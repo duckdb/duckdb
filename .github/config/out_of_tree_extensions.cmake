@@ -19,7 +19,7 @@ if (NOT MINGW)
     duckdb_extension_load(aws
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_aws
-            GIT_TAG 043890c2ad83c4a1375417e2d5d085a33f79a217
+            GIT_TAG f7b8729f1cce5ada5d4add70e1486de50763fb97
             )
 endif()
 
@@ -28,7 +28,7 @@ if (NOT MINGW)
     duckdb_extension_load(azure
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_azure
-            GIT_TAG 3ad0348334d2a263e5f19ef08fd02311bdae82f3
+            GIT_TAG 9e3e5b8addab5939b4ca4ac5f8997218a7228b8f
             )
 endif()
 
@@ -65,7 +65,7 @@ if (NOT MINGW)
     duckdb_extension_load(spatial
             DONT_LINK LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_spatial.git
-            GIT_TAG b9cd1904a2d243b9937294ae94d4c38e7ad289f4
+            GIT_TAG 05c4ba01c500140287bf6946fb6910122e5c2acf
             INCLUDE_DIR spatial/include
             TEST_DIR test/sql
             )

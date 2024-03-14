@@ -33,6 +33,7 @@ PhysicalPivot::PhysicalPivot(vector<LogicalType> types_p, unique_ptr<PhysicalOpe
 OperatorResultType PhysicalPivot::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                           GlobalOperatorState &gstate, OperatorState &state) const {
 	// copy the groups as-is
+	input.Flatten();
 	for (idx_t i = 0; i < bound_pivot.group_count; i++) {
 		chunk.data[i].Reference(input.data[i]);
 	}

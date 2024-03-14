@@ -71,6 +71,18 @@ void JemallocExtension::ThreadFlush(idx_t threshold) {
 	SetJemallocCTL("thread.peak.reset");
 }
 
+void JemallocExtension::FlushAll() {
+	// Flush thread-local cache
+	SetJemallocCTL("thread.tcache.flush");
+
+	// Flush all arenas
+	const auto purge_arena = StringUtil::Format("arena.%llu.purge", MALLCTL_ARENAS_ALL);
+	SetJemallocCTL(purge_arena.c_str());
+
+	// Reset the peak after resetting
+	SetJemallocCTL("thread.peak.reset");
+}
+
 } // namespace duckdb
 
 extern "C" {
