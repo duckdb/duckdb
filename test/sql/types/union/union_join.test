@@ -2,12 +2,8 @@
 # description: Test union type joins
 # group: [union]
 
-# FIXME bug in sequence/constant vector handling
-require no_vector_verification
-
-# FIXME - missing verification?
-#statement ok
-#PRAGMA enable_verification
+statement ok
+PRAGMA enable_verification
 
 statement ok
 SET default_null_order='nulls_first';

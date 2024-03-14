@@ -526,8 +526,9 @@ struct UnionVector {
 	DUCKDB_API static const Vector &GetTags(const Vector &v);
 	DUCKDB_API static Vector &GetTags(Vector &v);
 
-	//! Get the tag at the specific index of the union vector
-	DUCKDB_API static union_tag_t GetTag(const Vector &vector, idx_t index);
+	//! Try to get the tag at the specific flat index of the union vector. Returns false if the tag is NULL.
+	//! This will handle and map the index properly for constant and dictionary vectors internally.
+	DUCKDB_API static bool TryGetTag(const Vector &vector, idx_t index, union_tag_t &tag);
 
 	//! Get the member vector of a union vector by index
 	DUCKDB_API static const Vector &GetMember(const Vector &vector, idx_t member_index);
