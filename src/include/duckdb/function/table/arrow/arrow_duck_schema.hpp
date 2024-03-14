@@ -17,7 +17,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Arrow Variable Size Types
 //===--------------------------------------------------------------------===//
-enum class ArrowVariableSizeType : uint8_t { FIXED_SIZE = 0, NORMAL = 1, SUPER_SIZE = 2, VIEW = 3 };
+enum class ArrowVariableSizeType : uint8_t { FIXED_SIZE = 0, NORMAL = 1, SUPER_SIZE = 2 };
 
 //===--------------------------------------------------------------------===//
 // Arrow Time/Date Types

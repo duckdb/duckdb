@@ -69,8 +69,6 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 		return make_uniq<ArrowType>(LogicalType::VARCHAR, ArrowVariableSizeType::NORMAL);
 	} else if (format == "U") {
 		return make_uniq<ArrowType>(LogicalType::VARCHAR, ArrowVariableSizeType::SUPER_SIZE);
-	} else if (format == "vu") {
-		return make_uniq<ArrowType>(LogicalType::VARCHAR, ArrowVariableSizeType::VIEW);
 	} else if (format == "tsn:") {
 		return make_uniq<ArrowType>(LogicalTypeId::TIMESTAMP_NS);
 	} else if (format == "tsu:") {

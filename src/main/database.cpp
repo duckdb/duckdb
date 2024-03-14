@@ -134,31 +134,29 @@ ConnectionManager &ConnectionManager::Get(ClientContext &context) {
 }
 
 unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(ClientContext &context, const AttachInfo &info,
-                                                                      const AttachOptions &options) {
+                                                                      const string &type, AccessMode access_mode) {
 	unique_ptr<AttachedDatabase> attached_database;
-	auto &catalog = Catalog::GetSystemCatalog(*this);
-
-	if (!options.db_type.empty()) {
-		// Find the storage extension for this database file.
-		auto extension_name = ExtensionHelper::ApplyExtensionAlias(options.db_type);
+	if (!type.empty()) {
+		// find the storage extension
+		auto extension_name = ExtensionHelper::ApplyExtensionAlias(type);
 		auto entry = config.storage_extensions.find(extension_name);
 		if (entry == config.storage_extensions.end()) {
-			throw BinderException("Unrecognized storage type \"%s\"", options.db_type);
+			throw BinderException("Unrecognized storage type \"%s\"", type);
 		}
 
 		if (entry->second->attach != nullptr && entry->second->create_transaction_manager != nullptr) {
-			// Use the storage extension to create the initial database.
+			// use storage extension to create the initial database
+			attached_database = make_uniq<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), *entry->second,
+			                                                context, info.name, info, access_mode);
+		} else {
 			attached_database =
-			    make_uniq<AttachedDatabase>(*this, catalog, *entry->second, context, info.name, info, options);
-			return attached_database;
+			    make_uniq<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), info.name, info.path, access_mode);
 		}
-
-		attached_database = make_uniq<AttachedDatabase>(*this, catalog, info.name, info.path, options);
-		return attached_database;
+	} else {
+		// check if this is an in-memory database or not
+		attached_database =
+		    make_uniq<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), info.name, info.path, access_mode);
 	}
-
-	// An empty db_type defaults to a duckdb database file.
-	attached_database = make_uniq<AttachedDatabase>(*this, catalog, info.name, info.path, options);
 	return attached_database;
 }
 
@@ -171,8 +169,8 @@ void DatabaseInstance::CreateMainDatabase() {
 	{
 		Connection con(*this);
 		con.BeginTransaction();
-		AttachOptions options(config.options);
-		initial_database = db_manager->AttachDatabase(*con.context, info, options);
+		initial_database =
+		    db_manager->AttachDatabase(*con.context, info, config.options.database_type, config.options.access_mode);
 		con.Commit();
 	}
 
