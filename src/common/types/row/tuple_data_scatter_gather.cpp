@@ -58,6 +58,22 @@ inline void TupleDataWithinListValueStore(const string_t &source, const data_ptr
 }
 
 template <class T>
+inline void TupleDataValueVerify(const LogicalType &type, const T &value) {
+#ifdef DEBUG
+	// NOP
+#endif
+}
+
+template <>
+inline void TupleDataValueVerify(const LogicalType &type, const string_t &value) {
+#ifdef DEBUG
+	if (type.id() == LogicalTypeId::VARCHAR) {
+		value.Verify();
+	}
+#endif
+}
+
+template <class T>
 static inline T TupleDataWithinListValueLoad(const data_ptr_t &location, data_ptr_t &heap_location) {
 	return Load<T>(location);
 }
@@ -687,7 +703,7 @@ static void TupleDataArrayScatter(const Vector &source, const TupleDataVectorFor
 	// Source
 	// The Array vector has fake list_entry_t's set by this point, so this is fine
 	const auto &source_data = source_format.unified;
-	const auto source_sel = *source_data.sel;
+	const auto &source_sel = *source_data.sel;
 	const auto data = UnifiedVectorFormat::GetData<list_entry_t>(source_data);
 	const auto &validity = source_data.validity;
 
@@ -736,7 +752,7 @@ static void TupleDataTemplatedWithinCollectionScatter(const Vector &source, cons
                                                       const UnifiedVectorFormat &list_data,
                                                       const vector<TupleDataScatterFunction> &child_functions) {
 	// List data
-	const auto list_sel = *list_data.sel;
+	const auto &list_sel = *list_data.sel;
 	const auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
 	const auto &list_validity = list_data.validity;
 
@@ -796,7 +812,7 @@ static void TupleDataStructWithinCollectionScatter(const Vector &source, const T
 	const auto &source_validity = source_data.validity;
 
 	// List data
-	const auto list_sel = *list_data.sel;
+	const auto &list_sel = *list_data.sel;
 	const auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
 	const auto &list_validity = list_data.validity;
 
@@ -851,13 +867,13 @@ static void TupleDataCollectionWithinCollectionScatter(const Vector &child_list,
                                                        const UnifiedVectorFormat &list_data,
                                                        const vector<TupleDataScatterFunction> &child_functions) {
 	// List data (of the list Vector that "child_list" is in)
-	const auto list_sel = *list_data.sel;
+	const auto &list_sel = *list_data.sel;
 	const auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
 	const auto &list_validity = list_data.validity;
 
 	// Child list
 	const auto &child_list_data = child_list_format.unified;
-	const auto child_list_sel = *child_list_data.sel;
+	const auto &child_list_sel = *child_list_data.sel;
 	const auto child_list_entries = UnifiedVectorFormat::GetData<list_entry_t>(child_list_data);
 	const auto &child_list_validity = child_list_data.validity;
 
@@ -1016,6 +1032,7 @@ void TupleDataCollection::Gather(Vector &row_locations, const SelectionVector &s
 	const auto &gather_function = gather_functions[column_id];
 	gather_function.function(layout, row_locations, column_id, scan_sel, scan_count, result, target_sel,
 	                         cached_cast_vector, gather_function.child_functions);
+	Vector::Verify(result, target_sel, scan_count);
 }
 
 template <class T>
@@ -1042,6 +1059,7 @@ static void TupleDataTemplatedGather(const TupleDataLayout &layout, Vector &row_
 		ValidityBytes row_mask(source_row);
 		if (row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
 			target_data[target_idx] = Load<T>(source_row + offset_in_row);
+			TupleDataValueVerify<T>(target.GetType(), target_data[target_idx]);
 		} else {
 			target_validity.SetInvalid(target_idx);
 		}
@@ -1123,13 +1141,12 @@ static void TupleDataListGather(const TupleDataLayout &layout, Vector &row_locat
 	const auto offset_in_row = layout.GetOffsets()[col_idx];
 	uint64_t target_list_offset = 0;
 	for (idx_t i = 0; i < scan_count; i++) {
-		const auto source_idx = scan_sel.get_index(i);
-		const auto target_idx = target_sel.get_index(i);
-
-		const auto &source_row = source_locations[source_idx];
+		const auto &source_row = source_locations[scan_sel.get_index(i)];
 		ValidityBytes row_mask(source_row);
+
+		const auto target_idx = target_sel.get_index(i);
 		if (row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
-			auto &source_heap_location = source_heap_locations[source_idx];
+			auto &source_heap_location = source_heap_locations[i];
 			source_heap_location = Load<data_ptr_t>(source_row + offset_in_row);
 
 			// Load list size and skip over
@@ -1187,7 +1204,7 @@ static void TupleDataTemplatedWithinCollectionGather(const TupleDataLayout &layo
 		const auto &list_length = list_entries[target_idx].length;
 
 		// Initialize validity mask
-		auto &source_heap_location = source_heap_locations[scan_sel.get_index(i)];
+		auto &source_heap_location = source_heap_locations[i];
 		ValidityBytes source_mask(source_heap_location);
 		source_heap_location += ValidityBytes::SizeInBytes(list_length);
 
@@ -1198,8 +1215,10 @@ static void TupleDataTemplatedWithinCollectionGather(const TupleDataLayout &layo
 		// Load the child validity and data belonging to this list entry
 		for (idx_t child_i = 0; child_i < list_length; child_i++) {
 			if (source_mask.RowIsValidUnsafe(child_i)) {
-				target_data[target_offset + child_i] = TupleDataWithinListValueLoad<T>(
+				auto &target_value = target_data[target_offset + child_i];
+				target_value = TupleDataWithinListValueLoad<T>(
 				    source_data_location + child_i * TupleDataWithinListFixedSize<T>(), source_heap_location);
+				TupleDataValueVerify(target.GetType(), target_value);
 			} else {
 				target_validity.SetInvalid(target_offset + child_i);
 			}
@@ -1233,7 +1252,7 @@ static void TupleDataStructWithinCollectionGather(const TupleDataLayout &layout,
 		const auto &list_length = list_entries[target_idx].length;
 
 		// Initialize validity mask and skip over it
-		auto &source_heap_location = source_heap_locations[scan_sel.get_index(i)];
+		auto &source_heap_location = source_heap_locations[i];
 		ValidityBytes source_mask(source_heap_location);
 		source_heap_location += ValidityBytes::SizeInBytes(list_length);
 
@@ -1290,7 +1309,7 @@ static void TupleDataCollectionWithinCollectionGather(const TupleDataLayout &lay
 		const auto &list_length = list_entries[target_idx].length;
 
 		// Initialize validity mask and skip over it
-		auto &source_heap_location = source_heap_locations[scan_sel.get_index(i)];
+		auto &source_heap_location = source_heap_locations[i];
 		ValidityBytes source_mask(source_heap_location);
 		source_heap_location += ValidityBytes::SizeInBytes(list_length);
 
@@ -1376,7 +1395,6 @@ static void TupleDataCastToArrayStructGather(const TupleDataLayout &layout, Vect
 //------------------------------------------------------------------------------
 // Get Gather Function
 //------------------------------------------------------------------------------
-
 template <class T>
 tuple_data_gather_function_t TupleDataGetGatherFunction(bool within_collection) {
 	return within_collection ? TupleDataTemplatedWithinCollectionGather<T> : TupleDataTemplatedGather<T>;

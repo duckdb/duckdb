@@ -471,7 +471,7 @@ void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkSta
 
 	// Set any_combined, then check one last time whether we need to repartition
 	gstate.any_combined = true;
-	MaybeRepartition(context.client, gstate, lstate);
+	MaybeRepartition(context.client, gstate, lstate, gstate.active_threads);
 
 	auto &ht = *lstate.ht;
 	ht.UnpinData();
