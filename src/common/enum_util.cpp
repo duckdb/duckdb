@@ -15,6 +15,7 @@
 #include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enums/aggregate_handling.hpp"
+#include "duckdb/common/enums/catalog_lookup_behavior.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/enums/cte_materialize.hpp"
@@ -784,6 +785,34 @@ CTEMaterialize EnumUtil::FromString<CTEMaterialize>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "CTE_MATERIALIZE_NEVER")) {
 		return CTEMaterialize::CTE_MATERIALIZE_NEVER;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<CatalogLookupBehavior>(CatalogLookupBehavior value) {
+	switch(value) {
+	case CatalogLookupBehavior::STANDARD:
+		return "STANDARD";
+	case CatalogLookupBehavior::LOWER_PRIORITY:
+		return "LOWER_PRIORITY";
+	case CatalogLookupBehavior::NEVER_LOOKUP:
+		return "NEVER_LOOKUP";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+CatalogLookupBehavior EnumUtil::FromString<CatalogLookupBehavior>(const char *value) {
+	if (StringUtil::Equals(value, "STANDARD")) {
+		return CatalogLookupBehavior::STANDARD;
+	}
+	if (StringUtil::Equals(value, "LOWER_PRIORITY")) {
+		return CatalogLookupBehavior::LOWER_PRIORITY;
+	}
+	if (StringUtil::Equals(value, "NEVER_LOOKUP")) {
+		return CatalogLookupBehavior::NEVER_LOOKUP;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
