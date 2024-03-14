@@ -12,6 +12,7 @@ on:
 jobs:
   osx:
     uses: ./.github/workflows/OSX.yml
+    secrets: inherit
     with:
       override_git_describe: ${{ inputs.override_git_describe }}
       git_ref: ${{ inputs.git_ref }}

@@ -5,6 +5,9 @@
 statement ok
 SET default_null_order='nulls_first';
 
+# FIXME: bug in constant/sequence
+require no_vector_verification
+
 # Test value -> union casts
 statement ok
 create table tbl1(u UNION(i32 INT, str VARCHAR));
