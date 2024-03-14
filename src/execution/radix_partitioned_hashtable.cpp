@@ -579,7 +579,7 @@ public:
 	//! For synchronizing scan tasks
 	mutex lock;
 	idx_t scan_idx;
-	idx_t scan_done;
+	atomic<idx_t> scan_done;
 };
 
 enum class RadixHTScanStatus : uint8_t { INIT, IN_PROGRESS, DONE };
