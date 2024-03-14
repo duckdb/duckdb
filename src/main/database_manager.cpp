@@ -24,7 +24,8 @@ DatabaseManager &DatabaseManager::Get(AttachedDatabase &db) {
 }
 
 void DatabaseManager::InitializeSystemCatalog() {
-	system->Initialize();
+	// The SYSTEM_DATABASE has no persistent storage.
+	system->Initialize(DConstants::INVALID_INDEX);
 }
 
 optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &context, const string &name) {
@@ -164,8 +165,9 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 		return;
 	}
 
-	// The DUCKDB format does not allow unrecognized options.
-	if (!options.unrecognized_option.empty()) {
+	// The DuckDB file format does not allow unrecognized options, except for the block_size option,
+	// which is specific to DuckDB files.
+	if (!options.unrecognized_option.empty() && options.unrecognized_option != "block_size") {
 		throw BinderException("Unrecognized option for attach \"%s\"", options.unrecognized_option);
 	}
 }

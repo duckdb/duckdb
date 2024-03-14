@@ -123,6 +123,7 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL(DuckDBApiSetting),
                                                  DUCKDB_GLOBAL(CustomUserAgentSetting),
                                                  DUCKDB_LOCAL(PartitionedWriteFlushThreshold),
+                                                 DUCKDB_GLOBAL(DefaultBlockAllocSize),
                                                  FINAL_SETTING};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {

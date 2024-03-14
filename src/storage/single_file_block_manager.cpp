@@ -95,7 +95,7 @@ void DatabaseHeader::Write(WriteStream &ser) {
 	ser.Write<idx_t>(meta_block);
 	ser.Write<idx_t>(free_list);
 	ser.Write<uint64_t>(block_count);
-	ser.Write<idx_t>(block_size);
+	ser.Write<idx_t>(block_alloc_size);
 	ser.Write<idx_t>(vector_size);
 }
 
@@ -106,15 +106,10 @@ DatabaseHeader DatabaseHeader::Read(ReadStream &source) {
 	header.free_list = source.Read<idx_t>();
 	header.block_count = source.Read<uint64_t>();
 
-	header.block_size = source.Read<idx_t>();
-	if (!header.block_size) {
+	header.block_alloc_size = source.Read<idx_t>();
+	if (!header.block_alloc_size) {
 		// backwards compatibility
-		header.block_size = DEFAULT_BLOCK_ALLOC_SIZE;
-	}
-	if (header.block_size != Storage::BLOCK_ALLOC_SIZE) {
-		throw IOException("Cannot read database file: DuckDB's compiled block size is %llu bytes, but the file has a "
-		                  "block size of %llu bytes.",
-		                  Storage::BLOCK_ALLOC_SIZE, header.block_size);
+		header.block_alloc_size = DEFAULT_BLOCK_ALLOC_SIZE;
 	}
 
 	header.vector_size = source.Read<idx_t>();
@@ -143,8 +138,9 @@ T DeserializeHeaderStructure(data_ptr_t ptr) {
 	return T::Read(source);
 }
 
-SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, string path_p, StorageManagerOptions options)
-    : BlockManager(BufferManager::GetBufferManager(db)), db(db), path(std::move(path_p)),
+SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, const string &path_p,
+                                               const StorageManagerOptions &options)
+    : BlockManager(BufferManager::GetBufferManager(db), options.block_alloc_size), db(db), path(path_p),
       header_buffer(Allocator::Get(db), FileBufferType::MANAGED_BUFFER,
                     Storage::FILE_HEADER_SIZE - Storage::BLOCK_HEADER_SIZE),
       iteration_count(0), options(options) {
@@ -198,20 +194,24 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	h1.meta_block = INVALID_BLOCK;
 	h1.free_list = INVALID_BLOCK;
 	h1.block_count = 0;
-	h1.block_size = Storage::BLOCK_ALLOC_SIZE;
+	// We create the SingleFileBlockManager with the desired block allocation size before calling CreateNewDatabase.
+	h1.block_alloc_size = GetBlockAllocSize();
 	h1.vector_size = STANDARD_VECTOR_SIZE;
 	SerializeHeaderStructure<DatabaseHeader>(h1, header_buffer.buffer);
 	ChecksumAndWrite(header_buffer, Storage::FILE_HEADER_SIZE);
+
 	// header 2
 	DatabaseHeader h2;
 	h2.iteration = 0;
 	h2.meta_block = INVALID_BLOCK;
 	h2.free_list = INVALID_BLOCK;
 	h2.block_count = 0;
-	h2.block_size = Storage::BLOCK_ALLOC_SIZE;
+	// We create the SingleFileBlockManager with the desired block allocation size before calling CreateNewDatabase.
+	h2.block_alloc_size = GetBlockAllocSize();
 	h2.vector_size = STANDARD_VECTOR_SIZE;
 	SerializeHeaderStructure<DatabaseHeader>(h2, header_buffer.buffer);
 	ChecksumAndWrite(header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
+
 	// ensure that writing to disk is completed before returning
 	handle->Sync();
 	// we start with h2 as active_header, this way our initial write will be in h1
@@ -220,7 +220,7 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	max_block = 0;
 }
 
-void SingleFileBlockManager::LoadExistingDatabase() {
+void SingleFileBlockManager::LoadExistingDatabase(const idx_t block_alloc_size) {
 	uint8_t flags;
 	FileLockType lock;
 	GetFileFlags(flags, lock, false);
@@ -238,18 +238,20 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	DatabaseHeader h1;
 	ReadAndChecksum(header_buffer, Storage::FILE_HEADER_SIZE);
 	h1 = DeserializeHeaderStructure<DatabaseHeader>(header_buffer.buffer);
+
 	DatabaseHeader h2;
 	ReadAndChecksum(header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
 	h2 = DeserializeHeaderStructure<DatabaseHeader>(header_buffer.buffer);
+
 	// check the header with the highest iteration count
 	if (h1.iteration > h2.iteration) {
 		// h1 is active header
 		active_header = 0;
-		Initialize(h1);
+		Initialize(h1, block_alloc_size);
 	} else {
 		// h2 is active header
 		active_header = 1;
-		Initialize(h2);
+		Initialize(h2, block_alloc_size);
 	}
 	LoadFreeList();
 }
@@ -277,11 +279,26 @@ void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t locati
 	block.Write(*handle, location);
 }
 
-void SingleFileBlockManager::Initialize(DatabaseHeader &header) {
+void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const idx_t block_alloc_size) {
 	free_list_id = header.free_list;
 	meta_block = header.meta_block;
 	iteration_count = header.iteration;
 	max_block = header.block_count;
+
+	if (block_alloc_size != DConstants::INVALID_INDEX && block_alloc_size != header.block_alloc_size) {
+		throw InvalidInputException("cannot initialize the same database with a different block size: provided block "
+		                            "size: %llu, file block size: %llu",
+		                            GetBlockAllocSize(), header.block_alloc_size);
+	}
+
+	// FIXME: remove this once we start supporting different block sizes.
+	if (Storage::BLOCK_ALLOC_SIZE != header.block_alloc_size) {
+		throw NotImplementedException("cannot initialize a database with a different block size than the default block "
+		                              "size: default block size: %llu, file block size: %llu",
+		                              Storage::BLOCK_ALLOC_SIZE, header.block_alloc_size);
+	}
+
+	SetBlockAllocSize(header.block_alloc_size);
 }
 
 void SingleFileBlockManager::LoadFreeList() {
@@ -315,8 +332,7 @@ block_id_t SingleFileBlockManager::GetFreeBlockId() {
 	lock_guard<mutex> lock(block_lock);
 	block_id_t block;
 	if (!free_list.empty()) {
-		// free list is non empty
-		// take an entry from the free list
+		// The free list is not empty, so we take its first element.
 		block = *free_list.begin();
 		// erase the entry from the free list again
 		free_list.erase(free_list.begin());
