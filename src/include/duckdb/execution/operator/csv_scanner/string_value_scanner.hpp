@@ -92,7 +92,7 @@ public:
 	unsafe_vector<ValidityMask *> validity_mask;
 
 	//! Variables to iterate over the CSV buffers
-	idx_t last_position;
+	LinePosition last_position;
 	char *buffer_ptr;
 	idx_t buffer_size;
 
