@@ -262,25 +262,15 @@ def copy_if_different(src, dest):
     # print("Copying " + src + " to " + dest)
     shutil.copyfile(src, dest)
 
-
-def get_git_describe():
-    if 'OVERRIDE_GIT_DESCRIBE' in os.environ:
-        return os.environ['OVERRIDE_GIT_DESCRIBE']
-    try:
-        return subprocess.check_output(['git', 'describe', '--tags', '--long']).strip().decode('utf8')
-    except:
-        return "v0.0.0-0-deadbeeff"
-
-
 def git_commit_hash():
-    git_describe = get_git_describe();
+    git_describe = package_build.get_git_describe();
     hash = git_describe.split('-')[2];
     return hash
 
 
 def git_dev_version():
     try:
-        long_version = get_git_describe()
+        long_version = package_build.get_git_describe()
         version_splits = long_version.split('-')[0].lstrip('v').split('.')
         dev_version = long_version.split('-')[1]
         if int(dev_version) == 0:
