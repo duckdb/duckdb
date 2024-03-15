@@ -7,11 +7,16 @@ require parquet
 statement ok
 IMPORT DATABASE 'data/parquet-testing/malloy-smaller';
 
-# minimal reproducible example for internal issue 1546
+# minimal reproducible examples for internal issue 1546
 query I
 SELECT count(DISTINCT [[p.v2ProductName for p in h.product] for h in hits]) FROM tbl2;
 ----
 1022
+
+query I
+SELECT count(DISTINCT [[p.customDimensions for p in h.product] for h in hits]) FROM tbl2;
+----
+794
 
 query III
 SELECT

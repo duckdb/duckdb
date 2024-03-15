@@ -460,9 +460,6 @@ void TupleDataCollection::CollectionWithinCollectionComputeHeapSizes(Vector &hea
 		const auto &list_entry = list_entries[list_idx];
 		const auto &list_offset = list_entry.offset;
 		const auto &list_length = list_entry.length;
-		if (list_length == 0) {
-			continue;
-		}
 
 		// Size is the validity mask and the list sizes
 		auto &heap_size = heap_sizes[i];
