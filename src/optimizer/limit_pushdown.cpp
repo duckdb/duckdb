@@ -17,7 +17,9 @@ bool LimitPushdown::CanOptimize(duckdb::LogicalOperator &op) {
 		}
 
 		if (limit.limit_val.Type() == LimitNodeType::CONSTANT_VALUE && limit.limit_val.GetConstantValue() < 8192) {
-			// Push down only when limit value is small (< 8192).
+			// Push down only when limit value is smaller than 8192.
+			// when physical_limit is introduced, it will end a parallel pipeline
+			// restrict the limit value to be small so that remaining operations run fast without parallelization.
 			return true;
 		}
 	}
