@@ -670,7 +670,7 @@ public:
 	idx_t build_chunks_per_thread;
 
 	//! For probe synchronization
-	idx_t probe_chunk_count;
+	atomic<idx_t> probe_chunk_count;
 	idx_t probe_chunk_done;
 
 	//! To determine the number of threads
