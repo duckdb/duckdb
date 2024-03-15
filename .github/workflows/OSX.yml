@@ -8,7 +8,6 @@ on:
         type: string
       skip_tests:
         type: string
-  repository_dispatch:
   workflow_dispatch:
     inputs:
       override_git_describe:
@@ -17,6 +16,7 @@ on:
         type: string
       skip_tests:
         type: string
+  repository_dispatch:
   push:
     branches:
       - '**'
@@ -35,7 +35,7 @@ on:
 
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
+  group: osx-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
   cancel-in-progress: true
 
 env:
