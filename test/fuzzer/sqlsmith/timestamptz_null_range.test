@@ -4,6 +4,8 @@
 
 require icu
 
+require no_extension_autoloading
+
 statement error
 SELECT NULL FROM (
 	SELECT 4767 
