@@ -1,5 +1,5 @@
 # name: test/sql/transactions/test_index_large_aborted_append.test
-# description: Test that index entries are properly removed after aborted append
+# description: Test that index entries are properly removed after aborting appends
 # group: [transactions]
 
 require skip_reload
@@ -23,22 +23,22 @@ INSERT INTO integers SELECT -10 + i FROM RANGE(${i}) tbl(i);
 
 # insert the values [2..2048] into the table
 statement ok con2
-INSERT INTO integers SELECT case when i%2=0 then null else i end FROM range(2, 2049, 1) t1(i)
+INSERT INTO integers SELECT CASE WHEN i % 2 = 0 THEN NULL ELSE i END FROM range(2, 2049, 1) t1(i)
 
 statement ok con2
 INSERT INTO integers VALUES (-10);
 
-# con commits first
+# con1 commits first and succeeds
 statement ok con1
 COMMIT;
 
-# con2 fails to commit because of the conflict
+# con2 fails to commit because of the constraint violation on -10
 statement error con2
 COMMIT;
 ----
 
 query I con1
-SELECT COUNT(*)=${i} FROM integers
+SELECT COUNT(*) = ${i} FROM integers
 ----
 true
 
@@ -49,12 +49,12 @@ BEGIN TRANSACTION;
 statement ok con2
 INSERT INTO integers SELECT i FROM range(2, 2049, 1) t1(i)
 
-# this time the commit should work
+# this time the commit must succeed
 statement ok con2
 COMMIT;
 
 query IIII con1
-SELECT (COUNT(*)-2047)=${i}, MIN(i), MAX(i), (COUNT(i)-2047)=${i} FROM integers ORDER BY 1
+SELECT (COUNT(*) - 2047) = ${i}, MIN(i), MAX(i), (COUNT(i) - 2047) = ${i} FROM integers ORDER BY 1
 ----
 true	-10	2048	true
 

@@ -148,63 +148,78 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 }
 
 void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state,
-                                        idx_t append_count, bool append_to_table) {
+                                        bool append_to_table) {
+
+	// Get the global storage and initialize append.
 	auto &table = table_ref.get();
 	if (append_to_table) {
 		table.InitializeAppend(transaction, append_state);
 	}
+
 	ErrorData error;
 	if (append_to_table) {
-		// appending: need to scan entire
+		// Scan the local storage and append each chunk to the indexes and the global storage.
 		row_groups->Scan(transaction, [&](DataChunk &chunk) -> bool {
-			// append this chunk to the indexes of the table
+			// First, append to the indexes of the table.
 			error = table.AppendToIndexes(chunk, append_state.current_row);
 			if (error.HasError()) {
 				return false;
 			}
-			// append to base table
+
+			// If no constraint violation occurs, we append to the table storage.
 			table.Append(chunk, append_state);
 			return true;
 		});
+
 	} else {
+		// Only append to the indexes.
 		error =
 		    AppendToIndexes(transaction, *row_groups, table.info->indexes, table.GetTypes(), append_state.current_row);
 	}
-	if (error.HasError()) {
-		// need to revert all appended row ids
-		row_t current_row = append_state.row_start;
-		// remove the data from the indexes, if there are any indexes
-		row_groups->Scan(transaction, [&](DataChunk &chunk) -> bool {
-			// append this chunk to the indexes of the table
-			try {
-				table.RemoveFromIndexes(append_state, chunk, current_row);
-			} catch (std::exception &ex) { // LCOV_EXCL_START
-				error = ErrorData(ex);
-				return false;
-			} // LCOV_EXCL_STOP
 
-			current_row += chunk.size();
-			if (current_row >= append_state.current_row) {
-				// finished deleting all rows from the index: abort now
-				return false;
-			}
-			return true;
-		});
+	// Early-out, if no constraint violation occurred.
+	if (!error.HasError()) {
 		if (append_to_table) {
-			table.RevertAppendInternal(append_state.row_start);
+			// Finalize the global storage.
+			table.FinalizeAppend(transaction, append_state);
 		}
-
-		// we need to vacuum the indexes to remove any buffers that are now empty
-		// due to reverting the appends
-		table.info->indexes.Scan([&](Index &index) {
-			index.Vacuum();
-			return false;
-		});
-		error.Throw();
+		return;
 	}
+
+	// Constraint violation, we revert all appends to the indexes, and, if necessary, the global storage.
+	row_t current_row = append_state.row_start;
+
+	// Revert index appends.
+	row_groups->Scan(transaction, [&](DataChunk &chunk) -> bool {
+		try {
+			table.RemoveFromIndexes(append_state, chunk, current_row);
+		} catch (std::exception &ex) { // LCOV_EXCL_START
+			error = ErrorData(ex);
+			return false;
+		} // LCOV_EXCL_STOP
+
+		current_row += chunk.size();
+		if (current_row >= append_state.current_row) {
+			// Successfully deleted all row ids, abort.
+			return false;
+		}
+		return true;
+	});
+
+	// We revert the append and then finalize the changes, i.e., we finalize resetting them.
 	if (append_to_table) {
+		table.RevertAppendInternal(append_state.row_start);
 		table.FinalizeAppend(transaction, append_state);
 	}
+
+	// We vacuum the indexes to remove any empty buffers due to reverting the appends.
+	table.info->indexes.Scan([&](Index &index) {
+		index.Vacuum();
+		return false;
+	});
+
+	// Finally, we throw the constraint violation.
+	error.Throw();
 }
 
 OptimisticDataWriter &LocalTableStorage::CreateOptimisticWriter() {
@@ -448,6 +463,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 	TableAppendState append_state;
 	table.AppendLock(append_state);
 	transaction.PushAppend(table, append_state.row_start, append_count);
+
 	if ((append_state.row_start == 0 || storage.row_groups->GetTotalRows() >= MERGE_THRESHOLD) &&
 	    storage.deleted_rows == 0) {
 		// table is currently empty OR we are bulk appending: move over the storage directly
@@ -457,7 +473,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 		// FIXME: we should be able to merge the transaction-local index directly into the main table index
 		// as long we just rewrite some row-ids
 		if (!table.info->indexes.Empty()) {
-			storage.AppendToIndexes(transaction, append_state, append_count, false);
+			storage.AppendToIndexes(transaction, append_state, false);
 		}
 		// finally move over the row groups
 		table.MergeStorage(*storage.row_groups, storage.indexes);
@@ -467,7 +483,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 		// so we need to revert the data we have already written
 		storage.Rollback();
 		// append to the indexes and append to the base table
-		storage.AppendToIndexes(transaction, append_state, append_count, true);
+		storage.AppendToIndexes(transaction, append_state, true);
 	}
 
 	// try to initialize any unknown indexes
