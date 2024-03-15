@@ -661,10 +661,13 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		auto str = reinterpret_cast<string_t *>(data)[index];
 		return Value(str.GetString());
 	}
-	case LogicalTypeId::AGGREGATE_STATE:
 	case LogicalTypeId::BLOB: {
 		auto str = reinterpret_cast<string_t *>(data)[index];
 		return Value::BLOB(const_data_ptr_cast(str.GetData()), str.GetSize());
+	}
+	case LogicalTypeId::AGGREGATE_STATE: {
+		auto str = reinterpret_cast<string_t *>(data)[index];
+		return Value::AGGREGATE_STATE(vector->GetType(), const_data_ptr_cast(str.GetData()), str.GetSize());
 	}
 	case LogicalTypeId::BIT: {
 		auto str = reinterpret_cast<string_t *>(data)[index];
@@ -680,10 +683,16 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		return Value::MAP(ListType::GetChildType(type), std::move(children));
 	}
 	case LogicalTypeId::UNION: {
-		auto tag = UnionVector::GetTag(*vector, index);
-		auto value = UnionVector::GetMember(*vector, tag).GetValue(index);
-		auto members = UnionType::CopyMemberTypes(type);
-		return Value::UNION(members, tag, std::move(value));
+		// Remember to pass the original index_p here so we dont slice twice when looking up the tag
+		// in case this is a dictionary vector
+		union_tag_t tag;
+		if (UnionVector::TryGetTag(*vector, index_p, tag)) {
+			auto value = UnionVector::GetMember(*vector, tag).GetValue(index_p);
+			auto members = UnionType::CopyMemberTypes(type);
+			return Value::UNION(members, tag, std::move(value));
+		} else {
+			return Value(vector->GetType());
+		}
 	}
 	case LogicalTypeId::STRUCT: {
 		// we can derive the value schema from the vector schema
@@ -1568,6 +1577,94 @@ void Vector::Verify(idx_t count) {
 	Verify(*this, *flat_sel, count);
 }
 
+void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {
+	if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
+		// only supported for flat vectors currently
+		return;
+	}
+	// convert vector to dictionary vector
+	// first create an inverted vector of twice the size with NULL values every other value
+	// i.e. [1, 2, 3] is converted into [NULL, 3, NULL, 2, NULL, 1]
+	idx_t verify_count = count * 2;
+	SelectionVector inverted_sel(verify_count);
+	idx_t offset = 0;
+	for (idx_t i = 0; i < count; i++) {
+		idx_t current_index = count - i - 1;
+		inverted_sel.set_index(offset++, current_index);
+		inverted_sel.set_index(offset++, current_index);
+	}
+	Vector inverted_vector(vector, inverted_sel, verify_count);
+	inverted_vector.Flatten(verify_count);
+	// now insert the NULL values at every other position
+	for (idx_t i = 0; i < count; i++) {
+		FlatVector::SetNull(inverted_vector, i * 2, true);
+	}
+	// construct the selection vector pointing towards the original values
+	// we start at the back, (verify_count - 1) and move backwards
+	SelectionVector original_sel(count);
+	offset = 0;
+	for (idx_t i = 0; i < count; i++) {
+		original_sel.set_index(offset++, verify_count - 1 - i * 2);
+	}
+	// now slice the inverted vector with the inverted selection vector
+	vector.Slice(inverted_vector, original_sel, count);
+	vector.Verify(count);
+}
+
+void Vector::DebugShuffleNestedVector(Vector &vector, idx_t count) {
+	switch (vector.GetType().id()) {
+	case LogicalTypeId::STRUCT: {
+		auto &entries = StructVector::GetEntries(vector);
+		// recurse into child elements
+		for (auto &entry : entries) {
+			Vector::DebugShuffleNestedVector(*entry, count);
+		}
+		break;
+	}
+	case LogicalTypeId::LIST: {
+		if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
+			break;
+		}
+		auto list_entries = FlatVector::GetData<list_entry_t>(vector);
+		idx_t child_count = 0;
+		for (idx_t r = 0; r < count; r++) {
+			if (FlatVector::IsNull(vector, r)) {
+				continue;
+			}
+			child_count += list_entries[r].length;
+		}
+		if (child_count == 0) {
+			break;
+		}
+		auto &child_vector = ListVector::GetEntry(vector);
+		// reverse the order of all lists
+		SelectionVector child_sel(child_count);
+		idx_t position = child_count;
+		for (idx_t r = 0; r < count; r++) {
+			if (FlatVector::IsNull(vector, r)) {
+				continue;
+			}
+			// move this list to the back
+			position -= list_entries[r].length;
+			for (idx_t k = 0; k < list_entries[r].length; k++) {
+				child_sel.set_index(position + k, list_entries[r].offset + k);
+			}
+			// adjust the offset to this new position
+			list_entries[r].offset = position;
+		}
+		child_vector.Slice(child_sel, child_count);
+		child_vector.Flatten(child_count);
+		ListVector::SetListSize(vector, child_count);
+
+		// recurse into child elements
+		Vector::DebugShuffleNestedVector(child_vector, child_count);
+		break;
+	}
+	default:
+		break;
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // FlatVector
 //===--------------------------------------------------------------------===//
@@ -1586,7 +1683,6 @@ void FlatVector::SetNull(Vector &vector, idx_t idx, bool is_null) {
 		} else if (internal_type == PhysicalType::ARRAY) {
 			// set the child element in the array to null as well
 			auto &child = ArrayVector::GetEntry(vector);
-			D_ASSERT(child.GetVectorType() == VectorType::FLAT_VECTOR);
 			auto array_size = ArrayType::GetSize(type);
 			auto child_offset = idx * array_size;
 			for (idx_t i = 0; i < array_size; i++) {
@@ -1675,8 +1771,8 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 	case PhysicalType::ARRAY: {
 		UnifiedVectorFormat vdata;
 		source.ToUnifiedFormat(count, vdata);
-
-		if (!vdata.validity.RowIsValid(position)) {
+		auto source_idx = vdata.sel->get_index(position);
+		if (!vdata.validity.RowIsValid(source_idx)) {
 			// list is null: create null value
 			Value null_value(source_type);
 			vector.Reference(null_value);
@@ -1692,7 +1788,7 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 		auto array_size = ArrayType::GetSize(source_type);
 		SelectionVector sel(array_size);
 		for (idx_t i = 0; i < array_size; i++) {
-			sel.set_index(i, array_size * position + i);
+			sel.set_index(i, array_size * source_idx + i);
 		}
 		target_child.Slice(sel, array_size);
 		target_child.Flatten(array_size); // since its constant we only have to flatten this much
@@ -2291,17 +2387,34 @@ void UnionVector::SetToMember(Vector &union_vector, union_tag_t tag, Vector &mem
 	}
 }
 
-union_tag_t UnionVector::GetTag(const Vector &vector, idx_t index) {
+bool UnionVector::TryGetTag(const Vector &vector, idx_t index, union_tag_t &result) {
 	// the tag vector is always the first struct child.
 	auto &tag_vector = *StructVector::GetEntries(vector)[0];
 	if (tag_vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(tag_vector);
-		return FlatVector::GetData<union_tag_t>(child)[index];
+		auto &dict_sel = DictionaryVector::SelVector(tag_vector);
+		auto mapped_idx = dict_sel.get_index(index);
+		if (FlatVector::IsNull(child, mapped_idx)) {
+			return false;
+		} else {
+			result = FlatVector::GetData<union_tag_t>(child)[mapped_idx];
+			return true;
+		}
 	}
 	if (tag_vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		return ConstantVector::GetData<union_tag_t>(tag_vector)[0];
+		if (ConstantVector::IsNull(tag_vector)) {
+			return false;
+		} else {
+			result = ConstantVector::GetData<union_tag_t>(tag_vector)[0];
+			return true;
+		}
 	}
-	return FlatVector::GetData<union_tag_t>(tag_vector)[index];
+	if (FlatVector::IsNull(tag_vector, index)) {
+		return false;
+	} else {
+		result = FlatVector::GetData<union_tag_t>(tag_vector)[index];
+		return true;
+	}
 }
 
 //! Raw selection vector passed in (not merged with any other selection vectors)
