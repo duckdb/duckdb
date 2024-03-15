@@ -58,6 +58,9 @@ static void AssertValidFileFlags(uint8_t flags) {
 #ifdef DEBUG
 	bool is_read = flags & FileFlags::FILE_FLAGS_READ;
 	bool is_write = flags & FileFlags::FILE_FLAGS_WRITE;
+	bool is_create = (flags & FileFlags::FILE_FLAGS_FILE_CREATE) || (flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+	bool is_private = (flags & FileFlags::FILE_FLAGS_PRIVATE);
+
 	// require either READ or WRITE (or both)
 	D_ASSERT(is_read || is_write);
 	// CREATE/Append flags require writing
@@ -66,6 +69,9 @@ static void AssertValidFileFlags(uint8_t flags) {
 	D_ASSERT(is_write || !(flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
 	// cannot combine CREATE and CREATE_NEW flags
 	D_ASSERT(!(flags & FileFlags::FILE_FLAGS_FILE_CREATE && flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
+
+	// For is_private can only be set along with a create flag
+	D_ASSERT(!is_private || is_create);
 #endif
 }
 
@@ -267,18 +273,6 @@ static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 }
 #endif
 
-void LocalFileSystem::CreatePrivateFile(const string &path_p, FileOpener *opener) {
-	auto path = FileSystem::ExpandPath(path_p, opener);
-
-	int open_flags = O_WRONLY;
-	open_flags |= O_CLOEXEC;
-	open_flags |= O_CREAT;
-	open_flags |= O_APPEND;
-
-	int fd = open(path.c_str(), open_flags, 0600);
-	close(fd);
-}
-
 bool LocalFileSystem::IsPrivateFile(const string &path_p, FileOpener *opener) {
 	auto path = FileSystem::ExpandPath(path_p, opener);
 
@@ -344,7 +338,19 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t f
 		open_flags |= O_DIRECT | O_SYNC;
 #endif
 	}
-	int fd = open(path.c_str(), open_flags, 0666);
+
+	// Determine permissions
+	mode_t filesec;
+	if (flags & FileFlags::FILE_FLAGS_PRIVATE) {
+		open_flags |= O_EXCL; // Ensure we error on existing files or the permissions may not set
+		filesec = 0600;
+	} else {
+		filesec = 0666;
+	}
+
+	// Open the file
+	int fd = open(path.c_str(), open_flags, filesec);
+
 	if (fd == -1) {
 		throw IOException("Cannot open file \"%s\": %s", {{"errno", std::to_string(errno)}}, path, strerror(errno));
 	}
@@ -758,13 +764,6 @@ static string AdditionalLockInfo(const std::wstring path) {
 bool LocalFileSystem::IsPrivateFile(const string &path_p, FileOpener *opener) {
 	// TODO: detect if file is shared in windows
 	return true;
-}
-
-void LocalFileSystem::CreatePrivateFile(const string &path_p, FileOpener *opener) {
-	auto path = FileSystem::ExpandPath(path_p, opener);
-	auto unicode_path = WindowsUtil::UTF8ToUnicode(path.c_str());
-	HANDLE hFile = CreateFileW(unicode_path.c_str(), GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
-	CloseHandle(hFile);
 }
 
 unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t flags, FileLockType lock_type,
