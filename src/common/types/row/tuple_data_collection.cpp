@@ -266,7 +266,7 @@ static inline void ToUnifiedFormatInternal(TupleDataVectorFormat &format, Vector
 		// How many list_entry_t's do we need to cover the whole child array?
 		// Make sure we round up so its all covered
 		auto child_array_total_size = ArrayVector::GetTotalSize(vector);
-		auto list_entry_t_count = (child_array_total_size + array_size) / array_size;
+		auto list_entry_t_count = MaxValue((child_array_total_size + array_size) / array_size, count);
 
 		// Create list entries!
 		format.array_list_entries = make_uniq_array<list_entry_t>(list_entry_t_count);
