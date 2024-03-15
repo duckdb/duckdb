@@ -1,0 +1,28 @@
+# name: test/fuzzer/duckfuzz/bind_limit_num.test
+# description: Fuzzyduck issue #1581
+# group: [duckfuzz]
+
+require tpch
+
+statement ok
+call dbgen(sf=0.001);
+
+statement ok
+SELECT subq_2.c0 AS c2
+FROM main.orders AS ref_0,
+(
+	SELECT 1 AS c0
+	FROM main.customer AS ref_1 RIGHT JOIN
+		 main.partsupp AS ref_2 ON
+		 (ref_2.ps_availqty IS NULL),
+			 (
+					 SELECT 20 AS c5,
+					 FROM main.orders AS ref_4,
+							  (
+									  SELECT 97 AS c0,
+												   ref_0.o_orderdate AS c1
+									  FROM main.orders LIMIT 93
+							  ) AS subq_0
+					 WHERE (ref_1.c_mktsegment ~~ ref_0.o_clerk)
+			 ) AS subq_1
+) AS subq_2;

@@ -44,6 +44,7 @@ enum CSVErrorType : uint8_t {
 	SNIFFING = 4,          // If something went wrong during sniffing and was not possible to find suitable candidates
 	MAXIMUM_LINE_SIZE = 5, // Maximum line size was exceeded by a line in the CSV File
 	NULLPADDED_QUOTED_NEW_VALUE = 6, // If the null_padding option is set and we have quoted new values in parallel
+	INVALID_UNICODE = 7
 
 };
 
@@ -70,6 +71,8 @@ public:
 	static CSVError IncorrectColumnAmountError(const CSVReaderOptions &options, string_t *vector_ptr,
 	                                           idx_t vector_line_start, idx_t actual_columns,
 	                                           LinesPerBoundary error_info);
+	//! Produces error message when we detect an invalid utf-8 value
+	static CSVError InvalidUTF8(const CSVReaderOptions &options, LinesPerBoundary error_info);
 	idx_t GetBoundaryIndex() {
 		return error_info.boundary_idx;
 	}

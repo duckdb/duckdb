@@ -39,6 +39,7 @@ struct WindowInputExpression {
 			chunk.Reset();
 			executor.Execute(input_chunk, chunk);
 			chunk.Verify();
+			chunk.Flatten();
 		}
 	}
 

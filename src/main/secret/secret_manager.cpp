@@ -301,7 +301,7 @@ SecretMatch SecretManager::LookupSecret(CatalogTransaction transaction, const st
 		if (!storage_ref.get().IncludeInLookups()) {
 			continue;
 		}
-		auto match = storage_ref.get().LookupSecret(path, type, &transaction);
+		auto match = storage_ref.get().LookupSecret(path, StringUtil::Lower(type), &transaction);
 		if (match.HasMatch() && match.score > best_match_score) {
 			best_match = std::move(match.secret_entry);
 			best_match_score = match.score;
@@ -516,11 +516,11 @@ void SecretManager::InitializeSecrets(CatalogTransaction transaction) {
 }
 
 void SecretManager::AutoloadExtensionForType(const string &type) {
-	ExtensionHelper::TryAutoloadFromEntry(*db, type, EXTENSION_SECRET_TYPES);
+	ExtensionHelper::TryAutoloadFromEntry(*db, StringUtil::Lower(type), EXTENSION_SECRET_TYPES);
 }
 
 void SecretManager::AutoloadExtensionForFunction(const string &type, const string &provider) {
-	ExtensionHelper::TryAutoloadFromEntry(*db, type + "/" + provider, EXTENSION_SECRET_PROVIDERS);
+	ExtensionHelper::TryAutoloadFromEntry(*db, StringUtil::Lower(type) + "/" + provider, EXTENSION_SECRET_PROVIDERS);
 }
 
 optional_ptr<SecretStorage> SecretManager::GetSecretStorage(const string &name) {

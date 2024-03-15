@@ -11,8 +11,10 @@ namespace duckdb {
 static bool TypeIsNested(LogicalTypeId id) {
 	switch (id) {
 	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::UNION:
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::MAP:
+	case LogicalTypeId::ARRAY:
 		return true;
 	default:
 		return false;

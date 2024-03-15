@@ -261,20 +261,23 @@ static inline void ToUnifiedFormatInternal(TupleDataVectorFormat &format, Vector
 
 		// For arrays, we cheat a bit and pretend that they are lists by creating and assigning list_entry_t's to the
 		// vector This allows us to reuse all the list serialization functions for array types too.
-
-		// This is kind of hacky, but we need to create a list_entry_t for each array entry
-		idx_t array_count = ArrayVector::GetTotalSize(vector) / ArrayType::GetSize(vector.GetType());
-		format.array_list_entries = make_uniq_array<list_entry_t>(array_count);
-
 		auto array_size = ArrayType::GetSize(vector.GetType());
-		// create list entries
-		for (idx_t i = 0; i < array_count; i++) {
+
+		// How many list_entry_t's do we need to cover the whole child array?
+		// Make sure we round up so its all covered
+		auto child_array_total_size = ArrayVector::GetTotalSize(vector);
+		auto list_entry_t_count = (child_array_total_size + array_size) / array_size;
+
+		// Create list entries!
+		format.array_list_entries = make_uniq_array<list_entry_t>(list_entry_t_count);
+		for (idx_t i = 0; i < list_entry_t_count; i++) {
 			format.array_list_entries[i].length = array_size;
 			format.array_list_entries[i].offset = i * array_size;
 		}
 		format.unified.data = reinterpret_cast<data_ptr_t>(format.array_list_entries.get());
 
-		ToUnifiedFormatInternal(format.children[0], ArrayVector::GetEntry(vector), ArrayVector::GetTotalSize(vector));
+		ToUnifiedFormatInternal(reinterpret_cast<TupleDataVectorFormat &>(format.children[0]),
+		                        ArrayVector::GetEntry(vector), count * array_size);
 	} break;
 	default:
 		break;

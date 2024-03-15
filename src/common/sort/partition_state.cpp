@@ -3,7 +3,7 @@
 #include "duckdb/common/types/column/column_data_consumer.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/parallel/event.hpp"
+#include "duckdb/parallel/executor_task.hpp"
 
 #include <numeric>
 
@@ -565,7 +565,7 @@ class PartitionMergeTask : public ExecutorTask {
 public:
 	PartitionMergeTask(shared_ptr<Event> event_p, ClientContext &context_p, PartitionGlobalMergeStates &hash_groups_p,
 	                   PartitionGlobalSinkState &gstate)
-	    : ExecutorTask(context_p), event(std::move(event_p)), local_state(gstate), hash_groups(hash_groups_p) {
+	    : ExecutorTask(context_p, std::move(event_p)), local_state(gstate), hash_groups(hash_groups_p) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
@@ -582,7 +582,6 @@ private:
 		Executor &executor;
 	};
 
-	shared_ptr<Event> event;
 	PartitionLocalMergeState local_state;
 	PartitionGlobalMergeStates &hash_groups;
 };

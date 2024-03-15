@@ -290,6 +290,7 @@ cmake_build
 cmake-build-debug
 cmake-build-release
 cmake-build-relwithdebinfo
+CMakeUserPresets.json
 
 # Generated documentation
 docs

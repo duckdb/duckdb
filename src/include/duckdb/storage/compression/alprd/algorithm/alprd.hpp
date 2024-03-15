@@ -133,7 +133,7 @@ struct AlpRDCompression {
 	}
 
 	static double FindBestDictionary(const vector<EXACT_TYPE> &values, State &state) {
-		uint8_t right_bit_width;
+		uint8_t right_bit_width = 0;
 		double best_dict_size = NumericLimits<int32_t>::Maximum();
 		//! Finding the best position to CUT the values
 		for (idx_t i = 1; i <= AlpRDConstants::CUTTING_LIMIT; i++) {

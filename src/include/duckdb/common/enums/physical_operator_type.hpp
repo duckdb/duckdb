@@ -113,6 +113,7 @@ enum class PhysicalOperatorType : uint8_t {
 	RESULT_COLLECTOR,
 	RESET,
 	EXTENSION,
+	VERIFY_VECTOR,
 
 	// -----------------------------
 	// Secret
