@@ -346,7 +346,7 @@ struct FlatVector {
 		VerifyFlatVector(vector);
 		return vector.validity;
 	}
-	static inline void SetValidity(Vector &vector, ValidityMask &new_validity) {
+	static inline void SetValidity(Vector &vector, const ValidityMask &new_validity) {
 		VerifyFlatVector(vector);
 		vector.validity.Initialize(new_validity);
 	}
