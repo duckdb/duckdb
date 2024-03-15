@@ -17,13 +17,13 @@
 namespace duckdb {
 struct FixedRawBatchData;
 
-class PhysicalFixedBatchCopy : public PhysicalOperator {
+class PhysicalBatchCopyToFile : public PhysicalOperator {
 public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::BATCH_COPY_TO_FILE;
 
 public:
-	PhysicalFixedBatchCopy(vector<LogicalType> types, CopyFunction function, unique_ptr<FunctionData> bind_data,
-	                       idx_t estimated_cardinality);
+	PhysicalBatchCopyToFile(vector<LogicalType> types, CopyFunction function, unique_ptr<FunctionData> bind_data,
+	                        idx_t estimated_cardinality);
 
 	CopyFunction function;
 	unique_ptr<FunctionData> bind_data;

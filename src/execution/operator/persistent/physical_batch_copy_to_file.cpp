@@ -1,4 +1,4 @@
-#include "duckdb/execution/operator/persistent/physical_fixed_batch_copy.hpp"
+#include "duckdb/execution/operator/persistent/physical_batch_copy_to_file.hpp"
 #include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -13,8 +13,8 @@
 
 namespace duckdb {
 
-PhysicalFixedBatchCopy::PhysicalFixedBatchCopy(vector<LogicalType> types, CopyFunction function_p,
-                                               unique_ptr<FunctionData> bind_data_p, idx_t estimated_cardinality)
+PhysicalBatchCopyToFile::PhysicalBatchCopyToFile(vector<LogicalType> types, CopyFunction function_p,
+                                                 unique_ptr<FunctionData> bind_data_p, idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::BATCH_COPY_TO_FILE, std::move(types), estimated_cardinality),
       function(std::move(function_p)), bind_data(std::move(bind_data_p)) {
 	if (!function.flush_batch || !function.prepare_batch) {
@@ -31,7 +31,7 @@ public:
 	virtual ~BatchCopyTask() {
 	}
 
-	virtual void Execute(const PhysicalFixedBatchCopy &op, ClientContext &context, GlobalSinkState &gstate_p) = 0;
+	virtual void Execute(const PhysicalBatchCopyToFile &op, ClientContext &context, GlobalSinkState &gstate_p) = 0;
 };
 
 struct FixedRawBatchData {
@@ -139,8 +139,8 @@ public:
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-SinkResultType PhysicalFixedBatchCopy::Sink(ExecutionContext &context, DataChunk &chunk,
-                                            OperatorSinkInput &input) const {
+SinkResultType PhysicalBatchCopyToFile::Sink(ExecutionContext &context, DataChunk &chunk,
+                                             OperatorSinkInput &input) const {
 	auto &state = input.local_state.Cast<FixedBatchCopyLocalState>();
 	auto &gstate = input.global_state.Cast<FixedBatchCopyGlobalState>();
 	auto &memory_manager = gstate.memory_manager;
@@ -188,8 +188,8 @@ SinkResultType PhysicalFixedBatchCopy::Sink(ExecutionContext &context, DataChunk
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-SinkCombineResultType PhysicalFixedBatchCopy::Combine(ExecutionContext &context,
-                                                      OperatorSinkCombineInput &input) const {
+SinkCombineResultType PhysicalBatchCopyToFile::Combine(ExecutionContext &context,
+                                                       OperatorSinkCombineInput &input) const {
 	auto &state = input.local_state.Cast<FixedBatchCopyLocalState>();
 	auto &gstate = input.global_state.Cast<FixedBatchCopyGlobalState>();
 	auto &memory_manager = gstate.memory_manager;
@@ -215,7 +215,7 @@ SinkCombineResultType PhysicalFixedBatchCopy::Combine(ExecutionContext &context,
 class ProcessRemainingBatchesTask : public ExecutorTask {
 public:
 	ProcessRemainingBatchesTask(Executor &executor, shared_ptr<Event> event_p, FixedBatchCopyGlobalState &state_p,
-	                            ClientContext &context, const PhysicalFixedBatchCopy &op)
+	                            ClientContext &context, const PhysicalBatchCopyToFile &op)
 	    : ExecutorTask(executor, std::move(event_p)), op(op), gstate(state_p), context(context) {
 	}
 
@@ -228,18 +228,18 @@ public:
 	}
 
 private:
-	const PhysicalFixedBatchCopy &op;
+	const PhysicalBatchCopyToFile &op;
 	FixedBatchCopyGlobalState &gstate;
 	ClientContext &context;
 };
 
 class ProcessRemainingBatchesEvent : public BasePipelineEvent {
 public:
-	ProcessRemainingBatchesEvent(const PhysicalFixedBatchCopy &op_p, FixedBatchCopyGlobalState &gstate_p,
+	ProcessRemainingBatchesEvent(const PhysicalBatchCopyToFile &op_p, FixedBatchCopyGlobalState &gstate_p,
 	                             Pipeline &pipeline_p, ClientContext &context)
 	    : BasePipelineEvent(pipeline_p), op(op_p), gstate(gstate_p), context(context) {
 	}
-	const PhysicalFixedBatchCopy &op;
+	const PhysicalBatchCopyToFile &op;
 	FixedBatchCopyGlobalState &gstate;
 	ClientContext &context;
 
@@ -263,7 +263,7 @@ public:
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-SinkFinalizeType PhysicalFixedBatchCopy::FinalFlush(ClientContext &context, GlobalSinkState &gstate_p) const {
+SinkFinalizeType PhysicalBatchCopyToFile::FinalFlush(ClientContext &context, GlobalSinkState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<FixedBatchCopyGlobalState>();
 	if (gstate.task_manager.TaskCount() != 0) {
 		throw InternalException("Unexecuted tasks are remaining in PhysicalFixedBatchCopy::FinalFlush!?");
@@ -284,8 +284,8 @@ SinkFinalizeType PhysicalFixedBatchCopy::FinalFlush(ClientContext &context, Glob
 	return SinkFinalizeType::READY;
 }
 
-SinkFinalizeType PhysicalFixedBatchCopy::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                                  OperatorSinkFinalizeInput &input) const {
+SinkFinalizeType PhysicalBatchCopyToFile::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                                   OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<FixedBatchCopyGlobalState>();
 	auto min_batch_index = idx_t(NumericLimits<int64_t>::Maximum());
 	// repartition any remaining batches
@@ -311,7 +311,7 @@ public:
 	RepartitionedFlushTask() {
 	}
 
-	void Execute(const PhysicalFixedBatchCopy &op, ClientContext &context, GlobalSinkState &gstate_p) override {
+	void Execute(const PhysicalBatchCopyToFile &op, ClientContext &context, GlobalSinkState &gstate_p) override {
 		op.FlushBatchData(context, gstate_p, 0);
 	}
 };
@@ -325,7 +325,7 @@ public:
 	idx_t batch_index;
 	unique_ptr<FixedRawBatchData> batch_data;
 
-	void Execute(const PhysicalFixedBatchCopy &op, ClientContext &context, GlobalSinkState &gstate_p) override {
+	void Execute(const PhysicalBatchCopyToFile &op, ClientContext &context, GlobalSinkState &gstate_p) override {
 		auto &gstate = gstate_p.Cast<FixedBatchCopyGlobalState>();
 		auto memory_usage = batch_data->memory_usage;
 		auto prepared_batch =
@@ -340,8 +340,8 @@ public:
 //===--------------------------------------------------------------------===//
 // Batch Data Handling
 //===--------------------------------------------------------------------===//
-void PhysicalFixedBatchCopy::AddRawBatchData(ClientContext &context, GlobalSinkState &gstate_p, idx_t batch_index,
-                                             unique_ptr<FixedRawBatchData> raw_batch) const {
+void PhysicalBatchCopyToFile::AddRawBatchData(ClientContext &context, GlobalSinkState &gstate_p, idx_t batch_index,
+                                              unique_ptr<FixedRawBatchData> raw_batch) const {
 	auto &gstate = gstate_p.Cast<FixedBatchCopyGlobalState>();
 
 	// add the batch index to the set of raw batches
@@ -360,8 +360,8 @@ static bool CorrectSizeForBatch(idx_t collection_size, idx_t desired_size) {
 	return idx_t(AbsValue<int64_t>(int64_t(collection_size) - int64_t(desired_size))) < STANDARD_VECTOR_SIZE;
 }
 
-void PhysicalFixedBatchCopy::RepartitionBatches(ClientContext &context, GlobalSinkState &gstate_p, idx_t min_index,
-                                                bool final) const {
+void PhysicalBatchCopyToFile::RepartitionBatches(ClientContext &context, GlobalSinkState &gstate_p, idx_t min_index,
+                                                 bool final) const {
 	auto &gstate = gstate_p.Cast<FixedBatchCopyGlobalState>();
 	auto &task_manager = gstate.task_manager;
 
@@ -464,7 +464,7 @@ void PhysicalFixedBatchCopy::RepartitionBatches(ClientContext &context, GlobalSi
 	}
 }
 
-void PhysicalFixedBatchCopy::FlushBatchData(ClientContext &context, GlobalSinkState &gstate_p, idx_t min_index) const {
+void PhysicalBatchCopyToFile::FlushBatchData(ClientContext &context, GlobalSinkState &gstate_p, idx_t min_index) const {
 	auto &gstate = gstate_p.Cast<FixedBatchCopyGlobalState>();
 	auto &memory_manager = gstate.memory_manager;
 
@@ -508,7 +508,7 @@ void PhysicalFixedBatchCopy::FlushBatchData(ClientContext &context, GlobalSinkSt
 //===--------------------------------------------------------------------===//
 // Tasks
 //===--------------------------------------------------------------------===//
-bool PhysicalFixedBatchCopy::ExecuteTask(ClientContext &context, GlobalSinkState &gstate_p) const {
+bool PhysicalBatchCopyToFile::ExecuteTask(ClientContext &context, GlobalSinkState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<FixedBatchCopyGlobalState>();
 	auto task = gstate.task_manager.GetTask();
 	if (!task) {
@@ -518,7 +518,7 @@ bool PhysicalFixedBatchCopy::ExecuteTask(ClientContext &context, GlobalSinkState
 	return true;
 }
 
-void PhysicalFixedBatchCopy::ExecuteTasks(ClientContext &context, GlobalSinkState &gstate_p) const {
+void PhysicalBatchCopyToFile::ExecuteTasks(ClientContext &context, GlobalSinkState &gstate_p) const {
 	while (ExecuteTask(context, gstate_p)) {
 	}
 }
@@ -526,8 +526,8 @@ void PhysicalFixedBatchCopy::ExecuteTasks(ClientContext &context, GlobalSinkStat
 //===--------------------------------------------------------------------===//
 // Next Batch
 //===--------------------------------------------------------------------===//
-void PhysicalFixedBatchCopy::AddLocalBatch(ClientContext &context, GlobalSinkState &gstate_p,
-                                           LocalSinkState &lstate) const {
+void PhysicalBatchCopyToFile::AddLocalBatch(ClientContext &context, GlobalSinkState &gstate_p,
+                                            LocalSinkState &lstate) const {
 	auto &state = lstate.Cast<FixedBatchCopyLocalState>();
 	auto &gstate = gstate_p.Cast<FixedBatchCopyGlobalState>();
 	auto &memory_manager = gstate.memory_manager;
@@ -554,8 +554,8 @@ void PhysicalFixedBatchCopy::AddLocalBatch(ClientContext &context, GlobalSinkSta
 	}
 }
 
-SinkNextBatchType PhysicalFixedBatchCopy::NextBatch(ExecutionContext &context,
-                                                    OperatorSinkNextBatchInput &input) const {
+SinkNextBatchType PhysicalBatchCopyToFile::NextBatch(ExecutionContext &context,
+                                                     OperatorSinkNextBatchInput &input) const {
 	auto &lstate = input.local_state;
 	auto &state = lstate.Cast<FixedBatchCopyLocalState>();
 	auto &gstate = input.global_state.Cast<FixedBatchCopyGlobalState>();
@@ -572,11 +572,11 @@ SinkNextBatchType PhysicalFixedBatchCopy::NextBatch(ExecutionContext &context,
 	return SinkNextBatchType::READY;
 }
 
-unique_ptr<LocalSinkState> PhysicalFixedBatchCopy::GetLocalSinkState(ExecutionContext &context) const {
+unique_ptr<LocalSinkState> PhysicalBatchCopyToFile::GetLocalSinkState(ExecutionContext &context) const {
 	return make_uniq<FixedBatchCopyLocalState>(function.copy_to_initialize_local(context, *bind_data));
 }
 
-unique_ptr<GlobalSinkState> PhysicalFixedBatchCopy::GetGlobalSinkState(ClientContext &context) const {
+unique_ptr<GlobalSinkState> PhysicalBatchCopyToFile::GetGlobalSinkState(ClientContext &context) const {
 	// request memory based on the minimum amount of memory per column
 	auto minimum_memory_per_thread =
 	    FixedBatchCopyGlobalState::MINIMUM_MEMORY_PER_COLUMN_PER_THREAD * children[0]->types.size();
@@ -589,8 +589,8 @@ unique_ptr<GlobalSinkState> PhysicalFixedBatchCopy::GetGlobalSinkState(ClientCon
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-SourceResultType PhysicalFixedBatchCopy::GetData(ExecutionContext &context, DataChunk &chunk,
-                                                 OperatorSourceInput &input) const {
+SourceResultType PhysicalBatchCopyToFile::GetData(ExecutionContext &context, DataChunk &chunk,
+                                                  OperatorSourceInput &input) const {
 	auto &g = sink_state->Cast<FixedBatchCopyGlobalState>();
 
 	chunk.SetCardinality(1);
