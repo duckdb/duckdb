@@ -50,9 +50,22 @@ CREATE TABLE venue_2 (
 
 # Similar to the https://tech.marksblogg.com/duckdb-1b-taxi-rides.html issue
 statement error
-INSERT INTO venue SELECT * FROM read_csv('data/csv/venue_pipe_big.csv', sample_size = 1);
+INSERT INTO venue_2 SELECT * FROM read_csv('data/csv/venue_pipe_big.csv', sample_size = 1);
 ----
 This type was auto-detected from the CSV file.
+
+# Check our  possible solutions:
+#* Override the type for this column manually by setting the type explicitly, e.g. types={'venueseats': 'VARCHAR'}
+statement ok
+INSERT INTO venue_2 SELECT * FROM read_csv('data/csv/venue_pipe_big.csv', sample_size = 1, types={'venueseats': 'VARCHAR'});
+
+#* Set the sample size to a larger value to enable the auto-detection to scan more values, e.g. sample_size=-1
+statement ok
+INSERT INTO venue_2 SELECT * FROM read_csv('data/csv/venue_pipe_big.csv', sample_size = -1);
+
+#* Use a COPY statement to automatically derive types from an existing table.
+statement ok
+copy venue_2 from 'data/csv/venue_pipe_big.csv'
 
 statement error
 SELECT * FROM read_csv('data/csv/venue_pipe_big.csv', sample_size = 1);
