@@ -4,6 +4,9 @@
 
 require json
 
+statement ok
+PRAGMA enable_verification;
+
 # Check that the default settings are as expected
 statement ok
 PRAGMA enable_profiling = 'json';

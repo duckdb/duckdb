@@ -597,13 +597,18 @@ void CustomProfilingSettings::SetLocal(ClientContext &context, const Value &inpu
 	// read file into string
 	string file_content;
 	auto line = file->ReadLine();
+	idx_t line_count = 0;
 	while (!line.empty()) {
+		line_count++;
 		if (StringUtil::Equals(&line.back(), "\n")) {
 			line.substr(0, line.size() - 1);
 		}
 		StringUtil::Replace(line, "\\", "");
 		file_content += line;
 		line = file->ReadLine();
+	}
+	if (line_count == 0) {
+		throw IOException("File is empty");
 	}
 	file->Close();
 
