@@ -338,12 +338,6 @@ class SQLLogicConnectionPool:
         self.cursors = {}
         self.connection = con
 
-    def __del__(self):
-        # Named cursors, for named connections
-        self.cursors: Dict[str, duckdb.DuckDBPyConnection] = {}
-        # Unnamed cursor, the default 'connection' used
-        self.connection: Optional[duckdb.DuckDBPyConnection] = None
-
     def initialize_connection(self, context: "SQLLogicContext", con):
         runner = context.runner
         if runner.test.is_sqlite_test():
@@ -681,9 +675,6 @@ class SQLLogicContext:
 
     def reset(self):
         self.iterator = 0
-
-    def __del__(self):
-        self.pool = None
 
     def replace_keywords(self, input: str):
         # Apply a replacement for every registered keyword
