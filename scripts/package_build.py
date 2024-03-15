@@ -127,6 +127,7 @@ def get_relative_path(source_dir, target_file):
         target_file = target_file.replace(source_dir, "").lstrip('/')
     return target_file
 
+
 def get_git_describe():
     override_git_describe = ''
     if 'OVERRIDE_GIT_DESCRIBE' in os.environ:
@@ -144,16 +145,21 @@ def get_git_describe():
         override_git_describe += "-0"
     assert len(override_git_describe.split('-')) == 1
     try:
-        return override_git_describe + "-" + subprocess.check_output(['git', 'log', '-1', '--format=%h']).strip().decode('utf8')
+        return (
+            override_git_describe
+            + "-"
+            + subprocess.check_output(['git', 'log', '-1', '--format=%h']).strip().decode('utf8')
+        )
     except:
         return override_git_describe + "-" + "deadbeeff"
+
 
 def git_commit_hash():
     if 'SETUPTOOLS_SCM_PRETEND_HASH' in os.environ:
         return os.environ['SETUPTOOLS_SCM_PRETEND_HASH']
     try:
-        git_describe = get_git_describe();
-        hash = git_describe.split('-')[2];
+        git_describe = get_git_describe()
+        hash = git_describe.split('-')[2]
         return hash
     except:
         return "deadbeeff"

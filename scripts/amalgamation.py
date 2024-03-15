@@ -262,9 +262,10 @@ def copy_if_different(src, dest):
     # print("Copying " + src + " to " + dest)
     shutil.copyfile(src, dest)
 
+
 def git_commit_hash():
-    git_describe = package_build.get_git_describe();
-    hash = git_describe.split('-')[2];
+    git_describe = package_build.get_git_describe()
+    hash = git_describe.split('-')[2]
     return hash
 
 
