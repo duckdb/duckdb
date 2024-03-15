@@ -324,14 +324,20 @@ TEST_CASE("Parallel transactional appends to indexed table", "[index][.]") {
 }
 
 static void JoinIntegers(Connection *con) {
-
 	for (idx_t i = 0; i < 10; i++) {
 		auto result = con->Query("SELECT count(*) FROM integers INNER JOIN integers_2 ON (integers.i = integers_2.i)");
-		REQUIRE_NO_FAIL(*result);
-		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(500000)}));
+		if (result->HasError()) {
+			FAIL();
+		}
+		if (!CHECK_COLUMN(result, 0, {Value::BIGINT(500000)})) {
+			FAIL();
+		}
 	}
 
-	REQUIRE_NO_FAIL(con->Query("COMMIT"));
+	auto result = con->Query("COMMIT");
+	if (result->HasError()) {
+		FAIL();
+	}
 }
 
 TEST_CASE("Concurrent appends during joins", "[index][.]") {
