@@ -139,7 +139,9 @@ def git_commit_hash():
     if 'SETUPTOOLS_SCM_PRETEND_HASH' in os.environ:
         return os.environ['SETUPTOOLS_SCM_PRETEND_HASH']
     try:
-        return subprocess.check_output(['git', 'log', '-1', '--format=%h']).strip().decode('utf8')
+        git_describe = get_git_describe();
+        hash = git_describe.split('-')[2];
+        return hash
     except:
         return "deadbeeff"
 
