@@ -36,6 +36,7 @@ void CSVSniffer::ReplaceTypes() {
 	}
 	for (idx_t i = 0; i < sniffing_state_machine.options.sql_type_list.size(); i++) {
 		detected_types[i] = sniffing_state_machine.options.sql_type_list[i];
+		manually_set[i] = true;
 	}
 }
 } // namespace duckdb
