@@ -127,6 +127,13 @@ def get_relative_path(source_dir, target_file):
         target_file = target_file.replace(source_dir, "").lstrip('/')
     return target_file
 
+def get_git_describe():
+    if 'OVERRIDE_GIT_DESCRIBE' in os.environ:
+        return os.environ['OVERRIDE_GIT_DESCRIBE']
+    try:
+        return subprocess.check_output(['git', 'describe', '--tags', '--long']).strip().decode('utf8')
+    except:
+        return "v0.0.0-0-deadbeeff"
 
 def git_commit_hash():
     if 'SETUPTOOLS_SCM_PRETEND_HASH' in os.environ:
@@ -148,7 +155,7 @@ def git_dev_version():
     if 'SETUPTOOLS_SCM_PRETEND_VERSION' in os.environ:
         return prefix_version(os.environ['SETUPTOOLS_SCM_PRETEND_VERSION'])
     try:
-        long_version = subprocess.check_output(['git', 'describe', '--tags', '--long']).strip().decode('utf8')
+        long_version = get_git_describe()
         version_splits = long_version.split('-')[0].lstrip('v').split('.')
         dev_version = long_version.split('-')[1]
         if int(dev_version) == 0:
