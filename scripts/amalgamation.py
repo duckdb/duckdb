@@ -263,15 +263,25 @@ def copy_if_different(src, dest):
     shutil.copyfile(src, dest)
 
 
+def get_git_describe():
+    if 'OVERRIDE_GIT_DESCRIBE' in os.environ:
+        return os.environ['OVERRIDE_GIT_DESCRIBE']
+    try:
+        return subprocess.check_output(['git', 'describe', '--tags', '--long']).strip().decode('utf8')
+    except:
+        return "v0.0.0-0-deadbeeff"
+
+
 def git_commit_hash():
-    return subprocess.check_output(['git', 'log', '-1', '--format=%h']).strip().decode('utf8')
+    git_describe = get_git_describe();
+    hash = git_describe.split('-')[2];
+    return hash
 
 
 def git_dev_version():
     try:
-        version = subprocess.check_output(['git', 'describe', '--tags', '--abbrev=0']).strip().decode('utf8')
-        long_version = subprocess.check_output(['git', 'describe', '--tags', '--long']).strip().decode('utf8')
-        version_splits = version.lstrip('v').split('.')
+        long_version = get_git_describe()
+        version_splits = long_version.split('-')[0].lstrip('v').split('.')
         dev_version = long_version.split('-')[1]
         if int(dev_version) == 0:
             # directly on a tag: emit the regular version
