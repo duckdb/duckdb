@@ -184,7 +184,7 @@ PRAGMA custom_profiling_settings='__WORKING_DIRECTORY__/test/sql/pragma/pragma_d
 The custom profiler settings file must be a JSON file
 
 statement error
-PRAGMA custom_profiling_settings='__WORKING_DIRECTORY__/test/sql/pragma/test.json'
+PRAGMA custom_profiling_settings='__WORKING_DIRECTORY__/test/sql/pragma/not_a_valid.json'
 ----
 Could not parse the custom profiler settings file
 
