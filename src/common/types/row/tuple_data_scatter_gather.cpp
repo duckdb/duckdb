@@ -452,7 +452,7 @@ void TupleDataCollection::CollectionWithinCollectionComputeHeapSizes(Vector &hea
 		const auto append_idx = append_sel.get_index(i);
 		const auto list_idx = list_sel.get_index(append_idx);
 		if (!list_validity.RowIsValid(list_idx)) {
-			combined_validity.SetInvalidUnsafe(i);
+			combined_validity.SetInvalidUnsafe(append_idx);
 			continue; // Original list entry is invalid - no need to serialize the child list
 		}
 
