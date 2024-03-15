@@ -417,14 +417,20 @@ void RowGroupCollection::CommitAppend(transaction_t commit_id, idx_t row_start, 
 }
 
 void RowGroupCollection::RevertAppendInternal(idx_t start_row) {
-	if (total_rows <= start_row) {
-		return;
-	}
 	total_rows = start_row;
 
 	auto l = row_groups->Lock();
-	// find the segment index that the current row belongs to
-	idx_t segment_index = row_groups->GetSegmentIndex(l, start_row);
+	idx_t segment_count = row_groups->GetSegmentCount(l);
+	if (segment_count == 0) {
+		// we have no segments to revert
+		return;
+	}
+	idx_t segment_index;
+	// find the segment index that the start row belongs to
+	if (!row_groups->TryGetSegmentIndex(l, start_row, segment_index)) {
+		// revert from the last segment
+		segment_index = segment_count - 1;
+	}
 	auto &segment = *row_groups->GetSegmentByIndex(l, segment_index);
 
 	// remove any segments AFTER this segment: they should be deleted entirely
