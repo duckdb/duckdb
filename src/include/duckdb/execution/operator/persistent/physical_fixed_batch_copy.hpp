@@ -19,7 +19,7 @@ struct FixedRawBatchData;
 
 class PhysicalFixedBatchCopy : public PhysicalOperator {
 public:
-	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::FIXED_BATCH_COPY_TO_FILE;
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::BATCH_COPY_TO_FILE;
 
 public:
 	PhysicalFixedBatchCopy(vector<LogicalType> types, CopyFunction function, unique_ptr<FunctionData> bind_data,

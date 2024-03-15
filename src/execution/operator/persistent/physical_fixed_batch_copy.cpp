@@ -5,7 +5,6 @@
 #include "duckdb/common/types/batched_data_collection.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/queue.hpp"
-#include "duckdb/execution/operator/persistent/physical_batch_copy_to_file.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/execution/operator/persistent/batch_memory_manager.hpp"
 #include "duckdb/execution/operator/persistent/batch_task_manager.hpp"
@@ -18,9 +17,9 @@ PhysicalFixedBatchCopy::PhysicalFixedBatchCopy(vector<LogicalType> types, CopyFu
                                                unique_ptr<FunctionData> bind_data_p, idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::BATCH_COPY_TO_FILE, std::move(types), estimated_cardinality),
       function(std::move(function_p)), bind_data(std::move(bind_data_p)) {
-	if (!function.flush_batch || !function.prepare_batch || !function.desired_batch_size) {
+	if (!function.flush_batch || !function.prepare_batch) {
 		throw InternalException("PhysicalFixedBatchCopy created for copy function that does not have "
-		                        "prepare_batch/flush_batch/desired_batch_size defined");
+		                        "prepare_batch/flush_batch defined");
 	}
 }
 
@@ -354,6 +353,10 @@ void PhysicalFixedBatchCopy::AddRawBatchData(ClientContext &context, GlobalSinkS
 }
 
 static bool CorrectSizeForBatch(idx_t collection_size, idx_t desired_size) {
+	if (desired_size == 0) {
+		// a batch size of 0 indicates we are happy with any batch size
+		return true;
+	}
 	return idx_t(AbsValue<int64_t>(int64_t(collection_size) - int64_t(desired_size))) < STANDARD_VECTOR_SIZE;
 }
 
@@ -579,7 +582,7 @@ unique_ptr<GlobalSinkState> PhysicalFixedBatchCopy::GetGlobalSinkState(ClientCon
 	    FixedBatchCopyGlobalState::MINIMUM_MEMORY_PER_COLUMN_PER_THREAD * children[0]->types.size();
 	auto result = make_uniq<FixedBatchCopyGlobalState>(
 	    context, function.copy_to_initialize_global(context, *bind_data, file_path), minimum_memory_per_thread);
-	result->batch_size = function.desired_batch_size(context, *bind_data);
+	result->batch_size = function.desired_batch_size ? function.desired_batch_size(context, *bind_data) : 0;
 	return std::move(result);
 }
 
