@@ -217,6 +217,8 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 		}
 		return true;
 	}
+	lock_guard<mutex> l(state.lock);
+	scan_state.batch_index = state.batch_index;
 	return false;
 }
 
