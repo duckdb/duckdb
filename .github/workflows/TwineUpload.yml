@@ -29,7 +29,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: pip install twine
+        run: pip install twine awscli
 
       - name: Download from staging bucket
         shell: bash
