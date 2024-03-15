@@ -195,8 +195,6 @@ void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
 	loop_def.loop_idx = definition.loop_start;
 	if (loop_def.is_parallel) {
 		for (auto &running_loop : context.running_loops) {
-			// FIXME: this is only checking one level down
-			// concurrent loop followed by a regular loop, with another concurrent loop inside is not prevented by this
 			if (running_loop.is_parallel) {
 				throw std::runtime_error("Nested parallel loop commands not allowed");
 			}
