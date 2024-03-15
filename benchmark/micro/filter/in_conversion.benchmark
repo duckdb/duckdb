@@ -1,6 +1,6 @@
 # name: benchmark/micro/filter/in_conversion.benchmark
 # description: IN can be converted to = if there is one argument. for parquet files.
-# group: [pushdown]
+# group: [filter]
 
 name OrPushdown
 group micro
