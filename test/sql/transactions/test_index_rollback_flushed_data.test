@@ -35,11 +35,6 @@ statement error con2
 COMMIT;
 ----
 
-## correct behavior with rollback
-## con2 fails to commit because of the conflict
-#statement ok con2
-#ROLLBACK;
-
 statement ok
 INSERT INTO integers SELECT i FROM range(2, 4097, 1) t1(i)
 
