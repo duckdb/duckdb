@@ -470,6 +470,12 @@
         "id": 105,
         "name": "hive_types_schema",
         "type": "case_insensitive_map_t<LogicalType>"
+      },
+      {
+        "id": 106,
+        "name": "filename_column",
+        "type": "string",
+        "default": "MultiFileReaderOptions::DEFAULT_FILENAME_COLUMN"
       }
     ],
     "pointer_type": "none"

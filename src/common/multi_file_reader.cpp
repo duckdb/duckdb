@@ -14,7 +14,7 @@
 namespace duckdb {
 
 void MultiFileReader::AddParameters(TableFunction &table_function) {
-	table_function.named_parameters["filename"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["filename"] = LogicalType::VARCHAR;
 	table_function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["hive_types"] = LogicalType::ANY;
@@ -65,7 +65,16 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
                                   ClientContext &context) {
 	auto loption = StringUtil::Lower(key);
 	if (loption == "filename") {
-		options.filename = BooleanValue::Get(val);
+		Value boolean_value;
+		string error_message;
+		if (val.DefaultTryCastAs(LogicalType::BOOLEAN, boolean_value, &error_message)) {
+			// If the argument can be cast to boolean, we just interpret it as a boolean
+			options.filename = BooleanValue::Get(boolean_value);
+		} else {
+			// If not, we interpret it as the name of the column containing the filename
+			options.filename = true;
+			options.filename_column = StringValue::Get(val);
+		}
 	} else if (loption == "hive_partitioning") {
 		options.hive_partitioning = BooleanValue::Get(val);
 		options.auto_detect_hive_partitioning = false;
@@ -132,12 +141,14 @@ MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &opt
 	MultiFileReaderBindData bind_data;
 	// Add generated constant column for filename
 	if (options.filename) {
-		if (std::find(names.begin(), names.end(), "filename") != names.end()) {
-			throw BinderException("Using filename option on file with column named filename is not supported");
+		if (std::find(names.begin(), names.end(), options.filename_column) != names.end()) {
+			throw BinderException("Option filename adds column \"%s\", but a column with this name is also in the "
+			                      "file. Try setting a different name: filename='<filename column name>'",
+			                      options.filename_column);
 		}
 		bind_data.filename_idx = names.size();
 		return_types.emplace_back(LogicalType::VARCHAR);
-		names.emplace_back("filename");
+		names.emplace_back(options.filename_column);
 	}
 
 	// Add generated constant columns from hive partitioning scheme
@@ -359,7 +370,7 @@ HivePartitioningIndex::HivePartitioningIndex(string value_p, idx_t index) : valu
 }
 
 void MultiFileReaderOptions::AddBatchInfo(BindInfo &bind_info) const {
-	bind_info.InsertOption("filename", Value::BOOLEAN(filename));
+	bind_info.InsertOption("filename", Value(filename_column));
 	bind_info.InsertOption("hive_partitioning", Value::BOOLEAN(hive_partitioning));
 	bind_info.InsertOption("auto_detect_hive_partitioning", Value::BOOLEAN(auto_detect_hive_partitioning));
 	bind_info.InsertOption("union_by_name", Value::BOOLEAN(union_by_name));
