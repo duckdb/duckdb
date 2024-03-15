@@ -397,3 +397,15 @@ jobs:
        shell: bash
        if: ${{ github.ref == 'refs/heads/main' && github.repository == 'duckdb/duckdb' }}
        run: python3 scripts/pypi_cleanup.py
+
+   twine-upload:
+    needs:
+      - osx-python3
+      - win-python3
+      - linux-python3
+    # Note that want to run this by default ONLY if no override_git_describe is provided
+    # This means we are not staging a release
+    if: (( startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' )) && (( inputs.override_git_describe == '' ))
+    uses: ./.github/workflows/TwineUpload.yml
+    secrets: inherit
+    # Why? If present, it means we are staging releases, and we want to do the upload manually
