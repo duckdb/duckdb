@@ -680,7 +680,6 @@ class TestExpression(object):
         res2 = rel.filter(b.isnotnull()).fetchall()
         assert res2 == [(1, 'a'), (2, 'b'), (4, 'c'), (5, 'a')]
 
- 
     def test_sort(self):
         con = duckdb.connect()
         rel = con.sql(
