@@ -17,7 +17,7 @@ from .sleep import Sleep, SleepUnit
 
 from .skip import Skip, Unskip
 
-all = [
+__all__ = [
     Statement,
     Require,
     Mode,

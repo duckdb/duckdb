@@ -4,8 +4,8 @@ from typing import Optional, List
 
 class ExpectedResult:
     class Type(Enum):
-        SUCCESS = (auto(),)
-        ERROR = (auto(),)
+        SUCCESS = auto()
+        ERROR = auto()
         UNKNOWN = auto()
 
     def __init__(self, type: "ExpectedResult.Type"):

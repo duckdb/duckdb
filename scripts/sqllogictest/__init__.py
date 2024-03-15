@@ -26,7 +26,7 @@ from .decorator import SkipIf, OnlyIf
 from .expected_result import ExpectedResult
 from .parser import SQLLogicParser
 
-all = [
+__all__ = [
     TokenType,
     Token,
     BaseStatement,
