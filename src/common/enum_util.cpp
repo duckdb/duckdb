@@ -4361,8 +4361,6 @@ const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value) 
 		return "COPY_TO_FILE";
 	case PhysicalOperatorType::BATCH_COPY_TO_FILE:
 		return "BATCH_COPY_TO_FILE";
-	case PhysicalOperatorType::FIXED_BATCH_COPY_TO_FILE:
-		return "FIXED_BATCH_COPY_TO_FILE";
 	case PhysicalOperatorType::RESERVOIR_SAMPLE:
 		return "RESERVOIR_SAMPLE";
 	case PhysicalOperatorType::STREAMING_SAMPLE:
@@ -4536,9 +4534,6 @@ PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *valu
 	}
 	if (StringUtil::Equals(value, "BATCH_COPY_TO_FILE")) {
 		return PhysicalOperatorType::BATCH_COPY_TO_FILE;
-	}
-	if (StringUtil::Equals(value, "FIXED_BATCH_COPY_TO_FILE")) {
-		return PhysicalOperatorType::FIXED_BATCH_COPY_TO_FILE;
 	}
 	if (StringUtil::Equals(value, "RESERVOIR_SAMPLE")) {
 		return PhysicalOperatorType::RESERVOIR_SAMPLE;

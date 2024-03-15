@@ -13,6 +13,17 @@
 
 namespace duckdb {
 
+struct ActiveFlushGuard {
+	explicit ActiveFlushGuard(atomic<bool> &bool_value_p) : bool_value(bool_value_p) {
+		bool_value = true;
+	}
+	~ActiveFlushGuard() {
+		bool_value = false;
+	}
+
+	atomic<bool> &bool_value;
+};
+
 PhysicalBatchCopyToFile::PhysicalBatchCopyToFile(vector<LogicalType> types, CopyFunction function_p,
                                                  unique_ptr<FunctionData> bind_data_p, idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::BATCH_COPY_TO_FILE, std::move(types), estimated_cardinality),
