@@ -1004,7 +1004,23 @@ idx_t CastColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data
 			}
 		}
 	}
-	VectorOperations::DefaultCast(intermediate_vector, result, amount);
+	string error_message;
+	bool all_succeeded = VectorOperations::DefaultTryCast(intermediate_vector, result, amount, &error_message);
+	if (!all_succeeded) {
+		string extended_error;
+		extended_error =
+		    StringUtil::Format("In file \"%s\" the column \"%s\" has type %s, but we are trying to read it as type %s.",
+		                       reader.file_name, schema.name, intermediate_vector.GetType(), result.GetType());
+		extended_error += "\nThis can happen when reading multiple Parquet files. The schema information is taken from "
+		                  "the first Parquet file by default. Possible solutions:\n";
+		extended_error += "* Enable the union_by_name=True option to read the metadata of all Parquet files "
+		                  "(duckdb.org/docs/data/multiple_files/combining_schemas)\n";
+		extended_error += "* Use a COPY statement to automatically derive types from an existing table.";
+		throw ConversionException(
+		    "In Parquet reader of file \"%s\": failed to cast column \"%s\" from type %s to %s: %s\n\n%s",
+		    reader.file_name, schema.name, intermediate_vector.GetType(), result.GetType(), error_message,
+		    extended_error);
+	}
 	return amount;
 }
 
