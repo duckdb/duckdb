@@ -332,10 +332,9 @@ jobs:
          openssl: 0
          python: 0
 
-     - name: Install Python
-       uses: actions/setup-python@v5
+     - uses: actions/setup-python@v5
        with:
-         python-version: '3.9'
+         python-version: '3.10'
 
      - name: Install Python Test Dependencies
        shell: bash
