@@ -21,6 +21,7 @@ void string_t::VerifyUTF8() const {
 	D_ASSERT(dataptr);
 
 	auto utf_type = Utf8Proc::Analyze(dataptr, GetSize());
+	(void)utf_type;
 	D_ASSERT(utf_type != UnicodeType::INVALID);
 }
 
