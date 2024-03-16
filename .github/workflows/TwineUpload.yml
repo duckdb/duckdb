@@ -11,16 +11,11 @@ on:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
 
 jobs:
    twine-upload:
       name: Twine upload
       runs-on: ubuntu-latest
-
-      env:
-        TWINE_USERNAME: '__token__'
-        TWINE_PASSWORD: ${{ secrets.TWINE_TOKEN }}
 
       steps:
       - uses: actions/setup-python@v5
@@ -33,10 +28,12 @@ jobs:
 
       - name: Download from staging bucket
         shell: bash
+        env:
+          OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
         run: |
           # decide target for staging
           if [ -z "$OVERRIDE_GIT_DESCRIBE" ]; then
-            TARGET=$(git describe --tags --long)
+            TARGET=$(git describe --tags --abbrev=0)
           else
             TARGET="$OVERRIDE_GIT_DESCRIBE"
           fi
