@@ -48,7 +48,8 @@ public:
 	                                          PreparedStatementMode mode) {
 		return RebindQueryInfo::DO_NOT_REBIND;
 	}
-	virtual RebindQueryInfo OnExecutePrepared(ClientContext &context, PreparedStatementData &prepared_statement) {
+	virtual RebindQueryInfo OnExecutePrepared(ClientContext &context, PreparedStatementData &prepared_statement,
+	                                          RebindQueryInfo current_rebind) {
 		return RebindQueryInfo::DO_NOT_REBIND;
 	}
 };

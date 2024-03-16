@@ -38,6 +38,7 @@
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/enums/pending_execution_result.hpp"
 #include "duckdb/common/enums/physical_operator_type.hpp"
+#include "duckdb/common/enums/prepared_statement_mode.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
 #include "duckdb/common/enums/relation_type.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
@@ -4862,6 +4863,29 @@ PreparedParamType EnumUtil::FromString<PreparedParamType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "INVALID")) {
 		return PreparedParamType::INVALID;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<PreparedStatementMode>(PreparedStatementMode value) {
+	switch(value) {
+	case PreparedStatementMode::PREPARE_ONLY:
+		return "PREPARE_ONLY";
+	case PreparedStatementMode::PREPARE_AND_EXECUTE:
+		return "PREPARE_AND_EXECUTE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+PreparedStatementMode EnumUtil::FromString<PreparedStatementMode>(const char *value) {
+	if (StringUtil::Equals(value, "PREPARE_ONLY")) {
+		return PreparedStatementMode::PREPARE_ONLY;
+	}
+	if (StringUtil::Equals(value, "PREPARE_AND_EXECUTE")) {
+		return PreparedStatementMode::PREPARE_AND_EXECUTE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
