@@ -175,27 +175,11 @@ _exported_symbols.extend([
 
 
 from .duckdb import (
-    connect,
-    #project,
-    #aggregate,
-    #distinct,
-    #limit,
-    #query_df,
-    #order,
-    #alias,
-    #write_csv
+    connect
 )
 
 _exported_symbols.extend([
-    "connect",
-    #"project",
-    #"aggregate",
-    #"distinct",
-    #"limit",
-    #"query_df",
-    #"order",
-    #"alias",
-    #"write_csv"
+    "connect"
 ])
 
 # Exceptions
