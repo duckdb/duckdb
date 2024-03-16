@@ -71,58 +71,36 @@ static py::list PyTokenize(const string &query) {
 }
 
 static void InitializeConnectionMethods(py::module_ &m) {
-	m.def("project",
-	      [](const PandasDataFrame &df, const py::object &expr,
-	         shared_ptr<DuckDBPyConnection> conn) -> unique_ptr<DuckDBPyRelation> {
-		      // FIXME: if we want to support passing in DuckDBPyExpressions here
-		      // we could also accept 'expr' as a List[DuckDBPyExpression], without changing the signature
-		      if (!py::isinstance<py::str>(expr)) {
-			      throw InvalidInputException("Please provide 'expr' as a string");
-		      }
-		      return conn->FromDF(df)->Project(expr);
-	      });
-
-	// unique_ptr<DuckDBPyRelation> PyConnectionWrapper::DistinctDF(const PandasDataFrame &df,
-	//                                                             shared_ptr<DuckDBPyConnection> conn) {
-	//       return conn->FromDF(df)->Distinct();
-	//}
-
-	// void PyConnectionWrapper::WriteCsvDF(const PandasDataFrame &df, const string &file,
-	//                                     shared_ptr<DuckDBPyConnection> conn) {
-	//       return conn->FromDF(df)->ToCSV(file);
-	//}
-
-	// unique_ptr<DuckDBPyRelation> PyConnectionWrapper::QueryDF(const PandasDataFrame &df, const string &view_name,
-	//                                                          const string &sql_query,
-	//                                                          shared_ptr<DuckDBPyConnection> conn) {
-	//       return conn->FromDF(df)->Query(view_name, sql_query);
-	//}
-
-	// unique_ptr<DuckDBPyRelation> PyConnectionWrapper::AggregateDF(const PandasDataFrame &df, const string &expr,
-	//                                                              const string &groups,
-	//                                                              shared_ptr<DuckDBPyConnection> conn) {
-	//       return conn->FromDF(df)->Aggregate(expr, groups);
-	//}
-
-	// unique_ptr<DuckDBPyRelation> PyConnectionWrapper::AliasDF(const PandasDataFrame &df, const string &expr,
-	//                                                          shared_ptr<DuckDBPyConnection> conn) {
-	//       return conn->FromDF(df)->SetAlias(expr);
-	//}
-
-	// unique_ptr<DuckDBPyRelation> PyConnectionWrapper::FilterDf(const PandasDataFrame &df, const string &expr,
-	//                                                           shared_ptr<DuckDBPyConnection> conn) {
-	//       return conn->FromDF(df)->FilterFromExpression(expr);
-	//}
-
-	// unique_ptr<DuckDBPyRelation> PyConnectionWrapper::LimitDF(const PandasDataFrame &df, int64_t n,
-	//                                                          shared_ptr<DuckDBPyConnection> conn) {
-	//       return conn->FromDF(df)->Limit(n);
-	//}
-
-	// unique_ptr<DuckDBPyRelation> PyConnectionWrapper::OrderDf(const PandasDataFrame &df, const string &expr,
-	//                                                          shared_ptr<DuckDBPyConnection> conn) {
-	//       return conn->FromDF(df)->Order(expr);
-	//}
+	// We define these "wrapper" methods inside of C++ because they are overloaded
+	// every other wrapper method is defined inside of __init__.py
+	m.def(
+	    "arrow",
+	    [](idx_t rows_per_batch, shared_ptr<DuckDBPyConnection> conn) -> duckdb::pyarrow::Table {
+		    return conn->FetchArrow(rows_per_batch);
+	    },
+	    "Fetch a result as Arrow table following execute()", py::arg("rows_per_batch") = 1000000, py::kw_only(),
+	    py::arg("connection") = py::none());
+	m.def(
+	    "arrow",
+	    [](py::object &arrow_object, shared_ptr<DuckDBPyConnection> conn) -> unique_ptr<DuckDBPyRelation> {
+		    return conn->FromArrow(arrow_object);
+	    },
+	    "Create a relation object from an Arrow object", py::arg("arrow_object"), py::kw_only(),
+	    py::arg("connection") = py::none());
+	m.def(
+	    "df",
+	    [](bool date_as_object, shared_ptr<DuckDBPyConnection> conn) -> PandasDataFrame {
+		    return conn->FetchDF(date_as_object);
+	    },
+	    "Fetch a result as DataFrame following execute()", py::kw_only(), py::arg("date_as_object") = false,
+	    py::arg("connection") = py::none());
+	m.def(
+	    "df",
+	    [](const PandasDataFrame &value, shared_ptr<DuckDBPyConnection> conn) -> unique_ptr<DuckDBPyRelation> {
+		    return conn->FromDF(value);
+	    },
+	    "Create a relation object from the DataFrame df", py::arg("df"), py::kw_only(),
+	    py::arg("connection") = py::none());
 }
 
 static void RegisterStatementType(py::handle &m) {
