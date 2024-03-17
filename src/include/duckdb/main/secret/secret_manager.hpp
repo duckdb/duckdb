@@ -171,6 +171,10 @@ private:
 	//! Autoload extension for specific secret function
 	void AutoloadExtensionForFunction(const string &type, const string &provider);
 
+	//! Will throw appropriate error message when type not found
+	[[noreturn]] void ThrowTypeNotFoundError(const string &type);
+	[[noreturn]] void ThrowProviderNotFoundError(const string &type, const string &provider, bool was_default = false);
+
 	//! Thread-safe accessors for secret_storages
 	vector<reference<SecretStorage>> GetSecretStorages();
 	optional_ptr<SecretStorage> GetSecretStorage(const string &name);
