@@ -3,6 +3,7 @@
 import ctypes
 import os
 import platform
+import subprocess
 import sys
 import traceback
 from functools import lru_cache
