@@ -409,9 +409,9 @@ ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &qu
 		if (!rebind) {
 			return result;
 		}
+		// an extension wants to do a rebind - do it once
 	}
 
-	// an extension wants to do a rebind - do it once
 	return CreatePreparedStatementInternal(lock, query, std::move(statement), values);
 }
 
@@ -520,7 +520,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 	}
 	for (auto const &s : registered_state) {
 		auto new_rebind = s.second->OnExecutePrepared(*this, *prepared, rebind);
-		if (rebind == RebindQueryInfo::ATTEMPT_TO_REBIND) {
+		if (new_rebind == RebindQueryInfo::ATTEMPT_TO_REBIND) {
 			rebind = new_rebind;
 		}
 	}
