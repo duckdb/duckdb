@@ -521,7 +521,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 	for (auto const &s : registered_state) {
 		auto new_rebind = s.second->OnExecutePrepared(*this, *prepared, rebind);
 		if (new_rebind == RebindQueryInfo::ATTEMPT_TO_REBIND) {
-			rebind = new_rebind;
+			rebind = RebindQueryInfo::ATTEMPT_TO_REBIND;
 		}
 	}
 	if (rebind == RebindQueryInfo::ATTEMPT_TO_REBIND) {
