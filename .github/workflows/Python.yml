@@ -405,7 +405,7 @@ jobs:
       - linux-python3
     # Note that want to run this by default ONLY if no override_git_describe is provided
     # This means we are not staging a release
-    if: (( startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' )) && (( inputs.override_git_describe == '' ))
+    if: (( startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' )) && (( inputs.override_git_describe == '' )) && (( github.repository == 'duckdb/duckdb' ))
     uses: ./.github/workflows/TwineUpload.yml
     secrets: inherit
     # Why? If present, it means we are staging releases, and we want to do the upload manually
