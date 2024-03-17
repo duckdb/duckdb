@@ -79,7 +79,7 @@ jobs:
 
     - name: Install
       shell: bash
-      run: pip install 'cibuildwheel>=2.16.2' twine build
+      run: pip install 'cibuildwheel>=2.16.2' build
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -200,7 +200,7 @@ jobs:
     - name: Install
       shell: bash
       run: |
-        pip install 'cibuildwheel>=2.16.2' twine build
+        pip install 'cibuildwheel>=2.16.2' build
         python -m pip install numpy --config-settings=setup-args="-Dallow-noblas=true"
 
     - uses: actions/download-artifact@v3
@@ -271,7 +271,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: pip install 'cibuildwheel>=2.16.2' twine build
+        run: pip install 'cibuildwheel>=2.16.2' build
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
@@ -335,7 +335,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: pip install 'cibuildwheel>=2.16.2' twine build
+        run: pip install 'cibuildwheel>=2.16.2' build
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
