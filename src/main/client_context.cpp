@@ -116,6 +116,7 @@ struct DebugClientContextState : public ClientContextState {
 		}
 		active_transaction = false;
 	}
+#ifdef DUCKDB_DEBUG_REBIND
 	RebindQueryInfo OnPlanningError(ClientContext &context, SQLStatement &statement, ErrorData &error) override {
 		return RebindQueryInfo::ATTEMPT_TO_REBIND;
 	}
@@ -130,6 +131,7 @@ struct DebugClientContextState : public ClientContextState {
 	                                  RebindQueryInfo current_rebind) override {
 		return RebindQueryInfo::ATTEMPT_TO_REBIND;
 	}
+#endif
 };
 #endif
 
