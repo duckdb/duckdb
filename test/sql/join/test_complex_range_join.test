@@ -5,9 +5,6 @@
 statement ok
 PRAGMA enable_verification
 
-# FIXME: bug in constant operator
-require no_vector_verification
-
 # Coverage for multiple slicing predicates
 query IIIIII
 WITH lhs(i, j, k) AS (VALUES
