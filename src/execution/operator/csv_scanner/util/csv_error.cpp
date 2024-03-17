@@ -173,6 +173,14 @@ CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, s
 	// How many columns were expected and how many were found
 	error << "Expected Number of Columns: " << options.dialect_options.num_cols << " Found: " << actual_columns
 	      << std::endl;
+	error << std::endl << "Possible fixes:" << std::endl;
+	if (!options.null_padding) {
+		error << "* Enable null padding (null_padding=true) to replace missing values with NULL" << std::endl;
+	}
+	if (!options.ignore_errors) {
+		error << "* Enable ignore errors (ignore_errors=true) to skip this row" << std::endl;
+	}
+	error << std::endl;
 	// What were the options
 	error << options.ToString();
 	return CSVError(error.str(), CSVErrorType::INCORRECT_COLUMN_AMOUNT, error_info);
