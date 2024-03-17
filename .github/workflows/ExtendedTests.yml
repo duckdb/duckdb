@@ -6,8 +6,6 @@ on:
       - '**'
       - '!main'
       - '!feature'
-    tags:
-      - '**'
     paths-ignore:
       - '**'
       - '!.github/workflows/ExtendedTests.yml'
