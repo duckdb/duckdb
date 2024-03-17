@@ -65,7 +65,8 @@ Value AccessModeSetting::GetSetting(ClientContext &context) {
 // Allow Persistent Secrets
 //===--------------------------------------------------------------------===//
 void AllowPersistentSecrets::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.secret_manager->SetEnablePersistentSecrets(input.GetValue<bool>());
+	auto value = input.DefaultCastAs(LogicalType::BOOLEAN);
+	config.secret_manager->SetEnablePersistentSecrets(value.GetValue<bool>());
 }
 
 void AllowPersistentSecrets::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
@@ -74,7 +75,7 @@ void AllowPersistentSecrets::ResetGlobal(DatabaseInstance *db, DBConfig &config)
 
 Value AllowPersistentSecrets::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return config.secret_manager->PersistentSecretsEnabled();
+	return Value::BOOLEAN(config.secret_manager->PersistentSecretsEnabled());
 }
 
 //===--------------------------------------------------------------------===//
@@ -473,6 +474,29 @@ void AllowUnsignedExtensionsSetting::ResetGlobal(DatabaseInstance *db, DBConfig 
 Value AllowUnsignedExtensionsSetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::BOOLEAN(config.options.allow_unsigned_extensions);
+}
+
+//===--------------------------------------------------------------------===//
+// Allow Unredacted Secrets
+//===--------------------------------------------------------------------===//
+void AllowUnredactedSecretsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto new_value = input.GetValue<bool>();
+	if (db && new_value) {
+		throw InvalidInputException("Cannot change allow_unredacted_secrets setting while database is running");
+	}
+	config.options.allow_unredacted_secrets = new_value;
+}
+
+void AllowUnredactedSecretsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (db) {
+		throw InvalidInputException("Cannot change allow_unredacted_secrets setting while database is running");
+	}
+	config.options.allow_unredacted_secrets = DBConfig().options.allow_unredacted_secrets;
+}
+
+Value AllowUnredactedSecretsSetting::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.allow_unredacted_secrets);
 }
 
 //===--------------------------------------------------------------------===//
