@@ -128,11 +128,39 @@ def get_relative_path(source_dir, target_file):
     return target_file
 
 
+def get_git_describe():
+    override_git_describe = ''
+    if 'OVERRIDE_GIT_DESCRIBE' in os.environ:
+        override_git_describe = os.environ['OVERRIDE_GIT_DESCRIBE']
+    # empty override_git_describe, either since env was empty string or not existing
+    # -> ask git (that can fail, so except in place)
+    if len(override_git_describe) == 0:
+        try:
+            return subprocess.check_output(['git', 'describe', '--tags', '--long']).strip().decode('utf8')
+        except:
+            return "v0.0.0-0-deadbeeff"
+    if len(override_git_describe.split('-')) == 2:
+        return override_git_describe
+    if len(override_git_describe.split('-')) == 0:
+        override_git_describe += "-0"
+    assert len(override_git_describe.split('-')) == 1
+    try:
+        return (
+            override_git_describe
+            + "-"
+            + subprocess.check_output(['git', 'log', '-1', '--format=%h']).strip().decode('utf8')
+        )
+    except:
+        return override_git_describe + "-" + "deadbeeff"
+
+
 def git_commit_hash():
     if 'SETUPTOOLS_SCM_PRETEND_HASH' in os.environ:
         return os.environ['SETUPTOOLS_SCM_PRETEND_HASH']
     try:
-        return subprocess.check_output(['git', 'log', '-1', '--format=%h']).strip().decode('utf8')
+        git_describe = get_git_describe()
+        hash = git_describe.split('-')[2]
+        return hash
     except:
         return "deadbeeff"
 
@@ -148,9 +176,8 @@ def git_dev_version():
     if 'SETUPTOOLS_SCM_PRETEND_VERSION' in os.environ:
         return prefix_version(os.environ['SETUPTOOLS_SCM_PRETEND_VERSION'])
     try:
-        version = subprocess.check_output(['git', 'describe', '--tags', '--abbrev=0']).strip().decode('utf8')
-        long_version = subprocess.check_output(['git', 'describe', '--tags', '--long']).strip().decode('utf8')
-        version_splits = version.lstrip('v').split('.')
+        long_version = get_git_describe()
+        version_splits = long_version.split('-')[0].lstrip('v').split('.')
         dev_version = long_version.split('-')[1]
         if int(dev_version) == 0:
             # directly on a tag: emit the regular version

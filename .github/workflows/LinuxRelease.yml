@@ -1,6 +1,21 @@
 name: LinuxRelease
 on:
+  workflow_call:
+    inputs:
+      override_git_describe:
+        type: string
+      git_ref:
+        type: string
+      skip_tests:
+        type: string
   workflow_dispatch:
+    inputs:
+      override_git_describe:
+        type: string
+      git_ref:
+        type: string
+      skip_tests:
+        type: string
   repository_dispatch:
   push:
     branches:
@@ -31,11 +46,12 @@ on:
 
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
+  group: linuxrelease-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
   cancel-in-progress: true
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
 
 jobs:
  linux-release-64:
@@ -58,6 +74,7 @@ jobs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+        ref: ${{ inputs.git_ref }}
 
     - uses: ./.github/actions/manylinux_2014_setup
       with:
@@ -65,6 +82,7 @@ jobs:
         ccache: 1
         odbc: 1
         python_alias: 1
+        aws-cli: 1
 
     - name: Install pytest
       run: |
@@ -80,20 +98,20 @@ jobs:
 
     - name: Test
       shell: bash
-      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+      if: ${{ inputs.skip_tests != 'true' }}
       run: |
         make
         python3 scripts/run_tests_one_by_one.py build/release/test/unittest "*" --time_execution
 
     - name: Tools Tests
       shell: bash
-      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+      if: ${{ inputs.skip_tests != 'true' }}
       run: |
         python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
 
     - name: Examples
       shell: bash
-      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+      if: ${{ inputs.skip_tests != 'true' }}
       run: |
         (cd examples/embedded-c; make)
         (cd examples/embedded-c++; make)
@@ -102,13 +120,16 @@ jobs:
 
     - name: Deploy
       shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
         python3 scripts/amalgamation.py
         zip -j duckdb_cli-linux-amd64.zip build/release/duckdb
         zip -j libduckdb-linux-amd64.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
         zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h
         zip -j duckdb_odbc-linux-amd64.zip build/release/tools/odbc/libduckdb_odbc.so tools/odbc/linux_setup/unixodbc_setup.sh tools/odbc/linux_setup/update_odbc_path.py
-        python3 scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_odbc-linux-amd64.zip
+        ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_odbc-linux-amd64.zip
 
     - uses: actions/upload-artifact@v3
       with:
@@ -141,6 +162,7 @@ jobs:
      - uses: actions/checkout@v3
        with:
          fetch-depth: 0
+         ref: ${{ inputs.git_ref }}
 
      - uses: ./.github/actions/ubuntu_18_setup
        with:
@@ -162,12 +184,15 @@ jobs:
 
      - name: Deploy
        shell: bash
+       env:
+         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
        run: |
          python3 scripts/amalgamation.py
          zip -j duckdb_cli-linux-aarch64.zip build/release/duckdb
          zip -j duckdb_odbc-linux-aarch64.zip build/release/tools/odbc/libduckdb_odbc.so
          zip -j libduckdb-linux-aarch64.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
-         python3 scripts/asset-upload-gha.py libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip duckdb_odbc-linux-aarch64.zip
+         ./scripts/upload-assets-to-staging.sh github_release libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip duckdb_odbc-linux-aarch64.zip
 
      - uses: actions/upload-artifact@v3
        with:
@@ -190,6 +215,7 @@ jobs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+        ref: ${{ inputs.git_ref }}
 
     - uses: ./.github/actions/ubuntu_18_setup
       with:
@@ -203,8 +229,8 @@ jobs:
         post_install: rm build/release/src/libduckdb*
         deploy_as: linux_amd64
         treat_warn_as_error: 0
-        run_autoload_tests: ${{ startsWith(github.ref, 'refs/tags/v') && 0 || 1 }}
-        run_tests: ${{ startsWith(github.ref, 'refs/tags/v') && 0 || 1 }}
+        run_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
+        run_autoload_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
         s3_id: ${{ secrets.S3_ID }}
         s3_key: ${{ secrets.S3_KEY }}
         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
@@ -228,6 +254,7 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
+          ref: ${{ inputs.git_ref }}
 
       - uses: ./.github/actions/ubuntu_18_setup
         with:
@@ -258,7 +285,7 @@ jobs:
 
  check-load-install-extensions:
     name: Checks extension entries
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ inputs.skip_tests != 'true' }}
     runs-on: ubuntu-20.04
     needs: linux-extensions-64
     env:
@@ -270,6 +297,7 @@ jobs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+        ref: ${{ inputs.git_ref }}
 
     - uses: actions/setup-python@v5
       with:
@@ -327,7 +355,7 @@ jobs:
 
  symbol-leakage:
     name: Symbol Leakage
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ inputs.skip_tests != 'true' }}
     runs-on: ubuntu-20.04
     needs: linux-release-64
 
@@ -335,6 +363,7 @@ jobs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+        ref: ${{ inputs.git_ref }}
 
     - uses: actions/setup-python@v5
       with:
@@ -356,7 +385,7 @@ jobs:
 
  linux-httpfs:
     name: Linux HTTPFS
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ inputs.skip_tests != 'true' }}
     runs-on: ubuntu-20.04
     needs: linux-release-64
     env:
@@ -378,6 +407,7 @@ jobs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+        ref: ${{ inputs.git_ref }}
 
     - uses: actions/setup-python@v5
       with:
@@ -414,7 +444,7 @@ jobs:
 
  amalgamation-tests:
     name: Amalgamation Tests
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ inputs.skip_tests != 'true' }}
     needs: linux-release-64
     runs-on: ubuntu-20.04
     env:
@@ -425,6 +455,7 @@ jobs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+        ref: ${{ inputs.git_ref }}
 
     - uses: actions/setup-python@v5
       with:

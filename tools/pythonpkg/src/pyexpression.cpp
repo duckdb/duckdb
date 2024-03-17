@@ -155,6 +155,16 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Or(const DuckDBPyExpression &
 	return DuckDBPyExpression::InternalConjunction(ExpressionType::CONJUNCTION_OR, *this, other);
 }
 
+// NULL
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::IsNull() {
+	return DuckDBPyExpression::InternalUnaryOperator(ExpressionType::OPERATOR_IS_NULL, *this);
+}
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::IsNotNull() {
+	return DuckDBPyExpression::InternalUnaryOperator(ExpressionType::OPERATOR_IS_NOT_NULL, *this);
+}
+
 // IN
 
 shared_ptr<DuckDBPyExpression> DuckDBPyExpression::In(const py::args &args) {

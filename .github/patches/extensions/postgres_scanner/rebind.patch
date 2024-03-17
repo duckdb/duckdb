@@ -10,6 +10,31 @@ index 396664d..eb8f621 100644
  };
  
  class PostgresQueryFunction : public TableFunction {
+diff --git a/src/include/storage/postgres_catalog.hpp b/src/include/storage/postgres_catalog.hpp
+index 7e90c18..1b887fa 100644
+--- a/src/include/storage/postgres_catalog.hpp
++++ b/src/include/storage/postgres_catalog.hpp
+@@ -72,6 +72,20 @@ public:
+ 
+ 	void ClearCache();
+ 
++	//! Whether or not this catalog should search a specific type with the standard priority
++	CatalogLookupBehavior CatalogTypeLookupRule(CatalogType type) const override {
++		switch (type) {
++		case CatalogType::INDEX_ENTRY:
++		case CatalogType::TABLE_ENTRY:
++		case CatalogType::TYPE_ENTRY:
++		case CatalogType::VIEW_ENTRY:
++			return CatalogLookupBehavior::STANDARD;
++		default:
++			// unsupported type (e.g. scalar functions, aggregates, ...)
++			return CatalogLookupBehavior::NEVER_LOOKUP;
++		}
++	}
++
+ private:
+ 	void DropSchema(ClientContext &context, DropInfo &info) override;
+ 
 diff --git a/src/postgres_extension.cpp b/src/postgres_extension.cpp
 index 81bd46e..6e18d5a 100644
 --- a/src/postgres_extension.cpp
