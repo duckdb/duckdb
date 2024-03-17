@@ -188,9 +188,6 @@ public:
 	//! Get the segment index of the column segment for the given row
 	idx_t GetSegmentIndex(SegmentLock &l, idx_t row_number) {
 		idx_t segment_index;
-		D_ASSERT(!nodes.empty());
-		D_ASSERT(row_number >= nodes[0].row_start);
-		D_ASSERT(row_number < nodes.back().row_start + nodes.back().node->count);
 		if (TryGetSegmentIndex(l, row_number, segment_index)) {
 			return segment_index;
 		}
