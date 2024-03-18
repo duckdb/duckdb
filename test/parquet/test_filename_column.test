@@ -7,7 +7,7 @@ require parquet
 statement ok
 PRAGMA enable_verification
 
-# anything castable to boolean true just defaults to 'filename'
+# anything non-VARCHAR will be cast to boolean, and interpreted as such
 query I
 SELECT pq.filename FROM read_parquet('data/parquet-testing/enum.parquet', filename=true) pq LIMIT 1
 ----
@@ -18,8 +18,15 @@ SELECT pq.filename FROM read_parquet('data/parquet-testing/enum.parquet', filena
 ----
 data/parquet-testing/enum.parquet
 
+# the string TRUE can be a column name
 query I
-SELECT pq.filename FROM read_parquet('data/parquet-testing/enum.parquet', filename='TRUE') pq LIMIT 1
+SELECT "TRUE" FROM read_parquet('data/parquet-testing/enum.parquet', filename='TRUE') pq LIMIT 1
+----
+data/parquet-testing/enum.parquet
+
+# FALSR too
+query I
+SELECT "FALSE" FROM read_parquet('data/parquet-testing/enum.parquet', filename='FALSE') pq LIMIT 1
 ----
 data/parquet-testing/enum.parquet
 
@@ -39,12 +46,7 @@ SELECT * FROM read_parquet('data/parquet-testing/enum.parquet', filename=0)
 ----
 
 
-query IIIIIII nosort q0
-SELECT * FROM read_parquet('data/parquet-testing/enum.parquet', filename='FALSE')
-----
-
-
-# but we can give it a name and select the column using that name
+# cool names work too
 query I
 SELECT my_cool_filename FROM read_parquet('data/parquet-testing/enum.parquet', filename='my_cool_filename') LIMIT 1
 ----

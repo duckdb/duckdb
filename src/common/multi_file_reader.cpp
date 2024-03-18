@@ -14,7 +14,7 @@
 namespace duckdb {
 
 void MultiFileReader::AddParameters(TableFunction &table_function) {
-	table_function.named_parameters["filename"] = LogicalType::VARCHAR;
+	table_function.named_parameters["filename"] = LogicalType::ANY;
 	table_function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["hive_types"] = LogicalType::ANY;
@@ -65,15 +65,17 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
                                   ClientContext &context) {
 	auto loption = StringUtil::Lower(key);
 	if (loption == "filename") {
-		Value boolean_value;
-		string error_message;
-		if (val.DefaultTryCastAs(LogicalType::BOOLEAN, boolean_value, &error_message)) {
-			// If the argument can be cast to boolean, we just interpret it as a boolean
-			options.filename = BooleanValue::Get(boolean_value);
-		} else {
+		if (val.type() == LogicalType::VARCHAR) {
 			// If not, we interpret it as the name of the column containing the filename
 			options.filename = true;
 			options.filename_column = StringValue::Get(val);
+		} else {
+			Value boolean_value;
+			string error_message;
+			if (val.DefaultTryCastAs(LogicalType::BOOLEAN, boolean_value, &error_message)) {
+				// If the argument can be cast to boolean, we just interpret it as a boolean
+				options.filename = BooleanValue::Get(boolean_value);
+			}
 		}
 	} else if (loption == "hive_partitioning") {
 		options.hive_partitioning = BooleanValue::Get(val);
