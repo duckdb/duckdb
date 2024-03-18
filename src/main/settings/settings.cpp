@@ -603,8 +603,8 @@ void CustomProfilingSettings::SetLocal(ClientContext &context, const Value &inpu
 		line_count++;
 		if (StringUtil::Equals(&line.back(), "\n")) {
 			line.substr(0, line.size() - 1);
-		}
-		StringUtil::Replace(line, "\\", "");
+        }
+
 		file_content += line;
 		line = file->ReadLine();
 	}
