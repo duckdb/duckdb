@@ -64,6 +64,7 @@ jobs:
       CIBW_BUILD: 'cp39-manylinux_x86_64'
       CIBW_TEST_COMMAND: 'python -m pytest {project}/tests --verbose'
       PYTEST_TIMEOUT: '600'
+      CIBW_ENVIRONMENT: 'OVERRIDE_GIT_DESCRIBE=${{ inputs.override_git_describe }}'
 
     steps:
     - uses: actions/checkout@v3
@@ -180,6 +181,7 @@ jobs:
       CIBW_MANYLINUX_PYPY_X86_64_IMAGE: ${{ matrix.manylinux }}
       PYTEST_TIMEOUT: '600'
       DUCKDB_BUILD_UNITY: 1
+      CIBW_ENVIRONMENT: 'OVERRIDE_GIT_DESCRIBE=${{ inputs.override_git_describe }}'
 
     steps:
     - uses: actions/checkout@v3
