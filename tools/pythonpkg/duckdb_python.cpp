@@ -76,6 +76,9 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	m.def(
 	    "arrow",
 	    [](idx_t rows_per_batch, shared_ptr<DuckDBPyConnection> conn) -> duckdb::pyarrow::Table {
+		    if (!connection) {
+			    connection = DuckDBPyConnection::DefaultConnection();
+		    }
 		    return conn->FetchArrow(rows_per_batch);
 	    },
 	    "Fetch a result as Arrow table following execute()", py::arg("rows_per_batch") = 1000000, py::kw_only(),
@@ -83,6 +86,9 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	m.def(
 	    "arrow",
 	    [](py::object &arrow_object, shared_ptr<DuckDBPyConnection> conn) -> unique_ptr<DuckDBPyRelation> {
+		    if (!connection) {
+			    connection = DuckDBPyConnection::DefaultConnection();
+		    }
 		    return conn->FromArrow(arrow_object);
 	    },
 	    "Create a relation object from an Arrow object", py::arg("arrow_object"), py::kw_only(),
@@ -90,6 +96,9 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	m.def(
 	    "df",
 	    [](bool date_as_object, shared_ptr<DuckDBPyConnection> conn) -> PandasDataFrame {
+		    if (!connection) {
+			    connection = DuckDBPyConnection::DefaultConnection();
+		    }
 		    return conn->FetchDF(date_as_object);
 	    },
 	    "Fetch a result as DataFrame following execute()", py::kw_only(), py::arg("date_as_object") = false,
@@ -97,6 +106,9 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	m.def(
 	    "df",
 	    [](const PandasDataFrame &value, shared_ptr<DuckDBPyConnection> conn) -> unique_ptr<DuckDBPyRelation> {
+		    if (!connection) {
+			    connection = DuckDBPyConnection::DefaultConnection();
+		    }
 		    return conn->FromDF(value);
 	    },
 	    "Create a relation object from the DataFrame df", py::arg("df"), py::kw_only(),
