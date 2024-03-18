@@ -7,6 +7,7 @@ include_directories = [
         'extension/parquet/include',
         'third_party/parquet',
         'third_party/thrift',
+        'third_party/lz4',
         'third_party/snappy',
         'third_party/zstd/include',
         'third_party/mbedtls',
