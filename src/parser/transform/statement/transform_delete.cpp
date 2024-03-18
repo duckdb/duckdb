@@ -5,10 +5,8 @@ namespace duckdb {
 
 unique_ptr<DeleteStatement> Transformer::TransformDelete(duckdb_libpgquery::PGDeleteStmt &stmt) {
 	auto result = make_uniq<DeleteStatement>();
-	vector<unique_ptr<CTENode>> materialized_ctes;
 	if (stmt.withClause) {
-		TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), result->cte_map,
-		             materialized_ctes);
+		TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), result->cte_map);
 	}
 
 	result->condition = TransformExpression(stmt.whereClause);

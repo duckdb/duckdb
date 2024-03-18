@@ -19,10 +19,8 @@ unique_ptr<UpdateSetInfo> Transformer::TransformUpdateSetInfo(duckdb_libpgquery:
 
 unique_ptr<UpdateStatement> Transformer::TransformUpdate(duckdb_libpgquery::PGUpdateStmt &stmt) {
 	auto result = make_uniq<UpdateStatement>();
-	vector<unique_ptr<CTENode>> materialized_ctes;
 	if (stmt.withClause) {
-		TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), result->cte_map,
-		             materialized_ctes);
+		TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), result->cte_map);
 	}
 
 	result->table = TransformRangeVar(*stmt.relation);
