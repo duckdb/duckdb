@@ -51,6 +51,7 @@ void Bit::Finalize(string_t &str) {
 	for (idx_t i = 0; i < idx_t(padding); i++) {
 		Bit::SetBitInternal(str, i, 1);
 	}
+	str.Finalize();
 	Bit::Verify(str);
 }
 
@@ -145,7 +146,6 @@ void Bit::ToBit(string_t str, string_t &output_str) {
 		*(output++) = byte;
 	}
 	Bit::Finalize(output_str);
-	Bit::Verify(output_str);
 }
 
 string Bit::ToBit(string_t str) {
@@ -332,7 +332,6 @@ void Bit::LeftShift(const string_t &bit_string, const idx_t &shift, string_t &re
 		}
 	}
 	Bit::Finalize(result);
-	Bit::Verify(result);
 }
 
 void Bit::BitwiseAnd(const string_t &rhs, const string_t &lhs, string_t &result) {
@@ -348,8 +347,7 @@ void Bit::BitwiseAnd(const string_t &rhs, const string_t &lhs, string_t &result)
 	for (idx_t i = 1; i < lhs.GetSize(); i++) {
 		buf[i] = l_buf[i] & r_buf[i];
 	}
-	// and should preserve padding bits
-	Bit::Verify(result);
+	Bit::Finalize(result);
 }
 
 void Bit::BitwiseOr(const string_t &rhs, const string_t &lhs, string_t &result) {
@@ -365,8 +363,7 @@ void Bit::BitwiseOr(const string_t &rhs, const string_t &lhs, string_t &result) 
 	for (idx_t i = 1; i < lhs.GetSize(); i++) {
 		buf[i] = l_buf[i] | r_buf[i];
 	}
-	// or should preserve padding bits
-	Bit::Verify(result);
+	Bit::Finalize(result);
 }
 
 void Bit::BitwiseXor(const string_t &rhs, const string_t &lhs, string_t &result) {
@@ -403,6 +400,8 @@ void Bit::Verify(const string_t &input) {
 	for (idx_t i = 0; i < padding; i++) {
 		D_ASSERT(Bit::GetBitInternal(input, i));
 	}
+	// verify bit respects the "normal" string_t rules (i.e. null padding for inlined strings, prefix matches)
+	input.VerifyCharacters();
 #endif
 }
 
