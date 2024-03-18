@@ -5,9 +5,10 @@
 #include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/storage_lock.hpp"
-#include "duckdb/common/value_operations/value_operations.hpp"
+
 #include <algorithm>
 
 namespace duckdb {
@@ -46,13 +47,14 @@ using vector_of_value_map_t = unordered_map<vector<Value>, T, VectorOfValuesHash
 class CopyToFunctionGlobalState : public GlobalSinkState {
 public:
 	explicit CopyToFunctionGlobalState(unique_ptr<GlobalFunctionData> global_state)
-	    : rows_copied(0), last_file_offset(0), global_state(std::move(global_state)) {
+	    : rows_copied(0), last_file_offset(0), global_state(std::move(global_state)), rotate(false) {
 	}
 	StorageLock lock;
 	atomic<idx_t> rows_copied;
 	atomic<idx_t> last_file_offset;
 	unique_ptr<GlobalFunctionData> global_state;
 	idx_t created_directories = 0;
+	bool rotate;
 
 	//! shared state for HivePartitionedColumnData
 	shared_ptr<GlobalHivePartitionState> partition_state;
@@ -260,8 +262,8 @@ unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContex
 }
 
 unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext &context) const {
-
-	if (partition_output || per_thread_output || file_size_bytes.IsValid()) {
+	const auto rotate = function.rotate_files && function.rotate_files(context, *bind_data);
+	if (partition_output || per_thread_output || file_size_bytes.IsValid() || rotate) {
 		auto &fs = FileSystem::GetFileSystem(context);
 
 		if (fs.FileExists(file_path) && !overwrite_or_ignore) {
@@ -286,6 +288,8 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 		if (partition_output) {
 			state->partition_state = make_shared<GlobalHivePartitionState>();
 		}
+
+		state->rotate = rotate;
 
 		return std::move(state);
 	}

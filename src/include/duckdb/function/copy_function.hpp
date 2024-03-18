@@ -110,6 +110,10 @@ typedef idx_t (*copy_desired_batch_size_t)(ClientContext &context, FunctionData 
 
 typedef idx_t (*copy_file_size_bytes_t)(GlobalFunctionData &gstate);
 
+typedef bool (*copy_rotate_files_t)(FunctionData &bind_data);
+
+typedef bool (*copy_rotate_next_file_t)(GlobalFunctionData &gstate, FunctionData &bind_data);
+
 enum class CopyTypeSupport { SUPPORTED, LOSSY, UNSUPPORTED };
 
 typedef CopyTypeSupport (*copy_supports_type_t)(const LogicalType &type);
@@ -120,8 +124,8 @@ public:
 	    : Function(name), plan(nullptr), copy_to_bind(nullptr), copy_to_initialize_local(nullptr),
 	      copy_to_initialize_global(nullptr), copy_to_sink(nullptr), copy_to_combine(nullptr),
 	      copy_to_finalize(nullptr), execution_mode(nullptr), prepare_batch(nullptr), flush_batch(nullptr),
-	      desired_batch_size(nullptr), file_size_bytes(nullptr), serialize(nullptr), deserialize(nullptr),
-	      supports_type(nullptr), copy_from_bind(nullptr) {
+	      desired_batch_size(nullptr), file_size_bytes(nullptr), rotate_files(nullptr), rotate_next_file(nullptr),
+	      serialize(nullptr), deserialize(nullptr), supports_type(nullptr), copy_from_bind(nullptr) {
 	}
 
 	//! Plan rewrite copy function
@@ -139,6 +143,9 @@ public:
 	copy_flush_batch_t flush_batch;
 	copy_desired_batch_size_t desired_batch_size;
 	copy_file_size_bytes_t file_size_bytes;
+
+	copy_rotate_files_t rotate_files;
+	copy_rotate_next_file_t rotate_next_file;
 
 	copy_to_serialize_t serialize;
 	copy_to_deserialize_t deserialize;
