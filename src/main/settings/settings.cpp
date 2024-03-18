@@ -621,6 +621,10 @@ void CustomProfilingSettings::SetLocal(ClientContext &context, const Value &inpu
 		throw IOException("Could not parse the custom profiler settings file due to incorrect JSON: \"%s\"", input_str);
 	}
 
+	if (json.empty()) {
+        throw IOException("Could not parse the custom profiler settings file due to incorrect JSON: \"%s\"", input_str);
+    }
+
 	config.profiler_settings = FillTreeNodeSettings(json);
 }
 
