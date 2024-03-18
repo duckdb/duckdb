@@ -602,7 +602,7 @@ void CustomProfilingSettings::SetLocal(ClientContext &context, const Value &inpu
 		line_count++;
 		if (StringUtil::Equals(&line.back(), "\n")) {
 			line.substr(0, line.size() - 1);
-        }
+		}
 
 		file_content += line;
 		line = file->ReadLine();
@@ -621,8 +621,8 @@ void CustomProfilingSettings::SetLocal(ClientContext &context, const Value &inpu
 	}
 
 	if (json.empty()) {
-        throw IOException("Could not parse the custom profiler settings file due to incorrect JSON: \"%s\"", input_str);
-    }
+		throw IOException("Could not parse the custom profiler settings file due to incorrect JSON: \"%s\"", input_str);
+	}
 
 	config.profiler_settings = FillTreeNodeSettings(json);
 }
