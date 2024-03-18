@@ -72,9 +72,4 @@ source_files += [
     ]
 ]
 # lz4
-source_files += [
-    os.path.sep.join(x.split('/'))
-    for x in [
-        'third_party/lz4/lz4.c'
-    ]
-]
+source_files += [os.path.sep.join(x.split('/')) for x in ['third_party/lz4/lz4.c']]
