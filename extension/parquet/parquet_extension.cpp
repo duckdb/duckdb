@@ -1133,7 +1133,7 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	serializer.WriteProperty(106, "field_ids", bind_data.field_ids);
 	serializer.WritePropertyWithDefault<shared_ptr<ParquetEncryptionConfig>>(107, "encryption_config",
 	                                                                         bind_data.encryption_config, nullptr);
-	serializer.WriteProperty(107, "row_groups_per_file", bind_data.row_groups_per_file);
+	serializer.WriteProperty(108, "row_groups_per_file", bind_data.row_groups_per_file);
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
