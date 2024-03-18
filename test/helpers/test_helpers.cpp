@@ -147,6 +147,12 @@ unique_ptr<DBConfig> GetTestConfig() {
 #else
 	result->options.checkpoint_on_shutdown = false;
 #endif
+#if defined(__linux__)
+	// Currently this is only supported on linux.
+	// Because we test this mode on linux, and the no-trim mode on other platforms,
+	// we get coverage with the option both on and off.
+	result->options.trim_free_blocks = true;
+#endif
 	result->options.allow_unsigned_extensions = true;
 	if (single_threaded) {
 		result->options.maximum_threads = 1;

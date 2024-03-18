@@ -294,7 +294,9 @@ void SingleFileBlockManager::LoadFreeList() {
 	auto free_list_count = reader.Read<uint64_t>();
 	free_list.clear();
 	for (idx_t i = 0; i < free_list_count; i++) {
-		free_list.insert(reader.Read<block_id_t>());
+		auto block = reader.Read<block_id_t>();
+		free_list.insert(block);
+		newly_freed_list.insert(block);
 	}
 	auto multi_use_blocks_count = reader.Read<uint64_t>();
 	multi_use_blocks.clear();
@@ -320,6 +322,7 @@ block_id_t SingleFileBlockManager::GetFreeBlockId() {
 		block = *free_list.begin();
 		// erase the entry from the free list again
 		free_list.erase(free_list.begin());
+		newly_freed_list.erase(block);
 	} else {
 		block = max_block++;
 	}
@@ -335,6 +338,7 @@ void SingleFileBlockManager::MarkBlockAsFree(block_id_t block_id) {
 	}
 	multi_use_blocks.erase(block_id);
 	free_list.insert(block_id);
+	newly_freed_list.insert(block_id);
 }
 
 void SingleFileBlockManager::MarkBlockAsModified(block_id_t block_id) {
@@ -432,9 +436,8 @@ void SingleFileBlockManager::Truncate() {
 		return;
 	}
 	// truncate the file
-	for (idx_t i = 0; i < blocks_to_truncate; i++) {
-		free_list.erase(max_block + i);
-	}
+	free_list.erase(free_list.lower_bound(max_block), free_list.end());
+	newly_freed_list.erase(newly_freed_list.lower_bound(max_block), newly_freed_list.end());
 	handle->Truncate(BLOCK_START + max_block * Storage::BLOCK_ALLOC_SIZE);
 }
 
@@ -494,6 +497,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	metadata_manager.MarkBlocksAsModified();
 	for (auto &block : modified_blocks) {
 		free_list.insert(block);
+		newly_freed_list.insert(block);
 	}
 	modified_blocks.clear();
 
@@ -547,6 +551,28 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	active_header = 1 - active_header;
 	//! Ensure the header write ends up on disk
 	handle->Sync();
+	// Release the free blocks to the filesystem.
+	TrimFreeBlocks();
+	newly_freed_list.clear();
+}
+
+void SingleFileBlockManager::TrimFreeBlocks() {
+	if (DBConfig::Get(db).options.trim_free_blocks) {
+		for (auto itr = newly_freed_list.begin(); itr != newly_freed_list.end(); ++itr) {
+			block_id_t first = *itr;
+			block_id_t last = first;
+			// Find end of contiguous range.
+			for (++itr; itr != newly_freed_list.end() && (*itr == last + 1); ++itr) {
+				last = *itr;
+			}
+			// We are now one too far.
+			--itr;
+			// Trim the range.
+			handle->Trim(BLOCK_START + (first * Storage::BLOCK_ALLOC_SIZE),
+			             (last + 1 - first) * Storage::BLOCK_ALLOC_SIZE);
+		}
+	}
+	newly_freed_list.clear();
 }
 
 } // namespace duckdb
