@@ -70,3 +70,10 @@ source_files += [
         'third_party/zstd/compress/zstd_opt.cpp',
     ]
 ]
+# lz4
+source_files += [
+    os.path.sep.join(x.split('/'))
+    for x in [
+        'third_party/lz4/lz4.c'
+    ]
+]
