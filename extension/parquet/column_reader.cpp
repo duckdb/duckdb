@@ -342,7 +342,7 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_p
 	}
 	case CompressionCodec::LZ4_RAW: {
 		auto res = LZ4_decompress_safe((const char *)src, (char *)dst, src_size, dst_size);
-		if (res != dst_size) {
+		if (res != NumericCast<int>(dst_size)) {
 			throw std::runtime_error("LZ4 decompression failure");
 		}
 		break;
@@ -354,7 +354,7 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_p
 			if (!res) {
 				throw std::runtime_error("Snappy decompression failure");
 			}
-			if (uncompressed_size != (size_t)dst_size) {
+			if (uncompressed_size != dst_size) {
 				throw std::runtime_error("Snappy decompression failure: Uncompressed data size mismatch");
 			}
 		}
@@ -366,7 +366,7 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_p
 	}
 	case CompressionCodec::ZSTD: {
 		auto res = duckdb_zstd::ZSTD_decompress(dst, dst_size, src, src_size);
-		if (duckdb_zstd::ZSTD_isError(res) || res != (size_t)dst_size) {
+		if (duckdb_zstd::ZSTD_isError(res) || res != dst_size) {
 			throw std::runtime_error("ZSTD Decompression failure");
 		}
 		break;
