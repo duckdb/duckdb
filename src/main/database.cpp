@@ -213,7 +213,11 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	}
 
 	db_manager = make_uniq<DatabaseManager>(*this);
-	buffer_manager = make_uniq<StandardBufferManager>(*this, config.options.temporary_directory);
+	if (config.buffer_manager) {
+		buffer_manager = config.buffer_manager;
+	} else {
+		buffer_manager = make_uniq<StandardBufferManager>(*this, config.options.temporary_directory);
+	}
 	scheduler = make_uniq<TaskScheduler>(*this);
 	object_cache = make_uniq<ObjectCache>();
 	connection_manager = make_uniq<ConnectionManager>();
