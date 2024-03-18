@@ -49,8 +49,6 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "COPY_TO_FILE";
 	case PhysicalOperatorType::BATCH_COPY_TO_FILE:
 		return "BATCH_COPY_TO_FILE";
-	case PhysicalOperatorType::FIXED_BATCH_COPY_TO_FILE:
-		return "FIXED_BATCH_COPY_TO_FILE";
 	case PhysicalOperatorType::LEFT_DELIM_JOIN:
 		return "LEFT_DELIM_JOIN";
 	case PhysicalOperatorType::RIGHT_DELIM_JOIN:
@@ -155,6 +153,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "PIVOT";
 	case PhysicalOperatorType::COPY_DATABASE:
 		return "COPY_DATABASE";
+	case PhysicalOperatorType::VERIFY_VECTOR:
+		return "VERIFY_VECTOR";
 	case PhysicalOperatorType::INVALID:
 		break;
 	}

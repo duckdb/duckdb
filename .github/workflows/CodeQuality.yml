@@ -7,8 +7,6 @@ on:
       - '**'
       - '!main'
       - '!feature'
-    tags:
-      - '**'
     paths-ignore:
       - '**.md'
       - '.github/patches/duckdb-wasm/**'
