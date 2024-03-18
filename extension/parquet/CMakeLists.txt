@@ -4,6 +4,7 @@ project(ParquetExtension)
 
 include_directories(
   include
+  ../../third_party/lz4
   ../../third_party/parquet
   ../../third_party/thrift
   ../../third_party/snappy
@@ -38,6 +39,7 @@ if(NOT CLANG_TIDY)
   # zstd
   set(PARQUET_EXTENSION_FILES
       ${PARQUET_EXTENSION_FILES}
+      ../../third_party/lz4/lz4.c
       ../../third_party/zstd/decompress/zstd_ddict.cpp
       ../../third_party/zstd/decompress/huf_decompress.cpp
       ../../third_party/zstd/decompress/zstd_decompress.cpp

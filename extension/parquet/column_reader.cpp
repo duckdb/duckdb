@@ -16,6 +16,7 @@
 #include "templated_column_reader.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "zstd.h"
+#include "lz4.h"
 
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/types/bit.hpp"
@@ -339,6 +340,13 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_p
 		s.Decompress(const_char_ptr_cast(src), src_size, char_ptr_cast(dst), dst_size);
 		break;
 	}
+	case CompressionCodec::LZ4_RAW: {
+		auto res = LZ4_decompress_safe((const char *)src, (char *)dst, src_size, dst_size);
+		if (res != dst_size) {
+			throw std::runtime_error("LZ4 decompression failure");
+		}
+		break;
+	}
 	case CompressionCodec::SNAPPY: {
 		{
 			size_t uncompressed_size = 0;
@@ -363,11 +371,12 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_p
 		}
 		break;
 	}
+
 	default: {
 		std::stringstream codec_name;
 		codec_name << codec;
 		throw std::runtime_error("Unsupported compression codec \"" + codec_name.str() +
-		                         "\". Supported options are uncompressed, gzip, snappy or zstd");
+		                         "\". Supported options are uncompressed, gzip, lz4_raw, snappy or zstd");
 	}
 	}
 }
