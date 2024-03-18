@@ -323,15 +323,15 @@ void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	throw NotImplementedException("%s: Truncate is not implemented!", GetName());
 }
 
-bool FileSystem::DirectoryExists(const string &directory) {
+bool FileSystem::DirectoryExists(const string &directory, FileOpener *opener) {
 	throw NotImplementedException("%s: DirectoryExists is not implemented!", GetName());
 }
 
-void FileSystem::CreateDirectory(const string &directory) {
+void FileSystem::CreateDirectory(const string &directory, FileOpener *opener) {
 	throw NotImplementedException("%s: CreateDirectory is not implemented!", GetName());
 }
 
-void FileSystem::RemoveDirectory(const string &directory) {
+void FileSystem::RemoveDirectory(const string &directory, FileOpener *opener) {
 	throw NotImplementedException("%s: RemoveDirectory is not implemented!", GetName());
 }
 
@@ -340,11 +340,11 @@ bool FileSystem::ListFiles(const string &directory, const std::function<void(con
 	throw NotImplementedException("%s: ListFiles is not implemented!", GetName());
 }
 
-void FileSystem::MoveFile(const string &source, const string &target) {
+void FileSystem::MoveFile(const string &source, const string &target, FileOpener *opener) {
 	throw NotImplementedException("%s: MoveFile is not implemented!", GetName());
 }
 
-bool FileSystem::FileExists(const string &filename) {
+bool FileSystem::FileExists(const string &filename, FileOpener *opener) {
 	throw NotImplementedException("%s: FileExists is not implemented!", GetName());
 }
 
@@ -352,7 +352,7 @@ bool FileSystem::IsPipe(const string &filename) {
 	return false;
 }
 
-void FileSystem::RemoveFile(const string &filename) {
+void FileSystem::RemoveFile(const string &filename, FileOpener *opener) {
 	throw NotImplementedException("%s: RemoveFile is not implemented!", GetName());
 }
 

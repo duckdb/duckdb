@@ -76,7 +76,7 @@ static void AssertValidFileFlags(uint8_t flags) {
 }
 
 #ifndef _WIN32
-bool LocalFileSystem::FileExists(const string &filename) {
+bool LocalFileSystem::FileExists(const string &filename, FileOpener *opener) {
 	if (!filename.empty()) {
 		if (access(filename.c_str(), 0) == 0) {
 			struct stat status;
@@ -105,7 +105,7 @@ bool LocalFileSystem::IsPipe(const string &filename) {
 }
 
 #else
-bool LocalFileSystem::FileExists(const string &filename) {
+bool LocalFileSystem::FileExists(const string &filename, FileOpener *opener) {
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
 	const wchar_t *wpath = unicode_path.c_str();
 	if (_waccess(wpath, 0) == 0) {
@@ -521,7 +521,7 @@ void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	}
 }
 
-bool LocalFileSystem::DirectoryExists(const string &directory) {
+bool LocalFileSystem::DirectoryExists(const string &directory, FileOpener *opener) {
 	if (!directory.empty()) {
 		if (access(directory.c_str(), 0) == 0) {
 			struct stat status;
@@ -535,7 +535,7 @@ bool LocalFileSystem::DirectoryExists(const string &directory) {
 	return false;
 }
 
-void LocalFileSystem::CreateDirectory(const string &directory) {
+void LocalFileSystem::CreateDirectory(const string &directory, FileOpener *opener) {
 	struct stat st;
 
 	if (stat(directory.c_str(), &st) != 0) {
@@ -589,11 +589,11 @@ int RemoveDirectoryRecursive(const char *path) {
 	return r;
 }
 
-void LocalFileSystem::RemoveDirectory(const string &directory) {
+void LocalFileSystem::RemoveDirectory(const string &directory, FileOpener *opener) {
 	RemoveDirectoryRecursive(directory.c_str());
 }
 
-void LocalFileSystem::RemoveFile(const string &filename) {
+void LocalFileSystem::RemoveFile(const string &filename, FileOpener *opener) {
 	if (std::remove(filename.c_str()) != 0) {
 		throw IOException("Could not remove file \"%s\": %s", {{"errno", std::to_string(errno)}}, filename,
 		                  strerror(errno));
@@ -642,7 +642,7 @@ void LocalFileSystem::FileSync(FileHandle &handle) {
 	}
 }
 
-void LocalFileSystem::MoveFile(const string &source, const string &target) {
+void LocalFileSystem::MoveFile(const string &source, const string &target, FileOpener *opener) {
 	//! FIXME: rename does not guarantee atomicity or overwriting target file if it exists
 	if (rename(source.c_str(), target.c_str()) != 0) {
 		throw IOException("Could not rename file!", {{"errno", std::to_string(errno)}});
@@ -971,12 +971,12 @@ static DWORD WindowsGetFileAttributes(const string &filename) {
 	return GetFileAttributesW(unicode_path.c_str());
 }
 
-bool LocalFileSystem::DirectoryExists(const string &directory) {
+bool LocalFileSystem::DirectoryExists(const string &directory, FileOpener *opener) {
 	DWORD attrs = WindowsGetFileAttributes(directory);
 	return (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY));
 }
 
-void LocalFileSystem::CreateDirectory(const string &directory) {
+void LocalFileSystem::CreateDirectory(const string &directory, FileOpener *opener) {
 	if (DirectoryExists(directory)) {
 		return;
 	}
@@ -1001,7 +1001,7 @@ static void DeleteDirectoryRecursive(FileSystem &fs, string directory) {
 	}
 }
 
-void LocalFileSystem::RemoveDirectory(const string &directory) {
+void LocalFileSystem::RemoveDirectory(const string &directory, FileOpener *opener) {
 	if (FileExists(directory)) {
 		throw IOException("Attempting to delete directory \"%s\", but it is a file and not a directory!", directory);
 	}
@@ -1011,7 +1011,7 @@ void LocalFileSystem::RemoveDirectory(const string &directory) {
 	DeleteDirectoryRecursive(*this, directory.c_str());
 }
 
-void LocalFileSystem::RemoveFile(const string &filename) {
+void LocalFileSystem::RemoveFile(const string &filename, FileOpener *opener) {
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
 	if (!DeleteFileW(unicode_path.c_str())) {
 		auto error = LocalFileSystem::GetLastErrorAsString();
@@ -1055,7 +1055,7 @@ void LocalFileSystem::FileSync(FileHandle &handle) {
 	}
 }
 
-void LocalFileSystem::MoveFile(const string &source, const string &target) {
+void LocalFileSystem::MoveFile(const string &source, const string &target, FileOpener *opener) {
 	auto source_unicode = WindowsUtil::UTF8ToUnicode(source.c_str());
 	auto target_unicode = WindowsUtil::UTF8ToUnicode(target.c_str());
 	if (!MoveFileW(source_unicode.c_str(), target_unicode.c_str())) {

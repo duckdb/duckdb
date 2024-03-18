@@ -76,15 +76,15 @@ void VirtualFileSystem::FileSync(FileHandle &handle) {
 }
 
 // need to look up correct fs for this
-bool VirtualFileSystem::DirectoryExists(const string &directory) {
-	return FindFileSystem(directory).DirectoryExists(directory);
+bool VirtualFileSystem::DirectoryExists(const string &directory, FileOpener *opener) {
+	return FindFileSystem(directory).DirectoryExists(directory, opener);
 }
-void VirtualFileSystem::CreateDirectory(const string &directory) {
-	FindFileSystem(directory).CreateDirectory(directory);
+void VirtualFileSystem::CreateDirectory(const string &directory, FileOpener *opener) {
+	FindFileSystem(directory).CreateDirectory(directory, opener);
 }
 
-void VirtualFileSystem::RemoveDirectory(const string &directory) {
-	FindFileSystem(directory).RemoveDirectory(directory);
+void VirtualFileSystem::RemoveDirectory(const string &directory, FileOpener *opener) {
+	FindFileSystem(directory).RemoveDirectory(directory, opener);
 }
 
 bool VirtualFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
@@ -92,19 +92,19 @@ bool VirtualFileSystem::ListFiles(const string &directory, const std::function<v
 	return FindFileSystem(directory).ListFiles(directory, callback, opener);
 }
 
-void VirtualFileSystem::MoveFile(const string &source, const string &target) {
-	FindFileSystem(source).MoveFile(source, target);
+void VirtualFileSystem::MoveFile(const string &source, const string &target, FileOpener *opener) {
+	FindFileSystem(source).MoveFile(source, target, opener);
 }
 
-bool VirtualFileSystem::FileExists(const string &filename) {
-	return FindFileSystem(filename).FileExists(filename);
+bool VirtualFileSystem::FileExists(const string &filename, FileOpener *opener) {
+	return FindFileSystem(filename).FileExists(filename, opener);
 }
 
 bool VirtualFileSystem::IsPipe(const string &filename) {
 	return FindFileSystem(filename).IsPipe(filename);
 }
-void VirtualFileSystem::RemoveFile(const string &filename) {
-	FindFileSystem(filename).RemoveFile(filename);
+void VirtualFileSystem::RemoveFile(const string &filename, FileOpener *opener) {
+	FindFileSystem(filename).RemoveFile(filename, opener);
 }
 
 string VirtualFileSystem::PathSeparator(const string &path) {

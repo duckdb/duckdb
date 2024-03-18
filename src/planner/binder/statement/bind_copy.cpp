@@ -7,6 +7,7 @@
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
@@ -125,7 +126,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	if (is_remote_file) {
 		use_tmp_file = false;
 	} else {
-		bool is_file_and_exists = config.file_system->FileExists(stmt.info->file_path);
+		bool is_file_and_exists = config.file_system->FileExists(stmt.info->file_path, ClientData::Get(context).file_opener.get());
 		bool is_stdout = stmt.info->file_path == "/dev/stdout";
 		if (!user_set_use_tmp_file) {
 			use_tmp_file = is_file_and_exists && !per_thread_output && partition_cols.empty() && !is_stdout;

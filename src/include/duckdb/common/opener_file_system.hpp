@@ -61,15 +61,15 @@ public:
 		GetFileSystem().FileSync(handle);
 	}
 
-	bool DirectoryExists(const string &directory) override {
-		return GetFileSystem().DirectoryExists(directory);
+	bool DirectoryExists(const string &directory, FileOpener *opener = nullptr) override {
+		return GetFileSystem().DirectoryExists(directory, GetOpener().get());
 	}
-	void CreateDirectory(const string &directory) override {
-		return GetFileSystem().CreateDirectory(directory);
+	void CreateDirectory(const string &directory, FileOpener *opener = nullptr) override {
+		return GetFileSystem().CreateDirectory(directory, GetOpener().get());
 	}
 
-	void RemoveDirectory(const string &directory) override {
-		return GetFileSystem().RemoveDirectory(directory);
+	void RemoveDirectory(const string &directory, FileOpener *opener = nullptr) override {
+		return GetFileSystem().RemoveDirectory(directory, GetOpener().get());
 	}
 
 	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
@@ -80,8 +80,8 @@ public:
 		return GetFileSystem().ListFiles(directory, callback, GetOpener().get());
 	}
 
-	void MoveFile(const string &source, const string &target) override {
-		GetFileSystem().MoveFile(source, target);
+	void MoveFile(const string &source, const string &target, FileOpener *opener = nullptr) override {
+		GetFileSystem().MoveFile(source, target, GetOpener().get());
 	}
 
 	string GetHomeDirectory() override {
@@ -92,15 +92,15 @@ public:
 		return FileSystem::ExpandPath(path, GetOpener());
 	}
 
-	bool FileExists(const string &filename) override {
-		return GetFileSystem().FileExists(filename);
+	bool FileExists(const string &filename, FileOpener *opener = nullptr) override {
+		return GetFileSystem().FileExists(filename, GetOpener().get());
 	}
 
 	bool IsPipe(const string &filename) override {
 		return GetFileSystem().IsPipe(filename);
 	}
-	void RemoveFile(const string &filename) override {
-		GetFileSystem().RemoveFile(filename);
+	void RemoveFile(const string &filename, FileOpener *opener = nullptr) override {
+		GetFileSystem().RemoveFile(filename, GetOpener().get());
 	}
 
 	string PathSeparator(const string &path) override {

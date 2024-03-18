@@ -3,6 +3,7 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/file_opener.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/http_state.hpp"
 #include "duckdb/common/thread.hpp"
 #include "duckdb/common/types/hash.hpp"
@@ -496,9 +497,9 @@ time_t HTTPFileSystem::GetLastModifiedTime(FileHandle &handle) {
 	return sfh.last_modified;
 }
 
-bool HTTPFileSystem::FileExists(const string &filename) {
+bool HTTPFileSystem::FileExists(const string &filename, FileOpener *opener) {
 	try {
-		auto handle = OpenFile(filename.c_str(), FileFlags::FILE_FLAGS_READ);
+		auto handle = OpenFile(filename.c_str(), FileFlags::FILE_FLAGS_READ, DEFAULT_LOCK, DEFAULT_COMPRESSION, opener);
 		auto &sfh = (HTTPFileHandle &)*handle;
 		if (sfh.length == 0) {
 			return false;

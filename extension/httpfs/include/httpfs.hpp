@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/http_state.hpp"
 #include "duckdb/common/pair.hpp"
@@ -128,7 +129,7 @@ public:
 	void FileSync(FileHandle &handle) override;
 	int64_t GetFileSize(FileHandle &handle) override;
 	time_t GetLastModifiedTime(FileHandle &handle) override;
-	bool FileExists(const string &filename) override;
+	bool FileExists(const string &filename, FileOpener *opener = nullptr) override;
 	void Seek(FileHandle &handle, idx_t location) override;
 	idx_t SeekPosition(FileHandle &handle) override;
 	bool CanHandleFile(const string &fpath) override;
