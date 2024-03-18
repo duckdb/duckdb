@@ -287,6 +287,7 @@ idx_t Bit::GetBitInternal(string_t bit_string, idx_t n) {
 
 void Bit::SetBit(string_t &bit_string, idx_t n, idx_t new_value) {
 	SetBitInternal(bit_string, n + GetBitPadding(bit_string), new_value);
+	Bit::Finalize(bit_string);
 }
 
 void Bit::SetBitInternal(string_t &bit_string, idx_t n, idx_t new_value) {
