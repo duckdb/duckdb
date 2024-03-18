@@ -133,6 +133,10 @@ Value::Value(int32_t val) : type_(LogicalType::INTEGER), is_null(false) {
 	value_.integer = val;
 }
 
+Value::Value(bool val) : type_(LogicalType::BOOLEAN), is_null(false) {
+	value_.boolean = val;
+}
+
 Value::Value(int64_t val) : type_(LogicalType::BIGINT), is_null(false) {
 	value_.bigint = val;
 }
@@ -817,6 +821,13 @@ Value Value::BLOB(const string &data) {
 	Value result(LogicalType::BLOB);
 	result.is_null = false;
 	result.value_info_ = make_shared<StringValueInfo>(Blob::ToBlob(string_t(data)));
+	return result;
+}
+
+Value Value::AGGREGATE_STATE(const LogicalType &type, const_data_ptr_t data, idx_t len) { // NOLINT
+	Value result(type);
+	result.is_null = false;
+	result.value_info_ = make_shared<StringValueInfo>(string(const_char_ptr_cast(data), len));
 	return result;
 }
 

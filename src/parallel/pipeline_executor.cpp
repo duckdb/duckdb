@@ -17,10 +17,10 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 		requires_batch_index = pipeline.sink->RequiresBatchIndex() && pipeline.source->SupportsBatchIndex();
 		if (requires_batch_index) {
 			auto &partition_info = local_sink_state->partition_info;
-			D_ASSERT(!partition_info.HasBatchIndex());
+			D_ASSERT(!partition_info.batch_index.IsValid());
 			// batch index is not set yet - initialize before fetching anything
-			partition_info.SetBatchIndex(pipeline.RegisterNewBatchIndex());
-			partition_info.SetMinimumBatchIndex(partition_info.BatchIndex());
+			partition_info.batch_index = pipeline.RegisterNewBatchIndex();
+			partition_info.min_batch_index = partition_info.batch_index;
 		}
 	}
 	local_source_state = pipeline.source->GetLocalSourceState(context, *pipeline.source_state);
@@ -124,15 +124,15 @@ SinkNextBatchType PipelineExecutor::NextBatch(duckdb::DataChunk &source_chunk) {
 		}
 	}
 	auto &partition_info = local_sink_state->partition_info;
-	if (next_batch_index == partition_info.BatchIndex()) {
+	if (next_batch_index == partition_info.batch_index.GetIndex()) {
 		// no changes, return
 		return SinkNextBatchType::READY;
 	}
 	// batch index has changed - update it
-	if (partition_info.BatchIndex() > next_batch_index) {
+	if (partition_info.batch_index.GetIndex() > next_batch_index) {
 		throw InternalException(
 		    "Pipeline batch index - gotten lower batch index %llu (down from previous batch index of %llu)",
-		    next_batch_index, partition_info.BatchIndex());
+		    next_batch_index, partition_info.batch_index.GetIndex());
 	}
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 	if (debug_blocked_next_batch_count < debug_blocked_target_count) {
@@ -148,18 +148,18 @@ SinkNextBatchType PipelineExecutor::NextBatch(duckdb::DataChunk &source_chunk) {
 		return SinkNextBatchType::BLOCKED;
 	}
 #endif
-	auto current_batch = partition_info.BatchIndex();
-	partition_info.SetBatchIndex(next_batch_index);
+	auto current_batch = partition_info.batch_index.GetIndex();
+	partition_info.batch_index = next_batch_index;
 	OperatorSinkNextBatchInput next_batch_input {*pipeline.sink->sink_state, *local_sink_state, interrupt_state};
 	// call NextBatch before updating min_batch_index to provide the opportunity to flush the previous batch
 	auto next_batch_result = pipeline.sink->NextBatch(context, next_batch_input);
 
 	if (next_batch_result == SinkNextBatchType::BLOCKED) {
-		partition_info.SetBatchIndex(current_batch); // set batch_index back to what it was before
+		partition_info.batch_index = current_batch; // set batch_index back to what it was before
 		return SinkNextBatchType::BLOCKED;
 	}
 
-	partition_info.SetMinimumBatchIndex(pipeline.UpdateBatchIndex(current_batch, next_batch_index));
+	partition_info.min_batch_index = pipeline.UpdateBatchIndex(current_batch, next_batch_index);
 
 	return SinkNextBatchType::READY;
 }

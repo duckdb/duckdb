@@ -135,6 +135,8 @@ public:
 	}
 
 	void Verify() const;
+	void VerifyUTF8() const;
+	void VerifyCharacters() const;
 	void VerifyNull() const;
 
 	struct StringComparisonOperators {

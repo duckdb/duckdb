@@ -414,7 +414,7 @@ SinkNextBatchType PhysicalBatchInsert::NextBatch(ExecutionContext &context, Oper
 	auto &lstate = input.local_state.Cast<BatchInsertLocalState>();
 	auto &memory_manager = gstate.memory_manager;
 
-	auto batch_index = lstate.partition_info.BatchIndex();
+	auto batch_index = lstate.partition_info.batch_index.GetIndex();
 	if (lstate.current_collection) {
 		if (lstate.current_index == batch_index) {
 			throw InternalException("NextBatch called with the same batch index?");
@@ -422,7 +422,7 @@ SinkNextBatchType PhysicalBatchInsert::NextBatch(ExecutionContext &context, Oper
 		// batch index has changed: move the old collection to the global state and create a new collection
 		TransactionData tdata(0, 0);
 		lstate.current_collection->FinalizeAppend(tdata, lstate.current_append_state);
-		gstate.AddCollection(context.client, lstate.current_index, lstate.partition_info.MinimumBatchIndex(),
+		gstate.AddCollection(context.client, lstate.current_index, lstate.partition_info.min_batch_index.GetIndex(),
 		                     std::move(lstate.current_collection), lstate.writer);
 
 		auto any_unblocked = memory_manager.UnblockTasks();
@@ -450,10 +450,10 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &c
 	auto &table = gstate.table;
 	PhysicalInsert::ResolveDefaults(table, chunk, column_index_map, lstate.default_executor, lstate.insert_chunk);
 
-	auto batch_index = lstate.partition_info.BatchIndex();
+	auto batch_index = lstate.partition_info.batch_index.GetIndex();
 	// check if we should process this batch
 	if (!memory_manager.IsMinimumBatchIndex(batch_index)) {
-		memory_manager.UpdateMinBatchIndex(lstate.partition_info.MinimumBatchIndex());
+		memory_manager.UpdateMinBatchIndex(lstate.partition_info.min_batch_index.GetIndex());
 
 		// we are not processing the current min batch index
 		// check if we have exceeded the maximum number of unflushed rows
@@ -505,13 +505,13 @@ SinkCombineResultType PhysicalBatchInsert::Combine(ExecutionContext &context, Op
 	context.thread.profiler.Flush(*this, lstate.default_executor, "default_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
 
-	memory_manager.UpdateMinBatchIndex(lstate.partition_info.MinimumBatchIndex());
+	memory_manager.UpdateMinBatchIndex(lstate.partition_info.min_batch_index.GetIndex());
 
 	if (lstate.current_collection) {
 		TransactionData tdata(0, 0);
 		lstate.current_collection->FinalizeAppend(tdata, lstate.current_append_state);
 		if (lstate.current_collection->GetTotalRows() > 0) {
-			gstate.AddCollection(context.client, lstate.current_index, lstate.partition_info.MinimumBatchIndex(),
+			gstate.AddCollection(context.client, lstate.current_index, lstate.partition_info.min_batch_index.GetIndex(),
 			                     std::move(lstate.current_collection));
 		}
 	}

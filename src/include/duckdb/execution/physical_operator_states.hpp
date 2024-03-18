@@ -26,30 +26,11 @@ class MetaPipeline;
 class InterruptState;
 
 struct SourcePartitionInfo {
-public:
-	idx_t BatchIndex() const {
-		return batch_index.GetIndex();
-	}
-	void SetBatchIndex(idx_t batch_index) {
-		this->batch_index = batch_index;
-	}
-	bool HasBatchIndex() const {
-		return batch_index.IsValid();
-	}
-
-	idx_t MinimumBatchIndex() const {
-		return min_batch_index.GetIndex();
-	}
-	void SetMinimumBatchIndex(idx_t min_batch_index) {
-		this->min_batch_index = min_batch_index;
-	}
-
-private:
 	//! The current batch index
 	//! This is only set in case RequiresBatchIndex() is true, and the source has support for it (SupportsBatchIndex())
 	//! Otherwise this is left on INVALID_INDEX
 	//! The batch index is a globally unique, increasing index that should be used to maintain insertion order
-	//! in conjunction with parallelism
+	//! //! in conjunction with parallelism
 	optional_idx batch_index;
 	//! The minimum batch index that any thread is currently actively reading
 	optional_idx min_batch_index;
@@ -135,14 +116,6 @@ public:
 	const TARGET &Cast() const {
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
 		return reinterpret_cast<const TARGET &>(*this);
-	}
-
-public:
-	idx_t GetMinimumBatchIndex() const {
-		return partition_info.MinimumBatchIndex();
-	}
-	idx_t BatchIndex() const {
-		return partition_info.BatchIndex();
 	}
 };
 

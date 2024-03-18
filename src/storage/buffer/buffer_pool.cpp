@@ -93,7 +93,6 @@ BufferPool::EvictionResult BufferPool::EvictBlocks(MemoryTag tag, idx_t extra_me
 	TempBufferPoolReservation r(tag, *this, extra_memory);
 
 	while (current_memory > memory_limit) {
-
 		// get a block to unpin from the queue
 		if (!queue->q.try_dequeue(node)) {
 			// we could not dequeue any eviction node, so we try one more time,
