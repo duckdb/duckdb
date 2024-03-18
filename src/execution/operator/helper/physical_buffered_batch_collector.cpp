@@ -31,9 +31,9 @@ SinkResultType PhysicalBufferedBatchCollector::Sink(ExecutionContext &context, D
 	auto &gstate = input.global_state.Cast<BufferedBatchCollectorGlobalState>();
 	auto &lstate = input.local_state.Cast<BufferedBatchCollectorLocalState>();
 
-	lstate.current_batch = lstate.BatchIndex();
-	auto batch = lstate.BatchIndex();
-	auto min_batch_index = lstate.GetMinimumBatchIndex();
+	lstate.current_batch = lstate.partition_info.batch_index.GetIndex();
+	auto batch = lstate.partition_info.batch_index.GetIndex();
+	auto min_batch_index = lstate.partition_info.min_batch_index.GetIndex();
 
 	unique_lock<mutex> l(gstate.glock);
 
@@ -70,8 +70,8 @@ SinkNextBatchType PhysicalBufferedBatchCollector::NextBatch(ExecutionContext &co
 	lock_guard<mutex> l(gstate.glock);
 
 	auto batch = lstate.current_batch;
-	auto min_batch_index = lstate.GetMinimumBatchIndex();
-	auto new_index = lstate.BatchIndex();
+	auto min_batch_index = lstate.partition_info.min_batch_index.GetIndex();
+	auto new_index = lstate.partition_info.batch_index.GetIndex();
 
 	auto &buffered_data = dynamic_cast<BatchedBufferedData &>(*gstate.buffered_data);
 	buffered_data.CompleteBatch(batch);
@@ -90,7 +90,7 @@ SinkCombineResultType PhysicalBufferedBatchCollector::Combine(ExecutionContext &
 
 	lock_guard<mutex> l(gstate.glock);
 
-	auto min_batch_index = lstate.GetMinimumBatchIndex();
+	auto min_batch_index = lstate.partition_info.min_batch_index.GetIndex();
 	auto &buffered_data = dynamic_cast<BatchedBufferedData &>(*gstate.buffered_data);
 
 	// FIXME: this can move from 'other' chunks to 'current' chunks, increasing the 'current_batch_tuple_count'

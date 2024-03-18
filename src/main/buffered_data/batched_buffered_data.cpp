@@ -66,10 +66,6 @@ void BatchedBufferedData::UnblockSinks() {
 void BatchedBufferedData::UpdateMinBatchIndex(idx_t min_batch_index) {
 	lock_guard<mutex> lock(glock);
 	min_batch = MaxValue(min_batch, min_batch_index);
-	// printf("UPDATE MIN BATCH: min_batch: %llu\n", min_batch);
-	// printf("current-batch tuple_count: %llu\n", current_batch_tuple_count.load());
-	// printf("other-batches tuple_count: %llu\n\n", other_batches_tuple_count.load());
-
 	stack<idx_t> to_remove;
 	for (auto &it : in_progress_batches) {
 		auto batch = it.first;
@@ -126,7 +122,6 @@ PendingExecutionResult BatchedBufferedData::ReplenishBuffer(StreamQueryResult &r
 		UnblockSinks();
 		res = cc->ExecuteTaskInternal(context_lock, result);
 	}
-	// printf("IS_FINISHED\n");
 	return res;
 }
 
@@ -153,10 +148,6 @@ unique_ptr<DataChunk> BatchedBufferedData::Scan() {
 		D_ASSERT(in_progress_batches.empty());
 		return nullptr;
 	}
-	// printf("SCAN: min_batch: %llu\n", min_batch);
-	// printf("current-batch tuple_count: %llu\n", current_batch_tuple_count.load());
-	// printf("other-batches tuple_count: %llu\n\n", other_batches_tuple_count.load());
-
 	return chunk;
 }
 
@@ -175,9 +166,6 @@ void BatchedBufferedData::Append(unique_ptr<DataChunk> chunk, idx_t batch) {
 		other_batches_tuple_count += chunk->size();
 		chunks.push_back(std::move(chunk));
 	}
-	// printf("APPEND: batch: %llu | min_batch: %llu\n", batch, min_batch);
-	// printf("current-batch tuple_count: %llu\n", current_batch_tuple_count.load());
-	// printf("other-batches tuple_count: %llu\n\n", other_batches_tuple_count.load());
 }
 
 } // namespace duckdb
