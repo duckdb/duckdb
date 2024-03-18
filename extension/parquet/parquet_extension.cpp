@@ -95,7 +95,7 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 	bool error_opening_file = false;
 
 	//! Index of file currently up for scanning
-	idx_t file_index;
+	atomic<idx_t> file_index;
 	//! Index of row group within file currently up for scanning
 	idx_t row_group_index;
 	//! Batch index of the next row group to be scanned

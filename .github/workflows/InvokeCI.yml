@@ -9,6 +9,10 @@ on:
       skip_tests:
         type: string
 
+concurrency:
+  group: invokeci-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}-${{ inputs.git_ref }}-${{ inputs.skip_tests }}
+  cancel-in-progress: true
+
 jobs:
   osx:
     uses: ./.github/workflows/OSX.yml

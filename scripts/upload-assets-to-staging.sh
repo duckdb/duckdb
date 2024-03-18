@@ -2,11 +2,18 @@
 
 # Main extension uploading script
 
-# Usage: ./scripts/upload-staging-asset.sh <file>
+# Usage: ./scripts/upload-staging-asset.sh <folder> <file>*
+# <folder>              : Folder to upload to
 # <file>                : File to be uploaded
+
+if [ -z "$1" ] || [ -z "$2" ]; then
+    echo "Usage: ./scripts/upload-staging-asset.sh <folder> <file1> [... <fileN>]"
+    exit 1
+fi
 
 set -e
 
+FOLDER="$1"
 DRY_RUN_PARAM=""
 
 # dryrun if repo is not duckdb/duckdb
@@ -40,7 +47,7 @@ fi
 
 python3 -m pip install awscli
 
-for var in "$@"
+for var in "${@: 2}"
 do
-    aws s3 cp $var s3://duckdb-staging/$TARGET/$GITHUB_REPOSITORY/ $DRY_RUN_PARAM --region us-east-2
+    aws s3 cp $var s3://duckdb-staging/$TARGET/$GITHUB_REPOSITORY/$FOLDER/ $DRY_RUN_PARAM --region us-east-2
 done
