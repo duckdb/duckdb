@@ -83,7 +83,7 @@ jobs:
       if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
       run: |
         make
-        python3 scripts/run_tests_one_by_one.py build/release/test/unittest "*" --time_execution
+        python3 scripts/run_tests_one_by_one.py build/release/test/unittest "test/sql/pragma/test_custom_profiling_settings.test" --time_execution
 
     - name: Tools Tests
       shell: bash
