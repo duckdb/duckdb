@@ -76,8 +76,8 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	m.def(
 	    "arrow",
 	    [](idx_t rows_per_batch, shared_ptr<DuckDBPyConnection> conn) -> duckdb::pyarrow::Table {
-		    if (!connection) {
-			    connection = DuckDBPyConnection::DefaultConnection();
+		    if (!conn) {
+			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
 		    return conn->FetchArrow(rows_per_batch);
 	    },
@@ -86,8 +86,8 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	m.def(
 	    "arrow",
 	    [](py::object &arrow_object, shared_ptr<DuckDBPyConnection> conn) -> unique_ptr<DuckDBPyRelation> {
-		    if (!connection) {
-			    connection = DuckDBPyConnection::DefaultConnection();
+		    if (!conn) {
+			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
 		    return conn->FromArrow(arrow_object);
 	    },
@@ -96,8 +96,8 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	m.def(
 	    "df",
 	    [](bool date_as_object, shared_ptr<DuckDBPyConnection> conn) -> PandasDataFrame {
-		    if (!connection) {
-			    connection = DuckDBPyConnection::DefaultConnection();
+		    if (!conn) {
+			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
 		    return conn->FetchDF(date_as_object);
 	    },
@@ -106,8 +106,8 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	m.def(
 	    "df",
 	    [](const PandasDataFrame &value, shared_ptr<DuckDBPyConnection> conn) -> unique_ptr<DuckDBPyRelation> {
-		    if (!connection) {
-			    connection = DuckDBPyConnection::DefaultConnection();
+		    if (!conn) {
+			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
 		    return conn->FromDF(value);
 	    },
