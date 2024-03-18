@@ -9,6 +9,10 @@ on:
       skip_tests:
         type: string
 
+concurrency:
+  group: invokeci-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}-${{ inputs.git_ref }}-${{ inputs.skip_tests }}
+  cancel-in-progress: true
+
 jobs:
   osx:
     uses: ./.github/workflows/OSX.yml
@@ -44,6 +48,14 @@ jobs:
 
   java:
     uses: ./.github/workflows/Java.yml
+    secrets: inherit
+    with:
+      override_git_describe: ${{ inputs.override_git_describe }}
+      git_ref: ${{ inputs.git_ref }}
+      skip_tests: ${{ inputs.skip_tests }}
+
+  R:
+    uses: ./.github/workflows/R.yml
     secrets: inherit
     with:
       override_git_describe: ${{ inputs.override_git_describe }}

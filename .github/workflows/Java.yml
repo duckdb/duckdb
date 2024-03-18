@@ -253,6 +253,7 @@ jobs:
 
 
   java-combine:
+    if: ${{ inputs.override_git_describe == '' }}
     name: Java Combine
     runs-on: ubuntu-latest
     needs:

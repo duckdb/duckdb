@@ -1672,7 +1672,7 @@ void FlatVector::SetNull(Vector &vector, idx_t idx, bool is_null) {
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
 	vector.validity.Set(idx, !is_null);
 	if (is_null) {
-		auto type = vector.GetType();
+		auto &type = vector.GetType();
 		auto internal_type = type.InternalType();
 		if (internal_type == PhysicalType::STRUCT) {
 			// set all child entries to null as well
