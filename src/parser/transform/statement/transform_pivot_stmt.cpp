@@ -213,7 +213,7 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 	// transform order by/limit modifiers
 	TransformModifiers(select, *select_node);
 
-	return select_node;
+	return std::move(select_node);
 }
 
 } // namespace duckdb
