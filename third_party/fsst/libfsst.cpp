@@ -315,8 +315,7 @@ static inline size_t compressSIMD(SymbolTable &symbolTable, u8* symbolBase, size
 						inputOrdered[pos] = input[i];
 					}
 					// finally.. SIMD compress max 256KB of simdbuf into (max) 512KB of simdbuf (but presumably much less..)
-					for(size_t done = duckdb_fsst_compressAVX512(symbolTable, codeBase, symbolBase, inputOrdered, output, batchPos-empty, unroll);
-					     done < batchPos; done++) output[done] = inputOrdered[done];
+					for(size_t done = 0; done < batchPos; done++) output[done] = inputOrdered[done];
 				} else {
 					memcpy(output, input, batchPos*sizeof(SIMDjob));
 				}
@@ -592,12 +591,7 @@ extern "C" u32 duckdb_fsst_import(duckdb_fsst_decoder_t *decoder, u8 *buf) {
 }
 
 // runtime check for simd
-inline size_t _compressImpl(Encoder *e, size_t nlines, size_t lenIn[], u8 *strIn[], size_t size, u8 *output, size_t *lenOut, u8 *strOut[], bool noSuffixOpt, bool avoidBranch, int simd) {
-#ifndef NONOPT_FSST
-	if (simd && duckdb_fsst_hasAVX512())
-		return compressSIMD(*e->symbolTable, e->simdbuf, nlines, lenIn, strIn, size, output, lenOut, strOut, simd);
-#endif
-	(void) simd;
+inline size_t _compressImpl(Encoder *e, size_t nlines, size_t lenIn[], u8 *strIn[], size_t size, u8 *output, size_t *lenOut, u8 *strOut[], bool noSuffixOpt, bool avoidBranch, int) {
 	return compressBulk(*e->symbolTable, nlines, lenIn, strIn, size, output, lenOut, strOut, noSuffixOpt, avoidBranch);
 }
 size_t compressImpl(Encoder *e, size_t nlines, size_t lenIn[], u8 *strIn[], size_t size, u8 *output, size_t *lenOut, u8 *strOut[], bool noSuffixOpt, bool avoidBranch, int simd) {
