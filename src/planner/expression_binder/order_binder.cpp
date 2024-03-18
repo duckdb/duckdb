@@ -110,19 +110,12 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 				throw BinderException("ORDER term out of range - should be between 1 and %lld", (idx_t)max_count);
 			}
 			auto &sel_entry = extra_list->at(index);
-			if (!sel_entry->alias.empty()) {
-				vector<string> column_names = {sel_entry->alias};
-				auto colref = make_uniq<ColumnRefExpression>(std::move(column_names));
-				colref->query_location = sel_entry->query_location;
-				collation.child = std::move(colref);
-			} else { // no alias, e.g.: SELECT 'a' ORDER BY 1 COLLATE NOCASE
-				if (sel_entry->expression_class == ExpressionClass::SUBQUERY) {
-					throw BinderException(
-					    "OrderBy referenced a ColumnNumber in a SELECT clause - but the expression has a subquery."
-					    " This is not yet supported.");
-				}
-				collation.child = sel_entry->Copy();
+			if (sel_entry->HasSubquery()) {
+				throw BinderException(
+				    "OrderBy referenced a ColumnNumber in a SELECT clause - but the expression has a subquery."
+				    " This is not yet supported.");
 			}
+			collation.child = sel_entry->Copy();
 		}
 		break;
 	}
