@@ -12,7 +12,6 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
-
 #include <limits>
 
 namespace duckdb {
@@ -85,6 +84,12 @@ void BaseCSVData::Finalize() {
 	}
 }
 
+string TransformNewLine(string new_line) {
+	new_line = StringUtil::Replace(new_line, "\\r", "\r");
+	return StringUtil::Replace(new_line, "\\n", "\n");
+	;
+}
+
 static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctionBindInput &input,
                                              const vector<string> &names, const vector<LogicalType> &sql_types) {
 	auto bind_data = make_uniq<WriteCSVData>(input.info.file_path, sql_types, names);
@@ -110,7 +115,7 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctio
 	bind_data->requires_quotes[bind_data->options.dialect_options.state_machine_options.quote.GetValue()] = true;
 
 	if (!bind_data->options.write_newline.empty()) {
-		bind_data->newline = bind_data->options.write_newline;
+		bind_data->newline = TransformNewLine(bind_data->options.write_newline);
 	}
 	return std::move(bind_data);
 }

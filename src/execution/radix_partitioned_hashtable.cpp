@@ -289,10 +289,9 @@ idx_t RadixHTConfig::ExternalRadixBits(const idx_t &maximum_sink_radix_bits_p) {
 idx_t RadixHTConfig::SinkCapacity(ClientContext &context) {
 	// Get active and maximum number of threads
 	const idx_t active_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
-	const auto max_threads = DBConfig::GetConfig(context).options.maximum_threads;
 
 	// Compute cache size per active thread (assuming cache is shared)
-	const auto total_shared_cache_size = max_threads * L3_CACHE_SIZE;
+	const auto total_shared_cache_size = active_threads * L3_CACHE_SIZE;
 	const auto cache_per_active_thread = L1_CACHE_SIZE + L2_CACHE_SIZE + total_shared_cache_size / active_threads;
 
 	// Divide cache per active thread by entry size, round up to next power of two, to get capacity
@@ -581,7 +580,7 @@ public:
 	//! For synchronizing scan tasks
 	mutex lock;
 	idx_t scan_idx;
-	idx_t scan_done;
+	atomic<idx_t> scan_done;
 };
 
 enum class RadixHTScanStatus : uint8_t { INIT, IN_PROGRESS, DONE };

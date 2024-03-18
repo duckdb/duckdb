@@ -47,8 +47,10 @@ execute q1([5, 42, 3]);
 ----
 [3, 42, 5]
 
+statement ok
+create or replace table tbl_big as select range(5000) as list;
+
 query I
-create table tbl_big as select range(5000) as list;
 select list_sort((list), 'desc') == ${f}(list) from tbl_big;
 ----
 true
@@ -303,4 +305,3 @@ FROM example ORDER BY length(reverse_arr) DESC;
 []
 
 endloop
-
