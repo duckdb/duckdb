@@ -599,7 +599,6 @@ void CustomProfilingSettings::SetLocal(ClientContext &context, const Value &inpu
 	auto line = file->ReadLine();
 	idx_t line_count = 0;
 	while (!line.empty()) {
-		std::cout << line << std::endl;
 		line_count++;
 		if (StringUtil::Equals(&line.back(), "\n")) {
 			line.substr(0, line.size() - 1);
