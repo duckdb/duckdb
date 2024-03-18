@@ -140,8 +140,18 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	    copy_function.function.copy_to_bind(context, bind_input, unique_column_names, select_node.types);
 
 	const auto rotate = copy_function.function.rotate_files && copy_function.function.rotate_files(*function_data);
-	if (rotate && !copy_function.function.rotate_next_file) {
-		throw InternalException("rotate_next_file not implemented for \"%s\"", copy_function.function.extension);
+	if (rotate) {
+		if (!copy_function.function.rotate_next_file) {
+			throw InternalException("rotate_next_file not implemented for \"%s\"", copy_function.function.extension);
+		}
+		if (user_set_use_tmp_file) {
+			throw NotImplementedException(
+			    "Can't combine USE_TMP_FILE and file rotation (e.g., ROW_GROUPS_PER_FILE) for COPY");
+		}
+		if (!partition_cols.empty()) {
+			throw NotImplementedException(
+			    "Can't combine file rotation (e.g., ROW_GROUPS_PER_FILE) and PARTITION_BY for COPY");
+		}
 	}
 
 	// now create the copy information
@@ -155,6 +165,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	if (file_size_bytes.IsValid()) {
 		copy->file_size_bytes = file_size_bytes;
 	}
+	copy->rotate = rotate;
 	copy->partition_output = !partition_cols.empty();
 	copy->partition_columns = std::move(partition_cols);
 

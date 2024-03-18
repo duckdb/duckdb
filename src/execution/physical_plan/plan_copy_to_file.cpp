@@ -17,8 +17,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile
 		auto base = StringUtil::GetFileName(op.file_path);
 		op.file_path = fs.JoinPath(path, "tmp_" + base);
 	}
-	if (op.per_thread_output || op.file_size_bytes.IsValid() || op.partition_output || !op.partition_columns.empty() ||
-	    op.overwrite_or_ignore) {
+	if (op.per_thread_output || op.file_size_bytes.IsValid() || op.rotate || op.partition_output ||
+	    !op.partition_columns.empty() || op.overwrite_or_ignore) {
 		// hive-partitioning/per-thread output does not care about insertion order, and does not support batch indexes
 		preserve_insertion_order = false;
 		supports_batch_index = false;
@@ -59,6 +59,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile
 	if (op.file_size_bytes.IsValid()) {
 		copy->file_size_bytes = op.file_size_bytes;
 	}
+	copy->rotate = op.rotate;
 	copy->partition_output = op.partition_output;
 	copy->partition_columns = op.partition_columns;
 	copy->names = op.names;
