@@ -68,9 +68,7 @@ jobs:
 
       - id: parse-matrices
         run: |
-          cat ./duckdb/.github/config/distribution_matrix.json > distribution_matrix.json
-          grep wasm distribution_matrix.json || (head -n -1 ./duckdb/.github/config/distribution_matrix.json > distribution_matrix.json && echo ',"wasm":{"include":[{"duckdb_arch":"wasm_mvp","vcpkg_triplet":"wasm32-emscripten"},{"duckdb_arch":"wasm_eh","vcpkg_triplet":"wasm32-emscripten"},{"duckdb_arch":"wasm_threads","vcpkg_triplet":"wasm32-emscripten"}]}}' >> distribution_matrix.json)
-          python3 ${{ inputs.matrix_parse_script }} --input distribution_matrix.json --deploy_matrix --output deploy_matrix.json --exclude "${{ inputs.exclude_archs }}" --pretty
+          python3 ${{ inputs.matrix_parse_script }} --input ./duckdb/.github/config/distribution_matrix.json --deploy_matrix --output deploy_matrix.json --exclude "${{ inputs.exclude_archs }}" --pretty
           deploy_matrix="`cat deploy_matrix.json`"
           echo deploy_matrix=$deploy_matrix >> $GITHUB_OUTPUT
           echo `cat $GITHUB_OUTPUT`

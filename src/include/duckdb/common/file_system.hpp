@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/constants.hpp"
+#include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_buffer.hpp"
@@ -80,7 +80,7 @@ public:
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -110,6 +110,8 @@ public:
 	static constexpr uint8_t FILE_FLAGS_FILE_CREATE_NEW = 1 << 4;
 	//! Open file in append mode
 	static constexpr uint8_t FILE_FLAGS_APPEND = 1 << 5;
+	//! Open file with restrictive permissions (600 on linux/mac) can only be used when creating, throws if file exists
+	static constexpr uint8_t FILE_FLAGS_PRIVATE = 1 << 6;
 };
 
 class FileSystem {

@@ -6,7 +6,8 @@ ExportStatement::ExportStatement(unique_ptr<CopyInfo> info)
     : SQLStatement(StatementType::EXPORT_STATEMENT), info(std::move(info)) {
 }
 
-ExportStatement::ExportStatement(const ExportStatement &other) : SQLStatement(other), info(other.info->Copy()) {
+ExportStatement::ExportStatement(const ExportStatement &other)
+    : SQLStatement(other), info(other.info->Copy()), database(other.database) {
 }
 
 unique_ptr<SQLStatement> ExportStatement::Copy() const {

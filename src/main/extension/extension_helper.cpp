@@ -122,7 +122,6 @@ static DefaultExtension internal_extensions[] = {
     {"arrow", "A zero-copy data integration between Apache Arrow and DuckDB", false},
     {"azure", "Adds a filesystem abstraction for Azure blob storage to DuckDB", false},
     {"iceberg", "Adds support for Apache Iceberg", false},
-    {"visualizer", "Creates an HTML-based visualization of the query plan", false},
     {nullptr, nullptr, false}};
 
 idx_t ExtensionHelper::DefaultExtensionCount() {
@@ -171,19 +170,23 @@ bool ExtensionHelper::CanAutoloadExtension(const string &ext_name) {
 
 string ExtensionHelper::AddExtensionInstallHintToErrorMsg(ClientContext &context, const string &base_error,
                                                           const string &extension_name) {
-	auto &dbconfig = DBConfig::GetConfig(context);
+
+	return AddExtensionInstallHintToErrorMsg(DBConfig::GetConfig(context), base_error, extension_name);
+}
+string ExtensionHelper::AddExtensionInstallHintToErrorMsg(DBConfig &config, const string &base_error,
+                                                          const string &extension_name) {
 	string install_hint;
 
 	if (!ExtensionHelper::CanAutoloadExtension(extension_name)) {
 		install_hint = "Please try installing and loading the " + extension_name + " extension:\nINSTALL " +
 		               extension_name + ";\nLOAD " + extension_name + ";\n\n";
-	} else if (!dbconfig.options.autoload_known_extensions) {
+	} else if (!config.options.autoload_known_extensions) {
 		install_hint =
 		    "Please try installing and loading the " + extension_name + " extension by running:\nINSTALL " +
 		    extension_name + ";\nLOAD " + extension_name +
 		    ";\n\nAlternatively, consider enabling auto-install "
 		    "and auto-load by running:\nSET autoinstall_known_extensions=1;\nSET autoload_known_extensions=1;";
-	} else if (!dbconfig.options.autoinstall_known_extensions) {
+	} else if (!config.options.autoinstall_known_extensions) {
 		install_hint =
 		    "Please try installing the " + extension_name + " extension by running:\nINSTALL " + extension_name +
 		    ";\n\nAlternatively, consider enabling autoinstall by running:\nSET autoinstall_known_extensions=1;";
@@ -246,7 +249,7 @@ void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
 	// The in-tree extensions that we check. Non-cmake builds are currently limited to these for static linking
 	// TODO: rewrite package_build.py to allow also loading out-of-tree extensions in non-cmake builds, after that
 	//		 these can be removed
-	unordered_set<string> extensions {"parquet", "icu",   "tpch",     "tpcds", "fts",      "httpfs",      "visualizer",
+	unordered_set<string> extensions {"parquet", "icu",   "tpch",     "tpcds", "fts",      "httpfs",
 	                                  "json",    "excel", "sqlsmith", "inet",  "jemalloc", "autocomplete"};
 	for (auto &ext : extensions) {
 		LoadExtensionInternal(db, ext, true);

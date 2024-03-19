@@ -71,7 +71,7 @@ static string_t TranslateScalarFunction(const string_t &haystack, const string_t
 		input_haystack += sz;
 	}
 
-	return string_t(result.data(), result.size());
+	return string_t(result.data(), UnsafeNumericCast<uint32_t>(result.size()));
 }
 
 static void TranslateFunction(DataChunk &args, ExpressionState &state, Vector &result) {

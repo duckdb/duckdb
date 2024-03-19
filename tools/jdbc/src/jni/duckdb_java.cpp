@@ -844,7 +844,15 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 	case LogicalTypeId::DOUBLE:
 		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(double));
 		break;
+	case LogicalTypeId::DATE:
+		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(date_t));
+		break;
+	case LogicalTypeId::TIME:
+		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(dtime_t));
+		break;
 	case LogicalTypeId::TIME_TZ:
+		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(dtime_tz_t));
+		break;
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP:
@@ -900,6 +908,27 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 	case LogicalTypeId::UUID:
 		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(hugeint_t));
 		break;
+	case LogicalTypeId::ARRAY: {
+		varlen_data = env->NewObjectArray(row_count, J_DuckArray, nullptr);
+		auto &array_vector = ArrayVector::GetEntry(vec);
+		auto total_size = row_count * ArrayType::GetSize(vec.GetType());
+		auto j_vec = ProcessVector(env, conn_ref, array_vector, total_size);
+
+		auto limit = ArrayType::GetSize(vec.GetType());
+
+		for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
+			if (FlatVector::IsNull(vec, row_idx)) {
+				continue;
+			}
+
+			auto offset = row_idx * limit;
+
+			auto j_obj = env->NewObject(J_DuckArray, J_DuckArray_init, j_vec, offset, limit);
+
+			env->SetObjectArrayElement(varlen_data, row_idx, j_obj);
+		}
+		break;
+	}
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::LIST: {
 		varlen_data = env->NewObjectArray(row_count, J_DuckArray, nullptr);

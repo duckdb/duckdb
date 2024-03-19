@@ -44,8 +44,9 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
     }
 
     public static DuckDBColumnType TypeNameToType(String type_name) {
-        if (type_name.endsWith("[]")) {
-            return DuckDBColumnType.LIST;
+        if (type_name.endsWith("]")) {
+            // VARCHAR[] or VARCHAR[2]
+            return type_name.endsWith("[]") ? DuckDBColumnType.LIST : DuckDBColumnType.ARRAY;
         } else if (type_name.startsWith("DECIMAL")) {
             return DuckDBColumnType.DECIMAL;
         } else if (type_name.equals("TIME WITH TIME ZONE")) {
@@ -94,7 +95,7 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
         return column_names[column - 1];
     }
 
-    public static int type_to_int(DuckDBColumnType type) throws SQLException {
+    public static int type_to_int(DuckDBColumnType type) {
         switch (type) {
         case BOOLEAN:
             return Types.BOOLEAN;
@@ -107,6 +108,7 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
         case BIGINT:
             return Types.BIGINT;
         case LIST:
+        case ARRAY:
             return Types.ARRAY;
         case FLOAT:
             return Types.FLOAT;
@@ -127,6 +129,12 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
             return Types.TIMESTAMP;
         case TIMESTAMP_WITH_TIME_ZONE:
             return Types.TIMESTAMP_WITH_TIMEZONE;
+        case TIME_WITH_TIME_ZONE:
+            return Types.TIME_WITH_TIMEZONE;
+        case STRUCT:
+            return Types.STRUCT;
+        case BIT:
+            return Types.BIT;
         case BLOB:
             return Types.BLOB;
         default:
@@ -186,6 +194,7 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
         case UUID:
             return UUID.class.getName();
         case LIST:
+        case ARRAY:
             return DuckDBArray.class.getName();
         case MAP:
             return HashMap.class.getName();

@@ -49,7 +49,7 @@ extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG)
 #include <libproc.h>                                        // NOLINT
 #endif                                                      // NOLINT
 #elif defined(_WIN32)
-#include <RestartManager.h>
+#include <restartmanager.h>
 #endif
 
 namespace duckdb {
@@ -58,6 +58,9 @@ static void AssertValidFileFlags(uint8_t flags) {
 #ifdef DEBUG
 	bool is_read = flags & FileFlags::FILE_FLAGS_READ;
 	bool is_write = flags & FileFlags::FILE_FLAGS_WRITE;
+	bool is_create = (flags & FileFlags::FILE_FLAGS_FILE_CREATE) || (flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+	bool is_private = (flags & FileFlags::FILE_FLAGS_PRIVATE);
+
 	// require either READ or WRITE (or both)
 	D_ASSERT(is_read || is_write);
 	// CREATE/Append flags require writing
@@ -66,6 +69,9 @@ static void AssertValidFileFlags(uint8_t flags) {
 	D_ASSERT(is_write || !(flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
 	// cannot combine CREATE and CREATE_NEW flags
 	D_ASSERT(!(flags & FileFlags::FILE_FLAGS_FILE_CREATE && flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
+
+	// For is_private can only be set along with a create flag
+	D_ASSERT(!is_private || is_create);
 #endif
 }
 
@@ -188,6 +194,8 @@ static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 	}
 
 	string process_name, process_owner;
+// macOS >= 10.7 has PROC_PIDT_SHORTBSDINFO
+#ifdef PROC_PIDT_SHORTBSDINFO
 	// try to find out more about the process holding the lock
 	struct proc_bsdshortinfo proc;
 	if (proc_pidinfo(pid, PROC_PIDT_SHORTBSDINFO, 0, &proc, PROC_PIDT_SHORTBSDINFO_SIZE) ==
@@ -199,6 +207,9 @@ static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 			process_owner = pw->pw_name;
 		}
 	}
+#else
+	return string();
+#endif
 	// try to get a better process name (full path)
 	char full_exec_path[PROC_PIDPATHINFO_MAXSIZE];
 	if (proc_pidpath(pid, full_exec_path, PROC_PIDPATHINFO_MAXSIZE) > 0) {
@@ -262,6 +273,25 @@ static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 }
 #endif
 
+bool LocalFileSystem::IsPrivateFile(const string &path_p, FileOpener *opener) {
+	auto path = FileSystem::ExpandPath(path_p, opener);
+
+	struct stat st;
+
+	if (lstat(path.c_str(), &st) != 0) {
+		throw IOException(
+		    "Failed to stat '%s' when checking file permissions, file may be missing or have incorrect permissions",
+		    path.c_str());
+	}
+
+	// If group or other have any permission, the file is not private
+	if (st.st_mode & (S_IRGRP | S_IWGRP | S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH)) {
+		return false;
+	}
+
+	return true;
+}
+
 unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t flags, FileLockType lock_type,
                                                  FileCompressionType compression, FileOpener *opener) {
 	auto path = FileSystem::ExpandPath(path_p, opener);
@@ -308,7 +338,19 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t f
 		open_flags |= O_DIRECT | O_SYNC;
 #endif
 	}
-	int fd = open(path.c_str(), open_flags, 0666);
+
+	// Determine permissions
+	mode_t filesec;
+	if (flags & FileFlags::FILE_FLAGS_PRIVATE) {
+		open_flags |= O_EXCL; // Ensure we error on existing files or the permissions may not set
+		filesec = 0600;
+	} else {
+		filesec = 0666;
+	}
+
+	// Open the file
+	int fd = open(path.c_str(), open_flags, filesec);
+
 	if (fd == -1) {
 		throw IOException("Cannot open file \"%s\": %s", {{"errno", std::to_string(errno)}}, path, strerror(errno));
 	}
@@ -398,6 +440,7 @@ void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 		}
 		read_buffer += bytes_read;
 		nr_bytes -= bytes_read;
+		location += bytes_read;
 	}
 }
 
@@ -420,18 +463,29 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 			throw IOException("Could not write file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
 			                  strerror(errno));
 		}
-		D_ASSERT(bytes_written >= 0 && bytes_written);
+		if (bytes_written == 0) {
+			throw IOException("Could not write to file \"%s\" - attempted to write 0 bytes: %s",
+			                  {{"errno", std::to_string(errno)}}, handle.path, strerror(errno));
+		}
 		write_buffer += bytes_written;
 		nr_bytes -= bytes_written;
+		location += bytes_written;
 	}
 }
 
 int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
-	int64_t bytes_written = write(fd, buffer, nr_bytes);
-	if (bytes_written == -1) {
-		throw IOException("Could not write file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
-		                  strerror(errno));
+	int64_t bytes_written = 0;
+	while (nr_bytes > 0) {
+		auto bytes_to_write = MinValue<idx_t>(idx_t(NumericLimits<int32_t>::Maximum()), idx_t(nr_bytes));
+		int64_t current_bytes_written = write(fd, buffer, bytes_to_write);
+		if (current_bytes_written <= 0) {
+			throw IOException("Could not write file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
+			                  strerror(errno));
+		}
+		bytes_written += current_bytes_written;
+		buffer = (void *)(data_ptr_cast(buffer) + current_bytes_written);
+		nr_bytes -= current_bytes_written;
 	}
 	return bytes_written;
 }
@@ -707,6 +761,11 @@ static string AdditionalLockInfo(const std::wstring path) {
 	return conflict_string;
 }
 
+bool LocalFileSystem::IsPrivateFile(const string &path_p, FileOpener *opener) {
+	// TODO: detect if file is shared in windows
+	return true;
+}
+
 unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t flags, FileLockType lock_type,
                                                  FileCompressionType compression, FileOpener *opener) {
 	auto path = FileSystem::ExpandPath(path_p, opener);
@@ -827,9 +886,26 @@ static DWORD FSInternalWrite(FileHandle &handle, HANDLE hFile, void *buffer, int
 	return bytes_written;
 }
 
+static int64_t FSWrite(FileHandle &handle, HANDLE hFile, void *buffer, int64_t nr_bytes, idx_t location) {
+	int64_t bytes_written = 0;
+	while (nr_bytes > 0) {
+		auto bytes_to_write = MinValue<idx_t>(idx_t(NumericLimits<int32_t>::Maximum()), idx_t(nr_bytes));
+		DWORD current_bytes_written = FSInternalWrite(handle, hFile, buffer, bytes_to_write, location);
+		if (current_bytes_written <= 0) {
+			throw IOException("Could not write file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
+			                  strerror(errno));
+		}
+		bytes_written += current_bytes_written;
+		buffer = (void *)(data_ptr_cast(buffer) + current_bytes_written);
+		location += current_bytes_written;
+		nr_bytes -= current_bytes_written;
+	}
+	return bytes_written;
+}
+
 void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
-	auto bytes_written = FSInternalWrite(handle, hFile, buffer, nr_bytes, location);
+	auto bytes_written = FSWrite(handle, hFile, buffer, nr_bytes, location);
 	if (bytes_written != nr_bytes) {
 		throw IOException("Could not write all bytes from file \"%s\": wanted=%lld wrote=%lld", handle.path, nr_bytes,
 		                  bytes_written);
@@ -839,7 +915,7 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
 	auto &pos = handle.Cast<WindowsFileHandle>().position;
-	auto bytes_written = FSInternalWrite(handle, hFile, buffer, nr_bytes, pos);
+	auto bytes_written = FSWrite(handle, hFile, buffer, nr_bytes, pos);
 	pos += bytes_written;
 	return bytes_written;
 }

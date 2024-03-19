@@ -90,9 +90,9 @@ private:
 
 	//! Read properties
 	idx_t read_position;
-	idx_t requested_reads;
+	atomic<idx_t> requested_reads;
 	atomic<idx_t> actual_reads;
-	bool last_read_requested;
+	atomic<bool> last_read_requested;
 
 	//! Cached buffers for resetting when reading stream
 	vector<AllocatedData> cached_buffers;
@@ -161,7 +161,7 @@ private:
 	bool thrown;
 
 public:
-	mutex lock;
+	mutable mutex lock;
 	MultiFileReaderData reader_data;
 };
 

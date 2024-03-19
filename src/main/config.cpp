@@ -70,6 +70,7 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL(EnableExternalAccessSetting),
                                                  DUCKDB_GLOBAL(EnableFSSTVectors),
                                                  DUCKDB_GLOBAL(AllowUnsignedExtensionsSetting),
+                                                 DUCKDB_GLOBAL(AllowUnredactedSecretsSetting),
                                                  DUCKDB_GLOBAL(CustomExtensionRepository),
                                                  DUCKDB_GLOBAL(AutoloadExtensionRepository),
                                                  DUCKDB_GLOBAL(AutoinstallKnownExtensions),
@@ -121,6 +122,7 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL(FlushAllocatorSetting),
                                                  DUCKDB_GLOBAL(DuckDBApiSetting),
                                                  DUCKDB_GLOBAL(CustomUserAgentSetting),
+                                                 DUCKDB_LOCAL(PartitionedWriteFlushThreshold),
                                                  FINAL_SETTING};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {

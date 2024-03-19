@@ -28,6 +28,8 @@ inline void AddPointFunction(DataChunk &args, ExpressionState &state, Vector &re
 	auto left_vector_type = left_vector.GetVectorType();
 	auto right_vector_type = right_vector.GetVectorType();
 
+	args.Flatten();
+
 	UnifiedVectorFormat lhs_data;
 	UnifiedVectorFormat rhs_data;
 	left_vector.ToUnifiedFormat(count, lhs_data);
@@ -67,6 +69,7 @@ inline void SubPointFunction(DataChunk &args, ExpressionState &state, Vector &re
 	auto left_vector_type = left_vector.GetVectorType();
 	auto right_vector_type = right_vector.GetVectorType();
 
+	args.Flatten();
 	UnifiedVectorFormat lhs_data;
 	UnifiedVectorFormat rhs_data;
 	left_vector.ToUnifiedFormat(count, lhs_data);

@@ -1,5 +1,5 @@
-#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
-#include "duckdb/execution/operator/csv_scanner/scanner/base_scanner.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/base_scanner.hpp"
 
 namespace duckdb {
 
@@ -8,9 +8,9 @@ ScannerResult::ScannerResult(CSVStates &states_p, CSVStateMachine &state_machine
 }
 
 BaseScanner::BaseScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p,
-                         shared_ptr<CSVErrorHandler> error_handler_p, shared_ptr<CSVFileScan> csv_file_scan_p,
-                         CSVIterator iterator_p)
-    : csv_file_scan(std::move(csv_file_scan_p)), error_handler(std::move(error_handler_p)),
+                         shared_ptr<CSVErrorHandler> error_handler_p, bool sniffing_p,
+                         shared_ptr<CSVFileScan> csv_file_scan_p, CSVIterator iterator_p)
+    : csv_file_scan(std::move(csv_file_scan_p)), sniffing(sniffing_p), error_handler(std::move(error_handler_p)),
       state_machine(std::move(state_machine_p)), iterator(iterator_p), buffer_manager(std::move(buffer_manager_p)) {
 	D_ASSERT(buffer_manager);
 	D_ASSERT(state_machine);

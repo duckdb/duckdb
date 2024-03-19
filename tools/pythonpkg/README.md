@@ -107,6 +107,28 @@ pytest tests/stubs
 
 All the above should be done in a virtualenv.
 
+## Frequently encountered issue with extensions:
+
+If you are faced with an error on `import duckdb`:
+```
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+  File "/usr/bin/python3/site-packages/duckdb/__init__.py", line 4, in <module>
+    import duckdb.functional as functional
+  File "/usr/bin/python3/site-packages/duckdb/functional/__init__.py", line 1, in <module>
+    from duckdb.duckdb.functional import (
+ImportError: dlopen(/usr/bin/python3/site-packages/duckdb/duckdb.cpython-311-darwin.so, 0x0002): symbol not found in flat namespace '_MD5_Final'
+```
+
+When building DuckDB it outputs which extensions are linked into DuckDB, the python package does not deal with linked in extensions very well.
+The output looks something like this:
+`-- Extensions linked into DuckDB: [json, fts, tpcds, tpch, parquet, icu, httpfs]`
+
+`httpfs` should not be in that list, among others.
+Refer to `extension/extension_config_local.cmake` or the other `*.cmake` files and make sure you add DONT_LINK to the problematic extension.
+`tools/pythonpkg/duckdb_extension_config.cmake` contains the default list of extensions built for the python package
+Anything that is linked that is not listed there should be considered problematic.
+
 ## Clang-tidy and CMakeLists
 
 The pythonpkg does not use the CMakeLists for compilation, for that it uses pip and `package_build.py` mostly.

@@ -1,6 +1,6 @@
-#include "duckdb/execution/operator/csv_scanner/table_function/csv_file_scanner.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
 #include "duckdb/function/table/read_csv.hpp"
-#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
 
 namespace duckdb {
 
@@ -85,6 +85,10 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 		names = bind_data.column_info[file_idx].names;
 		types = bind_data.column_info[file_idx].types;
 		options.dialect_options.num_cols = names.size();
+		if (options.auto_detect) {
+			CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
+			sniffer.SniffCSV();
+		}
 		state_machine = make_shared<CSVStateMachine>(
 		    state_machine_cache.Get(options.dialect_options.state_machine_options), options);
 

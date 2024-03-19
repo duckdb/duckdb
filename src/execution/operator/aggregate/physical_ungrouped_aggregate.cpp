@@ -12,6 +12,7 @@
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/parallel/executor_task.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
@@ -402,8 +403,8 @@ public:
 	UngroupedDistinctAggregateFinalizeTask(Executor &executor, shared_ptr<Event> event_p,
 	                                       const PhysicalUngroupedAggregate &op,
 	                                       UngroupedAggregateGlobalSinkState &state_p)
-	    : ExecutorTask(executor), event(std::move(event_p)), op(op), gstate(state_p),
-	      allocator(gstate.CreateAllocator()), aggregate_state(op.aggregates) {
+	    : ExecutorTask(executor, std::move(event_p)), op(op), gstate(state_p), allocator(gstate.CreateAllocator()),
+	      aggregate_state(op.aggregates) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
@@ -412,8 +413,6 @@ private:
 	TaskExecutionResult AggregateDistinct();
 
 private:
-	shared_ptr<Event> event;
-
 	const PhysicalUngroupedAggregate &op;
 	UngroupedAggregateGlobalSinkState &gstate;
 

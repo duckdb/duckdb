@@ -1,0 +1,19 @@
+# name: test/fuzzer/duckfuzz/array_group_by_sample.test
+# group: [duckfuzz]
+
+# Internal Issue #1408
+# Caused by not allocating enough fake list_entry_t's during tuple format serialization
+statement ok
+CREATE TABLE array_tbl(c50 INTEGER[2][]);;
+
+statement ok
+INSERT INTO array_tbl VALUES('[[1, 2], [1, 2]]');
+
+statement ok
+INSERT INTO array_tbl VALUES('[[3, 4], [3, 4]]');
+
+query I rowsort
+SELECT c50 FROM array_tbl GROUP BY ALL USING SAMPLE 3;
+----
+[[1, 2], [1, 2]]
+[[3, 4], [3, 4]]
