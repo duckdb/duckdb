@@ -87,10 +87,6 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 #else
 		if (cte.ctematerialized == duckdb_libpgquery::PGCTEMaterializeAlways) {
 #endif
-			auto materialize = make_uniq<CTENode>();
-			materialize->query = info->query->node->Copy();
-			materialize->ctename = cte_name;
-			materialize->aliases = info->aliases;
 			info->materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
 		}
 
