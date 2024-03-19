@@ -541,7 +541,7 @@ void CheckpointReader::ReadTable(ClientContext &context, Deserializer &deseriali
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "table");
 	auto binder = Binder::CreateBinder(context);
 	auto &schema = catalog.GetSchema(context, info->schema);
-	auto bound_info = binder->BindCreateTableInfo(std::move(info), schema);
+	auto bound_info = binder->BindCreateTableInfo(std::move(info), schema, true);
 
 	// now read the actual table data and place it into the CreateTableInfo
 	ReadTableData(context, deserializer, *bound_info);
