@@ -1,0 +1,37 @@
+# name: test/sql/attach/attach_table_with_sequence.test
+# description: Test attaching a DuckDB file that contains a table relying on a sequence. (issue 10263)
+# group: [attach]
+
+require skip_reload
+
+# load the DB from disk
+load __TEST_DIR__/seq.db
+
+# create a table with a sequence in table-with-seq.db
+statement ok
+CREATE SEQUENCE 'id_seq';
+
+statement ok
+CREATE TABLE person (id INT DEFAULT nextval('id_seq'), age INT NOT NULL);
+
+statement ok
+INSERT INTO person (age) VALUES (10);
+
+# use memory catalog as default
+statement ok
+ATTACH DATABASE ':memory:' AS mem;
+
+statement ok
+USE mem;
+
+# Detach the table-with-seq.db
+statement ok
+DETACH DATABASE seq;
+
+# we cant read the table anymore
+statement error
+FROM person;
+----
+
+statement ok
+ATTACH DATABASE '__TEST_DIR__/seq.db' AS seq;
