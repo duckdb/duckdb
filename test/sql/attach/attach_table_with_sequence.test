@@ -32,11 +32,11 @@ ATTACH ':memory:' AS mem;
 statement ok
 USE mem;
 
-# Detach the table-with-seq.db
+# Detach the seq.db
 statement ok
 DETACH seq;
 
-# we cant read the table anymore
+# we can't read the table anymore
 statement error
 FROM person;
 ----
@@ -47,3 +47,24 @@ ATTACH '__TEST_DIR__/seq.db' AS seq;
 statement ok
 use seq;
 
+statement ok
+INSERT INTO person (age) VALUES (20) , (30);
+
+query II
+SELECT * FROM person;
+----
+1	10
+2	20
+3	30
+
+# Use the memory catalog
+statement ok
+USE mem;
+
+# read the person table again
+query II
+SELECT * FROM seq.person;
+----
+1	10
+2	20
+3	30
