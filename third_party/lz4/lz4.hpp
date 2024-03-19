@@ -35,7 +35,6 @@
 //#if defined (__cplusplus)
 //extern "C" {
 //#endif
-namespace duckdb_lz4 {
 
 #ifndef LZ4_H_2983827168210
 #define LZ4_H_2983827168210
@@ -43,6 +42,7 @@ namespace duckdb_lz4 {
 /* --- Dependency --- */
 #include <stddef.h>   /* size_t */
 
+namespace duckdb_lz4 {
 
 /**
   Introduction
