@@ -12,7 +12,7 @@ from typing import (
 )
 
 import duckdb
-from duckdb import ColumnExpression, Expression, StarExpression
+from duckdb import ColumnExpression, Expression, StarExpression, ConstantExpression
 
 from ._typing import ColumnOrName
 from ..errors import PySparkTypeError
@@ -846,11 +846,20 @@ class DataFrame:
         |NULL|   4|   5|   6|
         +----+----+----+----+
         """
+
+
         if not allowMissingColumns:
-            raise ContributionsAcceptedError
-        raise NotImplementedError
+            if set(self.relation.columns) != set(other.columns):
+                raise PySparkValueError(
+                    message="Union by name requires the same set of columns in both DataFrames when allowMissingColumns is False"
+                )
+
+            # This is a hack, change it when relation.union_by_name is implemented
+            return self.union(other.select(self.relation.columns))
         # The relational API does not have support for 'union_by_name' yet
         # return DataFrame(self.relation.union_by_name(other.relation, allowMissingColumns), self.session)
+        raise NotImplementedError
+
 
     def dropDuplicates(self, subset: Optional[List[str]] = None) -> "DataFrame":
         """Return a new :class:`DataFrame` with duplicate rows removed,
