@@ -254,7 +254,8 @@ static void ExtractDependencies(BoundCreateTableInfo &info) {
 		}
 	}
 }
-unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema, bool from_deserialization) {
+unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema,
+                                                             bool from_deserialization) {
 	auto &base = info->Cast<CreateTableInfo>();
 	auto result = make_uniq<BoundCreateTableInfo>(schema, std::move(info));
 	if (base.query) {
@@ -284,7 +285,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		// we skip this step if we are deserializing CreateTableInfo(e.g. ATTACH foo.db)
 		// col_bar DEFAULT nextval('col_bar_seq') , even col_bar_seq does exist in catalog 'foo'
 		// We can't find the 'col_bar_seq' in the current catalog when ATTACH 'foo' is not done
-		if(!from_deserialization){
+		if (!from_deserialization) {
 			BindDefaultValues(base.columns, result->bound_defaults);
 		}
 	}
