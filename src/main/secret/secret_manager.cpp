@@ -223,8 +223,7 @@ unique_ptr<SecretEntry> SecretManager::CreateSecret(ClientContext &context, cons
 	// Lookup function
 	auto function_lookup = LookupFunctionInternal(function_input.type, function_input.provider);
 	if (!function_lookup) {
-		throw InvalidInputException("Could not find CreateSecretFunction for type: '%s' and provider: '%s'", info.type,
-		                            info.provider);
+		ThrowProviderNotFoundError(info.type, info.provider);
 	}
 
 	// Call the function
@@ -258,8 +257,7 @@ BoundStatement SecretManager::BindCreateSecret(CatalogTransaction transaction, C
 	auto function = LookupFunctionInternal(type, provider);
 
 	if (!function) {
-		throw BinderException("Could not find create secret function for secret type '%s' with %sprovider '%s'", type,
-		                      default_string, provider);
+		ThrowProviderNotFoundError(info.type, info.provider, default_provider);
 	}
 
 	auto bound_info = info;
@@ -426,7 +424,7 @@ SecretType SecretManager::LookupTypeInternal(const string &type) {
 		return lookup->second;
 	}
 
-	throw InvalidInputException("Secret type '%s' not found", type);
+	ThrowTypeNotFoundError(type);
 }
 
 vector<SecretEntry> SecretManager::AllSecrets(CatalogTransaction transaction) {
@@ -519,8 +517,36 @@ void SecretManager::AutoloadExtensionForType(const string &type) {
 	ExtensionHelper::TryAutoloadFromEntry(*db, StringUtil::Lower(type), EXTENSION_SECRET_TYPES);
 }
 
+void SecretManager::ThrowTypeNotFoundError(const string &type) {
+	auto entry = ExtensionHelper::FindExtensionInEntries(StringUtil::Lower(type), EXTENSION_SECRET_TYPES);
+	if (!entry.empty() && db) {
+		auto error_message = "Secret type '" + type + "' does not exist, but it exists in the " + entry + " extension.";
+		error_message =
+		    ExtensionHelper::AddExtensionInstallHintToErrorMsg(DBConfig::GetConfig(*db), error_message, entry);
+
+		throw InvalidInputException(error_message);
+	}
+	throw InvalidInputException("Secret type '%s' not found", type);
+}
+
 void SecretManager::AutoloadExtensionForFunction(const string &type, const string &provider) {
-	ExtensionHelper::TryAutoloadFromEntry(*db, StringUtil::Lower(type) + "/" + provider, EXTENSION_SECRET_PROVIDERS);
+	ExtensionHelper::TryAutoloadFromEntry(*db, StringUtil::Lower(type) + "/" + StringUtil::Lower(provider),
+	                                      EXTENSION_SECRET_PROVIDERS);
+}
+
+void SecretManager::ThrowProviderNotFoundError(const string &type, const string &provider, bool was_default) {
+	auto entry = ExtensionHelper::FindExtensionInEntries(StringUtil::Lower(type) + "/" + StringUtil::Lower(provider),
+	                                                     EXTENSION_SECRET_PROVIDERS);
+	if (!entry.empty() && db) {
+		string error_message = was_default ? "Default secret provider" : "Secret provider";
+		error_message +=
+		    " '" + provider + "' for type '" + type + "' does not exist, but it exists in the " + entry + " extension.";
+		error_message =
+		    ExtensionHelper::AddExtensionInstallHintToErrorMsg(DBConfig::GetConfig(*db), error_message, entry);
+
+		throw InvalidInputException(error_message);
+	}
+	throw InvalidInputException("Secret provider '%s' not found for type '%s'", provider, type);
 }
 
 optional_ptr<SecretStorage> SecretManager::GetSecretStorage(const string &name) {
@@ -567,6 +593,13 @@ unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntry(ClientContex
 	// Note each file should contain 1 secret
 	try {
 		auto file_reader = BufferedFileReader(fs, secret_path.c_str());
+
+		if (!LocalFileSystem::IsPrivateFile(secret_path, nullptr)) {
+			throw IOException(
+			    "The secret file '%s' has incorrect permissions! Please set correct permissions or remove file",
+			    secret_path);
+		}
+
 		if (!file_reader.Finished()) {
 			BinaryDeserializer deserializer(file_reader);
 

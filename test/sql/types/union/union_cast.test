@@ -22,7 +22,7 @@ three
 
 # Test union -> value cast
 
-# cannot cast union to value in the general case 
+# cannot cast union to value in the general case
 statement error
 SELECT u::int FROM tbl1;
 ----

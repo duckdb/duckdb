@@ -176,7 +176,7 @@ void RleBpEncoder::FinishWrite(WriteStream &writer) {
 ColumnWriter::ColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p, idx_t max_repeat,
                            idx_t max_define, bool can_have_nulls)
     : writer(writer), schema_idx(schema_idx), schema_path(std::move(schema_path_p)), max_repeat(max_repeat),
-      max_define(max_define), can_have_nulls(can_have_nulls), null_count(0) {
+      max_define(max_define), can_have_nulls(can_have_nulls) {
 }
 ColumnWriter::~ColumnWriter() {
 }
@@ -254,7 +254,7 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 				if (!can_have_nulls) {
 					throw IOException("Parquet writer: map key column is not allowed to contain NULL values");
 				}
-				null_count++;
+				state.null_count++;
 				state.definition_levels.push_back(null_value);
 			}
 			if (parent->is_empty.empty() || !parent->is_empty[current_index]) {
@@ -270,7 +270,7 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 				if (!can_have_nulls) {
 					throw IOException("Parquet writer: map key column is not allowed to contain NULL values");
 				}
-				null_count++;
+				state.null_count++;
 				state.definition_levels.push_back(null_value);
 			}
 		}
@@ -614,7 +614,7 @@ void BasicColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t 
 void BasicColumnWriter::SetParquetStatistics(BasicColumnWriterState &state,
                                              duckdb_parquet::format::ColumnChunk &column_chunk) {
 	if (max_repeat == 0) {
-		column_chunk.meta_data.statistics.null_count = null_count;
+		column_chunk.meta_data.statistics.null_count = NumericCast<int64_t>(state.null_count);
 		column_chunk.meta_data.statistics.__isset.null_count = true;
 		column_chunk.meta_data.__isset.statistics = true;
 	}
@@ -1685,7 +1685,7 @@ void StructColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	auto &state = state_p.Cast<StructColumnWriterState>();
 	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
 		// we add the null count of the struct to the null count of the children
-		child_writers[child_idx]->null_count += null_count;
+		state.child_states[child_idx]->null_count += state_p.null_count;
 		child_writers[child_idx]->FinalizeWrite(*state.child_states[child_idx]);
 	}
 }

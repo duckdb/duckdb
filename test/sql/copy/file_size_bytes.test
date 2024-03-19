@@ -2,6 +2,9 @@
 # description: test FILE_SIZE_BYTES parameter for COPY
 # group: [copy]
 
+# different vector sizes result in different number of files
+require no_vector_verification
+
 statement ok
 CREATE TABLE bigdata AS SELECT i AS col_a, i AS col_b FROM range(0,10000) tbl(i);
 

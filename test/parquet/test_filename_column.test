@@ -1,0 +1,58 @@
+# name: test/parquet/test_filename_column.test
+# description: Test MultiFileReader filename column rename
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+# anything non-VARCHAR will be cast to boolean, and interpreted as such
+query I
+SELECT pq.filename FROM read_parquet('data/parquet-testing/enum.parquet', filename=true) pq LIMIT 1
+----
+data/parquet-testing/enum.parquet
+
+query I
+SELECT pq.filename FROM read_parquet('data/parquet-testing/enum.parquet', filename=1) pq LIMIT 1
+----
+data/parquet-testing/enum.parquet
+
+# the string TRUE can be a column name
+query I
+SELECT "TRUE" FROM read_parquet('data/parquet-testing/enum.parquet', filename='TRUE') pq LIMIT 1
+----
+data/parquet-testing/enum.parquet
+
+# FALSR too
+query I
+SELECT "FALSE" FROM read_parquet('data/parquet-testing/enum.parquet', filename='FALSE') pq LIMIT 1
+----
+data/parquet-testing/enum.parquet
+
+# this is the output without an additional filename column
+query IIIIIII nosort q0
+SELECT * FROM read_parquet('data/parquet-testing/enum.parquet')
+----
+
+# this shouldn't somehow add a column with the name false/0/FALSE
+query IIIIIII nosort q0
+SELECT * FROM read_parquet('data/parquet-testing/enum.parquet', filename=false)
+----
+
+
+query IIIIIII nosort q0
+SELECT * FROM read_parquet('data/parquet-testing/enum.parquet', filename=0)
+----
+
+
+# cool names work too
+query I
+SELECT my_cool_filename FROM read_parquet('data/parquet-testing/enum.parquet', filename='my_cool_filename') LIMIT 1
+----
+data/parquet-testing/enum.parquet
+
+query I
+SELECT my_cool_filename FROM read_parquet('data/parquet-testing/enum.parquet', filename=my_cool_filename) LIMIT 1
+----
+data/parquet-testing/enum.parquet

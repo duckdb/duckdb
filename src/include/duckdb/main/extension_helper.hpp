@@ -140,6 +140,8 @@ public:
 	                                            const string &extension_name);
 	static string AddExtensionInstallHintToErrorMsg(ClientContext &context, const string &base_error,
 	                                                const string &extension_name);
+	static string AddExtensionInstallHintToErrorMsg(DBConfig &config, const string &base_error,
+	                                                const string &extension_name);
 
 	//! For tagged releases we use the tag, else we use the git commit hash
 	static const string GetVersionDirectoryName();

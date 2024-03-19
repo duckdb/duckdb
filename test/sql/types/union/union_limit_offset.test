@@ -3,6 +3,9 @@
 # group: [union]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 CREATE TABLE tbl1 (u UNION(num INT, str VARCHAR));
 
 statement ok

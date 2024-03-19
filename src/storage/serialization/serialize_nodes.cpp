@@ -149,6 +149,7 @@ void CSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<map<LogicalTypeId, CSVOption<StrpTimeFormat>>>(128, "dialect_options.date_format", dialect_options.date_format);
 	serializer.WritePropertyWithDefault<string>(129, "sniffer_user_mismatch_error", sniffer_user_mismatch_error);
 	serializer.WritePropertyWithDefault<bool>(130, "parallel", parallel);
+	serializer.WritePropertyWithDefault<vector<bool>>(131, "was_type_manually_set", was_type_manually_set);
 }
 
 CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
@@ -184,6 +185,7 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadProperty<map<LogicalTypeId, CSVOption<StrpTimeFormat>>>(128, "dialect_options.date_format", result.dialect_options.date_format);
 	deserializer.ReadPropertyWithDefault<string>(129, "sniffer_user_mismatch_error", result.sniffer_user_mismatch_error);
 	deserializer.ReadPropertyWithDefault<bool>(130, "parallel", result.parallel);
+	deserializer.ReadPropertyWithDefault<vector<bool>>(131, "was_type_manually_set", result.was_type_manually_set);
 	return result;
 }
 
@@ -334,6 +336,7 @@ void MultiFileReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(103, "union_by_name", union_by_name);
 	serializer.WritePropertyWithDefault<bool>(104, "hive_types_autocast", hive_types_autocast);
 	serializer.WritePropertyWithDefault<case_insensitive_map_t<LogicalType>>(105, "hive_types_schema", hive_types_schema);
+	serializer.WritePropertyWithDefault<string>(106, "filename_column", filename_column, MultiFileReaderOptions::DEFAULT_FILENAME_COLUMN);
 }
 
 MultiFileReaderOptions MultiFileReaderOptions::Deserialize(Deserializer &deserializer) {
@@ -344,6 +347,7 @@ MultiFileReaderOptions MultiFileReaderOptions::Deserialize(Deserializer &deseria
 	deserializer.ReadPropertyWithDefault<bool>(103, "union_by_name", result.union_by_name);
 	deserializer.ReadPropertyWithDefault<bool>(104, "hive_types_autocast", result.hive_types_autocast);
 	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<LogicalType>>(105, "hive_types_schema", result.hive_types_schema);
+	deserializer.ReadPropertyWithDefault<string>(106, "filename_column", result.filename_column, MultiFileReaderOptions::DEFAULT_FILENAME_COLUMN);
 	return result;
 }
 

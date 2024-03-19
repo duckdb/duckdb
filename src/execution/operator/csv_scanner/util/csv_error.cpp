@@ -103,15 +103,30 @@ CSVError CSVError::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_
 }
 
 CSVError CSVError::CastError(const CSVReaderOptions &options, string &column_name, string &cast_error, idx_t column_idx,
-                             vector<Value> &row, LinesPerBoundary error_info) {
+                             vector<Value> &row, LinesPerBoundary error_info, LogicalTypeId type) {
 	std::ostringstream error;
 	// Which column
 	error << "Error when converting column \"" << column_name << "\"." << std::endl;
 	// What was the cast error
 	error << cast_error << std::endl;
-	error << std::endl;
-	// What were the options
+
+	error << "Column " << column_name << " is being converted as type " << LogicalTypeIdToString(type) << std::endl;
+	if (!options.WasTypeManuallySet(column_idx)) {
+		error << "This type was auto-detected from the CSV file." << std::endl;
+		error << "Possible solutions:" << std::endl;
+		error << "* Override the type for this column manually by setting the type explicitly, e.g. types={'"
+		      << column_name << "': 'VARCHAR'}" << std::endl;
+		error << "* Set the sample size to a larger value to enable the auto-detection to scan more values, e.g. "
+		         "sample_size=-1"
+		      << std::endl;
+		error << "* Use a COPY statement to automatically derive types from an existing table." << std::endl;
+	} else {
+		error << "This type was either manually set or derived from an existing table. Select a different type to "
+		         "correctly parse this column."
+		      << std::endl;
+	}
 	error << options.ToString();
+
 	return CSVError(error.str(), CSVErrorType::CAST_ERROR, column_idx, row, error_info);
 }
 
@@ -158,6 +173,14 @@ CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, s
 	// How many columns were expected and how many were found
 	error << "Expected Number of Columns: " << options.dialect_options.num_cols << " Found: " << actual_columns
 	      << std::endl;
+	error << std::endl << "Possible fixes:" << std::endl;
+	if (!options.null_padding) {
+		error << "* Enable null padding (null_padding=true) to replace missing values with NULL" << std::endl;
+	}
+	if (!options.ignore_errors) {
+		error << "* Enable ignore errors (ignore_errors=true) to skip this row" << std::endl;
+	}
+	error << std::endl;
 	// What were the options
 	error << options.ToString();
 	return CSVError(error.str(), CSVErrorType::INCORRECT_COLUMN_AMOUNT, error_info);

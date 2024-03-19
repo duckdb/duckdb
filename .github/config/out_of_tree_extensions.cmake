@@ -28,7 +28,7 @@ if (NOT MINGW)
     duckdb_extension_load(azure
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_azure
-            GIT_TAG 9e3e5b8addab5939b4ca4ac5f8997218a7228b8f
+            GIT_TAG 86f39d76157de970d16d6d6537bc90c0ee1c7d35
             )
 endif()
 
@@ -55,8 +55,7 @@ if (NOT MINGW)
     duckdb_extension_load(postgres_scanner
             DONT_LINK
             GIT_URL https://github.com/duckdb/postgres_scanner
-            GIT_TAG 883a8f1a8a487264855a5166f7df1f46ad386434
-            APPLY_PATCHES
+            GIT_TAG 375710fd22a35107b2c28e744f787e1a93a99998
             )
 endif()
 
@@ -90,7 +89,6 @@ if (NOT WIN32)
     duckdb_extension_load(substrait
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/substrait
-            GIT_TAG 870bab8725d1123905296bfb1f35ce737434e0b3
-            APPLY_PATCHES
+            GIT_TAG 1116fb580edd3e26e675436dbdbdf4a0aa5e456e
             )
 endif()
