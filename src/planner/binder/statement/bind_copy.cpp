@@ -126,7 +126,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	if (is_remote_file) {
 		use_tmp_file = false;
 	} else {
-		bool is_file_and_exists = config.file_system->FileExists(stmt.info->file_path, ClientData::Get(context).file_opener.get());
+		bool is_file_and_exists =
+		    config.file_system->FileExists(stmt.info->file_path, ClientData::Get(context).file_opener.get());
 		bool is_stdout = stmt.info->file_path == "/dev/stdout";
 		if (!user_set_use_tmp_file) {
 			use_tmp_file = is_file_and_exists && !per_thread_output && partition_cols.empty() && !is_stdout;
