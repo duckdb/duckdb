@@ -3,6 +3,8 @@ _exported_symbols = []
 # Modules
 import duckdb.functional as functional
 import duckdb.typing as typing
+import functools
+
 _exported_symbols.extend([
     "typing",
     "functional"
@@ -12,7 +14,7 @@ _exported_symbols.extend([
 from .duckdb import (
     DuckDBPyRelation,
     DuckDBPyConnection,
-	Statement,
+    Statement,
     ExplainType,
     StatementType,
     ExpectedResultType,
@@ -38,14 +40,92 @@ _exported_symbols.extend([
     "CaseExpression",
 ])
 
+# ---- Wrap the connection methods
+
+def is_dunder_method(method_name: str) -> bool:
+    if len(method_name) < 4:
+        return False
+    return method_name[:2] == '__' and method_name[:-3:-1] == '__'
+
+# Takes the function to execute on the 'connection'
+def create_wrapper(func):
+    def _wrapper(*args, **kwargs):
+        connection = duckdb.connect(':default:')
+        if 'connection' in kwargs:
+            connection = kwargs.pop('connection')
+        return func(connection, *args, **kwargs)
+    return _wrapper
+
+# Takes the name of a DuckDBPyConnection function to wrap (copying signature, docs, etc)
+# The 'func' is what gets executed when the function is called
+def create_connection_wrapper(name, func):
+    # Define a decorator function that forwards attribute lookup to the default connection
+    return functools.wraps(getattr(DuckDBPyConnection, name))(create_wrapper(func))
+
+# These are overloaded twice, we define them inside of C++ so pybind can deal with it
+EXCLUDED_METHODS = [
+    'df',
+    'arrow'
+]
+_exported_symbols.extend(EXCLUDED_METHODS)
+from .duckdb import (
+    df,
+    arrow
+)
+
+methods = [method for method in dir(DuckDBPyConnection) if not is_dunder_method(method) and method not in EXCLUDED_METHODS]
+for method_name in methods:
+    def create_method_wrapper(method_name):
+        def call_method(conn, *args, **kwargs):
+            return getattr(conn, method_name)(*args, **kwargs)
+        return call_method
+    wrapper_function = create_connection_wrapper(method_name, create_method_wrapper(method_name))
+    globals()[method_name] = wrapper_function  # Define the wrapper function in the module namespace
+    _exported_symbols.append(method_name)
+
+
+# Specialized "wrapper" methods
+
+SPECIAL_METHODS = [
+    'project',
+    'distinct',
+    'write_csv',
+    'aggregate',
+    'alias',
+    'filter',
+    'limit',
+    'order',
+    'query_df'
+]
+
+for method_name in SPECIAL_METHODS:
+    def create_method_wrapper(name):
+        def _closure(name=name):
+            mapping = {
+                'alias': 'set_alias',
+                'query_df': 'query'
+            }
+            def call_method(con, df, *args, **kwargs):
+                if name in mapping:
+                    mapped_name = mapping[name]
+                else:
+                    mapped_name = name
+                return getattr(con.from_df(df), mapped_name)(*args, **kwargs)
+            return call_method
+        return _closure(name)
+
+    wrapper_function = create_wrapper(create_method_wrapper(method_name))
+    globals()[method_name] = wrapper_function  # Define the wrapper function in the module namespace
+    _exported_symbols.append(method_name)
+
 # Enums
 from .duckdb import (
     ANALYZE,
     DEFAULT,
     RETURN_NULL,
     STANDARD,
-	COLUMNS,
-	ROWS
+    COLUMNS,
+    ROWS
 )
 _exported_symbols.extend([
     "ANALYZE",
@@ -54,19 +134,6 @@ _exported_symbols.extend([
     "STANDARD"
 ])
 
-# Type-creation methods
-from .duckdb import (
-    struct_type,
-    list_type,
-    array_type,
-    decimal_type
-)
-_exported_symbols.extend([
-    "struct_type",
-    "list_type",
-    "array_type",
-    "decimal_type"
-])
 
 # read-only properties
 from .duckdb import (
@@ -106,171 +173,13 @@ _exported_symbols.extend([
     "tokenize"
 ])
 
-from .duckdb import (
-    filter,
-    project,
-    aggregate,
-    distinct,
-    limit,
-    query_df,
-    order,
-    alias,
-    connect,
-    write_csv
-)
-_exported_symbols.extend([
-    "filter",
-    "project",
-    "aggregate",
-    "distinct",
-    "limit",
-    "query_df",
-    "order",
-    "alias",
-    "connect",
-    "write_csv"
-])
 
-# TODO: might be worth seeing if these methods can be replaced with a pure-python solution
-# Connection methods
 from .duckdb import (
-    append,
-    array_type,
-    arrow,
-    begin,
-    close,
-    commit,
-    create_function,
-    cursor,
-    decimal_type,
-    description,
-    df,
-    dtype,
-    duplicate,
-    enum_type,
-    execute,
-    executemany,
-    extract_statements,
-    fetch_arrow_table,
-    fetch_df,
-    fetch_df_chunk,
-    fetch_record_batch,
-    fetchall,
-    fetchdf,
-    fetchmany,
-    fetchnumpy,
-    fetchone,
-    filesystem_is_registered,
-    from_arrow,
-    from_csv_auto,
-    from_df,
-    from_parquet,
-    from_query,
-    from_substrait,
-    from_substrait_json,
-    get_substrait,
-    get_substrait_json,
-    get_table_names,
-    install_extension,
-    interrupt,
-    list_filesystems,
-    list_type,
-    load_extension,
-    map_type,
-    pl,
-    query,
-    read_csv,
-    read_json,
-    read_parquet,
-    register,
-    register_filesystem,
-    remove_function,
-    rollback,
-    row_type,
-    rowcount,
-    sql,
-    sqltype,
-    string_type,
-    struct_type,
-    table,
-    table_function,
-    tf,
-    torch,
-    type,
-    union_type,
-    unregister,
-    unregister_filesystem,
-    values,
-    view
+    connect
 )
+
 _exported_symbols.extend([
-    "append",
-    "array_type",
-    "arrow",
-    "begin",
-    "close",
-    "commit",
-    "create_function",
-    "cursor",
-    "decimal_type",
-    "description",
-    "df",
-    "dtype",
-    "duplicate",
-    "enum_type",
-    "execute",
-    "executemany",
-    "fetch_arrow_table",
-    "fetch_df",
-    "fetch_df_chunk",
-    "fetch_record_batch",
-    "fetchall",
-    "fetchdf",
-    "fetchmany",
-    "fetchnumpy",
-    "fetchone",
-    "filesystem_is_registered",
-    "from_arrow",
-    "from_csv_auto",
-    "from_df",
-    "from_parquet",
-    "from_query",
-    "from_substrait",
-    "from_substrait_json",
-    "get_substrait",
-    "get_substrait_json",
-    "get_table_names",
-    "install_extension",
-    "interrupt",
-    "list_filesystems",
-    "list_type",
-    "load_extension",
-    "map_type",
-    "pl",
-    "query",
-    "read_csv",
-    "read_json",
-    "read_parquet",
-    "register",
-    "register_filesystem",
-    "remove_function",
-    "rollback",
-    "row_type",
-    "rowcount",
-    "sql",
-    "sqltype",
-    "string_type",
-    "struct_type",
-    "table",
-    "table_function",
-    "tf",
-    "torch",
-    "type",
-    "union_type",
-    "unregister",
-    "unregister_filesystem",
-    "values",
-    "view"
+    "connect"
 ])
 
 # Exceptions
