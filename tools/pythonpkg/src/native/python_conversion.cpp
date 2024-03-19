@@ -5,6 +5,7 @@
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 
 #include "datetime.h" //From Python
 
@@ -81,13 +82,19 @@ Value TransformDictionaryToStruct(const PyDictionary &dict, const LogicalType &t
 	return Value::STRUCT(std::move(struct_values));
 }
 
-Value TransformStructFormatDictionaryToMap(const PyDictionary &dict) {
+Value TransformStructFormatDictionaryToMap(const PyDictionary &dict, const LogicalType &target_type) {
 	if (dict.len == 0) {
 		return EmptyMapValue();
 	}
 
+	if (target_type.id() != LogicalTypeId::MAP) {
+		throw InvalidInputException("Please provide a valid target type for transform from Python to Value");
+	}
 	auto size = py::len(dict.keys);
 	D_ASSERT(size == py::len(dict.values));
+
+	auto key_target = MapType::KeyType(target_type);
+	auto value_target = MapType::ValueType(target_type);
 
 	LogicalType key_type = LogicalType::SQLNULL;
 	LogicalType value_type = LogicalType::SQLNULL;
@@ -95,8 +102,8 @@ Value TransformStructFormatDictionaryToMap(const PyDictionary &dict) {
 	vector<Value> elements;
 	for (idx_t i = 0; i < size; i++) {
 
-		Value new_key = TransformPythonValue(dict.keys.attr("__getitem__")(i));
-		Value new_value = TransformPythonValue(dict.values.attr("__getitem__")(i));
+		Value new_key = TransformPythonValue(dict.keys.attr("__getitem__")(i), key_target);
+		Value new_value = TransformPythonValue(dict.values.attr("__getitem__")(i), value_target);
 
 		key_type = LogicalType::ForceMaxLogicalType(key_type, new_key.type());
 		value_type = LogicalType::ForceMaxLogicalType(value_type, new_value.type());
@@ -116,7 +123,7 @@ Value TransformStructFormatDictionaryToMap(const PyDictionary &dict) {
 Value TransformDictionaryToMap(const PyDictionary &dict, const LogicalType &target_type = LogicalType::UNKNOWN) {
 	if (target_type.id() != LogicalTypeId::UNKNOWN && !DictionaryHasMapFormat(dict)) {
 		// dict == { 'k1': v1, 'k2': v2, ..., 'kn': vn }
-		return TransformStructFormatDictionaryToMap(dict);
+		return TransformStructFormatDictionaryToMap(dict, target_type);
 	}
 
 	auto keys = dict.values.attr("__getitem__")(0);
@@ -203,6 +210,29 @@ Value TransformListValue(py::handle ele, const LogicalType &target_type = Logica
 	return Value::LIST(element_type, values);
 }
 
+Value TransformArrayValue(py::handle ele, const LogicalType &target_type = LogicalType::UNKNOWN) {
+	auto size = py::len(ele);
+
+	if (size == 0) {
+		return Value::EMPTYARRAY(LogicalType::SQLNULL, size);
+	}
+
+	vector<Value> values;
+	values.reserve(size);
+
+	bool array_target = target_type.id() == LogicalTypeId::ARRAY;
+	auto &child_type = array_target ? ArrayType::GetChildType(target_type) : LogicalType::UNKNOWN;
+
+	LogicalType element_type = LogicalType::SQLNULL;
+	for (idx_t i = 0; i < size; i++) {
+		Value new_value = TransformPythonValue(ele.attr("__getitem__")(i), child_type);
+		element_type = LogicalType::ForceMaxLogicalType(element_type, new_value.type());
+		values.push_back(std::move(new_value));
+	}
+
+	return Value::ARRAY(element_type, std::move(values));
+}
+
 Value TransformDictionary(const PyDictionary &dict) {
 	//! DICT -> MAP FORMAT
 	// keys() = [key, value]
@@ -267,7 +297,10 @@ bool TryTransformPythonNumeric(Value &res, py::handle ele, const LogicalType &ta
 			throw InvalidInputException(StringUtil::Format("Failed to cast value: Python value '%s' to INT64",
 			                                               std::string(pybind11::str(ele))));
 		}
-		return TryTransformPythonIntegerToDouble(res, ele);
+		auto cast_as = target_type.id() == LogicalTypeId::UNKNOWN ? LogicalType::HUGEINT : target_type;
+		auto numeric_string = std::string(py::str(ele));
+		res = Value(numeric_string).DefaultCastAs(cast_as);
+		return true;
 	} else if (overflow == 1) {
 		if (target_type.InternalType() == PhysicalType::INT64) {
 			throw InvalidInputException(StringUtil::Format("Failed to cast value: Python value '%s' to INT64",
@@ -406,6 +439,8 @@ PythonObjectType GetPythonObjectType(py::handle &ele) {
 		return PythonObjectType::Tuple;
 	} else if (py::isinstance<py::dict>(ele)) {
 		return PythonObjectType::Dict;
+	} else if (ele.is(import_cache.numpy.ma.masked())) {
+		return PythonObjectType::None;
 	} else if (py::isinstance(ele, import_cache.numpy.ndarray())) {
 		return PythonObjectType::NdArray;
 	} else if (py::isinstance(ele, import_cache.numpy.datetime64())) {
@@ -484,8 +519,13 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool 
 		auto timedelta = PyTimeDelta(ele);
 		return Value::INTERVAL(timedelta.ToInterval());
 	}
-	case PythonObjectType::String:
-		return ele.cast<string>();
+	case PythonObjectType::String: {
+		auto stringified = ele.cast<string>();
+		if (target_type.id() == LogicalTypeId::UNKNOWN) {
+			return Value(stringified);
+		}
+		return Value(stringified).DefaultCastAs(target_type);
+	}
 	case PythonObjectType::ByteArray: {
 		auto byte_array = ele;
 		const_data_ptr_t bytes = const_data_ptr_cast(PyByteArray_AsString(byte_array.ptr())); // NOLINT
@@ -511,7 +551,11 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool 
 		}
 	}
 	case PythonObjectType::List:
-		return TransformListValue(ele, target_type);
+		if (target_type.id() == LogicalTypeId::ARRAY) {
+			return TransformArrayValue(ele, target_type);
+		} else {
+			return TransformListValue(ele, target_type);
+		}
 	case PythonObjectType::Dict: {
 		PyDictionary dict = PyDictionary(py::reinterpret_borrow<py::object>(ele));
 		switch (target_type.id()) {
@@ -530,6 +574,8 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool 
 		case LogicalTypeId::UNKNOWN:
 		case LogicalTypeId::LIST:
 			return TransformListValue(ele, target_type);
+		case LogicalTypeId::ARRAY:
+			return TransformArrayValue(ele, target_type);
 		default:
 			throw InvalidInputException("Can't convert tuple to a Value of type %s", target_type.ToString());
 		}

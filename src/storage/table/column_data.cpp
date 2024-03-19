@@ -1,5 +1,5 @@
 #include "duckdb/storage/table/column_data.hpp"
-
+#include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/planner/table_filter.hpp"
@@ -23,7 +23,7 @@ namespace duckdb {
 ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
                        LogicalType type_p, optional_ptr<ColumnData> parent)
     : start(start_row), count(0), block_manager(block_manager), info(info), column_index(column_index),
-      type(std::move(type_p)), parent(parent), version(0) {
+      type(std::move(type_p)), parent(parent), allocation_size(0) {
 	if (!parent) {
 		stats = make_uniq<SegmentStatistics>(type);
 	}
@@ -57,10 +57,6 @@ const LogicalType &ColumnData::RootType() const {
 	return type;
 }
 
-void ColumnData::IncrementVersion() {
-	version++;
-}
-
 idx_t ColumnData::GetMaxEntry() {
 	return count;
 }
@@ -71,7 +67,6 @@ void ColumnData::InitializeScan(ColumnScanState &state) {
 	state.row_index = state.current ? state.current->start : 0;
 	state.internal_index = state.row_index;
 	state.initialized = false;
-	state.version = version;
 	state.scan_state.reset();
 	state.last_offset = 0;
 }
@@ -82,25 +77,19 @@ void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx)
 	state.row_index = row_idx;
 	state.internal_index = state.current->start;
 	state.initialized = false;
-	state.version = version;
 	state.scan_state.reset();
 	state.last_offset = 0;
 }
 
 idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, bool has_updates) {
 	state.previous_states.clear();
-	if (state.version != version) {
-		InitializeScanWithOffset(state, state.row_index);
-		state.current->InitializeScan(state);
-		state.initialized = true;
-	} else if (!state.initialized) {
+	if (!state.initialized) {
 		D_ASSERT(state.current);
 		state.current->InitializeScan(state);
 		state.internal_index = state.current->start;
 		state.initialized = true;
 	}
 	D_ASSERT(data.HasSegment(state.current));
-	D_ASSERT(state.version == version);
 	D_ASSERT(state.internal_index <= state.row_index);
 	if (state.internal_index < state.row_index) {
 		state.current->Skip(state);
@@ -210,8 +199,10 @@ idx_t ColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count)
 void ColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                         SelectionVector &sel, idx_t &count, const TableFilter &filter) {
 	idx_t scan_count = Scan(transaction, vector_index, state, result);
-	result.Flatten(scan_count);
-	ColumnSegment::FilterSelection(sel, result, filter, count, FlatVector::Validity(result));
+
+	UnifiedVectorFormat vdata;
+	result.ToUnifiedFormat(scan_count, vdata);
+	ColumnSegment::FilterSelection(sel, result, vdata, filter, scan_count, count);
 }
 
 void ColumnData::FilterScan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
@@ -394,14 +385,19 @@ unique_ptr<BaseStatistics> ColumnData::GetUpdateStatistics() {
 }
 
 void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
-	idx_t segment_size = Storage::BLOCK_SIZE;
+
+	idx_t vector_segment_size = Storage::BLOCK_SIZE;
 	if (start_row == idx_t(MAX_ROW_ID)) {
 #if STANDARD_VECTOR_SIZE < 1024
-		segment_size = 1024 * GetTypeIdSize(type.InternalType());
+		vector_segment_size = 1024 * GetTypeIdSize(type.InternalType());
 #else
-		segment_size = STANDARD_VECTOR_SIZE * GetTypeIdSize(type.InternalType());
+		vector_segment_size = STANDARD_VECTOR_SIZE * GetTypeIdSize(type.InternalType());
 #endif
 	}
+
+	// the segment size is bound by the block size, but can be smaller
+	idx_t segment_size = Storage::BLOCK_SIZE < vector_segment_size ? Storage::BLOCK_SIZE : vector_segment_size;
+	allocation_size += segment_size;
 	auto new_segment = ColumnSegment::CreateTransientSegment(GetDatabase(), type, start_row, segment_size);
 	data.AppendSegment(l, std::move(new_segment));
 }
@@ -457,7 +453,6 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group,
 	// replace the old tree with the new one
 	data.Replace(l, checkpoint_state->new_tree);
 	updates.reset();
-	version++;
 
 	return checkpoint_state;
 }

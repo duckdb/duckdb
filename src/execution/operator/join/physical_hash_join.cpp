@@ -7,8 +7,10 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
+#include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/parallel/executor_task.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -86,8 +88,10 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 class HashJoinGlobalSinkState : public GlobalSinkState {
 public:
 	HashJoinGlobalSinkState(const PhysicalHashJoin &op, ClientContext &context_p)
-	    : context(context_p), temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)),
-	      finalized(false), scanned_data(false) {
+	    : context(context_p), num_threads(TaskScheduler::GetScheduler(context).NumberOfThreads()),
+	      temporary_memory_update_count(0),
+	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)), finalized(false),
+	      scanned_data(false) {
 		hash_table = op.InitializeHashTable(context);
 
 		// for perfect hash join
@@ -106,8 +110,12 @@ public:
 
 public:
 	ClientContext &context;
+
+	const idx_t num_threads;
+	atomic<idx_t> temporary_memory_update_count;
 	//! Temporary memory state for managing this operator's memory usage
 	unique_ptr<TemporaryMemoryState> temporary_memory_state;
+
 	//! Global HT used by the join
 	unique_ptr<JoinHashTable> hash_table;
 	//! The perfect hash join executor (if any)
@@ -132,7 +140,8 @@ public:
 
 class HashJoinLocalSinkState : public LocalSinkState {
 public:
-	HashJoinLocalSinkState(const PhysicalHashJoin &op, ClientContext &context) : join_key_executor(context) {
+	HashJoinLocalSinkState(const PhysicalHashJoin &op, ClientContext &context)
+	    : join_key_executor(context), chunk_count(0) {
 		auto &allocator = BufferAllocator::Get(context);
 
 		for (auto &cond : op.conditions) {
@@ -158,6 +167,10 @@ public:
 
 	//! Thread-local HT
 	unique_ptr<JoinHashTable> hash_table;
+
+	//! For updating the temporary memory state
+	idx_t chunk_count;
+	static constexpr const idx_t CHUNK_COUNT_UPDATE_INTERVAL = 60;
 };
 
 unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &context) const {
@@ -241,6 +254,16 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, DataChunk &chun
 		}
 		ht.Build(lstate.append_state, lstate.join_keys, lstate.payload_chunk);
 	}
+
+	if (++lstate.chunk_count % HashJoinLocalSinkState::CHUNK_COUNT_UPDATE_INTERVAL == 0) {
+		auto &gstate = input.global_state.Cast<HashJoinGlobalSinkState>();
+		if (++gstate.temporary_memory_update_count % gstate.num_threads == 0) {
+			auto &sink_collection = lstate.hash_table->GetSinkCollection();
+			auto ht_size = sink_collection.SizeInBytes() + JoinHashTable::PointerTableSize(sink_collection.Count());
+			gstate.temporary_memory_state->SetRemainingSize(context.client, gstate.num_threads * ht_size);
+		}
+	}
+
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -266,7 +289,7 @@ class HashJoinFinalizeTask : public ExecutorTask {
 public:
 	HashJoinFinalizeTask(shared_ptr<Event> event_p, ClientContext &context, HashJoinGlobalSinkState &sink_p,
 	                     idx_t chunk_idx_from_p, idx_t chunk_idx_to_p, bool parallel_p)
-	    : ExecutorTask(context), event(std::move(event_p)), sink(sink_p), chunk_idx_from(chunk_idx_from_p),
+	    : ExecutorTask(context, std::move(event_p)), sink(sink_p), chunk_idx_from(chunk_idx_from_p),
 	      chunk_idx_to(chunk_idx_to_p), parallel(parallel_p) {
 	}
 
@@ -277,7 +300,6 @@ public:
 	}
 
 private:
-	shared_ptr<Event> event;
 	HashJoinGlobalSinkState &sink;
 	idx_t chunk_idx_from;
 	idx_t chunk_idx_to;
@@ -352,7 +374,7 @@ class HashJoinRepartitionTask : public ExecutorTask {
 public:
 	HashJoinRepartitionTask(shared_ptr<Event> event_p, ClientContext &context, JoinHashTable &global_ht,
 	                        JoinHashTable &local_ht)
-	    : ExecutorTask(context), event(std::move(event_p)), global_ht(global_ht), local_ht(local_ht) {
+	    : ExecutorTask(context, std::move(event_p)), global_ht(global_ht), local_ht(local_ht) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
@@ -362,8 +384,6 @@ public:
 	}
 
 private:
-	shared_ptr<Event> event;
-
 	JoinHashTable &global_ht;
 	JoinHashTable &local_ht;
 };
@@ -430,7 +450,6 @@ public:
 		sink.hash_table->GetTotalSize(partition_sizes, partition_counts, max_partition_size, max_partition_count);
 		sink.temporary_memory_state->SetMinimumReservation(max_partition_size +
 		                                                   JoinHashTable::PointerTableSize(max_partition_count));
-
 		sink.hash_table->PrepareExternalFinalize(sink.temporary_memory_state->GetReservation());
 		sink.ScheduleFinalize(*pipeline, *this);
 	}
@@ -614,7 +633,7 @@ public:
 	//! Initialize this source state using the info in the sink
 	void Initialize(HashJoinGlobalSinkState &sink);
 	//! Try to prepare the next stage
-	void TryPrepareNextStage(HashJoinGlobalSinkState &sink);
+	bool TryPrepareNextStage(HashJoinGlobalSinkState &sink);
 	//! Prepare the next build/probe/scan_ht stage for external hash join (must hold lock)
 	void PrepareBuild(HashJoinGlobalSinkState &sink);
 	void PrepareProbe(HashJoinGlobalSinkState &sink);
@@ -651,7 +670,7 @@ public:
 	idx_t build_chunks_per_thread;
 
 	//! For probe synchronization
-	idx_t probe_chunk_count;
+	atomic<idx_t> probe_chunk_count;
 	idx_t probe_chunk_done;
 
 	//! To determine the number of threads
@@ -660,9 +679,11 @@ public:
 
 	//! For full/outer synchronization
 	idx_t full_outer_chunk_idx;
-	idx_t full_outer_chunk_count;
-	idx_t full_outer_chunk_done;
+	atomic<idx_t> full_outer_chunk_count;
+	atomic<idx_t> full_outer_chunk_done;
 	idx_t full_outer_chunks_per_thread;
+
+	vector<InterruptState> blocked_tasks;
 };
 
 class HashJoinLocalSourceState : public LocalSourceState {
@@ -739,13 +760,14 @@ void HashJoinGlobalSourceState::Initialize(HashJoinGlobalSinkState &sink) {
 	TryPrepareNextStage(sink);
 }
 
-void HashJoinGlobalSourceState::TryPrepareNextStage(HashJoinGlobalSinkState &sink) {
+bool HashJoinGlobalSourceState::TryPrepareNextStage(HashJoinGlobalSinkState &sink) {
 	switch (global_stage.load()) {
 	case HashJoinSourceStage::BUILD:
 		if (build_chunk_done == build_chunk_count) {
 			sink.hash_table->GetDataCollection().VerifyEverythingPinned();
 			sink.hash_table->finalized = true;
 			PrepareProbe(sink);
+			return true;
 		}
 		break;
 	case HashJoinSourceStage::PROBE:
@@ -755,16 +777,19 @@ void HashJoinGlobalSourceState::TryPrepareNextStage(HashJoinGlobalSinkState &sin
 			} else {
 				PrepareBuild(sink);
 			}
+			return true;
 		}
 		break;
 	case HashJoinSourceStage::SCAN_HT:
 		if (full_outer_chunk_done == full_outer_chunk_count) {
 			PrepareBuild(sink);
+			return true;
 		}
 		break;
 	default:
 		break;
 	}
+	return false;
 }
 
 void HashJoinGlobalSourceState::PrepareBuild(HashJoinGlobalSinkState &sink) {
@@ -1014,7 +1039,15 @@ SourceResultType PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk 
 			lstate.ExecuteTask(sink, gstate, chunk);
 		} else {
 			lock_guard<mutex> guard(gstate.lock);
-			gstate.TryPrepareNextStage(sink);
+			if (gstate.TryPrepareNextStage(sink) || gstate.global_stage == HashJoinSourceStage::DONE) {
+				for (auto &state : gstate.blocked_tasks) {
+					state.Callback();
+				}
+				gstate.blocked_tasks.clear();
+			} else {
+				gstate.blocked_tasks.push_back(input.interrupt_state);
+				return SourceResultType::BLOCKED;
+			}
 		}
 	}
 
@@ -1049,6 +1082,23 @@ double PhysicalHashJoin::GetProgress(ClientContext &context, GlobalSourceState &
 	}
 
 	return progress * 100.0;
+}
+
+string PhysicalHashJoin::ParamsToString() const {
+	string result = EnumUtil::ToString(join_type) + "\n";
+	for (auto &it : conditions) {
+		string op = ExpressionTypeToOperator(it.comparison);
+		result += it.left->GetName() + " " + op + " " + it.right->GetName() + "\n";
+	}
+	result += "\n[INFOSEPARATOR]\n";
+	if (perfect_join_statistics.is_build_small) {
+		// perfect hash join
+		result += "Build Min: " + perfect_join_statistics.build_min.ToString() + "\n";
+		result += "Build Max: " + perfect_join_statistics.build_max.ToString() + "\n";
+		result += "\n[INFOSEPARATOR]\n";
+	}
+	result += StringUtil::Format("EC: %llu\n", estimated_cardinality);
+	return result;
 }
 
 } // namespace duckdb

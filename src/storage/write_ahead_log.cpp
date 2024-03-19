@@ -22,8 +22,9 @@ const uint64_t WAL_VERSION_NUMBER = 2;
 WriteAheadLog::WriteAheadLog(AttachedDatabase &database, const string &path) : skip_writing(false), database(database) {
 	wal_path = path;
 	writer = make_uniq<BufferedFileWriter>(FileSystem::Get(database), path.c_str(),
-	                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
-	                                           FileFlags::FILE_FLAGS_APPEND);
+	                                       NumericCast<uint8_t>(FileFlags::FILE_FLAGS_WRITE |
+	                                                            FileFlags::FILE_FLAGS_FILE_CREATE |
+	                                                            FileFlags::FILE_FLAGS_APPEND));
 }
 
 WriteAheadLog::~WriteAheadLog() {
@@ -267,7 +268,7 @@ void WriteAheadLog::WriteCreateIndex(const IndexCatalogEntry &entry) {
 
 	// now serialize the index data to the persistent storage and write the index metadata
 	auto &duck_index_entry = entry.Cast<DuckIndexEntry>();
-	auto &indexes = duck_index_entry.info->indexes.Indexes();
+	auto &indexes = duck_index_entry.GetDataTableInfo().indexes.Indexes();
 
 	// get the matching index and serialize its storage info
 	for (auto const &index : indexes) {

@@ -38,14 +38,24 @@ bool Expression::IsScalar() const {
 	return is_scalar;
 }
 
-bool Expression::HasSideEffects() const {
-	bool has_side_effects = false;
+bool Expression::IsVolatile() const {
+	bool is_volatile = false;
 	ExpressionIterator::EnumerateChildren(*this, [&](const Expression &child) {
-		if (child.HasSideEffects()) {
-			has_side_effects = true;
+		if (child.IsVolatile()) {
+			is_volatile = true;
 		}
 	});
-	return has_side_effects;
+	return is_volatile;
+}
+
+bool Expression::IsConsistent() const {
+	bool is_consistent = true;
+	ExpressionIterator::EnumerateChildren(*this, [&](const Expression &child) {
+		if (!child.IsConsistent()) {
+			is_consistent = false;
+		}
+	});
+	return is_consistent;
 }
 
 bool Expression::PropagatesNullValues() const {

@@ -36,7 +36,7 @@ SELECT '{"key=A"=Duck, "key=B"="hello=world"}'::MAP(VARCHAR, VARCHAR)
 statement error
 SELECT '{a=1, b=2, a=3}'::MAP(VARCHAR, INT)
 ----
-Invalid Input Error: Map keys have to be unique
+Map keys must be unique
 
 
 #               Nested Maps
@@ -118,7 +118,6 @@ SELECT CAST('   { { a:[2,    3], b:  Duckster      }=         {50.0        =50},
                 ={  1      =    0}  }' AS MAP(STRUCT(a INT[], b VARCHAR), MAP(INT, DOUBLE)));
 ----
 {{'a': [2, 3], 'b': Duckster}={50=50.0}, {'a': [9, 1, 4], 'b': Duck}={1=0.0}}
-
 
 #               NULL values
 # ---------------------------------------------------
@@ -324,7 +323,7 @@ statement ok
 CREATE TABLE assembled_maps(col1 MAP(INT, VARCHAR));
 
 statement ok
-COPY (SELECT '{8="hello, DuckDB"}') TO '__TEST_DIR__/assembled_maps.csv' (Header 0);
+COPY (SELECT '{8="hello, DuckDB"}') TO '__TEST_DIR__/assembled_maps.csv';
 
 statement ok
 COPY assembled_maps FROM '__TEST_DIR__/assembled_maps.csv';

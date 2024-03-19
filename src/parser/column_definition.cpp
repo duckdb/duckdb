@@ -22,6 +22,7 @@ ColumnDefinition ColumnDefinition::Copy() const {
 	copy.expression = expression ? expression->Copy() : nullptr;
 	copy.compression_type = compression_type;
 	copy.category = category;
+	copy.comment = comment;
 	return copy;
 }
 
@@ -64,9 +65,16 @@ void ColumnDefinition::SetType(const LogicalType &type) {
 const string &ColumnDefinition::Name() const {
 	return name;
 }
-
 void ColumnDefinition::SetName(const string &name) {
 	this->name = name;
+}
+
+const Value &ColumnDefinition::Comment() const {
+	return comment;
+}
+
+void ColumnDefinition::SetComment(const Value &comment) {
+	this->comment = comment;
 }
 
 const duckdb::CompressionType &ColumnDefinition::CompressionType() const {

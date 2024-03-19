@@ -61,6 +61,9 @@ public:
 	virtual unique_ptr<DataChunk> GetChunk() = 0;
 	BaseReservoirSampling base_reservoir_sample;
 
+	virtual void Serialize(Serializer &serializer) const;
+	static unique_ptr<BlockingSample> Deserialize(Deserializer &deserializer);
+
 protected:
 	//! The reservoir sampling
 	RandomEngine &random;

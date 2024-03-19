@@ -49,8 +49,7 @@ void ExtensionUtil::RegisterFunction(DatabaseInstance &db, AggregateFunctionSet 
 void ExtensionUtil::RegisterFunction(DatabaseInstance &db, CreateSecretFunction function) {
 	D_ASSERT(!function.secret_type.empty());
 	auto &config = DBConfig::GetConfig(db);
-	config.secret_manager->RegisterSecretFunction(CatalogTransaction::GetSystemTransaction(db), std::move(function),
-	                                              OnCreateConflict::ERROR_ON_CONFLICT);
+	config.secret_manager->RegisterSecretFunction(std::move(function), OnCreateConflict::ERROR_ON_CONFLICT);
 }
 
 void ExtensionUtil::RegisterFunction(DatabaseInstance &db, TableFunction function) {
@@ -162,7 +161,7 @@ void ExtensionUtil::RegisterType(DatabaseInstance &db, string type_name, Logical
 
 void ExtensionUtil::RegisterSecretType(DatabaseInstance &db, SecretType secret_type) {
 	auto &config = DBConfig::GetConfig(db);
-	config.secret_manager->RegisterSecretType(CatalogTransaction::GetSystemTransaction(db), secret_type);
+	config.secret_manager->RegisterSecretType(secret_type);
 }
 
 void ExtensionUtil::RegisterCastFunction(DatabaseInstance &db, const LogicalType &source, const LogicalType &target,

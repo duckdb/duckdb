@@ -64,18 +64,14 @@ public:
 
 public:
 	//! Create a index instance of this type
-	static unique_ptr<Index> Create(const string &name, const IndexConstraintType constraint_type,
-	                                const vector<column_t> &column_ids,
-	                                const vector<unique_ptr<Expression>> &unbound_expressions,
-	                                TableIOManager &table_io_manager, AttachedDatabase &db,
-	                                const IndexStorageInfo &storage_info) {
-		auto art = make_uniq<ART>(name, constraint_type, column_ids, table_io_manager, unbound_expressions, db, nullptr,
-		                          storage_info);
+	static unique_ptr<Index> Create(CreateIndexInput &input) {
+		auto art = make_uniq<ART>(input.name, input.constraint_type, input.column_ids, input.table_io_manager,
+		                          input.unbound_expressions, input.db, nullptr, input.storage_info);
 		return std::move(art);
 	}
 
 	//! Called when data is appended to the index. The lock obtained from InitializeLock must be held
-	PreservedError Append(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
+	ErrorData Append(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
 	//! Verify that data can be appended to the index without a constraint violation
 	void VerifyAppend(DataChunk &chunk) override;
 	//! Verify that data can be appended to the index without a constraint violation using the conflict manager
@@ -85,7 +81,7 @@ public:
 	//! Delete a chunk of entries from the index. The lock obtained from InitializeLock must be held
 	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
 	//! Insert a chunk of entries into the index
-	PreservedError Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
+	ErrorData Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
 
 	//! Construct an ART from a vector of sorted keys
 	bool ConstructFromSorted(idx_t count, vector<ARTKey> &keys, Vector &row_identifiers);

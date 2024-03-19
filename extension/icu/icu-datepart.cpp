@@ -198,7 +198,7 @@ struct ICUDatePart : public ICUDateFunc {
 		case DatePartSpecifier::TIMEZONE_MINUTE:
 			return ExtractTimezoneMinute;
 		default:
-			throw Exception("Unsupported ICU BIGINT extractor");
+			throw InternalException("Unsupported ICU BIGINT extractor");
 		}
 	}
 
@@ -209,7 +209,7 @@ struct ICUDatePart : public ICUDateFunc {
 		case DatePartSpecifier::JULIAN_DAY:
 			return ExtractJulianDay;
 		default:
-			throw Exception("Unsupported ICU DOUBLE extractor");
+			throw InternalException("Unsupported ICU DOUBLE extractor");
 		}
 	}
 
@@ -223,7 +223,7 @@ struct ICUDatePart : public ICUDateFunc {
 		UErrorCode status = U_ZERO_ERROR;
 		const auto dd = calendar->getActualMaximum(UCAL_DATE, status);
 		if (U_FAILURE(status)) {
-			throw Exception("Unable to extract ICU last day.");
+			throw InternalException("Unable to extract ICU last day.");
 		}
 
 		calendar->set(UCAL_DATE, dd);

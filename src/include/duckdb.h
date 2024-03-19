@@ -64,74 +64,77 @@ extern "C" {
 //===--------------------------------------------------------------------===//
 // Enums
 //===--------------------------------------------------------------------===//
-
+// WARNING: the numbers of these enums should not be changed, as changing the numbers breaks ABI compatibility
+// Always add enums at the END of the enum
 //! An enum over DuckDB's internal types.
 typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_INVALID = 0,
 	// bool
-	DUCKDB_TYPE_BOOLEAN,
+	DUCKDB_TYPE_BOOLEAN = 1,
 	// int8_t
-	DUCKDB_TYPE_TINYINT,
+	DUCKDB_TYPE_TINYINT = 2,
 	// int16_t
-	DUCKDB_TYPE_SMALLINT,
+	DUCKDB_TYPE_SMALLINT = 3,
 	// int32_t
-	DUCKDB_TYPE_INTEGER,
+	DUCKDB_TYPE_INTEGER = 4,
 	// int64_t
-	DUCKDB_TYPE_BIGINT,
+	DUCKDB_TYPE_BIGINT = 5,
 	// uint8_t
-	DUCKDB_TYPE_UTINYINT,
+	DUCKDB_TYPE_UTINYINT = 6,
 	// uint16_t
-	DUCKDB_TYPE_USMALLINT,
+	DUCKDB_TYPE_USMALLINT = 7,
 	// uint32_t
-	DUCKDB_TYPE_UINTEGER,
+	DUCKDB_TYPE_UINTEGER = 8,
 	// uint64_t
-	DUCKDB_TYPE_UBIGINT,
+	DUCKDB_TYPE_UBIGINT = 9,
 	// float
-	DUCKDB_TYPE_FLOAT,
+	DUCKDB_TYPE_FLOAT = 10,
 	// double
-	DUCKDB_TYPE_DOUBLE,
+	DUCKDB_TYPE_DOUBLE = 11,
 	// duckdb_timestamp, in microseconds
-	DUCKDB_TYPE_TIMESTAMP,
+	DUCKDB_TYPE_TIMESTAMP = 12,
 	// duckdb_date
-	DUCKDB_TYPE_DATE,
+	DUCKDB_TYPE_DATE = 13,
 	// duckdb_time
-	DUCKDB_TYPE_TIME,
+	DUCKDB_TYPE_TIME = 14,
 	// duckdb_interval
-	DUCKDB_TYPE_INTERVAL,
+	DUCKDB_TYPE_INTERVAL = 15,
 	// duckdb_hugeint
-	DUCKDB_TYPE_HUGEINT,
+	DUCKDB_TYPE_HUGEINT = 16,
 	// duckdb_uhugeint
-	DUCKDB_TYPE_UHUGEINT,
+	DUCKDB_TYPE_UHUGEINT = 32,
 	// const char*
-	DUCKDB_TYPE_VARCHAR,
+	DUCKDB_TYPE_VARCHAR = 17,
 	// duckdb_blob
-	DUCKDB_TYPE_BLOB,
+	DUCKDB_TYPE_BLOB = 18,
 	// decimal
-	DUCKDB_TYPE_DECIMAL,
+	DUCKDB_TYPE_DECIMAL = 19,
 	// duckdb_timestamp, in seconds
-	DUCKDB_TYPE_TIMESTAMP_S,
+	DUCKDB_TYPE_TIMESTAMP_S = 20,
 	// duckdb_timestamp, in milliseconds
-	DUCKDB_TYPE_TIMESTAMP_MS,
+	DUCKDB_TYPE_TIMESTAMP_MS = 21,
 	// duckdb_timestamp, in nanoseconds
-	DUCKDB_TYPE_TIMESTAMP_NS,
+	DUCKDB_TYPE_TIMESTAMP_NS = 22,
 	// enum type, only useful as logical type
-	DUCKDB_TYPE_ENUM,
+	DUCKDB_TYPE_ENUM = 23,
 	// list type, only useful as logical type
-	DUCKDB_TYPE_LIST,
+	DUCKDB_TYPE_LIST = 24,
 	// struct type, only useful as logical type
-	DUCKDB_TYPE_STRUCT,
+	DUCKDB_TYPE_STRUCT = 25,
 	// map type, only useful as logical type
-	DUCKDB_TYPE_MAP,
+	DUCKDB_TYPE_MAP = 26,
+	// duckdb_array, only useful as logical type
+	DUCKDB_TYPE_ARRAY = 33,
 	// duckdb_hugeint
-	DUCKDB_TYPE_UUID,
+	DUCKDB_TYPE_UUID = 27,
 	// union type, only useful as logical type
-	DUCKDB_TYPE_UNION,
+	DUCKDB_TYPE_UNION = 28,
 	// duckdb_bit
-	DUCKDB_TYPE_BIT,
+	DUCKDB_TYPE_BIT = 29,
 	// duckdb_time_tz
-	DUCKDB_TYPE_TIME_TZ,
+	DUCKDB_TYPE_TIME_TZ = 30,
 	// duckdb_timestamp
-	DUCKDB_TYPE_TIMESTAMP_TZ,
+	DUCKDB_TYPE_TIMESTAMP_TZ = 31,
 } duckdb_type;
 //! An enum over the returned state of different functions.
 typedef enum { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
@@ -144,41 +147,41 @@ typedef enum {
 } duckdb_pending_state;
 //! An enum over DuckDB's different result types.
 typedef enum {
-	DUCKDB_RESULT_TYPE_INVALID,
-	DUCKDB_RESULT_TYPE_CHANGED_ROWS,
-	DUCKDB_RESULT_TYPE_NOTHING,
-	DUCKDB_RESULT_TYPE_QUERY_RESULT,
+	DUCKDB_RESULT_TYPE_INVALID = 0,
+	DUCKDB_RESULT_TYPE_CHANGED_ROWS = 1,
+	DUCKDB_RESULT_TYPE_NOTHING = 2,
+	DUCKDB_RESULT_TYPE_QUERY_RESULT = 3,
 } duckdb_result_type;
 //! An enum over DuckDB's different statement types.
 typedef enum {
-	DUCKDB_STATEMENT_TYPE_INVALID,
-	DUCKDB_STATEMENT_TYPE_SELECT,
-	DUCKDB_STATEMENT_TYPE_INSERT,
-	DUCKDB_STATEMENT_TYPE_UPDATE,
-	DUCKDB_STATEMENT_TYPE_EXPLAIN,
-	DUCKDB_STATEMENT_TYPE_DELETE,
-	DUCKDB_STATEMENT_TYPE_PREPARE,
-	DUCKDB_STATEMENT_TYPE_CREATE,
-	DUCKDB_STATEMENT_TYPE_EXECUTE,
-	DUCKDB_STATEMENT_TYPE_ALTER,
-	DUCKDB_STATEMENT_TYPE_TRANSACTION,
-	DUCKDB_STATEMENT_TYPE_COPY,
-	DUCKDB_STATEMENT_TYPE_ANALYZE,
-	DUCKDB_STATEMENT_TYPE_VARIABLE_SET,
-	DUCKDB_STATEMENT_TYPE_CREATE_FUNC,
-	DUCKDB_STATEMENT_TYPE_DROP,
-	DUCKDB_STATEMENT_TYPE_EXPORT,
-	DUCKDB_STATEMENT_TYPE_PRAGMA,
-	DUCKDB_STATEMENT_TYPE_VACUUM,
-	DUCKDB_STATEMENT_TYPE_CALL,
-	DUCKDB_STATEMENT_TYPE_SET,
-	DUCKDB_STATEMENT_TYPE_LOAD,
-	DUCKDB_STATEMENT_TYPE_RELATION,
-	DUCKDB_STATEMENT_TYPE_EXTENSION,
-	DUCKDB_STATEMENT_TYPE_LOGICAL_PLAN,
-	DUCKDB_STATEMENT_TYPE_ATTACH,
-	DUCKDB_STATEMENT_TYPE_DETACH,
-	DUCKDB_STATEMENT_TYPE_MULTI,
+	DUCKDB_STATEMENT_TYPE_INVALID = 0,
+	DUCKDB_STATEMENT_TYPE_SELECT = 1,
+	DUCKDB_STATEMENT_TYPE_INSERT = 2,
+	DUCKDB_STATEMENT_TYPE_UPDATE = 3,
+	DUCKDB_STATEMENT_TYPE_EXPLAIN = 4,
+	DUCKDB_STATEMENT_TYPE_DELETE = 5,
+	DUCKDB_STATEMENT_TYPE_PREPARE = 6,
+	DUCKDB_STATEMENT_TYPE_CREATE = 7,
+	DUCKDB_STATEMENT_TYPE_EXECUTE = 8,
+	DUCKDB_STATEMENT_TYPE_ALTER = 9,
+	DUCKDB_STATEMENT_TYPE_TRANSACTION = 10,
+	DUCKDB_STATEMENT_TYPE_COPY = 11,
+	DUCKDB_STATEMENT_TYPE_ANALYZE = 12,
+	DUCKDB_STATEMENT_TYPE_VARIABLE_SET = 13,
+	DUCKDB_STATEMENT_TYPE_CREATE_FUNC = 14,
+	DUCKDB_STATEMENT_TYPE_DROP = 15,
+	DUCKDB_STATEMENT_TYPE_EXPORT = 16,
+	DUCKDB_STATEMENT_TYPE_PRAGMA = 17,
+	DUCKDB_STATEMENT_TYPE_VACUUM = 18,
+	DUCKDB_STATEMENT_TYPE_CALL = 19,
+	DUCKDB_STATEMENT_TYPE_SET = 20,
+	DUCKDB_STATEMENT_TYPE_LOAD = 21,
+	DUCKDB_STATEMENT_TYPE_RELATION = 22,
+	DUCKDB_STATEMENT_TYPE_EXTENSION = 23,
+	DUCKDB_STATEMENT_TYPE_LOGICAL_PLAN = 24,
+	DUCKDB_STATEMENT_TYPE_ATTACH = 25,
+	DUCKDB_STATEMENT_TYPE_DETACH = 26,
+	DUCKDB_STATEMENT_TYPE_MULTI = 27,
 } duckdb_statement_type;
 
 //===--------------------------------------------------------------------===//
@@ -227,7 +230,7 @@ typedef struct {
 	uint64_t bits;
 } duckdb_time_tz;
 typedef struct {
-	duckdb_time time;
+	duckdb_time_struct time;
 	int32_t offset;
 } duckdb_time_tz_struct;
 
@@ -1536,6 +1539,18 @@ The error message can be obtained by calling duckdb_pending_error on the pending
 DUCKDB_API duckdb_pending_state duckdb_pending_execute_task(duckdb_pending_result pending_result);
 
 /*!
+If this returns DUCKDB_PENDING_RESULT_READY, the duckdb_execute_pending function can be called to obtain the result.
+If this returns DUCKDB_PENDING_RESULT_NOT_READY, the duckdb_pending_execute_check_state function should be called again.
+If this returns DUCKDB_PENDING_ERROR, an error occurred during execution.
+
+The error message can be obtained by calling duckdb_pending_error on the pending_result.
+
+* pending_result: The pending result.
+* returns: The state of the pending result.
+*/
+DUCKDB_API duckdb_pending_state duckdb_pending_execute_check_state(duckdb_pending_result pending_result);
+
+/*!
 Fully execute a pending query result, returning the final query result.
 
 If duckdb_pending_execute_task has been called until DUCKDB_PENDING_RESULT_READY was returned, this will return fast.
@@ -1614,6 +1629,16 @@ Creates a list value from a type and an array of values of length `value_count`
 DUCKDB_API duckdb_value duckdb_create_list_value(duckdb_logical_type type, duckdb_value *values, idx_t value_count);
 
 /*!
+Creates a array value from a type and an array of values of length `value_count`
+
+* type: The type of the array
+* values: The values for the array
+* value_count: The number of values in the array
+* returns: The value. This must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_API duckdb_value duckdb_create_array_value(duckdb_logical_type type, duckdb_value *values, idx_t value_count);
+
+/*!
 Obtains a string representation of the given value.
 The result must be destroyed with `duckdb_free`.
 
@@ -1662,6 +1687,16 @@ The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 * returns: The logical type.
 */
 DUCKDB_API duckdb_logical_type duckdb_create_list_type(duckdb_logical_type type);
+
+/*!
+Creates a array type from its child type.
+The resulting type should be destroyed with `duckdb_destroy_logical_type`.
+
+* type: The child type of array type to create.
+* array_size: The number of elements in the array.
+* returns: The logical type.
+*/
+DUCKDB_API duckdb_logical_type duckdb_create_array_type(duckdb_logical_type type, idx_t array_size);
 
 /*!
 Creates a map type from its key type and value type.
@@ -1784,6 +1819,24 @@ The result must be freed with `duckdb_destroy_logical_type`.
 * returns: The child type of the list type. Must be destroyed with `duckdb_destroy_logical_type`.
 */
 DUCKDB_API duckdb_logical_type duckdb_list_type_child_type(duckdb_logical_type type);
+
+/*!
+Retrieves the child type of the given array type.
+
+The result must be freed with `duckdb_destroy_logical_type`.
+
+* type: The logical type object
+* returns: The child type of the array type. Must be destroyed with `duckdb_destroy_logical_type`.
+*/
+DUCKDB_API duckdb_logical_type duckdb_array_type_child_type(duckdb_logical_type type);
+
+/*!
+Retrieves the array size of the given array type.
+
+* type: The logical type object
+* returns: The fixed number of elements the values of this array type can store.
+*/
+DUCKDB_API idx_t duckdb_array_type_array_size(duckdb_logical_type type);
 
 /*!
 Retrieves the key type of the given map type.
@@ -2003,7 +2056,7 @@ Assigns a string element in the vector at the specified location.
 DUCKDB_API void duckdb_vector_assign_string_element(duckdb_vector vector, idx_t index, const char *str);
 
 /*!
-Assigns a string element in the vector at the specified location.
+Assigns a string element in the vector at the specified location. You may also use this function to assign BLOBs.
 
 * vector: The vector to alter
 * index: The row position in the vector to assign the string to
@@ -2059,6 +2112,17 @@ The resulting vector is valid as long as the parent vector is valid.
 * returns: The child vector
 */
 DUCKDB_API duckdb_vector duckdb_struct_vector_get_child(duckdb_vector vector, idx_t index);
+
+/*!
+Retrieves the child vector of a array vector.
+
+The resulting vector is valid as long as the parent vector is valid.
+The resulting vector has the size of the parent vector multiplied by the array size.
+
+* vector: The vector
+* returns: The child vector
+*/
+DUCKDB_API duckdb_vector duckdb_array_vector_get_child(duckdb_vector vector);
 
 //===--------------------------------------------------------------------===//
 // Validity Mask Functions
@@ -2482,6 +2546,25 @@ Note that the object must be destroyed with `duckdb_appender_destroy`.
 */
 DUCKDB_API duckdb_state duckdb_appender_create(duckdb_connection connection, const char *schema, const char *table,
                                                duckdb_appender *out_appender);
+
+/*!
+Returns the number of columns in the table that belongs to the appender.
+
+* appender The appender to get the column count from.
+* returns: The number of columns in the table.
+*/
+DUCKDB_API idx_t duckdb_appender_column_count(duckdb_appender appender);
+
+/*!
+Returns the type of the column at the specified index.
+
+Note: The resulting type should be destroyed with `duckdb_destroy_logical_type`.
+
+* appender The appender to get the column type from.
+* col_idx The index of the column to get the type of.
+* returns: The duckdb_logical_type of the column.
+*/
+DUCKDB_API duckdb_logical_type duckdb_appender_column_type(duckdb_appender appender, idx_t col_idx);
 
 /*!
 Returns the error message associated with the given appender.

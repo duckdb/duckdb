@@ -9,7 +9,7 @@ unique_ptr<ParsedExpression> Transformer::TransformPositionalReference(duckdb_li
 		throw ParserException("Positional reference node needs to be >= 1");
 	}
 	auto result = make_uniq<PositionalReferenceExpression>(node.position);
-	result->query_location = node.location;
+	SetQueryLocation(*result, node.location);
 	return std::move(result);
 }
 

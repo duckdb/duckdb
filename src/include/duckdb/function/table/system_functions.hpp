@@ -29,14 +29,6 @@ struct PragmaMetadataInfo {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct PragmaLastProfilingOutput {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct PragmaDetailedProfilingOutput {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct PragmaVersion {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
@@ -86,6 +78,10 @@ struct DuckDBKeywordsFun {
 };
 
 struct DuckDBIndexesFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBMemoryFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

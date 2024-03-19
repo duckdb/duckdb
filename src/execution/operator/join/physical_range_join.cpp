@@ -12,6 +12,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/parallel/executor_task.hpp"
 
 #include <thread>
 
@@ -90,7 +91,7 @@ public:
 
 public:
 	RangeJoinMergeTask(shared_ptr<Event> event_p, ClientContext &context, GlobalSortedTable &table)
-	    : ExecutorTask(context), event(std::move(event_p)), context(context), table(table) {
+	    : ExecutorTask(context, std::move(event_p)), context(context), table(table) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
@@ -104,7 +105,6 @@ public:
 	}
 
 private:
-	shared_ptr<Event> event;
 	ClientContext &context;
 	GlobalSortedTable &table;
 };
@@ -237,7 +237,12 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 			// Primary is already NULL
 			return count;
 		}
-		for (auto &v : keys.data) {
+		for (size_t c = 1; c < keys.data.size(); ++c) {
+			// Skip comparisons that accept NULLs
+			if (conditions[c].comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
+				continue;
+			}
+			auto &v = keys.data[c];
 			if (ConstantVector::IsNull(v)) {
 				// Create a new validity mask to avoid modifying original mask
 				auto &pvalidity = ConstantVector::Validity(primary);

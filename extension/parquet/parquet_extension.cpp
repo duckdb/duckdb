@@ -47,7 +47,6 @@ struct ParquetReadBindData : public TableFunctionData {
 	shared_ptr<ParquetReader> initial_reader;
 	vector<string> files;
 	atomic<idx_t> chunk_count;
-	atomic<idx_t> cur_file;
 	vector<string> names;
 	vector<LogicalType> types;
 
@@ -96,7 +95,7 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 	bool error_opening_file = false;
 
 	//! Index of file currently up for scanning
-	idx_t file_index;
+	atomic<idx_t> file_index;
 	//! Index of row group within file currently up for scanning
 	idx_t row_group_index;
 	//! Batch index of the next row group to be scanned
@@ -389,10 +388,15 @@ public:
 					// missing metadata entry in cache, no usable stats
 					return nullptr;
 				}
-				auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
-				// we need to check if the metadata cache entries are current
-				if (fs.GetLastModifiedTime(*handle) >= metadata->read_time) {
-					// missing or invalid metadata entry in cache, no usable stats overall
+				if (!fs.IsRemoteFile(file_name)) {
+					auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
+					// we need to check if the metadata cache entries are current
+					if (fs.GetLastModifiedTime(*handle) >= metadata->read_time) {
+						// missing or invalid metadata entry in cache, no usable stats overall
+						return nullptr;
+					}
+				} else {
+					// for remote files we just avoid reading stats entirely
 					return nullptr;
 				}
 				ParquetReader reader(context, bind_data.parquet_options, metadata);
@@ -484,15 +488,16 @@ public:
 	static double ParquetProgress(ClientContext &context, const FunctionData *bind_data_p,
 	                              const GlobalTableFunctionState *global_state) {
 		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
+		auto &gstate = global_state->Cast<ParquetReadGlobalState>();
 		if (bind_data.files.empty()) {
 			return 100.0;
 		}
 		if (bind_data.initial_file_cardinality == 0) {
-			return (100.0 * (bind_data.cur_file + 1)) / bind_data.files.size();
+			return (100.0 * (gstate.file_index + 1)) / bind_data.files.size();
 		}
-		auto percentage = std::min(
+		auto percentage = MinValue<double>(
 		    100.0, (bind_data.chunk_count * STANDARD_VECTOR_SIZE * 100.0 / bind_data.initial_file_cardinality));
-		return (percentage + 100.0 * bind_data.cur_file) / bind_data.files.size();
+		return (percentage + 100.0 * gstate.file_index) / bind_data.files.size();
 	}
 
 	static unique_ptr<LocalTableFunctionState>
@@ -628,7 +633,10 @@ public:
 
 	static idx_t ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = bind_data->Cast<ParquetReadBindData>();
-		return std::max(data.initial_file_row_groups, idx_t(1)) * data.files.size();
+		if (data.files.size() > 1) {
+			return TaskScheduler::GetScheduler(context).NumberOfThreads();
+		}
+		return MaxValue(data.initial_file_row_groups, (idx_t)1);
 	}
 
 	// This function looks for the next available row group. If not available, it will open files from bind_data.files

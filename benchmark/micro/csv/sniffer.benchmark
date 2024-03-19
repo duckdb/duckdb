@@ -6,9 +6,12 @@ name CSV Sniffer Benchmark
 group csv
 
 require tpch
+
+cache lineitem_sf1.csv
+
 load
-CALL dbgen(sf=2, suffix='_normal');
-COPY lineitem_normal TO '${BENCHMARK_DIR}/lineitem.csv' (FORMAT CSV, DELIMITER '|', HEADER);
+CALL dbgen(sf=1);
+COPY lineitem TO '${BENCHMARK_DIR}/lineitem_sf1.csv' (FORMAT CSV, DELIMITER '|', HEADER);
 
 run
-DESCRIBE SELECT * FROM '${BENCHMARK_DIR}/lineitem.csv'
+DESCRIBE SELECT * FROM '${BENCHMARK_DIR}/lineitem_sf1.csv'

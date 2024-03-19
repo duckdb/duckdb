@@ -102,7 +102,7 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 		}
 	} else {
 		auto &smask = CopyValidityMask(*source);
-		if (smask.IsMaskSet()) {
+		if (smask.IsMaskSet() || tmask.IsMaskSet()) {
 			for (idx_t i = 0; i < copy_count; i++) {
 				auto idx = sel->get_index(source_offset + i);
 
@@ -203,11 +203,11 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 		auto array_size = ArrayType::GetSize(source->GetType());
 
 		// Create a selection vector for the child elements
-		SelectionVector child_sel(copy_count * array_size);
+		SelectionVector child_sel(source_count * array_size);
 		for (idx_t i = 0; i < copy_count; i++) {
 			auto source_idx = sel->get_index(source_offset + i);
 			for (idx_t j = 0; j < array_size; j++) {
-				child_sel.set_index(i * array_size + j, source_idx * array_size + j);
+				child_sel.set_index((source_offset * array_size) + (i * array_size + j), source_idx * array_size + j);
 			}
 		}
 		VectorOperations::Copy(source_child, target_child, child_sel, source_count * array_size,

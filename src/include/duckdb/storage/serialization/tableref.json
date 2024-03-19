@@ -24,8 +24,8 @@
       {
         "id": 103,
         "name": "query_location",
-        "type": "idx_t",
-        "default": "idx_t(DConstants::INVALID_INDEX)"
+        "type": "optional_idx",
+        "default": "optional_idx()"
       }
     ]
   },

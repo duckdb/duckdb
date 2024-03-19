@@ -215,6 +215,8 @@ unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgque
 		return TransformSecret(PGCast<duckdb_libpgquery::PGCreateSecretStmt>(stmt));
 	case duckdb_libpgquery::T_PGDropSecretStmt:
 		return TransformDropSecret(PGCast<duckdb_libpgquery::PGDropSecretStmt>(stmt));
+	case duckdb_libpgquery::T_PGCommentOnStmt:
+		return TransformCommentOn(PGCast<duckdb_libpgquery::PGCommentOnStmt>(stmt));
 	default:
 		throw NotImplementedException(NodetypeToString(stmt.type));
 	}
@@ -232,6 +234,20 @@ unique_ptr<QueryNode> Transformer::TransformMaterializedCTE(unique_ptr<QueryNode
 	}
 
 	return root;
+}
+
+void Transformer::SetQueryLocation(ParsedExpression &expr, int query_location) {
+	if (query_location < 0) {
+		return;
+	}
+	expr.query_location = optional_idx(idx_t(query_location));
+}
+
+void Transformer::SetQueryLocation(TableRef &ref, int query_location) {
+	if (query_location < 0) {
+		return;
+	}
+	ref.query_location = optional_idx(idx_t(query_location));
 }
 
 } // namespace duckdb

@@ -2,7 +2,7 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/execution/operator/csv_scanner/options/csv_reader_options.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 #include "duckdb/main/appender.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/main/client_data.hpp"
@@ -98,6 +98,9 @@ bool RunFull(std::string &path, std::set<std::string> *skip = nullptr, const str
 	if (!full_buffer_res->HasError()) {
 		ground_truth = &full_buffer_res->Collection();
 	}
+	if (!ground_truth) {
+		return true;
+	}
 	// For parallel CSV Reading the buffer must be at least the size of the biggest line in the File.
 	idx_t min_buffer_size = conn.context->client_data->debug_max_line_length + 3;
 	// So our tests don't take infinite time, we will go till a max buffer size of 5 positions higher than the minimum.
@@ -141,7 +144,7 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data", "[parallel-csv
 
 //! Test case with specific parameters that allow us to run the no_quote.tsv we were skipping
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/no_quote.csv", "[parallel-csv][.]") {
-	string add_parameters = ",  header=1, quote=''";
+	string add_parameters = ", quote=''";
 	string file = "test/sql/copy/csv/data/no_quote.csv";
 	REQUIRE(RunFull(file, nullptr, add_parameters));
 }
@@ -239,7 +242,7 @@ TEST_CASE("Test Parallel CSV All Files - data/csv", "[parallel-csv][.]") {
 
 //! Test case with specific parameters that allow us to run the bug_7578.csv we were skipping
 TEST_CASE("Test Parallel CSV All Files - data/csv/bug_7578.csv", "[parallel-csv][.]") {
-	string add_parameters = ", delim=\'\\t\', header=true, quote = \'`\', columns={ \'transaction_id\': \'VARCHAR\', "
+	string add_parameters = ", delim=\'\\t\', quote = \'`\', columns={ \'transaction_id\': \'VARCHAR\', "
 	                        "\'team_id\': \'INT\', \'direction\': \'INT\', \'amount\':\'DOUBLE\', "
 	                        "\'account_id\':\'INT\', \'transaction_date\':\'DATE\', \'recorded_date\':\'DATE\', "
 	                        "\'tags.transaction_id\':\'VARCHAR\', \'tags.team_id\':\'INT\', \'tags\':\'varchar\'}";

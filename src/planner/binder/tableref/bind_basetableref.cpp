@@ -75,7 +75,7 @@ unique_ptr<BoundTableRef> Binder::BindWithReplacementScan(ClientContext &context
 }
 
 unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
-	QueryErrorContext error_context(root_statement, ref.query_location);
+	QueryErrorContext error_context(ref.query_location);
 	// CTEs and views are also referred to using BaseTableRefs, hence need to distinguish here
 	// check if the table name refers to a CTE
 
@@ -181,14 +181,17 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		}
 
 		// could not find an alternative: bind again to get the error
-		table_or_view = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, ref.catalog_name, ref.schema_name,
-		                                  ref.table_name, OnEntryNotFound::THROW_EXCEPTION, error_context);
+		Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, ref.catalog_name, ref.schema_name, ref.table_name,
+		                  OnEntryNotFound::THROW_EXCEPTION, error_context);
+		throw InternalException("Catalog::GetEntry should have thrown an exception above");
 	}
+
 	switch (table_or_view->type) {
 	case CatalogType::TABLE_ENTRY: {
 		// base table: create the BoundBaseTableRef node
 		auto table_index = GenerateTableIndex();
 		auto &table = table_or_view->Cast<TableCatalogEntry>();
+		properties.read_databases.insert(table.ParentCatalog().GetName());
 
 		unique_ptr<FunctionData> bind_data;
 		auto scan_function = table.GetScanFunction(context, bind_data);
@@ -225,8 +228,13 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		view_binder->can_contain_nulls = true;
 		SubqueryRef subquery(unique_ptr_cast<SQLStatement, SelectStatement>(view_catalog_entry.query->Copy()));
 		subquery.alias = ref.alias.empty() ? ref.table_name : ref.alias;
-		subquery.column_name_alias =
-		    BindContext::AliasColumnNames(subquery.alias, view_catalog_entry.aliases, ref.column_name_alias);
+		// construct view names by first (1) taking the view aliases, (2) adding the view names, then (3) applying
+		// subquery aliases
+		vector<string> view_names = view_catalog_entry.aliases;
+		for (idx_t n = view_names.size(); n < view_catalog_entry.names.size(); n++) {
+			view_names.push_back(view_catalog_entry.names[n]);
+		}
+		subquery.column_name_alias = BindContext::AliasColumnNames(subquery.alias, view_names, ref.column_name_alias);
 		// bind the child subquery
 		view_binder->AddBoundView(view_catalog_entry);
 		auto bound_child = view_binder->Bind(subquery);
@@ -237,9 +245,22 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		D_ASSERT(bound_child->type == TableReferenceType::SUBQUERY);
 		// verify that the types and names match up with the expected types and names
 		auto &bound_subquery = bound_child->Cast<BoundSubqueryRef>();
-		if (GetBindingMode() != BindingMode::EXTRACT_NAMES &&
-		    bound_subquery.subquery->types != view_catalog_entry.types) {
-			throw BinderException("Contents of view were altered: types don't match!");
+		if (GetBindingMode() != BindingMode::EXTRACT_NAMES) {
+			if (bound_subquery.subquery->types != view_catalog_entry.types) {
+				auto actual_types = StringUtil::ToString(bound_subquery.subquery->types, ", ");
+				auto expected_types = StringUtil::ToString(view_catalog_entry.types, ", ");
+				throw BinderException(
+				    "Contents of view were altered: types don't match! Expected [%s], but found [%s] instead",
+				    expected_types, actual_types);
+			}
+			if (bound_subquery.subquery->names.size() == view_catalog_entry.names.size() &&
+			    bound_subquery.subquery->names != view_catalog_entry.names) {
+				auto actual_names = StringUtil::Join(bound_subquery.subquery->names, ", ");
+				auto expected_names = StringUtil::Join(view_catalog_entry.names, ", ");
+				throw BinderException(
+				    "Contents of view were altered: names don't match! Expected [%s], but found [%s] instead",
+				    expected_names, actual_names);
+			}
 		}
 		bind_context.AddView(bound_subquery.subquery->GetRootIndex(), subquery.alias, subquery,
 		                     *bound_subquery.subquery, &view_catalog_entry);

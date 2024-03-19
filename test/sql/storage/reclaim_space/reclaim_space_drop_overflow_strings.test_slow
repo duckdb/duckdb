@@ -21,6 +21,11 @@ SELECT AVG(STRLEN(s)), MIN(STRLEN(S)), MAX(STRLEN(S)), SUM(STRLEN(S)), MIN(S[1])
 ----
 296.955	0	5000	44543527	(empty)	X
 
+# for smaller block sizes (16KB) the total blocks alternate between a few values in the loop,
+# therefore, we need to compare to a range of total block counts
+statement ok
+CREATE TABLE total_blocks_tbl AS SELECT total_blocks FROM pragma_database_size();
+
 loop i 0 10
 
 statement ok
@@ -37,8 +42,26 @@ SELECT AVG(STRLEN(s)), MIN(STRLEN(S)), MAX(STRLEN(S)), SUM(STRLEN(S)), MIN(S[1])
 statement ok
 CHECKPOINT;
 
-query I nosort expected_blocks
-select total_blocks from pragma_database_size();
+# ensure that the total blocks don't exceed the total blocks after the first iteration
+# by more than 1.2
+
+query I
+SELECT CASE WHEN ${i} = 0 THEN True
+	WHEN current.total_blocks <= total_blocks_tbl.total_blocks * 1.2 THEN True
+	ELSE False END
+FROM pragma_database_size() AS current, total_blocks_tbl;
+----
+1
+
+# adjust total_blocks_tbl once to the count after the first iteration
+
+statement ok
+UPDATE total_blocks_tbl SET total_blocks = (
+	SELECT CASE WHEN ${i} = 0 THEN (SELECT current.total_blocks FROM pragma_database_size() AS current)
+		ELSE (total_blocks) END);
+
+statement ok
+CHECKPOINT;
 
 restart
 

@@ -27,6 +27,12 @@ DuckDBPyResult::DuckDBPyResult(unique_ptr<QueryResult> result_p) : result(std::m
 	}
 }
 
+DuckDBPyResult::~DuckDBPyResult() {
+	py::gil_scoped_release gil;
+	result.reset();
+	current_chunk.reset();
+}
+
 const vector<string> &DuckDBPyResult::GetNames() {
 	if (!result) {
 		throw InternalException("Calling GetNames without a result object");
@@ -225,19 +231,11 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 	// now that we have materialized the result in contiguous arrays, construct the actual NumPy arrays or categorical
 	// types
 	py::dict res;
-	unordered_map<string, idx_t> names;
-	for (idx_t col_idx = 0; col_idx < result->types.size(); col_idx++) {
-		if (names[result->names[col_idx]]++ == 0) {
-			FillNumpy(res, col_idx, conversion, result->names[col_idx].c_str());
-		} else {
-			auto name = result->names[col_idx] + "_" + to_string(names[result->names[col_idx]]);
-			while (names[name] > 0) {
-				// This entry already exists
-				name += "_" + to_string(names[name]);
-			}
-			names[name]++;
-			FillNumpy(res, col_idx, conversion, name.c_str());
-		}
+	auto names = result->names;
+	QueryResult::DeduplicateColumns(names);
+	for (idx_t col_idx = 0; col_idx < result->names.size(); col_idx++) {
+		auto &name = names[col_idx];
+		FillNumpy(res, col_idx, conversion, name.c_str());
 	}
 	return res;
 }
@@ -268,7 +266,7 @@ void DuckDBPyResult::ChangeDateToDatetime(PandasDataFrame &df) {
 }
 
 PandasDataFrame DuckDBPyResult::FrameFromNumpy(bool date_as_object, const py::handle &o) {
-	auto df = py::cast<PandasDataFrame>(py::module::import("pandas").attr("DataFrame").attr("from_dict")(o));
+	PandasDataFrame df = py::cast<PandasDataFrame>(py::module::import("pandas").attr("DataFrame").attr("from_dict")(o));
 	// Unfortunately we have to do a type change here for timezones since these types are not supported by numpy
 	ChangeToTZType(df);
 	if (date_as_object) {
@@ -305,7 +303,8 @@ py::dict DuckDBPyResult::FetchTF() {
 	return result_dict;
 }
 
-bool DuckDBPyResult::FetchArrowChunk(ChunkScanState &scan_state, py::list &batches, idx_t rows_per_batch) {
+bool DuckDBPyResult::FetchArrowChunk(ChunkScanState &scan_state, py::list &batches, idx_t rows_per_batch,
+                                     bool to_polars) {
 	ArrowArray data;
 	idx_t count;
 	auto &query_result = *result.get();
@@ -317,13 +316,16 @@ bool DuckDBPyResult::FetchArrowChunk(ChunkScanState &scan_state, py::list &batch
 		return false;
 	}
 	ArrowSchema arrow_schema;
-	ArrowConverter::ToArrowSchema(&arrow_schema, query_result.types, query_result.names,
-	                              query_result.client_properties);
+	auto names = query_result.names;
+	if (to_polars) {
+		QueryResult::DeduplicateColumns(names);
+	}
+	ArrowConverter::ToArrowSchema(&arrow_schema, query_result.types, names, query_result.client_properties);
 	TransformDuckToArrowChunk(arrow_schema, data, batches);
 	return true;
 }
 
-py::list DuckDBPyResult::FetchAllArrowChunks(idx_t rows_per_batch) {
+py::list DuckDBPyResult::FetchAllArrowChunks(idx_t rows_per_batch, bool to_polars) {
 	if (!result) {
 		throw InvalidInputException("result closed");
 	}
@@ -331,16 +333,20 @@ py::list DuckDBPyResult::FetchAllArrowChunks(idx_t rows_per_batch) {
 
 	py::list batches;
 	QueryResultChunkScanState scan_state(*result.get());
-	while (FetchArrowChunk(scan_state, batches, rows_per_batch)) {
+	while (FetchArrowChunk(scan_state, batches, rows_per_batch, to_polars)) {
 	}
 	return batches;
 }
 
-duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t rows_per_batch) {
+duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t rows_per_batch, bool to_polars) {
 	if (!result) {
 		throw InvalidInputException("There is no query result");
 	}
-	return pyarrow::ToArrowTable(result->types, result->names, FetchAllArrowChunks(rows_per_batch),
+	auto names = result->names;
+	if (to_polars) {
+		QueryResult::DeduplicateColumns(names);
+	}
+	return pyarrow::ToArrowTable(result->types, names, FetchAllArrowChunks(rows_per_batch, to_polars),
 	                             result->client_properties);
 }
 
@@ -376,8 +382,13 @@ py::str GetTypeToPython(const LogicalType &type) {
 	case LogicalTypeId::DECIMAL: {
 		return py::str("NUMBER");
 	}
-	case LogicalTypeId::VARCHAR:
-		return py::str("STRING");
+	case LogicalTypeId::VARCHAR: {
+		if (type.HasAlias() && type.GetAlias() == "JSON") {
+			return py::str("JSON");
+		} else {
+			return py::str("STRING");
+		}
+	}
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::BIT:
 		return py::str("BINARY");

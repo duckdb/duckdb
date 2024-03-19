@@ -77,8 +77,8 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"enable_object_cache", {true}},
 	    {"enable_profiling", {"json"}},
 	    {"enable_progress_bar", {true}},
+	    {"errors_as_json", {true}},
 	    {"explain_output", {{"all", "optimized_only", "physical_only"}}},
-	    {"external_threads", {8}},
 	    {"file_search_path", {"test"}},
 	    {"force_compression", {"uncompressed", "Uncompressed"}},
 	    {"home_directory", {"test"}},
@@ -93,6 +93,7 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"perfect_ht_threshold", {0}},
 	    {"pivot_filter_threshold", {999}},
 	    {"pivot_limit", {999}},
+	    {"partitioned_write_flush_threshold", {123}},
 	    {"preserve_identifier_case", {false}},
 	    {"preserve_insertion_order", {false}},
 	    {"profile_output", {"test"}},
@@ -124,12 +125,13 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "disabled_filesystems",      // cant change this while db is running
 	    "enable_external_access",    // cant change this while db is running
 	    "allow_unsigned_extensions", // cant change this while db is running
+	    "allow_unredacted_secrets",  // cant change this while db is running
 	    "log_query_path",
 	    "password",
 	    "username",
 	    "user",
+	    "external_threads", // tested in test_threads.cpp
 	    "profiling_output", // just an alias
-	    "profiler_history_size",
 	    "duckdb_api",
 	    "custom_user_agent"};
 	return excluded_options.count(name) == 1;

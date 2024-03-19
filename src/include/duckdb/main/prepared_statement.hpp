@@ -11,7 +11,7 @@
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/main/pending_query_result.hpp"
-#include "duckdb/common/preserved_error.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
@@ -25,7 +25,7 @@ public:
 	DUCKDB_API PreparedStatement(shared_ptr<ClientContext> context, shared_ptr<PreparedStatementData> data,
 	                             string query, idx_t n_param, case_insensitive_map_t<idx_t> named_param_map);
 	//! Create a prepared statement that was not successfully prepared
-	DUCKDB_API explicit PreparedStatement(PreservedError error);
+	DUCKDB_API explicit PreparedStatement(ErrorData error);
 
 	DUCKDB_API ~PreparedStatement();
 
@@ -39,7 +39,7 @@ public:
 	//! Whether or not the statement was successfully prepared
 	bool success;
 	//! The error message (if success = false)
-	PreservedError error;
+	ErrorData error;
 	//! The amount of bound parameters
 	idx_t n_param;
 	//! The (optional) named parameters
@@ -49,7 +49,7 @@ public:
 	//! Returns the stored error message
 	DUCKDB_API const string &GetError();
 	//! Returns the stored error object
-	DUCKDB_API PreservedError &GetErrorObject();
+	DUCKDB_API ErrorData &GetErrorObject();
 	//! Returns whether or not an error occurred
 	DUCKDB_API bool HasError() const;
 	//! Returns the number of columns in the result

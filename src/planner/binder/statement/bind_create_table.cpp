@@ -171,9 +171,9 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 	auto binder = Binder::CreateBinder(context);
 	binder->bind_context.AddGenericBinding(table_index, base.table, names, types);
 	auto expr_binder = ExpressionBinder(*binder, context);
-	string ignore;
+	ErrorData ignore;
 	auto table_binding = binder->bind_context.GetBinding(base.table, ignore);
-	D_ASSERT(table_binding && ignore.empty());
+	D_ASSERT(table_binding && !ignore.HasError());
 
 	auto bind_order = info.column_dependency_manager.GetBindOrder(base.columns);
 	logical_index_set_t bound_indices;

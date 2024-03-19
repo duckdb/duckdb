@@ -1,0 +1,16 @@
+# name: test/sql/types/nested/map/test_map_and_lambdas.test
+# description: Test MAP functionality in lambda functions
+# group: [map]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE i AS SELECT str_split('my yay', ' ') AS l, range AS i FROM range(3);
+
+query I
+SELECT list_transform(l, x -> {'map1': MAP {x::VARCHAR:1::VARCHAR, 'b'::VARCHAR: x::VARCHAR}}) FROM i;
+----
+[{'map1': {my=1, b=my}}, {'map1': {yay=1, b=yay}}]
+[{'map1': {my=1, b=my}}, {'map1': {yay=1, b=yay}}]
+[{'map1': {my=1, b=my}}, {'map1': {yay=1, b=yay}}]

@@ -46,12 +46,12 @@ public:
 
 	// Index interface (unused)
 
-	PreservedError Append(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
+	ErrorData Append(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
 	void VerifyAppend(DataChunk &chunk) override;
 	void VerifyAppend(DataChunk &chunk, ConflictManager &conflict_manager) override;
 	void CommitDrop(IndexLock &index_lock) override;
 	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
-	PreservedError Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
+	ErrorData Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
 	IndexStorageInfo GetStorageInfo(bool get_buffers) override;
 	bool MergeIndexes(IndexLock &state, Index &other_index) override;
 	void Vacuum(IndexLock &state) override;

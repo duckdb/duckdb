@@ -56,7 +56,7 @@ def pytest_collection_modifyitems(config, items):
         if item.name in skipped_tests:
             # test is named specifically
             item.add_marker(skip_listed)
-        elif item.parent != None and item.parent.name in skipped_tests:
+        elif item.parent is not None and item.parent.name in skipped_tests:
             # the class is named specifically
             item.add_marker(skip_listed)
 
@@ -68,7 +68,7 @@ def duckdb_empty_cursor(request):
     return cursor
 
 
-def getTimeSeriesData(nper=None, freq: "Frequency" = "B") -> dict[str, "Series"]:
+def getTimeSeriesData(nper=None, freq: "Frequency" = "B"):
     from pandas import DatetimeIndex, bdate_range, Series
     from datetime import datetime
     from pandas._typing import Frequency
@@ -102,9 +102,9 @@ def pandas_2_or_higher():
 
 def pandas_supports_arrow_backend():
     try:
-        from pandas.compat import pa_version_under7p0
+        from pandas.compat import pa_version_under11p0
 
-        if pa_version_under7p0 == True:
+        if pa_version_under11p0 == True:
             return False
     except ImportError:
         return False
@@ -142,7 +142,7 @@ def convert_arrow_to_numpy_backend(df):
 def convert_to_numpy(df):
     if (
         pyarrow_dtypes_enabled
-        and pyarrow_dtype != None
+        and pyarrow_dtype is not None
         and any([True for x in df.dtypes if isinstance(x, pyarrow_dtype)])
     ):
         return convert_arrow_to_numpy_backend(df)

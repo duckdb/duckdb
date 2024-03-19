@@ -50,6 +50,10 @@ public:
 		return true;
 	}
 
+	bool ParallelSink() const override {
+		return true;
+	}
+
 	string ParamsToString() const override;
 
 public:

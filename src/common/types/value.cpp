@@ -133,6 +133,10 @@ Value::Value(int32_t val) : type_(LogicalType::INTEGER), is_null(false) {
 	value_.integer = val;
 }
 
+Value::Value(bool val) : type_(LogicalType::BOOLEAN), is_null(false) {
+	value_.boolean = val;
+}
+
 Value::Value(int64_t val) : type_(LogicalType::BIGINT), is_null(false) {
 	value_.bigint = val;
 }
@@ -156,7 +160,7 @@ Value::Value(string_t val) : Value(val.GetString()) {
 
 Value::Value(string val) : type_(LogicalType::VARCHAR), is_null(false) {
 	if (!Value::StringIsValid(val.c_str(), val.size())) {
-		throw Exception(ErrorManager::InvalidUnicodeError(val, "value construction"));
+		throw ErrorManager::InvalidUnicodeError(val, "value construction");
 	}
 	value_info_ = make_shared<StringValueInfo>(std::move(val));
 }
@@ -530,10 +534,10 @@ Value Value::DECIMAL(int64_t value, uint8_t width, uint8_t scale) {
 	Value result(decimal_type);
 	switch (decimal_type.InternalType()) {
 	case PhysicalType::INT16:
-		result.value_.smallint = value;
+		result.value_.smallint = NumericCast<int16_t>(value);
 		break;
 	case PhysicalType::INT32:
-		result.value_.integer = value;
+		result.value_.integer = NumericCast<int32_t>(value);
 		break;
 	case PhysicalType::INT64:
 		result.value_.bigint = value;
@@ -820,6 +824,13 @@ Value Value::BLOB(const string &data) {
 	return result;
 }
 
+Value Value::AGGREGATE_STATE(const LogicalType &type, const_data_ptr_t data, idx_t len) { // NOLINT
+	Value result(type);
+	result.is_null = false;
+	result.value_info_ = make_shared<StringValueInfo>(string(const_char_ptr_cast(data), len));
+	return result;
+}
+
 Value Value::BIT(const_data_ptr_t data, idx_t len) {
 	Value result(LogicalType::BIT);
 	result.is_null = false;
@@ -839,13 +850,13 @@ Value Value::ENUM(uint64_t value, const LogicalType &original_type) {
 	Value result(original_type);
 	switch (original_type.InternalType()) {
 	case PhysicalType::UINT8:
-		result.value_.utinyint = value;
+		result.value_.utinyint = NumericCast<uint8_t>(value);
 		break;
 	case PhysicalType::UINT16:
-		result.value_.usmallint = value;
+		result.value_.usmallint = NumericCast<uint16_t>(value);
 		break;
 	case PhysicalType::UINT32:
-		result.value_.uinteger = value;
+		result.value_.uinteger = NumericCast<uint32_t>(value);
 		break;
 	default:
 		throw InternalException("Incorrect Physical Type for ENUM");
@@ -1213,7 +1224,7 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 		return Value::POINTER(value);
 	case LogicalTypeId::DATE:
 		D_ASSERT(value >= NumericLimits<int32_t>::Minimum() && value <= NumericLimits<int32_t>::Maximum());
-		return Value::DATE(date_t(value));
+		return Value::DATE(date_t(NumericCast<int32_t>(value)));
 	case LogicalTypeId::TIME:
 		return Value::TIME(dtime_t(value));
 	case LogicalTypeId::TIMESTAMP:

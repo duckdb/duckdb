@@ -87,10 +87,10 @@ vector<string> SQLLogicParser::ExtractExpectedResult() {
 	return result;
 }
 
-string SQLLogicParser::ExtractExpectedError(bool expect_ok) {
+string SQLLogicParser::ExtractExpectedError(bool expect_ok, bool original_sqlite_test) {
 	// check if there is an expected error at all
 	if (current_line >= lines.size() || lines[current_line] != "----") {
-		if (!expect_ok) {
+		if (!expect_ok && !original_sqlite_test) {
 			Fail("Failed to parse statement: statement error needs to have an expected error message");
 		}
 		return string();
@@ -165,6 +165,7 @@ bool SQLLogicParser::IsSingleLineStatement(SQLLogicToken &token) {
 	case SQLLogicTokenType::SQLLOGIC_LOAD:
 	case SQLLogicTokenType::SQLLOGIC_RESTART:
 	case SQLLogicTokenType::SQLLOGIC_RECONNECT:
+	case SQLLogicTokenType::SQLLOGIC_SLEEP:
 		return true;
 
 	case SQLLogicTokenType::SQLLOGIC_SKIP_IF:
@@ -216,6 +217,8 @@ SQLLogicTokenType SQLLogicParser::CommandToToken(const string &token) {
 		return SQLLogicTokenType::SQLLOGIC_RESTART;
 	} else if (token == "reconnect") {
 		return SQLLogicTokenType::SQLLOGIC_RECONNECT;
+	} else if (token == "sleep") {
+		return SQLLogicTokenType::SQLLOGIC_SLEEP;
 	}
 	Fail("Unrecognized parameter %s", token);
 	return SQLLogicTokenType::SQLLOGIC_INVALID;

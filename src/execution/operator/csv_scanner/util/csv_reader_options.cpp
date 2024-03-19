@@ -1,4 +1,4 @@
-#include "duckdb/execution/operator/csv_scanner/options/csv_reader_options.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 #include "duckdb/common/bind_helpers.hpp"
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -297,6 +297,13 @@ template <class T>
 string FormatOptionLine(const string &name, const CSVOption<T> option) {
 	return name + " = " + option.FormatValue() + " " + option.FormatSet() + "\n  ";
 }
+bool CSVReaderOptions::WasTypeManuallySet(idx_t i) const {
+	if (i >= was_type_manually_set.size()) {
+		return false;
+	}
+	return was_type_manually_set[i];
+}
+
 string CSVReaderOptions::ToString() const {
 	auto &delimiter = dialect_options.state_machine_options.delimiter;
 	auto &quote = dialect_options.state_machine_options.quote;

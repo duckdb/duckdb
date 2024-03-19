@@ -676,7 +676,8 @@ static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 }
 
 ScalarFunction CreateSortKeyFun::GetFunction() {
-	ScalarFunction sort_key_function({LogicalType::ANY}, LogicalType::BLOB, CreateSortKeyFunction, CreateSortKeyBind);
+	ScalarFunction sort_key_function("create_sort_key", {LogicalType::ANY}, LogicalType::BLOB, CreateSortKeyFunction,
+	                                 CreateSortKeyBind);
 	sort_key_function.varargs = LogicalType::ANY;
 	sort_key_function.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return sort_key_function;

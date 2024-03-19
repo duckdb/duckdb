@@ -11,6 +11,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/qualified_name_set.hpp"
@@ -147,7 +148,7 @@ public:
 
 	//! Gets a binding of the specified name. Returns a nullptr and sets the out_error if the binding could not be
 	//! found.
-	optional_ptr<Binding> GetBinding(const string &name, string &out_error);
+	optional_ptr<Binding> GetBinding(const string &name, ErrorData &out_error);
 
 private:
 	void AddBinding(const string &alias, unique_ptr<Binding> binding);

@@ -1,12 +1,14 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "include/icu-datefunc.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 
 namespace duckdb {
 
@@ -137,13 +139,23 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 		return GetTime(calendar, micros);
 	}
 
+	struct CastTimestampUsToUs {
+		template <class SRC, class DST>
+		static inline DST Operation(SRC input) {
+			// no-op
+			return input;
+		}
+	};
+
+	template <class OP>
 	static bool CastFromNaive(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 		auto &cast_data = parameters.cast_data->Cast<CastData>();
 		auto &info = cast_data.info->Cast<BindData>();
 		CalendarPtr calendar(info.calendar->clone());
 
-		UnaryExecutor::Execute<timestamp_t, timestamp_t>(
-		    source, result, count, [&](timestamp_t input) { return Operation(calendar.get(), input); });
+		UnaryExecutor::Execute<timestamp_t, timestamp_t>(source, result, count, [&](timestamp_t input) {
+			return Operation(calendar.get(), OP::template Operation<timestamp_t, timestamp_t>(input));
+		});
 		return true;
 	}
 
@@ -153,8 +165,18 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 		}
 
 		auto cast_data = make_uniq<CastData>(make_uniq<BindData>(*input.context));
-
-		return BoundCastInfo(CastFromNaive, std::move(cast_data));
+		switch (source.id()) {
+		case LogicalTypeId::TIMESTAMP:
+			return BoundCastInfo(CastFromNaive<CastTimestampUsToUs>, std::move(cast_data));
+		case LogicalTypeId::TIMESTAMP_MS:
+			return BoundCastInfo(CastFromNaive<CastTimestampMsToUs>, std::move(cast_data));
+		case LogicalTypeId::TIMESTAMP_NS:
+			return BoundCastInfo(CastFromNaive<CastTimestampNsToUs>, std::move(cast_data));
+		case LogicalTypeId::TIMESTAMP_SEC:
+			return BoundCastInfo(CastFromNaive<CastTimestampSecToUs>, std::move(cast_data));
+		default:
+			throw InternalException("Type %s not handled in BindCastFromNaive", LogicalTypeIdToString(source.id()));
+		}
 	}
 
 	static void AddCasts(DatabaseInstance &db) {
@@ -162,6 +184,9 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 		auto &casts = config.GetCastFunctions();
 
 		casts.RegisterCastFunction(LogicalType::TIMESTAMP, LogicalType::TIMESTAMP_TZ, BindCastFromNaive);
+		casts.RegisterCastFunction(LogicalType::TIMESTAMP_MS, LogicalType::TIMESTAMP_TZ, BindCastFromNaive);
+		casts.RegisterCastFunction(LogicalType::TIMESTAMP_NS, LogicalType::TIMESTAMP_TZ, BindCastFromNaive);
+		casts.RegisterCastFunction(LogicalType::TIMESTAMP_S, LogicalType::TIMESTAMP_TZ, BindCastFromNaive);
 	}
 };
 

@@ -219,7 +219,8 @@ shared_ptr<RowVersionManager> RowVersionManager::Deserialize(MetaBlockPointer de
 	for (idx_t i = 0; i < chunk_count; i++) {
 		idx_t vector_index = source.Read<idx_t>();
 		if (vector_index >= Storage::ROW_GROUP_VECTOR_COUNT) {
-			throw Exception("In DeserializeDeletes, vector_index is out of range for the row group. Corrupted file?");
+			throw InternalException(
+			    "In DeserializeDeletes, vector_index is out of range for the row group. Corrupted file?");
 		}
 		version_info->vector_info[vector_index] = ChunkInfo::Read(source);
 	}

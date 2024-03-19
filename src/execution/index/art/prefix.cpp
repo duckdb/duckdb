@@ -273,7 +273,7 @@ void Prefix::Split(ART &art, reference<Node> &prefix_node, Node &child_node, idx
 	}
 
 	// set the new size of this node
-	prefix.data[Node::PREFIX_SIZE] = position;
+	prefix.data[Node::PREFIX_SIZE] = UnsafeNumericCast<uint8_t>(position);
 
 	// no bytes left before the split, free this node
 	if (position == 0) {

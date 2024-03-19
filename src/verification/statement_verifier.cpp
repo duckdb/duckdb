@@ -1,6 +1,6 @@
 #include "duckdb/verification/statement_verifier.hpp"
 
-#include "duckdb/common/preserved_error.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/verification/copied_statement_verifier.hpp"
@@ -118,12 +118,9 @@ bool StatementVerifier::Run(
 			failed = true;
 		}
 		materialized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
-	} catch (const Exception &ex) {
-		failed = true;
-		materialized_result = make_uniq<MaterializedQueryResult>(PreservedError(ex));
 	} catch (std::exception &ex) {
 		failed = true;
-		materialized_result = make_uniq<MaterializedQueryResult>(PreservedError(ex));
+		materialized_result = make_uniq<MaterializedQueryResult>(ErrorData(ex));
 	}
 	context.interrupted = false;
 

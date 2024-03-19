@@ -19,9 +19,8 @@ CREATE INDEX i1 ON t1 (c0);
 ----
 Catalog Error: Index with name "i1" already exists!
 
-# actually a ROLLBACK, because we threw an exception in the transaction
 statement ok
-COMMIT;
+ROLLBACK
 
 statement ok
 CREATE UNIQUE INDEX i1 ON t2 (c1);

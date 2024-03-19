@@ -24,7 +24,8 @@ struct StringSplitInput {
 			ListVector::SetListSize(result_list, offset + list_idx);
 			ListVector::Reserve(result_list, ListVector::GetListCapacity(result_list) * 2);
 		}
-		FlatVector::GetData<string_t>(result_child)[list_entry] = string_t(split_data, split_size);
+		FlatVector::GetData<string_t>(result_child)[list_entry] =
+		    string_t(split_data, UnsafeNumericCast<uint32_t>(split_size));
 	}
 };
 
@@ -186,7 +187,7 @@ ScalarFunctionSet StringSplitRegexFun::GetFunctions() {
 	ScalarFunctionSet regexp_split;
 	ScalarFunction regex_fun({LogicalType::VARCHAR, LogicalType::VARCHAR}, varchar_list_type, StringSplitRegexFunction,
 	                         RegexpMatchesBind, nullptr, nullptr, RegexInitLocalState, LogicalType::INVALID,
-	                         FunctionSideEffects::NO_SIDE_EFFECTS, FunctionNullHandling::SPECIAL_HANDLING);
+	                         FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
 	regexp_split.AddFunction(regex_fun);
 	// regexp options
 	regex_fun.arguments.emplace_back(LogicalType::VARCHAR);

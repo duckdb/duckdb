@@ -6,7 +6,7 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/update_info.hpp"
 #include "duckdb/common/printer.hpp"
-
+#include "duckdb/common/exception/transaction_exception.hpp"
 #include <algorithm>
 
 namespace duckdb {
@@ -574,12 +574,12 @@ void UpdateSegment::InitializeUpdateInfo(UpdateInfo &info, row_t *ids, const Sel
 	info.next = nullptr;
 
 	// set up the tuple ids
-	info.N = count;
+	info.N = UnsafeNumericCast<sel_t>(count);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
 		auto id = ids[idx];
 		D_ASSERT(idx_t(id) >= vector_offset && idx_t(id) < vector_offset + STANDARD_VECTOR_SIZE);
-		info.tuples[i] = id - vector_offset;
+		info.tuples[i] = NumericCast<sel_t>(id - vector_offset);
 	};
 }
 
@@ -804,7 +804,7 @@ static void MergeUpdateLoopInternal(UpdateInfo *base_info, V *base_table_data, U
 			result_values[result_offset] = UpdateSelectElement::Operation<T>(
 			    base_info->segment, OP::template Extract<T, V>(base_table_data, update_id));
 		}
-		result_ids[result_offset++] = update_id;
+		result_ids[result_offset++] = UnsafeNumericCast<sel_t>(update_id);
 	}
 	// write any remaining entries from the old updates
 	while (update_info_offset < update_info->N) {
@@ -813,7 +813,7 @@ static void MergeUpdateLoopInternal(UpdateInfo *base_info, V *base_table_data, U
 		update_info_offset++;
 	}
 	// now copy them back
-	update_info->N = result_offset;
+	update_info->N = UnsafeNumericCast<sel_t>(result_offset);
 	memcpy(update_info_data, result_values, result_offset * sizeof(T));
 	memcpy(update_info->tuples, result_ids, result_offset * sizeof(sel_t));
 
@@ -821,12 +821,12 @@ static void MergeUpdateLoopInternal(UpdateInfo *base_info, V *base_table_data, U
 	result_offset = 0;
 	auto pick_new = [&](idx_t id, idx_t aidx, idx_t count) {
 		result_values[result_offset] = OP::template Extract<T, V>(update_vector_data, aidx);
-		result_ids[result_offset] = id;
+		result_ids[result_offset] = UnsafeNumericCast<sel_t>(id);
 		result_offset++;
 	};
 	auto pick_old = [&](idx_t id, idx_t bidx, idx_t count) {
 		result_values[result_offset] = base_info_data[bidx];
-		result_ids[result_offset] = id;
+		result_ids[result_offset] = UnsafeNumericCast<sel_t>(id);
 		result_offset++;
 	};
 	// now we perform a merge of the new ids with the old ids
@@ -835,7 +835,7 @@ static void MergeUpdateLoopInternal(UpdateInfo *base_info, V *base_table_data, U
 	};
 	MergeLoop(ids, base_info->tuples, count, base_info->N, base_id, merge, pick_new, pick_old, sel);
 
-	base_info->N = result_offset;
+	base_info->N = UnsafeNumericCast<sel_t>(result_offset);
 	memcpy(base_info_data, result_values, result_offset * sizeof(T));
 	memcpy(base_info->tuples, result_ids, result_offset * sizeof(sel_t));
 }

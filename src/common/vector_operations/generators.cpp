@@ -6,6 +6,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 
 namespace duckdb {
 
@@ -13,7 +14,7 @@ template <class T>
 void TemplatedGenerateSequence(Vector &result, idx_t count, int64_t start, int64_t increment) {
 	D_ASSERT(result.GetType().IsNumeric());
 	if (start > NumericLimits<T>::Maximum() || increment > NumericLimits<T>::Maximum()) {
-		throw Exception("Sequence start or increment out of type range");
+		throw InternalException("Sequence start or increment out of type range");
 	}
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<T>(result);
@@ -59,14 +60,14 @@ void TemplatedGenerateSequence(Vector &result, idx_t count, const SelectionVecto
                                int64_t increment) {
 	D_ASSERT(result.GetType().IsNumeric());
 	if (start > NumericLimits<T>::Maximum() || increment > NumericLimits<T>::Maximum()) {
-		throw Exception("Sequence start or increment out of type range");
+		throw InternalException("Sequence start or increment out of type range");
 	}
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<T>(result);
 	auto value = (T)start;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
-		result_data[idx] = value + increment * idx;
+		result_data[idx] = UnsafeNumericCast<T>(value + increment * idx);
 	}
 }
 

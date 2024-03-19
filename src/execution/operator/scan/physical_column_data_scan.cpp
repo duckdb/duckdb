@@ -72,7 +72,18 @@ void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &met
 		return;
 	}
 	case PhysicalOperatorType::CTE_SCAN: {
-		break;
+		auto entry = state.cte_dependencies.find(*this);
+		D_ASSERT(entry != state.cte_dependencies.end());
+		// this chunk scan introduces a dependency to the current pipeline
+		// namely a dependency on the CTE pipeline to finish
+		auto cte_dependency = entry->second.get().shared_from_this();
+		auto cte_sink = state.GetPipelineSink(*cte_dependency);
+		(void)cte_sink;
+		D_ASSERT(cte_sink);
+		D_ASSERT(cte_sink->type == PhysicalOperatorType::CTE);
+		current.AddDependency(cte_dependency);
+		state.SetPipelineSource(current, *this);
+		return;
 	}
 	case PhysicalOperatorType::RECURSIVE_CTE_SCAN:
 		if (!meta_pipeline.HasRecursiveCTE()) {

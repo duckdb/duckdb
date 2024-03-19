@@ -76,29 +76,40 @@ static void VersionFunction(DataChunk &input, ExpressionState &state, Vector &re
 
 ScalarFunction CurrentQueryFun::GetFunction() {
 	ScalarFunction current_query({}, LogicalType::VARCHAR, CurrentQueryFunction);
-	current_query.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
+	current_query.stability = FunctionStability::VOLATILE;
 	return current_query;
 }
 
 ScalarFunction CurrentSchemaFun::GetFunction() {
-	return ScalarFunction({}, LogicalType::VARCHAR, CurrentSchemaFunction);
+	ScalarFunction current_schema({}, LogicalType::VARCHAR, CurrentSchemaFunction);
+	current_schema.stability = FunctionStability::CONSISTENT_WITHIN_QUERY;
+	return current_schema;
 }
 
 ScalarFunction CurrentDatabaseFun::GetFunction() {
-	return ScalarFunction({}, LogicalType::VARCHAR, CurrentDatabaseFunction);
+	ScalarFunction current_database({}, LogicalType::VARCHAR, CurrentDatabaseFunction);
+	current_database.stability = FunctionStability::CONSISTENT_WITHIN_QUERY;
+	return current_database;
 }
 
 ScalarFunction CurrentSchemasFun::GetFunction() {
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
-	return ScalarFunction({LogicalType::BOOLEAN}, varchar_list_type, CurrentSchemasFunction);
+	ScalarFunction current_schemas({LogicalType::BOOLEAN}, varchar_list_type, CurrentSchemasFunction);
+	current_schemas.stability = FunctionStability::CONSISTENT_WITHIN_QUERY;
+	return current_schemas;
 }
 
 ScalarFunction InSearchPathFun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN, InSearchPathFunction);
+	ScalarFunction in_search_path({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
+	                              InSearchPathFunction);
+	in_search_path.stability = FunctionStability::CONSISTENT_WITHIN_QUERY;
+	return in_search_path;
 }
 
 ScalarFunction CurrentTransactionIdFun::GetFunction() {
-	return ScalarFunction({}, LogicalType::BIGINT, TransactionIdCurrent);
+	ScalarFunction txid_current({}, LogicalType::BIGINT, TransactionIdCurrent);
+	txid_current.stability = FunctionStability::CONSISTENT_WITHIN_QUERY;
+	return txid_current;
 }
 
 ScalarFunction VersionFun::GetFunction() {

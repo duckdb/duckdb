@@ -437,7 +437,7 @@ AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, const uint32
 	duckdb::string results = "";
 
 	for (size_t i = 0; i < length; i++) {
-		uint32_t code = info_codes ? info_codes[i] : i;
+		auto code = duckdb::NumericCast<uint32_t>(info_codes ? info_codes[i] : i);
 		auto info_code = ConvertToInfoCode(code);
 		switch (info_code) {
 		case AdbcInfoCode::VENDOR_NAME: {
@@ -604,7 +604,8 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, stru
 		input->release = nullptr;
 	} catch (std::exception &ex) {
 		if (error) {
-			error->message = strdup(ex.what());
+			::duckdb::ErrorData parsed_error(ex);
+			error->message = strdup(parsed_error.RawMessage().c_str());
 		}
 		return ADBC_STATUS_INTERNAL;
 	} catch (...) {
@@ -711,7 +712,8 @@ AdbcStatusCode GetPreparedParameters(duckdb_connection connection, duckdb::uniqu
 		input->release = nullptr;
 	} catch (std::exception &ex) {
 		if (error) {
-			error->message = strdup(ex.what());
+			::duckdb::ErrorData parsed_error(ex);
+			error->message = strdup(parsed_error.RawMessage().c_str());
 		}
 		return ADBC_STATUS_INTERNAL;
 	} catch (...) {

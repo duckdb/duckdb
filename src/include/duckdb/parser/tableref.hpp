@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/enums/tableref_type.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 
@@ -30,7 +31,7 @@ public:
 	//! Sample options (if any)
 	unique_ptr<SampleOptions> sample;
 	//! The location in the query (if any)
-	idx_t query_location = DConstants::INVALID_INDEX;
+	optional_idx query_location;
 
 public:
 	//! Convert the object to a string

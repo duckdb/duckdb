@@ -178,10 +178,20 @@ void InterpretedBenchmark::LoadBenchmark() {
 			}
 			extensions.insert(splits[1]);
 		} else if (splits[0] == "cache") {
-			if (splits.size() != 2) {
-				throw std::runtime_error(reader.FormatException("cache requires a single parameter"));
+			if (splits.size() == 2) {
+				cache_db = splits[1];
+			} else if (splits.size() == 3 && splits[2] == "no_connect") {
+				cache_db = splits[1];
+				cache_no_connect = true;
+			} else {
+				throw std::runtime_error(
+				    reader.FormatException("cache requires a db file, and optionally a no_connect"));
 			}
-			cache_db = splits[1];
+			if (StringUtil::EndsWith(cache_db, ".csv") || StringUtil::EndsWith(cache_db, ".parquet") ||
+			    StringUtil::EndsWith(cache_db, ".csv.gz")) {
+				cache_file = cache_db;
+				cache_db = string();
+			}
 		} else if (splits[0] == "storage") {
 			if (splits.size() != 2) {
 				throw std::runtime_error(reader.FormatException("storage requires a single parameter"));
@@ -302,7 +312,7 @@ void InterpretedBenchmark::LoadBenchmark() {
 	}
 	// set up the queries
 	if (queries.find("run") == queries.end()) {
-		throw Exception("Invalid benchmark file: no \"run\" query specified");
+		throw InvalidInputException("Invalid benchmark file: no \"run\" query specified");
 	}
 	run_query = queries["run"];
 	is_loaded = true;
@@ -325,10 +335,10 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 	for (auto &extension : extensions) {
 		auto result = ExtensionHelper::LoadExtension(state->db, extension);
 		if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
-			throw std::runtime_error("Unknown extension " + extension);
+			throw InvalidInputException("Unknown extension " + extension);
 		} else if (result == ExtensionLoadResult::NOT_LOADED) {
-			throw std::runtime_error("Extension " + extension +
-			                         " is not available/was not compiled. Cannot run this benchmark.");
+			throw InvalidInputException("Extension " + extension +
+			                            " is not available/was not compiled. Cannot run this benchmark.");
 		}
 	}
 
@@ -348,7 +358,13 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 		load_query = queries["load"];
 	}
 
-	if (cache_db.empty() && cache_db.compare(DEFAULT_DB_PATH) != 0) {
+	if (!cache_file.empty()) {
+		auto fs = FileSystem::CreateLocal();
+		if (!fs->FileExists(fs->JoinPath(BenchmarkRunner::DUCKDB_BENCHMARK_DIRECTORY, cache_file))) {
+			// no cache or db_path specified: just run the initialization code
+			result = state->con.Query(load_query);
+		}
+	} else if (cache_db.empty() && cache_db.compare(DEFAULT_DB_PATH) != 0) {
 		// no cache or db_path specified: just run the initialization code
 		result = state->con.Query(load_query);
 	} else {
@@ -377,6 +393,18 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 		}
 		result = std::move(result->next);
 	}
+
+	// if a cache db is required but no connection, then reset the connection
+	if (!cache_db.empty() && cache_no_connect) {
+		cache_db = "";
+		in_memory = true;
+		cache_no_connect = false;
+		if (!load_query.empty()) {
+			queries.erase("load");
+		}
+		return Initialize(config);
+	}
+
 	if (config.profile_info == BenchmarkProfileInfo::NORMAL) {
 		state->con.Query("PRAGMA enable_profiling");
 	} else if (config.profile_info == BenchmarkProfileInfo::DETAILED) {
@@ -467,13 +495,13 @@ string InterpretedBenchmark::VerifyInternal(BenchmarkState *state_p, Materialize
 }
 
 string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
-	if (result_column_count == 0) {
-		// no result specified
-		return string();
-	}
 	auto &state = (InterpretedBenchmarkState &)*state_p;
 	if (state.result->HasError()) {
 		return state.result->GetError();
+	}
+	if (result_column_count == 0) {
+		// no result specified
+		return string();
 	}
 	if (!result_query.empty()) {
 		// we are running a result query

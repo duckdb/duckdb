@@ -8,7 +8,7 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 ## **Did you find a bug?**
 
 * **Ensure the bug was not already reported** by searching on GitHub under [Issues](https://github.com/duckdb/duckdb/issues).
-* If you're unable to find an open issue addressing the problem, [open a new one](https://github.com/duckdb/duckdb/issues/new). Be sure to include a **title and clear description**, as much relevant information as possible, and a **code sample** or an **executable test case** demonstrating the expected behavior that is not occurring.
+* If you're unable to find an open issue addressing the problem, [open a new one](https://github.com/duckdb/duckdb/issues/new/choose). Be sure to include a **title and clear description**, as much relevant information as possible, and a **code sample** or an **executable test case** demonstrating the expected behavior that is not occurring.
 
 ## **Did you write a patch that fixes a bug?**
 
@@ -51,6 +51,7 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 * To build the project for debugging, run `make debug`.
 * To build optional components, use the flags defined in the Makefile, e.g. to build the JDBC driver, run `BUILD_JDBC=1 make`.
 * For parallel builds, you can use the [Ninja](https://ninja-build.org/) build system: `GEN=ninja make`.
+  * The default number of parallel processes can lockup the system depending on the CPU-to-memory ratio. If this happens, restrict the maximum number of build processes: `CMAKE_BUILD_PARALLEL_LEVEL=4 GEN=ninja make`.
 
 ## Testing
 

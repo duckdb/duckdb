@@ -32,7 +32,7 @@ unique_ptr<QueryNode> Binder::BindTableMacro(FunctionExpression &function, Table
 	if (!error.empty()) {
 		// cannot use error below as binder rnot in scope
 		// return BindResult(binder. FormatError(*expr->get(), error));
-		throw BinderException(FormatError(function, error));
+		throw BinderException(function, error);
 	}
 
 	// create a MacroBinding to bind this macro's parameters to its arguments

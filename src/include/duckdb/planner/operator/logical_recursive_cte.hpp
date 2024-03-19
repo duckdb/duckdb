@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 
@@ -32,6 +33,7 @@ public:
 	string ctename;
 	idx_t table_index;
 	idx_t column_count;
+	vector<CorrelatedColumnInfo> correlated_columns;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override {

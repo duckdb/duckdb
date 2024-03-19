@@ -29,6 +29,7 @@ enum class CompressionType : uint8_t {
 	COMPRESSION_COUNT // This has to stay the last entry of the type!
 };
 
+bool CompressionTypeIsDeprecated(CompressionType compression_type);
 vector<string> ListCompressionTypes(void);
 CompressionType CompressionTypeFromString(const string &str);
 string CompressionTypeToString(CompressionType type);

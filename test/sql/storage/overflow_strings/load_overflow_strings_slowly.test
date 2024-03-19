@@ -2,7 +2,7 @@
 # description: Test loading overflow strings in small batches
 # group: [overflow_strings]
 
-load __TEST_DIR__/load_overflow_strings.db
+load __TEST_DIR__/overflow_strings.db
 
 loop x 0 10
 
@@ -13,7 +13,7 @@ CREATE TABLE strings(s VARCHAR);
 loop it 0 10
 
 statement ok
-INSERT INTO strings SELECT repeat('X', case when i%17=0 then 5000 else i%7 end) AS s FROM generate_series(0,2500) tbl(i);
+INSERT INTO strings SELECT repeat('X', CASE WHEN i % 17 = 0 THEN 5000 ELSE i % 7 END) AS s FROM generate_series(0, 2500) tbl(i);
 
 statement ok
 CHECKPOINT;
@@ -21,14 +21,14 @@ CHECKPOINT;
 endloop
 
 query I
-SELECT COUNT(*) FROM pragma_storage_info('strings') WHERE contains(segment_info, 'Overflow String');
+SELECT EXISTS (SELECT * FROM pragma_storage_info('strings') WHERE contains(segment_info, 'Overflow String'));
 ----
 1
 
-query I
-select total_blocks < 100 from pragma_database_size();
-----
-true
+# ensure that the expected total storage size is the same as in the first iteration of the loop
+
+query I nosort expected_blocks
+SELECT total_blocks FROM pragma_database_size();
 
 statement ok
 DROP TABLE strings;

@@ -4,6 +4,7 @@ import os
 import pytest
 import tempfile
 from conftest import pandas_supports_arrow_backend
+import sys
 from packaging.version import Version
 
 pa = pytest.importorskip("pyarrow")
@@ -714,6 +715,7 @@ class TestArrowFilterPushdown(object):
         match = re.search("│ +b +│", query_res[0][1])
         assert not match
 
+    @pytest.mark.skipif(sys.version_info < (3, 9), reason="Requires python 3.9")
     @pytest.mark.parametrize('create_table', [create_pyarrow_pandas, create_pyarrow_table])
     def test_struct_filter_pushdown(self, duckdb_cursor, create_table):
         duckdb_cursor.execute(
@@ -743,7 +745,10 @@ class TestArrowFilterPushdown(object):
         """
         ).fetchall()
 
-        match = re.search(".*ARROW_SCAN.*Filters: s\\.a<2 AND s\\.a IS.*NOT NULL.*", query_res[0][1], flags=re.DOTALL)
+        input = query_res[0][1]
+        if 'PANDAS_SCAN' in input:
+            pytest.skip(reason="This version of pandas does not produce an Arrow object")
+        match = re.search(".*ARROW_SCAN.*Filters: s\\.a<2 AND s\\.a IS.*NOT NULL.*", input, flags=re.DOTALL)
         assert match
 
         # Check that the filter is applied correctly
@@ -781,6 +786,7 @@ class TestArrowFilterPushdown(object):
         match = re.search(".*ARROW_SCAN.*Filters: s\\.a IS NULL.*", query_res[0][1], flags=re.DOTALL)
         assert not match
 
+    @pytest.mark.skipif(sys.version_info < (3, 9), reason="Requires python 3.9")
     @pytest.mark.parametrize('create_table', [create_pyarrow_pandas, create_pyarrow_table])
     def test_nested_struct_filter_pushdown(self, duckdb_cursor, create_table):
         duckdb_cursor.execute(
@@ -809,9 +815,10 @@ class TestArrowFilterPushdown(object):
         """
         ).fetchall()
 
-        match = re.search(
-            ".*ARROW_SCAN.*Filters: s\\.a\\.b<2 AND s\\.a\\.b.*IS NOT NULL.*", query_res[0][1], flags=re.DOTALL
-        )
+        input = query_res[0][1]
+        if 'PANDAS_SCAN' in input:
+            pytest.skip(reason="This version of pandas does not produce an Arrow object")
+        match = re.search(".*ARROW_SCAN.*Filters: s\\.a\\.b<2 AND s\\.a\\.b.*IS NOT NULL.*", input, flags=re.DOTALL)
         assert match
 
         # Check that the filter is applied correctly

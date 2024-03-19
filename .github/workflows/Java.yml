@@ -1,6 +1,21 @@
 name: Java JDBC
 on:
+  workflow_call:
+    inputs:
+      override_git_describe:
+        type: string
+      git_ref:
+        type: string
+      skip_tests:
+        type: string
   workflow_dispatch:
+    inputs:
+      override_git_describe:
+        type: string
+      git_ref:
+        type: string
+      skip_tests:
+        type: string
   repository_dispatch:
   push:
     branches:
@@ -32,12 +47,13 @@ on:
       - '!.github/workflows/Java.yml'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{
+  group: java-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{
     github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha
-    }}
+    }}-${{ inputs.override_git_describe }}
   cancel-in-progress: true
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
 
 jobs:
   java-linux-amd64:
@@ -57,12 +73,15 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
+          ref: ${{ inputs.git_ref }}
 
       - uses: ./.github/actions/manylinux_2014_setup
         with:
           ninja-build: 1
           ccache: 1
           jdk: 1
+          python_alias: 1
+          aws-cli: 1
 
       - name: Build
         shell: bash
@@ -70,15 +89,18 @@ jobs:
 
       - name: Java Tests
         shell: bash
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ inputs.skip_tests != 'true' }}
         working-directory: tools/jdbc
         run: make test_release
 
       - name: Deploy
         shell: bash
-        run: >
-          python3.8 scripts/asset-upload-gha.py
-          duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+        run: |
+          cp build/release/tools/jdbc/duckdb_jdbc.jar duckdb_jdbc-linux-amd64.jar
+          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-linux-amd64.jar
       - uses: actions/upload-artifact@v3
         with:
           name: java-linux-amd64
@@ -97,10 +119,12 @@ jobs:
       ENABLE_EXTENSION_AUTOINSTALL: 1
       OVERRIDE_JDBC_OS_ARCH: arm64
       JAVA_HOME: ../../jdk8u345-b01
+      DUCKDB_PLATFORM: linux_arm64
     steps:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
+          ref: ${{ inputs.git_ref }}
 
       - uses: ./.github/actions/ubuntu_18_setup
         with:
@@ -118,9 +142,12 @@ jobs:
 
       - name: Deploy
         shell: bash
-        run: >
-          python3.8 scripts/asset-upload-gha.py
-          duckdb_jdbc-linux-aarch64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+        run: |
+          cp build/release/tools/jdbc/duckdb_jdbc.jar duckdb_jdbc-linux-aarch64.jar
+          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-linux-aarch64.jar
 
       - uses: actions/upload-artifact@v3
         with:
@@ -137,9 +164,10 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v4
+          ref: ${{ inputs.git_ref }}
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.7"
+          python-version: "3.12"
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
         with:
@@ -155,15 +183,18 @@ jobs:
 
           cmake --build . --config Release
       - name: Java Tests
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ inputs.skip_tests != 'true' }}
         shell: bash
         working-directory: tools/jdbc
         run: make test_release
       - name: Deploy
         shell: bash
-        run: >
-          python scripts/asset-upload-gha.py
-          duckdb_jdbc-windows-amd64.jar=tools/jdbc/duckdb_jdbc.jar
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+        run: |
+          cp tools/jdbc/duckdb_jdbc.jar duckdb_jdbc-windows-amd64.jar
+          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-windows-amd64.jar
       - uses: actions/upload-artifact@v3
         with:
           name: java-windows-amd64
@@ -173,7 +204,7 @@ jobs:
 
   java-osx-universal:
     name: Java OSX (Universal)
-    runs-on: macos-latest
+    runs-on: macos-14
     needs: java-linux-amd64
     env:
       BUILD_JDBC: 1
@@ -185,9 +216,10 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v4
+          ref: ${{ inputs.git_ref }}
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.7"
+          python-version: "3.12"
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
         with:
@@ -197,7 +229,7 @@ jobs:
         shell: bash
         run: make
       - name: Java Tests
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ inputs.skip_tests != 'true' }}
         shell: bash
         working-directory: tools/jdbc
         run: make test_release
@@ -207,9 +239,12 @@ jobs:
           (cd examples/jdbc; make; make maven)
       - name: Deploy
         shell: bash
-        run: >
-          python scripts/asset-upload-gha.py
-          duckdb_jdbc-osx-universal.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+        run: |
+          cp build/release/tools/jdbc/duckdb_jdbc.jar duckdb_jdbc-osx-universal.jar
+          ./scripts/upload-assets-to-staging.sh github_release duckdb_jdbc-osx-universal.jar
       - uses: actions/upload-artifact@v3
         with:
           name: java-osx-universal
@@ -218,6 +253,7 @@ jobs:
 
 
   java-combine:
+    if: ${{ inputs.override_git_describe == '' }}
     name: Java Combine
     runs-on: ubuntu-latest
     needs:
@@ -230,6 +266,7 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
+          ref: ${{ inputs.git_ref }}
 
       - shell: bash
         run: mkdir jdbc-artifacts
@@ -288,7 +325,7 @@ jobs:
   jdbc-compliance:
     name: JDBC Compliance
     runs-on: ubuntu-20.04
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ inputs.skip_tests != 'true' }}
     needs: java-linux-amd64
     container: quay.io/pypa/manylinux2014_x86_64
     env:
@@ -299,12 +336,15 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
+          ref: ${{ inputs.git_ref }}
 
       - uses: ./.github/actions/manylinux_2014_setup
         with:
           ninja-build: 1
           ccache: 1
           jdk: 1
+          python_alias: 1
+          aws-cli: 1
 
       - name: Install
         shell: bash

@@ -8,11 +8,11 @@ pragma enable_verification
 statement ok
 copy (
 select '2021-05-25 04:55:03.382494 UTC'::timestamp as ts, '2021-05-25 04:55:03.382494 UTC'::timestamptz as tstz
-) to '__TEST_DIR__/timestamps.csv' (header 1, timestampformat '%A');
+) to '__TEST_DIR__/timestamps.csv' ( timestampformat '%A');
 
 
 query II
-select * from read_csv_auto('__TEST_DIR__/timestamps.csv', header=1);
+select * from read_csv_auto('__TEST_DIR__/timestamps.csv');
 ----
 Tuesday	Tuesday
 

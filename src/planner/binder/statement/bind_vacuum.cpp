@@ -51,7 +51,7 @@ BoundStatement Binder::Bind(VacuumStatement &stmt) {
 			ColumnRefExpression colref(col_name, table.name);
 			auto result = bind_context.BindColumn(colref, 0);
 			if (result.HasError()) {
-				throw BinderException(result.error);
+				result.error.Throw();
 			}
 			select_list.push_back(std::move(result.expression));
 		}

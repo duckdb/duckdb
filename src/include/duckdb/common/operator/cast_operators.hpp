@@ -20,8 +20,11 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/function/cast/default_casts.hpp"
 
 namespace duckdb {
+struct CastParameters;
 struct ValidityMask;
 class Vector;
 
@@ -34,15 +37,17 @@ struct TryCast {
 
 struct TryCastErrorMessage {
 	template <class SRC, class DST>
-	static inline bool Operation(SRC input, DST &result, string *error_message, bool strict = false) {
-		throw NotImplementedException("Unimplemented type for cast (%s -> %s)", GetTypeId<SRC>(), GetTypeId<DST>());
+	static inline bool Operation(SRC input, DST &result, CastParameters &parameters) {
+		throw NotImplementedException(parameters.query_location, "Unimplemented type for cast (%s -> %s)",
+		                              GetTypeId<SRC>(), GetTypeId<DST>());
 	}
 };
 
 struct TryCastErrorMessageCommaSeparated {
 	template <class SRC, class DST>
-	static inline bool Operation(SRC input, DST &result, string *error_message, bool strict = false) {
-		throw NotImplementedException("Unimplemented type for cast (%s -> %s)", GetTypeId<SRC>(), GetTypeId<DST>());
+	static inline bool Operation(SRC input, DST &result, CastParameters &parameters) {
+		throw NotImplementedException(parameters.query_location, "Unimplemented type for cast (%s -> %s)",
+		                              GetTypeId<SRC>(), GetTypeId<DST>());
 	}
 };
 
@@ -73,9 +78,11 @@ struct Cast {
 };
 
 struct HandleCastError {
-	static void AssignError(const string &error_message, string *error_message_ptr) {
+	static void AssignError(const string &error_message, CastParameters &parameters);
+	static void AssignError(const string &error_message, string *error_message_ptr,
+	                        optional_idx error_location = optional_idx()) {
 		if (!error_message_ptr) {
-			throw ConversionException(error_message);
+			throw ConversionException(error_location, error_message);
 		}
 		if (error_message_ptr->empty()) {
 			*error_message_ptr = error_message;
@@ -503,15 +510,14 @@ DUCKDB_API bool TryCast::Operation(string_t input, float &result, bool strict);
 template <>
 DUCKDB_API bool TryCast::Operation(string_t input, double &result, bool strict);
 template <>
-DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, float &result, string *error_message, bool strict);
+DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, float &result, CastParameters &parameters);
 template <>
-DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, double &result, string *error_message, bool strict);
+DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, double &result, CastParameters &parameters);
 template <>
-DUCKDB_API bool TryCastErrorMessageCommaSeparated::Operation(string_t input, float &result, string *error_message,
-                                                             bool strict);
+DUCKDB_API bool TryCastErrorMessageCommaSeparated::Operation(string_t input, float &result, CastParameters &parameters);
 template <>
-DUCKDB_API bool TryCastErrorMessageCommaSeparated::Operation(string_t input, double &result, string *error_message,
-                                                             bool strict);
+DUCKDB_API bool TryCastErrorMessageCommaSeparated::Operation(string_t input, double &result,
+                                                             CastParameters &parameters);
 
 //===--------------------------------------------------------------------===//
 // Date Casts
@@ -559,7 +565,7 @@ DUCKDB_API bool TryCast::Operation(interval_t input, interval_t &result, bool st
 // String -> Date Casts
 //===--------------------------------------------------------------------===//
 template <>
-DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, date_t &result, string *error_message, bool strict);
+DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, date_t &result, CastParameters &parameters);
 template <>
 DUCKDB_API bool TryCast::Operation(string_t input, date_t &result, bool strict);
 template <>
@@ -568,7 +574,7 @@ date_t Cast::Operation(string_t input);
 // String -> Time Casts
 //===--------------------------------------------------------------------===//
 template <>
-DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, dtime_t &result, string *error_message, bool strict);
+DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, dtime_t &result, CastParameters &parameters);
 template <>
 DUCKDB_API bool TryCast::Operation(string_t input, dtime_t &result, bool strict);
 template <>
@@ -577,7 +583,7 @@ dtime_t Cast::Operation(string_t input);
 // String -> TimeTZ Casts
 //===--------------------------------------------------------------------===//
 template <>
-DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, dtime_tz_t &result, string *error_message, bool strict);
+DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, dtime_tz_t &result, CastParameters &parameters);
 template <>
 DUCKDB_API bool TryCast::Operation(string_t input, dtime_tz_t &result, bool strict);
 template <>
@@ -586,7 +592,7 @@ dtime_tz_t Cast::Operation(string_t input);
 // String -> Timestamp Casts
 //===--------------------------------------------------------------------===//
 template <>
-DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, timestamp_t &result, string *error_message, bool strict);
+DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, timestamp_t &result, CastParameters &parameters);
 template <>
 DUCKDB_API bool TryCast::Operation(string_t input, timestamp_t &result, bool strict);
 template <>
@@ -595,7 +601,7 @@ timestamp_t Cast::Operation(string_t input);
 // String -> Interval Casts
 //===--------------------------------------------------------------------===//
 template <>
-DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, interval_t &result, string *error_message, bool strict);
+DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, interval_t &result, CastParameters &parameters);
 
 //===--------------------------------------------------------------------===//
 // string -> Non-Standard Timestamps
@@ -822,14 +828,12 @@ string_t CastFromBlobToBit::Operation(string_t input, Vector &result);
 
 struct TryCastToBlob {
 	template <class SRC, class DST>
-	static inline bool Operation(SRC input, DST &result, Vector &result_vector, string *error_message,
-	                             bool strict = false) {
+	static inline bool Operation(SRC input, DST &result, Vector &result_vector, CastParameters &parameters) {
 		throw InternalException("Unsupported type for try cast to blob");
 	}
 };
 template <>
-bool TryCastToBlob::Operation(string_t input, string_t &result, Vector &result_vector, string *error_message,
-                              bool strict);
+bool TryCastToBlob::Operation(string_t input, string_t &result, Vector &result_vector, CastParameters &parameters);
 
 //===--------------------------------------------------------------------===//
 // Bits
@@ -845,24 +849,25 @@ duckdb::string_t CastFromBitToString::Operation(duckdb::string_t input, Vector &
 
 struct CastFromBitToNumeric {
 	template <class SRC = string_t, class DST>
-	static inline bool Operation(SRC input, DST &result, bool strict = false) {
+	static inline bool Operation(SRC input, DST &result, CastParameters &parameters) {
 		D_ASSERT(input.GetSize() > 1);
 
 		// TODO: Allow conversion if the significant bytes of the bitstring can be cast to the target type
 		// Currently only allows bitstring -> numeric if the full bitstring fits inside the numeric type
 		if (input.GetSize() - 1 > sizeof(DST)) {
-			throw ConversionException("Bitstring doesn't fit inside of %s", GetTypeId<DST>());
+			throw ConversionException(parameters.query_location, "Bitstring doesn't fit inside of %s",
+			                          GetTypeId<DST>());
 		}
 		Bit::BitToNumeric(input, result);
 		return (true);
 	}
 };
 template <>
-bool CastFromBitToNumeric::Operation(string_t input, bool &result, bool strict);
+bool CastFromBitToNumeric::Operation(string_t input, bool &result, CastParameters &parameters);
 template <>
-bool CastFromBitToNumeric::Operation(string_t input, hugeint_t &result, bool strict);
+bool CastFromBitToNumeric::Operation(string_t input, hugeint_t &result, CastParameters &parameters);
 template <>
-bool CastFromBitToNumeric::Operation(string_t input, uhugeint_t &result, bool strict);
+bool CastFromBitToNumeric::Operation(string_t input, uhugeint_t &result, CastParameters &parameters);
 
 struct CastFromBitToBlob {
 	template <class SRC>
@@ -874,15 +879,13 @@ struct CastFromBitToBlob {
 
 struct TryCastToBit {
 	template <class SRC, class DST>
-	static inline bool Operation(SRC input, DST &result, Vector &result_vector, string *error_message,
-	                             bool strict = false) {
+	static inline bool Operation(SRC input, DST &result, Vector &result_vector, CastParameters &parameters) {
 		throw InternalException("Unsupported type for try cast to bit");
 	}
 };
 
 template <>
-bool TryCastToBit::Operation(string_t input, string_t &result, Vector &result_vector, string *error_message,
-                             bool strict);
+bool TryCastToBit::Operation(string_t input, string_t &result, Vector &result_vector, CastParameters &parameters);
 
 //===--------------------------------------------------------------------===//
 // UUID
@@ -898,15 +901,14 @@ duckdb::string_t CastFromUUID::Operation(duckdb::hugeint_t input, Vector &vector
 
 struct TryCastToUUID {
 	template <class SRC, class DST>
-	static inline bool Operation(SRC input, DST &result, Vector &result_vector, string *error_message,
-	                             bool strict = false) {
+	static inline bool Operation(SRC input, DST &result, Vector &result_vector, CastParameters &parameters) {
 		throw InternalException("Unsupported type for try cast to uuid");
 	}
 };
 
 template <>
 DUCKDB_API bool TryCastToUUID::Operation(string_t input, hugeint_t &result, Vector &result_vector,
-                                         string *error_message, bool strict);
+                                         CastParameters &parameters);
 
 //===--------------------------------------------------------------------===//
 // Pointers

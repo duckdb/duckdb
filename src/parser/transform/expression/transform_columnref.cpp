@@ -58,7 +58,7 @@ unique_ptr<ParsedExpression> Transformer::TransformStarExpression(duckdb_libpgqu
 		}
 	}
 	result->columns = star.columns;
-	result->query_location = star.location;
+	SetQueryLocation(*result, star.location);
 	return std::move(result);
 }
 
@@ -75,7 +75,7 @@ unique_ptr<ParsedExpression> Transformer::TransformColumnRef(duckdb_libpgquery::
 			column_names.emplace_back(PGPointerCast<duckdb_libpgquery::PGValue>(node->data.ptr_value)->val.str);
 		}
 		auto colref = make_uniq<ColumnRefExpression>(std::move(column_names));
-		colref->query_location = root.location;
+		SetQueryLocation(*colref, root.location);
 		return std::move(colref);
 	}
 	case duckdb_libpgquery::T_PGAStar: {

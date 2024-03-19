@@ -7,6 +7,7 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 
 #include <cctype>
 #include <cstring>
@@ -51,6 +52,10 @@ bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &r
 		} else {
 			return false;
 		}
+	}
+
+	if (pos >= len) {
+		return false;
 	}
 
 	// fetch the separator
@@ -132,8 +137,9 @@ bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &resul
 	return result.micros <= Interval::MICROS_PER_DAY;
 }
 
-bool Time::TryConvertTimeTZ(const char *buf, idx_t len, idx_t &pos, dtime_tz_t &result, bool strict) {
+bool Time::TryConvertTimeTZ(const char *buf, idx_t len, idx_t &pos, dtime_tz_t &result, bool &has_offset, bool strict) {
 	dtime_t time_part;
+	has_offset = false;
 	if (!Time::TryConvertInternal(buf, len, pos, time_part, false)) {
 		if (!strict) {
 			// last chance, check if we can parse as timestamp
@@ -157,7 +163,8 @@ bool Time::TryConvertTimeTZ(const char *buf, idx_t len, idx_t &pos, dtime_tz_t &
 	//	Get the ±HH[:MM] part
 	int hh = 0;
 	int mm = 0;
-	if (pos < len && !Timestamp::TryParseUTCOffset(buf, pos, len, hh, mm)) {
+	has_offset = (pos < len);
+	if (has_offset && !Timestamp::TryParseUTCOffset(buf, pos, len, hh, mm)) {
 		return false;
 	}
 

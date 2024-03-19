@@ -329,6 +329,7 @@ typedef enum PGNodeTag {
 	T_PGDropStmt,
 	T_PGTruncateStmt,
 	T_PGCommentStmt,
+	T_PGCommentOnStmt,
 	T_PGFetchStmt,
 	T_PGIndexStmt,
 	T_PGCreateFunctionStmt,

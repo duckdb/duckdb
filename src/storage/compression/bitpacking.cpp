@@ -966,6 +966,15 @@ CompressionFunction BitpackingFun::GetFunction(PhysicalType type) {
 }
 
 bool BitpackingFun::TypeIsSupported(PhysicalType type) {
+
+	// we calculate on BITPACKING_METADATA_GROUP_SIZE tuples, but they can exceed the block size,
+	// in which case we have to disable bitpacking for that data type
+	// we are conservative here by multiplying by 2
+	auto type_size = GetTypeIdSize(type);
+	if (type_size * BITPACKING_METADATA_GROUP_SIZE * 2 > Storage::BLOCK_SIZE) {
+		return false;
+	}
+
 	switch (type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:

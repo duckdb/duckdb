@@ -14,6 +14,7 @@ BindCastInput::BindCastInput(CastFunctionSet &function_set, optional_ptr<BindCas
 
 BoundCastInfo BindCastInput::GetCastFunction(const LogicalType &source, const LogicalType &target) {
 	GetCastFunctionInput input(context);
+	input.query_location = query_location;
 	return function_set.GetCastFunction(source, target, input);
 }
 
@@ -47,6 +48,7 @@ BoundCastInfo CastFunctionSet::GetCastFunction(const LogicalType &source, const 
 	for (idx_t i = bind_functions.size(); i > 0; i--) {
 		auto &bind_function = bind_functions[i - 1];
 		BindCastInput input(*this, bind_function.info.get(), get_input.context);
+		input.query_location = get_input.query_location;
 		auto result = bind_function.function(input, source, target);
 		if (result.function) {
 			// found a cast function! return it

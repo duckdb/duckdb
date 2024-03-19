@@ -70,8 +70,9 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL(EnableExternalAccessSetting),
                                                  DUCKDB_GLOBAL(EnableFSSTVectors),
                                                  DUCKDB_GLOBAL(AllowUnsignedExtensionsSetting),
-                                                 DUCKDB_LOCAL(CustomExtensionRepository),
-                                                 DUCKDB_LOCAL(AutoloadExtensionRepository),
+                                                 DUCKDB_GLOBAL(AllowUnredactedSecretsSetting),
+                                                 DUCKDB_GLOBAL(CustomExtensionRepository),
+                                                 DUCKDB_GLOBAL(AutoloadExtensionRepository),
                                                  DUCKDB_GLOBAL(AutoinstallKnownExtensions),
                                                  DUCKDB_GLOBAL(AutoloadKnownExtensions),
                                                  DUCKDB_GLOBAL(EnableObjectCacheSetting),
@@ -79,6 +80,7 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_LOCAL(EnableProfilingSetting),
                                                  DUCKDB_LOCAL(EnableProgressBarSetting),
                                                  DUCKDB_LOCAL(EnableProgressBarPrintSetting),
+                                                 DUCKDB_LOCAL(ErrorsAsJsonSetting),
                                                  DUCKDB_LOCAL(ExplainOutputSetting),
                                                  DUCKDB_GLOBAL(ExtensionDirectorySetting),
                                                  DUCKDB_GLOBAL(ExternalThreadsSetting),
@@ -102,7 +104,6 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_LOCAL(PivotLimitSetting),
                                                  DUCKDB_LOCAL(PreserveIdentifierCase),
                                                  DUCKDB_GLOBAL(PreserveInsertionOrder),
-                                                 DUCKDB_LOCAL(ProfilerHistorySize),
                                                  DUCKDB_LOCAL(ProfileOutputSetting),
                                                  DUCKDB_LOCAL(ProfilingModeSetting),
                                                  DUCKDB_LOCAL_ALIAS("profiling_output", ProfileOutputSetting),
@@ -121,6 +122,7 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL(FlushAllocatorSetting),
                                                  DUCKDB_GLOBAL(DuckDBApiSetting),
                                                  DUCKDB_GLOBAL(CustomUserAgentSetting),
+                                                 DUCKDB_LOCAL(PartitionedWriteFlushThreshold),
                                                  FINAL_SETTING};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
@@ -335,14 +337,6 @@ idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
 #endif
 #else
 	return 1;
-#endif
-}
-
-void DBConfig::SetDefaultMaxThreads() {
-#ifndef DUCKDB_NO_THREADS
-	options.maximum_threads = GetSystemMaxThreads(*file_system);
-#else
-	options.maximum_threads = 1;
 #endif
 }
 

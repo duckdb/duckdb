@@ -39,7 +39,7 @@ static unique_ptr<FunctionData> StrfTimeBindFunction(ClientContext &context, Sca
 		throw ParameterNotResolvedException();
 	}
 	if (!format_arg->IsFoldable()) {
-		throw InvalidInputException("strftime format must be a constant");
+		throw InvalidInputException(*format_arg, "strftime format must be a constant");
 	}
 	Value options_str = ExpressionExecutor::EvaluateScalar(context, *format_arg);
 	auto format_string = options_str.GetValue<string>();
@@ -48,7 +48,7 @@ static unique_ptr<FunctionData> StrfTimeBindFunction(ClientContext &context, Sca
 	if (!is_null) {
 		string error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
 		if (!error.empty()) {
-			throw InvalidInputException("Failed to parse format specifier %s: %s", format_string, error);
+			throw InvalidInputException(*format_arg, "Failed to parse format specifier %s: %s", format_string, error);
 		}
 	}
 	return make_uniq<StrfTimeBindData>(format, format_string, is_null);
@@ -132,7 +132,7 @@ static unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, Sca
 		throw ParameterNotResolvedException();
 	}
 	if (!arguments[1]->IsFoldable()) {
-		throw InvalidInputException("strptime format must be a constant");
+		throw InvalidInputException(*arguments[0], "strptime format must be a constant");
 	}
 	Value format_value = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 	string format_string;
@@ -144,7 +144,7 @@ static unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, Sca
 		format.format_specifier = format_string;
 		string error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
 		if (!error.empty()) {
-			throw InvalidInputException("Failed to parse format specifier %s: %s", format_string, error);
+			throw InvalidInputException(*arguments[0], "Failed to parse format specifier %s: %s", format_string, error);
 		}
 		if (format.HasFormatSpecifier(StrTimeSpecifier::UTC_OFFSET)) {
 			bound_function.return_type = LogicalType::TIMESTAMP_TZ;
@@ -153,7 +153,7 @@ static unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, Sca
 	} else if (format_value.type() == LogicalType::LIST(LogicalType::VARCHAR)) {
 		const auto &children = ListValue::GetChildren(format_value);
 		if (children.empty()) {
-			throw InvalidInputException("strptime format list must not be empty");
+			throw InvalidInputException(*arguments[0], "strptime format list must not be empty");
 		}
 		vector<string> format_strings;
 		vector<StrpTimeFormat> formats;
@@ -162,7 +162,8 @@ static unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, Sca
 			format.format_specifier = format_string;
 			string error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
 			if (!error.empty()) {
-				throw InvalidInputException("Failed to parse format specifier %s: %s", format_string, error);
+				throw InvalidInputException(*arguments[0], "Failed to parse format specifier %s: %s", format_string,
+				                            error);
 			}
 			// If any format has UTC offsets, then we have to produce TSTZ
 			if (format.HasFormatSpecifier(StrTimeSpecifier::UTC_OFFSET)) {
@@ -173,7 +174,7 @@ static unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, Sca
 		}
 		return make_uniq<StrpTimeBindData>(formats, format_strings);
 	} else {
-		throw InvalidInputException("strptime format must be a string");
+		throw InvalidInputException(*arguments[0], "strptime format must be a string");
 	}
 }
 

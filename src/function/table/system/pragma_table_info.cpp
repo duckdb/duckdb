@@ -251,7 +251,7 @@ static void PragmaTableInfoView(PragmaTableOperatorData &data, ViewCatalogEntry 
 	for (idx_t i = data.offset; i < next; i++) {
 		auto index = i - data.offset;
 		auto type = view.types[i];
-		auto &name = view.aliases[i];
+		auto &name = i < view.aliases.size() ? view.aliases[i] : view.names[i];
 
 		if (is_table_info) {
 			PragmaTableInfoHelper::GetViewColumns(i, name, type, output, index);

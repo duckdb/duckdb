@@ -58,6 +58,7 @@ public:
 	SequenceCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateSequenceInfo &info);
 
 public:
+	virtual unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
 	unique_ptr<CreateInfo> GetInfo() const override;
 
 	SequenceData GetData() const;

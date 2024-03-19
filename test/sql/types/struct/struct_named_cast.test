@@ -1,0 +1,35 @@
+# name: test/sql/types/struct/struct_named_cast.test
+# description: Test struct named casts
+# group: [struct]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT {'a': 42, 'b': 84}::STRUCT(b INT, a INT)
+----
+{'b': 84, 'a': 42}
+
+# nested
+query I
+SELECT {'a': ['1', '2', '3'], 'b': 84}::STRUCT(b INT, a INT[])
+----
+{'b': 84, 'a': [1, 2, 3]}
+
+# case insensitivity
+query I
+SELECT {'a': ['1', '2', '3'], 'b': 84}::STRUCT(b INT, A INT[])
+----
+{'b': 84, 'A': [1, 2, 3]}
+
+# name mismatch
+statement error
+SELECT {'a': ['1', '2', '3'], 'b': 84}::STRUCT(b INT, c INT[])
+----
+element "a" in source struct was not found in target struct
+
+# unnamed struct cast
+query I
+SELECT ROW(42, 84)::STRUCT(a INT, b INT)
+----
+{'a': 42, 'b': 84}

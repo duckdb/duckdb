@@ -6,8 +6,8 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/limits.hpp"
-
 #include <cstring>
 #include <cctype>
 #include <algorithm>
@@ -417,7 +417,7 @@ int32_t Date::EpochDays(date_t date) {
 }
 
 date_t Date::EpochToDate(int64_t epoch) {
-	return date_t(epoch / Interval::SECS_PER_DAY);
+	return date_t(UnsafeNumericCast<int32_t>(epoch / Interval::SECS_PER_DAY));
 }
 
 int64_t Date::Epoch(date_t date) {

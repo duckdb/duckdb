@@ -4,6 +4,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 
@@ -36,6 +37,9 @@ static unique_ptr<FunctionData> DuckDBSequencesBind(ClientContext &context, Tabl
 
 	names.emplace_back("sequence_oid");
 	return_types.emplace_back(LogicalType::BIGINT);
+
+	names.emplace_back("comment");
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("temporary");
 	return_types.emplace_back(LogicalType::BOOLEAN);
@@ -103,6 +107,8 @@ void DuckDBSequencesFunction(ClientContext &context, TableFunctionInput &data_p,
 		output.SetValue(col++, count, Value(seq.name));
 		// sequence_oid, BIGINT
 		output.SetValue(col++, count, Value::BIGINT(seq.oid));
+		// comment, VARCHAR
+		output.SetValue(col++, count, Value(seq.comment));
 		// temporary, BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(seq.temporary));
 		// start_value, BIGINT
@@ -116,7 +122,8 @@ void DuckDBSequencesFunction(ClientContext &context, TableFunctionInput &data_p,
 		// cycle, BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(seq_data.cycle));
 		// last_value, BIGINT
-		output.SetValue(col++, count, seq_data.usage_count == 0 ? Value() : Value::BOOLEAN(seq_data.last_value));
+		output.SetValue(col++, count,
+		                seq_data.usage_count == 0 ? Value() : Value::BOOLEAN(NumericCast<int8_t>(seq_data.last_value)));
 		// sql, LogicalType::VARCHAR
 		output.SetValue(col++, count, Value(seq.ToSQL()));
 

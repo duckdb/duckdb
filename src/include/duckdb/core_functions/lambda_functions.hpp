@@ -97,7 +97,7 @@ public:
 			auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 			auto &bind_info = func_expr.bind_info->Cast<ListLambdaBindData>();
 			lambda_expr = bind_info.lambda_expr;
-			has_side_effects = lambda_expr->HasSideEffects();
+			is_volatile = lambda_expr->IsVolatile();
 			has_index = bind_info.has_index;
 
 			// get the list column entries
@@ -120,7 +120,7 @@ public:
 
 		const idx_t row_count;
 		bool has_index;
-		bool has_side_effects;
+		bool is_volatile;
 		const bool is_all_constant;
 	};
 

@@ -118,7 +118,7 @@ unique_ptr<FunctionData> CTableFunctionBind(ClientContext &context, TableFunctio
 	CTableInternalBindInfo bind_info(context, input, return_types, names, *result, info);
 	info.bind(&bind_info);
 	if (!bind_info.success) {
-		throw Exception(bind_info.error);
+		throw BinderException(bind_info.error);
 	}
 
 	return std::move(result);
@@ -131,7 +131,7 @@ unique_ptr<GlobalTableFunctionState> CTableFunctionInit(ClientContext &context, 
 	CTableInternalInitInfo init_info(bind_data, result->init_data, data_p.column_ids, data_p.filters);
 	bind_data.info.init(&init_info);
 	if (!init_info.success) {
-		throw Exception(init_info.error);
+		throw InvalidInputException(init_info.error);
 	}
 	return std::move(result);
 }
@@ -147,7 +147,7 @@ unique_ptr<LocalTableFunctionState> CTableFunctionLocalInit(ExecutionContext &co
 	CTableInternalInitInfo init_info(bind_data, result->init_data, data_p.column_ids, data_p.filters);
 	bind_data.info.local_init(&init_info);
 	if (!init_info.success) {
-		throw Exception(init_info.error);
+		throw InvalidInputException(init_info.error);
 	}
 	return std::move(result);
 }
@@ -167,7 +167,7 @@ void CTableFunction(ClientContext &context, TableFunctionInput &data_p, DataChun
 	CTableInternalFunctionInfo function_info(bind_data, global_data.init_data, local_data.init_data);
 	bind_data.info.function(&function_info, reinterpret_cast<duckdb_data_chunk>(&output));
 	if (!function_info.success) {
-		throw Exception(function_info.error);
+		throw InvalidInputException(function_info.error);
 	}
 }
 

@@ -37,7 +37,7 @@ static void SetSeedFunction(DataChunk &args, ExpressionState &state, Vector &res
 	auto &random_engine = RandomEngine::Get(info.context);
 	for (idx_t i = 0; i < args.size(); i++) {
 		if (input_seeds[i] < -1.0 || input_seeds[i] > 1.0 || Value::IsNan(input_seeds[i])) {
-			throw Exception("SETSEED accepts seed values between -1.0 and 1.0, inclusive");
+			throw InvalidInputException("SETSEED accepts seed values between -1.0 and 1.0, inclusive");
 		}
 		uint32_t norm_seed = (input_seeds[i] + 1.0) * half_max;
 		random_engine.SetSeed(norm_seed);
@@ -54,7 +54,7 @@ unique_ptr<FunctionData> SetSeedBind(ClientContext &context, ScalarFunction &bou
 
 ScalarFunction SetseedFun::GetFunction() {
 	ScalarFunction setseed("setseed", {LogicalType::DOUBLE}, LogicalType::SQLNULL, SetSeedFunction, SetSeedBind);
-	setseed.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
+	setseed.stability = FunctionStability::VOLATILE;
 	return setseed;
 }
 

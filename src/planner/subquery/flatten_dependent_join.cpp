@@ -10,7 +10,9 @@
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/subquery/has_correlated_expressions.hpp"
 #include "duckdb/planner/subquery/rewrite_correlated_expressions.hpp"
+#include "duckdb/planner/subquery/rewrite_cte_scan.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
+#include "duckdb/execution/column_binding_resolver.hpp"
 
 namespace duckdb {
 
@@ -54,6 +56,35 @@ bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator *op, boo
 	}
 	// set the entry in the map
 	has_correlated_expressions[op] = has_correlation;
+
+	// If we detect correlation in a materialized or recursive CTE, the entire right side of the operator
+	// needs to be marked as correlated. Otherwise, function PushDownDependentJoinInternal does not do the
+	// right thing.
+	if (op->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE ||
+	    op->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+		if (has_correlation) {
+			MarkSubtreeCorrelated(*op->children[1].get());
+		}
+	}
+	return has_correlation;
+}
+
+bool FlattenDependentJoins::MarkSubtreeCorrelated(LogicalOperator &op) {
+	// Do not mark base table scans as correlated
+	auto entry = has_correlated_expressions.find(&op);
+	D_ASSERT(entry != has_correlated_expressions.end());
+	bool has_correlation = entry->second;
+	for (auto &child : op.children) {
+		has_correlation |= MarkSubtreeCorrelated(*child.get());
+	}
+	if (op.type != LogicalOperatorType::LOGICAL_GET || op.children.size() == 1) {
+		if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
+			has_correlated_expressions[&op] = true;
+			return true;
+		} else {
+			has_correlated_expressions[&op] = has_correlation;
+		}
+	}
 	return has_correlation;
 }
 
@@ -94,6 +125,18 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		// we reached a node without correlated expressions
 		// we can eliminate the dependent join now and create a simple cross product
 		// now create the duplicate eliminated scan for this node
+		if (plan->type == LogicalOperatorType::LOGICAL_CTE_REF) {
+			auto &op = plan->Cast<LogicalCTERef>();
+
+			auto rec_cte = binder.recursive_ctes.find(op.cte_index);
+			if (rec_cte != binder.recursive_ctes.end()) {
+				D_ASSERT(rec_cte->second->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE);
+				auto &rec_cte_op = rec_cte->second->Cast<LogicalRecursiveCTE>();
+				RewriteCTEScan cte_rewriter(op.cte_index, rec_cte_op.correlated_columns);
+				cte_rewriter.VisitOperator(*plan);
+			}
+		}
+
 		auto left_columns = plan->GetColumnBindings().size();
 		auto delim_index = binder.GenerateTableIndex();
 		this->base_binding = ColumnBinding(delim_index, 0);
@@ -284,7 +327,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN: {
 		auto &dependent_join = plan->Cast<LogicalJoin>();
 		if (!((dependent_join.join_type == JoinType::INNER) || (dependent_join.join_type == JoinType::LEFT))) {
-			throw Exception("Dependent join can only be INNER or LEFT type");
+			throw NotImplementedException("Dependent join can only be INNER or LEFT type");
 		}
 		D_ASSERT(plan->children.size() == 2);
 		// Push all the bindings down to the left side so the right side knows where to refer DELIM_GET from
@@ -345,7 +388,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			}
 		} else if (join.join_type == JoinType::MARK) {
 			if (right_has_correlation) {
-				throw Exception("MARK join with correlation in RHS not supported");
+				throw NotImplementedException("MARK join with correlation in RHS not supported");
 			}
 			// push the child into the LHS
 			plan->children[0] = PushDownDependentJoinInternal(std::move(plan->children[0]),
@@ -355,7 +398,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			rewriter.VisitOperator(*plan);
 			return plan;
 		} else {
-			throw Exception("Unsupported join type for flattening correlated subquery");
+			throw NotImplementedException("Unsupported join type for flattening correlated subquery");
 		}
 		// both sides have correlation
 		// push into both sides
@@ -405,8 +448,26 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	}
 	case LogicalOperatorType::LOGICAL_LIMIT: {
 		auto &limit = plan->Cast<LogicalLimit>();
-		if (limit.limit || limit.offset) {
-			throw ParserException("Non-constant limit or offset not supported in correlated subquery");
+		switch (limit.limit_val.Type()) {
+		case LimitNodeType::CONSTANT_PERCENTAGE:
+		case LimitNodeType::EXPRESSION_PERCENTAGE:
+			// NOTE: limit percent could be supported in a manner similar to the LIMIT above
+			// but instead of filtering by an exact number of rows, the limit should be expressed as
+			// COUNT computed over the partition multiplied by the percentage
+			throw ParserException("Limit percent operator not supported in correlated subquery");
+		case LimitNodeType::EXPRESSION_VALUE:
+			throw ParserException("Non-constant limit not supported in correlated subquery");
+		default:
+			break;
+		}
+		switch (limit.offset_val.Type()) {
+		case LimitNodeType::EXPRESSION_VALUE:
+			throw ParserException("Non-constant offset not supported in correlated subquery");
+		case LimitNodeType::CONSTANT_PERCENTAGE:
+		case LimitNodeType::EXPRESSION_PERCENTAGE:
+			throw InternalException("Percentage offset in FlattenDependentJoin");
+		default:
+			break;
 		}
 		auto rownum_alias = "limit_rownum";
 		unique_ptr<LogicalOperator> child;
@@ -453,19 +514,34 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		auto row_num_ref =
 		    make_uniq<BoundColumnRefExpression>(rownum_alias, LogicalType::BIGINT, ColumnBinding(window_index, 0));
 
-		int64_t upper_bound_limit = NumericLimits<int64_t>::Maximum();
-		TryAddOperator::Operation(limit.offset_val, limit.limit_val, upper_bound_limit);
-		auto upper_bound = make_uniq<BoundConstantExpression>(Value::BIGINT(upper_bound_limit));
-		condition = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO, row_num_ref->Copy(),
-		                                                 std::move(upper_bound));
+		if (limit.limit_val.Type() == LimitNodeType::CONSTANT_VALUE) {
+			auto upper_bound_limit = NumericLimits<int64_t>::Maximum();
+			auto limit_val = int64_t(limit.limit_val.GetConstantValue());
+			if (limit.offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
+				// both offset and limit specified - upper bound is offset + limit
+				auto offset_val = int64_t(limit.offset_val.GetConstantValue());
+				TryAddOperator::Operation(limit_val, offset_val, upper_bound_limit);
+			} else {
+				// no offset - upper bound is only the limit
+				upper_bound_limit = limit_val;
+			}
+			auto upper_bound = make_uniq<BoundConstantExpression>(Value::BIGINT(upper_bound_limit));
+			condition = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO,
+			                                                 row_num_ref->Copy(), std::move(upper_bound));
+		}
 		// we only need to add "row_number >= offset + 1" if offset is bigger than 0
-		if (limit.offset_val > 0) {
-			auto lower_bound = make_uniq<BoundConstantExpression>(Value::BIGINT(limit.offset_val));
+		if (limit.offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
+			auto offset_val = int64_t(limit.offset_val.GetConstantValue());
+			auto lower_bound = make_uniq<BoundConstantExpression>(Value::BIGINT(offset_val));
 			auto lower_comp = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHAN,
 			                                                       row_num_ref->Copy(), std::move(lower_bound));
-			auto conj = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(lower_comp),
-			                                                  std::move(condition));
-			condition = std::move(conj);
+			if (condition) {
+				auto conj = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
+				                                                  std::move(lower_comp), std::move(condition));
+				condition = std::move(conj);
+			} else {
+				condition = std::move(lower_comp);
+			}
 		}
 		filter->expressions.push_back(std::move(condition));
 		filter->children.push_back(std::move(window));
@@ -474,12 +550,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			filter->projection_map.push_back(i);
 		}
 		return std::move(filter);
-	}
-	case LogicalOperatorType::LOGICAL_LIMIT_PERCENT: {
-		// NOTE: limit percent could be supported in a manner similar to the LIMIT above
-		// but instead of filtering by an exact number of rows, the limit should be expressed as
-		// COUNT computed over the partition multiplied by the percentage
-		throw ParserException("Limit percent operator not supported in correlated subquery");
 	}
 	case LogicalOperatorType::LOGICAL_WINDOW: {
 		auto &window = plan->Cast<LogicalWindow>();
@@ -575,11 +645,62 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		this->data_offset = 0;
 		return plan;
 	}
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
-		throw BinderException("Recursive CTEs not (yet) supported in correlated subquery");
+
+#ifdef DEBUG
+		plan->children[0]->ResolveOperatorTypes();
+		plan->children[1]->ResolveOperatorTypes();
+#endif
+		idx_t table_index = 0;
+		plan->children[0] =
+		    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
+		if (plan->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+			auto &setop = plan->Cast<LogicalRecursiveCTE>();
+			base_binding.table_index = setop.table_index;
+			base_binding.column_index = setop.column_count;
+			table_index = setop.table_index;
+			setop.correlated_columns = correlated_columns;
+		} else if (plan->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+			auto &setop = plan->Cast<LogicalMaterializedCTE>();
+			base_binding.table_index = setop.table_index;
+			base_binding.column_index = setop.column_count;
+			table_index = setop.table_index;
+		}
+
+		RewriteCTEScan cte_rewriter(table_index, correlated_columns);
+		cte_rewriter.VisitOperator(*plan->children[1]);
+
+		parent_propagate_null_values = false;
+		plan->children[1] =
+		    PushDownDependentJoinInternal(std::move(plan->children[1]), parent_propagate_null_values, lateral_depth);
+		RewriteCorrelatedExpressions rewriter(this->base_binding, correlated_map, lateral_depth);
+		rewriter.VisitOperator(*plan);
+
+		RewriteCorrelatedExpressions recursive_rewriter(this->base_binding, correlated_map, lateral_depth, true);
+		recursive_rewriter.VisitOperator(*plan->children[0]);
+		recursive_rewriter.VisitOperator(*plan->children[1]);
+
+#ifdef DEBUG
+		plan->children[0]->ResolveOperatorTypes();
+		plan->children[1]->ResolveOperatorTypes();
+#endif
+		if (plan->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+			// we have to refer to the recursive CTE index now
+			auto &setop = plan->Cast<LogicalRecursiveCTE>();
+			base_binding.table_index = setop.table_index;
+			base_binding.column_index = setop.column_count;
+			setop.column_count += correlated_columns.size();
+		}
+
+		return plan;
 	}
-	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
-		throw BinderException("Materialized CTEs not (yet) supported in correlated subquery");
+	case LogicalOperatorType::LOGICAL_CTE_REF: {
+		auto &cteref = plan->Cast<LogicalCTERef>();
+		// Read correlated columns from CTE_SCAN instead of from DELIM_SCAN
+		base_binding.table_index = cteref.table_index;
+		base_binding.column_index = cteref.chunk_types.size() - cteref.correlated_columns;
+		return plan;
 	}
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
 		throw BinderException("Nested lateral joins or lateral joins in correlated subqueries are not (yet) supported");

@@ -1,6 +1,5 @@
-#include "duckdb/execution/operator/persistent/physical_batch_copy_to_file.hpp"
 #include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
-#include "duckdb/execution/operator/persistent/physical_fixed_batch_copy.hpp"
+#include "duckdb/execution/operator/persistent/physical_batch_copy_to_file.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
 
@@ -13,7 +12,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile
 	auto &fs = FileSystem::GetFileSystem(context);
 	op.file_path = fs.ExpandPath(op.file_path);
 	if (op.use_tmp_file) {
-		op.file_path += ".tmp";
+		auto path = StringUtil::GetFilePath(op.file_path);
+		auto base = StringUtil::GetFileName(op.file_path);
+		op.file_path = fs.JoinPath(path, "tmp_" + base);
 	}
 	if (op.per_thread_output || op.file_size_bytes.IsValid() || op.partition_output || !op.partition_columns.empty() ||
 	    op.overwrite_or_ignore) {
@@ -30,21 +31,12 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile
 			throw InternalException("BATCH_COPY_TO_FILE can only be used if batch indexes are supported");
 		}
 		// batched copy to file
-		if (op.function.desired_batch_size) {
-			auto copy = make_uniq<PhysicalFixedBatchCopy>(op.types, op.function, std::move(op.bind_data),
-			                                              op.estimated_cardinality);
-			copy->file_path = op.file_path;
-			copy->use_tmp_file = op.use_tmp_file;
-			copy->children.push_back(std::move(plan));
-			return std::move(copy);
-		} else {
-			auto copy = make_uniq<PhysicalBatchCopyToFile>(op.types, op.function, std::move(op.bind_data),
-			                                               op.estimated_cardinality);
-			copy->file_path = op.file_path;
-			copy->use_tmp_file = op.use_tmp_file;
-			copy->children.push_back(std::move(plan));
-			return std::move(copy);
-		}
+		auto copy = make_uniq<PhysicalBatchCopyToFile>(op.types, op.function, std::move(op.bind_data),
+		                                               op.estimated_cardinality);
+		copy->file_path = op.file_path;
+		copy->use_tmp_file = op.use_tmp_file;
+		copy->children.push_back(std::move(plan));
+		return std::move(copy);
 	}
 	// COPY from select statement to file
 	auto copy = make_uniq<PhysicalCopyToFile>(op.types, op.function, std::move(op.bind_data), op.estimated_cardinality);

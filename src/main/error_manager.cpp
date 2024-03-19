@@ -1,6 +1,7 @@
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/config.hpp"
 #include "utf8proc_wrapper.hpp"
+#include "duckdb/common/exception/list.hpp"
 
 namespace duckdb {
 
@@ -34,12 +35,12 @@ string ErrorManager::FormatExceptionRecursive(ErrorType error_type, vector<Excep
 	return ExceptionFormatValue::Format(error, values);
 }
 
-string ErrorManager::InvalidUnicodeError(const string &input, const string &context) {
+InvalidInputException ErrorManager::InvalidUnicodeError(const string &input, const string &context) {
 	UnicodeInvalidReason reason;
 	size_t pos;
 	auto unicode = Utf8Proc::Analyze(const_char_ptr_cast(input.c_str()), input.size(), &reason, &pos);
 	if (unicode != UnicodeType::INVALID) {
-		return "Invalid unicode error thrown but no invalid unicode detected in " + context;
+		return InvalidInputException("Invalid unicode error thrown but no invalid unicode detected in " + context);
 	}
 	string base_message;
 	switch (reason) {
@@ -52,7 +53,15 @@ string ErrorManager::InvalidUnicodeError(const string &input, const string &cont
 	default:
 		break;
 	}
-	return base_message + " detected in " + context;
+	return InvalidInputException(base_message + " detected in " + context);
+}
+
+FatalException ErrorManager::InvalidatedDatabase(ClientContext &context, const string &invalidated_msg) {
+	return FatalException(ErrorManager::FormatException(context, ErrorType::INVALIDATED_DATABASE, invalidated_msg));
+}
+
+TransactionException ErrorManager::InvalidatedTransaction(ClientContext &context) {
+	return TransactionException(ErrorManager::FormatException(context, ErrorType::INVALIDATED_TRANSACTION));
 }
 
 void ErrorManager::AddCustomError(ErrorType type, string new_error) {

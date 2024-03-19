@@ -54,7 +54,7 @@ unique_ptr<RowGroup> RowGroupSegmentTree::LoadSegment() {
 RowGroupCollection::RowGroupCollection(shared_ptr<DataTableInfo> info_p, BlockManager &block_manager,
                                        vector<LogicalType> types_p, idx_t row_start_p, idx_t total_rows_p)
     : block_manager(block_manager), total_rows(total_rows_p), info(std::move(info_p)), types(std::move(types_p)),
-      row_start(row_start_p) {
+      row_start(row_start_p), allocation_size(0) {
 	row_groups = make_shared<RowGroupSegmentTree>(*this);
 }
 
@@ -217,6 +217,8 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 		}
 		return true;
 	}
+	lock_guard<mutex> l(state.lock);
+	scan_state.batch_index = state.batch_index;
 	return false;
 }
 
@@ -288,11 +290,10 @@ void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, c
 // Append
 //===--------------------------------------------------------------------===//
 TableAppendState::TableAppendState()
-    : row_group_append_state(*this), total_append_count(0), start_row_group(nullptr), transaction(0, 0), remaining(0) {
+    : row_group_append_state(*this), total_append_count(0), start_row_group(nullptr), transaction(0, 0) {
 }
 
 TableAppendState::~TableAppendState() {
-	D_ASSERT(Exception::UncaughtException() || remaining == 0);
 }
 
 bool RowGroupCollection::IsEmpty() const {
@@ -304,7 +305,7 @@ bool RowGroupCollection::IsEmpty(SegmentLock &l) const {
 	return row_groups->IsEmpty(l);
 }
 
-void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppendState &state, idx_t append_count) {
+void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppendState &state) {
 	state.row_start = total_rows;
 	state.current_row = state.row_start;
 	state.total_append_count = 0;
@@ -318,17 +319,12 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 	state.start_row_group = row_groups->GetLastSegment(l);
 	D_ASSERT(this->row_start + total_rows == state.start_row_group->start + state.start_row_group->count);
 	state.start_row_group->InitializeAppend(state.row_group_append_state);
-	state.remaining = append_count;
 	state.transaction = transaction;
-	if (state.remaining > 0) {
-		state.start_row_group->AppendVersionInfo(transaction, state.remaining);
-		total_rows += state.remaining;
-	}
 }
 
 void RowGroupCollection::InitializeAppend(TableAppendState &state) {
 	TransactionData tdata(0, 0);
-	InitializeAppend(tdata, state, 0);
+	InitializeAppend(tdata, state);
 }
 
 bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
@@ -336,16 +332,18 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 	chunk.Verify();
 
 	bool new_row_group = false;
-	idx_t append_count = chunk.size();
+	idx_t total_append_count = chunk.size();
 	idx_t remaining = chunk.size();
-	state.total_append_count += append_count;
+	state.total_append_count += total_append_count;
 	while (true) {
 		auto current_row_group = state.row_group_append_state.row_group;
 		// check how much we can fit into the current row_group
 		idx_t append_count =
 		    MinValue<idx_t>(remaining, Storage::ROW_GROUP_SIZE - state.row_group_append_state.offset_in_row_group);
 		if (append_count > 0) {
+			auto previous_allocation_size = current_row_group->GetAllocationSize();
 			current_row_group->Append(state.row_group_append_state, chunk, append_count);
+			allocation_size += current_row_group->GetAllocationSize() - previous_allocation_size;
 			// merge the stats
 			auto stats_lock = stats.GetLock();
 			for (idx_t i = 0; i < types.size(); i++) {
@@ -353,9 +351,6 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 			}
 		}
 		remaining -= append_count;
-		if (state.remaining > 0) {
-			state.remaining -= append_count;
-		}
 		if (remaining > 0) {
 			// we expect max 1 iteration of this loop (i.e. a single chunk should never overflow more than one
 			// row_group)
@@ -373,15 +368,12 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 			// set up the append state for this row_group
 			auto last_row_group = row_groups->GetLastSegment(l);
 			last_row_group->InitializeAppend(state.row_group_append_state);
-			if (state.remaining > 0) {
-				last_row_group->AppendVersionInfo(state.transaction, state.remaining);
-			}
 			continue;
 		} else {
 			break;
 		}
 	}
-	state.current_row += append_count;
+	state.current_row += row_t(total_append_count);
 	auto stats_lock = stats.GetLock();
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
 		stats.GetStats(col_idx).UpdateDistinctStatistics(chunk.data[col_idx], chunk.size());
@@ -427,14 +419,20 @@ void RowGroupCollection::CommitAppend(transaction_t commit_id, idx_t row_start, 
 }
 
 void RowGroupCollection::RevertAppendInternal(idx_t start_row) {
-	if (total_rows <= start_row) {
-		return;
-	}
 	total_rows = start_row;
 
 	auto l = row_groups->Lock();
-	// find the segment index that the current row belongs to
-	idx_t segment_index = row_groups->GetSegmentIndex(l, start_row);
+	idx_t segment_count = row_groups->GetSegmentCount(l);
+	if (segment_count == 0) {
+		// we have no segments to revert
+		return;
+	}
+	idx_t segment_index;
+	// find the segment index that the start row belongs to
+	if (!row_groups->TryGetSegmentIndex(l, start_row, segment_index)) {
+		// revert from the last segment
+		segment_index = segment_count - 1;
+	}
 	auto &segment = *row_groups->GetSegmentByIndex(l, segment_index);
 
 	// remove any segments AFTER this segment: they should be deleted entirely
@@ -616,7 +614,7 @@ struct CollectionCheckpointState {
 	mutex write_lock;
 
 public:
-	void PushError(PreservedError error) {
+	void PushError(ErrorData error) {
 		error_manager.PushError(std::move(error));
 	}
 	bool HasError() {
@@ -642,6 +640,27 @@ public:
 		}
 		return false;
 	}
+	void CancelTasks() {
+		// This should only be called after an error has occurred, no other mechanism to cancel checkpoint tasks exists
+		// currently
+		D_ASSERT(error_manager.HasError());
+		// Give every pending task the chance to cancel
+		WorkOnTasks();
+		// Wait for all active tasks to realize they have been canceled
+		while (completed_tasks != total_tasks) {
+		}
+	}
+
+	void WorkOnTasks() {
+		shared_ptr<Task> task_from_producer;
+		while (scheduler.GetTaskFromProducer(*token, task_from_producer)) {
+			auto res = task_from_producer->Execute(TaskExecutionMode::PROCESS_ALL);
+			(void)res;
+			D_ASSERT(res != TaskExecutionResult::TASK_BLOCKED);
+			task_from_producer.reset();
+		}
+	}
+
 	bool GetTask(shared_ptr<Task> &task) {
 		return scheduler.GetTaskFromProducer(*token, task);
 	}
@@ -660,20 +679,22 @@ public:
 
 	virtual void ExecuteTask() = 0;
 	TaskExecutionResult Execute(TaskExecutionMode mode) override {
+		(void)mode;
+		D_ASSERT(mode == TaskExecutionMode::PROCESS_ALL);
 		if (checkpoint_state.HasError()) {
+			checkpoint_state.FinishTask();
 			return TaskExecutionResult::TASK_FINISHED;
 		}
 		try {
 			ExecuteTask();
 			checkpoint_state.FinishTask();
 			return TaskExecutionResult::TASK_FINISHED;
-		} catch (Exception &ex) {
-			checkpoint_state.PushError(PreservedError(ex));
 		} catch (std::exception &ex) {
-			checkpoint_state.PushError(PreservedError(ex));
+			checkpoint_state.PushError(ErrorData(ex));
 		} catch (...) { // LCOV_EXCL_START
-			checkpoint_state.PushError(PreservedError("Unknown exception during Checkpoint!"));
+			checkpoint_state.PushError(ErrorData("Unknown exception during Checkpoint!"));
 		} // LCOV_EXCL_STOP
+		checkpoint_state.FinishTask();
 		return TaskExecutionResult::TASK_ERROR;
 	}
 
@@ -753,11 +774,14 @@ public:
 		scan_state.Initialize(column_ids);
 		scan_state.table_state.Initialize(types);
 		scan_state.table_state.max_row = idx_t(-1);
-		idx_t next_idx = segment_idx + merge_count;
-		for (idx_t c_idx = segment_idx; c_idx < next_idx; c_idx++) {
+		idx_t merged_groups = 0;
+		idx_t total_row_groups = vacuum_state.row_group_counts.size();
+		for (idx_t c_idx = segment_idx; merged_groups < merge_count && c_idx < total_row_groups; c_idx++) {
 			if (vacuum_state.row_group_counts[c_idx] == 0) {
 				continue;
 			}
+			merged_groups++;
+
 			auto &current_row_group = *checkpoint_state.segments[c_idx].node;
 
 			current_row_group.InitializeScan(scan_state.table_state);
@@ -777,7 +801,9 @@ public:
 					                                           append_count);
 					append_counts[current_append_idx] += append_count;
 					remaining -= append_count;
-					if (remaining > 0) {
+					const bool row_group_full = append_counts[current_append_idx] == Storage::ROW_GROUP_SIZE;
+					const bool last_row_group = current_append_idx + 1 >= new_row_groups.size();
+					if (remaining > 0 || (row_group_full && !last_row_group)) {
 						// move to the next row group
 						current_append_idx++;
 						new_row_groups[current_append_idx]->InitializeAppend(append_state.row_group_append_state);
@@ -895,7 +921,7 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 	                                         merge_rows, state.row_start);
 	checkpoint_state.ScheduleTask(std::move(vacuum_task));
 	// skip vacuuming by the row groups we have merged
-	state.next_vacuum_idx = segment_idx + merge_count;
+	state.next_vacuum_idx = next_idx;
 	state.row_start += merge_rows;
 	return true;
 }
@@ -944,8 +970,10 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	// check if we ran into any errors while checkpointing
 	if (checkpoint_state.HasError()) {
 		// throw the error
+		checkpoint_state.CancelTasks();
 		checkpoint_state.ThrowError();
 	}
+
 	// no errors - finalize the row groups
 	idx_t new_total_rows = 0;
 	for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {

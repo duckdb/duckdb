@@ -12,7 +12,7 @@ PreparedStatement::PreparedStatement(shared_ptr<ClientContext> context, shared_p
 	D_ASSERT(data || !success);
 }
 
-PreparedStatement::PreparedStatement(PreservedError error) : context(nullptr), success(false), error(std::move(error)) {
+PreparedStatement::PreparedStatement(ErrorData error) : context(nullptr), success(false), error(std::move(error)) {
 }
 
 PreparedStatement::~PreparedStatement() {
@@ -23,7 +23,7 @@ const string &PreparedStatement::GetError() {
 	return error.Message();
 }
 
-PreservedError &PreparedStatement::GetErrorObject() {
+ErrorData &PreparedStatement::GetErrorObject() {
 	return error;
 }
 
@@ -98,15 +98,15 @@ unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(case_insensitive_
                                                                bool allow_stream_result) {
 	if (!success) {
 		auto exception = InvalidInputException("Attempting to execute an unsuccessfully prepared statement!");
-		return make_uniq<PendingQueryResult>(PreservedError(exception));
+		return make_uniq<PendingQueryResult>(ErrorData(exception));
 	}
 	PendingQueryParameters parameters;
 	parameters.parameters = &named_values;
 
 	try {
 		VerifyParameters(named_values, named_param_map);
-	} catch (const Exception &ex) {
-		return make_uniq<PendingQueryResult>(PreservedError(ex));
+	} catch (const std::exception &ex) {
+		return make_uniq<PendingQueryResult>(ErrorData(ex));
 	}
 
 	D_ASSERT(data);

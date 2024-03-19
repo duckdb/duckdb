@@ -14,7 +14,7 @@ unique_ptr<ParsedExpression> Transformer::TransformNullTest(duckdb_libpgquery::P
 	                               : ExpressionType::OPERATOR_IS_NOT_NULL;
 
 	auto result = make_uniq<OperatorExpression>(expr_type, std::move(arg));
-	result->query_location = root.location;
+	SetQueryLocation(*result, root.location);
 	return std::move(result);
 }
 

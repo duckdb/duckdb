@@ -10,9 +10,9 @@ namespace duckdb {
 
 // Reverse of map_from_entries
 static void MapEntriesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	idx_t count = args.size();
+	auto count = args.size();
 
-	result.Reinterpret(args.data[0]);
+	MapUtil::ReinterpretMap(result, args.data[0], count);
 
 	if (args.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);

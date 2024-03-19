@@ -35,19 +35,19 @@ static void CurrentTimestampFunction(DataChunk &input, ExpressionState &state, V
 
 ScalarFunction CurrentTimeFun::GetFunction() {
 	ScalarFunction current_time({}, LogicalType::TIME, CurrentTimeFunction);
-	current_time.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
+	current_time.stability = FunctionStability::CONSISTENT_WITHIN_QUERY;
 	return current_time;
 }
 
 ScalarFunction CurrentDateFun::GetFunction() {
 	ScalarFunction current_date({}, LogicalType::DATE, CurrentDateFunction);
-	current_date.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
+	current_date.stability = FunctionStability::CONSISTENT_WITHIN_QUERY;
 	return current_date;
 }
 
 ScalarFunction GetCurrentTimestampFun::GetFunction() {
 	ScalarFunction current_timestamp({}, LogicalType::TIMESTAMP_TZ, CurrentTimestampFunction);
-	current_timestamp.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
+	current_timestamp.stability = FunctionStability::CONSISTENT_WITHIN_QUERY;
 	return current_timestamp;
 }
 

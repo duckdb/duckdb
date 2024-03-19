@@ -120,7 +120,7 @@ static unique_ptr<LogicalOperator> ExtractJoinRelation(unique_ptr<SingleJoinRela
 			return result;
 		}
 	}
-	throw Exception("Could not find relation in parent node (?)");
+	throw InternalException("Could not find relation in parent node (?)");
 }
 
 unique_ptr<LogicalOperator> QueryGraphManager::Reconstruct(unique_ptr<LogicalOperator> plan, JoinNode &node) {

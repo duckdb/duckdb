@@ -40,8 +40,10 @@ SELECT AVG(STRLEN(s)), MIN(STRLEN(S)), MAX(STRLEN(S)), SUM(STRLEN(S)), MIN(S[1])
 statement ok
 CHECKPOINT;
 
+# ensure that the expected total storage size is the same as in the first iteration of the loop
+
 query I nosort expected_blocks
-select total_blocks from pragma_database_size();
+SELECT total_blocks FROM pragma_database_size();
 
 restart
 

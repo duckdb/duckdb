@@ -10,9 +10,11 @@
 
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
+#include "duckdb/parser/parsed_data/extra_drop_info.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
 
 namespace duckdb {
+struct ExtraDropInfo;
 
 struct DropInfo : public ParseInfo {
 public:
@@ -20,6 +22,7 @@ public:
 
 public:
 	DropInfo();
+	DropInfo(const DropInfo &info);
 
 	//! The catalog type to drop
 	CatalogType type;
@@ -36,9 +39,11 @@ public:
 	bool cascade = false;
 	//! Allow dropping of internal system entries
 	bool allow_drop_internal = false;
+	//! Extra info related to this drop
+	unique_ptr<ExtraDropInfo> extra_drop_info;
 
 public:
-	unique_ptr<DropInfo> Copy() const;
+	virtual unique_ptr<DropInfo> Copy() const;
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);

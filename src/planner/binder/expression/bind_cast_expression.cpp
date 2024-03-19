@@ -8,9 +8,9 @@ namespace duckdb {
 
 BindResult ExpressionBinder::BindExpression(CastExpression &expr, idx_t depth) {
 	// first try to bind the child of the cast expression
-	string error = Bind(expr.child, depth);
-	if (!error.empty()) {
-		return BindResult(error);
+	auto error = Bind(expr.child, depth);
+	if (error.HasError()) {
+		return BindResult(std::move(error));
 	}
 	// FIXME: We can also implement 'hello'::schema.custom_type; and pass by the schema down here.
 	// Right now just considering its DEFAULT_SCHEMA always

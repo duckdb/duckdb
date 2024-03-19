@@ -55,6 +55,8 @@ static void InitializeConsumers(py::class_<DuckDBPyRelation> &m) {
 	         py::arg("date_as_object") = false)
 	    .def("to_df", &DuckDBPyRelation::FetchDF, "Execute and fetch all rows as a pandas DataFrame", py::kw_only(),
 	         py::arg("date_as_object") = false)
+	    .def("fetch_df_chunk", &DuckDBPyRelation::FetchDFChunk, "Execute and fetch a chunk of the rows", py::kw_only(),
+	         py::arg("vectors_per_chunk"), py::arg("date_as_object"))
 	    .def("arrow", &DuckDBPyRelation::ToArrowTable, "Execute and fetch all rows as an Arrow Table",
 	         py::arg("batch_size") = 1000000)
 	    .def("fetch_arrow_table", &DuckDBPyRelation::ToArrowTable, "Execute and fetch all rows as an Arrow Table",

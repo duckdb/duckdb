@@ -1,14 +1,27 @@
 name: Windows
 on:
+  workflow_call:
+    inputs:
+      override_git_describe:
+        type: string
+      git_ref:
+        type: string
+      skip_tests:
+        type: string
   workflow_dispatch:
+    inputs:
+      override_git_describe:
+        type: string
+      git_ref:
+        type: string
+      skip_tests:
+        type: string
   repository_dispatch:
   push:
     branches:
       - '**'
       - '!main'
       - '!feature'
-    tags:
-      - '**'
     paths-ignore:
       - '**.md'
       - 'tools/**'
@@ -31,11 +44,12 @@ on:
 
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
+  group: windows-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
   cancel-in-progress: true
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
 
 jobs:
  win-release-64:
@@ -47,9 +61,9 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v4
+    - uses: actions/setup-python@v5
       with:
-        python-version: '3.7'
+        python-version: '3.12'
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -78,26 +92,29 @@ jobs:
 
     - name: Test
       shell: bash
-      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+      if: ${{ inputs.skip_tests != 'true' }}
       run: |
         test/Release/unittest.exe
 
     - name: Tools Test
       shell: bash
-      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+      if: ${{ inputs.skip_tests != 'true' }}
       run: |
         python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
         tools/sqlite3_api_wrapper/Release/test_sqlite3_api_wrapper.exe
 
     - name: Deploy
       shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
         python scripts/amalgamation.py
         choco install zip -y --force
         zip -j duckdb_cli-windows-amd64.zip Release/duckdb.exe
         zip -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
         zip -j duckdb_odbc-windows-amd64.zip tools/odbc/bin/Release/*
-        python scripts/asset-upload-gha.py libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip duckdb_odbc-windows-amd64.zip
+        ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip duckdb_odbc-windows-amd64.zip
 
     - uses: actions/upload-artifact@v3
       with:
@@ -131,9 +148,25 @@ jobs:
         Reg Query "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC"
 
     - name: Test Standard ODBC tests
+      if: ${{ inputs.skip_tests != 'true' }}
       shell: bash
       run: |
         tools/odbc/bin/Release/test_odbc.exe
+
+    - name: Setup Register For Connection Tests
+      shell: bash
+      run: |
+        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\DuckDB" //v database //t REG_SZ //d "/d/a/duckdb/duckdb/test/sql/storage_version/storage_version.db"
+        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\DuckDB" //v access_mode //t REG_SZ //d "READ_ONLY"
+        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\DuckDB" //v allow_unsigned_extensions //t REG_SZ //d "true"
+        echo "----------------------------------------------------------------"
+        Reg Query "HKCU\SOFTWARE\ODBC\ODBC.INI\DuckDB"
+
+    - name: Test Connection ODBC tests
+      if: ${{ inputs.skip_tests != 'true' }}
+      shell: bash
+      run: |
+        tools/odbc/bin/Release/test_connection_odbc.exe
 
     - name: Print ODBC trace on failure
       if: ${{ failure() }}
@@ -157,9 +190,9 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v4
+    - uses: actions/setup-python@v5
       with:
-        python-version: '3.7'
+        python-version: '3.12'
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -190,7 +223,7 @@ jobs:
  mingw:
      name: MingW (64 Bit)
      runs-on: windows-latest
-     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+     if: ${{ inputs.skip_tests != 'true' }}
      needs: win-release-64
      steps:
        - uses: actions/checkout@v3
@@ -244,9 +277,9 @@ jobs:
        with:
          fetch-depth: 0
 
-     - uses: actions/setup-python@v4
+     - uses: actions/setup-python@v5
        with:
-         python-version: '3.7'
+         python-version: '3.12'
 
      - uses: ./.github/actions/build_extensions
        with:
@@ -256,6 +289,6 @@ jobs:
          s3_id: ${{ secrets.S3_ID }}
          s3_key: ${{ secrets.S3_KEY }}
          signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-         run_tests: ${{ startsWith(github.ref, 'refs/tags/v') && 0 || 1 }}
-         run_autoload_tests: ${{ startsWith(github.ref, 'refs/tags/v') && 0 || 1 }}
+         run_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
+         run_autoload_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
          unittest_script: python3 scripts/run_tests_one_by_one.py ./build/release/test/Release/unittest.exe

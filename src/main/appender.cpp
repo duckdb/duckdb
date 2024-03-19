@@ -102,7 +102,8 @@ void BaseAppender::AppendDecimalValueInternal(Vector &col, SRC input) {
 		D_ASSERT(type.id() == LogicalTypeId::DECIMAL);
 		auto width = DecimalType::GetWidth(type);
 		auto scale = DecimalType::GetScale(type);
-		TryCastToDecimal::Operation<SRC, DST>(input, FlatVector::GetData<DST>(col)[chunk.size()], nullptr, width,
+		CastParameters parameters;
+		TryCastToDecimal::Operation<SRC, DST>(input, FlatVector::GetData<DST>(col)[chunk.size()], parameters, width,
 		                                      scale);
 		return;
 	}
@@ -327,8 +328,15 @@ void BaseAppender::AppendValue(const Value &value) {
 }
 
 void BaseAppender::AppendDataChunk(DataChunk &chunk) {
-	if (chunk.GetTypes() != types) {
-		throw InvalidInputException("Type mismatch in Append DataChunk and the types required for appender");
+	auto chunk_types = chunk.GetTypes();
+	if (chunk_types != types) {
+		for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
+			if (chunk.data[i].GetType() != types[i]) {
+				throw InvalidInputException("Type mismatch in Append DataChunk and the types required for appender, "
+				                            "expected %s but got %s for column %d",
+				                            types[i].ToString(), chunk.data[i].GetType().ToString(), i + 1);
+			}
+		}
 	}
 	collection->Append(chunk);
 	if (collection->Count() >= FLUSH_COUNT) {

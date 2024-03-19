@@ -118,7 +118,7 @@ set s3_endpoint='s3.some.random.endpoint.com';
 statement error
 SELECT * FROM '${prefix}test-bucket/whatever.parquet';
 ----
-IO Error: Connection error for HTTP HEAD to 'http://test-bucket.s3.some.random.endpoint.com/whatever.parquet'
+Connection error for HTTP HEAD to 'http://test-bucket.s3.some.random.endpoint.com/whatever.parquet'
 
 statement ok
 set s3_endpoint='${DUCKDB_S3_ENDPOINT}'
@@ -132,14 +132,14 @@ set s3_endpoint='';
 statement error
 SELECT * FROM 's3://test-bucket/whatever.parquet';
 ----
-IO Error: HTTP GET error on 'http://test-bucket.s3.amazonaws.com/whatever.parquet'
+HTTP GET error on 'http://test-bucket.s3.amazonaws.com/whatever.parquet'
 
 statement error
 SELECT * FROM 'r2://test-bucket/whatever.parquet';
 ----
-IO Error: HTTP GET error on 'http://test-bucket.s3.amazonaws.com/whatever.parquet'
+HTTP GET error on 'http://test-bucket.s3.amazonaws.com/whatever.parquet'
 
 statement error
 SELECT * FROM 'gcs://test-bucket/whatever.parquet';
 ----
-IO Error: HTTP GET error on 'http://test-bucket.storage.googleapis.com/whatever.parquet'
+HTTP GET error on 'http://test-bucket.storage.googleapis.com/whatever.parquet'

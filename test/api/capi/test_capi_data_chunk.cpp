@@ -97,46 +97,71 @@ TEST_CASE("Test DataChunk C API", "[capi]") {
 	duckdb_state status;
 
 	REQUIRE(tester.OpenDatabase(nullptr));
-
 	REQUIRE(duckdb_vector_size() == STANDARD_VECTOR_SIZE);
 
-	tester.Query("CREATE TABLE test(i BIGINT, j SMALLINT)");
+	// create column types
+	const idx_t COLUMN_COUNT = 3;
+	duckdb_type duckdbTypes[COLUMN_COUNT];
+	duckdbTypes[0] = DUCKDB_TYPE_BIGINT;
+	duckdbTypes[1] = DUCKDB_TYPE_SMALLINT;
+	duckdbTypes[2] = DUCKDB_TYPE_BLOB;
 
-	duckdb_logical_type types[2];
-	types[0] = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
-	types[1] = duckdb_create_logical_type(DUCKDB_TYPE_SMALLINT);
+	duckdb_logical_type types[COLUMN_COUNT];
+	for (idx_t i = 0; i < COLUMN_COUNT; i++) {
+		types[i] = duckdb_create_logical_type(duckdbTypes[i]);
+	}
 
-	auto data_chunk = duckdb_create_data_chunk(types, 2);
+	// create data chunk
+	auto data_chunk = duckdb_create_data_chunk(types, COLUMN_COUNT);
 	REQUIRE(data_chunk);
+	REQUIRE(duckdb_data_chunk_get_column_count(data_chunk) == COLUMN_COUNT);
 
-	REQUIRE(duckdb_data_chunk_get_column_count(data_chunk) == 2);
-
-	auto first_type = duckdb_vector_get_column_type(duckdb_data_chunk_get_vector(data_chunk, 0));
-	REQUIRE(duckdb_get_type_id(first_type) == DUCKDB_TYPE_BIGINT);
-	duckdb_destroy_logical_type(&first_type);
-
-	auto second_type = duckdb_vector_get_column_type(duckdb_data_chunk_get_vector(data_chunk, 1));
-	REQUIRE(duckdb_get_type_id(second_type) == DUCKDB_TYPE_SMALLINT);
-	duckdb_destroy_logical_type(&second_type);
+	// test duckdb_vector_get_column_type
+	for (idx_t i = 0; i < COLUMN_COUNT; i++) {
+		auto vector = duckdb_data_chunk_get_vector(data_chunk, i);
+		auto type = duckdb_vector_get_column_type(vector);
+		REQUIRE(duckdb_get_type_id(type) == duckdbTypes[i]);
+		duckdb_destroy_logical_type(&type);
+	}
 
 	REQUIRE(duckdb_data_chunk_get_vector(data_chunk, 999) == nullptr);
 	REQUIRE(duckdb_data_chunk_get_vector(nullptr, 0) == nullptr);
 	REQUIRE(duckdb_vector_get_column_type(nullptr) == nullptr);
-
 	REQUIRE(duckdb_data_chunk_get_size(data_chunk) == 0);
 	REQUIRE(duckdb_data_chunk_get_size(nullptr) == 0);
 
-	// use the appender to insert a value using the data chunk API
+	// create table
+	tester.Query("CREATE TABLE test(i BIGINT, j SMALLINT, k BLOB)");
 
+	// use the appender to insert values using the data chunk API
 	duckdb_appender appender;
 	status = duckdb_appender_create(tester.connection, nullptr, "test", &appender);
 	REQUIRE(status == DuckDBSuccess);
 
-	// append standard primitive values
-	auto col1_ptr = (int64_t *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(data_chunk, 0));
-	*col1_ptr = 42;
-	auto col2_ptr = (int16_t *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(data_chunk, 1));
-	*col2_ptr = 84;
+	// get the column types from the appender
+	REQUIRE(duckdb_appender_column_count(appender) == COLUMN_COUNT);
+
+	// test duckdb_appender_column_type
+	for (idx_t i = 0; i < COLUMN_COUNT; i++) {
+		auto type = duckdb_appender_column_type(appender, i);
+		REQUIRE(duckdb_get_type_id(type) == duckdbTypes[i]);
+		duckdb_destroy_logical_type(&type);
+	}
+
+	// append BIGINT
+	auto bigint_vector = duckdb_data_chunk_get_vector(data_chunk, 0);
+	auto int64_ptr = (int64_t *)duckdb_vector_get_data(bigint_vector);
+	*int64_ptr = 42;
+
+	// append SMALLINT
+	auto smallint_vector = duckdb_data_chunk_get_vector(data_chunk, 1);
+	auto int16_ptr = (int16_t *)duckdb_vector_get_data(smallint_vector);
+	*int16_ptr = 84;
+
+	// append BLOB
+	string s = "this is my blob";
+	auto blob_vector = duckdb_data_chunk_get_vector(data_chunk, 2);
+	duckdb_vector_assign_string_element_len(blob_vector, 0, s.c_str(), s.length());
 
 	REQUIRE(duckdb_vector_get_data(nullptr) == nullptr);
 
@@ -151,34 +176,33 @@ TEST_CASE("Test DataChunk C API", "[capi]") {
 	duckdb_data_chunk_reset(data_chunk);
 	REQUIRE(duckdb_data_chunk_get_size(data_chunk) == 0);
 
-	duckdb_vector_ensure_validity_writable(duckdb_data_chunk_get_vector(data_chunk, 0));
-	duckdb_vector_ensure_validity_writable(duckdb_data_chunk_get_vector(data_chunk, 1));
-	auto col1_validity = duckdb_vector_get_validity(duckdb_data_chunk_get_vector(data_chunk, 0));
-	REQUIRE(duckdb_validity_row_is_valid(col1_validity, 0));
-	duckdb_validity_set_row_validity(col1_validity, 0, false);
-	REQUIRE(!duckdb_validity_row_is_valid(col1_validity, 0));
+	for (idx_t i = 0; i < COLUMN_COUNT; i++) {
+		auto vector = duckdb_data_chunk_get_vector(data_chunk, i);
+		duckdb_vector_ensure_validity_writable(vector);
+		auto validity = duckdb_vector_get_validity(vector);
 
-	auto col2_validity = duckdb_vector_get_validity(duckdb_data_chunk_get_vector(data_chunk, 1));
-	REQUIRE(col2_validity);
-	REQUIRE(duckdb_validity_row_is_valid(col2_validity, 0));
-	duckdb_validity_set_row_validity(col2_validity, 0, false);
-	REQUIRE(!duckdb_validity_row_is_valid(col2_validity, 0));
+		REQUIRE(duckdb_validity_row_is_valid(validity, 0));
+		duckdb_validity_set_row_validity(validity, 0, false);
+		REQUIRE(!duckdb_validity_row_is_valid(validity, 0));
+	}
 
 	duckdb_data_chunk_set_size(data_chunk, 1);
 	REQUIRE(duckdb_data_chunk_get_size(data_chunk) == 1);
-
 	REQUIRE(duckdb_append_data_chunk(appender, data_chunk) == DuckDBSuccess);
-
 	REQUIRE(duckdb_vector_get_validity(nullptr) == nullptr);
 
 	duckdb_appender_destroy(&appender);
 
 	result = tester.Query("SELECT * FROM test");
 	REQUIRE_NO_FAIL(*result);
+
 	REQUIRE(result->Fetch<int64_t>(0, 0) == 42);
 	REQUIRE(result->Fetch<int16_t>(1, 0) == 84);
+	REQUIRE(result->Fetch<string>(2, 0) == "this is my blob");
+
 	REQUIRE(result->IsNull(0, 1));
 	REQUIRE(result->IsNull(1, 1));
+	REQUIRE(result->IsNull(2, 1));
 
 	duckdb_data_chunk_reset(data_chunk);
 	duckdb_data_chunk_reset(nullptr);
@@ -186,8 +210,48 @@ TEST_CASE("Test DataChunk C API", "[capi]") {
 
 	duckdb_destroy_data_chunk(&data_chunk);
 	duckdb_destroy_data_chunk(&data_chunk);
-
 	duckdb_destroy_data_chunk(nullptr);
+
+	for (idx_t i = 0; i < COLUMN_COUNT; i++) {
+		duckdb_destroy_logical_type(&types[i]);
+	}
+}
+
+TEST_CASE("Test DataChunk appending incorrect types in C API", "[capi]") {
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+	duckdb_state status;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	REQUIRE(duckdb_vector_size() == STANDARD_VECTOR_SIZE);
+
+	tester.Query("CREATE TABLE test(i BIGINT, j SMALLINT)");
+
+	duckdb_logical_type types[2];
+	types[0] = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
+	types[1] = duckdb_create_logical_type(DUCKDB_TYPE_BOOLEAN);
+
+	auto data_chunk = duckdb_create_data_chunk(types, 2);
+	REQUIRE(data_chunk);
+
+	auto col1_ptr = (int64_t *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(data_chunk, 0));
+	*col1_ptr = 42;
+	auto col2_ptr = (bool *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(data_chunk, 1));
+	*col2_ptr = false;
+
+	duckdb_appender appender;
+	status = duckdb_appender_create(tester.connection, nullptr, "test", &appender);
+	REQUIRE(status == DuckDBSuccess);
+
+	REQUIRE(duckdb_append_data_chunk(appender, data_chunk) == DuckDBError);
+
+	auto error = duckdb_appender_error(appender);
+	REQUIRE(duckdb::StringUtil::Contains(error, "expected SMALLINT but got BOOLEAN for column 2"));
+
+	duckdb_appender_destroy(&appender);
+
+	duckdb_destroy_data_chunk(&data_chunk);
 
 	duckdb_destroy_logical_type(&types[0]);
 	duckdb_destroy_logical_type(&types[1]);
@@ -365,5 +429,32 @@ TEST_CASE("Test DataChunk populate ListVector in C API", "[capi]") {
 
 	duckdb_destroy_data_chunk(&chunk);
 	duckdb_destroy_logical_type(&list_type);
+	duckdb_destroy_logical_type(&elem_type);
+}
+
+TEST_CASE("Test DataChunk populate ArrayVector in C API", "[capi]") {
+
+	auto elem_type = duckdb_create_logical_type(duckdb_type::DUCKDB_TYPE_INTEGER);
+	auto array_type = duckdb_create_array_type(elem_type, 3);
+	duckdb_logical_type schema[] = {array_type};
+	auto chunk = duckdb_create_data_chunk(schema, 1);
+	duckdb_data_chunk_set_size(chunk, 2);
+	auto array_vector = duckdb_data_chunk_get_vector(chunk, 0);
+
+	auto child = duckdb_array_vector_get_child(array_vector);
+	for (int i = 0; i < 6; i++) {
+		((int *)duckdb_vector_get_data(child))[i] = i;
+	}
+
+	auto vec = (Vector &)(*array_vector);
+	for (int i = 0; i < 2; i++) {
+		auto child_vals = ArrayValue::GetChildren(vec.GetValue(i));
+		for (int j = 0; j < 3; j++) {
+			REQUIRE(child_vals[j].GetValue<int>() == i * 3 + j);
+		}
+	}
+
+	duckdb_destroy_data_chunk(&chunk);
+	duckdb_destroy_logical_type(&array_type);
 	duckdb_destroy_logical_type(&elem_type);
 }

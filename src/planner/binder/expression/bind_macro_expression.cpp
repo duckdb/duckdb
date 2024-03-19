@@ -40,8 +40,8 @@ void ExpressionBinder::ReplaceMacroParametersInLambda(FunctionExpression &functi
 		lambda_params.emplace_back();
 
 		// push the lambda parameter names
-		for (const auto column_ref_expr : column_ref_expressions) {
-			auto column_ref = column_ref_expr.get().Cast<ColumnRefExpression>();
+		for (const auto &column_ref_expr : column_ref_expressions) {
+			const auto &column_ref = column_ref_expr.get().Cast<ColumnRefExpression>();
 			lambda_params.back().emplace(column_ref.GetName());
 		}
 
@@ -120,7 +120,7 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacro
 	string error =
 	    MacroFunction::ValidateArguments(*macro_func.function, macro_func.name, function, positionals, defaults);
 	if (!error.empty()) {
-		throw BinderException(binder.FormatError(*expr, error));
+		throw BinderException(*expr, error);
 	}
 
 	// create a MacroBinding to bind this macro's parameters to its arguments

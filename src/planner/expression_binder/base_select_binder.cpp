@@ -88,7 +88,7 @@ BindResult BaseSelectBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_pt
 				                      "cannot be referenced before it is defined",
 				                      colref.column_names[0]);
 			}
-			if (node.select_list[index]->HasSideEffects()) {
+			if (node.select_list[index]->IsVolatile()) {
 				throw BinderException("Alias \"%s\" referenced in a SELECT clause - but the expression has side "
 				                      "effects. This is not yet supported.",
 				                      colref.column_names[0]);
@@ -112,10 +112,10 @@ BindResult BaseSelectBinder::BindGroupingFunction(OperatorExpression &op, idx_t 
 		throw InternalException("GROUPING requires at least one child");
 	}
 	if (node.groups.group_expressions.empty()) {
-		return BindResult(binder.FormatError(op, "GROUPING statement cannot be used without groups"));
+		return BindResult(BinderException(op, "GROUPING statement cannot be used without groups"));
 	}
 	if (op.children.size() >= 64) {
-		return BindResult(binder.FormatError(op, "GROUPING statement cannot have more than 64 groups"));
+		return BindResult(BinderException(op, "GROUPING statement cannot have more than 64 groups"));
 	}
 	vector<idx_t> group_indexes;
 	group_indexes.reserve(op.children.size());
@@ -123,8 +123,7 @@ BindResult BaseSelectBinder::BindGroupingFunction(OperatorExpression &op, idx_t 
 		ExpressionBinder::QualifyColumnNames(binder, child);
 		auto idx = TryBindGroup(*child, depth);
 		if (idx == DConstants::INVALID_INDEX) {
-			return BindResult(binder.FormatError(
-			    op, StringUtil::Format("GROUPING child \"%s\" must be a grouping column", child->GetName())));
+			return BindResult(BinderException(op, "GROUPING child \"%s\" must be a grouping column", child->GetName()));
 		}
 		group_indexes.push_back(idx);
 	}
@@ -150,7 +149,7 @@ BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, idx_
 
 bool BaseSelectBinder::QualifyColumnAlias(const ColumnRefExpression &colref) {
 	if (!colref.IsQualified()) {
-		return alias_map.find(colref.column_names[0]) != alias_map.end() ? true : false;
+		return alias_map.find(colref.column_names[0]) != alias_map.end();
 	}
 	return false;
 }

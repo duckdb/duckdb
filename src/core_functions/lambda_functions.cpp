@@ -366,7 +366,7 @@ void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result) {
 
 	FUNCTION_FUNCTOR::AppendResult(result, lambda_vector, elem_cnt, result_entries, list_filter_info, execute_info);
 
-	if (info.is_all_constant && !info.has_side_effects) {
+	if (info.is_all_constant && !info.is_volatile) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }

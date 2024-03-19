@@ -6,9 +6,9 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/union_by_name.hpp"
-#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
-#include "duckdb/execution/operator/csv_scanner/table_function/global_csv_state.hpp"
-#include "duckdb/execution/operator/csv_scanner/util/csv_error.hpp"
+#include "duckdb/execution/operator/csv_scanner/global_csv_state.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_error.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
 #include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -20,10 +20,10 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/execution/operator/csv_scanner/table_function/csv_file_scanner.hpp"
-#include "duckdb/execution/operator/csv_scanner/scanner/base_scanner.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
+#include "duckdb/execution/operator/csv_scanner/base_scanner.hpp"
 
-#include "duckdb/execution/operator/csv_scanner/scanner/string_value_scanner.hpp"
+#include "duckdb/execution/operator/csv_scanner/string_value_scanner.hpp"
 
 #include <limits>
 
@@ -106,6 +106,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			names = sniffer_result.names;
 			return_types = sniffer_result.return_types;
 		}
+		result->csv_types = return_types;
+		result->csv_names = names;
 	}
 
 	D_ASSERT(return_types.size() == names.size());
@@ -131,13 +133,16 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 				}
 			}
 		}
+		result->csv_types = return_types;
+		result->csv_names = names;
 	} else {
+		result->csv_types = return_types;
+		result->csv_names = names;
 		result->reader_bind = MultiFileReader::BindOptions(options.file_options, result->files, return_types, names);
 	}
 	result->return_types = return_types;
 	result->return_names = names;
-	result->csv_types = return_types;
-	result->csv_names = names;
+
 	result->FinalizeRead(context);
 	return std::move(result);
 }
@@ -206,8 +211,6 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 			break;
 		}
 		if (csv_local_state.csv_reader->FinishedIterator()) {
-			csv_local_state.csv_reader->csv_file_scan->error_handler->Insert(
-			    csv_local_state.csv_reader->GetBoundaryIndex(), csv_local_state.csv_reader->GetLinesRead());
 			csv_local_state.csv_reader = csv_global_state.Next();
 			if (!csv_local_state.csv_reader) {
 				csv_global_state.DecrementThread();
@@ -265,6 +268,9 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 
 double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p,
                          const GlobalTableFunctionState *global_state) {
+	if (!global_state) {
+		return 0;
+	}
 	auto &bind_data = bind_data_p->Cast<ReadCSVData>();
 	auto &data = global_state->Cast<CSVGlobalState>();
 	return data.GetProgress(bind_data);

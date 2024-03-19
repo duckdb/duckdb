@@ -40,75 +40,83 @@ unique_ptr<Expression> Binder::BindOrderExpression(OrderBinder &order_binder, un
 	return bound_expr;
 }
 
-unique_ptr<Expression> Binder::BindDelimiter(ClientContext &context, OrderBinder &order_binder,
-                                             unique_ptr<ParsedExpression> delimiter, const LogicalType &type,
-                                             Value &delimiter_value) {
+BoundLimitNode Binder::BindLimitValue(OrderBinder &order_binder, unique_ptr<ParsedExpression> limit_val,
+                                      bool is_percentage, bool is_offset) {
 	auto new_binder = Binder::CreateBinder(context, this, true);
-	if (delimiter->HasSubquery()) {
+	if (limit_val->HasSubquery()) {
 		if (!order_binder.HasExtraList()) {
 			throw BinderException("Subquery in LIMIT/OFFSET not supported in set operation");
 		}
-		return order_binder.CreateExtraReference(std::move(delimiter));
+		auto bound_limit = order_binder.CreateExtraReference(std::move(limit_val));
+		if (is_percentage) {
+			return BoundLimitNode::ExpressionPercentage(std::move(bound_limit));
+		} else {
+			return BoundLimitNode::ExpressionValue(std::move(bound_limit));
+		}
 	}
 	ExpressionBinder expr_binder(*new_binder, context);
-	expr_binder.target_type = type;
-	auto expr = expr_binder.Bind(delimiter);
+	auto target_type = is_percentage ? LogicalType::DOUBLE : LogicalType::BIGINT;
+	;
+	expr_binder.target_type = target_type;
+	auto expr = expr_binder.Bind(limit_val);
 	if (expr->IsFoldable()) {
 		//! this is a constant
-		delimiter_value = ExpressionExecutor::EvaluateScalar(context, *expr).CastAs(context, type);
-		return nullptr;
+		auto val = ExpressionExecutor::EvaluateScalar(context, *expr).CastAs(context, target_type);
+		if (is_percentage) {
+			D_ASSERT(!is_offset);
+			double percentage_val;
+			if (val.IsNull()) {
+				percentage_val = 100.0;
+			} else {
+				percentage_val = val.GetValue<double>();
+			}
+			if (Value::IsNan(percentage_val) || percentage_val < 0 || percentage_val > 100) {
+				throw OutOfRangeException("Limit percent out of range, should be between 0% and 100%");
+			}
+			return BoundLimitNode::ConstantPercentage(percentage_val);
+		} else {
+			int64_t constant_val;
+			if (val.IsNull()) {
+				constant_val = is_offset ? 0 : NumericLimits<int64_t>::Maximum();
+			} else {
+				constant_val = val.GetValue<int64_t>();
+			}
+			if (constant_val < 0) {
+				throw BinderException(expr->query_location, "LIMIT/OFFSET cannot be negative");
+			}
+			return BoundLimitNode::ConstantValue(constant_val);
+		}
 	}
 	if (!new_binder->correlated_columns.empty()) {
 		throw BinderException("Correlated columns not supported in LIMIT/OFFSET");
 	}
 	// move any correlated columns to this binder
 	MoveCorrelatedExpressions(*new_binder);
-	return expr;
+	if (is_percentage) {
+		return BoundLimitNode::ExpressionPercentage(std::move(expr));
+	} else {
+		return BoundLimitNode::ExpressionValue(std::move(expr));
+	}
 }
 
 duckdb::unique_ptr<BoundResultModifier> Binder::BindLimit(OrderBinder &order_binder, LimitModifier &limit_mod) {
 	auto result = make_uniq<BoundLimitModifier>();
 	if (limit_mod.limit) {
-		Value val;
-		result->limit = BindDelimiter(context, order_binder, std::move(limit_mod.limit), LogicalType::BIGINT, val);
-		if (!result->limit) {
-			result->limit_val = val.IsNull() ? NumericLimits<int64_t>::Maximum() : val.GetValue<int64_t>();
-			if (result->limit_val < 0) {
-				throw BinderException("LIMIT cannot be negative");
-			}
-		}
+		result->limit_val = BindLimitValue(order_binder, std::move(limit_mod.limit), false, false);
 	}
 	if (limit_mod.offset) {
-		Value val;
-		result->offset = BindDelimiter(context, order_binder, std::move(limit_mod.offset), LogicalType::BIGINT, val);
-		if (!result->offset) {
-			result->offset_val = val.IsNull() ? 0 : val.GetValue<int64_t>();
-			if (result->offset_val < 0) {
-				throw BinderException("OFFSET cannot be negative");
-			}
-		}
+		result->offset_val = BindLimitValue(order_binder, std::move(limit_mod.offset), false, true);
 	}
 	return std::move(result);
 }
 
 unique_ptr<BoundResultModifier> Binder::BindLimitPercent(OrderBinder &order_binder, LimitPercentModifier &limit_mod) {
-	auto result = make_uniq<BoundLimitPercentModifier>();
+	auto result = make_uniq<BoundLimitModifier>();
 	if (limit_mod.limit) {
-		Value val;
-		result->limit = BindDelimiter(context, order_binder, std::move(limit_mod.limit), LogicalType::DOUBLE, val);
-		if (!result->limit) {
-			result->limit_percent = val.IsNull() ? 100 : val.GetValue<double>();
-			if (result->limit_percent < 0.0) {
-				throw Exception("Limit percentage can't be negative value");
-			}
-		}
+		result->limit_val = BindLimitValue(order_binder, std::move(limit_mod.limit), true, false);
 	}
 	if (limit_mod.offset) {
-		Value val;
-		result->offset = BindDelimiter(context, order_binder, std::move(limit_mod.offset), LogicalType::BIGINT, val);
-		if (!result->offset) {
-			result->offset_val = val.IsNull() ? 0 : val.GetValue<int64_t>();
-		}
+		result->offset_val = BindLimitValue(order_binder, std::move(limit_mod.offset), false, true);
 	}
 	return std::move(result);
 }
@@ -124,7 +132,8 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 			    distinct.distinct_on_targets.empty() ? DistinctType::DISTINCT : DistinctType::DISTINCT_ON;
 			if (distinct.distinct_on_targets.empty()) {
 				for (idx_t i = 0; i < result.names.size(); i++) {
-					distinct.distinct_on_targets.push_back(make_uniq<ConstantExpression>(Value::INTEGER(1 + i)));
+					distinct.distinct_on_targets.push_back(
+					    make_uniq<ConstantExpression>(Value::INTEGER(UnsafeNumericCast<int32_t>(1 + i))));
 				}
 			}
 			for (auto &distinct_on_target : distinct.distinct_on_targets) {
@@ -153,8 +162,9 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 
 					vector<OrderByNode> new_orders;
 					for (idx_t i = 0; i < order_binder.MaxCount(); i++) {
-						new_orders.emplace_back(order_type, null_order,
-						                        make_uniq<ConstantExpression>(Value::INTEGER(i + 1)));
+						new_orders.emplace_back(
+						    order_type, null_order,
+						    make_uniq<ConstantExpression>(Value::INTEGER(UnsafeNumericCast<int32_t>(i + 1))));
 					}
 					order.orders = std::move(new_orders);
 				}
@@ -215,7 +225,7 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 			bound_modifier = BindLimitPercent(order_binder, mod->Cast<LimitPercentModifier>());
 			break;
 		default:
-			throw Exception("Unsupported result modifier");
+			throw InternalException("Unsupported result modifier");
 		}
 		if (bound_modifier) {
 			result.modifiers.push_back(std::move(bound_modifier));
@@ -266,14 +276,8 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 		}
 		case ResultModifierType::LIMIT_MODIFIER: {
 			auto &limit = bound_mod->Cast<BoundLimitModifier>();
-			AssignReturnType(limit.limit, sql_types);
-			AssignReturnType(limit.offset, sql_types);
-			break;
-		}
-		case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
-			auto &limit = bound_mod->Cast<BoundLimitPercentModifier>();
-			AssignReturnType(limit.limit, sql_types);
-			AssignReturnType(limit.offset, sql_types);
+			AssignReturnType(limit.limit_val.GetExpression(), sql_types);
+			AssignReturnType(limit.offset_val.GetExpression(), sql_types);
 			break;
 		}
 		case ResultModifierType::ORDER_MODIFIER: {
@@ -593,13 +597,14 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 				if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES) {
 					error += "\nGROUP BY ALL will only group entries in the SELECT list. Add it to the SELECT list or "
 					         "GROUP BY this entry explicitly.";
+					throw BinderException(bound_columns[0].query_location, error, bound_columns[0].name);
 				} else {
 					error +=
 					    "\nEither add it to the GROUP BY list, or use \"ANY_VALUE(%s)\" if the exact value of \"%s\" "
 					    "is not important.";
+					throw BinderException(bound_columns[0].query_location, error, bound_columns[0].name,
+					                      bound_columns[0].name, bound_columns[0].name);
 				}
-				throw BinderException(FormatError(bound_columns[0].query_location, error, bound_columns[0].name,
-				                                  bound_columns[0].name, bound_columns[0].name));
 			}
 		}
 	}

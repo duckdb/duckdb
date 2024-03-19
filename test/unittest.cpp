@@ -44,6 +44,7 @@ int main(int argc, char *argv[]) {
 		} else if (string(argv[i]) == "--test-dir") {
 			test_directory = string(argv[++i]);
 		} else if (string(argv[i]) == "--test-temp-dir") {
+			delete_test_path = false;
 			auto test_dir = string(argv[++i]);
 			if (fs->DirectoryExists(test_dir)) {
 				fprintf(stderr, "--test-temp-dir cannot point to a directory that already exists (%s)\n",
@@ -51,7 +52,8 @@ int main(int argc, char *argv[]) {
 				return 1;
 			}
 			SetTestDirectory(test_dir);
-			delete_test_path = false;
+		} else if (string(argv[i]) == "--require") {
+			AddRequire(string(argv[++i]));
 		} else if (string(argv[i]) == "--zero-initialize") {
 			SetDebugInitialize(0);
 		} else if (string(argv[i]) == "--one-initialize") {

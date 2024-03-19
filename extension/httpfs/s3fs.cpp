@@ -7,6 +7,7 @@
 #include "duckdb/common/thread.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
+#include "duckdb/common/exception/http_exception.hpp"
 #endif
 
 #include <duckdb/function/scalar/string_functions.hpp>
@@ -389,6 +390,17 @@ string S3FileSystem::InitializeMultipartUpload(S3FileHandle &file_handle) {
 	return result.substr(open_tag_pos, close_tag_pos - open_tag_pos);
 }
 
+void S3FileSystem::NotifyUploadsInProgress(S3FileHandle &file_handle) {
+	{
+		unique_lock<mutex> lck(file_handle.uploads_in_progress_lock);
+		file_handle.uploads_in_progress--;
+	}
+	// Note that there are 2 cv's because otherwise we might deadlock when the final flushing thread is notified while
+	// another thread is still waiting for an upload thread
+	file_handle.uploads_in_progress_cv.notify_one();
+	file_handle.final_flush_cv.notify_one();
+}
+
 void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuffer> write_buffer) {
 	auto &s3fs = (S3FileSystem &)file_handle.file_system;
 
@@ -402,8 +414,8 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 		                      query_param);
 
 		if (res->code != 200) {
-			throw IOException("Unable to connect to URL %s %s (HTTP code %s)", res->http_url, res->error,
-			                  to_string(res->code));
+			throw HTTPException(*res, "Unable to connect to URL %s %s (HTTP code %s)", res->http_url, res->error,
+			                    to_string(res->code));
 		}
 
 		etag_lookup = res->headers.find("ETag");
@@ -419,11 +431,7 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 			file_handle.upload_exception = std::current_exception();
 		}
 
-		{
-			unique_lock<mutex> lck(file_handle.uploads_in_progress_lock);
-			file_handle.uploads_in_progress--;
-		}
-		file_handle.uploads_in_progress_cv.notify_one();
+		NotifyUploadsInProgress(file_handle);
 
 		return;
 	}
@@ -439,23 +447,10 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 	// Free up space for another thread to acquire an S3WriteBuffer
 	write_buffer.reset();
 
-	// Signal a buffer has become available
-	{
-		unique_lock<mutex> lck(s3fs.buffers_available_lock);
-		s3fs.buffers_in_use--;
-	}
-	s3fs.buffers_available_cv.notify_one();
-
-	// Signal a thread has finished
-	{
-		unique_lock<mutex> lck(file_handle.uploads_in_progress_lock);
-		file_handle.uploads_in_progress--;
-	}
-	file_handle.uploads_in_progress_cv.notify_one();
+	NotifyUploadsInProgress(file_handle);
 }
 
 void S3FileSystem::FlushBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuffer> write_buffer) {
-
 	if (write_buffer->idx == 0) {
 		return;
 	}
@@ -478,6 +473,13 @@ void S3FileSystem::FlushBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuff
 
 	{
 		unique_lock<mutex> lck(file_handle.uploads_in_progress_lock);
+		// check if there are upload threads available
+		if (file_handle.uploads_in_progress >= file_handle.config_params.max_upload_threads) {
+			// there are not - wait for one to become available
+			file_handle.uploads_in_progress_cv.wait(lck, [&file_handle] {
+				return file_handle.uploads_in_progress < file_handle.config_params.max_upload_threads;
+			});
+		}
 		file_handle.uploads_in_progress++;
 	}
 
@@ -504,7 +506,7 @@ void S3FileSystem::FlushAllBuffers(S3FileHandle &file_handle) {
 		}
 	}
 	unique_lock<mutex> lck(file_handle.uploads_in_progress_lock);
-	file_handle.uploads_in_progress_cv.wait(lck, [&file_handle] { return file_handle.uploads_in_progress == 0; });
+	file_handle.final_flush_cv.wait(lck, [&file_handle] { return file_handle.uploads_in_progress == 0; });
 
 	file_handle.RethrowIOError();
 }
@@ -538,50 +540,14 @@ void S3FileSystem::FinalizeMultipartUpload(S3FileHandle &file_handle) {
 
 	auto open_tag_pos = result.find("<CompleteMultipartUploadResult", 0);
 	if (open_tag_pos == string::npos) {
-		throw IOException("Unexpected response during S3 multipart upload finalization: %d\n\n%s", res->code, result);
+		throw HTTPException(*res, "Unexpected response during S3 multipart upload finalization: %d\n\n%s", res->code,
+		                    result);
 	}
 }
 
 // Wrapper around the BufferManager::Allocate to that allows limiting the number of buffers that will be handed out
 BufferHandle S3FileSystem::Allocate(idx_t part_size, uint16_t max_threads) {
-	unique_lock<mutex> lck(buffers_available_lock);
-
-	// Wait for a buffer to become available
-	if (buffers_in_use + threads_waiting_for_memory >= max_threads) {
-		buffers_available_cv.wait(lck, [&] { return buffers_in_use + threads_waiting_for_memory < max_threads; });
-	}
-	buffers_in_use++;
-
-	// Try to allocate a buffer from the buffer manager
-	BufferHandle duckdb_buffer;
-	bool set_waiting_for_memory = false;
-
-	while (true) {
-		try {
-			duckdb_buffer = buffer_manager.Allocate(part_size);
-
-			if (set_waiting_for_memory) {
-				threads_waiting_for_memory--;
-			}
-			break;
-		} catch (OutOfMemoryException &e) {
-			if (!set_waiting_for_memory) {
-				threads_waiting_for_memory++;
-				set_waiting_for_memory = true;
-			}
-
-			auto currently_in_use = buffers_in_use;
-			if (currently_in_use == 0) {
-				// There exist no upload write buffers that can release more memory. We really ran out of memory here.
-				throw;
-			} else {
-				// Wait for more buffers to become available before trying again
-				buffers_available_cv.wait(lck, [&] { return buffers_in_use < currently_in_use; });
-			}
-		}
-	}
-
-	return duckdb_buffer;
+	return buffer_manager.Allocate(MemoryTag::EXTENSION, part_size);
 }
 
 shared_ptr<S3WriteBuffer> S3FileHandle::GetBuffer(uint16_t write_buffer_idx) {
@@ -1157,7 +1123,7 @@ string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthPar
 	    listobjectv2_url.c_str(), *headers,
 	    [&](const duckdb_httplib_openssl::Response &response) {
 		    if (response.status >= 400) {
-			    throw IOException("HTTP GET error on '%s' (HTTP %d)", listobjectv2_url, response.status);
+			    throw HTTPException(response, "HTTP GET error on '%s' (HTTP %d)", listobjectv2_url, response.status);
 		    }
 		    return true;
 	    },

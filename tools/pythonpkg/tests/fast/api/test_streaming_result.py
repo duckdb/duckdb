@@ -3,9 +3,9 @@ import duckdb
 
 
 class TestStreamingResult(object):
-    def test_fetch_one(self):
+    def test_fetch_one(self, duckdb_cursor):
         # fetch one
-        res = duckdb.sql('SELECT * FROM range(100000)')
+        res = duckdb_cursor.sql('SELECT * FROM range(100000)')
         result = []
         while len(result) < 5000:
             tpl = res.fetchone()
@@ -13,7 +13,7 @@ class TestStreamingResult(object):
         assert result == list(range(5000))
 
         # fetch one with error
-        res = duckdb.sql(
+        res = duckdb_cursor.sql(
             "SELECT CASE WHEN i < 10000 THEN i ELSE concat('hello', i::VARCHAR)::INT END FROM range(100000) t(i)"
         )
         with pytest.raises(duckdb.ConversionException):
@@ -22,9 +22,9 @@ class TestStreamingResult(object):
                 if tpl is None:
                     break
 
-    def test_fetch_many(self):
+    def test_fetch_many(self, duckdb_cursor):
         # fetch many
-        res = duckdb.sql('SELECT * FROM range(100000)')
+        res = duckdb_cursor.sql('SELECT * FROM range(100000)')
         result = []
         while len(result) < 5000:
             tpl = res.fetchmany(10)
@@ -32,7 +32,7 @@ class TestStreamingResult(object):
         assert result == list(range(5000))
 
         # fetch many with error
-        res = duckdb.sql(
+        res = duckdb_cursor.sql(
             "SELECT CASE WHEN i < 10000 THEN i ELSE concat('hello', i::VARCHAR)::INT END FROM range(100000) t(i)"
         )
         with pytest.raises(duckdb.ConversionException):
@@ -41,11 +41,11 @@ class TestStreamingResult(object):
                 if tpl is None:
                     break
 
-    def test_record_batch_reader(self):
+    def test_record_batch_reader(self, duckdb_cursor):
         pytest.importorskip("pyarrow")
         pytest.importorskip("pyarrow.dataset")
         # record batch reader
-        res = duckdb.sql('SELECT * FROM range(100000) t(i)')
+        res = duckdb_cursor.sql('SELECT * FROM range(100000) t(i)')
         reader = res.fetch_arrow_reader(batch_size=16_384)
         result = []
         for batch in reader:
@@ -53,7 +53,7 @@ class TestStreamingResult(object):
         assert result == list(range(100000))
 
         # record batch reader with error
-        res = duckdb.sql(
+        res = duckdb_cursor.sql(
             "SELECT CASE WHEN i < 10000 THEN i ELSE concat('hello', i::VARCHAR)::INT END FROM range(100000) t(i)"
         )
         reader = res.fetch_arrow_reader(batch_size=16_384)

@@ -1,4 +1,4 @@
-#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
 #include "duckdb/main/client_data.hpp"
 
 namespace duckdb {
@@ -89,20 +89,24 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
                                          idx_t &best_consistent_rows, idx_t &prev_padding_count) {
 	// The sniffed_column_counts variable keeps track of the number of columns found for each row
 	auto &sniffed_column_counts = scanner->ParseChunk();
+	if (sniffed_column_counts.error) {
+		// This candidate has an error (i.e., over maximum line size or never unquoting quoted values)
+		return;
+	}
 	idx_t start_row = options.dialect_options.skip_rows.GetValue();
 	idx_t consistent_rows = 0;
-	idx_t num_cols = sniffed_column_counts.Empty() ? 1 : sniffed_column_counts[start_row];
+	idx_t num_cols = sniffed_column_counts.result_position == 0 ? 1 : sniffed_column_counts[start_row];
 	idx_t padding_count = 0;
 	bool allow_padding = options.null_padding;
-	if (sniffed_column_counts.Size() > rows_read) {
-		rows_read = sniffed_column_counts.Size();
+	if (sniffed_column_counts.result_position > rows_read) {
+		rows_read = sniffed_column_counts.result_position;
 	}
 	if (set_columns.IsCandidateUnacceptable(num_cols, options.null_padding, options.ignore_errors,
 	                                        sniffed_column_counts.last_value_always_empty)) {
 		// Not acceptable
 		return;
 	}
-	for (idx_t row = start_row; row < sniffed_column_counts.Size(); row++) {
+	for (idx_t row = start_row; row < sniffed_column_counts.result_position; row++) {
 		if (set_columns.IsCandidateUnacceptable(sniffed_column_counts[row], options.null_padding, options.ignore_errors,
 		                                        sniffed_column_counts.last_value_always_empty)) {
 			// Not acceptable
@@ -143,7 +147,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	// If the number of rows is consistent with the calculated value after accounting for skipped rows and the
 	// start row.
 	bool rows_consistent = consistent_rows + (start_row - options.dialect_options.skip_rows.GetValue()) ==
-	                       sniffed_column_counts.Size() - options.dialect_options.skip_rows.GetValue();
+	                       sniffed_column_counts.result_position - options.dialect_options.skip_rows.GetValue();
 	// If there are more than one consistent row.
 	bool more_than_one_row = (consistent_rows > 1);
 
@@ -205,7 +209,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 
 bool CSVSniffer::RefineCandidateNextChunk(ColumnCountScanner &candidate) {
 	auto &sniffed_column_counts = candidate.ParseChunk();
-	for (idx_t i = 0; i < sniffed_column_counts.Size(); i++) {
+	for (idx_t i = 0; i < sniffed_column_counts.result_position; i++) {
 		if (set_columns.IsSet()) {
 			return !set_columns.IsCandidateUnacceptable(sniffed_column_counts[i], options.null_padding,
 			                                            options.ignore_errors,
@@ -230,15 +234,14 @@ void CSVSniffer::RefineCandidates() {
 		// Only one candidate nothing to refine or all candidates already checked
 		return;
 	}
+	vector<unique_ptr<ColumnCountScanner>> successful_candidates;
 	for (auto &cur_candidate : candidates) {
 		for (idx_t i = 1; i <= options.sample_size_chunks; i++) {
 			bool finished_file = cur_candidate->FinishedFile();
 			if (finished_file || i == options.sample_size_chunks) {
-				// we finished the file or our chunk sample successfully: stop
-				auto successful_candidate = std::move(cur_candidate);
-				candidates.clear();
-				candidates.emplace_back(std::move(successful_candidate));
-				return;
+				// we finished the file or our chunk sample successfully
+				successful_candidates.push_back(std::move(cur_candidate));
+				break;
 			}
 			if (!RefineCandidateNextChunk(*cur_candidate) || cur_candidate->GetResult().error) {
 				// This candidate failed, move to the next one
@@ -246,7 +249,25 @@ void CSVSniffer::RefineCandidates() {
 			}
 		}
 	}
+	// If we have multiple candidates with quotes set, we will give the preference to ones
+	// that have actually quoted values, otherwise we will choose quotes = \0
 	candidates.clear();
+	if (!successful_candidates.empty()) {
+		unique_ptr<ColumnCountScanner> cc_best_candidate;
+		for (idx_t i = 0; i < successful_candidates.size(); i++) {
+			cc_best_candidate = std::move(successful_candidates[i]);
+			if (cc_best_candidate->state_machine->state_machine_options.quote != '\0' &&
+			    cc_best_candidate->ever_quoted) {
+				candidates.clear();
+				candidates.push_back(std::move(cc_best_candidate));
+				return;
+			}
+			if (cc_best_candidate->state_machine->state_machine_options.quote == '\0') {
+				candidates.push_back(std::move(cc_best_candidate));
+			}
+		}
+		return;
+	}
 	return;
 }
 

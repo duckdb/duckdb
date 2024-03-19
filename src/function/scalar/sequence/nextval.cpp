@@ -106,7 +106,7 @@ unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, ScalarFunction 
 void NextvalFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction next_val("nextval", {LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                        NextValFunction<NextSequenceValueOperator>, NextValBind, NextValDependency);
-	next_val.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
+	next_val.stability = FunctionStability::VOLATILE;
 	next_val.serialize = Serialize;
 	next_val.deserialize = Deserialize;
 	set.AddFunction(next_val);
@@ -115,7 +115,7 @@ void NextvalFun::RegisterFunction(BuiltinFunctions &set) {
 void CurrvalFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction curr_val("currval", {LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                        NextValFunction<CurrentSequenceValueOperator>, NextValBind, NextValDependency);
-	curr_val.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
+	curr_val.stability = FunctionStability::VOLATILE;
 	curr_val.serialize = Serialize;
 	curr_val.deserialize = Deserialize;
 	set.AddFunction(curr_val);

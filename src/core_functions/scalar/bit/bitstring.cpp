@@ -41,7 +41,7 @@ struct GetBitOperator {
 			throw OutOfRangeException("bit index %s out of valid range (0..%s)", NumericHelper::ToString(n),
 			                          NumericHelper::ToString(Bit::BitLength(input) - 1));
 		}
-		return Bit::GetBit(input, n);
+		return UnsafeNumericCast<TR>(Bit::GetBit(input, n));
 	}
 };
 
@@ -85,7 +85,7 @@ struct BitPositionOperator {
 		if (substring.GetSize() > input.GetSize()) {
 			return 0;
 		}
-		return Bit::BitPosition(substring, input);
+		return UnsafeNumericCast<TR>(Bit::BitPosition(substring, input));
 	}
 };
 

@@ -96,7 +96,7 @@ string ExceptionFormatValue::Format(const string &msg, std::vector<ExceptionForm
 	} catch (std::exception &ex) { // LCOV_EXCL_START
 		// work-around for oss-fuzz limiting memory which causes issues here
 		if (StringUtil::Contains(ex.what(), "fuzz mode")) {
-			throw Exception(msg);
+			throw InvalidInputException(msg);
 		}
 		throw InternalException(std::string("Primary exception: ") + msg +
 		                        "\nSecondary exception in ExceptionFormatValue: " + ex.what());

@@ -58,7 +58,7 @@ fi
 
 echo ""
 
-### INVALIDATE THE CLOUDFRONT CACHE
+### INVALIDATE THE CLOUDFRONT CACHE AND CLOUDFLARE
 # For double checking we are invalidating the correct domain
 CLOUDFRONT_ORIGINS=`aws cloudfront get-distribution --id $CLOUDFRONT_DISTRIBUTION_ID --query 'Distribution.DistributionConfig.Origins.Items[*].DomainName' --output text`
 
@@ -73,7 +73,7 @@ while IFS= read -r line; do
 done <<< "$output"
 
 if [ "$DUCKDB_DEPLOY_SCRIPT_MODE" == "for_real" ]; then
-  echo "INVALIDATION"
+  echo "CLOUDFRONT INVALIDATION"
   echo "> Total files: ${#s3_paths[@]}"
   echo "> Domain: $CLOUDFRONT_ORIGINS"
   for path in "${s3_paths[@]}"; do
@@ -87,4 +87,29 @@ else
   for path in "${s3_paths[@]}"; do
     echo "    $path"
   done
+fi
+
+echo ""
+
+if [ ! -z "$CLOUDFLARE_CACHE_PURGE_TOKEN" ]; then
+   if [ "$DUCKDB_DEPLOY_SCRIPT_MODE" == "for_real" ]; then
+     echo "CLOUDFLARE INVALIDATION"
+     echo "> Total files: ${#s3_paths[@]}"
+     for path in "${s3_paths[@]}"; do
+       curl  --request POST --url https://api.cloudflare.com/client/v4/zones/84f631c38b77d4631b561207f2477332/purge_cache --header 'Content-Type: application/json' --header "Authorization: Bearer $CLOUDFLARE_CACHE_PURGE_TOKEN" --data "{\"files\": [\"http://extensions.duckdb.org$path\"]}"
+       echo ""
+     done
+   else
+     echo "CLOUDFLARE INVALIDATION (DRY RUN)"
+     echo "> Total files: ${#s3_paths[@]}"
+     echo "> Domain: $CLOUDFRONT_ORIGINS"
+     echo "> Paths:"
+     for path in "${s3_paths[@]}"; do
+       echo "    http://extensions.duckdb.org$path"
+     done
+   fi
+else
+    echo "##########################################"
+    echo "WARNING! CLOUDFLARE INVALIDATION DISABLED!"
+    echo "##########################################"
 fi

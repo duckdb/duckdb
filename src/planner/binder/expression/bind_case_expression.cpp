@@ -8,14 +8,14 @@ namespace duckdb {
 
 BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 	// first try to bind the children of the case expression
-	string error;
+	ErrorData error;
 	for (auto &check : expr.case_checks) {
 		BindChild(check.when_expr, depth, error);
 		BindChild(check.then_expr, depth, error);
 	}
 	BindChild(expr.else_expr, depth, error);
-	if (!error.empty()) {
-		return BindResult(error);
+	if (error.HasError()) {
+		return BindResult(std::move(error));
 	}
 	// the children have been successfully resolved
 	// figure out the result type of the CASE expression
@@ -25,10 +25,9 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 		auto &then_expr = BoundExpression::GetExpression(*check.then_expr);
 		auto then_type = ExpressionBinder::GetExpressionReturnType(*then_expr);
 		if (!LogicalType::TryGetMaxLogicalType(context, return_type, then_type, return_type)) {
-			throw BinderException(binder.FormatError(
-			    expr, StringUtil::Format(
-			              "Cannot mix values of type %s and %s in CASE expression - an explicit cast is required",
-			              return_type.ToString(), then_type.ToString())));
+			throw BinderException(
+			    expr, "Cannot mix values of type %s and %s in CASE expression - an explicit cast is required",
+			    return_type.ToString(), then_type.ToString());
 		}
 	}
 

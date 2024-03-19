@@ -11,7 +11,7 @@ PendingQueryResult::PendingQueryResult(shared_ptr<ClientContext> context_p, Prep
       context(std::move(context_p)), allow_stream_result(allow_stream_result) {
 }
 
-PendingQueryResult::PendingQueryResult(PreservedError error)
+PendingQueryResult::PendingQueryResult(ErrorData error)
     : BaseQueryResult(QueryResultType::PENDING_RESULT, std::move(error)) {
 }
 
@@ -32,7 +32,7 @@ unique_ptr<ClientContextLock> PendingQueryResult::LockContext() {
 void PendingQueryResult::CheckExecutableInternal(ClientContextLock &lock) {
 	bool invalidated = HasError() || !context;
 	if (!invalidated) {
-		invalidated = !context->IsActiveResult(lock, this);
+		invalidated = !context->IsActiveResult(lock, *this);
 	}
 	if (invalidated) {
 		if (HasError()) {
@@ -48,15 +48,30 @@ PendingExecutionResult PendingQueryResult::ExecuteTask() {
 	return ExecuteTaskInternal(*lock);
 }
 
+PendingExecutionResult PendingQueryResult::CheckPulse() {
+	auto lock = LockContext();
+	CheckExecutableInternal(*lock);
+	return context->ExecuteTaskInternal(*lock, *this, true);
+}
+
+bool PendingQueryResult::AllowStreamResult() const {
+	return allow_stream_result;
+}
+
 PendingExecutionResult PendingQueryResult::ExecuteTaskInternal(ClientContextLock &lock) {
 	CheckExecutableInternal(lock);
-	return context->ExecuteTaskInternal(lock, *this);
+	return context->ExecuteTaskInternal(lock, *this, false);
 }
 
 unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &lock) {
 	CheckExecutableInternal(lock);
 	// Busy wait while execution is not finished
-	while (!IsFinished(ExecuteTaskInternal(lock))) {
+	if (allow_stream_result) {
+		while (!IsFinishedOrBlocked(ExecuteTaskInternal(lock))) {
+		}
+	} else {
+		while (!IsFinished(ExecuteTaskInternal(lock))) {
+		}
 	}
 	if (HasError()) {
 		return make_uniq<MaterializedQueryResult>(error);
@@ -76,10 +91,12 @@ void PendingQueryResult::Close() {
 }
 
 bool PendingQueryResult::IsFinished(PendingExecutionResult result) {
-	if (result == PendingExecutionResult::RESULT_READY || result == PendingExecutionResult::EXECUTION_ERROR) {
-		return true;
-	}
-	return false;
+	return (result == PendingExecutionResult::RESULT_READY || result == PendingExecutionResult::EXECUTION_ERROR);
+}
+
+bool PendingQueryResult::IsFinishedOrBlocked(PendingExecutionResult result) {
+	return (result == PendingExecutionResult::RESULT_READY || result == PendingExecutionResult::EXECUTION_ERROR ||
+	        result == PendingExecutionResult::BLOCKED);
 }
 
 } // namespace duckdb

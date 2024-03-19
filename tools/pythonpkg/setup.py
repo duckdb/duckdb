@@ -1,10 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import ctypes
-import logging
 import os
-import sys
 import platform
+import subprocess
 import sys
 import traceback
 from functools import lru_cache
@@ -123,7 +122,12 @@ if platform.system() == 'Windows':
     extensions = ['parquet', 'icu', 'fts', 'tpch', 'json']
 
 is_android = hasattr(sys, 'getandroidapilevel')
-use_jemalloc = not is_android and platform.system() == 'Linux' and platform.architecture()[0] == '64bit'
+use_jemalloc = (
+    not is_android
+    and platform.system() == 'Linux'
+    and platform.architecture()[0] == '64bit'
+    and platform.machine() == 'x86_64'
+)
 
 if use_jemalloc:
     extensions.append('jemalloc')
@@ -132,14 +136,18 @@ unity_build = 0
 if 'DUCKDB_BUILD_UNITY' in os.environ:
     unity_build = 16
 
+try:
+    import pybind11
+except ImportError:
+    raise Exception(
+        'pybind11 could not be imported. This usually means you\'re calling setup.py directly, or using a version of pip that doesn\'t support PEP517'
+    ) from None
+
 # speed up compilation with: -j = cpu_number() on non Windows machines
 if os.name != 'nt' and os.environ.get('DUCKDB_DISABLE_PARALLEL_COMPILE', '') != '1':
-    try:
-        from pybind11.setup_helpers import ParallelCompile
-    except ImportError:
-        logging.warning('Pybind11 not available yet')
-    else:
-        ParallelCompile().install()
+    from pybind11.setup_helpers import ParallelCompile
+
+    ParallelCompile().install()
 
 
 def open_utf8(fpath, flags):
@@ -166,23 +174,14 @@ if 'DUCKDB_INSTALL_USER' in os.environ and 'install' in sys.argv:
     sys.argv.append('--user')
 
 existing_duckdb_dir = ''
-new_sys_args = []
 libraries = []
-for i in range(len(sys.argv)):
-    if sys.argv[i].startswith("--binary-dir="):
-        existing_duckdb_dir = sys.argv[i].split('=', 1)[1]
-    elif sys.argv[i].startswith('--package_name='):
-        lib_name = sys.argv[i].split('=', 1)[1]
-    elif sys.argv[i].startswith("--compile-flags="):
-        # FIXME: this is overwriting the previously set toolchain_args ?
-        toolchain_args = ['-std=c++11'] + [
-            x.strip() for x in sys.argv[i].split('=', 1)[1].split(' ') if len(x.strip()) > 0
-        ]
-    elif sys.argv[i].startswith("--libs="):
-        libraries = [x.strip() for x in sys.argv[i].split('=', 1)[1].split(' ') if len(x.strip()) > 0]
-    else:
-        new_sys_args.append(sys.argv[i])
-sys.argv = new_sys_args
+if 'DUCKDB_BINARY_DIR' in os.environ:
+    existing_duckdb_dir = os.environ['DUCKDB_BINARY_DIR']
+if 'DUCKDB_COMPILE_FLAGS' in os.environ:
+    toolchain_args = ['-std=c++11'] + os.environ['DUCKDB_COMPILE_FLAGS'].split()
+if 'DUCKDB_LIBS' in os.environ:
+    libraries = os.environ['DUCKDB_LIBS'].split(' ')
+
 define_macros = [('DUCKDB_PYTHON_LIB_NAME', lib_name)]
 
 if platform.system() == 'Darwin':
@@ -200,20 +199,13 @@ for ext in extensions:
 
 define_macros.extend([('DUCKDB_EXTENSION_AUTOLOAD_DEFAULT', '1'), ('DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT', '1')])
 
-linker_args = toolchain_args
+linker_args = toolchain_args[:]
 if platform.system() == 'Windows':
-    linker_args.extend(['rstrtmgr.lib'])
+    linker_args.extend(['rstrtmgr.lib', 'bcrypt.lib'])
 
-
-class get_pybind_include(object):
-    def __init__(self, user=False):
-        self.user = user
-
-    def __str__(self):
-        import pybind11
-
-        return pybind11.get_include(self.user)
-
+short_paths = False
+if platform.system() == 'Windows':
+    short_paths = True
 
 extra_files = []
 header_files = []
@@ -228,7 +220,8 @@ script_path = os.path.dirname(os.path.abspath(__file__))
 main_include_path = os.path.join(script_path, 'src', 'include')
 main_source_path = os.path.join(script_path, 'src')
 main_source_files = ['duckdb_python.cpp'] + list_source_files(main_source_path)
-include_directories = [main_include_path, get_pybind_include(), get_pybind_include(user=True)]
+
+include_directories = [main_include_path, pybind11.get_include(False), pybind11.get_include(True)]
 if 'BUILD_HTTPFS' in os.environ and 'OPENSSL_ROOT_DIR' in os.environ:
     include_directories += [os.path.join(os.environ['OPENSSL_ROOT_DIR'], 'include')]
 
@@ -253,7 +246,7 @@ if len(existing_duckdb_dir) == 0:
         import package_build
 
         (source_list, include_list, original_sources) = package_build.build_package(
-            os.path.join(script_path, "duckdb_build"), extensions, False, unity_build, "duckdb_build"
+            os.path.join(script_path, "duckdb_build"), extensions, False, unity_build, "duckdb_build", short_paths
         )
 
         duckdb_sources = [
@@ -376,8 +369,41 @@ spark_packages = [
 
 packages.extend(spark_packages)
 
+
+# Duplicated from scripts/package_build.py
+def get_git_describe():
+    override_git_describe = os.getenv('OVERRIDE_GIT_DESCRIBE') or ''
+    # empty override_git_describe, either since env was empty string or not existing
+    # -> ask git (that can fail, so except in place)
+    if len(override_git_describe) == 0:
+        try:
+            return subprocess.check_output(['git', 'describe', '--tags', '--long']).strip().decode('utf8')
+        except subprocess.CalledProcessError:
+            return "v0.0.0-0-gdeadbeeff"
+    if len(override_git_describe.split('-')) == 3:
+        return override_git_describe
+    if len(override_git_describe.split('-')) == 1:
+        override_git_describe += "-0"
+    assert len(override_git_describe.split('-')) == 2
+    try:
+        return (
+            override_git_describe
+            + "-g"
+            + subprocess.check_output(['git', 'log', '-1', '--format=%h']).strip().decode('utf8')
+        )
+    except subprocess.CalledProcessError:
+        return override_git_describe + "-g" + "deadbeeff"
+
+
+def get_version():
+    git_describe = get_git_describe()
+    version = git_describe.split('-')[0]
+    return version
+
+
 setup(
     name=lib_name,
+    version=get_version(),
     description='DuckDB in-process database',
     keywords='DuckDB Database SQL OLAP',
     url="https://www.duckdb.org",

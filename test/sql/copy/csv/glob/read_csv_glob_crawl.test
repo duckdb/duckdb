@@ -97,7 +97,7 @@ SELECT count(*) FROM glob('test/sql/copy/csv/data/glob/crawl/d/**/mid/*/');
 statement error
 SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/**/mid/**/*.csv';
 ----
-IO Error: Cannot use multiple '**' in one path
+Cannot use multiple '**' in one path
 
 query I
 SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/**/???/*/*.csv';
@@ -112,7 +112,7 @@ SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/*/???/**/*.csv';
 statement error
 SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/*/mid/**/*.csv';
 ----
-IO Error: No files found that match the pattern 
+No files found that match the pattern
 
 query I
 SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/*/*/*/mid/**/*.csv';
@@ -132,7 +132,7 @@ SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/*/???/*.csv';
 statement error
 SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/**/*/**/*.csv';
 ----
-IO Error: Cannot use multiple '**' in one path
+Cannot use multiple '**' in one path
 
 query I
 SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/**/d2?/*/*.csv';
@@ -162,7 +162,7 @@ SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/*/**/d?0/*.csv';
 statement error
 SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/**/**/**/**/*.csv';
 ----
-IO Error: Cannot use multiple '**' in one path
+Cannot use multiple '**' in one path
 
 # Test with hidden files. By default python does not return hidden files, but duckdb does.
 query II
@@ -316,4 +316,4 @@ FROM read_csv_auto('test/sql/copy/csv/data/glob/crawl/.symbolic_link/**');
 statement error
 SELECT sum(column0) FROM read_csv('test/sql/copy/csv/data/glob/crawl/d/**/', auto_detect=1);
 ----
-IO Error: Could not read from file 
+Could not read from file

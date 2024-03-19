@@ -166,7 +166,7 @@ struct StringMinMaxBase : public MinMaxBase {
 			auto ptr = new char[len];
 			memcpy(ptr, input.GetData(), len);
 
-			state.value = string_t(ptr, len);
+			state.value = string_t(ptr, UnsafeNumericCast<uint32_t>(len));
 		}
 	}
 
@@ -457,7 +457,7 @@ struct VectorMinMaxBase {
 			state.value = new Vector(input.GetType());
 			state.value->SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
-		sel_t selv = idx;
+		sel_t selv = UnsafeNumericCast<sel_t>(idx);
 		SelectionVector sel(&selv);
 		VectorOperations::Copy(input, *state.value, sel, 1, 0, 0);
 	}
@@ -606,10 +606,11 @@ unique_ptr<FunctionData> BindMinMax(ClientContext &context, AggregateFunction &f
 
 			FunctionBinder function_binder(context);
 			vector<LogicalType> types {arguments[0]->return_type, arguments[0]->return_type};
-			string error;
+			ErrorData error;
 			idx_t best_function = function_binder.BindFunction(func_entry.name, func_entry.functions, types, error);
 			if (best_function == DConstants::INVALID_INDEX) {
-				throw BinderException(string("Fail to find corresponding function for collation min/max: ") + error);
+				throw BinderException(string("Fail to find corresponding function for collation min/max: ") +
+				                      error.Message());
 			}
 			function = func_entry.functions.GetFunctionByOffset(best_function);
 

@@ -208,11 +208,12 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 	}
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ: {
+		timestamp_t timestamp_value;
 		if (schema_ele.type == Type::INT96) {
 			if (stats.size() != sizeof(Int96)) {
 				throw InternalException("Incorrect stats size for type TIMESTAMP");
 			}
-			return Value::TIMESTAMP(ImpalaTimestampToTimestamp(Load<Int96>(stats_data)));
+			timestamp_value = ImpalaTimestampToTimestamp(Load<Int96>(stats_data));
 		} else {
 			D_ASSERT(schema_ele.type == Type::INT64);
 			if (stats.size() != sizeof(int64_t)) {
@@ -222,20 +223,24 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 			if (schema_ele.__isset.logicalType && schema_ele.logicalType.__isset.TIMESTAMP) {
 				// logical type
 				if (schema_ele.logicalType.TIMESTAMP.unit.__isset.MILLIS) {
-					return Value::TIMESTAMPMS(timestamp_t(val));
+					timestamp_value = Timestamp::FromEpochMs(val);
 				} else if (schema_ele.logicalType.TIMESTAMP.unit.__isset.NANOS) {
-					return Value::TIMESTAMPNS(timestamp_t(val));
+					timestamp_value = Timestamp::FromEpochNanoSeconds(val);
 				} else if (schema_ele.logicalType.TIMESTAMP.unit.__isset.MICROS) {
-					return Value::TIMESTAMP(timestamp_t(val));
+					timestamp_value = timestamp_t(val);
 				} else {
 					throw InternalException("Timestamp logicalType is set but unit is not defined");
 				}
-			}
-			if (schema_ele.converted_type == duckdb_parquet::format::ConvertedType::TIMESTAMP_MILLIS) {
-				return Value::TIMESTAMPMS(timestamp_t(val));
+			} else if (schema_ele.converted_type == duckdb_parquet::format::ConvertedType::TIMESTAMP_MILLIS) {
+				timestamp_value = Timestamp::FromEpochMs(val);
 			} else {
-				return Value::TIMESTAMP(timestamp_t(val));
+				timestamp_value = timestamp_t(val);
 			}
+		}
+		if (type.id() == LogicalTypeId::TIMESTAMP_TZ) {
+			return Value::TIMESTAMPTZ(timestamp_value);
+		} else {
+			return Value::TIMESTAMP(timestamp_value);
 		}
 	}
 	default:
@@ -298,7 +303,9 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
