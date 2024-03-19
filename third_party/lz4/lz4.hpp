@@ -32,9 +32,10 @@
     - LZ4 homepage : http://www.lz4.org
     - LZ4 source repository : https://github.com/lz4/lz4
 */
-#if defined (__cplusplus)
-extern "C" {
-#endif
+//#if defined (__cplusplus)
+//extern "C" {
+//#endif
+namespace duckdb_lz4 {
 
 #ifndef LZ4_H_2983827168210
 #define LZ4_H_2983827168210

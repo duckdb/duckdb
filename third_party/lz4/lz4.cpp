@@ -114,7 +114,9 @@
 #endif
 
 #define LZ4_STATIC_LINKING_ONLY  /* LZ4_DISTANCE_MAX */
-#include "lz4.h"
+#include <stdlib.h>
+
+#include "lz4.hpp"
 /* see also "memory routines" below */
 
 
@@ -184,7 +186,7 @@
 # define LZ4_ALIGN_TEST 1
 #endif
 
-
+namespace duckdb_lz4 {
 /*-************************************
 *  Memory routines
 **************************************/
@@ -734,9 +736,9 @@ int LZ4_sizeofState(void) { return sizeof(LZ4_stream_t); }
 /*-****************************************
 *  Internal Definitions, used only in Tests
 *******************************************/
-#if defined (__cplusplus)
-extern "C" {
-#endif
+//#if defined (__cplusplus)
+//extern "C" {
+//#endif
 
 int LZ4_compress_forceExtDict (LZ4_stream_t* LZ4_dict, const char* source, char* dest, int srcSize);
 
@@ -746,9 +748,9 @@ int LZ4_decompress_safe_forceExtDict(const char* source, char* dest,
 int LZ4_decompress_safe_partial_forceExtDict(const char* source, char* dest,
                                      int compressedSize, int targetOutputSize, int dstCapacity,
                                      const void* dictStart, size_t dictSize);
-#if defined (__cplusplus)
-}
-#endif
+//#if defined (__cplusplus)
+//}
+//#endif
 
 /*-******************************
 *  Compression functions
@@ -2720,3 +2722,4 @@ char* LZ4_slideInputBuffer (void* state)
 }
 
 #endif   /* LZ4_COMMONDEFS_ONLY */
+}

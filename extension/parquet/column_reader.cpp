@@ -16,7 +16,7 @@
 #include "templated_column_reader.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "zstd.h"
-#include "lz4.h"
+#include "lz4.hpp"
 
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/types/bit.hpp"
@@ -341,7 +341,7 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_p
 		break;
 	}
 	case CompressionCodec::LZ4_RAW: {
-		auto res = LZ4_decompress_safe(const_char_ptr_cast(src), char_ptr_cast(dst), src_size, dst_size);
+		auto res = duckdb_lz4::LZ4_decompress_safe(const_char_ptr_cast(src), char_ptr_cast(dst), src_size, dst_size);
 		if (res != NumericCast<int>(dst_size)) {
 			throw std::runtime_error("LZ4 decompression failure");
 		}
