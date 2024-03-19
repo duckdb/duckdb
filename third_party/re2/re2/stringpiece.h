@@ -5,10 +5,6 @@
 #ifndef RE2_STRINGPIECE_H_
 #define RE2_STRINGPIECE_H_
 
-#ifdef min
-#undef min
-#endif
-
 // A string-like object that points to a sized piece of memory.
 //
 // Functions or methods may use const StringPiece& parameters to accept either
@@ -23,18 +19,13 @@
 //
 // Arghh!  I wish C++ literals were "string".
 
-// Doing this simplifies the logic below.
-#ifndef __has_include
-#define __has_include(x) 0
-#endif
-
 #include <stddef.h>
 #include <string.h>
 #include <algorithm>
 #include <iosfwd>
 #include <iterator>
 #include <string>
-#if __has_include(<string_view>) && __cplusplus >= 201703L
+#ifdef __cpp_lib_string_view
 #include <string_view>
 #endif
 
@@ -61,7 +52,7 @@ class StringPiece {
   // expected.
   StringPiece()
       : data_(NULL), size_(0) {}
-#if __has_include(<string_view>) && __cplusplus >= 201703L
+#ifdef __cpp_lib_string_view
   StringPiece(const std::string_view& str)
       : data_(str.data()), size_(str.size()) {}
 #endif
@@ -106,6 +97,14 @@ class StringPiece {
     data_ = str;
     size_ = len;
   }
+
+#ifdef __cpp_lib_string_view
+  // Converts to `std::basic_string_view`.
+  operator std::basic_string_view<char, traits_type>() const {
+    if (!data_) return {};
+    return std::basic_string_view<char, traits_type>(data_, size_);
+  }
+#endif
 
   // Converts to `std::basic_string`.
   template <typename A>
@@ -209,6 +208,6 @@ inline bool operator>=(const StringPiece& x, const StringPiece& y) {
 // Allow StringPiece to be logged.
 std::ostream& operator<<(std::ostream& o, const StringPiece& p);
 
-}  // namespace duckdb_re2
+}  // namespace re2
 
 #endif  // RE2_STRINGPIECE_H_

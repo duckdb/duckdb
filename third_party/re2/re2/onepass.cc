@@ -59,19 +59,21 @@
 
 #include "util/util.h"
 #include "util/logging.h"
-#include "util/pod_array.h"
-#include "util/sparse_set.h"
 #include "util/strutil.h"
 #include "util/utf.h"
+#include "re2/pod_array.h"
 #include "re2/prog.h"
+#include "re2/sparse_set.h"
 #include "re2/stringpiece.h"
 
 // Silence "zero-sized array in struct/union" warning for OneState::action.
 #ifdef _MSC_VER
-//#pragma warning(disable: 4200)
+#pragma warning(disable: 4200)
 #endif
 
 namespace duckdb_re2 {
+
+static const bool ExtraDebug = false;
 
 // The key insight behind this implementation is that the
 // non-determinism in an NFA for a one-pass regular expression
@@ -143,7 +145,7 @@ namespace duckdb_re2 {
 // the memory footprint.)
 struct OneState {
   uint32_t matchcond;   // conditions to match right now.
-  uint32_t action[1];
+  uint32_t action[];
 };
 
 // The uint32_t conditions in the action are a combination of
@@ -233,11 +235,11 @@ bool Prog::SearchOnePass(const StringPiece& text,
     matchcap[i] = NULL;
 
   StringPiece context = const_context;
-  if (context.begin() == NULL)
+  if (context.data() == NULL)
     context = text;
-  if (anchor_start() && context.begin() != text.begin())
+  if (anchor_start() && BeginPtr(context) != BeginPtr(text))
     return false;
-  if (anchor_end() && context.end() != text.end())
+  if (anchor_end() && EndPtr(context) != EndPtr(text))
     return false;
   if (anchor_end())
     kind = kFullMatch;
@@ -247,8 +249,8 @@ bool Prog::SearchOnePass(const StringPiece& text,
   // start() is always mapped to the zeroth OneState.
   OneState* state = IndexToNode(nodes, statesize, 0);
   uint8_t* bytemap = bytemap_;
-  const char* bp = text.begin();
-  const char* ep = text.end();
+  const char* bp = text.data();
+  const char* ep = text.data() + text.size();
   const char* p;
   bool matched = false;
   matchcap[0] = bp;
@@ -459,6 +461,9 @@ bool Prog::IsOnePass() {
           int nextindex = nodebyid[ip->out()];
           if (nextindex == -1) {
             if (nalloc >= maxnodes) {
+              if (ExtraDebug)
+                LOG(ERROR) << StringPrintf(
+                    "Not OnePass: hit node limit %d >= %d", nalloc, maxnodes);
               goto fail;
             }
             nextindex = nalloc;
@@ -481,6 +486,9 @@ bool Prog::IsOnePass() {
             if ((act & kImpossible) == kImpossible) {
               node->action[b] = newact;
             } else if (act != newact) {
+              if (ExtraDebug)
+                LOG(ERROR) << StringPrintf(
+                    "Not OnePass: conflict on byte %#x at state %d", c, *it);
               goto fail;
             }
           }
@@ -499,6 +507,9 @@ bool Prog::IsOnePass() {
               if ((act & kImpossible) == kImpossible) {
                 node->action[b] = newact;
               } else if (act != newact) {
+                if (ExtraDebug)
+                  LOG(ERROR) << StringPrintf(
+                      "Not OnePass: conflict on byte %#x at state %d", c, *it);
                 goto fail;
               }
             }
@@ -537,6 +548,9 @@ bool Prog::IsOnePass() {
 
           // If already on work queue, (1) is violated: bail out.
           if (!AddQ(&workq, ip->out())) {
+            if (ExtraDebug)
+              LOG(ERROR) << StringPrintf(
+                  "Not OnePass: multiple paths %d -> %d", *it, ip->out());
             goto fail;
           }
           id = ip->out();
@@ -545,6 +559,9 @@ bool Prog::IsOnePass() {
         case kInstMatch:
           if (matched) {
             // (3) is violated
+            if (ExtraDebug)
+              LOG(ERROR) << StringPrintf(
+                  "Not OnePass: multiple matches from %d", *it);
             goto fail;
           }
           matched = true;
@@ -563,6 +580,37 @@ bool Prog::IsOnePass() {
       }
     }
   }
+
+  if (ExtraDebug) {  // For debugging, dump one-pass NFA to LOG(ERROR).
+    LOG(ERROR) << "bytemap:\n" << DumpByteMap();
+    LOG(ERROR) << "prog:\n" << Dump();
+
+    std::map<int, int> idmap;
+    for (int i = 0; i < size; i++)
+      if (nodebyid[i] != -1)
+        idmap[nodebyid[i]] = i;
+
+    std::string dump;
+    for (Instq::iterator it = tovisit.begin(); it != tovisit.end(); ++it) {
+      int id = *it;
+      int nodeindex = nodebyid[id];
+      if (nodeindex == -1)
+        continue;
+      OneState* node = IndexToNode(nodes.data(), statesize, nodeindex);
+      dump += StringPrintf("node %d id=%d: matchcond=%#x\n",
+                           nodeindex, id, node->matchcond);
+      for (int i = 0; i < bytemap_range_; i++) {
+        if ((node->action[i] & kImpossible) == kImpossible)
+          continue;
+        dump += StringPrintf("  %d cond %#x -> %d id=%d\n",
+                             i, node->action[i] & 0xFFFF,
+                             node->action[i] >> kIndexShift,
+                             idmap[node->action[i] >> kIndexShift]);
+      }
+    }
+    LOG(ERROR) << "nodes:\n" << dump;
+  }
+
   dfa_mem_ -= nalloc*statesize;
   onepass_nodes_ = PODArray<uint8_t>(nalloc*statesize);
   memmove(onepass_nodes_.data(), nodes.data(), nalloc*statesize);
@@ -572,4 +620,4 @@ fail:
   return false;
 }
 
-}  // namespace duckdb_re2
+}  // namespace re2
