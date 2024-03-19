@@ -7,8 +7,6 @@ on:
       - '**'
       - '!main'
       - '!feature'
-    tags:
-      - '**'
     paths-ignore:
       - '**.md'
       - 'examples/**'
@@ -35,6 +33,7 @@ name: R-CMD-check
 env:
   DUCKDB_R_REPO: 'duckdb/duckdb-r'
   TARGET_REF: 'main'
+  DUCKDB_R_REF: '0ed106a71c6e54a509e693a71aba49145c0a3a0f'
   DUCKDB_R_SRC: 'duckdb-r'
   DUCKDB_SRC: 'duckdb'
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
@@ -64,6 +63,7 @@ jobs:
         with:
           repository: ${{ env.DUCKDB_R_REPO }}
           path: ${{ env.DUCKDB_R_SRC }}
+          ref: ${{ env.DUCKDB_R_REF }}
 
       - uses: r-lib/actions/setup-pandoc@v2
 

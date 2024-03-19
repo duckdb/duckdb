@@ -22,8 +22,6 @@ on:
       - '**'
       - '!main'
       - '!feature'
-    tags:
-      - '**'
     paths-ignore:
       - '**.md'
       - 'examples/**'
@@ -66,6 +64,7 @@ jobs:
       CIBW_BUILD: 'cp39-manylinux_x86_64'
       CIBW_TEST_COMMAND: 'python -m pytest {project}/tests --verbose'
       PYTEST_TIMEOUT: '600'
+      CIBW_ENVIRONMENT: 'OVERRIDE_GIT_DESCRIBE=${{ inputs.override_git_describe }}'
 
     steps:
     - uses: actions/checkout@v3
@@ -182,6 +181,7 @@ jobs:
       CIBW_MANYLINUX_PYPY_X86_64_IMAGE: ${{ matrix.manylinux }}
       PYTEST_TIMEOUT: '600'
       DUCKDB_BUILD_UNITY: 1
+      CIBW_ENVIRONMENT: 'OVERRIDE_GIT_DESCRIBE=${{ inputs.override_git_describe }}'
 
     steps:
     - uses: actions/checkout@v3
@@ -397,15 +397,3 @@ jobs:
        shell: bash
        if: ${{ github.ref == 'refs/heads/main' && github.repository == 'duckdb/duckdb' }}
        run: python3 scripts/pypi_cleanup.py
-
-   twine-upload:
-    needs:
-      - osx-python3
-      - win-python3
-      - linux-python3
-    # Note that want to run this by default ONLY if no override_git_describe is provided
-    # This means we are not staging a release
-    if: (( startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' )) && (( inputs.override_git_describe == '' )) && (( github.repository == 'duckdb/duckdb' ))
-    uses: ./.github/workflows/TwineUpload.yml
-    secrets: inherit
-    # Why? If present, it means we are staging releases, and we want to do the upload manually

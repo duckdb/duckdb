@@ -593,6 +593,13 @@ unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntry(ClientContex
 	// Note each file should contain 1 secret
 	try {
 		auto file_reader = BufferedFileReader(fs, secret_path.c_str());
+
+		if (!LocalFileSystem::IsPrivateFile(secret_path, nullptr)) {
+			throw IOException(
+			    "The secret file '%s' has incorrect permissions! Please set correct permissions or remove file",
+			    secret_path);
+		}
+
 		if (!file_reader.Finished()) {
 			BinaryDeserializer deserializer(file_reader);
 

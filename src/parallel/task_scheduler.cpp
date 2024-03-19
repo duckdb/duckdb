@@ -304,7 +304,14 @@ void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 		for (idx_t i = 0; i < create_new_threads; i++) {
 			// launch a thread and assign it a cancellation marker
 			auto marker = unique_ptr<atomic<bool>>(new atomic<bool>(true));
-			auto worker_thread = make_uniq<thread>(ThreadExecuteTasks, this, marker.get());
+			unique_ptr<thread> worker_thread;
+			try {
+				worker_thread = make_uniq<thread>(ThreadExecuteTasks, this, marker.get());
+			} catch (std::exception &ex) {
+				// thread constructor failed - this can happen when the system has too many threads allocated
+				// in this case we cannot allocate more threads - stop launching them
+				break;
+			}
 			auto thread_wrapper = make_uniq<SchedulerThread>(std::move(worker_thread));
 
 			threads.push_back(std::move(thread_wrapper));

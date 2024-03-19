@@ -130,16 +130,14 @@ def get_relative_path(source_dir, target_file):
 
 
 def get_git_describe():
-    override_git_describe = ''
-    if 'OVERRIDE_GIT_DESCRIBE' in os.environ:
-        override_git_describe = os.environ['OVERRIDE_GIT_DESCRIBE']
+    override_git_describe = os.getenv('OVERRIDE_GIT_DESCRIBE') or ''
     # empty override_git_describe, either since env was empty string or not existing
     # -> ask git (that can fail, so except in place)
     if len(override_git_describe) == 0:
         try:
             return subprocess.check_output(['git', 'describe', '--tags', '--long']).strip().decode('utf8')
         except subprocess.CalledProcessError:
-            return "v0.0.0-0-deadbeeff"
+            return "v0.0.0-0-gdeadbeeff"
     if len(override_git_describe.split('-')) == 3:
         return override_git_describe
     if len(override_git_describe.split('-')) == 1:
@@ -148,11 +146,11 @@ def get_git_describe():
     try:
         return (
             override_git_describe
-            + "-"
+            + "-g"
             + subprocess.check_output(['git', 'log', '-1', '--format=%h']).strip().decode('utf8')
         )
     except subprocess.CalledProcessError:
-        return override_git_describe + "-" + "deadbeeff"
+        return override_git_describe + "-g" + "deadbeeff"
 
 
 def git_commit_hash():
@@ -160,7 +158,7 @@ def git_commit_hash():
         return os.environ['SETUPTOOLS_SCM_PRETEND_HASH']
     try:
         git_describe = get_git_describe()
-        hash = git_describe.split('-')[2]
+        hash = git_describe.split('-')[2].lstrip('g')
         return hash
     except:
         return "deadbeeff"
