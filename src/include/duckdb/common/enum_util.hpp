@@ -72,6 +72,8 @@ enum class CSVState : uint8_t;
 
 enum class CTEMaterialize : uint8_t;
 
+enum class CatalogLookupBehavior : uint8_t;
+
 enum class CatalogType : uint8_t;
 
 enum class CheckpointAbort : uint8_t;
@@ -213,6 +215,8 @@ enum class PhysicalType : uint8_t;
 enum class PragmaType : uint8_t;
 
 enum class PreparedParamType : uint8_t;
+
+enum class PreparedStatementMode : uint8_t;
 
 enum class ProfilerPrintFormat : uint8_t;
 
@@ -372,6 +376,9 @@ const char* EnumUtil::ToChars<CSVState>(CSVState value);
 
 template<>
 const char* EnumUtil::ToChars<CTEMaterialize>(CTEMaterialize value);
+
+template<>
+const char* EnumUtil::ToChars<CatalogLookupBehavior>(CatalogLookupBehavior value);
 
 template<>
 const char* EnumUtil::ToChars<CatalogType>(CatalogType value);
@@ -587,6 +594,9 @@ template<>
 const char* EnumUtil::ToChars<PreparedParamType>(PreparedParamType value);
 
 template<>
+const char* EnumUtil::ToChars<PreparedStatementMode>(PreparedStatementMode value);
+
+template<>
 const char* EnumUtil::ToChars<ProfilerPrintFormat>(ProfilerPrintFormat value);
 
 template<>
@@ -793,6 +803,9 @@ CSVState EnumUtil::FromString<CSVState>(const char *value);
 
 template<>
 CTEMaterialize EnumUtil::FromString<CTEMaterialize>(const char *value);
+
+template<>
+CatalogLookupBehavior EnumUtil::FromString<CatalogLookupBehavior>(const char *value);
 
 template<>
 CatalogType EnumUtil::FromString<CatalogType>(const char *value);
@@ -1006,6 +1019,9 @@ PragmaType EnumUtil::FromString<PragmaType>(const char *value);
 
 template<>
 PreparedParamType EnumUtil::FromString<PreparedParamType>(const char *value);
+
+template<>
+PreparedStatementMode EnumUtil::FromString<PreparedStatementMode>(const char *value);
 
 template<>
 ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value);

@@ -149,6 +149,7 @@ void CSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<map<LogicalTypeId, CSVOption<StrpTimeFormat>>>(128, "dialect_options.date_format", dialect_options.date_format);
 	serializer.WritePropertyWithDefault<string>(129, "sniffer_user_mismatch_error", sniffer_user_mismatch_error);
 	serializer.WritePropertyWithDefault<bool>(130, "parallel", parallel);
+	serializer.WritePropertyWithDefault<vector<bool>>(131, "was_type_manually_set", was_type_manually_set);
 }
 
 CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
@@ -184,6 +185,7 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadProperty<map<LogicalTypeId, CSVOption<StrpTimeFormat>>>(128, "dialect_options.date_format", result.dialect_options.date_format);
 	deserializer.ReadPropertyWithDefault<string>(129, "sniffer_user_mismatch_error", result.sniffer_user_mismatch_error);
 	deserializer.ReadPropertyWithDefault<bool>(130, "parallel", result.parallel);
+	deserializer.ReadPropertyWithDefault<vector<bool>>(131, "was_type_manually_set", result.was_type_manually_set);
 	return result;
 }
 
