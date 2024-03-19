@@ -375,9 +375,11 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 		l.FlushPartitions(context, *this, g);
 	} else if (function.copy_to_combine) {
 		if (per_thread_output) {
-			// For PER_THREAD_OUTPUT, we can combine/finalize immediately
-			function.copy_to_combine(context, *bind_data, *l.global_state, *l.local_state);
-			function.copy_to_finalize(context.client, *bind_data, *l.global_state);
+			// For PER_THREAD_OUTPUT, we can combine/finalize immediately (if there is a gstate)
+			if (l.global_state) {
+				function.copy_to_combine(context, *bind_data, *l.global_state, *l.local_state);
+				function.copy_to_finalize(context.client, *bind_data, *l.global_state);
+			}
 		} else if (file_size_bytes.IsValid() || rotate) {
 			// File in global state may change with FILE_SIZE_BYTES/rotate, need to grab lock
 			auto lock = g.lock.GetSharedLock();
