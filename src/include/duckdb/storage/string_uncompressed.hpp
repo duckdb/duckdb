@@ -61,11 +61,8 @@ public:
 
 	static unique_ptr<CompressionAppendState> StringInitAppend(ColumnSegment &segment) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+		// This block was initialized in StringInitSegment
 		auto handle = buffer_manager.Pin(segment.block);
-		auto handle_ptr = handle.Ptr();
-		// We have to zero initialize the dictionary length, when we append a string we increment this
-		uint32_t *dictionary_size = (uint32_t *)handle_ptr;
-		*dictionary_size = 0;
 		return make_uniq<CompressionAppendState>(std::move(handle));
 	}
 
