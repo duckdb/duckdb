@@ -1,0 +1,69 @@
+# name: test/optimizer/join_dependent_filter.test
+# description: Join dependent filter rule test
+# group: [optimizer]
+
+require tpch
+
+statement ok
+CALL dbgen(sf=0.01)
+
+# there should be 3 filter operators instead of just one
+query II
+EXPLAIN SELECT
+    supp_nation,
+    cust_nation,
+    l_year,
+    sum(volume) AS revenue
+FROM (
+    SELECT
+        n1.n_name AS supp_nation,
+        n2.n_name AS cust_nation,
+        extract(year FROM l_shipdate) AS l_year,
+        l_extendedprice * (1 - l_discount) AS volume
+    FROM
+        supplier,
+        lineitem,
+        orders,
+        customer,
+        nation n1,
+        nation n2
+    WHERE
+        s_suppkey = l_suppkey
+        AND o_orderkey = l_orderkey
+        AND c_custkey = o_custkey
+        AND s_nationkey = n1.n_nationkey
+        AND c_nationkey = n2.n_nationkey
+        AND ((n1.n_name = 'FRANCE'
+                AND n2.n_name = 'GERMANY')
+            OR (n1.n_name = 'GERMANY'
+                AND n2.n_name = 'FRANCE'))
+        AND l_shipdate BETWEEN CAST('1995-01-01' AS date)
+        AND CAST('1996-12-31' AS date)) AS shipping
+GROUP BY
+    supp_nation,
+    cust_nation,
+    l_year
+ORDER BY
+    supp_nation,
+    cust_nation,
+    l_year;
+----
+physical_plan	<REGEX>:.*FILTER.*FILTER.*FILTER.*
+
+# results should still be the same
+query I
+PRAGMA tpch(7)
+----
+<FILE>:extension/tpch/dbgen/answers/sf0.01/q07.csv
+
+# if we put the join-dependent filter explicitly as a join condition, we should still derive two filters
+query II
+EXPLAIN SELECT *
+FROM nation n1
+JOIN nation n2
+ON ((n1.n_name = 'FRANCE'
+        AND n2.n_name = 'GERMANY')
+    OR (n1.n_name = 'GERMANY'
+        AND n2.n_name = 'FRANCE'))
+----
+physical_plan	<REGEX>:.*FILTER.*FILTER.*
