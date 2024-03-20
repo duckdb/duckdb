@@ -7,6 +7,13 @@
         "type": "scalar_function"
     },
     {
+        "name": "try_decode",
+        "parameters": "blob",
+        "description": "Convert blob to varchar. Return NULL if blob is not valid utf-8",
+        "example": "try_decode('\\xC3\\xBC'::BLOB)",
+        "type": "scalar_function"
+    },
+    {
         "name": "encode",
         "parameters": "string",
         "description": "Convert varchar to blob. Converts utf-8 characters into literal encoding",

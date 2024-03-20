@@ -24,6 +24,15 @@ struct DecodeFun {
 	static ScalarFunction GetFunction();
 };
 
+struct TryDecodeFun {
+	static constexpr const char *Name = "try_decode";
+	static constexpr const char *Parameters = "blob";
+	static constexpr const char *Description = "Convert blob to varchar. Return NULL if blob is not valid utf-8";
+	static constexpr const char *Example = "try_decode('\\xC3\\xBC'::BLOB)";
+
+	static ScalarFunction GetFunction();
+};
+
 struct EncodeFun {
 	static constexpr const char *Name = "encode";
 	static constexpr const char *Parameters = "string";

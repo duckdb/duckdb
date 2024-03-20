@@ -17,7 +17,17 @@ SELECT decode(encode('ü'))
 ü
 
 query I
+SELECT try_decode(encode('ü'))
+----
+ü
+
+query I
 SELECT decode('\xF0\x9F\xA6\x86'::BLOB)
+----
+🦆
+
+query I
+SELECT try_decode('\xF0\x9F\xA6\x86'::BLOB)
 ----
 🦆
 
@@ -27,10 +37,20 @@ SELECT decode('\x00'::BLOB)
 ----
 \0
 
+query I
+SELECT try_decode('\x00'::BLOB)
+----
+\0
+
 # test invalid decodes
 statement error
 SELECT decode('\xFF'::BLOB)
 ----
+
+query I
+SELECT try_decode('\xFF'::BLOB)
+----
+NULL
 
 query I
 SELECT decode(encode(a)) || a from (values ('hello'), ('world')) tbl(a);
