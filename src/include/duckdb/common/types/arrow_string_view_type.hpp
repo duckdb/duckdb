@@ -12,18 +12,27 @@
 
 namespace duckdb {
 
+struct ArrowStringViewConstants {
+public:
+	static constexpr uint8_t MAX_INLINED_BYTES = 12 * sizeof(char);
+	static constexpr uint8_t PREFIX_BYTES = 4 * sizeof(char);
+
+public:
+	ArrowStringViewConstants() = delete;
+};
+
 union arrow_string_view_t {
 	arrow_string_view_t() {
 	}
 
 	//! Constructor for inlined arrow string views
 	arrow_string_view_t(int32_t length, const char *data) {
-		D_ASSERT(length <= MAX_INLINED_BYTES);
+		D_ASSERT(length <= ArrowStringViewConstants::MAX_INLINED_BYTES);
 		inlined.length = length;
 		memcpy(inlined.data, data, length);
-		if (length < MAX_INLINED_BYTES) {
+		if (length < ArrowStringViewConstants::MAX_INLINED_BYTES) {
 			// have to 0 pad
-			uint8_t remaining_bytes = MAX_INLINED_BYTES - NumericCast<uint8_t>(length);
+			uint8_t remaining_bytes = ArrowStringViewConstants::MAX_INLINED_BYTES - NumericCast<uint8_t>(length);
 
 			memset(&inlined.data[length], '0', remaining_bytes);
 		}
@@ -31,9 +40,9 @@ union arrow_string_view_t {
 
 	//! Constructor for non-inlined arrow string views
 	arrow_string_view_t(int32_t length, const char *data, int32_t buffer_idx, int32_t offset) {
-		D_ASSERT(length > MAX_INLINED_BYTES);
+		D_ASSERT(length > ArrowStringViewConstants::MAX_INLINED_BYTES);
 		ref.length = length;
-		memcpy(ref.prefix, data, 4);
+		memcpy(ref.prefix, data, ArrowStringViewConstants::PREFIX_BYTES);
 		ref.buffer_index = buffer_idx;
 		ref.offset = offset;
 	}
@@ -41,13 +50,13 @@ union arrow_string_view_t {
 	//! Representation of inlined arrow string views
 	struct {
 		int32_t length;
-		char data[12];
+		char data[ArrowStringViewConstants::MAX_INLINED_BYTES];
 	} inlined;
 
 	//! Representation of non-inlined arrow string views
 	struct {
 		int32_t length;
-		char prefix[4];
+		char prefix[ArrowStringViewConstants::MAX_INLINED_BYTES];
 		int32_t buffer_index, offset;
 	} ref;
 
@@ -55,7 +64,7 @@ union arrow_string_view_t {
 		return inlined.length;
 	}
 	bool IsInline() const {
-		return Length() <= MAX_INLINED_BYTES;
+		return Length() <= ArrowStringViewConstants::MAX_INLINED_BYTES;
 	}
 
 	const char *GetInlineData() const {
@@ -69,7 +78,6 @@ union arrow_string_view_t {
 		D_ASSERT(!IsInline());
 		return ref.offset;
 	}
-	static constexpr uint8_t MAX_INLINED_BYTES = 12;
 };
 
 } // namespace duckdb

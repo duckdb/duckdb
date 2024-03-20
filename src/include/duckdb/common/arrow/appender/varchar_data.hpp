@@ -151,7 +151,7 @@ struct ArrowVarcharToStringViewData {
 			// These two are now the same buffer
 			idx_t string_length = ArrowVarcharConverter::GetLength(data[source_idx]);
 			auto string_data = data[source_idx].GetData();
-			if (string_length <= arrow_string_view_t::MAX_INLINED_BYTES) {
+			if (string_length <= ArrowStringViewConstants::MAX_INLINED_BYTES) {
 				//	This string is inlined
 				//  | Bytes 0-3  | Bytes 4-15                            |
 				//  |------------|---------------------------------------|
