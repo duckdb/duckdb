@@ -4,9 +4,9 @@
 namespace duckdb {
 
 CSVBuffer::CSVBuffer(ClientContext &context, idx_t buffer_size_p, CSVFileHandle &file_handle,
-                     idx_t &global_csv_current_position, idx_t file_number_p)
+                     idx_t &global_csv_current_position, idx_t file_number_p, bool single_threaded)
     : context(context), file_number(file_number_p), can_seek(file_handle.CanSeek()) {
-	AllocateBuffer(buffer_size_p);
+	AllocateBuffer(buffer_size_p, can_seek || single_threaded);
 	auto buffer = Ptr();
 	actual_buffer_size = file_handle.Read(buffer, buffer_size_p);
 	while (actual_buffer_size < buffer_size_p && !file_handle.FinishedReading()) {
@@ -18,10 +18,10 @@ CSVBuffer::CSVBuffer(ClientContext &context, idx_t buffer_size_p, CSVFileHandle 
 }
 
 CSVBuffer::CSVBuffer(CSVFileHandle &file_handle, ClientContext &context, idx_t buffer_size,
-                     idx_t global_csv_current_position, idx_t file_number_p, idx_t buffer_idx_p)
+                     idx_t global_csv_current_position, idx_t file_number_p, idx_t buffer_idx_p, bool single_threaded)
     : context(context), global_csv_start(global_csv_current_position), file_number(file_number_p),
       can_seek(file_handle.CanSeek()), buffer_idx(buffer_idx_p) {
-	AllocateBuffer(buffer_size);
+	AllocateBuffer(buffer_size, single_threaded || can_seek);
 	auto buffer = handle.Ptr();
 	actual_buffer_size = file_handle.Read(handle.Ptr(), buffer_size);
 	while (actual_buffer_size < buffer_size && !file_handle.FinishedReading()) {
@@ -32,15 +32,16 @@ CSVBuffer::CSVBuffer(CSVFileHandle &file_handle, ClientContext &context, idx_t b
 }
 
 shared_ptr<CSVBuffer> CSVBuffer::Next(CSVFileHandle &file_handle, idx_t buffer_size, idx_t file_number_p,
-                                      bool &has_seaked) {
+                                      bool &has_seaked, bool single_threaded) {
 	if (has_seaked) {
 		// This means that at some point a reload was done, and we are currently on the incorrect position in our file
 		// handle
 		file_handle.Seek(global_csv_start + actual_buffer_size);
 		has_seaked = false;
 	}
-	auto next_csv_buffer = make_shared<CSVBuffer>(file_handle, context, buffer_size,
-	                                              global_csv_start + actual_buffer_size, file_number_p, buffer_idx + 1);
+	auto next_csv_buffer =
+	    make_shared<CSVBuffer>(file_handle, context, buffer_size, global_csv_start + actual_buffer_size, file_number_p,
+	                           buffer_idx + 1, single_threaded);
 	if (next_csv_buffer->GetBufferSize() == 0) {
 		// We are done reading
 		return nullptr;
@@ -48,9 +49,8 @@ shared_ptr<CSVBuffer> CSVBuffer::Next(CSVFileHandle &file_handle, idx_t buffer_s
 	return next_csv_buffer;
 }
 
-void CSVBuffer::AllocateBuffer(idx_t buffer_size) {
+void CSVBuffer::AllocateBuffer(idx_t buffer_size, bool can_destroy) {
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
-	bool can_destroy = can_seek;
 	handle = buffer_manager.Allocate(MemoryTag::CSV_READER, MaxValue<idx_t>(Storage::BLOCK_SIZE, buffer_size),
 	                                 can_destroy, &block);
 }
@@ -60,7 +60,7 @@ idx_t CSVBuffer::GetBufferSize() {
 }
 
 void CSVBuffer::Reload(CSVFileHandle &file_handle) {
-	AllocateBuffer(actual_buffer_size);
+	AllocateBuffer(actual_buffer_size, false);
 	file_handle.Seek(global_csv_start);
 	file_handle.Read(handle.Ptr(), actual_buffer_size);
 }

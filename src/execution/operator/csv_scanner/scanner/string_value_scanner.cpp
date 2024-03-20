@@ -530,9 +530,9 @@ unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &
 
 	state_machine->dialect_options.num_cols = options.dialect_options.num_cols;
 	state_machine->dialect_options.header = options.dialect_options.header;
-	auto buffer_manager = make_shared<CSVBufferManager>(context, options, options.file_path, 0);
+	auto buffer_manager = make_shared<CSVBufferManager>(context, options, options.file_path, 0, false);
 	auto scanner = make_uniq<StringValueScanner>(buffer_manager, state_machine, make_shared<CSVErrorHandler>());
-	scanner->csv_file_scan = make_shared<CSVFileScan>(context, options.file_path, options);
+	scanner->csv_file_scan = make_shared<CSVFileScan>(context, options.file_path, options, false);
 	scanner->csv_file_scan->InitializeProjection();
 	return scanner;
 }

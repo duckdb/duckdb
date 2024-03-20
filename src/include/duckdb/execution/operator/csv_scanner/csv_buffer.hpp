@@ -44,14 +44,15 @@ class CSVBuffer {
 public:
 	//! Constructor for Initial Buffer
 	CSVBuffer(ClientContext &context, idx_t buffer_size_p, CSVFileHandle &file_handle,
-	          idx_t &global_csv_current_position, idx_t file_number);
+	          idx_t &global_csv_current_position, idx_t file_number, bool single_threaded);
 
 	//! Constructor for `Next()` Buffers
 	CSVBuffer(CSVFileHandle &file_handle, ClientContext &context, idx_t buffer_size, idx_t global_csv_current_position,
-	          idx_t file_number_p, idx_t buffer_idx);
+	          idx_t file_number_p, idx_t buffer_idx, bool single_threaded);
 
 	//! Creates a new buffer with the next part of the CSV File
-	shared_ptr<CSVBuffer> Next(CSVFileHandle &file_handle, idx_t buffer_size, idx_t file_number, bool &has_seaked);
+	shared_ptr<CSVBuffer> Next(CSVFileHandle &file_handle, idx_t buffer_size, idx_t file_number, bool &has_seaked,
+	                           bool single_threaded);
 
 	//! Gets the buffer actual size
 	idx_t GetBufferSize();
@@ -60,7 +61,7 @@ public:
 	bool IsCSVFileLastBuffer();
 
 	//! Allocates internal buffer, sets 'block' and 'handle' variables.
-	void AllocateBuffer(idx_t buffer_size);
+	void AllocateBuffer(idx_t buffer_size, bool can_destroy);
 
 	void Reload(CSVFileHandle &file_handle);
 	//! Wrapper for the Pin Function, if it can seek, it means that the buffer might have been destroyed, hence we must

@@ -22,7 +22,7 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
 	} else {
 		// If not we need to construct it for the first file
 		file_scans.emplace_back(
-		    make_uniq<CSVFileScan>(context, files[0], options, 0, bind_data, column_ids, file_schema));
+		    make_uniq<CSVFileScan>(context, files[0], options, 0, bind_data, column_ids, file_schema, single_threaded));
 	};
 	//! There are situations where we only support single threaded scanning
 	bool many_csv_files = files.size() > 1 && files.size() > system_threads * 2;
@@ -65,9 +65,12 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 		shared_ptr<CSVFileScan> current_file;
 		if (cur_idx == 0) {
 			current_file = file_scans.back();
+			current_file->buffer_manager->SetSingleThreaded();
 		} else {
+			lock_guard<mutex> parallel_lock(main_mutex);
 			file_scans.emplace_back(make_shared<CSVFileScan>(context, bind_data.files[cur_idx], bind_data.options,
-			                                                 cur_idx, bind_data, column_ids, file_schema));
+			                                                 cur_idx, bind_data, column_ids, file_schema,
+			                                                 single_threaded));
 			current_file = file_scans.back();
 		}
 		auto csv_scanner =

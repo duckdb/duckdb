@@ -4,8 +4,9 @@
 namespace duckdb {
 
 CSVBufferManager::CSVBufferManager(ClientContext &context_p, const CSVReaderOptions &options, const string &file_path_p,
-                                   const idx_t file_idx_p)
-    : context(context_p), file_idx(file_idx_p), file_path(file_path_p), buffer_size(CSVBuffer::CSV_BUFFER_SIZE) {
+                                   const idx_t file_idx_p, bool single_threaded_p)
+    : context(context_p), file_idx(file_idx_p), file_path(file_path_p), buffer_size(CSVBuffer::CSV_BUFFER_SIZE),
+      single_threaded(single_threaded_p) {
 	D_ASSERT(!file_path.empty());
 	file_handle = ReadCSV::OpenCSV(file_path, options.compression, context);
 	skip_rows = options.dialect_options.skip_rows.GetValue();
@@ -28,7 +29,7 @@ void CSVBufferManager::UnpinBuffer(const idx_t cache_idx) {
 void CSVBufferManager::Initialize() {
 	if (cached_buffers.empty()) {
 		cached_buffers.emplace_back(
-		    make_shared<CSVBuffer>(context, buffer_size, *file_handle, global_csv_pos, file_idx));
+		    make_shared<CSVBuffer>(context, buffer_size, *file_handle, global_csv_pos, file_idx, single_threaded));
 		last_buffer = cached_buffers.front();
 	}
 }
@@ -47,7 +48,8 @@ bool CSVBufferManager::ReadNextAndCacheIt() {
 				last_buffer->last_buffer = true;
 				return false;
 			}
-			auto maybe_last_buffer = last_buffer->Next(*file_handle, cur_buffer_size, file_idx, has_seeked);
+			auto maybe_last_buffer =
+			    last_buffer->Next(*file_handle, cur_buffer_size, file_idx, has_seeked, single_threaded);
 			if (!maybe_last_buffer) {
 				last_buffer->last_buffer = true;
 				return false;
@@ -124,6 +126,10 @@ bool CSVBufferManager::Done() {
 
 string CSVBufferManager::GetFilePath() {
 	return file_path;
+}
+
+void CSVBufferManager::SetSingleThreaded() {
+	single_threaded = true;
 }
 
 } // namespace duckdb
