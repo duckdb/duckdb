@@ -339,7 +339,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 	}
 
 	if (param == "no_vector_verification") {
-#ifdef DUCKDB_VERIFY_DICTIONARY_VECTOR
+#ifdef DUCKDB_VERIFY_VECTOR
 		return RequireResult::MISSING;
 #else
 		return RequireResult::PRESENT;

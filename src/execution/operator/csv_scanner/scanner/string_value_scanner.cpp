@@ -370,8 +370,9 @@ bool StringValueResult::AddRowInternal() {
 			auto error_string = error.str();
 			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
 
-			auto csv_error = CSVError::CastError(state_machine.options, names[cast_error.first], error_string,
-			                                     cast_error.first, row, lines_per_batch);
+			auto csv_error =
+			    CSVError::CastError(state_machine.options, names[cast_error.first], error_string, cast_error.first, row,
+			                        lines_per_batch, parse_types[cast_error.first].first);
 			error_handler.Error(csv_error);
 		}
 		// If we got here it means we are ignoring errors, hence we need to signify to our result scanner to ignore this
@@ -644,8 +645,9 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 
 				LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(),
 				                                 lines_read - parse_chunk.size() + line_error);
-				auto csv_error = CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx],
-				                                     error_message, col_idx, row, lines_per_batch);
+				auto csv_error =
+				    CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx], error_message, col_idx,
+				                        row, lines_per_batch, result_vector.GetType().id());
 				error_handler->Error(csv_error);
 			}
 			borked_lines.insert(line_error++);
@@ -661,8 +663,9 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					}
 					LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(),
 					                                 lines_read - parse_chunk.size() + line_error);
-					auto csv_error = CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx],
-					                                     error_message, col_idx, row, lines_per_batch);
+					auto csv_error =
+					    CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx], error_message,
+					                        col_idx, row, lines_per_batch, result_vector.GetType().id());
 
 					error_handler->Error(csv_error);
 				}

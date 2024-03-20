@@ -90,6 +90,11 @@ struct ICUTableRange {
 
 		auto &inputs = input.inputs;
 		D_ASSERT(inputs.size() == 3);
+		for (const auto &value : inputs) {
+			if (value.IsNull()) {
+				throw BinderException("RANGE with NULL bounds is not supported");
+			}
+		}
 		result->start = inputs[0].GetValue<timestamp_t>();
 		result->end = inputs[1].GetValue<timestamp_t>();
 		result->increment = inputs[2].GetValue<interval_t>();

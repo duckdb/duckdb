@@ -658,6 +658,28 @@ class TestExpression(object):
         assert len(res) == 2
         assert res == [(3, 'c'), (4, 'a')]
 
+    def test_null(self):
+        con = duckdb.connect()
+        rel = con.sql(
+            """
+            select * from (VALUES
+                (1, 'a'),
+                (2, 'b'),
+                (3, NULL),
+                (4, 'c'),
+                (5, 'a')
+            ) tbl(a, b)
+        """
+        )
+
+        b = ColumnExpression("b")
+
+        res = rel.select(b.isnull()).fetchall()
+        assert res == [(False,), (False,), (True,), (False,), (False,)]
+
+        res2 = rel.filter(b.isnotnull()).fetchall()
+        assert res2 == [(1, 'a'), (2, 'b'), (4, 'c'), (5, 'a')]
+
     def test_sort(self):
         con = duckdb.connect()
         rel = con.sql(
