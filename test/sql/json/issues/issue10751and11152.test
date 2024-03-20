@@ -1,0 +1,16 @@
+# name: test/sql/json/issues/issue10751and11152.test
+# description: Test issue 10751 and 11152 - Duplicate keys in JSON object ignore_errors
+# group: [issues]
+
+require json
+
+# issue 10751
+statement ok
+create table json_test as select * from read_json_auto('data/json/10751.json', format = 'newline_delimited', ignore_errors=true);
+
+statement ok
+select * from json_test;
+
+# issue 11152
+statement ok
+FROM read_json_auto('data/json/11152.json', ignore_errors=true);

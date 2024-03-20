@@ -19,7 +19,7 @@ struct StrpTimeFormat;
 struct JSONStructureNode {
 public:
 	JSONStructureNode();
-	JSONStructureNode(yyjson_val *key_p, yyjson_val *val_p);
+	JSONStructureNode(yyjson_val *key_p, yyjson_val *val_p, const bool ignore_errors);
 
 	//! Disable copy constructors
 	JSONStructureNode(const JSONStructureNode &other) = delete;
@@ -33,18 +33,20 @@ public:
 	bool ContainsVarchar() const;
 	void InitializeCandidateTypes(const idx_t max_depth, const bool convert_strings_to_integers, idx_t depth = 0);
 	void RefineCandidateTypes(yyjson_val *vals[], idx_t val_count, Vector &string_vector, ArenaAllocator &allocator,
-	                          DateFormatMap &date_format_map);
+	                          DateFormatMap &date_format_map, const bool ignore_errors);
 
 private:
 	void RefineCandidateTypesArray(yyjson_val *vals[], idx_t val_count, Vector &string_vector,
-	                               ArenaAllocator &allocator, DateFormatMap &date_format_map);
+	                               ArenaAllocator &allocator, DateFormatMap &date_format_map, const bool ignore_errors);
 	void RefineCandidateTypesObject(yyjson_val *vals[], idx_t val_count, Vector &string_vector,
-	                                ArenaAllocator &allocator, DateFormatMap &date_format_map);
+	                                ArenaAllocator &allocator, DateFormatMap &date_format_map,
+	                                const bool ignore_errors);
 	void RefineCandidateTypesString(yyjson_val *vals[], idx_t val_count, Vector &string_vector,
-	                                DateFormatMap &date_format_map);
-	void EliminateCandidateTypes(idx_t vec_count, Vector &string_vector, DateFormatMap &date_format_map);
+	                                DateFormatMap &date_format_map, const bool ignore_errors);
+	void EliminateCandidateTypes(idx_t vec_count, Vector &string_vector, DateFormatMap &date_format_map,
+	                             const bool ignore_errors);
 	bool EliminateCandidateFormats(idx_t vec_count, Vector &string_vector, Vector &result_vector,
-	                               vector<StrpTimeFormat> &formats);
+	                               vector<StrpTimeFormat> &formats, const bool ignore_errors);
 
 public:
 	duckdb::unique_ptr<string> key;
@@ -64,7 +66,7 @@ public:
 	JSONStructureDescription &operator=(JSONStructureDescription &&) noexcept;
 
 	JSONStructureNode &GetOrCreateChild();
-	JSONStructureNode &GetOrCreateChild(yyjson_val *key, yyjson_val *val);
+	JSONStructureNode &GetOrCreateChild(yyjson_val *key, yyjson_val *val, const bool ignore_errors);
 
 public:
 	//! Type of this description
@@ -80,10 +82,10 @@ public:
 
 struct JSONStructure {
 public:
-	static void ExtractStructure(yyjson_val *val, JSONStructureNode &node);
+	static void ExtractStructure(yyjson_val *val, JSONStructureNode &node, const bool ignore_errors);
 	static LogicalType StructureToType(ClientContext &context, const JSONStructureNode &node, const idx_t max_depth,
-	                                   const double field_appearance_threshold, idx_t depth = 0,
-	                                   idx_t sample_count = DConstants::INVALID_INDEX);
+	                                   const double field_appearance_threshold, const bool ignore_errors,
+	                                   idx_t depth = 0, idx_t sample_count = DConstants::INVALID_INDEX);
 };
 
 } // namespace duckdb

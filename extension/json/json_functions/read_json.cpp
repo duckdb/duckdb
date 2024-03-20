@@ -40,14 +40,15 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 			for (idx_t i = 0; i < next; i++) {
 				const auto &val = lstate.values[i];
 				if (val) {
-					JSONStructure::ExtractStructure(val, node);
+					JSONStructure::ExtractStructure(val, node, bind_data.ignore_errors);
 				}
 			}
 			if (!node.ContainsVarchar()) { // Can't refine non-VARCHAR types
 				continue;
 			}
 			node.InitializeCandidateTypes(bind_data.max_depth, bind_data.convert_strings_to_integers);
-			node.RefineCandidateTypes(lstate.values, next, string_vector, allocator, bind_data.date_format_map);
+			node.RefineCandidateTypes(lstate.values, next, string_vector, allocator, bind_data.date_format_map,
+			                          bind_data.ignore_errors);
 			remaining -= next;
 		}
 
@@ -69,8 +70,8 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 	bind_data.type = JSONScanType::READ_JSON;
 
 	// Convert structure to logical type
-	auto type =
-	    JSONStructure::StructureToType(context, node, bind_data.max_depth, bind_data.field_appearance_threshold);
+	auto type = JSONStructure::StructureToType(context, node, bind_data.max_depth, bind_data.field_appearance_threshold,
+	                                           bind_data.ignore_errors);
 
 	// Auto-detect record type
 	if (bind_data.options.record_type == JSONRecordType::AUTO_DETECT) {
