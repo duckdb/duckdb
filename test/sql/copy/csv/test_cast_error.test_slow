@@ -1,5 +1,5 @@
 # name: test/sql/copy/csv/test_cast_error.test_slow
-# description: Test maximum_line_size CSV option
+# description: Test casting error in last lines of a big csv file
 # group: [csv]
 
 statement ok
