@@ -68,6 +68,11 @@ public:
 	shared_ptr<DuckDBPyExpression> And(const DuckDBPyExpression &other);
 	shared_ptr<DuckDBPyExpression> Or(const DuckDBPyExpression &other);
 
+	// IS NULL / IS NOT NULL
+
+	shared_ptr<DuckDBPyExpression> IsNull();
+	shared_ptr<DuckDBPyExpression> IsNotNull();
+
 	// IN / NOT IN
 
 	shared_ptr<DuckDBPyExpression> In(const py::args &args);

@@ -161,6 +161,68 @@ statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (MAGIC '42');
 ----
 
+# Try new_line option
+query I
+COPY test TO '__TEST_DIR__/test_crlf.csv' (new_line  '\r\n');
+----
+5000
+
+query I
+select count(*) from '__TEST_DIR__/test_crlf.csv'
+----
+5000
+
+# Try CR LF lines
+query I
+COPY test TO '__TEST_DIR__/test_r.csv' (new_line  '\r');
+----
+5000
+
+query I
+select count(*) from '__TEST_DIR__/test_r.csv'
+----
+5000
+
+query I
+COPY test TO '__TEST_DIR__/test_n.csv' (new_line  '\n');
+----
+5000
+
+query I
+select count(*) from '__TEST_DIR__/test_n.csv'
+----
+5000
+
+query I
+COPY test TO '__TEST_DIR__/test_crlfe.csv' (new_line  e'\r\n');
+----
+5000
+
+query I
+select count(*) from '__TEST_DIR__/test_crlfe.csv'
+----
+5000
+
+query I
+COPY test TO '__TEST_DIR__/test_re.csv' (new_line  e'\r');
+----
+5000
+
+query I
+select count(*) from '__TEST_DIR__/test_re.csv'
+----
+5000
+
+query I
+COPY test TO '__TEST_DIR__/test_en.csv' (new_line  e'\n');
+----
+5000
+
+query I
+select count(*) from '__TEST_DIR__/test_en.csv'
+----
+5000
+
 # use a different delimiter
 # create new table
 statement ok

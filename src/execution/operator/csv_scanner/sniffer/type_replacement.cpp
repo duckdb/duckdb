@@ -3,6 +3,7 @@
 namespace duckdb {
 void CSVSniffer::ReplaceTypes() {
 	auto &sniffing_state_machine = best_candidate->GetStateMachine();
+	manually_set = vector<bool>(detected_types.size(), false);
 	if (sniffing_state_machine.options.sql_type_list.empty()) {
 		return;
 	}
@@ -17,6 +18,7 @@ void CSVSniffer::ReplaceTypes() {
 				best_sql_types_candidates_per_column_idx[i] = {
 				    sniffing_state_machine.options.sql_type_list[it->second]};
 				detected_types[i] = sniffing_state_machine.options.sql_type_list[it->second];
+				manually_set[i] = true;
 				found++;
 			}
 		}
@@ -34,6 +36,7 @@ void CSVSniffer::ReplaceTypes() {
 	}
 	for (idx_t i = 0; i < sniffing_state_machine.options.sql_type_list.size(); i++) {
 		detected_types[i] = sniffing_state_machine.options.sql_type_list[i];
+		manually_set[i] = true;
 	}
 }
 } // namespace duckdb

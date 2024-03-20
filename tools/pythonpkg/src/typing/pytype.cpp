@@ -360,6 +360,8 @@ py::list DuckDBPyType::Children() const {
 		children.append(py::make_tuple("child", make_shared<DuckDBPyType>(ListType::GetChildType(type))));
 		return children;
 	}
+	// FIXME: where is ARRAY??
+	// it should expose 'child' and 'size'
 	if (id == LogicalTypeId::STRUCT || id == LogicalTypeId::UNION) {
 		auto &struct_children = StructType::GetChildTypes(type);
 		for (idx_t i = 0; i < struct_children.size(); i++) {
