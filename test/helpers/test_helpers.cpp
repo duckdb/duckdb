@@ -147,10 +147,9 @@ unique_ptr<DBConfig> GetTestConfig() {
 #else
 	result->options.checkpoint_on_shutdown = false;
 #endif
-#if defined(__linux__)
-	// Currently this is only supported on linux.
-	// Because we test this mode on linux, and the no-trim mode on other platforms,
-	// we get coverage with the option both on and off.
+#ifdef DUCKDB_RUN_SLOW_VERIFIERS
+	// This mode isn't slow, but we want test coverage both when it's enabled
+	// and when it's not, so we enable only when DUCKDB_RUN_SLOW_VERIFIERS is set.
 	result->options.trim_free_blocks = true;
 #endif
 	result->options.allow_unsigned_extensions = true;
