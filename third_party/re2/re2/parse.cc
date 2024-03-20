@@ -37,9 +37,9 @@
 #include "re2/walker-inl.h"
 
 #if defined(RE2_USE_ICU)
-#include "unicode/uniset.h"
-#include "unicode/unistr.h"
-#include "unicode/utypes.h"
+//#include "unicode/uniset.h"
+//#include "unicode/unistr.h"
+//#include "unicode/utypes.h"
 #endif
 
 namespace duckdb_re2 {
