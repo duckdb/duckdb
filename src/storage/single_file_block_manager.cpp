@@ -553,7 +553,6 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	handle->Sync();
 	// Release the free blocks to the filesystem.
 	TrimFreeBlocks();
-	newly_freed_list.clear();
 }
 
 void SingleFileBlockManager::TrimFreeBlocks() {
