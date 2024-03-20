@@ -221,6 +221,48 @@ select * from read_json_auto(['data/json/empty_array.json', 'data/json/example_n
 4	Broadcast News
 5	Raising Arizona
 
+# Simple map inference with default threshold
+query T
+select distinct typeof(a) from read_json_auto('data/json/simple_map.jsonl')
+----
+MAP(VARCHAR, BIGINT)
+
+# Test setting map_inference_threshold to a large value
+query T
+select distinct typeof(a) from read_json_auto('data/json/simple_map.jsonl', map_inference_threshold=1000)
+----
+JSON
+
+# Map inference can be disabled
+query T
+select distinct typeof(a) from read_json_auto('data/json/simple_map.jsonl', map_inference_threshold=-1)
+----
+JSON
+
+# Test setting map_inference_threshold to a small value
+query T
+select distinct typeof(a) from read_json_auto('data/json/simple_map.jsonl', map_inference_threshold=10)
+----
+MAP(VARCHAR, BIGINT)
+
+# Map where all values are null
+query T
+select distinct typeof(a) from read_json_auto('data/json/map_of_nulls.jsonl')
+----
+MAP(VARCHAR, JSON)
+
+# Map type can be inferred at the top level
+query T
+select distinct typeof(json) from read_json_auto('data/json/top_level_map.jsonl')
+----
+MAP(VARCHAR, BIGINT)
+
+# Map type can be inferred for struct value type
+query T
+select distinct typeof(a) from read_json_auto('data/json/map_of_structs.jsonl', field_appearance_threshold=0)
+----
+MAP(VARCHAR, STRUCT(b BIGINT))
+
 # if we only sample the first file, we default to a single JSON column
 query I
 select * from read_json_auto(['data/json/empty_array.json', 'data/json/example_n.ndjson'], maximum_sample_files=1);

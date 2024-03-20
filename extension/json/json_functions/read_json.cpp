@@ -69,8 +69,8 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 	bind_data.type = JSONScanType::READ_JSON;
 
 	// Convert structure to logical type
-	auto type =
-	    JSONStructure::StructureToType(context, node, bind_data.max_depth, bind_data.field_appearance_threshold);
+	auto type = JSONStructure::StructureToType(context, node, bind_data.max_depth, bind_data.field_appearance_threshold,
+	                                           bind_data.map_inference_threshold);
 
 	// Auto-detect record type
 	if (bind_data.options.record_type == JSONRecordType::AUTO_DETECT) {
@@ -166,6 +166,16 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 				    "read_json_auto \"field_appearance_threshold\" parameter must be between 0 and 1");
 			}
 			bind_data->field_appearance_threshold = arg;
+		} else if (loption == "map_inference_threshold") {
+			auto arg = BigIntValue::Get(kv.second);
+			if (arg == -1) {
+				bind_data->map_inference_threshold = NumericLimits<idx_t>::Maximum();
+			} else if (arg > 0) {
+				bind_data->map_inference_threshold = arg;
+			} else {
+				throw BinderException("read_json \"map_inference_threshold\" parameter must be positive, or -1 to "
+				                      "never infer map type.");
+			}
 		} else if (loption == "dateformat" || loption == "date_format") {
 			auto format_string = StringValue::Get(kv.second);
 			if (StringUtil::Lower(format_string) == "iso") {
@@ -343,6 +353,7 @@ TableFunctionSet CreateJSONFunctionInfo(string name, shared_ptr<JSONScanInfo> in
 	table_function.named_parameters["maximum_depth"] = LogicalType::BIGINT;
 	table_function.named_parameters["field_appearance_threshold"] = LogicalType::DOUBLE;
 	table_function.named_parameters["convert_strings_to_integers"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["map_inference_threshold"] = LogicalType::BIGINT;
 	return MultiFileReader::CreateFunctionSet(table_function);
 }
 

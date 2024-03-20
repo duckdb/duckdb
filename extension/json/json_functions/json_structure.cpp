@@ -496,26 +496,81 @@ ScalarFunctionSet JSONFunctions::GetStructureFunction() {
 }
 
 static LogicalType StructureToTypeArray(ClientContext &context, const JSONStructureNode &node, const idx_t max_depth,
-                                        const double field_appearance_threshold, idx_t depth,
-                                        const idx_t sample_count) {
+                                        const double field_appearance_threshold, const idx_t map_inference_threshold,
+                                        idx_t depth, const idx_t sample_count) {
 	D_ASSERT(node.descriptions.size() == 1 && node.descriptions[0].type == LogicalTypeId::LIST);
 	const auto &desc = node.descriptions[0];
 	D_ASSERT(desc.children.size() == 1);
 
-	return LogicalType::LIST(JSONStructure::StructureToType(
-	    context, desc.children[0], max_depth, field_appearance_threshold, depth + 1, desc.children[0].count));
+	return LogicalType::LIST(JSONStructure::StructureToType(context, desc.children[0], max_depth,
+	                                                        field_appearance_threshold, map_inference_threshold,
+	                                                        depth + 1, desc.children[0].count));
+}
+
+static child_list_t<LogicalType>
+StructureChildrenToTypeList(ClientContext &context, const JSONStructureDescription &desc, const idx_t max_depth,
+                            const double field_appearance_threshold, const idx_t map_inference_threshold, idx_t depth,
+                            const idx_t sample_count, const bool null_as_json) {
+	child_list_t<LogicalType> child_types;
+	child_types.reserve(desc.children.size());
+	for (auto &child : desc.children) {
+		D_ASSERT(child.key);
+		child_types.emplace_back(
+		    *child.key, JSONStructure::StructureToType(context, child, max_depth, field_appearance_threshold,
+		                                               map_inference_threshold, depth + 1, sample_count, null_as_json));
+	}
+	return child_types;
 }
 
 static LogicalType StructureToTypeObject(ClientContext &context, const JSONStructureNode &node, const idx_t max_depth,
-                                         const double field_appearance_threshold, idx_t depth,
-                                         const idx_t sample_count) {
+                                         const double field_appearance_threshold, const idx_t map_inference_threshold,
+                                         idx_t depth, const idx_t sample_count, const bool null_as_json) {
 	D_ASSERT(node.descriptions.size() == 1 && node.descriptions[0].type == LogicalTypeId::STRUCT);
 	auto &desc = node.descriptions[0];
 
 	// If it's an empty struct we do JSON instead
 	if (desc.children.empty()) {
 		// Empty struct - let's do JSON instead
-		return LogicalType::JSON();
+		return null_as_json ? LogicalType::JSON() : LogicalType::SQLNULL;
+	}
+
+	// If all children are of compatible types we infer map type
+	if (desc.children.size() >= map_inference_threshold) {
+		const auto child_types = StructureChildrenToTypeList(context, desc, max_depth, field_appearance_threshold,
+		                                                     map_inference_threshold, depth, sample_count, false);
+
+		LogicalType map_value_type = LogicalType::SQLNULL;
+		bool all_compatible_type = true;
+		for (const auto &child_type : child_types) {
+			const auto &child_logical_type = child_type.second;
+			if (child_logical_type == LogicalType::SQLNULL) {
+				continue;
+			}
+
+			if (map_value_type == LogicalType::SQLNULL) {
+				// First non-null type
+				map_value_type = child_logical_type;
+				if (map_value_type.IsJSONType()) {
+					// JSON is compatible with everything, so stop here
+					break;
+				}
+				continue;
+			}
+			if (map_value_type == child_logical_type) {
+				continue;
+			}
+			if (child_logical_type.IsJSONType()) {
+				// If one of the types is JSON, we can infer map of JSONs and stop here
+				map_value_type = child_logical_type;
+				break;
+			}
+			all_compatible_type = false;
+			break;
+		}
+		if (all_compatible_type) {
+			return LogicalType::MAP(LogicalType::VARCHAR,
+			                        map_value_type != LogicalType::SQLNULL ? map_value_type : LogicalType::JSON());
+		}
 	}
 
 	// If it's an inconsistent object we also just do JSON
@@ -528,15 +583,8 @@ static LogicalType StructureToTypeObject(ClientContext &context, const JSONStruc
 		return LogicalType::JSON();
 	}
 
-	child_list_t<LogicalType> child_types;
-	child_types.reserve(desc.children.size());
-	for (auto &child : desc.children) {
-		D_ASSERT(child.key);
-		child_types.emplace_back(*child.key,
-		                         JSONStructure::StructureToType(context, child, max_depth, field_appearance_threshold,
-		                                                        depth + 1, sample_count));
-	}
-	return LogicalType::STRUCT(child_types);
+	return LogicalType::STRUCT(StructureChildrenToTypeList(context, desc, max_depth, field_appearance_threshold,
+	                                                       map_inference_threshold, depth, sample_count, true));
 }
 
 static LogicalType StructureToTypeString(const JSONStructureNode &node) {
@@ -549,7 +597,8 @@ static LogicalType StructureToTypeString(const JSONStructureNode &node) {
 }
 
 LogicalType JSONStructure::StructureToType(ClientContext &context, const JSONStructureNode &node, const idx_t max_depth,
-                                           const double field_appearance_threshold, idx_t depth, idx_t sample_count) {
+                                           const double field_appearance_threshold, const idx_t map_inference_threshold,
+                                           idx_t depth, idx_t sample_count, const bool null_as_json) {
 	if (depth >= max_depth) {
 		return LogicalType::JSON();
 	}
@@ -564,15 +613,19 @@ LogicalType JSONStructure::StructureToType(ClientContext &context, const JSONStr
 	D_ASSERT(desc.type != LogicalTypeId::INVALID);
 	switch (desc.type) {
 	case LogicalTypeId::LIST:
-		return StructureToTypeArray(context, node, max_depth, field_appearance_threshold, depth, sample_count);
+		return StructureToTypeArray(context, node, max_depth, field_appearance_threshold, map_inference_threshold,
+		                            depth, sample_count);
 	case LogicalTypeId::STRUCT:
-		return StructureToTypeObject(context, node, max_depth, field_appearance_threshold, depth, sample_count);
+		return StructureToTypeObject(context, node, max_depth, field_appearance_threshold, map_inference_threshold,
+		                             depth, sample_count, null_as_json);
 	case LogicalTypeId::VARCHAR:
 		return StructureToTypeString(node);
-	case LogicalTypeId::SQLNULL:
-		return LogicalType::JSON();
 	case LogicalTypeId::UBIGINT:
 		return LogicalTypeId::BIGINT; // We prefer not to return UBIGINT in our type auto-detection
+	case LogicalTypeId::SQLNULL:
+		if (null_as_json) {
+			return LogicalType::JSON();
+		}
 	default:
 		return desc.type;
 	}
