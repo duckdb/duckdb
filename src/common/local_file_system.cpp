@@ -859,6 +859,11 @@ int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_byte
 	return bytes_written;
 }
 
+bool LocalFileSystem::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes) {
+	// TODO: Not yet implemented on windows.
+	return false;
+}
+
 int64_t LocalFileSystem::GetFileSize(FileHandle &handle) {
 	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
 	LARGE_INTEGER result;
