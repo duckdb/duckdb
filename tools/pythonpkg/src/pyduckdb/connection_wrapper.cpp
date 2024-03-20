@@ -77,7 +77,10 @@ shared_ptr<DuckDBPyType> PyConnectionWrapper::Type(const string &type_str, share
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
-	return conn->Type(type_str);
+	auto &context = *conn->connection->context;
+	shared_ptr<DuckDBPyType> result;
+	context.RunFunctionInTransaction([&result, &type_str, &conn]() { result = conn->Type(type_str); });
+	return result;
 }
 
 shared_ptr<DuckDBPyConnection> PyConnectionWrapper::ExecuteMany(const py::object &query, py::object params,
