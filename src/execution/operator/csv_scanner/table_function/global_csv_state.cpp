@@ -43,16 +43,16 @@ double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	idx_t total_files = bind_data.files.size();
 	// get the progress WITHIN the current file
-	double progress;
+	double percentage = 0;
 	if (file_scans.back()->file_size == 0) {
-		progress = 1.0;
+		percentage = 1.0;
 	} else {
 		// for compressed files, readed bytes may greater than files size.
-		progress = std::min(1.0, double(file_scans.back()->bytes_read) / double(file_scans.back()->file_size));
+		for (auto &file : file_scans) {
+			percentage +=
+			    (double(1) / double(total_files)) * std::min(1.0, double(file->bytes_read) / double(file->file_size));
+		}
 	}
-	// now get the total percentage of files read
-	double percentage = double(current_boundary.GetFileIdx()) / total_files;
-	percentage += (double(1) / double(total_files)) * progress;
 	return percentage * 100;
 }
 
@@ -66,8 +66,9 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 		if (cur_idx == 0) {
 			current_file = file_scans.back();
 		} else {
-			current_file = make_shared<CSVFileScan>(context, bind_data.files[cur_idx], bind_data.options, cur_idx,
-			                                        bind_data, column_ids, file_schema);
+			file_scans.emplace_back(make_shared<CSVFileScan>(context, bind_data.files[cur_idx], bind_data.options,
+			                                                 cur_idx, bind_data, column_ids, file_schema));
+			current_file = file_scans.back();
 		}
 		auto csv_scanner =
 		    make_uniq<StringValueScanner>(scanner_idx++, current_file->buffer_manager, current_file->state_machine,
@@ -98,7 +99,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 			// If we have a next file we have to construct the file scan for that
 			file_scans.emplace_back(make_shared<CSVFileScan>(context, bind_data.files[current_file_idx],
 			                                                 bind_data.options, current_file_idx, bind_data, column_ids,
-			                                                 file_schema));
+			                                                 file_schema, single_threaded));
 			// And re-start the boundary-iterator
 			auto buffer_size = file_scans.back()->buffer_manager->GetBuffer(0)->actual_size;
 			current_boundary = CSVIterator(current_file_idx, 0, 0, 0, buffer_size);
