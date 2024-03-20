@@ -19,7 +19,7 @@ if (NOT MINGW)
     duckdb_extension_load(aws
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_aws
-            GIT_TAG 043890c2ad83c4a1375417e2d5d085a33f79a217
+            GIT_TAG f7b8729f1cce5ada5d4add70e1486de50763fb97
             )
 endif()
 
@@ -28,7 +28,7 @@ if (NOT MINGW)
     duckdb_extension_load(azure
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_azure
-            GIT_TAG 3ad0348334d2a263e5f19ef08fd02311bdae82f3
+            GIT_TAG 86f39d76157de970d16d6d6537bc90c0ee1c7d35
             )
 endif()
 
@@ -55,8 +55,7 @@ if (NOT MINGW)
     duckdb_extension_load(postgres_scanner
             DONT_LINK
             GIT_URL https://github.com/duckdb/postgres_scanner
-            GIT_TAG 883a8f1a8a487264855a5166f7df1f46ad386434
-            APPLY_PATCHES
+            GIT_TAG 375710fd22a35107b2c28e744f787e1a93a99998
             )
 endif()
 
@@ -65,7 +64,7 @@ if (NOT MINGW)
     duckdb_extension_load(spatial
             DONT_LINK LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_spatial.git
-            GIT_TAG b9cd1904a2d243b9937294ae94d4c38e7ad289f4
+            GIT_TAG 05c4ba01c500140287bf6946fb6910122e5c2acf
             INCLUDE_DIR spatial/include
             TEST_DIR test/sql
             )
@@ -90,7 +89,6 @@ if (NOT WIN32)
     duckdb_extension_load(substrait
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/substrait
-            GIT_TAG 870bab8725d1123905296bfb1f35ce737434e0b3
-            APPLY_PATCHES
+            GIT_TAG 1116fb580edd3e26e675436dbdbdf4a0aa5e456e
             )
 endif()

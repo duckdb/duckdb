@@ -370,8 +370,9 @@ bool StringValueResult::AddRowInternal() {
 			auto error_string = error.str();
 			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
 
-			auto csv_error = CSVError::CastError(state_machine.options, names[cast_error.first], error_string,
-			                                     cast_error.first, row, lines_per_batch);
+			auto csv_error =
+			    CSVError::CastError(state_machine.options, names[cast_error.first], error_string, cast_error.first, row,
+			                        lines_per_batch, parse_types[cast_error.first].first);
 			error_handler.Error(csv_error);
 		}
 		// If we got here it means we are ignoring errors, hence we need to signify to our result scanner to ignore this
@@ -592,22 +593,25 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 			    type.id() == LogicalTypeId::DATE) {
 				// use the date format to cast the chunk
 				success = CSVCast::TryCastDateVector(state_machine->options.dialect_options.date_format, parse_vector,
-				                                     result_vector, parse_chunk.size(), parameters, line_error);
+				                                     result_vector, parse_chunk.size(), parameters, line_error, true);
 			} else if (!state_machine->options.dialect_options.date_format.at(LogicalTypeId::TIMESTAMP)
 			                .GetValue()
 			                .Empty() &&
 			           type.id() == LogicalTypeId::TIMESTAMP) {
 				// use the date format to cast the chunk
-				success = CSVCast::TryCastTimestampVector(state_machine->options.dialect_options.date_format,
-				                                          parse_vector, result_vector, parse_chunk.size(), parameters);
+				success =
+				    CSVCast::TryCastTimestampVector(state_machine->options.dialect_options.date_format, parse_vector,
+				                                    result_vector, parse_chunk.size(), parameters, true);
 			} else if (state_machine->options.decimal_separator != "." &&
 			           (type.id() == LogicalTypeId::FLOAT || type.id() == LogicalTypeId::DOUBLE)) {
 				success =
 				    CSVCast::TryCastFloatingVectorCommaSeparated(state_machine->options, parse_vector, result_vector,
 				                                                 parse_chunk.size(), parameters, type, line_error);
 			} else if (state_machine->options.decimal_separator != "." && type.id() == LogicalTypeId::DECIMAL) {
-				success = CSVCast::TryCastDecimalVectorCommaSeparated(
-				    state_machine->options, parse_vector, result_vector, parse_chunk.size(), parameters, type);
+				success =
+				    CSVCast::TryCastDecimalVectorCommaSeparated(state_machine->options, parse_vector, result_vector,
+				                                                parse_chunk.size(), parameters, type, line_error);
+
 			} else {
 				// target type is not varchar: perform a cast
 				success = VectorOperations::TryCast(buffer_manager->context, parse_vector, result_vector,
@@ -641,8 +645,9 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 
 				LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(),
 				                                 lines_read - parse_chunk.size() + line_error);
-				auto csv_error = CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx],
-				                                     error_message, col_idx, row, lines_per_batch);
+				auto csv_error =
+				    CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx], error_message, col_idx,
+				                        row, lines_per_batch, result_vector.GetType().id());
 				error_handler->Error(csv_error);
 			}
 			borked_lines.insert(line_error++);
@@ -658,8 +663,9 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					}
 					LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(),
 					                                 lines_read - parse_chunk.size() + line_error);
-					auto csv_error = CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx],
-					                                     error_message, col_idx, row, lines_per_batch);
+					auto csv_error =
+					    CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx], error_message,
+					                        col_idx, row, lines_per_batch, result_vector.GetType().id());
 
 					error_handler->Error(csv_error);
 				}

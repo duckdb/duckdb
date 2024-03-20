@@ -140,6 +140,10 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"st_extent", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_exteriorring", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_flipcoordinates", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"st_force2d", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"st_force3dm", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"st_force3dz", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"st_force4d", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_geometrytype", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_geomfromgeojson", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_geomfromhexewkb", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -160,10 +164,13 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"st_linemerge", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_linestring2dfromwkb", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_list_proj_crs", "spatial", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"st_m", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_makeenvelope", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_makeline", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_makepolygon", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_makevalid", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"st_mmax", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"st_mmin", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_ngeometries", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_ninteriorrings", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_normalize", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -204,6 +211,9 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"st_y", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_ymax", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_ymin", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"st_z", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"st_zmax", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"st_zmin", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"stem", "fts", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"text", "excel", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"to_arrow_ipc", "arrow", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -218,6 +228,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
 
 static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"azure_account_name", "azure"},
+    {"azure_context_caching", "azure"},
     {"azure_credential_chain", "azure"},
     {"azure_endpoint", "azure"},
     {"azure_http_proxy", "azure"},
@@ -228,6 +239,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"azure_read_transfer_chunk_size", "azure"},
     {"azure_read_transfer_concurrency", "azure"},
     {"azure_storage_connection_string", "azure"},
+    {"azure_transport_option_type", "azure"},
     {"binary_as_string", "parquet"},
     {"ca_cert_file", "httpfs"},
     {"calendar", "icu"},
@@ -299,10 +311,9 @@ static constexpr ExtensionEntry EXTENSION_COLLATIONS[] = {
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_FILE_PREFIXES[] = {
-    {"http://", "httpfs"}, {"https://", "httpfs"}, {"s3://", "httpfs"}, {"s3a://", "httpfs"}, {"s3n://", "httpfs"},
-    {"gcs://", "httpfs"},  {"gs://", "httpfs"},    {"r2://", "httpfs"}
-    //    {"azure://", "azure"}
-}; // END_OF_EXTENSION_FILE_PREFIXES
+    {"http://", "httpfs"}, {"https://", "httpfs"}, {"s3://", "httpfs"},  {"s3a://", "httpfs"},
+    {"s3n://", "httpfs"},  {"gcs://", "httpfs"},   {"gs://", "httpfs"},  {"r2://", "httpfs"},
+    {"azure://", "azure"}, {"az://", "azure"},     {"abfss://", "azure"}}; // END_OF_EXTENSION_FILE_PREFIXES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb

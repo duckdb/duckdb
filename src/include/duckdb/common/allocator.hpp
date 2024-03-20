@@ -8,8 +8,10 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 
 namespace duckdb {
 class Allocator;
@@ -95,16 +97,10 @@ public:
 	AllocatedData Allocate(idx_t size) {
 		return AllocatedData(*this, AllocateData(size), size);
 	}
-	static data_ptr_t DefaultAllocate(PrivateAllocatorData *private_data, idx_t size) {
-		return data_ptr_cast(malloc(size));
-	}
-	static void DefaultFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
-		free(pointer);
-	}
+	static data_ptr_t DefaultAllocate(PrivateAllocatorData *private_data, idx_t size);
+	static void DefaultFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size);
 	static data_ptr_t DefaultReallocate(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
-	                                    idx_t size) {
-		return data_ptr_cast(realloc(pointer, size));
-	}
+	                                    idx_t size);
 	static Allocator &Get(ClientContext &context);
 	static Allocator &Get(DatabaseInstance &db);
 	static Allocator &Get(AttachedDatabase &db);
@@ -117,6 +113,7 @@ public:
 	DUCKDB_API static shared_ptr<Allocator> &DefaultAllocatorReference();
 
 	static void ThreadFlush(idx_t threshold);
+	static void FlushAll();
 
 private:
 	allocate_function_ptr_t allocate_function;
