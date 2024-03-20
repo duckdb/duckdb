@@ -66,3 +66,8 @@ SELECT a.i FROM b : a
 ----
 Binder Error: Referenced table "a" not found!
 Candidate tables: "b"
+
+statement error
+SELECT a : 42 AS b
+----
+syntax error
