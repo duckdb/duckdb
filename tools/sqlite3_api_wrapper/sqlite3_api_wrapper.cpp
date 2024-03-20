@@ -1,35 +1,34 @@
 #ifdef USE_DUCKDB_SHELL_WRAPPER
 #include "duckdb_shell_wrapper.h"
 #endif
-#include "sqlite3.h"
-#include "udf_struct_sqlite3.h"
-#include "sqlite3_udf_wrapper.hpp"
 #include "cast_sqlite.hpp"
-
 #include "duckdb.hpp"
-#include "duckdb/parser/parser.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/common/types.hpp"
-#include "duckdb/common/operator/cast_operators.hpp"
-#include "duckdb/common/error_data.hpp"
-#include "duckdb/main/error_manager.hpp"
-#include "utf8proc_wrapper.hpp"
 #include "duckdb/common/box_renderer.hpp"
+#include "duckdb/common/error_data.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/error_manager.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "sqlite3.h"
+#include "sqlite3_udf_wrapper.hpp"
+#include "udf_struct_sqlite3.h"
+#include "utf8proc_wrapper.hpp"
 #ifdef SHELL_INLINE_AUTOCOMPLETE
 #include "autocomplete_extension.hpp"
 #endif
 #include "shell_extension.hpp"
 
+#include <cassert>
+#include <chrono>
+#include <climits>
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 #include <string>
-#include <chrono>
-#include <cassert>
-#include <climits>
 #include <thread>
+#include <time.h>
 
 using namespace duckdb;
 using namespace std;
@@ -480,9 +479,9 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 		return SQLITE_NULL;
 	}
 	auto column_type = pStmt->result->types[iCol];
-    if (column_type.IsJSONType()) {
-        return 0;
-    }
+	if (column_type.IsJSONType()) {
+		return 0; // Does not need to be surrounded in quotes like VARCHAR
+	}
 	switch (column_type.id()) {
 	case LogicalTypeId::BOOLEAN:
 	case LogicalTypeId::TINYINT:
