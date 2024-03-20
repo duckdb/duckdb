@@ -27,7 +27,7 @@ bool ExtractAll(duckdb_re2::StringPiece &input, duckdb_re2::RE2 &pattern, idx_t 
 	D_ASSERT(pattern.ok());
 	D_ASSERT(pattern.NumberOfCapturingGroups() == ngroups);
 
-	if (!pattern.Match(input, *startpos, input.size(), pattern.ANCHOR_BOTH, groups, ngroups + 1)) {
+	if (!pattern.Match(input, *startpos, input.size(), pattern.UNANCHORED, groups, ngroups + 1)) {
 		return false;
 	}
 	idx_t consumed = static_cast<size_t>(groups[0].end() - (input.begin() + *startpos));

@@ -58,14 +58,14 @@ class LogMessage {
  public:
   LogMessage(const char* file, int line)
       : flushed_(false) {
-    stream() << file << ":" << line << ": ";
+//    stream() << file << ":" << line << ": ";
   }
   void Flush() {
-    stream() << "\n";
-    std::string s = str_.str();
-    size_t n = s.size();
-    if (fwrite(s.data(), 1, n, stderr) < n) {}  // shut up gcc
-    flushed_ = true;
+//    stream() << "\n";
+//    std::string s = str_.str();
+//    size_t n = s.size();
+//    if (fwrite(s.data(), 1, n, stderr) < n) {}  // shut up gcc
+//    flushed_ = true;
   }
   ~LogMessage() {
     if (!flushed_) {
