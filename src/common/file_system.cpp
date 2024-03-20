@@ -286,9 +286,27 @@ string FileSystem::ExpandPath(const string &path) {
 }
 
 // LCOV_EXCL_START
-unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
-                                            FileCompressionType compression, FileOpener *opener) {
+unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, idx_t flags, FileLockType lock,
+                                            FileCompressionType compression, optional_ptr<FileOpener> opener) {
 	throw NotImplementedException("%s: OpenFile is not implemented!", GetName());
+}
+
+unique_ptr<FileHandle> FileSystem::TryOpenFile(const string &path, idx_t flags, FileLockType lock,
+                                               FileCompressionType compression, optional_ptr<ErrorData> out_error,
+                                               optional_ptr<FileOpener> opener) {
+	try {
+		return OpenFile(path, flags, lock, compression, opener.get());
+	} catch (std::exception &ex) {
+		if (out_error) {
+			*out_error = ErrorData(ex);
+		}
+		return nullptr;
+	} catch (...) {
+		if (out_error) {
+			*out_error = ErrorData("Unknown exception type in FileSystem::TryOpenFile");
+		}
+		return nullptr;
+	}
 }
 
 void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {

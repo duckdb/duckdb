@@ -54,7 +54,7 @@ extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG)
 
 namespace duckdb {
 
-static void AssertValidFileFlags(uint8_t flags) {
+static void AssertValidFileFlags(idx_t flags) {
 #ifdef DEBUG
 	bool is_read = flags & FileFlags::FILE_FLAGS_READ;
 	bool is_write = flags & FileFlags::FILE_FLAGS_WRITE;
@@ -292,8 +292,9 @@ bool LocalFileSystem::IsPrivateFile(const string &path_p, FileOpener *opener) {
 	return true;
 }
 
-unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t flags, FileLockType lock_type,
-                                                 FileCompressionType compression, FileOpener *opener) {
+unique_ptr<FileHandle> LocalFileSystem::TryOpenFile(const string &path_p, idx_t flags, FileLockType lock_type,
+                                                    FileCompressionType compression, optional_ptr<ErrorData> out_error,
+                                                    optional_ptr<FileOpener> opener) {
 	auto path = FileSystem::ExpandPath(path_p, opener);
 	if (compression != FileCompressionType::UNCOMPRESSED) {
 		throw NotImplementedException("Unsupported compression type for default file system");
@@ -352,7 +353,11 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t f
 	int fd = open(path.c_str(), open_flags, filesec);
 
 	if (fd == -1) {
-		throw IOException("Cannot open file \"%s\": %s", {{"errno", std::to_string(errno)}}, path, strerror(errno));
+		if (out_error) {
+			*out_error = ErrorData(
+			    IOException("Cannot open file \"%s\": %s", {{"errno", std::to_string(errno)}}, path, strerror(errno)));
+		}
+		return nullptr;
 	}
 	// #if defined(__DARWIN__) || defined(__APPLE__)
 	// 	if (flags & FileFlags::FILE_FLAGS_DIRECT_IO) {
@@ -378,6 +383,9 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t f
 			// Retain the original error.
 			int retained_errno = errno;
 			if (rc == -1) {
+				if (!out_error) {
+					return nullptr;
+				}
 				string message;
 				// try to find out who is holding the lock using F_GETLK
 				rc = fcntl(fd, F_GETLK, &fl);
@@ -397,8 +405,9 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t f
 					}
 				}
 				message += ". See also https://duckdb.org/docs/connect/concurrency";
-				throw IOException("Could not set lock on file \"%s\": %s", {{"errno", std::to_string(retained_errno)}},
-				                  path, message);
+				*out_error = ErrorData(IOException("Could not set lock on file \"%s\": %s",
+				                                   {{"errno", std::to_string(retained_errno)}}, path, message));
+				return nullptr;
 			}
 		}
 	}
@@ -766,8 +775,9 @@ bool LocalFileSystem::IsPrivateFile(const string &path_p, FileOpener *opener) {
 	return true;
 }
 
-unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t flags, FileLockType lock_type,
-                                                 FileCompressionType compression, FileOpener *opener) {
+unique_ptr<FileHandle> LocalFileSystem::TryOpenFile(const string &path, idx_t flags, FileLockType lock,
+                                                    FileCompressionType compression, optional_ptr<ErrorData> out_error,
+                                                    optional_ptr<FileOpener> opener) {
 	auto path = FileSystem::ExpandPath(path_p, opener);
 	if (compression != FileCompressionType::UNCOMPRESSED) {
 		throw NotImplementedException("Unsupported compression type for default file system");
@@ -806,14 +816,18 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t f
 	HANDLE hFile = CreateFileW(unicode_path.c_str(), desired_access, share_mode, NULL, creation_disposition,
 	                           flags_and_attributes, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) {
+		if (!out_error) {
+			return nullptr;
+		}
 		auto error = LocalFileSystem::GetLastErrorAsString();
 
 		auto better_error = AdditionalLockInfo(unicode_path);
 		if (!better_error.empty()) {
-			throw IOException(better_error);
+			*out_error = ErrorData(IOException(better_error));
+		} else {
+			*out_error = ErrorData(IOException("Cannot open file \"%s\": %s", path.c_str(), error));
 		}
-
-		throw IOException("Cannot open file \"%s\": %s", path.c_str(), error);
+		return nullptr;
 	}
 	auto handle = make_uniq<WindowsFileHandle>(*this, path.c_str(), hFile);
 	if (flags & FileFlags::FILE_FLAGS_APPEND) {
@@ -1080,6 +1094,16 @@ FileType LocalFileSystem::GetFileType(FileHandle &handle) {
 	return FileType::FILE_TYPE_INVALID;
 }
 #endif
+
+unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, idx_t flags, FileLockType lock_type,
+                                                 FileCompressionType compression, optional_ptr<FileOpener> opener) {
+	ErrorData error;
+	auto handle = TryOpenFile(path_p, flags, lock_type, compression, &error, opener);
+	if (error.HasError()) {
+		error.Throw();
+	}
+	return handle;
+}
 
 bool LocalFileSystem::CanSeek() {
 	return true;

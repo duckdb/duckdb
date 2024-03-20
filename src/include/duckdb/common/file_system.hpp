@@ -16,6 +16,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/error_data.hpp"
 #include <functional>
 
 #undef CreateDirectory
@@ -99,19 +100,19 @@ enum class FileLockType : uint8_t { NO_LOCK = 0, READ_LOCK = 1, WRITE_LOCK = 2 }
 class FileFlags {
 public:
 	//! Open file with read access
-	static constexpr uint8_t FILE_FLAGS_READ = 1 << 0;
+	static constexpr idx_t FILE_FLAGS_READ = 1 << 0;
 	//! Open file with write access
-	static constexpr uint8_t FILE_FLAGS_WRITE = 1 << 1;
+	static constexpr idx_t FILE_FLAGS_WRITE = 1 << 1;
 	//! Use direct IO when reading/writing to the file
-	static constexpr uint8_t FILE_FLAGS_DIRECT_IO = 1 << 2;
+	static constexpr idx_t FILE_FLAGS_DIRECT_IO = 1 << 2;
 	//! Create file if not exists, can only be used together with WRITE
-	static constexpr uint8_t FILE_FLAGS_FILE_CREATE = 1 << 3;
+	static constexpr idx_t FILE_FLAGS_FILE_CREATE = 1 << 3;
 	//! Always create a new file. If a file exists, the file is truncated. Cannot be used together with CREATE.
-	static constexpr uint8_t FILE_FLAGS_FILE_CREATE_NEW = 1 << 4;
+	static constexpr idx_t FILE_FLAGS_FILE_CREATE_NEW = 1 << 4;
 	//! Open file in append mode
-	static constexpr uint8_t FILE_FLAGS_APPEND = 1 << 5;
+	static constexpr idx_t FILE_FLAGS_APPEND = 1 << 5;
 	//! Open file with restrictive permissions (600 on linux/mac) can only be used when creating, throws if file exists
-	static constexpr uint8_t FILE_FLAGS_PRIVATE = 1 << 6;
+	static constexpr idx_t FILE_FLAGS_PRIVATE = 1 << 6;
 };
 
 class FileSystem {
@@ -125,10 +126,15 @@ public:
 	DUCKDB_API static FileSystem &GetFileSystem(DatabaseInstance &db);
 	DUCKDB_API static FileSystem &Get(AttachedDatabase &db);
 
-	DUCKDB_API virtual unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags,
+	DUCKDB_API virtual unique_ptr<FileHandle> OpenFile(const string &path, idx_t flags,
 	                                                   FileLockType lock = DEFAULT_LOCK,
 	                                                   FileCompressionType compression = DEFAULT_COMPRESSION,
-	                                                   FileOpener *opener = nullptr);
+	                                                   optional_ptr<FileOpener> opener = nullptr);
+	DUCKDB_API virtual unique_ptr<FileHandle> TryOpenFile(const string &path, idx_t flags,
+	                                                      FileLockType lock = DEFAULT_LOCK,
+	                                                      FileCompressionType compression = DEFAULT_COMPRESSION,
+	                                                      optional_ptr<ErrorData> out_error = nullptr,
+	                                                      optional_ptr<FileOpener> opener = nullptr);
 
 	//! Read exactly nr_bytes from the specified location in the file. Fails if nr_bytes could not be read. This is
 	//! equivalent to calling SetFilePointer(location) followed by calling Read().

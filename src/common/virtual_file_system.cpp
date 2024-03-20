@@ -9,8 +9,20 @@ VirtualFileSystem::VirtualFileSystem() : default_fs(FileSystem::CreateLocal()) {
 	VirtualFileSystem::RegisterSubSystem(FileCompressionType::GZIP, make_uniq<GZipFileSystem>());
 }
 
-unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
-                                                   FileCompressionType compression, FileOpener *opener) {
+unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, idx_t flags, FileLockType lock,
+                                                   FileCompressionType compression, optional_ptr<FileOpener> opener) {
+	ErrorData error;
+	auto handle = TryOpenFile(path, flags, lock, compression, &error, opener);
+	if (error.HasError()) {
+		error.Throw();
+	}
+	return handle;
+}
+
+unique_ptr<FileHandle> VirtualFileSystem::TryOpenFile(const string &path, idx_t flags, FileLockType lock,
+                                                      FileCompressionType compression,
+                                                      optional_ptr<ErrorData> out_error,
+                                                      optional_ptr<FileOpener> opener) {
 	if (compression == FileCompressionType::AUTO_DETECT) {
 		// auto detect compression settings based on file name
 		auto lower_path = StringUtil::Lower(path);
@@ -27,7 +39,11 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, uint8_t f
 		}
 	}
 	// open the base file handle
-	auto file_handle = FindFileSystem(path).OpenFile(path, flags, lock, FileCompressionType::UNCOMPRESSED, opener);
+	auto file_handle =
+	    FindFileSystem(path).TryOpenFile(path, flags, lock, FileCompressionType::UNCOMPRESSED, out_error, opener);
+	if (out_error->HasError()) {
+		return nullptr;
+	}
 	if (file_handle->GetType() == FileType::FILE_TYPE_FIFO) {
 		file_handle = PipeFileSystem::OpenPipe(std::move(file_handle));
 	} else if (compression != FileCompressionType::UNCOMPRESSED) {
