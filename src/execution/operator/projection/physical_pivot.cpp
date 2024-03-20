@@ -69,10 +69,10 @@ OperatorResultType PhysicalPivot::Execute(ExecutionContext &context, DataChunk &
 			for (idx_t aggr = 0; aggr < empty_aggregates.size(); aggr++) {
 				auto pivot_value_lists = FlatVector::GetData<list_entry_t>(input.data[bound_pivot.group_count + aggr]);
 				auto &pivot_value_child = ListVector::GetEntry(input.data[bound_pivot.group_count + aggr]);
-				if (list.offset != pivot_value_lists[r].offset || list.length != pivot_value_lists[r].length) {
+				if (list.length != pivot_value_lists[r].length) {
 					throw InternalException("Pivot - unaligned lists between values and columns!?");
 				}
-				chunk.data[column_idx + aggr].SetValue(r, pivot_value_child.GetValue(list.offset + l));
+				chunk.data[column_idx + aggr].SetValue(r, pivot_value_child.GetValue(pivot_value_lists[r].offset + l));
 			}
 		}
 	}

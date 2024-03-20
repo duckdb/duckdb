@@ -7,8 +7,6 @@ on:
       - '**'
       - '!main'
       - '!feature'
-    tags:
-      - '**'
     paths-ignore:
       - '**'
       - '!.github/workflows/NightlyTests.yml'
@@ -413,11 +411,24 @@ jobs:
         shell: bash
         run: build/relassert/test/unittest
 
-
-  dictionary-vector-verification:
-    name: Dictionary Vector Verification Tests
+  vector-verification:
+    name: Vector Verification Tests (${{ matrix.vector_type }})
     runs-on: ubuntu-20.04
     needs: linux-memory-leaks
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - vector_type: "dictionary_expression"
+            test_parameter: '"*"'
+          - vector_type: "dictionary_operator"
+            test_parameter: '"*"'
+          - vector_type: "constant_operator"
+            test_parameter: '' # skip running all tests here because it is too slow
+          - vector_type: "sequence_operator"
+            test_parameter: '' # skip running all tests here because it is too slow
+          - vector_type: "nested_shuffle"
+            test_parameter: '"*"'
     env:
       CC: gcc-10
       CXX: g++-10
@@ -431,7 +442,7 @@ jobs:
       BUILD_VISUALIZER: 1
       BUILD_JSON: 1
       BUILD_EXCEL: 1
-      VERIFY_DICTIONARY_VECTOR: 1
+      VERIFY_VECTOR: ${{ matrix.vector_type }}
 
     steps:
       - uses: actions/checkout@v3
@@ -454,7 +465,7 @@ jobs:
 
       - name: Test
         shell: bash
-        run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "*" --no-exit
+        run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest ${{ matrix.test_parameter }} --no-exit
 
   force-blocking-sink-source:
     name: Forcing async Sinks/Sources
@@ -646,6 +657,7 @@ jobs:
       BUILD_JSON: 1
       BUILD_EXCEL: 1
       BUILD_JEMALLOC: 1
+      DUCKDB_PLATFORM: linux_amd64
       TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt
 
     steps:

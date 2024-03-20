@@ -110,6 +110,8 @@ public:
 	static constexpr uint8_t FILE_FLAGS_FILE_CREATE_NEW = 1 << 4;
 	//! Open file in append mode
 	static constexpr uint8_t FILE_FLAGS_APPEND = 1 << 5;
+	//! Open file with restrictive permissions (600 on linux/mac) can only be used when creating, throws if file exists
+	static constexpr uint8_t FILE_FLAGS_PRIVATE = 1 << 6;
 };
 
 class FileSystem {

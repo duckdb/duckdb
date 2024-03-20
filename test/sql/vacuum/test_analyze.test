@@ -7,6 +7,9 @@ require vector_size 1024
 
 require skip_reload
 
+# distinct stats sampling is different for different vector sizes
+require no_vector_verification
+
 statement ok
 analyze
 
