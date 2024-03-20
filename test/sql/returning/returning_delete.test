@@ -219,7 +219,7 @@ RETURNING {'a': a, 'b': b};
 query I
 DELETE FROM table2
 WHERE b=4
-RETURNING [a, b];
+RETURNING [a, b::VARCHAR];
 ----
 [mysql, 4]
 

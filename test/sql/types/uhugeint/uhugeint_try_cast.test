@@ -1,0 +1,36 @@
+# name: test/sql/types/uhugeint/uhugeint_try_cast.test
+# description: Test try_cast for uhugeint
+# group: [uhugeint]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+SELECT CAST('340282366920938463463374607431768211456' AS UHUGEINT)
+----
+Conversion Error
+
+statement error
+SELECT CAST('340282366920938463463374607431768211456'::DOUBLE AS UHUGEINT)
+----
+Conversion Error
+
+statement error
+SELECT CAST('-1' AS UHUGEINT)
+----
+Conversion Error
+
+query I
+SELECT TRY_CAST('340282366920938463463374607431768211456' AS UHUGEINT)
+----
+NULL
+
+query I
+SELECT TRY_CAST('340282366920938463463374607431768211456'::DOUBLE AS UHUGEINT)
+----
+NULL
+
+query I
+SELECT TRY_CAST('-1' AS UHUGEINT)
+----
+NULL

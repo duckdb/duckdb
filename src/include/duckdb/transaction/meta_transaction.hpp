@@ -15,6 +15,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/common/error_data.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
@@ -40,14 +41,14 @@ public:
 
 public:
 	DUCKDB_API static MetaTransaction &Get(ClientContext &context);
-	timestamp_t GetCurrentTransactionStartTimestamp() {
+	timestamp_t GetCurrentTransactionStartTimestamp() const {
 		return start_timestamp;
 	}
 
 	Transaction &GetTransaction(AttachedDatabase &db);
 	void RemoveTransaction(AttachedDatabase &db);
 
-	string Commit();
+	ErrorData Commit();
 	void Rollback();
 
 	idx_t GetActiveQuery();
@@ -57,8 +58,13 @@ public:
 	optional_ptr<AttachedDatabase> ModifiedDatabase() {
 		return modified_database;
 	}
+	const vector<reference<AttachedDatabase>> &OpenedTransactions() const {
+		return all_transactions;
+	}
 
 private:
+	//! Lock to prevent all_transactions and transactions from getting out of sync
+	mutex lock;
 	//! The set of active transactions for each database
 	reference_map_t<AttachedDatabase, reference<Transaction>> transactions;
 	//! The set of transactions in order of when they were started

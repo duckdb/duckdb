@@ -7,6 +7,7 @@ IndexCatalogEntry::IndexCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schem
       index_type(info.index_type), index_constraint_type(info.constraint_type), column_ids(info.column_ids) {
 
 	this->temporary = info.temporary;
+	this->comment = info.comment;
 }
 
 unique_ptr<CreateInfo> IndexCatalogEntry::GetInfo() const {
@@ -27,6 +28,8 @@ unique_ptr<CreateInfo> IndexCatalogEntry::GetInfo() const {
 	for (auto &expr : parsed_expressions) {
 		result->parsed_expressions.push_back(expr->Copy());
 	}
+
+	result->comment = comment;
 
 	return std::move(result);
 }

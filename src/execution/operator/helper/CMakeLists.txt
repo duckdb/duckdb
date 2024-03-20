@@ -2,6 +2,8 @@ add_library_unity(
   duckdb_operator_helper
   OBJECT
   physical_batch_collector.cpp
+  physical_buffered_collector.cpp
+  physical_create_secret.cpp
   physical_execute.cpp
   physical_explain_analyze.cpp
   physical_limit.cpp
@@ -17,7 +19,8 @@ add_library_unity(
   physical_streaming_limit.cpp
   physical_streaming_sample.cpp
   physical_transaction.cpp
-  physical_vacuum.cpp)
+  physical_vacuum.cpp
+  physical_verify_vector.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_operator_helper>
     PARENT_SCOPE)

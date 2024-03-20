@@ -5,7 +5,6 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/list.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/column/column_data_allocator.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/vector.hpp"

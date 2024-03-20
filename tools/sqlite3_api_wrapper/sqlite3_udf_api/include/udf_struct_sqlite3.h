@@ -3,7 +3,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/string_heap.hpp"
-#include "duckdb/common/preserved_error.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb.hpp"
 
 #include <memory>
@@ -16,7 +16,7 @@
 struct sqlite3 {
 	duckdb::unique_ptr<duckdb::DuckDB> db;
 	duckdb::unique_ptr<duckdb::Connection> con;
-	duckdb::PreservedError last_error;
+	duckdb::ErrorData last_error;
 	int64_t last_changes = 0;
 	int64_t total_changes = 0;
 	int errCode; /* Most recent error code (SQLITE_*) */

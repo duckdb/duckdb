@@ -2,6 +2,7 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 
@@ -9,6 +10,7 @@ using duckdb::case_insensitive_map_t;
 using duckdb::Connection;
 using duckdb::date_t;
 using duckdb::dtime_t;
+using duckdb::ErrorData;
 using duckdb::ExtractStatementsWrapper;
 using duckdb::hugeint_t;
 using duckdb::LogicalType;
@@ -18,6 +20,7 @@ using duckdb::PreparedStatementWrapper;
 using duckdb::QueryResultType;
 using duckdb::StringUtil;
 using duckdb::timestamp_t;
+using duckdb::uhugeint_t;
 using duckdb::Value;
 
 idx_t duckdb_extract_statements(duckdb_connection connection, const char *query,
@@ -29,8 +32,9 @@ idx_t duckdb_extract_statements(duckdb_connection connection, const char *query,
 	Connection *conn = reinterpret_cast<Connection *>(connection);
 	try {
 		wrapper->statements = conn->ExtractStatements(query);
-	} catch (const duckdb::ParserException &e) {
-		wrapper->error = e.what();
+	} catch (const std::exception &ex) {
+		ErrorData error(ex);
+		wrapper->error = error.Message();
 	}
 
 	*out_extracted_statements = (duckdb_extracted_statements)wrapper;
@@ -213,8 +217,20 @@ static hugeint_t duckdb_internal_hugeint(duckdb_hugeint val) {
 	return internal;
 }
 
+static uhugeint_t duckdb_internal_uhugeint(duckdb_uhugeint val) {
+	uhugeint_t internal;
+	internal.lower = val.lower;
+	internal.upper = val.upper;
+	return internal;
+}
+
 duckdb_state duckdb_bind_hugeint(duckdb_prepared_statement prepared_statement, idx_t param_idx, duckdb_hugeint val) {
 	auto value = Value::HUGEINT(duckdb_internal_hugeint(val));
+	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
+}
+
+duckdb_state duckdb_bind_uhugeint(duckdb_prepared_statement prepared_statement, idx_t param_idx, duckdb_uhugeint val) {
+	auto value = Value::UHUGEINT(duckdb_internal_uhugeint(val));
 	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
 }
 

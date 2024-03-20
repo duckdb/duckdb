@@ -123,8 +123,13 @@ SELECT list_transform([[1], [2], [3]], x -> list_concat(list_transform(x, y -> y
 ----
 [[2, 0], [3, 1], [4, 2]]
 
-query I
+statement error
 SELECT list_transform([[1], [4], NULL, [1], [8]], x -> list_concat(list_transform(x, y -> CASE WHEN y > 1 THEN 'yay' ELSE 'nay' END), x))
+----
+an explicit cast is required
+
+query I
+SELECT list_transform([[1], [4], NULL, [1], [8]], x -> list_concat(list_transform(x, y -> CASE WHEN y > 1 THEN 'yay' ELSE 'nay' END), x::VARCHAR[]))
 ----
 [[nay, 1], [yay, 4], NULL, [nay, 1], [yay, 8]]
 

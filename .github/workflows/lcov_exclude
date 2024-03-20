@@ -14,7 +14,6 @@
 */extension/jemalloc/*
 */extension/tpcds/*
 */extension/tpch/*
-*/extension/visualizer/*
 */extension/json/yyjson/*
 */extension_helper.cpp
 */generated_extension_loader.hpp

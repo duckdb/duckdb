@@ -34,7 +34,7 @@ on:
       vcpkg_commit:
         required: false
         type: string
-        default: "a42af01b72c28a8e1d7b48107b33e4f286a55ef6"
+        default: "a1a1cbc975abf909a6c8985a6a2b8fe20bbd9bd6"
       # Override the default script producing the matrices. Allows specifying custom matrices.
       matrix_parse_script:
         required: false
@@ -45,6 +45,11 @@ on:
         required: false
         type: boolean
         default: true
+      # Patch file to patch the extension's sources before building
+      patch:
+        required: false
+        type: string
+        default: ""
 
 jobs:
   generate_matrix:
@@ -61,6 +66,11 @@ jobs:
           fetch-depth: 0
           submodules: 'true'
 
+      - if: ${{ inputs.patch != '' }}
+        run: |
+          patch -p1 < ${{ inputs.patch }}
+        shell: bash
+
       - name: Checkout DuckDB to version
         run: |
           cd duckdb
@@ -71,8 +81,6 @@ jobs:
           python3 ${{ inputs.matrix_parse_script }} --input ./duckdb/.github/config/distribution_matrix.json --select_os linux --output linux_matrix.json --exclude "${{ inputs.exclude_archs }}" --pretty
           python3 ${{ inputs.matrix_parse_script }} --input ./duckdb/.github/config/distribution_matrix.json --select_os osx --output osx_matrix.json --exclude "${{ inputs.exclude_archs }}" --pretty
           python3 ${{ inputs.matrix_parse_script }} --input ./duckdb/.github/config/distribution_matrix.json --select_os windows --output windows_matrix.json --exclude "${{ inputs.exclude_archs }}" --pretty
-          # In v0.9.2 wasm was not part of the avaliable triplets, backporting it here
-          grep wasm ./duckdb/.github/config/distribution_matrix.json || echo '{"wasm":{"include":[{"duckdb_arch":"wasm_mvp","vcpkg_triplet":"wasm32-emscripten"},{"duckdb_arch":"wasm_eh","vcpkg_triplet":"wasm32-emscripten"},{"duckdb_arch":"wasm_threads","vcpkg_triplet":"wasm32-emscripten"}]}}' > ./duckdb/.github/config/distribution_matrix.json
           python3 ${{ inputs.matrix_parse_script }} --input ./duckdb/.github/config/distribution_matrix.json --select_os wasm --output wasm_matrix.json --exclude "${{ inputs.exclude_archs }}" --pretty
 
       - id: set-matrix-linux
@@ -112,6 +120,7 @@ jobs:
       VCPKG_TOOLCHAIN_PATH: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
       GEN: Ninja
       BUILD_SHELL: ${{ inputs.build_duckdb_shell && '1' || '0' }}
+      DUCKDB_PLATFORM: ${{ matrix.duckdb_arch }}
 
     steps:
       - name: Install required ubuntu packages
@@ -138,6 +147,11 @@ jobs:
           fetch-depth: 0
           submodules: 'true'
 
+      - if: ${{ inputs.patch != '' }}
+        run: |
+          patch -p1 < ${{ inputs.patch }}
+        shell: bash
+
       - name: Checkout DuckDB to version
         run: |
           cd duckdb
@@ -149,7 +163,7 @@ jobs:
           ./duckdb/scripts/setup_manylinux2014.sh general aws-cli ccache ssh python_alias openssl
 
       - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
+        uses: hendrikmuhs/ccache-action@v1.2.11 # Note: pinned due to GLIBC incompatibility in later releases
         with:
           key: ${{ github.job }}-${{ matrix.duckdb_arch }}
 
@@ -169,6 +183,7 @@ jobs:
           GEN: ninja
           CC: ${{ matrix.duckdb_arch == 'linux_arm64' && 'aarch64-linux-gnu-gcc' || '' }}
           CXX: ${{ matrix.duckdb_arch == 'linux_arm64' && 'aarch64-linux-gnu-g++' || '' }}
+          DUCKDB_PLATFORM: ${{ matrix.duckdb_arch }}
         run: |
           make release
 
@@ -185,7 +200,7 @@ jobs:
 
   macos:
     name: MacOS
-    runs-on: macos-latest
+    runs-on: macos-14
     needs: generate_matrix
     if: ${{ needs.generate_matrix.outputs.osx_matrix != '{}' && needs.generate_matrix.outputs.osx_matrix != '' }}
     strategy:
@@ -196,12 +211,18 @@ jobs:
       OSX_BUILD_ARCH: ${{ matrix.osx_build_arch }}
       GEN: Ninja
       BUILD_SHELL: ${{ inputs.build_duckdb_shell && '1' || '0' }}
+      DUCKDB_PLATFORM: ${{ matrix.duckdb_arch }}
 
     steps:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
           submodules: 'true'
+
+      - if: ${{ inputs.patch != '' }}
+        run: |
+          patch -p1 < ${{ inputs.patch }}
+        shell: bash
 
       - name: Install Ninja
         run: |
@@ -212,9 +233,9 @@ jobs:
         with:
           key: ${{ github.job }}-${{ matrix.duckdb_arch }}
 
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.7'
+          python-version: '3.12'
 
       - name: Checkout DuckDB to version
         run: |
@@ -228,6 +249,8 @@ jobs:
 
       - name: Build extension
         shell: bash
+        env:
+          DUCKDB_PLATFORM: ${{ matrix.duckdb_arch }}
         run: |
           make release
 
@@ -255,6 +278,9 @@ jobs:
       VCPKG_TOOLCHAIN_PATH: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
       VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
       BUILD_SHELL: ${{ inputs.build_duckdb_shell && '1' || '0' }}
+      DUCKDB_PLATFORM: ${{ matrix.duckdb_arch }}
+      CC: ${{ matrix.duckdb_arch == 'windows_amd64_rtools' && 'gcc' || '' }}
+      CXX: ${{ matrix.duckdb_arch == 'windows_amd64_rtools' && 'g++' || '' }}
 
     steps:
       - name: Keep \n line endings
@@ -268,9 +294,21 @@ jobs:
           fetch-depth: 0
           submodules: 'true'
 
-      - uses: actions/setup-python@v2
+      - if: ${{ inputs.patch != '' }}
+        run: |
+          patch -p1 < ${{ inputs.patch }}
+        shell: bash
+
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.7'
+          python-version: '3.12'
+
+      - uses: r-lib/actions/setup-r@v2
+        if: matrix.duckdb_arch == 'windows_amd64_rtools'
+        with:
+          r-version: 'devel'
+          update-rtools: true
+          rtools-version: '42' # linker bug in 43
 
       - name: Checkout DuckDB to version
         run: |
@@ -288,6 +326,8 @@ jobs:
           vcpkgGitCommitId: ${{ inputs.vcpkg_commit }}
 
       - name: Build extension
+        env:
+          DUCKDB_PLATFORM: ${{ matrix.duckdb_arch }}
         run: |
           make release
 
@@ -313,12 +353,18 @@ jobs:
       VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
       VCPKG_TOOLCHAIN_PATH: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
       GEN: Ninja
+      DUCKDB_PLATFORM: ${{ matrix.duckdb_arch }}
 
     steps:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
           submodules: 'true'
+
+      - if: ${{ inputs.patch != '' }}
+        run: |
+          patch -p1 < ${{ inputs.patch }}
+        shell: bash
 
       - name: Checkout DuckDB to version
         run: |

@@ -10,6 +10,8 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/stack_checker.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/parser/expression/lambdaref_expression.hpp"
@@ -35,23 +37,30 @@ struct DummyBinding;
 
 struct BoundColumnReferenceInfo {
 	string name;
-	idx_t query_location;
+	optional_idx query_location;
 };
 
 struct BindResult {
 	BindResult() {
 	}
-	explicit BindResult(string error) : error(error) {
+	explicit BindResult(const Exception &ex) : error(ex) {
+	}
+	explicit BindResult(const string &error_msg) : error(ExceptionType::BINDER, error_msg) {
+	}
+	explicit BindResult(ErrorData error) : error(std::move(error)) {
 	}
 	explicit BindResult(unique_ptr<Expression> expr) : expression(std::move(expr)) {
 	}
 
-	bool HasError() {
-		return !error.empty();
+	bool HasError() const {
+		return error.HasError();
+	}
+	void SetError(const string &error_message) {
+		error = ErrorData(ExceptionType::BINDER, error_message);
 	}
 
 	unique_ptr<Expression> expression;
-	string error;
+	ErrorData error;
 };
 
 class ExpressionBinder {
@@ -80,26 +89,37 @@ public:
 		return bound_columns;
 	}
 
-	string Bind(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression = false);
+	ErrorData Bind(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression = false);
 
-	unique_ptr<ParsedExpression> CreateStructExtract(unique_ptr<ParsedExpression> base, string field_name);
-	unique_ptr<ParsedExpression> CreateStructPack(ColumnRefExpression &colref);
+	//! Returns the STRUCT_EXTRACT operator expression
+	unique_ptr<ParsedExpression> CreateStructExtract(unique_ptr<ParsedExpression> base, const string &field_name);
+	//! Returns a STRUCT_PACK function expression
+	unique_ptr<ParsedExpression> CreateStructPack(ColumnRefExpression &col_ref);
+
 	BindResult BindQualifiedColumnName(ColumnRefExpression &colref, const string &table_name);
 
-	unique_ptr<ParsedExpression> QualifyColumnName(const string &column_name, string &error_message);
-	unique_ptr<ParsedExpression> QualifyColumnName(ColumnRefExpression &colref, string &error_message);
-
-	// Bind table names to ColumnRefExpressions
-	void QualifyColumnNames(unique_ptr<ParsedExpression> &expr);
+	//! Returns a qualified column reference from a column name
+	unique_ptr<ParsedExpression> QualifyColumnName(const string &column_name, ErrorData &error);
+	//! Returns a qualified column reference from a column reference with column_names.size() > 2
+	unique_ptr<ParsedExpression> QualifyColumnNameWithManyDots(ColumnRefExpression &col_ref, ErrorData &error);
+	//! Returns a qualified column reference from a column reference
+	unique_ptr<ParsedExpression> QualifyColumnName(ColumnRefExpression &col_ref, ErrorData &error);
+	//! Enables special-handling of lambda parameters by tracking them in the lambda_params vector
+	void QualifyColumnNamesInLambda(FunctionExpression &function, vector<unordered_set<string>> &lambda_params);
+	//! Recursively qualifies the column references in the (children) of the expression. Passes on the
+	//! within_function_expression state from outer expressions, or sets it
+	void QualifyColumnNames(unique_ptr<ParsedExpression> &expr, vector<unordered_set<string>> &lambda_params,
+	                        const bool within_function_expression = false);
+	//! Entry point for qualifying the column references of the expression
 	static void QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpression> &expr);
 
 	static bool PushCollation(ClientContext &context, unique_ptr<Expression> &source, const LogicalType &sql_type,
 	                          bool equality_only = false);
 	static void TestCollation(ClientContext &context, const string &collation);
 
-	BindResult BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr, string error_message);
+	BindResult BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr, ErrorData error_message);
 
-	void BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, string &error);
+	void BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, ErrorData &error);
 	static void ExtractCorrelatedExpressions(Binder &binder, Expression &expr);
 
 	static bool ContainsNullType(const LogicalType &type);
@@ -109,12 +129,17 @@ public:
 
 	virtual bool QualifyColumnAlias(const ColumnRefExpression &colref);
 
-	//! Bind the given expresion. Unlike Bind(), this does *not* mute the given ParsedExpression.
+	//! Bind the given expression. Unlike Bind(), this does *not* mute the given ParsedExpression.
 	//! Exposed to be used from sub-binders that aren't subclasses of ExpressionBinder.
 	virtual BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
 	                                  bool root_expression = false);
 
-	void ReplaceMacroParametersRecursive(unique_ptr<ParsedExpression> &expr);
+	//! Recursively replaces macro parameters with the provided input parameters
+	void ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr, vector<unordered_set<string>> &lambda_params);
+	//! Enables special-handling of lambda parameters by tracking them in the lambda_params vector
+	void ReplaceMacroParametersInLambda(FunctionExpression &function, vector<unordered_set<string>> &lambda_params);
+
+	static LogicalType GetExpressionReturnType(const Expression &expr);
 
 private:
 	//! Maximum stack depth
@@ -153,6 +178,10 @@ protected:
 
 	static unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name);
 
+	LogicalType ResolveOperatorType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
+	LogicalType ResolveInType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
+	LogicalType ResolveNotType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
+
 protected:
 	virtual BindResult BindGroupingFunction(OperatorExpression &op, idx_t depth);
 	virtual BindResult BindFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry &function, idx_t depth);
@@ -169,6 +198,13 @@ protected:
 	ClientContext &context;
 	optional_ptr<ExpressionBinder> stored_binder;
 	vector<BoundColumnReferenceInfo> bound_columns;
+
+	//! Returns true if the function name is an alias for the UNNEST function
+	static bool IsUnnestFunction(const string &function_name);
+	//! Returns true, if the function contains a lambda expression and is not the '->>' operator
+	static bool IsLambdaFunction(const FunctionExpression &function);
+	//! Returns the bind result of binding a lambda or JSON function
+	BindResult TryBindLambdaOrJson(FunctionExpression &function, idx_t depth, CatalogEntry &func);
 };
 
 } // namespace duckdb

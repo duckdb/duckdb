@@ -49,10 +49,10 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "COPY_TO_FILE";
 	case PhysicalOperatorType::BATCH_COPY_TO_FILE:
 		return "BATCH_COPY_TO_FILE";
-	case PhysicalOperatorType::FIXED_BATCH_COPY_TO_FILE:
-		return "FIXED_BATCH_COPY_TO_FILE";
-	case PhysicalOperatorType::DELIM_JOIN:
-		return "DELIM_JOIN";
+	case PhysicalOperatorType::LEFT_DELIM_JOIN:
+		return "LEFT_DELIM_JOIN";
+	case PhysicalOperatorType::RIGHT_DELIM_JOIN:
+		return "RIGHT_DELIM_JOIN";
 	case PhysicalOperatorType::BLOCKWISE_NL_JOIN:
 		return "BLOCKWISE_NL_JOIN";
 	case PhysicalOperatorType::NESTED_LOOP_JOIN:
@@ -119,6 +119,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "CREATE_SCHEMA";
 	case PhysicalOperatorType::CREATE_MACRO:
 		return "CREATE_MACRO";
+	case PhysicalOperatorType::CREATE_SECRET:
+		return "CREATE_SECRET";
 	case PhysicalOperatorType::DROP:
 		return "DROP";
 	case PhysicalOperatorType::PRAGMA:
@@ -151,6 +153,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "PIVOT";
 	case PhysicalOperatorType::COPY_DATABASE:
 		return "COPY_DATABASE";
+	case PhysicalOperatorType::VERIFY_VECTOR:
+		return "VERIFY_VECTOR";
 	case PhysicalOperatorType::INVALID:
 		break;
 	}

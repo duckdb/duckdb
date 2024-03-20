@@ -37,7 +37,12 @@ struct PragmaInfo;
 
 //! The default null handling is NULL in, NULL out
 enum class FunctionNullHandling : uint8_t { DEFAULT_NULL_HANDLING = 0, SPECIAL_HANDLING = 1 };
-enum class FunctionSideEffects : uint8_t { NO_SIDE_EFFECTS = 0, HAS_SIDE_EFFECTS = 1 };
+//! The stability of the function, used by the optimizer
+//! CONSISTENT              -> this function always returns the same result when given the same input, no variance
+//! CONSISTENT_WITHIN_QUERY -> this function returns the same result WITHIN the same query/transaction
+//!                            but the result might change across queries (e.g. NOW(), CURRENT_TIME)
+//! VOLATILE                -> the result of this function might change per row (e.g. RANDOM())
+enum class FunctionStability : uint8_t { CONSISTENT = 0, VOLATILE = 1, CONSISTENT_WITHIN_QUERY = 2 };
 
 struct FunctionData {
 	DUCKDB_API virtual ~FunctionData();
@@ -48,7 +53,7 @@ struct FunctionData {
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -96,10 +101,11 @@ public:
 
 public:
 	//! Returns the formatted string name(arg1, arg2, ...)
-	DUCKDB_API static string CallToString(const string &name, const vector<LogicalType> &arguments);
+	DUCKDB_API static string CallToString(const string &name, const vector<LogicalType> &arguments,
+	                                      const LogicalType &varargs = LogicalType::INVALID);
 	//! Returns the formatted string name(arg1, arg2..) -> return_type
 	DUCKDB_API static string CallToString(const string &name, const vector<LogicalType> &arguments,
-	                                      const LogicalType &return_type);
+	                                      const LogicalType &varargs, const LogicalType &return_type);
 	//! Returns the formatted string name(arg1, arg2.., np1=a, np2=b, ...)
 	DUCKDB_API static string CallToString(const string &name, const vector<LogicalType> &arguments,
 	                                      const named_parameter_type_map_t &named_parameters);
@@ -147,16 +153,15 @@ public:
 class BaseScalarFunction : public SimpleFunction {
 public:
 	DUCKDB_API BaseScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
-	                              FunctionSideEffects side_effects,
+	                              FunctionStability stability,
 	                              LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
 	                              FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING);
 	DUCKDB_API ~BaseScalarFunction() override;
 
 	//! Return type of the function
 	LogicalType return_type;
-	//! Whether or not the function has side effects (e.g. sequence increments, random() functions, NOW()). Functions
-	//! with side-effects cannot be constant-folded.
-	FunctionSideEffects side_effects;
+	//! The stability of the function (see FunctionStability enum for more info)
+	FunctionStability stability;
 	//! How this function handles NULL values
 	FunctionNullHandling null_handling;
 

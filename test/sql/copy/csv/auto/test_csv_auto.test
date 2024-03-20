@@ -8,6 +8,11 @@ require vector_size 512
 statement ok 
 PRAGMA verify_parallelism
 
+statement error
+select * from read_csv_auto('data/csv/dates.csv', auto_detect=false, delim=',', quote='"', columns={'a': 'VARCHAR'})
+----
+Expected Number of Columns: 1 Found: 2
+
 query II
 select * from read_csv_auto('data/csv/dates.csv')
 ----

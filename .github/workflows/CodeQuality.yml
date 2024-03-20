@@ -7,8 +7,6 @@ on:
       - '**'
       - '!main'
       - '!feature'
-    tags:
-      - '**'
     paths-ignore:
       - '**.md'
       - '.github/patches/duckdb-wasm/**'
@@ -62,6 +60,35 @@ jobs:
         run: |
           make generate-files
           git diff --exit-code
+
+  enum-check:
+    name: C Enum Integrity Check
+    runs-on: ubuntu-20.04
+
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Install python dependencies
+      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+      shell: bash
+      run: python -m pip install clang-5
+
+    - name: Install libclang
+      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+      shell: bash
+      run: sudo apt-get update && sudo apt install llvm-dev && sudo apt install libclang-dev
+
+    - name: Verify C enum integrity
+      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+      shell: bash
+      run: python scripts/verify_enum_integrity.py src/include/duckdb.h --library_path $(llvm-config --libdir)
 
   tidy-check:
     name: Tidy Check

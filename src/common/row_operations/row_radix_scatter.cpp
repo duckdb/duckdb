@@ -2,6 +2,7 @@
 #include "duckdb/common/radix.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/uhugeint.hpp"
 
 namespace duckdb {
 
@@ -285,6 +286,9 @@ void RowOperations::RadixScatter(Vector &v, idx_t vcount, const SelectionVector 
 		break;
 	case PhysicalType::INT128:
 		TemplatedRadixScatter<hugeint_t>(vdata, sel, ser_count, key_locations, desc, has_null, nulls_first, offset);
+		break;
+	case PhysicalType::UINT128:
+		TemplatedRadixScatter<uhugeint_t>(vdata, sel, ser_count, key_locations, desc, has_null, nulls_first, offset);
 		break;
 	case PhysicalType::FLOAT:
 		TemplatedRadixScatter<float>(vdata, sel, ser_count, key_locations, desc, has_null, nulls_first, offset);

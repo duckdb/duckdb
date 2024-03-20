@@ -6,9 +6,9 @@ namespace duckdb {
 
 BindResult ExpressionBinder::BindExpression(CollateExpression &expr, idx_t depth) {
 	// first try to bind the child of the cast expression
-	string error = Bind(expr.child, depth);
-	if (!error.empty()) {
-		return BindResult(error);
+	auto error = Bind(expr.child, depth);
+	if (error.HasError()) {
+		return BindResult(std::move(error));
 	}
 	auto &child = BoundExpression::GetExpression(*expr.child);
 	if (child->HasParameter()) {

@@ -1,0 +1,39 @@
+# name: test/sql/binder/old_implicit_cast.test
+# description: Test old_implicit_cast setting
+# group: [binder]
+
+statement ok
+CREATE TABLE integers AS SELECT 42 AS i, '5' AS v;
+
+statement error
+SELECT i >= v FROM integers
+----
+an explicit cast is required
+
+statement error
+SELECT i[1] FROM integers
+----
+No function matches
+
+statement error
+SELECT [i, v] FROM integers
+----
+an explicit cast is required
+
+statement ok
+SET old_implicit_casting=true
+
+query I
+SELECT i[1] FROM integers
+----
+4
+
+query I
+SELECT i >= v FROM integers
+----
+true
+
+query I
+SELECT [i, v] FROM integers
+----
+[42, 5]

@@ -17,15 +17,19 @@ namespace duckdb {
 enum class AggregateType : uint8_t { NON_DISTINCT = 1, DISTINCT = 2 };
 //! Whether or not the input order influences the result of the aggregate
 enum class AggregateOrderDependent : uint8_t { ORDER_DEPENDENT = 1, NOT_ORDER_DEPENDENT = 2 };
+//! Whether or not the combiner needs to preserve the source
+enum class AggregateCombineType : uint8_t { PRESERVE_INPUT = 1, ALLOW_DESTRUCTIVE = 2 };
 
 class BoundAggregateExpression;
 
 struct AggregateInputData {
-	AggregateInputData(optional_ptr<FunctionData> bind_data_p, ArenaAllocator &allocator_p)
-	    : bind_data(bind_data_p), allocator(allocator_p) {
+	AggregateInputData(optional_ptr<FunctionData> bind_data_p, ArenaAllocator &allocator_p,
+	                   AggregateCombineType combine_type_p = AggregateCombineType::PRESERVE_INPUT)
+	    : bind_data(bind_data_p), allocator(allocator_p), combine_type(combine_type_p) {
 	}
 	optional_ptr<FunctionData> bind_data;
 	ArenaAllocator &allocator;
+	AggregateCombineType combine_type;
 };
 
 struct AggregateUnaryInput {

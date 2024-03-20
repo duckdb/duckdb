@@ -73,7 +73,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		auto cardinality = new_logical_plan->EstimateCardinality(context);
 		auto bindings = new_logical_plan->GetColumnBindings();
 		auto new_stats = RelationStatisticsHelper::CombineStatsOfReorderableOperator(bindings, relation_stats);
-		new_stats.cardinality = MaxValue(cardinality, new_stats.cardinality);
+		new_stats.cardinality = cardinality;
 		RelationStatisticsHelper::CopyRelationStats(*stats, new_stats);
 	}
 

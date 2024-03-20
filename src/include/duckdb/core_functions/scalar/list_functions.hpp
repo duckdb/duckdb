@@ -222,6 +222,27 @@ struct FilterFun {
 	static constexpr const char *Name = "filter";
 };
 
+struct ListReduceFun {
+	static constexpr const char *Name = "list_reduce";
+	static constexpr const char *Parameters = "list,lambda";
+	static constexpr const char *Description = "Returns a single value that is the result of applying the lambda function to each element of the input list, starting with the first element and then repeatedly applying the lambda function to the result of the previous application and the next element of the list.";
+	static constexpr const char *Example = "list_reduce([1, 2, 3], (x, y) -> x + y)";
+
+	static ScalarFunction GetFunction();
+};
+
+struct ArrayReduceFun {
+	using ALIAS = ListReduceFun;
+
+	static constexpr const char *Name = "array_reduce";
+};
+
+struct ReduceFun {
+	using ALIAS = ListReduceFun;
+
+	static constexpr const char *Name = "reduce";
+};
+
 struct GenerateSeriesFun {
 	static constexpr const char *Name = "generate_series";
 	static constexpr const char *Parameters = "start,stop,step";
@@ -289,6 +310,15 @@ struct ListInnerProductFunAlias {
 	using ALIAS = ListInnerProductFun;
 
 	static constexpr const char *Name = "<#>";
+};
+
+struct UnpivotListFun {
+	static constexpr const char *Name = "unpivot_list";
+	static constexpr const char *Parameters = "any,...";
+	static constexpr const char *Description = "Identical to list_value, but generated as part of unpivot for better error messages";
+	static constexpr const char *Example = "unpivot_list(4, 5, 6)";
+
+	static ScalarFunction GetFunction();
 };
 
 } // namespace duckdb

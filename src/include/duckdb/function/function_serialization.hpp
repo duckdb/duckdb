@@ -86,9 +86,10 @@ public:
 		} else if (function.bind) {
 			try {
 				bind_data = function.bind(context, function, children);
-			} catch (Exception &ex) {
-				// FIXME
-				throw SerializationException("Error during bind of function in deserialization: %s", ex.what());
+			} catch (std::exception &ex) {
+				ErrorData error(ex);
+				throw SerializationException("Error during bind of function in deserialization: %s",
+				                             error.RawMessage());
 			}
 		}
 		function.return_type = std::move(return_type);

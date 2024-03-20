@@ -1,0 +1,27 @@
+# name: benchmark/micro/compression/alprd/alprd_store.benchmark
+# description: Scanning a large amount of doubles
+# group: [alprd]
+
+name Alprd Insert
+group alprd
+storage persistent
+require_reinit
+require parquet
+require httpfs
+
+load
+PRAGMA force_compression='uncompressed';
+DROP TABLE IF EXISTS temperatures_uncompressed;
+CREATE TABLE temperatures_uncompressed (
+	temperature DOUBLE
+);
+INSERT INTO temperatures_uncompressed SELECT temp FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/city_temperature.parquet' t(temp), range(28);
+CREATE TABLE temperatures_alprd (
+	temperature DOUBLE
+);
+PRAGMA force_compression='alprd';
+checkpoint;
+
+run
+INSERT INTO temperatures_alprd SELECT * FROM temperatures_uncompressed;
+checkpoint;

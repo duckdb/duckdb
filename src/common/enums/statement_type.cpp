@@ -39,8 +39,6 @@ string StatementTypeToString(StatementType type) {
 		return "DROP";
 	case StatementType::PRAGMA_STATEMENT:
 		return "PRAGMA";
-	case StatementType::SHOW_STATEMENT:
-		return "SHOW";
 	case StatementType::VACUUM_STATEMENT:
 		return "VACUUM";
 	case StatementType::RELATION_STATEMENT:

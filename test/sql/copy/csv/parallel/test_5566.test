@@ -6,11 +6,6 @@
 statement ok
 PRAGMA verify_parallelism
 
-loop thr 1 8
-
-statement ok
-pragma threads=${thr}
-
 query I
 select * from read_csv_auto('test/sql/copy/csv/data/auto/test_single_column.csv')
 ----
@@ -43,4 +38,3 @@ select foo, count(1) cnt from read_csv_auto('test/sql/copy/csv/data/auto/test_mu
 2	100
 3	98
 
-endloop

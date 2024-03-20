@@ -141,8 +141,12 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 
 			single_array[0] = python_object;
 			single_name[0] = "c0";
-			python_object = py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_arrays")(
-			    single_array, py::arg("names") = single_name);
+			try {
+				python_object = py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_arrays")(
+				    single_array, py::arg("names") = single_name);
+			} catch (py::error_already_set &) {
+				throw InvalidInputException("Could not convert the result into an Arrow Table");
+			}
 		}
 		// Convert the pyarrow result back to a DuckDB datachunk
 		ConvertPyArrowToDataChunk(python_object, result, state.GetContext(), count);
@@ -333,8 +337,8 @@ public:
 		} else {
 			func = CreateNativeFunction(udf.ptr(), exception_handling, client_properties);
 		}
-		FunctionSideEffects function_side_effects =
-		    side_effects ? FunctionSideEffects::HAS_SIDE_EFFECTS : FunctionSideEffects::NO_SIDE_EFFECTS;
+		FunctionStability function_side_effects =
+		    side_effects ? FunctionStability::VOLATILE : FunctionStability::CONSISTENT;
 		ScalarFunction scalar_function(name, std::move(parameters), return_type, func, nullptr, nullptr, nullptr,
 		                               nullptr, varargs, function_side_effects, null_handling);
 		return scalar_function;

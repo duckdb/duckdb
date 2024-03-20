@@ -39,7 +39,7 @@ void Index::InitializeLock(IndexLock &state) {
 	state.index_lock = unique_lock<mutex>(lock);
 }
 
-PreservedError Index::Append(DataChunk &entries, Vector &row_identifiers) {
+ErrorData Index::Append(DataChunk &entries, Vector &row_identifiers) {
 	IndexLock state;
 	InitializeLock(state);
 	return Append(state, entries, row_identifiers);

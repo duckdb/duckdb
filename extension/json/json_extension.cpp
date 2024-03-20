@@ -19,15 +19,15 @@ namespace duckdb {
 static DefaultMacro json_macros[] = {
     {DEFAULT_SCHEMA, "json_group_array", {"x", nullptr}, "to_json(list(x))"},
     {DEFAULT_SCHEMA, "json_group_object", {"name", "value", nullptr}, "to_json(map(list(name), list(value)))"},
-    {DEFAULT_SCHEMA, "json_group_structure", {"x", nullptr}, "json_structure(json_group_array(x))->0"},
+    {DEFAULT_SCHEMA, "json_group_structure", {"x", nullptr}, "json_structure(json_group_array(x))->'0'"},
     {DEFAULT_SCHEMA, "json", {"x", nullptr}, "json_extract(x, '$')"},
     {nullptr, nullptr, {nullptr}, nullptr}};
 
 void JsonExtension::Load(DuckDB &db) {
 	auto &db_instance = *db.instance;
 	// JSON type
-	auto json_type = JSONCommon::JSONType();
-	ExtensionUtil::RegisterType(db_instance, JSONCommon::JSON_TYPE_NAME, std::move(json_type));
+	auto json_type = LogicalType::JSON();
+	ExtensionUtil::RegisterType(db_instance, LogicalType::JSON_TYPE_NAME, std::move(json_type));
 
 	// JSON casts
 	JSONFunctions::RegisterSimpleCastFunctions(DBConfig::GetConfig(db_instance).GetCastFunctions());

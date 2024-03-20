@@ -17,6 +17,18 @@ static void require_hugeint_eq(duckdb_hugeint left, uint64_t lower, int64_t uppe
 	require_hugeint_eq(left, temp);
 }
 
+static void require_uhugeint_eq(duckdb_uhugeint left, duckdb_uhugeint right) {
+	REQUIRE(left.lower == right.lower);
+	REQUIRE(left.upper == right.upper);
+}
+
+static void require_uhugeint_eq(duckdb_uhugeint left, uint64_t lower, uint64_t upper) {
+	duckdb_uhugeint temp;
+	temp.lower = lower;
+	temp.upper = upper;
+	require_uhugeint_eq(left, temp);
+}
+
 TEST_CASE("Basic test of C API", "[capi]") {
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;
@@ -127,8 +139,8 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE_NO_FAIL(tester.Query("SET default_null_order='nulls_first'"));
 
 	// integer columns
-	duckdb::vector<string> types = {"TINYINT",  "SMALLINT",  "INTEGER",  "BIGINT", "HUGEINT",
-	                                "UTINYINT", "USMALLINT", "UINTEGER", "UBIGINT"};
+	duckdb::vector<string> types = {"TINYINT",  "SMALLINT",  "INTEGER",  "BIGINT",  "HUGEINT",
+	                                "UTINYINT", "USMALLINT", "UINTEGER", "UBIGINT", "UHUGEINT"};
 	for (auto &type : types) {
 		// create the table and insert values
 		REQUIRE_NO_FAIL(tester.Query("BEGIN TRANSACTION"));
@@ -146,6 +158,7 @@ TEST_CASE("Test different types of C API", "[capi]") {
 		REQUIRE(result->Fetch<uint16_t>(0, 0) == 0);
 		REQUIRE(result->Fetch<uint32_t>(0, 0) == 0);
 		REQUIRE(result->Fetch<uint64_t>(0, 0) == 0);
+		REQUIRE(duckdb_uhugeint_to_double(result->Fetch<duckdb_uhugeint>(0, 0)) == 0);
 		REQUIRE(duckdb_hugeint_to_double(result->Fetch<duckdb_hugeint>(0, 0)) == 0);
 		REQUIRE(result->Fetch<string>(0, 0) == "");
 		REQUIRE(ApproxEqual(result->Fetch<float>(0, 0), 0.0f));
@@ -160,6 +173,7 @@ TEST_CASE("Test different types of C API", "[capi]") {
 		REQUIRE(result->Fetch<uint16_t>(0, 1) == 1);
 		REQUIRE(result->Fetch<uint32_t>(0, 1) == 1);
 		REQUIRE(result->Fetch<uint64_t>(0, 1) == 1);
+		REQUIRE(duckdb_uhugeint_to_double(result->Fetch<duckdb_uhugeint>(0, 1)) == 1);
 		REQUIRE(duckdb_hugeint_to_double(result->Fetch<duckdb_hugeint>(0, 1)) == 1);
 		REQUIRE(ApproxEqual(result->Fetch<float>(0, 1), 1.0f));
 		REQUIRE(ApproxEqual(result->Fetch<double>(0, 1), 1.0));
@@ -351,6 +365,12 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	require_hugeint_eq(result->Fetch<duckdb_hugeint>(3, 0), 49082094825, 0);
 	require_hugeint_eq(result->Fetch<duckdb_hugeint>(4, 0), 0, 0);
 
+	require_uhugeint_eq(result->Fetch<duckdb_uhugeint>(0, 0), 1, 0);
+	require_uhugeint_eq(result->Fetch<duckdb_uhugeint>(1, 0), 100, 0);
+	require_uhugeint_eq(result->Fetch<duckdb_uhugeint>(2, 0), 0, 0); // overflow
+	require_uhugeint_eq(result->Fetch<duckdb_uhugeint>(3, 0), 49082094825, 0);
+	require_uhugeint_eq(result->Fetch<duckdb_uhugeint>(4, 0), 0, 0);
+
 	REQUIRE(result->Fetch<float>(0, 0) == 1.2f);
 	REQUIRE(result->Fetch<float>(1, 0) == 100.3f);
 	REQUIRE(floor(result->Fetch<float>(2, 0)) == -320939);
@@ -391,6 +411,53 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(result->Fetch<float>(0, 0) == -123.45f);
 	REQUIRE(result->Fetch<double>(0, 0) == -123.45);
 	REQUIRE(result->Fetch<string>(0, 0) == "-123.45");
+}
+
+TEST_CASE("decompose timetz with duckdb_from_time_tz", "[capi]") {
+	CAPITester tester;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	auto res = tester.Query("SELECT TIMETZ '11:30:00.123456-02:00'");
+	REQUIRE(res->success);
+
+	auto chunk = res->FetchChunk(0);
+
+	REQUIRE(chunk->ColumnCount() == 1);
+	REQUIRE(res->ColumnType(0) == DUCKDB_TYPE_TIME_TZ);
+
+	auto data = (duckdb_time_tz *)chunk->GetData(0);
+
+	auto time_tz = duckdb_from_time_tz(data[0]);
+
+	REQUIRE(time_tz.time.hour == 11);
+	REQUIRE(time_tz.time.min == 30);
+	REQUIRE(time_tz.time.sec == 0);
+	REQUIRE(time_tz.time.micros == 123456);
+
+	REQUIRE(time_tz.offset == -7200);
+}
+
+TEST_CASE("create time_tz value") {
+	duckdb_time_struct time;
+	time.hour = 4;
+	time.min = 2;
+	time.sec = 6;
+	time.micros = 9;
+	int offset = 8000;
+
+	auto micros = duckdb_to_time(time);
+	auto res = duckdb_create_time_tz(micros.micros, offset);
+
+	// and back again
+
+	auto inverse = duckdb_from_time_tz(res);
+	REQUIRE(offset == inverse.offset);
+
+	REQUIRE(inverse.time.hour == 4);
+	REQUIRE(inverse.time.min == 2);
+	REQUIRE(inverse.time.sec == 6);
+	REQUIRE(inverse.time.micros == 9);
 }
 
 TEST_CASE("Test errors in C API", "[capi]") {

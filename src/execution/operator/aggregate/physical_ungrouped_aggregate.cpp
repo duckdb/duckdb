@@ -12,6 +12,7 @@
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/parallel/executor_task.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
@@ -85,29 +86,41 @@ struct AggregateState {
 class UngroupedAggregateGlobalSinkState : public GlobalSinkState {
 public:
 	UngroupedAggregateGlobalSinkState(const PhysicalUngroupedAggregate &op, ClientContext &client)
-	    : state(op.aggregates), finished(false), allocator(BufferAllocator::Get(client)) {
+	    : state(op.aggregates), finished(false), client_allocator(BufferAllocator::Get(client)),
+	      allocator(client_allocator) {
 		if (op.distinct_data) {
 			distinct_state = make_uniq<DistinctAggregateState>(*op.distinct_data, client);
 		}
 	}
 
+	//! Create an ArenaAllocator with cross-thread lifetime
+	ArenaAllocator &CreateAllocator() const {
+		lock_guard<mutex> glock(lock);
+		stored_allocators.emplace_back(make_uniq<ArenaAllocator>(client_allocator));
+		return *stored_allocators.back();
+	}
+
 	//! The lock for updating the global aggregate state
-	mutex lock;
+	mutable mutex lock;
 	//! The global aggregate state
 	AggregateState state;
 	//! Whether or not the aggregate is finished
 	bool finished;
 	//! The data related to the distinct aggregates (if there are any)
 	unique_ptr<DistinctAggregateState> distinct_state;
+	//! Client base allocator
+	Allocator &client_allocator;
 	//! Global arena allocator
 	ArenaAllocator allocator;
+	//! Allocator pool
+	mutable vector<unique_ptr<ArenaAllocator>> stored_allocators;
 };
 
 class UngroupedAggregateLocalSinkState : public LocalSinkState {
 public:
 	UngroupedAggregateLocalSinkState(const PhysicalUngroupedAggregate &op, const vector<LogicalType> &child_types,
-	                                 GlobalSinkState &gstate_p, ExecutionContext &context)
-	    : allocator(BufferAllocator::Get(context.client)), state(op.aggregates), child_executor(context.client),
+	                                 UngroupedAggregateGlobalSinkState &gstate_p, ExecutionContext &context)
+	    : allocator(gstate_p.CreateAllocator()), state(op.aggregates), child_executor(context.client),
 	      aggregate_input_chunk(), filter_set() {
 		auto &gstate = gstate_p.Cast<UngroupedAggregateGlobalSinkState>();
 
@@ -133,7 +146,7 @@ public:
 	}
 
 	//! Local arena allocator
-	ArenaAllocator allocator;
+	ArenaAllocator &allocator;
 	//! The local aggregate state
 	AggregateState state;
 	//! The executor
@@ -192,7 +205,7 @@ unique_ptr<GlobalSinkState> PhysicalUngroupedAggregate::GetGlobalSinkState(Clien
 
 unique_ptr<LocalSinkState> PhysicalUngroupedAggregate::GetLocalSinkState(ExecutionContext &context) const {
 	D_ASSERT(sink_state);
-	auto &gstate = *sink_state;
+	auto &gstate = sink_state->Cast<UngroupedAggregateGlobalSinkState>();
 	return make_uniq<UngroupedAggregateLocalSinkState>(*this, children[0]->GetTypes(), gstate, context);
 }
 
@@ -342,13 +355,13 @@ SinkCombineResultType PhysicalUngroupedAggregate::Combine(ExecutionContext &cont
 		Vector source_state(Value::POINTER(CastPointerToValue(lstate.state.aggregates[aggr_idx].get())));
 		Vector dest_state(Value::POINTER(CastPointerToValue(gstate.state.aggregates[aggr_idx].get())));
 
-		AggregateInputData aggr_input_data(aggregate.bind_info.get(), gstate.allocator);
+		AggregateInputData aggr_input_data(aggregate.bind_info.get(), gstate.allocator,
+		                                   AggregateCombineType::ALLOW_DESTRUCTIVE);
 		aggregate.function.combine(source_state, dest_state, aggr_input_data, 1);
 #ifdef DEBUG
 		gstate.state.counts[aggr_idx] += lstate.state.counts[aggr_idx];
 #endif
 	}
-	lstate.allocator.Destroy();
 
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(*this, lstate.child_executor, "child_executor", 0);
@@ -390,22 +403,26 @@ public:
 	UngroupedDistinctAggregateFinalizeTask(Executor &executor, shared_ptr<Event> event_p,
 	                                       const PhysicalUngroupedAggregate &op,
 	                                       UngroupedAggregateGlobalSinkState &state_p)
-	    : ExecutorTask(executor), event(std::move(event_p)), op(op), gstate(state_p),
-	      allocator(BufferAllocator::Get(executor.context)) {
+	    : ExecutorTask(executor, std::move(event_p)), op(op), gstate(state_p), allocator(gstate.CreateAllocator()),
+	      aggregate_state(op.aggregates) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
 
 private:
-	void AggregateDistinct();
+	TaskExecutionResult AggregateDistinct();
 
 private:
-	shared_ptr<Event> event;
-
 	const PhysicalUngroupedAggregate &op;
 	UngroupedAggregateGlobalSinkState &gstate;
 
-	ArenaAllocator allocator;
+	ArenaAllocator &allocator;
+
+	// Distinct aggregation state
+	AggregateState aggregate_state;
+	idx_t aggregation_idx = 0;
+	unique_ptr<LocalSourceState> radix_table_lstate;
+	bool blocked = false;
 };
 
 void UngroupedDistinctAggregateFinalizeEvent::Schedule() {
@@ -413,6 +430,7 @@ void UngroupedDistinctAggregateFinalizeEvent::Schedule() {
 	auto &aggregates = op.aggregates;
 	auto &distinct_data = *op.distinct_data;
 
+	idx_t n_tasks = 0;
 	idx_t payload_idx = 0;
 	idx_t next_payload_idx = 0;
 	for (idx_t agg_idx = 0; agg_idx < aggregates.size(); agg_idx++) {
@@ -432,12 +450,14 @@ void UngroupedDistinctAggregateFinalizeEvent::Schedule() {
 		// Create global state for scanning
 		auto table_idx = distinct_data.info.table_map.at(agg_idx);
 		auto &radix_table_p = *distinct_data.radix_tables[table_idx];
+		n_tasks += radix_table_p.MaxThreads(*gstate.distinct_state->radix_states[table_idx]);
 		global_source_states.push_back(radix_table_p.GetGlobalSourceState(context));
 	}
+	n_tasks = MaxValue<idx_t>(n_tasks, 1);
+	n_tasks = MinValue<idx_t>(n_tasks, TaskScheduler::GetScheduler(context).NumberOfThreads());
 
-	const idx_t n_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 	vector<shared_ptr<Task>> tasks;
-	for (idx_t i = 0; i < n_threads; i++) {
+	for (idx_t i = 0; i < n_tasks; i++) {
 		tasks.push_back(
 		    make_uniq<UngroupedDistinctAggregateFinalizeTask>(pipeline->executor, shared_from_this(), op, gstate));
 		tasks_scheduled++;
@@ -446,19 +466,21 @@ void UngroupedDistinctAggregateFinalizeEvent::Schedule() {
 }
 
 TaskExecutionResult UngroupedDistinctAggregateFinalizeTask::ExecuteTask(TaskExecutionMode mode) {
-	AggregateDistinct();
+	auto res = AggregateDistinct();
+	if (res == TaskExecutionResult::TASK_BLOCKED) {
+		return res;
+	}
 	event->FinishTask();
 	return TaskExecutionResult::TASK_FINISHED;
 }
 
-void UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() {
+TaskExecutionResult UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() {
 	D_ASSERT(gstate.distinct_state);
 	auto &distinct_state = *gstate.distinct_state;
 	auto &distinct_data = *op.distinct_data;
 
-	// Create thread-local copy of aggregate state
 	auto &aggregates = op.aggregates;
-	AggregateState state(aggregates);
+	auto &state = aggregate_state;
 
 	// Thread-local contexts
 	ThreadContext thread_context(executor.context);
@@ -467,14 +489,12 @@ void UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() {
 	auto &finalize_event = event->Cast<UngroupedDistinctAggregateFinalizeEvent>();
 
 	// Now loop through the distinct aggregates, scanning the distinct HTs
-	idx_t payload_idx = 0;
-	idx_t next_payload_idx = 0;
-	for (idx_t agg_idx = 0; agg_idx < aggregates.size(); agg_idx++) {
-		auto &aggregate = aggregates[agg_idx]->Cast<BoundAggregateExpression>();
 
-		// Forward the payload idx
-		payload_idx = next_payload_idx;
-		next_payload_idx = payload_idx + aggregate.children.size();
+	// This needs to be preserved in case the radix_table.GetData blocks
+	auto &agg_idx = aggregation_idx;
+
+	for (; agg_idx < aggregates.size(); agg_idx++) {
+		auto &aggregate = aggregates[agg_idx]->Cast<BoundAggregateExpression>();
 
 		// If aggregate is not distinct, skip it
 		if (!distinct_data.IsDistinct(agg_idx)) {
@@ -483,11 +503,15 @@ void UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() {
 
 		const auto table_idx = distinct_data.info.table_map.at(agg_idx);
 		auto &radix_table = *distinct_data.radix_tables[table_idx];
-		auto lstate = radix_table.GetLocalSourceState(execution_context);
+		if (!blocked) {
+			// Because we can block, we need to make sure we preserve this state
+			radix_table_lstate = radix_table.GetLocalSourceState(execution_context);
+		}
+		auto &lstate = *radix_table_lstate;
 
 		auto &sink = *distinct_state.radix_states[table_idx];
-		InterruptState interrupt_state;
-		OperatorSourceInput source_input {*finalize_event.global_source_states[agg_idx], *lstate, interrupt_state};
+		InterruptState interrupt_state(shared_from_this());
+		OperatorSourceInput source_input {*finalize_event.global_source_states[agg_idx], lstate, interrupt_state};
 
 		DataChunk output_chunk;
 		output_chunk.Initialize(executor.context, distinct_state.distinct_output_chunks[table_idx]->GetTypes());
@@ -505,8 +529,8 @@ void UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() {
 				D_ASSERT(output_chunk.size() == 0);
 				break;
 			} else if (res == SourceResultType::BLOCKED) {
-				throw InternalException(
-				    "Unexpected interrupt from radix table GetData in UngroupedDistinctAggregateFinalizeTask");
+				blocked = true;
+				return TaskExecutionResult::TASK_BLOCKED;
 			}
 
 			// We dont need to resolve the filter, we already did this in Sink
@@ -525,19 +549,19 @@ void UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() {
 			aggregate.function.simple_update(start_of_input, aggr_input_data, payload_cnt,
 			                                 state.aggregates[agg_idx].get(), payload_chunk.size());
 		}
+		blocked = false;
 	}
 
 	// After scanning the distinct HTs, we can combine the thread-local agg states with the thread-global
 	lock_guard<mutex> guard(finalize_event.lock);
-	payload_idx = 0;
-	next_payload_idx = 0;
 	for (idx_t agg_idx = 0; agg_idx < aggregates.size(); agg_idx++) {
 		if (!distinct_data.IsDistinct(agg_idx)) {
 			continue;
 		}
 
 		auto &aggregate = aggregates[agg_idx]->Cast<BoundAggregateExpression>();
-		AggregateInputData aggr_input_data(aggregate.bind_info.get(), allocator);
+		AggregateInputData aggr_input_data(aggregate.bind_info.get(), allocator,
+		                                   AggregateCombineType::ALLOW_DESTRUCTIVE);
 
 		Vector state_vec(Value::POINTER(CastPointerToValue(state.aggregates[agg_idx].get())));
 		Vector combined_vec(Value::POINTER(CastPointerToValue(gstate.state.aggregates[agg_idx].get())));
@@ -548,6 +572,7 @@ void UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() {
 	if (++finalize_event.tasks_done == finalize_event.tasks_scheduled) {
 		gstate.finished = true;
 	}
+	return TaskExecutionResult::TASK_FINISHED;
 }
 
 SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline, Event &event, ClientContext &context,

@@ -81,7 +81,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExprInternal(duckdb_libpgque
 		subquery_expr->subquery_type = SubqueryType::ANY;
 		subquery_expr->child = std::move(left_expr);
 		subquery_expr->comparison_type = OperatorToExpressionType(name);
-		subquery_expr->query_location = root.location;
+		SetQueryLocation(*subquery_expr, root.location);
 		if (subquery_expr->comparison_type == ExpressionType::INVALID) {
 			throw ParserException("Unsupported comparison \"%s\" for ANY/ALL subquery", name);
 		}
@@ -107,7 +107,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExprInternal(duckdb_libpgque
 			operator_type = ExpressionType::COMPARE_IN;
 		}
 		auto result = make_uniq<OperatorExpression>(operator_type, std::move(left_expr));
-		result->query_location = root.location;
+		SetQueryLocation(*result, root.location);
 		TransformExpressionList(*PGPointerCast<duckdb_libpgquery::PGList>(root.rexpr), result->children);
 		return std::move(result);
 	}
@@ -210,7 +210,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExprInternal(duckdb_libpgque
 unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAExpr &root) {
 	auto result = TransformAExprInternal(root);
 	if (result) {
-		result->query_location = root.location;
+		SetQueryLocation(*result, root.location);
 	}
 	return result;
 }

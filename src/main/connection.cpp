@@ -1,7 +1,6 @@
 #include "duckdb/main/connection.hpp"
 
 #include "duckdb/common/types/column/column_data_collection.hpp"
-#include "duckdb/execution/operator/scan/csv/parallel_csv_reader.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/client_context.hpp"

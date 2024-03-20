@@ -16,11 +16,11 @@ catalog/dependency_manager.cpp	5
 common/allocator.cpp	20
 common/arrow/arrow_appender.cpp	23
 common/arrow/appender/map_data.cpp	7
-common/arrow/arrow_converter.cpp	11
+common/arrow/arrow_converter.cpp	13
 common/arrow/arrow_wrapper.cpp	113
 common/assert.cpp	2
 common/bind_helpers.cpp	12
-common/box_renderer.cpp	35
+common/box_renderer.cpp	36
 common/checksum.cpp	2
 common/compressed_file_system.cpp	14
 common/crypto/md5.cpp	2
@@ -34,7 +34,7 @@ common/file_buffer.cpp	5
 common/file_system.cpp	20
 common/fsst.cpp	7
 common/gzip_file_system.cpp	40
-common/hive_partitioning.cpp	54
+common/hive_partitioning.cpp	55
 common/http_state.cpp	36
 common/local_file_system.cpp	22
 common/multi_file_reader.cpp	15
@@ -71,7 +71,7 @@ common/virtual_file_system.cpp	32
 common/types/batched_data_collection.cpp	11
 common/types/bit.cpp	9
 common/types/blob.cpp	3
-common/types/chunk_collection.cpp	94
+common/types/cast_helpers.cpp	2
 common/types/column/column_data_allocator.cpp	13
 common/types/column/column_data_collection.cpp	55
 common/types/column/partitioned_column_data.cpp	8
@@ -111,7 +111,7 @@ common/vector_operations/vector_storage.cpp	13
 core_functions/aggregate/distributive/approx_count.cpp	1
 core_functions/aggregate/distributive/arg_min_max.cpp	10
 core_functions/aggregate/distributive/bitagg.cpp	8
-core_functions/aggregate/distributive/bitstring_agg.cpp	6
+core_functions/aggregate/distributive/bitstring_agg.cpp	8
 core_functions/aggregate/distributive/entropy.cpp	9
 core_functions/aggregate/distributive/kurtosis.cpp	3
 core_functions/aggregate/distributive/minmax.cpp	3
@@ -267,9 +267,9 @@ function/pragma_function.cpp	6
 function/scalar/generic/constant_or_null.cpp	5
 function/scalar/list/list_concat.cpp	5
 function/scalar/list/list_extract.cpp	10
-function/scalar/operators/add.cpp	4
+function/scalar/operators/add.cpp	8
 function/scalar/operators/arithmetic.cpp	23
-function/scalar/operators/multiply.cpp	3
+function/scalar/operators/multiply.cpp	4
 function/scalar/operators/subtract.cpp	5
 function/scalar/strftime_format.cpp	31
 function/scalar/string/length.cpp	2
@@ -384,7 +384,6 @@ include/duckdb/common/sort/sorted_block.hpp	1
 include/duckdb/common/string_util.hpp	9
 include/duckdb/common/type_util.hpp	2
 include/duckdb/common/types.hpp	5
-include/duckdb/common/types/chunk_collection.hpp	6
 include/duckdb/common/types/column/column_data_allocator.hpp	3
 include/duckdb/common/types/column/partitioned_column_data.hpp	2
 include/duckdb/common/types/datetime.hpp	13
@@ -392,6 +391,7 @@ include/duckdb/common/types/hugeint.hpp	2
 include/duckdb/common/types/row/partitioned_tuple_data.hpp	11
 include/duckdb/common/types/string_type.hpp	5
 include/duckdb/common/types/uuid.hpp	4
+include/duckdb/common/types/uhugeint.hpp	2
 include/duckdb/common/types/validity_mask.hpp	5
 include/duckdb/common/types/value.hpp	6
 include/duckdb/common/types/vector_buffer.hpp	1
@@ -490,7 +490,7 @@ main/chunk_scan_state/query_result.cpp	28
 main/capi/data_chunk-c.cpp	30
 main/capi/duckdb-c.cpp	3
 main/capi/duckdb_value-c.cpp	14
-main/capi/helper-c.cpp	49
+main/capi/helper-c.cpp	52
 main/capi/hugeint-c.cpp	5
 main/capi/logical_types-c.cpp	45
 main/capi/pending-c.cpp	32

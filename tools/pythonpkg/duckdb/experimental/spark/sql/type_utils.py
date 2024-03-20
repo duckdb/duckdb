@@ -1,4 +1,3 @@
-import typing
 from duckdb.typing import DuckDBPyType
 from typing import List, Tuple, cast
 from .types import (
@@ -28,6 +27,7 @@ from .types import (
     LongType,
     UnsignedLongType,
     HugeIntegerType,
+    UnsignedHugeIntegerType,
     DayTimeIntervalType,
     ArrayType,
     MapType,
@@ -46,6 +46,7 @@ _sqltype_to_spark_class = {
     'ubigint': UnsignedLongType,
     'bigint': LongType,
     'hugeint': HugeIntegerType,
+    'uhugeint': UnsignedHugeIntegerType,
     'varchar': StringType,
     'blob': BinaryType,
     'bit': BitstringType,

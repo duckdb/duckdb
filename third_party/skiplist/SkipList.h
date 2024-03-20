@@ -532,11 +532,6 @@ namespace duckdb_skiplistlib {
 
 /************************ END: Exceptions ****************************/
 
-        bool tossCoin();
-
-        /** Seed the random number generator for coin tosses. */
-        void seedRand(unsigned seed);
-
 #ifdef SKIPLIST_THREAD_SUPPORT
         /**
          * Mutex used in a multi-threaded environment.

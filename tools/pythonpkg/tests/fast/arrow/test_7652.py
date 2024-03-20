@@ -8,7 +8,7 @@ pq = pytest.importorskip("pyarrow.parquet", minversion="11")
 
 
 class Test7652(object):
-    def test_7652(self):
+    def test_7652(self, duckdb_cursor):
         temp_file_name = tempfile.NamedTemporaryFile(suffix='.parquet').name
         # Generate a list of values that aren't uniform in changes.
         generated_list = [1, 0, 2]
@@ -36,7 +36,7 @@ class Test7652(object):
 
         # Attempt to perform the same thing with duckdb.
         print("Retrieving from duckdb")
-        duckdb_result = list(map(lambda v: v[0], duckdb.query(f"select * from '{temp_file_name}'").fetchall()))
+        duckdb_result = list(map(lambda v: v[0], duckdb_cursor.sql(f"select * from '{temp_file_name}'").fetchall()))
 
         print("DuckDB result:", duckdb_result)
         assert min(duckdb_result) == min(generated_list)

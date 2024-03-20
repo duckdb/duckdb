@@ -70,7 +70,7 @@ void PragmaHandler::HandlePragmaStatements(ClientContextLock &lock, vector<uniqu
 
 bool PragmaHandler::HandlePragma(SQLStatement &statement, string &resulting_query) {
 	auto info = statement.Cast<PragmaStatement>().info->Copy();
-	QueryErrorContext error_context(&statement, statement.stmt_location);
+	QueryErrorContext error_context(statement.stmt_location);
 	auto binder = Binder::CreateBinder(context);
 	auto bound_info = binder->BindPragma(*info, error_context);
 	if (bound_info->function.query) {

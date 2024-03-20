@@ -86,7 +86,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	this->bound_aggregate = true;
 	unique_ptr<Expression> bound_filter;
 	AggregateBinder aggregate_binder(binder, context);
-	string error;
+	ErrorData error;
 
 	// Now we bind the filter (if any)
 	if (aggr.filter) {
@@ -114,7 +114,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	for (auto &child : aggr.children) {
 		aggregate_binder.BindChild(child, 0, error);
 		// We have to negate the fractions for PERCENTILE_XXXX DESC
-		if (error.empty() && ordered_set_agg) {
+		if (!error.HasError() && ordered_set_agg) {
 			NegatePercentileFractions(context, child, negate_fractions);
 		}
 	}
@@ -126,7 +126,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		}
 	}
 
-	if (!error.empty()) {
+	if (error.HasError()) {
 		// failed to bind child
 		if (aggregate_binder.HasBoundColumns()) {
 			for (idx_t i = 0; i < aggr.children.size(); i++) {
@@ -136,7 +136,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 				auto result = aggregate_binder.BindCorrelatedColumns(aggr.children[i], error);
 				// if there is still an error after this, we could not successfully bind the aggregate
 				if (result.HasError()) {
-					throw BinderException(result.error);
+					result.error.Throw();
 				}
 				auto &bound_expr = BoundExpression::GetExpression(*aggr.children[i]);
 				ExtractCorrelatedExpressions(binder, *bound_expr);
@@ -145,7 +145,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 				auto result = aggregate_binder.BindCorrelatedColumns(aggr.filter, error);
 				// if there is still an error after this, we could not successfully bind the aggregate
 				if (result.HasError()) {
-					throw BinderException(result.error);
+					result.error.Throw();
 				}
 				auto &bound_expr = BoundExpression::GetExpression(*aggr.filter);
 				ExtractCorrelatedExpressions(binder, *bound_expr);
@@ -154,7 +154,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 				for (auto &order : aggr.order_bys->orders) {
 					auto result = aggregate_binder.BindCorrelatedColumns(order.expression, error);
 					if (result.HasError()) {
-						throw BinderException(result.error);
+						result.error.Throw();
 					}
 					auto &bound_expr = BoundExpression::GetExpression(*order.expression);
 					ExtractCorrelatedExpressions(binder, *bound_expr);
@@ -162,7 +162,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 			}
 		} else {
 			// we didn't bind columns, try again in children
-			return BindResult(error);
+			return BindResult(std::move(error));
 		}
 	} else if (depth > 0 && !aggregate_binder.HasBoundColumns()) {
 		return BindResult("Aggregate with only constant parameters has to be bound in the root subquery");
@@ -207,7 +207,8 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	FunctionBinder function_binder(context);
 	idx_t best_function = function_binder.BindFunction(func.name, func.functions, types, error);
 	if (best_function == DConstants::INVALID_INDEX) {
-		throw BinderException(binder.FormatError(aggr, error));
+		error.AddQueryLocation(aggr);
+		error.Throw();
 	}
 	// found a matching function!
 	auto bound_function = func.functions.GetFunctionByOffset(best_function);

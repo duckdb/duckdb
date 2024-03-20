@@ -27,6 +27,9 @@ inputs:
     default: ''
 
   # Build config
+  duckdb_arch:
+    description: 'Provide DUCKDB_PLATFORM to build system for cross compilation'
+    default: ''
   static_link_build:
     description: 'Links DuckDB statically to the loadable extensions'
     default: 1
@@ -93,7 +96,7 @@ runs:
       if: inputs.vcpkg_build == 1
       uses: lukka/run-vcpkg@v11.1
       with:
-        vcpkgGitCommitId: a42af01b72c28a8e1d7b48107b33e4f286a55ef6
+        vcpkgGitCommitId: a1a1cbc975abf909a6c8985a6a2b8fe20bbd9bd6
 
     - name: Set vcpkg env variables
       if: inputs.vcpkg_build == 1
@@ -112,6 +115,17 @@ runs:
         curl -O -L https://github.com/duckdb/duckdb-data/releases/download/v1.0/nasm-2.16.01-win64.zip
         ls -al
         pwd
+
+    - name: Fix for MSVC issue (see e.g. https://github.com/TileDB-Inc/TileDB/pull/4759)
+      shell: bash
+      if: inputs.deploy_as == 'windows_amd64'
+      env:
+        OVERLAY_TRIPLET_SRC:  ${{ github.workspace }}/vcpkg/triplets/community/x64-windows-static-md.cmake
+        OVERLAY_TRIPLET_DST:  ${{ github.workspace }}/overlay_triplets/x64-windows-static-md.cmake
+      run: |
+        mkdir overlay_triplets
+        cp $OVERLAY_TRIPLET_SRC $OVERLAY_TRIPLET_DST
+        echo "set(VCPKG_PLATFORM_TOOLSET_VERSION "14.38")" >> $OVERLAY_TRIPLET_DST
 
     - name: Set Openssl dir
       if: inputs.openssl_path != ''
@@ -140,6 +154,8 @@ runs:
         LOCAL_EXTENSION_REPO: ${{ inputs.run_autoload_tests == 1 && github.workspace || ''}}
         GEN: ${{ inputs.ninja == 1 && 'ninja' || '' }}
         USE_MERGED_VCPKG_MANIFEST: 1
+        DUCKDB_PLATFORM: ${{ inputs.duckdb_arch }}
+        VCPKG_OVERLAY_TRIPLETS: "${{ github.workspace }}/overlay_triplets"
       run: |
         ls
         mkdir -p ~/.ssh
@@ -209,15 +225,16 @@ runs:
         AWS_SECRET_ACCESS_KEY: ${{ inputs.s3_key }}
         DUCKDB_EXTENSION_SIGNING_PK: ${{ inputs.signing_pk }}
         AWS_DEFAULT_REGION: us-east-1
+        DUCKDB_DEPLOY_SCRIPT_MODE: for_real
       run: |
         cd  ${{ inputs.build_dir}}
         if [[ "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
           if [[ ! -z "${{ inputs.deploy_version }}" ]] ; then
-            ./scripts/extension-upload.sh ${{ inputs.deploy_as }} ${{ inputs.deploy_version }}
+            ./scripts/extension-upload-all.sh ${{ inputs.deploy_as }} ${{ inputs.deploy_version }}
           elif [[ "$GITHUB_REF" =~ ^(refs/tags/v.+)$ ]] ; then
-            ./scripts/extension-upload.sh ${{ inputs.deploy_as }} ${{ github.ref_name }}
+            ./scripts/extension-upload-all.sh ${{ inputs.deploy_as }} ${{ github.ref_name }}
           elif [[ "$GITHUB_REF" =~ ^(refs/heads/main)$ ]] ; then
-            ./scripts/extension-upload.sh ${{ inputs.deploy_as }} `git log -1 --format=%h`
+            ./scripts/extension-upload-all.sh ${{ inputs.deploy_as }} `git log -1 --format=%h`
           fi
         fi
 

@@ -146,9 +146,9 @@ static void GetContainsFunctionInternal(ScalarFunctionSet &set, const LogicalTyp
 ScalarFunctionSet JSONFunctions::GetContainsFunction() {
 	ScalarFunctionSet set("json_contains");
 	GetContainsFunctionInternal(set, LogicalType::VARCHAR, LogicalType::VARCHAR);
-	GetContainsFunctionInternal(set, LogicalType::VARCHAR, JSONCommon::JSONType());
-	GetContainsFunctionInternal(set, JSONCommon::JSONType(), LogicalType::VARCHAR);
-	GetContainsFunctionInternal(set, JSONCommon::JSONType(), JSONCommon::JSONType());
+	GetContainsFunctionInternal(set, LogicalType::VARCHAR, LogicalType::JSON());
+	GetContainsFunctionInternal(set, LogicalType::JSON(), LogicalType::VARCHAR);
+	GetContainsFunctionInternal(set, LogicalType::JSON(), LogicalType::JSON());
 	// TODO: implement json_contains that accepts path argument as well
 
 	return set;

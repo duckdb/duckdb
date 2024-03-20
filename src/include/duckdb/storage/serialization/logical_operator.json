@@ -143,25 +143,15 @@
       {
         "id": 200,
         "name": "limit_val",
-        "type": "int64_t"
+        "type": "BoundLimitNode"
       },
       {
         "id": 201,
         "name": "offset_val",
-        "type": "int64_t"
-      },
-      {
-        "id": 202,
-        "name": "limit",
-        "type": "Expression*"
-      },
-      {
-        "id": 203,
-        "name": "offset",
-        "type": "Expression*"
+        "type": "BoundLimitNode"
       }
     ],
-    "constructor": ["limit_val", "offset_val", "limit", "offset"]
+    "constructor": ["limit_val", "offset_val"]
   },
   {
     "class": "LogicalOrder",
@@ -238,34 +228,6 @@
         "type": "SampleOptions*"
       }
     ]
-  },
-  {
-    "class": "LogicalLimitPercent",
-    "base": "LogicalOperator",
-    "enum": "LOGICAL_LIMIT_PERCENT",
-    "members": [
-      {
-        "id": 200,
-        "name": "limit_percent",
-        "type": "double"
-      },
-      {
-        "id": 201,
-        "name": "offset_val",
-        "type": "int64_t"
-      },
-      {
-        "id": 202,
-        "name": "limit",
-        "type": "Expression*"
-      },
-      {
-        "id": 203,
-        "name": "offset",
-        "type": "Expression*"
-      }
-    ],
-    "constructor": ["limit_percent", "offset_val", "limit", "offset"]
   },
   {
     "class": "LogicalColumnDataGet",
@@ -433,6 +395,12 @@
         "id": 206,
         "name": "duplicate_eliminated_columns",
         "type": "vector<Expression*>"
+      },
+      {
+        "id": 207,
+        "name": "delim_flipped",
+        "type": "bool",
+        "default": "false"
       }
     ],
     "constructor": ["join_type", "type"]
@@ -793,23 +761,6 @@
       }
     ],
     "constructor": ["explain_type"]
-  },
-  {
-    "class": "LogicalShow",
-    "base": "LogicalOperator",
-    "enum": "LOGICAL_SHOW",
-    "members": [
-      {
-        "id": 200,
-        "name": "types_select",
-        "type": "vector<LogicalType>"
-      },
-      {
-        "id": 201,
-        "name": "aliases",
-        "type": "vector<string>"
-      }
-    ]
   },
   {
     "class": "LogicalSet",

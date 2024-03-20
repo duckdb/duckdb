@@ -160,35 +160,35 @@ function duckdb_destroy_config(config)
     return ccall((:duckdb_destroy_config, libduckdb), Cvoid, (Ref{duckdb_config},), config)
 end
 
-# #=
-# //===--------------------------------------------------------------------===//
-# // Query Execution
-# //===--------------------------------------------------------------------===//
-# =#
-#
-# """
-# 	duckdb_query(connection,query,out_result)
-# Executes a SQL query within a connection and stores the full (materialized) result in the out_result pointer.
-# If the query fails to execute, DuckDBError is returned and the error message can be retrieved by calling
-# `duckdb_result_error`.
-# Note that after running `duckdb_query`, `duckdb_destroy_result` must be called on the result object even if the
-# query fails, otherwise the error stored within the result will not be freed correctly.
-# * `connection`: The connection to perform the query in.
-# * `query`: The SQL query to run.
-# * `out_result`: The query result.
-# * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
-# """
-# function duckdb_query(connection, query, out_result)
-#     return ccall(
-#         (:duckdb_query, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Ptr{UInt8}, Ptr{Cvoid}),
-#         connection[],
-#         query,
-#         out_result,
-#     )
-# end
-#
+#=
+//===--------------------------------------------------------------------===//
+// Query Execution
+//===--------------------------------------------------------------------===//
+=#
+
+"""
+	duckdb_query(connection,query,out_result)
+Executes a SQL query within a connection and stores the full (materialized) result in the out_result pointer.
+If the query fails to execute, DuckDBError is returned and the error message can be retrieved by calling
+`duckdb_result_error`.
+Note that after running `duckdb_query`, `duckdb_destroy_result` must be called on the result object even if the
+query fails, otherwise the error stored within the result will not be freed correctly.
+* `connection`: The connection to perform the query in.
+* `query`: The SQL query to run.
+* `out_result`: The query result.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+"""
+function duckdb_query(connection, query, out_result)
+    return ccall(
+        (:duckdb_query, libduckdb),
+        duckdb_state,
+        (duckdb_connection, Ptr{UInt8}, Ref{duckdb_result}),
+        connection,
+        query,
+        out_result
+    )
+end
+
 """
 	duckdb_destroy_result(result)
 Closes the result and de-allocates all memory allocated for that connection.
@@ -458,6 +458,21 @@ function duckdb_value_hugeint(result, col, row)
     return ccall(
         (:duckdb_value_hugeint, libduckdb),
         Int64,
+        (Ref{duckdb_result}, Int32, Int32),
+        result,
+        col - 1,
+        row - 1
+    )
+end
+
+"""
+	duckdb_value_uhugeint(result,col,row)
+ * returns: The duckdb_uhugeint value at the specified location, or 0 if the value cannot be converted.
+"""
+function duckdb_value_uhugeint(result, col, row)
+    return ccall(
+        (:duckdb_value_uhugeint, libduckdb),
+        UInt64,
         (Ref{duckdb_result}, Int32, Int32),
         result,
         col - 1,
@@ -762,6 +777,21 @@ end
 #     return ccall((:duckdb_from_timestamp, libduckdb), Ptr{Cvoid}, (Ptr{Cvoid},), ts)
 # end
 #
+
+"""
+Decompose a TIME_TZ objects into micros and a timezone offset.
+
+Use `duckdb_from_time` to further decompose the micros into hour, minute, second and microsecond.
+
+* micros: The time object, as obtained from a `DUCKDB_TYPE_TIME_TZ` column.
+* out_micros: The microsecond component of the time.
+* out_offset: The timezone offset component of the time.
+"""
+function duckdb_from_time_tz(val)
+    return ccall((:duckdb_from_time_tz, libduckdb), duckdb_time_tz, (UInt64,), val)
+end
+
+#
 # """
 # duckdb_to_timestamp(ts)
 # Re-compose a `duckdb_timestamp` from a duckdb_timestamp_struct.
@@ -978,6 +1008,23 @@ function duckdb_bind_hugeint(prepared_statement, param_idx, val)
         (:duckdb_bind_hugeint, libduckdb),
         duckdb_state,
         (duckdb_prepared_statement, Int32, duckdb_hugeint),
+        prepared_statement,
+        param_idx,
+        val
+    )
+end
+
+"""
+Binds an duckdb_uhugeint value to the prepared statement at the specified index.
+*/
+DUCKDB_API duckdb_state duckdb_bind_hugeint(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+                                            duckdb_uhugeint val);
+"""
+function duckdb_bind_uhugeint(prepared_statement, param_idx, val)
+    return ccall(
+        (:duckdb_bind_uhugeint, libduckdb),
+        duckdb_state,
+        (duckdb_prepared_statement, Int32, duckdb_uhugeint),
         prepared_statement,
         param_idx,
         val
@@ -1286,6 +1333,28 @@ function duckdb_pending_prepared_streaming(prepared_statement, out_pending)
         (duckdb_prepared_statement, Ref{duckdb_pending_result}),
         prepared_statement,
         out_pending
+    )
+end
+
+"""
+Checks the state of the execution, returning it.
+The pending result represents an intermediate structure for a query that is not yet fully executed.
+
+If this returns DUCKDB_PENDING_RESULT_READY, the duckdb_execute_pending function can be called to obtain the result.
+If this returns DUCKDB_PENDING_RESULT_NOT_READY, the duckdb_pending_execute_check_state function should be called again.
+If this returns DUCKDB_PENDING_ERROR, an error occurred during execution.
+
+The error message can be obtained by calling duckdb_pending_error on the pending_result.
+
+* pending_result: The pending result to check the state of.
+* returns: The state of the pending result.
+"""
+function duckdb_pending_execute_check_state(pending_result)
+    return ccall(
+        (:duckdb_pending_execute_check_state, libduckdb),
+        duckdb_pending_state,
+        (duckdb_pending_result,),
+        pending_result
     )
 end
 
@@ -2561,6 +2630,14 @@ function duckdb_append_hugeint(appender, value)
 end
 
 """
+Append a duckdb_uhugeint value to the appender.
+DUCKDB_API duckdb_state duckdb_append_uhugeint(duckdb_appender appender, duckdb_uhugeint value);
+"""
+function duckdb_append_uhugeint(appender, value)
+    return ccall((:duckdb_append_uhugeint, libduckdb), duckdb_state, (duckdb_appender, UInt64), appender, value)
+end
+
+"""
 Append a uint8_t value to the appender.
 DUCKDB_API duckdb_state duckdb_append_uint8(duckdb_appender appender, uint8_t value);
 """
@@ -2621,7 +2698,7 @@ Append a duckdb_time value to the appender.
 DUCKDB_API duckdb_state duckdb_append_time(duckdb_appender appender, duckdb_time value);
 """
 function duckdb_append_time(appender, value)
-    return ccall((:duckdb_append_time, libduckdb), duckdb_state, (duckdb_appender, Int32), appender, value)
+    return ccall((:duckdb_append_time, libduckdb), duckdb_state, (duckdb_appender, Int64), appender, value)
 end
 
 """
@@ -2629,7 +2706,7 @@ Append a duckdb_timestamp value to the appender.
 DUCKDB_API duckdb_state duckdb_append_timestamp(duckdb_appender appender, duckdb_timestamp value);
 """
 function duckdb_append_timestamp(appender, value)
-    return ccall((:duckdb_append_timestamp, libduckdb), duckdb_state, (duckdb_appender, Int32), appender, value)
+    return ccall((:duckdb_append_timestamp, libduckdb), duckdb_state, (duckdb_appender, Int64), appender, value)
 end
 
 """

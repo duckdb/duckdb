@@ -1,0 +1,21 @@
+# name: test/extension/wrong_function_type.test
+# group: [extension]
+
+statement error
+FROM json("['item':'phasers','year':2155','count':1035]");
+----
+Catalog Error: Table Function with name "json" is not in the catalog, a function by this name exists in the json extension, but it's of a different type, namely Macro Function
+
+require no_extension_autoloading
+
+# Multiple options exist, none are scalar
+statement error
+select json_execute_serialized_sql(42) from range(5);
+----
+Catalog Error: Scalar Function with name "json_execute_serialized_sql" is not in the catalog, functions with this name exist in the json extension, but they are of different types, namely Pragma Function, Table Function
+
+# One of the two options is Table Function
+statement error
+CALL json_execute_serialized_sql('test');
+----
+Catalog Error: Table Function with name "json_execute_serialized_sql" is not in the catalog, but it exists in the json extension.

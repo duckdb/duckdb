@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
+#include "utf8proc_wrapper.hpp"
 
 #include "re2/re2.h"
 #include "re2/regexp.h"
@@ -31,12 +32,25 @@ static void AddCharacter(char chr, LikeString &ret, bool contains) {
 	// if we are not converting into a contains, and the string has LIKE special characters
 	// then don't return a possible LIKE match
 	// same if the character is a control character
-	if (iscntrl(chr) || (!contains && (chr == '%' || chr == '_'))) {
+	if (iscntrl(static_cast<unsigned char>(chr)) || (!contains && (chr == '%' || chr == '_'))) {
 		ret.exists = false;
 		return;
 	}
 	auto run_as_str {chr};
 	ret.like_string += run_as_str;
+}
+
+static void AddCodepoint(int32_t codepoint, LikeString &ret, bool contains) {
+	int sz = 0;
+	char utf8_str[4];
+	if (!Utf8Proc::CodepointToUtf8(codepoint, sz, utf8_str)) {
+		// invalid codepoint
+		ret.exists = false;
+		return;
+	}
+	for (idx_t i = 0; i < idx_t(sz); i++) {
+		AddCharacter(utf8_str[i], ret, contains);
+	}
 }
 
 static LikeString GetLikeStringEscaped(duckdb_re2::Regexp *regexp, bool contains = false) {
@@ -57,16 +71,14 @@ static LikeString GetLikeStringEscaped(duckdb_re2::Regexp *regexp, bool contains
 		auto nrunes = (idx_t)regexp->nrunes();
 		auto runes = regexp->runes();
 		for (idx_t i = 0; i < nrunes; i++) {
-			char chr = toascii(runes[i]);
-			AddCharacter(chr, ret, contains);
+			AddCodepoint(runes[i], ret, contains);
 			if (!ret.exists) {
 				return ret;
 			}
 		}
 	} else {
 		auto rune = regexp->rune();
-		char chr = toascii(rune);
-		AddCharacter(chr, ret, contains);
+		AddCodepoint(rune, ret, contains);
 	}
 	D_ASSERT(ret.like_string.size() >= 1 || !ret.exists);
 	return ret;

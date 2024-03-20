@@ -7,6 +7,7 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 
+#include "duckdb/common/uhugeint.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
 #include "duckdb/common/printer.hpp"
@@ -132,6 +133,10 @@ Value::Value(int32_t val) : type_(LogicalType::INTEGER), is_null(false) {
 	value_.integer = val;
 }
 
+Value::Value(bool val) : type_(LogicalType::BOOLEAN), is_null(false) {
+	value_.boolean = val;
+}
+
 Value::Value(int64_t val) : type_(LogicalType::BIGINT), is_null(false) {
 	value_.bigint = val;
 }
@@ -155,7 +160,7 @@ Value::Value(string_t val) : Value(val.GetString()) {
 
 Value::Value(string val) : type_(LogicalType::VARCHAR), is_null(false) {
 	if (!Value::StringIsValid(val.c_str(), val.size())) {
-		throw Exception(ErrorManager::InvalidUnicodeError(val, "value construction"));
+		throw ErrorManager::InvalidUnicodeError(val, "value construction");
 	}
 	value_info_ = make_shared<StringValueInfo>(std::move(val));
 }
@@ -206,6 +211,8 @@ Value Value::MinimumValue(const LogicalType &type) {
 		return Value::BIGINT(NumericLimits<int64_t>::Minimum());
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(NumericLimits<hugeint_t>::Minimum());
+	case LogicalTypeId::UHUGEINT:
+		return Value::UHUGEINT(NumericLimits<uhugeint_t>::Minimum());
 	case LogicalTypeId::UUID:
 		return Value::UUID(NumericLimits<hugeint_t>::Minimum());
 	case LogicalTypeId::UTINYINT:
@@ -230,7 +237,8 @@ Value Value::MinimumValue(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_NS:
 		return Value::TIMESTAMPNS(timestamp_t(NumericLimits<int64_t>::Minimum()));
 	case LogicalTypeId::TIME_TZ:
-		return Value::TIMETZ(dtime_tz_t(dtime_t(0), dtime_tz_t::MIN_OFFSET));
+		//	"00:00:00+1559" from the PG docs, but actually 00:00:00+15:59:59
+		return Value::TIMETZ(dtime_tz_t(dtime_t(0), dtime_tz_t::MAX_OFFSET));
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return Value::TIMESTAMPTZ(Timestamp::FromDatetime(
 		    Date::FromDate(Timestamp::MIN_YEAR, Timestamp::MIN_MONTH, Timestamp::MIN_DAY), dtime_t(0)));
@@ -276,6 +284,8 @@ Value Value::MaximumValue(const LogicalType &type) {
 		return Value::BIGINT(NumericLimits<int64_t>::Maximum());
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(NumericLimits<hugeint_t>::Maximum());
+	case LogicalTypeId::UHUGEINT:
+		return Value::UHUGEINT(NumericLimits<uhugeint_t>::Maximum());
 	case LogicalTypeId::UUID:
 		return Value::UUID(NumericLimits<hugeint_t>::Maximum());
 	case LogicalTypeId::UTINYINT:
@@ -300,8 +310,8 @@ Value Value::MaximumValue(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return MaximumValue(LogicalType::TIMESTAMP).DefaultCastAs(LogicalType::TIMESTAMP_S);
 	case LogicalTypeId::TIME_TZ:
-		return Value::TIMETZ(
-		    dtime_tz_t(dtime_t(Interval::SECS_PER_DAY * Interval::MICROS_PER_SEC - 1), dtime_tz_t::MAX_OFFSET));
+		//	"24:00:00-1559" from the PG docs but actually "24:00:00-15:59:59"
+		return Value::TIMETZ(dtime_tz_t(dtime_t(Interval::MICROS_PER_DAY), dtime_tz_t::MIN_OFFSET));
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return MaximumValue(LogicalType::TIMESTAMP);
 	case LogicalTypeId::FLOAT:
@@ -419,6 +429,13 @@ Value Value::HUGEINT(hugeint_t value) {
 	return result;
 }
 
+Value Value::UHUGEINT(uhugeint_t value) {
+	Value result(LogicalType::UHUGEINT);
+	result.value_.uhugeint = value;
+	result.is_null = false;
+	return result;
+}
+
 Value Value::UUID(hugeint_t value) {
 	Value result(LogicalType::UUID);
 	result.value_.hugeint = value;
@@ -517,10 +534,10 @@ Value Value::DECIMAL(int64_t value, uint8_t width, uint8_t scale) {
 	Value result(decimal_type);
 	switch (decimal_type.InternalType()) {
 	case PhysicalType::INT16:
-		result.value_.smallint = value;
+		result.value_.smallint = NumericCast<int16_t>(value);
 		break;
 	case PhysicalType::INT32:
-		result.value_.integer = value;
+		result.value_.integer = NumericCast<int32_t>(value);
 		break;
 	case PhysicalType::INT64:
 		result.value_.bigint = value;
@@ -807,6 +824,13 @@ Value Value::BLOB(const string &data) {
 	return result;
 }
 
+Value Value::AGGREGATE_STATE(const LogicalType &type, const_data_ptr_t data, idx_t len) { // NOLINT
+	Value result(type);
+	result.is_null = false;
+	result.value_info_ = make_shared<StringValueInfo>(string(const_char_ptr_cast(data), len));
+	return result;
+}
+
 Value Value::BIT(const_data_ptr_t data, idx_t len) {
 	Value result(LogicalType::BIT);
 	result.is_null = false;
@@ -826,13 +850,13 @@ Value Value::ENUM(uint64_t value, const LogicalType &original_type) {
 	Value result(original_type);
 	switch (original_type.InternalType()) {
 	case PhysicalType::UINT8:
-		result.value_.utinyint = value;
+		result.value_.utinyint = NumericCast<uint8_t>(value);
 		break;
 	case PhysicalType::UINT16:
-		result.value_.usmallint = value;
+		result.value_.usmallint = NumericCast<uint16_t>(value);
 		break;
 	case PhysicalType::UINT32:
-		result.value_.uinteger = value;
+		result.value_.uinteger = NumericCast<uint32_t>(value);
 		break;
 	default:
 		throw InternalException("Incorrect Physical Type for ENUM");
@@ -905,6 +929,11 @@ Value Value::CreateValue(uint64_t value) {
 template <>
 Value Value::CreateValue(hugeint_t value) {
 	return Value::HUGEINT(value);
+}
+
+template <>
+Value Value::CreateValue(uhugeint_t value) {
+	return Value::UHUGEINT(value);
 }
 
 template <>
@@ -1004,6 +1033,8 @@ T Value::GetValueInternal() const {
 	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::UUID:
 		return Cast::Operation<hugeint_t, T>(value_.hugeint);
+	case LogicalTypeId::UHUGEINT:
+		return Cast::Operation<uhugeint_t, T>(value_.uhugeint);
 	case LogicalTypeId::DATE:
 		return Cast::Operation<date_t, T>(value_.date);
 	case LogicalTypeId::TIME:
@@ -1108,6 +1139,10 @@ uint64_t Value::GetValue() const {
 	return GetValueInternal<uint64_t>();
 }
 template <>
+uhugeint_t Value::GetValue() const {
+	return GetValueInternal<uhugeint_t>();
+}
+template <>
 string Value::GetValue() const {
 	return ToString();
 }
@@ -1177,6 +1212,8 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 		return Value::UBIGINT(value);
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(value);
+	case LogicalTypeId::UHUGEINT:
+		return Value::UHUGEINT(value);
 	case LogicalTypeId::DECIMAL:
 		return Value::DECIMAL(value, DecimalType::GetWidth(type), DecimalType::GetScale(type));
 	case LogicalTypeId::FLOAT:
@@ -1187,7 +1224,7 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 		return Value::POINTER(value);
 	case LogicalTypeId::DATE:
 		D_ASSERT(value >= NumericLimits<int32_t>::Minimum() && value <= NumericLimits<int32_t>::Maximum());
-		return Value::DATE(date_t(value));
+		return Value::DATE(date_t(NumericCast<int32_t>(value)));
 	case LogicalTypeId::TIME:
 		return Value::TIME(dtime_t(value));
 	case LogicalTypeId::TIMESTAMP:
@@ -1231,6 +1268,21 @@ Value Value::Numeric(const LogicalType &type, hugeint_t value) {
 		return Value::UBIGINT(Hugeint::Cast<uint64_t>(value));
 	default:
 		return Value::Numeric(type, Hugeint::Cast<int64_t>(value));
+	}
+}
+
+Value Value::Numeric(const LogicalType &type, uhugeint_t value) {
+#ifdef DEBUG
+	// perform a throwing cast to verify that the type fits
+	Value::UHUGEINT(value).DefaultCastAs(type);
+#endif
+	switch (type.id()) {
+	case LogicalTypeId::UHUGEINT:
+		return Value::UHUGEINT(value);
+	case LogicalTypeId::UBIGINT:
+		return Value::UBIGINT(Uhugeint::Cast<uint64_t>(value));
+	default:
+		return Value::Numeric(type, Uhugeint::Cast<int64_t>(value));
 	}
 }
 
@@ -1298,6 +1350,12 @@ uint64_t Value::GetValueUnsafe() const {
 }
 
 template <>
+uhugeint_t Value::GetValueUnsafe() const {
+	D_ASSERT(type_.InternalType() == PhysicalType::UINT128);
+	return value_.uhugeint;
+}
+
+template <>
 string Value::GetValueUnsafe() const {
 	return StringValue::Get(*this);
 }
@@ -1329,6 +1387,12 @@ template <>
 dtime_t Value::GetValueUnsafe() const {
 	D_ASSERT(type_.InternalType() == PhysicalType::INT64);
 	return value_.time;
+}
+
+template <>
+dtime_tz_t Value::GetValueUnsafe() const {
+	D_ASSERT(type_.InternalType() == PhysicalType::INT64);
+	return value_.timetz;
 }
 
 template <>
@@ -1386,18 +1450,23 @@ string Value::ToSQLString() const {
 	case LogicalTypeId::ENUM:
 		return "'" + StringUtil::Replace(ToString(), "'", "''") + "'";
 	case LogicalTypeId::STRUCT: {
-		string ret = "{";
+		bool is_unnamed = StructType::IsUnnamed(type_);
+		string ret = is_unnamed ? "(" : "{";
 		auto &child_types = StructType::GetChildTypes(type_);
 		auto &struct_values = StructValue::GetChildren(*this);
 		for (idx_t i = 0; i < struct_values.size(); i++) {
 			auto &name = child_types[i].first;
 			auto &child = struct_values[i];
-			ret += "'" + name + "': " + child.ToSQLString();
+			if (is_unnamed) {
+				ret += child.ToSQLString();
+			} else {
+				ret += "'" + name + "': " + child.ToSQLString();
+			}
 			if (i < struct_values.size() - 1) {
 				ret += ", ";
 			}
 		}
-		ret += "}";
+		ret += is_unnamed ? ")" : "}";
 		return ret;
 	}
 	case LogicalTypeId::FLOAT:
@@ -1488,6 +1557,10 @@ uint32_t UIntegerValue::Get(const Value &value) {
 
 uint64_t UBigIntValue::Get(const Value &value) {
 	return value.GetValueUnsafe<uint64_t>();
+}
+
+uhugeint_t UhugeIntValue::Get(const Value &value) {
+	return value.GetValueUnsafe<uhugeint_t>();
 }
 
 float FloatValue::Get(const Value &value) {
@@ -1590,6 +1663,8 @@ hugeint_t IntegralValue::Get(const Value &value) {
 		return UIntegerValue::Get(value);
 	case PhysicalType::UINT64:
 		return UBigIntValue::Get(value);
+	case PhysicalType::UINT128:
+		return static_cast<hugeint_t>(UhugeIntValue::Get(value));
 	default:
 		throw InternalException("Invalid internal type \"%s\" for IntegralValue::Get", value.type().ToString());
 	}
@@ -1761,6 +1836,9 @@ void Value::Serialize(Serializer &serializer) const {
 		case PhysicalType::INT128:
 			serializer.WriteProperty(102, "value", value_.hugeint);
 			break;
+		case PhysicalType::UINT128:
+			serializer.WriteProperty(102, "value", value_.uhugeint);
+			break;
 		case PhysicalType::FLOAT:
 			serializer.WriteProperty(102, "value", value_.float_);
 			break;
@@ -1839,6 +1917,9 @@ Value Value::Deserialize(Deserializer &deserializer) {
 		break;
 	case PhysicalType::INT64:
 		new_value.value_.bigint = deserializer.ReadProperty<int64_t>(102, "value");
+		break;
+	case PhysicalType::UINT128:
+		new_value.value_.uhugeint = deserializer.ReadProperty<uhugeint_t>(102, "value");
 		break;
 	case PhysicalType::INT128:
 		new_value.value_.hugeint = deserializer.ReadProperty<hugeint_t>(102, "value");

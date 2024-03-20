@@ -1,0 +1,51 @@
+# name: test/sql/function/nested/array_extract_unnamed_struct.test
+# description: Test array extract on unnamed structs
+# group: [nested]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+SELECT (ROW(42, 84))['element']
+----
+cannot be used on an unnamed struct
+
+query I
+SELECT (ROW(42, 84))[1]
+----
+42
+
+query I
+SELECT (ROW(42, 84))[2]
+----
+84
+
+query II
+SELECT UNNEST(ROW(42, 84))
+----
+42	84
+
+statement error
+SELECT (ROW(42, 84))[0]
+----
+out of range
+
+statement error
+SELECT (ROW(42, 84))[9999]
+----
+out of range
+
+statement error
+SELECT (ROW(42, 84))[-1]
+----
+out of range
+
+statement error
+SELECT (ROW(42, 84))[9223372036854775807]
+----
+out of range
+
+statement error
+SELECT (ROW(42, 84))[(-9223372036854775808)::BIGINT]
+----
+out of range

@@ -6,11 +6,6 @@ statement ok
 CREATE TABLE test (a INTEGER, b INTEGER, c VARCHAR(10));
 
 query I
-COPY test FROM 'test/sql/copy/csv/data/test/test.csv' (PARALLEL);
-----
-5000
-
-query I
-COPY test FROM 'test/sql/copy/csv/data/test/test.csv' (PARALLEL FALSE);
+COPY test FROM 'test/sql/copy/csv/data/test/test.csv';
 ----
 5000

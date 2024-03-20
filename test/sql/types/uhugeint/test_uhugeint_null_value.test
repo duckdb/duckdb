@@ -1,0 +1,51 @@
+# name: test/sql/types/uhugeint/test_uhugeint_null_value.test
+# description: Test uhugeint null value handling
+# group: [uhugeint]
+
+statement ok
+SET default_null_order='nulls_first';
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT NULL::UHUGEINT
+----
+NULL
+
+statement ok
+CREATE TABLE hugeints(id INTEGER, h UHUGEINT)
+
+statement ok
+INSERT INTO hugeints VALUES (1, NULL), (1, 1), (1, 2)
+
+query III
+SELECT id, FIRST(h), LAST(h) FROM hugeints WHERE h IS NULL GROUP BY id
+----
+1	NULL	NULL
+
+query II
+SELECT h, SUM(id) FROM hugeints GROUP BY h ORDER BY 1
+----
+NULL	1
+1	1
+2	1
+
+query III
+SELECT id, h1.h, h2.h FROM hugeints h1 JOIN hugeints h2 USING (id) WHERE h1.h IS NULL AND h2.h IS NULL
+----
+1	NULL	NULL
+
+query I
+SELECT (SELECT h1.h) FROM hugeints h1 ORDER BY 1
+----
+NULL
+1
+2
+
+query I
+SELECT h1.h NOT IN (SELECT h1.h+h2.h FROM hugeints h2) FROM hugeints h1 ORDER BY 1
+----
+NULL
+NULL
+NULL

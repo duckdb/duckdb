@@ -11,10 +11,6 @@ require skip_reload
 
 statement ok
 CREATE FUNCTION mem_to_bytes(x) AS CASE
-    WHEN CONTAINS(x, 'KB') THEN REPLACE(x, 'KB', '')::INT * 1000
-    WHEN CONTAINS(x, 'MB') THEN REPLACE(x, 'MB', '')::INT * 1000 * 1000
-    WHEN CONTAINS(x, 'GB') THEN REPLACE(x, 'GB', '')::INT * 1000 * 1000 * 1000
-    WHEN CONTAINS(x, 'TB') THEN REPLACE(x, 'TB', '')::INT * 1000 * 1000 * 1000 * 1000
     WHEN CONTAINS(x, 'KiB') THEN REPLACE(x, 'KiB', '')::INT * 1024.0
     WHEN CONTAINS(x, 'MiB') THEN REPLACE(x, 'MiB', '')::INT * 1024.0 * 1024
     WHEN CONTAINS(x, 'GiB') THEN REPLACE(x, 'GiB', '')::INT * 1024.0 * 1024 * 1024
@@ -41,8 +37,7 @@ CREATE TABLE base AS
 SELECT mem_to_bytes(memory_usage) AS usage FROM pragma_database_size();
 
 query I
-SELECT base.usage > empty.usage
-FROM base, empty;
+SELECT base.usage > empty.usage FROM base, empty;
 ----
 true
 
@@ -67,9 +62,11 @@ CREATE TABLE t (i integer PRIMARY KEY);
 statement ok
 INSERT INTO t SELECT * FROM range(1000000);
 
+# overhead due to more metadata blocks for smaller block sizes should not exceed 5x the base usage
+
 query I
 SELECT mem_to_bytes(current.memory_usage) > base.usage AND
-	mem_to_bytes(current.memory_usage) < 3 * base.usage
+	mem_to_bytes(current.memory_usage) < 5 * base.usage
 FROM base, pragma_database_size() current;
 ----
 1
@@ -103,7 +100,7 @@ INSERT INTO t SELECT * FROM range(1000000);
 
 query I
 SELECT mem_to_bytes(current.memory_usage) > base.usage AND
-       	mem_to_bytes(current.memory_usage) < 3 * base.usage
+       	mem_to_bytes(current.memory_usage) < 5 * base.usage
 FROM base, pragma_database_size() current;
 ----
 1
@@ -128,7 +125,7 @@ INSERT INTO t SELECT * FROM range(1000000);
 
 query I
 SELECT mem_to_bytes(current.memory_usage) > base.usage AND
-       	mem_to_bytes(current.memory_usage) < 3 * base.usage
+       	mem_to_bytes(current.memory_usage) < 5 * base.usage
 FROM base, pragma_database_size() current;
 ----
 1
@@ -141,7 +138,7 @@ statement ok
 DELETE FROM t WHERE i > 500000;
 
 query I
-SELECT mem_to_bytes(current.memory_usage) * 3 > pk_mem.usage
+SELECT mem_to_bytes(current.memory_usage) * 5 > pk_mem.usage
     AND mem_to_bytes(current.memory_usage) < pk_mem.usage
 FROM pragma_database_size() current, pk_mem;
 ----

@@ -89,7 +89,7 @@ idx_t ExpressionExecutor::SelectExpression(DataChunk &input, SelectionVector &se
 	SetChunk(&input);
 	states[0]->profiler.BeginSample();
 	idx_t selected_tuples = Select(*expressions[0], states[0]->root_state.get(), nullptr, input.size(), &sel, nullptr);
-	states[0]->profiler.EndSample(chunk ? chunk->size() : 0);
+	states[0]->profiler.EndSample(NumericCast<int>(chunk ? chunk->size() : 0));
 	return selected_tuples;
 }
 
@@ -103,7 +103,7 @@ void ExpressionExecutor::ExecuteExpression(idx_t expr_idx, Vector &result) {
 	D_ASSERT(result.GetType().id() == expressions[expr_idx]->return_type.id());
 	states[expr_idx]->profiler.BeginSample();
 	Execute(*expressions[expr_idx], states[expr_idx]->root_state.get(), nullptr, chunk ? chunk->size() : 1, result);
-	states[expr_idx]->profiler.EndSample(chunk ? chunk->size() : 0);
+	states[expr_idx]->profiler.EndSample(NumericCast<int>(chunk ? chunk->size() : 0));
 }
 
 Value ExpressionExecutor::EvaluateScalar(ClientContext &context, const Expression &expr, bool allow_unfoldable) {
@@ -138,6 +138,9 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 	if (expr.verification_stats) {
 		expr.verification_stats->Verify(vector, count);
 	}
+#ifdef DUCKDB_VERIFY_DICTIONARY_EXPRESSION
+	Vector::DebugTransformToDictionary(vector, count);
+#endif
 }
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const Expression &expr,
@@ -171,7 +174,8 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const Expression
 void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, Vector &result) {
 #ifdef DEBUG
-	//! The result Vector must be "clean"
+	// the result vector has to be used for the first time or has to be reset
+	// otherwise, the validity mask might contain previous (now incorrect) data
 	if (result.GetVectorType() == VectorType::FLAT_VECTOR) {
 		D_ASSERT(FlatVector::Validity(result).CheckAllValid(count));
 	}

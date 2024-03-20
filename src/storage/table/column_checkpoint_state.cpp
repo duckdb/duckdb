@@ -38,7 +38,6 @@ bool PartialBlockForCheckpoint::IsFlushed() {
 }
 
 void PartialBlockForCheckpoint::Flush(const idx_t free_space_left) {
-
 	if (IsFlushed()) {
 		throw InternalException("Flush called on partial block that was already flushed");
 	}
@@ -57,7 +56,6 @@ void PartialBlockForCheckpoint::Flush(const idx_t free_space_left) {
 
 	for (idx_t i = 0; i < segments.size(); i++) {
 		auto &segment = segments[i];
-		segment.data.IncrementVersion();
 		if (i == 0) {
 			// the first segment is converted to persistent - this writes the data for ALL segments to disk
 			D_ASSERT(segment.offset_in_block == 0);
@@ -98,7 +96,7 @@ void PartialBlockForCheckpoint::Merge(PartialBlock &other_p, idx_t offset, idx_t
 
 	// move over the segments
 	for (auto &segment : other.segments) {
-		AddSegmentToTail(segment.data, segment.segment, segment.offset_in_block + offset);
+		AddSegmentToTail(segment.data, segment.segment, NumericCast<uint32_t>(segment.offset_in_block + offset));
 	}
 
 	other.Clear();
@@ -130,9 +128,13 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 	block_id_t block_id = INVALID_BLOCK;
 	uint32_t offset_in_block = 0;
 
+	unique_lock<mutex> partial_block_lock;
 	if (!segment->stats.statistics.IsConstant()) {
+		partial_block_lock = partial_block_manager.GetLock();
+
 		// non-constant block
-		PartialBlockAllocation allocation = partial_block_manager.GetBlockAllocation(segment_size);
+		PartialBlockAllocation allocation =
+		    partial_block_manager.GetBlockAllocation(NumericCast<uint32_t>(segment_size));
 		block_id = allocation.state.block_id;
 		offset_in_block = allocation.state.offset;
 

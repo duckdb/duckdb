@@ -105,7 +105,7 @@ SELECT * FROM '__TEST_DIR__/part/a=9/*.parquet';
 statement error
 COPY test5 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a));
 ----
-IO Error: Directory
+Directory
 
 
 
@@ -113,7 +113,7 @@ IO Error: Directory
 statement error
 COPY test4 TO '__TEST_DIR__/to_be_overwritten' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PATTERN);
 ----
-IO Error: FILENAME_PATTERN
+FILENAME_PATTERN
 
 statement ok
 COPY test4 TO '__TEST_DIR__/to_be_overwritten' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PATTERN a_file_name);

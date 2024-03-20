@@ -22,6 +22,9 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &deserializer)
 	case ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO:
 		result = AggregateStateTypeInfo::Deserialize(deserializer);
 		break;
+	case ExtraTypeInfoType::ANY_TYPE_INFO:
+		result = AnyTypeInfo::Deserialize(deserializer);
+		break;
 	case ExtraTypeInfoType::ARRAY_TYPE_INFO:
 		result = ArrayTypeInfo::Deserialize(deserializer);
 		break;
@@ -33,6 +36,9 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &deserializer)
 		break;
 	case ExtraTypeInfoType::GENERIC_TYPE_INFO:
 		result = make_shared<ExtraTypeInfo>(type);
+		break;
+	case ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO:
+		result = IntegerLiteralTypeInfo::Deserialize(deserializer);
 		break;
 	case ExtraTypeInfoType::INVALID_TYPE_INFO:
 		return nullptr;
@@ -70,6 +76,19 @@ shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::Deserialize(Deserializer &dese
 	return std::move(result);
 }
 
+void AnyTypeInfo::Serialize(Serializer &serializer) const {
+	ExtraTypeInfo::Serialize(serializer);
+	serializer.WriteProperty<LogicalType>(200, "target_type", target_type);
+	serializer.WritePropertyWithDefault<idx_t>(201, "cast_score", cast_score);
+}
+
+shared_ptr<ExtraTypeInfo> AnyTypeInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::shared_ptr<AnyTypeInfo>(new AnyTypeInfo());
+	deserializer.ReadProperty<LogicalType>(200, "target_type", result->target_type);
+	deserializer.ReadPropertyWithDefault<idx_t>(201, "cast_score", result->cast_score);
+	return std::move(result);
+}
+
 void ArrayTypeInfo::Serialize(Serializer &serializer) const {
 	ExtraTypeInfo::Serialize(serializer);
 	serializer.WriteProperty<LogicalType>(200, "child_type", child_type);
@@ -93,6 +112,17 @@ shared_ptr<ExtraTypeInfo> DecimalTypeInfo::Deserialize(Deserializer &deserialize
 	auto result = duckdb::shared_ptr<DecimalTypeInfo>(new DecimalTypeInfo());
 	deserializer.ReadPropertyWithDefault<uint8_t>(200, "width", result->width);
 	deserializer.ReadPropertyWithDefault<uint8_t>(201, "scale", result->scale);
+	return std::move(result);
+}
+
+void IntegerLiteralTypeInfo::Serialize(Serializer &serializer) const {
+	ExtraTypeInfo::Serialize(serializer);
+	serializer.WriteProperty<Value>(200, "constant_value", constant_value);
+}
+
+shared_ptr<ExtraTypeInfo> IntegerLiteralTypeInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::shared_ptr<IntegerLiteralTypeInfo>(new IntegerLiteralTypeInfo());
+	deserializer.ReadProperty<Value>(200, "constant_value", result->constant_value);
 	return std::move(result);
 }
 

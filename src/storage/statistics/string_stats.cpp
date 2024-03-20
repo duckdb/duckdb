@@ -152,15 +152,15 @@ void StringStats::Update(BaseStatistics &stats, const string_t &value) {
 		memcpy(string_data.max, target, StringStatsData::MAX_STRING_MINMAX_SIZE);
 	}
 	if (size > string_data.max_string_length) {
-		string_data.max_string_length = size;
+		string_data.max_string_length = UnsafeNumericCast<uint32_t>(size);
 	}
 	if (stats.GetType().id() == LogicalTypeId::VARCHAR && !string_data.has_unicode) {
 		auto unicode = Utf8Proc::Analyze(const_char_ptr_cast(data), size);
 		if (unicode == UnicodeType::UNICODE) {
 			string_data.has_unicode = true;
 		} else if (unicode == UnicodeType::INVALID) {
-			throw InvalidInputException(ErrorManager::InvalidUnicodeError(string(const_char_ptr_cast(data), size),
-			                                                              "segment statistics update"));
+			throw ErrorManager::InvalidUnicodeError(string(const_char_ptr_cast(data), size),
+			                                        "segment statistics update");
 		}
 	}
 }

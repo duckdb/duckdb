@@ -101,6 +101,7 @@ CopyTypeSupport ParquetWriter::DuckDBTypeToParquetTypeInternal(const LogicalType
 	case LogicalTypeId::DOUBLE:
 		parquet_type = Type::DOUBLE;
 		break;
+	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::HUGEINT:
 		parquet_type = Type::DOUBLE;
 		return CopyTypeSupport::LOSSY;
@@ -167,6 +168,10 @@ CopyTypeSupport ParquetWriter::TypeIsSupported(const LogicalType &type) {
 	auto id = type.id();
 	if (id == LogicalTypeId::LIST) {
 		auto &child_type = ListType::GetChildType(type);
+		return TypeIsSupported(child_type);
+	}
+	if (id == LogicalTypeId::ARRAY) {
+		auto &child_type = ArrayType::GetChildType(type);
 		return TypeIsSupported(child_type);
 	}
 	if (id == LogicalTypeId::UNION) {

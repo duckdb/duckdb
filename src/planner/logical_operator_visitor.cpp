@@ -87,21 +87,11 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 	}
 	case LogicalOperatorType::LOGICAL_LIMIT: {
 		auto &limit = op.Cast<LogicalLimit>();
-		if (limit.limit) {
-			callback(&limit.limit);
+		if (limit.limit_val.GetExpression()) {
+			callback(&limit.limit_val.GetExpression());
 		}
-		if (limit.offset) {
-			callback(&limit.offset);
-		}
-		break;
-	}
-	case LogicalOperatorType::LOGICAL_LIMIT_PERCENT: {
-		auto &limit = op.Cast<LogicalLimitPercent>();
-		if (limit.limit) {
-			callback(&limit.limit);
-		}
-		if (limit.offset) {
-			callback(&limit.offset);
+		if (limit.offset_val.GetExpression()) {
+			callback(&limit.offset_val.GetExpression());
 		}
 		break;
 	}

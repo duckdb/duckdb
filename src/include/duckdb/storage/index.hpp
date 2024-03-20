@@ -59,26 +59,17 @@ public:
 	AttachedDatabase &db;
 
 public:
-	//! Initialize a single predicate scan on the index with the given expression and column IDs
-	virtual unique_ptr<IndexScanState> InitializeScanSinglePredicate(const Transaction &transaction, const Value &value,
-	                                                                 const ExpressionType expression_type) = 0;
-	//! Initialize a two predicate scan on the index with the given expression and column IDs
-	virtual unique_ptr<IndexScanState> InitializeScanTwoPredicates(const Transaction &transaction,
-	                                                               const Value &low_value,
-	                                                               const ExpressionType low_expression_type,
-	                                                               const Value &high_value,
-	                                                               const ExpressionType high_expression_type) = 0;
-	//! Performs a lookup on the index, fetching up to max_count result IDs. Returns true if all row IDs were fetched,
-	//! and false otherwise
-	virtual bool Scan(const Transaction &transaction, const DataTable &table, IndexScanState &state,
-	                  const idx_t max_count, vector<row_t> &result_ids) = 0;
+	//! Returns true if the index is a unknown index, and false otherwise
+	virtual bool IsUnknown() {
+		return false;
+	}
 
 	//! Obtain a lock on the index
 	void InitializeLock(IndexLock &state);
 	//! Called when data is appended to the index. The lock obtained from InitializeLock must be held
-	virtual PreservedError Append(IndexLock &state, DataChunk &entries, Vector &row_identifiers) = 0;
+	virtual ErrorData Append(IndexLock &state, DataChunk &entries, Vector &row_identifiers) = 0;
 	//! Obtains a lock and calls Append while holding that lock
-	PreservedError Append(DataChunk &entries, Vector &row_identifiers);
+	ErrorData Append(DataChunk &entries, Vector &row_identifiers);
 	//! Verify that data can be appended to the index without a constraint violation
 	virtual void VerifyAppend(DataChunk &chunk) = 0;
 	//! Verify that data can be appended to the index without a constraint violation using the conflict manager
@@ -96,7 +87,7 @@ public:
 	void Delete(DataChunk &entries, Vector &row_identifiers);
 
 	//! Insert a chunk of entries into the index
-	virtual PreservedError Insert(IndexLock &lock, DataChunk &input, Vector &row_identifiers) = 0;
+	virtual ErrorData Insert(IndexLock &lock, DataChunk &input, Vector &row_identifiers) = 0;
 
 	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
 	//! index must also be locked during the merge
@@ -143,6 +134,10 @@ public:
 	void ExecuteExpressions(DataChunk &input, DataChunk &result);
 	static string AppendRowError(DataChunk &input, idx_t index);
 
+	//! Throw a constraint violation exception
+	virtual string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
+	                                             DataChunk &input) = 0;
+
 protected:
 	//! Lock used for any changes to the index
 	mutex lock;
@@ -159,7 +154,7 @@ private:
 public:
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 

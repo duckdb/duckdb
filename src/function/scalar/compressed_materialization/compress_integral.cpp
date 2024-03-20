@@ -1,7 +1,8 @@
-#include "duckdb/function/function_set.hpp"
-#include "duckdb/function/scalar/compressed_materialization_functions.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/function/function_set.hpp"
+#include "duckdb/function/scalar/compressed_materialization_functions.hpp"
 
 namespace duckdb {
 
@@ -14,7 +15,7 @@ template <class INPUT_TYPE, class RESULT_TYPE>
 struct TemplatedIntegralCompress {
 	static inline RESULT_TYPE Operation(const INPUT_TYPE &input, const INPUT_TYPE &min_val) {
 		D_ASSERT(min_val <= input);
-		return input - min_val;
+		return UnsafeNumericCast<RESULT_TYPE>(input - min_val);
 	}
 };
 
@@ -22,7 +23,15 @@ template <class RESULT_TYPE>
 struct TemplatedIntegralCompress<hugeint_t, RESULT_TYPE> {
 	static inline RESULT_TYPE Operation(const hugeint_t &input, const hugeint_t &min_val) {
 		D_ASSERT(min_val <= input);
-		return (input - min_val).lower;
+		return UnsafeNumericCast<RESULT_TYPE>((input - min_val).lower);
+	}
+};
+
+template <class RESULT_TYPE>
+struct TemplatedIntegralCompress<uhugeint_t, RESULT_TYPE> {
+	static inline RESULT_TYPE Operation(const uhugeint_t &input, const uhugeint_t &min_val) {
+		D_ASSERT(min_val <= input);
+		return UnsafeNumericCast<RESULT_TYPE>((input - min_val).lower);
 	}
 };
 
@@ -75,6 +84,8 @@ static scalar_function_t GetIntegralCompressFunctionInputSwitch(const LogicalTyp
 		return GetIntegralCompressFunctionResultSwitch<uint32_t>(input_type, result_type);
 	case LogicalTypeId::UBIGINT:
 		return GetIntegralCompressFunctionResultSwitch<uint64_t>(input_type, result_type);
+	case LogicalTypeId::UHUGEINT:
+		return GetIntegralCompressFunctionResultSwitch<uhugeint_t>(input_type, result_type);
 	default:
 		throw InternalException("Unexpected input type in GetIntegralCompressFunctionInputSwitch");
 	}
@@ -87,7 +98,7 @@ static string IntegralDecompressFunctionName(const LogicalType &result_type) {
 
 template <class INPUT_TYPE, class RESULT_TYPE>
 static inline RESULT_TYPE TemplatedIntegralDecompress(const INPUT_TYPE &input, const RESULT_TYPE &min_val) {
-	return min_val + input;
+	return UnsafeNumericCast<RESULT_TYPE>(min_val + input);
 }
 
 template <class INPUT_TYPE, class RESULT_TYPE>
@@ -124,6 +135,8 @@ static scalar_function_t GetIntegralDecompressFunctionResultSwitch(const Logical
 		return GetIntegralDecompressFunction<INPUT_TYPE, uint32_t>(input_type, result_type);
 	case LogicalTypeId::UBIGINT:
 		return GetIntegralDecompressFunction<INPUT_TYPE, uint64_t>(input_type, result_type);
+	case LogicalTypeId::UHUGEINT:
+		return GetIntegralDecompressFunction<INPUT_TYPE, uhugeint_t>(input_type, result_type);
 	default:
 		throw InternalException("Unexpected input type in GetIntegralDecompressFunctionSetSwitch");
 	}

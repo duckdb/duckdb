@@ -176,7 +176,8 @@ static idx_t GenericNestedMatch(Vector &lhs_vector, const TupleDataVectorFormat 
 	Vector key(type);
 	const auto gather_function = TupleDataCollection::GetGatherFunction(type);
 	gather_function.function(rhs_layout, rhs_row_locations, col_idx, sel, count, key,
-	                         *FlatVector::IncrementalSelectionVector(), key, gather_function.child_functions);
+	                         *FlatVector::IncrementalSelectionVector(), nullptr, gather_function.child_functions);
+	Vector::Verify(key, *FlatVector::IncrementalSelectionVector(), count);
 
 	// Densify the input column
 	Vector sliced(lhs_vector, sel, count);
@@ -238,6 +239,8 @@ MatchFunction RowMatcher::GetMatchFunction(const LogicalType &type, const Expres
 		return GetMatchFunction<NO_MATCH_SEL, uint32_t>(predicate);
 	case PhysicalType::UINT64:
 		return GetMatchFunction<NO_MATCH_SEL, uint64_t>(predicate);
+	case PhysicalType::UINT128:
+		return GetMatchFunction<NO_MATCH_SEL, uhugeint_t>(predicate);
 	case PhysicalType::FLOAT:
 		return GetMatchFunction<NO_MATCH_SEL, float>(predicate);
 	case PhysicalType::DOUBLE:

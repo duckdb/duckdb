@@ -6,6 +6,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/cast_rules.hpp"
+#include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -75,7 +76,7 @@ int64_t FunctionBinder::BindFunctionCost(const SimpleFunction &func, const vecto
 
 template <class T>
 vector<idx_t> FunctionBinder::BindFunctionsFromArguments(const string &name, FunctionSet<T> &functions,
-                                                         const vector<LogicalType> &arguments, string &error) {
+                                                         const vector<LogicalType> &arguments, ErrorData &error) {
 	idx_t best_function = DConstants::INVALID_INDEX;
 	int64_t lowest_cost = NumericLimits<int64_t>::Maximum();
 	vector<idx_t> candidate_functions;
@@ -100,14 +101,11 @@ vector<idx_t> FunctionBinder::BindFunctionsFromArguments(const string &name, Fun
 	}
 	if (best_function == DConstants::INVALID_INDEX) {
 		// no matching function was found, throw an error
-		string call_str = Function::CallToString(name, arguments);
-		string candidate_str = "";
+		vector<string> candidates;
 		for (auto &f : functions.functions) {
-			candidate_str += "\t" + f.ToString() + "\n";
+			candidates.push_back(f.ToString());
 		}
-		error = StringUtil::Format("No function matches the given name and argument types '%s'. You might need to add "
-		                           "explicit type casts.\n\tCandidate functions:\n%s",
-		                           call_str, candidate_str);
+		error = ErrorData(BinderException::NoMatchingFunction(name, arguments, candidates));
 		return candidate_functions;
 	}
 	candidate_functions.push_back(best_function);
@@ -117,25 +115,27 @@ vector<idx_t> FunctionBinder::BindFunctionsFromArguments(const string &name, Fun
 template <class T>
 idx_t FunctionBinder::MultipleCandidateException(const string &name, FunctionSet<T> &functions,
                                                  vector<idx_t> &candidate_functions,
-                                                 const vector<LogicalType> &arguments, string &error) {
+                                                 const vector<LogicalType> &arguments, ErrorData &error) {
 	D_ASSERT(functions.functions.size() > 1);
 	// there are multiple possible function definitions
 	// throw an exception explaining which overloads are there
 	string call_str = Function::CallToString(name, arguments);
-	string candidate_str = "";
+	string candidate_str;
 	for (auto &conf : candidate_functions) {
 		T f = functions.GetFunctionByOffset(conf);
 		candidate_str += "\t" + f.ToString() + "\n";
 	}
-	error = StringUtil::Format("Could not choose a best candidate function for the function call \"%s\". In order to "
-	                           "select one, please add explicit type casts.\n\tCandidate functions:\n%s",
-	                           call_str, candidate_str);
+	error = ErrorData(
+	    ExceptionType::BINDER,
+	    StringUtil::Format("Could not choose a best candidate function for the function call \"%s\". In order to "
+	                       "select one, please add explicit type casts.\n\tCandidate functions:\n%s",
+	                       call_str, candidate_str));
 	return DConstants::INVALID_INDEX;
 }
 
 template <class T>
 idx_t FunctionBinder::BindFunctionFromArguments(const string &name, FunctionSet<T> &functions,
-                                                const vector<LogicalType> &arguments, string &error) {
+                                                const vector<LogicalType> &arguments, ErrorData &error) {
 	auto candidate_functions = BindFunctionsFromArguments<T>(name, functions, arguments, error);
 	if (candidate_functions.empty()) {
 		// no candidates
@@ -158,29 +158,29 @@ idx_t FunctionBinder::BindFunctionFromArguments(const string &name, FunctionSet<
 }
 
 idx_t FunctionBinder::BindFunction(const string &name, ScalarFunctionSet &functions,
-                                   const vector<LogicalType> &arguments, string &error) {
+                                   const vector<LogicalType> &arguments, ErrorData &error) {
 	return BindFunctionFromArguments(name, functions, arguments, error);
 }
 
 idx_t FunctionBinder::BindFunction(const string &name, AggregateFunctionSet &functions,
-                                   const vector<LogicalType> &arguments, string &error) {
+                                   const vector<LogicalType> &arguments, ErrorData &error) {
 	return BindFunctionFromArguments(name, functions, arguments, error);
 }
 
 idx_t FunctionBinder::BindFunction(const string &name, TableFunctionSet &functions,
-                                   const vector<LogicalType> &arguments, string &error) {
+                                   const vector<LogicalType> &arguments, ErrorData &error) {
 	return BindFunctionFromArguments(name, functions, arguments, error);
 }
 
 idx_t FunctionBinder::BindFunction(const string &name, PragmaFunctionSet &functions, vector<Value> &parameters,
-                                   string &error) {
+                                   ErrorData &error) {
 	vector<LogicalType> types;
 	for (auto &value : parameters) {
 		types.push_back(value.type());
 	}
 	idx_t entry = BindFunctionFromArguments(name, functions, types, error);
 	if (entry == DConstants::INVALID_INDEX) {
-		throw BinderException(error);
+		error.Throw();
 	}
 	auto candidate_function = functions.GetFunctionByOffset(entry);
 	// cast the input parameters
@@ -196,25 +196,25 @@ vector<LogicalType> FunctionBinder::GetLogicalTypesFromExpressions(vector<unique
 	vector<LogicalType> types;
 	types.reserve(arguments.size());
 	for (auto &argument : arguments) {
-		types.push_back(argument->return_type);
+		types.push_back(ExpressionBinder::GetExpressionReturnType(*argument));
 	}
 	return types;
 }
 
 idx_t FunctionBinder::BindFunction(const string &name, ScalarFunctionSet &functions,
-                                   vector<unique_ptr<Expression>> &arguments, string &error) {
+                                   vector<unique_ptr<Expression>> &arguments, ErrorData &error) {
 	auto types = GetLogicalTypesFromExpressions(arguments);
 	return BindFunction(name, functions, types, error);
 }
 
 idx_t FunctionBinder::BindFunction(const string &name, AggregateFunctionSet &functions,
-                                   vector<unique_ptr<Expression>> &arguments, string &error) {
+                                   vector<unique_ptr<Expression>> &arguments, ErrorData &error) {
 	auto types = GetLogicalTypesFromExpressions(arguments);
 	return BindFunction(name, functions, types, error);
 }
 
 idx_t FunctionBinder::BindFunction(const string &name, TableFunctionSet &functions,
-                                   vector<unique_ptr<Expression>> &arguments, string &error) {
+                                   vector<unique_ptr<Expression>> &arguments, ErrorData &error) {
 	auto types = GetLogicalTypesFromExpressions(arguments);
 	return BindFunction(name, functions, types, error);
 }
@@ -237,9 +237,29 @@ LogicalTypeComparisonResult RequiresCast(const LogicalType &source_type, const L
 	return LogicalTypeComparisonResult::DIFFERENT_TYPES;
 }
 
+LogicalType PrepareTypeForCast(const LogicalType &type) {
+	if (type.id() == LogicalTypeId::ANY) {
+		return AnyType::GetTargetType(type);
+	}
+	if (type.id() == LogicalTypeId::LIST) {
+		return LogicalType::LIST(PrepareTypeForCast(ListType::GetChildType(type)));
+	}
+	return type;
+}
+
 void FunctionBinder::CastToFunctionArguments(SimpleFunction &function, vector<unique_ptr<Expression>> &children) {
+	for (auto &arg : function.arguments) {
+		arg = PrepareTypeForCast(arg);
+	}
+	function.varargs = PrepareTypeForCast(function.varargs);
+
 	for (idx_t i = 0; i < children.size(); i++) {
 		auto target_type = i < function.arguments.size() ? function.arguments[i] : function.varargs;
+		if (target_type.id() == LogicalTypeId::STRING_LITERAL || target_type.id() == LogicalTypeId::INTEGER_LITERAL) {
+			throw InternalException(
+			    "Function %s returned a STRING_LITERAL or INTEGER_LITERAL type - return an explicit type instead",
+			    function.name);
+		}
 		target_type.Verify();
 		// don't cast lambda children, they get removed before execution
 		if (children[i]->return_type.id() == LogicalTypeId::LAMBDA) {
@@ -257,7 +277,7 @@ void FunctionBinder::CastToFunctionArguments(SimpleFunction &function, vector<un
 }
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(const string &schema, const string &name,
-                                                          vector<unique_ptr<Expression>> children, string &error,
+                                                          vector<unique_ptr<Expression>> children, ErrorData &error,
                                                           bool is_operator, Binder *binder) {
 	// bind the function
 	auto &function =
@@ -268,7 +288,7 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const string &schema, 
 }
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogEntry &func,
-                                                          vector<unique_ptr<Expression>> children, string &error,
+                                                          vector<unique_ptr<Expression>> children, ErrorData &error,
                                                           bool is_operator, Binder *binder) {
 	// bind the function
 	idx_t best_function = BindFunction(func.name, func.functions, children, error);
@@ -279,10 +299,28 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogE
 	// found a matching function!
 	auto bound_function = func.functions.GetFunctionByOffset(best_function);
 
+	// If any of the parameters are NULL, the function will just be replaced with a NULL constant
+	// But this NULL constant needs to have to correct type, because we use LogicalType::SQLNULL for binding macro's
+	// However, some functions may have an invalid return type, so we default to SQLNULL for those
+	LogicalType return_type_if_null;
+	switch (bound_function.return_type.id()) {
+	case LogicalTypeId::ANY:
+	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::MAP:
+	case LogicalTypeId::UNION:
+	case LogicalTypeId::ARRAY:
+		return_type_if_null = LogicalType::SQLNULL;
+		break;
+	default:
+		return_type_if_null = bound_function.return_type;
+	}
+
 	if (bound_function.null_handling == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 		for (auto &child : children) {
 			if (child->return_type == LogicalTypeId::SQLNULL) {
-				return make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL));
+				return make_uniq<BoundConstantExpression>(Value(return_type_if_null));
 			}
 			if (!child->IsFoldable()) {
 				continue;
@@ -292,7 +330,7 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogE
 				continue;
 			}
 			if (result.IsNull()) {
-				return make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL));
+				return make_uniq<BoundConstantExpression>(Value(return_type_if_null));
 			}
 		}
 	}

@@ -54,6 +54,7 @@ bool DBConfigOptions::debug_print_bindings = false;
 	{ nullptr, nullptr, LogicalTypeId::INVALID, nullptr, nullptr, nullptr, nullptr, nullptr }
 
 static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting),
+                                                 DUCKDB_GLOBAL(AllowPersistentSecrets),
                                                  DUCKDB_GLOBAL(CheckpointThresholdSetting),
                                                  DUCKDB_GLOBAL(DebugCheckpointAbort),
                                                  DUCKDB_LOCAL(DebugForceExternal),
@@ -69,8 +70,9 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL(EnableExternalAccessSetting),
                                                  DUCKDB_GLOBAL(EnableFSSTVectors),
                                                  DUCKDB_GLOBAL(AllowUnsignedExtensionsSetting),
-                                                 DUCKDB_LOCAL(CustomExtensionRepository),
-                                                 DUCKDB_LOCAL(AutoloadExtensionRepository),
+                                                 DUCKDB_GLOBAL(AllowUnredactedSecretsSetting),
+                                                 DUCKDB_GLOBAL(CustomExtensionRepository),
+                                                 DUCKDB_GLOBAL(AutoloadExtensionRepository),
                                                  DUCKDB_GLOBAL(AutoinstallKnownExtensions),
                                                  DUCKDB_GLOBAL(AutoloadKnownExtensions),
                                                  DUCKDB_GLOBAL(EnableObjectCacheSetting),
@@ -78,6 +80,7 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_LOCAL(EnableProfilingSetting),
                                                  DUCKDB_LOCAL(EnableProgressBarSetting),
                                                  DUCKDB_LOCAL(EnableProgressBarPrintSetting),
+                                                 DUCKDB_LOCAL(ErrorsAsJsonSetting),
                                                  DUCKDB_LOCAL(ExplainOutputSetting),
                                                  DUCKDB_GLOBAL(ExtensionDirectorySetting),
                                                  DUCKDB_GLOBAL(ExternalThreadsSetting),
@@ -91,6 +94,7 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_LOCAL(IntegerDivisionSetting),
                                                  DUCKDB_LOCAL(MaximumExpressionDepthSetting),
                                                  DUCKDB_GLOBAL(MaximumMemorySetting),
+                                                 DUCKDB_GLOBAL(OldImplicitCasting),
                                                  DUCKDB_GLOBAL_ALIAS("memory_limit", MaximumMemorySetting),
                                                  DUCKDB_GLOBAL_ALIAS("null_order", DefaultNullOrderSetting),
                                                  DUCKDB_LOCAL(OrderedAggregateThreshold),
@@ -100,13 +104,14 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_LOCAL(PivotLimitSetting),
                                                  DUCKDB_LOCAL(PreserveIdentifierCase),
                                                  DUCKDB_GLOBAL(PreserveInsertionOrder),
-                                                 DUCKDB_LOCAL(ProfilerHistorySize),
                                                  DUCKDB_LOCAL(ProfileOutputSetting),
                                                  DUCKDB_LOCAL(ProfilingModeSetting),
                                                  DUCKDB_LOCAL_ALIAS("profiling_output", ProfileOutputSetting),
                                                  DUCKDB_LOCAL(ProgressBarTimeSetting),
                                                  DUCKDB_LOCAL(SchemaSetting),
                                                  DUCKDB_LOCAL(SearchPathSetting),
+                                                 DUCKDB_GLOBAL(SecretDirectorySetting),
+                                                 DUCKDB_GLOBAL(DefaultSecretStorage),
                                                  DUCKDB_GLOBAL(TempDirectorySetting),
                                                  DUCKDB_GLOBAL(ThreadsSetting),
                                                  DUCKDB_GLOBAL(UsernameSetting),
@@ -117,6 +122,7 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL(FlushAllocatorSetting),
                                                  DUCKDB_GLOBAL(DuckDBApiSetting),
                                                  DUCKDB_GLOBAL(CustomUserAgentSetting),
+                                                 DUCKDB_LOCAL(PartitionedWriteFlushThreshold),
                                                  FINAL_SETTING};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
@@ -243,6 +249,10 @@ CastFunctionSet &DBConfig::GetCastFunctions() {
 	return *cast_functions;
 }
 
+IndexTypeSet &DBConfig::GetIndexTypes() {
+	return *index_types;
+}
+
 void DBConfig::SetDefaultMaxMemory() {
 	auto memory = FileSystem::GetAvailableMemory();
 	if (memory != DConstants::INVALID_INDEX) {
@@ -327,14 +337,6 @@ idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
 #endif
 #else
 	return 1;
-#endif
-}
-
-void DBConfig::SetDefaultMaxThreads() {
-#ifndef DUCKDB_NO_THREADS
-	options.maximum_threads = GetSystemMaxThreads(*file_system);
-#else
-	options.maximum_threads = 1;
 #endif
 }
 
@@ -438,7 +440,11 @@ OrderByNullType DBConfig::ResolveNullOrder(OrderType order_type, OrderByNullType
 }
 
 const std::string DBConfig::UserAgent() const {
-	auto user_agent = options.duckdb_api;
+	auto user_agent = GetDefaultUserAgent();
+
+	if (!options.duckdb_api.empty()) {
+		user_agent += " " + options.duckdb_api;
+	}
 
 	if (!options.custom_user_agent.empty()) {
 		user_agent += " " + options.custom_user_agent;

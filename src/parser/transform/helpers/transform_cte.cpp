@@ -33,9 +33,9 @@ void Transformer::ExtractCTEsRecursive(CommonTableExpressionMap &cte_map) {
 
 void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, CommonTableExpressionMap &cte_map,
                                vector<unique_ptr<CTENode>> &materialized_ctes) {
-	// TODO: might need to update in case of future lawsuit
 	stored_cte_map.push_back(&cte_map);
 
+	// TODO: might need to update in case of future lawsuit
 	D_ASSERT(de_with_clause.ctes);
 	for (auto cte_ele = de_with_clause.ctes->head; cte_ele != nullptr; cte_ele = cte_ele->next) {
 		auto info = make_uniq<CommonTableExpressionInfo>();

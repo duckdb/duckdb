@@ -7,7 +7,6 @@
 # different on Windows and other systems
 
 # test null or empty
-
 query I
 SELECT list_distinct(NULL)
 ----
@@ -46,7 +45,7 @@ No function matches
 
 # test incorrect parameter type
 
-foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10) date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval blob
+foreach type boolean varchar tinyint smallint integer bigint hugeint uhugeint utinyint usmallint uinteger ubigint float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10) date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval blob
 
 statement error
 SELECT list_distinct(NULL::${type})
@@ -133,7 +132,7 @@ SELECT list_distinct([NULL::VARCHAR])
 []
 
 # INTEGER types
-foreach type tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint
+foreach type tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint uhugeint
 
 query I
 SELECT list_distinct([1::${type}, NULL, 1::${type}])
@@ -278,20 +277,16 @@ select list_distinct(["${colname}"]) FROM all_types;
 
 endloop
 
-# we don't support histogram for the min/max values of these types (casting errors)
+# we support histogram for the min/max values of these types
 foreach colname hugeint dec_18_6 dec38_10
 
-statement error
+statement ok
 select list_distinct(["${colname}"]) FROM all_types;
-----
-Invalid Input Error
 
 endloop
 
-statement error
+statement ok
 select list_distinct(["blob"]) FROM all_types;
-----
-No matching aggregate function
 
 # we don't support histogram for nested types
 foreach colname int_array double_array date_array timestamp_array timestamptz_array varchar_array nested_int_array struct struct_of_arrays array_of_structs map

@@ -51,7 +51,7 @@ static unique_ptr<FunctionData> ArrayValueBind(ClientContext &context, ScalarFun
 	// construct return type
 	LogicalType child_type = arguments[0]->return_type;
 	for (idx_t i = 1; i < arguments.size(); i++) {
-		child_type = LogicalType::MaxLogicalType(child_type, arguments[i]->return_type);
+		child_type = LogicalType::MaxLogicalType(context, child_type, arguments[i]->return_type);
 	}
 
 	if (arguments.size() > ArrayType::MAX_ARRAY_SIZE) {

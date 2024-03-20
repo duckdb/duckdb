@@ -108,12 +108,12 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	}
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 		break;
-	case LogicalOperatorType::LOGICAL_UNION:
-		if (!everything_referenced) {
-			// for UNION we can remove unreferenced columns as long as everything_referenced is false (i.e. we
-			// encounter a UNION node that is not preceded by a DISTINCT)
-			// this happens when UNION ALL is used
-			auto &setop = op.Cast<LogicalSetOperation>();
+	case LogicalOperatorType::LOGICAL_UNION: {
+		auto &setop = op.Cast<LogicalSetOperation>();
+		if (setop.setop_all && !everything_referenced) {
+			// for UNION we can remove unreferenced columns if union all is used
+			// it's possible not all columns are referenced, but unreferenced columns in the union can
+			// still have an affect on the result of the union
 			vector<idx_t> entries;
 			for (idx_t i = 0; i < setop.column_count; i++) {
 				entries.push_back(i);
@@ -156,6 +156,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			remove.VisitOperator(*child);
 		}
 		return;
+	}
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
 		// for INTERSECT/EXCEPT operations we can't remove anything, just recursively visit the children
@@ -319,6 +320,27 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	}
 	LogicalOperatorVisitor::VisitOperatorExpressions(op);
 	LogicalOperatorVisitor::VisitOperatorChildren(op);
+
+	if (op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN || op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN ||
+	    op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		auto &comp_join = op.Cast<LogicalComparisonJoin>();
+		// after removing duplicate columns we may have duplicate join conditions (if the join graph is cyclical)
+		vector<JoinCondition> unique_conditions;
+		for (auto &cond : comp_join.conditions) {
+			bool found = false;
+			for (auto &unique_cond : unique_conditions) {
+				if (cond.comparison == unique_cond.comparison && cond.left->Equals(*unique_cond.left) &&
+				    cond.right->Equals(*unique_cond.right)) {
+					found = true;
+					break;
+				}
+			}
+			if (!found) {
+				unique_conditions.push_back(std::move(cond));
+			}
+		}
+		comp_join.conditions = std::move(unique_conditions);
+	}
 }
 
 unique_ptr<Expression> RemoveUnusedColumns::VisitReplace(BoundColumnRefExpression &expr,

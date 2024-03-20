@@ -40,7 +40,7 @@ FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager)
       block_handle(nullptr) {
 
 	auto &buffer_manager = block_manager.buffer_manager;
-	buffer_handle = buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &block_handle);
+	buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, Storage::BLOCK_SIZE, false, &block_handle);
 }
 
 FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager, const idx_t segment_count, const idx_t allocation_size,
@@ -88,7 +88,8 @@ void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, cons
 	D_ASSERT(InMemory() && !OnDisk());
 
 	// now we write the changes, first get a partial block allocation
-	PartialBlockAllocation allocation = partial_block_manager.GetBlockAllocation(allocation_size);
+	PartialBlockAllocation allocation =
+	    partial_block_manager.GetBlockAllocation(NumericCast<uint32_t>(allocation_size));
 	block_pointer.block_id = allocation.state.block_id;
 	block_pointer.offset = allocation.state.offset;
 
@@ -123,7 +124,6 @@ void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, cons
 }
 
 void FixedSizeBuffer::Pin() {
-
 	auto &buffer_manager = block_manager.buffer_manager;
 	D_ASSERT(block_pointer.IsValid());
 	D_ASSERT(block_handle && block_handle->BlockId() < MAXIMUM_BLOCK);
@@ -133,13 +133,14 @@ void FixedSizeBuffer::Pin() {
 
 	// we need to copy the (partial) data into a new (not yet disk-backed) buffer handle
 	shared_ptr<BlockHandle> new_block_handle;
-	auto new_buffer_handle = buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &new_block_handle);
+	auto new_buffer_handle =
+	    buffer_manager.Allocate(MemoryTag::ART_INDEX, Storage::BLOCK_SIZE, false, &new_block_handle);
 
 	memcpy(new_buffer_handle.Ptr(), buffer_handle.Ptr() + block_pointer.offset, allocation_size);
 
 	Destroy();
 	buffer_handle = std::move(new_buffer_handle);
-	block_handle = new_block_handle;
+	block_handle = std::move(new_block_handle);
 	block_pointer = BlockPointer();
 }
 
@@ -153,7 +154,7 @@ uint32_t FixedSizeBuffer::GetOffset(const idx_t bitmask_count) {
 	// fills up a buffer sequentially before searching for free bits
 	if (mask.RowIsValid(segment_count)) {
 		mask.SetInvalid(segment_count);
-		return segment_count;
+		return UnsafeNumericCast<uint32_t>(segment_count);
 	}
 
 	for (idx_t entry_idx = 0; entry_idx < bitmask_count; entry_idx++) {
@@ -186,7 +187,7 @@ uint32_t FixedSizeBuffer::GetOffset(const idx_t bitmask_count) {
 		auto prev_bits = entry_idx * sizeof(validity_t) * 8;
 		D_ASSERT(mask.RowIsValid(prev_bits + first_valid_bit));
 		mask.SetInvalid(prev_bits + first_valid_bit);
-		return (prev_bits + first_valid_bit);
+		return UnsafeNumericCast<uint32_t>(prev_bits + first_valid_bit);
 	}
 
 	throw InternalException("Invalid bitmask for FixedSizeAllocator");
@@ -213,7 +214,7 @@ uint32_t FixedSizeBuffer::GetMaxOffset(const idx_t available_segments) {
 	if (available_segments % entry_size != 0) {
 		bitmask_count++;
 	}
-	uint32_t max_offset = bitmask_count * sizeof(validity_t) * 8;
+	auto max_offset = UnsafeNumericCast<uint32_t>(bitmask_count * sizeof(validity_t) * 8);
 	auto bits_in_last_entry = available_segments % (sizeof(validity_t) * 8);
 
 	// get the bitmask data

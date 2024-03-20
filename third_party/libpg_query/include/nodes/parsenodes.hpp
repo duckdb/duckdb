@@ -1205,6 +1205,7 @@ typedef struct PGPivotExpr {
 	PGList *groups;      /* The set of groups to pivot over (if any) */
 	PGAlias *alias;      /* table alias & optional column aliases */
 	bool include_nulls;  /* Whether or not to include NULL values (UNPIVOT only */
+	int location;        /* token location, or -1 if unknown */
 } PGPivotExpr;
 
 typedef struct PGPivotStmt {
@@ -1214,6 +1215,7 @@ typedef struct PGPivotStmt {
 	PGList *unpivots;    /* The names to unpivot over (UNPIVOT only) */
 	PGList *columns;     /* The set of columns to pivot over */
 	PGList *groups;      /* The set of groups to pivot over (if any) */
+	int location;        /* token location, or -1 if unknown */
 } PGPivotStmt;
 
 /* ----------------------
@@ -2162,5 +2164,44 @@ typedef struct PGUseStmt {
 	PGRangeVar *name;    /* variable to be set */
 } PGUseStmt;
 
+
+/* ----------------------
+ *		Create Secret Statement
+ * ----------------------
+ */
+typedef struct PGCreateSecretStmt {
+	PGNodeTag type;
+	char *persist_type;                   /* the requested persist mode */
+	char *secret_name;                    /* name of the secret */
+	char *secret_storage;                 /* the optional storage type of the secret */
+	PGList *scope;                        /* optionally the scopes of the secret */
+	PGList *options;                      /* Secret options */
+	PGOnCreateConflict onconflict;        /* what to do on create conflict */
+} PGCreateSecretStmt;
+
+
+/* ----------------------
+ *		Drop Secret Statement
+ * ----------------------
+ */
+typedef struct PGDropSecretStmt {
+	PGNodeTag type;
+	char *persist_type;                   /* the requested persist mode */
+	char *secret_name;                    /* name of the secret */
+	char *secret_storage;
+	bool missing_ok;
+} PGDropSecretStmt;
+
+/* ----------------------
+ *		Comment On Statement
+ * ----------------------
+ */
+typedef struct PGCommentOnStmt {
+	PGNodeTag type;
+	PGObjectType object_type; 	/* object type */
+	PGRangeVar *name;         /* the object to comment on */
+	PGNode *value;				/* the comment: a string or NULL*/
+	PGNode *column_expr;
+} PGCommentOnStmt;
 
 }

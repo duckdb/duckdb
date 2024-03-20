@@ -39,11 +39,12 @@ public:
 	//! Create an attached database instance with the specified name and storage
 	AttachedDatabase(DatabaseInstance &db, Catalog &catalog, string name, string file_path, AccessMode access_mode);
 	//! Create an attached database instance with the specified storage extension
-	AttachedDatabase(DatabaseInstance &db, Catalog &catalog, StorageExtension &ext, string name, const AttachInfo &info,
-	                 AccessMode access_mode);
+	AttachedDatabase(DatabaseInstance &db, Catalog &catalog, StorageExtension &ext, ClientContext &context, string name,
+	                 const AttachInfo &info, AccessMode access_mode);
 	~AttachedDatabase() override;
 
 	void Initialize();
+	void Close();
 
 	Catalog &ParentCatalog() override;
 	StorageManager &GetStorageManager();
@@ -61,6 +62,7 @@ public:
 	bool IsInitialDatabase() const;
 	void SetInitialDatabase();
 
+	static bool NameIsReserved(const string &name);
 	static string ExtractDatabaseName(const string &dbpath, FileSystem &fs);
 
 private:
@@ -71,6 +73,7 @@ private:
 	AttachedDatabaseType type;
 	optional_ptr<Catalog> parent_catalog;
 	bool is_initial_database = false;
+	bool is_closed = false;
 };
 
 } // namespace duckdb

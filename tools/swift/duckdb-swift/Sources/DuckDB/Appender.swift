@@ -2,7 +2,7 @@
 //  DuckDB
 //  https://github.com/duckdb/duckdb-swift
 //
-//  Copyright © 2018-2023 Stichting DuckDB Foundation
+//  Copyright © 2018-2024 Stichting DuckDB Foundation
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a copy
 //  of this software and associated documentation files (the "Software"), to
@@ -208,6 +208,20 @@ public extension Appender {
   func append(_ value: IntHuge?) throws {
     guard let value = try unwrapValueOrAppendNull(value) else { return }
     try withThrowingCommand { duckdb_append_hugeint(ptr.pointee, .init(value)) }
+  }
+
+  /// Appends a value for the current row of the given type
+  ///
+  /// Appends are made in row-wise format. For every column, an `append(_:)`
+  /// call should be made, after which the row should be finished by calling
+  /// ``endRow()``.
+  ///
+  /// - Parameter value: the value to append
+  /// - Throws: ``DatabaseError/appenderFailedToAppendItem(reason:)``
+  ///   if a value of this type was not expected in the appender's current state
+  func append(_ value: UIntHuge?) throws {
+    guard let value = try unwrapValueOrAppendNull(value) else { return }
+    try withThrowingCommand { duckdb_append_uhugeint(ptr.pointee, .init(value)) }
   }
   
   /// Appends a value for the current row of the given type

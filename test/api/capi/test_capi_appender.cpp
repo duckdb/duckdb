@@ -88,6 +88,80 @@ TEST_CASE("Test appending into DECIMAL in C API", "[capi]") {
 	TestAppendingSingleDecimalValue<double, &duckdb_append_double>(12345234234.31243244234324, expected, 26, 1);
 }
 
+TEST_CASE("Test NULL struct Appender", "[capi]") {
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+	duckdb_state status;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+	tester.Query("CREATE TABLE test (simple_struct STRUCT(a INTEGER, b VARCHAR));");
+	duckdb_appender appender;
+
+	status = duckdb_appender_create(tester.connection, nullptr, "test", &appender);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(duckdb_appender_error(appender) == nullptr);
+
+	// create the column types of the data chunk
+	duckdb::vector<duckdb_logical_type> child_types = {duckdb_create_logical_type(DUCKDB_TYPE_INTEGER),
+	                                                   duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR)};
+	duckdb::vector<const char *> names = {"a", "b"};
+	auto struct_type = duckdb_create_struct_type(child_types.data(), names.data(), child_types.size());
+
+	// create the data chunk
+	duckdb_logical_type types[1] = {struct_type};
+	auto data_chunk = duckdb_create_data_chunk(types, 1);
+	REQUIRE(data_chunk);
+	REQUIRE(duckdb_data_chunk_get_column_count(data_chunk) == 1);
+
+	auto struct_vector = duckdb_data_chunk_get_vector(data_chunk, 0);
+	auto first_child_vector = duckdb_struct_vector_get_child(struct_vector, 0);
+	auto second_child_vector = duckdb_struct_vector_get_child(struct_vector, 1);
+
+	// set two values
+	auto first_child_ptr = (int64_t *)duckdb_vector_get_data(first_child_vector);
+	*first_child_ptr = 42;
+	duckdb_vector_assign_string_element(second_child_vector, 0, "hello");
+
+	// set the parent/STRUCT vector to NULL
+	duckdb_vector_ensure_validity_writable(struct_vector);
+	auto validity = duckdb_vector_get_validity(struct_vector);
+	duckdb_validity_set_row_validity(validity, 1, false);
+
+	// set the first child vector to NULL
+	duckdb_vector_ensure_validity_writable(first_child_vector);
+	auto first_validity = duckdb_vector_get_validity(first_child_vector);
+	duckdb_validity_set_row_validity(first_validity, 1, false);
+
+	// set the second child vector to NULL
+	duckdb_vector_ensure_validity_writable(second_child_vector);
+	auto second_validity = duckdb_vector_get_validity(second_child_vector);
+	duckdb_validity_set_row_validity(second_validity, 1, false);
+
+	duckdb_data_chunk_set_size(data_chunk, 2);
+	REQUIRE(duckdb_append_data_chunk(appender, data_chunk) == DuckDBSuccess);
+
+	// close flushes all remaining data
+	status = duckdb_appender_close(appender);
+	REQUIRE(status == DuckDBSuccess);
+
+	// verify the result
+	result = tester.Query("SELECT simple_struct::VARCHAR FROM test;");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<string>(0, 0) == "{'a': 42, 'b': hello}");
+	REQUIRE(result->Fetch<string>(0, 1) == "");
+
+	// destroy the data chunk and the appender
+	duckdb_destroy_data_chunk(&data_chunk);
+	status = duckdb_appender_destroy(&appender);
+	REQUIRE(status == DuckDBSuccess);
+
+	// destroy the logical types
+	for (auto child_type : child_types) {
+		duckdb_destroy_logical_type(&child_type);
+	}
+	duckdb_destroy_logical_type(&struct_type);
+}
+
 TEST_CASE("Test appender statements in C API", "[capi]") {
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;
@@ -216,7 +290,7 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	// many types
 	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE many_types(bool boolean, t TINYINT, s SMALLINT, b BIGINT, ut UTINYINT, "
 	                             "us USMALLINT, ui UINTEGER, ub UBIGINT, uf REAL, ud DOUBLE, txt VARCHAR, blb BLOB, dt "
-	                             "DATE, tm TIME, ts TIMESTAMP, ival INTERVAL, h HUGEINT)"));
+	                             "DATE, tm TIME, ts TIMESTAMP, ival INTERVAL, h HUGEINT, uh UHUGEINT)"));
 	duckdb_appender tappender;
 
 	status = duckdb_appender_create(tester.connection, nullptr, "many_types", &tappender);
@@ -298,10 +372,16 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	status = duckdb_append_hugeint(tappender, duckdb_double_to_hugeint(27));
 	REQUIRE(status == DuckDBSuccess);
 
+	status = duckdb_append_uhugeint(tappender, duckdb_double_to_uhugeint(27));
+	REQUIRE(status == DuckDBSuccess);
+
 	status = duckdb_appender_end_row(tappender);
 	REQUIRE(status == DuckDBSuccess);
 
 	status = duckdb_appender_begin_row(tappender);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_append_null(tappender);
 	REQUIRE(status == DuckDBSuccess);
 
 	status = duckdb_append_null(tappender);
@@ -415,6 +495,9 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	auto hugeint = result->Fetch<duckdb_hugeint>(16, 0);
 	REQUIRE(duckdb_hugeint_to_double(hugeint) == 27);
 
+	auto uhugeint = result->Fetch<duckdb_uhugeint>(17, 0);
+	REQUIRE(duckdb_uhugeint_to_double(uhugeint) == 27);
+
 	REQUIRE(result->IsNull(0, 1));
 	REQUIRE(result->IsNull(1, 1));
 	REQUIRE(result->IsNull(2, 1));
@@ -464,6 +547,9 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	hugeint = result->Fetch<duckdb_hugeint>(16, 1);
 	REQUIRE(duckdb_hugeint_to_double(hugeint) == 0);
 
+	uhugeint = result->Fetch<duckdb_uhugeint>(17, 1);
+	REQUIRE(duckdb_uhugeint_to_double(uhugeint) == 0);
+
 	// double out of range for hugeint
 	hugeint = duckdb_double_to_hugeint(1e300);
 	REQUIRE(hugeint.lower == 0);
@@ -472,6 +558,15 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	hugeint = duckdb_double_to_hugeint(NAN);
 	REQUIRE(hugeint.lower == 0);
 	REQUIRE(hugeint.upper == 0);
+
+	// double out of range for uhugeint
+	uhugeint = duckdb_double_to_uhugeint(1e300);
+	REQUIRE(uhugeint.lower == 0);
+	REQUIRE(uhugeint.upper == 0);
+
+	uhugeint = duckdb_double_to_uhugeint(NAN);
+	REQUIRE(uhugeint.lower == 0);
+	REQUIRE(uhugeint.upper == 0);
 }
 
 TEST_CASE("Test append timestamp in C API", "[capi]") {

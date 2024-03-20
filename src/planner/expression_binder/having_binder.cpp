@@ -16,30 +16,42 @@ HavingBinder::HavingBinder(Binder &binder, ClientContext &context, BoundSelectNo
 }
 
 BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
-	auto &expr = expr_ptr->Cast<ColumnRefExpression>();
-	auto alias_result = column_alias_binder.BindAlias(*this, expr, depth, root_expression);
-	if (!alias_result.HasError()) {
+
+	// Keep the original column name to return a meaningful error message.
+	auto column_name = expr_ptr->Cast<ColumnRefExpression>().GetColumnName();
+
+	// Bind the alias.
+	BindResult alias_result;
+	auto found_alias = column_alias_binder.BindAlias(*this, expr_ptr, depth, root_expression, alias_result);
+
+	if (found_alias) {
 		if (depth > 0) {
-			throw BinderException("Having clause cannot reference alias in correlated subquery");
+			throw BinderException("Having clause cannot reference alias \"%s\" in correlated subquery", column_name);
 		}
 		return alias_result;
 	}
 
 	if (aggregate_handling == AggregateHandling::FORCE_AGGREGATES) {
 		if (depth > 0) {
-			throw BinderException("Having clause cannot reference column in correlated subquery and group by all");
+			throw BinderException(
+			    "Having clause cannot reference column \"%s\" in correlated subquery and group by all", column_name);
 		}
+
 		auto expr = duckdb::BaseSelectBinder::BindExpression(expr_ptr, depth);
 		if (expr.HasError()) {
 			return expr;
 		}
-		auto group_ref = make_uniq<BoundColumnRefExpression>(
-		    expr.expression->return_type, ColumnBinding(node.group_index, node.groups.group_expressions.size()));
+
+		// Return a GROUP BY column reference expression.
+		auto return_type = expr.expression->return_type;
+		auto column_binding = ColumnBinding(node.group_index, node.groups.group_expressions.size());
+		auto group_ref = make_uniq<BoundColumnRefExpression>(return_type, column_binding);
 		node.groups.group_expressions.push_back(std::move(expr.expression));
 		return BindResult(std::move(group_ref));
 	}
+
 	return BindResult(StringUtil::Format(
-	    "column %s must appear in the GROUP BY clause or be used in an aggregate function", expr.ToString()));
+	    "column %s must appear in the GROUP BY clause or be used in an aggregate function", column_name));
 }
 
 BindResult HavingBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {

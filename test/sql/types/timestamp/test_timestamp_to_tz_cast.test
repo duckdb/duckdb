@@ -1,0 +1,244 @@
+# name: test/sql/types/timestamp/test_timestamp_to_tz_cast.test
+# description: Test casting to TIMESTAMP WITH TIME ZONE from any unit
+# group: [timestamp]
+
+require icu
+
+statement ok
+PRAGMA enable_verification
+
+# Note: this also contains TIMESTAMP_NS
+foreach unit TIMESTAMP TIMESTAMP_NS TIMESTAMP_MS TIMESTAMP_S
+
+# Basic value
+statement ok
+create table ts_${unit}_tbl_1 as from VALUES
+	('1990/12/21'::${unit})
+as t(ts);
+
+# NULL
+statement ok
+create table ts_${unit}_tbl_null as FROM VALUES
+	(NULL::${unit})
+as t(ts);
+
+# Positive infinity
+statement ok
+create table ts_${unit}_tbl_posinf as from VALUES
+	('infinity'::${unit})
+as t(ts);
+
+# Negative infinity
+statement ok
+create table ts_${unit}_tbl_mininf as from VALUES
+	('-infinity'::${unit})
+as t(ts);
+
+endloop
+
+foreach unit TIMESTAMP TIMESTAMP_MS TIMESTAMP_S
+
+# Extreme positive
+statement ok
+create table ts_${unit}_tbl_2 as from VALUES
+	('294247-01-10'::${unit})
+as t(ts);
+
+# Extreme negative
+statement ok
+create table ts_${unit}_tbl_3 as from VALUES
+	('29720-04-05 (BC) 22:13:20'::${unit})
+as t(ts);
+
+endloop
+
+statement ok
+SET Calendar='gregorian';
+
+# ---------------- UTC ----------------
+
+statement ok
+SET TimeZone='UTC';
+
+# Table 1 | UTC +0
+foreach unit TIMESTAMP TIMESTAMP_NS TIMESTAMP_MS TIMESTAMP_S
+
+query II nosort result_utc_1
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_1;
+----
+
+endloop
+
+# Table 2 | UTC +0
+foreach unit TIMESTAMP TIMESTAMP_MS TIMESTAMP_S
+
+query II nosort result_utc_2
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_2;
+----
+
+endloop
+
+# Table 3 | UTC +0
+foreach unit TIMESTAMP TIMESTAMP_MS TIMESTAMP_S
+
+query II nosort result_utc_3
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_3;
+----
+
+endloop
+
+# Table +inf | UTC +0
+foreach unit TIMESTAMP TIMESTAMP_NS TIMESTAMP_MS TIMESTAMP_S
+
+query II
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_posinf;
+----
+infinity	infinity
+
+endloop
+
+# Table -inf | UTC +0
+foreach unit TIMESTAMP TIMESTAMP_NS TIMESTAMP_MS TIMESTAMP_S
+
+query II
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_mininf;
+----
+-infinity	-infinity
+
+endloop
+
+# Table NULL | UTC +0
+foreach unit TIMESTAMP TIMESTAMP_NS TIMESTAMP_MS TIMESTAMP_S
+
+query II nosort result_utc_null
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_null;
+----
+
+endloop
+
+# ---------------- America / Los Angeles ----------------
+
+statement ok
+SET TimeZone='America/Los_Angeles'
+
+# Table 1 | America -7/8
+foreach unit TIMESTAMP TIMESTAMP_MS TIMESTAMP_S
+
+query II nosort result_america_1
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_1;
+----
+
+endloop
+
+# Table 2 | America -7/8
+foreach unit TIMESTAMP TIMESTAMP_MS TIMESTAMP_S
+
+# This timestamp is near the end of the valid range, this timezone would overflow the value
+statement error
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_2;
+----
+Conversion Error: Unable to convert ICU date to timestamp
+
+endloop
+
+# Table 3 | America -7/8
+foreach unit TIMESTAMP TIMESTAMP_MS TIMESTAMP_S
+
+query II nosort result_america_3
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_3;
+----
+
+endloop
+
+# Table +inf | America -7/8
+foreach unit TIMESTAMP TIMESTAMP_NS TIMESTAMP_MS TIMESTAMP_S
+
+query II
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_posinf;
+----
+infinity	infinity
+
+endloop
+
+# Table -inf | America -7/8
+foreach unit TIMESTAMP TIMESTAMP_NS TIMESTAMP_MS TIMESTAMP_S
+
+query II
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_mininf;
+----
+-infinity	-infinity
+
+endloop
+
+# Table NULL | America -7/8
+
+foreach unit TIMESTAMP TIMESTAMP_NS TIMESTAMP_MS TIMESTAMP_S
+
+query II nosort result_america_null
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_null;
+----
+
+endloop
+
+# ---------------- ETC ----------------
+
+statement ok
+SET TimeZone='Etc/GMT-6'
+
+# Table 1 | ETC +6
+foreach unit TIMESTAMP TIMESTAMP_MS TIMESTAMP_S
+
+query II nosort result_etc_1
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_1;
+----
+
+endloop
+
+# Table 2 | ETC +6
+foreach unit TIMESTAMP TIMESTAMP_MS TIMESTAMP_S
+
+query II nosort result_etc_2
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_2;
+----
+
+endloop
+
+# Table 3 | ETC +6
+foreach unit TIMESTAMP TIMESTAMP_MS TIMESTAMP_S
+
+# FIXME: I would expect this to overflow???
+query II nosort result_etc_3
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_3;
+----
+
+endloop
+
+# Table +inf | ETC +6
+foreach unit TIMESTAMP TIMESTAMP_NS TIMESTAMP_MS TIMESTAMP_S
+
+query II
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_posinf;
+----
+infinity	infinity
+
+endloop
+
+# Table -inf | ETC +6
+foreach unit TIMESTAMP TIMESTAMP_NS TIMESTAMP_MS TIMESTAMP_S
+
+query II
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_mininf;
+----
+-infinity	-infinity
+
+endloop
+
+# Table NULL | ETC +6
+
+foreach unit TIMESTAMP TIMESTAMP_NS TIMESTAMP_MS TIMESTAMP_S
+
+query II nosort result_etc_null
+select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_null;
+----
+
+endloop

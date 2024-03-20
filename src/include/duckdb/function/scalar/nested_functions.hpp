@@ -45,8 +45,12 @@ struct PositionFunctor {
 		return 0;
 	}
 	static inline int32_t UpdateResultEntries(idx_t child_idx) {
-		return child_idx + 1;
+		return UnsafeNumericCast<int32_t>(child_idx + 1);
 	}
+};
+
+struct MapUtil {
+	static void ReinterpretMap(Vector &target, Vector &other, idx_t count);
 };
 
 struct VariableReturnBindData : public FunctionData {
@@ -99,7 +103,6 @@ struct ListPositionFun {
 };
 
 struct ListResizeFun {
-	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
@@ -119,7 +122,9 @@ struct ListWhereFun {
 };
 
 struct StructExtractFun {
-	static ScalarFunction GetFunction();
+	static ScalarFunction KeyExtractFunction();
+	static ScalarFunction IndexExtractFunction();
+	static ScalarFunctionSet GetFunctions();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

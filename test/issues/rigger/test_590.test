@@ -13,7 +13,6 @@ statement ok
 INSERT INTO t0(c0) VALUES (DATE '2000-01-02');
 
 query T
-SELECT * FROM t0 WHERE DATE '2000-01-01' < t0.c0;
+SELECT * FROM t0 WHERE DATE '2000-01-01' < cast(t0.c0 as date);
 ----
 2000-01-02
-

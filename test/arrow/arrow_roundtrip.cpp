@@ -16,13 +16,12 @@ static void TestArrowRoundtrip(const string &query, bool export_large_buffer = f
 }
 
 static void TestParquetRoundtrip(const string &path) {
-	DuckDB db;
-	Connection con(db);
+	DBConfig config;
+	// This needs to be set since this test will be triggered when testing autoloading
+	config.options.allow_unsigned_extensions = true;
 
-	if (ExtensionHelper::LoadExtension(db, "parquet") == ExtensionLoadResult::NOT_LOADED) {
-		FAIL();
-		return;
-	}
+	DuckDB db(nullptr, &config);
+	Connection con(db);
 
 	// run the query
 	auto query = "SELECT * FROM parquet_scan('" + path + "')";
@@ -75,7 +74,8 @@ TEST_CASE("Test arrow roundtrip", "[arrow]") {
 	return;
 #endif
 	TestArrowRoundtrip("SELECT * EXCLUDE(bit,time_tz) REPLACE "
-	                   "(interval (1) seconds AS interval, hugeint::DOUBLE as hugeint) FROM test_all_types()");
+	                   "(interval (1) seconds AS interval, hugeint::DOUBLE as hugeint, uhugeint::DOUBLE as uhugeint) "
+	                   "FROM test_all_types()");
 }
 
 TEST_CASE("Test Parquet Files round-trip", "[arrow][.]") {

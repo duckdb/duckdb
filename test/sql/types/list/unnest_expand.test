@@ -1,0 +1,43 @@
+# name: test/sql/types/list/unnest_expand.test
+# description: Test expanding structs in UNNEST
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl1 (str VARCHAR, str_list VARCHAR[]);
+
+statement ok
+INSERT INTO tbl1 VALUES ('a', ['vibrant', 'plant', 'day']);
+
+statement ok
+CREATE TABLE tbl2 (data struct (str VARCHAR, str_list VARCHAR[]));
+
+statement ok
+INSERT INTO tbl2 VALUES (('a', ['sunny', 'vibrant', 'day']));
+
+query II
+SELECT UNNEST(data) FROM tbl2;
+----
+a	[sunny, vibrant, day]
+
+query I
+SELECT UNNEST(str_list) FROM tbl1;
+----
+vibrant
+plant
+day
+
+query II
+SELECT UNNEST(data) FROM tbl2 INTERSECT SELECT * FROM tbl1;
+----
+
+statement ok
+CREATE TABLE test (id VARCHAR, b STRUCT("n" VARCHAR, "v" STRUCT("n" VARCHAR, "v" BIGINT)[])[]);
+
+statement ok
+SELECT DISTINCT * FROM (SELECT id, UNNEST(b, recursive := true) FROM test);
+
+statement ok
+SELECT DISTINCT id, UNNEST(b, recursive := true) FROM test;

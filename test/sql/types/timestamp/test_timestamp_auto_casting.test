@@ -1,0 +1,43 @@
+# name: test/sql/types/timestamp/test_timestamp_auto_casting.test
+# description: Test auto-casting of timestamps
+# group: [timestamp]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE timestamps(ts_SEC TIMESTAMP_S, ts_MS TIMESTAMP_MS, ts TIMESTAMP, ts_NS TIMESTAMP_NS)
+
+# FIXME - we don't actually support nanosecond precision in string parsing
+statement ok
+INSERT INTO timestamps VALUES ('2000-01-01 01:12:23', '2000-01-01 01:12:23.123', '2000-01-01 01:12:23.123456', '2000-01-01 01:12:23.123457');
+
+# All of these timestamps are different
+query IIIIIIIIIIII
+SELECT
+	ts_SEC=ts_MS,
+	ts_SEC=ts,
+	ts_SEC=ts_NS,
+	ts_MS=ts,
+	ts_MS=ts_NS,
+	ts=ts_NS,
+	ts_MS=ts_SEC,
+	ts=ts_SEC,
+	ts_SEC=ts_NS,
+	ts=ts_MS,
+	ts_NS=ts_MS,
+	ts_NS=ts,
+FROM timestamps
+----
+false	false	false	false	false	false	false	false	false	false	false	false
+
+# we always prefer the timestamp with the highest precision when auto-casting
+query I
+SELECT typeof([TIMESTAMP '2000-01-01 01:12:23.123456', TIMESTAMP_NS '2000-01-01 01:12:23.123456'])
+----
+TIMESTAMP_NS[]
+
+query I
+SELECT typeof([TIMESTAMP_NS '2000-01-01 01:12:23.123456', TIMESTAMP '2000-01-01 01:12:23.123456'])
+----
+TIMESTAMP_NS[]

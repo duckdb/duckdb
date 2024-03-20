@@ -11,9 +11,11 @@
 #include "duckdb/common/array.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/printer.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
+#include <iomanip>
 
 namespace duckdb {
 
@@ -44,6 +46,30 @@ namespace duckdb {
 // Implementation of a generic merge-sort-tree
 // Rewrite of the original, which was in C++17 and targeted for research,
 // instead of deployment.
+template <typename T>
+struct MergeSortTraits {
+	using return_type = T;
+	static const return_type SENTINEL() {
+		return NumericLimits<T>::Maximum();
+	};
+};
+
+template <typename... T>
+struct MergeSortTraits<std::tuple<T...>> {
+	using return_type = std::tuple<T...>;
+	static return_type SENTINEL() {
+		return std::tuple<T...> {MergeSortTraits<T>::SENTINEL()...};
+	};
+};
+
+template <typename... T>
+struct MergeSortTraits<std::pair<T...>> {
+	using return_type = std::pair<T...>;
+	static return_type SENTINEL() {
+		return std::pair<T...> {MergeSortTraits<T>::SENTINEL()...};
+	};
+};
+
 template <typename E = idx_t, typename O = idx_t, typename CMP = std::less<E>, uint64_t F = 32, uint64_t C = 32>
 struct MergeSortTree {
 	using ElementType = E;
@@ -74,7 +100,7 @@ struct MergeSortTree {
 		CMP cmp;
 	};
 
-	MergeSortTree() {
+	explicit MergeSortTree(const CMP &cmp = CMP()) : cmp(cmp) {
 	}
 	explicit MergeSortTree(Elements &&lowest_level, const CMP &cmp = CMP());
 
@@ -83,6 +109,15 @@ struct MergeSortTree {
 	inline ElementType NthElement(idx_t i) const {
 		return tree.front().first[i];
 	}
+
+	template <typename L>
+	void AggregateLowerBound(const idx_t lower, const idx_t upper, const idx_t needle, L aggregate) const;
+
+	Tree tree;
+	CompareElements cmp;
+
+	static constexpr auto FANOUT = F;
+	static constexpr auto CASCADING = C;
 
 protected:
 	RunElement StartGames(Games &losers, const RunElements &elements, const RunElement &sentinel) {
@@ -157,12 +192,6 @@ protected:
 		return smallest;
 	}
 
-	Tree tree;
-	CompareElements cmp;
-
-	static constexpr auto FANOUT = F;
-	static constexpr auto CASCADING = C;
-
 	static idx_t LowestCascadingLevel() {
 		idx_t level = 0;
 		idx_t level_width = 1;
@@ -171,6 +200,52 @@ protected:
 			level_width *= FANOUT;
 		}
 		return level;
+	}
+
+	void Print() const {
+		std::ostringstream out;
+		const char *separator = "    ";
+		const char *group_separator = " || ";
+		idx_t level_width = 1;
+		idx_t number_width = 0;
+		for (auto &level : tree) {
+			for (auto &e : level.first) {
+				if (e) {
+					idx_t digits = ceil(log10(fabs(e))) + (e < 0);
+					if (digits > number_width) {
+						number_width = digits;
+					}
+				}
+			}
+		}
+		for (auto &level : tree) {
+			// Print the elements themself
+			{
+				out << 'd';
+				for (size_t i = 0; i < level.first.size(); ++i) {
+					out << ((i && i % level_width == 0) ? group_separator : separator);
+					out << std::setw(number_width) << level.first[i];
+				}
+				out << std::endl;
+			}
+			// Print the pointers
+			if (!level.second.empty()) {
+				idx_t run_cnt = (level.first.size() + level_width - 1) / level_width;
+				idx_t cascading_idcs_cnt = run_cnt * (2 + level_width / CASCADING) * FANOUT;
+				for (idx_t child_nr = 0; child_nr < FANOUT; ++child_nr) {
+					out << " ";
+					for (idx_t idx = 0; idx < cascading_idcs_cnt; idx += FANOUT) {
+						out << ((idx && ((idx / FANOUT) % (level_width / CASCADING + 2) == 0)) ? group_separator
+						                                                                       : separator);
+						out << std::setw(number_width) << level.second[idx + child_nr];
+					}
+					out << std::endl;
+				}
+			}
+			level_width *= FANOUT;
+		}
+
+		Printer::Print(out.str());
 	}
 };
 
@@ -181,7 +256,7 @@ MergeSortTree<E, O, CMP, F, C>::MergeSortTree(Elements &&lowest_level, const CMP
 	const auto count = lowest_level.size();
 	tree.emplace_back(Level(lowest_level, Offsets()));
 
-	const RunElement SENTINEL(std::numeric_limits<ElementType>::max(), std::numeric_limits<idx_t>::max());
+	const RunElement SENTINEL(MergeSortTraits<ElementType>::SENTINEL(), MergeSortTraits<idx_t>::SENTINEL());
 
 	//	Fan in parent levels until we are at the top
 	//	Note that we don't build the top layer as that would just be all the data.
@@ -392,6 +467,164 @@ idx_t MergeSortTree<E, O, CMP, F, C>::SelectNth(const SubFrames &frames, idx_t n
 	}
 
 	return result;
+}
+
+template <typename E, typename O, typename CMP, uint64_t F, uint64_t C>
+template <typename L>
+void MergeSortTree<E, O, CMP, F, C>::AggregateLowerBound(const idx_t lower, const idx_t upper, const idx_t needle,
+                                                         L aggregate) const {
+
+	if (lower >= upper) {
+		return;
+	}
+
+	D_ASSERT(upper <= tree[0].first.size());
+
+	using IdxRange = std::pair<idx_t, idx_t>;
+
+	// Find the entry point into the tree
+	IdxRange run_idx(lower, upper - 1);
+	idx_t level_width = 1;
+	idx_t level = 0;
+	IdxRange prev_run_idx;
+	IdxRange curr;
+	if (run_idx.first == run_idx.second) {
+		curr.first = curr.second = run_idx.first;
+	} else {
+		do {
+			prev_run_idx.second = run_idx.second;
+			run_idx.first /= FANOUT;
+			run_idx.second /= FANOUT;
+			level_width *= FANOUT;
+			++level;
+		} while (run_idx.first != run_idx.second);
+		curr.second = prev_run_idx.second * level_width / FANOUT;
+		curr.first = curr.second;
+	}
+
+	// Aggregate layers using the cascading indices
+	if (level > LowestCascadingLevel()) {
+		IdxRange cascading_idx;
+		// Find the initial cascading idcs
+		{
+			IdxRange entry;
+			entry.first = run_idx.first * level_width;
+			entry.second = std::min(entry.first + level_width, static_cast<idx_t>(tree[0].first.size()));
+			auto *level_data = tree[level].first.data();
+			idx_t entry_idx =
+			    std::lower_bound(level_data + entry.first, level_data + entry.second, needle) - level_data;
+			cascading_idx.first = cascading_idx.second =
+			    (entry_idx / CASCADING + 2 * (entry.first / level_width)) * FANOUT;
+
+			// We have to slightly shift the initial CASCADING idcs because at the top level
+			// we won't be exactly on a boundary
+			auto correction = (prev_run_idx.second - run_idx.second * FANOUT);
+			cascading_idx.first -= (FANOUT - correction);
+			cascading_idx.second += correction;
+		}
+
+		// Aggregate all layers until we reach a layer without cascading indices
+		// For the first layer, we already checked we have cascading indices available, otherwise
+		// we wouldn't have even searched the entry points. Hence, we use a `do-while` instead of `while`
+		do {
+			--level;
+			level_width /= FANOUT;
+			auto *level_data = tree[level].first.data();
+			auto &cascading_idcs = tree[level + 1].second;
+			// Left side of tree
+			// Handle all completely contained runs
+			cascading_idx.first += FANOUT - 1;
+			while (curr.first - lower >= level_width) {
+				// Search based on cascading info from previous level
+				const auto *search_begin = level_data + cascading_idcs[cascading_idx.first];
+				const auto *search_end = level_data + cascading_idcs[cascading_idx.first + FANOUT];
+				const auto run_pos = std::lower_bound(search_begin, search_end, needle) - level_data;
+				// Compute runBegin and pass it to our callback
+				const auto run_begin = curr.first - level_width;
+				aggregate(level, run_begin, run_pos);
+				// Update state for next round
+				curr.first -= level_width;
+				--cascading_idx.first;
+			}
+			// Handle the partial last run to find the cascading entry point for the next level
+			if (curr.first != lower) {
+				const auto *search_begin = level_data + cascading_idcs[cascading_idx.first];
+				const auto *search_end = level_data + cascading_idcs[cascading_idx.first + FANOUT];
+				auto idx = std::lower_bound(search_begin, search_end, needle) - level_data;
+				cascading_idx.first = (idx / CASCADING + 2 * (lower / level_width)) * FANOUT;
+			}
+
+			// Right side of tree
+			// Handle all completely contained runs
+			while (upper - curr.second >= level_width) {
+				// Search based on cascading info from previous level
+				const auto *search_begin = level_data + cascading_idcs[cascading_idx.second];
+				const auto *search_end = level_data + cascading_idcs[cascading_idx.second + FANOUT];
+				const auto run_pos = std::lower_bound(search_begin, search_end, needle) - level_data;
+				// Compute runBegin and pass it to our callback
+				const auto run_begin = curr.second;
+				aggregate(level, run_begin, run_pos);
+				// Update state for next round
+				curr.second += level_width;
+				++cascading_idx.second;
+			}
+			// Handle the partial last run to find the cascading entry point for the next level
+			if (curr.second != upper) {
+				const auto *search_begin = level_data + cascading_idcs[cascading_idx.second];
+				const auto *search_end = level_data + cascading_idcs[cascading_idx.second + FANOUT];
+				auto idx = std::lower_bound(search_begin, search_end, needle) - level_data;
+				cascading_idx.second = (idx / CASCADING + 2 * (upper / level_width)) * FANOUT;
+			}
+		} while (level >= LowestCascadingLevel());
+	}
+
+	// Handle lower levels which won't have cascading info
+	if (level) {
+		while (--level) {
+			level_width /= FANOUT;
+			auto *level_data = tree[level].first.data();
+			// Left side
+			while (curr.first - lower >= level_width) {
+				const auto *search_end = level_data + curr.first;
+				const auto *search_begin = search_end - level_width;
+				const auto run_pos = std::lower_bound(search_begin, search_end, needle) - level_data;
+				const auto run_begin = search_begin - level_data;
+				aggregate(level, run_begin, run_pos);
+				curr.first -= level_width;
+			}
+			// Right side
+			while (upper - curr.second >= level_width) {
+				const auto *search_begin = level_data + curr.second;
+				const auto *search_end = search_begin + level_width;
+				const auto run_pos = std::lower_bound(search_begin, search_end, needle) - level_data;
+				const auto run_begin = search_begin - level_data;
+				aggregate(level, run_begin, run_pos);
+				curr.second += level_width;
+			}
+		}
+	}
+
+	// The last layer
+	{
+		auto *level_data = tree[0].first.data();
+		// Left side
+		auto lower_it = lower;
+		while (lower_it != curr.first) {
+			const auto *search_begin = level_data + lower_it;
+			const auto run_begin = lower_it;
+			const auto run_pos = run_begin + (*search_begin < needle);
+			aggregate(level, run_begin, run_pos);
+			++lower_it;
+		}
+		// Right side
+		while (curr.second != upper) {
+			const auto *search_begin = level_data + curr.second;
+			const auto run_begin = curr.second;
+			const auto run_pos = run_begin + (*search_begin < needle);
+			aggregate(level, run_begin, run_pos);
+			++curr.second;
+		}
+	}
 }
 
 } // namespace duckdb

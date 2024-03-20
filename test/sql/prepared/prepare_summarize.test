@@ -1,0 +1,41 @@
+# name: test/sql/prepared/prepare_summarize.test
+# description: PREPARE of SUMMARIZE/DESCRIBE
+# group: [prepared]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE accounts AS SELECT 1 id, 'Mark' AS name
+
+# prepare summarize
+query I nosort summarize
+SUMMARIZE SELECT * FROM accounts WHERE id = 1;
+
+statement ok
+PREPARE query AS SUMMARIZE SELECT * FROM accounts WHERE id = $1;
+
+query I nosort summarize
+EXECUTE query(1);
+
+statement ok
+PREPARE query AS (SUMMARIZE SELECT * FROM accounts WHERE id = $1);
+
+query I nosort summarize
+EXECUTE query(1);
+
+# prepare describe
+query I nosort describe
+DESCRIBE SELECT * FROM accounts WHERE id = 1;
+
+statement ok
+PREPARE query AS DESCRIBE SELECT * FROM accounts WHERE id = $1;
+
+query I nosort describe
+EXECUTE query(1);
+
+statement ok
+PREPARE query AS (DESCRIBE SELECT * FROM accounts WHERE id = $1);
+
+query I nosort describe
+EXECUTE query(1);

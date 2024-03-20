@@ -191,11 +191,13 @@ public:
 	PyTimezone() = delete;
 
 public:
+	DUCKDB_API static int32_t GetUTCOffsetSeconds(py::handle &tzone_obj);
 	DUCKDB_API static interval_t GetUTCOffset(py::handle &tzone_obj);
 };
 
 struct PythonObject {
 	static void Initialize();
+	static py::object FromStruct(const Value &value, const LogicalType &id, const ClientProperties &client_properties);
 	static py::object FromValue(const Value &value, const LogicalType &id, const ClientProperties &client_properties);
 };
 

@@ -21,6 +21,11 @@ SELECT CURRENT_DATABASE()
 memory
 
 query I
+SELECT pg_catalog.CURRENT_DATABASE()
+----
+memory
+
+query I
 SELECT USER
 ----
 duckdb
@@ -37,6 +42,11 @@ query I
 SELECT current_query();
 ----
 SELECT current_query();
+
+query I
+SELECT pg_catalog.current_query();
+----
+SELECT pg_catalog.current_query();
 
 query IIII
 SELECT 1, 2, 3, current_query();

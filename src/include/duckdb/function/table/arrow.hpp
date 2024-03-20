@@ -63,6 +63,22 @@ public:
 	ArrowTableType arrow_table;
 };
 
+struct ArrowRunEndEncodingState {
+public:
+	ArrowRunEndEncodingState() {
+	}
+
+public:
+	unique_ptr<Vector> run_ends;
+	unique_ptr<Vector> values;
+
+public:
+	void Reset() {
+		run_ends.reset();
+		values.reset();
+	}
+};
+
 struct ArrowScanLocalState;
 struct ArrowArrayScanState {
 public:
@@ -70,15 +86,36 @@ public:
 
 public:
 	ArrowScanLocalState &state;
+	// Hold ownership over the Arrow Arrays owned by DuckDB to allow for zero-copy
+	shared_ptr<ArrowArrayWrapper> owned_data;
 	unordered_map<idx_t, unique_ptr<ArrowArrayScanState>> children;
+	// Optionally holds the pointer that was used to create the cached dictionary
+	optional_ptr<ArrowArray> arrow_dictionary = nullptr;
 	// Cache the (optional) dictionary of this array
 	unique_ptr<Vector> dictionary;
+	//! Run-end-encoding state
+	ArrowRunEndEncodingState run_end_encoding;
 
 public:
 	ArrowArrayScanState &GetChild(idx_t child_idx);
-	void AddDictionary(unique_ptr<Vector> dictionary_p);
+	void AddDictionary(unique_ptr<Vector> dictionary_p, ArrowArray *arrow_dict);
 	bool HasDictionary() const;
+	bool CacheOutdated(ArrowArray *dictionary) const;
 	Vector &GetDictionary();
+	ArrowRunEndEncodingState &RunEndEncoding() {
+		return run_end_encoding;
+	}
+
+public:
+	void Reset() {
+		// Note: dictionary is not reset
+		// the dictionary should be the same for every array scanned of this column
+		run_end_encoding.Reset();
+		for (auto &child : children) {
+			child.second->Reset();
+		}
+		owned_data.reset();
+	}
 };
 
 struct ArrowScanLocalState : public LocalTableFunctionState {
@@ -89,9 +126,6 @@ public:
 public:
 	unique_ptr<ArrowArrayStreamWrapper> stream;
 	shared_ptr<ArrowArrayWrapper> chunk;
-	// This vector hold the Arrow Vectors owned by DuckDB to allow for zero-copy
-	// Note that only DuckDB can release these vectors
-	unordered_map<idx_t, shared_ptr<ArrowArrayWrapper>> arrow_owned_data;
 	idx_t chunk_offset = 0;
 	idx_t batch_index = 0;
 	vector<column_t> column_ids;
@@ -101,6 +135,12 @@ public:
 	DataChunk all_columns;
 
 public:
+	void Reset() {
+		chunk_offset = 0;
+		for (auto &col : array_states) {
+			col.second->Reset();
+		}
+	}
 	ArrowArrayScanState &GetState(idx_t child_idx) {
 		auto it = array_states.find(child_idx);
 		if (it == array_states.end()) {
@@ -179,8 +219,6 @@ protected:
 	//! Gets the progress on the table scan, used for Progress Bars
 	static double ArrowProgress(ClientContext &context, const FunctionData *bind_data,
 	                            const GlobalTableFunctionState *global_state);
-	//! Renames repeated columns and case sensitive columns
-	static void RenameArrowColumns(vector<string> &names);
 
 public:
 	//! Helper function to get the DuckDB logical type

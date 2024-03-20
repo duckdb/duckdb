@@ -14,12 +14,12 @@ ScalarFunctionSet::ScalarFunctionSet(ScalarFunction fun) : FunctionSet(std::move
 }
 
 ScalarFunction ScalarFunctionSet::GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments) {
-	string error;
+	ErrorData error;
 	FunctionBinder binder(context);
 	idx_t index = binder.BindFunction(name, *this, arguments, error);
 	if (index == DConstants::INVALID_INDEX) {
 		throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
-		                        error);
+		                        error.Message());
 	}
 	return GetFunctionByOffset(index);
 }
@@ -36,7 +36,7 @@ AggregateFunctionSet::AggregateFunctionSet(AggregateFunction fun) : FunctionSet(
 
 AggregateFunction AggregateFunctionSet::GetFunctionByArguments(ClientContext &context,
                                                                const vector<LogicalType> &arguments) {
-	string error;
+	ErrorData error;
 	FunctionBinder binder(context);
 	idx_t index = binder.BindFunction(name, *this, arguments, error);
 	if (index == DConstants::INVALID_INDEX) {
@@ -59,7 +59,7 @@ AggregateFunction AggregateFunctionSet::GetFunctionByArguments(ClientContext &co
 			}
 		}
 		throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
-		                        error);
+		                        error.Message());
 	}
 	return GetFunctionByOffset(index);
 }
@@ -72,12 +72,12 @@ TableFunctionSet::TableFunctionSet(TableFunction fun) : FunctionSet(std::move(fu
 }
 
 TableFunction TableFunctionSet::GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments) {
-	string error;
+	ErrorData error;
 	FunctionBinder binder(context);
 	idx_t index = binder.BindFunction(name, *this, arguments, error);
 	if (index == DConstants::INVALID_INDEX) {
 		throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
-		                        error);
+		                        error.Message());
 	}
 	return GetFunctionByOffset(index);
 }

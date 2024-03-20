@@ -1,6 +1,9 @@
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
 
@@ -18,28 +21,49 @@ void PreparedStatementData::CheckParameterCount(idx_t parameter_count) {
 	}
 }
 
+void StartTransactionInCatalog(ClientContext &context, const string &catalog_name) {
+	auto database = DatabaseManager::Get(context).GetDatabase(context, catalog_name);
+	if (!database) {
+		throw BinderException("Prepared statement requires database %s but it was not attached", catalog_name);
+	}
+	Transaction::Get(context, *database);
+}
+
 bool PreparedStatementData::RequireRebind(ClientContext &context, optional_ptr<case_insensitive_map_t<Value>> values) {
 	idx_t count = values ? values->size() : 0;
 	CheckParameterCount(count);
 	if (!unbound_statement) {
-		// no unbound statement!? cannot rebind?
-		return false;
+		throw InternalException("Prepared statement without unbound statement");
+	}
+	if (properties.always_require_rebind) {
+		// this statement must always be re-bound
+		return true;
 	}
 	if (!properties.bound_all_parameters) {
 		// parameters not yet bound: query always requires a rebind
 		return true;
 	}
-	if (Catalog::GetSystemCatalog(context).GetCatalogVersion() != catalog_version) {
-		//! context is out of bounds
-		return true;
-	}
 	for (auto &it : value_map) {
 		auto &identifier = it.first;
 		auto lookup = values->find(identifier);
-		D_ASSERT(lookup != values->end());
+		if (lookup == values->end()) {
+			break;
+		}
 		if (lookup->second.type() != it.second->return_type) {
 			return true;
 		}
+	}
+	// prior to checking the catalog version we need to explicitly start transactions in all affected databases
+	// this ensures all catalog entries we rely on are cached
+	for (auto &catalog_name : properties.read_databases) {
+		StartTransactionInCatalog(context, catalog_name);
+	}
+	for (auto &catalog_name : properties.modified_databases) {
+		StartTransactionInCatalog(context, catalog_name);
+	}
+	if (Catalog::GetSystemCatalog(context).GetCatalogVersion() != catalog_version) {
+		//! context is out of bounds
+		return true;
 	}
 	return false;
 }

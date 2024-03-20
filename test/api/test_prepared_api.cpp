@@ -57,7 +57,7 @@ TEST_CASE("Test type resolution of function with parameter expressions", "[api]"
 
 	// can deduce type of prepared parameter here
 	auto prepared = con.Prepare("select 1 + $1");
-	REQUIRE(!prepared->error);
+	REQUIRE(!prepared->error.HasError());
 
 	result = prepared->Execute(1);
 	REQUIRE(CHECK_COLUMN(result, 0, {2}));

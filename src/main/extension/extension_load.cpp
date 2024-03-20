@@ -58,8 +58,7 @@ static void ComputeSHA256FileSegment(FileHandle *handle, const idx_t start, cons
 #endif
 
 bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const string &extension,
-                                     ExtensionInitResult &result, string &error,
-                                     optional_ptr<const ClientConfig> client_config) {
+                                     ExtensionInitResult &result, string &error) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Loading external extensions is disabled through a compile time flag");
 #else
@@ -72,7 +71,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 	if (!ExtensionHelper::IsFullPath(extension)) {
 		string extension_name = ApplyExtensionAlias(extension);
 #ifdef WASM_LOADABLE_EXTENSIONS
-		string url_template = ExtensionUrlTemplate(client_config, "");
+		string url_template = ExtensionUrlTemplate(&config, "");
 		string url = ExtensionFinalizeUrlTemplate(url_template, extension_name);
 
 		char *str = (char *)EM_ASM_PTR(
@@ -95,8 +94,8 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		filename = address;
 #else
 
-		string local_path =
-		    !config.options.extension_directory.empty() ? config.options.extension_directory : fs.GetHomeDirectory();
+		string local_path = !config.options.extension_directory.empty() ? config.options.extension_directory
+		                                                                : ExtensionHelper::DefaultExtensionFolder(fs);
 
 		// convert random separators to platform-canonic
 		local_path = fs.ConvertSeparators(local_path);
@@ -108,6 +107,8 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		}
 		filename = fs.JoinPath(local_path, extension_name + ".duckdb_extension");
 #endif
+	} else {
+		filename = fs.ExpandPath(filename);
 	}
 	if (!fs.FileExists(filename)) {
 		string message;
@@ -178,7 +179,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 			throw IOException(config.error_manager->FormatException(ErrorType::UNSIGNED_EXTENSION, filename));
 		}
 	}
-	auto basename = fs.ExtractBaseName(filename);
+	auto filebase = fs.ExtractBaseName(filename);
 
 #ifdef WASM_LOADABLE_EXTENSIONS
 	EM_ASM(
@@ -196,8 +197,8 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		    // Here we add the uInt8Array to Emscripten's filesystem, for it to be found by dlopen
 		    FS.writeFile(UTF8ToString($1), new Uint8Array(uInt8Array));
 	    },
-	    filename.c_str(), basename.c_str());
-	auto dopen_from = basename;
+	    filename.c_str(), filebase.c_str());
+	auto dopen_from = filebase;
 #else
 	auto dopen_from = filename;
 #endif
@@ -207,8 +208,10 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		throw IOException("Extension \"%s\" could not be loaded: %s", filename, GetDLError());
 	}
 
+	auto lowercase_extension_name = StringUtil::Lower(filebase);
+
 	ext_version_fun_t version_fun;
-	auto version_fun_name = basename + "_version";
+	auto version_fun_name = lowercase_extension_name + "_version";
 
 	version_fun = LoadFunctionFromDLL<ext_version_fun_t>(lib_hdl, version_fun_name, filename);
 
@@ -235,25 +238,24 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		                            extension_version, engine_version);
 	}
 
-	result.basename = basename;
+	result.filebase = lowercase_extension_name;
 	result.filename = filename;
 	result.lib_hdl = lib_hdl;
 	return true;
 #endif
 }
 
-ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileSystem &fs, const string &extension,
-                                                 optional_ptr<const ClientConfig> client_config) {
+ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileSystem &fs, const string &extension) {
 	string error;
 	ExtensionInitResult result;
-	if (!TryInitialLoad(config, fs, extension, result, error, client_config)) {
+	if (!TryInitialLoad(config, fs, extension, result, error)) {
 		if (!ExtensionHelper::AllowAutoInstall(extension)) {
 			throw IOException(error);
 		}
 		// the extension load failed - try installing the extension
 		ExtensionHelper::InstallExtension(config, fs, extension, false);
 		// try loading again
-		if (!TryInitialLoad(config, fs, extension, result, error, client_config)) {
+		if (!TryInitialLoad(config, fs, extension, result, error)) {
 			throw IOException(error);
 		}
 	}
@@ -281,16 +283,15 @@ string ExtensionHelper::GetExtensionName(const string &original_name) {
 	return ExtensionHelper::ApplyExtensionAlias(splits.front());
 }
 
-void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const string &extension,
-                                            optional_ptr<const ClientConfig> client_config) {
+void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const string &extension) {
 	if (db.ExtensionIsLoaded(extension)) {
 		return;
 	}
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Loading external extensions is disabled through a compile time flag");
 #else
-	auto res = InitialLoad(DBConfig::GetConfig(db), fs, extension, client_config);
-	auto init_fun_name = res.basename + "_init";
+	auto res = InitialLoad(DBConfig::GetConfig(db), fs, extension);
+	auto init_fun_name = res.filebase + "_init";
 
 	ext_init_fun_t init_fun;
 	init_fun = LoadFunctionFromDLL<ext_init_fun_t>(res.lib_hdl, init_fun_name, res.filename);
@@ -298,8 +299,9 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 	try {
 		(*init_fun)(db);
 	} catch (std::exception &e) {
+		ErrorData error(e);
 		throw InvalidInputException("Initialization function \"%s\" from file \"%s\" threw an exception: \"%s\"",
-		                            init_fun_name, res.filename, e.what());
+		                            init_fun_name, res.filename, error.RawMessage());
 	}
 
 	db.SetExtensionLoaded(extension);
@@ -307,8 +309,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 }
 
 void ExtensionHelper::LoadExternalExtension(ClientContext &context, const string &extension) {
-	LoadExternalExtension(DatabaseInstance::GetDatabase(context), FileSystem::GetFileSystem(context), extension,
-	                      &ClientConfig::GetConfig(context));
+	LoadExternalExtension(DatabaseInstance::GetDatabase(context), FileSystem::GetFileSystem(context), extension);
 }
 
 string ExtensionHelper::ExtractExtensionPrefixFromPath(const string &path) {

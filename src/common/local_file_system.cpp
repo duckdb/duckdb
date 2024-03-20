@@ -34,12 +34,33 @@ extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG)
 #undef FILE_CREATE // woo mingw
 #endif
 
+// includes for giving a better error message on lock conflicts
+#if defined(__linux__) || defined(__APPLE__)
+#include <pwd.h>
+#endif
+
+#if defined(__linux__)
+#include <libgen.h>
+// See e.g.:
+// https://opensource.apple.com/source/CarbonHeaders/CarbonHeaders-18.1/TargetConditionals.h.auto.html
+#elif defined(__APPLE__)
+#include <TargetConditionals.h>                             // NOLINT
+#if not(defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE == 1) // NOLINT
+#include <libproc.h>                                        // NOLINT
+#endif                                                      // NOLINT
+#elif defined(_WIN32)
+#include <restartmanager.h>
+#endif
+
 namespace duckdb {
 
 static void AssertValidFileFlags(uint8_t flags) {
 #ifdef DEBUG
 	bool is_read = flags & FileFlags::FILE_FLAGS_READ;
 	bool is_write = flags & FileFlags::FILE_FLAGS_WRITE;
+	bool is_create = (flags & FileFlags::FILE_FLAGS_FILE_CREATE) || (flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+	bool is_private = (flags & FileFlags::FILE_FLAGS_PRIVATE);
+
 	// require either READ or WRITE (or both)
 	D_ASSERT(is_read || is_write);
 	// CREATE/Append flags require writing
@@ -48,6 +69,9 @@ static void AssertValidFileFlags(uint8_t flags) {
 	D_ASSERT(is_write || !(flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
 	// cannot combine CREATE and CREATE_NEW flags
 	D_ASSERT(!(flags & FileFlags::FILE_FLAGS_FILE_CREATE && flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
+
+	// For is_private can only be set along with a create flag
+	D_ASSERT(!is_private || is_create);
 #endif
 }
 
@@ -162,6 +186,112 @@ static FileType GetFileTypeInternal(int fd) { // LCOV_EXCL_START
 	}
 } // LCOV_EXCL_STOP
 
+#if __APPLE__ && !TARGET_OS_IPHONE
+
+static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
+	if (pid == getpid()) {
+		return "Lock is already held in current process, likely another DuckDB instance";
+	}
+
+	string process_name, process_owner;
+// macOS >= 10.7 has PROC_PIDT_SHORTBSDINFO
+#ifdef PROC_PIDT_SHORTBSDINFO
+	// try to find out more about the process holding the lock
+	struct proc_bsdshortinfo proc;
+	if (proc_pidinfo(pid, PROC_PIDT_SHORTBSDINFO, 0, &proc, PROC_PIDT_SHORTBSDINFO_SIZE) ==
+	    PROC_PIDT_SHORTBSDINFO_SIZE) {
+		process_name = proc.pbsi_comm; // only a short version however, let's take it in case proc_pidpath() below fails
+		// try to get actual name of conflicting process owner
+		auto pw = getpwuid(proc.pbsi_uid);
+		if (pw) {
+			process_owner = pw->pw_name;
+		}
+	}
+#else
+	return string();
+#endif
+	// try to get a better process name (full path)
+	char full_exec_path[PROC_PIDPATHINFO_MAXSIZE];
+	if (proc_pidpath(pid, full_exec_path, PROC_PIDPATHINFO_MAXSIZE) > 0) {
+		// somehow could not get the path, lets use some sensible fallback
+		process_name = full_exec_path;
+	}
+	return StringUtil::Format("Conflicting lock is held in %s%s",
+	                          !process_name.empty() ? StringUtil::Format("%s (PID %d)", process_name, pid)
+	                                                : StringUtil::Format("PID %d", pid),
+	                          !process_owner.empty() ? StringUtil::Format(" by user %s", process_owner) : "");
+}
+
+#elif __linux__
+
+static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
+	if (pid == getpid()) {
+		return "Lock is already held in current process, likely another DuckDB instance";
+	}
+	string process_name, process_owner;
+
+	try {
+		auto cmdline_file = fs.OpenFile(StringUtil::Format("/proc/%d/cmdline", pid), FileFlags::FILE_FLAGS_READ);
+		auto cmdline = cmdline_file->ReadLine();
+		process_name = basename(const_cast<char *>(cmdline.c_str()));
+	} catch (std::exception &) {
+		// ignore
+	}
+
+	// we would like to provide a full path to the executable if possible but we might not have rights
+	{
+		char exe_target[PATH_MAX];
+		memset(exe_target, '\0', PATH_MAX);
+		auto proc_exe_link = StringUtil::Format("/proc/%d/exe", pid);
+		auto readlink_n = readlink(proc_exe_link.c_str(), exe_target, PATH_MAX);
+		if (readlink_n > 0) {
+			process_name = exe_target;
+		}
+	}
+
+	// try to find out who created that process
+	try {
+		auto loginuid_file = fs.OpenFile(StringUtil::Format("/proc/%d/loginuid", pid), FileFlags::FILE_FLAGS_READ);
+		auto uid = std::stoi(loginuid_file->ReadLine());
+		auto pw = getpwuid(uid);
+		if (pw) {
+			process_owner = pw->pw_name;
+		}
+	} catch (std::exception &) {
+		// ignore
+	}
+
+	return StringUtil::Format("Conflicting lock is held in %s%s",
+	                          !process_name.empty() ? StringUtil::Format("%s (PID %d)", process_name, pid)
+	                                                : StringUtil::Format("PID %d", pid),
+	                          !process_owner.empty() ? StringUtil::Format(" by user %s", process_owner) : "");
+}
+
+#else
+static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
+	return "";
+}
+#endif
+
+bool LocalFileSystem::IsPrivateFile(const string &path_p, FileOpener *opener) {
+	auto path = FileSystem::ExpandPath(path_p, opener);
+
+	struct stat st;
+
+	if (lstat(path.c_str(), &st) != 0) {
+		throw IOException(
+		    "Failed to stat '%s' when checking file permissions, file may be missing or have incorrect permissions",
+		    path.c_str());
+	}
+
+	// If group or other have any permission, the file is not private
+	if (st.st_mode & (S_IRGRP | S_IWGRP | S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH)) {
+		return false;
+	}
+
+	return true;
+}
+
 unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t flags, FileLockType lock_type,
                                                  FileCompressionType compression, FileOpener *opener) {
 	auto path = FileSystem::ExpandPath(path_p, opener);
@@ -199,7 +329,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t f
 	}
 	if (flags & FileFlags::FILE_FLAGS_DIRECT_IO) {
 #if defined(__sun) && defined(__SVR4)
-		throw Exception("DIRECT_IO not supported on Solaris");
+		throw InvalidInputException("DIRECT_IO not supported on Solaris");
 #endif
 #if defined(__DARWIN__) || defined(__APPLE__) || defined(__OpenBSD__)
 		// OSX does not have O_DIRECT, instead we need to use fcntl afterwards to support direct IO
@@ -208,9 +338,21 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t f
 		open_flags |= O_DIRECT | O_SYNC;
 #endif
 	}
-	int fd = open(path.c_str(), open_flags, 0666);
+
+	// Determine permissions
+	mode_t filesec;
+	if (flags & FileFlags::FILE_FLAGS_PRIVATE) {
+		open_flags |= O_EXCL; // Ensure we error on existing files or the permissions may not set
+		filesec = 0600;
+	} else {
+		filesec = 0666;
+	}
+
+	// Open the file
+	int fd = open(path.c_str(), open_flags, filesec);
+
 	if (fd == -1) {
-		throw IOException("Cannot open file \"%s\": %s", path, strerror(errno));
+		throw IOException("Cannot open file \"%s\": %s", {{"errno", std::to_string(errno)}}, path, strerror(errno));
 	}
 	// #if defined(__DARWIN__) || defined(__APPLE__)
 	// 	if (flags & FileFlags::FILE_FLAGS_DIRECT_IO) {
@@ -233,8 +375,30 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t f
 			fl.l_start = 0;
 			fl.l_len = 0;
 			rc = fcntl(fd, F_SETLK, &fl);
+			// Retain the original error.
+			int retained_errno = errno;
 			if (rc == -1) {
-				throw IOException("Could not set lock on file \"%s\": %s", path, strerror(errno));
+				string message;
+				// try to find out who is holding the lock using F_GETLK
+				rc = fcntl(fd, F_GETLK, &fl);
+				if (rc == -1) { // fnctl does not want to help us
+					message = strerror(errno);
+				} else {
+					message = AdditionalProcessInfo(*this, fl.l_pid);
+				}
+
+				if (lock_type == FileLockType::WRITE_LOCK) {
+					// maybe we can get a read lock instead and tell this to the user.
+					fl.l_type = F_RDLCK;
+					rc = fcntl(fd, F_SETLK, &fl);
+					if (rc != -1) { // success!
+						message += ". However, you would be able to open this database in read-only mode, e.g. by "
+						           "using the -readonly parameter in the CLI";
+					}
+				}
+				message += ". See also https://duckdb.org/docs/connect/concurrency";
+				throw IOException("Could not set lock on file \"%s\": %s", {{"errno", std::to_string(retained_errno)}},
+				                  path, message);
 			}
 		}
 	}
@@ -245,8 +409,8 @@ void LocalFileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	off_t offset = lseek(fd, location, SEEK_SET);
 	if (offset == (off_t)-1) {
-		throw IOException("Could not seek to location %lld for file \"%s\": %s", location, handle.path,
-		                  strerror(errno));
+		throw IOException("Could not seek to location %lld for file \"%s\": %s", {{"errno", std::to_string(errno)}},
+		                  location, handle.path, strerror(errno));
 	}
 }
 
@@ -254,7 +418,8 @@ idx_t LocalFileSystem::GetFilePointer(FileHandle &handle) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	off_t position = lseek(fd, 0, SEEK_CUR);
 	if (position == (off_t)-1) {
-		throw IOException("Could not get file position file \"%s\": %s", handle.path, strerror(errno));
+		throw IOException("Could not get file position file \"%s\": %s", {{"errno", std::to_string(errno)}},
+		                  handle.path, strerror(errno));
 	}
 	return position;
 }
@@ -265,7 +430,8 @@ void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 	while (nr_bytes > 0) {
 		int64_t bytes_read = pread(fd, read_buffer, nr_bytes, location);
 		if (bytes_read == -1) {
-			throw IOException("Could not read from file \"%s\": %s", handle.path, strerror(errno));
+			throw IOException("Could not read from file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
+			                  strerror(errno));
 		}
 		if (bytes_read == 0) {
 			throw IOException(
@@ -274,6 +440,7 @@ void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 		}
 		read_buffer += bytes_read;
 		nr_bytes -= bytes_read;
+		location += bytes_read;
 	}
 }
 
@@ -281,7 +448,8 @@ int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	int64_t bytes_read = read(fd, buffer, nr_bytes);
 	if (bytes_read == -1) {
-		throw IOException("Could not read from file \"%s\": %s", handle.path, strerror(errno));
+		throw IOException("Could not read from file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
+		                  strerror(errno));
 	}
 	return bytes_read;
 }
@@ -292,19 +460,32 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 	while (nr_bytes > 0) {
 		int64_t bytes_written = pwrite(fd, write_buffer, nr_bytes, location);
 		if (bytes_written < 0) {
-			throw IOException("Could not write file \"%s\": %s", handle.path, strerror(errno));
+			throw IOException("Could not write file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
+			                  strerror(errno));
 		}
-		D_ASSERT(bytes_written >= 0 && bytes_written);
+		if (bytes_written == 0) {
+			throw IOException("Could not write to file \"%s\" - attempted to write 0 bytes: %s",
+			                  {{"errno", std::to_string(errno)}}, handle.path, strerror(errno));
+		}
 		write_buffer += bytes_written;
 		nr_bytes -= bytes_written;
+		location += bytes_written;
 	}
 }
 
 int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
-	int64_t bytes_written = write(fd, buffer, nr_bytes);
-	if (bytes_written == -1) {
-		throw IOException("Could not write file \"%s\": %s", handle.path, strerror(errno));
+	int64_t bytes_written = 0;
+	while (nr_bytes > 0) {
+		auto bytes_to_write = MinValue<idx_t>(idx_t(NumericLimits<int32_t>::Maximum()), idx_t(nr_bytes));
+		int64_t current_bytes_written = write(fd, buffer, bytes_to_write);
+		if (current_bytes_written <= 0) {
+			throw IOException("Could not write file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
+			                  strerror(errno));
+		}
+		bytes_written += current_bytes_written;
+		buffer = (void *)(data_ptr_cast(buffer) + current_bytes_written);
+		nr_bytes -= current_bytes_written;
 	}
 	return bytes_written;
 }
@@ -335,7 +516,8 @@ FileType LocalFileSystem::GetFileType(FileHandle &handle) {
 void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	if (ftruncate(fd, new_size) != 0) {
-		throw IOException("Could not truncate file \"%s\": %s", handle.path, strerror(errno));
+		throw IOException("Could not truncate file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
+		                  strerror(errno));
 	}
 }
 
@@ -359,10 +541,11 @@ void LocalFileSystem::CreateDirectory(const string &directory) {
 	if (stat(directory.c_str(), &st) != 0) {
 		/* Directory does not exist. EEXIST for race condition */
 		if (mkdir(directory.c_str(), 0755) != 0 && errno != EEXIST) {
-			throw IOException("Failed to create directory \"%s\"!", directory);
+			throw IOException("Failed to create directory \"%s\"!", {{"errno", std::to_string(errno)}}, directory);
 		}
 	} else if (!S_ISDIR(st.st_mode)) {
-		throw IOException("Failed to create directory \"%s\": path exists but is not a directory!", directory);
+		throw IOException("Failed to create directory \"%s\": path exists but is not a directory!",
+		                  {{"errno", std::to_string(errno)}}, directory);
 	}
 }
 
@@ -412,7 +595,8 @@ void LocalFileSystem::RemoveDirectory(const string &directory) {
 
 void LocalFileSystem::RemoveFile(const string &filename) {
 	if (std::remove(filename.c_str()) != 0) {
-		throw IOException("Could not remove file \"%s\": %s", filename, strerror(errno));
+		throw IOException("Could not remove file \"%s\": %s", {{"errno", std::to_string(errno)}}, filename,
+		                  strerror(errno));
 	}
 }
 
@@ -461,7 +645,7 @@ void LocalFileSystem::FileSync(FileHandle &handle) {
 void LocalFileSystem::MoveFile(const string &source, const string &target) {
 	//! FIXME: rename does not guarantee atomicity or overwriting target file if it exists
 	if (rename(source.c_str(), target.c_str()) != 0) {
-		throw IOException("Could not rename file!");
+		throw IOException("Could not rename file!", {{"errno", std::to_string(errno)}});
 	}
 }
 
@@ -515,6 +699,73 @@ public:
 	};
 };
 
+static string AdditionalLockInfo(const std::wstring path) {
+	// try to find out if another process is holding the lock
+
+	// init of the somewhat obscure "Windows Restart Manager"
+	// see also https://devblogs.microsoft.com/oldnewthing/20120217-00/?p=8283
+
+	DWORD session, status, reason;
+	WCHAR session_key[CCH_RM_SESSION_KEY + 1] = {0};
+
+	status = RmStartSession(&session, 0, session_key);
+	if (status != ERROR_SUCCESS) {
+		return "";
+	}
+
+	PCWSTR path_ptr = path.c_str();
+	status = RmRegisterResources(session, 1, &path_ptr, 0, NULL, 0, NULL);
+	if (status != ERROR_SUCCESS) {
+		return "";
+	}
+	UINT process_info_size_needed, process_info_size;
+
+	// we first call with nProcInfo = 0 to find out how much to allocate
+	process_info_size = 0;
+	status = RmGetList(session, &process_info_size_needed, &process_info_size, NULL, &reason);
+	if (status != ERROR_MORE_DATA || process_info_size_needed == 0) {
+		return "";
+	}
+
+	// allocate
+	auto process_info_buffer = duckdb::unique_ptr<RM_PROCESS_INFO[]>(new RM_PROCESS_INFO[process_info_size_needed]);
+	auto process_info = process_info_buffer.get();
+
+	// now call again to get actual data
+	process_info_size = process_info_size_needed;
+	status = RmGetList(session, &process_info_size_needed, &process_info_size, process_info, &reason);
+	if (status != ERROR_SUCCESS || process_info_size == 0) {
+		return "";
+	}
+
+	string conflict_string = "File is already open in ";
+
+	for (UINT process_idx = 0; process_idx < process_info_size; process_idx++) {
+		string process_name = WindowsUtil::UnicodeToUTF8(process_info[process_idx].strAppName);
+		auto pid = process_info[process_idx].Process.dwProcessId;
+
+		// find out full path if possible
+		HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+		if (process) {
+			WCHAR full_path[MAX_PATH];
+			DWORD full_path_size = MAX_PATH;
+			if (QueryFullProcessImageNameW(process, 0, full_path, &full_path_size) && full_path_size <= MAX_PATH) {
+				process_name = WindowsUtil::UnicodeToUTF8(full_path);
+			}
+			CloseHandle(process);
+		}
+		conflict_string += StringUtil::Format("\n%s (PID %d)", process_name, pid);
+	}
+
+	RmEndSession(session);
+	return conflict_string;
+}
+
+bool LocalFileSystem::IsPrivateFile(const string &path_p, FileOpener *opener) {
+	// TODO: detect if file is shared in windows
+	return true;
+}
+
 unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t flags, FileLockType lock_type,
                                                  FileCompressionType compression, FileOpener *opener) {
 	auto path = FileSystem::ExpandPath(path_p, opener);
@@ -556,6 +807,12 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t f
 	                           flags_and_attributes, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) {
 		auto error = LocalFileSystem::GetLastErrorAsString();
+
+		auto better_error = AdditionalLockInfo(unicode_path);
+		if (!better_error.empty()) {
+			throw IOException(better_error);
+		}
+
 		throw IOException("Cannot open file \"%s\": %s", path.c_str(), error);
 	}
 	auto handle = make_uniq<WindowsFileHandle>(*this, path.c_str(), hFile);
@@ -629,9 +886,26 @@ static DWORD FSInternalWrite(FileHandle &handle, HANDLE hFile, void *buffer, int
 	return bytes_written;
 }
 
+static int64_t FSWrite(FileHandle &handle, HANDLE hFile, void *buffer, int64_t nr_bytes, idx_t location) {
+	int64_t bytes_written = 0;
+	while (nr_bytes > 0) {
+		auto bytes_to_write = MinValue<idx_t>(idx_t(NumericLimits<int32_t>::Maximum()), idx_t(nr_bytes));
+		DWORD current_bytes_written = FSInternalWrite(handle, hFile, buffer, bytes_to_write, location);
+		if (current_bytes_written <= 0) {
+			throw IOException("Could not write file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
+			                  strerror(errno));
+		}
+		bytes_written += current_bytes_written;
+		buffer = (void *)(data_ptr_cast(buffer) + current_bytes_written);
+		location += current_bytes_written;
+		nr_bytes -= current_bytes_written;
+	}
+	return bytes_written;
+}
+
 void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
-	auto bytes_written = FSInternalWrite(handle, hFile, buffer, nr_bytes, location);
+	auto bytes_written = FSWrite(handle, hFile, buffer, nr_bytes, location);
 	if (bytes_written != nr_bytes) {
 		throw IOException("Could not write all bytes from file \"%s\": wanted=%lld wrote=%lld", handle.path, nr_bytes,
 		                  bytes_written);
@@ -641,7 +915,7 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
 	auto &pos = handle.Cast<WindowsFileHandle>().position;
-	auto bytes_written = FSInternalWrite(handle, hFile, buffer, nr_bytes, pos);
+	auto bytes_written = FSWrite(handle, hFile, buffer, nr_bytes, pos);
 	pos += bytes_written;
 	return bytes_written;
 }

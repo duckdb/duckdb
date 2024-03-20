@@ -240,7 +240,8 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 		break;
 	}
 	case TableReferenceType::BASE_TABLE:
-	case TableReferenceType::EMPTY:
+	case TableReferenceType::EMPTY_FROM:
+	case TableReferenceType::SHOW_REF:
 		// these TableRefs do not need to be unfolded
 		break;
 	case TableReferenceType::INVALID:

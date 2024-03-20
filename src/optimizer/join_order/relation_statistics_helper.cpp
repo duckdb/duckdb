@@ -226,7 +226,8 @@ RelationStats RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(Log
 	idx_t child_1_card = child_stats[0].stats_initialized ? child_stats[0].cardinality : 0;
 	idx_t child_2_card = child_stats[1].stats_initialized ? child_stats[1].cardinality : 0;
 	ret.cardinality = MaxValue(child_1_card, child_2_card);
-	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		auto &join = op.Cast<LogicalComparisonJoin>();
 		switch (join.join_type) {
 		case JoinType::RIGHT_ANTI:
@@ -241,7 +242,30 @@ RelationStats RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(Log
 		default:
 			break;
 		}
+		break;
 	}
+	case LogicalOperatorType::LOGICAL_UNION: {
+		auto &setop = op.Cast<LogicalSetOperation>();
+		if (setop.setop_all) {
+			// setop returns all records
+			ret.cardinality = child_1_card + child_2_card;
+		} else {
+			ret.cardinality = MaxValue(child_1_card, child_2_card);
+		}
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_INTERSECT: {
+		ret.cardinality = MinValue(child_1_card, child_2_card);
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_EXCEPT: {
+		ret.cardinality = child_1_card;
+		break;
+	}
+	default:
+		break;
+	}
+
 	ret.stats_initialized = true;
 	ret.filter_strength = 1;
 	ret.table_name = child_stats[0].table_name + " joined with " + child_stats[1].table_name;
@@ -356,12 +380,10 @@ idx_t RelationStatisticsHelper::InspectConjunctionAND(idx_t cardinality, idx_t c
 			continue;
 		}
 		auto column_count = base_stats.GetDistinctCount();
-		auto filtered_card = cardinality;
 		// column_count = 0 when there is no column count (i.e parquet scans)
 		if (column_count > 0) {
 			// we want the ceil of cardinality/column_count. We also want to avoid compiler errors
-			filtered_card = (cardinality + column_count - 1) / column_count;
-			cardinality_after_filters = filtered_card;
+			cardinality_after_filters = (cardinality + column_count - 1) / column_count;
 		}
 	}
 	return cardinality_after_filters;

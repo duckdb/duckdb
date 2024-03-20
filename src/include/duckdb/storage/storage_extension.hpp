@@ -24,8 +24,9 @@ struct StorageExtensionInfo {
 	}
 };
 
-typedef unique_ptr<Catalog> (*attach_function_t)(StorageExtensionInfo *storage_info, AttachedDatabase &db,
-                                                 const string &name, AttachInfo &info, AccessMode access_mode);
+typedef unique_ptr<Catalog> (*attach_function_t)(StorageExtensionInfo *storage_info, ClientContext &context,
+                                                 AttachedDatabase &db, const string &name, AttachInfo &info,
+                                                 AccessMode access_mode);
 typedef unique_ptr<TransactionManager> (*create_transaction_manager_t)(StorageExtensionInfo *storage_info,
                                                                        AttachedDatabase &db, Catalog &catalog);
 

@@ -25,7 +25,6 @@
 #include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/pragma_function.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -48,7 +47,6 @@ struct ParquetReadBindData : public TableFunctionData {
 	shared_ptr<ParquetReader> initial_reader;
 	vector<string> files;
 	atomic<idx_t> chunk_count;
-	atomic<idx_t> cur_file;
 	vector<string> names;
 	vector<LogicalType> types;
 
@@ -97,7 +95,7 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 	bool error_opening_file = false;
 
 	//! Index of file currently up for scanning
-	idx_t file_index;
+	atomic<idx_t> file_index;
 	//! Index of row group within file currently up for scanning
 	idx_t row_group_index;
 	//! Batch index of the next row group to be scanned
@@ -390,10 +388,15 @@ public:
 					// missing metadata entry in cache, no usable stats
 					return nullptr;
 				}
-				auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
-				// we need to check if the metadata cache entries are current
-				if (fs.GetLastModifiedTime(*handle) >= metadata->read_time) {
-					// missing or invalid metadata entry in cache, no usable stats overall
+				if (!fs.IsRemoteFile(file_name)) {
+					auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
+					// we need to check if the metadata cache entries are current
+					if (fs.GetLastModifiedTime(*handle) >= metadata->read_time) {
+						// missing or invalid metadata entry in cache, no usable stats overall
+						return nullptr;
+					}
+				} else {
+					// for remote files we just avoid reading stats entirely
 					return nullptr;
 				}
 				ParquetReader reader(context, bind_data.parquet_options, metadata);
@@ -485,16 +488,16 @@ public:
 	static double ParquetProgress(ClientContext &context, const FunctionData *bind_data_p,
 	                              const GlobalTableFunctionState *global_state) {
 		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
+		auto &gstate = global_state->Cast<ParquetReadGlobalState>();
 		if (bind_data.files.empty()) {
 			return 100.0;
 		}
 		if (bind_data.initial_file_cardinality == 0) {
-			return (100.0 * (bind_data.cur_file + 1)) / bind_data.files.size();
+			return (100.0 * (gstate.file_index + 1)) / bind_data.files.size();
 		}
-		auto percentage = (bind_data.chunk_count * STANDARD_VECTOR_SIZE * 100.0 / bind_data.initial_file_cardinality) /
-		                  bind_data.files.size();
-		percentage += 100.0 * bind_data.cur_file / bind_data.files.size();
-		return percentage;
+		auto percentage = MinValue<double>(
+		    100.0, (bind_data.chunk_count * STANDARD_VECTOR_SIZE * 100.0 / bind_data.initial_file_cardinality));
+		return (percentage + 100.0 * gstate.file_index) / bind_data.files.size();
 	}
 
 	static unique_ptr<LocalTableFunctionState>
@@ -630,7 +633,10 @@ public:
 
 	static idx_t ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = bind_data->Cast<ParquetReadBindData>();
-		return data.initial_file_row_groups * data.files.size();
+		if (data.files.size() > 1) {
+			return TaskScheduler::GetScheduler(context).NumberOfThreads();
+		}
+		return MaxValue(data.initial_file_row_groups, (idx_t)1);
 	}
 
 	// This function looks for the next available row group. If not available, it will open files from bind_data.files
@@ -910,12 +916,12 @@ static void GetFieldIDs(const Value &field_ids_value, ChildFieldIDs &field_ids,
 	}
 }
 
-unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, const CopyInfo &info, const vector<string> &names,
-                                          const vector<LogicalType> &sql_types) {
+unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBindInput &input,
+                                          const vector<string> &names, const vector<LogicalType> &sql_types) {
 	D_ASSERT(names.size() == sql_types.size());
 	bool row_group_size_bytes_set = false;
 	auto bind_data = make_uniq<ParquetWriteBindData>();
-	for (auto &option : info.options) {
+	for (auto &option : input.info.options) {
 		const auto loption = StringUtil::Lower(option.first);
 		if (option.second.size() != 1) {
 			// All parquet write options require exactly one argument
@@ -941,6 +947,10 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, const CopyInfo
 				bind_data->codec = duckdb_parquet::format::CompressionCodec::GZIP;
 			} else if (roption == "zstd") {
 				bind_data->codec = duckdb_parquet::format::CompressionCodec::ZSTD;
+			} else if (roption == "lz4" || roption == "lz4_raw") {
+				/* LZ4 is technically another compression scheme, but deprecated and arrow also uses them
+				 * interchangeably */
+				bind_data->codec = duckdb_parquet::format::CompressionCodec::LZ4_RAW;
 			} else {
 				throw BinderException("Expected %s argument to be either [uncompressed, snappy, gzip or zstd]",
 				                      loption);
@@ -986,7 +996,13 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, const CopyInfo
 			throw NotImplementedException("Unrecognized option for PARQUET: %s", option.first.c_str());
 		}
 	}
-	if (!row_group_size_bytes_set) {
+	if (row_group_size_bytes_set) {
+		if (DBConfig::GetConfig(context).options.preserve_insertion_order) {
+			throw BinderException("ROW_GROUP_SIZE_BYTES does not work while preserving insertion order. Use \"SET "
+			                      "preserve_insertion_order=false;\" to disable preserving insertion order.");
+		}
+	} else {
+		// We always set a max row group size bytes so we don't use too much memory
 		bind_data->row_group_size_bytes = bind_data->row_group_size * ParquetWriteBindData::BYTES_PER_ROW;
 	}
 
@@ -1069,6 +1085,9 @@ const char *EnumUtil::ToChars<duckdb_parquet::format::CompressionCodec::type>(
 	case CompressionCodec::LZ4:
 		return "LZ4";
 		break;
+	case CompressionCodec::LZ4_RAW:
+		return "LZ4_RAW";
+		break;
 	case CompressionCodec::ZSTD:
 		return "ZSTD";
 		break;
@@ -1097,6 +1116,9 @@ EnumUtil::FromString<duckdb_parquet::format::CompressionCodec::type>(const char 
 	}
 	if (StringUtil::Equals(value, "LZ4")) {
 		return CompressionCodec::LZ4;
+	}
+	if (StringUtil::Equals(value, "LZ4_RAW")) {
+		return CompressionCodec::LZ4_RAW;
 	}
 	if (StringUtil::Equals(value, "ZSTD")) {
 		return CompressionCodec::ZSTD;
@@ -1180,6 +1202,14 @@ idx_t ParquetWriteDesiredBatchSize(ClientContext &context, FunctionData &bind_da
 }
 
 //===--------------------------------------------------------------------===//
+// Current File Size
+//===--------------------------------------------------------------------===//
+idx_t ParquetWriteFileSize(GlobalFunctionData &gstate) {
+	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
+	return global_state.writer->FileSize();
+}
+
+//===--------------------------------------------------------------------===//
 // Scan Replacement
 //===--------------------------------------------------------------------===//
 unique_ptr<TableRef> ParquetScanReplacement(ClientContext &context, const string &table_name,
@@ -1240,6 +1270,7 @@ void ParquetExtension::Load(DuckDB &db) {
 	function.prepare_batch = ParquetWritePrepareBatch;
 	function.flush_batch = ParquetWriteFlushBatch;
 	function.desired_batch_size = ParquetWriteDesiredBatchSize;
+	function.file_size_bytes = ParquetWriteFileSize;
 	function.serialize = ParquetCopySerialize;
 	function.deserialize = ParquetCopyDeserialize;
 	function.supports_type = ParquetWriter::TypeIsSupported;

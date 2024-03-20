@@ -51,7 +51,7 @@ struct ListSegmentFunctions {
 
 	void AppendRow(ArenaAllocator &allocator, LinkedList &linked_list, RecursiveUnifiedVectorFormat &input_data,
 	               idx_t &entry_idx) const;
-	void BuildListVector(const LinkedList &linked_list, Vector &result, idx_t &initial_total_count) const;
+	void BuildListVector(const LinkedList &linked_list, Vector &result, idx_t total_count) const;
 };
 
 void GetSegmentDataFunctions(ListSegmentFunctions &functions, const LogicalType &type);

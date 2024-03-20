@@ -141,6 +141,21 @@ void duckdb_destroy_arrow(duckdb_arrow *result) {
 	}
 }
 
+void duckdb_destroy_arrow_stream(duckdb_arrow_stream *stream_p) {
+
+	auto stream = reinterpret_cast<ArrowArrayStream *>(*stream_p);
+	if (!stream) {
+		return;
+	}
+	if (stream->release) {
+		stream->release(stream);
+	}
+	D_ASSERT(!stream->release);
+
+	delete stream;
+	*stream_p = nullptr;
+}
+
 duckdb_state duckdb_execute_prepared_arrow(duckdb_prepared_statement prepared_statement, duckdb_arrow *out_result) {
 	auto wrapper = reinterpret_cast<PreparedStatementWrapper *>(prepared_statement);
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError() || !out_result) {

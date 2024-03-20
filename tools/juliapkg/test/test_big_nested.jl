@@ -15,7 +15,7 @@ end
 
     DBInterface.execute(con, "CREATE TABLE bit_table (bits BIT);")
     # 131073 = 64 * 2048 + 1
-    DBInterface.execute(con, "INSERT INTO bit_table VALUES (bitstring('1010'::BIT, 131073));")
+    DBInterface.execute(con, "INSERT INTO bit_table VALUES (bitstring('1010', 131073));")
     df = DataFrame(DBInterface.execute(con, "SELECT * FROM bit_table;"))
     # Currently mapped to Julia in an odd way.
     # Can reenable following https://github.com/duckdb/duckdb/issues/7065

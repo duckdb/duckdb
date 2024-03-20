@@ -40,6 +40,8 @@ public:
 	unique_ptr<Expression> filter_expr;
 	//! True to ignore NULL values
 	bool ignore_nulls;
+	//! Whether or not the aggregate function is distinct, only used for aggregates
+	bool distinct;
 	//! The window boundaries
 	WindowBoundary start = WindowBoundary::INVALID;
 	WindowBoundary end = WindowBoundary::INVALID;

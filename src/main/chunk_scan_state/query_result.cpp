@@ -10,7 +10,7 @@ QueryResultChunkScanState::QueryResultChunkScanState(QueryResult &result) : Chun
 QueryResultChunkScanState::~QueryResultChunkScanState() {
 }
 
-bool QueryResultChunkScanState::InternalLoad(PreservedError &error) {
+bool QueryResultChunkScanState::InternalLoad(ErrorData &error) {
 	D_ASSERT(!finished);
 	if (result.type == QueryResultType::STREAM_RESULT) {
 		auto &stream_result = result.Cast<StreamQueryResult>();
@@ -25,7 +25,7 @@ bool QueryResultChunkScanState::HasError() const {
 	return result.HasError();
 }
 
-PreservedError &QueryResultChunkScanState::GetError() {
+ErrorData &QueryResultChunkScanState::GetError() {
 	D_ASSERT(result.HasError());
 	return result.GetErrorObject();
 }
@@ -38,7 +38,7 @@ const vector<string> &QueryResultChunkScanState::Names() const {
 	return result.names;
 }
 
-bool QueryResultChunkScanState::LoadNextChunk(PreservedError &error) {
+bool QueryResultChunkScanState::LoadNextChunk(ErrorData &error) {
 	if (finished) {
 		return !finished;
 	}

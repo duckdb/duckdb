@@ -7,6 +7,7 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 
 #include <cctype>
 #include <cstring>
@@ -51,6 +52,10 @@ bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &r
 		} else {
 			return false;
 		}
+	}
+
+	if (pos >= len) {
+		return false;
 	}
 
 	// fetch the separator
@@ -132,73 +137,9 @@ bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &resul
 	return result.micros <= Interval::MICROS_PER_DAY;
 }
 
-bool Time::TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int32_t &offset) {
-	offset = 0;
-	if (pos == len || StringUtil::CharacterIsSpace(str[pos])) {
-		return true;
-	}
-
-	idx_t curpos = pos;
-	// Minimum of 3 characters
-	if (curpos + 3 > len) {
-		// no characters left to parse
-		return false;
-	}
-
-	const auto sign_char = str[curpos];
-	if (sign_char != '+' && sign_char != '-') {
-		// expected either + or -
-		return false;
-	}
-	curpos++;
-
-	int32_t hh = 0;
-	idx_t start = curpos;
-	for (; curpos < len; ++curpos) {
-		const auto c = str[curpos];
-		if (!StringUtil::CharacterIsDigit(c)) {
-			break;
-		}
-		hh = hh * 10 + (c - '0');
-	}
-	//	HH is in [-1559,+1559] and must be at least two digits
-	if (curpos - start < 2 || hh > 1559) {
-		return false;
-	}
-
-	// optional minute specifier: expected ":MM"
-	int32_t mm = 0;
-	if (curpos + 3 <= len && str[curpos] == ':') {
-		++curpos;
-		if (!Date::ParseDoubleDigit(str, len, curpos, mm) || mm >= Interval::MINS_PER_HOUR) {
-			return false;
-		}
-	}
-
-	// optional seconds specifier: expected ":SS"
-	int32_t ss = 0;
-	if (curpos + 3 <= len && str[curpos] == ':') {
-		++curpos;
-		if (!Date::ParseDoubleDigit(str, len, curpos, ss) || ss >= Interval::SECS_PER_MINUTE) {
-			return false;
-		}
-	}
-
-	//	Assemble the offset now that we know nothing went wrong
-	offset += hh * Interval::SECS_PER_HOUR;
-	offset += mm * Interval::SECS_PER_MINUTE;
-	offset += ss;
-	if (sign_char == '-') {
-		offset = -offset;
-	}
-
-	pos = curpos;
-
-	return true;
-}
-
-bool Time::TryConvertTimeTZ(const char *buf, idx_t len, idx_t &pos, dtime_tz_t &result, bool strict) {
+bool Time::TryConvertTimeTZ(const char *buf, idx_t len, idx_t &pos, dtime_tz_t &result, bool &has_offset, bool strict) {
 	dtime_t time_part;
+	has_offset = false;
 	if (!Time::TryConvertInternal(buf, len, pos, time_part, false)) {
 		if (!strict) {
 			// last chance, check if we can parse as timestamp
@@ -214,9 +155,34 @@ bool Time::TryConvertTimeTZ(const char *buf, idx_t len, idx_t &pos, dtime_tz_t &
 		return false;
 	}
 
-	//	We can't use Timestamp::TryParseUTCOffset because the colon is optional there but required here.
-	int32_t offset = 0;
-	if (!TryParseUTCOffset(buf, pos, len, offset)) {
+	// skip optional whitespace before offset
+	while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
+		pos++;
+	}
+
+	//	Get the ±HH[:MM] part
+	int hh = 0;
+	int mm = 0;
+	has_offset = (pos < len);
+	if (has_offset && !Timestamp::TryParseUTCOffset(buf, pos, len, hh, mm)) {
+		return false;
+	}
+
+	//	Offsets are in seconds in the open interval (-16:00:00, +16:00:00)
+	int32_t offset = ((hh * Interval::MINS_PER_HOUR) + mm) * Interval::SECS_PER_MINUTE;
+
+	//	Check for trailing seconds.
+	//	(PG claims they don't support this but they do...)
+	if (pos < len && buf[pos] == ':') {
+		++pos;
+		int ss = 0;
+		if (!Date::ParseDoubleDigit(buf, len, pos, ss)) {
+			return false;
+		}
+		offset += (offset < 0) ? -ss : ss;
+	}
+
+	if (offset < dtime_tz_t::MIN_OFFSET || offset > dtime_tz_t::MAX_OFFSET) {
 		return false;
 	}
 
@@ -235,6 +201,11 @@ bool Time::TryConvertTimeTZ(const char *buf, idx_t len, idx_t &pos, dtime_tz_t &
 	result = dtime_tz_t(time_part, offset);
 
 	return true;
+}
+
+dtime_t Time::NormalizeTimeTZ(dtime_tz_t timetz) {
+	date_t date(0);
+	return Interval::Add(timetz.time(), {0, 0, -timetz.offset() * Interval::MICROS_PER_SEC}, date);
 }
 
 string Time::ConversionError(const string &str) {

@@ -4,6 +4,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/column/column_data_collection_segment.hpp"
 #include "duckdb/common/types/value_map.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -106,6 +107,14 @@ idx_t ColumnDataCollection::SizeInBytes() const {
 	idx_t total_size = 0;
 	for (const auto &segment : segments) {
 		total_size += segment->SizeInBytes();
+	}
+	return total_size;
+}
+
+idx_t ColumnDataCollection::AllocationSize() const {
+	idx_t total_size = 0;
+	for (const auto &segment : segments) {
+		total_size += segment->AllocationSize();
 	}
 	return total_size;
 }
@@ -288,6 +297,7 @@ const ColumnDataRow &ColumnDataRowIterationHelper::ColumnDataRowIterator::operat
 //===--------------------------------------------------------------------===//
 void ColumnDataCollection::InitializeAppend(ColumnDataAppendState &state) {
 	D_ASSERT(!finished_append);
+	state.current_chunk_state.handles.clear();
 	state.vector_data.resize(types.size());
 	if (segments.empty()) {
 		CreateSegment();
@@ -531,7 +541,8 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 			} else {
 				D_ASSERT(heap_ptr != nullptr);
 				memcpy(heap_ptr, source_entry.GetData(), source_entry.GetSize());
-				target_entry = string_t(const_char_ptr_cast(heap_ptr), source_entry.GetSize());
+				target_entry =
+				    string_t(const_char_ptr_cast(heap_ptr), UnsafeNumericCast<uint32_t>(source_entry.GetSize()));
 				heap_ptr += source_entry.GetSize();
 			}
 		}
@@ -716,6 +727,9 @@ ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &
 		break;
 	case PhysicalType::UINT64:
 		function = ColumnDataCopy<uint64_t>;
+		break;
+	case PhysicalType::UINT128:
+		function = ColumnDataCopy<uhugeint_t>;
 		break;
 	case PhysicalType::FLOAT:
 		function = ColumnDataCopy<float>;

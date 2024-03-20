@@ -44,13 +44,13 @@ void StringUtil::LTrim(string &str) {
 
 // Remove trailing ' ', '\f', '\n', '\r', '\t', '\v'
 void StringUtil::RTrim(string &str) {
-	str.erase(find_if(str.rbegin(), str.rend(), [](int ch) { return ch > 0 && !CharacterIsSpace(ch); }).base(),
+	str.erase(find_if(str.rbegin(), str.rend(), [](char ch) { return ch > 0 && !CharacterIsSpace(ch); }).base(),
 	          str.end());
 }
 
 void StringUtil::RTrim(string &str, const string &chars_to_trim) {
 	str.erase(find_if(str.rbegin(), str.rend(),
-	                  [&chars_to_trim](int ch) { return ch > 0 && chars_to_trim.find(ch) == string::npos; })
+	                  [&chars_to_trim](char ch) { return ch > 0 && chars_to_trim.find(ch) == string::npos; })
 	              .base(),
 	          str.end());
 }
@@ -355,7 +355,7 @@ idx_t StringUtil::LevenshteinDistance(const string &s1_p, const string &s2_p, id
 			// d[i][j] = std::min({ d[i - 1][j] + 1,
 			//                      d[i][j - 1] + 1,
 			//                      d[i - 1][j - 1] + (s1[i - 1] == s2[j - 1] ? 0 : 1) });
-			int equal = s1[i - 1] == s2[j - 1] ? 0 : not_equal_penalty;
+			auto equal = s1[i - 1] == s2[j - 1] ? 0 : not_equal_penalty;
 			idx_t adjacent_score1 = array.Score(i - 1, j) + 1;
 			idx_t adjacent_score2 = array.Score(i, j - 1) + 1;
 			idx_t adjacent_score3 = array.Score(i - 1, j - 1) + equal;
@@ -403,6 +403,251 @@ string StringUtil::CandidatesErrorMessage(const vector<string> &strings, const s
                                           const string &message_prefix, idx_t n) {
 	auto closest_strings = StringUtil::TopNLevenshtein(strings, target, n);
 	return StringUtil::CandidatesMessage(closest_strings, message_prefix);
+}
+
+static void SkipSpaces(const string &message, idx_t &pos) {
+	for (; pos < message.size() && StringUtil::CharacterIsSpace(message[pos]); pos++) {
+	}
+}
+
+static bool MatchCharacter(const string &message, idx_t &pos, char c) {
+	if (pos >= message.size()) {
+		return false;
+	}
+	return message[pos] == c;
+}
+
+static string ParseJSONValue(const string &message, idx_t &pos) {
+	string result;
+	if (!MatchCharacter(message, pos, '"')) {
+		// values need to start with a quote
+		D_ASSERT(0);
+		return result;
+	}
+	pos++;
+	for (; pos < message.size(); pos++) {
+		if (message[pos] == '\\') {
+			// escape
+			pos++;
+			if (pos >= message.size()) {
+				// escape at end of string!?
+				D_ASSERT(0);
+				return result;
+			}
+			switch (message[pos]) {
+			case 'r':
+				result += '\r';
+				break;
+			case 'n':
+				result += '\n';
+				break;
+			case 't':
+				result += '\t';
+				break;
+			case 'b':
+				result += '\b';
+				break;
+			case 'f':
+				result += '\f';
+				break;
+			case '0':
+				result += '\0';
+				break;
+			case '\\':
+			case '"':
+			case '/':
+				result += message[pos];
+				break;
+			default:
+				// unsupported escape character
+				// NOTE: we do not support unicode escape sequences here
+				D_ASSERT(0);
+				result += message[pos];
+				break;
+			}
+		} else if (message[pos] == '"') {
+			// end of message
+			pos++;
+			return result;
+		} else {
+			result += message[pos];
+		}
+	}
+	// no end-of-value found
+	D_ASSERT(0);
+	return result;
+}
+
+unordered_map<string, string> StringUtil::ParseJSONMap(const string &json) {
+	unordered_map<string, string> result;
+	if (json.empty()) {
+		return result;
+	}
+	idx_t pos = 0;
+	SkipSpaces(json, pos);
+	if (!MatchCharacter(json, pos, '{')) {
+		D_ASSERT(0);
+		return result;
+	}
+	pos++;
+	while (true) {
+		SkipSpaces(json, pos);
+		if (MatchCharacter(json, pos, '}')) {
+			// end of object
+			break;
+		}
+		if (!result.empty()) {
+			// objects are comma separated
+			if (!MatchCharacter(json, pos, ',')) {
+				D_ASSERT(0);
+				return result;
+			}
+			pos++;
+		}
+		string key = ParseJSONValue(json, pos);
+		SkipSpaces(json, pos);
+		if (!MatchCharacter(json, pos, ':')) {
+			D_ASSERT(0);
+			return result;
+		}
+		pos++;
+		string value = ParseJSONValue(json, pos);
+		auto entry = result.find(key);
+		if (entry != result.end()) {
+			// entry already exists
+			D_ASSERT(0);
+			continue;
+		}
+		result.insert(make_pair(std::move(key), std::move(value)));
+	}
+	return result;
+}
+
+static void WriteJSONValue(const string &value, string &result) {
+	result += '"';
+	for (auto c : value) {
+		// check for characters we need to escape
+		switch (c) {
+		case '\0':
+			result += "\\0";
+			break;
+		case '\\':
+			result += "\\\\";
+			break;
+		case '\b':
+			result += "\\b";
+			break;
+		case '\f':
+			result += "\\f";
+			break;
+		case '\t':
+			result += "\\t";
+			break;
+		case '\r':
+			result += "\\r";
+			break;
+		case '\n':
+			result += "\\n";
+			break;
+		case '"':
+			result += "\\\"";
+			break;
+		default:
+			result += c;
+			break;
+		}
+	}
+	result += '"';
+}
+
+static void WriteJSONPair(const string &key, const string &value, string &result) {
+	WriteJSONValue(key, result);
+	result += ":";
+	WriteJSONValue(value, result);
+}
+
+string StringUtil::ToJSONMap(ExceptionType type, const string &message, const unordered_map<string, string> &map) {
+	D_ASSERT(map.find("exception_type") == map.end());
+	D_ASSERT(map.find("exception_message") == map.end());
+	string result;
+	result += "{";
+	// we always write exception type/message
+	WriteJSONPair("exception_type", Exception::ExceptionTypeToString(type), result);
+	result += ",";
+	WriteJSONPair("exception_message", message, result);
+	for (auto &entry : map) {
+		result += ",";
+		WriteJSONPair(entry.first, entry.second, result);
+	}
+	result += "}";
+	return result;
+}
+
+string StringUtil::GetFileName(const string &file_path) {
+
+	idx_t pos = file_path.find_last_of("/\\");
+	if (pos == string::npos) {
+		return file_path;
+	}
+	auto end = file_path.size() - 1;
+
+	// If the rest of the string is just slashes or dots, trim them
+	if (file_path.find_first_not_of("/\\.", pos) == string::npos) {
+		// Trim the trailing slashes and dots
+		while (end > 0 && (file_path[end] == '/' || file_path[end] == '.' || file_path[end] == '\\')) {
+			end--;
+		}
+
+		// Now find the next slash
+		pos = file_path.find_last_of("/\\", end);
+		if (pos == string::npos) {
+			return file_path.substr(0, end + 1);
+		}
+	}
+
+	return file_path.substr(pos + 1, end - pos);
+}
+
+string StringUtil::GetFileExtension(const string &file_name) {
+	auto name = GetFileName(file_name);
+	idx_t pos = name.find_last_of('.');
+	// We dont consider e.g. `.gitignore` to have an extension
+	if (pos == string::npos || pos == 0) {
+		return "";
+	}
+	return name.substr(pos + 1);
+}
+
+string StringUtil::GetFileStem(const string &file_name) {
+	auto name = GetFileName(file_name);
+	if (name.size() > 1 && name[0] == '.') {
+		return name;
+	}
+	idx_t pos = name.find_last_of('.');
+	if (pos == string::npos) {
+		return name;
+	}
+	return name.substr(0, pos);
+}
+
+string StringUtil::GetFilePath(const string &file_path) {
+
+	// Trim the trailing slashes
+	auto end = file_path.size() - 1;
+	while (end > 0 && (file_path[end] == '/' || file_path[end] == '\\')) {
+		end--;
+	}
+
+	auto pos = file_path.find_last_of("/\\", end);
+	if (pos == string::npos) {
+		return "";
+	}
+
+	while (pos > 0 && (file_path[pos] == '/' || file_path[pos] == '\\')) {
+		pos--;
+	}
+
+	return file_path.substr(0, pos + 1);
 }
 
 } // namespace duckdb

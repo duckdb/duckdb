@@ -60,7 +60,7 @@ JoinSide JoinSide::GetJoinSide(Expression &expression, const unordered_set<idx_t
 	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = expression.Cast<BoundColumnRefExpression>();
 		if (colref.depth > 0) {
-			throw Exception("Non-inner join on correlated columns not supported");
+			throw NotImplementedException("Non-inner join on correlated columns not supported");
 		}
 		return GetJoinSide(colref.binding.table_index, left_bindings, right_bindings);
 	}

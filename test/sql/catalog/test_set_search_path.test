@@ -90,6 +90,11 @@ SELECT MAIN.CURRENT_SCHEMAS(false);
 ----
 [test, test2]
 
+query I
+SELECT pg_catalog.CURRENT_SCHEMAS(false);
+----
+[test, test2]
+
 statement ok
 SET SCHEMA = 'test';
 
@@ -100,6 +105,11 @@ test
 
 query I
 SELECT MAIN.CURRENT_SCHEMA();
+----
+test
+
+query I
+SELECT pg_catalog.CURRENT_SCHEMA();
 ----
 test
 

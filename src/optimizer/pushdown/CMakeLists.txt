@@ -11,6 +11,7 @@ add_library_unity(
   pushdown_left_join.cpp
   pushdown_mark_join.cpp
   pushdown_projection.cpp
+  pushdown_semi_anti_join.cpp
   pushdown_set_operation.cpp
   pushdown_single_join.cpp)
 set(ALL_OBJECT_FILES

@@ -1,0 +1,208 @@
+# name: test/sql/types/numeric/uhugeint_try_cast.test
+# description: Unsigned Hugeint try cast
+# group: [numeric]
+
+statement ok
+PRAGMA enable_verification
+
+# integer casts
+statement ok
+CREATE TABLE uhugeints AS SELECT i::UHUGEINT i FROM (VALUES (0::UHUGEINT), (1::UHUGEINT), ('340282366920938463463374607431768211455'::UHUGEINT)) tbl(i)
+
+# -> signed
+statement error
+SELECT i::TINYINT FROM uhugeints
+----
+Conversion Error
+
+statement error
+SELECT i::SMALLINT FROM uhugeints
+----
+Conversion Error
+
+statement error
+SELECT i::INTEGER FROM uhugeints
+----
+Conversion Error
+
+statement error
+SELECT i::BIGINT FROM uhugeints
+----
+Conversion Error
+
+query I
+SELECT TRY_CAST(i AS TINYINT) FROM uhugeints ORDER BY i
+----
+0
+1
+NULL
+
+query I
+SELECT TRY_CAST(i AS SMALLINT) FROM uhugeints ORDER BY i
+----
+0
+1
+NULL
+
+query I
+SELECT TRY_CAST(i AS INTEGER) FROM uhugeints ORDER BY i
+----
+0
+1
+NULL
+
+query I
+SELECT TRY_CAST(i AS BIGINT) FROM uhugeints ORDER BY i
+----
+0
+1
+NULL
+
+# -> unsigned
+statement error
+SELECT i::UTINYINT FROM uhugeints ORDER BY i
+----
+Conversion Error
+
+query I
+SELECT TRY_CAST(i AS UTINYINT) FROM uhugeints ORDER BY i
+----
+0
+1
+NULL
+
+statement error
+SELECT i::USMALLINT FROM uhugeints ORDER BY i
+----
+Conversion Error
+
+query I
+SELECT TRY_CAST(i AS USMALLINT) FROM uhugeints ORDER BY i
+----
+0
+1
+NULL
+
+statement error
+SELECT i::UINTEGER FROM uhugeints ORDER BY i
+----
+Conversion Error
+
+query I
+SELECT TRY_CAST(i AS UINTEGER) FROM uhugeints ORDER BY i
+----
+0
+1
+NULL
+
+statement error
+SELECT i::UBIGINT FROM uhugeints ORDER BY i
+----
+Conversion Error
+
+query I
+SELECT TRY_CAST(i AS UBIGINT) FROM uhugeints ORDER BY i
+----
+0
+1
+NULL
+
+# -> float
+query I
+SELECT i::FLOAT FROM uhugeints ORDER BY i
+----
+0
+1
+340282366920938463463374607431768211455
+
+query I
+SELECT i::DOUBLE FROM uhugeints ORDER BY i
+----
+0
+1
+340282366920938463463374607431768211455
+
+# -> bool
+query I
+SELECT i::BOOL FROM uhugeints ORDER BY i
+----
+False
+True
+True
+
+# -> varchar
+query I
+SELECT i::VARCHAR FROM uhugeints ORDER BY i
+----
+0
+1
+340282366920938463463374607431768211455
+
+# from string casts
+statement ok
+CREATE TABLE strings AS SELECT * FROM (VALUES ('   '), ('blablabla'), ('-1000000000000000000000000000000000000000'), ('0'), ('1'), ('340282366920938463463374607431768211455'), ('1000000000000000000000000000000000000000')) tbl(s)
+
+statement error
+SELECT s::UHUGEINT FROM strings
+----
+Conversion Error
+
+query I
+SELECT TRY_CAST(s AS UHUGEINT) FROM strings
+----
+NULL
+NULL
+NULL
+0
+1
+340282366920938463463374607431768211455
+NULL
+
+# -> decimal casts
+statement error
+SELECT i::DECIMAL(3,0)::UHUGEINT FROM uhugeints ORDER BY i
+----
+Conversion Error
+
+statement error
+SELECT i::DECIMAL(9,0)::UHUGEINT FROM uhugeints ORDER BY i
+----
+Conversion Error
+
+statement error
+SELECT i::DECIMAL(18,0)::UHUGEINT FROM uhugeints ORDER BY i
+----
+Conversion Error
+
+statement error
+SELECT i::DECIMAL(38,0)::UHUGEINT FROM uhugeints ORDER BY i
+----
+Conversion Error
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(3,0))::UHUGEINT FROM uhugeints ORDER BY i
+----
+0
+1
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(9,0))::UHUGEINT FROM uhugeints ORDER BY i
+----
+0
+1
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(18,0))::UHUGEINT FROM uhugeints ORDER BY i
+----
+0
+1
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(38,0))::UHUGEINT FROM uhugeints ORDER BY i
+----
+0
+1
+NULL

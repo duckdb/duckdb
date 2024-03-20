@@ -3,6 +3,7 @@
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/common/sort/sorted_block.hpp"
+#include "duckdb/storage/buffer/buffer_pool.hpp"
 
 #include <algorithm>
 #include <numeric>
@@ -268,7 +269,7 @@ unique_ptr<RowDataBlock> LocalSortState::ConcatenateBlocks(RowDataCollection &ro
 	auto buffer_manager = &row_data.buffer_manager;
 	const idx_t &entry_size = row_data.entry_size;
 	idx_t capacity = MaxValue(((idx_t)Storage::BLOCK_SIZE + entry_size - 1) / entry_size, row_data.count);
-	auto new_block = make_uniq<RowDataBlock>(*buffer_manager, capacity, entry_size);
+	auto new_block = make_uniq<RowDataBlock>(MemoryTag::ORDER_BY, *buffer_manager, capacity, entry_size);
 	new_block->count = row_data.count;
 	auto new_block_handle = buffer_manager->Pin(new_block->block);
 	data_ptr_t new_block_ptr = new_block_handle.Ptr();
@@ -293,8 +294,8 @@ void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataColl
 	auto unordered_data_handle = buffer_manager->Pin(unordered_data_block->block);
 	const data_ptr_t unordered_data_ptr = unordered_data_handle.Ptr();
 	// Create new block that will hold re-ordered row data
-	auto ordered_data_block =
-	    make_uniq<RowDataBlock>(*buffer_manager, unordered_data_block->capacity, unordered_data_block->entry_size);
+	auto ordered_data_block = make_uniq<RowDataBlock>(MemoryTag::ORDER_BY, *buffer_manager,
+	                                                  unordered_data_block->capacity, unordered_data_block->entry_size);
 	ordered_data_block->count = count;
 	auto ordered_data_handle = buffer_manager->Pin(ordered_data_block->block);
 	data_ptr_t ordered_data_ptr = ordered_data_handle.Ptr();
@@ -322,7 +323,7 @@ void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataColl
 		    std::accumulate(heap.blocks.begin(), heap.blocks.end(), (idx_t)0,
 		                    [](idx_t a, const unique_ptr<RowDataBlock> &b) { return a + b->byte_offset; });
 		idx_t heap_block_size = MaxValue(total_byte_offset, (idx_t)Storage::BLOCK_SIZE);
-		auto ordered_heap_block = make_uniq<RowDataBlock>(*buffer_manager, heap_block_size, 1);
+		auto ordered_heap_block = make_uniq<RowDataBlock>(MemoryTag::ORDER_BY, *buffer_manager, heap_block_size, 1);
 		ordered_heap_block->count = count;
 		ordered_heap_block->byte_offset = total_byte_offset;
 		auto ordered_heap_handle = buffer_manager->Pin(ordered_heap_block->block);
@@ -400,7 +401,7 @@ void GlobalSortState::PrepareMergePhase() {
 	idx_t total_heap_size =
 	    std::accumulate(sorted_blocks.begin(), sorted_blocks.end(), (idx_t)0,
 	                    [](idx_t a, const unique_ptr<SortedBlock> &b) { return a + b->HeapSize(); });
-	if (external || (pinned_blocks.empty() && total_heap_size > 0.25 * buffer_manager.GetMaxMemory())) {
+	if (external || (pinned_blocks.empty() && total_heap_size > 0.25 * buffer_manager.GetQueryMaxMemory())) {
 		external = true;
 	}
 	// Use the data that we have to determine which partition size to use during the merge

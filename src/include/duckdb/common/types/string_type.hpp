@@ -11,6 +11,7 @@
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 
 #include <cstring>
 
@@ -58,10 +59,14 @@ public:
 			value.pointer.ptr = (char *)data; // NOLINT
 		}
 	}
-	string_t(const char *data) : string_t(data, strlen(data)) { // NOLINT: Allow implicit conversion from `const char*`
+
+	string_t(const char *data)
+	    : string_t(data,
+	               UnsafeNumericCast<uint32_t>(strlen(data))) { // NOLINT: Allow implicit conversion from `const char*`
 	}
 	string_t(const string &value)
-	    : string_t(value.c_str(), value.size()) { // NOLINT: Allow implicit conversion from `const char*`
+	    : string_t(value.c_str(),
+	               UnsafeNumericCast<uint32_t>(value.size())) { // NOLINT: Allow implicit conversion from `const char*`
 	}
 
 	bool IsInlined() const {
@@ -91,6 +96,10 @@ public:
 		return value.inlined.length;
 	}
 
+	bool Empty() const {
+		return value.inlined.length == 0;
+	}
+
 	string GetString() const {
 		return string(GetData(), GetSize());
 	}
@@ -113,9 +122,7 @@ public:
 		// set trailing NULL byte
 		if (GetSize() <= INLINE_LENGTH) {
 			// fill prefix with zeros if the length is smaller than the prefix length
-			for (idx_t i = GetSize(); i < INLINE_BYTES; i++) {
-				value.inlined.inlined[i] = '\0';
-			}
+			memset(value.inlined.inlined + GetSize(), 0, INLINE_BYTES - GetSize());
 		} else {
 			// copy the data into the prefix
 #ifndef DUCKDB_DEBUG_NO_INLINE
@@ -128,6 +135,8 @@ public:
 	}
 
 	void Verify() const;
+	void VerifyUTF8() const;
+	void VerifyCharacters() const;
 	void VerifyNull() const;
 
 	struct StringComparisonOperators {
@@ -163,8 +172,8 @@ public:
 		}
 		// compare up to shared length. if still the same, compare lengths
 		static bool GreaterThan(const string_t &left, const string_t &right) {
-			const uint32_t left_length = left.GetSize();
-			const uint32_t right_length = right.GetSize();
+			const uint32_t left_length = UnsafeNumericCast<uint32_t>(left.GetSize());
+			const uint32_t right_length = UnsafeNumericCast<uint32_t>(right.GetSize());
 			const uint32_t min_length = std::min<uint32_t>(left_length, right_length);
 
 #ifndef DUCKDB_DEBUG_NO_INLINE

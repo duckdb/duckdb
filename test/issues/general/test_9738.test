@@ -1,0 +1,32 @@
+# name: test/issues/general/test_9738.test
+# description: Issue 9738: Column identifier is case sensitive when used as a macro parameter.
+# group: [general]
+
+statement ok
+create table MY_TABLE(NAME String);
+
+statement ok
+insert into my_table(name) values('Someone');
+
+statement ok
+create or replace macro do_nothing(input) as input;
+
+query I
+select name from my_table;
+----
+Someone
+
+query I
+select NAME from my_table;
+----
+Someone
+
+query I
+select do_nothing(NAME) from my_table;
+----
+Someone
+
+query I
+select do_nothing(name) from my_table;
+----
+Someone

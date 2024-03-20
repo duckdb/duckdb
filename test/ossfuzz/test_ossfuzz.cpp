@@ -29,7 +29,7 @@ static void test_runner() {
 	if (result->HasError()) {
 		if (TestIsInternalError(internal_error_messages, result->GetError())) {
 			result->Print();
-			REQUIRE(!result->GetErrorObject());
+			REQUIRE(!result->GetErrorObject().HasError());
 		}
 	}
 

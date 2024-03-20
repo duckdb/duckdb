@@ -171,9 +171,9 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 	auto binder = Binder::CreateBinder(context);
 	binder->bind_context.AddGenericBinding(table_index, base.table, names, types);
 	auto expr_binder = ExpressionBinder(*binder, context);
-	string ignore;
+	ErrorData ignore;
 	auto table_binding = binder->bind_context.GetBinding(base.table, ignore);
-	D_ASSERT(table_binding && ignore.empty());
+	D_ASSERT(table_binding && !ignore.HasError());
 
 	auto bind_order = info.column_dependency_manager.GetBindOrder(base.columns);
 	logical_index_set_t bound_indices;
@@ -216,6 +216,9 @@ void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expr
 			// we bind a copy of the DEFAULT value because binding is destructive
 			// and we want to keep the original expression around for serialization
 			auto default_copy = column.DefaultValue().Copy();
+			if (default_copy->HasParameter()) {
+				throw BinderException("DEFAULT values cannot contain parameters");
+			}
 			ConstantBinder default_binder(*this, context, "DEFAULT value");
 			default_binder.target_type = column.Type();
 			bound_default = default_binder.Bind(default_copy);

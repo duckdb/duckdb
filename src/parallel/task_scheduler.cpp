@@ -9,6 +9,7 @@
 #include "concurrentqueue.h"
 #include "duckdb/common/thread.hpp"
 #include "lightweightsemaphore.h"
+
 #include <thread>
 #else
 #include <queue>
@@ -19,6 +20,10 @@ namespace duckdb {
 struct SchedulerThread {
 #ifndef DUCKDB_NO_THREADS
 	explicit SchedulerThread(unique_ptr<thread> thread_p) : internal_thread(std::move(thread_p)) {
+	}
+
+	~SchedulerThread() {
+		Allocator::ThreadFlush(0);
 	}
 
 	unique_ptr<thread> internal_thread;
@@ -97,12 +102,13 @@ ProducerToken::~ProducerToken() {
 
 TaskScheduler::TaskScheduler(DatabaseInstance &db)
     : db(db), queue(make_uniq<ConcurrentQueue>()),
-      allocator_flush_threshold(db.config.options.allocator_flush_threshold) {
+      allocator_flush_threshold(db.config.options.allocator_flush_threshold), requested_thread_count(0),
+      current_thread_count(1) {
 }
 
 TaskScheduler::~TaskScheduler() {
 #ifndef DUCKDB_NO_THREADS
-	SetThreadsInternal(1);
+	RelaunchThreadsInternal(0);
 #endif
 }
 
@@ -229,23 +235,24 @@ static void ThreadExecuteTasks(TaskScheduler *scheduler, atomic<bool> *marker) {
 #endif
 
 int32_t TaskScheduler::NumberOfThreads() {
-	lock_guard<mutex> t(thread_lock);
-	auto &config = DBConfig::GetConfig(db);
-	return threads.size() + config.options.external_threads + 1;
+	return current_thread_count.load();
 }
 
-void TaskScheduler::SetThreads(int32_t n) {
-#ifndef DUCKDB_NO_THREADS
-	lock_guard<mutex> t(thread_lock);
-	if (n < 1) {
-		throw SyntaxException("Must have at least 1 thread!");
+void TaskScheduler::SetThreads(idx_t total_threads, idx_t external_threads) {
+	if (total_threads == 0) {
+		throw SyntaxException("Number of threads must be positive!");
 	}
-	SetThreadsInternal(n);
+#ifndef DUCKDB_NO_THREADS
+	if (total_threads < external_threads) {
+		throw SyntaxException("Number of threads can't be smaller than number of external threads!");
+	}
 #else
-	if (n != 1) {
-		throw NotImplementedException("DuckDB was compiled without threads! Setting threads > 1 is not allowed.");
+	if (total_threads != external_threads) {
+		throw NotImplementedException(
+		    "DuckDB was compiled without threads! Setting total_threads != external_threads is not allowed.");
 	}
 #endif
+	requested_thread_count = NumericCast<int32_t>(total_threads - external_threads);
 }
 
 void TaskScheduler::SetAllocatorFlushTreshold(idx_t threshold) {
@@ -263,12 +270,20 @@ void TaskScheduler::YieldThread() {
 #endif
 }
 
-void TaskScheduler::SetThreadsInternal(int32_t n) {
+void TaskScheduler::RelaunchThreads() {
+	lock_guard<mutex> t(thread_lock);
+	auto n = requested_thread_count.load();
+	RelaunchThreadsInternal(n);
+}
+
+void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 #ifndef DUCKDB_NO_THREADS
-	if (threads.size() == idx_t(n - 1)) {
+	auto &config = DBConfig::GetConfig(db);
+	idx_t new_thread_count = n;
+	if (threads.size() == new_thread_count) {
+		current_thread_count = NumericCast<int32_t>(threads.size() + config.options.external_threads);
 		return;
 	}
-	idx_t new_thread_count = n - 1;
 	if (threads.size() > new_thread_count) {
 		// we are reducing the number of threads: clear all threads first
 		for (idx_t i = 0; i < threads.size(); i++) {
@@ -289,13 +304,21 @@ void TaskScheduler::SetThreadsInternal(int32_t n) {
 		for (idx_t i = 0; i < create_new_threads; i++) {
 			// launch a thread and assign it a cancellation marker
 			auto marker = unique_ptr<atomic<bool>>(new atomic<bool>(true));
-			auto worker_thread = make_uniq<thread>(ThreadExecuteTasks, this, marker.get());
+			unique_ptr<thread> worker_thread;
+			try {
+				worker_thread = make_uniq<thread>(ThreadExecuteTasks, this, marker.get());
+			} catch (std::exception &ex) {
+				// thread constructor failed - this can happen when the system has too many threads allocated
+				// in this case we cannot allocate more threads - stop launching them
+				break;
+			}
 			auto thread_wrapper = make_uniq<SchedulerThread>(std::move(worker_thread));
 
 			threads.push_back(std::move(thread_wrapper));
 			markers.push_back(std::move(marker));
 		}
 	}
+	current_thread_count = NumericCast<int32_t>(threads.size() + config.options.external_threads);
 #endif
 }
 

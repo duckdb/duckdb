@@ -11,6 +11,7 @@ public enum DuckDBColumnType {
     UINTEGER,
     UBIGINT,
     HUGEINT,
+    UHUGEINT,
     FLOAT,
     DOUBLE,
     DECIMAL,
@@ -32,6 +33,7 @@ public enum DuckDBColumnType {
     UUID,
     JSON,
     MAP,
+    ARRAY,
     UNKNOWN,
     UNION;
 }

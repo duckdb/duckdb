@@ -124,6 +124,12 @@ hugeint_t BinaryDeserializer::ReadHugeInt() {
 	return hugeint_t(upper, lower);
 }
 
+uhugeint_t BinaryDeserializer::ReadUhugeInt() {
+	auto upper = VarIntDecode<uint64_t>();
+	auto lower = VarIntDecode<uint64_t>();
+	return uhugeint_t(upper, lower);
+}
+
 void BinaryDeserializer::ReadDataPtr(data_ptr_t &ptr_p, idx_t count) {
 	auto len = VarIntDecode<uint64_t>();
 	if (len != count) {

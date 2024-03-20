@@ -51,6 +51,8 @@ struct ParserExtensionParseResult {
 	unique_ptr<ParserExtensionParseData> parse_data;
 	//! The error message (if unsuccessful)
 	string error;
+	//! The error location (if unsuccessful)
+	optional_idx error_location;
 };
 
 typedef ParserExtensionParseResult (*parse_function_t)(ParserExtensionInfo *info, const string &query);

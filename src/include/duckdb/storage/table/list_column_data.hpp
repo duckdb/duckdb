@@ -56,7 +56,7 @@ public:
 	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, PartialBlockManager &partial_block_manager,
 	                                             ColumnCheckpointInfo &checkpoint_info) override;
 
-	void DeserializeColumn(Deserializer &deserializer) override;
+	void DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats) override;
 
 	void GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,
 	                          vector<duckdb::ColumnSegmentInfo> &result) override;

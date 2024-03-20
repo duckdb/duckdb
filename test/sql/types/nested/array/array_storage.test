@@ -15,6 +15,9 @@ checkpoint;
 statement ok
 INSERT INTO t1 VALUES(1, [1, 2, 3]::INT[3]);
 
+statement ok
+checkpoint;
+
 query IIIIIIIIIIIIIII rowsort
 SELECT * FROM pragma_storage_info('t1');
 ----

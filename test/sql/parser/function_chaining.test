@@ -103,9 +103,9 @@ Hello
 
 # prepared statements
 statement ok
-PREPARE v1 AS SELECT ?.split(' ').lower()
+PREPARE v1 AS SELECT ?.split(' ')[1].lower()
 
 query I
 EXECUTE v1('Hello World')
 ----
-[hello, world]
+hello

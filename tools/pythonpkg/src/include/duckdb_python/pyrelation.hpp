@@ -31,6 +31,11 @@ class PythonDependencies : public ExternalDependency {
 public:
 	explicit PythonDependencies() : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY) {
 	}
+	~PythonDependencies() override {
+		py::gil_scoped_acquire gil;
+		py_object_list.clear();
+	}
+
 	explicit PythonDependencies(py::function map_function)
 	    : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY), map_function(std::move(map_function)) {};
 	explicit PythonDependencies(unique_ptr<RegisteredObject> py_object)
@@ -51,6 +56,7 @@ struct DuckDBPyRelation {
 public:
 	explicit DuckDBPyRelation(shared_ptr<Relation> rel);
 	explicit DuckDBPyRelation(unique_ptr<DuckDBPyResult> result);
+	~DuckDBPyRelation();
 
 public:
 	static void Initialize(py::handle &m);
@@ -212,6 +218,8 @@ public:
 
 	duckdb::pyarrow::Table ToArrowTable(idx_t batch_size);
 
+	duckdb::pyarrow::Table ToArrowTableInternal(idx_t batch_size, bool to_polars);
+
 	PolarsDataFrame ToPolars(idx_t batch_size);
 
 	duckdb::pyarrow::RecordBatchReader ToRecordBatch(idx_t batch_size);
@@ -260,6 +268,8 @@ public:
 	string Explain(ExplainType type);
 
 	static bool IsRelation(const py::object &object);
+
+	bool CanBeRegisteredBy(Connection &con);
 
 	Relation &GetRel();
 

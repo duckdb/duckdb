@@ -101,10 +101,10 @@ SELECT GREATEST(TIMESTAMP '1992-01-01 13:45:21.890123', TIMESTAMP '1994-02-02 05
 infinity
 
 # test mix of types
-query T
+statement error
 SELECT LEAST(DATE '1992-01-01', 'hello', 123)
 ----
-123
+No function matches
 
 # tables
 statement ok

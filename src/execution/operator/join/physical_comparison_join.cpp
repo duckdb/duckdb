@@ -1,5 +1,5 @@
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
+
 #include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {

@@ -45,7 +45,7 @@ public:
 
 	private:
 		// Merge the NULLs of all non-DISTINCT predicates into the primary so they sort to the end.
-		idx_t MergeNulls(const vector<JoinCondition> &conditions);
+		idx_t MergeNulls(Vector &primary, const vector<JoinCondition> &conditions);
 	};
 
 	class GlobalSortedTable {

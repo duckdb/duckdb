@@ -67,46 +67,46 @@ select '5877642-06-24 (BC)'::date - 2147483647
 
 # interval arithmetic
 query I
-select '5877642-06-25 (BC)'::date + interval (1) day
+select '290309-12-22 (BC)'::date + interval (1) day
 ----
-5877642-06-26 (BC)
+290309-12-23 (BC) 00:00:00
 
 statement error
-select '5877642-06-25 (BC)'::date - interval (1) day
-----
-
-statement error
-select '5877642-06-25 (BC)'::date - interval (365) day
+select '290309-12-22 (BC)'::date - interval (1) day
 ----
 
 statement error
-select '5877642-06-25 (BC)'::date - interval (2147483647) day
+select '290309-12-22 (BC)'::date - interval (365) day
 ----
 
 statement error
-select '5877642-06-25 (BC)'::date - interval (9999999999999) second
+select '290309-12-22 (BC)'::date - interval (2147483647) day
 ----
 
 statement error
-select '5877642-06-25 (BC)'::date - interval (9223372036854775807) microsecond
+select '290309-12-22 (BC)'::date - interval (9999999999999) second
 ----
 
 statement error
-select '5877642-06-25 (BC)'::date - interval '1147483647 days 9223372036854775807 microseconds'
+select '290309-12-22 (BC)'::date - interval (9223372036854775807) microsecond
 ----
 
 statement error
-select '5877642-06-25 (BC)'::date - interval '2147483647 days 9223372036854775807 microseconds'
+select '290309-12-22 (BC)'::date - interval '1147483647 days 9223372036854775807 microseconds'
 ----
 
 statement error
-select '5877642-06-25 (BC)'::date - interval '2007483647 days 9223372036854775807 microseconds'
+select '290309-12-22 (BC)'::date - interval '2147483647 days 9223372036854775807 microseconds'
+----
+
+statement error
+select '290309-12-22 (BC)'::date - interval '2007483647 days 9223372036854775807 microseconds'
 ----
 
 query I
-select '5877642-06-25 (BC)'::date + interval (1) month
+select '290309-12-22 (BC)'::date + interval (1) month
 ----
-5877642-07-25 (BC)
+290308-01-22 (BC) 00:00:00
 
 statement error
 select '5877642-06-23 (BC)'::date - interval (1) month
@@ -136,12 +136,12 @@ select '99999999-01-01'::date
 
 # max date for timestamp micros is 294246
 query I
-select '294246-12-31'::date::timestamp
+select '294247-01-10'::date::timestamp
 ----
-294246-12-31 00:00:00
+294247-01-10 00:00:00
 
 statement error
-select '294247-12-31'::date::timestamp
+select '294247-01-11'::date::timestamp
 ----
 
 # arithmetic
@@ -168,50 +168,50 @@ SELECT '5877642-06-25 (BC)'::DATE - 1;
 
 # interval arithmetic
 query I
-select '5881580-07-10'::date - interval (1) day
+select '294247-01-10'::date - interval (1) day
 ----
-5881580-07-09
+294247-01-09 00:00:00
 
 statement error
-select '5881580-07-10'::date + interval (1) day
-----
-
-statement error
-select '5881580-07-10'::date + interval (365) day
+select '294247-01-10'::date + interval (1) day
 ----
 
 statement error
-select '5881580-07-10'::date + interval (2147483647) day
+select '294247-01-10'::date + interval (365) day
 ----
 
 statement error
-select '5881580-07-10'::date + interval (9999999999999) second
+select '294247-01-10'::date + interval (2147483647) day
 ----
 
 statement error
-select '5881580-07-10'::date + interval (9223372036854775807) microsecond
+select '294247-01-10'::date + interval (9999999999999) second
 ----
 
 statement error
-select '5881580-07-10'::date + interval '1147483647 days 9223372036854775807 microseconds'
+select '294247-01-10'::date + interval (9223372036854775807) microsecond
 ----
 
 statement error
-select '5881580-07-10'::date + interval '2147483647 days 9223372036854775807 microseconds'
+select '294247-01-10'::date + interval '1147483647 days 9223372036854775807 microseconds'
 ----
 
 statement error
-select '5881580-07-10'::date + interval '2007483647 days 9223372036854775807 microseconds'
+select '294247-01-10'::date + interval '2147483647 days 9223372036854775807 microseconds'
 ----
 
 statement error
-select '5881580-07-10'::date + interval (1) month
+select '294247-01-10'::date + interval '2007483647 days 9223372036854775807 microseconds'
+----
+
+statement error
+select '294247-01-10'::date + interval (1) month
 ----
 
 query I
-select '5881580-07-10'::date - interval (1) month
+select '294247-01-10'::date - interval (1) month
 ----
-5881580-06-10
+294246-12-10 00:00:00
 
 query I
 select '5881580-07-10'::date - '5877642-06-25 (BC)'::date

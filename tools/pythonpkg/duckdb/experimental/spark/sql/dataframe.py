@@ -1,34 +1,50 @@
-from ..exception import ContributionsAcceptedError
-
-from typing import TYPE_CHECKING, List, Optional, Union, Tuple, overload, Sequence, Any, Dict, cast, Callable
-from duckdb import StarExpression, ColumnExpression, Expression
-
-from ..errors import PySparkTypeError
-from .readwriter import DataFrameWriter
-from .types import Row, StructType
-from .type_utils import duckdb_to_spark_schema
-from .column import Column
-import duckdb
 from functools import reduce
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    List,
+    Optional,
+    Tuple,
+    Union,
+    cast,
+    overload,
+)
+
+import duckdb
+from duckdb import ColumnExpression, Expression, StarExpression
+
+from ._typing import ColumnOrName
+from ..errors import PySparkTypeError
+from ..exception import ContributionsAcceptedError
+from .column import Column
+from .readwriter import DataFrameWriter
+from .type_utils import duckdb_to_spark_schema
+from .types import Row, StructType
 
 if TYPE_CHECKING:
-    from .session import SparkSession
-    from .group import GroupedData, Grouping
+    from pandas.core.frame import DataFrame as PandasDataFrame
 
-from .functions import _to_column
+    from .group import GroupedData, Grouping
+    from .session import SparkSession
 
 from ..errors import PySparkValueError
+from .functions import _to_column
+
 
 class DataFrame:
     def __init__(self, relation: duckdb.DuckDBPyRelation, session: "SparkSession"):
         self.relation = relation
         self.session = session
         self._schema = None
-        if (self.relation != None):
+        if self.relation is not None:
             self._schema = duckdb_to_spark_schema(self.relation.columns, self.relation.types)
 
     def show(self, **kwargs) -> None:
         self.relation.show()
+
+    def toPandas(self) -> "PandasDataFrame":
+        return self.relation.df()
 
     def createOrReplaceTempView(self, name: str) -> None:
         """Creates or replaces a local temporary view with this :class:`DataFrame`.
@@ -96,7 +112,9 @@ class DataFrame:
         rel = self.relation.select(*cols)
         return DataFrame(rel, self.session)
 
-    def transform(self, func: Callable[..., "DataFrame"], *args: Any, **kwargs: Any) -> "DataFrame":
+    def transform(
+        self, func: Callable[..., "DataFrame"], *args: Any, **kwargs: Any
+    ) -> "DataFrame":
         """Returns a new :class:`DataFrame`. Concise syntax for chaining custom transformations.
 
         .. versionadded:: 3.0.0
@@ -152,12 +170,15 @@ class DataFrame:
         +---+-----+
         """
         result = func(self, *args, **kwargs)
-        assert isinstance(
-            result, DataFrame
-        ), "Func returned an instance of type [%s], " "should have been DataFrame." % type(result)
+        assert isinstance(result, DataFrame), (
+            "Func returned an instance of type [%s], "
+            "should have been DataFrame." % type(result)
+        )
         return result
 
-    def sort(self, *cols: Union[str, Column, List[Union[str, Column]]], **kwargs: Any) -> "DataFrame":
+    def sort(
+        self, *cols: Union[str, Column, List[Union[str, Column]]], **kwargs: Any
+    ) -> "DataFrame":
         """Returns a new :class:`DataFrame` sorted by the specified column(s).
 
         Parameters
@@ -316,9 +337,13 @@ class DataFrame:
         if len(cols) == 1:
             cols = cols[0]
         if isinstance(cols, list):
-            projections = [x.expr if isinstance(x, Column) else ColumnExpression(x) for x in cols]
+            projections = [
+                x.expr if isinstance(x, Column) else ColumnExpression(x) for x in cols
+            ]
         else:
-            projections = [cols.expr if isinstance(cols, Column) else ColumnExpression(cols)]
+            projections = [
+                cols.expr if isinstance(cols, Column) else ColumnExpression(cols)
+            ]
         rel = self.relation.select(*projections)
         return DataFrame(rel, self.session)
 
@@ -436,7 +461,9 @@ class DataFrame:
             on = [_to_column(x) for x in on]
 
             # & all the Expressions together to form one Expression
-            assert isinstance(on[0], Expression), "on should be Column or list of Column"
+            assert isinstance(
+                on[0], Expression
+            ), "on should be Column or list of Column"
             on = reduce(lambda x, y: x.__and__(y), cast(List[Expression], on))
 
         if on is None and how is None:
@@ -452,12 +479,12 @@ class DataFrame:
 
             def map_to_recognized_jointype(how):
                 known_aliases = {
-                    'inner': [],
-                    'outer': ['full', 'fullouter', 'full_outer'],
-                    'left': ['leftouter', 'left_outer'],
-                    'right': ['rightouter', 'right_outer'],
-                    'anti': ['leftanti', 'left_anti'],
-                    'semi': ['leftsemi', 'left_semi'],
+                    "inner": [],
+                    "outer": ["full", "fullouter", "full_outer"],
+                    "left": ["leftouter", "left_outer"],
+                    "right": ["rightouter", "right_outer"],
+                    "anti": ["leftanti", "left_anti"],
+                    "semi": ["leftsemi", "left_semi"],
                 }
                 mapped_type = None
                 for type, aliases in known_aliases.items():
@@ -588,7 +615,9 @@ class DataFrame:
     def __getitem__(self, item: Union[Column, List, Tuple]) -> "DataFrame":
         ...
 
-    def __getitem__(self, item: Union[int, str, Column, List, Tuple]) -> Union[Column, "DataFrame"]:
+    def __getitem__(
+        self, item: Union[int, str, Column, List, Tuple]
+    ) -> Union[Column, "DataFrame"]:
         """Returns the column as a :class:`Column`.
 
         Examples
@@ -623,7 +652,9 @@ class DataFrame:
         [Row(age=2), Row(age=5)]
         """
         if name not in self.relation.columns:
-            raise AttributeError("'%s' object has no attribute '%s'" % (self.__class__.__name__, name))
+            raise AttributeError(
+                "'%s' object has no attribute '%s'" % (self.__class__.__name__, name)
+            )
         return Column(duckdb.ColumnExpression(name))
 
     @overload
@@ -757,7 +788,9 @@ class DataFrame:
 
     unionAll = union
 
-    def unionByName(self, other: "DataFrame", allowMissingColumns: bool = False) -> "DataFrame":
+    def unionByName(
+        self, other: "DataFrame", allowMissingColumns: bool = False
+    ) -> "DataFrame":
         """Returns a new :class:`DataFrame` containing union of rows in this and another
         :class:`DataFrame`.
 
@@ -921,9 +954,10 @@ class DataFrame:
         assert types_count == len(existing_columns)
 
         cast_expressions = [
-            f'{existing}::{target_type} as {existing}' for existing, target_type in zip(existing_columns, types)
+            f"{existing}::{target_type} as {existing}"
+            for existing, target_type in zip(existing_columns, types)
         ]
-        cast_expressions = ', '.join(cast_expressions)
+        cast_expressions = ", ".join(cast_expressions)
         new_rel = self.relation.project(cast_expressions)
         return DataFrame(new_rel, self.session)
 
@@ -936,17 +970,21 @@ class DataFrame:
             )
 
         existing_columns = [ColumnExpression(x) for x in existing_columns]
-        projections = [existing.alias(new) for existing, new in zip(existing_columns, cols)]
+        projections = [
+            existing.alias(new) for existing, new in zip(existing_columns, cols)
+        ]
         new_rel = self.relation.project(*projections)
         return DataFrame(new_rel, self.session)
 
     def collect(self) -> List[Row]:
         columns = self.relation.columns
         result = self.relation.fetchall()
+
         def construct_row(values, names) -> Row:
             row = tuple.__new__(Row, list(values))
             row.__fields__ = list(names)
             return row
+
         rows = [construct_row(x, columns) for x in result]
         return rows
 

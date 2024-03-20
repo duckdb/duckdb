@@ -1,0 +1,9 @@
+# name: test/issues/general/test_9380.test
+# description: Issue 9380: "Could not choose a best candidate function for the function call" after upgrading to 0.9
+# group: [general]
+
+statement ok
+CREATE MACRO time_to_datetime(date, string) AS
+   date::TIMESTAMP +
+   TRY_CAST(regexp_replace(string, '^2400$', '0000').substr(1, 2).concat(' hours') AS INTERVAL) +
+   TRY_CAST(regexp_replace(string, '^2400$', '0000').substr(3, 2).concat(' minutes') AS INTERVAL);

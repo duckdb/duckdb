@@ -44,11 +44,11 @@ void Event::AddDependency(Event &event) {
 	total_dependencies++;
 	event.parents.push_back(weak_ptr<Event>(shared_from_this()));
 #ifdef DEBUG
-	event.parents_raw.push_back(this);
+	event.parents_raw.push_back(*this);
 #endif
 }
 
-const vector<Event *> &Event::GetParentsVerification() const {
+const vector<reference<Event>> &Event::GetParentsVerification() const {
 	D_ASSERT(parents.size() == parents_raw.size());
 	return parents_raw;
 }

@@ -1,18 +1,17 @@
 #include "duckdb/common/bind_helpers.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/execution/operator/scan/csv/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
-#include "duckdb/common/serializer/write_stream.hpp"
-#include "duckdb/common/serializer/memory_stream.hpp"
-
 #include <limits>
 
 namespace duckdb {
@@ -85,12 +84,18 @@ void BaseCSVData::Finalize() {
 	}
 }
 
-static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, const CopyInfo &info, const vector<string> &names,
-                                             const vector<LogicalType> &sql_types) {
-	auto bind_data = make_uniq<WriteCSVData>(info.file_path, sql_types, names);
+string TransformNewLine(string new_line) {
+	new_line = StringUtil::Replace(new_line, "\\r", "\r");
+	return StringUtil::Replace(new_line, "\\n", "\n");
+	;
+}
+
+static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctionBindInput &input,
+                                             const vector<string> &names, const vector<LogicalType> &sql_types) {
+	auto bind_data = make_uniq<WriteCSVData>(input.info.file_path, sql_types, names);
 
 	// check all the options in the copy info
-	for (auto &option : info.options) {
+	for (auto &option : input.info.options) {
 		auto loption = StringUtil::Lower(option.first);
 		auto &set = option.second;
 		bind_data->options.SetWriteOption(loption, ConvertVectorToValue(set));
@@ -110,7 +115,7 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, const CopyI
 	bind_data->requires_quotes[bind_data->options.dialect_options.state_machine_options.quote.GetValue()] = true;
 
 	if (!bind_data->options.write_newline.empty()) {
-		bind_data->newline = bind_data->options.write_newline;
+		bind_data->newline = TransformNewLine(bind_data->options.write_newline);
 	}
 	return std::move(bind_data);
 }
@@ -150,15 +155,14 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 		options.sql_types_per_column[expected_names[i]] = i;
 	}
 
-	bind_data->FinalizeRead(context);
-
 	if (options.auto_detect) {
-		// We must run the sniffer, but this is a copy csv, hence names and types have already been previsouly defined.
-		auto file_handle = BaseCSVReader::OpenCSV(context, options);
-		auto buffer_manager = make_shared<CSVBufferManager>(context, std::move(file_handle), options);
-		CSVSniffer sniffer(options, buffer_manager, bind_data->state_machine_cache, {&expected_types, &expected_names});
+		auto buffer_manager = make_shared<CSVBufferManager>(context, options, bind_data->files[0], 0);
+		CSVSniffer sniffer(options, buffer_manager, CSVStateMachineCache::Get(context),
+		                   {&expected_types, &expected_names});
 		sniffer.SniffCSV();
 	}
+	bind_data->FinalizeRead(context);
+
 	return std::move(bind_data);
 }
 
@@ -291,6 +295,11 @@ struct GlobalWriteCSVData : public GlobalFunctionData {
 		handle->Write((void *)data, size);
 	}
 
+	idx_t FileSize() {
+		lock_guard<mutex> flock(lock);
+		return handle->GetFileSize();
+	}
+
 	FileSystem &fs;
 	//! The mutex for writing to the physical file
 	mutex lock;
@@ -339,6 +348,11 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 	}
 
 	return std::move(global_data);
+}
+
+idx_t WriteCSVFileSize(GlobalFunctionData &gstate) {
+	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
+	return global_state.FileSize();
 }
 
 static void WriteCSVChunkInternal(ClientContext &context, FunctionData &bind_data, DataChunk &cast_chunk,
@@ -519,6 +533,7 @@ void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {
 	info.execution_mode = WriteCSVExecutionMode;
 	info.prepare_batch = WriteCSVPrepareBatch;
 	info.flush_batch = WriteCSVFlushBatch;
+	info.file_size_bytes = WriteCSVFileSize;
 
 	info.copy_from_bind = ReadCSVBind;
 	info.copy_from_function = ReadCSVTableFunction::GetFunction();

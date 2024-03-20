@@ -193,7 +193,7 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 					// Find an empty entry
 					auto entry_idx = ApplyBitMask(hash);
 					D_ASSERT(entry_idx == hash % capacity);
-					while (entries[entry_idx].IsOccupied() > 0) {
+					while (entries[entry_idx].IsOccupied()) {
 						entry_idx++;
 						if (entry_idx >= capacity) {
 							entry_idx = 0;
@@ -482,7 +482,7 @@ struct FlushMoveState {
 	bool Scan() {
 		if (collection.Scan(scan_state, groups)) {
 			collection.Gather(scan_state.chunk_state.row_locations, *FlatVector::IncrementalSelectionVector(),
-			                  groups.size(), hash_col_idx, hashes, *FlatVector::IncrementalSelectionVector());
+			                  groups.size(), hash_col_idx, hashes, *FlatVector::IncrementalSelectionVector(), nullptr);
 			return true;
 		}
 
@@ -512,7 +512,7 @@ void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other) {
 	}
 }
 
-void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data) {
+void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data, optional_ptr<atomic<double>> progress) {
 	D_ASSERT(other_data.GetLayout().GetAggrWidth() == layout.GetAggrWidth());
 	D_ASSERT(other_data.GetLayout().GetDataWidth() == layout.GetDataWidth());
 	D_ASSERT(other_data.GetLayout().GetRowWidth() == layout.GetRowWidth());
@@ -523,6 +523,9 @@ void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data) {
 
 	FlushMoveState fm_state(other_data);
 	RowOperationsState row_state(*aggregate_allocator);
+
+	idx_t chunk_idx = 0;
+	const auto chunk_count = other_data.ChunkCount();
 	while (fm_state.Scan()) {
 		FindOrCreateGroups(fm_state.groups, fm_state.hashes, fm_state.group_addresses, fm_state.new_groups_sel);
 		RowOperations::CombineStates(row_state, layout, fm_state.scan_state.chunk_state.row_locations,
@@ -530,6 +533,10 @@ void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data) {
 		if (layout.HasDestructor()) {
 			RowOperations::DestroyStates(row_state, layout, fm_state.scan_state.chunk_state.row_locations,
 			                             fm_state.groups.size());
+		}
+
+		if (progress) {
+			*progress = double(++chunk_idx) / double(chunk_count);
 		}
 	}
 

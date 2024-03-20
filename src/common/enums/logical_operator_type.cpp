@@ -46,8 +46,6 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "TOP_N";
 	case LogicalOperatorType::LOGICAL_SAMPLE:
 		return "SAMPLE";
-	case LogicalOperatorType::LOGICAL_LIMIT_PERCENT:
-		return "LIMIT_PERCENT";
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
 		return "COPY_TO_FILE";
 	case LogicalOperatorType::LOGICAL_COPY_DATABASE:
@@ -94,8 +92,6 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "CTE";
 	case LogicalOperatorType::LOGICAL_CTE_REF:
 		return "CTE_SCAN";
-	case LogicalOperatorType::LOGICAL_SHOW:
-		return "SHOW";
 	case LogicalOperatorType::LOGICAL_ALTER:
 		return "ALTER";
 	case LogicalOperatorType::LOGICAL_CREATE_SEQUENCE:
@@ -106,10 +102,12 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "CREATE_VIEW";
 	case LogicalOperatorType::LOGICAL_CREATE_SCHEMA:
 		return "CREATE_SCHEMA";
+	case LogicalOperatorType::LOGICAL_CREATE_SECRET:
+		return "CREATE_SECRET";
 	case LogicalOperatorType::LOGICAL_ATTACH:
 		return "ATTACH";
 	case LogicalOperatorType::LOGICAL_DETACH:
-		return "ATTACH";
+		return "DETACH";
 	case LogicalOperatorType::LOGICAL_DROP:
 		return "DROP";
 	case LogicalOperatorType::LOGICAL_PRAGMA:

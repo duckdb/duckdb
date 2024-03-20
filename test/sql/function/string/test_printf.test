@@ -72,6 +72,12 @@ SELECT printf('%s', 120381902481294715712::HUGEINT)
 ----
 120381902481294715712
 
+# uhugeint
+query T
+SELECT printf('%s', 120381902481294715712::UHUGEINT)
+----
+120381902481294715712
+
 # decimal
 query T
 SELECT printf('%.3f', '1.234'::DECIMAL)
@@ -152,7 +158,7 @@ SELECT printf(fmt) FROM strings ORDER BY idx
 ----
 
 query T
-SELECT printf(CASE WHEN pint < 15 THEN NULL ELSE pint END) FROM strings ORDER BY idx
+SELECT printf(CASE WHEN pint < 15 THEN NULL ELSE pint::VARCHAR END) FROM strings ORDER BY idx
 ----
 NULL
 20

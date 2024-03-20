@@ -14,6 +14,7 @@
 #include "duckdb/core_functions/scalar/math_functions.hpp"
 #include "duckdb/core_functions/scalar/operators_functions.hpp"
 #include "duckdb/core_functions/scalar/random_functions.hpp"
+#include "duckdb/core_functions/scalar/secret_functions.hpp"
 #include "duckdb/core_functions/scalar/string_functions.hpp"
 #include "duckdb/core_functions/scalar/struct_functions.hpp"
 #include "duckdb/core_functions/scalar/union_functions.hpp"
@@ -67,7 +68,9 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_AGGREGATE_FUNCTION_SET(ApproxCountDistinctFun),
 	DUCKDB_AGGREGATE_FUNCTION_SET(ApproxQuantileFun),
 	DUCKDB_AGGREGATE_FUNCTION_SET(ArgMaxFun),
+	DUCKDB_AGGREGATE_FUNCTION_SET(ArgMaxNullFun),
 	DUCKDB_AGGREGATE_FUNCTION_SET(ArgMinFun),
+	DUCKDB_AGGREGATE_FUNCTION_SET(ArgMinNullFun),
 	DUCKDB_AGGREGATE_FUNCTION_SET_ALIAS(ArgmaxFun),
 	DUCKDB_AGGREGATE_FUNCTION_SET_ALIAS(ArgminFun),
 	DUCKDB_AGGREGATE_FUNCTION_ALIAS(ArrayAggFun),
@@ -82,6 +85,7 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayFilterFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(ArrayGradeUpFun),
 	DUCKDB_SCALAR_FUNCTION_SET(ArrayInnerProductFun),
+	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayReduceFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(ArrayReverseSortFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(ArraySliceFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(ArraySortFun),
@@ -116,6 +120,7 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION(CotFun),
 	DUCKDB_AGGREGATE_FUNCTION(CovarPopFun),
 	DUCKDB_AGGREGATE_FUNCTION(CovarSampFun),
+	DUCKDB_SCALAR_FUNCTION(CreateSortKeyFun),
 	DUCKDB_SCALAR_FUNCTION(CurrentDatabaseFun),
 	DUCKDB_SCALAR_FUNCTION(CurrentDateFun),
 	DUCKDB_SCALAR_FUNCTION(CurrentQueryFun),
@@ -198,6 +203,7 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(JulianDayFun),
 	DUCKDB_AGGREGATE_FUNCTION(KahanSumFun),
 	DUCKDB_AGGREGATE_FUNCTION(KurtosisFun),
+	DUCKDB_AGGREGATE_FUNCTION(KurtosisPopFun),
 	DUCKDB_SCALAR_FUNCTION_SET(LastDayFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(LcmFun),
 	DUCKDB_SCALAR_FUNCTION_SET(LeastFun),
@@ -218,6 +224,7 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(ListGradeUpFun),
 	DUCKDB_SCALAR_FUNCTION_SET(ListInnerProductFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ListPackFun),
+	DUCKDB_SCALAR_FUNCTION(ListReduceFun),
 	DUCKDB_SCALAR_FUNCTION_SET(ListReverseSortFun),
 	DUCKDB_SCALAR_FUNCTION_SET(ListSliceFun),
 	DUCKDB_SCALAR_FUNCTION_SET(ListSortFun),
@@ -263,6 +270,10 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(NextAfterFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(NowFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(OrdFun),
+	DUCKDB_SCALAR_FUNCTION_SET(ParseDirnameFun),
+	DUCKDB_SCALAR_FUNCTION_SET(ParseDirpathFun),
+	DUCKDB_SCALAR_FUNCTION_SET(ParseFilenameFun),
+	DUCKDB_SCALAR_FUNCTION_SET(ParsePathFun),
 	DUCKDB_SCALAR_FUNCTION(PiFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(PositionFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(PowFun),
@@ -276,6 +287,8 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION(RadiansFun),
 	DUCKDB_SCALAR_FUNCTION(RandomFun),
 	DUCKDB_SCALAR_FUNCTION_SET(ListRangeFun),
+	DUCKDB_SCALAR_FUNCTION_ALIAS(ReduceFun),
+	DUCKDB_SCALAR_FUNCTION(RegexpEscapeFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(RegexpSplitToArrayFun),
 	DUCKDB_AGGREGATE_FUNCTION(RegrAvgxFun),
 	DUCKDB_AGGREGATE_FUNCTION(RegrAvgyFun),
@@ -362,6 +375,7 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION(UnionExtractFun),
 	DUCKDB_SCALAR_FUNCTION(UnionTagFun),
 	DUCKDB_SCALAR_FUNCTION(UnionValueFun),
+	DUCKDB_SCALAR_FUNCTION(UnpivotListFun),
 	DUCKDB_SCALAR_FUNCTION(UUIDFun),
 	DUCKDB_AGGREGATE_FUNCTION(VarPopFun),
 	DUCKDB_AGGREGATE_FUNCTION(VarSampFun),
@@ -371,6 +385,7 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(WeekFun),
 	DUCKDB_SCALAR_FUNCTION_SET(WeekDayFun),
 	DUCKDB_SCALAR_FUNCTION_SET(WeekOfYearFun),
+	DUCKDB_SCALAR_FUNCTION(WhichSecretFun),
 	DUCKDB_SCALAR_FUNCTION_SET(BitwiseXorFun),
 	DUCKDB_SCALAR_FUNCTION_SET(YearFun),
 	DUCKDB_SCALAR_FUNCTION_SET(YearWeekFun),

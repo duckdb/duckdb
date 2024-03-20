@@ -20,6 +20,14 @@
 namespace duckdb {
 
 struct UnifiedVectorFormat {
+	DUCKDB_API UnifiedVectorFormat();
+	// disable copy constructors
+	UnifiedVectorFormat(const UnifiedVectorFormat &other) = delete;
+	UnifiedVectorFormat &operator=(const UnifiedVectorFormat &) = delete;
+	//! enable move constructors
+	DUCKDB_API UnifiedVectorFormat(UnifiedVectorFormat &&other) noexcept;
+	DUCKDB_API UnifiedVectorFormat &operator=(UnifiedVectorFormat &&) noexcept;
+
 	const SelectionVector *sel;
 	data_ptr_t data;
 	ValidityMask validity;
@@ -118,9 +126,9 @@ public:
 	DUCKDB_API void ResetFromCache(const VectorCache &cache);
 
 	//! Creates a reference to a slice of the other vector
-	DUCKDB_API void Slice(Vector &other, idx_t offset, idx_t end);
+	DUCKDB_API void Slice(const Vector &other, idx_t offset, idx_t end);
 	//! Creates a reference to a slice of the other vector
-	DUCKDB_API void Slice(Vector &other, const SelectionVector &sel, idx_t count);
+	DUCKDB_API void Slice(const Vector &other, const SelectionVector &sel, idx_t count);
 	//! Turns the vector into a dictionary vector with the specified dictionary
 	DUCKDB_API void Slice(const SelectionVector &sel, idx_t count);
 	//! Slice the vector, keeping the result around in a cache or potentially using the cache instead of slicing
@@ -172,6 +180,11 @@ public:
 		auxiliary = std::move(new_buffer);
 	};
 
+	inline void CopyBuffer(Vector &other) {
+		buffer = other.buffer;
+		data = other.data;
+	}
+
 	//! This functions resizes the vector
 	DUCKDB_API void Resize(idx_t cur_size, idx_t new_size);
 
@@ -199,6 +212,11 @@ public:
 
 	// Setters
 	DUCKDB_API void SetVectorType(VectorType vector_type);
+
+	// Transform vector to an equivalent dictionary vector
+	static void DebugTransformToDictionary(Vector &vector, idx_t count);
+	// Transform vector to an equivalent nested vector
+	static void DebugShuffleNestedVector(Vector &vector, idx_t count);
 
 private:
 	//! Returns the [index] element of the Vector as a Value.
@@ -290,6 +308,16 @@ struct DictionaryVector {
 };
 
 struct FlatVector {
+	static void VerifyFlatVector(const Vector &vector) {
+#ifdef DUCKDB_DEBUG_NO_SAFETY
+		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
+#else
+		if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
+			throw InternalException("Operation requires a flat vector but a non-flat vector was encountered");
+		}
+#endif
+	}
+
 	static inline data_ptr_t GetData(Vector &vector) {
 		return ConstantVector::GetData(vector);
 	}
@@ -311,15 +339,15 @@ struct FlatVector {
 		return FlatVector::GetData<T>(vector)[idx];
 	}
 	static inline const ValidityMask &Validity(const Vector &vector) {
-		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
+		VerifyFlatVector(vector);
 		return vector.validity;
 	}
 	static inline ValidityMask &Validity(Vector &vector) {
-		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
+		VerifyFlatVector(vector);
 		return vector.validity;
 	}
-	static inline void SetValidity(Vector &vector, ValidityMask &new_validity) {
-		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
+	static inline void SetValidity(Vector &vector, const ValidityMask &new_validity) {
+		VerifyFlatVector(vector);
 		vector.validity.Initialize(new_validity);
 	}
 	DUCKDB_API static void SetNull(Vector &vector, idx_t idx, bool is_null);
@@ -432,7 +460,15 @@ struct FSSTVector {
 	DUCKDB_API static idx_t GetCount(Vector &vector);
 };
 
-enum class MapInvalidReason : uint8_t { VALID, NULL_KEY_LIST, NULL_KEY, DUPLICATE_KEY };
+enum class MapInvalidReason : uint8_t {
+	VALID,
+	NULL_KEY_LIST,
+	NULL_KEY,
+	DUPLICATE_KEY,
+	NULL_VALUE_LIST,
+	NOT_ALIGNED,
+	INVALID_PARAMS
+};
 
 struct MapVector {
 	DUCKDB_API static const Vector &GetKeys(const Vector &vector);
@@ -441,6 +477,7 @@ struct MapVector {
 	DUCKDB_API static Vector &GetValues(Vector &vector);
 	DUCKDB_API static MapInvalidReason
 	CheckMapValidity(Vector &map, idx_t count, const SelectionVector &sel = *FlatVector::IncrementalSelectionVector());
+	DUCKDB_API static void EvalMapInvalidReason(MapInvalidReason reason);
 	DUCKDB_API static void MapConversionVerify(Vector &vector, idx_t count);
 };
 
@@ -456,11 +493,6 @@ struct ArrayVector {
 	DUCKDB_API static Vector &GetEntry(Vector &vector);
 	//! Gets the total size of the underlying child-vector of an array
 	DUCKDB_API static idx_t GetTotalSize(const Vector &vector);
-	//! Allocate dummy list entries for a vector
-	//! Note that there is nothing ensuring that the allocated data
-	//! remains valid (e.g. if this vector is resized)
-	//! This is only used during row serialization
-	DUCKDB_API static void AllocateDummyListEntries(Vector &vector);
 };
 
 enum class UnionInvalidReason : uint8_t {
@@ -494,8 +526,9 @@ struct UnionVector {
 	DUCKDB_API static const Vector &GetTags(const Vector &v);
 	DUCKDB_API static Vector &GetTags(Vector &v);
 
-	//! Get the tag at the specific index of the union vector
-	DUCKDB_API static union_tag_t GetTag(const Vector &vector, idx_t index);
+	//! Try to get the tag at the specific flat index of the union vector. Returns false if the tag is NULL.
+	//! This will handle and map the index properly for constant and dictionary vectors internally.
+	DUCKDB_API static bool TryGetTag(const Vector &vector, idx_t index, union_tag_t &tag);
 
 	//! Get the member vector of a union vector by index
 	DUCKDB_API static const Vector &GetMember(const Vector &vector, idx_t member_index);

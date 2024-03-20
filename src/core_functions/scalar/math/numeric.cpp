@@ -344,14 +344,14 @@ unique_ptr<FunctionData> BindGenericRoundFunctionDecimal(ClientContext &context,
 struct CeilDecimalOperator {
 	template <class T, class POWERS_OF_TEN_CLASS>
 	static void Operation(DataChunk &input, uint8_t scale, Vector &result) {
-		T power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale];
+		T power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale]);
 		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
-			if (input < 0) {
+			if (input <= 0) {
 				// below 0 we floor the number (e.g. -10.5 -> -10)
-				return input / power_of_ten;
+				return UnsafeNumericCast<T>(input / power_of_ten);
 			} else {
 				// above 0 we ceil the number
-				return ((input - 1) / power_of_ten) + 1;
+				return UnsafeNumericCast<T>(((input - 1) / power_of_ten) + 1);
 			}
 		});
 	}
@@ -397,14 +397,14 @@ struct FloorOperator {
 struct FloorDecimalOperator {
 	template <class T, class POWERS_OF_TEN_CLASS>
 	static void Operation(DataChunk &input, uint8_t scale, Vector &result) {
-		T power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale];
+		T power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale]);
 		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
 			if (input < 0) {
 				// below 0 we ceil the number (e.g. -10.5 -> -11)
-				return ((input + 1) / power_of_ten) - 1;
+				return UnsafeNumericCast<T>(((input + 1) / power_of_ten) - 1);
 			} else {
 				// above 0 we floor the number
-				return input / power_of_ten;
+				return UnsafeNumericCast<T>(input / power_of_ten);
 			}
 		});
 	}
@@ -451,10 +451,10 @@ struct TruncOperator {
 struct TruncDecimalOperator {
 	template <class T, class POWERS_OF_TEN_CLASS>
 	static void Operation(DataChunk &input, uint8_t scale, Vector &result) {
-		T power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale];
+		T power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale]);
 		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
 			//	Always floor
-			return (input / power_of_ten);
+			return UnsafeNumericCast<T>((input / power_of_ten));
 		});
 	}
 };
@@ -484,6 +484,7 @@ ScalarFunctionSet TruncFun::GetFunctions() {
 		case LogicalTypeId::USMALLINT:
 		case LogicalTypeId::UINTEGER:
 		case LogicalTypeId::UBIGINT:
+		case LogicalTypeId::UHUGEINT:
 			func = ScalarFunction::NopFunction;
 			break;
 		default:
@@ -532,7 +533,7 @@ struct RoundOperator {
 struct RoundDecimalOperator {
 	template <class T, class POWERS_OF_TEN_CLASS>
 	static void Operation(DataChunk &input, uint8_t scale, Vector &result) {
-		T power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale];
+		T power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale]);
 		T addition = power_of_ten / 2;
 		// regular round rounds towards the nearest number
 		// in case of a tie we round away from zero
@@ -547,7 +548,7 @@ struct RoundDecimalOperator {
 			} else {
 				input += addition;
 			}
-			return input / power_of_ten;
+			return UnsafeNumericCast<T>(input / power_of_ten);
 		});
 	}
 };
@@ -580,8 +581,8 @@ static void DecimalRoundNegativePrecisionFunction(DataChunk &input, ExpressionSt
 		result.SetValue(0, Value::INTEGER(0));
 		return;
 	}
-	T divide_power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale + source_scale];
-	T multiply_power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale];
+	T divide_power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale + source_scale]);
+	T multiply_power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale]);
 	T addition = divide_power_of_ten / 2;
 
 	UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
@@ -590,7 +591,7 @@ static void DecimalRoundNegativePrecisionFunction(DataChunk &input, ExpressionSt
 		} else {
 			input += addition;
 		}
-		return input / divide_power_of_ten * multiply_power_of_ten;
+		return UnsafeNumericCast<T>(input / divide_power_of_ten * multiply_power_of_ten);
 	});
 }
 
@@ -599,7 +600,7 @@ static void DecimalRoundPositivePrecisionFunction(DataChunk &input, ExpressionSt
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.bind_info->Cast<RoundPrecisionFunctionData>();
 	auto source_scale = DecimalType::GetScale(func_expr.children[0]->return_type);
-	T power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[source_scale - info.target_scale];
+	T power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[source_scale - info.target_scale]);
 	T addition = power_of_ten / 2;
 	UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
 		if (input < 0) {
@@ -607,7 +608,7 @@ static void DecimalRoundPositivePrecisionFunction(DataChunk &input, ExpressionSt
 		} else {
 			input += addition;
 		}
-		return input / power_of_ten;
+		return UnsafeNumericCast<T>(input / power_of_ten);
 	});
 }
 
@@ -655,7 +656,7 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(ClientContext &context, Scala
 			bound_function.function = ScalarFunction::NopFunction;
 			target_scale = scale;
 		} else {
-			target_scale = round_value;
+			target_scale = NumericCast<uint8_t>(round_value);
 			switch (decimal_type.InternalType()) {
 			case PhysicalType::INT16:
 				bound_function.function = DecimalRoundPositivePrecisionFunction<int16_t, NumericHelper>;
@@ -1067,7 +1068,7 @@ struct ASinOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
 		if (input < -1 || input > 1) {
-			throw Exception("ASIN is undefined outside [-1,1]");
+			throw InvalidInputException("ASIN is undefined outside [-1,1]");
 		}
 		return (double)std::asin(input);
 	}
@@ -1114,6 +1115,9 @@ ScalarFunction Atan2Fun::GetFunction() {
 struct ACos {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
+		if (input < -1 || input > 1) {
+			throw InvalidInputException("ACOS is undefined outside [-1,1]");
+		}
 		return (double)std::acos(input);
 	}
 };
@@ -1199,7 +1203,9 @@ struct FactorialOperator {
 	static inline TR Operation(TA left) {
 		TR ret = 1;
 		for (TA i = 2; i <= left; i++) {
-			ret *= i;
+			if (!TryMultiplyOperator::Operation(ret, TR(i), ret)) {
+				throw OutOfRangeException("Value out of range");
+			}
 		}
 		return ret;
 	}

@@ -285,7 +285,7 @@ static bool FindKeyStruct(const char *buf, idx_t len, idx_t &pos) {
 }
 
 static bool FindValueStruct(const char *buf, idx_t len, idx_t &pos, Vector &varchar_child, idx_t &row_idx,
-                            ValidityMask *child_mask) {
+                            ValidityMask &child_mask) {
 	auto start_pos = pos;
 	idx_t lvl = 0;
 	while (pos < len) {
@@ -302,7 +302,7 @@ static bool FindValueStruct(const char *buf, idx_t len, idx_t &pos, Vector &varc
 			}
 			FlatVector::GetData<string_t>(varchar_child)[row_idx] =
 			    StringVector::AddString(varchar_child, buf + start_pos, end_pos - start_pos);
-			child_mask->SetValid(row_idx); // any child not set to valid will remain invalid
+			child_mask.SetValid(row_idx); // any child not set to valid will remain invalid
 			return true;
 		}
 		pos++;
@@ -312,7 +312,7 @@ static bool FindValueStruct(const char *buf, idx_t len, idx_t &pos, Vector &varc
 
 bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<Vector>> &varchar_vectors,
                                        idx_t &row_idx, string_map_t<idx_t> &child_names,
-                                       vector<ValidityMask *> &child_masks) {
+                                       vector<reference<ValidityMask>> &child_masks) {
 	const char *buf = input.GetData();
 	idx_t len = input.GetSize();
 	idx_t pos = 0;
@@ -332,7 +332,11 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 				return false;
 			}
 			auto key_end = StringTrim(buf, key_start, pos);
-			string_t found_key(buf + key_start, key_end - key_start);
+			if (key_start >= key_end) {
+				// empty key name unsupported
+				return false;
+			}
+			string_t found_key(buf + key_start, UnsafeNumericCast<uint32_t>(key_end - key_start));
 
 			auto it = child_names.find(found_key);
 			if (it == child_names.end()) {
@@ -340,7 +344,7 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 			}
 			child_idx = it->second;
 			SkipWhitespace(buf, ++pos, len);
-			if (!FindValueStruct(buf, len, pos, *varchar_vectors[child_idx], row_idx, child_masks[child_idx])) {
+			if (!FindValueStruct(buf, len, pos, *varchar_vectors[child_idx], row_idx, child_masks[child_idx].get())) {
 				return false;
 			}
 			SkipWhitespace(buf, ++pos, len);

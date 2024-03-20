@@ -13,7 +13,7 @@ MaterializedQueryResult::MaterializedQueryResult(StatementType statement_type, S
       collection(std::move(collection_p)), scan_initialized(false) {
 }
 
-MaterializedQueryResult::MaterializedQueryResult(PreservedError error)
+MaterializedQueryResult::MaterializedQueryResult(ErrorData error)
     : QueryResult(QueryResultType::MATERIALIZED_RESULT, std::move(error)), scan_initialized(false) {
 }
 

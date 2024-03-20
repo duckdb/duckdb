@@ -74,7 +74,7 @@ select i%3 a, unnest(first([i])) from range(10) tbl(i) group by a order by a;
 2	2
 
 query I
-select string_agg(list_value(i), ',') from range(10) tbl(i);
+select string_agg(list_value(i)::varchar, ',') from range(10) tbl(i);
 ----
 [0],[1],[2],[3],[4],[5],[6],[7],[8],[9]
 

@@ -10,7 +10,7 @@ unique_ptr<FunctionData> ReadJSONObjectsBind(ClientContext &context, TableFuncti
 	bind_data->Bind(context, input);
 
 	bind_data->names.emplace_back("json");
-	return_types.push_back(JSONCommon::JSONType());
+	return_types.push_back(LogicalType::JSON());
 	names.emplace_back("json");
 
 	bind_data->reader_bind =

@@ -99,7 +99,7 @@ SELECT list_transform([[1, 3], [2, 3, 1], [2, 4, 2]], x -> list_filter(x, y -> y
 [[1], [2, 1], [2, 2]]
 
 query I
-SELECT list_concat(list_filter([42, -42, 8, -5, 2], elem -> elem > 0), list_filter(['enjoy', 'life', 'to', 'the', 'fullest'], str -> str ILIKE '%e%'))
+SELECT list_concat(list_filter([42, -42, 8, -5, 2], elem -> elem > 0)::varchar[], list_filter(['enjoy', 'life', 'to', 'the', 'fullest'], str -> str ILIKE '%e%'))
 ----
 [42, 8, 2, enjoy, life, the, fullest]
 
@@ -163,7 +163,7 @@ SELECT n FROM corr_test WHERE list_count(list_filter(l, elem -> length(elem) >= 
 
 query I
 SELECT ct.n FROM corr_test ct
-WHERE list_count(ct.l) < (SELECT list_count(list_filter(list_concat(list(c.n), ct.l), a -> length(a) >= 1)) FROM corr_test c GROUP BY c.g)
+WHERE list_count(ct.l) < (SELECT list_count(list_filter(list_concat(list(c.n)::varchar[], ct.l), a -> length(a) >= 1)) FROM corr_test c GROUP BY c.g)
 ORDER BY ct.n
 ----
 0

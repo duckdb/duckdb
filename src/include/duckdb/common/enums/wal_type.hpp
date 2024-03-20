@@ -54,6 +54,7 @@ enum class WALType : uint8_t {
 	// -----------------------------
 	// Flush
 	// -----------------------------
+	WAL_VERSION = 98,
 	CHECKPOINT = 99,
 	WAL_FLUSH = 100
 };

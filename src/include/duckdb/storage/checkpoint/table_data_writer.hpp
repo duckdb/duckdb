@@ -36,6 +36,8 @@ public:
 
 	virtual void AddRowGroup(RowGroupPointer &&row_group_pointer, unique_ptr<RowGroupWriter> &&writer);
 
+	TaskScheduler &GetScheduler();
+
 protected:
 	DuckTableEntry &table;
 	//! Pointers to the start of each row group.

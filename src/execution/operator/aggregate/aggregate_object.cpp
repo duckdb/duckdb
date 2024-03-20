@@ -22,13 +22,14 @@ AggregateObject::AggregateObject(BoundAggregateExpression *aggr)
 
 AggregateObject::AggregateObject(BoundWindowExpression &window)
     : AggregateObject(*window.aggregate, window.bind_info.get(), window.children.size(),
-                      AlignValue(window.aggregate->state_size()), AggregateType::NON_DISTINCT,
+                      AlignValue(window.aggregate->state_size()),
+                      window.distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT,
                       window.return_type.InternalType(), window.filter_expr.get()) {
 }
 
 vector<AggregateObject> AggregateObject::CreateAggregateObjects(const vector<BoundAggregateExpression *> &bindings) {
 	vector<AggregateObject> aggregates;
-	aggregates.reserve(aggregates.size());
+	aggregates.reserve(bindings.size());
 	for (auto &binding : bindings) {
 		aggregates.emplace_back(binding);
 	}

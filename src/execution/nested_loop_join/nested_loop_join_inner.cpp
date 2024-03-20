@@ -1,4 +1,5 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/execution/nested_loop_join.hpp"
 
 namespace duckdb {
@@ -108,6 +109,9 @@ static idx_t NestedLoopJoinTypeSwitch(Vector &left, Vector &right, idx_t left_si
 	case PhysicalType::INT128:
 		return NLTYPE::template Operation<hugeint_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector,
 		                                                 rvector, current_match_count);
+	case PhysicalType::UINT128:
+		return NLTYPE::template Operation<uhugeint_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector,
+		                                                  rvector, current_match_count);
 	case PhysicalType::FLOAT:
 		return NLTYPE::template Operation<float, OP>(left, right, left_size, right_size, lpos, rpos, lvector, rvector,
 		                                             current_match_count);

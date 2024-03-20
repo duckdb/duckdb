@@ -1,9 +1,12 @@
 # name: test/sql/create/create_table_compression.test
-# description: Test CREATE TABLE using Compression Option
+# description: Test CREATE TABLE using compression options
 # group: [create]
 
-require skip_reload
+# for small block sizes, this test will default to another compression function, as the bitpacking groups
+# no longer fit the blocks
+require block_size 262144
 
+require skip_reload
 
 statement ok
 PRAGMA enable_verification
@@ -33,7 +36,6 @@ CREATE TABLE T (a INTEGER USING COMPRESSION bla)
 statement ok
 CREATE TABLE T (a INTEGER NOT NULL USING COMPRESSION RLE)
 
-
 statement ok
 DROP TABLE T
 
@@ -49,7 +51,6 @@ CREATE TABLE T (a INTEGER USING COMPRESSION RLE, b VARCHAR )
 statement ok
 DROP TABLE T
 
-# load the DB from disk
 load __TEST_DIR__/test_compression_hint.db
 
 statement ok
@@ -92,7 +93,6 @@ Uncompressed
 
 statement ok
 ALTER TABLE T RENAME COLUMN a TO a_1
-
 
 statement ok
 ALTER TABLE T RENAME COLUMN b TO b_1

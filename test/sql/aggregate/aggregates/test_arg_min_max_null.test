@@ -1,0 +1,152 @@
+# name: test/sql/aggregate/aggregates/test_arg_min_max_null.test
+# description: Test arg_min_null and arg_max_null operator
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA verify_external
+
+#Corner cases
+statement error
+select arg_min_null()
+----
+
+query I
+select arg_min_null(NULL,NULL)
+----
+NULL
+
+query I
+select arg_min_null(1,1)
+----
+1
+
+statement error
+select arg_min_null(*)
+----
+
+query I
+select arg_min_null(i,i) from range (100) tbl(i);
+----
+0
+
+query I
+select arg_min_null(i,i) from range (100) tbl(i) where 1 = 0;
+----
+NULL
+
+statement error
+select arg_max_null()
+----
+
+query I
+select arg_max_null(NULL,NULL)
+----
+NULL
+
+query I
+select arg_max_null(1,1)
+----
+1
+
+statement error
+select arg_max_null(*)
+----
+
+query I
+select arg_max_null(i,i) from range (100) tbl(i);
+----
+99
+
+query I
+select arg_max_null(i,i) from range (100) tbl(i) where 1 = 0;
+----
+NULL
+
+statement ok
+create table args (a integer, b integer)
+
+statement ok
+insert into args values (1,1), (2,2), (8,8), (10,10)
+
+query II
+select arg_min_null(a,b), arg_max_null(a,b) from args;
+----
+1.000000	10.000000
+
+query II
+select arg_min_null(a,b), arg_max_null(a,b) from args group by a%2 ORDER BY arg_min_null(a,b);
+----
+1	1
+2	10
+
+statement ok
+insert into args values (NULL, 0), (NULL, 12)
+
+query II
+select arg_min_null(a,b), arg_max_null(a,b) from args;
+----
+NULL	NULL
+
+query II
+select arg_min_null(a,b), arg_max_null(a,b) from args group by a%2 ORDER BY arg_min_null(a,b);
+----
+1	1
+2	10
+NULL	NULL
+
+statement ok
+CREATE TABLE blobs (b BYTEA, a BIGINT);
+
+statement ok
+INSERT INTO blobs VALUES('\xaa\xff\xaa',5), ('\xAA\xFF\xAA\xAA\xFF\xAA',30), ('\xAA\xFF\xAA\xAA\xFF\xAA\xAA\xFF\xAA',20)
+
+query II
+select arg_min_null(b,a), arg_max_null(b,a)  from blobs ;
+----
+\xAA\xFF\xAA	\xAA\xFF\xAA\xAA\xFF\xAA
+
+query II
+select arg_min_null(a,b), arg_max_null(a,b)  from blobs;
+----
+5	20
+
+# Window Function
+query I rowsort
+select arg_min_null(a,b) over ( partition by a%2) from args;
+----
+1
+2
+2
+2
+NULL
+NULL
+
+query I rowsort
+select arg_max_null(a,b) over ( partition by a%2) from args;
+----
+1
+10
+10
+10
+NULL
+NULL
+
+statement ok
+create table names (name string, salary integer)
+
+statement ok
+insert into names values ('Pedro',10), ('Hannes',20), ('Mark',15), ('Hubert-Blaine-Wolfeschlegelsteinhausenbergerdorff',30)
+
+query II
+select arg_min_null(name,salary),arg_max_null(name,salary)  from names;
+----
+Pedro	Hubert-Blaine-Wolfeschlegelsteinhausenbergerdorff
+
+query II
+select arg_min_null(salary,name),arg_max_null(salary,name)  from names;
+----
+20	10
+

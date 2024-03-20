@@ -54,7 +54,7 @@ HyperLogLog *HyperLogLog::MergePointer(HyperLogLog &other) {
 	hlls[1] = other.hll;
 	auto new_hll = duckdb_hll::hll_merge(hlls, 2);
 	if (!new_hll) {
-		throw Exception("Could not merge HLLs");
+		throw InternalException("Could not merge HLLs");
 	}
 	return new HyperLogLog(new_hll);
 }
@@ -125,6 +125,12 @@ inline uint64_t TemplatedHash(const T &elem) {
 
 template <>
 inline uint64_t TemplatedHash(const hugeint_t &elem) {
+	return TemplatedHash<uint64_t>(Load<uint64_t>(const_data_ptr_cast(&elem.upper))) ^
+	       TemplatedHash<uint64_t>(elem.lower);
+}
+
+template <>
+inline uint64_t TemplatedHash(const uhugeint_t &elem) {
 	return TemplatedHash<uint64_t>(Load<uint64_t>(const_data_ptr_cast(&elem.upper))) ^
 	       TemplatedHash<uint64_t>(elem.lower);
 }
@@ -226,9 +232,10 @@ static void ComputeHashes(UnifiedVectorFormat &vdata, const LogicalType &type, u
 	case PhysicalType::DOUBLE:
 		return TemplatedComputeHashes<uint64_t>(vdata, count, hashes);
 	case PhysicalType::INT128:
+	case PhysicalType::UINT128:
 	case PhysicalType::INTERVAL:
-		static_assert(sizeof(hugeint_t) == sizeof(interval_t), "ComputeHashes assumes these are the same size!");
-		return TemplatedComputeHashes<hugeint_t>(vdata, count, hashes);
+		static_assert(sizeof(uhugeint_t) == sizeof(interval_t), "ComputeHashes assumes these are the same size!");
+		return TemplatedComputeHashes<uhugeint_t>(vdata, count, hashes);
 	case PhysicalType::VARCHAR:
 		return TemplatedComputeHashes<string_t>(vdata, count, hashes);
 	default:

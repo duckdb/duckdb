@@ -9,14 +9,6 @@ CompressionType RowGroupWriter::GetColumnCompressionType(idx_t i) {
 	return table.GetColumn(LogicalIndex(i)).CompressionType();
 }
 
-void RowGroupWriter::RegisterPartialBlock(PartialBlockAllocation &&allocation) {
-	partial_block_manager.RegisterPartialBlock(std::move(allocation));
-}
-
-PartialBlockAllocation RowGroupWriter::GetBlockAllocation(uint32_t segment_size) {
-	return partial_block_manager.GetBlockAllocation(segment_size);
-}
-
 void SingleFileRowGroupWriter::WriteColumnDataPointers(ColumnCheckpointState &column_checkpoint_state,
                                                        Serializer &serializer) {
 	const auto &data_pointers = column_checkpoint_state.data_pointers;

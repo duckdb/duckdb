@@ -1,7 +1,8 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
+
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
@@ -113,6 +114,9 @@ static void ExecuteListExtractInternal(const idx_t count, UnifiedVectorFormat &l
 		break;
 	case PhysicalType::UINT64:
 		ListExtractTemplate<uint64_t>(count, list, offsets, child_vector, list_size, result);
+		break;
+	case PhysicalType::UINT128:
+		ListExtractTemplate<uhugeint_t>(count, list, offsets, child_vector, list_size, result);
 		break;
 	case PhysicalType::FLOAT:
 		ListExtractTemplate<float>(count, list, offsets, child_vector, list_size, result);
@@ -244,7 +248,8 @@ void ListExtractFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet array_extract("array_extract");
 	array_extract.AddFunction(lfun);
 	array_extract.AddFunction(sfun);
-	array_extract.AddFunction(StructExtractFun::GetFunction());
+	array_extract.AddFunction(StructExtractFun::KeyExtractFunction());
+	array_extract.AddFunction(StructExtractFun::IndexExtractFunction());
 	set.AddFunction(array_extract);
 }
 

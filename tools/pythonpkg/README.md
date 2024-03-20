@@ -22,10 +22,10 @@ Note that this will override any existing DuckDB installation you might have. Yo
     source .venv/bin/activate
     BUILD_PYTHON=1 make
 
-You can also directly invoke the setup.py script from the `tools/pythonpkg` environment.
+You can also directly invoke pip from the `tools/pythonpkg` environment.
 
     cd tools/pythonpkg
-    python3 setup.py install
+    python3 -m pip install .
 
 Alternatively, using virtualenv and pip:
 
@@ -49,9 +49,10 @@ storage from a notebook.
 
 First, get the repository based version number and extract the source distribution.
 
+    python3 -m pip install build # required for pep517 compliant source dists
     cd tools/pythonpkg
-    export SETUPTOOLS_SCM_PRETEND_VERSION=$(python setup.py --version)
-    python setup.py sdist
+    export SETUPTOOLS_SCM_PRETEND_VERSION=$(python3 -m setuptools_scm)
+    pyproject-build . --sdist
     cd ../..
 
 Next, copy over the python package related files, and install the package.
@@ -106,9 +107,31 @@ pytest tests/stubs
 
 All the above should be done in a virtualenv.
 
+## Frequently encountered issue with extensions:
+
+If you are faced with an error on `import duckdb`:
+```
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+  File "/usr/bin/python3/site-packages/duckdb/__init__.py", line 4, in <module>
+    import duckdb.functional as functional
+  File "/usr/bin/python3/site-packages/duckdb/functional/__init__.py", line 1, in <module>
+    from duckdb.duckdb.functional import (
+ImportError: dlopen(/usr/bin/python3/site-packages/duckdb/duckdb.cpython-311-darwin.so, 0x0002): symbol not found in flat namespace '_MD5_Final'
+```
+
+When building DuckDB it outputs which extensions are linked into DuckDB, the python package does not deal with linked in extensions very well.
+The output looks something like this:
+`-- Extensions linked into DuckDB: [json, fts, tpcds, tpch, parquet, icu, httpfs]`
+
+`httpfs` should not be in that list, among others.
+Refer to `extension/extension_config_local.cmake` or the other `*.cmake` files and make sure you add DONT_LINK to the problematic extension.
+`tools/pythonpkg/duckdb_extension_config.cmake` contains the default list of extensions built for the python package
+Anything that is linked that is not listed there should be considered problematic.
+
 ## Clang-tidy and CMakeLists
 
-The pythonpkg does not use the CMakeLists for compilation, for that it uses `setup.py` and `package_build.py` mostly.
+The pythonpkg does not use the CMakeLists for compilation, for that it uses pip and `package_build.py` mostly.
 But we still have CMakeLists in the pythonpkg, for tidy-check and intellisense purposes.
 For this reason it might not be instantly apparent that the CMakeLists are incorrectly set up, and will only result in a very confusing CI failure of TidyCheck.
 

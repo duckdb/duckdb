@@ -1,14 +1,27 @@
 name: Python
 on:
+  workflow_call:
+    inputs:
+      override_git_describe:
+        type: string
+      git_ref:
+        type: string
+      skip_tests:
+        type: string
   workflow_dispatch:
+    inputs:
+      override_git_describe:
+        type: string
+      git_ref:
+        type: string
+      skip_tests:
+        type: string
   repository_dispatch:
   push:
     branches:
       - '**'
       - '!main'
       - '!feature'
-    tags:
-      - '**'
     paths-ignore:
       - '**.md'
       - 'examples/**'
@@ -33,11 +46,13 @@ on:
 
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
+  group: python-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
   cancel-in-progress: true
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
+  CIBW_TEST_SKIP: ${{ inputs.skip_tests == 'true' && '*-*' || '' }}
 
 jobs:
 #  This is just a sanity check of Python 3.9 running with Arrow
@@ -48,21 +63,22 @@ jobs:
     env:
       CIBW_BUILD: 'cp39-manylinux_x86_64'
       CIBW_TEST_COMMAND: 'python -m pytest {project}/tests --verbose'
-      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       PYTEST_TIMEOUT: '600'
+      CIBW_ENVIRONMENT: 'OVERRIDE_GIT_DESCRIBE=${{ inputs.override_git_describe }}'
 
     steps:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+        ref: ${{ inputs.git_ref }}
 
-    - uses: actions/setup-python@v4
+    - uses: actions/setup-python@v5
       with:
-        python-version: '3.9'
+        python-version: '3.10'
 
     - name: Install
       shell: bash
-      run: pip install cibuildwheel twine
+      run: pip install 'cibuildwheel>=2.16.2' build
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -74,7 +90,7 @@ jobs:
       shell: bash
       working-directory: tools/pythonpkg
       run: |
-        python setup.py sdist
+        pyproject-build . --sdist
         mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
     - name: Build
       shell: bash
@@ -85,8 +101,7 @@ jobs:
         cibuildwheel --output-dir wheelhouse --config-file pyproject.toml duckdb_tarball
 
    manylinux-extensions-x64:
-    # Builds extensions for linux_md64_gcc4
-    name: Linux Extensions (gcc4)
+    name: Linux Extensions (linux_amd64_gcc4)
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
     needs: linux-python3-9
@@ -97,6 +112,7 @@ jobs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+        ref: ${{ inputs.git_ref }}
 
     - uses: ./.github/actions/manylinux_2014_setup
       with:
@@ -116,8 +132,8 @@ jobs:
         s3_id: ${{ secrets.S3_ID }}
         s3_key: ${{ secrets.S3_KEY }}
         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-        run_tests: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-        run_autoload_tests: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
+        run_autoload_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
         treat_warn_as_error: 0
         ninja: 1
 
@@ -133,16 +149,23 @@ jobs:
     strategy:
       matrix:
         arch: [x86_64, aarch64]
-        python_build: [cp37-*, cp38-*, cp39-*, cp310-*, cp311-*]
+        python_build: [cp37-*, cp38-*, cp39-*, cp310-*, cp311-*, cp312-*]
+        manylinux: [manylinux2014, manylinux_2_28]
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' }}
         exclude:
+          # For now we don't distribute the 2_28 wheels on x64
+          - arch: x86_64
+            manylinux: manylinux_2_28
+          # Speed things up a bit for non-releases
           - isRelease: false
             python_build: 'cp37-*'
           - isRelease: false
             python_build: 'cp38-*'
           - isRelease: false
             python_build: 'cp39-*'
+          - isRelease: false
+            python_build: 'cp310-*'
           - isRelease: false
             python_build: 'cp311-*'
           - isRelease: false
@@ -152,27 +175,32 @@ jobs:
       CIBW_BUILD: ${{ matrix.python_build}}
       CIBW_SKIP: '*-musllinux_aarch64'
       CIBW_ARCHS: ${{ matrix.arch == 'aarch64' && 'aarch64' || 'auto64' }}
-      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
+      CIBW_MANYLINUX_AARCH64_IMAGE: ${{ matrix.manylinux }}
+      CIBW_MANYLINUX_PYPY_AARCH64_IMAGE: ${{ matrix.manylinux }}
+      CIBW_MANYLINUX_X86_64_IMAGE: ${{ matrix.manylinux }}
+      CIBW_MANYLINUX_PYPY_X86_64_IMAGE: ${{ matrix.manylinux }}
       PYTEST_TIMEOUT: '600'
       DUCKDB_BUILD_UNITY: 1
+      CIBW_ENVIRONMENT: 'OVERRIDE_GIT_DESCRIBE=${{ inputs.override_git_describe }}'
 
     steps:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+        ref: ${{ inputs.git_ref }}
 
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v2
       if: ${{ matrix.arch == 'aarch64' }}
 
-    - uses: actions/setup-python@v4
+    - uses: actions/setup-python@v5
       with:
-        python-version: '3.7'
+        python-version: '3.10'
 
     - name: Install
       shell: bash
       run: |
-        pip install cibuildwheel twine
+        pip install 'cibuildwheel>=2.16.2' build
         python -m pip install numpy --config-settings=setup-args="-Dallow-noblas=true"
 
     - uses: actions/download-artifact@v3
@@ -187,7 +215,7 @@ jobs:
         find tools/pythonpkg -maxdepth 2 -type f -name "*.duckdb_extension"
 
     - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
+      uses: hendrikmuhs/ccache-action@v1.2.11 # Note: pinned due to GLIBC incompatibility in later releases
       with:
         key: ${{ github.job }}-${{ matrix.arch }}-${{ matrix.python_build }}
         save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
@@ -196,7 +224,7 @@ jobs:
       shell: bash
       run: |
         cd tools/pythonpkg
-        python setup.py sdist
+        pyproject-build . --sdist
         mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         ls duckdb_tarball
         export DISTUTILS_C_COMPILER_LAUNCHER=ccache
@@ -209,14 +237,13 @@ jobs:
 
     - name: Deploy
       env:
-        TWINE_USERNAME: '__token__'
-        TWINE_PASSWORD: ${{ secrets.TWINE_TOKEN }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       shell: bash
       run: |
-        python scripts/asset-upload-gha.py duckdb_python_src.tar.gz=tools/pythonpkg/dist/duckdb-*.tar.gz
-        if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-          twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
-        fi
+        cp tools/pythonpkg/dist/duckdb-*.tar.gz duckdb_python_src.tar.gz
+        ./scripts/upload-assets-to-staging.sh github_release duckdb_python_src.tar.gz
+        ./scripts/upload-assets-to-staging.sh twine_upload duckdb_python_src.tar.gz tools/pythonpkg/wheelhouse/*.whl
 
    osx-python3:
       if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
@@ -224,28 +251,27 @@ jobs:
       runs-on: macos-latest
       strategy:
        matrix:
-        python_build: [cp37-*, cp38-*, cp39-*, cp310-*, cp311-*]
+        python_build: [cp37-*, cp38-*, cp39-*, cp310-*, cp311-*, cp312-*]
       needs: linux-python3-9
       env:
         CIBW_BUILD: ${{ matrix.python_build}}
         CIBW_ARCHS: 'x86_64 universal2 arm64'
         CIBW_TEST_COMMAND: 'python -m pytest {project}/tests/fast  --verbose'
-        SETUPTOOLS_SCM_NO_LOCAL: 'yes'
-        TWINE_USERNAME: '__token__'
         DUCKDB_BUILD_UNITY: 1
 
       steps:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
+          ref: ${{ inputs.git_ref }}
 
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.7'
+          python-version: '3.10'
 
       - name: Install
         shell: bash
-        run: pip install cibuildwheel twine
+        run: pip install 'cibuildwheel>=2.16.2' build
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
@@ -257,7 +283,7 @@ jobs:
         shell: bash
         run: |
           cd tools/pythonpkg
-          python setup.py sdist
+          pyproject-build . --sdist
           mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
           export DISTUTILS_C_COMPILER_LAUNCHER=ccache
           # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
@@ -268,20 +294,18 @@ jobs:
 
       - name: Deploy
         env:
-          TWINE_USERNAME: '__token__'
-          TWINE_PASSWORD: ${{ secrets.TWINE_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         shell: bash
         run: |
-          if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-            twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
-          fi
+          ./scripts/upload-assets-to-staging.sh twine_upload tools/pythonpkg/wheelhouse/*.whl
 
    win-python3:
       name: Python 3 Windows
       runs-on: windows-2019
       strategy:
        matrix:
-        python_build: [cp37-*, cp38-*, cp39-*, cp310-*, cp311-*]
+        python_build: [cp37-*, cp38-*, cp39-*, cp310-*, cp311-*, cp312-*]
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' }}
         exclude:
@@ -297,23 +321,21 @@ jobs:
 
       env:
         CIBW_BUILD: ${{ matrix.python_build}}
-        SETUPTOOLS_SCM_NO_LOCAL: 'yes'
-        SETUPTOOLS_USE_DISTUTILS: 'stdlib'
-        TWINE_USERNAME: '__token__'
         DUCKDB_BUILD_UNITY: 1
 
       steps:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
+          ref: ${{ inputs.git_ref }}
 
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.7'
+          python-version: '3.10'
 
       - name: Install
         shell: bash
-        run: pip install cibuildwheel twine
+        run: pip install 'cibuildwheel>=2.16.2' build
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
@@ -321,12 +343,17 @@ jobs:
           key: ${{ github.job }}-${{ matrix.python_build }}
           save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
-      - name: Build
+      - name: Build source dist
         shell: bash
+        working-directory: tools/pythonpkg
         run: |
-          cd tools/pythonpkg
-          python setup.py sdist
+          pyproject-build . --sdist
           mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+
+      - name: Build wheels
+        shell: bash
+        working-directory: tools/pythonpkg
+        run: |
           export DISTUTILS_C_COMPILER_LAUNCHER=ccache
           # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
           if [[ "$GITHUB_REF" =~ ^refs/tags/v.+$ ]] ; then
@@ -336,13 +363,11 @@ jobs:
 
       - name: Deploy
         env:
-          TWINE_USERNAME: '__token__'
-          TWINE_PASSWORD: ${{ secrets.TWINE_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         shell: bash
         run: |
-          if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-            twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
-          fi
+          ./scripts/upload-assets-to-staging.sh twine_upload tools/pythonpkg/wheelhouse/*.whl
 
    linux-release-cleanup:
      if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
@@ -358,10 +383,11 @@ jobs:
      - uses: actions/checkout@v3
        with:
          fetch-depth: 0
+         ref: ${{ inputs.git_ref }}
 
-     - uses: actions/setup-python@v4
+     - uses: actions/setup-python@v5
        with:
-         python-version: '3.7'
+         python-version: '3.10'
 
      - name: Install Packages
        shell: bash
@@ -369,4 +395,5 @@ jobs:
 
      - name: Cleanup Releases
        shell: bash
+       if: ${{ github.ref == 'refs/heads/main' && github.repository == 'duckdb/duckdb' }}
        run: python3 scripts/pypi_cleanup.py

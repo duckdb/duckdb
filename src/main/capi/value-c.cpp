@@ -3,6 +3,7 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/uhugeint.hpp"
 
 #include "duckdb/main/capi/cast/generic.hpp"
 
@@ -17,6 +18,7 @@ using duckdb::interval_t;
 using duckdb::StringCast;
 using duckdb::timestamp_t;
 using duckdb::ToCStringCastWrapper;
+using duckdb::uhugeint_t;
 using duckdb::UnsafeFetch;
 
 bool duckdb_value_boolean(duckdb_result *result, idx_t col, idx_t row) {
@@ -63,6 +65,14 @@ duckdb_decimal duckdb_value_decimal(duckdb_result *result, idx_t col, idx_t row)
 duckdb_hugeint duckdb_value_hugeint(duckdb_result *result, idx_t col, idx_t row) {
 	duckdb_hugeint result_value;
 	auto internal_value = GetInternalCValue<hugeint_t>(result, col, row);
+	result_value.lower = internal_value.lower;
+	result_value.upper = internal_value.upper;
+	return result_value;
+}
+
+duckdb_uhugeint duckdb_value_uhugeint(duckdb_result *result, idx_t col, idx_t row) {
+	duckdb_uhugeint result_value;
+	auto internal_value = GetInternalCValue<uhugeint_t>(result, col, row);
 	result_value.lower = internal_value.lower;
 	result_value.upper = internal_value.upper;
 	return result_value;

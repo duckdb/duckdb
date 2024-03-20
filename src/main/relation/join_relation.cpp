@@ -12,7 +12,7 @@ JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> rig
     : Relation(left_p->context, RelationType::JOIN_RELATION), left(std::move(left_p)), right(std::move(right_p)),
       condition(std::move(condition_p)), join_type(type), join_ref_type(join_ref_type) {
 	if (left->context.GetContext() != right->context.GetContext()) {
-		throw Exception("Cannot combine LEFT and RIGHT relations of different connections!");
+		throw InvalidInputException("Cannot combine LEFT and RIGHT relations of different connections!");
 	}
 	context.GetContext()->TryBindRelation(*this, this->columns);
 }
@@ -22,7 +22,7 @@ JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> rig
     : Relation(left_p->context, RelationType::JOIN_RELATION), left(std::move(left_p)), right(std::move(right_p)),
       using_columns(std::move(using_columns_p)), join_type(type), join_ref_type(join_ref_type) {
 	if (left->context.GetContext() != right->context.GetContext()) {
-		throw Exception("Cannot combine LEFT and RIGHT relations of different connections!");
+		throw InvalidInputException("Cannot combine LEFT and RIGHT relations of different connections!");
 	}
 	context.GetContext()->TryBindRelation(*this, this->columns);
 }

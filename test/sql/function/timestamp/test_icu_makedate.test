@@ -420,7 +420,7 @@ SELECT make_timestamptz(
 	CAST(a."bigint" AS BIGINT), CAST(a."bigint" AS BIGINT), 
 	CAST(a."bigint" AS BIGINT), CAST(a."bigint" AS BIGINT), 
 	CAST(txid_current() AS BIGINT), 
-	CAST(CAST(COALESCE(a."bigint", a."bigint") AS BIGINT) AS BIGINT))
+	CAST(CAST(COALESCE(a."bigint", a."bigint") AS BIGINT) AS VARCHAR))
 FROM all_types a;
 ----
 Overflow in subtraction

@@ -25,7 +25,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 	// because they make deletions and lookups unfeasible
 	for (idx_t i = 0; i < op.unbound_expressions.size(); i++) {
 		auto &expr = op.unbound_expressions[i];
-		if (expr->HasSideEffects()) {
+		if (!expr->IsConsistent()) {
 			throw BinderException("Index keys cannot contain expressions with side effects.");
 		}
 	}
@@ -33,7 +33,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 	// if we get here and the index type is not ART, we throw an exception
 	// because we don't support any other index type yet. However, an operator extension could have
 	// replaced this part of the plan with a different index creation operator.
-	if (op.info->index_type != "ART") {
+	if (op.info->index_type != ART::TYPE_NAME) {
 		throw BinderException("Unknown index type: " + op.info->index_type);
 	}
 

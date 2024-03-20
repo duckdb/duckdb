@@ -81,7 +81,9 @@ struct ToWeeksOperator {
 	static inline TR Operation(TA input) {
 		interval_t result;
 		result.months = 0;
-		result.days = input * 7;
+		if (!TryMultiplyOperator::Operation<int32_t, int32_t, int32_t>(input, Interval::DAYS_PER_WEEK, result.days)) {
+			throw OutOfRangeException("Interval value %d weeks out of range", input);
+		}
 		result.micros = 0;
 		return result;
 	}
@@ -184,13 +186,13 @@ ScalarFunction ToDaysFun::GetFunction() {
 }
 
 ScalarFunction ToHoursFun::GetFunction() {
-	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::INTERVAL,
-	                      ScalarFunction::UnaryFunction<double, interval_t, ToHoursOperator>);
+	return ScalarFunction({LogicalType::BIGINT}, LogicalType::INTERVAL,
+	                      ScalarFunction::UnaryFunction<int64_t, interval_t, ToHoursOperator>);
 }
 
 ScalarFunction ToMinutesFun::GetFunction() {
-	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::INTERVAL,
-	                      ScalarFunction::UnaryFunction<double, interval_t, ToMinutesOperator>);
+	return ScalarFunction({LogicalType::BIGINT}, LogicalType::INTERVAL,
+	                      ScalarFunction::UnaryFunction<int64_t, interval_t, ToMinutesOperator>);
 }
 
 ScalarFunction ToSecondsFun::GetFunction() {

@@ -1,0 +1,22 @@
+# name: test/sql/types/numeric/ubigint_arithmetic_casting.test
+# description: UBIGINT arithmetic
+# group: [numeric]
+
+statement ok
+PRAGMA enable_verification
+
+# ubigint casts
+query I
+SELECT typeof(1::UBIGINT + 1::TINYINT)
+----
+HUGEINT
+
+query I
+SELECT typeof(1::UBIGINT + 1)
+----
+UBIGINT
+
+query I
+SELECT typeof(1::UBIGINT + 10000)
+----
+UBIGINT

@@ -121,7 +121,15 @@ struct ApproxQuantileScalarOperation : public ApproxQuantileOperation {
 		state.h->compress();
 		auto &bind_data = finalize_data.input.bind_data->template Cast<ApproximateQuantileBindData>();
 		D_ASSERT(bind_data.quantiles.size() == 1);
-		target = Cast::template Operation<SAVE_TYPE, TARGET_TYPE>(state.h->quantile(bind_data.quantiles[0]));
+		// The result is approximate, so clamp instead of overflowing.
+		const auto source = state.h->quantile(bind_data.quantiles[0]);
+		if (TryCast::Operation(source, target, false)) {
+			return;
+		} else if (source < 0) {
+			target = NumericLimits<TARGET_TYPE>::Minimum();
+		} else {
+			target = NumericLimits<TARGET_TYPE>::Maximum();
+		}
 	}
 };
 

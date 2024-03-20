@@ -206,7 +206,7 @@ class DateTimeTests(unittest.TestCase):
         self.assertEqual(ts, ts2)
 
     def test_CheckSqlTimestamp(self):
-        now = datetime.datetime.utcnow()
+        now = datetime.datetime.now(datetime.UTC) if hasattr(datetime, 'UTC') else datetime.datetime.utcnow()
         self.cur.execute("insert into test(ts) values (current_timestamp)")
         self.cur.execute("select ts from test")
         ts = self.cur.fetchone()[0]

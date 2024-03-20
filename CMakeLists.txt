@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.5)
 
+if(NOT CLANG_TIDY)
+  find_package(Python3)
+endif()
+
 if(POLICY CMP0026)
   cmake_policy(SET CMP0026 NEW)
 endif()
@@ -90,8 +94,6 @@ if(${FORCE_COLORED_OUTPUT})
   endif()
 endif()
 
-option("Enable address sanitizer." TRUE)
-
 set(M32_FLAG "")
 if(FORCE_32_BIT)
   set(M32_FLAG " -m32 ")
@@ -120,7 +122,7 @@ endif()
 option(FORCE_WARN_UNUSED "Unused code objects lead to compiler warnings." FALSE)
 
 option(ENABLE_EXTENSION_AUTOLOADING "Enable extension auto-loading by default." FALSE)
-option(ENABLE_EXTENSION_AUTOINSTAll "Enable extension auto-installing by default." FALSE)
+option(ENABLE_EXTENSION_AUTOINSTALL "Enable extension auto-installing by default." FALSE)
 option(EXTENSION_TESTS_ONLY "Only load the tests for extensions, don't actually build them; useful for testing loadable extensions" FALSE)
 option(WASM_LOADABLE_EXTENSIONS "WebAssembly build with loadable extensions." FALSE)
 option(ENABLE_SANITIZER "Enable address sanitizer." TRUE)
@@ -239,54 +241,87 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "SunOS")
   set(SUN TRUE)
 endif()
 
-find_package(Git)
-if(Git_FOUND)
-  if (NOT DEFINED GIT_COMMIT_HASH)
-    execute_process(
+
+if (OVERRIDE_GIT_DESCRIBE)
+  if (OVERRIDE_GIT_DESCRIBE MATCHES "^v[0-9]+\.[0-9]+\.[0-9]+\-[0-9]+\-g[a-f0-9]+$")
+    set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE}")
+  elseif(OVERRIDE_GIT_DESCRIBE MATCHES "^v[0-9]+\.[0-9]+\.[0-9]+$")
+    find_package(Git)
+    if(Git_FOUND)
+      execute_process(
             COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
             RESULT_VARIABLE GIT_RESULT
             OUTPUT_VARIABLE GIT_COMMIT_HASH
             OUTPUT_STRIP_TRAILING_WHITESPACE)
+        set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE}-0-g${GIT_COMMIT_HASH}")
+    else()
+      set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE}-0-g0123456789")
+    endif()
+  else()
+    message(FATAL_ERROR "Provided OVERRIDE_GIT_DESCRIBE '${OVERRIDE_GIT_DESCRIBE}' do not match supported versions, either fully specified 'vX.Y.Z-N-gGITHASH123' or version only 'vX.Y.Z'")
   endif()
-  execute_process(
-          COMMAND ${GIT_EXECUTABLE} describe --tags --abbrev=0
-          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-          OUTPUT_VARIABLE GIT_LAST_TAG
-          OUTPUT_STRIP_TRAILING_WHITESPACE)
-  execute_process(
+else()
+  find_package(Git)
+  if(Git_FOUND)
+     if (NOT DEFINED GIT_COMMIT_HASH)
+     execute_process(
+            COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            RESULT_VARIABLE GIT_RESULT
+            OUTPUT_VARIABLE GIT_COMMIT_HASH
+            OUTPUT_STRIP_TRAILING_WHITESPACE)
+    endif()
+    execute_process(
           COMMAND ${GIT_EXECUTABLE} describe --tags --long
           WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-          OUTPUT_VARIABLE GIT_ITERATION
+          OUTPUT_VARIABLE GIT_DESCRIBE
           OUTPUT_STRIP_TRAILING_WHITESPACE)
-else()
-  message("Git NOT FOUND")
+  else()
+    message("Git NOT FOUND and EXTERNAL_GIT_DESCRIBE not provided, continuing with dummy version v0.0.1")
+    set(GIT_DESCRIBE "v0.0.1-0-g0123456789")
+  endif()
 endif()
 
-if(GIT_RESULT EQUAL "0")
-  string(REGEX REPLACE "v([0-9]+).[0-9]+.[0-9]+" "\\1" DUCKDB_MAJOR_VERSION "${GIT_LAST_TAG}")
-  string(REGEX REPLACE "v[0-9]+.([0-9]+).[0-9]+" "\\1" DUCKDB_MINOR_VERSION "${GIT_LAST_TAG}")
-  string(REGEX REPLACE "v[0-9]+.[0-9]+.([0-9]+)" "\\1" DUCKDB_PATCH_VERSION "${GIT_LAST_TAG}")
-  string(REGEX REPLACE ".*-([0-9]+)-.*" "\\1" DUCKDB_DEV_ITERATION "${GIT_ITERATION}")
+string(REGEX REPLACE "v([0-9]+)\.[0-9]+\.[0-9]+\-.*" "\\1" DUCKDB_MAJOR_VERSION "${GIT_DESCRIBE}")
+string(REGEX REPLACE "v[0-9]+\.([0-9]+)\.[0-9]+\-.*" "\\1" DUCKDB_MINOR_VERSION "${GIT_DESCRIBE}")
+string(REGEX REPLACE "v[0-9]+\.[0-9]+\.([0-9]+)\-.*" "\\1" DUCKDB_PATCH_VERSION "${GIT_DESCRIBE}")
+string(REGEX REPLACE "v[0-9]+\.[0-9]+\.[0-9]+\-([0-9]+)\-g.*" "\\1" DUCKDB_DEV_ITERATION "${GIT_DESCRIBE}")
+if (NOT DEFINED GIT_COMMIT_HASH)
+  string(REGEX REPLACE "v[0-9]+\.[0-9]+\.[0-9]+\-[0-9]+\-g([a-f0-9]+)" "\\1" GIT_COMMIT_HASH "${GIT_DESCRIBE}")
+endif()
 
-  if(DUCKDB_DEV_ITERATION EQUAL 0)
-    # on a tag; directly use the version
-    set(DUCKDB_VERSION "${GIT_LAST_TAG}")
-  else()
-    # not on a tag, increment the patch version by one and add a -devX suffix
-    math(EXPR DUCKDB_PATCH_VERSION "${DUCKDB_PATCH_VERSION}+1")
-    set(DUCKDB_VERSION "v${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}-dev${DUCKDB_DEV_ITERATION}")
-  endif()
+string(LENGTH "${GIT_COMMIT_HASH}" LENGTH_GIT_COMMIT_HASH)
+if (NOT ${LENGTH_GIT_COMMIT_HASH} EQUAL 10)
+   message(STATUS "GIT_COMMIT_HASH has lenght ${LENGTH_GIT_COMMIT_HASH} different than the expected 10")
+endif()
+
+string(SUBSTRING "${GIT_COMMIT_HASH}" 0 10 GIT_COMMIT_HASH)
+
+if(DUCKDB_DEV_ITERATION EQUAL 0)
+  # on a tag; directly use the version
+  set(DUCKDB_VERSION "v${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}")
 else()
-  # fallback for when building from tarball
-  set(DUCKDB_MAJOR_VERSION 0)
-  set(DUCKDB_MINOR_VERSION 0)
-  set(DUCKDB_PATCH_VERSION 1)
-  set(DUCKDB_DEV_ITERATION 0)
+  # not on a tag, increment the patch version by one and add a -devX suffix
+  math(EXPR DUCKDB_PATCH_VERSION "${DUCKDB_PATCH_VERSION}+1")
   set(DUCKDB_VERSION "v${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}-dev${DUCKDB_DEV_ITERATION}")
 endif()
 
-message(STATUS "git hash ${GIT_COMMIT_HASH}, version ${DUCKDB_VERSION}")
+string(REGEX MATCH ".*dev.*" DUCKDB_EXTENSION_FOLDER_IS_VERSION "${DUCKDB_VERSION}")
+
+if(DUCKDB_EXTENSION_FOLDER_IS_VERSION AND NOT GIT_COMMIT_HASH STREQUAL "")
+  set(DUCKDB_NORMALIZED_VERSION "${GIT_COMMIT_HASH}")
+else()
+  set(DUCKDB_NORMALIZED_VERSION "${DUCKDB_VERSION}")
+endif()
+
+if(EMSCRIPTEN)
+  set(EXTENSION_POSTFIX "duckdb_extension.wasm")
+else()
+  set(EXTENSION_POSTFIX "duckdb_extension")
+endif()
+
+message(STATUS "git hash ${GIT_COMMIT_HASH}, version ${DUCKDB_VERSION}, extension folder ${DUCKDB_NORMALIZED_VERSION}")
 
 option(AMALGAMATION_BUILD
        "Build from the amalgamation files, rather than from the normal sources."
@@ -320,10 +355,13 @@ option(DISABLE_STR_INLINE "Debug setting: disable inlining of strings" FALSE)
 option(DISABLE_MEMORY_SAFETY "Debug setting: disable memory access checks at runtime" FALSE)
 option(DISABLE_ASSERTIONS "Debug setting: disable assertions" FALSE)
 option(ALTERNATIVE_VERIFY "Debug setting: use alternative verify mode" FALSE)
+option(RUN_SLOW_VERIFIERS "Debug setting: enable a more extensive set of verifiers" FALSE)
 option(DESTROY_UNPINNED_BLOCKS "Debug setting: destroy unpinned buffer-managed blocks" FALSE)
 option(FORCE_ASYNC_SINK_SOURCE "Debug setting: forces sinks/sources to block the first 2 times they're called" FALSE)
+option(DEBUG_ALLOCATION "Debug setting: keep track of outstanding allocations to detect memory leaks" FALSE)
 option(DEBUG_STACKTRACE "Debug setting: print a stracktrace on asserts and when testing crashes" FALSE)
 option(DEBUG_MOVE "Debug setting: Ensure std::move is being used" FALSE)
+option(VERIFY_VECTOR "Debug setting: verify vectors (options: dictionary_expression, dictionary_operator, constant_operator, sequence_operator, nested_shuffle)" "none")
 option(CLANG_TIDY "Enable build for clang-tidy, this disables all source files excluding the core database. This does not produce a working build." FALSE)
 option(BUILD_UNITTESTS "Build the C++ Unit Tests." TRUE)
 option(EXTENSION_CONFIG_BUILD "Produce extension configuration artifacts instead of building. (such as shared vcpkg.json, extensions.txt)" FALSE)
@@ -381,16 +419,21 @@ endif()
 if(DESTROY_UNPINNED_BLOCKS)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_DESTROY_BLOCKS")
 endif()
+
 if(FORCE_ASYNC_SINK_SOURCE)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_ASYNC_SINK_SOURCE")
+endif()
+
+if(RUN_SLOW_VERIFIERS)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_RUN_SLOW_VERIFIERS")
 endif()
 
 if(ALTERNATIVE_VERIFY)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_ALTERNATIVE_VERIFY")
 endif()
 
-if(DEBUG_STACKTRACE)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_STACKTRACE")
+if(DEBUG_ALLOCATION)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_ALLOCATION")
 endif()
 
 if(DEBUG_MOVE)
@@ -403,6 +446,28 @@ endif()
 
 if(FORCE_ASSERT)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_FORCE_ASSERT")
+endif()
+
+if("${VERIFY_VECTOR}" STREQUAL "none" OR "${VERIFY_VECTOR}" STREQUAL "OFF")
+  # do nothing
+else()
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_VERIFY_VECTOR")
+  if("${VERIFY_VECTOR}" STREQUAL "dictionary_expression")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_VERIFY_DICTIONARY_EXPRESSION")
+  else()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_VERIFY_VECTOR_OPERATOR")
+    if("${VERIFY_VECTOR}" STREQUAL "dictionary_operator")
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_VERIFY_DICTIONARY_OPERATOR")
+    elseif("${VERIFY_VECTOR}" STREQUAL "constant_operator")
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_VERIFY_CONSTANT_OPERATOR")
+    elseif("${VERIFY_VECTOR}" STREQUAL "sequence_operator")
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_VERIFY_SEQUENCE_OPERATOR")
+    elseif("${VERIFY_VECTOR}" STREQUAL "nested_shuffle")
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_VERIFY_NESTED_SHUFFLE")
+    else()
+      message(FATAL_ERROR "unsupported option for VERIFY_VECTOR ${VERIFY_VECTOR}")
+    endif()
+  endif()
 endif()
 
 if(CUSTOM_LINKER)
@@ -631,8 +696,38 @@ function(link_threads LIBRARY)
     target_link_libraries(${LIBRARY} Threads::Threads)
 endfunction()
 
+# Deploys extensions to a local repository (a folder structure that contains the duckdb version + binary arch)
+if ("${LOCAL_EXTENSION_REPO}" STREQUAL "")
+  set(LOCAL_EXTENSION_REPO_DIR ${CMAKE_BINARY_DIR}/repository)
+else()
+  if (NOT Python3_FOUND)
+    MESSAGE(FATAL_ERROR "Could not find python3 executable, when providing LOCAL_EXTENSION_REPO this is compulsory")
+  endif()
+  set(LOCAL_EXTENSION_REPO_DIR ${LOCAL_EXTENSION_REPO})
+endif()
+
+set(LOCAL_EXTENSION_REPO FALSE)
+if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_TIDY)
+  if (NOT Python3_FOUND)
+    MESSAGE(STATUS "Could not find python3, create extension directory step will be skipped")
+  else()
+    add_custom_target(
+          duckdb_local_extension_repo ALL
+          COMMAND
+          ${Python3_EXECUTABLE} scripts/create_local_extension_repo.py "${DUCKDB_NORMALIZED_VERSION}" "${CMAKE_CURRENT_BINARY_DIR}/duckdb_platform_out" "${CMAKE_CURRENT_BINARY_DIR}" "${LOCAL_EXTENSION_REPO_DIR}" "${EXTENSION_POSTFIX}"
+          WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+          COMMENT Create local extension repository)
+    add_dependencies(duckdb_local_extension_repo duckdb_platform)
+    set(LOCAL_EXTENSION_REPO TRUE)
+    message(STATUS "Extensions will be deployed to: ${LOCAL_EXTENSION_REPO_DIR}")
+  endif()
+endif()
+
 function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
   set(TARGET_NAME ${NAME}_loadable_extension)
+  if (LOCAL_EXTENSION_REPO)
+    add_dependencies(duckdb_local_extension_repo ${NAME}_loadable_extension)
+  endif()
   # all parameters after output_directory
   set(FILES ${ARGV})
   # remove name
@@ -791,7 +886,7 @@ function(register_extension NAME DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PA
 endfunction()
 
 # Downloads the external extension repo at the specified commit and calls register_extension
-macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PATH TEST_PATH APPLY_PATCHES)
+macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PATH TEST_PATH APPLY_PATCHES SUBMODULES)
   include(FetchContent)
   if (${APPLY_PATCHES})
     set(PATCH_COMMAND python3 ${CMAKE_SOURCE_DIR}/scripts/apply_extension_patches.py ${CMAKE_SOURCE_DIR}/.github/patches/extensions/${NAME}/)
@@ -800,7 +895,7 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TEST
           ${NAME}_extension_fc
           GIT_REPOSITORY ${URL}
           GIT_TAG ${COMMIT}
-          GIT_SUBMODULES ""
+          GIT_SUBMODULES "${SUBMODULES}"
           PATCH_COMMAND ${PATCH_COMMAND}
   )
   message(STATUS "Load extension '${NAME}' from ${URL} @ ${COMMIT}")
@@ -824,7 +919,7 @@ endmacro()
 function(duckdb_extension_load NAME)
   # Parameter parsing
   set(options DONT_LINK DONT_BUILD LOAD_TESTS APPLY_PATCHES)
-  set(oneValueArgs SOURCE_DIR INCLUDE_DIR TEST_DIR GIT_URL GIT_TAG)
+  set(oneValueArgs SOURCE_DIR INCLUDE_DIR TEST_DIR GIT_URL GIT_TAG SUBMODULES)
   cmake_parse_arguments(duckdb_extension_load "${options}" "${oneValueArgs}" "" ${ARGN})
 
   string(TOLOWER ${NAME} EXTENSION_NAME_LOWERCASE)
@@ -848,7 +943,7 @@ function(duckdb_extension_load NAME)
     if (NOT "${duckdb_extension_load_GIT_COMMIT}" STREQUAL "")
       error("Git URL specified but no valid git commit was found for ${NAME} extension")
     endif()
-    register_external_extension(${NAME} "${duckdb_extension_load_GIT_URL}" "${duckdb_extension_load_GIT_TAG}" "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${duckdb_extension_load_SOURCE_DIR}" "${duckdb_extension_load_INCLUDE_DIR}" "${duckdb_extension_load_TEST_DIR}" "${duckdb_extension_load_APPLY_PATCHES}")
+    register_external_extension(${NAME} "${duckdb_extension_load_GIT_URL}" "${duckdb_extension_load_GIT_TAG}" "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${duckdb_extension_load_SOURCE_DIR}" "${duckdb_extension_load_INCLUDE_DIR}" "${duckdb_extension_load_TEST_DIR}" "${duckdb_extension_load_APPLY_PATCHES}" "${duckdb_extension_load_SUBMODULES}")
   elseif (NOT "${duckdb_extension_load_SOURCE_DIR}" STREQUAL "")
     # Local extension, custom path
     message(STATUS "Load extension '${NAME}' from '${duckdb_extension_load_SOURCE_DIR}'")
@@ -1036,6 +1131,8 @@ if(${EXTENSION_CONFIG_BUILD})
       FILE(APPEND ${CMAKE_BINARY_DIR}/extensions.txt "${EXT_NAME}\r")
     endif()
   endforeach()
+
+  return()
 endif()
 
 if(BUILD_PYTHON)
@@ -1052,29 +1149,54 @@ if(BUILD_PYTHON)
 
   get_target_property(duckdb_libs duckdb LINK_LIBRARIES)
 
-  if(BUILD_PYTHON)
-    if(USER_SPACE)
-      add_custom_target(
-              duckdb_python ALL
-              COMMAND
-              python3 setup.py install --user --binary-dir=${PROJECT_BINARY_DIR}
-              --compile-flags=${ALL_COMPILE_FLAGS} --libs="${duckdb_libs}"
-              DEPENDS duckdb duckdb_static
-              WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/pythonpkg
-              COMMENT Build
-              Python package)
-    else()
-      add_custom_target(
-              duckdb_python ALL
-              COMMAND python3 setup.py install --binary-dir=${PROJECT_BINARY_DIR}
-              --compile-flags=${ALL_COMPILE_FLAGS} --libs="${duckdb_libs}"
-              DEPENDS duckdb duckdb_static
-              WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/pythonpkg
-              COMMENT Build
-              Python package)
-    endif()
-    add_extension_dependencies(duckdb_python)
+  set(PIP_COMMAND
+      cmake
+      -E
+      env
+      DUCKDB_BINARY_DIR=${PROJECT_BINARY_DIR}
+      DUCKDB_COMPILE_FLAGS=${ALL_COMPILE_FLAGS}
+      DUCKDB_LIBS="${duckdb_libs}"
+	)
+
+  if(PYTHON_EDITABLE_BUILD)
+    set(PIP_COMMAND ${PIP_COMMAND} python3 -m pip install --editable .)
+  else()
+    set(PIP_COMMAND ${PIP_COMMAND} python3 -m pip install .)
   endif()
+
+  if(USER_SPACE)
+    set(PIP_COMMAND ${PIP_COMMAND} --user)
+  endif()
+  add_custom_target(
+    duckdb_python ALL
+    COMMAND ${PIP_COMMAND}
+    DEPENDS duckdb duckdb_static
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/pythonpkg
+    COMMENT Build
+    Python package)
+  add_extension_dependencies(duckdb_python)
+endif()
+
+if(NOT DUCKDB_EXPLICIT_PLATFORM)
+  set(VERSION_SOURCES tools/utils/test_platform.cpp)
+
+  add_executable(duckdb_platform_binary ${VERSION_SOURCES})
+  link_threads(duckdb_platform_binary)
+
+  set_target_properties(duckdb_platform_binary PROPERTIES OUTPUT_NAME duckdb_platform_binary)
+  set_target_properties(duckdb_platform_binary PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+                                         ${PROJECT_BINARY_DIR})
+  add_custom_target(
+          duckdb_platform ALL
+          COMMAND duckdb_platform_binary > duckdb_platform_out || (echo "Provide explicit DUCKDB_PLATFORM=your_target_arch to avoid build-type detection of the platform" && exit 1)
+          )
+  add_dependencies(duckdb_platform duckdb_platform_binary)
+else()
+  add_custom_target(
+          duckdb_platform ALL
+	  COMMAND
+	  echo "${DUCKDB_EXPLICIT_PLATFORM}" > duckdb_platform_out
+          )
 endif()
 
 if(NOT CLANG_TIDY)
@@ -1091,23 +1213,6 @@ if(NOT CLANG_TIDY)
   endif()
 endif()
 
-# Deploys extensions to a local repository (a folder structure that contains the duckdb version + binary arch)
-if (NOT "${LOCAL_EXTENSION_REPO}" STREQUAL "")
-  add_custom_target(
-          duckdb_local_extension_repo ALL
-          COMMAND
-          python3 scripts/create_local_extension_repo.py $<TARGET_FILE:shell> "${CMAKE_CURRENT_BINARY_DIR}" "${LOCAL_EXTENSION_REPO}"
-          DEPENDS shell
-          WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-          COMMENT Create local extension repository)
-  add_extension_dependencies(duckdb_local_extension_repo)
-  foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
-    add_dependencies(duckdb_local_extension_repo ${EXT_NAME}_loadable_extension)
-  endforeach()
-  message(STATUS "Extensions will be deployed to: ${LOCAL_EXTENSION_REPO}")
-endif()
-
-if (NOT EXTENSION_CONFIG_BUILD )
 # Write the export set for build and install tree
 install(EXPORT "${DUCKDB_EXPORT_SET}" DESTINATION "${INSTALL_CMAKE_DIR}")
 export(EXPORT "${DUCKDB_EXPORT_SET}"
@@ -1141,6 +1246,4 @@ if(EXISTS ${CMAKE_CONFIG_TEMPLATE} AND EXISTS ${CMAKE_CONFIG_VERSION_TEMPLATE})
     FILES "${PROJECT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/DuckDBConfig.cmake"
           "${PROJECT_BINARY_DIR}/DuckDBConfigVersion.cmake"
     DESTINATION "${INSTALL_CMAKE_DIR}")
-endif()
-
 endif()

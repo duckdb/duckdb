@@ -15,6 +15,7 @@
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
+#include "duckdb/optimizer/matcher/expression_matcher.hpp"
 
 namespace duckdb {
 
@@ -38,7 +39,7 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
          TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
          AttachedDatabase &db, const shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr,
          const IndexStorageInfo &info)
-    : Index(name, "ART", index_constraint_type, column_ids, table_io_manager, unbound_expressions, db),
+    : Index(name, ART::TYPE_NAME, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db),
       allocators(allocators_ptr), owns_data(false) {
 
 	// initialize all allocators
@@ -81,6 +82,7 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 		case PhysicalType::UINT16:
 		case PhysicalType::UINT32:
 		case PhysicalType::UINT64:
+		case PhysicalType::UINT128:
 		case PhysicalType::FLOAT:
 		case PhysicalType::DOUBLE:
 		case PhysicalType::VARCHAR:
@@ -95,8 +97,9 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 // Initialize Predicate Scans
 //===--------------------------------------------------------------------===//
 
-unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(const Transaction &transaction, const Value &value,
-                                                              const ExpressionType expression_type) {
+//! Initialize a single predicate scan on the index with the given expression and column IDs
+static unique_ptr<IndexScanState> InitializeScanSinglePredicate(const Transaction &transaction, const Value &value,
+                                                                const ExpressionType expression_type) {
 	// initialize point lookup
 	auto result = make_uniq<ARTIndexScanState>();
 	result->values[0] = value;
@@ -104,10 +107,11 @@ unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(const Transaction 
 	return std::move(result);
 }
 
-unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(const Transaction &transaction, const Value &low_value,
-                                                            const ExpressionType low_expression_type,
-                                                            const Value &high_value,
-                                                            const ExpressionType high_expression_type) {
+//! Initialize a two predicate scan on the index with the given expression and column IDs
+static unique_ptr<IndexScanState> InitializeScanTwoPredicates(const Transaction &transaction, const Value &low_value,
+                                                              const ExpressionType low_expression_type,
+                                                              const Value &high_value,
+                                                              const ExpressionType high_expression_type) {
 	// initialize range lookup
 	auto result = make_uniq<ARTIndexScanState>();
 	result->values[0] = low_value;
@@ -115,6 +119,93 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(const Transaction &t
 	result->values[1] = high_value;
 	result->expressions[1] = high_expression_type;
 	return std::move(result);
+}
+
+unique_ptr<IndexScanState> ART::TryInitializeScan(const Transaction &transaction, const Expression &index_expr,
+                                                  const Expression &filter_expr) {
+
+	Value low_value, high_value, equal_value;
+	ExpressionType low_comparison_type = ExpressionType::INVALID, high_comparison_type = ExpressionType::INVALID;
+	// try to find a matching index for any of the filter expressions
+
+	// create a matcher for a comparison with a constant
+	ComparisonExpressionMatcher matcher;
+	// match on a comparison type
+	matcher.expr_type = make_uniq<ComparisonExpressionTypeMatcher>();
+	// match on a constant comparison with the indexed expression
+	matcher.matchers.push_back(make_uniq<ExpressionEqualityMatcher>(const_cast<Expression &>(index_expr)));
+	matcher.matchers.push_back(make_uniq<ConstantExpressionMatcher>());
+
+	matcher.policy = SetMatcher::Policy::UNORDERED;
+
+	vector<reference<Expression>> bindings;
+	if (matcher.Match(const_cast<Expression &>(filter_expr), bindings)) {
+		// range or equality comparison with constant value
+		// we can use our index here
+		// bindings[0] = the expression
+		// bindings[1] = the index expression
+		// bindings[2] = the constant
+		auto &comparison = bindings[0].get().Cast<BoundComparisonExpression>();
+		auto constant_value = bindings[2].get().Cast<BoundConstantExpression>().value;
+		auto comparison_type = comparison.type;
+		if (comparison.left->type == ExpressionType::VALUE_CONSTANT) {
+			// the expression is on the right side, we flip them around
+			comparison_type = FlipComparisonExpression(comparison_type);
+		}
+		if (comparison_type == ExpressionType::COMPARE_EQUAL) {
+			// equality value
+			// equality overrides any other bounds so we just break here
+			equal_value = constant_value;
+		} else if (comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
+		           comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
+			// greater than means this is a lower bound
+			low_value = constant_value;
+			low_comparison_type = comparison_type;
+		} else {
+			// smaller than means this is an upper bound
+			high_value = constant_value;
+			high_comparison_type = comparison_type;
+		}
+	} else if (filter_expr.type == ExpressionType::COMPARE_BETWEEN) {
+		// BETWEEN expression
+		auto &between = filter_expr.Cast<BoundBetweenExpression>();
+		if (!between.input->Equals(index_expr)) {
+			// expression doesn't match the index expression
+			return nullptr;
+		}
+		if (between.lower->type != ExpressionType::VALUE_CONSTANT ||
+		    between.upper->type != ExpressionType::VALUE_CONSTANT) {
+			// not a constant comparison
+			return nullptr;
+		}
+		low_value = (between.lower->Cast<BoundConstantExpression>()).value;
+		low_comparison_type = between.lower_inclusive ? ExpressionType::COMPARE_GREATERTHANOREQUALTO
+		                                              : ExpressionType::COMPARE_GREATERTHAN;
+		high_value = (between.upper->Cast<BoundConstantExpression>()).value;
+		high_comparison_type =
+		    between.upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO : ExpressionType::COMPARE_LESSTHAN;
+	}
+
+	if (!equal_value.IsNull() || !low_value.IsNull() || !high_value.IsNull()) {
+		// we can scan this index using this predicate: try a scan
+		unique_ptr<IndexScanState> index_state;
+		if (!equal_value.IsNull()) {
+			// equality predicate
+			index_state = InitializeScanSinglePredicate(transaction, equal_value, ExpressionType::COMPARE_EQUAL);
+		} else if (!low_value.IsNull() && !high_value.IsNull()) {
+			// two-sided predicate
+			index_state = InitializeScanTwoPredicates(transaction, low_value, low_comparison_type, high_value,
+			                                          high_comparison_type);
+		} else if (!low_value.IsNull()) {
+			// less than predicate
+			index_state = InitializeScanSinglePredicate(transaction, low_value, low_comparison_type);
+		} else {
+			D_ASSERT(!high_value.IsNull());
+			index_state = InitializeScanSinglePredicate(transaction, high_value, high_comparison_type);
+		}
+		return index_state;
+	}
+	return nullptr;
 }
 
 //===--------------------------------------------------------------------===//
@@ -194,6 +285,9 @@ void ART::GenerateKeys(ArenaAllocator &allocator, DataChunk &input, vector<ARTKe
 	case PhysicalType::UINT64:
 		TemplatedGenerateKeys<uint64_t>(allocator, input.data[0], input.size(), keys);
 		break;
+	case PhysicalType::UINT128:
+		TemplatedGenerateKeys<uhugeint_t>(allocator, input.data[0], input.size(), keys);
+		break;
 	case PhysicalType::FLOAT:
 		TemplatedGenerateKeys<float>(allocator, input.data[0], input.size(), keys);
 		break;
@@ -239,6 +333,9 @@ void ART::GenerateKeys(ArenaAllocator &allocator, DataChunk &input, vector<ARTKe
 			break;
 		case PhysicalType::UINT64:
 			ConcatenateKeys<uint64_t>(allocator, input.data[i], input.size(), keys);
+			break;
+		case PhysicalType::UINT128:
+			ConcatenateKeys<uhugeint_t>(allocator, input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::FLOAT:
 			ConcatenateKeys<float>(allocator, input.data[i], input.size(), keys);
@@ -294,7 +391,8 @@ bool Construct(ART &art, vector<ARTKey> &keys, row_t *row_ids, Node &node, KeySe
 
 	// increment the depth until we reach a leaf or find a mismatching byte
 	auto prefix_start = key_section.depth;
-	while (start_key.len != key_section.depth && start_key.ByteMatches(end_key, key_section.depth)) {
+	while (start_key.len != key_section.depth &&
+	       start_key.ByteMatches(end_key, UnsafeNumericCast<uint32_t>(key_section.depth))) {
 		key_section.depth++;
 	}
 
@@ -310,7 +408,8 @@ bool Construct(ART &art, vector<ARTKey> &keys, row_t *row_ids, Node &node, KeySe
 		}
 
 		reference<Node> ref_node(node);
-		Prefix::New(art, ref_node, start_key, prefix_start, start_key.len - prefix_start);
+		Prefix::New(art, ref_node, start_key, UnsafeNumericCast<uint32_t>(prefix_start),
+		            UnsafeNumericCast<uint32_t>(start_key.len - prefix_start));
 		if (single_row_id) {
 			Leaf::New(ref_node, row_ids[key_section.start]);
 		} else {
@@ -328,7 +427,8 @@ bool Construct(ART &art, vector<ARTKey> &keys, row_t *row_ids, Node &node, KeySe
 	// set the prefix
 	reference<Node> ref_node(node);
 	auto prefix_length = key_section.depth - prefix_start;
-	Prefix::New(art, ref_node, start_key, prefix_start, prefix_length);
+	Prefix::New(art, ref_node, start_key, UnsafeNumericCast<uint32_t>(prefix_start),
+	            UnsafeNumericCast<uint32_t>(prefix_length));
 
 	// set the node
 	auto node_type = Node::GetARTNodeTypeByCount(child_sections.size());
@@ -373,7 +473,7 @@ bool ART::ConstructFromSorted(idx_t count, vector<ARTKey> &keys, Vector &row_ide
 //===--------------------------------------------------------------------===//
 // Insert / Verification / Constraint Checking
 //===--------------------------------------------------------------------===//
-PreservedError ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
+ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 
 	D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
 	D_ASSERT(logical_types[0] == input.data[0].GetType());
@@ -414,8 +514,8 @@ PreservedError ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	}
 
 	if (failed_index != DConstants::INVALID_INDEX) {
-		return PreservedError(ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicate key \"%s\"",
-		                                          AppendRowError(input, failed_index)));
+		return ErrorData(ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicate key \"%s\"",
+		                                     AppendRowError(input, failed_index)));
 	}
 
 #ifdef DEBUG
@@ -429,10 +529,10 @@ PreservedError ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	}
 #endif
 
-	return PreservedError();
+	return ErrorData();
 }
 
-PreservedError ART::Append(IndexLock &lock, DataChunk &appended_data, Vector &row_identifiers) {
+ErrorData ART::Append(IndexLock &lock, DataChunk &appended_data, Vector &row_identifiers) {
 	DataChunk expression_result;
 	expression_result.Initialize(Allocator::DefaultAllocator(), logical_types);
 
@@ -469,7 +569,8 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id
 	if (!node.HasMetadata()) {
 		D_ASSERT(depth <= key.len);
 		reference<Node> ref_node(node);
-		Prefix::New(*this, ref_node, key, depth, key.len - depth);
+		Prefix::New(*this, ref_node, key, UnsafeNumericCast<uint32_t>(depth),
+		            UnsafeNumericCast<uint32_t>(key.len - depth));
 		Leaf::New(ref_node, row_id);
 		return true;
 	}
@@ -496,7 +597,8 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id
 		Node leaf_node;
 		reference<Node> ref_node(leaf_node);
 		if (depth + 1 < key.len) {
-			Prefix::New(*this, ref_node, key, depth + 1, key.len - depth - 1);
+			Prefix::New(*this, ref_node, key, UnsafeNumericCast<uint32_t>(depth + 1),
+			            UnsafeNumericCast<uint32_t>(key.len - depth - 1));
 		}
 		Leaf::New(ref_node, row_id);
 		Node::InsertChild(*this, node, key[depth], leaf_node);
@@ -526,7 +628,8 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id
 	Node leaf_node;
 	reference<Node> ref_node(leaf_node);
 	if (depth + 1 < key.len) {
-		Prefix::New(*this, ref_node, key, depth + 1, key.len - depth - 1);
+		Prefix::New(*this, ref_node, key, UnsafeNumericCast<uint32_t>(depth + 1),
+		            UnsafeNumericCast<uint32_t>(key.len - depth - 1));
 	}
 	Leaf::New(ref_node, row_id);
 	Node4::InsertChild(*this, next_node, key[depth], leaf_node);
@@ -661,6 +764,8 @@ static ARTKey CreateKey(ArenaAllocator &allocator, PhysicalType type, Value &val
 		return ARTKey::CreateARTKey<uint64_t>(allocator, value.type(), value);
 	case PhysicalType::INT128:
 		return ARTKey::CreateARTKey<hugeint_t>(allocator, value.type(), value);
+	case PhysicalType::UINT128:
+		return ARTKey::CreateARTKey<uhugeint_t>(allocator, value.type(), value);
 	case PhysicalType::FLOAT:
 		return ARTKey::CreateARTKey<float>(allocator, value.type(), value);
 	case PhysicalType::DOUBLE:
@@ -1170,5 +1275,13 @@ string ART::VerifyAndToStringInternal(const bool only_verify) {
 	}
 	return "[empty]";
 }
+
+string ART::GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index, DataChunk &input) {
+	auto key_name = GenerateErrorKeyName(input, failed_index);
+	auto exception_msg = GenerateConstraintErrorMessage(verify_type, key_name);
+	return exception_msg;
+}
+
+constexpr const char *ART::TYPE_NAME;
 
 } // namespace duckdb

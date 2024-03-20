@@ -15,6 +15,7 @@ scalar_functions = [
     'math',
     'operators',
     'random',
+    'secret',
     'string',
     'debug',
     'struct',

@@ -1,0 +1,119 @@
+# name: test/sql/function/timetz/test_extract.test
+# description: have you seen the fnords?
+# group: [timetz]
+
+statement ok
+CREATE TABLE timetzs (i TIMETZ);
+
+statement ok
+INSERT INTO timetzs VALUES
+	(NULL),
+	('00:00:00+1559'),
+	('00:00:00+1558'),
+	('02:30:00'),
+	('02:30:00+04'),
+	('02:30:00+04:30'),
+	('02:30:00+04:30:45'),
+	('16:15:03.123456'),
+	('02:30:00+1200'),
+	('02:30:00-1200'),
+	('24:00:00-1558'),
+	('24:00:00-1559'),
+;
+
+# extract various parts of the time
+query I
+SELECT EXTRACT(second FROM i) FROM timetzs
+----
+NULL
+0
+0
+0
+0
+0
+0
+3
+0
+0
+0
+0
+
+query I
+SELECT EXTRACT(minute FROM i) FROM timetzs
+----
+NULL
+0
+0
+30
+30
+30
+30
+15
+30
+30
+0
+0
+
+query I
+SELECT EXTRACT(hour FROM i) FROM timetzs
+----
+NULL
+0
+0
+2
+2
+2
+2
+16
+2
+2
+24
+24
+
+query I
+SELECT EXTRACT(milliseconds FROM i) FROM timetzs
+----
+NULL
+0
+0
+0
+0
+0
+0
+3123
+0
+0
+0
+0
+
+query I
+SELECT EXTRACT(microseconds FROM i) FROM timetzs
+----
+NULL
+0
+0
+0
+0
+0
+0
+3123456
+0
+0
+0
+0
+
+query I
+SELECT EXTRACT(epoch FROM i) FROM timetzs
+----
+NULL
+0.0
+0.0
+9000.0
+9000.0
+9000.0
+9000.0
+58503.123456
+9000.0
+9000.0
+86400.0
+86400.0

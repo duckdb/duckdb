@@ -1,4 +1,3 @@
-
 #include "duckdb/function/cast/cast_function_set.hpp"
 
 #include "duckdb/common/pair.hpp"
@@ -15,6 +14,7 @@ BindCastInput::BindCastInput(CastFunctionSet &function_set, optional_ptr<BindCas
 
 BoundCastInfo BindCastInput::GetCastFunction(const LogicalType &source, const LogicalType &target) {
 	GetCastFunctionInput input(context);
+	input.query_location = query_location;
 	return function_set.GetCastFunction(source, target, input);
 }
 
@@ -24,6 +24,10 @@ BindCastFunction::BindCastFunction(bind_cast_function_t function_p, unique_ptr<B
 
 CastFunctionSet::CastFunctionSet() : map_info(nullptr) {
 	bind_functions.emplace_back(DefaultCasts::GetDefaultCastFunction);
+}
+
+CastFunctionSet::CastFunctionSet(DBConfig &config_p) : CastFunctionSet() {
+	this->config = &config_p;
 }
 
 CastFunctionSet &CastFunctionSet::Get(ClientContext &context) {
@@ -44,6 +48,7 @@ BoundCastInfo CastFunctionSet::GetCastFunction(const LogicalType &source, const 
 	for (idx_t i = bind_functions.size(); i > 0; i--) {
 		auto &bind_function = bind_functions[i - 1];
 		BindCastInput input(*this, bind_function.info.get(), get_input.context);
+		input.query_location = get_input.query_location;
 		auto result = bind_function.function(input, source, target);
 		if (result.function) {
 			// found a cast function! return it
@@ -156,7 +161,13 @@ int64_t CastFunctionSet::ImplicitCastCost(const LogicalType &source, const Logic
 		}
 	}
 	// if not, fallback to the default implicit cast rules
-	return CastRules::ImplicitCast(source, target);
+	auto score = CastRules::ImplicitCast(source, target);
+	if (score < 0 && config && config->options.old_implicit_casting) {
+		if (source.id() != LogicalTypeId::BLOB && target.id() == LogicalTypeId::VARCHAR) {
+			score = 149;
+		}
+	}
+	return score;
 }
 
 BoundCastInfo MapCastFunction(BindCastInput &input, const LogicalType &source, const LogicalType &target) {

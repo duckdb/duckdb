@@ -148,6 +148,8 @@ class TestNativeUDF(object):
             (UBIGINT, 18446744073709551616),
             (HUGEINT, -170141183460469231731687303715884105729),
             (HUGEINT, 170141183460469231731687303715884105728),
+            (UHUGEINT, -1),
+            (UHUGEINT, 340282366920938463463374607431768211456),
         ],
     )
     def test_return_overflow(self, pair):

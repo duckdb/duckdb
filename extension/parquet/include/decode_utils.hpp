@@ -7,8 +7,8 @@ class ParquetDecodeUtils {
 
 public:
 	template <class T>
-	static T ZigzagToInt(const T n) {
-		return (n >> 1) ^ -(n & 1);
+	static T ZigzagToInt(const uint64_t n) {
+		return T(n >> 1) ^ -T(n & 1);
 	}
 
 	static const uint64_t BITPACK_MASKS[];

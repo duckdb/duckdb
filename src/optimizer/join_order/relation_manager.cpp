@@ -29,15 +29,16 @@ idx_t RelationManager::NumRelations() {
 	return relations.size();
 }
 
-void RelationManager::AddAggregateRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent,
-                                           const RelationStats &stats) {
+void RelationManager::AddAggregateOrWindowRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent,
+                                                   const RelationStats &stats, LogicalOperatorType op_type) {
 	auto relation = make_uniq<SingleJoinRelation>(op, parent, stats);
 	auto relation_id = relations.size();
 
-	auto table_indexes = op.GetTableIndex();
-	for (auto &index : table_indexes) {
-		D_ASSERT(relation_mapping.find(index) == relation_mapping.end());
-		relation_mapping[index] = relation_id;
+	auto op_bindings = op.GetColumnBindings();
+	for (auto &binding : op_bindings) {
+		if (relation_mapping.find(binding.table_index) == relation_mapping.end()) {
+			relation_mapping[binding.table_index] = relation_id;
+		}
 	}
 	relations.push_back(std::move(relation));
 }
@@ -131,9 +132,6 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 			}
 			filter_operators.push_back(*op);
 		}
-		if (op->type == LogicalOperatorType::LOGICAL_SHOW) {
-			return false;
-		}
 		op = op->children[0].get();
 	}
 	bool non_reorderable_operation = false;
@@ -187,7 +185,7 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		if (!datasource_filters.empty()) {
 			operator_stats.cardinality *= RelationStatisticsHelper::DEFAULT_SELECTIVITY;
 		}
-		AddAggregateRelation(input_op, parent, operator_stats);
+		AddAggregateOrWindowRelation(input_op, parent, operator_stats, op->type);
 		return true;
 	}
 	case LogicalOperatorType::LOGICAL_WINDOW: {
@@ -197,7 +195,10 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		op->children[0] = optimizer.Optimize(std::move(op->children[0]), &child_stats);
 		auto &window = op->Cast<LogicalWindow>();
 		auto operator_stats = RelationStatisticsHelper::ExtractWindowStats(window, child_stats);
-		AddAggregateRelation(input_op, parent, operator_stats);
+		if (!datasource_filters.empty()) {
+			operator_stats.cardinality *= RelationStatisticsHelper::DEFAULT_SELECTIVITY;
+		}
+		AddAggregateOrWindowRelation(input_op, parent, operator_stats, op->type);
 		return true;
 	}
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
@@ -279,8 +280,9 @@ bool RelationManager::ExtractBindings(Expression &expression, unordered_set<idx_
 			// operator during plan reconstruction
 			return true;
 		}
-		D_ASSERT(relation_mapping.find(colref.binding.table_index) != relation_mapping.end());
-		bindings.insert(relation_mapping[colref.binding.table_index]);
+		if (relation_mapping.find(colref.binding.table_index) != relation_mapping.end()) {
+			bindings.insert(relation_mapping[colref.binding.table_index]);
+		}
 	}
 	if (expression.type == ExpressionType::BOUND_REF) {
 		// bound expression
@@ -326,17 +328,24 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 			}
 			join.conditions.clear();
 		} else {
+			vector<unique_ptr<Expression>> leftover_expressions;
 			for (auto &expression : f_op.expressions) {
 				if (filter_set.find(*expression) == filter_set.end()) {
 					filter_set.insert(*expression);
 					unordered_set<idx_t> bindings;
 					ExtractBindings(*expression, bindings);
+					if (bindings.empty()) {
+						// the filter is on a column that is not in our relational map. (example: limit_rownum)
+						// in this case we do not create a FilterInfo for it. (duckdb-internal/#1493)s
+						leftover_expressions.push_back(std::move(expression));
+						continue;
+					}
 					auto &set = set_manager.GetJoinRelation(bindings);
 					auto filter_info = make_uniq<FilterInfo>(std::move(expression), set, filters_and_bindings.size());
 					filters_and_bindings.push_back(std::move(filter_info));
 				}
 			}
-			f_op.expressions.clear();
+			f_op.expressions = std::move(leftover_expressions);
 		}
 	}
 

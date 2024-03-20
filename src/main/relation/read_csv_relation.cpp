@@ -1,14 +1,13 @@
 #include "duckdb/main/relation/read_csv_relation.hpp"
 
-#include "duckdb/execution/operator/scan/csv/buffered_csv_reader.hpp"
-#include "duckdb/execution/operator/scan/csv/csv_buffer_manager.hpp"
-#include "duckdb/execution/operator/scan/csv/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_buffer_manager.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
@@ -39,7 +38,9 @@ ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, 
 	InitializeAlias(input);
 
 	auto file_list = CreateValueFromFileList(input);
-	auto files = MultiFileReader::GetFileList(*context, file_list, "CSV");
+
+	vector<string> files;
+	context->RunFunctionInTransaction([&]() { files = MultiFileReader::GetFileList(*context, file_list, "CSV"); });
 	D_ASSERT(!files.empty());
 
 	auto &file_name = files[0];
@@ -52,16 +53,18 @@ ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, 
 	csv_options.FromNamedParameters(options, *context, unused_types, unused_names);
 
 	// Run the auto-detect, populating the options with the detected settings
-	auto bm_file_handle = BaseCSVReader::OpenCSV(*context, csv_options);
-	auto buffer_manager = make_shared<CSVBufferManager>(*context, std::move(bm_file_handle), csv_options);
-	CSVStateMachineCache state_machine_cache;
-	CSVSniffer sniffer(csv_options, buffer_manager, state_machine_cache);
-	auto sniffer_result = sniffer.SniffCSV();
-	auto &types = sniffer_result.return_types;
-	auto &names = sniffer_result.names;
-	for (idx_t i = 0; i < types.size(); i++) {
-		columns.emplace_back(names[i], types[i]);
-	}
+
+	shared_ptr<CSVBufferManager> buffer_manager;
+	context->RunFunctionInTransaction([&]() {
+		buffer_manager = make_shared<CSVBufferManager>(*context, csv_options, files[0], 0);
+		CSVSniffer sniffer(csv_options, buffer_manager, CSVStateMachineCache::Get(*context));
+		auto sniffer_result = sniffer.SniffCSV();
+		auto &types = sniffer_result.return_types;
+		auto &names = sniffer_result.names;
+		for (idx_t i = 0; i < types.size(); i++) {
+			columns.emplace_back(names[i], types[i]);
+		}
+	});
 
 	// After sniffing we can consider these set, so they are exported as named parameters
 	// FIXME: This is horribly hacky, should be refactored at some point

@@ -21,6 +21,8 @@ void InetExtension::Load(DuckDB &db) {
 	// add the "inet" type
 	child_list_t<LogicalType> children;
 	children.push_back(make_pair("ip_type", LogicalType::UTINYINT));
+	// The address type would ideally be UHUGEINT, but the initial version was HUGEINT
+	// so maintain backwards-compatibility with db written with older versions.
 	children.push_back(make_pair("address", LogicalType::HUGEINT));
 	children.push_back(make_pair("mask", LogicalType::USMALLINT));
 	auto inet_type = LogicalType::STRUCT(std::move(children));
@@ -28,18 +30,23 @@ void InetExtension::Load(DuckDB &db) {
 	ExtensionUtil::RegisterType(*db.instance, INET_TYPE_NAME, inet_type);
 
 	// add the casts to and from INET type
-	ExtensionUtil::RegisterCastFunction(*db.instance, LogicalType::VARCHAR, inet_type, INetFunctions::CastVarcharToINET,
-	                                    100);
+	ExtensionUtil::RegisterCastFunction(*db.instance, LogicalType::VARCHAR, inet_type,
+	                                    INetFunctions::CastVarcharToINET);
 	ExtensionUtil::RegisterCastFunction(*db.instance, inet_type, LogicalType::VARCHAR,
 	                                    INetFunctions::CastINETToVarchar);
 
 	// add inet functions
 	ExtensionUtil::RegisterFunction(*db.instance,
 	                                ScalarFunction("host", {inet_type}, LogicalType::VARCHAR, INetFunctions::Host));
+	ExtensionUtil::RegisterFunction(
+	    *db.instance, ScalarFunction("family", {inet_type}, LogicalType::UTINYINT, INetFunctions::Family));
 
 	// Add - function with ALTER_ON_CONFLICT
-	ScalarFunction substract_fun("-", {inet_type, LogicalType::BIGINT}, inet_type, INetFunctions::Subtract);
+	ScalarFunction substract_fun("-", {inet_type, LogicalType::HUGEINT}, inet_type, INetFunctions::Subtract);
 	ExtensionUtil::AddFunctionOverload(*db.instance, substract_fun);
+
+	ScalarFunction add_fun("+", {inet_type, LogicalType::HUGEINT}, inet_type, INetFunctions::Add);
+	ExtensionUtil::AddFunctionOverload(*db.instance, add_fun);
 }
 
 std::string InetExtension::Name() {

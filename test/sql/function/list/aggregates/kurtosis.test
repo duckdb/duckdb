@@ -36,6 +36,16 @@ NULL
 NULL
 NULL
 
+query I
+select list_kurtosis_pop(k) from aggr;
+----
+6.100000
+-1.676857
+-1.358688
+NULL
+NULL
+NULL
+
 # incorrect usage
 statement error
 select list_kurtosis()

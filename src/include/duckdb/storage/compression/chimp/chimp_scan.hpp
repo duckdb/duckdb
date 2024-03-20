@@ -12,6 +12,7 @@
 #include "duckdb/storage/compression/chimp/algorithm/chimp_utils.hpp"
 
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
@@ -210,7 +211,7 @@ public:
 		auto group_size = MinValue<idx_t>(segment_count - total_value_count, ChimpPrimitives::CHIMP_SEQUENCE_SIZE);
 		// Reduce by one, because the first value of a group does not have a flag
 		auto flag_count = group_size - 1;
-		uint16_t flag_byte_count = (AlignValue<uint16_t, 4>(flag_count) / 4);
+		uint16_t flag_byte_count = AlignValue<uint16_t, 4>(UnsafeNumericCast<uint16_t>(flag_count)) / 4;
 
 		// Load the flags
 		metadata_ptr -= flag_byte_count;
@@ -263,7 +264,7 @@ template <class T>
 void ChimpScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                       idx_t result_offset) {
 	using INTERNAL_TYPE = typename ChimpType<T>::type;
-	auto &scan_state = (ChimpScanState<T> &)*state.scan_state;
+	auto &scan_state = state.scan_state->Cast<ChimpScanState<T>>();
 
 	T *result_data = FlatVector::GetData<T>(result);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -280,7 +281,7 @@ void ChimpScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan
 
 template <class T>
 void ChimpSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
-	auto &scan_state = (ChimpScanState<T> &)*state.scan_state;
+	auto &scan_state = state.scan_state->Cast<ChimpScanState<T>>();
 	scan_state.Skip(segment, skip_count);
 }
 

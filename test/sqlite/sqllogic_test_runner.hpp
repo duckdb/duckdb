@@ -16,6 +16,9 @@ namespace duckdb {
 
 class Command;
 class LoopCommand;
+class SQLLogicParser;
+
+enum class RequireResult { PRESENT, MISSING };
 
 class SQLLogicTestRunner {
 public:
@@ -68,6 +71,9 @@ public:
 	static string ReplaceLoopIterator(string text, string loop_iterator_name, string replacement);
 	static string LoopReplacement(string text, const vector<LoopDefinition> &loops);
 	static bool ForEachTokenReplace(const string &parameter, vector<string> &result);
+
+private:
+	RequireResult CheckRequire(SQLLogicParser &parser, const vector<string> &params);
 };
 
 } // namespace duckdb

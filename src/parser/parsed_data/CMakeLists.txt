@@ -6,6 +6,7 @@ add_library_unity(
   alter_table_function_info.cpp
   alter_table_info.cpp
   attach_info.cpp
+  comment_on_column_info.cpp
   create_info.cpp
   create_index_info.cpp
   create_aggregate_function_info.cpp
@@ -13,6 +14,7 @@ add_library_unity(
   create_copy_function_info.cpp
   create_macro_info.cpp
   create_pragma_function_info.cpp
+  create_secret_info.cpp
   create_sequence_info.cpp
   create_scalar_function_info.cpp
   create_table_function_info.cpp
@@ -21,6 +23,7 @@ add_library_unity(
   create_view_info.cpp
   detach_info.cpp
   drop_info.cpp
+  extra_drop_info.cpp
   sample_options.cpp
   transaction_info.cpp
   vacuum_info.cpp)

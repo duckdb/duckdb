@@ -19,7 +19,7 @@ static void GetValidFunctionInternal(ScalarFunctionSet &set, const LogicalType &
 ScalarFunctionSet JSONFunctions::GetValidFunction() {
 	ScalarFunctionSet set("json_valid");
 	GetValidFunctionInternal(set, LogicalType::VARCHAR);
-	GetValidFunctionInternal(set, JSONCommon::JSONType());
+	GetValidFunctionInternal(set, LogicalType::JSON());
 
 	return set;
 }

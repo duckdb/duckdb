@@ -13,6 +13,14 @@ TypeCatalogEntry::TypeCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema,
     : StandardEntry(CatalogType::TYPE_ENTRY, schema, catalog, info.name), user_type(info.type) {
 	this->temporary = info.temporary;
 	this->internal = info.internal;
+	this->comment = info.comment;
+}
+
+unique_ptr<CatalogEntry> TypeCatalogEntry::Copy(ClientContext &context) const {
+	auto info_copy = GetInfo();
+	auto &cast_info = info_copy->Cast<CreateTypeInfo>();
+	auto result = make_uniq<TypeCatalogEntry>(catalog, schema, cast_info);
+	return std::move(result);
 }
 
 unique_ptr<CreateInfo> TypeCatalogEntry::GetInfo() const {
@@ -21,18 +29,25 @@ unique_ptr<CreateInfo> TypeCatalogEntry::GetInfo() const {
 	result->schema = schema.name;
 	result->name = name;
 	result->type = user_type;
+	result->comment = comment;
 	return std::move(result);
 }
 
 string TypeCatalogEntry::ToSQL() const {
-	switch (user_type.id()) {
-	case (LogicalTypeId::ENUM): {
-		auto create_type_info = GetInfo();
-		return create_type_info->ToString();
-	}
-	default:
-		throw InternalException("Logical Type can't be used as a User Defined Type");
-	}
+	std::stringstream ss;
+	ss << "CREATE TYPE ";
+	ss << KeywordHelper::WriteOptionallyQuoted(name);
+	ss << " AS ";
+
+	auto user_type_copy = user_type;
+
+	// Strip off the potential alias so ToString doesn't just output the alias
+	user_type_copy.SetAlias("");
+	D_ASSERT(user_type_copy.GetAlias().empty());
+
+	ss << user_type_copy.ToString();
+	ss << ";";
+	return ss.str();
 }
 
 } // namespace duckdb

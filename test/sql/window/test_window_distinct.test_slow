@@ -1,0 +1,47 @@
+# name: test/sql/window/test_window_distinct.test_slow
+# description: Windowed distinct aggregates at scale
+# group: [window]
+
+require tpch
+
+statement ok
+CALL dbgen(sf=1);
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA temp_directory='__TEST_DIR__/window_distinct'
+
+# DISTINCT aggregate over a larger data set (e.g. lineitem or so)
+query I
+SELECT 
+	l_orderkey, 
+	l_linenumber,
+	l_returnflag,
+	COUNT(DISTINCT l_returnflag) OVER(PARTITION BY l_orderkey ORDER BY l_linenumber)
+FROM lineitem
+ORDER BY ALL
+----
+24004860 values hashing to d39903ddf93011916ff3354d8bded7ff
+
+statement ok
+PRAGMA disable_verification
+
+# Trigger external sorting of a partition
+statement ok
+PRAGMA threads=4
+
+statement ok
+PRAGMA memory_limit='20MB'
+
+query I
+WITH t AS (
+	SELECT range AS i, CHR((65 + i % 26)::INTEGER) AS c
+	FROM range(1e6::BIGINT) 
+)
+SELECT i, c, COUNT(DISTINCT c) OVER (ORDER BY i DESC) AS n
+FROM t
+ORDER BY ALL
+----
+3000000 values hashing to f56f9b4e62101f52951e1f01a9b5c862

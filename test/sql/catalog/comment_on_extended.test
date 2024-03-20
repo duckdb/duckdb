@@ -1,0 +1,158 @@
+# name: test/sql/catalog/comment_on_extended.test
+# description: Test COMMENT ON to add comment on database
+# group: [catalog]
+
+require skip_reload
+
+### Create some test data
+statement ok
+ATTACH '__TEST_DIR__/comment_on_extended_1.db' AS db1
+
+statement ok
+ATTACH '__TEST_DIR__/comment_on_extended_2.db' AS db2
+
+statement ok
+CREATE SCHEMA db1.s1;
+
+statement ok
+CREATE SCHEMA db2.s2;
+
+statement ok
+CREATE TABLE db1.s1.t1 AS SELECT 1 as c1
+
+statement ok
+CREATE TABLE db2.s2.t2 AS SELECT 2 as c2
+
+# some extra tables to index on (since we can not comment on tables with dependencies)
+statement ok
+CREATE TABLE db1.s1.t3 AS SELECT 3 as c3
+
+statement ok
+CREATE TABLE db2.s2.t4 AS SELECT 4 as c4
+
+statement ok
+CREATE INDEX test_index ON db1.s1.t3 using art(c3)
+
+statement ok
+CREATE INDEX test_index ON db2.s2.t4 using art(c4)
+
+### Confirm we have no comments yet
+query I
+SELECT count(*) from duckdb_tables() where comment IS NOT NULL;
+----
+0
+
+query I
+SELECT count(*) from duckdb_columns() where comment IS NOT NULL;
+----
+0
+
+### Tables with fully qualified names
+statement ok
+COMMENT ON TABLE db1.s1.t1 IS 'very gezellige table 1'
+
+query I
+select comment from duckdb_tables() where table_name='t1';
+----
+very gezellige table 1
+
+# just table
+statement ok
+USE db2.s2
+
+statement ok
+COMMENT ON TABLE t2 IS 'very gezellige table 2'
+
+query I
+select comment from duckdb_tables() where table_name='t2';
+----
+very gezellige table 2
+
+# db.table
+statement ok
+COMMENT ON TABLE db2.t2 IS 'another very gezellige table 2'
+
+query I
+select comment from duckdb_tables() where table_name='t2';
+----
+another very gezellige table 2
+
+# schema.table
+statement ok
+COMMENT ON TABLE s2.t2 IS 'yet another very gezellige table 2'
+
+query I
+select comment from duckdb_tables() where table_name='t2';
+----
+yet another very gezellige table 2
+
+
+### Index with fully qualified name
+statement ok
+COMMENT ON INDEX db1.s1.test_index IS 'very gezellige index 1'
+
+query I
+select comment from duckdb_indexes() where index_name='test_index' and database_name='db1';
+----
+very gezellige index 1
+
+# db.index
+statement ok
+COMMENT ON INDEX db2.test_index IS 'very gezellige index 2'
+
+query III
+select database_name, schema_name, comment from duckdb_indexes() where index_name='test_index' order by comment;
+----
+db1	s1	very gezellige index 1
+db2	s2	very gezellige index 2
+
+### Fully qualified column
+statement error
+COMMENT ON COLUMN col1 IS 'no bueno'
+----
+Parser Error: Invalid column reference: 'col1'
+
+statement error
+COMMENT ON COLUMN galaxy.db.schema.table.col1 IS 'no bueno'
+----
+Parser Error: Invalid column reference: 'galaxy.db."schema"."table".col1', too many dots
+
+statement error
+COMMENT ON COLUMN table_blablabla.col1 IS 'bla'
+----
+Catalog Error: Table with name table_blablabla does not exist!
+
+statement ok
+COMMENT ON COLUMN db1.s1.t1.c1 IS 'very gezellige column 1'
+
+query IIII
+select database_name, schema_name, table_name, comment from duckdb_columns() where column_name='c1' order by comment;
+----
+db1	s1	t1	very gezellige column 1
+
+# Using db.tbl.col
+statement ok
+COMMENT ON COLUMN db2.t2.c2 IS 'very gezellige column 2'
+
+query IIII
+select database_name, schema_name, table_name, comment from duckdb_columns() where column_name='c2' order by comment;
+----
+db2	s2	t2	very gezellige column 2
+
+# Using schema.tbl.col
+statement ok
+COMMENT ON COLUMN s2.t2.c2 IS 'another very gezellige column 2'
+
+query IIII
+select database_name, schema_name, table_name, comment from duckdb_columns() where column_name='c2' order by comment;
+----
+db2	s2	t2	another very gezellige column 2
+
+# Using tbl.col
+statement ok
+COMMENT ON COLUMN t2.c2 IS 'yet another very gezellige column 2'
+
+query IIII
+select database_name, schema_name, table_name, comment from duckdb_columns() where column_name='c2' order by comment;
+----
+db2	s2	t2	yet another very gezellige column 2

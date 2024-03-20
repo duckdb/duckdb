@@ -377,8 +377,7 @@ void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vecto
 		if (union_find != union_names_map.end()) {
 			// given same name , union_col's type must compatible with col's type
 			auto &current_type = union_col_types[union_find->second];
-			LogicalType compatible_type;
-			compatible_type = LogicalType::MaxLogicalType(current_type, sql_types[col]);
+			auto compatible_type = LogicalType::ForceMaxLogicalType(current_type, sql_types[col]);
 			union_col_types[union_find->second] = compatible_type;
 		} else {
 			union_names_map[col_names[col]] = union_col_names.size();

@@ -1,0 +1,19 @@
+# name: test/sql/copy/parquet/parquet_10148.test
+# description: Issue #10148: Wide decimal values in stats
+# group: [parquet]
+
+require parquet
+
+query I
+SELECT CDCONO FROM 'data/parquet-testing/bug10148-wide-decimal-stats.parquet'
+----
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0

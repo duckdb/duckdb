@@ -27,6 +27,10 @@ public:
 	vector<string> aliases;
 	//! Return types
 	vector<LogicalType> types;
+	//! Names of the query
+	vector<string> names;
+	//! Comments on columns of the query. Note: vector can be empty when no comments are set
+	vector<Value> column_comments;
 	//! The SelectStatement of the view
 	unique_ptr<SelectStatement> query;
 
@@ -37,6 +41,8 @@ public:
 	DUCKDB_API static unique_ptr<CreateViewInfo> FromSelect(ClientContext &context, unique_ptr<CreateViewInfo> info);
 	//! Gets a bound CreateViewInfo object from a CREATE VIEW statement
 	DUCKDB_API static unique_ptr<CreateViewInfo> FromCreateView(ClientContext &context, const string &sql);
+	//! Parse a SELECT statement from a SQL string
+	DUCKDB_API static unique_ptr<SelectStatement> ParseSelect(const string &sql);
 
 	DUCKDB_API void Serialize(Serializer &serializer) const override;
 	DUCKDB_API static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);

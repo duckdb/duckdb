@@ -1,0 +1,54 @@
+# name: test/issues/general/test_9456.test
+# description: Issue 9456: EXISTS operator returns NULL when multiple predicates are present
+# group: [general]
+
+statement ok
+create table u(u0 int, u1 int);
+
+statement ok
+create table t(t0 int, t1 int);
+
+statement ok
+insert into u values(1, 10);
+
+statement ok
+insert into t values(1, 11);
+
+statement ok
+insert into u values(null, 20);
+
+statement ok
+insert into t values(null, 21);
+
+statement ok
+PRAGMA enable_verification
+
+query III
+SELECT t0, t1, EXISTS (SELECT * FROM u WHERE u0 = t0 AND u1 < t1) FROM t ORDER BY t0, t1;
+----
+1	11	true
+NULL	21	false
+
+query III
+SELECT t0, t1, EXISTS (SELECT * FROM u WHERE u0 != t0 AND u1 < t1) FROM t ORDER BY t0, t1;
+----
+1	11	false
+NULL	21	false
+
+query III
+SELECT t0, t1, EXISTS (SELECT * FROM u WHERE u0 != t0 AND u1 = t1) FROM t ORDER BY t0, t1;
+----
+1	11	false
+NULL	21	false
+
+query III
+SELECT t0, t1, EXISTS (SELECT * FROM u WHERE u0 != t0 AND u1 != t1) FROM t ORDER BY t0, t1;
+----
+1	11	false
+NULL	21	false
+
+query III
+SELECT t0, t1, EXISTS (SELECT * FROM u WHERE u0 < t0 AND u1 < t1) FROM t ORDER BY t0, t1;
+----
+1	11	false
+NULL	21	false

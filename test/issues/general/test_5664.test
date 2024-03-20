@@ -25,4 +25,4 @@ INSERT INTO test VALUES ('duckdb');
 query I
 SELECT typeof(x) FROM test;
 ----
-b
+BLOB

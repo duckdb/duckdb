@@ -20,21 +20,28 @@ if(NOT MSVC)
   endif()
 endif()
 set(EXIT_TIME_DESTRUCTORS_WARNING FALSE)
-if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR "${CMAKE_CXX_COMPILER_ID}"
+                                                  STREQUAL "AppleClang")
   set(EXIT_TIME_DESTRUCTORS_WARNING TRUE)
-  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wexit-time-destructors")
+  set(CMAKE_CXX_FLAGS_DEBUG
+      "${CMAKE_CXX_FLAGS_DEBUG} -Wexit-time-destructors -Wimplicit-int-conversion -Wshorten-64-to-32 -Wnarrowing"
+  )
 endif()
 
 set(DUCKDB_SYSTEM_LIBS ${CMAKE_DL_LIBS})
 
 if(MSVC OR MINGW)
-  set(DUCKDB_SYSTEM_LIBS ${DUCKDB_SYSTEM_LIBS} ws2_32)
+  set(DUCKDB_SYSTEM_LIBS ${DUCKDB_SYSTEM_LIBS} ws2_32 rstrtmgr)
+endif()
+if(MSVC)
+  set(DUCKDB_SYSTEM_LIBS ${DUCKDB_SYSTEM_LIBS} bcrypt)
+endif()
+
+if(MSVC)
+  add_definitions(/bigobj)
 endif()
 
 if(AMALGAMATION_BUILD)
-  if(WIN32)
-    add_definitions(/bigobj)
-  endif()
 
   add_library(duckdb SHARED "${PROJECT_SOURCE_DIR}/src/amalgamation/duckdb.cpp")
   target_link_libraries(duckdb ${DUCKDB_SYSTEM_LIBS})

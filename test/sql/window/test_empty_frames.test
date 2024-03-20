@@ -105,9 +105,9 @@ SELECT id, ${agg}(id) OVER (PARTITION BY ch ORDER BY id ROWS BETWEEN 1 FOLLOWING
 FROM t1
 ORDER BY 1;
 ----
-1	[]
+1	NULL
 2	[NULL]
-NULL	[]
+NULL	NULL
 
 endloop
 

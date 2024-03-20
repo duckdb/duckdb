@@ -5,7 +5,7 @@ import pandas._testing as tm
 import datetime
 import csv
 import pytest
-from conftest import NumpyPandas, ArrowPandas
+from conftest import NumpyPandas, ArrowPandas, getTimeSeriesData
 
 
 class TestToCSV(object):
@@ -15,7 +15,7 @@ class TestToCSV(object):
         df = pandas.DataFrame({'a': [5, 3, 23, 2], 'b': [45, 234, 234, 2]})
         rel = duckdb.from_df(df)
 
-        rel.to_csv(temp_file_name, header=False)
+        rel.to_csv(temp_file_name)
 
         csv_rel = duckdb.read_csv(temp_file_name)
         assert rel.execute().fetchall() == csv_rel.execute().fetchall()
@@ -26,7 +26,7 @@ class TestToCSV(object):
         df = pandas.DataFrame({'a': [5, 3, 23, 2], 'b': [45, 234, 234, 2]})
         rel = duckdb.from_df(df)
 
-        rel.to_csv(temp_file_name, sep=',', header=False)
+        rel.to_csv(temp_file_name, sep=',')
 
         csv_rel = duckdb.read_csv(temp_file_name, sep=',')
         assert rel.execute().fetchall() == csv_rel.execute().fetchall()
@@ -37,7 +37,7 @@ class TestToCSV(object):
         df = pandas.DataFrame({'a': [5, None, 23, 2], 'b': [45, 234, 234, 2]})
         rel = duckdb.from_df(df)
 
-        rel.to_csv(temp_file_name, na_rep="test", header=False)
+        rel.to_csv(temp_file_name, na_rep="test")
 
         csv_rel = duckdb.read_csv(temp_file_name, na_values="test")
         assert rel.execute().fetchall() == csv_rel.execute().fetchall()
@@ -48,9 +48,9 @@ class TestToCSV(object):
         df = pandas.DataFrame({'a': [5, None, 23, 2], 'b': [45, 234, 234, 2]})
         rel = duckdb.from_df(df)
 
-        rel.to_csv(temp_file_name, header=True)
+        rel.to_csv(temp_file_name)
 
-        csv_rel = duckdb.read_csv(temp_file_name, header=True)
+        csv_rel = duckdb.read_csv(temp_file_name)
         assert rel.execute().fetchall() == csv_rel.execute().fetchall()
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
@@ -59,7 +59,7 @@ class TestToCSV(object):
         df = pandas.DataFrame({'a': ["\'a,b,c\'", None, "hello", "bye"], 'b': [45, 234, 234, 2]})
         rel = duckdb.from_df(df)
 
-        rel.to_csv(temp_file_name, quotechar='\'', sep=',', header=False)
+        rel.to_csv(temp_file_name, quotechar='\'', sep=',')
 
         csv_rel = duckdb.read_csv(temp_file_name, sep=',', quotechar='\'')
         assert rel.execute().fetchall() == csv_rel.execute().fetchall()
@@ -76,18 +76,18 @@ class TestToCSV(object):
             }
         )
         rel = duckdb.from_df(df)
-        rel.to_csv(temp_file_name, header=True, quotechar='"', escapechar='!')
+        rel.to_csv(temp_file_name, quotechar='"', escapechar='!')
         csv_rel = duckdb.read_csv(temp_file_name, quotechar='"', escapechar='!')
         assert rel.execute().fetchall() == csv_rel.execute().fetchall()
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_to_csv_date_format(self, pandas):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
-        df = pandas.DataFrame(tm.getTimeSeriesData())
+        df = pandas.DataFrame(getTimeSeriesData())
         dt_index = df.index
         df = pandas.DataFrame({"A": dt_index, "B": dt_index.shift(1)}, index=dt_index)
         rel = duckdb.from_df(df)
-        rel.to_csv(temp_file_name, date_format="%Y%m%d", header=False)
+        rel.to_csv(temp_file_name, date_format="%Y%m%d")
 
         csv_rel = duckdb.read_csv(temp_file_name, date_format="%Y%m%d")
 
@@ -99,7 +99,7 @@ class TestToCSV(object):
         data = [datetime.time(hour=23, minute=1, second=34, microsecond=234345)]
         df = pandas.DataFrame({'0': pandas.Series(data=data, dtype='object')})
         rel = duckdb.from_df(df)
-        rel.to_csv(temp_file_name, timestamp_format='%m/%d/%Y', header=False)
+        rel.to_csv(temp_file_name, timestamp_format='%m/%d/%Y')
 
         csv_rel = duckdb.read_csv(temp_file_name, timestamp_format='%m/%d/%Y')
 
@@ -110,7 +110,7 @@ class TestToCSV(object):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
         df = pandas.DataFrame({'a': ['string1', 'string2', 'string3']})
         rel = duckdb.from_df(df)
-        rel.to_csv(temp_file_name, quoting=None, header=False)
+        rel.to_csv(temp_file_name, quoting=None)
 
         csv_rel = duckdb.read_csv(temp_file_name)
         assert rel.execute().fetchall() == csv_rel.execute().fetchall()
@@ -120,7 +120,7 @@ class TestToCSV(object):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
         df = pandas.DataFrame({'a': ['string1', 'string2', 'string3']})
         rel = duckdb.from_df(df)
-        rel.to_csv(temp_file_name, quoting="force", header=False)
+        rel.to_csv(temp_file_name, quoting="force")
 
         csv_rel = duckdb.read_csv(temp_file_name)
         assert rel.execute().fetchall() == csv_rel.execute().fetchall()
@@ -130,7 +130,7 @@ class TestToCSV(object):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
         df = pandas.DataFrame({'a': ['string1', 'string2', 'string3']})
         rel = duckdb.from_df(df)
-        rel.to_csv(temp_file_name, quoting=csv.QUOTE_ALL, header=False)
+        rel.to_csv(temp_file_name, quoting=csv.QUOTE_ALL)
 
         csv_rel = duckdb.read_csv(temp_file_name)
         assert rel.execute().fetchall() == csv_rel.execute().fetchall()
@@ -143,14 +143,14 @@ class TestToCSV(object):
         with pytest.raises(
             duckdb.InvalidInputException, match="Invalid Input Error: The only supported encoding option is 'UTF8"
         ):
-            rel.to_csv(temp_file_name, encoding="nope", header=False)
+            rel.to_csv(temp_file_name, encoding="nope")
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_to_csv_encoding_correct(self, pandas):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
         df = pandas.DataFrame({'a': ['string1', 'string2', 'string3']})
         rel = duckdb.from_df(df)
-        rel.to_csv(temp_file_name, encoding="UTF-8", header=False)
+        rel.to_csv(temp_file_name, encoding="UTF-8")
         csv_rel = duckdb.read_csv(temp_file_name)
         assert rel.execute().fetchall() == csv_rel.execute().fetchall()
 
@@ -159,6 +159,6 @@ class TestToCSV(object):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
         df = pandas.DataFrame({'a': ['string1', 'string2', 'string3']})
         rel = duckdb.from_df(df)
-        rel.to_csv(temp_file_name, compression="gzip", header=False)
+        rel.to_csv(temp_file_name, compression="gzip")
         csv_rel = duckdb.read_csv(temp_file_name, compression="gzip")
         assert rel.execute().fetchall() == csv_rel.execute().fetchall()

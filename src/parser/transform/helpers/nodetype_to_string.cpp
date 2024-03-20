@@ -478,6 +478,8 @@ std::string Transformer::NodetypeToString(duckdb_libpgquery::PGNodeTag type) { /
 		return "T_ClosePortalStmt";
 	case duckdb_libpgquery::T_PGClusterStmt:
 		return "T_ClusterStmt";
+	case duckdb_libpgquery::T_PGCommentOnStmt:
+		return "T_CommentOnStmt";
 	case duckdb_libpgquery::T_PGCopyStmt:
 		return "T_CopyStmt";
 	case duckdb_libpgquery::T_PGCreateStmt:

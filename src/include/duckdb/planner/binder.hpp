@@ -12,6 +12,7 @@
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
@@ -48,6 +49,9 @@ struct BoundCreateFunctionInfo;
 struct CommonTableExpressionInfo;
 struct BoundParameterMap;
 struct BoundPragmaInfo;
+struct BoundLimitNode;
+struct PivotColumnEntry;
+struct UnpivotEntry;
 
 enum class BindingMode : uint8_t { STANDARD_BINDING, EXTRACT_NAMES };
 
@@ -105,6 +109,8 @@ public:
 	//! The intermediate lambda bindings to bind nested lambdas (if any)
 	optional_ptr<vector<DummyBinding>> lambda_bindings;
 
+	unordered_map<idx_t, LogicalOperator *> recursive_ctes;
+
 public:
 	DUCKDB_API BoundStatement Bind(SQLStatement &statement);
 	DUCKDB_API BoundStatement Bind(QueryNode &node);
@@ -149,23 +155,6 @@ public:
 	//! Add a correlated column to this binder (if it does not exist)
 	void AddCorrelatedColumn(const CorrelatedColumnInfo &info);
 
-	string FormatError(ParsedExpression &expr_context, const string &message);
-	string FormatError(TableRef &ref_context, const string &message);
-
-	string FormatErrorRecursive(idx_t query_location, const string &message, vector<ExceptionFormatValue> &values);
-	template <class T, typename... ARGS>
-	string FormatErrorRecursive(idx_t query_location, const string &msg, vector<ExceptionFormatValue> &values, T param,
-	                            ARGS... params) {
-		values.push_back(ExceptionFormatValue::CreateFormatValue<T>(param));
-		return FormatErrorRecursive(query_location, msg, values, params...);
-	}
-
-	template <typename... ARGS>
-	string FormatError(idx_t query_location, const string &msg, ARGS... params) {
-		vector<ExceptionFormatValue> values;
-		return FormatErrorRecursive(query_location, msg, values, params...);
-	}
-
 	unique_ptr<LogicalOperator> BindUpdateSet(LogicalOperator &op, unique_ptr<LogicalOperator> root,
 	                                          UpdateSetInfo &set_info, TableCatalogEntry &table,
 	                                          vector<PhysicalIndex> &columns);
@@ -177,11 +166,11 @@ public:
 	static void BindLogicalType(ClientContext &context, LogicalType &type, optional_ptr<Catalog> catalog = nullptr,
 	                            const string &schema = INVALID_SCHEMA);
 
-	bool HasMatchingBinding(const string &table_name, const string &column_name, string &error_message);
+	bool HasMatchingBinding(const string &table_name, const string &column_name, ErrorData &error);
 	bool HasMatchingBinding(const string &schema_name, const string &table_name, const string &column_name,
-	                        string &error_message);
+	                        ErrorData &error);
 	bool HasMatchingBinding(const string &catalog_name, const string &schema_name, const string &table_name,
-	                        const string &column_name, string &error_message);
+	                        const string &column_name, ErrorData &error);
 
 	void SetBindingMode(BindingMode mode);
 	BindingMode GetBindingMode();
@@ -192,6 +181,7 @@ public:
 	}
 
 	void SetCanContainNulls(bool can_contain_nulls);
+	void SetAlwaysRequireRebind();
 
 private:
 	//! The parent binder (if any)
@@ -216,10 +206,12 @@ private:
 	unordered_set<string> table_names;
 	//! The set of bound views
 	reference_set_t<ViewCatalogEntry> bound_views;
+	//! Unnamed subquery index
+	idx_t unnamed_subquery_index = 1;
 
 private:
 	//! Get the root binder (binder with no parent)
-	Binder *GetRootBinder();
+	Binder &GetRootBinder();
 	//! Determine the depth of the binder
 	idx_t GetBinderDepth() const;
 	//! Bind the expressions of generated columns to check for errors
@@ -227,9 +219,8 @@ private:
 	//! Bind the default values of the columns of a table
 	void BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expression>> &bound_defaults);
 	//! Bind a limit value (LIMIT or OFFSET)
-	unique_ptr<Expression> BindDelimiter(ClientContext &context, OrderBinder &order_binder,
-	                                     unique_ptr<ParsedExpression> delimiter, const LogicalType &type,
-	                                     Value &delimiter_value);
+	BoundLimitNode BindLimitValue(OrderBinder &order_binder, unique_ptr<ParsedExpression> limit_val, bool is_percentage,
+	                              bool is_offset);
 
 	//! Move correlated expressions from the child binder to this binder
 	void MoveCorrelatedExpressions(Binder &other);
@@ -253,7 +244,6 @@ private:
 	BoundStatement Bind(ExplainStatement &stmt);
 	BoundStatement Bind(VacuumStatement &stmt);
 	BoundStatement Bind(RelationStatement &stmt);
-	BoundStatement Bind(ShowStatement &stmt);
 	BoundStatement Bind(CallStatement &stmt);
 	BoundStatement Bind(ExportStatement &stmt);
 	BoundStatement Bind(ExtensionStatement &stmt);
@@ -285,6 +275,7 @@ private:
 	unique_ptr<LogicalOperator> CreatePlan(BoundSetOperationNode &node);
 	unique_ptr<LogicalOperator> CreatePlan(BoundQueryNode &node);
 
+	unique_ptr<BoundTableRef> BindJoin(Binder &parent, TableRef &ref);
 	unique_ptr<BoundTableRef> Bind(BaseTableRef &ref);
 	unique_ptr<BoundTableRef> Bind(JoinRef &ref);
 	unique_ptr<BoundTableRef> Bind(SubqueryRef &ref, optional_ptr<CommonTableExpressionInfo> cte = nullptr);
@@ -292,19 +283,22 @@ private:
 	unique_ptr<BoundTableRef> Bind(EmptyTableRef &ref);
 	unique_ptr<BoundTableRef> Bind(ExpressionListRef &ref);
 	unique_ptr<BoundTableRef> Bind(PivotRef &expr);
+	unique_ptr<BoundTableRef> Bind(ShowRef &ref);
 
 	unique_ptr<SelectNode> BindPivot(PivotRef &expr, vector<unique_ptr<ParsedExpression>> all_columns);
 	unique_ptr<SelectNode> BindUnpivot(Binder &child_binder, PivotRef &expr,
 	                                   vector<unique_ptr<ParsedExpression>> all_columns,
 	                                   unique_ptr<ParsedExpression> &where_clause);
 	unique_ptr<BoundTableRef> BindBoundPivot(PivotRef &expr);
+	void ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry, vector<UnpivotEntry> &unpivot_entries);
+	void ExtractUnpivotColumnName(ParsedExpression &expr, vector<string> &result);
 
 	bool BindTableFunctionParameters(TableFunctionCatalogEntry &table_function,
 	                                 vector<unique_ptr<ParsedExpression>> &expressions, vector<LogicalType> &arguments,
 	                                 vector<Value> &parameters, named_parameter_map_t &named_parameters,
-	                                 unique_ptr<BoundSubqueryRef> &subquery, string &error);
+	                                 unique_ptr<BoundSubqueryRef> &subquery, ErrorData &error);
 	bool BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &expressions,
-	                                 unique_ptr<BoundSubqueryRef> &subquery, string &error);
+	                                 unique_ptr<BoundSubqueryRef> &subquery, ErrorData &error);
 	unique_ptr<LogicalOperator> BindTableFunction(TableFunction &function, vector<Value> parameters);
 	unique_ptr<LogicalOperator>
 	BindTableFunctionInternal(TableFunction &table_function, const string &function_name, vector<Value> parameters,
@@ -328,7 +322,6 @@ private:
 	void BindModifierTypes(BoundQueryNode &result, const vector<LogicalType> &sql_types, idx_t projection_index,
 	                       const vector<idx_t> &expansion_count = {});
 
-	BoundStatement BindSummarize(ShowStatement &stmt);
 	unique_ptr<BoundResultModifier> BindLimit(OrderBinder &order_binder, LimitModifier &limit_mod);
 	unique_ptr<BoundResultModifier> BindLimitPercent(OrderBinder &order_binder, LimitPercentModifier &limit_mod);
 	unique_ptr<Expression> BindOrderExpression(OrderBinder &order_binder, unique_ptr<ParsedExpression> expr);
@@ -373,6 +366,10 @@ private:
 	                                                   Catalog &to_database);
 	unique_ptr<LogicalOperator> BindCopyDatabaseData(CopyDatabaseStatement &stmt, Catalog &from_database,
 	                                                 Catalog &to_database);
+
+	unique_ptr<BoundTableRef> BindShowQuery(ShowRef &ref);
+	unique_ptr<BoundTableRef> BindShowTable(ShowRef &ref);
+	unique_ptr<BoundTableRef> BindSummarize(ShowRef &ref);
 
 public:
 	// This should really be a private constructor, but make_shared does not allow it...

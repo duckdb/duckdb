@@ -334,11 +334,11 @@ unique_ptr<QueryResult> Relation::Explain(ExplainType type) {
 }
 
 void Relation::Update(const string &update, const string &condition) {
-	throw Exception("UPDATE can only be used on base tables!");
+	throw InvalidInputException("UPDATE can only be used on base tables!");
 }
 
 void Relation::Delete(const string &condition) {
-	throw Exception("DELETE can only be used on base tables!");
+	throw InvalidInputException("DELETE can only be used on base tables!");
 }
 
 shared_ptr<Relation> Relation::TableFunction(const std::string &fname, const vector<Value> &values,

@@ -15,6 +15,7 @@ FilterPropagateResult ConstantFilter::CheckStatistics(BaseStatistics &stats) {
 	case PhysicalType::UINT16:
 	case PhysicalType::UINT32:
 	case PhysicalType::UINT64:
+	case PhysicalType::UINT128:
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:
 	case PhysicalType::INT32:

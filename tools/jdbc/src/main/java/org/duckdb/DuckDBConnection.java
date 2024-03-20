@@ -37,7 +37,7 @@ public final class DuckDBConnection implements java.sql.Connection {
 
     public static DuckDBConnection newConnection(String url, boolean readOnly, Properties properties)
         throws SQLException {
-        if (!url.startsWith("jdbc:duckdb")) {
+        if (!url.startsWith("jdbc:duckdb:")) {
             throw new SQLException("DuckDB JDBC URL needs to start with 'jdbc:duckdb:'");
         }
         String db_dir = url.substring("jdbc:duckdb:".length()).trim();

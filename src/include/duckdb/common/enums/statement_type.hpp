@@ -35,7 +35,6 @@ enum class StatementType : uint8_t {
 	DROP_STATEMENT,         // DROP statement type
 	EXPORT_STATEMENT,       // EXPORT statement type
 	PRAGMA_STATEMENT,       // PRAGMA statement type
-	SHOW_STATEMENT,         // SHOW statement type
 	VACUUM_STATEMENT,       // VACUUM statement type
 	CALL_STATEMENT,         // CALL statement type
 	SET_STATEMENT,          // SET statement type
@@ -46,8 +45,7 @@ enum class StatementType : uint8_t {
 	ATTACH_STATEMENT,
 	DETACH_STATEMENT,
 	MULTI_STATEMENT,
-	COPY_DATABASE_STATEMENT
-
+	COPY_DATABASE_STATEMENT,
 };
 
 DUCKDB_API string StatementTypeToString(StatementType type);
@@ -64,13 +62,15 @@ string StatementReturnTypeToString(StatementReturnType type);
 struct StatementProperties {
 	StatementProperties()
 	    : requires_valid_transaction(true), allow_stream_result(false), bound_all_parameters(true),
-	      return_type(StatementReturnType::QUERY_RESULT), parameter_count(0) {
+	      return_type(StatementReturnType::QUERY_RESULT), parameter_count(0), always_require_rebind(false) {
 	}
 
+	//! The set of databases this statement will read from
+	unordered_set<string> read_databases;
 	//! The set of databases this statement will modify
 	unordered_set<string> modified_databases;
 	//! Whether or not the statement requires a valid transaction. Almost all statements require this, with the
-	//! exception of
+	//! exception of ROLLBACK
 	bool requires_valid_transaction;
 	//! Whether or not the result can be streamed to the client
 	bool allow_stream_result;
@@ -80,6 +80,8 @@ struct StatementProperties {
 	StatementReturnType return_type;
 	//! The number of prepared statement parameters
 	idx_t parameter_count;
+	//! Whether or not the statement ALWAYS requires a rebind
+	bool always_require_rebind;
 
 	bool IsReadOnly() {
 		return modified_databases.empty();

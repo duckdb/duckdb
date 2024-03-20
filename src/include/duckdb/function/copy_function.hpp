@@ -26,7 +26,7 @@ struct LocalFunctionData {
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -42,7 +42,7 @@ struct GlobalFunctionData {
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -58,7 +58,7 @@ struct PreparedBatchData {
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -68,10 +68,19 @@ struct PreparedBatchData {
 	}
 };
 
+struct CopyFunctionBindInput {
+	const CopyInfo &info;
+
+	string file_extension;
+
+	CopyFunctionBindInput(const CopyInfo &info_p) : info(info_p) {
+	}
+};
+
 enum class CopyFunctionExecutionMode { REGULAR_COPY_TO_FILE, PARALLEL_COPY_TO_FILE, BATCH_COPY_TO_FILE };
 
 typedef BoundStatement (*copy_to_plan_t)(Binder &binder, CopyStatement &stmt);
-typedef unique_ptr<FunctionData> (*copy_to_bind_t)(ClientContext &context, const CopyInfo &info,
+typedef unique_ptr<FunctionData> (*copy_to_bind_t)(ClientContext &context, CopyFunctionBindInput &input,
                                                    const vector<string> &names, const vector<LogicalType> &sql_types);
 typedef unique_ptr<LocalFunctionData> (*copy_to_initialize_local_t)(ExecutionContext &context, FunctionData &bind_data);
 typedef unique_ptr<GlobalFunctionData> (*copy_to_initialize_global_t)(ClientContext &context, FunctionData &bind_data,
@@ -99,18 +108,20 @@ typedef void (*copy_flush_batch_t)(ClientContext &context, FunctionData &bind_da
                                    PreparedBatchData &batch);
 typedef idx_t (*copy_desired_batch_size_t)(ClientContext &context, FunctionData &bind_data);
 
+typedef idx_t (*copy_file_size_bytes_t)(GlobalFunctionData &gstate);
+
 enum class CopyTypeSupport { SUPPORTED, LOSSY, UNSUPPORTED };
 
 typedef CopyTypeSupport (*copy_supports_type_t)(const LogicalType &type);
 
 class CopyFunction : public Function {
 public:
-	explicit CopyFunction(string name)
+	explicit CopyFunction(const string &name)
 	    : Function(name), plan(nullptr), copy_to_bind(nullptr), copy_to_initialize_local(nullptr),
 	      copy_to_initialize_global(nullptr), copy_to_sink(nullptr), copy_to_combine(nullptr),
 	      copy_to_finalize(nullptr), execution_mode(nullptr), prepare_batch(nullptr), flush_batch(nullptr),
-	      desired_batch_size(nullptr), serialize(nullptr), deserialize(nullptr), supports_type(nullptr),
-	      copy_from_bind(nullptr) {
+	      desired_batch_size(nullptr), file_size_bytes(nullptr), serialize(nullptr), deserialize(nullptr),
+	      supports_type(nullptr), copy_from_bind(nullptr) {
 	}
 
 	//! Plan rewrite copy function
@@ -127,6 +138,7 @@ public:
 	copy_prepare_batch_t prepare_batch;
 	copy_flush_batch_t flush_batch;
 	copy_desired_batch_size_t desired_batch_size;
+	copy_file_size_bytes_t file_size_bytes;
 
 	copy_to_serialize_t serialize;
 	copy_to_deserialize_t deserialize;

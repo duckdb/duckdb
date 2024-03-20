@@ -39,8 +39,14 @@ bool IsLeftOuterJoin(JoinType type);
 //! True if join is rght or full outer join
 bool IsRightOuterJoin(JoinType type);
 
-//!
+//! Whether the build side is propagated out of the join
 bool PropagatesBuildSide(JoinType type);
+
+//! Whether the JoinType has an inverse
+bool HasInverseJoinType(JoinType type);
+
+//! Gets the inverse JoinType, e.g., LEFT -> RIGHT
+JoinType InverseJoinType(JoinType type);
 
 // **DEPRECATED**: Use EnumUtil directly instead.
 string JoinTypeToString(JoinType type);

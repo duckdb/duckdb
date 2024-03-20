@@ -266,7 +266,7 @@ query I
 UPDATE table2
 SET b=98
 WHERE b=99
-RETURNING [a, b];
+RETURNING [a, b::VARCHAR];
 ----
 [Mr.Duck, 98]
 

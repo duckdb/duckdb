@@ -16,10 +16,47 @@ class ClientContext;
 class DatabaseInstance;
 struct DBConfig;
 
+const string GetDefaultUserAgent();
+
+enum class SettingScope : uint8_t { GLOBAL, LOCAL, INVALID };
+
+struct SettingLookupResult {
+public:
+	SettingLookupResult() : scope(SettingScope::INVALID) {
+	}
+	SettingLookupResult(SettingScope scope) : scope(scope) {
+		D_ASSERT(scope != SettingScope::INVALID);
+	}
+
+public:
+	operator bool() {
+		return scope != SettingScope::INVALID;
+	}
+
+public:
+	SettingScope GetScope() {
+		D_ASSERT(scope != SettingScope::INVALID);
+		return scope;
+	}
+
+private:
+	SettingScope scope = SettingScope::INVALID;
+};
+
 struct AccessModeSetting {
 	static constexpr const char *Name = "access_mode";
 	static constexpr const char *Description = "Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct AllowPersistentSecrets {
+	static constexpr const char *Name = "allow_persistent_secrets";
+	static constexpr const char *Description =
+	    "Allow the creation of persistent secrets, that are stored and loaded on restarts";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(ClientContext &context);
@@ -131,6 +168,15 @@ struct DefaultNullOrderSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct DefaultSecretStorage {
+	static constexpr const char *Name = "default_secret_storage";
+	static constexpr const char *Description = "Allows switching the default storage for secrets";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct DisabledFileSystemsSetting {
 	static constexpr const char *Name = "disabled_filesystems";
 	static constexpr const char *Description = "Disable specific file systems preventing access (e.g. LocalFileSystem)";
@@ -179,12 +225,21 @@ struct AllowUnsignedExtensionsSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct AllowUnredactedSecretsSetting {
+	static constexpr const char *Name = "allow_unredacted_secrets";
+	static constexpr const char *Description = "Allow printing unredacted secrets";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct CustomExtensionRepository {
 	static constexpr const char *Name = "custom_extension_repository";
 	static constexpr const char *Description = "Overrides the custom endpoint for remote extension installation";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(ClientContext &context);
 };
 
@@ -193,8 +248,8 @@ struct AutoloadExtensionRepository {
 	static constexpr const char *Description =
 	    "Overrides the custom endpoint for extension installation on autoloading";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(ClientContext &context);
 };
 
@@ -266,12 +321,31 @@ struct EnableProgressBarPrintSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct ErrorsAsJsonSetting {
+	static constexpr const char *Name = "errors_as_json";
+	static constexpr const char *Description = "Output error messages as structured JSON instead of as a raw string";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct ExplainOutputSetting {
 	static constexpr const char *Name = "explain_output";
 	static constexpr const char *Description = "Output of EXPLAIN statements (ALL, OPTIMIZED_ONLY, PHYSICAL_ONLY)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct ExportLargeBufferArrow {
+	static constexpr const char *Name = "arrow_large_buffer_size";
+	static constexpr const char *Description =
+	    "If arrow buffers for strings, blobs, uuids and bits should be exported using large buffers";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(ClientContext &context);
 };
 
@@ -388,6 +462,25 @@ struct MaximumMemorySetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct OldImplicitCasting {
+	static constexpr const char *Name = "old_implicit_casting";
+	static constexpr const char *Description = "Allow implicit casting to/from VARCHAR";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct PartitionedWriteFlushThreshold {
+	static constexpr const char *Name = "partitioned_write_flush_threshold";
+	static constexpr const char *Description =
+	    "The threshold in number of rows after which we flush a thread state when writing using PARTITION_BY";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct PasswordSetting {
 	static constexpr const char *Name = "password";
 	static constexpr const char *Description = "The password to use. Ignored for legacy compatibility.";
@@ -447,25 +540,6 @@ struct PreserveInsertionOrder {
 	static Value GetSetting(ClientContext &context);
 };
 
-struct ExportLargeBufferArrow {
-	static constexpr const char *Name = "arrow_large_buffer_size";
-	static constexpr const char *Description =
-	    "If arrow buffers for strings, blobs, uuids and bits should be exported using large buffers";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
-};
-
-struct ProfilerHistorySize {
-	static constexpr const char *Name = "profiler_history_size";
-	static constexpr const char *Description = "Sets the profiler history size";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(ClientContext &context);
-};
-
 struct ProfileOutputSetting {
 	static constexpr const char *Name = "profile_output";
 	static constexpr const char *Description =
@@ -512,6 +586,15 @@ struct SearchPathSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct SecretDirectorySetting {
+	static constexpr const char *Name = "secret_directory";
+	static constexpr const char *Description = "Set the directory to which persistent secrets are stored";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(ClientContext &context);
 };
 

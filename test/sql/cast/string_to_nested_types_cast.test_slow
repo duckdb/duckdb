@@ -15,7 +15,7 @@ SELECT CAST('[[True,False], [true], [FALSE], [false, true]]' AS BOOL[][]);
 ----
 [[true, false], [true], [false], [false, true]]
 
-foreach type INT TINYINT SMALLINT INTEGER BIGINT HUGEINT UTINYINT USMALLINT UINTEGER UBIGINT 
+foreach type INT TINYINT SMALLINT INTEGER BIGINT HUGEINT UTINYINT USMALLINT UINTEGER UBIGINT UHUGEINT
 
 query I
 SELECT CAST('[1,2,3]' AS ${type}[]);
@@ -112,7 +112,7 @@ SELECT CAST('{a: True, b: False, c:[true]}' AS STRUCT(a BOOL, b BOOL, c BOOL[], 
 ----
 {'a': true, 'b': false, 'c': [true], 'd': NULL}
 
-foreach type INT TINYINT SMALLINT INTEGER BIGINT HUGEINT UTINYINT USMALLINT UINTEGER UBIGINT
+foreach type INT TINYINT SMALLINT INTEGER BIGINT HUGEINT UTINYINT USMALLINT UINTEGER UBIGINT UHUGEINT
 
 query I
 SELECT CAST('{a:1, b:{a:2, b: 3}}' AS STRUCT(a ${type}, b STRUCT(a ${type}, b ${type})));

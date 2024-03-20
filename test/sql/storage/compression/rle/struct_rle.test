@@ -6,6 +6,9 @@
 load __TEST_DIR__/test_rle.db
 
 statement ok
+pragma verify_fetch_row
+
+statement ok
 PRAGMA force_compression = 'rle'
 
 statement ok

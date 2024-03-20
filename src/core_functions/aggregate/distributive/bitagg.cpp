@@ -35,6 +35,8 @@ static AggregateFunction GetBitfieldUnaryAggregate(LogicalType type) {
 		return AggregateFunction::UnaryAggregate<BitState<uint32_t>, uint32_t, uint32_t, OP>(type, type);
 	case LogicalTypeId::UBIGINT:
 		return AggregateFunction::UnaryAggregate<BitState<uint64_t>, uint64_t, uint64_t, OP>(type, type);
+	case LogicalTypeId::UHUGEINT:
+		return AggregateFunction::UnaryAggregate<BitState<uhugeint_t>, uhugeint_t, uhugeint_t, OP>(type, type);
 	default:
 		throw InternalException("Unimplemented bitfield type for unary aggregate");
 	}
@@ -144,7 +146,7 @@ struct BitStringBitwiseOperation : public BitwiseOperation {
 			auto ptr = new char[len];
 			memcpy(ptr, input.GetData(), len);
 
-			state.value = string_t(ptr, len);
+			state.value = string_t(ptr, UnsafeNumericCast<uint32_t>(len));
 		}
 	}
 

@@ -4,7 +4,6 @@ const duckdb_config = Ptr{Cvoid}
 const duckdb_connection = Ptr{Cvoid}
 const duckdb_prepared_statement = Ptr{Cvoid}
 const duckdb_pending_result = Ptr{Cvoid}
-const duckdb_logical_type = Ptr{Cvoid}
 const duckdb_data_chunk = Ptr{Cvoid}
 const duckdb_vector = Ptr{Cvoid}
 const duckdb_appender = Ptr{Cvoid}
@@ -29,35 +28,38 @@ const DUCKDB_PENDING_NO_TASKS_AVAILABLE = 3;
 
 @enum DUCKDB_TYPE_::UInt32 begin
     DUCKDB_TYPE_INVALID = 0
-    DUCKDB_TYPE_BOOLEAN
-    DUCKDB_TYPE_TINYINT
-    DUCKDB_TYPE_SMALLINT
-    DUCKDB_TYPE_INTEGER
-    DUCKDB_TYPE_BIGINT
-    DUCKDB_TYPE_UTINYINT
-    DUCKDB_TYPE_USMALLINT
-    DUCKDB_TYPE_UINTEGER
-    DUCKDB_TYPE_UBIGINT
-    DUCKDB_TYPE_FLOAT
-    DUCKDB_TYPE_DOUBLE
-    DUCKDB_TYPE_TIMESTAMP
-    DUCKDB_TYPE_DATE
-    DUCKDB_TYPE_TIME
-    DUCKDB_TYPE_INTERVAL
-    DUCKDB_TYPE_HUGEINT
-    DUCKDB_TYPE_VARCHAR
-    DUCKDB_TYPE_BLOB
-    DUCKDB_TYPE_DECIMAL
-    DUCKDB_TYPE_TIMESTAMP_S
-    DUCKDB_TYPE_TIMESTAMP_MS
-    DUCKDB_TYPE_TIMESTAMP_NS
-    DUCKDB_TYPE_ENUM
-    DUCKDB_TYPE_LIST
-    DUCKDB_TYPE_STRUCT
-    DUCKDB_TYPE_MAP
-    DUCKDB_TYPE_UUID
-    DUCKDB_TYPE_UNION
-    DUCKDB_TYPE_BIT
+    DUCKDB_TYPE_BOOLEAN = 1
+    DUCKDB_TYPE_TINYINT = 2
+    DUCKDB_TYPE_SMALLINT = 3
+    DUCKDB_TYPE_INTEGER = 4
+    DUCKDB_TYPE_BIGINT = 5
+    DUCKDB_TYPE_UTINYINT = 6
+    DUCKDB_TYPE_USMALLINT = 7
+    DUCKDB_TYPE_UINTEGER = 8
+    DUCKDB_TYPE_UBIGINT = 9
+    DUCKDB_TYPE_FLOAT = 10
+    DUCKDB_TYPE_DOUBLE = 11
+    DUCKDB_TYPE_TIMESTAMP = 12
+    DUCKDB_TYPE_DATE = 13
+    DUCKDB_TYPE_TIME = 14
+    DUCKDB_TYPE_INTERVAL = 15
+    DUCKDB_TYPE_HUGEINT = 16
+    DUCKDB_TYPE_UHUGEINT = 32
+    DUCKDB_TYPE_VARCHAR = 17
+    DUCKDB_TYPE_BLOB = 18
+    DUCKDB_TYPE_DECIMAL = 19
+    DUCKDB_TYPE_TIMESTAMP_S = 20
+    DUCKDB_TYPE_TIMESTAMP_MS = 21
+    DUCKDB_TYPE_TIMESTAMP_NS = 22
+    DUCKDB_TYPE_ENUM = 23
+    DUCKDB_TYPE_LIST = 24
+    DUCKDB_TYPE_STRUCT = 25
+    DUCKDB_TYPE_MAP = 26
+    DUCKDB_TYPE_UUID = 27
+    DUCKDB_TYPE_UNION = 28
+    DUCKDB_TYPE_BIT = 29
+    DUCKDB_TYPE_TIME_TZ = 30
+    DUCKDB_TYPE_TIMESTAMP_TZ = 31
 end
 
 const DUCKDB_TYPE = DUCKDB_TYPE_
@@ -93,6 +95,11 @@ struct duckdb_time_struct
     micros::Int32
 end
 
+struct duckdb_time_tz
+    time::duckdb_time_struct
+    offset::Int32
+end
+
 """
 Timestamps are stored as microseconds since 1970-01-01\n
 Use the duckdb_from_timestamp/duckdb_to_timestamp function to extract individual information
@@ -122,6 +129,11 @@ For easy usage, the functions duckdb_hugeint_to_double/duckdb_double_to_hugeint 
 struct duckdb_hugeint
     lower::UInt64
     upper::Int64
+end
+
+struct duckdb_uhugeint
+    lower::UInt64
+    upper::UInt64
 end
 
 struct duckdb_string_t
@@ -169,10 +181,13 @@ INTERNAL_TYPE_MAP = Dict(
     DUCKDB_TYPE_TIMESTAMP_S => Int64,
     DUCKDB_TYPE_TIMESTAMP_MS => Int64,
     DUCKDB_TYPE_TIMESTAMP_NS => Int64,
+    DUCKDB_TYPE_TIMESTAMP_TZ => Int64,
     DUCKDB_TYPE_DATE => Int32,
     DUCKDB_TYPE_TIME => Int64,
+    DUCKDB_TYPE_TIME_TZ => UInt64,
     DUCKDB_TYPE_INTERVAL => duckdb_interval,
     DUCKDB_TYPE_HUGEINT => duckdb_hugeint,
+    DUCKDB_TYPE_UHUGEINT => duckdb_uhugeint,
     DUCKDB_TYPE_UUID => duckdb_hugeint,
     DUCKDB_TYPE_VARCHAR => duckdb_string_t,
     DUCKDB_TYPE_BLOB => duckdb_string_t,
@@ -192,6 +207,7 @@ JULIA_TYPE_MAP = Dict(
     DUCKDB_TYPE_INTEGER => Int32,
     DUCKDB_TYPE_BIGINT => Int64,
     DUCKDB_TYPE_HUGEINT => Int128,
+    DUCKDB_TYPE_UHUGEINT => UInt128,
     DUCKDB_TYPE_UTINYINT => UInt8,
     DUCKDB_TYPE_USMALLINT => UInt16,
     DUCKDB_TYPE_UINTEGER => UInt32,
@@ -200,7 +216,9 @@ JULIA_TYPE_MAP = Dict(
     DUCKDB_TYPE_DOUBLE => Float64,
     DUCKDB_TYPE_DATE => Date,
     DUCKDB_TYPE_TIME => Time,
+    DUCKDB_TYPE_TIME_TZ => Time,
     DUCKDB_TYPE_TIMESTAMP => DateTime,
+    DUCKDB_TYPE_TIMESTAMP_TZ => DateTime,
     DUCKDB_TYPE_TIMESTAMP_S => DateTime,
     DUCKDB_TYPE_TIMESTAMP_MS => DateTime,
     DUCKDB_TYPE_TIMESTAMP_NS => DateTime,

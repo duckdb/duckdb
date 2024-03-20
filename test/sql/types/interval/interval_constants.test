@@ -219,3 +219,261 @@ statement error
 select '47.210 5'::interval;
 ----
 Could not convert string '47.210 5' to INTERVAL
+
+#
+# Fractional to_interval parsing - above seconds truncates
+#
+
+query I
+SELECT INTERVAL '1.5' MICROSECOND;
+----
+00:00:00.000001
+
+query I
+SELECT INTERVAL '1.5' MILLISECOND;
+----
+00:00:00.0015
+
+query I
+SELECT INTERVAL '1.5' SECOND;
+----
+00:00:01.5
+
+query I
+SELECT INTERVAL '1.5' MINUTE;
+----
+00:01:00
+
+query I
+SELECT INTERVAL '1.5' HOUR;
+----
+01:00:00
+
+query I
+SELECT INTERVAL '1.5' DAY;
+----
+1 day
+
+query I
+SELECT INTERVAL '1.5' WEEK;
+----
+7 days
+
+query I
+SELECT INTERVAL '1.5' MONTH;
+----
+1 month
+
+query I
+SELECT INTERVAL '1.5' YEAR;
+----
+1 year
+
+query I
+SELECT INTERVAL '1.5' DECADE;
+----
+10 years
+
+query I
+SELECT INTERVAL '1.5' CENTURY;
+----
+100 years
+
+query I
+SELECT INTERVAL '1.5' MILLENNIA;
+----
+1000 years
+
+query I
+SELECT INTERVAL '-1.5' MICROSECOND;
+----
+-00:00:00.000001
+
+query I
+SELECT INTERVAL '-1.5' MILLISECOND;
+----
+-00:00:00.0015
+
+query I
+SELECT INTERVAL '-1.5' SECOND;
+----
+-00:00:01.5
+
+query I
+SELECT INTERVAL '-1.5' MINUTE;
+----
+-00:01:00
+
+query I
+SELECT INTERVAL '-1.5' HOUR;
+----
+-01:00:00
+
+query I
+SELECT INTERVAL '-1.5' DAY;
+----
+-1 day
+
+query I
+SELECT INTERVAL '-1.5' WEEK;
+----
+-7 days
+
+query I
+SELECT INTERVAL '-1.5' MONTH;
+----
+-1 month
+
+query I
+SELECT INTERVAL '-1.5' YEAR;
+----
+-1 year
+
+query I
+SELECT INTERVAL '-1.5' DECADE;
+----
+-10 years
+
+query I
+SELECT INTERVAL '-1.5' CENTURY;
+----
+-100 years
+
+query I
+SELECT INTERVAL '-1.5' MILLENNIA;
+----
+-1000 years
+
+#
+# Fractional VARCHAR casts - fractions spill one position
+#
+
+query I
+SELECT '1.5 MICROSECOND'::INTERVAL;
+----
+00:00:00.000002
+
+query I
+SELECT '1.5 MILLISECOND'::INTERVAL;
+----
+00:00:00.0015
+
+query I
+SELECT '1.5 SECOND'::INTERVAL;
+----
+00:00:01.5
+
+query I
+SELECT '1.5 MINUTE'::INTERVAL;
+----
+00:01:30
+
+query I
+SELECT '1.5 HOUR'::INTERVAL;
+----
+01:30:00
+
+query I
+SELECT '1.5 DAY'::INTERVAL;
+----
+1 day 12:00:00
+
+query I
+SELECT '1.5 WEEK'::INTERVAL;
+----
+10 days 12:00:00
+
+query I
+SELECT '1.5 MONTH'::INTERVAL;
+----
+1 month 15 days
+
+query I
+SELECT '1.5 QUARTER'::INTERVAL;
+----
+4 months 15 days
+
+query I
+SELECT '1.5 YEAR'::INTERVAL
+----
+1 year 6 months
+
+query I
+SELECT '1.5 DECADE'::INTERVAL
+----
+15 years
+
+query I
+SELECT '1.5 CENTURY'::INTERVAL
+----
+150 years
+
+query I
+SELECT '1.5 MILLENIUM'::INTERVAL
+----
+1500 years
+
+query I
+SELECT '-1.5 MICROSECOND'::INTERVAL;
+----
+-00:00:00.000002
+
+query I
+SELECT '-1.5 MILLISECOND'::INTERVAL;
+----
+-00:00:00.0015
+
+query I
+SELECT '-1.5 SECOND'::INTERVAL;
+----
+-00:00:01.5
+
+query I
+SELECT '-1.5 MINUTE'::INTERVAL;
+----
+-00:01:30
+
+query I
+SELECT '-1.5 HOUR'::INTERVAL;
+----
+-01:30:00
+
+query I
+SELECT '-1.5 DAY'::INTERVAL;
+----
+-1 day -12:00:00
+
+query I
+SELECT '-1.5 WEEK'::INTERVAL;
+----
+-10 days -12:00:00
+
+query I
+SELECT '-1.5 MONTH'::INTERVAL;
+----
+-1 month -15 days
+
+query I
+SELECT '-1.5 QUARTER'::INTERVAL;
+----
+-4 months -15 days
+
+query I
+SELECT '-1.5 YEAR'::INTERVAL
+----
+-1 year -6 months
+
+query I
+SELECT '-1.5 DECADE'::INTERVAL
+----
+-15 years
+
+query I
+SELECT '-1.5 CENTURY'::INTERVAL
+----
+-150 years
+
+query I
+SELECT '-1.5 MILLENIUM'::INTERVAL
+----
+-1500 years

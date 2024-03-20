@@ -50,7 +50,7 @@ public:
 	}
 
 	static inline uint32_t EncodeFloat(float x) {
-		uint64_t buff;
+		uint32_t buff;
 
 		//! zero
 		if (x == 0) {
@@ -162,6 +162,12 @@ inline void Radix::EncodeData(data_ptr_t dataptr, uint64_t value) {
 template <>
 inline void Radix::EncodeData(data_ptr_t dataptr, hugeint_t value) {
 	EncodeData<int64_t>(dataptr, value.upper);
+	EncodeData<uint64_t>(dataptr + sizeof(value.upper), value.lower);
+}
+
+template <>
+inline void Radix::EncodeData(data_ptr_t dataptr, uhugeint_t value) {
+	EncodeData<uint64_t>(dataptr, value.upper);
 	EncodeData<uint64_t>(dataptr + sizeof(value.upper), value.lower);
 }
 

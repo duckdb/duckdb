@@ -25,14 +25,21 @@ AttachStmt:
 		;
 
 DetachStmt:
-				DETACH opt_database IDENT
+				DETACH ColLabel
+				{
+					PGDetachStmt *n = makeNode(PGDetachStmt);
+					n->missing_ok = false;
+					n->db_name = $2;
+					$$ = (PGNode *)n;
+				}
+			|	DETACH DATABASE ColLabel
 				{
 					PGDetachStmt *n = makeNode(PGDetachStmt);
 					n->missing_ok = false;
 					n->db_name = $3;
 					$$ = (PGNode *)n;
 				}
-			|	DETACH DATABASE IF_P EXISTS IDENT
+			|	DETACH DATABASE IF_P EXISTS ColLabel
 				{
 					PGDetachStmt *n = makeNode(PGDetachStmt);
 					n->missing_ok = true;

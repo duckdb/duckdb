@@ -9,7 +9,7 @@ namespace duckdb {
 using ValidityBytes = TupleDataLayout::ValidityBytes;
 
 TupleDataBlock::TupleDataBlock(BufferManager &buffer_manager, idx_t capacity_p) : capacity(capacity_p), size(0) {
-	buffer_manager.Allocate(capacity, false, &handle);
+	buffer_manager.Allocate(MemoryTag::HASH_TABLE, capacity, false, &handle);
 }
 
 TupleDataBlock::TupleDataBlock(TupleDataBlock &&other) noexcept {
@@ -110,12 +110,12 @@ TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataPinState &pin_sta
 	if (row_blocks.empty() || row_blocks.back().RemainingCapacity() < layout.GetRowWidth()) {
 		row_blocks.emplace_back(buffer_manager, (idx_t)Storage::BLOCK_SIZE);
 	}
-	result.row_block_index = row_blocks.size() - 1;
+	result.row_block_index = NumericCast<uint32_t>(row_blocks.size() - 1);
 	auto &row_block = row_blocks[result.row_block_index];
-	result.row_block_offset = row_block.size;
+	result.row_block_offset = NumericCast<uint32_t>(row_block.size);
 
 	// Set count (might be reduced later when checking heap space)
-	result.count = MinValue<idx_t>(row_block.RemainingCapacity(layout.GetRowWidth()), append_count);
+	result.count = NumericCast<uint32_t>(MinValue(row_block.RemainingCapacity(layout.GetRowWidth()), append_count));
 	if (!layout.AllConstant()) {
 		const auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
 
@@ -138,21 +138,21 @@ TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataPinState &pin_sta
 				const auto size = MaxValue<idx_t>((idx_t)Storage::BLOCK_SIZE, heap_sizes[append_offset]);
 				heap_blocks.emplace_back(buffer_manager, size);
 			}
-			result.heap_block_index = heap_blocks.size() - 1;
+			result.heap_block_index = NumericCast<uint32_t>(heap_blocks.size() - 1);
 			auto &heap_block = heap_blocks[result.heap_block_index];
-			result.heap_block_offset = heap_block.size;
+			result.heap_block_offset = NumericCast<uint32_t>(heap_block.size);
 
 			const auto heap_remaining = heap_block.RemainingCapacity();
 			if (total_heap_size <= heap_remaining) {
 				// Everything fits
-				result.total_heap_size = total_heap_size;
+				result.total_heap_size = NumericCast<uint32_t>(total_heap_size);
 			} else {
 				// Not everything fits - determine how many we can read next
 				result.total_heap_size = 0;
 				for (idx_t i = 0; i < result.count; i++) {
 					const auto &heap_size = heap_sizes[append_offset + i];
 					if (result.total_heap_size + heap_size > heap_remaining) {
-						result.count = i;
+						result.count = NumericCast<uint32_t>(i);
 						break;
 					}
 					result.total_heap_size += heap_size;

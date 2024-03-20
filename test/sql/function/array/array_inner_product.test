@@ -4,11 +4,11 @@
 statement ok
 PRAGMA enable_verification
 
-# Erorr message coverage test
+# Error message coverage test
 statement error
 SELECT array_inner_product('foo', 'bar');
 ----
-Binder Error: No function matches the given name and argument types
+Could not choose a best candidate function
 
 statement error
 SELECT array_inner_product([1,2,3]::INT[3], ['a','b','c']::VARCHAR[3]);

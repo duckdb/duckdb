@@ -30,6 +30,7 @@ class RowGroupSegmentTree;
 struct ColumnSegmentInfo;
 class MetadataManager;
 struct VacuumState;
+struct CollectionCheckpointState;
 
 class RowGroupCollection {
 public:
@@ -68,8 +69,9 @@ public:
 
 	//! Initialize an append of a variable number of rows. FinalizeAppend must be called after appending is done.
 	void InitializeAppend(TableAppendState &state);
-	//! Initialize an append with a known number of rows. FinalizeAppend should not be called after appending is done.
-	void InitializeAppend(TransactionData transaction, TableAppendState &state, idx_t append_count);
+	//! Initialize an append with a variable number of rows. FinalizeAppend should not be called after appending is
+	//! done.
+	void InitializeAppend(TransactionData transaction, TableAppendState &state);
 	//! Appends to the row group collection. Returns true if a new row group has been created to append to
 	bool Append(DataChunk &chunk, TableAppendState &state);
 	//! FinalizeAppend flushes an append with a variable number of rows.
@@ -89,7 +91,8 @@ public:
 	void Checkpoint(TableDataWriter &writer, TableStatistics &global_stats);
 
 	void InitializeVacuumState(VacuumState &state, vector<SegmentNode<RowGroup>> &segments);
-	void VacuumDeletes(VacuumState &state, vector<SegmentNode<RowGroup>> &segments, idx_t segment_idx);
+	bool ScheduleVacuumTasks(CollectionCheckpointState &checkpoint_state, VacuumState &state, idx_t segment_idx);
+	void ScheduleCheckpointTask(CollectionCheckpointState &checkpoint_state, idx_t segment_idx);
 
 	void CommitDropColumn(idx_t index);
 	void CommitDropTable();
@@ -117,6 +120,10 @@ public:
 		return *info;
 	}
 
+	idx_t GetAllocationSize() const {
+		return allocation_size;
+	}
+
 private:
 	bool IsEmpty(SegmentLock &) const;
 
@@ -134,6 +141,8 @@ private:
 	shared_ptr<RowGroupSegmentTree> row_groups;
 	//! Table statistics
 	TableStatistics stats;
+	//! Allocation size, only tracked for appends
+	idx_t allocation_size;
 };
 
 } // namespace duckdb

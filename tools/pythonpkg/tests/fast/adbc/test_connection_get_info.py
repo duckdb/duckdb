@@ -4,9 +4,16 @@ import duckdb
 import pytest
 
 pa = pytest.importorskip("pyarrow")
+adbc_driver_manager = pytest.importorskip("adbc_driver_manager")
 
-adbc_driver_duckdb = pytest.importorskip("adbc_driver_duckdb.dbapi")
-con = adbc_driver_duckdb.connect()
+try:
+    adbc_driver_duckdb = pytest.importorskip("adbc_driver_duckdb.dbapi")
+    con = adbc_driver_duckdb.connect()
+except adbc_driver_manager.InternalError as e:
+    pytest.skip(
+        f"'duckdb_adbc_init' was not exported in this install, try running 'python3 setup.py install': {e}",
+        allow_module_level=True,
+    )
 
 
 class TestADBCConnectionGetInfo(object):

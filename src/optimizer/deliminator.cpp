@@ -1,7 +1,5 @@
 #include "duckdb/optimizer/deliminator.hpp"
 
-#include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
-#include "duckdb/optimizer/remove_duplicate_groups.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
@@ -10,8 +8,19 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_delim_get.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/table_filter.hpp"
+
+#include <algorithm>
 
 namespace duckdb {
+
+struct JoinWithDelimGet {
+	JoinWithDelimGet(unique_ptr<LogicalOperator> &join_p, idx_t depth_p) : join(join_p), depth(depth_p) {
+	}
+	reference<unique_ptr<LogicalOperator>> join;
+	idx_t depth;
+};
 
 struct DelimCandidate {
 public:
@@ -22,7 +31,7 @@ public:
 public:
 	unique_ptr<LogicalOperator> &op;
 	LogicalComparisonJoin &delim_join;
-	vector<reference<unique_ptr<LogicalOperator>>> joins;
+	vector<JoinWithDelimGet> joins;
 	idx_t delim_get_count;
 };
 
@@ -42,15 +51,30 @@ unique_ptr<LogicalOperator> Deliminator::Optimize(unique_ptr<LogicalOperator> op
 	vector<DelimCandidate> candidates;
 	FindCandidates(op, candidates);
 
+	if (candidates.empty()) {
+		return op;
+	}
+
 	for (auto &candidate : candidates) {
 		auto &delim_join = candidate.delim_join;
 
+		// Sort these so the deepest are first
+		std::sort(candidate.joins.begin(), candidate.joins.end(),
+		          [](const JoinWithDelimGet &lhs, const JoinWithDelimGet &rhs) { return lhs.depth > rhs.depth; });
+
 		bool all_removed = true;
+		if (!candidate.joins.empty() && HasSelection(delim_join)) {
+			// Keep the deepest join with DelimGet in these cases,
+			// as the selection can greatly reduce the cost of the RHS child of the DelimJoin
+			candidate.joins.erase(candidate.joins.begin());
+			all_removed = false;
+		}
+
 		bool all_equality_conditions = true;
 		for (auto &join : candidate.joins) {
-			all_removed =
-			    RemoveJoinWithDelimGet(delim_join, candidate.delim_get_count, join, all_equality_conditions) &&
-			    all_removed;
+			all_removed = RemoveJoinWithDelimGet(delim_join, candidate.delim_get_count, join.join.get(),
+			                                     all_equality_conditions) &&
+			              all_removed;
 		}
 
 		// Change type if there are no more duplicate-eliminated columns
@@ -65,13 +89,18 @@ unique_ptr<LogicalOperator> Deliminator::Optimize(unique_ptr<LogicalOperator> op
 				}
 			}
 		}
+
+		// Only DelimJoins are ever created as SINGLE joins,
+		// and we can switch from SINGLE to LEFT if the RHS is de-duplicated by an aggr
+		if (delim_join.join_type == JoinType::SINGLE) {
+			TrySwitchSingleToLeft(delim_join);
+		}
 	}
 
 	return op;
 }
 
 void Deliminator::FindCandidates(unique_ptr<LogicalOperator> &op, vector<DelimCandidate> &candidates) {
-	// Search children before adding, so the deepest candidates get added first
 	for (auto &child : op->children) {
 		FindCandidates(child, candidates);
 	}
@@ -87,6 +116,33 @@ void Deliminator::FindCandidates(unique_ptr<LogicalOperator> &op, vector<DelimCa
 	FindJoinWithDelimGet(op->children[1], candidate);
 }
 
+bool Deliminator::HasSelection(const LogicalOperator &op) {
+	// TODO once we implement selectivity estimation using samples we need to use that here
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_GET: {
+		auto &get = op.Cast<LogicalGet>();
+		for (const auto &filter : get.table_filters.filters) {
+			if (filter.second->filter_type != TableFilterType::IS_NOT_NULL) {
+				return true;
+			}
+		}
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_FILTER:
+		return true;
+	default:
+		break;
+	}
+
+	for (auto &child : op.children) {
+		if (HasSelection(*child)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 static bool OperatorIsDelimGet(LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_DELIM_GET) {
 		return true;
@@ -98,20 +154,20 @@ static bool OperatorIsDelimGet(LogicalOperator &op) {
 	return false;
 }
 
-void Deliminator::FindJoinWithDelimGet(unique_ptr<LogicalOperator> &op, DelimCandidate &candidate) {
+void Deliminator::FindJoinWithDelimGet(unique_ptr<LogicalOperator> &op, DelimCandidate &candidate, idx_t depth) {
 	if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
-		FindJoinWithDelimGet(op->children[0], candidate);
+		FindJoinWithDelimGet(op->children[0], candidate, depth + 1);
 	} else if (op->type == LogicalOperatorType::LOGICAL_DELIM_GET) {
 		candidate.delim_get_count++;
 	} else {
 		for (auto &child : op->children) {
-			FindJoinWithDelimGet(child, candidate);
+			FindJoinWithDelimGet(child, candidate, depth + 1);
 		}
 	}
 
 	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
 	    (OperatorIsDelimGet(*op->children[0]) || OperatorIsDelimGet(*op->children[1]))) {
-		candidate.joins.emplace_back(op);
+		candidate.joins.emplace_back(op, depth);
 	}
 }
 
@@ -230,8 +286,8 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_
 	}
 
 	// TODO: we cannot perform the optimization here because our pure inequality joins don't implement
-	//  JoinType::SINGLE yet
-	if (delim_join.join_type == JoinType::SINGLE) {
+	//  JoinType::SINGLE yet, and JoinType::MARK is a special case
+	if (delim_join.join_type == JoinType::SINGLE || delim_join.join_type == JoinType::MARK) {
 		bool has_one_equality = false;
 		for (auto &cond : join_conditions) {
 			has_one_equality = has_one_equality || IsEqualityJoinCondition(cond);
@@ -283,7 +339,22 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_
 			auto &delim_side = delim_idx == 0 ? *join_condition.left : *join_condition.right;
 			auto &colref = delim_side.Cast<BoundColumnRefExpression>();
 			if (colref.binding == traced_binding) {
-				delim_condition.comparison = FlipComparisonExpression(join_condition.comparison);
+				auto join_comparison = join_condition.comparison;
+				if (delim_condition.comparison == ExpressionType::COMPARE_DISTINCT_FROM ||
+				    delim_condition.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+					// We need to compare NULL values
+					if (join_comparison == ExpressionType::COMPARE_EQUAL) {
+						join_comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+					} else if (join_comparison == ExpressionType::COMPARE_NOTEQUAL) {
+						join_comparison = ExpressionType::COMPARE_DISTINCT_FROM;
+					} else if (join_comparison != ExpressionType::COMPARE_DISTINCT_FROM &&
+					           join_comparison != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+						// The optimization does not work here
+						found = false;
+						break;
+					}
+				}
+				delim_condition.comparison = FlipComparisonExpression(join_comparison);
 				found = true;
 				break;
 			}
@@ -292,6 +363,57 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_
 	}
 
 	return found_all;
+}
+
+void Deliminator::TrySwitchSingleToLeft(LogicalComparisonJoin &delim_join) {
+	D_ASSERT(delim_join.join_type == JoinType::SINGLE);
+
+	// Collect RHS bindings
+	vector<ColumnBinding> join_bindings;
+	for (const auto &cond : delim_join.conditions) {
+		if (!IsEqualityJoinCondition(cond)) {
+			return;
+		}
+		if (cond.right->type != ExpressionType::BOUND_COLUMN_REF) {
+			return;
+		}
+		auto &colref = cond.right->Cast<BoundColumnRefExpression>();
+		join_bindings.emplace_back(colref.binding);
+	}
+
+	// Now try to find an aggr in the RHS such that the join_column_bindings is a superset of the groups
+	reference<LogicalOperator> current_op = *delim_join.children[1];
+	while (current_op.get().type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+		if (current_op.get().children.size() != 1) {
+			return;
+		}
+
+		switch (current_op.get().type) {
+		case LogicalOperatorType::LOGICAL_PROJECTION:
+			FindAndReplaceBindings(join_bindings, current_op.get().expressions, current_op.get().GetColumnBindings());
+			break;
+		case LogicalOperatorType::LOGICAL_FILTER:
+			break; // Doesn't change bindings
+		default:
+			return;
+		}
+		current_op = *current_op.get().children[0];
+	}
+
+	D_ASSERT(current_op.get().type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY);
+	const auto &aggr = current_op.get().Cast<LogicalAggregate>();
+	if (!aggr.grouping_functions.empty()) {
+		return;
+	}
+
+	for (idx_t group_idx = 0; group_idx < aggr.groups.size(); group_idx++) {
+		if (std::find(join_bindings.begin(), join_bindings.end(), ColumnBinding(aggr.group_index, group_idx)) ==
+		    join_bindings.end()) {
+			return;
+		}
+	}
+
+	delim_join.join_type = JoinType::LEFT;
 }
 
 } // namespace duckdb

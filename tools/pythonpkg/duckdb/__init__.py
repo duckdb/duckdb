@@ -12,7 +12,10 @@ _exported_symbols.extend([
 from .duckdb import (
     DuckDBPyRelation,
     DuckDBPyConnection,
+	Statement,
     ExplainType,
+    StatementType,
+    ExpectedResultType,
     PythonExceptionHandling,
     RenderMode,
     Expression,
@@ -147,6 +150,7 @@ from .duckdb import (
     enum_type,
     execute,
     executemany,
+    extract_statements,
     fetch_arrow_table,
     fetch_df,
     fetch_df_chunk,
@@ -273,11 +277,9 @@ _exported_symbols.extend([
 from .duckdb import (
     Error,
     DataError,
-    CastException,
     ConversionException,
     OutOfRangeException,
     TypeMismatchException,
-    ValueOutOfRangeException,
     FatalException,
     IntegrityError,
     ConstraintException,
@@ -302,17 +304,14 @@ from .duckdb import (
     ParserException,
     SyntaxException,
     SequenceException,
-    StandardException,
     Warning
 )
 _exported_symbols.extend([
     "Error",
     "DataError",
-    "CastException",
     "ConversionException",
     "OutOfRangeException",
     "TypeMismatchException",
-    "ValueOutOfRangeException",
     "FatalException",
     "IntegrityError",
     "ConstraintException",
@@ -337,7 +336,6 @@ _exported_symbols.extend([
     "ParserException",
     "SyntaxException",
     "SequenceException",
-    "StandardException",
     "Warning"
 ])
 

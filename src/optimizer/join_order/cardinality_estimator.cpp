@@ -154,7 +154,7 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set
 	for (idx_t i = 0; i < new_set.count; i++) {
 		auto &single_node_set = set_manager.GetJoinRelation(new_set.relations[i]);
 		auto card_helper = relation_set_2_cardinality[single_node_set.ToString()];
-		numerator *= card_helper.cardinality_before_filters;
+		numerator *= card_helper.cardinality_before_filters == 0 ? 1 : card_helper.cardinality_before_filters;
 		actual_set.insert(new_set.relations[i]);
 	}
 

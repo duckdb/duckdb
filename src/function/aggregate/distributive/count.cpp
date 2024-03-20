@@ -225,6 +225,7 @@ AggregateFunction CountStarFun::GetFunction() {
 	auto fun = AggregateFunction::NullaryAggregate<int64_t, int64_t, CountStarFunction>(LogicalType::BIGINT);
 	fun.name = "count_star";
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	fun.window = CountStarFunction::Window<int64_t>;
 	return fun;
 }
@@ -246,9 +247,7 @@ void CountFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet count("count");
 	count.AddFunction(count_function);
 	// the count function can also be called without arguments
-	count_function.arguments.clear();
-	count_function.statistics = nullptr;
-	count_function.window = CountStarFunction::Window<int64_t>;
+	count_function = CountStarFun::GetFunction();
 	count.AddFunction(count_function);
 	set.AddFunction(count);
 }

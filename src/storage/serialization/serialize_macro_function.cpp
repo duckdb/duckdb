@@ -14,13 +14,13 @@ namespace duckdb {
 void MacroFunction::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<MacroType>(100, "type", type);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(101, "parameters", parameters);
-	serializer.WritePropertyWithDefault<unordered_map<string, unique_ptr<ParsedExpression>>>(102, "default_parameters", default_parameters);
+	serializer.WritePropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(102, "default_parameters", default_parameters);
 }
 
 unique_ptr<MacroFunction> MacroFunction::Deserialize(Deserializer &deserializer) {
 	auto type = deserializer.ReadProperty<MacroType>(100, "type");
 	auto parameters = deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(101, "parameters");
-	auto default_parameters = deserializer.ReadPropertyWithDefault<unordered_map<string, unique_ptr<ParsedExpression>>>(102, "default_parameters");
+	auto default_parameters = deserializer.ReadPropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(102, "default_parameters");
 	unique_ptr<MacroFunction> result;
 	switch (type) {
 	case MacroType::SCALAR_MACRO:

@@ -85,7 +85,7 @@ SELECT * FROM (VALUES
 	({'x': 'duck', 'y': NULL}),
 	({'x': NULL, 'y': 'goose'}),
 	({'x': NULL, 'y': NULL}),
-	({'x': NULL, 'y': 0}),
+	({'x': NULL, 'y': '0'}),
 	(NULL)
 ) tbl(i);
 

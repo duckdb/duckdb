@@ -3,6 +3,9 @@
 # group: [general]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 CREATE TABLE list_str AS
 SELECT * FROM (VALUES
 	({'x': 'duck', 'y': ''}),

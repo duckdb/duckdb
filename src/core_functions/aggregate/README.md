@@ -127,9 +127,13 @@ the generator is `StateCombine` and the method it wraps is:
 Combine(const State& source, State &target, AggregateInputData &info)
 ```
 
-Note that the `sources` should _not_ be modified for efficiency because the caller may be using them
-for multiple operations(e.g., window segment trees).
-If you wish to combine destructively, you _must_ define a `window` function.
+Note that the `source` should _not_ be modified for efficiency because the caller may be using them
+for multiple operations (e.g., window segment trees).
+
+If you wish to combine destructively, you _must_ check that the `combine_type` member
+of the `AggregateInputData` argument is set to `ALLOW_DESTRUCTIVE`.
+This is useful when the aggregate can move data more efficiently than copying it.
+`LIST` is an example, where the internal linked list data structures can be spliced instead of copied.
 
 The `combine` operation is optional, but it is needed for multi-threaded aggregation.
 If it is not provided, then _all_ aggregate functions in the grouping must be computed on a single thread. 
@@ -183,9 +187,6 @@ Window(const ArgType *arg, ValidityMask &filter, ValidityMask &valid,
        const FrameBounds &frame, const FrameBounds &prev, 
        ResultType &result, idx_t rid, idx_tbias)
 ```
-
-Defining `window` is also useful if the aggregate wishes to use a destructive `combine` operation.
-This may be tricky to implement efficiently. 
 
 ### Bind
 

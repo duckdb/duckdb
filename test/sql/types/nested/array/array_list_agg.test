@@ -11,6 +11,11 @@ statement ok
 INSERT INTO arrays VALUES ([1, 2, 3]), ([1, 2, 4]), ([7, 8, 9]), ([-1, -2, -3]), (NULL), ([4, NULL, 2])
 
 query I
+SELECT list(a) FROM arrays;
+----
+[[1, 2, 3], [1, 2, 4], [7, 8, 9], [-1, -2, -3], NULL, [4, NULL, 2]]
+
+query I
 SELECT list(a ORDER BY a[3] ASC) FROM arrays;
 ----
 [[-1, -2, -3], [4, NULL, 2], [1, 2, 3], [1, 2, 4], [7, 8, 9], NULL]

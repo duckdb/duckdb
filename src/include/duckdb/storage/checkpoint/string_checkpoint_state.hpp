@@ -39,7 +39,7 @@ struct string_location_t {
 	string_location_t() {
 	}
 	bool IsValid() {
-		return offset < Storage::BLOCK_SIZE && (block_id == INVALID_BLOCK || block_id >= MAXIMUM_BLOCK);
+		return offset < int32_t(Storage::BLOCK_SIZE) && (block_id == INVALID_BLOCK || block_id >= MAXIMUM_BLOCK);
 	}
 	block_id_t block_id;
 	int32_t offset;

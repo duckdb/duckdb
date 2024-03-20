@@ -43,6 +43,12 @@
         "id": 106,
         "name": "sql",
         "type": "string"
+      },
+      {
+        "id": 107,
+        "name": "comment",
+        "type": "Value",
+        "default": "Value()"
       }
     ]
   },
@@ -68,7 +74,7 @@
       {
         "id": 202,
         "name": "index_type",
-        "type": "IndexType",
+        "type": "DeprecatedIndexType",
         "deleted": "True"
       },
       {
@@ -176,6 +182,17 @@
         "id": 203,
         "name": "query",
         "type": "SelectStatement*"
+      },
+      {
+        "id": 204,
+        "name": "names",
+        "type": "vector<string>"
+      },
+      {
+        "id": 205,
+        "name": "column_comments",
+        "type": "vector<Value>",
+        "default": "vector<Value>()"
       }
     ]
   },

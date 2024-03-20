@@ -74,14 +74,15 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	// with integral internal types
 	for (auto &&join_stat : op.join_stats) {
 		if (!TypeIsInteger(join_stat->GetType().InternalType()) ||
-		    join_stat->GetType().InternalType() == PhysicalType::INT128) {
+		    join_stat->GetType().InternalType() == PhysicalType::INT128 ||
+		    join_stat->GetType().InternalType() == PhysicalType::UINT128) {
 			// perfect join not possible for non-integral types or hugeint
 			return;
 		}
 	}
 
 	// and when the build range is smaller than the threshold
-	auto &stats_build = *op.join_stats[0].get(); // lhs stats
+	auto &stats_build = *op.join_stats[1].get(); // rhs stats
 	if (!NumericStats::HasMinMax(stats_build)) {
 		return;
 	}
@@ -96,7 +97,7 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	}
 
 	// Fill join_stats for invisible join
-	auto &stats_probe = *op.join_stats[1].get(); // rhs stats
+	auto &stats_probe = *op.join_stats[0].get(); // lhs stats
 	if (!NumericStats::HasMinMax(stats_probe)) {
 		return;
 	}

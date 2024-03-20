@@ -35,56 +35,7 @@ class TypeCatalogEntry;
 class TableCatalogEntry;
 class Transaction;
 class TransactionManager;
-
-class ReplayState {
-public:
-	ReplayState(AttachedDatabase &db, ClientContext &context)
-	    : db(db), context(context), catalog(db.GetCatalog()), deserialize_only(false) {
-	}
-
-	AttachedDatabase &db;
-	ClientContext &context;
-	Catalog &catalog;
-	optional_ptr<TableCatalogEntry> current_table;
-	bool deserialize_only;
-	MetaBlockPointer checkpoint_id;
-
-public:
-	void ReplayEntry(WALType entry_type, BinaryDeserializer &deserializer);
-
-protected:
-	virtual void ReplayCreateTable(BinaryDeserializer &deserializer);
-	void ReplayDropTable(BinaryDeserializer &deserializer);
-	void ReplayAlter(BinaryDeserializer &deserializer);
-
-	void ReplayCreateView(BinaryDeserializer &deserializer);
-	void ReplayDropView(BinaryDeserializer &deserializer);
-
-	void ReplayCreateSchema(BinaryDeserializer &deserializer);
-	void ReplayDropSchema(BinaryDeserializer &deserializer);
-
-	void ReplayCreateType(BinaryDeserializer &deserializer);
-	void ReplayDropType(BinaryDeserializer &deserializer);
-
-	void ReplayCreateSequence(BinaryDeserializer &deserializer);
-	void ReplayDropSequence(BinaryDeserializer &deserializer);
-	void ReplaySequenceValue(BinaryDeserializer &deserializer);
-
-	void ReplayCreateMacro(BinaryDeserializer &deserializer);
-	void ReplayDropMacro(BinaryDeserializer &deserializer);
-
-	void ReplayCreateTableMacro(BinaryDeserializer &deserializer);
-	void ReplayDropTableMacro(BinaryDeserializer &deserializer);
-
-	void ReplayCreateIndex(BinaryDeserializer &deserializer);
-	void ReplayDropIndex(BinaryDeserializer &deserializer);
-
-	void ReplayUseTable(BinaryDeserializer &deserializer);
-	void ReplayInsert(BinaryDeserializer &deserializer);
-	void ReplayDelete(BinaryDeserializer &deserializer);
-	void ReplayUpdate(BinaryDeserializer &deserializer);
-	void ReplayCheckpoint(BinaryDeserializer &deserializer);
-};
+class WriteAheadLogDeserializer;
 
 //! The WriteAheadLog (WAL) is a log that is used to provide durability. Prior
 //! to committing a transaction it writes the changes the transaction made to
@@ -107,6 +58,12 @@ public:
 	int64_t GetWALSize();
 	//! Gets the total bytes written to the WAL since startup
 	idx_t GetTotalWritten();
+
+	BufferedFileWriter &GetWriter() {
+		return *writer;
+	}
+
+	void WriteVersion();
 
 	virtual void WriteCreateTable(const TableCatalogEntry &entry);
 	void WriteDropTable(const TableCatalogEntry &entry);

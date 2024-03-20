@@ -149,6 +149,7 @@ private:
 	double ReadDouble() final;
 	string ReadString() final;
 	hugeint_t ReadHugeInt() final;
+	uhugeint_t ReadUhugeInt() final;
 	void ReadDataPtr(data_ptr_t &ptr, idx_t count) final;
 };
 

@@ -60,7 +60,7 @@ public:
 	// Append functions
 	template <class T>
 	void Append(T value) {
-		throw Exception("Undefined type for Appender::Append!");
+		throw InternalException("Undefined type for Appender::Append!");
 	}
 
 	DUCKDB_API void Append(const char *value, uint32_t length);
@@ -152,6 +152,8 @@ template <>
 DUCKDB_API void BaseAppender::Append(int64_t value);
 template <>
 DUCKDB_API void BaseAppender::Append(hugeint_t value);
+template <>
+DUCKDB_API void BaseAppender::Append(uhugeint_t value);
 template <>
 DUCKDB_API void BaseAppender::Append(uint8_t value);
 template <>

@@ -5,13 +5,13 @@
 name Ordered First (Grouped)
 group aggregate
 
-#load
-#PRAGMA ordered_aggregate_threshold=262144
+load
+CREATE TABLE t AS FROM range(10000000) tbl(i);
 
 run
 SELECT SUM(agg) FROM (
 	SELECT i // 2048 AS grp, FIRST(i ORDER BY i DESC) AS agg
-	FROM range(10000000) tbl(i)
+	FROM t
 	GROUP BY ALL
 )
 

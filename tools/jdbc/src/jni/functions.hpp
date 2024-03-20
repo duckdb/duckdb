@@ -3,6 +3,7 @@
 #pragma once
 
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "org_duckdb_DuckDBNative.h"
 #include <exception>
 

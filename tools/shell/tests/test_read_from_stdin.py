@@ -203,8 +203,7 @@ class TestReadFromStdin(object):
 
 
     @pytest.mark.parametrize("alias", [
-        "'/dev/stderr'",
-        'stderr'
+        "'/dev/stderr'"
     ])
     def test_copy_csv_to_stderr(self, shell, alias):
         test = (

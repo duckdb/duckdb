@@ -1,4 +1,6 @@
 #include "duckdb/common/types/list_segment.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/uhugeint.hpp"
 
 namespace duckdb {
 
@@ -189,7 +191,7 @@ static ListSegment *GetSegment(const ListSegmentFunctions &functions, ArenaAlloc
 	if (!linked_list.last_segment) {
 		// empty linked list, create the first (and last) segment
 		auto capacity = ListSegment::INITIAL_CAPACITY;
-		segment = functions.create_segment(functions, allocator, capacity);
+		segment = functions.create_segment(functions, allocator, UnsafeNumericCast<uint16_t>(capacity));
 		linked_list.first_segment = segment;
 		linked_list.last_segment = segment;
 
@@ -338,10 +340,7 @@ static void WriteDataToArraySegment(const ListSegmentFunctions &functions, Arena
 	auto valid = input_data.unified.validity.RowIsValid(sel_entry_idx);
 	null_mask[segment->count] = !valid;
 
-	if (!valid) {
-		return;
-	}
-
+	// Arrays require there to be values in the child even when the entry is NULL.
 	auto array_size = ArrayType::GetSize(input_data.logical_type);
 	auto array_offset = sel_entry_idx * array_size;
 
@@ -523,10 +522,8 @@ static void ReadDataFromArraySegment(const ListSegmentFunctions &functions, cons
 	functions.child_functions[0].BuildListVector(linked_child_list, child_vector, child_size);
 }
 
-void ListSegmentFunctions::BuildListVector(const LinkedList &linked_list, Vector &result,
-                                           idx_t &initial_total_count) const {
+void ListSegmentFunctions::BuildListVector(const LinkedList &linked_list, Vector &result, idx_t total_count) const {
 	auto &read_data_from_segment = *this;
-	idx_t total_count = initial_total_count;
 	auto segment = linked_list.first_segment;
 	while (segment) {
 		read_data_from_segment.read_data(read_data_from_segment, segment, result, total_count);
@@ -589,6 +586,9 @@ void GetSegmentDataFunctions(ListSegmentFunctions &functions, const LogicalType 
 		break;
 	case PhysicalType::INT128:
 		SegmentPrimitiveFunction<hugeint_t>(functions);
+		break;
+	case PhysicalType::UINT128:
+		SegmentPrimitiveFunction<uhugeint_t>(functions);
 		break;
 	case PhysicalType::INTERVAL:
 		SegmentPrimitiveFunction<interval_t>(functions);

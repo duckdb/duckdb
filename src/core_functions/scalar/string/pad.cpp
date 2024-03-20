@@ -71,13 +71,13 @@ static string_t LeftPadFunction(const string_t &str, const int32_t len, const st
 
 	//  Left pad by the number of characters still needed
 	if (!InsertPadding(len - written.second, pad, result)) {
-		throw Exception("Insufficient padding in LPAD.");
+		throw InvalidInputException("Insufficient padding in LPAD.");
 	}
 
 	//  Append as much of the original string as fits
 	result.insert(result.end(), data_str, data_str + written.first);
 
-	return string_t(result.data(), result.size());
+	return string_t(result.data(), UnsafeNumericCast<uint32_t>(result.size()));
 }
 
 struct LeftPadOperator {
@@ -103,10 +103,10 @@ static string_t RightPadFunction(const string_t &str, const int32_t len, const s
 
 	//  Right pad by the number of characters still needed
 	if (!InsertPadding(len - written.second, pad, result)) {
-		throw Exception("Insufficient padding in RPAD.");
+		throw InvalidInputException("Insufficient padding in RPAD.");
 	};
 
-	return string_t(result.data(), result.size());
+	return string_t(result.data(), UnsafeNumericCast<uint32_t>(result.size()));
 }
 
 struct RightPadOperator {

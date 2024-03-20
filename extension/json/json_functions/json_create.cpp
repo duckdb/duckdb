@@ -32,7 +32,7 @@ public:
 };
 
 static LogicalType GetJSONType(StructNames &const_struct_names, const LogicalType &type) {
-	if (JSONCommon::LogicalTypeIsJSON(type)) {
+	if (type.IsJSONType()) {
 		return type;
 	}
 
@@ -55,11 +55,15 @@ static LogicalType GetJSONType(StructNames &const_struct_names, const LogicalTyp
 		return LogicalType::UBIGINT;
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::HUGEINT:
 		return LogicalType::DOUBLE;
 	// The nested types need to conform as well
 	case LogicalTypeId::LIST:
 		return LogicalType::LIST(GetJSONType(const_struct_names, ListType::GetChildType(type)));
+	case LogicalTypeId::ARRAY:
+		return LogicalType::ARRAY(GetJSONType(const_struct_names, ArrayType::GetChildType(type)),
+		                          ArrayType::GetSize(type));
 	// Struct and MAP are treated as JSON values
 	case LogicalTypeId::STRUCT: {
 		child_list_t<LogicalType> child_types;
@@ -211,6 +215,14 @@ struct CreateJSONValue<hugeint_t, string_t> {
 	}
 };
 
+template <>
+struct CreateJSONValue<uhugeint_t, string_t> {
+	static inline yyjson_mut_val *Operation(yyjson_mut_doc *doc, const uhugeint_t &input) {
+		const auto input_string = input.ToString();
+		return yyjson_mut_strncpy(doc, input_string.c_str(), input_string.length());
+	}
+};
+
 inline yyjson_mut_val *CreateJSONValueFromJSON(yyjson_mut_doc *doc, const string_t &value) {
 	auto value_doc = JSONCommon::ReadDocument(value, JSONCommon::READ_FLAG, &doc->alc);
 	auto result = yyjson_val_mut_copy(doc, value_doc->root);
@@ -255,7 +267,7 @@ static void TemplatedCreateValues(yyjson_mut_doc *doc, yyjson_mut_val *vals[], V
 	value_v.ToUnifiedFormat(count, value_data);
 	auto values = UnifiedVectorFormat::GetData<INPUT_TYPE>(value_data);
 
-	const auto type_is_json = JSONCommon::LogicalTypeIsJSON(value_v.GetType());
+	const auto type_is_json = value_v.GetType().IsJSONType();
 	for (idx_t i = 0; i < count; i++) {
 		idx_t val_idx = value_data.sel->get_index(i);
 		if (!value_data.validity.RowIsValid(val_idx)) {
@@ -426,6 +438,9 @@ static void CreateValuesList(const StructNames &names, yyjson_mut_doc *doc, yyjs
 
 static void CreateValuesArray(const StructNames &names, yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v,
                               idx_t count) {
+
+	value_v.Flatten(count);
+
 	// Initialize array for the nested values
 	auto &child_v = ArrayVector::GetEntry(value_v);
 	auto array_size = ArrayType::GetSize(value_v.GetType());
@@ -474,6 +489,9 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 		break;
 	case LogicalTypeId::HUGEINT:
 		TemplatedCreateValues<hugeint_t, string_t>(doc, vals, value_v, count);
+		break;
+	case LogicalTypeId::UHUGEINT:
+		TemplatedCreateValues<uhugeint_t, string_t>(doc, vals, value_v, count);
 		break;
 	case LogicalTypeId::UTINYINT:
 		TemplatedCreateValues<uint8_t, uint64_t>(doc, vals, value_v, count);
@@ -642,7 +660,7 @@ static void ToJSONFunction(DataChunk &args, ExpressionState &state, Vector &resu
 }
 
 ScalarFunctionSet JSONFunctions::GetObjectFunction() {
-	ScalarFunction fun("json_object", {}, JSONCommon::JSONType(), ObjectFunction, JSONObjectBind, nullptr, nullptr,
+	ScalarFunction fun("json_object", {}, LogicalType::JSON(), ObjectFunction, JSONObjectBind, nullptr, nullptr,
 	                   JSONFunctionLocalState::Init);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
@@ -650,7 +668,7 @@ ScalarFunctionSet JSONFunctions::GetObjectFunction() {
 }
 
 ScalarFunctionSet JSONFunctions::GetArrayFunction() {
-	ScalarFunction fun("json_array", {}, JSONCommon::JSONType(), ArrayFunction, JSONArrayBind, nullptr, nullptr,
+	ScalarFunction fun("json_array", {}, LogicalType::JSON(), ArrayFunction, JSONArrayBind, nullptr, nullptr,
 	                   JSONFunctionLocalState::Init);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
@@ -658,21 +676,21 @@ ScalarFunctionSet JSONFunctions::GetArrayFunction() {
 }
 
 ScalarFunctionSet JSONFunctions::GetToJSONFunction() {
-	ScalarFunction fun("to_json", {}, JSONCommon::JSONType(), ToJSONFunction, ToJSONBind, nullptr, nullptr,
+	ScalarFunction fun("to_json", {}, LogicalType::JSON(), ToJSONFunction, ToJSONBind, nullptr, nullptr,
 	                   JSONFunctionLocalState::Init);
 	fun.varargs = LogicalType::ANY;
 	return ScalarFunctionSet(fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetArrayToJSONFunction() {
-	ScalarFunction fun("array_to_json", {}, JSONCommon::JSONType(), ToJSONFunction, ArrayToJSONBind, nullptr, nullptr,
+	ScalarFunction fun("array_to_json", {}, LogicalType::JSON(), ToJSONFunction, ArrayToJSONBind, nullptr, nullptr,
 	                   JSONFunctionLocalState::Init);
 	fun.varargs = LogicalType::ANY;
 	return ScalarFunctionSet(fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetRowToJSONFunction() {
-	ScalarFunction fun("row_to_json", {}, JSONCommon::JSONType(), ToJSONFunction, RowToJSONBind, nullptr, nullptr,
+	ScalarFunction fun("row_to_json", {}, LogicalType::JSON(), ToJSONFunction, RowToJSONBind, nullptr, nullptr,
 	                   JSONFunctionLocalState::Init);
 	fun.varargs = LogicalType::ANY;
 	return ScalarFunctionSet(fun);
@@ -740,7 +758,7 @@ void JSONFunctions::RegisterJSONCreateCastFunctions(CastFunctionSet &casts) {
 		// We prefer going to JSON over going to VARCHAR if a function can do either
 		const auto source_to_json_cost =
 		    MaxValue<int64_t>(casts.ImplicitCastCost(source_type, LogicalType::VARCHAR) - 1, 0);
-		casts.RegisterCastFunction(source_type, JSONCommon::JSONType(), AnyToJSONCastBind, source_to_json_cost);
+		casts.RegisterCastFunction(source_type, LogicalType::JSON(), AnyToJSONCastBind, source_to_json_cost);
 	}
 }
 

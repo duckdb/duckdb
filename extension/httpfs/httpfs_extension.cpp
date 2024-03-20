@@ -1,7 +1,9 @@
 #define DUCKDB_EXTENSION_MAIN
 
-#include "duckdb.hpp"
 #include "httpfs_extension.hpp"
+
+#include "create_secret_functions.hpp"
+#include "duckdb.hpp"
 #include "s3fs.hpp"
 
 namespace duckdb {
@@ -32,6 +34,12 @@ static void LoadInternal(DatabaseInstance &instance) {
 	    "http_keep_alive",
 	    "Keep alive connections. Setting this to false can help when running into connection failures",
 	    LogicalType::BOOLEAN, Value(true));
+	config.AddExtensionOption("enable_server_cert_verification",
+	                          "Enable server side certificate verification, defaults to False.", LogicalType::BOOLEAN,
+	                          Value(false));
+	config.AddExtensionOption("ca_cert_file",
+	                          "Path to a custom certificate file for self-signed certificates. By default not set.",
+	                          LogicalType::VARCHAR, Value(""));
 	// Global S3 config
 	config.AddExtensionOption("s3_region", "S3 Region (default us-east-1)", LogicalType::VARCHAR, Value("us-east-1"));
 	config.AddExtensionOption("s3_access_key_id", "S3 Access Key ID", LogicalType::VARCHAR);
@@ -56,6 +64,8 @@ static void LoadInternal(DatabaseInstance &instance) {
 
 	auto provider = make_uniq<AWSEnvironmentCredentialsProvider>(config);
 	provider->SetAll();
+
+	CreateS3SecretFunctions::Register(instance);
 }
 
 void HttpfsExtension::Load(DuckDB &db) {

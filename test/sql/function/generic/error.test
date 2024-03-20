@@ -8,7 +8,7 @@ PRAGMA enable_verification
 statement error
 SELECT error('test')
 ----
-Invalid Error: test
+test
 
 statement error
 SELECT
@@ -20,7 +20,7 @@ FROM (
   SELECT 'foo' AS value UNION ALL
   SELECT 'baz' AS value);
 ----
-Invalid Error: Found unexpected value: baz
+Found unexpected value: baz
 
 query I
 SELECT *
@@ -34,4 +34,14 @@ SELECT *
 FROM (SELECT 3 AS x)
 WHERE IF(x % 2 = 0, true, ERROR(FORMAT('x must be even but is {}', x)));
 ----
-Invalid Error: x must be even but is 3
+x must be even but is 3
+
+statement error
+SELECT 42=error('hello world')
+----
+hello world
+
+statement error
+SELECT error('hello world') IS NULL
+----
+hello world

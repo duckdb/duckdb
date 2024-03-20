@@ -15,13 +15,13 @@ static string_t BarScalarFunction(double x, double min, double max, double max_w
 	static const idx_t PARTIAL_BLOCKS_COUNT = UnicodeBar::PartialBlocksCount();
 
 	if (!Value::IsFinite(max_width)) {
-		throw ValueOutOfRangeException("Max bar width must not be NaN or infinity");
+		throw OutOfRangeException("Max bar width must not be NaN or infinity");
 	}
 	if (max_width < 1) {
-		throw ValueOutOfRangeException("Max bar width must be >= 1");
+		throw OutOfRangeException("Max bar width must be >= 1");
 	}
 	if (max_width > 1000) {
-		throw ValueOutOfRangeException("Max bar width must be <= 1000");
+		throw OutOfRangeException("Max bar width must be <= 1000");
 	}
 
 	double width;
@@ -35,7 +35,7 @@ static string_t BarScalarFunction(double x, double min, double max, double max_w
 	}
 
 	if (!Value::IsFinite(width)) {
-		throw ValueOutOfRangeException("Bar width must not be NaN or infinity");
+		throw OutOfRangeException("Bar width must not be NaN or infinity");
 	}
 
 	result.clear();

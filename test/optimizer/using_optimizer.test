@@ -111,13 +111,13 @@ explain select c.i from a left outer join b on (a.i=b.i) right join c on (a.i=c.
 # full outer join
 # need to use a case expression here
 query I
-select i from a full outer join b using (i);
+select i from a full outer join b using (i) order by all;
 ----
 42
 43
 
 query I
-select coalesce(a.i, b.i) from a full outer join b on (a.i=b.i);
+select coalesce(a.i, b.i) from a full outer join b on (a.i=b.i) order by all;
 ----
 42
 43

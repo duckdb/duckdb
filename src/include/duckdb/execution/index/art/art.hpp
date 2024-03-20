@@ -33,6 +33,8 @@ struct ARTFlags {
 
 class ART : public Index {
 public:
+	// Index type name for the ART
+	static constexpr const char *TYPE_NAME = "ART";
 	//! FixedSizeAllocator count of the ART
 	static constexpr uint8_t ALLOCATOR_COUNT = 6;
 
@@ -51,22 +53,25 @@ public:
 	//! True, if the ART owns its data
 	bool owns_data;
 
-public:
-	//! Initialize a single predicate scan on the index with the given expression and column IDs
-	unique_ptr<IndexScanState> InitializeScanSinglePredicate(const Transaction &transaction, const Value &value,
-	                                                         const ExpressionType expression_type) override;
-	//! Initialize a two predicate scan on the index with the given expression and column IDs
-	unique_ptr<IndexScanState> InitializeScanTwoPredicates(const Transaction &transaction, const Value &low_value,
-	                                                       const ExpressionType low_expression_type,
-	                                                       const Value &high_value,
-	                                                       const ExpressionType high_expression_type) override;
+	//! Try to initialize a scan on the index with the given expression and filter
+	unique_ptr<IndexScanState> TryInitializeScan(const Transaction &transaction, const Expression &index_expr,
+	                                             const Expression &filter_expr);
+
 	//! Performs a lookup on the index, fetching up to max_count result IDs. Returns true if all row IDs were fetched,
 	//! and false otherwise
-	bool Scan(const Transaction &transaction, const DataTable &table, IndexScanState &state, const idx_t max_count,
-	          vector<row_t> &result_ids) override;
+	bool Scan(const Transaction &transaction, const DataTable &table, IndexScanState &state, idx_t max_count,
+	          vector<row_t> &result_ids);
+
+public:
+	//! Create a index instance of this type
+	static unique_ptr<Index> Create(CreateIndexInput &input) {
+		auto art = make_uniq<ART>(input.name, input.constraint_type, input.column_ids, input.table_io_manager,
+		                          input.unbound_expressions, input.db, nullptr, input.storage_info);
+		return std::move(art);
+	}
 
 	//! Called when data is appended to the index. The lock obtained from InitializeLock must be held
-	PreservedError Append(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
+	ErrorData Append(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
 	//! Verify that data can be appended to the index without a constraint violation
 	void VerifyAppend(DataChunk &chunk) override;
 	//! Verify that data can be appended to the index without a constraint violation using the conflict manager
@@ -76,7 +81,7 @@ public:
 	//! Delete a chunk of entries from the index. The lock obtained from InitializeLock must be held
 	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
 	//! Insert a chunk of entries into the index
-	PreservedError Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
+	ErrorData Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
 
 	//! Construct an ART from a vector of sorted keys
 	bool ConstructFromSorted(idx_t count, vector<ARTKey> &keys, Vector &row_identifiers);
@@ -153,6 +158,9 @@ private:
 	void Deserialize(const BlockPointer &pointer);
 	//! Initializes the serialization of the index by combining the allocator data onto partial blocks
 	void WritePartialBlocks();
+
+	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
+	                                     DataChunk &input) override;
 };
 
 } // namespace duckdb

@@ -252,6 +252,7 @@ class TestScalarUDF(object):
             UINTEGER,
             UBIGINT,
             HUGEINT,
+            UHUGEINT,
             VARCHAR,
             UUID,
             FLOAT,

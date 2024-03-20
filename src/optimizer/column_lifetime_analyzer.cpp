@@ -110,6 +110,12 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		analyzer.VisitOperator(*op.children[0]);
 		return;
 	}
+	case LogicalOperatorType::LOGICAL_ORDER_BY:
+		// order by, for now reference all columns
+		// FIXME: for ORDER BY we remove columns below an ORDER BY, we just need to make sure that the projections are
+		// updated
+		everything_referenced = true;
+		break;
 	case LogicalOperatorType::LOGICAL_DISTINCT: {
 		// distinct, all projected columns are used for the DISTINCT computation
 		// mark all columns as used and continue to the children

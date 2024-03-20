@@ -24,7 +24,7 @@ struct FunctionLocalState {
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -78,7 +78,7 @@ public:
 	                          dependency_function_t dependency = nullptr, function_statistics_t statistics = nullptr,
 	                          init_local_state_t init_local_state = nullptr,
 	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
-	                          FunctionSideEffects side_effects = FunctionSideEffects::NO_SIDE_EFFECTS,
+	                          FunctionStability stability = FunctionStability::CONSISTENT,
 	                          FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
 	                          bind_lambda_function_t bind_lambda = nullptr);
 
@@ -86,7 +86,7 @@ public:
 	                          bind_scalar_function_t bind = nullptr, dependency_function_t dependency = nullptr,
 	                          function_statistics_t statistics = nullptr, init_local_state_t init_local_state = nullptr,
 	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
-	                          FunctionSideEffects side_effects = FunctionSideEffects::NO_SIDE_EFFECTS,
+	                          FunctionStability stability = FunctionStability::CONSISTENT,
 	                          FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
 	                          bind_lambda_function_t bind_lambda = nullptr);
 
@@ -165,6 +165,9 @@ public:
 		case LogicalTypeId::HUGEINT:
 			function = &ScalarFunction::UnaryFunction<hugeint_t, hugeint_t, OP>;
 			break;
+		case LogicalTypeId::UHUGEINT:
+			function = &ScalarFunction::UnaryFunction<uhugeint_t, uhugeint_t, OP>;
+			break;
 		case LogicalTypeId::FLOAT:
 			function = &ScalarFunction::UnaryFunction<float, float, OP>;
 			break;
@@ -207,6 +210,9 @@ public:
 			break;
 		case LogicalTypeId::HUGEINT:
 			function = &ScalarFunction::UnaryFunction<hugeint_t, TR, OP>;
+			break;
+		case LogicalTypeId::UHUGEINT:
+			function = &ScalarFunction::UnaryFunction<uhugeint_t, TR, OP>;
 			break;
 		case LogicalTypeId::FLOAT:
 			function = &ScalarFunction::UnaryFunction<float, TR, OP>;

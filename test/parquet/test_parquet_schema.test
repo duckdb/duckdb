@@ -64,7 +64,7 @@ FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map {
                     0: {name: 'new_column', type: 'UTINYINT', default_value: 43}
                   })
 ----
-Invalid Input Error: Map keys have to be unique
+Map keys must be unique
 
 # cannot duplicate column names
 statement error

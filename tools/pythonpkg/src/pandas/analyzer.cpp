@@ -4,14 +4,17 @@
 #include "duckdb_python/pandas/pandas_analyzer.hpp"
 #include "duckdb_python/python_conversion.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 
 static bool TypeIsNested(LogicalTypeId id) {
 	switch (id) {
 	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::UNION:
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::MAP:
+	case LogicalTypeId::ARRAY:
 		return true;
 	default:
 		return false;
@@ -139,7 +142,7 @@ static bool UpgradeType(LogicalType &left, const LogicalType &right) {
 		}
 	}
 	// If one of the types is map, this will set the resulting type to map
-	left = LogicalType::MaxLogicalType(left, right);
+	left = LogicalType::ForceMaxLogicalType(left, right);
 	return true;
 }
 
@@ -396,7 +399,8 @@ LogicalType PandasAnalyzer::InnerAnalyze(py::object column, bool &can_convert, b
 	LogicalType item_type = LogicalType::SQLNULL;
 	vector<LogicalType> types;
 	for (idx_t i = 0; i < rows; i += increment) {
-		auto obj = FindFirstNonNull(row, i, increment);
+		auto range = MinValue(increment, rows - i);
+		auto obj = FindFirstNonNull(row, i, range);
 		auto next_item_type = GetItemType(obj, can_convert);
 		types.push_back(next_item_type);
 

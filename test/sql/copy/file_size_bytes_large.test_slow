@@ -1,0 +1,42 @@
+# name: test/sql/copy/file_size_bytes_large.test_slow
+# description: test FILE_SIZE_BYTES parameter for COPY (slow test)
+# group: [copy]
+
+statement ok
+CREATE TABLE bigdata AS SELECT i AS col_a, i AS col_b FROM range(0, 10000000) tbl(i);
+
+statement ok
+COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv42' (FORMAT CSV, FILE_SIZE_BYTES '200kb');
+
+query I
+SELECT COUNT(*) FROM read_csv('__TEST_DIR__/file_size_bytes_csv42/*.csv')
+----
+10000000
+
+query II
+SELECT AVG(col_a), AVG(col_b) FROM read_csv('__TEST_DIR__/file_size_bytes_csv42/*.csv')
+----
+4999999.5	4999999.5
+
+query I
+SELECT COUNT(*) BETWEEN 550 AND 800 FROM glob('__TEST_DIR__/file_size_bytes_csv42/*.csv')
+----
+1
+
+statement ok
+COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv43' (FORMAT CSV, FILE_SIZE_BYTES '200kb', PER_THREAD_OUTPUT TRUE);
+
+query I
+SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv43/*.csv')
+----
+10000000
+
+query II
+SELECT AVG(col_a), AVG(col_b) FROM read_csv('__TEST_DIR__/file_size_bytes_csv43/*.csv')
+----
+4999999.5	4999999.5
+
+query I
+SELECT COUNT(*) BETWEEN 550 AND 800 FROM glob('__TEST_DIR__/file_size_bytes_csv43/*.csv')
+----
+1

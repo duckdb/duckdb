@@ -90,7 +90,7 @@ public:
 	//! (Basically we put lower expected cardinality columns on the build side, and larger
 	//! tables on the probe side)
 	unique_ptr<LogicalOperator> LeftRightOptimizations(unique_ptr<LogicalOperator> op);
-	void TryFlipChildren(LogicalOperator &op, JoinType inverse, idx_t cardinality_ratio = 1);
+	void TryFlipChildren(LogicalOperator &op, idx_t cardinality_ratio = 1);
 
 private:
 	vector<reference<LogicalOperator>> filter_operators;

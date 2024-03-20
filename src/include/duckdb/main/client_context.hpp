@@ -23,8 +23,11 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/external_dependencies.hpp"
-#include "duckdb/common/preserved_error.hpp"
+#include "duckdb/common/error_data.hpp"
+#include "duckdb/common/enums/prepared_statement_mode.hpp"
 #include "duckdb/main/client_properties.hpp"
+#include "duckdb/main/client_context_state.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 class Appender;
@@ -43,7 +46,9 @@ struct CreateScalarFunctionInfo;
 class ScalarFunctionCatalogEntry;
 struct ActiveQueryContext;
 struct ParserOptions;
+class SimpleBufferedData;
 struct ClientData;
+class ClientContextState;
 
 struct PendingQueryParameters {
 	//! Prepared statement parameters (if any)
@@ -52,19 +57,12 @@ struct PendingQueryParameters {
 	bool allow_stream_result = false;
 };
 
-//! ClientContextState is virtual base class for ClientContext-local (or Query-Local, using QueryEnd callback) state
-//! e.g. caches that need to live as long as a ClientContext or Query.
-class ClientContextState {
-public:
-	virtual ~ClientContextState() {};
-	virtual void QueryEnd() = 0;
-};
-
 //! The ClientContext holds information relevant to the current client session
 //! during execution
 class ClientContext : public std::enable_shared_from_this<ClientContext> {
-	friend class PendingQueryResult;
-	friend class StreamQueryResult;
+	friend class PendingQueryResult; // LockContext
+	friend class SimpleBufferedData; // ExecuteTaskInternal
+	friend class StreamQueryResult;  // LockContext
 	friend class ConnectionManager;
 
 public:
@@ -169,15 +167,14 @@ public:
 	                                                 bool requires_valid_transaction = true);
 
 	//! Equivalent to CURRENT_SETTING(key) SQL function.
-	DUCKDB_API bool TryGetCurrentSetting(const std::string &key, Value &result);
+	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const std::string &key, Value &result);
 
 	//! Returns the parser options for this client context
 	DUCKDB_API ParserOptions GetParserOptions() const;
 
-	DUCKDB_API unique_ptr<DataChunk> Fetch(ClientContextLock &lock, StreamQueryResult &result);
-
 	//! Whether or not the given result object (streaming query result or pending query result) is active
-	DUCKDB_API bool IsActiveResult(ClientContextLock &lock, BaseQueryResult *result);
+	DUCKDB_API bool IsActiveResult(ClientContextLock &lock, BaseQueryResult &result);
+	DUCKDB_API void SetActiveResult(ClientContextLock &lock, BaseQueryResult &result);
 
 	//! Returns the current executor
 	Executor &GetExecutor();
@@ -193,10 +190,13 @@ public:
 	//! Returns true if execution of the current query is finished
 	DUCKDB_API bool ExecutionIsFinished();
 
+	//! Process an error for display to the user
+	DUCKDB_API void ProcessError(ErrorData &error, const string &query) const;
+
 private:
 	//! Parse statements and resolve pragmas from a query
 	bool ParseStatements(ClientContextLock &lock, const string &query, vector<unique_ptr<SQLStatement>> &result,
-	                     PreservedError &error);
+	                     ErrorData &error);
 	//! Issues a query to the database and returns a Pending Query Result
 	unique_ptr<PendingQueryResult> PendingQueryInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
 	                                                    const PendingQueryParameters &parameters, bool verify = true);
@@ -206,7 +206,7 @@ private:
 	vector<unique_ptr<SQLStatement>> ParseStatementsInternal(ClientContextLock &lock, const string &query);
 	//! Perform aggressive query verification of a SELECT statement. Only called when query_verification_enabled is
 	//! true.
-	PreservedError VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement);
+	ErrorData VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement);
 
 	void InitialCleanup(ClientContextLock &lock);
 	//! Internal clean up, does not lock. Caller must hold the context_lock.
@@ -216,14 +216,19 @@ private:
 	                                                                   unique_ptr<SQLStatement> statement,
 	                                                                   shared_ptr<PreparedStatementData> &prepared,
 	                                                                   const PendingQueryParameters &parameters);
-	unique_ptr<PendingQueryResult> PendingPreparedStatement(ClientContextLock &lock,
+	unique_ptr<PendingQueryResult> PendingPreparedStatement(ClientContextLock &lock, const string &query,
 	                                                        shared_ptr<PreparedStatementData> statement_p,
 	                                                        const PendingQueryParameters &parameters);
+	unique_ptr<PendingQueryResult> PendingPreparedStatementInternal(ClientContextLock &lock,
+	                                                                shared_ptr<PreparedStatementData> statement_p,
+	                                                                const PendingQueryParameters &parameters);
+	void CheckIfPreparedStatementIsExecutable(PreparedStatementData &statement);
 
 	//! Internally prepare a SQL statement. Caller must hold the context_lock.
 	shared_ptr<PreparedStatementData>
 	CreatePreparedStatement(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-	                        optional_ptr<case_insensitive_map_t<Value>> values = nullptr);
+	                        optional_ptr<case_insensitive_map_t<Value>> values = nullptr,
+	                        PreparedStatementMode mode = PreparedStatementMode::PREPARE_ONLY);
 	unique_ptr<PendingQueryResult> PendingStatementInternal(ClientContextLock &lock, const string &query,
 	                                                        unique_ptr<SQLStatement> statement,
 	                                                        const PendingQueryParameters &parameters);
@@ -234,15 +239,13 @@ private:
 	void LogQueryInternal(ClientContextLock &lock, const string &query);
 
 	unique_ptr<QueryResult> FetchResultInternal(ClientContextLock &lock, PendingQueryResult &pending);
-	unique_ptr<DataChunk> FetchInternal(ClientContextLock &lock, Executor &executor, BaseQueryResult &result);
 
 	unique_ptr<ClientContextLock> LockContext();
 
-	void BeginTransactionInternal(ClientContextLock &lock, bool requires_valid_transaction);
 	void BeginQueryInternal(ClientContextLock &lock, const string &query);
-	PreservedError EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction);
+	ErrorData EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction);
 
-	PendingExecutionResult ExecuteTaskInternal(ClientContextLock &lock, PendingQueryResult &result);
+	PendingExecutionResult ExecuteTaskInternal(ClientContextLock &lock, BaseQueryResult &result, bool dry_run = false);
 
 	unique_ptr<PendingQueryResult> PendingStatementOrPreparedStatementInternal(
 	    ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
@@ -254,6 +257,16 @@ private:
 
 	unique_ptr<PendingQueryResult> PendingQueryInternal(ClientContextLock &, const shared_ptr<Relation> &relation,
 	                                                    bool allow_stream_result);
+
+	void RebindPreparedStatement(ClientContextLock &lock, const string &query,
+	                             shared_ptr<PreparedStatementData> &prepared, const PendingQueryParameters &parameters);
+
+	template <class T>
+	unique_ptr<T> ErrorResult(ErrorData error, const string &query = string());
+
+	shared_ptr<PreparedStatementData>
+	CreatePreparedStatementInternal(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
+	                                optional_ptr<case_insensitive_map_t<Value>> values);
 
 private:
 	//! Lock on using the ClientContext in parallel

@@ -64,7 +64,7 @@ SELECT COUNT(*), SUM(i), MIN(i), MAX(i) FROM integers
 
 # 732K..910K - delete every 3 entries but based on the hash to make it more random
 query I
-DELETE FROM integers WHERE hash(i)%3=0 AND i>=721377 AND i<909999
+DELETE FROM integers WHERE hash(i)::DOUBLE%3=0 AND i>=721377 AND i<909999
 ----
 62853
 
@@ -75,7 +75,7 @@ SELECT COUNT(*), SUM(i), MIN(i), MAX(i) FROM integers
 
 # 732K..910K - delete every 2 entries but based on the hash to make it more random
 query I
-DELETE FROM integers WHERE hash(i)%2=0 AND i>=909999
+DELETE FROM integers WHERE hash(i)::DOUBLE%2=0 AND i>=909999
 ----
 89983
 

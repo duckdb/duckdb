@@ -16,19 +16,24 @@ QualifyBinder::QualifyBinder(Binder &binder, ClientContext &context, BoundSelect
 }
 
 BindResult QualifyBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
-	auto &expr = expr_ptr->Cast<ColumnRefExpression>();
+
 	auto result = duckdb::BaseSelectBinder::BindExpression(expr_ptr, depth);
 	if (!result.HasError()) {
 		return result;
 	}
 
-	auto alias_result = column_alias_binder.BindAlias(*this, expr, depth, root_expression);
-	if (!alias_result.HasError()) {
+	// Keep the original column reference's string to return a meaningful error message.
+	auto expr_string = expr_ptr->Cast<ColumnRefExpression>().ToString();
+
+	// Try to bind as an alias.
+	BindResult alias_result;
+	auto found_alias = column_alias_binder.BindAlias(*this, expr_ptr, depth, root_expression, alias_result);
+	if (found_alias) {
 		return alias_result;
 	}
 
-	return BindResult(StringUtil::Format("Referenced column %s not found in FROM clause and can't find in alias map.",
-	                                     expr.ToString()));
+	return BindResult(
+	    StringUtil::Format("Referenced column %s not found in FROM clause and can't find in alias map.", expr_string));
 }
 
 BindResult QualifyBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {

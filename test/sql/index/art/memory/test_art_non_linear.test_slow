@@ -11,10 +11,6 @@ require skip_reload
 
 statement ok
 CREATE FUNCTION mem_to_bytes(x) AS CASE
-    WHEN CONTAINS(x, 'KB') THEN REPLACE(x, 'KB', '')::INT * 1000
-    WHEN CONTAINS(x, 'MB') THEN REPLACE(x, 'MB', '')::INT * 1000 * 1000
-    WHEN CONTAINS(x, 'GB') THEN REPLACE(x, 'GB', '')::INT * 1000 * 1000 * 1000
-    WHEN CONTAINS(x, 'TB') THEN REPLACE(x, 'TB', '')::INT * 1000 * 1000 * 1000 * 1000
     WHEN CONTAINS(x, 'KiB') THEN REPLACE(x, 'KiB', '')::INT * 1024.0
     WHEN CONTAINS(x, 'MiB') THEN REPLACE(x, 'MiB', '')::INT * 1024.0 * 1024
     WHEN CONTAINS(x, 'GiB') THEN REPLACE(x, 'GiB', '')::INT * 1024.0 * 1024 * 1024

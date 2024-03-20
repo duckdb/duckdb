@@ -14,11 +14,10 @@ add_library_unity(
   copy_csv.cpp
   read_csv.cpp
   sniff_csv.cpp
+  read_file.cpp
   system_functions.cpp
   summary.cpp
   table_scan.cpp
-  pragma_last_profiling_output.cpp
-  pragma_detailed_profiling_output.cpp
   unnest.cpp)
 
 set(ALL_OBJECT_FILES

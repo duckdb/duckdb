@@ -56,7 +56,7 @@ create table numerics as
 	union all values (NULL, 0.1), (NULL, 0.5), (NULL, 0.9)
 	order by 2;
 
-foreach type smallint integer bigint hugeint float double decimal(8,1) decimal(12,1) decimal(18,1) decimal(24,1)
+foreach type smallint integer bigint hugeint uhugeint float double decimal(8,1) decimal(12,1) decimal(18,1) decimal(24,1)
 
 query I
 SELECT mad(r::${type}) FROM numerics

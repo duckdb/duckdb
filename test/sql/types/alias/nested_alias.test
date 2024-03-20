@@ -1,0 +1,14 @@
+# name: test/sql/types/alias/nested_alias.test
+# description: Verify that nested aliases work correctly
+# group: [alias]
+
+statement ok
+CREATE TYPE my_int AS INT
+
+statement ok
+CREATE TYPE my_int_list AS my_int[]
+
+query I
+SELECT [42]::my_int_list
+----
+[42]

@@ -171,7 +171,7 @@ static void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Ve
 		memcpy(local_state.state_buffer0.get(), state0.GetData(), bind_data.state_size);
 		memcpy(local_state.state_buffer1.get(), state1.GetData(), bind_data.state_size);
 
-		AggregateInputData aggr_input_data(nullptr, local_state.allocator);
+		AggregateInputData aggr_input_data(nullptr, local_state.allocator, AggregateCombineType::ALLOW_DESTRUCTIVE);
 		bind_data.aggr.combine(local_state.state_vector0, local_state.state_vector1, aggr_input_data, 1);
 
 		result_ptr[i] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(local_state.state_buffer1.get()),
@@ -213,13 +213,14 @@ static unique_ptr<FunctionData> BindAggregateState(ClientContext &context, Scala
 	}
 	auto &aggr = func.Cast<AggregateFunctionCatalogEntry>();
 
-	string error;
+	ErrorData error;
 
 	FunctionBinder function_binder(context);
 	idx_t best_function =
 	    function_binder.BindFunction(aggr.name, aggr.functions, state_type.bound_argument_types, error);
 	if (best_function == DConstants::INVALID_INDEX) {
-		throw InternalException("Could not re-bind exported aggregate %s: %s", state_type.function_name, error);
+		throw InternalException("Could not re-bind exported aggregate %s: %s", state_type.function_name,
+		                        error.Message());
 	}
 	auto bound_aggr = aggr.functions.GetFunctionByOffset(best_function);
 	if (bound_aggr.bind) {

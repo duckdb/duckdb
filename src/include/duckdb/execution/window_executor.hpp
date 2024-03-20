@@ -39,6 +39,7 @@ struct WindowInputExpression {
 			chunk.Reset();
 			executor.Execute(input_chunk, chunk);
 			chunk.Verify();
+			chunk.Flatten();
 		}
 	}
 
@@ -125,7 +126,7 @@ public:
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -176,6 +177,7 @@ class WindowAggregateExecutor : public WindowExecutor {
 public:
 	bool IsConstantAggregate();
 	bool IsCustomAggregate();
+	bool IsDistinctAggregate();
 
 	WindowAggregateExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t payload_count,
 	                        const ValidityMask &partition_mask, const ValidityMask &order_mask,

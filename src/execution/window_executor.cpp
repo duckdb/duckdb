@@ -207,19 +207,24 @@ static idx_t FindTypedRangeBound(const WindowInputColumn &over, const idx_t orde
 	WindowColumnIterator<T> begin(over, order_begin);
 	WindowColumnIterator<T> end(over, order_end);
 
-	if (order_begin < prev.start && prev.start < order_end) {
-		const auto first = over.GetCell<T>(prev.start);
-		if (!comp(val, first)) {
-			//	prev.first <= val, so we can start further forward
-			begin += (prev.start - order_begin);
+	//	Try to reuse the previous bounds to restrict the search.
+	//	This is only valid if the previous bounds were non-empty
+	//	Only inject the comparisons if the previous bounds are a strict subset.
+	if (prev.start < prev.end) {
+		if (order_begin < prev.start && prev.start < order_end) {
+			const auto first = over.GetCell<T>(prev.start);
+			if (!comp(val, first)) {
+				//	prev.first <= val, so we can start further forward
+				begin += (prev.start - order_begin);
+			}
 		}
-	}
-	if (order_begin <= prev.end && prev.end < order_end) {
-		const auto second = over.GetCell<T>(prev.end);
-		if (!comp(second, val)) {
-			//	val <= prev.second, so we can end further back
-			// (prev.second is the largest peer)
-			end -= (order_end - prev.end - 1);
+		if (order_begin < prev.end && prev.end < order_end) {
+			const auto second = over.GetCell<T>(prev.end - 1);
+			if (!comp(second, val)) {
+				//	val <= prev.second, so we can end further back
+				// (prev.second is the largest peer)
+				end -= (order_end - prev.end - 1);
+			}
 		}
 	}
 
@@ -255,6 +260,8 @@ static idx_t FindRangeBound(const WindowInputColumn &over, const idx_t order_beg
 		return FindTypedRangeBound<uint64_t, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
 	case PhysicalType::INT128:
 		return FindTypedRangeBound<hugeint_t, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
+	case PhysicalType::UINT128:
+		return FindTypedRangeBound<uhugeint_t, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
 	case PhysicalType::FLOAT:
 		return FindTypedRangeBound<float, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
 	case PhysicalType::DOUBLE:
@@ -850,6 +857,14 @@ bool WindowAggregateExecutor::IsConstantAggregate() {
 	return true;
 }
 
+bool WindowAggregateExecutor::IsDistinctAggregate() {
+	if (!wexpr.aggregate) {
+		return false;
+	}
+
+	return wexpr.distinct;
+}
+
 bool WindowAggregateExecutor::IsCustomAggregate() {
 	if (!wexpr.aggregate) {
 		return false;
@@ -878,18 +893,25 @@ WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, C
                                                  const ValidityMask &order_mask, WindowAggregationMode mode)
     : WindowExecutor(wexpr, context, count, partition_mask, order_mask), mode(mode), filter_executor(context) {
 
-	//	Check for constant aggregate
-	if (IsConstantAggregate()) {
-		aggregator = make_uniq<WindowConstantAggregator>(AggregateObject(wexpr), wexpr.return_type, partition_mask,
-		                                                 wexpr.exclude_clause, count);
-	} else if (IsCustomAggregate()) {
+	// Force naive for SEPARATE mode or for (currently!) unsupported functionality
+	const auto force_naive =
+	    !ClientConfig::GetConfig(context).enable_optimizer || mode == WindowAggregationMode::SEPARATE;
+	AggregateObject aggr(wexpr);
+	if (force_naive || (wexpr.distinct && wexpr.exclude_clause != WindowExcludeMode::NO_OTHER)) {
+		aggregator = make_uniq<WindowNaiveAggregator>(aggr, wexpr.return_type, wexpr.exclude_clause, count);
+	} else if (IsDistinctAggregate()) {
+		// build a merge sort tree
+		// see https://dl.acm.org/doi/pdf/10.1145/3514221.3526184
+		aggregator = make_uniq<WindowDistinctAggregator>(aggr, wexpr.return_type, wexpr.exclude_clause, count, context);
+	} else if (IsConstantAggregate()) {
 		aggregator =
-		    make_uniq<WindowCustomAggregator>(AggregateObject(wexpr), wexpr.return_type, wexpr.exclude_clause, count);
-	} else if (wexpr.aggregate) {
+		    make_uniq<WindowConstantAggregator>(aggr, wexpr.return_type, partition_mask, wexpr.exclude_clause, count);
+	} else if (IsCustomAggregate()) {
+		aggregator = make_uniq<WindowCustomAggregator>(aggr, wexpr.return_type, wexpr.exclude_clause, count);
+	} else {
 		// build a segment tree for frame-adhering aggregates
 		// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
-		aggregator =
-		    make_uniq<WindowSegmentTree>(AggregateObject(wexpr), wexpr.return_type, mode, wexpr.exclude_clause, count);
+		aggregator = make_uniq<WindowSegmentTree>(aggr, wexpr.return_type, mode, wexpr.exclude_clause, count);
 	}
 
 	// evaluate the FILTER clause and stuff it into a large mask for compactness and reuse
@@ -923,6 +945,64 @@ void WindowAggregateExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx
 	WindowExecutor::Sink(input_chunk, input_idx, total_count);
 }
 
+static void ApplyWindowStats(const WindowBoundary &boundary, FrameDelta &delta, BaseStatistics *base, bool is_start) {
+	// Avoid overflow by clamping to the frame bounds
+	auto base_stats = delta;
+
+	switch (boundary) {
+	case WindowBoundary::UNBOUNDED_PRECEDING:
+		if (is_start) {
+			delta.end = 0;
+			return;
+		}
+		break;
+	case WindowBoundary::UNBOUNDED_FOLLOWING:
+		if (!is_start) {
+			delta.begin = 0;
+			return;
+		}
+		break;
+	case WindowBoundary::CURRENT_ROW_ROWS:
+		delta.begin = delta.end = 0;
+		return;
+	case WindowBoundary::EXPR_PRECEDING_ROWS:
+		if (base && base->GetStatsType() == StatisticsType::NUMERIC_STATS && NumericStats::HasMinMax(*base)) {
+			//	Preceding so negative offset from current row
+			base_stats.begin = NumericStats::GetMin<int64_t>(*base);
+			base_stats.end = NumericStats::GetMax<int64_t>(*base);
+			if (delta.begin < base_stats.end && base_stats.end < delta.end) {
+				delta.begin = -base_stats.end;
+			}
+			if (delta.begin < base_stats.begin && base_stats.begin < delta.end) {
+				delta.end = -base_stats.begin + 1;
+			}
+		}
+		return;
+	case WindowBoundary::EXPR_FOLLOWING_ROWS:
+		if (base && base->GetStatsType() == StatisticsType::NUMERIC_STATS && NumericStats::HasMinMax(*base)) {
+			base_stats.begin = NumericStats::GetMin<int64_t>(*base);
+			base_stats.end = NumericStats::GetMax<int64_t>(*base);
+			if (base_stats.end < delta.end) {
+				delta.end = base_stats.end + 1;
+			}
+		}
+		return;
+
+	case WindowBoundary::CURRENT_ROW_RANGE:
+	case WindowBoundary::EXPR_PRECEDING_RANGE:
+	case WindowBoundary::EXPR_FOLLOWING_RANGE:
+		return;
+	default:
+		break;
+	}
+
+	if (is_start) {
+		throw InternalException("Unsupported window start boundary");
+	} else {
+		throw InternalException("Unsupported window end boundary");
+	}
+}
+
 void WindowAggregateExecutor::Finalize() {
 	D_ASSERT(aggregator);
 
@@ -934,66 +1014,12 @@ void WindowAggregateExecutor::Finalize() {
 	//	First entry is the frame start
 	stats[0] = FrameDelta(-count, count);
 	auto base = wexpr.expr_stats.empty() ? nullptr : wexpr.expr_stats[0].get();
-	switch (wexpr.start) {
-	case WindowBoundary::UNBOUNDED_PRECEDING:
-		stats[0].end = 0;
-		break;
-	case WindowBoundary::CURRENT_ROW_ROWS:
-		stats[0].begin = stats[0].end = 0;
-		break;
-	case WindowBoundary::EXPR_PRECEDING_ROWS:
-		if (base && base->GetStatsType() == StatisticsType::NUMERIC_STATS && NumericStats::HasMinMax(*base)) {
-			//	Preceding so negative offset from current row
-			stats[0].begin = -NumericStats::GetMax<int64_t>(*base);
-			stats[0].end = -NumericStats::GetMin<int64_t>(*base) + 1;
-		}
-		break;
-	case WindowBoundary::EXPR_FOLLOWING_ROWS:
-		if (base && base->GetStatsType() == StatisticsType::NUMERIC_STATS && NumericStats::HasMinMax(*base)) {
-			stats[0].begin = NumericStats::GetMin<int64_t>(*base);
-			stats[0].end = NumericStats::GetMax<int64_t>(*base) + 1;
-		}
-		break;
-
-	case WindowBoundary::CURRENT_ROW_RANGE:
-	case WindowBoundary::EXPR_PRECEDING_RANGE:
-	case WindowBoundary::EXPR_FOLLOWING_RANGE:
-		break;
-	default:
-		throw InternalException("Unsupported window start boundary");
-	}
+	ApplyWindowStats(wexpr.start, stats[0], base, true);
 
 	//	Second entry is the frame end
 	stats[1] = FrameDelta(-count, count);
 	base = wexpr.expr_stats.empty() ? nullptr : wexpr.expr_stats[1].get();
-	switch (wexpr.end) {
-	case WindowBoundary::UNBOUNDED_FOLLOWING:
-		stats[1].begin = 0;
-		break;
-	case WindowBoundary::CURRENT_ROW_ROWS:
-		stats[1].begin = stats[1].end = 0;
-		break;
-	case WindowBoundary::EXPR_PRECEDING_ROWS:
-		if (base && base->GetStatsType() == StatisticsType::NUMERIC_STATS && NumericStats::HasMinMax(*base)) {
-			//	Preceding so negative offset from current row
-			stats[1].begin = -NumericStats::GetMax<int64_t>(*base);
-			stats[1].end = -NumericStats::GetMin<int64_t>(*base) + 1;
-		}
-		break;
-	case WindowBoundary::EXPR_FOLLOWING_ROWS:
-		if (base && base->GetStatsType() == StatisticsType::NUMERIC_STATS && NumericStats::HasMinMax(*base)) {
-			stats[1].begin = NumericStats::GetMin<int64_t>(*base);
-			stats[1].end = NumericStats::GetMax<int64_t>(*base) + 1;
-		}
-		break;
-
-	case WindowBoundary::CURRENT_ROW_RANGE:
-	case WindowBoundary::EXPR_PRECEDING_RANGE:
-	case WindowBoundary::EXPR_FOLLOWING_RANGE:
-		break;
-	default:
-		throw InternalException("Unsupported window end boundary");
-	}
+	ApplyWindowStats(wexpr.end, stats[1], base, false);
 
 	aggregator->Finalize(stats);
 }
@@ -1265,6 +1291,7 @@ void WindowValueExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, co
 		if (check_nulls) {
 			const auto count = input_chunk.size();
 
+			payload_chunk.Flatten();
 			UnifiedVectorFormat vdata;
 			payload_chunk.data[0].ToUnifiedFormat(count, vdata);
 			if (!vdata.validity.AllValid()) {

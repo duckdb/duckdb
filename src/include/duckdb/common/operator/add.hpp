@@ -35,11 +35,15 @@ timestamp_t AddOperator::Operation(date_t left, dtime_t right);
 template <>
 timestamp_t AddOperator::Operation(dtime_t left, date_t right);
 template <>
+timestamp_t AddOperator::Operation(date_t left, dtime_tz_t right);
+template <>
+timestamp_t AddOperator::Operation(dtime_tz_t left, date_t right);
+template <>
 interval_t AddOperator::Operation(interval_t left, interval_t right);
 template <>
-date_t AddOperator::Operation(date_t left, interval_t right);
+timestamp_t AddOperator::Operation(date_t left, interval_t right);
 template <>
-date_t AddOperator::Operation(interval_t left, date_t right);
+timestamp_t AddOperator::Operation(interval_t left, date_t right);
 template <>
 timestamp_t AddOperator::Operation(timestamp_t left, interval_t right);
 template <>
@@ -69,6 +73,8 @@ template <>
 bool TryAddOperator::Operation(int32_t left, int32_t right, int32_t &result);
 template <>
 DUCKDB_API bool TryAddOperator::Operation(int64_t left, int64_t right, int64_t &result);
+template <>
+bool TryAddOperator::Operation(uhugeint_t left, uhugeint_t right, uhugeint_t &result);
 template <>
 bool TryAddOperator::Operation(hugeint_t left, hugeint_t right, hugeint_t &result);
 
@@ -125,5 +131,10 @@ template <>
 dtime_t AddTimeOperator::Operation(dtime_t left, interval_t right);
 template <>
 dtime_t AddTimeOperator::Operation(interval_t left, dtime_t right);
+
+template <>
+dtime_tz_t AddTimeOperator::Operation(dtime_tz_t left, interval_t right);
+template <>
+dtime_tz_t AddTimeOperator::Operation(interval_t left, dtime_tz_t right);
 
 } // namespace duckdb

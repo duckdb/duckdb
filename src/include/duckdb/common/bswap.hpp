@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 
 namespace duckdb {
 
@@ -33,9 +34,12 @@ static inline T BSwap(const T &x) {
 	} else if (sizeof(T) == 2) {
 		return BSWAP16(x);
 	} else if (sizeof(T) == 4) {
-		return BSWAP32(x);
+		// this check is superfluous as the branch is not taken for small return types but the compiler does not realize
+		// that
+		return UnsafeNumericCast<T>(BSWAP32(x));
 	} else {
-		return BSWAP64(x);
+		// see above
+		return UnsafeNumericCast<T>(BSWAP64(x));
 	}
 }
 

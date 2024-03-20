@@ -146,12 +146,12 @@ static duckdb::unique_ptr<T> make_unique(_Args&&... __args) {
 }
 
 template <typename T>
-T MaxValue(T a, T b) {
+constexpr T MaxValue(T a, T b) {
 	return a > b ? a : b;
 }
 
 template <typename T>
-T MinValue(T a, T b) {
+constexpr T MinValue(T a, T b) {
 	return a < b ? a : b;
 }
 
@@ -160,10 +160,15 @@ T AbsValue(T a) {
 	return a < 0 ? -a : a;
 }
 
-//Align value (ceiling)
+//! Align value (ceiling)
 template<class T, T val=8>
 static inline T AlignValue(T n) {
 	return ((n + (val - 1)) / val) * val;
+}
+
+template<class T, T val=8>
+constexpr inline T AlignValueFloor(T n) {
+	return (n / val) * val;
 }
 
 template<class T, T val=8>
@@ -213,6 +218,13 @@ bool RefersToSameObject(const reference<T> &A, const reference<T> &B) {
 template<class T>
 bool RefersToSameObject(const T &A, const T &B) {
 	return &A == &B;
+}
+
+template<class T, class SRC>
+void DynamicCastCheck(SRC *source) {
+#ifndef __APPLE__
+	D_ASSERT(dynamic_cast<T *>(source));
+#endif
 }
 
 } // namespace duckdb

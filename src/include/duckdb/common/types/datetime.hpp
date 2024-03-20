@@ -90,7 +90,7 @@ struct dtime_tz_t { // NOLINT
 	static constexpr const int TIME_BITS = 40;
 	static constexpr const int OFFSET_BITS = 24;
 	static constexpr const uint64_t OFFSET_MASK = ~uint64_t(0) >> TIME_BITS;
-	static constexpr const int32_t MAX_OFFSET = 1559 * 60 * 60;
+	static constexpr const int32_t MAX_OFFSET = 16 * 60 * 60 - 1; // ±15:59:59
 	static constexpr const int32_t MIN_OFFSET = -MAX_OFFSET;
 
 	uint64_t bits;
@@ -98,7 +98,9 @@ struct dtime_tz_t { // NOLINT
 	dtime_tz_t() = default;
 
 	inline dtime_tz_t(dtime_t t, int32_t offset)
-	    : bits((uint64_t(t.micros) << OFFSET_BITS) | uint64_t(offset + MAX_OFFSET)) {
+	    : bits((uint64_t(t.micros) << OFFSET_BITS) | uint64_t(MAX_OFFSET - offset)) {
+	}
+	explicit inline dtime_tz_t(uint64_t bits_p) : bits(bits_p) {
 	}
 
 	inline dtime_t time() const { // NOLINT
@@ -106,7 +108,7 @@ struct dtime_tz_t { // NOLINT
 	}
 
 	inline int32_t offset() const { // NOLINT
-		return int32_t(bits & OFFSET_MASK) - MAX_OFFSET;
+		return MAX_OFFSET - int32_t(bits & OFFSET_MASK);
 	}
 
 	// comparison operators

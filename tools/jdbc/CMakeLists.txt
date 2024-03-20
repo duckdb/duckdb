@@ -10,13 +10,14 @@ endif()
 include(UseJava)
 project(DuckDBJDummy NONE)
 
-file(GLOB JAVA_SRC_FILES src/main/java/org/duckdb/*.java)
-file(GLOB JAVA_TEST_FILES src/test/java/org/duckdb/test/*.java)
+file(GLOB_RECURSE JAVA_SRC_FILES src/main/java/org/duckdb/*.java)
+file(GLOB_RECURSE JAVA_TEST_FILES src/test/java/org/duckdb/*.java)
 
 set(CMAKE_JAVA_COMPILE_FLAGS -source 1.8 -target 1.8 -encoding utf-8)
 
-add_jar(duckdb_jdbc ${JAVA_SRC_FILES} ${JAVA_TEST_FILES}
-        META-INF/services/java.sql.Driver GENERATE_NATIVE_HEADERS duckdb-native)
+add_jar(duckdb_jdbc ${JAVA_SRC_FILES} META-INF/services/java.sql.Driver
+        GENERATE_NATIVE_HEADERS duckdb-native)
+add_jar(duckdb_jdbc_tests ${JAVA_TEST_FILES} INCLUDE_JARS duckdb_jdbc)
 
 include_directories(../../extension/parquet/include)
 
@@ -36,7 +37,7 @@ set_target_properties(duckdb_java PROPERTIES PREFIX "lib")
 
 add_custom_command(
   OUTPUT dummy_jdbc_target
-  DEPENDS duckdb_java duckdb_jdbc
+  DEPENDS duckdb_java duckdb_jdbc duckdb_jdbc_tests
   COMMAND ${Java_JAR_EXECUTABLE} uf duckdb_jdbc.jar -C
           $<TARGET_FILE_DIR:duckdb_java> $<TARGET_FILE_NAME:duckdb_java>)
 
