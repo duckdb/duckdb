@@ -121,8 +121,7 @@ void JSONStructureNode::InitializeCandidateTypes(const idx_t max_depth, const bo
 }
 
 void JSONStructureNode::RefineCandidateTypes(yyjson_val *vals[], idx_t val_count, Vector &string_vector,
-                                             ArenaAllocator &allocator, DateFormatMap &date_format_map,
-                                             const bool ignore_errors) {
+                                             ArenaAllocator &allocator, DateFormatMap &date_format_map) {
 	if (descriptions.size() != 1) {
 		// We can't refine types if we have more than 1 description (yet), defaults to JSON type for now
 		return;
@@ -133,19 +132,18 @@ void JSONStructureNode::RefineCandidateTypes(yyjson_val *vals[], idx_t val_count
 	auto &description = descriptions[0];
 	switch (description.type) {
 	case LogicalTypeId::LIST:
-		return RefineCandidateTypesArray(vals, val_count, string_vector, allocator, date_format_map, ignore_errors);
+		return RefineCandidateTypesArray(vals, val_count, string_vector, allocator, date_format_map);
 	case LogicalTypeId::STRUCT:
-		return RefineCandidateTypesObject(vals, val_count, string_vector, allocator, date_format_map, ignore_errors);
+		return RefineCandidateTypesObject(vals, val_count, string_vector, allocator, date_format_map);
 	case LogicalTypeId::VARCHAR:
-		return RefineCandidateTypesString(vals, val_count, string_vector, date_format_map, ignore_errors);
+		return RefineCandidateTypesString(vals, val_count, string_vector, date_format_map);
 	default:
 		return;
 	}
 }
 
 void JSONStructureNode::RefineCandidateTypesArray(yyjson_val *vals[], idx_t val_count, Vector &string_vector,
-                                                  ArenaAllocator &allocator, DateFormatMap &date_format_map,
-                                                  const bool ignore_errors) {
+                                                  ArenaAllocator &allocator, DateFormatMap &date_format_map) {
 	D_ASSERT(descriptions.size() == 1 && descriptions[0].type == LogicalTypeId::LIST);
 	auto &desc = descriptions[0];
 	D_ASSERT(desc.children.size() == 1);
@@ -172,12 +170,11 @@ void JSONStructureNode::RefineCandidateTypesArray(yyjson_val *vals[], idx_t val_
 			}
 		}
 	}
-	child.RefineCandidateTypes(child_vals, total_list_size, string_vector, allocator, date_format_map, ignore_errors);
+	child.RefineCandidateTypes(child_vals, total_list_size, string_vector, allocator, date_format_map);
 }
 
 void JSONStructureNode::RefineCandidateTypesObject(yyjson_val *vals[], idx_t val_count, Vector &string_vector,
-                                                   ArenaAllocator &allocator, DateFormatMap &date_format_map,
-                                                   const bool ignore_errors) {
+                                                   ArenaAllocator &allocator, DateFormatMap &date_format_map) {
 	D_ASSERT(descriptions.size() == 1 && descriptions[0].type == LogicalTypeId::STRUCT);
 	auto &desc = descriptions[0];
 
@@ -206,9 +203,6 @@ void JSONStructureNode::RefineCandidateTypesObject(yyjson_val *vals[], idx_t val
 				auto key_ptr = unsafe_yyjson_get_str(child_key);
 				auto key_len = unsafe_yyjson_get_len(child_key);
 				auto it = key_map.find({key_ptr, key_len});
-				if (ignore_errors) {
-					continue;
-				}
 				D_ASSERT(it != key_map.end());
 				const auto child_idx = it->second;
 				child_vals[child_idx][i] = child_val;
@@ -233,23 +227,23 @@ void JSONStructureNode::RefineCandidateTypesObject(yyjson_val *vals[], idx_t val
 
 	for (idx_t child_idx = 0; child_idx < child_count; child_idx++) {
 		desc.children[child_idx].RefineCandidateTypes(child_vals[child_idx], val_count, string_vector, allocator,
-		                                              date_format_map, ignore_errors);
+		                                              date_format_map);
 	}
 }
 
 void JSONStructureNode::RefineCandidateTypesString(yyjson_val *vals[], idx_t val_count, Vector &string_vector,
-                                                   DateFormatMap &date_format_map, const bool ignore_errors) {
+                                                   DateFormatMap &date_format_map) {
 	D_ASSERT(descriptions.size() == 1 && descriptions[0].type == LogicalTypeId::VARCHAR);
 	if (descriptions[0].candidate_types.empty()) {
 		return;
 	}
 	static JSONTransformOptions OPTIONS;
 	JSONTransform::GetStringVector(vals, val_count, LogicalType::SQLNULL, string_vector, OPTIONS);
-	EliminateCandidateTypes(val_count, string_vector, date_format_map, ignore_errors);
+	EliminateCandidateTypes(val_count, string_vector, date_format_map);
 }
 
-void JSONStructureNode::EliminateCandidateTypes(idx_t vec_count, Vector &string_vector, DateFormatMap &date_format_map,
-                                                const bool ignore_errors) {
+void JSONStructureNode::EliminateCandidateTypes(idx_t vec_count, Vector &string_vector,
+                                                DateFormatMap &date_format_map) {
 	D_ASSERT(descriptions.size() == 1 && descriptions[0].type == LogicalTypeId::VARCHAR);
 	auto &description = descriptions[0];
 	auto &candidate_types = description.candidate_types;
@@ -261,7 +255,7 @@ void JSONStructureNode::EliminateCandidateTypes(idx_t vec_count, Vector &string_
 		Vector result_vector(type, vec_count);
 		if (date_format_map.HasFormats(type)) {
 			auto &formats = date_format_map.GetCandidateFormats(type);
-			if (EliminateCandidateFormats(vec_count, string_vector, result_vector, formats, ignore_errors)) {
+			if (EliminateCandidateFormats(vec_count, string_vector, result_vector, formats)) {
 				return;
 			} else {
 				candidate_types.pop_back();
@@ -303,7 +297,7 @@ bool TryParse(Vector &string_vector, StrpTimeFormat &format, const idx_t count) 
 }
 
 bool JSONStructureNode::EliminateCandidateFormats(idx_t vec_count, Vector &string_vector, Vector &result_vector,
-                                                  vector<StrpTimeFormat> &formats, const bool ignore_errors) {
+                                                  vector<StrpTimeFormat> &formats) {
 	D_ASSERT(descriptions.size() == 1 && descriptions[0].type == LogicalTypeId::VARCHAR);
 	const auto type = result_vector.GetType().id();
 	for (idx_t i = formats.size(); i != 0; i--) {
@@ -402,10 +396,7 @@ static inline void ExtractStructureObject(yyjson_val *obj, JSONStructureNode &no
 		auto key_ptr = unsafe_yyjson_get_str(key);
 		auto key_len = unsafe_yyjson_get_len(key);
 		auto insert_result = obj_keys.insert(string(key_ptr, key_len));
-		if (!insert_result.second) {
-			if (ignore_errors) {
-				continue;
-			}
+		if (!ignore_errors && !insert_result.second) {
 			JSONCommon::ThrowValFormatError("Duplicate key \"" + string(key_ptr, key_len) + "\" in object %s", obj);
 		}
 		description.GetOrCreateChild(key, val, ignore_errors);
@@ -506,7 +497,7 @@ ScalarFunctionSet JSONFunctions::GetStructureFunction() {
 }
 
 static LogicalType StructureToTypeArray(ClientContext &context, const JSONStructureNode &node, const idx_t max_depth,
-                                        const double field_appearance_threshold, const bool ignore_errors, idx_t depth,
+                                        const double field_appearance_threshold, idx_t depth,
                                         const idx_t sample_count) {
 	D_ASSERT(node.descriptions.size() == 1 && node.descriptions[0].type == LogicalTypeId::LIST);
 	const auto &desc = node.descriptions[0];
@@ -517,7 +508,7 @@ static LogicalType StructureToTypeArray(ClientContext &context, const JSONStruct
 }
 
 static LogicalType StructureToTypeObject(ClientContext &context, const JSONStructureNode &node, const idx_t max_depth,
-                                         const double field_appearance_threshold, const bool ignore_errors, idx_t depth,
+                                         const double field_appearance_threshold, idx_t depth,
                                          const idx_t sample_count) {
 	D_ASSERT(node.descriptions.size() == 1 && node.descriptions[0].type == LogicalTypeId::STRUCT);
 	auto &desc = node.descriptions[0];
@@ -538,16 +529,10 @@ static LogicalType StructureToTypeObject(ClientContext &context, const JSONStruc
 		return LogicalType::JSON();
 	}
 
-	case_insensitive_set_t child_names;
 	child_list_t<LogicalType> child_types;
 	child_types.reserve(desc.children.size());
 	for (auto &child : desc.children) {
 		D_ASSERT(child.key);
-		if (ignore_errors && !child_names.insert(*child.key).second) {
-			// If we don't ignore errors, duplicates are handled before this
-			// If we do ignore errors, we skip the key if it's a duplicate
-			continue;
-		}
 		child_types.emplace_back(*child.key,
 		                         JSONStructure::StructureToType(context, child, max_depth, field_appearance_threshold,
 		                                                        depth + 1, sample_count));
@@ -565,8 +550,7 @@ static LogicalType StructureToTypeString(const JSONStructureNode &node) {
 }
 
 LogicalType JSONStructure::StructureToType(ClientContext &context, const JSONStructureNode &node, const idx_t max_depth,
-                                           const double field_appearance_threshold, const bool ignore_errors,
-                                           idx_t depth, idx_t sample_count) {
+                                           const double field_appearance_threshold, idx_t depth, idx_t sample_count) {
 	if (depth >= max_depth) {
 		return LogicalType::JSON();
 	}
@@ -581,11 +565,9 @@ LogicalType JSONStructure::StructureToType(ClientContext &context, const JSONStr
 	D_ASSERT(desc.type != LogicalTypeId::INVALID);
 	switch (desc.type) {
 	case LogicalTypeId::LIST:
-		return StructureToTypeArray(context, node, max_depth, field_appearance_threshold, ignore_errors, depth,
-		                            sample_count);
+		return StructureToTypeArray(context, node, max_depth, field_appearance_threshold, depth, sample_count);
 	case LogicalTypeId::STRUCT:
-		return StructureToTypeObject(context, node, max_depth, field_appearance_threshold, ignore_errors, depth,
-		                             sample_count);
+		return StructureToTypeObject(context, node, max_depth, field_appearance_threshold, depth, sample_count);
 	case LogicalTypeId::VARCHAR:
 		return StructureToTypeString(node);
 	case LogicalTypeId::SQLNULL:
