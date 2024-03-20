@@ -151,18 +151,19 @@ struct ArrowVarcharToStringViewData {
 			// These two are now the same buffer
 			idx_t string_length = ArrowVarcharConverter::GetLength(data[source_idx]);
 			auto string_data = data[source_idx].GetData();
-			if (string_length <= arrow_string_view_t::max_inlined_bytes) {
+			if (string_length <= ArrowStringViewConstants::MAX_INLINED_BYTES) {
 				//	This string is inlined
 				//  | Bytes 0-3  | Bytes 4-15                            |
 				//  |------------|---------------------------------------|
 				//  | length     | data (padded with 0)                  |
-				arrow_data[result_idx] = arrow_string_view_t(string_length, string_data);
+				arrow_data[result_idx] = arrow_string_view_t(UnsafeNumericCast<int32_t>(string_length), string_data);
 			} else {
 				// This string is not inlined, we have to check a different buffer and offsets
 				//  | Bytes 0-3  | Bytes 4-7  | Bytes 8-11 | Bytes 12-15 |
 				//  |------------|------------|------------|-------------|
 				//  | length     | prefix     | buf. index | offset      |
-				arrow_data[result_idx] = arrow_string_view_t(string_length, string_data, 0, append_data.offset);
+				arrow_data[result_idx] = arrow_string_view_t(UnsafeNumericCast<int32_t>(string_length), string_data, 0,
+				                                             UnsafeNumericCast<int32_t>(append_data.offset));
 				auto current_offset = append_data.offset + string_length;
 				aux_buffer.resize(current_offset);
 				ArrowVarcharConverter::WriteData(aux_buffer.data() + append_data.offset, data[source_idx]);
