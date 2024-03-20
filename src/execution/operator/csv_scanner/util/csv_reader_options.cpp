@@ -297,6 +297,13 @@ template <class T>
 string FormatOptionLine(const string &name, const CSVOption<T> option) {
 	return name + " = " + option.FormatValue() + " " + option.FormatSet() + "\n  ";
 }
+bool CSVReaderOptions::WasTypeManuallySet(idx_t i) const {
+	if (i >= was_type_manually_set.size()) {
+		return false;
+	}
+	return was_type_manually_set[i];
+}
+
 string CSVReaderOptions::ToString() const {
 	auto &delimiter = dialect_options.state_machine_options.delimiter;
 	auto &quote = dialect_options.state_machine_options.quote;
@@ -366,7 +373,15 @@ static uint8_t GetCandidateSpecificity(const LogicalType &candidate_type) {
 	}
 	return it->second;
 }
-
+bool StoreUserDefinedParameter(string &option) {
+	if (option == "column_types" || option == "types" || option == "dtypes" || option == "auto_detect" ||
+	    option == "auto_type_candidates" || option == "columns" || option == "names") {
+		// We don't store options related to types, names and auto-detection since these are either irrelevant to our
+		// prompt or are covered by the columns option.
+		return false;
+	}
+	return true;
+}
 void CSVReaderOptions::FromNamedParameters(named_parameter_map_t &in, ClientContext &context,
                                            vector<LogicalType> &return_types, vector<string> &names) {
 	for (auto &kv : in) {
@@ -375,7 +390,7 @@ void CSVReaderOptions::FromNamedParameters(named_parameter_map_t &in, ClientCont
 		}
 		auto loption = StringUtil::Lower(kv.first);
 		// skip variables that are specific to auto detection
-		if (loption != "auto_detect" && loption != "auto_type_candidates") {
+		if (StoreUserDefinedParameter(loption)) {
 			user_defined_parameters += loption + "=" + kv.second.ToSQLString() + ", ";
 		}
 		if (loption == "columns") {

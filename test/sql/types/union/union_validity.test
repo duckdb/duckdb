@@ -1,12 +1,8 @@
 # name: test/sql/types/union/union_validity.test
 # group: [union]
 
-# FIXME bug in sequence/constant vector handling
-require no_vector_verification
-
-# FIXME - missing verification?
-#statement ok
-#PRAGMA enable_verification
+statement ok
+PRAGMA enable_verification
 
 statement ok
 CREATE TABLE tbl (u UNION(a INT, b VARCHAR));

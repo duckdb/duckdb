@@ -3,6 +3,7 @@
 import ctypes
 import os
 import platform
+import subprocess
 import sys
 import traceback
 from functools import lru_cache
@@ -121,7 +122,12 @@ if platform.system() == 'Windows':
     extensions = ['parquet', 'icu', 'fts', 'tpch', 'json']
 
 is_android = hasattr(sys, 'getandroidapilevel')
-use_jemalloc = not is_android and platform.system() == 'Linux' and platform.architecture()[0] == '64bit'
+use_jemalloc = (
+    not is_android
+    and platform.system() == 'Linux'
+    and platform.architecture()[0] == '64bit'
+    and platform.machine() == 'x86_64'
+)
 
 if use_jemalloc:
     extensions.append('jemalloc')
@@ -363,8 +369,41 @@ spark_packages = [
 
 packages.extend(spark_packages)
 
+
+# Duplicated from scripts/package_build.py
+def get_git_describe():
+    override_git_describe = os.getenv('OVERRIDE_GIT_DESCRIBE') or ''
+    # empty override_git_describe, either since env was empty string or not existing
+    # -> ask git (that can fail, so except in place)
+    if len(override_git_describe) == 0:
+        try:
+            return subprocess.check_output(['git', 'describe', '--tags', '--long']).strip().decode('utf8')
+        except subprocess.CalledProcessError:
+            return "v0.0.0-0-gdeadbeeff"
+    if len(override_git_describe.split('-')) == 3:
+        return override_git_describe
+    if len(override_git_describe.split('-')) == 1:
+        override_git_describe += "-0"
+    assert len(override_git_describe.split('-')) == 2
+    try:
+        return (
+            override_git_describe
+            + "-g"
+            + subprocess.check_output(['git', 'log', '-1', '--format=%h']).strip().decode('utf8')
+        )
+    except subprocess.CalledProcessError:
+        return override_git_describe + "-g" + "deadbeeff"
+
+
+def get_version():
+    git_describe = get_git_describe()
+    version = git_describe.split('-')[0]
+    return version
+
+
 setup(
     name=lib_name,
+    version=get_version(),
     description='DuckDB in-process database',
     keywords='DuckDB Database SQL OLAP',
     url="https://www.duckdb.org",

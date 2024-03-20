@@ -683,10 +683,16 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		return Value::MAP(ListType::GetChildType(type), std::move(children));
 	}
 	case LogicalTypeId::UNION: {
-		auto tag = UnionVector::GetTag(*vector, index);
-		auto value = UnionVector::GetMember(*vector, tag).GetValue(index);
-		auto members = UnionType::CopyMemberTypes(type);
-		return Value::UNION(members, tag, std::move(value));
+		// Remember to pass the original index_p here so we dont slice twice when looking up the tag
+		// in case this is a dictionary vector
+		union_tag_t tag;
+		if (UnionVector::TryGetTag(*vector, index_p, tag)) {
+			auto value = UnionVector::GetMember(*vector, tag).GetValue(index_p);
+			auto members = UnionType::CopyMemberTypes(type);
+			return Value::UNION(members, tag, std::move(value));
+		} else {
+			return Value(vector->GetType());
+		}
 	}
 	case LogicalTypeId::STRUCT: {
 		// we can derive the value schema from the vector schema
@@ -1666,7 +1672,7 @@ void FlatVector::SetNull(Vector &vector, idx_t idx, bool is_null) {
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
 	vector.validity.Set(idx, !is_null);
 	if (is_null) {
-		auto type = vector.GetType();
+		auto &type = vector.GetType();
 		auto internal_type = type.InternalType();
 		if (internal_type == PhysicalType::STRUCT) {
 			// set all child entries to null as well
@@ -2381,17 +2387,34 @@ void UnionVector::SetToMember(Vector &union_vector, union_tag_t tag, Vector &mem
 	}
 }
 
-union_tag_t UnionVector::GetTag(const Vector &vector, idx_t index) {
+bool UnionVector::TryGetTag(const Vector &vector, idx_t index, union_tag_t &result) {
 	// the tag vector is always the first struct child.
 	auto &tag_vector = *StructVector::GetEntries(vector)[0];
 	if (tag_vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(tag_vector);
-		return FlatVector::GetData<union_tag_t>(child)[index];
+		auto &dict_sel = DictionaryVector::SelVector(tag_vector);
+		auto mapped_idx = dict_sel.get_index(index);
+		if (FlatVector::IsNull(child, mapped_idx)) {
+			return false;
+		} else {
+			result = FlatVector::GetData<union_tag_t>(child)[mapped_idx];
+			return true;
+		}
 	}
 	if (tag_vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		return ConstantVector::GetData<union_tag_t>(tag_vector)[0];
+		if (ConstantVector::IsNull(tag_vector)) {
+			return false;
+		} else {
+			result = ConstantVector::GetData<union_tag_t>(tag_vector)[0];
+			return true;
+		}
 	}
-	return FlatVector::GetData<union_tag_t>(tag_vector)[index];
+	if (FlatVector::IsNull(tag_vector, index)) {
+		return false;
+	} else {
+		result = FlatVector::GetData<union_tag_t>(tag_vector)[index];
+		return true;
+	}
 }
 
 //! Raw selection vector passed in (not merged with any other selection vectors)

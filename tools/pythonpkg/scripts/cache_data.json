@@ -93,6 +93,7 @@
             "datetime.date",
             "datetime.time",
             "datetime.timedelta",
+            "datetime.timezone",
             "datetime.datetime"
         ]
     },
@@ -135,7 +136,8 @@
         "name": "datetime",
         "children": [
             "datetime.datetime.min",
-            "datetime.datetime.max"
+            "datetime.datetime.max",
+            "datetime.datetime.combine"
         ]
     },
     "datetime.datetime.min": {
@@ -148,6 +150,18 @@
         "type": "attribute",
         "full_path": "datetime.datetime.max",
         "name": "max",
+        "children": []
+    },
+    "datetime.datetime.combine": {
+        "type": "attribute",
+        "full_path": "datetime.datetime.combine",
+        "name": "combine",
+        "children": []
+    },
+    "datetime.timezone": {
+        "type": "attribute",
+        "full_path": "datetime.timezone",
+        "name": "timezone",
         "children": []
     },
     "decimal": {
