@@ -9,11 +9,11 @@
 namespace duckdb {
 
 JoinDependentFilterRule::JoinDependentFilterRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
-	// Match on a ConjunctionExpression that has two ConjunctionExpressions as children
+	// Match on a ConjunctionExpression that has at least two ConjunctionExpressions as children
 	auto op = make_uniq<ConjunctionExpressionMatcher>();
 	op->matchers.push_back(make_uniq<ConjunctionExpressionMatcher>());
 	op->matchers.push_back(make_uniq<ConjunctionExpressionMatcher>());
-	op->policy = SetMatcher::Policy::UNORDERED;
+	op->policy = SetMatcher::Policy::SOME;
 	root = std::move(op);
 }
 
@@ -39,8 +39,9 @@ static inline void ExtractConjunctedExpressions(Expression &binding,
 	if (binding.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
 	    binding.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		auto &conjunction = binding.Cast<BoundConjunctionExpression>();
-		ExtractConjunctedExpressions(*conjunction.children[0], expressions);
-		ExtractConjunctedExpressions(*conjunction.children[1], expressions);
+		for (auto &child : conjunction.children) {
+			ExtractConjunctedExpressions(*child, expressions);
+		}
 	} else if (binding.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
 		auto &comparison = binding.Cast<BoundComparisonExpression>();
 		if (comparison.left->IsFoldable() == comparison.right->IsFoldable()) {
@@ -69,49 +70,66 @@ unique_ptr<Expression> JoinDependentFilterRule::Apply(LogicalOperator &op, vecto
 		return nullptr;
 	}
 
-	// The expression must be an OR of AND expressions
-	if ((bindings[0].get().GetExpressionType() != ExpressionType::CONJUNCTION_OR ||
-	     bindings[1].get().GetExpressionType() != ExpressionType::CONJUNCTION_AND ||
-	     bindings[2].get().GetExpressionType() != ExpressionType::CONJUNCTION_AND)) {
+	// The expression must be an OR
+	auto &conjunction = bindings[0].get().Cast<BoundConjunctionExpression>();
+	if (conjunction.GetExpressionType() != ExpressionType::CONJUNCTION_OR) {
 		return nullptr;
 	}
 
-	// Both sides of the OR must be join-dependent
-	if (!ExpressionReferencesMultipleTables(bindings[1].get()) ||
-	    !ExpressionReferencesMultipleTables(bindings[2].get())) {
-		return nullptr;
+	// All children must be ANDs that are join-dependent
+	auto &children = conjunction.children;
+	for (const auto &child : children) {
+		if (child->GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION ||
+		    child->GetExpressionType() != ExpressionType::CONJUNCTION_AND ||
+		    !ExpressionReferencesMultipleTables(*child)) {
+			return nullptr;
+		}
 	}
 
 	// Extract all comparison expressions between column references and constants that are AND'ed together
-	expression_map_t<unique_ptr<Expression>> lhs_expressions;
-	ExtractConjunctedExpressions(bindings[1].get(), lhs_expressions);
-	expression_map_t<unique_ptr<Expression>> rhs_expressions;
-	ExtractConjunctedExpressions(bindings[2].get(), rhs_expressions);
-
-	unique_ptr<Expression> derived_filter;
-	for (auto &lhs_entry : lhs_expressions) {
-		auto rhs_it = rhs_expressions.find(lhs_entry.first);
-		if (rhs_it == rhs_expressions.end()) {
-			continue; // LHS expression does not appear in RHS
-		}
-
-		auto derived_entry_filter = make_uniq<BoundConjunctionExpression>(
-		    ExpressionType::CONJUNCTION_OR, lhs_entry.second->Copy(), rhs_it->second->Copy());
-		if (derived_filter) {
-			derived_filter = make_uniq<BoundConjunctionExpression>(
-			    ExpressionType::CONJUNCTION_AND, std::move(derived_filter), std::move(derived_entry_filter));
-		} else {
-			derived_filter = std::move(derived_entry_filter);
-		}
+	vector<expression_map_t<unique_ptr<Expression>>> conjuncted_expressions;
+	conjuncted_expressions.resize(children.size());
+	for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
+		ExtractConjunctedExpressions(*children[child_idx], conjuncted_expressions[child_idx]);
 	}
 
-	if (!derived_filter) {
-		return nullptr; // Could not derive join-dependent filters that can be pushed down
+	auto derived_filter = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
+	for (auto &entry : conjuncted_expressions[0]) {
+		auto derived_entry_filter = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
+		derived_entry_filter->children.push_back(entry.second->Copy());
+
+		bool found = true;
+		for (idx_t conj_idx = 1; conj_idx < conjuncted_expressions.size(); conj_idx++) {
+			auto &other_entry = conjuncted_expressions[conj_idx];
+			auto other_it = other_entry.find(entry.first);
+			if (other_it == other_entry.end()) {
+				found = false;
+				break; // Expression does not appear in every conjuncted expression, cannot derive any restriction
+			}
+			derived_entry_filter->children.push_back(other_it->second->Copy());
+		}
+
+		if (!found) {
+			continue; // Expression must show up in every entry
+		}
+
+		derived_filter->children.push_back(std::move(derived_entry_filter));
+	}
+
+	if (derived_filter->children.empty()) {
+		return nullptr; // Could not derive filters that can be pushed down
 	}
 
 	// Add the derived expression to the original expression with an AND
-	return make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, bindings[0].get().Copy(),
-	                                             std::move(derived_filter));
+	auto result = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
+	result->children.push_back(conjunction.Copy());
+
+	if (derived_filter->children.size() == 1) {
+		result->children.push_back(std::move(derived_filter->children[0]));
+	} else {
+		result->children.push_back(std::move(derived_filter));
+	}
+	return result;
 }
 
 } // namespace duckdb
