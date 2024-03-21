@@ -490,6 +490,16 @@ int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_byte
 	return bytes_written;
 }
 
+bool LocalFileSystem::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes) {
+#if defined(__linux__)
+	int fd = handle.Cast<UnixFileHandle>().fd;
+	int res = fallocate(fd, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE, offset_bytes, length_bytes);
+	return res == 0;
+#else
+	return false;
+#endif
+}
+
 int64_t LocalFileSystem::GetFileSize(FileHandle &handle) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	struct stat s;
@@ -918,6 +928,11 @@ int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_byte
 	auto bytes_written = FSWrite(handle, hFile, buffer, nr_bytes, pos);
 	pos += bytes_written;
 	return bytes_written;
+}
+
+bool LocalFileSystem::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes) {
+	// TODO: Not yet implemented on windows.
+	return false;
 }
 
 int64_t LocalFileSystem::GetFileSize(FileHandle &handle) {

@@ -64,6 +64,7 @@ public:
 	DUCKDB_API void Sync();
 	DUCKDB_API void Truncate(int64_t new_size);
 	DUCKDB_API string ReadLine();
+	DUCKDB_API bool Trim(idx_t offset_bytes, idx_t length_bytes);
 
 	DUCKDB_API bool CanSeek();
 	DUCKDB_API bool IsPipe();
@@ -141,6 +142,9 @@ public:
 	DUCKDB_API virtual int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes);
 	//! Write nr_bytes from the buffer into the file, moving the file pointer forward by nr_bytes.
 	DUCKDB_API virtual int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes);
+	//! Excise a range of the file. The OS can drop pages from the page-cache, and the file-system is free to deallocate
+	//! this range (sparse file support). Reads to the range will succeed but will return undefined data.
+	DUCKDB_API virtual bool Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes);
 
 	//! Returns the file size of a file handle, returns -1 on error
 	DUCKDB_API virtual int64_t GetFileSize(FileHandle &handle);
