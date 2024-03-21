@@ -146,7 +146,11 @@ void SingleFileStorageManager::LoadDatabase() {
 
 		// check if the WAL exists
 		auto wal_path = GetWALPath();
-		fs.RemoveFile(wal_path, FileErrorHandler::IGNORE_IF_EXISTS);
+		if (fs.FileExists(wal_path)) {
+			// WAL file exists but database file does not
+			// remove the WAL
+			fs.RemoveFile(wal_path);
+		}
 
 		// initialize the block manager while creating a new db file
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
@@ -170,7 +174,7 @@ void SingleFileStorageManager::LoadDatabase() {
 		if (fs.FileExists(wal_path)) {
 			// replay the WAL
 			if (WriteAheadLog::Replay(db, wal_path)) {
-				fs.RemoveFile(wal_path, FileErrorHandler::IGNORE_ALL_ERRORS);
+				fs.RemoveFile(wal_path);
 			}
 		}
 	}

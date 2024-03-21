@@ -19,7 +19,7 @@ public:
 	virtual optional_ptr<FileOpener> GetOpener() const = 0;
 
 	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
-	                                optional_ptr<FileOpener> opener = nullptr) override {
+									optional_ptr<FileOpener> opener = nullptr) override {
 		if (opener) {
 			throw InternalException("OpenerFileSystem cannot take an opener - the opener is pushed automatically");
 		}
@@ -67,6 +67,10 @@ public:
 		return GetFileSystem().CreateDirectory(directory);
 	}
 
+	void RemoveDirectory(const string &directory) override {
+		return GetFileSystem().RemoveDirectory(directory);
+	}
+
 	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
 	               FileOpener *opener = nullptr) override {
 		if (opener) {
@@ -94,15 +98,8 @@ public:
 	bool IsPipe(const string &filename) override {
 		return GetFileSystem().IsPipe(filename);
 	}
-
-	void RemoveDirectory(const string &directory, FileErrorHandler on_error = FileErrorHandler::THROW_ON_ERROR,
-	                     optional_ptr<FileOpener> opener = nullptr) override {
-		GetFileSystem().RemoveDirectory(directory, on_error, opener);
-	}
-
-	void RemoveFile(const string &filename, FileErrorHandler on_error = FileErrorHandler::THROW_ON_ERROR,
-	                optional_ptr<FileOpener> opener = nullptr) override {
-		GetFileSystem().RemoveFile(filename, on_error, opener);
+	void RemoveFile(const string &filename) override {
+		GetFileSystem().RemoveFile(filename);
 	}
 
 	string PathSeparator(const string &path) override {

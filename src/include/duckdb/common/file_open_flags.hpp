@@ -13,8 +13,6 @@
 
 namespace duckdb {
 
-enum class FileErrorHandler : uint8_t { THROW_ON_ERROR, IGNORE_IF_EXISTS, IGNORE_ALL_ERRORS };
-
 enum class FileLockType : uint8_t { NO_LOCK = 0, READ_LOCK = 1, WRITE_LOCK = 2 };
 
 class FileOpenFlags {

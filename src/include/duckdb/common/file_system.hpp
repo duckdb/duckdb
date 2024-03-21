@@ -135,9 +135,7 @@ public:
 	//! Create a directory if it does not exist
 	DUCKDB_API virtual void CreateDirectory(const string &directory);
 	//! Recursively remove a directory and all files in it
-	DUCKDB_API virtual void RemoveDirectory(const string &directory,
-	                                        FileErrorHandler on_error = FileErrorHandler::THROW_ON_ERROR,
-	                                        optional_ptr<FileOpener> opener = nullptr);
+	DUCKDB_API virtual void RemoveDirectory(const string &directory);
 
 	//! List files in a directory, invoking the callback method for each one with (filename, is_dir)
 	DUCKDB_API virtual bool ListFiles(const string &directory,
@@ -152,9 +150,7 @@ public:
 	//! Check if path is pipe
 	DUCKDB_API virtual bool IsPipe(const string &filename);
 	//! Remove a file from disk
-	DUCKDB_API virtual void RemoveFile(const string &filename,
-	                                   FileErrorHandler on_error = FileErrorHandler::THROW_ON_ERROR,
-	                                   optional_ptr<FileOpener> opener = nullptr);
+	DUCKDB_API virtual void RemoveFile(const string &filename);
 	//! Sync a file handle to disk
 	DUCKDB_API virtual void FileSync(FileHandle &handle);
 	//! Sets the working directory

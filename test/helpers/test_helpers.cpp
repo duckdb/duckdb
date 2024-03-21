@@ -49,7 +49,12 @@ void TestDeleteDirectory(string path) {
 
 void TestDeleteFile(string path) {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	fs->RemoveFile(path, FileErrorHandler::IGNORE_ALL_ERRORS);
+	try {
+		if (fs->FileExists(path)) {
+			fs->RemoveFile(path);
+		}
+	} catch (...) {
+	}
 }
 
 void TestChangeDirectory(string path) {

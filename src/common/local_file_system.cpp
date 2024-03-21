@@ -571,19 +571,12 @@ int RemoveDirectoryRecursive(const char *path) {
 	return r;
 }
 
-void LocalFileSystem::RemoveDirectory(const string &directory, FileErrorHandler on_error,
-                                      optional_ptr<FileOpener> opener) {
+void LocalFileSystem::RemoveDirectory(const string &directory) {
 	RemoveDirectoryRecursive(directory.c_str());
 }
 
-void LocalFileSystem::RemoveFile(const string &filename, FileErrorHandler on_error, optional_ptr<FileOpener> opener) {
+void LocalFileSystem::RemoveFile(const string &filename) {
 	if (std::remove(filename.c_str()) != 0) {
-		if (on_error == FileErrorHandler::IGNORE_ALL_ERRORS) {
-			return;
-		}
-		if (on_error == FileErrorHandler::IGNORE_IF_EXISTS && errno == ENOENT) {
-			return;
-		}
 		throw IOException("Could not remove file \"%s\": %s", {{"errno", std::to_string(errno)}}, filename,
 		                  strerror(errno));
 	}

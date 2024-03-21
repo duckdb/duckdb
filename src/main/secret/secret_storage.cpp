@@ -198,7 +198,10 @@ void LocalFileSecretStorage::WriteSecret(const BaseSecret &secret, OnCreateConfl
 	}
 
 	auto file_path = fs.JoinPath(secret_path, secret.GetName() + ".duckdb_secret");
-	fs.RemoveFile(file_path, FileErrorHandler::IGNORE_IF_EXISTS);
+
+	if (fs.FileExists(file_path)) {
+		fs.RemoveFile(file_path);
+	}
 
 	auto open_flags = FileFlags::FILE_FLAGS_WRITE;
 	// Ensure we are writing to a private file with 600 permission

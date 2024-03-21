@@ -361,7 +361,7 @@ void FileSystem::CreateDirectory(const string &directory) {
 	throw NotImplementedException("%s: CreateDirectory is not implemented!", GetName());
 }
 
-void FileSystem::RemoveDirectory(const string &directory, FileErrorHandler on_error, optional_ptr<FileOpener> opener) {
+void FileSystem::RemoveDirectory(const string &directory) {
 	throw NotImplementedException("%s: RemoveDirectory is not implemented!", GetName());
 }
 
@@ -382,7 +382,7 @@ bool FileSystem::IsPipe(const string &filename) {
 	return false;
 }
 
-void FileSystem::RemoveFile(const string &filename, FileErrorHandler on_error, optional_ptr<FileOpener> opener) {
+void FileSystem::RemoveFile(const string &filename) {
 	throw NotImplementedException("%s: RemoveFile is not implemented!", GetName());
 }
 

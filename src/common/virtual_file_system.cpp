@@ -88,9 +88,8 @@ void VirtualFileSystem::CreateDirectory(const string &directory) {
 	FindFileSystem(directory).CreateDirectory(directory);
 }
 
-void VirtualFileSystem::RemoveDirectory(const string &directory, FileErrorHandler on_error,
-                                        optional_ptr<FileOpener> opener) {
-	FindFileSystem(directory).RemoveDirectory(directory, on_error, opener);
+void VirtualFileSystem::RemoveDirectory(const string &directory) {
+	FindFileSystem(directory).RemoveDirectory(directory);
 }
 
 bool VirtualFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
@@ -110,8 +109,8 @@ bool VirtualFileSystem::IsPipe(const string &filename) {
 	return FindFileSystem(filename).IsPipe(filename);
 }
 
-void VirtualFileSystem::RemoveFile(const string &filename, FileErrorHandler on_error, optional_ptr<FileOpener> opener) {
-	FindFileSystem(filename).RemoveFile(filename, on_error, opener);
+void VirtualFileSystem::RemoveFile(const string &filename) {
+	FindFileSystem(filename).RemoveFile(filename);
 }
 
 string VirtualFileSystem::PathSeparator(const string &path) {

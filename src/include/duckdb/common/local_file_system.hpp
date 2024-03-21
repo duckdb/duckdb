@@ -45,8 +45,7 @@ public:
 	//! Create a directory if it does not exist
 	void CreateDirectory(const string &directory) override;
 	//! Recursively remove a directory and all files in it
-	void RemoveDirectory(const string &directory, FileErrorHandler on_error = FileErrorHandler::THROW_ON_ERROR,
-	                     optional_ptr<FileOpener> opener = nullptr) override;
+	void RemoveDirectory(const string &directory) override;
 	//! List files in a directory, invoking the callback method for each one with (filename, is_dir)
 	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
 	               FileOpener *opener = nullptr) override;
@@ -59,8 +58,7 @@ public:
 	//! Check if path is a pipe
 	bool IsPipe(const string &filename) override;
 	//! Remove a file from disk
-	void RemoveFile(const string &filename, FileErrorHandler on_error = FileErrorHandler::THROW_ON_ERROR,
-	                optional_ptr<FileOpener> opener = nullptr) override;
+	void RemoveFile(const string &filename) override;
 	//! Sync a file handle to disk
 	void FileSync(FileHandle &handle) override;
 

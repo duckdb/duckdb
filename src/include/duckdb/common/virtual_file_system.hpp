@@ -41,8 +41,7 @@ public:
 	bool DirectoryExists(const string &directory) override;
 	void CreateDirectory(const string &directory) override;
 
-	void RemoveDirectory(const string &directory, FileErrorHandler on_error = FileErrorHandler::IGNORE_IF_EXISTS,
-	                     optional_ptr<FileOpener> opener = nullptr) override;
+	void RemoveDirectory(const string &directory) override;
 
 	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
 	               FileOpener *opener = nullptr) override;
@@ -52,8 +51,7 @@ public:
 	bool FileExists(const string &filename) override;
 
 	bool IsPipe(const string &filename) override;
-	void RemoveFile(const string &filename, FileErrorHandler on_error = FileErrorHandler::THROW_ON_ERROR,
-	                optional_ptr<FileOpener> opener = nullptr) override;
+	void RemoveFile(const string &filename) override;
 
 	virtual vector<string> Glob(const string &path, FileOpener *opener = nullptr) override;
 

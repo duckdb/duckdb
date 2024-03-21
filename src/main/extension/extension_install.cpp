@@ -207,13 +207,15 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs,
 	auto extension_name = ApplyExtensionAlias(fs.ExtractBaseName(extension));
 
 	string local_extension_path = fs.JoinPath(local_path, extension_name + ".duckdb_extension");
-	if (!force_install && fs.FileExists(local_extension_path)) {
+	if (fs.FileExists(local_extension_path) && !force_install) {
 		return;
 	}
 
 	auto uuid = UUID::ToString(UUID::GenerateRandomUUID());
 	string temp_path = local_extension_path + ".tmp-" + uuid;
-	fs.RemoveFile(temp_path, FileErrorHandler::IGNORE_IF_EXISTS);
+	if (fs.FileExists(temp_path)) {
+		fs.RemoveFile(temp_path);
+	}
 	auto is_http_url = StringUtil::Contains(extension, "http://");
 	if (ExtensionHelper::IsFullPath(extension)) {
 		if (fs.FileExists(extension)) {
@@ -221,8 +223,8 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs,
 			auto in_buffer = ReadExtensionFileFromDisk(fs, extension, file_size);
 			WriteExtensionFileToDisk(fs, temp_path, in_buffer.get(), file_size);
 
-			if (force_install) {
-				fs.RemoveFile(local_extension_path, FileErrorHandler::IGNORE_IF_EXISTS);
+			if (fs.FileExists(local_extension_path) && force_install) {
+				fs.RemoveFile(local_extension_path);
 			}
 			fs.MoveFile(temp_path, local_extension_path);
 			return;
@@ -266,8 +268,8 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs,
 		read_handle->Read(test_data.get(), read_handle->GetFileSize());
 		WriteExtensionFileToDisk(fs, temp_path, (void *)test_data.get(), read_handle->GetFileSize());
 
-		if (force_install) {
-			fs.RemoveFile(local_extension_path, FileErrorHandler::IGNORE_IF_EXISTS);
+		if (fs.FileExists(local_extension_path) && force_install) {
+			fs.RemoveFile(local_extension_path);
 		}
 		fs.MoveFile(temp_path, local_extension_path);
 		return;
@@ -304,8 +306,8 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs,
 
 	WriteExtensionFileToDisk(fs, temp_path, (void *)decompressed_body.data(), decompressed_body.size());
 
-	if (force_install) {
-		fs.RemoveFile(local_extension_path, FileErrorHandler::IGNORE_IF_EXISTS);
+	if (fs.FileExists(local_extension_path) && force_install) {
+		fs.RemoveFile(local_extension_path);
 	}
 	fs.MoveFile(temp_path, local_extension_path);
 #endif
