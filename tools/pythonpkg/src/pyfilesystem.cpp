@@ -44,7 +44,8 @@ string PythonFilesystem::DecodeFlags(FileOpenFlags flags) {
 	return flags_s;
 }
 
-unique_ptr<FileHandle> PythonFilesystem::OpenFile(const string &path, FileOpenFlags flags, optional_ptr<FileOpener> opener) {
+unique_ptr<FileHandle> PythonFilesystem::OpenFile(const string &path, FileOpenFlags flags,
+                                                  optional_ptr<FileOpener> opener) {
 	PythonGILWrapper gil;
 
 	if (flags.Compression() != FileCompressionType::UNCOMPRESSED) {
