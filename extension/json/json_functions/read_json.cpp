@@ -6,6 +6,35 @@
 
 namespace duckdb {
 
+static inline LogicalType RemoveDuplicateStructKeys(const LogicalType &type, const bool ignore_errors) {
+	switch (type.id()) {
+	case LogicalTypeId::STRUCT: {
+		case_insensitive_set_t child_names;
+		child_list_t<LogicalType> child_types;
+		for (auto &child_type : StructType::GetChildTypes(type)) {
+			auto insert_success = child_names.insert(child_type.first).second;
+			if (!insert_success) {
+				if (ignore_errors) {
+					continue;
+				}
+				throw NotImplementedException(
+				    "Duplicate name \"%s\" in struct auto-detected in JSON, try ignore_errors=true", child_type.first);
+			} else {
+				child_types.emplace_back(child_type.first, RemoveDuplicateStructKeys(child_type.second, ignore_errors));
+			}
+		}
+		return LogicalType::STRUCT(child_types);
+	}
+	case LogicalTypeId::MAP:
+		return LogicalType::MAP(RemoveDuplicateStructKeys(MapType::KeyType(type), ignore_errors),
+		                        RemoveDuplicateStructKeys(MapType::ValueType(type), ignore_errors));
+	case LogicalTypeId::LIST:
+		return LogicalType::LIST(RemoveDuplicateStructKeys(ListType::GetChildType(type), ignore_errors));
+	default:
+		return type;
+	}
+}
+
 void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vector<LogicalType> &return_types,
                           vector<string> &names) {
 	// Change scan type during detection
@@ -40,7 +69,7 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 			for (idx_t i = 0; i < next; i++) {
 				const auto &val = lstate.values[i];
 				if (val) {
-					JSONStructure::ExtractStructure(val, node);
+					JSONStructure::ExtractStructure(val, node, true);
 				}
 			}
 			if (!node.ContainsVarchar()) { // Can't refine non-VARCHAR types
@@ -94,7 +123,7 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 			return_types.reserve(child_types.size());
 			names.reserve(child_types.size());
 			for (auto &child_type : child_types) {
-				return_types.emplace_back(child_type.second);
+				return_types.emplace_back(RemoveDuplicateStructKeys(child_type.second, bind_data.ignore_errors));
 				names.emplace_back(child_type.first);
 			}
 		} else {
@@ -103,7 +132,7 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 		}
 	} else {
 		D_ASSERT(bind_data.options.record_type == JSONRecordType::VALUES);
-		return_types.emplace_back(type);
+		return_types.emplace_back(RemoveDuplicateStructKeys(type, bind_data.ignore_errors));
 		names.emplace_back("json");
 	}
 }
