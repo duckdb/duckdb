@@ -748,7 +748,7 @@ bool LocalFileSystem::IsPrivateFile(const string &path_p, FileOpener *opener) {
 	return true;
 }
 
-unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, FileOpenFlags flags,
+unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenFlags flags,
                                                  optional_ptr<FileOpener> opener) {
 	auto path = FileSystem::ExpandPath(path_p, opener);
 	if (flags.Compression() != FileCompressionType::UNCOMPRESSED) {
