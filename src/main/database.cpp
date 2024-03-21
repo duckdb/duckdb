@@ -227,11 +227,12 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	object_cache = make_uniq<ObjectCache>();
 	connection_manager = make_uniq<ConnectionManager>();
 
-	// resolve the type of teh database we are opening
-	DBPathAndType::ResolveDatabaseType(config.options.database_path, config.options.database_type, config);
-
 	// initialize the secret manager
 	config.secret_manager->Initialize(*this);
+
+	// resolve the type of teh database we are opening
+	auto &fs = FileSystem::GetFileSystem(*this);
+	DBPathAndType::ResolveDatabaseType(fs, config.options.database_path, config.options.database_type);
 
 	// initialize the system catalog
 	db_manager->InitializeSystemCatalog();
