@@ -7,10 +7,10 @@ namespace duckdb {
 DataFileType MagicBytes::CheckMagicBytes(FileSystem *fs_p, const string &path) {
 	LocalFileSystem lfs;
 	FileSystem &fs = fs_p ? *fs_p : lfs;
-	if (!fs.FileExists(path)) {
+	auto handle = fs.TryOpenFile(path, FileFlags::FILE_FLAGS_READ);
+	if (!handle) {
 		return DataFileType::FILE_DOES_NOT_EXIST;
 	}
-	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 
 	constexpr const idx_t MAGIC_BYTES_READ_SIZE = 16;
 	char buffer[MAGIC_BYTES_READ_SIZE];

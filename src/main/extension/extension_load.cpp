@@ -110,7 +110,8 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 	} else {
 		filename = fs.ExpandPath(filename);
 	}
-	if (!fs.FileExists(filename)) {
+	auto handle = fs.TryOpenFile(filename, FileFlags::FILE_FLAGS_READ);
+	if (!handle) {
 		string message;
 		bool exact_match = ExtensionHelper::CreateSuggestions(extension, message);
 		if (exact_match) {
@@ -120,8 +121,6 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		return false;
 	}
 	if (!config.options.allow_unsigned_extensions) {
-		auto handle = fs.OpenFile(filename, FileFlags::FILE_FLAGS_READ);
-
 		// signature is the last 256 bytes of the file
 
 		string signature;
@@ -179,6 +178,8 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 			throw IOException(config.error_manager->FormatException(ErrorType::UNSIGNED_EXTENSION, filename));
 		}
 	}
+	handle.reset();
+
 	auto filebase = fs.ExtractBaseName(filename);
 
 #ifdef WASM_LOADABLE_EXTENSIONS
@@ -226,10 +227,10 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 	// Trim v's if necessary
 	std::string extension_version_trimmed = extension_version;
 	std::string engine_version_trimmed = engine_version;
-	if (extension_version.length() > 0 && extension_version[0] == 'v') {
+	if (!extension_version.empty() && extension_version[0] == 'v') {
 		extension_version_trimmed = extension_version.substr(1);
 	}
-	if (engine_version.length() > 0 && engine_version[0] == 'v') {
+	if (!engine_version.empty() && engine_version[0] == 'v') {
 		engine_version_trimmed = engine_version.substr(1);
 	}
 

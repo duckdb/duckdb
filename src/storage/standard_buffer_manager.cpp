@@ -336,9 +336,7 @@ void StandardBufferManager::DeleteTemporaryFile(block_id_t id) {
 	}
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto path = GetTemporaryPath(id);
-	if (fs.FileExists(path)) {
-		fs.RemoveFile(path);
-	}
+	fs.RemoveFile(path, FileErrorHandler::IGNORE_IF_EXISTS);
 }
 
 bool StandardBufferManager::HasTemporaryDirectory() const {
