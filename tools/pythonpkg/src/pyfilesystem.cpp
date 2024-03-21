@@ -51,6 +51,12 @@ unique_ptr<FileHandle> PythonFilesystem::OpenFile(const string &path, FileOpenFl
 	if (flags.Compression() != FileCompressionType::UNCOMPRESSED) {
 		throw IOException("Compression not supported");
 	}
+	// maybe this can be implemented in a better way?
+	if (flags.ReturnNullIfNotExists()) {
+		if (!FileExists(path)) {
+			return nullptr;
+		}
+	}
 
 	// TODO: lock support?
 
