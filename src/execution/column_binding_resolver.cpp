@@ -162,17 +162,9 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 	// LCOV_EXCL_START
 	// could not bind the column reference, this should never happen and indicates a bug in the code
 	// generate an error message
-	string bound_columns = "[";
-	for (idx_t i = 0; i < bindings.size(); i++) {
-		if (i != 0) {
-			bound_columns += " ";
-		}
-		bound_columns += to_string(bindings[i].table_index) + "." + to_string(bindings[i].column_index);
-	}
-	bound_columns += "]";
-
 	throw InternalException("Failed to bind column reference \"%s\" [%d.%d] (bindings: %s)", expr.alias,
-	                        expr.binding.table_index, expr.binding.column_index, bound_columns);
+	                        expr.binding.table_index, expr.binding.column_index,
+	                        LogicalOperator::ColumnBindingsToString(bindings));
 	// LCOV_EXCL_STOP
 }
 
