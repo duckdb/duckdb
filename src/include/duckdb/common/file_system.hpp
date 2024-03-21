@@ -131,11 +131,11 @@ public:
 	DUCKDB_API virtual void Truncate(FileHandle &handle, int64_t new_size);
 
 	//! Check if a directory exists
-	DUCKDB_API virtual bool DirectoryExists(const string &directory);
+	DUCKDB_API virtual bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener = nullptr);
 	//! Create a directory if it does not exist
-	DUCKDB_API virtual void CreateDirectory(const string &directory);
+	DUCKDB_API virtual void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr);
 	//! Recursively remove a directory and all files in it
-	DUCKDB_API virtual void RemoveDirectory(const string &directory);
+	DUCKDB_API virtual void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr);
 
 	//! List files in a directory, invoking the callback method for each one with (filename, is_dir)
 	DUCKDB_API virtual bool ListFiles(const string &directory,
@@ -144,13 +144,14 @@ public:
 
 	//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID
 	//! properties
-	DUCKDB_API virtual void MoveFile(const string &source, const string &target);
+	DUCKDB_API virtual void MoveFile(const string &source, const string &target,
+	                                 optional_ptr<FileOpener> opener = nullptr);
 	//! Check if a file exists
-	DUCKDB_API virtual bool FileExists(const string &filename);
+	DUCKDB_API virtual bool FileExists(const string &filename, optional_ptr<FileOpener> opener = nullptr);
 	//! Check if path is pipe
-	DUCKDB_API virtual bool IsPipe(const string &filename);
+	DUCKDB_API virtual bool IsPipe(const string &filename, optional_ptr<FileOpener> opener = nullptr);
 	//! Remove a file from disk
-	DUCKDB_API virtual void RemoveFile(const string &filename);
+	DUCKDB_API virtual void RemoveFile(const string &filename, optional_ptr<FileOpener> opener = nullptr);
 	//! Sync a file handle to disk
 	DUCKDB_API virtual void FileSync(FileHandle &handle);
 	//! Sets the working directory

@@ -386,6 +386,16 @@ unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, FileOpenFlag
                                                 optional_ptr<FileOpener> opener) {
 	D_ASSERT(flags.Compression() == FileCompressionType::UNCOMPRESSED);
 
+	if (flags.ReturnNullIfNotExists()) {
+		try {
+			auto handle = CreateHandle(path, flags, opener);
+			handle->Initialize(opener);
+			return std::move(handle);
+		} catch (...) {
+			return nullptr;
+		}
+	}
+
 	auto handle = CreateHandle(path, flags, opener);
 	handle->Initialize(opener);
 	return std::move(handle);
@@ -487,19 +497,19 @@ void HTTPFileSystem::FileSync(FileHandle &handle) {
 }
 
 int64_t HTTPFileSystem::GetFileSize(FileHandle &handle) {
-	auto &sfh = (HTTPFileHandle &)handle;
+	auto &sfh = handle.Cast<HTTPFileHandle>();
 	return sfh.length;
 }
 
 time_t HTTPFileSystem::GetLastModifiedTime(FileHandle &handle) {
-	auto &sfh = (HTTPFileHandle &)handle;
+	auto &sfh = handle.Cast<HTTPFileHandle>();
 	return sfh.last_modified;
 }
 
-bool HTTPFileSystem::FileExists(const string &filename) {
+bool HTTPFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
 	try {
-		auto handle = OpenFile(filename.c_str(), FileFlags::FILE_FLAGS_READ);
-		auto &sfh = (HTTPFileHandle &)*handle;
+		auto handle = OpenFile(filename, FileFlags::FILE_FLAGS_READ, opener);
+		auto &sfh = handle->Cast<HTTPFileHandle>();
 		if (sfh.length == 0) {
 			return false;
 		}
@@ -554,12 +564,7 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 	auto &hfs = file_system.Cast<HTTPFileSystem>();
 	state = HTTPState::TryGetState(opener);
 	if (!state) {
-		if (!opener) {
-			// If opener is not available (e.g., FileExists()), we create the HTTPState here.
-			state = make_shared<HTTPState>();
-		} else {
-			throw InternalException("State was not defined in this HTTP File Handle");
-		}
+		state = make_shared<HTTPState>();
 	}
 
 	auto current_cache = TryGetMetadataCache(opener, hfs);
