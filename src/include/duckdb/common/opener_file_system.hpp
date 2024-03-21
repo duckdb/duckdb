@@ -77,10 +77,6 @@ public:
 		return GetFileSystem().CreateDirectory(directory);
 	}
 
-	void RemoveDirectory(const string &directory) override {
-		return GetFileSystem().RemoveDirectory(directory);
-	}
-
 	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
 	               FileOpener *opener = nullptr) override {
 		if (opener) {
@@ -108,8 +104,13 @@ public:
 	bool IsPipe(const string &filename) override {
 		return GetFileSystem().IsPipe(filename);
 	}
-	void RemoveFile(const string &filename) override {
-		GetFileSystem().RemoveFile(filename);
+
+	void RemoveDirectory(const string &directory, FileErrorHandler on_error = FileErrorHandler::THROW_ON_ERROR, optional_ptr<FileOpener> opener = nullptr) override {
+		GetFileSystem().RemoveDirectory(directory, on_error, opener);
+	}
+
+	void RemoveFile(const string &filename, FileErrorHandler on_error = FileErrorHandler::THROW_ON_ERROR, optional_ptr<FileOpener> opener = nullptr) override {
+		GetFileSystem().RemoveFile(filename, on_error, opener);
 	}
 
 	string PathSeparator(const string &path) override {

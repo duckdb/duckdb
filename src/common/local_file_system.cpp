@@ -44,10 +44,10 @@ extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG)
 // See e.g.:
 // https://opensource.apple.com/source/CarbonHeaders/CarbonHeaders-18.1/TargetConditionals.h.auto.html
 #elif defined(__APPLE__)
-#include <TargetConditionals.h>                             // NOLINT
+#include <TargetConditionals.h> // NOLINT
 #if not(defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE == 1) // NOLINT
-#include <libproc.h>                                        // NOLINT
-#endif                                                      // NOLINT
+#include <libproc.h> // NOLINT
+#endif // NOLINT
 #elif defined(_WIN32)
 #include <restartmanager.h>
 #endif
@@ -598,14 +598,20 @@ int RemoveDirectoryRecursive(const char *path) {
 	return r;
 }
 
-void LocalFileSystem::RemoveDirectory(const string &directory) {
+void LocalFileSystem::RemoveDirectory(const string &directory, FileErrorHandler on_error, optional_ptr<FileOpener> opener) {
 	RemoveDirectoryRecursive(directory.c_str());
 }
 
-void LocalFileSystem::RemoveFile(const string &filename) {
+void LocalFileSystem::RemoveFile(const string &filename, FileErrorHandler on_error, optional_ptr<FileOpener> opener) {
 	if (std::remove(filename.c_str()) != 0) {
+		if (on_error == FileErrorHandler::IGNORE_ALL_ERRORS) {
+			return;
+		}
+		if (on_error == FileErrorHandler::IGNORE_IF_EXISTS && errno == ENOENT) {
+			return;
+		}
 		throw IOException("Could not remove file \"%s\": %s", {{"errno", std::to_string(errno)}}, filename,
-		                  strerror(errno));
+								strerror(errno));
 	}
 }
 
@@ -1094,16 +1100,6 @@ FileType LocalFileSystem::GetFileType(FileHandle &handle) {
 	return FileType::FILE_TYPE_INVALID;
 }
 #endif
-
-unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, idx_t flags, FileLockType lock_type,
-                                                 FileCompressionType compression, optional_ptr<FileOpener> opener) {
-	ErrorData error;
-	auto handle = TryOpenFile(path_p, flags, lock_type, compression, &error, opener);
-	if (error.HasError()) {
-		error.Throw();
-	}
-	return handle;
-}
 
 bool LocalFileSystem::CanSeek() {
 	return true;

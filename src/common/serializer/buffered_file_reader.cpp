@@ -14,6 +14,11 @@ BufferedFileReader::BufferedFileReader(FileSystem &fs, const char *path, FileLoc
 	file_size = fs.GetFileSize(*handle);
 }
 
+BufferedFileReader::BufferedFileReader(FileSystem &fs, unique_ptr<FileHandle> handle_p) :
+	fs(fs), data(make_unsafe_uniq_array<data_t>(FILE_BUFFER_SIZE)), offset(0), read_data(0), handle(std::move(handle_p)), total_read(0) {
+	file_size = fs.GetFileSize(*handle);
+}
+
 void BufferedFileReader::ReadData(data_ptr_t target_buffer, uint64_t read_size) {
 	// first copy anything we can from the buffer
 	data_ptr_t end_ptr = target_buffer + read_size;

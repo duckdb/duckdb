@@ -288,25 +288,18 @@ string FileSystem::ExpandPath(const string &path) {
 // LCOV_EXCL_START
 unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, idx_t flags, FileLockType lock,
                                             FileCompressionType compression, optional_ptr<FileOpener> opener) {
-	throw NotImplementedException("%s: OpenFile is not implemented!", GetName());
+	ErrorData error;
+	auto handle = TryOpenFile(path, flags, lock, compression, &error, opener);
+	if (error.HasError()) {
+		error.Throw();
+	}
+	return handle;
 }
 
 unique_ptr<FileHandle> FileSystem::TryOpenFile(const string &path, idx_t flags, FileLockType lock,
                                                FileCompressionType compression, optional_ptr<ErrorData> out_error,
                                                optional_ptr<FileOpener> opener) {
-	try {
-		return OpenFile(path, flags, lock, compression, opener.get());
-	} catch (std::exception &ex) {
-		if (out_error) {
-			*out_error = ErrorData(ex);
-		}
-		return nullptr;
-	} catch (...) {
-		if (out_error) {
-			*out_error = ErrorData("Unknown exception type in FileSystem::TryOpenFile");
-		}
-		return nullptr;
-	}
+	throw NotImplementedException("%s: TryOpenFile is not implemented!", GetName());
 }
 
 void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
@@ -349,7 +342,7 @@ void FileSystem::CreateDirectory(const string &directory) {
 	throw NotImplementedException("%s: CreateDirectory is not implemented!", GetName());
 }
 
-void FileSystem::RemoveDirectory(const string &directory) {
+void FileSystem::RemoveDirectory(const string &directory, FileErrorHandler on_error, optional_ptr<FileOpener> opener) {
 	throw NotImplementedException("%s: RemoveDirectory is not implemented!", GetName());
 }
 
@@ -370,7 +363,7 @@ bool FileSystem::IsPipe(const string &filename) {
 	return false;
 }
 
-void FileSystem::RemoveFile(const string &filename) {
+void FileSystem::RemoveFile(const string &filename, FileErrorHandler on_error, optional_ptr<FileOpener> opener) {
 	throw NotImplementedException("%s: RemoveFile is not implemented!", GetName());
 }
 

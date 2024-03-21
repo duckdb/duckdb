@@ -308,9 +308,7 @@ void PhysicalCopyToFile::MoveTmpFile(ClientContext &context, const string &tmp_f
 	}
 
 	auto file_path = fs.JoinPath(path, base);
-	if (fs.FileExists(file_path)) {
-		fs.RemoveFile(file_path);
-	}
+	fs.RemoveFile(file_path, FileErrorHandler::IGNORE_IF_EXISTS);
 	fs.MoveFile(tmp_file_path, file_path);
 }
 

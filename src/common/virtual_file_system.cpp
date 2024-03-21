@@ -41,7 +41,7 @@ unique_ptr<FileHandle> VirtualFileSystem::TryOpenFile(const string &path, idx_t 
 	// open the base file handle
 	auto file_handle =
 	    FindFileSystem(path).TryOpenFile(path, flags, lock, FileCompressionType::UNCOMPRESSED, out_error, opener);
-	if (out_error->HasError()) {
+	if (!file_handle) {
 		return nullptr;
 	}
 	if (file_handle->GetType() == FileType::FILE_TYPE_FIFO) {
@@ -99,8 +99,8 @@ void VirtualFileSystem::CreateDirectory(const string &directory) {
 	FindFileSystem(directory).CreateDirectory(directory);
 }
 
-void VirtualFileSystem::RemoveDirectory(const string &directory) {
-	FindFileSystem(directory).RemoveDirectory(directory);
+void VirtualFileSystem::RemoveDirectory(const string &directory, FileErrorHandler on_error, optional_ptr<FileOpener> opener) {
+	FindFileSystem(directory).RemoveDirectory(directory, on_error, opener);
 }
 
 bool VirtualFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
@@ -119,8 +119,9 @@ bool VirtualFileSystem::FileExists(const string &filename) {
 bool VirtualFileSystem::IsPipe(const string &filename) {
 	return FindFileSystem(filename).IsPipe(filename);
 }
-void VirtualFileSystem::RemoveFile(const string &filename) {
-	FindFileSystem(filename).RemoveFile(filename);
+
+void VirtualFileSystem::RemoveFile(const string &filename, FileErrorHandler on_error, optional_ptr<FileOpener> opener) {
+	FindFileSystem(filename).RemoveFile(filename, on_error, opener);
 }
 
 string VirtualFileSystem::PathSeparator(const string &path) {
