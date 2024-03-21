@@ -57,7 +57,7 @@ public:
 	static CSVError ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names);
 	//! Produces error messages for casting errors
 	static CSVError CastError(const CSVReaderOptions &options, string &column_name, string &cast_error,
-	                          idx_t column_idx, vector<Value> &row, LinesPerBoundary error_info);
+	                          idx_t column_idx, vector<Value> &row, LinesPerBoundary error_info, LogicalTypeId type);
 	//! Produces error for when the line size exceeds the maximum line size option
 	static CSVError LineSizeError(const CSVReaderOptions &options, idx_t actual_size, LinesPerBoundary error_info);
 	//! Produces error for when the sniffer couldn't find viable options

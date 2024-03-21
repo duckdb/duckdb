@@ -5,7 +5,7 @@ from packaging import version
 pa = pytest.importorskip('pyarrow')
 
 pytestmark = pytest.mark.skipif(
-    version.parse(pa.__version__) <= version.parse("15.0"), reason="requires pyarrow version 16 or higher"
+    not hasattr(pa, 'string_view'), reason="This version of PyArrow does not support StringViews"
 )
 
 

@@ -15,6 +15,7 @@
 #include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enums/aggregate_handling.hpp"
+#include "duckdb/common/enums/catalog_lookup_behavior.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/enums/cte_materialize.hpp"
@@ -38,6 +39,7 @@
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/enums/pending_execution_result.hpp"
 #include "duckdb/common/enums/physical_operator_type.hpp"
+#include "duckdb/common/enums/prepared_statement_mode.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
 #include "duckdb/common/enums/relation_type.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
@@ -790,6 +792,34 @@ CTEMaterialize EnumUtil::FromString<CTEMaterialize>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "CTE_MATERIALIZE_NEVER")) {
 		return CTEMaterialize::CTE_MATERIALIZE_NEVER;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<CatalogLookupBehavior>(CatalogLookupBehavior value) {
+	switch(value) {
+	case CatalogLookupBehavior::STANDARD:
+		return "STANDARD";
+	case CatalogLookupBehavior::LOWER_PRIORITY:
+		return "LOWER_PRIORITY";
+	case CatalogLookupBehavior::NEVER_LOOKUP:
+		return "NEVER_LOOKUP";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+CatalogLookupBehavior EnumUtil::FromString<CatalogLookupBehavior>(const char *value) {
+	if (StringUtil::Equals(value, "STANDARD")) {
+		return CatalogLookupBehavior::STANDARD;
+	}
+	if (StringUtil::Equals(value, "LOWER_PRIORITY")) {
+		return CatalogLookupBehavior::LOWER_PRIORITY;
+	}
+	if (StringUtil::Equals(value, "NEVER_LOOKUP")) {
+		return CatalogLookupBehavior::NEVER_LOOKUP;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -4371,8 +4401,6 @@ const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value) 
 		return "COPY_TO_FILE";
 	case PhysicalOperatorType::BATCH_COPY_TO_FILE:
 		return "BATCH_COPY_TO_FILE";
-	case PhysicalOperatorType::FIXED_BATCH_COPY_TO_FILE:
-		return "FIXED_BATCH_COPY_TO_FILE";
 	case PhysicalOperatorType::RESERVOIR_SAMPLE:
 		return "RESERVOIR_SAMPLE";
 	case PhysicalOperatorType::STREAMING_SAMPLE:
@@ -4491,6 +4519,8 @@ const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value) 
 		return "RESET";
 	case PhysicalOperatorType::EXTENSION:
 		return "EXTENSION";
+	case PhysicalOperatorType::VERIFY_VECTOR:
+		return "VERIFY_VECTOR";
 	case PhysicalOperatorType::CREATE_SECRET:
 		return "CREATE_SECRET";
 	default:
@@ -4544,9 +4574,6 @@ PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *valu
 	}
 	if (StringUtil::Equals(value, "BATCH_COPY_TO_FILE")) {
 		return PhysicalOperatorType::BATCH_COPY_TO_FILE;
-	}
-	if (StringUtil::Equals(value, "FIXED_BATCH_COPY_TO_FILE")) {
-		return PhysicalOperatorType::FIXED_BATCH_COPY_TO_FILE;
 	}
 	if (StringUtil::Equals(value, "RESERVOIR_SAMPLE")) {
 		return PhysicalOperatorType::RESERVOIR_SAMPLE;
@@ -4725,6 +4752,9 @@ PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *valu
 	if (StringUtil::Equals(value, "EXTENSION")) {
 		return PhysicalOperatorType::EXTENSION;
 	}
+	if (StringUtil::Equals(value, "VERIFY_VECTOR")) {
+		return PhysicalOperatorType::VERIFY_VECTOR;
+	}
 	if (StringUtil::Equals(value, "CREATE_SECRET")) {
 		return PhysicalOperatorType::CREATE_SECRET;
 	}
@@ -4901,6 +4931,29 @@ PreparedParamType EnumUtil::FromString<PreparedParamType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "INVALID")) {
 		return PreparedParamType::INVALID;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<PreparedStatementMode>(PreparedStatementMode value) {
+	switch(value) {
+	case PreparedStatementMode::PREPARE_ONLY:
+		return "PREPARE_ONLY";
+	case PreparedStatementMode::PREPARE_AND_EXECUTE:
+		return "PREPARE_AND_EXECUTE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+PreparedStatementMode EnumUtil::FromString<PreparedStatementMode>(const char *value) {
+	if (StringUtil::Equals(value, "PREPARE_ONLY")) {
+		return PreparedStatementMode::PREPARE_ONLY;
+	}
+	if (StringUtil::Equals(value, "PREPARE_AND_EXECUTE")) {
+		return PreparedStatementMode::PREPARE_AND_EXECUTE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
