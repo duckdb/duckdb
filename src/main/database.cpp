@@ -22,6 +22,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
+#include "duckdb/main/database_file_opener.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -221,6 +222,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		config.options.temporary_directory = string();
 	}
 
+	db_file_system = make_uniq<DatabaseFileSystem>(*this);
 	db_manager = make_uniq<DatabaseManager>(*this);
 	buffer_manager = make_uniq<StandardBufferManager>(*this, config.options.temporary_directory);
 	scheduler = make_uniq<TaskScheduler>(*this);
@@ -303,7 +305,7 @@ ObjectCache &DatabaseInstance::GetObjectCache() {
 }
 
 FileSystem &DatabaseInstance::GetFileSystem() {
-	return *config.file_system;
+	return *db_file_system;
 }
 
 ConnectionManager &DatabaseInstance::GetConnectionManager() {

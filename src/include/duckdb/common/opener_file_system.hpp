@@ -116,6 +116,14 @@ public:
 	std::string GetName() const override {
 		return "OpenerFileSystem - " + GetFileSystem().GetName();
 	}
+
+	void RegisterSubSystem(unique_ptr<FileSystem> sub_fs) override {
+		GetFileSystem().RegisterSubSystem(std::move(sub_fs));
+	}
+
+	void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs) override {
+		GetFileSystem().RegisterSubSystem(compression_type, std::move(fs));
+	}
 };
 
 } // namespace duckdb
