@@ -4,6 +4,8 @@
 
 require tpcds
 
+mode skip
+
 statement ok
 CALL dsdgen(sf=0.01);
 

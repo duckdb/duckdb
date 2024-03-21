@@ -158,10 +158,10 @@ private:
 //===--------------------------------------------------------------------===//
 // Replay
 //===--------------------------------------------------------------------===//
-bool WriteAheadLog::Replay(AttachedDatabase &database, unique_ptr<FileHandle> handle) {
+bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 	Connection con(database.GetDatabase());
-	BufferedFileReader reader(FileSystem::Get(database), std::move(handle));
-	if (reader.Finished()) {
+	auto initial_source = make_uniq<BufferedFileReader>(FileSystem::Get(database), path.c_str());
+	if (initial_source->Finished()) {
 		// WAL is empty
 		return false;
 	}
@@ -174,10 +174,10 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, unique_ptr<FileHandle> ha
 	try {
 		while (true) {
 			// read the current entry (deserialize only)
-			auto deserializer = WriteAheadLogDeserializer::Open(checkpoint_state, reader, true);
+			auto deserializer = WriteAheadLogDeserializer::Open(checkpoint_state, *initial_source, true);
 			if (deserializer.ReplayEntry()) {
 				// check if the file is exhausted
-				if (reader.Finished()) {
+				if (initial_source->Finished()) {
 					// we finished reading the file: break
 					break;
 				}
@@ -196,7 +196,7 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, unique_ptr<FileHandle> ha
 		Printer::Print("Unknown Exception in WAL playback during initial read");
 		return false;
 	} // LCOV_EXCL_STOP
-
+	initial_source.reset();
 	if (checkpoint_state.checkpoint_id.IsValid()) {
 		// there is a checkpoint flag: check if we need to deserialize the WAL
 		auto &manager = database.GetStorageManager();
@@ -208,10 +208,8 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, unique_ptr<FileHandle> ha
 	}
 
 	// we need to recover from the WAL: actually set up the replay state
+	BufferedFileReader reader(FileSystem::Get(database), path.c_str());
 	ReplayState state(database, *con.context);
-
-	// reset the reader - we will read the WAL again
-	reader.handle->Reset();
 
 	// replay the WAL
 	// note that everything is wrapped inside a try/catch block here

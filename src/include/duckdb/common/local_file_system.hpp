@@ -15,8 +15,6 @@ namespace duckdb {
 
 class LocalFileSystem : public FileSystem {
 public:
-	~LocalFileSystem() override = default;
-
 	unique_ptr<FileHandle> TryOpenFile(const string &path, idx_t flags, FileLockType lock = FileLockType::NO_LOCK,
 	                                   FileCompressionType compression = FileCompressionType::UNCOMPRESSED,
 	                                   optional_ptr<ErrorData> out_error = nullptr,
