@@ -288,18 +288,7 @@ string FileSystem::ExpandPath(const string &path) {
 // LCOV_EXCL_START
 unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, idx_t flags, FileLockType lock,
                                             FileCompressionType compression, optional_ptr<FileOpener> opener) {
-	ErrorData error;
-	auto handle = TryOpenFile(path, flags, lock, compression, &error, opener);
-	if (error.HasError()) {
-		error.Throw();
-	}
-	return handle;
-}
-
-unique_ptr<FileHandle> FileSystem::TryOpenFile(const string &path, idx_t flags, FileLockType lock,
-                                               FileCompressionType compression, optional_ptr<ErrorData> out_error,
-                                               optional_ptr<FileOpener> opener) {
-	throw NotImplementedException("%s: TryOpenFile is not implemented!", GetName());
+	throw NotImplementedException("%s: OpenFile is not implemented!", GetName());
 }
 
 void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {

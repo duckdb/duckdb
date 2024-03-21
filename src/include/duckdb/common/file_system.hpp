@@ -119,6 +119,8 @@ public:
 	static constexpr idx_t FILE_FLAGS_APPEND = 1 << 5;
 	//! Open file with restrictive permissions (600 on linux/mac) can only be used when creating, throws if file exists
 	static constexpr idx_t FILE_FLAGS_PRIVATE = 1 << 6;
+	//! Return NULL if the file does not exist instead of throwing an error
+	static constexpr idx_t FILE_FLAGS_NULL_IF_NOT_EXISTS = 1 << 7;
 };
 
 class FileSystem {
@@ -136,11 +138,6 @@ public:
 	                                                   FileLockType lock = DEFAULT_LOCK,
 	                                                   FileCompressionType compression = DEFAULT_COMPRESSION,
 	                                                   optional_ptr<FileOpener> opener = nullptr);
-	DUCKDB_API virtual unique_ptr<FileHandle> TryOpenFile(const string &path, idx_t flags,
-	                                                      FileLockType lock = DEFAULT_LOCK,
-	                                                      FileCompressionType compression = DEFAULT_COMPRESSION,
-	                                                      optional_ptr<ErrorData> out_error = nullptr,
-	                                                      optional_ptr<FileOpener> opener = nullptr);
 
 	//! Read exactly nr_bytes from the specified location in the file. Fails if nr_bytes could not be read. This is
 	//! equivalent to calling SetFilePointer(location) followed by calling Read().

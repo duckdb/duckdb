@@ -110,7 +110,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 	} else {
 		filename = fs.ExpandPath(filename);
 	}
-	auto handle = fs.TryOpenFile(filename, FileFlags::FILE_FLAGS_READ);
+	auto handle = fs.OpenFile(filename, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
 	if (!handle) {
 		string message;
 		bool exact_match = ExtensionHelper::CreateSuggestions(extension, message);

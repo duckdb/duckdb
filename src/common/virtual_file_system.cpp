@@ -11,18 +11,6 @@ VirtualFileSystem::VirtualFileSystem() : default_fs(FileSystem::CreateLocal()) {
 
 unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, idx_t flags, FileLockType lock,
                                                    FileCompressionType compression, optional_ptr<FileOpener> opener) {
-	ErrorData error;
-	auto handle = TryOpenFile(path, flags, lock, compression, &error, opener);
-	if (error.HasError()) {
-		error.Throw();
-	}
-	return handle;
-}
-
-unique_ptr<FileHandle> VirtualFileSystem::TryOpenFile(const string &path, idx_t flags, FileLockType lock,
-                                                      FileCompressionType compression,
-                                                      optional_ptr<ErrorData> out_error,
-                                                      optional_ptr<FileOpener> opener) {
 	if (compression == FileCompressionType::AUTO_DETECT) {
 		// auto detect compression settings based on file name
 		auto lower_path = StringUtil::Lower(path);
@@ -40,7 +28,7 @@ unique_ptr<FileHandle> VirtualFileSystem::TryOpenFile(const string &path, idx_t 
 	}
 	// open the base file handle
 	auto file_handle =
-	    FindFileSystem(path).TryOpenFile(path, flags, lock, FileCompressionType::UNCOMPRESSED, out_error, opener);
+	    FindFileSystem(path).OpenFile(path, flags, lock, FileCompressionType::UNCOMPRESSED, opener);
 	if (!file_handle) {
 		return nullptr;
 	}
