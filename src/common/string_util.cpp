@@ -504,6 +504,7 @@ unordered_map<string, string> StringUtil::ParseJSONMap(const string &json) {
 			}
 			pos++;
 		}
+		SkipSpaces(json, pos);
 		string key = ParseJSONValue(json, pos);
 		SkipSpaces(json, pos);
 		if (!MatchCharacter(json, pos, ':')) {

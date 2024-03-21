@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-ThreadContext::ThreadContext(ClientContext &context) : profiler(QueryProfiler::Get(context).IsEnabled()) {
+ThreadContext::ThreadContext(ClientContext &context) : profiler(context) {
 }
 
 } // namespace duckdb

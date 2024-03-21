@@ -172,6 +172,8 @@ enum class MapInvalidReason : uint8_t;
 
 enum class MemoryTag : uint8_t;
 
+enum class MetricsType : uint8_t;
+
 enum class NType : uint8_t;
 
 enum class NewLineIdentifier : uint8_t;
@@ -526,6 +528,9 @@ const char* EnumUtil::ToChars<MapInvalidReason>(MapInvalidReason value);
 
 template<>
 const char* EnumUtil::ToChars<MemoryTag>(MemoryTag value);
+
+template<>
+const char* EnumUtil::ToChars<MetricsType>(MetricsType value);
 
 template<>
 const char* EnumUtil::ToChars<NType>(NType value);
@@ -953,6 +958,9 @@ MapInvalidReason EnumUtil::FromString<MapInvalidReason>(const char *value);
 
 template<>
 MemoryTag EnumUtil::FromString<MemoryTag>(const char *value);
+
+template<>
+MetricsType EnumUtil::FromString<MetricsType>(const char *value);
 
 template<>
 NType EnumUtil::FromString<NType>(const char *value);

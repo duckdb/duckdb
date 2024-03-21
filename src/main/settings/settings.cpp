@@ -577,6 +577,100 @@ Value EnableProfilingSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Custom Profiling Settings
+//===--------------------------------------------------------------------===//
+
+static ProfilerSettings FillTreeNodeSettings(unordered_map<string, string> &json) {
+	ProfilerSettings metrics;
+
+	string invalid_settings;
+	for (auto &entry : json) {
+		MetricsType setting;
+		try {
+			setting = EnumUtil::FromString<MetricsType>(StringUtil::Upper(entry.first));
+		} catch (std::exception &ex) {
+			if (!invalid_settings.empty()) {
+				invalid_settings += ", ";
+			}
+			invalid_settings += entry.first;
+			continue;
+		}
+		if (StringUtil::Lower(entry.second) == "true") {
+			metrics.insert(setting);
+		}
+	}
+
+	if (!invalid_settings.empty()) {
+		throw IOException("Invalid custom profiler settings: \"%s\"", invalid_settings);
+	}
+	return metrics;
+}
+
+void CustomProfilingSettings::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	auto input_str = input.ToString();
+	unique_ptr<duckdb::FileSystem> fs = duckdb::FileSystem::CreateLocal();
+	if (!fs->FileExists(input_str)) {
+		throw IOException("Could not locate the file containing the custom profiler settings: \"%s\"", input_str);
+	}
+	if (StringUtil::GetFileExtension(input_str) != "json") {
+		throw IOException("The custom profiler settings file must be a JSON file: \"%s\"", input_str);
+	}
+	auto file = fs->OpenFile(input_str, FileFlags::FILE_FLAGS_READ);
+
+	// read file into string
+	string file_content;
+	auto line = file->ReadLine();
+	idx_t line_count = 0;
+	while (!line.empty()) {
+		line_count++;
+		if (StringUtil::Equals(&line.back(), "\n")) {
+			line.substr(0, line.size() - 1);
+		}
+
+		file_content += line;
+		line = file->ReadLine();
+	}
+	if (line_count == 0) {
+		throw IOException("File is empty");
+	}
+	file->Close();
+
+	// parse the file content
+	unordered_map<string, string> json;
+	try {
+		json = StringUtil::ParseJSONMap(file_content);
+	} catch (std::exception &ex) {
+		throw IOException("Could not parse the custom profiler settings file due to incorrect JSON: \"%s\"", input_str);
+	}
+
+	if (json.empty()) {
+		throw IOException("Could not parse the custom profiler settings file due to incorrect JSON: \"%s\"", input_str);
+	}
+
+	config.profiler_settings = FillTreeNodeSettings(json);
+}
+
+void CustomProfilingSettings::ResetLocal(ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.profiler_settings = ProfilingInfo::DefaultSettings();
+}
+
+Value CustomProfilingSettings::GetSetting(ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+
+	string profiling_settings_str;
+	for (auto &entry : config.profiler_settings) {
+		if (!profiling_settings_str.empty()) {
+			profiling_settings_str += ", ";
+		}
+		profiling_settings_str += EnumUtil::ToString(entry);
+	}
+
+	return Value(profiling_settings_str);
+}
+
+//===--------------------------------------------------------------------===//
 // Custom Extension Repository
 //===--------------------------------------------------------------------===//
 void CustomExtensionRepository::ResetGlobal(DatabaseInstance *db, DBConfig &config) {

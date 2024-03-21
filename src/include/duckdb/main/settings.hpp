@@ -301,6 +301,15 @@ struct EnableProfilingSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct CustomProfilingSettings {
+	static constexpr const char *Name = "custom_profiling_settings";
+	static constexpr const char *Description = "Accepts a path to a JSON file enabling custom metrics";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct EnableProgressBarSetting {
 	static constexpr const char *Name = "enable_progress_bar";
 	static constexpr const char *Description =
