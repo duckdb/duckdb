@@ -5,28 +5,13 @@
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
-// FileSizeMonitor
-//===--------------------------------------------------------------------===//
-
-FileSizeMonitor::FileSizeMonitor(TemporaryFileManager &manager) : manager(manager) {
-}
-
-void FileSizeMonitor::Increase(idx_t blocks) {
-	auto size_on_disk = blocks * TEMPFILE_BLOCK_SIZE;
-	manager.IncreaseSizeOnDisk(size_on_disk);
-}
-
-void FileSizeMonitor::Decrease(idx_t blocks) {
-	auto size_on_disk = blocks * TEMPFILE_BLOCK_SIZE;
-	manager.DecreaseSizeOnDisk(size_on_disk);
-}
-
-//===--------------------------------------------------------------------===//
 // BlockIndexManager
 //===--------------------------------------------------------------------===//
 
-BlockIndexManager::BlockIndexManager(unique_ptr<FileSizeMonitor> file_size_monitor)
-    : max_index(0), file_size_monitor(std::move(file_size_monitor)) {
+BlockIndexManager::BlockIndexManager(TemporaryFileManager &manager) : max_index(0), manager(&manager) {
+}
+
+BlockIndexManager::BlockIndexManager() : max_index(0), manager(nullptr) {
 }
 
 idx_t BlockIndexManager::GetNewBlockIndex() {
@@ -45,17 +30,12 @@ bool BlockIndexManager::RemoveIndex(idx_t index) {
 	free_indexes.insert(index);
 	// check if we can truncate the file
 
-	auto old_max = max_index;
-
 	// get the max_index in use right now
 	auto max_index_in_use = indexes_in_use.empty() ? 0 : *indexes_in_use.rbegin() + 1;
 	if (max_index_in_use < max_index) {
 		// max index in use is lower than the max_index
 		// reduce the max_index
-		max_index = max_index_in_use;
-		if (file_size_monitor) {
-			file_size_monitor->Decrease(old_max - max_index);
-		}
+		SetMaxIndex(max_index_in_use);
 		// we can remove any free_indexes that are larger than the current max_index
 		while (!free_indexes.empty()) {
 			auto max_entry = *free_indexes.rbegin();
@@ -77,13 +57,31 @@ bool BlockIndexManager::HasFreeBlocks() {
 	return !free_indexes.empty();
 }
 
+void BlockIndexManager::SetMaxIndex(idx_t new_index) {
+	static constexpr idx_t TEMPFILE_BLOCK_SIZE = Storage::BLOCK_ALLOC_SIZE;
+	if (!manager) {
+		max_index = new_index;
+	} else {
+		auto old = max_index;
+		if (new_index < old) {
+			max_index = new_index;
+			auto difference = old - new_index;
+			auto size_on_disk = difference * TEMPFILE_BLOCK_SIZE;
+			manager->DecreaseSizeOnDisk(size_on_disk);
+		} else if (new_index > old) {
+			auto difference = new_index - old;
+			auto size_on_disk = difference * TEMPFILE_BLOCK_SIZE;
+			manager->IncreaseSizeOnDisk(size_on_disk);
+			// Increase can throw, so this is only updated after it was succesfully updated
+			max_index = new_index;
+		}
+	}
+}
+
 idx_t BlockIndexManager::GetNewBlockIndexInternal() {
 	if (free_indexes.empty()) {
 		auto new_index = max_index;
-		if (file_size_monitor) {
-			file_size_monitor->Increase(1);
-		}
-		max_index++;
+		SetMaxIndex(max_index + 1);
 		return new_index;
 	}
 	auto entry = free_indexes.begin();
@@ -100,7 +98,7 @@ TemporaryFileHandle::TemporaryFileHandle(idx_t temp_file_count, DatabaseInstance
                                          idx_t index, TemporaryFileManager &manager)
     : max_allowed_index((1 << temp_file_count) * MAX_ALLOWED_INDEX_BASE), db(db), file_index(index),
       path(FileSystem::GetFileSystem(db).JoinPath(temp_directory, "duckdb_temp_storage-" + to_string(index) + ".tmp")),
-      index_manager(make_uniq<FileSizeMonitor>(manager)) {
+      index_manager(manager) {
 }
 
 TemporaryFileHandle::TemporaryFileLock::TemporaryFileLock(mutex &mutex) : lock(mutex) {

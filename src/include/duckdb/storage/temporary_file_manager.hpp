@@ -33,16 +33,14 @@ public:
 	FileSizeMonitor(TemporaryFileManager &manager);
 
 public:
-	void Increase(idx_t blocks);
-	void Decrease(idx_t blocks);
-
 private:
 	TemporaryFileManager &manager;
 };
 
 struct BlockIndexManager {
 public:
-	BlockIndexManager(unique_ptr<FileSizeMonitor> file_size_monitor = nullptr);
+	BlockIndexManager(TemporaryFileManager &manager);
+	BlockIndexManager();
 
 public:
 	//! Obtains a new block index from the index manager
@@ -54,13 +52,14 @@ public:
 	bool HasFreeBlocks();
 
 private:
+	void SetMaxIndex(idx_t blocks);
 	idx_t GetNewBlockIndexInternal();
 
 private:
 	idx_t max_index;
 	set<idx_t> free_indexes;
 	set<idx_t> indexes_in_use;
-	unique_ptr<FileSizeMonitor> file_size_monitor;
+	optional_ptr<TemporaryFileManager> manager;
 };
 
 //===--------------------------------------------------------------------===//
