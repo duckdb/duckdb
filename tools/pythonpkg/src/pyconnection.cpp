@@ -160,13 +160,9 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	m.def("map_type", &DuckDBPyConnection::MapType, "Create a map type object from 'key_type' and 'value_type'",
 	      py::arg("key").none(false), py::arg("value").none(false))
 	    .def("duplicate", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
-	    .def(
-	        "execute",
-	        [](DuckDBPyConnection &conn, const py::object &query, py::object params, bool many) {
-		        return conn.Execute(query, std::move(params), many);
-	        },
-	        "Execute the given SQL query, optionally using prepared statements with parameters set", py::arg("query"),
-	        py::arg("parameters") = py::none(), py::arg("multiple_parameter_sets") = false)
+	    .def("execute", &DuckDBPyConnection::Execute,
+	         "Execute the given SQL query, optionally using prepared statements with parameters set", py::arg("query"),
+	         py::arg("parameters") = py::none(), py::arg("multiple_parameter_sets") = false)
 	    .def("executemany", &DuckDBPyConnection::ExecuteMany,
 	         "Execute the given prepared statement multiple times using the list of parameter sets in parameters",
 	         py::arg("query"), py::arg("parameters") = py::none())
@@ -580,7 +576,7 @@ vector<unique_ptr<SQLStatement>> DuckDBPyConnection::GetStatements(const py::obj
 	throw InvalidInputException("Please provide either a DuckDBPyStatement or a string representing the query");
 }
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const string &query) {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteFromString(const string &query) {
 	return Execute(py::str(query));
 }
 
@@ -1254,7 +1250,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterPythonObject(const 
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Begin() {
-	Execute("BEGIN TRANSACTION");
+	ExecuteFromString("BEGIN TRANSACTION");
 	return shared_from_this();
 }
 
@@ -1262,12 +1258,12 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Commit() {
 	if (connection->context->transaction.IsAutoCommit()) {
 		return shared_from_this();
 	}
-	Execute("COMMIT");
+	ExecuteFromString("COMMIT");
 	return shared_from_this();
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Rollback() {
-	Execute("ROLLBACK");
+	ExecuteFromString("ROLLBACK");
 	return shared_from_this();
 }
 
