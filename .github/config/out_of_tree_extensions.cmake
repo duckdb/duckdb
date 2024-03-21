@@ -4,6 +4,16 @@
 # to build duckdb with this configuration run:
 #   EXTENSION_CONFIGS=.github/config/out_of_tree_extensions.cmake make
 #
+#  Note that many of these packages require vcpkg, and a merged manifest must be created to
+#  compile multiple of them.
+#
+#  After setting up vcpkg, build using e.g. the following commands:
+#  USE_MERGED_VCPKG_MANIFEST=1 BUILD_ALL_EXT=1 make extension_configuration
+#  USE_MERGED_VCPKG_MANIFEST=1 BUILD_ALL_EXT=1 make debug
+#
+#  Make sure the VCPKG_TOOLCHAIN_PATH and VCPKG_TARGET_TRIPLET are set. For example:
+#  VCPKG_TOOLCHAIN_PATH=~/vcpkg/scripts/buildsystems/vcpkg.cmake
+#  VCPKG_TARGET_TRIPLET=arm64-osx
 
 ################# ARROW
 if (NOT WIN32)
