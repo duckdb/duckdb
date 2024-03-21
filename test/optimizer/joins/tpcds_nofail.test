@@ -4,9 +4,6 @@
 
 require tpcds
 
-# FIXME: this test inconsistently generates a different query plan that takes a long time to finish
-mode skip
-
 statement ok
 CALL dsdgen(sf=0.01);
 
