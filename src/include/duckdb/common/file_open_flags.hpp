@@ -92,7 +92,7 @@ public:
 	inline bool CreatePrivateFile() const {
 		return flags & FILE_FLAGS_PRIVATE;
 	}
-	inline bool ReturnNullIfExists() const {
+	inline bool ReturnNullIfNotExists() const {
 		return flags & FILE_FLAGS_NULL_IF_NOT_EXISTS;
 	}
 

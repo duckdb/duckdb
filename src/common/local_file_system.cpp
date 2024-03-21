@@ -331,7 +331,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	int fd = open(path.c_str(), open_flags, filesec);
 
 	if (fd == -1) {
-		if (flags.ReturnNullIfExists() && errno == ENOENT) {
+		if (flags.ReturnNullIfNotExists() && errno == ENOENT) {
 			return nullptr;
 		}
 		throw IOException("Cannot open file \"%s\": %s", {{"errno", std::to_string(errno)}}, path, strerror(errno));
@@ -788,7 +788,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, idx_t flags
 	HANDLE hFile = CreateFileW(unicode_path.c_str(), desired_access, share_mode, NULL, creation_disposition,
 	                           flags_and_attributes, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) {
-		if (flags.ReturnNullIfExists() && GetLastError() == ERROR_FILE_NOT_FOUND) {
+		if (flags.ReturnNullIfNotExists() && GetLastError() == ERROR_FILE_NOT_FOUND) {
 			return nullptr;
 		}
 		auto error = LocalFileSystem::GetLastErrorAsString();
