@@ -1,0 +1,210 @@
+diff --git a/src/azure_blob_filesystem.cpp b/src/azure_blob_filesystem.cpp
+index 6f4d0dc..935f30a 100644
+--- a/src/azure_blob_filesystem.cpp
++++ b/src/azure_blob_filesystem.cpp
+@@ -66,21 +66,20 @@ AzureBlobContextState::GetBlobContainerClient(const std::string &blobContainerNa
+ }
+ 
+ //////// AzureBlobStorageFileHandle ////////
+-AzureBlobStorageFileHandle::AzureBlobStorageFileHandle(AzureBlobStorageFileSystem &fs, string path, uint8_t flags,
++AzureBlobStorageFileHandle::AzureBlobStorageFileHandle(AzureBlobStorageFileSystem &fs, string path, FileOpenFlags flags,
+                                                        const AzureReadOptions &read_options,
+                                                        Azure::Storage::Blobs::BlobClient blob_client)
+     : AzureFileHandle(fs, std::move(path), flags, read_options), blob_client(std::move(blob_client)) {
+ }
+ 
+ //////// AzureBlobStorageFileSystem ////////
+-unique_ptr<AzureFileHandle> AzureBlobStorageFileSystem::CreateHandle(const string &path, uint8_t flags,
+-                                                                     FileLockType lock, FileCompressionType compression,
+-                                                                     FileOpener *opener) {
+-	if (opener == nullptr) {
++unique_ptr<AzureFileHandle> AzureBlobStorageFileSystem::CreateHandle(const string &path, FileOpenFlags flags,
++                                                                     optional_ptr<FileOpener> opener) {
++	if (!opener) {
+ 		throw InternalException("Cannot do Azure storage CreateHandle without FileOpener");
+ 	}
+ 
+-	D_ASSERT(compression == FileCompressionType::UNCOMPRESSED);
++	D_ASSERT(flags.Compression() == FileCompressionType::UNCOMPRESSED);
+ 
+ 	auto parsed_url = ParseUrl(path);
+ 	auto storage_context = GetOrCreateStorageContext(opener, path, parsed_url);
+diff --git a/src/azure_dfs_filesystem.cpp b/src/azure_dfs_filesystem.cpp
+index 34435ae..8a756d6 100644
+--- a/src/azure_dfs_filesystem.cpp
++++ b/src/azure_dfs_filesystem.cpp
+@@ -83,21 +83,20 @@ AzureDfsContextState::GetDfsFileSystemClient(const std::string &file_system_name
+ }
+ 
+ //////// AzureDfsContextState ////////
+-AzureDfsStorageFileHandle::AzureDfsStorageFileHandle(AzureDfsStorageFileSystem &fs, string path, uint8_t flags,
++AzureDfsStorageFileHandle::AzureDfsStorageFileHandle(AzureDfsStorageFileSystem &fs, string path, FileOpenFlags flags,
+                                                      const AzureReadOptions &read_options,
+                                                      Azure::Storage::Files::DataLake::DataLakeFileClient client)
+     : AzureFileHandle(fs, std::move(path), flags, read_options), file_client(std::move(client)) {
+ }
+ 
+ //////// AzureDfsStorageFileSystem ////////
+-unique_ptr<AzureFileHandle> AzureDfsStorageFileSystem::CreateHandle(const string &path, uint8_t flags,
+-                                                                    FileLockType lock, FileCompressionType compression,
+-                                                                    FileOpener *opener) {
++unique_ptr<AzureFileHandle> AzureDfsStorageFileSystem::CreateHandle(const string &path, FileOpenFlags flags,
++                                                                    optional_ptr<FileOpener> opener) {
+ 	if (opener == nullptr) {
+ 		throw InternalException("Cannot do Azure storage CreateHandle without FileOpener");
+ 	}
+ 
+-	D_ASSERT(compression == FileCompressionType::UNCOMPRESSED);
++	D_ASSERT(flags.Compression() == FileCompressionType::UNCOMPRESSED);
+ 
+ 	auto parsed_url = ParseUrl(path);
+ 	auto storage_context = GetOrCreateStorageContext(opener, path, parsed_url);
+diff --git a/src/azure_filesystem.cpp b/src/azure_filesystem.cpp
+index 4c2caed..1c4c434 100644
+--- a/src/azure_filesystem.cpp
++++ b/src/azure_filesystem.cpp
+@@ -18,7 +18,7 @@ void AzureContextState::QueryEnd() {
+ 	is_valid = false;
+ }
+ 
+-AzureFileHandle::AzureFileHandle(AzureStorageFileSystem &fs, string path, uint8_t flags,
++AzureFileHandle::AzureFileHandle(AzureStorageFileSystem &fs, string path, FileOpenFlags flags,
+                                  const AzureReadOptions &read_options)
+     : FileHandle(fs, std::move(path)), flags(flags),
+       // File info
+@@ -27,7 +27,7 @@ AzureFileHandle::AzureFileHandle(AzureStorageFileSystem &fs, string path, uint8_
+       buffer_available(0), buffer_idx(0), file_offset(0), buffer_start(0), buffer_end(0),
+       // Options
+       read_options(read_options) {
+-	if (flags & FileFlags::FILE_FLAGS_READ) {
++	if (flags.OpenForReading()) {
+ 		read_buffer = duckdb::unique_ptr<data_t[]>(new data_t[read_options.buffer_size]);
+ 	}
+ }
+@@ -37,7 +37,7 @@ void AzureFileHandle::PostConstruct() {
+ }
+ 
+ void AzureStorageFileSystem::LoadFileInfo(AzureFileHandle &handle) {
+-	if (handle.flags & FileFlags::FILE_FLAGS_READ) {
++	if (handle.flags.OpenForReading()) {
+ 		try {
+ 			LoadRemoteFileInfo(handle);
+ 		} catch (const Azure::Storage::StorageException &e) {
+@@ -53,15 +53,15 @@ void AzureStorageFileSystem::LoadFileInfo(AzureFileHandle &handle) {
+ 	}
+ }
+ 
+-unique_ptr<FileHandle> AzureStorageFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
+-                                                        FileCompressionType compression, FileOpener *opener) {
+-	D_ASSERT(compression == FileCompressionType::UNCOMPRESSED);
++unique_ptr<FileHandle> AzureStorageFileSystem::OpenFile(const string &path,FileOpenFlags flags,
++														optional_ptr<FileOpener> opener) {
++	D_ASSERT(flags.Compression() == FileCompressionType::UNCOMPRESSED);
+ 
+-	if (flags & FileFlags::FILE_FLAGS_WRITE) {
++	if (flags.OpenForWriting()) {
+ 		throw NotImplementedException("Writing to Azure containers is currently not supported");
+ 	}
+ 
+-	auto handle = CreateHandle(path, flags, lock, compression, opener);
++	auto handle = CreateHandle(path, flags, opener);
+ 	return std::move(handle);
+ }
+ 
+@@ -92,7 +92,7 @@ void AzureStorageFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_b
+ 	idx_t buffer_offset = 0;
+ 
+ 	// Don't buffer when DirectIO is set.
+-	if (hfh.flags & FileFlags::FILE_FLAGS_DIRECT_IO && to_read > 0) {
++	if (hfh.flags.DirectIO() && to_read > 0) {
+ 		ReadRange(hfh, location, (char *)buffer, to_read);
+ 		hfh.buffer_available = 0;
+ 		hfh.buffer_idx = 0;
+diff --git a/src/include/azure_blob_filesystem.hpp b/src/include/azure_blob_filesystem.hpp
+index cb76d68..0f3d6d0 100644
+--- a/src/include/azure_blob_filesystem.hpp
++++ b/src/include/azure_blob_filesystem.hpp
+@@ -23,7 +23,7 @@ class AzureBlobStorageFileSystem;
+ 
+ class AzureBlobStorageFileHandle : public AzureFileHandle {
+ public:
+-	AzureBlobStorageFileHandle(AzureBlobStorageFileSystem &fs, string path, uint8_t flags,
++	AzureBlobStorageFileHandle(AzureBlobStorageFileSystem &fs, string path, FileOpenFlags flags,
+ 	                           const AzureReadOptions &read_options, Azure::Storage::Blobs::BlobClient blob_client);
+ 	~AzureBlobStorageFileHandle() override = default;
+ 
+@@ -59,8 +59,8 @@ protected:
+ 	}
+ 	std::shared_ptr<AzureContextState> CreateStorageContext(FileOpener *opener, const string &path,
+ 	                                                        const AzureParsedUrl &parsed_url) override;
+-	duckdb::unique_ptr<AzureFileHandle> CreateHandle(const string &path, uint8_t flags, FileLockType lock,
+-	                                                 FileCompressionType compression, FileOpener *opener) override;
++	duckdb::unique_ptr<AzureFileHandle> CreateHandle(const string &path, FileOpenFlags flags,
++													 optional_ptr<FileOpener> opener) override;
+ 
+ 	void ReadRange(AzureFileHandle &handle, idx_t file_offset, char *buffer_out, idx_t buffer_out_len) override;
+ };
+diff --git a/src/include/azure_dfs_filesystem.hpp b/src/include/azure_dfs_filesystem.hpp
+index c4bf8fe..f9794b8 100644
+--- a/src/include/azure_dfs_filesystem.hpp
++++ b/src/include/azure_dfs_filesystem.hpp
+@@ -25,7 +25,7 @@ class AzureDfsStorageFileSystem;
+ 
+ class AzureDfsStorageFileHandle : public AzureFileHandle {
+ public:
+-	AzureDfsStorageFileHandle(AzureDfsStorageFileSystem &fs, string path, uint8_t flags,
++	AzureDfsStorageFileHandle(AzureDfsStorageFileSystem &fs, string path, FileOpenFlags flags,
+ 	                          const AzureReadOptions &read_options,
+ 	                          Azure::Storage::Files::DataLake::DataLakeFileClient client);
+ 	~AzureDfsStorageFileHandle() override = default;
+@@ -57,8 +57,8 @@ protected:
+ 	}
+ 	std::shared_ptr<AzureContextState> CreateStorageContext(FileOpener *opener, const string &path,
+ 	                                                        const AzureParsedUrl &parsed_url) override;
+-	duckdb::unique_ptr<AzureFileHandle> CreateHandle(const string &path, uint8_t flags, FileLockType lock,
+-	                                                 FileCompressionType compression, FileOpener *opener) override;
++	duckdb::unique_ptr<AzureFileHandle> CreateHandle(const string &path, FileOpenFlags flags,
++													 optional_ptr<FileOpener> opener) override;
+ 
+ 	void ReadRange(AzureFileHandle &handle, idx_t file_offset, char *buffer_out, idx_t buffer_out_len) override;
+ };
+diff --git a/src/include/azure_filesystem.hpp b/src/include/azure_filesystem.hpp
+index a41d7a2..b68aa03 100644
+--- a/src/include/azure_filesystem.hpp
++++ b/src/include/azure_filesystem.hpp
+@@ -52,10 +52,10 @@ public:
+ 	}
+ 
+ protected:
+-	AzureFileHandle(AzureStorageFileSystem &fs, string path, uint8_t flags, const AzureReadOptions &read_options);
++	AzureFileHandle(AzureStorageFileSystem &fs, string path, FileOpenFlags flags, const AzureReadOptions &read_options);
+ 
+ public:
+-	const uint8_t flags;
++	const FileOpenFlags flags;
+ 
+ 	// File info
+ 	idx_t length;
+@@ -76,9 +76,8 @@ public:
+ class AzureStorageFileSystem : public FileSystem {
+ public:
+ 	// FS methods
+-	duckdb::unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock = DEFAULT_LOCK,
+-	                                        FileCompressionType compression = DEFAULT_COMPRESSION,
+-	                                        FileOpener *opener = nullptr) override;
++	duckdb::unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
++	                                        optional_ptr<FileOpener> opener = nullptr) override;
+ 
+ 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
+ 	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
+@@ -99,8 +98,8 @@ public:
+ 	void LoadFileInfo(AzureFileHandle &handle);
+ 
+ protected:
+-	virtual duckdb::unique_ptr<AzureFileHandle> CreateHandle(const string &path, uint8_t flags, FileLockType lock,
+-	                                                         FileCompressionType compression, FileOpener *opener) = 0;
++	virtual duckdb::unique_ptr<AzureFileHandle> CreateHandle(const string &path, FileOpenFlags flags,
++															 optional_ptr<FileOpener> opener) = 0;
+ 	virtual void ReadRange(AzureFileHandle &handle, idx_t file_offset, char *buffer_out, idx_t buffer_out_len) = 0;
+ 
+ 	virtual const string &GetContextPrefix() const = 0;
