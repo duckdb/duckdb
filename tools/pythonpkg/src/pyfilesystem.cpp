@@ -15,12 +15,12 @@ PythonFileHandle::~PythonFileHandle() {
 	handle.release();
 }
 
-string PythonFilesystem::DecodeFlags(uint8_t flags) {
+string PythonFilesystem::DecodeFlags(FileOpenFlags flags) {
 	// see https://stackoverflow.com/a/58925279 for truth table of python file modes
-	bool read = flags & FileFlags::FILE_FLAGS_READ;
-	bool write = flags & FileFlags::FILE_FLAGS_WRITE;
-	bool append = flags & FileFlags::FILE_FLAGS_APPEND;
-	bool truncate = flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW;
+	bool read = flags.OpenForReading();
+	bool write = flags.OpenForWriting();
+	bool append = flags.OpenForAppending();
+	bool truncate = flags.OverwriteExistingFile();
 
 	string flags_s;
 	if (read && write && truncate) {
@@ -44,11 +44,10 @@ string PythonFilesystem::DecodeFlags(uint8_t flags) {
 	return flags_s;
 }
 
-unique_ptr<FileHandle> PythonFilesystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
-                                                  FileCompressionType compression, FileOpener *opener) {
+unique_ptr<FileHandle> PythonFilesystem::OpenFile(const string &path, FileOpenFlags flags, optional_ptr<FileOpener> opener) {
 	PythonGILWrapper gil;
 
-	if (compression != FileCompressionType::UNCOMPRESSED) {
+	if (flags.Compression() != FileCompressionType::UNCOMPRESSED) {
 		throw IOException("Compression not supported");
 	}
 

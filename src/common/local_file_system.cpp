@@ -299,7 +299,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		open_flags |= O_CLOEXEC;
 		if (flags.CreateFileIfNotExists()) {
 			open_flags |= O_CREAT;
-		} else if (flags.AlwaysCreateFile()) {
+		} else if (flags.OverwriteExistingFile()) {
 			open_flags |= O_CREAT | O_TRUNC;
 		}
 		if (flags.OpenForAppending()) {
@@ -777,7 +777,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, idx_t flags
 	if (open_write) {
 		if (flags.CreateFileIfNotExists()) {
 			creation_disposition = OPEN_ALWAYS;
-		} else if (flags.AlwaysCreateFile()) {
+		} else if (flags.OverwriteExistingFile()) {
 			creation_disposition = CREATE_ALWAYS;
 		}
 	}

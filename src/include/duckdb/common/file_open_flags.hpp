@@ -83,7 +83,7 @@ public:
 	inline bool CreateFileIfNotExists() const {
 		return flags & FILE_FLAGS_FILE_CREATE;
 	}
-	inline bool AlwaysCreateFile() const {
+	inline bool OverwriteExistingFile() const {
 		return flags & FILE_FLAGS_FILE_CREATE_NEW;
 	}
 	inline bool OpenForAppending() const {

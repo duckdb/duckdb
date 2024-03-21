@@ -593,7 +593,7 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 
 	if (res->code != 200) {
 		if (flags.OpenForWriting() && res->code == 404) {
-			if (!flags.CreateFileIfNotExists() && !flags.AlwaysCreateFile()) {
+			if (!flags.CreateFileIfNotExists() && !flags.OverwriteExistingFile()) {
 				throw IOException("Unable to open URL \"" + path +
 				                  "\" for writing: file does not exist and CREATE flag is not set");
 			}
