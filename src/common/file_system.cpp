@@ -45,6 +45,37 @@ extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG)
 
 namespace duckdb {
 
+constexpr FileOpenFlags FileFlags::FILE_FLAGS_READ;
+constexpr FileOpenFlags FileFlags::FILE_FLAGS_WRITE;
+constexpr FileOpenFlags FileFlags::FILE_FLAGS_DIRECT_IO;
+constexpr FileOpenFlags FileFlags::FILE_FLAGS_FILE_CREATE;
+constexpr FileOpenFlags FileFlags::FILE_FLAGS_FILE_CREATE_NEW;
+constexpr FileOpenFlags FileFlags::FILE_FLAGS_APPEND;
+constexpr FileOpenFlags FileFlags::FILE_FLAGS_PRIVATE;
+constexpr FileOpenFlags FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS;
+
+void FileOpenFlags::Verify() {
+#ifdef DEBUG
+	bool is_read = flags & FileOpenFlags::FILE_FLAGS_READ;
+	bool is_write = flags & FileOpenFlags::FILE_FLAGS_WRITE;
+	bool is_create =
+	    (flags & FileOpenFlags::FILE_FLAGS_FILE_CREATE) || (flags & FileOpenFlags::FILE_FLAGS_FILE_CREATE_NEW);
+	bool is_private = (flags & FileOpenFlags::FILE_FLAGS_PRIVATE);
+
+	// require either READ or WRITE (or both)
+	D_ASSERT(is_read || is_write);
+	// CREATE/Append flags require writing
+	D_ASSERT(is_write || !(flags & FileOpenFlags::FILE_FLAGS_APPEND));
+	D_ASSERT(is_write || !(flags & FileOpenFlags::FILE_FLAGS_FILE_CREATE));
+	D_ASSERT(is_write || !(flags & FileOpenFlags::FILE_FLAGS_FILE_CREATE_NEW));
+	// cannot combine CREATE and CREATE_NEW flags
+	D_ASSERT(!(flags & FileOpenFlags::FILE_FLAGS_FILE_CREATE && flags & FileOpenFlags::FILE_FLAGS_FILE_CREATE_NEW));
+
+	// For is_private can only be set along with a create flag
+	D_ASSERT(!is_private || is_create);
+#endif
+}
+
 FileSystem::~FileSystem() {
 }
 
@@ -286,8 +317,7 @@ string FileSystem::ExpandPath(const string &path) {
 }
 
 // LCOV_EXCL_START
-unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, idx_t flags, FileLockType lock,
-                                            FileCompressionType compression, optional_ptr<FileOpener> opener) {
+unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, FileOpenFlags flags, optional_ptr<FileOpener> opener) {
 	throw NotImplementedException("%s: OpenFile is not implemented!", GetName());
 }
 

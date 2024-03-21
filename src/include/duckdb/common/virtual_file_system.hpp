@@ -19,8 +19,7 @@ class VirtualFileSystem : public FileSystem {
 public:
 	VirtualFileSystem();
 
-	unique_ptr<FileHandle> OpenFile(const string &path, idx_t flags, FileLockType lock = FileLockType::NO_LOCK,
-	                                FileCompressionType compression = FileCompressionType::UNCOMPRESSED,
+	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
 	                                optional_ptr<FileOpener> opener = nullptr) override;
 
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
@@ -42,8 +41,8 @@ public:
 	bool DirectoryExists(const string &directory) override;
 	void CreateDirectory(const string &directory) override;
 
-	void RemoveDirectory(const string &directory, FileErrorHandler on_error = FileErrorHandler::IGNORE_IF_EXISTS, optional_ptr<FileOpener> opener = nullptr) override;
-
+	void RemoveDirectory(const string &directory, FileErrorHandler on_error = FileErrorHandler::IGNORE_IF_EXISTS,
+	                     optional_ptr<FileOpener> opener = nullptr) override;
 
 	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
 	               FileOpener *opener = nullptr) override;
@@ -53,7 +52,8 @@ public:
 	bool FileExists(const string &filename) override;
 
 	bool IsPipe(const string &filename) override;
-	void RemoveFile(const string &filename, FileErrorHandler on_error = FileErrorHandler::THROW_ON_ERROR, optional_ptr<FileOpener> opener = nullptr) override;
+	void RemoveFile(const string &filename, FileErrorHandler on_error = FileErrorHandler::THROW_ON_ERROR,
+	                optional_ptr<FileOpener> opener = nullptr) override;
 
 	virtual vector<string> Glob(const string &path, FileOpener *opener = nullptr) override;
 

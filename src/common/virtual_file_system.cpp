@@ -9,8 +9,9 @@ VirtualFileSystem::VirtualFileSystem() : default_fs(FileSystem::CreateLocal()) {
 	VirtualFileSystem::RegisterSubSystem(FileCompressionType::GZIP, make_uniq<GZipFileSystem>());
 }
 
-unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, idx_t flags, FileLockType lock,
-                                                   FileCompressionType compression, optional_ptr<FileOpener> opener) {
+unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, FileOpenFlags flags,
+                                                   optional_ptr<FileOpener> opener) {
+	auto compression = flags.Compression();
 	if (compression == FileCompressionType::AUTO_DETECT) {
 		// auto detect compression settings based on file name
 		auto lower_path = StringUtil::Lower(path);
@@ -26,9 +27,9 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, idx_t fla
 			compression = FileCompressionType::UNCOMPRESSED;
 		}
 	}
-	// open the base file handle
-	auto file_handle =
-	    FindFileSystem(path).OpenFile(path, flags, lock, FileCompressionType::UNCOMPRESSED, opener);
+	// open the base file handle in UNCOMPRESSED mode
+	flags.SetCompression(FileCompressionType::UNCOMPRESSED);
+	auto file_handle = FindFileSystem(path).OpenFile(path, flags, opener);
 	if (!file_handle) {
 		return nullptr;
 	}
@@ -40,7 +41,7 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, idx_t fla
 			throw NotImplementedException(
 			    "Attempting to open a compressed file, but the compression type is not supported");
 		}
-		file_handle = entry->second->OpenCompressedFile(std::move(file_handle), flags & FileFlags::FILE_FLAGS_WRITE);
+		file_handle = entry->second->OpenCompressedFile(std::move(file_handle), flags.OpenForWriting());
 	}
 	return file_handle;
 }
@@ -87,7 +88,8 @@ void VirtualFileSystem::CreateDirectory(const string &directory) {
 	FindFileSystem(directory).CreateDirectory(directory);
 }
 
-void VirtualFileSystem::RemoveDirectory(const string &directory, FileErrorHandler on_error, optional_ptr<FileOpener> opener) {
+void VirtualFileSystem::RemoveDirectory(const string &directory, FileErrorHandler on_error,
+                                        optional_ptr<FileOpener> opener) {
 	FindFileSystem(directory).RemoveDirectory(directory, on_error, opener);
 }
 
