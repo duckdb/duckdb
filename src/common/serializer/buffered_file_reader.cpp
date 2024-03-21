@@ -57,6 +57,12 @@ void BufferedFileReader::Seek(uint64_t location) {
 	read_data = offset = 0;
 }
 
+void BufferedFileReader::Reset() {
+	handle->Reset();
+	total_read = 0;
+	read_data = offset = 0;
+}
+
 uint64_t BufferedFileReader::CurrentOffset() {
 	return total_read + offset;
 }

@@ -171,9 +171,10 @@ void SingleFileStorageManager::LoadDatabase() {
 
 		// check if the WAL file exists
 		auto wal_path = GetWALPath();
-		if (fs.FileExists(wal_path)) {
+		auto handle = fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
+		if (handle) {
 			// replay the WAL
-			if (WriteAheadLog::Replay(db, wal_path)) {
+			if (WriteAheadLog::Replay(db, std::move(handle))) {
 				fs.RemoveFile(wal_path);
 			}
 		}

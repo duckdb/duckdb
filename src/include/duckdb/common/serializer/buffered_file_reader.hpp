@@ -34,6 +34,8 @@ public:
 		return file_size;
 	}
 
+	//! Resets reading - beginning at position 0
+	void Reset();
 	void Seek(uint64_t location);
 	uint64_t CurrentOffset();
 
