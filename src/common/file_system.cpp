@@ -328,6 +328,11 @@ void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t 
 	throw NotImplementedException("%s: Read (with location) is not implemented!", GetName());
 }
 
+bool FileSystem::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes) {
+	// This is not a required method. Derived FileSystems may optionally override/implement.
+	return false;
+}
+
 void FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	throw NotImplementedException("%s: Write (with location) is not implemented!", GetName());
 }
@@ -508,6 +513,10 @@ FileHandle::~FileHandle() {
 
 int64_t FileHandle::Read(void *buffer, idx_t nr_bytes) {
 	return file_system.Read(*this, buffer, nr_bytes);
+}
+
+bool FileHandle::Trim(idx_t offset_bytes, idx_t length_bytes) {
+	return file_system.Trim(*this, offset_bytes, length_bytes);
 }
 
 int64_t FileHandle::Write(void *buffer, idx_t nr_bytes) {

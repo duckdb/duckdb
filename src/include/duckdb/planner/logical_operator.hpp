@@ -43,6 +43,8 @@ public:
 
 public:
 	virtual vector<ColumnBinding> GetColumnBindings();
+	static string ColumnBindingsToString(const vector<ColumnBinding> &bindings);
+	void PrintColumnBindings();
 	static vector<ColumnBinding> GenerateColumnBindings(idx_t table_idx, idx_t column_count);
 	static vector<LogicalType> MapTypes(const vector<LogicalType> &types, const vector<idx_t> &projection_map);
 	static vector<ColumnBinding> MapBindings(const vector<ColumnBinding> &types, const vector<idx_t> &projection_map);
