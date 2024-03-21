@@ -20,6 +20,12 @@ Run the `install_s3_test_server` script. This requires root. This makes a few ch
 sudo ./scripts/install_s3_test_server.sh
 ```
 
+Then, if this has not been done yet, we need to generate some data:
+
+```
+./scripts/generate_presigned_url.sh
+```
+
 Then run the test server in the back-ground using Docker. Note that Docker must be opened for this to work. On MacOS you can open the docker gui (`/Applications/Docker`) and leave it open to accomplish this.
 
 

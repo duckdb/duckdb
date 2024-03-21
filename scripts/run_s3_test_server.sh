@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 #Note: DONT run as root
 
+set -e
+
+if [ ! -f data/attach_test/attach.db ]; then
+    echo "File data/attach_test/attach.db not found, run ./scripts/generate_presigned_url.sh to generate"
+    exit 1
+fi
+
+rm -rf /tmp/minio_test_data
+rm -rf /tmp/minio_root_data
 mkdir -p /tmp/minio_test_data
 mkdir -p /tmp/minio_root_data
 docker compose -f scripts/minio_s3.yml -p duckdb-minio up -d
