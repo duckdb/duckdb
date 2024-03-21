@@ -1,6 +1,7 @@
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/typedefs.hpp"
 #include <cstring>
 
 namespace duckdb {
@@ -22,16 +23,34 @@ idx_t BufferedFileWriter::GetTotalWritten() {
 }
 
 void BufferedFileWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
-	// first copy anything we can from the buffer
-	const_data_ptr_t end_ptr = buffer + write_size;
-	while (buffer < end_ptr) {
-		idx_t to_write = MinValue<idx_t>((end_ptr - buffer), FILE_BUFFER_SIZE - offset);
-		D_ASSERT(to_write > 0);
-		memcpy(data.get() + offset, buffer, to_write);
-		offset += to_write;
-		buffer += to_write;
-		if (offset == FILE_BUFFER_SIZE) {
-			Flush();
+	if (write_size >= (2 * FILE_BUFFER_SIZE - offset)) {
+		idx_t to_copy = 0;
+		// Check before performing direct IO if there is some data in the current internal buffer.
+		// If so, then fill the buffer (to avoid to small write operation), flush it and then write
+		// all the remain data directly.
+		// This is to avoid to split a large buffer into N*FILE_BUFFER_SIZE buffers
+		if (offset != 0) {
+			// Some data are still present in the buffer let write them before
+			to_copy = FILE_BUFFER_SIZE - offset;
+			memcpy(data.get() + offset, buffer, to_copy);
+			offset += to_copy;
+			Flush(); // Flush buffer before writing every things else
+		}
+		idx_t remaining_to_write = write_size - to_copy;
+		fs.Write(*handle, const_cast<data_ptr_t>(buffer + to_copy), remaining_to_write);
+		total_written += remaining_to_write;
+	} else {
+		// first copy anything we can from the buffer
+		const_data_ptr_t end_ptr = buffer + write_size;
+		while (buffer < end_ptr) {
+			idx_t to_write = MinValue<idx_t>((end_ptr - buffer), FILE_BUFFER_SIZE - offset);
+			D_ASSERT(to_write > 0);
+			memcpy(data.get() + offset, buffer, to_write);
+			offset += to_write;
+			buffer += to_write;
+			if (offset == FILE_BUFFER_SIZE) {
+				Flush();
+			}
 		}
 	}
 }
