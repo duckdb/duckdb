@@ -980,8 +980,8 @@ void MaximumTempDirectorySize::SetGlobal(DatabaseInstance *db, DBConfig &config,
 	if (input.ToString() != "-1") {
 		maximum_swap_space = DBConfig::ParseMemoryLimit(input.ToString());
 	}
-	config.options.maximum_swap_space = maximum_swap_space;
 	if (!db) {
+		config.options.maximum_swap_space = maximum_swap_space;
 		return;
 	}
 	auto &buffer_manager = BufferManager::GetBufferManager(*db);
@@ -990,6 +990,7 @@ void MaximumTempDirectorySize::SetGlobal(DatabaseInstance *db, DBConfig &config,
 	} else {
 		buffer_manager.SetSwapLimit(maximum_swap_space);
 	}
+	config.options.maximum_swap_space = maximum_swap_space;
 }
 
 void MaximumTempDirectorySize::ResetGlobal(DatabaseInstance *db, DBConfig &config) {

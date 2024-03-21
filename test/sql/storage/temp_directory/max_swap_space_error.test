@@ -70,3 +70,28 @@ query I
 select "size" from duckdb_temporary_files()
 ----
 1572864
+
+# Lower the limit
+statement error
+set max_temp_directory_size='256KiB'
+----
+failed to adjust the 'max_temp_directory_size', currently used space (1.5 MiB) exceeds the new limit (256.0 KiB)
+
+# Lower the limit
+statement error
+set max_temp_directory_size='256KiB'
+----
+failed to adjust the 'max_temp_directory_size', currently used space (1.5 MiB) exceeds the new limit (256.0 KiB)
+
+query I
+select current_setting('max_temp_directory_size')
+----
+1.5 MiB
+
+statement ok
+set max_temp_directory_size='2550KiB'
+
+query I
+select current_setting('max_temp_directory_size')
+----
+2.4 MiB
