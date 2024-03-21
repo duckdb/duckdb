@@ -1,3 +1,4 @@
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
@@ -15,12 +16,18 @@ static bool IsCompareDistinct(ExpressionType type) {
 }
 
 bool StatisticsPropagator::ExpressionIsConstant(Expression &expr, const Value &val) {
-	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
+	Value expr_value;
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		expr_value = expr.Cast<BoundConstantExpression>().value;
+	} else if (expr.IsFoldable()) {
+		if (!ExpressionExecutor::TryEvaluateScalar(context, expr, expr_value)) {
+			return false;
+		}
+	} else {
 		return false;
 	}
-	auto &bound_constant = expr.Cast<BoundConstantExpression>();
-	D_ASSERT(bound_constant.value.type() == val.type());
-	return Value::NotDistinctFrom(bound_constant.value, val);
+	D_ASSERT(expr_value.type() == val.type());
+	return Value::NotDistinctFrom(expr_value, val);
 }
 
 bool StatisticsPropagator::ExpressionIsConstantOrNull(Expression &expr, const Value &val) {
