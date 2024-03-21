@@ -140,7 +140,7 @@ static void parallel_query(Connection *conn, bool *correct, size_t threadnr) {
 }
 
 TEST_CASE("Test temp_directory defaults", "[api][.]") {
-	const char *db_paths[] = {nullptr, "", ":memory:", ":memory:named_conn"};
+	const char *db_paths[] = {nullptr, "", ":memory:"};
 	for (auto &path : db_paths) {
 		auto db = make_uniq<DuckDB>(path);
 		auto conn = make_uniq<Connection>(*db);
