@@ -87,9 +87,9 @@ unique_ptr<Expression> JoinDependentFilterRule::Apply(LogicalOperator &op, vecto
 	}
 
 	// Extract all comparison expressions between column references and constants that are AND'ed together
-	vector<expression_map_t<unique_ptr<Expression>>> conjuncted_expressions;
-	conjuncted_expressions.resize(children.size());
+	auto conjuncted_expressions = make_uniq_array<expression_map_t<unique_ptr<Expression>>>(children.size());
 	for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
+		conjuncted_expressions[child_idx] = expression_map_t<unique_ptr<Expression>>();
 		ExtractConjunctedExpressions(*children[child_idx], conjuncted_expressions[child_idx]);
 	}
 
@@ -99,7 +99,7 @@ unique_ptr<Expression> JoinDependentFilterRule::Apply(LogicalOperator &op, vecto
 		derived_entry_filter->children.push_back(entry.second->Copy());
 
 		bool found = true;
-		for (idx_t conj_idx = 1; conj_idx < conjuncted_expressions.size(); conj_idx++) {
+		for (idx_t conj_idx = 1; conj_idx < children.size(); conj_idx++) {
 			auto &other_entry = conjuncted_expressions[conj_idx];
 			auto other_it = other_entry.find(entry.first);
 			if (other_it == other_entry.end()) {
@@ -121,13 +121,14 @@ unique_ptr<Expression> JoinDependentFilterRule::Apply(LogicalOperator &op, vecto
 	}
 
 	// Add the derived expression to the original expression with an AND
-	auto result = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
-	result->children.push_back(conjunction.Copy());
+	auto result = make_uniq_base<Expression, BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
+	auto &result_conjunction = result->Cast<BoundConjunctionExpression>();
+	result_conjunction.children.push_back(conjunction.Copy());
 
 	if (derived_filter->children.size() == 1) {
-		result->children.push_back(std::move(derived_filter->children[0]));
+		result_conjunction.children.push_back(std::move(derived_filter->children[0]));
 	} else {
-		result->children.push_back(std::move(derived_filter));
+		result_conjunction.children.push_back(std::move(derived_filter));
 	}
 	return result;
 }
