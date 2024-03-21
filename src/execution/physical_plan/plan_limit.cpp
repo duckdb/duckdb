@@ -40,12 +40,21 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalLimit &op)
 	    op.offset_val.Type() != LimitNodeType::EXPRESSION_VALUE) {
 		auto &order_by = plan->Cast<PhysicalOrder>();
 		// Can not use TopN operator if PhysicalOrder uses projections
-		if (order_by.projections.empty()) {
+		bool omit_projection = true;
+		for (idx_t i = 0; i < order_by.projections.size(); i++) {
+			if (order_by.projections[i] == i) {
+				continue;
+			}
+			omit_projection = false;
+			break;
+		}
+		if (order_by.projections.empty() || omit_projection)
+		{
 			idx_t offset_val = 0;
 			if (op.offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
 				offset_val = op.offset_val.GetConstantValue();
 			}
-			auto top_n = make_uniq<PhysicalTopN>(op.types, std::move(order_by.orders), op.limit_val.GetConstantValue(),
+			auto top_n = make_uniq<PhysicalTopN>(order_by.children[0]->types, std::move(order_by.orders), op.limit_val.GetConstantValue(),
 			                                     offset_val, op.estimated_cardinality);
 			top_n->children.push_back(std::move(order_by.children[0]));
 			return std::move(top_n);
