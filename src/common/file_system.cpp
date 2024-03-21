@@ -61,6 +61,7 @@ void FileOpenFlags::Verify() {
 	bool is_create =
 	    (flags & FileOpenFlags::FILE_FLAGS_FILE_CREATE) || (flags & FileOpenFlags::FILE_FLAGS_FILE_CREATE_NEW);
 	bool is_private = (flags & FileOpenFlags::FILE_FLAGS_PRIVATE);
+	bool null_if_not_exists = flags & FileOpenFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS;
 
 	// require either READ or WRITE (or both)
 	D_ASSERT(is_read || is_write);
@@ -73,6 +74,8 @@ void FileOpenFlags::Verify() {
 
 	// For is_private can only be set along with a create flag
 	D_ASSERT(!is_private || is_create);
+	// FILE_FLAGS_NULL_IF_NOT_EXISTS cannot be combined with CREATE/CREATE_NEW
+	D_ASSERT(!(null_if_not_exists && is_create));
 #endif
 }
 
