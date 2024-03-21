@@ -74,7 +74,7 @@ shared_ptr<HTTPState> HTTPState::TryGetState(ClientContext &context, bool create
 	return http_state;
 }
 
-shared_ptr<HTTPState> HTTPState::TryGetState(FileOpener *opener, bool create_on_missing) {
+shared_ptr<HTTPState> HTTPState::TryGetState(optional_ptr<FileOpener> opener, bool create_on_missing) {
 	auto client_context = FileOpener::TryGetClientContext(opener);
 	if (client_context) {
 		return TryGetState(*client_context, create_on_missing);

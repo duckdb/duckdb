@@ -6,7 +6,7 @@ mkdir -p /tmp/minio_root_data
 docker compose -f scripts/minio_s3.yml -p duckdb-minio up -d
 
 # for testing presigned url 
-sleep 3
+sleep 10
 container_name=$(docker ps -a --format '{{.Names}}' | grep -m 1 "duckdb-minio")
 echo $container_name
 
