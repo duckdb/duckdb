@@ -76,14 +76,18 @@ unique_ptr<Expression> JoinDependentFilterRule::Apply(LogicalOperator &op, vecto
 		return nullptr;
 	}
 
-	// All children must be ANDs that are join-dependent
+	// Must have at least two join-dependent AND expressions
 	auto &children = conjunction.children;
+	idx_t dependent_and_count = 0;
 	for (const auto &child : children) {
-		if (child->GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION ||
-		    child->GetExpressionType() != ExpressionType::CONJUNCTION_AND ||
-		    !ExpressionReferencesMultipleTables(*child)) {
-			return nullptr;
+		if (child->GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
+		    child->GetExpressionType() == ExpressionType::CONJUNCTION_AND &&
+		    ExpressionReferencesMultipleTables(*child)) {
+			dependent_and_count++;
 		}
+	}
+	if (dependent_and_count < 2) {
+		return nullptr;
 	}
 
 	// Extract all comparison expressions between column references and constants that are AND'ed together

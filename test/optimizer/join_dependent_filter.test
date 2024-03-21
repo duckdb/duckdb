@@ -117,6 +117,22 @@ where (t1.i = 0 and t2.i = 1) or (t1.i = 2 and t2.i = 3) or (t1.i = 3 and t2.i =
 ----
 physical_plan	<REGEX>:.*FILTER.*FILTER.*
 
+query I
+select count(*)
+from test t1, test t2
+where (t1.i = 0 and t2.i = 1) or (t1.i = 2 and t2.i = 3) or (t1.i = 3 and t2.i = 4) or (t2.i = 8)
+----
+13
+
+# not everything in the OR needs to be an AND
+# we can still derive one filter (on t2.i)
+query II
+explain select count(*)
+from test t1, test t2
+where (t1.i = 0 and t2.i = 1) or (t1.i = 2 and t2.i = 3) or (t1.i = 3 and t2.i = 4) or (t2.i = 8)
+----
+physical_plan	<REGEX>:.*FILTER.*
+
 require tpch
 
 statement ok
