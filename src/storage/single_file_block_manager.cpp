@@ -154,7 +154,7 @@ FileOpenFlags SingleFileBlockManager::GetFileFlags(bool create_new) const {
 	FileOpenFlags result;
 	if (options.read_only) {
 		D_ASSERT(!create_new);
-		result = FileFlags::FILE_FLAGS_READ | FileLockType::READ_LOCK;
+		result = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS | FileLockType::READ_LOCK;
 	} else {
 		result = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_READ | FileLockType::WRITE_LOCK;
 		if (create_new) {
@@ -224,6 +224,10 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	// open the RDBMS handle
 	auto &fs = FileSystem::Get(db);
 	handle = fs.OpenFile(path, flags);
+	if (!handle) {
+		// this can only happen in read-only mode - as that is when we set FILE_FLAGS_NULL_IF_NOT_EXISTS
+		throw CatalogException("Cannot open database \"%s\" in read-only mode: database does not exist", path);
+	}
 
 	MainHeader::CheckMagicBytes(*handle);
 	// otherwise, we check the metadata of the file
