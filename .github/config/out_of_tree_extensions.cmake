@@ -68,6 +68,7 @@ if (NOT MINGW)
             GIT_TAG 05c4ba01c500140287bf6946fb6910122e5c2acf
             INCLUDE_DIR spatial/include
             TEST_DIR test/sql
+            APPLY_PATCHES
             )
 endif()
 
