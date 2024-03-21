@@ -11,9 +11,6 @@ CREATE TABLE t0(c1 INT);
 statement ok
 INSERT INTO t0(c1) VALUES (1);
 
-#statement ok
-#PRAGMA disabled_optimizers='statistics_propagation';
-
 statement ok
 CREATE VIEW v0(c0, c1, c2) AS SELECT '1', true, t0.c1 FROM t0 ORDER BY -1-2 LIMIT 2;
 

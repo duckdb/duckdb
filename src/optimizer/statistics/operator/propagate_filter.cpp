@@ -17,11 +17,12 @@ static bool IsCompareDistinct(ExpressionType type) {
 
 bool StatisticsPropagator::ExpressionIsConstant(Expression &expr, const Value &val) {
 	Value expr_value;
-	if (expr.IsFoldable()) {
-		expr_value = ExpressionExecutor::EvaluateScalar(context, expr);
-	} else if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
-		auto &bound_constant = expr.Cast<BoundConstantExpression>();
-		expr_value = bound_constant.value;
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		expr_value = expr.Cast<BoundConstantExpression>().value;
+	} else if (expr.IsFoldable()) {
+		if (!ExpressionExecutor::TryEvaluateScalar(context, expr, expr_value)) {
+			return false;
+		}
 	} else {
 		return false;
 	}
