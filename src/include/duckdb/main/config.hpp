@@ -34,6 +34,7 @@
 
 namespace duckdb {
 
+class BufferManager;
 class BufferPool;
 class CastFunctionSet;
 class ClientContext;
@@ -236,6 +237,8 @@ public:
 	case_insensitive_map_t<duckdb::unique_ptr<StorageExtension>> storage_extensions;
 	//! A buffer pool can be shared across multiple databases (if desired).
 	shared_ptr<BufferPool> buffer_pool;
+	//! Provide a custom buffer manager implementation (if desired).
+	shared_ptr<BufferManager> buffer_manager;
 	//! Set of callbacks that can be installed by extensions
 	vector<unique_ptr<ExtensionCallback>> extension_callbacks;
 
