@@ -256,10 +256,7 @@ bool DBConfig::IsInMemoryDatabase(const char *database_path) {
 		// '' empty string
 		return true;
 	}
-	constexpr const char *IN_MEMORY_PATH_PREFIX = ":memory:";
-	const idx_t PREFIX_LENGTH = strlen(IN_MEMORY_PATH_PREFIX);
-	if (strncmp(database_path, IN_MEMORY_PATH_PREFIX, PREFIX_LENGTH) == 0) {
-		// Starts with :memory:, i.e ':memory:named_conn' is valid
+	if (strcmp(database_path, ":memory:") == 0) {
 		return true;
 	}
 	return false;
@@ -275,8 +272,8 @@ IndexTypeSet &DBConfig::GetIndexTypes() {
 
 void DBConfig::SetDefaultMaxMemory() {
 	auto memory = FileSystem::GetAvailableMemory();
-	if (memory != DConstants::INVALID_INDEX) {
-		options.maximum_memory = memory * 8 / 10;
+	if (memory.IsValid()) {
+		options.maximum_memory = memory.GetIndex() * 8 / 10;
 	}
 }
 
@@ -286,27 +283,6 @@ void DBConfig::SetDefaultTempDirectory() {
 	} else {
 		options.temporary_directory = options.database_path + ".tmp";
 	}
-}
-
-void DBConfig::SetDefaultMaxSwapSpace(optional_ptr<DatabaseInstance> db) {
-	options.maximum_swap_space.SetDefault(0);
-	if (options.temporary_directory.empty()) {
-		return;
-	}
-	if (!db) {
-		return;
-	}
-	auto &fs = FileSystem::GetFileSystem(*db);
-	if (!fs.DirectoryExists(options.temporary_directory)) {
-		// Directory doesnt exist yet, we will look up the disk space once we have created the directory
-		// FIXME: do we want to proactively create the directory instead ???
-		return;
-	}
-	// Use the available disk space if temp directory is set
-	auto disk_space = FileSystem::GetAvailableDiskSpace(options.temporary_directory);
-	// Only use 90% of the available disk space
-	auto default_value = disk_space == DConstants::INVALID_INDEX ? 0 : static_cast<double>(disk_space) * 0.9;
-	options.maximum_swap_space.SetDefault(default_value);
 }
 
 void DBConfig::CheckLock(const string &name) {

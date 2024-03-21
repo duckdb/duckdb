@@ -84,7 +84,7 @@ void FileSystem::SetWorkingDirectory(const string &path) {
 	}
 }
 
-idx_t FileSystem::GetAvailableMemory() {
+optional_idx FileSystem::GetAvailableMemory() {
 	errno = 0;
 
 #ifdef __MVS__
@@ -95,16 +95,16 @@ idx_t FileSystem::GetAvailableMemory() {
 	idx_t max_memory = MinValue<idx_t>((idx_t)sysconf(_SC_PHYS_PAGES) * (idx_t)sysconf(_SC_PAGESIZE), UINTPTR_MAX);
 #endif
 	if (errno != 0) {
-		return DConstants::INVALID_INDEX;
+		return optional_idx();
 	}
 	return max_memory;
 }
 
-idx_t FileSystem::GetAvailableDiskSpace(const string &path) {
+optional_idx FileSystem::GetAvailableDiskSpace(const string &path) {
 	struct statvfs vfs;
 
 	if (statvfs(path.c_str(), &vfs) == -1) {
-		return DConstants::INVALID_INDEX;
+		optional_idx();
 	}
 	auto block_size = vfs.f_frsize;
 	// These are the blocks available for creating new files or extending existing ones
@@ -112,7 +112,7 @@ idx_t FileSystem::GetAvailableDiskSpace(const string &path) {
 	idx_t available_disk_space = DConstants::INVALID_INDEX;
 	if (!TryMultiplyOperator::Operation(static_cast<idx_t>(block_size), static_cast<idx_t>(available_blocks),
 	                                    available_disk_space)) {
-		return DConstants::INVALID_INDEX;
+		return optional_idx();
 	}
 	return available_disk_space;
 }
@@ -214,15 +214,15 @@ idx_t FileSystem::GetAvailableMemory() {
 	if (GlobalMemoryStatusEx(&mem_state)) {
 		return MinValue<idx_t>(mem_state.ullTotalPhys, UINTPTR_MAX);
 	}
-	return DConstants::INVALID_INDEX;
+	return optional_idx();
 }
 
-idx_t FileSystem::GetAvailableDiskSpace(const string &path) {
+optional_idx FileSystem::GetAvailableDiskSpace(const string &path) {
 	ULARGE_INTEGER available_bytes, total_bytes, free_bytes;
 
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(path.c_str());
 	if (!GetDiskFreeSpaceExW(unicode_path.c_str(), &available_bytes, &total_bytes, &free_bytes)) {
-		return DConstants::INVALID_INDEX;
+		return optional_idx();
 	}
 	(void)total_bytes;
 	(void)free_bytes;

@@ -61,37 +61,6 @@ typedef void (*reset_global_function_t)(DatabaseInstance *db, DBConfig &config);
 typedef void (*reset_local_function_t)(ClientContext &context);
 typedef Value (*get_setting_function_t)(ClientContext &context);
 
-struct NumericSetting {
-public:
-	NumericSetting() : value(0), set_by_user(false) {
-	}
-
-public:
-	NumericSetting &operator=(idx_t val) = delete;
-
-public:
-	operator idx_t() {
-		return value;
-	}
-
-public:
-	bool ExplicitlySet() const {
-		return set_by_user;
-	}
-	void SetDefault(idx_t val) {
-		value = val;
-		set_by_user = false;
-	}
-	void SetExplicit(idx_t val) {
-		value = val;
-		set_by_user = true;
-	}
-
-private:
-	idx_t value;
-	bool set_by_user;
-};
-
 struct ConfigurationOption {
 	const char *name;
 	const char *description;
@@ -145,14 +114,14 @@ struct DBConfigOptions {
 #endif
 	//! Override for the default extension repository
 	string custom_extension_repo = "";
-	//! Override for the default autoload extensoin repository
+	//! Override for the default autoload extension repository
 	string autoinstall_extension_repo = "";
 	//! The maximum memory used by the database system (in bytes). Default: 80% of System available memory
-	idx_t maximum_memory = (idx_t)-1;
-	//! The maximum size of the 'temp_directory' folder when set (in bytes)
-	NumericSetting maximum_swap_space = NumericSetting();
+	idx_t maximum_memory = DConstants::INVALID_INDEX;
+	//! The maximum size of the 'temp_directory' folder when set (in bytes). Default: 90% of available disk space.
+	idx_t maximum_swap_space = DConstants::INVALID_INDEX;
 	//! The maximum amount of CPU threads used by the database system. Default: all available.
-	idx_t maximum_threads = (idx_t)-1;
+	idx_t maximum_threads = DConstants::INVALID_INDEX;
 	//! The number of external threads that work on DuckDB tasks. Default: 1.
 	//! Must be smaller or equal to maximum_threads.
 	idx_t external_threads = 1;
@@ -310,7 +279,6 @@ public:
 	DUCKDB_API IndexTypeSet &GetIndexTypes();
 	static idx_t GetSystemMaxThreads(FileSystem &fs);
 	void SetDefaultMaxMemory();
-	void SetDefaultMaxSwapSpace(optional_ptr<DatabaseInstance> db);
 	void SetDefaultTempDirectory();
 
 	OrderType ResolveOrder(OrderType order_type) const;

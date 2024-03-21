@@ -128,7 +128,7 @@ private:
 
 class TemporaryDirectoryHandle {
 public:
-	TemporaryDirectoryHandle(DatabaseInstance &db, string path_p);
+	TemporaryDirectoryHandle(DatabaseInstance &db, string path_p, optional_idx max_swap_space);
 	~TemporaryDirectoryHandle();
 
 	TemporaryFileManager &GetTempFile();
@@ -146,7 +146,7 @@ private:
 
 class TemporaryFileManager {
 public:
-	TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p);
+	TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p, optional_idx max_swap_space);
 	~TemporaryFileManager();
 
 public:
@@ -164,6 +164,8 @@ public:
 	void DeleteTemporaryBuffer(block_id_t id);
 	vector<TemporaryFileInformation> GetTemporaryFiles();
 	idx_t GetTotalUsedSpaceInBytes();
+	optional_idx GetMaxSwapSpace() const;
+	void SetMaxSwapSpace(optional_idx limit);
 	//! Register temporary file size growth
 	void IncreaseSizeOnDisk(idx_t amount);
 	//! Register temporary file size decrease
@@ -189,6 +191,8 @@ private:
 	BlockIndexManager index_manager;
 	//! The size in bytes of the temporary files that are currently alive
 	atomic<idx_t> size_on_disk;
+	//! The max amount of disk space that can be used
+	idx_t max_swap_space;
 };
 
 } // namespace duckdb

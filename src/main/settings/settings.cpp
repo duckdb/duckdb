@@ -959,7 +959,7 @@ Value MaximumExpressionDepthSetting::GetSetting(ClientContext &context) {
 void MaximumMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	config.options.maximum_memory = DBConfig::ParseMemoryLimit(input.ToString());
 	if (db) {
-		BufferManager::GetBufferManager(*db).SetLimit(config.options.maximum_memory);
+		BufferManager::GetBufferManager(*db).SetMemoryLimit(config.options.maximum_memory);
 	}
 }
 
@@ -976,18 +976,46 @@ Value MaximumMemorySetting::GetSetting(ClientContext &context) {
 // Maximum Temp Directory Size
 //===--------------------------------------------------------------------===//
 void MaximumTempDirectorySize::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	// FIXME: should this not use 'SetExplicit' when the value is 0?
-	// So it acts as RESET instead when 0 is passed?
-	config.options.maximum_swap_space.SetExplicit(DBConfig::ParseMemoryLimit(input.ToString()));
+	idx_t maximum_swap_space = DConstants::INVALID_INDEX;
+	if (input.ToString() != "-1") {
+		maximum_swap_space = DBConfig::ParseMemoryLimit(input.ToString());
+	}
+	config.options.maximum_swap_space = maximum_swap_space;
+	if (!db) {
+		return;
+	}
+	auto &buffer_manager = BufferManager::GetBufferManager(*db);
+	if (maximum_swap_space == DConstants::INVALID_INDEX) {
+		buffer_manager.SetSwapLimit();
+	} else {
+		buffer_manager.SetSwapLimit(maximum_swap_space);
+	}
 }
 
 void MaximumTempDirectorySize::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.SetDefaultMaxSwapSpace(db);
+	config.options.maximum_swap_space = DConstants::INVALID_INDEX;
+	if (!db) {
+		return;
+	}
+	auto &buffer_manager = BufferManager::GetBufferManager(*db);
+	buffer_manager.SetSwapLimit();
 }
 
 Value MaximumTempDirectorySize::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return Value(StringUtil::BytesToHumanReadableString(config.options.maximum_swap_space));
+	if (config.options.maximum_swap_space != DConstants::INVALID_INDEX) {
+		// Explicitly set by the user
+		return Value(StringUtil::BytesToHumanReadableString(config.options.maximum_swap_space));
+	}
+	auto &buffer_manager = BufferManager::GetBufferManager(context);
+	// Database is initialized, use the setting from the temporary directory
+	auto max_swap = buffer_manager.GetMaxSwap();
+	if (max_swap.IsValid()) {
+		return Value(StringUtil::BytesToHumanReadableString(max_swap.GetIndex()));
+	} else {
+		// The temp directory has not been used yet
+		return Value(StringUtil::BytesToHumanReadableString(0));
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -1271,9 +1299,6 @@ Value SecretDirectorySetting::GetSetting(ClientContext &context) {
 void TempDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	config.options.temporary_directory = input.ToString();
 	config.options.use_temporary_directory = !config.options.temporary_directory.empty();
-	if (!config.options.maximum_swap_space.ExplicitlySet()) {
-		config.SetDefaultMaxSwapSpace(db);
-	}
 	if (db) {
 		auto &buffer_manager = BufferManager::GetBufferManager(*db);
 		buffer_manager.SetTemporaryDirectory(config.options.temporary_directory);

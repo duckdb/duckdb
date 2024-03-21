@@ -189,18 +189,14 @@ idx_t TemporaryFileHandle::GetPositionInFile(idx_t index) {
 // TemporaryDirectoryHandle
 //===--------------------------------------------------------------------===//
 
-TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string path_p)
-    : db(db), temp_directory(std::move(path_p)), temp_file(make_uniq<TemporaryFileManager>(db, temp_directory)) {
+TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string path_p, optional_idx max_swap_space)
+    : db(db), temp_directory(std::move(path_p)),
+      temp_file(make_uniq<TemporaryFileManager>(db, temp_directory, max_swap_space)) {
 	auto &fs = FileSystem::GetFileSystem(db);
 	if (!temp_directory.empty()) {
 		if (!fs.DirectoryExists(temp_directory)) {
-			auto &config = DBConfig::GetConfig(db);
 			fs.CreateDirectory(temp_directory);
 			created_directory = true;
-			// Maximum swap space isn't set explicitly, initialize to default
-			if (!config.options.maximum_swap_space.ExplicitlySet()) {
-				config.SetDefaultMaxSwapSpace(&db);
-			}
 		}
 	}
 }
@@ -258,8 +254,23 @@ bool TemporaryFileIndex::IsValid() const {
 // TemporaryFileManager
 //===--------------------------------------------------------------------===//
 
-TemporaryFileManager::TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p)
-    : db(db), temp_directory(temp_directory_p), size_on_disk(0) {
+static idx_t GetDefaultMax(const string &path) {
+	// Use the available disk space
+	auto disk_space = FileSystem::GetAvailableDiskSpace(path);
+	idx_t default_value = 0;
+	if (disk_space.IsValid()) {
+		// Only use 90% of the available disk space
+		default_value = static_cast<idx_t>(static_cast<double>(disk_space.GetIndex()) * 0.9);
+	}
+	return default_value;
+}
+
+TemporaryFileManager::TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p,
+                                           optional_idx max_swap_space)
+    : db(db), temp_directory(temp_directory_p), size_on_disk(0), max_swap_space(GetDefaultMax(temp_directory_p)) {
+	if (max_swap_space.IsValid()) {
+		this->max_swap_space = max_swap_space.GetIndex();
+	}
 }
 
 TemporaryFileManager::~TemporaryFileManager() {
@@ -311,10 +322,19 @@ idx_t TemporaryFileManager::GetTotalUsedSpaceInBytes() {
 	return size_on_disk.load();
 }
 
-void TemporaryFileManager::IncreaseSizeOnDisk(idx_t bytes) {
-	auto &config = DBConfig::GetConfig(db);
-	auto max_swap_space = config.options.maximum_swap_space;
+optional_idx TemporaryFileManager::GetMaxSwapSpace() const {
+	return max_swap_space;
+}
 
+void TemporaryFileManager::SetMaxSwapSpace(optional_idx limit) {
+	if (limit.IsValid()) {
+		max_swap_space = limit.GetIndex();
+	} else {
+		max_swap_space = GetDefaultMax(temp_directory);
+	}
+}
+
+void TemporaryFileManager::IncreaseSizeOnDisk(idx_t bytes) {
 	auto current_size_on_disk = size_on_disk.load();
 	if (current_size_on_disk + bytes > max_swap_space) {
 		auto used = StringUtil::BytesToHumanReadableString(current_size_on_disk);

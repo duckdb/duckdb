@@ -36,16 +36,18 @@ unique_ptr<FileBuffer> StandardBufferManager::ConstructManagedBuffer(idx_t size,
 }
 
 void StandardBufferManager::SetTemporaryDirectory(const string &new_dir) {
-	if (temp_directory_handle) {
+	lock_guard<mutex> guard(temporary_directory.lock);
+	if (temporary_directory.handle) {
 		throw NotImplementedException("Cannot switch temporary directory after the current one has been used");
 	}
-	this->temp_directory = new_dir;
+	temporary_directory.path = new_dir;
 }
 
 StandardBufferManager::StandardBufferManager(DatabaseInstance &db, string tmp)
-    : BufferManager(), db(db), buffer_pool(db.GetBufferPool()), temp_directory(std::move(tmp)),
-      temporary_id(MAXIMUM_BLOCK), buffer_allocator(BufferAllocatorAllocate, BufferAllocatorFree,
-                                                    BufferAllocatorRealloc, make_uniq<BufferAllocatorData>(*this)) {
+    : BufferManager(), db(db), buffer_pool(db.GetBufferPool()), temporary_id(MAXIMUM_BLOCK),
+      buffer_allocator(BufferAllocatorAllocate, BufferAllocatorFree, BufferAllocatorRealloc,
+                       make_uniq<BufferAllocatorData>(*this)) {
+	temporary_directory.path = std::move(tmp);
 	temp_block_manager = make_uniq<InMemoryBlockManager>(*this);
 	for (idx_t i = 0; i < MEMORY_TAG_COUNT; i++) {
 		evicted_data_per_tag[i] = 0;
@@ -68,6 +70,22 @@ idx_t StandardBufferManager::GetUsedMemory() const {
 }
 idx_t StandardBufferManager::GetMaxMemory() const {
 	return buffer_pool.GetMaxMemory();
+}
+
+idx_t StandardBufferManager::GetUsedSwap() {
+	lock_guard<mutex> guard(temporary_directory.lock);
+	if (!temporary_directory.handle) {
+		return 0;
+	}
+	return temporary_directory.handle->GetTempFile().GetTotalUsedSpaceInBytes();
+}
+
+optional_idx StandardBufferManager::GetMaxSwap() {
+	lock_guard<mutex> guard(temporary_directory.lock);
+	if (!temporary_directory.handle) {
+		return optional_idx();
+	}
+	return temporary_directory.handle->GetTempFile().GetMaxSwapSpace();
 }
 
 template <typename... ARGS>
@@ -232,8 +250,17 @@ void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 	}
 }
 
-void StandardBufferManager::SetLimit(idx_t limit) {
+void StandardBufferManager::SetMemoryLimit(idx_t limit) {
 	buffer_pool.SetLimit(limit, InMemoryWarning());
+}
+
+void StandardBufferManager::SetSwapLimit(optional_idx limit) {
+	lock_guard<mutex> guard(temporary_directory.lock);
+	if (temporary_directory.handle) {
+		temporary_directory.handle->GetTempFile().SetMaxSwapSpace(limit);
+	} else {
+		temporary_directory.maximum_swap_space = limit;
+	}
 }
 
 vector<MemoryInformation> StandardBufferManager::GetMemoryUsageInfo() const {
@@ -259,19 +286,20 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBufferInternal(Buffer
 
 string StandardBufferManager::GetTemporaryPath(block_id_t id) {
 	auto &fs = FileSystem::GetFileSystem(db);
-	return fs.JoinPath(temp_directory, "duckdb_temp_block-" + to_string(id) + ".block");
+	return fs.JoinPath(temporary_directory.path, "duckdb_temp_block-" + to_string(id) + ".block");
 }
 
 void StandardBufferManager::RequireTemporaryDirectory() {
-	if (temp_directory.empty()) {
+	if (temporary_directory.path.empty()) {
 		throw InvalidInputException(
 		    "Out-of-memory: cannot write buffer because no temporary directory is specified!\nTo enable "
 		    "temporary buffer eviction set a temporary directory using PRAGMA temp_directory='/path/to/tmp.tmp'");
 	}
-	lock_guard<mutex> temp_handle_guard(temp_handle_lock);
-	if (!temp_directory_handle) {
+	lock_guard<mutex> guard(temporary_directory.lock);
+	if (!temporary_directory.handle) {
 		// temp directory has not been created yet: initialize it
-		temp_directory_handle = make_uniq<TemporaryDirectoryHandle>(db, temp_directory);
+		temporary_directory.handle =
+		    make_uniq<TemporaryDirectoryHandle>(db, temporary_directory.path, temporary_directory.maximum_swap_space);
 	}
 }
 
@@ -279,7 +307,7 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 	RequireTemporaryDirectory();
 	if (buffer.size == Storage::BLOCK_SIZE) {
 		evicted_data_per_tag[uint8_t(tag)] += Storage::BLOCK_SIZE;
-		temp_directory_handle->GetTempFile().WriteTemporaryBuffer(block_id, buffer);
+		temporary_directory.handle->GetTempFile().WriteTemporaryBuffer(block_id, buffer);
 		return;
 	}
 	evicted_data_per_tag[uint8_t(tag)] += buffer.size;
@@ -295,11 +323,11 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 
 unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(MemoryTag tag, block_id_t id,
                                                                   unique_ptr<FileBuffer> reusable_buffer) {
-	D_ASSERT(!temp_directory.empty());
-	D_ASSERT(temp_directory_handle.get());
-	if (temp_directory_handle->GetTempFile().HasTemporaryBuffer(id)) {
+	D_ASSERT(!temporary_directory.path.empty());
+	D_ASSERT(temporary_directory.handle.get());
+	if (temporary_directory.handle->GetTempFile().HasTemporaryBuffer(id)) {
 		evicted_data_per_tag[uint8_t(tag)] -= Storage::BLOCK_SIZE;
-		return temp_directory_handle->GetTempFile().ReadTemporaryBuffer(id, std::move(reusable_buffer));
+		return temporary_directory.handle->GetTempFile().ReadTemporaryBuffer(id, std::move(reusable_buffer));
 	}
 	idx_t block_size;
 	// open the temporary file and read the size
@@ -318,20 +346,20 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(MemoryTag tag,
 }
 
 void StandardBufferManager::DeleteTemporaryFile(block_id_t id) {
-	if (temp_directory.empty()) {
+	if (temporary_directory.path.empty()) {
 		// no temporary directory specified: nothing to delete
 		return;
 	}
 	{
-		lock_guard<mutex> temp_handle_guard(temp_handle_lock);
-		if (!temp_directory_handle) {
+		lock_guard<mutex> guard(temporary_directory.lock);
+		if (!temporary_directory.handle) {
 			// temporary directory was not initialized yet: nothing to delete
 			return;
 		}
 	}
 	// check if we should delete the file from the shared pool of files, or from the general file system
-	if (temp_directory_handle->GetTempFile().HasTemporaryBuffer(id)) {
-		temp_directory_handle->GetTempFile().DeleteTemporaryBuffer(id);
+	if (temporary_directory.handle->GetTempFile().HasTemporaryBuffer(id)) {
+		temporary_directory.handle->GetTempFile().DeleteTemporaryBuffer(id);
 		return;
 	}
 	auto &fs = FileSystem::GetFileSystem(db);
@@ -342,22 +370,22 @@ void StandardBufferManager::DeleteTemporaryFile(block_id_t id) {
 }
 
 bool StandardBufferManager::HasTemporaryDirectory() const {
-	return !temp_directory.empty();
+	return !temporary_directory.path.empty();
 }
 
 vector<TemporaryFileInformation> StandardBufferManager::GetTemporaryFiles() {
 	vector<TemporaryFileInformation> result;
-	if (temp_directory.empty()) {
+	if (temporary_directory.path.empty()) {
 		return result;
 	}
 	{
-		lock_guard<mutex> temp_handle_guard(temp_handle_lock);
-		if (temp_directory_handle) {
-			result = temp_directory_handle->GetTempFile().GetTemporaryFiles();
+		lock_guard<mutex> temp_handle_guard(temporary_directory.lock);
+		if (temporary_directory.handle) {
+			result = temporary_directory.handle->GetTempFile().GetTemporaryFiles();
 		}
 	}
 	auto &fs = FileSystem::GetFileSystem(db);
-	fs.ListFiles(temp_directory, [&](const string &name, bool is_dir) {
+	fs.ListFiles(temporary_directory.path, [&](const string &name, bool is_dir) {
 		if (is_dir) {
 			return;
 		}
@@ -375,7 +403,7 @@ vector<TemporaryFileInformation> StandardBufferManager::GetTemporaryFiles() {
 }
 
 const char *StandardBufferManager::InMemoryWarning() {
-	if (!temp_directory.empty()) {
+	if (!temporary_directory.path.empty()) {
 		return "";
 	}
 	return "\nDatabase is launched in in-memory mode and no temporary directory is specified."

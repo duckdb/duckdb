@@ -334,13 +334,10 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (new_config.secret_manager) {
 		config.secret_manager = std::move(new_config.secret_manager);
 	}
-	if (config.options.maximum_memory == (idx_t)-1) {
+	if (config.options.maximum_memory == DConstants::INVALID_INDEX) {
 		config.SetDefaultMaxMemory();
 	}
-	if (!config.options.maximum_swap_space.ExplicitlySet()) {
-		config.SetDefaultMaxSwapSpace(this);
-	}
-	if (new_config.options.maximum_threads == (idx_t)-1) {
+	if (new_config.options.maximum_threads == DConstants::INVALID_INDEX) {
 		config.options.maximum_threads = config.GetSystemMaxThreads(*config.file_system);
 	}
 	config.allocator = std::move(new_config.allocator);
