@@ -152,7 +152,8 @@ public:
 	duckdb::unique_ptr<HTTPMetadataCache> global_metadata_cache;
 
 protected:
-	virtual duckdb::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, FileOpenFlags flags, optional_ptr<FileOpener> opener);
+	virtual duckdb::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, FileOpenFlags flags,
+	                                                        optional_ptr<FileOpener> opener);
 };
 
 } // namespace duckdb

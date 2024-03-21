@@ -21,7 +21,8 @@ optional_ptr<ClientContext> FileOpener::TryGetClientContext(optional_ptr<FileOpe
 	return opener->TryGetClientContext();
 }
 
-SettingLookupResult FileOpener::TryGetCurrentSetting(optional_ptr<FileOpener> opener, const string &key, Value &result) {
+SettingLookupResult FileOpener::TryGetCurrentSetting(optional_ptr<FileOpener> opener, const string &key,
+                                                     Value &result) {
 	if (!opener) {
 		return SettingLookupResult();
 	}

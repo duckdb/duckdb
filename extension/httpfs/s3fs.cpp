@@ -776,7 +776,8 @@ unique_ptr<ResponseWrapper> S3FileSystem::GetRangeRequest(FileHandle &handle, st
 	return HTTPFileSystem::GetRangeRequest(handle, http_url, headers, file_offset, buffer_out, buffer_out_len);
 }
 
-unique_ptr<HTTPFileHandle> S3FileSystem::CreateHandle(const string &path, FileOpenFlags flags, optional_ptr<FileOpener> opener) {
+unique_ptr<HTTPFileHandle> S3FileSystem::CreateHandle(const string &path, FileOpenFlags flags,
+                                                      optional_ptr<FileOpener> opener) {
 	FileOpenerInfo info = {path};
 
 	S3AuthParams auth_params;

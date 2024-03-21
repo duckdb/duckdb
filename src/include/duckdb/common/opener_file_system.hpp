@@ -19,7 +19,7 @@ public:
 	virtual optional_ptr<FileOpener> GetOpener() const = 0;
 
 	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
-									optional_ptr<FileOpener> opener = nullptr) override {
+	                                optional_ptr<FileOpener> opener = nullptr) override {
 		if (opener) {
 			throw InternalException("OpenerFileSystem cannot take an opener - the opener is pushed automatically");
 		}

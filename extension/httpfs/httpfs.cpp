@@ -376,12 +376,14 @@ HTTPFileHandle::HTTPFileHandle(FileSystem &fs, const string &path, FileOpenFlags
       file_offset(0), buffer_start(0), buffer_end(0) {
 }
 
-unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const string &path, FileOpenFlags flags, optional_ptr<FileOpener> opener) {
+unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const string &path, FileOpenFlags flags,
+                                                        optional_ptr<FileOpener> opener) {
 	D_ASSERT(flags.Compression() == FileCompressionType::UNCOMPRESSED);
 	return duckdb::make_uniq<HTTPFileHandle>(*this, path, flags, HTTPParams::ReadFrom(opener));
 }
 
-unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, FileOpenFlags flags, optional_ptr<FileOpener> opener) {
+unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, FileOpenFlags flags,
+                                                optional_ptr<FileOpener> opener) {
 	D_ASSERT(flags.Compression() == FileCompressionType::UNCOMPRESSED);
 
 	auto handle = CreateHandle(path, flags, opener);

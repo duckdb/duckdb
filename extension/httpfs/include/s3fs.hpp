@@ -235,7 +235,8 @@ public:
 
 protected:
 	static void NotifyUploadsInProgress(S3FileHandle &file_handle);
-	duckdb::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, FileOpenFlags flags, optional_ptr<FileOpener> opener) override;
+	duckdb::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, FileOpenFlags flags,
+	                                                optional_ptr<FileOpener> opener) override;
 
 	void FlushBuffer(S3FileHandle &handle, shared_ptr<S3WriteBuffer> write_buffer);
 	string GetPayloadHash(char *buffer, idx_t buffer_len);

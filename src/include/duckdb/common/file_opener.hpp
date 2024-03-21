@@ -33,9 +33,10 @@ public:
 	virtual optional_ptr<ClientContext> TryGetClientContext() = 0;
 
 	DUCKDB_API static optional_ptr<ClientContext> TryGetClientContext(optional_ptr<FileOpener> opener);
-	DUCKDB_API static SettingLookupResult TryGetCurrentSetting(optional_ptr<FileOpener> opener, const string &key, Value &result);
-	DUCKDB_API static SettingLookupResult TryGetCurrentSetting(optional_ptr<FileOpener> opener, const string &key, Value &result,
-	                                                           FileOpenerInfo &info);
+	DUCKDB_API static SettingLookupResult TryGetCurrentSetting(optional_ptr<FileOpener> opener, const string &key,
+	                                                           Value &result);
+	DUCKDB_API static SettingLookupResult TryGetCurrentSetting(optional_ptr<FileOpener> opener, const string &key,
+	                                                           Value &result, FileOpenerInfo &info);
 };
 
 } // namespace duckdb

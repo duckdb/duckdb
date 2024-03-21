@@ -28,12 +28,13 @@ public:
 
 public:
 	FileOpenFlags() = default;
-	constexpr FileOpenFlags(idx_t flags) : flags(flags) {
-	} // NOLINT: allow implicit conversion
-	constexpr FileOpenFlags(FileLockType lock) : lock(lock) {
-	} // NOLINT: allow implicit conversion
-	constexpr FileOpenFlags(FileCompressionType compression) : compression(compression) {
-	} // NOLINT: allow implicit conversion
+	constexpr FileOpenFlags(idx_t flags) : flags(flags) { // NOLINT: allow implicit conversion
+	}
+	constexpr FileOpenFlags(FileLockType lock) : lock(lock) { // NOLINT: allow implicit conversion
+	}
+	constexpr FileOpenFlags(FileCompressionType compression) // NOLINT: allow implicit conversion
+	    : compression(compression) {
+	}
 	constexpr FileOpenFlags(idx_t flags, FileLockType lock, FileCompressionType compression)
 	    : flags(flags), lock(lock), compression(compression) {
 	}
