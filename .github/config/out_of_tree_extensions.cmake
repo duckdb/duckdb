@@ -60,15 +60,13 @@ if (NOT MINGW)
 endif()
 
 ################# SPATIAL
-if (NOT MINGW)
-    duckdb_extension_load(spatial
-            DONT_LINK LOAD_TESTS
-            GIT_URL https://github.com/duckdb/duckdb_spatial.git
-            GIT_TAG 05c4ba01c500140287bf6946fb6910122e5c2acf
-            INCLUDE_DIR spatial/include
-            TEST_DIR test/sql
-            )
-endif()
+duckdb_extension_load(spatial
+    DONT_LINK LOAD_TESTS
+    GIT_URL https://github.com/duckdb/duckdb_spatial.git
+    GIT_TAG 05c4ba01c500140287bf6946fb6910122e5c2acf
+    INCLUDE_DIR spatial/include
+    TEST_DIR test/sql
+    )
 
 ################# SQLITE_SCANNER
 # Static linking on windows does not properly work due to symbol collision
