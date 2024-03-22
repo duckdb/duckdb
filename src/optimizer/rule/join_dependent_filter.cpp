@@ -12,53 +12,48 @@ JoinDependentFilterRule::JoinDependentFilterRule(ExpressionRewriter &rewriter) :
 	// Match on a ConjunctionExpression that has at least two ConjunctionExpressions as children
 	auto op = make_uniq<ConjunctionExpressionMatcher>();
 	op->matchers.push_back(make_uniq<ConjunctionExpressionMatcher>());
-	op->matchers.push_back(make_uniq<ConjunctionExpressionMatcher>());
 	op->policy = SetMatcher::Policy::SOME;
 	root = std::move(op);
 }
 
-static inline void ExpressionReferencesMultipleTablesRec(const Expression &binding, unordered_set<idx_t> &table_idxs) {
-	ExpressionIterator::EnumerateChildren(binding, [&](const Expression &child) {
+static inline void GetTableIndices(const Expression &expression, unordered_set<idx_t> &table_idxs) {
+	ExpressionIterator::EnumerateChildren(expression, [&](const Expression &child) {
 		if (child.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 			auto &colref = child.Cast<BoundColumnRefExpression>();
 			table_idxs.insert(colref.binding.table_index);
 		} else {
-			ExpressionReferencesMultipleTablesRec(child, table_idxs);
+			GetTableIndices(child, table_idxs);
 		}
 	});
 }
 
 static inline bool ExpressionReferencesMultipleTables(const Expression &binding) {
 	unordered_set<idx_t> table_idxs;
-	ExpressionReferencesMultipleTablesRec(binding, table_idxs);
+	GetTableIndices(binding, table_idxs);
 	return table_idxs.size() > 1;
 }
 
-static inline void ExtractConjunctedExpressions(Expression &binding,
-                                                expression_map_t<unique_ptr<Expression>> &expressions) {
-	if (binding.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
-	    binding.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
-		auto &conjunction = binding.Cast<BoundConjunctionExpression>();
+static inline void ExtractConjunctedExpressions(Expression &expression,
+                                                unordered_map<idx_t, unique_ptr<Expression>> &expressions) {
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
+	    expression.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
+		auto &conjunction = expression.Cast<BoundConjunctionExpression>();
 		for (auto &child : conjunction.children) {
 			ExtractConjunctedExpressions(*child, expressions);
 		}
-	} else if (binding.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
-		auto &comparison = binding.Cast<BoundComparisonExpression>();
-		if (comparison.left->IsFoldable() == comparison.right->IsFoldable()) {
-			return; // Need exactly one foldable expression
-		}
-
-		// The non-foldable expression must not reference more than one table
-		auto &non_foldable = comparison.left->IsFoldable() ? *comparison.right : *comparison.left;
-		if (ExpressionReferencesMultipleTables(non_foldable)) {
-			return;
+	} else {
+		unordered_set<idx_t> table_idxs;
+		GetTableIndices(expression, table_idxs);
+		if (table_idxs.size() != 1) {
+			return; // Needs to reference exactly one table
 		}
 
 		// If there was already an expression, AND it together
-		auto &expression = expressions[non_foldable];
-		expression = expression ? make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
-		                                                                std::move(expression), binding.Copy())
-		                        : binding.Copy();
+		auto &table_expressions = expressions[*table_idxs.begin()];
+		table_expressions = table_expressions
+		                        ? make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
+		                                                                std::move(table_expressions), expression.Copy())
+		                        : expression.Copy();
 	}
 }
 
@@ -76,24 +71,25 @@ unique_ptr<Expression> JoinDependentFilterRule::Apply(LogicalOperator &op, vecto
 		return nullptr;
 	}
 
-	// Must have at least two join-dependent AND expressions
+	// Must have at least one join-dependent AND expression
 	auto &children = conjunction.children;
-	idx_t dependent_and_count = 0;
+	bool eligible = false;
 	for (const auto &child : children) {
 		if (child->GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
 		    child->GetExpressionType() == ExpressionType::CONJUNCTION_AND &&
 		    ExpressionReferencesMultipleTables(*child)) {
-			dependent_and_count++;
+			eligible = true;
+			break;
 		}
 	}
-	if (dependent_and_count < 2) {
+	if (!eligible) {
 		return nullptr;
 	}
 
 	// Extract all comparison expressions between column references and constants that are AND'ed together
-	auto conjuncted_expressions = make_uniq_array<expression_map_t<unique_ptr<Expression>>>(children.size());
+	auto conjuncted_expressions = make_uniq_array<unordered_map<idx_t, unique_ptr<Expression>>>(children.size());
 	for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
-		conjuncted_expressions[child_idx] = expression_map_t<unique_ptr<Expression>>();
+		conjuncted_expressions[child_idx] = unordered_map<idx_t, unique_ptr<Expression>>();
 		ExtractConjunctedExpressions(*children[child_idx], conjuncted_expressions[child_idx]);
 	}
 
