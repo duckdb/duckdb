@@ -56,6 +56,7 @@ if (NOT MINGW)
             ${LOAD_ICEBERG_TESTS}
             GIT_URL https://github.com/duckdb/duckdb_iceberg
             GIT_TAG 7aa3d8e4cb7b513d35fdacfa28dc328771bc4047
+            APPLY_PATCHES
             )
 endif()
 
@@ -71,16 +72,14 @@ if (NOT MINGW)
 endif()
 
 ################# SPATIAL
-if (NOT MINGW)
-    duckdb_extension_load(spatial
-            DONT_LINK LOAD_TESTS
-            GIT_URL https://github.com/duckdb/duckdb_spatial.git
-            GIT_TAG 05c4ba01c500140287bf6946fb6910122e5c2acf
-            INCLUDE_DIR spatial/include
-            TEST_DIR test/sql
-            APPLY_PATCHES
-            )
-endif()
+duckdb_extension_load(spatial
+    DONT_LINK LOAD_TESTS
+    GIT_URL https://github.com/duckdb/duckdb_spatial.git
+    GIT_TAG 05c4ba01c500140287bf6946fb6910122e5c2acf
+    INCLUDE_DIR spatial/include
+    TEST_DIR test/sql
+    APPLY_PATCHES
+    )
 
 ################# SQLITE_SCANNER
 # Static linking on windows does not properly work due to symbol collision

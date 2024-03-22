@@ -67,7 +67,7 @@ private:
 	void Configure(DBConfig &config);
 
 private:
-	unique_ptr<BufferManager> buffer_manager;
+	shared_ptr<BufferManager> buffer_manager;
 	unique_ptr<DatabaseManager> db_manager;
 	unique_ptr<TaskScheduler> scheduler;
 	unique_ptr<ObjectCache> object_cache;
