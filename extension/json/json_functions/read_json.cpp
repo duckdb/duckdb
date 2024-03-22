@@ -167,14 +167,12 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 			}
 			bind_data->field_appearance_threshold = arg;
 		} else if (loption == "map_inference_threshold") {
-			auto arg = BigIntValue::Get(kv.second);
-			if (arg == -1) {
-				bind_data->map_inference_threshold = NumericLimits<idx_t>::Maximum();
-			} else if (arg > 0) {
-				bind_data->map_inference_threshold = arg;
-			} else {
-				throw BinderException("read_json \"map_inference_threshold\" parameter must be positive, or -1 to "
-				                      "never infer map type.");
+			bind_data->map_inference_threshold = DoubleValue::Get(kv.second);
+			if (bind_data->map_inference_threshold == -1) {
+				bind_data->map_inference_threshold = NumericLimits<double>::Maximum();
+			} else if (bind_data->map_inference_threshold < 0 || bind_data->map_inference_threshold > 1) {
+				throw BinderException("read_json_auto \"map_inference_threshold\" parameter must be between 0 and 1, "
+				                      "or -1 to disable map inference.");
 			}
 		} else if (loption == "dateformat" || loption == "date_format") {
 			auto format_string = StringValue::Get(kv.second);
@@ -353,7 +351,7 @@ TableFunctionSet CreateJSONFunctionInfo(string name, shared_ptr<JSONScanInfo> in
 	table_function.named_parameters["maximum_depth"] = LogicalType::BIGINT;
 	table_function.named_parameters["field_appearance_threshold"] = LogicalType::DOUBLE;
 	table_function.named_parameters["convert_strings_to_integers"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["map_inference_threshold"] = LogicalType::BIGINT;
+	table_function.named_parameters["map_inference_threshold"] = LogicalType::DOUBLE;
 	return MultiFileReader::CreateFunctionSet(table_function);
 }
 

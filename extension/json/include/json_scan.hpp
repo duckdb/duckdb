@@ -130,9 +130,9 @@ public:
 	idx_t maximum_sample_files = 32;
 	//! Whether we auto-detect and convert JSON strings to integers
 	bool convert_strings_to_integers = false;
-	//! If a struct contains more fields than this threshold and all fields have compatible types,
+	//! If a struct contains many fields with type similarity score more than this threshold,
 	//! we infer it as MAP type
-	idx_t map_inference_threshold = 10;
+	double map_inference_threshold = 0.8;
 
 	//! All column names (in order)
 	vector<string> names;

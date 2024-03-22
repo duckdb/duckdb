@@ -5,6 +5,8 @@
 #include "json_scan.hpp"
 #include "json_transform.hpp"
 
+#include <duckdb/common/extra_type_info.hpp>
+
 namespace duckdb {
 
 static inline bool IsNumeric(LogicalTypeId type) {
@@ -496,80 +498,171 @@ ScalarFunctionSet JSONFunctions::GetStructureFunction() {
 }
 
 static LogicalType StructureToTypeArray(ClientContext &context, const JSONStructureNode &node, const idx_t max_depth,
-                                        const double field_appearance_threshold, const idx_t map_inference_threshold,
-                                        idx_t depth, const idx_t sample_count) {
+                                        const double field_appearance_threshold, const double map_inference_threshold,
+                                        idx_t depth, const idx_t sample_count, const LogicalType &null_type) {
 	D_ASSERT(node.descriptions.size() == 1 && node.descriptions[0].type == LogicalTypeId::LIST);
 	const auto &desc = node.descriptions[0];
 	D_ASSERT(desc.children.size() == 1);
 
 	return LogicalType::LIST(JSONStructure::StructureToType(context, desc.children[0], max_depth,
 	                                                        field_appearance_threshold, map_inference_threshold,
-	                                                        depth + 1, desc.children[0].count));
+	                                                        depth + 1, desc.children[0].count, null_type));
+}
+
+static bool AreTypesCompatible(const LogicalType &left, const LogicalType &right) {
+	return left == right || left.IsJSONType() || right == LogicalType::SQLNULL;
+}
+
+static double TryMergeTypes(LogicalType &left, const LogicalType &right);
+
+static double TryMergeStructTypes(LogicalType &left, const LogicalType &right) {
+	const auto &left_child_types = left.AuxInfo()->Cast<StructTypeInfo>().child_types;
+	const auto &right_child_types = right.AuxInfo()->Cast<StructTypeInfo>().child_types;
+
+	unordered_map<string, LogicalType> merged_child_types;
+	for (const auto &left_child : left_child_types) {
+		merged_child_types[left_child.first] = left_child.second;
+	}
+
+	double total_similarity = 0;
+	for (const auto &right_child : right_child_types) {
+		const auto &right_child_name = right_child.first;
+		const auto &right_child_type = right_child.second;
+		auto it = merged_child_types.find(right_child_name);
+		if (it == merged_child_types.end()) {
+			merged_child_types[right_child_name] = right_child_type;
+			total_similarity += 1;
+			continue;
+		}
+
+		const double child_similarity = TryMergeTypes(it->second, right_child_type);
+		if (child_similarity < 0) {
+			return -1;
+		}
+
+		total_similarity += child_similarity;
+	}
+
+	left = LogicalType::STRUCT({merged_child_types.begin(), merged_child_types.end()});
+	return total_similarity / static_cast<double>(merged_child_types.size());
+}
+
+static double TryMergeMapAndStructTypes(const LogicalType &map_type, const LogicalType &struct_type,
+                                        LogicalType &merged_type) {
+	const auto &map_struct_type = map_type.AuxInfo()->Cast<ListTypeInfo>().child_type;
+	auto map_value_type = map_struct_type.AuxInfo()->Cast<StructTypeInfo>().child_types[1].second;
+	const auto &struct_child_types = struct_type.AuxInfo()->Cast<StructTypeInfo>().child_types;
+
+	double total_similarity = 0;
+	for (const auto &struct_child : struct_child_types) {
+		const double similarity = TryMergeTypes(map_value_type, struct_child.second);
+		if (similarity < 0) {
+			return similarity;
+		}
+		total_similarity += similarity;
+	}
+
+	merged_type = LogicalType::MAP(LogicalTypeId::VARCHAR, map_value_type);
+	return total_similarity / static_cast<double>(struct_child_types.size());
+}
+
+//! @return similarity score of the right type to the (new) left type
+static double TryMergeTypes(LogicalType &left, const LogicalType &right) {
+	if (AreTypesCompatible(left, right)) {
+		return 1;
+	}
+	if (left == LogicalType::SQLNULL || right.IsJSONType()) {
+		left = right;
+		return 1;
+	}
+
+	const auto &left_id = left.id();
+	const auto &right_id = right.id();
+	if (left_id == LogicalTypeId::STRUCT && right_id == LogicalTypeId::STRUCT) {
+		return TryMergeStructTypes(left, right);
+	}
+	if (left_id == LogicalTypeId::MAP && right_id == LogicalTypeId::STRUCT) {
+		return TryMergeMapAndStructTypes(left, right, left);
+	}
+	if (left_id == LogicalTypeId::STRUCT && right_id == LogicalTypeId::MAP) {
+		return TryMergeMapAndStructTypes(right, left, left);
+	}
+	if (left_id == LogicalTypeId::MAP && right_id == LogicalTypeId::MAP) {
+		const auto &left_struct_type = left.AuxInfo()->Cast<ListTypeInfo>().child_type;
+		auto left_value_type = left_struct_type.AuxInfo()->Cast<StructTypeInfo>().child_types[1].second;
+		const auto &right_struct_type = right.AuxInfo()->Cast<ListTypeInfo>().child_type;
+		const auto &right_value_type = right_struct_type.AuxInfo()->Cast<StructTypeInfo>().child_types[1].second;
+
+		const double similarity = TryMergeTypes(left_value_type, right_value_type);
+		left = LogicalType::MAP(LogicalTypeId::VARCHAR, left_value_type);
+		return similarity;
+	}
+
+	if (left_id == LogicalTypeId::LIST && right_id == LogicalTypeId::LIST) {
+		auto left_child_type = left.AuxInfo()->Cast<ListTypeInfo>().child_type;
+		const auto &right_child_type = right.AuxInfo()->Cast<ListTypeInfo>().child_type;
+
+		const double similarity = TryMergeTypes(left_child_type, right_child_type);
+		left = LogicalType::LIST(left_child_type);
+		return similarity;
+	}
+
+	return -1;
 }
 
 static child_list_t<LogicalType>
 StructureChildrenToTypeList(ClientContext &context, const JSONStructureDescription &desc, const idx_t max_depth,
-                            const double field_appearance_threshold, const idx_t map_inference_threshold, idx_t depth,
-                            const idx_t sample_count, const bool null_as_json) {
+                            const double field_appearance_threshold, const double map_inference_threshold, idx_t depth,
+                            const idx_t sample_count, const LogicalType &null_type) {
 	child_list_t<LogicalType> child_types;
 	child_types.reserve(desc.children.size());
 	for (auto &child : desc.children) {
 		D_ASSERT(child.key);
 		child_types.emplace_back(
 		    *child.key, JSONStructure::StructureToType(context, child, max_depth, field_appearance_threshold,
-		                                               map_inference_threshold, depth + 1, sample_count, null_as_json));
+		                                               map_inference_threshold, depth + 1, sample_count, null_type));
 	}
 	return child_types;
 }
 
 static LogicalType StructureToTypeObject(ClientContext &context, const JSONStructureNode &node, const idx_t max_depth,
-                                         const double field_appearance_threshold, const idx_t map_inference_threshold,
-                                         idx_t depth, const idx_t sample_count, const bool null_as_json) {
+                                         const double field_appearance_threshold, const double map_inference_threshold,
+                                         idx_t depth, const idx_t sample_count, const LogicalType &null_type) {
 	D_ASSERT(node.descriptions.size() == 1 && node.descriptions[0].type == LogicalTypeId::STRUCT);
 	auto &desc = node.descriptions[0];
 
 	// If it's an empty struct we do JSON instead
 	if (desc.children.empty()) {
 		// Empty struct - let's do JSON instead
-		return null_as_json ? LogicalType::JSON() : LogicalType::SQLNULL;
+		return null_type;
 	}
 
-	// If all children are of compatible types we infer map type
-	if (desc.children.size() >= map_inference_threshold) {
-		const auto child_types = StructureChildrenToTypeList(context, desc, max_depth, field_appearance_threshold,
-		                                                     map_inference_threshold, depth, sample_count, false);
+	// If we have many children and all children have similar-enough types we infer map type
+	if (desc.children.size() >= 10) {
+		const auto child_types =
+		    StructureChildrenToTypeList(context, desc, max_depth, field_appearance_threshold, map_inference_threshold,
+		                                depth, sample_count, LogicalType::SQLNULL);
 
+		// Merge all child types
 		LogicalType map_value_type = LogicalType::SQLNULL;
-		bool all_compatible_type = true;
 		for (const auto &child_type : child_types) {
-			const auto &child_logical_type = child_type.second;
-			if (child_logical_type == LogicalType::SQLNULL) {
-				continue;
-			}
+			TryMergeTypes(map_value_type, child_type.second);
+		}
 
-			if (map_value_type == LogicalType::SQLNULL) {
-				// First non-null type
-				map_value_type = child_logical_type;
-				if (map_value_type.IsJSONType()) {
-					// JSON is compatible with everything, so stop here
-					break;
-				}
-				continue;
-			}
-			if (map_value_type == child_logical_type) {
-				continue;
-			}
-			if (child_logical_type.IsJSONType()) {
-				// If one of the types is JSON, we can infer map of JSONs and stop here
-				map_value_type = child_logical_type;
+		// Re-run merging algorithm with the merged type to get an accurate similarity score
+		double total_similarity = 0;
+		for (const auto &child_type : child_types) {
+			const auto child_similarity = TryMergeTypes(map_value_type, child_type.second);
+			if (child_similarity < 0) {
+				total_similarity = -1;
 				break;
 			}
-			all_compatible_type = false;
-			break;
+			total_similarity += child_similarity;
 		}
-		if (all_compatible_type) {
+		const auto avg_similarity = total_similarity / static_cast<double>(child_types.size());
+		if (avg_similarity >= map_inference_threshold) {
 			return LogicalType::MAP(LogicalType::VARCHAR,
-			                        map_value_type != LogicalType::SQLNULL ? map_value_type : LogicalType::JSON());
+			                        map_value_type != LogicalType::SQLNULL ? map_value_type : null_type);
 		}
 	}
 
@@ -584,7 +677,7 @@ static LogicalType StructureToTypeObject(ClientContext &context, const JSONStruc
 	}
 
 	return LogicalType::STRUCT(StructureChildrenToTypeList(context, desc, max_depth, field_appearance_threshold,
-	                                                       map_inference_threshold, depth, sample_count, true));
+	                                                       map_inference_threshold, depth, sample_count, null_type));
 }
 
 static LogicalType StructureToTypeString(const JSONStructureNode &node) {
@@ -597,13 +690,14 @@ static LogicalType StructureToTypeString(const JSONStructureNode &node) {
 }
 
 LogicalType JSONStructure::StructureToType(ClientContext &context, const JSONStructureNode &node, const idx_t max_depth,
-                                           const double field_appearance_threshold, const idx_t map_inference_threshold,
-                                           idx_t depth, idx_t sample_count, const bool null_as_json) {
+                                           const double field_appearance_threshold,
+                                           const double map_inference_threshold, idx_t depth, idx_t sample_count,
+                                           const LogicalType &null_type) {
 	if (depth >= max_depth) {
 		return LogicalType::JSON();
 	}
 	if (node.descriptions.empty()) {
-		return LogicalType::JSON();
+		return null_type;
 	}
 	if (node.descriptions.size() != 1) { // Inconsistent types, so we resort to JSON
 		return LogicalType::JSON();
@@ -614,18 +708,16 @@ LogicalType JSONStructure::StructureToType(ClientContext &context, const JSONStr
 	switch (desc.type) {
 	case LogicalTypeId::LIST:
 		return StructureToTypeArray(context, node, max_depth, field_appearance_threshold, map_inference_threshold,
-		                            depth, sample_count);
+		                            depth, sample_count, null_type);
 	case LogicalTypeId::STRUCT:
 		return StructureToTypeObject(context, node, max_depth, field_appearance_threshold, map_inference_threshold,
-		                             depth, sample_count, null_as_json);
+		                             depth, sample_count, null_type);
 	case LogicalTypeId::VARCHAR:
 		return StructureToTypeString(node);
 	case LogicalTypeId::UBIGINT:
 		return LogicalTypeId::BIGINT; // We prefer not to return UBIGINT in our type auto-detection
 	case LogicalTypeId::SQLNULL:
-		if (null_as_json) {
-			return LogicalType::JSON();
-		}
+		return null_type;
 	default:
 		return desc.type;
 	}

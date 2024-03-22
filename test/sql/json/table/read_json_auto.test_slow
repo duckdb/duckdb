@@ -227,23 +227,17 @@ select distinct typeof(a) from read_json_auto('data/json/simple_map.jsonl')
 ----
 MAP(VARCHAR, BIGINT)
 
-# Test setting map_inference_threshold to a large value
+# Test setting map_inference_threshold high
 query T
-select distinct typeof(a) from read_json_auto('data/json/simple_map.jsonl', map_inference_threshold=1000)
+select distinct typeof(a) from read_json_auto('data/json/simple_map.jsonl', map_inference_threshold=1)
 ----
-JSON
+MAP(VARCHAR, BIGINT)
 
 # Map inference can be disabled
 query T
 select distinct typeof(a) from read_json_auto('data/json/simple_map.jsonl', map_inference_threshold=-1)
 ----
 JSON
-
-# Test setting map_inference_threshold to a small value
-query T
-select distinct typeof(a) from read_json_auto('data/json/simple_map.jsonl', map_inference_threshold=10)
-----
-MAP(VARCHAR, BIGINT)
 
 # Map where all values are null
 query T
@@ -262,6 +256,23 @@ query T
 select distinct typeof(a) from read_json_auto('data/json/map_of_structs.jsonl', field_appearance_threshold=0)
 ----
 MAP(VARCHAR, STRUCT(b BIGINT))
+
+# Map similarity score is accurate
+query T
+select distinct typeof(a) from read_json_auto('data/json/map_50_50.jsonl', map_inference_threshold=0.51)
+----
+STRUCT(s1 STRUCT(f1 BIGINT[]), s2 STRUCT(f2 BIGINT[]), s3 STRUCT(f1 BIGINT[]), s4 STRUCT(f2 BIGINT[]), s5 STRUCT(f1 BIGINT[]), s6 STRUCT(f2 BIGINT[]), s7 STRUCT(f1 BIGINT[]), s8 STRUCT(f2 BIGINT[]), s9 STRUCT(f1 BIGINT[]), s10 STRUCT(f2 BIGINT[]))
+
+query T
+select distinct typeof(a) from read_json_auto('data/json/map_50_50.jsonl', map_inference_threshold=0.5)
+----
+MAP(VARCHAR, STRUCT(f2 BIGINT[], f1 BIGINT[]))
+
+# Map of maps
+query T
+select distinct typeof(a) from read_json_auto('data/json/map_of_map.jsonl')
+----
+MAP(VARCHAR, MAP(VARCHAR, BIGINT))
 
 # if we only sample the first file, we default to a single JSON column
 query I
