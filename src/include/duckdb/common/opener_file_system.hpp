@@ -134,6 +134,10 @@ public:
 	void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs) override {
 		GetFileSystem().RegisterSubSystem(compression_type, std::move(fs));
 	}
+
+	void UnregisterSubSystem(const string &name) override {
+		GetFileSystem().UnregisterSubSystem(name);
+	}
 };
 
 } // namespace duckdb
