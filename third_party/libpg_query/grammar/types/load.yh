@@ -1,2 +1,4 @@
 %type <str> file_name
 %type <str> repo_path
+%type <str> opt_from_repo
+%type <str> opt_ext_version

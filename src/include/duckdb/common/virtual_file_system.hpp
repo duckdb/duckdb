@@ -64,6 +64,8 @@ public:
 
 	vector<string> ListSubSystems() override;
 
+	FileSystem &GetSubsystem(const string &fpath) override;
+
 	std::string GetName() const override;
 
 	void SetDisabledFileSystems(const vector<string> &names) override;

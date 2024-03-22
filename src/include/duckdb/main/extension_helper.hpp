@@ -8,9 +8,10 @@
 
 #pragma once
 
-#include <string>
 #include "duckdb.hpp"
 #include "duckdb/main/extension_entries.hpp"
+
+#include <string>
 
 namespace duckdb {
 class DuckDB;
@@ -35,17 +36,30 @@ struct ExtensionInitResult {
 	void *lib_hdl;
 };
 
+struct ExtensionUpdateResult {
+	string extension_name;
+	string repository;
+	bool updated;
+
+	string extension_version;
+	string prev_version;
+	string installed_version;
+};
+
 class ExtensionHelper {
 public:
+	static constexpr const char *DEFAULT_REPOSITORY = "http://extensions.duckdb.org";
+	static constexpr const char *NIGHTLY_REPOSITORY = "http://nightly-extensions.duckdb.org";
+
 	static void LoadAllExtensions(DuckDB &db);
 
 	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension);
 
 	//! Install an extension
 	static void InstallExtension(ClientContext &context, const string &extension, bool force_install,
-	                             const string &respository = "");
+	                             const string &repository = "", const string &version = "");
 	static void InstallExtension(DBConfig &config, FileSystem &fs, const string &extension, bool force_install,
-	                             const string &respository = "");
+	                             const string &respository = "", const string &version = "");
 	//! Load an extension
 	static void LoadExternalExtension(ClientContext &context, const string &extension);
 	static void LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const string &extension);
@@ -57,12 +71,20 @@ public:
 	//! Autoload an extension (depending on config, potentially a nop. Returns false on failure)
 	DUCKDB_API static bool TryAutoLoadExtension(ClientContext &context, const string &extension_name) noexcept;
 
+	//! Update all extensions, return a vector of extension names that were updated;
+	static vector<ExtensionUpdateResult> UpdateExtensions(ClientContext &context);
+	static vector<ExtensionUpdateResult> UpdateExtensions(DBConfig &config, FileSystem &fs);
+	//! Update a specific extension
+	static ExtensionUpdateResult UpdateExtension(ClientContext &context, const string &extension_name);
+	static ExtensionUpdateResult UpdateExtension(DBConfig &config, FileSystem &fs, const string &extension_name);
+
 	//! Get the extension directory base on the current config
 	static string ExtensionDirectory(ClientContext &context);
 	static string ExtensionDirectory(DBConfig &config, FileSystem &fs);
 
 	//! Get the extension url template, containing placeholders for version, platform and extension name
-	static string ExtensionUrlTemplate(optional_ptr<const DBConfig> config, const string &repository);
+	static string ExtensionUrlTemplate(optional_ptr<const DBConfig> config, const string &repository,
+	                                   const string &version);
 	//! Return the extension url template with the variables replaced
 	static string ExtensionFinalizeUrlTemplate(const string &url, const string &name);
 
@@ -80,6 +102,9 @@ public:
 
 	// Returns extension name, or empty string if not a replacement open path
 	static string ExtractExtensionPrefixFromPath(const string &path);
+
+	// Returns the user-readable name of a repository URL
+	static string GetRepositoryName(const string &repository_base_url);
 
 	//! Apply any known extension aliases, return the lowercase name
 	static string ApplyExtensionAlias(const string &extension_name);
@@ -146,9 +171,13 @@ public:
 	//! For tagged releases we use the tag, else we use the git commit hash
 	static const string GetVersionDirectoryName();
 
+	static bool IsRelease(const string &version_tag);
+	static bool CreateSuggestions(const string &extension_name, string &message);
+
 private:
 	static void InstallExtensionInternal(DBConfig &config, FileSystem &fs, const string &local_path,
-	                                     const string &extension, bool force_install, const string &repository);
+	                                     const string &extension, bool force_install, const string &repository,
+	                                     const string &version);
 	static const vector<string> PathComponents();
 	static string DefaultExtensionFolder(FileSystem &fs);
 	static bool AllowAutoInstall(const string &extension);
@@ -157,8 +186,6 @@ private:
 	                           string &error);
 	//! Version tags occur with and without 'v', tag in extension path is always with 'v'
 	static const string NormalizeVersionTag(const string &version_tag);
-	static bool IsRelease(const string &version_tag);
-	static bool CreateSuggestions(const string &extension_name, string &message);
 
 private:
 	static ExtensionLoadResult LoadExtensionInternal(DuckDB &db, const std::string &extension, bool initial_load);

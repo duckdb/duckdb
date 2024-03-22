@@ -24,6 +24,7 @@ public:
 
 	string filename;
 	string repository;
+	string version;
 	LoadType load_type;
 
 public:
