@@ -249,7 +249,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, stri
 }
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, string url, HeaderMap header_map) {
-	auto &hfh = (HTTPFileHandle &)handle;
+	auto &hfh = handle.Cast<HTTPFileHandle>();
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
 	auto headers = initialize_http_headers(header_map);
@@ -404,7 +404,7 @@ unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, FileOpenFlag
 // Buffered read from http file.
 // Note that buffering is disabled when FileFlags::FILE_FLAGS_DIRECT_IO is set
 void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	auto &hfh = (HTTPFileHandle &)handle;
+	auto &hfh = handle.Cast<HTTPFileHandle>();
 
 	D_ASSERT(hfh.state);
 	if (hfh.cached_file_handle) {
@@ -419,8 +419,9 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 	idx_t to_read = nr_bytes;
 	idx_t buffer_offset = 0;
 
-	// Don't buffer when DirectIO is set.
-	if (hfh.flags.DirectIO() && to_read > 0) {
+	// Don't buffer when DirectIO is set or when we are doing parallel reads
+	bool skip_buffer = hfh.flags.DirectIO() || hfh.flags.RequireParallelAccess();
+	if (skip_buffer && to_read > 0) {
 		GetRangeRequest(hfh, hfh.path, {}, location, (char *)buffer, to_read);
 		hfh.buffer_available = 0;
 		hfh.buffer_idx = 0;
@@ -535,19 +536,19 @@ idx_t HTTPFileSystem::SeekPosition(FileHandle &handle) {
 
 // Get either the local, global, or no cache depending on settings
 static optional_ptr<HTTPMetadataCache> TryGetMetadataCache(optional_ptr<FileOpener> opener, HTTPFileSystem &httpfs) {
+	auto db = FileOpener::TryGetDatabase(opener);
 	auto client_context = FileOpener::TryGetClientContext(opener);
-	if (!client_context) {
+	if (!db) {
 		return nullptr;
 	}
 
-	bool use_shared_cache = client_context->db->config.options.http_metadata_cache_enable;
-
+	bool use_shared_cache = db->config.options.http_metadata_cache_enable;
 	if (use_shared_cache) {
 		if (!httpfs.global_metadata_cache) {
 			httpfs.global_metadata_cache = make_uniq<HTTPMetadataCache>(false, true);
 		}
 		return httpfs.global_metadata_cache.get();
-	} else {
+	} else if (client_context) {
 		auto lookup = client_context->registered_state.find("http_cache");
 		if (lookup == client_context->registered_state.end()) {
 			auto cache = make_shared<HTTPMetadataCache>(true, true);

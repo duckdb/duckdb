@@ -53,6 +53,7 @@ constexpr FileOpenFlags FileFlags::FILE_FLAGS_FILE_CREATE_NEW;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_APPEND;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_PRIVATE;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS;
+constexpr FileOpenFlags FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
 
 void FileOpenFlags::Verify() {
 #ifdef DEBUG
