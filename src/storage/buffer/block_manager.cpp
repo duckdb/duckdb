@@ -6,8 +6,9 @@
 
 namespace duckdb {
 
-BlockManager::BlockManager(BufferManager &buffer_manager)
-    : buffer_manager(buffer_manager), metadata_manager(make_uniq<MetadataManager>(*this, buffer_manager)) {
+BlockManager::BlockManager(BufferManager &buffer_manager, const optional_idx block_alloc_size_p)
+    : buffer_manager(buffer_manager), metadata_manager(make_uniq<MetadataManager>(*this, buffer_manager)),
+      block_alloc_size(block_alloc_size_p) {
 }
 
 shared_ptr<BlockHandle> BlockManager::RegisterBlock(block_id_t block_id) {
