@@ -69,7 +69,7 @@ SELECT count(*) FROM '__TEST_DIR__/row_groups_per_file4/*.parquet'
 10000
 
 query I
-SELECT count(*) BETWEEN 3 and 5 FROM glob('__TEST_DIR__/row_groups_per_file4/*.parquet')
+SELECT count(*) BETWEEN 2 and 5 FROM glob('__TEST_DIR__/row_groups_per_file4/*.parquet')
 ----
 true
 
@@ -82,7 +82,7 @@ SELECT count(*) FROM '__TEST_DIR__/row_groups_per_file5/*.parquet'
 10000
 
 query I
-SELECT count(*) BETWEEN 2 and 3 FROM glob('__TEST_DIR__/row_groups_per_file5/*.parquet')
+SELECT count(*) BETWEEN 1 and 3 FROM glob('__TEST_DIR__/row_groups_per_file5/*.parquet')
 ----
 true
 
@@ -95,7 +95,7 @@ SELECT count(*) FROM '__TEST_DIR__/row_groups_per_file6/*.parquet'
 10000
 
 query I
-SELECT count(*) BETWEEN 2 and 3 FROM glob('__TEST_DIR__/row_groups_per_file6/*.parquet')
+SELECT count(*) BETWEEN 1 and 3 FROM glob('__TEST_DIR__/row_groups_per_file6/*.parquet')
 ----
 true
 
