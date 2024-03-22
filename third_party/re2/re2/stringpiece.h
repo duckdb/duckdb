@@ -5,6 +5,10 @@
 #ifndef RE2_STRINGPIECE_H_
 #define RE2_STRINGPIECE_H_
 
+#ifdef min
+#undef min
+#endif
+
 // A string-like object that points to a sized piece of memory.
 //
 // Functions or methods may use const StringPiece& parameters to accept either
