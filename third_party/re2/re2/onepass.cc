@@ -73,8 +73,6 @@
 
 namespace duckdb_re2 {
 
-static const bool ExtraDebug = false;
-
 // The key insight behind this implementation is that the
 // non-determinism in an NFA for a one-pass regular expression
 // is contained.  To explain what that means, first a
@@ -461,9 +459,6 @@ bool Prog::IsOnePass() {
           int nextindex = nodebyid[ip->out()];
           if (nextindex == -1) {
             if (nalloc >= maxnodes) {
-              if (ExtraDebug)
-                LOG(ERROR) << StringPrintf(
-                    "Not OnePass: hit node limit %d >= %d", nalloc, maxnodes);
               goto fail;
             }
             nextindex = nalloc;
@@ -486,9 +481,6 @@ bool Prog::IsOnePass() {
             if ((act & kImpossible) == kImpossible) {
               node->action[b] = newact;
             } else if (act != newact) {
-              if (ExtraDebug)
-                LOG(ERROR) << StringPrintf(
-                    "Not OnePass: conflict on byte %#x at state %d", c, *it);
               goto fail;
             }
           }
@@ -507,9 +499,6 @@ bool Prog::IsOnePass() {
               if ((act & kImpossible) == kImpossible) {
                 node->action[b] = newact;
               } else if (act != newact) {
-                if (ExtraDebug)
-                  LOG(ERROR) << StringPrintf(
-                      "Not OnePass: conflict on byte %#x at state %d", c, *it);
                 goto fail;
               }
             }
@@ -548,9 +537,6 @@ bool Prog::IsOnePass() {
 
           // If already on work queue, (1) is violated: bail out.
           if (!AddQ(&workq, ip->out())) {
-            if (ExtraDebug)
-              LOG(ERROR) << StringPrintf(
-                  "Not OnePass: multiple paths %d -> %d", *it, ip->out());
             goto fail;
           }
           id = ip->out();
@@ -559,9 +545,6 @@ bool Prog::IsOnePass() {
         case kInstMatch:
           if (matched) {
             // (3) is violated
-            if (ExtraDebug)
-              LOG(ERROR) << StringPrintf(
-                  "Not OnePass: multiple matches from %d", *it);
             goto fail;
           }
           matched = true;
@@ -579,36 +562,6 @@ bool Prog::IsOnePass() {
           break;
       }
     }
-  }
-
-  if (ExtraDebug) {  // For debugging, dump one-pass NFA to LOG(ERROR).
-    LOG(ERROR) << "bytemap:\n" << DumpByteMap();
-    LOG(ERROR) << "prog:\n" << Dump();
-
-    std::map<int, int> idmap;
-    for (int i = 0; i < size; i++)
-      if (nodebyid[i] != -1)
-        idmap[nodebyid[i]] = i;
-
-    std::string dump;
-    for (Instq::iterator it = tovisit.begin(); it != tovisit.end(); ++it) {
-      int id = *it;
-      int nodeindex = nodebyid[id];
-      if (nodeindex == -1)
-        continue;
-      OneState* node = IndexToNode(nodes.data(), statesize, nodeindex);
-      dump += StringPrintf("node %d id=%d: matchcond=%#x\n",
-                           nodeindex, id, node->matchcond);
-      for (int i = 0; i < bytemap_range_; i++) {
-        if ((node->action[i] & kImpossible) == kImpossible)
-          continue;
-        dump += StringPrintf("  %d cond %#x -> %d id=%d\n",
-                             i, node->action[i] & 0xFFFF,
-                             node->action[i] >> kIndexShift,
-                             idmap[node->action[i] >> kIndexShift]);
-      }
-    }
-    LOG(ERROR) << "nodes:\n" << dump;
   }
 
   dfa_mem_ -= nalloc*statesize;
