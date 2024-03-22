@@ -12,7 +12,7 @@ index dfe396a..87bf598 100644
  
  	auto max_threads = context.db->NumberOfThreads();
 diff --git a/spatial/src/spatial/gdal/file_handler.cpp b/spatial/src/spatial/gdal/file_handler.cpp
-index db449df..4985c9f 100644
+index db449df..ebcefe5 100644
 --- a/spatial/src/spatial/gdal/file_handler.cpp
 +++ b/spatial/src/spatial/gdal/file_handler.cpp
 @@ -122,7 +122,7 @@ public:
@@ -24,7 +24,15 @@ index db449df..4985c9f 100644
  		auto len = strlen(access);
  		if (access[0] == 'r') {
  			flags = FileFlags::FILE_FLAGS_READ;
-@@ -167,7 +167,7 @@ public:
+@@ -160,14 +160,14 @@ public:
+ 			// Check if the file is a directory
+ 
+ #ifdef _WIN32
+-			if (fs.DirectoryExists(path) && (flags & FileFlags::FILE_FLAGS_READ)) {
++			if (fs.DirectoryExists(path) && flags.OpenForReading()) {
+ 				// We can't open a directory for reading on windows without special flags
+ 				// so just open nul instead, gdal will reject it when it tries to read
+ 				auto file = fs.OpenFile("nul", flags);
  				return new DuckDBFileHandle(std::move(file));
  			}
  #endif
