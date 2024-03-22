@@ -148,12 +148,16 @@ public:
 	}
 	static void Verify();
 
-	// Global cache
-	duckdb::unique_ptr<HTTPMetadataCache> global_metadata_cache;
+	optional_ptr<HTTPMetadataCache> GetGlobalCache();
 
 protected:
 	virtual duckdb::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, FileOpenFlags flags,
 	                                                        optional_ptr<FileOpener> opener);
+
+private:
+	// Global cache
+	mutex global_cache_lock;
+	duckdb::unique_ptr<HTTPMetadataCache> global_metadata_cache;
 };
 
 } // namespace duckdb

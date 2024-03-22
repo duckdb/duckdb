@@ -534,6 +534,14 @@ idx_t HTTPFileSystem::SeekPosition(FileHandle &handle) {
 	return sfh.file_offset;
 }
 
+optional_ptr<HTTPMetadataCache> HTTPFileSystem::GetGlobalCache() {
+	lock_guard<mutex> lock(global_cache_lock);
+	if (!global_metadata_cache) {
+		global_metadata_cache = make_uniq<HTTPMetadataCache>(false, true);
+	}
+	return global_metadata_cache.get();
+}
+
 // Get either the local, global, or no cache depending on settings
 static optional_ptr<HTTPMetadataCache> TryGetMetadataCache(optional_ptr<FileOpener> opener, HTTPFileSystem &httpfs) {
 	auto db = FileOpener::TryGetDatabase(opener);
@@ -544,10 +552,7 @@ static optional_ptr<HTTPMetadataCache> TryGetMetadataCache(optional_ptr<FileOpen
 
 	bool use_shared_cache = db->config.options.http_metadata_cache_enable;
 	if (use_shared_cache) {
-		if (!httpfs.global_metadata_cache) {
-			httpfs.global_metadata_cache = make_uniq<HTTPMetadataCache>(false, true);
-		}
-		return httpfs.global_metadata_cache.get();
+		return httpfs.GetGlobalCache();
 	} else if (client_context) {
 		auto lookup = client_context->registered_state.find("http_cache");
 		if (lookup == client_context->registered_state.end()) {
