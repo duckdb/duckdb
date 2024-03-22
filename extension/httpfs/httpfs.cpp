@@ -558,6 +558,7 @@ static optional_ptr<HTTPMetadataCache> TryGetMetadataCache(optional_ptr<FileOpen
 			return (HTTPMetadataCache *)lookup->second.get();
 		}
 	}
+	return nullptr;
 }
 
 void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
