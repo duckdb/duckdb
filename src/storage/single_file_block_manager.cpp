@@ -150,31 +150,29 @@ SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, string path
       iteration_count(0), options(options) {
 }
 
-void SingleFileBlockManager::GetFileFlags(uint8_t &flags, FileLockType &lock, bool create_new) {
+FileOpenFlags SingleFileBlockManager::GetFileFlags(bool create_new) const {
+	FileOpenFlags result;
 	if (options.read_only) {
 		D_ASSERT(!create_new);
-		flags = FileFlags::FILE_FLAGS_READ;
-		lock = FileLockType::READ_LOCK;
+		result = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS | FileLockType::READ_LOCK;
 	} else {
-		flags = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_READ;
-		lock = FileLockType::WRITE_LOCK;
+		result = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_READ | FileLockType::WRITE_LOCK;
 		if (create_new) {
-			flags |= FileFlags::FILE_FLAGS_FILE_CREATE;
+			result |= FileFlags::FILE_FLAGS_FILE_CREATE;
 		}
 	}
 	if (options.use_direct_io) {
-		flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
+		result |= FileFlags::FILE_FLAGS_DIRECT_IO;
 	}
+	return result;
 }
 
 void SingleFileBlockManager::CreateNewDatabase() {
-	uint8_t flags;
-	FileLockType lock;
-	GetFileFlags(flags, lock, true);
+	auto flags = GetFileFlags(true);
 
 	// open the RDBMS handle
 	auto &fs = FileSystem::Get(db);
-	handle = fs.OpenFile(path, flags, lock);
+	handle = fs.OpenFile(path, flags);
 
 	// if we create a new file, we fill the metadata of the file
 	// first fill in the new header
@@ -221,13 +219,15 @@ void SingleFileBlockManager::CreateNewDatabase() {
 }
 
 void SingleFileBlockManager::LoadExistingDatabase() {
-	uint8_t flags;
-	FileLockType lock;
-	GetFileFlags(flags, lock, false);
+	auto flags = GetFileFlags(false);
 
 	// open the RDBMS handle
 	auto &fs = FileSystem::Get(db);
-	handle = fs.OpenFile(path, flags, lock);
+	handle = fs.OpenFile(path, flags);
+	if (!handle) {
+		// this can only happen in read-only mode - as that is when we set FILE_FLAGS_NULL_IF_NOT_EXISTS
+		throw CatalogException("Cannot open database \"%s\" in read-only mode: database does not exist", path);
+	}
 
 	MainHeader::CheckMagicBytes(*handle);
 	// otherwise, we check the metadata of the file

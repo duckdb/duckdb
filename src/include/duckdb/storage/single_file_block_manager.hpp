@@ -36,7 +36,7 @@ class SingleFileBlockManager : public BlockManager {
 public:
 	SingleFileBlockManager(AttachedDatabase &db, string path, StorageManagerOptions options);
 
-	void GetFileFlags(uint8_t &flags, FileLockType &lock, bool create_new);
+	FileOpenFlags GetFileFlags(bool create_new) const;
 	void CreateNewDatabase();
 	void LoadExistingDatabase();
 

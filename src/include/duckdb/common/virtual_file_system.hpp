@@ -19,9 +19,8 @@ class VirtualFileSystem : public FileSystem {
 public:
 	VirtualFileSystem();
 
-	unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK,
-	                                FileCompressionType compression = FileCompressionType::UNCOMPRESSED,
-	                                FileOpener *opener = nullptr) override;
+	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
+	                                optional_ptr<FileOpener> opener = nullptr) override;
 
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
 	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
@@ -52,7 +51,7 @@ public:
 	bool FileExists(const string &filename) override;
 
 	bool IsPipe(const string &filename) override;
-	virtual void RemoveFile(const string &filename) override;
+	void RemoveFile(const string &filename) override;
 
 	virtual vector<string> Glob(const string &path, FileOpener *opener = nullptr) override;
 

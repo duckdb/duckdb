@@ -30,12 +30,13 @@ public:
 
 	virtual SettingLookupResult TryGetCurrentSetting(const string &key, Value &result, FileOpenerInfo &info);
 	virtual SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) = 0;
-	virtual ClientContext *TryGetClientContext() = 0;
+	virtual optional_ptr<ClientContext> TryGetClientContext() = 0;
 
-	DUCKDB_API static ClientContext *TryGetClientContext(FileOpener *opener);
-	DUCKDB_API static SettingLookupResult TryGetCurrentSetting(FileOpener *opener, const string &key, Value &result);
-	DUCKDB_API static SettingLookupResult TryGetCurrentSetting(FileOpener *opener, const string &key, Value &result,
-	                                                           FileOpenerInfo &info);
+	DUCKDB_API static optional_ptr<ClientContext> TryGetClientContext(optional_ptr<FileOpener> opener);
+	DUCKDB_API static SettingLookupResult TryGetCurrentSetting(optional_ptr<FileOpener> opener, const string &key,
+	                                                           Value &result);
+	DUCKDB_API static SettingLookupResult TryGetCurrentSetting(optional_ptr<FileOpener> opener, const string &key,
+	                                                           Value &result, FileOpenerInfo &info);
 };
 
 } // namespace duckdb
