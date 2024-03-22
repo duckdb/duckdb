@@ -72,6 +72,19 @@ jobs:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
 
+    - name: Check/Act on inputs.override_git_describe
+      shell: bash
+      run: |
+        if [[ "${{ inputs.override_git_describe }}" == *-* ]]; then
+            echo "override_git_describe ${{ inputs.override_git_describe }}: provide either vX.Y.Z or empty string"
+            exit 1
+        elif [[ -z "${{ inputs.override_git_describe }}" ]]; then
+            echo "No override_git_describe provided"
+        else
+            echo "override_git_describe ${{ inputs.override_git_describe }}: add tag"
+            git tag ${{ inputs.override_git_describe }}
+        fi
+
     - uses: actions/setup-python@v5
       with:
         python-version: '3.10'
@@ -189,6 +202,19 @@ jobs:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
 
+    - name: Check/Act on inputs.override_git_describe
+      shell: bash
+      run: |
+        if [[ "${{ inputs.override_git_describe }}" == *-* ]]; then
+            echo "override_git_describe ${{ inputs.override_git_describe }}: provide either vX.Y.Z or empty string"
+            exit 1
+        elif [[ -z "${{ inputs.override_git_describe }}" ]]; then
+            echo "No override_git_describe provided"
+        else
+            echo "override_git_describe ${{ inputs.override_git_describe }}: add tag"
+            git tag ${{ inputs.override_git_describe }}
+        fi
+
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v2
       if: ${{ matrix.arch == 'aarch64' }}
@@ -265,6 +291,19 @@ jobs:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
 
+      - name: Check/Act on inputs.override_git_describe
+        shell: bash
+        run: |
+          if [[ "${{ inputs.override_git_describe }}" == *-* ]]; then
+              echo "override_git_describe ${{ inputs.override_git_describe }}: provide either vX.Y.Z or empty string"
+              exit 1
+          elif [[ -z "${{ inputs.override_git_describe }}" ]]; then
+              echo "No override_git_describe provided"
+          else
+              echo "override_git_describe ${{ inputs.override_git_describe }}: add tag"
+              git tag ${{ inputs.override_git_describe }}
+          fi
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
@@ -328,6 +367,19 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
+
+      - name: Check/Act on inputs.override_git_describe
+        shell: bash
+        run: |
+          if [[ "${{ inputs.override_git_describe }}" == *-* ]]; then
+              echo "override_git_describe ${{ inputs.override_git_describe }}: provide either vX.Y.Z or empty string"
+              exit 1
+          elif [[ -z "${{ inputs.override_git_describe }}" ]]; then
+              echo "No override_git_describe provided"
+          else
+              echo "override_git_describe ${{ inputs.override_git_describe }}: add tag"
+              git tag ${{ inputs.override_git_describe }}
+          fi
 
       - uses: actions/setup-python@v5
         with:
