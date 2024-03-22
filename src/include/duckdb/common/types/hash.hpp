@@ -35,7 +35,7 @@ inline hash_t murmurhash32(uint32_t x) {
 
 template <class T>
 hash_t Hash(T value) {
-	return murmurhash32(value);
+	return murmurhash32(static_cast<uint32_t>(value));
 }
 
 //! Combine two hashes by XORing them

@@ -50,7 +50,7 @@ bool CardinalityEstimator::SingleColumnFilter(FilterInfo &filter_info) {
 
 vector<idx_t> CardinalityEstimator::DetermineMatchingEquivalentSets(FilterInfo *filter_info) {
 	vector<idx_t> matching_equivalent_sets;
-	auto equivalent_relation_index = 0;
+	idx_t equivalent_relation_index = 0;
 
 	for (const RelationsToTDom &r2tdom : relations_to_tdoms) {
 		auto &i_set = r2tdom.equivalent_relations;

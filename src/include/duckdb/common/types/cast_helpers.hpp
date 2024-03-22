@@ -64,7 +64,7 @@ public:
 		int sign = -(value < 0);
 		UNSIGNED unsigned_value = UnsafeNumericCast<UNSIGNED>(UNSIGNED(value ^ sign) - sign);
 		int length = UnsignedLength<UNSIGNED>(unsigned_value) - sign;
-		string_t result = StringVector::EmptyString(vector, length);
+		string_t result = StringVector::EmptyString(vector, NumericCast<size_t>(length));
 		auto dataptr = result.GetDataWriteable();
 		auto endptr = dataptr + length;
 		endptr = FormatUnsigned(unsigned_value, endptr);
@@ -149,7 +149,7 @@ struct DecimalToString {
 	template <class SIGNED, class UNSIGNED>
 	static string_t Format(SIGNED value, uint8_t width, uint8_t scale, Vector &vector) {
 		int len = DecimalLength<SIGNED, UNSIGNED>(value, width, scale);
-		string_t result = StringVector::EmptyString(vector, len);
+		string_t result = StringVector::EmptyString(vector, NumericCast<size_t>(len));
 		FormatDecimal<SIGNED, UNSIGNED>(value, width, scale, result.GetDataWriteable(), len);
 		result.Finalize();
 		return result;
@@ -260,7 +260,7 @@ struct HugeintToStringCast {
 			Hugeint::NegateInPlace(value);
 		}
 		int length = UnsignedLength(value) + negative;
-		string_t result = StringVector::EmptyString(vector, length);
+		string_t result = StringVector::EmptyString(vector, NumericCast<size_t>(length));
 		auto dataptr = result.GetDataWriteable();
 		auto endptr = dataptr + length;
 		if (value.upper == 0) {
@@ -339,7 +339,7 @@ struct HugeintToStringCast {
 
 	static string_t FormatDecimal(hugeint_t value, uint8_t width, uint8_t scale, Vector &vector) {
 		int length = DecimalLength(value, width, scale);
-		string_t result = StringVector::EmptyString(vector, length);
+		string_t result = StringVector::EmptyString(vector, NumericCast<idx_t>(length));
 
 		auto dst = result.GetDataWriteable();
 
@@ -417,9 +417,9 @@ struct DateToStringCast {
 
 struct TimeToStringCast {
 	//! Format microseconds to a buffer of length 6. Returns the number of trailing zeros
-	static int32_t FormatMicros(uint32_t microseconds, char micro_buffer[]) {
+	static int32_t FormatMicros(int32_t microseconds, char micro_buffer[]) {
 		char *endptr = micro_buffer + 6;
-		endptr = NumericHelper::FormatUnsigned<uint32_t>(microseconds, endptr);
+		endptr = NumericHelper::FormatUnsigned<int32_t>(microseconds, endptr);
 		while (endptr > micro_buffer) {
 			*--endptr = '0';
 		}
@@ -448,7 +448,7 @@ struct TimeToStringCast {
 			// we write backwards and pad with zeros to the left
 			// now we figure out how many digits we need to include by looking backwards
 			// and checking how many zeros we encounter
-			length -= FormatMicros(time[3], micro_buffer);
+			length -= NumericCast<idx_t>(FormatMicros(time[3], micro_buffer));
 		}
 		return length;
 	}
@@ -485,8 +485,8 @@ struct TimeToStringCast {
 struct IntervalToStringCast {
 	static void FormatSignedNumber(int64_t value, char buffer[], idx_t &length) {
 		int sign = -(value < 0);
-		uint64_t unsigned_value = (value ^ sign) - sign;
-		length += NumericHelper::UnsignedLength<uint64_t>(unsigned_value) - sign;
+		auto unsigned_value = NumericCast<uint64_t>((value ^ sign) - sign);
+		length += NumericCast<idx_t>(NumericHelper::UnsignedLength<uint64_t>(unsigned_value) - sign);
 		auto endptr = buffer + length;
 		endptr = NumericHelper::FormatUnsigned<uint64_t>(unsigned_value, endptr);
 		if (sign) {
@@ -567,9 +567,8 @@ struct IntervalToStringCast {
 			FormatTwoDigits(sec, buffer, length);
 			if (micros != 0) {
 				buffer[length++] = '.';
-				auto trailing_zeros =
-				    TimeToStringCast::FormatMicros(UnsafeNumericCast<uint32_t>(micros), buffer + length);
-				length += 6 - trailing_zeros;
+				auto trailing_zeros = TimeToStringCast::FormatMicros(NumericCast<int32_t>(micros), buffer + length);
+				length += NumericCast<idx_t>(6 - trailing_zeros);
 			}
 		} else if (length == 0) {
 			// empty interval: default to 00:00:00

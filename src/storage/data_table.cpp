@@ -105,7 +105,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 
 	// erase the column definitions from this DataTable
 	D_ASSERT(removed_column < column_definitions.size());
-	column_definitions.erase(column_definitions.begin() + removed_column);
+	column_definitions.erase_at(removed_column);
 
 	storage_t storage_idx = 0;
 	for (idx_t i = 0; i < column_definitions.size(); i++) {

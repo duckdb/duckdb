@@ -1056,7 +1056,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 shared_ptr<RowGroupCollection> RowGroupCollection::RemoveColumn(idx_t col_idx) {
 	D_ASSERT(col_idx < types.size());
 	auto new_types = types;
-	new_types.erase(new_types.begin() + col_idx);
+	new_types.erase_at(col_idx);
 
 	auto result =
 	    make_shared<RowGroupCollection>(info, block_manager, std::move(new_types), row_start, total_rows.load());

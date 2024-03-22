@@ -32,7 +32,7 @@ unique_ptr<LogicalOperator> TopN::Optimize(unique_ptr<LogicalOperator> op) {
 		auto limit_val = int64_t(limit.limit_val.GetConstantValue());
 		int64_t offset_val = 0;
 		if (limit.offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
-			offset_val = limit.offset_val.GetConstantValue();
+			offset_val = NumericCast<int64_t>(limit.offset_val.GetConstantValue());
 		}
 		auto topn = make_uniq<LogicalTopN>(std::move(order_by.orders), limit_val, offset_val);
 		topn->AddChild(std::move(order_by.children[0]));

@@ -76,7 +76,7 @@ public:
 		D_ASSERT(buffer);
 		// resize and adjust current memory
 		buffer->Resize(block_size);
-		memory_usage += memory_delta;
+		memory_usage = NumericCast<idx_t>(NumericCast<int64_t>(memory_usage) + memory_delta);
 		D_ASSERT(memory_usage == buffer->AllocSize());
 	}
 

@@ -100,6 +100,13 @@ public:
 		}
 		return get<SAFE>(original::size() - 1);
 	}
+
+	void erase_at(idx_t idx) {
+		if (MemorySafety<SAFE>::enabled && idx > original::size()) {
+			throw InternalException("Can't remove offset %d from vector of size %d", idx, original::size());
+		}
+		original::erase(original::begin() + static_cast<typename original::iterator::difference_type>(idx));
+	}
 };
 
 template <typename T>

@@ -21,7 +21,7 @@ void TableIndexList::RemoveIndex(const string &name) {
 	for (idx_t index_idx = 0; index_idx < indexes.size(); index_idx++) {
 		auto &index_entry = indexes[index_idx];
 		if (index_entry->name == name) {
-			indexes.erase(indexes.begin() + index_idx);
+			indexes.erase_at(index_idx);
 			break;
 		}
 	}

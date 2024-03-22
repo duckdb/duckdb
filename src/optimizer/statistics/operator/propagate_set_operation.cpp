@@ -10,7 +10,8 @@ void StatisticsPropagator::AddCardinalities(unique_ptr<NodeStatistics> &stats, N
 		return;
 	}
 	stats->estimated_cardinality += new_stats.estimated_cardinality;
-	auto new_max = Hugeint::Add(stats->max_cardinality, new_stats.max_cardinality);
+	auto new_max =
+	    Hugeint::Add(NumericCast<int64_t>(stats->max_cardinality), NumericCast<int64_t>(new_stats.max_cardinality));
 	if (new_max < NumericLimits<int64_t>::Maximum()) {
 		int64_t result;
 		if (!Hugeint::TryCast<int64_t>(new_max, result)) {

@@ -219,7 +219,7 @@ void LocalTableStorage::FinalizeOptimisticWriter(OptimisticDataWriter &writer) {
 	for (idx_t i = 0; i < optimistic_writers.size(); i++) {
 		if (optimistic_writers[i].get() == &writer) {
 			owned_writer = std::move(optimistic_writers[i]);
-			optimistic_writers.erase(optimistic_writers.begin() + i);
+			optimistic_writers.erase_at(i);
 			break;
 		}
 	}

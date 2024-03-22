@@ -30,7 +30,7 @@
 
 namespace duckdb {
 
-static void CheckInsertColumnCountMismatch(int64_t expected_columns, int64_t result_columns, bool columns_provided,
+static void CheckInsertColumnCountMismatch(idx_t expected_columns, idx_t result_columns, bool columns_provided,
                                            const char *tname) {
 	if (result_columns != expected_columns) {
 		string msg = StringUtil::Format(!columns_provided ? "table %s has %lld columns but %lld values were supplied"
