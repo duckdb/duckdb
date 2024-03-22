@@ -96,10 +96,15 @@ SELECT typeof(column0), typeof(column1), typeof(column2) FROM read_csv_auto ('__
 ----
 SMALLINT	FLOAT	VARCHAR
 
-statement error
+query III
 SELECT * FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['USMALLINT', 'VARCHAR']);
 ----
-Auto Type Candidate of type USMALLINT is not accepted as a valid input
+1	1.1	bla
+
+query TTT
+SELECT typeof(column0), typeof(column1), typeof(column2) FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['USMALLINT', 'VARCHAR']);
+----
+USMALLINT	VARCHAR	VARCHAR
 
 statement error
 SELECT * FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['bla', 'VARCHAR'])

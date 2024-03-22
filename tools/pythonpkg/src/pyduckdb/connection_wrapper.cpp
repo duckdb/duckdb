@@ -263,18 +263,17 @@ unique_ptr<DuckDBPyRelation> PyConnectionWrapper::ReadJSON(const string &filenam
 	return conn->ReadJSON(filename, columns, sample_size, maximum_depth, records, format);
 }
 
-unique_ptr<DuckDBPyRelation>
-PyConnectionWrapper::ReadCSV(const py::object &name, shared_ptr<DuckDBPyConnection> conn, const py::object &header,
-                             const py::object &compression, const py::object &sep, const py::object &delimiter,
-                             const py::object &dtype, const py::object &na_values, const py::object &skiprows,
-                             const py::object &quotechar, const py::object &escapechar, const py::object &encoding,
-                             const py::object &parallel, const py::object &date_format,
-                             const py::object &timestamp_format, const py::object &sample_size,
-                             const py::object &all_varchar, const py::object &normalize_names,
-                             const py::object &filename, const py::object &null_padding, const py::object &names) {
+unique_ptr<DuckDBPyRelation> PyConnectionWrapper::ReadCSV(
+    const py::object &name, shared_ptr<DuckDBPyConnection> conn, const py::object &header,
+    const py::object &compression, const py::object &sep, const py::object &delimiter, const py::object &dtype,
+    const py::object &na_values, const py::object &skiprows, const py::object &quotechar, const py::object &escapechar,
+    const py::object &encoding, const py::object &parallel, const py::object &date_format,
+    const py::object &timestamp_format, const py::object &sample_size, const py::object &all_varchar,
+    const py::object &normalize_names, const py::object &filename, const py::object &null_padding,
+    const py::object &names, const py::object &auto_type_candidates) {
 	return conn->ReadCSV(name, header, compression, sep, delimiter, dtype, na_values, skiprows, quotechar, escapechar,
 	                     encoding, parallel, date_format, timestamp_format, sample_size, all_varchar, normalize_names,
-	                     filename, null_padding, names);
+	                     filename, null_padding, names, auto_type_candidates);
 }
 
 py::list PyConnectionWrapper::FetchMany(idx_t size, shared_ptr<DuckDBPyConnection> conn) {

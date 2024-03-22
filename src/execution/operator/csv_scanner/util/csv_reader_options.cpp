@@ -358,12 +358,14 @@ static Value StringVectorToValue(const vector<string> &vec) {
 static uint8_t GetCandidateSpecificity(const LogicalType &candidate_type) {
 	//! Const ht with accepted auto_types and their weights in specificity
 	const duckdb::unordered_map<uint8_t, uint8_t> auto_type_candidates_specificity {
-	    {(uint8_t)LogicalTypeId::VARCHAR, 0},  {(uint8_t)LogicalTypeId::TIMESTAMP, 1},
-	    {(uint8_t)LogicalTypeId::DATE, 2},     {(uint8_t)LogicalTypeId::TIME, 3},
-	    {(uint8_t)LogicalTypeId::DOUBLE, 4},   {(uint8_t)LogicalTypeId::FLOAT, 5},
-	    {(uint8_t)LogicalTypeId::BIGINT, 6},   {(uint8_t)LogicalTypeId::INTEGER, 7},
-	    {(uint8_t)LogicalTypeId::SMALLINT, 8}, {(uint8_t)LogicalTypeId::TINYINT, 9},
-	    {(uint8_t)LogicalTypeId::BOOLEAN, 10}, {(uint8_t)LogicalTypeId::SQLNULL, 11}};
+	    {(uint8_t)LogicalTypeId::VARCHAR, 0},   {(uint8_t)LogicalTypeId::TIMESTAMP, 1},
+	    {(uint8_t)LogicalTypeId::DATE, 2},      {(uint8_t)LogicalTypeId::TIME, 3},
+	    {(uint8_t)LogicalTypeId::DOUBLE, 4},    {(uint8_t)LogicalTypeId::FLOAT, 5},
+	    {(uint8_t)LogicalTypeId::BIGINT, 6},    {(uint8_t)LogicalTypeId::UBIGINT, 7},
+	    {(uint8_t)LogicalTypeId::INTEGER, 8},   {(uint8_t)LogicalTypeId::UINTEGER, 9},
+	    {(uint8_t)LogicalTypeId::SMALLINT, 10}, {(uint8_t)LogicalTypeId::USMALLINT, 11},
+	    {(uint8_t)LogicalTypeId::TINYINT, 12},  {(uint8_t)LogicalTypeId::UTINYINT, 13},
+	    {(uint8_t)LogicalTypeId::BOOLEAN, 14},  {(uint8_t)LogicalTypeId::SQLNULL, 15}};
 
 	auto id = (uint8_t)candidate_type.id();
 	auto it = auto_type_candidates_specificity.find(id);
