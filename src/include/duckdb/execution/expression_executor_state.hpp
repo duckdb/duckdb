@@ -10,7 +10,6 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/cycle_counter.hpp"
 #include "duckdb/function/function.hpp"
 
 namespace duckdb {
@@ -29,7 +28,6 @@ struct ExpressionState {
 	vector<unique_ptr<ExpressionState>> child_states;
 	vector<LogicalType> types;
 	DataChunk intermediate_chunk;
-	CycleCounter profiler;
 
 public:
 	void AddChild(Expression *expr);
@@ -70,7 +68,6 @@ struct ExpressionExecutorState {
 
 	unique_ptr<ExpressionState> root_state;
 	ExpressionExecutor *executor = nullptr;
-	CycleCounter profiler;
 
 	void Verify();
 };
