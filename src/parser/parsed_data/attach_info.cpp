@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-idx_t AttachInfo::GetBlockAllocSize() const {
+optional_idx AttachInfo::GetBlockAllocSize() const {
 
 	for (auto &entry : options) {
 		if (entry.first == "block_size") {
@@ -15,7 +15,7 @@ idx_t AttachInfo::GetBlockAllocSize() const {
 			return block_alloc_size;
 		}
 	}
-	return DConstants::INVALID_INDEX;
+	return optional_idx();
 }
 
 unique_ptr<AttachInfo> AttachInfo::Copy() const {

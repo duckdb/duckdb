@@ -44,11 +44,10 @@ public:
 	static StorageManager &Get(AttachedDatabase &db);
 	static StorageManager &Get(Catalog &catalog);
 
-	//! Initialize a database or load an existing database from the database file path.
-	//! The block_alloc_size is either set, or DConstants::INVALID_INDEX. For DConstants::INVALID_INDEX,
-	//! DuckDB defaults to the default_block_alloc_size (DBConfig), or the file's block allocation size,
-	//! if it is an existing database.
-	void Initialize(const idx_t block_alloc_size);
+	//! Initialize a database or load an existing database from the database file path. The block_alloc_size is
+	//! either set, or invalid. If invalid, then DuckDB defaults to the default_block_alloc_size (DBConfig),
+	//! or the file's block allocation size, if it is an existing database.
+	void Initialize(const optional_idx block_alloc_size);
 
 	DatabaseInstance &GetDatabase();
 	AttachedDatabase &GetAttached() {
@@ -75,7 +74,7 @@ public:
 	virtual shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) = 0;
 
 protected:
-	virtual void LoadDatabase(const idx_t block_alloc_size) = 0;
+	virtual void LoadDatabase(const optional_idx block_alloc_size) = 0;
 
 protected:
 	//! The database this storage manager belongs to
@@ -124,6 +123,6 @@ public:
 	shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) override;
 
 protected:
-	void LoadDatabase(const idx_t block_alloc_size) override;
+	void LoadDatabase(const optional_idx block_alloc_size) override;
 };
 } // namespace duckdb

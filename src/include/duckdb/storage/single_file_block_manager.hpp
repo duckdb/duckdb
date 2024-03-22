@@ -26,8 +26,7 @@ struct StorageManagerOptions {
 	bool read_only = false;
 	bool use_direct_io = false;
 	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
-	//! NOTE: this becomes the DEFAULT_BLOCK_ALLOC_SIZE once we support different block sizes.
-	idx_t block_alloc_size = Storage::BLOCK_ALLOC_SIZE;
+	optional_idx block_alloc_size = optional_idx();
 };
 
 //! SingleFileBlockManager is an implementation for a BlockManager which manages blocks in a single file
@@ -43,7 +42,7 @@ public:
 	void CreateNewDatabase();
 	//! Loads an existing database. We pass the provided block allocation size as a parameter
 	//! to detect inconsistencies with the file header.
-	void LoadExistingDatabase(const idx_t block_alloc_size);
+	void LoadExistingDatabase();
 
 	//! Creates a new Block using the specified block_id and returns a pointer
 	unique_ptr<Block> ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) override;
@@ -79,7 +78,7 @@ private:
 	void LoadFreeList();
 	//! Initializes the database header. We pass the provided block allocation size as a parameter
 	//!	to detect inconsistencies with the file header.
-	void Initialize(const DatabaseHeader &header, const idx_t block_alloc_size);
+	void Initialize(const DatabaseHeader &header, const optional_idx block_alloc_size);
 
 	void ReadAndChecksum(FileBuffer &handle, uint64_t location) const;
 	void ChecksumAndWrite(FileBuffer &handle, uint64_t location) const;

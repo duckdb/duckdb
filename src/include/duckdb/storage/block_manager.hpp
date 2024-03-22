@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/storage/block.hpp"
 #include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/unordered_map.hpp"
@@ -26,7 +27,7 @@ class MetadataManager;
 class BlockManager {
 public:
 	BlockManager() = delete;
-	BlockManager(BufferManager &buffer_manager, const idx_t block_alloc_size);
+	BlockManager(BufferManager &buffer_manager, const optional_idx block_alloc_size_p);
 	virtual ~BlockManager() = default;
 
 	//! The buffer manager
@@ -81,13 +82,19 @@ public:
 	//! Returns the block allocation size of this block manager.
 	//! Not to be confused with the block size.
 	inline idx_t GetBlockAllocSize() const {
+		return block_alloc_size.GetIndex();
+	}
+	inline optional_idx GetOptionalBlockAllocSize() const {
 		return block_alloc_size;
 	}
 	//! Sets the block allocation size. This should only happen when initializing an existing database.
 	//! When initializing an existing database, we construct the block manager before reading the file header,
 	//! which contains the file's actual block allocation size.
-	void SetBlockAllocSize(const idx_t block_alloc_size_p) {
-		block_alloc_size = block_alloc_size_p;
+	void SetBlockAllocSize(const optional_idx block_alloc_size_p) {
+		if (block_alloc_size.IsValid()) {
+			throw InternalException("the block allocation size must be set once");
+		}
+		block_alloc_size = block_alloc_size_p.GetIndex();
 	}
 
 private:
@@ -100,6 +107,6 @@ private:
 	//! The allocation size of blocks managed by this block manager. Defaults to DEFAULT_BLOCK_ALLOC_SIZE
 	//! for in-memory block managers. Default to default_block_alloc_size for file-backed block managers.
 	//! This is NOT the actual memory available on a block (block_size).
-	idx_t block_alloc_size;
+	optional_idx block_alloc_size;
 };
 } // namespace duckdb
