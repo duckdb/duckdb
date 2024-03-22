@@ -75,7 +75,7 @@ public:
 	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
 	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
 
-	bool FileExists(const string &filename, optional_ptr<FileOpener> opener) override;
+	bool FileExists(const string &filename, optional_ptr<FileOpener> opener = nullptr) override;
 	vector<string> Glob(const string &path, FileOpener *opener) override;
 	bool CanHandleFile(const string &fpath) override;
 	bool CanSeek() override {
@@ -86,17 +86,17 @@ public:
 	}
 	string PathSeparator(const string &path) override;
 	int64_t GetFileSize(FileHandle &handle) override;
-	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener) override;
-	void MoveFile(const string &source, const string &dest, optional_ptr<FileOpener> opener) override;
+	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener = nullptr) override;
+	void MoveFile(const string &source, const string &dest, optional_ptr<FileOpener> opener = nullptr) override;
 	time_t GetLastModifiedTime(FileHandle &handle) override;
 	void FileSync(FileHandle &handle) override;
-	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) override;
-	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) override;
-	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) override;
+	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
+	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
+	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
 	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
 	               FileOpener *opener = nullptr) override;
 	void Truncate(FileHandle &handle, int64_t new_size) override;
-	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener) override;
+	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener = nullptr) override;
 	idx_t SeekPosition(FileHandle &handle) override;
 };
 
