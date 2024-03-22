@@ -127,27 +127,30 @@ static void BinaryTrimFunction(DataChunk &input, ExpressionState &state, Vector 
 
 ScalarFunctionSet TrimFun::GetFunctions() {
 	ScalarFunctionSet trim;
-	trim.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, UnaryTrimFunction<true, true>));
+	trim.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, UnaryTrimFunction<true, true>,
+	                                FunctionAllCollationBinder));
 
 	trim.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                                BinaryTrimFunction<true, true>));
+	                                BinaryTrimFunction<true, true>, FunctionAllCollationBinder));
 	return trim;
 }
 
 ScalarFunctionSet LtrimFun::GetFunctions() {
 	ScalarFunctionSet ltrim;
-	ltrim.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, UnaryTrimFunction<true, false>));
+	ltrim.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, UnaryTrimFunction<true, false>,
+	                                 FunctionAllCollationBinder));
 	ltrim.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                                 BinaryTrimFunction<true, false>));
+	                                 BinaryTrimFunction<true, false>, FunctionAllCollationBinder));
 	return ltrim;
 }
 
 ScalarFunctionSet RtrimFun::GetFunctions() {
 	ScalarFunctionSet rtrim;
-	rtrim.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, UnaryTrimFunction<false, true>));
+	rtrim.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, UnaryTrimFunction<false, true>,
+	                                 FunctionAllCollationBinder));
 
 	rtrim.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                                 BinaryTrimFunction<false, true>));
+	                                 BinaryTrimFunction<false, true>, FunctionAllCollationBinder));
 	return rtrim;
 }
 

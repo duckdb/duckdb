@@ -237,6 +237,7 @@ static unique_ptr<FunctionData> BindConcatFunction(ClientContext &context, Scala
 		arg = LogicalType::VARCHAR;
 	}
 	bound_function.varargs = LogicalType::VARCHAR;
+	FunctionRetCollationBinder(context, bound_function, arguments);
 	return nullptr;
 }
 

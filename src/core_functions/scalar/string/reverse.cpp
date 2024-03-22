@@ -50,7 +50,8 @@ static void ReverseFunction(DataChunk &args, ExpressionState &state, Vector &res
 }
 
 ScalarFunction ReverseFun::GetFunction() {
-	return ScalarFunction("reverse", {LogicalType::VARCHAR}, LogicalType::VARCHAR, ReverseFunction);
+	return ScalarFunction("reverse", {LogicalType::VARCHAR}, LogicalType::VARCHAR, ReverseFunction,
+	                      FunctionRetCollationBinder);
 }
 
 } // namespace duckdb
