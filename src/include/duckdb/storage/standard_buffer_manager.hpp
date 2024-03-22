@@ -43,6 +43,9 @@ public:
 	static unique_ptr<FileBuffer> ReadTemporaryBufferInternal(BufferManager &buffer_manager, FileHandle &handle,
 	                                                          idx_t position, idx_t size,
 	                                                          unique_ptr<FileBuffer> reusable_buffer);
+
+	//! Registers a transient memory buffer.
+	shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size) final override;
 	//! Registers an in-memory buffer that cannot be unloaded until it is destroyed
 	//! This buffer can be small (smaller than BLOCK_SIZE)
 	//! Unpin and pin are nops on this block of memory

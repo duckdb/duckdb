@@ -124,11 +124,14 @@ public:
 	void CommitDropSegment();
 
 public:
-	ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, LogicalType type, ColumnSegmentType segment_type,
-	              idx_t start, idx_t count, CompressionFunction &function, BaseStatistics statistics,
-	              block_id_t block_id, idx_t offset, idx_t segment_size,
-	              unique_ptr<ColumnSegmentState> segment_state = nullptr);
-	ColumnSegment(ColumnSegment &other, idx_t start);
+	//! Construct a column segment.
+	ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, const LogicalType &type,
+	              const ColumnSegmentType segment_type, const idx_t start, const idx_t count,
+	              CompressionFunction &function_p, BaseStatistics statistics, const block_id_t block_id_p,
+	              const idx_t offset, idx_t segment_size_p, unique_ptr<ColumnSegmentState> segment_state_p = nullptr);
+	//! Construct a column segment from another column segment.
+	//! The other column segment becomes invalid (std::move).
+	ColumnSegment(ColumnSegment &other, const idx_t start);
 
 private:
 	void Scan(ColumnScanState &state, idx_t scan_count, Vector &result);

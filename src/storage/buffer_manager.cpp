@@ -12,6 +12,10 @@ unique_ptr<BufferManager> BufferManager::CreateStandardBufferManager(DatabaseIns
 	return make_uniq<StandardBufferManager>(db, config.options.temporary_directory);
 }
 
+shared_ptr<BlockHandle> BufferManager::RegisterTransientMemory(const idx_t size) {
+	throw NotImplementedException("This type of BufferManager can not create 'transient-memory' blocks");
+}
+
 shared_ptr<BlockHandle> BufferManager::RegisterSmallMemory(idx_t block_size) {
 	throw NotImplementedException("This type of BufferManager can not create 'small-memory' blocks");
 }

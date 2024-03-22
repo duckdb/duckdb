@@ -45,6 +45,7 @@ public:
 	virtual idx_t GetUsedMemory() const = 0;
 	//! Returns the maximum available memory
 	virtual idx_t GetMaxMemory() const = 0;
+	virtual shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size);
 	virtual shared_ptr<BlockHandle> RegisterSmallMemory(idx_t block_size);
 	virtual DUCKDB_API Allocator &GetBufferAllocator();
 	virtual DUCKDB_API void ReserveMemory(idx_t size);
