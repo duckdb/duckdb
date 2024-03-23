@@ -79,7 +79,10 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 			if (unique.index.index != DConstants::INVALID_INDEX) {
 				D_ASSERT(unique.index.index < base.columns.LogicalColumnCount());
 				// unique constraint is given by single index
-				unique.columns.push_back(base.columns.GetColumn(unique.index).Name());
+				D_ASSERT(unique.columns.size() <= 1);
+				if (unique.columns.empty()) {
+					unique.columns.push_back(base.columns.GetColumn(unique.index).Name());
+				}
 				keys.push_back(unique.index);
 				key_set.insert(unique.index);
 			} else {

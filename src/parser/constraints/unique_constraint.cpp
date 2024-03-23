@@ -18,6 +18,7 @@ UniqueConstraint::UniqueConstraint(vector<string> columns, bool is_primary_key)
 
 string UniqueConstraint::ToString() const {
 	string base = is_primary_key ? "PRIMARY KEY(" : "UNIQUE(";
+	D_ASSERT(index.index == DConstants::INVALID_INDEX || columns.size() <= 1);
 	for (idx_t i = 0; i < columns.size(); i++) {
 		if (i > 0) {
 			base += ", ";
@@ -32,6 +33,7 @@ unique_ptr<Constraint> UniqueConstraint::Copy() const {
 		return make_uniq<UniqueConstraint>(columns, is_primary_key);
 	} else {
 		auto result = make_uniq<UniqueConstraint>(index, is_primary_key);
+		D_ASSERT(columns.size() <= 1);
 		result->columns = columns;
 		return std::move(result);
 	}
