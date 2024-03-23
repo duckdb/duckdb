@@ -188,8 +188,7 @@ idx_t TemporaryFileHandle::GetPositionInFile(idx_t index) {
 //===--------------------------------------------------------------------===//
 
 TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string path_p, optional_idx max_swap_space)
-    : db(db), temp_directory(std::move(path_p)),
-      temp_file(make_uniq<TemporaryFileManager>(db, temp_directory, max_swap_space)) {
+    : db(db), temp_directory(std::move(path_p)), temp_file(make_uniq<TemporaryFileManager>(db, temp_directory)) {
 	auto &fs = FileSystem::GetFileSystem(db);
 	if (!temp_directory.empty()) {
 		if (!fs.DirectoryExists(temp_directory)) {
@@ -197,6 +196,7 @@ TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string 
 			created_directory = true;
 		}
 	}
+	temp_file->SetMaxSwapSpace(max_swap_space);
 }
 
 TemporaryDirectoryHandle::~TemporaryDirectoryHandle() {
@@ -263,12 +263,8 @@ static idx_t GetDefaultMax(const string &path) {
 	return default_value;
 }
 
-TemporaryFileManager::TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p,
-                                           optional_idx max_swap_space)
-    : db(db), temp_directory(temp_directory_p), size_on_disk(0), max_swap_space(GetDefaultMax(temp_directory_p)) {
-	if (max_swap_space.IsValid()) {
-		this->max_swap_space = max_swap_space.GetIndex();
-	}
+TemporaryFileManager::TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p)
+    : db(db), temp_directory(temp_directory_p), size_on_disk(0), max_swap_space(0) {
 }
 
 TemporaryFileManager::~TemporaryFileManager() {

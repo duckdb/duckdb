@@ -145,7 +145,7 @@ private:
 
 class TemporaryFileManager {
 public:
-	TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p, optional_idx max_swap_space);
+	TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p);
 	~TemporaryFileManager();
 
 public:

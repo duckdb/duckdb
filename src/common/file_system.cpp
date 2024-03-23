@@ -103,12 +103,13 @@ optional_idx FileSystem::GetAvailableMemory() {
 optional_idx FileSystem::GetAvailableDiskSpace(const string &path) {
 	struct statvfs vfs;
 
-	if (statvfs(path.c_str(), &vfs) == -1) {
-		optional_idx();
+	auto ret = statvfs(path.c_str(), &vfs);
+	if (ret == -1) {
+		return optional_idx();
 	}
 	auto block_size = vfs.f_frsize;
 	// These are the blocks available for creating new files or extending existing ones
-	auto available_blocks = vfs.f_bavail;
+	auto available_blocks = vfs.f_bfree;
 	idx_t available_disk_space = DConstants::INVALID_INDEX;
 	if (!TryMultiplyOperator::Operation(static_cast<idx_t>(block_size), static_cast<idx_t>(available_blocks),
 	                                    available_disk_space)) {
