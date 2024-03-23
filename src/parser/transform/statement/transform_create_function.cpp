@@ -5,7 +5,6 @@
 
 #include "duckdb/function/scalar_macro_function.hpp"
 #include "duckdb/function/table_macro_function.hpp"
-#include "duckdb/catalog/dependency_list.hpp"
 
 namespace duckdb {
 

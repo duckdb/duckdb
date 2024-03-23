@@ -10,7 +10,6 @@
 
 #include "duckdb/parser/parsed_data/create_function_info.hpp"
 #include "duckdb/function/macro_function.hpp"
-#include "duckdb/catalog/dependency_list.hpp"
 
 namespace duckdb {
 
