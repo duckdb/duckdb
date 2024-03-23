@@ -68,8 +68,10 @@ public:
 private:
 	UniqueConstraint();
 
-#ifndef DUCKDB_API_1_0
+#ifdef DUCKDB_API_1_0
 private:
+#else
+public:
 #endif
 	//! The index of the column for which this constraint holds. Only used when the constraint relates to a single
 	//! column, equal to DConstants::INVALID_INDEX if not used
