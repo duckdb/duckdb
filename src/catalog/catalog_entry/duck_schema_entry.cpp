@@ -61,64 +61,11 @@ void FindForeignKeyInformation(TableCatalogEntry &table, AlterForeignKeyType alt
 	}
 }
 
-DuckSchemaEntry::DuckSchemaEntry(Catalog &catalog, CreateSchemaInfo &info) : SchemaCatalogEntry(catalog, info) {
-	//! The catalog set holding the tables
-	catalog_sets[DuckCatalogSetType::TABLES] =
-	    make_uniq<CatalogSet>(catalog, make_uniq<DefaultViewGenerator>(catalog, *this));
-	//! The catalog set holding the indexes
-	catalog_sets[DuckCatalogSetType::INDEXES] = make_uniq<CatalogSet>(catalog);
-	//! The catalog set holding the table functions
-	catalog_sets[DuckCatalogSetType::TABLE_FUNCTIONS] = make_uniq<CatalogSet>(catalog);
-	//! The catalog set holding the copy functions
-	catalog_sets[DuckCatalogSetType::COPY_FUNCTIONS] = make_uniq<CatalogSet>(catalog);
-	//! The catalog set holding the pragma functions
-	catalog_sets[DuckCatalogSetType::PRAGMA_FUNCTIONS] = make_uniq<CatalogSet>(catalog);
-	//! The catalog set holding the scalar and aggregate functions
-	catalog_sets[DuckCatalogSetType::FUNCTIONS] =
-	    make_uniq<CatalogSet>(catalog, make_uniq<DefaultFunctionGenerator>(catalog, *this));
-	//! The catalog set holding the sequences
-	catalog_sets[DuckCatalogSetType::SEQUENCES] = make_uniq<CatalogSet>(catalog);
-	//! The catalog set holding the collations
-	catalog_sets[DuckCatalogSetType::COLLATIONS] = make_uniq<CatalogSet>(catalog);
-	//! The catalog set holding the types
-	catalog_sets[DuckCatalogSetType::TYPES] =
-	    make_uniq<CatalogSet>(catalog, make_uniq<DefaultTypeGenerator>(catalog, *this));
-}
-
-CatalogSet &DuckSchemaEntry::Tables() {
-	return *catalog_sets.at(DuckCatalogSetType::TABLES);
-}
-
-CatalogSet &DuckSchemaEntry::Indexes() {
-	return *catalog_sets.at(DuckCatalogSetType::INDEXES);
-}
-
-CatalogSet &DuckSchemaEntry::TableFunctions() {
-	return *catalog_sets.at(DuckCatalogSetType::TABLE_FUNCTIONS);
-}
-
-CatalogSet &DuckSchemaEntry::CopyFunctions() {
-	return *catalog_sets.at(DuckCatalogSetType::COPY_FUNCTIONS);
-}
-
-CatalogSet &DuckSchemaEntry::PragmaFunctions() {
-	return *catalog_sets.at(DuckCatalogSetType::PRAGMA_FUNCTIONS);
-}
-
-CatalogSet &DuckSchemaEntry::Functions() {
-	return *catalog_sets.at(DuckCatalogSetType::FUNCTIONS);
-}
-
-CatalogSet &DuckSchemaEntry::Sequences() {
-	return *catalog_sets.at(DuckCatalogSetType::SEQUENCES);
-}
-
-CatalogSet &DuckSchemaEntry::Collations() {
-	return *catalog_sets.at(DuckCatalogSetType::COLLATIONS);
-}
-
-CatalogSet &DuckSchemaEntry::Types() {
-	return *catalog_sets.at(DuckCatalogSetType::TYPES);
+DuckSchemaEntry::DuckSchemaEntry(Catalog &catalog, CreateSchemaInfo &info)
+    : SchemaCatalogEntry(catalog, info), tables(catalog, make_uniq<DefaultViewGenerator>(catalog, *this)),
+      indexes(catalog), table_functions(catalog), copy_functions(catalog), pragma_functions(catalog),
+      functions(catalog, make_uniq<DefaultFunctionGenerator>(catalog, *this)), sequences(catalog), collations(catalog),
+      types(catalog, make_uniq<DefaultTypeGenerator>(catalog, *this)) {
 }
 
 unique_ptr<CatalogEntry> DuckSchemaEntry::Copy(ClientContext &context) const {
@@ -331,9 +278,12 @@ void DuckSchemaEntry::Scan(CatalogType type, const std::function<void(CatalogEnt
 }
 
 void DuckSchemaEntry::ScanAll(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback) {
-	for (auto &set : catalog_sets) {
-		auto &catalog_set = *set.second;
-		catalog_set.Scan(transaction, callback);
+	static const CatalogType ALL_SETS[] = {
+	    CatalogType::TABLE_ENTRY,         CatalogType::INDEX_ENTRY,           CatalogType::TABLE_MACRO_ENTRY,
+	    CatalogType::COPY_FUNCTION_ENTRY, CatalogType::PRAGMA_FUNCTION_ENTRY, CatalogType::MACRO_ENTRY,
+	    CatalogType::SEQUENCE_ENTRY,      CatalogType::COLLATION_ENTRY,       CatalogType::TYPE_ENTRY};
+	for (auto &set : ALL_SETS) {
+		GetCatalogSet(set).Scan(transaction, callback);
 	}
 }
 
@@ -383,26 +333,26 @@ CatalogSet &DuckSchemaEntry::GetCatalogSet(CatalogType type) {
 	switch (type) {
 	case CatalogType::VIEW_ENTRY:
 	case CatalogType::TABLE_ENTRY:
-		return Tables();
+		return tables;
 	case CatalogType::INDEX_ENTRY:
-		return Indexes();
+		return indexes;
 	case CatalogType::TABLE_FUNCTION_ENTRY:
 	case CatalogType::TABLE_MACRO_ENTRY:
-		return TableFunctions();
+		return table_functions;
 	case CatalogType::COPY_FUNCTION_ENTRY:
-		return CopyFunctions();
+		return copy_functions;
 	case CatalogType::PRAGMA_FUNCTION_ENTRY:
-		return PragmaFunctions();
+		return pragma_functions;
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
 	case CatalogType::SCALAR_FUNCTION_ENTRY:
 	case CatalogType::MACRO_ENTRY:
-		return Functions();
+		return functions;
 	case CatalogType::SEQUENCE_ENTRY:
-		return Sequences();
+		return sequences;
 	case CatalogType::COLLATION_ENTRY:
-		return Collations();
+		return collations;
 	case CatalogType::TYPE_ENTRY:
-		return Types();
+		return types;
 	default:
 		throw InternalException("Unsupported catalog type in schema");
 	}
@@ -411,10 +361,15 @@ CatalogSet &DuckSchemaEntry::GetCatalogSet(CatalogType type) {
 void DuckSchemaEntry::Verify(Catalog &catalog) {
 	InCatalogEntry::Verify(catalog);
 
-	for (auto &set : catalog_sets) {
-		auto &catalog_set = set.second;
-		catalog_set->Verify(catalog);
-	}
+	tables.Verify(catalog);
+	indexes.Verify(catalog);
+	table_functions.Verify(catalog);
+	copy_functions.Verify(catalog);
+	pragma_functions.Verify(catalog);
+	functions.Verify(catalog);
+	sequences.Verify(catalog);
+	collations.Verify(catalog);
+	types.Verify(catalog);
 }
 
 } // namespace duckdb

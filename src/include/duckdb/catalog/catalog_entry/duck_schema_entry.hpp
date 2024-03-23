@@ -18,18 +18,24 @@ public:
 	DuckSchemaEntry(Catalog &catalog, CreateSchemaInfo &info);
 
 private:
-	enum class DuckCatalogSetType : uint8_t {
-		TABLES,
-		INDEXES,
-		TABLE_FUNCTIONS,
-		COPY_FUNCTIONS,
-		PRAGMA_FUNCTIONS,
-		FUNCTIONS,
-		SEQUENCES,
-		COLLATIONS,
-		TYPES,
-	};
-	unordered_map<DuckCatalogSetType, unique_ptr<CatalogSet>> catalog_sets;
+	//! The catalog set holding the tables
+	CatalogSet tables;
+	//! The catalog set holding the indexes
+	CatalogSet indexes;
+	//! The catalog set holding the table functions
+	CatalogSet table_functions;
+	//! The catalog set holding the copy functions
+	CatalogSet copy_functions;
+	//! The catalog set holding the pragma functions
+	CatalogSet pragma_functions;
+	//! The catalog set holding the scalar and aggregate functions
+	CatalogSet functions;
+	//! The catalog set holding the sequences
+	CatalogSet sequences;
+	//! The catalog set holding the collations
+	CatalogSet collations;
+	//! The catalog set holding the types
+	CatalogSet types;
 
 public:
 	optional_ptr<CatalogEntry> AddEntry(CatalogTransaction transaction, unique_ptr<StandardEntry> entry,
@@ -62,17 +68,6 @@ public:
 	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
 
 	void Verify(Catalog &catalog) override;
-
-private:
-	CatalogSet &Tables();
-	CatalogSet &Indexes();
-	CatalogSet &TableFunctions();
-	CatalogSet &CopyFunctions();
-	CatalogSet &PragmaFunctions();
-	CatalogSet &Functions();
-	CatalogSet &Sequences();
-	CatalogSet &Collations();
-	CatalogSet &Types();
 
 private:
 	//! Get the catalog set for the specified type
