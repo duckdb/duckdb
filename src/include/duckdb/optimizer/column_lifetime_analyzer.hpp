@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/optimizer/column_lifetime_optimizer.hpp
+// duckdb/optimizer/column_lifetime_analyzer.hpp
 //
 //
 //===----------------------------------------------------------------------===//

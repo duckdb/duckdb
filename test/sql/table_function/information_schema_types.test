@@ -1,0 +1,16 @@
+# name: test/sql/table_function/information_schema_types.test
+# description: Issue #11281: duckdb_columns() produces NULL value as DATA_TYPE for certain INFORMATION_SCHEMA columns
+# group: [table_function]
+
+# Verify all columns in the information_schema have explicitly defined types
+
+statement ok
+pragma enable_verification
+
+query II
+select table_name, column_name
+from duckdb_columns()
+where database_name = 'system'
+and schema_name = 'information_schema'
+and data_type = 'NULL'
+----

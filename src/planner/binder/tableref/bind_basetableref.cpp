@@ -124,16 +124,15 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 #endif
 			}
 			auto result = make_uniq<BoundCTERef>(index, ctebinding->index, materialized);
-			auto b = ctebinding;
 			auto alias = ref.alias.empty() ? ref.table_name : ref.alias;
-			auto names = BindContext::AliasColumnNames(alias, b->names, ref.column_name_alias);
+			auto names = BindContext::AliasColumnNames(alias, ctebinding->names, ref.column_name_alias);
 
-			bind_context.AddGenericBinding(index, alias, names, b->types);
+			bind_context.AddGenericBinding(index, alias, names, ctebinding->types);
 			// Update references to CTE
 			auto cteref = bind_context.cte_references[ref.table_name];
 			(*cteref)++;
 
-			result->types = b->types;
+			result->types = ctebinding->types;
 			result->bound_columns = std::move(names);
 			return std::move(result);
 		}

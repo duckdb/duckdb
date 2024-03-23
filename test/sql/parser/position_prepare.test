@@ -1,0 +1,14 @@
+# name: test/sql/parser/position_prepare.test
+# description: Test prepared statement parameters in POSITION
+# group: [parser]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PREPARE v1 AS SELECT POSITION(? in ?)
+
+query I
+EXECUTE v1('e', 'hello world')
+----
+2

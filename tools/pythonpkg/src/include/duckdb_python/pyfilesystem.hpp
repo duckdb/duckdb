@@ -50,7 +50,7 @@ class PythonFilesystem : public FileSystem {
 private:
 	const vector<string> protocols;
 	const AbstractFileSystem filesystem;
-	std::string DecodeFlags(uint8_t flags);
+	std::string DecodeFlags(FileOpenFlags flags);
 	bool Exists(const string &filename, const char *func_name) const;
 
 public:
@@ -64,8 +64,7 @@ protected:
 	}
 
 public:
-	unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock,
-	                                FileCompressionType compression, FileOpener *opener) override;
+	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags, optional_ptr<FileOpener> opener) override;
 	void Seek(duckdb::FileHandle &handle, uint64_t location) override;
 	FileType GetFileType(FileHandle &handle) override {
 		return FileType::FILE_TYPE_REGULAR;
