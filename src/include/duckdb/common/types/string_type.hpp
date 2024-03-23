@@ -15,6 +15,10 @@
 
 #include <cstring>
 
+#ifdef _WIN32
+#include <algorithm>
+#endif
+
 namespace duckdb {
 
 struct string_t {

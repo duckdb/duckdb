@@ -10,6 +10,21 @@ static string StringCompressFunctionName(const LogicalType &result_type) {
 	                          StringUtil::Lower(LogicalTypeIdToString(result_type.id())));
 }
 
+#ifdef _WIN32
+template <idx_t LENGTH>
+static inline void TemplatedReverseMemCpy(data_t *__restrict dest, const data_t *__restrict src) {
+	for (idx_t i = 0; i < LENGTH; i++) {
+		dest[i] = src[LENGTH - 1 - i];
+	}
+}
+
+static inline void ReverseMemCpy(data_t *__restrict dest, const data_t *__restrict src,
+                                 const idx_t length) {
+	for (idx_t i = 0; i < length; i++) {
+		dest[i] = src[length - 1 - i];
+	}
+}
+#else
 template <idx_t LENGTH>
 static inline void TemplatedReverseMemCpy(const data_ptr_t __restrict &dest, const const_data_ptr_t __restrict &src) {
 	for (idx_t i = 0; i < LENGTH; i++) {
@@ -23,7 +38,30 @@ static inline void ReverseMemCpy(const data_ptr_t __restrict &dest, const const_
 		dest[i] = src[length - 1 - i];
 	}
 }
+#endif
 
+#ifdef _WIN32
+template <class RESULT_TYPE>
+static inline RESULT_TYPE StringCompressInternal(const string_t &input) {
+	RESULT_TYPE result;
+	auto result_ptr = data_ptr_cast(&result);
+	if (sizeof(RESULT_TYPE) <= string_t::INLINE_LENGTH) {
+		TemplatedReverseMemCpy<sizeof(RESULT_TYPE)>(result_ptr, const_data_ptr_cast(input.GetPrefix()));
+	} else if (input.IsInlined()) {
+		static constexpr auto REMAINDER = sizeof(RESULT_TYPE) - string_t::INLINE_LENGTH;
+		auto remainder_ptr = result_ptr + REMAINDER;
+		TemplatedReverseMemCpy<string_t::INLINE_LENGTH>(remainder_ptr, const_data_ptr_cast(input.GetPrefix()));
+		memset(result_ptr, '\0', REMAINDER);
+	} else {
+		const auto remainder = sizeof(RESULT_TYPE) - input.GetSize();
+		auto remainder_ptr = result_ptr + remainder;
+		ReverseMemCpy(remainder_ptr, data_ptr_cast(input.GetPointer()), input.GetSize());
+		memset(result_ptr, '\0', remainder);
+	}
+	result_ptr[0] = UnsafeNumericCast<char>(input.GetSize());
+	return result;
+}
+#else
 template <class RESULT_TYPE>
 static inline RESULT_TYPE StringCompressInternal(const string_t &input) {
 	RESULT_TYPE result;
@@ -42,6 +80,7 @@ static inline RESULT_TYPE StringCompressInternal(const string_t &input) {
 	result_ptr[0] = UnsafeNumericCast<char>(input.GetSize());
 	return result;
 }
+#endif
 
 template <class RESULT_TYPE>
 static inline RESULT_TYPE StringCompress(const string_t &input) {
@@ -111,6 +150,27 @@ public:
 	ArenaAllocator allocator;
 };
 
+#ifdef _WIN32
+template <class INPUT_TYPE>
+static inline string_t StringDecompress(const INPUT_TYPE &input, ArenaAllocator &allocator) {
+	const auto input_ptr = const_data_ptr_cast(&input);
+	string_t result(input_ptr[0]);
+	if (sizeof(INPUT_TYPE) <= string_t::INLINE_LENGTH) {
+		auto result_ptr = data_ptr_cast(result.GetPrefixWriteable());
+		TemplatedReverseMemCpy<sizeof(INPUT_TYPE)>(result_ptr, input_ptr);
+		memset(result_ptr + sizeof(INPUT_TYPE) - 1, '\0', string_t::INLINE_LENGTH - sizeof(INPUT_TYPE) + 1);
+	} else if (result.GetSize() <= string_t::INLINE_LENGTH) {
+		static constexpr auto REMAINDER = sizeof(INPUT_TYPE) - string_t::INLINE_LENGTH;
+		auto result_ptr = data_ptr_cast(result.GetPrefixWriteable());
+		TemplatedReverseMemCpy<string_t::INLINE_LENGTH>(result_ptr, input_ptr + REMAINDER);
+	} else {
+		result.SetPointer(char_ptr_cast(allocator.Allocate(sizeof(INPUT_TYPE))));
+		TemplatedReverseMemCpy<sizeof(INPUT_TYPE)>(data_ptr_cast(result.GetPointer()), input_ptr);
+		memcpy(result.GetPrefixWriteable(), result.GetPointer(), string_t::PREFIX_LENGTH);
+	}
+	return result;
+}
+#else
 template <class INPUT_TYPE>
 static inline string_t StringDecompress(const INPUT_TYPE &input, ArenaAllocator &allocator) {
 	const auto input_ptr = const_data_ptr_cast(&input);
@@ -130,6 +190,7 @@ static inline string_t StringDecompress(const INPUT_TYPE &input, ArenaAllocator 
 	}
 	return result;
 }
+#endif
 
 template <class INPUT_TYPE>
 static inline string_t MiniStringDecompress(const INPUT_TYPE &input, ArenaAllocator &allocator) {
