@@ -138,6 +138,10 @@ public:
 	void UnregisterSubSystem(const string &name) override {
 		GetFileSystem().UnregisterSubSystem(name);
 	}
+
+	void SetDisabledFileSystems(const vector<string> &names) override {
+		GetFileSystem().SetDisabledFileSystems(names);
+	}
 };
 
 } // namespace duckdb
