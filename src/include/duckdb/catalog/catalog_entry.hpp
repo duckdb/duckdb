@@ -77,7 +77,9 @@ public:
 	virtual string ToSQL() const;
 
 	virtual Catalog &ParentCatalog();
+	virtual const Catalog &ParentCatalog() const;
 	virtual SchemaCatalogEntry &ParentSchema();
+	virtual const SchemaCatalogEntry &ParentSchema() const;
 
 	virtual void Verify(Catalog &catalog);
 
@@ -115,6 +117,9 @@ public:
 
 public:
 	Catalog &ParentCatalog() override {
+		return catalog;
+	}
+	const Catalog &ParentCatalog() const override {
 		return catalog;
 	}
 

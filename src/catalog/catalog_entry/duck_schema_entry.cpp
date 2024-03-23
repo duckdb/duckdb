@@ -82,7 +82,7 @@ unique_ptr<CatalogEntry> DuckSchemaEntry::Copy(ClientContext &context) const {
 optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction transaction,
                                                              unique_ptr<StandardEntry> entry,
                                                              OnCreateConflict on_conflict,
-                                                             DependencyList dependencies) {
+                                                             LogicalDependencyList dependencies) {
 	auto entry_name = entry->name;
 	auto entry_type = entry->type;
 	auto result = entry.get();
@@ -184,7 +184,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateFunction(CatalogTransaction tr
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntry(CatalogTransaction transaction, unique_ptr<StandardEntry> entry,
                                                      OnCreateConflict on_conflict) {
-	DependencyList dependencies;
+	LogicalDependencyList dependencies = entry->dependencies;
 	return AddEntryInternal(transaction, std::move(entry), on_conflict, dependencies);
 }
 
@@ -205,8 +205,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateView(CatalogTransaction transa
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateIndex(ClientContext &context, CreateIndexInfo &info,
                                                         TableCatalogEntry &table) {
-	DependencyList dependencies;
-	dependencies.AddDependency(table);
+	info.dependencies.AddDependency(table);
 
 	// currently, we can not alter PK/FK/UNIQUE constraints
 	// concurrency-safe name checks against other INDEX catalog entries happens in the catalog
@@ -215,6 +214,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateIndex(ClientContext &context, 
 	}
 
 	auto index = make_uniq<DuckIndexEntry>(catalog, *this, info);
+	LogicalDependencyList dependencies = index->dependencies;
 	return AddEntryInternal(GetCatalogTransaction(context), std::move(index), info.on_conflict, dependencies);
 }
 
