@@ -11,6 +11,7 @@ MacroCatalogEntry::MacroCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schem
       function(std::move(info.function)) {
 	this->temporary = info.temporary;
 	this->internal = info.internal;
+	this->dependencies = info.dependencies;
 	this->comment = info.comment;
 }
 
@@ -42,6 +43,7 @@ unique_ptr<CreateInfo> MacroCatalogEntry::GetInfo() const {
 	info->schema = schema.name;
 	info->name = name;
 	info->function = function->Copy();
+	info->dependencies = dependencies;
 	info->comment = comment;
 	return std::move(info);
 }
