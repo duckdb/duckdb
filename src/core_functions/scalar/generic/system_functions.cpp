@@ -30,7 +30,7 @@ static void CurrentDatabaseFunction(DataChunk &input, ExpressionState &state, Ve
 }
 
 struct CurrentSchemasBindData : public FunctionData {
-	CurrentSchemasBindData(Value result_value) : result(std::move(result_value)) {
+	explicit CurrentSchemasBindData(Value result_value) : result(std::move(result_value)) {
 	}
 
 	Value result;
