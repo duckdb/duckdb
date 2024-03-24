@@ -25,8 +25,6 @@ public:
 
 	//! The schema the entry belongs to
 	SchemaCatalogEntry &schema;
-	//! The dependencies of the entry, can be empty
-	LogicalDependencyList dependencies;
 
 public:
 	SchemaCatalogEntry &ParentSchema() override {

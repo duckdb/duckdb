@@ -184,7 +184,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateFunction(CatalogTransaction tr
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntry(CatalogTransaction transaction, unique_ptr<StandardEntry> entry,
                                                      OnCreateConflict on_conflict) {
-	LogicalDependencyList dependencies = entry->dependencies;
+	LogicalDependencyList dependencies;
 	return AddEntryInternal(transaction, std::move(entry), on_conflict, dependencies);
 }
 
@@ -205,7 +205,8 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateView(CatalogTransaction transa
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateIndex(ClientContext &context, CreateIndexInfo &info,
                                                         TableCatalogEntry &table) {
-	info.dependencies.AddDependency(table);
+	LogicalDependencyList dependencies;
+	dependencies.AddDependency(table);
 
 	// currently, we can not alter PK/FK/UNIQUE constraints
 	// concurrency-safe name checks against other INDEX catalog entries happens in the catalog
@@ -214,7 +215,6 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateIndex(ClientContext &context, 
 	}
 
 	auto index = make_uniq<DuckIndexEntry>(catalog, *this, info);
-	LogicalDependencyList dependencies = index->dependencies;
 	return AddEntryInternal(GetCatalogTransaction(context), std::move(index), info.on_conflict, dependencies);
 }
 

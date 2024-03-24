@@ -44,8 +44,6 @@ public:
 	bool internal;
 	//! The SQL string of the CREATE statement
 	string sql;
-	//! The inherent dependencies of the created entry
-	LogicalDependencyList dependencies;
 	//! User provided comment
 	Value comment;
 
