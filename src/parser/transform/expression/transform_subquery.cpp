@@ -69,6 +69,12 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 		vector<unique_ptr<ParsedExpression>> children;
 		children.push_back(std::move(columns_star));
 		auto aggr = make_uniq<FunctionExpression>("array_agg", std::move(children));
+		for (auto &modifier : subquery_expr->subquery->node->modifiers) {
+			if (modifier->type == ResultModifierType::ORDER_MODIFIER) {
+				aggr->order_bys = unique_ptr_cast<ResultModifier, OrderModifier>(modifier->Copy());
+				break;
+			}
+		}
 		// ARRAY_AGG(COLUMNS(*)) IS NULL
 		auto agg_is_null = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NULL, aggr->Copy());
 		// empty list

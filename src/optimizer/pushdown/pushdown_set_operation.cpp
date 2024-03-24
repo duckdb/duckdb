@@ -69,7 +69,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 		// both empty: return empty result
 		return make_uniq<LogicalEmptyResult>(std::move(op));
 	}
-	if (left_empty) {
+	if (left_empty && setop.setop_all) {
 		// left child is empty result
 		switch (op->type) {
 		case LogicalOperatorType::LOGICAL_UNION:
@@ -88,7 +88,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 		default:
 			throw InternalException("Unsupported set operation");
 		}
-	} else if (right_empty) {
+	} else if (right_empty && setop.setop_all) {
 		// right child is empty result
 		switch (op->type) {
 		case LogicalOperatorType::LOGICAL_UNION:
