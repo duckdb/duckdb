@@ -126,6 +126,10 @@ Catalog &AttachedDatabase::ParentCatalog() {
 	return *parent_catalog;
 }
 
+const Catalog &AttachedDatabase::ParentCatalog() const {
+	return *parent_catalog;
+}
+
 bool AttachedDatabase::IsInitialDatabase() const {
 	return is_initial_database;
 }
