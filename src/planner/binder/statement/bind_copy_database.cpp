@@ -19,81 +19,24 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
 #include "duckdb/planner/operator/logical_expression_get.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
 
 namespace duckdb {
 
 unique_ptr<LogicalOperator> Binder::BindCopyDatabaseSchema(CopyDatabaseStatement &stmt, Catalog &from_database,
                                                            Catalog &to_database) {
-	auto from_schemas = from_database.GetSchemas(context);
 
-	ExportEntries entries;
-	PhysicalExport::ExtractEntries(context, from_schemas, entries);
+	catalog_entry_vector_t catalog_entries;
+	catalog_entries = PhysicalExport::GetNaiveExportOrder(context, from_database);
 
 	auto info = make_uniq<CopyDatabaseInfo>(from_database, to_database);
-
-	// get a list of all schemas to copy over
-	for (auto &schema_ref : from_schemas) {
-		auto &schema = schema_ref.get().Cast<SchemaCatalogEntry>();
-		if (schema.internal) {
-			continue;
-		}
-		auto create_info = schema.GetInfo();
+	for (auto &entry : catalog_entries) {
+		auto create_info = entry.get().GetInfo();
 		create_info->catalog = to_database.GetName();
-		create_info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
-		info->entries.push_back(std::move(create_info));
-	}
-	// get a list of all types to copy over
-	for (auto &seq_ref : entries.sequences) {
-		auto &seq_entry = seq_ref.get().Cast<SequenceCatalogEntry>();
-		if (seq_entry.internal) {
-			continue;
-		}
-		auto create_info = seq_entry.GetInfo();
-		create_info->catalog = to_database.GetName();
-		create_info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
-		info->entries.push_back(std::move(create_info));
-	}
-	// get a list of all types to copy over
-	for (auto &type_ref : entries.custom_types) {
-		auto &type_entry = type_ref.get().Cast<TypeCatalogEntry>();
-		if (type_entry.internal) {
-			continue;
-		}
-		auto create_info = type_entry.GetInfo();
-		create_info->catalog = to_database.GetName();
-		create_info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
-		info->entries.push_back(std::move(create_info));
-	}
-	// get a list of all tables to copy over
-	for (auto &table_ref : entries.tables) {
-		auto &table = table_ref.get().Cast<TableCatalogEntry>();
-		if (table.internal) {
-			continue;
-		}
-		auto create_info = table.GetInfo();
-		create_info->catalog = to_database.GetName();
-		create_info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
-		info->entries.push_back(std::move(create_info));
-	}
-	for (auto &macro_ref : entries.macros) {
-		auto &macro = macro_ref.get().Cast<MacroCatalogEntry>();
-		if (macro.internal) {
-			continue;
-		}
-		auto create_info = macro.GetInfo();
-		create_info->catalog = to_database.GetName();
-		create_info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
-		info->entries.push_back(std::move(create_info));
-	}
-	// get a list of all views to copy over
-	for (auto &view_ref : entries.views) {
-		auto &view = view_ref.get().Cast<ViewCatalogEntry>();
-		if (view.internal) {
-			continue;
-		}
-		auto create_info = view.GetInfo();
-		create_info->catalog = to_database.GetName();
-		create_info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
+		auto on_conflict = create_info->type == CatalogType::SCHEMA_ENTRY ? OnCreateConflict::IGNORE_ON_CONFLICT
+		                                                                  : OnCreateConflict::ERROR_ON_CONFLICT;
+		create_info->on_conflict = on_conflict;
 		info->entries.push_back(std::move(create_info));
 	}
 
@@ -105,6 +48,7 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseData(CopyDatabaseStatement &
                                                          Catalog &to_database) {
 	auto from_schemas = from_database.GetSchemas(context);
 
+	// We can just use ExtractEntries here because the order doesn't matter
 	ExportEntries entries;
 	PhysicalExport::ExtractEntries(context, from_schemas, entries);
 
