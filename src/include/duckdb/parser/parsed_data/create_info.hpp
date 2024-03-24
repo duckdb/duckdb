@@ -13,6 +13,7 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/enums/on_create_conflict.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 
 namespace duckdb {
 struct AlterInfo;
@@ -43,6 +44,8 @@ public:
 	bool internal;
 	//! The SQL string of the CREATE statement
 	string sql;
+	//! The inherent dependencies of the created entry
+	DependencyList dependencies;
 	//! User provided comment
 	Value comment;
 

@@ -47,7 +47,6 @@ public:
 	void Close();
 
 	Catalog &ParentCatalog() override;
-	const Catalog &ParentCatalog() const override;
 	StorageManager &GetStorageManager();
 	Catalog &GetCatalog();
 	TransactionManager &GetTransactionManager();
