@@ -46,60 +46,54 @@ template<typename T>
 using reference = std::reference_wrapper<T>;
 
 template<class DATA_TYPE, bool SAFE = true>
-struct __unique_if
+struct TemplatedUniqueIf
 {
-    typedef unique_ptr<DATA_TYPE, std::default_delete<DATA_TYPE>, SAFE> __unique_single;
+    typedef unique_ptr<DATA_TYPE, std::default_delete<DATA_TYPE>, SAFE> templated_unique_single_t;
 };
 
-template<class DATA_TYPE>
-struct __unique_if<DATA_TYPE[]>
+template<class DATA_TYPE, size_t N>
+struct TemplatedUniqueIf<DATA_TYPE[N]>
 {
-    typedef unique_ptr<DATA_TYPE[]> __unique_array_unknown_bound;
-};
-
-template<class DATA_TYPE, size_t _Np>
-struct __unique_if<DATA_TYPE[_Np]>
-{
-    typedef void __unique_array_known_bound;
+    typedef void TemplatedUniqueArrayKnownBound; // NOLINT: mimic std style
 };
 
 template<class DATA_TYPE, class... ARGS>
 inline 
-typename __unique_if<DATA_TYPE, true>::__unique_single
-make_uniq(ARGS&&... __args)
+typename TemplatedUniqueIf<DATA_TYPE, true>::templated_unique_single_t
+make_uniq(ARGS&&... args) // NOLINT: mimic std style
 {
-    return unique_ptr<DATA_TYPE, std::default_delete<DATA_TYPE>, true>(new DATA_TYPE(std::forward<ARGS>(__args)...));
+    return unique_ptr<DATA_TYPE, std::default_delete<DATA_TYPE>, true>(new DATA_TYPE(std::forward<ARGS>(args)...));
 }
 
 template<class DATA_TYPE, class... ARGS>
 inline 
-typename __unique_if<DATA_TYPE, false>::__unique_single
-make_unsafe_uniq(ARGS&&... __args)
+typename TemplatedUniqueIf<DATA_TYPE, false>::templated_unique_single_t
+make_unsafe_uniq(ARGS&&... args) // NOLINT: mimic std style
 {
-    return unique_ptr<DATA_TYPE, std::default_delete<DATA_TYPE>, false>(new DATA_TYPE(std::forward<ARGS>(__args)...));
+    return unique_ptr<DATA_TYPE, std::default_delete<DATA_TYPE>, false>(new DATA_TYPE(std::forward<ARGS>(args)...));
 }
 
 template<class DATA_TYPE>
 inline unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, true>
-make_uniq_array(size_t __n)
+make_uniq_array(size_t n) // NOLINT: mimic std style
 {
-    return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, true>(new DATA_TYPE[__n]());
+    return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, true>(new DATA_TYPE[n]());
 }
 
 template<class DATA_TYPE>
 inline unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, false>
-make_unsafe_uniq_array(size_t __n)
+make_unsafe_uniq_array(size_t n) // NOLINT: mimic std style
 {
-    return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, false>(new DATA_TYPE[__n]());
+    return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, false>(new DATA_TYPE[n]());
 }
 
 template<class DATA_TYPE, class... ARGS>
-    typename __unique_if<DATA_TYPE>::__unique_array_known_bound
-    make_uniq(ARGS&&...) = delete;
+    typename TemplatedUniqueIf<DATA_TYPE>::TemplatedUniqueArrayKnownBound
+    make_uniq(ARGS&&...) = delete; // NOLINT: mimic std style
 
 
 template <typename S, typename T, typename... ARGS>
-unique_ptr<S> make_uniq_base(ARGS &&... args) {
+unique_ptr<S> make_uniq_base(ARGS &&... args) { // NOLINT: mimic std style
 	return unique_ptr<S>(new T(std::forward<ARGS>(args)...));
 }
 
@@ -111,7 +105,7 @@ unique_ptr<S> make_unique_base(Args &&... args) {
 #endif // DUCKDB_ENABLE_DEPRECATED_API
 
 template <typename T, typename S>
-unique_ptr<S> unique_ptr_cast(unique_ptr<T> src) {
+unique_ptr<S> unique_ptr_cast(unique_ptr<T> src) { // NOLINT: mimic std style
 	return unique_ptr<S>(static_cast<S *>(src.release()));
 }
 
@@ -138,7 +132,7 @@ typename std::remove_reference<T>::type&& move(T&& t) noexcept {
 #endif
 
 template <class T, class... ARGS>
-static duckdb::unique_ptr<T> make_unique(ARGS&&... __args) {
+static duckdb::unique_ptr<T> make_unique(ARGS&&... __args) { // NOLINT: mimic std style
 #ifndef DUCKDB_ENABLE_DEPRECATED_API
 	static_assert(sizeof(T) == 0, "Use make_uniq instead of make_unique!");
 #endif // DUCKDB_ENABLE_DEPRECATED_API

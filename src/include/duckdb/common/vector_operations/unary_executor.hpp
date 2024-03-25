@@ -50,7 +50,7 @@ template <class OP>
 struct UnaryStringOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto vector = (Vector *)dataptr;
+		auto vector = reinterpret_cast<Vector *>(dataptr);
 		return OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, *vector);
 	}
 };

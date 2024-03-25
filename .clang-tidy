@@ -37,7 +37,7 @@ CheckOptions:
   - key:             readability-identifier-naming.EnumConstantCase
     value:           UPPER_CASE
   - key:             readability-identifier-naming.ConstexprVariableCase
-    value:           UPPER_CASE
+    value:           aNy_CasE
   - key:             readability-identifier-naming.StaticConstantCase
     value:           UPPER_CASE
   - key:             readability-identifier-naming.TemplateTemplateParameterCase
