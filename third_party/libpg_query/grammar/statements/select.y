@@ -1018,18 +1018,18 @@ from_list_opt_comma:
 		;
 
 alias_prefix_colon_clause:
-			ColIdOrString ':'
-				{
-					$$ = makeNode(PGAlias);
-					$$->aliasname = $1;
-				}
-			/*	| ColIdOrString '(' name_list_opt_comma ')' ':'
-                {
-                    $$ = makeNode(PGAlias);
-                    $$->aliasname = $1;
-                    $$->colnames = $3;
-                }*/
-		;
+            ColIdOrString ':'
+            {
+                $$ = makeNode(PGAlias);
+                $$->aliasname = $1;
+            }
+            | IDENT '(' name_list_opt_comma ')' ':'
+            {
+                $$ = makeNode(PGAlias);
+                $$->aliasname = $1;
+                $$->colnames = $3;
+            }
+    ;
 
 /*
  * table_ref is where an alias clause can be attached.
@@ -1063,6 +1063,7 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 				n->sample = $3;
 				$$ = (PGNode *) n;
 			}
+
 			| LATERAL_P func_table func_alias_clause
 				{
 					PGRangeFunction *n = (PGRangeFunction *) $2;
@@ -1080,6 +1081,15 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 					n->sample = $3;
 					$$ = (PGNode *) n;
 				}
+				| alias_prefix_colon_clause select_with_parens  opt_tablesample_clause
+                {
+                    PGRangeSubselect *n = makeNode(PGRangeSubselect);
+                    n->lateral = false;
+                    n->subquery = $2;
+                    n->alias = $1;
+                    n->sample = $3;
+                    $$ = (PGNode *) n;
+                }
 			| LATERAL_P select_with_parens opt_alias_clause
 				{
 					PGRangeSubselect *n = makeNode(PGRangeSubselect);
@@ -1098,6 +1108,11 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 					$2->alias = $4;
 					$$ = (PGNode *) $2;
 				}
+            | alias_prefix_colon_clause '(' joined_table ')'
+                            {
+                                $3->alias = $1;
+                                $$ = (PGNode *) $3;
+                            }
 			| table_ref PIVOT '(' target_list_opt_comma FOR pivot_value_list opt_pivot_group_by ')' opt_alias_clause
 				{
 					PGPivotExpr *n = makeNode(PGPivotExpr);
