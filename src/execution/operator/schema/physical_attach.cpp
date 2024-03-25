@@ -56,7 +56,7 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 	auto attached_db = db_manager.AttachDatabase(context.client, *info, options);
 
 	//! Initialize the database.
-	attached_db->Initialize();
+	attached_db->Initialize(&context.client);
 	return SourceResultType::FINISHED;
 }
 
