@@ -8,10 +8,6 @@
 
 namespace duckdb {
 
-unique_ptr<BufferManager> BufferManager::CreateStandardBufferManager(DatabaseInstance &db, DBConfig &config) {
-	return make_uniq<StandardBufferManager>(db, config.options.temporary_directory);
-}
-
 shared_ptr<BlockHandle> BufferManager::RegisterSmallMemory(idx_t block_size) {
 	throw NotImplementedException("This type of BufferManager can not create 'small-memory' blocks");
 }
@@ -49,10 +45,6 @@ TemporaryMemoryManager &BufferManager::GetTemporaryMemoryManager() {
 
 void BufferManager::SetTemporaryDirectory(const string &new_dir) {
 	throw NotImplementedException("This type of BufferManager can not set a temporary directory");
-}
-
-DatabaseInstance &BufferManager::GetDatabase() {
-	throw NotImplementedException("This type of BufferManager is not linked to a DatabaseInstance");
 }
 
 bool BufferManager::HasTemporaryDirectory() const {

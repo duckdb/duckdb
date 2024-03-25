@@ -3004,8 +3004,8 @@ func_expr_common_subexpr:
 				}
 			| POSITION '(' position_list ')'
 				{
-					/* position(A in B) is converted to position(B, A) */
-					$$ = (PGNode *) makeFuncCall(SystemFuncName("position"), $3, @1);
+					/* position(A in B) is converted to position_inverse(A, B) */
+					$$ = (PGNode *) makeFuncCall(SystemFuncName("__internal_position_operator"), $3, @1);
 				}
 			| SUBSTRING '(' substr_list ')'
 				{
@@ -3630,7 +3630,7 @@ overlay_placing:
 /* position_list uses b_expr not a_expr to avoid conflict with general IN */
 
 position_list:
-			b_expr IN_P b_expr						{ $$ = list_make2($3, $1); }
+			b_expr IN_P b_expr						{ $$ = list_make2($1, $3); }
 			| /*EMPTY*/								{ $$ = NIL; }
 		;
 
