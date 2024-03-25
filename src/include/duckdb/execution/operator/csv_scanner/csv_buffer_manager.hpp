@@ -42,6 +42,7 @@ public:
 	//! once.
 	bool Done();
 
+	void ResetBufferManager();
 	string GetFilePath();
 
 	ClientContext &context;

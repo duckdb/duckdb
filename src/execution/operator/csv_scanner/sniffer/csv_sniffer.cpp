@@ -93,6 +93,8 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 	DetectHeader();
 	// 5. Type Replacement
 	ReplaceTypes();
+	buffer_manager->ResetBufferManager();
+
 	if (!best_candidate->error_handler->errors.empty() && !options.ignore_errors) {
 		for (auto &error_vector : best_candidate->error_handler->errors) {
 			for (auto &error : error_vector.second) {

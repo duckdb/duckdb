@@ -32,20 +32,31 @@ bool CSVFileHandle::CanSeek() {
 	return can_seek;
 }
 
-void CSVFileHandle::Seek(idx_t position) {
+void CSVFileHandle::Seek(void *buffer, idx_t nr_bytes, idx_t position) {
 	if (!can_seek) {
 		if (is_pipe) {
 			throw InternalException("Can't reconstruct the buffer from a on disk file.");
 		}
-		//! If we can't seek in this file, we reset it and re-read up to the necessary point.
+		// If we can't seek in this file, we reset it and re-read up to the necessary point.
+		// This should only happen on extreme cases of memory pressure
 		file_handle->Reset();
-		//		file_handle->Read();
+		D_ASSERT(position % nr_bytes == 0);
+		for (idx_t i = 0; i < position / nr_bytes; i++) {
+			file_handle->Read(buffer, nr_bytes);
+		}
+		return;
 	}
 	file_handle->Seek(position);
 }
 
 bool CSVFileHandle::OnDiskFile() {
 	return on_disk_file;
+}
+
+void CSVFileHandle::Reset() {
+	file_handle->Reset();
+	finished = false;
+	requested_bytes = 0;
 }
 
 bool CSVFileHandle::IsPipe() {
