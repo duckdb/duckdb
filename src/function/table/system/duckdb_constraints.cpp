@@ -153,7 +153,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 				break;
 			case ConstraintType::UNIQUE: {
 				auto &unique = constraint->Cast<UniqueConstraint>();
-				constraint_type = unique.is_primary_key ? "PRIMARY KEY" : "UNIQUE";
+				constraint_type = unique.IsPrimaryKey() ? "PRIMARY KEY" : "UNIQUE";
 				break;
 			}
 			case ConstraintType::NOT_NULL:

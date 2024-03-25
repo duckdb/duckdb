@@ -245,6 +245,11 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 		}
 	}
 
+	if (bind_data->options.record_type == JSONRecordType::AUTO_DETECT && return_types.size() > 1) {
+		// More than one specified column implies records
+		bind_data->options.record_type = JSONRecordType::RECORDS;
+	}
+
 	// Specifying column names overrides auto-detect
 	if (!return_types.empty()) {
 		bind_data->auto_detect = false;
