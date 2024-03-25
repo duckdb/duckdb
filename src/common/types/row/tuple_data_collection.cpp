@@ -384,6 +384,17 @@ void TupleDataCollection::InitializeChunk(DataChunk &chunk) const {
 	chunk.Initialize(allocator->GetAllocator(), layout.GetTypes());
 }
 
+void TupleDataCollection::InitializeChunk(DataChunk &chunk, const vector<column_t> &columns) const {
+	vector<LogicalType> chunk_types(columns.size());
+	// keep the order of the columns
+	for (idx_t i = 0; i < columns.size(); i++) {
+		auto column_idx = columns[i];
+		D_ASSERT(column_idx < layout.ColumnCount());
+		chunk_types[i] = layout.GetTypes()[column_idx];
+	}
+	chunk.Initialize(allocator->GetAllocator(), chunk_types);
+}
+
 void TupleDataCollection::InitializeScanChunk(TupleDataScanState &state, DataChunk &chunk) const {
 	auto &column_ids = state.chunk_state.column_ids;
 	D_ASSERT(!column_ids.empty());
