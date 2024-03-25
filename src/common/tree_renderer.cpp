@@ -61,7 +61,7 @@ void TreeRenderer::RenderTopLayer(RenderTree &root, std::ostream &ss, idx_t y) {
 			ss << StringUtil::Repeat(" ", config.NODE_RENDER_WIDTH);
 		}
 	}
-	ss << std::endl;
+	ss << '\n';
 }
 
 void TreeRenderer::RenderBottomLayer(RenderTree &root, std::ostream &ss, idx_t y) {
@@ -89,7 +89,7 @@ void TreeRenderer::RenderBottomLayer(RenderTree &root, std::ostream &ss, idx_t y
 			ss << StringUtil::Repeat(" ", config.NODE_RENDER_WIDTH);
 		}
 	}
-	ss << std::endl;
+	ss << '\n';
 }
 
 string AdjustTextForRendering(string source, idx_t max_render_width) {
@@ -210,7 +210,7 @@ void TreeRenderer::RenderBoxContent(RenderTree &root, std::ostream &ss, idx_t y)
 				}
 			}
 		}
-		ss << std::endl;
+		ss << '\n';
 	}
 }
 
@@ -504,8 +504,8 @@ unique_ptr<RenderTree> TreeRenderer::CreateTree(const QueryProfiler::TreeNode &o
 	return CreateRenderTree<QueryProfiler::TreeNode>(op);
 }
 
-unique_ptr<RenderTree> TreeRenderer::CreateTree(const Pipeline &op) {
-	auto operators = op.GetOperators();
+unique_ptr<RenderTree> TreeRenderer::CreateTree(const Pipeline &pipeline) {
+	auto operators = pipeline.GetOperators();
 	D_ASSERT(!operators.empty());
 	unique_ptr<PipelineRenderNode> node;
 	for (auto &op : operators) {

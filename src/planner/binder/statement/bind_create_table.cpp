@@ -201,7 +201,6 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 			col.SetType(bound_expression->return_type);
 
 			// Update the type in the binding, for future expansions
-			string ignore;
 			table_binding->types[i.index] = col.Type();
 		}
 		bound_indices.insert(i);

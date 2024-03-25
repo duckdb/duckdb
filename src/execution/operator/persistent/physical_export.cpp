@@ -22,9 +22,9 @@ static void WriteCatalogEntries(stringstream &ss, vector<reference<CatalogEntry>
 		if (entry.get().internal) {
 			continue;
 		}
-		ss << entry.get().ToSQL() << std::endl;
+		ss << entry.get().ToSQL() << '\n';
 	}
-	ss << std::endl;
+	ss << '\n';
 }
 
 static void WriteStringStreamToFile(FileSystem &fs, stringstream &ss, const string &path) {
@@ -77,7 +77,7 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info,
 			throw NotImplementedException("FIXME: serialize list of options");
 		}
 	}
-	ss << ");" << std::endl;
+	ss << ");" << '\n';
 }
 
 //===--------------------------------------------------------------------===//

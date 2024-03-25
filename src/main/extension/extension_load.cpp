@@ -38,7 +38,7 @@ static void ComputeSHA256String(const std::string &to_hash, std::string *res) {
 
 static void ComputeSHA256FileSegment(FileHandle *handle, const idx_t start, const idx_t end, std::string *res) {
 	idx_t iter = start;
-	const idx_t segment_size = 1024 * 8;
+	const idx_t segment_size = 1024ULL * 8ULL;
 
 	duckdb_mbedtls::MbedTlsWrapper::SHA256State state;
 

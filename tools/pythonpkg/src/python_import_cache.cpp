@@ -17,7 +17,7 @@ py::handle PythonImportCacheItem::operator()(bool load) {
 
 	optional_ptr<PythonImportCacheItem> item = this;
 	while (item) {
-		hierarchy.push(*item);
+		hierarchy.emplace(*item);
 		item = item->parent;
 	}
 	return PythonImporter::Import(hierarchy, load);
