@@ -1031,6 +1031,7 @@ alias_prefix_colon_clause:
             }
     ;
 
+
 /*
  * table_ref is where an alias clause can be attached.
  */
@@ -1054,7 +1055,8 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 					n->sample = $3;
 					$$ = (PGNode *) n;
 				}
-			| values_clause_opt_comma alias_clause opt_tablesample_clause
+			|
+            values_clause_opt_comma alias_clause opt_tablesample_clause
 			{
 				PGRangeSubselect *n = makeNode(PGRangeSubselect);
 				n->lateral = false;
@@ -1109,10 +1111,10 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 					$$ = (PGNode *) $2;
 				}
             | alias_prefix_colon_clause '(' joined_table ')'
-                            {
-                                $3->alias = $1;
-                                $$ = (PGNode *) $3;
-                            }
+                {
+                    $3->alias = $1;
+                    $$ = (PGNode *) $3;
+                }
 			| table_ref PIVOT '(' target_list_opt_comma FOR pivot_value_list opt_pivot_group_by ')' opt_alias_clause
 				{
 					PGPivotExpr *n = makeNode(PGPivotExpr);
@@ -3924,7 +3926,7 @@ target_el:	a_expr AS ColLabelOrString
 					$$->val = (PGNode *)$1;
 					$$->location = @1;
 				}
-            | IDENT ':' a_expr
+            | ColId ':' a_expr
 				{
 					$$ = makeNode(PGResTarget);
 					$$->name = $1;
