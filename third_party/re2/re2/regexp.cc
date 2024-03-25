@@ -24,6 +24,13 @@
 #include "re2/stringpiece.h"
 #include "re2/walker-inl.h"
 
+#ifdef min
+#undef min
+#endif
+#ifdef max
+#undef max
+#endif
+
 namespace duckdb_re2 {
 
 // Constructor.  Allocates vectors as appropriate for operator.

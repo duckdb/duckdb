@@ -123,49 +123,52 @@
 /*-************************************
 *  Compiler Options
 **************************************/
-#if defined(_MSC_VER) && (_MSC_VER >= 1400)  /* Visual Studio 2005+ */
-#  include <intrin.h>               /* only present in VS2005+ */
-#  pragma warning(disable : 4127)   /* disable: C4127: conditional expression is constant */
-#  pragma warning(disable : 6237)   /* disable: C6237: conditional expression is always 0 */
-#endif  /* _MSC_VER */
+//#if defined(_MSC_VER) && (_MSC_VER >= 1400)  /* Visual Studio 2005+ */
+//#  include <intrin.h>               /* only present in VS2005+ */
+//#  pragma warning(disable : 4127)   /* disable: C4127: conditional expression is constant */
+//#  pragma warning(disable : 6237)   /* disable: C6237: conditional expression is always 0 */
+//#endif  /* _MSC_VER */
+//
+//#ifndef LZ4_FORCE_INLINE
+//#  ifdef _MSC_VER    /* Visual Studio */
+//#    define LZ4_FORCE_INLINE static __forceinline
+//#  else
+//#    if defined (__cplusplus) || defined (__STDC_VERSION__) && __STDC_VERSION__ >= 199901L   /* C99 */
+//#      ifdef __GNUC__
+//#        define LZ4_FORCE_INLINE static inline __attribute__((always_inline))
+//#      else
+//#        define LZ4_FORCE_INLINE static inline
+//#      endif
+//#    else
+//#      define LZ4_FORCE_INLINE static
+//#    endif /* __STDC_VERSION__ */
+//#  endif  /* _MSC_VER */
+//#endif /* LZ4_FORCE_INLINE */
+//
+///* LZ4_FORCE_O2 and LZ4_FORCE_INLINE
+// * gcc on ppc64le generates an unrolled SIMDized loop for LZ4_wildCopy8,
+// * together with a simple 8-byte copy loop as a fall-back path.
+// * However, this optimization hurts the decompression speed by >30%,
+// * because the execution does not go to the optimized loop
+// * for typical compressible data, and all of the preamble checks
+// * before going to the fall-back path become useless overhead.
+// * This optimization happens only with the -O3 flag, and -O2 generates
+// * a simple 8-byte copy loop.
+// * With gcc on ppc64le, all of the LZ4_decompress_* and LZ4_wildCopy8
+// * functions are annotated with __attribute__((optimize("O2"))),
+// * and also LZ4_wildCopy8 is forcibly inlined, so that the O2 attribute
+// * of LZ4_wildCopy8 does not affect the compression speed.
+// */
+//#if defined(__PPC64__) && defined(__LITTLE_ENDIAN__) && defined(__GNUC__) && !defined(__clang__)
+//#  define LZ4_FORCE_O2  __attribute__((optimize("O2")))
+//#  undef LZ4_FORCE_INLINE
+//#  define LZ4_FORCE_INLINE  static __inline __attribute__((optimize("O2"),always_inline))
+//#else
+//#  define LZ4_FORCE_O2
+//#endif
 
-#ifndef LZ4_FORCE_INLINE
-#  ifdef _MSC_VER    /* Visual Studio */
-#    define LZ4_FORCE_INLINE static __forceinline
-#  else
-#    if defined (__cplusplus) || defined (__STDC_VERSION__) && __STDC_VERSION__ >= 199901L   /* C99 */
-#      ifdef __GNUC__
-#        define LZ4_FORCE_INLINE static inline __attribute__((always_inline))
-#      else
-#        define LZ4_FORCE_INLINE static inline
-#      endif
-#    else
-#      define LZ4_FORCE_INLINE static
-#    endif /* __STDC_VERSION__ */
-#  endif  /* _MSC_VER */
-#endif /* LZ4_FORCE_INLINE */
-
-/* LZ4_FORCE_O2 and LZ4_FORCE_INLINE
- * gcc on ppc64le generates an unrolled SIMDized loop for LZ4_wildCopy8,
- * together with a simple 8-byte copy loop as a fall-back path.
- * However, this optimization hurts the decompression speed by >30%,
- * because the execution does not go to the optimized loop
- * for typical compressible data, and all of the preamble checks
- * before going to the fall-back path become useless overhead.
- * This optimization happens only with the -O3 flag, and -O2 generates
- * a simple 8-byte copy loop.
- * With gcc on ppc64le, all of the LZ4_decompress_* and LZ4_wildCopy8
- * functions are annotated with __attribute__((optimize("O2"))),
- * and also LZ4_wildCopy8 is forcibly inlined, so that the O2 attribute
- * of LZ4_wildCopy8 does not affect the compression speed.
- */
-#if defined(__PPC64__) && defined(__LITTLE_ENDIAN__) && defined(__GNUC__) && !defined(__clang__)
-#  define LZ4_FORCE_O2  __attribute__((optimize("O2")))
-#  undef LZ4_FORCE_INLINE
-#  define LZ4_FORCE_INLINE  static __inline __attribute__((optimize("O2"),always_inline))
-#else
-#  define LZ4_FORCE_O2
-#endif
+#define LZ4_FORCE_INLINE static
+#define LZ4_FORCE_O2
 
 #if (defined(__GNUC__) && (__GNUC__ >= 3)) || (defined(__INTEL_COMPILER) && (__INTEL_COMPILER >= 800)) || defined(__clang__)
 #  define expect(expr,value)    (__builtin_expect ((expr),(value)) )
