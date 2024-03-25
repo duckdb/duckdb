@@ -39,68 +39,68 @@ namespace duckdb {
 
 template <class... T>
 struct AlwaysFalse {
-	static constexpr bool value = false;
+	static constexpr bool VALUE = false;
 };
 
 template<typename T>
 using reference = std::reference_wrapper<T>;
 
-template<class _Tp, bool SAFE = true>
+template<class DATA_TYPE, bool SAFE = true>
 struct __unique_if
 {
-    typedef unique_ptr<_Tp, std::default_delete<_Tp>, SAFE> __unique_single;
+    typedef unique_ptr<DATA_TYPE, std::default_delete<DATA_TYPE>, SAFE> __unique_single;
 };
 
-template<class _Tp>
-struct __unique_if<_Tp[]>
+template<class DATA_TYPE>
+struct __unique_if<DATA_TYPE[]>
 {
-    typedef unique_ptr<_Tp[]> __unique_array_unknown_bound;
+    typedef unique_ptr<DATA_TYPE[]> __unique_array_unknown_bound;
 };
 
-template<class _Tp, size_t _Np>
-struct __unique_if<_Tp[_Np]>
+template<class DATA_TYPE, size_t _Np>
+struct __unique_if<DATA_TYPE[_Np]>
 {
     typedef void __unique_array_known_bound;
 };
 
-template<class _Tp, class... _Args>
+template<class DATA_TYPE, class... ARGS>
 inline 
-typename __unique_if<_Tp, true>::__unique_single
-make_uniq(_Args&&... __args)
+typename __unique_if<DATA_TYPE, true>::__unique_single
+make_uniq(ARGS&&... __args)
 {
-    return unique_ptr<_Tp, std::default_delete<_Tp>, true>(new _Tp(std::forward<_Args>(__args)...));
+    return unique_ptr<DATA_TYPE, std::default_delete<DATA_TYPE>, true>(new DATA_TYPE(std::forward<ARGS>(__args)...));
 }
 
-template<class _Tp, class... _Args>
+template<class DATA_TYPE, class... ARGS>
 inline 
-typename __unique_if<_Tp, false>::__unique_single
-make_unsafe_uniq(_Args&&... __args)
+typename __unique_if<DATA_TYPE, false>::__unique_single
+make_unsafe_uniq(ARGS&&... __args)
 {
-    return unique_ptr<_Tp, std::default_delete<_Tp>, false>(new _Tp(std::forward<_Args>(__args)...));
+    return unique_ptr<DATA_TYPE, std::default_delete<DATA_TYPE>, false>(new DATA_TYPE(std::forward<ARGS>(__args)...));
 }
 
-template<class _Tp>
-inline unique_ptr<_Tp[], std::default_delete<_Tp>, true>
+template<class DATA_TYPE>
+inline unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, true>
 make_uniq_array(size_t __n)
 {
-    return unique_ptr<_Tp[], std::default_delete<_Tp>, true>(new _Tp[__n]());
+    return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, true>(new DATA_TYPE[__n]());
 }
 
-template<class _Tp>
-inline unique_ptr<_Tp[], std::default_delete<_Tp>, false>
+template<class DATA_TYPE>
+inline unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, false>
 make_unsafe_uniq_array(size_t __n)
 {
-    return unique_ptr<_Tp[], std::default_delete<_Tp>, false>(new _Tp[__n]());
+    return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, false>(new DATA_TYPE[__n]());
 }
 
-template<class _Tp, class... _Args>
-    typename __unique_if<_Tp>::__unique_array_known_bound
-    make_uniq(_Args&&...) = delete;
+template<class DATA_TYPE, class... ARGS>
+    typename __unique_if<DATA_TYPE>::__unique_array_known_bound
+    make_uniq(ARGS&&...) = delete;
 
 
-template <typename S, typename T, typename... Args>
-unique_ptr<S> make_uniq_base(Args &&... args) {
-	return unique_ptr<S>(new T(std::forward<Args>(args)...));
+template <typename S, typename T, typename... ARGS>
+unique_ptr<S> make_uniq_base(ARGS &&... args) {
+	return unique_ptr<S>(new T(std::forward<ARGS>(args)...));
 }
 
 #ifdef DUCKDB_ENABLE_DEPRECATED_API
@@ -137,12 +137,12 @@ typename std::remove_reference<T>::type&& move(T&& t) noexcept {
 }
 #endif
 
-template <class T, class... _Args>
-static duckdb::unique_ptr<T> make_unique(_Args&&... __args) {
+template <class T, class... ARGS>
+static duckdb::unique_ptr<T> make_unique(ARGS&&... __args) {
 #ifndef DUCKDB_ENABLE_DEPRECATED_API
 	static_assert(sizeof(T) == 0, "Use make_uniq instead of make_unique!");
 #endif // DUCKDB_ENABLE_DEPRECATED_API
-	return unique_ptr<T>(new T(std::forward<_Args>(__args)...));
+	return unique_ptr<T>(new T(std::forward<ARGS>(__args)...));
 }
 
 template <typename T>
@@ -211,13 +211,13 @@ using const_reference = std::reference_wrapper<const T>;
 
 //! Returns whether or not two reference wrappers refer to the same object
 template<class T>
-bool RefersToSameObject(const reference<T> &A, const reference<T> &B) {
-	return &A.get() == &B.get();
+bool RefersToSameObject(const reference<T> &a, const reference<T> &b) {
+	return &a.get() == &b.get();
 }
 
 template<class T>
-bool RefersToSameObject(const T &A, const T &B) {
-	return &A == &B;
+bool RefersToSameObject(const T &a, const T &b) {
+	return &a == &b;
 }
 
 template<class T, class SRC>

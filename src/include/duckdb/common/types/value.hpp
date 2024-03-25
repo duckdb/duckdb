@@ -197,7 +197,7 @@ public:
 	T GetValue() const;
 	template <class T>
 	static Value CreateValue(T value) {
-		static_assert(AlwaysFalse<T>::value, "No specialization exists for this type");
+		static_assert(AlwaysFalse<T>::VALUE, "No specialization exists for this type");
 		return Value(nullptr);
 	}
 	// Returns the internal value. Unlike GetValue(), this method does not perform casting, and assumes T matches the

@@ -9,10 +9,10 @@
 
 namespace duckdb {
 
-template <class _Tp, class _Dp = std::default_delete<_Tp>, bool SAFE = true>
-class unique_ptr : public std::unique_ptr<_Tp, _Dp> {
+template <class DATA_TYPE, class ALLOCATOR_TYPE = std::default_delete<DATA_TYPE>, bool SAFE = true>
+class unique_ptr : public std::unique_ptr<DATA_TYPE, ALLOCATOR_TYPE> { // NOLINT: naming
 public:
-	using original = std::unique_ptr<_Tp, _Dp>;
+	using original = std::unique_ptr<DATA_TYPE, ALLOCATOR_TYPE>;
 	using original::original;
 
 private:
@@ -27,7 +27,7 @@ private:
 	}
 
 public:
-	typename std::add_lvalue_reference<_Tp>::type operator*() const {
+	typename std::add_lvalue_reference<DATA_TYPE>::type operator*() const { // NOLINT: hiding on purpose
 		const auto ptr = original::get();
 		if (MemorySafety<SAFE>::ENABLED) {
 			AssertNotNull(!ptr);
@@ -35,7 +35,7 @@ public:
 		return *ptr;
 	}
 
-	typename original::pointer operator->() const {
+	typename original::pointer operator->() const { // NOLINT: hiding on purpose
 		const auto ptr = original::get();
 		if (MemorySafety<SAFE>::ENABLED) {
 			AssertNotNull(!ptr);
@@ -48,15 +48,15 @@ public:
 	[[clang::reinitializes]]
 #endif
 	inline void
-	reset(typename original::pointer ptr = typename original::pointer()) noexcept {
+	reset(typename original::pointer ptr = typename original::pointer()) noexcept { // NOLINT: hiding on purpose
 		original::reset(ptr);
 	}
 };
 
-template <class _Tp, class _Dp, bool SAFE>
-class unique_ptr<_Tp[], _Dp, SAFE> : public std::unique_ptr<_Tp[], std::default_delete<_Tp[]>> {
+template <class DATA_TYPE, class ALLOCATOR_TYPE, bool SAFE>
+class unique_ptr<DATA_TYPE[], ALLOCATOR_TYPE, SAFE> : public std::unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE[]>> {
 public:
-	using original = std::unique_ptr<_Tp[], std::default_delete<_Tp[]>>;
+	using original = std::unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE[]>>;
 	using original::original;
 
 private:
@@ -71,7 +71,7 @@ private:
 	}
 
 public:
-	typename std::add_lvalue_reference<_Tp>::type operator[](size_t __i) const {
+	typename std::add_lvalue_reference<DATA_TYPE>::type operator[](size_t __i) const { // NOLINT: hiding on purpose
 		const auto ptr = original::get();
 		if (MemorySafety<SAFE>::ENABLED) {
 			AssertNotNull(!ptr);

@@ -25,7 +25,7 @@ class ParsedExpression;
 class QueryErrorContext;
 class TableRef;
 struct hugeint_t;
-class optional_idx;
+class optional_idx; // NOLINT: matching std style
 
 inline void AssertRestrictFunction(const void *left_start, const void *left_end, const void *right_start,
                                      const void *right_end, const char *fname, int linenr) {
