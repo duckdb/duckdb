@@ -98,7 +98,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	}
 	if (options.auto_detect && !options.file_options.union_by_name) {
 		options.file_path = result->files[0];
-		result->buffer_manager = make_shared<CSVBufferManager>(context, options, result->files[0], 0, false);
+		result->buffer_manager = make_shared<CSVBufferManager>(context, options, result->files[0], 0);
 		CSVSniffer sniffer(options, result->buffer_manager, CSVStateMachineCache::Get(context),
 		                   {&return_types, &names});
 		auto sniffer_result = sniffer.SniffCSV();

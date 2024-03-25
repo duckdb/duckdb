@@ -73,7 +73,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 	}
 
 	// Initialize Buffer Manager
-	buffer_manager = make_shared<CSVBufferManager>(context, options, file_path, file_idx, single_threaded);
+	buffer_manager = make_shared<CSVBufferManager>(context, options, file_path, file_idx);
 	// Initialize On Disk and Size of file
 	on_disk_file = buffer_manager->file_handle->OnDiskFile();
 	file_size = buffer_manager->file_handle->FileSize();
@@ -132,7 +132,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, CSVRea
                          bool single_threaded)
     : file_path(file_name), file_idx(0), error_handler(make_shared<CSVErrorHandler>(options_p.ignore_errors)),
       options(options_p) {
-	buffer_manager = make_shared<CSVBufferManager>(context, options, file_path, file_idx, single_threaded);
+	buffer_manager = make_shared<CSVBufferManager>(context, options, file_path, file_idx);
 	// Initialize On Disk and Size of file
 	on_disk_file = buffer_manager->file_handle->OnDiskFile();
 	file_size = buffer_manager->file_handle->FileSize();

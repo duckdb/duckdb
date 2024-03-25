@@ -65,7 +65,6 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 		shared_ptr<CSVFileScan> current_file;
 		if (cur_idx == 0) {
 			current_file = file_scans.back();
-			current_file->buffer_manager->SetSingleThreaded();
 		} else {
 			lock_guard<mutex> parallel_lock(main_mutex);
 			file_scans.emplace_back(make_shared<CSVFileScan>(context, bind_data.files[cur_idx], bind_data.options,
