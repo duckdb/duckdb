@@ -17,18 +17,18 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
+
 	BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
 
 	optional_ptr<CatalogEntry> entry;
-
 	if (stmt.info->type == AlterType::SET_COLUMN_COMMENT) {
 		// for column comments we need to an extra step: they can alter a table or a view, we resolve that here.
 		auto &info = stmt.info->Cast<SetColumnCommentInfo>();
-		entry = info.TryResolveCatalogEntry(context);
+		entry = info.TryResolveCatalogEntry(entry_retriever);
 	} else {
 		// All other AlterTypes
-		entry = Catalog::GetEntry(context, stmt.info->GetCatalogType(), stmt.info->catalog, stmt.info->schema,
-		                          stmt.info->name, stmt.info->if_not_found);
+		entry = entry_retriever.GetEntry(stmt.info->GetCatalogType(), stmt.info->catalog, stmt.info->schema,
+		                                 stmt.info->name, stmt.info->if_not_found);
 	}
 
 	if (entry) {

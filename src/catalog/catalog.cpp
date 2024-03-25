@@ -55,7 +55,11 @@ AttachedDatabase &Catalog::GetAttached() {
 	return db;
 }
 
-const string &Catalog::GetName() {
+const AttachedDatabase &Catalog::GetAttached() const {
+	return db;
+}
+
+const string &Catalog::GetName() const {
 	return GetAttached().GetName();
 }
 
@@ -295,17 +299,6 @@ struct CatalogLookup {
 
 	Catalog &catalog;
 	string schema;
-};
-
-//! Return value of Catalog::LookupEntry
-struct CatalogEntryLookup {
-	optional_ptr<SchemaCatalogEntry> schema;
-	optional_ptr<CatalogEntry> entry;
-	ErrorData error;
-
-	DUCKDB_API bool Found() const {
-		return entry;
-	}
 };
 
 //===--------------------------------------------------------------------===//

@@ -212,6 +212,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		client_locks.clear();
 	}
 
+	D_ASSERT(lock);
 	// commit successful: remove the transaction id from the list of active transactions
 	// potentially resulting in garbage collection
 	RemoveTransaction(transaction);

@@ -39,13 +39,10 @@ create macro m1(a) as a+1;
 statement ok
 create macro m2(a) as m1(a)+1;
 
-statement ok
-create or replace macro m1(a) as m2(a)+1;
-
 statement error
-select m2(42);
+create or replace macro m1(a) as m2(a)+1;
 ----
-Binder Error: Maximum recursion depth exceeded
+Catalog Error: CREATE OR REPLACE is not allowed to depend on itself
 
 # also table macros
 statement ok
@@ -54,10 +51,7 @@ create macro m3(a) as a+1;
 statement ok
 create macro m4(a) as table select m3(a);
 
-statement ok
-create or replace macro m3(a) as (from m4(42));
-
 statement error
-select m3(42);
+create or replace macro m3(a) as (from m4(42));
 ----
-Binder Error: Maximum recursion depth exceeded
+Catalog Error: CREATE OR REPLACE is not allowed to depend on itself

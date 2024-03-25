@@ -3,12 +3,12 @@
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/main/database_path_and_type.hpp"
 
 namespace duckdb {
@@ -123,6 +123,10 @@ TransactionManager &AttachedDatabase::GetTransactionManager() {
 }
 
 Catalog &AttachedDatabase::ParentCatalog() {
+	return *parent_catalog;
+}
+
+const Catalog &AttachedDatabase::ParentCatalog() const {
 	return *parent_catalog;
 }
 

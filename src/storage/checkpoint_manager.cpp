@@ -28,12 +28,12 @@
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/unknown_index.hpp"
 
 namespace duckdb {
-
-void ReorderTableEntries(catalog_entry_vector_t &tables);
 
 SingleFileCheckpointWriter::SingleFileCheckpointWriter(AttachedDatabase &db, BlockManager &block_manager)
     : CheckpointWriter(db), partial_block_manager(block_manager, CheckpointType::FULL_CHECKPOINT) {
@@ -56,74 +56,6 @@ unique_ptr<TableDataWriter> SingleFileCheckpointWriter::GetTableDataWriter(Table
 	return make_uniq<SingleFileTableDataWriter>(*this, table, *table_metadata_writer);
 }
 
-static catalog_entry_vector_t GetCatalogEntries(vector<reference<SchemaCatalogEntry>> &schemas) {
-	catalog_entry_vector_t entries;
-	for (auto &schema_p : schemas) {
-		auto &schema = schema_p.get();
-		entries.push_back(schema);
-		schema.Scan(CatalogType::TYPE_ENTRY, [&](CatalogEntry &entry) {
-			if (entry.internal) {
-				return;
-			}
-			entries.push_back(entry);
-		});
-
-		schema.Scan(CatalogType::SEQUENCE_ENTRY, [&](CatalogEntry &entry) {
-			if (entry.internal) {
-				return;
-			}
-			entries.push_back(entry);
-		});
-
-		catalog_entry_vector_t tables;
-		vector<reference<ViewCatalogEntry>> views;
-		schema.Scan(CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
-			if (entry.internal) {
-				return;
-			}
-			if (entry.type == CatalogType::TABLE_ENTRY) {
-				tables.push_back(entry.Cast<TableCatalogEntry>());
-			} else if (entry.type == CatalogType::VIEW_ENTRY) {
-				views.push_back(entry.Cast<ViewCatalogEntry>());
-			} else {
-				throw NotImplementedException("Catalog type for entries");
-			}
-		});
-		// Reorder tables because of foreign key constraint
-		ReorderTableEntries(tables);
-		for (auto &table : tables) {
-			entries.push_back(table.get());
-		}
-		for (auto &view : views) {
-			entries.push_back(view.get());
-		}
-
-		schema.Scan(CatalogType::SCALAR_FUNCTION_ENTRY, [&](CatalogEntry &entry) {
-			if (entry.internal) {
-				return;
-			}
-			if (entry.type == CatalogType::MACRO_ENTRY) {
-				entries.push_back(entry);
-			}
-		});
-
-		schema.Scan(CatalogType::TABLE_FUNCTION_ENTRY, [&](CatalogEntry &entry) {
-			if (entry.internal) {
-				return;
-			}
-			if (entry.type == CatalogType::TABLE_MACRO_ENTRY) {
-				entries.push_back(entry);
-			}
-		});
-
-		schema.Scan(CatalogType::INDEX_ENTRY, [&](CatalogEntry &entry) {
-			D_ASSERT(!entry.internal);
-			entries.push_back(entry);
-		});
-	}
-	return entries;
-}
-
 void SingleFileCheckpointWriter::CreateCheckpoint() {
 	auto &config = DBConfig::Get(db);
 	auto &storage_manager = db.GetStorageManager().Cast<SingleFileStorageManager>();
@@ -143,10 +75,18 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	// get the id of the first meta block
 	auto meta_block = metadata_writer->GetMetaBlockPointer();
 
-	vector<reference<SchemaCatalogEntry>> schemas;
-	// we scan the set of committed schemas
 	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
-	catalog.ScanSchemas([&](SchemaCatalogEntry &entry) { schemas.push_back(entry); });
+
+	catalog_entry_vector_t catalog_entries;
+	D_ASSERT(catalog.IsDuckCatalog());
+
+	auto &duck_catalog = catalog.Cast<DuckCatalog>();
+	auto &dependency_manager = duck_catalog.GetDependencyManager();
+	auto &transaction_manager = DuckTransactionManager::Get(db);
+	auto dummy_transaction = CatalogTransaction(db.GetDatabase(), transaction_manager.LowestActiveId(),
+	                                            transaction_manager.LowestActiveStart());
+	catalog_entries = dependency_manager.GetExportOrder(dummy_transaction);
+
 	// write the actual data into the database
 
 	// Create a serializer to write the checkpoint data
@@ -167,7 +107,6 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	        ]
 	    }
 	 */
-	auto catalog_entries = GetCatalogEntries(schemas);
 	BinarySerializer serializer(*metadata_writer);
 	serializer.Begin();
 	serializer.WriteList(100, "catalog_entries", catalog_entries.size(), [&](Serializer::List &list, idx_t i) {
@@ -353,7 +292,7 @@ void CheckpointReader::ReadEntry(ClientContext &context, Deserializer &deseriali
 }
 
 void CheckpointReader::ReadSchema(ClientContext &context, Deserializer &deserializer) {
-	// Read the schema and create it in the catalog
+	// read the schema and create it in the catalog
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "schema");
 	auto &schema_info = info->Cast<CreateSchemaInfo>();
 

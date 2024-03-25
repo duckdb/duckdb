@@ -24,14 +24,11 @@ PRAGMA table_info('test.v')
 
 # drop the table the view is based on
 statement ok
-DROP TABLE test.t
+DROP TABLE test.t CASCADE;
 
-# we can still query the types and column names
-query IIIIII
+statement error
 PRAGMA table_info('test.v')
 ----
-0	a	INTEGER	0	NULL	0
-1	b	INTEGER	0	NULL	0
 
 # but querying the view fails
 statement error
@@ -44,13 +41,9 @@ loop i 0 2
 # restart the system
 restart
 
-# the view still exists, but the table does not
-# we can check the types, but not query it
-query IIIIII
+statement error
 PRAGMA table_info('test.v')
 ----
-0	a	INTEGER	0	NULL	0
-1	b	INTEGER	0	NULL	0
 
 statement error
 SELECT * FROM test.v
@@ -63,6 +56,13 @@ CREATE TABLE test.t (a INTEGER, b INTEGER);
 statement ok
 SELECT * FROM test.t
 
+statement error
+SELECT * FROM test.v
+----
+
+statement ok
+CREATE VIEW test.v AS SELECT * FROM test.t;
+
 statement ok
 SELECT * FROM test.v
 
@@ -74,6 +74,6 @@ PRAGMA table_info('test.v')
 
 # drop the table again
 statement ok
-DROP TABLE test.t
+DROP TABLE test.t CASCADE;
 
 endloop

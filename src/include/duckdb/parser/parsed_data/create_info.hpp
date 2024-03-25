@@ -10,6 +10,7 @@
 
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/enums/on_create_conflict.hpp"
 #include "duckdb/common/types/value.hpp"
@@ -43,6 +44,8 @@ public:
 	bool internal;
 	//! The SQL string of the CREATE statement
 	string sql;
+	//! The inherent dependencies of the created entry
+	LogicalDependencyList dependencies;
 	//! User provided comment
 	Value comment;
 

@@ -1,5 +1,6 @@
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry_retriever.hpp"
 
 namespace duckdb {
 
@@ -21,8 +22,8 @@ unique_ptr<AlterInfo> SetColumnCommentInfo::Copy() const {
 	return std::move(result);
 }
 
-optional_ptr<CatalogEntry> SetColumnCommentInfo::TryResolveCatalogEntry(ClientContext &context) {
-	auto entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, catalog, schema, name, if_not_found);
+optional_ptr<CatalogEntry> SetColumnCommentInfo::TryResolveCatalogEntry(CatalogEntryRetriever &retriever) {
+	auto entry = retriever.GetEntry(CatalogType::TABLE_ENTRY, catalog, schema, name, if_not_found);
 
 	if (entry) {
 		catalog_entry_type = entry->type;

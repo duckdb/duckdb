@@ -210,8 +210,8 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	auto &fexpr = ref.function->Cast<FunctionExpression>();
 
 	// fetch the function from the catalog
-	auto &func_catalog = Catalog::GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, fexpr.catalog, fexpr.schema,
-	                                       fexpr.function_name, error_context);
+	auto &func_catalog = *GetCatalogEntry(CatalogType::TABLE_FUNCTION_ENTRY, fexpr.catalog, fexpr.schema,
+	                                      fexpr.function_name, OnEntryNotFound::THROW_EXCEPTION, error_context);
 
 	if (func_catalog.type == CatalogType::TABLE_MACRO_ENTRY) {
 		auto &macro_func = func_catalog.Cast<TableMacroCatalogEntry>();

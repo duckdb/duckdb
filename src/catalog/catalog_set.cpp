@@ -192,14 +192,14 @@ bool CatalogSet::CreateEntryInternal(CatalogTransaction transaction, const strin
 }
 
 bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name, unique_ptr<CatalogEntry> value,
-                             const DependencyList &dependencies) {
+                             const LogicalDependencyList &logical_dependencies) {
 	CheckCatalogEntryInvariants(*value, name);
 
 	// Set the timestamp to the timestamp of the current transaction
 	value->timestamp = transaction.transaction_id;
 	value->set = this;
 	// now add the dependency set of this object to the dependency manager
-	catalog.GetDependencyManager().AddObject(transaction, *value, dependencies);
+	catalog.GetDependencyManager().AddObject(transaction, *value, logical_dependencies);
 
 	// lock the catalog for writing
 	lock_guard<mutex> write_lock(catalog.GetWriteLock());
@@ -210,7 +210,7 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 }
 
 bool CatalogSet::CreateEntry(ClientContext &context, const string &name, unique_ptr<CatalogEntry> value,
-                             const DependencyList &dependencies) {
+                             const LogicalDependencyList &dependencies) {
 	return CreateEntry(catalog.GetCatalogTransaction(context), name, std::move(value), dependencies);
 }
 
@@ -563,6 +563,20 @@ optional_ptr<CatalogEntry> CatalogSet::GetEntry(CatalogTransaction transaction, 
 
 optional_ptr<CatalogEntry> CatalogSet::GetEntry(ClientContext &context, const string &name) {
 	return GetEntry(catalog.GetCatalogTransaction(context), name);
+}
+
+optional_ptr<CatalogEntry> CatalogSet::GetEntry(const string &name) {
+	unique_lock<mutex> read_lock(catalog_lock);
+	auto entry_value = map.GetEntry(name);
+	if (!entry_value) {
+		return nullptr;
+	}
+	auto &entry = *entry_value;
+	auto &committed_entry = GetCommittedEntry(entry);
+	if (committed_entry.deleted) {
+		return nullptr;
+	}
+	return &committed_entry;
 }
 
 void CatalogSet::UpdateTimestamp(CatalogEntry &entry, transaction_t timestamp) {

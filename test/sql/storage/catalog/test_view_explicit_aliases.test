@@ -17,18 +17,19 @@ statement ok
 CREATE VIEW test.v (b,c) AS SELECT * FROM test.t;
 
 # check the view info
-query II nosort view_info
+query IIIIII
 PRAGMA table_info('test.v')
 ----
+0	b	INTEGER	false	NULL	false
+1	c	INTEGER	false	NULL	false
 
 statement ok
 SELECT * FROM test.v
 
 statement ok
-DROP TABLE test.t
+DROP TABLE test.t CASCADE;
 
-# we can still query this after the table is gone
-query II nosort view_info
+statement error
 PRAGMA table_info('test.v')
 ----
 
@@ -37,8 +38,7 @@ loop i 0 2
 # now reload
 restart
 
-# can check info, but not query the view
-query II nosort view_info
+statement error
 PRAGMA table_info('test.v')
 ----
 
@@ -53,10 +53,14 @@ CREATE TABLE test.t (a INTEGER, b INTEGER);
 statement ok
 SELECT * FROM test.t
 
-statement ok
+statement error
 SELECT b,c FROM test.v
+----
 
 statement ok
-DROP TABLE test.t
+CREATE VIEW test.v (b,c) AS SELECT * FROM test.t;
+
+statement ok
+DROP TABLE test.t CASCADE;
 
 endloop

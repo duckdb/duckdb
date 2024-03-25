@@ -14,7 +14,7 @@
 #include "duckdb/parser/qualified_name.hpp"
 
 namespace duckdb {
-class ClientContext;
+class CatalogEntryRetriever;
 class CatalogEntry;
 
 struct SetColumnCommentInfo : public AlterInfo {
@@ -35,7 +35,7 @@ public:
 	Value comment_value;
 
 public:
-	optional_ptr<CatalogEntry> TryResolveCatalogEntry(ClientContext &context);
+	optional_ptr<CatalogEntry> TryResolveCatalogEntry(CatalogEntryRetriever &retriever);
 	unique_ptr<AlterInfo> Copy() const override;
 	CatalogType GetCatalogType() const override;
 

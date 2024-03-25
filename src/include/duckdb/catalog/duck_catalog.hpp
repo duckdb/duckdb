@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry_map.hpp"
 
 namespace duckdb {
 
@@ -33,7 +34,9 @@ public:
 	}
 
 public:
+	DUCKDB_API catalog_entry_vector_t GetNonSystemEntries(CatalogTransaction transaction);
 	DUCKDB_API optional_ptr<CatalogEntry> CreateSchema(CatalogTransaction transaction, CreateSchemaInfo &info) override;
+	DUCKDB_API void ScanSchemas(CatalogTransaction transaction, std::function<void(SchemaCatalogEntry &)> callback);
 	DUCKDB_API void ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) override;
 	DUCKDB_API void ScanSchemas(std::function<void(SchemaCatalogEntry &)> callback);
 

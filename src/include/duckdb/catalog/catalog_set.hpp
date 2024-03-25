@@ -26,7 +26,7 @@ namespace duckdb {
 struct AlterInfo;
 
 class ClientContext;
-class DependencyList;
+class LogicalDependencyList;
 
 class DuckCatalog;
 class TableCatalogEntry;
@@ -65,9 +65,9 @@ public:
 	//! Create an entry in the catalog set. Returns whether or not it was
 	//! successful.
 	DUCKDB_API bool CreateEntry(CatalogTransaction transaction, const string &name, unique_ptr<CatalogEntry> value,
-	                            const DependencyList &dependencies);
+	                            const LogicalDependencyList &dependencies);
 	DUCKDB_API bool CreateEntry(ClientContext &context, const string &name, unique_ptr<CatalogEntry> value,
-	                            const DependencyList &dependencies);
+	                            const LogicalDependencyList &dependencies);
 
 	DUCKDB_API bool AlterEntry(CatalogTransaction transaction, const string &name, AlterInfo &alter_info);
 
@@ -86,6 +86,7 @@ public:
 	DUCKDB_API EntryLookup GetEntryDetailed(CatalogTransaction transaction, const string &name);
 	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(CatalogTransaction transaction, const string &name);
 	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(ClientContext &context, const string &name);
+	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(const string &name);
 
 	//! Gets the entry that is most similar to the given name (i.e. smallest levenshtein distance), or empty string if
 	//! none is found. The returned pair consists of the entry name and the distance (smaller means closer).

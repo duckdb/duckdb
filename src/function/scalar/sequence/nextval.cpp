@@ -30,7 +30,8 @@ struct NextSequenceValueOperator {
 SequenceCatalogEntry &BindSequence(ClientContext &context, const string &name) {
 	auto qname = QualifiedName::Parse(name);
 	// fetch the sequence from the catalog
-	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
+	auto binder = Binder::CreateBinder(context);
+	binder->BindSchemaOrCatalog(qname.catalog, qname.schema);
 	return Catalog::GetEntry<SequenceCatalogEntry>(context, qname.catalog, qname.schema, qname.name);
 }
 
@@ -78,7 +79,7 @@ static unique_ptr<FunctionData> NextValBind(ClientContext &context, ScalarFuncti
 	return make_uniq<NextvalBindData>(sequence);
 }
 
-static void NextValDependency(BoundFunctionExpression &expr, DependencyList &dependencies) {
+static void NextValDependency(BoundFunctionExpression &expr, LogicalDependencyList &dependencies) {
 	auto &info = expr.bind_info->Cast<NextvalBindData>();
 	if (info.sequence) {
 		dependencies.AddDependency(*info.sequence);

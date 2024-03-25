@@ -42,6 +42,7 @@ unique_ptr<CreateInfo> MacroCatalogEntry::GetInfo() const {
 	info->schema = schema.name;
 	info->name = name;
 	info->function = function->Copy();
+	info->dependencies = dependencies;
 	info->comment = comment;
 	return std::move(info);
 }
