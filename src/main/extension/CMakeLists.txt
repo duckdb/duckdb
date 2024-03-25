@@ -8,10 +8,8 @@ include_directories(../../../third_party/httplib/)
 configure_file(
   generated_extension_headers.hpp.in
   "${PROJECT_BINARY_DIR}/codegen/include/generated_extension_headers.hpp")
-message(DUCKDB_EXTENSION_NAMES="${DUCKDB_EXTENSION_NAMES}")
 if(NOT ${DISABLE_BUILTIN_EXTENSIONS})
   foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
-      message(EXT_NAME="${EXT_NAME}")
     string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
     if(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK})
       set(DUCKDB_EXTENSION_HEADER "${EXT_NAME}_extension.hpp")
