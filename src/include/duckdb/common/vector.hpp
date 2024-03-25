@@ -58,7 +58,7 @@ public:
 
 	template <bool _SAFE = false>
 	inline typename original::reference get(typename original::size_type __n) {
-		if (MemorySafety<_SAFE>::enabled) {
+		if (MemorySafety<_SAFE>::ENABLED) {
 			AssertIndexInBounds(__n, original::size());
 		}
 		return original::operator[](__n);
@@ -66,7 +66,7 @@ public:
 
 	template <bool _SAFE = false>
 	inline typename original::const_reference get(typename original::size_type __n) const {
-		if (MemorySafety<_SAFE>::enabled) {
+		if (MemorySafety<_SAFE>::ENABLED) {
 			AssertIndexInBounds(__n, original::size());
 		}
 		return original::operator[](__n);
@@ -88,14 +88,14 @@ public:
 	}
 
 	typename original::reference back() {
-		if (MemorySafety<SAFE>::enabled && original::empty()) {
+		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
 			throw InternalException("'back' called on an empty vector!");
 		}
 		return get<SAFE>(original::size() - 1);
 	}
 
 	typename original::const_reference back() const {
-		if (MemorySafety<SAFE>::enabled && original::empty()) {
+		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
 			throw InternalException("'back' called on an empty vector!");
 		}
 		return get<SAFE>(original::size() - 1);

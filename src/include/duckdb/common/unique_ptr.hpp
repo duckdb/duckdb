@@ -29,7 +29,7 @@ private:
 public:
 	typename std::add_lvalue_reference<_Tp>::type operator*() const {
 		const auto ptr = original::get();
-		if (MemorySafety<SAFE>::enabled) {
+		if (MemorySafety<SAFE>::ENABLED) {
 			AssertNotNull(!ptr);
 		}
 		return *ptr;
@@ -37,7 +37,7 @@ public:
 
 	typename original::pointer operator->() const {
 		const auto ptr = original::get();
-		if (MemorySafety<SAFE>::enabled) {
+		if (MemorySafety<SAFE>::ENABLED) {
 			AssertNotNull(!ptr);
 		}
 		return ptr;
@@ -73,7 +73,7 @@ private:
 public:
 	typename std::add_lvalue_reference<_Tp>::type operator[](size_t __i) const {
 		const auto ptr = original::get();
-		if (MemorySafety<SAFE>::enabled) {
+		if (MemorySafety<SAFE>::ENABLED) {
 			AssertNotNull(!ptr);
 		}
 		return ptr[__i];
