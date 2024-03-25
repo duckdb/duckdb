@@ -625,6 +625,35 @@ StructureChildrenToTypeList(ClientContext &context, const JSONStructureDescripti
 	return child_types;
 }
 
+static void ReplaceNulls(LogicalType &type, const LogicalType &null_type) {
+	if (type == LogicalType::SQLNULL) {
+		type = null_type;
+		return;
+	}
+	if (type.id() == LogicalTypeId::STRUCT) {
+		const auto &child_types = type.AuxInfo()->Cast<StructTypeInfo>().child_types;
+		child_list_t<LogicalType> new_child_types {};
+		for (auto &child_type : child_types) {
+			new_child_types.emplace_back(child_type.first, child_type.second);
+			ReplaceNulls(new_child_types.back().second, null_type);
+		}
+		type = LogicalType::STRUCT(new_child_types);
+		return;
+	}
+	if (type.id() == LogicalTypeId::LIST) {
+		LogicalType child_type = type.AuxInfo()->Cast<ListTypeInfo>().child_type;
+		ReplaceNulls(child_type, null_type);
+		type = LogicalType::LIST(child_type);
+		return;
+	}
+	if (type.id() == LogicalTypeId::MAP) {
+		const auto &struct_type = type.AuxInfo()->Cast<ListTypeInfo>().child_type;
+		auto value_type = struct_type.AuxInfo()->Cast<StructTypeInfo>().child_types[1].second;
+		ReplaceNulls(value_type, null_type);
+		type = LogicalType::MAP(LogicalType::VARCHAR, value_type);
+	}
+}
+
 static LogicalType StructureToTypeObject(ClientContext &context, const JSONStructureNode &node, const idx_t max_depth,
                                          const double field_appearance_threshold, const double map_inference_threshold,
                                          idx_t depth, const idx_t sample_count, const LogicalType &null_type) {
@@ -661,6 +690,10 @@ static LogicalType StructureToTypeObject(ClientContext &context, const JSONStruc
 		}
 		const auto avg_similarity = total_similarity / static_cast<double>(child_types.size());
 		if (avg_similarity >= map_inference_threshold) {
+			// We have a map type. Replace all null types recursively with proper null_type
+			if (null_type != LogicalType::SQLNULL) {
+				ReplaceNulls(map_value_type, null_type);
+			}
 			return LogicalType::MAP(LogicalType::VARCHAR,
 			                        map_value_type != LogicalType::SQLNULL ? map_value_type : null_type);
 		}

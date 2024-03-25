@@ -274,6 +274,12 @@ select distinct typeof(a) from read_json_auto('data/json/map_of_map.jsonl')
 ----
 MAP(VARCHAR, MAP(VARCHAR, BIGINT))
 
+# All NULL types get converted to JSON if we do map inference
+query T
+select distinct typeof(a) from read_json_auto('data/json/map_of_struct_with_nulls.jsonl')
+----
+MAP(VARCHAR, STRUCT(a JSON[]))
+
 # if we only sample the first file, we default to a single JSON column
 query I
 select * from read_json_auto(['data/json/empty_array.json', 'data/json/example_n.ndjson'], maximum_sample_files=1);
