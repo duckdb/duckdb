@@ -140,7 +140,10 @@ idx_t ColumnData::ScanVector(TransactionData transaction, idx_t vector_index, Co
 		lock_guard<mutex> update_guard(update_lock);
 		has_updates = updates ? true : false;
 	}
-	auto scan_count = ScanVector(state, result, STANDARD_VECTOR_SIZE, has_updates);
+	idx_t current_row = vector_index * STANDARD_VECTOR_SIZE;
+	auto vector_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - current_row);
+
+	auto scan_count = ScanVector(state, result, vector_count, has_updates);
 	if (has_updates) {
 		lock_guard<mutex> update_guard(update_lock);
 		if (!ALLOW_UPDATES && updates->HasUncommittedUpdates(vector_index)) {
