@@ -1,4 +1,4 @@
-# name: test/sql/attach/attach_httpfs.test
+# name: test/sql/attach/attach_s3.test
 # description: Test attach using httpfs
 # group: [attach]
 
@@ -18,11 +18,22 @@ require-env DUCKDB_S3_ENDPOINT
 
 require-env DUCKDB_S3_USE_SSL
 
-require-env S3_ATTACH_DB_PRESIGNED_URL
+require-env S3_ATTACH_DB
+
+statement ok
+CREATE SECRET (
+    TYPE S3,
+    PROVIDER config,
+    KEY_ID '${AWS_ACCESS_KEY_ID}',
+    SECRET '${AWS_SECRET_ACCESS_KEY}',
+    REGION '${AWS_DEFAULT_REGION}',
+    ENDPOINT '${DUCKDB_S3_ENDPOINT}',
+    USE_SSL '${DUCKDB_S3_USE_SSL}'
+)
 
 # ATTACH a DuckDB database over HTTPFS
 statement ok
-ATTACH '${S3_ATTACH_DB_PRESIGNED_URL}' AS db (READONLY 1);
+ATTACH '${S3_ATTACH_DB}' AS db (READONLY 1);
 
 query IIIII
 SELECT * FROM db.integral_values

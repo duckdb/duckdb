@@ -45,24 +45,24 @@ public:
 	void Truncate(FileHandle &handle, int64_t new_size) override;
 
 	//! Check if a directory exists
-	bool DirectoryExists(const string &directory) override;
+	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
 	//! Create a directory if it does not exist
-	void CreateDirectory(const string &directory) override;
+	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
 	//! Recursively remove a directory and all files in it
-	void RemoveDirectory(const string &directory) override;
+	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr) override;
 	//! List files in a directory, invoking the callback method for each one with (filename, is_dir)
 	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
 	               FileOpener *opener = nullptr) override;
 	//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID
 	//! properties
-	void MoveFile(const string &source, const string &target) override;
+	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener = nullptr) override;
 	//! Check if a file exists
-	bool FileExists(const string &filename) override;
+	bool FileExists(const string &filename, optional_ptr<FileOpener> opener = nullptr) override;
 
 	//! Check if path is a pipe
-	bool IsPipe(const string &filename) override;
+	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener = nullptr) override;
 	//! Remove a file from disk
-	void RemoveFile(const string &filename) override;
+	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener = nullptr) override;
 	//! Sync a file handle to disk
 	void FileSync(FileHandle &handle) override;
 
