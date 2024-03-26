@@ -20,8 +20,8 @@ public:
 
 public:
 	PhysicalPrepare(string name_p, shared_ptr<PreparedStatementData> prepared, idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::PREPARE, {LogicalType::BOOLEAN}, estimated_cardinality), name(std::move(name_p)),
-	      prepared(std::move(prepared)) {
+	    : PhysicalOperator(PhysicalOperatorType::PREPARE, {LogicalType::BOOLEAN}, estimated_cardinality),
+	      name(std::move(name_p)), prepared(std::move(prepared)) {
 	}
 
 	string name;

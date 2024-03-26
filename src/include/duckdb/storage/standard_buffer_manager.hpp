@@ -36,8 +36,7 @@ class StandardBufferManager : public BufferManager {
 
 public:
 	StandardBufferManager(DatabaseInstance &db, string temp_directory);
-	~StandardBufferManager() override
-	;
+	~StandardBufferManager() override;
 
 public:
 	static unique_ptr<StandardBufferManager> CreateBufferManager(DatabaseInstance &db, string temp_directory);

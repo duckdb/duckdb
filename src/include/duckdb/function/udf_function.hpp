@@ -99,7 +99,8 @@ public:
 
 	template <typename UDF_OP, typename STATE, typename TR, typename TA, typename TB>
 	inline static AggregateFunction CreateAggregateFunction(const string &name, const LogicalType &ret_type,
-	                                                        const LogicalType &input_type_a, const LogicalType &input_type_b) {
+	                                                        const LogicalType &input_type_a,
+	                                                        const LogicalType &input_type_b) {
 		if (!TypesMatch<TR>(ret_type)) { // LCOV_EXCL_START
 			throw std::runtime_error("The return argument don't match!");
 		}
@@ -123,8 +124,8 @@ public:
 	                        aggregate_simple_update_t simple_update = nullptr, bind_aggregate_function_t bind = nullptr,
 	                        aggregate_destructor_t destructor = nullptr) {
 
-		AggregateFunction aggr_function(name, arguments, return_type, state_size,
-		                                initialize, update, combine, finalize, simple_update, bind, destructor);
+		AggregateFunction aggr_function(name, arguments, return_type, state_size, initialize, update, combine, finalize,
+		                                simple_update, bind, destructor);
 		aggr_function.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 		return aggr_function;
 	}
@@ -370,7 +371,8 @@ private:
 
 	template <typename UDF_OP, typename STATE, typename TR, typename TA, typename TB>
 	inline static AggregateFunction CreateBinaryAggregateFunction(const string &name, const LogicalType &ret_type,
-	                                                              const LogicalType &input_type_a, const LogicalType &input_type_b) {
+	                                                              const LogicalType &input_type_a,
+	                                                              const LogicalType &input_type_b) {
 		AggregateFunction aggr_function =
 		    AggregateFunction::BinaryAggregate<STATE, TA, TB, TR, UDF_OP>(input_type_a, input_type_b, ret_type);
 		aggr_function.name = name;

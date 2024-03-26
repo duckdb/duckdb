@@ -32,7 +32,7 @@ struct GroupMatch {
 	const std::string &str() const { // NOLINT
 		return text;
 	}
-	operator std::string() const {  // NOLINT: allow implicit cast
+	operator std::string() const { // NOLINT: allow implicit cast
 		return text;
 	}
 };

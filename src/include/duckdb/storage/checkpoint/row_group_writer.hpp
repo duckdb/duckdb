@@ -56,8 +56,7 @@ public:
 	MetadataWriter &table_data_writer;
 
 public:
-	void WriteColumnDataPointers(ColumnCheckpointState &column_checkpoint_state,
-	                                     Serializer &serializer) override;
+	void WriteColumnDataPointers(ColumnCheckpointState &column_checkpoint_state, Serializer &serializer) override;
 
 	MetadataWriter &GetPayloadWriter() override;
 };

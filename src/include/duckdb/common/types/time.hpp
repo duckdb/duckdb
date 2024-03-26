@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-struct dtime_t; // NOLINT
+struct dtime_t;    // NOLINT
 struct dtime_tz_t; // NOLINT
 
 //! The Time class is a static class that holds helper functions for the Time

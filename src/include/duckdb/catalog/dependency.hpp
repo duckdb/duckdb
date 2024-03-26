@@ -135,9 +135,8 @@ public:
 
 struct Dependency {
 	Dependency(CatalogEntry &entry, // NOLINT: Allow implicit conversion from `CatalogEntry`
-			   DependencyDependentFlags flags = DependencyDependentFlags().SetBlocking())
-	    :
-	      entry(entry), flags(std::move(flags)) {
+	           DependencyDependentFlags flags = DependencyDependentFlags().SetBlocking())
+	    : entry(entry), flags(std::move(flags)) {
 	}
 
 	//! The catalog entry this depends on

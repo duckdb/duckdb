@@ -23,7 +23,8 @@ public:
 
 public:
 	LogicalPrepare(string name_p, shared_ptr<PreparedStatementData> prepared, unique_ptr<LogicalOperator> logical_plan)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_PREPARE), name(std::move(name_p)), prepared(std::move(prepared)) {
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_PREPARE), name(std::move(name_p)),
+	      prepared(std::move(prepared)) {
 		if (logical_plan) {
 			children.push_back(std::move(logical_plan));
 		}

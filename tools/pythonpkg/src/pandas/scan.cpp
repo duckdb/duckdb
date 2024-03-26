@@ -28,7 +28,7 @@ struct PandasScanFunctionData : public PyTableFunctionData {
 		try {
 			py::gil_scoped_acquire acquire;
 			pandas_bind_data.clear();
-		} catch(...) { // NOLINT
+		} catch (...) { // NOLINT
 		}
 	}
 };

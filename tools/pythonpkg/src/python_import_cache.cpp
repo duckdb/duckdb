@@ -82,7 +82,7 @@ PythonImportCache::~PythonImportCache() {
 	try {
 		py::gil_scoped_acquire acquire;
 		owned_objects.clear();
-	} catch(...) { // NOLINT
+	} catch (...) { // NOLINT
 	}
 }
 

@@ -85,7 +85,7 @@ class BaseSecret {
 public:
 	BaseSecret(vector<string> prefix_paths_p, string type_p, string provider_p, string name_p)
 	    : prefix_paths(std::move(prefix_paths_p)), type(std::move(type_p)), provider(std::move(provider_p)),
-		  name(std::move(name_p)), serializable(false) {
+	      name(std::move(name_p)), serializable(false) {
 		D_ASSERT(!type.empty());
 	}
 	BaseSecret(const BaseSecret &other)
@@ -162,7 +162,8 @@ public:
 		serializable = true;
 	};
 	KeyValueSecret(KeyValueSecret &&secret) noexcept
-	    : BaseSecret(std::move(secret.prefix_paths), std::move(secret.type), std::move(secret.provider), std::move(secret.name)) {
+	    : BaseSecret(std::move(secret.prefix_paths), std::move(secret.type), std::move(secret.provider),
+	                 std::move(secret.name)) {
 		secret_map = std::move(secret.secret_map);
 		redact_keys = std::move(secret.redact_keys);
 		serializable = true;

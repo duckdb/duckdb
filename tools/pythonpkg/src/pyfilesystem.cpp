@@ -14,7 +14,7 @@ PythonFileHandle::~PythonFileHandle() {
 		PythonGILWrapper gil;
 		handle.dec_ref();
 		handle.release();
-	} catch(...) { // NOLINT
+	} catch (...) { // NOLINT
 	}
 }
 

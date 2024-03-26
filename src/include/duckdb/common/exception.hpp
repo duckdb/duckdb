@@ -28,7 +28,7 @@ struct hugeint_t;
 class optional_idx; // NOLINT: matching std style
 
 inline void AssertRestrictFunction(const void *left_start, const void *left_end, const void *right_start,
-                                     const void *right_end, const char *fname, int linenr) {
+                                   const void *right_end, const char *fname, int linenr) {
 	// assert that the two pointers do not overlap
 #ifdef DEBUG
 	if (!(left_end <= right_start || right_end <= left_start)) {

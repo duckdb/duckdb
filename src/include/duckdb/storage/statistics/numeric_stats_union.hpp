@@ -27,9 +27,9 @@ struct NumericValueUnion {
 		uint64_t ubigint;
 		hugeint_t hugeint;
 		uhugeint_t uhugeint;
-		float float_; // NOLINT
+		float float_;   // NOLINT
 		double double_; // NOLINT
-	} value_;  // NOLINT
+	} value_;           // NOLINT
 
 	template <class T>
 	T &GetReferenceUnsafe();

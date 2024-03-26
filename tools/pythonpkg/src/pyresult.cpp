@@ -32,7 +32,7 @@ DuckDBPyResult::~DuckDBPyResult() {
 		py::gil_scoped_release gil;
 		result.reset();
 		current_chunk.reset();
-	} catch(...) { // NOLINT
+	} catch (...) { // NOLINT
 	}
 }
 

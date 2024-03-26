@@ -54,7 +54,8 @@ public:
 };
 
 template <class DATA_TYPE, class ALLOCATOR_TYPE, bool SAFE>
-class unique_ptr<DATA_TYPE[], ALLOCATOR_TYPE, SAFE> : public std::unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE[]>> {
+class unique_ptr<DATA_TYPE[], ALLOCATOR_TYPE, SAFE>
+    : public std::unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE[]>> {
 public:
 	using original = std::unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE[]>>;
 	using original::original;

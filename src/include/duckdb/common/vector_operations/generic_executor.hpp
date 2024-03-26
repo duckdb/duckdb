@@ -26,7 +26,7 @@ struct PrimitiveTypeState {
 
 template <class INPUT_TYPE>
 struct PrimitiveType {
-	PrimitiveType()  = default;
+	PrimitiveType() = default;
 	PrimitiveType(INPUT_TYPE val) : val(val) { // NOLINT: allow implicit cast
 	}
 

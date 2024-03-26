@@ -23,8 +23,8 @@ public:
 public:
 	LogicalRecursiveCTE(string ctename_p, idx_t table_index, idx_t column_count, bool union_all,
 	                    unique_ptr<LogicalOperator> top, unique_ptr<LogicalOperator> bottom)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_RECURSIVE_CTE), union_all(union_all), ctename(std::move(ctename_p)),
-	      table_index(table_index), column_count(column_count) {
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_RECURSIVE_CTE), union_all(union_all),
+	      ctename(std::move(ctename_p)), table_index(table_index), column_count(column_count) {
 		children.push_back(std::move(top));
 		children.push_back(std::move(bottom));
 	}

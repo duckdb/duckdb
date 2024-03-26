@@ -80,7 +80,7 @@ private:
 
 public:
 	DUCKDB_API ColumnDataRowIterator begin(); // NOLINT: match stl API
-	DUCKDB_API ColumnDataRowIterator end(); // NOLINT: match stl API
+	DUCKDB_API ColumnDataRowIterator end();   // NOLINT: match stl API
 };
 
 } // namespace duckdb

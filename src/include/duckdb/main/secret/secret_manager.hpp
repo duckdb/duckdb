@@ -55,7 +55,8 @@ public:
 //! A Secret Entry in the secret manager
 struct SecretEntry {
 public:
-	explicit SecretEntry(unique_ptr<const BaseSecret> secret) : secret(secret != nullptr ? secret->Clone() : nullptr) {}
+	explicit SecretEntry(unique_ptr<const BaseSecret> secret) : secret(secret != nullptr ? secret->Clone() : nullptr) {
+	}
 	SecretEntry(const SecretEntry &other)
 	    : persist_type(other.persist_type), storage_mode(other.storage_mode),
 	      secret((other.secret != nullptr) ? other.secret->Clone() : nullptr) {

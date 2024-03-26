@@ -42,7 +42,8 @@ public:
 	// This is necessary to tell clang-tidy that it reinitializes the variable after a move
 	[[clang::reinitializes]]
 #endif
-	inline void clear() noexcept { // NOLINT: hiding on purpose
+	inline void
+	clear() noexcept { // NOLINT: hiding on purpose
 		original::clear();
 	}
 

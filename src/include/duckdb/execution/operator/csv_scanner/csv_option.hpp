@@ -26,8 +26,10 @@ class Deserializer;
 template <typename T>
 struct CSVOption { // NOLINT: work-around bug in clang-tidy
 public:
-	CSVOption(T value_p) : value(value_p) {} // NOLINT: allow implicit conversion from value
-	CSVOption(T value_p, bool set_by_user_p) : value(value_p), set_by_user(set_by_user_p) {}
+	CSVOption(T value_p) : value(value_p) { // NOLINT: allow implicit conversion from value
+	}
+	CSVOption(T value_p, bool set_by_user_p) : value(value_p), set_by_user(set_by_user_p) {
+	}
 	CSVOption() {};
 
 	//! Sets value.

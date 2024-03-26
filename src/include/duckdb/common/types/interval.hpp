@@ -12,9 +12,9 @@
 
 namespace duckdb {
 
-struct dtime_t; // NOLINT: literal casing
-struct date_t; // NOLINT: literal casing
-struct dtime_tz_t; // NOLINT: literal casing
+struct dtime_t;     // NOLINT: literal casing
+struct date_t;      // NOLINT: literal casing
+struct dtime_tz_t;  // NOLINT: literal casing
 struct timestamp_t; // NOLINT: literal casing
 
 class Serializer;

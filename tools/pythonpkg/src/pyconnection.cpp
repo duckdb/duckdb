@@ -69,7 +69,7 @@ DuckDBPyConnection::~DuckDBPyConnection() {
 		database.reset();
 		connection.reset();
 		temporary_views.clear();
-	} catch(...) { // NOLINT
+	} catch (...) { // NOLINT
 	}
 }
 

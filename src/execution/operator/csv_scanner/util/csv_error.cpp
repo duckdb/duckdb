@@ -171,8 +171,7 @@ CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, s
                                               LinesPerBoundary error_info) {
 	std::ostringstream error;
 	// How many columns were expected and how many were found
-	error << "Expected Number of Columns: " << options.dialect_options.num_cols << " Found: " << actual_columns
-	      << '\n';
+	error << "Expected Number of Columns: " << options.dialect_options.num_cols << " Found: " << actual_columns << '\n';
 	error << '\n' << "Possible fixes:" << '\n';
 	if (!options.null_padding) {
 		error << "* Enable null padding (null_padding=true) to replace missing values with NULL" << '\n';

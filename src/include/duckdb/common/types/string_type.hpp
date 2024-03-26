@@ -60,10 +60,10 @@ public:
 		}
 	}
 
-	string_t(const char *data)  // NOLINT: Allow implicit conversion from `const char*`
+	string_t(const char *data) // NOLINT: Allow implicit conversion from `const char*`
 	    : string_t(data, UnsafeNumericCast<uint32_t>(strlen(data))) {
 	}
-	string_t(const string &value)  // NOLINT: Allow implicit conversion from `const char*`
+	string_t(const string &value) // NOLINT: Allow implicit conversion from `const char*`
 	    : string_t(value.c_str(), UnsafeNumericCast<uint32_t>(value.size())) {
 	}
 
