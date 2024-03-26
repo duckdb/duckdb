@@ -142,6 +142,10 @@ public:
 	void SetDisabledFileSystems(const vector<string> &names) override {
 		GetFileSystem().SetDisabledFileSystems(names);
 	}
+
+	vector<string> ListSubSystems() override {
+		return GetFileSystem().ListSubSystems();
+	}
 };
 
 } // namespace duckdb
