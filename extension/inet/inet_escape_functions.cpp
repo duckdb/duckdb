@@ -223,7 +223,7 @@ void INetFunctions::Unescape(DataChunk &args, ExpressionState &state, Vector &re
 }
 
 ScalarFunctionSet InetExtension::GetEscapeFunctionSet() {
-	ScalarFunctionSet funcs("escape");
+	ScalarFunctionSet funcs("html_escape");
 	funcs.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, INetFunctions::Escape, nullptr,
 	                                 nullptr, nullptr, nullptr, LogicalType::INVALID, FunctionStability::CONSISTENT,
 	                                 FunctionNullHandling::SPECIAL_HANDLING));
@@ -234,8 +234,8 @@ ScalarFunctionSet InetExtension::GetEscapeFunctionSet() {
 }
 
 ScalarFunction InetExtension::GetUnescapeFunction() {
-	return ScalarFunction("unescape", {LogicalType::VARCHAR}, LogicalType::VARCHAR, INetFunctions::Unescape, nullptr,
-	                      nullptr, nullptr, nullptr, LogicalType::INVALID, FunctionStability::CONSISTENT,
+	return ScalarFunction("html_unescape", {LogicalType::VARCHAR}, LogicalType::VARCHAR, INetFunctions::Unescape,
+	                      nullptr, nullptr, nullptr, nullptr, LogicalType::INVALID, FunctionStability::CONSISTENT,
 	                      FunctionNullHandling::SPECIAL_HANDLING);
 }
 
