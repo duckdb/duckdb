@@ -5,10 +5,7 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-
-#ifdef _WIN32
 #include <cctype>
-#endif
 
 namespace duckdb {
 
