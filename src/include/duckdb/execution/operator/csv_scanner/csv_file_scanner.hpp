@@ -27,10 +27,9 @@ public:
 	//! Path to this file
 	CSVFileScan(ClientContext &context, const string &file_path, const CSVReaderOptions &options, const idx_t file_idx,
 	            const ReadCSVData &bind_data, const vector<column_t> &column_ids,
-	            const vector<LogicalType> &file_schema, bool single_threaded);
+	            const vector<LogicalType> &file_schema);
 
-	CSVFileScan(ClientContext &context, const string &file_name, CSVReaderOptions &options,
-	            bool single_threaded = false);
+	CSVFileScan(ClientContext &context, const string &file_name, CSVReaderOptions &options);
 
 	const string &GetFileName();
 	const vector<string> &GetNames();

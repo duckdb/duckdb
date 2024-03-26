@@ -41,7 +41,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, shared_ptr<CSVBufferManager> bu
 
 CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, const CSVReaderOptions &options_p,
                          const idx_t file_idx_p, const ReadCSVData &bind_data, const vector<column_t> &column_ids,
-                         const vector<LogicalType> &file_schema, bool single_threaded)
+                         const vector<LogicalType> &file_schema)
     : file_path(file_path_p), file_idx(file_idx_p),
       error_handler(make_shared<CSVErrorHandler>(options_p.ignore_errors)), options(options_p) {
 	if (file_idx < bind_data.union_readers.size()) {
@@ -128,8 +128,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 	InitializeFileNamesTypes();
 }
 
-CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, CSVReaderOptions &options_p,
-                         bool single_threaded)
+CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, CSVReaderOptions &options_p)
     : file_path(file_name), file_idx(0), error_handler(make_shared<CSVErrorHandler>(options_p.ignore_errors)),
       options(options_p) {
 	buffer_manager = make_shared<CSVBufferManager>(context, options, file_path, file_idx);
