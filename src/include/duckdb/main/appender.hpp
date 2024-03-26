@@ -29,7 +29,7 @@ enum class AppenderType : uint8_t {
 class BaseAppender {
 protected:
 	//! The amount of tuples that will be gathered in the column data collection before flushing
-	static constexpr const idx_t FLUSH_COUNT = STANDARD_VECTOR_SIZE * 100;
+	static constexpr const idx_t FLUSH_COUNT = STANDARD_VECTOR_SIZE * 100ULL;
 
 	Allocator &allocator;
 	//! The append types
@@ -66,8 +66,8 @@ public:
 	DUCKDB_API void Append(const char *value, uint32_t length);
 
 	// prepared statements
-	template <typename... Args>
-	void AppendRow(Args... args) {
+	template <typename... ARGS>
+	void AppendRow(ARGS... args) {
 		BeginRow();
 		AppendRowRecursive(args...);
 	}
@@ -80,7 +80,7 @@ public:
 	vector<LogicalType> &GetTypes() {
 		return types;
 	}
-	idx_t CurrentColumn() {
+	idx_t CurrentColumn() const {
 		return column;
 	}
 	DUCKDB_API void AppendDataChunk(DataChunk &value);

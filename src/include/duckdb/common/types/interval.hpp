@@ -12,10 +12,10 @@
 
 namespace duckdb {
 
-struct dtime_t;
-struct date_t;
-struct dtime_tz_t;
-struct timestamp_t;
+struct dtime_t; // NOLINT: literal casing
+struct date_t; // NOLINT: literal casing
+struct dtime_tz_t; // NOLINT: literal casing
+struct timestamp_t; // NOLINT: literal casing
 
 class Serializer;
 class Deserializer;
