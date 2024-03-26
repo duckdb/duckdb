@@ -25,12 +25,12 @@ struct FloatingToExact {};
 
 template <>
 struct FloatingToExact<double> {
-	typedef uint64_t TYPE;
+	using TYPE = uint64_t;
 };
 
 template <>
 struct FloatingToExact<float> {
-	typedef uint32_t TYPE;
+	using TYPE = uint32_t;
 };
 
 template <class T, bool EMPTY>
