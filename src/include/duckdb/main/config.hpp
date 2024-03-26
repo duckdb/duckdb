@@ -204,7 +204,7 @@ struct DBConfig {
 
 public:
 	DUCKDB_API DBConfig();
-	DUCKDB_API DBConfig(bool read_only);
+	explicit DUCKDB_API DBConfig(bool read_only);
 	DUCKDB_API DBConfig(const case_insensitive_map_t<Value> &config_dict, bool read_only);
 	DUCKDB_API ~DBConfig();
 

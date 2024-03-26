@@ -38,10 +38,10 @@ struct ParserExtensionParseData {
 struct ParserExtensionParseResult {
 	ParserExtensionParseResult() : type(ParserExtensionResultType::DISPLAY_ORIGINAL_ERROR) {
 	}
-	ParserExtensionParseResult(string error_p)
+	explicit ParserExtensionParseResult(string error_p)
 	    : type(ParserExtensionResultType::DISPLAY_EXTENSION_ERROR), error(std::move(error_p)) {
 	}
-	ParserExtensionParseResult(unique_ptr<ParserExtensionParseData> parse_data_p)
+	explicit ParserExtensionParseResult(unique_ptr<ParserExtensionParseData> parse_data_p)
 	    : type(ParserExtensionResultType::PARSE_SUCCESSFUL), parse_data(std::move(parse_data_p)) {
 	}
 

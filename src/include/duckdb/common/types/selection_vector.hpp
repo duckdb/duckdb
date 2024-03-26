@@ -119,7 +119,7 @@ private:
 
 class OptionalSelection {
 public:
-	inline OptionalSelection(SelectionVector *sel_p) {
+	explicit OptionalSelection(SelectionVector *sel_p) {
 		Initialize(sel_p);
 	}
 	void Initialize(SelectionVector *sel_p) {
@@ -130,7 +130,7 @@ public:
 		}
 	}
 
-	inline operator SelectionVector *() {
+	inline operator SelectionVector *() { // NOLINT: allow implicit conversion to SelectionVector
 		return sel;
 	}
 
