@@ -9,8 +9,9 @@ VirtualFileSystem::VirtualFileSystem() : default_fs(FileSystem::CreateLocal()) {
 	VirtualFileSystem::RegisterSubSystem(FileCompressionType::GZIP, make_uniq<GZipFileSystem>());
 }
 
-unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
-                                                   FileCompressionType compression, FileOpener *opener) {
+unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, FileOpenFlags flags,
+                                                   optional_ptr<FileOpener> opener) {
+	auto compression = flags.Compression();
 	if (compression == FileCompressionType::AUTO_DETECT) {
 		// auto detect compression settings based on file name
 		auto lower_path = StringUtil::Lower(path);
@@ -26,8 +27,12 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, uint8_t f
 			compression = FileCompressionType::UNCOMPRESSED;
 		}
 	}
-	// open the base file handle
-	auto file_handle = FindFileSystem(path).OpenFile(path, flags, lock, FileCompressionType::UNCOMPRESSED, opener);
+	// open the base file handle in UNCOMPRESSED mode
+	flags.SetCompression(FileCompressionType::UNCOMPRESSED);
+	auto file_handle = FindFileSystem(path).OpenFile(path, flags, opener);
+	if (!file_handle) {
+		return nullptr;
+	}
 	if (file_handle->GetType() == FileType::FILE_TYPE_FIFO) {
 		file_handle = PipeFileSystem::OpenPipe(std::move(file_handle));
 	} else if (compression != FileCompressionType::UNCOMPRESSED) {
@@ -36,7 +41,7 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, uint8_t f
 			throw NotImplementedException(
 			    "Attempting to open a compressed file, but the compression type is not supported");
 		}
-		file_handle = entry->second->OpenCompressedFile(std::move(file_handle), flags & FileFlags::FILE_FLAGS_WRITE);
+		file_handle = entry->second->OpenCompressedFile(std::move(file_handle), flags.OpenForWriting());
 	}
 	return file_handle;
 }
@@ -103,6 +108,7 @@ bool VirtualFileSystem::FileExists(const string &filename) {
 bool VirtualFileSystem::IsPipe(const string &filename) {
 	return FindFileSystem(filename).IsPipe(filename);
 }
+
 void VirtualFileSystem::RemoveFile(const string &filename) {
 	FindFileSystem(filename).RemoveFile(filename);
 }
