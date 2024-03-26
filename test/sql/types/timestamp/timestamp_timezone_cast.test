@@ -35,9 +35,24 @@ SELECT TIMESTAMP '2021-05-25 04:55:03.382494 EST';
 has a timestamp that is not UTC
 
 statement ok
+set Calendar='gregorian';
+
+statement ok
 SET TimeZone='UTC'
 
 query I
 SELECT TIMESTAMPTZ '2021-05-25 04:55:03.382494 EST';
 ----
 2021-05-25 09:55:03.382494+00
+
+statement ok
+set TimeZone='America/Phoenix';
+
+query I
+SELECT
+  DATE_DIFF(
+  	'HOUR',  
+  	TIMESTAMP '2010-07-07 10:20:00' AT TIME ZONE 'Asia/Bangkok', 
+  	TIMESTAMP '2010-07-07 10:20:00+00') AS hours;
+----
+14

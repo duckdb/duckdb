@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 #Note: DONT run as root
 
+set -e
+
 mkdir -p data/parquet-testing/presigned
 
 generate_large_parquet_query=$(cat <<EOF
