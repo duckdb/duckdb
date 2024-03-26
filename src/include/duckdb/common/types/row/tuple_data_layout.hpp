@@ -50,6 +50,9 @@ public:
 	inline Aggregates &GetAggregates() {
 		return aggregates;
 	}
+	const inline Aggregates &GetAggregates() const {
+		return aggregates;
+	}
 	//! Returns a map from column id to the struct TupleDataLayout
 	const inline TupleDataLayout &GetStructLayout(idx_t col_idx) const {
 		D_ASSERT(struct_layouts->find(col_idx) != struct_layouts->end());
@@ -91,6 +94,10 @@ public:
 	inline bool HasDestructor() const {
 		return has_destructor;
 	}
+	//! Returns the indices of the aggregates that have destructors
+	inline const vector<idx_t> GetAggregateDestructorIndices() const {
+		return aggr_destructor_idxs;
+	}
 
 private:
 	//! The types of the data columns
@@ -115,6 +122,8 @@ private:
 	idx_t heap_size_offset;
 	//! Whether any of the aggregates have a destructor
 	bool has_destructor;
+	//! Indices of aggregate functions that have a destructor
+	vector<idx_t> aggr_destructor_idxs;
 };
 
 } // namespace duckdb
