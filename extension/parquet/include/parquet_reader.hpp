@@ -87,6 +87,7 @@ struct ParquetOptions {
 
 	bool binary_as_string = false;
 	bool file_row_number = false;
+	bool force_direct_io = false;
 	shared_ptr<ParquetEncryptionConfig> encryption_config;
 
 	MultiFileReaderOptions file_options;
