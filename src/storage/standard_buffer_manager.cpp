@@ -13,6 +13,10 @@
 
 namespace duckdb {
 
+static void WriteGarbageIntoBuffer(FileBuffer &buffer) {
+	memset(buffer.buffer, 0xa5, buffer.size); // 0xa5 is default memory in debug mode
+}
+
 struct BufferAllocatorData : PrivateAllocatorData {
 	explicit BufferAllocatorData(StandardBufferManager &manager) : manager(manager) {
 	}
@@ -96,7 +100,7 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(idx_t block_s
 	                                       std::move(buffer), false, block_size, std::move(reservation));
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 	// Initialize the memory with garbage data
-	memset(result->buffer->buffer, 0xa5, result->buffer->size); // 0xa5 is default memory in debug mode
+	WriteGarbageIntoBuffer(*result->buffer);
 #endif
 	return result;
 }
@@ -123,7 +127,7 @@ BufferHandle StandardBufferManager::Allocate(MemoryTag tag, idx_t block_size, bo
 	*block_ptr = RegisterMemory(tag, block_size, can_destroy);
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 	// Initialize the memory with garbage data
-	memset((*block_ptr)->buffer->buffer, 0xa5, (*block_ptr)->buffer->size); // 0xa5 is default memory in debug mode
+	WriteGarbageIntoBuffer(*(*block_ptr)->buffer);
 #endif
 	return Pin(*block_ptr);
 }
@@ -216,7 +220,7 @@ void StandardBufferManager::VerifyZeroReaders(shared_ptr<BlockHandle> &handle) {
 	auto replacement_buffer = make_uniq<FileBuffer>(Allocator::Get(db), handle->buffer->type,
 	                                                handle->memory_usage - Storage::BLOCK_HEADER_SIZE);
 	memcpy(replacement_buffer->buffer, handle->buffer->buffer, handle->buffer->size);
-	memset(handle->buffer->buffer, 0xa5, handle->buffer->size); // 0xa5 is default memory in debug mode
+	WriteGarbageIntoBuffer(*handle->buffer);
 	handle->buffer = std::move(replacement_buffer);
 #endif
 }
