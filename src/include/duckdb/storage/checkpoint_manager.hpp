@@ -80,7 +80,7 @@ public:
 	    : CheckpointReader(Catalog::GetCatalog(storage.GetAttached())), storage(storage) {
 	}
 
-	void LoadFromStorage();
+	void LoadFromStorage(optional_ptr<ClientContext> context = nullptr);
 	MetadataManager &GetMetadataManager();
 
 	//! The database

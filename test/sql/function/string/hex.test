@@ -11,6 +11,16 @@ SELECT to_hex('duckdb');
 6475636B6462
 
 query I
+SELECT hex(unhex('abcd'));
+----
+ABCD
+
+query I
+SELECT hex(blob '\x00\x00\x80');
+----
+000080
+
+query I
 SELECT from_hex('6475636B6462');
 ----
 duckdb
