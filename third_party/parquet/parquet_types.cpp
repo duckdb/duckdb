@@ -194,6 +194,9 @@ std::ostream &operator<<(std::ostream &out, const CompressionCodec::type &val) {
 	case CompressionCodec::ZSTD:
 		out << "ZSTD";
 		return out;
+	case CompressionCodec::LZ4_RAW:
+		out << "LZ4_RAW";
+		return out;
 		//  no default for compiler error on missing enum
 	}
 	out << static_cast<int>(val);

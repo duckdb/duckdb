@@ -83,14 +83,14 @@ bool StorageManager::InMemory() {
 	return path == IN_MEMORY_PATH;
 }
 
-void StorageManager::Initialize() {
+void StorageManager::Initialize(optional_ptr<ClientContext> context) {
 	bool in_memory = InMemory();
 	if (in_memory && read_only) {
 		throw CatalogException("Cannot launch in-memory database in read-only mode!");
 	}
 
 	// create or load the database from disk, if not in-memory mode
-	LoadDatabase();
+	LoadDatabase(context);
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -117,8 +117,7 @@ SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string 
     : StorageManager(db, std::move(path), read_only) {
 }
 
-void SingleFileStorageManager::LoadDatabase() {
-
+void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context) {
 	if (InMemory()) {
 		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db));
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager);
@@ -139,12 +138,11 @@ void SingleFileStorageManager::LoadDatabase() {
 	options.debug_initialize = config.options.debug_initialize;
 
 	// first check if the database exists
-	if (!fs.FileExists(path)) {
-		if (read_only) {
-			throw CatalogException("Cannot open database \"%s\" in read-only mode: database does not exist", path);
-		}
+	if (!read_only && !fs.FileExists(path)) {
+		// file does not exist and we are in read-write mode
+		// create a new file
 
-		// check if the WAL exists
+		// check if a WAL file already exists
 		auto wal_path = GetWALPath();
 		if (fs.FileExists(wal_path)) {
 			// WAL file exists but database file does not
@@ -157,8 +155,10 @@ void SingleFileStorageManager::LoadDatabase() {
 		sf_block_manager->CreateNewDatabase();
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager);
-
 	} else {
+		// either the file exists, or we are in read-only mode
+		// try to read the existing file on disk
+
 		// initialize the block manager while loading the current db file
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
 		sf_block_manager->LoadExistingDatabase();
@@ -167,13 +167,14 @@ void SingleFileStorageManager::LoadDatabase() {
 
 		// load the db from storage
 		auto checkpoint_reader = SingleFileCheckpointReader(*this);
-		checkpoint_reader.LoadFromStorage();
+		checkpoint_reader.LoadFromStorage(context);
 
 		// check if the WAL file exists
 		auto wal_path = GetWALPath();
-		if (fs.FileExists(wal_path)) {
+		auto handle = fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
+		if (handle) {
 			// replay the WAL
-			if (WriteAheadLog::Replay(db, wal_path)) {
+			if (WriteAheadLog::Replay(db, std::move(handle))) {
 				fs.RemoveFile(wal_path);
 			}
 		}

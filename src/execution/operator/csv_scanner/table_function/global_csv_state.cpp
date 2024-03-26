@@ -130,6 +130,9 @@ void CSVGlobalState::DecrementThread() {
 	D_ASSERT(running_threads > 0);
 	running_threads--;
 	if (running_threads == 0) {
+		for (auto &file : file_scans) {
+			file->error_handler->ErrorIfNeeded();
+		}
 		FillRejectsTable();
 		if (context.client_data->debug_set_max_line_length) {
 			context.client_data->debug_max_line_length = file_scans[0]->error_handler->GetMaxLineLength();

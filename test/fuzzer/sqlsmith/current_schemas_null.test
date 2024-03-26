@@ -21,9 +21,6 @@ SELECT current_schemas(NULL);
 ----
 NULL
 
-# the test below succeeds with a constant vector (it probably should just always succeed or always fail - but it's not that important)
-require no_vector_verification
-
 statement error
 SELECT current_schemas(ref_0.bool) AS c4 FROM booleans AS ref_0;
 ----

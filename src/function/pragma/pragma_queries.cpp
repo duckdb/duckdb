@@ -139,8 +139,7 @@ string PragmaImportDatabase(ClientContext &context, const FunctionParameters &pa
 	vector<string> files = {"schema.sql", "load.sql"};
 	for (auto &file : files) {
 		auto file_path = fs.JoinPath(parameters.values[0].ToString(), file);
-		auto handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
-		                          FileSystem::DEFAULT_COMPRESSION);
+		auto handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_READ);
 		auto fsize = fs.GetFileSize(*handle);
 		auto buffer = make_unsafe_uniq_array<char>(fsize);
 		fs.Read(*handle, buffer.get(), fsize);
