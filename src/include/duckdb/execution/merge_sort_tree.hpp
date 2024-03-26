@@ -349,7 +349,7 @@ idx_t MergeSortTree<E, O, CMP, F, C>::SelectNth(const SubFrames &frames, idx_t n
 	// 	The first level contains a single run,
 	//	so the only thing we need is any cascading pointers
 	auto level_no = tree.size() - 2;
-	auto level_width = 1;
+	idx_t level_width = 1;
 	for (idx_t i = 0; i < level_no; ++i) {
 		level_width *= FANOUT;
 	}
@@ -367,9 +367,11 @@ idx_t MergeSortTree<E, O, CMP, F, C>::SelectNth(const SubFrames &frames, idx_t n
 		for (idx_t f = 0; f < frames.size(); ++f) {
 			const auto &frame = frames[f];
 			auto &cascade_idx = cascades[f];
-			const auto lower_idx = std::lower_bound(level.begin(), level.end(), frame.start) - level.begin();
+			const auto lower_idx =
+			    UnsafeNumericCast<idx_t>(std::lower_bound(level.begin(), level.end(), frame.start) - level.begin());
 			cascade_idx.first = lower_idx / CASCADING * FANOUT;
-			const auto upper_idx = std::lower_bound(level.begin(), level.end(), frame.end) - level.begin();
+			const auto upper_idx =
+			    UnsafeNumericCast<idx_t>(std::lower_bound(level.begin(), level.end(), frame.end) - level.begin());
 			cascade_idx.second = upper_idx / CASCADING * FANOUT;
 		}
 
@@ -390,11 +392,13 @@ idx_t MergeSortTree<E, O, CMP, F, C>::SelectNth(const SubFrames &frames, idx_t n
 
 					const auto lower_begin = level_data + level_cascades[cascade_idx.first];
 					const auto lower_end = level_data + level_cascades[cascade_idx.first + FANOUT];
-					match.first = std::lower_bound(lower_begin, lower_end, frame.start) - level_data;
+					match.first =
+					    UnsafeNumericCast<idx_t>(std::lower_bound(lower_begin, lower_end, frame.start) - level_data);
 
 					const auto upper_begin = level_data + level_cascades[cascade_idx.second];
 					const auto upper_end = level_data + level_cascades[cascade_idx.second + FANOUT];
-					match.second = std::lower_bound(upper_begin, upper_end, frame.end) - level_data;
+					match.second =
+					    UnsafeNumericCast<idx_t>(std::lower_bound(upper_begin, upper_end, frame.end) - level_data);
 
 					matched += idx_t(match.second - match.first);
 				}

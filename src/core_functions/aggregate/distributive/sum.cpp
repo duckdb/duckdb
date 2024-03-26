@@ -112,8 +112,8 @@ unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggreg
 		default:
 			throw InternalException("Unsupported type for propagate sum stats");
 		}
-		auto max_sum_negative = max_negative * hugeint_t(input.node_stats->max_cardinality);
-		auto max_sum_positive = max_positive * hugeint_t(input.node_stats->max_cardinality);
+		auto max_sum_negative = max_negative * Hugeint::Convert(input.node_stats->max_cardinality);
+		auto max_sum_positive = max_positive * Hugeint::Convert(input.node_stats->max_cardinality);
 		if (max_sum_positive >= NumericLimits<int64_t>::Maximum() ||
 		    max_sum_negative <= NumericLimits<int64_t>::Minimum()) {
 			// sum can potentially exceed int64_t bounds: use hugeint sum
