@@ -95,7 +95,7 @@ public:
 		return !aggr_destructor_idxs.empty();
 	}
 	//! Returns the indices of the aggregates that have destructors
-	inline const vector<idx_t> GetAggregateDestructorIndices() const {
+	inline const vector<idx_t> &GetAggregateDestructorIndices() const {
 		return aggr_destructor_idxs;
 	}
 
