@@ -27,8 +27,12 @@ duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow_schema 
 		return DuckDBSuccess;
 	}
 	auto wrapper = reinterpret_cast<ArrowResultWrapper *>(result);
-	ArrowConverter::ToArrowSchema((ArrowSchema *)*out_schema, wrapper->result->types, wrapper->result->names,
-	                              wrapper->result->client_properties);
+	try {
+		ArrowConverter::ToArrowSchema((ArrowSchema *)*out_schema, wrapper->result->types, wrapper->result->names,
+		                              wrapper->result->client_properties);
+	} catch (...) {
+		return DuckDBError;
+	}
 	return DuckDBSuccess;
 }
 

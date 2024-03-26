@@ -425,20 +425,18 @@ jobs:
       shell: bash
       run: make
 
-    - name: Start S3/HTTP test server
+    - name: Start test server & run tests
       shell: bash
       run: |
         sudo ./scripts/install_s3_test_server.sh
         ./scripts/generate_presigned_url.sh
         source ./scripts/run_s3_test_server.sh
+        source ./scripts/set_s3_test_server_variables.sh
         sleep 60
-
-    - name: Test
-      shell: bash
-      run: |
+       
         python3 scripts/get_test_list.py --file-contains 'require httpfs' --list '"*"' > test.list
         python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest '-f test.list'
-        python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest '[secret]'
+        python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest '[secret]'  
 
  amalgamation-tests:
     name: Amalgamation Tests

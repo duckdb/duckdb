@@ -483,47 +483,12 @@ unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const PipelineRenderNode &op
 	return CreateNode(op.op);
 }
 
-string TreeRenderer::ExtractExpressionsRecursive(ExpressionInfo &state) {
-	string result = "\n[INFOSEPARATOR]";
-	result += "\n" + state.function_name;
-	result += "\n" + StringUtil::Format("%.9f", double(state.function_time));
-	if (state.children.empty()) {
-		return result;
-	}
-	// render the children of this node
-	for (auto &child : state.children) {
-		result += ExtractExpressionsRecursive(*child);
-	}
-	return result;
-}
-
 unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const QueryProfiler::TreeNode &op) {
 	auto result = TreeRenderer::CreateRenderNode(op.name, op.extra_info);
 	result->extra_text += "\n[INFOSEPARATOR]";
 	result->extra_text += "\n" + to_string(op.info.elements);
 	string timing = StringUtil::Format("%.2f", op.info.time);
 	result->extra_text += "\n(" + timing + "s)";
-	if (config.detailed) {
-		for (auto &info : op.info.executors_info) {
-			if (!info) {
-				continue;
-			}
-			for (auto &executor_info : info->roots) {
-				string sample_count = to_string(executor_info->sample_count);
-				result->extra_text += "\n[INFOSEPARATOR]";
-				result->extra_text += "\nsample_count: " + sample_count;
-				string sample_tuples_count = to_string(executor_info->sample_tuples_count);
-				result->extra_text += "\n[INFOSEPARATOR]";
-				result->extra_text += "\nsample_tuples_count: " + sample_tuples_count;
-				string total_count = to_string(executor_info->total_count);
-				result->extra_text += "\n[INFOSEPARATOR]";
-				result->extra_text += "\ntotal_count: " + total_count;
-				for (auto &state : executor_info->root->children) {
-					result->extra_text += ExtractExpressionsRecursive(*state);
-				}
-			}
-		}
-	}
 	return result;
 }
 

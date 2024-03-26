@@ -61,3 +61,36 @@ SELECT grp, FIRST(i ORDER BY i DESC) FROM integers GROUP BY grp ORDER BY ALL
 1	30
 2	20
 
+statement ok
+CREATE TABLE user_causes (
+    user_id INT,
+    cause VARCHAR,
+    "date" DATE
+);
+
+statement ok
+INSERT INTO user_causes (user_id, cause, "date") VALUES
+(1, 'Environmental', '2024-03-18'),
+(1, 'Environmental', '2024-02-18'),
+(1, 'Health', '2024-01-18'),
+(1, 'Social', '2023-12-18'),
+(1, NULL, '2023-11-19');
+
+statement error
+SELECT 
+    user_id, 
+    list(DISTINCT cause ORDER BY "date" DESC) FILTER(cause IS NOT NULL) AS causes
+FROM user_causes 
+GROUP BY user_id;
+----
+Binder Error: In a DISTINCT aggregate, ORDER BY expressions must appear in the argument list
+
+query II
+SELECT 
+    user_id, 
+    list(DISTINCT cause ORDER BY cause DESC) FILTER(cause IS NOT NULL) AS causes
+FROM user_causes 
+GROUP BY user_id;
+----
+1	[Social, Health, Environmental]
+
