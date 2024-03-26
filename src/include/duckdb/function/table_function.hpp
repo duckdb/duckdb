@@ -145,7 +145,7 @@ public:
 	ScanType type;
 	optional_ptr<TableCatalogEntry> table;
 
-	void InsertOption(const string &name, Value value) {
+	void InsertOption(const string &name, Value value) { // NOLINT: work-around bug in clang-tidy
 		if (options.find(name) != options.end()) {
 			throw InternalException("This option already exists");
 		}

@@ -10,9 +10,12 @@ PythonFileHandle::PythonFileHandle(FileSystem &file_system, const string &path, 
     : FileHandle(file_system, path), handle(handle) {
 }
 PythonFileHandle::~PythonFileHandle() {
-	PythonGILWrapper gil;
-	handle.dec_ref();
-	handle.release();
+	try {
+		PythonGILWrapper gil;
+		handle.dec_ref();
+		handle.release();
+	} catch(...) { // NOLINT
+	}
 }
 
 string PythonFilesystem::DecodeFlags(FileOpenFlags flags) {

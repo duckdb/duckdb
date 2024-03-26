@@ -13,6 +13,8 @@
 
 namespace duckdb {
 
+// NOLINTBEGIN
+
 struct UDFWrapper {
 public:
 	template <typename TR, typename... ARGS>
@@ -375,5 +377,7 @@ private:
 		return aggr_function;
 	}
 }; // end UDFWrapper
+
+// NOLINTEND
 
 } // namespace duckdb

@@ -165,6 +165,7 @@ public:
 	//! Fetch a list of table names that are required for a given query
 	DUCKDB_API unordered_set<string> GetTableNames(const string &query);
 
+	// NOLINTBEGIN
 	template <typename TR, typename... ARGS>
 	void CreateScalarFunction(const string &name, TR (*udf_func)(ARGS...)) {
 		scalar_function_t function = UDFWrapper::CreateScalarFunction<TR, ARGS...>(name, udf_func);
@@ -229,6 +230,7 @@ public:
 		                                        finalize, simple_update, bind, destructor);
 		UDFWrapper::RegisterAggrFunction(function, *context);
 	}
+	// NOLINTEND
 
 private:
 	unique_ptr<QueryResult> QueryParamsRecursive(const string &query, vector<Value> &values);

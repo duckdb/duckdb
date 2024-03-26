@@ -49,13 +49,13 @@ public:
 	//! Unpin and pin are nops on this block of memory
 	shared_ptr<BlockHandle> RegisterSmallMemory(idx_t block_size) final;
 
-	idx_t GetUsedMemory() const final override;
-	idx_t GetMaxMemory() const final override;
+	idx_t GetUsedMemory() const final;
+	idx_t GetMaxMemory() const final;
 
 	//! Allocate an in-memory buffer with a single pin.
 	//! The allocated memory is released when the buffer handle is destroyed.
 	DUCKDB_API BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy = true,
-	                                 shared_ptr<BlockHandle> *block = nullptr) final override;
+	                                 shared_ptr<BlockHandle> *block = nullptr) final;
 
 	//! Reallocate an in-memory buffer that is pinned.
 	void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) final;

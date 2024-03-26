@@ -25,8 +25,11 @@ struct PandasScanFunctionData : public PyTableFunctionData {
 	vector<LogicalType> sql_types;
 
 	~PandasScanFunctionData() override {
-		py::gil_scoped_acquire acquire;
-		pandas_bind_data.clear();
+		try {
+			py::gil_scoped_acquire acquire;
+			pandas_bind_data.clear();
+		} catch(...) { // NOLINT
+		}
 	}
 };
 

@@ -25,12 +25,12 @@ struct ChimpType {};
 
 template <>
 struct ChimpType<double> {
-	typedef uint64_t TYPE;
+	using TYPE = uint64_t;
 };
 
 template <>
 struct ChimpType<float> {
-	typedef uint32_t TYPE;
+	using TYPE = uint32_t;
 };
 
 class ChimpPrimitives {
