@@ -5,7 +5,7 @@ namespace duckdb {
 
 CSVBuffer::CSVBuffer(ClientContext &context, idx_t buffer_size_p, CSVFileHandle &file_handle,
                      idx_t &global_csv_current_position, idx_t file_number_p)
-    : context(context), file_number(file_number_p), can_seek(file_handle.CanSeek()), is_pipe(file_handle.OnDiskFile()) {
+    : context(context), file_number(file_number_p), can_seek(file_handle.CanSeek()), is_pipe(file_handle.IsPipe()) {
 	AllocateBuffer(buffer_size_p);
 	auto buffer = Ptr();
 	actual_buffer_size = file_handle.Read(buffer, buffer_size_p);
@@ -20,7 +20,7 @@ CSVBuffer::CSVBuffer(ClientContext &context, idx_t buffer_size_p, CSVFileHandle 
 CSVBuffer::CSVBuffer(CSVFileHandle &file_handle, ClientContext &context, idx_t buffer_size,
                      idx_t global_csv_current_position, idx_t file_number_p, idx_t buffer_idx_p)
     : context(context), global_csv_start(global_csv_current_position), file_number(file_number_p),
-      can_seek(file_handle.CanSeek()), is_pipe(file_handle.OnDiskFile()), buffer_idx(buffer_idx_p) {
+      can_seek(file_handle.CanSeek()), is_pipe(file_handle.IsPipe()), buffer_idx(buffer_idx_p) {
 	AllocateBuffer(buffer_size);
 	auto buffer = handle.Ptr();
 	actual_buffer_size = file_handle.Read(handle.Ptr(), buffer_size);
