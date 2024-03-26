@@ -37,6 +37,9 @@ end
 @testset "Test Set TimeZone" begin
     con = DBInterface.connect(DuckDB.DB, ":memory:")
 
+    DuckDB.execute(con, "INSTALL icu")
+    DuckDB.execute(con, "LOAD icu")
+
     DBInterface.execute(con, "SET TimeZone='UTC'")
     results = DBInterface.execute(con, "SELECT CURRENT_SETTING('TimeZone') AS tz")
     df = DataFrame(results)

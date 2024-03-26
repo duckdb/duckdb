@@ -136,6 +136,9 @@ end
 @testset "TimestampTZ" begin
     db = DuckDB.open(":memory:")
     con = DuckDB.connect(db)
+
+    DuckDB.execute(con, "INSTALL icu")
+    DuckDB.execute(con, "LOAD icu")
     DuckDB.execute(con, "SET TimeZone='Asia/Shanghai'") # UTC+8
 
     res = DuckDB.execute(con, "SELECT TIMESTAMPTZ '2021-09-27 11:30:00' tz, TIMESTAMP '2021-09-27 11:30:00' ts;")
