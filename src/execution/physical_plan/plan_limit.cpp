@@ -1,12 +1,9 @@
 #include "duckdb/execution/operator/helper/physical_limit.hpp"
-#include "duckdb/execution/operator/helper/physical_limit_percent.hpp"
 #include "duckdb/execution/operator/helper/physical_streaming_limit.hpp"
-#include "duckdb/execution/operator/order/physical_top_n.hpp"
-#include "duckdb/execution/operator/order/physical_order.hpp"
+#include "duckdb/execution/operator/helper/physical_limit_percent.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
-#include "duckdb/planner/operator/logical_order.hpp"
 
 namespace duckdb {
 
