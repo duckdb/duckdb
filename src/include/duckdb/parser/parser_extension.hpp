@@ -59,7 +59,7 @@ typedef ParserExtensionParseResult (*parse_function_t)(ParserExtensionInfo *info
 //===--------------------------------------------------------------------===//
 // Plan
 //===--------------------------------------------------------------------===//
-struct ParserExtensionPlanResult {
+struct ParserExtensionPlanResult { // NOLINT: work-around bug in clang-tidy
 	//! The table function to execute
 	TableFunction function;
 	//! Parameters to the function
