@@ -110,7 +110,7 @@ CSVError CSVError::CastError(const CSVReaderOptions &options, string &column_nam
 	// What was the cast error
 	error << cast_error << '\n';
 
-	error << "Column " << column_name << " is being converted as type " << LogicalTypeIdToString(type) << std::endl;
+	error << "Column " << column_name << " is being converted as type " << LogicalTypeIdToString(type) << '\n';
 	if (!options.WasTypeManuallySet(column_idx)) {
 		error << "This type was auto-detected from the CSV file." << '\n';
 		error << "Possible solutions:" << '\n';
@@ -142,7 +142,7 @@ CSVError CSVError::SniffingError(string &file_path) {
 	std::ostringstream error;
 	// Which column
 	error << "Error when sniffing file \"" << file_path << "\"." << '\n';
-	error << "CSV options could not be auto-detected. Consider setting parser options manually." << std::endl;
+	error << "CSV options could not be auto-detected. Consider setting parser options manually." << '\n';
 	return CSVError(error.str(), CSVErrorType::SNIFFING, {});
 }
 

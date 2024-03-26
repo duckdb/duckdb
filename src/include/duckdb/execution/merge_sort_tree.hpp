@@ -226,7 +226,7 @@ protected:
 					out << ((i && i % level_width == 0) ? group_separator : separator);
 					out << std::setw(number_width) << level.first[i];
 				}
-				out << std::endl;
+				out << '\n';
 			}
 			// Print the pointers
 			if (!level.second.empty()) {
@@ -239,7 +239,7 @@ protected:
 						                                                                       : separator);
 						out << std::setw(number_width) << level.second[idx + child_nr];
 					}
-					out << std::endl;
+					out << '\n';
 				}
 			}
 			level_width *= FANOUT;

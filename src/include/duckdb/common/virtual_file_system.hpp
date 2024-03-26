@@ -53,7 +53,7 @@ public:
 	bool IsPipe(const string &filename) override;
 	void RemoveFile(const string &filename) override;
 
-	virtual vector<string> Glob(const string &path, FileOpener *opener = nullptr) override;
+	vector<string> Glob(const string &path, FileOpener *opener = nullptr) override;
 
 	void RegisterSubSystem(unique_ptr<FileSystem> fs) override;
 

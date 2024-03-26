@@ -102,8 +102,8 @@ protected:
 		EndRow();
 	}
 
-	template <typename T, typename... Args>
-	void AppendRowRecursive(T value, Args... args) {
+	template <typename T, typename... ARGS>
+	void AppendRowRecursive(T value, ARGS... args) {
 		Append<T>(value);
 		AppendRowRecursive(args...);
 	}

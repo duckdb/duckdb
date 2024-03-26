@@ -17,7 +17,7 @@ class BoundAggregateExpression;
 class BoundWindowExpression;
 
 struct FunctionDataWrapper {
-	FunctionDataWrapper(unique_ptr<FunctionData> function_data_p) : function_data(std::move(function_data_p)) {
+	explicit FunctionDataWrapper(unique_ptr<FunctionData> function_data_p) : function_data(std::move(function_data_p)) {
 	}
 
 	unique_ptr<FunctionData> function_data;

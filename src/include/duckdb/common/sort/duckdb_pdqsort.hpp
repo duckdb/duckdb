@@ -46,6 +46,8 @@ using duckdb::make_unsafe_uniq_array;
 using duckdb::FastMemcpy;
 using duckdb::FastMemcmp;
 
+// NOLINTBEGIN
+
 enum {
 	// Partitions below this size are sorted using insertion sort.
 	insertion_sort_threshold = 24,
@@ -704,5 +706,6 @@ inline void pdqsort_branchless(const PDQIterator &begin, const PDQIterator &end,
 	}
 	pdqsort_loop<true>(begin, end, constants, log2(end - begin));
 }
+// NOLINTEND
 
 } // namespace duckdb_pdqsort
