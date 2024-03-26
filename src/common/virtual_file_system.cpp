@@ -19,6 +19,13 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, FileOpenF
 			// strip .tmp
 			lower_path = lower_path.substr(0, lower_path.length() - 4);
 		}
+		// remove the query string for http paths
+		if (StringUtil::StartsWith(lower_path, "http://") || StringUtil::StartsWith(lower_path, "https://")) {
+			auto query_char = lower_path.find('?');
+			if (query_char != string::npos) {
+				lower_path = lower_path.substr(0, query_char);
+			}
+		}
 		if (StringUtil::EndsWith(lower_path, ".gz")) {
 			compression = FileCompressionType::GZIP;
 		} else if (StringUtil::EndsWith(lower_path, ".zst")) {
