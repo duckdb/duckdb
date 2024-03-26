@@ -10,6 +10,7 @@
 #include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/parallel/executor_task.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -288,7 +289,7 @@ class HashJoinFinalizeTask : public ExecutorTask {
 public:
 	HashJoinFinalizeTask(shared_ptr<Event> event_p, ClientContext &context, HashJoinGlobalSinkState &sink_p,
 	                     idx_t chunk_idx_from_p, idx_t chunk_idx_to_p, bool parallel_p)
-	    : ExecutorTask(context), event(std::move(event_p)), sink(sink_p), chunk_idx_from(chunk_idx_from_p),
+	    : ExecutorTask(context, std::move(event_p)), sink(sink_p), chunk_idx_from(chunk_idx_from_p),
 	      chunk_idx_to(chunk_idx_to_p), parallel(parallel_p) {
 	}
 
@@ -299,7 +300,6 @@ public:
 	}
 
 private:
-	shared_ptr<Event> event;
 	HashJoinGlobalSinkState &sink;
 	idx_t chunk_idx_from;
 	idx_t chunk_idx_to;
@@ -374,7 +374,7 @@ class HashJoinRepartitionTask : public ExecutorTask {
 public:
 	HashJoinRepartitionTask(shared_ptr<Event> event_p, ClientContext &context, JoinHashTable &global_ht,
 	                        JoinHashTable &local_ht)
-	    : ExecutorTask(context), event(std::move(event_p)), global_ht(global_ht), local_ht(local_ht) {
+	    : ExecutorTask(context, std::move(event_p)), global_ht(global_ht), local_ht(local_ht) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
@@ -384,8 +384,6 @@ public:
 	}
 
 private:
-	shared_ptr<Event> event;
-
 	JoinHashTable &global_ht;
 	JoinHashTable &local_ht;
 };
@@ -672,7 +670,7 @@ public:
 	idx_t build_chunks_per_thread;
 
 	//! For probe synchronization
-	idx_t probe_chunk_count;
+	atomic<idx_t> probe_chunk_count;
 	idx_t probe_chunk_done;
 
 	//! To determine the number of threads
@@ -681,8 +679,8 @@ public:
 
 	//! For full/outer synchronization
 	idx_t full_outer_chunk_idx;
-	idx_t full_outer_chunk_count;
-	idx_t full_outer_chunk_done;
+	atomic<idx_t> full_outer_chunk_count;
+	atomic<idx_t> full_outer_chunk_done;
 	idx_t full_outer_chunks_per_thread;
 
 	vector<InterruptState> blocked_tasks;
@@ -1084,6 +1082,23 @@ double PhysicalHashJoin::GetProgress(ClientContext &context, GlobalSourceState &
 	}
 
 	return progress * 100.0;
+}
+
+string PhysicalHashJoin::ParamsToString() const {
+	string result = EnumUtil::ToString(join_type) + "\n";
+	for (auto &it : conditions) {
+		string op = ExpressionTypeToOperator(it.comparison);
+		result += it.left->GetName() + " " + op + " " + it.right->GetName() + "\n";
+	}
+	result += "\n[INFOSEPARATOR]\n";
+	if (perfect_join_statistics.is_build_small) {
+		// perfect hash join
+		result += "Build Min: " + perfect_join_statistics.build_min.ToString() + "\n";
+		result += "Build Max: " + perfect_join_statistics.build_max.ToString() + "\n";
+		result += "\n[INFOSEPARATOR]\n";
+	}
+	result += StringUtil::Format("EC: %llu\n", estimated_cardinality);
+	return result;
 }
 
 } // namespace duckdb

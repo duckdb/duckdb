@@ -1,4 +1,4 @@
-#include "duckdb/execution/operator/csv_scanner/buffer_manager/csv_file_handle.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_file_handle.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
 
 namespace duckdb {
@@ -14,7 +14,7 @@ CSVFileHandle::CSVFileHandle(FileSystem &fs, Allocator &allocator, unique_ptr<Fi
 
 unique_ptr<FileHandle> CSVFileHandle::OpenFileHandle(FileSystem &fs, Allocator &allocator, const string &path,
                                                      FileCompressionType compression) {
-	auto file_handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK, compression);
+	auto file_handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ | compression);
 	if (file_handle->CanSeek()) {
 		file_handle->Reset();
 	}

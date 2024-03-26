@@ -2,7 +2,7 @@
 # group: [map]
 
 statement ok
-pragma enable_verification;
+PRAGMA enable_verification;
 
 # Empty
 query I

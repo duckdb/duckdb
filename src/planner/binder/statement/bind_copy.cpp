@@ -121,11 +121,12 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	if (file_size_bytes.IsValid() && !partition_cols.empty()) {
 		throw NotImplementedException("Can't combine FILE_SIZE_BYTES and PARTITION_BY for COPY");
 	}
-	bool is_remote_file = config.file_system->IsRemoteFile(stmt.info->file_path);
+	bool is_remote_file = FileSystem::IsRemoteFile(stmt.info->file_path);
 	if (is_remote_file) {
 		use_tmp_file = false;
 	} else {
-		bool is_file_and_exists = config.file_system->FileExists(stmt.info->file_path);
+		auto &fs = FileSystem::GetFileSystem(context);
+		bool is_file_and_exists = fs.FileExists(stmt.info->file_path);
 		bool is_stdout = stmt.info->file_path == "/dev/stdout";
 		if (!user_set_use_tmp_file) {
 			use_tmp_file = is_file_and_exists && !per_thread_output && partition_cols.empty() && !is_stdout;

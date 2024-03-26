@@ -22,10 +22,9 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 	}
 
 	vector<UnifiedVectorFormat> input_lists;
+	input_lists.resize(args.ColumnCount());
 	for (idx_t i = 0; i < args.ColumnCount(); i++) {
-		UnifiedVectorFormat curr;
-		args.data[i].ToUnifiedFormat(count, curr);
-		input_lists.push_back(curr);
+		args.data[i].ToUnifiedFormat(count, input_lists[i]);
 	}
 
 	// Handling output row for each input row
@@ -77,7 +76,7 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 	for (idx_t j = 0; j < count; j++) {
 		idx_t len = lengths[j];
 		for (idx_t i = 0; i < args_size; i++) {
-			UnifiedVectorFormat curr = input_lists[i];
+			auto &curr = input_lists[i];
 			idx_t sel_idx = curr.sel->get_index(j);
 			idx_t curr_off = 0;
 			idx_t curr_len = 0;

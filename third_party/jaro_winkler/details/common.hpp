@@ -233,7 +233,7 @@ struct BlockPatternMatchVector {
         for (int64_t i = 0; i < len; ++i) {
             int64_t block = i / 64;
             int64_t pos = i % 64;
-            insert(block, first[i], pos);
+            insert(block, first[i], static_cast<int>(pos));
         }
     }
 

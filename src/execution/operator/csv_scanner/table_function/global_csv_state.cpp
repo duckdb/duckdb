@@ -1,7 +1,7 @@
-#include "duckdb/execution/operator/csv_scanner/table_function/global_csv_state.hpp"
+#include "duckdb/execution/operator/csv_scanner/global_csv_state.hpp"
 #include "duckdb/main/client_data.hpp"
-#include "duckdb/execution/operator/csv_scanner/scanner/scanner_boundary.hpp"
-#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/scanner_boundary.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
 #include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
 #include "duckdb/main/appender.hpp"
 
@@ -40,7 +40,7 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
 }
 
 double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
-
+	lock_guard<mutex> parallel_lock(main_mutex);
 	idx_t total_files = bind_data.files.size();
 	// get the progress WITHIN the current file
 	double progress;
@@ -71,7 +71,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 		}
 		auto csv_scanner =
 		    make_uniq<StringValueScanner>(scanner_idx++, current_file->buffer_manager, current_file->state_machine,
-		                                  current_file->error_handler, current_file, current_boundary);
+		                                  current_file->error_handler, current_file, false, current_boundary);
 		return csv_scanner;
 	}
 	lock_guard<mutex> parallel_lock(main_mutex);
@@ -86,7 +86,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 	auto &current_file = *file_scans.back();
 	auto csv_scanner =
 	    make_uniq<StringValueScanner>(scanner_idx++, current_file.buffer_manager, current_file.state_machine,
-	                                  current_file.error_handler, file_scans.back(), current_boundary);
+	                                  current_file.error_handler, file_scans.back(), false, current_boundary);
 
 	csv_scanner->buffer_tracker = current_buffer_in_use;
 
@@ -130,6 +130,9 @@ void CSVGlobalState::DecrementThread() {
 	D_ASSERT(running_threads > 0);
 	running_threads--;
 	if (running_threads == 0) {
+		for (auto &file : file_scans) {
+			file->error_handler->ErrorIfNeeded();
+		}
 		FillRejectsTable();
 		if (context.client_data->debug_set_max_line_length) {
 			context.client_data->debug_max_line_length = file_scans[0]->error_handler->GetMaxLineLength();
@@ -151,51 +154,52 @@ void CSVGlobalState::FillRejectsTable() {
 		for (auto &file : file_scans) {
 			auto file_name = file->file_path;
 			auto &errors = file->error_handler->errors;
-			for (auto &error_info : errors) {
-				if (error_info.second.type != CSVErrorType::CAST_ERROR) {
-					// For now we only will use it for casting errors
-					continue;
-				}
-				// short circuit if we already have too many rejects
-				if (limit == 0 || rejects->count < limit) {
-					if (limit != 0 && rejects->count >= limit) {
-						break;
+			for (auto &error_vector : errors) {
+				for (auto &error : error_vector.second) {
+					if (error.type != CSVErrorType::CAST_ERROR) {
+						// For now we only will use it for casting errors
+						continue;
 					}
-					rejects->count++;
-					auto error = &error_info.second;
-					auto row_line = file->error_handler->GetLine(error_info.first);
-					auto col_idx = error->column_idx;
-					auto col_name = bind_data.return_names[col_idx];
-					// Add the row to the rejects table
-					appender.BeginRow();
-					appender.Append(string_t(file_name));
-					appender.Append(row_line);
-					appender.Append(col_idx);
-					appender.Append(string_t("\"" + col_name + "\""));
-					appender.Append(error->row[col_idx]);
-
-					if (!options.rejects_recovery_columns.empty()) {
-						child_list_t<Value> recovery_key;
-						for (auto &key_idx : options.rejects_recovery_column_ids) {
-							// Figure out if the recovery key is valid.
-							// If not, error out for real.
-							auto &value = error->row[key_idx];
-							if (value.IsNull()) {
-								throw InvalidInputException("%s at line %llu in column %s. Parser options:\n%s ",
-								                            "Could not parse recovery column", row_line, col_name,
-								                            options.ToString());
-							}
-							recovery_key.emplace_back(bind_data.return_names[key_idx], value);
+					// short circuit if we already have too many rejects
+					if (limit == 0 || rejects->count < limit) {
+						if (limit != 0 && rejects->count >= limit) {
+							break;
 						}
-						appender.Append(Value::STRUCT(recovery_key));
+						rejects->count++;
+						auto row_line = file->error_handler->GetLine(error.error_info);
+						auto col_idx = error.column_idx;
+						auto col_name = bind_data.return_names[col_idx];
+						// Add the row to the rejects table
+						appender.BeginRow();
+						appender.Append(string_t(file_name));
+						appender.Append(row_line);
+						appender.Append(col_idx);
+						appender.Append(string_t("\"" + col_name + "\""));
+						appender.Append(error.row[col_idx]);
+
+						if (!options.rejects_recovery_columns.empty()) {
+							child_list_t<Value> recovery_key;
+							for (auto &key_idx : options.rejects_recovery_column_ids) {
+								// Figure out if the recovery key is valid.
+								// If not, error out for real.
+								auto &value = error.row[key_idx];
+								if (value.IsNull()) {
+									throw InvalidInputException("%s at line %llu in column %s. Parser options:\n%s ",
+									                            "Could not parse recovery column", row_line, col_name,
+									                            options.ToString());
+								}
+								recovery_key.emplace_back(bind_data.return_names[key_idx], value);
+							}
+							appender.Append(Value::STRUCT(recovery_key));
+						}
+						auto row_error_msg =
+						    StringUtil::Format("Could not convert string '%s' to '%s'", error.row[col_idx].ToString(),
+						                       file->types[col_idx].ToString());
+						appender.Append(string_t(row_error_msg));
+						appender.EndRow();
 					}
-					auto row_error_msg =
-					    StringUtil::Format("Could not convert string '%s' to '%s'", error->row[col_idx].ToString(),
-					                       file->types[col_idx].ToString());
-					appender.Append(string_t(row_error_msg));
-					appender.EndRow();
+					appender.Close();
 				}
-				appender.Close();
 			}
 		}
 	}

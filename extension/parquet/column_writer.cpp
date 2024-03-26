@@ -24,6 +24,7 @@
 #include "miniz_wrapper.hpp"
 #include "snappy.h"
 #include "zstd.h"
+#include "lz4.hpp"
 
 namespace duckdb {
 
@@ -176,7 +177,7 @@ void RleBpEncoder::FinishWrite(WriteStream &writer) {
 ColumnWriter::ColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p, idx_t max_repeat,
                            idx_t max_define, bool can_have_nulls)
     : writer(writer), schema_idx(schema_idx), schema_path(std::move(schema_path_p)), max_repeat(max_repeat),
-      max_define(max_define), can_have_nulls(can_have_nulls), null_count(0) {
+      max_define(max_define), can_have_nulls(can_have_nulls) {
 }
 ColumnWriter::~ColumnWriter() {
 }
@@ -191,6 +192,7 @@ void ColumnWriter::CompressPage(MemoryStream &temp_writer, size_t &compressed_si
 		compressed_size = temp_writer.GetPosition();
 		compressed_data = temp_writer.GetData();
 		break;
+
 	case CompressionCodec::SNAPPY: {
 		compressed_size = duckdb_snappy::MaxCompressedLength(temp_writer.GetPosition());
 		compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
@@ -198,6 +200,15 @@ void ColumnWriter::CompressPage(MemoryStream &temp_writer, size_t &compressed_si
 		                           char_ptr_cast(compressed_buf.get()), &compressed_size);
 		compressed_data = compressed_buf.get();
 		D_ASSERT(compressed_size <= duckdb_snappy::MaxCompressedLength(temp_writer.GetPosition()));
+		break;
+	}
+	case CompressionCodec::LZ4_RAW: {
+		compressed_size = duckdb_lz4::LZ4_compressBound(temp_writer.GetPosition());
+		compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
+		compressed_size = duckdb_lz4::LZ4_compress_default(const_char_ptr_cast(temp_writer.GetData()),
+		                                                   char_ptr_cast(compressed_buf.get()),
+		                                                   temp_writer.GetPosition(), compressed_size);
+		compressed_data = compressed_buf.get();
 		break;
 	}
 	case CompressionCodec::GZIP: {
@@ -254,7 +265,7 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 				if (!can_have_nulls) {
 					throw IOException("Parquet writer: map key column is not allowed to contain NULL values");
 				}
-				null_count++;
+				state.null_count++;
 				state.definition_levels.push_back(null_value);
 			}
 			if (parent->is_empty.empty() || !parent->is_empty[current_index]) {
@@ -270,7 +281,7 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 				if (!can_have_nulls) {
 					throw IOException("Parquet writer: map key column is not allowed to contain NULL values");
 				}
-				null_count++;
+				state.null_count++;
 				state.definition_levels.push_back(null_value);
 			}
 		}
@@ -285,7 +296,7 @@ public:
 public:
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -614,7 +625,7 @@ void BasicColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t 
 void BasicColumnWriter::SetParquetStatistics(BasicColumnWriterState &state,
                                              duckdb_parquet::format::ColumnChunk &column_chunk) {
 	if (max_repeat == 0) {
-		column_chunk.meta_data.statistics.null_count = null_count;
+		column_chunk.meta_data.statistics.null_count = NumericCast<int64_t>(state.null_count);
 		column_chunk.meta_data.statistics.__isset.null_count = true;
 		column_chunk.meta_data.__isset.statistics = true;
 	}
@@ -663,19 +674,17 @@ void BasicColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 
 	auto &column_writer = writer.GetWriter();
 	auto start_offset = column_writer.GetTotalWritten();
-	auto page_offset = start_offset;
 	// flush the dictionary
 	if (HasDictionary(state)) {
 		column_chunk.meta_data.statistics.distinct_count = DictionarySize(state);
 		column_chunk.meta_data.statistics.__isset.distinct_count = true;
-		column_chunk.meta_data.dictionary_page_offset = page_offset;
+		column_chunk.meta_data.dictionary_page_offset = start_offset;
 		column_chunk.meta_data.__isset.dictionary_page_offset = true;
 		FlushDictionary(state, state.stats_state.get());
-		page_offset += state.write_info[0].compressed_size;
 	}
 
 	// record the start position of the pages for this column
-	column_chunk.meta_data.data_page_offset = page_offset;
+	column_chunk.meta_data.data_page_offset = column_writer.GetTotalWritten();
 	SetParquetStatistics(state, column_chunk);
 
 	// write the individual pages to disk
@@ -1687,7 +1696,7 @@ void StructColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	auto &state = state_p.Cast<StructColumnWriterState>();
 	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
 		// we add the null count of the struct to the null count of the children
-		child_writers[child_idx]->null_count += null_count;
+		state.child_states[child_idx]->null_count += state_p.null_count;
 		child_writers[child_idx]->FinalizeWrite(*state.child_states[child_idx]);
 	}
 }
@@ -1752,6 +1761,40 @@ void ListColumnWriter::FinalizeAnalyze(ColumnWriterState &state_p) {
 	child_writer->FinalizeAnalyze(*state.child_state);
 }
 
+idx_t GetConsecutiveChildList(Vector &list, Vector &result, idx_t offset, idx_t count) {
+	// returns a consecutive child list that fully flattens and repeats all required elements
+	auto &validity = FlatVector::Validity(list);
+	auto list_entries = FlatVector::GetData<list_entry_t>(list);
+	bool is_consecutive = true;
+	idx_t total_length = 0;
+	for (idx_t c = offset; c < offset + count; c++) {
+		if (!validity.RowIsValid(c)) {
+			continue;
+		}
+		if (list_entries[c].offset != total_length) {
+			is_consecutive = false;
+		}
+		total_length += list_entries[c].length;
+	}
+	if (is_consecutive) {
+		// already consecutive - leave it as-is
+		return total_length;
+	}
+	SelectionVector sel(total_length);
+	idx_t index = 0;
+	for (idx_t c = offset; c < offset + count; c++) {
+		if (!validity.RowIsValid(c)) {
+			continue;
+		}
+		for (idx_t k = 0; k < list_entries[c].length; k++) {
+			sel.set_index(index++, list_entries[c].offset + k);
+		}
+	}
+	result.Slice(sel, total_length);
+	result.Flatten(total_length);
+	return total_length;
+}
+
 void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
 	auto &state = state_p.Cast<ListColumnWriterState>();
 
@@ -1805,7 +1848,7 @@ void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *pa
 
 	auto &list_child = ListVector::GetEntry(vector);
 	Vector child_list(list_child);
-	auto child_length = ListVector::GetConsecutiveChildList(vector, child_list, 0, count);
+	auto child_length = GetConsecutiveChildList(vector, child_list, 0, count);
 	child_writer->Prepare(*state.child_state, &state_p, child_list, child_length);
 }
 
@@ -1819,7 +1862,7 @@ void ListColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t c
 
 	auto &list_child = ListVector::GetEntry(vector);
 	Vector child_list(list_child);
-	auto child_length = ListVector::GetConsecutiveChildList(vector, child_list, 0, count);
+	auto child_length = GetConsecutiveChildList(vector, child_list, 0, count);
 	child_writer->Write(*state.child_state, child_list, child_length);
 }
 
@@ -1829,8 +1872,101 @@ void ListColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 }
 
 //===--------------------------------------------------------------------===//
+// Array Column Writer
+//===--------------------------------------------------------------------===//
+class ArrayColumnWriter : public ListColumnWriter {
+public:
+	ArrayColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p, idx_t max_repeat,
+	                  idx_t max_define, unique_ptr<ColumnWriter> child_writer_p, bool can_have_nulls)
+	    : ListColumnWriter(writer, schema_idx, std::move(schema_path_p), max_repeat, max_define,
+	                       std::move(child_writer_p), can_have_nulls) {
+	}
+	~ArrayColumnWriter() override = default;
+
+public:
+	void Analyze(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count) override;
+	void Prepare(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count) override;
+	void Write(ColumnWriterState &state, Vector &vector, idx_t count) override;
+};
+
+void ArrayColumnWriter::Analyze(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
+	auto &state = state_p.Cast<ListColumnWriterState>();
+	auto &array_child = ArrayVector::GetEntry(vector);
+	auto array_size = ArrayType::GetSize(vector.GetType());
+	child_writer->Analyze(*state.child_state, &state_p, array_child, array_size * count);
+}
+
+void ArrayColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
+	auto &state = state_p.Cast<ListColumnWriterState>();
+
+	auto array_size = ArrayType::GetSize(vector.GetType());
+	auto &validity = FlatVector::Validity(vector);
+
+	// write definition levels and repeats
+	// the main difference between this and ListColumnWriter::Prepare is that we need to make sure to write out
+	// repetition levels and definitions for the child elements of the array even if the array itself is NULL.
+	idx_t start = 0;
+	idx_t vcount = parent ? parent->definition_levels.size() - state.parent_index : count;
+	idx_t vector_index = 0;
+	for (idx_t i = start; i < vcount; i++) {
+		idx_t parent_index = state.parent_index + i;
+		if (parent && !parent->is_empty.empty() && parent->is_empty[parent_index]) {
+			state.definition_levels.push_back(parent->definition_levels[parent_index]);
+			state.repetition_levels.push_back(parent->repetition_levels[parent_index]);
+			state.is_empty.push_back(true);
+			continue;
+		}
+		auto first_repeat_level =
+		    parent && !parent->repetition_levels.empty() ? parent->repetition_levels[parent_index] : max_repeat;
+		if (parent && parent->definition_levels[parent_index] != PARQUET_DEFINE_VALID) {
+			state.definition_levels.push_back(parent->definition_levels[parent_index]);
+			state.repetition_levels.push_back(first_repeat_level);
+			state.is_empty.push_back(false);
+			for (idx_t k = 1; k < array_size; k++) {
+				state.repetition_levels.push_back(max_repeat + 1);
+				state.definition_levels.push_back(parent->definition_levels[parent_index]);
+				state.is_empty.push_back(false);
+			}
+		} else if (validity.RowIsValid(vector_index)) {
+			// push the repetition levels
+			state.definition_levels.push_back(PARQUET_DEFINE_VALID);
+			state.is_empty.push_back(false);
+
+			state.repetition_levels.push_back(first_repeat_level);
+			for (idx_t k = 1; k < array_size; k++) {
+				state.repetition_levels.push_back(max_repeat + 1);
+				state.definition_levels.push_back(PARQUET_DEFINE_VALID);
+				state.is_empty.push_back(false);
+			}
+		} else {
+			state.definition_levels.push_back(max_define - 1);
+			state.repetition_levels.push_back(first_repeat_level);
+			state.is_empty.push_back(false);
+			for (idx_t k = 1; k < array_size; k++) {
+				state.repetition_levels.push_back(max_repeat + 1);
+				state.definition_levels.push_back(max_define - 1);
+				state.is_empty.push_back(false);
+			}
+		}
+		vector_index++;
+	}
+	state.parent_index += vcount;
+
+	auto &array_child = ArrayVector::GetEntry(vector);
+	child_writer->Prepare(*state.child_state, &state_p, array_child, count * array_size);
+}
+
+void ArrayColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t count) {
+	auto &state = state_p.Cast<ListColumnWriterState>();
+	auto array_size = ArrayType::GetSize(vector.GetType());
+	auto &array_child = ArrayVector::GetEntry(vector);
+	child_writer->Write(*state.child_state, array_child, count * array_size);
+}
+
+//===--------------------------------------------------------------------===//
 // Create Column Writer
 //===--------------------------------------------------------------------===//
+
 unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parquet::format::SchemaElement> &schemas,
                                                              ParquetWriter &writer, const LogicalType &type,
                                                              const string &name, vector<string> schema_path,
@@ -1879,8 +2015,9 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		return make_uniq<StructColumnWriter>(writer, schema_idx, std::move(schema_path), max_repeat, max_define,
 		                                     std::move(child_writers), can_have_nulls);
 	}
-	if (type.id() == LogicalTypeId::LIST) {
-		auto &child_type = ListType::GetChildType(type);
+	if (type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::ARRAY) {
+		auto is_list = type.id() == LogicalTypeId::LIST;
+		auto &child_type = is_list ? ListType::GetChildType(type) : ArrayType::GetChildType(type);
 		// set up the two schema elements for the list
 		// for some reason we only set the converted type in the OPTIONAL element
 		// first an OPTIONAL element
@@ -1907,14 +2044,19 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		repeated_element.__isset.num_children = true;
 		repeated_element.__isset.type = false;
 		repeated_element.__isset.repetition_type = true;
-		repeated_element.name = "list";
+		repeated_element.name = is_list ? "list" : "array";
 		schemas.push_back(std::move(repeated_element));
-		schema_path.emplace_back("list");
+		schema_path.emplace_back(is_list ? "list" : "array");
 
 		auto child_writer = CreateWriterRecursive(schemas, writer, child_type, "element", schema_path, child_field_ids,
 		                                          max_repeat + 1, max_define + 2);
-		return make_uniq<ListColumnWriter>(writer, schema_idx, std::move(schema_path), max_repeat, max_define,
-		                                   std::move(child_writer), can_have_nulls);
+		if (is_list) {
+			return make_uniq<ListColumnWriter>(writer, schema_idx, std::move(schema_path), max_repeat, max_define,
+			                                   std::move(child_writer), can_have_nulls);
+		} else {
+			return make_uniq<ArrayColumnWriter>(writer, schema_idx, std::move(schema_path), max_repeat, max_define,
+			                                    std::move(child_writer), can_have_nulls);
+		}
 	}
 	if (type.id() == LogicalTypeId::MAP) {
 		// map type

@@ -25,7 +25,6 @@ add_library_unity(
   logical_insert.cpp
   logical_join.cpp
   logical_limit.cpp
-  logical_limit_percent.cpp
   logical_order.cpp
   logical_pivot.cpp
   logical_positional_join.cpp

@@ -1,4 +1,4 @@
-#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
 
 namespace duckdb {
 
@@ -94,10 +94,12 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 	// 5. Type Replacement
 	ReplaceTypes();
 	if (!best_candidate->error_handler->errors.empty() && !options.ignore_errors) {
-		for (auto &error : best_candidate->error_handler->errors) {
-			if (error.second.type == CSVErrorType::MAXIMUM_LINE_SIZE) {
-				// If it's a maximul line size error, we can do it now.
-				error_handler->Error(error.second);
+		for (auto &error_vector : best_candidate->error_handler->errors) {
+			for (auto &error : error_vector.second) {
+				if (error.type == CSVErrorType::MAXIMUM_LINE_SIZE) {
+					// If it's a maximum line size error, we can do it now.
+					error_handler->Error(error);
+				}
 			}
 		}
 		auto error = CSVError::SniffingError(options.file_path);
@@ -134,6 +136,8 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 			if (set_types[i] != detected_types[i] && !(set_types[i].IsNumeric() && detected_types[i].IsNumeric())) {
 				type_error += "Column at position: " + to_string(i) + " Set type: " + set_types[i].ToString() +
 				              " Sniffed type: " + detected_types[i].ToString() + "\n";
+				detected_types[i] = set_types[i];
+				manually_set[i] = true;
 				match = false;
 			}
 		}
@@ -144,13 +148,14 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 		if (!error.empty() && force_match) {
 			throw InvalidInputException(error);
 		}
-
+		options.was_type_manually_set = manually_set;
 		// We do not need to run type refinement, since the types have been given by the user
 		return SnifferResult({}, {});
 	}
 	if (!error.empty() && force_match) {
 		throw InvalidInputException(error);
 	}
+	options.was_type_manually_set = manually_set;
 	return SnifferResult(detected_types, names);
 }
 

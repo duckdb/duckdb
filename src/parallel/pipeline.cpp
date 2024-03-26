@@ -16,7 +16,7 @@
 namespace duckdb {
 
 PipelineTask::PipelineTask(Pipeline &pipeline_p, shared_ptr<Event> event_p)
-    : ExecutorTask(pipeline_p.executor), pipeline(pipeline_p), event(std::move(event_p)) {
+    : ExecutorTask(pipeline_p.executor, std::move(event_p)), pipeline(pipeline_p) {
 }
 
 bool PipelineTask::TaskBlockedOnResult() const {
@@ -111,6 +111,17 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 		}
 	}
 	idx_t max_threads = source_state->MaxThreads();
+	auto &scheduler = TaskScheduler::GetScheduler(executor.context);
+	idx_t active_threads = scheduler.NumberOfThreads();
+	if (max_threads > active_threads) {
+		max_threads = active_threads;
+	}
+	if (sink && sink->sink_state) {
+		max_threads = sink->sink_state->MaxThreads(max_threads);
+	}
+	if (max_threads > active_threads) {
+		max_threads = active_threads;
+	}
 	return LaunchScanTasks(event, max_threads);
 }
 
@@ -155,11 +166,6 @@ void Pipeline::Schedule(shared_ptr<Event> &event) {
 
 bool Pipeline::LaunchScanTasks(shared_ptr<Event> &event, idx_t max_threads) {
 	// split the scan up into parts and schedule the parts
-	auto &scheduler = TaskScheduler::GetScheduler(executor.context);
-	idx_t active_threads = scheduler.NumberOfThreads();
-	if (max_threads > active_threads) {
-		max_threads = active_threads;
-	}
 	if (max_threads <= 1) {
 		// too small to parallelize
 		return false;

@@ -101,6 +101,9 @@ void SQLLogicTestRunner::Reconnect() {
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 	con->Query("SET pivot_filter_threshold=0");
 #endif
+	auto &client_config = ClientConfig::GetConfig(*con->context);
+	client_config.enable_progress_bar = true;
+	client_config.print_progress_bar = false;
 	if (enable_verification) {
 		con->EnableQueryVerification();
 	}
@@ -329,6 +332,14 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 
 	if (param == "noalternativeverify") {
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
+		return RequireResult::MISSING;
+#else
+		return RequireResult::PRESENT;
+#endif
+	}
+
+	if (param == "no_vector_verification") {
+#ifdef DUCKDB_VERIFY_VECTOR
 		return RequireResult::MISSING;
 #else
 		return RequireResult::PRESENT;

@@ -25,11 +25,12 @@ public:
 	vector<uint16_t> definition_levels;
 	vector<uint16_t> repetition_levels;
 	vector<bool> is_empty;
+	idx_t null_count = 0;
 
 public:
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -51,7 +52,7 @@ public:
 public:
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -74,8 +75,6 @@ public:
 	idx_t max_repeat;
 	idx_t max_define;
 	bool can_have_nulls;
-	// collected stats
-	idx_t null_count;
 
 public:
 	//! Create the column writer for a specific type recursively

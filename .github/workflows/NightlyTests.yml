@@ -7,8 +7,6 @@ on:
       - '**'
       - '!main'
       - '!feature'
-    tags:
-      - '**'
     paths-ignore:
       - '**'
       - '!.github/workflows/NightlyTests.yml'
@@ -42,9 +40,9 @@ jobs:
        with:
          fetch-depth: 0
 
-     - uses: actions/setup-python@v4
+     - uses: actions/setup-python@v5
        with:
-         python-version: '3.7'
+         python-version: '3.12'
 
      - name: Install Ninja
        shell: bash
@@ -69,6 +67,7 @@ jobs:
     name: Release Assertions
     runs-on: ubuntu-20.04
     needs: linux-memory-leaks
+    timeout-minutes: 120
     env:
       CC: gcc-10
       CXX: g++-10
@@ -108,7 +107,7 @@ jobs:
     - name: Test
       shell: bash
       run: |
-          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit
+          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit --timeout 600
 
 
   linux-clang:
@@ -135,9 +134,9 @@ jobs:
         version: "14.0"
         directory: '/home/runner/work/llvm'
 
-    - uses: actions/setup-python@v4
+    - uses: actions/setup-python@v5
       with:
-        python-version: '3.7'
+        python-version: '3.12'
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -217,9 +216,9 @@ jobs:
        with:
          fetch-depth: 0
 
-     - uses: actions/setup-python@v4
+     - uses: actions/setup-python@v5
        with:
-         python-version: '3.7'
+         python-version: '3.12'
 
      - name: Install
        shell: bash
@@ -368,7 +367,6 @@ jobs:
        shell: bash
        run: python3 scripts/test_zero_initialize.py
 
-
   no-string-inline:
     name: No String Inline / Destroy Unpinned Blocks
     runs-on: ubuntu-20.04
@@ -413,6 +411,62 @@ jobs:
         shell: bash
         run: build/relassert/test/unittest
 
+  vector-verification:
+    name: Vector Verification Tests (${{ matrix.vector_type }})
+    runs-on: ubuntu-20.04
+    needs: linux-memory-leaks
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - vector_type: "dictionary_expression"
+            test_parameter: '"*"'
+          - vector_type: "dictionary_operator"
+            test_parameter: '"*"'
+          - vector_type: "constant_operator"
+            test_parameter: '' # skip running all tests here because it is too slow
+          - vector_type: "sequence_operator"
+            test_parameter: '' # skip running all tests here because it is too slow
+          - vector_type: "nested_shuffle"
+            test_parameter: '"*"'
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      BUILD_ICU: 1
+      BUILD_INET: 1
+      BUILD_PARQUET: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_FTS: 1
+      BUILD_VISUALIZER: 1
+      BUILD_JSON: 1
+      BUILD_EXCEL: 1
+      VERIFY_VECTOR: ${{ matrix.vector_type }}
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ env.CCACHE_SAVE }}
+
+      - name: Build
+        shell: bash
+        run: make reldebug
+
+      - name: Test
+        shell: bash
+        run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest ${{ matrix.test_parameter }} --no-exit
+
   force-blocking-sink-source:
     name: Forcing async Sinks/Sources
     runs-on: ubuntu-20.04
@@ -453,7 +507,7 @@ jobs:
 
       - name: Test
         shell: bash
-        run: python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest --no-exit
+        run: python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest --no-exit --timeout 600
 
   regression-test-memory-safety:
    name: Regression Tests between safe and unsafe builds
@@ -481,9 +535,9 @@ jobs:
          fetch-depth: 0
          path: unsafe
 
-     - uses: actions/setup-python@v4
+     - uses: actions/setup-python@v5
        with:
-         python-version: '3.7'
+         python-version: '3.12'
 
      - name: Install
        shell: bash
@@ -580,11 +634,55 @@ jobs:
     - name: Test
       shell: bash
       run: |
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[intraquery]" --no-exit
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]" --no-exit
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[detailed_profiler]" --no-exit
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow --no-exit
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit --timeout 600
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[intraquery]" --no-exit --timeout 600
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]" --no-exit --timeout 600
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[detailed_profiler]" --no-exit --timeout 600
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow --no-exit --timeout 600
+
+
+  threadsan-relassert-all:
+    name: Thread Sanitizer (Relassert + All tests)
+    runs-on: ubuntu-latest
+    needs: linux-memory-leaks
+    env:
+      GEN: ninja
+      EXTENSION_STATIC_BUILD: 1
+      BUILD_ICU: 1
+      BUILD_INET: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_FTS: 1
+      BUILD_VISUALIZER: 1
+      BUILD_JSON: 1
+      BUILD_EXCEL: 1
+      BUILD_JEMALLOC: 1
+      DUCKDB_PLATFORM: linux_amd64
+      TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ env.CCACHE_SAVE }}
+
+    - name: Build
+      shell: bash
+      run: THREADSAN=1 make relassert
+
+    - name: Test
+      shell: bash
+      run: |
+          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit
 
   vector-sizes:
     name: Vector Sizes
@@ -599,9 +697,9 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v4
+    - uses: actions/setup-python@v5
       with:
-        python-version: '3.7'
+        python-version: '3.12'
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -626,9 +724,9 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.7'
+          python-version: '3.12'
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
@@ -723,7 +821,7 @@ jobs:
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build lcov curl g++ zip
 
       - name: Set up Python 3.9
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.9'
 

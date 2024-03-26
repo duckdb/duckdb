@@ -191,6 +191,7 @@ public:
 	PyTimezone() = delete;
 
 public:
+	DUCKDB_API static int32_t GetUTCOffsetSeconds(py::handle &tzone_obj);
 	DUCKDB_API static interval_t GetUTCOffset(py::handle &tzone_obj);
 };
 

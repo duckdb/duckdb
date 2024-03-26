@@ -97,6 +97,11 @@ NULL
 [NULL, NULL, NULL, NULL]
 [NULL, NULL, 5, 6, NULL, NULL]
 
+query I
+select * from (SELECT list_resize(NULL, 1, 1))
+----
+NULL
+
 # Nested Lists
 
 query I

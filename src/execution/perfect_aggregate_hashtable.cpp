@@ -1,5 +1,5 @@
 #include "duckdb/execution/perfect_aggregate_hashtable.hpp"
-
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
@@ -199,13 +199,13 @@ static void ReconstructGroupVectorTemplated(uint32_t group_values[], Value &min,
 	auto min_data = min.GetValueUnsafe<T>();
 	for (idx_t i = 0; i < entry_count; i++) {
 		// extract the value of this group from the total group index
-		auto group_index = (group_values[i] >> shift) & mask;
+		auto group_index = UnsafeNumericCast<int32_t>((group_values[i] >> shift) & mask);
 		if (group_index == 0) {
 			// if it is 0, the value is NULL
 			validity_mask.SetInvalid(i);
 		} else {
 			// otherwise we add the value (minus 1) to the min value
-			data[i] = min_data + group_index - 1;
+			data[i] = UnsafeNumericCast<T>(min_data + group_index - 1);
 		}
 	}
 }
@@ -254,7 +254,7 @@ void PerfectAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 		if (group_is_set[scan_position]) {
 			// this group is set: add it to the set of groups to extract
 			data_pointers[entry_count] = data + tuple_size * scan_position;
-			group_values[entry_count] = scan_position;
+			group_values[entry_count] = NumericCast<uint32_t>(scan_position);
 			entry_count++;
 			if (entry_count == STANDARD_VECTOR_SIZE) {
 				scan_position++;

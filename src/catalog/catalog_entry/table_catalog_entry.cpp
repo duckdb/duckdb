@@ -85,19 +85,18 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 			not_null_columns.insert(not_null.index);
 		} else if (constraint->type == ConstraintType::UNIQUE) {
 			auto &pk = constraint->Cast<UniqueConstraint>();
-			vector<string> constraint_columns = pk.columns;
-			if (pk.index.index != DConstants::INVALID_INDEX) {
+			if (pk.HasIndex()) {
 				// no columns specified: single column constraint
-				if (pk.is_primary_key) {
-					pk_columns.insert(pk.index);
+				if (pk.IsPrimaryKey()) {
+					pk_columns.insert(pk.GetIndex());
 				} else {
-					unique_columns.insert(pk.index);
+					unique_columns.insert(pk.GetIndex());
 				}
 			} else {
 				// multi-column constraint, this constraint needs to go at the end after all columns
-				if (pk.is_primary_key) {
+				if (pk.IsPrimaryKey()) {
 					// multi key pk column: insert set of columns into multi_key_pks
-					for (auto &col : pk.columns) {
+					for (auto &col : pk.GetColumnNames()) {
 						multi_key_pks.insert(col);
 					}
 				}
@@ -217,6 +216,7 @@ static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalP
 static bool TypeSupportsRegularUpdate(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::LIST:
+	case LogicalTypeId::ARRAY:
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::UNION:
 		// lists and maps and unions don't support updates directly

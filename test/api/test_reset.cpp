@@ -93,6 +93,7 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"perfect_ht_threshold", {0}},
 	    {"pivot_filter_threshold", {999}},
 	    {"pivot_limit", {999}},
+	    {"partitioned_write_flush_threshold", {123}},
 	    {"preserve_identifier_case", {false}},
 	    {"preserve_insertion_order", {false}},
 	    {"profile_output", {"test"}},
@@ -124,6 +125,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "disabled_filesystems",      // cant change this while db is running
 	    "enable_external_access",    // cant change this while db is running
 	    "allow_unsigned_extensions", // cant change this while db is running
+	    "allow_unredacted_secrets",  // cant change this while db is running
 	    "log_query_path",
 	    "password",
 	    "username",

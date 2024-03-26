@@ -158,11 +158,12 @@ struct VectorOperations {
 	//! NULLs. If any elements cannot be converted, returns false and fills in the error_message. If no error message is
 	//! provided, an exception is thrown instead.
 	DUCKDB_API static bool TryCast(CastFunctionSet &set, GetCastFunctionInput &input, Vector &source, Vector &result,
-	                               idx_t count, string *error_message, bool strict = false);
+	                               idx_t count, string *error_message, bool strict = false,
+	                               const bool nullify_parent = false);
 	DUCKDB_API static bool DefaultTryCast(Vector &source, Vector &result, idx_t count, string *error_message,
 	                                      bool strict = false);
 	DUCKDB_API static bool TryCast(ClientContext &context, Vector &source, Vector &result, idx_t count,
-	                               string *error_message, bool strict = false);
+	                               string *error_message, bool strict = false, const bool nullify_parent = false);
 	//! Cast the data from the source type to the target type. Throws an exception if the cast fails.
 	DUCKDB_API static void Cast(ClientContext &context, Vector &source, Vector &result, idx_t count,
 	                            bool strict = false);

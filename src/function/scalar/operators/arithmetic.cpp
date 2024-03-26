@@ -205,7 +205,7 @@ unique_ptr<FunctionData> BindDecimalAddSubtract(ClientContext &context, ScalarFu
 	}
 	D_ASSERT(max_width > 0);
 	// for addition/subtraction, we add 1 to the width to ensure we don't overflow
-	auto required_width = MaxValue<uint8_t>(max_scale + max_width_over_scale, max_width) + 1;
+	auto required_width = NumericCast<uint8_t>(MaxValue<uint8_t>(max_scale + max_width_over_scale, max_width) + 1);
 	if (required_width > Decimal::MAX_WIDTH_INT64 && max_width <= Decimal::MAX_WIDTH_INT64) {
 		// we don't automatically promote past the hugeint boundary to avoid the large hugeint performance penalty
 		bind_data->check_overflow = true;

@@ -109,7 +109,7 @@ bool Timestamp::TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &r
 			}
 			auto tz_len = str + pos - tz_name;
 			if (tz_len) {
-				tz = string_t(tz_name, tz_len);
+				tz = string_t(tz_name, UnsafeNumericCast<uint32_t>(tz_len));
 			}
 			// Note that the caller must reinterpret the instant we return to the given time zone
 		}

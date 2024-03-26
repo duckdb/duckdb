@@ -10,6 +10,7 @@ struct DuckDBSettingValue {
 	string value;
 	string description;
 	string input_type;
+	string scope;
 };
 
 struct DuckDBSettingsData : public GlobalTableFunctionState {
@@ -34,6 +35,9 @@ static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, Table
 	names.emplace_back("input_type");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
+	names.emplace_back("scope");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
 	return nullptr;
 }
 
@@ -46,24 +50,30 @@ unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, 
 		auto option = DBConfig::GetOptionByIndex(i);
 		D_ASSERT(option);
 		DuckDBSettingValue value;
+		auto scope = option->set_global ? SettingScope::GLOBAL : SettingScope::LOCAL;
 		value.name = option->name;
 		value.value = option->get_setting(context).ToString();
 		value.description = option->description;
 		value.input_type = EnumUtil::ToString(option->parameter_type);
+		value.scope = EnumUtil::ToString(scope);
 
 		result->settings.push_back(std::move(value));
 	}
 	for (auto &ext_param : config.extension_parameters) {
 		Value setting_val;
 		string setting_str_val;
-		if (context.TryGetCurrentSetting(ext_param.first, setting_val)) {
+		auto scope = SettingScope::GLOBAL;
+		auto lookup_result = context.TryGetCurrentSetting(ext_param.first, setting_val);
+		if (lookup_result) {
 			setting_str_val = setting_val.ToString();
+			scope = lookup_result.GetScope();
 		}
 		DuckDBSettingValue value;
 		value.name = ext_param.first;
 		value.value = std::move(setting_str_val);
 		value.description = ext_param.second.description;
 		value.input_type = ext_param.second.type.ToString();
+		value.scope = EnumUtil::ToString(scope);
 
 		result->settings.push_back(std::move(value));
 	}
@@ -91,6 +101,8 @@ void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, 
 		output.SetValue(2, count, Value(entry.description));
 		// input_type, LogicalType::VARCHAR
 		output.SetValue(3, count, Value(entry.input_type));
+		// scope, LogicalType::VARCHAR
+		output.SetValue(4, count, Value(entry.scope));
 		count++;
 	}
 	output.SetCardinality(count);

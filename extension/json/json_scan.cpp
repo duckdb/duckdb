@@ -569,6 +569,7 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 			if (file_done) {
 				lock_guard<mutex> guard(gstate.lock);
 				TryIncrementFileIndex(gstate);
+				lock_guard<mutex> reader_guard(current_reader->lock);
 				current_reader->GetFileHandle().Close();
 			}
 
@@ -675,7 +676,7 @@ void JSONScanLocalState::ReadAndAutoDetect(JSONScanGlobalState &gstate, optional
 		SkipOverArrayStart();
 	}
 
-	if (bind_data.options.record_type == JSONRecordType::RECORDS &&
+	if (!bind_data.ignore_errors && bind_data.options.record_type == JSONRecordType::RECORDS &&
 	    current_reader->GetRecordType() != JSONRecordType::RECORDS) {
 		throw InvalidInputException("Expected file \"%s\" to contain records, detected non-record JSON instead.",
 		                            current_reader->GetFileName());

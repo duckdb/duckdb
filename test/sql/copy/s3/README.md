@@ -20,11 +20,17 @@ Run the `install_s3_test_server` script. This requires root. This makes a few ch
 sudo ./scripts/install_s3_test_server.sh
 ```
 
+Then, if this has not been done yet, we need to generate some data:
+
+```
+./scripts/generate_presigned_url.sh
+```
+
 Then run the test server in the back-ground using Docker. Note that Docker must be opened for this to work. On MacOS you can open the docker gui (`/Applications/Docker`) and leave it open to accomplish this.
 
 
 ```bash
-./scripts/run_s3_test_server.sh
+source ./scripts/run_s3_test_server.sh
 ```
 
 Now set up the following environment variables to enable running of the tests.
@@ -51,3 +57,5 @@ Now you should be able to run the S3 tests using minio, e.g.:
 ```bash
 build/debug/test/unittest test/sql/copy/s3/s3_hive_partition.test
 ```
+
+> minio uses port 9000. Clickhouse also uses port 9000. If the tests are not working and you have a running Clickhouse service - try killing it first, e.g. using `killall -9 clickhouse`

@@ -7,12 +7,11 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
-
 #include <limits>
 
 namespace duckdb {
@@ -85,6 +84,12 @@ void BaseCSVData::Finalize() {
 	}
 }
 
+string TransformNewLine(string new_line) {
+	new_line = StringUtil::Replace(new_line, "\\r", "\r");
+	return StringUtil::Replace(new_line, "\\n", "\n");
+	;
+}
+
 static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctionBindInput &input,
                                              const vector<string> &names, const vector<LogicalType> &sql_types) {
 	auto bind_data = make_uniq<WriteCSVData>(input.info.file_path, sql_types, names);
@@ -110,7 +115,7 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctio
 	bind_data->requires_quotes[bind_data->options.dialect_options.state_machine_options.quote.GetValue()] = true;
 
 	if (!bind_data->options.write_newline.empty()) {
-		bind_data->newline = bind_data->options.write_newline;
+		bind_data->newline = TransformNewLine(bind_data->options.write_newline);
 	}
 	return std::move(bind_data);
 }
@@ -265,8 +270,8 @@ struct LocalWriteCSVData : public LocalFunctionData {
 struct GlobalWriteCSVData : public GlobalFunctionData {
 	GlobalWriteCSVData(FileSystem &fs, const string &file_path, FileCompressionType compression)
 	    : fs(fs), written_anything(false) {
-		handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW,
-		                     FileLockType::WRITE_LOCK, compression);
+		handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW |
+		                                    FileLockType::WRITE_LOCK | compression);
 	}
 
 	//! Write generic data, e.g., CSV header

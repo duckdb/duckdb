@@ -40,6 +40,9 @@ public:
 
 public:
 	static unique_ptr<StandardBufferManager> CreateBufferManager(DatabaseInstance &db, string temp_directory);
+	static unique_ptr<FileBuffer> ReadTemporaryBufferInternal(BufferManager &buffer_manager, FileHandle &handle,
+	                                                          idx_t position, idx_t size,
+	                                                          unique_ptr<FileBuffer> reusable_buffer);
 	//! Registers an in-memory buffer that cannot be unloaded until it is destroyed
 	//! This buffer can be small (smaller than BLOCK_SIZE)
 	//! Unpin and pin are nops on this block of memory
@@ -77,7 +80,7 @@ public:
 
 	DUCKDB_API Allocator &GetBufferAllocator() final override;
 
-	DatabaseInstance &GetDatabase() final override {
+	DatabaseInstance &GetDatabase() {
 		return db;
 	}
 

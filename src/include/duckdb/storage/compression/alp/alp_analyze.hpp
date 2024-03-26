@@ -115,7 +115,7 @@ bool AlpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 			T value = data[idx];
 			//! We resolve null values with a predicated comparison
 			bool is_null = !vdata.validity.RowIsValid(idx);
-			current_vector_null_positions[nulls_idx] = i;
+			current_vector_null_positions[nulls_idx] = UnsafeNumericCast<uint16_t>(i);
 			nulls_idx += is_null;
 			current_vector_values[i] = value;
 		}
@@ -163,6 +163,10 @@ idx_t AlpFinalAnalyze(AnalyzeState &state) {
 
 	// Flush last unfinished segment
 	analyze_state.FlushSegment();
+
+	if (compressed_values == 0) {
+		return DConstants::INVALID_INDEX;
+	}
 
 	// We estimate the size by taking into account the portion of the values we took
 	const auto factor_of_sampling = analyze_state.total_values_count / compressed_values;

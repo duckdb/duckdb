@@ -40,6 +40,8 @@ public:
 
 	//! Size of strings
 	DUCKDB_API idx_t SizeInBytes() const;
+	//! Total allocation size (cached)
+	DUCKDB_API idx_t AllocationSize() const;
 
 private:
 	ArenaAllocator allocator;

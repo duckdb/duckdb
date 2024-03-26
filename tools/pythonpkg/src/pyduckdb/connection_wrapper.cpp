@@ -11,6 +11,13 @@ shared_ptr<DuckDBPyType> PyConnectionWrapper::UnionType(const py::object &member
 	return conn->UnionType(members);
 }
 
+py::list PyConnectionWrapper::ExtractStatements(const string &query, shared_ptr<DuckDBPyConnection> conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->ExtractStatements(query);
+}
+
 shared_ptr<DuckDBPyType> PyConnectionWrapper::EnumType(const string &name, const shared_ptr<DuckDBPyType> &type,
                                                        const py::list &values, shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
@@ -33,12 +40,20 @@ shared_ptr<DuckDBPyType> PyConnectionWrapper::StringType(const string &collation
 	return conn->StringType(collation);
 }
 
-shared_ptr<DuckDBPyType> PyConnectionWrapper::ArrayType(const shared_ptr<DuckDBPyType> &type,
+shared_ptr<DuckDBPyType> PyConnectionWrapper::ArrayType(const shared_ptr<DuckDBPyType> &type, idx_t size,
                                                         shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
-	return conn->ArrayType(type);
+	return conn->ArrayType(type, size);
+}
+
+shared_ptr<DuckDBPyType> PyConnectionWrapper::ListType(const shared_ptr<DuckDBPyType> &type,
+                                                       shared_ptr<DuckDBPyConnection> conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->ListType(type);
 }
 
 shared_ptr<DuckDBPyType> PyConnectionWrapper::MapType(const shared_ptr<DuckDBPyType> &key,
@@ -62,10 +77,13 @@ shared_ptr<DuckDBPyType> PyConnectionWrapper::Type(const string &type_str, share
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
-	return conn->Type(type_str);
+	auto &context = *conn->connection->context;
+	shared_ptr<DuckDBPyType> result;
+	context.RunFunctionInTransaction([&result, &type_str, &conn]() { result = conn->Type(type_str); });
+	return result;
 }
 
-shared_ptr<DuckDBPyConnection> PyConnectionWrapper::ExecuteMany(const string &query, py::object params,
+shared_ptr<DuckDBPyConnection> PyConnectionWrapper::ExecuteMany(const py::object &query, py::object params,
                                                                 shared_ptr<DuckDBPyConnection> conn) {
 	return conn->ExecuteMany(query, params);
 }
@@ -92,7 +110,7 @@ unique_ptr<DuckDBPyRelation> PyConnectionWrapper::AggregateDF(const PandasDataFr
 	return conn->FromDF(df)->Aggregate(expr, groups);
 }
 
-shared_ptr<DuckDBPyConnection> PyConnectionWrapper::Execute(const string &query, py::object params, bool many,
+shared_ptr<DuckDBPyConnection> PyConnectionWrapper::Execute(const py::object &query, py::object params, bool many,
                                                             shared_ptr<DuckDBPyConnection> conn) {
 	return conn->Execute(query, params, many);
 }
@@ -318,7 +336,7 @@ unique_ptr<DuckDBPyRelation> PyConnectionWrapper::Values(py::object values, shar
 	return conn->Values(std::move(values));
 }
 
-unique_ptr<DuckDBPyRelation> PyConnectionWrapper::RunQuery(const string &query, const string &alias,
+unique_ptr<DuckDBPyRelation> PyConnectionWrapper::RunQuery(const py::object &query, const string &alias,
                                                            shared_ptr<DuckDBPyConnection> conn) {
 	return conn->RunQuery(query, alias);
 }
