@@ -68,7 +68,7 @@ private:
 //! The QueryProfiler can be used to measure timings of queries
 class QueryProfiler {
 public:
-	DUCKDB_API QueryProfiler(ClientContext &context);
+	DUCKDB_API explicit QueryProfiler(ClientContext &context);
 
 public:
 	struct TreeNode {

@@ -21,8 +21,7 @@ class ColumnDataCollection;
 class ExecutionContext;
 
 struct LocalFunctionData {
-	virtual ~LocalFunctionData() {
-	}
+	virtual ~LocalFunctionData() = default;
 
 	template <class TARGET>
 	TARGET &Cast() {
@@ -37,8 +36,7 @@ struct LocalFunctionData {
 };
 
 struct GlobalFunctionData {
-	virtual ~GlobalFunctionData() {
-	}
+	virtual ~GlobalFunctionData() = default;
 
 	template <class TARGET>
 	TARGET &Cast() {
@@ -53,8 +51,7 @@ struct GlobalFunctionData {
 };
 
 struct PreparedBatchData {
-	virtual ~PreparedBatchData() {
-	}
+	virtual ~PreparedBatchData() = default;
 
 	template <class TARGET>
 	TARGET &Cast() {
@@ -69,12 +66,12 @@ struct PreparedBatchData {
 };
 
 struct CopyFunctionBindInput {
+	explicit CopyFunctionBindInput(const CopyInfo &info_p) : info(info_p) {
+	}
+
 	const CopyInfo &info;
 
 	string file_extension;
-
-	CopyFunctionBindInput(const CopyInfo &info_p) : info(info_p) {
-	}
 };
 
 enum class CopyFunctionExecutionMode { REGULAR_COPY_TO_FILE, PARALLEL_COPY_TO_FILE, BATCH_COPY_TO_FILE };

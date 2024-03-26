@@ -51,7 +51,9 @@ public:
 //! should be seen as the method of secret creation. (e.g. user-provided config, env variables, auto-detect)
 class CreateSecretFunctionSet {
 public:
-	CreateSecretFunctionSet(string &name) : name(name) {};
+	explicit CreateSecretFunctionSet(string &name) : name(name) {};
+
+public:
 	bool ProviderExists(const string &provider_name);
 	void AddFunction(CreateSecretFunction &function, OnCreateConflict on_conflict);
 	CreateSecretFunction &GetFunction(const string &provider);
@@ -148,17 +150,17 @@ public:
 		D_ASSERT(!type.empty());
 		serializable = true;
 	}
-	KeyValueSecret(BaseSecret &secret)
+	explicit KeyValueSecret(BaseSecret &secret)
 	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
 		serializable = true;
 	};
-	KeyValueSecret(const KeyValueSecret &secret)
+	explicit KeyValueSecret(const KeyValueSecret &secret)
 	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
 		secret_map = secret.secret_map;
 		redact_keys = secret.redact_keys;
 		serializable = true;
 	};
-	KeyValueSecret(KeyValueSecret &&secret)
+	explicit KeyValueSecret(KeyValueSecret &&secret)
 	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
 		secret_map = std::move(secret.secret_map);
 		redact_keys = std::move(secret.redact_keys);
