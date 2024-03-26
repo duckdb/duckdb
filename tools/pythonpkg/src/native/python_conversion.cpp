@@ -137,8 +137,16 @@ Value TransformDictionaryToMap(const PyDictionary &dict, const LogicalType &targ
 		return EmptyMapValue();
 	}
 	// dict == { 'key': [ ... ], 'value' : [ ... ] }
-	auto key_list = TransformPythonValue(keys);
-	auto value_list = TransformPythonValue(values);
+	LogicalType key_target = LogicalTypeId::UNKNOWN;
+	LogicalType value_target = LogicalTypeId::UNKNOWN;
+
+	if (target_type.id() != LogicalTypeId::UNKNOWN) {
+		key_target = LogicalType::LIST(MapType::KeyType(target_type));
+		value_target = LogicalType::LIST(MapType::ValueType(target_type));
+	}
+
+	auto key_list = TransformPythonValue(keys, key_target);
+	auto value_list = TransformPythonValue(values, value_target);
 
 	LogicalType key_type = LogicalType::SQLNULL;
 	LogicalType value_type = LogicalType::SQLNULL;
