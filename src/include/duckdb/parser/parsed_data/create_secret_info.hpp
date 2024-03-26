@@ -18,7 +18,7 @@
 
 namespace duckdb {
 
-struct CreateSecretInfo : public CreateInfo {
+struct CreateSecretInfo : public CreateInfo { // NOLINT: work-around bug in clang-tidy
 public:
 	static constexpr const ParseInfoType TYPE = ParseInfoType::CREATE_SECRET_INFO;
 

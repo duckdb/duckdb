@@ -46,8 +46,8 @@ public:
 		return std::static_pointer_cast<T, ObjectCacheEntry>(object);
 	}
 
-	template <class T, class... Args>
-	shared_ptr<T> GetOrCreate(const string &key, Args &&...args) {
+	template <class T, class... ARGS>
+	shared_ptr<T> GetOrCreate(const string &key, ARGS &&...args) {
 		lock_guard<mutex> glock(lock);
 
 		auto entry = cache.find(key);
@@ -65,7 +65,7 @@ public:
 
 	void Put(string key, shared_ptr<ObjectCacheEntry> value) {
 		lock_guard<mutex> glock(lock);
-		cache[key] = std::move(value);
+		cache.insert(make_pair(std::move(key), std::move(value)));
 	}
 
 	void Delete(const string &key) {

@@ -83,8 +83,9 @@ class BaseSecret {
 	friend class SecretManager;
 
 public:
-	BaseSecret(const vector<string> &prefix_paths, const string &type, const string &provider, const string &name)
-	    : prefix_paths(prefix_paths), type(type), provider(provider), name(name), serializable(false) {
+	BaseSecret(vector<string> prefix_paths_p, string type_p, string provider_p, string name_p)
+	    : prefix_paths(std::move(prefix_paths_p)), type(std::move(type_p)), provider(std::move(provider_p)),
+		  name(std::move(name_p)), serializable(false) {
 		D_ASSERT(!type.empty());
 	}
 	BaseSecret(const BaseSecret &other)
@@ -150,7 +151,7 @@ public:
 		D_ASSERT(!type.empty());
 		serializable = true;
 	}
-	explicit KeyValueSecret(BaseSecret &secret)
+	explicit KeyValueSecret(const BaseSecret &secret)
 	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
 		serializable = true;
 	};
@@ -161,7 +162,7 @@ public:
 		serializable = true;
 	};
 	KeyValueSecret(KeyValueSecret &&secret) noexcept
-	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
+	    : BaseSecret(std::move(secret.prefix_paths), std::move(secret.type), std::move(secret.provider), std::move(secret.name)) {
 		secret_map = std::move(secret.secret_map);
 		redact_keys = std::move(secret.redact_keys);
 		serializable = true;
