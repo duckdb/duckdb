@@ -38,6 +38,66 @@ unique_ptr<LogicalOperator> TopN::Optimize(unique_ptr<LogicalOperator> op) {
 		topn->AddChild(std::move(order_by.children[0]));
 		op = std::move(topn);
 	} else {
+		// Check if we can push the limit operator down through projection operators
+		if (op->type == LogicalOperatorType::LOGICAL_LIMIT) {
+			auto &limit = op->Cast<LogicalLimit>();
+			if (limit.limit_val.Type() == LimitNodeType::CONSTANT_VALUE &&
+			    limit.offset_val.Type() != LimitNodeType::EXPRESSION_VALUE) {
+				auto child_op = op->children[0].get();
+				bool can_optimize = false;
+
+				// Check if there are only projection operators between the limit operator
+				// and an order by operator.
+				while (child_op && !can_optimize) {
+					switch (child_op->type) {
+					case LogicalOperatorType::LOGICAL_PROJECTION:
+						child_op = child_op->children[0].get();
+						if (child_op->type == LogicalOperatorType::LOGICAL_ORDER_BY) {
+							can_optimize = true;
+						}
+						break;
+					default:
+						child_op = nullptr;
+						can_optimize = false;
+						break;
+					}
+				}
+
+				if (can_optimize) {
+					// traverse operator tree and collect all projection nodes until we reach
+					// the order by operator
+					vector<unique_ptr<LogicalOperator>> projections;
+					projections.push_back(std::move(op->children[0]));
+					while (true) {
+						auto child = projections.back().get();
+						if (child->type != LogicalOperatorType::LOGICAL_PROJECTION) {
+							break;
+						}
+						projections.push_back(std::move(child->children[0]));
+					}
+
+					// Move order by operator into children of limit operator
+					auto order_by = std::move(projections.back());
+					projections.pop_back();
+					op->children.clear();
+					op->children.push_back(std::move(order_by));
+
+					// reconstruct all projection nodes above limit operator
+					unique_ptr<LogicalOperator> root = std::move(op);
+					while (!projections.empty()) {
+						unique_ptr<LogicalOperator> node = std::move(projections.back());
+						node->children.clear();
+						node->children.push_back(std::move(root));
+						root = std::move(node);
+						projections.pop_back();
+					}
+
+					// recurse into Optimize function to apply TopN optimization
+					return Optimize(std::move(root));
+				}
+			}
+		}
+
 		for (auto &child : op->children) {
 			child = Optimize(std::move(child));
 		}

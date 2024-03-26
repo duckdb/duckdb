@@ -37,3 +37,9 @@ query II
 EXPLAIN SELECT i FROM integers ORDER BY i OFFSET 3
 ----
 logical_opt	<!REGEX>:.*TOP_N.*
+
+# only limit, but in subquery with projection pull up optimization
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM range(100000000) AS _(x) ORDER BY x) AS cte LIMIT 10
+----
+logical_opt	<!REGEX>:.*TOP_N.*
