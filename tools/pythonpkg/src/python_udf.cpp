@@ -162,7 +162,7 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
                                               const ClientProperties &client_properties) {
 	// Through the capture of the lambda, we have access to the function pointer
 	// We just need to make sure that it doesn't get garbage collected
-	scalar_function_t func = [&](DataChunk &input, ExpressionState &state, Vector &result) -> void {
+	scalar_function_t func = [=](DataChunk &input, ExpressionState &state, Vector &result) -> void {
 		py::gil_scoped_acquire gil;
 
 		// owning references

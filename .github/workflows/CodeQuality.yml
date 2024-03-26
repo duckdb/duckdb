@@ -65,6 +65,7 @@ jobs:
 
   enum-check:
     name: C Enum Integrity Check
+    needs: format-check
     runs-on: ubuntu-20.04
 
     env:
