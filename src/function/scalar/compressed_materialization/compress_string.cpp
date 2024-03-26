@@ -11,14 +11,23 @@ static string StringCompressFunctionName(const LogicalType &result_type) {
 }
 
 template <idx_t LENGTH>
+#ifdef _WIN32
+static inline void TemplatedReverseMemCpy(const data_ptr_t &__restrict dest, const const_data_ptr_t &__restrict src) {
+#else
 static inline void TemplatedReverseMemCpy(const data_ptr_t __restrict &dest, const const_data_ptr_t __restrict &src) {
+#endif
 	for (idx_t i = 0; i < LENGTH; i++) {
 		dest[i] = src[LENGTH - 1 - i];
 	}
 }
 
+#ifdef _WIN32
+static inline void ReverseMemCpy(const data_ptr_t &__restrict dest, const const_data_ptr_t &__restrict src,
+                                 const idx_t &length) {
+#else
 static inline void ReverseMemCpy(const data_ptr_t __restrict &dest, const const_data_ptr_t __restrict &src,
                                  const idx_t &length) {
+#endif
 	for (idx_t i = 0; i < length; i++) {
 		dest[i] = src[length - 1 - i];
 	}
