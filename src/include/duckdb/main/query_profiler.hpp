@@ -29,7 +29,7 @@ class PhysicalOperator;
 class SQLStatement;
 
 struct OperatorInformation {
-	explicit OperatorInformation(double time_ = 0, idx_t elements_ = 0) : time(time_), elements(elements_) {
+	explicit OperatorInformation(double time_p = 0, idx_t elements_p = 0) : time(time_p), elements(elements_p) {
 	}
 
 	double time = 0;
