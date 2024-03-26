@@ -17,7 +17,7 @@ class SelectStatement;
 class QueryRelation : public Relation {
 public:
 	QueryRelation(const std::shared_ptr<ClientContext> &context, unique_ptr<SelectStatement> select_stmt, string alias);
-	~QueryRelation();
+	~QueryRelation() override;
 
 	unique_ptr<SelectStatement> select_stmt;
 	string alias;

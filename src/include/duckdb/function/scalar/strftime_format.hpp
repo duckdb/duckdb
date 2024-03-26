@@ -128,7 +128,7 @@ protected:
 	                             char *target);
 };
 
-struct StrpTimeFormat : public StrTimeFormat {
+struct StrpTimeFormat : public StrTimeFormat { // NOLINT: work-around bug in clang-tidy
 public:
 	StrpTimeFormat();
 

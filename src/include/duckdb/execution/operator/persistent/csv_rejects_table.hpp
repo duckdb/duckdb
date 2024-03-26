@@ -14,7 +14,7 @@ class ClientContext;
 
 class CSVRejectsTable : public ObjectCacheEntry {
 public:
-	CSVRejectsTable(string name_p) : name(std::move(name_p)), count(0) {
+	explicit CSVRejectsTable(string name_p) : name(std::move(name_p)), count(0) {
 	}
 	mutex write_lock;
 	string name;

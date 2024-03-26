@@ -149,7 +149,7 @@ public:
 		if (options.find(name) != options.end()) {
 			throw InternalException("This option already exists");
 		}
-		options[name] = std::move(value);
+		options.emplace(name, std::move(value));
 	}
 	template <class T>
 	T GetOption(const string &name) {

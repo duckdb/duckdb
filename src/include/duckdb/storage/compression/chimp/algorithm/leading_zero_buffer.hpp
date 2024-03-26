@@ -77,7 +77,7 @@ public:
 	}
 
 	uint64_t BitsWritten() const {
-		return counter * 3;
+		return counter * 3ULL;
 	}
 
 	// Reset the counter, but don't replace the buffer
