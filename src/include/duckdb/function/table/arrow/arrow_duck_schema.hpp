@@ -35,7 +35,7 @@ enum class ArrowDateTimeType : uint8_t {
 class ArrowType {
 public:
 	//! From a DuckDB type
-	explicit ArrowType(LogicalType type_p) // NOLINT: work-around bug in clang-tidy
+	ArrowType(LogicalType type_p) // NOLINT: allow implicit conversion
 	    : type(std::move(type_p)), size_type(ArrowVariableSizeType::NORMAL),
 	      date_time_precision(ArrowDateTimeType::DAYS) {};
 
