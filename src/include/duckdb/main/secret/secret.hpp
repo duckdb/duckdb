@@ -154,13 +154,13 @@ public:
 	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
 		serializable = true;
 	};
-	explicit KeyValueSecret(const KeyValueSecret &secret)
+	KeyValueSecret(const KeyValueSecret &secret)
 	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
 		secret_map = secret.secret_map;
 		redact_keys = secret.redact_keys;
 		serializable = true;
 	};
-	explicit KeyValueSecret(KeyValueSecret &&secret)
+	KeyValueSecret(KeyValueSecret &&secret) noexcept
 	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
 		secret_map = std::move(secret.secret_map);
 		redact_keys = std::move(secret.redact_keys);
@@ -168,7 +168,7 @@ public:
 	};
 
 	//! Print the secret as a key value map in the format 'key1=value;key2=value2'
-	virtual string ToString(SecretDisplayType mode = SecretDisplayType::REDACTED) const override;
+	string ToString(SecretDisplayType mode = SecretDisplayType::REDACTED) const override;
 	void Serialize(Serializer &serializer) const override;
 
 	//! Tries to get the value at key <key>, depending on error_on_missing will throw or return Value()

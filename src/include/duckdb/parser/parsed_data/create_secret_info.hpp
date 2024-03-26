@@ -41,7 +41,7 @@ public:
 	//! Named parameter list (if any)
 	case_insensitive_map_t<Value> options;
 
-	unique_ptr<CreateInfo> Copy() const;
+	unique_ptr<CreateInfo> Copy() const override;
 };
 
 } // namespace duckdb

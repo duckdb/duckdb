@@ -22,7 +22,7 @@ public:
 public:
 	LogicalExtensionOperator() : LogicalOperator(LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR) {
 	}
-	LogicalExtensionOperator(vector<unique_ptr<Expression>> expressions)
+	explicit LogicalExtensionOperator(vector<unique_ptr<Expression>> expressions)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR, std::move(expressions)) {
 	}
 

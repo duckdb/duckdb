@@ -285,7 +285,7 @@ BoundStatement SecretManager::BindCreateSecret(CatalogTransaction transaction, C
 	BoundStatement result;
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
-	result.plan = make_uniq<LogicalCreateSecret>(*function, std::move(bound_info));
+	result.plan = make_uniq<LogicalCreateSecret>(std::move(bound_info));
 	return result;
 }
 
