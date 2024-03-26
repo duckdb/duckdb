@@ -74,14 +74,7 @@
 // See e.g.:
 // https://opensource.apple.com/source/CarbonHeaders/CarbonHeaders-18.1/TargetConditionals.h.auto.html
 #ifdef __APPLE__
-#  include <TargetConditionals.h>
-#  if (defined(TARGET_OS_OSX) && TARGET_OS_OSX == 1) || \
-      (defined(TARGET_OS_MAC) && TARGET_OS_MAC == 1)
-#    define CATCH_PLATFORM_MAC
-#  elif (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE == 1)
-#    define CATCH_PLATFORM_IPHONE
-#  endif
-
+#  define CATCH_PLATFORM_MAC
 #elif defined(linux) || defined(__linux) || defined(__linux__)
 #  define CATCH_PLATFORM_LINUX
 
