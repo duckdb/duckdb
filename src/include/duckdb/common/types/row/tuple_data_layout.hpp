@@ -92,7 +92,7 @@ public:
 	}
 	//! Returns whether any of the aggregates have a destructor
 	inline bool HasDestructor() const {
-		return has_destructor;
+		return !aggr_destructor_idxs.empty();
 	}
 	//! Returns the indices of the aggregates that have destructors
 	inline const vector<idx_t> GetAggregateDestructorIndices() const {
@@ -120,8 +120,6 @@ private:
 	bool all_constant;
 	//! Offset to the heap size of every row
 	idx_t heap_size_offset;
-	//! Whether any of the aggregates have a destructor
-	bool has_destructor;
 	//! Indices of aggregate functions that have a destructor
 	vector<idx_t> aggr_destructor_idxs;
 };
