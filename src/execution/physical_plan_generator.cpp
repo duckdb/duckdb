@@ -37,6 +37,15 @@ PhysicalPlanGenerator::PhysicalPlanGenerator(ClientContext &context) : context(c
 PhysicalPlanGenerator::~PhysicalPlanGenerator() {
 }
 
+static void CollectDependencies(LogicalOperator &op, vector<shared_ptr<ExternalDependency>> &dependencies) {
+	for (auto &dep : op.external_dependencies) {
+		dependencies.push_back(dep);
+	}
+	for (auto &child : op.children) {
+		CollectDependencies(*child, dependencies);
+	}
+}
+
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(unique_ptr<LogicalOperator> op) {
 	auto &profiler = QueryProfiler::Get(context);
 
@@ -57,7 +66,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(unique_ptr<Logica
 
 	// then create the main physical plan
 	profiler.StartPhase("create_plan");
+	vector<shared_ptr<ExternalDependency>> dependencies;
+	CollectDependencies(*op, dependencies);
 	auto plan = CreatePlan(*op);
+	plan->external_dependencies = std::move(dependencies);
 	profiler.EndPhase();
 
 	plan->Verify();

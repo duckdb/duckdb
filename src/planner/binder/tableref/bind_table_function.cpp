@@ -144,17 +144,15 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 		if (table_function.bind_replace) {
 			auto new_plan = table_function.bind_replace(context, bind_input);
 			if (new_plan != nullptr) {
-				return CreatePlan(*Bind(*new_plan));
+				auto result = CreatePlan(*Bind(*new_plan));
+				result->AddExternalDependency(std::move(external_dependency));
+				return std::move(result);
 			} else if (!table_function.bind) {
 				throw BinderException("Failed to bind \"%s\": nullptr returned from bind_replace without bind function",
 				                      table_function.name);
 			}
 		}
 		bind_data = table_function.bind(context, bind_input, return_types, return_names);
-		if (table_function.name == "pandas_scan" || table_function.name == "arrow_scan") {
-			auto &arrow_bind = bind_data->Cast<PyTableFunctionData>();
-			arrow_bind.external_dependency = std::move(external_dependency);
-		}
 	} else {
 		throw InvalidInputException("Cannot call function \"%s\" directly - it has no bind function",
 		                            table_function.name);
@@ -177,6 +175,7 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 	}
 
 	auto get = make_uniq<LogicalGet>(bind_index, table_function, std::move(bind_data), return_types, return_names);
+	get->AddExternalDependency(std::move(external_dependency));
 	get->parameters = parameters;
 	get->named_parameters = named_parameters;
 	get->input_table_types = input_table_types;

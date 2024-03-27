@@ -46,7 +46,7 @@ typedef unique_ptr<ArrowArrayStreamWrapper> (*stream_factory_produce_t)(uintptr_
                                                                         ArrowStreamParameters &parameters);
 typedef void (*stream_factory_get_schema_t)(ArrowArrayStream *stream_factory_ptr, ArrowSchema &schema);
 
-struct ArrowScanFunctionData : public PyTableFunctionData {
+struct ArrowScanFunctionData : public TableFunctionData {
 public:
 	ArrowScanFunctionData(stream_factory_produce_t scanner_producer_p, uintptr_t stream_factory_ptr_p)
 	    : lines_read(0), stream_factory_ptr(stream_factory_ptr_p), scanner_producer(scanner_producer_p) {

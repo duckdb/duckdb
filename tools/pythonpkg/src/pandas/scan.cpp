@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-struct PandasScanFunctionData : public PyTableFunctionData {
+struct PandasScanFunctionData : public TableFunctionData {
 	PandasScanFunctionData(py::handle df, idx_t row_count, vector<PandasColumnBindData> pandas_bind_data,
 	                       vector<LogicalType> sql_types)
 	    : df(df), row_count(row_count), lines_read(0), pandas_bind_data(std::move(pandas_bind_data)),

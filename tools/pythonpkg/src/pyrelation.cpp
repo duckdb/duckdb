@@ -62,7 +62,9 @@ DuckDBPyRelation::DuckDBPyRelation(unique_ptr<DuckDBPyResult> result_p) : rel(nu
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectFromExpression(const string &expression) {
 	auto projected_relation = make_uniq<DuckDBPyRelation>(rel->Project(expression));
-	projected_relation->rel->extra_dependencies = this->rel->extra_dependencies;
+	for (auto &dep : this->rel->external_dependencies) {
+		projected_relation->rel->AddExternalDependency(dep);
+	}
 	return projected_relation;
 }
 
@@ -1262,7 +1264,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Map(py::function fun, Optional<py
 	auto rel_dependency = make_uniq<PythonDependencies>();
 	rel_dependency->map_function = std::move(fun);
 	rel_dependency->py_object_list.push_back(make_uniq<RegisteredObject>(std::move(schema)));
-	relation->rel->extra_dependencies = std::move(rel_dependency);
+	relation->rel->AddExternalDependency(std::move(rel_dependency));
 	return relation;
 }
 

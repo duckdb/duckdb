@@ -47,6 +47,10 @@ string LogicalOperator::GetName() const {
 	return LogicalOperatorToString(type);
 }
 
+void LogicalOperator::AddExternalDependency(shared_ptr<ExternalDependency> dependency) {
+	external_dependencies.push_back(std::move(dependency));
+}
+
 string LogicalOperator::ParamsToString() const {
 	string result;
 	for (idx_t i = 0; i < expressions.size(); i++) {

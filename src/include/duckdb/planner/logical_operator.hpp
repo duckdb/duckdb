@@ -15,6 +15,7 @@
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
+#include "duckdb/main/external_dependencies.hpp"
 
 #include <algorithm>
 #include <functional>
@@ -40,6 +41,8 @@ public:
 	//! Estimated Cardinality
 	idx_t estimated_cardinality;
 	bool has_estimated_cardinality;
+	//! External Dependencies
+	vector<shared_ptr<ExternalDependency>> external_dependencies;
 
 public:
 	virtual vector<ColumnBinding> GetColumnBindings();
@@ -51,6 +54,7 @@ public:
 
 	//! Resolve the types of the logical operator and its children
 	void ResolveOperatorTypes();
+	void AddExternalDependency(shared_ptr<ExternalDependency> dependency);
 
 	virtual string GetName() const;
 	virtual string ParamsToString() const;

@@ -56,6 +56,8 @@ public:
 	unique_ptr<GlobalOperatorState> op_state;
 	//! Lock for (re)setting any of the operator states
 	mutex lock;
+	//! External Dependencies
+	vector<shared_ptr<ExternalDependency>> external_dependencies;
 
 public:
 	virtual string GetName() const;
@@ -69,6 +71,9 @@ public:
 	//! Return a vector of the types that will be returned by this operator
 	const vector<LogicalType> &GetTypes() const {
 		return types;
+	}
+	void AddExternalDependency(shared_ptr<ExternalDependency> dependency) {
+		external_dependencies.push_back(std::move(dependency));
 	}
 
 	virtual bool Equals(const PhysicalOperator &other) const {

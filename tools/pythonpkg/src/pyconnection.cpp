@@ -980,8 +980,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 	auto read_csv_p = connection->ReadCSV(name, std::move(bind_parameters));
 	auto &read_csv = read_csv_p->Cast<ReadCSVRelation>();
 	if (file_like_object_wrapper) {
-		D_ASSERT(!read_csv.extra_dependencies);
-		read_csv.extra_dependencies = std::move(file_like_object_wrapper);
+		read_csv.AddExternalDependency(std::move(file_like_object_wrapper));
 	}
 
 	return make_uniq<DuckDBPyRelation>(read_csv_p->Alias(read_csv.alias));
@@ -1106,8 +1105,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const PandasDataFrame &v
 	vector<Value> params;
 	params.emplace_back(Value::POINTER(CastPointerToValue(new_df.ptr())));
 	auto rel = connection->TableFunction("pandas_scan", params)->Alias(name);
-	rel->extra_dependencies =
-	    make_uniq<PythonDependencies>(make_uniq<RegisteredObject>(value), make_uniq<RegisteredObject>(new_df));
+	rel->AddExternalDependency(
+	    make_shared<PythonDependencies>(make_uniq<RegisteredObject>(value), make_uniq<RegisteredObject>(new_df)));
 	return make_uniq<DuckDBPyRelation>(std::move(rel));
 }
 
@@ -1189,8 +1188,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_obj
 	                                              Value::POINTER(CastPointerToValue(stream_factory_produce)),
 	                                              Value::POINTER(CastPointerToValue(stream_factory_get_schema))})
 	               ->Alias(name);
-	rel->extra_dependencies =
-	    make_uniq<PythonDependencies>(make_uniq<RegisteredArrow>(std::move(stream_factory), arrow_object));
+	rel->AddExternalDependency(
+	    make_shared<PythonDependencies>(make_uniq<RegisteredArrow>(std::move(stream_factory), arrow_object)));
 	return make_uniq<DuckDBPyRelation>(std::move(rel));
 }
 
