@@ -34,6 +34,8 @@ public:
 	bool GetSuccessWithInfo() const {
 		return success_with_info;
 	}
+	// Ignore keys for use with Power Query
+	std::vector<std::string> PQIgnoreKeys = {"driver"};
 
 private:
 	OdbcHandleDbc *dbc;
