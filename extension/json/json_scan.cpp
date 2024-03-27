@@ -612,9 +612,6 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 		// Auto-detect if we haven't yet done this during the bind
 		if (gstate.bind_data.options.record_type == JSONRecordType::AUTO_DETECT ||
 		    current_reader->GetFormat() == JSONFormat::AUTO_DETECT) {
-			if (!buffer.IsSet()) {
-				buffer = AllocateBuffer(gstate);
-			}
 			ReadAndAutoDetect(gstate, buffer, buffer_index);
 		}
 
