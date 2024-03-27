@@ -134,6 +134,10 @@ void AttachedDatabase::SetInitialDatabase() {
 	is_initial_database = true;
 }
 
+void AttachedDatabase::SetReadOnlyDatabase() {
+	type = AttachedDatabaseType::READ_ONLY_DATABASE;
+}
+
 void AttachedDatabase::Close() {
 	D_ASSERT(catalog);
 	if (is_closed) {
