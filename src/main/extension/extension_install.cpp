@@ -10,6 +10,7 @@
 #endif
 #endif
 #include "duckdb/common/windows_undefs.hpp"
+#include <cstdlib>
 
 #include <fstream>
 
@@ -281,6 +282,24 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs,
 
 	auto url_base = "http://" + hostname_without_http;
 	duckdb_httplib::Client cli(url_base.c_str());
+
+	char const* http_proxy_env = std::getenv("http_proxy");
+	if (http_proxy_env == nullptr) {
+		http_proxy_env = std::getenv("https_proxy");
+	}
+
+	if (http_proxy_env) {
+		const std::string http_proxy(http_proxy_env);
+		std::string no_http_proxy = StringUtil::Replace(http_proxy, "http://", "");
+		no_http_proxy = StringUtil::Replace(no_http_proxy, "https://", "");
+		
+		const size_t idx = no_http_proxy.find(":");
+		const std::string host = (idx == std::string::npos) ? no_http_proxy : no_http_proxy.substr(0, idx);
+		const std::string port_string = no_http_proxy.substr(idx);
+		const int port = port_string.empty() ? 80 : std::atoi(port_string.c_str());
+
+		cli.set_proxy(host.c_str(), port);
+	}
 
 	duckdb_httplib::Headers headers = {
 	    {"User-Agent", StringUtil::Format("%s %s", config.UserAgent(), DuckDB::SourceID())}};
