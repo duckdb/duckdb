@@ -83,7 +83,7 @@ public:
 
 	DUCKDB_API Allocator &GetBufferAllocator() final override;
 
-	DatabaseInstance &GetDatabase() final override {
+	DatabaseInstance &GetDatabase() override {
 		return db;
 	}
 

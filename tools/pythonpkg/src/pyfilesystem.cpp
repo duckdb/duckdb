@@ -15,12 +15,12 @@ PythonFileHandle::~PythonFileHandle() {
 	handle.release();
 }
 
-string PythonFilesystem::DecodeFlags(uint8_t flags) {
+string PythonFilesystem::DecodeFlags(FileOpenFlags flags) {
 	// see https://stackoverflow.com/a/58925279 for truth table of python file modes
-	bool read = flags & FileFlags::FILE_FLAGS_READ;
-	bool write = flags & FileFlags::FILE_FLAGS_WRITE;
-	bool append = flags & FileFlags::FILE_FLAGS_APPEND;
-	bool truncate = flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW;
+	bool read = flags.OpenForReading();
+	bool write = flags.OpenForWriting();
+	bool append = flags.OpenForAppending();
+	bool truncate = flags.OverwriteExistingFile();
 
 	string flags_s;
 	if (read && write && truncate) {
@@ -44,12 +44,18 @@ string PythonFilesystem::DecodeFlags(uint8_t flags) {
 	return flags_s;
 }
 
-unique_ptr<FileHandle> PythonFilesystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
-                                                  FileCompressionType compression, FileOpener *opener) {
+unique_ptr<FileHandle> PythonFilesystem::OpenFile(const string &path, FileOpenFlags flags,
+                                                  optional_ptr<FileOpener> opener) {
 	PythonGILWrapper gil;
 
-	if (compression != FileCompressionType::UNCOMPRESSED) {
+	if (flags.Compression() != FileCompressionType::UNCOMPRESSED) {
 		throw IOException("Compression not supported");
+	}
+	// maybe this can be implemented in a better way?
+	if (flags.ReturnNullIfNotExists()) {
+		if (!FileExists(path)) {
+			return nullptr;
+		}
 	}
 
 	// TODO: lock support?
@@ -92,7 +98,7 @@ void PythonFilesystem::Read(duckdb::FileHandle &handle, void *buffer, int64_t nr
 
 	Read(handle, buffer, nr_bytes);
 }
-bool PythonFilesystem::FileExists(const string &filename) {
+bool PythonFilesystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
 	return Exists(filename, "isfile");
 }
 bool PythonFilesystem::Exists(const string &filename, const char *func_name) const {
@@ -142,13 +148,13 @@ bool PythonFilesystem::CanHandleFile(const string &fpath) {
 	}
 	return false;
 }
-void PythonFilesystem::MoveFile(const string &source, const string &dest) {
+void PythonFilesystem::MoveFile(const string &source, const string &dest, optional_ptr<FileOpener> opener) {
 	PythonGILWrapper gil;
 
 	auto move = filesystem.attr("mv");
 	move(py::str(source), py::str(dest));
 }
-void PythonFilesystem::RemoveFile(const string &filename) {
+void PythonFilesystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
 	PythonGILWrapper gil;
 
 	auto remove = filesystem.attr("rm");
@@ -167,15 +173,15 @@ void PythonFilesystem::FileSync(FileHandle &handle) {
 
 	PythonFileHandle::GetHandle(handle).attr("flush")();
 }
-bool PythonFilesystem::DirectoryExists(const string &directory) {
+bool PythonFilesystem::DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) {
 	return Exists(directory, "isdir");
 }
-void PythonFilesystem::RemoveDirectory(const string &directory) {
+void PythonFilesystem::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
 	PythonGILWrapper gil;
 
 	filesystem.attr("rm")(directory, py::arg("recursive") = true);
 }
-void PythonFilesystem::CreateDirectory(const string &directory) {
+void PythonFilesystem::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
 	PythonGILWrapper gil;
 
 	filesystem.attr("mkdir")(py::str(directory));
@@ -200,7 +206,7 @@ void PythonFilesystem::Truncate(FileHandle &handle, int64_t new_size) {
 
 	filesystem.attr("touch")(handle.path, py::arg("truncate") = true);
 }
-bool PythonFilesystem::IsPipe(const string &filename) {
+bool PythonFilesystem::IsPipe(const string &filename, optional_ptr<FileOpener> opener) {
 	return false;
 }
 idx_t PythonFilesystem::SeekPosition(FileHandle &handle) {

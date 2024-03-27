@@ -312,8 +312,7 @@ idx_t CGroupBandwidthQuota(idx_t physical_cores, FileSystem &fs) {
 	if (fs.FileExists(CPU_MAX)) {
 		// cgroup v2
 		// https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html
-		handle =
-		    fs.OpenFile(CPU_MAX, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK, FileSystem::DEFAULT_COMPRESSION);
+		handle = fs.OpenFile(CPU_MAX, FileFlags::FILE_FLAGS_READ);
 		read_bytes = fs.Read(*handle, (void *)byte_buffer, 999);
 		byte_buffer[read_bytes] = '\0';
 		if (std::sscanf(byte_buffer, "%" SCNd64 " %" SCNd64 "", &quota, &period) != 2) {
@@ -324,8 +323,7 @@ idx_t CGroupBandwidthQuota(idx_t physical_cores, FileSystem &fs) {
 		// https://www.kernel.org/doc/html/latest/scheduler/sched-bwc.html#management
 
 		// Read the quota, this indicates how many microseconds the CPU can be utilized by this cgroup per period
-		handle = fs.OpenFile(CFS_QUOTA, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
-		                     FileSystem::DEFAULT_COMPRESSION);
+		handle = fs.OpenFile(CFS_QUOTA, FileFlags::FILE_FLAGS_READ);
 		read_bytes = fs.Read(*handle, (void *)byte_buffer, 999);
 		byte_buffer[read_bytes] = '\0';
 		if (std::sscanf(byte_buffer, "%" SCNd64 "", &quota) != 1) {
@@ -333,8 +331,7 @@ idx_t CGroupBandwidthQuota(idx_t physical_cores, FileSystem &fs) {
 		}
 
 		// Read the time period, a cgroup can utilize the CPU up to quota microseconds every period
-		handle = fs.OpenFile(CFS_PERIOD, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
-		                     FileSystem::DEFAULT_COMPRESSION);
+		handle = fs.OpenFile(CFS_PERIOD, FileFlags::FILE_FLAGS_READ);
 		read_bytes = fs.Read(*handle, (void *)byte_buffer, 999);
 		byte_buffer[read_bytes] = '\0';
 		if (std::sscanf(byte_buffer, "%" SCNd64 "", &period) != 1) {

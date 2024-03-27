@@ -298,6 +298,13 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		auto construct_array = make_uniq<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR);
 		construct_array->children = std::move(children);
 		return std::move(construct_array);
+	} else if (lowercase_name == "__internal_position_operator") {
+		if (children.size() != 2) {
+			throw ParserException("Wrong number of arguments to __internal_position_operator.");
+		}
+		// swap arguments for POSITION(x IN y)
+		std::swap(children[0], children[1]);
+		lowercase_name = "position";
 	} else if (lowercase_name == "ifnull") {
 		if (children.size() != 2) {
 			throw ParserException("Wrong number of arguments to IFNULL.");

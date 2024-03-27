@@ -162,7 +162,7 @@ void TemporaryFileHandle::CreateFileIfNotExists(TemporaryFileLock &) {
 		return;
 	}
 	auto &fs = FileSystem::GetFileSystem(db);
-	uint8_t open_flags = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE;
+	auto open_flags = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE;
 	handle = fs.OpenFile(path, open_flags);
 }
 

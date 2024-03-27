@@ -34,7 +34,6 @@ public:
 	}
 
 public:
-	static unique_ptr<BufferManager> CreateStandardBufferManager(DatabaseInstance &db, DBConfig &config);
 	virtual BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy = true,
 	                              shared_ptr<BlockHandle> *block = nullptr) = 0;
 	//! Reallocate an in-memory buffer that is pinned.
@@ -73,7 +72,7 @@ public:
 	//! Get the underlying buffer pool responsible for managing the buffers
 	virtual BufferPool &GetBufferPool() const;
 
-	virtual DatabaseInstance &GetDatabase();
+	virtual DatabaseInstance &GetDatabase() = 0;
 	// Static methods
 	DUCKDB_API static BufferManager &GetBufferManager(DatabaseInstance &db);
 	DUCKDB_API static BufferManager &GetBufferManager(ClientContext &context);

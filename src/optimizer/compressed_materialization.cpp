@@ -447,7 +447,7 @@ unique_ptr<Expression> CompressedMaterialization::GetDecompressExpression(unique
 	if (TypeIsIntegral(type.InternalType())) {
 		return GetIntegralDecompress(std::move(input), result_type, stats);
 	} else if (type.id() == LogicalTypeId::VARCHAR) {
-		return GetStringDecompress(std::move(input), stats);
+		return GetStringDecompress(std::move(input), result_type, stats);
 	} else {
 		throw InternalException("Type other than integral/string marked for decompression!");
 	}
@@ -465,13 +465,13 @@ unique_ptr<Expression> CompressedMaterialization::GetIntegralDecompress(unique_p
 }
 
 unique_ptr<Expression> CompressedMaterialization::GetStringDecompress(unique_ptr<Expression> input,
+                                                                      const LogicalType &result_type,
                                                                       const BaseStatistics &stats) {
 	D_ASSERT(StringStats::HasMaxStringLength(stats));
 	auto decompress_function = CMStringDecompressFun::GetFunction(input->return_type);
 	vector<unique_ptr<Expression>> arguments;
 	arguments.emplace_back(std::move(input));
-	return make_uniq<BoundFunctionExpression>(decompress_function.return_type, decompress_function,
-	                                          std::move(arguments), nullptr);
+	return make_uniq<BoundFunctionExpression>(result_type, decompress_function, std::move(arguments), nullptr);
 }
 
 } // namespace duckdb
