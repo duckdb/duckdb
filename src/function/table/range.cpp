@@ -282,6 +282,7 @@ void BuiltinFunctions::RegisterTableFunctions() {
 	CSVSnifferFunction::RegisterFunction(*this);
 	ReadBlobFunction::RegisterFunction(*this);
 	ReadTextFunction::RegisterFunction(*this);
+	QueryTableFunction::RegisterFunction(*this);
 }
 
 } // namespace duckdb

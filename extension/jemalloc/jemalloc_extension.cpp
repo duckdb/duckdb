@@ -33,7 +33,10 @@ data_ptr_t JemallocExtension::Reallocate(PrivateAllocatorData *private_data, dat
 
 static void JemallocCTL(const char *name, void *old_ptr, size_t *old_len, void *new_ptr, size_t new_len) {
 	if (duckdb_jemalloc::je_mallctl(name, old_ptr, old_len, new_ptr, new_len) != 0) {
+#ifdef DEBUG
+		// We only want to throw an exception here when debugging
 		throw InternalException("je_mallctl failed for setting \"%s\"", name);
+#endif
 	}
 }
 
