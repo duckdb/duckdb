@@ -82,7 +82,7 @@ struct JSONStructure {
 public:
 	static void ExtractStructure(yyjson_val *val, JSONStructureNode &node);
 	static LogicalType StructureToType(ClientContext &context, const JSONStructureNode &node, const idx_t max_depth,
-	                                   const double field_appearance_threshold, double map_inference_threshold,
+	                                   const double field_appearance_threshold, idx_t map_inference_threshold,
 	                                   idx_t depth = 0, idx_t sample_count = DConstants::INVALID_INDEX,
 	                                   const LogicalType &null_type = LogicalType::JSON());
 };

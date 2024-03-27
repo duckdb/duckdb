@@ -140,7 +140,7 @@
         "id": 113,
         "name": "field_appearance_threshold",
         "type": "double",
-        "default": 0.1
+        "default": 0.25
       },
       {
         "id": 114,
@@ -157,8 +157,8 @@
       {
         "id": 116,
         "name": "map_inference_threshold",
-        "type": "double",
-        "default": 0.8
+        "type": "idx_t",
+        "default": 25
       }
     ],
     "constructor": ["$ClientContext", "files", "date_format", "timestamp_format"]
