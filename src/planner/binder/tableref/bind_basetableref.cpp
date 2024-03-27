@@ -124,16 +124,15 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 #endif
 			}
 			auto result = make_uniq<BoundCTERef>(index, ctebinding->index, materialized);
-			auto b = ctebinding;
 			auto alias = ref.alias.empty() ? ref.table_name : ref.alias;
-			auto names = BindContext::AliasColumnNames(alias, b->names, ref.column_name_alias);
+			auto names = BindContext::AliasColumnNames(alias, ctebinding->names, ref.column_name_alias);
 
-			bind_context.AddGenericBinding(index, alias, names, b->types);
+			bind_context.AddGenericBinding(index, alias, names, ctebinding->types);
 			// Update references to CTE
 			auto cteref = bind_context.cte_references[ref.table_name];
 			(*cteref)++;
 
-			result->types = b->types;
+			result->types = ctebinding->types;
 			result->bound_columns = std::move(names);
 			return std::move(result);
 		}
@@ -181,14 +180,17 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		}
 
 		// could not find an alternative: bind again to get the error
-		table_or_view = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, ref.catalog_name, ref.schema_name,
-		                                  ref.table_name, OnEntryNotFound::THROW_EXCEPTION, error_context);
+		Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, ref.catalog_name, ref.schema_name, ref.table_name,
+		                  OnEntryNotFound::THROW_EXCEPTION, error_context);
+		throw InternalException("Catalog::GetEntry should have thrown an exception above");
 	}
+
 	switch (table_or_view->type) {
 	case CatalogType::TABLE_ENTRY: {
 		// base table: create the BoundBaseTableRef node
 		auto table_index = GenerateTableIndex();
 		auto &table = table_or_view->Cast<TableCatalogEntry>();
+		properties.read_databases.insert(table.ParentCatalog().GetName());
 
 		unique_ptr<FunctionData> bind_data;
 		auto scan_function = table.GetScanFunction(context, bind_data);
@@ -244,11 +246,19 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		auto &bound_subquery = bound_child->Cast<BoundSubqueryRef>();
 		if (GetBindingMode() != BindingMode::EXTRACT_NAMES) {
 			if (bound_subquery.subquery->types != view_catalog_entry.types) {
-				throw BinderException("Contents of view were altered: types don't match!");
+				auto actual_types = StringUtil::ToString(bound_subquery.subquery->types, ", ");
+				auto expected_types = StringUtil::ToString(view_catalog_entry.types, ", ");
+				throw BinderException(
+				    "Contents of view were altered: types don't match! Expected [%s], but found [%s] instead",
+				    expected_types, actual_types);
 			}
 			if (bound_subquery.subquery->names.size() == view_catalog_entry.names.size() &&
 			    bound_subquery.subquery->names != view_catalog_entry.names) {
-				throw BinderException("Contents of view were altered: names don't match!");
+				auto actual_names = StringUtil::Join(bound_subquery.subquery->names, ", ");
+				auto expected_names = StringUtil::Join(view_catalog_entry.names, ", ");
+				throw BinderException(
+				    "Contents of view were altered: names don't match! Expected [%s], but found [%s] instead",
+				    expected_names, actual_names);
 			}
 		}
 		bind_context.AddView(bound_subquery.subquery->GetRootIndex(), subquery.alias, subquery,

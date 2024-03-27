@@ -117,8 +117,8 @@ void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Express
 				callback(std::move(comparison));
 			}
 			// for each entry also create a comparison with each constant
-			int lower_index = -1;
-			int upper_index = -1;
+			auto lower_index = optional_idx::Invalid();
+			auto upper_index = optional_idx::Invalid();
 			bool lower_inclusive = false;
 			bool upper_inclusive = false;
 			for (idx_t k = 0; k < constant_list.size(); k++) {
@@ -138,25 +138,29 @@ void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Express
 					callback(std::move(comparison));
 				}
 			}
-			if (lower_index >= 0 && upper_index >= 0) {
+			if (lower_index.IsValid() && upper_index.IsValid()) {
 				// found both lower and upper index, create a BETWEEN expression
-				auto lower_constant = make_uniq<BoundConstantExpression>(constant_list[lower_index].constant);
-				auto upper_constant = make_uniq<BoundConstantExpression>(constant_list[upper_index].constant);
+				auto lower_constant =
+				    make_uniq<BoundConstantExpression>(constant_list[lower_index.GetIndex()].constant);
+				auto upper_constant =
+				    make_uniq<BoundConstantExpression>(constant_list[upper_index.GetIndex()].constant);
 				auto between =
 				    make_uniq<BoundBetweenExpression>(entries[i].get().Copy(), std::move(lower_constant),
 				                                      std::move(upper_constant), lower_inclusive, upper_inclusive);
 				callback(std::move(between));
-			} else if (lower_index >= 0) {
+			} else if (lower_index.IsValid()) {
 				// only lower index found, create simple comparison expression
-				auto constant = make_uniq<BoundConstantExpression>(constant_list[lower_index].constant);
-				auto comparison = make_uniq<BoundComparisonExpression>(constant_list[lower_index].comparison_type,
-				                                                       entries[i].get().Copy(), std::move(constant));
+				auto constant = make_uniq<BoundConstantExpression>(constant_list[lower_index.GetIndex()].constant);
+				auto comparison =
+				    make_uniq<BoundComparisonExpression>(constant_list[lower_index.GetIndex()].comparison_type,
+				                                         entries[i].get().Copy(), std::move(constant));
 				callback(std::move(comparison));
-			} else if (upper_index >= 0) {
+			} else if (upper_index.IsValid()) {
 				// only upper index found, create simple comparison expression
-				auto constant = make_uniq<BoundConstantExpression>(constant_list[upper_index].constant);
-				auto comparison = make_uniq<BoundComparisonExpression>(constant_list[upper_index].comparison_type,
-				                                                       entries[i].get().Copy(), std::move(constant));
+				auto constant = make_uniq<BoundConstantExpression>(constant_list[upper_index.GetIndex()].constant);
+				auto comparison =
+				    make_uniq<BoundComparisonExpression>(constant_list[upper_index.GetIndex()].comparison_type,
+				                                         entries[i].get().Copy(), std::move(constant));
 				callback(std::move(comparison));
 			}
 		}
@@ -829,7 +833,9 @@ FilterResult FilterCombiner::AddFilter(Expression &expr) {
  * It's missing to create another method to add transitive filters from scalar filters, e.g, i > 10
  */
 FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &comparison, bool is_root) {
-	D_ASSERT(IsGreaterThan(comparison.type) || IsLessThan(comparison.type));
+	if (!IsGreaterThan(comparison.type) && !IsLessThan(comparison.type)) {
+		return FilterResult::UNSUPPORTED;
+	}
 	// get the LHS and RHS nodes
 	auto &left_node = GetNode(*comparison.left);
 	reference<Expression> right_node = GetNode(*comparison.right);

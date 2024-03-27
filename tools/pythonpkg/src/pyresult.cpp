@@ -266,7 +266,7 @@ void DuckDBPyResult::ChangeDateToDatetime(PandasDataFrame &df) {
 }
 
 PandasDataFrame DuckDBPyResult::FrameFromNumpy(bool date_as_object, const py::handle &o) {
-	auto df = py::cast<PandasDataFrame>(py::module::import("pandas").attr("DataFrame").attr("from_dict")(o));
+	PandasDataFrame df = py::cast<PandasDataFrame>(py::module::import("pandas").attr("DataFrame").attr("from_dict")(o));
 	// Unfortunately we have to do a type change here for timezones since these types are not supported by numpy
 	ChangeToTZType(df);
 	if (date_as_object) {
@@ -317,7 +317,9 @@ bool DuckDBPyResult::FetchArrowChunk(ChunkScanState &scan_state, py::list &batch
 	}
 	ArrowSchema arrow_schema;
 	auto names = query_result.names;
-	QueryResult::DeduplicateColumns(names);
+	if (to_polars) {
+		QueryResult::DeduplicateColumns(names);
+	}
 	ArrowConverter::ToArrowSchema(&arrow_schema, query_result.types, names, query_result.client_properties);
 	TransformDuckToArrowChunk(arrow_schema, data, batches);
 	return true;

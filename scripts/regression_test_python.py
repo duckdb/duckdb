@@ -7,11 +7,14 @@ import time
 import argparse
 from typing import Dict, List, Any
 
-TPCH_NQUERIES = 22
 TPCH_QUERIES = []
-for i in range(1, TPCH_NQUERIES + 1):
-    TPCH_QUERIES.append(f'PRAGMA tpch({i})')
-
+res = duckdb.execute(
+    """
+    select query from tpch_queries()
+"""
+).fetchall()
+for x in res:
+    TPCH_QUERIES.append(x[0])
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--verbose", action="store_true", help="Enable verbose mode", default=False)
@@ -244,6 +247,39 @@ class ArrowDictionaryBenchmark:
         return results
 
 
+class PandasDFLoadBenchmark:
+    def __init__(self):
+        self.initialize_connection()
+        self.generate()
+
+    def initialize_connection(self):
+        self.con = duckdb.connect()
+        if not threads:
+            return
+        print_msg(f'Limiting threads to {threads}')
+        self.con.execute(f"SET threads={threads}")
+
+    def generate(self):
+        self.con.execute("call dbgen(sf=0.1)")
+        new_table = "*, " + ", ".join(["l_shipdate"] * 300)
+        self.con.execute(f"create table wide as select {new_table} from lineitem limit 500")
+        self.con.execute(f"copy wide to 'wide_table.csv' (FORMAT CSV)")
+
+    def benchmark(self) -> List[BenchmarkResult]:
+        results = []
+        for nrun in range(nruns):
+            duration = 0.0
+            pandas_df = pd.read_csv('wide_table.csv')
+            start = time.time()
+            for amplification in range(30):
+                res = self.con.execute("""select * from pandas_df""").df()
+            end = time.time()
+            duration = float(end - start)
+            del res
+            results.append(BenchmarkResult(duration, nrun))
+        return results
+
+
 def test_arrow_dictionaries_scan():
     DICT_SIZE = 26 * 1000
     print_msg(f"Generating a unique dictionary of size {DICT_SIZE}")
@@ -259,9 +295,20 @@ def test_arrow_dictionaries_scan():
             write_result(benchmark_name, run_number, duration)
 
 
+def test_loading_pandas_df_many_times():
+    test = PandasDFLoadBenchmark()
+    results = test.benchmark()
+    benchmark_name = f"load_pandas_df_many_times"
+    for res in results:
+        run_number = res.run_number
+        duration = res.duration
+        write_result(benchmark_name, run_number, duration)
+
+
 def main():
     test_tpch()
     test_arrow_dictionaries_scan()
+    test_loading_pandas_df_many_times()
 
     close_result()
 

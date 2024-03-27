@@ -9,7 +9,7 @@ struct ArrowListData {
 public:
 	static void Initialize(ArrowAppendData &result, const LogicalType &type, idx_t capacity) {
 		auto &child_type = ListType::GetChildType(type);
-		result.main_buffer.reserve((capacity + 1) * sizeof(BUFTYPE));
+		result.GetMainBuffer().reserve((capacity + 1) * sizeof(BUFTYPE));
 		auto child_buffer = ArrowAppender::InitializeChild(child_type, capacity, result.options);
 		result.child_data.push_back(std::move(child_buffer));
 	}
@@ -34,7 +34,7 @@ public:
 
 	static void Finalize(ArrowAppendData &append_data, const LogicalType &type, ArrowArray *result) {
 		result->n_buffers = 2;
-		result->buffers[1] = append_data.main_buffer.data();
+		result->buffers[1] = append_data.GetMainBuffer().data();
 
 		auto &child_type = ListType::GetChildType(type);
 		ArrowAppender::AddChildren(append_data, 1);
@@ -48,9 +48,11 @@ public:
 	                          vector<sel_t> &child_sel) {
 		// resize the offset buffer - the offset buffer holds the offsets into the child array
 		idx_t size = to - from;
-		append_data.main_buffer.resize(append_data.main_buffer.size() + sizeof(BUFTYPE) * (size + 1));
+		auto &main_buffer = append_data.GetMainBuffer();
+
+		main_buffer.resize(main_buffer.size() + sizeof(BUFTYPE) * (size + 1));
 		auto data = UnifiedVectorFormat::GetData<list_entry_t>(format);
-		auto offset_data = append_data.main_buffer.GetData<BUFTYPE>();
+		auto offset_data = main_buffer.GetData<BUFTYPE>();
 		if (append_data.row_count == 0) {
 			// first entry
 			offset_data[0] = 0;
@@ -79,7 +81,7 @@ public:
 			offset_data[offset_idx] = last_offset;
 
 			for (idx_t k = 0; k < list_length; k++) {
-				child_sel.push_back(data[source_idx].offset + k);
+				child_sel.push_back(UnsafeNumericCast<sel_t>(data[source_idx].offset + k));
 			}
 		}
 	}

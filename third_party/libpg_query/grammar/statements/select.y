@@ -1130,7 +1130,8 @@ single_pivot_value:
 	;
 
 pivot_header:
-	d_expr		                 			{ $$ = list_make1($1); }
+	| d_expr	                 			{ $$ = list_make1($1); }
+	| indirection_expr						{ $$ = list_make1($1); }
 	| '(' c_expr_list_opt_comma ')' 		{ $$ = $2; }
 
 pivot_value:
@@ -2658,11 +2659,7 @@ b_expr:		c_expr
  * ambiguity to the b_expr syntax.
  */
 c_expr:		d_expr
-			| row {
-				PGFuncCall *n = makeFuncCall(SystemFuncName("row"), $1, @1);
-				$$ = (PGNode *) n;
-			}
-			| indirection_expr opt_extended_indirection
+			| indirection_expr_or_a_expr opt_extended_indirection
 				{
 					if ($2)
 					{
@@ -2678,42 +2675,6 @@ c_expr:		d_expr
 
 d_expr:		columnref								{ $$ = $1; }
 			| AexprConst							{ $$ = $1; }
-			| '#' ICONST
-				{
-					PGPositionalReference *n = makeNode(PGPositionalReference);
-					n->position = $2;
-					n->location = @1;
-					$$ = (PGNode *) n;
-				}
-			| '$' ColLabel
-				{
-					$$ = makeNamedParamRef($2, @1);
-				}
-			| '[' opt_expr_list_opt_comma ']' {
-				PGFuncCall *n = makeFuncCall(SystemFuncName("list_value"), $2, @2);
-				$$ = (PGNode *) n;
-			}
-			| list_comprehension {
-				$$ = $1;
-			}
-			| ARRAY select_with_parens
-				{
-					PGSubLink *n = makeNode(PGSubLink);
-					n->subLinkType = PG_ARRAY_SUBLINK;
-					n->subLinkId = 0;
-					n->testexpr = NULL;
-					n->operName = NULL;
-					n->subselect = $2;
-					n->location = @2;
-					$$ = (PGNode *)n;
-				}
-			| ARRAY '[' opt_expr_list_opt_comma ']' {
-				PGList *func_name = list_make1(makeString("construct_array"));
-				PGFuncCall *n = makeFuncCall(func_name, $3, @1);
-				$$ = (PGNode *) n;
-			}
-			| case_expr
-				{ $$ = $1; }
 			| select_with_parens			%prec UMINUS
 				{
 					PGSubLink *n = makeNode(PGSubLink);
@@ -2769,9 +2730,23 @@ d_expr:		columnref								{ $$ = $1; }
 			  }
 		;
 
+indirection_expr_or_a_expr:
+			'(' a_expr ')'
+				{
+					$$ = $2;
+				}
+			| indirection_expr
+				{
+					$$ = $1;
+				}
+			| row {
+				PGFuncCall *n = makeFuncCall(SystemFuncName("row"), $1, @1);
+				$$ = (PGNode *) n;
+			}
+		;
 
-
-indirection_expr:		'?'
+indirection_expr:
+			'?'
 				{
 					$$ = makeParamRef(0, @1);
 				}
@@ -2781,10 +2756,6 @@ indirection_expr:		'?'
 					p->number = $1;
 					p->location = @1;
 					$$ = (PGNode *) p;
-				}
-			| '(' a_expr ')'
-				{
-					$$ = $2;
 				}
 			| struct_expr
 				{
@@ -2810,6 +2781,42 @@ indirection_expr:		'?'
 			| func_expr
 				{
 					$$ = $1;
+				}
+			| case_expr
+				{ $$ = $1; }
+			| '[' opt_expr_list_opt_comma ']' {
+				PGFuncCall *n = makeFuncCall(SystemFuncName("list_value"), $2, @2);
+				$$ = (PGNode *) n;
+			}
+			| list_comprehension {
+				$$ = $1;
+			}
+			| ARRAY select_with_parens
+				{
+					PGSubLink *n = makeNode(PGSubLink);
+					n->subLinkType = PG_ARRAY_SUBLINK;
+					n->subLinkId = 0;
+					n->testexpr = NULL;
+					n->operName = NULL;
+					n->subselect = $2;
+					n->location = @2;
+					$$ = (PGNode *)n;
+				}
+			| ARRAY '[' opt_expr_list_opt_comma ']' {
+				PGList *func_name = list_make1(makeString("construct_array"));
+				PGFuncCall *n = makeFuncCall(func_name, $3, @1);
+				$$ = (PGNode *) n;
+			}
+			| '#' ICONST
+				{
+					PGPositionalReference *n = makeNode(PGPositionalReference);
+					n->position = $2;
+					n->location = @1;
+					$$ = (PGNode *) n;
+				}
+			| '$' ColLabel
+				{
+					$$ = makeNamedParamRef($2, @1);
 				}
 		;
 
@@ -2962,8 +2969,8 @@ func_expr_common_subexpr:
 				}
 			| POSITION '(' position_list ')'
 				{
-					/* position(A in B) is converted to position(B, A) */
-					$$ = (PGNode *) makeFuncCall(SystemFuncName("position"), $3, @1);
+					/* position(A in B) is converted to position_inverse(A, B) */
+					$$ = (PGNode *) makeFuncCall(SystemFuncName("__internal_position_operator"), $3, @1);
 				}
 			| SUBSTRING '(' substr_list ')'
 				{
@@ -3588,7 +3595,7 @@ overlay_placing:
 /* position_list uses b_expr not a_expr to avoid conflict with general IN */
 
 position_list:
-			b_expr IN_P b_expr						{ $$ = list_make2($3, $1); }
+			b_expr IN_P b_expr						{ $$ = list_make2($1, $3); }
 			| /*EMPTY*/								{ $$ = NIL; }
 		;
 

@@ -207,19 +207,24 @@ static idx_t FindTypedRangeBound(const WindowInputColumn &over, const idx_t orde
 	WindowColumnIterator<T> begin(over, order_begin);
 	WindowColumnIterator<T> end(over, order_end);
 
-	if (order_begin < prev.start && prev.start < order_end) {
-		const auto first = over.GetCell<T>(prev.start);
-		if (!comp(val, first)) {
-			//	prev.first <= val, so we can start further forward
-			begin += (prev.start - order_begin);
+	//	Try to reuse the previous bounds to restrict the search.
+	//	This is only valid if the previous bounds were non-empty
+	//	Only inject the comparisons if the previous bounds are a strict subset.
+	if (prev.start < prev.end) {
+		if (order_begin < prev.start && prev.start < order_end) {
+			const auto first = over.GetCell<T>(prev.start);
+			if (!comp(val, first)) {
+				//	prev.first <= val, so we can start further forward
+				begin += (prev.start - order_begin);
+			}
 		}
-	}
-	if (order_begin <= prev.end && prev.end < order_end) {
-		const auto second = over.GetCell<T>(prev.end);
-		if (!comp(second, val)) {
-			//	val <= prev.second, so we can end further back
-			// (prev.second is the largest peer)
-			end -= (order_end - prev.end - 1);
+		if (order_begin < prev.end && prev.end < order_end) {
+			const auto second = over.GetCell<T>(prev.end - 1);
+			if (!comp(second, val)) {
+				//	val <= prev.second, so we can end further back
+				// (prev.second is the largest peer)
+				end -= (order_end - prev.end - 1);
+			}
 		}
 	}
 
@@ -1286,6 +1291,7 @@ void WindowValueExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, co
 		if (check_nulls) {
 			const auto count = input_chunk.size();
 
+			payload_chunk.Flatten();
 			UnifiedVectorFormat vdata;
 			payload_chunk.data[0].ToUnifiedFormat(count, vdata);
 			if (!vdata.validity.AllValid()) {

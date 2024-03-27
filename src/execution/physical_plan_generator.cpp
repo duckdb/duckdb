@@ -9,6 +9,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
 #include "duckdb/planner/operator/list.hpp"
+#include "duckdb/execution/operator/helper/physical_verify_vector.hpp"
 
 namespace duckdb {
 
@@ -91,9 +92,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		break;
 	case LogicalOperatorType::LOGICAL_LIMIT:
 		plan = CreatePlan(op.Cast<LogicalLimit>());
-		break;
-	case LogicalOperatorType::LOGICAL_LIMIT_PERCENT:
-		plan = CreatePlan(op.Cast<LogicalLimitPercent>());
 		break;
 	case LogicalOperatorType::LOGICAL_SAMPLE:
 		plan = CreatePlan(op.Cast<LogicalSample>());
@@ -229,6 +227,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 	}
 
 	plan->estimated_cardinality = op.estimated_cardinality;
+#ifdef DUCKDB_VERIFY_VECTOR_OPERATOR
+	auto verify = make_uniq<PhysicalVerifyVector>(std::move(plan));
+	plan = std::move(verify);
+#endif
 
 	return plan;
 }

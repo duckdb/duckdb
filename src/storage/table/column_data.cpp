@@ -23,7 +23,7 @@ namespace duckdb {
 ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
                        LogicalType type_p, optional_ptr<ColumnData> parent)
     : start(start_row), count(0), block_manager(block_manager), info(info), column_index(column_index),
-      type(std::move(type_p)), parent(parent), version(0), allocation_size(0) {
+      type(std::move(type_p)), parent(parent), allocation_size(0) {
 	if (!parent) {
 		stats = make_uniq<SegmentStatistics>(type);
 	}
@@ -57,10 +57,6 @@ const LogicalType &ColumnData::RootType() const {
 	return type;
 }
 
-void ColumnData::IncrementVersion() {
-	version++;
-}
-
 idx_t ColumnData::GetMaxEntry() {
 	return count;
 }
@@ -71,7 +67,6 @@ void ColumnData::InitializeScan(ColumnScanState &state) {
 	state.row_index = state.current ? state.current->start : 0;
 	state.internal_index = state.row_index;
 	state.initialized = false;
-	state.version = version;
 	state.scan_state.reset();
 	state.last_offset = 0;
 }
@@ -82,25 +77,19 @@ void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx)
 	state.row_index = row_idx;
 	state.internal_index = state.current->start;
 	state.initialized = false;
-	state.version = version;
 	state.scan_state.reset();
 	state.last_offset = 0;
 }
 
 idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, bool has_updates) {
 	state.previous_states.clear();
-	if (state.version != version) {
-		InitializeScanWithOffset(state, state.row_index);
-		state.current->InitializeScan(state);
-		state.initialized = true;
-	} else if (!state.initialized) {
+	if (!state.initialized) {
 		D_ASSERT(state.current);
 		state.current->InitializeScan(state);
 		state.internal_index = state.current->start;
 		state.initialized = true;
 	}
 	D_ASSERT(data.HasSegment(state.current));
-	D_ASSERT(state.version == version);
 	D_ASSERT(state.internal_index <= state.row_index);
 	if (state.internal_index < state.row_index) {
 		state.current->Skip(state);
@@ -151,7 +140,10 @@ idx_t ColumnData::ScanVector(TransactionData transaction, idx_t vector_index, Co
 		lock_guard<mutex> update_guard(update_lock);
 		has_updates = updates ? true : false;
 	}
-	auto scan_count = ScanVector(state, result, STANDARD_VECTOR_SIZE, has_updates);
+	idx_t current_row = vector_index * STANDARD_VECTOR_SIZE;
+	auto vector_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - current_row);
+
+	auto scan_count = ScanVector(state, result, vector_count, has_updates);
 	if (has_updates) {
 		lock_guard<mutex> update_guard(update_lock);
 		if (!ALLOW_UPDATES && updates->HasUncommittedUpdates(vector_index)) {
@@ -210,8 +202,10 @@ idx_t ColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count)
 void ColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                         SelectionVector &sel, idx_t &count, const TableFilter &filter) {
 	idx_t scan_count = Scan(transaction, vector_index, state, result);
-	result.Flatten(scan_count);
-	ColumnSegment::FilterSelection(sel, result, filter, count, FlatVector::Validity(result));
+
+	UnifiedVectorFormat vdata;
+	result.ToUnifiedFormat(scan_count, vdata);
+	ColumnSegment::FilterSelection(sel, result, vdata, filter, scan_count, count);
 }
 
 void ColumnData::FilterScan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
@@ -462,7 +456,6 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group,
 	// replace the old tree with the new one
 	data.Replace(l, checkpoint_state->new_tree);
 	updates.reset();
-	version++;
 
 	return checkpoint_state;
 }

@@ -121,6 +121,12 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	sniffer_options.file_path = data.path;
 
 	auto buffer_manager = make_shared<CSVBufferManager>(context, sniffer_options, sniffer_options.file_path, 0);
+	if (sniffer_options.name_list.empty()) {
+		sniffer_options.name_list = data.names_csv;
+	}
+	if (sniffer_options.sql_type_list.empty()) {
+		sniffer_options.sql_type_list = data.return_types_csv;
+	}
 	CSVSniffer sniffer(sniffer_options, buffer_manager, CSVStateMachineCache::Get(context));
 	auto sniffer_result = sniffer.SniffCSV(true);
 	string str_opt;
@@ -142,7 +148,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	    NewLineIdentifierToString(sniffer_options.dialect_options.state_machine_options.new_line.GetValue());
 	output.SetValue(3, 0, new_line_identifier);
 	// 5. Skip Rows
-	output.SetValue(4, 0, Value::UINTEGER(sniffer_options.dialect_options.skip_rows.GetValue()));
+	output.SetValue(4, 0, Value::UINTEGER(NumericCast<uint32_t>(sniffer_options.dialect_options.skip_rows.GetValue())));
 	// 6. Has Header
 	auto has_header = Value::BOOLEAN(sniffer_options.dialect_options.header.GetValue()).ToString();
 	output.SetValue(5, 0, has_header);

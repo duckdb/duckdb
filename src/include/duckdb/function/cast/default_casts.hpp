@@ -25,7 +25,7 @@ struct BindCastInfo {
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -43,7 +43,7 @@ struct BoundCastData {
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -59,8 +59,9 @@ struct CastParameters {
 	CastParameters(bool strict, string *error_message) : CastParameters(nullptr, strict, error_message, nullptr) {
 	}
 	CastParameters(BoundCastData *cast_data, bool strict, string *error_message,
-	               optional_ptr<FunctionLocalState> local_state)
-	    : cast_data(cast_data), strict(strict), error_message(error_message), local_state(local_state) {
+	               optional_ptr<FunctionLocalState> local_state, bool nullify_parent_p = false)
+	    : cast_data(cast_data), strict(strict), error_message(error_message), local_state(local_state),
+	      nullify_parent(nullify_parent_p) {
 	}
 	CastParameters(CastParameters &parent, optional_ptr<BoundCastData> cast_data,
 	               optional_ptr<FunctionLocalState> local_state)
@@ -78,6 +79,8 @@ struct CastParameters {
 	optional_ptr<FunctionLocalState> local_state;
 	//! Query location (if any)
 	optional_idx query_location;
+	//! In the case of a nested type, when facing a cast error, if we nullify the parent
+	bool nullify_parent = false;
 };
 
 struct CastLocalStateParameters {

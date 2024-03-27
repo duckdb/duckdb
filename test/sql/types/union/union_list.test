@@ -53,13 +53,13 @@ NULL
 7
 NULL
 
-query I
+query I rowsort
 SELECT union_list[1] FROM tbl2 JOIN tbl1 ON union_with_list.num = union_list[1].num;
 ----
 4
 6
 
-query I
+query I rowsort
 SELECT union_list[1] FROM tbl2 JOIN tbl1 ON union_with_list.num = union_list[1];
 ----
 4

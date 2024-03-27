@@ -44,30 +44,15 @@ extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG)
 // See e.g.:
 // https://opensource.apple.com/source/CarbonHeaders/CarbonHeaders-18.1/TargetConditionals.h.auto.html
 #elif defined(__APPLE__)
-#include <TargetConditionals.h>                             // NOLINT
-#if not(defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE == 1) // NOLINT
-#include <libproc.h>                                        // NOLINT
-#endif                                                      // NOLINT
+#include <TargetConditionals.h>
+#if not(defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE == 1)
+#include <libproc.h>
+#endif
 #elif defined(_WIN32)
 #include <restartmanager.h>
 #endif
 
 namespace duckdb {
-
-static void AssertValidFileFlags(uint8_t flags) {
-#ifdef DEBUG
-	bool is_read = flags & FileFlags::FILE_FLAGS_READ;
-	bool is_write = flags & FileFlags::FILE_FLAGS_WRITE;
-	// require either READ or WRITE (or both)
-	D_ASSERT(is_read || is_write);
-	// CREATE/Append flags require writing
-	D_ASSERT(is_write || !(flags & FileFlags::FILE_FLAGS_APPEND));
-	D_ASSERT(is_write || !(flags & FileFlags::FILE_FLAGS_FILE_CREATE));
-	D_ASSERT(is_write || !(flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
-	// cannot combine CREATE and CREATE_NEW flags
-	D_ASSERT(!(flags & FileFlags::FILE_FLAGS_FILE_CREATE && flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
-#endif
-}
 
 #ifndef _WIN32
 bool LocalFileSystem::FileExists(const string &filename) {
@@ -267,19 +252,38 @@ static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 }
 #endif
 
-unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t flags, FileLockType lock_type,
-                                                 FileCompressionType compression, FileOpener *opener) {
+bool LocalFileSystem::IsPrivateFile(const string &path_p, FileOpener *opener) {
 	auto path = FileSystem::ExpandPath(path_p, opener);
-	if (compression != FileCompressionType::UNCOMPRESSED) {
+
+	struct stat st;
+
+	if (lstat(path.c_str(), &st) != 0) {
+		throw IOException(
+		    "Failed to stat '%s' when checking file permissions, file may be missing or have incorrect permissions",
+		    path.c_str());
+	}
+
+	// If group or other have any permission, the file is not private
+	if (st.st_mode & (S_IRGRP | S_IWGRP | S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH)) {
+		return false;
+	}
+
+	return true;
+}
+
+unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenFlags flags,
+                                                 optional_ptr<FileOpener> opener) {
+	auto path = FileSystem::ExpandPath(path_p, opener);
+	if (flags.Compression() != FileCompressionType::UNCOMPRESSED) {
 		throw NotImplementedException("Unsupported compression type for default file system");
 	}
 
-	AssertValidFileFlags(flags);
+	flags.Verify();
 
 	int open_flags = 0;
 	int rc;
-	bool open_read = flags & FileFlags::FILE_FLAGS_READ;
-	bool open_write = flags & FileFlags::FILE_FLAGS_WRITE;
+	bool open_read = flags.OpenForReading();
+	bool open_write = flags.OpenForWriting();
 	if (open_read && open_write) {
 		open_flags = O_RDWR;
 	} else if (open_read) {
@@ -291,18 +295,18 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t f
 	}
 	if (open_write) {
 		// need Read or Write
-		D_ASSERT(flags & FileFlags::FILE_FLAGS_WRITE);
+		D_ASSERT(flags.OpenForWriting());
 		open_flags |= O_CLOEXEC;
-		if (flags & FileFlags::FILE_FLAGS_FILE_CREATE) {
+		if (flags.CreateFileIfNotExists()) {
 			open_flags |= O_CREAT;
-		} else if (flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW) {
+		} else if (flags.OverwriteExistingFile()) {
 			open_flags |= O_CREAT | O_TRUNC;
 		}
-		if (flags & FileFlags::FILE_FLAGS_APPEND) {
+		if (flags.OpenForAppending()) {
 			open_flags |= O_APPEND;
 		}
 	}
-	if (flags & FileFlags::FILE_FLAGS_DIRECT_IO) {
+	if (flags.DirectIO()) {
 #if defined(__sun) && defined(__SVR4)
 		throw InvalidInputException("DIRECT_IO not supported on Solaris");
 #endif
@@ -313,8 +317,23 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t f
 		open_flags |= O_DIRECT | O_SYNC;
 #endif
 	}
-	int fd = open(path.c_str(), open_flags, 0666);
+
+	// Determine permissions
+	mode_t filesec;
+	if (flags.CreatePrivateFile()) {
+		open_flags |= O_EXCL; // Ensure we error on existing files or the permissions may not set
+		filesec = 0600;
+	} else {
+		filesec = 0666;
+	}
+
+	// Open the file
+	int fd = open(path.c_str(), open_flags, filesec);
+
 	if (fd == -1) {
+		if (flags.ReturnNullIfNotExists() && errno == ENOENT) {
+			return nullptr;
+		}
 		throw IOException("Cannot open file \"%s\": %s", {{"errno", std::to_string(errno)}}, path, strerror(errno));
 	}
 	// #if defined(__DARWIN__) || defined(__APPLE__)
@@ -326,14 +345,14 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t f
 	// 		}
 	// 	}
 	// #endif
-	if (lock_type != FileLockType::NO_LOCK) {
+	if (flags.Lock() != FileLockType::NO_LOCK) {
 		// set lock on file
 		// but only if it is not an input/output stream
 		auto file_type = GetFileTypeInternal(fd);
 		if (file_type != FileType::FILE_TYPE_FIFO && file_type != FileType::FILE_TYPE_SOCKET) {
 			struct flock fl;
 			memset(&fl, 0, sizeof fl);
-			fl.l_type = lock_type == FileLockType::READ_LOCK ? F_RDLCK : F_WRLCK;
+			fl.l_type = flags.Lock() == FileLockType::READ_LOCK ? F_RDLCK : F_WRLCK;
 			fl.l_whence = SEEK_SET;
 			fl.l_start = 0;
 			fl.l_len = 0;
@@ -350,7 +369,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t f
 					message = AdditionalProcessInfo(*this, fl.l_pid);
 				}
 
-				if (lock_type == FileLockType::WRITE_LOCK) {
+				if (flags.Lock() == FileLockType::WRITE_LOCK) {
 					// maybe we can get a read lock instead and tell this to the user.
 					fl.l_type = F_RDLCK;
 					rc = fcntl(fd, F_SETLK, &fl);
@@ -403,6 +422,7 @@ void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 		}
 		read_buffer += bytes_read;
 		nr_bytes -= bytes_read;
+		location += bytes_read;
 	}
 }
 
@@ -431,17 +451,35 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 		}
 		write_buffer += bytes_written;
 		nr_bytes -= bytes_written;
+		location += bytes_written;
 	}
 }
 
 int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
-	int64_t bytes_written = write(fd, buffer, nr_bytes);
-	if (bytes_written == -1) {
-		throw IOException("Could not write file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
-		                  strerror(errno));
+	int64_t bytes_written = 0;
+	while (nr_bytes > 0) {
+		auto bytes_to_write = MinValue<idx_t>(idx_t(NumericLimits<int32_t>::Maximum()), idx_t(nr_bytes));
+		int64_t current_bytes_written = write(fd, buffer, bytes_to_write);
+		if (current_bytes_written <= 0) {
+			throw IOException("Could not write file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
+			                  strerror(errno));
+		}
+		bytes_written += current_bytes_written;
+		buffer = (void *)(data_ptr_cast(buffer) + current_bytes_written);
+		nr_bytes -= current_bytes_written;
 	}
 	return bytes_written;
+}
+
+bool LocalFileSystem::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes) {
+#if defined(__linux__)
+	int fd = handle.Cast<UnixFileHandle>().fd;
+	int res = fallocate(fd, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE, offset_bytes, length_bytes);
+	return res == 0;
+#else
+	return false;
+#endif
 }
 
 int64_t LocalFileSystem::GetFileSize(FileHandle &handle) {
@@ -715,20 +753,25 @@ static string AdditionalLockInfo(const std::wstring path) {
 	return conflict_string;
 }
 
-unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t flags, FileLockType lock_type,
-                                                 FileCompressionType compression, FileOpener *opener) {
+bool LocalFileSystem::IsPrivateFile(const string &path_p, FileOpener *opener) {
+	// TODO: detect if file is shared in windows
+	return true;
+}
+
+unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenFlags flags,
+                                                 optional_ptr<FileOpener> opener) {
 	auto path = FileSystem::ExpandPath(path_p, opener);
-	if (compression != FileCompressionType::UNCOMPRESSED) {
+	if (flags.Compression() != FileCompressionType::UNCOMPRESSED) {
 		throw NotImplementedException("Unsupported compression type for default file system");
 	}
-	AssertValidFileFlags(flags);
+	flags.Verify();
 
 	DWORD desired_access;
 	DWORD share_mode;
 	DWORD creation_disposition = OPEN_EXISTING;
 	DWORD flags_and_attributes = FILE_ATTRIBUTE_NORMAL;
-	bool open_read = flags & FileFlags::FILE_FLAGS_READ;
-	bool open_write = flags & FileFlags::FILE_FLAGS_WRITE;
+	bool open_read = flags.OpenForReading();
+	bool open_write = flags.OpenForWriting();
 	if (open_read && open_write) {
 		desired_access = GENERIC_READ | GENERIC_WRITE;
 		share_mode = 0;
@@ -742,30 +785,33 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t f
 		throw InternalException("READ, WRITE or both should be specified when opening a file");
 	}
 	if (open_write) {
-		if (flags & FileFlags::FILE_FLAGS_FILE_CREATE) {
+		if (flags.CreateFileIfNotExists()) {
 			creation_disposition = OPEN_ALWAYS;
-		} else if (flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW) {
+		} else if (flags.OverwriteExistingFile()) {
 			creation_disposition = CREATE_ALWAYS;
 		}
 	}
-	if (flags & FileFlags::FILE_FLAGS_DIRECT_IO) {
+	if (flags.DirectIO()) {
 		flags_and_attributes |= FILE_FLAG_NO_BUFFERING;
 	}
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(path.c_str());
 	HANDLE hFile = CreateFileW(unicode_path.c_str(), desired_access, share_mode, NULL, creation_disposition,
 	                           flags_and_attributes, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) {
+		if (flags.ReturnNullIfNotExists() && GetLastError() == ERROR_FILE_NOT_FOUND) {
+			return nullptr;
+		}
 		auto error = LocalFileSystem::GetLastErrorAsString();
 
 		auto better_error = AdditionalLockInfo(unicode_path);
 		if (!better_error.empty()) {
 			throw IOException(better_error);
+		} else {
+			throw IOException("Cannot open file \"%s\": %s", path.c_str(), error);
 		}
-
-		throw IOException("Cannot open file \"%s\": %s", path.c_str(), error);
 	}
 	auto handle = make_uniq<WindowsFileHandle>(*this, path.c_str(), hFile);
-	if (flags & FileFlags::FILE_FLAGS_APPEND) {
+	if (flags.OpenForAppending()) {
 		auto file_size = GetFileSize(*handle);
 		SetFilePointer(*handle, file_size);
 	}
@@ -835,9 +881,26 @@ static DWORD FSInternalWrite(FileHandle &handle, HANDLE hFile, void *buffer, int
 	return bytes_written;
 }
 
+static int64_t FSWrite(FileHandle &handle, HANDLE hFile, void *buffer, int64_t nr_bytes, idx_t location) {
+	int64_t bytes_written = 0;
+	while (nr_bytes > 0) {
+		auto bytes_to_write = MinValue<idx_t>(idx_t(NumericLimits<int32_t>::Maximum()), idx_t(nr_bytes));
+		DWORD current_bytes_written = FSInternalWrite(handle, hFile, buffer, bytes_to_write, location);
+		if (current_bytes_written <= 0) {
+			throw IOException("Could not write file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
+			                  strerror(errno));
+		}
+		bytes_written += current_bytes_written;
+		buffer = (void *)(data_ptr_cast(buffer) + current_bytes_written);
+		location += current_bytes_written;
+		nr_bytes -= current_bytes_written;
+	}
+	return bytes_written;
+}
+
 void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
-	auto bytes_written = FSInternalWrite(handle, hFile, buffer, nr_bytes, location);
+	auto bytes_written = FSWrite(handle, hFile, buffer, nr_bytes, location);
 	if (bytes_written != nr_bytes) {
 		throw IOException("Could not write all bytes from file \"%s\": wanted=%lld wrote=%lld", handle.path, nr_bytes,
 		                  bytes_written);
@@ -847,9 +910,14 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
 	auto &pos = handle.Cast<WindowsFileHandle>().position;
-	auto bytes_written = FSInternalWrite(handle, hFile, buffer, nr_bytes, pos);
+	auto bytes_written = FSWrite(handle, hFile, buffer, nr_bytes, pos);
 	pos += bytes_written;
 	return bytes_written;
+}
+
+bool LocalFileSystem::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes) {
+	// TODO: Not yet implemented on windows.
+	return false;
 }
 
 int64_t LocalFileSystem::GetFileSize(FileHandle &handle) {

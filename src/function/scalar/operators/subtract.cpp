@@ -50,9 +50,15 @@ date_t SubtractOperator::Operation(date_t left, int32_t right) {
 template <>
 interval_t SubtractOperator::Operation(interval_t left, interval_t right) {
 	interval_t result;
-	result.months = left.months - right.months;
-	result.days = left.days - right.days;
-	result.micros = left.micros - right.micros;
+	if (!TrySubtractOperator::Operation(left.months, right.months, result.months)) {
+		throw OutOfRangeException("Interval months subtraction out of range");
+	}
+	if (!TrySubtractOperator::Operation(left.days, right.days, result.days)) {
+		throw OutOfRangeException("Interval days subtraction out of range");
+	}
+	if (!TrySubtractOperator::Operation(left.micros, right.micros, result.micros)) {
+		throw OutOfRangeException("Interval micros subtraction out of range");
+	}
 	return result;
 }
 

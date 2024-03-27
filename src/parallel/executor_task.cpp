@@ -4,13 +4,17 @@
 
 namespace duckdb {
 
-ExecutorTask::ExecutorTask(Executor &executor_p) : executor(executor_p) {
+ExecutorTask::ExecutorTask(Executor &executor_p, shared_ptr<Event> event_p)
+    : executor(executor_p), event(std::move(event_p)) {
+	executor.RegisterTask();
 }
 
-ExecutorTask::ExecutorTask(ClientContext &context) : ExecutorTask(Executor::Get(context)) {
+ExecutorTask::ExecutorTask(ClientContext &context, shared_ptr<Event> event_p)
+    : ExecutorTask(Executor::Get(context), std::move(event_p)) {
 }
 
 ExecutorTask::~ExecutorTask() {
+	executor.UnregisterTask();
 }
 
 void ExecutorTask::Deschedule() {

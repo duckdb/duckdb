@@ -2,7 +2,6 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_distinct.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
-#include "duckdb/planner/operator/logical_limit_percent.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 
@@ -38,16 +37,7 @@ unique_ptr<LogicalOperator> Binder::VisitQueryNode(BoundQueryNode &node, unique_
 		}
 		case ResultModifierType::LIMIT_MODIFIER: {
 			auto &bound = mod->Cast<BoundLimitModifier>();
-			auto limit = make_uniq<LogicalLimit>(bound.limit_val, bound.offset_val, std::move(bound.limit),
-			                                     std::move(bound.offset));
-			limit->AddChild(std::move(root));
-			root = std::move(limit);
-			break;
-		}
-		case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
-			auto &bound = mod->Cast<BoundLimitPercentModifier>();
-			auto limit = make_uniq<LogicalLimitPercent>(bound.limit_percent, bound.offset_val, std::move(bound.limit),
-			                                            std::move(bound.offset));
+			auto limit = make_uniq<LogicalLimit>(std::move(bound.limit_val), std::move(bound.offset_val));
 			limit->AddChild(std::move(root));
 			root = std::move(limit);
 			break;

@@ -54,7 +54,16 @@ DatabaseInstance::DatabaseInstance() {
 }
 
 DatabaseInstance::~DatabaseInstance() {
-	GetDatabaseManager().ResetDatabases();
+	// destroy all attached databases
+	GetDatabaseManager().ResetDatabases(scheduler);
+	// destroy child elements
+	connection_manager.reset();
+	object_cache.reset();
+	scheduler.reset();
+	db_manager.reset();
+	buffer_manager.reset();
+	// finally, flush allocations
+	Allocator::FlushAll();
 }
 
 BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {
@@ -125,29 +134,31 @@ ConnectionManager &ConnectionManager::Get(ClientContext &context) {
 }
 
 unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(ClientContext &context, const AttachInfo &info,
-                                                                      const string &type, AccessMode access_mode) {
+                                                                      const AttachOptions &options) {
 	unique_ptr<AttachedDatabase> attached_database;
-	if (!type.empty()) {
-		// find the storage extension
-		auto extension_name = ExtensionHelper::ApplyExtensionAlias(type);
+	auto &catalog = Catalog::GetSystemCatalog(*this);
+
+	if (!options.db_type.empty()) {
+		// Find the storage extension for this database file.
+		auto extension_name = ExtensionHelper::ApplyExtensionAlias(options.db_type);
 		auto entry = config.storage_extensions.find(extension_name);
 		if (entry == config.storage_extensions.end()) {
-			throw BinderException("Unrecognized storage type \"%s\"", type);
+			throw BinderException("Unrecognized storage type \"%s\"", options.db_type);
 		}
 
 		if (entry->second->attach != nullptr && entry->second->create_transaction_manager != nullptr) {
-			// use storage extension to create the initial database
-			attached_database = make_uniq<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), *entry->second,
-			                                                context, info.name, info, access_mode);
-		} else {
+			// Use the storage extension to create the initial database.
 			attached_database =
-			    make_uniq<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), info.name, info.path, access_mode);
+			    make_uniq<AttachedDatabase>(*this, catalog, *entry->second, context, info.name, info, options);
+			return attached_database;
 		}
-	} else {
-		// check if this is an in-memory database or not
-		attached_database =
-		    make_uniq<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), info.name, info.path, access_mode);
+
+		attached_database = make_uniq<AttachedDatabase>(*this, catalog, info.name, info.path, options);
+		return attached_database;
 	}
+
+	// An empty db_type defaults to a duckdb database file.
+	attached_database = make_uniq<AttachedDatabase>(*this, catalog, info.name, info.path, options);
 	return attached_database;
 }
 
@@ -160,8 +171,8 @@ void DatabaseInstance::CreateMainDatabase() {
 	{
 		Connection con(*this);
 		con.BeginTransaction();
-		initial_database =
-		    db_manager->AttachDatabase(*con.context, info, config.options.database_type, config.options.access_mode);
+		AttachOptions options(config.options);
+		initial_database = db_manager->AttachDatabase(*con.context, info, options);
 		con.Commit();
 	}
 
@@ -213,7 +224,11 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	}
 
 	db_manager = make_uniq<DatabaseManager>(*this);
-	buffer_manager = make_uniq<StandardBufferManager>(*this, config.options.temporary_directory);
+	if (config.buffer_manager) {
+		buffer_manager = config.buffer_manager;
+	} else {
+		buffer_manager = make_uniq<StandardBufferManager>(*this, config.options.temporary_directory);
+	}
 	scheduler = make_uniq<TaskScheduler>(*this);
 	object_cache = make_uniq<ObjectCache>();
 	connection_manager = make_uniq<ConnectionManager>();
@@ -395,7 +410,7 @@ void DatabaseInstance::SetExtensionLoaded(const std::string &name) {
 	}
 }
 
-bool DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) {
+SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) {
 	// check the session values
 	auto &db_config = DBConfig::GetConfig(*this);
 	const auto &global_config_map = db_config.options.set_variables;
@@ -403,10 +418,10 @@ bool DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &resul
 	auto global_value = global_config_map.find(key);
 	bool found_global_value = global_value != global_config_map.end();
 	if (!found_global_value) {
-		return false;
+		return SettingLookupResult();
 	}
 	result = global_value->second;
-	return true;
+	return SettingLookupResult(SettingScope::GLOBAL);
 }
 
 ValidChecker &DatabaseInstance::GetValidChecker() {

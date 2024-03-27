@@ -38,8 +38,8 @@ test	4	CHECK	k
 query II
 SELECT constraint_name, unique_constraint_name FROM information_schema.referential_constraints ORDER BY constraint_name
 ----
-j_integers_i_fkey	integers_i_pkey
-k_integers_i_fkey	integers_i_pkey
+fk_integers_2_k_fkey	integers_i_pkey
+fk_integers_j_fkey	integers_i_pkey
 
 query IIII
 SELECT column_name, constraint_name, table_name, position_in_unique_constraint FROM information_schema.key_column_usage ORDER BY constraint_name

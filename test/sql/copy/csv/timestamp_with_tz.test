@@ -13,6 +13,8 @@ timestamp that is not UTC
 
 require icu
 
+require no_extension_autoloading
+
 # we can load this into a timestamptz table
 statement ok
 CREATE TABLE tbl_tz(id int, ts timestamptz);

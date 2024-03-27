@@ -414,3 +414,28 @@ SELECT list_reduce(s, (a, b) -> row(a.v || b.v, a.i + b.i)) FROM t_struct;
 {'v': ef, 'i': 11}
 {'v': gh, 'i': 15}
 {'v': ij, 'i': 19}
+
+# issue #11142
+statement ok
+CREATE OR REPLACE TABLE df(s STRUCT(a INT, b INT)[]);
+
+statement ok
+INSERT INTO df VALUES ([row(0, 0), row(0, 1), row(0, 2)]);
+
+query I
+SELECT 
+list_reduce(
+    s, (curr, next) -> struct_pack(a:=curr.a + (next.b - curr.b), b:=next.b)
+)
+FROM df
+----
+{'a': 2, 'b': 2}
+
+query I
+SELECT 
+list_reduce(
+    [struct_pack(a:=0, b:=0), struct_pack(a:=0, b:=1), struct_pack(a:=0, b:=2)],
+    (curr, next) -> struct_pack(a:=curr.a + (next.b - curr.b), b:=next.b)
+)
+----
+{'a': 2, 'b': 2}
