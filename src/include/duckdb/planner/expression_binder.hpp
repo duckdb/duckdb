@@ -73,7 +73,8 @@ public:
 	//! The target type that should result from the binder. If the result is not of this type, a cast to this type will
 	//! be added. Defaults to INVALID.
 	LogicalType target_type;
-
+	//! True, if the binder is inside a window expression.
+	bool inside_window;
 	optional_ptr<DummyBinding> macro_binding;
 	optional_ptr<vector<DummyBinding>> lambda_bindings;
 
@@ -138,6 +139,11 @@ public:
 	void ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr, vector<unordered_set<string>> &lambda_params);
 	//! Enables special-handling of lambda parameters by tracking them in the lambda_params vector
 	void ReplaceMacroParametersInLambda(FunctionExpression &function, vector<unordered_set<string>> &lambda_params);
+
+	//! We cannot bind UNNEST expressions in WINDOW child expressions.
+	bool WindowContainsUnnest(unique_ptr<ParsedExpression> &expr);
+	//! Performs additional checks before binding specific children of a WINDOW expression.
+	void BindWindowChild(unique_ptr<ParsedExpression> &expr, idx_t depth, ErrorData &error);
 
 	static LogicalType GetExpressionReturnType(const Expression &expr);
 
