@@ -17,6 +17,10 @@ class InetExtension : public Extension {
 public:
 	void Load(DuckDB &db) override;
 	std::string Name() override;
+
+protected:
+	ScalarFunctionSet GetEscapeFunctionSet();
+	ScalarFunction GetUnescapeFunction();
 };
 
 } // namespace duckdb
