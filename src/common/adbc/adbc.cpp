@@ -67,6 +67,8 @@ struct DuckDBAdbcStatementWrapper {
 	char *ingestion_table_name;
 	ArrowArrayStream ingestion_stream;
 	IngestionMode ingestion_mode = IngestionMode::CREATE;
+	uint8_t *substrait_plan;
+	uint64_t plan_length;
 };
 
 static AdbcStatusCode QueryInternal(struct AdbcConnection *connection, struct ArrowArrayStream *out, const char *query,
@@ -168,11 +170,10 @@ AdbcStatusCode StatementSetSubstraitPlan(struct AdbcStatement *statement, const 
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 	auto wrapper = reinterpret_cast<DuckDBAdbcStatementWrapper *>(statement->private_data);
-	auto plan_str = std::string(reinterpret_cast<const char *>(plan), length);
-	auto query = "CALL from_substrait('" + plan_str + "'::BLOB)";
-	auto res = duckdb_prepare(wrapper->connection, query.c_str(), &wrapper->statement);
-	auto error_msg = duckdb_prepare_error(wrapper->statement);
-	return CheckResult(res, error, error_msg);
+	wrapper->substrait_plan = (uint8_t *)malloc(sizeof(uint8_t) * (length));
+	wrapper->plan_length = length;
+	memcpy(wrapper->substrait_plan, plan, length);
+	return ADBC_STATUS_OK;
 }
 
 AdbcStatusCode DatabaseSetOption(struct AdbcDatabase *database, const char *key, const char *value,
@@ -643,6 +644,8 @@ AdbcStatusCode StatementNew(struct AdbcConnection *connection, struct AdbcStatem
 	statement_wrapper->result = nullptr;
 	statement_wrapper->ingestion_stream.release = nullptr;
 	statement_wrapper->ingestion_table_name = nullptr;
+	statement_wrapper->substrait_plan = nullptr;
+
 	statement_wrapper->ingestion_mode = IngestionMode::CREATE;
 	return ADBC_STATUS_OK;
 }
@@ -667,6 +670,10 @@ AdbcStatusCode StatementRelease(struct AdbcStatement *statement, struct AdbcErro
 	if (wrapper->ingestion_table_name) {
 		free(wrapper->ingestion_table_name);
 		wrapper->ingestion_table_name = nullptr;
+	}
+	if (wrapper->substrait_plan) {
+		free(wrapper->substrait_plan);
+		wrapper->substrait_plan = nullptr;
 	}
 	free(statement->private_data);
 	statement->private_data = nullptr;
@@ -758,8 +765,24 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 	if (has_stream && to_table) {
 		return IngestToTableFromBoundStream(wrapper, error);
 	}
-
-	if (has_stream) {
+	if (wrapper->substrait_plan != nullptr) {
+		auto plan_str = std::string(reinterpret_cast<const char *>(wrapper->substrait_plan), wrapper->plan_length);
+		duckdb::vector<duckdb::Value> params;
+		params.emplace_back(duckdb::Value::BLOB_RAW(plan_str));
+		duckdb::unique_ptr<duckdb::QueryResult> query_result;
+		try {
+			query_result =
+			    ((duckdb::Connection *)wrapper->connection)->TableFunction("from_substrait", params)->Execute();
+		} catch (duckdb::Exception &e) {
+			std::string error_msg = "It was not possible to execute substrait query. " + std::string(e.what());
+			SetError(error, error_msg);
+			return ADBC_STATUS_INVALID_ARGUMENT;
+		}
+		auto arrow_wrapper = new duckdb::ArrowResultWrapper();
+		arrow_wrapper->result =
+		    duckdb::unique_ptr_cast<duckdb::QueryResult, duckdb::MaterializedQueryResult>(std::move(query_result));
+		wrapper->result = reinterpret_cast<duckdb_arrow>(arrow_wrapper);
+	} else if (has_stream) {
 		// A stream was bound to the statement, use that to bind parameters
 		duckdb::unique_ptr<duckdb::QueryResult> result;
 		ArrowArrayStream stream = wrapper->ingestion_stream;
