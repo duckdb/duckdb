@@ -13,9 +13,11 @@
 
 namespace duckdb {
 
+#ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 static void WriteGarbageIntoBuffer(FileBuffer &buffer) {
 	memset(buffer.buffer, 0xa5, buffer.size); // 0xa5 is default memory in debug mode
 }
+#endif
 
 struct BufferAllocatorData : PrivateAllocatorData {
 	explicit BufferAllocatorData(StandardBufferManager &manager) : manager(manager) {
