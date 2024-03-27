@@ -9,13 +9,13 @@
 #pragma once
 
 #include "buffered_json_reader.hpp"
-#include "json_enums.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/type_map.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "json_enums.hpp"
 #include "json_transform.hpp"
 
 namespace duckdb {
@@ -226,12 +226,16 @@ public:
 
 private:
 	bool ReadNextBuffer(JSONScanGlobalState &gstate);
-	bool ReadNextBufferInternal(JSONScanGlobalState &gstate, optional_idx &buffer_index, bool &file_done);
-	bool ReadNextBufferSeek(JSONScanGlobalState &gstate, optional_idx &buffer_index, bool &file_done);
-	bool ReadNextBufferNoSeek(JSONScanGlobalState &gstate, optional_idx &buffer_index, bool &file_done);
+	bool ReadNextBufferInternal(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index,
+	                            bool &file_done);
+	bool ReadNextBufferSeek(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index,
+	                        bool &file_done);
+	bool ReadNextBufferNoSeek(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index,
+	                          bool &file_done);
+	AllocatedData AllocateBuffer(JSONScanGlobalState &gstate);
 	void SkipOverArrayStart();
 
-	void ReadAndAutoDetect(JSONScanGlobalState &gstate, optional_idx &buffer_index);
+	void ReadAndAutoDetect(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index);
 	bool ReconstructFirstObject();
 	void ParseNextChunk();
 
