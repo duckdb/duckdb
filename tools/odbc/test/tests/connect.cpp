@@ -23,6 +23,24 @@ void ConnectWithoutDSN(SQLHANDLE &env, SQLHANDLE &dbc) {
 	                  str, sizeof(str), &strl, SQL_DRIVER_COMPLETE);
 }
 
+// Connect to a database with extra keywords provided by Power Query SDK
+void ConnectWithPowerQuerySDK(SQLHANDLE &env, SQLHANDLE &dbc) {
+	std::string conn_str = "DRIVER={DuckDB Driver};database=" + GetTesterDirectory() + ";custom_user_agent=powerbi/v0.0(DuckDB);Trusted_Connection=yes;";
+	SQLCHAR str[1024];
+	SQLSMALLINT strl;
+
+	SQLRETURN ret = SQLAllocHandle(SQL_HANDLE_ENV, nullptr, &env);
+	REQUIRE(ret == SQL_SUCCESS);
+
+	EXECUTE_AND_CHECK("SQLSetEnvAttr (SQL_ATTR_ODBC_VERSION ODBC3)", SQLSetEnvAttr, env, SQL_ATTR_ODBC_VERSION,
+	                  ConvertToSQLPOINTER(SQL_OV_ODBC3), 0);
+
+	EXECUTE_AND_CHECK("SQLAllocHandle (DBC)", SQLAllocHandle, SQL_HANDLE_DBC, env, &dbc);
+
+	EXECUTE_AND_CHECK("SQLDriverConnect", SQLDriverConnect, dbc, nullptr, ConvertToSQLCHAR(conn_str.c_str()), SQL_NTS,
+	                  str, sizeof(str), &strl, SQL_DRIVER_COMPLETE);
+}
+
 // Connect with incorrect params
 void ConnectWithIncorrectParam(std::string param) {
 	SQLHANDLE env;
@@ -129,6 +147,7 @@ TEST_CASE("Test SQLConnect and SQLDriverConnect", "[odbc]") {
 	TestSettingConfigs();
 
 	ConnectWithoutDSN(env, dbc);
+	ConnectWithPowerQuerySDK(env, dbc);
 	DISCONNECT_FROM_DATABASE(env, dbc);
 }
 

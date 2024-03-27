@@ -248,9 +248,11 @@ std::string ConvertHexToString(SQLCHAR val[16], int precision) {
 
 std::string GetTesterDirectory() {
 	duckdb::unique_ptr<duckdb::FileSystem> fs = duckdb::FileSystem::CreateLocal();
-	std::string current_directory = fs->GetWorkingDirectory() + "/test/sql/storage_version/storage_version.db";
+	auto cwd = fs->GetWorkingDirectory();
+	std::string current_directory = cwd + "/test/sql/storage_version/storage_version.db";
 	if (!fs->FileExists(current_directory)) {
-		auto s = fs->GetWorkingDirectory() + "/../../../../test/sql/storage_version/storage_version.db";
+		auto base_dir = cwd.substr(0, cwd.rfind("duckdb"));
+		auto s = base_dir + "duckdb/test/sql/storage_version/storage_version.db";
 		if (!fs->FileExists(s)) {
 			throw std::runtime_error("Could not find storage_version.db file.");
 		}
