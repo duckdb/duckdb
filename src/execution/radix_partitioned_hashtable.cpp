@@ -742,7 +742,7 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 		const idx_t memory_limit = BufferManager::GetBufferManager(gstate.context).GetMaxMemory();
 		const idx_t thread_limit = 0.6 * memory_limit / n_threads;
 
-		const idx_t size_per_entry = partition.data->SizeInBytes() / partition.data->Count() +
+		const idx_t size_per_entry = partition.data->SizeInBytes() / MaxValue<idx_t>(partition.data->Count(), 1) +
 		                             idx_t(GroupedAggregateHashTable::LOAD_FACTOR * sizeof(aggr_ht_entry_t));
 		const auto capacity_limit = NextPowerOfTwo(thread_limit / size_per_entry);
 
