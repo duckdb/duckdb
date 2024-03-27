@@ -9,7 +9,24 @@ namespace duckdb {
 typedef duckdb_moodycamel::ConcurrentQueue<BufferEvictionNode> eviction_queue_t;
 
 struct EvictionQueue {
+	EvictionQueue() : evict_queue_insertions(0), total_dead_nodes(0) {
+	}
 	eviction_queue_t q;
+
+	//! Increment the dead node counter in the purge queue.
+	inline void IncrementDeadNodes() {
+		total_dead_nodes++;
+	}
+	//! Decrement the dead node counter in the purge queue.
+	inline void DecrementDeadNodes() {
+		total_dead_nodes--;
+	}
+
+	//! Total number of insertions into the eviction queue. This guides the schedule for calling PurgeQueue.
+	atomic<idx_t> evict_queue_insertions;
+	//! Total dead nodes in the eviction queue. There are two scenarios in which a node dies: (1) we destroy its block
+	//! handle, or (2) we insert a newer version into the eviction queue.
+	atomic<idx_t> total_dead_nodes;
 };
 
 bool BufferEvictionNode::CanUnload(BlockHandle &handle_p) {
@@ -35,8 +52,10 @@ shared_ptr<BlockHandle> BufferEvictionNode::TryGetBlockHandle() {
 }
 
 BufferPool::BufferPool(idx_t maximum_memory)
-    : current_memory(0), maximum_memory(maximum_memory), queue(make_uniq<EvictionQueue>()),
-      temporary_memory_manager(make_uniq<TemporaryMemoryManager>()), evict_queue_insertions(0), total_dead_nodes(0) {
+    : current_memory(0), maximum_memory(maximum_memory), temporary_memory_manager(make_uniq<TemporaryMemoryManager>()) {
+	for (idx_t i = 0; i < FILE_BUFFER_TYPE_COUNT; i++) {
+		queues[i] = make_uniq<EvictionQueue>();
+	}
 	for (idx_t i = 0; i < MEMORY_TAG_COUNT; i++) {
 		memory_usage_per_tag[i] = 0;
 	}
@@ -52,18 +71,27 @@ bool BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 	D_ASSERT(handle->readers == 0);
 	auto ts = ++handle->eviction_timestamp;
 
+	auto &queue = GetEvictionQueueForType(handle->buffer->type);
 	BufferEvictionNode evict_node(weak_ptr<BlockHandle>(handle), ts);
-	queue->q.enqueue(evict_node);
+	queue.q.enqueue(evict_node);
 
 	if (ts != 1) {
 		// we add a newer version, i.e., we kill exactly one previous version
-		IncrementDeadNodes();
+		queue.IncrementDeadNodes();
 	}
 
-	if (++evict_queue_insertions % INSERT_INTERVAL == 0) {
+	if (++queue.evict_queue_insertions % INSERT_INTERVAL == 0) {
 		return true;
 	}
 	return false;
+}
+
+EvictionQueue &BufferPool::GetEvictionQueueForType(FileBufferType type) {
+	return *queues[uint8_t(type)];
+}
+
+void BufferPool::IncrementDeadNodes(FileBufferType type) {
+	GetEvictionQueueForType(type).IncrementDeadNodes();
 }
 
 void BufferPool::IncreaseUsedMemory(MemoryTag tag, idx_t size) {
@@ -89,15 +117,32 @@ TemporaryMemoryManager &BufferPool::GetTemporaryMemoryManager() {
 
 BufferPool::EvictionResult BufferPool::EvictBlocks(MemoryTag tag, idx_t extra_memory, idx_t memory_limit,
                                                    unique_ptr<FileBuffer> *buffer) {
+	auto block_result =
+	    EvictBlocksInternal(GetEvictionQueueForType(FileBufferType::BLOCK), tag, extra_memory, memory_limit, buffer);
+	if (block_result.success) {
+		return block_result;
+	}
+	auto managed_buffer_result = EvictBlocksInternal(GetEvictionQueueForType(FileBufferType::MANAGED_BUFFER), tag,
+	                                                 extra_memory, memory_limit, buffer);
+	if (managed_buffer_result.success) {
+		return managed_buffer_result;
+	}
+
+	return EvictBlocksInternal(GetEvictionQueueForType(FileBufferType::TINY_BUFFER), tag, extra_memory, memory_limit,
+	                           buffer);
+}
+
+BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue, MemoryTag tag, idx_t extra_memory,
+                                                           idx_t memory_limit, unique_ptr<FileBuffer> *buffer) {
 	BufferEvictionNode node;
 	TempBufferPoolReservation r(tag, *this, extra_memory);
 
 	while (current_memory > memory_limit) {
 		// get a block to unpin from the queue
-		if (!queue->q.try_dequeue(node)) {
+		if (!queue.q.try_dequeue(node)) {
 			// we could not dequeue any eviction node, so we try one more time,
 			// but more aggressively
-			if (!TryDequeueWithLock(node)) {
+			if (!TryDequeueWithLock(queue, node)) {
 				// still no success, we return
 				r.Resize(0);
 				return {false, std::move(r)};
@@ -107,7 +152,7 @@ BufferPool::EvictionResult BufferPool::EvictBlocks(MemoryTag tag, idx_t extra_me
 		// get a reference to the underlying block pointer
 		auto handle = node.TryGetBlockHandle();
 		if (!handle) {
-			DecrementDeadNodes();
+			queue.DecrementDeadNodes();
 			continue;
 		}
 
@@ -115,7 +160,7 @@ BufferPool::EvictionResult BufferPool::EvictBlocks(MemoryTag tag, idx_t extra_me
 		lock_guard<mutex> lock(handle->lock);
 		if (!node.CanUnload(*handle)) {
 			// something changed in the mean-time, bail out
-			DecrementDeadNodes();
+			queue.DecrementDeadNodes();
 			continue;
 		}
 
@@ -132,39 +177,18 @@ BufferPool::EvictionResult BufferPool::EvictBlocks(MemoryTag tag, idx_t extra_me
 	return {true, std::move(r)};
 }
 
-bool BufferPool::TryDequeueWithLock(BufferEvictionNode &node) {
+bool BufferPool::TryDequeueWithLock(EvictionQueue &queue, BufferEvictionNode &node) {
 	lock_guard<mutex> lock(purge_lock);
-	return queue->q.try_dequeue(node);
-}
-
-void BufferPool::PurgeIteration(const idx_t purge_size) {
-	// if this purge is significantly smaller or bigger than the previous purge, then
-	// we need to resize the purge_nodes vector. Note that this barely happens, as we
-	// purge queue_insertions * PURGE_SIZE_MULTIPLIER nodes
-	idx_t previous_purge_size = purge_nodes.size();
-	if (purge_size < previous_purge_size / 2 || purge_size > previous_purge_size) {
-		purge_nodes.resize(purge_size);
-	}
-
-	// bulk purge
-	idx_t actually_dequeued = queue->q.try_dequeue_bulk(purge_nodes.begin(), purge_size);
-
-	// retrieve all alive nodes that have been wrongly dequeued
-	idx_t alive_nodes = 0;
-	for (idx_t i = 0; i < actually_dequeued; i++) {
-		auto &node = purge_nodes[i];
-		auto handle = node.TryGetBlockHandle();
-		if (handle) {
-			queue->q.enqueue(std::move(node));
-			alive_nodes++;
-		}
-	}
-
-	total_dead_nodes -= actually_dequeued - alive_nodes;
+	return queue.q.try_dequeue(node);
 }
 
 void BufferPool::PurgeQueue() {
+	for (idx_t i = 0; i < FILE_BUFFER_TYPE_COUNT; i++) {
+		PurgeQueueInternal(*queues[i]);
+	}
+}
 
+void BufferPool::PurgeQueueInternal(EvictionQueue &queue) {
 	// only one thread purges the queue, all other threads early-out
 	if (!purge_lock.try_lock()) {
 		return;
@@ -175,7 +199,7 @@ void BufferPool::PurgeQueue() {
 	idx_t purge_size = INSERT_INTERVAL * PURGE_SIZE_MULTIPLIER;
 
 	// get an estimate of the queue size as-of now
-	idx_t approx_q_size = queue->q.size_approx();
+	idx_t approx_q_size = queue.q.size_approx();
 
 	// early-out, if the queue is not big enough to justify purging
 	// - we want to keep the LRU characteristic alive
@@ -201,18 +225,17 @@ void BufferPool::PurgeQueue() {
 
 	idx_t max_purges = approx_q_size / purge_size;
 	while (max_purges != 0) {
-
-		PurgeIteration(purge_size);
+		PurgeIteration(queue, purge_size);
 
 		// update relevant sizes and potentially early-out
-		approx_q_size = queue->q.size_approx();
+		approx_q_size = queue.q.size_approx();
 
 		// early-out according to (2.1)
 		if (approx_q_size < purge_size * EARLY_OUT_MULTIPLIER) {
 			break;
 		}
 
-		idx_t approx_dead_nodes = total_dead_nodes;
+		idx_t approx_dead_nodes = queue.total_dead_nodes;
 		approx_dead_nodes = approx_dead_nodes > approx_q_size ? approx_q_size : approx_dead_nodes;
 		idx_t approx_alive_nodes = approx_q_size - approx_dead_nodes;
 
@@ -223,6 +246,32 @@ void BufferPool::PurgeQueue() {
 
 		max_purges--;
 	}
+}
+
+void BufferPool::PurgeIteration(EvictionQueue &queue, const idx_t purge_size) {
+	// if this purge is significantly smaller or bigger than the previous purge, then
+	// we need to resize the purge_nodes vector. Note that this barely happens, as we
+	// purge queue_insertions * PURGE_SIZE_MULTIPLIER nodes
+	idx_t previous_purge_size = purge_nodes.size();
+	if (purge_size < previous_purge_size / 2 || purge_size > previous_purge_size) {
+		purge_nodes.resize(purge_size);
+	}
+
+	// bulk purge
+	idx_t actually_dequeued = queue.q.try_dequeue_bulk(purge_nodes.begin(), purge_size);
+
+	// retrieve all alive nodes that have been wrongly dequeued
+	idx_t alive_nodes = 0;
+	for (idx_t i = 0; i < actually_dequeued; i++) {
+		auto &node = purge_nodes[i];
+		auto handle = node.TryGetBlockHandle();
+		if (handle) {
+			queue.q.enqueue(std::move(node));
+			alive_nodes++;
+		}
+	}
+
+	queue.total_dead_nodes -= actually_dequeued - alive_nodes;
 }
 
 void BufferPool::SetLimit(idx_t limit, const char *exception_postscript) {
