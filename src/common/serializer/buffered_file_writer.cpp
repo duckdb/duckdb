@@ -23,7 +23,7 @@ idx_t BufferedFileWriter::GetTotalWritten() {
 }
 
 void BufferedFileWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
-	if (write_size >= (2 * FILE_BUFFER_SIZE - offset)) {
+	if (write_size >= (2ULL * FILE_BUFFER_SIZE - offset)) {
 		idx_t to_copy = 0;
 		// Check before performing direct IO if there is some data in the current internal buffer.
 		// If so, then fill the buffer (to avoid to small write operation), flush it and then write

@@ -66,10 +66,10 @@ struct MainHeader {
 	static void CheckMagicBytes(FileHandle &handle);
 
 	string LibraryGitDesc() {
-		return string((char *)library_git_desc, 0, MAX_VERSION_SIZE);
+		return string(char_ptr_cast(library_git_desc), 0, MAX_VERSION_SIZE);
 	}
 	string LibraryGitHash() {
-		return string((char *)library_git_hash, 0, MAX_VERSION_SIZE);
+		return string(char_ptr_cast(library_git_hash), 0, MAX_VERSION_SIZE);
 	}
 
 	void Write(WriteStream &ser);

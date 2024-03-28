@@ -28,7 +28,7 @@ public:
 	};
 
 public:
-	UndoBuffer(ClientContext &context);
+	explicit UndoBuffer(ClientContext &context);
 
 	//! Reserve space for an entry of the specified type and length in the undo
 	//! buffer
