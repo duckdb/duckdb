@@ -7,9 +7,6 @@
 statement ok
 PRAGMA enable_verification;
 
-# FIXME: bug in dictionary vector operator
-require no_vector_verification
-
 query I nosort all_types
 SELECT [columns(*)]
 FROM test_all_types()

@@ -164,14 +164,14 @@ string AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &f
 	return name;
 }
 
-void AttachedDatabase::Initialize(const optional_idx block_alloc_size) {
+void AttachedDatabase::Initialize(const optional_idx block_alloc_size, optional_ptr<ClientContext> context) {
 	if (IsSystem()) {
 		catalog->Initialize(true);
 	} else {
 		catalog->Initialize(false);
 	}
 	if (storage) {
-		storage->Initialize(block_alloc_size);
+		storage->Initialize(block_alloc_size, context);
 	}
 }
 
