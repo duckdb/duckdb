@@ -233,11 +233,13 @@ private:
 	bool ReadNextBufferNoSeek(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index,
 	                          bool &file_done);
 	AllocatedData AllocateBuffer(JSONScanGlobalState &gstate);
+	data_ptr_t GetReconstructBuffer(JSONScanGlobalState &gstate);
+
 	void SkipOverArrayStart();
 
 	void ReadAndAutoDetect(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index);
-	bool ReconstructFirstObject();
-	void ParseNextChunk();
+	bool ReconstructFirstObject(JSONScanGlobalState &gstate);
+	void ParseNextChunk(JSONScanGlobalState &gstate);
 
 	void ParseJSON(char *const json_start, const idx_t json_size, const idx_t remaining);
 	void ThrowObjectSizeError(const idx_t object_size);
