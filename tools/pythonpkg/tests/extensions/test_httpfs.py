@@ -70,3 +70,16 @@ class TestHTTPFS(object):
         assert value.status_code != 200
         assert value.body == ''
         assert 'Content-Length' in value.headers
+
+    def test_fsspec_priority(self, require):
+        pytest.importorskip("fsspec")
+        pytest.importorskip("gscfs")
+        import fsspec
+
+        connection = require('httpfs')
+
+        gcs = fsspec.filesystem("gcs")
+        connection.register_filesystem(gcs)
+        assert connection.sql("select count(*) from 'gcs://ibis-examples/data/band_members.csv.gz'").fetchone() == (
+            3,
+        )  # Read from a bogus HTTPS url, assert that it errors with a non-succesfull status code

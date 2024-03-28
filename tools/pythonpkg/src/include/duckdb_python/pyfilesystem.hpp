@@ -82,6 +82,11 @@ public:
 	bool CanSeek() override {
 		return true;
 	}
+
+	bool IsManuallySet() override {
+		return true;
+	}
+
 	bool OnDiskFile(FileHandle &handle) override {
 		return false;
 	}

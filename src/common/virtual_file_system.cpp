@@ -174,10 +174,17 @@ FileSystem &VirtualFileSystem::FindFileSystem(const string &path) {
 }
 
 FileSystem &VirtualFileSystem::FindFileSystemInternal(const string &path) {
+	FileSystem *fs = nullptr;
 	for (auto &sub_system : sub_systems) {
 		if (sub_system->CanHandleFile(path)) {
-			return *sub_system;
+			if (sub_system->IsManuallySet()) {
+				return *sub_system;
+			}
+			fs = sub_system.get();
 		}
+	}
+	if (fs) {
+		return *fs;
 	}
 	return *default_fs;
 }
