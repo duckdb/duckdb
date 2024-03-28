@@ -166,6 +166,7 @@ benchmark/micro/map/map_extract.benchmark
 benchmark/micro/map/map_lookup.benchmark
 benchmark/micro/nulls/no_nulls_addition.benchmark
 benchmark/micro/nulls/null_addition.benchmark
+benchmark/micro/optimizer/topn_optimization.benchmark
 benchmark/micro/order/orderby.benchmark
 benchmark/micro/pushdown/or_pushdown.benchmark
 benchmark/micro/simd/auto-vectorization.benchmark
