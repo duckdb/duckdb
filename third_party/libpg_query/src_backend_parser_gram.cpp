@@ -27535,8 +27535,8 @@ yyreduce:
   case 1036:
 #line 2971 "third_party/libpg_query/grammar/statements/select.y"
     {
-					/* position(A in B) is converted to position(B, A) */
-					(yyval.node) = (PGNode *) makeFuncCall(SystemFuncName("position"), (yyvsp[(3) - (4)].list), (yylsp[(1) - (4)]));
+					/* position(A in B) is converted to position_inverse(A, B) */
+					(yyval.node) = (PGNode *) makeFuncCall(SystemFuncName("__internal_position_operator"), (yyvsp[(3) - (4)].list), (yylsp[(1) - (4)]));
 				;}
     break;
 
@@ -28447,7 +28447,7 @@ yyreduce:
 
   case 1168:
 #line 3598 "third_party/libpg_query/grammar/statements/select.y"
-    { (yyval.list) = list_make2((yyvsp[(3) - (3)].node), (yyvsp[(1) - (3)].node)); ;}
+    { (yyval.list) = list_make2((yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].node)); ;}
     break;
 
   case 1169:

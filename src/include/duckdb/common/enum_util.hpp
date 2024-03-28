@@ -58,6 +58,8 @@ enum class AppenderType : uint8_t;
 
 enum class ArrowDateTimeType : uint8_t;
 
+enum class ArrowOffsetSize : uint8_t;
+
 enum class ArrowTypeInfoType : uint8_t;
 
 enum class ArrowVariableSizeType : uint8_t;
@@ -110,9 +112,13 @@ enum class DeprecatedIndexType : uint8_t;
 
 enum class DistinctType : uint8_t;
 
+enum class DuckCatalogSetType : uint8_t;
+
 enum class ErrorType : uint16_t;
 
 enum class ExceptionFormatValueType : uint8_t;
+
+enum class ExceptionType : uint8_t;
 
 enum class ExplainOutputType : uint8_t;
 
@@ -123,6 +129,8 @@ enum class ExpressionClass : uint8_t;
 enum class ExpressionType : uint8_t;
 
 enum class ExtensionLoadResult : uint8_t;
+
+enum class ExternalDependenciesType : uint8_t;
 
 enum class ExtraDropInfoType : uint8_t;
 
@@ -238,6 +246,8 @@ enum class ResultModifierType : uint8_t;
 
 enum class SampleMethod : uint8_t;
 
+enum class ScanType : uint8_t;
+
 enum class SecretDisplayType : uint8_t;
 
 enum class SecretPersistType : uint8_t;
@@ -291,6 +301,8 @@ enum class TaskExecutionMode : uint8_t;
 enum class TaskExecutionResult : uint8_t;
 
 enum class TimestampCastResult : uint8_t;
+
+enum class TransactionComparison : uint8_t;
 
 enum class TransactionType : uint8_t;
 
@@ -357,6 +369,9 @@ const char* EnumUtil::ToChars<AppenderType>(AppenderType value);
 
 template<>
 const char* EnumUtil::ToChars<ArrowDateTimeType>(ArrowDateTimeType value);
+
+template<>
+const char* EnumUtil::ToChars<ArrowOffsetSize>(ArrowOffsetSize value);
 
 template<>
 const char* EnumUtil::ToChars<ArrowTypeInfoType>(ArrowTypeInfoType value);
@@ -437,10 +452,16 @@ template<>
 const char* EnumUtil::ToChars<DistinctType>(DistinctType value);
 
 template<>
+const char* EnumUtil::ToChars<DuckCatalogSetType>(DuckCatalogSetType value);
+
+template<>
 const char* EnumUtil::ToChars<ErrorType>(ErrorType value);
 
 template<>
 const char* EnumUtil::ToChars<ExceptionFormatValueType>(ExceptionFormatValueType value);
+
+template<>
+const char* EnumUtil::ToChars<ExceptionType>(ExceptionType value);
 
 template<>
 const char* EnumUtil::ToChars<ExplainOutputType>(ExplainOutputType value);
@@ -456,6 +477,9 @@ const char* EnumUtil::ToChars<ExpressionType>(ExpressionType value);
 
 template<>
 const char* EnumUtil::ToChars<ExtensionLoadResult>(ExtensionLoadResult value);
+
+template<>
+const char* EnumUtil::ToChars<ExternalDependenciesType>(ExternalDependenciesType value);
 
 template<>
 const char* EnumUtil::ToChars<ExtraDropInfoType>(ExtraDropInfoType value);
@@ -629,6 +653,9 @@ template<>
 const char* EnumUtil::ToChars<SampleMethod>(SampleMethod value);
 
 template<>
+const char* EnumUtil::ToChars<ScanType>(ScanType value);
+
+template<>
 const char* EnumUtil::ToChars<SecretDisplayType>(SecretDisplayType value);
 
 template<>
@@ -710,6 +737,9 @@ template<>
 const char* EnumUtil::ToChars<TimestampCastResult>(TimestampCastResult value);
 
 template<>
+const char* EnumUtil::ToChars<TransactionComparison>(TransactionComparison value);
+
+template<>
 const char* EnumUtil::ToChars<TransactionType>(TransactionType value);
 
 template<>
@@ -787,6 +817,9 @@ AppenderType EnumUtil::FromString<AppenderType>(const char *value);
 
 template<>
 ArrowDateTimeType EnumUtil::FromString<ArrowDateTimeType>(const char *value);
+
+template<>
+ArrowOffsetSize EnumUtil::FromString<ArrowOffsetSize>(const char *value);
 
 template<>
 ArrowTypeInfoType EnumUtil::FromString<ArrowTypeInfoType>(const char *value);
@@ -867,10 +900,16 @@ template<>
 DistinctType EnumUtil::FromString<DistinctType>(const char *value);
 
 template<>
+DuckCatalogSetType EnumUtil::FromString<DuckCatalogSetType>(const char *value);
+
+template<>
 ErrorType EnumUtil::FromString<ErrorType>(const char *value);
 
 template<>
 ExceptionFormatValueType EnumUtil::FromString<ExceptionFormatValueType>(const char *value);
+
+template<>
+ExceptionType EnumUtil::FromString<ExceptionType>(const char *value);
 
 template<>
 ExplainOutputType EnumUtil::FromString<ExplainOutputType>(const char *value);
@@ -886,6 +925,9 @@ ExpressionType EnumUtil::FromString<ExpressionType>(const char *value);
 
 template<>
 ExtensionLoadResult EnumUtil::FromString<ExtensionLoadResult>(const char *value);
+
+template<>
+ExternalDependenciesType EnumUtil::FromString<ExternalDependenciesType>(const char *value);
 
 template<>
 ExtraDropInfoType EnumUtil::FromString<ExtraDropInfoType>(const char *value);
@@ -1059,6 +1101,9 @@ template<>
 SampleMethod EnumUtil::FromString<SampleMethod>(const char *value);
 
 template<>
+ScanType EnumUtil::FromString<ScanType>(const char *value);
+
+template<>
 SecretDisplayType EnumUtil::FromString<SecretDisplayType>(const char *value);
 
 template<>
@@ -1138,6 +1183,9 @@ TaskExecutionResult EnumUtil::FromString<TaskExecutionResult>(const char *value)
 
 template<>
 TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value);
+
+template<>
+TransactionComparison EnumUtil::FromString<TransactionComparison>(const char *value);
 
 template<>
 TransactionType EnumUtil::FromString<TransactionType>(const char *value);

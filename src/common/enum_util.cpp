@@ -12,6 +12,7 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/catalog/catalog_entry/dependency/dependency_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
+#include "duckdb/catalog/transaction_comparison.hpp"
 #include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enums/aggregate_handling.hpp"
@@ -21,6 +22,7 @@
 #include "duckdb/common/enums/cte_materialize.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/enums/debug_initialize.hpp"
+#include "duckdb/common/enums/duck_catalog_set_type.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
@@ -53,10 +55,11 @@
 #include "duckdb/common/enums/vector_type.hpp"
 #include "duckdb/common/enums/wal_type.hpp"
 #include "duckdb/common/enums/window_aggregation_mode.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/exception_format_value.hpp"
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/file_buffer.hpp"
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/sort/partition_state.hpp"
 #include "duckdb/common/types.hpp"
@@ -83,11 +86,14 @@
 #include "duckdb/function/table/arrow/enum/arrow_datetime_type.hpp"
 #include "duckdb/function/table/arrow/enum/arrow_type_info_type.hpp"
 #include "duckdb/function/table/arrow/enum/arrow_variable_size_type.hpp"
+#include "duckdb/function/table_function.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
+#include "duckdb/main/client_properties.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/settings.hpp"
@@ -542,6 +548,29 @@ ArrowDateTimeType EnumUtil::FromString<ArrowDateTimeType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "MONTH_DAY_NANO")) {
 		return ArrowDateTimeType::MONTH_DAY_NANO;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<ArrowOffsetSize>(ArrowOffsetSize value) {
+	switch(value) {
+	case ArrowOffsetSize::REGULAR:
+		return "REGULAR";
+	case ArrowOffsetSize::LARGE:
+		return "LARGE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+ArrowOffsetSize EnumUtil::FromString<ArrowOffsetSize>(const char *value) {
+	if (StringUtil::Equals(value, "REGULAR")) {
+		return ArrowOffsetSize::REGULAR;
+	}
+	if (StringUtil::Equals(value, "LARGE")) {
+		return ArrowOffsetSize::LARGE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -1610,6 +1639,64 @@ DistinctType EnumUtil::FromString<DistinctType>(const char *value) {
 }
 
 template<>
+const char* EnumUtil::ToChars<DuckCatalogSetType>(DuckCatalogSetType value) {
+	switch(value) {
+	case DuckCatalogSetType::TABLES:
+		return "TABLES";
+	case DuckCatalogSetType::INDEXES:
+		return "INDEXES";
+	case DuckCatalogSetType::TABLE_FUNCTIONS:
+		return "TABLE_FUNCTIONS";
+	case DuckCatalogSetType::COPY_FUNCTIONS:
+		return "COPY_FUNCTIONS";
+	case DuckCatalogSetType::PRAGMA_FUNCTIONS:
+		return "PRAGMA_FUNCTIONS";
+	case DuckCatalogSetType::FUNCTIONS:
+		return "FUNCTIONS";
+	case DuckCatalogSetType::SEQUENCES:
+		return "SEQUENCES";
+	case DuckCatalogSetType::COLLATIONS:
+		return "COLLATIONS";
+	case DuckCatalogSetType::TYPES:
+		return "TYPES";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+DuckCatalogSetType EnumUtil::FromString<DuckCatalogSetType>(const char *value) {
+	if (StringUtil::Equals(value, "TABLES")) {
+		return DuckCatalogSetType::TABLES;
+	}
+	if (StringUtil::Equals(value, "INDEXES")) {
+		return DuckCatalogSetType::INDEXES;
+	}
+	if (StringUtil::Equals(value, "TABLE_FUNCTIONS")) {
+		return DuckCatalogSetType::TABLE_FUNCTIONS;
+	}
+	if (StringUtil::Equals(value, "COPY_FUNCTIONS")) {
+		return DuckCatalogSetType::COPY_FUNCTIONS;
+	}
+	if (StringUtil::Equals(value, "PRAGMA_FUNCTIONS")) {
+		return DuckCatalogSetType::PRAGMA_FUNCTIONS;
+	}
+	if (StringUtil::Equals(value, "FUNCTIONS")) {
+		return DuckCatalogSetType::FUNCTIONS;
+	}
+	if (StringUtil::Equals(value, "SEQUENCES")) {
+		return DuckCatalogSetType::SEQUENCES;
+	}
+	if (StringUtil::Equals(value, "COLLATIONS")) {
+		return DuckCatalogSetType::COLLATIONS;
+	}
+	if (StringUtil::Equals(value, "TYPES")) {
+		return DuckCatalogSetType::TYPES;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
 const char* EnumUtil::ToChars<ErrorType>(ErrorType value) {
 	switch(value) {
 	case ErrorType::UNSIGNED_EXTENSION:
@@ -1671,6 +1758,229 @@ ExceptionFormatValueType EnumUtil::FromString<ExceptionFormatValueType>(const ch
 	}
 	if (StringUtil::Equals(value, "FORMAT_VALUE_TYPE_STRING")) {
 		return ExceptionFormatValueType::FORMAT_VALUE_TYPE_STRING;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<ExceptionType>(ExceptionType value) {
+	switch(value) {
+	case ExceptionType::INVALID:
+		return "INVALID";
+	case ExceptionType::OUT_OF_RANGE:
+		return "OUT_OF_RANGE";
+	case ExceptionType::CONVERSION:
+		return "CONVERSION";
+	case ExceptionType::UNKNOWN_TYPE:
+		return "UNKNOWN_TYPE";
+	case ExceptionType::DECIMAL:
+		return "DECIMAL";
+	case ExceptionType::MISMATCH_TYPE:
+		return "MISMATCH_TYPE";
+	case ExceptionType::DIVIDE_BY_ZERO:
+		return "DIVIDE_BY_ZERO";
+	case ExceptionType::OBJECT_SIZE:
+		return "OBJECT_SIZE";
+	case ExceptionType::INVALID_TYPE:
+		return "INVALID_TYPE";
+	case ExceptionType::SERIALIZATION:
+		return "SERIALIZATION";
+	case ExceptionType::TRANSACTION:
+		return "TRANSACTION";
+	case ExceptionType::NOT_IMPLEMENTED:
+		return "NOT_IMPLEMENTED";
+	case ExceptionType::EXPRESSION:
+		return "EXPRESSION";
+	case ExceptionType::CATALOG:
+		return "CATALOG";
+	case ExceptionType::PARSER:
+		return "PARSER";
+	case ExceptionType::PLANNER:
+		return "PLANNER";
+	case ExceptionType::SCHEDULER:
+		return "SCHEDULER";
+	case ExceptionType::EXECUTOR:
+		return "EXECUTOR";
+	case ExceptionType::CONSTRAINT:
+		return "CONSTRAINT";
+	case ExceptionType::INDEX:
+		return "INDEX";
+	case ExceptionType::STAT:
+		return "STAT";
+	case ExceptionType::CONNECTION:
+		return "CONNECTION";
+	case ExceptionType::SYNTAX:
+		return "SYNTAX";
+	case ExceptionType::SETTINGS:
+		return "SETTINGS";
+	case ExceptionType::BINDER:
+		return "BINDER";
+	case ExceptionType::NETWORK:
+		return "NETWORK";
+	case ExceptionType::OPTIMIZER:
+		return "OPTIMIZER";
+	case ExceptionType::NULL_POINTER:
+		return "NULL_POINTER";
+	case ExceptionType::IO:
+		return "IO";
+	case ExceptionType::INTERRUPT:
+		return "INTERRUPT";
+	case ExceptionType::FATAL:
+		return "FATAL";
+	case ExceptionType::INTERNAL:
+		return "INTERNAL";
+	case ExceptionType::INVALID_INPUT:
+		return "INVALID_INPUT";
+	case ExceptionType::OUT_OF_MEMORY:
+		return "OUT_OF_MEMORY";
+	case ExceptionType::PERMISSION:
+		return "PERMISSION";
+	case ExceptionType::PARAMETER_NOT_RESOLVED:
+		return "PARAMETER_NOT_RESOLVED";
+	case ExceptionType::PARAMETER_NOT_ALLOWED:
+		return "PARAMETER_NOT_ALLOWED";
+	case ExceptionType::DEPENDENCY:
+		return "DEPENDENCY";
+	case ExceptionType::HTTP:
+		return "HTTP";
+	case ExceptionType::MISSING_EXTENSION:
+		return "MISSING_EXTENSION";
+	case ExceptionType::AUTOLOAD:
+		return "AUTOLOAD";
+	case ExceptionType::SEQUENCE:
+		return "SEQUENCE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+ExceptionType EnumUtil::FromString<ExceptionType>(const char *value) {
+	if (StringUtil::Equals(value, "INVALID")) {
+		return ExceptionType::INVALID;
+	}
+	if (StringUtil::Equals(value, "OUT_OF_RANGE")) {
+		return ExceptionType::OUT_OF_RANGE;
+	}
+	if (StringUtil::Equals(value, "CONVERSION")) {
+		return ExceptionType::CONVERSION;
+	}
+	if (StringUtil::Equals(value, "UNKNOWN_TYPE")) {
+		return ExceptionType::UNKNOWN_TYPE;
+	}
+	if (StringUtil::Equals(value, "DECIMAL")) {
+		return ExceptionType::DECIMAL;
+	}
+	if (StringUtil::Equals(value, "MISMATCH_TYPE")) {
+		return ExceptionType::MISMATCH_TYPE;
+	}
+	if (StringUtil::Equals(value, "DIVIDE_BY_ZERO")) {
+		return ExceptionType::DIVIDE_BY_ZERO;
+	}
+	if (StringUtil::Equals(value, "OBJECT_SIZE")) {
+		return ExceptionType::OBJECT_SIZE;
+	}
+	if (StringUtil::Equals(value, "INVALID_TYPE")) {
+		return ExceptionType::INVALID_TYPE;
+	}
+	if (StringUtil::Equals(value, "SERIALIZATION")) {
+		return ExceptionType::SERIALIZATION;
+	}
+	if (StringUtil::Equals(value, "TRANSACTION")) {
+		return ExceptionType::TRANSACTION;
+	}
+	if (StringUtil::Equals(value, "NOT_IMPLEMENTED")) {
+		return ExceptionType::NOT_IMPLEMENTED;
+	}
+	if (StringUtil::Equals(value, "EXPRESSION")) {
+		return ExceptionType::EXPRESSION;
+	}
+	if (StringUtil::Equals(value, "CATALOG")) {
+		return ExceptionType::CATALOG;
+	}
+	if (StringUtil::Equals(value, "PARSER")) {
+		return ExceptionType::PARSER;
+	}
+	if (StringUtil::Equals(value, "PLANNER")) {
+		return ExceptionType::PLANNER;
+	}
+	if (StringUtil::Equals(value, "SCHEDULER")) {
+		return ExceptionType::SCHEDULER;
+	}
+	if (StringUtil::Equals(value, "EXECUTOR")) {
+		return ExceptionType::EXECUTOR;
+	}
+	if (StringUtil::Equals(value, "CONSTRAINT")) {
+		return ExceptionType::CONSTRAINT;
+	}
+	if (StringUtil::Equals(value, "INDEX")) {
+		return ExceptionType::INDEX;
+	}
+	if (StringUtil::Equals(value, "STAT")) {
+		return ExceptionType::STAT;
+	}
+	if (StringUtil::Equals(value, "CONNECTION")) {
+		return ExceptionType::CONNECTION;
+	}
+	if (StringUtil::Equals(value, "SYNTAX")) {
+		return ExceptionType::SYNTAX;
+	}
+	if (StringUtil::Equals(value, "SETTINGS")) {
+		return ExceptionType::SETTINGS;
+	}
+	if (StringUtil::Equals(value, "BINDER")) {
+		return ExceptionType::BINDER;
+	}
+	if (StringUtil::Equals(value, "NETWORK")) {
+		return ExceptionType::NETWORK;
+	}
+	if (StringUtil::Equals(value, "OPTIMIZER")) {
+		return ExceptionType::OPTIMIZER;
+	}
+	if (StringUtil::Equals(value, "NULL_POINTER")) {
+		return ExceptionType::NULL_POINTER;
+	}
+	if (StringUtil::Equals(value, "IO")) {
+		return ExceptionType::IO;
+	}
+	if (StringUtil::Equals(value, "INTERRUPT")) {
+		return ExceptionType::INTERRUPT;
+	}
+	if (StringUtil::Equals(value, "FATAL")) {
+		return ExceptionType::FATAL;
+	}
+	if (StringUtil::Equals(value, "INTERNAL")) {
+		return ExceptionType::INTERNAL;
+	}
+	if (StringUtil::Equals(value, "INVALID_INPUT")) {
+		return ExceptionType::INVALID_INPUT;
+	}
+	if (StringUtil::Equals(value, "OUT_OF_MEMORY")) {
+		return ExceptionType::OUT_OF_MEMORY;
+	}
+	if (StringUtil::Equals(value, "PERMISSION")) {
+		return ExceptionType::PERMISSION;
+	}
+	if (StringUtil::Equals(value, "PARAMETER_NOT_RESOLVED")) {
+		return ExceptionType::PARAMETER_NOT_RESOLVED;
+	}
+	if (StringUtil::Equals(value, "PARAMETER_NOT_ALLOWED")) {
+		return ExceptionType::PARAMETER_NOT_ALLOWED;
+	}
+	if (StringUtil::Equals(value, "DEPENDENCY")) {
+		return ExceptionType::DEPENDENCY;
+	}
+	if (StringUtil::Equals(value, "HTTP")) {
+		return ExceptionType::HTTP;
+	}
+	if (StringUtil::Equals(value, "MISSING_EXTENSION")) {
+		return ExceptionType::MISSING_EXTENSION;
+	}
+	if (StringUtil::Equals(value, "AUTOLOAD")) {
+		return ExceptionType::AUTOLOAD;
+	}
+	if (StringUtil::Equals(value, "SEQUENCE")) {
+		return ExceptionType::SEQUENCE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -2311,6 +2621,24 @@ ExtensionLoadResult EnumUtil::FromString<ExtensionLoadResult>(const char *value)
 	}
 	if (StringUtil::Equals(value, "NOT_LOADED")) {
 		return ExtensionLoadResult::NOT_LOADED;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<ExternalDependenciesType>(ExternalDependenciesType value) {
+	switch(value) {
+	case ExternalDependenciesType::PYTHON_DEPENDENCY:
+		return "PYTHON_DEPENDENCY";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+ExternalDependenciesType EnumUtil::FromString<ExternalDependenciesType>(const char *value) {
+	if (StringUtil::Equals(value, "PYTHON_DEPENDENCY")) {
+		return ExternalDependenciesType::PYTHON_DEPENDENCY;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -5347,6 +5675,29 @@ SampleMethod EnumUtil::FromString<SampleMethod>(const char *value) {
 }
 
 template<>
+const char* EnumUtil::ToChars<ScanType>(ScanType value) {
+	switch(value) {
+	case ScanType::TABLE:
+		return "TABLE";
+	case ScanType::PARQUET:
+		return "PARQUET";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+ScanType EnumUtil::FromString<ScanType>(const char *value) {
+	if (StringUtil::Equals(value, "TABLE")) {
+		return ScanType::TABLE;
+	}
+	if (StringUtil::Equals(value, "PARQUET")) {
+		return ScanType::PARQUET;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
 const char* EnumUtil::ToChars<SecretDisplayType>(SecretDisplayType value) {
 	switch(value) {
 	case SecretDisplayType::REDACTED:
@@ -6498,6 +6849,49 @@ TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value)
 	}
 	if (StringUtil::Equals(value, "ERROR_NON_UTC_TIMEZONE")) {
 		return TimestampCastResult::ERROR_NON_UTC_TIMEZONE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<TransactionComparison>(TransactionComparison value) {
+	switch(value) {
+	case TransactionComparison::ACTIVE_SAME:
+		return "ACTIVE_SAME";
+	case TransactionComparison::ACTIVE_BEFORE:
+		return "ACTIVE_BEFORE";
+	case TransactionComparison::ACTIVE_AFTER:
+		return "ACTIVE_AFTER";
+	case TransactionComparison::COMMITTED_CURRENT:
+		return "COMMITTED_CURRENT";
+	case TransactionComparison::COMMITTED_AFTER:
+		return "COMMITTED_AFTER";
+	case TransactionComparison::COMMITTED_BEFORE:
+		return "COMMITTED_BEFORE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+TransactionComparison EnumUtil::FromString<TransactionComparison>(const char *value) {
+	if (StringUtil::Equals(value, "ACTIVE_SAME")) {
+		return TransactionComparison::ACTIVE_SAME;
+	}
+	if (StringUtil::Equals(value, "ACTIVE_BEFORE")) {
+		return TransactionComparison::ACTIVE_BEFORE;
+	}
+	if (StringUtil::Equals(value, "ACTIVE_AFTER")) {
+		return TransactionComparison::ACTIVE_AFTER;
+	}
+	if (StringUtil::Equals(value, "COMMITTED_CURRENT")) {
+		return TransactionComparison::COMMITTED_CURRENT;
+	}
+	if (StringUtil::Equals(value, "COMMITTED_AFTER")) {
+		return TransactionComparison::COMMITTED_AFTER;
+	}
+	if (StringUtil::Equals(value, "COMMITTED_BEFORE")) {
+		return TransactionComparison::COMMITTED_BEFORE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

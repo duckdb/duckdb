@@ -730,7 +730,6 @@ Value ExplainOutputSetting::GetSetting(ClientContext &context) {
 // Extension Directory Setting
 //===--------------------------------------------------------------------===//
 void ExtensionDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	auto new_directory = input.ToString();
 	config.options.extension_directory = input.ToString();
 }
 

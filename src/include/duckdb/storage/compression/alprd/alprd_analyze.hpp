@@ -23,7 +23,7 @@ namespace duckdb {
 template <class T>
 struct AlpRDAnalyzeState : public AnalyzeState {
 public:
-	using EXACT_TYPE = typename FloatingToExact<T>::type;
+	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
 	AlpRDAnalyzeState() : state() {
 	}
@@ -45,7 +45,7 @@ unique_ptr<AnalyzeState> AlpRDInitAnalyze(ColumnData &col_data, PhysicalType typ
  */
 template <class T>
 bool AlpRDAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
-	using EXACT_TYPE = typename FloatingToExact<T>::type;
+	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 	auto &analyze_state = (AlpRDAnalyzeState<T> &)state;
 
 	bool must_skip_current_vector = alp::AlpUtils::MustSkipSamplingFromCurrentVector(

@@ -24,6 +24,7 @@
 #include "miniz_wrapper.hpp"
 #include "snappy.h"
 #include "zstd.h"
+#include "lz4.hpp"
 
 namespace duckdb {
 
@@ -191,6 +192,7 @@ void ColumnWriter::CompressPage(MemoryStream &temp_writer, size_t &compressed_si
 		compressed_size = temp_writer.GetPosition();
 		compressed_data = temp_writer.GetData();
 		break;
+
 	case CompressionCodec::SNAPPY: {
 		compressed_size = duckdb_snappy::MaxCompressedLength(temp_writer.GetPosition());
 		compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
@@ -198,6 +200,15 @@ void ColumnWriter::CompressPage(MemoryStream &temp_writer, size_t &compressed_si
 		                           char_ptr_cast(compressed_buf.get()), &compressed_size);
 		compressed_data = compressed_buf.get();
 		D_ASSERT(compressed_size <= duckdb_snappy::MaxCompressedLength(temp_writer.GetPosition()));
+		break;
+	}
+	case CompressionCodec::LZ4_RAW: {
+		compressed_size = duckdb_lz4::LZ4_compressBound(temp_writer.GetPosition());
+		compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
+		compressed_size = duckdb_lz4::LZ4_compress_default(const_char_ptr_cast(temp_writer.GetData()),
+		                                                   char_ptr_cast(compressed_buf.get()),
+		                                                   temp_writer.GetPosition(), compressed_size);
+		compressed_data = compressed_buf.get();
 		break;
 	}
 	case CompressionCodec::GZIP: {

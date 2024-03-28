@@ -220,6 +220,7 @@ struct IEJoinUnion {
 		DataChunk payload;
 		payload.Initialize(Allocator::DefaultAllocator(), gstate.payload_layout.GetTypes());
 		for (;;) {
+			payload.Reset();
 			scanner.Scan(payload);
 			const auto count = payload.size();
 			if (!count) {
@@ -301,6 +302,7 @@ idx_t IEJoinUnion::AppendKey(SortedTable &table, ExpressionExecutor &executor, S
 
 	idx_t inserted = 0;
 	for (auto rid = base; table_idx < valid;) {
+		scanned.Reset();
 		scanner.Scan(scanned);
 
 		// NULLs are at the end, so stop when we reach them

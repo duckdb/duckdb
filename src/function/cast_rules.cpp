@@ -24,6 +24,8 @@ static int64_t TargetTypeCost(const LogicalType &type) {
 		return 121;
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return 122;
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return 123;
 	case LogicalTypeId::VARCHAR:
 		return 149;
 	case LogicalTypeId::STRUCT:
@@ -258,6 +260,8 @@ static int64_t ImplicitCastTimestampNS(const LogicalType &to) {
 static int64_t ImplicitCastTimestamp(const LogicalType &to) {
 	switch (to.id()) {
 	case LogicalTypeId::TIMESTAMP_NS:
+		return TargetTypeCost(to);
+	case LogicalTypeId::TIMESTAMP_TZ:
 		return TargetTypeCost(to);
 	default:
 		return -1;

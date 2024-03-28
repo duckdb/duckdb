@@ -258,7 +258,6 @@ void ArrowTableFunction::PopulateArrowTableType(ArrowTableType &arrow_table, Arr
 		auto arrow_type = GetArrowLogicalType(schema);
 		return_types.emplace_back(arrow_type->GetDuckType(true));
 		arrow_table.AddColumn(col_idx, std::move(arrow_type));
-		auto format = string(schema.format);
 		auto name = string(schema.name);
 		if (name.empty()) {
 			name = string("v") + to_string(col_idx);

@@ -33,7 +33,7 @@ struct StringBlock {
 	unique_ptr<StringBlock> next;
 };
 
-struct string_location_t {
+struct string_location_t { // NOLINT
 	string_location_t(block_id_t block_id, int32_t offset) : block_id(block_id), offset(offset) {
 	}
 	string_location_t() {
