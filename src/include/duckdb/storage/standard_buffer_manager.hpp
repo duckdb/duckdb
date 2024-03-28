@@ -106,7 +106,7 @@ protected:
 	shared_ptr<BlockHandle> RegisterMemory(MemoryTag tag, idx_t block_size, bool can_destroy);
 
 	//! Garbage collect eviction queue
-	void PurgeQueue() final override;
+	void PurgeQueue(FileBufferType type) final override;
 
 	BufferPool &GetBufferPool() const final override;
 	TemporaryMemoryManager &GetTemporaryMemoryManager() final override;

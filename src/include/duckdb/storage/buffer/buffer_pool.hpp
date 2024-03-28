@@ -74,13 +74,8 @@ protected:
 	virtual EvictionResult EvictBlocksInternal(EvictionQueue &queue, MemoryTag tag, idx_t extra_memory,
 	                                           idx_t memory_limit, unique_ptr<FileBuffer> *buffer = nullptr);
 
-	//! Tries to dequeue an element from the eviction queue, but only after acquiring the purge queue lock.
-	bool TryDequeueWithLock(EvictionQueue &queue, BufferEvictionNode &node);
 	//! Garbage collect dead nodes in the eviction queue.
-	void PurgeQueue();
-	void PurgeQueueInternal(EvictionQueue &queue);
-	//! Bulk purge dead nodes from the eviction queue. Then, enqueue those that are still alive.
-	void PurgeIteration(EvictionQueue &queue, const idx_t purge_size);
+	void PurgeQueue(FileBufferType type);
 	//! Add a buffer handle to the eviction queue. Returns true, if the queue is
 	//! ready to be purged, and false otherwise.
 	bool AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
@@ -96,30 +91,13 @@ protected:
 	atomic<idx_t> current_memory;
 	//! The maximum amount of memory that the buffer manager can keep (in bytes)
 	atomic<idx_t> maximum_memory;
+
 	//! Eviction queues
-	unique_ptr<EvictionQueue> queues[FILE_BUFFER_TYPE_COUNT];
+	vector<unique_ptr<EvictionQueue>> queues;
 	//! Memory manager for concurrently used temporary memory, e.g., for physical operators
 	unique_ptr<TemporaryMemoryManager> temporary_memory_manager;
 	//! Memory usage per tag
 	atomic<idx_t> memory_usage_per_tag[MEMORY_TAG_COUNT];
-
-	//! We trigger a purge of the eviction queue every INSERT_INTERVAL insertions
-	constexpr static idx_t INSERT_INTERVAL = 4096;
-	//! We multiply the base purge size by this value.
-	constexpr static idx_t PURGE_SIZE_MULTIPLIER = 2;
-	//! We multiply the purge size by this value to determine early-outs. This is the minimum queue size.
-	//! We never purge below this point.
-	constexpr static idx_t EARLY_OUT_MULTIPLIER = 4;
-	//! We multiply the approximate alive nodes by this value to test whether our total dead nodes
-	//! exceed their allowed ratio. Must be greater than 1.
-	constexpr static idx_t ALIVE_NODE_MULTIPLIER = 4;
-
-	//! Locked, if a queue purge is currently active or we're trying to forcefully evict a node.
-	//! Only lets a single thread enter the purge phase.
-	mutex purge_lock;
-
-	//! A pre-allocated vector of eviction nodes. We reuse this to keep the allocation overhead of purges small.
-	vector<BufferEvictionNode> purge_nodes;
 };
 
 } // namespace duckdb
