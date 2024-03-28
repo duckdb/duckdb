@@ -16,8 +16,8 @@ namespace duckdb {
 
 class SegmentStatistics {
 public:
-	SegmentStatistics(LogicalType type);
-	SegmentStatistics(BaseStatistics statistics);
+	explicit SegmentStatistics(LogicalType type);
+	explicit SegmentStatistics(BaseStatistics statistics);
 
 	//! Type-specific statistics of the segment
 	BaseStatistics statistics;

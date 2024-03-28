@@ -32,7 +32,7 @@ template <class T>
 struct AlpCompressionState : public CompressionState {
 
 public:
-	using EXACT_TYPE = typename FloatingToExact<T>::type;
+	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 	explicit AlpCompressionState(ColumnDataCheckpointer &checkpointer, AlpAnalyzeState<T> *analyze_state)
 	    : checkpointer(checkpointer), function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_ALP)) {
 		CreateEmptySegment(checkpointer.GetRowGroup().start);

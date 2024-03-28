@@ -598,7 +598,9 @@ string StrTimeFormat::ParseFormatSpecifier(const string &format_string, StrTimeF
 					// parse the subformat in a separate format specifier
 					StrfTimeFormat locale_format;
 					string error = StrTimeFormat::ParseFormatSpecifier(subformat, locale_format);
-					D_ASSERT(error.empty());
+					if (!error.empty()) {
+						throw InternalException("Failed to bind sub-format specifier \"%s\": %s", subformat, error);
+					}
 					// add the previous literal to the first literal of the subformat
 					locale_format.literals[0] = std::move(current_literal) + locale_format.literals[0];
 					current_literal = "";

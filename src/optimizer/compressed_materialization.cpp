@@ -410,11 +410,11 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetStringCompress(uniq
 		auto max_string = StringStats::Max(stats);
 
 		uint8_t min_numeric = 0;
-		if (max_string_length != 0 && min_string.length() != 0) {
+		if (max_string_length != 0 && !min_string.empty()) {
 			min_numeric = *reinterpret_cast<const uint8_t *>(min_string.c_str());
 		}
 		uint8_t max_numeric = 0;
-		if (max_string_length != 0 && max_string.length() != 0) {
+		if (max_string_length != 0 && !max_string.empty()) {
 			max_numeric = *reinterpret_cast<const uint8_t *>(max_string.c_str());
 		}
 

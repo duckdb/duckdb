@@ -156,25 +156,25 @@ void AWSEnvironmentCredentialsProvider::SetExtensionOptionValue(string key, cons
 }
 
 void AWSEnvironmentCredentialsProvider::SetAll() {
-	this->SetExtensionOptionValue("s3_region", this->DEFAULT_REGION_ENV_VAR);
-	this->SetExtensionOptionValue("s3_region", this->REGION_ENV_VAR);
-	this->SetExtensionOptionValue("s3_access_key_id", this->ACCESS_KEY_ENV_VAR);
-	this->SetExtensionOptionValue("s3_secret_access_key", this->SECRET_KEY_ENV_VAR);
-	this->SetExtensionOptionValue("s3_session_token", this->SESSION_TOKEN_ENV_VAR);
-	this->SetExtensionOptionValue("s3_endpoint", this->DUCKDB_ENDPOINT_ENV_VAR);
-	this->SetExtensionOptionValue("s3_use_ssl", this->DUCKDB_USE_SSL_ENV_VAR);
+	this->SetExtensionOptionValue("s3_region", DEFAULT_REGION_ENV_VAR);
+	this->SetExtensionOptionValue("s3_region", REGION_ENV_VAR);
+	this->SetExtensionOptionValue("s3_access_key_id", ACCESS_KEY_ENV_VAR);
+	this->SetExtensionOptionValue("s3_secret_access_key", SECRET_KEY_ENV_VAR);
+	this->SetExtensionOptionValue("s3_session_token", SESSION_TOKEN_ENV_VAR);
+	this->SetExtensionOptionValue("s3_endpoint", DUCKDB_ENDPOINT_ENV_VAR);
+	this->SetExtensionOptionValue("s3_use_ssl", DUCKDB_USE_SSL_ENV_VAR);
 }
 
 S3AuthParams AWSEnvironmentCredentialsProvider::CreateParams() {
 	S3AuthParams params;
 
-	params.region = this->DEFAULT_REGION_ENV_VAR;
-	params.region = this->REGION_ENV_VAR;
-	params.access_key_id = this->ACCESS_KEY_ENV_VAR;
-	params.secret_access_key = this->SECRET_KEY_ENV_VAR;
-	params.session_token = this->SESSION_TOKEN_ENV_VAR;
-	params.endpoint = this->DUCKDB_ENDPOINT_ENV_VAR;
-	params.use_ssl = this->DUCKDB_USE_SSL_ENV_VAR;
+	params.region = DEFAULT_REGION_ENV_VAR;
+	params.region = REGION_ENV_VAR;
+	params.access_key_id = ACCESS_KEY_ENV_VAR;
+	params.secret_access_key = SECRET_KEY_ENV_VAR;
+	params.session_token = SESSION_TOKEN_ENV_VAR;
+	params.endpoint = DUCKDB_ENDPOINT_ENV_VAR;
+	params.use_ssl = DUCKDB_USE_SSL_ENV_VAR;
 
 	return params;
 }
@@ -183,12 +183,14 @@ unique_ptr<S3AuthParams> S3AuthParams::ReadFromStoredCredentials(optional_ptr<Fi
 	if (!opener) {
 		return nullptr;
 	}
-	auto context = opener->TryGetClientContext();
-	if (!context) {
+	auto db = opener->TryGetDatabase();
+	if (!db) {
 		return nullptr;
 	}
-	auto &secret_manager = context->db->GetSecretManager();
-	auto transaction = CatalogTransaction::GetSystemCatalogTransaction(*context);
+	auto &secret_manager = db->GetSecretManager();
+	auto context = opener->TryGetClientContext();
+	auto transaction = context ? CatalogTransaction::GetSystemCatalogTransaction(*context)
+	                           : CatalogTransaction::GetSystemTransaction(*db);
 
 	auto secret_match = secret_manager.LookupSecret(transaction, path, "s3");
 	if (!secret_match.HasMatch()) {

@@ -14,11 +14,22 @@ SettingLookupResult ClientContextFileOpener::TryGetCurrentSetting(const string &
 	return context.TryGetCurrentSetting(key, result);
 }
 
+optional_ptr<DatabaseInstance> ClientContextFileOpener::TryGetDatabase() {
+	return context.db.get();
+}
+
 optional_ptr<ClientContext> FileOpener::TryGetClientContext(optional_ptr<FileOpener> opener) {
 	if (!opener) {
 		return nullptr;
 	}
 	return opener->TryGetClientContext();
+}
+
+optional_ptr<DatabaseInstance> FileOpener::TryGetDatabase(optional_ptr<FileOpener> opener) {
+	if (!opener) {
+		return nullptr;
+	}
+	return opener->TryGetDatabase();
 }
 
 SettingLookupResult FileOpener::TryGetCurrentSetting(optional_ptr<FileOpener> opener, const string &key,
