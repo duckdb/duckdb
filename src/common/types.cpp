@@ -1518,7 +1518,7 @@ LogicalType LogicalType::ARRAY(const LogicalType &child, idx_t size) {
 	return LogicalType(LogicalTypeId::ARRAY, std::move(info));
 }
 
-LogicalType LogicalType::ARRAY(const LogicalType &child) {
+LogicalType LogicalType::ARRAYUNBOUNDED(const LogicalType &child) {
 	auto info = make_shared<ArrayTypeInfo>(child, 0);
 	return LogicalType(LogicalTypeId::ARRAY, std::move(info));
 }

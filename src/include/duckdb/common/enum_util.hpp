@@ -60,6 +60,8 @@ enum class ArrowDateTimeType : uint8_t;
 
 enum class ArrowOffsetSize : uint8_t;
 
+enum class ArrowTypeInfoType : uint8_t;
+
 enum class ArrowVariableSizeType : uint8_t;
 
 enum class BindingMode : uint8_t;
@@ -109,6 +111,8 @@ enum class DependencyEntryType : uint8_t;
 enum class DeprecatedIndexType : uint8_t;
 
 enum class DistinctType : uint8_t;
+
+enum class DuckCatalogSetType : uint8_t;
 
 enum class ErrorType : uint16_t;
 
@@ -298,6 +302,8 @@ enum class TaskExecutionResult : uint8_t;
 
 enum class TimestampCastResult : uint8_t;
 
+enum class TransactionComparison : uint8_t;
+
 enum class TransactionType : uint8_t;
 
 enum class TupleDataPinProperties : uint8_t;
@@ -366,6 +372,9 @@ const char* EnumUtil::ToChars<ArrowDateTimeType>(ArrowDateTimeType value);
 
 template<>
 const char* EnumUtil::ToChars<ArrowOffsetSize>(ArrowOffsetSize value);
+
+template<>
+const char* EnumUtil::ToChars<ArrowTypeInfoType>(ArrowTypeInfoType value);
 
 template<>
 const char* EnumUtil::ToChars<ArrowVariableSizeType>(ArrowVariableSizeType value);
@@ -441,6 +450,9 @@ const char* EnumUtil::ToChars<DeprecatedIndexType>(DeprecatedIndexType value);
 
 template<>
 const char* EnumUtil::ToChars<DistinctType>(DistinctType value);
+
+template<>
+const char* EnumUtil::ToChars<DuckCatalogSetType>(DuckCatalogSetType value);
 
 template<>
 const char* EnumUtil::ToChars<ErrorType>(ErrorType value);
@@ -725,6 +737,9 @@ template<>
 const char* EnumUtil::ToChars<TimestampCastResult>(TimestampCastResult value);
 
 template<>
+const char* EnumUtil::ToChars<TransactionComparison>(TransactionComparison value);
+
+template<>
 const char* EnumUtil::ToChars<TransactionType>(TransactionType value);
 
 template<>
@@ -807,6 +822,9 @@ template<>
 ArrowOffsetSize EnumUtil::FromString<ArrowOffsetSize>(const char *value);
 
 template<>
+ArrowTypeInfoType EnumUtil::FromString<ArrowTypeInfoType>(const char *value);
+
+template<>
 ArrowVariableSizeType EnumUtil::FromString<ArrowVariableSizeType>(const char *value);
 
 template<>
@@ -880,6 +898,9 @@ DeprecatedIndexType EnumUtil::FromString<DeprecatedIndexType>(const char *value)
 
 template<>
 DistinctType EnumUtil::FromString<DistinctType>(const char *value);
+
+template<>
+DuckCatalogSetType EnumUtil::FromString<DuckCatalogSetType>(const char *value);
 
 template<>
 ErrorType EnumUtil::FromString<ErrorType>(const char *value);
@@ -1162,6 +1183,9 @@ TaskExecutionResult EnumUtil::FromString<TaskExecutionResult>(const char *value)
 
 template<>
 TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value);
+
+template<>
+TransactionComparison EnumUtil::FromString<TransactionComparison>(const char *value);
 
 template<>
 TransactionType EnumUtil::FromString<TransactionType>(const char *value);

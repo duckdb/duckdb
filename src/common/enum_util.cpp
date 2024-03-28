@@ -12,6 +12,7 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/catalog/catalog_entry/dependency/dependency_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
+#include "duckdb/catalog/transaction_comparison.hpp"
 #include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enums/aggregate_handling.hpp"
@@ -21,6 +22,7 @@
 #include "duckdb/common/enums/cte_materialize.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/enums/debug_initialize.hpp"
+#include "duckdb/common/enums/duck_catalog_set_type.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
@@ -81,7 +83,9 @@
 #include "duckdb/function/macro_function.hpp"
 #include "duckdb/function/scalar/compressed_materialization_functions.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
-#include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
+#include "duckdb/function/table/arrow/enum/arrow_datetime_type.hpp"
+#include "duckdb/function/table/arrow/enum/arrow_type_info_type.hpp"
+#include "duckdb/function/table/arrow/enum/arrow_variable_size_type.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
@@ -572,12 +576,50 @@ ArrowOffsetSize EnumUtil::FromString<ArrowOffsetSize>(const char *value) {
 }
 
 template<>
+const char* EnumUtil::ToChars<ArrowTypeInfoType>(ArrowTypeInfoType value) {
+	switch(value) {
+	case ArrowTypeInfoType::LIST:
+		return "LIST";
+	case ArrowTypeInfoType::STRUCT:
+		return "STRUCT";
+	case ArrowTypeInfoType::DATE_TIME:
+		return "DATE_TIME";
+	case ArrowTypeInfoType::STRING:
+		return "STRING";
+	case ArrowTypeInfoType::ARRAY:
+		return "ARRAY";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+ArrowTypeInfoType EnumUtil::FromString<ArrowTypeInfoType>(const char *value) {
+	if (StringUtil::Equals(value, "LIST")) {
+		return ArrowTypeInfoType::LIST;
+	}
+	if (StringUtil::Equals(value, "STRUCT")) {
+		return ArrowTypeInfoType::STRUCT;
+	}
+	if (StringUtil::Equals(value, "DATE_TIME")) {
+		return ArrowTypeInfoType::DATE_TIME;
+	}
+	if (StringUtil::Equals(value, "STRING")) {
+		return ArrowTypeInfoType::STRING;
+	}
+	if (StringUtil::Equals(value, "ARRAY")) {
+		return ArrowTypeInfoType::ARRAY;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
 const char* EnumUtil::ToChars<ArrowVariableSizeType>(ArrowVariableSizeType value) {
 	switch(value) {
-	case ArrowVariableSizeType::FIXED_SIZE:
-		return "FIXED_SIZE";
 	case ArrowVariableSizeType::NORMAL:
 		return "NORMAL";
+	case ArrowVariableSizeType::FIXED_SIZE:
+		return "FIXED_SIZE";
 	case ArrowVariableSizeType::SUPER_SIZE:
 		return "SUPER_SIZE";
 	case ArrowVariableSizeType::VIEW:
@@ -589,11 +631,11 @@ const char* EnumUtil::ToChars<ArrowVariableSizeType>(ArrowVariableSizeType value
 
 template<>
 ArrowVariableSizeType EnumUtil::FromString<ArrowVariableSizeType>(const char *value) {
-	if (StringUtil::Equals(value, "FIXED_SIZE")) {
-		return ArrowVariableSizeType::FIXED_SIZE;
-	}
 	if (StringUtil::Equals(value, "NORMAL")) {
 		return ArrowVariableSizeType::NORMAL;
+	}
+	if (StringUtil::Equals(value, "FIXED_SIZE")) {
+		return ArrowVariableSizeType::FIXED_SIZE;
 	}
 	if (StringUtil::Equals(value, "SUPER_SIZE")) {
 		return ArrowVariableSizeType::SUPER_SIZE;
@@ -1592,6 +1634,64 @@ DistinctType EnumUtil::FromString<DistinctType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "DISTINCT_ON")) {
 		return DistinctType::DISTINCT_ON;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<DuckCatalogSetType>(DuckCatalogSetType value) {
+	switch(value) {
+	case DuckCatalogSetType::TABLES:
+		return "TABLES";
+	case DuckCatalogSetType::INDEXES:
+		return "INDEXES";
+	case DuckCatalogSetType::TABLE_FUNCTIONS:
+		return "TABLE_FUNCTIONS";
+	case DuckCatalogSetType::COPY_FUNCTIONS:
+		return "COPY_FUNCTIONS";
+	case DuckCatalogSetType::PRAGMA_FUNCTIONS:
+		return "PRAGMA_FUNCTIONS";
+	case DuckCatalogSetType::FUNCTIONS:
+		return "FUNCTIONS";
+	case DuckCatalogSetType::SEQUENCES:
+		return "SEQUENCES";
+	case DuckCatalogSetType::COLLATIONS:
+		return "COLLATIONS";
+	case DuckCatalogSetType::TYPES:
+		return "TYPES";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+DuckCatalogSetType EnumUtil::FromString<DuckCatalogSetType>(const char *value) {
+	if (StringUtil::Equals(value, "TABLES")) {
+		return DuckCatalogSetType::TABLES;
+	}
+	if (StringUtil::Equals(value, "INDEXES")) {
+		return DuckCatalogSetType::INDEXES;
+	}
+	if (StringUtil::Equals(value, "TABLE_FUNCTIONS")) {
+		return DuckCatalogSetType::TABLE_FUNCTIONS;
+	}
+	if (StringUtil::Equals(value, "COPY_FUNCTIONS")) {
+		return DuckCatalogSetType::COPY_FUNCTIONS;
+	}
+	if (StringUtil::Equals(value, "PRAGMA_FUNCTIONS")) {
+		return DuckCatalogSetType::PRAGMA_FUNCTIONS;
+	}
+	if (StringUtil::Equals(value, "FUNCTIONS")) {
+		return DuckCatalogSetType::FUNCTIONS;
+	}
+	if (StringUtil::Equals(value, "SEQUENCES")) {
+		return DuckCatalogSetType::SEQUENCES;
+	}
+	if (StringUtil::Equals(value, "COLLATIONS")) {
+		return DuckCatalogSetType::COLLATIONS;
+	}
+	if (StringUtil::Equals(value, "TYPES")) {
+		return DuckCatalogSetType::TYPES;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -6749,6 +6849,49 @@ TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value)
 	}
 	if (StringUtil::Equals(value, "ERROR_NON_UTC_TIMEZONE")) {
 		return TimestampCastResult::ERROR_NON_UTC_TIMEZONE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<TransactionComparison>(TransactionComparison value) {
+	switch(value) {
+	case TransactionComparison::ACTIVE_SAME:
+		return "ACTIVE_SAME";
+	case TransactionComparison::ACTIVE_BEFORE:
+		return "ACTIVE_BEFORE";
+	case TransactionComparison::ACTIVE_AFTER:
+		return "ACTIVE_AFTER";
+	case TransactionComparison::COMMITTED_CURRENT:
+		return "COMMITTED_CURRENT";
+	case TransactionComparison::COMMITTED_AFTER:
+		return "COMMITTED_AFTER";
+	case TransactionComparison::COMMITTED_BEFORE:
+		return "COMMITTED_BEFORE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+TransactionComparison EnumUtil::FromString<TransactionComparison>(const char *value) {
+	if (StringUtil::Equals(value, "ACTIVE_SAME")) {
+		return TransactionComparison::ACTIVE_SAME;
+	}
+	if (StringUtil::Equals(value, "ACTIVE_BEFORE")) {
+		return TransactionComparison::ACTIVE_BEFORE;
+	}
+	if (StringUtil::Equals(value, "ACTIVE_AFTER")) {
+		return TransactionComparison::ACTIVE_AFTER;
+	}
+	if (StringUtil::Equals(value, "COMMITTED_CURRENT")) {
+		return TransactionComparison::COMMITTED_CURRENT;
+	}
+	if (StringUtil::Equals(value, "COMMITTED_AFTER")) {
+		return TransactionComparison::COMMITTED_AFTER;
+	}
+	if (StringUtil::Equals(value, "COMMITTED_BEFORE")) {
+		return TransactionComparison::COMMITTED_BEFORE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
