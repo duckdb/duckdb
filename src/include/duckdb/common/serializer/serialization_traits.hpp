@@ -11,6 +11,7 @@
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
 
@@ -260,6 +261,16 @@ struct SerializationDefaultValue {
 	template <typename T = void>
 	static inline bool IsDefault(const typename std::enable_if<std::is_same<T, string>::value, T>::type &value) {
 		return value.empty();
+	}
+
+	template <typename T = void>
+	static inline typename std::enable_if<std::is_same<T, optional_idx>::value, T>::type GetDefault() {
+		return optional_idx();
+	}
+
+	template <typename T = void>
+	static inline bool IsDefault(const typename std::enable_if<std::is_same<T, optional_idx>::value, T>::type &value) {
+		return !value.IsValid();
 	}
 };
 
