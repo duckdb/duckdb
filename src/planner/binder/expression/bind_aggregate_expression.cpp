@@ -226,6 +226,22 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		}
 	}
 
+	// If the aggregate is DISTINCT then the ORDER BYs need to be arguments.
+	if (aggr.distinct && order_bys) {
+		for (const auto &order_by : order_bys->orders) {
+			bool is_arg = false;
+			for (const auto &child : children) {
+				if (order_by.expression->Equals(*child)) {
+					is_arg = true;
+					break;
+				}
+			}
+			if (!is_arg) {
+				throw BinderException("In a DISTINCT aggregate, ORDER BY expressions must appear in the argument list");
+			}
+		}
+	}
+
 	auto aggregate =
 	    function_binder.BindAggregateFunction(bound_function, std::move(children), std::move(bound_filter),
 	                                          aggr.distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT);

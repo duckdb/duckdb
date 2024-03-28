@@ -29,7 +29,7 @@ class PhysicalOperator;
 class SQLStatement;
 
 struct OperatorInformation {
-	explicit OperatorInformation(double time_ = 0, idx_t elements_ = 0) : time(time_), elements(elements_) {
+	explicit OperatorInformation(double time_p = 0, idx_t elements_p = 0) : time(time_p), elements(elements_p) {
 	}
 
 	double time = 0;
@@ -68,7 +68,7 @@ private:
 //! The QueryProfiler can be used to measure timings of queries
 class QueryProfiler {
 public:
-	DUCKDB_API QueryProfiler(ClientContext &context);
+	DUCKDB_API explicit QueryProfiler(ClientContext &context);
 
 public:
 	struct TreeNode {

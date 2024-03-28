@@ -58,7 +58,7 @@ public:
 #endif
 
 	uint64_t BitsWritten() const {
-		return counter * 2;
+		return counter * 2ULL;
 	}
 
 	void Insert(ChimpConstants::Flags value) {

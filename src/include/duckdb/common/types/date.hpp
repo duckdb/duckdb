@@ -18,7 +18,7 @@
 
 namespace duckdb {
 
-struct timestamp_t;
+struct timestamp_t; // NOLINT: primitive case
 
 //! Type used to represent dates (days since 1970-01-01)
 struct date_t { // NOLINT

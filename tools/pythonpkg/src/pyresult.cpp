@@ -28,9 +28,12 @@ DuckDBPyResult::DuckDBPyResult(unique_ptr<QueryResult> result_p) : result(std::m
 }
 
 DuckDBPyResult::~DuckDBPyResult() {
-	py::gil_scoped_release gil;
-	result.reset();
-	current_chunk.reset();
+	try {
+		py::gil_scoped_release gil;
+		result.reset();
+		current_chunk.reset();
+	} catch (...) { // NOLINT
+	}
 }
 
 const vector<string> &DuckDBPyResult::GetNames() {

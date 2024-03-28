@@ -291,19 +291,19 @@ struct ConstantVector {
 struct DictionaryVector {
 	static inline const SelectionVector &SelVector(const Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
-		return ((const DictionaryBuffer &)*vector.buffer).GetSelVector();
+		return vector.buffer->Cast<DictionaryBuffer>().GetSelVector();
 	}
 	static inline SelectionVector &SelVector(Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
-		return ((DictionaryBuffer &)*vector.buffer).GetSelVector();
+		return vector.buffer->Cast<DictionaryBuffer>().GetSelVector();
 	}
 	static inline const Vector &Child(const Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
-		return ((const VectorChildBuffer &)*vector.auxiliary).data;
+		return vector.auxiliary->Cast<VectorChildBuffer>().data;
 	}
 	static inline Vector &Child(Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
-		return ((VectorChildBuffer &)*vector.auxiliary).data;
+		return vector.auxiliary->Cast<VectorChildBuffer>().data;
 	}
 };
 
@@ -552,7 +552,7 @@ struct UnionVector {
 struct SequenceVector {
 	static void GetSequence(const Vector &vector, int64_t &start, int64_t &increment, int64_t &sequence_count) {
 		D_ASSERT(vector.GetVectorType() == VectorType::SEQUENCE_VECTOR);
-		auto data = (int64_t *)vector.buffer->GetData();
+		auto data = reinterpret_cast<int64_t *>(vector.buffer->GetData());
 		start = data[0];
 		increment = data[1];
 		sequence_count = data[2];

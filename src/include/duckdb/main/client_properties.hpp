@@ -11,7 +11,8 @@
 #include <string>
 
 namespace duckdb {
-enum ArrowOffsetSize { REGULAR, LARGE };
+
+enum class ArrowOffsetSize : uint8_t { REGULAR, LARGE };
 
 //! A set of properties from the client context that can be used to interpret the query result
 struct ClientProperties {

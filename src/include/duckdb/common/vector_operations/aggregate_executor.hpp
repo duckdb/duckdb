@@ -444,6 +444,8 @@ public:
 				op.Right(i, limit);
 				break;
 			case 0x03:
+			default:
+				D_ASSERT(overlap == 0x03);
 				// i ∈ F ∩ P
 				limit = MinValue(right->end, left->end);
 				op.Both(i, limit);

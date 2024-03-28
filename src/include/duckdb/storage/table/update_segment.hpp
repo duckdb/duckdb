@@ -22,7 +22,7 @@ struct UpdateNode;
 
 class UpdateSegment {
 public:
-	UpdateSegment(ColumnData &column_data);
+	explicit UpdateSegment(ColumnData &column_data);
 	~UpdateSegment();
 
 	ColumnData &column_data;

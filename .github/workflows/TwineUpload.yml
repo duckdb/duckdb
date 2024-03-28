@@ -39,8 +39,7 @@ jobs:
         run: |
           TARGET=$(git describe --tags --long)
           # decide target for staging
-          if [ -z "$OVERRIDE_GIT_DESCRIBE" ]; then
-          else
+          if [ "$OVERRIDE_GIT_DESCRIBE" ]; then
             TARGET="$TARGET/$OVERRIDE_GIT_DESCRIBE"
           fi
           cd tools/pythonpkg

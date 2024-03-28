@@ -51,7 +51,7 @@ struct BoundCreateTableInfo {
 
 	CreateTableInfo &Base() {
 		D_ASSERT(base);
-		return (CreateTableInfo &)*base;
+		return base->Cast<CreateTableInfo>();
 	}
 };
 

@@ -29,7 +29,7 @@ class GroupByNode;
 //! plan and executed.
 class Parser {
 public:
-	Parser(ParserOptions options = ParserOptions());
+	explicit Parser(ParserOptions options = ParserOptions());
 
 	//! The parsed SQL statements from an invocation to ParseQuery.
 	vector<unique_ptr<SQLStatement>> statements;

@@ -38,7 +38,7 @@ struct UsingColumnSet {
 //! encountered during the binding process.
 class BindContext {
 public:
-	BindContext(Binder &binder);
+	explicit BindContext(Binder &binder);
 
 	//! Keep track of recursive CTE references
 	case_insensitive_map_t<std::shared_ptr<idx_t>> cte_references;
@@ -133,7 +133,7 @@ public:
 		return cte_bindings;
 	}
 	void SetCTEBindings(case_insensitive_map_t<std::shared_ptr<Binding>> bindings) {
-		cte_bindings = bindings;
+		cte_bindings = std::move(bindings);
 	}
 
 	//! Alias a set of column names for the specified table, using the original names if there are not enough aliases

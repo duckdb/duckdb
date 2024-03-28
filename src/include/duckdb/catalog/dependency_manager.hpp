@@ -52,7 +52,7 @@ public:
 
 struct MangledEntryName {
 public:
-	MangledEntryName(const CatalogEntryInfo &info);
+	explicit MangledEntryName(const CatalogEntryInfo &info);
 	MangledEntryName() = delete;
 
 public:
