@@ -191,6 +191,7 @@ benchmark/micro/string/string_agg_order_by.benchmark
 benchmark/micro/string/string_agg_short.benchmark
 benchmark/micro/timestamp/extract_month.benchmark
 benchmark/micro/timestamp/extract_year.benchmark
+benchmark/micro/update/update_with_join.benchmark
 benchmark/micro/view/many_values.benchmark
 benchmark/micro/window/window_constant_aggregates.benchmark
 benchmark/micro/window/window_constant_count.benchmark

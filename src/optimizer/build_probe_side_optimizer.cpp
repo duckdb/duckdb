@@ -8,12 +8,10 @@
 namespace duckdb {
 
 BuildProbeSideOptimizer::BuildProbeSideOptimizer(ClientContext &context, LogicalOperator &op) : context(context) {
-	vector<ColumnBinding> updating_columns;
+	vector<ColumnBinding> updating_columns, current_op_bindings;
 	if (op.type == LogicalOperatorType::LOGICAL_UPDATE) {
 		auto child = op.children[0].get();
-		D_ASSERT(child->type == LogicalOperatorType::LOGICAL_PROJECTION);
 		while (child->type != LogicalOperatorType::LOGICAL_PROJECTION) {
-			D_ASSERT(child->children.size() == 1);
 			child = child->children[0].get();
 		}
 		updating_columns = child->GetColumnBindings();
