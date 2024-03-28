@@ -35,6 +35,7 @@ public:
 	const vector<string> &GetNames();
 	const vector<LogicalType> &GetTypes();
 	void InitializeProjection();
+	void Finish();
 
 	//! Initialize the actual names and types to be scanned from the file
 	void InitializeFileNamesTypes();

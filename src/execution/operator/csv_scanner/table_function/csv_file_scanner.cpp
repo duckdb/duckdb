@@ -222,4 +222,9 @@ void CSVFileScan::InitializeProjection() {
 		reader_data.column_mapping.push_back(i);
 	}
 }
+
+void CSVFileScan::Finish() {
+	buffer_manager.reset();
+}
+
 } // namespace duckdb

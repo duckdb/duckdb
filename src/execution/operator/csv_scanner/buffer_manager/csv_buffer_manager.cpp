@@ -122,6 +122,19 @@ bool CSVBufferManager::Done() {
 	return done;
 }
 
+void CSVBufferManager::ResetBufferManager() {
+	if (!file_handle->IsPipe()) {
+		// If this is not a pipe we reset the buffer manager and restart it when doing the actual scan
+		cached_buffers.clear();
+		reset_when_possible.clear();
+		file_handle->Reset();
+		last_buffer = nullptr;
+		done = false;
+		global_csv_pos = 0;
+		Initialize();
+	}
+}
+
 string CSVBufferManager::GetFilePath() {
 	return file_path;
 }
