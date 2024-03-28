@@ -32,7 +32,8 @@ namespace duckdb {
 struct PyDictionary {
 public:
 	PyDictionary(py::object dict);
-	// FIXME: should probably remove these, as they aren't used if the dictionary has MAP format
+	// These are cached so we don't have to create new objects all the time
+	// The CPython API offers PyDict_Keys but that creates a new reference every time, same for values
 	py::object keys;
 	py::object values;
 	idx_t len;
@@ -40,6 +41,11 @@ public:
 public:
 	py::handle operator[](const py::object &obj) const {
 		return PyDict_GetItem(dict.ptr(), obj.ptr());
+	}
+
+public:
+	string ToString() const {
+		return string(py::str(dict));
 	}
 
 private:

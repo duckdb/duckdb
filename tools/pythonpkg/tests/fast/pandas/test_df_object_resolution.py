@@ -46,6 +46,40 @@ def ConvertStringToDecimal(data: list, pandas):
     return data
 
 
+class ObjectPair:
+    def __init__(self, obj1, obj2):
+        self.first = obj1
+        self.second = obj2
+
+    def __repr__(self):
+        return str([self.first, self.second])
+
+
+def construct_list(pair):
+    return [[pair.first], [pair.second]]
+
+
+def construct_struct(pair):
+    return [{'v1': pair.first}, {'v1': pair.second}]
+
+
+def construct_map(pair):
+    return [
+        {'key': ['v1', 'v2'], "value": [pair.first, pair.first]},
+        {'key': ['v1', 'v2'], "value": [pair.second, pair.second]},
+    ]
+
+
+def check_struct_upgrade(expected_type: str, creation_method, pair: ObjectPair, pandas, cursor):
+    column_data = creation_method(pair)
+    df = pandas.DataFrame(data={"col": column_data})
+    rel = cursor.query("select col from df")
+    res = rel.fetchall()
+    print("COLUMN_DATA", column_data)
+    print("RESULT", res)
+    assert expected_type == rel.types[0]
+
+
 class TestResolveObjectColumns(object):
     # TODO: add support for ArrowPandas
     @pytest.mark.parametrize('pandas', [NumpyPandas()])
@@ -328,6 +362,67 @@ class TestResolveObjectColumns(object):
             duckdb.InvalidInputException, match="Dict->Map conversion failed because 'key' list contains None"
         ):
             converted_col = duckdb_cursor.sql("select * from x").df()
+
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_structs_in_nested_types(self, pandas, duckdb_cursor):
+        # This test is testing a bug that occurred when type upgrades occurred inside nested types
+        # STRUCT(key1 varchar) + STRUCT(key1 varchar, key2 varchar) turns into MAP
+        # But when inside a nested structure, this upgrade did not happen properly
+
+        pairs = {
+            'v1': ObjectPair({'key1': 21}, {'key1': 21, 'key2': 42}),
+            'v2': ObjectPair({'key1': 21}, {'key2': 21}),
+            'v3': ObjectPair({'key1': 21, 'key2': 42}, {'key1': 21}),
+            'v4': ObjectPair({}, {'key1': 21}),
+        }
+
+        for _, pair in pairs.items():
+            check_struct_upgrade('MAP(VARCHAR, INTEGER)[]', construct_list, pair, pandas, duckdb_cursor)
+
+        for key, pair in pairs.items():
+            if key == 'v4':
+                expected_type = 'MAP(VARCHAR, MAP(VARCHAR, INTEGER))'
+            else:
+                expected_type = 'STRUCT(v1 MAP(VARCHAR, INTEGER))'
+            check_struct_upgrade(expected_type, construct_struct, pair, pandas, duckdb_cursor)
+
+        for key, pair in pairs.items():
+            check_struct_upgrade('MAP(VARCHAR, MAP(VARCHAR, INTEGER))', construct_map, pair, pandas, duckdb_cursor)
+
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_structs_of_different_sizes(self, pandas, duckdb_cursor):
+        # This list has both a STRUCT(v1) and a STRUCT(v1, v2) member
+        # Those can't be combined
+        df = pandas.DataFrame(
+            data={
+                "col": [
+                    [
+                        {
+                            "key": "value",
+                        }
+                    ],
+                    [
+                        {
+                            "key": "value",
+                            "key1": "value",
+                        }
+                    ],
+                ]
+            }
+        )
+        res = duckdb_cursor.query("select typeof(col) from df").fetchall()
+        # So we fall back to converting them as VARCHAR instead
+        assert res == [('MAP(VARCHAR, VARCHAR)[]',), ('MAP(VARCHAR, VARCHAR)[]',)]
+
+        malformed_struct = duckdb.Value({"v1": 1, "v2": 2}, duckdb.struct_type({'v1': int}))
+        with pytest.raises(
+            duckdb.InvalidInputException,
+            match=re.escape(
+                "We could not convert the object {'v1': 1, 'v2': 2} to the desired target type (STRUCT(v1 BIGINT))"
+            ),
+        ):
+            res = duckdb_cursor.execute("select $1", [malformed_struct])
+            print(res)
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_struct_key_conversion(self, pandas, duckdb_cursor):
