@@ -130,6 +130,9 @@ struct ParquetWriteBindData : public TableFunctionData {
 	//! How/Whether to encrypt the data
 	shared_ptr<ParquetEncryptionConfig> encryption_config;
 
+	//! After how many row groups to rotate to a new file
+	optional_idx row_groups_per_file;
+
 	ChildFieldIDs field_ids;
 };
 
@@ -937,6 +940,8 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 				bind_data->row_group_size_bytes = option.second[0].GetValue<uint64_t>();
 			}
 			row_group_size_bytes_set = true;
+		} else if (loption == "row_groups_per_file") {
+			bind_data->row_groups_per_file = option.second[0].GetValue<uint64_t>();
 		} else if (loption == "compression" || loption == "codec") {
 			const auto roption = StringUtil::Lower(option.second[0].ToString());
 			if (roption == "uncompressed") {
@@ -1032,8 +1037,8 @@ void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_p, Glob
 	// append data to the local (buffered) chunk collection
 	local_state.buffer.Append(local_state.append_state, input);
 
-	if (local_state.buffer.Count() > bind_data.row_group_size ||
-	    local_state.buffer.SizeInBytes() > bind_data.row_group_size_bytes) {
+	if (local_state.buffer.Count() >= bind_data.row_group_size ||
+	    local_state.buffer.SizeInBytes() >= bind_data.row_group_size_bytes) {
 		// if the chunk collection exceeds a certain size (rows/bytes) we flush it to the parquet file
 		local_state.append_state.current_chunk_state.handles.clear();
 		global_state.writer->Flush(local_state.buffer);
@@ -1138,6 +1143,7 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	serializer.WriteProperty(106, "field_ids", bind_data.field_ids);
 	serializer.WritePropertyWithDefault<shared_ptr<ParquetEncryptionConfig>>(107, "encryption_config",
 	                                                                         bind_data.encryption_config, nullptr);
+	serializer.WriteProperty(108, "row_groups_per_file", bind_data.row_groups_per_file);
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
@@ -1151,6 +1157,8 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	data->field_ids = deserializer.ReadProperty<ChildFieldIDs>(106, "field_ids");
 	deserializer.ReadPropertyWithDefault<shared_ptr<ParquetEncryptionConfig>>(107, "encryption_config",
 	                                                                          data->encryption_config, nullptr);
+	data->row_groups_per_file =
+	    deserializer.ReadPropertyWithDefault<optional_idx>(108, "row_groups_per_file", optional_idx::Invalid());
 	return std::move(data);
 }
 // LCOV_EXCL_STOP
@@ -1207,6 +1215,20 @@ idx_t ParquetWriteDesiredBatchSize(ClientContext &context, FunctionData &bind_da
 idx_t ParquetWriteFileSize(GlobalFunctionData &gstate) {
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
 	return global_state.writer->FileSize();
+}
+
+//===--------------------------------------------------------------------===//
+// File rotation
+//===--------------------------------------------------------------------===//
+bool ParquetWriteRotateFiles(FunctionData &bind_data_p) {
+	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
+	return bind_data.row_groups_per_file.IsValid();
+}
+
+bool ParquetWriteRotateNextFile(GlobalFunctionData &gstate, FunctionData &bind_data_p) {
+	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
+	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
+	return global_state.writer->NumberOfRowGroups() >= bind_data.row_groups_per_file.GetIndex();
 }
 
 //===--------------------------------------------------------------------===//
@@ -1271,6 +1293,8 @@ void ParquetExtension::Load(DuckDB &db) {
 	function.flush_batch = ParquetWriteFlushBatch;
 	function.desired_batch_size = ParquetWriteDesiredBatchSize;
 	function.file_size_bytes = ParquetWriteFileSize;
+	function.rotate_files = ParquetWriteRotateFiles;
+	function.rotate_next_file = ParquetWriteRotateNextFile;
 	function.serialize = ParquetCopySerialize;
 	function.deserialize = ParquetCopyDeserialize;
 	function.supports_type = ParquetWriter::TypeIsSupported;

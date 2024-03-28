@@ -33,6 +33,7 @@ void LogicalCopyToFile::Serialize(Serializer &serializer) const {
 	}
 
 	serializer.WriteProperty(213, "file_extension", file_extension);
+	serializer.WriteProperty(214, "rotate", rotate);
 }
 
 unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deserializer) {
@@ -81,6 +82,8 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	auto file_extension =
 	    deserializer.ReadPropertyWithDefault<string>(213, "file_extension", std::move(default_extension));
 
+	auto rotate = deserializer.ReadPropertyWithDefault(214, "rotate", false);
+
 	auto result = make_uniq<LogicalCopyToFile>(function, std::move(bind_data), std::move(copy_info));
 	result->file_path = file_path;
 	result->use_tmp_file = use_tmp_file;
@@ -92,6 +95,7 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	result->partition_columns = partition_columns;
 	result->names = names;
 	result->expected_types = expected_types;
+	result->rotate = rotate;
 
 	return std::move(result);
 }

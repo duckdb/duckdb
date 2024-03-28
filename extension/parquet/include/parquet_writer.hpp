@@ -91,6 +91,10 @@ public:
 		lock_guard<mutex> glock(lock);
 		return writer->total_written;
 	}
+	idx_t NumberOfRowGroups() {
+		lock_guard<mutex> glock(lock);
+		return file_meta_data.row_groups.size();
+	}
 
 	static CopyTypeSupport TypeIsSupported(const LogicalType &type);
 

@@ -1,0 +1,48 @@
+# name: test/sql/copy/row_groups_per_file_large.test_slow
+# description: test ROW_GROUPS_PER_FILE parameter for parquet COPY (slow test)
+# group: [copy]
+
+require parquet
+
+statement ok
+SET threads=4
+
+statement ok
+CREATE TABLE bigdata AS SELECT i AS col_a, i AS col_b FROM range(0, 10000000) tbl(i)
+
+# parallel, so best effort, not an exact number of files: around 82 row groups, 4 per file, ~20 files
+statement ok
+COPY bigdata TO '__TEST_DIR__/row_groups_per_file42' (FORMAT PARQUET, ROW_GROUP_SIZE 122880, ROW_GROUPS_PER_FILE 4)
+
+query I
+SELECT count(*) FROM read_parquet('__TEST_DIR__/row_groups_per_file42/*.parquet')
+----
+10000000
+
+query II
+SELECT avg(col_a), avg(col_b) FROM read_parquet('__TEST_DIR__/row_groups_per_file42/*.parquet')
+----
+4999999.5	4999999.5
+
+query I
+SELECT count(*) BETWEEN 15 AND 25 FROM glob('__TEST_DIR__/row_groups_per_file42/*.parquet')
+----
+true
+
+statement ok
+COPY bigdata TO '__TEST_DIR__/row_groups_per_file43' (FORMAT PARQUET, ROW_GROUP_SIZE 122880, ROW_GROUPS_PER_FILE 4, PER_THREAD_OUTPUT TRUE)
+
+query I
+SELECT count(*) FROM read_parquet('__TEST_DIR__/row_groups_per_file43/*.parquet')
+----
+10000000
+
+query II
+SELECT avg(col_a), avg(col_b) FROM read_parquet('__TEST_DIR__/row_groups_per_file43/*.parquet')
+----
+4999999.5	4999999.5
+
+query I
+SELECT count(*) BETWEEN 15 AND 25 FROM glob('__TEST_DIR__/row_groups_per_file43/*.parquet')
+----
+true
