@@ -53,29 +53,12 @@ LogicalDependency::LogicalDependency(CatalogEntry &entry) {
 		auto &dependency_entry = entry.Cast<DependencyEntry>();
 
 		this->entry = dependency_entry.EntryInfo();
-		// FIXME: do we also want to set 'catalog' here?
 	} else {
 		this->entry.schema = GetSchema(entry);
 		this->entry.name = entry.name;
 		this->entry.type = entry.type;
 		catalog = entry.ParentCatalog().GetName();
 	}
-}
-
-void LogicalDependency::Serialize(Serializer &serializer) const {
-	serializer.WriteProperty(0, "name", entry.name);
-	serializer.WriteProperty(1, "schema", entry.schema);
-	serializer.WriteProperty(2, "catalog", catalog);
-	serializer.WriteProperty(3, "type", entry.type);
-}
-
-LogicalDependency LogicalDependency::Deserialize(Deserializer &deserializer) {
-	LogicalDependency dependency;
-	dependency.entry.name = deserializer.ReadProperty<string>(0, "name");
-	dependency.entry.schema = deserializer.ReadProperty<string>(1, "schema");
-	dependency.catalog = deserializer.ReadProperty<string>(2, "catalog");
-	dependency.entry.type = deserializer.ReadProperty<CatalogType>(3, "type");
-	return dependency;
 }
 
 bool LogicalDependency::operator==(const LogicalDependency &other) const {
@@ -107,18 +90,8 @@ void LogicalDependencyList::VerifyDependencies(Catalog &catalog, const string &n
 	}
 }
 
-void LogicalDependencyList::Serialize(Serializer &serializer) const {
-	serializer.WriteProperty(0, "logical_dependencies", set);
-}
-
 const LogicalDependencyList::create_info_set_t &LogicalDependencyList::Set() const {
 	return set;
-}
-
-LogicalDependencyList LogicalDependencyList::Deserialize(Deserializer &deserializer) {
-	LogicalDependencyList dependency;
-	dependency.set = deserializer.ReadProperty<create_info_set_t>(0, "logical_dependencies");
-	return dependency;
 }
 
 bool LogicalDependencyList::operator==(const LogicalDependencyList &other) const {
