@@ -80,6 +80,4 @@ class TestHTTPFS(object):
 
         gcs = fsspec.filesystem("gcs")
         connection.register_filesystem(gcs)
-        assert connection.sql("select count(*) from 'gcs://ibis-examples/data/band_members.csv.gz'").fetchone() == (
-            3,
-        )  # Read from a bogus HTTPS url, assert that it errors with a non-succesfull status code
+        assert connection.sql("select count(*) from 'gcs://ibis-examples/data/band_members.csv.gz'").fetchone() == (3,)
