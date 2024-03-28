@@ -1,0 +1,27 @@
+# name: benchmark/micro/update/update_with_join.benchmark
+# description: updated table scan should be on probe side
+# group: [update]
+
+load
+create table t(ts_start timestamptz, ts_stop timestamptz, id text);
+with dates as (
+  select '2023-01-01'::timestamp + i * interval '1 DAY' as x
+    from generate_series(0, 999) as t(i)
+),
+ids as (
+  select 'id_' || lpad(i::text, 4, '0') as y
+  from generate_series(0, 999) as t(i)
+)
+insert into t(ts_start, ts_stop, id)
+  select d.x, null, i.y from dates d, ids i;
+
+
+run
+update t as this
+set ts_stop = next.ts_start_next
+from (
+    select id, ts_start, LEAD(ts_start) over (partition by id order by ts_start)
+        as ts_start_next
+    from t
+) as next
+where this.id=next.id and this.ts_start=next.ts_start;
