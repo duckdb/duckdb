@@ -19,6 +19,7 @@
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/optimizer/rule/equal_or_null_simplification.hpp"
 #include "duckdb/optimizer/rule/in_clause_simplification.hpp"
+#include "duckdb/optimizer/rule/join_dependent_filter.hpp"
 #include "duckdb/optimizer/rule/list.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
@@ -44,6 +45,7 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_uniq<RegexOptimizationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<EmptyNeedleRemovalRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<EnumComparisonRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<JoinDependentFilterRule>(rewriter));
 
 #ifdef DEBUG
 	for (auto &rule : rewriter.rules) {

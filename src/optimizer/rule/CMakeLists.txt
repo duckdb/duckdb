@@ -14,6 +14,7 @@ add_library_unity(
   move_constants.cpp
   like_optimizations.cpp
   in_clause_simplification_rule.cpp
+  join_dependent_filter.cpp
   ordered_aggregate_optimizer.cpp
   regex_optimizations.cpp)
 set(ALL_OBJECT_FILES
