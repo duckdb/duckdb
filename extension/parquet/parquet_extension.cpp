@@ -131,8 +131,8 @@ static MultiFileReaderBindData BindSchema(ClientContext &context, vector<Logical
 	return bind_data;
 }
 
-//! TODO: move to ParquetMetadataProvider as well?
-static void InitializeParquetReader(ParquetReader &reader, const ParquetReadBindData &bind_data,
+// TODO: clean up ->GetFile call which is only for error message
+void ParquetScanFunction::InitializeParquetReader(ParquetReader &reader, const ParquetReadBindData &bind_data,
                                     const vector<column_t> &global_column_ids,
                                     optional_ptr<TableFilterSet> table_filters, ClientContext &context) {
 	auto &parquet_options = bind_data.parquet_options;
@@ -295,7 +295,7 @@ unique_ptr<FunctionData> ParquetScanFunction::ParquetReadBind(ClientContext &con
     return ParquetScanBindInternal(context, std::move(files), expected_types, expected_names, parquet_options);
 }
 
-unique_ptr<BaseStatistics> ParquetScanFunction::ParquetScanFunction::ParquetScanStats(ClientContext &context, const FunctionData *bind_data_p,
+unique_ptr<BaseStatistics> ParquetScanFunction::ParquetScanStats(ClientContext &context, const FunctionData *bind_data_p,
                                                    column_t column_index) {
     auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
     return bind_data.metadata_provider->ParquetScanStats(context, bind_data_p, column_index);
@@ -395,30 +395,39 @@ unique_ptr<GlobalTableFunctionState> ParquetScanFunction::ParquetScanInitGlobal(
     auto &bind_data = input.bind_data->CastNoConst<ParquetReadBindData>();
     auto result = make_uniq<ParquetReadGlobalState>();
 
-    // TODO: make generative
-    result->file_states = vector<ParquetFileState>(bind_data.metadata_provider->GetFiles().size(), ParquetFileState::UNOPENED);
-    result->file_mutexes = unique_ptr<mutex[]>(new mutex[bind_data.metadata_provider->GetFiles().size()]);
-    if (bind_data.metadata_provider->GetFiles().empty()) {
+    if (!bind_data.metadata_provider->HaveData()) {
         result->initial_reader = nullptr;
+		result->readers = {};
     } else {
-        result->readers = std::move(bind_data.metadata_provider->union_readers);
-        if (result->readers.size() != bind_data.metadata_provider->GetFiles().size()) {
-            result->readers = vector<shared_ptr<ParquetReader>>(bind_data.metadata_provider->GetFiles().size(), nullptr);
-        } else {
-            std::fill(result->file_states.begin(), result->file_states.end(), ParquetFileState::OPEN);
-        }
-        if (bind_data.metadata_provider->initial_reader) {
-            result->initial_reader = std::move(bind_data.metadata_provider->initial_reader);
-            result->readers[0] = result->initial_reader;
-        } else if (result->readers[0]) {
+		//! Load any parquet readers that are already available
+        result->readers = bind_data.metadata_provider->GetInitializedReaders();
+		//! Mark the initial reader
+		result->initial_reader = bind_data.metadata_provider->GetInitialReader();
+
+        // TODO: ensure we correctly re-use the readers from binding, but only where necessary
+        if (result->initial_reader) {
+            // TODO: wtf is this
+			if (result->readers.empty()) {
+                result->readers.push_back(result->initial_reader);
+            }
+        } else if (!result->readers.empty()) {
+			// TODO: again wtf? the metadata provider should probably handle this?
             result->initial_reader = result->readers[0];
         } else {
-            result->initial_reader =
-                make_shared<ParquetReader>(context, bind_data.metadata_provider->GetFile(0), bind_data.parquet_options);
-            result->readers[0] = result->initial_reader;
+			// No parquet reader has been create before. We are now ready to open the first file
+            result->initial_reader = make_shared<ParquetReader>(context, bind_data.metadata_provider->GetFile(0), bind_data.parquet_options);
+            result->readers.push_back(result->initial_reader);
         }
-        result->file_states[0] = ParquetFileState::OPEN;
+
+		//! Mark all files that we get as parquet readers from the metadata_provider as open
+        result->file_states = vector<ParquetFileState>(result->readers.size(), ParquetFileState::OPEN);
     }
+
+	//! Initialize mutexes
+	for (idx_t i = 0; i < result->readers.size(); i++) {
+		result->file_mutexes.push_back(make_uniq<mutex>());
+	}
+
     for (auto &reader : result->readers) {
         if (!reader) {
             continue;
@@ -510,6 +519,24 @@ idx_t ParquetScanFunction::ParquetScanMaxThreads(ClientContext &context, const F
     return data.metadata_provider->ParquetScanMaxThreads(context, bind_data);
 }
 
+// Queries the metadataprovider for another file to scan, updating the files/reader lists in the process.
+// Returns true if resized, REQUIRES LOCK!
+static bool ResizeFiles(const ParquetReadBindData &bind_data, ParquetReadGlobalState &parallel_state) {
+	// Check if the metadata provider has another file
+	auto maybe_file = bind_data.metadata_provider->GetFile(parallel_state.readers.size());
+	if (maybe_file.empty()) {
+		return false;
+	}
+
+	// Resize our files/readers list
+	idx_t new_size = parallel_state.file_states.size() + 1;
+	parallel_state.readers.resize(new_size, nullptr);
+	parallel_state.file_states.resize(new_size, ParquetFileState::UNOPENED);
+	parallel_state.file_mutexes.resize(new_size);
+	parallel_state.file_mutexes[new_size-1] = make_uniq<mutex>();
+
+	return true;
+}
 // This function looks for the next available row group. If not available, it will open files from bind_data.files
 // until there is a row group available for scanning or the files runs out
 bool ParquetScanFunction::ParquetParallelStateNext(ClientContext &context, const ParquetReadBindData &bind_data,
@@ -521,10 +548,11 @@ bool ParquetScanFunction::ParquetParallelStateNext(ClientContext &context, const
             return false;
         }
 
-        if (parallel_state.file_index >= parallel_state.readers.size()) {
+        if (parallel_state.file_index >= parallel_state.readers.size() && !ResizeFiles(bind_data, parallel_state)) {
             return false;
         }
 
+		// TODO: do we need this?
         D_ASSERT(parallel_state.initial_reader);
 
         if (parallel_state.file_states[parallel_state.file_index] == ParquetFileState::OPEN) {
@@ -547,9 +575,6 @@ bool ParquetScanFunction::ParquetParallelStateNext(ClientContext &context, const
                 parallel_state.file_index++;
                 parallel_state.row_group_index = 0;
 
-                if (parallel_state.file_index >= bind_data.metadata_provider->GetFiles().size()) {
-                    return false;
-                }
                 continue;
             }
         }
@@ -577,7 +602,7 @@ void ParquetScanFunction::WaitForFile(idx_t file_index, ParquetReadGlobalState &
     while (true) {
         // To get the file lock, we first need to release the parallel_lock to prevent deadlocking
         parallel_lock.unlock();
-        unique_lock<mutex> current_file_lock(parallel_state.file_mutexes[file_index]);
+        unique_lock<mutex> current_file_lock(*parallel_state.file_mutexes[file_index]);
         parallel_lock.lock();
 
         // Here we have both locks which means we can stop waiting if:
@@ -597,7 +622,10 @@ bool ParquetScanFunction::TryOpenNextFile(ClientContext &context, const ParquetR
                             ParquetReadLocalState &scan_data, ParquetReadGlobalState &parallel_state,
                             unique_lock<mutex> &parallel_lock) {
     const auto num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
-    const auto file_index_limit = MinValue<idx_t>(parallel_state.file_index + num_threads, bind_data.metadata_provider->GetFiles().size());
+
+	// TODO: should we ResizeFiles here as well?
+    const auto file_index_limit = MinValue<idx_t>(parallel_state.file_index + num_threads, parallel_state.file_states.size());
+
     for (idx_t i = parallel_state.file_index; i < file_index_limit; i++) {
         if (parallel_state.file_states[i] == ParquetFileState::UNOPENED) {
             string file = bind_data.metadata_provider->GetFile(i);
@@ -608,7 +636,7 @@ bool ParquetScanFunction::TryOpenNextFile(ClientContext &context, const ParquetR
             // the file we are opening. This file lock allows threads to wait for a file to be opened.
             parallel_lock.unlock();
 
-            unique_lock<mutex> file_lock(parallel_state.file_mutexes[i]);
+            unique_lock<mutex> file_lock(*parallel_state.file_mutexes[i]);
 
             shared_ptr<ParquetReader> reader;
             try {
@@ -1146,6 +1174,21 @@ void ParquetExtension::Load(DuckDB &db) {
 
 std::string ParquetExtension::Name() {
 	return "parquet";
+}
+
+bool ParquetMetadataProvider::HaveData() {
+	return !files.empty();
+}
+
+shared_ptr<ParquetReader> ParquetMetadataProvider::GetInitialReader() {
+    return initial_reader;
+}
+
+vector<shared_ptr<ParquetReader>> ParquetMetadataProvider::GetInitializedReaders() {
+	if (union_readers.size() == files.size()) {
+        return union_readers;
+    }
+	return {};
 }
 
 string ParquetMetadataProvider::GetFile(idx_t i) {

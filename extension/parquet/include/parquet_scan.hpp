@@ -17,8 +17,10 @@ struct ParquetReadBindData : public TableFunctionData {
     //! The bound names and types TODO: when passing the schema, we also have this information in the ParquetOptions
     vector<string> names;
     vector<LogicalType> types;
+
     //! The metadata provider for this parquet scan
     unique_ptr<ParquetMetadataProvider> metadata_provider;
+
 	//! Used for counting chunks for progress estimation
     atomic<idx_t> chunk_count;
 
@@ -53,7 +55,7 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
     //! Flag to indicate a file is being opened
     vector<ParquetFileState> file_states;
     //! Mutexes to wait for a file that is currently being opened
-    unique_ptr<mutex[]> file_mutexes;
+    vector<unique_ptr<mutex>> file_mutexes;
     //! Signal to other threads that a file failed to open, letting every thread abort.
     bool error_opening_file = false;
 
@@ -118,6 +120,10 @@ protected:
     //! Scan a chunk
     static void ParquetScanImplementation(ClientContext &context, TableFunctionInput &data_p, DataChunk &output);
 
+	//! Initialize a reader, passing through the pushed-down filters, projections etc.
+	static void InitializeParquetReader(ParquetReader &reader, const ParquetReadBindData &bind_data,
+	                             const vector<column_t> &global_column_ids,
+	                             optional_ptr<TableFilterSet> table_filters, ClientContext &context);
 
     static double ParquetProgress(ClientContext &context, const FunctionData *bind_data_p,
                                   const GlobalTableFunctionState *global_state);
@@ -150,19 +156,25 @@ public:
 	ParquetMetadataProvider(const vector<string>& files) : files(files){
 	}
 
+	//! Core API; to be changed into abstract base class and extended by:
+	//! - DeltaTableMetadataProvider ( uses delta metadata )
+	//! - GlobMetadataProvider ( uses a glob pattern that is lazily expanded as needed )
+	//! - FileListMetadataProvider ( uses a list of files )
+public:
 	//! DEPRECATED: parquet reader should not try to read the whole file list anymore, any usages of this should be removed
 	//! TODO: disable this and fix any code that depends on it
 	const vector<string>& GetFiles() {
 		return files;
 	}
 
-	//! Core API; to be changed into abstract base class and extended by:
-	//! - DeltaTableMetadataProvider ( uses delta metadata )
-	//! - GlobMetadataProvider ( uses a glob pattern that is lazily expanded as needed )
-	//! - FileListMetadataProvider ( uses a list of files )
-public:
-	//! This could be used for reads that require knowing the filenames of 1 or more files. For example, we could consider
-	//!
+	//! Whether the scan can produce data at all. (e.g. filter pushdown can eliminate every tuple)
+	bool HaveData();
+	//! Return the initial reader (could be nullptr)
+	shared_ptr<ParquetReader> GetInitialReader();
+	//! Return all currently initialized readers (could be empty if the MetadataProvider does not open any parquet files)
+	vector<shared_ptr<ParquetReader>> GetInitializedReaders();
+
+	//! This could be used for reads that require knowing the filenames of 1 or more files. TODO: remove?
 	string GetFile(idx_t i);
 
 	//! This would be an optional call to be implemented by the HiveFilteredGlob; necessary for
@@ -200,7 +212,6 @@ public:
 		initial_reader = std::move(reader);
 		initial_file_cardinality = initial_reader->NumRows();
 		initial_file_row_groups = initial_reader->NumRowGroups();
-//		initial_reader_parquet_options = initial_reader->parquet_options; TODO: these are now missing
 	}
 protected:
 	// The set of files to be scanned
@@ -210,9 +221,8 @@ protected:
 	idx_t initial_file_cardinality;
 	idx_t initial_file_row_groups;
 
-public: // TODO remove
+public: // todo make private
 	shared_ptr<ParquetReader> initial_reader;
-	ParquetOptions initial_reader_parquet_options;
 	// The union readers are created (when parquet union_by_name option is on) during binding
 	// Those readers can be re-used during ParquetParallelStateNext
 	vector<shared_ptr<ParquetReader>> union_readers;
