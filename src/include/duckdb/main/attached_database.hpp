@@ -61,6 +61,7 @@ public:
 	bool IsReadOnly() const;
 	bool IsInitialDatabase() const;
 	void SetInitialDatabase();
+	void SetReadOnlyDatabase();
 
 	static bool NameIsReserved(const string &name);
 	static string ExtractDatabaseName(const string &dbpath, FileSystem &fs);

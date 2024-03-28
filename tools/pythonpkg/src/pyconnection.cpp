@@ -65,11 +65,14 @@ shared_ptr<PythonImportCache> DuckDBPyConnection::import_cache = nullptr;
 PythonEnvironmentType DuckDBPyConnection::environment = PythonEnvironmentType::NORMAL;
 
 DuckDBPyConnection::~DuckDBPyConnection() {
-	py::gil_scoped_release gil;
-	// Release any structures that do not need to hold the GIL here
-	database.reset();
-	connection.reset();
-	temporary_views.clear();
+	try {
+		py::gil_scoped_release gil;
+		// Release any structures that do not need to hold the GIL here
+		database.reset();
+		connection.reset();
+		temporary_views.clear();
+	} catch (...) { // NOLINT
+	}
 }
 
 void DuckDBPyConnection::DetectEnvironment() {

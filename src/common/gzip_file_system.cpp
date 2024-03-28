@@ -92,7 +92,7 @@ MiniZStreamWrapper::~MiniZStreamWrapper() {
 	}
 	try {
 		MiniZStreamWrapper::Close();
-	} catch (...) {
+	} catch (...) { // NOLINT - cannot throw in exception
 	}
 }
 

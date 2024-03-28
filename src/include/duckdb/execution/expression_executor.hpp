@@ -158,6 +158,6 @@ private:
 private:
 	// it is possible to create an expression executor without a ClientContext - but it should be avoided
 	DUCKDB_API ExpressionExecutor();
-	DUCKDB_API ExpressionExecutor(const vector<unique_ptr<Expression>> &exprs);
+	DUCKDB_API explicit ExpressionExecutor(const vector<unique_ptr<Expression>> &exprs);
 };
 } // namespace duckdb

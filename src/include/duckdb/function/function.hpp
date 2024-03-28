@@ -72,7 +72,7 @@ struct TableFunctionData : public FunctionData {
 	// used to pass on projections to table functions that support them. NB, can contain COLUMN_IDENTIFIER_ROW_ID
 	vector<idx_t> column_ids;
 
-	DUCKDB_API virtual ~TableFunctionData();
+	DUCKDB_API ~TableFunctionData() override;
 
 	DUCKDB_API unique_ptr<FunctionData> Copy() const override;
 	DUCKDB_API bool Equals(const FunctionData &other) const override;

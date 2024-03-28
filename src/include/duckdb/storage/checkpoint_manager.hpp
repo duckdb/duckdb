@@ -51,7 +51,7 @@ protected:
 
 class CheckpointReader {
 public:
-	CheckpointReader(Catalog &catalog) : catalog(catalog) {
+	explicit CheckpointReader(Catalog &catalog) : catalog(catalog) {
 	}
 	virtual ~CheckpointReader() {
 	}
@@ -102,9 +102,9 @@ public:
 	//! connection is available because right now the checkpointing cannot be done online. (TODO)
 	void CreateCheckpoint();
 
-	virtual MetadataWriter &GetMetadataWriter() override;
-	virtual MetadataManager &GetMetadataManager() override;
-	virtual unique_ptr<TableDataWriter> GetTableDataWriter(TableCatalogEntry &table) override;
+	MetadataWriter &GetMetadataWriter() override;
+	MetadataManager &GetMetadataManager() override;
+	unique_ptr<TableDataWriter> GetTableDataWriter(TableCatalogEntry &table) override;
 
 	BlockManager &GetBlockManager();
 

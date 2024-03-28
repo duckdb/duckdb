@@ -219,7 +219,7 @@ idx_t FunctionBinder::BindFunction(const string &name, TableFunctionSet &functio
 	return BindFunction(name, functions, types, error);
 }
 
-enum class LogicalTypeComparisonResult { IDENTICAL_TYPE, TARGET_IS_ANY, DIFFERENT_TYPES };
+enum class LogicalTypeComparisonResult : uint8_t { IDENTICAL_TYPE, TARGET_IS_ANY, DIFFERENT_TYPES };
 
 LogicalTypeComparisonResult RequiresCast(const LogicalType &source_type, const LogicalType &target_type) {
 	if (target_type.id() == LogicalTypeId::ANY) {
