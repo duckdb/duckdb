@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-bool UUID::FromString(string str, hugeint_t &result) {
+bool UUID::FromString(const string &str, hugeint_t &result) {
 	auto hex2char = [](char ch) -> unsigned char {
 		if (ch >= '0' && ch <= '9') {
 			return ch - '0';

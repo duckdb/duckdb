@@ -87,7 +87,7 @@ void CleanupState::Flush() {
 	// delete the tuples from all the indexes
 	try {
 		current_table->RemoveFromIndexes(row_identifiers, count);
-	} catch (...) {
+	} catch (...) { // NOLINT: ignore errors here
 	}
 
 	count = 0;

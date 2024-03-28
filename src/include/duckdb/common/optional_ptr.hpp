@@ -14,7 +14,7 @@
 namespace duckdb {
 
 template <class T>
-class optional_ptr {
+class optional_ptr { // NOLINT: mimic std casing
 public:
 	optional_ptr() : ptr(nullptr) {
 	}
@@ -29,7 +29,7 @@ public:
 		}
 	}
 
-	operator bool() const {
+	operator bool() const { // NOLINT: allow implicit conversion to bool
 		return ptr;
 	}
 	T &operator*() {
@@ -48,16 +48,16 @@ public:
 		CheckValid();
 		return ptr;
 	}
-	T *get() {
+	T *get() { // NOLINT: mimic std casing
 		// CheckValid();
 		return ptr;
 	}
-	const T *get() const {
+	const T *get() const { // NOLINT: mimic std casing
 		// CheckValid();
 		return ptr;
 	}
 	// this looks dirty - but this is the default behavior of raw pointers
-	T *get_mutable() const {
+	T *get_mutable() const { // NOLINT: mimic std casing
 		// CheckValid();
 		return ptr;
 	}
