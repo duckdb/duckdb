@@ -23,7 +23,7 @@ class ClientContextLock;
 
 struct BlockedSink {
 public:
-	BlockedSink(InterruptState state, idx_t chunk_size) : state(state), chunk_size(chunk_size) {
+	BlockedSink(InterruptState state, idx_t chunk_size) : state(std::move(state)), chunk_size(chunk_size) {
 	}
 
 public:
@@ -38,7 +38,7 @@ protected:
 	enum class Type { SIMPLE };
 
 public:
-	BufferedData(Type type, weak_ptr<ClientContext> context) : type(type), context(context) {
+	BufferedData(Type type, weak_ptr<ClientContext> context) : type(type), context(std::move(context)) {
 	}
 	virtual ~BufferedData() {
 	}

@@ -230,7 +230,7 @@ void AttachedDatabase::Close() {
 			}
 			storage->CreateCheckpoint(true);
 		}
-	} catch (...) {
+	} catch (...) { // NOLINT
 	}
 }
 
