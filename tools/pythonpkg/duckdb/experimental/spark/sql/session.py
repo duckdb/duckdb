@@ -4,6 +4,8 @@ import uuid
 if TYPE_CHECKING:
     from .catalog import Catalog
     from pandas.core.frame import DataFrame as PandasDataFrame
+    from polars.dataframe.frame import DataFrame as PolarsDataFrame
+    from pyarrow.lib import Table as PyArrowTable
 
 from ..exception import ContributionsAcceptedError
  
@@ -21,6 +23,8 @@ from ..errors import (
     PySparkTypeError,
     PySparkValueError
 )
+
+import importlib
 
 from ..errors.error_classes import *
 
@@ -51,13 +55,27 @@ class SparkSession:
         self._context = context
         self._conf = RuntimeConfig(self.conn)
 
-    def _create_dataframe(self, data: Union[Iterable[Any], "PandasDataFrame"]) -> DataFrame:
-        try:
-            import pandas
-            has_pandas = True
-        except ImportError:
-            has_pandas = False
-        if has_pandas and isinstance(data, pandas.DataFrame):
+    @classmethod
+    def _is_registrable_dataframe(cls, df: Any) -> bool:
+        frames_classes = (
+            "pandas.DataFrame",
+            "polars.DataFrame",
+            "pyarrow.Table",
+        )
+
+        for frame_class in frames_classes:
+            cls_path, cls_name = frame_class.rsplit(".", 1)
+            try:
+                cls_type = getattr(importlib.import_module(cls_path), cls_name)
+                if isinstance(df, cls_type):
+                    return True
+            except ModuleNotFoundError: ...
+
+        return False
+
+
+    def _create_dataframe(self, data: Union[Iterable[Any], "PandasDataFrame", "PolarsDataFrame", "PyArrowTable"]) -> DataFrame:
+        if self._is_registrable_dataframe(data):
             unique_name = f'pyspark_pandas_df_{uuid.uuid1()}'
             self.conn.register(unique_name, data)
             return DataFrame(self.conn.sql(f'select * from "{unique_name}"'), self)
@@ -113,7 +131,7 @@ class SparkSession:
         rel = self.conn.sql(query, params=parameters)
         return DataFrame(rel, self)
 
-    def _createDataFrameFromPandas(self, data: "PandasDataFrame", types, names) -> DataFrame:
+    def _createDataFrame(self, data: Union["PandasDataFrame", "PolarsDataFrame", "PyArrowTable"], types, names) -> DataFrame:
         df = self._create_dataframe(data)
 
         # Cast to types
@@ -126,7 +144,7 @@ class SparkSession:
 
     def createDataFrame(
         self,
-        data: Union["PandasDataFrame", Iterable[Any]],
+        data: Union["PandasDataFrame", "PolarsDataFrame", "PyArrowTable", Iterable[Any]],
         schema: Optional[Union[StructType, List[str]]] = None,
         samplingRatio: Optional[float] = None,
         verifySchema: bool = True,
@@ -150,16 +168,10 @@ class SparkSession:
             else:
                 names = schema
 
-        try:
-            import pandas
-
-            has_pandas = True
-        except ImportError:
-            has_pandas = False
         # Falsey check on pandas dataframe is not defined, so first check if it's not a pandas dataframe
         # Then check if 'data' is None or []
-        if has_pandas and isinstance(data, pandas.DataFrame):
-            return self._createDataFrameFromPandas(data, types, names)
+        if self._is_registrable_dataframe(data):
+            return self._createDataFrame(data, types, names)
 
         # Finally check if a schema was provided
         is_empty = False
