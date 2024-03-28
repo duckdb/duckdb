@@ -67,10 +67,6 @@ class PlanCost:
         return self.total > other.total
 
     def __lt__(self, other):
-        return self.total > other.total
-
-
-    def __lt__(self, other):
         if self == other:
             return False
         return not (self > other)
