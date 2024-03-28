@@ -11,40 +11,24 @@
 #include "parquet_reader.hpp"
 
 namespace duckdb {
+class ParquetMetadataProvider;
 
 struct ParquetReadBindData : public TableFunctionData {
-    //! The bound names and types
+    //! The bound names and types TODO: when passing the schema, we also have this information in the ParquetOptions
     vector<string> names;
     vector<LogicalType> types;
-
     //! The metadata provider for this parquet scan
     unique_ptr<ParquetMetadataProvider> metadata_provider;
-
+	//! Used for counting chunks for progress estimation
     atomic<idx_t> chunk_count;
 
-    //! Todo: the initial reader concept should be moved into the metadata provider I think;
-    //! bind data itself to remain generic and unspecific
-    //! can just ask for the first reader and the caching is abstracted away
-    shared_ptr<ParquetReader> initial_reader;
+	//! The parquet options for this scan
+	//! TODO: these used to be initialized with the options from the first opened reader, that is now gone, I should check
+	//!       if that needs to be restored?
+	ParquetOptions parquet_options;
 
-    // The union readers are created (when parquet union_by_name option is on) during binding
-    // Those readers can be re-used during ParquetParallelStateNext
-    vector<shared_ptr<ParquetReader>> union_readers;
-
-    // These come from the initial_reader, but need to be stored in case the initial_reader is removed by a filter
-    // TODO: Move into metadataprovider
-    idx_t initial_file_cardinality;
-    idx_t initial_file_row_groups;
-
-    ParquetOptions parquet_options;
-    MultiFileReaderBindData reader_bind;
-
-    void Initialize(shared_ptr<ParquetReader> reader) {
-        initial_reader = std::move(reader);
-        initial_file_cardinality = initial_reader->NumRows();
-        initial_file_row_groups = initial_reader->NumRowGroups();
-        parquet_options = initial_reader->parquet_options;
-    }
+	//! The MultifileReader specific bind data
+	MultiFileReaderBindData reader_bind;
 };
 
 enum class ParquetFileState : uint8_t { UNOPENED, OPENING, OPEN, CLOSED };
@@ -154,5 +138,90 @@ protected:
                                 ParquetReadLocalState &scan_data, ParquetReadGlobalState &parallel_state,
                                 unique_lock<mutex> &parallel_lock);
 };
+
+
+//! This class manages the Metadata required for a parquet scan, the parquet scan can then use these
+//! The goal of having this here is to have a clear API against which to implement stuff like:
+//! - DeltaTableMetaDataProvider
+//! - GlobMetaDataProvider (for efficient globbing, especially with filters)
+//! - MultiFileMetaDataProvider
+class ParquetMetadataProvider {
+public:
+	ParquetMetadataProvider(const vector<string>& files) : files(files){
+	}
+
+	//! DEPRECATED: parquet reader should not try to read the whole file list anymore, any usages of this should be removed
+	//! TODO: disable this and fix any code that depends on it
+	const vector<string>& GetFiles() {
+		return files;
+	}
+
+	//! Core API; to be changed into abstract base class and extended by:
+	//! - DeltaTableMetadataProvider ( uses delta metadata )
+	//! - GlobMetadataProvider ( uses a glob pattern that is lazily expanded as needed )
+	//! - FileListMetadataProvider ( uses a list of files )
+public:
+	//! This could be used for reads that require knowing the filenames of 1 or more files. For example, we could consider
+	//!
+	string GetFile(idx_t i);
+
+	//! This would be an optional call to be implemented by the HiveFilteredGlob; necessary for
+	const string GetAnyFile();
+
+	//! Returns the deletion vector for a fil
+	string GetDeletionVector(string);
+
+	//! TODO: add a function call that returns the next parquet reader to be used in parquet reading
+
+	//! TODO: the bind should probably not go in here; we can just do a separate bind function for delta which will
+	//! ensure the correct ParquetMetadataProvider is returned;
+	void Bind(ClientContext &context, TableFunctionBindInput &input,
+	          vector<LogicalType> &return_types, vector<string> &names);
+
+	//! Pushes the filters down into the ParquetScanMetaDataProvider; this ensures when GetFile() is called, the
+	//! MetaDataProvider can use the filters to ensure only files are passed through that match the filters
+	void FilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
+	                    vector<unique_ptr<Expression>> &filters);
+
+	//! Return the statistics of a column
+	unique_ptr<BaseStatistics> ParquetScanStats(ClientContext &context, const FunctionData *bind_data_p,
+	                                            column_t column_index);
+	//! Returns the progress of the current scan
+	double ParquetProgress(ClientContext &context, const FunctionData *bind_data_p,
+	                       const GlobalTableFunctionState *global_state);
+	//! Returns the cardinality
+	unique_ptr<NodeStatistics> ParquetCardinality(ClientContext &context, const FunctionData *bind_data);
+	//! Max Threads to be scanned with
+	idx_t ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data);
+
+//! These calls are specific to the current MultiFileMetaDataProvider
+public:
+	void Initialize(shared_ptr<ParquetReader> reader) {
+		initial_reader = std::move(reader);
+		initial_file_cardinality = initial_reader->NumRows();
+		initial_file_row_groups = initial_reader->NumRowGroups();
+//		initial_reader_parquet_options = initial_reader->parquet_options; TODO: these are now missing
+	}
+protected:
+	// The set of files to be scanned
+	vector<string> files;
+
+	// These come from the initial_reader, but need to be stored in case the initial_reader is removed by a filter
+	idx_t initial_file_cardinality;
+	idx_t initial_file_row_groups;
+
+public: // TODO remove
+	shared_ptr<ParquetReader> initial_reader;
+	ParquetOptions initial_reader_parquet_options;
+	// The union readers are created (when parquet union_by_name option is on) during binding
+	// Those readers can be re-used during ParquetParallelStateNext
+	vector<shared_ptr<ParquetReader>> union_readers;
+};
+
+// TODO: We can also abstract the other way around:
+// Where the internals of the parquet scan are grouped together and then we can reuse
+// just that logic and ignore the rest. That keeps things more flexible probably
+// NOPE -> this would not allow use to implement the hive optimization.
+
 
 } // namespace duckdb

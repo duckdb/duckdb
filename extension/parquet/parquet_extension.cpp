@@ -308,7 +308,7 @@ unique_ptr<FunctionData> ParquetScanFunction::ParquetScanBindInternal(ClientCont
     result->metadata_provider = make_uniq<ParquetMetadataProvider>(files);
     if (parquet_options.schema.empty()) {
         result->reader_bind = MultiFileReader::BindReader<ParquetReader>(context, result->types, result->names, files,
-                                                                         *result, parquet_options);
+                                                                         *result->metadata_provider, parquet_options);
     } else {
         // a schema was supplied
         result->reader_bind = BindSchema(context, result->types, result->names, *result, parquet_options);
@@ -401,14 +401,14 @@ unique_ptr<GlobalTableFunctionState> ParquetScanFunction::ParquetScanInitGlobal(
     if (bind_data.metadata_provider->GetFiles().empty()) {
         result->initial_reader = nullptr;
     } else {
-        result->readers = std::move(bind_data.union_readers);
+        result->readers = std::move(bind_data.metadata_provider->union_readers);
         if (result->readers.size() != bind_data.metadata_provider->GetFiles().size()) {
             result->readers = vector<shared_ptr<ParquetReader>>(bind_data.metadata_provider->GetFiles().size(), nullptr);
         } else {
             std::fill(result->file_states.begin(), result->file_states.end(), ParquetFileState::OPEN);
         }
-        if (bind_data.initial_reader) {
-            result->initial_reader = std::move(bind_data.initial_reader);
+        if (bind_data.metadata_provider->initial_reader) {
+            result->initial_reader = std::move(bind_data.metadata_provider->initial_reader);
             result->readers[0] = result->initial_reader;
         } else if (result->readers[0]) {
             result->initial_reader = result->readers[0];
@@ -1172,7 +1172,7 @@ void ParquetMetadataProvider::FilterPushdown(ClientContext &context, LogicalGet 
     auto reset_reader = MultiFileReader::ComplexFilterPushdown(context, files,
                                                                data.parquet_options.file_options, get, filters);
     if (reset_reader) {
-        MultiFileReader::PruneReaders(data, files);
+        MultiFileReader::PruneReaders(*data.metadata_provider, files);
     }
 }
 
@@ -1187,9 +1187,9 @@ unique_ptr<BaseStatistics> ParquetMetadataProvider::ParquetScanStats(ClientConte
     // NOTE: we do not want to parse the Parquet metadata for the sole purpose of getting column statistics
     auto &config = DBConfig::GetConfig(context);
     if (files.size() < 2) {
-        if (bind_data.initial_reader) {
+        if (initial_reader) {
             // most common path, scanning single parquet file
-            return bind_data.initial_reader->ReadStatistics(bind_data.names[column_index]);
+            return initial_reader->ReadStatistics(bind_data.names[column_index]);
         } else if (!config.options.object_cache_enable) {
             // our initial reader was reset
             return nullptr;
@@ -1248,25 +1248,23 @@ double ParquetMetadataProvider::ParquetProgress(ClientContext &context, const Fu
     if (files.empty()) {
         return 100.0;
     }
-    if (bind_data.initial_file_cardinality == 0) {
+    if (initial_file_cardinality == 0) {
         return (100.0 * (gstate.file_index + 1)) / files.size();
     }
     auto percentage = MinValue<double>(
-            100.0, (bind_data.chunk_count * STANDARD_VECTOR_SIZE * 100.0 / bind_data.initial_file_cardinality));
+            100.0, (bind_data.chunk_count * STANDARD_VECTOR_SIZE * 100.0 / initial_file_cardinality));
     return (percentage + 100.0 * gstate.file_index) / files.size();
 }
 
 unique_ptr<NodeStatistics> ParquetMetadataProvider::ParquetCardinality(ClientContext &context, const FunctionData *bind_data) {
-    auto &data = bind_data->Cast<ParquetReadBindData>();
-    return make_uniq<NodeStatistics>(data.initial_file_cardinality * files.size());
+    return make_uniq<NodeStatistics>(initial_file_cardinality * files.size());
 }
 
 idx_t ParquetMetadataProvider::ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data) {
-    auto &data = bind_data->Cast<ParquetReadBindData>();
     if (files.size() > 1) {
         return TaskScheduler::GetScheduler(context).NumberOfThreads();
     }
-    return MaxValue(data.initial_file_row_groups, (idx_t)1);
+    return MaxValue(initial_file_row_groups, (idx_t)1);
 }
 
 } // namespace duckdb
