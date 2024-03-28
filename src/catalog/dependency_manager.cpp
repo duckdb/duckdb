@@ -255,7 +255,7 @@ void DependencyManager::CreateDependency(CatalogTransaction transaction, Depende
 }
 
 void DependencyManager::CreateDependencies(CatalogTransaction transaction, const CatalogEntry &object,
-                                           const LogicalDependencyList &unfiltered_dependencies) {
+                                           const LogicalDependencyList &dependencies) {
 	DependencyDependentFlags dependency_flags;
 	if (object.type != CatalogType::INDEX_ENTRY) {
 		// indexes do not require CASCADE to be dropped, they are simply always dropped along with the table
@@ -263,16 +263,14 @@ void DependencyManager::CreateDependencies(CatalogTransaction transaction, const
 	}
 
 	const auto object_info = GetLookupProperties(object);
-	LogicalDependencyList dependencies;
 	// check for each object in the sources if they were not deleted yet
-	for (auto &dependency : unfiltered_dependencies.Set()) {
+	for (auto &dependency : dependencies.Set()) {
 		if (dependency.catalog != object.ParentCatalog().GetName()) {
-			continue;
+			throw DependencyException(
+			    "Error adding dependency for object \"%s\" - dependency \"%s\" is in catalog "
+			    "\"%s\", which does not match the catalog \"%s\".\nCross catalog dependencies are not supported.",
+			    object.name, dependency.entry.name, dependency.catalog, object.ParentCatalog().GetName());
 		}
-		if (object_info == dependency.entry) {
-			continue;
-		}
-		dependencies.AddDependency(dependency);
 	}
 
 	// add the object to the dependents_map of each object that it depends on
