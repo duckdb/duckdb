@@ -38,7 +38,12 @@ if [ -z "$AWS_ACCESS_KEY_ID" ]; then
   DRY_RUN_PARAM="--dryrun"
 fi
 
+
 TARGET=$(git describe --tags --long)
+
+if [ "$UPLOAD_ASSETS_TO_STAGING_TARGET" ]; then
+  TARGET="$UPLOAD_ASSETS_TO_STAGING_TARGET"
+fi
 
 # decide target for staging
 if [ "$OVERRIDE_GIT_DESCRIBE" ]; then

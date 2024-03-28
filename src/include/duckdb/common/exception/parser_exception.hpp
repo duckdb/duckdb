@@ -19,11 +19,11 @@ public:
 	DUCKDB_API explicit ParserException(const string &msg);
 	DUCKDB_API explicit ParserException(const string &msg, const unordered_map<string, string> &extra_info);
 
-	template <typename... Args>
-	explicit ParserException(const string &msg, Args... params) : ParserException(ConstructMessage(msg, params...)) {
+	template <typename... ARGS>
+	explicit ParserException(const string &msg, ARGS... params) : ParserException(ConstructMessage(msg, params...)) {
 	}
-	template <typename... Args>
-	explicit ParserException(optional_idx error_location, const string &msg, Args... params)
+	template <typename... ARGS>
+	explicit ParserException(optional_idx error_location, const string &msg, ARGS... params)
 	    : ParserException(ConstructMessage(msg, params...), Exception::InitializeExtraInfo(error_location)) {
 	}
 

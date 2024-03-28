@@ -1,5 +1,5 @@
 diff --git a/src/azure_blob_filesystem.cpp b/src/azure_blob_filesystem.cpp
-index 6f4d0dc..93ead81 100644
+index 6f4d0dc..bc34eb9 100644
 --- a/src/azure_blob_filesystem.cpp
 +++ b/src/azure_blob_filesystem.cpp
 @@ -66,21 +66,20 @@ AzureBlobContextState::GetBlobContainerClient(const std::string &blobContainerNa
@@ -29,6 +29,18 @@ index 6f4d0dc..93ead81 100644
  
  	auto parsed_url = ParseUrl(path);
  	auto storage_context = GetOrCreateStorageContext(opener, path, parsed_url);
+@@ -167,9 +166,9 @@ void AzureBlobStorageFileSystem::LoadRemoteFileInfo(AzureFileHandle &handle) {
+ 	hfh.last_modified = ToTimeT(res.Value.LastModified);
+ }
+ 
+-bool AzureBlobStorageFileSystem::FileExists(const string &filename) {
++bool AzureBlobStorageFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
+ 	try {
+-		auto handle = OpenFile(filename, FileFlags::FILE_FLAGS_READ);
++		auto handle = OpenFile(filename, FileFlags::FILE_FLAGS_READ, opener);
+ 		auto &sfh = handle->Cast<AzureBlobStorageFileHandle>();
+ 		if (sfh.length == 0) {
+ 			return false;
 @@ -202,7 +201,7 @@ void AzureBlobStorageFileSystem::ReadRange(AzureFileHandle &handle, idx_t file_o
  	}
  }
@@ -314,7 +326,7 @@ index e54ca93..5a22e60 100644
  	if (secret_match.HasMatch()) {
  		const auto &base_secret = secret_match.GetSecret();
 diff --git a/src/include/azure_blob_filesystem.hpp b/src/include/azure_blob_filesystem.hpp
-index cb76d68..29ddc5b 100644
+index cb76d68..4d10ebe 100644
 --- a/src/include/azure_blob_filesystem.hpp
 +++ b/src/include/azure_blob_filesystem.hpp
 @@ -23,7 +23,7 @@ class AzureBlobStorageFileSystem;
@@ -326,6 +338,15 @@ index cb76d68..29ddc5b 100644
  	                           const AzureReadOptions &read_options, Azure::Storage::Blobs::BlobClient blob_client);
  	~AzureBlobStorageFileHandle() override = default;
  
+@@ -36,7 +36,7 @@ public:
+ 	vector<string> Glob(const string &path, FileOpener *opener = nullptr) override;
+ 
+ 	// FS methods
+-	bool FileExists(const string &filename) override;
++	bool FileExists(const string &filename, optional_ptr<FileOpener> opener = nullptr) override;
+ 	bool CanHandleFile(const string &fpath) override;
+ 	string GetName() const override {
+ 		return "AzureBlobStorageFileSystem";
 @@ -57,10 +57,10 @@ protected:
  	const string &GetContextPrefix() const override {
  		return PATH_PREFIX;
@@ -368,7 +389,7 @@ index c4bf8fe..cdcdb23 100644
  	void ReadRange(AzureFileHandle &handle, idx_t file_offset, char *buffer_out, idx_t buffer_out_len) override;
  };
 diff --git a/src/include/azure_filesystem.hpp b/src/include/azure_filesystem.hpp
-index a41d7a2..237301a 100644
+index a41d7a2..338c744 100644
 --- a/src/include/azure_filesystem.hpp
 +++ b/src/include/azure_filesystem.hpp
 @@ -52,10 +52,10 @@ public:
@@ -396,6 +417,15 @@ index a41d7a2..237301a 100644
  
  	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
  	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
+@@ -88,7 +87,7 @@ public:
+ 	bool OnDiskFile(FileHandle &handle) override {
+ 		return false;
+ 	}
+-	bool IsPipe(const string &filename) override {
++	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener = nullptr) override {
+ 		return false;
+ 	}
+ 	int64_t GetFileSize(FileHandle &handle) override;
 @@ -99,18 +98,18 @@ public:
  	void LoadFileInfo(AzureFileHandle &handle);
  

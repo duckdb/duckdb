@@ -111,7 +111,7 @@ struct ColumnFetchState {
 
 class CollectionScanState {
 public:
-	CollectionScanState(TableScanState &parent_p);
+	explicit CollectionScanState(TableScanState &parent_p);
 
 	//! The current row_group we are scanning
 	RowGroup *row_group;

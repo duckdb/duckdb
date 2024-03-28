@@ -406,7 +406,7 @@ string_location_t UncompressedStringStorage::FetchStringLocation(StringDictionar
 	D_ASSERT(dict_offset >= -1 * int32_t(Storage::BLOCK_SIZE) && dict_offset <= int32_t(Storage::BLOCK_SIZE));
 	if (dict_offset < 0) {
 		string_location_t result;
-		ReadStringMarker(baseptr + dict.end - (-1 * dict_offset), result.block_id, result.offset);
+		ReadStringMarker(baseptr + dict.end - idx_t(-1 * dict_offset), result.block_id, result.offset);
 		return result;
 	} else {
 		return string_location_t(INVALID_BLOCK, dict_offset);
