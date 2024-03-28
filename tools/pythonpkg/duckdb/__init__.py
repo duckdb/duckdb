@@ -220,6 +220,7 @@ _exported_symbols.extend([
     "enum_type",
     "execute",
     "executemany",
+    "extract_statements",
     "fetch_arrow_table",
     "fetch_df",
     "fetch_df_chunk",
