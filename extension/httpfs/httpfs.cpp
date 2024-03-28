@@ -249,7 +249,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, stri
 }
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, string url, HeaderMap header_map) {
-	auto &hfh = (HTTPFileHandle &)handle;
+	auto &hfh = handle.Cast<HTTPFileHandle>();
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
 	auto headers = initialize_http_headers(header_map);
@@ -386,6 +386,16 @@ unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, FileOpenFlag
                                                 optional_ptr<FileOpener> opener) {
 	D_ASSERT(flags.Compression() == FileCompressionType::UNCOMPRESSED);
 
+	if (flags.ReturnNullIfNotExists()) {
+		try {
+			auto handle = CreateHandle(path, flags, opener);
+			handle->Initialize(opener);
+			return std::move(handle);
+		} catch (...) {
+			return nullptr;
+		}
+	}
+
 	auto handle = CreateHandle(path, flags, opener);
 	handle->Initialize(opener);
 	return std::move(handle);
@@ -394,7 +404,7 @@ unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, FileOpenFlag
 // Buffered read from http file.
 // Note that buffering is disabled when FileFlags::FILE_FLAGS_DIRECT_IO is set
 void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	auto &hfh = (HTTPFileHandle &)handle;
+	auto &hfh = handle.Cast<HTTPFileHandle>();
 
 	D_ASSERT(hfh.state);
 	if (hfh.cached_file_handle) {
@@ -409,8 +419,9 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 	idx_t to_read = nr_bytes;
 	idx_t buffer_offset = 0;
 
-	// Don't buffer when DirectIO is set.
-	if (hfh.flags.DirectIO() && to_read > 0) {
+	// Don't buffer when DirectIO is set or when we are doing parallel reads
+	bool skip_buffer = hfh.flags.DirectIO() || hfh.flags.RequireParallelAccess();
+	if (skip_buffer && to_read > 0) {
 		GetRangeRequest(hfh, hfh.path, {}, location, (char *)buffer, to_read);
 		hfh.buffer_available = 0;
 		hfh.buffer_idx = 0;
@@ -487,19 +498,19 @@ void HTTPFileSystem::FileSync(FileHandle &handle) {
 }
 
 int64_t HTTPFileSystem::GetFileSize(FileHandle &handle) {
-	auto &sfh = (HTTPFileHandle &)handle;
+	auto &sfh = handle.Cast<HTTPFileHandle>();
 	return sfh.length;
 }
 
 time_t HTTPFileSystem::GetLastModifiedTime(FileHandle &handle) {
-	auto &sfh = (HTTPFileHandle &)handle;
+	auto &sfh = handle.Cast<HTTPFileHandle>();
 	return sfh.last_modified;
 }
 
-bool HTTPFileSystem::FileExists(const string &filename) {
+bool HTTPFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
 	try {
-		auto handle = OpenFile(filename.c_str(), FileFlags::FILE_FLAGS_READ);
-		auto &sfh = (HTTPFileHandle &)*handle;
+		auto handle = OpenFile(filename, FileFlags::FILE_FLAGS_READ, opener);
+		auto &sfh = handle->Cast<HTTPFileHandle>();
 		if (sfh.length == 0) {
 			return false;
 		}
@@ -523,21 +534,26 @@ idx_t HTTPFileSystem::SeekPosition(FileHandle &handle) {
 	return sfh.file_offset;
 }
 
+optional_ptr<HTTPMetadataCache> HTTPFileSystem::GetGlobalCache() {
+	lock_guard<mutex> lock(global_cache_lock);
+	if (!global_metadata_cache) {
+		global_metadata_cache = make_uniq<HTTPMetadataCache>(false, true);
+	}
+	return global_metadata_cache.get();
+}
+
 // Get either the local, global, or no cache depending on settings
 static optional_ptr<HTTPMetadataCache> TryGetMetadataCache(optional_ptr<FileOpener> opener, HTTPFileSystem &httpfs) {
+	auto db = FileOpener::TryGetDatabase(opener);
 	auto client_context = FileOpener::TryGetClientContext(opener);
-	if (!client_context) {
+	if (!db) {
 		return nullptr;
 	}
 
-	bool use_shared_cache = client_context->db->config.options.http_metadata_cache_enable;
-
+	bool use_shared_cache = db->config.options.http_metadata_cache_enable;
 	if (use_shared_cache) {
-		if (!httpfs.global_metadata_cache) {
-			httpfs.global_metadata_cache = make_uniq<HTTPMetadataCache>(false, true);
-		}
-		return httpfs.global_metadata_cache.get();
-	} else {
+		return httpfs.GetGlobalCache();
+	} else if (client_context) {
 		auto lookup = client_context->registered_state.find("http_cache");
 		if (lookup == client_context->registered_state.end()) {
 			auto cache = make_shared<HTTPMetadataCache>(true, true);
@@ -547,6 +563,7 @@ static optional_ptr<HTTPMetadataCache> TryGetMetadataCache(optional_ptr<FileOpen
 			return (HTTPMetadataCache *)lookup->second.get();
 		}
 	}
+	return nullptr;
 }
 
 void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
@@ -554,12 +571,7 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 	auto &hfs = file_system.Cast<HTTPFileSystem>();
 	state = HTTPState::TryGetState(opener);
 	if (!state) {
-		if (!opener) {
-			// If opener is not available (e.g., FileExists()), we create the HTTPState here.
-			state = make_shared<HTTPState>();
-		} else {
-			throw InternalException("State was not defined in this HTTP File Handle");
-		}
+		state = make_shared<HTTPState>();
 	}
 
 	auto current_cache = TryGetMetadataCache(opener, hfs);

@@ -101,7 +101,9 @@ jobs:
       - name: update duckdb-r src code with PR code
         shell: bash
         working-directory: ${{ env.DUCKDB_R_SRC }}
-        run: ./vendor.sh $GITHUB_WORKSPACE/$DUCKDB_SRC
+        env:
+          DUCKDB_PATH: ${{ env.DUCKDB_SRC }}
+        run: ./vendor.sh
 
       - uses: r-lib/actions/check-r-package@v2
         with:

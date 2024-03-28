@@ -24,12 +24,12 @@ struct SettingLookupResult {
 public:
 	SettingLookupResult() : scope(SettingScope::INVALID) {
 	}
-	SettingLookupResult(SettingScope scope) : scope(scope) {
+	explicit SettingLookupResult(SettingScope scope) : scope(scope) {
 		D_ASSERT(scope != SettingScope::INVALID);
 	}
 
 public:
-	operator bool() {
+	operator bool() { // NOLINT: allow implicit conversion to bool
 		return scope != SettingScope::INVALID;
 	}
 

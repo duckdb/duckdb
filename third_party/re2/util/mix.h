@@ -13,8 +13,8 @@ namespace duckdb_re2 {
 // Silence "truncation of constant value" warning for kMul in 32-bit mode.
 // Since this is a header file, push and then pop to limit the scope.
 #ifdef _MSC_VER
-//#pragma warning(push)
-//#pragma warning(disable: 4309)
+#pragma warning(push)
+#pragma warning(disable: 4309)
 #endif
 
 class HashMix {
@@ -33,9 +33,9 @@ class HashMix {
 };
 
 #ifdef _MSC_VER
-//#pragma warning(pop)
+#pragma warning(pop)
 #endif
 
-}  // namespace duckdb_re2
+}  // namespace re2
 
 #endif  // UTIL_MIX_H_

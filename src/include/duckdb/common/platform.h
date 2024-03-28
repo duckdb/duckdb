@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-std::string DuckDBPlatform() {
+std::string DuckDBPlatform() { // NOLINT: allow definition in header
 #if defined(DUCKDB_CUSTOM_PLATFORM)
 	return DUCKDB_QUOTE_DEFINE(DUCKDB_CUSTOM_PLATFORM);
 #endif

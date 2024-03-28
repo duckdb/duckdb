@@ -12,6 +12,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/lcov_exclude'
+      - '!.github/workflows/CodeQuality.yml'
 
   pull_request:
     types: [opened, reopened, ready_for_review]
@@ -20,6 +21,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/lcov_exclude'
+      - '!.github/workflows/CodeQuality.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
@@ -63,6 +65,7 @@ jobs:
 
   enum-check:
     name: C Enum Integrity Check
+    needs: format-check
     runs-on: ubuntu-20.04
 
     env:
@@ -92,7 +95,7 @@ jobs:
 
   tidy-check:
     name: Tidy Check
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: format-check
 
     env:
