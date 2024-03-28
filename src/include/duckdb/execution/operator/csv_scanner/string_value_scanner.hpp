@@ -143,9 +143,6 @@ public:
 	                   const shared_ptr<CSVStateMachine> &state_machine,
 	                   const shared_ptr<CSVErrorHandler> &error_handler);
 
-	~StringValueScanner() {
-	}
-
 	StringValueResult &ParseChunk() override;
 
 	//! Flushes the result to the insert_chunk

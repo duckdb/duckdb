@@ -22,6 +22,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
+#include "duckdb/main/database_file_opener.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -223,6 +224,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		config.options.temporary_directory = string();
 	}
 
+	db_file_system = make_uniq<DatabaseFileSystem>(*this);
 	db_manager = make_uniq<DatabaseManager>(*this);
 	if (config.buffer_manager) {
 		buffer_manager = config.buffer_manager;
@@ -233,11 +235,12 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	object_cache = make_uniq<ObjectCache>();
 	connection_manager = make_uniq<ConnectionManager>();
 
-	// resolve the type of teh database we are opening
-	DBPathAndType::ResolveDatabaseType(config.options.database_path, config.options.database_type, config);
-
 	// initialize the secret manager
 	config.secret_manager->Initialize(*this);
+
+	// resolve the type of teh database we are opening
+	auto &fs = FileSystem::GetFileSystem(*this);
+	DBPathAndType::ResolveDatabaseType(fs, config.options.database_path, config.options.database_type);
 
 	// initialize the system catalog
 	db_manager->InitializeSystemCatalog();
@@ -308,7 +311,7 @@ ObjectCache &DatabaseInstance::GetObjectCache() {
 }
 
 FileSystem &DatabaseInstance::GetFileSystem() {
-	return *config.file_system;
+	return *db_file_system;
 }
 
 ConnectionManager &DatabaseInstance::GetConnectionManager() {

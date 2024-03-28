@@ -21,7 +21,7 @@ public:
 	LogicalDelimGet(idx_t table_index, vector<LogicalType> types)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_DELIM_GET), table_index(table_index) {
 		D_ASSERT(types.size() > 0);
-		chunk_types = types;
+		chunk_types = std::move(types);
 	}
 
 	//! The table index in the current bind context

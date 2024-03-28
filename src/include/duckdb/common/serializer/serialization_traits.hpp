@@ -24,6 +24,7 @@ const field_id_t MESSAGE_TERMINATOR_FIELD_ID = 0xFFFF;
 template <class...>
 using void_t = void;
 
+// NOLINTBEGIN: match STL case
 // Check for anything implementing a `void Serialize(Serializer &Serializer)` method
 template <typename T, typename = T>
 struct has_serialize : std::false_type {};
@@ -144,6 +145,8 @@ template <typename T>
 struct is_atomic<std::atomic<T>> : std::true_type {
 	typedef T TYPE;
 };
+
+// NOLINTEND
 
 struct SerializationDefaultValue {
 
