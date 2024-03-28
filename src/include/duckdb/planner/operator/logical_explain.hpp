@@ -14,7 +14,7 @@
 namespace duckdb {
 
 class LogicalExplain : public LogicalOperator {
-	LogicalExplain(ExplainType explain_type)
+	explicit LogicalExplain(ExplainType explain_type)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXPLAIN), explain_type(explain_type) {};
 
 public:

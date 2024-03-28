@@ -28,7 +28,7 @@ class ArenaAllocator {
 	static constexpr const idx_t ARENA_ALLOCATOR_INITIAL_CAPACITY = 2048;
 
 public:
-	DUCKDB_API ArenaAllocator(Allocator &allocator, idx_t initial_capacity = ARENA_ALLOCATOR_INITIAL_CAPACITY);
+	DUCKDB_API explicit ArenaAllocator(Allocator &allocator, idx_t initial_capacity = ARENA_ALLOCATOR_INITIAL_CAPACITY);
 	DUCKDB_API ~ArenaAllocator();
 
 	DUCKDB_API data_ptr_t Allocate(idx_t size);
@@ -36,6 +36,9 @@ public:
 
 	DUCKDB_API data_ptr_t AllocateAligned(idx_t size);
 	DUCKDB_API data_ptr_t ReallocateAligned(data_ptr_t pointer, idx_t old_size, idx_t size);
+
+	//! Increment the internal cursor (if required) so the next allocation is guaranteed to be aligned to 8 bytes
+	DUCKDB_API void AlignNext();
 
 	//! Resets the current head and destroys all previous arena chunks
 	DUCKDB_API void Reset();

@@ -112,7 +112,7 @@ inline void DeserializationData::Unset<CatalogType>() {
 
 template <>
 inline void DeserializationData::Set(ClientContext &context) {
-	contexts.push(context);
+	contexts.emplace(context);
 }
 
 template <>
@@ -129,7 +129,7 @@ inline void DeserializationData::Unset<ClientContext>() {
 
 template <>
 inline void DeserializationData::Set(DatabaseInstance &db) {
-	databases.push(db);
+	databases.emplace(db);
 }
 
 template <>
@@ -146,7 +146,7 @@ inline void DeserializationData::Unset<DatabaseInstance>() {
 
 template <>
 inline void DeserializationData::Set(bound_parameter_map_t &context) {
-	parameter_data.push(context);
+	parameter_data.emplace(context);
 }
 
 template <>
