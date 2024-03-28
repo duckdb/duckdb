@@ -84,12 +84,6 @@ struct AggregatePartition {
 	      progress(0) {
 	}
 
-	void SetFinalized() {
-		lock_guard<mutex> guard(*lock);
-		state = AggregatePartitionState::READY_TO_SCAN;
-		blocked_tasks.clear();
-	}
-
 	unique_ptr<mutex> lock;
 	AggregatePartitionState state;
 
@@ -153,15 +147,6 @@ public:
 class RadixHTGlobalSinkState : public GlobalSinkState {
 public:
 	RadixHTGlobalSinkState(ClientContext &context, const RadixPartitionedHashTable &radix_ht);
-
-	void MarkFinalizeDone() {
-		auto res = ++finalize_done;
-		D_ASSERT(res <= partitions.size());
-		if (res == partitions.size()) {
-			// All finalizes are done, set remaining size to 0
-			temporary_memory_state->SetRemainingSize(context, 0);
-		}
-	}
 
 	//! Destroys aggregate states (if multi-scan)
 	~RadixHTGlobalSinkState() override;
@@ -542,6 +527,7 @@ void RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 			gstate.partitions.emplace_back(make_uniq<AggregatePartition>(std::move(partition)));
 			if (single_ht) {
 				gstate.finalize_done++;
+				gstate.partitions.back()->progress = 1;
 				gstate.partitions.back()->state = AggregatePartitionState::READY_TO_SCAN;
 			}
 		}
@@ -664,40 +650,34 @@ RadixHTGlobalSourceState::RadixHTGlobalSourceState(ClientContext &context_p, con
 SourceResultType RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTLocalSourceState &lstate,
                                                       InterruptState &interrupt_state) {
 	// First, try to get a partition index
-	{
-		lock_guard<mutex> guard(lock);
-		if (finished) {
-			return SourceResultType::FINISHED;
-		}
-
-		if (task_idx == sink.partitions.size()) {
-			return SourceResultType::FINISHED;
-		}
-
-		lstate.task_idx = task_idx++;
+	lock_guard<mutex> gstate_guard(lock);
+	if (finished) {
+		return SourceResultType::FINISHED;
 	}
+	if (task_idx == sink.partitions.size()) {
+		return SourceResultType::FINISHED;
+	}
+	lstate.task_idx = task_idx++;
 
-	// We got a partition index!
+	// We got a partition index
 	auto &partition = *sink.partitions[lstate.task_idx];
-	{
-		lock_guard<mutex> guard(*partition.lock);
-		switch (partition.state) {
-		case AggregatePartitionState::READY_TO_FINALIZE:
-			partition.state = AggregatePartitionState::FINALIZE_IN_PROGRESS;
-			lstate.task = RadixHTSourceTaskType::FINALIZE;
-			return SourceResultType::HAVE_MORE_OUTPUT;
-		case AggregatePartitionState::FINALIZE_IN_PROGRESS:
-			lstate.task = RadixHTSourceTaskType::SCAN;
-			lstate.scan_status = RadixHTScanStatus::INIT;
-			partition.blocked_tasks.push_back(interrupt_state);
-			return SourceResultType::BLOCKED;
-		case AggregatePartitionState::READY_TO_SCAN:
-			lstate.task = RadixHTSourceTaskType::SCAN;
-			lstate.scan_status = RadixHTScanStatus::INIT;
-			return SourceResultType::HAVE_MORE_OUTPUT;
-		default:
-			throw InternalException("Unexpected AggregatePartitionState in RadixHTLocalSourceState::Finalize!");
-		}
+	auto partition_lock = unique_lock<mutex>(*partition.lock);
+	switch (partition.state) {
+	case AggregatePartitionState::READY_TO_FINALIZE:
+		partition.state = AggregatePartitionState::FINALIZE_IN_PROGRESS;
+		lstate.task = RadixHTSourceTaskType::FINALIZE;
+		return SourceResultType::HAVE_MORE_OUTPUT;
+	case AggregatePartitionState::FINALIZE_IN_PROGRESS:
+		lstate.task = RadixHTSourceTaskType::SCAN;
+		lstate.scan_status = RadixHTScanStatus::INIT;
+		partition.blocked_tasks.push_back(interrupt_state);
+		return SourceResultType::BLOCKED;
+	case AggregatePartitionState::READY_TO_SCAN:
+		lstate.task = RadixHTSourceTaskType::SCAN;
+		lstate.scan_status = RadixHTScanStatus::INIT;
+		return SourceResultType::HAVE_MORE_OUTPUT;
+	default:
+		throw InternalException("Unexpected AggregatePartitionState in RadixHTLocalSourceState::Finalize!");
 	}
 }
 
@@ -731,7 +711,6 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 	D_ASSERT(task == RadixHTSourceTaskType::FINALIZE);
 	D_ASSERT(scan_status != RadixHTScanStatus::IN_PROGRESS);
 	auto &partition = *sink.partitions[task_idx];
-	D_ASSERT(partition.state == AggregatePartitionState::FINALIZE_IN_PROGRESS);
 
 	if (!ht) {
 		// This capacity would always be sufficient for all data
@@ -757,23 +736,34 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 	// Now combine the uncombined data using this thread's HT
 	ht->Combine(*partition.data, &partition.progress);
 	ht->UnpinData();
+	partition.progress = 1;
 
 	// Move the combined data back to the partition
 	partition.data =
 	    make_uniq<TupleDataCollection>(BufferManager::GetBufferManager(gstate.context), sink.radix_ht.GetLayout());
 	partition.data->Combine(*ht->GetPartitionedData()->GetPartitions()[0]);
 
-	// Bookkeeping
-	partition.SetFinalized();
-	sink.MarkFinalizeDone();
+	// Update thread-global state
+	lock_guard<mutex> global_guard(gstate.lock);
+	sink.stored_allocators.emplace_back(ht->GetAggregateAllocator());
+	const auto finalizes_done = ++sink.finalize_done;
+	D_ASSERT(finalizes_done <= sink.partitions.size());
+	if (finalizes_done == sink.partitions.size()) {
+		// All finalizes are done, set remaining size to 0
+		sink.temporary_memory_state->SetRemainingSize(sink.context, 0);
+	}
 
-	// This thread will scan this partition
+	// Update partition state
+	lock_guard<mutex> partition_guard(*partition.lock);
+	partition.state = AggregatePartitionState::READY_TO_SCAN;
+	for (auto &blocked_task : partition.blocked_tasks) {
+		blocked_task.Callback();
+	}
+	partition.blocked_tasks.clear();
+
+	// This thread will scan the partition
 	task = RadixHTSourceTaskType::SCAN;
 	scan_status = RadixHTScanStatus::INIT;
-
-	// Make sure this thread's aggregate allocator does not get lost
-	lock_guard<mutex> guard(sink.lock);
-	sink.stored_allocators.emplace_back(ht->GetAggregateAllocator());
 }
 
 void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSourceState &gstate, DataChunk &chunk) {
@@ -794,14 +784,11 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 			data_collection.Reset();
 		}
 		scan_status = RadixHTScanStatus::DONE;
-		return;
-	}
-
-	if (data_collection.ScanComplete(scan_state)) {
 		lock_guard<mutex> gstate_guard(gstate.lock);
 		if (++gstate.task_done == sink.partitions.size()) {
 			gstate.finished = true;
 		}
+		return;
 	}
 
 	RowOperationsState row_state(aggregate_allocator);
@@ -920,11 +907,11 @@ double RadixPartitionedHashTable::GetProgress(ClientContext &, GlobalSinkState &
 	// Get partition combine progress, weigh it 2x
 	double total_progress = 0;
 	for (auto &partition : sink.partitions) {
-		total_progress += partition->progress * 2.0;
+		total_progress += 2.0 * partition->progress;
 	}
 
 	// Get scan progress, weigh it 1x
-	total_progress += gstate.task_done;
+	total_progress += 1.0 * gstate.task_done;
 
 	// Divide by 3x for the weights, and the number of partitions to get a value between 0 and 1 again
 	total_progress /= 3.0 * sink.partitions.size();
