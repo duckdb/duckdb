@@ -1,0 +1,29 @@
+# name: test/sql/storage/temp_directory/max_swap_space_explicit.test
+# group: [temp_directory]
+
+require skip_reload
+
+statement ok
+PRAGMA memory_limit='2MB'
+
+# --- Not changed when set explicitly by the user
+
+# If we set 'max_temp_directory_size' explicitly, it will not be overridden
+statement ok
+set max_temp_directory_size='15gb'
+
+# When we change the temp_directory to something that doesnt exist
+statement ok
+set temp_directory = '__TEST_DIR__/this_directory_should_not_exist__swap_space'
+
+query I nosort explicitly_set
+select current_setting('max_temp_directory_size')
+----
+
+statement ok
+CREATE TABLE t2 AS SELECT * FROM range(1000000);
+
+# The 'temp_directory' was created, but the value of 'max_temp_directory_size' was set explicitly, so it was unaltered
+query I nosort explicitly_set
+select current_setting('max_temp_directory_size')
+----
