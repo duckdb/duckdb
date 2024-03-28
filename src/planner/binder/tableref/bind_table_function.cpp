@@ -132,7 +132,7 @@ unique_ptr<LogicalOperator>
 Binder::BindTableFunctionInternal(TableFunction &table_function, const string &function_name, vector<Value> parameters,
                                   named_parameter_map_t named_parameters, vector<LogicalType> input_table_types,
                                   vector<string> input_table_names, const vector<string> &column_name_alias,
-                                  unique_ptr<ExternalDependency> external_dependency) {
+                                  shared_ptr<ExternalDependency> external_dependency) {
 	auto bind_index = GenerateTableIndex();
 	// perform the binding
 	unique_ptr<FunctionData> bind_data;
@@ -277,10 +277,10 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		input_table_types = subquery->subquery->types;
 		input_table_names = subquery->subquery->names;
 	}
-	auto get = BindTableFunctionInternal(table_function, ref.alias.empty() ? fexpr.function_name : ref.alias,
-	                                     std::move(parameters), std::move(named_parameters),
-	                                     std::move(input_table_types), std::move(input_table_names),
-	                                     ref.column_name_alias, std::move(ref.external_dependency));
+	auto get =
+	    BindTableFunctionInternal(table_function, ref.alias.empty() ? fexpr.function_name : ref.alias,
+	                              std::move(parameters), std::move(named_parameters), std::move(input_table_types),
+	                              std::move(input_table_names), ref.column_name_alias, ref.external_dependency);
 	if (subquery) {
 		get->children.push_back(Binder::CreatePlan(*subquery));
 	}

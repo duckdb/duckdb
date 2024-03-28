@@ -27,6 +27,10 @@ public:
 class PythonContextState : public ClientContextState {
 public:
 	PythonContextState();
+	~PythonContextState() override;
+
+public:
+	void QueryEnd(ClientContext &context) override;
 
 public:
 	//! Cache the replacement scan lookups

@@ -1307,6 +1307,9 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Cursor() {
 	auto res = make_shared<DuckDBPyConnection>();
 	res->database = database;
 	res->connection = make_uniq<Connection>(*res->database);
+	auto &client_context = *res->connection->context;
+	// FIXME: should this context state be shared with the parent?
+	client_context.registered_state["python_state"] = std::make_shared<PythonContextState>();
 	cursors.push_back(res);
 	return res;
 }

@@ -25,6 +25,7 @@ unique_ptr<TableRef> TableFunctionRef::Copy() {
 
 	copy->function = function->Copy();
 	copy->column_name_alias = column_name_alias;
+	copy->external_dependency = external_dependency;
 	CopyProperties(*copy);
 
 	return std::move(copy);

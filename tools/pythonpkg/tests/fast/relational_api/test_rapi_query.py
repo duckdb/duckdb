@@ -123,7 +123,9 @@ class TestRAPIQuery(object):
             # With the default we reach a stack overflow in the CI
             depth_limit = 250
         duckdb_cursor.execute(f"SET max_expression_depth TO {depth_limit}")
-        rel = duckdb_cursor.sql('select 42')
-        rel = duckdb_cursor.sql('select * from rel')
+        rel = duckdb_cursor.sql('select 42 a, 21 b')
+        rel = duckdb_cursor.sql('select a+a a, b+b b from rel')
         with pytest.raises(duckdb.BinderException, match=f'Max expression depth limit of {depth_limit} exceeded'):
-            duckdb_cursor.sql('select * from rel')
+            other_rel = duckdb_cursor.sql('select a from rel')
+            res = other_rel.fetchall()
+            print(res)

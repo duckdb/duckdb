@@ -30,7 +30,7 @@ public:
 	unique_ptr<SelectStatement> subquery;
 
 	// External dependencies of this table function
-	unique_ptr<ExternalDependency> external_dependency;
+	shared_ptr<ExternalDependency> external_dependency;
 
 public:
 	string ToString() const override;

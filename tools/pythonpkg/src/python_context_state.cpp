@@ -28,5 +28,11 @@ void ReplacementCache::Evict() {
 
 PythonContextState::PythonContextState() {
 }
+PythonContextState::~PythonContextState() {
+}
+
+void PythonContextState::QueryEnd(ClientContext &context) {
+	cache.Evict();
+}
 
 } // namespace duckdb

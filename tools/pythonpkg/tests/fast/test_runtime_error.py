@@ -58,7 +58,7 @@ class TestRuntimeError(object):
             res.fetch_arrow_reader(1)
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
-    def test_relation_fetchall_error(self, pandas):
+    def test_relation_cache_fetchall(self, pandas):
         conn = duckdb.connect()
         df_in = pandas.DataFrame(
             {
@@ -68,11 +68,12 @@ class TestRuntimeError(object):
         conn.execute("create view x as select * from df_in")
         rel = conn.query("select * from x")
         del df_in
-        with pytest.raises(duckdb.ProgrammingError, match='Table with name df_in does not exist'):
-            rel.fetchall()
+        res = rel.fetchall()
+        print(res)
+        assert res == [(1,), (2,), (3,), (4,), (5,)]
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
-    def test_relation_fetchall_execute(self, pandas):
+    def test_relation_cache_execute(self, pandas):
         conn = duckdb.connect()
         df_in = pandas.DataFrame(
             {
@@ -82,8 +83,9 @@ class TestRuntimeError(object):
         conn.execute("create view x as select * from df_in")
         rel = conn.query("select * from x")
         del df_in
-        with pytest.raises(duckdb.ProgrammingError, match='Table with name df_in does not exist'):
-            rel.execute()
+        res = rel.execute().fetchall()
+        print(res)
+        assert res == [(1,), (2,), (3,), (4,), (5,)]
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_relation_query_error(self, pandas):
