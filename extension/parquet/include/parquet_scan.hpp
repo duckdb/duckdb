@@ -145,15 +145,50 @@ protected:
                                 unique_lock<mutex> &parallel_lock);
 };
 
+//! Interface for a parquet scan metadata provider. A metadata provider is used to drive metadata parsing and file list
+//! generation of a parquet scan.
+//! Examples are:
+//! - DeltaTableMetaDataProvider
+//! - GlobMetaDataProvider (for efficient globbing, especially with filters)
+//! - MultiFileMetaDataProvider
+class ParquetMetadataProvider {
+public:
+	//! Whether the scan can produce data at all. (e.g. filter pushdown can eliminate every tuple)
+	virtual bool HaveData() = 0;
+	//! Return the initial reader (could be nullptr) TODO: remove the initial reader thing
+	virtual shared_ptr<ParquetReader> GetInitialReader() = 0;
+	//! Return all currently initialized readers (could be empty if the MetadataProvider does not open any parquet files)
+	virtual vector<shared_ptr<ParquetReader>> GetInitializedReaders() = 0;
+	//! This could be used for reads that require knowing the filenames of 1 or more files. TODO: remove?
+	virtual string GetFile(idx_t i) = 0;
+//	//! This would be an optional call to be implemented by the HiveFilteredGlob; necessary for hivepartitioning
+//	virtual const string GetAnyFile() = 0;
+	//! Returns the deletion vector for a file TODO: implement
+	virtual string GetDeletionVector(string) = 0;
+	//! Pushes the filters down into the ParquetScanMetaDataProvider; this ensures when GetFile() is called, the
+	//! MetaDataProvider can use the filters to ensure only files are passed through that match the filters
+	virtual void FilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
+	                    vector<unique_ptr<Expression>> &filters) = 0;
+	//! Return the statistics of a column
+	virtual unique_ptr<BaseStatistics> ParquetScanStats(ClientContext &context, const FunctionData *bind_data_p,
+	                                            column_t column_index) = 0;
+	//! Returns the progress of the current scan
+	virtual double ParquetProgress(ClientContext &context, const FunctionData *bind_data_p,
+	                       const GlobalTableFunctionState *global_state) = 0;
+	//! Returns the cardinality
+	virtual unique_ptr<NodeStatistics> ParquetCardinality(ClientContext &context, const FunctionData *bind_data) = 0;
+	//! Max Threads to be scanned with
+	virtual idx_t ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data) = 0;
+};
 
 //! This class manages the Metadata required for a parquet scan, the parquet scan can then use these
 //! The goal of having this here is to have a clear API against which to implement stuff like:
 //! - DeltaTableMetaDataProvider
 //! - GlobMetaDataProvider (for efficient globbing, especially with filters)
 //! - MultiFileMetaDataProvider
-class ParquetMetadataProvider {
+class MultiFileMetaDataProvider : public ParquetMetadataProvider {
 public:
-	ParquetMetadataProvider(const vector<string>& files) : files(files){
+	MultiFileMetaDataProvider(const vector<string>& files) : files(files){
 	}
 
 	//! Core API; to be changed into abstract base class and extended by:
@@ -161,50 +196,32 @@ public:
 	//! - GlobMetadataProvider ( uses a glob pattern that is lazily expanded as needed )
 	//! - FileListMetadataProvider ( uses a list of files )
 public:
-	//! DEPRECATED: parquet reader should not try to read the whole file list anymore, any usages of this should be removed
-	//! TODO: disable this and fix any code that depends on it
-	const vector<string>& GetFiles() {
-		return files;
-	}
-
 	//! Whether the scan can produce data at all. (e.g. filter pushdown can eliminate every tuple)
-	bool HaveData();
+	bool HaveData() override;
 	//! Return the initial reader (could be nullptr)
-	shared_ptr<ParquetReader> GetInitialReader();
+	shared_ptr<ParquetReader> GetInitialReader() override;
 	//! Return all currently initialized readers (could be empty if the MetadataProvider does not open any parquet files)
-	vector<shared_ptr<ParquetReader>> GetInitializedReaders();
-
+	vector<shared_ptr<ParquetReader>> GetInitializedReaders() override;
 	//! This could be used for reads that require knowing the filenames of 1 or more files. TODO: remove?
-	string GetFile(idx_t i);
-
-	//! This would be an optional call to be implemented by the HiveFilteredGlob; necessary for
-	const string GetAnyFile();
-
-	//! Returns the deletion vector for a fil
-	string GetDeletionVector(string);
-
-	//! TODO: add a function call that returns the next parquet reader to be used in parquet reading
-
-	//! TODO: the bind should probably not go in here; we can just do a separate bind function for delta which will
-	//! ensure the correct ParquetMetadataProvider is returned;
-	void Bind(ClientContext &context, TableFunctionBindInput &input,
-	          vector<LogicalType> &return_types, vector<string> &names);
-
+	string GetFile(idx_t i) override;
+//	//! This would be an optional call to be implemented by the HiveFilteredGlob; necessary for hivepartitioning
+//	const string GetAnyFile() override;
+	//! Returns the deletion vector for a file
+	string GetDeletionVector(string) override;
 	//! Pushes the filters down into the ParquetScanMetaDataProvider; this ensures when GetFile() is called, the
 	//! MetaDataProvider can use the filters to ensure only files are passed through that match the filters
 	void FilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
-	                    vector<unique_ptr<Expression>> &filters);
-
+	                    vector<unique_ptr<Expression>> &filters) override;
 	//! Return the statistics of a column
 	unique_ptr<BaseStatistics> ParquetScanStats(ClientContext &context, const FunctionData *bind_data_p,
-	                                            column_t column_index);
+	                                            column_t column_index) override;
 	//! Returns the progress of the current scan
 	double ParquetProgress(ClientContext &context, const FunctionData *bind_data_p,
-	                       const GlobalTableFunctionState *global_state);
+	                       const GlobalTableFunctionState *global_state) override;
 	//! Returns the cardinality
-	unique_ptr<NodeStatistics> ParquetCardinality(ClientContext &context, const FunctionData *bind_data);
+	unique_ptr<NodeStatistics> ParquetCardinality(ClientContext &context, const FunctionData *bind_data) override;
 	//! Max Threads to be scanned with
-	idx_t ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data);
+	idx_t ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data) override;
 
 //! These calls are specific to the current MultiFileMetaDataProvider
 public:
@@ -221,17 +238,16 @@ protected:
 	idx_t initial_file_cardinality;
 	idx_t initial_file_row_groups;
 
-public: // todo make private
+public:
+	//! DEPRECATED: parquet reader should not try to read the whole file list anymore, any usages of this should be removed
+    //! TODO: disable this and fix any code that depends on it
+    const vector<string>& GetFiles() {
+        return files;
+    }
 	shared_ptr<ParquetReader> initial_reader;
 	// The union readers are created (when parquet union_by_name option is on) during binding
 	// Those readers can be re-used during ParquetParallelStateNext
 	vector<shared_ptr<ParquetReader>> union_readers;
 };
-
-// TODO: We can also abstract the other way around:
-// Where the internals of the parquet scan are grouped together and then we can reuse
-// just that logic and ignore the rest. That keeps things more flexible probably
-// NOPE -> this would not allow use to implement the hive optimization.
-
 
 } // namespace duckdb

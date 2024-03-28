@@ -79,7 +79,10 @@ BindInfo ParquetGetBindInfo(const optional_ptr<FunctionData> bind_data) {
 	auto bind_info = BindInfo(ScanType::PARQUET);
 	auto &parquet_bind = bind_data->Cast<ParquetReadBindData>();
 	vector<Value> file_path;
-	for (auto &path : parquet_bind.metadata_provider->GetFiles()) {
+
+    // TODO figure out what to do here.
+    auto &cast_metadata_provider = dynamic_cast<MultiFileMetaDataProvider&>(*parquet_bind.metadata_provider);
+	for (auto &path : cast_metadata_provider.GetFiles()) {
 		file_path.emplace_back(path);
 	}
 	// LCOV_EXCL_START
@@ -109,7 +112,9 @@ static MultiFileReaderBindData BindSchema(ClientContext &context, vector<Logical
 	}
 
 	// perform the binding on the obtained set of names + types
-    auto files = result.metadata_provider->GetFiles();
+
+	auto &cast_metadata_provider = dynamic_cast<MultiFileMetaDataProvider&>(*result.metadata_provider);
+    auto files = cast_metadata_provider.GetFiles();
 	auto bind_data =
 	    MultiFileReader::BindOptions(options.file_options, files, schema_col_types, schema_col_names);
 
@@ -305,10 +310,11 @@ unique_ptr<FunctionData> ParquetScanFunction::ParquetScanBindInternal(ClientCont
                                                         vector<LogicalType> &return_types, vector<string> &names,
                                                         ParquetOptions parquet_options) {
     auto result = make_uniq<ParquetReadBindData>();
-    result->metadata_provider = make_uniq<ParquetMetadataProvider>(files);
+    result->metadata_provider = make_uniq<MultiFileMetaDataProvider>(files);
+	auto &cast_metadata_provider = dynamic_cast<MultiFileMetaDataProvider&>(*result->metadata_provider);
     if (parquet_options.schema.empty()) {
         result->reader_bind = MultiFileReader::BindReader<ParquetReader>(context, result->types, result->names, files,
-                                                                         *result->metadata_provider, parquet_options);
+		                                                                 cast_metadata_provider, parquet_options);
     } else {
         // a schema was supplied
         result->reader_bind = BindSchema(context, result->types, result->names, *result, parquet_options);
@@ -465,7 +471,8 @@ idx_t ParquetScanFunction::ParquetScanGetBatchIndex(ClientContext &context, cons
 void ParquetScanFunction::ParquetScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
                                  const TableFunction &function) {
     auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
-    serializer.WriteProperty(100, "files", bind_data.metadata_provider->GetFiles());
+	auto &cast_metadata_provider = dynamic_cast<MultiFileMetaDataProvider&>(*bind_data.metadata_provider);
+    serializer.WriteProperty(100, "files", cast_metadata_provider.GetFiles());
     serializer.WriteProperty(101, "types", bind_data.types);
     serializer.WriteProperty(102, "names", bind_data.names);
     serializer.WriteProperty(103, "parquet_options", bind_data.parquet_options);
@@ -1176,22 +1183,22 @@ std::string ParquetExtension::Name() {
 	return "parquet";
 }
 
-bool ParquetMetadataProvider::HaveData() {
+bool MultiFileMetaDataProvider::HaveData() {
 	return !files.empty();
 }
 
-shared_ptr<ParquetReader> ParquetMetadataProvider::GetInitialReader() {
+shared_ptr<ParquetReader> MultiFileMetaDataProvider::GetInitialReader() {
     return initial_reader;
 }
 
-vector<shared_ptr<ParquetReader>> ParquetMetadataProvider::GetInitializedReaders() {
+vector<shared_ptr<ParquetReader>> MultiFileMetaDataProvider::GetInitializedReaders() {
 	if (union_readers.size() == files.size()) {
         return union_readers;
     }
 	return {};
 }
 
-string ParquetMetadataProvider::GetFile(idx_t i) {
+string MultiFileMetaDataProvider::GetFile(idx_t i) {
     if (files.size() <= i) {
         return "";
     } else {
@@ -1199,27 +1206,24 @@ string ParquetMetadataProvider::GetFile(idx_t i) {
     }
 }
 
-string ParquetMetadataProvider::GetDeletionVector(string) {
+string MultiFileMetaDataProvider::GetDeletionVector(string) {
     throw NotImplementedException("Not implemented");
 }
 
-void ParquetMetadataProvider::Bind(ClientContext &context, TableFunctionBindInput &input,
-                                           vector<LogicalType> &return_types, vector<string> &names) {
-    throw NotImplementedException("Not implemented");
-}
-
-void ParquetMetadataProvider::FilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
+void MultiFileMetaDataProvider::FilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
                                                      vector<unique_ptr<Expression>> &filters) {
     auto &data = bind_data_p->Cast<ParquetReadBindData>();
 
     auto reset_reader = MultiFileReader::ComplexFilterPushdown(context, files,
                                                                data.parquet_options.file_options, get, filters);
+
+	auto &cast_metadata_provider = dynamic_cast<MultiFileMetaDataProvider&>(*data.metadata_provider);
     if (reset_reader) {
-        MultiFileReader::PruneReaders(*data.metadata_provider, files);
+        MultiFileReader::PruneReaders(cast_metadata_provider, files);
     }
 }
 
-unique_ptr<BaseStatistics> ParquetMetadataProvider::ParquetScanStats(ClientContext &context, const FunctionData *bind_data_p,
+unique_ptr<BaseStatistics> MultiFileMetaDataProvider::ParquetScanStats(ClientContext &context, const FunctionData *bind_data_p,
                                                                              column_t column_index) {
     auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
 
@@ -1284,7 +1288,7 @@ unique_ptr<BaseStatistics> ParquetMetadataProvider::ParquetScanStats(ClientConte
     return nullptr;
 }
 
-double ParquetMetadataProvider::ParquetProgress(ClientContext &context, const FunctionData *bind_data_p,
+double MultiFileMetaDataProvider::ParquetProgress(ClientContext &context, const FunctionData *bind_data_p,
                                                         const GlobalTableFunctionState *global_state) {
     auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
     auto &gstate = global_state->Cast<ParquetReadGlobalState>();
@@ -1299,11 +1303,11 @@ double ParquetMetadataProvider::ParquetProgress(ClientContext &context, const Fu
     return (percentage + 100.0 * gstate.file_index) / files.size();
 }
 
-unique_ptr<NodeStatistics> ParquetMetadataProvider::ParquetCardinality(ClientContext &context, const FunctionData *bind_data) {
+unique_ptr<NodeStatistics> MultiFileMetaDataProvider::ParquetCardinality(ClientContext &context, const FunctionData *bind_data) {
     return make_uniq<NodeStatistics>(initial_file_cardinality * files.size());
 }
 
-idx_t ParquetMetadataProvider::ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data) {
+idx_t MultiFileMetaDataProvider::ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data) {
     if (files.size() > 1) {
         return TaskScheduler::GetScheduler(context).NumberOfThreads();
     }
