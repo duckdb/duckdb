@@ -123,7 +123,7 @@ struct MultiFileReader {
 
 	template <class READER_CLASS, class RESULT_CLASS, class OPTIONS_CLASS>
 	static MultiFileReaderBindData BindUnionReader(ClientContext &context, vector<LogicalType> &return_types,
-	                                               vector<string> &names, RESULT_CLASS &result,
+	                                               vector<string> &names, vector<string> &files, RESULT_CLASS &result,
 	                                               OPTIONS_CLASS &options) {
 		D_ASSERT(options.file_options.union_by_name);
 		vector<string> union_col_names;
@@ -131,12 +131,12 @@ struct MultiFileReader {
 		// obtain the set of union column names + types by unifying the types of all of the files
 		// note that this requires opening readers for each file and reading the metadata of each file
 		auto union_readers =
-		    UnionByName::UnionCols<READER_CLASS>(context, result.files, union_col_types, union_col_names, options);
+		    UnionByName::UnionCols<READER_CLASS>(context, files, union_col_types, union_col_names, options);
 
 		std::move(union_readers.begin(), union_readers.end(), std::back_inserter(result.union_readers));
 		// perform the binding on the obtained set of names + types
 		auto bind_data =
-		    MultiFileReader::BindOptions(options.file_options, result.files, union_col_types, union_col_names);
+		    MultiFileReader::BindOptions(options.file_options, files, union_col_types, union_col_names);
 		names = union_col_names;
 		return_types = union_col_types;
 		result.Initialize(result.union_readers[0]);
@@ -146,16 +146,16 @@ struct MultiFileReader {
 
 	template <class READER_CLASS, class RESULT_CLASS, class OPTIONS_CLASS>
 	static MultiFileReaderBindData BindReader(ClientContext &context, vector<LogicalType> &return_types,
-	                                          vector<string> &names, RESULT_CLASS &result, OPTIONS_CLASS &options) {
+	                                          vector<string> &names, vector<string> &files, RESULT_CLASS &result, OPTIONS_CLASS &options) {
 		if (options.file_options.union_by_name) {
-			return BindUnionReader<READER_CLASS>(context, return_types, names, result, options);
+			return BindUnionReader<READER_CLASS>(context, return_types, names, files, result, options);
 		} else {
 			shared_ptr<READER_CLASS> reader;
-			reader = make_shared<READER_CLASS>(context, result.files[0], options);
+			reader = make_shared<READER_CLASS>(context, files[0], options);
 			return_types = reader->return_types;
 			names = reader->names;
 			result.Initialize(std::move(reader));
-			return MultiFileReader::BindOptions(options.file_options, result.files, return_types, names);
+			return MultiFileReader::BindOptions(options.file_options, files, return_types, names);
 		}
 	}
 
@@ -173,9 +173,9 @@ struct MultiFileReader {
 	}
 
 	template <class BIND_DATA>
-	static void PruneReaders(BIND_DATA &data) {
+	static void PruneReaders(BIND_DATA &data, vector<string> &files) {
 		unordered_set<string> file_set;
-		for (auto &file : data.files) {
+		for (auto &file : files) {
 			file_set.insert(file);
 		}
 
