@@ -704,6 +704,9 @@ bool JSONScanLocalState::ReadNextBufferSeek(JSONScanGlobalState &gstate, Allocat
 
 	{
 		lock_guard<mutex> reader_guard(current_reader->lock);
+		if (file_handle.LastReadRequested()) {
+			return false;
+		}
 		if (!buffer.IsSet()) {
 			buffer = AllocateBuffer(gstate);
 		}
@@ -750,11 +753,15 @@ bool JSONScanLocalState::ReadNextBufferNoSeek(JSONScanGlobalState &gstate, Alloc
 		if (!current_reader->HasFileHandle() || !current_reader->IsOpen()) {
 			return false; // Couldn't read anything
 		}
+		auto &file_handle = current_reader->GetFileHandle();
+		if (file_handle.LastReadRequested()) {
+			return false;
+		}
 		if (!buffer.IsSet()) {
 			buffer = AllocateBuffer(gstate);
 		}
-		if (!current_reader->GetFileHandle().Read(buffer_ptr + prev_buffer_remainder, read_size, request_size,
-		                                          file_done, gstate.bind_data.type == JSONScanType::SAMPLE)) {
+		if (!file_handle.Read(buffer_ptr + prev_buffer_remainder, read_size, request_size, file_done,
+		                      gstate.bind_data.type == JSONScanType::SAMPLE)) {
 			return false; // Couldn't read anything
 		}
 		buffer_index = current_reader->GetBufferIndex();

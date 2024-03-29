@@ -44,6 +44,10 @@ bool JSONFileHandle::RequestedReadsComplete() {
 	return requested_reads == actual_reads;
 }
 
+bool JSONFileHandle::LastReadRequested() const {
+	return last_read_requested;
+}
+
 idx_t JSONFileHandle::FileSize() const {
 	return file_size;
 }
