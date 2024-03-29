@@ -53,7 +53,7 @@ bool DBConfigOptions::debug_print_bindings = false;
 #define FINAL_SETTING                                                                                                  \
 	{ nullptr, nullptr, LogicalTypeId::INVALID, nullptr, nullptr, nullptr, nullptr, nullptr }
 
-static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting),
+static const ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting),
                                                  DUCKDB_GLOBAL(AllowPersistentSecrets),
                                                  DUCKDB_GLOBAL(CheckpointThresholdSetting),
                                                  DUCKDB_GLOBAL(DebugCheckpointAbort),

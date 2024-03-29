@@ -100,7 +100,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Default Extensions
 //===--------------------------------------------------------------------===//
-static DefaultExtension internal_extensions[] = {
+static const DefaultExtension internal_extensions[] = {
     {"icu", "Adds support for time zones and collations using the ICU library", DUCKDB_EXTENSION_ICU_LINKED},
     {"excel", "Adds support for Excel-like format strings", DUCKDB_EXTENSION_EXCEL_LINKED},
     {"parquet", "Adds support for reading and writing parquet files", DUCKDB_EXTENSION_PARQUET_LINKED},
@@ -139,7 +139,7 @@ DefaultExtension ExtensionHelper::GetDefaultExtension(idx_t index) {
 //===--------------------------------------------------------------------===//
 // Allow Auto-Install Extensions
 //===--------------------------------------------------------------------===//
-static const char *auto_install[] = {"motherduck", "postgres_scanner", "mysql_scanner", "sqlite_scanner", nullptr};
+static const char *const auto_install[] = {"motherduck", "postgres_scanner", "mysql_scanner", "sqlite_scanner", nullptr};
 
 // TODO: unify with new autoload mechanism
 bool ExtensionHelper::AllowAutoInstall(const string &extension) {
@@ -398,7 +398,7 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 	return ExtensionLoadResult::LOADED_EXTENSION;
 }
 
-static vector<std::string> public_keys = {
+static const char * const public_keys[] = {
     R"(
 -----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA6aZuHUa1cLR9YDDYaEfi
@@ -618,10 +618,15 @@ SLWQo0+/ciQ21Zwz5SwimX8ep1YpqYirO04gcyGZzAfGboXRvdUwA+1bZvuUXdKC
 EMS5gLv50CzQqJXK9mNzPuYXNUIc4Pw4ssVWe0OfN3Od90gl5uFUwk/G9lWSYnBN
 3wIDAQAB
 -----END PUBLIC KEY-----
-)"};
+)",
+	nullptr};
 
 const vector<string> ExtensionHelper::GetPublicKeys() {
-	return public_keys;
+	vector<string> keys;
+	for(idx_t i = 0; public_keys[i]; i++) {
+		keys.emplace_back(public_keys[i]);
+	}
+	return keys;
 }
 
 } // namespace duckdb

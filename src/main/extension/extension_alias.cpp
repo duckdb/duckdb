@@ -2,7 +2,7 @@
 
 namespace duckdb {
 
-static ExtensionAlias internal_aliases[] = {{"http", "httpfs"}, // httpfs
+static const ExtensionAlias internal_aliases[] = {{"http", "httpfs"}, // httpfs
                                             {"https", "httpfs"},
                                             {"md", "motherduck"},       // motherduck
                                             {"mysql", "mysql_scanner"}, // mysql
