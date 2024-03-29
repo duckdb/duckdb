@@ -11,7 +11,7 @@ PRAGMA enable_verification
 statement ok
 SELECT * FROM duckdb_databases();
 
-query IIIIT
+query IIIII
 SELECT database_name, internal, readonly, path, type FROM duckdb_databases() ORDER BY database_name;
 ----
 memory	false	false	NULL	duckdb
