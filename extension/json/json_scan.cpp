@@ -704,6 +704,9 @@ bool JSONScanLocalState::ReadNextBufferSeek(JSONScanGlobalState &gstate, Allocat
 
 	{
 		lock_guard<mutex> reader_guard(current_reader->lock);
+		if (!buffer.IsSet()) {
+			buffer = AllocateBuffer(gstate);
+		}
 		if (!file_handle.GetPositionAndSize(read_position, read_size, request_size)) {
 			return false; // We weren't able to read
 		}
@@ -731,9 +734,6 @@ bool JSONScanLocalState::ReadNextBufferSeek(JSONScanGlobalState &gstate, Allocat
 	}
 
 	// Now read the file lock-free!
-	if (!buffer.IsSet()) {
-		buffer = AllocateBuffer(gstate);
-	}
 	file_handle.ReadAtPosition(buffer_ptr + prev_buffer_remainder, read_size, read_position, file_done,
 	                           gstate.bind_data.type == JSONScanType::SAMPLE, thread_local_filehandle);
 
