@@ -79,7 +79,7 @@ jobs:
       shell: bash
       run: |
         python scripts/windows_ci.py
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1 -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
         cmake --build . --config Release
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
@@ -207,7 +207,7 @@ jobs:
     - name: Build
       shell: bash
       run: |
-        cmake -DCMAKE_BUILD_TYPE=Release  -DCMAKE_GENERATOR_PLATFORM=Win32 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake"
+        cmake -DCMAKE_BUILD_TYPE=Release  -DCMAKE_GENERATOR_PLATFORM=Win32 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
         cmake --build . --config Release
 
     - name: Test
@@ -247,7 +247,7 @@ jobs:
        - name: Build
          shell: msys2 {0}
          run: |
-           cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_EXTENSIONS=parquet
+           cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_EXTENSIONS=parquet -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
            cmake --build . --config Release
 
        - name: Test

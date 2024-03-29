@@ -76,6 +76,7 @@ struct ConfigurationOption {
 typedef void (*set_option_callback_t)(ClientContext &context, SetScope scope, Value &parameter);
 
 struct ExtensionOption {
+	// NOLINTNEXTLINE: work around bug in clang-tidy
 	ExtensionOption(string description_p, LogicalType type_p, set_option_callback_t set_function_p,
 	                Value default_value_p)
 	    : description(std::move(description_p)), type(std::move(type_p)), set_function(set_function_p),
@@ -209,7 +210,7 @@ struct DBConfig {
 
 public:
 	DUCKDB_API DBConfig();
-	DUCKDB_API DBConfig(bool read_only);
+	explicit DUCKDB_API DBConfig(bool read_only);
 	DUCKDB_API DBConfig(const case_insensitive_map_t<Value> &config_dict, bool read_only);
 	DUCKDB_API ~DBConfig();
 

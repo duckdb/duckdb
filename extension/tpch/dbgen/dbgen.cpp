@@ -30,8 +30,12 @@ struct tpch_append_information {
 	duckdb::unique_ptr<InternalAppender> appender;
 };
 
-void append_value(tpch_append_information &info, int32_t value) {
+void append_int32(tpch_append_information &info, int32_t value) {
 	info.appender->Append<int32_t>(value);
+}
+
+void append_int64(tpch_append_information &info, int64_t value) {
+	info.appender->Append<int64_t>(value);
 }
 
 void append_string(tpch_append_information &info, const char *value) {
@@ -59,9 +63,9 @@ static void append_order(order_t *o, tpch_append_information *info) {
 	// fill the current row with the order information
 	append_info.appender->BeginRow();
 	// o_orderkey
-	append_value(append_info, o->okey);
+	append_int64(append_info, o->okey);
 	// o_custkey
-	append_value(append_info, o->custkey);
+	append_int64(append_info, o->custkey);
 	// o_orderstatus
 	append_char(append_info, o->orderstatus);
 	// o_totalprice
@@ -73,7 +77,7 @@ static void append_order(order_t *o, tpch_append_information *info) {
 	// o_clerk
 	append_string(append_info, o->clerk);
 	// o_shippriority
-	append_value(append_info, o->spriority);
+	append_int32(append_info, o->spriority);
 	// o_comment
 	append_string(append_info, o->comment);
 	append_info.appender->EndRow();
@@ -86,13 +90,13 @@ static void append_line(order_t *o, tpch_append_information *info) {
 	for (DSS_HUGE i = 0; i < o->lines; i++) {
 		append_info.appender->BeginRow();
 		// l_orderkey
-		append_value(append_info, o->l[i].okey);
+		append_int64(append_info, o->l[i].okey);
 		// l_partkey
-		append_value(append_info, o->l[i].partkey);
+		append_int64(append_info, o->l[i].partkey);
 		// l_suppkey
-		append_value(append_info, o->l[i].suppkey);
+		append_int64(append_info, o->l[i].suppkey);
 		// l_linenumber
-		append_value(append_info, o->l[i].lcnt);
+		append_int64(append_info, o->l[i].lcnt);
 		// l_quantity
 		append_decimal(append_info, o->l[i].quantity);
 		// l_extendedprice
@@ -131,13 +135,13 @@ static void append_supp(supplier_t *supp, tpch_append_information *info) {
 
 	append_info.appender->BeginRow();
 	// s_suppkey
-	append_value(append_info, supp->suppkey);
+	append_int64(append_info, supp->suppkey);
 	// s_name
 	append_string(append_info, supp->name);
 	// s_address
 	append_string(append_info, supp->address);
 	// s_nationkey
-	append_value(append_info, supp->nation_code);
+	append_int32(append_info, supp->nation_code);
 	// s_phone
 	append_string(append_info, supp->phone);
 	// s_acctbal
@@ -152,13 +156,13 @@ static void append_cust(customer_t *c, tpch_append_information *info) {
 
 	append_info.appender->BeginRow();
 	// c_custkey
-	append_value(append_info, c->custkey);
+	append_int64(append_info, c->custkey);
 	// c_name
 	append_string(append_info, c->name);
 	// c_address
 	append_string(append_info, c->address);
 	// c_nationkey
-	append_value(append_info, c->nation_code);
+	append_int32(append_info, c->nation_code);
 	// c_phone
 	append_string(append_info, c->phone);
 	// c_acctbal
@@ -175,7 +179,7 @@ static void append_part(part_t *part, tpch_append_information *info) {
 
 	append_info.appender->BeginRow();
 	// p_partkey
-	append_value(append_info, part->partkey);
+	append_int64(append_info, part->partkey);
 	// p_name
 	append_string(append_info, part->name);
 	// p_mfgr
@@ -185,7 +189,7 @@ static void append_part(part_t *part, tpch_append_information *info) {
 	// p_type
 	append_string(append_info, part->type);
 	// p_size
-	append_value(append_info, part->size);
+	append_int32(append_info, part->size);
 	// p_container
 	append_string(append_info, part->container);
 	// p_retailprice
@@ -200,11 +204,11 @@ static void append_psupp(part_t *part, tpch_append_information *info) {
 	for (size_t i = 0; i < SUPP_PER_PART; i++) {
 		append_info.appender->BeginRow();
 		// ps_partkey
-		append_value(append_info, part->s[i].partkey);
+		append_int64(append_info, part->s[i].partkey);
 		// ps_suppkey
-		append_value(append_info, part->s[i].suppkey);
+		append_int64(append_info, part->s[i].suppkey);
 		// ps_availqty
-		append_value(append_info, part->s[i].qty);
+		append_int64(append_info, part->s[i].qty);
 		// ps_supplycost
 		append_decimal(append_info, part->s[i].scost);
 		// ps_comment
@@ -223,11 +227,11 @@ static void append_nation(code_t *c, tpch_append_information *info) {
 
 	append_info.appender->BeginRow();
 	// n_nationkey
-	append_value(append_info, c->code);
+	append_int32(append_info, c->code);
 	// n_name
 	append_string(append_info, c->text);
 	// n_regionkey
-	append_value(append_info, c->join);
+	append_int32(append_info, c->join);
 	// n_comment
 	append_string(append_info, c->comment);
 	append_info.appender->EndRow();
@@ -238,7 +242,7 @@ static void append_region(code_t *c, tpch_append_information *info) {
 
 	append_info.appender->BeginRow();
 	// r_regionkey
-	append_value(append_info, c->code);
+	append_int32(append_info, c->code);
 	// r_name
 	append_string(append_info, c->text);
 	// r_comment
@@ -344,7 +348,7 @@ struct SupplierInfo {
 };
 const char *SupplierInfo::Columns[] = {"s_suppkey", "s_name",    "s_address", "s_nationkey",
                                        "s_phone",   "s_acctbal", "s_comment"};
-const LogicalType SupplierInfo::Types[] = {LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR),
+const LogicalType SupplierInfo::Types[] = {LogicalType(LogicalTypeId::BIGINT),  LogicalType(LogicalTypeId::VARCHAR),
                                            LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER),
                                            LogicalType(LogicalTypeId::VARCHAR), LogicalType::DECIMAL(15, 2),
                                            LogicalType(LogicalTypeId::VARCHAR)};
@@ -357,7 +361,7 @@ struct CustomerInfo {
 };
 const char *CustomerInfo::Columns[] = {"c_custkey", "c_name",    "c_address",    "c_nationkey",
                                        "c_phone",   "c_acctbal", "c_mktsegment", "c_comment"};
-const LogicalType CustomerInfo::Types[] = {LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR),
+const LogicalType CustomerInfo::Types[] = {LogicalType(LogicalTypeId::BIGINT),  LogicalType(LogicalTypeId::VARCHAR),
                                            LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER),
                                            LogicalType(LogicalTypeId::VARCHAR), LogicalType::DECIMAL(15, 2),
                                            LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR)};
@@ -371,7 +375,7 @@ struct PartInfo {
 const char *PartInfo::Columns[] = {"p_partkey", "p_name",      "p_mfgr",        "p_brand",  "p_type",
                                    "p_size",    "p_container", "p_retailprice", "p_comment"};
 const LogicalType PartInfo::Types[] = {
-    LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR),
+    LogicalType(LogicalTypeId::BIGINT),  LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR),
     LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER),
     LogicalType(LogicalTypeId::VARCHAR), LogicalType::DECIMAL(15, 2),         LogicalType(LogicalTypeId::VARCHAR)};
 
@@ -382,8 +386,8 @@ struct PartsuppInfo {
 	static const LogicalType Types[];
 };
 const char *PartsuppInfo::Columns[] = {"ps_partkey", "ps_suppkey", "ps_availqty", "ps_supplycost", "ps_comment"};
-const LogicalType PartsuppInfo::Types[] = {LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER),
-                                           LogicalType(LogicalTypeId::INTEGER), LogicalType::DECIMAL(15, 2),
+const LogicalType PartsuppInfo::Types[] = {LogicalType(LogicalTypeId::BIGINT),  LogicalType(LogicalTypeId::BIGINT), 
+                                           LogicalType(LogicalTypeId::BIGINT),  LogicalType::DECIMAL(15, 2),
                                            LogicalType(LogicalTypeId::VARCHAR)};
 
 struct OrdersInfo {
@@ -395,7 +399,7 @@ struct OrdersInfo {
 const char *OrdersInfo::Columns[] = {"o_orderkey",      "o_custkey", "o_orderstatus",  "o_totalprice", "o_orderdate",
                                      "o_orderpriority", "o_clerk",   "o_shippriority", "o_comment"};
 const LogicalType OrdersInfo::Types[] = {
-    LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR),
+    LogicalType(LogicalTypeId::BIGINT),  LogicalType(LogicalTypeId::BIGINT),  LogicalType(LogicalTypeId::VARCHAR),
     LogicalType::DECIMAL(15, 2),         LogicalType(LogicalTypeId::DATE),    LogicalType(LogicalTypeId::VARCHAR),
     LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR)};
 
@@ -410,8 +414,8 @@ const char *LineitemInfo::Columns[] = {"l_orderkey",    "l_partkey",       "l_su
                                        "l_returnflag",  "l_linestatus",    "l_shipdate", "l_commitdate",
                                        "l_receiptdate", "l_shipinstruct",  "l_shipmode", "l_comment"};
 const LogicalType LineitemInfo::Types[] = {
-    LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER),
-    LogicalType(LogicalTypeId::INTEGER), LogicalType::DECIMAL(15, 2),         LogicalType::DECIMAL(15, 2),
+    LogicalType(LogicalTypeId::BIGINT),  LogicalType(LogicalTypeId::BIGINT),  LogicalType(LogicalTypeId::BIGINT), 
+    LogicalType(LogicalTypeId::BIGINT),  LogicalType::DECIMAL(15, 2),         LogicalType::DECIMAL(15, 2),
     LogicalType::DECIMAL(15, 2),         LogicalType::DECIMAL(15, 2),         LogicalType(LogicalTypeId::VARCHAR),
     LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DATE),    LogicalType(LogicalTypeId::DATE),
     LogicalType(LogicalTypeId::DATE),    LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR),

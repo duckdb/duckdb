@@ -37,22 +37,22 @@ struct BoxRendererConfig {
 	RenderMode render_mode = RenderMode::ROWS;
 
 #ifndef DUCKDB_ASCII_TREE_RENDERER
-	const char *LTCORNER = "\342\224\214"; // "┌";
-	const char *RTCORNER = "\342\224\220"; // "┐";
-	const char *LDCORNER = "\342\224\224"; // "└";
-	const char *RDCORNER = "\342\224\230"; // "┘";
+	const char *LTCORNER = "\342\224\214"; // NOLINT: "┌";
+	const char *RTCORNER = "\342\224\220"; // NOLINT: "┐";
+	const char *LDCORNER = "\342\224\224"; // NOLINT: "└";
+	const char *RDCORNER = "\342\224\230"; // NOLINT: "┘";
 
-	const char *MIDDLE = "\342\224\274";  // "┼";
-	const char *TMIDDLE = "\342\224\254"; // "┬";
-	const char *LMIDDLE = "\342\224\234"; // "├";
-	const char *RMIDDLE = "\342\224\244"; // "┤";
-	const char *DMIDDLE = "\342\224\264"; // "┴";
+	const char *MIDDLE = "\342\224\274";  // NOLINT: "┼";
+	const char *TMIDDLE = "\342\224\254"; // NOLINT: "┬";
+	const char *LMIDDLE = "\342\224\234"; // NOLINT: "├";
+	const char *RMIDDLE = "\342\224\244"; // NOLINT: "┤";
+	const char *DMIDDLE = "\342\224\264"; // NOLINT: "┴";
 
-	const char *VERTICAL = "\342\224\202";   // "│";
-	const char *HORIZONTAL = "\342\224\200"; // "─";
+	const char *VERTICAL = "\342\224\202";   // NOLINT: "│";
+	const char *HORIZONTAL = "\342\224\200"; // NOLINT: "─";
 
-	const char *DOTDOTDOT = "\xE2\x80\xA6"; // "…";
-	const char *DOT = "\xC2\xB7";           // "·";
+	const char *DOTDOTDOT = "\xE2\x80\xA6"; // NOLINT: "…";
+	const char *DOT = "\xC2\xB7";           // NOLINT: "·";
 	const idx_t DOTDOTDOT_LENGTH = 1;
 
 #else

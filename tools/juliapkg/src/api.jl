@@ -1230,7 +1230,7 @@ function duckdb_bind_blob(prepared_statement, param_idx, val, length)
         (duckdb_prepared_statement, Int32, Ptr{Cvoid}, Int32),
         prepared_statement,
         param_idx,
-        data,
+        val,
         length
     )
 end

@@ -40,7 +40,6 @@ void NumpyBind::Bind(const ClientContext &context, py::handle df, vector<PandasC
 		} else if (bind_data.numpy_type.type == NumpyNullableType::OBJECT &&
 		           string(py::str(df_types[col_idx])) == "string") {
 			bind_data.numpy_type.type = NumpyNullableType::CATEGORY;
-			auto enum_name = string(py::str(df_columns[col_idx]));
 			// here we call numpy.unique
 			// this function call will return the unique values of a given array
 			// together with the indices to reconstruct the given array

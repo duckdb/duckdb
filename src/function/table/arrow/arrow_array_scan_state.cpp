@@ -14,7 +14,7 @@ ArrowArrayScanState &ArrowArrayScanState::GetChild(idx_t child_idx) {
 		auto child_p = make_uniq<ArrowArrayScanState>(state);
 		auto &child = *child_p;
 		child.owned_data = owned_data;
-		children.emplace(std::make_pair(child_idx, std::move(child_p)));
+		children.emplace(child_idx, std::move(child_p));
 		return child;
 	}
 	if (!it->second->owned_data) {
