@@ -173,7 +173,6 @@ string StringUtil::Join(const set<string> &input, const string &separator) {
 
 string StringUtil::BytesToHumanReadableString(idx_t bytes, idx_t multiplier) {
 	D_ASSERT(multiplier == 1000 || multiplier == 1024);
-	string db_size;
 	idx_t array[6] = {};
 	const char *unit[2][6] = {{"bytes", "KiB", "MiB", "GiB", "TiB", "PiB"}, {"bytes", "kB", "MB", "GB", "TB", "PB"}};
 

@@ -24,7 +24,7 @@ public:
 //! The SpecificTypeMatcher class matches only a single specified type
 class SpecificTypeMatcher : public TypeMatcher {
 public:
-	explicit SpecificTypeMatcher(LogicalType type) : type(type) {
+	explicit SpecificTypeMatcher(LogicalType type) : type(std::move(type)) {
 	}
 
 	bool Match(const LogicalType &type_p) override {

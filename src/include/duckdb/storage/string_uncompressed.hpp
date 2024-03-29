@@ -83,9 +83,9 @@ public:
 		D_ASSERT(segment.GetBlockOffset() == 0);
 		auto handle_ptr = handle.Ptr();
 		auto source_data = UnifiedVectorFormat::GetData<string_t>(data);
-		auto result_data = (int32_t *)(handle_ptr + DICTIONARY_HEADER_SIZE);
-		uint32_t *dictionary_size = (uint32_t *)handle_ptr;
-		uint32_t *dictionary_end = (uint32_t *)(handle_ptr + sizeof(uint32_t));
+		auto result_data = reinterpret_cast<int32_t *>(handle_ptr + DICTIONARY_HEADER_SIZE);
+		auto dictionary_size = reinterpret_cast<uint32_t *>(handle_ptr);
+		auto dictionary_end = reinterpret_cast<uint32_t *>(handle_ptr + sizeof(uint32_t));
 
 		idx_t remaining_space = RemainingSpace(segment, handle);
 		auto base_count = segment.count.load();
@@ -137,15 +137,15 @@ public:
 			if (DUCKDB_UNLIKELY(use_overflow_block)) {
 				// write to overflow blocks
 				block_id_t block;
-				int32_t offset;
+				int32_t current_offset;
 				// write the string into the current string block
-				WriteString(segment, source_data[source_idx], block, offset);
-				*dictionary_size += required_space;
-				remaining_space -= required_space;
+				WriteString(segment, source_data[source_idx], block, current_offset);
+				*dictionary_size += BIG_STRING_MARKER_SIZE;
+				remaining_space -= BIG_STRING_MARKER_SIZE;
 				auto dict_pos = end - *dictionary_size;
 
 				// write a big string marker into the dictionary
-				WriteStringMarker(dict_pos, block, offset);
+				WriteStringMarker(dict_pos, block, current_offset);
 
 				// place the dictionary offset into the set of vectors
 				// note: for overflow strings we write negative value

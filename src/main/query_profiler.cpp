@@ -470,7 +470,7 @@ static string JSONSanitize(const string &text) {
 	return result;
 }
 
-static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int depth = 1) {
+static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, idx_t depth = 1) {
 	ss << string(depth * 3, ' ') << " {\n";
 	ss << string(depth * 3, ' ') << "   \"name\": \"" + JSONSanitize(node.name) + "\",\n";
 	ss << string(depth * 3, ' ') << "   \"timing\":" + to_string(node.info.time) + ",\n";

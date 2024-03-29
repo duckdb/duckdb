@@ -171,6 +171,8 @@ inline uint64_t HashOtherSize(const_data_ptr_t &data, const idx_t &len) {
 		CreateIntegerRecursive<1>(data, x);
 		break;
 	case 0:
+	default:
+		D_ASSERT((len & 7) == 0);
 		break;
 	}
 	return TemplatedHash<uint64_t>(x);
