@@ -9,6 +9,7 @@
 #pragma once
 
 #include "parquet_reader.hpp"
+#include "duckdb/parser/parsed_data/copy_info.hpp"
 
 namespace duckdb {
 class ParquetMetadataProvider;
@@ -153,6 +154,7 @@ protected:
 //! - MultiFileMetaDataProvider
 class ParquetMetadataProvider {
 public:
+    virtual ~ParquetMetadataProvider();
 	//! Whether the scan can produce data at all. (e.g. filter pushdown can eliminate every tuple)
 	virtual bool HaveData() = 0;
 	//! Return the initial reader (could be nullptr) TODO: remove the initial reader thing
@@ -163,7 +165,7 @@ public:
 	virtual string GetFile(idx_t i) = 0;
 //	//! This would be an optional call to be implemented by the HiveFilteredGlob; necessary for hivepartitioning
 //	virtual const string GetAnyFile() = 0;
-	//! Returns the deletion vector for a file TODO: implement
+	//! Returns the deletion vector for a file TODO: implement, possibly as an extra filter on the file row number for row based deletes,
 	virtual string GetDeletionVector(string) = 0;
 	//! Pushes the filters down into the ParquetScanMetaDataProvider; this ensures when GetFile() is called, the
 	//! MetaDataProvider can use the filters to ensure only files are passed through that match the filters

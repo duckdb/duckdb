@@ -244,6 +244,7 @@ TableFunctionSet ParquetScanFunction::GetFunctionSet() {
     return MultiFileReader::CreateFunctionSet(table_function);
 }
 
+// TODO: can we remove the need to statically link delta against code from the parquet extension?
 TableFunction ParquetScanFunction::CreateParquetScan(const string &name, table_function_bind_t bind_function,
                                              table_function_serialize_t serialize, table_function_deserialize_t deserialize) {
     TableFunction table_function(name, {LogicalType::VARCHAR}, ParquetScanImplementation, bind_function,
@@ -1182,6 +1183,9 @@ void ParquetExtension::Load(DuckDB &db) {
 std::string ParquetExtension::Name() {
 	return "parquet";
 }
+
+ParquetMetadataProvider::~ParquetMetadataProvider() {
+};
 
 bool MultiFileMetaDataProvider::HaveData() {
 	return !files.empty();
