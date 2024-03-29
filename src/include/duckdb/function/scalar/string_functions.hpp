@@ -12,7 +12,7 @@
 #include "utf8proc.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 
-namespace re2 {
+namespace duckdb_re2 {
 class RE2;
 }
 

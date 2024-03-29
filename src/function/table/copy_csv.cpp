@@ -270,8 +270,8 @@ struct LocalWriteCSVData : public LocalFunctionData {
 struct GlobalWriteCSVData : public GlobalFunctionData {
 	GlobalWriteCSVData(FileSystem &fs, const string &file_path, FileCompressionType compression)
 	    : fs(fs), written_anything(false) {
-		handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW,
-		                     FileLockType::WRITE_LOCK, compression);
+		handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW |
+		                                    FileLockType::WRITE_LOCK | compression);
 	}
 
 	//! Write generic data, e.g., CSV header

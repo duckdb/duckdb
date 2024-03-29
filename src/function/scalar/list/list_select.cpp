@@ -149,8 +149,6 @@ static unique_ptr<FunctionData> ListSelectBind(ClientContext &context, ScalarFun
 
 	D_ASSERT(LogicalTypeId::LIST == arguments[0]->return_type.id() ||
 	         LogicalTypeId::SQLNULL == arguments[0]->return_type.id());
-	D_ASSERT(LogicalTypeId::LIST == arguments[1]->return_type.id() ||
-	         LogicalTypeId::SQLNULL == arguments[1]->return_type.id());
 
 	bound_function.return_type = arguments[0]->return_type;
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);

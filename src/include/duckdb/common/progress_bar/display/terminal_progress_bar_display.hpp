@@ -27,11 +27,11 @@ private:
 	int32_t rendered_percentage = -1;
 	static constexpr const idx_t PARTIAL_BLOCK_COUNT = UnicodeBar::PartialBlocksCount();
 #ifndef DUCKDB_ASCII_TREE_RENDERER
-	const char *PROGRESS_EMPTY = " ";
-	const char *const *PROGRESS_PARTIAL = UnicodeBar::PartialBlocks();
-	const char *PROGRESS_BLOCK = UnicodeBar::FullBlock();
-	const char *PROGRESS_START = "\xE2\x96\x95";
-	const char *PROGRESS_END = "\xE2\x96\x8F";
+	const char *PROGRESS_EMPTY = " ";                                  // NOLINT
+	const char *const *PROGRESS_PARTIAL = UnicodeBar::PartialBlocks(); // NOLINT
+	const char *PROGRESS_BLOCK = UnicodeBar::FullBlock();              // NOLINT
+	const char *PROGRESS_START = "\xE2\x96\x95";                       // NOLINT
+	const char *PROGRESS_END = "\xE2\x96\x8F";                         // NOLINT
 #else
 	const char *PROGRESS_EMPTY = " ";
 	const char *const PROGRESS_PARTIAL[PARTIAL_BLOCK_COUNT] = {" ", " ", " ", " ", " ", " ", " ", " "};

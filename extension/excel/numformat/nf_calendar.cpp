@@ -185,8 +185,7 @@ std::wstring Calendar::getDisplayName(sal_Int16 displayIndex, sal_Int16 idx, sal
 			return L"";
 		break;
 	case CalendarDisplayIndex::CDI_DAY:
-		if (idx >= pFormatter->getDayOfWeekSize())
-			return L"";
+		idx %= pFormatter->getDayOfWeekSize();
 		if (nameType == 0)
 			aStr = pFormatter->getDayOfWeekAbbrvName(idx);
 		else if (nameType == 1)
