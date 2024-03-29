@@ -29,7 +29,7 @@ public:
 	string catalog;
 
 public:
-	LogicalDependency(CatalogEntry &entry);
+	explicit LogicalDependency(CatalogEntry &entry);
 	LogicalDependency();
 	bool operator==(const LogicalDependency &other) const;
 };
