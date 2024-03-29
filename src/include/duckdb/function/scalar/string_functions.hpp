@@ -19,7 +19,7 @@ class RE2;
 namespace duckdb {
 
 struct LowerFun {
-	static const uint8_t ascii_to_lower_map[];
+	static const uint8_t ASCII_TO_LOWER_MAP[];
 
 	//! Returns the length of the result string obtained from lowercasing the given input (in bytes)
 	static idx_t LowerLength(const char *input_data, idx_t input_length);
@@ -31,7 +31,7 @@ struct LowerFun {
 };
 
 struct UpperFun {
-	static const uint8_t ascii_to_upper_map[];
+	static const uint8_t ASCII_TO_UPPER_MAP[];
 
 	static void RegisterFunction(BuiltinFunctions &set);
 };
