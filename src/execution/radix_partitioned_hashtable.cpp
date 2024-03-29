@@ -80,11 +80,10 @@ enum class AggregatePartitionState : uint8_t {
 
 struct AggregatePartition {
 	explicit AggregatePartition(unique_ptr<TupleDataCollection> data_p)
-	    : lock(make_uniq<mutex>()), state(AggregatePartitionState::READY_TO_FINALIZE), data(std::move(data_p)),
-	      progress(0) {
+	    : state(AggregatePartitionState::READY_TO_FINALIZE), data(std::move(data_p)), progress(0) {
 	}
 
-	unique_ptr<mutex> lock;
+	mutex lock;
 	AggregatePartitionState state;
 
 	unique_ptr<TupleDataCollection> data;
@@ -661,7 +660,7 @@ SourceResultType RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &si
 
 	// We got a partition index
 	auto &partition = *sink.partitions[lstate.task_idx];
-	auto partition_lock = unique_lock<mutex>(*partition.lock);
+	auto partition_lock = unique_lock<mutex>(partition.lock);
 	switch (partition.state) {
 	case AggregatePartitionState::READY_TO_FINALIZE:
 		partition.state = AggregatePartitionState::FINALIZE_IN_PROGRESS;
@@ -754,7 +753,7 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 	}
 
 	// Update partition state
-	lock_guard<mutex> partition_guard(*partition.lock);
+	lock_guard<mutex> partition_guard(partition.lock);
 	partition.state = AggregatePartitionState::READY_TO_SCAN;
 	for (auto &blocked_task : partition.blocked_tasks) {
 		blocked_task.Callback();
