@@ -83,9 +83,9 @@ public:
 	//! Create a vector that references the other vector
 	DUCKDB_API Vector(Vector &other);
 	//! Create a vector that slices another vector
-	DUCKDB_API explicit Vector(Vector &other, const SelectionVector &sel, idx_t count);
+	DUCKDB_API explicit Vector(const Vector &other, const SelectionVector &sel, idx_t count);
 	//! Create a vector that slices another vector between a pair of offsets
-	DUCKDB_API explicit Vector(Vector &other, idx_t offset, idx_t end);
+	DUCKDB_API explicit Vector(const Vector &other, idx_t offset, idx_t end);
 	//! Create a vector of size one holding the passed on value
 	DUCKDB_API explicit Vector(const Value &value);
 	//! Create a vector of size tuple_count (non-standard)
@@ -390,6 +390,10 @@ struct ListVector {
 	DUCKDB_API static void GetConsecutiveChildSelVector(Vector &list, SelectionVector &sel, idx_t offset, idx_t count);
 	//! Share the entry of the other list vector
 	DUCKDB_API static void ReferenceEntry(Vector &vector, Vector &other);
+
+private:
+	template <class T>
+	static T &GetEntryInternal(T &vector);
 };
 
 struct StringVector {
@@ -493,6 +497,10 @@ struct ArrayVector {
 	DUCKDB_API static Vector &GetEntry(Vector &vector);
 	//! Gets the total size of the underlying child-vector of an array
 	DUCKDB_API static idx_t GetTotalSize(const Vector &vector);
+
+private:
+	template <class T>
+	static T &GetEntryInternal(T &vector);
 };
 
 enum class UnionInvalidReason : uint8_t {

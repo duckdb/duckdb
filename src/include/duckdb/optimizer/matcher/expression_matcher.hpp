@@ -40,7 +40,7 @@ public:
 //! The ExpressionEqualityMatcher matches on equality with another (given) expression
 class ExpressionEqualityMatcher : public ExpressionMatcher {
 public:
-	explicit ExpressionEqualityMatcher(Expression &expr)
+	explicit ExpressionEqualityMatcher(const Expression &expr)
 	    : ExpressionMatcher(ExpressionClass::INVALID), expression(expr) {
 	}
 
