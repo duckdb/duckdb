@@ -2127,7 +2127,8 @@ const vector<unique_ptr<Vector>> &StructVector::GetEntries(const Vector &vector)
 //===--------------------------------------------------------------------===//
 // ListVector
 //===--------------------------------------------------------------------===//
-const Vector &ListVector::GetEntry(const Vector &vector) {
+template <class T>
+T &ListVector::GetEntryInternal(T &vector) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::LIST || vector.GetType().id() == LogicalTypeId::MAP);
 	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(vector);
@@ -2137,12 +2138,15 @@ const Vector &ListVector::GetEntry(const Vector &vector) {
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	D_ASSERT(vector.auxiliary);
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::LIST_BUFFER);
-	return vector.auxiliary->Cast<VectorListBuffer>().GetChild();
+	return vector.auxiliary->template Cast<VectorListBuffer>().GetChild();
+}
+
+const Vector &ListVector::GetEntry(const Vector &vector) {
+	return GetEntryInternal<const Vector>(vector);
 }
 
 Vector &ListVector::GetEntry(Vector &vector) {
-	const Vector &cvector = vector;
-	return const_cast<Vector &>(ListVector::GetEntry(cvector)); // NOLINT: avoid duplicate implementation...
+	return GetEntryInternal<Vector>(vector);
 }
 
 void ListVector::Reserve(Vector &vector, idx_t required_capacity) {
@@ -2496,7 +2500,8 @@ UnionInvalidReason UnionVector::CheckUnionValidity(Vector &vector_p, idx_t count
 //===--------------------------------------------------------------------===//
 // ArrayVector
 //===--------------------------------------------------------------------===//
-const Vector &ArrayVector::GetEntry(const Vector &vector) {
+template <class T>
+T &ArrayVector::GetEntryInternal(T &vector) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::ARRAY);
 	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(vector);
@@ -2506,12 +2511,15 @@ const Vector &ArrayVector::GetEntry(const Vector &vector) {
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	D_ASSERT(vector.auxiliary);
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::ARRAY_BUFFER);
-	return vector.auxiliary->Cast<VectorArrayBuffer>().GetChild();
+	return vector.auxiliary->template Cast<VectorArrayBuffer>().GetChild();
+}
+
+const Vector &ArrayVector::GetEntry(const Vector &vector) {
+	return GetEntryInternal<const Vector>(vector);
 }
 
 Vector &ArrayVector::GetEntry(Vector &vector) {
-	const Vector &cvector = vector;
-	return const_cast<Vector &>(ArrayVector::GetEntry(cvector)); // NOLINT: avoid duplicate implementation
+	return GetEntryInternal<Vector>(vector);
 }
 
 idx_t ArrayVector::GetTotalSize(const Vector &vector) {

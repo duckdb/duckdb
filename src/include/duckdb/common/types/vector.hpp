@@ -390,6 +390,10 @@ struct ListVector {
 	DUCKDB_API static void GetConsecutiveChildSelVector(Vector &list, SelectionVector &sel, idx_t offset, idx_t count);
 	//! Share the entry of the other list vector
 	DUCKDB_API static void ReferenceEntry(Vector &vector, Vector &other);
+
+private:
+	template <class T>
+	static T &GetEntryInternal(T &vector);
 };
 
 struct StringVector {
@@ -493,6 +497,10 @@ struct ArrayVector {
 	DUCKDB_API static Vector &GetEntry(Vector &vector);
 	//! Gets the total size of the underlying child-vector of an array
 	DUCKDB_API static idx_t GetTotalSize(const Vector &vector);
+
+private:
+	template <class T>
+	static T &GetEntryInternal(T &vector);
 };
 
 enum class UnionInvalidReason : uint8_t {
