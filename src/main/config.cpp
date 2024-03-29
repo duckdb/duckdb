@@ -150,7 +150,7 @@ vector<std::string> DBConfig::GetOptionNames() {
 	return names;
 }
 
-ConfigurationOption *DBConfig::GetOptionByIndex(idx_t target_index) {
+optional_ptr<const ConfigurationOption> DBConfig::GetOptionByIndex(idx_t target_index) {
 	for (idx_t index = 0; internal_options[index].name; index++) {
 		if (index == target_index) {
 			return internal_options + index;
@@ -159,7 +159,7 @@ ConfigurationOption *DBConfig::GetOptionByIndex(idx_t target_index) {
 	return nullptr;
 }
 
-ConfigurationOption *DBConfig::GetOptionByName(const string &name) {
+optional_ptr<const ConfigurationOption> DBConfig::GetOptionByName(const string &name) {
 	auto lname = StringUtil::Lower(name);
 	for (idx_t index = 0; internal_options[index].name; index++) {
 		D_ASSERT(StringUtil::Lower(internal_options[index].name) == string(internal_options[index].name));

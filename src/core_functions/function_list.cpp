@@ -394,7 +394,7 @@ static const StaticFunctionDefinition internal_functions[] = {
 	FINAL_FUNCTION
 };
 
-StaticFunctionDefinition *StaticFunctionDefinition::GetFunctionList() {
+const StaticFunctionDefinition *StaticFunctionDefinition::GetFunctionList() {
 	return internal_functions;
 }
 
