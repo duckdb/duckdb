@@ -22,7 +22,6 @@
 #include "duckdb/common/enums/cte_materialize.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/enums/debug_initialize.hpp"
-#include "duckdb/common/enums/duck_catalog_set_type.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
@@ -1634,64 +1633,6 @@ DistinctType EnumUtil::FromString<DistinctType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "DISTINCT_ON")) {
 		return DistinctType::DISTINCT_ON;
-	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
-}
-
-template<>
-const char* EnumUtil::ToChars<DuckCatalogSetType>(DuckCatalogSetType value) {
-	switch(value) {
-	case DuckCatalogSetType::TABLES:
-		return "TABLES";
-	case DuckCatalogSetType::INDEXES:
-		return "INDEXES";
-	case DuckCatalogSetType::TABLE_FUNCTIONS:
-		return "TABLE_FUNCTIONS";
-	case DuckCatalogSetType::COPY_FUNCTIONS:
-		return "COPY_FUNCTIONS";
-	case DuckCatalogSetType::PRAGMA_FUNCTIONS:
-		return "PRAGMA_FUNCTIONS";
-	case DuckCatalogSetType::FUNCTIONS:
-		return "FUNCTIONS";
-	case DuckCatalogSetType::SEQUENCES:
-		return "SEQUENCES";
-	case DuckCatalogSetType::COLLATIONS:
-		return "COLLATIONS";
-	case DuckCatalogSetType::TYPES:
-		return "TYPES";
-	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
-	}
-}
-
-template<>
-DuckCatalogSetType EnumUtil::FromString<DuckCatalogSetType>(const char *value) {
-	if (StringUtil::Equals(value, "TABLES")) {
-		return DuckCatalogSetType::TABLES;
-	}
-	if (StringUtil::Equals(value, "INDEXES")) {
-		return DuckCatalogSetType::INDEXES;
-	}
-	if (StringUtil::Equals(value, "TABLE_FUNCTIONS")) {
-		return DuckCatalogSetType::TABLE_FUNCTIONS;
-	}
-	if (StringUtil::Equals(value, "COPY_FUNCTIONS")) {
-		return DuckCatalogSetType::COPY_FUNCTIONS;
-	}
-	if (StringUtil::Equals(value, "PRAGMA_FUNCTIONS")) {
-		return DuckCatalogSetType::PRAGMA_FUNCTIONS;
-	}
-	if (StringUtil::Equals(value, "FUNCTIONS")) {
-		return DuckCatalogSetType::FUNCTIONS;
-	}
-	if (StringUtil::Equals(value, "SEQUENCES")) {
-		return DuckCatalogSetType::SEQUENCES;
-	}
-	if (StringUtil::Equals(value, "COLLATIONS")) {
-		return DuckCatalogSetType::COLLATIONS;
-	}
-	if (StringUtil::Equals(value, "TYPES")) {
-		return DuckCatalogSetType::TYPES;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

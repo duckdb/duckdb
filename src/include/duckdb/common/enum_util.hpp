@@ -112,8 +112,6 @@ enum class DeprecatedIndexType : uint8_t;
 
 enum class DistinctType : uint8_t;
 
-enum class DuckCatalogSetType : uint8_t;
-
 enum class ErrorType : uint16_t;
 
 enum class ExceptionFormatValueType : uint8_t;
@@ -450,9 +448,6 @@ const char* EnumUtil::ToChars<DeprecatedIndexType>(DeprecatedIndexType value);
 
 template<>
 const char* EnumUtil::ToChars<DistinctType>(DistinctType value);
-
-template<>
-const char* EnumUtil::ToChars<DuckCatalogSetType>(DuckCatalogSetType value);
 
 template<>
 const char* EnumUtil::ToChars<ErrorType>(ErrorType value);
@@ -898,9 +893,6 @@ DeprecatedIndexType EnumUtil::FromString<DeprecatedIndexType>(const char *value)
 
 template<>
 DistinctType EnumUtil::FromString<DistinctType>(const char *value);
-
-template<>
-DuckCatalogSetType EnumUtil::FromString<DuckCatalogSetType>(const char *value);
 
 template<>
 ErrorType EnumUtil::FromString<ErrorType>(const char *value);
