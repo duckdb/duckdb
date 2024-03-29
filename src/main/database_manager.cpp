@@ -25,7 +25,7 @@ DatabaseManager &DatabaseManager::Get(AttachedDatabase &db) {
 
 void DatabaseManager::InitializeSystemCatalog() {
 	// The SYSTEM_DATABASE has no persistent storage.
-	system->Initialize();
+	system->Initialize(optional_idx());
 }
 
 optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &context, const string &name) {
