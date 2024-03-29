@@ -439,6 +439,11 @@ static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) 
 	return false;
 }
 
+unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateStatement &stmt,
+                                                         TableCatalogEntry &table, unique_ptr<LogicalOperator> plan) {
+	return binder.BindCreateIndex(stmt, table, std::move(plan));
+}
+
 unique_ptr<LogicalOperator> Binder::BindCreateIndex(CreateStatement &stmt, TableCatalogEntry &table,
                                                     unique_ptr<LogicalOperator> plan) {
 	D_ASSERT(plan->type == LogicalOperatorType::LOGICAL_GET);
