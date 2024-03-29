@@ -596,7 +596,7 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 		// Open the file if it is not yet open
 		if (!current_reader->IsOpen()) {
 			current_reader->OpenJSONFile();
-			if (current_reader->GetFileHandle().FileSize() == 0) {
+			if (current_reader->GetFileHandle().FileSize() == 0 && !current_reader->GetFileHandle().IsPipe()) {
 				current_reader->GetFileHandle().Close();
 				// Skip over empty files
 				if (gstate.enable_parallel_scans) {
@@ -878,6 +878,7 @@ void JSONScanLocalState::ParseNextChunk(JSONScanGlobalState &gstate) {
 	auto buffer_offset_before = buffer_offset;
 
 	const auto format = current_reader->GetFormat();
+	D_ASSERT(format != JSONFormat::AUTO_DETECT);
 	for (; scan_count < STANDARD_VECTOR_SIZE; scan_count++) {
 		SkipWhitespace(buffer_ptr, buffer_offset, buffer_size);
 		auto json_start = buffer_ptr + buffer_offset;

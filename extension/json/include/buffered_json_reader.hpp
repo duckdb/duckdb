@@ -66,6 +66,7 @@ public:
 	idx_t Remaining() const;
 
 	bool CanSeek() const;
+	bool IsPipe() const;
 
 	FileHandle &GetHandle();
 

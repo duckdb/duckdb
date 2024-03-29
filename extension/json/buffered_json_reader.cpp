@@ -60,6 +60,10 @@ bool JSONFileHandle::CanSeek() const {
 	return can_seek;
 }
 
+bool JSONFileHandle::IsPipe() const {
+	return file_handle->IsPipe();
+}
+
 FileHandle &JSONFileHandle::GetHandle() {
 	return *file_handle;
 }
