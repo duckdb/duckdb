@@ -55,6 +55,7 @@ public:
 	//! Resolve the types of the logical operator and its children
 	void ResolveOperatorTypes();
 	void AddExternalDependency(shared_ptr<ExternalDependency> dependency);
+	void CollectDependencies(vector<shared_ptr<ExternalDependency>> &dependencies) const;
 
 	virtual string GetName() const;
 	virtual string ParamsToString() const;

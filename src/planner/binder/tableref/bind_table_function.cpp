@@ -146,7 +146,7 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 			if (new_plan != nullptr) {
 				auto result = CreatePlan(*Bind(*new_plan));
 				result->AddExternalDependency(std::move(external_dependency));
-				return std::move(result);
+				return result;
 			} else if (!table_function.bind) {
 				throw BinderException("Failed to bind \"%s\": nullptr returned from bind_replace without bind function",
 				                      table_function.name);

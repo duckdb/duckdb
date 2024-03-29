@@ -1124,15 +1124,6 @@ void ClientContext::Append(TableDescription &description, ColumnDataCollection &
 	});
 }
 
-static void CollectDependencies(LogicalOperator &op, vector<shared_ptr<ExternalDependency>> &dependencies) {
-	for (auto &dep : op.external_dependencies) {
-		dependencies.push_back(dep);
-	}
-	for (auto &child : op.children) {
-		CollectDependencies(*child, dependencies);
-	}
-}
-
 void ClientContext::TryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns) {
 #ifdef DEBUG
 	D_ASSERT(!relation.GetAlias().empty());
@@ -1151,7 +1142,7 @@ void ClientContext::TryBindRelation(Relation &relation, vector<ColumnDefinition>
 
 		// Add the dependencies discovered during bind to the Relation
 		// so we ensure they are kept alive
-		CollectDependencies(*result.plan, relation.external_dependencies);
+		result.plan->CollectDependencies(relation.external_dependencies);
 	});
 }
 

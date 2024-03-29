@@ -51,6 +51,15 @@ void LogicalOperator::AddExternalDependency(shared_ptr<ExternalDependency> depen
 	external_dependencies.push_back(std::move(dependency));
 }
 
+void LogicalOperator::CollectDependencies(vector<shared_ptr<ExternalDependency>> &dependencies) const {
+	for (auto &dep : external_dependencies) {
+		dependencies.push_back(dep);
+	}
+	for (auto &child : children) {
+		child->CollectDependencies(dependencies);
+	}
+}
+
 string LogicalOperator::ParamsToString() const {
 	string result;
 	for (idx_t i = 0; i < expressions.size(); i++) {
