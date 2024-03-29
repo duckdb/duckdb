@@ -23,7 +23,7 @@ struct DeserializationData {
 	stack<reference<DatabaseInstance>> databases;
 	stack<idx_t> enums;
 	stack<reference<bound_parameter_map_t>> parameter_data;
-	stack<reference<LogicalType>> types;
+	stack<const_reference<LogicalType>> types;
 
 	template <class T>
 	void Set(T entry) = delete;
@@ -167,13 +167,24 @@ inline void DeserializationData::Set(LogicalType &type) {
 }
 
 template <>
-inline LogicalType &DeserializationData::Get() {
+inline void DeserializationData::Unset<LogicalType>() {
+	AssertNotEmpty(types);
+	types.pop();
+}
+
+template <>
+inline void DeserializationData::Set(const LogicalType &type) {
+	types.emplace(type);
+}
+
+template <>
+inline const LogicalType &DeserializationData::Get() {
 	AssertNotEmpty(types);
 	return types.top();
 }
 
 template <>
-inline void DeserializationData::Unset<LogicalType>() {
+inline void DeserializationData::Unset<const LogicalType>() {
 	AssertNotEmpty(types);
 	types.pop();
 }

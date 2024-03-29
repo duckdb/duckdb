@@ -83,9 +83,9 @@ public:
 	//! Create a vector that references the other vector
 	DUCKDB_API Vector(Vector &other);
 	//! Create a vector that slices another vector
-	DUCKDB_API explicit Vector(Vector &other, const SelectionVector &sel, idx_t count);
+	DUCKDB_API explicit Vector(const Vector &other, const SelectionVector &sel, idx_t count);
 	//! Create a vector that slices another vector between a pair of offsets
-	DUCKDB_API explicit Vector(Vector &other, idx_t offset, idx_t end);
+	DUCKDB_API explicit Vector(const Vector &other, idx_t offset, idx_t end);
 	//! Create a vector of size one holding the passed on value
 	DUCKDB_API explicit Vector(const Value &value);
 	//! Create a vector of size tuple_count (non-standard)

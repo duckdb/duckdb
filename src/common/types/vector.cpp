@@ -78,11 +78,11 @@ Vector::Vector(Vector &other) : type(other.type) {
 	Reference(other);
 }
 
-Vector::Vector(Vector &other, const SelectionVector &sel, idx_t count) : type(other.type) {
+Vector::Vector(const Vector &other, const SelectionVector &sel, idx_t count) : type(other.type) {
 	Slice(other, sel, count);
 }
 
-Vector::Vector(Vector &other, idx_t offset, idx_t end) : type(other.type) {
+Vector::Vector(const Vector &other, idx_t offset, idx_t end) : type(other.type) {
 	Slice(other, offset, end);
 }
 
@@ -574,8 +574,8 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 			throw InternalException("FSST Vector with non-string datatype found!");
 		}
 		auto str_compressed = reinterpret_cast<string_t *>(data)[index];
-		Value result = FSSTPrimitives::DecompressValue(FSSTVector::GetDecoder(const_cast<Vector &>(*vector)),
-		                                               str_compressed.GetData(), str_compressed.GetSize());
+		Value result = FSSTPrimitives::DecompressValue(FSSTVector::GetDecoder(*vector), str_compressed.GetData(),
+		                                               str_compressed.GetSize());
 		return result;
 	}
 
@@ -776,8 +776,8 @@ string Vector::ToString(idx_t count) const {
 	case VectorType::FSST_VECTOR: {
 		for (idx_t i = 0; i < count; i++) {
 			string_t compressed_string = reinterpret_cast<string_t *>(data)[i];
-			Value val = FSSTPrimitives::DecompressValue(FSSTVector::GetDecoder(const_cast<Vector &>(*this)),
-			                                            compressed_string.GetData(), compressed_string.GetSize());
+			Value val = FSSTPrimitives::DecompressValue(FSSTVector::GetDecoder(*this), compressed_string.GetData(),
+			                                            compressed_string.GetSize());
 			retval += GetValue(i).ToString() + (i == count - 1 ? "" : ", ");
 		}
 	} break;
@@ -2142,7 +2142,7 @@ const Vector &ListVector::GetEntry(const Vector &vector) {
 
 Vector &ListVector::GetEntry(Vector &vector) {
 	const Vector &cvector = vector;
-	return const_cast<Vector &>(ListVector::GetEntry(cvector));
+	return const_cast<Vector &>(ListVector::GetEntry(cvector)); // NOLINT: avoid duplicate implementation...
 }
 
 void ListVector::Reserve(Vector &vector, idx_t required_capacity) {
@@ -2511,7 +2511,7 @@ const Vector &ArrayVector::GetEntry(const Vector &vector) {
 
 Vector &ArrayVector::GetEntry(Vector &vector) {
 	const Vector &cvector = vector;
-	return const_cast<Vector &>(ArrayVector::GetEntry(cvector));
+	return const_cast<Vector &>(ArrayVector::GetEntry(cvector)); // NOLINT: avoid duplicate implementation
 }
 
 idx_t ArrayVector::GetTotalSize(const Vector &vector) {
