@@ -29,6 +29,9 @@ static unique_ptr<FunctionData> DuckDBDatabasesBind(ClientContext &context, Tabl
 	names.emplace_back("internal");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
+	names.emplace_back("readonly");
+	return_types.emplace_back(LogicalType::BOOLEAN);
+
 	names.emplace_back("type");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -64,8 +67,9 @@ void DuckDBDatabasesFunction(ClientContext &context, TableFunctionInput &data_p,
 		output.SetValue(col++, count, attached.GetName());
 		// database_oid, BIGINT
 		output.SetValue(col++, count, Value::BIGINT(attached.oid));
-		// path, VARCHAR
 		bool is_internal = attached.IsSystem() || attached.IsTemporary();
+		bool is_readonly = attached.IsReadOnly();
+		// path, VARCHAR
 		Value db_path;
 		if (!is_internal) {
 			bool in_memory = attached.GetCatalog().InMemory();
@@ -78,6 +82,8 @@ void DuckDBDatabasesFunction(ClientContext &context, TableFunctionInput &data_p,
 		output.SetValue(col++, count, Value(attached.comment));
 		// internal, BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(is_internal));
+		// readonly, BOOLEAN
+		output.SetValue(col++, count, Value::BOOLEAN(is_readonly));
 		// type, VARCHAR
 		output.SetValue(col++, count, Value(attached.GetCatalog().GetCatalogType()));
 
