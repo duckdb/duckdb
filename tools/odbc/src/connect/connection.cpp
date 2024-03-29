@@ -1044,8 +1044,8 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 
 		// return SQL_SUCCESS, but with a record message
 		std::string msg = "Unrecognized attribute: " + std::to_string(info_type);
-		return duckdb::SetDiagnosticRecord(dbc, SQL_SUCCESS, "SQLGetInfo", msg,
-		                                   SQLStateType::ST_HY092, dbc->GetDataSourceName());
+		return duckdb::SetDiagnosticRecord(dbc, SQL_SUCCESS, "SQLGetInfo", msg, SQLStateType::ST_HY092,
+		                                   dbc->GetDataSourceName());
 	}
 } // end SQLGetInfo
 
