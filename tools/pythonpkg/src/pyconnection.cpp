@@ -57,10 +57,10 @@
 
 namespace duckdb {
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::default_connection = nullptr;
-DBInstanceCache instance_cache; // NOLINT: explicitly allow global here
-shared_ptr<PythonImportCache> DuckDBPyConnection::import_cache = nullptr;
-PythonEnvironmentType DuckDBPyConnection::environment = PythonEnvironmentType::NORMAL;
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::default_connection = nullptr;       // NOLINT: allow global
+DBInstanceCache instance_cache;                                                        // NOLINT: allow global
+shared_ptr<PythonImportCache> DuckDBPyConnection::import_cache = nullptr;              // NOLINT: allow global
+PythonEnvironmentType DuckDBPyConnection::environment = PythonEnvironmentType::NORMAL; // NOLINT: allow global
 
 DuckDBPyConnection::~DuckDBPyConnection() {
 	try {
