@@ -26,7 +26,7 @@ struct ASCIILCaseReader {
 	}
 
 	static char Operation(const char *data, idx_t pos) {
-		return (char)LowerFun::ascii_to_lower_map[(uint8_t)data[pos]];
+		return (char)LowerFun::ASCII_TO_LOWER_MAP[(uint8_t)data[pos]];
 	}
 };
 

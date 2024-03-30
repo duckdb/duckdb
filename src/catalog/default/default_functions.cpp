@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-static DefaultMacro internal_macros[] = {
+static const DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "current_role", {nullptr}, "'duckdb'"},                       // user name of current execution context
 	{DEFAULT_SCHEMA, "current_user", {nullptr}, "'duckdb'"},                       // user name of current execution context
 	{DEFAULT_SCHEMA, "current_catalog", {nullptr}, "current_database()"},          // name of current database (called "catalog" in the SQL standard)
@@ -171,7 +171,7 @@ static DefaultMacro internal_macros[] = {
 	{nullptr, nullptr, {nullptr}, nullptr}
 	};
 
-unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalTableMacroInfo(DefaultMacro &default_macro, unique_ptr<MacroFunction> function) {
+unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalTableMacroInfo(const DefaultMacro &default_macro, unique_ptr<MacroFunction> function) {
 	for (idx_t param_idx = 0; default_macro.parameters[param_idx] != nullptr; param_idx++) {
 		function->parameters.push_back(
 		    make_uniq<ColumnRefExpression>(default_macro.parameters[param_idx]));
@@ -188,7 +188,7 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalTableMacroIn
 
 }
 
-unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(DefaultMacro &default_macro) {
+unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(const DefaultMacro &default_macro) {
 	// parse the expression
 	auto expressions = Parser::ParseExpressionList(default_macro.macro);
 	D_ASSERT(expressions.size() == 1);
@@ -197,7 +197,7 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(De
 	return CreateInternalTableMacroInfo(default_macro, std::move(result));
 }
 
-unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalTableMacroInfo(DefaultMacro &default_macro) {
+unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalTableMacroInfo(const DefaultMacro &default_macro) {
 	Parser parser;
 	parser.ParseQuery(default_macro.macro);
 	D_ASSERT(parser.statements.size() == 1);
