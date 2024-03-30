@@ -36,12 +36,12 @@ unique_ptr<CreateInfo> IndexCatalogEntry::GetInfo() const {
 
 string IndexCatalogEntry::ToSQL() const {
 	if (sql.empty()) {
+		//! Return empty sql with view name so pragma view_tables don't complain
 		return sql;
 	}
-	if (sql.back() != ';') {
-		return sql + ";";
-	}
-	return sql;
+	auto info = GetInfo();
+	auto result = info->ToString();
+	return result + ";\n";
 }
 
 bool IndexCatalogEntry::IsUnique() {
