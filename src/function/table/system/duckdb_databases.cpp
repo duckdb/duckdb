@@ -29,11 +29,11 @@ static unique_ptr<FunctionData> DuckDBDatabasesBind(ClientContext &context, Tabl
 	names.emplace_back("internal");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
-	names.emplace_back("readonly");
-	return_types.emplace_back(LogicalType::BOOLEAN);
-
 	names.emplace_back("type");
 	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("readonly");
+	return_types.emplace_back(LogicalType::BOOLEAN);
 
 	return nullptr;
 }
@@ -82,10 +82,10 @@ void DuckDBDatabasesFunction(ClientContext &context, TableFunctionInput &data_p,
 		output.SetValue(col++, count, Value(attached.comment));
 		// internal, BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(is_internal));
-		// readonly, BOOLEAN
-		output.SetValue(col++, count, Value::BOOLEAN(is_readonly));
 		// type, VARCHAR
 		output.SetValue(col++, count, Value(attached.GetCatalog().GetCatalogType()));
+		// readonly, BOOLEAN
+		output.SetValue(col++, count, Value::BOOLEAN(is_readonly));
 
 		count++;
 	}
