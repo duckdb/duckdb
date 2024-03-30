@@ -42,7 +42,7 @@ unique_ptr<RowGroupWriter> SingleFileTableDataWriter::GetRowGroupWriter(RowGroup
 	return make_uniq<SingleFileRowGroupWriter>(table, checkpoint_manager.partial_block_manager, table_data_writer);
 }
 
-void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, DataTableInfo *info,
+void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo *info,
                                               Serializer &serializer) {
 	// store the current position in the metadata writer
 	// this is where the row groups for this table start

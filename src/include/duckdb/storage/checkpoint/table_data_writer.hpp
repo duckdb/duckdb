@@ -31,7 +31,7 @@ public:
 
 	CompressionType GetColumnCompressionType(idx_t i);
 
-	virtual void FinalizeTable(TableStatistics &&global_stats, DataTableInfo *info, Serializer &serializer) = 0;
+	virtual void FinalizeTable(const TableStatistics &global_stats, DataTableInfo *info, Serializer &serializer) = 0;
 	virtual unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) = 0;
 
 	virtual void AddRowGroup(RowGroupPointer &&row_group_pointer, unique_ptr<RowGroupWriter> writer);
@@ -50,7 +50,7 @@ public:
 	                          MetadataWriter &table_data_writer);
 
 public:
-	void FinalizeTable(TableStatistics &&global_stats, DataTableInfo *info, Serializer &serializer) override;
+	void FinalizeTable(const TableStatistics &global_stats, DataTableInfo *info, Serializer &serializer) override;
 	unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) override;
 
 private:
