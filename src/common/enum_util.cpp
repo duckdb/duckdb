@@ -12,7 +12,6 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/catalog/catalog_entry/dependency/dependency_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
-#include "duckdb/catalog/transaction_comparison.hpp"
 #include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enums/aggregate_handling.hpp"
@@ -6790,49 +6789,6 @@ TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value)
 	}
 	if (StringUtil::Equals(value, "ERROR_NON_UTC_TIMEZONE")) {
 		return TimestampCastResult::ERROR_NON_UTC_TIMEZONE;
-	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
-}
-
-template<>
-const char* EnumUtil::ToChars<TransactionComparison>(TransactionComparison value) {
-	switch(value) {
-	case TransactionComparison::ACTIVE_SAME:
-		return "ACTIVE_SAME";
-	case TransactionComparison::ACTIVE_BEFORE:
-		return "ACTIVE_BEFORE";
-	case TransactionComparison::ACTIVE_AFTER:
-		return "ACTIVE_AFTER";
-	case TransactionComparison::COMMITTED_CURRENT:
-		return "COMMITTED_CURRENT";
-	case TransactionComparison::COMMITTED_AFTER:
-		return "COMMITTED_AFTER";
-	case TransactionComparison::COMMITTED_BEFORE:
-		return "COMMITTED_BEFORE";
-	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
-	}
-}
-
-template<>
-TransactionComparison EnumUtil::FromString<TransactionComparison>(const char *value) {
-	if (StringUtil::Equals(value, "ACTIVE_SAME")) {
-		return TransactionComparison::ACTIVE_SAME;
-	}
-	if (StringUtil::Equals(value, "ACTIVE_BEFORE")) {
-		return TransactionComparison::ACTIVE_BEFORE;
-	}
-	if (StringUtil::Equals(value, "ACTIVE_AFTER")) {
-		return TransactionComparison::ACTIVE_AFTER;
-	}
-	if (StringUtil::Equals(value, "COMMITTED_CURRENT")) {
-		return TransactionComparison::COMMITTED_CURRENT;
-	}
-	if (StringUtil::Equals(value, "COMMITTED_AFTER")) {
-		return TransactionComparison::COMMITTED_AFTER;
-	}
-	if (StringUtil::Equals(value, "COMMITTED_BEFORE")) {
-		return TransactionComparison::COMMITTED_BEFORE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

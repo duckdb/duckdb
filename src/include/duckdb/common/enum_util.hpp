@@ -300,8 +300,6 @@ enum class TaskExecutionResult : uint8_t;
 
 enum class TimestampCastResult : uint8_t;
 
-enum class TransactionComparison : uint8_t;
-
 enum class TransactionType : uint8_t;
 
 enum class TupleDataPinProperties : uint8_t;
@@ -730,9 +728,6 @@ const char* EnumUtil::ToChars<TaskExecutionResult>(TaskExecutionResult value);
 
 template<>
 const char* EnumUtil::ToChars<TimestampCastResult>(TimestampCastResult value);
-
-template<>
-const char* EnumUtil::ToChars<TransactionComparison>(TransactionComparison value);
 
 template<>
 const char* EnumUtil::ToChars<TransactionType>(TransactionType value);
@@ -1175,9 +1170,6 @@ TaskExecutionResult EnumUtil::FromString<TaskExecutionResult>(const char *value)
 
 template<>
 TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value);
-
-template<>
-TransactionComparison EnumUtil::FromString<TransactionComparison>(const char *value);
 
 template<>
 TransactionType EnumUtil::FromString<TransactionType>(const char *value);
