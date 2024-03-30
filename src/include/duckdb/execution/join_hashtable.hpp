@@ -265,8 +265,10 @@ private:
 	                                                  const SelectionVector *&current_sel);
 	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
 
+	bool UseSalt() const;
+
 	//! Gets a pointer to the entry in the HT for each of the hashes_v using linear probing. Will update the match_sel
-	//! vectorand the count argument to the number and position of the matches
+	//! vector and the count argument to the number and position of the matches
 	void GetRowPointers(DataChunk &keys, TupleDataChunkState &key_state, ProbeState &state, Vector &hashes_v,
 	                    const SelectionVector &sel, idx_t &count, Vector &pointers_result_v,
 	                    SelectionVector &match_sel);
