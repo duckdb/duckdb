@@ -70,7 +70,7 @@ string OdbcUtils::ParseStringFilter(const string &filter_name, const string &fil
 		filter = filter_name + " LIKE '" + filter_value + "'";
 	}
 	// Handle escape character passed by Power Query SDK
-	filter += "ESCAPE '\\'";
+	filter += " ESCAPE '\\'";
 	return filter;
 }
 
