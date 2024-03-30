@@ -313,7 +313,6 @@ jobs:
   python-sqllogic:
      name: Python SQLLogicTest Library (Linux)
      runs-on: ubuntu-20.04
-     needs: linux-memory-leaks
      env:
         GEN: ninja
         DUCKDEBUG: 1
@@ -323,11 +322,6 @@ jobs:
      - uses: actions/checkout@v3
        with:
          fetch-depth: 0
-
-     - uses: ./.github/actions/ubuntu_18_setup
-       with:
-         openssl: 0
-         python: 0
 
      - uses: actions/setup-python@v5
        with:
