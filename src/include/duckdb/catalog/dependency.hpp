@@ -15,12 +15,12 @@ namespace duckdb {
 class CatalogEntry;
 
 struct DependencyFlags {
-private:
 public:
 	DependencyFlags() : value(0) {
 	}
 	DependencyFlags(const DependencyFlags &other) : value(other.value) {
 	}
+	virtual ~DependencyFlags() = default;
 	DependencyFlags &operator=(const DependencyFlags &other) {
 		value = other.value;
 		return *this;
