@@ -416,7 +416,7 @@ struct IntegerDivisionSetting {
 struct LogQueryPathSetting {
 	static constexpr const char *Name = "log_query_path";
 	static constexpr const char *Description =
-	    "Specifies the path to which queries should be logged (default: empty string, queries are not logged)";
+	    "Specifies the path to which queries should be logged (default: NULL, queries are not logged)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
@@ -502,7 +502,7 @@ struct PasswordSetting {
 
 struct PerfectHashThresholdSetting {
 	static constexpr const char *Name = "perfect_ht_threshold";
-	static constexpr const char *Description = "Threshold in bytes for when to use a perfect hash table (default: 12)";
+	static constexpr const char *Description = "Threshold in bytes for when to use a perfect hash table";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
@@ -521,8 +521,7 @@ struct PivotFilterThreshold {
 
 struct PivotLimitSetting {
 	static constexpr const char *Name = "pivot_limit";
-	static constexpr const char *Description =
-	    "The maximum number of pivot columns in a pivot statement (default: 100000)";
+	static constexpr const char *Description = "The maximum number of pivot columns in a pivot statement";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);

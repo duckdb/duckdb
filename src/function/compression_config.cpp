@@ -14,7 +14,7 @@ struct DefaultCompressionMethod {
 	compression_supports_type_t supports_type;
 };
 
-static DefaultCompressionMethod internal_compression_methods[] = {
+static const DefaultCompressionMethod internal_compression_methods[] = {
     {CompressionType::COMPRESSION_CONSTANT, ConstantFun::GetFunction, ConstantFun::TypeIsSupported},
     {CompressionType::COMPRESSION_UNCOMPRESSED, UncompressedFun::GetFunction, UncompressedFun::TypeIsSupported},
     {CompressionType::COMPRESSION_RLE, RLEFun::GetFunction, RLEFun::TypeIsSupported},

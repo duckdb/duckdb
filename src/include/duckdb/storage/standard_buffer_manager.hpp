@@ -48,10 +48,10 @@ public:
 	//! Unpin and pin are nops on this block of memory
 	shared_ptr<BlockHandle> RegisterSmallMemory(idx_t block_size) final;
 
-	idx_t GetUsedMemory() const final override;
-	idx_t GetMaxMemory() const final override;
-	idx_t GetUsedSwap() final override;
-	optional_idx GetMaxSwap() final override;
+	idx_t GetUsedMemory() const final;
+	idx_t GetMaxMemory() const final;
+	idx_t GetUsedSwap() final;
+	optional_idx GetMaxSwap() final;
 
 	//! Allocate an in-memory buffer with a single pin.
 	//! The allocated memory is released when the buffer handle is destroyed.
@@ -75,7 +75,7 @@ public:
 	//! Returns a list of all temporary files
 	vector<TemporaryFileInformation> GetTemporaryFiles() final;
 
-	const string &GetTemporaryDirectory() final override {
+	const string &GetTemporaryDirectory() final {
 		return temporary_directory.path;
 	}
 

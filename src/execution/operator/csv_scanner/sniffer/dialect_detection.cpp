@@ -176,6 +176,11 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 		}
 		auto &sniffing_state_machine = scanner->GetStateMachine();
 
+		if (!candidates.empty() && candidates.front()->ever_quoted && !scanner->ever_quoted) {
+			// Give preference to quoted boys.
+			return;
+		}
+
 		best_consistent_rows = consistent_rows;
 		max_columns_found = num_cols;
 		prev_padding_count = padding_count;
