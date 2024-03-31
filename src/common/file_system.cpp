@@ -117,7 +117,7 @@ void FileSystem::SetWorkingDirectory(const string &path) {
 	}
 }
 
-idx_t FileSystem::GetAvailableMemory() {
+optional_idx FileSystem::GetAvailableMemory() {
 	errno = 0;
 
 #ifdef __MVS__
@@ -128,7 +128,7 @@ idx_t FileSystem::GetAvailableMemory() {
 	idx_t max_memory = MinValue<idx_t>((idx_t)sysconf(_SC_PHYS_PAGES) * (idx_t)sysconf(_SC_PAGESIZE), UINTPTR_MAX);
 #endif
 	if (errno != 0) {
-		return DConstants::INVALID_INDEX;
+		return optional_idx();
 	}
 	return max_memory;
 }

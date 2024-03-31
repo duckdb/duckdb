@@ -256,8 +256,8 @@ IndexTypeSet &DBConfig::GetIndexTypes() {
 
 void DBConfig::SetDefaultMaxMemory() {
 	auto memory = FileSystem::GetAvailableMemory();
-	if (memory != DConstants::INVALID_INDEX) {
-		options.maximum_memory = memory * 8 / 10;
+	if (memory.IsValid()) {
+		options.maximum_memory = memory.GetIndex() * 8 / 10;
 	}
 }
 
@@ -340,7 +340,8 @@ idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
 
 idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 	if (arg[0] == '-' || arg == "null" || arg == "none") {
-		return DConstants::INVALID_INDEX;
+		// infinite
+		return NumericLimits<idx_t>::Maximum();
 	}
 	// split based on the number/non-number
 	idx_t idx = 0;
