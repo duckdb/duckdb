@@ -265,7 +265,6 @@ def test_connection_get_objects_filters(duck_conn):
 
     assert no_filter.schema == column_filter.schema
     assert no_filter.schema == table_name_filter.schema
-    # assert no_filter.schema == table_name_filter.schema
     assert no_filter.schema == db_schema_filter.schema
     assert no_filter.schema == catalog_filter.schema
 
