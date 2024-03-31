@@ -110,8 +110,8 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 				state.cached_expressions.push_back(std::move(expr_ptr));
 			}
 			// replace the original expression with a bound column ref
-			expr_ptr = make_uniq<BoundColumnRefExpression>(alias, type,
-			                                               ColumnBinding(state.projection_index, node.column_index.GetIndex()));
+			expr_ptr = make_uniq<BoundColumnRefExpression>(
+			    alias, type, ColumnBinding(state.projection_index, node.column_index.GetIndex()));
 			return;
 		}
 	}
