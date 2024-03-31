@@ -97,7 +97,7 @@ def test_connection_get_objects(duck_conn):
                         }
                     ],
                 },
-            ]
+            ],
         }
     ]
 
@@ -117,7 +117,7 @@ def test_connection_get_objects(duck_conn):
                         }
                     ],
                 },
-            ]
+            ],
         }
     ]
 
@@ -130,7 +130,7 @@ def test_connection_get_objects(duck_conn):
                     'db_schema_name': 'main',
                     'db_schema_tables': [],
                 },
-            ]
+            ],
         }
     ]
 
@@ -147,10 +147,11 @@ def test_connection_get_objects(duck_conn):
     assert depth_all.schema == depth_db_schemas.schema
     assert depth_all.schema == depth_catalogs.schema
 
+
 def test_connection_get_objects_filters(duck_conn):
     with duck_conn.cursor() as cursor:
         cursor.execute("CREATE TABLE getobjects (ints BIGINT PRIMARY KEY)")
-    
+
     no_filter = duck_conn.adbc_get_objects(depth="all").read_all()
     assert no_filter.to_pylist() == [
         {
@@ -202,7 +203,7 @@ def test_connection_get_objects_filters(duck_conn):
                         }
                     ],
                 },
-            ]
+            ],
         }
     ]
 
@@ -235,7 +236,7 @@ def test_connection_get_objects_filters(duck_conn):
                         }
                     ],
                 },
-            ]
+            ],
         }
     ]
 
@@ -248,7 +249,7 @@ def test_connection_get_objects_filters(duck_conn):
                     'db_schema_name': 'main',
                     'db_schema_tables': None,
                 },
-            ]
+            ],
         }
     ]
 
@@ -267,7 +268,6 @@ def test_connection_get_objects_filters(duck_conn):
     assert no_filter.schema == table_name_filter.schema
     assert no_filter.schema == db_schema_filter.schema
     assert no_filter.schema == catalog_filter.schema
-
 
 
 def test_commit(tmp_path):
