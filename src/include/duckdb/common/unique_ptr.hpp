@@ -13,7 +13,7 @@ template <class DATA_TYPE, class ALLOCATOR_TYPE = std::default_delete<DATA_TYPE>
 class unique_ptr : public std::unique_ptr<DATA_TYPE, ALLOCATOR_TYPE> { // NOLINT: naming
 public:
 	using original = std::unique_ptr<DATA_TYPE, ALLOCATOR_TYPE>;
-	using original::original;
+	using original::original; // NOLINT
 
 private:
 	static inline void AssertNotNull(const bool null) {
