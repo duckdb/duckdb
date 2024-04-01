@@ -1,5 +1,6 @@
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 
+#include "duckdb/common/chrono.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/parallel/concurrentqueue.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
@@ -56,8 +57,7 @@ bool BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 
 	D_ASSERT(handle->readers == 0);
 	auto ts = ++handle->eviction_seq_num;
-	handle->lru_timestamp =
-	    std::chrono::time_point_cast<std::chrono::seconds>(std::chrono::steady_clock::now()).time_since_epoch().count();
+	handle->lru_timestamp_msec = GetCoarseMonotonicMillisecondTimestamp();
 
 	BufferEvictionNode evict_node(weak_ptr<BlockHandle>(handle), ts);
 	queue->q.enqueue(evict_node);
@@ -132,15 +132,13 @@ BufferPool::EvictionResult BufferPool::EvictBlocks(MemoryTag tag, idx_t extra_me
 }
 
 idx_t BufferPool::PurgeAgedBlocks(uint32_t max_age_sec) {
-	idx_t limit = std::chrono::time_point_cast<std::chrono::seconds>(std::chrono::steady_clock::now())
-	                  .time_since_epoch()
-	                  .count() -
-	              max_age_sec;
+	int64_t now = GetCoarseMonotonicMillisecondTimestamp();
+	int64_t limit = now - (max_age_sec * 1000);
 	idx_t purged_bytes = 0;
 	IterateUnloadableBlocks([&](BufferEvictionNode &node, const std::shared_ptr<BlockHandle> &handle) {
 		// We will unload this block regardless. But stop the iteration immediately afterward if this
-		// block is youngers than the age threshold.
-		bool is_fresh = handle->lru_timestamp > limit;
+		// block is younger than the age threshold.
+		bool is_fresh = handle->lru_timestamp_msec >= limit && handle->lru_timestamp_msec <= now;
 		purged_bytes += handle->GetMemoryUsage();
 		handle->Unload();
 		return is_fresh;

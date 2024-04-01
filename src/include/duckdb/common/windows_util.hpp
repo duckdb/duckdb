@@ -23,6 +23,7 @@ public:
 	static std::wstring UTF8ToUnicode(const char *input);
 	static string UnicodeToUTF8(LPCWSTR input);
 	static string UTF8ToMBCS(const char *input, bool use_ansi = false);
+	static int64_t GetTickCount();
 };
 #endif
 

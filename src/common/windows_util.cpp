@@ -48,6 +48,10 @@ string WindowsUtil::UTF8ToMBCS(const char *input, bool use_ansi) {
 	return WindowsUnicodeToMBCS(unicode.c_str(), use_ansi);
 }
 
+int64_t WindowsUtil::GetTickCount() {
+	return (int64_t)::GetTickCount();
+}
+
 #endif
 
 } // namespace duckdb
