@@ -1065,7 +1065,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE(res->RowCount() == 1);
 		REQUIRE(res->GetValue(0, 0).ToString() == "test_catalog_depth");
 		REQUIRE(res->GetValue(1, 0).ToString() == "[]");
-		db.QueryArrow("Drop table result;");
+		db.Query("Drop table result;");
 
 		// Test Filters
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_CATALOGS, "bla", nullptr, nullptr, nullptr,
@@ -1074,7 +1074,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		res = db.Query("Select * from result");
 		REQUIRE(res->ColumnCount() == 2);
 		REQUIRE(res->RowCount() == 0);
-		db.QueryArrow("Drop table result;");
+		db.Query("Drop table result;");
 	}
 	// 2. Test ADBC_OBJECT_DEPTH_DB_SCHEMAS
 	{
@@ -1103,7 +1103,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		])";
 		REQUIRE(StringUtil::Replace(res->GetValue(1, 0).ToString(), " ", "") ==
 		        StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected, "\n", ""), "\t", ""), " ", ""));
-		db.QueryArrow("Drop table result;");
+		db.Query("Drop table result;");
 
 		// Test Filters
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_DB_SCHEMAS, "bla", nullptr, nullptr, nullptr,
@@ -1112,7 +1112,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		res = db.Query("Select * from result");
 		REQUIRE(res->ColumnCount() == 2);
 		REQUIRE(res->RowCount() == 0);
-		db.QueryArrow("Drop table result;");
+		db.Query("Drop table result;");
 
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_DB_SCHEMAS, nullptr, "bla", nullptr, nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
@@ -1121,7 +1121,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE(res->ColumnCount() == 2);
 		REQUIRE(res->RowCount() == 1);
 		REQUIRE(res->GetValue(1, 0).ToString() == "NULL");
-		db.QueryArrow("Drop table result;");
+		db.Query("Drop table result;");
 	}
 	// 3. Test ADBC_OBJECT_DEPTH_TABLES
 	{
@@ -1156,7 +1156,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		])";
 		REQUIRE(StringUtil::Replace(res->GetValue(1, 0).ToString(), " ", "") ==
 		        StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected, "\n", ""), "\t", ""), " ", ""));
-		db.QueryArrow("Drop table result;");
+		db.Query("Drop table result;");
 
 		// Test Filters
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, "bla", nullptr, nullptr, nullptr,
@@ -1165,7 +1165,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		res = db.Query("Select * from result");
 		REQUIRE(res->ColumnCount() == 2);
 		REQUIRE(res->RowCount() == 0);
-		db.QueryArrow("Drop table result;");
+		db.Query("Drop table result;");
 
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, nullptr, "bla", nullptr, nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
@@ -1174,7 +1174,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE(res->ColumnCount() == 2);
 		REQUIRE(res->RowCount() == 1);
 		REQUIRE(res->GetValue(1, 0).ToString() == "NULL");
-		db.QueryArrow("Drop table result;");
+		db.Query("Drop table result;");
 
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, nullptr, nullptr, "bla", nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
@@ -1183,7 +1183,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE(res->ColumnCount() == 2);
 		REQUIRE(res->RowCount() == 1);
 		REQUIRE(res->GetValue(1, 0).ToString() == "[{'db_schema_name': main, 'db_schema_tables': NULL}]");
-		db.QueryArrow("Drop table result;");
+		db.Query("Drop table result;");
 	}
 	// 4.Test ADBC_OBJECT_DEPTH_COLUMNS
 	{
@@ -1240,7 +1240,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		])";
 		REQUIRE(StringUtil::Replace(res->GetValue(1, 0).ToString(), " ", "") ==
 		        StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected, "\n", ""), "\t", ""), " ", ""));
-		db.QueryArrow("Drop table result;");
+		db.Query("Drop table result;");
 
 		// Test Filters
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, "bla", nullptr, nullptr, nullptr,
@@ -1249,7 +1249,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		res = db.Query("Select * from result");
 		REQUIRE(res->ColumnCount() == 2);
 		REQUIRE(res->RowCount() == 0);
-		db.QueryArrow("Drop table result;");
+		db.Query("Drop table result;");
 
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, "bla", nullptr, nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
@@ -1258,7 +1258,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE(res->ColumnCount() == 2);
 		REQUIRE(res->RowCount() == 1);
 		REQUIRE(res->GetValue(1, 0).ToString() == "NULL");
-		db.QueryArrow("Drop table result;");
+		db.Query("Drop table result;");
 
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr, "bla", nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
@@ -1267,7 +1267,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE(res->ColumnCount() == 2);
 		REQUIRE(res->RowCount() == 1);
 		REQUIRE(res->GetValue(1, 0).ToString() == "[{'db_schema_name': main, 'db_schema_tables': NULL}]");
-		db.QueryArrow("Drop table result;");
+		db.Query("Drop table result;");
 
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr, nullptr, nullptr,
 		                         "bla", &arrow_stream, &adbc_error);
@@ -1278,7 +1278,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE(res->GetValue(1, 0).ToString() ==
 		        "[{'db_schema_name': main, 'db_schema_tables': [{'table_name': my_table, 'table_type': BASE TABLE, "
 		        "'table_columns': NULL, 'table_constraints': NULL}]}]");
-		db.QueryArrow("Drop table result;");
+		db.Query("Drop table result;");
 	}
 	// 5.Test ADBC_OBJECT_DEPTH_ALL
 	{
@@ -1335,7 +1335,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		])";
 		REQUIRE(StringUtil::Replace(res->GetValue(1, 0).ToString(), " ", "") ==
 		        StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected, "\n", ""), "\t", ""), " ", ""));
-		db.QueryArrow("Drop table result;");
+		db.Query("Drop table result;");
 
 		// Test Filters
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, "bla", nullptr, nullptr, nullptr,
@@ -1344,7 +1344,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		res = db.Query("Select * from result");
 		REQUIRE(res->ColumnCount() == 2);
 		REQUIRE(res->RowCount() == 0);
-		db.QueryArrow("Drop table result;");
+		db.Query("Drop table result;");
 
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, "bla", nullptr, nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
@@ -1353,7 +1353,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE(res->ColumnCount() == 2);
 		REQUIRE(res->RowCount() == 1);
 		REQUIRE(res->GetValue(1, 0).ToString() == "NULL");
-		db.QueryArrow("Drop table result;");
+		db.Query("Drop table result;");
 
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr, "bla", nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
@@ -1362,7 +1362,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE(res->ColumnCount() == 2);
 		REQUIRE(res->RowCount() == 1);
 		REQUIRE(res->GetValue(1, 0).ToString() == "[{'db_schema_name': main, 'db_schema_tables': NULL}]");
-		db.QueryArrow("Drop table result;");
+		db.Query("Drop table result;");
 
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr, nullptr, nullptr,
 		                         "bla", &arrow_stream, &adbc_error);
@@ -1373,7 +1373,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE(res->GetValue(1, 0).ToString() ==
 		        "[{'db_schema_name': main, 'db_schema_tables': [{'table_name': my_table, 'table_type': BASE TABLE, "
 		        "'table_columns': NULL, 'table_constraints': NULL}]}]");
-		db.QueryArrow("Drop table result;");
+		db.Query("Drop table result;");
 	}
 	//	 Now lets test some errors
 	{
