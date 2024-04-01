@@ -16,12 +16,14 @@
 #  VCPKG_TARGET_TRIPLET=arm64-osx
 
 ################# ARROW
+if (LZMA_AVAILABLE)
 if (NOT WIN32)
     duckdb_extension_load(arrow
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/arrow
             GIT_TAG 9e10240da11f61ea7fbfe3fc9988ffe672ccd40f
             )
+endif()
 endif()
 
 ################## AWS
@@ -34,6 +36,7 @@ if (NOT MINGW)
 endif()
 
 ################# AZURE
+if (LZMA_AVAILABLE)
 if (NOT MINGW)
     duckdb_extension_load(azure
             LOAD_TESTS
@@ -42,9 +45,11 @@ if (NOT MINGW)
             APPLY_PATCHES
             )
 endif()
+endif()
 
 ################# ICEBERG
 # Windows tests for iceberg currently not working
+if (LZMA_AVAILABLE)
 if (NOT WIN32)
     set(LOAD_ICEBERG_TESTS "LOAD_TESTS")
 else ()
@@ -58,6 +63,7 @@ if (NOT MINGW)
             GIT_TAG 7aa3d8e4cb7b513d35fdacfa28dc328771bc4047
             APPLY_PATCHES
             )
+endif()
 endif()
 
 ################# POSTGRES_SCANNER
