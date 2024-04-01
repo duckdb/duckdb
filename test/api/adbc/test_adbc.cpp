@@ -1101,13 +1101,8 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 				'db_schema_tables': []
 			}
 		])";
-		REQUIRE(
-			StringUtil::Replace(res->GetValue(1, 0).ToString(), " ", "") ==
-			StringUtil::Replace(
-				StringUtil::Replace(
-					StringUtil::Replace(expected, "\n", ""),
-					"\t", ""),
-				" ", ""));
+		REQUIRE(StringUtil::Replace(res->GetValue(1, 0).ToString(), " ", "") ==
+		        StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected, "\n", ""), "\t", ""), " ", ""));
 		db.QueryArrow("Drop table result;");
 
 		// Test Filters
@@ -1118,7 +1113,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE(res->ColumnCount() == 2);
 		REQUIRE(res->RowCount() == 0);
 		db.QueryArrow("Drop table result;");
-		
+
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_DB_SCHEMAS, nullptr, "bla", nullptr, nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
@@ -1159,15 +1154,10 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 				]
 			}
 		])";
-		REQUIRE(
-			StringUtil::Replace(res->GetValue(1, 0).ToString(), " ", "") ==
-			StringUtil::Replace(
-				StringUtil::Replace(
-					StringUtil::Replace(expected, "\n", ""),
-					"\t", ""),
-				" ", ""));
+		REQUIRE(StringUtil::Replace(res->GetValue(1, 0).ToString(), " ", "") ==
+		        StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected, "\n", ""), "\t", ""), " ", ""));
 		db.QueryArrow("Drop table result;");
-		
+
 		// Test Filters
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, "bla", nullptr, nullptr, nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
@@ -1176,7 +1166,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE(res->ColumnCount() == 2);
 		REQUIRE(res->RowCount() == 0);
 		db.QueryArrow("Drop table result;");
-		
+
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, nullptr, "bla", nullptr, nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
@@ -1185,7 +1175,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE(res->RowCount() == 1);
 		REQUIRE(res->GetValue(1, 0).ToString() == "NULL");
 		db.QueryArrow("Drop table result;");
-		
+
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, nullptr, nullptr, "bla", nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
@@ -1248,13 +1238,8 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 				]
 			}
 		])";
-		REQUIRE(
-			StringUtil::Replace(res->GetValue(1, 0).ToString(), " ", "") ==
-			StringUtil::Replace(
-				StringUtil::Replace(
-					StringUtil::Replace(expected, "\n", ""),
-					"\t", ""),
-				" ", ""));
+		REQUIRE(StringUtil::Replace(res->GetValue(1, 0).ToString(), " ", "") ==
+		        StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected, "\n", ""), "\t", ""), " ", ""));
 		db.QueryArrow("Drop table result;");
 
 		// Test Filters
@@ -1265,7 +1250,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE(res->ColumnCount() == 2);
 		REQUIRE(res->RowCount() == 0);
 		db.QueryArrow("Drop table result;");
-		
+
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, "bla", nullptr, nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
@@ -1274,7 +1259,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE(res->RowCount() == 1);
 		REQUIRE(res->GetValue(1, 0).ToString() == "NULL");
 		db.QueryArrow("Drop table result;");
-		
+
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr, "bla", nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
@@ -1283,7 +1268,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE(res->RowCount() == 1);
 		REQUIRE(res->GetValue(1, 0).ToString() == "[{'db_schema_name': main, 'db_schema_tables': NULL}]");
 		db.QueryArrow("Drop table result;");
-		
+
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr, nullptr, nullptr,
 		                         "bla", &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
@@ -1291,7 +1276,8 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE(res->ColumnCount() == 2);
 		REQUIRE(res->RowCount() == 1);
 		REQUIRE(res->GetValue(1, 0).ToString() ==
-			"[{'db_schema_name': main, 'db_schema_tables': [{'table_name': my_table, 'table_type': BASE TABLE, 'table_columns': NULL, 'table_constraints': NULL}]}]");
+		        "[{'db_schema_name': main, 'db_schema_tables': [{'table_name': my_table, 'table_type': BASE TABLE, "
+		        "'table_columns': NULL, 'table_constraints': NULL}]}]");
 		db.QueryArrow("Drop table result;");
 	}
 	// 5.Test ADBC_OBJECT_DEPTH_ALL
@@ -1347,13 +1333,8 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 				]
 			}
 		])";
-		REQUIRE(
-			StringUtil::Replace(res->GetValue(1, 0).ToString(), " ", "") ==
-			StringUtil::Replace(
-				StringUtil::Replace(
-					StringUtil::Replace(expected, "\n", ""),
-					"\t", ""),
-				" ", ""));
+		REQUIRE(StringUtil::Replace(res->GetValue(1, 0).ToString(), " ", "") ==
+		        StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected, "\n", ""), "\t", ""), " ", ""));
 		db.QueryArrow("Drop table result;");
 
 		// Test Filters
@@ -1364,7 +1345,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE(res->ColumnCount() == 2);
 		REQUIRE(res->RowCount() == 0);
 		db.QueryArrow("Drop table result;");
-		
+
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, "bla", nullptr, nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
@@ -1373,7 +1354,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE(res->RowCount() == 1);
 		REQUIRE(res->GetValue(1, 0).ToString() == "NULL");
 		db.QueryArrow("Drop table result;");
-		
+
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr, "bla", nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
@@ -1382,7 +1363,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE(res->RowCount() == 1);
 		REQUIRE(res->GetValue(1, 0).ToString() == "[{'db_schema_name': main, 'db_schema_tables': NULL}]");
 		db.QueryArrow("Drop table result;");
-		
+
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr, nullptr, nullptr,
 		                         "bla", &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
@@ -1390,7 +1371,8 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE(res->ColumnCount() == 2);
 		REQUIRE(res->RowCount() == 1);
 		REQUIRE(res->GetValue(1, 0).ToString() ==
-			"[{'db_schema_name': main, 'db_schema_tables': [{'table_name': my_table, 'table_type': BASE TABLE, 'table_columns': NULL, 'table_constraints': NULL}]}]");
+		        "[{'db_schema_name': main, 'db_schema_tables': [{'table_name': my_table, 'table_type': BASE TABLE, "
+		        "'table_columns': NULL, 'table_constraints': NULL}]}]");
 		db.QueryArrow("Drop table result;");
 	}
 	//	 Now lets test some errors
