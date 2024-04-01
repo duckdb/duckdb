@@ -1169,8 +1169,8 @@ int Linenoise::Edit() {
 					if (!EditBufferWithEditor(nullptr)) {
 						// failed to edit - refresh the removal of ".edit" / "\e"
 						RefreshLine();
+						break;
 					}
-					break;
 				}
 			}
 #endif
@@ -1532,8 +1532,24 @@ bool Linenoise::EditBufferWithEditor(const char *editor) {
 		return false;
 	}
 
+	// edit the current buffer by default
+	const char *write_buffer = buf;
+	idx_t write_len = len;
+	if (write_len == 0) {
+		// if the current buffer is empty we are typing ".edit" as the first command
+		// edit the previous history entry
+		auto edit_index = History::GetLength();
+		if (edit_index >= 2) {
+			auto history_entry = History::GetEntry(edit_index - 2);
+			if (history_entry) {
+				write_buffer = history_entry;
+				write_len = strlen(history_entry);
+			}
+		}
+	}
+
 	// write existing buffer to file
-	if (fwrite(buf, 1, len, f) != len) {
+	if (fwrite(write_buffer, 1, write_len, f) != write_len) {
 		Log("Failed to write data %s: %s\n", temporary_file_name, strerror(errno));
 		fclose(f);
 		remove(temporary_file_name.c_str());
