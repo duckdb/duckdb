@@ -857,8 +857,8 @@ TEST_CASE("Test ADBC ConnectionGetTableSchema", "[adbc]") {
 	REQUIRE(StringUtil::Contains(adbc_error.message, "Catalog \"bla\" does not exist"));
 	adbc_error.release(&adbc_error);
 
-	REQUIRE(SUCCESS(
-	    AdbcConnectionGetTableSchema(&adbc_connection, "memory", "main", "duckdb_indexes", &arrow_schema, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcConnectionGetTableSchema(&adbc_connection, "memory", "main", "duckdb_indexes", &arrow_schema,
+	                                             &adbc_error)));
 	REQUIRE(arrow_schema.n_children == 13);
 	arrow_schema.release(&arrow_schema);
 

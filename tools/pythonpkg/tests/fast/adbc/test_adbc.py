@@ -347,7 +347,9 @@ def test_connection_get_table_schema(duck_conn):
             duck_conn.adbc_get_table_schema("tableschema", catalog_filter="bla", db_schema_filter="test")
 
         # Catalog and DB Schema name
-        assert duck_conn.adbc_get_table_schema("tableschema", catalog_filter="memory", db_schema_filter="test") == pyarrow.schema(
+        assert duck_conn.adbc_get_table_schema(
+            "tableschema", catalog_filter="memory", db_schema_filter="test"
+        ) == pyarrow.schema(
             [
                 ("test_ints", "int64"),
             ]
