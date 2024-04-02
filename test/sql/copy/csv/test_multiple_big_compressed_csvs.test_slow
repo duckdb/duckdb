@@ -8,7 +8,7 @@ statement ok
 CALL dbgen(sf=10);
 
 statement ok
-copy lineitem to ' __TEST_DIR__/lineitem.csv.gz';
+copy lineitem to '__TEST_DIR__/lineitem.csv.gz';
 
 statement ok
 SET temp_directory=''
@@ -21,30 +21,30 @@ CREATE TABLE lineitem_2(l_orderkey INTEGER NOT NULL, l_partkey INTEGER NOT NULL,
 
 statement ok
 INSERT INTO lineitem_2 FROM read_csv([
-	' __TEST_DIR__/lineitem.csv.gz',
-	' __TEST_DIR__/lineitem.csv.gz',
-	' __TEST_DIR__/lineitem.csv.gz',
-	' __TEST_DIR__/lineitem.csv.gz',
-	' __TEST_DIR__/lineitem.csv.gz',
-	' __TEST_DIR__/lineitem.csv.gz',
-	' __TEST_DIR__/lineitem.csv.gz',
-	' __TEST_DIR__/lineitem.csv.gz',
-	' __TEST_DIR__/lineitem.csv.gz',
-	' __TEST_DIR__/lineitem.csv.gz',
-	' __TEST_DIR__/lineitem.csv.gz',
-	' __TEST_DIR__/lineitem.csv.gz',
-	' __TEST_DIR__/lineitem.csv.gz',
-	' __TEST_DIR__/lineitem.csv.gz',
-	' __TEST_DIR__/lineitem.csv.gz',
-	' __TEST_DIR__/lineitem.csv.gz',
-	' __TEST_DIR__/lineitem.csv.gz',
-	' __TEST_DIR__/lineitem.csv.gz',
-	' __TEST_DIR__/lineitem.csv.gz',
-	' __TEST_DIR__/lineitem.csv.gz',
-	' __TEST_DIR__/lineitem.csv.gz',
-	' __TEST_DIR__/lineitem.csv.gz',
-	' __TEST_DIR__/lineitem.csv.gz',
-	' __TEST_DIR__/lineitem.csv.gz',
+	'__TEST_DIR__/lineitem.csv.gz',
+	'__TEST_DIR__/lineitem.csv.gz',
+	'__TEST_DIR__/lineitem.csv.gz',
+	'__TEST_DIR__/lineitem.csv.gz',
+	'__TEST_DIR__/lineitem.csv.gz',
+	'__TEST_DIR__/lineitem.csv.gz',
+	'__TEST_DIR__/lineitem.csv.gz',
+	'__TEST_DIR__/lineitem.csv.gz',
+	'__TEST_DIR__/lineitem.csv.gz',
+	'__TEST_DIR__/lineitem.csv.gz',
+	'__TEST_DIR__/lineitem.csv.gz',
+	'__TEST_DIR__/lineitem.csv.gz',
+	'__TEST_DIR__/lineitem.csv.gz',
+	'__TEST_DIR__/lineitem.csv.gz',
+	'__TEST_DIR__/lineitem.csv.gz',
+	'__TEST_DIR__/lineitem.csv.gz',
+	'__TEST_DIR__/lineitem.csv.gz',
+	'__TEST_DIR__/lineitem.csv.gz',
+	'__TEST_DIR__/lineitem.csv.gz',
+	'__TEST_DIR__/lineitem.csv.gz',
+	'__TEST_DIR__/lineitem.csv.gz',
+	'__TEST_DIR__/lineitem.csv.gz',
+	'__TEST_DIR__/lineitem.csv.gz',
+	'__TEST_DIR__/lineitem.csv.gz',
 ]);
 
 query I
