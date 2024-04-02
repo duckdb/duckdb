@@ -10,7 +10,7 @@
 namespace duckdb {
 
 ExpressionBinder::ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder)
-    : inside_window(false), binder(binder), context(context) {
+    : binder(binder), context(context) {
 	InitializeStackCheck();
 	if (replace_binder) {
 		stored_binder = &binder.GetActiveBinder();
@@ -292,36 +292,6 @@ bool ExpressionBinder::IsLambdaFunction(const FunctionExpression &function) {
 		}
 	}
 	return false;
-}
-
-bool ExpressionBinder::WindowContainsUnnest(unique_ptr<ParsedExpression> &expr) {
-
-	if (expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
-		auto &function = expr->Cast<FunctionExpression>();
-		if (IsUnnestFunction(function.function_name)) {
-			return true;
-		}
-	}
-
-	bool contains_unnest = false;
-	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child) {
-		if (WindowContainsUnnest(child)) {
-			contains_unnest = true;
-		}
-	});
-	return contains_unnest;
-}
-
-void ExpressionBinder::BindWindowChild(unique_ptr<ParsedExpression> &expr, idx_t depth, ErrorData &error) {
-
-	if (!expr) {
-		return;
-	}
-
-	if (WindowContainsUnnest(expr)) {
-		error = NotImplementedException(UnsupportedUnnestMessage());
-	}
-	BindChild(expr, depth, error);
 }
 
 } // namespace duckdb

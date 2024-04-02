@@ -187,11 +187,11 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 			BindRangeExpression(context, "+", order.expression, epoch);
 		}
 	}
-	BindWindowChild(window.filter_expr, depth, error);
-	BindWindowChild(window.start_expr, depth, error);
-	BindWindowChild(window.end_expr, depth, error);
-	BindWindowChild(window.offset_expr, depth, error);
-	BindWindowChild(window.default_expr, depth, error);
+	BindChild(window.filter_expr, depth, error);
+	BindChild(window.start_expr, depth, error);
+	BindChild(window.end_expr, depth, error);
+	BindChild(window.offset_expr, depth, error);
+	BindChild(window.default_expr, depth, error);
 
 	inside_window = false;
 	if (error.HasError()) {

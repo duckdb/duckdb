@@ -13,7 +13,7 @@ namespace duckdb {
 
 BaseSelectBinder::BaseSelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node,
                                    BoundGroupInformation &info, case_insensitive_map_t<idx_t> alias_map)
-    : ExpressionBinder(binder, context), node(node), info(info), alias_map(std::move(alias_map)) {
+    : ExpressionBinder(binder, context), inside_window(false), node(node), info(info), alias_map(std::move(alias_map)) {
 }
 
 BaseSelectBinder::BaseSelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node,

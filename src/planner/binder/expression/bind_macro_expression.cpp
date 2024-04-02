@@ -145,11 +145,6 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacro
 
 	// replace current expression with stored macro expression
 	expr = macro_def.expression->Copy();
-	if (inside_window) {
-		if (WindowContainsUnnest(expr)) {
-			return BindResult(ErrorData(UnsupportedUnnestMessage()));
-		}
-	}
 
 	// qualify only the macro parameters with a new empty binder that only knows the macro binding
 	auto dummy_binder = Binder::CreateBinder(context);
