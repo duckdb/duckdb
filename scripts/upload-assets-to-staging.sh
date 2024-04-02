@@ -38,11 +38,16 @@ if [ -z "$AWS_ACCESS_KEY_ID" ]; then
   DRY_RUN_PARAM="--dryrun"
 fi
 
+
+TARGET=$(git describe --tags --long)
+
+if [ "$UPLOAD_ASSETS_TO_STAGING_TARGET" ]; then
+  TARGET="$UPLOAD_ASSETS_TO_STAGING_TARGET"
+fi
+
 # decide target for staging
-if [ -z "$OVERRIDE_GIT_DESCRIBE" ]; then
-  TARGET=$(git describe --tags --long)
-else
-  TARGET="$OVERRIDE_GIT_DESCRIBE"
+if [ "$OVERRIDE_GIT_DESCRIBE" ]; then
+  TARGET="$TARGET/$OVERRIDE_GIT_DESCRIBE"
 fi
 
 python3 -m pip install awscli

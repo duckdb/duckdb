@@ -34,7 +34,6 @@ public:
 	}
 
 public:
-	static unique_ptr<BufferManager> CreateStandardBufferManager(DatabaseInstance &db, DBConfig &config);
 	virtual BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy = true,
 	                              shared_ptr<BlockHandle> *block = nullptr) = 0;
 	//! Reallocate an in-memory buffer that is pinned.
@@ -56,7 +55,6 @@ public:
 	virtual vector<TemporaryFileInformation> GetTemporaryFiles();
 	virtual const string &GetTemporaryDirectory();
 	virtual void SetTemporaryDirectory(const string &new_dir);
-	virtual DatabaseInstance &GetDatabase();
 	virtual bool HasTemporaryDirectory() const;
 	//! Construct a managed buffer.
 	virtual unique_ptr<FileBuffer> ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&source,

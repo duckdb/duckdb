@@ -29,7 +29,7 @@ struct FlushMoveState;
    stores them in the HT. It uses linear probing for collision resolution.
 */
 
-struct aggr_ht_entry_t {
+struct aggr_ht_entry_t { // NOLINT
 public:
 	//! Upper 16 bits are salt
 	static constexpr const hash_t SALT_MASK = 0xFFFF000000000000;

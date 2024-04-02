@@ -903,7 +903,7 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 				Store<bool>(true, ptrs[idx] + ht.tuple_size);
 			}
 		}
-		// for right semi join, just mark the entry as found and move on. Propogation happens later
+		// for right semi join, just mark the entry as found and move on. Propagation happens later
 		if (ht.join_type != JoinType::RIGHT_SEMI && ht.join_type != JoinType::RIGHT_ANTI) {
 			// matches were found
 			// construct the result

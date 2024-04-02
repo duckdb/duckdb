@@ -26,6 +26,7 @@ struct StorageManagerOptions {
 	bool read_only = false;
 	bool use_direct_io = false;
 	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
+	optional_idx block_alloc_size = optional_idx();
 };
 
 //! SingleFileBlockManager is an implementation for a BlockManager which manages blocks in a single file
@@ -34,10 +35,13 @@ class SingleFileBlockManager : public BlockManager {
 	static constexpr uint64_t BLOCK_START = Storage::FILE_HEADER_SIZE * 3;
 
 public:
-	SingleFileBlockManager(AttachedDatabase &db, string path, StorageManagerOptions options);
+	SingleFileBlockManager(AttachedDatabase &db, const string &path, const StorageManagerOptions &options);
 
-	void GetFileFlags(uint8_t &flags, FileLockType &lock, bool create_new);
+	FileOpenFlags GetFileFlags(bool create_new) const;
+	//! Creates a new database.
 	void CreateNewDatabase();
+	//! Loads an existing database. We pass the provided block allocation size as a parameter
+	//! to detect inconsistencies with the file header.
 	void LoadExistingDatabase();
 
 	//! Creates a new Block using the specified block_id and returns a pointer
@@ -70,10 +74,11 @@ public:
 	idx_t FreeBlocks() override;
 
 private:
-	//! Load the free list from the file
+	//! Loads the free list of the file.
 	void LoadFreeList();
-
-	void Initialize(DatabaseHeader &header);
+	//! Initializes the database header. We pass the provided block allocation size as a parameter
+	//!	to detect inconsistencies with the file header.
+	void Initialize(const DatabaseHeader &header, const optional_idx block_alloc_size);
 
 	void ReadAndChecksum(FileBuffer &handle, uint64_t location) const;
 	void ChecksumAndWrite(FileBuffer &handle, uint64_t location) const;

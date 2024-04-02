@@ -222,8 +222,20 @@ unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgque
 	}
 }
 
-unique_ptr<QueryNode> Transformer::TransformMaterializedCTE(unique_ptr<QueryNode> root,
-                                                            vector<unique_ptr<CTENode>> &materialized_ctes) {
+unique_ptr<QueryNode> Transformer::TransformMaterializedCTE(unique_ptr<QueryNode> root) {
+	// Extract materialized CTEs from cte_map
+	vector<unique_ptr<CTENode>> materialized_ctes;
+	for (auto &cte : root->cte_map.map) {
+		auto &cte_entry = cte.second;
+		if (cte_entry->materialized == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
+			auto mat_cte = make_uniq<CTENode>();
+			mat_cte->ctename = cte.first;
+			mat_cte->query = cte_entry->query->node->Copy();
+			mat_cte->aliases = cte_entry->aliases;
+			materialized_ctes.push_back(std::move(mat_cte));
+		}
+	}
+
 	while (!materialized_ctes.empty()) {
 		unique_ptr<CTENode> node_result;
 		node_result = std::move(materialized_ctes.back());

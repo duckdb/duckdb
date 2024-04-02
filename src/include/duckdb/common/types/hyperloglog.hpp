@@ -13,7 +13,7 @@
 #include "hyperloglog.hpp"
 
 namespace duckdb_hll {
-struct robj;
+struct robj; // NOLINT
 }
 
 namespace duckdb {

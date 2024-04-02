@@ -25,20 +25,20 @@ struct FloatingToExact {};
 
 template <>
 struct FloatingToExact<double> {
-	typedef uint64_t type;
+	using TYPE = uint64_t;
 };
 
 template <>
 struct FloatingToExact<float> {
-	typedef uint32_t type;
+	using TYPE = uint32_t;
 };
 
 template <class T, bool EMPTY>
 struct PatasState {
 public:
-	using EXACT_TYPE = typename FloatingToExact<T>::type;
+	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
-	PatasState(void *state_p = nullptr) : data_ptr(state_p), patas_state() {
+	explicit PatasState(void *state_p = nullptr) : data_ptr(state_p), patas_state() {
 	}
 	//! The Compress/Analyze State
 	void *data_ptr;

@@ -8,6 +8,7 @@ add_library_unity(
   arrow_conversion.cpp
   checkpoint.cpp
   glob.cpp
+  query_function.cpp
   range.cpp
   repeat.cpp
   repeat_row.cpp
