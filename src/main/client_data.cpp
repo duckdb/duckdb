@@ -24,6 +24,7 @@ public:
 		auto &config = DBConfig::GetConfig(context);
 		return *config.file_system;
 	}
+
 	optional_ptr<FileOpener> GetOpener() const override {
 		return ClientData::Get(context).file_opener.get();
 	}
@@ -43,7 +44,8 @@ ClientData::ClientData(ClientContext &context) : catalog_search_path(make_uniq<C
 	// The temporary objects always use DEFAULT_BLOCK_ALLOC_SIZE, as they're always in memory
 	temporary_objects = make_shared<AttachedDatabase>(db, AttachedDatabaseType::TEMP_DATABASE);
 	temporary_objects->oid = DatabaseManager::Get(db).ModifyCatalog();
-	temporary_objects->Initialize(DEFAULT_BLOCK_ALLOC_SIZE);
+	// NOTE: this becomes DEFAULT_BLOCK_ALLOC_SIZE once we start supporting different block sizes.
+	temporary_objects->Initialize(Storage::BLOCK_ALLOC_SIZE);
 }
 ClientData::~ClientData() {
 }

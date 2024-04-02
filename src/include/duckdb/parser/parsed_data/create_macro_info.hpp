@@ -14,7 +14,7 @@
 namespace duckdb {
 
 struct CreateMacroInfo : public CreateFunctionInfo {
-	CreateMacroInfo(CatalogType type);
+	explicit CreateMacroInfo(CatalogType type);
 
 	unique_ptr<MacroFunction> function;
 

@@ -61,7 +61,7 @@ public:
 	~AttachedDatabase() override;
 
 	//! Initializes the catalog and storage of the attached database.
-	void Initialize(const optional_idx block_alloc_size = optional_idx());
+	void Initialize(const optional_idx block_alloc_size, optional_ptr<ClientContext> context = nullptr);
 	void Close();
 
 	Catalog &ParentCatalog() override;

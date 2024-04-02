@@ -501,7 +501,9 @@ void UpdateSegment::RollbackUpdate(UpdateInfo &info) {
 	auto lock_handle = lock.GetExclusiveLock();
 
 	// move the data from the UpdateInfo back into the base info
-	D_ASSERT(root->info[info.vector_index]);
+	if (!root->info[info.vector_index]) {
+		return;
+	}
 	rollback_update_function(*root->info[info.vector_index]->info, info);
 
 	// clean up the update chain

@@ -37,7 +37,7 @@ class SingleFileBlockManager : public BlockManager {
 public:
 	SingleFileBlockManager(AttachedDatabase &db, const string &path, const StorageManagerOptions &options);
 
-	void GetFileFlags(uint8_t &flags, FileLockType &lock, bool create_new);
+	FileOpenFlags GetFileFlags(bool create_new) const;
 	//! Creates a new database.
 	void CreateNewDatabase();
 	//! Loads an existing database. We pass the provided block allocation size as a parameter
@@ -85,6 +85,7 @@ private:
 
 	//! Return the blocks to which we will write the free list and modified blocks
 	vector<MetadataHandle> GetFreeListBlocks();
+	void TrimFreeBlocks();
 
 private:
 	AttachedDatabase &db;
@@ -98,6 +99,8 @@ private:
 	FileBuffer header_buffer;
 	//! The list of free blocks that can be written to currently
 	set<block_id_t> free_list;
+	//! The list of blocks that were freed since the last checkpoint.
+	set<block_id_t> newly_freed_list;
 	//! The list of multi-use blocks (i.e. blocks that have >1 reference in the file)
 	//! When a multi-use block is marked as modified, the reference count is decreased by 1 instead of directly
 	//! Appending the block to the modified_blocks list

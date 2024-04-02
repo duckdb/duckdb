@@ -66,7 +66,7 @@ public:
 template <class T>
 struct AlpScanState : public SegmentScanState {
 public:
-	using EXACT_TYPE = typename FloatingToExact<T>::type;
+	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
 	explicit AlpScanState(ColumnSegment &segment) : segment(segment), count(segment.count) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);

@@ -1,6 +1,7 @@
 #include "duckdb/parser/parsed_data/attach_info.hpp"
 
 #include "duckdb/storage/storage_info.hpp"
+#include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
 

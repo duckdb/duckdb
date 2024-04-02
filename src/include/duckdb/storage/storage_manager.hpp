@@ -34,7 +34,8 @@ public:
 	virtual void FlushCommit() = 0;
 };
 
-//! The StorageManager is responsible for managing the physical storage of the database on disk.
+//! StorageManager is responsible for managing the physical storage of the
+//! database on disk
 class StorageManager {
 public:
 	StorageManager(AttachedDatabase &db, string path, bool read_only);
@@ -47,7 +48,7 @@ public:
 	//! Initialize a database or load an existing database from the database file path. The block_alloc_size is
 	//! either set, or invalid. If invalid, then DuckDB defaults to the default_block_alloc_size (DBConfig),
 	//! or the file's block allocation size, if it is an existing database.
-	void Initialize(const optional_idx block_alloc_size);
+	void Initialize(const optional_idx block_alloc_size, optional_ptr<ClientContext> context);
 
 	DatabaseInstance &GetDatabase();
 	AttachedDatabase &GetAttached() {
@@ -74,7 +75,7 @@ public:
 	virtual shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) = 0;
 
 protected:
-	virtual void LoadDatabase(const optional_idx block_alloc_size) = 0;
+	virtual void LoadDatabase(const optional_idx block_alloc_size, optional_ptr<ClientContext> context = nullptr) = 0;
 
 protected:
 	//! The database this storage manager belongs to
@@ -123,6 +124,6 @@ public:
 	shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) override;
 
 protected:
-	void LoadDatabase(const optional_idx block_alloc_size) override;
+	void LoadDatabase(const optional_idx block_alloc_size, optional_ptr<ClientContext> context = nullptr) override;
 };
 } // namespace duckdb

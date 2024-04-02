@@ -229,7 +229,7 @@ MetadataManager &SingleFileCheckpointReader::GetMetadataManager() {
 	return storage.block_manager->GetMetadataManager();
 }
 
-void SingleFileCheckpointReader::LoadFromStorage() {
+void SingleFileCheckpointReader::LoadFromStorage(optional_ptr<ClientContext> context) {
 	auto &block_manager = *storage.block_manager;
 	auto &metadata_manager = GetMetadataManager();
 	MetaBlockPointer meta_block(block_manager.GetMetaBlock(), 0);
@@ -238,13 +238,20 @@ void SingleFileCheckpointReader::LoadFromStorage() {
 		return;
 	}
 
-	Connection con(storage.GetDatabase());
-	con.BeginTransaction();
-	// create the MetadataReader to read from the storage
-	MetadataReader reader(metadata_manager, meta_block);
-	//	reader.SetContext(*con.context);
-	LoadCheckpoint(*con.context, reader);
-	con.Commit();
+	if (context) {
+		// create the MetadataReader to read from the storage
+		MetadataReader reader(metadata_manager, meta_block);
+		//	reader.SetContext(*con.context);
+		LoadCheckpoint(*context, reader);
+	} else {
+		Connection con(storage.GetDatabase());
+		con.BeginTransaction();
+		// create the MetadataReader to read from the storage
+		MetadataReader reader(metadata_manager, meta_block);
+		//	reader.SetContext(*con.context);
+		LoadCheckpoint(*con.context, reader);
+		con.Commit();
+	}
 }
 
 void CheckpointWriter::WriteEntry(CatalogEntry &entry, Serializer &serializer) {

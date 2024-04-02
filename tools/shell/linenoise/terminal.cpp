@@ -10,6 +10,8 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <sys/ioctl.h>
+#include <sys/select.h>
+#include <sys/time.h>
 
 namespace duckdb {
 

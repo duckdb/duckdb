@@ -25,7 +25,7 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_CASE;
 
 public:
-	BoundCaseExpression(LogicalType type);
+	explicit BoundCaseExpression(LogicalType type);
 	BoundCaseExpression(unique_ptr<Expression> when_expr, unique_ptr<Expression> then_expr,
 	                    unique_ptr<Expression> else_expr);
 

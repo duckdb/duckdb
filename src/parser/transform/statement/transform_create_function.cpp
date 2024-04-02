@@ -40,10 +40,11 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgque
 		break;
 	case duckdb_libpgquery::PG_RELPERSISTENCE_UNLOGGED:
 		throw ParserException("Unlogged flag not supported for macros: '%s'", qname.name);
-		break;
 	case duckdb_libpgquery::RELPERSISTENCE_PERMANENT:
 		info->temporary = false;
 		break;
+	default:
+		throw ParserException("Unsupported persistence flag for table '%s'", qname.name);
 	}
 
 	// what to do on conflict
