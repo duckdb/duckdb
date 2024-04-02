@@ -102,7 +102,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 			continue;
 		}
 
-		TableFunctionBinder binder(*this, context);
+		TableFunctionBinder binder(*this, context, table_function.name);
 		LogicalType sql_type;
 		auto expr = binder.Bind(child, &sql_type);
 		if (expr->HasParameter()) {

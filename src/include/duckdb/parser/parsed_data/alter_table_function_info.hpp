@@ -21,7 +21,7 @@ enum class AlterTableFunctionType : uint8_t { INVALID = 0, ADD_FUNCTION_OVERLOAD
 
 struct AlterTableFunctionInfo : public AlterInfo {
 	AlterTableFunctionInfo(AlterTableFunctionType type, AlterEntryData data);
-	virtual ~AlterTableFunctionInfo() override;
+	~AlterTableFunctionInfo() override;
 
 	AlterTableFunctionType alter_table_function_type;
 

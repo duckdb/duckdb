@@ -149,8 +149,8 @@ public:
 
 	//! Join multiple items of container with given size, transformed to string
 	//! using function, into one string using the given separator
-	template <typename C, typename S, typename Func>
-	static string Join(const C &input, S count, const string &separator, Func f) {
+	template <typename C, typename S, typename FUNC>
+	static string Join(const C &input, S count, const string &separator, FUNC f) {
 		// The result
 		std::string result;
 
@@ -189,8 +189,8 @@ public:
 	DUCKDB_API static bool CILessThan(const string &l1, const string &l2);
 
 	//! Format a string using printf semantics
-	template <typename... Args>
-	static string Format(const string fmt_str, Args... params) {
+	template <typename... ARGS>
+	static string Format(const string fmt_str, ARGS... params) {
 		return Exception::ConstructMessage(fmt_str, params...);
 	}
 

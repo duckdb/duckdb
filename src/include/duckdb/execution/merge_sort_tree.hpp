@@ -226,7 +226,7 @@ protected:
 					out << ((i && i % level_width == 0) ? group_separator : separator);
 					out << std::setw(number_width) << level.first[i];
 				}
-				out << std::endl;
+				out << '\n';
 			}
 			// Print the pointers
 			if (!level.second.empty()) {
@@ -239,7 +239,7 @@ protected:
 						                                                                       : separator);
 						out << std::setw(number_width) << level.second[idx + child_nr];
 					}
-					out << std::endl;
+					out << '\n';
 				}
 			}
 			level_width *= FANOUT;
@@ -254,7 +254,7 @@ MergeSortTree<E, O, CMP, F, C>::MergeSortTree(Elements &&lowest_level, const CMP
 	const auto fanout = F;
 	const auto cascading = C;
 	const auto count = lowest_level.size();
-	tree.emplace_back(Level(lowest_level, Offsets()));
+	tree.emplace_back(Level(std::move(lowest_level), Offsets()));
 
 	const RunElement SENTINEL(MergeSortTraits<ElementType>::SENTINEL(), MergeSortTraits<idx_t>::SENTINEL());
 

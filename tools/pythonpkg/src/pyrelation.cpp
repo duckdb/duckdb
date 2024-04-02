@@ -335,10 +335,9 @@ string DuckDBPyRelation::GenerateExpressionList(const string &function_name, con
 	                              projected_columns, window_spec);
 }
 
-string DuckDBPyRelation::GenerateExpressionList(const string &function_name, vector<string> &&input,
-                                                const string &groups, const string &function_parameter,
-                                                bool ignore_nulls, const string &projected_columns,
-                                                const string &window_spec) {
+string DuckDBPyRelation::GenerateExpressionList(const string &function_name, vector<string> input, const string &groups,
+                                                const string &function_parameter, bool ignore_nulls,
+                                                const string &projected_columns, const string &window_spec) {
 	string expr;
 
 	if (StringUtil::CIEquals("count", function_name) && input.empty()) {

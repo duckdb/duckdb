@@ -53,6 +53,7 @@ constexpr FileOpenFlags FileFlags::FILE_FLAGS_FILE_CREATE_NEW;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_APPEND;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_PRIVATE;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS;
+constexpr FileOpenFlags FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
 
 void FileOpenFlags::Verify() {
 #ifdef DEBUG
@@ -361,15 +362,15 @@ void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	throw NotImplementedException("%s: Truncate is not implemented!", GetName());
 }
 
-bool FileSystem::DirectoryExists(const string &directory) {
+bool FileSystem::DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) {
 	throw NotImplementedException("%s: DirectoryExists is not implemented!", GetName());
 }
 
-void FileSystem::CreateDirectory(const string &directory) {
+void FileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
 	throw NotImplementedException("%s: CreateDirectory is not implemented!", GetName());
 }
 
-void FileSystem::RemoveDirectory(const string &directory) {
+void FileSystem::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
 	throw NotImplementedException("%s: RemoveDirectory is not implemented!", GetName());
 }
 
@@ -378,19 +379,19 @@ bool FileSystem::ListFiles(const string &directory, const std::function<void(con
 	throw NotImplementedException("%s: ListFiles is not implemented!", GetName());
 }
 
-void FileSystem::MoveFile(const string &source, const string &target) {
+void FileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
 	throw NotImplementedException("%s: MoveFile is not implemented!", GetName());
 }
 
-bool FileSystem::FileExists(const string &filename) {
+bool FileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
 	throw NotImplementedException("%s: FileExists is not implemented!", GetName());
 }
 
-bool FileSystem::IsPipe(const string &filename) {
+bool FileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> opener) {
 	return false;
 }
 
-void FileSystem::RemoveFile(const string &filename) {
+void FileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
 	throw NotImplementedException("%s: RemoveFile is not implemented!", GetName());
 }
 
@@ -494,6 +495,10 @@ idx_t FileSystem::SeekPosition(FileHandle &handle) {
 
 bool FileSystem::CanSeek() {
 	throw NotImplementedException("%s: CanSeek is not implemented!", GetName());
+}
+
+bool FileSystem::IsManuallySet() {
+	return false;
 }
 
 unique_ptr<FileHandle> FileSystem::OpenCompressedFile(unique_ptr<FileHandle> handle, bool write) {

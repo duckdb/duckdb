@@ -30,8 +30,6 @@ public:
 };
 
 struct BaseCSVData : public TableFunctionData {
-	virtual ~BaseCSVData() {
-	}
 	//! The file path of the CSV file to read or write
 	vector<string> files;
 	//! The CSV reader options
@@ -55,7 +53,7 @@ struct WriteCSVData : public BaseCSVData {
 	//! The newline string to write
 	string newline = "\n";
 	//! The size of the CSV file (in bytes) that we buffer before we flush it to disk
-	idx_t flush_size = 4096 * 8;
+	idx_t flush_size = 4096ULL * 8ULL;
 	//! For each byte whether or not the CSV file requires quotes when containing the byte
 	unsafe_unique_array<bool> requires_quotes;
 };

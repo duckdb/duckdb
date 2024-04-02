@@ -356,8 +356,7 @@ struct UhugeintToStringCast {
 		string_t result = StringVector::EmptyString(vector, str.length());
 		auto data = result.GetDataWriteable();
 
-		// null-termination not required
-		memcpy(data, str.data(), str.length());
+		memcpy(data, str.data(), str.length()); // NOLINT: null-termination not required
 		result.Finalize();
 		return result;
 	}

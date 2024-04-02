@@ -18,7 +18,7 @@ namespace duckdb {
 template <class T>
 class FunctionSet {
 public:
-	explicit FunctionSet(string name) : name(name) {
+	explicit FunctionSet(string name) : name(std::move(name)) {
 	}
 
 	//! The name of the function set
