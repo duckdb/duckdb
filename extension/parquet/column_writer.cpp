@@ -15,16 +15,16 @@
 #include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/hugeint.hpp"
-#include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 #endif
 
+#include "lz4.hpp"
 #include "miniz_wrapper.hpp"
 #include "snappy.h"
 #include "zstd.h"
-#include "lz4.hpp"
 
 namespace duckdb {
 
@@ -1293,6 +1293,9 @@ public:
 
 	void Analyze(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) override {
 		auto &state = state_p.Cast<StringColumnWriterState>();
+		if (CannotWriteDictionary(state)) {
+			return; // Early out: We already know we will not write a dictionary, no need to analyze
+		}
 
 		idx_t vcount = parent ? parent->definition_levels.size() - state.definition_levels.size() : count;
 		idx_t parent_index = state.definition_levels.size();
@@ -1319,6 +1322,7 @@ public:
 					new_value_index++;
 					state.estimated_dict_page_size += value.GetSize() + MAX_DICTIONARY_KEY_SIZE;
 				}
+
 				// if the value changed, we will encode it in the page
 				if (last_value_index != found.first->second) {
 					// we will add the value index size later, when we know the total number of keys
@@ -1338,10 +1342,7 @@ public:
 	void FinalizeAnalyze(ColumnWriterState &state_p) override {
 		auto &state = state_p.Cast<StringColumnWriterState>();
 
-		// check if a dictionary will require more space than a plain write, or if the dictionary page is going to
-		// be too large
-		if (state.estimated_dict_page_size > MAX_UNCOMPRESSED_DICT_PAGE_SIZE ||
-		    state.estimated_rle_pages_size + state.estimated_dict_page_size > state.estimated_plain_size) {
+		if (CannotWriteDictionary(state)) {
 			// clearing the dictionary signals a plain write
 			state.dictionary.clear();
 			state.key_bit_width = 0;
@@ -1456,6 +1457,14 @@ public:
 			auto strings = FlatVector::GetData<string_t>(vector);
 			return strings[index].GetSize();
 		}
+	}
+
+private:
+	bool CannotWriteDictionary(StringColumnWriterState &state) {
+		// check if a dictionary will require more space than a plain write, or if the dictionary page is going to
+		// be too large
+		return state.estimated_dict_page_size > MAX_UNCOMPRESSED_DICT_PAGE_SIZE ||
+		       state.estimated_rle_pages_size + state.estimated_dict_page_size > state.estimated_plain_size;
 	}
 };
 
