@@ -355,15 +355,18 @@ public:
 	~BasicColumnWriter() override = default;
 
 	//! We limit the uncompressed page size to 100MB
-	// The max size in Parquet is 2GB, but we choose a more conservative limit
+	//! The max size in Parquet is 2GB, but we choose a more conservative limit
 	static constexpr const idx_t MAX_UNCOMPRESSED_PAGE_SIZE = 100000000;
 	//! Dictionary pages must be below 2GB. Unlike data pages, there's only one dictionary page.
-	//  For this reason we go with a much higher, but still a conservative upper bound of 1GB;
+	//! For this reason we go with a much higher, but still a conservative upper bound of 1GB;
 	static constexpr const idx_t MAX_UNCOMPRESSED_DICT_PAGE_SIZE = 1e9;
+	//! If the dictionary has this many entries, but the compression ratio is still below 1,
+	//! we stop creating the dictionary
+	static constexpr const idx_t DICTIONARY_ANALYZE_THRESHOLD = 1e4;
 
-	// the maximum size a key entry in an RLE page takes
+	//! The maximum size a key entry in an RLE page takes
 	static constexpr const idx_t MAX_DICTIONARY_KEY_SIZE = sizeof(uint32_t);
-	// the size of encoding the string length
+	//! The size of encoding the string length
 	static constexpr const idx_t STRING_LENGTH_SIZE = sizeof(uint32_t);
 
 public:
@@ -1293,8 +1296,9 @@ public:
 
 	void Analyze(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) override {
 		auto &state = state_p.Cast<StringColumnWriterState>();
-		if (CannotWriteDictionary(state)) {
-			return; // Early out: We already know we will not write a dictionary, no need to analyze
+		if (state.estimated_dict_page_size > MAX_UNCOMPRESSED_DICT_PAGE_SIZE ||
+		    (state.dictionary.size() > DICTIONARY_ANALYZE_THRESHOLD && DictionaryCompressionRatio(state) < 1.0)) {
+			return; // Early out: compression ratio is less than 1 after seeing more entries than the theshold
 		}
 
 		idx_t vcount = parent ? parent->definition_levels.size() - state.definition_levels.size() : count;
@@ -1342,7 +1346,10 @@ public:
 	void FinalizeAnalyze(ColumnWriterState &state_p) override {
 		auto &state = state_p.Cast<StringColumnWriterState>();
 
-		if (CannotWriteDictionary(state)) {
+		// check if a dictionary will require more space than a plain write, or if the dictionary page is going to
+		// be too large
+		if (state.estimated_dict_page_size > MAX_UNCOMPRESSED_DICT_PAGE_SIZE ||
+		    DictionaryCompressionRatio(state) < 1.0) {
 			// clearing the dictionary signals a plain write
 			state.dictionary.clear();
 			state.key_bit_width = 0;
@@ -1460,11 +1467,15 @@ public:
 	}
 
 private:
-	bool CannotWriteDictionary(StringColumnWriterState &state) {
-		// check if a dictionary will require more space than a plain write, or if the dictionary page is going to
-		// be too large
-		return state.estimated_dict_page_size > MAX_UNCOMPRESSED_DICT_PAGE_SIZE ||
-		       state.estimated_rle_pages_size + state.estimated_dict_page_size > state.estimated_plain_size;
+	static double DictionaryCompressionRatio(StringColumnWriterState &state) {
+		// If any are 0, we just return a compression ratio of 1
+		if (state.estimated_plain_size == 0 || state.estimated_rle_pages_size == 0 ||
+		    state.estimated_dict_page_size == 0) {
+			return 1;
+		}
+		// Otherwise, plain size divided by compressed size
+		return double(state.estimated_plain_size) /
+		       double(state.estimated_rle_pages_size + state.estimated_dict_page_size);
 	}
 };
 
