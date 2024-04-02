@@ -60,12 +60,6 @@ jobs:
           update-rtools: true
           rtools-version: '42' # linker bug in 43 ^^
 
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
-        with:
-          key: ${{ github.job }}
-          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
-
       - uses: ./.github/actions/build_extensions
         with:
           deploy_as: windows_amd64_rtools
