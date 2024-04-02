@@ -1,25 +1,35 @@
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
-#include "duckdb/main/secret/secret_manager.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/function/scalar_macro_function.hpp"
+#include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
+#include "duckdb/parser/constraints/foreign_key_constraint.hpp"
+#include "duckdb/parser/constraints/list.hpp"
+#include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
-#include "duckdb/planner/expression/bound_cast_expression.hpp"
-#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
-#include "duckdb/parser/parsed_data/create_view_info.hpp"
-#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/operator/logical_create.hpp"
@@ -30,18 +40,8 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
-#include "duckdb/parser/constraints/foreign_key_constraint.hpp"
-#include "duckdb/function/scalar_macro_function.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/storage_extension.hpp"
-#include "duckdb/main/client_data.hpp"
-#include "duckdb/parser/constraints/unique_constraint.hpp"
-#include "duckdb/parser/constraints/list.hpp"
-#include "duckdb/main/database_manager.hpp"
-#include "duckdb/main/attached_database.hpp"
-#include "duckdb/catalog/duck_catalog.hpp"
-#include "duckdb/function/table/table_scan.hpp"
-#include "duckdb/parser/tableref/basetableref.hpp"
 
 namespace duckdb {
 
@@ -441,12 +441,17 @@ static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) 
 
 unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateStatement &stmt,
                                                          TableCatalogEntry &table, unique_ptr<LogicalOperator> plan) {
+	return binder.BindCreateIndex(stmt, table, std::move(plan));
+}
+
+unique_ptr<LogicalOperator> Binder::BindCreateIndex(CreateStatement &stmt, TableCatalogEntry &table,
+                                                    unique_ptr<LogicalOperator> plan) {
 	D_ASSERT(plan->type == LogicalOperatorType::LOGICAL_GET);
 	auto &base = stmt.info->Cast<CreateIndexInfo>();
 
 	auto &get = plan->Cast<LogicalGet>();
 	// bind the index expressions
-	IndexBinder index_binder(binder, binder.context);
+	IndexBinder index_binder(*this, context);
 	vector<unique_ptr<Expression>> expressions;
 	expressions.reserve(base.expressions.size());
 	for (auto &expr : base.expressions) {
@@ -539,7 +544,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		if (plan->type != LogicalOperatorType::LOGICAL_GET) {
 			throw BinderException("Cannot create index on a view!");
 		}
-		result.plan = table.catalog.BindCreateIndex(*this, stmt, table, std::move(plan));
+		result.plan = BindCreateIndex(stmt, table, std::move(plan));
 		break;
 	}
 	case CatalogType::TABLE_ENTRY: {
