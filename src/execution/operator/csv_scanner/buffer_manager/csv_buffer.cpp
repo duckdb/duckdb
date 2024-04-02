@@ -36,7 +36,7 @@ shared_ptr<CSVBuffer> CSVBuffer::Next(CSVFileHandle &file_handle, idx_t buffer_s
 	if (has_seaked) {
 		// This means that at some point a reload was done, and we are currently on the incorrect position in our file
 		// handle
-		file_handle.Seek(handle.Ptr(), actual_buffer_size, global_csv_start + actual_buffer_size);
+		file_handle.Seek(global_csv_start + actual_buffer_size);
 		has_seaked = false;
 	}
 	auto next_csv_buffer = make_shared<CSVBuffer>(file_handle, context, buffer_size,
@@ -62,7 +62,7 @@ idx_t CSVBuffer::GetBufferSize() {
 void CSVBuffer::Reload(CSVFileHandle &file_handle) {
 	AllocateBuffer(actual_buffer_size);
 	// If we can seek, we seek and return the correct pointers
-	file_handle.Seek(handle.Ptr(), actual_buffer_size, global_csv_start);
+	file_handle.Seek(global_csv_start);
 	file_handle.Read(handle.Ptr(), actual_buffer_size);
 }
 

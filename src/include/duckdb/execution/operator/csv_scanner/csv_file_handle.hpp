@@ -26,7 +26,7 @@ public:
 
 public:
 	bool CanSeek();
-	void Seek(void *buffer, idx_t nr_bytes, idx_t position);
+	void Seek(idx_t position);
 	bool OnDiskFile();
 	bool IsPipe();
 

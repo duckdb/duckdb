@@ -24,7 +24,7 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
 		file_scans.emplace_back(
 		    make_uniq<CSVFileScan>(context, files[0], options, 0, bind_data, column_ids, file_schema));
 	};
-	//! There are situations where we only support single threaded scanning
+	// There are situations where we only support single threaded scanning
 	bool many_csv_files = files.size() > 1 && files.size() > system_threads * 2;
 	single_threaded = many_csv_files || !options.parallel;
 	last_file_idx = 0;
@@ -56,7 +56,7 @@ double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
 	return percentage * 100;
 }
 
-unique_ptr<StringValueScanner> CSVGlobalState::Next(StringValueScanner *previous_scanner) {
+unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScanner> previous_scanner) {
 	if (single_threaded) {
 		idx_t cur_idx = last_file_idx++;
 		if (cur_idx >= bind_data.files.size()) {

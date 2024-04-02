@@ -1,0 +1,53 @@
+# name: test/sql/copy/csv/test_multiple_big_compressed_csvs.test_slow
+# description: Test scan over multiple compressed big csv files
+# group: [csv]
+
+require tpch
+
+statement ok
+CALL dbgen(sf=10);
+
+statement ok
+copy lineitem to ' __TEST_DIR__/lineitem.csv.gz';
+
+statement ok
+SET temp_directory=''
+
+# load the DB from disk (Avoids OOM when generating ze table)
+load __TEST_DIR__/lineitem_compressed.db
+
+statement ok
+CREATE TABLE lineitem_2(l_orderkey INTEGER NOT NULL, l_partkey INTEGER NOT NULL, l_suppkey INTEGER NOT NULL, l_linenumber INTEGER NOT NULL, l_quantity DECIMAL(15,2) NOT NULL, l_extendedprice DECIMAL(15,2) NOT NULL, l_discount DECIMAL(15,2) NOT NULL, l_tax DECIMAL(15,2) NOT NULL, l_returnflag VARCHAR NOT NULL, l_linestatus VARCHAR NOT NULL, l_shipdate DATE NOT NULL, l_commitdate DATE NOT NULL, l_receiptdate DATE NOT NULL, l_shipinstruct VARCHAR NOT NULL, l_shipmode VARCHAR NOT NULL, l_comment VARCHAR NOT NULL);
+
+statement ok
+INSERT INTO lineitem_2 FROM read_csv([
+	' __TEST_DIR__/lineitem.csv.gz',
+	' __TEST_DIR__/lineitem.csv.gz',
+	' __TEST_DIR__/lineitem.csv.gz',
+	' __TEST_DIR__/lineitem.csv.gz',
+	' __TEST_DIR__/lineitem.csv.gz',
+	' __TEST_DIR__/lineitem.csv.gz',
+	' __TEST_DIR__/lineitem.csv.gz',
+	' __TEST_DIR__/lineitem.csv.gz',
+	' __TEST_DIR__/lineitem.csv.gz',
+	' __TEST_DIR__/lineitem.csv.gz',
+	' __TEST_DIR__/lineitem.csv.gz',
+	' __TEST_DIR__/lineitem.csv.gz',
+	' __TEST_DIR__/lineitem.csv.gz',
+	' __TEST_DIR__/lineitem.csv.gz',
+	' __TEST_DIR__/lineitem.csv.gz',
+	' __TEST_DIR__/lineitem.csv.gz',
+	' __TEST_DIR__/lineitem.csv.gz',
+	' __TEST_DIR__/lineitem.csv.gz',
+	' __TEST_DIR__/lineitem.csv.gz',
+	' __TEST_DIR__/lineitem.csv.gz',
+	' __TEST_DIR__/lineitem.csv.gz',
+	' __TEST_DIR__/lineitem.csv.gz',
+	' __TEST_DIR__/lineitem.csv.gz',
+	' __TEST_DIR__/lineitem.csv.gz',
+]);
+
+query I
+select count(*) from lineitem_2
+----
+1439665248
