@@ -408,16 +408,9 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 		// It makes no sense to have a schema depend on anything
 		D_ASSERT(dep.EntryInfo().type != CatalogType::SCHEMA_ENTRY);
 
-		if (dep.EntryInfo().type == CatalogType::INDEX_ENTRY) {
-			// FIXME: this is only done because the table name is baked into the SQL of the Index Entry
-			// If we update that then there is no reason this has to throw an exception.
-
-			// conflict: attempting to alter this object but the dependent object still exists
-			// no cascade and there are objects that depend on this object: throw error
-			throw DependencyException("Cannot alter entry \"%s\" because there are entries that "
-			                          "depend on it.",
-			                          old_obj.name);
-		}
+		throw DependencyException("Cannot alter entry \"%s\" because there are entries that "
+		                          "depend on it.",
+		                          old_obj.name);
 
 		auto dep_info = DependencyInfo::FromDependent(dep);
 		dep_info.subject.entry = new_info;
