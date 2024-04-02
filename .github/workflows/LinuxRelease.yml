@@ -283,7 +283,8 @@ jobs:
 
  check-load-install-extensions:
     name: Checks extension entries
-    if: ${{ inputs.skip_tests != 'true' }}
+    #FIXME: To be reenabled after arrow, azure and iceberg builds are restored
+    if: ${{ inputs.skip_tests != 'true' && 0 }}
     runs-on: ubuntu-20.04
     needs: linux-extensions-64
     env:
