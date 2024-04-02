@@ -105,7 +105,8 @@ select map_concat(x, y, z) from tbl where rowid != 0;
 {42=small, 1=this is a long string, 0=tiny}
 {5=long, 1337=longer, 0=longest}
 
-query I map_concat(x, y, z) from tbl where rowid == 1;
+query I
+select map_concat(x, y, z) from tbl where rowid == 1;
 ----
 {42=small, 1=this is a long string, 0=tiny}
 

@@ -106,7 +106,8 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"enable_http_metadata_cache", {true}},
 	    {"force_bitpacking_mode", {"constant"}},
 	    {"allocator_flush_threshold", {"4.0 GiB"}},
-	    {"arrow_large_buffer_size", {true}}};
+	    {"arrow_large_buffer_size", {true}},
+	    {"produce_arrow_string_view", {true}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
 		REQUIRE(name == "MISSING_FROM_MAP");
@@ -125,6 +126,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "disabled_filesystems",      // cant change this while db is running
 	    "enable_external_access",    // cant change this while db is running
 	    "allow_unsigned_extensions", // cant change this while db is running
+	    "allow_unredacted_secrets",  // cant change this while db is running
 	    "log_query_path",
 	    "password",
 	    "username",
@@ -132,7 +134,8 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "external_threads", // tested in test_threads.cpp
 	    "profiling_output", // just an alias
 	    "duckdb_api",
-	    "custom_user_agent"};
+	    "custom_user_agent",
+	    "default_block_size"};
 	return excluded_options.count(name) == 1;
 }
 

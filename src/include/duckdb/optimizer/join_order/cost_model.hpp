@@ -16,7 +16,7 @@ class QueryGraphManager;
 
 class CostModel {
 public:
-	CostModel(QueryGraphManager &query_graph_manager);
+	explicit CostModel(QueryGraphManager &query_graph_manager);
 
 private:
 	//! query graph storing relation manager information

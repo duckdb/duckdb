@@ -28,9 +28,12 @@ DuckDBPyResult::DuckDBPyResult(unique_ptr<QueryResult> result_p) : result(std::m
 }
 
 DuckDBPyResult::~DuckDBPyResult() {
-	py::gil_scoped_release gil;
-	result.reset();
-	current_chunk.reset();
+	try {
+		py::gil_scoped_release gil;
+		result.reset();
+		current_chunk.reset();
+	} catch (...) { // NOLINT
+	}
 }
 
 const vector<string> &DuckDBPyResult::GetNames() {
@@ -317,7 +320,9 @@ bool DuckDBPyResult::FetchArrowChunk(ChunkScanState &scan_state, py::list &batch
 	}
 	ArrowSchema arrow_schema;
 	auto names = query_result.names;
-	QueryResult::DeduplicateColumns(names);
+	if (to_polars) {
+		QueryResult::DeduplicateColumns(names);
+	}
 	ArrowConverter::ToArrowSchema(&arrow_schema, query_result.types, names, query_result.client_properties);
 	TransformDuckToArrowChunk(arrow_schema, data, batches);
 	return true;

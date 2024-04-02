@@ -64,13 +64,30 @@ class PlanCost:
         return self
 
     def __gt__(self, other):
-        return self.total > other.total
+        if self == other or self.total < other.total:
+            return False
+        # if the total intermediate cardinalities is greater, also inspect time.
+        # it's possible a plan reordering increased cardinalities, but overall execution time
+        # was not greatly affected
+        total_card_increased = self.total > other.total
+        build_card_increased = self.build_side > other.build_side
+        if total_card_increased and build_card_increased:
+            return True
+        # we know the total cardinality is either the same or higher and the build side has not increased
+        # in this case fall back to the timing. It's possible that even if the probe side is higher
+        # since the tuples are in flight, the plan executes faster
+        return self.time > other.time * 1.03
 
     def __lt__(self, other):
-        return self.total > other.total
+        if self == other:
+            return False
+        return not (self > other)
+
+    def __eq__(self, other):
+        return self.total == other.total and self.build_side == other.build_side and self.probe_side == other.probe_side
 
 
-def op_inspect(op):
+def op_inspect(op) -> PlanCost:
     cost = PlanCost()
     if op['name'] == "Query":
         cost.time = op['timing']
@@ -139,25 +156,6 @@ def print_diffs(diffs):
         print("New total cost:", new_cost.total)
         print("New build cost:", new_cost.build_side)
         print("New probe cost:", new_cost.probe_side)
-
-
-def cardinality_is_higher(old_cost, new_cost):
-    new_cardinality_higher = (
-        old_cost.total < new_cost.total
-        or old_cost.build_side < new_cost.build_side
-        or old_cost.probe_side < new_cost.probe_side
-    )
-    new_timing_higher = old_cost.time < new_cost.time
-
-    # if the cardinalities have changed, its possible build side probe sides
-    # have changed, but this may still lead to better execution. So return
-    # result of timing
-    if new_cardinality_higher:
-        return new_timing_higher
-
-    # if new_cardinality_higher is False, we either have the same plan, or
-    # an even better plan with less cardinalities.
-    return False
 
 
 def main():

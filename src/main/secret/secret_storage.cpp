@@ -104,7 +104,7 @@ SecretMatch CatalogSetSecretStorage::LookupSecret(const string &path, const stri
 
 	const std::function<void(CatalogEntry &)> callback = [&](CatalogEntry &entry) {
 		auto &cast_entry = entry.Cast<SecretCatalogEntry>();
-		if (cast_entry.secret->secret->GetType() == type) {
+		if (StringUtil::CIEquals(cast_entry.secret->secret->GetType(), type)) {
 			best_match = SelectBestMatch(*cast_entry.secret, path, best_match);
 		}
 	};
@@ -203,7 +203,13 @@ void LocalFileSecretStorage::WriteSecret(const BaseSecret &secret, OnCreateConfl
 		fs.RemoveFile(file_path);
 	}
 
-	auto file_writer = BufferedFileWriter(fs, file_path);
+	auto open_flags = FileFlags::FILE_FLAGS_WRITE;
+	// Ensure we are writing to a private file with 600 permission
+	open_flags |= FileFlags::FILE_FLAGS_PRIVATE;
+	// Ensure we overwrite anything that may have been placed there since our delete above
+	open_flags |= FileFlags::FILE_FLAGS_FILE_CREATE_NEW;
+
+	auto file_writer = BufferedFileWriter(fs, file_path, open_flags);
 
 	auto serializer = BinarySerializer(file_writer);
 	serializer.Begin();

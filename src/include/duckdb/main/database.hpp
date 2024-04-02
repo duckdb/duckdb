@@ -25,6 +25,8 @@ class FileSystem;
 class TaskScheduler;
 class ObjectCache;
 struct AttachInfo;
+struct AttachOptions;
+class DatabaseFileSystem;
 
 class DatabaseInstance : public std::enable_shared_from_this<DatabaseInstance> {
 	friend class DuckDB;
@@ -57,7 +59,7 @@ public:
 	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const string &key, Value &result);
 
 	unique_ptr<AttachedDatabase> CreateAttachedDatabase(ClientContext &context, const AttachInfo &info,
-	                                                    const string &type, AccessMode access_mode);
+	                                                    const AttachOptions &options);
 
 private:
 	void Initialize(const char *path, DBConfig *config);
@@ -66,13 +68,14 @@ private:
 	void Configure(DBConfig &config);
 
 private:
-	unique_ptr<BufferManager> buffer_manager;
+	shared_ptr<BufferManager> buffer_manager;
 	unique_ptr<DatabaseManager> db_manager;
 	unique_ptr<TaskScheduler> scheduler;
 	unique_ptr<ObjectCache> object_cache;
 	unique_ptr<ConnectionManager> connection_manager;
 	unordered_set<std::string> loaded_extensions;
 	ValidChecker db_validity;
+	unique_ptr<DatabaseFileSystem> db_file_system;
 };
 
 //! The database object. This object holds the catalog and all the

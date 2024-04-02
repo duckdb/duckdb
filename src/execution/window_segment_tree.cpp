@@ -18,9 +18,9 @@ namespace duckdb {
 WindowAggregatorState::WindowAggregatorState() : allocator(Allocator::DefaultAllocator()) {
 }
 
-WindowAggregator::WindowAggregator(AggregateObject aggr, const LogicalType &result_type_p,
+WindowAggregator::WindowAggregator(AggregateObject aggr_p, const LogicalType &result_type_p,
                                    const WindowExcludeMode exclude_mode_p, idx_t partition_count_p)
-    : aggr(std::move(aggr)), result_type(result_type_p), partition_count(partition_count_p),
+    : aggr(std::move(aggr_p)), result_type(result_type_p), partition_count(partition_count_p),
       state_size(aggr.function.state_size()), filter_pos(0), exclude_mode(exclude_mode_p) {
 }
 

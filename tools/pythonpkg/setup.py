@@ -121,7 +121,12 @@ if platform.system() == 'Windows':
     extensions = ['parquet', 'icu', 'fts', 'tpch', 'json']
 
 is_android = hasattr(sys, 'getandroidapilevel')
-use_jemalloc = not is_android and platform.system() == 'Linux' and platform.architecture()[0] == '64bit'
+use_jemalloc = (
+    not is_android
+    and platform.system() == 'Linux'
+    and platform.architecture()[0] == '64bit'
+    and platform.machine() == 'x86_64'
+)
 
 if use_jemalloc:
     extensions.append('jemalloc')

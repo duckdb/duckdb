@@ -46,7 +46,7 @@ StandardBufferManager::StandardBufferManager(DatabaseInstance &db, string tmp)
     : BufferManager(), db(db), buffer_pool(db.GetBufferPool()), temp_directory(std::move(tmp)),
       temporary_id(MAXIMUM_BLOCK), buffer_allocator(BufferAllocatorAllocate, BufferAllocatorFree,
                                                     BufferAllocatorRealloc, make_uniq<BufferAllocatorData>(*this)) {
-	temp_block_manager = make_uniq<InMemoryBlockManager>(*this);
+	temp_block_manager = make_uniq<InMemoryBlockManager>(*this, DEFAULT_BLOCK_ALLOC_SIZE);
 	for (idx_t i = 0; i < MEMORY_TAG_COUNT; i++) {
 		evicted_data_per_tag[i] = 0;
 	}
@@ -120,22 +120,26 @@ BufferHandle StandardBufferManager::Allocate(MemoryTag tag, idx_t block_size, bo
 
 void StandardBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) {
 	D_ASSERT(block_size >= Storage::BLOCK_SIZE);
-	lock_guard<mutex> lock(handle->lock);
+	unique_lock<mutex> lock(handle->lock);
 	D_ASSERT(handle->state == BlockState::BLOCK_LOADED);
 	D_ASSERT(handle->memory_usage == handle->buffer->AllocSize());
 	D_ASSERT(handle->memory_usage == handle->memory_charge.size);
 
 	auto req = handle->buffer->CalculateMemory(block_size);
-	int64_t memory_delta = (int64_t)req.alloc_size - handle->memory_usage;
+	int64_t memory_delta = NumericCast<int64_t>(req.alloc_size) - handle->memory_usage;
 
 	if (memory_delta == 0) {
 		return;
 	} else if (memory_delta > 0) {
 		// evict blocks until we have space to resize this block
+		// unlock the handle lock during the call to EvictBlocksOrThrow
+		lock.unlock();
 		auto reservation =
 		    EvictBlocksOrThrow(handle->tag, memory_delta, nullptr, "failed to resize block from %s to %s%s",
 		                       StringUtil::BytesToHumanReadableString(handle->memory_usage),
 		                       StringUtil::BytesToHumanReadableString(req.alloc_size));
+		lock.lock();
+
 		// EvictBlocks decrements 'current_memory' for us.
 		handle->memory_charge.Merge(std::move(reservation));
 	} else {

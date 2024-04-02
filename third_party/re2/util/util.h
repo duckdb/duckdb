@@ -5,7 +5,7 @@
 #ifndef UTIL_UTIL_H_
 #define UTIL_UTIL_H_
 
-#define arraysize(array) (int)(sizeof(array)/sizeof((array)[0]))
+#define arraysize(array) (sizeof(array)/sizeof((array)[0]))
 
 #ifndef ATTRIBUTE_NORETURN
 #if defined(__GNUC__)
@@ -14,6 +14,14 @@
 #define ATTRIBUTE_NORETURN __declspec(noreturn)
 #else
 #define ATTRIBUTE_NORETURN
+#endif
+#endif
+
+#ifndef ATTRIBUTE_UNUSED
+#if defined(__GNUC__)
+#define ATTRIBUTE_UNUSED __attribute__((unused))
+#else
+#define ATTRIBUTE_UNUSED
 #endif
 #endif
 

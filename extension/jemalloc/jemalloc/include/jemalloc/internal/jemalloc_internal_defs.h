@@ -205,26 +205,35 @@ namespace duckdb_jemalloc {
 /* #undef LG_QUANTUM */
 
 /* One page is 2^LG_PAGE bytes. */
-// FIXME (duckdb): not sure how future-proof this is. What if Intel makes a chip with a 16k page?
-//  What if someone uses a Windows ARM machine? I hope this suffices for now. If an issue pops up we can fix it.
-#if defined(__i386__)
-#define LG_PAGE 12
-#elif defined(__x86_64__) || defined(__amd64__)
-#define LG_PAGE 12
+// NOTE: This is an attempt at setting a correct page size for multiple architectures without running getconf
+// This is compiled into DuckDB, which means that our distributions have a fixed page size
+// We only enable jemalloc for non-ARM Linux builds, virtually all of which have a page size of 4KB
+// The other definitions are just here for people who want to build DuckDB with jemalloc themselves
+#if defined(__i386__) || defined(__x86_64__) || defined(__amd64__) || defined(COMPILER_MSVC) && (defined(_M_IX86) || defined(_M_X64))
+#define LG_PAGE 12 // x86 and x86_64 typically have a 4KB page size
 #elif defined(__powerpc__) || defined(__ppc__)
-#define LG_PAGE 12
+#define LG_PAGE 16 // PowerPC architectures often use 64KB page size
 #elif defined(__sparc__)
-#define LG_PAGE 12
-#elif defined(__ia64__)
-#define LG_PAGE 12
-#elif defined(COMPILER_MSVC) && defined(_M_IX86)
-#define LG_PAGE 12
-#elif defined(__aarch64__)
-#define LG_PAGE 16
-#elif defined(__ARM_ARCH)
-#define LG_PAGE 14
+#define LG_PAGE 13 // SPARC architectures usually have an 8KB page size
+#elif defined(__aarch64__) || defined(__ARM_ARCH)
+
+// ARM architectures can have a wide range of page sizes
+#if defined(__APPLE__)
+#define LG_PAGE 14 // Apple Silicon uses a 16KB page size
+
+// Best effort for other ARM versions
+#elif defined(__ARM_ARCH) && __ARM_ARCH >= 8
+#define LG_PAGE 16 // ARM architectures >= ARMv8 typically use a 64KB page size
+#elif defined(__ARM_ARCH) && __ARM_ARCH >= 7
+#define LG_PAGE 14 // ARM architectures >= ARMv7 typically use a 16KB page size
+#elif defined(__ARM_ARCH) && __ARM_ARCH >= 6
+#define LG_PAGE 12 // ARM architectures >= ARMv6 typically use a 4KB page size
 #else
-#define LG_PAGE 12
+#define LG_PAGE 12 // Default to a 4KB page size for unknown ARM architectures
+#endif
+
+#else
+#define LG_PAGE 12 // Default to the most common page size of 4KB
 #endif
 
 /* Maximum number of regions in a slab. */
