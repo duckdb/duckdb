@@ -93,8 +93,8 @@ void Mutex::ReaderUnlock() { ReleaseSRWLockShared(&mutex_); }
 
 #define SAFE_PTHREAD(fncall)    \
   do {                          \
-    if ((fncall) != 0) abort(); \
-  } while (0)
+    if ((fncall) != 0) throw std::runtime_error("RE2 pthread failure"); \
+  } while (0);
 
 Mutex::Mutex()             { SAFE_PTHREAD(pthread_rwlock_init(&mutex_, NULL)); }
 Mutex::~Mutex()            { SAFE_PTHREAD(pthread_rwlock_destroy(&mutex_)); }
