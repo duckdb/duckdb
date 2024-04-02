@@ -185,7 +185,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 		best_consistent_rows = consistent_rows;
 		max_columns_found = num_cols;
 		prev_padding_count = padding_count;
-		if (!options.null_padding && !options.ignore_errors) {
+		if (!options.null_padding && !options.ignore_errors.GetValue()) {
 			sniffing_state_machine.dialect_options.skip_rows = start_row;
 		} else {
 			sniffing_state_machine.dialect_options.skip_rows = options.dialect_options.skip_rows.GetValue();
@@ -210,7 +210,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 			}
 		}
 		if (!same_quote_is_candidate) {
-			if (!options.null_padding && !options.ignore_errors) {
+			if (!options.null_padding && !options.ignore_errors.GetValue()) {
 				sniffing_state_machine.dialect_options.skip_rows = start_row;
 			} else {
 				sniffing_state_machine.dialect_options.skip_rows = options.dialect_options.skip_rows.GetValue();

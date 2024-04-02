@@ -380,10 +380,10 @@ bool StringValueResult::HandleError() {
 			    line_pos.GetGlobalPosition(requested_size, first_nl));
 			break;
 		case CSVErrorType::CAST_ERROR:
-			csv_error = CSVError::CastError(state_machine.options, names[cur_error.col_idx], cur_error.error_message,
-			                                cur_error.col_idx, borked_line, lines_per_batch,
-			                                current_line_position.begin.GetGlobalPosition(requested_size, first_nl),
-			                                line_pos.GetGlobalPosition(requested_size, first_nl));
+			csv_error = CSVError::CastError(
+			    state_machine.options, names[cur_error.col_idx], cur_error.error_message, cur_error.col_idx,
+			    borked_line, lines_per_batch, current_line_position.begin.GetGlobalPosition(requested_size, first_nl),
+			    line_pos.GetGlobalPosition(requested_size, first_nl), parse_types[cur_error.col_idx].first);
 			break;
 		default:
 			throw InvalidInputException("CSV Error not allowed when inserting row");
@@ -730,11 +730,8 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 				auto csv_error = CSVError::CastError(
 				    state_machine->options, csv_file_scan->names[col_idx], error_message, col_idx, borked_line,
 				    lines_per_batch,
-				    result.line_positions_per_row[line_error].begin.GetGlobalPosition(result.result_size, first_nl),
-				    -1);
-					auto csv_error =
-				    CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx], error_message, col_idx,
-				                        row, lines_per_batch, result_vector.GetType().id());
+				    result.line_positions_per_row[line_error].begin.GetGlobalPosition(result.result_size, first_nl), -1,
+				    result_vector.GetType().id());
 
 				error_handler->Error(csv_error);
 			}
@@ -758,11 +755,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					    state_machine->options, csv_file_scan->names[col_idx], error_message, col_idx, borked_line,
 					    lines_per_batch,
 					    result.line_positions_per_row[line_error].begin.GetGlobalPosition(result.result_size, first_nl),
-					    -1);
-					auto csv_error =
-					    CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx], error_message,
-					                        col_idx, row, lines_per_batch, result_vector.GetType().id());
-
+					    -1, result_vector.GetType().id());
 					error_handler->Error(csv_error);
 				}
 			}

@@ -59,8 +59,7 @@ public:
 	//! Produces error messages for casting errors
 	static CSVError CastError(const CSVReaderOptions &options, string &column_name, string &cast_error,
 	                          idx_t column_idx, string &csv_row, LinesPerBoundary error_info, idx_t row_byte_position,
-	                          int64_t byte_position);
-	                          idx_t column_idx, vector<Value> &row, LinesPerBoundary error_info, LogicalTypeId type);
+	                          int64_t byte_position, LogicalTypeId type);
 	//! Produces error for when the line size exceeds the maximum line size option
 	static CSVError LineSizeError(const CSVReaderOptions &options, idx_t actual_size, LinesPerBoundary error_info,
 	                              string &csv_row, idx_t byte_position);
