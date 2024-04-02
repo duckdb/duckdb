@@ -22,7 +22,7 @@ struct TimeBucket {
 	// There are 360 months between 1970-01-01 and 2000-01-01
 	constexpr static const int32_t DEFAULT_ORIGIN_MONTHS = 360;
 
-	enum struct BucketWidthType { CONVERTIBLE_TO_MICROS, CONVERTIBLE_TO_MONTHS, UNCLASSIFIED };
+	enum struct BucketWidthType : uint8_t { CONVERTIBLE_TO_MICROS, CONVERTIBLE_TO_MONTHS, UNCLASSIFIED };
 
 	static inline BucketWidthType ClassifyBucketWidth(const interval_t bucket_width) {
 		if (bucket_width.months == 0 && Interval::GetMicro(bucket_width) > 0) {

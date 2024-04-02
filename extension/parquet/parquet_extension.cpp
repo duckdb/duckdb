@@ -47,7 +47,6 @@ struct ParquetReadBindData : public TableFunctionData {
 	shared_ptr<ParquetReader> initial_reader;
 	vector<string> files;
 	atomic<idx_t> chunk_count;
-	atomic<idx_t> cur_file;
 	vector<string> names;
 	vector<LogicalType> types;
 
@@ -96,7 +95,7 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 	bool error_opening_file = false;
 
 	//! Index of file currently up for scanning
-	idx_t file_index;
+	atomic<idx_t> file_index;
 	//! Index of row group within file currently up for scanning
 	idx_t row_group_index;
 	//! Batch index of the next row group to be scanned
@@ -489,15 +488,16 @@ public:
 	static double ParquetProgress(ClientContext &context, const FunctionData *bind_data_p,
 	                              const GlobalTableFunctionState *global_state) {
 		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
+		auto &gstate = global_state->Cast<ParquetReadGlobalState>();
 		if (bind_data.files.empty()) {
 			return 100.0;
 		}
 		if (bind_data.initial_file_cardinality == 0) {
-			return (100.0 * (bind_data.cur_file + 1)) / bind_data.files.size();
+			return (100.0 * (gstate.file_index + 1)) / bind_data.files.size();
 		}
-		auto percentage = std::min(
+		auto percentage = MinValue<double>(
 		    100.0, (bind_data.chunk_count * STANDARD_VECTOR_SIZE * 100.0 / bind_data.initial_file_cardinality));
-		return (percentage + 100.0 * bind_data.cur_file) / bind_data.files.size();
+		return (percentage + 100.0 * gstate.file_index) / bind_data.files.size();
 	}
 
 	static unique_ptr<LocalTableFunctionState>
@@ -947,6 +947,10 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 				bind_data->codec = duckdb_parquet::format::CompressionCodec::GZIP;
 			} else if (roption == "zstd") {
 				bind_data->codec = duckdb_parquet::format::CompressionCodec::ZSTD;
+			} else if (roption == "lz4" || roption == "lz4_raw") {
+				/* LZ4 is technically another compression scheme, but deprecated and arrow also uses them
+				 * interchangeably */
+				bind_data->codec = duckdb_parquet::format::CompressionCodec::LZ4_RAW;
 			} else {
 				throw BinderException("Expected %s argument to be either [uncompressed, snappy, gzip or zstd]",
 				                      loption);
@@ -1081,6 +1085,9 @@ const char *EnumUtil::ToChars<duckdb_parquet::format::CompressionCodec::type>(
 	case CompressionCodec::LZ4:
 		return "LZ4";
 		break;
+	case CompressionCodec::LZ4_RAW:
+		return "LZ4_RAW";
+		break;
 	case CompressionCodec::ZSTD:
 		return "ZSTD";
 		break;
@@ -1109,6 +1116,9 @@ EnumUtil::FromString<duckdb_parquet::format::CompressionCodec::type>(const char 
 	}
 	if (StringUtil::Equals(value, "LZ4")) {
 		return CompressionCodec::LZ4;
+	}
+	if (StringUtil::Equals(value, "LZ4_RAW")) {
+		return CompressionCodec::LZ4_RAW;
 	}
 	if (StringUtil::Equals(value, "ZSTD")) {
 		return CompressionCodec::ZSTD;

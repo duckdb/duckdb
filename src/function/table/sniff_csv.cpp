@@ -110,6 +110,12 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	sniffer_options.file_path = data.path;
 
 	auto buffer_manager = make_shared<CSVBufferManager>(context, sniffer_options, sniffer_options.file_path, 0);
+	if (sniffer_options.name_list.empty()) {
+		sniffer_options.name_list = data.names_csv;
+	}
+	if (sniffer_options.sql_type_list.empty()) {
+		sniffer_options.sql_type_list = data.return_types_csv;
+	}
 	CSVSniffer sniffer(sniffer_options, buffer_manager, CSVStateMachineCache::Get(context));
 	auto sniffer_result = sniffer.SniffCSV(true);
 	string str_opt;

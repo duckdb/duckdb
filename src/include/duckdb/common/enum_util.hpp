@@ -58,6 +58,8 @@ enum class AppenderType : uint8_t;
 
 enum class ArrowDateTimeType : uint8_t;
 
+enum class ArrowOffsetSize : uint8_t;
+
 enum class ArrowVariableSizeType : uint8_t;
 
 enum class BindingMode : uint8_t;
@@ -71,6 +73,8 @@ enum class CAPIResultSetType : uint8_t;
 enum class CSVState : uint8_t;
 
 enum class CTEMaterialize : uint8_t;
+
+enum class CatalogLookupBehavior : uint8_t;
 
 enum class CatalogType : uint8_t;
 
@@ -110,6 +114,8 @@ enum class ErrorType : uint16_t;
 
 enum class ExceptionFormatValueType : uint8_t;
 
+enum class ExceptionType : uint8_t;
+
 enum class ExplainOutputType : uint8_t;
 
 enum class ExplainType : uint8_t;
@@ -119,6 +125,8 @@ enum class ExpressionClass : uint8_t;
 enum class ExpressionType : uint8_t;
 
 enum class ExtensionLoadResult : uint8_t;
+
+enum class ExternalDependenciesType : uint8_t;
 
 enum class ExtraDropInfoType : uint8_t;
 
@@ -214,6 +222,8 @@ enum class PragmaType : uint8_t;
 
 enum class PreparedParamType : uint8_t;
 
+enum class PreparedStatementMode : uint8_t;
+
 enum class ProfilerPrintFormat : uint8_t;
 
 enum class QuantileSerializationType : uint8_t;
@@ -232,6 +242,8 @@ enum class ResultModifierType : uint8_t;
 
 enum class SampleMethod : uint8_t;
 
+enum class ScanType : uint8_t;
+
 enum class SecretDisplayType : uint8_t;
 
 enum class SecretPersistType : uint8_t;
@@ -243,6 +255,8 @@ enum class SetOperationType : uint8_t;
 enum class SetScope : uint8_t;
 
 enum class SetType : uint8_t;
+
+enum class SettingScope : uint8_t;
 
 enum class ShowType : uint8_t;
 
@@ -351,6 +365,9 @@ template<>
 const char* EnumUtil::ToChars<ArrowDateTimeType>(ArrowDateTimeType value);
 
 template<>
+const char* EnumUtil::ToChars<ArrowOffsetSize>(ArrowOffsetSize value);
+
+template<>
 const char* EnumUtil::ToChars<ArrowVariableSizeType>(ArrowVariableSizeType value);
 
 template<>
@@ -370,6 +387,9 @@ const char* EnumUtil::ToChars<CSVState>(CSVState value);
 
 template<>
 const char* EnumUtil::ToChars<CTEMaterialize>(CTEMaterialize value);
+
+template<>
+const char* EnumUtil::ToChars<CatalogLookupBehavior>(CatalogLookupBehavior value);
 
 template<>
 const char* EnumUtil::ToChars<CatalogType>(CatalogType value);
@@ -429,6 +449,9 @@ template<>
 const char* EnumUtil::ToChars<ExceptionFormatValueType>(ExceptionFormatValueType value);
 
 template<>
+const char* EnumUtil::ToChars<ExceptionType>(ExceptionType value);
+
+template<>
 const char* EnumUtil::ToChars<ExplainOutputType>(ExplainOutputType value);
 
 template<>
@@ -442,6 +465,9 @@ const char* EnumUtil::ToChars<ExpressionType>(ExpressionType value);
 
 template<>
 const char* EnumUtil::ToChars<ExtensionLoadResult>(ExtensionLoadResult value);
+
+template<>
+const char* EnumUtil::ToChars<ExternalDependenciesType>(ExternalDependenciesType value);
 
 template<>
 const char* EnumUtil::ToChars<ExtraDropInfoType>(ExtraDropInfoType value);
@@ -585,6 +611,9 @@ template<>
 const char* EnumUtil::ToChars<PreparedParamType>(PreparedParamType value);
 
 template<>
+const char* EnumUtil::ToChars<PreparedStatementMode>(PreparedStatementMode value);
+
+template<>
 const char* EnumUtil::ToChars<ProfilerPrintFormat>(ProfilerPrintFormat value);
 
 template<>
@@ -612,6 +641,9 @@ template<>
 const char* EnumUtil::ToChars<SampleMethod>(SampleMethod value);
 
 template<>
+const char* EnumUtil::ToChars<ScanType>(ScanType value);
+
+template<>
 const char* EnumUtil::ToChars<SecretDisplayType>(SecretDisplayType value);
 
 template<>
@@ -628,6 +660,9 @@ const char* EnumUtil::ToChars<SetScope>(SetScope value);
 
 template<>
 const char* EnumUtil::ToChars<SetType>(SetType value);
+
+template<>
+const char* EnumUtil::ToChars<SettingScope>(SettingScope value);
 
 template<>
 const char* EnumUtil::ToChars<ShowType>(ShowType value);
@@ -769,6 +804,9 @@ template<>
 ArrowDateTimeType EnumUtil::FromString<ArrowDateTimeType>(const char *value);
 
 template<>
+ArrowOffsetSize EnumUtil::FromString<ArrowOffsetSize>(const char *value);
+
+template<>
 ArrowVariableSizeType EnumUtil::FromString<ArrowVariableSizeType>(const char *value);
 
 template<>
@@ -788,6 +826,9 @@ CSVState EnumUtil::FromString<CSVState>(const char *value);
 
 template<>
 CTEMaterialize EnumUtil::FromString<CTEMaterialize>(const char *value);
+
+template<>
+CatalogLookupBehavior EnumUtil::FromString<CatalogLookupBehavior>(const char *value);
 
 template<>
 CatalogType EnumUtil::FromString<CatalogType>(const char *value);
@@ -847,6 +888,9 @@ template<>
 ExceptionFormatValueType EnumUtil::FromString<ExceptionFormatValueType>(const char *value);
 
 template<>
+ExceptionType EnumUtil::FromString<ExceptionType>(const char *value);
+
+template<>
 ExplainOutputType EnumUtil::FromString<ExplainOutputType>(const char *value);
 
 template<>
@@ -860,6 +904,9 @@ ExpressionType EnumUtil::FromString<ExpressionType>(const char *value);
 
 template<>
 ExtensionLoadResult EnumUtil::FromString<ExtensionLoadResult>(const char *value);
+
+template<>
+ExternalDependenciesType EnumUtil::FromString<ExternalDependenciesType>(const char *value);
 
 template<>
 ExtraDropInfoType EnumUtil::FromString<ExtraDropInfoType>(const char *value);
@@ -1003,6 +1050,9 @@ template<>
 PreparedParamType EnumUtil::FromString<PreparedParamType>(const char *value);
 
 template<>
+PreparedStatementMode EnumUtil::FromString<PreparedStatementMode>(const char *value);
+
+template<>
 ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value);
 
 template<>
@@ -1030,6 +1080,9 @@ template<>
 SampleMethod EnumUtil::FromString<SampleMethod>(const char *value);
 
 template<>
+ScanType EnumUtil::FromString<ScanType>(const char *value);
+
+template<>
 SecretDisplayType EnumUtil::FromString<SecretDisplayType>(const char *value);
 
 template<>
@@ -1046,6 +1099,9 @@ SetScope EnumUtil::FromString<SetScope>(const char *value);
 
 template<>
 SetType EnumUtil::FromString<SetType>(const char *value);
+
+template<>
+SettingScope EnumUtil::FromString<SettingScope>(const char *value);
 
 template<>
 ShowType EnumUtil::FromString<ShowType>(const char *value);

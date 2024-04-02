@@ -151,7 +151,8 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, string &db_type, A
 	if (db_type.empty()) {
 		CheckPathConflict(context, info.path);
 
-		DBPathAndType::CheckMagicBytes(info.path, db_type, config);
+		auto &fs = FileSystem::GetFileSystem(context);
+		DBPathAndType::CheckMagicBytes(fs, info.path, db_type);
 	}
 
 	// if we are loading a database type from an extension - check if that extension is loaded

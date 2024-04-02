@@ -1,13 +1,13 @@
 #include "duckdb/planner/logical_operator.hpp"
 
 #include "duckdb/common/printer.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/operator/list.hpp"
-#include "duckdb/common/serializer/binary_serializer.hpp"
-#include "duckdb/common/serializer/binary_deserializer.hpp"
-#include "duckdb/common/serializer/memory_stream.hpp"
 
 namespace duckdb {
 
@@ -25,6 +25,23 @@ LogicalOperator::~LogicalOperator() {
 vector<ColumnBinding> LogicalOperator::GetColumnBindings() {
 	return {ColumnBinding(0, 0)};
 }
+
+// LCOV_EXCL_START
+string LogicalOperator::ColumnBindingsToString(const vector<ColumnBinding> &bindings) {
+	string result = "{";
+	for (idx_t i = 0; i < bindings.size(); i++) {
+		if (i != 0) {
+			result += ", ";
+		}
+		result += bindings[i].ToString();
+	}
+	return result + "}";
+}
+
+void LogicalOperator::PrintColumnBindings() {
+	Printer::Print(ColumnBindingsToString(GetColumnBindings()));
+}
+// LCOV_EXCL_STOP
 
 string LogicalOperator::GetName() const {
 	return LogicalOperatorToString(type);

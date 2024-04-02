@@ -554,3 +554,15 @@ SELECT text('hello', 1.0)
 statement error
 SELECT text('hello', '@')
 ----
+
+# Days
+query T
+SELECT excel_text(i, 'dddd') FROM range(7) as t(i);
+----
+Saturday
+Sunday
+Monday
+Tuesday
+Wednesday
+Thursday
+Friday

@@ -10,17 +10,18 @@ WhereBinder::WhereBinder(Binder &binder, ClientContext &context, optional_ptr<Co
 }
 
 BindResult WhereBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
-	auto &expr = expr_ptr->Cast<ColumnRefExpression>();
+
 	auto result = ExpressionBinder::BindExpression(expr_ptr, depth);
 	if (!result.HasError() || !column_alias_binder) {
 		return result;
 	}
 
 	BindResult alias_result;
-	auto found_alias = column_alias_binder->BindAlias(*this, expr, depth, root_expression, alias_result);
+	auto found_alias = column_alias_binder->BindAlias(*this, expr_ptr, depth, root_expression, alias_result);
 	if (found_alias) {
 		return alias_result;
 	}
+
 	return result;
 }
 

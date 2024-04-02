@@ -17,7 +17,6 @@ public:
 	CSVRejectsTable(string rejects_scan, string rejects_error)
 	    : count(0), scan_table(rejects_scan), errors_table(rejects_error) {
 	}
-	~CSVRejectsTable() override = default;
 	mutex write_lock;
 	string name;
 	idx_t count;

@@ -1,5 +1,6 @@
 #include "duckdb/planner/expression_binder/order_binder.hpp"
 
+#include "duckdb/parser/expression/collate_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
@@ -99,6 +100,24 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 	}
 	case ExpressionClass::PARAMETER: {
 		throw ParameterNotAllowedException("Parameter not supported in ORDER BY clause");
+	}
+	case ExpressionClass::COLLATE: {
+		auto &collation = expr->Cast<CollateExpression>();
+		if (collation.child->expression_class == ExpressionClass::CONSTANT) {
+			auto &constant = collation.child->Cast<ConstantExpression>();
+			auto index = NumericCast<idx_t>(constant.value.GetValue<idx_t>()) - 1;
+			if (index >= extra_list->size()) {
+				throw BinderException("ORDER term out of range - should be between 1 and %lld", (idx_t)max_count);
+			}
+			auto &sel_entry = extra_list->at(index);
+			if (sel_entry->HasSubquery()) {
+				throw BinderException(
+				    "OrderBy referenced a ColumnNumber in a SELECT clause - but the expression has a subquery."
+				    " This is not yet supported.");
+			}
+			collation.child = sel_entry->Copy();
+		}
+		break;
 	}
 	default:
 		break;

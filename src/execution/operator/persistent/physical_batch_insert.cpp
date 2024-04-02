@@ -376,7 +376,7 @@ unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContex
 		table = insert_table.get_mutable();
 	}
 	// heuristic - we start off by allocating 4MB of cache space per column
-	static constexpr const idx_t MINIMUM_MEMORY_PER_COLUMN = 4 * 1024 * 1024;
+	static constexpr const idx_t MINIMUM_MEMORY_PER_COLUMN = 4ULL * 1024ULL * 1024ULL;
 	auto initial_memory = table->GetColumns().PhysicalColumnCount() * MINIMUM_MEMORY_PER_COLUMN;
 	auto result = make_uniq<BatchInsertGlobalState>(context, table->Cast<DuckTableEntry>(), initial_memory);
 	return std::move(result);

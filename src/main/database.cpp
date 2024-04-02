@@ -22,6 +22,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
+#include "duckdb/main/database_file_opener.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -56,6 +57,14 @@ DatabaseInstance::DatabaseInstance() {
 DatabaseInstance::~DatabaseInstance() {
 	// destroy all attached databases
 	GetDatabaseManager().ResetDatabases(scheduler);
+	// destroy child elements
+	connection_manager.reset();
+	object_cache.reset();
+	scheduler.reset();
+	db_manager.reset();
+	buffer_manager.reset();
+	// finally, flush allocations
+	Allocator::FlushAll();
 }
 
 BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {
@@ -213,17 +222,23 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		config.options.temporary_directory = string();
 	}
 
+	db_file_system = make_uniq<DatabaseFileSystem>(*this);
 	db_manager = make_uniq<DatabaseManager>(*this);
-	buffer_manager = make_uniq<StandardBufferManager>(*this, config.options.temporary_directory);
+	if (config.buffer_manager) {
+		buffer_manager = config.buffer_manager;
+	} else {
+		buffer_manager = make_uniq<StandardBufferManager>(*this, config.options.temporary_directory);
+	}
 	scheduler = make_uniq<TaskScheduler>(*this);
 	object_cache = make_uniq<ObjectCache>();
 	connection_manager = make_uniq<ConnectionManager>();
 
-	// resolve the type of teh database we are opening
-	DBPathAndType::ResolveDatabaseType(config.options.database_path, config.options.database_type, config);
-
 	// initialize the secret manager
 	config.secret_manager->Initialize(*this);
+
+	// resolve the type of teh database we are opening
+	auto &fs = FileSystem::GetFileSystem(*this);
+	DBPathAndType::ResolveDatabaseType(fs, config.options.database_path, config.options.database_type);
 
 	// initialize the system catalog
 	db_manager->InitializeSystemCatalog();
@@ -294,7 +309,7 @@ ObjectCache &DatabaseInstance::GetObjectCache() {
 }
 
 FileSystem &DatabaseInstance::GetFileSystem() {
-	return *config.file_system;
+	return *db_file_system;
 }
 
 ConnectionManager &DatabaseInstance::GetConnectionManager() {
@@ -396,7 +411,7 @@ void DatabaseInstance::SetExtensionLoaded(const std::string &name) {
 	}
 }
 
-bool DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) {
+SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) {
 	// check the session values
 	auto &db_config = DBConfig::GetConfig(*this);
 	const auto &global_config_map = db_config.options.set_variables;
@@ -404,10 +419,10 @@ bool DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &resul
 	auto global_value = global_config_map.find(key);
 	bool found_global_value = global_value != global_config_map.end();
 	if (!found_global_value) {
-		return false;
+		return SettingLookupResult();
 	}
 	result = global_value->second;
-	return true;
+	return SettingLookupResult(SettingScope::GLOBAL);
 }
 
 ValidChecker &DatabaseInstance::GetValidChecker() {

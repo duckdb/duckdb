@@ -74,7 +74,8 @@ struct CSVReaderOptions {
 	                                            LogicalType::BOOLEAN, LogicalType::SQLNULL};
 	//! In case the sniffer found a mismatch error from user defined types or dialect
 	string sniffer_user_mismatch_error;
-
+	//! In case the sniffer found a mismatch error from user defined types or dialect
+	vector<bool> was_type_manually_set;
 	//===--------------------------------------------------------------------===//
 	// ReadCSVOptions
 	//===--------------------------------------------------------------------===//
@@ -159,6 +160,8 @@ struct CSVReaderOptions {
 	                         vector<string> &names);
 
 	string ToString() const;
+	//! If the type for column with idx i was manually set
+	bool WasTypeManuallySet(idx_t i) const;
 
 	string NewLineIdentifierToString() {
 		switch (dialect_options.state_machine_options.new_line.GetValue()) {

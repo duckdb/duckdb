@@ -34,9 +34,12 @@ struct TupleDataPinState {
 };
 
 struct CombinedListData {
+	CombinedListData() : combined_validity(STANDARD_VECTOR_SIZE) {
+	}
 	UnifiedVectorFormat combined_data;
-	list_entry_t combined_list_entries[STANDARD_VECTOR_SIZE];
 	buffer_ptr<SelectionData> selection_data;
+	list_entry_t combined_list_entries[STANDARD_VECTOR_SIZE];
+	ValidityMask combined_validity;
 };
 
 struct TupleDataVectorFormat {

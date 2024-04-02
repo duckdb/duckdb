@@ -9,14 +9,16 @@
 #pragma once
 
 #include "duckdb/catalog/catalog_entry.hpp"
-#include "duckdb/common/mutex.hpp"
-#include "duckdb/parser/query_error_context.hpp"
 #include "duckdb/catalog/catalog_transaction.hpp"
-#include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/atomic.hpp"
-#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/enums/catalog_lookup_behavior.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
 #include "duckdb/common/exception/catalog_exception.hpp"
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/reference_map.hpp"
+#include "duckdb/parser/query_error_context.hpp"
+
 #include <functional>
 
 namespace duckdb {
@@ -279,6 +281,11 @@ public:
 
 	virtual bool InMemory() = 0;
 	virtual string GetDBPath() = 0;
+
+	//! Whether or not this catalog should search a specific type with the standard priority
+	DUCKDB_API virtual CatalogLookupBehavior CatalogTypeLookupRule(CatalogType type) const {
+		return CatalogLookupBehavior::STANDARD;
+	}
 
 public:
 	template <class T>

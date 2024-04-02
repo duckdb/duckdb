@@ -237,7 +237,6 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 	if (row_groups->NextParallelScan(context, state.scan_state, scan_state.table_state)) {
 		return true;
 	}
-	scan_state.table_state.batch_index = state.scan_state.batch_index;
 	auto &local_storage = LocalStorage::Get(context, db);
 	if (local_storage.NextParallelScan(context, *this, state.local_state, scan_state.local_state)) {
 		return true;
@@ -1245,7 +1244,7 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	//   row-group pointers
 	//   table pointer
 	//   index data
-	writer.FinalizeTable(std::move(global_stats), info.get(), serializer);
+	writer.FinalizeTable(global_stats, info.get(), serializer);
 }
 
 void DataTable::CommitDropColumn(idx_t index) {

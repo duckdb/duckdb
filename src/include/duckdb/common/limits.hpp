@@ -29,10 +29,10 @@ struct NumericLimits {
 	static constexpr T Maximum() {
 		return std::numeric_limits<T>::max();
 	}
-	DUCKDB_API static constexpr bool IsSigned() {
+	static constexpr bool IsSigned() {
 		return std::is_signed<T>::value;
 	}
-	DUCKDB_API static constexpr idx_t Digits();
+	static constexpr idx_t Digits();
 };
 
 template <>

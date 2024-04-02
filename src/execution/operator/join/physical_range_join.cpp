@@ -237,7 +237,12 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 			// Primary is already NULL
 			return count;
 		}
-		for (auto &v : keys.data) {
+		for (size_t c = 1; c < keys.data.size(); ++c) {
+			// Skip comparisons that accept NULLs
+			if (conditions[c].comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
+				continue;
+			}
+			auto &v = keys.data[c];
 			if (ConstantVector::IsNull(v)) {
 				// Create a new validity mask to avoid modifying original mask
 				auto &pvalidity = ConstantVector::Validity(primary);

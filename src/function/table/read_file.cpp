@@ -74,7 +74,7 @@ struct ReadFileGlobalState : public GlobalTableFunctionState {
 	ReadFileGlobalState() : current_file_idx(0) {
 	}
 
-	idx_t current_file_idx;
+	atomic<idx_t> current_file_idx;
 	vector<string> files;
 	vector<idx_t> column_ids;
 	bool requires_file_open = false;

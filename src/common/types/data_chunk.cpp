@@ -218,7 +218,7 @@ void DataChunk::Flatten() {
 	}
 }
 
-vector<LogicalType> DataChunk::GetTypes() {
+vector<LogicalType> DataChunk::GetTypes() const {
 	vector<LogicalType> types;
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		types.push_back(data[i].GetType());
@@ -290,7 +290,7 @@ void DataChunk::Slice(const SelectionVector &sel_vector, idx_t count_p) {
 	}
 }
 
-void DataChunk::Slice(DataChunk &other, const SelectionVector &sel, idx_t count_p, idx_t col_offset) {
+void DataChunk::Slice(const DataChunk &other, const SelectionVector &sel, idx_t count_p, idx_t col_offset) {
 	D_ASSERT(other.ColumnCount() <= col_offset + ColumnCount());
 	this->count = count_p;
 	SelCache merge_cache;

@@ -24,6 +24,7 @@
 #include "miniz_wrapper.hpp"
 #include "snappy.h"
 #include "zstd.h"
+#include "lz4.hpp"
 
 namespace duckdb {
 
@@ -176,7 +177,7 @@ void RleBpEncoder::FinishWrite(WriteStream &writer) {
 ColumnWriter::ColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p, idx_t max_repeat,
                            idx_t max_define, bool can_have_nulls)
     : writer(writer), schema_idx(schema_idx), schema_path(std::move(schema_path_p)), max_repeat(max_repeat),
-      max_define(max_define), can_have_nulls(can_have_nulls), null_count(0) {
+      max_define(max_define), can_have_nulls(can_have_nulls) {
 }
 ColumnWriter::~ColumnWriter() {
 }
@@ -191,6 +192,7 @@ void ColumnWriter::CompressPage(MemoryStream &temp_writer, size_t &compressed_si
 		compressed_size = temp_writer.GetPosition();
 		compressed_data = temp_writer.GetData();
 		break;
+
 	case CompressionCodec::SNAPPY: {
 		compressed_size = duckdb_snappy::MaxCompressedLength(temp_writer.GetPosition());
 		compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
@@ -198,6 +200,15 @@ void ColumnWriter::CompressPage(MemoryStream &temp_writer, size_t &compressed_si
 		                           char_ptr_cast(compressed_buf.get()), &compressed_size);
 		compressed_data = compressed_buf.get();
 		D_ASSERT(compressed_size <= duckdb_snappy::MaxCompressedLength(temp_writer.GetPosition()));
+		break;
+	}
+	case CompressionCodec::LZ4_RAW: {
+		compressed_size = duckdb_lz4::LZ4_compressBound(temp_writer.GetPosition());
+		compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
+		compressed_size = duckdb_lz4::LZ4_compress_default(const_char_ptr_cast(temp_writer.GetData()),
+		                                                   char_ptr_cast(compressed_buf.get()),
+		                                                   temp_writer.GetPosition(), compressed_size);
+		compressed_data = compressed_buf.get();
 		break;
 	}
 	case CompressionCodec::GZIP: {
@@ -254,7 +265,7 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 				if (!can_have_nulls) {
 					throw IOException("Parquet writer: map key column is not allowed to contain NULL values");
 				}
-				null_count++;
+				state.null_count++;
 				state.definition_levels.push_back(null_value);
 			}
 			if (parent->is_empty.empty() || !parent->is_empty[current_index]) {
@@ -270,7 +281,7 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 				if (!can_have_nulls) {
 					throw IOException("Parquet writer: map key column is not allowed to contain NULL values");
 				}
-				null_count++;
+				state.null_count++;
 				state.definition_levels.push_back(null_value);
 			}
 		}
@@ -614,7 +625,7 @@ void BasicColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t 
 void BasicColumnWriter::SetParquetStatistics(BasicColumnWriterState &state,
                                              duckdb_parquet::format::ColumnChunk &column_chunk) {
 	if (max_repeat == 0) {
-		column_chunk.meta_data.statistics.null_count = null_count;
+		column_chunk.meta_data.statistics.null_count = NumericCast<int64_t>(state.null_count);
 		column_chunk.meta_data.statistics.__isset.null_count = true;
 		column_chunk.meta_data.__isset.statistics = true;
 	}
@@ -1685,7 +1696,7 @@ void StructColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	auto &state = state_p.Cast<StructColumnWriterState>();
 	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
 		// we add the null count of the struct to the null count of the children
-		child_writers[child_idx]->null_count += null_count;
+		state.child_states[child_idx]->null_count += state_p.null_count;
 		child_writers[child_idx]->FinalizeWrite(*state.child_states[child_idx]);
 	}
 }
@@ -1750,6 +1761,40 @@ void ListColumnWriter::FinalizeAnalyze(ColumnWriterState &state_p) {
 	child_writer->FinalizeAnalyze(*state.child_state);
 }
 
+idx_t GetConsecutiveChildList(Vector &list, Vector &result, idx_t offset, idx_t count) {
+	// returns a consecutive child list that fully flattens and repeats all required elements
+	auto &validity = FlatVector::Validity(list);
+	auto list_entries = FlatVector::GetData<list_entry_t>(list);
+	bool is_consecutive = true;
+	idx_t total_length = 0;
+	for (idx_t c = offset; c < offset + count; c++) {
+		if (!validity.RowIsValid(c)) {
+			continue;
+		}
+		if (list_entries[c].offset != total_length) {
+			is_consecutive = false;
+		}
+		total_length += list_entries[c].length;
+	}
+	if (is_consecutive) {
+		// already consecutive - leave it as-is
+		return total_length;
+	}
+	SelectionVector sel(total_length);
+	idx_t index = 0;
+	for (idx_t c = offset; c < offset + count; c++) {
+		if (!validity.RowIsValid(c)) {
+			continue;
+		}
+		for (idx_t k = 0; k < list_entries[c].length; k++) {
+			sel.set_index(index++, list_entries[c].offset + k);
+		}
+	}
+	result.Slice(sel, total_length);
+	result.Flatten(total_length);
+	return total_length;
+}
+
 void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
 	auto &state = state_p.Cast<ListColumnWriterState>();
 
@@ -1803,7 +1848,7 @@ void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *pa
 
 	auto &list_child = ListVector::GetEntry(vector);
 	Vector child_list(list_child);
-	auto child_length = ListVector::GetConsecutiveChildList(vector, child_list, 0, count);
+	auto child_length = GetConsecutiveChildList(vector, child_list, 0, count);
 	child_writer->Prepare(*state.child_state, &state_p, child_list, child_length);
 }
 
@@ -1817,7 +1862,7 @@ void ListColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t c
 
 	auto &list_child = ListVector::GetEntry(vector);
 	Vector child_list(list_child);
-	auto child_length = ListVector::GetConsecutiveChildList(vector, child_list, 0, count);
+	auto child_length = GetConsecutiveChildList(vector, child_list, 0, count);
 	child_writer->Write(*state.child_state, child_list, child_length);
 }
 

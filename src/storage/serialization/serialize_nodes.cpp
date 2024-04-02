@@ -118,7 +118,7 @@ CSVOption<T> CSVOption<T>::Deserialize(Deserializer &deserializer) {
 }
 
 void CSVReaderOptions::Serialize(Serializer &serializer) const {
-	serializer.WriteProperty<CSVOption<bool>>(100, "ignore_errors", ignore_errors);
+	serializer.WritePropertyWithDefault<bool>(100, "ignore_errors", ignore_errors);
 	serializer.WritePropertyWithDefault<idx_t>(101, "buffer_sample_size", buffer_sample_size);
 	serializer.WritePropertyWithDefault<string>(102, "null_str", null_str);
 	serializer.WriteProperty<FileCompressionType>(103, "compression", compression);
@@ -135,25 +135,26 @@ void CSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<idx_t>(114, "buffer_size", buffer_size);
 	serializer.WriteProperty<MultiFileReaderOptions>(115, "file_options", file_options);
 	serializer.WritePropertyWithDefault<vector<bool>>(116, "force_quote", force_quote);
-	serializer.WriteProperty<CSVOption<bool>>(117, "store_rejects", store_rejects);
+	serializer.WritePropertyWithDefault<string>(117, "rejects_table_name", rejects_table_name);
 	serializer.WritePropertyWithDefault<idx_t>(118, "rejects_limit", rejects_limit);
-	serializer.WriteProperty<CSVOption<char>>(119, "dialect_options.state_machine_options.delimiter", dialect_options.state_machine_options.delimiter);
-	serializer.WriteProperty<CSVOption<char>>(120, "dialect_options.state_machine_options.quote", dialect_options.state_machine_options.quote);
-	serializer.WriteProperty<CSVOption<char>>(121, "dialect_options.state_machine_options.escape", dialect_options.state_machine_options.escape);
-	serializer.WriteProperty<CSVOption<bool>>(122, "dialect_options.header", dialect_options.header);
-	serializer.WritePropertyWithDefault<idx_t>(123, "dialect_options.num_cols", dialect_options.num_cols);
-	serializer.WriteProperty<CSVOption<NewLineIdentifier>>(124, "dialect_options.state_machine_options.new_line", dialect_options.state_machine_options.new_line);
-	serializer.WriteProperty<CSVOption<idx_t>>(125, "dialect_options.skip_rows", dialect_options.skip_rows);
-	serializer.WriteProperty<map<LogicalTypeId, CSVOption<StrpTimeFormat>>>(126, "dialect_options.date_format", dialect_options.date_format);
-	serializer.WritePropertyWithDefault<string>(127, "sniffer_user_mismatch_error", sniffer_user_mismatch_error);
-	serializer.WritePropertyWithDefault<bool>(128, "parallel", parallel);
-	serializer.WriteProperty<CSVOption<string>>(129, "rejects_table_name", rejects_table_name);
-	serializer.WriteProperty<CSVOption<string>>(130, "rejects_scan_name", rejects_scan_name);
+	serializer.WritePropertyWithDefault<vector<string>>(119, "rejects_recovery_columns", rejects_recovery_columns);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(120, "rejects_recovery_column_ids", rejects_recovery_column_ids);
+	serializer.WriteProperty<CSVOption<char>>(121, "dialect_options.state_machine_options.delimiter", dialect_options.state_machine_options.delimiter);
+	serializer.WriteProperty<CSVOption<char>>(122, "dialect_options.state_machine_options.quote", dialect_options.state_machine_options.quote);
+	serializer.WriteProperty<CSVOption<char>>(123, "dialect_options.state_machine_options.escape", dialect_options.state_machine_options.escape);
+	serializer.WriteProperty<CSVOption<bool>>(124, "dialect_options.header", dialect_options.header);
+	serializer.WritePropertyWithDefault<idx_t>(125, "dialect_options.num_cols", dialect_options.num_cols);
+	serializer.WriteProperty<CSVOption<NewLineIdentifier>>(126, "dialect_options.state_machine_options.new_line", dialect_options.state_machine_options.new_line);
+	serializer.WriteProperty<CSVOption<idx_t>>(127, "dialect_options.skip_rows", dialect_options.skip_rows);
+	serializer.WriteProperty<map<LogicalTypeId, CSVOption<StrpTimeFormat>>>(128, "dialect_options.date_format", dialect_options.date_format);
+	serializer.WritePropertyWithDefault<string>(129, "sniffer_user_mismatch_error", sniffer_user_mismatch_error);
+	serializer.WritePropertyWithDefault<bool>(130, "parallel", parallel);
+	serializer.WritePropertyWithDefault<vector<bool>>(131, "was_type_manually_set", was_type_manually_set);
 }
 
 CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	CSVReaderOptions result;
-	deserializer.ReadProperty<CSVOption<bool>>(100, "ignore_errors", result.ignore_errors);
+	deserializer.ReadPropertyWithDefault<bool>(100, "ignore_errors", result.ignore_errors);
 	deserializer.ReadPropertyWithDefault<idx_t>(101, "buffer_sample_size", result.buffer_sample_size);
 	deserializer.ReadPropertyWithDefault<string>(102, "null_str", result.null_str);
 	deserializer.ReadProperty<FileCompressionType>(103, "compression", result.compression);
@@ -170,20 +171,21 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<idx_t>(114, "buffer_size", result.buffer_size);
 	deserializer.ReadProperty<MultiFileReaderOptions>(115, "file_options", result.file_options);
 	deserializer.ReadPropertyWithDefault<vector<bool>>(116, "force_quote", result.force_quote);
-	deserializer.ReadProperty<CSVOption<bool>>(117, "store_rejects", result.store_rejects);
+	deserializer.ReadPropertyWithDefault<string>(117, "rejects_table_name", result.rejects_table_name);
 	deserializer.ReadPropertyWithDefault<idx_t>(118, "rejects_limit", result.rejects_limit);
-	deserializer.ReadProperty<CSVOption<char>>(119, "dialect_options.state_machine_options.delimiter", result.dialect_options.state_machine_options.delimiter);
-	deserializer.ReadProperty<CSVOption<char>>(120, "dialect_options.state_machine_options.quote", result.dialect_options.state_machine_options.quote);
-	deserializer.ReadProperty<CSVOption<char>>(121, "dialect_options.state_machine_options.escape", result.dialect_options.state_machine_options.escape);
-	deserializer.ReadProperty<CSVOption<bool>>(122, "dialect_options.header", result.dialect_options.header);
-	deserializer.ReadPropertyWithDefault<idx_t>(123, "dialect_options.num_cols", result.dialect_options.num_cols);
-	deserializer.ReadProperty<CSVOption<NewLineIdentifier>>(124, "dialect_options.state_machine_options.new_line", result.dialect_options.state_machine_options.new_line);
-	deserializer.ReadProperty<CSVOption<idx_t>>(125, "dialect_options.skip_rows", result.dialect_options.skip_rows);
-	deserializer.ReadProperty<map<LogicalTypeId, CSVOption<StrpTimeFormat>>>(126, "dialect_options.date_format", result.dialect_options.date_format);
-	deserializer.ReadPropertyWithDefault<string>(127, "sniffer_user_mismatch_error", result.sniffer_user_mismatch_error);
-	deserializer.ReadPropertyWithDefault<bool>(128, "parallel", result.parallel);
-	deserializer.ReadProperty<CSVOption<string>>(129, "rejects_table_name", result.rejects_table_name);
-	deserializer.ReadProperty<CSVOption<string>>(130, "rejects_scan_name", result.rejects_scan_name);
+	deserializer.ReadPropertyWithDefault<vector<string>>(119, "rejects_recovery_columns", result.rejects_recovery_columns);
+	deserializer.ReadPropertyWithDefault<vector<idx_t>>(120, "rejects_recovery_column_ids", result.rejects_recovery_column_ids);
+	deserializer.ReadProperty<CSVOption<char>>(121, "dialect_options.state_machine_options.delimiter", result.dialect_options.state_machine_options.delimiter);
+	deserializer.ReadProperty<CSVOption<char>>(122, "dialect_options.state_machine_options.quote", result.dialect_options.state_machine_options.quote);
+	deserializer.ReadProperty<CSVOption<char>>(123, "dialect_options.state_machine_options.escape", result.dialect_options.state_machine_options.escape);
+	deserializer.ReadProperty<CSVOption<bool>>(124, "dialect_options.header", result.dialect_options.header);
+	deserializer.ReadPropertyWithDefault<idx_t>(125, "dialect_options.num_cols", result.dialect_options.num_cols);
+	deserializer.ReadProperty<CSVOption<NewLineIdentifier>>(126, "dialect_options.state_machine_options.new_line", result.dialect_options.state_machine_options.new_line);
+	deserializer.ReadProperty<CSVOption<idx_t>>(127, "dialect_options.skip_rows", result.dialect_options.skip_rows);
+	deserializer.ReadProperty<map<LogicalTypeId, CSVOption<StrpTimeFormat>>>(128, "dialect_options.date_format", result.dialect_options.date_format);
+	deserializer.ReadPropertyWithDefault<string>(129, "sniffer_user_mismatch_error", result.sniffer_user_mismatch_error);
+	deserializer.ReadPropertyWithDefault<bool>(130, "parallel", result.parallel);
+	deserializer.ReadPropertyWithDefault<vector<bool>>(131, "was_type_manually_set", result.was_type_manually_set);
 	return result;
 }
 
