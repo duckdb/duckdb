@@ -1296,9 +1296,11 @@ public:
 
 	void Analyze(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) override {
 		auto &state = state_p.Cast<StringColumnWriterState>();
-		if (state.estimated_dict_page_size > MAX_UNCOMPRESSED_DICT_PAGE_SIZE ||
-		    (state.dictionary.size() > DICTIONARY_ANALYZE_THRESHOLD && DictionaryCompressionRatio(state) < 1.0)) {
-			return; // Early out: compression ratio is less than 1 after seeing more entries than the theshold
+		if (writer.DictionaryCompressionRatioThreshold() == NumericLimits<double>::Maximum() ||
+		    (state.dictionary.size() > DICTIONARY_ANALYZE_THRESHOLD && WontUseDictionary(state))) {
+			// Early out: compression ratio is less than the specified parameter
+			// after seeing more entries than the threshold
+			return;
 		}
 
 		idx_t vcount = parent ? parent->definition_levels.size() - state.definition_levels.size() : count;
@@ -1348,8 +1350,7 @@ public:
 
 		// check if a dictionary will require more space than a plain write, or if the dictionary page is going to
 		// be too large
-		if (state.estimated_dict_page_size > MAX_UNCOMPRESSED_DICT_PAGE_SIZE ||
-		    DictionaryCompressionRatio(state) < 1.0) {
+		if (WontUseDictionary(state)) {
 			// clearing the dictionary signals a plain write
 			state.dictionary.clear();
 			state.key_bit_width = 0;
@@ -1467,6 +1468,11 @@ public:
 	}
 
 private:
+	bool WontUseDictionary(StringColumnWriterState &state) const {
+		return state.estimated_dict_page_size > MAX_UNCOMPRESSED_DICT_PAGE_SIZE ||
+		       DictionaryCompressionRatio(state) < writer.DictionaryCompressionRatioThreshold();
+	}
+
 	static double DictionaryCompressionRatio(StringColumnWriterState &state) {
 		// If any are 0, we just return a compression ratio of 1
 		if (state.estimated_plain_size == 0 || state.estimated_rle_pages_size == 0 ||
