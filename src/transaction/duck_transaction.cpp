@@ -73,15 +73,33 @@ void DuckTransaction::PushCatalogEntry(CatalogEntry &entry, data_ptr_t extra_dat
 
 void DuckTransaction::PushDelete(DataTable &table, RowVersionManager &info, idx_t vector_idx, row_t rows[], idx_t count,
                                  idx_t base_row) {
-	auto delete_info = reinterpret_cast<DeleteInfo *>(
-	    undo_buffer.CreateEntry(UndoFlags::DELETE_TUPLE, sizeof(DeleteInfo) + sizeof(uint16_t) * count));
+	bool is_consecutive = true;
+	// check if the rows are consecutive
+	for (idx_t i = 0; i < count; i++) {
+		if (rows[i] != row_t(i)) {
+			is_consecutive = false;
+			break;
+		}
+	}
+	idx_t alloc_size = sizeof(DeleteInfo);
+	if (!is_consecutive) {
+		// if rows are not consecutive we need to allocate row identifiers
+		alloc_size += sizeof(uint16_t) * count;
+	}
+
+	auto delete_info = reinterpret_cast<DeleteInfo *>(undo_buffer.CreateEntry(UndoFlags::DELETE_TUPLE, alloc_size));
 	delete_info->version_info = &info;
 	delete_info->vector_idx = vector_idx;
 	delete_info->table = &table;
 	delete_info->count = count;
 	delete_info->base_row = base_row;
-	for (idx_t i = 0; i < count; i++) {
-		delete_info->rows[i] = NumericCast<uint16_t>(rows[i]);
+	delete_info->is_consecutive = is_consecutive;
+	if (!is_consecutive) {
+		// if rows are not consecutive
+		auto delete_rows = delete_info->GetRows();
+		for (idx_t i = 0; i < count; i++) {
+			delete_rows[i] = NumericCast<uint16_t>(rows[i]);
+		}
 	}
 }
 
