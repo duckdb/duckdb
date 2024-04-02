@@ -4452,6 +4452,8 @@ const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value) 
 		return "RESET";
 	case PhysicalOperatorType::EXTENSION:
 		return "EXTENSION";
+	case PhysicalOperatorType::VERIFY_VECTOR:
+		return "VERIFY_VECTOR";
 	case PhysicalOperatorType::CREATE_SECRET:
 		return "CREATE_SECRET";
 	default:
@@ -4685,6 +4687,9 @@ PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *valu
 	}
 	if (StringUtil::Equals(value, "EXTENSION")) {
 		return PhysicalOperatorType::EXTENSION;
+	}
+	if (StringUtil::Equals(value, "VERIFY_VECTOR")) {
+		return PhysicalOperatorType::VERIFY_VECTOR;
 	}
 	if (StringUtil::Equals(value, "CREATE_SECRET")) {
 		return PhysicalOperatorType::CREATE_SECRET;

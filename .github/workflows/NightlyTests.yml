@@ -369,7 +369,6 @@ jobs:
        shell: bash
        run: python3 scripts/test_zero_initialize.py
 
-
   no-string-inline:
     name: No String Inline / Destroy Unpinned Blocks
     runs-on: ubuntu-20.04
@@ -413,6 +412,62 @@ jobs:
       - name: Test
         shell: bash
         run: build/relassert/test/unittest
+
+  vector-verification:
+    name: Vector Verification Tests (${{ matrix.vector_type }})
+    runs-on: ubuntu-20.04
+    needs: linux-memory-leaks
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - vector_type: "dictionary_expression"
+            test_parameter: '"*"'
+          - vector_type: "dictionary_operator"
+            test_parameter: '"*"'
+          - vector_type: "constant_operator"
+            test_parameter: '' # skip running all tests here because it is too slow
+          - vector_type: "sequence_operator"
+            test_parameter: '' # skip running all tests here because it is too slow
+          - vector_type: "nested_shuffle"
+            test_parameter: '"*"'
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      BUILD_ICU: 1
+      BUILD_INET: 1
+      BUILD_PARQUET: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_FTS: 1
+      BUILD_VISUALIZER: 1
+      BUILD_JSON: 1
+      BUILD_EXCEL: 1
+      VERIFY_VECTOR: ${{ matrix.vector_type }}
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ env.CCACHE_SAVE }}
+
+      - name: Build
+        shell: bash
+        run: make reldebug
+
+      - name: Test
+        shell: bash
+        run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest ${{ matrix.test_parameter }} --no-exit
 
   force-blocking-sink-source:
     name: Forcing async Sinks/Sources

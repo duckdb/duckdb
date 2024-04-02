@@ -338,6 +338,14 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 #endif
 	}
 
+	if (param == "no_vector_verification") {
+#ifdef DUCKDB_VERIFY_VECTOR
+		return RequireResult::MISSING;
+#else
+		return RequireResult::PRESENT;
+#endif
+	}
+
 	if (param == "no_extension_autoloading") {
 		if (config->options.autoload_known_extensions) {
 			// If autoloading is on, we skip this test
