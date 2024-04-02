@@ -51,6 +51,9 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 	if (function.children.empty()) {
 		return BindResult(BinderException(function, "UNNEST() requires a single argument"));
 	}
+	if (inside_window) {
+		return BindResult(BinderException(function, "UNNEST() cannot be used inside a window function"));
+	}
 	idx_t max_depth = 1;
 	if (function.children.size() != 1) {
 		bool has_parameter = false;
