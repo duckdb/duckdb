@@ -52,7 +52,8 @@ class CSVError {
 public:
 	CSVError() {};
 	CSVError(string error_message, CSVErrorType type, idx_t column_idx, string csv_row, LinesPerBoundary error_info,
-	         idx_t row_byte_position, int64_t byte_position, const CSVReaderOptions &reader_options);
+	         idx_t row_byte_position, int64_t byte_position, const CSVReaderOptions &reader_options,
+	         const string &fixes);
 	CSVError(string error_message, CSVErrorType type, LinesPerBoundary error_info);
 	//! Produces error messages for column name -> type mismatch.
 	static CSVError ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names);
@@ -84,8 +85,11 @@ public:
 
 	//! Actual error message
 	string error_message;
-	//! Actual error message
-	string error_message_with_options;
+	//! Full error message used in throws
+	//! 1. The Actual error
+	//! 2. How to fix it
+	//! 3. Options that generated the error
+	string full_error_message;
 	//! Error Type
 	CSVErrorType type;
 	//! Column Index where error happened
