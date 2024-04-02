@@ -148,6 +148,9 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 
 		child_list_t<LogicalType> members;
 		vector<unique_ptr<ArrowType>> children;
+		if (schema.n_children == 0) {
+			throw InvalidInputException("Attempted to convert a UNION with no fields to DuckDB which is not supported");
+		}
 		for (idx_t type_idx = 0; type_idx < (idx_t)schema.n_children; type_idx++) {
 			auto type = schema.children[type_idx];
 

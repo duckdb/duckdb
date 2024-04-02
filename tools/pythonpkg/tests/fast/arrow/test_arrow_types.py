@@ -30,3 +30,18 @@ class TestArrowTypes(object):
             match='Attempted to convert a STRUCT with no fields to DuckDB which is not supported',
         ):
             duckdb_cursor.register('invalid_struct', arrow_table)
+
+    def test_invalid_union(self, duckdb_cursor):
+        # Create a sparse union array from dense arrays
+        types = pa.array([0, 1, 1], type=pa.int8())
+        sparse_union_array = pa.UnionArray.from_sparse(types, [], type_codes=[])
+
+        arrow_table = pa.Table.from_arrays([sparse_union_array], schema=pa.schema([("data", sparse_union_array.type)]))
+        with pytest.raises(
+            duckdb.InvalidInputException,
+            match='Attempted to convert a UNION with no fields to DuckDB which is not supported',
+        ):
+            duckdb_cursor.register('invalid_union', arrow_table)
+
+            res = duckdb_cursor.sql("select * from invalid_union").fetchall()
+            print(res)
