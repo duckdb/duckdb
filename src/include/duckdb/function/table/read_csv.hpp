@@ -95,6 +95,8 @@ struct ReadCSVData : public BaseCSVData {
 	vector<unique_ptr<CSVFileScan>> union_readers;
 	//! Reader bind data
 	MultiFileReaderBindData reader_bind;
+	unique_ptr<MultiFileReader> multi_file_reader;
+
 	vector<ColumnInfo> column_info;
 
 	void Initialize(unique_ptr<CSVFileScan> &reader) {

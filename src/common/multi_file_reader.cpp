@@ -16,12 +16,13 @@ namespace duckdb {
 MultiFileList::~MultiFileList() {
 }
 
-void MultiFileList::ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
+bool MultiFileList::ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
                            vector<unique_ptr<Expression>> &filters) {
 	// By default the filter pushdown into a multifilelist does nothing
+    return false;
 }
 
-vector<string> MultiFileList::GetRawList() {
+vector<string> MultiFileList::GetRawList() const {
 	vector<string> result;
 	idx_t i = 0;
 	while(true) {
@@ -39,15 +40,47 @@ vector<string> MultiFileList::GetRawList() {
 SimpleMultiFileList::SimpleMultiFileList(vector<string> files) : files(files) {
 }
 
-vector<string> SimpleMultiFileList::GetRawList() {
+vector<string> SimpleMultiFileList::GetRawList() const {
     return files;
 }
 
-string SimpleMultiFileList::GetFile(idx_t i) {
-    if (files.size() >= i) {
+string SimpleMultiFileList::GetFile(idx_t i) const {
+    if (files.size() <= i) {
 		return "";
 	}
 	return files[i];
+}
+
+bool SimpleMultiFileList::ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
+                                          vector<unique_ptr<Expression>> &filters) {
+	if (files.empty()) {
+		return false;
+	}
+
+	if (!options.hive_partitioning && !options.filename) {
+		return false;
+	}
+
+	unordered_map<string, column_t> column_map;
+	for (idx_t i = 0; i < get.column_ids.size(); i++) {
+		if (!IsRowIdColumnId(get.column_ids[i])) {
+			column_map.insert({get.names[get.column_ids[i]], i});
+		}
+	}
+
+	auto start_files = files.size();
+	HivePartitioning::ApplyFiltersToFileList(context, files, filters, column_map, get, options.hive_partitioning,
+	                                         options.filename);
+
+	if (files.size() != start_files) {
+		return true;
+	}
+
+	return false;
+}
+
+
+MultiFileReader::~MultiFileReader() {
 }
 
 void MultiFileReader::AddParameters(TableFunction &table_function) {
@@ -136,35 +169,13 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 	return true;
 }
 
-bool MultiFileReader::ComplexFilterPushdown(ClientContext &context, vector<string> &files,
+bool MultiFileReader::ComplexFilterPushdown(ClientContext &context, MultiFileList &files,
                                             const MultiFileReaderOptions &options, LogicalGet &get,
                                             vector<unique_ptr<Expression>> &filters) {
-	if (files.empty()) {
-		return false;
-	}
-	if (!options.hive_partitioning && !options.filename) {
-		return false;
-	}
-
-	unordered_map<string, column_t> column_map;
-	for (idx_t i = 0; i < get.column_ids.size(); i++) {
-		if (!IsRowIdColumnId(get.column_ids[i])) {
-			column_map.insert({get.names[get.column_ids[i]], i});
-		}
-	}
-
-	auto start_files = files.size();
-	HivePartitioning::ApplyFiltersToFileList(context, files, filters, column_map, get, options.hive_partitioning,
-	                                         options.filename);
-
-	if (files.size() != start_files) {
-		// we have pruned files
-		return true;
-	}
-	return false;
+	return files.ComplexFilterPushdown(context, options, get, filters);
 }
 
-MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &options, const vector<string> &files,
+MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &options, const MultiFileList& files,
                                                      vector<LogicalType> &return_types, vector<string> &names) {
 	MultiFileReaderBindData bind_data;
 	// Add generated constant column for filename
@@ -179,27 +190,28 @@ MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &opt
 
 	// Add generated constant columns from hive partitioning scheme
 	if (options.hive_partitioning) {
-		D_ASSERT(!files.empty());
-		auto partitions = HivePartitioning::Parse(files[0]);
+		auto file_list = files.GetRawList(); // TODO: don't load the full list here
+		D_ASSERT(!file_list.empty());
+		auto partitions = HivePartitioning::Parse(file_list[0]);
 		// verify that all files have the same hive partitioning scheme
-		for (auto &f : files) {
+		for (auto &f : file_list) {
 			auto file_partitions = HivePartitioning::Parse(f);
 			for (auto &part_info : partitions) {
 				if (file_partitions.find(part_info.first) == file_partitions.end()) {
 					string error = "Hive partition mismatch between file \"%s\" and \"%s\": key \"%s\" not found";
 					if (options.auto_detect_hive_partitioning == true) {
-						throw InternalException(error + "(hive partitioning was autodetected)", files[0], f,
+						throw InternalException(error + "(hive partitioning was autodetected)", file_list[0], f,
 						                        part_info.first);
 					}
-					throw BinderException(error.c_str(), files[0], f, part_info.first);
+					throw BinderException(error.c_str(), file_list[0], f, part_info.first);
 				}
 			}
 			if (partitions.size() != file_partitions.size()) {
 				string error_msg = "Hive partition mismatch between file \"%s\" and \"%s\"";
 				if (options.auto_detect_hive_partitioning == true) {
-					throw InternalException(error_msg + "(hive partitioning was autodetected)", files[0], f);
+					throw InternalException(error_msg + "(hive partitioning was autodetected)", file_list[0], f);
 				}
-				throw BinderException(error_msg.c_str(), files[0], f);
+				throw BinderException(error_msg.c_str(), file_list[0], f);
 			}
 		}
 

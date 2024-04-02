@@ -64,8 +64,9 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 
 	auto result = make_uniq<ReadCSVData>();
 	auto &options = result->options;
-	MultiFileReader multi_file_reader;
-	result->files = multi_file_reader.GetFileList(context, input.inputs[0], "CSV")->GetRawList();
+	result->multi_file_reader = make_uniq<MultiFileReader>();
+	auto mfl = result->multi_file_reader->GetFileList(context, input.inputs[0], "CSV");
+	result->files = mfl->GetRawList();
 
 	options.FromNamedParameters(input.named_parameters, context, return_types, names);
 
@@ -114,8 +115,9 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	D_ASSERT(return_types.size() == names.size());
 	result->options.dialect_options.num_cols = names.size();
 	if (options.file_options.union_by_name) {
+		vector<string> file_list = mfl->GetRawList();
 		result->reader_bind =
-		    MultiFileReader::BindUnionReader<CSVFileScan>(context, multi_file_reader, return_types, names, result->files, *result, options);
+		    MultiFileReader::BindUnionReader<CSVFileScan>(context, *result->multi_file_reader, return_types, names, file_list, *result, options);
 		if (result->union_readers.size() > 1) {
 			result->column_info.emplace_back(result->initial_reader->names, result->initial_reader->types);
 			for (idx_t i = 1; i < result->union_readers.size(); i++) {
@@ -139,7 +141,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	} else {
 		result->csv_types = return_types;
 		result->csv_names = names;
-		result->reader_bind = multi_file_reader.BindOptions(options.file_options, result->files, return_types, names);
+		result->reader_bind = result->multi_file_reader->BindOptions(options.file_options, *mfl, return_types, names);
 	}
 	result->return_types = return_types;
 	result->return_names = names;
@@ -207,7 +209,7 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 	}
 	do {
 		if (output.size() != 0) {
-			MultiFileReader::FinalizeChunk(bind_data.reader_bind,
+			bind_data.multi_file_reader->FinalizeChunk(bind_data.reader_bind,
 			                               csv_local_state.csv_reader->csv_file_scan->reader_data, output);
 			break;
 		}
@@ -264,7 +266,14 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 	table_function.named_parameters["names"] = LogicalType::LIST(LogicalType::VARCHAR);
 	table_function.named_parameters["column_names"] = LogicalType::LIST(LogicalType::VARCHAR);
 	table_function.named_parameters["parallel"] = LogicalType::BOOLEAN;
-	MultiFileReader::AddParameters(table_function);
+
+	if (table_function.get_multi_file_reader) {
+		auto mfr = table_function.get_multi_file_reader();
+		mfr->AddParameters(table_function);
+	} else {
+		MultiFileReader mfr;
+		mfr.AddParameters(table_function);
+	}
 }
 
 double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p,
@@ -280,8 +289,8 @@ double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p
 void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
                               vector<unique_ptr<Expression>> &filters) {
 	auto &data = bind_data_p->Cast<ReadCSVData>();
-	auto reset_reader =
-	    MultiFileReader::ComplexFilterPushdown(context, data.files, data.options.file_options, get, filters);
+	SimpleMultiFileList file_list(data.files);
+	auto reset_reader = data.multi_file_reader->ComplexFilterPushdown(context, file_list, data.options.file_options, get, filters);
 	if (reset_reader) {
 		MultiFileReader::PruneReaders(data, data.files);
 	}

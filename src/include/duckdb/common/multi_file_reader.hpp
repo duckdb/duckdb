@@ -112,24 +112,29 @@ struct MultiFileReaderData {
 struct MultiFileList {
 	virtual ~MultiFileList();
 	//! Get the file at index i
-	virtual string GetFile(idx_t i) = 0;
+	//! TODO: should I refactor the interface to reflect the fact that you should sequentially fetch them?
+	virtual string GetFile(idx_t i) const = 0;
 	//! Get the whole list (Warning: this potentially returns more files that necessary if called before ComplexFilterPushdown)
-	virtual vector<string> GetRawList();
+	virtual vector<string> GetRawList() const;
 	//! (optional) Push down filters into the MultiFileList; sometimes the filters can be used to skip files completely
-	virtual void  ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
+	virtual bool ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
 	                                             vector<unique_ptr<Expression>> &filters);
 };
 
 //! Simplest implementation of a MultiFilelist with, you guessed it, a list of files
 struct SimpleMultiFileList : public MultiFileList {
 	SimpleMultiFileList(vector<string> files);
-	vector<string> GetRawList() override;
-	string GetFile(idx_t i) override;
+	//! TODO: remove as many of the GetRawList as possible
+	vector<string> GetRawList() const override;
+	string GetFile(idx_t i) const override;
+	bool ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
+	                                   vector<unique_ptr<Expression>> &filters) override;
 protected:
 	vector<string> files;
 };
 
 struct MultiFileReader {
+	virtual ~MultiFileReader();
 	//! Add the parameters for multi-file readers (e.g. union_by_name, filename) to a table function
 	DUCKDB_API virtual void AddParameters(TableFunction &table_function);
 	//! Performs any globbing for the multi-file reader and returns a list of files to be read
@@ -140,11 +145,11 @@ struct MultiFileReader {
 	                                   ClientContext &context);
 	//! Perform complex filter pushdown into the multi-file reader, potentially filtering out files that should be read
 	//! If "true" the first file has been eliminated
-	DUCKDB_API virtual bool ComplexFilterPushdown(ClientContext &context, vector<string> &files,
+	DUCKDB_API virtual bool ComplexFilterPushdown(ClientContext &context, MultiFileList &files,
 	                                             const MultiFileReaderOptions &options, LogicalGet &get,
 	                                             vector<unique_ptr<Expression>> &filters);
 	//! Bind the options of the multi-file reader, potentially emitting any extra columns that are required
-	DUCKDB_API virtual MultiFileReaderBindData BindOptions(MultiFileReaderOptions &options, const vector<string> &files,
+	DUCKDB_API virtual MultiFileReaderBindData BindOptions(MultiFileReaderOptions &options, const MultiFileList &files,
 	                                                      vector<LogicalType> &return_types, vector<string> &names);
 	//! Finalize the bind phase of the multi-file reader after we know (1) the required (output) columns, and (2) the
 	//! pushed down table filters
@@ -185,7 +190,8 @@ struct MultiFileReader {
 
 		std::move(union_readers.begin(), union_readers.end(), std::back_inserter(result.union_readers));
 		// perform the binding on the obtained set of names + types
-		auto bind_data = multi_file_reader.BindOptions(options.file_options, files, union_col_types, union_col_names);
+		SimpleMultiFileList simple_multi_file_list(files); // TODO: this is a bit wonky now
+		auto bind_data = multi_file_reader.BindOptions(options.file_options, simple_multi_file_list, union_col_types, union_col_names);
 		names = union_col_names;
 		return_types = union_col_types;
 		result.Initialize(result.union_readers[0]);
@@ -195,12 +201,15 @@ struct MultiFileReader {
 
 	template <class READER_CLASS, class RESULT_CLASS, class OPTIONS_CLASS>
 	static MultiFileReaderBindData BindReader(ClientContext &context, MultiFileReader &multi_file_reader, vector<LogicalType> &return_types,
-	                                          vector<string> &names, vector<string> &files, RESULT_CLASS &result, OPTIONS_CLASS &options) {
+	                                          vector<string> &names, MultiFileList &files, RESULT_CLASS &result, OPTIONS_CLASS &options) {
 		if (options.file_options.union_by_name) {
-			return BindUnionReader<READER_CLASS>(context, return_types, names, files, result, options);
+			//! Union by name requires reading all metadata (TODO: does it though?)
+			vector<string> complete_file_list = files.GetRawList();
+			return BindUnionReader<READER_CLASS>(context, multi_file_reader, return_types, names, complete_file_list, result, options);
 		} else {
+			// Default behaviour: get the 1st file and use its schema for scanning all files
 			shared_ptr<READER_CLASS> reader;
-			reader = make_shared<READER_CLASS>(context, files[0], options);
+			reader = make_shared<READER_CLASS>(context, files.GetFile(0), options);
 			return_types = reader->return_types;
 			names = reader->names;
 			result.Initialize(std::move(reader));
@@ -208,6 +217,7 @@ struct MultiFileReader {
 		}
 	}
 
+	// TODO this parameter list is insanely ugly now
 	template <class READER_CLASS>
 	static void InitializeReader(MultiFileReader &multi_file_reader, READER_CLASS &reader, const MultiFileReaderOptions &options,
 	                             const MultiFileReaderBindData &bind_data, const vector<LogicalType> &global_types,
