@@ -25,21 +25,9 @@ namespace duckdb {
 
 class TemporaryFileManager;
 
-struct FileSizeMonitor {
-public:
-	static constexpr idx_t TEMPFILE_BLOCK_SIZE = Storage::BLOCK_ALLOC_SIZE;
-
-public:
-	FileSizeMonitor(TemporaryFileManager &manager);
-
-public:
-private:
-	TemporaryFileManager &manager;
-};
-
 struct BlockIndexManager {
 public:
-	BlockIndexManager(TemporaryFileManager &manager);
+	explicit BlockIndexManager(TemporaryFileManager &manager);
 	BlockIndexManager();
 
 public:
