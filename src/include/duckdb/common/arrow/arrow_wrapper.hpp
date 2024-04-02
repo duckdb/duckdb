@@ -35,7 +35,7 @@ public:
 		arrow_array.length = 0;
 		arrow_array.release = nullptr;
 	}
-	ArrowArrayWrapper(ArrowArrayWrapper &&other) : arrow_array(other.arrow_array) {
+	ArrowArrayWrapper(ArrowArrayWrapper &&other) noexcept : arrow_array(other.arrow_array) {
 		other.arrow_array.release = nullptr;
 	}
 	~ArrowArrayWrapper();

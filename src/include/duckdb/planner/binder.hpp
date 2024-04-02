@@ -11,8 +11,9 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/reference_map.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
@@ -21,9 +22,8 @@
 #include "duckdb/planner/bound_statement.hpp"
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/joinside.hpp"
-#include "duckdb/common/reference_map.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 class BoundResultModifier;
@@ -61,6 +61,7 @@ struct CorrelatedColumnInfo {
 	string name;
 	idx_t depth;
 
+	// NOLINTNEXTLINE - work-around bug in clang-tidy
 	CorrelatedColumnInfo(ColumnBinding binding, LogicalType type_p, string name_p, idx_t depth)
 	    : binding(binding), type(std::move(type_p)), name(std::move(name_p)), depth(depth) {
 	}
@@ -122,6 +123,9 @@ public:
 	SchemaCatalogEntry &BindSchema(CreateInfo &info);
 	SchemaCatalogEntry &BindCreateFunctionInfo(CreateInfo &info);
 
+	unique_ptr<LogicalOperator> BindCreateIndex(CreateStatement &stmt, TableCatalogEntry &table,
+	                                            unique_ptr<LogicalOperator> plan);
+
 	//! Check usage, and cast named parameters to their types
 	static void BindNamedParameters(named_parameter_type_map_t &types, named_parameter_map_t &values,
 	                                QueryErrorContext &error_context, string &func_name);
@@ -135,8 +139,8 @@ public:
 
 	//! Add a common table expression to the binder
 	void AddCTE(const string &name, CommonTableExpressionInfo &cte);
-	//! Find a common table expression by name; returns nullptr if none exists
-	optional_ptr<CommonTableExpressionInfo> FindCTE(const string &name, bool skip = false);
+	//! Find all candidate common table expression by name; returns empty vector if none exists
+	vector<reference<CommonTableExpressionInfo>> FindCTE(const string &name, bool skip = false);
 
 	bool CTEIsAlreadyBound(CommonTableExpressionInfo &cte);
 

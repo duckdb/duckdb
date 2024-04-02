@@ -217,6 +217,8 @@ public:
 	DUCKDB_API virtual void Reset(FileHandle &handle);
 	DUCKDB_API virtual idx_t SeekPosition(FileHandle &handle);
 
+	//! If FS was manually set by the user
+	DUCKDB_API virtual bool IsManuallySet();
 	//! Whether or not we can seek into the file
 	DUCKDB_API virtual bool CanSeek();
 	//! Whether or not the FS handles plain files on disk. This is relevant for certain optimizations, as random reads

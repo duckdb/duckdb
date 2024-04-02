@@ -15,12 +15,12 @@ namespace duckdb {
 class CatalogEntry;
 
 struct DependencyFlags {
-private:
 public:
 	DependencyFlags() : value(0) {
 	}
 	DependencyFlags(const DependencyFlags &other) : value(other.value) {
 	}
+	virtual ~DependencyFlags() = default;
 	DependencyFlags &operator=(const DependencyFlags &other) {
 		value = other.value;
 		return *this;
@@ -134,9 +134,9 @@ public:
 };
 
 struct Dependency {
-	Dependency(CatalogEntry &entry, DependencyDependentFlags flags = DependencyDependentFlags().SetBlocking())
-	    : // NOLINT: Allow implicit conversion from `CatalogEntry`
-	      entry(entry), flags(flags) {
+	Dependency(CatalogEntry &entry, // NOLINT: Allow implicit conversion from `CatalogEntry`
+	           DependencyDependentFlags flags = DependencyDependentFlags().SetBlocking())
+	    : entry(entry), flags(std::move(flags)) {
 	}
 
 	//! The catalog entry this depends on

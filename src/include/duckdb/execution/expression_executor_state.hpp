@@ -53,7 +53,7 @@ public:
 
 struct ExecuteFunctionState : public ExpressionState {
 	ExecuteFunctionState(const Expression &expr, ExpressionExecutorState &root);
-	~ExecuteFunctionState();
+	~ExecuteFunctionState() override;
 
 	unique_ptr<FunctionLocalState> local_state;
 
