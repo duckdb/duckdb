@@ -430,8 +430,8 @@ idx_t MergeSortTree<E, O, CMP, F, C>::SelectNth(const SubFrames &frames, idx_t n
 	//	Continue with the uncascaded levels (except the first)
 	for (; level_no > 0; --level_no) {
 		const auto &level = tree[level_no].first;
-		auto range_begin = level.begin() + result * level_width;
-		auto range_end = range_begin + level_width;
+		auto range_begin = level.begin() + UnsafeNumericCast<int64_t>(result * level_width);
+		auto range_end = range_begin + UnsafeNumericCast<int64_t>(level_width);
 		while (range_end < level.end()) {
 			idx_t matched = 0;
 			for (idx_t f = 0; f < frames.size(); ++f) {
@@ -447,7 +447,7 @@ idx_t MergeSortTree<E, O, CMP, F, C>::SelectNth(const SubFrames &frames, idx_t n
 			}
 			//	Not enough in this child, so move right
 			range_begin = range_end;
-			range_end += level_width;
+			range_end += UnsafeNumericCast<int64_t>(level_width);
 			++result;
 			n -= matched;
 		}
