@@ -198,7 +198,7 @@ idx_t ChunkVectorInfo::Delete(transaction_t transaction_id, row_t rows[], idx_t 
 	return deleted_tuples;
 }
 
-void ChunkVectorInfo::CommitDelete(transaction_t commit_id, row_t rows[], idx_t count) {
+void ChunkVectorInfo::CommitDelete(transaction_t commit_id, uint16_t rows[], idx_t count) {
 	for (idx_t i = 0; i < count; i++) {
 		deleted[rows[i]] = commit_id;
 	}

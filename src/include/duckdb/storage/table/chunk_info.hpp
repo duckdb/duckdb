@@ -132,7 +132,7 @@ public:
 	//! Note that "rows" is written to to reflect the row ids that were actually deleted
 	//! i.e. after calling this function, rows will hold [0..actual_delete_count] row ids of the actually deleted tuples
 	idx_t Delete(transaction_t transaction_id, row_t rows[], idx_t count);
-	void CommitDelete(transaction_t commit_id, row_t rows[], idx_t count);
+	void CommitDelete(transaction_t commit_id, uint16_t rows[], idx_t count);
 
 	bool HasDeletes() const override;
 

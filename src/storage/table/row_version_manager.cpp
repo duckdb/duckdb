@@ -159,7 +159,7 @@ idx_t RowVersionManager::DeleteRows(idx_t vector_idx, transaction_t transaction_
 	return GetVectorInfo(vector_idx).Delete(transaction_id, rows, count);
 }
 
-void RowVersionManager::CommitDelete(idx_t vector_idx, transaction_t commit_id, row_t rows[], idx_t count) {
+void RowVersionManager::CommitDelete(idx_t vector_idx, transaction_t commit_id, uint16_t rows[], idx_t count) {
 	lock_guard<mutex> lock(version_lock);
 	has_changes = true;
 	GetVectorInfo(vector_idx).CommitDelete(commit_id, rows, count);

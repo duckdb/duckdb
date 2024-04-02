@@ -38,7 +38,7 @@ public:
 	void RevertAppend(idx_t start_row);
 
 	idx_t DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t rows[], idx_t count);
-	void CommitDelete(idx_t vector_idx, transaction_t commit_id, row_t rows[], idx_t count);
+	void CommitDelete(idx_t vector_idx, transaction_t commit_id, uint16_t rows[], idx_t count);
 
 	vector<MetaBlockPointer> Checkpoint(MetadataManager &manager);
 	static shared_ptr<RowVersionManager> Deserialize(MetaBlockPointer delete_pointer, MetadataManager &manager,

@@ -74,13 +74,15 @@ void DuckTransaction::PushCatalogEntry(CatalogEntry &entry, data_ptr_t extra_dat
 void DuckTransaction::PushDelete(DataTable &table, RowVersionManager &info, idx_t vector_idx, row_t rows[], idx_t count,
                                  idx_t base_row) {
 	auto delete_info = reinterpret_cast<DeleteInfo *>(
-	    undo_buffer.CreateEntry(UndoFlags::DELETE_TUPLE, sizeof(DeleteInfo) + sizeof(row_t) * count));
+	    undo_buffer.CreateEntry(UndoFlags::DELETE_TUPLE, sizeof(DeleteInfo) + sizeof(uint16_t) * count));
 	delete_info->version_info = &info;
 	delete_info->vector_idx = vector_idx;
 	delete_info->table = &table;
 	delete_info->count = count;
 	delete_info->base_row = base_row;
-	memcpy(delete_info->rows, rows, sizeof(row_t) * count);
+	for (idx_t i = 0; i < count; i++) {
+		delete_info->rows[i] = NumericCast<uint16_t>(rows[i]);
+	}
 }
 
 void DuckTransaction::PushAppend(DataTable &table, idx_t start_row, idx_t row_count) {

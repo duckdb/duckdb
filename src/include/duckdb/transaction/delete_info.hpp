@@ -20,7 +20,7 @@ struct DeleteInfo {
 	idx_t vector_idx;
 	idx_t count;
 	idx_t base_row;
-	row_t rows[1];
+	uint16_t rows[1];
 };
 
 } // namespace duckdb
