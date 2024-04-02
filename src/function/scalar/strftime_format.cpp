@@ -1342,11 +1342,11 @@ bool StrTimeFormat::Empty() const {
 	return format_specifier.empty();
 }
 
-string StrpTimeFormat::FormatStrpTimeError(const string &input, idx_t position) {
-	if (position == DConstants::INVALID_INDEX) {
+string StrpTimeFormat::FormatStrpTimeError(const string &input, optional_idx position) {
+	if (!position.IsValid()) {
 		return string();
 	}
-	return input + "\n" + string(position, ' ') + "^";
+	return input + "\n" + string(position.GetIndex(), ' ') + "^";
 }
 
 date_t StrpTimeFormat::ParseResult::ToDate() {
