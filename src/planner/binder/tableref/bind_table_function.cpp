@@ -140,7 +140,7 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 	vector<string> return_names;
 	if (table_function.bind || table_function.bind_replace) {
 		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names,
-		                                  table_function.function_info.get());
+		                                  table_function.function_info.get(), table_function);
 		if (table_function.bind_replace) {
 			auto new_plan = table_function.bind_replace(context, bind_input);
 			if (new_plan != nullptr) {

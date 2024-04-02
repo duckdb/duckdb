@@ -64,7 +64,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 
 	auto result = make_uniq<ReadCSVData>();
 	auto &options = result->options;
-	result->files = MultiFileReader::GetFileList(context, input.inputs[0], "CSV");
+	MultiFileReader multi_file_reader;
+	result->files = multi_file_reader.GetFileList(context, input.inputs[0], "CSV")->GetRawList();
 
 	options.FromNamedParameters(input.named_parameters, context, return_types, names);
 
@@ -114,7 +115,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	result->options.dialect_options.num_cols = names.size();
 	if (options.file_options.union_by_name) {
 		result->reader_bind =
-		    MultiFileReader::BindUnionReader<CSVFileScan>(context, return_types, names, result->files, *result, options);
+		    MultiFileReader::BindUnionReader<CSVFileScan>(context, multi_file_reader, return_types, names, result->files, *result, options);
 		if (result->union_readers.size() > 1) {
 			result->column_info.emplace_back(result->initial_reader->names, result->initial_reader->types);
 			for (idx_t i = 1; i < result->union_readers.size(); i++) {
@@ -138,7 +139,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	} else {
 		result->csv_types = return_types;
 		result->csv_names = names;
-		result->reader_bind = MultiFileReader::BindOptions(options.file_options, result->files, return_types, names);
+		result->reader_bind = multi_file_reader.BindOptions(options.file_options, result->files, return_types, names);
 	}
 	result->return_types = return_types;
 	result->return_names = names;

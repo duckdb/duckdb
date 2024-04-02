@@ -57,6 +57,7 @@ public:
 	vector<string> names;
 	vector<LogicalType> types;
 	MultiFileReaderData reader_data;
+	MultiFileReader multi_file_reader;
 
 	vector<LogicalType> file_types;
 

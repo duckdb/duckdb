@@ -13,6 +13,43 @@
 
 namespace duckdb {
 
+MultiFileList::~MultiFileList() {
+}
+
+void MultiFileList::ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
+                           vector<unique_ptr<Expression>> &filters) {
+	// By default the filter pushdown into a multifilelist does nothing
+}
+
+vector<string> MultiFileList::GetRawList() {
+	vector<string> result;
+	idx_t i = 0;
+	while(true) {
+		auto next_file = GetFile(i);
+
+		if (next_file.empty()) {
+			break;
+		}
+		result.push_back(next_file);
+	}
+	return result;
+}
+
+
+SimpleMultiFileList::SimpleMultiFileList(vector<string> files) : files(files) {
+}
+
+vector<string> SimpleMultiFileList::GetRawList() {
+    return files;
+}
+
+string SimpleMultiFileList::GetFile(idx_t i) {
+    if (files.size() >= i) {
+		return "";
+	}
+	return files[i];
+}
+
 void MultiFileReader::AddParameters(TableFunction &table_function) {
 	table_function.named_parameters["filename"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
@@ -21,7 +58,7 @@ void MultiFileReader::AddParameters(TableFunction &table_function) {
 	table_function.named_parameters["hive_types_autocast"] = LogicalType::BOOLEAN;
 }
 
-vector<string> MultiFileReader::GetFileList(ClientContext &context, const Value &input, const string &name,
+unique_ptr<MultiFileList> MultiFileReader::GetFileList(ClientContext &context, const Value &input, const string &name,
                                             FileGlobOptions options) {
 	auto &config = DBConfig::GetConfig(context);
 	if (!config.options.enable_external_access) {
@@ -58,7 +95,7 @@ vector<string> MultiFileReader::GetFileList(ClientContext &context, const Value 
 		throw IOException("%s reader needs at least one file to read", name);
 	}
 
-	return files;
+	return make_uniq<SimpleMultiFileList>(files);
 }
 
 bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFileReaderOptions &options,

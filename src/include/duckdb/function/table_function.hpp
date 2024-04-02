@@ -25,6 +25,7 @@ class DependencyList;
 class LogicalGet;
 class TableFilterSet;
 class TableCatalogEntry;
+struct MultiFileReader;
 
 struct TableFunctionInfo {
 	DUCKDB_API virtual ~TableFunctionInfo();
@@ -83,9 +84,9 @@ struct LocalTableFunctionState {
 struct TableFunctionBindInput {
 	TableFunctionBindInput(vector<Value> &inputs, named_parameter_map_t &named_parameters,
 	                       vector<LogicalType> &input_table_types, vector<string> &input_table_names,
-	                       optional_ptr<TableFunctionInfo> info)
+	                       optional_ptr<TableFunctionInfo> info, const TableFunction& table_function)
 	    : inputs(inputs), named_parameters(named_parameters), input_table_types(input_table_types),
-	      input_table_names(input_table_names), info(info) {
+	      input_table_names(input_table_names), info(info), table_function(table_function){
 	}
 
 	vector<Value> &inputs;
@@ -93,6 +94,7 @@ struct TableFunctionBindInput {
 	vector<LogicalType> &input_table_types;
 	vector<string> &input_table_names;
 	optional_ptr<TableFunctionInfo> info;
+	const TableFunction& table_function;
 };
 
 struct TableFunctionInitInput {
@@ -197,6 +199,8 @@ typedef idx_t (*table_function_get_batch_index_t)(ClientContext &context, const 
 
 typedef BindInfo (*table_function_get_bind_info_t)(const optional_ptr<FunctionData> bind_data);
 
+typedef unique_ptr<MultiFileReader> (*table_function_get_multi_file_reader)(ClientContext &context);
+
 typedef double (*table_function_progress_t)(ClientContext &context, const FunctionData *bind_data,
                                             const GlobalTableFunctionState *global_state);
 typedef void (*table_function_dependency_t)(DependencyList &dependencies, const FunctionData *bind_data);
@@ -266,6 +270,8 @@ public:
 	table_function_get_batch_index_t get_batch_index;
 	//! (Optional) returns extra bind info
 	table_function_get_bind_info_t get_bind_info;
+	//! (Optional) allows re-using existing table functions with a custom MultiFileReader implementation
+	table_function_get_multi_file_reader get_multi_file_reader;
 
 	table_function_serialize_t serialize;
 	table_function_deserialize_t deserialize;

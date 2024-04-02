@@ -377,7 +377,8 @@ static uint8_t GetCandidateSpecificity(const LogicalType &candidate_type) {
 void CSVReaderOptions::FromNamedParameters(named_parameter_map_t &in, ClientContext &context,
                                            vector<LogicalType> &return_types, vector<string> &names) {
 	for (auto &kv : in) {
-		if (MultiFileReader::ParseOption(kv.first, kv.second, file_options, context)) {
+		MultiFileReader multi_file_reader;
+		if (multi_file_reader.ParseOption(kv.first, kv.second, file_options, context)) {
 			continue;
 		}
 		auto loption = StringUtil::Lower(kv.first);

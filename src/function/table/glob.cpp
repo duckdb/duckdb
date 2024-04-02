@@ -14,7 +14,8 @@ struct GlobFunctionBindData : public TableFunctionData {
 static unique_ptr<FunctionData> GlobFunctionBind(ClientContext &context, TableFunctionBindInput &input,
                                                  vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_uniq<GlobFunctionBindData>();
-	result->files = MultiFileReader::GetFileList(context, input.inputs[0], "Globbing", FileGlobOptions::ALLOW_EMPTY);
+	auto multi_file_reader = MultiFileReader();
+	result->files = multi_file_reader.GetFileList(context, input.inputs[0], "Globbing", FileGlobOptions::ALLOW_EMPTY)->GetRawList();
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("file");
 	return std::move(result);
