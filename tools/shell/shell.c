@@ -685,6 +685,15 @@ static char *local_getline(char *zLine, FILE *in){
   int nLine = zLine==0 ? 0 : 100;
   int n = 0;
 
+#if defined(_WIN32) || defined(WIN32)
+  int is_stdin = stdin_is_interactive && in==stdin;
+  int is_utf8 = 0;
+  if (is_stdin) {
+      if (SetConsoleCP(CP_UTF8)) {
+          is_utf8 = 1;
+      }
+  }
+#endif
   while( 1 ){
     if( n+100>nLine ){
       nLine = nLine*2 + 100;
@@ -710,7 +719,7 @@ static char *local_getline(char *zLine, FILE *in){
 #if defined(_WIN32) || defined(WIN32)
   /* For interactive input on Windows systems, translate the
   ** multi-byte characterset characters into UTF-8. */
-  if( stdin_is_interactive && in==stdin ){
+  if(is_stdin && !is_utf8){
     char *zTrans = sqlite3_win32_mbcs_to_utf8_v2(zLine, 0);
     if( zTrans ){
       int nTrans = strlen30(zTrans)+1;
