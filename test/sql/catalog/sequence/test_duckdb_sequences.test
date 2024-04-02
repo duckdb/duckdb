@@ -1,0 +1,65 @@
+# name: test/sql/catalog/sequence/test_duckdb_sequences.test
+# group: [sequence]
+
+statement ok
+pragma enable_verification;
+
+query IIIIIIIIIIIIIII
+select * from duckdb_sequences();
+----
+
+statement ok
+create sequence seq1 start 0 minvalue 0;
+
+query IIIIII
+select start_value, min_value, max_value, increment_by, cycle, last_value from duckdb_sequences();
+----
+0	0	9223372036854775807	1	false	NULL
+
+statement ok
+create table tbl (a integer default nextval('seq1'))
+
+# No change, the sequence hasnt been used yet
+query IIIIII
+select start_value, min_value, max_value, increment_by, cycle, last_value from duckdb_sequences();
+----
+0	0	9223372036854775807	1	false	NULL
+
+statement ok
+insert into tbl values(default);
+
+# last_value is no longer NULL
+query IIIIII
+select start_value, min_value, max_value, increment_by, cycle, last_value from duckdb_sequences();
+----
+0	0	9223372036854775807	1	false	0
+
+statement ok
+insert into tbl values(default);
+
+query IIIIII
+select start_value, min_value, max_value, increment_by, cycle, last_value from duckdb_sequences();
+----
+0	0	9223372036854775807	1	false	1
+
+statement ok
+drop sequence seq1 cascade;
+
+statement ok
+create sequence seq1 start 20316564;
+
+query IIIIII
+select start_value, min_value, max_value, increment_by, cycle, last_value from duckdb_sequences();
+----
+20316564	1	9223372036854775807	1	false	NULL
+
+statement ok
+create table tbl (a integer DEFAULT nextval('seq1'))
+
+statement ok
+insert into tbl values(default);
+
+query IIIIII
+select start_value, min_value, max_value, increment_by, cycle, last_value from duckdb_sequences();
+----
+20316564	1	9223372036854775807	1	false	20316564
