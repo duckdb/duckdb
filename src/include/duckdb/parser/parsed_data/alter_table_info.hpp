@@ -307,7 +307,7 @@ public:
 	static unique_ptr<AlterInfo> Deserialize(Deserializer &deserializer);
 
 protected:
-	AlterViewInfo(AlterViewType type);
+	explicit AlterViewInfo(AlterViewType type);
 };
 
 //===--------------------------------------------------------------------===//

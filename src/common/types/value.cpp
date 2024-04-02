@@ -133,6 +133,10 @@ Value::Value(int32_t val) : type_(LogicalType::INTEGER), is_null(false) {
 	value_.integer = val;
 }
 
+Value::Value(bool val) : type_(LogicalType::BOOLEAN), is_null(false) {
+	value_.boolean = val;
+}
+
 Value::Value(int64_t val) : type_(LogicalType::BIGINT), is_null(false) {
 	value_.bigint = val;
 }

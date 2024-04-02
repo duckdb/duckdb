@@ -8,7 +8,6 @@ on:
         type: string
       skip_tests:
         type: string
-  repository_dispatch:
   workflow_dispatch:
     inputs:
       override_git_describe:
@@ -17,13 +16,12 @@ on:
         type: string
       skip_tests:
         type: string
+  repository_dispatch:
   push:
     branches:
       - '**'
       - '!main'
       - '!feature'
-    tags:
-      - '**'
     paths-ignore:
       - '**.md'
       - 'tools/**'
@@ -35,7 +33,7 @@ on:
 
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
+  group: osx-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
   cancel-in-progress: true
 
 env:
@@ -190,7 +188,7 @@ jobs:
           zip -j duckdb_cli-osx-universal.zip build/release/duckdb
           zip -j libduckdb-osx-universal.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
           zip -j duckdb_odbc-osx-universal.zip build/release/tools/odbc/libduckdb_odbc.dylib
-          ./scripts/upload-assets-to-staging.sh libduckdb-osx-universal.zip duckdb_cli-osx-universal.zip duckdb_odbc-osx-universal.zip
+          ./scripts/upload-assets-to-staging.sh github_release libduckdb-osx-universal.zip duckdb_cli-osx-universal.zip duckdb_odbc-osx-universal.zip
 
       - uses: actions/upload-artifact@v3
         with:
@@ -218,7 +216,7 @@ jobs:
             osx_arch: arm64
             duckdb_arch: osx_arm64
             vcpkg_triplet: arm64-osx
-            run_autoload_tests: ${{ inputs.skip_tests != 'true' }}
+            run_autoload_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
 
     env:
       DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}

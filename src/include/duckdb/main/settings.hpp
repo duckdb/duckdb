@@ -24,12 +24,12 @@ struct SettingLookupResult {
 public:
 	SettingLookupResult() : scope(SettingScope::INVALID) {
 	}
-	SettingLookupResult(SettingScope scope) : scope(scope) {
+	explicit SettingLookupResult(SettingScope scope) : scope(scope) {
 		D_ASSERT(scope != SettingScope::INVALID);
 	}
 
 public:
-	operator bool() {
+	operator bool() { // NOLINT: allow implicit conversion to bool
 		return scope != SettingScope::INVALID;
 	}
 
@@ -219,6 +219,15 @@ struct EnableFSSTVectors {
 struct AllowUnsignedExtensionsSetting {
 	static constexpr const char *Name = "allow_unsigned_extensions";
 	static constexpr const char *Description = "Allow to load extensions with invalid or missing signatures";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct AllowUnredactedSecretsSetting {
+	static constexpr const char *Name = "allow_unredacted_secrets";
+	static constexpr const char *Description = "Allow printing unredacted secrets";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
@@ -472,6 +481,16 @@ struct PartitionedWriteFlushThreshold {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct DefaultBlockAllocSize {
+	static constexpr const char *Name = "default_block_size";
+	static constexpr const char *Description =
+	    "The default block size for new duckdb database files (new as-in, they do not yet exist).";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct PasswordSetting {
 	static constexpr const char *Name = "password";
 	static constexpr const char *Description = "The password to use. Ignored for legacy compatibility.";
@@ -525,6 +544,16 @@ struct PreserveInsertionOrder {
 	static constexpr const char *Description =
 	    "Whether or not to preserve insertion order. If set to false the system is allowed to re-order any results "
 	    "that do not contain ORDER BY clauses.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct ProduceArrowStringView {
+	static constexpr const char *Name = "produce_arrow_string_view";
+	static constexpr const char *Description =
+	    "If strings should be produced by DuckDB in Utf8View format instead of Utf8";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);

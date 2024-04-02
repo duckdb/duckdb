@@ -9,12 +9,19 @@
 namespace duckdb {
 
 unique_ptr<BoundQueryNode> Binder::BindNode(CTENode &statement) {
+	// first recursively visit the materialized CTE operations
+	// the left side is visited first and is added to the BindContext of the right side
+	D_ASSERT(statement.query);
+
+	return BindCTE(statement);
+}
+
+unique_ptr<BoundCTENode> Binder::BindCTE(CTENode &statement) {
 	auto result = make_uniq<BoundCTENode>();
 
 	// first recursively visit the materialized CTE operations
 	// the left side is visited first and is added to the BindContext of the right side
 	D_ASSERT(statement.query);
-	D_ASSERT(statement.child);
 
 	result->ctename = statement.ctename;
 	result->setop_index = GenerateTableIndex();
@@ -46,28 +53,32 @@ unique_ptr<BoundQueryNode> Binder::BindNode(CTENode &statement) {
 
 	result->child_binder = Binder::CreateBinder(context, this);
 
-	// Move all modifiers to the child node.
-	for (auto &modifier : statement.modifiers) {
-		statement.child->modifiers.push_back(std::move(modifier));
-	}
-
-	statement.modifiers.clear();
-
 	// Add bindings of left side to temporary CTE bindings context
 	result->child_binder->bind_context.AddCTEBinding(result->setop_index, statement.ctename, names, result->types);
-	result->child = result->child_binder->BindNode(*statement.child);
-	for (auto &c : result->query_binder->correlated_columns) {
-		result->child_binder->AddCorrelatedColumn(c);
+
+	if (statement.child) {
+		// Move all modifiers to the child node.
+		for (auto &modifier : statement.modifiers) {
+			statement.child->modifiers.push_back(std::move(modifier));
+		}
+
+		statement.modifiers.clear();
+
+		result->child = result->child_binder->BindNode(*statement.child);
+		for (auto &c : result->query_binder->correlated_columns) {
+			result->child_binder->AddCorrelatedColumn(c);
+		}
+
+		// the result types of the CTE are the types of the LHS
+		result->types = result->child->types;
+		result->names = result->child->names;
+
+		MoveCorrelatedExpressions(*result->child_binder);
 	}
 
-	// the result types of the CTE are the types of the LHS
-	result->types = result->child->types;
-	result->names = result->child->names;
-
 	MoveCorrelatedExpressions(*result->query_binder);
-	MoveCorrelatedExpressions(*result->child_binder);
 
-	return std::move(result);
+	return result;
 }
 
 } // namespace duckdb

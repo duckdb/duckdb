@@ -291,19 +291,19 @@ struct ConstantVector {
 struct DictionaryVector {
 	static inline const SelectionVector &SelVector(const Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
-		return ((const DictionaryBuffer &)*vector.buffer).GetSelVector();
+		return vector.buffer->Cast<DictionaryBuffer>().GetSelVector();
 	}
 	static inline SelectionVector &SelVector(Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
-		return ((DictionaryBuffer &)*vector.buffer).GetSelVector();
+		return vector.buffer->Cast<DictionaryBuffer>().GetSelVector();
 	}
 	static inline const Vector &Child(const Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
-		return ((const VectorChildBuffer &)*vector.auxiliary).data;
+		return vector.auxiliary->Cast<VectorChildBuffer>().data;
 	}
 	static inline Vector &Child(Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
-		return ((VectorChildBuffer &)*vector.auxiliary).data;
+		return vector.auxiliary->Cast<VectorChildBuffer>().data;
 	}
 };
 
@@ -346,7 +346,7 @@ struct FlatVector {
 		VerifyFlatVector(vector);
 		return vector.validity;
 	}
-	static inline void SetValidity(Vector &vector, ValidityMask &new_validity) {
+	static inline void SetValidity(Vector &vector, const ValidityMask &new_validity) {
 		VerifyFlatVector(vector);
 		vector.validity.Initialize(new_validity);
 	}
@@ -526,8 +526,9 @@ struct UnionVector {
 	DUCKDB_API static const Vector &GetTags(const Vector &v);
 	DUCKDB_API static Vector &GetTags(Vector &v);
 
-	//! Get the tag at the specific index of the union vector
-	DUCKDB_API static union_tag_t GetTag(const Vector &vector, idx_t index);
+	//! Try to get the tag at the specific flat index of the union vector. Returns false if the tag is NULL.
+	//! This will handle and map the index properly for constant and dictionary vectors internally.
+	DUCKDB_API static bool TryGetTag(const Vector &vector, idx_t index, union_tag_t &tag);
 
 	//! Get the member vector of a union vector by index
 	DUCKDB_API static const Vector &GetMember(const Vector &vector, idx_t member_index);
@@ -551,7 +552,7 @@ struct UnionVector {
 struct SequenceVector {
 	static void GetSequence(const Vector &vector, int64_t &start, int64_t &increment, int64_t &sequence_count) {
 		D_ASSERT(vector.GetVectorType() == VectorType::SEQUENCE_VECTOR);
-		auto data = (int64_t *)vector.buffer->GetData();
+		auto data = reinterpret_cast<int64_t *>(vector.buffer->GetData());
 		start = data[0];
 		increment = data[1];
 		sequence_count = data[2];

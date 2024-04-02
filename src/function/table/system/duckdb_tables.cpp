@@ -87,7 +87,7 @@ static bool TableHasPrimaryKey(TableCatalogEntry &table) {
 	for (auto &constraint : table.GetConstraints()) {
 		if (constraint->type == ConstraintType::UNIQUE) {
 			auto &unique = constraint->Cast<UniqueConstraint>();
-			if (unique.is_primary_key) {
+			if (unique.IsPrimaryKey()) {
 				return true;
 			}
 		}

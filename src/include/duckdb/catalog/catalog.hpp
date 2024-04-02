@@ -17,6 +17,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
 #include "duckdb/common/exception/catalog_exception.hpp"
+#include "duckdb/common/enums/catalog_lookup_behavior.hpp"
 #include <functional>
 
 namespace duckdb {
@@ -276,6 +277,11 @@ public:
 
 	virtual bool InMemory() = 0;
 	virtual string GetDBPath() = 0;
+
+	//! Whether or not this catalog should search a specific type with the standard priority
+	DUCKDB_API virtual CatalogLookupBehavior CatalogTypeLookupRule(CatalogType type) const {
+		return CatalogLookupBehavior::STANDARD;
+	}
 
 public:
 	template <class T>

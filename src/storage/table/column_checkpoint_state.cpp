@@ -56,7 +56,6 @@ void PartialBlockForCheckpoint::Flush(const idx_t free_space_left) {
 
 	for (idx_t i = 0; i < segments.size(); i++) {
 		auto &segment = segments[i];
-		segment.data.IncrementVersion();
 		if (i == 0) {
 			// the first segment is converted to persistent - this writes the data for ALL segments to disk
 			D_ASSERT(segment.offset_in_block == 0);

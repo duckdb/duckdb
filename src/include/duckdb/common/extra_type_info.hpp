@@ -219,7 +219,7 @@ private:
 };
 
 struct IntegerLiteralTypeInfo : public ExtraTypeInfo {
-	IntegerLiteralTypeInfo(Value constant_value);
+	explicit IntegerLiteralTypeInfo(Value constant_value);
 
 	Value constant_value;
 

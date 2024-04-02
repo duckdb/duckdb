@@ -64,13 +64,19 @@ class PlanCost:
         return self
 
     def __gt__(self, other):
-        if self.total > other.total:
-            # if the total intermediate cardinalities is greater, also inspect time.
-            # it's possible a plan reordering fixed other things as well
-            return self.time > other.time * 1.05
-        if self == other:
+        if self == other or self.total < other.total:
             return False
-        return self.time > other.time * 1.05
+        # if the total intermediate cardinalities is greater, also inspect time.
+        # it's possible a plan reordering increased cardinalities, but overall execution time
+        # was not greatly affected
+        total_card_increased = self.total > other.total
+        build_card_increased = self.build_side > other.build_side
+        if total_card_increased and build_card_increased:
+            return True
+        # we know the total cardinality is either the same or higher and the build side has not increased
+        # in this case fall back to the timing. It's possible that even if the probe side is higher
+        # since the tuples are in flight, the plan executes faster
+        return self.time > other.time * 1.03
 
     def __lt__(self, other):
         if self == other:
@@ -81,7 +87,7 @@ class PlanCost:
         return self.total == other.total and self.build_side == other.build_side and self.probe_side == other.probe_side
 
 
-def op_inspect(op):
+def op_inspect(op) -> PlanCost:
     cost = PlanCost()
     if op['name'] == "Query":
         cost.time = op['timing']

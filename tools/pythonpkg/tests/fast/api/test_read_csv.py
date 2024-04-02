@@ -195,7 +195,12 @@ class TestReadCSV(object):
 
         rel = duckdb_cursor.read_csv(TestFile('nullpadding.csv'), null_padding=True, header=False)
         res = rel.fetchall()
-        assert res == [('one', 'two', 'three', 'four'), ('1', 'a', 'alice', None), ('2', 'b', 'bob', None)]
+        assert res == [
+            ('# this file has a bunch of gunk at the top', None, None, None),
+            ('one', 'two', 'three', 'four'),
+            ('1', 'a', 'alice', None),
+            ('2', 'b', 'bob', None),
+        ]
 
         rel = duckdb.read_csv(TestFile('nullpadding.csv'), null_padding=False, header=False)
         res = rel.fetchall()
@@ -208,7 +213,12 @@ class TestReadCSV(object):
 
         rel = duckdb.read_csv(TestFile('nullpadding.csv'), null_padding=True, header=False)
         res = rel.fetchall()
-        assert res == [('one', 'two', 'three', 'four'), ('1', 'a', 'alice', None), ('2', 'b', 'bob', None)]
+        assert res == [
+            ('# this file has a bunch of gunk at the top', None, None, None),
+            ('one', 'two', 'three', 'four'),
+            ('1', 'a', 'alice', None),
+            ('2', 'b', 'bob', None),
+        ]
 
         rel = duckdb_cursor.from_csv_auto(TestFile('nullpadding.csv'), null_padding=False, header=False)
         res = rel.fetchall()
@@ -222,6 +232,7 @@ class TestReadCSV(object):
         rel = duckdb_cursor.from_csv_auto(TestFile('nullpadding.csv'), null_padding=True, header=False)
         res = rel.fetchall()
         assert res == [
+            ('# this file has a bunch of gunk at the top', None, None, None),
             ('one', 'two', 'three', 'four'),
             ('1', 'a', 'alice', None),
             ('2', 'b', 'bob', None),

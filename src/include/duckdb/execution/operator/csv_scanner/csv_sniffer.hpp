@@ -174,7 +174,6 @@ private:
 	void RefineTypes();
 	bool TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type);
 	vector<LogicalType> detected_types;
-
 	//! ------------------------------------------------------//
 	//! ------------------ Header Detection ----------------- //
 	//! ------------------------------------------------------//
@@ -186,6 +185,7 @@ private:
 	//! ------------------ Type Replacement ----------------- //
 	//! ------------------------------------------------------//
 	void ReplaceTypes();
+	vector<bool> manually_set;
 };
 
 } // namespace duckdb

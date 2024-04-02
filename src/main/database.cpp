@@ -22,6 +22,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
+#include "duckdb/main/database_file_opener.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -134,29 +135,31 @@ ConnectionManager &ConnectionManager::Get(ClientContext &context) {
 }
 
 unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(ClientContext &context, const AttachInfo &info,
-                                                                      const string &type, AccessMode access_mode) {
+                                                                      const AttachOptions &options) {
 	unique_ptr<AttachedDatabase> attached_database;
-	if (!type.empty()) {
-		// find the storage extension
-		auto extension_name = ExtensionHelper::ApplyExtensionAlias(type);
+	auto &catalog = Catalog::GetSystemCatalog(*this);
+
+	if (!options.db_type.empty()) {
+		// Find the storage extension for this database file.
+		auto extension_name = ExtensionHelper::ApplyExtensionAlias(options.db_type);
 		auto entry = config.storage_extensions.find(extension_name);
 		if (entry == config.storage_extensions.end()) {
-			throw BinderException("Unrecognized storage type \"%s\"", type);
+			throw BinderException("Unrecognized storage type \"%s\"", options.db_type);
 		}
 
 		if (entry->second->attach != nullptr && entry->second->create_transaction_manager != nullptr) {
-			// use storage extension to create the initial database
-			attached_database = make_uniq<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), *entry->second,
-			                                                context, info.name, info, access_mode);
-		} else {
+			// Use the storage extension to create the initial database.
 			attached_database =
-			    make_uniq<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), info.name, info.path, access_mode);
+			    make_uniq<AttachedDatabase>(*this, catalog, *entry->second, context, info.name, info, options);
+			return attached_database;
 		}
-	} else {
-		// check if this is an in-memory database or not
-		attached_database =
-		    make_uniq<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), info.name, info.path, access_mode);
+
+		attached_database = make_uniq<AttachedDatabase>(*this, catalog, info.name, info.path, options);
+		return attached_database;
 	}
+
+	// An empty db_type defaults to a duckdb database file.
+	attached_database = make_uniq<AttachedDatabase>(*this, catalog, info.name, info.path, options);
 	return attached_database;
 }
 
@@ -169,13 +172,13 @@ void DatabaseInstance::CreateMainDatabase() {
 	{
 		Connection con(*this);
 		con.BeginTransaction();
-		initial_database =
-		    db_manager->AttachDatabase(*con.context, info, config.options.database_type, config.options.access_mode);
+		AttachOptions options(config.options);
+		initial_database = db_manager->AttachDatabase(*con.context, info, options);
 		con.Commit();
 	}
 
 	initial_database->SetInitialDatabase();
-	initial_database->Initialize();
+	initial_database->Initialize(config.options.default_block_alloc_size);
 }
 
 void ThrowExtensionSetUnrecognizedOptions(const unordered_map<string, Value> &unrecognized_options) {
@@ -221,17 +224,23 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		config.options.temporary_directory = string();
 	}
 
+	db_file_system = make_uniq<DatabaseFileSystem>(*this);
 	db_manager = make_uniq<DatabaseManager>(*this);
-	buffer_manager = make_uniq<StandardBufferManager>(*this, config.options.temporary_directory);
+	if (config.buffer_manager) {
+		buffer_manager = config.buffer_manager;
+	} else {
+		buffer_manager = make_uniq<StandardBufferManager>(*this, config.options.temporary_directory);
+	}
 	scheduler = make_uniq<TaskScheduler>(*this);
 	object_cache = make_uniq<ObjectCache>();
 	connection_manager = make_uniq<ConnectionManager>();
 
-	// resolve the type of teh database we are opening
-	DBPathAndType::ResolveDatabaseType(config.options.database_path, config.options.database_type, config);
-
 	// initialize the secret manager
 	config.secret_manager->Initialize(*this);
+
+	// resolve the type of teh database we are opening
+	auto &fs = FileSystem::GetFileSystem(*this);
+	DBPathAndType::ResolveDatabaseType(fs, config.options.database_path, config.options.database_type);
 
 	// initialize the system catalog
 	db_manager->InitializeSystemCatalog();
@@ -302,7 +311,7 @@ ObjectCache &DatabaseInstance::GetObjectCache() {
 }
 
 FileSystem &DatabaseInstance::GetFileSystem() {
-	return *config.file_system;
+	return *db_file_system;
 }
 
 ConnectionManager &DatabaseInstance::GetConnectionManager() {

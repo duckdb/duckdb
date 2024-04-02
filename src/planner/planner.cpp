@@ -182,10 +182,10 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 			*map = std::move(parameters);
 		}
 		op = std::move(new_plan);
-	} catch (SerializationException &ex) {
-		// pass
-	} catch (NotImplementedException &ex) {
-		// pass
+	} catch (SerializationException &ex) {  // NOLINT: explicitly allowing these errors (for now)
+		                                    // pass
+	} catch (NotImplementedException &ex) { // NOLINT: explicitly allowing these errors (for now)
+		                                    // pass
 	}
 }
 
