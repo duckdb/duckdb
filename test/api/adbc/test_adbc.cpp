@@ -851,12 +851,16 @@ TEST_CASE("Test ADBC ConnectionGetTableSchema", "[adbc]") {
 	REQUIRE(arrow_schema.n_children == 13);
 	arrow_schema.release(&arrow_schema);
 
-	// Test Catalog Name (Not accepted)
+	// Test Catalog Name
 	REQUIRE(!SUCCESS(
 	    AdbcConnectionGetTableSchema(&adbc_connection, "bla", "main", "duckdb_indexes", &arrow_schema, &adbc_error)));
-	REQUIRE(std::strcmp(adbc_error.message,
-	                    "Catalog Name is not used in DuckDB. It must be set to nullptr or an empty string") == 0);
+	REQUIRE(StringUtil::Contains(adbc_error.message, "Catalog \"bla\" does not exist"));
 	adbc_error.release(&adbc_error);
+
+	REQUIRE(SUCCESS(
+	    AdbcConnectionGetTableSchema(&adbc_connection, "memory", "main", "duckdb_indexes", &arrow_schema, &adbc_error)));
+	REQUIRE(arrow_schema.n_children == 13);
+	arrow_schema.release(&arrow_schema);
 
 	// Empty schema should be fine
 	REQUIRE(SUCCESS(

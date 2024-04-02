@@ -339,12 +339,26 @@ def test_connection_get_table_schema(duck_conn):
             ]
         )
 
-        # Catalog name is currently not supported
+        # Test invalid catalog name
         with pytest.raises(
-            adbc_driver_manager_lib.NotSupportedError,
-            match=r'Catalog Name is not used in DuckDB. It must be set to nullptr or an empty string',
+            adbc_driver_manager.InternalError,
+            match=r'Catalog "bla" does not exist',
         ):
             duck_conn.adbc_get_table_schema("tableschema", catalog_filter="bla", db_schema_filter="test")
+
+        # Catalog and DB Schema name
+        assert duck_conn.adbc_get_table_schema("tableschema", catalog_filter="memory", db_schema_filter="test") == pyarrow.schema(
+            [
+                ("test_ints", "int64"),
+            ]
+        )
+
+        # DB Schema is inferred to be "main" if unspecified
+        assert duck_conn.adbc_get_table_schema("tableschema", catalog_filter="memory") == pyarrow.schema(
+            [
+                ("ints", "int64"),
+            ]
+        )
 
 
 def test_prepared_statement(duck_conn):

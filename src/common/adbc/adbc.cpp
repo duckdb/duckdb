@@ -234,16 +234,11 @@ AdbcStatusCode ConnectionGetTableSchema(struct AdbcConnection *connection, const
 		SetError(error, "Connection is not set");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	if (db_schema == nullptr) {
+	if (db_schema == nullptr || strlen(db_schema) == 0) {
 		// if schema is not set, we use the default schema
 		db_schema = "main";
 	}
-	if (catalog != nullptr && strlen(catalog) > 0) {
-		// In DuckDB this is the name of the database, not sure what's the expected functionality here, so for now,
-		// scream.
-		SetError(error, "Catalog Name is not used in DuckDB. It must be set to nullptr or an empty string");
-		return ADBC_STATUS_NOT_IMPLEMENTED;
-	} else if (table_name == nullptr) {
+	if (table_name == nullptr) {
 		SetError(error, "AdbcConnectionGetTableSchema: must provide table_name");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	} else if (strlen(table_name) == 0) {
@@ -253,9 +248,10 @@ AdbcStatusCode ConnectionGetTableSchema(struct AdbcConnection *connection, const
 	ArrowArrayStream arrow_stream;
 
 	std::string query = "SELECT * FROM ";
-	if (strlen(db_schema) > 0) {
-		query += std::string(db_schema) + ".";
+	if (catalog != nullptr && strlen(catalog) > 0) {
+		query += std::string(catalog) + ".";
 	}
+	query += std::string(db_schema) + ".";
 	query += std::string(table_name) + " LIMIT 0;";
 
 	auto success = QueryInternal(connection, &arrow_stream, query.c_str(), error);
