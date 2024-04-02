@@ -189,7 +189,7 @@ struct SortKeyVarcharOperator {
 		auto input_data = input.GetDataUnsafe();
 		auto input_size = input.GetSize();
 		for (idx_t r = 0; r < input_size; r++) {
-			result[r] = input_data[r] + 1;
+			result[r] = UnsafeNumericCast<data_t>(input_data[r] + 1);
 		}
 		result[input_size] = SortKeyVectorData::STRING_DELIMITER; // null-byte delimiter
 		return input_size + 1;
@@ -519,7 +519,8 @@ void ConstructSortKeyList(SortKeyVectorData &vector_data, SortKeyChunk chunk, So
 		}
 
 		// write the end-of-list delimiter
-		result_ptr[offset++] = info.flip_bytes ? ~SortKeyVectorData::LIST_DELIMITER : SortKeyVectorData::LIST_DELIMITER;
+		result_ptr[offset++] = UnsafeNumericCast<data_t>(info.flip_bytes ? ~SortKeyVectorData::LIST_DELIMITER
+		                                                                 : SortKeyVectorData::LIST_DELIMITER);
 	}
 }
 

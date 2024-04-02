@@ -1432,8 +1432,8 @@ void DatePart::StructOperator::Operation(bigint_vec &bigint_values, double_vec &
 
 	// Both define epoch, and the correct value is the sum.
 	// So mask it out and compute it separately.
-	Operation(bigint_values, double_values, d, idx, mask & ~EPOCH);
-	Operation(bigint_values, double_values, t, idx, mask & ~EPOCH);
+	Operation(bigint_values, double_values, d, idx, mask & UnsafeNumericCast<part_mask_t>(~EPOCH));
+	Operation(bigint_values, double_values, t, idx, mask & UnsafeNumericCast<part_mask_t>(~EPOCH));
 
 	if (mask & EPOCH) {
 		auto part_data = HasPartValue(double_values, DatePartSpecifier::EPOCH);
