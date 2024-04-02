@@ -17,7 +17,7 @@ namespace duckdb {
 
 class BuildProbeSideOptimizer : LogicalOperatorVisitor {
 public:
-	explicit BuildProbeSideOptimizer(ClientContext &context, vector<ColumnBinding> preferred_on_probe_side);
+	explicit BuildProbeSideOptimizer(ClientContext &context, LogicalOperator &op);
 
 	void VisitOperator(LogicalOperator &op) override;
 	void VisitExpression(unique_ptr<Expression> *expression) override {};

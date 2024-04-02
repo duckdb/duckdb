@@ -7,8 +7,16 @@
 
 namespace duckdb {
 
-BuildProbeSideOptimizer::BuildProbeSideOptimizer(ClientContext &context, vector<ColumnBinding> preferred_on_probe_side)
-    : context(context), preferred_on_probe_side(std::move(preferred_on_probe_side)) {
+BuildProbeSideOptimizer::BuildProbeSideOptimizer(ClientContext &context, LogicalOperator &op) : context(context) {
+	vector<ColumnBinding> updating_columns, current_op_bindings;
+	if (op.type == LogicalOperatorType::LOGICAL_UPDATE) {
+		auto child = op.children[0].get();
+		while (child->type != LogicalOperatorType::LOGICAL_PROJECTION) {
+			child = child->children[0].get();
+		}
+		updating_columns = child->GetColumnBindings();
+	}
+	preferred_on_probe_side = updating_columns;
 }
 
 static void FlipChildren(LogicalOperator &op) {
