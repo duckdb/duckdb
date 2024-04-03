@@ -55,8 +55,8 @@ public:
 //! A Secret Entry in the secret manager
 struct SecretEntry {
 public:
-	SecretEntry(unique_ptr<const BaseSecret> secret) : secret(secret != nullptr ? secret->Clone() : nullptr) {};
-
+	explicit SecretEntry(unique_ptr<const BaseSecret> secret) : secret(secret != nullptr ? secret->Clone() : nullptr) {
+	}
 	SecretEntry(const SecretEntry &other)
 	    : persist_type(other.persist_type), storage_mode(other.storage_mode),
 	      secret((other.secret != nullptr) ? other.secret->Clone() : nullptr) {
@@ -170,6 +170,10 @@ private:
 	void AutoloadExtensionForType(const string &type);
 	//! Autoload extension for specific secret function
 	void AutoloadExtensionForFunction(const string &type, const string &provider);
+
+	//! Will throw appropriate error message when type not found
+	[[noreturn]] void ThrowTypeNotFoundError(const string &type);
+	[[noreturn]] void ThrowProviderNotFoundError(const string &type, const string &provider, bool was_default = false);
 
 	//! Thread-safe accessors for secret_storages
 	vector<reference<SecretStorage>> GetSecretStorages();

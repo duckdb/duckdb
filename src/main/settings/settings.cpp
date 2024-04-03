@@ -65,7 +65,8 @@ Value AccessModeSetting::GetSetting(ClientContext &context) {
 // Allow Persistent Secrets
 //===--------------------------------------------------------------------===//
 void AllowPersistentSecrets::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.secret_manager->SetEnablePersistentSecrets(input.GetValue<bool>());
+	auto value = input.DefaultCastAs(LogicalType::BOOLEAN);
+	config.secret_manager->SetEnablePersistentSecrets(value.GetValue<bool>());
 }
 
 void AllowPersistentSecrets::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
@@ -74,7 +75,7 @@ void AllowPersistentSecrets::ResetGlobal(DatabaseInstance *db, DBConfig &config)
 
 Value AllowPersistentSecrets::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return config.secret_manager->PersistentSecretsEnabled();
+	return Value::BOOLEAN(config.secret_manager->PersistentSecretsEnabled());
 }
 
 //===--------------------------------------------------------------------===//
@@ -476,6 +477,29 @@ Value AllowUnsignedExtensionsSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Allow Unredacted Secrets
+//===--------------------------------------------------------------------===//
+void AllowUnredactedSecretsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto new_value = input.GetValue<bool>();
+	if (db && new_value) {
+		throw InvalidInputException("Cannot change allow_unredacted_secrets setting while database is running");
+	}
+	config.options.allow_unredacted_secrets = new_value;
+}
+
+void AllowUnredactedSecretsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (db) {
+		throw InvalidInputException("Cannot change allow_unredacted_secrets setting while database is running");
+	}
+	config.options.allow_unredacted_secrets = DBConfig().options.allow_unredacted_secrets;
+}
+
+Value AllowUnredactedSecretsSetting::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.allow_unredacted_secrets);
+}
+
+//===--------------------------------------------------------------------===//
 // Enable Object Cache
 //===--------------------------------------------------------------------===//
 void EnableObjectCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -706,7 +730,6 @@ Value ExplainOutputSetting::GetSetting(ClientContext &context) {
 // Extension Directory Setting
 //===--------------------------------------------------------------------===//
 void ExtensionDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	auto new_directory = input.ToString();
 	config.options.extension_directory = input.ToString();
 }
 
@@ -962,6 +985,22 @@ void OldImplicitCasting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 Value OldImplicitCasting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::BOOLEAN(config.options.old_implicit_casting);
+}
+
+//===--------------------------------------------------------------------===//
+// Partitioned Write Flush Threshold
+//===--------------------------------------------------------------------===//
+void PartitionedWriteFlushThreshold::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).partitioned_write_flush_threshold =
+	    ClientConfig().partitioned_write_flush_threshold;
+}
+
+void PartitionedWriteFlushThreshold::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).partitioned_write_flush_threshold = input.GetValue<idx_t>();
+}
+
+Value PartitionedWriteFlushThreshold::GetSetting(ClientContext &context) {
+	return Value::BIGINT(ClientConfig::GetConfig(context).partitioned_write_flush_threshold);
 }
 
 //===--------------------------------------------------------------------===//

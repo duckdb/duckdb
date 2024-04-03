@@ -1,0 +1,40 @@
+name: Staged Upload
+on:
+  workflow_dispatch:
+    inputs:
+      target_git_describe:
+        type: string
+
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
+jobs:
+ staged-upload:
+   runs-on: ubuntu-latest
+   if: ${{ inputs.target_git_describe != '' }}
+   steps:
+     - uses: actions/checkout@v3
+       with:
+         fetch-depth: 0
+
+     - uses: actions/setup-python@v4
+       with:
+         python-version: '3.10'
+
+     - name: Install
+       shell: bash
+       run: pip install awscli
+
+     - name: Download from staging bucket
+       shell: bash
+       env:
+         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+       run: |
+          mkdir to_be_uploaded
+          aws s3 cp --recursive "s3://duckdb-staging/${{ inputs.target_git_describe }}/$GITHUB_REPOSITORY/github_release" to_be_uploaded --region us-east-2
+
+     - name: Deploy
+       shell: bash
+       run: |
+         python3 scripts/asset-upload-gha.py to_be_uploaded/*

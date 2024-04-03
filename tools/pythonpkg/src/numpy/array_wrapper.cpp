@@ -273,36 +273,62 @@ struct UUIDConvert {
 	}
 };
 
+static py::object InternalCreateList(Vector &input, idx_t total_size, idx_t offset, idx_t size,
+                                     NumpyAppendData &append_data) {
+	// Initialize the array we'll append the list data to
+	auto &type = input.GetType();
+	ArrayWrapper result(type, append_data.client_properties, append_data.pandas);
+	result.Initialize(size);
+
+	D_ASSERT(offset + size <= total_size);
+	result.Append(0, input, total_size, offset, size);
+	return result.ToArray();
+}
+
 struct ListConvert {
-	static py::list ConvertValue(Vector &input, idx_t chunk_offset, const ClientProperties &client_properties) {
-		auto val = input.GetValue(chunk_offset);
-		auto &list_children = ListValue::GetChildren(val);
-		py::list list;
-		for (auto &list_elem : list_children) {
-			list.append(PythonObject::FromValue(list_elem, ListType::GetChildType(input.GetType()), client_properties));
-		}
-		return list;
+	static py::object ConvertValue(Vector &input, idx_t chunk_offset, NumpyAppendData &append_data) {
+		auto &client_properties = append_data.client_properties;
+		auto &list_data = append_data.idata;
+
+		// Get the list entry information from the parent
+		const auto list_sel = *list_data.sel;
+		const auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
+		auto list_index = list_sel.get_index(chunk_offset);
+		auto list_entry = list_entries[list_index];
+
+		auto list_size = list_entry.length;
+		auto list_offset = list_entry.offset;
+		auto child_size = ListVector::GetListSize(input);
+		auto &child_vector = ListVector::GetEntry(input);
+
+		return InternalCreateList(child_vector, child_size, list_offset, list_size, append_data);
 	}
 };
 
 struct ArrayConvert {
-	static py::tuple ConvertValue(Vector &input, idx_t chunk_offset, const ClientProperties &client_properties) {
-		auto val = input.GetValue(chunk_offset);
-		auto &array_values = ArrayValue::GetChildren(val);
-		auto &array_type = input.GetType();
-		auto array_size = ArrayType::GetSize(array_type);
-		auto &child_type = ArrayType::GetChildType(array_type);
+	static py::object ConvertValue(Vector &input, idx_t chunk_offset, NumpyAppendData &append_data) {
+		auto &array_data = append_data.idata;
 
-		py::tuple arr(array_size);
-		for (idx_t elem_idx = 0; elem_idx < array_size; elem_idx++) {
-			arr[elem_idx] = PythonObject::FromValue(array_values[elem_idx], child_type, client_properties);
-		}
-		return arr;
+		// Get the list entry information from the parent
+		const auto array_sel = *array_data.sel;
+		auto array_index = array_sel.get_index(chunk_offset);
+
+		auto &array_type = input.GetType();
+		D_ASSERT(array_type.id() == LogicalTypeId::ARRAY);
+
+		auto array_size = ArrayType::GetSize(array_type);
+		auto array_offset = array_index * array_size;
+		auto child_size = ArrayVector::GetTotalSize(input);
+		auto &child_vector = ArrayVector::GetEntry(input);
+
+		return InternalCreateList(child_vector, child_size, array_offset, array_size, append_data);
 	}
 };
 
 struct StructConvert {
-	static py::dict ConvertValue(Vector &input, idx_t chunk_offset, const ClientProperties &client_properties) {
+	static py::dict ConvertValue(Vector &input, idx_t chunk_offset, NumpyAppendData &append_data) {
+		auto &client_properties = append_data.client_properties;
+
 		py::dict py_struct;
 		auto val = input.GetValue(chunk_offset);
 		auto &child_types = StructType::GetChildTypes(input.GetType());
@@ -319,7 +345,8 @@ struct StructConvert {
 };
 
 struct UnionConvert {
-	static py::object ConvertValue(Vector &input, idx_t chunk_offset, const ClientProperties &client_properties) {
+	static py::object ConvertValue(Vector &input, idx_t chunk_offset, NumpyAppendData &append_data) {
+		auto &client_properties = append_data.client_properties;
 		auto val = input.GetValue(chunk_offset);
 		auto value = UnionValue::GetValue(val);
 
@@ -328,7 +355,8 @@ struct UnionConvert {
 };
 
 struct MapConvert {
-	static py::dict ConvertValue(Vector &input, idx_t chunk_offset, const ClientProperties &client_properties) {
+	static py::dict ConvertValue(Vector &input, idx_t chunk_offset, NumpyAppendData &append_data) {
+		auto &client_properties = append_data.client_properties;
 		auto val = input.GetValue(chunk_offset);
 		auto &list_children = ListValue::GetChildren(val);
 
@@ -386,13 +414,14 @@ static bool ConvertColumn(NumpyAppendData &append_data) {
 	auto target_mask = append_data.target_mask;
 	auto &idata = append_data.idata;
 	auto count = append_data.count;
+	auto source_offset = append_data.source_offset;
 
 	auto src_ptr = UnifiedVectorFormat::GetData<DUCKDB_T>(idata);
 	auto out_ptr = reinterpret_cast<NUMPY_T *>(target_data);
 	if (!idata.validity.AllValid()) {
 		bool mask_is_set = false;
 		for (idx_t i = 0; i < count; i++) {
-			idx_t src_idx = idata.sel->get_index(i);
+			idx_t src_idx = idata.sel->get_index(i + source_offset);
 			idx_t offset = target_offset + i;
 			if (!idata.validity.RowIsValidUnsafe(src_idx)) {
 				if (append_data.pandas) {
@@ -409,7 +438,7 @@ static bool ConvertColumn(NumpyAppendData &append_data) {
 		return mask_is_set;
 	} else {
 		for (idx_t i = 0; i < count; i++) {
-			idx_t src_idx = idata.sel->get_index(i);
+			idx_t src_idx = idata.sel->get_index(i + source_offset);
 			idx_t offset = target_offset + i;
 			out_ptr[offset] = CONVERT::template ConvertValue<DUCKDB_T, NUMPY_T>(src_ptr[src_idx]);
 			target_mask[offset] = false;
@@ -424,12 +453,13 @@ static bool ConvertColumnCategoricalTemplate(NumpyAppendData &append_data) {
 	auto target_data = append_data.target_data;
 	auto &idata = append_data.idata;
 	auto count = append_data.count;
+	auto source_offset = append_data.source_offset;
 
 	auto src_ptr = UnifiedVectorFormat::GetData<DUCKDB_T>(idata);
 	auto out_ptr = reinterpret_cast<NUMPY_T *>(target_data);
 	if (!idata.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
-			idx_t src_idx = idata.sel->get_index(i);
+			idx_t src_idx = idata.sel->get_index(i + source_offset);
 			idx_t offset = target_offset + i;
 			if (!idata.validity.RowIsValidUnsafe(src_idx)) {
 				out_ptr[offset] = static_cast<NUMPY_T>(-1);
@@ -440,7 +470,7 @@ static bool ConvertColumnCategoricalTemplate(NumpyAppendData &append_data) {
 		}
 	} else {
 		for (idx_t i = 0; i < count; i++) {
-			idx_t src_idx = idata.sel->get_index(i);
+			idx_t src_idx = idata.sel->get_index(i + source_offset);
 			idx_t offset = target_offset + i;
 			out_ptr[offset] =
 			    duckdb_py_convert::RegularConvert::template ConvertValue<DUCKDB_T, NUMPY_T>(src_ptr[src_idx]);
@@ -459,24 +489,32 @@ static bool ConvertNested(NumpyAppendData &append_data) {
 	auto &idata = append_data.idata;
 	auto &client_properties = append_data.client_properties;
 	auto count = append_data.count;
+	auto source_offset = append_data.source_offset;
 
 	auto out_ptr = reinterpret_cast<NUMPY_T *>(target_data);
 	if (!idata.validity.AllValid()) {
+		bool requires_mask = false;
 		for (idx_t i = 0; i < count; i++) {
-			idx_t src_idx = idata.sel->get_index(i);
+			idx_t index = i + source_offset;
+			idx_t src_idx = idata.sel->get_index(index);
 			idx_t offset = target_offset + i;
 			if (!idata.validity.RowIsValidUnsafe(src_idx)) {
+				out_ptr[offset] = py::none();
+				requires_mask = true;
 				target_mask[offset] = true;
 			} else {
-				out_ptr[offset] = CONVERT::ConvertValue(input, i, client_properties);
+				out_ptr[offset] = CONVERT::ConvertValue(input, index, append_data);
 				target_mask[offset] = false;
 			}
 		}
-		return true;
+		return requires_mask;
 	} else {
 		for (idx_t i = 0; i < count; i++) {
+			// NOTE: we do not apply the selection vector here,
+			// because we use GetValue inside ConvertValue, which *also* applies the selection vector
+			idx_t index = i + source_offset;
 			idx_t offset = target_offset + i;
-			out_ptr[offset] = CONVERT::ConvertValue(input, i, client_properties);
+			out_ptr[offset] = CONVERT::ConvertValue(input, index, append_data);
 			target_mask[offset] = false;
 		}
 		return false;
@@ -510,12 +548,13 @@ static bool ConvertDecimalInternal(NumpyAppendData &append_data, double division
 	auto target_mask = append_data.target_mask;
 	auto &idata = append_data.idata;
 	auto count = append_data.count;
+	auto source_offset = append_data.source_offset;
 
 	auto src_ptr = UnifiedVectorFormat::GetData<DUCKDB_T>(idata);
 	auto out_ptr = reinterpret_cast<double *>(target_data);
 	if (!idata.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
-			idx_t src_idx = idata.sel->get_index(i);
+			idx_t src_idx = idata.sel->get_index(i + source_offset);
 			idx_t offset = target_offset + i;
 			if (!idata.validity.RowIsValidUnsafe(src_idx)) {
 				target_mask[offset] = true;
@@ -528,7 +567,7 @@ static bool ConvertDecimalInternal(NumpyAppendData &append_data, double division
 		return true;
 	} else {
 		for (idx_t i = 0; i < count; i++) {
-			idx_t src_idx = idata.sel->get_index(i);
+			idx_t src_idx = idata.sel->get_index(i + source_offset);
 			idx_t offset = target_offset + i;
 			out_ptr[offset] =
 			    duckdb_py_convert::IntegralConvert::ConvertValue<DUCKDB_T, double>(src_ptr[src_idx]) / division;
@@ -572,7 +611,7 @@ void ArrayWrapper::Resize(idx_t new_capacity) {
 	mask->Resize(new_capacity);
 }
 
-void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
+void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t source_size, idx_t source_offset, idx_t count) {
 	auto dataptr = data->data;
 	auto maskptr = reinterpret_cast<bool *>(mask->data);
 	D_ASSERT(dataptr);
@@ -581,11 +620,18 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 	bool may_have_null;
 
 	UnifiedVectorFormat idata;
-	input.ToUnifiedFormat(count, idata);
+	input.ToUnifiedFormat(source_size, idata);
+
+	if (count == DConstants::INVALID_INDEX) {
+		D_ASSERT(source_size != DConstants::INVALID_INDEX);
+		count = source_size;
+	}
 
 	NumpyAppendData append_data(idata, client_properties, input);
 	append_data.target_offset = current_offset;
 	append_data.target_data = dataptr;
+	append_data.source_offset = source_offset;
+	append_data.source_size = source_size;
 	append_data.count = count;
 	append_data.target_mask = maskptr;
 	append_data.pandas = pandas;
@@ -672,19 +718,19 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		may_have_null = ConvertColumn<string_t, PyObject *, duckdb_py_convert::BitConvert>(append_data);
 		break;
 	case LogicalTypeId::LIST:
-		may_have_null = ConvertNested<py::list, duckdb_py_convert::ListConvert>(append_data);
+		may_have_null = ConvertNested<py::object, duckdb_py_convert::ListConvert>(append_data);
 		break;
 	case LogicalTypeId::ARRAY:
-		may_have_null = ConvertNested<py::tuple, duckdb_py_convert::ArrayConvert>(append_data);
+		may_have_null = ConvertNested<py::object, duckdb_py_convert::ArrayConvert>(append_data);
 		break;
 	case LogicalTypeId::MAP:
-		may_have_null = ConvertNested<py::dict, duckdb_py_convert::MapConvert>(append_data);
+		may_have_null = ConvertNested<py::object, duckdb_py_convert::MapConvert>(append_data);
 		break;
 	case LogicalTypeId::UNION:
 		may_have_null = ConvertNested<py::object, duckdb_py_convert::UnionConvert>(append_data);
 		break;
 	case LogicalTypeId::STRUCT:
-		may_have_null = ConvertNested<py::dict, duckdb_py_convert::StructConvert>(append_data);
+		may_have_null = ConvertNested<py::object, duckdb_py_convert::StructConvert>(append_data);
 		break;
 	case LogicalTypeId::UUID:
 		may_have_null = ConvertColumn<hugeint_t, PyObject *, duckdb_py_convert::UUIDConvert>(append_data);
@@ -700,7 +746,7 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 	mask->count += count;
 }
 
-py::object ArrayWrapper::ToArray(idx_t count) const {
+py::object ArrayWrapper::ToArray() const {
 	D_ASSERT(data->array && mask->array);
 	data->Resize(data->count);
 	if (!requires_mask) {

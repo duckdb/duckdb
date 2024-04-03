@@ -1,0 +1,99 @@
+# name: test/sql/copy/csv/test_column_inconsistencies.test
+# description: Test bug from issue 10273
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query IIII
+FROM read_csv('data/csv/inconsistencies/inconsistent_columns_3.csv')
+----
+1	2	3	4
+1	2	3	4
+1	2	3	4
+1	2	3	4
+1	2	3	4
+
+query IIII
+FROM read_csv('data/csv/inconsistencies/inconsistent_columns_3.csv', null_padding = true)
+----
+1	2	3	4
+1	2	3	4
+1	2	3	4
+1	2	3	4
+1	2	3	4
+
+query IIII
+FROM read_csv('data/csv/inconsistencies/inconsistent_columns_3.csv', null_padding = true, ignore_errors = true)
+----
+1	2	3	4
+1	2	3	4
+1	2	3	4
+1	2	3	4
+1	2	3	4
+
+
+query I
+FROM read_csv('data/csv/inconsistencies/inconsistent_columns_6.csv')
+----
+1,2,3,4
+2,2,3,4,5
+3,2,3,4
+4,2,3,4
+5,2,3,4
+
+query IIIII
+FROM read_csv('data/csv/inconsistencies/inconsistent_columns_6.csv', null_padding = true)
+----
+1	2	3	4	NULL
+2	2	3	4	5
+3	2	3	4	NULL
+4	2	3	4	NULL
+5	2	3	4	NULL
+
+query IIIII
+FROM read_csv('data/csv/inconsistencies/inconsistent_columns_6.csv', null_padding = true, ignore_errors = true)
+----
+1	2	3	4	NULL
+2	2	3	4	5
+3	2	3	4	NULL
+4	2	3	4	NULL
+5	2	3	4	NULL
+
+query IIIII
+FROM read_csv('data/csv/inconsistencies/inconsistent_columns_6.csv', null_padding = true, ignore_errors = true, header = false)
+----
+one	two	three	four	NULL
+1	2	3	4	NULL
+2	2	3	4	5
+3	2	3	4	NULL
+4	2	3	4	NULL
+5	2	3	4	NULL
+
+query IIII
+FROM read_csv('data/csv/inconsistencies/line_with_spaces.csv')
+----
+1	2	3	4
+1	2	3	4
+1	2	3	4
+1	2	3	4
+
+# Header gets nullpadded instead of thrown away
+query IIII
+FROM read_csv('data/csv/inconsistencies/line_with_spaces.csv', null_padding = true, header = false)
+----
+Line with spaces	NULL	NULL	NULL
+a	b	c	d
+1	2	3	4
+1	2	3	4
+1	2	3	4
+1	2	3	4
+
+query IIII
+FROM read_csv('data/csv/inconsistencies/line_with_spaces.csv', null_padding = true, ignore_errors = true)
+----
+a	b	c	d
+1	2	3	4
+1	2	3	4
+1	2	3	4
+1	2	3	4

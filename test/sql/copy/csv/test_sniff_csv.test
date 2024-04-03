@@ -2,6 +2,9 @@
 # description: Test sniff_csv function
 # group: [csv]
 
+# the sniffer sniffs vectors-at-a-time, so different vector sizes can lead to different results
+require vector_size 2048
+
 statement ok
 PRAGMA enable_verification
 

@@ -71,7 +71,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 		}
 		auto csv_scanner =
 		    make_uniq<StringValueScanner>(scanner_idx++, current_file->buffer_manager, current_file->state_machine,
-		                                  current_file->error_handler, current_file, current_boundary);
+		                                  current_file->error_handler, current_file, false, current_boundary);
 		return csv_scanner;
 	}
 	lock_guard<mutex> parallel_lock(main_mutex);
@@ -86,7 +86,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 	auto &current_file = *file_scans.back();
 	auto csv_scanner =
 	    make_uniq<StringValueScanner>(scanner_idx++, current_file.buffer_manager, current_file.state_machine,
-	                                  current_file.error_handler, file_scans.back(), current_boundary);
+	                                  current_file.error_handler, file_scans.back(), false, current_boundary);
 
 	csv_scanner->buffer_tracker = current_buffer_in_use;
 
@@ -130,6 +130,9 @@ void CSVGlobalState::DecrementThread() {
 	D_ASSERT(running_threads > 0);
 	running_threads--;
 	if (running_threads == 0) {
+		for (auto &file : file_scans) {
+			file->error_handler->ErrorIfNeeded();
+		}
 		FillRejectsTable();
 		if (context.client_data->debug_set_max_line_length) {
 			context.client_data->debug_max_line_length = file_scans[0]->error_handler->GetMaxLineLength();

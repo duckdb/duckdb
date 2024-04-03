@@ -52,7 +52,7 @@ public:
 	StringValueResult(CSVStates &states, CSVStateMachine &state_machine,
 	                  const shared_ptr<CSVBufferHandle> &buffer_handle, Allocator &buffer_allocator, idx_t result_size,
 	                  idx_t buffer_position, CSVErrorHandler &error_hander, CSVIterator &iterator, bool store_line_size,
-	                  shared_ptr<CSVFileScan> csv_file_scan, idx_t &lines_read);
+	                  shared_ptr<CSVFileScan> csv_file_scan, idx_t &lines_read, bool sniffing);
 
 	~StringValueResult();
 
@@ -87,7 +87,7 @@ public:
 	bool added_last_line = false;
 	bool quoted_new_line = false;
 
-	unsafe_unique_array<LogicalTypeId> parse_types;
+	unsafe_unique_array<std::pair<LogicalTypeId, bool>> parse_types;
 	vector<string> names;
 	unordered_map<idx_t, string> cast_errors;
 
@@ -103,6 +103,8 @@ public:
 
 	//! If the current row has an error, we have to skip it
 	bool ignore_current_row = false;
+
+	bool sniffing;
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
 	//! Adds a Value to the result
@@ -125,7 +127,6 @@ public:
 	Value GetValue(idx_t row_idx, idx_t col_idx);
 
 	DataChunk &ToChunk();
-
 	//! Resets the state of the result
 	void Reset();
 };
@@ -136,14 +137,11 @@ public:
 	StringValueScanner(idx_t scanner_idx, const shared_ptr<CSVBufferManager> &buffer_manager,
 	                   const shared_ptr<CSVStateMachine> &state_machine,
 	                   const shared_ptr<CSVErrorHandler> &error_handler, const shared_ptr<CSVFileScan> &csv_file_scan,
-	                   CSVIterator boundary = {}, idx_t result_size = STANDARD_VECTOR_SIZE);
+	                   bool sniffing = false, CSVIterator boundary = {}, idx_t result_size = STANDARD_VECTOR_SIZE);
 
 	StringValueScanner(const shared_ptr<CSVBufferManager> &buffer_manager,
 	                   const shared_ptr<CSVStateMachine> &state_machine,
 	                   const shared_ptr<CSVErrorHandler> &error_handler);
-
-	~StringValueScanner() {
-	}
 
 	StringValueResult &ParseChunk() override;
 

@@ -144,7 +144,7 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 			try {
 				python_object = py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_arrays")(
 				    single_array, py::arg("names") = single_name);
-			} catch (py::error_already_set &ex) {
+			} catch (py::error_already_set &) {
 				throw InvalidInputException("Could not convert the result into an Arrow Table");
 			}
 		}
@@ -162,7 +162,7 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
                                               const ClientProperties &client_properties) {
 	// Through the capture of the lambda, we have access to the function pointer
 	// We just need to make sure that it doesn't get garbage collected
-	scalar_function_t func = [=](DataChunk &input, ExpressionState &state, Vector &result) -> void {
+	scalar_function_t func = [=](DataChunk &input, ExpressionState &state, Vector &result) -> void { // NOLINT
 		py::gil_scoped_acquire gil;
 
 		// owning references

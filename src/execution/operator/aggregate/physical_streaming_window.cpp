@@ -113,7 +113,6 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
                                                     GlobalOperatorState &gstate_p, OperatorState &state_p) const {
 	auto &gstate = gstate_p.Cast<StreamingWindowGlobalState>();
 	auto &state = state_p.Cast<StreamingWindowState>();
-	state.allocator.Reset();
 
 	if (!state.initialized) {
 		state.Initialize(context.client, input, select_list);

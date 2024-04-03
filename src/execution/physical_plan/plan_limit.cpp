@@ -7,6 +7,28 @@
 
 namespace duckdb {
 
+bool UseBatchLimit(BoundLimitNode &limit_val, BoundLimitNode &offset_val) {
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
+	return true;
+#else
+	// we only use batch limit when we are computing a small amount of values
+	// as the batch limit materializes this many rows PER thread
+	static constexpr const idx_t BATCH_LIMIT_THRESHOLD = 10000;
+
+	if (limit_val.Type() != LimitNodeType::CONSTANT_VALUE) {
+		return false;
+	}
+	if (offset_val.Type() == LimitNodeType::EXPRESSION_VALUE) {
+		return false;
+	}
+	idx_t total_offset = limit_val.GetConstantValue();
+	if (offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
+		total_offset += offset_val.GetConstantValue();
+	}
+	return total_offset <= BATCH_LIMIT_THRESHOLD;
+#endif
+}
+
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalLimit &op) {
 	D_ASSERT(op.children.size() == 1);
 
@@ -26,7 +48,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalLimit &op)
 			                                          op.estimated_cardinality, true);
 		} else {
 			// maintaining insertion order is important
-			if (UseBatchIndex(*plan)) {
+			if (UseBatchIndex(*plan) && UseBatchLimit(op.limit_val, op.offset_val)) {
 				// source supports batch index: use parallel batch limit
 				limit = make_uniq<PhysicalLimit>(op.types, std::move(op.limit_val), std::move(op.offset_val),
 				                                 op.estimated_cardinality);

@@ -12,6 +12,7 @@
 #include "duckdb/main/valid_checker.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/extension.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 class BufferManager;
@@ -24,6 +25,7 @@ class FileSystem;
 class TaskScheduler;
 class ObjectCache;
 struct AttachInfo;
+class DatabaseFileSystem;
 
 struct ExtensionInfo {
 	ExtensionInfo(const std::string &version) : extension_version(version) {
@@ -61,10 +63,10 @@ public:
 	DUCKDB_API static DatabaseInstance &GetDatabase(ClientContext &context);
 
 	DUCKDB_API const unordered_set<std::string> &LoadedExtensions();
-	DUCKDB_API const unordered_map<std::string, ExtensionInfo> &LoadedExtensionsData();
-	DUCKDB_API bool ExtensionIsLoaded(const std::string &name);
+	DUCKDB_API const unordered_map<string, ExtensionInfo> &LoadedExtensionsData();
+	DUCKDB_API bool ExtensionIsLoaded(const string &name);
 
-	DUCKDB_API bool TryGetCurrentSetting(const std::string &key, Value &result);
+	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const string &key, Value &result);
 
 	unique_ptr<AttachedDatabase> CreateAttachedDatabase(ClientContext &context, const AttachInfo &info,
 	                                                    const string &type, AccessMode access_mode);
@@ -76,7 +78,7 @@ private:
 	void Configure(DBConfig &config);
 
 private:
-	unique_ptr<BufferManager> buffer_manager;
+	shared_ptr<BufferManager> buffer_manager;
 	unique_ptr<DatabaseManager> db_manager;
 	unique_ptr<TaskScheduler> scheduler;
 	unique_ptr<ObjectCache> object_cache;
@@ -84,6 +86,7 @@ private:
 	unordered_set<std::string> loaded_extensions;
 	unordered_map<std::string, ExtensionInfo> loaded_extensions_data;
 	ValidChecker db_validity;
+	unique_ptr<DatabaseFileSystem> db_file_system;
 };
 
 //! The database object. This object holds the catalog and all the

@@ -99,6 +99,13 @@ public:
 	//! Returns true if all pipelines have been completed
 	bool ExecutionIsFinished();
 
+	void RegisterTask() {
+		executor_tasks++;
+	}
+	void UnregisterTask() {
+		executor_tasks--;
+	}
+
 private:
 	bool ResultCollectorIsBlocked();
 	void InitializeInternal(PhysicalOperator &physical_plan);
@@ -157,5 +164,8 @@ private:
 
 	//! Task that have been descheduled
 	unordered_map<Task *, shared_ptr<Task>> to_be_rescheduled_tasks;
+
+	//! Currently alive executor tasks
+	atomic<idx_t> executor_tasks;
 };
 } // namespace duckdb

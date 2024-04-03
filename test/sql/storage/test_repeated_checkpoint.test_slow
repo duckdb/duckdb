@@ -41,13 +41,13 @@ SELECT
 						ELSE 'U33' END AS model
 FROM range(1000) t(i)
 )
-TO 'repeated_load.csv' (DELIMITER '|');
+TO '__TEST_DIR__/repeated_load.csv' (DELIMITER '|');
 
 statement ok
 CREATE TABLE IF NOT EXISTS pdata (record_id BIGINT PRIMARY KEY , price DOUBLE, shop VARCHAR, category VARCHAR, name VARCHAR, brand VARCHAR, color VARCHAR, model VARCHAR);
 
 statement ok
-COPY pdata(record_id,price,shop,category,name,brand,color,model) FROM 'repeated_load.csv' ( DELIMITER '|' );
+COPY pdata(record_id,price,shop,category,name,brand,color,model) FROM '__TEST_DIR__/repeated_load.csv' ( DELIMITER '|' );
 
 query IIIIIIII
 SELECT MIN(record_id), MIN(price), MIN(shop), MIN(category), MIN(name), MIN(brand), MIN(color), MIN(model) FROM pdata

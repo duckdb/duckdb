@@ -32,7 +32,7 @@ struct TableScanBindData : public TableFunctionData {
 
 public:
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const TableScanBindData &)other_p;
+		auto &other = other_p.Cast<TableScanBindData>();
 		return &other.table == &table && result_ids == other.result_ids;
 	}
 };
