@@ -21,7 +21,6 @@ unique_ptr<CreateInfo> CreateSequenceInfo::Copy() const {
 	result->max_value = max_value;
 	result->start_value = start_value;
 	result->cycle = cycle;
-	result->last_value = last_value;
 	return std::move(result);
 }
 

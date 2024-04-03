@@ -13,10 +13,21 @@
 
 namespace duckdb {
 
+// This should only be used for deserialization purposes, as we can guarantee that the result is within bounds in that
+// case.
+static int64_t LastValue(CreateSequenceInfo &info) {
+	auto usage_count = info.usage_count;
+	if (usage_count == 0) {
+		return info.start_value;
+	}
+	usage_count--;
+	// FIXME: this is not accounting for CYCLE behavior
+	return info.start_value + (info.increment * usage_count);
+}
+
 SequenceData::SequenceData(CreateSequenceInfo &info)
-    : usage_count(info.usage_count), counter(info.start_value + (info.increment * info.usage_count)),
-      last_value(info.last_value), increment(info.increment), start_value(info.start_value), min_value(info.min_value),
-      max_value(info.max_value), cycle(info.cycle) {
+    : usage_count(info.usage_count), counter(LastValue(info)), last_value(LastValue(info)), increment(info.increment),
+      start_value(info.start_value), min_value(info.min_value), max_value(info.max_value), cycle(info.cycle) {
 }
 
 SequenceCatalogEntry::SequenceCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateSequenceInfo &info)
@@ -94,7 +105,6 @@ unique_ptr<CreateInfo> SequenceCatalogEntry::GetInfo() const {
 	result->schema = schema.name;
 	result->name = name;
 	result->usage_count = seq_data.usage_count;
-	result->last_value = seq_data.last_value;
 	result->increment = seq_data.increment;
 	result->min_value = seq_data.min_value;
 	result->max_value = seq_data.max_value;
