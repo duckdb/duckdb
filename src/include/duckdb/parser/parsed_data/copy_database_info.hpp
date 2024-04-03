@@ -31,6 +31,10 @@ public:
 
 	// The catalog entries that are going to be created in the destination DB
 	vector<unique_ptr<CreateInfo>> entries;
+
+public:
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

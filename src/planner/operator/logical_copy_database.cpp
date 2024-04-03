@@ -7,11 +7,12 @@ LogicalCopyDatabase::LogicalCopyDatabase(unique_ptr<CopyDatabaseInfo> info_p)
     : LogicalOperator(LogicalOperatorType::LOGICAL_COPY_DATABASE), info(std::move(info_p)) {
 }
 
-void LogicalCopyDatabase::Serialize(Serializer &serializer) const {
-	throw NotImplementedException("LogicalCopyDatabase::Serialize");
+LogicalCopyDatabase::LogicalCopyDatabase(unique_ptr<ParseInfo> info_p)
+    : LogicalOperator(LogicalOperatorType::LOGICAL_COPY_DATABASE),
+      info(unique_ptr_cast<ParseInfo, CopyDatabaseInfo>(std::move(info_p))) {
 }
-unique_ptr<LogicalOperator> LogicalCopyDatabase::Deserialize(Deserializer &deserializer) {
-	throw NotImplementedException("LogicalCopyDatabase::Deserialize");
+
+LogicalCopyDatabase::~LogicalCopyDatabase() {
 }
 
 void LogicalCopyDatabase::ResolveTypes() {

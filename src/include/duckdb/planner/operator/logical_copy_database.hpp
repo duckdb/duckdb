@@ -19,7 +19,7 @@ public:
 
 public:
 	explicit LogicalCopyDatabase(unique_ptr<CopyDatabaseInfo> info_p);
-	~LogicalCopyDatabase() override {};
+	~LogicalCopyDatabase() override;
 
 	unique_ptr<CopyDatabaseInfo> info;
 
@@ -29,6 +29,9 @@ public:
 
 protected:
 	void ResolveTypes() override;
+
+private:
+	explicit LogicalCopyDatabase(unique_ptr<ParseInfo> info_p);
 };
 
 } // namespace duckdb
