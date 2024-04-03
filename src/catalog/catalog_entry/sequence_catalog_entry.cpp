@@ -100,7 +100,8 @@ unique_ptr<CreateInfo> SequenceCatalogEntry::GetInfo() const {
 	result->min_value = seq_data.min_value;
 	result->max_value = seq_data.max_value;
 	// To "persist" the last_value we create the sequence as if the provided START value is the current value
-	// Inside the SequenceData we set the usage_count to 0 so currvalue will throw if the sequence hasnt been updated yet
+	// Inside the SequenceData we set the usage_count to 0 so currvalue will throw if the sequence hasnt been updated
+	// yet
 	result->start_value = seq_data.counter;
 	result->cycle = seq_data.cycle;
 	result->comment = comment;
