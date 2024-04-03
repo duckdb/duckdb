@@ -252,12 +252,12 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		ErrorData error;
 		FunctionBinder function_binder(context);
 		auto best_function = function_binder.BindFunction(func.name, func.functions, types, error);
-		if (best_function == DConstants::INVALID_INDEX) {
+		if (!best_function.IsValid()) {
 			error.AddQueryLocation(window);
 			error.Throw();
 		}
 		// found a matching function! bind it as an aggregate
-		auto bound_function = func.functions.GetFunctionByOffset(best_function);
+		auto bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
 		auto bound_aggregate = function_binder.BindAggregateFunction(bound_function, std::move(children));
 		// create the aggregate
 		aggregate = make_uniq<AggregateFunction>(bound_aggregate->function);
