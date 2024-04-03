@@ -405,9 +405,8 @@ void StringValueResult::QuotedNewLine(StringValueResult &result) {
 
 void StringValueResult::NullPaddingQuotedNewlineCheck() {
 	// We do some checks for null_padding correctness
-	if (state_machine.options.null_padding && iterator.IsBoundarySet() && quoted_new_line && iterator.done) {
-		// If we have null_padding set, we found a quoted new line, we are scanning the file in parallel, and it's the
-		// last row of this thread.
+	if (state_machine.options.null_padding && iterator.IsBoundarySet() && quoted_new_line) {
+		// If we have null_padding set, we found a quoted new line, we are scanning the file in parallel; We error.
 		LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
 		auto csv_error = CSVError::NullPaddingFail(state_machine.options, lines_per_batch);
 		error_handler.Error(csv_error);
@@ -1035,14 +1034,16 @@ bool StringValueScanner::MoveToNextBuffer() {
 				// And an extra empty value to represent what comes after the delimiter
 				result.AddRow(result, previous_buffer_handle->actual_size);
 				lines_read++;
-			} else if (states.IsQuotedCurrent()) {
+			}
+			else if (states.IsQuotedCurrent()) {
 				// Unterminated quote
 				LinePosition current_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos,
 				                                   result.buffer_size};
 				result.current_line_position.begin = result.current_line_position.end;
 				result.current_line_position.end = current_line_start;
 				result.InvalidState(result);
-			} else {
+			}
+			else {
 				result.AddRow(result, previous_buffer_handle->actual_size);
 				lines_read++;
 			}

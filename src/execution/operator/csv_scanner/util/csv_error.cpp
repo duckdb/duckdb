@@ -182,7 +182,6 @@ CSVError CSVError::UnterminatedQuotesError(const CSVReaderOptions &options, idx_
                                            int64_t byte_position) {
 	std::ostringstream error;
 	error << "Value with unterminated quote found." << '\n';
-	error << '\n';
 	std::ostringstream how_to_fix_it;
 	how_to_fix_it << "Possible Solution: Enable ignore errors (ignore_errors=true) to skip this row" << '\n';
 	return CSVError(error.str(), CSVErrorType::UNTERMINATED_QUOTES, current_column, csv_row, error_info,
