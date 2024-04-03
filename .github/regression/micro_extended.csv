@@ -123,6 +123,7 @@ benchmark/micro/join/asof_join.benchmark
 benchmark/micro/join/asof_join_small_probe.benchmark
 benchmark/micro/join/blockwise_nl_join.benchmark
 benchmark/micro/join/delim_join_no_blowup.benchmark
+benchmark/micro/join/hashjoin_dups_rhs.benchmark
 benchmark/micro/join/hashjoin_highcardinality.benchmark
 benchmark/micro/join/hashjoin_lhsarithmetic.benchmark
 benchmark/micro/join/iejoin_employees.benchmark
