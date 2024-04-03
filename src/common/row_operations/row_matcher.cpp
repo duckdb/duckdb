@@ -204,8 +204,8 @@ void RowMatcher::Initialize(const bool no_match_sel, const TupleDataLayout &layo
 	// The columns must have the same size as the predicates vector
 	D_ASSERT(columns.size() == predicates.size());
 
-	// The largest column_id must be smaller than the number of predicates to not cause an out-of-bounds error
-	D_ASSERT(*max_element(columns.begin(), columns.end()) < predicates.size());
+	// The largest column_id must be smaller than the number of types to not cause an out-of-bounds error
+	D_ASSERT(*max_element(columns.begin(), columns.end()) < layout.GetTypes().size());
 
 	match_functions.reserve(predicates.size());
 	for (idx_t idx = 0; idx < predicates.size(); idx++) {
@@ -235,8 +235,8 @@ idx_t RowMatcher::Match(DataChunk &lhs, const vector<TupleDataVectorFormat> &lhs
 	// The column_ids must have the same size as the match_functions vector
 	D_ASSERT(columns.size() == match_functions.size());
 
-	// The largest column_id must be smaller than the number of predicates to not cause an out-of-bounds error
-	D_ASSERT(*max_element(columns.begin(), columns.end()) < predicates.size());
+	// The largest column_id must be smaller than the number columns to not cause an out-of-bounds error
+	D_ASSERT(*max_element(columns.begin(), columns.end()) < lhs.ColumnCount());
 
 	for (idx_t fun_idx = 0; fun_idx < match_functions.size(); fun_idx++) {
 		// if we only care about specific columns, we need to use the column_ids to get the correct column index
