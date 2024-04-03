@@ -150,6 +150,8 @@ struct MultiFileReader {
 	                                             const MultiFileReaderOptions &options, LogicalGet &get,
 	                                             vector<unique_ptr<Expression>> &filters);
     //! Tries to use the MultiFileReader for binding. This method can be overridden by custom MultiFileReaders
+    // TODO: this is quirky: While it works, it requires every reader to understand that they need to call this and check
+    //       if it bound, then skip the actual binding process
     DUCKDB_API virtual bool Bind(MultiFileReaderOptions &options, MultiFileList &files,
                                                            vector<LogicalType> &return_types, vector<string> &names, MultiFileReaderBindData &bind_data);
 	//! Bind the options of the multi-file reader, potentially emitting any extra columns that are required

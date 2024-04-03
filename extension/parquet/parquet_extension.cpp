@@ -431,23 +431,38 @@ public:
 		result->files = result->multi_file_reader->GetFileList(context, files, "Parquet");
 
         // Firstly, we try to use the multifilereader to bind
-        MultiFileReaderBindData bind_data;
-        auto bound = result->multi_file_reader->Bind(parquet_options.file_options, *result->files, result->types, result->names, result->reader_bind);
-
-        if (!bound) {
-            if (parquet_options.schema.empty()) {
-                result->reader_bind = MultiFileReader::BindReader<ParquetReader>(
-                        context,
-                        *result->multi_file_reader,
-                        result->types,
-                        result->names,
-                        *result->files,
-                        *result,
-                        parquet_options);
-            } else {
-                // a schema was supplied
-                result->reader_bind = BindSchema(context, result->types, result->names, *result, parquet_options);
+        if (result->multi_file_reader->Bind(parquet_options.file_options, *result->files, result->types, result->names, result->reader_bind)) {
+            // TODO: deduplicate with BindSchema
+            if (parquet_options.file_row_number) {
+                if (std::find(names.begin(), names.end(), "file_row_number") != names.end()) {
+                    throw BinderException(
+                            "Using file_row_number option on file with column named file_row_number is not supported");
+                }
+                result->reader_bind.file_row_number_idx = names.size();
+                result->types.emplace_back(LogicalType::BIGINT);
+                result->names.emplace_back("file_row_number");
             }
+
+            // The MultiFileReader has provided a bind; we only need to bind any multifilereader options present, and then
+            // we are done.
+            result->multi_file_reader->BindOptions(
+                    parquet_options.file_options,
+                    *result->files,
+                    result->types,
+                    result->names,
+                    result->reader_bind);
+        } else if (!parquet_options.schema.empty()) {
+            // a schema was supplied
+            result->reader_bind = BindSchema(context, result->types, result->names, *result, parquet_options);
+        } else {
+            result->reader_bind = MultiFileReader::BindReader<ParquetReader>(
+                    context,
+                    *result->multi_file_reader,
+                    result->types,
+                    result->names,
+                    *result->files,
+                    *result,
+                    parquet_options);
         }
 
 		if (return_types.empty()) {
