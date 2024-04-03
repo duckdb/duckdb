@@ -83,7 +83,7 @@ BindResult BaseSelectBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_pt
 		if (alias_entry != alias_map.end()) {
 			// found entry!
 			auto index = alias_entry->second;
-			if (index >= node.select_list.size()) {
+			if (index >= node.bound_column_count) {
 				throw BinderException("Column \"%s\" referenced that exists in the SELECT clause - but this column "
 				                      "cannot be referenced before it is defined",
 				                      colref.column_names[0]);
