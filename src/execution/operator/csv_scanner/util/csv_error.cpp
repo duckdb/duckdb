@@ -214,10 +214,10 @@ CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, i
 	error << "Expected Number of Columns: " << options.dialect_options.num_cols << " Found: " << actual_columns + 1;
 	if (actual_columns >= options.dialect_options.num_cols) {
 		return CSVError(error.str(), CSVErrorType::TOO_MANY_COLUMNS, actual_columns, csv_row, error_info,
-		                row_byte_position, byte_position, options, how_to_fix_it.str());
+		                row_byte_position, byte_position - 1, options, how_to_fix_it.str());
 	} else {
 		return CSVError(error.str(), CSVErrorType::TOO_FEW_COLUMNS, actual_columns, csv_row, error_info,
-		                row_byte_position, byte_position, options, how_to_fix_it.str());
+		                row_byte_position, byte_position - 1, options, how_to_fix_it.str());
 	}
 }
 

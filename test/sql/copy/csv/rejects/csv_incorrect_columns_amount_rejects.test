@@ -11,104 +11,115 @@ statement ok
 SELECT * FROM read_csv(
     'data/csv/rejects/incorrect_columns/few_columns.csv',
     columns = {'a': 'INTEGER', 'b': 'INTEGER', 'c': 'INTEGER', 'd': 'INTEGER'},
-    rejects_table='csv_rejects_table',
-    ignore_errors=true, auto_detect=false, header = 1);
+    store_rejects=true, auto_detect=false, header = 1);
 
-query IIIIIII rowsort
-SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
-FROM csv_rejects_table;
+query IIIIIIIIII rowsort
+FROM reject_errors order by all;
 ----
-data/csv/rejects/incorrect_columns/few_columns.csv	1814	3	"d"	MISSING COLUMNS	1,2,3	14504
-data/csv/rejects/incorrect_columns/few_columns.csv	1823	1	"b"	MISSING COLUMNS	1	14574
-data/csv/rejects/incorrect_columns/few_columns.csv	2378	1	"b"	MISSING COLUMNS	1	19008
-data/csv/rejects/incorrect_columns/few_columns.csv	2762	2	"c"	MISSING COLUMNS	1,2	22074
+3	0	1814	14505	14510	3	d	MISSING COLUMNS	1,2,3	Expected Number of Columns: 4 Found: 3
+3	0	1823	14575	14576	1	b	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 1
+3	0	2378	19009	19010	1	b	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 1
+3	0	2762	22075	22078	2	c	MISSING COLUMNS	1,2	Expected Number of Columns: 4 Found: 2
 
 statement ok
-DROP TABLE csv_rejects_table;
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
 
 statement ok
 SELECT * FROM read_csv(
     'data/csv/rejects/incorrect_columns/many_columns.csv',
     columns = {'a': 'INTEGER', 'b': 'INTEGER', 'c': 'INTEGER', 'd': 'INTEGER'},
-    rejects_table='csv_rejects_table',
-    ignore_errors=true, auto_detect=false, header = 1);
+    store_rejects=true, auto_detect=false, header = 1);
 
-query IIIIIII rowsort
-SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
-FROM csv_rejects_table;
+query IIIIIIIIII rowsort
+FROM reject_errors order by all;
 ----
-data/csv/rejects/incorrect_columns/many_columns.csv	1096	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	8760
-data/csv/rejects/incorrect_columns/many_columns.csv	1159	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	9268
-data/csv/rejects/incorrect_columns/many_columns.csv	1206	5	NULL	TOO MANY COLUMNS	1,2,3,4,5	9648
-data/csv/rejects/incorrect_columns/many_columns.csv	2769	5	NULL	TOO MANY COLUMNS	1,2,3,4,5	22154
+7	0	1096	8761	8768	5	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 5
+7	0	1096	8761	8770	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 6
+7	0	1159	9269	9276	5	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 5
+7	0	1159	9269	9278	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 6
+7	0	1206	9649	9656	5	NULL	TOO MANY COLUMNS	1,2,3,4,5	Expected Number of Columns: 4 Found: 5
+7	0	2769	22155	22162	5	NULL	TOO MANY COLUMNS	1,2,3,4,5	Expected Number of Columns: 4 Found: 5
 
 statement ok
-DROP TABLE csv_rejects_table;
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
 
 statement ok
 SELECT * FROM read_csv(
     'data/csv/rejects/incorrect_columns/mix_columns.csv',
     columns = {'a': 'INTEGER', 'b': 'INTEGER', 'c': 'INTEGER', 'd': 'INTEGER'},
-    rejects_table='csv_rejects_table',
-    ignore_errors=true, auto_detect=false, header = 1);
+    store_rejects=true, auto_detect=false, header = 1);
 
-query IIIIIII rowsort
-SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
-FROM csv_rejects_table;
+query IIIIIIIIII rowsort
+FROM reject_errors order by all;
 ----
-data/csv/rejects/incorrect_columns/mix_columns.csv	1604	1	"b"	MISSING COLUMNS	1	12824
-data/csv/rejects/incorrect_columns/mix_columns.csv	1671	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	13354
-data/csv/rejects/incorrect_columns/mix_columns.csv	2751	2	"c"	MISSING COLUMNS	1,2	21998
-data/csv/rejects/incorrect_columns/mix_columns.csv	2768	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	22130
+11	0	1604	12825	12826	1	b	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 1
+11	0	1671	13355	13362	5	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 5
+11	0	1671	13355	13364	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 6
+11	0	2751	21999	22002	2	c	MISSING COLUMNS	1,2	Expected Number of Columns: 4 Found: 2
+11	0	2768	22131	22138	5	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 5
+11	0	2768	22131	22140	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 6
+
 
 # Different Buffer Sizes
 loop buffer_size 10 15
 
 statement ok
-DROP TABLE csv_rejects_table;
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
 
 statement ok
 SELECT * FROM read_csv(
     'data/csv/rejects/incorrect_columns/small_mix.csv',
     columns = {'a': 'INTEGER', 'b': 'INTEGER', 'c': 'INTEGER', 'd': 'INTEGER'},
-    rejects_table='csv_rejects_table',
-    ignore_errors=true, auto_detect=false, header = 1);
+    store_rejects=true, auto_detect=false, header = 1);
 
-query IIIIIII rowsort
-SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
-FROM csv_rejects_table;
+query IIIIIIIII rowsort
+SELECT * EXCLUDE (scan_id) FROM reject_errors order by all
 ----
-data/csv/rejects/incorrect_columns/small_mix.csv	3	5	NULL	TOO MANY COLUMNS	1,2,3,4,5	16
-data/csv/rejects/incorrect_columns/small_mix.csv	4	3	"d"	MISSING COLUMNS	1,2,3	26
+0	3	17	24	5	NULL	TOO MANY COLUMNS	1,2,3,4,5	Expected Number of Columns: 4 Found: 5
+0	4	27	32	3	d	MISSING COLUMNS	1,2,3	Expected Number of Columns: 4 Found: 3
 
 endloop
 
 # All files
 statement ok
-DROP TABLE csv_rejects_table;
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
 
 statement ok
 SELECT * FROM read_csv(
     'data/csv/rejects/incorrect_columns/*.csv',
     columns = {'a': 'INTEGER', 'b': 'INTEGER', 'c': 'INTEGER', 'd': 'INTEGER'},
-    rejects_table='csv_rejects_table',
-    ignore_errors=true, auto_detect=false, header = 1);
+   store_rejects=true, auto_detect=false, header = 1);
 
-query IIIIIII rowsort
-SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
-FROM csv_rejects_table;
+query IIIIIIIIII rowsort
+FROM reject_errors order by all
 ----
-data/csv/rejects/incorrect_columns/few_columns.csv	1814	3	"d"	MISSING COLUMNS	1,2,3	14504
-data/csv/rejects/incorrect_columns/few_columns.csv	1823	1	"b"	MISSING COLUMNS	1	14574
-data/csv/rejects/incorrect_columns/few_columns.csv	2378	1	"b"	MISSING COLUMNS	1	19008
-data/csv/rejects/incorrect_columns/few_columns.csv	2762	2	"c"	MISSING COLUMNS	1,2	22074
-data/csv/rejects/incorrect_columns/many_columns.csv	1096	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	8760
-data/csv/rejects/incorrect_columns/many_columns.csv	1159	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	9268
-data/csv/rejects/incorrect_columns/many_columns.csv	1206	5	NULL	TOO MANY COLUMNS	1,2,3,4,5	9648
-data/csv/rejects/incorrect_columns/many_columns.csv	2769	5	NULL	TOO MANY COLUMNS	1,2,3,4,5	22154
-data/csv/rejects/incorrect_columns/mix_columns.csv	1604	1	"b"	MISSING COLUMNS	1	12824
-data/csv/rejects/incorrect_columns/mix_columns.csv	1671	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	13354
-data/csv/rejects/incorrect_columns/mix_columns.csv	2751	2	"c"	MISSING COLUMNS	1,2	21998
-data/csv/rejects/incorrect_columns/mix_columns.csv	2768	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	22130
-data/csv/rejects/incorrect_columns/small_mix.csv	3	5	NULL	TOO MANY COLUMNS	1,2,3,4,5	16
-data/csv/rejects/incorrect_columns/small_mix.csv	4	3	"d"	MISSING COLUMNS	1,2,3	26
+35	0	1814	14505	14510	3	d	MISSING COLUMNS	1,2,3	Expected Number of Columns: 4 Found: 3
+35	0	1823	14575	14576	1	b	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 1
+35	0	2378	19009	19010	1	b	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 1
+35	0	2762	22075	22078	2	c	MISSING COLUMNS	1,2	Expected Number of Columns: 4 Found: 2
+35	1	1096	8761	8768	5	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 5
+35	1	1096	8761	8770	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 6
+35	1	1159	9269	9276	5	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 5
+35	1	1159	9269	9278	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 6
+35	1	1206	9649	9656	5	NULL	TOO MANY COLUMNS	1,2,3,4,5	Expected Number of Columns: 4 Found: 5
+35	1	2769	22155	22162	5	NULL	TOO MANY COLUMNS	1,2,3,4,5	Expected Number of Columns: 4 Found: 5
+35	2	1604	12825	12826	1	b	MISSING COLUMNS	1	Expected Number of Columns: 4 Found: 1
+35	2	1671	13355	13362	5	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 5
+35	2	1671	13355	13364	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 6
+35	2	2751	21999	22002	2	c	MISSING COLUMNS	1,2	Expected Number of Columns: 4 Found: 2
+35	2	2768	22131	22138	5	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 5
+35	2	2768	22131	22140	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	Expected Number of Columns: 4 Found: 6
+35	3	3	17	24	5	NULL	TOO MANY COLUMNS	1,2,3,4,5	Expected Number of Columns: 4 Found: 5
+35	3	4	27	32	3	d	MISSING COLUMNS	1,2,3	Expected Number of Columns: 4 Found: 3

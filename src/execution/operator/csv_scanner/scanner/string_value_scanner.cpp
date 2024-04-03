@@ -121,6 +121,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 			// We error pointing to the current value error.
 			current_errors.push_back({CSVErrorType::TOO_MANY_COLUMNS, cur_col_id, last_position});
 		}
+		cur_col_id++;
 		return;
 	}
 
