@@ -281,7 +281,7 @@ private:
 	                              const string &groups = "", const string &function_parameter = "",
 	                              bool ignore_nulls = false, const string &projected_columns = "",
 	                              const string &window_spec = "");
-	string GenerateExpressionList(const string &function_name, vector<string> &&aggregated_columns,
+	string GenerateExpressionList(const string &function_name, vector<string> aggregated_columns,
 	                              const string &groups = "", const string &function_parameter = "",
 	                              bool ignore_nulls = false, const string &projected_columns = "",
 	                              const string &window_spec = "");

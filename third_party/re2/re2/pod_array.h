@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-#ifndef UTIL_POD_ARRAY_H_
-#define UTIL_POD_ARRAY_H_
+#ifndef RE2_POD_ARRAY_H_
+#define RE2_POD_ARRAY_H_
 
 #include <memory>
 #include <type_traits>
@@ -13,7 +13,7 @@ namespace duckdb_re2 {
 template <typename T>
 class PODArray {
  public:
-  static_assert(std::is_pod<T>::value,
+  static_assert(std::is_trivial<T>::value && std::is_standard_layout<T>::value,
                 "T must be POD");
 
   PODArray()
@@ -50,6 +50,6 @@ class PODArray {
   std::unique_ptr<T[], Deleter> ptr_;
 };
 
-}  // namespace duckdb_re2
+}  // namespace re2
 
-#endif  // UTIL_POD_ARRAY_H_
+#endif  // RE2_POD_ARRAY_H_

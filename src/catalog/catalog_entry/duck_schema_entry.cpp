@@ -80,19 +80,19 @@ unique_ptr<CatalogEntry> DuckSchemaEntry::Copy(ClientContext &context) const {
 optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction transaction,
                                                              unique_ptr<StandardEntry> entry,
                                                              OnCreateConflict on_conflict,
-                                                             LogicalDependencyList logical_dependencies) {
+                                                             LogicalDependencyList dependencies) {
 	auto entry_name = entry->name;
 	auto entry_type = entry->type;
 	auto result = entry.get();
 
 	// first find the set for this entry
 	auto &set = GetCatalogSet(entry_type);
-	logical_dependencies.AddDependency(*this);
+	dependencies.AddDependency(*this);
 	if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 		// CREATE OR REPLACE: first try to drop the entry
 		auto old_entry = set.GetEntry(transaction, entry_name);
 		if (old_entry) {
-			if (logical_dependencies.Contains(*old_entry)) {
+			if (dependencies.Contains(*old_entry)) {
 				throw CatalogException("CREATE OR REPLACE is not allowed to depend on itself");
 			}
 			if (old_entry->type != entry_type) {
@@ -104,7 +104,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction 
 	}
 
 	// now try to add the entry
-	if (!set.CreateEntry(transaction, entry_name, std::move(entry), logical_dependencies)) {
+	if (!set.CreateEntry(transaction, entry_name, std::move(entry), dependencies)) {
 		// entry already exists!
 		if (on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
 			throw CatalogException::EntryAlreadyExists(entry_type, entry_name);

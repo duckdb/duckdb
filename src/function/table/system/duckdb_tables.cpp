@@ -87,7 +87,7 @@ static bool TableHasPrimaryKey(TableCatalogEntry &table) {
 	for (auto &constraint : table.GetConstraints()) {
 		if (constraint->type == ConstraintType::UNIQUE) {
 			auto &unique = constraint->Cast<UniqueConstraint>();
-			if (unique.is_primary_key) {
+			if (unique.IsPrimaryKey()) {
 				return true;
 			}
 		}
@@ -146,7 +146,7 @@ void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 		output.SetValue(col++, count, Value::BOOLEAN(TableHasPrimaryKey(table)));
 		// estimated_size, LogicalType::BIGINT
 		Value card_val =
-		    storage_info.cardinality == DConstants::INVALID_INDEX ? Value() : Value::BIGINT(storage_info.cardinality);
+		    !storage_info.cardinality.IsValid() ? Value() : Value::BIGINT(storage_info.cardinality.GetIndex());
 		output.SetValue(col++, count, card_val);
 		// column_count, LogicalType::BIGINT
 		output.SetValue(col++, count, Value::BIGINT(table.GetColumns().LogicalColumnCount()));

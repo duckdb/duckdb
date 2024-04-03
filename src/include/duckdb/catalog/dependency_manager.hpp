@@ -21,7 +21,6 @@
 namespace duckdb {
 class DuckCatalog;
 class ClientContext;
-class DependencyList;
 class DependencyEntry;
 class LogicalDependencyList;
 
@@ -53,7 +52,7 @@ public:
 
 struct MangledEntryName {
 public:
-	MangledEntryName(const CatalogEntryInfo &info);
+	explicit MangledEntryName(const CatalogEntryInfo &info);
 	MangledEntryName() = delete;
 
 public:

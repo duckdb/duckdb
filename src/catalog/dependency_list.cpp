@@ -53,7 +53,6 @@ LogicalDependency::LogicalDependency(CatalogEntry &entry) {
 		auto &dependency_entry = entry.Cast<DependencyEntry>();
 
 		this->entry = dependency_entry.EntryInfo();
-		// FIXME: do we also want to set 'catalog' here?
 	} else {
 		this->entry.schema = GetSchema(entry);
 		this->entry.name = entry.name;

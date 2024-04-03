@@ -81,6 +81,7 @@ jobs:
         elif [[ -z "${{ inputs.override_git_describe }}" ]]; then
             echo "No override_git_describe provided"
         else
+            echo "UPLOAD_ASSETS_TO_STAGING_TARGET=$(git describe --tags --long)" >> "$GITHUB_ENV"
             echo "override_git_describe ${{ inputs.override_git_describe }}: add tag"
             git tag ${{ inputs.override_git_describe }}
         fi
@@ -211,6 +212,7 @@ jobs:
         elif [[ -z "${{ inputs.override_git_describe }}" ]]; then
             echo "No override_git_describe provided"
         else
+            echo "UPLOAD_ASSETS_TO_STAGING_TARGET=$(git describe --tags --long)" >> "$GITHUB_ENV"
             echo "override_git_describe ${{ inputs.override_git_describe }}: add tag"
             git tag ${{ inputs.override_git_describe }}
         fi
@@ -300,6 +302,7 @@ jobs:
           elif [[ -z "${{ inputs.override_git_describe }}" ]]; then
               echo "No override_git_describe provided"
           else
+              echo "UPLOAD_ASSETS_TO_STAGING_TARGET=$(git describe --tags --long)" >> "$GITHUB_ENV"
               echo "override_git_describe ${{ inputs.override_git_describe }}: add tag"
               git tag ${{ inputs.override_git_describe }}
           fi
@@ -377,6 +380,7 @@ jobs:
           elif [[ -z "${{ inputs.override_git_describe }}" ]]; then
               echo "No override_git_describe provided"
           else
+              echo "UPLOAD_ASSETS_TO_STAGING_TARGET=$(git describe --tags --long)" >> "$GITHUB_ENV"
               echo "override_git_describe ${{ inputs.override_git_describe }}: add tag"
               git tag ${{ inputs.override_git_describe }}
           fi

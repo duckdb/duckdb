@@ -320,10 +320,10 @@ private:
 		};
 
 	public:
-		SegmentIterator begin() {
+		SegmentIterator begin() { // NOLINT: match stl API
 			return SegmentIterator(tree, tree.GetRootSegment());
 		}
-		SegmentIterator end() {
+		SegmentIterator end() { // NOLINT: match stl API
 			return SegmentIterator(tree, nullptr);
 		}
 	};
@@ -349,8 +349,8 @@ private:
 		if (!SUPPORTS_LAZY_LOADING) {
 			return;
 		}
-		while (LoadNextSegment(l))
-			;
+		while (LoadNextSegment(l)) {
+		}
 	}
 };
 

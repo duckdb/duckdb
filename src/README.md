@@ -13,7 +13,7 @@ The optimizer can be found in the [optimizer](https://github.com/duckdb/duckdb/t
 The execution layer can be found in the [execution](https://github.com/duckdb/duckdb/tree/main/src/execution) folder. The execution layer first takes the Logical Query Plan resulting from the `Optimizer` and converts it into a Physical Query Plan consisting of `PhysicalOperators`. The `PhysicalOperators` are then executed using a push-based execution model.
 
 # Catalog
-The catalog management can be found in the [catalog](https://github.com/duckdb/duckdb/tree/main/src/catalog) folder. The catalog keeps track of the the tables, schemas and functions that are contained in the database. The `Catalog` is used by the `Binder` in the planning phase to resolve symbols (e.g. "table_name") to the actual tables and columns that exist in the database.
+The catalog management can be found in the [catalog](https://github.com/duckdb/duckdb/tree/main/src/catalog) folder. The catalog keeps track of the tables, schemas and functions that are contained in the database. The `Catalog` is used by the `Binder` in the planning phase to resolve symbols (e.g. "table_name") to the actual tables and columns that exist in the database.
 
 # Storage
 The database storage component can be found in the [storage](https://github.com/duckdb/duckdb/tree/main/src/storage) folder. The storage component is responsible for managing the actual physical data, both as it resides in memory and as it resides on disk. The execution layer uses the storage component whenever it needs to access the base table data (e.g. perform a base table scan) or when it needs to update the information stored in the database (as part of e.g. an `INSERT` or `UPDATE` command).

@@ -57,17 +57,20 @@
 
 namespace duckdb {
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::default_connection = nullptr;
-DBInstanceCache instance_cache;
-shared_ptr<PythonImportCache> DuckDBPyConnection::import_cache = nullptr;
-PythonEnvironmentType DuckDBPyConnection::environment = PythonEnvironmentType::NORMAL;
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::default_connection = nullptr;       // NOLINT: allow global
+DBInstanceCache instance_cache;                                                        // NOLINT: allow global
+shared_ptr<PythonImportCache> DuckDBPyConnection::import_cache = nullptr;              // NOLINT: allow global
+PythonEnvironmentType DuckDBPyConnection::environment = PythonEnvironmentType::NORMAL; // NOLINT: allow global
 
 DuckDBPyConnection::~DuckDBPyConnection() {
-	py::gil_scoped_release gil;
-	// Release any structures that do not need to hold the GIL here
-	database.reset();
-	connection.reset();
-	temporary_views.clear();
+	try {
+		py::gil_scoped_release gil;
+		// Release any structures that do not need to hold the GIL here
+		database.reset();
+		connection.reset();
+		temporary_views.clear();
+	} catch (...) { // NOLINT
+	}
 }
 
 void DuckDBPyConnection::DetectEnvironment() {
@@ -1399,7 +1402,6 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(co
 
 static void CreateArrowScan(py::object entry, TableFunctionRef &table_function,
                             vector<unique_ptr<ParsedExpression>> &children, ClientProperties &client_properties) {
-	string name = "arrow_" + StringUtil::GenerateRandomName();
 	auto stream_factory = make_uniq<PythonTableArrowArrayStreamFactory>(entry.ptr(), client_properties);
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
@@ -1428,7 +1430,6 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 			auto table = ArrowTableFromDataframe(entry);
 			CreateArrowScan(table, *table_function, children, client_properties);
 		} else {
-			string name = "df_" + StringUtil::GenerateRandomName();
 			auto new_df = PandasScanFunction::PandasReplaceCopiedNames(entry);
 			children.push_back(make_uniq<ConstantExpression>(Value::POINTER(CastPointerToValue(new_df.ptr()))));
 			table_function->function = make_uniq<FunctionExpression>("pandas_scan", std::move(children));
@@ -1453,8 +1454,7 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 		auto materialized = entry.attr("collect")();
 		auto arrow_dataset = materialized.attr("to_arrow")();
 		CreateArrowScan(arrow_dataset, *table_function, children, client_properties);
-	} else if ((numpytype = DuckDBPyConnection::IsAcceptedNumpyObject(entry)) != NumpyObjectType::INVALID) {
-		string name = "np_" + StringUtil::GenerateRandomName();
+	} else if ((numpytype = DuckDBPyConnection::IsAcceptedNumpyObject(entry)) != NumpyObjectType::INVALID) { // NOLINT
 		py::dict data; // we will convert all the supported format to dict{"key": np.array(value)}.
 		size_t idx = 0;
 		switch (numpytype) {

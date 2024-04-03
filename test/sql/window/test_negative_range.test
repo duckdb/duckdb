@@ -1,0 +1,63 @@
+# name: test/sql/window/test_negative_range.test
+# description: Check that negative ranges trigger errors
+# group: [window]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE OR REPLACE TABLE issue10855(i INTEGER, v FLOAT);
+
+statement ok
+INSERT INTO issue10855 VALUES (0, 1), (1, 2), (2, 3),;
+
+# Ascending
+statement error
+SELECT i, v, sum(v) OVER (ORDER BY i RANGE BETWEEN 1 PRECEDING AND -1 FOLLOWING) 
+FROM issue10855
+----
+Out of Range Error: Invalid RANGE FOLLOWING value
+
+statement error
+SELECT i, v, sum(v) OVER (ORDER BY i RANGE BETWEEN -1 FOLLOWING AND 1 FOLLOWING) 
+FROM issue10855
+----
+Out of Range Error: Invalid RANGE FOLLOWING value
+
+statement error
+SELECT i, v, sum(v) OVER (ORDER BY i RANGE BETWEEN -1 PRECEDING AND 1 FOLLOWING) 
+FROM issue10855
+----
+Out of Range Error: Invalid RANGE PRECEDING value
+
+statement error
+SELECT i, v, sum(v) OVER (ORDER BY i RANGE BETWEEN 1 PRECEDING AND -1 PRECEDING) 
+FROM issue10855
+----
+Out of Range Error: Invalid RANGE PRECEDING value
+
+# Descending
+statement error
+SELECT i, v, sum(v) OVER (ORDER BY i DESC RANGE BETWEEN 1 PRECEDING AND -1 FOLLOWING) 
+FROM issue10855
+----
+Out of Range Error: Invalid RANGE FOLLOWING value
+
+statement error
+SELECT i, v, sum(v) OVER (ORDER BY i DESC RANGE BETWEEN -1 FOLLOWING AND 1 FOLLOWING) 
+FROM issue10855
+----
+Out of Range Error: Invalid RANGE FOLLOWING value
+
+statement error
+SELECT i, v, sum(v) OVER (ORDER BY i DESC RANGE BETWEEN -1 PRECEDING AND 1 FOLLOWING) 
+FROM issue10855
+----
+Out of Range Error: Invalid RANGE PRECEDING value
+
+statement error
+SELECT i, v, sum(v) OVER (ORDER BY i DESC RANGE BETWEEN 1 PRECEDING AND -1 PRECEDING) 
+FROM issue10855
+----
+Out of Range Error: Invalid RANGE PRECEDING value
+

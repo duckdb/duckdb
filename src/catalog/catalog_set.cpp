@@ -192,14 +192,14 @@ bool CatalogSet::CreateEntryInternal(CatalogTransaction transaction, const strin
 }
 
 bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name, unique_ptr<CatalogEntry> value,
-                             const LogicalDependencyList &logical_dependencies) {
+                             const LogicalDependencyList &dependencies) {
 	CheckCatalogEntryInvariants(*value, name);
 
 	// Set the timestamp to the timestamp of the current transaction
 	value->timestamp = transaction.transaction_id;
 	value->set = this;
 	// now add the dependency set of this object to the dependency manager
-	catalog.GetDependencyManager().AddObject(transaction, *value, logical_dependencies);
+	catalog.GetDependencyManager().AddObject(transaction, *value, dependencies);
 
 	// lock the catalog for writing
 	lock_guard<mutex> write_lock(catalog.GetWriteLock());

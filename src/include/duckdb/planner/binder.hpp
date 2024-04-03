@@ -61,6 +61,7 @@ struct CorrelatedColumnInfo {
 	string name;
 	idx_t depth;
 
+	// NOLINTNEXTLINE - work-around bug in clang-tidy
 	CorrelatedColumnInfo(ColumnBinding binding, LogicalType type_p, string name_p, idx_t depth)
 	    : binding(binding), type(std::move(type_p)), name(std::move(name_p)), depth(depth) {
 	}
@@ -140,8 +141,8 @@ public:
 
 	//! Add a common table expression to the binder
 	void AddCTE(const string &name, CommonTableExpressionInfo &cte);
-	//! Find a common table expression by name; returns nullptr if none exists
-	optional_ptr<CommonTableExpressionInfo> FindCTE(const string &name, bool skip = false);
+	//! Find all candidate common table expression by name; returns empty vector if none exists
+	vector<reference<CommonTableExpressionInfo>> FindCTE(const string &name, bool skip = false);
 
 	bool CTEIsAlreadyBound(CommonTableExpressionInfo &cte);
 

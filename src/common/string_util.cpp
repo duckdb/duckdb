@@ -173,7 +173,6 @@ string StringUtil::Join(const set<string> &input, const string &separator) {
 
 string StringUtil::BytesToHumanReadableString(idx_t bytes, idx_t multiplier) {
 	D_ASSERT(multiplier == 1000 || multiplier == 1024);
-	string db_size;
 	idx_t array[6] = {};
 	const char *unit[2][6] = {{"bytes", "KiB", "MiB", "GiB", "TiB", "PiB"}, {"bytes", "kB", "MB", "GB", "TB", "PB"}};
 
@@ -230,7 +229,7 @@ bool StringUtil::CIEquals(const string &l1, const string &l2) {
 	if (l1.size() != l2.size()) {
 		return false;
 	}
-	const auto charmap = LowerFun::ascii_to_lower_map;
+	const auto charmap = LowerFun::ASCII_TO_LOWER_MAP;
 	for (idx_t c = 0; c < l1.size(); c++) {
 		if (charmap[(uint8_t)l1[c]] != charmap[(uint8_t)l2[c]]) {
 			return false;
@@ -240,7 +239,7 @@ bool StringUtil::CIEquals(const string &l1, const string &l2) {
 }
 
 bool StringUtil::CILessThan(const string &s1, const string &s2) {
-	const auto charmap = UpperFun::ascii_to_upper_map;
+	const auto charmap = UpperFun::ASCII_TO_UPPER_MAP;
 
 	unsigned char u1, u2;
 

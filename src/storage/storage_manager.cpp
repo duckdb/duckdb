@@ -83,14 +83,14 @@ bool StorageManager::InMemory() {
 	return path == IN_MEMORY_PATH;
 }
 
-void StorageManager::Initialize() {
+void StorageManager::Initialize(optional_ptr<ClientContext> context) {
 	bool in_memory = InMemory();
 	if (in_memory && read_only) {
 		throw CatalogException("Cannot launch in-memory database in read-only mode!");
 	}
 
 	// create or load the database from disk, if not in-memory mode
-	LoadDatabase();
+	LoadDatabase(context);
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -117,7 +117,7 @@ SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string 
     : StorageManager(db, std::move(path), read_only) {
 }
 
-void SingleFileStorageManager::LoadDatabase() {
+void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context) {
 	if (InMemory()) {
 		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db));
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager);
@@ -167,7 +167,7 @@ void SingleFileStorageManager::LoadDatabase() {
 
 		// load the db from storage
 		auto checkpoint_reader = SingleFileCheckpointReader(*this);
-		checkpoint_reader.LoadFromStorage();
+		checkpoint_reader.LoadFromStorage(context);
 
 		// check if the WAL file exists
 		auto wal_path = GetWALPath();

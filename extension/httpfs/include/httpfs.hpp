@@ -127,7 +127,7 @@ public:
 	void FileSync(FileHandle &handle) override;
 	int64_t GetFileSize(FileHandle &handle) override;
 	time_t GetLastModifiedTime(FileHandle &handle) override;
-	bool FileExists(const string &filename) override;
+	bool FileExists(const string &filename, optional_ptr<FileOpener> opener) override;
 	void Seek(FileHandle &handle, idx_t location) override;
 	idx_t SeekPosition(FileHandle &handle) override;
 	bool CanHandleFile(const string &fpath) override;
@@ -137,7 +137,7 @@ public:
 	bool OnDiskFile(FileHandle &handle) override {
 		return false;
 	}
-	bool IsPipe(const string &filename) override {
+	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener) override {
 		return false;
 	}
 	string GetName() const override {
@@ -148,12 +148,16 @@ public:
 	}
 	static void Verify();
 
-	// Global cache
-	duckdb::unique_ptr<HTTPMetadataCache> global_metadata_cache;
+	optional_ptr<HTTPMetadataCache> GetGlobalCache();
 
 protected:
 	virtual duckdb::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, FileOpenFlags flags,
 	                                                        optional_ptr<FileOpener> opener);
+
+private:
+	// Global cache
+	mutex global_cache_lock;
+	duckdb::unique_ptr<HTTPMetadataCache> global_metadata_cache;
 };
 
 } // namespace duckdb

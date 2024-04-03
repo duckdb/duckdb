@@ -60,11 +60,13 @@ public:
 
 	void Reset();
 	bool RequestedReadsComplete();
+	bool LastReadRequested() const;
 
 	idx_t FileSize() const;
 	idx_t Remaining() const;
 
 	bool CanSeek() const;
+	bool IsPipe() const;
 
 	FileHandle &GetHandle();
 

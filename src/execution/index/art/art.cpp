@@ -133,13 +133,13 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Transaction &transaction
 	// match on a comparison type
 	matcher.expr_type = make_uniq<ComparisonExpressionTypeMatcher>();
 	// match on a constant comparison with the indexed expression
-	matcher.matchers.push_back(make_uniq<ExpressionEqualityMatcher>(const_cast<Expression &>(index_expr)));
+	matcher.matchers.push_back(make_uniq<ExpressionEqualityMatcher>(index_expr));
 	matcher.matchers.push_back(make_uniq<ConstantExpressionMatcher>());
 
 	matcher.policy = SetMatcher::Policy::UNORDERED;
 
 	vector<reference<Expression>> bindings;
-	if (matcher.Match(const_cast<Expression &>(filter_expr), bindings)) {
+	if (matcher.Match(const_cast<Expression &>(filter_expr), bindings)) { // NOLINT: Match does not alter the expr
 		// range or equality comparison with constant value
 		// we can use our index here
 		// bindings[0] = the expression
