@@ -183,7 +183,8 @@ static MultiFileReaderBindData BindSchema(ClientContext &context, vector<Logical
 	}
 
 	// perform the binding on the obtained set of names + types
-	auto bind_data = result.multi_file_reader->BindOptions(options.file_options, *result.files, schema_col_types, schema_col_names);
+    MultiFileReaderBindData bind_data;
+	result.multi_file_reader->BindOptions(options.file_options, *result.files, schema_col_types, schema_col_names, bind_data);
 
 	names = schema_col_names;
 	return_types = schema_col_types;
@@ -428,20 +429,26 @@ public:
 		auto result = make_uniq<ParquetReadBindData>();
 		result->multi_file_reader = std::move(multi_file_reader);
 		result->files = result->multi_file_reader->GetFileList(context, files, "Parquet");
-		if (parquet_options.schema.empty()) {
 
-			result->reader_bind = MultiFileReader::BindReader<ParquetReader>(
-			    context,
-			    *result->multi_file_reader,
-			    result->types,
-			    result->names,
-			    *result->files,
-			    *result,
-			    parquet_options);
-		} else {
-			// a schema was supplied
-			result->reader_bind = BindSchema(context, result->types, result->names, *result, parquet_options);
-		}
+        // Firstly, we try to use the multifilereader to bind
+        MultiFileReaderBindData bind_data;
+        auto bound = result->multi_file_reader->Bind(parquet_options.file_options, *result->files, result->types, result->names, result->reader_bind);
+
+        if (!bound) {
+            if (parquet_options.schema.empty()) {
+                result->reader_bind = MultiFileReader::BindReader<ParquetReader>(
+                        context,
+                        *result->multi_file_reader,
+                        result->types,
+                        result->names,
+                        *result->files,
+                        *result,
+                        parquet_options);
+            } else {
+                // a schema was supplied
+                result->reader_bind = BindSchema(context, result->types, result->names, *result, parquet_options);
+            }
+        }
 
 		if (return_types.empty()) {
 			// no expected types - just copy the types
@@ -660,9 +667,10 @@ public:
 	static idx_t ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = bind_data->Cast<ParquetReadBindData>();
 
-		if (!data.files->GetFile(1).empty()) {
+		if (!data.files->GetFile(0).empty() && !data.files->GetFile(1).empty()) {
 			return TaskScheduler::GetScheduler(context).NumberOfThreads();
 		}
+
 		return MaxValue(data.initial_file_row_groups, (idx_t)1);
 	}
 
@@ -742,9 +750,12 @@ public:
 		auto reset_reader = data.multi_file_reader->ComplexFilterPushdown(context, *data.files,
 		                                                           data.parquet_options.file_options, get, filters);
 		if (reset_reader) {
-			// TODO clean this up!
-			vector<string> files = data.files->GetRawList();
-			MultiFileReader::PruneReaders(data, files);
+
+            if (!data.union_readers.empty()) { // TODO this if is just for testing
+                // TODO clean this up!
+                vector<string> files = data.files->GetRawList();
+                MultiFileReader::PruneReaders(data, files);
+            }
 		}
 	}
 

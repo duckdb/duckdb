@@ -22,11 +22,11 @@ bool MultiFileList::ComplexFilterPushdown(ClientContext &context, const MultiFil
     return false;
 }
 
-vector<string> MultiFileList::GetRawList() const {
+vector<string> MultiFileList::GetRawList() {
 	vector<string> result;
 	idx_t i = 0;
 	while(true) {
-		auto next_file = GetFile(i);
+		auto next_file = GetFile(i++);
 
 		if (next_file.empty()) {
 			break;
@@ -40,11 +40,11 @@ vector<string> MultiFileList::GetRawList() const {
 SimpleMultiFileList::SimpleMultiFileList(vector<string> files) : files(files) {
 }
 
-vector<string> SimpleMultiFileList::GetRawList() const {
+vector<string> SimpleMultiFileList::GetRawList() {
     return files;
 }
 
-string SimpleMultiFileList::GetFile(idx_t i) const {
+string SimpleMultiFileList::GetFile(idx_t i) {
     if (files.size() <= i) {
 		return "";
 	}
@@ -175,9 +175,13 @@ bool MultiFileReader::ComplexFilterPushdown(ClientContext &context, MultiFileLis
 	return files.ComplexFilterPushdown(context, options, get, filters);
 }
 
-MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &options, const MultiFileList& files,
-                                                     vector<LogicalType> &return_types, vector<string> &names) {
-	MultiFileReaderBindData bind_data;
+bool MultiFileReader::Bind(MultiFileReaderOptions &options, MultiFileList &files,
+          vector<LogicalType> &return_types, vector<string> &names, MultiFileReaderBindData &bind_data) {
+    return false;
+}
+
+void MultiFileReader::BindOptions(MultiFileReaderOptions &options, MultiFileList& files,
+                                                     vector<LogicalType> &return_types, vector<string> &names, MultiFileReaderBindData& bind_data) {
 	// Add generated constant column for filename
 	if (options.filename) {
 		if (std::find(names.begin(), names.end(), "filename") != names.end()) {
@@ -237,7 +241,6 @@ MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &opt
 			bind_data.hive_partitioning_indexes.emplace_back(part.first, hive_partitioning_index);
 		}
 	}
-	return bind_data;
 }
 
 void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, const MultiFileReaderBindData &options,

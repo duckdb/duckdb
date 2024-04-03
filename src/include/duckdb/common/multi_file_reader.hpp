@@ -60,6 +60,7 @@ protected:
 
 //! The bind data for the multi-file reader, obtained through MultiFileReader::BindReader
 struct MultiFileReaderBindData {
+    bool overridden_bind = false;
 	//! The index of the filename column (if any)
 	idx_t filename_idx = DConstants::INVALID_INDEX;
 	//! The set of hive partitioning indexes (if any)
@@ -113,9 +114,9 @@ struct MultiFileList {
 	virtual ~MultiFileList();
 	//! Get the file at index i
 	//! TODO: should I refactor the interface to reflect the fact that you should sequentially fetch them?
-	virtual string GetFile(idx_t i) const = 0;
+	virtual string GetFile(idx_t i) = 0;
 	//! Get the whole list (Warning: this potentially returns more files that necessary if called before ComplexFilterPushdown)
-	virtual vector<string> GetRawList() const;
+	virtual vector<string> GetRawList();
 	//! (optional) Push down filters into the MultiFileList; sometimes the filters can be used to skip files completely
 	virtual bool ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
 	                                             vector<unique_ptr<Expression>> &filters);
@@ -125,8 +126,8 @@ struct MultiFileList {
 struct SimpleMultiFileList : public MultiFileList {
 	SimpleMultiFileList(vector<string> files);
 	//! TODO: remove as many of the GetRawList as possible
-	vector<string> GetRawList() const override;
-	string GetFile(idx_t i) const override;
+	vector<string> GetRawList() override;
+	string GetFile(idx_t i) override;
 	bool ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
 	                                   vector<unique_ptr<Expression>> &filters) override;
 protected:
@@ -148,9 +149,12 @@ struct MultiFileReader {
 	DUCKDB_API virtual bool ComplexFilterPushdown(ClientContext &context, MultiFileList &files,
 	                                             const MultiFileReaderOptions &options, LogicalGet &get,
 	                                             vector<unique_ptr<Expression>> &filters);
+    //! Tries to use the MultiFileReader for binding. This method can be overridden by custom MultiFileReaders
+    DUCKDB_API virtual bool Bind(MultiFileReaderOptions &options, MultiFileList &files,
+                                                           vector<LogicalType> &return_types, vector<string> &names, MultiFileReaderBindData &bind_data);
 	//! Bind the options of the multi-file reader, potentially emitting any extra columns that are required
-	DUCKDB_API virtual MultiFileReaderBindData BindOptions(MultiFileReaderOptions &options, const MultiFileList &files,
-	                                                      vector<LogicalType> &return_types, vector<string> &names);
+	DUCKDB_API virtual void BindOptions(MultiFileReaderOptions &options, MultiFileList &files,
+	                                                      vector<LogicalType> &return_types, vector<string> &names, MultiFileReaderBindData& bind_data);
 	//! Finalize the bind phase of the multi-file reader after we know (1) the required (output) columns, and (2) the
 	//! pushed down table filters
 	DUCKDB_API virtual void FinalizeBind(const MultiFileReaderOptions &file_options,
@@ -191,7 +195,8 @@ struct MultiFileReader {
 		std::move(union_readers.begin(), union_readers.end(), std::back_inserter(result.union_readers));
 		// perform the binding on the obtained set of names + types
 		SimpleMultiFileList simple_multi_file_list(files); // TODO: this is a bit wonky now
-		auto bind_data = multi_file_reader.BindOptions(options.file_options, simple_multi_file_list, union_col_types, union_col_names);
+        MultiFileReaderBindData bind_data;
+		multi_file_reader.BindOptions(options.file_options, simple_multi_file_list, union_col_types, union_col_names, bind_data);
 		names = union_col_names;
 		return_types = union_col_types;
 		result.Initialize(result.union_readers[0]);
@@ -213,7 +218,9 @@ struct MultiFileReader {
 			return_types = reader->return_types;
 			names = reader->names;
 			result.Initialize(std::move(reader));
-			return multi_file_reader.BindOptions(options.file_options, files, return_types, names);
+            MultiFileReaderBindData bind_data;
+			multi_file_reader.BindOptions(options.file_options, files, return_types, names, bind_data);
+            return bind_data;
 		}
 	}
 

@@ -141,7 +141,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	} else {
 		result->csv_types = return_types;
 		result->csv_names = names;
-		result->reader_bind = result->multi_file_reader->BindOptions(options.file_options, *mfl, return_types, names);
+        result->multi_file_reader->BindOptions(options.file_options, *mfl, return_types, names, result->reader_bind);
 	}
 	result->return_types = return_types;
 	result->return_names = names;
