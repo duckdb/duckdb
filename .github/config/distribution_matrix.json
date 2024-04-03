@@ -32,18 +32,6 @@
       }
     ]
   },
-  "windows": {
-    "include": [
-      {
-        "duckdb_arch": "windows_amd64",
-        "vcpkg_triplet": "x64-windows-static-md"
-      },
-      {
-        "duckdb_arch": "windows_amd64_rtools",
-        "vcpkg_triplet": "x64-mingw-static"
-      }
-    ]
-  },
   "wasm": {
     "include": [
       {
