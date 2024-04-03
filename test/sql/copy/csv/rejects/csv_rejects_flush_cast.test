@@ -11,32 +11,16 @@ query III
 SELECT typeof(first(a)), typeof(first(b)), COUNT(*) FROM read_csv(
     'data/csv/error/flush_cast.csv',
     columns = {'a': 'DATE', 'b': 'VARCHAR'},
-    rejects_table='csv_rejects_table',
+    store_rejects = true,
     delim = ',',
-    dateformat = '%d-%m-%Y',
-    ignore_errors=true);
+    dateformat = '%d-%m-%Y');
 ----
 DATE	VARCHAR	2811
 
-
-query IIIIIII rowsort
-SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
-FROM csv_rejects_table order by all;
+query IIIIIIIIII
+SELECT *
+FROM reject_errors order by all;
 ----
-data/csv/error/flush_cast.csv	2813	1	"a"	CAST	c, bla	44971
-data/csv/error/flush_cast.csv	439	1	"a"	CAST	B, bla	6996
+3	0	439	6997	NULL	1	a	CAST	B, bla	Error when converting column "a". Could not parse string "B" according to format specifier "%d-%m-%Y"
+3	0	2813	44972	NULL	1	a	CAST	c, bla	Error when converting column "a". Could not parse string "c" according to format specifier "%d-%m-%Y"
 
-query I
-SELECT error_message
-FROM csv_rejects_table where byte_position = 6996;
-----
-<REGEX>:.*Could not parse string "B" according to format specifier "%d-%m-%Y".*
-
-query I
-SELECT error_message
-FROM csv_rejects_table where byte_position = 44971;
-----
-<REGEX>:.*Could not parse string "c" according to format specifier "%d-%m-%Y".*
-
-statement ok
-DROP TABLE csv_rejects_table;

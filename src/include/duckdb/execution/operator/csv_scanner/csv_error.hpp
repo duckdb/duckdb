@@ -83,6 +83,9 @@ public:
 		return error_info.boundary_idx;
 	}
 
+	//! We might want to remove newline in errors if we are doing them for the rejects tables
+	void RemoveNewLine(string &error);
+
 	//! Actual error message
 	string error_message;
 	//! Full error message used in throws
