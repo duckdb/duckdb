@@ -55,6 +55,7 @@ static bool SkipToClose(idx_t &idx, const char *buf, idx_t &len, idx_t &lvl, cha
 			if (buf[idx] == ']') {
 				lvl--;
 			}
+			brackets.pop_back();
 			if (brackets.empty()) {
 				return true;
 			}
