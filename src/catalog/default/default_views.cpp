@@ -12,7 +12,7 @@ struct DefaultView {
 	const char *sql;
 };
 
-static DefaultView internal_views[] = {
+static const DefaultView internal_views[] = {
     {DEFAULT_SCHEMA, "pragma_database_list", "SELECT database_oid AS seq, database_name AS name, path AS file FROM duckdb_databases() WHERE NOT internal ORDER BY 1"},
     {DEFAULT_SCHEMA, "sqlite_master", "select 'table' \"type\", table_name \"name\", table_name \"tbl_name\", 0 rootpage, sql from duckdb_tables union all select 'view' \"type\", view_name \"name\", view_name \"tbl_name\", 0 rootpage, sql from duckdb_views union all select 'index' \"type\", index_name \"name\", table_name \"tbl_name\", 0 rootpage, sql from duckdb_indexes;"},
     {DEFAULT_SCHEMA, "sqlite_schema", "SELECT * FROM sqlite_master"},

@@ -2764,7 +2764,7 @@ public class TestDuckDBJDBC {
     }
 
     private static String blob_to_string(Blob b) throws SQLException {
-        return new String(b.getBytes(0, (int) b.length()), StandardCharsets.US_ASCII);
+        return new String(b.getBytes(1, (int) b.length()), StandardCharsets.US_ASCII);
     }
 
     public static void test_blob_bug1090() throws Exception {
