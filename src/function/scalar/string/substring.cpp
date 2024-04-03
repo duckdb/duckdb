@@ -40,7 +40,7 @@ string_t SubstringEmptyString(Vector &result) {
 }
 
 string_t SubstringSlice(Vector &result, const char *input_data, int64_t offset, int64_t length) {
-	auto result_string = StringVector::EmptyString(result, length);
+	auto result_string = StringVector::EmptyString(result, UnsafeNumericCast<idx_t>(length));
 	auto result_data = result_string.GetDataWriteable();
 	memcpy(result_data, input_data + offset, length);
 	result_string.Finalize();
