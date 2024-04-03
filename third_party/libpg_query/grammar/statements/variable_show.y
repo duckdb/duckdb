@@ -56,6 +56,13 @@ VariableShowStmt:
 				n->is_summary = 0;
 				$$ = (PGNode *) n;
 			}
+        | show_or_describe PROPERTY GRAPH ColId
+            {
+				PGVariableShowStmt *n = makeNode(PGVariableShowStmt);
+				n->name = $4;
+				n->is_summary = 0;
+				$$ = (PGNode *) n;
+            }
 		;
 
 describe_or_desc: DESCRIBE | DESC_P
