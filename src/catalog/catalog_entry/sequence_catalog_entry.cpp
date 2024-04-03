@@ -13,6 +13,9 @@
 
 namespace duckdb {
 
+// NOTE: usage_count is explicitly set to 0,
+// if the sequence was serialized to disk the start_value
+// was updated to the value of the last_value before serializing, keeping the state of the sequence.
 SequenceData::SequenceData(CreateSequenceInfo &info)
     : usage_count(0), counter(info.start_value), last_value(info.start_value), increment(info.increment),
       start_value(info.start_value), min_value(info.min_value), max_value(info.max_value), cycle(info.cycle) {
