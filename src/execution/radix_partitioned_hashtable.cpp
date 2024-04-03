@@ -6,6 +6,7 @@
 #include "duckdb/common/types/row/tuple_data_iterator.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/executor.hpp"
+#include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parallel/event.hpp"
@@ -192,7 +193,7 @@ RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context_p, const R
 	auto num_partitions = RadixPartitioning::NumberOfPartitions(config.GetRadixBits());
 	auto count_per_partition = ht_count / num_partitions;
 	auto blocks_per_partition = (count_per_partition + tuples_per_block) / tuples_per_block + 1;
-	auto ht_size = blocks_per_partition * Storage::BLOCK_ALLOC_SIZE + config.sink_capacity * sizeof(aggr_ht_entry_t);
+	auto ht_size = blocks_per_partition * Storage::BLOCK_ALLOC_SIZE + config.sink_capacity * sizeof(ht_entry_t);
 
 	// This really is the minimum reservation that we can do
 	idx_t num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
@@ -295,7 +296,7 @@ idx_t RadixHTConfig::SinkCapacity(ClientContext &context) {
 	const auto cache_per_active_thread = L1_CACHE_SIZE + L2_CACHE_SIZE + total_shared_cache_size / active_threads;
 
 	// Divide cache per active thread by entry size, round up to next power of two, to get capacity
-	const auto size_per_entry = sizeof(aggr_ht_entry_t) * GroupedAggregateHashTable::LOAD_FACTOR;
+	const auto size_per_entry = sizeof(ht_entry_t) * GroupedAggregateHashTable::LOAD_FACTOR;
 	const auto capacity = NextPowerOfTwo(cache_per_active_thread / size_per_entry);
 
 	// Capacity must be at least the minimum capacity
@@ -355,7 +356,7 @@ bool MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 
 	// Check if we're approaching the memory limit
 	auto &temporary_memory_state = *gstate.temporary_memory_state;
-	const auto total_size = partitioned_data->SizeInBytes() + ht.Capacity() * sizeof(aggr_ht_entry_t);
+	const auto total_size = partitioned_data->SizeInBytes() + ht.Capacity() * sizeof(ht_entry_t);
 	idx_t thread_limit = temporary_memory_state.GetReservation() / active_threads;
 	if (total_size > thread_limit) {
 		// We're over the thread memory limit
@@ -511,7 +512,7 @@ void RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 			auto &partition = uncombined_partition_data[i];
 			auto partition_size =
 			    partition->SizeInBytes() +
-			    GroupedAggregateHashTable::GetCapacityForCount(partition->Count()) * sizeof(aggr_ht_entry_t);
+			    GroupedAggregateHashTable::GetCapacityForCount(partition->Count()) * sizeof(ht_entry_t);
 			gstate.max_partition_size = MaxValue(gstate.max_partition_size, partition_size);
 
 			gstate.partitions.emplace_back(make_uniq<AggregatePartition>(std::move(partition)));
@@ -731,7 +732,7 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 		const idx_t thread_limit = 0.6 * memory_limit / n_threads;
 
 		const idx_t size_per_entry = partition.data->SizeInBytes() / partition.data->Count() +
-		                             idx_t(GroupedAggregateHashTable::LOAD_FACTOR * sizeof(aggr_ht_entry_t));
+		                             idx_t(GroupedAggregateHashTable::LOAD_FACTOR * sizeof(ht_entry_t));
 		const auto capacity_limit = NextPowerOfTwo(thread_limit / size_per_entry);
 
 		ht = sink.radix_ht.CreateHT(gstate.context, MinValue<idx_t>(capacity, capacity_limit), 0);

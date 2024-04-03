@@ -17,6 +17,7 @@
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
+#include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/storage/storage_info.hpp"
 
@@ -224,7 +225,7 @@ public:
 	//! If there is more than one element in the chain, we need to scan the next elements of the chain
 	bool chains_longer_than_one;
 
-	//! The capacity of the HT. Is the same as hash_map.GetSize() / sizeof(aggr_ht_entry_t)
+	//! The capacity of the HT. Is the same as hash_map.GetSize() / sizeof(ht_entry_t)
 	idx_t capacity;
 	//! The size of an entry as stored in the HashTable
 	idx_t entry_size;
@@ -290,7 +291,7 @@ private:
 
 	//! The hash map of the HT, created after finalization
 	AllocatedData hash_map;
-	aggr_ht_entry_t *entries;
+	ht_entry_t *entries;
 	//! Whether or not NULL values are considered equal in each of the comparisons
 	vector<bool> null_values_are_equal;
 
