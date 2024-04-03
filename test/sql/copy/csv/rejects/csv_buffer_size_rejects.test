@@ -7,7 +7,7 @@ require skip_reload
 # Test will fail on windows because byte_position is slightly different due to \r\n instead of \n
 require notwindows
 
-loop buffer_size 5 10
+loop buffer_size 5 8
 
 # Ensure that we can get the schema if we reduce the sample size and ignore errors
 query IIIII
@@ -15,45 +15,29 @@ SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), M
     'test/sql/copy/csv/data/error/mismatch/big_bad*.csv',
     sample_size=1,
     buffer_size=${buffer_size},
-    rejects_table='csv_rejects_table',
-    ignore_errors=true);
+    store_rejects = true);
 ----
 BIGINT	VARCHAR	11044	11044	2
 
-query IIIIII rowsort
-SELECT regexp_replace(file, '\\', '/', 'g'), column_idx, column_name, error_type, csv_line, byte_position
-FROM csv_rejects_table;
+query IIIIIIIIIII rowsort
+SELECT * EXCLUDE (scan_id, user_arguments) FROM reject_scans order by all;
 ----
-test/sql/copy/csv/data/error/mismatch/big_bad.csv	1	"column0"	CAST	B, A	10875
-test/sql/copy/csv/data/error/mismatch/big_bad.csv	1	"column0"	CAST	C, A	20875
-test/sql/copy/csv/data/error/mismatch/big_bad2.csv	1	"column0"	CAST	B, A	18395
-test/sql/copy/csv/data/error/mismatch/big_bad2.csv	1	"column0"	CAST	C, A	28395
+0	test/sql/copy/csv/data/error/mismatch/big_bad.csv	,	\0	\0	\n	0	false	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL
+1	test/sql/copy/csv/data/error/mismatch/big_bad2.csv	,	\0	\0	\n	0	false	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL
 
-query I
-SELECT error_message
-FROM csv_rejects_table where byte_position = 10875;
-----
-<REGEX>:.*Could not convert string "B" to 'BIGINT'.*
 
-query I
-SELECT error_message
-FROM csv_rejects_table where byte_position = 20875;
+query IIIIIIIII rowsort
+SELECT * EXCLUDE (scan_id) FROM reject_errors order by all;
 ----
-<REGEX>:.*Could not convert string "C" to 'BIGINT'.*
-
-query I
-SELECT error_message
-FROM csv_rejects_table where  byte_position = 18395;
-----
-<REGEX>:.*Could not convert string "B" to 'BIGINT'.*
-
-query I
-SELECT error_message
-FROM csv_rejects_table where byte_position = 28395;
-----
-<REGEX>:.*Could not convert string "C" to 'BIGINT'.*
+0	2176	10876	10876	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
+0	4176	20876	20876	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
+1	3680	18396	18396	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
+1	5680	28396	28396	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
 
 statement ok
-DROP TABLE csv_rejects_table;
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
 
 endloop

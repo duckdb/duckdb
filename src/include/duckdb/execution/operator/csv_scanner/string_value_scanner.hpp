@@ -42,7 +42,12 @@ public:
 		}
 		return other.buffer_size - other.buffer_pos + buffer_pos;
 	}
-	idx_t GetGlobalPosition(idx_t requested_buffer_size, bool first_char_nl) {
+
+	bool operator==(const LinePosition &other) const {
+		return buffer_pos == other.buffer_pos && buffer_idx == other.buffer_idx && buffer_size == other.buffer_size;
+	}
+
+	idx_t GetGlobalPosition(idx_t requested_buffer_size, bool first_char_nl = false) {
 		return requested_buffer_size * buffer_idx + buffer_pos + first_char_nl;
 	}
 	idx_t buffer_pos = 0;

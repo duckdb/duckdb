@@ -279,7 +279,7 @@ void CSVGlobalState::FillRejectsTable() {
 							// a null
 							errors_appender.Append(Value());
 						} else {
-							errors_appender.Append(error.byte_position);
+							errors_appender.Append(error.byte_position + 1);
 						}
 						// 6. Column Index
 						errors_appender.Append(col_idx + 1);

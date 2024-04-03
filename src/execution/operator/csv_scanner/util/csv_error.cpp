@@ -89,7 +89,7 @@ CSVError::CSVError(string error_message_p, CSVErrorType type_p, idx_t column_idx
       error_info(error_info_p), row_byte_position(row_byte_position), byte_position(byte_position_p) {
 	// What were the options
 	std::ostringstream error;
-	if (reader_options.ignore_errors.GetValue()){
+	if (reader_options.ignore_errors.GetValue()) {
 		RemoveNewLine(error_message);
 	}
 	error << error_message << '\n';
@@ -119,7 +119,7 @@ CSVError CSVError::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_
 	return CSVError(exception, CSVErrorType::COLUMN_NAME_TYPE_MISMATCH, {});
 }
 
-void CSVError::RemoveNewLine(string &error){
+void CSVError::RemoveNewLine(string &error) {
 	error = StringUtil::Split(error, "\n")[0];
 }
 
