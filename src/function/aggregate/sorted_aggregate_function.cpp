@@ -538,7 +538,7 @@ struct SortedAggregateFunction {
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input_data) {
 		auto &order_bind = aggr_input_data.bind_data->Cast<SortedAggregateBindData>();
-		auto &other = const_cast<STATE &>(source);
+		auto &other = const_cast<STATE &>(source); // NOLINT: absorb explicitly allows destruction
 		target.Absorb(order_bind, other);
 	}
 

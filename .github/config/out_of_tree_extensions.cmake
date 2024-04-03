@@ -4,6 +4,16 @@
 # to build duckdb with this configuration run:
 #   EXTENSION_CONFIGS=.github/config/out_of_tree_extensions.cmake make
 #
+#  Note that many of these packages require vcpkg, and a merged manifest must be created to
+#  compile multiple of them.
+#
+#  After setting up vcpkg, build using e.g. the following commands:
+#  USE_MERGED_VCPKG_MANIFEST=1 BUILD_ALL_EXT=1 make extension_configuration
+#  USE_MERGED_VCPKG_MANIFEST=1 BUILD_ALL_EXT=1 make debug
+#
+#  Make sure the VCPKG_TOOLCHAIN_PATH and VCPKG_TARGET_TRIPLET are set. For example:
+#  VCPKG_TOOLCHAIN_PATH=~/vcpkg/scripts/buildsystems/vcpkg.cmake
+#  VCPKG_TARGET_TRIPLET=arm64-osx
 
 ################# ARROW
 if (NOT WIN32)
@@ -28,7 +38,8 @@ if (NOT MINGW)
     duckdb_extension_load(azure
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_azure
-            GIT_TAG 86f39d76157de970d16d6d6537bc90c0ee1c7d35
+            GIT_TAG 6620a32454c1eb2e455104d87262061d2464aad0
+            APPLY_PATCHES
             )
 endif()
 
@@ -45,6 +56,7 @@ if (NOT MINGW)
             ${LOAD_ICEBERG_TESTS}
             GIT_URL https://github.com/duckdb/duckdb_iceberg
             GIT_TAG 7aa3d8e4cb7b513d35fdacfa28dc328771bc4047
+            APPLY_PATCHES
             )
 endif()
 
@@ -60,15 +72,14 @@ if (NOT MINGW)
 endif()
 
 ################# SPATIAL
-if (NOT MINGW)
-    duckdb_extension_load(spatial
-            DONT_LINK LOAD_TESTS
-            GIT_URL https://github.com/duckdb/duckdb_spatial.git
-            GIT_TAG 05c4ba01c500140287bf6946fb6910122e5c2acf
-            INCLUDE_DIR spatial/include
-            TEST_DIR test/sql
-            )
-endif()
+duckdb_extension_load(spatial
+    DONT_LINK LOAD_TESTS
+    GIT_URL https://github.com/duckdb/duckdb_spatial.git
+    GIT_TAG 05c4ba01c500140287bf6946fb6910122e5c2acf
+    INCLUDE_DIR spatial/include
+    TEST_DIR test/sql
+    APPLY_PATCHES
+    )
 
 ################# SQLITE_SCANNER
 # Static linking on windows does not properly work due to symbol collision

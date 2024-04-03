@@ -467,10 +467,17 @@ void utf8_printf(FILE *out, const char *zFormat, ...){
   va_start(ap, zFormat);
   if( stdout_is_console && (out==stdout || out==stderr) ){
     char *z1 = sqlite3_vmprintf(zFormat, ap);
-    char *z2 = sqlite3_win32_utf8_to_mbcs_v2(z1, 0);
+	if (SetConsoleOutputCP(CP_UTF8)) {
+		// we can write UTF8 directly
+        fputs(z1, out);
+	} else {
+        // failed to set code page
+        // fallback to writing old style windows unicode
+        char *z2 = sqlite3_win32_utf8_to_mbcs_v2(z1, 0);
+        fputs(z2, out);
+        sqlite3_free(z2);
+	}
     sqlite3_free(z1);
-    fputs(z2, out);
-    sqlite3_free(z2);
   }else{
     vfprintf(out, zFormat, ap);
   }
@@ -678,6 +685,15 @@ static char *local_getline(char *zLine, FILE *in){
   int nLine = zLine==0 ? 0 : 100;
   int n = 0;
 
+#if defined(_WIN32) || defined(WIN32)
+  int is_stdin = stdin_is_interactive && in==stdin;
+  int is_utf8 = 0;
+  if (is_stdin) {
+      if (SetConsoleCP(CP_UTF8)) {
+          is_utf8 = 1;
+      }
+  }
+#endif
   while( 1 ){
     if( n+100>nLine ){
       nLine = nLine*2 + 100;
@@ -703,7 +719,7 @@ static char *local_getline(char *zLine, FILE *in){
 #if defined(_WIN32) || defined(WIN32)
   /* For interactive input on Windows systems, translate the
   ** multi-byte characterset characters into UTF-8. */
-  if( stdin_is_interactive && in==stdin ){
+  if(is_stdin && !is_utf8){
     char *zTrans = sqlite3_win32_mbcs_to_utf8_v2(zLine, 0);
     if( zTrans ){
       int nTrans = strlen30(zTrans)+1;
@@ -13587,11 +13603,13 @@ static const char *(azHelp[]) = {
   ".changes on|off          Show number of rows changed by SQL",
   ".check GLOB              Fail if output since .testcase does not match",
   ".columns                 Column-wise rendering of query results",
+#ifdef HAVE_LINENOISE
   ".constant ?COLOR?        Sets the syntax highlighting color used for constant values",
   "   COLOR is one of:",
   "     red|green|yellow|blue|magenta|cyan|white|brightblack|brightred|brightgreen",
   "     brightyellow|brightblue|brightmagenta|brightcyan|brightwhite",
   ".constantcode ?CODE?     Sets the syntax highlighting terminal code used for constant values",
+#endif
   ".databases               List names and files of attached databases",
   ".dump ?TABLE?            Render database content as SQL",
   "   Options:",
@@ -13608,12 +13626,22 @@ static const char *(azHelp[]) = {
   "      trigger               Like \"full\" but also show trigger bytecode",
   ".excel                   Display the output of next command in spreadsheet",
   "   --bom                   Put a UTF8 byte-order mark on intermediate file",
+#ifdef HAVE_LINENOISE
+  ".edit                    Opens an external text editor to edit a query.",
+  "   Notes:",
+  "     *  The editor is read from the environment variables",
+  "        DUCKDB_EDITOR, EDITOR, VISUAL in-order",
+  "     * If none of these are set, the default editor is vi",
+    "   * \\e can be used as an alais for .edit",
+#endif
   ".exit ?CODE?             Exit this program with return-code CODE",
   ".explain ?on|off|auto?   Change the EXPLAIN formatting mode.  Default: auto",
   ".fullschema ?--indent?   Show schema and the content of sqlite_stat tables",
   ".headers on|off          Turn display of headers on or off",
   ".help ?-all? ?PATTERN?   Show help text for PATTERN",
+#ifdef HAVE_LINENOISE
   ".highlight [on|off]      Toggle syntax highlighting in the shell on/off",
+#endif
   ".import FILE TABLE       Import data from FILE into TABLE",
   "   Options:",
   "     --ascii               Use \\037 and \\036 as column and row separators",
@@ -13633,11 +13661,13 @@ static const char *(azHelp[]) = {
 #ifdef SQLITE_ENABLE_IOTRACE
   ".iotrace FILE            Enable I/O diagnostic logging to FILE",
 #endif
+#ifdef HAVE_LINENOISE
   ".keyword ?COLOR?         Sets the syntax highlighting color used for keywords",
   "   COLOR is one of:",
   "     red|green|yellow|blue|magenta|cyan|white|brightblack|brightred|brightgreen",
   "     brightyellow|brightblue|brightmagenta|brightcyan|brightwhite",
   ".keywordcode ?CODE?      Sets the syntax highlighting terminal code used for keywords",
+#endif
   ".lint OPTIONS            Report potential schema issues.",
   "     Options:",
   "        fkey-indexes     Find missing foreign key indexes",

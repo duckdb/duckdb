@@ -28,7 +28,7 @@ private:
 	static constexpr idx_t BUFFER_SIZE = 100000;
 
 public:
-	SimpleBufferedData(weak_ptr<ClientContext> context);
+	explicit SimpleBufferedData(weak_ptr<ClientContext> context);
 	~SimpleBufferedData() override;
 
 public:

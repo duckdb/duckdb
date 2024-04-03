@@ -21,7 +21,7 @@
 namespace duckdb {
 
 class BaseStatistics;
-class DependencyList;
+class LogicalDependencyList;
 class LogicalGet;
 class TableFilterSet;
 class TableCatalogEntry;
@@ -134,7 +134,7 @@ public:
 	optional_ptr<GlobalTableFunctionState> global_state;
 };
 
-enum ScanType { TABLE, PARQUET };
+enum class ScanType : uint8_t { TABLE, PARQUET };
 
 struct BindInfo {
 public:
@@ -145,11 +145,11 @@ public:
 	ScanType type;
 	optional_ptr<TableCatalogEntry> table;
 
-	void InsertOption(const string &name, Value value) {
+	void InsertOption(const string &name, Value value) { // NOLINT: work-around bug in clang-tidy
 		if (options.find(name) != options.end()) {
 			throw InternalException("This option already exists");
 		}
-		options[name] = std::move(value);
+		options.emplace(name, std::move(value));
 	}
 	template <class T>
 	T GetOption(const string &name) {
@@ -199,7 +199,7 @@ typedef BindInfo (*table_function_get_bind_info_t)(const optional_ptr<FunctionDa
 
 typedef double (*table_function_progress_t)(ClientContext &context, const FunctionData *bind_data,
                                             const GlobalTableFunctionState *global_state);
-typedef void (*table_function_dependency_t)(DependencyList &dependencies, const FunctionData *bind_data);
+typedef void (*table_function_dependency_t)(LogicalDependencyList &dependencies, const FunctionData *bind_data);
 typedef unique_ptr<NodeStatistics> (*table_function_cardinality_t)(ClientContext &context,
                                                                    const FunctionData *bind_data);
 typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context, LogicalGet &get,
@@ -211,7 +211,7 @@ typedef void (*table_function_serialize_t)(Serializer &serializer, const optiona
                                            const TableFunction &function);
 typedef unique_ptr<FunctionData> (*table_function_deserialize_t)(Deserializer &deserializer, TableFunction &function);
 
-class TableFunction : public SimpleNamedParameterFunction {
+class TableFunction : public SimpleNamedParameterFunction { // NOLINT: work-around bug in clang-tidy
 public:
 	DUCKDB_API
 	TableFunction(string name, vector<LogicalType> arguments, table_function_t function,

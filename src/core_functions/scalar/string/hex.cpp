@@ -392,16 +392,14 @@ ScalarFunctionSet HexFun::GetFunctions() {
 	ScalarFunctionSet to_hex;
 	to_hex.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, ToHexFunction<string_t, HexStrOperator>));
-
+	to_hex.AddFunction(
+	    ScalarFunction({LogicalType::BLOB}, LogicalType::VARCHAR, ToHexFunction<string_t, HexStrOperator>));
 	to_hex.AddFunction(
 	    ScalarFunction({LogicalType::BIGINT}, LogicalType::VARCHAR, ToHexFunction<int64_t, HexIntegralOperator>));
-
 	to_hex.AddFunction(
 	    ScalarFunction({LogicalType::UBIGINT}, LogicalType::VARCHAR, ToHexFunction<uint64_t, HexIntegralOperator>));
-
 	to_hex.AddFunction(
 	    ScalarFunction({LogicalType::HUGEINT}, LogicalType::VARCHAR, ToHexFunction<hugeint_t, HexHugeIntOperator>));
-
 	to_hex.AddFunction(
 	    ScalarFunction({LogicalType::UHUGEINT}, LogicalType::VARCHAR, ToHexFunction<uhugeint_t, HexUhugeIntOperator>));
 	return to_hex;

@@ -5,13 +5,8 @@ namespace duckdb {
 
 unique_ptr<DeleteStatement> Transformer::TransformDelete(duckdb_libpgquery::PGDeleteStmt &stmt) {
 	auto result = make_uniq<DeleteStatement>();
-	vector<unique_ptr<CTENode>> materialized_ctes;
 	if (stmt.withClause) {
-		TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), result->cte_map,
-		             materialized_ctes);
-		if (!materialized_ctes.empty()) {
-			throw NotImplementedException("Materialized CTEs are not implemented for delete.");
-		}
+		TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), result->cte_map);
 	}
 
 	result->condition = TransformExpression(stmt.whereClause);
@@ -30,6 +25,7 @@ unique_ptr<DeleteStatement> Transformer::TransformDelete(duckdb_libpgquery::PGDe
 	if (stmt.returningList) {
 		TransformExpressionList(*stmt.returningList, result->returning_list);
 	}
+
 	return result;
 }
 

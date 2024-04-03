@@ -305,7 +305,7 @@ void BaseReservoirSampling::ReplaceElement(double with_weight) {
 		r2 = with_weight;
 	}
 	//! now we insert the new weight into the reservoir
-	reservoir_weights.push(std::make_pair(-r2, min_weighted_entry_index));
+	reservoir_weights.emplace(-r2, min_weighted_entry_index);
 	//! we update the min entry with the new min entry in the reservoir
 	SetNextEntry();
 }

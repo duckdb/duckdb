@@ -62,8 +62,10 @@ elseif(UNIX)
 endif()
 
 set(RE2_SOURCES
+
+        re2/bitmap256.cc
+        re2/compile.cc
     re2/bitstate.cc
-    re2/compile.cc
     re2/dfa.cc
     re2/filtered_re2.cc
     re2/mimics_pcre.cc
@@ -83,7 +85,8 @@ set(RE2_SOURCES
     re2/unicode_casefold.cc
     re2/unicode_groups.cc
     util/rune.cc
-    util/strutil.cc)
+    util/strutil.cc
+)
 
 add_library(duckdb_re2 STATIC ${RE2_SOURCES})
 
