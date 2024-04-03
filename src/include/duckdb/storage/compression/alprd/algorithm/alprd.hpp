@@ -34,7 +34,7 @@ struct AlpRDLeftPartInfo {
 template <class T, bool EMPTY>
 class AlpRDCompressionState {
 public:
-	using EXACT_TYPE = typename FloatingToExact<T>::type;
+	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
 	AlpRDCompressionState() : right_bit_width(0), left_bit_width(0), exceptions_count(0) {
 	}
@@ -63,7 +63,7 @@ public:
 template <class T, bool EMPTY>
 struct AlpRDCompression {
 	using State = AlpRDCompressionState<T, EMPTY>;
-	using EXACT_TYPE = typename FloatingToExact<T>::type;
+	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 	static constexpr uint8_t EXACT_TYPE_BITSIZE = sizeof(EXACT_TYPE) * 8;
 
 	/*
@@ -133,7 +133,7 @@ struct AlpRDCompression {
 	}
 
 	static double FindBestDictionary(const vector<EXACT_TYPE> &values, State &state) {
-		uint8_t right_bit_width;
+		uint8_t right_bit_width = 0;
 		double best_dict_size = NumericLimits<int32_t>::Maximum();
 		//! Finding the best position to CUT the values
 		for (idx_t i = 1; i <= AlpRDConstants::CUTTING_LIMIT; i++) {
@@ -199,7 +199,7 @@ struct AlpRDCompression {
 
 template <class T>
 struct AlpRDDecompression {
-	using EXACT_TYPE = typename FloatingToExact<T>::type;
+	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
 	static void Decompress(uint8_t *left_encoded, uint8_t *right_encoded, const uint16_t *left_parts_dict,
 	                       EXACT_TYPE *output, idx_t values_count, uint16_t exceptions_count,

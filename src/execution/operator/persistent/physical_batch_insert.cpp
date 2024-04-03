@@ -376,7 +376,7 @@ unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContex
 		table = insert_table.get_mutable();
 	}
 	// heuristic - we start off by allocating 4MB of cache space per column
-	static constexpr const idx_t MINIMUM_MEMORY_PER_COLUMN = 4 * 1024 * 1024;
+	static constexpr const idx_t MINIMUM_MEMORY_PER_COLUMN = 4ULL * 1024ULL * 1024ULL;
 	auto initial_memory = table->GetColumns().PhysicalColumnCount() * MINIMUM_MEMORY_PER_COLUMN;
 	auto result = make_uniq<BatchInsertGlobalState>(context, table->Cast<DuckTableEntry>(), initial_memory);
 	return std::move(result);
@@ -507,11 +507,13 @@ SinkCombineResultType PhysicalBatchInsert::Combine(ExecutionContext &context, Op
 
 	memory_manager.UpdateMinBatchIndex(lstate.partition_info.min_batch_index.GetIndex());
 
-	if (lstate.current_collection && lstate.current_collection->GetTotalRows() > 0) {
+	if (lstate.current_collection) {
 		TransactionData tdata(0, 0);
 		lstate.current_collection->FinalizeAppend(tdata, lstate.current_append_state);
-		gstate.AddCollection(context.client, lstate.current_index, lstate.partition_info.min_batch_index.GetIndex(),
-		                     std::move(lstate.current_collection));
+		if (lstate.current_collection->GetTotalRows() > 0) {
+			gstate.AddCollection(context.client, lstate.current_index, lstate.partition_info.min_batch_index.GetIndex(),
+			                     std::move(lstate.current_collection));
+		}
 	}
 	if (lstate.writer) {
 		lock_guard<mutex> l(gstate.lock);
@@ -571,12 +573,12 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 		for (auto &merger : mergers) {
 			final_collections.push_back(merger->Flush(writer));
 		}
-		storage.FinalizeOptimisticWriter(context, writer);
 
 		// finally, merge the row groups into the local storage
 		for (auto &collection : final_collections) {
 			storage.LocalMerge(context, *collection);
 		}
+		storage.FinalizeOptimisticWriter(context, writer);
 	} else {
 		// we are writing a small amount of data to disk
 		// append directly to transaction local storage

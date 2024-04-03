@@ -44,6 +44,7 @@ enum CSVErrorType : uint8_t {
 	SNIFFING = 4,          // If something went wrong during sniffing and was not possible to find suitable candidates
 	MAXIMUM_LINE_SIZE = 5, // Maximum line size was exceeded by a line in the CSV File
 	NULLPADDED_QUOTED_NEW_VALUE = 6, // If the null_padding option is set and we have quoted new values in parallel
+	INVALID_UNICODE = 7
 
 };
 
@@ -56,7 +57,7 @@ public:
 	static CSVError ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names);
 	//! Produces error messages for casting errors
 	static CSVError CastError(const CSVReaderOptions &options, string &column_name, string &cast_error,
-	                          idx_t column_idx, vector<Value> &row, LinesPerBoundary error_info);
+	                          idx_t column_idx, vector<Value> &row, LinesPerBoundary error_info, LogicalTypeId type);
 	//! Produces error for when the line size exceeds the maximum line size option
 	static CSVError LineSizeError(const CSVReaderOptions &options, idx_t actual_size, LinesPerBoundary error_info);
 	//! Produces error for when the sniffer couldn't find viable options
@@ -70,6 +71,8 @@ public:
 	static CSVError IncorrectColumnAmountError(const CSVReaderOptions &options, string_t *vector_ptr,
 	                                           idx_t vector_line_start, idx_t actual_columns,
 	                                           LinesPerBoundary error_info);
+	//! Produces error message when we detect an invalid utf-8 value
+	static CSVError InvalidUTF8(const CSVReaderOptions &options, LinesPerBoundary error_info);
 	idx_t GetBoundaryIndex() {
 		return error_info.boundary_idx;
 	}
@@ -88,7 +91,7 @@ public:
 
 class CSVErrorHandler {
 public:
-	CSVErrorHandler(bool ignore_errors = false);
+	explicit CSVErrorHandler(bool ignore_errors = false);
 	//! Throws the error
 	void Error(CSVError csv_error, bool force_error = false);
 	//! If we have a cached error, and we can now error, we error.

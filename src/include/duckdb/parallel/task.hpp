@@ -52,24 +52,4 @@ public:
 	}
 };
 
-//! Execute a task within an executor, including exception handling
-//! This should be used within queries
-class ExecutorTask : public Task {
-public:
-	ExecutorTask(Executor &executor);
-	ExecutorTask(ClientContext &context);
-	virtual ~ExecutorTask();
-
-public:
-	void Deschedule() override;
-	void Reschedule() override;
-
-public:
-	Executor &executor;
-
-public:
-	virtual TaskExecutionResult ExecuteTask(TaskExecutionMode mode) = 0;
-	TaskExecutionResult Execute(TaskExecutionMode mode) override;
-};
-
 } // namespace duckdb

@@ -25,8 +25,11 @@ struct PandasScanFunctionData : public PyTableFunctionData {
 	vector<LogicalType> sql_types;
 
 	~PandasScanFunctionData() override {
-		py::gil_scoped_acquire acquire;
-		pandas_bind_data.clear();
+		try {
+			py::gil_scoped_acquire acquire;
+			pandas_bind_data.clear();
+		} catch (...) { // NOLINT
+		}
 	}
 };
 
@@ -194,7 +197,7 @@ unique_ptr<NodeStatistics> PandasScanFunction::PandasScanCardinality(ClientConte
 }
 
 py::object PandasScanFunction::PandasReplaceCopiedNames(const py::object &original_df) {
-	auto copy_df = original_df.attr("copy")(false);
+	py::object copy_df = original_df.attr("copy")(false);
 	auto df_columns = py::list(original_df.attr("columns"));
 	vector<string> columns;
 	for (const auto &str : df_columns) {
@@ -202,7 +205,12 @@ py::object PandasScanFunction::PandasReplaceCopiedNames(const py::object &origin
 	}
 	QueryResult::DeduplicateColumns(columns);
 
-	copy_df.attr("columns") = columns;
+	py::list new_columns(columns.size());
+	for (idx_t i = 0; i < columns.size(); i++) {
+		new_columns[i] = std::move(columns[i]);
+	}
+	copy_df.attr("columns") = std::move(new_columns);
+	columns.clear();
 	return copy_df;
 }
 

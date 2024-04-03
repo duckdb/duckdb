@@ -88,6 +88,27 @@ static unique_ptr<Expression> CastWindowExpression(unique_ptr<ParsedExpression> 
 	return std::move(bound);
 }
 
+static bool IsRangeType(const LogicalType &type) {
+	switch (type.InternalType()) {
+	case PhysicalType::INT8:
+	case PhysicalType::INT16:
+	case PhysicalType::INT32:
+	case PhysicalType::INT64:
+	case PhysicalType::UINT8:
+	case PhysicalType::UINT16:
+	case PhysicalType::UINT32:
+	case PhysicalType::UINT64:
+	case PhysicalType::INT128:
+	case PhysicalType::UINT128:
+	case PhysicalType::FLOAT:
+	case PhysicalType::DOUBLE:
+	case PhysicalType::INTERVAL:
+		return true;
+	default:
+		return false;
+	}
+}
+
 static LogicalType BindRangeExpression(ClientContext &context, const string &name, unique_ptr<ParsedExpression> &expr,
                                        unique_ptr<ParsedExpression> &order_expr) {
 
@@ -101,8 +122,8 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 	D_ASSERT(expr.get());
 	D_ASSERT(expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
 	auto &bound = BoundExpression::GetExpression(*expr);
+	QueryErrorContext error_context(bound->query_location);
 	if (bound->return_type == LogicalType::SQLNULL) {
-		QueryErrorContext error_context(bound->query_location);
 		throw BinderException(error_context, "Window RANGE expressions cannot be NULL");
 	}
 	children.emplace_back(std::move(bound));
@@ -112,6 +133,11 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 	auto function = function_binder.BindScalarFunction(DEFAULT_SCHEMA, name, std::move(children), error, true);
 	if (!function) {
 		error.Throw();
+	}
+	// +/- can be applied to non-scalar types,
+	// so we can't rely on function binding to catch all problems.
+	if (!IsRangeType(function->return_type)) {
+		throw BinderException(error_context, "Invalid type for Window RANGE expression");
 	}
 	bound = std::move(function);
 	return bound->return_type;
@@ -175,6 +201,10 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	}
 
 	//	Restore any collation expressions
+	for (auto &part_expr : window.partitions) {
+		auto &bound_partition = BoundExpression::GetExpression(*part_expr);
+		ExpressionBinder::PushCollation(context, bound_partition, bound_partition->return_type, true);
+	}
 	for (auto &order : window.orders) {
 		auto &order_expr = order.expression;
 		auto &bound_order = BoundExpression::GetExpression(*order_expr);
@@ -222,12 +252,12 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		ErrorData error;
 		FunctionBinder function_binder(context);
 		auto best_function = function_binder.BindFunction(func.name, func.functions, types, error);
-		if (best_function == DConstants::INVALID_INDEX) {
+		if (!best_function.IsValid()) {
 			error.AddQueryLocation(window);
 			error.Throw();
 		}
 		// found a matching function! bind it as an aggregate
-		auto bound_function = func.functions.GetFunctionByOffset(best_function);
+		auto bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
 		auto bound_aggregate = function_binder.BindAggregateFunction(bound_function, std::move(children));
 		// create the aggregate
 		aggregate = make_uniq<AggregateFunction>(bound_aggregate->function);

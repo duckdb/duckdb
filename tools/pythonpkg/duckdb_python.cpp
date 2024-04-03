@@ -6,6 +6,7 @@
 
 #include "duckdb_python/python_objects.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
+#include "duckdb_python/pystatement.hpp"
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/expression/pyexpression.hpp"
 #include "duckdb_python/pyresult.hpp"
@@ -18,6 +19,7 @@
 #include "duckdb/function/function.hpp"
 #include "duckdb_python/pybind11/conversions/exception_handling_enum.hpp"
 #include "duckdb_python/pybind11/conversions/python_udf_type_enum.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
 
 #include "duckdb.hpp"
 
@@ -29,7 +31,7 @@ namespace py = pybind11;
 
 namespace duckdb {
 
-enum PySQLTokenType {
+enum PySQLTokenType : uint8_t {
 	PY_SQL_TOKEN_IDENTIFIER = 0,
 	PY_SQL_TOKEN_NUMERIC_CONSTANT,
 	PY_SQL_TOKEN_STRING_CONSTANT,
@@ -221,7 +223,10 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	         py::arg("values"), py::arg("connection") = py::none())
 	    .def("table_function", &PyConnectionWrapper::TableFunction,
 	         "Create a relation object from the name'd table function with given parameters", py::arg("name"),
-	         py::arg("parameters") = py::none(), py::arg("connection") = py::none());
+	         py::arg("parameters") = py::none(), py::arg("connection") = py::none())
+	    .def("extract_statements", &PyConnectionWrapper::ExtractStatements,
+	         "Parse the query string and extract the Statement object(s) produced", py::arg("query"),
+	         py::arg("connection") = py::none());
 
 	DefineMethod({"sql", "query", "from_query"}, m, &PyConnectionWrapper::RunQuery,
 	             "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, "
@@ -268,11 +273,54 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	         py::arg("connection") = py::none());
 }
 
+static void RegisterStatementType(py::handle &m) {
+	auto statement_type = py::enum_<duckdb::StatementType>(m, "StatementType");
+	static const duckdb::StatementType TYPES[] = {
+	    duckdb::StatementType::INVALID_STATEMENT,      duckdb::StatementType::SELECT_STATEMENT,
+	    duckdb::StatementType::INSERT_STATEMENT,       duckdb::StatementType::UPDATE_STATEMENT,
+	    duckdb::StatementType::CREATE_STATEMENT,       duckdb::StatementType::DELETE_STATEMENT,
+	    duckdb::StatementType::PREPARE_STATEMENT,      duckdb::StatementType::EXECUTE_STATEMENT,
+	    duckdb::StatementType::ALTER_STATEMENT,        duckdb::StatementType::TRANSACTION_STATEMENT,
+	    duckdb::StatementType::COPY_STATEMENT,         duckdb::StatementType::ANALYZE_STATEMENT,
+	    duckdb::StatementType::VARIABLE_SET_STATEMENT, duckdb::StatementType::CREATE_FUNC_STATEMENT,
+	    duckdb::StatementType::EXPLAIN_STATEMENT,      duckdb::StatementType::DROP_STATEMENT,
+	    duckdb::StatementType::EXPORT_STATEMENT,       duckdb::StatementType::PRAGMA_STATEMENT,
+	    duckdb::StatementType::VACUUM_STATEMENT,       duckdb::StatementType::CALL_STATEMENT,
+	    duckdb::StatementType::SET_STATEMENT,          duckdb::StatementType::LOAD_STATEMENT,
+	    duckdb::StatementType::RELATION_STATEMENT,     duckdb::StatementType::EXTENSION_STATEMENT,
+	    duckdb::StatementType::LOGICAL_PLAN_STATEMENT, duckdb::StatementType::ATTACH_STATEMENT,
+	    duckdb::StatementType::DETACH_STATEMENT,       duckdb::StatementType::MULTI_STATEMENT,
+	    duckdb::StatementType::COPY_DATABASE_STATEMENT};
+	static const idx_t AMOUNT = sizeof(TYPES) / sizeof(duckdb::StatementType);
+	for (idx_t i = 0; i < AMOUNT; i++) {
+		auto &type = TYPES[i];
+		statement_type.value(StatementTypeToString(type).c_str(), type);
+	}
+	statement_type.export_values();
+}
+
+static void RegisterExpectedResultType(py::handle &m) {
+	auto expected_return_type = py::enum_<duckdb::StatementReturnType>(m, "ExpectedResultType");
+	static const duckdb::StatementReturnType TYPES[] = {duckdb::StatementReturnType::QUERY_RESULT,
+	                                                    duckdb::StatementReturnType::CHANGED_ROWS,
+	                                                    duckdb::StatementReturnType::NOTHING};
+	static const idx_t AMOUNT = sizeof(TYPES) / sizeof(duckdb::StatementReturnType);
+	for (idx_t i = 0; i < AMOUNT; i++) {
+		auto &type = TYPES[i];
+		expected_return_type.value(StatementReturnTypeToString(type).c_str(), type);
+	}
+	expected_return_type.export_values();
+}
+
 PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	py::enum_<duckdb::ExplainType>(m, "ExplainType")
 	    .value("STANDARD", duckdb::ExplainType::EXPLAIN_STANDARD)
 	    .value("ANALYZE", duckdb::ExplainType::EXPLAIN_ANALYZE)
 	    .export_values();
+
+	RegisterStatementType(m);
+
+	RegisterExpectedResultType(m);
 
 	py::enum_<duckdb::PythonExceptionHandling>(m, "PythonExceptionHandling")
 	    .value("DEFAULT", duckdb::PythonExceptionHandling::FORWARD_ERROR)
@@ -287,6 +335,7 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	DuckDBPyTyping::Initialize(m);
 	DuckDBPyFunctional::Initialize(m);
 	DuckDBPyExpression::Initialize(m);
+	DuckDBPyStatement::Initialize(m);
 	DuckDBPyRelation::Initialize(m);
 	DuckDBPyConnection::Initialize(m);
 	PythonObject::Initialize();

@@ -21,7 +21,7 @@ namespace duckdb {
 // Install Extension
 //===--------------------------------------------------------------------===//
 const string ExtensionHelper::NormalizeVersionTag(const string &version_tag) {
-	if (version_tag.length() > 0 && version_tag[0] != 'v') {
+	if (!version_tag.empty() && version_tag[0] != 'v') {
 		return "v" + version_tag;
 	}
 	return version_tag;

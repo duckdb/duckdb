@@ -40,7 +40,7 @@ install_deps() {
     (
       cd $VCPKG_TARGET_DIR ;
       git clone https://github.com/Microsoft/vcpkg.git ;
-      git checkout a42af01b72c28a8e1d7b48107b33e4f286a55ef6 ;
+      git checkout a1a1cbc975abf909a6c8985a6a2b8fe20bbd9bd6 ;
       cd vcpkg ;
       ./bootstrap-vcpkg.sh
     )

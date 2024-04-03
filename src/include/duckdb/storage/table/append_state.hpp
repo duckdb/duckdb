@@ -36,7 +36,7 @@ struct ColumnAppendState {
 };
 
 struct RowGroupAppendState {
-	RowGroupAppendState(TableAppendState &parent_p) : parent(parent_p) {
+	explicit RowGroupAppendState(TableAppendState &parent_p) : parent(parent_p) {
 	}
 
 	//! The parent append state
@@ -67,8 +67,6 @@ struct TableAppendState {
 	RowGroup *start_row_group;
 	//! The transaction data
 	TransactionData transaction;
-	//! The remaining append count, only if the append count is known beforehand
-	idx_t remaining;
 };
 
 struct LocalAppendState {

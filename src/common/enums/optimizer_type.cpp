@@ -10,7 +10,7 @@ struct DefaultOptimizerType {
 	OptimizerType type;
 };
 
-static DefaultOptimizerType internal_optimizer_types[] = {
+static const DefaultOptimizerType internal_optimizer_types[] = {
     {"expression_rewriter", OptimizerType::EXPRESSION_REWRITER},
     {"filter_pullup", OptimizerType::FILTER_PULLUP},
     {"filter_pushdown", OptimizerType::FILTER_PUSHDOWN},

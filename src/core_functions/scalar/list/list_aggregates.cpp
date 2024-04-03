@@ -180,7 +180,8 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 	auto &result_validity = FlatVector::Validity(result);
 
 	if (lists.GetType().id() == LogicalTypeId::SQLNULL) {
-		result_validity.SetInvalid(0);
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, true);
 		return;
 	}
 
@@ -473,12 +474,12 @@ static unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, Scala
 
 	FunctionBinder function_binder(context);
 	auto best_function_idx = function_binder.BindFunction(func.name, func.functions, types, error);
-	if (best_function_idx == DConstants::INVALID_INDEX) {
+	if (!best_function_idx.IsValid()) {
 		throw BinderException("No matching aggregate function\n%s", error.Message());
 	}
 
 	// found a matching function, bind it as an aggregate
-	auto best_function = func.functions.GetFunctionByOffset(best_function_idx);
+	auto best_function = func.functions.GetFunctionByOffset(best_function_idx.GetIndex());
 	if (IS_AGGR) {
 		return ListAggregatesBindFunction<IS_AGGR>(context, bound_function, child_type, best_function, arguments);
 	}

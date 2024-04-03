@@ -1688,11 +1688,11 @@ static const yytype_int16 yytranslate[] =
 /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
 static const yytype_int16 yyrline[] =
 {
-       0,   502,   502,   518,   530,   539,   540,   541,   542,   543,
-     544,   545,   546,   547,   548,   549,   550,   551,   552,   553,
-     554,   555,   556,   557,   558,   559,   560,   561,   562,   563,
-     564,   565,   566,   567,   568,   569,   570,   571,   572,   573,
-     574,   575,   576,   577,   578,   580,     9,    18,    27,    36,
+       0,   504,   504,   520,   532,   541,   542,   543,   544,   545,
+     546,   547,   548,   549,   550,   551,   552,   553,   554,   555,
+     556,   557,   558,   559,   560,   561,   562,   563,   564,   565,
+     566,   567,   568,   569,   570,   571,   572,   573,   574,   575,
+     576,   577,   578,   579,   580,   582,     9,    18,    27,    36,
       45,    54,    63,    72,    85,    87,    93,    94,    99,   103,
      107,   118,   126,   130,   139,   148,   157,   166,   175,   184,
      192,   200,   209,   218,   227,   236,   253,   262,   271,   280,
@@ -18945,7 +18945,7 @@ yyreduce:
   switch (yyn)
     {
   case 2: /* stmtblock: stmtmulti  */
-#line 503 "third_party/libpg_query/grammar/grammar.y"
+#line 505 "third_party/libpg_query/grammar/grammar.y"
                         {
 				pg_yyget_extra(yyscanner)->parsetree = (yyvsp[0].list);
 			}
@@ -18953,7 +18953,7 @@ yyreduce:
     break;
 
   case 3: /* stmtmulti: stmtmulti ';' stmt  */
-#line 519 "third_party/libpg_query/grammar/grammar.y"
+#line 521 "third_party/libpg_query/grammar/grammar.y"
                                 {
 					if ((yyvsp[-2].list) != NIL)
 					{
@@ -18969,7 +18969,7 @@ yyreduce:
     break;
 
   case 4: /* stmtmulti: stmt  */
-#line 531 "third_party/libpg_query/grammar/grammar.y"
+#line 533 "third_party/libpg_query/grammar/grammar.y"
                                 {
 					if ((yyvsp[0].node) != NULL)
 						(yyval.list) = list_make1(makeRawStmt((yyvsp[0].node), 0));
@@ -18980,7 +18980,7 @@ yyreduce:
     break;
 
   case 45: /* stmt: %empty  */
-#line 580 "third_party/libpg_query/grammar/grammar.y"
+#line 582 "third_party/libpg_query/grammar/grammar.y"
         { (yyval.node) = NULL; }
 #line 18986 "third_party/libpg_query/grammar/grammar_out.cpp"
     break;
@@ -23831,19 +23831,19 @@ yyreduce:
 
   case 589: /* opt_ignore_nulls: IGNORE_P NULLS_P  */
 #line 578 "third_party/libpg_query/grammar/statements/select.y"
-                                                                                        { (yyval.boolean) = true;}
+                                                                                        { (yyval.ignorenulls) = PG_IGNORE_NULLS;}
 #line 23836 "third_party/libpg_query/grammar/grammar_out.cpp"
     break;
 
   case 590: /* opt_ignore_nulls: RESPECT_P NULLS_P  */
 #line 579 "third_party/libpg_query/grammar/statements/select.y"
-                                                                                        { (yyval.boolean) = false;}
+                                                                                        { (yyval.ignorenulls) = PG_RESPECT_NULLS;}
 #line 23842 "third_party/libpg_query/grammar/grammar_out.cpp"
     break;
 
   case 591: /* opt_ignore_nulls: %empty  */
 #line 580 "third_party/libpg_query/grammar/statements/select.y"
-                                                                                                { (yyval.boolean) = false; }
+                                                                                                { (yyval.ignorenulls) = PG_DEFAULT_NULLS; }
 #line 23848 "third_party/libpg_query/grammar/grammar_out.cpp"
     break;
 
@@ -27271,7 +27271,7 @@ yyreduce:
                                 {
 					PGFuncCall *n = makeFuncCall((yyvsp[-5].list), (yyvsp[-3].list), (yylsp[-5]));
 					n->agg_order = (yyvsp[-2].list);
-					n->agg_ignore_nulls = (yyvsp[-1].boolean);
+					n->agg_ignore_nulls = (yyvsp[-1].ignorenulls);
 					(yyval.node) = (PGNode *)n;
 				}
 #line 27278 "third_party/libpg_query/grammar/grammar_out.cpp"
@@ -27283,7 +27283,7 @@ yyreduce:
 					PGFuncCall *n = makeFuncCall((yyvsp[-6].list), list_make1((yyvsp[-3].node)), (yylsp[-6]));
 					n->func_variadic = true;
 					n->agg_order = (yyvsp[-2].list);
-					n->agg_ignore_nulls = (yyvsp[-1].boolean);
+					n->agg_ignore_nulls = (yyvsp[-1].ignorenulls);
 					(yyval.node) = (PGNode *)n;
 				}
 #line 27290 "third_party/libpg_query/grammar/grammar_out.cpp"
@@ -27295,7 +27295,7 @@ yyreduce:
 					PGFuncCall *n = makeFuncCall((yyvsp[-8].list), lappend((yyvsp[-6].list), (yyvsp[-3].node)), (yylsp[-8]));
 					n->func_variadic = true;
 					n->agg_order = (yyvsp[-2].list);
-					n->agg_ignore_nulls = (yyvsp[-1].boolean);
+					n->agg_ignore_nulls = (yyvsp[-1].ignorenulls);
 					(yyval.node) = (PGNode *)n;
 				}
 #line 27302 "third_party/libpg_query/grammar/grammar_out.cpp"
@@ -27306,7 +27306,7 @@ yyreduce:
                                 {
 					PGFuncCall *n = makeFuncCall((yyvsp[-6].list), (yyvsp[-3].list), (yylsp[-6]));
 					n->agg_order = (yyvsp[-2].list);
-					n->agg_ignore_nulls = (yyvsp[-1].boolean);
+					n->agg_ignore_nulls = (yyvsp[-1].ignorenulls);
 					/* Ideally we'd mark the PGFuncCall node to indicate
 					 * "must be an aggregate", but there's no provision
 					 * for that in PGFuncCall at the moment.
@@ -27321,7 +27321,7 @@ yyreduce:
                                 {
 					PGFuncCall *n = makeFuncCall((yyvsp[-6].list), (yyvsp[-3].list), (yylsp[-6]));
 					n->agg_order = (yyvsp[-2].list);
-					n->agg_ignore_nulls = (yyvsp[-1].boolean);
+					n->agg_ignore_nulls = (yyvsp[-1].ignorenulls);
 					n->agg_distinct = true;
 					(yyval.node) = (PGNode *)n;
 				}
@@ -27432,8 +27432,8 @@ yyreduce:
   case 1036: /* func_expr_common_subexpr: POSITION '(' position_list ')'  */
 #line 2971 "third_party/libpg_query/grammar/statements/select.y"
                                 {
-					/* position(A in B) is converted to position(B, A) */
-					(yyval.node) = (PGNode *) makeFuncCall(SystemFuncName("position"), (yyvsp[-1].list), (yylsp[-3]));
+					/* position(A in B) is converted to position_inverse(A, B) */
+					(yyval.node) = (PGNode *) makeFuncCall(SystemFuncName("__internal_position_operator"), (yyvsp[-1].list), (yylsp[-3]));
 				}
 #line 27439 "third_party/libpg_query/grammar/grammar_out.cpp"
     break;
@@ -28476,7 +28476,7 @@ yyreduce:
 
   case 1168: /* position_list: b_expr IN_P b_expr  */
 #line 3598 "third_party/libpg_query/grammar/statements/select.y"
-                                                                                        { (yyval.list) = list_make2((yyvsp[0].node), (yyvsp[-2].node)); }
+                                                                                        { (yyval.list) = list_make2((yyvsp[-2].node), (yyvsp[0].node)); }
 #line 28481 "third_party/libpg_query/grammar/grammar_out.cpp"
     break;
 
@@ -29139,7 +29139,7 @@ yyreduce:
 									(errcode(PG_ERRCODE_SYNTAX_ERROR),
 									 errmsg("type modifier cannot have ORDER BY"),
 									 parser_errposition((yylsp[-3]))));
-					if ((yyvsp[-2].boolean) != false)
+					if ((yyvsp[-2].ignorenulls) != false)
 							ereport(ERROR,
 									(errcode(PG_ERRCODE_SYNTAX_ERROR),
 									 errmsg("type modifier cannot have IGNORE NULLS"),

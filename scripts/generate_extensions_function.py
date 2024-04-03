@@ -21,7 +21,7 @@ parser.add_argument(
     '--extension_dir',
     action='store',
     help="The root directory to look for the '<extension_name>/<extension>.duckdb_extension' files, relative to the location of this script",
-    default='/tmp/',  # Locally, try: '../build/release/extension'
+    default='../build/release/repository',
 )
 
 args = parser.parse_args()
@@ -362,8 +362,10 @@ def print_map_diff(d1, d2):
     s1 = sorted(set(d1.items()))
     s2 = sorted(set(d2.items()))
 
-    diff = str(s1 ^ s2)
-    print("Diff between maps: " + diff + "\n")
+    diff1 = str(set(s1) - set(s2))
+    diff2 = str(set(s2) - set(s1))
+    print("Diff between maps: " + diff1 + "\n")
+    print("Diff between maps: " + diff2 + "\n")
 
 
 def get_extension_path_map() -> Dict[str, str]:
@@ -453,15 +455,9 @@ def write_header(data: ExtensionData):
     // Note: these are currently hardcoded in scripts/generate_extensions_function.py
     // TODO: automate by passing though to script via duckdb
     static constexpr ExtensionEntry EXTENSION_FILE_PREFIXES[] = {
-        {"http://", "httpfs"},
-        {"https://", "httpfs"},
-        {"s3://", "httpfs"},
-        {"s3a://", "httpfs"},
-        {"s3n://", "httpfs"},
-        {"gcs://", "httpfs"},
-        {"gs://", "httpfs"},
-        {"r2://", "httpfs"}
-    //    {"azure://", "azure"}
+         {"http://", "httpfs"}, {"https://", "httpfs"}, {"s3://", "httpfs"}, {"s3a://", "httpfs"}, {"s3n://", "httpfs"},
+         {"gcs://", "httpfs"},  {"gs://", "httpfs"},    {"r2://", "httpfs"}, {"azure://", "azure"}, {"az://", "azure"},
+         {"abfss://", "azure"}
     }; // END_OF_EXTENSION_FILE_PREFIXES
 
     // Note: these are currently hardcoded in scripts/generate_extensions_function.py
@@ -511,11 +507,13 @@ def write_header(data: ExtensionData):
     "excel",
     "fts",
     "httpfs",
-    // "inet", 
-    // "icu",
+    "inet",
+    "icu",
     "json",
     "parquet",
+    "sqlite_scanner",
     "sqlsmith",
+    "postgres_scanner",
     "tpcds",
     "tpch"
     }; // END_OF_AUTOLOADABLE_EXTENSIONS

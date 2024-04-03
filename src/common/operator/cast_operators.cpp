@@ -1529,7 +1529,8 @@ bool TryCastErrorMessage::Operation(string_t input, dtime_tz_t &result, CastPara
 template <>
 bool TryCast::Operation(string_t input, dtime_tz_t &result, bool strict) {
 	idx_t pos;
-	return Time::TryConvertTimeTZ(input.GetData(), input.GetSize(), pos, result, strict);
+	bool has_offset;
+	return Time::TryConvertTimeTZ(input.GetData(), input.GetSize(), pos, result, has_offset, strict);
 }
 
 template <>

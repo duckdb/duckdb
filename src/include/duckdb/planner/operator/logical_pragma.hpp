@@ -19,7 +19,7 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_PRAGMA;
 
 public:
-	LogicalPragma(unique_ptr<BoundPragmaInfo> info_p)
+	explicit LogicalPragma(unique_ptr<BoundPragmaInfo> info_p)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_PRAGMA), info(std::move(info_p)) {
 	}
 

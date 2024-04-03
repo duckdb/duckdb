@@ -7,8 +7,6 @@ on:
       - '**'
       - '!main'
       - '!feature'
-    tags:
-      - '**'
     paths-ignore:
       - '**.md'
       - 'examples/**'
@@ -49,7 +47,7 @@ jobs:
           - 'iOS Simulator,name=iPhone 14'
           - 'tvOS Simulator,name=Apple TV 4K (at 1080p) (2nd generation)'
         isRelease:
-          - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' }}
+          - ${{ github.ref == 'refs/heads/main' }}
         exclude:
           - isRelease: false
             destination: 'iOS Simulator,name=iPhone 14'

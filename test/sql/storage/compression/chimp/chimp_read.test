@@ -1,6 +1,11 @@
 # name: test/sql/storage/compression/chimp/chimp_read.test
 # group: [chimp]
 
+# we cannot read/open a file with a different block size
+require block_size 262144
+
+require vector_size 2048
+
 load test/sql/storage/compression/chimp/chimp.db readonly
 
 query I

@@ -103,7 +103,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Default Extensions
 //===--------------------------------------------------------------------===//
-static DefaultExtension internal_extensions[] = {
+static const DefaultExtension internal_extensions[] = {
     {"icu", "Adds support for time zones and collations using the ICU library", DUCKDB_EXTENSION_ICU_LINKED},
     {"excel", "Adds support for Excel-like format strings", DUCKDB_EXTENSION_EXCEL_LINKED},
     {"parquet", "Adds support for reading and writing parquet files", DUCKDB_EXTENSION_PARQUET_LINKED},
@@ -142,7 +142,8 @@ DefaultExtension ExtensionHelper::GetDefaultExtension(idx_t index) {
 //===--------------------------------------------------------------------===//
 // Allow Auto-Install Extensions
 //===--------------------------------------------------------------------===//
-static const char *auto_install[] = {"motherduck", "postgres_scanner", "mysql_scanner", "sqlite_scanner", nullptr};
+static const char *const auto_install[] = {"motherduck", "postgres_scanner", "mysql_scanner", "sqlite_scanner",
+                                           nullptr};
 
 // TODO: unify with new autoload mechanism
 bool ExtensionHelper::AllowAutoInstall(const string &extension) {
@@ -173,19 +174,23 @@ bool ExtensionHelper::CanAutoloadExtension(const string &ext_name) {
 
 string ExtensionHelper::AddExtensionInstallHintToErrorMsg(ClientContext &context, const string &base_error,
                                                           const string &extension_name) {
-	auto &dbconfig = DBConfig::GetConfig(context);
+
+	return AddExtensionInstallHintToErrorMsg(DBConfig::GetConfig(context), base_error, extension_name);
+}
+string ExtensionHelper::AddExtensionInstallHintToErrorMsg(DBConfig &config, const string &base_error,
+                                                          const string &extension_name) {
 	string install_hint;
 
 	if (!ExtensionHelper::CanAutoloadExtension(extension_name)) {
 		install_hint = "Please try installing and loading the " + extension_name + " extension:\nINSTALL " +
 		               extension_name + ";\nLOAD " + extension_name + ";\n\n";
-	} else if (!dbconfig.options.autoload_known_extensions) {
+	} else if (!config.options.autoload_known_extensions) {
 		install_hint =
 		    "Please try installing and loading the " + extension_name + " extension by running:\nINSTALL " +
 		    extension_name + ";\nLOAD " + extension_name +
 		    ";\n\nAlternatively, consider enabling auto-install "
 		    "and auto-load by running:\nSET autoinstall_known_extensions=1;\nSET autoload_known_extensions=1;";
-	} else if (!dbconfig.options.autoinstall_known_extensions) {
+	} else if (!config.options.autoinstall_known_extensions) {
 		install_hint =
 		    "Please try installing the " + extension_name + " extension by running:\nINSTALL " + extension_name +
 		    ";\n\nAlternatively, consider enabling autoinstall by running:\nSET autoinstall_known_extensions=1;";
@@ -488,7 +493,7 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 	return ExtensionLoadResult::LOADED_EXTENSION;
 }
 
-static vector<std::string> public_keys = {
+static const char *const public_keys[] = {
     R"(
 -----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA6aZuHUa1cLR9YDDYaEfi
@@ -708,10 +713,14 @@ SLWQo0+/ciQ21Zwz5SwimX8ep1YpqYirO04gcyGZzAfGboXRvdUwA+1bZvuUXdKC
 EMS5gLv50CzQqJXK9mNzPuYXNUIc4Pw4ssVWe0OfN3Od90gl5uFUwk/G9lWSYnBN
 3wIDAQAB
 -----END PUBLIC KEY-----
-)"};
+)", nullptr};
 
 const vector<string> ExtensionHelper::GetPublicKeys() {
-	return public_keys;
+	vector<string> keys;
+	for (idx_t i = 0; public_keys[i]; i++) {
+		keys.emplace_back(public_keys[i]);
+	}
+	return keys;
 }
 
 } // namespace duckdb

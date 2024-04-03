@@ -25,15 +25,15 @@
 
 namespace duckdb {
 
-RowGroup::RowGroup(RowGroupCollection &collection, idx_t start, idx_t count)
-    : SegmentBase<RowGroup>(start, count), collection(collection), allocation_size(0) {
+RowGroup::RowGroup(RowGroupCollection &collection_p, idx_t start, idx_t count)
+    : SegmentBase<RowGroup>(start, count), collection(collection_p), allocation_size(0) {
 	Verify();
 }
 
-RowGroup::RowGroup(RowGroupCollection &collection, RowGroupPointer &&pointer)
-    : SegmentBase<RowGroup>(pointer.row_start, pointer.tuple_count), collection(collection), allocation_size(0) {
+RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
+    : SegmentBase<RowGroup>(pointer.row_start, pointer.tuple_count), collection(collection_p), allocation_size(0) {
 	// deserialize the columns
-	if (pointer.data_pointers.size() != collection.GetTypes().size()) {
+	if (pointer.data_pointers.size() != collection_p.GetTypes().size()) {
 		throw IOException("Row group column count is unaligned with table column count. Corrupt file?");
 	}
 	this->column_pointers = std::move(pointer.data_pointers);
@@ -48,8 +48,8 @@ RowGroup::RowGroup(RowGroupCollection &collection, RowGroupPointer &&pointer)
 	Verify();
 }
 
-void RowGroup::MoveToCollection(RowGroupCollection &collection, idx_t new_start) {
-	this->collection = collection;
+void RowGroup::MoveToCollection(RowGroupCollection &collection_p, idx_t new_start) {
+	this->collection = collection_p;
 	this->start = new_start;
 	for (auto &column : GetColumns()) {
 		column->SetStart(new_start);
@@ -184,12 +184,17 @@ bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, idx_t vector
 	state.vector_index = vector_offset;
 	state.max_row_group_row =
 	    this->start > state.max_row ? 0 : MinValue<idx_t>(this->count, state.max_row - this->start);
+	auto row_number = start + vector_offset * STANDARD_VECTOR_SIZE;
+	if (state.max_row_group_row == 0) {
+		// exceeded row groups to scan
+		return false;
+	}
 	D_ASSERT(state.column_scans);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		const auto &column = column_ids[i];
 		if (column != COLUMN_IDENTIFIER_ROW_ID) {
 			auto &column_data = GetColumn(column);
-			column_data.InitializeScanWithOffset(state.column_scans[i], start + vector_offset * STANDARD_VECTOR_SIZE);
+			column_data.InitializeScanWithOffset(state.column_scans[i], row_number);
 			state.column_scans[i].scan_options = &state.GetOptions();
 		} else {
 			state.column_scans[i].current = nullptr;

@@ -12,6 +12,7 @@
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/parallel/executor_task.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
@@ -478,7 +479,7 @@ class HashAggregateFinalizeTask : public ExecutorTask {
 public:
 	HashAggregateFinalizeTask(ClientContext &context, Pipeline &pipeline, shared_ptr<Event> event_p,
 	                          const PhysicalHashAggregate &op, HashAggregateGlobalSinkState &state_p)
-	    : ExecutorTask(pipeline.executor), context(context), pipeline(pipeline), event(std::move(event_p)), op(op),
+	    : ExecutorTask(pipeline.executor, std::move(event_p)), context(context), pipeline(pipeline), op(op),
 	      gstate(state_p) {
 	}
 
@@ -488,7 +489,6 @@ public:
 private:
 	ClientContext &context;
 	Pipeline &pipeline;
-	shared_ptr<Event> event;
 
 	const PhysicalHashAggregate &op;
 	HashAggregateGlobalSinkState &gstate;
@@ -539,7 +539,7 @@ class HashAggregateDistinctFinalizeTask : public ExecutorTask {
 public:
 	HashAggregateDistinctFinalizeTask(Pipeline &pipeline, shared_ptr<Event> event_p, const PhysicalHashAggregate &op,
 	                                  HashAggregateGlobalSinkState &state_p)
-	    : ExecutorTask(pipeline.executor), pipeline(pipeline), event(std::move(event_p)), op(op), gstate(state_p) {
+	    : ExecutorTask(pipeline.executor, std::move(event_p)), pipeline(pipeline), op(op), gstate(state_p) {
 	}
 
 public:
@@ -550,7 +550,6 @@ private:
 
 private:
 	Pipeline &pipeline;
-	shared_ptr<Event> event;
 
 	const PhysicalHashAggregate &op;
 	HashAggregateGlobalSinkState &gstate;

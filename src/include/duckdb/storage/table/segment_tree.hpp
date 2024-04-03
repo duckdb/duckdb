@@ -69,6 +69,9 @@ public:
 	}
 	idx_t GetSegmentCount() {
 		auto l = Lock();
+		return GetSegmentCount(l);
+	}
+	idx_t GetSegmentCount(SegmentLock &l) {
 		return nodes.size();
 	}
 	//! Gets a pointer to the nth segment. Negative numbers start from the back.
@@ -207,9 +210,6 @@ public:
 		if (nodes.empty()) {
 			return false;
 		}
-		D_ASSERT(!nodes.empty());
-		D_ASSERT(row_number >= nodes[0].row_start);
-		D_ASSERT(row_number < nodes.back().row_start + nodes.back().node->count);
 		idx_t lower = 0;
 		idx_t upper = nodes.size() - 1;
 		// binary search to find the node
@@ -320,10 +320,10 @@ private:
 		};
 
 	public:
-		SegmentIterator begin() {
+		SegmentIterator begin() { // NOLINT: match stl API
 			return SegmentIterator(tree, tree.GetRootSegment());
 		}
-		SegmentIterator end() {
+		SegmentIterator end() { // NOLINT: match stl API
 			return SegmentIterator(tree, nullptr);
 		}
 	};
@@ -349,8 +349,8 @@ private:
 		if (!SUPPORTS_LAZY_LOADING) {
 			return;
 		}
-		while (LoadNextSegment(l))
-			;
+		while (LoadNextSegment(l)) {
+		}
 	}
 };
 

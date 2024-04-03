@@ -297,7 +297,10 @@ bool TryTransformPythonNumeric(Value &res, py::handle ele, const LogicalType &ta
 			throw InvalidInputException(StringUtil::Format("Failed to cast value: Python value '%s' to INT64",
 			                                               std::string(pybind11::str(ele))));
 		}
-		return TryTransformPythonIntegerToDouble(res, ele);
+		auto cast_as = target_type.id() == LogicalTypeId::UNKNOWN ? LogicalType::HUGEINT : target_type;
+		auto numeric_string = std::string(py::str(ele));
+		res = Value(numeric_string).DefaultCastAs(cast_as);
+		return true;
 	} else if (overflow == 1) {
 		if (target_type.InternalType() == PhysicalType::INT64) {
 			throw InvalidInputException(StringUtil::Format("Failed to cast value: Python value '%s' to INT64",
@@ -436,6 +439,8 @@ PythonObjectType GetPythonObjectType(py::handle &ele) {
 		return PythonObjectType::Tuple;
 	} else if (py::isinstance<py::dict>(ele)) {
 		return PythonObjectType::Dict;
+	} else if (ele.is(import_cache.numpy.ma.masked())) {
+		return PythonObjectType::None;
 	} else if (py::isinstance(ele, import_cache.numpy.ndarray())) {
 		return PythonObjectType::NdArray;
 	} else if (py::isinstance(ele, import_cache.numpy.datetime64())) {
@@ -514,8 +519,13 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool 
 		auto timedelta = PyTimeDelta(ele);
 		return Value::INTERVAL(timedelta.ToInterval());
 	}
-	case PythonObjectType::String:
-		return ele.cast<string>();
+	case PythonObjectType::String: {
+		auto stringified = ele.cast<string>();
+		if (target_type.id() == LogicalTypeId::UNKNOWN) {
+			return Value(stringified);
+		}
+		return Value(stringified).DefaultCastAs(target_type);
+	}
 	case PythonObjectType::ByteArray: {
 		auto byte_array = ele;
 		const_data_ptr_t bytes = const_data_ptr_cast(PyByteArray_AsString(byte_array.ptr())); // NOLINT

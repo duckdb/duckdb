@@ -1,0 +1,17 @@
+# name: test/sql/window/test_streaming_window_list.test_slow
+# description: Streaming window with LIST aggregate
+# group: [window]
+
+statement ok
+select
+   list(row_number) over(rows between unbounded preceding and current row)
+from generate_series(5000) t(row_number);
+
+query IIII
+SELECT COUNT(*), SUM(LENGTH(list_aggr)), MIN(LENGTH(list_aggr)), MAX(LENGTH(list_aggr)) FROM (
+select
+   list(row_number) over(rows between unbounded preceding and current row)
+from generate_series(5000) t(row_number)
+) t(list_aggr)
+----
+5001	12507501	1	5001
