@@ -58,11 +58,11 @@ static idx_t GetResultLength(const char *input_data, idx_t input_length) {
 		if (input_data[i] & 0x80) {
 			// unicode
 			int sz = 0;
-			int codepoint = utf8proc_codepoint(input_data + i, sz);
-			int converted_codepoint = IS_UPPER ? utf8proc_toupper(codepoint) : utf8proc_tolower(codepoint);
-			int new_sz = utf8proc_codepoint_length(converted_codepoint);
+			auto codepoint = utf8proc_codepoint(input_data + i, sz);
+			auto converted_codepoint = IS_UPPER ? utf8proc_toupper(codepoint) : utf8proc_tolower(codepoint);
+			auto new_sz = utf8proc_codepoint_length(converted_codepoint);
 			D_ASSERT(new_sz >= 0);
-			output_length += new_sz;
+			output_length += UnsafeNumericCast<idx_t>(new_sz);
 			i += sz;
 		} else {
 			// ascii
