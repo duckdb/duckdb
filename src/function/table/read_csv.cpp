@@ -210,7 +210,7 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 	do {
 		if (output.size() != 0) {
 			bind_data.multi_file_reader->FinalizeChunk(bind_data.reader_bind,
-			                               csv_local_state.csv_reader->csv_file_scan->reader_data, output);
+			                               csv_local_state.csv_reader->csv_file_scan->reader_data, output, csv_local_state.csv_reader->csv_file_scan->file_path);
 			break;
 		}
 		if (csv_local_state.csv_reader->FinishedIterator()) {

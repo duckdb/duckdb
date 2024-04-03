@@ -24,6 +24,9 @@ struct MultiFileReaderOptions {
 	bool hive_types_autocast = true;
 	case_insensitive_map_t<LogicalType> hive_types_schema;
 
+    // These are used to pass options through custom multifilereaders
+    case_insensitive_map_t<Value> custom_options;
+
 	DUCKDB_API void Serialize(Serializer &serializer) const;
 	DUCKDB_API static MultiFileReaderOptions Deserialize(Deserializer &source);
 	DUCKDB_API void AddBatchInfo(BindInfo &bind_info) const;

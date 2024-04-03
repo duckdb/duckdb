@@ -34,33 +34,14 @@ struct HivePartitioningIndex {
 	DUCKDB_API static HivePartitioningIndex Deserialize(Deserializer &deserializer);
 };
 
-struct MultiFileGenerator {
-	virtual ~MultiFileGenerator(){};
-
-	//! Reader caching API
-
-
-	//! File iterator API
-	virtual string GetFile(idx_t i) = 0;
-	virtual void FilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
-	                            vector<unique_ptr<Expression>> &filters) = 0;
-
-};
-
-struct SimpleMultiFileGenerator : public MultiFileGenerator {
-	SimpleMultiFileGenerator(vector<string> files) : files(files){};
-	//! File iterator API
-	virtual string GetFile(idx_t i) = 0;
-
-	virtual void FilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
-	                            vector<unique_ptr<Expression>> &filters) = 0;
-protected:
-	vector<string> files;
+struct CustomMultiFileReaderBindData {
+    virtual ~CustomMultiFileReaderBindData();
+    // To be overridden
+    // TODO how to serialize/deserialize? can we just rebind?
 };
 
 //! The bind data for the multi-file reader, obtained through MultiFileReader::BindReader
 struct MultiFileReaderBindData {
-    bool overridden_bind = false;
 	//! The index of the filename column (if any)
 	idx_t filename_idx = DConstants::INVALID_INDEX;
 	//! The set of hive partitioning indexes (if any)
@@ -68,10 +49,11 @@ struct MultiFileReaderBindData {
 	//! The index of the file_row_number column (if any)
 	idx_t file_row_number_idx = DConstants::INVALID_INDEX;
 
+    //! Overridable data for custom multifilereader implementations
+    unique_ptr<CustomMultiFileReaderBindData> custom_data;
+
 	DUCKDB_API void Serialize(Serializer &serializer) const;
 	DUCKDB_API static MultiFileReaderBindData Deserialize(Deserializer &deserializer);
-
-	unique_ptr<MultiFileGenerator> multi_file_generator;
 };
 
 struct MultiFileFilterEntry {
@@ -134,6 +116,10 @@ protected:
 	vector<string> files;
 };
 
+// TODO: This API can be made simpler probably; its verbosity stems from the fact that this used to be all static.
+//       perhaps we can make all state related to the MultiFileReader just live in the MultiFileReader? That way it has access to
+//       everything and we solve the ugly dual ComplexFilterPushdown on the MultiFileList/MultiFileReader and the passing around
+//       of MultiFileReaderData
 struct MultiFileReader {
 	virtual ~MultiFileReader();
 	//! Add the parameters for multi-file readers (e.g. union_by_name, filename) to a table function
@@ -175,7 +161,7 @@ struct MultiFileReader {
 	                                       optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data);
 	//! Finalize the reading of a chunk - applying any constants that are required
 	DUCKDB_API virtual void FinalizeChunk(const MultiFileReaderBindData &bind_data,
-	                                     const MultiFileReaderData &reader_data, DataChunk &chunk);
+	                                     const MultiFileReaderData &reader_data, DataChunk &chunk, const string &filename);
 
 	//! Can remain static?
 

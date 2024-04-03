@@ -79,6 +79,8 @@ bool SimpleMultiFileList::ComplexFilterPushdown(ClientContext &context, const Mu
 	return false;
 }
 
+CustomMultiFileReaderBindData::~CustomMultiFileReaderBindData() {
+}
 
 MultiFileReader::~MultiFileReader() {
 }
@@ -390,7 +392,7 @@ void MultiFileReader::CreateFilterMap(const vector<LogicalType> &global_types, o
 }
 
 void MultiFileReader::FinalizeChunk(const MultiFileReaderBindData &bind_data, const MultiFileReaderData &reader_data,
-                                    DataChunk &chunk) {
+                                    DataChunk &chunk, const string &path) {
 	// reference all the constants set up in MultiFileReader::FinalizeBind
 	for (auto &entry : reader_data.constant_map) {
 		chunk.data[entry.column_id].Reference(entry.value);
