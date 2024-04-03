@@ -38,7 +38,7 @@ struct ColumnSegmentInfo {
 class TableStorageInfo {
 public:
 	//! The (estimated) cardinality of the table
-	idx_t cardinality = DConstants::INVALID_INDEX;
+	optional_idx cardinality;
 	//! Info of the indexes of a table
 	vector<IndexInfo> index_info;
 };

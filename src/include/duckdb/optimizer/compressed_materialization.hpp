@@ -102,7 +102,7 @@ private:
 	bool TryCompressChild(CompressedMaterializationInfo &info, const CMChildInfo &child_info,
 	                      vector<unique_ptr<CompressExpression>> &compress_expressions);
 	void CreateCompressProjection(unique_ptr<LogicalOperator> &child_op,
-	                              vector<unique_ptr<CompressExpression>> &&compress_exprs,
+	                              vector<unique_ptr<CompressExpression>> compress_exprs,
 	                              CompressedMaterializationInfo &info, CMChildInfo &child_info);
 	void CreateDecompressProjection(unique_ptr<LogicalOperator> &op, CompressedMaterializationInfo &info);
 

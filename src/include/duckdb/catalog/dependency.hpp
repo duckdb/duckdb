@@ -10,17 +10,18 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 class CatalogEntry;
 
 struct DependencyFlags {
-private:
 public:
 	DependencyFlags() : value(0) {
 	}
 	DependencyFlags(const DependencyFlags &other) : value(other.value) {
 	}
+	virtual ~DependencyFlags() = default;
 	DependencyFlags &operator=(const DependencyFlags &other) {
 		value = other.value;
 		return *this;
@@ -130,6 +131,27 @@ public:
 			result += "OWNED BY";
 		}
 		return result;
+	}
+};
+
+struct CatalogEntryInfo {
+public:
+	CatalogType type;
+	string schema;
+	string name;
+
+public:
+	bool operator==(const CatalogEntryInfo &other) const {
+		if (other.type != type) {
+			return false;
+		}
+		if (!StringUtil::CIEquals(other.schema, schema)) {
+			return false;
+		}
+		if (!StringUtil::CIEquals(other.name, name)) {
+			return false;
+		}
+		return true;
 	}
 };
 

@@ -30,7 +30,7 @@ CMBindingInfo::CMBindingInfo(ColumnBinding binding_p, const LogicalType &type_p)
 
 CompressedMaterializationInfo::CompressedMaterializationInfo(LogicalOperator &op, vector<idx_t> &&child_idxs_p,
                                                              const column_binding_set_t &referenced_bindings)
-    : child_idxs(child_idxs_p) {
+    : child_idxs(std::move(child_idxs_p)) {
 	child_info.reserve(child_idxs.size());
 	for (const auto &child_idx : child_idxs) {
 		child_info.emplace_back(*op.children[child_idx], referenced_bindings);
@@ -158,7 +158,7 @@ bool CompressedMaterialization::TryCompressChild(CompressedMaterializationInfo &
 }
 
 void CompressedMaterialization::CreateCompressProjection(unique_ptr<LogicalOperator> &child_op,
-                                                         vector<unique_ptr<CompressExpression>> &&compress_exprs,
+                                                         vector<unique_ptr<CompressExpression>> compress_exprs,
                                                          CompressedMaterializationInfo &info, CMChildInfo &child_info) {
 	// Replace child op with a projection
 	vector<unique_ptr<Expression>> projections;

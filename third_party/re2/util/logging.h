@@ -92,10 +92,11 @@ class LogMessage {
 class LogMessageFatal : public LogMessage {
  public:
   LogMessageFatal(const char* file, int line)
-      : LogMessage(file, line) {}
-  ATTRIBUTE_NORETURN ~LogMessageFatal() {
+      : LogMessage(file, line) {
+	  throw std::runtime_error("RE2 Fatal Error");
+  }
+  ~LogMessageFatal() {
     Flush();
-    abort();
   }
  private:
   LogMessageFatal(const LogMessageFatal&) = delete;
