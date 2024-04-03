@@ -40,7 +40,7 @@ unique_ptr<FunctionData> ListSliceBindData::Copy() const {
 }
 
 template <typename INDEX_TYPE>
-static idx_t CalculateSliceLength(idx_t begin, idx_t end, INDEX_TYPE step, bool svalid) {
+static idx_t CalculateSliceLength(INDEX_TYPE begin, INDEX_TYPE end, INDEX_TYPE step, bool svalid) {
 	if (step < 0) {
 		step = abs(step);
 	}
@@ -48,14 +48,14 @@ static idx_t CalculateSliceLength(idx_t begin, idx_t end, INDEX_TYPE step, bool 
 		throw InvalidInputException("Slice step cannot be zero");
 	}
 	if (step == 1) {
-		return NumericCast<int>(end - begin);
-	} else if (static_cast<idx_t>(step) >= (end - begin)) {
+		return UnsafeNumericCast<idx_t>(end - begin);
+	} else if (step >= (end - begin)) {
 		return 1;
 	}
 	if ((end - begin) % step != 0) {
-		return (end - begin) / step + 1;
+		return UnsafeNumericCast<idx_t>((end - begin) / step + 1);
 	}
-	return (end - begin) / step;
+	return UnsafeNumericCast<idx_t>((end - begin) / step);
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
@@ -64,7 +64,7 @@ INDEX_TYPE ValueLength(const INPUT_TYPE &value) {
 }
 
 template <>
-int64_t ValueLength(const list_entry_t &value) {
+idx_t ValueLength(const list_entry_t &value) {
 	return value.length;
 }
 
@@ -119,8 +119,8 @@ INPUT_TYPE SliceValue(Vector &result, INPUT_TYPE input, INDEX_TYPE begin, INDEX_
 
 template <>
 list_entry_t SliceValue(Vector &result, list_entry_t input, int64_t begin, int64_t end) {
-	input.offset += begin;
-	input.length = end - begin;
+	input.offset = UnsafeNumericCast<uint64_t>(UnsafeNumericCast<int64_t>(input.offset) + begin);
+	input.length = UnsafeNumericCast<uint64_t>(end - begin);
 	return input;
 }
 
@@ -145,14 +145,14 @@ list_entry_t SliceValueWithSteps(Vector &result, SelectionVector &sel, list_entr
 		return input;
 	}
 	input.length = CalculateSliceLength(begin, end, step, true);
-	idx_t child_idx = input.offset + begin;
+	auto child_idx = UnsafeNumericCast<idx_t>(UnsafeNumericCast<int64_t>(input.offset) + begin);
 	if (step < 0) {
-		child_idx = input.offset + end - 1;
+		child_idx = UnsafeNumericCast<idx_t>(UnsafeNumericCast<int64_t>(input.offset) + end - 1);
 	}
 	input.offset = sel_idx;
 	for (idx_t i = 0; i < input.length; i++) {
 		sel.set_index(sel_idx, child_idx);
-		child_idx += step;
+		child_idx = UnsafeNumericCast<idx_t>(UnsafeNumericCast<int64_t>(child_idx) + step);
 		sel_idx++;
 	}
 	return input;
