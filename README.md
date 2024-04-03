@@ -1,46 +1,32 @@
-<div align="center">
-  <img src="https://duckdb.org/images/logo-dl/DuckDB_Logo-stacked.svg" height="120">
-</div>
-<br>
+# DuckDB-PGQ
+
+This is a forked repository of [DuckDB](https://github.com/duckdb/duckdb) to support the [DuckPGQ](https://github.com/cwida/duckpgq-extension) extension.
+Do not clone this repository directly to use the DuckPGQ extension.
+To build the extension from source, see the [DuckPGQ](https://github.com/cwida/duckpgq-extension) repository 
+and the [documentation page](https://duckpgq.notion.site/duckpgq/b8ac652667964f958bfada1c3e53f1bb?v=3b47a8d44bdf4e0c8b503bf23f1b76f2) for instructions.
 
 
+# Loading DuckPGQ into DuckDB
+The extension currently only works for DuckDB version 0.10.1 on macOS and Linux. 
 
+Since this is a third-party extension, DuckDB must be started in `unsigned` mode to load it. The extension can be loaded with the following commands: 
 
-<p align="center">
-  <a href="https://github.com/duckdb/duckdb/actions">
-    <img src="https://github.com/duckdb/duckdb/actions/workflows/Main.yml/badge.svg?branch=main" alt="Github Actions Badge">
-  </a>
-  <a href="https://discord.gg/tcvwpjfnZx">
-    <img src="https://shields.io/discord/909674491309850675" alt="discord" />
-  </a>
-  <a href="https://github.com/duckdb/duckdb/releases/">
-    <img src="https://img.shields.io/github/v/release/duckdb/duckdb?color=brightgreen&display_name=tag&logo=duckdb&logoColor=white" alt="Latest Release">
-  </a>
-</p>
+For CLI:
+```bash
+duckdb -unsigned
 
-## DuckDB
-DuckDB is a high-performance analytical database system. It is designed to be fast, reliable, portable, and easy to use. DuckDB provides a rich SQL dialect, with support far beyond basic SQL. DuckDB supports arbitrary and nested correlated subqueries, window functions, collations, complex types (arrays, structs), and more. For more information on using DuckDB, please refer to the [DuckDB documentation](https://duckdb.org/docs/).
-
-## Installation
-If you want to install and use DuckDB, please see [our website](https://www.duckdb.org) for installation and usage instructions.
-
-## Data Import
-For CSV files and Parquet files, data import is as simple as referencing the file in the FROM clause:
-
-```sql
-SELECT * FROM 'myfile.csv';
-SELECT * FROM 'myfile.parquet';
+set custom_extension_repository = 'http://duckpgq.s3.eu-north-1.amazonaws.com';
+force install 'duckpgq'; # ensures any existing DuckPGQ version already installed is overwritten
+load 'duckpgq';
 ```
 
-Refer to our [Data Import](https://duckdb.org/docs/data/overview) section for more information.
+For Python:
+```python
+import duckdb 
+conn = duckdb.connect(config = {"allow_unsigned_extensions": "true"})
 
-## SQL Reference
-The [website](https://duckdb.org/docs/sql/introduction) contains a reference of functions and SQL constructs available in DuckDB.
+conn.execute("set custom_extension_repository = 'http://duckpgq.s3.eu-north-1.amazonaws.com';")
+conn.execute("force install 'duckpgq';")
+conn.execute("load 'duckpgq';")
+```
 
-## Development
-For development, DuckDB requires [CMake](https://cmake.org), Python3 and a `C++11` compliant compiler. Run `make` in the root directory to compile the sources. For development, use `make debug` to build a non-optimized debug version. You should run `make unit` and `make allunit` to verify that your version works properly after making changes. To test performance, you can run `BUILD_BENCHMARK=1 BUILD_TPCH=1 make` and then perform several standard benchmarks from the root directory by executing `./build/release/benchmark/benchmark_runner`. The details of benchmarks are in our [Benchmark Guide](benchmark/README.md).
-
-Please also refer to our [Build Guide](https://duckdb.org/dev/building) and [Contribution Guide](CONTRIBUTING.md).
-
-## Support
-See the [Support Options](https://duckdblabs.com/support/) page.
