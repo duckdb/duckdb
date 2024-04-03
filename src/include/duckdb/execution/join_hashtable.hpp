@@ -61,6 +61,10 @@ class JoinHashTable {
 public:
 	using ValidityBytes = TemplatedValidityMask<uint8_t>;
 
+	// only compare salts with the ht entries if the capacity is larger than 8192 so
+	// that it does not fit into the CPU cache
+	static constexpr const idx_t USE_SALT_THRESHOLD = 8192;
+
 	//! Scan structure that can be used to resume scans, as a single probe can
 	//! return 1024*N values (where N is the size of the HT). This is
 	//! returned by the JoinHashTable::Scan function and can be used to resume a
@@ -119,32 +123,35 @@ public:
 	};
 
 public:
-	struct ProbeState {
+	struct SharedState {
+
+		SharedState();
+
+		// The ptrs to the row to which a key should be inserted into during building
+		// or matched against during probing
+		Vector rhs_row_locations;
+
+		SelectionVector salt_match_sel;
+		SelectionVector key_no_match_sel;
+	};
+
+	struct ProbeState : SharedState {
 
 		ProbeState();
 
+		Vector salt_v;
 		Vector ht_offsets_v;
 		Vector ht_offsets_dense_v;
-		Vector row_ptr_insert_to_v;
-		Vector salt_v;
 
 		SelectionVector non_empty_sel;
-
-		SelectionVector key_no_match_sel;
-
-		// Selection vectors for the find entries loop. There are three options:
-		// 1. Entry is empty -> return null (do nothing, vector is already null)
-		// 2. Entry is full and salt matches -> compare the keys
-		// 3. Entry is full and salt does not match -> continue probing
-		SelectionVector salt_match_sel;
 	};
 
-	struct InsertState : ProbeState {
+	struct InsertState : SharedState {
 		InsertState(const unique_ptr<TupleDataCollection> &data_collection,
 		            const vector<column_t> &equality_predicate_columns);
 		/// Because of the index hick up
 		SelectionVector remaining_sel;
-		SelectionVector match_sel;
+		SelectionVector key_match_sel;
 		TupleDataChunkState chunk_state;
 	};
 
@@ -166,7 +173,7 @@ public:
 	void Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel);
 	//! Probe the HT with the given input chunk, resulting in the given result
 	unique_ptr<ScanStructure> Probe(DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state,
-	                                Vector *precomputed_hashes = nullptr);
+	                                optional_ptr<Vector> precomputed_hashes = nullptr);
 	//! Scan the HT to construct the full outer join result
 	void ScanFullOuter(JoinHTScanState &state, Vector &addresses, DataChunk &result);
 
@@ -268,8 +275,8 @@ private:
 
 	bool UseSalt() const;
 
-	//! Gets a pointer to the entry in the HT for each of the hashes_v using linear probing. Will update the match_sel
-	//! vector and the count argument to the number and position of the matches
+	//! Gets a pointer to the entry in the HT for each of the hashes_v using linear probing. Will update the
+	//! key_match_sel vector and the count argument to the number and position of the matches
 	void GetRowPointers(DataChunk &keys, TupleDataChunkState &key_state, ProbeState &state, Vector &hashes_v,
 	                    const SelectionVector &sel, idx_t &count, Vector &pointers_result_v,
 	                    SelectionVector &match_sel);
