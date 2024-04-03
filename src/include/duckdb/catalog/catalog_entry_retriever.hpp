@@ -18,7 +18,7 @@ using catalog_entry_callback_t = std::function<void(CatalogEntry &)>;
 // Wraps the Catalog::GetEntry method
 class CatalogEntryRetriever {
 public:
-	CatalogEntryRetriever(ClientContext &context) : context(context) {
+	explicit CatalogEntryRetriever(ClientContext &context) : context(context) {
 	}
 	CatalogEntryRetriever(const CatalogEntryRetriever &other) : callback(other.callback), context(other.context) {
 	}
@@ -43,7 +43,7 @@ public:
 	                                           QueryErrorContext error_context = QueryErrorContext());
 
 	void SetCallback(catalog_entry_callback_t callback) {
-		this->callback = callback;
+		this->callback = std::move(callback);
 	}
 	catalog_entry_callback_t GetCallback() {
 		return callback;
@@ -51,7 +51,7 @@ public:
 
 private:
 	using catalog_entry_retrieve_func_t = std::function<optional_ptr<CatalogEntry>()>;
-	optional_ptr<CatalogEntry> GetEntryInternal(catalog_entry_retrieve_func_t retriever) {
+	optional_ptr<CatalogEntry> GetEntryInternal(const catalog_entry_retrieve_func_t &retriever) {
 		auto result = retriever();
 		if (!result) {
 			return result;
