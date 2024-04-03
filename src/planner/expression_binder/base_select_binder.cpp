@@ -4,10 +4,8 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
-#include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 
@@ -26,7 +24,7 @@ BaseSelectBinder::BaseSelectBinder(Binder &binder, ClientContext &context, Bound
 BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
 	auto &expr = *expr_ptr;
 	// check if the expression binds to one of the groups
-	auto group_index = TryBindGroup(expr, depth);
+	auto group_index = TryBindGroup(expr);
 	if (group_index != DConstants::INVALID_INDEX) {
 		return BindGroup(expr, depth, group_index);
 	}
@@ -42,7 +40,7 @@ BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_p
 	}
 }
 
-idx_t BaseSelectBinder::TryBindGroup(ParsedExpression &expr, idx_t depth) {
+idx_t BaseSelectBinder::TryBindGroup(ParsedExpression &expr) {
 	// first check the group alias map, if expr is a ColumnRefExpression
 	if (expr.type == ExpressionType::COLUMN_REF) {
 		auto &colref = expr.Cast<ColumnRefExpression>();
@@ -61,9 +59,9 @@ idx_t BaseSelectBinder::TryBindGroup(ParsedExpression &expr, idx_t depth) {
 		return entry->second;
 	}
 #ifdef DEBUG
-	for (auto entry : info.map) {
-		D_ASSERT(!entry.first.get().Equals(expr));
-		D_ASSERT(!expr.Equals(entry.first.get()));
+	for (auto map_entry : info.map) {
+		D_ASSERT(!map_entry.first.get().Equals(expr));
+		D_ASSERT(!expr.Equals(map_entry.first.get()));
 	}
 #endif
 	return DConstants::INVALID_INDEX;
@@ -121,7 +119,7 @@ BindResult BaseSelectBinder::BindGroupingFunction(OperatorExpression &op, idx_t 
 	group_indexes.reserve(op.children.size());
 	for (auto &child : op.children) {
 		ExpressionBinder::QualifyColumnNames(binder, child);
-		auto idx = TryBindGroup(*child, depth);
+		auto idx = TryBindGroup(*child);
 		if (idx == DConstants::INVALID_INDEX) {
 			return BindResult(BinderException(op, "GROUPING child \"%s\" must be a grouping column", child->GetName()));
 		}
