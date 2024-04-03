@@ -169,6 +169,7 @@ class TestArrowFilterPushdown(object):
             'USMALLINT',
             'UINTEGER',
             'UBIGINT',
+            'UHUGEINT',
             'FLOAT',
             'DOUBLE',
             'HUGEINT',
