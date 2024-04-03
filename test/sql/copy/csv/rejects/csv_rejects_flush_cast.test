@@ -18,7 +18,6 @@ SELECT typeof(first(a)), typeof(first(b)), COUNT(*) FROM read_csv(
 DATE	VARCHAR	2811
 
 query IIIIIIIIII
-SELECT *
 FROM reject_errors order by all;
 ----
 3	0	439	6997	NULL	1	a	CAST	B, bla	Error when converting column "a". Could not parse string "B" according to format specifier "%d-%m-%Y"

@@ -11,17 +11,18 @@ statement ok
 SELECT * FROM read_csv(
     'data/csv/rejects/maximum_line/max_10.csv',
     columns = {'a': 'VARCHAR', 'b': 'INTEGER'},
-    rejects_table='csv_rejects_table',
-    ignore_errors=true, auto_detect=false, header = 1, max_line_size=10);
+    store_rejects=true, auto_detect=false, header = 1, max_line_size=10);
 
-query IIIIIII rowsort
-SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
-FROM csv_rejects_table;
+query IIIIIIIIII
+FROM reject_errors order by all;
 ----
-data/csv/rejects/maximum_line/max_10.csv	5	1	"a"	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaa,4	22
+3	0	5	23	23	1	a	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaa,4	Maximum line size of 10 bytes exceeded. Actual Size:19 bytes.
 
 statement ok
-DROP TABLE csv_rejects_table;
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
 
 # Test with buffer sizes
 
@@ -31,17 +32,18 @@ statement ok
 SELECT * FROM read_csv(
     'data/csv/rejects/maximum_line/max_10.csv',
     columns = {'a': 'VARCHAR', 'b': 'INTEGER'},
-    rejects_table='csv_rejects_table',
-    ignore_errors=true, auto_detect=false, header = 1, max_line_size=10, buffer_size=${buffer_size});
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=10, buffer_size=${buffer_size});
 
-query IIIIIII rowsort
-SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
-FROM csv_rejects_table;
+query IIIIIIIII
+SELECT * EXCLUDE (scan_id) FROM reject_errors order by all;
 ----
-data/csv/rejects/maximum_line/max_10.csv	5	1	"a"	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaa,4	22
+0	5	23	23	1	a	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaa,4	Maximum line size of 10 bytes exceeded. Actual Size:19 bytes.
 
 statement ok
-DROP TABLE csv_rejects_table;
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
 
 endloop
 
@@ -50,37 +52,38 @@ statement ok
 SELECT * FROM read_csv(
     'data/csv/rejects/maximum_line/over_vector.csv',
     columns = {'a': 'VARCHAR', 'b': 'INTEGER'},
-    rejects_table='csv_rejects_table',
-    ignore_errors=true, auto_detect=false, header = 1, max_line_size=20);
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=20);
 
-query IIIIIII rowsort
-SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
-FROM csv_rejects_table;
+query IIIIIIIIII
+FROM reject_errors order by all;
 ----
-data/csv/rejects/maximum_line/over_vector.csv	2282	1	"a"	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,1	13684
-data/csv/rejects/maximum_line/over_vector.csv	2591	1	"a"	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,1	15557
-data/csv/rejects/maximum_line/over_vector.csv	2923	1	"a"	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,3	17568
+27	0	2282	13685	13685	1	a	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,1	Maximum line size of 20 bytes exceeded. Actual Size:25 bytes.
+27	0	2591	15558	15558	1	a	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,1	Maximum line size of 20 bytes exceeded. Actual Size:25 bytes.
+27	0	2923	17569	17569	1	a	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,3	Maximum line size of 20 bytes exceeded. Actual Size:25 bytes.
 
 statement ok
-DROP TABLE csv_rejects_table;
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
 
 # Read Multiple Files
-
 statement ok
 SELECT * FROM read_csv(
     'data/csv/rejects/maximum_line/*.csv',
     columns = {'a': 'VARCHAR', 'b': 'INTEGER'},
-    rejects_table='csv_rejects_table',
-    ignore_errors=true, auto_detect=false, header = 1, max_line_size=10);
+     store_rejects = true, auto_detect=false, header = 1, max_line_size=10);
 
-query IIIIIII rowsort
-SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
-FROM csv_rejects_table;
+query IIIIIIIIII
+FROM reject_errors order by all;
 ----
-data/csv/rejects/maximum_line/max_10.csv	5	1	"a"	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaa,4	22
-data/csv/rejects/maximum_line/over_vector.csv	2282	1	"a"	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,1	13684
-data/csv/rejects/maximum_line/over_vector.csv	2591	1	"a"	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,1	15557
-data/csv/rejects/maximum_line/over_vector.csv	2923	1	"a"	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,3	17568
+31	0	5	23	23	1	a	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaa,4	Maximum line size of 10 bytes exceeded. Actual Size:19 bytes.
+31	1	2282	13685	13685	1	a	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,1	Maximum line size of 10 bytes exceeded. Actual Size:25 bytes.
+31	1	2591	15558	15558	1	a	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,1	Maximum line size of 10 bytes exceeded. Actual Size:25 bytes.
+31	1	2923	17569	17569	1	a	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,3	Maximum line size of 10 bytes exceeded. Actual Size:25 bytes.
 
 statement ok
-DROP TABLE csv_rejects_table;
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
