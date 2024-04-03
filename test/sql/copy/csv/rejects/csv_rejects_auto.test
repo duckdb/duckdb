@@ -11,89 +11,44 @@ query IIIII
 SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), MAX(len(column1)) FROM read_csv_auto(
     'test/sql/copy/csv/data/error/mismatch/big_bad*.csv',
     sample_size=1,
-    rejects_table='csv_rejects_table',
-    ignore_errors=true);
+    store_rejects=true);
 ----
 BIGINT	VARCHAR	11044	11044	2
 
-query IIIIIII rowsort
-SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
-FROM csv_rejects_table;
+query IIIIIIIIII rowsort
+FROM reject_errors order by all;
 ----
-test/sql/copy/csv/data/error/mismatch/big_bad.csv	2176	1	"column0"	CAST	B, A	10875
-test/sql/copy/csv/data/error/mismatch/big_bad.csv	4176	1	"column0"	CAST	C, A	20875
-test/sql/copy/csv/data/error/mismatch/big_bad2.csv	3680	1	"column0"	CAST	B, A	18395
-test/sql/copy/csv/data/error/mismatch/big_bad2.csv	5680	1	"column0"	CAST	C, A	28395
-
-query I
-SELECT error_message
-FROM csv_rejects_table where line=2176 and column_idx=1;
-----
-<REGEX>:.*Could not convert string "B" to 'BIGINT'.*
-
-query I
-SELECT error_message
-FROM csv_rejects_table where line=4176 and column_idx=1;
-----
-<REGEX>:.*Could not convert string "C" to 'BIGINT'.*
-
-query I
-SELECT error_message
-FROM csv_rejects_table where line=3680 and column_idx=1;
-----
-<REGEX>:.*Could not convert string "B" to 'BIGINT'.*
-
-query I
-SELECT error_message
-FROM csv_rejects_table where line=5680 and column_idx=1;
-----
-<REGEX>:.*Could not convert string "C" to 'BIGINT'.*
+3	0	2176	10876	10876	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
+3	0	4176	20876	20876	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
+3	1	3680	18396	18396	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
+3	1	5680	28396	28396	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
 
 statement ok
-DROP TABLE csv_rejects_table;
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
 
 # Test with lots of errors 
 query I
 SELECT SUM(num) FROM read_csv_auto(
 	'test/sql/copy/csv/data/error/mismatch/half1.csv',
 	header=true,
-	ignore_errors=true,
 	sample_size=1,
-	rejects_table='csv_rejects_table')
+	store_rejects=true)
 ----
 2464
 
 query I
-SELECT COUNT(*) FROM csv_rejects_table;
+SELECT COUNT(*) FROM reject_errors;
 ----
 1024
 
 statement ok
-DROP TABLE csv_rejects_table;
-
-# Test same with COPY
-statement ok
-CREATE TABLE tbl1 (col1 BIGINT, col2 VARCHAR);
+DROP TABLE reject_errors;
 
 statement ok
-COPY tbl1 FROM 'test/sql/copy/csv/data/error/mismatch/half1.csv'
-WITH (HEADER, IGNORE_ERRORS TRUE, SAMPLE_SIZE 1000, REJECTS_TABLE 'csv_rejects_table');
-
-query I
-SELECT SUM(col1) FROM tbl1;
-----
-2464
-
-query I
-SELECT COUNT(*) FROM csv_rejects_table;
-----
-1024
-
-statement ok
-DROP TABLE csv_rejects_table;
-
-statement ok
-DROP TABLE tbl1;
+DROP TABLE reject_scans;
 
 # Test with more errors than STANDARD_VECTOR_SIZE
 query I
@@ -113,51 +68,3 @@ SELECT COUNT(*) FROM csv_rejects_table;
 
 statement ok
 DROP TABLE csv_rejects_table;
-
-statement ok
-CREATE TABLE tbl1 (col1 BIGINT, col2 VARCHAR);
-
-statement ok
-COPY tbl1 FROM 'test/sql/copy/csv/data/error/mismatch/half2.csv'
-WITH (HEADER, IGNORE_ERRORS TRUE,  SAMPLE_SIZE 1000, REJECTS_TABLE 'csv_rejects_table');
-
-query I
-SELECT SUM(col1) FROM tbl1;
-----
-2542
-
-query I
-SELECT COUNT(*) FROM csv_rejects_table;
-----
-3072
-
-statement ok
-DROP TABLE csv_rejects_table;
-
-statement ok
-DROP TABLE tbl1;
-
-# Test with more errors than STANDARD_VECTOR_SIZE and limit
-statement ok
-CREATE TABLE tbl1 (col1 BIGINT, col2 VARCHAR);
-
-statement ok
-COPY tbl1 FROM 'test/sql/copy/csv/data/error/mismatch/half2.csv'
-WITH (HEADER, IGNORE_ERRORS TRUE, SAMPLE_SIZE 1000, REJECTS_TABLE 'csv_rejects_table', REJECTS_LIMIT 1337);
-
-query I
-SELECT SUM(col1) FROM tbl1;
-----
-2542
-
-query I
-SELECT COUNT(*) FROM csv_rejects_table;
-----
-1337
-
-statement ok
-DROP TABLE csv_rejects_table;
-
-statement ok
-DROP TABLE tbl1;
-
