@@ -280,6 +280,11 @@
         "id": 206,
         "name": "cycle",
         "type": "bool"
+      },
+      {
+        "id": 207,
+        "name": "last_value",
+        "type": "int64_t"
       }
     ]
   }

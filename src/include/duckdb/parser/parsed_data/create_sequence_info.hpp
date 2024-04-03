@@ -45,6 +45,8 @@ struct CreateSequenceInfo : public CreateInfo {
 	int64_t start_value;
 	//! Whether or not the sequence cycles
 	bool cycle;
+	//! Last value of the sequence
+	int64_t last_value;
 
 public:
 	unique_ptr<CreateInfo> Copy() const override;

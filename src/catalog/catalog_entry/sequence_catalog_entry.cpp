@@ -14,8 +14,9 @@
 namespace duckdb {
 
 SequenceData::SequenceData(CreateSequenceInfo &info)
-    : usage_count(info.usage_count), counter(info.start_value), increment(info.increment),
-      start_value(info.start_value), min_value(info.min_value), max_value(info.max_value), cycle(info.cycle) {
+    : usage_count(info.usage_count), counter(info.start_value + (info.increment * info.usage_count)),
+      last_value(info.last_value), increment(info.increment), start_value(info.start_value), min_value(info.min_value),
+      max_value(info.max_value), cycle(info.cycle) {
 }
 
 SequenceCatalogEntry::SequenceCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateSequenceInfo &info)
@@ -93,10 +94,11 @@ unique_ptr<CreateInfo> SequenceCatalogEntry::GetInfo() const {
 	result->schema = schema.name;
 	result->name = name;
 	result->usage_count = seq_data.usage_count;
+	result->last_value = seq_data.last_value;
 	result->increment = seq_data.increment;
 	result->min_value = seq_data.min_value;
 	result->max_value = seq_data.max_value;
-	result->start_value = seq_data.counter;
+	result->start_value = seq_data.start_value;
 	result->cycle = seq_data.cycle;
 	result->comment = comment;
 	return std::move(result);
