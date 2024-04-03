@@ -14,6 +14,20 @@ select __internal_compress_string_utinyint('L')
 ----
 Binder Error: Compressed materialization functions are for internal use only!
 
+# internal issue 1576
+statement ok
+create table t0 as select range%400000 a, range%400000 b from range(500000);
+
+query III
+select * from (
+      select *, row_number() OVER () as row_number from (
+          SELECT * FROM t0 ORDER BY 1) ta
+      ) tb where b > 2
+  order by a limit 2;
+----
+3	3	7
+3	3	8
+
 # tricky tests taken from test/sql/subquery/scalar/test_issue_6136.test
 # we run these with one thread since they are order dependent
 statement ok
