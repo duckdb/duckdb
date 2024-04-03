@@ -25,9 +25,8 @@ CompressionType TableDataWriter::GetColumnCompressionType(idx_t i) {
 	return table.GetColumn(LogicalIndex(i)).CompressionType();
 }
 
-void TableDataWriter::AddRowGroup(RowGroupPointer &&row_group_pointer, unique_ptr<RowGroupWriter> &&writer) {
+void TableDataWriter::AddRowGroup(RowGroupPointer &&row_group_pointer, unique_ptr<RowGroupWriter> writer) {
 	row_group_pointers.push_back(std::move(row_group_pointer));
-	writer.reset();
 }
 
 TaskScheduler &TableDataWriter::GetScheduler() {
@@ -43,7 +42,7 @@ unique_ptr<RowGroupWriter> SingleFileTableDataWriter::GetRowGroupWriter(RowGroup
 	return make_uniq<SingleFileRowGroupWriter>(table, checkpoint_manager.partial_block_manager, table_data_writer);
 }
 
-void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, DataTableInfo *info,
+void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo *info,
                                               Serializer &serializer) {
 	// store the current position in the metadata writer
 	// this is where the row groups for this table start

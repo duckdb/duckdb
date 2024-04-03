@@ -8,9 +8,9 @@
 namespace duckdb {
 
 // Forward declaration to allow conversion between hugeint and uhugeint
-struct uhugeint_t;
+struct uhugeint_t; // NOLINT: use numeric casing
 
-struct hugeint_t {
+struct hugeint_t { // NOLINT: use numeric casing
 public:
 	uint64_t lower;
 	int64_t upper;

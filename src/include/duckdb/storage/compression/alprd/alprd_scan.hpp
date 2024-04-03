@@ -28,7 +28,7 @@ namespace duckdb {
 template <class T>
 struct AlpRDVectorState {
 public:
-	using EXACT_TYPE = typename FloatingToExact<T>::type;
+	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
 	void Reset() {
 		index = 0;
@@ -70,7 +70,7 @@ public:
 template <class T>
 struct AlpRDScanState : public SegmentScanState {
 public:
-	using EXACT_TYPE = typename FloatingToExact<T>::type;
+	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
 	explicit AlpRDScanState(ColumnSegment &segment) : segment(segment), count(segment.count) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
@@ -220,7 +220,7 @@ unique_ptr<SegmentScanState> AlpRDInitScan(ColumnSegment &segment) {
 template <class T>
 void AlpRDScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                       idx_t result_offset) {
-	using EXACT_TYPE = typename FloatingToExact<T>::type;
+	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 	auto &scan_state = (AlpRDScanState<T> &)*state.scan_state;
 
 	// Get the pointer to the result values

@@ -18,7 +18,7 @@ TransactionContext::~TransactionContext() {
 	if (current_transaction) {
 		try {
 			Rollback();
-		} catch (...) {
+		} catch (...) { // NOLINT
 		}
 	}
 }

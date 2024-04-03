@@ -83,6 +83,16 @@ FROM VALUES (11000), (3100), (2900), (2800), (2600), (2500) AS tab(col);
 ----
 2900
 
+# ORDER BY ... DESC
+query II
+SELECT 
+    percentile_disc(0.8) WITHIN GROUP (ORDER BY x DESC),
+    quantile_disc(x, 0.8 ORDER BY x DESC),
+FROM 
+    (VALUES (2), (1)) _(x);
+----
+1.2	1.2
+
 #
 # VARCHAR. Remember, this is dictionary ordering, not numeric ordering!
 #

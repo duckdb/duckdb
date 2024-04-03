@@ -4,6 +4,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/transaction/delete_info.hpp"
 
 namespace duckdb {
 
@@ -198,9 +199,16 @@ idx_t ChunkVectorInfo::Delete(transaction_t transaction_id, row_t rows[], idx_t 
 	return deleted_tuples;
 }
 
-void ChunkVectorInfo::CommitDelete(transaction_t commit_id, row_t rows[], idx_t count) {
-	for (idx_t i = 0; i < count; i++) {
-		deleted[rows[i]] = commit_id;
+void ChunkVectorInfo::CommitDelete(transaction_t commit_id, const DeleteInfo &info) {
+	if (info.is_consecutive) {
+		for (idx_t i = 0; i < info.count; i++) {
+			deleted[i] = commit_id;
+		}
+	} else {
+		auto rows = info.GetRows();
+		for (idx_t i = 0; i < info.count; i++) {
+			deleted[rows[i]] = commit_id;
+		}
 	}
 }
 

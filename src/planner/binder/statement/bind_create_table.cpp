@@ -76,17 +76,16 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 			// have to resolve columns of the unique constraint
 			vector<LogicalIndex> keys;
 			logical_index_set_t key_set;
-			if (unique.index.index != DConstants::INVALID_INDEX) {
-				D_ASSERT(unique.index.index < base.columns.LogicalColumnCount());
+			if (unique.HasIndex()) {
+				D_ASSERT(unique.GetIndex().index < base.columns.LogicalColumnCount());
 				// unique constraint is given by single index
-				unique.columns.push_back(base.columns.GetColumn(unique.index).Name());
-				keys.push_back(unique.index);
-				key_set.insert(unique.index);
+				unique.SetColumnName(base.columns.GetColumn(unique.GetIndex()).Name());
+				keys.push_back(unique.GetIndex());
+				key_set.insert(unique.GetIndex());
 			} else {
 				// unique constraint is given by list of names
 				// have to resolve names
-				D_ASSERT(!unique.columns.empty());
-				for (auto &keyname : unique.columns) {
+				for (auto &keyname : unique.GetColumnNames()) {
 					if (!base.columns.ColumnExists(keyname)) {
 						throw ParserException("column \"%s\" named in key does not exist", keyname);
 					}
@@ -102,7 +101,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 				}
 			}
 
-			if (unique.is_primary_key) {
+			if (unique.IsPrimaryKey()) {
 				// we can only have one primary key per table
 				if (has_primary_key) {
 					throw ParserException("table \"%s\" has more than one primary key", base.table);
@@ -111,7 +110,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 				primary_keys = keys;
 			}
 			info.bound_constraints.push_back(
-			    make_uniq<BoundUniqueConstraint>(std::move(keys), std::move(key_set), unique.is_primary_key));
+			    make_uniq<BoundUniqueConstraint>(std::move(keys), std::move(key_set), unique.IsPrimaryKey()));
 			break;
 		}
 		case ConstraintType::FOREIGN_KEY: {
@@ -203,7 +202,6 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 			col.SetType(bound_expression->return_type);
 
 			// Update the type in the binding, for future expansions
-			string ignore;
 			table_binding->types[i.index] = col.Type();
 		}
 		bound_indices.insert(i);
@@ -231,7 +229,7 @@ void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expr
 	}
 }
 
-static void ExtractExpressionDependencies(Expression &expr, DependencyList &dependencies) {
+static void ExtractExpressionDependencies(Expression &expr, LogicalDependencyList &dependencies) {
 	if (expr.type == ExpressionType::BOUND_FUNCTION) {
 		auto &function = expr.Cast<BoundFunctionExpression>();
 		if (function.function.dependency) {

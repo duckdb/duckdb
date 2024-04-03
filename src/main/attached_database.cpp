@@ -96,14 +96,14 @@ string AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &f
 	return name;
 }
 
-void AttachedDatabase::Initialize() {
+void AttachedDatabase::Initialize(optional_ptr<ClientContext> context) {
 	if (IsSystem()) {
 		catalog->Initialize(true);
 	} else {
 		catalog->Initialize(false);
 	}
 	if (storage) {
-		storage->Initialize();
+		storage->Initialize(context);
 	}
 }
 
@@ -126,12 +126,20 @@ Catalog &AttachedDatabase::ParentCatalog() {
 	return *parent_catalog;
 }
 
+const Catalog &AttachedDatabase::ParentCatalog() const {
+	return *parent_catalog;
+}
+
 bool AttachedDatabase::IsInitialDatabase() const {
 	return is_initial_database;
 }
 
 void AttachedDatabase::SetInitialDatabase() {
 	is_initial_database = true;
+}
+
+void AttachedDatabase::SetReadOnlyDatabase() {
+	type = AttachedDatabaseType::READ_ONLY_DATABASE;
 }
 
 void AttachedDatabase::Close() {
@@ -162,7 +170,7 @@ void AttachedDatabase::Close() {
 			}
 			storage->CreateCheckpoint(true);
 		}
-	} catch (...) {
+	} catch (...) { // NOLINT
 	}
 }
 

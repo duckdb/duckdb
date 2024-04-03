@@ -3,12 +3,11 @@
 // Description: This file contains the vectorized hash implementations
 //===--------------------------------------------------------------------===//
 
-#include "duckdb/common/uhugeint.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
 
@@ -91,6 +90,8 @@ static inline void StructLoopHash(Vector &input, Vector &hashes, const Selection
 
 template <bool HAS_RSEL, bool FIRST_HASH>
 static inline void ListLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
+	// FIXME: if we want to be more efficient we shouldn't flatten, but the logic here currently requires it
+	hashes.Flatten(count);
 	auto hdata = FlatVector::GetData<hash_t>(hashes);
 
 	UnifiedVectorFormat idata;

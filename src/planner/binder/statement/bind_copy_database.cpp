@@ -31,11 +31,20 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseSchema(CopyDatabaseStatement
 	catalog_entries = PhysicalExport::GetNaiveExportOrder(context, from_database);
 
 	auto info = make_uniq<CopyDatabaseInfo>(from_database, to_database);
+	auto to_database_name = to_database.GetName();
 	for (auto &entry : catalog_entries) {
 		auto create_info = entry.get().GetInfo();
-		create_info->catalog = to_database.GetName();
+		create_info->catalog = to_database_name;
 		auto on_conflict = create_info->type == CatalogType::SCHEMA_ENTRY ? OnCreateConflict::IGNORE_ON_CONFLICT
 		                                                                  : OnCreateConflict::ERROR_ON_CONFLICT;
+		// Update all the dependencies of the entry to point to the newly created entries on the target database
+		LogicalDependencyList altered_dependencies;
+		for (auto &dep : create_info->dependencies.Set()) {
+			auto altered_dep = dep;
+			altered_dep.catalog = to_database_name;
+			altered_dependencies.AddDependency(altered_dep);
+		}
+		create_info->dependencies = altered_dependencies;
 		create_info->on_conflict = on_conflict;
 		info->entries.push_back(std::move(create_info));
 	}

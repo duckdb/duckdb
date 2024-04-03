@@ -62,7 +62,7 @@ struct FixedPreparedBatchData {
 class FixedBatchCopyGlobalState : public GlobalSinkState {
 public:
 	// heuristic - we need at least 4MB of cache space per column per thread we launch
-	static constexpr const idx_t MINIMUM_MEMORY_PER_COLUMN_PER_THREAD = 4 * 1024 * 1024;
+	static constexpr const idx_t MINIMUM_MEMORY_PER_COLUMN_PER_THREAD = 4ULL * 1024ULL * 1024ULL;
 
 public:
 	explicit FixedBatchCopyGlobalState(ClientContext &context_p, unique_ptr<GlobalFunctionData> global_state,
@@ -117,7 +117,7 @@ public:
 	}
 };
 
-enum class FixedBatchCopyState { SINKING_DATA = 1, PROCESSING_TASKS = 2 };
+enum class FixedBatchCopyState : uint8_t { SINKING_DATA = 1, PROCESSING_TASKS = 2 };
 
 class FixedBatchCopyLocalState : public LocalSinkState {
 public:

@@ -53,6 +53,7 @@ constexpr FileOpenFlags FileFlags::FILE_FLAGS_FILE_CREATE_NEW;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_APPEND;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_PRIVATE;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS;
+constexpr FileOpenFlags FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
 
 void FileOpenFlags::Verify() {
 #ifdef DEBUG
@@ -116,7 +117,7 @@ void FileSystem::SetWorkingDirectory(const string &path) {
 	}
 }
 
-idx_t FileSystem::GetAvailableMemory() {
+optional_idx FileSystem::GetAvailableMemory() {
 	errno = 0;
 
 #ifdef __MVS__
@@ -127,7 +128,7 @@ idx_t FileSystem::GetAvailableMemory() {
 	idx_t max_memory = MinValue<idx_t>((idx_t)sysconf(_SC_PHYS_PAGES) * (idx_t)sysconf(_SC_PAGESIZE), UINTPTR_MAX);
 #endif
 	if (errno != 0) {
-		return DConstants::INVALID_INDEX;
+		return optional_idx();
 	}
 	return max_memory;
 }
@@ -217,7 +218,7 @@ void FileSystem::SetWorkingDirectory(const string &path) {
 	}
 }
 
-idx_t FileSystem::GetAvailableMemory() {
+optional_idx FileSystem::GetAvailableMemory() {
 	ULONGLONG available_memory_kb;
 	if (GetPhysicallyInstalledSystemMemory(&available_memory_kb)) {
 		return MinValue<idx_t>(available_memory_kb * 1000, UINTPTR_MAX);
@@ -229,7 +230,7 @@ idx_t FileSystem::GetAvailableMemory() {
 	if (GlobalMemoryStatusEx(&mem_state)) {
 		return MinValue<idx_t>(mem_state.ullTotalPhys, UINTPTR_MAX);
 	}
-	return DConstants::INVALID_INDEX;
+	return optional_idx();
 }
 
 string FileSystem::GetWorkingDirectory() {
@@ -361,15 +362,15 @@ void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	throw NotImplementedException("%s: Truncate is not implemented!", GetName());
 }
 
-bool FileSystem::DirectoryExists(const string &directory) {
+bool FileSystem::DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) {
 	throw NotImplementedException("%s: DirectoryExists is not implemented!", GetName());
 }
 
-void FileSystem::CreateDirectory(const string &directory) {
+void FileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
 	throw NotImplementedException("%s: CreateDirectory is not implemented!", GetName());
 }
 
-void FileSystem::RemoveDirectory(const string &directory) {
+void FileSystem::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
 	throw NotImplementedException("%s: RemoveDirectory is not implemented!", GetName());
 }
 
@@ -378,19 +379,19 @@ bool FileSystem::ListFiles(const string &directory, const std::function<void(con
 	throw NotImplementedException("%s: ListFiles is not implemented!", GetName());
 }
 
-void FileSystem::MoveFile(const string &source, const string &target) {
+void FileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
 	throw NotImplementedException("%s: MoveFile is not implemented!", GetName());
 }
 
-bool FileSystem::FileExists(const string &filename) {
+bool FileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
 	throw NotImplementedException("%s: FileExists is not implemented!", GetName());
 }
 
-bool FileSystem::IsPipe(const string &filename) {
+bool FileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> opener) {
 	return false;
 }
 
-void FileSystem::RemoveFile(const string &filename) {
+void FileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
 	throw NotImplementedException("%s: RemoveFile is not implemented!", GetName());
 }
 
@@ -494,6 +495,10 @@ idx_t FileSystem::SeekPosition(FileHandle &handle) {
 
 bool FileSystem::CanSeek() {
 	throw NotImplementedException("%s: CanSeek is not implemented!", GetName());
+}
+
+bool FileSystem::IsManuallySet() {
+	return false;
 }
 
 unique_ptr<FileHandle> FileSystem::OpenCompressedFile(unique_ptr<FileHandle> handle, bool write) {

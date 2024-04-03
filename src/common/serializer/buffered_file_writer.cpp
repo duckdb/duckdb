@@ -23,7 +23,7 @@ idx_t BufferedFileWriter::GetTotalWritten() {
 }
 
 void BufferedFileWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
-	if (write_size >= (2 * FILE_BUFFER_SIZE - offset)) {
+	if (write_size >= (2ULL * FILE_BUFFER_SIZE - offset)) {
 		idx_t to_copy = 0;
 		// Check before performing direct IO if there is some data in the current internal buffer.
 		// If so, then fill the buffer (to avoid to small write operation), flush it and then write
@@ -37,7 +37,7 @@ void BufferedFileWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
 			Flush(); // Flush buffer before writing every things else
 		}
 		idx_t remaining_to_write = write_size - to_copy;
-		fs.Write(*handle, const_cast<data_ptr_t>(buffer + to_copy), remaining_to_write);
+		fs.Write(*handle, const_cast<data_ptr_t>(buffer + to_copy), remaining_to_write); // NOLINT: wrong API in Write
 		total_written += remaining_to_write;
 	} else {
 		// first copy anything we can from the buffer

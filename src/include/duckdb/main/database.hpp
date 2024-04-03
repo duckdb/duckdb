@@ -25,6 +25,7 @@ class FileSystem;
 class TaskScheduler;
 class ObjectCache;
 struct AttachInfo;
+class DatabaseFileSystem;
 
 class DatabaseInstance : public std::enable_shared_from_this<DatabaseInstance> {
 	friend class DuckDB;
@@ -73,6 +74,7 @@ private:
 	unique_ptr<ConnectionManager> connection_manager;
 	unordered_set<std::string> loaded_extensions;
 	ValidChecker db_validity;
+	unique_ptr<DatabaseFileSystem> db_file_system;
 };
 
 //! The database object. This object holds the catalog and all the

@@ -334,17 +334,19 @@ void Binder::AddCTE(const string &name, CommonTableExpressionInfo &info) {
 	CTE_bindings.insert(make_pair(name, reference<CommonTableExpressionInfo>(info)));
 }
 
-optional_ptr<CommonTableExpressionInfo> Binder::FindCTE(const string &name, bool skip) {
+vector<reference<CommonTableExpressionInfo>> Binder::FindCTE(const string &name, bool skip) {
 	auto entry = CTE_bindings.find(name);
+	vector<reference<CommonTableExpressionInfo>> ctes;
 	if (entry != CTE_bindings.end()) {
 		if (!skip || entry->second.get().query->node->type == QueryNodeType::RECURSIVE_CTE_NODE) {
-			return &entry->second.get();
+			ctes.push_back(entry->second);
 		}
 	}
 	if (parent && inherit_ctes) {
-		return parent->FindCTE(name, name == alias);
+		auto parent_ctes = parent->FindCTE(name, name == alias);
+		ctes.insert(ctes.end(), parent_ctes.begin(), parent_ctes.end());
 	}
-	return nullptr;
+	return ctes;
 }
 
 bool Binder::CTEIsAlreadyBound(CommonTableExpressionInfo &cte) {

@@ -95,7 +95,7 @@ protected:
 	DUCKDB_API virtual void AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier);
 };
 
-struct StrfTimeFormat : public StrTimeFormat {
+struct StrfTimeFormat : public StrTimeFormat { // NOLINT: work-around bug in clang-tidy
 	DUCKDB_API idx_t GetLength(date_t date, dtime_t time, int32_t utc_offset, const char *tz_name);
 
 	DUCKDB_API void FormatString(date_t date, int32_t data[8], const char *tz_name, char *target);
@@ -128,7 +128,7 @@ protected:
 	                             char *target);
 };
 
-struct StrpTimeFormat : public StrTimeFormat {
+struct StrpTimeFormat : public StrTimeFormat { // NOLINT: work-around bug in clang-tidy
 public:
 	StrpTimeFormat();
 
@@ -137,7 +137,7 @@ public:
 		int32_t data[8]; // year, month, day, hour, min, sec, µs, offset
 		string tz;
 		string error_message;
-		idx_t error_position = DConstants::INVALID_INDEX;
+		optional_idx error_position;
 
 		bool is_special;
 		date_t special;
@@ -169,7 +169,7 @@ public:
 	static StrpTimeFormat Deserialize(Deserializer &deserializer);
 
 protected:
-	static string FormatStrpTimeError(const string &input, idx_t position);
+	static string FormatStrpTimeError(const string &input, optional_idx position);
 	DUCKDB_API void AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) override;
 	int NumericSpecifierWidth(StrTimeSpecifier specifier);
 	int32_t TryParseCollection(const char *data, idx_t &pos, idx_t size, const string_t collection[],

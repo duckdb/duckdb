@@ -1244,7 +1244,7 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	//   row-group pointers
 	//   table pointer
 	//   index data
-	writer.FinalizeTable(std::move(global_stats), info.get(), serializer);
+	writer.FinalizeTable(global_stats, info.get(), serializer);
 }
 
 void DataTable::CommitDropColumn(idx_t index) {
