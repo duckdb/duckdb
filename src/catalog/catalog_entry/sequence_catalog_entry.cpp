@@ -58,9 +58,6 @@ static int64_t ReconstructValue(const CreateSequenceInfo &info, idx_t usage_coun
 	}
 }
 
-// NOTE: usage_count is explicitly set to 0,
-// if the sequence was serialized to disk the start_value
-// was updated to the value of the last_value before serializing, keeping the state of the sequence.
 SequenceData::SequenceData(CreateSequenceInfo &info)
     : usage_count(info.usage_count), counter(ReconstructValue(info, info.usage_count)), last_value(info.start_value),
       increment(info.increment), start_value(info.start_value), min_value(info.min_value), max_value(info.max_value),
