@@ -10,101 +10,67 @@ query III rowsort
 SELECT * FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/bad.csv',
     columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
-    rejects_table='csv_rejects_table',
-    ignore_errors=true, auto_detect=false);
+    store_rejects = true, auto_detect=true);
 ----
 1	2	AAA
 6	7	CCC
 
-query IIIIIII rowsort
-SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
-FROM csv_rejects_table;
+query IIIIIIIIII
+FROM reject_errors;
 ----
-test/sql/copy/csv/data/error/mismatch/bad.csv	2	2	"col1"	CAST	4,BBB,9,	9
-
-query I
-SELECT error_message
-FROM csv_rejects_table;
-----
-<REGEX>:.*Could not convert string "BBB" to 'INTEGER'.*
+3	0	2	10	12	2	col1	CAST	4,BBB,9,	Error when converting column "col1". Could not convert string "BBB" to 'INTEGER'
 
 statement ok
-DROP TABLE csv_rejects_table;
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
 
 # Test with multiple columns on the same row
 query III rowsort
 SELECT * FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/bad2.csv',
     columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'INTEGER'},
-    rejects_table='csv_rejects_table',
-    ignore_errors=true, auto_detect=false);
+    store_rejects = true, auto_detect=false);
 ----
 4	5	9
 
-query IIIIIII rowsort
-SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
-FROM csv_rejects_table;
+query IIIIIIIIII
+FROM reject_errors ORDER BY ALL;
 ----
-test/sql/copy/csv/data/error/mismatch/bad2.csv	1	3	"col2"	CAST	1,2,DDD,	0
-test/sql/copy/csv/data/error/mismatch/bad2.csv	3	1	"col0"	CAST	EEE,7,FFF,	16
-test/sql/copy/csv/data/error/mismatch/bad2.csv	3	3	"col2"	CAST	EEE,7,FFF,	16
-
-query I
-SELECT error_message
-FROM csv_rejects_table where line=1 and column_idx=3;
-----
-<REGEX>:.*Could not convert string "DDD" to 'INTEGER'.*
-
-query I
-SELECT error_message
-FROM csv_rejects_table where line=3 and column_idx=1;
-----
-<REGEX>:.*Could not convert string "EEE" to 'INTEGER'.*
-
-query I
-SELECT error_message
-FROM csv_rejects_table where line=3 and column_idx=3;
-----
-<REGEX>:.*Could not convert string "FFF" to 'INTEGER'.*
+7	0	1	1	5	3	col2	CAST	1,2,DDD,	Error when converting column "col2". Could not convert string "DDD" to 'INTEGER'
+7	0	3	17	17	1	col0	CAST	EEE,7,FFF,	Error when converting column "col0". Could not convert string "EEE" to 'INTEGER'
+7	0	3	17	23	3	col2	CAST	EEE,7,FFF,	Error when converting column "col2". Could not convert string "FFF" to 'INTEGER'
 
 statement ok
-DROP TABLE csv_rejects_table;
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
 
 # Test with multiple files
 query III rowsort
 SELECT * FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/bad*.csv',
     columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
-    rejects_table='csv_rejects_table',
-    ignore_errors=true, auto_detect=false);
+    store_rejects = true, auto_detect=false);
 ----
 1	2	AAA
 1	2	DDD
 4	5	9
 6	7	CCC
 
-
-query IIIIIII rowsort
-SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
-FROM csv_rejects_table;
+query IIIIIIIIII
+FROM reject_errors ORDER BY ALL;
 ----
-test/sql/copy/csv/data/error/mismatch/bad.csv	2	2	"col1"	CAST	4,BBB,9,	9
-test/sql/copy/csv/data/error/mismatch/bad2.csv	3	1	"col0"	CAST	EEE,7,FFF,	16
-
-query I
-SELECT error_message
-FROM csv_rejects_table where line=2 and column_idx=2;
-----
-<REGEX>:.*Could not convert string "BBB" to 'INTEGER'.*
-
-query I
-SELECT error_message
-FROM csv_rejects_table where line=3 and column_idx=1;
-----
-<REGEX>:.*Could not convert string "EEE" to 'INTEGER'.*
+11	0	2	10	12	2	col1	CAST	4,BBB,9,	Error when converting column "col1". Could not convert string "BBB" to 'INTEGER'
+11	1	3	17	17	1	col0	CAST	EEE,7,FFF,	Error when converting column "col0". Could not convert string "EEE" to 'INTEGER'
 
 statement ok
-DROP TABLE csv_rejects_table;
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
 
 # Set limit
 
@@ -112,9 +78,7 @@ query III rowsort
 SELECT * FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/bad*.csv',
     columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
-    rejects_table='csv_rejects_table',
-    rejects_limit=2,
-    ignore_errors=true, auto_detect=false);
+    store_rejects = true,rejects_limit=2, ignore_errors=true, auto_detect=false);
 ----
 1	2	AAA
 1	2	DDD
@@ -123,121 +87,80 @@ SELECT * FROM read_csv(
 
 # We should now only have two errors logged
 query I
-SELECT COUNT(*) FROM csv_rejects_table
+SELECT COUNT(*) FROM reject_errors
 ----
 2
 
 statement ok
-DROP TABLE csv_rejects_table;
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
 
 # Try with bigger files
 query I
 SELECT SUM(num) FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/big_bad.csv',
     columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
-    rejects_table='csv_rejects_table',
-    ignore_errors=true, auto_detect=false);
+    store_rejects = true, auto_detect=false);
 ----
 4270
 
-query  IIIIIII rowsort
-SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
-FROM csv_rejects_table;
+query IIIIIIIIII
+FROM reject_errors ORDER BY ALL;
 ----
-test/sql/copy/csv/data/error/mismatch/big_bad.csv	2176	1	"num"	CAST	B, A	10875
-test/sql/copy/csv/data/error/mismatch/big_bad.csv	4176	1	"num"	CAST	C, A	20875
-
-query I
-SELECT error_message
-FROM csv_rejects_table where line=2176 and column_idx=1;
-----
-<REGEX>:.*Could not convert string "B" to 'INTEGER'.*
-
-query I
-SELECT error_message
-FROM csv_rejects_table where line=4176 and column_idx=1;
-----
-<REGEX>:.*Could not convert string "C" to 'INTEGER'.*
+19	0	2176	10876	10876	1	num	CAST	B, A	Error when converting column "num". Could not convert string "B" to 'INTEGER'
+19	0	4176	20876	20876	1	num	CAST	C, A	Error when converting column "num". Could not convert string "C" to 'INTEGER'
 
 statement ok
-DROP TABLE csv_rejects_table;
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
 
 query I
 SELECT SUM(num) FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/big_bad2.csv',
     columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
-    rejects_table='csv_rejects_table',
-    ignore_errors=true,  auto_detect=false)
+    store_rejects = true,  auto_detect=false)
 ----
 6774
 
-query  IIIIIII rowsort
-SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
-FROM csv_rejects_table;
+query IIIIIIIIII
+FROM reject_errors ORDER BY ALL;
 ----
-test/sql/copy/csv/data/error/mismatch/big_bad2.csv	3680	1	"num"	CAST	B, A	18395
-test/sql/copy/csv/data/error/mismatch/big_bad2.csv	5680	1	"num"	CAST	C, A	28395
+23	0	3680	18396	18396	1	num	CAST	B, A	Error when converting column "num". Could not convert string "B" to 'INTEGER'
+23	0	5680	28396	28396	1	num	CAST	C, A	Error when converting column "num". Could not convert string "C" to 'INTEGER'
 
-query I
-SELECT error_message
-FROM csv_rejects_table where line=3680 and column_idx=1;
-----
-<REGEX>:.*Could not convert string "B" to 'INTEGER'.*
-
-query I
-SELECT error_message
-FROM csv_rejects_table where line=5680 and column_idx=1;
-----
-<REGEX>:.*Could not convert string "C" to 'INTEGER'.*
 
 statement ok
-DROP TABLE csv_rejects_table;
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
 
 # Test with multiple big files
 query I
 SELECT SUM(num) FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/big_*.csv',
     columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
-    rejects_table='csv_rejects_table',
-    ignore_errors=true, auto_detect=false);
+    store_rejects = true, auto_detect=false);
 ----
 11044
 
-query  IIIIIII rowsort
-SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
-FROM csv_rejects_table;
+query IIIIIIIIII
+FROM reject_errors ORDER BY ALL;
 ----
-test/sql/copy/csv/data/error/mismatch/big_bad.csv	2176	1	"num"	CAST	B, A	10875
-test/sql/copy/csv/data/error/mismatch/big_bad.csv	4176	1	"num"	CAST	C, A	20875
-test/sql/copy/csv/data/error/mismatch/big_bad2.csv	3680	1	"num"	CAST	B, A	18395
-test/sql/copy/csv/data/error/mismatch/big_bad2.csv	5680	1	"num"	CAST	C, A	28395
-
-query I
-SELECT error_message
-FROM csv_rejects_table where line=3680 and column_idx=1;
-----
-<REGEX>:.*Could not convert string "B" to 'INTEGER'.*
-
-query I
-SELECT error_message
-FROM csv_rejects_table where line=5680 and column_idx=1;
-----
-<REGEX>:.*Could not convert string "C" to 'INTEGER'.*
-
-query I
-SELECT error_message
-FROM csv_rejects_table where line=2176 and column_idx=1;
-----
-<REGEX>:.*Could not convert string "B" to 'INTEGER'.*
-
-query I
-SELECT error_message
-FROM csv_rejects_table where line=4176 and column_idx=1;
-----
-<REGEX>:.*Could not convert string "C" to 'INTEGER'.*
+27	0	2176	10876	10876	1	num	CAST	B, A	Error when converting column "num". Could not convert string "B" to 'INTEGER'
+27	0	4176	20876	20876	1	num	CAST	C, A	Error when converting column "num". Could not convert string "C" to 'INTEGER'
+27	1	3680	18396	18396	1	num	CAST	B, A	Error when converting column "num". Could not convert string "B" to 'INTEGER'
+27	1	5680	28396	28396	1	num	CAST	C, A	Error when converting column "num". Could not convert string "C" to 'INTEGER'
 
 statement ok
-DROP TABLE csv_rejects_table;
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
 
 # Test with multiple rejects table in the same query
 query IIII rowsort
@@ -245,61 +168,36 @@ SELECT *
 FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/small1.csv',
     columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
-    rejects_table='csv_rejects_table_left',
-    ignore_errors=true) as L
+    store_rejects = true) as L
 JOIN read_csv(
     'test/sql/copy/csv/data/error/mismatch/small2.csv',
     columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
-    rejects_table='csv_rejects_table_right',
-    ignore_errors=true) as R
+   store_rejects = true) as R
 ON L.num = R.num;
 ----
 1	A	1	A
 3	C	3	C
 
-query IIIIIII rowsort
-SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
-FROM csv_rejects_table_left;
+query IIIIIIIIIIIII
+FROM reject_scans ORDER BY ALL;
 ----
-test/sql/copy/csv/data/error/mismatch/small1.csv	3	1	"num"	CAST	X,Y	14
-test/sql/copy/csv/data/error/mismatch/small1.csv	6	1	"num"	CAST	X,Y	26
+31	0	test/sql/copy/csv/data/error/mismatch/small1.csv	,	"	"	\n	0	true	{'num': 'INTEGER','str': 'VARCHAR'}	NULL	NULL	store_rejects=true
+31	1	test/sql/copy/csv/data/error/mismatch/small2.csv	,	"	"	\n	0	true	{'num': 'INTEGER','str': 'VARCHAR'}	NULL	NULL	store_rejects=true
 
-query IIIIIII rowsort
-SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
-FROM csv_rejects_table_right;
-----
-test/sql/copy/csv/data/error/mismatch/small2.csv	3	1	"num"	CAST	X,Y	14
-test/sql/copy/csv/data/error/mismatch/small2.csv	5	1	"num"	CAST	X,Y	22
 
-query I
-SELECT error_message
-FROM csv_rejects_table_left where line=3 and column_idx=1;
+query IIIIIIIIII
+FROM reject_errors ORDER BY ALL;
 ----
-<REGEX>:.*Could not convert string "X" to 'INTEGER'.*
-
-query I
-SELECT error_message
-FROM csv_rejects_table_left where line=6 and column_idx=1;
-----
-<REGEX>:.*Could not convert string "X" to 'INTEGER'.*
-
-query I
-SELECT error_message
-FROM csv_rejects_table_right where line=3 and column_idx=1;
-----
-<REGEX>:.*Could not convert string "X" to 'INTEGER'.*
-
-query I
-SELECT error_message
-FROM csv_rejects_table_right where line=5 and column_idx=1;
-----
-<REGEX>:.*Could not convert string "X" to 'INTEGER'.*
+31	0	3	15	15	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
+31	0	6	27	27	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
+31	1	3	15	15	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
+31	1	5	23	23	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
 
 statement ok
-DROP TABLE csv_rejects_table_left;
+DROP TABLE reject_errors;
 
 statement ok
-DROP TABLE csv_rejects_table_right;
+DROP TABLE reject_scans;
 
 # Test with multiple rejects table in the same query, with different limits
 # (only one reject should be logged in right table)
@@ -308,36 +206,28 @@ SELECT *
 FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/small1.csv',
     columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
-    rejects_table='csv_rejects_table_left',
-    ignore_errors=true) as L
+    store_rejects = true) as L
 JOIN read_csv(
     'test/sql/copy/csv/data/error/mismatch/small2.csv',
     columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
-    rejects_table='csv_rejects_table_right',
-	rejects_limit=1,
-    ignore_errors=true) as R
+    store_rejects = true, rejects_limit=1) as R
 ON L.num = R.num;
 ----
 1	A	1	A
 3	C	3	C
 
 
-query IIIIIII rowsort
-SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
-FROM csv_rejects_table_left;
+query IIIIIIIIII
+FROM reject_errors ORDER BY ALL;
 ----
-test/sql/copy/csv/data/error/mismatch/small1.csv	3	1	"num"	CAST	X,Y	14
-test/sql/copy/csv/data/error/mismatch/small1.csv	6	1	"num"	CAST	X,Y	26
+36	0	3	15	15	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
+36	0	6	27	27	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
+36	1	3	15	15	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
 
-query I
-SELECT COUNT(*)
-FROM csv_rejects_table_right;
-----
-1
 
 statement ok
-DROP TABLE csv_rejects_table_left;
+DROP TABLE reject_errors;
 
 statement ok
-DROP TABLE csv_rejects_table_right;
+DROP TABLE reject_scans;
 

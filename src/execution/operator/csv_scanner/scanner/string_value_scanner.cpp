@@ -120,8 +120,8 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		if (error) {
 			// We error pointing to the current value error.
 			current_errors.push_back({CSVErrorType::TOO_MANY_COLUMNS, cur_col_id, last_position});
+			cur_col_id++;
 		}
-		cur_col_id++;
 		return;
 	}
 
@@ -552,7 +552,6 @@ bool StringValueResult::AddRowInternal() {
 				    last_position.GetGlobalPosition(requested_size));
 				error_handler.Error(csv_error);
 			}
-
 			// If we are here we ignore_errors, so we delete this line
 			number_of_rows--;
 		}

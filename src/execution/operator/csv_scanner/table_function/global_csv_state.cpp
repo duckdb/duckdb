@@ -245,8 +245,8 @@ void CSVGlobalState::FillRejectsTable() {
 		InternalAppender errors_appender(context, errors_table);
 		InternalAppender scans_appender(context, scans_table);
 		idx_t scan_idx = context.transaction.GetActiveQuery();
-		idx_t file_idx = 0;
 		for (auto &file : file_scans) {
+			idx_t file_idx = context.transaction.GetIncrementalIndex();
 			auto file_name = file->file_path;
 			auto &errors = file->error_handler->errors;
 			// We first insert the file into the file scans table
@@ -309,7 +309,6 @@ void CSVGlobalState::FillRejectsTable() {
 				rejects->count = 0;
 				FillScanErrorTable(scans_appender, scan_idx, file_idx, *file);
 			}
-			file_idx++;
 		}
 		errors_appender.Close();
 		scans_appender.Close();
