@@ -129,4 +129,7 @@ end
         DuckDB.end_row(appender)
     end
     DuckDB.close(appender)
+
+    df2 = DuckDB.query(db, "select * from data") |> DataFrame
+    @test isequal(df2, DataFrame(x = [1, 2, missing, missing]))
 end
