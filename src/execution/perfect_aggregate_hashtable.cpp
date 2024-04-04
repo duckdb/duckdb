@@ -64,7 +64,7 @@ static void ComputeGroupLocationTemplated(UnifiedVectorFormat &group_data, Value
 			// we only need to handle non-null values here
 			if (group_data.validity.RowIsValid(index)) {
 				D_ASSERT(data[index] >= min_val);
-				uintptr_t adjusted_value = (data[index] - min_val) + 1;
+				auto adjusted_value = UnsafeNumericCast<uintptr_t>((data[index] - min_val) + 1);
 				address_data[i] += adjusted_value << current_shift;
 			}
 		}
@@ -72,7 +72,7 @@ static void ComputeGroupLocationTemplated(UnifiedVectorFormat &group_data, Value
 		// no null values: we can directly compute the addresses
 		for (idx_t i = 0; i < count; i++) {
 			auto index = group_data.sel->get_index(i);
-			uintptr_t adjusted_value = (data[index] - min_val) + 1;
+			auto adjusted_value = UnsafeNumericCast<uintptr_t>((data[index] - min_val) + 1);
 			address_data[i] += adjusted_value << current_shift;
 		}
 	}
@@ -149,7 +149,7 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 		}
 		// move to the next aggregate
 		payload_idx += input_count;
-		VectorOperations::AddInPlace(addresses, aggregate.payload_size, payload.size());
+		VectorOperations::AddInPlace(addresses, NumericCast<int64_t>(aggregate.payload_size), payload.size());
 	}
 }
 
@@ -199,7 +199,7 @@ static void ReconstructGroupVectorTemplated(uint32_t group_values[], Value &min,
 	auto min_data = min.GetValueUnsafe<T>();
 	for (idx_t i = 0; i < entry_count; i++) {
 		// extract the value of this group from the total group index
-		auto group_index = UnsafeNumericCast<int32_t>((group_values[i] >> shift) & mask);
+		auto group_index = UnsafeNumericCast<T>((group_values[i] >> shift) & mask);
 		if (group_index == 0) {
 			// if it is 0, the value is NULL
 			validity_mask.SetInvalid(i);

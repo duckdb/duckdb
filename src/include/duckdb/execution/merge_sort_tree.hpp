@@ -515,8 +515,8 @@ void MergeSortTree<E, O, CMP, F, C>::AggregateLowerBound(const idx_t lower, cons
 			entry.first = run_idx.first * level_width;
 			entry.second = std::min(entry.first + level_width, static_cast<idx_t>(tree[0].first.size()));
 			auto *level_data = tree[level].first.data();
-			idx_t entry_idx =
-			    std::lower_bound(level_data + entry.first, level_data + entry.second, needle) - level_data;
+			auto entry_idx = NumericCast<idx_t>(
+			    std::lower_bound(level_data + entry.first, level_data + entry.second, needle) - level_data);
 			cascading_idx.first = cascading_idx.second =
 			    (entry_idx / CASCADING + 2 * (entry.first / level_width)) * FANOUT;
 
@@ -545,7 +545,7 @@ void MergeSortTree<E, O, CMP, F, C>::AggregateLowerBound(const idx_t lower, cons
 				const auto run_pos = std::lower_bound(search_begin, search_end, needle) - level_data;
 				// Compute runBegin and pass it to our callback
 				const auto run_begin = curr.first - level_width;
-				aggregate(level, run_begin, run_pos);
+				aggregate(level, run_begin, NumericCast<idx_t>(run_pos));
 				// Update state for next round
 				curr.first -= level_width;
 				--cascading_idx.first;
@@ -554,7 +554,7 @@ void MergeSortTree<E, O, CMP, F, C>::AggregateLowerBound(const idx_t lower, cons
 			if (curr.first != lower) {
 				const auto *search_begin = level_data + cascading_idcs[cascading_idx.first];
 				const auto *search_end = level_data + cascading_idcs[cascading_idx.first + FANOUT];
-				auto idx = std::lower_bound(search_begin, search_end, needle) - level_data;
+				auto idx = NumericCast<idx_t>(std::lower_bound(search_begin, search_end, needle) - level_data);
 				cascading_idx.first = (idx / CASCADING + 2 * (lower / level_width)) * FANOUT;
 			}
 
@@ -567,7 +567,7 @@ void MergeSortTree<E, O, CMP, F, C>::AggregateLowerBound(const idx_t lower, cons
 				const auto run_pos = std::lower_bound(search_begin, search_end, needle) - level_data;
 				// Compute runBegin and pass it to our callback
 				const auto run_begin = curr.second;
-				aggregate(level, run_begin, run_pos);
+				aggregate(level, run_begin, NumericCast<idx_t>(run_pos));
 				// Update state for next round
 				curr.second += level_width;
 				++cascading_idx.second;
@@ -576,7 +576,7 @@ void MergeSortTree<E, O, CMP, F, C>::AggregateLowerBound(const idx_t lower, cons
 			if (curr.second != upper) {
 				const auto *search_begin = level_data + cascading_idcs[cascading_idx.second];
 				const auto *search_end = level_data + cascading_idcs[cascading_idx.second + FANOUT];
-				auto idx = std::lower_bound(search_begin, search_end, needle) - level_data;
+				auto idx = NumericCast<idx_t>(std::lower_bound(search_begin, search_end, needle) - level_data);
 				cascading_idx.second = (idx / CASCADING + 2 * (upper / level_width)) * FANOUT;
 			}
 		} while (level >= LowestCascadingLevel());
@@ -591,8 +591,9 @@ void MergeSortTree<E, O, CMP, F, C>::AggregateLowerBound(const idx_t lower, cons
 			while (curr.first - lower >= level_width) {
 				const auto *search_end = level_data + curr.first;
 				const auto *search_begin = search_end - level_width;
-				const auto run_pos = std::lower_bound(search_begin, search_end, needle) - level_data;
-				const auto run_begin = search_begin - level_data;
+				const auto run_pos =
+				    NumericCast<idx_t>(std::lower_bound(search_begin, search_end, needle) - level_data);
+				const auto run_begin = NumericCast<idx_t>(search_begin - level_data);
 				aggregate(level, run_begin, run_pos);
 				curr.first -= level_width;
 			}
@@ -600,8 +601,9 @@ void MergeSortTree<E, O, CMP, F, C>::AggregateLowerBound(const idx_t lower, cons
 			while (upper - curr.second >= level_width) {
 				const auto *search_begin = level_data + curr.second;
 				const auto *search_end = search_begin + level_width;
-				const auto run_pos = std::lower_bound(search_begin, search_end, needle) - level_data;
-				const auto run_begin = search_begin - level_data;
+				const auto run_pos =
+				    NumericCast<idx_t>(std::lower_bound(search_begin, search_end, needle) - level_data);
+				const auto run_begin = NumericCast<idx_t>(search_begin - level_data);
 				aggregate(level, run_begin, run_pos);
 				curr.second += level_width;
 			}

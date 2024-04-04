@@ -1075,7 +1075,7 @@ void StringValueScanner::SetStart() {
 		}
 
 		scan_finder = make_uniq<StringValueScanner>(
-		    0, buffer_manager, state_machine, make_shared<CSVErrorHandler>(true), csv_file_scan, false, iterator, 1);
+		    0U, buffer_manager, state_machine, make_shared<CSVErrorHandler>(true), csv_file_scan, false, iterator, 1U);
 		auto &tuples = scan_finder->ParseChunk();
 		line_found = true;
 		if (tuples.number_of_rows != 1) {

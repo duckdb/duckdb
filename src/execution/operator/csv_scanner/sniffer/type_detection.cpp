@@ -50,7 +50,7 @@ static bool StartsWithNumericDate(string &separator, const string &value) {
 	}
 
 	//	second literal must match first
-	if (((field3 - literal2) != (field2 - literal1)) || strncmp(literal1, literal2, (field2 - literal1)) != 0) {
+	if (((field3 - literal2) != (field2 - literal1)) || strncmp(literal1, literal2, NumericCast<size_t>((field2 - literal1))) != 0) {
 		return false;
 	}
 
