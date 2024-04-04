@@ -367,10 +367,12 @@ py::object TransformFilterRecursive(TableFilter *filter, vector<string> &column_
 		auto &struct_filter = filter->Cast<StructFilter>();
 		auto &child_type = StructType::GetChildType(type.GetDuckType(), struct_filter.child_idx);
 		auto &child_name = struct_filter.child_name;
+		auto &struct_type_info = type.GetTypeInfo<ArrowStructInfo>();
+		auto &struct_child_type = struct_type_info.GetChild(struct_filter.child_idx);
 
 		column_ref.push_back(child_name);
 		auto child_expr =
-		    TransformFilterRecursive(struct_filter.child_filter.get(), column_ref, timezone_config, child_type);
+		    TransformFilterRecursive(struct_filter.child_filter.get(), column_ref, timezone_config, struct_child_type);
 		column_ref.pop_back();
 
 		return child_expr;
