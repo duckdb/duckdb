@@ -11,8 +11,7 @@ query III
 SELECT * FROM read_csv(
     'data/csv/rejects/frankstein/nightmare.csv',
     columns = {'a': 'INTEGER', 'b': 'INTEGER', 'c': 'VARCHAR'},
-    rejects_table='csv_rejects_table',
-    ignore_errors=true, auto_detect=false, header = 1, max_line_size=20);
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=20);
 ----
 1	2	pedro
 1	2	pedro
@@ -56,13 +55,12 @@ SELECT * FROM read_csv(
 1	2	pedro
 1	2	pedro
 
-query IIIIIIII rowsort
-SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position, error_message
-FROM csv_rejects_table;
+query IIIIIIIIII rowsort
+FROM reject_errors ORDER BY ALL;
 ----
-data/csv/rejects/frankstein/nightmare.csv	10	2	"c"	MISSING COLUMNS	1,2	102	Expected Number of Columns: 3 Found: 2
-data/csv/rejects/frankstein/nightmare.csv	14	4	NULL	TOO MANY COLUMNS	1,2,"pedro",5	142	Expected Number of Columns: 3 Found: 4
-data/csv/rejects/frankstein/nightmare.csv	19	2	"b"	CAST	1,bla,"pedro"	204	Error when converting column "b". Could not convert string "bla" to 'INTEGER'
-data/csv/rejects/frankstein/nightmare.csv	22	3	"c"	UNQUOTED VALUE	1,2,"pedro"bla	242	Value with unterminated quote found.
-data/csv/rejects/frankstein/nightmare.csv	32	1	"a"	LINE SIZE OVER MAXIMUM	1,2,"pedro thiago timbo holanda"	365	Maximum line size of 20 bytes exceeded. Actual Size:33 bytes.
-data/csv/rejects/frankstein/nightmare.csv	38	3	"c"	INVALID UNICODE	1,2,"pedro??"	458	Invalid unicode (byte sequence mismatch) detected.
+3	0	10	103	106	2	c	MISSING COLUMNS	1,2	Expected Number of Columns: 3 Found: 2
+3	0	14	143	154	4	NULL	TOO MANY COLUMNS	1,2,"pedro",5	Expected Number of Columns: 3 Found: 4
+3	0	19	205	207	2	b	CAST	1,bla,"pedro"	Error when converting column "b". Could not convert string "bla" to 'INTEGER'
+3	0	22	243	247	3	c	UNQUOTED VALUE	1,2,"pedro"bla	Value with unterminated quote found.
+3	0	32	366	366	1	a	LINE SIZE OVER MAXIMUM	1,2,"pedro thiago timbo holanda"	Maximum line size of 20 bytes exceeded. Actual Size:33 bytes.
+3	0	38	459	463	3	c	INVALID UNICODE	1,2,"pedro??"	Invalid unicode (byte sequence mismatch) detected.
