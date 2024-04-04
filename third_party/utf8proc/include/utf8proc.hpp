@@ -637,7 +637,7 @@ void utf8proc_grapheme_callback(const char *s, size_t len, T &&fun) {
 	size_t start = 0;
 	size_t cpos = 0;
 	while(true) {
-		cpos += UnsafeNumericCast<size_t>(sz);
+		cpos += static_cast<size_t>(sz);
 		if (cpos >= len) {
 			fun(start, cpos);
 			return;
