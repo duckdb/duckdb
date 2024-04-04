@@ -1360,11 +1360,18 @@ bool StrpTimeFormat::ParseResult::TryToDate(date_t &result) {
 	return Date::TryFromDate(data[0], data[1], data[2], result);
 }
 
+dtime_t StrpTimeFormat::ParseResult::ToTime() {
+	const auto hour_offset = data[7] / Interval::MINS_PER_HOUR;
+	const auto mins_offset = data[7] % Interval::MINS_PER_HOUR;
+	return Time::FromTime(data[3] - hour_offset, data[4] - mins_offset, data[5], data[6]);
+}
+
 bool StrpTimeFormat::ParseResult::TryToTime(dtime_t &result) {
-	if (data[7] != 0) {
+	if (data[7]) {
 		return false;
 	}
-	return Time::TryFromTime(data[3], data[4], data[5], data[6], result);
+	result = Time::FromTime(data[3], data[4], data[5], data[6]);
+	return true;
 }
 
 timestamp_t StrpTimeFormat::ParseResult::ToTimestamp() {
@@ -1378,9 +1385,7 @@ timestamp_t StrpTimeFormat::ParseResult::ToTimestamp() {
 	}
 
 	date_t date = Date::FromDate(data[0], data[1], data[2]);
-	const auto hour_offset = data[7] / Interval::MINS_PER_HOUR;
-	const auto mins_offset = data[7] % Interval::MINS_PER_HOUR;
-	dtime_t time = Time::FromTime(data[3] - hour_offset, data[4] - mins_offset, data[5], data[6]);
+	dtime_t time = ToTime();
 	return Timestamp::FromDatetime(date, time);
 }
 
@@ -1389,9 +1394,7 @@ bool StrpTimeFormat::ParseResult::TryToTimestamp(timestamp_t &result) {
 	if (!TryToDate(date)) {
 		return false;
 	}
-	const auto hour_offset = data[7] / Interval::MINS_PER_HOUR;
-	const auto mins_offset = data[7] % Interval::MINS_PER_HOUR;
-	dtime_t time = Time::FromTime(data[3] - hour_offset, data[4] - mins_offset, data[5], data[6]);
+	dtime_t time = ToTime();
 	return Timestamp::TryFromDatetime(date, time, result);
 }
 
@@ -1426,22 +1429,6 @@ bool StrpTimeFormat::TryParseTimestamp(string_t input, timestamp_t &result, stri
 		return false;
 	}
 	return parse_result.TryToTimestamp(result);
-}
-
-date_t StrpTimeFormat::ParseDate(string_t input) {
-	ParseResult result;
-	if (!Parse(input, result)) {
-		throw InvalidInputException(result.FormatError(input, format_specifier));
-	}
-	return result.ToDate();
-}
-
-timestamp_t StrpTimeFormat::ParseTimestamp(string_t input) {
-	ParseResult result;
-	if (!Parse(input, result)) {
-		throw InvalidInputException(result.FormatError(input, format_specifier));
-	}
-	return result.ToTimestamp();
 }
 
 } // namespace duckdb

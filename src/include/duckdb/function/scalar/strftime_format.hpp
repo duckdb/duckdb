@@ -143,6 +143,7 @@ public:
 		date_t special;
 
 		date_t ToDate();
+		dtime_t ToTime();
 		timestamp_t ToTimestamp();
 
 		bool TryToDate(date_t &result);
@@ -163,9 +164,6 @@ public:
 	DUCKDB_API bool TryParseDate(string_t str, date_t &result, string &error_message) const;
 	DUCKDB_API bool TryParseTime(string_t str, dtime_t &result, string &error_message) const;
 	DUCKDB_API bool TryParseTimestamp(string_t str, timestamp_t &result, string &error_message) const;
-
-	date_t ParseDate(string_t str);
-	timestamp_t ParseTimestamp(string_t str);
 
 	void Serialize(Serializer &serializer) const;
 	static StrpTimeFormat Deserialize(Deserializer &deserializer);
