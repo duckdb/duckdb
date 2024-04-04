@@ -46,7 +46,7 @@ public:
 	DUCKDB_API ObjectCache &GetObjectCache();
 	DUCKDB_API ConnectionManager &GetConnectionManager();
 	DUCKDB_API ValidChecker &GetValidChecker();
-	DUCKDB_API void SetExtensionLoaded(const std::string &extension_name);
+	DUCKDB_API void SetExtensionLoaded(const std::string &extension_name, const std::string &extension_version = "");
 
 	idx_t NumberOfThreads();
 
