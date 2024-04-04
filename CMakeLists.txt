@@ -822,6 +822,20 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY EXTENSION_VERS
       COMMAND emcc $<TARGET_FILE:${TARGET_NAME}>.lib -o $<TARGET_FILE:${TARGET_NAME}> -sSIDE_MODULE=1 -O3
       )
   endif()
+  add_custom_command(
+    TARGET ${TARGET_NAME}
+    POST_BUILD
+    COMMAND
+    printf "${DUCKDB_NORMALIZED_VERSION}" > duckdb_version_file
+    COMMAND
+    printf "${EXTENSION_VERSION}" > extension_version_file
+    COMMAND
+    bash ${CMAKE_SOURCE_DIR}/scripts/append_metadata.sh $<TARGET_FILE:${TARGET_NAME}> ${CMAKE_BINARY_DIR}/duckdb_platform_out duckdb_version_file extension_version_file
+    )
+  add_dependencies(${TARGET_NAME} duckdb_platform)
+  if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_TIDY)
+    add_dependencies(duckdb_local_extension_repo ${TARGET_NAME})
+  endif()
 endfunction()
 
 function(build_loadable_extension NAME PARAMETERS)
