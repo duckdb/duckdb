@@ -160,7 +160,7 @@ struct MultiFileReader {
 	DUCKDB_API virtual void CreateFilterMap(const vector<LogicalType> &global_types,
 	                                       optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data);
 	//! Finalize the reading of a chunk - applying any constants that are required
-	DUCKDB_API virtual void FinalizeChunk(const MultiFileReaderBindData &bind_data,
+	DUCKDB_API virtual void FinalizeChunk(ClientContext &context, const MultiFileReaderBindData &bind_data,
 	                                     const MultiFileReaderData &reader_data, DataChunk &chunk, const string &filename);
 
 	//! Can remain static?

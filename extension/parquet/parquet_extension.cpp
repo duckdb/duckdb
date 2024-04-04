@@ -656,11 +656,11 @@ public:
 			if (gstate.CanRemoveFilterColumns()) {
 				data.all_columns.Reset();
 				data.reader->Scan(data.scan_state, data.all_columns);
-				bind_data.multi_file_reader->FinalizeChunk(bind_data.reader_bind, data.reader->reader_data, data.all_columns, data.reader->file_name);
+				bind_data.multi_file_reader->FinalizeChunk(context, bind_data.reader_bind, data.reader->reader_data, data.all_columns, data.reader->file_name);
 				output.ReferenceColumns(data.all_columns, gstate.projection_ids);
 			} else {
 				data.reader->Scan(data.scan_state, output);
-				bind_data.multi_file_reader->FinalizeChunk(bind_data.reader_bind, data.reader->reader_data, output, data.reader->file_name);
+				bind_data.multi_file_reader->FinalizeChunk(context, bind_data.reader_bind, data.reader->reader_data, output, data.reader->file_name);
 			}
 
 			bind_data.chunk_count++;
