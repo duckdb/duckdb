@@ -12,9 +12,9 @@ SET allow_extensions_metadata_mismatch=true;
 
 # This is the error thrown by dlopen
 statement error
-LOAD 'data/csv/error/time.csv';
+LOAD 'README.md';
 ----
-Error: Extension "data/csv/error/time.csv" could not be loaded
+Error: Extension "README.md" could not be loaded
 
 statement error
 LOAD 'data/csv/no_opt.csv';
