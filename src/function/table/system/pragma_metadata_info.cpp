@@ -57,13 +57,13 @@ static void PragmaMetadataInfoFunction(ClientContext &context, TableFunctionInpu
 		// block_id
 		output.SetValue(col_idx++, count, Value::BIGINT(entry.block_id));
 		// total_blocks
-		output.SetValue(col_idx++, count, Value::BIGINT(entry.total_blocks));
+		output.SetValue(col_idx++, count, Value::BIGINT(NumericCast<int64_t>(entry.total_blocks)));
 		// free_blocks
-		output.SetValue(col_idx++, count, Value::BIGINT(entry.free_list.size()));
+		output.SetValue(col_idx++, count, Value::BIGINT(NumericCast<int64_t>(entry.free_list.size())));
 		// free_list
 		vector<Value> list_values;
 		for (auto &free_id : entry.free_list) {
-			list_values.push_back(Value::BIGINT(free_id));
+			list_values.push_back(Value::BIGINT(NumericCast<int64_t>(free_id)));
 		}
 		output.SetValue(col_idx++, count, Value::LIST(LogicalType::BIGINT, std::move(list_values)));
 		count++;

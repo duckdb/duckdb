@@ -98,15 +98,15 @@ void DuckDBSequencesFunction(ClientContext &context, TableFunctionInput &data_p,
 		// database_name, VARCHAR
 		output.SetValue(col++, count, seq.catalog.GetName());
 		// database_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(seq.catalog.GetOid()));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(seq.catalog.GetOid())));
 		// schema_name, VARCHAR
 		output.SetValue(col++, count, Value(seq.schema.name));
 		// schema_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(seq.schema.oid));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(seq.schema.oid)));
 		// sequence_name, VARCHAR
 		output.SetValue(col++, count, Value(seq.name));
 		// sequence_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(seq.oid));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(seq.oid)));
 		// comment, VARCHAR
 		output.SetValue(col++, count, Value(seq.comment));
 		// temporary, BOOLEAN
