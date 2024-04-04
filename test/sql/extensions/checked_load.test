@@ -1,0 +1,30 @@
+# name: test/sql/extensions/checked_load.test
+# description: Test metadata checks on load
+# group: [extensions]
+
+statement error
+LOAD 'README.md';
+----
+Invalid Input Error: Extension "README.md" do not have metadata compatible with DuckDB loading it
+
+statement ok
+SET allow_extensions_metadata_mismatch=true;
+
+# This is the error thrown by dlopen
+statement error
+LOAD 'data/csv/error/time.csv';
+----
+Error: Extension "data/csv/error/time.csv" could not be loaded
+
+statement error
+LOAD 'data/csv/no_opt.csv';
+----
+File size in particular is 15 lower than minimum threshold of 1024
+
+statement ok
+SET allow_unsigned_extensions=false;
+
+statement error
+LOAD 'README.md';
+----
+IO Error: Extension "README.md" could not be loaded because its signature is either missing or invalid and unsigned extensions are disabled by configuration
