@@ -36,3 +36,8 @@ query II
 SELECT typeof(10.0 % 2.0), typeof(10.0 % 2.0 % 2.0 % 2.0)
 ----
 DECIMAL(3,1)	DECIMAL(3,1)
+
+query I
+SELECT 10.0 % 0.0
+----
+NULL
