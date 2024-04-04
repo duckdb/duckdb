@@ -442,7 +442,6 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 			if (!entry.second) {
 				throw BinderException("Duplicate column name \"%s\" in INSERT", stmt.columns[i]);
 			}
-			column_name_map[stmt.columns[i]] = i;
 			auto column_index = table.GetColumnIndex(stmt.columns[i]);
 			if (column_index.index == COLUMN_IDENTIFIER_ROW_ID) {
 				throw BinderException("Cannot explicitly insert values into rowid column");

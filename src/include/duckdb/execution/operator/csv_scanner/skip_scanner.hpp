@@ -42,9 +42,6 @@ public:
 	SkipScanner(shared_ptr<CSVBufferManager> buffer_manager, const shared_ptr<CSVStateMachine> &state_machine,
 	            shared_ptr<CSVErrorHandler> error_handler, idx_t rows_to_skip);
 
-	~SkipScanner() {
-	}
-
 	SkipResult &ParseChunk() override;
 
 	SkipResult &GetResult() override;

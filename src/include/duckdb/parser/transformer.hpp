@@ -55,7 +55,7 @@ class Transformer {
 
 public:
 	explicit Transformer(ParserOptions &options);
-	explicit Transformer(Transformer &parent);
+	Transformer(Transformer &parent);
 	~Transformer();
 
 	//! Transforms a Postgres parse tree into a set of SQL Statements

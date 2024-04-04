@@ -30,7 +30,7 @@ CMBindingInfo::CMBindingInfo(ColumnBinding binding_p, const LogicalType &type_p)
 
 CompressedMaterializationInfo::CompressedMaterializationInfo(LogicalOperator &op, vector<idx_t> &&child_idxs_p,
                                                              const column_binding_set_t &referenced_bindings)
-    : child_idxs(child_idxs_p) {
+    : child_idxs(std::move(child_idxs_p)) {
 	child_info.reserve(child_idxs.size());
 	for (const auto &child_idx : child_idxs) {
 		child_info.emplace_back(*op.children[child_idx], referenced_bindings);
@@ -158,7 +158,7 @@ bool CompressedMaterialization::TryCompressChild(CompressedMaterializationInfo &
 }
 
 void CompressedMaterialization::CreateCompressProjection(unique_ptr<LogicalOperator> &child_op,
-                                                         vector<unique_ptr<CompressExpression>> &&compress_exprs,
+                                                         vector<unique_ptr<CompressExpression>> compress_exprs,
                                                          CompressedMaterializationInfo &info, CMChildInfo &child_info) {
 	// Replace child op with a projection
 	vector<unique_ptr<Expression>> projections;
@@ -410,11 +410,11 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetStringCompress(uniq
 		auto max_string = StringStats::Max(stats);
 
 		uint8_t min_numeric = 0;
-		if (max_string_length != 0 && min_string.length() != 0) {
+		if (max_string_length != 0 && !min_string.empty()) {
 			min_numeric = *reinterpret_cast<const uint8_t *>(min_string.c_str());
 		}
 		uint8_t max_numeric = 0;
-		if (max_string_length != 0 && max_string.length() != 0) {
+		if (max_string_length != 0 && !max_string.empty()) {
 			max_numeric = *reinterpret_cast<const uint8_t *>(max_string.c_str());
 		}
 
