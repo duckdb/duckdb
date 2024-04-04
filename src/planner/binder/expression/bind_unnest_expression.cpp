@@ -4,6 +4,7 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_expanded_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
@@ -224,8 +225,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 				break;
 			}
 		}
-		expanded_expressions = std::move(struct_expressions);
-		unnest_expr = make_uniq<BoundConstantExpression>(Value(42));
+		unnest_expr = make_uniq<BoundExpandedExpression>(std::move(struct_expressions));
 	}
 	return BindResult(std::move(unnest_expr));
 }

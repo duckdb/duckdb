@@ -14,6 +14,7 @@
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_expanded_expression.hpp"
 #include "duckdb/planner/expression_binder/column_alias_binder.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/planner/expression_binder/group_binder.hpp"
@@ -486,7 +487,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 		    statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES && is_original_column;
 		result->bound_column_count++;
 
-		if (select_binder.HasExpandedExpressions()) {
+		if (expr->type == ExpressionType::BOUND_EXPANDED) {
 			if (!is_original_column) {
 				throw InternalException("Only original columns can have expanded expressions");
 			}
@@ -494,7 +495,8 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 				throw BinderException("UNNEST of struct cannot be combined with GROUP BY ALL");
 			}
 
-			auto &struct_expressions = select_binder.ExpandedExpressions();
+			auto &expanded = expr->Cast<BoundExpandedExpression>();
+			auto &struct_expressions = expanded.expanded_expressions;
 			D_ASSERT(!struct_expressions.empty());
 
 			for (auto &struct_expr : struct_expressions) {
@@ -503,8 +505,6 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 				internal_sql_types.push_back(struct_expr->return_type);
 				result->select_list.push_back(std::move(struct_expr));
 			}
-
-			struct_expressions.clear();
 			continue;
 		}
 
