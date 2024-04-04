@@ -1,3 +1,4 @@
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/likely.hpp"
 #include "duckdb/common/operator/abs.hpp"
@@ -10,7 +11,6 @@
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/core_functions/scalar/math_functions.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -1438,8 +1438,20 @@ ScalarFunctionSet LeastCommonMultipleFun::GetFunctions() {
 // and Software Libraries, Software: Practice and Experience 49 (6), 2019.
 // https://arxiv.org/abs/1902.01961
 
+static uhugeint_t ComputeM(uint64_t rhs) {
+	return uhugeint_t(0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF) / rhs + 1;
+}
+
 static uint64_t ComputeM(uint32_t rhs) {
 	return UINT64_C(0xFFFFFFFFFFFFFFFF) / rhs + 1;
+}
+
+static uint32_t ComputeM(uint16_t rhs) {
+	return UINT32_C(0xFFFFFFFF) / rhs + 1;
+}
+
+static uint16_t ComputeM(uint8_t rhs) {
+	return UINT32_C(0xFFFF) / rhs + 1;
 }
 
 static uint64_t ComputeM(int32_t rhs) {
@@ -1449,6 +1461,27 @@ static uint64_t ComputeM(int32_t rhs) {
 	return UINT64_C(0xFFFFFFFFFFFFFFFF) / rhs + 1 + ((rhs & (rhs - 1)) == 0 ? 1 : 0);
 }
 
+static uint32_t ComputeM(int16_t rhs) {
+	if (rhs < 0) {
+		rhs = -rhs;
+	}
+	return UINT32_C(0xFFFFFFFF) / rhs + 1 + ((rhs & (rhs - 1)) == 0 ? 1 : 0);
+}
+
+static uint16_t ComputeM(int8_t rhs) {
+	if (rhs < 0) {
+		rhs = -rhs;
+	}
+	return UINT32_C(0xFFFF) / rhs + 1 + ((rhs & (rhs - 1)) == 0 ? 1 : 0);
+}
+
+// fastdiv computes (a / d) given precomputed M for d>1
+inline static uint64_t Fastdiv(uint64_t a, uhugeint_t m, uint64_t d) {
+	// Compute the bottom 32 bits, then the top 32 bits, add them, and only keep the top 32 bits
+	// The reason we need the bottom 32 bits, is because the carry will roll into the top 32 bits.
+	return ((((m & 0xFFFFFFFFFFFFFFFF) * a) >> 64) + ((m >> 64) * a)).upper;
+}
+
 // fastdiv computes (a / d) given precomputed M for d>1
 inline static uint32_t Fastdiv(uint32_t a, uint64_t m, uint32_t d) {
 	// Compute the bottom 32 bits, then the top 32 bits, add them, and only keep the top 32 bits
@@ -1456,7 +1489,19 @@ inline static uint32_t Fastdiv(uint32_t a, uint64_t m, uint32_t d) {
 	return ((((m & 0xFFFFFFFF) * a) >> 32) + ((m >> 32) * a)) >> 32;
 }
 
-static uint32_t Fastdiv(int32_t a, uint64_t m, int32_t d) {
+inline static uint16_t Fastdiv(uint16_t a, uint32_t m, uint16_t d) {
+	// Compute the bottom 32 bits, then the top 32 bits, add them, and only keep the top 32 bits
+	// The reason we need the bottom 32 bits, is because the carry will roll into the top 32 bits.
+	return ((((m & 0xFFFF) * a) >> 16) + ((m >> 16) * a)) >> 16;
+}
+
+inline static uint8_t Fastdiv(uint8_t a, uint16_t m, uint8_t d) {
+	// Compute the bottom 32 bits, then the top 32 bits, add them, and only keep the top 32 bits
+	// The reason we need the bottom 32 bits, is because the carry will roll into the top 32 bits.
+	return ((((m & 0xFF) * a) >> 8) + ((m >> 8) * a)) >> 8;
+}
+
+static int32_t Fastdiv(int32_t a, uint64_t m, int32_t d) {
 	hugeint_t lhs;
 	if (a < 0) {
 		lhs = hugeint_t(0xffffffffffffffff, a);
@@ -1469,6 +1514,32 @@ static uint32_t Fastdiv(int32_t a, uint64_t m, int32_t d) {
 		return -(int32_t)(highbits);
 	}
 	return (int32_t)(highbits);
+}
+
+static int16_t Fastdiv(int16_t a, uint32_t m, int16_t d) {
+	int64_t lhs = a;
+	if (a < 0) {
+		lhs |= int64_t(0xffffffff) << 32;
+	}
+	uint32_t highbits = (lhs * m) >> 32;
+	highbits += (a < 0 ? 1 : 0);
+	if (d < 0) {
+		return -(int16_t)(highbits);
+	}
+	return (int16_t)(highbits);
+}
+
+static int8_t Fastdiv(int8_t a, uint16_t m, int8_t d) {
+	int32_t lhs = a;
+	if (a < 0) {
+		lhs |= int32_t(0xffffffff) << 16;
+	}
+	uint16_t highbits = (lhs * m) >> 16;
+	highbits += (a < 0 ? 1 : 0);
+	if (d < 0) {
+		return -(int8_t)(highbits);
+	}
+	return (int8_t)(highbits);
 }
 
 template <class LHS, class RHS, class RESULT>
@@ -1529,9 +1600,9 @@ static scalar_function_t GetConstDivideFunction(const LogicalType &type) {
 	scalar_function_t function;
 	switch (type.id()) {
 	case LogicalTypeId::TINYINT:
-		return ConstRHSDivideOperation<int8_t, int8_t, int8_t>;
+		return ConstRHSDivideOperationFast<int8_t, int8_t, int8_t>;
 	case LogicalTypeId::SMALLINT:
-		return ConstRHSDivideOperation<int16_t, int16_t, int16_t>;
+		return ConstRHSDivideOperationFast<int16_t, int16_t, int16_t>;
 	case LogicalTypeId::INTEGER:
 		return ConstRHSDivideOperationFast<int32_t, int32_t, int32_t>;
 	case LogicalTypeId::BIGINT:
@@ -1539,13 +1610,13 @@ static scalar_function_t GetConstDivideFunction(const LogicalType &type) {
 	case LogicalTypeId::HUGEINT:
 		return ConstRHSDivideOperation<hugeint_t, hugeint_t, hugeint_t>;
 	case LogicalTypeId::UTINYINT:
-		return ConstRHSDivideOperation<uint8_t, uint8_t, uint8_t>;
+		return ConstRHSDivideOperationFast<uint8_t, uint8_t, uint8_t>;
 	case LogicalTypeId::USMALLINT:
-		return ConstRHSDivideOperation<uint16_t, uint16_t, uint16_t>;
+		return ConstRHSDivideOperationFast<uint16_t, uint16_t, uint16_t>;
 	case LogicalTypeId::UINTEGER:
 		return ConstRHSDivideOperationFast<uint32_t, uint32_t, uint32_t>;
 	case LogicalTypeId::UBIGINT:
-		return ConstRHSDivideOperation<uint64_t, uint64_t, uint64_t>;
+		return ConstRHSDivideOperationFast<uint64_t, uint64_t, uint64_t>;
 	case LogicalTypeId::UHUGEINT:
 		return ConstRHSDivideOperation<uhugeint_t, uhugeint_t, uhugeint_t>;
 	default:
