@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/planner/select_bind_state.hpp
+// duckdb/planner/expression_binder/select_bind_state.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -25,6 +25,9 @@ struct SelectBindState {
 	//! The original unparsed expressions. This is exported after binding, because the binding might change the
 	//! expressions (e.g. when a * clause is present)
 	vector<unique_ptr<ParsedExpression>> original_expressions;
+
+public:
+	unique_ptr<ParsedExpression> BindAlias(idx_t index);
 };
 
 } // namespace duckdb

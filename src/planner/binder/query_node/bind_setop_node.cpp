@@ -9,7 +9,7 @@
 #include "duckdb/planner/expression_binder/order_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/query_node/bound_set_operation_node.hpp"
-#include "duckdb/planner/select_bind_state.hpp"
+#include "duckdb/planner/expression_binder/select_bind_state.hpp"
 #include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {

@@ -19,13 +19,13 @@ struct SelectBindState;
 //! A helper binder for WhereBinder and HavingBinder which support alias as a columnref.
 class ColumnAliasBinder {
 public:
-	explicit ColumnAliasBinder(const SelectBindState &bind_state);
+	explicit ColumnAliasBinder(SelectBindState &bind_state);
 
 	bool BindAlias(ExpressionBinder &enclosing_binder, unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
 	               bool root_expression, BindResult &result);
 
 private:
-	const SelectBindState &bind_state;
+	SelectBindState &bind_state;
 	unordered_set<idx_t> visited_select_indexes;
 };
 

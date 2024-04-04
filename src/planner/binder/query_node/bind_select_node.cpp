@@ -26,7 +26,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
-#include "duckdb/planner/select_bind_state.hpp"
+#include "duckdb/planner/expression_binder/select_bind_state.hpp"
 
 namespace duckdb {
 
@@ -448,7 +448,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 
 	// bind the HAVING clause, if any
 	if (statement.having) {
-		HavingBinder having_binder(*this, context, *result, info, bind_state, statement.aggregate_handling);
+		HavingBinder having_binder(*this, context, *result, info, statement.aggregate_handling);
 		ExpressionBinder::QualifyColumnNames(*this, statement.having);
 		result->having = having_binder.Bind(statement.having);
 	}
@@ -459,7 +459,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 		if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES) {
 			throw BinderException("Combining QUALIFY with GROUP BY ALL is not supported yet");
 		}
-		qualify_binder = make_uniq<QualifyBinder>(*this, context, *result, info, bind_state);
+		qualify_binder = make_uniq<QualifyBinder>(*this, context, *result, info);
 		ExpressionBinder::QualifyColumnNames(*this, statement.qualify);
 		result->qualify = qualify_binder->Bind(statement.qualify);
 		if (qualify_binder->HasBoundColumns() && qualify_binder->BoundAggregates()) {

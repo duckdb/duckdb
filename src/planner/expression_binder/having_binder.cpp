@@ -9,8 +9,8 @@
 namespace duckdb {
 
 HavingBinder::HavingBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info,
-						   const SelectBindState &bind_state, AggregateHandling aggregate_handling)
-    : BaseSelectBinder(binder, context, node, info), column_alias_binder(bind_state),
+						   AggregateHandling aggregate_handling)
+    : BaseSelectBinder(binder, context, node, info), column_alias_binder(node.bind_state),
       aggregate_handling(aggregate_handling) {
 	target_type = LogicalType(LogicalTypeId::BOOLEAN);
 }

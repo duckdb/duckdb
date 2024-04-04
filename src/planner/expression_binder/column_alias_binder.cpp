@@ -4,11 +4,11 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/select_bind_state.hpp"
+#include "duckdb/planner/expression_binder/select_bind_state.hpp"
 
 namespace duckdb {
 
-ColumnAliasBinder::ColumnAliasBinder(const SelectBindState &bind_state)
+ColumnAliasBinder::ColumnAliasBinder(SelectBindState &bind_state)
     : bind_state(bind_state), visited_select_indexes() {
 }
 
@@ -35,12 +35,10 @@ bool ColumnAliasBinder::BindAlias(ExpressionBinder &enclosing_binder, unique_ptr
 	}
 
 	// We found an alias, so we copy the alias expression into this expression.
-	auto original_expr = bind_state.original_expressions[alias_entry->second]->Copy();
+	auto original_expr = bind_state.BindAlias(alias_entry->second);
 	expr_ptr = std::move(original_expr);
 	visited_select_indexes.insert(alias_entry->second);
 
-	// Since the alias has been found, we pass a depth of 0. See issue 4978 (#16).
-	// Only HAVING, QUALIFY, and WHERE binders contain ColumnAliasBinders.
 	result = enclosing_binder.BindExpression(expr_ptr, depth, root_expression);
 	visited_select_indexes.erase(alias_entry->second);
 	return true;
