@@ -27,6 +27,16 @@ class ObjectCache;
 struct AttachInfo;
 class DatabaseFileSystem;
 
+struct ExtensionInfo {
+	explicit ExtensionInfo(const std::string &version) : extension_version(version) {
+	}
+	ExtensionInfo() : ExtensionInfo("defaultme") {
+	}
+	ExtensionInfo(const ExtensionInfo &x) : ExtensionInfo(x.extension_version) {
+	}
+	std::string extension_version;
+};
+
 class DatabaseInstance : public std::enable_shared_from_this<DatabaseInstance> {
 	friend class DuckDB;
 
@@ -53,6 +63,7 @@ public:
 	DUCKDB_API static DatabaseInstance &GetDatabase(ClientContext &context);
 
 	DUCKDB_API const unordered_set<std::string> &LoadedExtensions();
+	DUCKDB_API const unordered_map<string, ExtensionInfo> &LoadedExtensionsData();
 	DUCKDB_API bool ExtensionIsLoaded(const string &name);
 
 	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const string &key, Value &result);
@@ -73,6 +84,7 @@ private:
 	unique_ptr<ObjectCache> object_cache;
 	unique_ptr<ConnectionManager> connection_manager;
 	unordered_set<std::string> loaded_extensions;
+	unordered_map<std::string, ExtensionInfo> loaded_extensions_data;
 	ValidChecker db_validity;
 	unique_ptr<DatabaseFileSystem> db_file_system;
 };
