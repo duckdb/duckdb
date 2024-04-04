@@ -9,12 +9,12 @@
 #include "duckdb/planner/expression_binder/order_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/query_node/bound_set_operation_node.hpp"
+#include "duckdb/planner/select_bind_state.hpp"
 #include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {
 
-static void GatherAliases(BoundQueryNode &node, case_insensitive_map_t<idx_t> &aliases,
-                          parsed_expression_map_t<idx_t> &expressions, const vector<idx_t> &reorder_idx) {
+static void GatherAliases(BoundQueryNode &node, SelectBindState &bind_state, const vector<idx_t> &reorder_idx) {
 	if (node.type == QueryNodeType::SET_OPERATION_NODE) {
 		// setop, recurse
 		auto &setop = node.Cast<BoundSetOperationNode>();
@@ -32,13 +32,13 @@ static void GatherAliases(BoundQueryNode &node, case_insensitive_map_t<idx_t> &a
 			}
 
 			// use new reorder index
-			GatherAliases(*setop.left, aliases, expressions, new_left_reorder_idx);
-			GatherAliases(*setop.right, aliases, expressions, new_right_reorder_idx);
+			GatherAliases(*setop.left, bind_state, new_left_reorder_idx);
+			GatherAliases(*setop.right, bind_state, new_right_reorder_idx);
 			return;
 		}
 
-		GatherAliases(*setop.left, aliases, expressions, reorder_idx);
-		GatherAliases(*setop.right, aliases, expressions, reorder_idx);
+		GatherAliases(*setop.left, bind_state, reorder_idx);
+		GatherAliases(*setop.right, bind_state, reorder_idx);
 	} else {
 		// query node
 		D_ASSERT(node.type == QueryNodeType::SELECT_NODE);
@@ -46,27 +46,27 @@ static void GatherAliases(BoundQueryNode &node, case_insensitive_map_t<idx_t> &a
 		// fill the alias lists
 		for (idx_t i = 0; i < select.names.size(); i++) {
 			auto &name = select.names[i];
-			auto &expr = select.original_expressions[i];
+			auto &expr = select.bind_state.original_expressions[i];
 			// first check if the alias is already in there
-			auto entry = aliases.find(name);
+			auto entry = bind_state.alias_map.find(name);
 
 			idx_t index = reorder_idx[i];
 
-			if (entry == aliases.end()) {
+			if (entry == bind_state.alias_map.end()) {
 				// the alias is not in there yet, just assign it
-				aliases[name] = index;
+				bind_state.alias_map[name] = index;
 			}
 			// now check if the node is already in the set of expressions
-			auto expr_entry = expressions.find(*expr);
-			if (expr_entry != expressions.end()) {
+			auto expr_entry = bind_state.projection_map.find(*expr);
+			if (expr_entry != bind_state.projection_map.end()) {
 				// the node is in there
 				// repeat the same as with the alias: if there is an ambiguity we insert "-1"
 				if (expr_entry->second != index) {
-					expressions[*expr] = DConstants::INVALID_INDEX;
+					bind_state.projection_map[*expr] = DConstants::INVALID_INDEX;
 				}
 			} else {
 				// not in there yet, just place it in there
-				expressions[*expr] = index;
+				bind_state.projection_map[*expr] = index;
 			}
 		}
 	}
@@ -230,22 +230,21 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 
 		// we recursively visit the children of this node to extract aliases and expressions that can be referenced
 		// in the ORDER BY
-		case_insensitive_map_t<idx_t> alias_map;
-		parsed_expression_map_t<idx_t> expression_map;
+		SelectBindState bind_state;
 
 		if (result->setop_type == SetOperationType::UNION_BY_NAME) {
-			GatherAliases(*result->left, alias_map, expression_map, result->left_reorder_idx);
-			GatherAliases(*result->right, alias_map, expression_map, result->right_reorder_idx);
+			GatherAliases(*result->left, bind_state, result->left_reorder_idx);
+			GatherAliases(*result->right, bind_state, result->right_reorder_idx);
 		} else {
 			vector<idx_t> reorder_idx;
 			for (idx_t i = 0; i < result->names.size(); i++) {
 				reorder_idx.push_back(i);
 			}
-			GatherAliases(*result, alias_map, expression_map, reorder_idx);
+			GatherAliases(*result, bind_state, reorder_idx);
 		}
 		// now we perform the actual resolution of the ORDER BY/DISTINCT expressions
 		OrderBinder order_binder({result->left_binder.get(), result->right_binder.get()}, result->setop_index,
-		                         alias_map, expression_map, result->names.size());
+								 bind_state, result->names.size());
 		BindModifiers(order_binder, statement, *result);
 	}
 

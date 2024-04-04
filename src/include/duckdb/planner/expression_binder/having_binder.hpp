@@ -18,7 +18,7 @@ namespace duckdb {
 class HavingBinder : public BaseSelectBinder {
 public:
 	HavingBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info,
-	             case_insensitive_map_t<idx_t> &alias_map, AggregateHandling aggregate_handling);
+	             const SelectBindState &bind_state, AggregateHandling aggregate_handling);
 
 protected:
 	BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,

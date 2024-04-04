@@ -28,9 +28,7 @@ struct BoundGroupInformation {
 //! functions.
 class BaseSelectBinder : public ExpressionBinder {
 public:
-	BaseSelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info,
-	                 case_insensitive_map_t<idx_t> alias_map);
-	BaseSelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info);
+	BaseSelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info, bool support_alias_binding = true);
 
 	bool BoundAggregates() {
 		return bound_aggregate;
@@ -48,10 +46,11 @@ protected:
 
 	bool inside_window;
 	bool bound_aggregate = false;
+	bool support_alias_binding;
 
 	BoundSelectNode &node;
 	BoundGroupInformation &info;
-	case_insensitive_map_t<idx_t> alias_map;
+	const SelectBindState &bind_state;
 
 protected:
 	BindResult BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth);

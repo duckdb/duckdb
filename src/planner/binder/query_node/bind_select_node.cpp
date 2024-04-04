@@ -26,6 +26,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/planner/select_bind_state.hpp"
 
 namespace duckdb {
 
@@ -361,19 +362,17 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 	}
 	statement.select_list = std::move(new_select_list);
 
-	// create a mapping of (alias -> index) and a mapping of (Expression -> index) for the SELECT list
-	case_insensitive_map_t<idx_t> alias_map;
-	parsed_expression_map_t<idx_t> projection_map;
+	auto &bind_state = result->bind_state;
 	for (idx_t i = 0; i < statement.select_list.size(); i++) {
 		auto &expr = statement.select_list[i];
 		result->names.push_back(expr->GetName());
 		ExpressionBinder::QualifyColumnNames(*this, expr);
 		if (!expr->alias.empty()) {
-			alias_map[expr->alias] = i;
+			bind_state.alias_map[expr->alias] = i;
 			result->names[i] = expr->alias;
 		}
-		projection_map[*expr] = i;
-		result->original_expressions.push_back(expr->Copy());
+		bind_state.projection_map[*expr] = i;
+		bind_state.original_expressions.push_back(expr->Copy());
 	}
 	result->column_count = statement.select_list.size();
 
@@ -383,14 +382,14 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 		// bind any star expressions in the WHERE clause
 		BindWhereStarExpression(statement.where_clause);
 
-		ColumnAliasBinder alias_binder(*result, alias_map);
+		ColumnAliasBinder alias_binder(bind_state);
 		WhereBinder where_binder(*this, context, &alias_binder);
 		unique_ptr<ParsedExpression> condition = std::move(statement.where_clause);
 		result->where_clause = where_binder.Bind(condition);
 	}
 
 	// now bind all the result modifiers; including DISTINCT and ORDER BY targets
-	OrderBinder order_binder({this}, result->projection_index, statement, alias_map, projection_map);
+	OrderBinder order_binder({this}, result->projection_index, statement, bind_state);
 	BindModifiers(order_binder, statement, *result);
 
 	vector<unique_ptr<ParsedExpression>> unbound_groups;
@@ -399,7 +398,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 	if (!group_expressions.empty()) {
 		// the statement has a GROUP BY clause, bind it
 		unbound_groups.resize(group_expressions.size());
-		GroupBinder group_binder(*this, context, statement, result->group_index, alias_map, info.alias_map);
+		GroupBinder group_binder(*this, context, statement, result->group_index, bind_state, info.alias_map);
 		for (idx_t i = 0; i < group_expressions.size(); i++) {
 
 			// we keep a copy of the unbound expression;
@@ -449,7 +448,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 
 	// bind the HAVING clause, if any
 	if (statement.having) {
-		HavingBinder having_binder(*this, context, *result, info, alias_map, statement.aggregate_handling);
+		HavingBinder having_binder(*this, context, *result, info, bind_state, statement.aggregate_handling);
 		ExpressionBinder::QualifyColumnNames(*this, statement.having);
 		result->having = having_binder.Bind(statement.having);
 	}
@@ -460,7 +459,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 		if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES) {
 			throw BinderException("Combining QUALIFY with GROUP BY ALL is not supported yet");
 		}
-		qualify_binder = make_uniq<QualifyBinder>(*this, context, *result, info, alias_map);
+		qualify_binder = make_uniq<QualifyBinder>(*this, context, *result, info, bind_state);
 		ExpressionBinder::QualifyColumnNames(*this, statement.qualify);
 		result->qualify = qualify_binder->Bind(statement.qualify);
 		if (qualify_binder->HasBoundColumns() && qualify_binder->BoundAggregates()) {
@@ -469,7 +468,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 	}
 
 	// after that, we bind to the SELECT list
-	SelectBinder select_binder(*this, context, *result, info, alias_map);
+	SelectBinder select_binder(*this, context, *result, info);
 
 	// if we expand select-list expressions, e.g., via UNNEST, then we need to possibly
 	// adjust the column index of the already bound ORDER BY modifiers, and not only set their types

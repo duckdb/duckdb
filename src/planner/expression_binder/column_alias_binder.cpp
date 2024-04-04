@@ -1,15 +1,15 @@
 #include "duckdb/planner/expression_binder/column_alias_binder.hpp"
 
 #include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/select_bind_state.hpp"
 
 namespace duckdb {
 
-ColumnAliasBinder::ColumnAliasBinder(BoundSelectNode &node, const case_insensitive_map_t<idx_t> &alias_map)
-    : node(node), alias_map(alias_map), visited_select_indexes() {
+ColumnAliasBinder::ColumnAliasBinder(const SelectBindState &bind_state)
+    : bind_state(bind_state), visited_select_indexes() {
 }
 
 bool ColumnAliasBinder::BindAlias(ExpressionBinder &enclosing_binder, unique_ptr<ParsedExpression> &expr_ptr,
@@ -24,8 +24,8 @@ bool ColumnAliasBinder::BindAlias(ExpressionBinder &enclosing_binder, unique_ptr
 	}
 
 	// We try to find the alias in the alias_map and return false, if no alias exists.
-	auto alias_entry = alias_map.find(expr.column_names[0]);
-	if (alias_entry == alias_map.end()) {
+	auto alias_entry = bind_state.alias_map.find(expr.column_names[0]);
+	if (alias_entry == bind_state.alias_map.end()) {
 		return false;
 	}
 
@@ -35,7 +35,7 @@ bool ColumnAliasBinder::BindAlias(ExpressionBinder &enclosing_binder, unique_ptr
 	}
 
 	// We found an alias, so we copy the alias expression into this expression.
-	auto original_expr = node.original_expressions[alias_entry->second]->Copy();
+	auto original_expr = bind_state.original_expressions[alias_entry->second]->Copy();
 	expr_ptr = std::move(original_expr);
 	visited_select_indexes.insert(alias_entry->second);
 

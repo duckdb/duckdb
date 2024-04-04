@@ -12,12 +12,13 @@
 #include "duckdb/planner/expression_binder/column_alias_binder.hpp"
 
 namespace duckdb {
+struct SelectBindState;
 
 //! The QUALIFY binder is responsible for binding an expression within the QUALIFY clause of a SQL statement
 class QualifyBinder : public BaseSelectBinder {
 public:
 	QualifyBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info,
-	              case_insensitive_map_t<idx_t> &alias_map);
+				  const SelectBindState &bind_state);
 
 protected:
 	BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
