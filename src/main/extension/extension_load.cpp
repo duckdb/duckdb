@@ -64,6 +64,32 @@ static string FilterZeroAtEnd(string s) {
 	return s;
 }
 
+static string PrettyPrintString(const string &s) {
+	string res = "";
+	for (auto c : s) {
+		if (StringUtil::CharacterIsAlpha(c) || StringUtil::CharacterIsDigit(c) || c == '_' || c == '-' || c == ' ' ||
+		    c == '.') {
+			res += c;
+		} else {
+			uint8_t value = c;
+			res += "\\x";
+			uint8_t first = value / 16;
+			if (first < 10) {
+				res += '0' + first;
+			} else {
+				res += 'a' + first - 10;
+			}
+			uint8_t second = value % 16;
+			if (second < 10) {
+				res += '0' + second;
+			} else {
+				res += 'a' + second - 10;
+			}
+		}
+	}
+	return res;
+}
+
 bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const string &extension,
                                      ExtensionInitResult &result, string &error) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
@@ -218,19 +244,19 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		}
 	}
 
-	if (engine_version != extension_duckdb_version || engine_platform != extension_duckdb_platform) {
-		throw InvalidInputException(
-		    "Extension \"%s\" (version %s, platfrom %s) does not match DuckDB loading it (version %s, platform %s)",
-		    filename, extension_duckdb_version, extension_duckdb_platform, engine_version, engine_platform);
-	}
-
 	char a[32] = {0};
 	a[0] = '4';
 
-	if (strcmp(a, metadata_field[0].data()) != 0) {
-		throw InvalidInputException("Extension \"%s\", version unknown, do not have metadata compatible with DuckDB "
-		                            "version (%s %s). Number of fields was different than 4",
-		                            filename, extension_duckdb_version, engine_version);
+	if (strncmp(a, metadata_field[0].data(), 32) != 0) {
+		throw InvalidInputException("Extension \"%s\" do not have metadata compatible with DuckDB "
+		                            "loading it (version %s, platform %s)",
+		                            filename, engine_version, engine_platform);
+	}
+
+	if (engine_version != extension_duckdb_version || engine_platform != extension_duckdb_platform) {
+		throw InvalidInputException(
+		    "Extension \"%s\" (version %s, platfrom %s) does not match DuckDB loading it (version %s, platform %s)",
+		    filename, PrettyPrintString(extension_duckdb_version), PrettyPrintString(extension_duckdb_platform), engine_version, engine_platform);
 	}
 
 	auto number_metadata_fields = 3;
