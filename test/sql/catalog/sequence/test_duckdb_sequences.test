@@ -28,12 +28,13 @@ select start_value, min_value, max_value, increment_by, cycle, last_value from d
 statement ok
 insert into tbl values(default);
 
-# last_value is no longer NULL
+# value is 0
 query IIIIII
 select start_value, min_value, max_value, increment_by, cycle, last_value from duckdb_sequences();
 ----
 0	0	9223372036854775807	1	false	0
 
+# value is 1
 statement ok
 insert into tbl values(default);
 

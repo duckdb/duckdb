@@ -13,15 +13,9 @@
 
 namespace duckdb {
 
-static int64_t LastValue(const CreateSequenceInfo &info) {
-	if (info.usage_count == 0) {
-		// last_value was never set, we don't need to recreate it
-		return info.start_value;
-	}
-	int64_t result = 0;
-	auto to_simulate = info.usage_count;
-	// The first use is always just initializing the counter to start_value
-	to_simulate--;
+static int64_t ReconstructValue(const CreateSequenceInfo &info, idx_t usage_count) {
+	int64_t result = info.start_value;
+	auto to_simulate = usage_count;
 	if (info.cycle) {
 		auto current = info.start_value;
 		auto increase = info.increment > 0;
@@ -68,11 +62,13 @@ static int64_t LastValue(const CreateSequenceInfo &info) {
 // if the sequence was serialized to disk the start_value
 // was updated to the value of the last_value before serializing, keeping the state of the sequence.
 SequenceData::SequenceData(CreateSequenceInfo &info)
-    : usage_count(info.usage_count), counter(0), last_value(0), increment(info.increment),
-      start_value(info.start_value), min_value(info.min_value), max_value(info.max_value), cycle(info.cycle) {
-	auto reconstructed_last_value = LastValue(info);
-	last_value = reconstructed_last_value;
-	counter = reconstructed_last_value;
+    : usage_count(info.usage_count), counter(ReconstructValue(info, info.usage_count)), last_value(info.start_value),
+      increment(info.increment), start_value(info.start_value), min_value(info.min_value), max_value(info.max_value),
+      cycle(info.cycle) {
+
+	if (info.usage_count) {
+		last_value = ReconstructValue(info, info.usage_count - 1);
+	}
 }
 
 SequenceCatalogEntry::SequenceCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateSequenceInfo &info)
@@ -109,8 +105,8 @@ int64_t SequenceCatalogEntry::CurrentValue() {
 int64_t SequenceCatalogEntry::NextValue(DuckTransaction &transaction) {
 	lock_guard<mutex> seqlock(lock);
 	int64_t result;
-	bool overflow = !TryAddOperator::Operation(data.counter, data.increment, data.counter);
 	result = data.counter;
+	bool overflow = !TryAddOperator::Operation(data.counter, data.increment, data.counter);
 	if (data.cycle) {
 		if (overflow) {
 			data.counter = data.increment < 0 ? data.max_value : data.min_value;
