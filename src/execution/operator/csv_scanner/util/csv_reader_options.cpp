@@ -185,6 +185,9 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 	} else if (loption == "date_format" || loption == "dateformat") {
 		string format = ParseString(value, loption);
 		SetDateFormat(LogicalTypeId::DATE, format, true);
+	} else if (loption == "time_format" || loption == "timeformat") {
+		string format = ParseString(value, loption);
+		SetDateFormat(LogicalTypeId::TIME, format, true);
 	} else if (loption == "timestamp_format" || loption == "timestampformat") {
 		string format = ParseString(value, loption);
 		SetDateFormat(LogicalTypeId::TIMESTAMP, format, true);

@@ -243,6 +243,7 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 	table_function.named_parameters["all_varchar"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["dateformat"] = LogicalType::VARCHAR;
 	table_function.named_parameters["timestampformat"] = LogicalType::VARCHAR;
+	table_function.named_parameters["timeformat"] = LogicalType::VARCHAR;
 	table_function.named_parameters["normalize_names"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["compression"] = LogicalType::VARCHAR;
 	table_function.named_parameters["skip"] = LogicalType::BIGINT;

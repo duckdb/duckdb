@@ -27,8 +27,8 @@ struct DialectOptions {
 	//! Whether or not the file has a header line
 	CSVOption<bool> header = false;
 	//! The date format to use (if any is specified)
-	map<LogicalTypeId, CSVOption<StrpTimeFormat>> date_format = {{LogicalTypeId::DATE, {}},
-	                                                             {LogicalTypeId::TIMESTAMP, {}}};
+	map<LogicalTypeId, CSVOption<StrpTimeFormat>> date_format = {
+	    {LogicalTypeId::DATE, {}}, {LogicalTypeId::TIME, {}}, {LogicalTypeId::TIMESTAMP, {}}};
 	//! How many leading rows to skip
 	CSVOption<idx_t> skip_rows = 0;
 };

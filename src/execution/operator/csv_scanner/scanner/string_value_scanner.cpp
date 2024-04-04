@@ -594,6 +594,11 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 				// use the date format to cast the chunk
 				success = CSVCast::TryCastDateVector(state_machine->options.dialect_options.date_format, parse_vector,
 				                                     result_vector, parse_chunk.size(), parameters, line_error, true);
+			} else if (!state_machine->options.dialect_options.date_format.at(LogicalTypeId::TIME).GetValue().Empty() &&
+			           type.id() == LogicalTypeId::TIME) {
+				// use the date format to cast the chunk
+				success = CSVCast::TryCastTimeVector(state_machine->options.dialect_options.date_format, parse_vector,
+				                                     result_vector, parse_chunk.size(), parameters, line_error, true);
 			} else if (!state_machine->options.dialect_options.date_format.at(LogicalTypeId::TIMESTAMP)
 			                .GetValue()
 			                .Empty() &&

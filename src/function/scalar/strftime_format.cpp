@@ -1360,6 +1360,13 @@ bool StrpTimeFormat::ParseResult::TryToDate(date_t &result) {
 	return Date::TryFromDate(data[0], data[1], data[2], result);
 }
 
+bool StrpTimeFormat::ParseResult::TryToTime(dtime_t &result) {
+	const auto hour_offset = data[7] / Interval::MINS_PER_HOUR;
+	const auto mins_offset = data[7] % Interval::MINS_PER_HOUR;
+	result = Time::FromTime(data[3] - hour_offset, data[4] - mins_offset, data[5], data[6]);
+	return true;
+}
+
 timestamp_t StrpTimeFormat::ParseResult::ToTimestamp() {
 	if (is_special) {
 		if (special == date_t::infinity()) {
@@ -1401,6 +1408,15 @@ bool StrpTimeFormat::TryParseDate(string_t input, date_t &result, string &error_
 		return false;
 	}
 	return parse_result.TryToDate(result);
+}
+
+bool StrpTimeFormat::TryParseTime(string_t input, dtime_t &result, string &error_message) const {
+	ParseResult parse_result;
+	if (!Parse(input, parse_result)) {
+		error_message = parse_result.FormatError(input, format_specifier);
+		return false;
+	}
+	return parse_result.TryToTime(result);
 }
 
 bool StrpTimeFormat::TryParseTimestamp(string_t input, timestamp_t &result, string &error_message) const {

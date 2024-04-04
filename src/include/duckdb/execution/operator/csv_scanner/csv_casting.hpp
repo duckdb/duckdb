@@ -67,6 +67,13 @@ class CSVCast {
 		}
 	};
 
+	struct TryCastTimeOperator {
+		static bool Operation(const map<LogicalTypeId, CSVOption<StrpTimeFormat>> &options, string_t input,
+		                      dtime_t &result, string &error_message) {
+			return options.at(LogicalTypeId::TIME).GetValue().TryParseTime(input, result, error_message);
+		}
+	};
+
 	struct TryCastTimestampOperator {
 		static bool Operation(const map<LogicalTypeId, CSVOption<StrpTimeFormat>> &options, string_t input,
 		                      timestamp_t &result, string &error_message) {
@@ -105,6 +112,12 @@ public:
 	                              bool nullify_error = false) {
 		return TemplatedTryCastDateVector<TryCastDateOperator, date_t>(options, input_vector, result_vector, count,
 		                                                               parameters, line_error, nullify_error);
+	}
+	static bool TryCastTimeVector(const map<LogicalTypeId, CSVOption<StrpTimeFormat>> &options, Vector &input_vector,
+	                              Vector &result_vector, idx_t count, CastParameters &parameters, idx_t &line_error,
+	                              bool nullify_error = false) {
+		return TemplatedTryCastDateVector<TryCastTimeOperator, dtime_t>(options, input_vector, result_vector, count,
+		                                                                parameters, line_error, nullify_error);
 	}
 	static bool TryCastTimestampVector(const map<LogicalTypeId, CSVOption<StrpTimeFormat>> &options,
 	                                   Vector &input_vector, Vector &result_vector, idx_t count,

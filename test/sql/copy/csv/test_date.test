@@ -38,3 +38,9 @@ Select * from read_csv('data/csv/custom_date.csv', header=true, timestampformat=
 ----
 123	2023-01-02 12:33:00
 124	2023-12-02 11:57:00
+
+query TT
+Select * from read_csv('data/csv/custom_date.csv', header=true, timeformat='%m/%d/%Y, %-I:%-M %p', types = ['BIGINT', 'TIME'] );
+----
+123	12:33:00
+124	11:57:00

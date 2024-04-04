@@ -146,6 +146,7 @@ public:
 		timestamp_t ToTimestamp();
 
 		bool TryToDate(date_t &result);
+		bool TryToTime(dtime_t &result);
 		bool TryToTimestamp(timestamp_t &result);
 
 		DUCKDB_API string FormatError(string_t input, const string &format_specifier);
@@ -160,6 +161,7 @@ public:
 	DUCKDB_API bool Parse(string_t str, ParseResult &result) const;
 
 	DUCKDB_API bool TryParseDate(string_t str, date_t &result, string &error_message) const;
+	DUCKDB_API bool TryParseTime(string_t str, dtime_t &result, string &error_message) const;
 	DUCKDB_API bool TryParseTimestamp(string_t str, timestamp_t &result, string &error_message) const;
 
 	date_t ParseDate(string_t str);
