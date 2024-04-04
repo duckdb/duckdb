@@ -239,6 +239,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 	}
 
 	result.filebase = lowercase_extension_name;
+	result.extension_version = extension_version;
 	result.filename = filename;
 	result.lib_hdl = lib_hdl;
 	return true;
@@ -304,7 +305,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 		                            init_fun_name, res.filename, error.RawMessage());
 	}
 
-	db.SetExtensionLoaded(extension);
+	db.SetExtensionLoaded(extension, res.extension_version);
 #endif
 }
 
