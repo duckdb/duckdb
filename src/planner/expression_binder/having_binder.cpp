@@ -10,13 +10,12 @@ namespace duckdb {
 
 HavingBinder::HavingBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info,
 						   const SelectBindState &bind_state, AggregateHandling aggregate_handling)
-    : BaseSelectBinder(binder, context, node, info, false), column_alias_binder(bind_state),
+    : BaseSelectBinder(binder, context, node, info), column_alias_binder(bind_state),
       aggregate_handling(aggregate_handling) {
 	target_type = LogicalType(LogicalTypeId::BOOLEAN);
 }
 
 BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
-
 	// Keep the original column name to return a meaningful error message.
 	auto column_name = expr_ptr->Cast<ColumnRefExpression>().GetColumnName();
 
@@ -37,7 +36,7 @@ BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, i
 			    "Having clause cannot reference column \"%s\" in correlated subquery and group by all", column_name);
 		}
 
-		auto expr = duckdb::BaseSelectBinder::BindExpression(expr_ptr, depth);
+		auto expr = duckdb::BaseSelectBinder::BindColumnRef(expr_ptr, depth, root_expression);
 		if (expr.HasError()) {
 			return expr;
 		}
@@ -54,21 +53,8 @@ BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, i
 	    "column %s must appear in the GROUP BY clause or be used in an aggregate function", column_name));
 }
 
-BindResult HavingBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
-	auto &expr = *expr_ptr;
-	// check if the expression binds to one of the groups
-	auto group_index = TryBindGroup(expr);
-	if (group_index != DConstants::INVALID_INDEX) {
-		return BindGroup(expr, depth, group_index);
-	}
-	switch (expr.expression_class) {
-	case ExpressionClass::WINDOW:
-		return BindResult("HAVING clause cannot contain window functions!");
-	case ExpressionClass::COLUMN_REF:
-		return BindColumnRef(expr_ptr, depth, root_expression);
-	default:
-		return duckdb::BaseSelectBinder::BindExpression(expr_ptr, depth);
-	}
+BindResult HavingBinder::BindWindow(WindowExpression &expr, idx_t depth) {
+	return BindResult("HAVING clause cannot contain window functions!");
 }
 
 } // namespace duckdb

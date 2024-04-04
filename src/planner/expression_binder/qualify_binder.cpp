@@ -11,13 +11,12 @@ namespace duckdb {
 
 QualifyBinder::QualifyBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info,
 							 const SelectBindState &bind_state)
-    : BaseSelectBinder(binder, context, node, info, false), column_alias_binder(bind_state) {
+    : BaseSelectBinder(binder, context, node, info), column_alias_binder(bind_state) {
 	target_type = LogicalType(LogicalTypeId::BOOLEAN);
 }
 
 BindResult QualifyBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
-
-	auto result = duckdb::BaseSelectBinder::BindExpression(expr_ptr, depth);
+	auto result = duckdb::BaseSelectBinder::BindColumnRef(expr_ptr, depth, root_expression);
 	if (!result.HasError()) {
 		return result;
 	}
@@ -34,23 +33,6 @@ BindResult QualifyBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, 
 
 	return BindResult(
 	    StringUtil::Format("Referenced column %s not found in FROM clause and can't find in alias map.", expr_string));
-}
-
-BindResult QualifyBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
-	auto &expr = *expr_ptr;
-	// check if the expression binds to one of the groups
-	auto group_index = TryBindGroup(expr);
-	if (group_index != DConstants::INVALID_INDEX) {
-		return BindGroup(expr, depth, group_index);
-	}
-	switch (expr.expression_class) {
-	case ExpressionClass::WINDOW:
-		return BindWindow(expr.Cast<WindowExpression>(), depth);
-	case ExpressionClass::COLUMN_REF:
-		return BindColumnRef(expr_ptr, depth, root_expression);
-	default:
-		return duckdb::BaseSelectBinder::BindExpression(expr_ptr, depth);
-	}
 }
 
 } // namespace duckdb

@@ -21,12 +21,9 @@ public:
 				  const SelectBindState &bind_state);
 
 protected:
-	BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
-	                          bool root_expression = false) override;
+	BindResult BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) override;
 
 private:
-	BindResult BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression);
-
 	ColumnAliasBinder column_alias_binder;
 };
 
