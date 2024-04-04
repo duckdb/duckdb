@@ -63,3 +63,132 @@ query IIIIII
 select start_value, min_value, max_value, increment_by, cycle, last_value from duckdb_sequences();
 ----
 20316564	1	9223372036854775807	1	false	20316564
+
+# Reached max value (no cycle)
+
+statement ok
+drop sequence seq1 cascade;
+
+statement ok
+create sequence seq1 increment 2 minvalue 3 maxvalue 8 start 5
+
+statement ok
+create table tbl (a integer DEFAULT nextval('seq1'))
+
+statement ok
+insert into tbl values(default);
+
+statement ok
+insert into tbl values(default);
+
+query IIIIII
+select start_value, min_value, max_value, increment_by, cycle, last_value from duckdb_sequences();
+----
+5	3	8	2	false	7
+
+statement error
+insert into tbl values(default);
+----
+Sequence Error: nextval: reached maximum value of sequence "seq1" (8)
+
+query IIIIII
+select start_value, min_value, max_value, increment_by, cycle, last_value from duckdb_sequences();
+----
+5	3	8	2	false	7
+
+# Reached min value (no cycle)
+
+statement ok
+drop sequence seq1 cascade;
+
+statement ok
+create sequence seq1 increment -2 minvalue 3 maxvalue 8 start 5
+
+statement ok
+create table tbl (a integer DEFAULT nextval('seq1'))
+
+statement ok
+insert into tbl values(default);
+
+statement ok
+insert into tbl values(default);
+
+query IIIIII
+select start_value, min_value, max_value, increment_by, cycle, last_value from duckdb_sequences();
+----
+5	3	8	-2	false	3
+
+statement error
+insert into tbl values(default);
+----
+Sequence Error: nextval: reached minimum value of sequence "seq1" (3)
+
+query IIIIII
+select start_value, min_value, max_value, increment_by, cycle, last_value from duckdb_sequences();
+----
+5	3	8	-2	false	3
+
+# Cycle (positive)
+
+statement ok
+drop sequence seq1 cascade;
+
+statement ok
+create sequence seq1 increment 2 minvalue 3 maxvalue 8 start 5 cycle
+
+statement ok
+create table tbl (a integer DEFAULT nextval('seq1'))
+
+# value is 5 here
+statement ok
+insert into tbl values(default);
+
+# value is 7 here
+statement ok
+insert into tbl values(default);
+
+query IIIIII
+select start_value, min_value, max_value, increment_by, cycle, last_value from duckdb_sequences();
+----
+5	3	8	2	true	7
+
+# value is min_value (3)
+statement ok
+insert into tbl values(default);
+
+query IIIIII
+select start_value, min_value, max_value, increment_by, cycle, last_value from duckdb_sequences();
+----
+5	3	8	2	true	3
+
+# Cycle (negative)
+
+statement ok
+drop sequence seq1 cascade;
+
+statement ok
+create sequence seq1 increment -2 minvalue 3 maxvalue 8 start 5 cycle
+
+statement ok
+create table tbl (a integer DEFAULT nextval('seq1'))
+
+# value is 5
+statement ok
+insert into tbl values(default);
+
+# value is 3
+statement ok
+insert into tbl values(default);
+
+query IIIIII
+select start_value, min_value, max_value, increment_by, cycle, last_value from duckdb_sequences();
+----
+5	3	8	-2	true	3
+
+statement ok
+insert into tbl values(default);
+
+query IIIIII
+select start_value, min_value, max_value, increment_by, cycle, last_value from duckdb_sequences();
+----
+5	3	8	-2	true	8

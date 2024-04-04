@@ -28,11 +28,8 @@ static int64_t LastValue(const CreateSequenceInfo &info) {
 		if (increase) {
 			while (to_simulate > 0) {
 				auto maximum_increase = info.max_value - current;
-				uint64_t max_uses = maximum_increase / info.increment;
-				if (maximum_increase % info.increment != 0) {
-					// i.e 300 / 170 == 1.76, 2 would overflow
-					max_uses++;
-				}
+				uint64_t max_uses = 1 + (maximum_increase / info.increment);
+
 				if (to_simulate >= max_uses) {
 					// Uses would overflow, cycle around
 					to_simulate -= max_uses;
@@ -44,20 +41,18 @@ static int64_t LastValue(const CreateSequenceInfo &info) {
 				}
 			}
 		} else {
+			auto increment = info.increment * -1;
 			while (to_simulate > 0) {
 				auto maximum_decrease = current - info.min_value;
-				uint64_t max_uses = maximum_decrease / info.increment;
-				if (maximum_decrease % info.increment != 0) {
-					// If there's a remainder, one more decrement would overflow
-					max_uses++;
-				}
+				uint64_t max_uses = 1 + (maximum_decrease / increment);
+
 				if (to_simulate >= max_uses) {
 					// Decrementing would overflow, cycle around
 					to_simulate -= max_uses;
 					current = info.max_value;
 					result = current;
 				} else {
-					result = current - (info.increment * to_simulate);
+					result = current - (increment * to_simulate);
 					break;
 				}
 			}
@@ -114,8 +109,8 @@ int64_t SequenceCatalogEntry::CurrentValue() {
 int64_t SequenceCatalogEntry::NextValue(DuckTransaction &transaction) {
 	lock_guard<mutex> seqlock(lock);
 	int64_t result;
-	result = data.counter;
 	bool overflow = !TryAddOperator::Operation(data.counter, data.increment, data.counter);
+	result = data.counter;
 	if (data.cycle) {
 		if (overflow) {
 			data.counter = data.increment < 0 ? data.max_value : data.min_value;
