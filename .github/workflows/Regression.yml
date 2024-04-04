@@ -129,6 +129,18 @@ jobs:
       run: |
         python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/csv.csv --verbose --threads=2
 
+    - name: Regression Test new micro benchmark
+      if: always()
+      shell: bash
+      run: |
+        git diff --name-only main | grep "benchmark/micro/*" > .github/regression/updated_micro_benchmarks.csv
+        if [ $(wc -l < .github/regression/updated_micro_benchmarks.csv) -gt 0 ]; then
+          python scripts/regression_test_runner.py \
+                --old=duckdb/build/release/benchmark/benchmark_runner \ 
+                --new=build/release/benchmark/benchmark_runner \
+                --benchmarks=.github/regression/updated_micro_benchmarks.csv --verbose --threads=2
+        fi
+
  regression-test-storage:
   name: Storage Size Regression Test
   runs-on: ubuntu-20.04
