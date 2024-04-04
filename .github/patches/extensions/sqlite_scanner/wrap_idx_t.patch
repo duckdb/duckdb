@@ -1,0 +1,20 @@
+diff --git a/src/storage/sqlite_table_entry.cpp b/src/storage/sqlite_table_entry.cpp
+index 9d83f00..fadbb39 100644
+--- a/src/storage/sqlite_table_entry.cpp
++++ b/src/storage/sqlite_table_entry.cpp
+@@ -53,10 +53,14 @@ TableStorageInfo SQLiteTableEntry::GetStorageInfo(ClientContext &context) {
+ 	auto &transaction = Transaction::Get(context, catalog).Cast<SQLiteTransaction>();
+ 	auto &db = transaction.GetDB();
+ 	TableStorageInfo result;
+-	if (!db.GetMaxRowId(name, result.cardinality)) {
++
++	idx_t cardinality;
++	if (!db.GetMaxRowId(name, cardinality)) {
+ 		// probably
+ 		result.cardinality = 10000;
+ 	}
++	result.cardinality = cardinality;
++
+ 	result.index_info = db.GetIndexInfo(name);
+ 	return result;
+ }

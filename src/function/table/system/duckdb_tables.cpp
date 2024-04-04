@@ -145,9 +145,9 @@ void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 		// has_primary_key, LogicalType::BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(TableHasPrimaryKey(table)));
 		// estimated_size, LogicalType::BIGINT
-		Value card_val = storage_info.cardinality == DConstants::INVALID_INDEX
-		                     ? Value()
-		                     : Value::BIGINT(NumericCast<int64_t>(storage_info.cardinality));
+
+		Value card_val =
+		    !storage_info.cardinality.IsValid() ? Value() : Value::BIGINT(NumericCast<int64_t>(storage_info.cardinality.GetIndex()));
 		output.SetValue(col++, count, card_val);
 		// column_count, LogicalType::BIGINT
 		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(table.GetColumns().LogicalColumnCount())));

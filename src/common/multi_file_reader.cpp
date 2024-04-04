@@ -172,7 +172,7 @@ MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &opt
 		}
 
 		for (auto &part : partitions) {
-			idx_t hive_partitioning_index = DConstants::INVALID_INDEX;
+			idx_t hive_partitioning_index;
 			auto lookup = std::find(names.begin(), names.end(), part.first);
 			if (lookup != names.end()) {
 				// hive partitioning column also exists in file - override
