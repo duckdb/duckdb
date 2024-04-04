@@ -30,8 +30,7 @@ for i in eachrow(df)
     end
     DuckDB.end_row(appender)
 end
-# flush the appender after all rows
-DuckDB.flush(appender)
+# close the appender after all rows
 DuckDB.close(appender)
 ```
 """
@@ -84,6 +83,8 @@ append(appender::Appender, val::UInt32) = duckdb_append_uint32(appender.handle, 
 append(appender::Appender, val::UInt64) = duckdb_append_uint64(appender.handle, val);
 append(appender::Appender, val::Float32) = duckdb_append_float(appender.handle, val);
 append(appender::Appender, val::Float64) = duckdb_append_double(appender.handle, val);
+append(appender::Appender, val::Missing) = duckdb_append_null(appender.handle);
+append(appender::Appender, val::Nothing) = duckdb_append_null(appender.handle);
 append(appender::Appender, val::Type{Missing}) = duckdb_append_null(appender.handle);
 append(appender::Appender, val::Type{Nothing}) = duckdb_append_null(appender.handle);
 append(appender::Appender, val::AbstractString) = duckdb_append_varchar(appender.handle, val);
