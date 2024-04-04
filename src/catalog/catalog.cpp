@@ -55,7 +55,11 @@ AttachedDatabase &Catalog::GetAttached() {
 	return db;
 }
 
-const string &Catalog::GetName() {
+const AttachedDatabase &Catalog::GetAttached() const {
+	return db;
+}
+
+const string &Catalog::GetName() const {
 	return GetAttached().GetName();
 }
 

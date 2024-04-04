@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/catalog/catalog_entry.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 
 namespace duckdb {
 class SchemaCatalogEntry;
@@ -27,6 +28,9 @@ public:
 
 public:
 	SchemaCatalogEntry &ParentSchema() override {
+		return schema;
+	}
+	const SchemaCatalogEntry &ParentSchema() const override {
 		return schema;
 	}
 };
