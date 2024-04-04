@@ -70,8 +70,15 @@ void CleanupState::CleanupDelete(DeleteInfo &info) {
 	indexed_tables[current_table->info->table] = current_table;
 
 	count = 0;
-	for (idx_t i = 0; i < info.count; i++) {
-		row_numbers[count++] = info.base_row + info.rows[i];
+	if (info.is_consecutive) {
+		for (idx_t i = 0; i < info.count; i++) {
+			row_numbers[count++] = info.base_row + i;
+		}
+	} else {
+		auto rows = info.GetRows();
+		for (idx_t i = 0; i < info.count; i++) {
+			row_numbers[count++] = info.base_row + rows[i];
+		}
 	}
 	Flush();
 }
