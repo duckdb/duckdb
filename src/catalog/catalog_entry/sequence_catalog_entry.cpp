@@ -13,12 +13,71 @@
 
 namespace duckdb {
 
+static int64_t LastValue(const CreateSequenceInfo &info) {
+	if (info.usage_count == 0) {
+		// last_value was never set, we don't need to recreate it
+		return info.start_value;
+	}
+	int64_t result = 0;
+	auto to_simulate = info.usage_count;
+	// The first use is always just initializing the counter to start_value
+	to_simulate--;
+	if (info.cycle) {
+		auto current = info.start_value;
+		auto increase = info.increment > 0;
+		if (increase) {
+			while (to_simulate > 0) {
+				auto maximum_increase = info.max_value - current;
+				uint64_t max_uses = maximum_increase / info.increment;
+				if (maximum_increase % info.increment != 0) {
+					// i.e 300 / 170 == 1.76, 2 would overflow
+					max_uses++;
+				}
+				if (to_simulate >= max_uses) {
+					// Uses would overflow, cycle around
+					to_simulate -= max_uses;
+					current = info.min_value;
+					result = current;
+				} else {
+					result = current + (info.increment * to_simulate);
+					break;
+				}
+			}
+		} else {
+			while (to_simulate > 0) {
+				auto maximum_decrease = current - info.min_value;
+				uint64_t max_uses = maximum_decrease / info.increment;
+				if (maximum_decrease % info.increment != 0) {
+					// If there's a remainder, one more decrement would overflow
+					max_uses++;
+				}
+				if (to_simulate >= max_uses) {
+					// Decrementing would overflow, cycle around
+					to_simulate -= max_uses;
+					current = info.max_value;
+					result = current;
+				} else {
+					result = current - (info.increment * to_simulate);
+					break;
+				}
+			}
+		}
+		return result;
+	} else {
+		// This is guaranteed to be in bounds, otherwise nextval would have thrown trying to create this state
+		return info.start_value + (info.increment * to_simulate);
+	}
+}
+
 // NOTE: usage_count is explicitly set to 0,
 // if the sequence was serialized to disk the start_value
 // was updated to the value of the last_value before serializing, keeping the state of the sequence.
 SequenceData::SequenceData(CreateSequenceInfo &info)
-    : usage_count(0), counter(info.start_value), last_value(info.start_value), increment(info.increment),
+    : usage_count(info.usage_count), counter(0), last_value(0), increment(info.increment),
       start_value(info.start_value), min_value(info.min_value), max_value(info.max_value), cycle(info.cycle) {
+	auto reconstructed_last_value = LastValue(info);
+	last_value = reconstructed_last_value;
+	counter = reconstructed_last_value;
 }
 
 SequenceCatalogEntry::SequenceCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateSequenceInfo &info)
@@ -99,10 +158,7 @@ unique_ptr<CreateInfo> SequenceCatalogEntry::GetInfo() const {
 	result->increment = seq_data.increment;
 	result->min_value = seq_data.min_value;
 	result->max_value = seq_data.max_value;
-	// To "persist" the last_value we create the sequence as if the provided START value is the current value
-	// Inside the SequenceData we set the usage_count to 0 so currvalue will throw if the sequence hasnt been updated
-	// yet
-	result->start_value = seq_data.counter;
+	result->start_value = seq_data.start_value;
 	result->cycle = seq_data.cycle;
 	result->comment = comment;
 	return std::move(result);
