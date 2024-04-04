@@ -22,6 +22,7 @@ public:
 	explicit ArrowType(LogicalType type_p, unique_ptr<ArrowTypeInfo> type_info = nullptr)
 	    : type(std::move(type_p)), type_info(std::move(type_info)) {
 	}
+
 public:
 	LogicalType GetDuckType(bool use_dictionary = false) const;
 
