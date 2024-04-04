@@ -181,7 +181,7 @@ string_t StringCastTZ::Operation(dtime_tz_t input, Vector &vector) {
 	auto ss = std::abs(offset);
 	const auto hh = ss / Interval::SECS_PER_HOUR;
 
-	const auto hh_length = (hh < 100) ? 2 : NumericHelper::UnsignedLength(uint32_t(hh));
+	const auto hh_length = UnsafeNumericCast<idx_t>((hh < 100) ? 2 : NumericHelper::UnsignedLength(uint32_t(hh)));
 	length += hh_length;
 
 	ss %= Interval::SECS_PER_HOUR;

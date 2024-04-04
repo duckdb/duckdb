@@ -6,6 +6,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/optimizer/rule/ordered_aggregate_optimizer.hpp"
 
 namespace duckdb {
 

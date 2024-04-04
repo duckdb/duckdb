@@ -85,7 +85,7 @@ static uint8_t PositiveHugeintHighestBit(hugeint_t bits) {
 	uint8_t out = 0;
 	if (bits.upper) {
 		out = 64;
-		uint64_t up = bits.upper;
+		uint64_t up = static_cast<uint64_t>(bits.upper);
 		while (up) {
 			up >>= 1;
 			out++;
@@ -104,7 +104,7 @@ static bool PositiveHugeintIsBitSet(hugeint_t lhs, uint8_t bit_position) {
 	if (bit_position < 64) {
 		return lhs.lower & (uint64_t(1) << uint64_t(bit_position));
 	} else {
-		return lhs.upper & (uint64_t(1) << uint64_t(bit_position - 64));
+		return static_cast<uint64_t>(lhs.upper) & (uint64_t(1) << uint64_t(bit_position - 64));
 	}
 }
 

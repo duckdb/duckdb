@@ -67,7 +67,7 @@ int NumericHelper::UnsignedLength(uint32_t value) {
 }
 
 template <>
-idx_t NumericHelper::UnsignedLength(uint64_t value) {
+int NumericHelper::UnsignedLength(uint64_t value) {
 	if (value >= 10000000000ULL) {
 		if (value >= 1000000000000000ULL) {
 			int length = 16;

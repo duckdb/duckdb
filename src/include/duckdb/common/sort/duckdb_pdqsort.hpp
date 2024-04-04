@@ -154,9 +154,9 @@ struct PDQIterator {
 	}
 
 	inline friend idx_t operator-(const PDQIterator &lhs, const PDQIterator &rhs) {
-		D_ASSERT((*lhs - *rhs) % lhs.entry_size == 0);
+		D_ASSERT(duckdb::NumericCast<idx_t>(*lhs - *rhs) % lhs.entry_size == 0);
 		D_ASSERT(*lhs - *rhs >= 0);
-		return (*lhs - *rhs) / lhs.entry_size;
+		return duckdb::NumericCast<idx_t>(*lhs - *rhs) / lhs.entry_size;
 	}
 
 	inline friend bool operator<(const PDQIterator &lhs, const PDQIterator &rhs) {
@@ -320,7 +320,7 @@ inline T *align_cacheline(T *p) {
 #else
 	std::size_t ip = reinterpret_cast<std::size_t>(p);
 #endif
-	ip = (ip + cacheline_size - 1) & -cacheline_size;
+	ip = (ip + cacheline_size - 1) & duckdb::UnsafeNumericCast<uintptr_t>(-cacheline_size);
 	return reinterpret_cast<T *>(ip);
 }
 

@@ -62,7 +62,7 @@ public:
 	template <class SIGNED, class UNSIGNED>
 	static string_t FormatSigned(SIGNED value, Vector &vector) {
 		int sign = -(value < 0);
-		UNSIGNED unsigned_value = UnsafeNumericCast<UNSIGNED>(UNSIGNED(value ^ sign) - sign);
+		UNSIGNED unsigned_value = UNSIGNED(value) ^ UNSIGNED(sign) - UNSIGNED(sign);
 		int length = UnsignedLength<UNSIGNED>(unsigned_value) - sign;
 		string_t result = StringVector::EmptyString(vector, NumericCast<size_t>(length));
 		auto dataptr = result.GetDataWriteable();
@@ -123,16 +123,18 @@ struct DecimalToString {
 			*dst = '-';
 		}
 		if (scale == 0) {
-			NumericHelper::FormatUnsigned<UNSIGNED>(value, end);
+			NumericHelper::FormatUnsigned<UNSIGNED>(UnsafeNumericCast<UNSIGNED>(value), end);
 			return;
 		}
 		// we write two numbers:
 		// the numbers BEFORE the decimal (major)
 		// and the numbers AFTER the decimal (minor)
-		UNSIGNED minor = value % (UNSIGNED)NumericHelper::POWERS_OF_TEN[scale];
-		UNSIGNED major = value / (UNSIGNED)NumericHelper::POWERS_OF_TEN[scale];
+		auto minor =
+		    UnsafeNumericCast<UNSIGNED>(value) % UnsafeNumericCast<UNSIGNED>(NumericHelper::POWERS_OF_TEN[scale]);
+		auto major =
+		    UnsafeNumericCast<UNSIGNED>(value) / UnsafeNumericCast<UNSIGNED>(NumericHelper::POWERS_OF_TEN[scale]);
 		// write the number after the decimal
-		dst = NumericHelper::FormatUnsigned<UNSIGNED>(minor, end);
+		dst = NumericHelper::FormatUnsigned<UNSIGNED>(UnsafeNumericCast<UNSIGNED>(minor), end);
 		// (optionally) pad with zeros and add the decimal point
 		while (dst > (end - scale)) {
 			*--dst = '0';
@@ -142,7 +144,7 @@ struct DecimalToString {
 		D_ASSERT(width > scale || major == 0);
 		if (width > scale) {
 			// there are numbers after the comma
-			dst = NumericHelper::FormatUnsigned<UNSIGNED>(major, dst);
+			dst = NumericHelper::FormatUnsigned<UNSIGNED>(UnsafeNumericCast<UNSIGNED>(major), dst);
 		}
 	}
 
@@ -150,7 +152,7 @@ struct DecimalToString {
 	static string_t Format(SIGNED value, uint8_t width, uint8_t scale, Vector &vector) {
 		int len = DecimalLength<SIGNED, UNSIGNED>(value, width, scale);
 		string_t result = StringVector::EmptyString(vector, NumericCast<size_t>(len));
-		FormatDecimal<SIGNED, UNSIGNED>(value, width, scale, result.GetDataWriteable(), len);
+		FormatDecimal<SIGNED, UNSIGNED>(value, width, scale, result.GetDataWriteable(), UnsafeNumericCast<idx_t>(len));
 		result.Finalize();
 		return result;
 	}
