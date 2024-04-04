@@ -175,6 +175,88 @@ DROP TABLE reject_errors;
 statement ok
 DROP TABLE reject_scans;
 
+query IIII
+FROM read_csv('data/csv/rejects/multiple_errors/unquoted_cast.csv',
+    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
+----
+oogie boogie	3	2023-01-01	2
+oogie boogie	3	2023-01-02	7
+
+query IIIIIIIII rowsort
+SElECT * EXCLUDE (scan_id)  FROM reject_errors ORDER BY byte_position;
+----
+0	3	59	59	1	name	UNQUOTED VALUE	"oogie boogie"bla,bla, 2023-01-02, 5	Value with unterminated quote found.
+0	3	59	77	2	age	CAST	"oogie boogie"bla,bla, 2023-01-02, 5	Error when converting column "age". Could not convert string "bla" to 'INTEGER'
+
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+query IIII
+FROM read_csv('data/csv/rejects/multiple_errors/unquoted_less.csv',
+    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
+----
+oogie boogie	3	2023-01-01	2
+oogie boogie	3	2023-01-02	7
+
+query IIIIIIIII rowsort
+SElECT * EXCLUDE (scan_id)  FROM reject_errors ORDER BY byte_position;
+----
+0	3	59	59	1	name	UNQUOTED VALUE	"oogie boogie"bla,4, 2023-01-02	Value with unterminated quote found.
+0	3	59	90	3	barks	MISSING COLUMNS	"oogie boogie"bla,4, 2023-01-02	Expected Number of Columns: 4 Found: 3
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+query IIII
+FROM read_csv('data/csv/rejects/multiple_errors/unquoted_maxline.csv',
+    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
+----
+oogie boogie	3	2023-01-01	2
+oogie boogie	3	2023-01-02	7
+
+query IIIIIIIII rowsort
+SElECT * EXCLUDE (scan_id)  FROM reject_errors ORDER BY byte_position;
+----
+0	3	59	59	1	name	UNQUOTED VALUE	"oogie boogieoogie boogieoogie boogieoogie boogie"bla,4, 2023-01-02, 5	Value with unterminated quote found.
+0	3	59	59	NULL	NULL	LINE SIZE OVER MAXIMUM	"oogie boogieoogie boogieoogie boogieoogie boogie"bla,4, 2023-01-02, 5	Maximum line size of 40 bytes exceeded. Actual Size:71 bytes.
+
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+query IIII
+FROM read_csv('data/csv/rejects/multiple_errors/unquoted_more.csv',
+    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
+----
+oogie boogie	3	2023-01-01	2
+oogie boogie	3	2023-01-02	7
+
+query IIIIIIIII rowsort
+SElECT * EXCLUDE (scan_id)  FROM reject_errors ORDER BY byte_position;
+----
+0	3	59	59	1	name	UNQUOTED VALUE	"oogie boogie"bla,4, 2023-01-02, 5, 8	Value with unterminated quote found.
+0	3	59	93	5	NULL	TOO MANY COLUMNS	"oogie boogie"bla,4, 2023-01-02, 5, 8	Expected Number of Columns: 4 Found: 5
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
 #query IIII
 #FROM read_csv('data/csv/rejects/multiple_errors.csv',
 #    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
