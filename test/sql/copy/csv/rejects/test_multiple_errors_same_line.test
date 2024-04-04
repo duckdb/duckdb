@@ -257,19 +257,123 @@ DROP TABLE reject_errors;
 statement ok
 DROP TABLE reject_scans;
 
-#query IIII
-#FROM read_csv('data/csv/rejects/multiple_errors.csv',
-#    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
-#    store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
-#----
-#oogie boogie	3	2023-01-01	2
-#oogie boogie	3	2023-01-02	5
-#
-#query IIIIIIIIII rowsort
-#FROM reject_errors ORDER BY ALL;
-#----
-#3	0	4	89	116	4	barks	CAST	oogie boogie,3, 2023-01-03, bla, 7	Error when converting column "barks". Could not convert string " bla" to 'INTEGER'
-#3	0	4	89	120	5	NULL	TOO MANY COLUMNS	oogie boogie,3, 2023-01-03, bla, 7	Expected Number of Columns: 4 Found: 5
-#3	0	5	124	144	4	barks	CAST	oogie boogie,3, bla, bla, 7	Error when converting column "barks". Could not convert string " bla" to 'INTEGER'
-#3	0	5	124	148	5	NULL	TOO MANY COLUMNS	oogie boogie,3, bla, bla, 7	Expected Number of Columns: 4 Found: 5
-#3	0	6	152	171	3	barks	MISSING COLUMNS	oogie boogie,3, bla	Expected Number of Columns: 4 Found: 3
+query IIII
+FROM read_csv('data/csv/rejects/multiple_errors/invalid_utf_cast.csv',
+    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
+----
+oogie boogie	3	2023-01-01	2
+
+query IIIIIIIII rowsort
+SElECT * EXCLUDE (scan_id)  FROM reject_errors ORDER BY byte_position;
+----
+0	3	59	59	1	name	INVALID UNICODE	oogie bo??gie,bla, 2023-01-01, 2	Invalid unicode (byte sequence mismatch) detected.
+0	3	59	73	2	age	CAST	oogie bo??gie,bla, 2023-01-01, 2	Error when converting column "age". Could not convert string "bla" to 'INTEGER'
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+query IIII
+FROM read_csv('data/csv/rejects/multiple_errors/invalid_utf_less.csv',
+    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
+----
+oogie boogie	3	2023-01-01	2
+
+
+query IIIIIIIII rowsort
+SElECT * EXCLUDE (scan_id)  FROM reject_errors ORDER BY byte_position;
+----
+0	3	59	59	1	name	INVALID UNICODE	oogie bo??gie,3, 2023-01-01	Invalid unicode (byte sequence mismatch) detected.
+0	3	59	86	3	barks	MISSING COLUMNS	oogie bo??gie,3, 2023-01-01	Expected Number of Columns: 4 Found: 3
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+query IIII
+FROM read_csv('data/csv/rejects/multiple_errors/invalid_utf_max_line.csv',
+    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
+----
+oogie boogie	3	2023-01-01	2
+
+
+query IIIIIIIII rowsort
+SElECT * EXCLUDE (scan_id)  FROM reject_errors ORDER BY byte_position, error_message;
+----
+0	3	59	125	5	NULL	TOO MANY COLUMNS	oogie bo??gieoogie boogieoogie boogieoogie boogie,3, 2023-01-01, 2, 5	Expected Number of Columns: 4 Found: 5
+0	3	59	59	1	name	INVALID UNICODE	oogie bo??gieoogie boogieoogie boogieoogie boogie,3, 2023-01-01, 2, 5	Invalid unicode (byte sequence mismatch) detected.
+0	3	59	59	NULL	NULL	LINE SIZE OVER MAXIMUM	oogie bo??gieoogie boogieoogie boogieoogie boogie,3, 2023-01-01, 2, 5	Maximum line size of 40 bytes exceeded. Actual Size:70 bytes.
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+query IIII
+FROM read_csv('data/csv/rejects/multiple_errors/invalid_utf_more.csv',
+    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
+----
+oogie boogie	3	2023-01-01	2
+
+
+query IIIIIIIII rowsort
+SElECT * EXCLUDE (scan_id)  FROM reject_errors ORDER BY byte_position;
+----
+0	3	59	59	1	name	INVALID UNICODE	oogie bo??gie,3, 2023-01-01, 2, 5	Invalid unicode (byte sequence mismatch) detected.
+0	3	59	89	5	NULL	TOO MANY COLUMNS	oogie bo??gie,3, 2023-01-01, 2, 5	Expected Number of Columns: 4 Found: 5
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+query IIIII
+FROM read_csv('data/csv/rejects/multiple_errors/invalid_utf_unquoted.csv',
+    columns = {'name': 'VARCHAR', 'last_name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
+----
+oogie	 boogie	3	2023-01-01	2
+
+
+query IIIIIIIII rowsort
+SElECT * EXCLUDE (scan_id)  FROM reject_errors ORDER BY byte_position;
+----
+0	3	71	71	1	name	UNQUOTED VALUE	"oogie"bla, bo??gie,3, 2023-01-01, 2	Value with unterminated quote found.
+0	3	71	82	2	last_name	INVALID UNICODE	"oogie"bla, bo??gie,3, 2023-01-01, 2	Invalid unicode (byte sequence mismatch) detected.
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+query IIII
+FROM read_csv('data/csv/rejects/multiple_errors/multiple_errors.csv',
+    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
+----
+oogie boogie	3	2023-01-01	2
+oogie boogie	3	2023-01-02	5
+
+query IIIIIIIII rowsort
+SELECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
+----
+0	4	89	116	4	barks	CAST	oogie boogie,3, 2023-01-03, bla, 7	Error when converting column "barks". Could not convert string " bla" to 'INTEGER'
+0	4	89	120	5	NULL	TOO MANY COLUMNS	oogie boogie,3, 2023-01-03, bla, 7	Expected Number of Columns: 4 Found: 5
+0	5	124	144	4	barks	CAST	oogie boogie,3, bla, bla, 7	Error when converting column "barks". Could not convert string " bla" to 'INTEGER'
+0	5	124	148	5	NULL	TOO MANY COLUMNS	oogie boogie,3, bla, bla, 7	Expected Number of Columns: 4 Found: 5
+0	6	152	152	1	name	UNQUOTED VALUE	"oogie boogie"bla,3, 2023-01-04	Value with unterminated quote found.
+0	6	152	183	3	barks	MISSING COLUMNS	"oogie boogie"bla,3, 2023-01-04	Expected Number of Columns: 4 Found: 3
+0	7	184	203	3	barks	MISSING COLUMNS	oogie boogie,3, bla	Expected Number of Columns: 4 Found: 3
+0	8	204	204	NULL	NULL	LINE SIZE OVER MAXIMUM	oogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogie,3, bla	Maximum line size of 40 bytes exceeded. Actual Size:92 bytes.
+0	8	204	295	3	barks	MISSING COLUMNS	oogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogie,3, bla	Expected Number of Columns: 4 Found: 3

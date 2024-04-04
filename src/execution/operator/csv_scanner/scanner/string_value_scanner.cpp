@@ -334,11 +334,6 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 void StringValueResult::HandleUnicodeError(idx_t col_idx, LinePosition &error_position) {
 	bool first_nl;
 	auto borked_line = current_line_position.ReconstructCurrentLine(first_nl, buffer_handles);
-	// sanitize borked line
-	std::vector<char> char_array(borked_line.begin(), borked_line.end());
-	char_array.push_back('\0'); // Null-terminate the character array
-	Utf8Proc::MakeValid(&char_array[0], char_array.size());
-	borked_line = {char_array.begin(), char_array.end() - 1};
 	LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
 	if (current_line_position.begin == error_position) {
 		auto csv_error = CSVError::InvalidUTF8(state_machine.options, col_idx, lines_per_batch, borked_line,
@@ -379,11 +374,6 @@ bool StringValueResult::HandleError() {
 			}
 			break;
 		case CSVErrorType::INVALID_UNICODE: {
-			// We have to sanitize the CSV line
-			std::vector<char> char_array(borked_line.begin(), borked_line.end());
-			char_array.push_back('\0'); // Null-terminate the character array
-			Utf8Proc::MakeValid(&char_array[0], char_array.size());
-			borked_line = {char_array.begin(), char_array.end() - 1};
 			if (current_line_position.begin == line_pos) {
 				csv_error =
 				    CSVError::InvalidUTF8(state_machine.options, col_idx, lines_per_batch, borked_line,
@@ -489,6 +479,11 @@ string FullLinePosition::ReconstructCurrentLine(bool &first_char_nl,
 			result += second_buffer[i];
 		}
 	}
+	// sanitize borked line
+	std::vector<char> char_array(result.begin(), result.end());
+	char_array.push_back('\0'); // Null-terminate the character array
+	Utf8Proc::MakeValid(&char_array[0], char_array.size());
+	result = {char_array.begin(), char_array.end() - 1};
 	return result;
 }
 
