@@ -1,13 +1,16 @@
 #include "duckdb/common/types/hugeint.hpp"
-#include "duckdb/common/types/uhugeint.hpp"
-#include "duckdb/common/exception.hpp"
+
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/windows_undefs.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/windows_undefs.hpp"
 
 #include <cmath>
 #include <limits>
@@ -301,8 +304,7 @@ bool Hugeint::TryMultiply(hugeint_t lhs, hugeint_t rhs, hugeint_t &result) {
 }
 
 // Multiply without overflow check
-template <>
-hugeint_t Hugeint::Multiply<false>(hugeint_t lhs, hugeint_t rhs) {
+hugeint_t Hugeint::SlowMultiply(hugeint_t lhs, hugeint_t rhs) {
 	hugeint_t result;
 	bool lhs_negative = lhs.upper < 0;
 	bool rhs_negative = rhs.upper < 0;
@@ -313,15 +315,6 @@ hugeint_t Hugeint::Multiply<false>(hugeint_t lhs, hugeint_t rhs) {
 		NegateInPlace<false>(rhs);
 	}
 
-#if ((__GNUC__ >= 5) || defined(__clang__)) && defined(__SIZEOF_INT128__)
-	__uint128_t left = __uint128_t(lhs.lower) + (__uint128_t(lhs.upper) << 64);
-	__uint128_t right = __uint128_t(rhs.lower) + (__uint128_t(rhs.upper) << 64);
-	__uint128_t result_i128;
-	result_i128 = left * right;
-	uint64_t upper = uint64_t(result_i128 >> 64);
-	result.upper = int64_t(upper);
-	result.lower = uint64_t(result_i128 & 0xffffffffffffffff);
-#else
 	// Multiply code adapted from:
 	// https://github.com/calccrypto/uint128_t/blob/master/uint128_t.cpp
 
@@ -371,7 +364,7 @@ hugeint_t Hugeint::Multiply<false>(hugeint_t lhs, hugeint_t rhs) {
 	// combine components
 	result.lower = (third32 << 32) | fourth32;
 	result.upper = (first32 << 32) | second32;
-#endif
+
 	if (lhs_negative ^ rhs_negative) {
 		NegateInPlace<false>(result);
 	}
