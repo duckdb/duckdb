@@ -25,7 +25,6 @@ end
         DuckDB.append(appender, i)
         DuckDB.end_row(appender)
     end
-    DuckDB.flush(appender)
     DuckDB.close(appender)
 
     results = DBInterface.execute(db, "SELECT * FROM integers")
@@ -87,8 +86,7 @@ end
     DuckDB.append(appender, "Foo")
     # End the row of the appender
     DuckDB.end_row(appender)
-    # Destroy the appender and flush the data
-    DuckDB.flush(appender)
+    # Destroy the appender
     DuckDB.close(appender)
 
     # Retrive the data from the table and store it in  a vector
@@ -116,4 +114,19 @@ end
 
     # close the database 
     DBInterface.close!(db)
+end
+
+@testset "missing and nothing values" begin
+    db = DuckDB.DB()
+    DBInterface.execute(db, "CREATE OR REPLACE TABLE data (x INT)")
+
+    df = DataFrame(x = [1, 2, missing, nothing])
+    appender = DuckDB.Appender(db, "data")
+    for i in eachrow(df)
+        for j in i
+            DuckDB.append(appender, j)
+        end
+        DuckDB.end_row(appender)
+    end
+    DuckDB.close(appender)
 end
