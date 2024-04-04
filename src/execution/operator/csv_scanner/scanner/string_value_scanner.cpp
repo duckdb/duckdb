@@ -365,6 +365,7 @@ bool StringValueResult::HandleError() {
 
 		switch (cur_error.type) {
 		case CSVErrorType::TOO_MANY_COLUMNS:
+		case CSVErrorType::TOO_FEW_COLUMNS:
 			if (current_line_position.begin == line_pos) {
 				csv_error = CSVError::IncorrectColumnAmountError(
 				    state_machine.options, col_idx, lines_per_batch, borked_line,
@@ -503,7 +504,15 @@ bool StringValueResult::AddRowInternal() {
 		    CSVError::LineSizeError(state_machine.options, current_line_size, lines_per_batch, borked_line,
 		                            current_line_position.begin.GetGlobalPosition(requested_size, first_nl));
 		error_handler.Error(csv_error);
-		number_of_rows--;
+		if (number_of_rows > 0) {
+			number_of_rows--;
+		}
+	}
+	if (!current_errors.empty()) {
+		// We need to add a few columns error
+		for (idx_t col_idx = cur_col_id; col_idx < number_of_columns; col_idx++) {
+			current_errors.push_back({CSVErrorType::TOO_FEW_COLUMNS, col_idx - 1, last_position});
+		}
 	}
 	if (HandleError()) {
 		return false;
@@ -553,7 +562,9 @@ bool StringValueResult::AddRowInternal() {
 				error_handler.Error(csv_error);
 			}
 			// If we are here we ignore_errors, so we delete this line
-			number_of_rows--;
+			if (number_of_rows > 0) {
+				number_of_rows--;
+			}
 		}
 	}
 	line_positions_per_row[number_of_rows] = current_line_position;

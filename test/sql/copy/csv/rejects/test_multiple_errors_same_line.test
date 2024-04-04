@@ -1,0 +1,131 @@
+# name: test/sql/copy/csv/rejects/test_multiple_errors_same_line.test
+# description: Tests a mix of multiple errors and validate they get hit
+# group: [rejects]
+
+require skip_reload
+
+# Test will fail on windows because byte_position is slightly different due to \r\n instead of \n
+require notwindows
+
+#query IIII
+#FROM read_csv('data/csv/rejects/multiple_errors/cast_and_more_col.csv',
+#    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
+#    store_rejects = true, auto_detect=false, header = 1);
+#----
+#oogie boogie	3	2023-01-01	2
+#oogie boogie	3	2023-01-02	5
+#
+#query IIIIIIIII rowsort
+#SElECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
+#----
+#0	4	89	116	4	barks	CAST	oogie boogie,3, 2023-01-03, bla, 7	Error when converting column "barks". Could not convert string " bla" to 'INTEGER'
+#0	4	89	120	5	NULL	TOO MANY COLUMNS	oogie boogie,3, 2023-01-03, bla, 7	Expected Number of Columns: 4 Found: 5
+#0	5	124	151	4	barks	CAST	oogie boogie,3, 2023-01-03, bla, 7, 8	Error when converting column "barks". Could not convert string " bla" to 'INTEGER'
+#0	5	124	155	5	NULL	TOO MANY COLUMNS	oogie boogie,3, 2023-01-03, bla, 7, 8	Expected Number of Columns: 4 Found: 5
+#0	5	124	158	6	NULL	TOO MANY COLUMNS	oogie boogie,3, 2023-01-03, bla, 7, 8	Expected Number of Columns: 4 Found: 6
+#
+#statement ok
+#DROP TABLE reject_errors;
+#
+#statement ok
+#DROP TABLE reject_scans;
+#
+#query IIII
+#FROM read_csv('data/csv/rejects/multiple_errors/multiple_cast_implicit.csv',
+#    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
+#    store_rejects = true, auto_detect=false, header = 1);
+#----
+#oogie boogie	3	2023-01-01	2
+#oogie boogie	3	2023-01-02	5
+#
+#query IIIIIIIII rowsort
+#SElECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
+#----
+#0	4	89	102	2	age	CAST	oogie boogie,bla_2, 2023-01-02, bla_1	Error when converting column "age". Could not convert string "bla_2" to 'INTEGER'
+#0	4	89	120	4	barks	CAST	oogie boogie,bla_2, 2023-01-02, bla_1	Error when converting column "barks". Could not convert string " bla_1" to 'INTEGER'
+#
+#statement ok
+#DROP TABLE reject_errors;
+#
+#statement ok
+#DROP TABLE reject_scans;
+#
+#query IIII
+#FROM read_csv('data/csv/rejects/multiple_errors/multiple_casts_flush.csv',
+#    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'tomorrow': 'DATE'},
+#    store_rejects = true, auto_detect=false, header = 1);
+#----
+#oogie boogie	3	2023-01-01	2023-01-02
+#oogie boogie	3	2023-01-02	2023-01-03
+#
+#query IIIIIIIII rowsort
+#SElECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
+#----
+#0	4	110	NULL	3	current_day	CAST	oogie boogie,3, bla_2, bla_1	Error when converting column "current_day". date field value out of range: " bla_2", expected format is (YYYY-MM-DD)
+#0	4	110	NULL	4	tomorrow	CAST	oogie boogie,3, bla_2, bla_1	Error when converting column "tomorrow". date field value out of range: " bla_1", expected format is (YYYY-MM-DD)
+#
+#statement ok
+#DROP TABLE reject_errors;
+#
+#statement ok
+#DROP TABLE reject_scans;
+#
+#query IIII
+#FROM read_csv('data/csv/rejects/multiple_errors/multiple_casts_mixed.csv',
+#    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
+#    store_rejects = true, auto_detect=false, header = 1);
+#----
+#oogie boogie	3	2023-01-01	2
+#oogie boogie	3	2023-01-02	5
+#
+## FIXME: This will not present the both cast errors :'(, should be alleviated the more types we add to implicit casting
+#query IIIIIIIII rowsort
+#SElECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
+#----
+#0	4	89	111	4	barks	CAST	oogie boogie,3, bla_2, bla_1	Error when converting column "barks". Could not convert string " bla_1" to 'INTEGER'
+#
+#statement ok
+#DROP TABLE reject_errors;
+#
+#statement ok
+#DROP TABLE reject_scans;
+
+query IIII
+FROM read_csv('data/csv/rejects/multiple_errors/cast_and_less_col.csv',
+    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
+    store_rejects = true, auto_detect=false, header = 1);
+----
+oogie boogie	3	2023-01-01	2
+oogie boogie	3	2023-01-02	5
+
+query IIIIIIIII rowsort
+SElECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
+----
+0	4	89	102	2	age	CAST	oogie boogie,bla, 2023-01-03	Error when converting column "age". Could not convert string "bla" to 'INTEGER'
+0	4	89	117	3	barks	MISSING COLUMNS	oogie boogie,bla, 2023-01-03	Expected Number of Columns: 4 Found: 3
+0	5	118	131	2	age	CAST	oogie boogie,bla	Error when converting column "age". Could not convert string "bla" to 'INTEGER'
+0	5	118	134	2	current_day	MISSING COLUMNS	oogie boogie,bla	Expected Number of Columns: 4 Found: 2
+0	5	118	134	3	barks	MISSING COLUMNS	oogie boogie,bla	Expected Number of Columns: 4 Found: 3
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+#query IIII
+#FROM read_csv('data/csv/rejects/multiple_errors.csv',
+#    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
+#    store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
+#----
+#oogie boogie	3	2023-01-01	2
+#oogie boogie	3	2023-01-02	5
+#
+#query IIIIIIIIII rowsort
+#FROM reject_errors ORDER BY ALL;
+#----
+#3	0	4	89	116	4	barks	CAST	oogie boogie,3, 2023-01-03, bla, 7	Error when converting column "barks". Could not convert string " bla" to 'INTEGER'
+#3	0	4	89	120	5	NULL	TOO MANY COLUMNS	oogie boogie,3, 2023-01-03, bla, 7	Expected Number of Columns: 4 Found: 5
+#3	0	5	124	144	4	barks	CAST	oogie boogie,3, bla, bla, 7	Error when converting column "barks". Could not convert string " bla" to 'INTEGER'
+#3	0	5	124	148	5	NULL	TOO MANY COLUMNS	oogie boogie,3, bla, bla, 7	Expected Number of Columns: 4 Found: 5
+#3	0	6	152	171	3	barks	MISSING COLUMNS	oogie boogie,3, bla	Expected Number of Columns: 4 Found: 3
