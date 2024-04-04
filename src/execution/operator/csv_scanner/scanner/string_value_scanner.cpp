@@ -424,7 +424,11 @@ bool StringValueResult::HandleError() {
 				    current_line_position.begin.GetGlobalPosition(requested_size, first_nl),
 				    line_pos.GetGlobalPosition(requested_size), parse_types[cur_error.col_idx].first);
 			}
-
+			break;
+		case CSVErrorType::MAXIMUM_LINE_SIZE:
+			csv_error = CSVError::LineSizeError(
+			    state_machine.options, cur_error.current_line_size, lines_per_batch, borked_line,
+			    current_line_position.begin.GetGlobalPosition(requested_size, first_nl));
 			break;
 		default:
 			throw InvalidInputException("CSV Error not allowed when inserting row");
@@ -497,16 +501,8 @@ bool StringValueResult::AddRowInternal() {
 	current_line_position.begin = current_line_position.end;
 	current_line_position.end = current_line_start;
 	if (current_line_size > state_machine.options.maximum_line_size) {
-		bool first_nl;
-		auto borked_line = current_line_position.ReconstructCurrentLine(first_nl, buffer_handles);
-		LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
-		auto csv_error =
-		    CSVError::LineSizeError(state_machine.options, current_line_size, lines_per_batch, borked_line,
-		                            current_line_position.begin.GetGlobalPosition(requested_size, first_nl));
-		error_handler.Error(csv_error);
-		if (number_of_rows > 0) {
-			number_of_rows--;
-		}
+		current_errors.push_back({CSVErrorType::MAXIMUM_LINE_SIZE, 1, last_position});
+		current_errors.back().current_line_size = current_line_size;
 	}
 	if (!current_errors.empty()) {
 		// We need to add a few columns error
@@ -562,9 +558,7 @@ bool StringValueResult::AddRowInternal() {
 				error_handler.Error(csv_error);
 			}
 			// If we are here we ignore_errors, so we delete this line
-			if (number_of_rows > 0) {
-				number_of_rows--;
-			}
+			number_of_rows--;
 		}
 	}
 	line_positions_per_row[number_of_rows] = current_line_position;

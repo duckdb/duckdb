@@ -74,6 +74,7 @@ public:
 
 	CSVErrorType type;
 	idx_t col_idx;
+	idx_t current_line_size;
 	string error_message;
 	//! Exact Position where the error happened
 	LinePosition error_position;

@@ -282,10 +282,15 @@ void CSVGlobalState::FillRejectsTable() {
 							errors_appender.Append(error.byte_position + 1);
 						}
 						// 6. Column Index
-						errors_appender.Append(col_idx + 1);
+						if (error.type == CSVErrorType::MAXIMUM_LINE_SIZE) {
+							errors_appender.Append(Value());
+						} else {
+							errors_appender.Append(col_idx + 1);
+						}
 						// 7. Column Name (If Applicable)
 						switch (error.type) {
 						case CSVErrorType::TOO_MANY_COLUMNS:
+						case CSVErrorType::MAXIMUM_LINE_SIZE:
 							errors_appender.Append(Value());
 							break;
 						case CSVErrorType::TOO_FEW_COLUMNS:
