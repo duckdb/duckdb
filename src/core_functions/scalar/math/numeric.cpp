@@ -1,16 +1,25 @@
-#include "duckdb/core_functions/scalar/math_functions.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/likely.hpp"
 #include "duckdb/common/operator/abs.hpp"
 #include "duckdb/common/operator/multiply.hpp"
-#include "duckdb/common/types/hugeint.hpp"
-#include "duckdb/common/types/cast_helpers.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/common/algorithm.hpp"
-#include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/common/likely.hpp"
+#include "duckdb/common/operator/numeric_binary_operators.hpp"
 #include "duckdb/common/types/bit.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
+#include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/core_functions/scalar/math_functions.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+
 #include <cmath>
+#include <cstdint>
 #include <errno.h>
+#include <limits>
+#include <type_traits>
 
 namespace duckdb {
 
@@ -1420,4 +1429,135 @@ ScalarFunctionSet LeastCommonMultipleFun::GetFunctions() {
 	return funcs;
 }
 
+//===--------------------------------------------------------------------===//
+// [divide_by_const]
+//===--------------------------------------------------------------------===//
+
+// This code is inspired by:
+// Lemire et al., Faster Remainder by Direct Computation: Applications to Compilers
+// and Software Libraries, Software: Practice and Experience 49 (6), 2019.
+// https://arxiv.org/abs/1902.01961
+
+static uint64_t ComputeM(uint32_t rhs) {
+	return UINT64_C(0xFFFFFFFFFFFFFFFF) / rhs + 1;
+}
+
+static uint64_t ComputeM(int32_t rhs) {
+	if (rhs < 0) {
+		rhs = -rhs;
+	}
+	return UINT64_C(0xFFFFFFFFFFFFFFFF) / rhs + 1 + ((rhs & (rhs - 1)) == 0 ? 1 : 0);
+}
+
+// fastdiv computes (a / d) given precomputed M for d>1
+inline static uint32_t Fastdiv(uint32_t a, uint64_t m, uint32_t d) {
+	// Compute the bottom 32 bits, then the top 32 bits, add them, and only keep the top 32 bits
+	// The reason we need the bottom 32 bits, is because the carry will roll into the top 32 bits.
+	return ((((m & 0xFFFFFFFF) * a) >> 32) + ((m >> 32) * a)) >> 32;
+}
+
+static uint32_t Fastdiv(int32_t a, uint64_t m, int32_t d) {
+	hugeint_t lhs;
+	if (a < 0) {
+		lhs = hugeint_t(0xffffffffffffffff, a);
+	} else {
+		lhs = hugeint_t(0, a);
+	}
+	uint64_t highbits = Hugeint::Multiply<false>(lhs, hugeint_t(0, m)).upper;
+	highbits += (a < 0 ? 1 : 0);
+	if (d < 0) {
+		return -(int32_t)(highbits);
+	}
+	return (int32_t)(highbits);
+}
+
+template <class LHS, class RHS, class RESULT>
+static void ConstRHSDivideOperation(DataChunk &args, ExpressionState &state, Vector &result) {
+	if (args.data[1].GetVectorType() != VectorType::CONSTANT_VECTOR) {
+		throw InvalidInputException("`divide_by_const` called with a non-constant hrs");
+	}
+	RHS rhs = args.data[1].GetValue(0).GetValue<RHS>();
+
+	if (rhs == 0) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, true);
+		return;
+	}
+	UnaryExecutor::ExecuteWithNulls<LHS, RESULT>(
+	    args.data[0], result, args.size(), [&](LHS lhs, ValidityMask &validity, idx_t idx) {
+		    if (std::is_signed<RHS>() && rhs == RHS(-1) && lhs == NumericLimits<LHS>::Minimum()) {
+			    validity.SetInvalid(args.data.size());
+		    }
+		    return lhs / rhs;
+	    });
+}
+
+template <class LHS, class RHS, class RESULT>
+static void ConstRHSDivideOperationFast(DataChunk &args, ExpressionState &state, Vector &result) {
+	if (args.data[1].GetVectorType() != VectorType::CONSTANT_VECTOR) {
+		throw InvalidInputException("`divide_by_const` called with a non-constant hrs");
+	}
+	RHS rhs = args.data[1].GetValue(0).GetValue<RHS>();
+
+	if (rhs == 0) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, true);
+		return;
+	}
+
+	if (rhs == 1) {
+		result.Reinterpret(args.data[0]);
+	}
+	if (std::is_signed<RHS>() && rhs == RHS(-1)) {
+		UnaryExecutor::Execute<LHS, RESULT>(args.data[0], result, args.size(), [&](LHS lhs) {
+			if (lhs == std::numeric_limits<LHS>::min()) {
+				throw OutOfRangeException("Overflow in division of %d / %d", lhs, rhs);
+			}
+			return -lhs;
+		});
+	}
+	// If the divisor is the smallest possible, it is always 0 except when lhs is also the smallest
+	if (std::is_signed<RHS>() && rhs == std::numeric_limits<RHS>::min()) {
+		UnaryExecutor::Execute<LHS, RESULT>(args.data[0], result, args.size(), [&](LHS lhs) { return lhs == rhs; });
+	}
+	auto optimised_rhs = ComputeM(rhs);
+	UnaryExecutor::Execute<LHS, RESULT>(args.data[0], result, args.size(),
+	                                    [&](LHS lhs) { return Fastdiv(lhs, optimised_rhs, rhs); });
+}
+
+static scalar_function_t GetConstDivideFunction(const LogicalType &type) {
+	scalar_function_t function;
+	switch (type.id()) {
+	case LogicalTypeId::TINYINT:
+		return ConstRHSDivideOperation<int8_t, int8_t, int8_t>;
+	case LogicalTypeId::SMALLINT:
+		return ConstRHSDivideOperation<int16_t, int16_t, int16_t>;
+	case LogicalTypeId::INTEGER:
+		return ConstRHSDivideOperationFast<int32_t, int32_t, int32_t>;
+	case LogicalTypeId::BIGINT:
+		return ConstRHSDivideOperation<int64_t, int64_t, int64_t>;
+	case LogicalTypeId::HUGEINT:
+		return ConstRHSDivideOperation<hugeint_t, hugeint_t, hugeint_t>;
+	case LogicalTypeId::UTINYINT:
+		return ConstRHSDivideOperation<uint8_t, uint8_t, uint8_t>;
+	case LogicalTypeId::USMALLINT:
+		return ConstRHSDivideOperation<uint16_t, uint16_t, uint16_t>;
+	case LogicalTypeId::UINTEGER:
+		return ConstRHSDivideOperationFast<uint32_t, uint32_t, uint32_t>;
+	case LogicalTypeId::UBIGINT:
+		return ConstRHSDivideOperation<uint64_t, uint64_t, uint64_t>;
+	case LogicalTypeId::UHUGEINT:
+		return ConstRHSDivideOperation<uhugeint_t, uhugeint_t, uhugeint_t>;
+	default:
+		throw NotImplementedException("Unimplemented type for GetScalarIntegerUnaryFunction");
+	}
+}
+
+ScalarFunctionSet ConstRHSDivideFun::GetFunctions() {
+	ScalarFunctionSet functions;
+	for (auto &type : LogicalType::Integral()) {
+		functions.AddFunction(ScalarFunction({type, type}, type, GetConstDivideFunction(type)));
+	}
+	return functions;
+}
 } // namespace duckdb

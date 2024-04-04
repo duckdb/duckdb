@@ -60,7 +60,8 @@ struct PowOperatorFunAlias {
 struct FactorialOperatorFun {
 	static constexpr const char *Name = "!__postfix";
 	static constexpr const char *Parameters = "x";
-	static constexpr const char *Description = "Factorial of x. Computes the product of the current integer and all integers below it";
+	static constexpr const char *Description =
+	    "Factorial of x. Computes the product of the current integer and all integers below it";
 	static constexpr const char *Example = "4!";
 
 	static ScalarFunction GetFunction();
@@ -216,7 +217,8 @@ struct IsInfiniteFun {
 struct IsNanFun {
 	static constexpr const char *Name = "isnan";
 	static constexpr const char *Parameters = "x";
-	static constexpr const char *Description = "Returns true if the floating point value is not a number, false otherwise";
+	static constexpr const char *Description =
+	    "Returns true if the floating point value is not a number, false otherwise";
 	static constexpr const char *Example = "isnan('NaN'::FLOAT)";
 
 	static ScalarFunctionSet GetFunctions();
@@ -300,7 +302,8 @@ struct Log10Fun {
 struct LogFun {
 	static constexpr const char *Name = "log";
 	static constexpr const char *Parameters = "b, x";
-	static constexpr const char *Description = "Computes the logarithm of x to base b. b may be omitted, in which case the default 10";
+	static constexpr const char *Description =
+	    "Computes the logarithm of x to base b. b may be omitted, in which case the default 10";
 	static constexpr const char *Example = "log(2, 64)";
 
 	static ScalarFunctionSet GetFunctions();
@@ -448,6 +451,15 @@ struct AtanhFun {
 	static constexpr const char *Example = "atanh(0.5)";
 
 	static ScalarFunction GetFunction();
+};
+
+struct ConstRHSDivideFun {
+	static constexpr const char *Name = "divide_by_const";
+	static constexpr const char *Parameters = "x, C";
+	static constexpr const char *Description = "Same as // but optimised for a constant right hand size";
+	static constexpr const char *Example = "SELECT divide_by_const(x, 100) FROM Y";
+
+	static ScalarFunctionSet GetFunctions();
 };
 
 } // namespace duckdb
