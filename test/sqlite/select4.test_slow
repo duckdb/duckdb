@@ -39742,6 +39742,7 @@ SELECT e1, x8, d9, c6, x2
 ----
 1050 values hashing to e0a50b87e246602e118b07307e5eaa36
 
+
 query TIIIIIII rowsort join277
 SELECT x5, e6+c6, d1, c8, e9+108, a7, a3+149+a5, e4+358
   FROM t3, t4, t7, t5, t6, t9, t1, t8

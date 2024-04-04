@@ -35,7 +35,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 #endif
 			// this filter references the marker
 			// we can turn this into a SEMI join if the filter is on only the marker
-			if (filters[i]->filter->type == ExpressionType::BOUND_COLUMN_REF) {
+			if (filters[i]->filter->type == ExpressionType::BOUND_COLUMN_REF && rewrite_mark_joins) {
 				// filter just references the marker: turn into semi join
 #ifdef DEBUG
 				simplified_mark_join = true;
@@ -61,7 +61,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 							break;
 						}
 					}
-					if (all_null_values_are_equal) {
+					if (all_null_values_are_equal && rewrite_mark_joins) {
 #ifdef DEBUG
 						simplified_mark_join = true;
 #endif

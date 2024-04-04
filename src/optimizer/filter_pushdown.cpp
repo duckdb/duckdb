@@ -9,7 +9,7 @@ namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
 
-FilterPushdown::FilterPushdown(Optimizer &optimizer) : optimizer(optimizer), combiner(optimizer.context) {
+FilterPushdown::FilterPushdown(Optimizer &optimizer, bool rewrite_mark_joins) : optimizer(optimizer), combiner(optimizer.context), rewrite_mark_joins(rewrite_mark_joins) {
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> op) {

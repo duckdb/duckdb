@@ -357,7 +357,7 @@ void StatisticsPropagator::CreateFilterFromJoinStats(unique_ptr<LogicalOperator>
 		child->expressions.emplace_back(std::move(filter_expr));
 	}
 
-	FilterPushdown filter_pushdown(optimizer);
+	FilterPushdown filter_pushdown(optimizer, false);
 	child = filter_pushdown.Rewrite(std::move(child));
 	PropagateExpression(expr);
 }
