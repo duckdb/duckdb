@@ -17,20 +17,18 @@ BIGINT	VARCHAR	11044	11044	2
 
 
 query IIIIIIIIIIIII
-SELECT *
 FROM reject_scans order by all;
 ----
 3	0	test/sql/copy/csv/data/error/mismatch/big_bad.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	store_rejects=true, sample_size=1
 3	1	test/sql/copy/csv/data/error/mismatch/big_bad2.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	store_rejects=true, sample_size=1
 
-query IIIIIIIII
-SELECT *
+query IIIIIIIIII
 FROM reject_errors order by all;
 ----
-3	0	2176	10875	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
-3	0	4176	20875	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
-3	1	3680	18395	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
-3	1	5680	28395	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
+3	0	2176	10876	10876	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
+3	0	4176	20876	20876	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
+3	1	3680	18396	18396	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
+3	1	5680	28396	28396	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
 
 # Test giving the name of errors table
 statement error
@@ -54,20 +52,18 @@ SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), M
 BIGINT	VARCHAR	11044	11044	2
 
 query IIIIIIIIIIIII
-SELECT *
 FROM reject_scans order by all;
 ----
 8	0	test/sql/copy/csv/data/error/mismatch/big_bad.csv	,	\0	\0	\n	0	false	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	rejects_table='rejects_errors_2', sample_size=1
 8	1	test/sql/copy/csv/data/error/mismatch/big_bad2.csv	,	\0	\0	\n	0	false	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	rejects_table='rejects_errors_2', sample_size=1
 
-query IIIIIIIII
-SELECT *
+query IIIIIIIIII
 FROM rejects_errors_2 order by all;
 ----
-8	0	2176	10875	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
-8	0	4176	20875	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
-8	1	3680	18395	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
-8	1	5680	28395	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
+8	0	2176	10876	10876	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
+8	0	4176	20876	20876	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
+8	1	3680	18396	18396	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
+8	1	5680	28396	28396	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
 
 statement ok
 drop table reject_errors;
@@ -82,21 +78,18 @@ SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), M
 BIGINT	VARCHAR	11044	11044	2
 
 query IIIIIIIIIIIII
-SELECT *
 FROM rejects_scan_2 order by all;
 ----
 12	0	test/sql/copy/csv/data/error/mismatch/big_bad.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	rejects_scan='rejects_scan_2', sample_size=1
 12	1	test/sql/copy/csv/data/error/mismatch/big_bad2.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	rejects_scan='rejects_scan_2', sample_size=1
 
-query IIIIIIIII
-SELECT *
+query IIIIIIIIII
 FROM reject_errors order by all;
 ----
-12	0	2176	10875	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
-12	0	4176	20875	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
-12	1	3680	18395	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
-12	1	5680	28395	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
-
+12	0	2176	10876	10876	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
+12	0	4176	20876	20876	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
+12	1	3680	18396	18396	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
+12	1	5680	28396	28396	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
 
 # Test giving the name of both tables
 query IIIII
@@ -116,14 +109,13 @@ FROM rejects_scan_3 order by all;
 15	0	test/sql/copy/csv/data/error/mismatch/big_bad.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	rejects_table='rejects_errors_3', rejects_scan='rejects_scan_3', sample_size=1
 15	1	test/sql/copy/csv/data/error/mismatch/big_bad2.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	rejects_table='rejects_errors_3', rejects_scan='rejects_scan_3', sample_size=1
 
-query IIIIIIIII
-SELECT *
+query IIIIIIIIII
 FROM rejects_errors_3 order by all;
 ----
-15	0	2176	10875	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
-15	0	4176	20875	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
-15	1	3680	18395	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
-15	1	5680	28395	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
+15	0	2176	10876	10876	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
+15	0	4176	20876	20876	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
+15	1	3680	18396	18396	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
+15	1	5680	28396	28396	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
 
 statement ok
 drop table reject_errors;
