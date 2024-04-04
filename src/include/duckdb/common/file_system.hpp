@@ -171,7 +171,7 @@ public:
 	//! Expands a given path, including e.g. expanding the home directory of the user
 	DUCKDB_API virtual string ExpandPath(const string &path);
 	//! Returns the system-available memory in bytes. Returns DConstants::INVALID_INDEX if the system function fails.
-	DUCKDB_API static idx_t GetAvailableMemory();
+	DUCKDB_API static optional_idx GetAvailableMemory();
 	//! Path separator for path
 	DUCKDB_API virtual string PathSeparator(const string &path);
 	//! Checks if path is starts with separator (i.e., '/' on UNIX '\\' on Windows)

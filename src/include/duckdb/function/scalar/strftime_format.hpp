@@ -137,7 +137,7 @@ public:
 		int32_t data[8]; // year, month, day, hour, min, sec, µs, offset
 		string tz;
 		string error_message;
-		idx_t error_position = DConstants::INVALID_INDEX;
+		optional_idx error_position;
 
 		bool is_special;
 		date_t special;
@@ -169,7 +169,7 @@ public:
 	static StrpTimeFormat Deserialize(Deserializer &deserializer);
 
 protected:
-	static string FormatStrpTimeError(const string &input, idx_t position);
+	static string FormatStrpTimeError(const string &input, optional_idx position);
 	DUCKDB_API void AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) override;
 	int NumericSpecifierWidth(StrTimeSpecifier specifier);
 	int32_t TryParseCollection(const char *data, idx_t &pos, idx_t size, const string_t collection[],

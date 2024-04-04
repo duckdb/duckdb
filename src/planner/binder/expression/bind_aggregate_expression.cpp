@@ -212,13 +212,13 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 
 	// bind the aggregate
 	FunctionBinder function_binder(context);
-	idx_t best_function = function_binder.BindFunction(func.name, func.functions, types, error);
-	if (best_function == DConstants::INVALID_INDEX) {
+	auto best_function = function_binder.BindFunction(func.name, func.functions, types, error);
+	if (!best_function.IsValid()) {
 		error.AddQueryLocation(aggr);
 		error.Throw();
 	}
 	// found a matching function!
-	auto bound_function = func.functions.GetFunctionByOffset(best_function);
+	auto bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
 
 	// Bind any sort columns, unless the aggregate is order-insensitive
 	unique_ptr<BoundOrderModifier> order_bys;

@@ -506,6 +506,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 		bool is_original_column = i < result->column_count;
 		bool can_group_by_all =
 		    statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES && is_original_column;
+		result->bound_column_count++;
 
 		if (select_binder.HasExpandedExpressions()) {
 			if (!is_original_column) {
