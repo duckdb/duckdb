@@ -8,8 +8,7 @@
 
 namespace duckdb {
 
-ColumnAliasBinder::ColumnAliasBinder(SelectBindState &bind_state)
-    : bind_state(bind_state), visited_select_indexes() {
+ColumnAliasBinder::ColumnAliasBinder(SelectBindState &bind_state) : bind_state(bind_state), visited_select_indexes() {
 }
 
 bool ColumnAliasBinder::BindAlias(ExpressionBinder &enclosing_binder, unique_ptr<ParsedExpression> &expr_ptr,

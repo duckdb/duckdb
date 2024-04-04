@@ -507,6 +507,13 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 			continue;
 		}
 
+		if (expr->IsVolatile()) {
+			result->bind_state.SetExpressionIsVolatile(i);
+		}
+		if (expr->HasSubquery()) {
+			result->bind_state.SetExpressionHasSubquery(i);
+		}
+
 		if (can_group_by_all && select_binder.HasBoundColumns()) {
 			if (select_binder.BoundAggregates()) {
 				throw BinderException("Cannot mix aggregates with non-aggregated columns!");

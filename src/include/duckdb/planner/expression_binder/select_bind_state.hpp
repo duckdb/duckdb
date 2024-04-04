@@ -28,6 +28,19 @@ struct SelectBindState {
 
 public:
 	unique_ptr<ParsedExpression> BindAlias(idx_t index);
+
+	void SetExpressionIsVolatile(idx_t index);
+	void SetExpressionHasSubquery(idx_t index);
+
+	bool AliasHasSubquery(idx_t index);
+
+private:
+	//! The set of referenced aliases
+	unordered_set<idx_t> referenced_aliases;
+	//! The set of expressions that is volatile
+	unordered_set<idx_t> volatile_expressions;
+	//! The set of expressions that contains a subquery
+	unordered_set<idx_t> subquery_expressions;
 };
 
 } // namespace duckdb

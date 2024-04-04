@@ -16,26 +16,22 @@ BindResult SelectBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, i
 	// check in the alias map
 	auto &colref = (expr_ptr.get())->Cast<ColumnRefExpression>();
 	if (!colref.IsQualified()) {
+		auto &bind_state = node.bind_state;
 		auto alias_entry = node.bind_state.alias_map.find(colref.column_names[0]);
 		if (alias_entry != node.bind_state.alias_map.end()) {
 			// found entry!
 			auto index = alias_entry->second;
 			if (index >= node.bound_column_count) {
 				throw BinderException("Column \"%s\" referenced that exists in the SELECT clause - but this column "
-									  "cannot be referenced before it is defined",
-									  colref.column_names[0]);
+				                      "cannot be referenced before it is defined",
+				                      colref.column_names[0]);
 			}
-			if (node.select_list[index]->IsVolatile()) {
-				throw BinderException("Alias \"%s\" referenced in a SELECT clause - but the expression has side "
-									  "effects. This is not yet supported.",
-									  colref.column_names[0]);
-			}
-			if (node.select_list[index]->HasSubquery()) {
+			if (bind_state.AliasHasSubquery(index)) {
 				throw BinderException("Alias \"%s\" referenced in a SELECT clause - but the expression has a subquery."
-									  " This is not yet supported.",
-									  colref.column_names[0]);
+				                      " This is not yet supported.",
+				                      colref.column_names[0]);
 			}
-			auto copied_expression = node.bind_state.original_expressions[index]->Copy();
+			auto copied_expression = node.bind_state.BindAlias(index);
 			result = BindExpression(copied_expression, depth, false);
 			return result;
 		}

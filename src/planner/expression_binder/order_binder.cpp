@@ -15,9 +15,10 @@ namespace duckdb {
 
 OrderBinder::OrderBinder(vector<Binder *> binders, idx_t projection_index, SelectBindState &bind_state, idx_t max_count)
     : binders(std::move(binders)), projection_index(projection_index), max_count(max_count), extra_list(nullptr),
-	  bind_state(bind_state) {
+      bind_state(bind_state) {
 }
-OrderBinder::OrderBinder(vector<Binder *> binders, idx_t projection_index, SelectNode &node, SelectBindState &bind_state)
+OrderBinder::OrderBinder(vector<Binder *> binders, idx_t projection_index, SelectNode &node,
+                         SelectBindState &bind_state)
     : binders(std::move(binders)), projection_index(projection_index), bind_state(bind_state) {
 	this->max_count = node.select_list.size();
 	this->extra_list = &node.select_list;
@@ -32,7 +33,8 @@ unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &
 			alias = expr.alias;
 		}
 	}
-	return make_uniq<BoundColumnRefExpression>(std::move(alias), LogicalType::INVALID, ColumnBinding(projection_index, index));
+	return make_uniq<BoundColumnRefExpression>(std::move(alias), LogicalType::INVALID,
+	                                           ColumnBinding(projection_index, index));
 }
 
 unique_ptr<Expression> OrderBinder::CreateExtraReference(unique_ptr<ParsedExpression> expr) {
