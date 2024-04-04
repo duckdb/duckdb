@@ -164,9 +164,10 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 	idx_t file_size = handle->GetFileSize();
 
 	if (file_size < 1024) {
-		throw InvalidInputException("Extension \"%s\" do not have metadata compatible with DuckDB loading it "
-		                            "(version %s, platform %s). File size in particular is %i lower than minimum threshold of 1024",
-		                            filename, engine_version, engine_platform, file_size);
+		throw InvalidInputException(
+		    "Extension \"%s\" do not have metadata compatible with DuckDB loading it "
+		    "(version %s, platform %s). File size in particular is %i lower than minimum threshold of 1024",
+		    filename, engine_version, engine_platform, file_size);
 	}
 
 	auto metadata_offset = file_size - metadata_segment.size();
@@ -190,12 +191,17 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		a[0] = '4';
 		if (strncmp(a, metadata_field[0].data(), 32) != 0) {
 			// metadata do not looks right, add this to the error message
-			metadata_mismatch_error = "\n" + StringUtil::Format("Extension \"%s\" do not have metadata compatible with DuckDB "
-				    "loading it (version %s, platform %s)",
-				    filename, engine_version, engine_platform);
+			metadata_mismatch_error =
+			    "\n" + StringUtil::Format("Extension \"%s\" do not have metadata compatible with DuckDB "
+			                              "loading it (version %s, platform %s)",
+			                              filename, engine_version, engine_platform);
 		} else if (engine_version != extension_duckdb_version || engine_platform != extension_duckdb_platform) {
-			metadata_mismatch_error = "\n" + StringUtil::Format("Extension \"%s\" (version %s, platfrom %s) does not match DuckDB loading it (version %s, platform %s)",
-			    filename, PrettyPrintString(extension_duckdb_version), PrettyPrintString(extension_duckdb_platform), engine_version, engine_platform);
+			metadata_mismatch_error = "\n" + StringUtil::Format("Extension \"%s\" (version %s, platfrom %s) does not "
+			                                                    "match DuckDB loading it (version %s, platform %s)",
+			                                                    filename, PrettyPrintString(extension_duckdb_version),
+			                                                    PrettyPrintString(extension_duckdb_platform),
+			                                                    engine_version, engine_platform);
+
 		} else {
 			// All looks good
 		}
@@ -254,12 +260,20 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 			}
 		}
 		if (!any_valid) {
-			throw IOException(config.error_manager->FormatException(ErrorType::UNSIGNED_EXTENSION, filename) + metadata_mismatch_error);
+			throw IOException(config.error_manager->FormatException(ErrorType::UNSIGNED_EXTENSION, filename) +
+			                  metadata_mismatch_error);
 		}
-	}
 
-	if (!metadata_mismatch_error.empty()) {
-		throw InvalidInputException(metadata_mismatch_error.substr(1));
+		if (!metadata_mismatch_error.empty()) {
+			// Signed extensions perform the full check
+			throw InvalidInputException(metadata_mismatch_error.substr(1));
+		}
+	} else if (!config.options.allow_extensions_metadata_mismatch) {
+		if (!metadata_mismatch_error.empty()) {
+			// Unsigned extensions AND configuration allowing metadata_mismatch_error, loading allowed, mainly for
+			// debugging purposes
+			throw InvalidInputException(metadata_mismatch_error.substr(1));
+		}
 	}
 
 	auto number_metadata_fields = 3;
