@@ -12,10 +12,10 @@ SELECT * FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/bad.csv',
     columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
     ignore_errors=false,
-    rejects_table='csv_rejects_table'
+    store_rejects=true
 )
 ----
-only supported when IGNORE_ERRORS is set to true
+STORE_REJECTS option is only supported when IGNORE_ERRORS is not manually set to false
 
 statement error
 SELECT * FROM read_csv(
@@ -63,7 +63,7 @@ SELECT * FROM read_csv_auto(
     rejects_table='csv_rejects_table'
 )
 ----
-only supported when IGNORE_ERRORS is set to true
+option is only supported when IGNORE_ERRORS is not manually set to false
 
 statement error
 SELECT * FROM read_csv_auto(
