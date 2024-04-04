@@ -29,4 +29,3 @@ conn.execute("set custom_extension_repository = 'http://duckpgq.s3.eu-north-1.am
 conn.execute("force install 'duckpgq';")
 conn.execute("load 'duckpgq';")
 ```
-
