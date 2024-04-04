@@ -7,8 +7,6 @@ require parquet
 statement ok
 CREATE TABLE test AS SELECT 'thisisaverylongstringbutitrepeatsmanytimessoitshighlycompressible' || (range % 10) i FROM range(100000)
 
-mode skip
-
 # cannot be negative
 statement error
 COPY test TO '__TEST_DIR__/dictionary_compression_ratio_threshold.parquet' (dictionary_compression_ratio_threshold -2)
@@ -34,8 +32,6 @@ query I
 SELECT dictionary_page_offset IS NULL FROM parquet_metadata('__TEST_DIR__/dictionary_compression_ratio_threshold.parquet')
 ----
 true
-
-mode unskip
 
 # the data compresses more than 10x
 statement ok
