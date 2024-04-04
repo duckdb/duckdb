@@ -381,7 +381,7 @@ const DBConfig &DBConfig::GetConfig(const ClientContext &context) {
 }
 
 idx_t DatabaseInstance::NumberOfThreads() {
-	return scheduler->NumberOfThreads();
+	return NumericCast<idx_t>(scheduler->NumberOfThreads());
 }
 
 const unordered_set<std::string> &DatabaseInstance::LoadedExtensions() {

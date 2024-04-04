@@ -260,7 +260,7 @@ void TaskScheduler::SetAllocatorFlushTreshold(idx_t threshold) {
 
 void TaskScheduler::Signal(idx_t n) {
 #ifndef DUCKDB_NO_THREADS
-	queue->semaphore.signal(n);
+	queue->semaphore.signal(NumericCast<ssize_t>(n));
 #endif
 }
 
@@ -279,7 +279,7 @@ void TaskScheduler::RelaunchThreads() {
 void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 #ifndef DUCKDB_NO_THREADS
 	auto &config = DBConfig::GetConfig(db);
-	idx_t new_thread_count = n;
+	auto new_thread_count = NumericCast<idx_t>(n);
 	if (threads.size() == new_thread_count) {
 		current_thread_count = NumericCast<int32_t>(threads.size() + config.options.external_threads);
 		return;

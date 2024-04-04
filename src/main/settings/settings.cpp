@@ -749,7 +749,7 @@ void ExternalThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, c
 	if (new_val < 0) {
 		throw SyntaxException("Must have a non-negative number of external threads!");
 	}
-	idx_t new_external_threads = new_val;
+	auto new_external_threads = NumericCast<idx_t>(new_val);
 	if (db) {
 		TaskScheduler::GetScheduler(*db).SetThreads(config.options.maximum_threads, new_external_threads);
 	}
@@ -766,7 +766,7 @@ void ExternalThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config)
 
 Value ExternalThreadsSetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return Value::BIGINT(config.options.external_threads);
+	return Value::BIGINT(NumericCast<int64_t>(config.options.external_threads));
 }
 
 //===--------------------------------------------------------------------===//
@@ -1000,7 +1000,7 @@ void PartitionedWriteFlushThreshold::SetLocal(ClientContext &context, const Valu
 }
 
 Value PartitionedWriteFlushThreshold::GetSetting(ClientContext &context) {
-	return Value::BIGINT(ClientConfig::GetConfig(context).partitioned_write_flush_threshold);
+	return Value::BIGINT(NumericCast<int64_t>(ClientConfig::GetConfig(context).partitioned_write_flush_threshold));
 }
 
 //===--------------------------------------------------------------------===//
@@ -1030,11 +1030,11 @@ void PerfectHashThresholdSetting::SetLocal(ClientContext &context, const Value &
 	if (bits < 0 || bits > 32) {
 		throw ParserException("Perfect HT threshold out of range: should be within range 0 - 32");
 	}
-	ClientConfig::GetConfig(context).perfect_ht_threshold = bits;
+	ClientConfig::GetConfig(context).perfect_ht_threshold = NumericCast<idx_t>(bits);
 }
 
 Value PerfectHashThresholdSetting::GetSetting(ClientContext &context) {
-	return Value::BIGINT(ClientConfig::GetConfig(context).perfect_ht_threshold);
+	return Value::BIGINT(NumericCast<int64_t>(ClientConfig::GetConfig(context).perfect_ht_threshold));
 }
 
 //===--------------------------------------------------------------------===//
@@ -1049,7 +1049,7 @@ void PivotFilterThreshold::SetLocal(ClientContext &context, const Value &input) 
 }
 
 Value PivotFilterThreshold::GetSetting(ClientContext &context) {
-	return Value::BIGINT(ClientConfig::GetConfig(context).pivot_filter_threshold);
+	return Value::BIGINT(NumericCast<int64_t>(ClientConfig::GetConfig(context).pivot_filter_threshold));
 }
 
 //===--------------------------------------------------------------------===//
@@ -1064,7 +1064,7 @@ void PivotLimitSetting::SetLocal(ClientContext &context, const Value &input) {
 }
 
 Value PivotLimitSetting::GetSetting(ClientContext &context) {
-	return Value::BIGINT(ClientConfig::GetConfig(context).pivot_limit);
+	return Value::BIGINT(NumericCast<int64_t>(ClientConfig::GetConfig(context).pivot_limit));
 }
 
 //===--------------------------------------------------------------------===//
@@ -1280,7 +1280,7 @@ void ThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Val
 	if (new_val < 1) {
 		throw SyntaxException("Must have at least 1 thread!");
 	}
-	idx_t new_maximum_threads = new_val;
+	auto new_maximum_threads = NumericCast<idx_t>(new_val);
 	if (db) {
 		TaskScheduler::GetScheduler(*db).SetThreads(new_maximum_threads, config.options.external_threads);
 	}
@@ -1297,7 +1297,7 @@ void ThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 
 Value ThreadsSetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return Value::BIGINT(config.options.maximum_threads);
+	return Value::BIGINT(NumericCast<int64_t>(config.options.maximum_threads));
 }
 
 //===--------------------------------------------------------------------===//

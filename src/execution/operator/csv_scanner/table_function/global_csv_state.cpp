@@ -22,7 +22,7 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
 	} else {
 		// If not we need to construct it for the first file
 		file_scans.emplace_back(
-		    make_uniq<CSVFileScan>(context, files[0], options, 0, bind_data, column_ids, file_schema));
+		    make_uniq<CSVFileScan>(context, files[0], options, 0U, bind_data, column_ids, file_schema));
 	};
 	//! There are situations where we only support single threaded scanning
 	bool many_csv_files = files.size() > 1 && files.size() > system_threads * 2;
