@@ -57,6 +57,13 @@ static void ComputeSHA256FileSegment(FileHandle *handle, const idx_t start, cons
 }
 #endif
 
+static string FilterZeroAtEnd(string s) {
+	while (!s.empty() && s.back() == '\0') {
+		s.pop_back();
+	}
+	return s;
+}
+
 bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const string &extension,
                                      ExtensionInitResult &result, string &error) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
@@ -147,16 +154,9 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 
 	std::reverse(metadata_field.begin(), metadata_field.end());
 
-	for (auto &m : metadata_field) {
-		auto zero_pos = m.find_first_of((char)0);
-		if (zero_pos < m.size()) {
-			m.resize(zero_pos);
-		}
-	}
-
-	std::string extension_duckdb_platform = metadata_field[1];
-	std::string extension_duckdb_version = metadata_field[2];
-	std::string extension_version = metadata_field[3];
+	std::string extension_duckdb_platform = FilterZeroAtEnd(metadata_field[1]);
+	std::string extension_duckdb_version = FilterZeroAtEnd(metadata_field[2]);
+	std::string extension_version = FilterZeroAtEnd(metadata_field[3]);
 
 	if (!config.options.allow_unsigned_extensions) {
 		// signature is the last 256 bytes of the file
