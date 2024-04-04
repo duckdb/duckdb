@@ -45,18 +45,229 @@ def test_connection_get_table_types(duck_conn):
 
 def test_connection_get_objects(duck_conn):
     with duck_conn.cursor() as cursor:
-        cursor.execute("CREATE TABLE getobjects (ints BIGINT)")
-    assert duck_conn.adbc_get_objects(depth="all").read_all().to_pylist() == [
+        cursor.execute("CREATE TABLE getobjects (ints BIGINT PRIMARY KEY)")
+        depth_all = duck_conn.adbc_get_objects(depth="all").read_all()
+    assert depth_all.to_pylist() == [
         {
-            'db_schema_name': 'main',
-            'db_schema_tables': [
+            'catalog_name': 'memory',
+            'catalog_db_schemas': [
                 {
-                    'table_name': 'getobjects',
-                    'table_columns': [{'column_name': 'ints', 'ordinal_position': 2, 'remarks': ''}],
-                }
+                    'db_schema_name': 'main',
+                    'db_schema_tables': [
+                        {
+                            'table_name': 'getobjects',
+                            'table_type': 'BASE TABLE',
+                            'table_columns': [
+                                {
+                                    'column_name': 'ints',
+                                    'ordinal_position': 1,
+                                    'remarks': '',
+                                    'xdbc_char_octet_length': None,
+                                    'xdbc_column_def': None,
+                                    'xdbc_column_size': None,
+                                    'xdbc_data_type': None,
+                                    'xdbc_datetime_sub': None,
+                                    'xdbc_decimal_digits': None,
+                                    'xdbc_is_autoincrement': None,
+                                    'xdbc_is_generatedcolumn': None,
+                                    'xdbc_is_nullable': None,
+                                    'xdbc_nullable': None,
+                                    'xdbc_num_prec_radix': None,
+                                    'xdbc_scope_catalog': None,
+                                    'xdbc_scope_schema': None,
+                                    'xdbc_scope_table': None,
+                                    'xdbc_sql_data_type': None,
+                                    'xdbc_type_name': None,
+                                },
+                            ],
+                            'table_constraints': [
+                                {
+                                    'constraint_column_names': [],
+                                    'constraint_column_usage': [],
+                                    'constraint_name': 'getobjects_ints_pkey',
+                                    'constraint_type': 'PRIMARY KEY',
+                                },
+                                {
+                                    'constraint_column_names': [],
+                                    'constraint_column_usage': [],
+                                    'constraint_name': 'getobjects_ints_not_null',
+                                    'constraint_type': 'CHECK',
+                                },
+                            ],
+                        }
+                    ],
+                },
             ],
         }
     ]
+
+    depth_tables = duck_conn.adbc_get_objects(depth="tables").read_all()
+    assert depth_tables.to_pylist() == [
+        {
+            'catalog_name': 'memory',
+            'catalog_db_schemas': [
+                {
+                    'db_schema_name': 'main',
+                    'db_schema_tables': [
+                        {
+                            'table_name': 'getobjects',
+                            'table_type': 'BASE TABLE',
+                            'table_columns': [],
+                            'table_constraints': [],
+                        }
+                    ],
+                },
+            ],
+        }
+    ]
+
+    depth_db_schemas = duck_conn.adbc_get_objects(depth="db_schemas").read_all()
+    assert depth_db_schemas.to_pylist() == [
+        {
+            'catalog_name': 'memory',
+            'catalog_db_schemas': [
+                {
+                    'db_schema_name': 'main',
+                    'db_schema_tables': [],
+                },
+            ],
+        }
+    ]
+
+    depth_catalogs = duck_conn.adbc_get_objects(depth="catalogs").read_all()
+    assert depth_catalogs.to_pylist() == [
+        {
+            'catalog_name': 'memory',
+            'catalog_db_schemas': [],
+        }
+    ]
+
+    # All result schemas should be the same
+    assert depth_all.schema == depth_tables.schema
+    assert depth_all.schema == depth_db_schemas.schema
+    assert depth_all.schema == depth_catalogs.schema
+
+
+def test_connection_get_objects_filters(duck_conn):
+    with duck_conn.cursor() as cursor:
+        cursor.execute("CREATE TABLE getobjects (ints BIGINT PRIMARY KEY)")
+
+    no_filter = duck_conn.adbc_get_objects(depth="all").read_all()
+    assert no_filter.to_pylist() == [
+        {
+            'catalog_name': 'memory',
+            'catalog_db_schemas': [
+                {
+                    'db_schema_name': 'main',
+                    'db_schema_tables': [
+                        {
+                            'table_name': 'getobjects',
+                            'table_type': 'BASE TABLE',
+                            'table_columns': [
+                                {
+                                    'column_name': 'ints',
+                                    'ordinal_position': 1,
+                                    'remarks': '',
+                                    'xdbc_char_octet_length': None,
+                                    'xdbc_column_def': None,
+                                    'xdbc_column_size': None,
+                                    'xdbc_data_type': None,
+                                    'xdbc_datetime_sub': None,
+                                    'xdbc_decimal_digits': None,
+                                    'xdbc_is_autoincrement': None,
+                                    'xdbc_is_generatedcolumn': None,
+                                    'xdbc_is_nullable': None,
+                                    'xdbc_nullable': None,
+                                    'xdbc_num_prec_radix': None,
+                                    'xdbc_scope_catalog': None,
+                                    'xdbc_scope_schema': None,
+                                    'xdbc_scope_table': None,
+                                    'xdbc_sql_data_type': None,
+                                    'xdbc_type_name': None,
+                                },
+                            ],
+                            'table_constraints': [
+                                {
+                                    'constraint_column_names': [],
+                                    'constraint_column_usage': [],
+                                    'constraint_name': 'getobjects_ints_pkey',
+                                    'constraint_type': 'PRIMARY KEY',
+                                },
+                                {
+                                    'constraint_column_names': [],
+                                    'constraint_column_usage': [],
+                                    'constraint_name': 'getobjects_ints_not_null',
+                                    'constraint_type': 'CHECK',
+                                },
+                            ],
+                        }
+                    ],
+                },
+            ],
+        }
+    ]
+
+    column_filter = duck_conn.adbc_get_objects(depth="all", column_name_filter="notexist").read_all()
+    assert column_filter.to_pylist() == [
+        {
+            'catalog_name': 'memory',
+            'catalog_db_schemas': [
+                {
+                    'db_schema_name': 'main',
+                    'db_schema_tables': [
+                        {
+                            'table_name': 'getobjects',
+                            'table_type': 'BASE TABLE',
+                            'table_columns': None,
+                            'table_constraints': [
+                                {
+                                    'constraint_column_names': [],
+                                    'constraint_column_usage': [],
+                                    'constraint_name': 'getobjects_ints_pkey',
+                                    'constraint_type': 'PRIMARY KEY',
+                                },
+                                {
+                                    'constraint_column_names': [],
+                                    'constraint_column_usage': [],
+                                    'constraint_name': 'getobjects_ints_not_null',
+                                    'constraint_type': 'CHECK',
+                                },
+                            ],
+                        }
+                    ],
+                },
+            ],
+        }
+    ]
+
+    table_name_filter = duck_conn.adbc_get_objects(depth="all", table_name_filter="notexist").read_all()
+    assert table_name_filter.to_pylist() == [
+        {
+            'catalog_name': 'memory',
+            'catalog_db_schemas': [
+                {
+                    'db_schema_name': 'main',
+                    'db_schema_tables': None,
+                },
+            ],
+        }
+    ]
+
+    db_schema_filter = duck_conn.adbc_get_objects(depth="all", db_schema_filter="notexist").read_all()
+    assert db_schema_filter.to_pylist() == [
+        {
+            'catalog_name': 'memory',
+            'catalog_db_schemas': None,
+        }
+    ]
+
+    catalog_filter = duck_conn.adbc_get_objects(depth="all", catalog_filter="notexist").read_all()
+    assert catalog_filter.to_pylist() == []
+
+    assert no_filter.schema == column_filter.schema
+    assert no_filter.schema == table_name_filter.schema
+    assert no_filter.schema == db_schema_filter.schema
+    assert no_filter.schema == catalog_filter.schema
 
 
 def test_commit(tmp_path):
@@ -128,12 +339,28 @@ def test_connection_get_table_schema(duck_conn):
             ]
         )
 
-        # Catalog name is currently not supported
+        # Test invalid catalog name
         with pytest.raises(
-            adbc_driver_manager_lib.NotSupportedError,
-            match=r'Catalog Name is not used in DuckDB. It must be set to nullptr or an empty string',
+            adbc_driver_manager.InternalError,
+            match=r'Catalog "bla" does not exist',
         ):
             duck_conn.adbc_get_table_schema("tableschema", catalog_filter="bla", db_schema_filter="test")
+
+        # Catalog and DB Schema name
+        assert duck_conn.adbc_get_table_schema(
+            "tableschema", catalog_filter="memory", db_schema_filter="test"
+        ) == pyarrow.schema(
+            [
+                ("test_ints", "int64"),
+            ]
+        )
+
+        # DB Schema is inferred to be "main" if unspecified
+        assert duck_conn.adbc_get_table_schema("tableschema", catalog_filter="memory") == pyarrow.schema(
+            [
+                ("ints", "int64"),
+            ]
+        )
 
 
 def test_prepared_statement(duck_conn):
