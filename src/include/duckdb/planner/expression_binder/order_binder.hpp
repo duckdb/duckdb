@@ -42,8 +42,7 @@ public:
 	unique_ptr<Expression> CreateExtraReference(unique_ptr<ParsedExpression> expr);
 
 private:
-	unique_ptr<Expression> CreateProjectionReference(ParsedExpression &expr, const idx_t index,
-	                                                 const LogicalType &logical_type);
+	unique_ptr<Expression> CreateProjectionReference(ParsedExpression &expr, const idx_t index);
 	unique_ptr<Expression> BindConstant(ParsedExpression &expr, const Value &val);
 
 private:
