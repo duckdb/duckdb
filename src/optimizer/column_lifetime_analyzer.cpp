@@ -76,7 +76,7 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 			break;
 		}
 		// visit current operator expressions so they are added to the referenced_columns
-//		LogicalOperatorVisitor::VisitOperatorExpressions(op);
+		//		LogicalOperatorVisitor::VisitOperatorExpressions(op);
 
 		column_binding_set_t unused_bindings;
 		auto old_bindings = op.GetColumnBindings();
