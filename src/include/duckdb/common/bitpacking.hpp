@@ -112,7 +112,7 @@ public:
 			return num_to_round;
 		}
 
-		return num_to_round + BITPACKING_ALGORITHM_GROUP_SIZE - remainder;
+		return num_to_round + BITPACKING_ALGORITHM_GROUP_SIZE - NumericCast<idx_t>(remainder);
 	}
 
 private:

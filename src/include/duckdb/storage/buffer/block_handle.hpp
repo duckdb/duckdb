@@ -11,6 +11,7 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"

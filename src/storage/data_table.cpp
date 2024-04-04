@@ -742,7 +742,7 @@ void DataTable::AppendLock(TableAppendState &state) {
 	if (!is_root) {
 		throw TransactionException("Transaction conflict: adding entries to a table that has been altered!");
 	}
-	state.row_start = row_groups->GetTotalRows();
+	state.row_start = NumericCast<row_t>(row_groups->GetTotalRows());
 	state.current_row = state.row_start;
 }
 
@@ -855,7 +855,7 @@ void DataTable::RevertAppend(idx_t start_row, idx_t count) {
 		idx_t scan_count = MinValue<idx_t>(count, row_groups->GetTotalRows() - start_row);
 		ScanTableSegment(start_row, scan_count, [&](DataChunk &chunk) {
 			for (idx_t i = 0; i < chunk.size(); i++) {
-				row_data[i] = current_row_base + i;
+				row_data[i] = NumericCast<row_t>(current_row_base + i);
 			}
 			info->indexes.Scan([&](Index &index) {
 				index.Delete(chunk, row_identifiers);

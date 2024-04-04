@@ -200,7 +200,7 @@ public:
 			wal.skip_writing = false;
 			if (wal.GetTotalWritten() > initial_written) {
 				// remove any entries written into the WAL by truncating it
-				wal.Truncate(initial_wal_size);
+				wal.Truncate(NumericCast<int64_t>(initial_wal_size));
 			}
 		}
 	}
@@ -284,7 +284,7 @@ DatabaseSize SingleFileStorageManager::GetDatabaseSize() {
 		ds.used_blocks = ds.total_blocks - ds.free_blocks;
 		ds.bytes = (ds.total_blocks * ds.block_size);
 		if (auto wal = GetWriteAheadLog()) {
-			ds.wal_size = wal->GetWALSize();
+			ds.wal_size = NumericCast<idx_t>(wal->GetWALSize());
 		}
 	}
 	return ds;
@@ -302,7 +302,7 @@ bool SingleFileStorageManager::AutomaticCheckpoint(idx_t estimated_wal_bytes) {
 	}
 
 	auto &config = DBConfig::Get(db);
-	auto initial_size = log->GetWALSize();
+	auto initial_size = NumericCast<idx_t>(log->GetWALSize());
 	idx_t expected_wal_size = initial_size + estimated_wal_bytes;
 	return expected_wal_size > config.options.checkpoint_wal_size;
 }

@@ -191,7 +191,7 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 			return true;
 		});
 		if (append_to_table) {
-			table.RevertAppendInternal(append_state.row_start);
+			table.RevertAppendInternal(NumericCast<idx_t>(append_state.row_start));
 		}
 
 		// we need to vacuum the indexes to remove any buffers that are now empty
@@ -361,8 +361,9 @@ void LocalStorage::InitializeAppend(LocalAppendState &state, DataTable &table) {
 void LocalStorage::Append(LocalAppendState &state, DataChunk &chunk) {
 	// append to unique indices (if any)
 	auto storage = state.storage;
-	idx_t base_id = MAX_ROW_ID + storage->row_groups->GetTotalRows() + state.append_state.total_append_count;
-	auto error = DataTable::AppendToIndexes(storage->indexes, chunk, base_id);
+	idx_t base_id =
+	    NumericCast<idx_t>(MAX_ROW_ID) + storage->row_groups->GetTotalRows() + state.append_state.total_append_count;
+	auto error = DataTable::AppendToIndexes(storage->indexes, chunk, NumericCast<row_t>(base_id));
 	if (error.HasError()) {
 		error.Throw();
 	}
@@ -383,7 +384,7 @@ void LocalStorage::LocalMerge(DataTable &table, RowGroupCollection &collection) 
 	auto &storage = table_manager.GetOrCreateStorage(table);
 	if (!storage.indexes.Empty()) {
 		// append data to indexes if required
-		row_t base_id = MAX_ROW_ID + storage.row_groups->GetTotalRows();
+		row_t base_id = MAX_ROW_ID + NumericCast<row_t>(storage.row_groups->GetTotalRows());
 		auto error = storage.AppendToIndexes(transaction, collection, storage.indexes, table.GetTypes(), base_id);
 		if (error.HasError()) {
 			error.Throw();
@@ -447,7 +448,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 
 	TableAppendState append_state;
 	table.AppendLock(append_state);
-	transaction.PushAppend(table, append_state.row_start, append_count);
+	transaction.PushAppend(table, NumericCast<idx_t>(append_state.row_start), append_count);
 	if ((append_state.row_start == 0 || storage.row_groups->GetTotalRows() >= MERGE_THRESHOLD) &&
 	    storage.deleted_rows == 0) {
 		// table is currently empty OR we are bulk appending: move over the storage directly
