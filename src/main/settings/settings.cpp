@@ -1004,6 +1004,24 @@ Value PartitionedWriteFlushThreshold::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Preferred block allocation size
+//===--------------------------------------------------------------------===//
+void DefaultBlockAllocSize::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	idx_t block_alloc_size = input.GetValue<uint64_t>();
+	Storage::VerifyBlockAllocSize(block_alloc_size);
+	config.options.default_block_alloc_size = block_alloc_size;
+}
+
+void DefaultBlockAllocSize::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.default_block_alloc_size = DBConfig().options.default_block_alloc_size;
+}
+
+Value DefaultBlockAllocSize::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::UBIGINT(config.options.default_block_alloc_size);
+}
+
+//===--------------------------------------------------------------------===//
 // Password Setting
 //===--------------------------------------------------------------------===//
 void PasswordSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
