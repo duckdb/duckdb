@@ -399,7 +399,7 @@ vector<idx_t> BoxRenderer::ComputeRenderWidths(const vector<string> &names, cons
 			// e.g. if we have 10 columns, we remove #5, then #4, then #6, then #3, then #7, etc
 			int64_t offset = 0;
 			while (total_length > max_width) {
-				idx_t c = column_count / 2 + offset;
+				idx_t c = column_count / 2 + NumericCast<idx_t>(offset);
 				total_length -= widths[c] + 3;
 				pruned_columns.insert(c);
 				if (offset >= 0) {
