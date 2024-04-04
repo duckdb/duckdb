@@ -273,7 +273,8 @@ static void UpdateNullMask(Vector &vec, const SelectionVector &sel, idx_t count,
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
 static idx_t DistinctSelect(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-                            SelectionVector *true_sel, SelectionVector *false_sel, ValidityMask *null_mask) {
+                            SelectionVector *true_sel, SelectionVector *false_sel,
+                            optional_ptr<ValidityMask> null_mask) {
 	if (!sel) {
 		sel = FlatVector::IncrementalSelectionVector();
 	}
@@ -303,7 +304,7 @@ static idx_t DistinctSelect(Vector &left, Vector &right, const SelectionVector *
 template <class OP>
 static idx_t DistinctSelectNotNull(Vector &left, Vector &right, const idx_t count, idx_t &true_count,
                                    const SelectionVector &sel, SelectionVector &maybe_vec, OptionalSelection &true_opt,
-                                   OptionalSelection &false_opt, ValidityMask *null_mask) {
+                                   OptionalSelection &false_opt, optional_ptr<ValidityMask> null_mask) {
 	UnifiedVectorFormat lvdata, rvdata;
 	left.ToUnifiedFormat(count, lvdata);
 	right.ToUnifiedFormat(count, rvdata);
@@ -364,7 +365,7 @@ struct PositionComparator {
 	// Default to the same as the final row
 	template <typename OP>
 	static idx_t Definite(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
-	                      SelectionVector *true_sel, SelectionVector &false_sel, ValidityMask *null_mask) {
+	                      SelectionVector *true_sel, SelectionVector &false_sel, optional_ptr<ValidityMask> null_mask) {
 		return Final<OP>(left, right, sel, count, true_sel, &false_sel, null_mask);
 	}
 
@@ -372,7 +373,7 @@ struct PositionComparator {
 	// Usually this means Is Not Distinct, as those are the semantics used by Postges
 	template <typename OP>
 	static idx_t Possible(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
-	                      SelectionVector &true_sel, SelectionVector *false_sel, ValidityMask *null_mask) {
+	                      SelectionVector &true_sel, SelectionVector *false_sel, optional_ptr<ValidityMask> null_mask) {
 		return VectorOperations::NestedEquals(left, right, &sel, count, &true_sel, false_sel, null_mask);
 	}
 
@@ -380,7 +381,7 @@ struct PositionComparator {
 	// This needs to be specialised.
 	template <typename OP>
 	static idx_t Final(Vector &left, Vector &right, const SelectionVector &sel, idx_t count, SelectionVector *true_sel,
-	                   SelectionVector *false_sel, ValidityMask *null_mask) {
+	                   SelectionVector *false_sel, optional_ptr<ValidityMask> null_mask) {
 		return 0;
 	}
 
@@ -397,14 +398,16 @@ struct PositionComparator {
 template <>
 idx_t PositionComparator::Definite<duckdb::NotDistinctFrom>(Vector &left, Vector &right, const SelectionVector &sel,
                                                             idx_t count, SelectionVector *true_sel,
-                                                            SelectionVector &false_sel, ValidityMask *null_mask) {
+                                                            SelectionVector &false_sel,
+                                                            optional_ptr<ValidityMask> null_mask) {
 	return 0;
 }
 
 template <>
 idx_t PositionComparator::Final<duckdb::NotDistinctFrom>(Vector &left, Vector &right, const SelectionVector &sel,
                                                          idx_t count, SelectionVector *true_sel,
-                                                         SelectionVector *false_sel, ValidityMask *null_mask) {
+                                                         SelectionVector *false_sel,
+                                                         optional_ptr<ValidityMask> null_mask) {
 	return VectorOperations::NestedEquals(left, right, &sel, count, true_sel, false_sel, null_mask);
 }
 
@@ -412,14 +415,16 @@ idx_t PositionComparator::Final<duckdb::NotDistinctFrom>(Vector &left, Vector &r
 template <>
 idx_t PositionComparator::Possible<duckdb::DistinctFrom>(Vector &left, Vector &right, const SelectionVector &sel,
                                                          idx_t count, SelectionVector &true_sel,
-                                                         SelectionVector *false_sel, ValidityMask *null_mask) {
+                                                         SelectionVector *false_sel,
+                                                         optional_ptr<ValidityMask> null_mask) {
 	return count;
 }
 
 template <>
 idx_t PositionComparator::Final<duckdb::DistinctFrom>(Vector &left, Vector &right, const SelectionVector &sel,
                                                       idx_t count, SelectionVector *true_sel,
-                                                      SelectionVector *false_sel, ValidityMask *null_mask) {
+                                                      SelectionVector *false_sel,
+                                                      optional_ptr<ValidityMask> null_mask) {
 	return VectorOperations::NestedNotEquals(left, right, &sel, count, true_sel, false_sel, null_mask);
 }
 
@@ -429,14 +434,15 @@ idx_t PositionComparator::Definite<duckdb::DistinctLessThanEquals>(Vector &left,
                                                                    const SelectionVector &sel, idx_t count,
                                                                    SelectionVector *true_sel,
                                                                    SelectionVector &false_sel,
-                                                                   ValidityMask *null_mask) {
+                                                                   optional_ptr<ValidityMask> null_mask) {
 	return VectorOperations::DistinctGreaterThan(right, left, &sel, count, true_sel, &false_sel, null_mask);
 }
 
 template <>
 idx_t PositionComparator::Final<duckdb::DistinctLessThanEquals>(Vector &left, Vector &right, const SelectionVector &sel,
                                                                 idx_t count, SelectionVector *true_sel,
-                                                                SelectionVector *false_sel, ValidityMask *null_mask) {
+                                                                SelectionVector *false_sel,
+                                                                optional_ptr<ValidityMask> null_mask) {
 	return VectorOperations::DistinctGreaterThanEquals(right, left, &sel, count, true_sel, false_sel, null_mask);
 }
 
@@ -445,7 +451,7 @@ idx_t PositionComparator::Definite<duckdb::DistinctGreaterThanEquals>(Vector &le
                                                                       const SelectionVector &sel, idx_t count,
                                                                       SelectionVector *true_sel,
                                                                       SelectionVector &false_sel,
-                                                                      ValidityMask *null_mask) {
+                                                                      optional_ptr<ValidityMask> null_mask) {
 	return VectorOperations::DistinctGreaterThan(left, right, &sel, count, true_sel, &false_sel, null_mask);
 }
 
@@ -454,7 +460,7 @@ idx_t PositionComparator::Final<duckdb::DistinctGreaterThanEquals>(Vector &left,
                                                                    const SelectionVector &sel, idx_t count,
                                                                    SelectionVector *true_sel,
                                                                    SelectionVector *false_sel,
-                                                                   ValidityMask *null_mask) {
+                                                                   optional_ptr<ValidityMask> null_mask) {
 	return VectorOperations::DistinctGreaterThanEquals(left, right, &sel, count, true_sel, false_sel, null_mask);
 }
 
@@ -462,14 +468,16 @@ idx_t PositionComparator::Final<duckdb::DistinctGreaterThanEquals>(Vector &left,
 template <>
 idx_t PositionComparator::Final<duckdb::DistinctLessThan>(Vector &left, Vector &right, const SelectionVector &sel,
                                                           idx_t count, SelectionVector *true_sel,
-                                                          SelectionVector *false_sel, ValidityMask *null_mask) {
+                                                          SelectionVector *false_sel,
+                                                          optional_ptr<ValidityMask> null_mask) {
 	return VectorOperations::DistinctGreaterThan(right, left, &sel, count, true_sel, false_sel, null_mask);
 }
 
 template <>
 idx_t PositionComparator::Final<duckdb::DistinctGreaterThan>(Vector &left, Vector &right, const SelectionVector &sel,
                                                              idx_t count, SelectionVector *true_sel,
-                                                             SelectionVector *false_sel, ValidityMask *null_mask) {
+                                                             SelectionVector *false_sel,
+                                                             optional_ptr<ValidityMask> null_mask) {
 	return VectorOperations::DistinctGreaterThan(left, right, &sel, count, true_sel, false_sel, null_mask);
 }
 
@@ -487,7 +495,7 @@ static void ExtractNestedSelection(const SelectionVector &slice_sel, const idx_t
 }
 
 static void ExtractNestedMask(const SelectionVector &slice_sel, const idx_t count, const SelectionVector &sel,
-                              ValidityMask *child_mask, ValidityMask *null_mask) {
+                              ValidityMask *child_mask, optional_ptr<ValidityMask> null_mask) {
 
 	if (!child_mask) {
 		return;
@@ -512,7 +520,8 @@ static void DensifyNestedSelection(const SelectionVector &dense_sel, const idx_t
 
 template <class OP>
 static idx_t DistinctSelectStruct(Vector &left, Vector &right, idx_t count, const SelectionVector &sel,
-                                  OptionalSelection &true_opt, OptionalSelection &false_opt, ValidityMask *null_mask) {
+                                  OptionalSelection &true_opt, OptionalSelection &false_opt,
+                                  optional_ptr<ValidityMask> null_mask) {
 	if (count == 0) {
 		return 0;
 	}
@@ -622,7 +631,8 @@ static void PositionListCursor(SelectionVector &cursor, UnifiedVectorFormat &vda
 
 template <class OP>
 static idx_t DistinctSelectList(Vector &left, Vector &right, idx_t count, const SelectionVector &sel,
-                                OptionalSelection &true_opt, OptionalSelection &false_opt, ValidityMask *null_mask) {
+                                OptionalSelection &true_opt, OptionalSelection &false_opt,
+                                optional_ptr<ValidityMask> null_mask) {
 	if (count == 0) {
 		return count;
 	}
@@ -768,7 +778,8 @@ static void PositionArrayCursor(SelectionVector &cursor, UnifiedVectorFormat &vd
 
 template <class OP>
 static idx_t DistinctSelectArray(Vector &left, Vector &right, idx_t count, const SelectionVector &sel,
-                                 OptionalSelection &true_opt, OptionalSelection &false_opt, ValidityMask *null_mask) {
+                                 OptionalSelection &true_opt, OptionalSelection &false_opt,
+                                 optional_ptr<ValidityMask> null_mask) {
 	if (count == 0) {
 		return count;
 	}
@@ -889,7 +900,8 @@ static idx_t DistinctSelectArray(Vector &left, Vector &right, idx_t count, const
 
 template <class OP>
 static idx_t DistinctSelectNested(Vector &left, Vector &right, const SelectionVector *sel, const idx_t count,
-                                  SelectionVector *true_sel, SelectionVector *false_sel, ValidityMask *null_mask) {
+                                  SelectionVector *true_sel, SelectionVector *false_sel,
+                                  optional_ptr<ValidityMask> null_mask) {
 	// The Select operations all use a dense pair of input vectors to partition
 	// a selection vector in a single pass. But to implement progressive comparisons,
 	// we have to make multiple passes, so we need to keep track of the original input positions
@@ -1013,7 +1025,7 @@ static void ExecuteDistinct(Vector &left, Vector &right, Vector &result, idx_t c
 template <class OP>
 static idx_t TemplatedDistinctSelectOperation(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                               SelectionVector *true_sel, SelectionVector *false_sel,
-                                              ValidityMask *null_mask) {
+                                              optional_ptr<ValidityMask> null_mask) {
 
 	switch (left.GetType().InternalType()) {
 	case PhysicalType::BOOL:
@@ -1115,7 +1127,7 @@ idx_t VectorOperations::NotDistinctFrom(Vector &left, Vector &right, const Selec
 // true := A > B with nulls being maximal
 idx_t VectorOperations::DistinctGreaterThan(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                             SelectionVector *true_sel, SelectionVector *false_sel,
-                                            ValidityMask *null_mask) {
+                                            optional_ptr<ValidityMask> null_mask) {
 	return TemplatedDistinctSelectOperation<duckdb::DistinctGreaterThan>(left, right, sel, count, true_sel, false_sel,
 	                                                                     null_mask);
 }
@@ -1123,21 +1135,22 @@ idx_t VectorOperations::DistinctGreaterThan(Vector &left, Vector &right, const S
 // true := A > B with nulls being minimal
 idx_t VectorOperations::DistinctGreaterThanNullsFirst(Vector &left, Vector &right, const SelectionVector *sel,
                                                       idx_t count, SelectionVector *true_sel,
-                                                      SelectionVector *false_sel, ValidityMask *null_mask) {
+                                                      SelectionVector *false_sel,
+                                                      optional_ptr<ValidityMask> null_mask) {
 	return TemplatedDistinctSelectOperation<duckdb::DistinctGreaterThanNullsFirst>(left, right, sel, count, true_sel,
 	                                                                               false_sel, null_mask);
 }
 // true := A >= B with nulls being maximal
 idx_t VectorOperations::DistinctGreaterThanEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                                   SelectionVector *true_sel, SelectionVector *false_sel,
-                                                  ValidityMask *null_mask) {
+                                                  optional_ptr<ValidityMask> null_mask) {
 	return count - TemplatedDistinctSelectOperation<duckdb::DistinctGreaterThan>(right, left, sel, count, false_sel,
 	                                                                             true_sel, null_mask);
 }
 // true := A < B with nulls being maximal
 idx_t VectorOperations::DistinctLessThan(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                          SelectionVector *true_sel, SelectionVector *false_sel,
-                                         ValidityMask *null_mask) {
+                                         optional_ptr<ValidityMask> null_mask) {
 	return TemplatedDistinctSelectOperation<duckdb::DistinctGreaterThan>(right, left, sel, count, true_sel, false_sel,
 	                                                                     null_mask);
 }
@@ -1145,7 +1158,7 @@ idx_t VectorOperations::DistinctLessThan(Vector &left, Vector &right, const Sele
 // true := A < B with nulls being minimal
 idx_t VectorOperations::DistinctLessThanNullsFirst(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                                    SelectionVector *true_sel, SelectionVector *false_sel,
-                                                   ValidityMask *null_mask) {
+                                                   optional_ptr<ValidityMask> null_mask) {
 	return TemplatedDistinctSelectOperation<duckdb::DistinctGreaterThanNullsFirst>(right, left, sel, count, true_sel,
 	                                                                               false_sel, nullptr);
 }
@@ -1153,7 +1166,7 @@ idx_t VectorOperations::DistinctLessThanNullsFirst(Vector &left, Vector &right, 
 // true := A <= B with nulls being maximal
 idx_t VectorOperations::DistinctLessThanEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                                SelectionVector *true_sel, SelectionVector *false_sel,
-                                               ValidityMask *null_mask) {
+                                               optional_ptr<ValidityMask> null_mask) {
 	return count - TemplatedDistinctSelectOperation<duckdb::DistinctGreaterThan>(left, right, sel, count, false_sel,
 	                                                                             true_sel, null_mask);
 }
@@ -1161,13 +1174,14 @@ idx_t VectorOperations::DistinctLessThanEquals(Vector &left, Vector &right, cons
 // true := A != B with nulls being equal, inputs selected
 idx_t VectorOperations::NestedNotEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                         SelectionVector *true_sel, SelectionVector *false_sel,
-                                        ValidityMask *null_mask) {
+                                        optional_ptr<ValidityMask> null_mask) {
 	return TemplatedDistinctSelectOperation<duckdb::DistinctFrom>(left, right, sel, count, true_sel, false_sel,
 	                                                              null_mask);
 }
 // true := A == B with nulls being equal, inputs selected
 idx_t VectorOperations::NestedEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-                                     SelectionVector *true_sel, SelectionVector *false_sel, ValidityMask *null_mask) {
+                                     SelectionVector *true_sel, SelectionVector *false_sel,
+                                     optional_ptr<ValidityMask> null_mask) {
 	return count - TemplatedDistinctSelectOperation<duckdb::DistinctFrom>(left, right, sel, count, false_sel, true_sel,
 	                                                                      null_mask);
 }
