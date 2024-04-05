@@ -37,6 +37,16 @@ static void FlipChildren(LogicalOperator &op) {
 	}
 }
 
+static inline idx_t ComputeOverlappingBindings(const vector<ColumnBinding> &haystack, const vector<ColumnBinding> &needles) {
+	idx_t result = 0;
+	for (auto &needle : needles) {
+		if (std::find(haystack.begin(), haystack.end(), needle) != haystack.end()) {
+			result++;
+		}
+	}
+	return result;
+}
+
 void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op, idx_t cardinality_ratio) {
 	auto &left_child = op.children[0];
 	auto &right_child = op.children[1];
@@ -51,19 +61,9 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op, idx_t car
 	if (rhs_cardinality == lhs_cardinality * cardinality_ratio && !preferred_on_probe_side.empty()) {
 		// inspect final bindings, we prefer them on the probe side
 		auto bindings_left = left_child->GetColumnBindings();
-		idx_t bindings_in_left = 0;
-		for (auto &p_binding : preferred_on_probe_side) {
-			if (std::find(bindings_left.begin(), bindings_left.end(), p_binding) != bindings_left.end()) {
-				bindings_in_left += 1;
-			}
-		}
 		auto bindings_right = right_child->GetColumnBindings();
-		idx_t bindings_in_right = 0;
-		for (auto &p_binding : preferred_on_probe_side) {
-			if (std::find(bindings_right.begin(), bindings_right.end(), p_binding) != bindings_right.end()) {
-				bindings_in_right += 1;
-			}
-		}
+		auto bindings_in_left = ComputeOverlappingBindings(bindings_left, preferred_on_probe_side);
+		auto bindings_in_right = ComputeOverlappingBindings(bindings_right, preferred_on_probe_side);
 		if (bindings_in_right > bindings_in_left) {
 			FlipChildren(op);
 		}
