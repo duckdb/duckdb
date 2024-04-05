@@ -980,8 +980,6 @@ function(duckdb_extension_load NAME)
 
     if (NOT "${duckdb_extension_load_EXTENSION_VERSION}" STREQUAL "")
       set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION "${duckdb_extension_load_EXTENSION_VERSION}" PARENT_SCOPE)
-    elseif (NOT "${duckdb_extension_load_EXT_VERSION}" STREQUAL "")
-      set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION "${duckdb_extension_load_GIT_TAG}" PARENT_SCOPE)
     else()
       find_package(Git)
       if(Git_FOUND)
