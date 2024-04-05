@@ -386,6 +386,7 @@ bool StoreUserDefinedParameter(string &option) {
 }
 void CSVReaderOptions::FromNamedParameters(named_parameter_map_t &in, ClientContext &context,
                                            vector<LogicalType> &return_types, vector<string> &names) {
+	map<string, string> ordered_user_defined_parameters;
 	for (auto &kv : in) {
 		if (MultiFileReader::ParseOption(kv.first, kv.second, file_options, context)) {
 			continue;
@@ -393,7 +394,7 @@ void CSVReaderOptions::FromNamedParameters(named_parameter_map_t &in, ClientCont
 		auto loption = StringUtil::Lower(kv.first);
 		// skip variables that are specific to auto detection
 		if (StoreUserDefinedParameter(loption)) {
-			user_defined_parameters += loption + "=" + kv.second.ToSQLString() + ", ";
+			ordered_user_defined_parameters[loption] = kv.second.ToSQLString();
 		}
 		if (loption == "columns") {
 			auto &child_type = kv.second.type();
@@ -498,6 +499,9 @@ void CSVReaderOptions::FromNamedParameters(named_parameter_map_t &in, ClientCont
 		} else {
 			SetReadOption(loption, kv.second, names);
 		}
+	}
+	for (auto &udf_parameter : ordered_user_defined_parameters) {
+		user_defined_parameters += udf_parameter.first + "=" + udf_parameter.second + ", ";
 	}
 	if (user_defined_parameters.size() >= 2) {
 		user_defined_parameters.erase(user_defined_parameters.size() - 2);

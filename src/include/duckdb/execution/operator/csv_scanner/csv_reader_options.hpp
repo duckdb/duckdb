@@ -107,6 +107,7 @@ struct CSVReaderOptions {
 
 	//! User defined parameters for the csv function concatenated on a string
 	string user_defined_parameters;
+
 	//===--------------------------------------------------------------------===//
 	// WriteCSVOptions
 	//===--------------------------------------------------------------------===//

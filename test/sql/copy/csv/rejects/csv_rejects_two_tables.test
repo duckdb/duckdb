@@ -19,8 +19,8 @@ BIGINT	VARCHAR	11044	11044	2
 query IIIIIIIIIIIII
 FROM reject_scans order by all;
 ----
-3	0	test/sql/copy/csv/data/error/mismatch/big_bad.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	store_rejects=true, sample_size=1
-3	1	test/sql/copy/csv/data/error/mismatch/big_bad2.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	store_rejects=true, sample_size=1
+3	0	test/sql/copy/csv/data/error/mismatch/big_bad.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	sample_size=1, store_rejects=true
+3	1	test/sql/copy/csv/data/error/mismatch/big_bad2.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	sample_size=1, store_rejects=true
 
 query IIIIIIIIII
 FROM reject_errors order by all;
@@ -106,8 +106,8 @@ query IIIIIIIIIIIII
 SELECT *
 FROM rejects_scan_3 order by all;
 ----
-15	0	test/sql/copy/csv/data/error/mismatch/big_bad.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	rejects_table='rejects_errors_3', rejects_scan='rejects_scan_3', sample_size=1
-15	1	test/sql/copy/csv/data/error/mismatch/big_bad2.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	rejects_table='rejects_errors_3', rejects_scan='rejects_scan_3', sample_size=1
+15	0	test/sql/copy/csv/data/error/mismatch/big_bad.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	rejects_scan='rejects_scan_3', rejects_table='rejects_errors_3', sample_size=1
+15	1	test/sql/copy/csv/data/error/mismatch/big_bad2.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	rejects_scan='rejects_scan_3', rejects_table='rejects_errors_3', sample_size=1
 
 query IIIIIIIIII
 FROM rejects_errors_3 order by all;
