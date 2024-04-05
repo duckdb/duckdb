@@ -569,9 +569,8 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			auto &fst_const_value_expr = func.children[1]->Cast<BoundConstantExpression>();
 			auto &type = fst_const_value_expr.value.type();
 
-			if ((type.IsNumeric() ||
-			     type.id() == LogicalTypeId::VARCHAR ||
-			     type.id() == LogicalTypeId::BOOLEAN) && func.children.size() == 2) {
+			if ((type.IsNumeric() || type.id() == LogicalTypeId::VARCHAR || type.id() == LogicalTypeId::BOOLEAN) &&
+			    func.children.size() == 2) {
 				auto bound_eq_comparison =
 				    make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, fst_const_value_expr.value);
 				table_filters.PushFilter(column_index, std::move(bound_eq_comparison));
