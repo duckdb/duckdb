@@ -985,7 +985,6 @@ function(duckdb_extension_load NAME)
     else()
       find_package(Git)
       if(Git_FOUND)
-	  message(STATUS "CIAO  ${duckdb_extension_load_SOURCE_DIR}")
           execute_process(
             COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
             WORKING_DIRECTORY ${duckdb_extension_load_SOURCE_DIR}
@@ -993,7 +992,6 @@ function(duckdb_extension_load NAME)
             OUTPUT_VARIABLE GIT_COMMIT
             OUTPUT_STRIP_TRAILING_WHITESPACE)
         set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_GIT_TAG "${GIT_COMMIT}" PARENT_SCOPE)
-	  message(STATUS "CIAO  ${GIT_COMMIT}")
       else()
         set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_GIT_TAG "" PARENT_SCOPE)
       endif()
