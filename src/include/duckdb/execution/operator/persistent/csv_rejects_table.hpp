@@ -1,5 +1,7 @@
 #pragma once
 
+#include <utility>
+
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/typedefs.hpp"
@@ -15,7 +17,7 @@ class ClientContext;
 class CSVRejectsTable : public ObjectCacheEntry {
 public:
 	CSVRejectsTable(string rejects_scan, string rejects_error)
-	    : count(0), scan_table(rejects_scan), errors_table(rejects_error) {
+	    : count(0), scan_table(std::move(rejects_scan)), errors_table(std::move(rejects_error)) {
 	}
 	mutex write_lock;
 	string name;
