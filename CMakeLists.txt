@@ -729,15 +729,9 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY EXTENSION_VERS
     add_dependencies(duckdb_local_extension_repo ${NAME}_loadable_extension)
   endif()
   # all parameters after output_directory
-  set(FILES ${ARGV})
-  # remove name
-  list(REMOVE_AT FILES 0)
-  # remove output_directory
-  list(REMOVE_AT FILES 0)
-  # remove extension_version
-  list(REMOVE_AT FILES 0)
-  # remove parameters
-  list(REMOVE_AT FILES 0)
+  set(FILES "${ARGV}")
+  # remove name, output_directory, extension_version, parameters
+  list(REMOVE_AT FILES 0 1 2 3)
 
   # parse parameters
   string(FIND "${PARAMETERS}" "-no-warnings" IGNORE_WARNINGS)
@@ -840,9 +834,8 @@ endfunction()
 
 function(build_loadable_extension NAME PARAMETERS)
   # all parameters after name
-  set(FILES ${ARGV})
-  list(REMOVE_AT FILES 0)
-  list(REMOVE_AT FILES 0)
+  set(FILES "${ARGV}")
+  list(REMOVE_AT FILES 0 1)
   string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
 
   build_loadable_extension_directory(${NAME} "extension/${NAME}" "${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_GIT_TAG}" "${PARAMETERS}" ${FILES})
@@ -850,7 +843,7 @@ endfunction()
 
 function(build_static_extension NAME PARAMETERS)
   # all parameters after name
-  set(FILES ${ARGV})
+  set(FILES "${ARGV}")
   list(REMOVE_AT FILES 0)
   add_library(${NAME}_extension STATIC ${FILES})
   target_link_libraries(${NAME}_extension duckdb_static)
