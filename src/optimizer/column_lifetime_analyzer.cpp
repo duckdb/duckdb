@@ -126,14 +126,14 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		if (everything_referenced) {
 			break;
 		}
-//		// first visit operator expressions to populate referenced columns
-//		LogicalOperatorVisitor::VisitOperatorExpressions(op);
+		// first visit operator expressions to populate referenced columns
+		LogicalOperatorVisitor::VisitOperatorExpressions(op);
 		// filter, figure out which columns are not needed after the filter
 		column_binding_set_t unused_bindings;
 		ExtractUnusedColumnBindings(op.children[0]->GetColumnBindings(), unused_bindings);
 
 		// now recurse into the filter and its children
-		StandardVisitOperator(op);
+		LogicalOperatorVisitor::VisitOperatorChildren(op);
 
 		// then generate the projection map
 		GenerateProjectionMap(op.children[0]->GetColumnBindings(), unused_bindings, filter.projection_map);

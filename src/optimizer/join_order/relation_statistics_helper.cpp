@@ -59,10 +59,10 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 	auto cardinality_after_filters = base_table_cardinality;
 	unique_ptr<BaseStatistics> column_statistics;
 
-	auto catlog_table = get.GetTable();
+	auto catalog_table = get.GetTable();
 	auto name = string("some table");
-	if (catlog_table) {
-		name = catlog_table->name;
+	if (catalog_table) {
+		name = catalog_table->name;
 		return_stats.table_name = name;
 	}
 
