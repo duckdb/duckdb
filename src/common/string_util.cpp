@@ -204,7 +204,7 @@ string StringUtil::Upper(const string &str) {
 string StringUtil::Lower(const string &str) {
 	string copy(str);
 	transform(copy.begin(), copy.end(), copy.begin(),
-	          [](unsigned char c) { return StringUtil::CharacterToLower(UnsafeNumericCast<char>(c)); });
+	          [](unsigned char c) { return StringUtil::CharacterToLower(static_cast<char>(c)); });
 	return (copy);
 }
 
@@ -216,7 +216,7 @@ bool StringUtil::IsLower(const string &str) {
 uint64_t StringUtil::CIHash(const string &str) {
 	uint32_t hash = 0;
 	for (auto c : str) {
-		hash += UnsafeNumericCast<uint32_t>(StringUtil::CharacterToLower(UnsafeNumericCast<char>(c)));
+		hash += static_cast<uint32_t>(StringUtil::CharacterToLower(static_cast<char>(c)));
 		hash += hash << 10;
 		hash ^= hash >> 6;
 	}

@@ -11,8 +11,7 @@ struct SetSelectionVectorSelect {
 	                               ValidityMask &input_validity, Vector &selection_entry, idx_t child_idx,
 	                               idx_t &target_offset, idx_t selection_offset, idx_t input_offset,
 	                               idx_t target_length) {
-		auto sel_idx =
-		    UnsafeNumericCast<idx_t>(selection_entry.GetValue(selection_offset + child_idx).GetValue<int64_t>() - 1);
+		auto sel_idx = selection_entry.GetValue(selection_offset + child_idx).GetValue<int64_t>() - 1;
 		if (sel_idx < target_length) {
 			selection_vector.set_index(target_offset, input_offset + sel_idx);
 			if (!input_validity.RowIsValid(input_offset + sel_idx)) {

@@ -117,7 +117,7 @@ struct CDecimalConverter : public CBaseConverter {
 	template <class SRC, class DST>
 	static DST Convert(SRC input) {
 		duckdb_hugeint result;
-		result.lower = NumericCast<uint64_t>(input);
+		result.lower = static_cast<uint64_t>(input);
 		result.upper = 0;
 		return result;
 	}

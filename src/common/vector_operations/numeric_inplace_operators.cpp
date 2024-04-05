@@ -30,7 +30,7 @@ void VectorOperations::AddInPlace(Vector &input, int64_t right, idx_t count) {
 		D_ASSERT(input.GetVectorType() == VectorType::FLAT_VECTOR);
 		auto data = FlatVector::GetData<uintptr_t>(input);
 		for (idx_t i = 0; i < count; i++) {
-			data[i] += UnsafeNumericCast<uintptr_t>(right);
+			data[i] = UnsafeNumericCast<uintptr_t>(UnsafeNumericCast<int64_t>(data[i]) + right);
 		}
 		break;
 	}

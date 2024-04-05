@@ -325,7 +325,7 @@ idx_t IEJoinUnion::AppendKey(SortedTable &table, ExpressionExecutor &executor, S
 		payload.data[0].Sequence(rid, increment, scan_count);
 		payload.SetCardinality(scan_count);
 		keys.Fuse(payload);
-		rid += UnsafeNumericCast<idx_t>(increment) * scan_count;
+		rid += increment * UnsafeNumericCast<int64_t>(scan_count);
 
 		// Sort on the sort columns (which will no longer be needed)
 		keys.Split(payload, payload_idx);

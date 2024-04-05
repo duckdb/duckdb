@@ -1647,7 +1647,7 @@ struct HugeIntegerCastOperation {
 	template <class T, bool NEGATIVE>
 	static bool HandleDigit(T &state, uint8_t digit) {
 		if (NEGATIVE) {
-			if (DUCKDB_UNLIKELY(UnsafeNumericCast<int64_t>(state.intermediate) <
+			if (DUCKDB_UNLIKELY(static_cast<int64_t>(state.intermediate) <
 			                    (NumericLimits<int64_t>::Minimum() + digit) / 10)) {
 				// intermediate is full: need to flush it
 				if (!state.Flush()) {
@@ -1702,7 +1702,7 @@ struct HugeIntegerCastOperation {
 				remainder = negate_result;
 			}
 			state.decimal = remainder;
-			state.decimal_total_digits = UnsafeNumericCast<uint16_t>(-e);
+			state.decimal_total_digits = static_cast<uint16_t>(-e);
 			state.decimal_intermediate = 0;
 			state.decimal_intermediate_digits = 0;
 			return Finalize<T, NEGATIVE>(state);

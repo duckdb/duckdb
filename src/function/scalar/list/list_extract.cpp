@@ -62,13 +62,13 @@ void ListExtractTemplate(idx_t count, UnifiedVectorFormat &list_data, UnifiedVec
 				result_mask.SetInvalid(i);
 				continue;
 			}
-			child_offset = list_entry.offset + list_entry.length + UnsafeNumericCast<uint64_t>(offsets_entry);
+			child_offset = list_entry.offset + list_entry.length + offsets_entry;
 		} else {
 			if ((idx_t)offsets_entry >= list_entry.length) {
 				result_mask.SetInvalid(i);
 				continue;
 			}
-			child_offset = list_entry.offset + UnsafeNumericCast<uint64_t>(offsets_entry);
+			child_offset = list_entry.offset + offsets_entry;
 		}
 		auto child_index = child_format.sel->get_index(child_offset);
 		if (child_format.validity.RowIsValid(child_index)) {

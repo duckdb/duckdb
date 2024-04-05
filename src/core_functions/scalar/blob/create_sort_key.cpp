@@ -519,8 +519,8 @@ void ConstructSortKeyList(SortKeyVectorData &vector_data, SortKeyChunk chunk, So
 		}
 
 		// write the end-of-list delimiter
-		result_ptr[offset++] = UnsafeNumericCast<data_t>(info.flip_bytes ? ~SortKeyVectorData::LIST_DELIMITER
-		                                                                 : SortKeyVectorData::LIST_DELIMITER);
+		result_ptr[offset++] = static_cast<data_t>(info.flip_bytes ? ~SortKeyVectorData::LIST_DELIMITER
+		                                                           : SortKeyVectorData::LIST_DELIMITER);
 	}
 }
 

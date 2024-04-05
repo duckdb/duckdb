@@ -90,8 +90,7 @@ struct HexIntegralOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
 
-		auto num_leading_zero =
-		    UnsafeNumericCast<idx_t>(CountZeros<uint64_t>::Leading(UnsafeNumericCast<uint64_t>(input)));
+		idx_t num_leading_zero = CountZeros<uint64_t>::Leading(input);
 		idx_t num_bits_to_check = 64 - num_leading_zero;
 		D_ASSERT(num_bits_to_check <= sizeof(INPUT_TYPE) * 8);
 
@@ -110,7 +109,7 @@ struct HexIntegralOperator {
 		auto target = StringVector::EmptyString(result, buffer_size);
 		auto output = target.GetDataWriteable();
 
-		WriteHexBytes(UnsafeNumericCast<uint64_t>(input), output, buffer_size);
+		WriteHexBytes(input, output, buffer_size);
 
 		target.Finalize();
 		return target;
@@ -121,7 +120,7 @@ struct HexHugeIntOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
 
-		auto num_leading_zero = UnsafeNumericCast<idx_t>(CountZeros<hugeint_t>::Leading(input));
+		idx_t num_leading_zero = CountZeros<hugeint_t>::Leading(input);
 		idx_t buffer_size = sizeof(INPUT_TYPE) * 2 - (num_leading_zero / 4);
 
 		// Special case: All bits are zero
@@ -148,7 +147,7 @@ struct HexUhugeIntOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
 
-		auto num_leading_zero = UnsafeNumericCast<idx_t>(CountZeros<uhugeint_t>::Leading(input));
+		idx_t num_leading_zero = CountZeros<uhugeint_t>::Leading(input);
 		idx_t buffer_size = sizeof(INPUT_TYPE) * 2 - (num_leading_zero / 4);
 
 		// Special case: All bits are zero
@@ -190,7 +189,7 @@ struct BinaryStrOperator {
 		auto output = target.GetDataWriteable();
 
 		for (idx_t i = 0; i < size; ++i) {
-			auto byte = UnsafeNumericCast<uint8_t>(data[i]);
+			uint8_t byte = data[i];
 			for (idx_t i = 8; i >= 1; --i) {
 				*output = ((byte >> (i - 1)) & 0x01) + '0';
 				output++;
@@ -206,8 +205,7 @@ struct BinaryIntegralOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
 
-		auto num_leading_zero =
-		    UnsafeNumericCast<idx_t>(CountZeros<uint64_t>::Leading(UnsafeNumericCast<uint64_t>(input)));
+		idx_t num_leading_zero = CountZeros<uint64_t>::Leading(input);
 		idx_t num_bits_to_check = 64 - num_leading_zero;
 		D_ASSERT(num_bits_to_check <= sizeof(INPUT_TYPE) * 8);
 
@@ -226,7 +224,7 @@ struct BinaryIntegralOperator {
 		auto target = StringVector::EmptyString(result, buffer_size);
 		auto output = target.GetDataWriteable();
 
-		WriteBinBytes(UnsafeNumericCast<uint64_t>(input), output, buffer_size);
+		WriteBinBytes(input, output, buffer_size);
 
 		target.Finalize();
 		return target;
@@ -236,7 +234,7 @@ struct BinaryIntegralOperator {
 struct BinaryHugeIntOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
-		auto num_leading_zero = UnsafeNumericCast<idx_t>(CountZeros<hugeint_t>::Leading(input));
+		idx_t num_leading_zero = CountZeros<hugeint_t>::Leading(input);
 		idx_t buffer_size = sizeof(INPUT_TYPE) * 8 - num_leading_zero;
 
 		// Special case: All bits are zero
@@ -261,7 +259,7 @@ struct BinaryHugeIntOperator {
 struct BinaryUhugeIntOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
-		auto num_leading_zero = UnsafeNumericCast<idx_t>(CountZeros<uhugeint_t>::Leading(input));
+		idx_t num_leading_zero = CountZeros<uhugeint_t>::Leading(input);
 		idx_t buffer_size = sizeof(INPUT_TYPE) * 8 - num_leading_zero;
 
 		// Special case: All bits are zero
@@ -303,7 +301,7 @@ struct FromHexOperator {
 		// Treated as a single byte
 		idx_t i = 0;
 		if (size % 2 != 0) {
-			*output = UnsafeNumericCast<char>(StringUtil::GetHexValue(data[i]));
+			*output = StringUtil::GetHexValue(data[i]);
 			i++;
 			output++;
 		}
@@ -311,7 +309,7 @@ struct FromHexOperator {
 		for (; i < size; i += 2) {
 			uint8_t major = StringUtil::GetHexValue(data[i]);
 			uint8_t minor = StringUtil::GetHexValue(data[i + 1]);
-			*output = UnsafeNumericCast<char>((major << 4) | minor);
+			*output = UnsafeNumericCast<uint8_t>((major << 4) | minor);
 			output++;
 		}
 
@@ -345,7 +343,7 @@ struct FromBinaryOperator {
 				byte |= StringUtil::GetBinaryValue(data[i]) << (j - 1);
 				i++;
 			}
-			*output = UnsafeNumericCast<char>(byte);
+			*output = byte;
 			output++;
 		}
 
@@ -355,8 +353,7 @@ struct FromBinaryOperator {
 				byte |= StringUtil::GetBinaryValue(data[i]) << (j - 1);
 				i++;
 			}
-			*output = UnsafeNumericCast<char>(byte);
-			;
+			*output = byte;
 			output++;
 		}
 

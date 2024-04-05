@@ -23,8 +23,8 @@ BufferPoolReservation::~BufferPoolReservation() {
 }
 
 void BufferPoolReservation::Resize(idx_t new_size) {
-	int64_t delta = NumericCast<int64_t>(new_size) - NumericCast<int64_t>(size);
-	pool.IncreaseUsedMemory(tag, NumericCast<idx_t>(delta));
+	int64_t delta = (int64_t)new_size - size;
+	pool.IncreaseUsedMemory(tag, delta);
 	size = new_size;
 }
 

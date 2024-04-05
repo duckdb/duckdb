@@ -830,14 +830,14 @@ hugeint_t hugeint_t::operator>>(const hugeint_t &rhs) const {
 		return *this;
 	} else if (shift == 64) {
 		result.upper = (upper < 0) ? -1 : 0;
-		result.lower = UnsafeNumericCast<uint64_t>(upper);
+		result.lower = uint64_t(upper);
 	} else if (shift < 64) {
 		// perform lower shift in unsigned integer, and mask away the most significant bit
 		result.lower = (uint64_t(upper) << (64 - shift)) | (lower >> shift);
 		result.upper = upper >> shift;
 	} else {
 		D_ASSERT(shift < 128);
-		result.lower = UnsafeNumericCast<uint64_t>(upper >> (shift - 64));
+		result.lower = uint64_t(upper >> (shift - 64));
 		result.upper = (upper < 0) ? -1 : 0;
 	}
 	return result;
@@ -852,7 +852,7 @@ hugeint_t hugeint_t::operator<<(const hugeint_t &rhs) const {
 	if (rhs.upper != 0 || shift >= 128) {
 		return hugeint_t(0);
 	} else if (shift == 64) {
-		result.upper = UnsafeNumericCast<int64_t>(lower);
+		result.upper = int64_t(lower);
 		result.lower = 0;
 	} else if (shift == 0) {
 		return *this;
@@ -860,7 +860,7 @@ hugeint_t hugeint_t::operator<<(const hugeint_t &rhs) const {
 		// perform upper shift in unsigned integer, and mask away the most significant bit
 		uint64_t upper_shift = ((uint64_t(upper) << shift) + (lower >> (64 - shift))) & 0x7FFFFFFFFFFFFFFF;
 		result.lower = lower << shift;
-		result.upper = UnsafeNumericCast<int64_t>(upper_shift);
+		result.upper = int64_t(upper_shift);
 	} else {
 		D_ASSERT(shift < 128);
 		result.lower = 0;

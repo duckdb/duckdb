@@ -95,8 +95,8 @@ void RowOperations::CombineStates(RowOperationsState &state, TupleDataLayout &la
 	}
 
 	// Now subtract the offset to get back to the original position
-	VectorOperations::AddInPlace(sources, UnsafeNumericCast<int64_t>(-offset), count);
-	VectorOperations::AddInPlace(targets, UnsafeNumericCast<int64_t>(-offset), count);
+	VectorOperations::AddInPlace(sources, -UnsafeNumericCast<int64_t>(offset), count);
+	VectorOperations::AddInPlace(targets, -UnsafeNumericCast<int64_t>(offset), count);
 }
 
 void RowOperations::FinalizeStates(RowOperationsState &state, TupleDataLayout &layout, Vector &addresses,
