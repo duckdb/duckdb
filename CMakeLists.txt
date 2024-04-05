@@ -822,7 +822,7 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY EXTENSION_VERS
     COMMAND
     printf "${DUCKDB_NORMALIZED_VERSION}" > duckdb_version_file
     COMMAND
-    printf "${EXTENSION_VERSION}" > extension_version_file
+    printf "${EXTENSION_VERSION}" > extension_version_file || (echo "CMake appears not to propagate correctly version information for the extension" && exit 1)
     COMMAND
     bash ${CMAKE_SOURCE_DIR}/scripts/append_metadata.sh $<TARGET_FILE:${TARGET_NAME}> ${CMAKE_BINARY_DIR}/duckdb_platform_out duckdb_version_file extension_version_file
     )
