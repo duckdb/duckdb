@@ -11,10 +11,10 @@ statement ok
 from read_csv('test/sql/copy/csv/data/test/invalid_utf_big.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'},
  auto_detect=false, header = 0, delim = ',', store_rejects=true)
 
-query IIIIIIIIII rowsort
-FROM reject_errors ORDER BY ALL;
+query IIIIIIIII rowsort
+SELECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
 ----
-3	0	3001	54001	54007	2	col2	INVALID UNICODE	valid,invalid_??_part,valid	Invalid unicode (byte sequence mismatch) detected.
-3	0	3012	54209	54221	3	col3	INVALID UNICODE	valid,valid,invalid_??_part	Invalid unicode (byte sequence mismatch) detected.
-3	0	3023	54417	54423	2	col2	INVALID UNICODE	valid,invalid_??_part,valid	Invalid unicode (byte sequence mismatch) detected.
-3	0	3034	54625	54637	3	col3	INVALID UNICODE	valid,valid,invalid_??_part	Invalid unicode (byte sequence mismatch) detected.
+0	3001	54001	54007	2	col2	INVALID UNICODE	valid,invalid_??_part,valid	Invalid unicode (byte sequence mismatch) detected.
+0	3012	54209	54221	3	col3	INVALID UNICODE	valid,valid,invalid_??_part	Invalid unicode (byte sequence mismatch) detected.
+0	3023	54417	54423	2	col2	INVALID UNICODE	valid,invalid_??_part,valid	Invalid unicode (byte sequence mismatch) detected.
+0	3034	54625	54637	3	col3	INVALID UNICODE	valid,valid,invalid_??_part	Invalid unicode (byte sequence mismatch) detected.

@@ -15,10 +15,10 @@ SELECT * FROM read_csv(
 1	2	AAA
 6	7	CCC
 
-query IIIIIIIIII
-FROM reject_errors;
+query IIIIIIIII
+SELECT * EXCLUDE (scan_id) FROM reject_errors;
 ----
-3	0	2	10	12	2	col1	CAST	4,BBB,9,	Error when converting column "col1". Could not convert string "BBB" to 'INTEGER'
+0	2	10	12	2	col1	CAST	4,BBB,9,	Error when converting column "col1". Could not convert string "BBB" to 'INTEGER'
 
 statement ok
 DROP TABLE reject_errors;
@@ -35,12 +35,12 @@ SELECT * FROM read_csv(
 ----
 4	5	9
 
-query IIIIIIIIII
-FROM reject_errors ORDER BY ALL;
+query IIIIIIIII
+SELECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
 ----
-7	0	1	1	5	3	col2	CAST	1,2,DDD,	Error when converting column "col2". Could not convert string "DDD" to 'INTEGER'
-7	0	3	17	17	1	col0	CAST	EEE,7,FFF,	Error when converting column "col0". Could not convert string "EEE" to 'INTEGER'
-7	0	3	17	23	3	col2	CAST	EEE,7,FFF,	Error when converting column "col2". Could not convert string "FFF" to 'INTEGER'
+0	1	1	5	3	col2	CAST	1,2,DDD,	Error when converting column "col2". Could not convert string "DDD" to 'INTEGER'
+0	3	17	17	1	col0	CAST	EEE,7,FFF,	Error when converting column "col0". Could not convert string "EEE" to 'INTEGER'
+0	3	17	23	3	col2	CAST	EEE,7,FFF,	Error when converting column "col2". Could not convert string "FFF" to 'INTEGER'
 
 statement ok
 DROP TABLE reject_errors;
@@ -60,11 +60,11 @@ SELECT * FROM read_csv(
 4	5	9
 6	7	CCC
 
-query IIIIIIIIII
-FROM reject_errors ORDER BY ALL;
+query IIIIIIIII
+SELECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
 ----
-11	0	2	10	12	2	col1	CAST	4,BBB,9,	Error when converting column "col1". Could not convert string "BBB" to 'INTEGER'
-11	1	3	17	17	1	col0	CAST	EEE,7,FFF,	Error when converting column "col0". Could not convert string "EEE" to 'INTEGER'
+0	2	10	12	2	col1	CAST	4,BBB,9,	Error when converting column "col1". Could not convert string "BBB" to 'INTEGER'
+1	3	17	17	1	col0	CAST	EEE,7,FFF,	Error when converting column "col0". Could not convert string "EEE" to 'INTEGER'
 
 statement ok
 DROP TABLE reject_errors;
@@ -106,11 +106,11 @@ SELECT SUM(num) FROM read_csv(
 ----
 4270
 
-query IIIIIIIIII
-FROM reject_errors ORDER BY ALL;
+query IIIIIIIII
+SELECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
 ----
-19	0	2176	10876	10876	1	num	CAST	B, A	Error when converting column "num". Could not convert string "B" to 'INTEGER'
-19	0	4176	20876	20876	1	num	CAST	C, A	Error when converting column "num". Could not convert string "C" to 'INTEGER'
+0	2176	10876	10876	1	num	CAST	B, A	Error when converting column "num". Could not convert string "B" to 'INTEGER'
+0	4176	20876	20876	1	num	CAST	C, A	Error when converting column "num". Could not convert string "C" to 'INTEGER'
 
 statement ok
 DROP TABLE reject_errors;
@@ -126,11 +126,11 @@ SELECT SUM(num) FROM read_csv(
 ----
 6774
 
-query IIIIIIIIII
-FROM reject_errors ORDER BY ALL;
+query IIIIIIIII
+SELECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
 ----
-23	0	3680	18396	18396	1	num	CAST	B, A	Error when converting column "num". Could not convert string "B" to 'INTEGER'
-23	0	5680	28396	28396	1	num	CAST	C, A	Error when converting column "num". Could not convert string "C" to 'INTEGER'
+0	3680	18396	18396	1	num	CAST	B, A	Error when converting column "num". Could not convert string "B" to 'INTEGER'
+0	5680	28396	28396	1	num	CAST	C, A	Error when converting column "num". Could not convert string "C" to 'INTEGER'
 
 
 statement ok
@@ -148,13 +148,13 @@ SELECT SUM(num) FROM read_csv(
 ----
 11044
 
-query IIIIIIIIII
-FROM reject_errors ORDER BY ALL;
+query IIIIIIIII
+SELECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
 ----
-27	0	2176	10876	10876	1	num	CAST	B, A	Error when converting column "num". Could not convert string "B" to 'INTEGER'
-27	0	4176	20876	20876	1	num	CAST	C, A	Error when converting column "num". Could not convert string "C" to 'INTEGER'
-27	1	3680	18396	18396	1	num	CAST	B, A	Error when converting column "num". Could not convert string "B" to 'INTEGER'
-27	1	5680	28396	28396	1	num	CAST	C, A	Error when converting column "num". Could not convert string "C" to 'INTEGER'
+0	2176	10876	10876	1	num	CAST	B, A	Error when converting column "num". Could not convert string "B" to 'INTEGER'
+0	4176	20876	20876	1	num	CAST	C, A	Error when converting column "num". Could not convert string "C" to 'INTEGER'
+1	3680	18396	18396	1	num	CAST	B, A	Error when converting column "num". Could not convert string "B" to 'INTEGER'
+1	5680	28396	28396	1	num	CAST	C, A	Error when converting column "num". Could not convert string "C" to 'INTEGER'
 
 statement ok
 DROP TABLE reject_errors;
@@ -178,20 +178,20 @@ ON L.num = R.num;
 1	A	1	A
 3	C	3	C
 
-query IIIIIIIIIIIII
-FROM reject_scans ORDER BY ALL;
+query IIIIIIIIIIII
+SELECT * EXCLUDE (scan_id) FROM reject_scans ORDER BY ALL;
 ----
-31	0	test/sql/copy/csv/data/error/mismatch/small1.csv	,	"	"	\n	0	true	{'num': 'INTEGER','str': 'VARCHAR'}	NULL	NULL	store_rejects=true
-31	1	test/sql/copy/csv/data/error/mismatch/small2.csv	,	"	"	\n	0	true	{'num': 'INTEGER','str': 'VARCHAR'}	NULL	NULL	store_rejects=true
+0	test/sql/copy/csv/data/error/mismatch/small1.csv	,	"	"	\n	0	true	{'num': 'INTEGER','str': 'VARCHAR'}	NULL	NULL	store_rejects=true
+1	test/sql/copy/csv/data/error/mismatch/small2.csv	,	"	"	\n	0	true	{'num': 'INTEGER','str': 'VARCHAR'}	NULL	NULL	store_rejects=true
 
 
-query IIIIIIIIII
-FROM reject_errors ORDER BY ALL;
+query IIIIIIIII
+SELECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
 ----
-31	0	3	15	15	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
-31	0	6	27	27	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
-31	1	3	15	15	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
-31	1	5	23	23	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
+0	3	15	15	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
+0	6	27	27	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
+1	3	15	15	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
+1	5	23	23	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
 
 statement ok
 DROP TABLE reject_errors;
@@ -217,12 +217,12 @@ ON L.num = R.num;
 3	C	3	C
 
 
-query IIIIIIIIII
-FROM reject_errors ORDER BY ALL;
+query IIIIIIIII
+SELECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
 ----
-36	0	3	15	15	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
-36	0	6	27	27	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
-36	1	3	15	15	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
+0	3	15	15	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
+0	6	27	27	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
+1	3	15	15	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
 
 
 statement ok
