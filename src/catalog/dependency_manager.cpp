@@ -417,7 +417,6 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 			case AlterTableType::FOREIGN_KEY_CONSTRAINT: {
 				// These alters are made as part of a CREATE or DROP table statement when a foreign key column is
 				// present either adding or removing a reference to the referenced primary key table
-				auto &alter_fk = alter_table.Cast<AlterForeignKeyInfo>();
 				disallow_alter = false;
 				break;
 			}
