@@ -134,7 +134,8 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "external_threads", // tested in test_threads.cpp
 	    "profiling_output", // just an alias
 	    "duckdb_api",
-	    "custom_user_agent"};
+	    "custom_user_agent",
+	    "default_block_size"};
 	return excluded_options.count(name) == 1;
 }
 
