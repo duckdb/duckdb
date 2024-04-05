@@ -58,28 +58,45 @@ void BenchmarkRunner::InitializeBenchmarkDirectory() {
 atomic<bool> is_active;
 atomic<bool> timeout;
 
-void sleep_thread(Benchmark *benchmark, BenchmarkState *state, int timeout_duration) {
-	// timeout is given in seconds
-	// we wait 10ms per iteration, so timeout * 100 gives us the amount of
-	// iterations
+void sleep_thread(Benchmark *benchmark, BenchmarkRunner *runner, BenchmarkState *state, bool hotrun,
+                  int timeout_duration) {
 	if (timeout_duration < 0) {
 		return;
 	}
+	// timeout is given in seconds
+	// we wait 10ms per iteration, so timeout * 100 gives us the amount of
+	// iterations
 	for (size_t i = 0; i < (size_t)(timeout_duration * 100) && is_active; i++) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 	}
 	if (is_active) {
 		timeout = true;
 		benchmark->Interrupt(state);
+
+		// wait again after interrupting
+		for (size_t i = 0; i < (size_t)(timeout_duration * 100) && is_active; i++) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+		}
+		if (is_active) {
+			// still active - we might be stuck in an infinite loop
+			// our interrupt is not working
+			if (!hotrun) {
+				runner->Log(StringUtil::Format("%s\t%d\t", benchmark->name, 0));
+			}
+			runner->LogResult("KILLED");
+			exit(1);
+		}
 	}
 }
 
 void BenchmarkRunner::Log(string message) {
 	fprintf(stderr, "%s", message.c_str());
+	fflush(stderr);
 }
 
 void BenchmarkRunner::LogLine(string message) {
 	fprintf(stderr, "%s\n", message.c_str());
+	fflush(stderr);
 }
 
 void BenchmarkRunner::LogResult(string message) {
@@ -113,7 +130,7 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 		}
 		is_active = true;
 		timeout = false;
-		std::thread interrupt_thread(sleep_thread, benchmark, state.get(), benchmark->Timeout());
+		std::thread interrupt_thread(sleep_thread, benchmark, this, state.get(), hotrun, benchmark->Timeout());
 
 		profiler.Start();
 		benchmark->Run(state.get());

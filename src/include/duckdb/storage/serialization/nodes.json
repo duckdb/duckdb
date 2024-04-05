@@ -110,6 +110,33 @@
     "constructor": ["type", "null_order", "expression"]
   },
   {
+    "class": "BoundLimitNode",
+    "members": [
+      {
+        "id": 100,
+        "name": "type",
+        "type": "LimitNodeType"
+      },
+      {
+        "id": 101,
+        "name": "constant_integer",
+        "type": "idx_t"
+      },
+      {
+        "id": 102,
+        "name": "constant_percentage",
+        "type": "double"
+      },
+      {
+        "id": 103,
+        "name": "expression",
+        "type": "Expression*"
+      }
+    ],
+    "pointer_type": "none",
+    "constructor": ["type", "constant_integer", "constant_percentage", "expression"]
+  },
+  {
     "class": "CaseCheck",
     "includes": [
       "duckdb/parser/expression/case_expression.hpp"
@@ -216,7 +243,8 @@
       {
         "id": 101,
         "name": "star_expr",
-        "type": "ParsedExpression*"
+        "type": "ParsedExpression*",
+        "property": "expr"
       },
       {
         "id": 102,
@@ -442,6 +470,12 @@
         "id": 105,
         "name": "hive_types_schema",
         "type": "case_insensitive_map_t<LogicalType>"
+      },
+      {
+        "id": 106,
+        "name": "filename_column",
+        "type": "string",
+        "default": "MultiFileReaderOptions::DEFAULT_FILENAME_COLUMN"
       }
     ],
     "pointer_type": "none"
@@ -485,7 +519,7 @@
   {
     "class": "CSVOption<T>",
     "includes": [
-      "duckdb/execution/operator/csv_scanner/options/csv_option.hpp"
+      "duckdb/execution/operator/csv_scanner/csv_option.hpp"
     ],
     "members": [
       {
@@ -504,7 +538,7 @@
   {
     "class": "CSVReaderOptions",
     "includes": [
-      "duckdb/execution/operator/csv_scanner/options/csv_reader_options.hpp"
+      "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
     ],
     "members": [
       {"id": 100,
@@ -630,6 +664,10 @@
       {"id": 130,
         "name": "parallel",
         "type": "bool"
+      },
+      {"id": 131,
+        "name": "was_type_manually_set",
+        "type": "vector<bool>"
       }
     ],
     "pointer_type": "none"

@@ -18,12 +18,12 @@ CREATE TABLE df2 AS
     UNNEST(['K0', 'K2', 'K5']) AS key,
     UNNEST([2, 3, 5]) AS C
 
-query II
+query II rowsort
 select sin(columns(df1.* exclude (key))) from df1 join df2 using(key)
 ----
+-0.2879033166650653	0.7625584504796027
 -0.9999902065507035	0.836655638536056
 0.4201670368266409	-0.8462204041751706
--0.2879033166650653	0.7625584504796027
 
 statement error
 select sin(columns(dfxx.* exclude (key))) from df1 join df2 using(key)

@@ -1,0 +1,69 @@
+# name: benchmark/tpch/aggregate/lineitem_distinct_on_few_groups.benchmark
+# description: DISTINCT ON over Lineitem
+# group: [aggregate]
+
+name Lineitem Distinct On (Few Groups)
+group aggregate
+subgroup tpch
+
+require tpch
+
+cache tpch_sf1.duckdb
+
+load
+CALL dbgen(sf=1);
+
+run
+SELECT DISTINCT ON (l_quantity) l_quantity, l_extendedprice FROM lineitem ORDER BY l_quantity, l_extendedprice DESC;
+
+result II
+1	2097.99
+2	4193.98
+3	6293.97
+4	8395.96
+5	10489.95
+6	12587.94
+7	14685.93
+8	16791.92
+9	18890.91
+10	20989.9
+11	23055.89
+12	25175.88
+13	27260.87
+14	29357.86
+15	31469.85
+16	33567.84
+17	35682.83
+18	37781.82
+19	39880.81
+20	41979.8
+21	44078.79
+22	46155.78
+23	48253.77
+24	50351.76
+25	52449.75
+26	54573.74
+27	56672.73
+28	58743.72
+29	60870.71
+30	62909.7
+31	65006.69
+32	67135.68
+33	69266.67
+34	71365.66
+35	73429.65
+36	75563.64
+37	77662.63
+38	79761.62
+39	81821.61
+40	83879.6
+41	85976.59
+42	88157.58
+43	90213.57
+44	92223.56
+45	94454.55
+46	96553.54
+47	98652.53
+48	100703.52
+49	102801.51
+50	104949.5

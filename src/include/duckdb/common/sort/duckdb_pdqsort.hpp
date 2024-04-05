@@ -46,6 +46,8 @@ using duckdb::make_unsafe_uniq_array;
 using duckdb::FastMemcpy;
 using duckdb::FastMemcmp;
 
+// NOLINTBEGIN
+
 enum {
 	// Partitions below this size are sorted using insertion sort.
 	insertion_sort_threshold = 24,
@@ -401,7 +403,7 @@ inline std::pair<PDQIterator, bool> partition_right_branchless(const PDQIterator
 
 			// Fill the offset blocks.
 			if (left_split >= block_size) {
-				for (size_t i = 0; i < block_size;) {
+				for (unsigned char i = 0; i < block_size;) {
 					offsets_l[num_l] = i++;
 					num_l += !comp(*first, pivot, constants);
 					++first;
@@ -428,7 +430,7 @@ inline std::pair<PDQIterator, bool> partition_right_branchless(const PDQIterator
 					++first;
 				}
 			} else {
-				for (size_t i = 0; i < left_split;) {
+				for (unsigned char i = 0; i < left_split;) {
 					offsets_l[num_l] = i++;
 					num_l += !comp(*first, pivot, constants);
 					++first;
@@ -436,7 +438,7 @@ inline std::pair<PDQIterator, bool> partition_right_branchless(const PDQIterator
 			}
 
 			if (right_split >= block_size) {
-				for (size_t i = 0; i < block_size;) {
+				for (unsigned char i = 0; i < block_size;) {
 					offsets_r[num_r] = ++i;
 					num_r += comp(*--last, pivot, constants);
 					offsets_r[num_r] = ++i;
@@ -455,7 +457,7 @@ inline std::pair<PDQIterator, bool> partition_right_branchless(const PDQIterator
 					num_r += comp(*--last, pivot, constants);
 				}
 			} else {
-				for (size_t i = 0; i < right_split;) {
+				for (unsigned char i = 0; i < right_split;) {
 					offsets_r[num_r] = ++i;
 					num_r += comp(*--last, pivot, constants);
 				}
@@ -704,5 +706,6 @@ inline void pdqsort_branchless(const PDQIterator &begin, const PDQIterator &end,
 	}
 	pdqsort_loop<true>(begin, end, constants, log2(end - begin));
 }
+// NOLINTEND
 
 } // namespace duckdb_pdqsort

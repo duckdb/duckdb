@@ -140,11 +140,9 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 	bool has_parameters = next_param_count > current_param_count;
 
 	auto select_node = make_uniq<SelectNode>();
-	vector<unique_ptr<CTENode>> materialized_ctes;
 	// handle the CTEs
 	if (select.withClause) {
-		TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(select.withClause), select_node->cte_map,
-		             materialized_ctes);
+		TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(select.withClause), select_node->cte_map);
 	}
 	if (!pivot->columns) {
 		// no pivot columns - not actually a pivot
@@ -168,7 +166,8 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 	}
 
 	// generate CREATE TYPE statements for each of the columns that do not have an IN list
-	auto columns = TransformPivotList(*pivot->columns);
+	bool is_pivot = !pivot->unpivots;
+	auto columns = TransformPivotList(*pivot->columns, is_pivot);
 	auto pivot_idx = PivotEntryCount();
 	for (idx_t c = 0; c < columns.size(); c++) {
 		auto &col = columns[c];
@@ -209,13 +208,12 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 		pivot_ref->groups = TransformStringList(pivot->groups);
 	}
 	pivot_ref->pivots = std::move(columns);
+	SetQueryLocation(*pivot_ref, pivot->location);
 	select_node->from_table = std::move(pivot_ref);
 	// transform order by/limit modifiers
 	TransformModifiers(select, *select_node);
 
-	auto node = Transformer::TransformMaterializedCTE(std::move(select_node), materialized_ctes);
-
-	return node;
+	return std::move(select_node);
 }
 
 } // namespace duckdb

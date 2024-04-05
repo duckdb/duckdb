@@ -21,12 +21,11 @@ class ColumnDataCollection;
 class ExecutionContext;
 
 struct LocalFunctionData {
-	virtual ~LocalFunctionData() {
-	}
+	virtual ~LocalFunctionData() = default;
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -37,12 +36,11 @@ struct LocalFunctionData {
 };
 
 struct GlobalFunctionData {
-	virtual ~GlobalFunctionData() {
-	}
+	virtual ~GlobalFunctionData() = default;
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -53,12 +51,11 @@ struct GlobalFunctionData {
 };
 
 struct PreparedBatchData {
-	virtual ~PreparedBatchData() {
-	}
+	virtual ~PreparedBatchData() = default;
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -69,12 +66,12 @@ struct PreparedBatchData {
 };
 
 struct CopyFunctionBindInput {
+	explicit CopyFunctionBindInput(const CopyInfo &info_p) : info(info_p) {
+	}
+
 	const CopyInfo &info;
 
 	string file_extension;
-
-	CopyFunctionBindInput(const CopyInfo &info_p) : info(info_p) {
-	}
 };
 
 enum class CopyFunctionExecutionMode { REGULAR_COPY_TO_FILE, PARALLEL_COPY_TO_FILE, BATCH_COPY_TO_FILE };
@@ -114,7 +111,7 @@ enum class CopyTypeSupport { SUPPORTED, LOSSY, UNSUPPORTED };
 
 typedef CopyTypeSupport (*copy_supports_type_t)(const LogicalType &type);
 
-class CopyFunction : public Function {
+class CopyFunction : public Function { // NOLINT: work-around bug in clang-tidy
 public:
 	explicit CopyFunction(const string &name)
 	    : Function(name), plan(nullptr), copy_to_bind(nullptr), copy_to_initialize_local(nullptr),

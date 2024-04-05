@@ -1,0 +1,64 @@
+# name: test/sql/storage/test_repeated_checkpoint.test_slow
+# description: Test repeated load and checkpoint of storage
+# group: [storage]
+
+load __TEST_DIR__/repeated_load.db
+
+loop i 0 100
+
+statement ok
+COPY (
+SELECT
+	${i} * 1000 + i AS record_id,
+	i % 99 AS price,
+	CASE WHEN i + ${i} % 2 = 0 THEN 'www.goodshop.com' ELSE 'www.badshop.com' END AS shop,
+	'electronics' AS category,
+	CONCAT('Electronics  Something  ',
+		CASE (i + ${i} % 10) WHEN 0 THEN 'One'
+		                     WHEN 1 THEN 'Two'
+		                     WHEN 2 THEN 'Three'
+		                     WHEN 3 THEN 'Four'
+		                     WHEN 4 THEN 'Five'
+		                     WHEN 5 THEN 'Six'
+		                     WHEN 6 THEN 'Seven'
+		                     WHEN 7 THEN 'Eight'
+		                     WHEN 8 THEN 'Nine'
+		                     ELSE 'Ten' END) AS name,
+	CASE (i + ${i} % 5) WHEN 0 THEN 'AAAAA'
+						WHEN 1 THEN 'BBBBB'
+						WHEN 2 THEN 'CCCC'
+						WHEN 3 THEN 'DDDDDD'
+						ELSE 'PPPP' END AS brand,
+	CASE (i + ${i} % 7) WHEN 0 THEN 'violet'
+						WHEN 1 THEN 'indigo'
+						WHEN 2 THEN 'blue'
+						WHEN 3 THEN 'green'
+						WHEN 4 THEN 'yellow'
+						WHEN 5 THEN 'orange'
+						ELSE 'red' END AS color,
+	CASE (i + ${i} % 3) WHEN 0 THEN 'M11'
+						WHEN 1 THEN 'F22'
+						ELSE 'U33' END AS model
+FROM range(1000) t(i)
+)
+TO '__TEST_DIR__/repeated_load.csv' (DELIMITER '|');
+
+statement ok
+CREATE TABLE IF NOT EXISTS pdata (record_id BIGINT PRIMARY KEY , price DOUBLE, shop VARCHAR, category VARCHAR, name VARCHAR, brand VARCHAR, color VARCHAR, model VARCHAR);
+
+statement ok
+COPY pdata(record_id,price,shop,category,name,brand,color,model) FROM '__TEST_DIR__/repeated_load.csv' ( DELIMITER '|' );
+
+query IIIIIIII
+SELECT MIN(record_id), MIN(price), MIN(shop), MIN(category), MIN(name), MIN(brand), MIN(color), MIN(model) FROM pdata
+----
+0	0	www.badshop.com	electronics	Electronics  Something  Eight	AAAAA	blue	F22
+
+query I
+SELECT COUNT(*)=(${i}+1)*1000 FROM pdata
+----
+true
+
+restart
+
+endloop

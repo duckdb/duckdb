@@ -104,7 +104,7 @@ SecretMatch CatalogSetSecretStorage::LookupSecret(const string &path, const stri
 
 	const std::function<void(CatalogEntry &)> callback = [&](CatalogEntry &entry) {
 		auto &cast_entry = entry.Cast<SecretCatalogEntry>();
-		if (cast_entry.secret->secret->GetType() == type) {
+		if (StringUtil::CIEquals(cast_entry.secret->secret->GetType(), type)) {
 			best_match = SelectBestMatch(*cast_entry.secret, path, best_match);
 		}
 	};
@@ -134,13 +134,9 @@ LocalFileSecretStorage::LocalFileSecretStorage(SecretManager &manager, DatabaseI
     : CatalogSetSecretStorage(db_p, name_p), secret_path(secret_path) {
 	persistent = true;
 
+	// Check existence of persistent secret dir
 	LocalFileSystem fs;
-
-	if (!fs.DirectoryExists(secret_path)) {
-		fs.CreateDirectory(secret_path);
-	}
-
-	if (persistent_secrets.empty()) {
+	if (fs.DirectoryExists(secret_path)) {
 		fs.ListFiles(secret_path, [&](const string &fname, bool is_dir) {
 			string full_path = fs.JoinPath(secret_path, fname);
 
@@ -172,13 +168,48 @@ CatalogTransaction CatalogSetSecretStorage::GetTransactionOrDefault(optional_ptr
 
 void LocalFileSecretStorage::WriteSecret(const BaseSecret &secret, OnCreateConflict on_conflict) {
 	LocalFileSystem fs;
+
+	// We may need to create the secret dir here if the directory was not present during LocalFileSecretStorage
+	// construction
+	if (!fs.DirectoryExists(secret_path)) {
+		// TODO: recursive directory creation should probably live in filesystem
+		auto sep = fs.PathSeparator(secret_path);
+		auto splits = StringUtil::Split(secret_path, sep);
+		D_ASSERT(!splits.empty());
+		string extension_directory_prefix;
+		if (StringUtil::StartsWith(secret_path, sep)) {
+			extension_directory_prefix = sep; // this is swallowed by Split otherwise
+		}
+		try {
+			for (auto &split : splits) {
+				extension_directory_prefix = extension_directory_prefix + split + sep;
+				if (!fs.DirectoryExists(extension_directory_prefix)) {
+					fs.CreateDirectory(extension_directory_prefix);
+				}
+			}
+		} catch (std::exception &ex) {
+			ErrorData error(ex);
+			if (error.Type() == ExceptionType::IO) {
+				throw IOException("Failed to initialize persistent storage directory. (original error: '%s')",
+				                  error.RawMessage());
+			}
+			throw;
+		}
+	}
+
 	auto file_path = fs.JoinPath(secret_path, secret.GetName() + ".duckdb_secret");
 
 	if (fs.FileExists(file_path)) {
 		fs.RemoveFile(file_path);
 	}
 
-	auto file_writer = BufferedFileWriter(fs, file_path);
+	auto open_flags = FileFlags::FILE_FLAGS_WRITE;
+	// Ensure we are writing to a private file with 600 permission
+	open_flags |= FileFlags::FILE_FLAGS_PRIVATE;
+	// Ensure we overwrite anything that may have been placed there since our delete above
+	open_flags |= FileFlags::FILE_FLAGS_FILE_CREATE_NEW;
+
+	auto file_writer = BufferedFileWriter(fs, file_path, open_flags);
 
 	auto serializer = BinarySerializer(file_writer);
 	serializer.Begin();
@@ -201,6 +232,7 @@ void LocalFileSecretStorage::RemoveSecret(const string &secret, OnEntryNotFound 
 			                  "instance. (original error: '%s')",
 			                  file, error.RawMessage());
 		}
+		throw;
 	}
 }
 

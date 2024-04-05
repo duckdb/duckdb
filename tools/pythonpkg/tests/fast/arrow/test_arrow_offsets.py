@@ -480,9 +480,9 @@ class TestArrowOffsets(object):
         if col2_null:
             res2 = None
         elif col1_null:
-            res2 = [None, None, None]
+            res2 = (None, None, None)
         else:
-            res2 = ['131072', '131072', '131072']
+            res2 = ('131072', '131072', '131072')
         assert res == [(res1, res2)]
 
     @test_nulls()
@@ -511,9 +511,9 @@ class TestArrowOffsets(object):
         if col2_null:
             res2 = None
         elif col1_null:
-            res2 = [None, None, None]
+            res2 = (None, None, None)
         else:
-            res2 = [b'131072', b'131073', b'131074']
+            res2 = (b'131072', b'131073', b'131074')
         assert res == [(res1, res2)]
 
     @test_nulls()

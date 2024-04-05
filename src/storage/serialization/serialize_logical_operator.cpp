@@ -124,9 +124,6 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_LIMIT:
 		result = LogicalLimit::Deserialize(deserializer);
 		break;
-	case LogicalOperatorType::LOGICAL_LIMIT_PERCENT:
-		result = LogicalLimitPercent::Deserialize(deserializer);
-		break;
 	case LogicalOperatorType::LOGICAL_LOAD:
 		result = LogicalSimple::Deserialize(deserializer);
 		break;
@@ -187,16 +184,16 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 }
 
 void FilenamePattern::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<string>(200, "base", _base);
-	serializer.WritePropertyWithDefault<idx_t>(201, "pos", _pos);
-	serializer.WritePropertyWithDefault<bool>(202, "uuid", _uuid);
+	serializer.WritePropertyWithDefault<string>(200, "base", base);
+	serializer.WritePropertyWithDefault<idx_t>(201, "pos", pos);
+	serializer.WritePropertyWithDefault<bool>(202, "uuid", uuid);
 }
 
 FilenamePattern FilenamePattern::Deserialize(Deserializer &deserializer) {
 	FilenamePattern result;
-	deserializer.ReadPropertyWithDefault<string>(200, "base", result._base);
-	deserializer.ReadPropertyWithDefault<idx_t>(201, "pos", result._pos);
-	deserializer.ReadPropertyWithDefault<bool>(202, "uuid", result._uuid);
+	deserializer.ReadPropertyWithDefault<string>(200, "base", result.base);
+	deserializer.ReadPropertyWithDefault<idx_t>(201, "pos", result.pos);
+	deserializer.ReadPropertyWithDefault<bool>(202, "uuid", result.uuid);
 	return result;
 }
 
@@ -506,35 +503,14 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(Deserializer &deserialize
 
 void LogicalLimit::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	serializer.WritePropertyWithDefault<int64_t>(200, "limit_val", limit_val);
-	serializer.WritePropertyWithDefault<int64_t>(201, "offset_val", offset_val);
-	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(202, "limit", limit);
-	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(203, "offset", offset);
+	serializer.WriteProperty<BoundLimitNode>(200, "limit_val", limit_val);
+	serializer.WriteProperty<BoundLimitNode>(201, "offset_val", offset_val);
 }
 
 unique_ptr<LogicalOperator> LogicalLimit::Deserialize(Deserializer &deserializer) {
-	auto limit_val = deserializer.ReadPropertyWithDefault<int64_t>(200, "limit_val");
-	auto offset_val = deserializer.ReadPropertyWithDefault<int64_t>(201, "offset_val");
-	auto limit = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(202, "limit");
-	auto offset = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(203, "offset");
-	auto result = duckdb::unique_ptr<LogicalLimit>(new LogicalLimit(limit_val, offset_val, std::move(limit), std::move(offset)));
-	return std::move(result);
-}
-
-void LogicalLimitPercent::Serialize(Serializer &serializer) const {
-	LogicalOperator::Serialize(serializer);
-	serializer.WriteProperty<double>(200, "limit_percent", limit_percent);
-	serializer.WritePropertyWithDefault<int64_t>(201, "offset_val", offset_val);
-	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(202, "limit", limit);
-	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(203, "offset", offset);
-}
-
-unique_ptr<LogicalOperator> LogicalLimitPercent::Deserialize(Deserializer &deserializer) {
-	auto limit_percent = deserializer.ReadProperty<double>(200, "limit_percent");
-	auto offset_val = deserializer.ReadPropertyWithDefault<int64_t>(201, "offset_val");
-	auto limit = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(202, "limit");
-	auto offset = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(203, "offset");
-	auto result = duckdb::unique_ptr<LogicalLimitPercent>(new LogicalLimitPercent(limit_percent, offset_val, std::move(limit), std::move(offset)));
+	auto limit_val = deserializer.ReadProperty<BoundLimitNode>(200, "limit_val");
+	auto offset_val = deserializer.ReadProperty<BoundLimitNode>(201, "offset_val");
+	auto result = duckdb::unique_ptr<LogicalLimit>(new LogicalLimit(std::move(limit_val), std::move(offset_val)));
 	return std::move(result);
 }
 

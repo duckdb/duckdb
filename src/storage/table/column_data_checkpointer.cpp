@@ -147,6 +147,9 @@ unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx
 		if (!compression_functions[i]) {
 			continue;
 		}
+		if (!analyze_states[i]) {
+			continue;
+		}
 		//! Check if the method type is the forced method (if forced is used)
 		bool forced_method_found = compression_functions[i]->type == forced_method;
 		auto score = compression_functions[i]->final_analyze(*analyze_states[i]);
@@ -229,7 +232,7 @@ void ColumnDataCheckpointer::WritePersistentSegments() {
 		// set up the data pointer directly using the data from the persistent segment
 		DataPointer pointer(segment->stats.statistics.Copy());
 		pointer.block_pointer.block_id = segment->GetBlockId();
-		pointer.block_pointer.offset = segment->GetBlockOffset();
+		pointer.block_pointer.offset = NumericCast<uint32_t>(segment->GetBlockOffset());
 		pointer.row_start = segment->start;
 		pointer.tuple_count = segment->count;
 		pointer.compression_type = segment->function.get().type;

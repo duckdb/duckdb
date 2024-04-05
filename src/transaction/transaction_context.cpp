@@ -18,7 +18,7 @@ TransactionContext::~TransactionContext() {
 	if (current_transaction) {
 		try {
 			Rollback();
-		} catch (...) {
+		} catch (...) { // NOLINT
 		}
 	}
 }
@@ -34,15 +34,6 @@ void TransactionContext::BeginTransaction() {
 	// Notify any registered state of transaction begin
 	for (auto const &s : context.registered_state) {
 		s.second->TransactionBegin(*current_transaction, context);
-	}
-
-	auto &config = DBConfig::GetConfig(context);
-	if (config.options.immediate_transaction_mode) {
-		// if immediate transaction mode is enabled then start all transactions immediately
-		auto databases = DatabaseManager::Get(context).GetDatabases(context);
-		for (auto db : databases) {
-			current_transaction->GetTransaction(db.get());
-		}
 	}
 }
 

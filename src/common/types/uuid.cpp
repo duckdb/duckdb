@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-bool UUID::FromString(string str, hugeint_t &result) {
+bool UUID::FromString(const string &str, hugeint_t &result) {
 	auto hex2char = [](char ch) -> unsigned char {
 		if (ch >= '0' && ch <= '9') {
 			return ch - '0';
@@ -83,6 +83,17 @@ void UUID::ToString(hugeint_t input, char *buf) {
 	byte_to_hex(input.lower >> 16 & 0xFF, buf, pos);
 	byte_to_hex(input.lower >> 8 & 0xFF, buf, pos);
 	byte_to_hex(input.lower & 0xFF, buf, pos);
+}
+
+hugeint_t UUID::FromUHugeint(uhugeint_t input) {
+	hugeint_t result;
+	result.lower = input.lower;
+	if (input.upper > uint64_t(NumericLimits<int64_t>::Maximum())) {
+		result.upper = int64_t(input.upper - uint64_t(NumericLimits<int64_t>::Maximum()) - 1);
+	} else {
+		result.upper = int64_t(input.upper) - NumericLimits<int64_t>::Maximum() - 1;
+	}
+	return result;
 }
 
 hugeint_t UUID::GenerateRandomUUID(RandomEngine &engine) {

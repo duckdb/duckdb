@@ -9,15 +9,15 @@
 #pragma once
 
 #include "duckdb/common/multi_file_reader.hpp"
-#include "duckdb/execution/operator/csv_scanner/buffer_manager/csv_buffer.hpp"
-#include "duckdb/execution/operator/csv_scanner/buffer_manager/csv_buffer_manager.hpp"
-#include "duckdb/execution/operator/csv_scanner/buffer_manager/csv_file_handle.hpp"
-#include "duckdb/execution/operator/csv_scanner/options/csv_reader_options.hpp"
-#include "duckdb/execution/operator/csv_scanner/state_machine/csv_state_machine_cache.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_buffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_buffer_manager.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_file_handle.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_state_machine_cache.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/execution/operator/csv_scanner/table_function/csv_file_scanner.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
 
 namespace duckdb {
 class BaseScanner;
@@ -30,8 +30,6 @@ public:
 };
 
 struct BaseCSVData : public TableFunctionData {
-	virtual ~BaseCSVData() {
-	}
 	//! The file path of the CSV file to read or write
 	vector<string> files;
 	//! The CSV reader options
@@ -55,7 +53,7 @@ struct WriteCSVData : public BaseCSVData {
 	//! The newline string to write
 	string newline = "\n";
 	//! The size of the CSV file (in bytes) that we buffer before we flush it to disk
-	idx_t flush_size = 4096 * 8;
+	idx_t flush_size = 4096ULL * 8ULL;
 	//! For each byte whether or not the CSV file requires quotes when containing the byte
 	unsafe_unique_array<bool> requires_quotes;
 };
@@ -80,6 +78,8 @@ struct ReadCSVData : public BaseCSVData {
 	vector<LogicalType> csv_types;
 	//! The expected SQL names to be read from the file
 	vector<string> csv_names;
+	//! If the sql types from the file were manually set
+	vector<bool> manually_set;
 	//! The expected SQL types to be returned from the read - including added constants (e.g. filename, hive partitions)
 	vector<LogicalType> return_types;
 	//! The expected SQL names to be returned from the read - including added constants (e.g. filename, hive partitions)

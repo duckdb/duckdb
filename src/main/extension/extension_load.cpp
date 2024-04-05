@@ -38,7 +38,7 @@ static void ComputeSHA256String(const std::string &to_hash, std::string *res) {
 
 static void ComputeSHA256FileSegment(FileHandle *handle, const idx_t start, const idx_t end, std::string *res) {
 	idx_t iter = start;
-	const idx_t segment_size = 1024 * 8;
+	const idx_t segment_size = 1024ULL * 8ULL;
 
 	duckdb_mbedtls::MbedTlsWrapper::SHA256State state;
 
@@ -226,10 +226,10 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 	// Trim v's if necessary
 	std::string extension_version_trimmed = extension_version;
 	std::string engine_version_trimmed = engine_version;
-	if (extension_version.length() > 0 && extension_version[0] == 'v') {
+	if (!extension_version.empty() && extension_version[0] == 'v') {
 		extension_version_trimmed = extension_version.substr(1);
 	}
-	if (engine_version.length() > 0 && engine_version[0] == 'v') {
+	if (!engine_version.empty() && engine_version[0] == 'v') {
 		engine_version_trimmed = engine_version.substr(1);
 	}
 

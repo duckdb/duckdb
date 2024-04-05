@@ -71,9 +71,13 @@ class TestType(object):
         assert str(BIT) == 'BIT'
         assert str(INTERVAL) == 'INTERVAL'
 
-    def test_array_type(self):
-        type = duckdb.array_type(BIGINT)
+    def test_list_type(self):
+        type = duckdb.list_type(BIGINT)
         assert str(type) == 'BIGINT[]'
+
+    def test_array_type(self):
+        type = duckdb.array_type(BIGINT, 3)
+        assert str(type) == 'BIGINT[3]'
 
     def test_struct_type(self):
         type = duckdb.struct_type({'a': BIGINT, 'b': BOOLEAN})
@@ -191,6 +195,13 @@ class TestType(object):
 
         child_type = type.v2.child
         assert str(child_type) == 'MAP(BLOB, BIT)'
+
+    def test_json_type(self):
+        json_type = duckdb.type('JSON')
+
+        val = duckdb.Value('{"duck": 42}', json_type)
+        res = duckdb.execute("select typeof($1)", [val]).fetchone()
+        assert res == ('JSON',)
 
     # NOTE: we can support this, but I don't think going through hoops for an outdated version of python is worth it
     @pytest.mark.skipif(sys.version_info < (3, 9), reason="python3.7 does not store Optional[..] in a recognized way")

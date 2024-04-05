@@ -32,7 +32,7 @@ struct ExtraDropInfo {
 public:
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 
@@ -57,9 +57,9 @@ struct ExtraDropSecretInfo : public ExtraDropInfo {
 	string secret_storage;
 
 public:
-	virtual unique_ptr<ExtraDropInfo> Copy() const override;
+	unique_ptr<ExtraDropInfo> Copy() const override;
 
-	virtual void Serialize(Serializer &serializer) const override;
+	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ExtraDropInfo> Deserialize(Deserializer &deserializer);
 };
 

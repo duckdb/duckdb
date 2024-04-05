@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// src/include/duckdb/parallel/interrupt.hpp
+// duckdb/parallel/interrupt.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -44,9 +44,9 @@ public:
 	//! Default interrupt state will be set to InterruptMode::NO_INTERRUPTS and throw an error on use of Callback()
 	InterruptState();
 	//! Register the task to be interrupted and set mode to InterruptMode::TASK, the preferred way to handle interrupts
-	InterruptState(weak_ptr<Task> task);
+	explicit InterruptState(weak_ptr<Task> task);
 	//! Register signal state and set mode to InterruptMode::BLOCKING, used for code paths without Task.
-	InterruptState(weak_ptr<InterruptDoneSignalState> done_signal);
+	explicit InterruptState(weak_ptr<InterruptDoneSignalState> done_signal);
 
 	//! Perform the callback to indicate the Interrupt is over
 	DUCKDB_API void Callback() const;

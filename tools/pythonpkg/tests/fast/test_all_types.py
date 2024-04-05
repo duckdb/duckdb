@@ -9,10 +9,22 @@ import pytz
 import pytest
 
 
+def replace_with_ndarray(obj):
+    if hasattr(obj, '__getitem__'):
+        if isinstance(obj, dict):
+            for key, value in obj.items():
+                obj[key] = replace_with_ndarray(value)
+        elif isinstance(obj, list):
+            for i, item in enumerate(obj):
+                obj[i] = replace_with_ndarray(item)
+        return np.array(obj)
+    return obj
+
+
 # we need to write our own equality function that considers nan==nan for testing purposes
 def recursive_equality(o1, o2):
-    if o1 == o2:
-        return True
+    import math
+
     if type(o1) != type(o2):
         return False
     if type(o1) == float and math.isnan(o1) and math.isnan(o2):
@@ -27,7 +39,7 @@ def recursive_equality(o1, o2):
                 return False
         return True
     except:
-        return False
+        return o1 == o2
 
 
 # Regenerate the 'all_types' list using:
@@ -89,6 +101,14 @@ all_types = [
     "array_of_structs",
     "map",
     "union",
+    "fixed_int_array",
+    "fixed_varchar_array",
+    "fixed_nested_int_array",
+    "fixed_nested_varchar_array",
+    "fixed_struct_array",
+    "struct_of_fixed_array",
+    "fixed_array_of_int_list",
+    "list_of_fixed_int_array",
 ]
 
 
@@ -220,6 +240,38 @@ class TestAllTypes(object):
             'timestamp_ms': [(datetime.datetime(1990, 1, 1, 0, 0),)],
             'timestamp_tz': [(datetime.datetime(1990, 1, 1, 0, 0, tzinfo=pytz.UTC),)],
             'union': [('Frank',), (5,), (None,)],
+            'fixed_int_array': [((None, 2, 3),), ((4, 5, 6),), (None,)],
+            'fixed_varchar_array': [(('a', None, 'c'),), (('d', 'e', 'f'),), (None,)],
+            'fixed_nested_int_array': [
+                (((None, 2, 3), None, (None, 2, 3)),),
+                (((4, 5, 6), (None, 2, 3), (4, 5, 6)),),
+                (None,),
+            ],
+            'fixed_nested_varchar_array': [
+                ((('a', None, 'c'), None, ('a', None, 'c')),),
+                ((('d', 'e', 'f'), ('a', None, 'c'), ('d', 'e', 'f')),),
+                (None,),
+            ],
+            'fixed_struct_array': [
+                (({'a': None, 'b': None}, {'a': 42, 'b': '🦆🦆🦆🦆🦆🦆'}, {'a': None, 'b': None}),),
+                (({'a': 42, 'b': '🦆🦆🦆🦆🦆🦆'}, {'a': None, 'b': None}, {'a': 42, 'b': '🦆🦆🦆🦆🦆🦆'}),),
+                (None,),
+            ],
+            'struct_of_fixed_array': [
+                ({'a': (None, 2, 3), 'b': ('a', None, 'c')},),
+                ({'a': (4, 5, 6), 'b': ('d', 'e', 'f')},),
+                (None,),
+            ],
+            'fixed_array_of_int_list': [
+                (([], [42, 999, None, None, -42], []),),
+                (([42, 999, None, None, -42], [], [42, 999, None, None, -42]),),
+                (None,),
+            ],
+            'list_of_fixed_int_array': [
+                ([(None, 2, 3), (4, 5, 6), (None, 2, 3)],),
+                ([(4, 5, 6), (None, 2, 3), (4, 5, 6)],),
+                (None,),
+            ],
         }
         if cur_type in replacement_values:
             result = conn.execute("select " + replacement_values[cur_type]).fetchall()
@@ -441,6 +493,7 @@ class TestAllTypes(object):
             ),
             'union': np.ma.array(['Frank', 5, None], mask=[0, 0, 1], dtype=object),
         }
+        correct_answer_map = replace_with_ndarray(correct_answer_map)
 
         # The following types don't have a numpy equivalent, and are coerced to
         # floating point types by fetchnumpy():

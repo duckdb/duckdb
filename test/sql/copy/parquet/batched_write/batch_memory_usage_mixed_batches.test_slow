@@ -1,0 +1,40 @@
+# name: test/sql/copy/parquet/batched_write/batch_memory_usage_mixed_batches.test_slow
+# description: Batched Parquet write memory usage with mixed batches
+# group: [batched_write]
+
+require parquet
+
+statement ok
+COPY (FROM range(100000) tbl(i)) TO '__TEST_DIR__/mem_usage_mix_batches_small.parquet' (ROW_GROUP_SIZE 5000)
+
+statement ok
+COPY (FROM range(100000, 400000) tbl(i)) TO '__TEST_DIR__/mem_usage_mix_batches_large.parquet' (ROW_GROUP_SIZE 200000)
+
+statement ok
+COPY (FROM range(400000, 700000) tbl(i)) TO '__TEST_DIR__/mem_usage_mix_batches_odd.parquet' (ROW_GROUP_SIZE 999)
+
+statement ok
+COPY (FROM range(700000, 1000000) tbl(i)) TO '__TEST_DIR__/mem_usage_mix_batches_odd_again.parquet' (ROW_GROUP_SIZE 99979)
+
+statement ok
+CREATE VIEW v1 AS SELECT * FROM parquet_scan([
+	'__TEST_DIR__/mem_usage_mix_batches_small.parquet',
+	'__TEST_DIR__/mem_usage_mix_batches_large.parquet',
+	'__TEST_DIR__/mem_usage_mix_batches_odd.parquet',
+	'__TEST_DIR__/mem_usage_mix_batches_odd_again.parquet'])
+
+statement ok
+SET memory_limit='500MB'
+
+statement ok
+COPY v1 TO '__TEST_DIR__/mem_usage_mix_result.parquet'
+
+# ensure the parquet files hold the same content in the same order
+statement ok
+SET memory_limit='2GB';
+
+query II
+SELECT *, row_number() OVER () as rownum FROM v1
+EXCEPT
+SELECT *, row_number() OVER () as rownum FROM '__TEST_DIR__/mem_usage_mix_result.parquet';
+----

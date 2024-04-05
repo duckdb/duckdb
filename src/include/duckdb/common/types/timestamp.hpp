@@ -18,9 +18,9 @@
 
 namespace duckdb {
 
-struct date_t;
-struct dtime_t;
-struct dtime_tz_t;
+struct date_t;     // NOLINT
+struct dtime_t;    // NOLINT
+struct dtime_tz_t; // NOLINT
 
 //! Type used to represent timestamps (seconds,microseconds,milliseconds or nanoseconds since 1970-01-01)
 struct timestamp_t { // NOLINT
@@ -137,14 +137,19 @@ public:
 	DUCKDB_API static timestamp_t GetCurrentTimestamp();
 
 	//! Convert the epoch (in sec) to a timestamp
-	DUCKDB_API static timestamp_t FromEpochSeconds(int64_t ms);
+	DUCKDB_API static timestamp_t FromEpochSecondsPossiblyInfinite(int64_t s);
+	DUCKDB_API static timestamp_t FromEpochSeconds(int64_t s);
 	//! Convert the epoch (in ms) to a timestamp
+	DUCKDB_API static timestamp_t FromEpochMsPossiblyInfinite(int64_t ms);
 	DUCKDB_API static timestamp_t FromEpochMs(int64_t ms);
 	//! Convert the epoch (in microseconds) to a timestamp
 	DUCKDB_API static timestamp_t FromEpochMicroSeconds(int64_t micros);
 	//! Convert the epoch (in nanoseconds) to a timestamp
-	DUCKDB_API static timestamp_t FromEpochNanoSeconds(int64_t micros);
+	DUCKDB_API static timestamp_t FromEpochNanoSecondsPossiblyInfinite(int64_t nanos);
+	DUCKDB_API static timestamp_t FromEpochNanoSeconds(int64_t nanos);
 
+	//! Try convert a timestamp to epoch (in nanoseconds)
+	DUCKDB_API static bool TryGetEpochNanoSeconds(timestamp_t timestamp, int64_t &result);
 	//! Convert the epoch (in seconds) to a timestamp
 	DUCKDB_API static int64_t GetEpochSeconds(timestamp_t timestamp);
 	//! Convert the epoch (in ms) to a timestamp

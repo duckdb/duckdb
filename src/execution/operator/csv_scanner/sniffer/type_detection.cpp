@@ -1,5 +1,5 @@
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
-#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/string.hpp"
 
@@ -9,7 +9,8 @@ struct TryCastFloatingOperator {
 	static bool Operation(string_t input) {
 		T result;
 		string error_message;
-		return OP::Operation(input, result, &error_message);
+		CastParameters parameters(false, &error_message);
+		return OP::Operation(input, result, parameters);
 	}
 };
 
@@ -83,27 +84,28 @@ string GenerateDateFormat(const string &separator, const char *format_template) 
 	return result;
 }
 
-bool CSVSniffer::TryCastValue(CSVStateMachine &candidate, const Value &value, const LogicalType &sql_type) {
+bool CSVSniffer::TryCastValue(const DialectOptions &dialect_options, const string &decimal_separator,
+                              const Value &value, const LogicalType &sql_type) {
 	if (value.IsNull()) {
 		return true;
 	}
-	if (!candidate.dialect_options.date_format.find(LogicalTypeId::DATE)->second.GetValue().Empty() &&
+	if (!dialect_options.date_format.find(LogicalTypeId::DATE)->second.GetValue().Empty() &&
 	    sql_type.id() == LogicalTypeId::DATE) {
 		date_t result;
 		string error_message;
-		return candidate.dialect_options.date_format.find(LogicalTypeId::DATE)
+		return dialect_options.date_format.find(LogicalTypeId::DATE)
 		    ->second.GetValue()
 		    .TryParseDate(string_t(StringValue::Get(value)), result, error_message);
 	}
-	if (!candidate.dialect_options.date_format.find(LogicalTypeId::TIMESTAMP)->second.GetValue().Empty() &&
+	if (!dialect_options.date_format.find(LogicalTypeId::TIMESTAMP)->second.GetValue().Empty() &&
 	    sql_type.id() == LogicalTypeId::TIMESTAMP) {
 		timestamp_t result;
 		string error_message;
-		return candidate.dialect_options.date_format.find(LogicalTypeId::TIMESTAMP)
+		return dialect_options.date_format.find(LogicalTypeId::TIMESTAMP)
 		    ->second.GetValue()
 		    .TryParseTimestamp(string_t(StringValue::Get(value)), result, error_message);
 	}
-	if (candidate.options.decimal_separator != "." && (sql_type.id() == LogicalTypeId::DOUBLE)) {
+	if (decimal_separator != "." && (sql_type.id() == LogicalTypeId::DOUBLE)) {
 		return TryCastFloatingOperator::Operation<TryCastErrorMessageCommaSeparated, double>(StringValue::Get(value));
 	}
 	Value new_value;
@@ -123,6 +125,11 @@ void CSVSniffer::InitializeDateAndTimeStampDetection(CSVStateMachine &candidate,
 	auto &format_candidate = format_candidates[sql_type.id()];
 	if (!format_candidate.initialized) {
 		format_candidate.initialized = true;
+		// if user set a format, we add that as well
+		auto user_format = options.dialect_options.date_format.find(sql_type.id());
+		if (user_format->second.IsSetByUser()) {
+			format_candidate.format.emplace_back(user_format->second.GetValue().format_specifier);
+		}
 		// order by preference
 		auto entry = format_template_candidates.find(sql_type.id());
 		if (entry != format_template_candidates.end()) {
@@ -184,6 +191,7 @@ void CSVSniffer::DetectDateAndTimeStampFormats(CSVStateMachine &candidate, const
 
 void CSVSniffer::DetectTypes() {
 	idx_t min_varchar_cols = max_columns_found + 1;
+	idx_t min_errors = NumericLimits<idx_t>::Maximum();
 	vector<LogicalType> return_types;
 	// check which info candidate leads to minimum amount of non-varchar columns...
 	for (auto &candidate_cc : candidates) {
@@ -238,7 +246,8 @@ void CSVSniffer::DetectTypes() {
 						// Nothing to convert it to
 						continue;
 					}
-					if (TryCastValue(sniffing_state_machine, dummy_val, sql_type)) {
+					if (TryCastValue(sniffing_state_machine.dialect_options,
+					                 sniffing_state_machine.options.decimal_separator, dummy_val, sql_type)) {
 						break;
 					} else {
 						if (row_idx != start_idx_detection && cur_top_candidate == LogicalType::BOOLEAN) {
@@ -268,7 +277,9 @@ void CSVSniffer::DetectTypes() {
 
 		// it's good if the dialect creates more non-varchar columns, but only if we sacrifice < 30% of
 		// best_num_cols.
-		if (varchar_cols < min_varchar_cols && info_sql_types_candidates.size() > (max_columns_found * 0.7)) {
+		if (varchar_cols < min_varchar_cols && info_sql_types_candidates.size() > (max_columns_found * 0.7) &&
+		    (!options.ignore_errors || candidate->error_handler->errors.size() < min_errors)) {
+			min_errors = candidate->error_handler->errors.size();
 			best_header_row.clear();
 			// we have a new best_options candidate
 			best_candidate = std::move(candidate);
@@ -286,7 +297,7 @@ void CSVSniffer::DetectTypes() {
 	}
 	if (!best_candidate) {
 		auto error = CSVError::SniffingError(options.file_path);
-		error_handler->Error(error);
+		error_handler->Error(error, true);
 	}
 	// Assert that it's all good at this point.
 	D_ASSERT(best_candidate && !best_format_candidates.empty());

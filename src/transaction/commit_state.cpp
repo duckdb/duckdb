@@ -82,7 +82,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 				(void)column_name;
 				break;
 			default:
-				throw InternalException("Don't know how to drop this type!");
+				throw InternalException("Don't know how to alter this type!");
 			}
 
 			auto &alter_info = parse_info->Cast<AlterInfo>();
@@ -116,7 +116,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 				log->WriteCreateTableMacro(parent.Cast<TableMacroCatalogEntry>());
 				break;
 			default:
-				throw InternalException("Don't know how to drop this type!");
+				throw InternalException("Don't know how to create this type!");
 			}
 		}
 		break;
@@ -284,6 +284,8 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 		if (!StringUtil::CIEquals(catalog_entry->name, catalog_entry->Parent().name)) {
 			catalog_entry->set->UpdateTimestamp(*catalog_entry, commit_id);
 		}
+		// modify catalog on commit
+		duck_catalog.ModifyCatalog();
 
 		if (HAS_LOG) {
 			// push the catalog update to the WAL

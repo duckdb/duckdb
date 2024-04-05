@@ -23,6 +23,12 @@
         "id": 102,
         "name": "alias",
         "type": "string"
+      },
+      {
+        "id": 103,
+        "name": "query_location",
+        "type": "optional_idx",
+        "default": "optional_idx()"
       }
     ]
   },

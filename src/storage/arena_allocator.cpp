@@ -72,6 +72,7 @@ data_ptr_t ArenaAllocator::Allocate(idx_t len) {
 			tail = new_chunk.get();
 		}
 		head = std::move(new_chunk);
+		allocated_size += current_capacity;
 	}
 	D_ASSERT(head->current_position + len <= head->maximum_size);
 	auto result = head->data.get() + head->current_position;
@@ -100,11 +101,20 @@ data_ptr_t ArenaAllocator::Reallocate(data_ptr_t pointer, idx_t old_size, idx_t 
 	}
 }
 
+void ArenaAllocator::AlignNext() {
+	if (head && !ValueIsAligned<idx_t>(head->current_position)) {
+		// move the current position forward so that the next allocation is aligned
+		head->current_position = AlignValue<idx_t>(head->current_position);
+	}
+}
+
 data_ptr_t ArenaAllocator::AllocateAligned(idx_t size) {
+	AlignNext();
 	return Allocate(AlignValue<idx_t>(size));
 }
 
 data_ptr_t ArenaAllocator::ReallocateAligned(data_ptr_t pointer, idx_t old_size, idx_t size) {
+	AlignNext();
 	return Reallocate(pointer, old_size, AlignValue<idx_t>(size));
 }
 
@@ -123,12 +133,14 @@ void ArenaAllocator::Reset() {
 		head->current_position = 0;
 		head->prev = nullptr;
 	}
+	allocated_size = 0;
 }
 
 void ArenaAllocator::Destroy() {
 	head = nullptr;
 	tail = nullptr;
 	current_capacity = ARENA_ALLOCATOR_INITIAL_CAPACITY;
+	allocated_size = 0;
 }
 
 void ArenaAllocator::Move(ArenaAllocator &other) {
@@ -136,6 +148,7 @@ void ArenaAllocator::Move(ArenaAllocator &other) {
 	other.tail = tail;
 	other.head = std::move(head);
 	other.current_capacity = current_capacity;
+	other.allocated_size = allocated_size;
 	Destroy();
 }
 
@@ -161,6 +174,11 @@ idx_t ArenaAllocator::SizeInBytes() const {
 		}
 	}
 	return total_size;
+}
+
+idx_t ArenaAllocator::AllocationSize() const {
+	D_ASSERT(head || allocated_size == 0);
+	return allocated_size;
 }
 
 } // namespace duckdb

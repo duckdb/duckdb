@@ -1,10 +1,10 @@
 #pragma once
 
+#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/http_state.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_map.hpp"
-#include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb/common/http_state.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "http_metadata_cache.hpp"
 
@@ -36,6 +36,7 @@ struct HTTPParams {
 	static constexpr float DEFAULT_RETRY_BACKOFF = 4;
 	static constexpr bool DEFAULT_FORCE_DOWNLOAD = false;
 	static constexpr bool DEFAULT_KEEP_ALIVE = true;
+	static constexpr bool DEFAULT_ENABLE_SERVER_CERT_VERIFICATION = false;
 
 	uint64_t timeout;
 	uint64_t retries;
@@ -43,16 +44,18 @@ struct HTTPParams {
 	float retry_backoff;
 	bool force_download;
 	bool keep_alive;
+	bool enable_server_cert_verification;
+	std::string ca_cert_file;
 
-	static HTTPParams ReadFrom(FileOpener *opener);
+	static HTTPParams ReadFrom(optional_ptr<FileOpener> opener);
 };
 
 class HTTPFileHandle : public FileHandle {
 public:
-	HTTPFileHandle(FileSystem &fs, string path, uint8_t flags, const HTTPParams &params);
+	HTTPFileHandle(FileSystem &fs, const string &path, FileOpenFlags flags, const HTTPParams &params);
 	~HTTPFileHandle() override;
 	// This two-phase construction allows subclasses more flexible setup.
-	virtual void Initialize(FileOpener *opener);
+	virtual void Initialize(optional_ptr<FileOpener> opener);
 
 	// We keep an http client stored for connection reuse with keep-alive headers
 	duckdb::unique_ptr<duckdb_httplib_openssl::Client> http_client;
@@ -60,7 +63,7 @@ public:
 	const HTTPParams http_params;
 
 	// File handle info
-	uint8_t flags;
+	FileOpenFlags flags;
 	idx_t length;
 	time_t last_modified;
 
@@ -93,9 +96,8 @@ public:
 	static duckdb::unique_ptr<duckdb_httplib_openssl::Client> GetClient(const HTTPParams &http_params,
 	                                                                    const char *proto_host_port);
 	static void ParseUrl(string &url, string &path_out, string &proto_host_port_out);
-	duckdb::unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock = DEFAULT_LOCK,
-	                                        FileCompressionType compression = DEFAULT_COMPRESSION,
-	                                        FileOpener *opener = nullptr) final;
+	duckdb::unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
+	                                        optional_ptr<FileOpener> opener = nullptr) final;
 
 	vector<string> Glob(const string &path, FileOpener *opener = nullptr) override {
 		return {path}; // FIXME
@@ -125,7 +127,7 @@ public:
 	void FileSync(FileHandle &handle) override;
 	int64_t GetFileSize(FileHandle &handle) override;
 	time_t GetLastModifiedTime(FileHandle &handle) override;
-	bool FileExists(const string &filename) override;
+	bool FileExists(const string &filename, optional_ptr<FileOpener> opener) override;
 	void Seek(FileHandle &handle, idx_t location) override;
 	idx_t SeekPosition(FileHandle &handle) override;
 	bool CanHandleFile(const string &fpath) override;
@@ -135,7 +137,7 @@ public:
 	bool OnDiskFile(FileHandle &handle) override {
 		return false;
 	}
-	bool IsPipe(const string &filename) override {
+	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener) override {
 		return false;
 	}
 	string GetName() const override {
@@ -146,12 +148,16 @@ public:
 	}
 	static void Verify();
 
-	// Global cache
-	duckdb::unique_ptr<HTTPMetadataCache> global_metadata_cache;
+	optional_ptr<HTTPMetadataCache> GetGlobalCache();
 
 protected:
-	virtual duckdb::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, uint8_t flags, FileLockType lock,
-	                                                        FileCompressionType compression, FileOpener *opener);
+	virtual duckdb::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, FileOpenFlags flags,
+	                                                        optional_ptr<FileOpener> opener);
+
+private:
+	// Global cache
+	mutex global_cache_lock;
+	duckdb::unique_ptr<HTTPMetadataCache> global_metadata_cache;
 };
 
 } // namespace duckdb

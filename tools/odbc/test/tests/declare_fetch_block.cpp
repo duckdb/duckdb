@@ -1,4 +1,4 @@
-#include "../common.h"
+#include "common.h"
 
 using namespace odbc_test;
 
@@ -134,33 +134,33 @@ static void FetchAbsolute(HSTMT &hstmt, ESize S) {
 	EXECUTE_AND_CHECK("SQLFreeStmt(CLOSE)", SQLFreeStmt, hstmt, SQL_CLOSE);
 }
 
-TEST_CASE("Test Using SQLFetchScroll with different orrientations", "[odbc]") {
+TEST_CASE("Test Using SQLFetchScroll with different orientations", "[odbc]") {
 	SQLHANDLE env;
 	SQLHANDLE dbc;
 	HSTMT hstmt = SQL_NULL_HSTMT;
 
-	// Perform the tests for both SMALL and LARGE tables and different fetch sizes
+	// Perform the tests for both SMALL and LARGE tables
 	ESize size[] = {SMALL, LARGE};
-	for (int i = 0; i < 2; i++) {
-		// Connect to the database using SQLDriverConnect with UseDeclareFetch=1
-		DRIVER_CONNECT_TO_DATABASE(env, dbc, "UseDeclareFetch=1");
+	for (auto &i : size) {
+		// Connect to the database using SQLConnect
+		CONNECT_TO_DATABASE(env, dbc);
 
 		// Allocate a statement handle
 		EXECUTE_AND_CHECK("SQLAllocHandle (HSTMT)", SQLAllocHandle, SQL_HANDLE_STMT, dbc, &hstmt);
 
 		// Create a temporary table and insert size[i] rows
-		TemporaryTable(hstmt, size[i]);
+		TemporaryTable(hstmt, i);
 
-		SQLINTEGER *id = new SQLINTEGER[TABLE_SIZE[size[i]]];
-		SQLLEN *id_ind = new SQLLEN[TABLE_SIZE[size[i]]];
+		auto *id = new SQLINTEGER[TABLE_SIZE[i]];
+		auto *id_ind = new SQLLEN[TABLE_SIZE[i]];
 		// Block cursor, fetch rows in blocks of size[i]
-		BlockCursor(hstmt, size[i], id, id_ind);
+		BlockCursor(hstmt, i, id, id_ind);
 
 		// Scroll cursor, fetch rows one by one
-		ScrollNext(hstmt, size[i]);
+		ScrollNext(hstmt, i);
 
 		// Fetch rows using SQL_FETCH_ABSOLUTE
-		FetchAbsolute(hstmt, size[i]);
+		FetchAbsolute(hstmt, i);
 
 		delete[] id;
 		delete[] id_ind;

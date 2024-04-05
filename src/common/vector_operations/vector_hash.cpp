@@ -3,12 +3,11 @@
 // Description: This file contains the vectorized hash implementations
 //===--------------------------------------------------------------------===//
 
-#include "duckdb/common/uhugeint.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
 
@@ -91,6 +90,8 @@ static inline void StructLoopHash(Vector &input, Vector &hashes, const Selection
 
 template <bool HAS_RSEL, bool FIRST_HASH>
 static inline void ListLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
+	// FIXME: if we want to be more efficient we shouldn't flatten, but the logic here currently requires it
+	hashes.Flatten(count);
 	auto hdata = FlatVector::GetData<hash_t>(hashes);
 
 	UnifiedVectorFormat idata;
@@ -182,13 +183,18 @@ template <bool HAS_RSEL, bool FIRST_HASH>
 static inline void ArrayLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
 	auto hdata = FlatVector::GetData<hash_t>(hashes);
 
+	if (input.GetVectorType() != VectorType::CONSTANT_VECTOR || input.GetVectorType() != VectorType::FLAT_VECTOR) {
+		input.Flatten(count);
+	}
+
 	UnifiedVectorFormat idata;
 	input.ToUnifiedFormat(count, idata);
 
 	// Hash the children into a temporary
 	auto &child = ArrayVector::GetEntry(input);
 	auto array_size = ArrayType::GetSize(input.GetType());
-	auto child_count = array_size * count;
+	auto is_constant = input.GetVectorType() == VectorType::CONSTANT_VECTOR;
+	auto child_count = array_size * (is_constant ? 1 : count);
 
 	Vector child_hashes(LogicalType::HASH, child_count);
 	if (child_count > 0) {
@@ -197,12 +203,18 @@ static inline void ArrayLoopHash(Vector &input, Vector &hashes, const SelectionV
 	}
 	auto chdata = FlatVector::GetData<hash_t>(child_hashes);
 
-	// Combine hashes for every array
-	// TODO: Branch on FIRST_HASH and HAS_RSEL
-	for (idx_t i = 0; i < count; i++) {
-		for (idx_t j = i * array_size; j < (i + 1) * array_size; j++) {
-			hdata[i] = CombineHashScalar(hdata[i], chdata[j]);
+	for (idx_t i = 0; i < count; ++i) {
+		const auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
+		const auto lidx = idata.sel->get_index(ridx);
+		const auto offset = lidx * array_size;
+		if (idata.validity.RowIsValid(lidx)) {
+			for (idx_t j = 0; j < array_size; j++) {
+				hdata[ridx] = CombineHashScalar(hdata[ridx], chdata[offset + j]);
+			}
+		} else if (FIRST_HASH) {
+			hdata[ridx] = HashOp::NULL_HASH;
 		}
+		// Empty or NULL non-first elements have no effect.
 	}
 }
 

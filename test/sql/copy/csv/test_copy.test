@@ -35,7 +35,7 @@ statement ok
 CREATE TABLE test2 (a INTEGER, b INTEGER, c VARCHAR(10));
 
 query I
-COPY test2 FROM '__TEST_DIR__/test2.csv' (HEADER 1);
+COPY test2 FROM '__TEST_DIR__/test2.csv' ;
 ----
 5000
 
@@ -51,7 +51,7 @@ statement ok
 CREATE TABLE test_too_few_rows (a INTEGER, b INTEGER, c VARCHAR, d INTEGER);
 
 statement error
-COPY test_too_few_rows FROM '__TEST_DIR__/test2.csv' (NULL_PADDING 0, HEADER 1);
+COPY test_too_few_rows FROM '__TEST_DIR__/test2.csv' (NULL_PADDING 0);
 ----
 
 # create CSV file from query
@@ -65,7 +65,7 @@ statement ok
 CREATE TABLE test3 (a INTEGER, b INTEGER);
 
 query I
-COPY test3 FROM '__TEST_DIR__/test3.csv' (HEADER 1);
+COPY test3 FROM '__TEST_DIR__/test3.csv';
 ----
 4000
 
@@ -160,6 +160,68 @@ COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (ENCODING 'utf-42');
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (MAGIC '42');
 ----
+
+# Try new_line option
+query I
+COPY test TO '__TEST_DIR__/test_crlf.csv' (new_line  '\r\n');
+----
+5000
+
+query I
+select count(*) from '__TEST_DIR__/test_crlf.csv'
+----
+5000
+
+# Try CR LF lines
+query I
+COPY test TO '__TEST_DIR__/test_r.csv' (new_line  '\r');
+----
+5000
+
+query I
+select count(*) from '__TEST_DIR__/test_r.csv'
+----
+5000
+
+query I
+COPY test TO '__TEST_DIR__/test_n.csv' (new_line  '\n');
+----
+5000
+
+query I
+select count(*) from '__TEST_DIR__/test_n.csv'
+----
+5000
+
+query I
+COPY test TO '__TEST_DIR__/test_crlfe.csv' (new_line  e'\r\n');
+----
+5000
+
+query I
+select count(*) from '__TEST_DIR__/test_crlfe.csv'
+----
+5000
+
+query I
+COPY test TO '__TEST_DIR__/test_re.csv' (new_line  e'\r');
+----
+5000
+
+query I
+select count(*) from '__TEST_DIR__/test_re.csv'
+----
+5000
+
+query I
+COPY test TO '__TEST_DIR__/test_en.csv' (new_line  e'\n');
+----
+5000
+
+query I
+select count(*) from '__TEST_DIR__/test_en.csv'
+----
+5000
 
 # use a different delimiter
 # create new table

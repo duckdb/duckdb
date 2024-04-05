@@ -10,11 +10,14 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 
 py::handle PythonImportCacheItem::operator()(bool load) {
+	if (IsLoaded()) {
+		return object;
+	}
 	stack<reference<PythonImportCacheItem>> hierarchy;
 
 	optional_ptr<PythonImportCacheItem> item = this;
 	while (item) {
-		hierarchy.push(*item);
+		hierarchy.emplace(*item);
 		item = item->parent;
 	}
 	return PythonImporter::Import(hierarchy, load);
@@ -24,7 +27,7 @@ bool PythonImportCacheItem::LoadSucceeded() const {
 	return load_succeeded;
 }
 
-bool PythonImportCacheItem::IsLoaded() const {
+inline bool PythonImportCacheItem::IsLoaded() const {
 	return object.ptr() != nullptr;
 }
 
@@ -76,8 +79,11 @@ py::handle PythonImportCacheItem::Load(PythonImportCache &cache, py::handle sour
 //===--------------------------------------------------------------------===//
 
 PythonImportCache::~PythonImportCache() {
-	py::gil_scoped_acquire acquire;
-	owned_objects.clear();
+	try {
+		py::gil_scoped_acquire acquire;
+		owned_objects.clear();
+	} catch (...) { // NOLINT
+	}
 }
 
 py::handle PythonImportCache::AddCache(py::object item) {

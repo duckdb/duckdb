@@ -32,7 +32,7 @@ template <class T>
 struct AlpCompressionState : public CompressionState {
 
 public:
-	using EXACT_TYPE = typename FloatingToExact<T>::type;
+	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 	explicit AlpCompressionState(ColumnDataCheckpointer &checkpointer, AlpAnalyzeState<T> *analyze_state)
 	    : checkpointer(checkpointer), function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_ALP)) {
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
@@ -141,7 +141,7 @@ public:
 		Store<uint64_t>(state.frame_of_reference, data_ptr);
 		data_ptr += AlpConstants::FOR_SIZE;
 
-		Store<uint8_t>(state.bit_width, data_ptr);
+		Store<uint8_t>(UnsafeNumericCast<uint8_t>(state.bit_width), data_ptr);
 		data_ptr += AlpConstants::BIT_WIDTH_SIZE;
 
 		memcpy((void *)data_ptr, (void *)state.values_encoded, state.bp_size);
@@ -166,7 +166,7 @@ public:
 		// Write pointer to the vector data (metadata)
 		metadata_ptr -= sizeof(uint32_t);
 		Store<uint32_t>(next_vector_byte_index_start, metadata_ptr);
-		next_vector_byte_index_start = UsedSpace();
+		next_vector_byte_index_start = NumericCast<uint32_t>(UsedSpace());
 
 		vectors_flushed++;
 		vector_idx = 0;
@@ -206,7 +206,7 @@ public:
 		}
 
 		// Store the offset to the end of metadata (to be used as a backwards pointer in decoding)
-		Store<uint32_t>(total_segment_size, dataptr);
+		Store<uint32_t>(NumericCast<uint32_t>(total_segment_size), dataptr);
 
 		handle.Destroy();
 		checkpoint_state.FlushSegment(std::move(current_segment), total_segment_size);
@@ -244,7 +244,7 @@ public:
 					T value = data[idx];
 					bool is_null = !vdata.validity.RowIsValid(idx);
 					//! We resolve null values with a predicated comparison
-					vector_null_positions[nulls_idx] = vector_idx + i;
+					vector_null_positions[nulls_idx] = UnsafeNumericCast<uint16_t>(vector_idx + i);
 					nulls_idx += is_null;
 					input_vector[vector_idx + i] = value;
 				}

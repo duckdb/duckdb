@@ -314,9 +314,6 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			final_subgraph.numerator_filter_strength *= merge_with->numerator_filter_strength;
 		}
 	}
-	//	for (auto &match : subgraphs) {
-	//		denom *= match.denom;
-	//	}
 	// can happen if a table has cardinality 0, a tdom is set to 0, or if a cross product is used.
 	if (subgraphs.size() == 0 || denom == 0) {
 		// denominator is 1 and numerators are a cross product of cardinalities.
@@ -346,7 +343,8 @@ template <>
 idx_t CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set) {
 	auto cardinality_as_double = EstimateCardinalityWithSet<double>(new_set);
 	auto max = NumericLimits<idx_t>::Maximum();
-	if (cardinality_as_double > max) {
+	// need to add a buffer
+	if (cardinality_as_double >= max) {
 		return max;
 	}
 	return (idx_t)cardinality_as_double;
@@ -372,6 +370,9 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(optional_ptr<JoinRelati
 	auto relation_filter = stats.filter_strength;
 
 	auto card_helper = CardinalityHelper(relation_cardinality, relation_filter);
+	if (set->ToString() == "[2, 3]") {
+		auto break_here = 0;
+	}
 	relation_set_2_cardinality[set->ToString()] = card_helper;
 
 	UpdateTotalDomains(set, stats);

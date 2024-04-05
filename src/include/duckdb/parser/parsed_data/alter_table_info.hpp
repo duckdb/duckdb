@@ -208,30 +208,6 @@ private:
 };
 
 //===--------------------------------------------------------------------===//
-// SetColumnCommentInfo
-//===--------------------------------------------------------------------===//
-struct SetColumnCommentInfo : public AlterTableInfo {
-	SetColumnCommentInfo(AlterEntryData data, string column_name, Value comment_value);
-	~SetColumnCommentInfo() override;
-
-	//! The column name to alter
-	string column_name;
-	//! The target type of the column
-	Value comment;
-
-public:
-	unique_ptr<AlterInfo> Copy() const override;
-	void Serialize(Serializer &serializer) const override;
-	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
-
-	string GetColumnName() const override {
-		return column_name;
-	};
-
-	explicit SetColumnCommentInfo();
-};
-
-//===--------------------------------------------------------------------===//
 // SetDefaultInfo
 //===--------------------------------------------------------------------===//
 struct SetDefaultInfo : public AlterTableInfo {
@@ -331,7 +307,7 @@ public:
 	static unique_ptr<AlterInfo> Deserialize(Deserializer &deserializer);
 
 protected:
-	AlterViewInfo(AlterViewType type);
+	explicit AlterViewInfo(AlterViewType type);
 };
 
 //===--------------------------------------------------------------------===//

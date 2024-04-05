@@ -157,6 +157,11 @@ static unique_ptr<FunctionData> RangeDateTimeBind(ClientContext &context, TableF
 	auto result = make_uniq<RangeDateTimeBindData>();
 	auto &inputs = input.inputs;
 	D_ASSERT(inputs.size() == 3);
+	for (idx_t i = 0; i < inputs.size(); ++i) {
+		if (inputs[i].IsNull()) {
+			throw BinderException("RANGE with NULL argument is not supported");
+		}
+	}
 	result->start = inputs[0].GetValue<timestamp_t>();
 	result->end = inputs[1].GetValue<timestamp_t>();
 	result->increment = inputs[2].GetValue<interval_t>();
@@ -277,6 +282,7 @@ void BuiltinFunctions::RegisterTableFunctions() {
 	CSVSnifferFunction::RegisterFunction(*this);
 	ReadBlobFunction::RegisterFunction(*this);
 	ReadTextFunction::RegisterFunction(*this);
+	QueryTableFunction::RegisterFunction(*this);
 }
 
 } // namespace duckdb

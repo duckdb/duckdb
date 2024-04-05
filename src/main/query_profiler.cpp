@@ -3,6 +3,7 @@
 #include "duckdb/common/fstream.hpp"
 #include "duckdb/common/http_state.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
@@ -283,10 +284,6 @@ void OperatorProfiler::Flush(const PhysicalOperator &phys_op, ExpressionExecutor
 		return;
 	}
 	auto &operator_timing = timings.find(phys_op)->second;
-	if (int(operator_timing.executors_info.size()) <= id) {
-		operator_timing.executors_info.resize(id + 1);
-	}
-	operator_timing.executors_info[id] = make_uniq<ExpressionExecutorInfo>(expression_executor, name, id);
 	operator_timing.name = phys_op.GetName();
 }
 
@@ -306,16 +303,6 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 		if (!IsDetailedEnabled()) {
 			continue;
 		}
-		for (auto &info : node.second.executors_info) {
-			if (!info) {
-				continue;
-			}
-			auto info_id = info->id;
-			if (int32_t(tree_node.info.executors_info.size()) <= info_id) {
-				tree_node.info.executors_info.resize(info_id + 1);
-			}
-			tree_node.info.executors_info[info_id] = std::move(info);
-		}
 	}
 	profiler.timings.clear();
 }
@@ -325,20 +312,20 @@ static string DrawPadded(const string &str, idx_t width) {
 		return str.substr(0, width);
 	} else {
 		width -= str.size();
-		int half_spaces = width / 2;
-		int extra_left_space = width % 2 != 0 ? 1 : 0;
+		auto half_spaces = width / 2;
+		auto extra_left_space = width % 2 != 0 ? 1 : 0;
 		return string(half_spaces + extra_left_space, ' ') + str + string(half_spaces, ' ');
 	}
 }
 
 static string RenderTitleCase(string str) {
 	str = StringUtil::Lower(str);
-	str[0] = toupper(str[0]);
+	str[0] = NumericCast<char>(toupper(str[0]));
 	for (idx_t i = 0; i < str.size(); i++) {
 		if (str[i] == '_') {
 			str[i] = ' ';
 			if (i + 1 < str.size()) {
-				str[i + 1] = toupper(str[i + 1]);
+				str[i + 1] = NumericCast<char>(toupper(str[i + 1]));
 			}
 		}
 	}
@@ -483,69 +470,12 @@ static string JSONSanitize(const string &text) {
 	return result;
 }
 
-// Print a row
-static void PrintRow(std::ostream &ss, const string &annotation, int id, const string &name, double time,
-                     int sample_counter, int tuple_counter, const string &extra_info, int depth) {
-	ss << string(depth * 3, ' ') << " {\n";
-	ss << string(depth * 3, ' ') << "   \"annotation\": \"" + JSONSanitize(annotation) + "\",\n";
-	ss << string(depth * 3, ' ') << "   \"id\": " + to_string(id) + ",\n";
-	ss << string(depth * 3, ' ') << "   \"name\": \"" + JSONSanitize(name) + "\",\n";
-#if defined(RDTSC)
-	ss << string(depth * 3, ' ') << "   \"timing\": \"NULL\" ,\n";
-	ss << string(depth * 3, ' ') << "   \"cycles_per_tuple\": " + StringUtil::Format("%.4f", time) + ",\n";
-#else
-	ss << string(depth * 3, ' ') << "   \"timing\":" + to_string(time) + ",\n";
-	ss << string(depth * 3, ' ') << "   \"cycles_per_tuple\": \"NULL\" ,\n";
-#endif
-	ss << string(depth * 3, ' ') << "   \"sample_size\": " << to_string(sample_counter) + ",\n";
-	ss << string(depth * 3, ' ') << "   \"input_size\": " << to_string(tuple_counter) + ",\n";
-	ss << string(depth * 3, ' ') << "   \"extra_info\": \"" << JSONSanitize(extra_info) + "\"\n";
-	ss << string(depth * 3, ' ') << " },\n";
-}
-
-static void ExtractFunctions(std::ostream &ss, ExpressionInfo &info, int &fun_id, int depth) {
-	if (info.hasfunction) {
-		double time = info.sample_tuples_count == 0 ? 0 : int(info.function_time) / double(info.sample_tuples_count);
-		PrintRow(ss, "Function", fun_id++, info.function_name, time, info.sample_tuples_count, info.tuples_count, "",
-		         depth);
-	}
-	if (info.children.empty()) {
-		return;
-	}
-	// extract the children of this node
-	for (auto &child : info.children) {
-		ExtractFunctions(ss, *child, fun_id, depth);
-	}
-}
-
-static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int depth = 1) {
+static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, idx_t depth = 1) {
 	ss << string(depth * 3, ' ') << " {\n";
 	ss << string(depth * 3, ' ') << "   \"name\": \"" + JSONSanitize(node.name) + "\",\n";
 	ss << string(depth * 3, ' ') << "   \"timing\":" + to_string(node.info.time) + ",\n";
 	ss << string(depth * 3, ' ') << "   \"cardinality\":" + to_string(node.info.elements) + ",\n";
 	ss << string(depth * 3, ' ') << "   \"extra_info\": \"" + JSONSanitize(node.extra_info) + "\",\n";
-	ss << string(depth * 3, ' ') << "   \"timings\": [";
-	int32_t function_counter = 1;
-	int32_t expression_counter = 1;
-	ss << "\n ";
-	for (auto &expr_executor : node.info.executors_info) {
-		// For each Expression tree
-		if (!expr_executor) {
-			continue;
-		}
-		for (auto &expr_timer : expr_executor->roots) {
-			double time = expr_timer->sample_tuples_count == 0
-			                  ? 0
-			                  : double(expr_timer->time) / double(expr_timer->sample_tuples_count);
-			PrintRow(ss, "ExpressionRoot", expression_counter++, expr_timer->name, time,
-			         expr_timer->sample_tuples_count, expr_timer->tuples_count, expr_timer->extra_info, depth + 1);
-			// Extract all functions inside the tree
-			ExtractFunctions(ss, *expr_timer->root, function_counter, depth + 1);
-		}
-	}
-	ss.seekp(-2, ss.cur);
-	ss << "\n";
-	ss << string(depth * 3, ' ') << "   ],\n";
 	ss << string(depth * 3, ' ') << "   \"children\": [\n";
 	if (node.children.empty()) {
 		ss << string(depth * 3, ' ') << "   ]\n";
@@ -662,49 +592,4 @@ vector<QueryProfiler::PhaseTimingItem> QueryProfiler::GetOrderedPhaseTimings() c
 void QueryProfiler::Propagate(QueryProfiler &qp) {
 }
 
-void ExpressionInfo::ExtractExpressionsRecursive(unique_ptr<ExpressionState> &state) {
-	if (state->child_states.empty()) {
-		return;
-	}
-	// extract the children of this node
-	for (auto &child : state->child_states) {
-		auto expr_info = make_uniq<ExpressionInfo>();
-		if (child->expr.expression_class == ExpressionClass::BOUND_FUNCTION) {
-			expr_info->hasfunction = true;
-			expr_info->function_name = child->expr.Cast<BoundFunctionExpression>().function.ToString();
-			expr_info->function_time = child->profiler.time;
-			expr_info->sample_tuples_count = child->profiler.sample_tuples_count;
-			expr_info->tuples_count = child->profiler.tuples_count;
-		}
-		expr_info->ExtractExpressionsRecursive(child);
-		children.push_back(std::move(expr_info));
-	}
-	return;
-}
-
-ExpressionExecutorInfo::ExpressionExecutorInfo(ExpressionExecutor &executor, const string &name, int id) : id(id) {
-	// Extract Expression Root Information from ExpressionExecutorStats
-	for (auto &state : executor.GetStates()) {
-		roots.push_back(make_uniq<ExpressionRootInfo>(*state, name));
-	}
-}
-
-ExpressionRootInfo::ExpressionRootInfo(ExpressionExecutorState &state, string name)
-    : current_count(state.profiler.current_count), sample_count(state.profiler.sample_count),
-      sample_tuples_count(state.profiler.sample_tuples_count), tuples_count(state.profiler.tuples_count),
-      name("expression"), time(state.profiler.time) {
-	// Use the name of expression-tree as extra-info
-	extra_info = std::move(name);
-	auto expression_info_p = make_uniq<ExpressionInfo>();
-	// Maybe root has a function
-	if (state.root_state->expr.expression_class == ExpressionClass::BOUND_FUNCTION) {
-		expression_info_p->hasfunction = true;
-		expression_info_p->function_name = (state.root_state->expr.Cast<BoundFunctionExpression>()).function.name;
-		expression_info_p->function_time = state.root_state->profiler.time;
-		expression_info_p->sample_tuples_count = state.root_state->profiler.sample_tuples_count;
-		expression_info_p->tuples_count = state.root_state->profiler.tuples_count;
-	}
-	expression_info_p->ExtractExpressionsRecursive(state.root_state);
-	root = std::move(expression_info_p);
-}
 } // namespace duckdb

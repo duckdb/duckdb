@@ -333,7 +333,7 @@ duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statemen
 	}
 
 	auto result = wrapper->statement->Execute(wrapper->values, false);
-	return duckdb_translate_result(std::move(result), out_result);
+	return DuckDBTranslateResult(std::move(result), out_result);
 }
 
 duckdb_state duckdb_execute_prepared_streaming(duckdb_prepared_statement prepared_statement,
@@ -344,7 +344,7 @@ duckdb_state duckdb_execute_prepared_streaming(duckdb_prepared_statement prepare
 	}
 
 	auto result = wrapper->statement->Execute(wrapper->values, true);
-	return duckdb_translate_result(std::move(result), out_result);
+	return DuckDBTranslateResult(std::move(result), out_result);
 }
 
 duckdb_statement_type duckdb_prepared_statement_type(duckdb_prepared_statement statement) {

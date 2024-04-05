@@ -96,7 +96,7 @@ runs:
       if: inputs.vcpkg_build == 1
       uses: lukka/run-vcpkg@v11.1
       with:
-        vcpkgGitCommitId: a42af01b72c28a8e1d7b48107b33e4f286a55ef6
+        vcpkgGitCommitId: a1a1cbc975abf909a6c8985a6a2b8fe20bbd9bd6
 
     - name: Set vcpkg env variables
       if: inputs.vcpkg_build == 1
@@ -115,6 +115,17 @@ runs:
         curl -O -L https://github.com/duckdb/duckdb-data/releases/download/v1.0/nasm-2.16.01-win64.zip
         ls -al
         pwd
+
+    - name: Fix for MSVC issue (see e.g. https://github.com/TileDB-Inc/TileDB/pull/4759)
+      shell: bash
+      if: inputs.deploy_as == 'windows_amd64'
+      env:
+        OVERLAY_TRIPLET_SRC:  ${{ github.workspace }}/vcpkg/triplets/community/x64-windows-static-md.cmake
+        OVERLAY_TRIPLET_DST:  ${{ github.workspace }}/overlay_triplets/x64-windows-static-md.cmake
+      run: |
+        mkdir overlay_triplets
+        cp $OVERLAY_TRIPLET_SRC $OVERLAY_TRIPLET_DST
+        echo "set(VCPKG_PLATFORM_TOOLSET_VERSION "14.38")" >> $OVERLAY_TRIPLET_DST
 
     - name: Set Openssl dir
       if: inputs.openssl_path != ''
@@ -144,6 +155,7 @@ runs:
         GEN: ${{ inputs.ninja == 1 && 'ninja' || '' }}
         USE_MERGED_VCPKG_MANIFEST: 1
         DUCKDB_PLATFORM: ${{ inputs.duckdb_arch }}
+        VCPKG_OVERLAY_TRIPLETS: "${{ github.workspace }}/overlay_triplets"
       run: |
         ls
         mkdir -p ~/.ssh

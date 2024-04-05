@@ -1,6 +1,5 @@
 from fsspec import filesystem, AbstractFileSystem
 from fsspec.implementations.memory import MemoryFileSystem
-from shutil import copyfileobj
 from .bytes_io_wrapper import BytesIOWrapper
 from io import TextIOBase
 

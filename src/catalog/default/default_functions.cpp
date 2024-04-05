@@ -162,6 +162,9 @@ static DefaultMacro internal_macros[] = {
 	// date functions
 	{DEFAULT_SCHEMA, "date_add", {"date", "interval", nullptr}, "date + interval"},
 
+	// regexp functions
+	{DEFAULT_SCHEMA, "regexp_split_to_table", {"text", "pattern", nullptr}, "unnest(string_split_regex(text, pattern))"},
+
     // storage helper functions
     {DEFAULT_SCHEMA, "get_block_size", {"db_name"}, "(SELECT block_size FROM pragma_database_size() WHERE database_name = db_name)"},
 

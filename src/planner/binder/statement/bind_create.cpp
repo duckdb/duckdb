@@ -54,12 +54,18 @@ void Binder::BindSchemaOrCatalog(ClientContext &context, string &catalog, string
 		if (database) {
 			// we have a database with this name
 			// check if there is a schema
-			auto schema_obj = Catalog::GetSchema(context, INVALID_CATALOG, schema, OnEntryNotFound::RETURN_NULL);
-			if (schema_obj) {
-				auto &attached = schema_obj->catalog.GetAttached();
-				throw BinderException(
-				    "Ambiguous reference to catalog or schema \"%s\" - use a fully qualified path like \"%s.%s\"",
-				    schema, attached.GetName(), schema);
+			auto &search_path = *context.client_data->catalog_search_path;
+			auto catalog_names = search_path.GetCatalogsForSchema(schema);
+			if (catalog_names.empty()) {
+				catalog_names.push_back(DatabaseManager::GetDefaultDatabase(context));
+			}
+			for (auto &catalog_name : catalog_names) {
+				auto &catalog = Catalog::GetCatalog(context, catalog_name);
+				if (catalog.CheckAmbiguousCatalogOrSchema(context, schema)) {
+					throw BinderException(
+					    "Ambiguous reference to catalog or schema \"%s\" - use a fully qualified path like \"%s.%s\"",
+					    schema, catalog_name, schema);
+				}
 			}
 			catalog = schema;
 			schema = string();
@@ -266,16 +272,16 @@ static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vecto
 			continue;
 		}
 		auto &unique = constr->Cast<UniqueConstraint>();
-		if (find_primary_key && !unique.is_primary_key) {
+		if (find_primary_key && !unique.IsPrimaryKey()) {
 			continue;
 		}
 		found_constraint = true;
 
 		vector<string> pk_names;
-		if (unique.index.index != DConstants::INVALID_INDEX) {
-			pk_names.push_back(columns.GetColumn(LogicalIndex(unique.index)).Name());
+		if (unique.HasIndex()) {
+			pk_names.push_back(columns.GetColumn(LogicalIndex(unique.GetIndex())).Name());
 		} else {
-			pk_names = unique.columns;
+			pk_names = unique.GetColumnNames();
 		}
 		if (find_primary_key) {
 			// found matching primary key
@@ -408,15 +414,14 @@ static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) 
 		}
 		case ConstraintType::UNIQUE: {
 			auto &constraint = constr->Cast<UniqueConstraint>();
-			auto index = constraint.index;
-			if (index.index == DConstants::INVALID_INDEX) {
-				for (auto &col : constraint.columns) {
+			if (!constraint.HasIndex()) {
+				for (auto &col : constraint.GetColumnNames()) {
 					if (generated_columns.count(col)) {
 						return true;
 					}
 				}
 			} else {
-				if (table_info.columns.GetColumn(index).Generated()) {
+				if (table_info.columns.GetColumn(constraint.GetIndex()).Generated()) {
 					return true;
 				}
 			}

@@ -116,6 +116,22 @@ struct DebugClientContextState : public ClientContextState {
 		}
 		active_transaction = false;
 	}
+#ifdef DUCKDB_DEBUG_REBIND
+	RebindQueryInfo OnPlanningError(ClientContext &context, SQLStatement &statement, ErrorData &error) override {
+		return RebindQueryInfo::ATTEMPT_TO_REBIND;
+	}
+	RebindQueryInfo OnFinalizePrepare(ClientContext &context, PreparedStatementData &prepared,
+	                                  PreparedStatementMode mode) override {
+		if (mode == PreparedStatementMode::PREPARE_AND_EXECUTE) {
+			return RebindQueryInfo::ATTEMPT_TO_REBIND;
+		}
+		return RebindQueryInfo::DO_NOT_REBIND;
+	}
+	RebindQueryInfo OnExecutePrepared(ClientContext &context, PreparedStatementData &prepared_statement,
+	                                  RebindQueryInfo current_rebind) override {
+		return RebindQueryInfo::ATTEMPT_TO_REBIND;
+	}
+#endif
 };
 #endif
 
@@ -292,8 +308,9 @@ static bool IsExplainAnalyze(SQLStatement *statement) {
 }
 
 shared_ptr<PreparedStatementData>
-ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-                                       optional_ptr<case_insensitive_map_t<Value>> values) {
+ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock, const string &query,
+                                               unique_ptr<SQLStatement> statement,
+                                               optional_ptr<case_insensitive_map_t<Value>> values) {
 	StatementType statement_type = statement->type;
 	auto result = make_shared<PreparedStatementData>(statement_type);
 
@@ -319,7 +336,6 @@ ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &qu
 	result->types = planner.types;
 	result->value_map = std::move(planner.value_map);
 	result->catalog_version = MetaTransaction::Get(*this).catalog_version;
-
 	if (!planner.properties.bound_all_parameters) {
 		return result;
 	}
@@ -351,15 +367,85 @@ ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &qu
 	return result;
 }
 
+shared_ptr<PreparedStatementData>
+ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
+                                       optional_ptr<case_insensitive_map_t<Value>> values, PreparedStatementMode mode) {
+	// check if any client context state could request a rebind
+	bool can_request_rebind = false;
+	for (auto const &s : registered_state) {
+		if (s.second->CanRequestRebind()) {
+			can_request_rebind = true;
+			break;
+		}
+	}
+	if (can_request_rebind) {
+		bool rebind = false;
+		// if any registered state can request a rebind we do the binding on a copy first
+		shared_ptr<PreparedStatementData> result;
+		try {
+			result = CreatePreparedStatementInternal(lock, query, statement->Copy(), values);
+		} catch (std::exception &ex) {
+			ErrorData error(ex);
+			// check if any registered client context state wants to try a rebind
+			for (auto const &s : registered_state) {
+				auto info = s.second->OnPlanningError(*this, *statement, error);
+				if (info == RebindQueryInfo::ATTEMPT_TO_REBIND) {
+					rebind = true;
+				}
+			}
+			if (!rebind) {
+				throw;
+			}
+		}
+		if (result) {
+			D_ASSERT(!rebind);
+			for (auto const &s : registered_state) {
+				auto info = s.second->OnFinalizePrepare(*this, *result, mode);
+				if (info == RebindQueryInfo::ATTEMPT_TO_REBIND) {
+					rebind = true;
+				}
+			}
+		}
+		if (!rebind) {
+			return result;
+		}
+		// an extension wants to do a rebind - do it once
+	}
+
+	return CreatePreparedStatementInternal(lock, query, std::move(statement), values);
+}
+
 QueryProgress ClientContext::GetQueryProgress() {
 	return query_progress;
 }
 
-unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientContextLock &lock,
-                                                                       shared_ptr<PreparedStatementData> statement_p,
-                                                                       const PendingQueryParameters &parameters) {
-	D_ASSERT(active_query);
-	auto &statement = *statement_p;
+void BindPreparedStatementParameters(PreparedStatementData &statement, const PendingQueryParameters &parameters) {
+	case_insensitive_map_t<Value> owned_values;
+	if (parameters.parameters) {
+		auto &params = *parameters.parameters;
+		for (auto &val : params) {
+			owned_values.emplace(val);
+		}
+	}
+	statement.Bind(std::move(owned_values));
+}
+
+void ClientContext::RebindPreparedStatement(ClientContextLock &lock, const string &query,
+                                            shared_ptr<PreparedStatementData> &prepared,
+                                            const PendingQueryParameters &parameters) {
+	if (!prepared->unbound_statement) {
+		throw InternalException("ClientContext::RebindPreparedStatement called but PreparedStatementData did not have "
+		                        "an unbound statement so rebinding cannot be done");
+	}
+	// catalog was modified: rebind the statement before execution
+	auto new_prepared =
+	    CreatePreparedStatement(lock, query, prepared->unbound_statement->Copy(), parameters.parameters);
+	D_ASSERT(new_prepared->properties.bound_all_parameters);
+	prepared = std::move(new_prepared);
+	prepared->properties.bound_all_parameters = false;
+}
+
+void ClientContext::CheckIfPreparedStatementIsExecutable(PreparedStatementData &statement) {
 	if (ValidChecker::IsInvalidated(ActiveTransaction()) && statement.properties.requires_valid_transaction) {
 		throw ErrorManager::InvalidatedTransaction(*this);
 	}
@@ -377,16 +463,15 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 		}
 		meta_transaction.ModifyDatabase(*entry);
 	}
+}
 
-	// bind the bound values before execution
-	case_insensitive_map_t<Value> owned_values;
-	if (parameters.parameters) {
-		auto &params = *parameters.parameters;
-		for (auto &val : params) {
-			owned_values.emplace(val);
-		}
-	}
-	statement.Bind(std::move(owned_values));
+unique_ptr<PendingQueryResult>
+ClientContext::PendingPreparedStatementInternal(ClientContextLock &lock, shared_ptr<PreparedStatementData> statement_p,
+                                                const PendingQueryParameters &parameters) {
+	D_ASSERT(active_query);
+	auto &statement = *statement_p;
+
+	BindPreparedStatementParameters(statement, parameters);
 
 	active_query->executor = make_uniq<Executor>(*this);
 	auto &executor = *active_query->executor;
@@ -424,6 +509,27 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 	return pending_result;
 }
 
+unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientContextLock &lock, const string &query,
+                                                                       shared_ptr<PreparedStatementData> prepared,
+                                                                       const PendingQueryParameters &parameters) {
+	CheckIfPreparedStatementIsExecutable(*prepared);
+
+	RebindQueryInfo rebind = RebindQueryInfo::DO_NOT_REBIND;
+	if (prepared->RequireRebind(*this, parameters.parameters)) {
+		rebind = RebindQueryInfo::ATTEMPT_TO_REBIND;
+	}
+	for (auto const &s : registered_state) {
+		auto new_rebind = s.second->OnExecutePrepared(*this, *prepared, rebind);
+		if (new_rebind == RebindQueryInfo::ATTEMPT_TO_REBIND) {
+			rebind = RebindQueryInfo::ATTEMPT_TO_REBIND;
+		}
+	}
+	if (rebind == RebindQueryInfo::ATTEMPT_TO_REBIND) {
+		RebindPreparedStatement(lock, query, prepared, parameters);
+	}
+	return PendingPreparedStatementInternal(lock, prepared, parameters);
+}
+
 PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &lock, BaseQueryResult &result,
                                                           bool dry_run) {
 	D_ASSERT(active_query);
@@ -447,7 +553,7 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 				invalidate_transaction = true;
 			} else {
 				// Interrupted by an exception caused in a worker thread
-				auto error = executor.GetError();
+				error = executor.GetError();
 				invalidate_transaction = Exception::InvalidatesTransaction(error.Type());
 				result.SetError(error);
 			}
@@ -458,6 +564,7 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 			auto &db_instance = DatabaseInstance::GetDatabase(*this);
 			ValidChecker::Invalidate(db_instance, error.RawMessage());
 		}
+		ProcessError(error, active_query->query);
 		result.SetError(std::move(error));
 	} catch (...) { // LCOV_EXCL_START
 		result.SetError(ErrorData("Unhandled exception in ExecuteTaskInternal"));
@@ -610,7 +717,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientCon
                                                                        unique_ptr<SQLStatement> statement,
                                                                        const PendingQueryParameters &parameters) {
 	// prepare the query for execution
-	auto prepared = CreatePreparedStatement(lock, query, std::move(statement), parameters.parameters);
+	auto prepared = CreatePreparedStatement(lock, query, std::move(statement), parameters.parameters,
+	                                        PreparedStatementMode::PREPARE_AND_EXECUTE);
 	idx_t parameter_count = !parameters.parameters ? 0 : parameters.parameters->size();
 	if (prepared->properties.parameter_count > 0 && parameter_count == 0) {
 		string error_message = StringUtil::Format("Expected %lld parameters, but none were supplied",
@@ -621,7 +729,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientCon
 		return ErrorResult<PendingQueryResult>(ErrorData("Not all parameters were bound"), query);
 	}
 	// execute the prepared statement
-	return PendingPreparedStatement(lock, std::move(prepared), parameters);
+	CheckIfPreparedStatementIsExecutable(*prepared);
+	return PendingPreparedStatementInternal(lock, std::move(prepared), parameters);
 }
 
 unique_ptr<QueryResult> ClientContext::RunStatementInternal(ClientContextLock &lock, const string &query,
@@ -728,16 +837,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		if (statement) {
 			pending = PendingStatementInternal(lock, query, std::move(statement), parameters);
 		} else {
-			if (prepared->RequireRebind(*this, parameters.parameters)) {
-				// catalog was modified: rebind the statement before execution
-				auto new_prepared =
-				    CreatePreparedStatement(lock, query, prepared->unbound_statement->Copy(), parameters.parameters);
-				D_ASSERT(new_prepared->properties.bound_all_parameters);
-				new_prepared->unbound_statement = std::move(prepared->unbound_statement);
-				prepared = std::move(new_prepared);
-				prepared->properties.bound_all_parameters = false;
-			}
-			pending = PendingPreparedStatement(lock, prepared, parameters);
+			pending = PendingPreparedStatement(lock, query, prepared, parameters);
 		}
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
@@ -1135,13 +1235,13 @@ unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relat
 	return ErrorResult<MaterializedQueryResult>(ErrorData(err_str));
 }
 
-bool ClientContext::TryGetCurrentSetting(const std::string &key, Value &result) {
+SettingLookupResult ClientContext::TryGetCurrentSetting(const std::string &key, Value &result) {
 	// first check the built-in settings
 	auto &db_config = DBConfig::GetConfig(*this);
 	auto option = db_config.GetOptionByName(key);
 	if (option) {
 		result = option->get_setting(*this);
-		return true;
+		return SettingLookupResult(SettingScope::LOCAL);
 	}
 
 	// check the client session values
@@ -1151,7 +1251,7 @@ bool ClientContext::TryGetCurrentSetting(const std::string &key, Value &result) 
 	bool found_session_value = session_value != session_config_map.end();
 	if (found_session_value) {
 		result = session_value->second;
-		return true;
+		return SettingLookupResult(SettingScope::LOCAL);
 	}
 	// finally check the global session values
 	return db->TryGetCurrentSetting(key, result);
@@ -1182,7 +1282,7 @@ ClientProperties ClientContext::GetClientProperties() const {
 	} else {
 		timezone = tz_config->second.GetValue<string>();
 	}
-	return {timezone, db->config.options.arrow_offset_size};
+	return {timezone, db->config.options.arrow_offset_size, db->config.options.produce_arrow_string_views};
 }
 
 bool ClientContext::ExecutionIsFinished() {

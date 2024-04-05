@@ -72,7 +72,7 @@ ArrowArray *ArrowAppender::FinalizeChild(const LogicalType &type, unique_ptr<Arr
 	result->buffers = append_data.buffers.data();
 	result->null_count = append_data.null_count;
 	result->length = append_data.row_count;
-	result->buffers[0] = append_data.validity.data();
+	result->buffers[0] = append_data.GetValidityBuffer().data();
 
 	if (append_data.finalize) {
 		append_data.finalize(append_data, type, result.get());
@@ -188,6 +188,16 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		}
 		break;
 	case LogicalTypeId::VARCHAR:
+		if (append_data.options.produce_arrow_string_view) {
+			InitializeAppenderForType<ArrowVarcharToStringViewData>(append_data);
+		} else {
+			if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+				InitializeAppenderForType<ArrowVarcharData<string_t>>(append_data);
+			} else {
+				InitializeAppenderForType<ArrowVarcharData<string_t, ArrowVarcharConverter, int32_t>>(append_data);
+			}
+		}
+		break;
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::BIT:
 		if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
@@ -227,6 +237,9 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 	case LogicalTypeId::STRUCT:
 		InitializeAppenderForType<ArrowStructData>(append_data);
 		break;
+	case LogicalTypeId::ARRAY:
+		InitializeAppenderForType<ArrowFixedSizeListData>(append_data);
+		break;
 	case LogicalTypeId::LIST: {
 		if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 			InitializeAppenderForType<ArrowListData<int64_t>>(append_data);
@@ -236,11 +249,8 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		break;
 	}
 	case LogicalTypeId::MAP:
-		if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
-			InitializeAppenderForType<ArrowMapData<int64_t>>(append_data);
-		} else {
-			InitializeAppenderForType<ArrowMapData<int32_t>>(append_data);
-		}
+		// Arrow MapArray only supports 32-bit offsets. There is no LargeMapArray type in Arrow.
+		InitializeAppenderForType<ArrowMapData<int32_t>>(append_data);
 		break;
 	default:
 		throw NotImplementedException("Unsupported type in DuckDB -> Arrow Conversion: %s\n", type.ToString());
@@ -253,7 +263,7 @@ unique_ptr<ArrowAppendData> ArrowAppender::InitializeChild(const LogicalType &ty
 	InitializeFunctionPointers(*result, type);
 
 	auto byte_count = (capacity + 7) / 8;
-	result->validity.reserve(byte_count);
+	result->GetValidityBuffer().reserve(byte_count);
 	result->initialize(*result, type, capacity);
 	return result;
 }

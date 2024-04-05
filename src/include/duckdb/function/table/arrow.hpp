@@ -82,11 +82,15 @@ public:
 struct ArrowScanLocalState;
 struct ArrowArrayScanState {
 public:
-	ArrowArrayScanState(ArrowScanLocalState &state);
+	explicit ArrowArrayScanState(ArrowScanLocalState &state);
 
 public:
 	ArrowScanLocalState &state;
+	// Hold ownership over the Arrow Arrays owned by DuckDB to allow for zero-copy
+	shared_ptr<ArrowArrayWrapper> owned_data;
 	unordered_map<idx_t, unique_ptr<ArrowArrayScanState>> children;
+	// Optionally holds the pointer that was used to create the cached dictionary
+	optional_ptr<ArrowArray> arrow_dictionary = nullptr;
 	// Cache the (optional) dictionary of this array
 	unique_ptr<Vector> dictionary;
 	//! Run-end-encoding state
@@ -94,8 +98,9 @@ public:
 
 public:
 	ArrowArrayScanState &GetChild(idx_t child_idx);
-	void AddDictionary(unique_ptr<Vector> dictionary_p);
+	void AddDictionary(unique_ptr<Vector> dictionary_p, ArrowArray *arrow_dict);
 	bool HasDictionary() const;
+	bool CacheOutdated(ArrowArray *dictionary) const;
 	Vector &GetDictionary();
 	ArrowRunEndEncodingState &RunEndEncoding() {
 		return run_end_encoding;
@@ -106,6 +111,10 @@ public:
 		// Note: dictionary is not reset
 		// the dictionary should be the same for every array scanned of this column
 		run_end_encoding.Reset();
+		for (auto &child : children) {
+			child.second->Reset();
+		}
+		owned_data.reset();
 	}
 };
 
@@ -117,9 +126,6 @@ public:
 public:
 	unique_ptr<ArrowArrayStreamWrapper> stream;
 	shared_ptr<ArrowArrayWrapper> chunk;
-	// This vector hold the Arrow Vectors owned by DuckDB to allow for zero-copy
-	// Note that only DuckDB can release these vectors
-	unordered_map<idx_t, shared_ptr<ArrowArrayWrapper>> arrow_owned_data;
 	idx_t chunk_offset = 0;
 	idx_t batch_index = 0;
 	vector<column_t> column_ids;
@@ -140,7 +146,7 @@ public:
 		if (it == array_states.end()) {
 			auto child_p = make_uniq<ArrowArrayScanState>(*this);
 			auto &child = *child_p;
-			array_states.emplace(std::make_pair(child_idx, std::move(child_p)));
+			array_states.emplace(child_idx, std::move(child_p));
 			return child;
 		}
 		return *it->second;

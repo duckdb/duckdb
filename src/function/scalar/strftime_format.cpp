@@ -367,7 +367,7 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 		break;
 	}
 	case StrTimeSpecifier::MONTH_DECIMAL: {
-		target = Write2(target, data[1]);
+		target = Write2(target, UnsafeNumericCast<uint8_t>(data[1]));
 		break;
 	}
 	case StrTimeSpecifier::YEAR_WITHOUT_CENTURY: {
@@ -375,7 +375,7 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 		break;
 	}
 	case StrTimeSpecifier::HOUR_24_DECIMAL: {
-		target = Write2(target, data[3]);
+		target = Write2(target, UnsafeNumericCast<uint8_t>(data[3]));
 		break;
 	}
 	case StrTimeSpecifier::HOUR_12_DECIMAL: {
@@ -383,15 +383,15 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 		if (hour == 0) {
 			hour = 12;
 		}
-		target = Write2(target, hour);
+		target = Write2(target, UnsafeNumericCast<uint8_t>(hour));
 		break;
 	}
 	case StrTimeSpecifier::MINUTE_DECIMAL: {
-		target = Write2(target, data[4]);
+		target = Write2(target, UnsafeNumericCast<uint8_t>(data[4]));
 		break;
 	}
 	case StrTimeSpecifier::SECOND_DECIMAL: {
-		target = Write2(target, data[5]);
+		target = Write2(target, UnsafeNumericCast<uint8_t>(data[5]));
 		break;
 	}
 	default:
@@ -598,7 +598,9 @@ string StrTimeFormat::ParseFormatSpecifier(const string &format_string, StrTimeF
 					// parse the subformat in a separate format specifier
 					StrfTimeFormat locale_format;
 					string error = StrTimeFormat::ParseFormatSpecifier(subformat, locale_format);
-					D_ASSERT(error.empty());
+					if (!error.empty()) {
+						throw InternalException("Failed to bind sub-format specifier \"%s\": %s", subformat, error);
+					}
 					// add the previous literal to the first literal of the subformat
 					locale_format.literals[0] = std::move(current_literal) + locale_format.literals[0];
 					current_literal = "";
@@ -731,7 +733,7 @@ int32_t StrpTimeFormat::TryParseCollection(const char *data, idx_t &pos, idx_t s
 		if (i == entry_size) {
 			// full match
 			pos += entry_size;
-			return c;
+			return UnsafeNumericCast<int32_t>(c);
 		}
 	}
 	return -1;
@@ -862,7 +864,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) const {
 					return false;
 				}
 				// day of the month
-				result_data[2] = number;
+				result_data[2] = UnsafeNumericCast<int32_t>(number);
 				offset_specifier = specifiers[i];
 				break;
 			case StrTimeSpecifier::MONTH_DECIMAL_PADDED:
@@ -873,7 +875,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) const {
 					return false;
 				}
 				// month number
-				result_data[1] = number;
+				result_data[1] = UnsafeNumericCast<int32_t>(number);
 				offset_specifier = specifiers[i];
 				break;
 			case StrTimeSpecifier::YEAR_WITHOUT_CENTURY_PADDED:
@@ -916,7 +918,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) const {
 					break;
 				}
 				// year as full number
-				result_data[0] = number;
+				result_data[0] = UnsafeNumericCast<int32_t>(number);
 				break;
 			case StrTimeSpecifier::YEAR_ISO:
 				switch (offset_specifier) {
@@ -965,7 +967,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) const {
 					return false;
 				}
 				// hour as full number
-				result_data[3] = number;
+				result_data[3] = UnsafeNumericCast<int32_t>(number);
 				break;
 			case StrTimeSpecifier::HOUR_12_PADDED:
 			case StrTimeSpecifier::HOUR_12_DECIMAL:
@@ -975,7 +977,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) const {
 					return false;
 				}
 				// 12-hour number: start off by just storing the number
-				result_data[3] = number;
+				result_data[3] = UnsafeNumericCast<int32_t>(number);
 				break;
 			case StrTimeSpecifier::MINUTE_PADDED:
 			case StrTimeSpecifier::MINUTE_DECIMAL:
@@ -985,7 +987,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) const {
 					return false;
 				}
 				// minutes
-				result_data[4] = number;
+				result_data[4] = UnsafeNumericCast<int32_t>(number);
 				break;
 			case StrTimeSpecifier::SECOND_PADDED:
 			case StrTimeSpecifier::SECOND_DECIMAL:
@@ -995,22 +997,23 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) const {
 					return false;
 				}
 				// seconds
-				result_data[5] = number;
+				result_data[5] = UnsafeNumericCast<int32_t>(number);
 				break;
 			case StrTimeSpecifier::NANOSECOND_PADDED:
 				D_ASSERT(number < Interval::NANOS_PER_SEC); // enforced by the length of the number
 				// microseconds (rounded)
-				result_data[6] = (number + Interval::NANOS_PER_MICRO / 2) / Interval::NANOS_PER_MICRO;
+				result_data[6] =
+				    UnsafeNumericCast<int32_t>((number + Interval::NANOS_PER_MICRO / 2) / Interval::NANOS_PER_MICRO);
 				break;
 			case StrTimeSpecifier::MICROSECOND_PADDED:
 				D_ASSERT(number < Interval::MICROS_PER_SEC); // enforced by the length of the number
 				// microseconds
-				result_data[6] = number;
+				result_data[6] = UnsafeNumericCast<int32_t>(number);
 				break;
 			case StrTimeSpecifier::MILLISECOND_PADDED:
 				D_ASSERT(number < Interval::MSECS_PER_SEC); // enforced by the length of the number
 				// microseconds
-				result_data[6] = number * Interval::MICROS_PER_MSEC;
+				result_data[6] = UnsafeNumericCast<int32_t>(number * Interval::MICROS_PER_MSEC);
 				break;
 			case StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST:
 			case StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST:
@@ -1272,11 +1275,11 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) const {
 		iso_week = (iso_week > 53) ? 1 : iso_week;
 		iso_weekday = (iso_weekday > 7) ? 1 : iso_weekday;
 		// Gregorian and ISO agree on the year of January 4
-		auto jan4 = Date::FromDate(iso_year, 1, 4);
+		auto jan4 = Date::FromDate(UnsafeNumericCast<int32_t>(iso_year), 1, 4);
 		// ISO Week 1 starts on the previous Monday
 		auto week1 = Date::GetMondayOfCurrentWeek(jan4);
 		// ISO Week N starts N-1 weeks later
-		auto iso_date = week1 + (iso_week - 1) * 7 + (iso_weekday - 1);
+		auto iso_date = week1 + UnsafeNumericCast<int32_t>((iso_week - 1) * 7 + (iso_weekday - 1));
 		Date::Convert(iso_date, result_data[0], result_data[1], result_data[2]);
 		break;
 	}
@@ -1292,14 +1295,14 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) const {
 		yeardate -= int(offset_specifier == StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST);
 		// Is there a week 0?
 		yeardate -= 7 * int(yeardate >= jan1);
-		yeardate += weekno * 7 + weekday;
+		yeardate += UnsafeNumericCast<int32_t>(weekno * 7 + weekday);
 		Date::Convert(yeardate, result_data[0], result_data[1], result_data[2]);
 		break;
 	}
 	case StrTimeSpecifier::DAY_OF_YEAR_PADDED:
 	case StrTimeSpecifier::DAY_OF_YEAR_DECIMAL: {
 		auto yeardate = Date::FromDate(result_data[0], 1, 1);
-		yeardate += yearday - 1;
+		yeardate += UnsafeNumericCast<int32_t>(yearday - 1);
 		Date::Convert(yeardate, result_data[0], result_data[1], result_data[2]);
 		break;
 	}

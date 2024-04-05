@@ -68,7 +68,7 @@ duckdb_blob FetchDefaultValue::Operation() {
 
 template <>
 bool FromCBlobCastWrapper::Operation(duckdb_blob input, duckdb_string &result) {
-	string_t input_str(const_char_ptr_cast(input.data), input.size);
+	string_t input_str(const_char_ptr_cast(input.data), UnsafeNumericCast<uint32_t>(input.size));
 	return ToCStringCastWrapper<duckdb::CastFromBlob>::template Operation<string_t, duckdb_string>(input_str, result);
 }
 
@@ -78,7 +78,7 @@ bool CanUseDeprecatedFetch(duckdb_result *result, idx_t col, idx_t row) {
 	if (!result) {
 		return false;
 	}
-	if (!duckdb::deprecated_materialize_result(result)) {
+	if (!duckdb::DeprecatedMaterializeResult(result)) {
 		return false;
 	}
 	if (col >= result->__deprecated_column_count || row >= result->__deprecated_row_count) {

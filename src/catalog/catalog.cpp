@@ -469,14 +469,52 @@ void Catalog::AutoloadExtensionByConfigName(ClientContext &context, const string
 	throw Catalog::UnrecognizedConfigurationError(context, configuration_name);
 }
 
+static bool IsAutoloadableFunction(CatalogType type) {
+	return (type == CatalogType::TABLE_FUNCTION_ENTRY || type == CatalogType::SCALAR_FUNCTION_ENTRY ||
+	        type == CatalogType::AGGREGATE_FUNCTION_ENTRY || type == CatalogType::PRAGMA_FUNCTION_ENTRY);
+}
+
+static bool CompareCatalogTypes(CatalogType type_a, CatalogType type_b) {
+	if (type_a == type_b) {
+		// Types are same
+		return true;
+	}
+	if (!IsAutoloadableFunction(type_a)) {
+		D_ASSERT(IsAutoloadableFunction(type_b));
+		// Make sure that `type_a` is an autoloadable function
+		return CompareCatalogTypes(type_b, type_a);
+	}
+	if (type_a == CatalogType::TABLE_FUNCTION_ENTRY) {
+		// These are all table functions
+		return type_b == CatalogType::TABLE_MACRO_ENTRY || type_b == CatalogType::PRAGMA_FUNCTION_ENTRY;
+	} else if (type_a == CatalogType::SCALAR_FUNCTION_ENTRY) {
+		// These are all scalar functions
+		return type_b == CatalogType::MACRO_ENTRY;
+	} else if (type_a == CatalogType::PRAGMA_FUNCTION_ENTRY) {
+		// These are all table functions
+		return type_b == CatalogType::TABLE_MACRO_ENTRY || type_b == CatalogType::TABLE_FUNCTION_ENTRY;
+	}
+	return false;
+}
+
 bool Catalog::AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType type, const string &entry_name) {
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 	auto &dbconfig = DBConfig::GetConfig(db);
 	if (dbconfig.options.autoload_known_extensions) {
 		string extension_name;
-		if (type == CatalogType::TABLE_FUNCTION_ENTRY || type == CatalogType::SCALAR_FUNCTION_ENTRY ||
-		    type == CatalogType::AGGREGATE_FUNCTION_ENTRY || type == CatalogType::PRAGMA_FUNCTION_ENTRY) {
-			extension_name = ExtensionHelper::FindExtensionInEntries(entry_name, EXTENSION_FUNCTIONS);
+		if (IsAutoloadableFunction(type)) {
+			auto lookup_result = ExtensionHelper::FindExtensionInFunctionEntries(entry_name, EXTENSION_FUNCTIONS);
+			if (lookup_result.empty()) {
+				return false;
+			}
+			for (auto &function : lookup_result) {
+				auto function_type = function.second;
+				// FIXME: what if there are two functions with the same name, from different extensions?
+				if (CompareCatalogTypes(type, function_type)) {
+					extension_name = function.first;
+					break;
+				}
+			}
 		} else if (type == CatalogType::COPY_FUNCTION_ENTRY) {
 			extension_name = ExtensionHelper::FindExtensionInEntries(entry_name, EXTENSION_COPY_FUNCTIONS);
 		} else if (type == CatalogType::TYPE_ENTRY) {
@@ -533,7 +571,42 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 	string extension_name;
 	if (type == CatalogType::TABLE_FUNCTION_ENTRY || type == CatalogType::SCALAR_FUNCTION_ENTRY ||
 	    type == CatalogType::AGGREGATE_FUNCTION_ENTRY || type == CatalogType::PRAGMA_FUNCTION_ENTRY) {
-		extension_name = ExtensionHelper::FindExtensionInEntries(entry_name, EXTENSION_FUNCTIONS);
+		auto lookup_result = ExtensionHelper::FindExtensionInFunctionEntries(entry_name, EXTENSION_FUNCTIONS);
+		do {
+			if (lookup_result.empty()) {
+				break;
+			}
+			vector<string> other_types;
+			string extension_for_error;
+			for (auto &function : lookup_result) {
+				auto function_type = function.second;
+				if (CompareCatalogTypes(type, function_type)) {
+					extension_name = function.first;
+					break;
+				}
+				extension_for_error = function.first;
+				other_types.push_back(CatalogTypeToString(function_type));
+			}
+			if (!extension_name.empty()) {
+				break;
+			}
+			if (other_types.size() == 1) {
+				auto &function_type = other_types[0];
+				auto error =
+				    CatalogException("%s with name \"%s\" is not in the catalog, a function by this name exists "
+				                     "in the %s extension, but it's of a different type, namely %s",
+				                     CatalogTypeToString(type), entry_name, extension_for_error, function_type);
+				return error;
+			} else {
+				D_ASSERT(!other_types.empty());
+				auto list_of_types = StringUtil::Join(other_types, ", ");
+				auto error =
+				    CatalogException("%s with name \"%s\" is not in the catalog, functions with this name exist "
+				                     "in the %s extension, but they are of different types, namely %s",
+				                     CatalogTypeToString(type), entry_name, extension_for_error, list_of_types);
+				return error;
+			}
+		} while (false);
 	} else if (type == CatalogType::TYPE_ENTRY) {
 		extension_name = ExtensionHelper::FindExtensionInEntries(entry_name, EXTENSION_TYPES);
 	} else if (type == CatalogType::COPY_FUNCTION_ENTRY) {
@@ -657,17 +730,28 @@ CatalogEntryLookup Catalog::TryLookupEntry(ClientContext &context, CatalogType t
                                            QueryErrorContext error_context) {
 	auto entries = GetCatalogEntries(context, catalog, schema);
 	vector<CatalogLookup> lookups;
+	vector<CatalogLookup> final_lookups;
 	lookups.reserve(entries.size());
 	for (auto &entry : entries) {
+		optional_ptr<Catalog> catalog_entry;
 		if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-			auto catalog_entry = Catalog::GetCatalogEntry(context, entry.catalog);
-			if (!catalog_entry) {
-				return {nullptr, nullptr, ErrorData()};
-			}
-			lookups.emplace_back(*catalog_entry, entry.schema);
+			catalog_entry = Catalog::GetCatalogEntry(context, entry.catalog);
 		} else {
-			lookups.emplace_back(Catalog::GetCatalog(context, entry.catalog), entry.schema);
+			catalog_entry = &Catalog::GetCatalog(context, entry.catalog);
 		}
+		if (!catalog_entry) {
+			return {nullptr, nullptr, ErrorData()};
+		}
+		D_ASSERT(catalog_entry);
+		auto lookup_behavior = catalog_entry->CatalogTypeLookupRule(type);
+		if (lookup_behavior == CatalogLookupBehavior::STANDARD) {
+			lookups.emplace_back(*catalog_entry, entry.schema);
+		} else if (lookup_behavior == CatalogLookupBehavior::LOWER_PRIORITY) {
+			final_lookups.emplace_back(*catalog_entry, entry.schema);
+		}
+	}
+	for (auto &lookup : final_lookups) {
+		lookups.emplace_back(std::move(lookup));
 	}
 	return Catalog::TryLookupEntry(context, lookups, type, name, if_not_found, error_context);
 }

@@ -36,7 +36,7 @@ void BaseAppender::Destructor() {
 	// wrapped in a try/catch because Close() can throw if the table was dropped in the meantime
 	try {
 		Close();
-	} catch (...) {
+	} catch (...) { // NOLINT
 	}
 }
 
@@ -102,7 +102,8 @@ void BaseAppender::AppendDecimalValueInternal(Vector &col, SRC input) {
 		D_ASSERT(type.id() == LogicalTypeId::DECIMAL);
 		auto width = DecimalType::GetWidth(type);
 		auto scale = DecimalType::GetScale(type);
-		TryCastToDecimal::Operation<SRC, DST>(input, FlatVector::GetData<DST>(col)[chunk.size()], nullptr, width,
+		CastParameters parameters;
+		TryCastToDecimal::Operation<SRC, DST>(input, FlatVector::GetData<DST>(col)[chunk.size()], parameters, width,
 		                                      scale);
 		return;
 	}

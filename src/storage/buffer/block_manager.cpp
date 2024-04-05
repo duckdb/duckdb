@@ -6,8 +6,9 @@
 
 namespace duckdb {
 
-BlockManager::BlockManager(BufferManager &buffer_manager)
-    : buffer_manager(buffer_manager), metadata_manager(make_uniq<MetadataManager>(*this, buffer_manager)) {
+BlockManager::BlockManager(BufferManager &buffer_manager, const optional_idx block_alloc_size_p)
+    : buffer_manager(buffer_manager), metadata_manager(make_uniq<MetadataManager>(*this, buffer_manager)),
+      block_alloc_size(block_alloc_size_p) {
 }
 
 shared_ptr<BlockHandle> BlockManager::RegisterBlock(block_id_t block_id) {
@@ -35,8 +36,8 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id, s
 	D_ASSERT(old_block->state == BlockState::BLOCK_LOADED);
 	D_ASSERT(old_block->buffer);
 
-	// Temp buffers can be larger than the storage block size. But persistent buffers
-	// cannot.
+	// Temp buffers can be larger than the storage block size.
+	// But persistent buffers cannot.
 	D_ASSERT(old_block->buffer->AllocSize() <= Storage::BLOCK_ALLOC_SIZE);
 
 	// register a block with the new block id
@@ -60,7 +61,11 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id, s
 	// persist the new block to disk
 	Write(*new_block->buffer, block_id);
 
-	buffer_manager.GetBufferPool().AddToEvictionQueue(new_block);
+	// potentially purge the queue
+	auto purge_queue = buffer_manager.GetBufferPool().AddToEvictionQueue(new_block);
+	if (purge_queue) {
+		buffer_manager.GetBufferPool().PurgeQueue();
+	}
 
 	return new_block;
 }

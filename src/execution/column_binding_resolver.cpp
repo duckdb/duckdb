@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-ColumnBindingResolver::ColumnBindingResolver() {
+ColumnBindingResolver::ColumnBindingResolver(bool verify_only) : verify_only(verify_only) {
 }
 
 void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
@@ -152,23 +152,19 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 	// check the current set of column bindings to see which index corresponds to the column reference
 	for (idx_t i = 0; i < bindings.size(); i++) {
 		if (expr.binding == bindings[i]) {
+			if (verify_only) {
+				// in verification mode
+				return nullptr;
+			}
 			return make_uniq<BoundReferenceExpression>(expr.alias, expr.return_type, i);
 		}
 	}
 	// LCOV_EXCL_START
 	// could not bind the column reference, this should never happen and indicates a bug in the code
 	// generate an error message
-	string bound_columns = "[";
-	for (idx_t i = 0; i < bindings.size(); i++) {
-		if (i != 0) {
-			bound_columns += " ";
-		}
-		bound_columns += to_string(bindings[i].table_index) + "." + to_string(bindings[i].column_index);
-	}
-	bound_columns += "]";
-
 	throw InternalException("Failed to bind column reference \"%s\" [%d.%d] (bindings: %s)", expr.alias,
-	                        expr.binding.table_index, expr.binding.column_index, bound_columns);
+	                        expr.binding.table_index, expr.binding.column_index,
+	                        LogicalOperator::ColumnBindingsToString(bindings));
 	// LCOV_EXCL_STOP
 }
 
@@ -197,6 +193,8 @@ unordered_set<idx_t> ColumnBindingResolver::VerifyInternal(LogicalOperator &op) 
 
 void ColumnBindingResolver::Verify(LogicalOperator &op) {
 #ifdef DEBUG
+	ColumnBindingResolver resolver(true);
+	resolver.VisitOperator(op);
 	VerifyInternal(op);
 #endif
 }

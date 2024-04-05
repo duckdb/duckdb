@@ -186,7 +186,7 @@ select * from read_csv('test/sql/copy/csv/data/auto/glob/[0-9].csv', AUTO_DETECT
 9	9	1.9	nine
 
 query IIII rowsort
-select * from read_csv('test/sql/copy/csv/data/auto/glob/[0-9].csv', sample_size=-1, header=True, new_line = '\r\n', columns={'row_id':'BIGINT','integer':'INTEGER','float':'DOUBLE', 'text':'VARCHAR'})
+select * from read_csv('test/sql/copy/csv/data/auto/glob/[0-9].csv', sample_size=-1,  new_line = '\r\n', columns={'row_id':'BIGINT','integer':'INTEGER','float':'DOUBLE', 'text':'VARCHAR'})
 ----
 0	0	1.0	zero
 1	1	1.1	one

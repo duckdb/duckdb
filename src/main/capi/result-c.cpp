@@ -54,6 +54,9 @@ struct CBlobConverter {
 struct CTimestampMsConverter : public CBaseConverter {
 	template <class SRC, class DST>
 	static DST Convert(SRC input) {
+		if (!Timestamp::IsFinite(input)) {
+			return input;
+		}
 		return Timestamp::FromEpochMs(input.value);
 	}
 };
@@ -61,6 +64,9 @@ struct CTimestampMsConverter : public CBaseConverter {
 struct CTimestampNsConverter : public CBaseConverter {
 	template <class SRC, class DST>
 	static DST Convert(SRC input) {
+		if (!Timestamp::IsFinite(input)) {
+			return input;
+		}
 		return Timestamp::FromEpochNanoSeconds(input.value);
 	}
 };
@@ -68,6 +74,9 @@ struct CTimestampNsConverter : public CBaseConverter {
 struct CTimestampSecConverter : public CBaseConverter {
 	template <class SRC, class DST>
 	static DST Convert(SRC input) {
+		if (!Timestamp::IsFinite(input)) {
+			return input;
+		}
 		return Timestamp::FromEpochSeconds(input.value);
 	}
 };
@@ -264,7 +273,7 @@ duckdb_state deprecated_duckdb_translate_column(MaterializedQueryResult &result,
 	return DuckDBSuccess;
 }
 
-duckdb_state duckdb_translate_result(unique_ptr<QueryResult> result_p, duckdb_result *out) {
+duckdb_state DuckDBTranslateResult(unique_ptr<QueryResult> result_p, duckdb_result *out) {
 	auto &result = *result_p;
 	D_ASSERT(result_p);
 	if (!out) {
@@ -292,7 +301,7 @@ duckdb_state duckdb_translate_result(unique_ptr<QueryResult> result_p, duckdb_re
 	return DuckDBSuccess;
 }
 
-bool deprecated_materialize_result(duckdb_result *result) {
+bool DeprecatedMaterializeResult(duckdb_result *result) {
 	if (!result) {
 		return false;
 	}
@@ -466,7 +475,7 @@ void *duckdb_column_data(duckdb_result *result, idx_t col) {
 	if (!result || col >= result->__deprecated_column_count) {
 		return nullptr;
 	}
-	if (!duckdb::deprecated_materialize_result(result)) {
+	if (!duckdb::DeprecatedMaterializeResult(result)) {
 		return nullptr;
 	}
 	return result->__deprecated_columns[col].__deprecated_data;
@@ -476,7 +485,7 @@ bool *duckdb_nullmask_data(duckdb_result *result, idx_t col) {
 	if (!result || col >= result->__deprecated_column_count) {
 		return nullptr;
 	}
-	if (!duckdb::deprecated_materialize_result(result)) {
+	if (!duckdb::DeprecatedMaterializeResult(result)) {
 		return nullptr;
 	}
 	return result->__deprecated_columns[col].__deprecated_nullmask;
