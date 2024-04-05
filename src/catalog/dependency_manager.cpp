@@ -420,6 +420,14 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 				disallow_alter = false;
 				break;
 			}
+			case AlterTableType::RENAME_TABLE: {
+				// Renaming of tables shouldnt be blocked by anything
+				disallow_alter = false;
+				if (dep.EntryInfo().type == CatalogType::INDEX_ENTRY) {
+					// FIXME: unless there is an index on the table, because the table name is baked into the index
+					disallow_alter = true;
+				}
+			}
 			default:
 				break;
 			}
