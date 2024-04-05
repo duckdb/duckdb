@@ -160,8 +160,8 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 				if (star.exclude_list.empty() && star.replace_list.empty() && !star.expr) {
 					// ORDER BY ALL
 					// replace the order list with the all elements in the SELECT list
-					auto order_type = order.orders[0].type;
-					auto null_order = order.orders[0].null_order;
+					auto order_type = config.ResolveOrder(order.orders[0].type);
+					auto null_order = config.ResolveNullOrder(order_type, order.orders[0].null_order);
 					auto constant_expr = make_uniq<BoundConstantExpression>(Value("ALL"));
 					bound_order->orders.emplace_back(order_type, null_order, std::move(constant_expr));
 					bound_modifier = std::move(bound_order);
@@ -249,11 +249,14 @@ unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression> expr, 
 	case LogicalTypeId::UBIGINT: {
 		// index
 		auto index = UBigIntValue::Get(constant.value);
+		if (index >= sql_types.size()) {
+			throw BinderException(*expr, "ORDER term out of range - should be between 1 and %lld", sql_types.size());
+		}
 		return make_uniq<BoundColumnRefExpression>(std::move(expr->alias), sql_types[index], ColumnBinding(table_index, index));
 	}
 	case LogicalTypeId::VARCHAR: {
 		// ORDER BY ALL
-		throw InternalException("FIXME: order by all");
+		return nullptr;
 	}
 	case LogicalTypeId::STRUCT: {
 		// collation
@@ -273,6 +276,11 @@ void Binder::BindModifiers(BoundQueryNode &result, idx_t table_index, const vect
 			// set types of distinct targets
 			for (auto &expr : distinct.target_distincts) {
 				expr = FinalizeBindOrderExpression(std::move(expr), table_index, sql_types, bind_state);
+				if (!expr) {
+					throw InternalException("DISTINCT ON ORDER BY ALL not supported");
+				}
+			}
+			for (auto &expr : distinct.target_distincts) {
 				ExpressionBinder::PushCollation(context, expr, expr->return_type, true);
 			}
 			break;
@@ -285,9 +293,26 @@ void Binder::BindModifiers(BoundQueryNode &result, idx_t table_index, const vect
 		}
 		case ResultModifierType::ORDER_MODIFIER: {
 			auto &order = bound_mod->Cast<BoundOrderModifier>();
+			bool order_by_all = false;
 			for (auto &order_node : order.orders) {
 				auto &expr = order_node.expression;
 				expr = FinalizeBindOrderExpression(std::move(expr), table_index, sql_types, bind_state);
+				if (!expr) {
+					order_by_all = true;
+				}
+			}
+			if (order_by_all) {
+				D_ASSERT(order.orders.size() == 1);
+				auto order_type = order.orders[0].type;
+				auto null_order = order.orders[0].null_order;
+				order.orders.clear();
+				for(idx_t i = 0; i < sql_types.size(); i++) {
+					auto expr = make_uniq<BoundColumnRefExpression>(sql_types[i], ColumnBinding(table_index, i));
+					order.orders.emplace_back(order_type, null_order, std::move(expr));
+				}
+			}
+			for (auto &order_node : order.orders) {
+				auto &expr = order_node.expression;
 				ExpressionBinder::PushCollation(context, order_node.expression, expr->return_type);
 			}
 			break;
