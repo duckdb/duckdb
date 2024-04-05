@@ -983,7 +983,20 @@ function(duckdb_extension_load NAME)
     elseif (NOT "${duckdb_extension_load_GIT_TAG}" STREQUAL "")
       set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_GIT_TAG "${duckdb_extension_load_GIT_TAG}" PARENT_SCOPE)
     else()
-      set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_GIT_TAG "" PARENT_SCOPE)
+      find_package(Git)
+      if(Git_FOUND)
+	  message(STATUS "CIAO  ${duckdb_extension_load_SOURCE_DIR}")
+          execute_process(
+            COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
+            WORKING_DIRECTORY ${duckdb_extension_load_SOURCE_DIR}
+            RESULT_VARIABLE GIT_RESULT
+            OUTPUT_VARIABLE GIT_COMMIT
+            OUTPUT_STRIP_TRAILING_WHITESPACE)
+        set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_GIT_TAG "${GIT_COMMIT}" PARENT_SCOPE)
+	  message(STATUS "CIAO  ${GIT_COMMIT}")
+      else()
+        set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_GIT_TAG "" PARENT_SCOPE)
+      endif()
     endif()
     register_extension(${NAME} "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${duckdb_extension_load_SOURCE_DIR}" "${INCLUDE_PATH_DEFAULT}" "${TEST_PATH_DEFAULT}")
   elseif(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/extension_external/${NAME})
