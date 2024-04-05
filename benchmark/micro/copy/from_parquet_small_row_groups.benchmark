@@ -11,6 +11,7 @@ storage persistent
 
 load
 COPY (FROM range(100000000)) TO '${BENCHMARK_DIR}/small_batches.parquet' (ROW_GROUP_SIZE 5000);
+select 1;
 
 run
 CREATE TABLE small AS FROM '${BENCHMARK_DIR}/small_batches.parquet';
