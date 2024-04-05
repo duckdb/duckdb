@@ -82,7 +82,7 @@ void MetaPipeline::Ready() {
 }
 
 MetaPipeline &MetaPipeline::CreateChildMetaPipeline(Pipeline &current, PhysicalOperator &op) {
-	children.push_back(make_shared<MetaPipeline>(executor, state, &op));
+	children.push_back(make_refcounted<MetaPipeline>(executor, state, &op));
 	auto child_meta_pipeline = children.back().get();
 	// child MetaPipeline must finish completely before this MetaPipeline can start
 	current.AddDependency(child_meta_pipeline->GetBasePipeline());
@@ -92,7 +92,7 @@ MetaPipeline &MetaPipeline::CreateChildMetaPipeline(Pipeline &current, PhysicalO
 }
 
 Pipeline &MetaPipeline::CreatePipeline() {
-	pipelines.emplace_back(make_shared<Pipeline>(executor));
+	pipelines.emplace_back(make_refcounted<Pipeline>(executor));
 	state.SetPipelineSink(*pipelines.back(), sink, next_batch_index++);
 	return *pipelines.back();
 }

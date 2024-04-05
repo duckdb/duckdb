@@ -212,7 +212,7 @@ shared_ptr<RowVersionManager> RowVersionManager::Deserialize(MetaBlockPointer de
 	if (!delete_pointer.IsValid()) {
 		return nullptr;
 	}
-	auto version_info = make_shared<RowVersionManager>(start);
+	auto version_info = make_refcounted<RowVersionManager>(start);
 	MetadataReader source(manager, delete_pointer, &version_info->storage_pointers);
 	auto chunk_count = source.Read<idx_t>();
 	D_ASSERT(chunk_count > 0);

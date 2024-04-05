@@ -54,7 +54,8 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 		    make_uniq<FixedSizeAllocator>(sizeof(Node16), block_manager),
 		    make_uniq<FixedSizeAllocator>(sizeof(Node48), block_manager),
 		    make_uniq<FixedSizeAllocator>(sizeof(Node256), block_manager)};
-		allocators = make_shared<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>>(std::move(allocator_array));
+		allocators =
+		    make_refcounted<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>>(std::move(allocator_array));
 	}
 
 	// deserialize lazily

@@ -14,7 +14,7 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
       sniffer_mismatch_error(options.sniffer_user_mismatch_error), bind_data(bind_data_p) {
 
 	if (buffer_manager && buffer_manager->GetFilePath() == files[0]) {
-		auto state_machine = make_shared<CSVStateMachine>(
+		auto state_machine = make_refcounted<CSVStateMachine>(
 		    CSVStateMachineCache::Get(context).Get(options.dialect_options.state_machine_options), options);
 		// If we already have a buffer manager, we don't need to reconstruct it to the first file
 		file_scans.emplace_back(make_uniq<CSVFileScan>(context, buffer_manager, state_machine, options, bind_data,
@@ -36,7 +36,7 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
 		auto buffer_size = file_scans.back()->buffer_manager->GetBuffer(0)->actual_size;
 		current_boundary = CSVIterator(0, 0, 0, 0, buffer_size);
 	}
-	current_buffer_in_use = make_shared<CSVBufferUsage>(*file_scans.back()->buffer_manager, 0);
+	current_buffer_in_use = make_refcounted<CSVBufferUsage>(*file_scans.back()->buffer_manager, 0);
 }
 
 double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
@@ -66,8 +66,8 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 		if (cur_idx == 0) {
 			current_file = file_scans.back();
 		} else {
-			current_file = make_shared<CSVFileScan>(context, bind_data.files[cur_idx], bind_data.options, cur_idx,
-			                                        bind_data, column_ids, file_schema);
+			current_file = make_refcounted<CSVFileScan>(context, bind_data.files[cur_idx], bind_data.options, cur_idx,
+			                                            bind_data, column_ids, file_schema);
 		}
 		auto csv_scanner =
 		    make_uniq<StringValueScanner>(scanner_idx++, current_file->buffer_manager, current_file->state_machine,
@@ -80,7 +80,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 	}
 	if (current_buffer_in_use->buffer_idx != current_boundary.GetBufferIdx()) {
 		current_buffer_in_use =
-		    make_shared<CSVBufferUsage>(*file_scans.back()->buffer_manager, current_boundary.GetBufferIdx());
+		    make_refcounted<CSVBufferUsage>(*file_scans.back()->buffer_manager, current_boundary.GetBufferIdx());
 	}
 	// We first create the scanner for the current boundary
 	auto &current_file = *file_scans.back();
@@ -96,13 +96,13 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 		auto current_file_idx = current_file.file_idx + 1;
 		if (current_file_idx < bind_data.files.size()) {
 			// If we have a next file we have to construct the file scan for that
-			file_scans.emplace_back(make_shared<CSVFileScan>(context, bind_data.files[current_file_idx],
-			                                                 bind_data.options, current_file_idx, bind_data, column_ids,
-			                                                 file_schema));
+			file_scans.emplace_back(make_refcounted<CSVFileScan>(context, bind_data.files[current_file_idx],
+			                                                     bind_data.options, current_file_idx, bind_data,
+			                                                     column_ids, file_schema));
 			// And re-start the boundary-iterator
 			auto buffer_size = file_scans.back()->buffer_manager->GetBuffer(0)->actual_size;
 			current_boundary = CSVIterator(current_file_idx, 0, 0, 0, buffer_size);
-			current_buffer_in_use = make_shared<CSVBufferUsage>(*file_scans.back()->buffer_manager, 0);
+			current_buffer_in_use = make_refcounted<CSVBufferUsage>(*file_scans.back()->buffer_manager, 0);
 		} else {
 			// If not we are done with this CSV Scanning
 			finished = true;

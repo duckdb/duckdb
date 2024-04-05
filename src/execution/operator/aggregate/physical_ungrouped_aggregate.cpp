@@ -586,7 +586,7 @@ SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline
 		auto &radix_state = *distinct_state.radix_states[table_idx];
 		radix_table_p->Finalize(context, radix_state);
 	}
-	auto new_event = make_shared<UngroupedDistinctAggregateFinalizeEvent>(context, *this, gstate, pipeline);
+	auto new_event = make_refcounted<UngroupedDistinctAggregateFinalizeEvent>(context, *this, gstate, pipeline);
 	event.InsertEvent(std::move(new_event));
 	return SinkFinalizeType::READY;
 }

@@ -178,7 +178,7 @@ SinkFinalizeType PhysicalCreateARTIndex::Finalize(Pipeline &pipeline, Event &eve
 	auto &index = index_entry->Cast<DuckIndexEntry>();
 	index.initial_index_size = state.global_index->GetInMemorySize();
 
-	index.info = make_shared<IndexDataTableInfo>(storage.info, index.name);
+	index.info = make_refcounted<IndexDataTableInfo>(storage.info, index.name);
 	for (auto &parsed_expr : info->parsed_expressions) {
 		index.parsed_expressions.push_back(parsed_expr->Copy());
 	}

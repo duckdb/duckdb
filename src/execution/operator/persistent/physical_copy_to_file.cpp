@@ -284,7 +284,7 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 		}
 
 		if (partition_output) {
-			state->partition_state = make_shared<GlobalHivePartitionState>();
+			state->partition_state = make_refcounted<GlobalHivePartitionState>();
 		}
 
 		return std::move(state);

@@ -15,7 +15,7 @@
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/execution/physical_operator_states.hpp"
 #include "duckdb/common/enums/pending_execution_result.hpp"
-#include "duckdb/common/weak_ptr.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 
 namespace duckdb {
 

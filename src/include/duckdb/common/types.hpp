@@ -35,7 +35,7 @@ using buffer_ptr = shared_ptr<T>;
 
 template <class T, typename... ARGS>
 buffer_ptr<T> make_buffer(ARGS &&...args) { // NOLINT: mimic std casing
-	return make_shared<T>(std::forward<ARGS>(args)...);
+	return make_refcounted<T>(std::forward<ARGS>(args)...);
 }
 
 struct list_entry_t { // NOLINT: mimic std casing

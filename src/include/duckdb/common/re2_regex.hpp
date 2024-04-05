@@ -4,7 +4,8 @@
 
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/common/vector.hpp"
-#include <string>
+#include "duckdb/common/shared_ptr.hpp"
+#include "duckdb/common/string.hpp"
 #include <stdexcept>
 
 namespace duckdb_re2 {
@@ -22,7 +23,7 @@ public:
 	}
 
 private:
-	shared_ptr<duckdb_re2::RE2> regex;
+	duckdb::shared_ptr<duckdb_re2::RE2> regex;
 };
 
 struct GroupMatch {

@@ -13,7 +13,7 @@
 #include "duckdb/transaction/undo_buffer.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/transaction/transaction_data.hpp"
-#include "duckdb/common/weak_ptr.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 
 namespace duckdb {
 class SequenceCatalogEntry;

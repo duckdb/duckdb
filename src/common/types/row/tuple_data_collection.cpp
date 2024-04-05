@@ -12,7 +12,7 @@ namespace duckdb {
 using ValidityBytes = TupleDataLayout::ValidityBytes;
 
 TupleDataCollection::TupleDataCollection(BufferManager &buffer_manager, const TupleDataLayout &layout_p)
-    : layout(layout_p.Copy()), allocator(make_shared<TupleDataAllocator>(buffer_manager, layout)) {
+    : layout(layout_p.Copy()), allocator(make_refcounted<TupleDataAllocator>(buffer_manager, layout)) {
 	Initialize();
 }
 
@@ -377,7 +377,7 @@ void TupleDataCollection::Reset() {
 	segments.clear();
 
 	// Refreshes the TupleDataAllocator to prevent holding on to allocated data unnecessarily
-	allocator = make_shared<TupleDataAllocator>(*allocator);
+	allocator = make_refcounted<TupleDataAllocator>(*allocator);
 }
 
 void TupleDataCollection::InitializeChunk(DataChunk &chunk) const {

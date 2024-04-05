@@ -186,7 +186,7 @@ SinkFinalizeType PhysicalOrder::Finalize(Pipeline &pipeline, Event &event, Clien
 void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, Event &event, OrderGlobalSinkState &state) {
 	// Initialize global sort state for a round of merging
 	state.global_sort_state.InitializeMergeRound();
-	auto new_event = make_shared<OrderMergeEvent>(state, pipeline);
+	auto new_event = make_refcounted<OrderMergeEvent>(state, pipeline);
 	event.InsertEvent(std::move(new_event));
 }
 

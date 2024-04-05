@@ -27,7 +27,7 @@ class ObjectCache;
 struct AttachInfo;
 class DatabaseFileSystem;
 
-class DatabaseInstance : public std::enable_shared_from_this<DatabaseInstance> {
+class DatabaseInstance : public enable_shared_from_this<DatabaseInstance> {
 	friend class DuckDB;
 
 public:

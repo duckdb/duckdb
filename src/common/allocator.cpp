@@ -195,7 +195,7 @@ data_ptr_t Allocator::DefaultReallocate(PrivateAllocatorData *private_data, data
 }
 
 shared_ptr<Allocator> &Allocator::DefaultAllocatorReference() {
-	static shared_ptr<Allocator> DEFAULT_ALLOCATOR = make_shared<Allocator>();
+	static shared_ptr<Allocator> DEFAULT_ALLOCATOR = make_refcounted<Allocator>();
 	return DEFAULT_ALLOCATOR;
 }
 

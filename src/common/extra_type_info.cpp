@@ -190,7 +190,7 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 		deserializer.ReadList(201, "values", [&](Deserializer::List &list, idx_t i) {
 			strings[i] = StringVector::AddStringOrBlob(values_insert_order, list.ReadElement<string>());
 		});
-		return make_shared<EnumTypeInfoTemplated>(values_insert_order, size);
+		return make_refcounted<EnumTypeInfoTemplated>(values_insert_order, size);
 	}
 
 	const string_map_t<T> &GetValues() const {
@@ -227,13 +227,13 @@ LogicalType EnumTypeInfo::CreateType(Vector &ordered_data, idx_t size) {
 	auto enum_internal_type = EnumTypeInfo::DictType(size);
 	switch (enum_internal_type) {
 	case PhysicalType::UINT8:
-		info = make_shared<EnumTypeInfoTemplated<uint8_t>>(ordered_data, size);
+		info = make_refcounted<EnumTypeInfoTemplated<uint8_t>>(ordered_data, size);
 		break;
 	case PhysicalType::UINT16:
-		info = make_shared<EnumTypeInfoTemplated<uint16_t>>(ordered_data, size);
+		info = make_refcounted<EnumTypeInfoTemplated<uint16_t>>(ordered_data, size);
 		break;
 	case PhysicalType::UINT32:
-		info = make_shared<EnumTypeInfoTemplated<uint32_t>>(ordered_data, size);
+		info = make_refcounted<EnumTypeInfoTemplated<uint32_t>>(ordered_data, size);
 		break;
 	default:
 		throw InternalException("Invalid Physical Type for ENUMs");

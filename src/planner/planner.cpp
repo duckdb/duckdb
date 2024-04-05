@@ -101,7 +101,7 @@ shared_ptr<PreparedStatementData> Planner::PrepareSQLStatement(unique_ptr<SQLSta
 	// create a plan of the underlying statement
 	CreatePlan(std::move(statement));
 	// now create the logical prepare
-	auto prepared_data = make_shared<PreparedStatementData>(copied_statement->type);
+	auto prepared_data = make_refcounted<PreparedStatementData>(copied_statement->type);
 	prepared_data->unbound_statement = std::move(copied_statement);
 	prepared_data->names = names;
 	prepared_data->types = types;

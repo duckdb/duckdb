@@ -35,8 +35,8 @@ private:
 
 ClientData::ClientData(ClientContext &context) : catalog_search_path(make_uniq<CatalogSearchPath>(context)) {
 	auto &db = DatabaseInstance::GetDatabase(context);
-	profiler = make_shared<QueryProfiler>(context);
-	temporary_objects = make_shared<AttachedDatabase>(db, AttachedDatabaseType::TEMP_DATABASE);
+	profiler = make_refcounted<QueryProfiler>(context);
+	temporary_objects = make_refcounted<AttachedDatabase>(db, AttachedDatabaseType::TEMP_DATABASE);
 	temporary_objects->oid = DatabaseManager::Get(db).ModifyCatalog();
 	random_engine = make_uniq<RandomEngine>();
 	file_opener = make_uniq<ClientContextFileOpener>(context);

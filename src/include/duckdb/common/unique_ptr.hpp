@@ -9,10 +9,10 @@
 
 namespace duckdb {
 
-template <class DATA_TYPE, class ALLOCATOR_TYPE = std::default_delete<DATA_TYPE>, bool SAFE = true>
-class unique_ptr : public std::unique_ptr<DATA_TYPE, ALLOCATOR_TYPE> { // NOLINT: naming
+template <class DATA_TYPE, class DELETER = std::default_delete<DATA_TYPE>, bool SAFE = true>
+class unique_ptr : public std::unique_ptr<DATA_TYPE, DELETER> { // NOLINT: naming
 public:
-	using original = std::unique_ptr<DATA_TYPE, ALLOCATOR_TYPE>;
+	using original = std::unique_ptr<DATA_TYPE, DELETER>;
 	using original::original; // NOLINT
 
 private:
@@ -53,9 +53,9 @@ public:
 	}
 };
 
-template <class DATA_TYPE, class ALLOCATOR_TYPE, bool SAFE>
-class unique_ptr<DATA_TYPE[], ALLOCATOR_TYPE, SAFE>
-    : public std::unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE[]>> {
+// FIXME: DELETER is defined, but we use std::default_delete???
+template <class DATA_TYPE, class DELETER, bool SAFE>
+class unique_ptr<DATA_TYPE[], DELETER, SAFE> : public std::unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE[]>> {
 public:
 	using original = std::unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE[]>>;
 	using original::original;

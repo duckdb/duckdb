@@ -43,7 +43,7 @@ public:
 		if (!object || object->GetObjectType() != T::ObjectType()) {
 			return nullptr;
 		}
-		return std::static_pointer_cast<T, ObjectCacheEntry>(object);
+		return shared_ptr_cast<ObjectCacheEntry, T>(object);
 	}
 
 	template <class T, class... ARGS>
@@ -52,7 +52,7 @@ public:
 
 		auto entry = cache.find(key);
 		if (entry == cache.end()) {
-			auto value = make_shared<T>(args...);
+			auto value = make_refcounted<T>(args...);
 			cache[key] = value;
 			return value;
 		}
@@ -60,7 +60,7 @@ public:
 		if (!object || object->GetObjectType() != T::ObjectType()) {
 			return nullptr;
 		}
-		return std::static_pointer_cast<T, ObjectCacheEntry>(object);
+		return shared_ptr_cast<ObjectCacheEntry, T>(object);
 	}
 
 	void Put(string key, shared_ptr<ObjectCacheEntry> value) {

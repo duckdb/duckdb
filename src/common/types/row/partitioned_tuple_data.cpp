@@ -9,7 +9,7 @@ namespace duckdb {
 PartitionedTupleData::PartitionedTupleData(PartitionedTupleDataType type_p, BufferManager &buffer_manager_p,
                                            const TupleDataLayout &layout_p)
     : type(type_p), buffer_manager(buffer_manager_p), layout(layout_p.Copy()), count(0), data_size(0),
-      allocators(make_shared<PartitionTupleDataAllocators>()) {
+      allocators(make_refcounted<PartitionTupleDataAllocators>()) {
 }
 
 PartitionedTupleData::PartitionedTupleData(const PartitionedTupleData &other)
@@ -434,7 +434,7 @@ void PartitionedTupleData::Print() {
 // LCOV_EXCL_STOP
 
 void PartitionedTupleData::CreateAllocator() {
-	allocators->allocators.emplace_back(make_shared<TupleDataAllocator>(buffer_manager, layout));
+	allocators->allocators.emplace_back(make_refcounted<TupleDataAllocator>(buffer_manager, layout));
 }
 
 } // namespace duckdb

@@ -624,7 +624,7 @@ shared_ptr<RowVersionManager> &RowGroup::GetOrCreateVersionInfoPtr() {
 	if (!vinfo) {
 		lock_guard<mutex> lock(row_group_lock);
 		if (!version_info) {
-			version_info = make_shared<RowVersionManager>(start);
+			version_info = make_refcounted<RowVersionManager>(start);
 		}
 	}
 	return version_info;

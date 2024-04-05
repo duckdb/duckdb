@@ -34,7 +34,7 @@ class LogicalOperator;
 class QueryNode;
 class TableRef;
 
-class Relation : public std::enable_shared_from_this<Relation> {
+class Relation : public enable_shared_from_this<Relation> {
 public:
 	Relation(const shared_ptr<ClientContext> &context, RelationType type) : context(context), type(type) {
 	}
