@@ -26,7 +26,7 @@ static idx_t GetNumpyTypeWidth(const LogicalType &type) {
 	case LogicalTypeId::UBIGINT:
 		return sizeof(uint64_t);
 	case LogicalTypeId::UHUGEINT:
-		return sizeof(uhugeint_t);	
+		return sizeof(uhugeint_t);
 	case LogicalTypeId::TINYINT:
 		return sizeof(int8_t);
 	case LogicalTypeId::SMALLINT:

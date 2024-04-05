@@ -27,7 +27,18 @@ class TestArrowREE(object):
     @pytest.mark.parametrize('size', [100, 10000])
     @pytest.mark.parametrize(
         'value_type',
-        ['UTINYINT', 'USMALLINT', 'UINTEGER', 'UBIGINT', 'UHUGEINT', 'TINYINT', 'SMALLINT', 'INTEGER', 'BIGINT', 'HUGEINT'],
+        [
+            'UTINYINT',
+            'USMALLINT',
+            'UINTEGER',
+            'UBIGINT',
+            'UHUGEINT',
+            'TINYINT',
+            'SMALLINT',
+            'INTEGER',
+            'BIGINT',
+            'HUGEINT',
+        ],
     )
     def test_arrow_run_end_encoding_numerics(self, duckdb_cursor, query, run_length, size, value_type):
         if value_type == 'UTINYINT':
