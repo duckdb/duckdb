@@ -32,7 +32,7 @@ do
   cat "$1.empty_32" >> "$1"
 done
 
-# Write provided fiedls (backwards)
+# Write provided fields (backwards)
 for ((i=$#; i>=2; i--))
 do
   cat "${!i}" > "$1.add"
@@ -49,4 +49,4 @@ done
 
 cat "$1.empty_256" >> "$1"
 
-rm -f "$1.*"
+rm -f $1.*
