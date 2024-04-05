@@ -59,7 +59,6 @@ BoundLimitNode Binder::BindLimitValue(OrderBinder &order_binder, unique_ptr<Pars
 	}
 	ExpressionBinder expr_binder(*new_binder, context);
 	auto target_type = is_percentage ? LogicalType::DOUBLE : LogicalType::BIGINT;
-	;
 	expr_binder.target_type = target_type;
 	auto expr = expr_binder.Bind(limit_val);
 	if (expr->IsFoldable()) {
@@ -232,17 +231,6 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 	}
 }
 
-static void AssignReturnType(unique_ptr<Expression> &expr, const vector<LogicalType> &sql_types) {
-	if (!expr) {
-		return;
-	}
-	if (expr->type != ExpressionType::BOUND_COLUMN_REF) {
-		return;
-	}
-	auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
-	bound_colref.return_type = sql_types[bound_colref.binding.column_index];
-}
-
 unique_ptr<Expression> CreateOrderExpression(unique_ptr<Expression> expr, const vector<LogicalType> &sql_types,
                                              idx_t table_index, idx_t index) {
 	if (index >= sql_types.size()) {
@@ -286,6 +274,22 @@ unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression> expr, 
 	}
 }
 
+static void AssignReturnType(unique_ptr<Expression> &expr, idx_t table_index,
+							 const vector<LogicalType> &sql_types,
+							 const SelectBindState &bind_state) {
+	if (!expr) {
+		return;
+	}
+	if (expr->type == ExpressionType::VALUE_CONSTANT) {
+		expr = FinalizeBindOrderExpression(std::move(expr), table_index, sql_types, bind_state);
+	}
+	if (expr->type != ExpressionType::BOUND_COLUMN_REF) {
+		return;
+	}
+	auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
+	bound_colref.return_type = sql_types[bound_colref.binding.column_index];
+}
+
 void Binder::BindModifiers(BoundQueryNode &result, idx_t table_index, const vector<LogicalType> &sql_types,
                            const SelectBindState &bind_state) {
 	for (auto &bound_mod : result.modifiers) {
@@ -307,8 +311,8 @@ void Binder::BindModifiers(BoundQueryNode &result, idx_t table_index, const vect
 		}
 		case ResultModifierType::LIMIT_MODIFIER: {
 			auto &limit = bound_mod->Cast<BoundLimitModifier>();
-			AssignReturnType(limit.limit_val.GetExpression(), sql_types);
-			AssignReturnType(limit.offset_val.GetExpression(), sql_types);
+			AssignReturnType(limit.limit_val.GetExpression(), table_index, sql_types, bind_state);
+			AssignReturnType(limit.offset_val.GetExpression(), table_index, sql_types, bind_state);
 			break;
 		}
 		case ResultModifierType::ORDER_MODIFIER: {
