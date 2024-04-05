@@ -4167,6 +4167,8 @@ const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
 		return "COLUMN_LIFETIME";
 	case OptimizerType::BUILD_SIDE_PROBE_SIDE:
 		return "BUILD_SIDE_PROBE_SIDE";
+	case OptimizerType::LIMIT_PUSHDOWN:
+		return "LIMIT_PUSHDOWN";
 	case OptimizerType::TOP_N:
 		return "TOP_N";
 	case OptimizerType::COMPRESSED_MATERIALIZATION:
@@ -4228,6 +4230,9 @@ OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "BUILD_SIDE_PROBE_SIDE")) {
 		return OptimizerType::BUILD_SIDE_PROBE_SIDE;
+	}
+	if (StringUtil::Equals(value, "LIMIT_PUSHDOWN")) {
+		return OptimizerType::LIMIT_PUSHDOWN;
 	}
 	if (StringUtil::Equals(value, "TOP_N")) {
 		return OptimizerType::TOP_N;
