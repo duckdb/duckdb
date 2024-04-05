@@ -133,7 +133,7 @@ jobs:
       if: always()
       shell: bash
       run: |
-        git diff --name-only main | grep "benchmark/micro/*" > .github/regression/updated_micro_benchmarks.csv
+        git diff --name-only origin/main | grep "benchmark/micro/*" > .github/regression/updated_micro_benchmarks.csv
         if [ $(wc -l < .github/regression/updated_micro_benchmarks.csv) -gt 0 ]; then
           echo "Detected the following modified benchmarks. Running a regression test"
           cat .github/regression/updated_micro_benchmarks.csv
