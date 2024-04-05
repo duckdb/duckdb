@@ -520,7 +520,7 @@ void BindContext::AddCTEBinding(idx_t index, const string &alias, const vector<s
 		throw BinderException("Duplicate alias \"%s\" in query!", alias);
 	}
 	cte_bindings[alias] = std::move(binding);
-	cte_references[alias] = std::make_shared<idx_t>(0);
+	cte_references[alias] = make_shared<idx_t>(0);
 }
 
 void BindContext::AddContext(BindContext other) {

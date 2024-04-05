@@ -72,7 +72,7 @@ IndexStorageInfo GetIndexInfo(const IndexConstraintType &constraint_type, unique
 }
 
 DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info,
-                               std::shared_ptr<DataTable> inherited_storage)
+                               shared_ptr<DataTable> inherited_storage)
     : TableCatalogEntry(catalog, schema, info.Base()), storage(std::move(inherited_storage)),
       bound_constraints(std::move(info.bound_constraints)),
       column_dependency_manager(std::move(info.column_dependency_manager)) {

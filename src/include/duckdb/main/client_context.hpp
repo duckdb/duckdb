@@ -304,7 +304,7 @@ public:
 	}
 
 private:
-	std::weak_ptr<ClientContext> client_context;
+	weak_ptr<ClientContext> client_context;
 };
 
 } // namespace duckdb

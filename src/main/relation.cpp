@@ -277,7 +277,7 @@ void Relation::Create(const string &schema_name, const string &table_name) {
 }
 
 shared_ptr<Relation> Relation::WriteCSVRel(const string &csv_file, case_insensitive_map_t<vector<Value>> options) {
-	return std::make_shared<duckdb::WriteCSVRelation>(shared_from_this(), csv_file, std::move(options));
+	return make_shared<duckdb::WriteCSVRelation>(shared_from_this(), csv_file, std::move(options));
 }
 
 void Relation::WriteCSV(const string &csv_file, case_insensitive_map_t<vector<Value>> options) {
@@ -292,7 +292,7 @@ void Relation::WriteCSV(const string &csv_file, case_insensitive_map_t<vector<Va
 shared_ptr<Relation> Relation::WriteParquetRel(const string &parquet_file,
                                                case_insensitive_map_t<vector<Value>> options) {
 	auto write_parquet =
-	    std::make_shared<duckdb::WriteParquetRelation>(shared_from_this(), parquet_file, std::move(options));
+	    make_shared<duckdb::WriteParquetRelation>(shared_from_this(), parquet_file, std::move(options));
 	return std::move(write_parquet);
 }
 

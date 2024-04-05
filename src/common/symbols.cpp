@@ -182,24 +182,24 @@ INSTANTIATE_VECTOR(vector<unique_ptr<LogicalOperator>>)
 INSTANTIATE_VECTOR(vector<unique_ptr<Transaction>>)
 INSTANTIATE_VECTOR(vector<unique_ptr<JoinNode>>)
 INSTANTIATE_VECTOR(vector<unique_ptr<Rule>>)
-INSTANTIATE_VECTOR(vector<std::shared_ptr<Event>>)
+INSTANTIATE_VECTOR(vector<shared_ptr<Event>>)
 INSTANTIATE_VECTOR(vector<unique_ptr<Pipeline>>)
-INSTANTIATE_VECTOR(vector<std::shared_ptr<Pipeline>>)
-INSTANTIATE_VECTOR(vector<std::weak_ptr<Pipeline>>)
-INSTANTIATE_VECTOR(vector<std::shared_ptr<MetaPipeline>>)
+INSTANTIATE_VECTOR(vector<shared_ptr<Pipeline>>)
+INSTANTIATE_VECTOR(vector<weak_ptr<Pipeline>>)
+INSTANTIATE_VECTOR(vector<shared_ptr<MetaPipeline>>)
 INSTANTIATE_VECTOR(vector<unique_ptr<JoinHashTable>>)
 INSTANTIATE_VECTOR(vector<unique_ptr<ColumnDataCollection>>)
-INSTANTIATE_VECTOR(vector<std::shared_ptr<ColumnDataAllocator>>)
+INSTANTIATE_VECTOR(vector<shared_ptr<ColumnDataAllocator>>)
 INSTANTIATE_VECTOR(vector<unique_ptr<RowDataBlock>>)
 
-template class std::shared_ptr<Relation>;
-template class std::shared_ptr<Event>;
-template class std::shared_ptr<Pipeline>;
-template class std::shared_ptr<MetaPipeline>;
-template class std::shared_ptr<RowGroupCollection>;
-template class std::shared_ptr<ColumnDataAllocator>;
-template class std::shared_ptr<PreparedStatementData>;
-template class std::weak_ptr<Pipeline>;
+template class shared_ptr<Relation>;
+template class shared_ptr<Event>;
+template class shared_ptr<Pipeline>;
+template class shared_ptr<MetaPipeline>;
+template class shared_ptr<RowGroupCollection>;
+template class shared_ptr<ColumnDataAllocator>;
+template class shared_ptr<PreparedStatementData>;
+template class weak_ptr<Pipeline>;
 
 #if !defined(__clang__)
 template struct std::atomic<uint64_t>;

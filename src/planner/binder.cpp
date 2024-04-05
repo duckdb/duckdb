@@ -16,6 +16,7 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/parser/query_node/list.hpp"
+#include "duckdb/common/helper.hpp"
 
 #include <algorithm>
 

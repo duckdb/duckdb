@@ -26,7 +26,7 @@ void CachedFileHandle::AllocateBuffer(idx_t size) {
 	if (file->initialized) {
 		throw InternalException("Cannot allocate a buffer for a cached file that was already initialized");
 	}
-	file->data = std::shared_ptr<char>(new char[size], std::default_delete<char[]>());
+	file->data = shared_ptr<char>(new char[size], std::default_delete<char[]>());
 	file->capacity = size;
 }
 

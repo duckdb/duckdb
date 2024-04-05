@@ -22,7 +22,7 @@ public:
 	}
 
 private:
-	std::shared_ptr<duckdb_re2::RE2> regex;
+	shared_ptr<duckdb_re2::RE2> regex;
 };
 
 struct GroupMatch {

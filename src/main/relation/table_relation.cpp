@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-TableRelation::TableRelation(const std::shared_ptr<ClientContext> &context, unique_ptr<TableDescription> description)
+TableRelation::TableRelation(const shared_ptr<ClientContext> &context, unique_ptr<TableDescription> description)
     : Relation(context, RelationType::TABLE_RELATION), description(std::move(description)) {
 }
 

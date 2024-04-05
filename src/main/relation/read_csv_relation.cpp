@@ -30,7 +30,7 @@ static Value CreateValueFromFileList(const vector<string> &file_list) {
 	return Value::LIST(std::move(files));
 }
 
-ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, const vector<string> &input,
+ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const vector<string> &input,
                                  named_parameter_map_t &&options, string alias_p)
     : TableFunctionRelation(context, "read_csv_auto", {CreateValueFromFileList(input)}, nullptr, false),
       alias(std::move(alias_p)) {

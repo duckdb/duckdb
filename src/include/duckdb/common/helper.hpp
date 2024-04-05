@@ -67,6 +67,14 @@ make_uniq(ARGS&&... args) // NOLINT: mimic std style
 
 template<class DATA_TYPE, class... ARGS>
 inline 
+shared_ptr<DATA_TYPE>
+make_shared(ARGS&&... args) // NOLINT: mimic std style
+{
+    return shared_ptr<DATA_TYPE>(new DATA_TYPE(std::forward<ARGS>(args)...));
+}
+
+template<class DATA_TYPE, class... ARGS>
+inline 
 typename TemplatedUniqueIf<DATA_TYPE, false>::templated_unique_single_t
 make_unsafe_uniq(ARGS&&... args) // NOLINT: mimic std style
 {
