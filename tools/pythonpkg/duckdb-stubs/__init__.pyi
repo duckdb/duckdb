@@ -297,6 +297,7 @@ class DuckDBPyConnection:
         encoding: Optional[str] = None,
         parallel: Optional[bool] = None,
         date_format: Optional[str] = None,
+        time_format: Optional[str] = None,
         timestamp_format: Optional[str] = None,
         sample_size: Optional[int] = None,
         all_varchar: Optional[bool] = None,

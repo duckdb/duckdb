@@ -273,6 +273,14 @@ dtime_t Time::FromTime(int32_t hour, int32_t minute, int32_t second, int32_t mic
 	return dtime_t(result);
 }
 
+bool Time::TryFromTime(int32_t hour, int32_t minute, int32_t second, int32_t microseconds, dtime_t &result) {
+	if (!Time::IsValidTime(hour, minute, second, microseconds)) {
+		return false;
+	}
+	result = Time::FromTime(hour, minute, second, microseconds);
+	return true;
+}
+
 bool Time::IsValidTime(int32_t hour, int32_t minute, int32_t second, int32_t microseconds) {
 	if (hour < 0 || hour >= 24) {
 		return (hour == 24) && (minute == 0) && (second == 0) && (microseconds == 0);

@@ -1361,10 +1361,10 @@ bool StrpTimeFormat::ParseResult::TryToDate(date_t &result) {
 }
 
 bool StrpTimeFormat::ParseResult::TryToTime(dtime_t &result) {
-	const auto hour_offset = data[7] / Interval::MINS_PER_HOUR;
-	const auto mins_offset = data[7] % Interval::MINS_PER_HOUR;
-	result = Time::FromTime(data[3] - hour_offset, data[4] - mins_offset, data[5], data[6]);
-	return true;
+	if (data[7] != 0) {
+		return false;
+	}
+	return Time::TryFromTime(data[3], data[4], data[5], data[6], result);
 }
 
 timestamp_t StrpTimeFormat::ParseResult::ToTimestamp() {

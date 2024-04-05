@@ -1,0 +1,25 @@
+# name: test/sql/copy/csv/test_csv_time_format_errors.test
+# description: Test reading csv files containing time format errors
+# group: [csv]
+
+statement error
+Select * from read_csv('data/csv/time_format_errors_out_of_bounds.csv', header=true, timeformat='%H%M', types = ['BIGINT', 'TIME'] );
+----
+Conversion Error: CSV Error on Line: 2
+Error when converting column "Date_Time".
+Could not parse string "23:67" according to format specifier "%H%M"
+23:67
+  ^
+Error: Expected a number
+Column Date_Time is being converted as type TIME
+
+
+statement error
+Select * from read_csv('data/csv/time_format_errors_out_of_bounds.csv', header=true, timeformat='%H:%M', types = ['BIGINT', 'TIME'] );
+----
+Conversion Error: CSV Error on Line: 3
+Error when converting column "Date_Time".
+Could not parse string "23:67" according to format specifier "%H:%M"
+23:67
+   ^
+Error: Minutes out of range, expected a value between 0 and 59

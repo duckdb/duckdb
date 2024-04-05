@@ -235,10 +235,10 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	             py::arg("delimiter") = py::none(), py::arg("dtype") = py::none(), py::arg("na_values") = py::none(),
 	             py::arg("skiprows") = py::none(), py::arg("quotechar") = py::none(),
 	             py::arg("escapechar") = py::none(), py::arg("encoding") = py::none(), py::arg("parallel") = py::none(),
-	             py::arg("date_format") = py::none(), py::arg("timestamp_format") = py::none(),
-	             py::arg("sample_size") = py::none(), py::arg("all_varchar") = py::none(),
-	             py::arg("normalize_names") = py::none(), py::arg("filename") = py::none(),
-	             py::arg("null_padding") = py::none(), py::arg("names") = py::none());
+	             py::arg("date_format") = py::none(), py::arg("time_format") = py::none(),
+	             py::arg("timestamp_format") = py::none(), py::arg("sample_size") = py::none(),
+	             py::arg("all_varchar") = py::none(), py::arg("normalize_names") = py::none(),
+	             py::arg("filename") = py::none(), py::arg("null_padding") = py::none(), py::arg("names") = py::none());
 
 	m.def("from_df", &DuckDBPyConnection::FromDF, "Create a relation object from the Data.Frame in df",
 	      py::arg("df") = py::none())
@@ -789,9 +789,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
     const py::object &name_p, const py::object &header, const py::object &compression, const py::object &sep,
     const py::object &delimiter, const py::object &dtype, const py::object &na_values, const py::object &skiprows,
     const py::object &quotechar, const py::object &escapechar, const py::object &encoding, const py::object &parallel,
-    const py::object &date_format, const py::object &timestamp_format, const py::object &sample_size,
-    const py::object &all_varchar, const py::object &normalize_names, const py::object &filename,
-    const py::object &null_padding, const py::object &names_p) {
+    const py::object &date_format, const py::object &time_format, const py::object &timestamp_format,
+    const py::object &sample_size, const py::object &all_varchar, const py::object &normalize_names,
+    const py::object &filename, const py::object &null_padding, const py::object &names_p) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
@@ -934,6 +934,13 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 			throw InvalidInputException("read_csv only accepts 'date_format' as a string");
 		}
 		bind_parameters["dateformat"] = Value(py::str(date_format));
+	}
+
+	if (!py::none().is(time_format)) {
+		if (!py::isinstance<py::str>(time_format)) {
+			throw InvalidInputException("read_csv only accepts 'time_format' as a string");
+		}
+		bind_parameters["timeformat"] = Value(py::str(time_format));
 	}
 
 	if (!py::none().is(timestamp_format)) {
