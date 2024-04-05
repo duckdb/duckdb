@@ -243,16 +243,24 @@ static void AssignReturnType(unique_ptr<Expression> &expr, const vector<LogicalT
 	bound_colref.return_type = sql_types[bound_colref.binding.column_index];
 }
 
-unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression> expr, idx_t table_index, const vector<LogicalType> &sql_types, const SelectBindState &bind_state) {
+unique_ptr<Expression> CreateOrderExpression(unique_ptr<Expression> expr, const vector<LogicalType> &sql_types,
+                                             idx_t table_index, idx_t index) {
+	if (index >= sql_types.size()) {
+		throw BinderException(*expr, "ORDER term out of range - should be between 1 and %lld", sql_types.size());
+	}
+	return make_uniq<BoundColumnRefExpression>(std::move(expr->alias), sql_types[index],
+	                                           ColumnBinding(table_index, index));
+}
+
+unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression> expr, idx_t table_index,
+                                                   const vector<LogicalType> &sql_types,
+                                                   const SelectBindState &bind_state) {
 	auto &constant = expr->Cast<BoundConstantExpression>();
-	switch(constant.value.type().id()) {
+	switch (constant.value.type().id()) {
 	case LogicalTypeId::UBIGINT: {
 		// index
 		auto index = UBigIntValue::Get(constant.value);
-		if (index >= sql_types.size()) {
-			throw BinderException(*expr, "ORDER term out of range - should be between 1 and %lld", sql_types.size());
-		}
-		return make_uniq<BoundColumnRefExpression>(std::move(expr->alias), sql_types[index], ColumnBinding(table_index, index));
+		return CreateOrderExpression(std::move(expr), sql_types, table_index, index);
 	}
 	case LogicalTypeId::VARCHAR: {
 		// ORDER BY ALL
@@ -260,14 +268,26 @@ unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression> expr, 
 	}
 	case LogicalTypeId::STRUCT: {
 		// collation
-		throw InternalException("FIXME: collate struct by number");
+		auto &struct_values = StructValue::GetChildren(constant.value);
+		if (struct_values.size() != 2) {
+			throw InternalException("Expected two children: index and collation");
+		}
+		auto index = UBigIntValue::Get(struct_values[0]);
+		auto collation = StringValue::Get(struct_values[1]);
+		if (sql_types[index].id() != LogicalTypeId::VARCHAR) {
+			throw BinderException(*expr, "COLLATE can only be applied to varchar columns");
+		}
+		auto result = CreateOrderExpression(std::move(expr), sql_types, table_index, index);
+		result->return_type = LogicalType::VARCHAR_COLLATION(std::move(collation));
+		return result;
 	}
 	default:
 		throw InternalException("Unknown type in FinalizeBindOrderExpression");
 	}
 }
 
-void Binder::BindModifiers(BoundQueryNode &result, idx_t table_index, const vector<LogicalType> &sql_types, const SelectBindState &bind_state) {
+void Binder::BindModifiers(BoundQueryNode &result, idx_t table_index, const vector<LogicalType> &sql_types,
+                           const SelectBindState &bind_state) {
 	for (auto &bound_mod : result.modifiers) {
 		switch (bound_mod->type) {
 		case ResultModifierType::DISTINCT_MODIFIER: {
@@ -306,7 +326,7 @@ void Binder::BindModifiers(BoundQueryNode &result, idx_t table_index, const vect
 				auto order_type = order.orders[0].type;
 				auto null_order = order.orders[0].null_order;
 				order.orders.clear();
-				for(idx_t i = 0; i < sql_types.size(); i++) {
+				for (idx_t i = 0; i < sql_types.size(); i++) {
 					auto expr = make_uniq<BoundColumnRefExpression>(sql_types[i], ColumnBinding(table_index, i));
 					order.orders.emplace_back(order_type, null_order, std::move(expr));
 				}

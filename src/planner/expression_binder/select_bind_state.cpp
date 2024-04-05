@@ -31,11 +31,9 @@ bool SelectBindState::AliasHasSubquery(idx_t index) {
 }
 
 void SelectBindState::AddExpandedColumn(idx_t expand_count) {
-
 }
 
 void SelectBindState::AddRegularColumn() {
-
 }
 
 } // namespace duckdb

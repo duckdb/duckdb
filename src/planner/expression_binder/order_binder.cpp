@@ -15,7 +15,7 @@
 namespace duckdb {
 
 OrderBinder::OrderBinder(vector<Binder *> binders, SelectBindState &bind_state)
-    : binders(std::move(binders)), extra_list(nullptr),  bind_state(bind_state) {
+    : binders(std::move(binders)), extra_list(nullptr), bind_state(bind_state) {
 }
 OrderBinder::OrderBinder(vector<Binder *> binders, SelectNode &node, SelectBindState &bind_state)
     : binders(std::move(binders)), bind_state(bind_state) {

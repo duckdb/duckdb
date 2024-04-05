@@ -31,7 +31,7 @@ public:
 	}
 	template <typename... ARGS>
 	explicit BinderException(const Expression &expr, const string &msg, ARGS... params)
-			: BinderException(ConstructMessage(msg, params...), Exception::InitializeExtraInfo(expr)) {
+	    : BinderException(ConstructMessage(msg, params...), Exception::InitializeExtraInfo(expr)) {
 	}
 	template <typename... ARGS>
 	explicit BinderException(QueryErrorContext error_context, const string &msg, ARGS... params)
