@@ -80,7 +80,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOpe
 		// 3. Check if a filter is on one of the partitions
 		//    in the event there are multiple window functions, a fiter can only be pushed down
 		//    if each window function is partitioned on the filtered value
-		//    if a filter is not on a partition fiters_to_parition[filter_index] = -1
+		//    if a filter is not on a partition filters_to_partition[filter_index] = -1
 		//    which means the filter will no longer be pushed down, even if the filter is on a partition.
 		//    tpcds q47 caught this
 		for (idx_t i = 0; i < filters.size(); i++) {
