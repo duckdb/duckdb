@@ -19,7 +19,7 @@ Error: Extension "README.md" could not be loaded
 statement error
 LOAD 'data/csv/no_opt.csv';
 ----
-File size in particular is 15 lower than minimum threshold of 1024
+File size in particular is lower than minimum threshold of 1024
 
 statement ok
 SET allow_unsigned_extensions=false;
