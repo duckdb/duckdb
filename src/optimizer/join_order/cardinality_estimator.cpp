@@ -382,7 +382,7 @@ void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set,
 	D_ASSERT(set->count == 1);
 	auto relation_id = set->relations[0];
 	//! Initialize the distinct count for all columns used in joins with the current relation.
-	//	D_ASSERT(stats.column_distinct_count.size() >= 1);
+	D_ASSERT(stats.column_distinct_count.size() >= 1);
 
 	for (idx_t i = 0; i < stats.column_distinct_count.size(); i++) {
 		//! for every column used in a filter in the relation, get the distinct count via HLL, or assume it to be
