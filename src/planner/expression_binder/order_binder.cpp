@@ -10,17 +10,15 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/common/pair.hpp"
 
 namespace duckdb {
 
-OrderBinder::OrderBinder(vector<Binder *> binders, idx_t projection_index, SelectBindState &bind_state, idx_t max_count)
-    : binders(std::move(binders)), projection_index(projection_index), max_count(max_count), extra_list(nullptr),
-      bind_state(bind_state) {
+OrderBinder::OrderBinder(vector<Binder *> binders, SelectBindState &bind_state)
+    : binders(std::move(binders)), extra_list(nullptr),  bind_state(bind_state) {
 }
-OrderBinder::OrderBinder(vector<Binder *> binders, idx_t projection_index, SelectNode &node,
-                         SelectBindState &bind_state)
-    : binders(std::move(binders)), projection_index(projection_index), bind_state(bind_state) {
-	this->max_count = node.select_list.size();
+OrderBinder::OrderBinder(vector<Binder *> binders, SelectNode &node, SelectBindState &bind_state)
+    : binders(std::move(binders)), bind_state(bind_state) {
 	this->extra_list = &node.select_list;
 }
 
@@ -33,8 +31,9 @@ unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &
 			alias = expr.alias;
 		}
 	}
-	return make_uniq<BoundColumnRefExpression>(std::move(alias), LogicalType::INVALID,
-	                                           ColumnBinding(projection_index, index));
+	auto result = make_uniq<BoundConstantExpression>(Value::UBIGINT(index));
+	result->alias = std::move(alias);
+	return std::move(result);
 }
 
 unique_ptr<Expression> OrderBinder::CreateExtraReference(unique_ptr<ParsedExpression> expr) {
@@ -57,9 +56,6 @@ unique_ptr<Expression> OrderBinder::BindConstant(ParsedExpression &expr, const V
 	}
 	// INTEGER constant: we use the integer as an index into the select list (e.g. ORDER BY 1)
 	auto index = (idx_t)val.GetValue<int64_t>();
-	if (index < 1 || index > max_count) {
-		throw BinderException("ORDER term out of range - should be between 1 and %lld", max_count);
-	}
 	return CreateProjectionReference(expr, index - 1);
 }
 
@@ -94,9 +90,6 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 	}
 	case ExpressionClass::POSITIONAL_REFERENCE: {
 		auto &posref = expr->Cast<PositionalReferenceExpression>();
-		if (posref.index < 1 || posref.index > max_count) {
-			throw BinderException("ORDER term out of range - should be between 1 and %lld", max_count);
-		}
 		return CreateProjectionReference(*expr, posref.index - 1);
 	}
 	case ExpressionClass::PARAMETER: {
@@ -107,16 +100,10 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		if (collation.child->expression_class == ExpressionClass::CONSTANT) {
 			auto &constant = collation.child->Cast<ConstantExpression>();
 			auto index = NumericCast<idx_t>(constant.value.GetValue<idx_t>()) - 1;
-			if (index >= extra_list->size()) {
-				throw BinderException("ORDER term out of range - should be between 1 and %lld", max_count);
-			}
-			auto &sel_entry = extra_list->at(index);
-			if (sel_entry->HasSubquery()) {
-				throw BinderException(
-				    "OrderBy referenced a ColumnNumber in a SELECT clause - but the expression has a subquery."
-				    " This is not yet supported.");
-			}
-			collation.child = sel_entry->Copy();
+			child_list_t<Value> values;
+			values.push_back(make_pair("index", Value::UBIGINT(index)));
+			values.push_back(make_pair("collation", Value(std::move(collation.collation))));
+			return make_uniq<BoundConstantExpression>(Value::STRUCT(std::move(values)));
 		}
 		break;
 	}

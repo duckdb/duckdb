@@ -30,4 +30,12 @@ bool SelectBindState::AliasHasSubquery(idx_t index) {
 	return subquery_expressions.find(index) != subquery_expressions.end();
 }
 
+void SelectBindState::AddExpandedColumn(idx_t expand_count) {
+
+}
+
+void SelectBindState::AddRegularColumn() {
+
+}
+
 } // namespace duckdb

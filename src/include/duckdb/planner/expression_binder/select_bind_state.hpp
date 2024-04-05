@@ -34,6 +34,9 @@ public:
 
 	bool AliasHasSubquery(idx_t index);
 
+	void AddExpandedColumn(idx_t expand_count);
+	void AddRegularColumn();
+
 private:
 	//! The set of referenced aliases
 	unordered_set<idx_t> referenced_aliases;
