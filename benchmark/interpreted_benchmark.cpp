@@ -422,6 +422,10 @@ string InterpretedBenchmark::GetQuery() {
 void InterpretedBenchmark::Run(BenchmarkState *state_p) {
 	auto &state = (InterpretedBenchmarkState &)*state_p;
 	state.result = state.con.Query(run_query);
+	if (state.result->type == QueryResultType::STREAM_RESULT) {
+		auto &stream_query = state.result->Cast<StreamQueryResult>();
+		state.result = stream_query.Materialize();
+	}
 }
 
 void InterpretedBenchmark::Cleanup(BenchmarkState *state_p) {

@@ -896,6 +896,10 @@ unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement,
 unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_stream_result) {
 	auto lock = LockContext();
 
+	if (ClientConfig::GetConfig(*this).verify_streaming) {
+		allow_stream_result = true;
+	}
+
 	ErrorData error;
 	vector<unique_ptr<SQLStatement>> statements;
 	if (!ParseStatements(*lock, query, statements, error)) {
@@ -966,6 +970,10 @@ bool ClientContext::ParseStatements(ClientContextLock &lock, const string &query
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query, bool allow_stream_result) {
 	auto lock = LockContext();
+
+	if (ClientConfig::GetConfig(*this).verify_streaming) {
+		allow_stream_result = true;
+	}
 
 	ErrorData error;
 	vector<unique_ptr<SQLStatement>> statements;

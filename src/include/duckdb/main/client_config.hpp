@@ -67,6 +67,8 @@ struct ClientConfig {
 	bool enable_optimizer = true;
 	//! Enable caching operators
 	bool enable_caching_operators = true;
+	//! Force streaming the query, used for testing
+	bool verify_streaming = false;
 	//! Force parallelism of small tables, used for testing
 	bool verify_parallelism = false;
 	//! Force out-of-core computation for operators that support it, used for testing
