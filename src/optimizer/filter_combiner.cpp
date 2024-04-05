@@ -569,7 +569,9 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			auto &fst_const_value_expr = func.children[1]->Cast<BoundConstantExpression>();
 			auto &type = fst_const_value_expr.value.type();
 
-			if ((type.IsIntegral() || type.id() == LogicalTypeId::VARCHAR) && func.children.size() == 2) {
+			if ((type.IsNumeric() ||
+			     type.id() == LogicalTypeId::VARCHAR ||
+			     type.id() == LogicalTypeId::BOOLEAN) && func.children.size() == 2) {
 				auto bound_eq_comparison =
 				    make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, fst_const_value_expr.value);
 				table_filters.PushFilter(column_index, std::move(bound_eq_comparison));
@@ -581,14 +583,6 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			//! Check if values are consecutive, if yes transform them to >= <= (only for integers)
 			// e.g. if we have x IN (1, 2, 3, 4, 5) we transform this into x >= 1 AND x <= 5
 			if (!type.IsIntegral()) {
-				if (func.children.size() != 2 || type.id() != LogicalTypeId::VARCHAR) {
-					continue;
-				}
-				auto bound_eq_comparison =
-				    make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, fst_const_value_expr.value);
-				table_filters.PushFilter(column_index, std::move(bound_eq_comparison));
-				table_filters.PushFilter(column_index, make_uniq<IsNotNullFilter>());
-				remaining_filters.erase(remaining_filters.begin() + rem_fil_idx);
 				continue;
 			}
 
