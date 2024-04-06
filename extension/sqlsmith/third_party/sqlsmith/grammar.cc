@@ -16,14 +16,14 @@ shared_ptr<table_ref> table_ref::factory(prod *p) {
 	try {
 		if (p->level < 3 + d6()) {
 			if (d6() > 3 && p->level < d6())
-				return make_shared<table_subquery>(p);
+				return make_refcounted<table_subquery>(p);
 			if (d6() > 3)
-				return make_shared<joined_table>(p);
+				return make_refcounted<joined_table>(p);
 		}
 		if (d6() > 3)
-			return make_shared<table_or_query_name>(p);
+			return make_refcounted<table_or_query_name>(p);
 		else
-			return make_shared<table_sample>(p);
+			return make_refcounted<table_sample>(p);
 	} catch (runtime_error &e) {
 		p->retry();
 	}
@@ -32,7 +32,7 @@ shared_ptr<table_ref> table_ref::factory(prod *p) {
 
 table_or_query_name::table_or_query_name(prod *p) : table_ref(p) {
 	t = random_pick(scope->tables);
-	refs.push_back(make_shared<aliased_relation>(scope->stmt_uid("ref"), t));
+	refs.push_back(make_refcounted<aliased_relation>(scope->stmt_uid("ref"), t));
 }
 
 void table_or_query_name::out(std::ostream &out) {
@@ -46,7 +46,7 @@ target_table::target_table(prod *p, table *victim) : table_ref(p) {
 		retry();
 	}
 	victim_ = victim;
-	refs.push_back(make_shared<aliased_relation>(scope->stmt_uid("target"), victim));
+	refs.push_back(make_refcounted<aliased_relation>(scope->stmt_uid("target"), victim));
 }
 
 void target_table::out(std::ostream &out) {
@@ -62,7 +62,7 @@ table_sample::table_sample(prod *p) : table_ref(p) {
 		retry();
 	} while (!t || !t->is_base_table);
 
-	refs.push_back(make_shared<aliased_relation>(scope->stmt_uid("sample"), t));
+	refs.push_back(make_refcounted<aliased_relation>(scope->stmt_uid("sample"), t));
 	percent = 0.1 * d100();
 	method = (d6() > 2) ? "system" : "bernoulli";
 }
@@ -72,10 +72,10 @@ void table_sample::out(std::ostream &out) {
 }
 
 table_subquery::table_subquery(prod *p, bool lateral) : table_ref(p), is_lateral(lateral) {
-	query = make_shared<query_spec>(this, scope, lateral);
+	query = make_refcounted<query_spec>(this, scope, lateral);
 	string alias = scope->stmt_uid("subq");
 	relation *aliased_rel = &query->select_list->derived_table;
-	refs.push_back(make_shared<aliased_relation>(alias, aliased_rel));
+	refs.push_back(make_refcounted<aliased_relation>(alias, aliased_rel));
 }
 
 table_subquery::~table_subquery() {
@@ -89,9 +89,9 @@ void table_subquery::accept(prod_visitor *v) {
 shared_ptr<join_cond> join_cond::factory(prod *p, table_ref &lhs, table_ref &rhs) {
 	try {
 		if (d6() < 6)
-			return make_shared<expr_join_cond>(p, lhs, rhs);
+			return make_refcounted<expr_join_cond>(p, lhs, rhs);
 		else
-			return make_shared<simple_join_cond>(p, lhs, rhs);
+			return make_refcounted<simple_join_cond>(p, lhs, rhs);
 	} catch (runtime_error &e) {
 		p->retry();
 	}
@@ -196,7 +196,7 @@ from_clause::from_clause(prod *p) : prod(p) {
 		// add a lateral subquery
 		if (!impedance::matched(typeid(lateral_subquery)))
 			break;
-		reflist.push_back(make_shared<lateral_subquery>(this));
+		reflist.push_back(make_refcounted<lateral_subquery>(this));
 		for (auto r : reflist.back()->refs)
 			scope->refs.push_back(&*r);
 	}
@@ -302,8 +302,8 @@ query_spec::query_spec(prod *p, struct scope *s, bool lateral) : prod(p), myscop
 	if (lateral)
 		scope->refs = s->refs;
 
-	from_clause = make_shared<struct from_clause>(this);
-	select_list = make_shared<struct select_list>(this);
+	from_clause = make_refcounted<struct from_clause>(this);
+	select_list = make_refcounted<struct select_list>(this);
 
 	set_quantifier = (d100() == 1) ? "distinct" : "";
 
@@ -341,7 +341,7 @@ delete_stmt::delete_stmt(prod *p, struct scope *s, table *v) : modifying_stmt(p,
 
 delete_returning::delete_returning(prod *p, struct scope *s, table *victim) : delete_stmt(p, s, victim) {
 	match();
-	select_list = make_shared<struct select_list>(this);
+	select_list = make_refcounted<struct select_list>(this);
 }
 
 insert_stmt::insert_stmt(prod *p, struct scope *s, table *v) : modifying_stmt(p, s, v) {
@@ -399,7 +399,7 @@ void set_list::out(std::ostream &out) {
 update_stmt::update_stmt(prod *p, struct scope *s, table *v) : modifying_stmt(p, s, v) {
 	scope->refs.push_back(victim);
 	search = bool_expr::factory(this);
-	set_list = make_shared<struct set_list>(this, victim);
+	set_list = make_refcounted<struct set_list>(this, victim);
 }
 
 void update_stmt::out(std::ostream &out) {
@@ -409,7 +409,7 @@ void update_stmt::out(std::ostream &out) {
 update_returning::update_returning(prod *p, struct scope *s, table *v) : update_stmt(p, s, v) {
 	match();
 
-	select_list = make_shared<struct select_list>(this);
+	select_list = make_refcounted<struct select_list>(this);
 }
 
 upsert_stmt::upsert_stmt(prod *p, struct scope *s, table *v) : insert_stmt(p, s, v) {
@@ -427,20 +427,20 @@ shared_ptr<prod> statement_factory(struct scope *s) {
 	try {
 		s->new_stmt();
 		if (d42() == 1)
-			return make_shared<merge_stmt>((struct prod *)0, s);
+			return make_refcounted<merge_stmt>((struct prod *)0, s);
 		if (d42() == 1)
-			return make_shared<insert_stmt>((struct prod *)0, s);
+			return make_refcounted<insert_stmt>((struct prod *)0, s);
 		else if (d42() == 1)
-			return make_shared<delete_returning>((struct prod *)0, s);
+			return make_refcounted<delete_returning>((struct prod *)0, s);
 		else if (d42() == 1) {
-			return make_shared<upsert_stmt>((struct prod *)0, s);
+			return make_refcounted<upsert_stmt>((struct prod *)0, s);
 		} else if (d42() == 1)
-			return make_shared<update_returning>((struct prod *)0, s);
+			return make_refcounted<update_returning>((struct prod *)0, s);
 		else if (d6() > 4)
-			return make_shared<select_for_update>((struct prod *)0, s);
+			return make_refcounted<select_for_update>((struct prod *)0, s);
 		else if (d6() > 5)
-			return make_shared<common_table_expression>((struct prod *)0, s);
-		return make_shared<query_spec>((struct prod *)0, s);
+			return make_refcounted<common_table_expression>((struct prod *)0, s);
+		return make_refcounted<query_spec>((struct prod *)0, s);
 	} catch (runtime_error &e) {
 		return statement_factory(s);
 	}
@@ -456,11 +456,11 @@ void common_table_expression::accept(prod_visitor *v) {
 common_table_expression::common_table_expression(prod *parent, struct scope *s) : prod(parent), myscope(s) {
 	scope = &myscope;
 	do {
-		shared_ptr<query_spec> query = make_shared<query_spec>(this, s);
+		shared_ptr<query_spec> query = make_refcounted<query_spec>(this, s);
 		with_queries.push_back(query);
 		string alias = scope->stmt_uid("jennifer");
 		relation *relation = &query->select_list->derived_table;
-		auto aliased_rel = make_shared<aliased_relation>(alias, relation);
+		auto aliased_rel = make_refcounted<aliased_relation>(alias, relation);
 		refs.push_back(aliased_rel);
 		scope->tables.push_back(&*aliased_rel);
 
@@ -472,7 +472,7 @@ retry:
 		scope->tables.push_back(pick);
 	} while (d6() > 3);
 	try {
-		query = make_shared<query_spec>(this, scope);
+		query = make_refcounted<query_spec>(this, scope);
 	} catch (runtime_error &e) {
 		retry();
 		goto retry;
@@ -495,11 +495,11 @@ void common_table_expression::out(std::ostream &out) {
 
 merge_stmt::merge_stmt(prod *p, struct scope *s, table *v) : modifying_stmt(p, s, v) {
 	match();
-	target_table_ = make_shared<target_table>(this, victim);
+	target_table_ = make_refcounted<target_table>(this, victim);
 	data_source = table_ref::factory(this);
 	//   join_condition = join_cond::factory(this, *target_table_,
 	//   *data_source);
-	join_condition = make_shared<simple_join_cond>(this, *target_table_, *data_source);
+	join_condition = make_refcounted<simple_join_cond>(this, *target_table_, *data_source);
 
 	/* Put data_source into scope but not target_table.  Visibility of
 	   the latter varies depending on kind of when clause. */
@@ -604,12 +604,12 @@ shared_ptr<when_clause> when_clause::factory(struct merge_stmt *p) {
 		switch (d6()) {
 		case 1:
 		case 2:
-			return make_shared<when_clause_insert>(p);
+			return make_refcounted<when_clause_insert>(p);
 		case 3:
 		case 4:
-			return make_shared<when_clause_update>(p);
+			return make_refcounted<when_clause_update>(p);
 		default:
-			return make_shared<when_clause>(p);
+			return make_refcounted<when_clause>(p);
 		}
 	} catch (runtime_error &e) {
 		p->retry();

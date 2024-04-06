@@ -10,6 +10,8 @@ private:
 	template <class U>
 	friend class weak_ptr;
 	std::shared_ptr<T> internal;
+	template <class U>
+	friend class shared_ptr;
 
 public:
 	// Constructors
@@ -24,6 +26,9 @@ public:
 	template <typename Deleter>
 	shared_ptr(T *ptr, Deleter deleter) : internal(ptr, deleter) {
 	}
+	template <class U>
+	shared_ptr(const shared_ptr<U> &__r, T *__p) noexcept : internal(__r.internal, __p) {
+	}
 
 	shared_ptr(const shared_ptr &other) : internal(other.internal) {
 	}
@@ -37,17 +42,16 @@ public:
 	explicit shared_ptr(weak_ptr<U> other) : internal(other.internal) {
 	}
 
-	template <class U, class DELETER, bool SAFE,
-	          std::enable_if<!std::is_lvalue_reference<DELETER>::value && __compatible_with<U, T>::value &&
-	                             std::is_convertible<typename unique_ptr<U, DELETER>::pointer, T *>::value,
-	                         int> = 0>
-	shared_ptr(unique_ptr<U, DELETER, SAFE> other) : internal(other.release()) {
+#if _LIBCPP_STD_VER <= 14 || defined(_LIBCPP_ENABLE_CXX17_REMOVED_AUTO_PTR)
+	template <class U, std::enable_if<std::is_convertible<U *, T *>::value, int> = 0>
+	shared_ptr(std::auto_ptr<U> &&__r) : internal(__r.release()) {
 	}
+#endif
 
 	template <class U, class DELETER, bool SAFE,
-	          std::enable_if<!std::is_lvalue_reference<DELETER>::value && __compatible_with<U, T>::value &&
-	                             std::is_convertible<typename unique_ptr<U, DELETER>::pointer, T *>::value,
-	                         int> = 0>
+	          typename std::enable_if<__compatible_with<U, T>::value &&
+	                                      std::is_convertible<typename unique_ptr<U, DELETER>::pointer, T *>::value,
+	                                  int>::type = 0>
 	shared_ptr(unique_ptr<U, DELETER, SAFE> &&other) : internal(other.release()) {
 	}
 
@@ -60,7 +64,10 @@ public:
 		return *this;
 	}
 
-	template <class U, class DELETER, bool SAFE>
+	template <class U, class DELETER, bool SAFE,
+	          typename std::enable_if<__compatible_with<U, T>::value &&
+	                                      std::is_convertible<typename unique_ptr<U, DELETER>::pointer, T *>::value,
+	                                  int>::type = 0>
 	shared_ptr<T> &operator=(unique_ptr<U, DELETER, SAFE> &&__r) {
 		shared_ptr(std::move(__r)).swap(*this);
 		return *this;
@@ -79,6 +86,10 @@ public:
 	template <typename U, typename Deleter>
 	void reset(U *ptr, Deleter deleter) {
 		internal.reset(ptr, deleter);
+	}
+
+	void swap(shared_ptr &r) noexcept {
+		internal.swap(r.internal);
 	}
 
 	// Observers
@@ -121,6 +132,9 @@ public:
 	template <typename U>
 	bool operator!=(const shared_ptr<U> &other) const noexcept {
 		return internal != other.internal;
+	}
+	bool operator!=(std::nullptr_t) const noexcept {
+		return internal != nullptr;
 	}
 
 	template <typename U>

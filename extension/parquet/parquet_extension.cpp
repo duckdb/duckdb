@@ -540,7 +540,7 @@ public:
 				result->initial_reader = result->readers[0];
 			} else {
 				result->initial_reader =
-				    make_shared<ParquetReader>(context, bind_data.files[0], bind_data.parquet_options);
+				    make_refcounted<ParquetReader>(context, bind_data.files[0], bind_data.parquet_options);
 				result->readers[0] = result->initial_reader;
 			}
 			result->file_states[0] = ParquetFileState::OPEN;
@@ -746,7 +746,7 @@ public:
 
 				shared_ptr<ParquetReader> reader;
 				try {
-					reader = make_shared<ParquetReader>(context, file, pq_options);
+					reader = make_refcounted<ParquetReader>(context, file, pq_options);
 					InitializeParquetReader(*reader, bind_data, parallel_state.column_ids, parallel_state.filters,
 					                        context);
 				} catch (...) {

@@ -381,26 +381,26 @@ TableFunctionSet CreateJSONFunctionInfo(string name, shared_ptr<JSONScanInfo> in
 }
 
 TableFunctionSet JSONFunctions::GetReadJSONFunction() {
-	auto info =
-	    make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT, JSONRecordType::AUTO_DETECT, true);
+	auto info = make_refcounted<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT,
+	                                          JSONRecordType::AUTO_DETECT, true);
 	return CreateJSONFunctionInfo("read_json", std::move(info));
 }
 
 TableFunctionSet JSONFunctions::GetReadNDJSONFunction() {
-	auto info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED,
-	                                      JSONRecordType::AUTO_DETECT, true);
+	auto info = make_refcounted<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED,
+	                                          JSONRecordType::AUTO_DETECT, true);
 	return CreateJSONFunctionInfo("read_ndjson", std::move(info));
 }
 
 TableFunctionSet JSONFunctions::GetReadJSONAutoFunction() {
-	auto info =
-	    make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT, JSONRecordType::AUTO_DETECT, true);
+	auto info = make_refcounted<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT,
+	                                          JSONRecordType::AUTO_DETECT, true);
 	return CreateJSONFunctionInfo("read_json_auto", std::move(info));
 }
 
 TableFunctionSet JSONFunctions::GetReadNDJSONAutoFunction() {
-	auto info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED,
-	                                      JSONRecordType::AUTO_DETECT, true);
+	auto info = make_refcounted<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED,
+	                                          JSONRecordType::AUTO_DETECT, true);
 	return CreateJSONFunctionInfo("read_ndjson_auto", std::move(info));
 }
 

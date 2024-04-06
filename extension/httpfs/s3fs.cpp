@@ -567,7 +567,7 @@ shared_ptr<S3WriteBuffer> S3FileHandle::GetBuffer(uint16_t write_buffer_idx) {
 
 	auto buffer_handle = s3fs.Allocate(part_size, config_params.max_upload_threads);
 	auto new_write_buffer =
-	    make_shared<S3WriteBuffer>(write_buffer_idx * part_size, part_size, std::move(buffer_handle));
+	    make_refcounted<S3WriteBuffer>(write_buffer_idx * part_size, part_size, std::move(buffer_handle));
 	{
 		unique_lock<mutex> lck(write_buffers_lock);
 		auto lookup_result = write_buffers.find(write_buffer_idx);

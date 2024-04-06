@@ -11,13 +11,23 @@ public:
 	// Constructors
 	weak_ptr() : internal() {
 	}
-	// template <class U, std::enable_if<__compatible_with<U, T>::value, int> = 0>
-	template <class U>
-	weak_ptr(const shared_ptr<U> &ptr) : internal(ptr.internal) {
-	}
-	weak_ptr(const weak_ptr &other) : internal(other.internal) {
-	}
 
+	template <class U>
+	weak_ptr(shared_ptr<U> const &ptr, typename std::enable_if<__compatible_with<U, T>::value, int>::type = 0) noexcept
+	    : internal(ptr.internal) {
+	}
+	weak_ptr(weak_ptr const &other) noexcept : internal(other.internal) {
+	}
+	template <class U>
+	weak_ptr(weak_ptr<U> const &ptr, typename std::enable_if<__compatible_with<U, T>::value, int>::type = 0) noexcept
+	    : internal(ptr.internal) {
+	}
+	weak_ptr(weak_ptr &&ptr) noexcept : internal(ptr.internal) {
+	}
+	template <class U>
+	weak_ptr(weak_ptr<U> &&ptr, typename std::enable_if<__compatible_with<U, T>::value, int>::type = 0) noexcept
+	    : internal(ptr.internal) {
+	}
 	// Destructor
 	~weak_ptr() = default;
 

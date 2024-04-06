@@ -14,6 +14,7 @@ class unique_ptr : public std::unique_ptr<DATA_TYPE, DELETER> { // NOLINT: namin
 public:
 	using original = std::unique_ptr<DATA_TYPE, DELETER>;
 	using original::original; // NOLINT
+	using pointer = typename original::pointer;
 
 private:
 	static inline void AssertNotNull(const bool null) {

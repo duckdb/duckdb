@@ -46,7 +46,7 @@ StatementGenerator::~StatementGenerator() {
 }
 
 shared_ptr<GeneratorContext> StatementGenerator::GetDatabaseState(ClientContext &context) {
-	auto result = make_shared<GeneratorContext>();
+	auto result = make_refcounted<GeneratorContext>();
 	result->test_types = TestAllTypesFun::GetTestTypes();
 
 	auto schemas = Catalog::GetAllSchemas(context);

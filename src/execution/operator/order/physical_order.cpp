@@ -6,6 +6,7 @@
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/executor_task.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 
 namespace duckdb {
 
