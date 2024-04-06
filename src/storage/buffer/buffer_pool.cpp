@@ -133,7 +133,7 @@ BufferPool::EvictionResult BufferPool::EvictBlocks(MemoryTag tag, idx_t extra_me
 
 idx_t BufferPool::PurgeAgedBlocks(uint32_t max_age_sec) {
 	int64_t now = GetCoarseMonotonicMillisecondTimestamp();
-	int64_t limit = now - (max_age_sec * 1000);
+	int64_t limit = now - (static_cast<int64_t>(max_age_sec) * 1000);
 	idx_t purged_bytes = 0;
 	IterateUnloadableBlocks([&](BufferEvictionNode &node, const std::shared_ptr<BlockHandle> &handle) {
 		// We will unload this block regardless. But stop the iteration immediately afterward if this
