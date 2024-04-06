@@ -427,6 +427,7 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 					// FIXME: unless there is an index on the table, because the table name is baked into the index
 					disallow_alter = true;
 				}
+				break;
 			}
 			default:
 				break;
