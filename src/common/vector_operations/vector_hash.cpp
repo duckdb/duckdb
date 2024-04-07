@@ -183,23 +183,31 @@ template <bool HAS_RSEL, bool FIRST_HASH>
 static inline void ArrayLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
 	auto hdata = FlatVector::GetData<hash_t>(hashes);
 
-	if (input.GetVectorType() != VectorType::CONSTANT_VECTOR && input.GetVectorType() != VectorType::FLAT_VECTOR) {
-		input.Flatten(count);
-	}
-
 	UnifiedVectorFormat idata;
 	input.ToUnifiedFormat(count, idata);
 
 	// Hash the children into a temporary
 	auto &child = ArrayVector::GetEntry(input);
 	auto array_size = ArrayType::GetSize(input.GetType());
-	auto is_constant = input.GetVectorType() == VectorType::CONSTANT_VECTOR;
-	auto child_count = array_size * (is_constant ? 1 : count);
+
+	// Figure out how large the child hashes vector should be
+	// TODO: We could use some sort of sparse reverse selection vector to avoid having to allocate a much larger vector
+	auto child_count = array_size * count;
+	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		child_count = array_size;
+	} else if (input.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		// Based on the largest dict offset
+		for (idx_t i = 0; i < count; i++) {
+			auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
+			auto lidx = idata.sel->get_index(ridx);
+			child_count = MaxValue(child_count, array_size * lidx + array_size);
+		}
+	}
 
 	Vector child_hashes(LogicalType::HASH, child_count);
 	if (child_count > 0) {
-		child_hashes.Flatten(child_count);
 		VectorOperations::Hash(child, child_hashes, child_count);
+		child_hashes.Flatten(child_count);
 	}
 	auto chdata = FlatVector::GetData<hash_t>(child_hashes);
 
