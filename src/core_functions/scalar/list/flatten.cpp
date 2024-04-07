@@ -113,6 +113,22 @@ static unique_ptr<FunctionData> ListFlattenBind(ClientContext &context, ScalarFu
                                                 vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 1);
 
+	if (arguments[0]->return_type.id() == LogicalTypeId::ARRAY) {
+		auto child_type = ArrayType::GetChildType(arguments[0]->return_type);
+		if (child_type.id() == LogicalTypeId::ARRAY) {
+			child_type = LogicalType::LIST(ArrayType::GetChildType(child_type));
+		}
+		arguments[0] =
+		    BoundCastExpression::AddCastToType(context, std::move(arguments[0]), LogicalType::LIST(child_type));
+	} else if (arguments[0]->return_type.id() == LogicalTypeId::LIST) {
+		auto child_type = ListType::GetChildType(arguments[0]->return_type);
+		if (child_type.id() == LogicalTypeId::ARRAY) {
+			child_type = LogicalType::LIST(ArrayType::GetChildType(child_type));
+			arguments[0] =
+			    BoundCastExpression::AddCastToType(context, std::move(arguments[0]), LogicalType::LIST(child_type));
+		}
+	}
+
 	auto &input_type = arguments[0]->return_type;
 	bound_function.arguments[0] = input_type;
 	if (input_type.id() == LogicalTypeId::UNKNOWN) {
