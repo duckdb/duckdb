@@ -26,14 +26,26 @@ void SelectBindState::SetExpressionHasSubquery(idx_t index) {
 	subquery_expressions.insert(index);
 }
 
-bool SelectBindState::AliasHasSubquery(idx_t index) {
+bool SelectBindState::AliasHasSubquery(idx_t index) const {
 	return subquery_expressions.find(index) != subquery_expressions.end();
 }
 
 void SelectBindState::AddExpandedColumn(idx_t expand_count) {
+	if (expanded_column_indices.empty()) {
+		expanded_column_indices.push_back(0);
+	}
+	expanded_column_indices.push_back(expanded_column_indices.back() + expand_count);
 }
 
 void SelectBindState::AddRegularColumn() {
+	AddExpandedColumn(1);
+}
+
+idx_t SelectBindState::GetFinalIndex(idx_t index) const {
+	if (expanded_column_indices.empty()) {
+		return index;
+	}
+	return expanded_column_indices[index];
 }
 
 } // namespace duckdb

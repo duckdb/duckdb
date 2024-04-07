@@ -231,16 +231,21 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 	}
 }
 
-unique_ptr<Expression> CreateOrderExpression(unique_ptr<Expression> expr, const vector<LogicalType> &sql_types,
+unique_ptr<Expression> CreateOrderExpression(unique_ptr<Expression> expr, const vector<string> &names, const vector<LogicalType> &sql_types,
                                              idx_t table_index, idx_t index) {
 	if (index >= sql_types.size()) {
 		throw BinderException(*expr, "ORDER term out of range - should be between 1 and %lld", sql_types.size());
 	}
-	return make_uniq<BoundColumnRefExpression>(std::move(expr->alias), sql_types[index],
+	auto result = make_uniq<BoundColumnRefExpression>(std::move(expr->alias), sql_types[index],
 	                                           ColumnBinding(table_index, index));
+	if (result->alias.empty() && index < names.size()) {
+		result->alias = names[index];
+	}
+	return std::move(result);
 }
 
 unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression> expr, idx_t table_index,
+												   const vector<string> &names,
                                                    const vector<LogicalType> &sql_types,
                                                    const SelectBindState &bind_state) {
 	auto &constant = expr->Cast<BoundConstantExpression>();
@@ -248,7 +253,7 @@ unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression> expr, 
 	case LogicalTypeId::UBIGINT: {
 		// index
 		auto index = UBigIntValue::Get(constant.value);
-		return CreateOrderExpression(std::move(expr), sql_types, table_index, index);
+		return CreateOrderExpression(std::move(expr), names, sql_types, table_index, bind_state.GetFinalIndex(index));
 	}
 	case LogicalTypeId::VARCHAR: {
 		// ORDER BY ALL
@@ -257,16 +262,21 @@ unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression> expr, 
 	case LogicalTypeId::STRUCT: {
 		// collation
 		auto &struct_values = StructValue::GetChildren(constant.value);
-		if (struct_values.size() != 2) {
-			throw InternalException("Expected two children: index and collation");
+		if (struct_values.size() > 2) {
+			throw InternalException("Expected one or two children: index and optional collation");
 		}
 		auto index = UBigIntValue::Get(struct_values[0]);
-		auto collation = StringValue::Get(struct_values[1]);
-		if (sql_types[index].id() != LogicalTypeId::VARCHAR) {
-			throw BinderException(*expr, "COLLATE can only be applied to varchar columns");
+		string collation;
+		if (struct_values.size() == 2) {
+			collation = StringValue::Get(struct_values[1]);
 		}
-		auto result = CreateOrderExpression(std::move(expr), sql_types, table_index, index);
-		result->return_type = LogicalType::VARCHAR_COLLATION(std::move(collation));
+		auto result = CreateOrderExpression(std::move(expr), names, sql_types, table_index, index);
+		if (!collation.empty()) {
+			if (sql_types[index].id() != LogicalTypeId::VARCHAR) {
+				throw BinderException(*result, "COLLATE can only be applied to varchar columns");
+			}
+			result->return_type = LogicalType::VARCHAR_COLLATION(std::move(collation));
+		}
 		return result;
 	}
 	default:
@@ -275,13 +285,14 @@ unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression> expr, 
 }
 
 static void AssignReturnType(unique_ptr<Expression> &expr, idx_t table_index,
+							 const vector<string> &names,
 							 const vector<LogicalType> &sql_types,
 							 const SelectBindState &bind_state) {
 	if (!expr) {
 		return;
 	}
 	if (expr->type == ExpressionType::VALUE_CONSTANT) {
-		expr = FinalizeBindOrderExpression(std::move(expr), table_index, sql_types, bind_state);
+		expr = FinalizeBindOrderExpression(std::move(expr), table_index, names, sql_types, bind_state);
 	}
 	if (expr->type != ExpressionType::BOUND_COLUMN_REF) {
 		return;
@@ -290,8 +301,8 @@ static void AssignReturnType(unique_ptr<Expression> &expr, idx_t table_index,
 	bound_colref.return_type = sql_types[bound_colref.binding.column_index];
 }
 
-void Binder::BindModifiers(BoundQueryNode &result, idx_t table_index, const vector<LogicalType> &sql_types,
-                           const SelectBindState &bind_state) {
+void Binder::BindModifiers(BoundQueryNode &result, idx_t table_index, const vector<string> &names,
+						   const vector<LogicalType> &sql_types, const SelectBindState &bind_state) {
 	for (auto &bound_mod : result.modifiers) {
 		switch (bound_mod->type) {
 		case ResultModifierType::DISTINCT_MODIFIER: {
@@ -299,7 +310,7 @@ void Binder::BindModifiers(BoundQueryNode &result, idx_t table_index, const vect
 			D_ASSERT(!distinct.target_distincts.empty());
 			// set types of distinct targets
 			for (auto &expr : distinct.target_distincts) {
-				expr = FinalizeBindOrderExpression(std::move(expr), table_index, sql_types, bind_state);
+				expr = FinalizeBindOrderExpression(std::move(expr), table_index, names, sql_types, bind_state);
 				if (!expr) {
 					throw InternalException("DISTINCT ON ORDER BY ALL not supported");
 				}
@@ -311,8 +322,8 @@ void Binder::BindModifiers(BoundQueryNode &result, idx_t table_index, const vect
 		}
 		case ResultModifierType::LIMIT_MODIFIER: {
 			auto &limit = bound_mod->Cast<BoundLimitModifier>();
-			AssignReturnType(limit.limit_val.GetExpression(), table_index, sql_types, bind_state);
-			AssignReturnType(limit.offset_val.GetExpression(), table_index, sql_types, bind_state);
+			AssignReturnType(limit.limit_val.GetExpression(), table_index, names, sql_types, bind_state);
+			AssignReturnType(limit.offset_val.GetExpression(), table_index, names, sql_types, bind_state);
 			break;
 		}
 		case ResultModifierType::ORDER_MODIFIER: {
@@ -320,7 +331,7 @@ void Binder::BindModifiers(BoundQueryNode &result, idx_t table_index, const vect
 			bool order_by_all = false;
 			for (auto &order_node : order.orders) {
 				auto &expr = order_node.expression;
-				expr = FinalizeBindOrderExpression(std::move(expr), table_index, sql_types, bind_state);
+				expr = FinalizeBindOrderExpression(std::move(expr), table_index, names, sql_types, bind_state);
 				if (!expr) {
 					order_by_all = true;
 				}
@@ -332,6 +343,9 @@ void Binder::BindModifiers(BoundQueryNode &result, idx_t table_index, const vect
 				order.orders.clear();
 				for (idx_t i = 0; i < sql_types.size(); i++) {
 					auto expr = make_uniq<BoundColumnRefExpression>(sql_types[i], ColumnBinding(table_index, i));
+					if (i < names.size()) {
+						expr->alias = names[i];
+					}
 					order.orders.emplace_back(order_type, null_order, std::move(expr));
 				}
 			}
@@ -649,7 +663,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 	}
 
 	// now that the SELECT list is bound, we set the types of DISTINCT/ORDER BY expressions
-	BindModifiers(*result, result->projection_index, internal_sql_types, bind_state);
+	BindModifiers(*result, result->projection_index, result->names, internal_sql_types, bind_state);
 	return std::move(result);
 }
 

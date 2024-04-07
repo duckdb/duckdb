@@ -3,7 +3,7 @@
 # group: [planner]
 
 statement ok
-CREATE TABLE a (i INTEGER, j INTEGER)
+CREATE TABLE a (i INTEGER, j INTEGER);
 
 statement ok
 PRAGMA explain_output = PHYSICAL_ONLY;
@@ -12,7 +12,6 @@ PRAGMA explain_output = PHYSICAL_ONLY;
 query I nosort orderbinder
 EXPLAIN SELECT i FROM a ORDER BY 1
 ----
-
 query I nosort orderbinder
 EXPLAIN SELECT i FROM a ORDER BY i
 ----

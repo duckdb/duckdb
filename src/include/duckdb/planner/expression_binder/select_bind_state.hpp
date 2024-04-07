@@ -32,10 +32,11 @@ public:
 	void SetExpressionIsVolatile(idx_t index);
 	void SetExpressionHasSubquery(idx_t index);
 
-	bool AliasHasSubquery(idx_t index);
+	bool AliasHasSubquery(idx_t index) const;
 
 	void AddExpandedColumn(idx_t expand_count);
 	void AddRegularColumn();
+	idx_t GetFinalIndex(idx_t index) const;
 
 private:
 	//! The set of referenced aliases
@@ -44,6 +45,8 @@ private:
 	unordered_set<idx_t> volatile_expressions;
 	//! The set of expressions that contains a subquery
 	unordered_set<idx_t> subquery_expressions;
+	//! Column indices after expansion of Expanded expressions (e.g. UNNEST(STRUCT) clauses)
+	vector<idx_t> expanded_column_indices;
 };
 
 } // namespace duckdb

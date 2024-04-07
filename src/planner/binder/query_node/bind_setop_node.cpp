@@ -248,7 +248,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 	}
 
 	// finally bind the types of the ORDER/DISTINCT clause expressions
-	BindModifiers(*result, result->setop_index, result->types, bind_state);
+	BindModifiers(*result, result->setop_index, result->names, result->types, bind_state);
 	return std::move(result);
 }
 

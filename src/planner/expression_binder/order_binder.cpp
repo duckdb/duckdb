@@ -56,8 +56,13 @@ unique_ptr<Expression> OrderBinder::BindConstant(ParsedExpression &expr, const V
 		return nullptr;
 	}
 	// INTEGER constant: we use the integer as an index into the select list (e.g. ORDER BY 1)
-	auto index = (idx_t)val.GetValue<int64_t>();
-	return CreateProjectionReference(expr, index - 1);
+	auto index = idx_t(val.GetValue<int64_t>() - 1);
+	child_list_t<Value> values;
+	values.push_back(make_pair("index", Value::UBIGINT(index)));
+	auto result = make_uniq<BoundConstantExpression>(Value::STRUCT(std::move(values)));
+	result->alias = std::move(expr.alias);
+	result->query_location = expr.query_location;
+	return std::move(result);
 }
 
 unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
