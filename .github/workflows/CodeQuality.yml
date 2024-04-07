@@ -81,7 +81,7 @@ jobs:
     - name: Install python dependencies
       if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
       shell: bash
-      run: python -m pip install clang-5
+      run: python -m pip install libclang
 
     - name: Install libclang
       if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
