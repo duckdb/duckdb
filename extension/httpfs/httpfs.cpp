@@ -169,7 +169,9 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
 		req.method = "POST";
 		req.path = path;
 		req.headers = *headers;
-		req.headers.emplace("Content-Type", "application/octet-stream");
+		if (header_map.find("Content-Type") == header_map.end()) {
+			req.headers.emplace("Content-Type", "application/octet-stream");
+		}
 		req.content_receiver = [&](const char *data, size_t data_length, uint64_t /*offset*/,
 		                           uint64_t /*total_length*/) {
 			if (hfs.state) {
