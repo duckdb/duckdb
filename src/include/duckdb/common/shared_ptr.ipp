@@ -24,7 +24,7 @@ public:
 	}
 	shared_ptr(std::nullptr_t) : internal(nullptr) {
 	} // Implicit conversion
-	template <class U>
+	template <class U, typename std::enable_if<__compatible_with<U, T>::value, int>::type = 0>
 	explicit shared_ptr(U *ptr) : internal(ptr) {
 		__enable_weak_this(internal.get(), internal.get());
 	}
@@ -35,6 +35,16 @@ public:
 	}
 	template <class U>
 	shared_ptr(const shared_ptr<U> &__r, T *__p) noexcept : internal(__r.internal, __p) {
+	}
+	template <class U>
+	shared_ptr(shared_ptr<U> &&__r, T *__p) noexcept : internal(__r.internal, __p) {
+	}
+
+	template <class U, typename std::enable_if<__compatible_with<U, T>::value, int>::type = 0>
+	shared_ptr(const shared_ptr<U> &__r) noexcept : internal(__r.internal) {
+	}
+	template <class U, typename std::enable_if<__compatible_with<U, T>::value, int>::type = 0>
+	shared_ptr(shared_ptr<U> &&__r) noexcept : internal(__r.internal) {
 	}
 
 	shared_ptr(const shared_ptr &other) : internal(other.internal) {
@@ -72,7 +82,13 @@ public:
 
 	// Assignment operators
 	shared_ptr &operator=(const shared_ptr &other) {
-		internal = other.internal;
+		shared_ptr(other).swap(*this);
+		return *this;
+	}
+
+	template <class U, typename std::enable_if<__compatible_with<U, T>::value, int>::type = 0>
+	shared_ptr &operator=(const shared_ptr<U> &other) {
+		shared_ptr(other).swap(*this);
 		return *this;
 	}
 
@@ -115,11 +131,6 @@ public:
 
 	explicit operator bool() const noexcept {
 		return internal.operator bool();
-	}
-
-	template <class U>
-	operator shared_ptr<U>() const noexcept {
-		return shared_ptr<U>(internal);
 	}
 
 	// Element access
