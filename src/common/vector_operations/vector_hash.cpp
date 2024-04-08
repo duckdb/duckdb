@@ -181,6 +181,7 @@ static inline void ListLoopHash(Vector &input, Vector &hashes, const SelectionVe
 
 template <bool HAS_RSEL, bool FIRST_HASH>
 static inline void ArrayLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
+	hashes.Flatten(count);
 	auto hdata = FlatVector::GetData<hash_t>(hashes);
 
 	UnifiedVectorFormat idata;
@@ -190,39 +191,58 @@ static inline void ArrayLoopHash(Vector &input, Vector &hashes, const SelectionV
 	auto &child = ArrayVector::GetEntry(input);
 	auto array_size = ArrayType::GetSize(input.GetType());
 
-	// Figure out how large the child hashes vector should be
-	// TODO: We could use some sort of sparse reverse selection vector to avoid having to allocate a much larger vector
-	auto child_count = array_size * count;
-	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		child_count = array_size;
-	} else {
-		// Based on the largest selection offset
-		for (idx_t i = 0; i < count; i++) {
-			auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
-			auto lidx = idata.sel->get_index(ridx);
-			child_count = MaxValue(child_count, array_size * lidx + array_size);
-		}
-	}
+	auto is_flat = input.GetVectorType() == VectorType::FLAT_VECTOR;
+	auto is_constant = input.GetVectorType() == VectorType::CONSTANT_VECTOR;
 
-	Vector child_hashes(LogicalType::HASH, child_count);
-	if (child_count > 0) {
+	if (!HAS_RSEL && (is_flat || is_constant)) {
+		// Fast path for contiguous vectors with no selection vector
+		auto child_count = array_size * (is_constant ? 1 : count);
+
+		Vector child_hashes(LogicalType::HASH, child_count);
 		VectorOperations::Hash(child, child_hashes, child_count);
 		child_hashes.Flatten(child_count);
-	}
-	auto chdata = FlatVector::GetData<hash_t>(child_hashes);
+		auto chdata = FlatVector::GetData<hash_t>(child_hashes);
 
-	for (idx_t i = 0; i < count; ++i) {
-		const auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
-		const auto lidx = idata.sel->get_index(ridx);
-		const auto offset = lidx * array_size;
-		if (idata.validity.RowIsValid(lidx)) {
-			for (idx_t j = 0; j < array_size; j++) {
-				hdata[ridx] = CombineHashScalar(hdata[ridx], chdata[offset + j]);
+		for (idx_t i = 0; i < count; i++) {
+			auto lidx = idata.sel->get_index(i);
+			if (idata.validity.RowIsValid(lidx)) {
+				for (idx_t j = 0; j < array_size; j++) {
+					auto offset = lidx * array_size + j;
+					hdata[i] = CombineHashScalar(hdata[i], chdata[offset]);
+				}
+			} else if (FIRST_HASH) {
+				hdata[i] = HashOp::NULL_HASH;
 			}
-		} else if (FIRST_HASH) {
-			hdata[ridx] = HashOp::NULL_HASH;
 		}
-		// Empty or NULL non-first elements have no effect.
+	} else {
+		// Hash the arrays one-by-one
+		SelectionVector array_sel(array_size);
+		Vector array_hashes(LogicalType::HASH, array_size);
+		for (idx_t i = 0; i < count; i++) {
+			const auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
+			const auto lidx = idata.sel->get_index(ridx);
+
+			if (idata.validity.RowIsValid(lidx)) {
+				// Create a selection vector for the array
+				for (idx_t j = 0; j < array_size; j++) {
+					array_sel.set_index(j, lidx * array_size + j);
+				}
+
+				// Hash the array slice
+				Vector dict_vec(child, array_sel, array_size);
+				VectorOperations::Hash(dict_vec, array_hashes, array_size);
+				auto ahdata = FlatVector::GetData<hash_t>(array_hashes);
+
+				// Combine the hashes of the array
+				for (idx_t j = 0; j < array_size; j++) {
+					hdata[ridx] = CombineHashScalar(hdata[ridx], ahdata[j]);
+					// Clear the hash for the next iteration
+					ahdata[j] = 0;
+				}
+			} else if (FIRST_HASH) {
+				hdata[ridx] = HashOp::NULL_HASH;
+			}
+		}
 	}
 }
 
