@@ -89,19 +89,13 @@ idx_t TransactionContext::GetActiveQuery() {
 	return current_transaction->GetActiveQuery();
 }
 
-idx_t TransactionContext::GetIncrementalIndex() {
-	return incremental_index++;
-}
-
 void TransactionContext::ResetActiveQuery() {
-	incremental_index = 0;
 	if (current_transaction) {
 		SetActiveQuery(MAXIMUM_QUERY_ID);
 	}
 }
 
 void TransactionContext::SetActiveQuery(transaction_t query_number) {
-	incremental_index = 0;
 	if (!current_transaction) {
 		throw InternalException("SetActiveQuery called without active transaction");
 	}

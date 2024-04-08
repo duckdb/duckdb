@@ -32,7 +32,8 @@ public:
 	TableCatalogEntry &GetErrorsTable(ClientContext &context);
 	TableCatalogEntry &GetScansTable(ClientContext &context);
 
-public:
+	idx_t GetCurrentFileIndex(idx_t query_id);
+
 	static string ObjectType() {
 		return "csv_rejects_table_cache";
 	}
@@ -40,6 +41,12 @@ public:
 	string GetObjectType() override {
 		return ObjectType();
 	}
+
+private:
+	//! Current File Index being used in the query
+	idx_t current_file_idx = 0;
+	//! Current Query ID being executed
+	idx_t current_query_id = 0;
 };
 
 } // namespace duckdb

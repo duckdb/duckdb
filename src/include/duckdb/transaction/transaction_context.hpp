@@ -48,7 +48,6 @@ public:
 	}
 
 	idx_t GetActiveQuery();
-	idx_t GetIncrementalIndex();
 	void ResetActiveQuery();
 	void SetActiveQuery(transaction_t query_number);
 
@@ -57,7 +56,6 @@ private:
 	bool auto_commit;
 
 	unique_ptr<MetaTransaction> current_transaction;
-	idx_t incremental_index = 0;
 
 	TransactionContext(const TransactionContext &) = delete;
 };

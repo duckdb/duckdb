@@ -19,6 +19,14 @@ TableCatalogEntry &CSVRejectsTable::GetScansTable(ClientContext &context) {
 	return table_entry;
 }
 
+idx_t CSVRejectsTable::GetCurrentFileIndex(idx_t query_id) {
+	if (current_query_id != query_id) {
+		current_query_id = query_id;
+		current_file_idx = 0;
+	}
+	return current_file_idx++;
+}
+
 shared_ptr<CSVRejectsTable> CSVRejectsTable::GetOrCreate(ClientContext &context, const string &rejects_scan,
                                                          const string &rejects_error) {
 	// Check that these names can't be the same

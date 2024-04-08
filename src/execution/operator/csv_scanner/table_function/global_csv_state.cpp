@@ -246,7 +246,7 @@ void CSVGlobalState::FillRejectsTable() {
 		InternalAppender scans_appender(context, scans_table);
 		idx_t scan_idx = context.transaction.GetActiveQuery();
 		for (auto &file : file_scans) {
-			idx_t file_idx = context.transaction.GetIncrementalIndex();
+			idx_t file_idx = rejects->GetCurrentFileIndex(scan_idx);
 			auto file_name = file->file_path;
 			auto &errors = file->error_handler->errors;
 			// We first insert the file into the file scans table
