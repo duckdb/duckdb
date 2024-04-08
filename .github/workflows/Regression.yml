@@ -129,9 +129,6 @@ jobs:
       run: |
         python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/csv.csv --verbose --threads=2
 
-    - name: Setup tmate session
-      uses: mxschmitt/action-tmate@v3
-
     - name: Regression Test new micro benchmark
       if: always()
       shell: bash
