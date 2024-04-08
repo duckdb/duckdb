@@ -195,8 +195,8 @@ static inline void ArrayLoopHash(Vector &input, Vector &hashes, const SelectionV
 	auto child_count = array_size * count;
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		child_count = array_size;
-	} else if (input.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		// Based on the largest dict offset
+	} else {
+		// Based on the largest selection offset
 		for (idx_t i = 0; i < count; i++) {
 			auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
 			auto lidx = idata.sel->get_index(ridx);
