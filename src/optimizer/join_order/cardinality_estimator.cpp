@@ -298,7 +298,6 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			}
 		}
 	}
-	double denom = 1;
 	// TODO: It's possible cross-products were added and are not present in the filters in the relation_2_tdom
 	//       structures. When that's the case, merge all subgraphs
 	if (subgraphs.size() > 1) {
