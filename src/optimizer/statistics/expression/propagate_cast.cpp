@@ -122,7 +122,7 @@ static unique_ptr<BaseStatistics> StatisticsNumericCastSwitch(const BaseStatisti
 }
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundCastExpression &cast,
-                                                                     unique_ptr<Expression> *expr_ptr) {
+                                                                     unique_ptr<Expression> &expr_ptr) {
 	auto child_stats = PropagateExpression(cast.child);
 	if (!child_stats) {
 		return nullptr;
