@@ -837,12 +837,32 @@ void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 template <>
 float DivideOperator::Operation(float left, float right) {
+	if (right == 0.0) {
+		if (left == 0.0) {
+			return NAN;
+		} else if (left < 0.0) {
+			return -INFINITY;
+		} else {
+			return INFINITY;
+		}
+	}
+	
 	auto result = left / right;
 	return result;
 }
 
 template <>
 double DivideOperator::Operation(double left, double right) {
+	if (right == 0.0) {
+		if (left == 0.0) {
+			return NAN;
+		} else if (left < 0.0) {
+			return -INFINITY;
+		} else {
+			return INFINITY;
+		}
+	}
+
 	auto result = left / right;
 	return result;
 }
