@@ -37,7 +37,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<Logical
 
 	// pushdown into AGGREGATE and GROUP BY
 	// we cannot push expressions that refer to the aggregate
-	FilterPushdown child_pushdown(optimizer);
+	FilterPushdown child_pushdown(optimizer, rewrite_mark_joins);
 	for (idx_t i = 0; i < filters.size(); i++) {
 		auto &f = *filters[i];
 		if (f.bindings.find(aggr.aggregate_index) != f.bindings.end()) {

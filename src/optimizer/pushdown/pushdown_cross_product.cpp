@@ -8,7 +8,7 @@ using Filter = FilterPushdown::Filter;
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->children.size() > 1);
-	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
+	FilterPushdown left_pushdown(optimizer, rewrite_mark_joins), right_pushdown(optimizer, rewrite_mark_joins);
 	vector<unique_ptr<Expression>> join_expressions;
 	auto join_ref_type = JoinRefType::REGULAR;
 	switch (op->type) {

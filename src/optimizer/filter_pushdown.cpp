@@ -145,7 +145,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushFinalFilters(unique_ptr<LogicalO
 unique_ptr<LogicalOperator> FilterPushdown::FinishPushdown(unique_ptr<LogicalOperator> op) {
 	// unhandled type, first perform filter pushdown in its children
 	for (auto &child : op->children) {
-		FilterPushdown pushdown(optimizer);
+		FilterPushdown pushdown(optimizer, rewrite_mark_joins);
 		child = pushdown.Rewrite(std::move(child));
 	}
 	// now push any existing filters

@@ -16,7 +16,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 	         op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN || op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN);
 
 	right_bindings.insert(comp_join.mark_index);
-	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
+	FilterPushdown left_pushdown(optimizer, rewrite_mark_joins), right_pushdown(optimizer, rewrite_mark_joins);
 #ifdef DEBUG
 	bool simplified_mark_join = false;
 #endif

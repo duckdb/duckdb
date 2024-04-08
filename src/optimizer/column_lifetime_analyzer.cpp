@@ -83,7 +83,7 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		ExtractUnusedColumnBindings(op.children[1]->GetColumnBindings(), unused_bindings);
 
 		// now recurse into the filter and its children
-		StandardVisitOperator(op);
+		LogicalOperatorVisitor::VisitOperatorChildren(op);
 
 		// then generate the projection map
 		GenerateProjectionMap(op.children[1]->GetColumnBindings(), unused_bindings, comp_join.right_projection_map);
