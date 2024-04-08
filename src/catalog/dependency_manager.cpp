@@ -427,6 +427,25 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 					// FIXME: unless there is an index on the table, because the table name is baked into the index
 					disallow_alter = true;
 				}
+				if (dep.EntryInfo().type == CatalogType::TABLE_ENTRY && old_obj.type == CatalogType::TABLE_ENTRY) {
+					auto &table_entry = old_obj.Cast<TableCatalogEntry>();
+					for (auto &constraint : table_entry.GetConstraints()) {
+						if (constraint->type != ConstraintType::FOREIGN_KEY) {
+							continue;
+						}
+						auto &fk = constraint->Cast<ForeignKeyConstraint>();
+						if (fk.info.type != ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE) {
+							continue;
+						}
+						if (StringUtil::CIEquals(dep.EntryInfo().name, fk.info.table)) {
+							// Renaming tables that are referenced by ForeignKeyConstraints is not supported
+							// this currently breaks 'ScanForeignKeyTable' and causes it to infinite loop because
+							// 'ReferencedTableIsOrdered' will not get a hit to fix this we should probably use OIDs in
+							// places like this, so it survives a rename
+							disallow_alter = true;
+						}
+					}
+				}
 				break;
 			}
 			default:

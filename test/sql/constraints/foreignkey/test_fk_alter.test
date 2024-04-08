@@ -19,23 +19,18 @@ drop table departments
 ----
 Catalog Error: Could not drop the table because this table is main key table of the table "employees"
 
-statement ok
+# FIXME: we would need to update the foreign key constraint of the tables that are referencing 'employees'
+# to fix this, propagating an alter down.
+# (or use Postgres's solution of using oids to add a layer of indirection so we dont need to do cleanup whenever a rename is done)
+statement error
 ALTER TABLE departments RENAME TO old_departments
+----
+Dependency Error: Cannot alter entry "departments" because there are entries that depend on it.
 
 statement error
-drop table old_departments
+drop table departments
 ----
 Catalog Error: Could not drop the table because this table is main key table of the table "employees"
 
 statement ok
 ALTER TABLE employees RENAME TO old_employees
-
-# FIXME: we would need to update the foreign key constraint of the tables that are referencing 'employees'
-# to fix this, propagating an alter down.
-# (or use Postgres's solution of using oids to add a layer of indirection so we dont need to do cleanup whenever a rename is done)
-mode skip
-
-statement error
-drop table old_departments
-----
-Catalog Error: Could not drop the table because this table is main key table of the table "old_employees"
