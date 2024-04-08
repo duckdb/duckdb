@@ -1,7 +1,5 @@
 #pragma once
 
-#include <utility>
-
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/typedefs.hpp"
