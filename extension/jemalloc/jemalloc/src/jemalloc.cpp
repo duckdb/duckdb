@@ -4308,8 +4308,8 @@ label_done:
 JEMALLOC_ATTR(constructor)
 static void
 jemalloc_constructor(void) {
-	static const std::string CONFIG_STRING = duckdb::StringUtil::Format("narenas:%llu,dirty_decay_ms:1000,muzzy_decay_ms:1000", duckdb::idx_t(malloc_ncpus()));
-	je_malloc_conf = CONFIG_STRING.c_str();
+//	static const std::string CONFIG_STRING = duckdb::StringUtil::Format("narenas:%llu,dirty_decay_ms:1000,muzzy_decay_ms:1000", duckdb::idx_t(malloc_ncpus()));
+//	je_malloc_conf = CONFIG_STRING.c_str();
 	malloc_init();
 }
 #endif

@@ -261,7 +261,7 @@ namespace duckdb_jemalloc {
  * common sequences of mmap()/munmap() calls will cause virtual memory map
  * holes.
  */
-/* #undef JEMALLOC_RETAIN */
+#define JEMALLOC_RETAIN
 
 /* TLS is used to map arenas and magazine caches to threads. */
 /* #undef JEMALLOC_TLS */
