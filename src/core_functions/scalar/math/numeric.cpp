@@ -1438,108 +1438,86 @@ ScalarFunctionSet LeastCommonMultipleFun::GetFunctions() {
 // and Software Libraries, Software: Practice and Experience 49 (6), 2019.
 // https://arxiv.org/abs/1902.01961
 
-static uhugeint_t ComputeM(uint64_t rhs) {
+template <class > struct next_size;
+template <class T> using next_size_t = typename next_size<T>::type;
+template <class T> struct tag { using type = T; };
+
+template <> struct next_size<uint8_t>  : tag<uint16_t> { };
+template <> struct next_size<uint16_t> : tag<uint32_t> { };
+template <> struct next_size<uint32_t> : tag<uint64_t> { };
+template <> struct next_size<uint64_t> : tag<uhugeint_t> { };
+template <> struct next_size<int8_t>  : tag<int16_t> { };
+template <> struct next_size<int16_t> : tag<int32_t> { };
+template <> struct next_size<int32_t> : tag<int64_t> { };
+
+template <class T> using m_t = next_size_t<typename std::make_unsigned<T>::type>;
+
+template <class RHS>
+typename std::enable_if<std::is_unsigned<RHS>::value, next_size_t<RHS>>::type
+ComputeM(RHS rhs) {
+	return next_size_t<RHS>(-1) / rhs + 1;
+}
+
+template <>
+m_t<uint64_t> ComputeM<uint64_t>(uint64_t rhs) {
 	return uhugeint_t(0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF) / rhs + 1;
 }
 
-static uint64_t ComputeM(uint32_t rhs) {
-	return UINT64_C(0xFFFFFFFFFFFFFFFF) / rhs + 1;
-}
-
-static uint32_t ComputeM(uint16_t rhs) {
-	return UINT32_C(0xFFFFFFFF) / rhs + 1;
-}
-
-static uint16_t ComputeM(uint8_t rhs) {
-	return UINT32_C(0xFFFF) / rhs + 1;
-}
-
-static uint64_t ComputeM(int32_t rhs) {
+template <class RHS>
+typename std::enable_if<!std::is_unsigned<RHS>::value, m_t<RHS>>::type
+ComputeM(RHS rhs) {
 	if (rhs < 0) {
 		rhs = -rhs;
 	}
-	return UINT64_C(0xFFFFFFFFFFFFFFFF) / rhs + 1 + ((rhs & (rhs - 1)) == 0 ? 1 : 0);
-}
-
-static uint32_t ComputeM(int16_t rhs) {
-	if (rhs < 0) {
-		rhs = -rhs;
-	}
-	return UINT32_C(0xFFFFFFFF) / rhs + 1 + ((rhs & (rhs - 1)) == 0 ? 1 : 0);
-}
-
-static uint16_t ComputeM(int8_t rhs) {
-	if (rhs < 0) {
-		rhs = -rhs;
-	}
-	return UINT32_C(0xFFFF) / rhs + 1 + ((rhs & (rhs - 1)) == 0 ? 1 : 0);
+	return (typename std::make_unsigned<next_size_t<RHS>>::type)(-1) / rhs + 1 + ((rhs & (rhs - 1)) == 0 ? 1 : 0);
 }
 
 // fastdiv computes (a / d) given precomputed M for d>1
-inline static uint64_t Fastdiv(uint64_t a, uhugeint_t m, uint64_t d) {
+
+template <class RHS>
+inline static typename std::enable_if<std::is_unsigned<RHS>::value, RHS>::type
+Fastdiv(RHS a, m_t<RHS> m, RHS d) {
+	// Compute the bottom 32 bits, then the top 32 bits, add them, and only keep the top 32 bits
+	// The reason we need the bottom 32 bits, is because the carry will roll into the top 32 bits.
+	return ((((m & RHS(-1)) * a) >> (sizeof(RHS) * 8)) + ((m >> (sizeof(RHS)*8)) * a)) >> (sizeof(RHS) * 8);
+}
+
+template <>
+inline uint64_t Fastdiv<uint64_t>(uint64_t a, m_t<uint64_t> m, uint64_t d) {
 	// Compute the bottom 32 bits, then the top 32 bits, add them, and only keep the top 32 bits
 	// The reason we need the bottom 32 bits, is because the carry will roll into the top 32 bits.
 	return ((((m & 0xFFFFFFFFFFFFFFFF) * a) >> 64) + ((m >> 64) * a)).upper;
 }
 
-// fastdiv computes (a / d) given precomputed M for d>1
-inline static uint32_t Fastdiv(uint32_t a, uint64_t m, uint32_t d) {
-	// Compute the bottom 32 bits, then the top 32 bits, add them, and only keep the top 32 bits
-	// The reason we need the bottom 32 bits, is because the carry will roll into the top 32 bits.
-	return ((((m & 0xFFFFFFFF) * a) >> 32) + ((m >> 32) * a)) >> 32;
+template <class RHS>
+static typename std::enable_if<!std::is_unsigned<RHS>::value, RHS>::type
+Fastdiv(RHS a, m_t<RHS> m, RHS d) {
+	next_size_t<next_size_t<RHS>> lhs = a;
+	if (a < 0) {
+		lhs |= next_size_t<next_size_t<RHS>>(-1) << (sizeof(m_t<RHS>) * 8);
+	}
+	m_t<RHS> highbits = (lhs * m) >> (sizeof(m_t<RHS>) * 8);
+	highbits += (a < 0 ? 1 : 0);
+	if (d < 0) {
+		return -UnsafeNumericCast<RHS>(highbits);
+	}
+	return UnsafeNumericCast<RHS>(highbits);
 }
 
-inline static uint16_t Fastdiv(uint16_t a, uint32_t m, uint16_t d) {
-	// Compute the bottom 32 bits, then the top 32 bits, add them, and only keep the top 32 bits
-	// The reason we need the bottom 32 bits, is because the carry will roll into the top 32 bits.
-	return ((((m & 0xFFFF) * a) >> 16) + ((m >> 16) * a)) >> 16;
-}
-
-inline static uint8_t Fastdiv(uint8_t a, uint16_t m, uint8_t d) {
-	// Compute the bottom 32 bits, then the top 32 bits, add them, and only keep the top 32 bits
-	// The reason we need the bottom 32 bits, is because the carry will roll into the top 32 bits.
-	return ((((m & 0xFF) * a) >> 8) + ((m >> 8) * a)) >> 8;
-}
-
-static int32_t Fastdiv(int32_t a, uint64_t m, int32_t d) {
+template <>
+inline int32_t Fastdiv<int32_t> (int32_t a, m_t<int32_t> m, int32_t d) {
 	hugeint_t lhs;
 	if (a < 0) {
 		lhs = hugeint_t(0xffffffffffffffff, a);
 	} else {
 		lhs = hugeint_t(0, a);
 	}
-	uint64_t highbits = Hugeint::Multiply<false>(lhs, hugeint_t(0, m)).upper;
+	m_t<int32_t> highbits = Hugeint::Multiply<false>(lhs, hugeint_t(0, m)).upper;
 	highbits += (a < 0 ? 1 : 0);
 	if (d < 0) {
-		return -(int32_t)(highbits);
+		return -UnsafeNumericCast<int32_t>(highbits);
 	}
-	return (int32_t)(highbits);
-}
-
-static int16_t Fastdiv(int16_t a, uint32_t m, int16_t d) {
-	int64_t lhs = a;
-	if (a < 0) {
-		lhs |= int64_t(0xffffffff) << 32;
-	}
-	uint32_t highbits = (lhs * m) >> 32;
-	highbits += (a < 0 ? 1 : 0);
-	if (d < 0) {
-		return -(int16_t)(highbits);
-	}
-	return (int16_t)(highbits);
-}
-
-static int8_t Fastdiv(int8_t a, uint16_t m, int8_t d) {
-	int32_t lhs = a;
-	if (a < 0) {
-		lhs |= int32_t(0xffffffff) << 16;
-	}
-	uint16_t highbits = (lhs * m) >> 16;
-	highbits += (a < 0 ? 1 : 0);
-	if (d < 0) {
-		return -(int8_t)(highbits);
-	}
-	return (int8_t)(highbits);
+	return UnsafeNumericCast<int32_t>(highbits);
 }
 
 template <class LHS, class RHS, class RESULT>
@@ -1591,7 +1569,7 @@ static void ConstRHSDivideOperationFast(DataChunk &args, ExpressionState &state,
 	if (std::is_signed<RHS>() && rhs == std::numeric_limits<RHS>::min()) {
 		UnaryExecutor::Execute<LHS, RESULT>(args.data[0], result, args.size(), [&](LHS lhs) { return lhs == rhs; });
 	}
-	auto optimised_rhs = ComputeM(rhs);
+	auto optimised_rhs = ComputeM<RHS>(rhs);
 	UnaryExecutor::Execute<LHS, RESULT>(args.data[0], result, args.size(),
 	                                    [&](LHS lhs) { return Fastdiv(lhs, optimised_rhs, rhs); });
 }
