@@ -21,6 +21,7 @@
 #include "duckdb/optimizer/rule/in_clause_simplification.hpp"
 #include "duckdb/optimizer/rule/list.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
+#include "duckdb/optimizer/limit_pushdown.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/optimizer/unnest_rewriter.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -174,6 +175,12 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	RunOptimizer(OptimizerType::COLUMN_LIFETIME, [&]() {
 		ColumnLifetimeAnalyzer column_lifetime(true);
 		column_lifetime.VisitOperator(*plan);
+	});
+
+	// pushes LIMIT below PROJECTION
+	RunOptimizer(OptimizerType::LIMIT_PUSHDOWN, [&]() {
+		LimitPushdown limit_pushdown;
+		plan = limit_pushdown.Optimize(std::move(plan));
 	});
 
 	// compress data based on statistics for materializing operators
