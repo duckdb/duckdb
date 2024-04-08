@@ -1,0 +1,43 @@
+# name: test/sql/function/numeric/decimal_mod.test
+# description: Test decimal modulo
+# group: [numeric]
+
+statement ok
+PRAGMA enable_verification
+
+query II
+SELECT 10 % 2.4, -10 % 2.4
+----
+0.4	-0.4
+
+query II
+SELECT 10.0 % 2.4, -10.0 % 2.4
+----
+0.4	-0.4
+
+# large decimals
+query I
+SELECT 12345678901111111 % 2.0;
+----
+1
+
+query I
+select 12345678901234567890 % 123;
+----
+78
+
+# if the required width exceeds the maximum decimal width we fallback to double
+query I
+SELECT 10000000000000000000000000000000000001::DECIMAL(38,0) % 0.00000000000000000000000000000000004
+----
+0.0
+
+query II
+SELECT typeof(10.0 % 2.0), typeof(10.0 % 2.0 % 2.0 % 2.0)
+----
+DECIMAL(3,1)	DECIMAL(3,1)
+
+query I
+SELECT 10.0 % 0.0
+----
+NULL

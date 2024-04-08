@@ -239,6 +239,9 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 			auto &result_entry = ListVector::GetEntry(result);
 			auto result_data = ListVector::GetData(result);
 			for (idx_t i = 0; i < count; i++) {
+				if (!result_validity.RowIsValid(i)) {
+					continue;
+				}
 				for (idx_t j = result_data[i].offset; j < result_data[i].offset + result_data[i].length; j++) {
 					auto b = sel_sorted.get_index(j) - result_data[i].offset;
 					result_entry.SetValue(j, Value::BIGINT(b + 1));
