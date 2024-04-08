@@ -820,11 +820,7 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY EXTENSION_VERS
     TARGET ${TARGET_NAME}
     POST_BUILD
     COMMAND
-    printf "${DUCKDB_NORMALIZED_VERSION}" > duckdb_version_file
-    COMMAND
-    printf "${EXTENSION_VERSION}" > extension_version_file || ( echo "CMake appears not to propagate correctly version information for the extension, using empty string" && rm extension_version_file && touch extension_version_file )
-    COMMAND
-    bash ${CMAKE_SOURCE_DIR}/scripts/append_metadata.sh $<TARGET_FILE:${TARGET_NAME}> ${CMAKE_BINARY_DIR}/duckdb_platform_out duckdb_version_file extension_version_file
+    ${CMAKE_COMMAND} -DEXTENSION=$<TARGET_FILE:${TARGET_NAME}> -DPLATFORM_FILE=${CMAKE_BINARY_DIR}/duckdb_platform_out -DDUCKDB_VERSION="${DUCKDB_NORMALIZED_VERSION}" -DEXTENSION_VERSION="${EXTENSION_VERSION}" -DNULL_FILE=${CMAKE_SOURCE_DIR}/scripts/null.txt -P ${CMAKE_SOURCE_DIR}/scripts/append_metadata.cmake
     )
   add_dependencies(${TARGET_NAME} duckdb_platform)
   if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_TIDY)
@@ -1228,8 +1224,8 @@ if(NOT DUCKDB_EXPLICIT_PLATFORM)
 else()
   add_custom_target(
           duckdb_platform ALL
-	  COMMAND
-	  printf "${DUCKDB_EXPLICIT_PLATFORM}" > duckdb_platform_out
+          COMMAND
+          ${CMAKE_COMMAND} -E echo_append \"${DUCKDB_EXPLICIT_PLATFORM}\" > duckdb_platform_out
           )
 endif()
 
