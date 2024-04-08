@@ -37,7 +37,8 @@ static void FlipChildren(LogicalOperator &op) {
 	}
 }
 
-static inline idx_t ComputeOverlappingBindings(const vector<ColumnBinding> &haystack, const vector<ColumnBinding> &needles) {
+static inline idx_t ComputeOverlappingBindings(const vector<ColumnBinding> &haystack,
+                                               const vector<ColumnBinding> &needles) {
 	idx_t result = 0;
 	for (auto &needle : needles) {
 		if (std::find(haystack.begin(), haystack.end(), needle) != haystack.end()) {
