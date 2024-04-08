@@ -537,7 +537,7 @@
     "members": [
       {"id": 100,
         "name": "ignore_errors",
-        "type": "CSVOption<bool>",
+        "type": "bool",
         "default": "false"
       },
       {"id": 101,
@@ -606,8 +606,8 @@
       },
       {"id": 117,
         "name": "rejects_table_name",
-        "type": "CSVOption<string>",
-        "default": "{\"reject_errors\"}"
+        "type": "string",
+        "default": "\"reject_errors\""
       },
       {"id": 118,
         "name": "rejects_limit",

@@ -118,7 +118,7 @@ CSVOption<T> CSVOption<T>::Deserialize(Deserializer &deserializer) {
 }
 
 void CSVReaderOptions::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<CSVOption<bool>>(100, "ignore_errors", ignore_errors, false);
+	serializer.WritePropertyWithDefault<bool>(100, "ignore_errors", ignore_errors, false);
 	serializer.WritePropertyWithDefault<idx_t>(101, "buffer_sample_size", buffer_sample_size);
 	serializer.WritePropertyWithDefault<string>(102, "null_str", null_str);
 	serializer.WriteProperty<FileCompressionType>(103, "compression", compression);
@@ -135,7 +135,7 @@ void CSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<idx_t>(114, "buffer_size", buffer_size);
 	serializer.WriteProperty<MultiFileReaderOptions>(115, "file_options", file_options);
 	serializer.WritePropertyWithDefault<vector<bool>>(116, "force_quote", force_quote);
-	serializer.WritePropertyWithDefault<CSVOption<string>>(117, "rejects_table_name", rejects_table_name, {"reject_errors"});
+	serializer.WritePropertyWithDefault<string>(117, "rejects_table_name", rejects_table_name, "reject_errors");
 	serializer.WritePropertyWithDefault<idx_t>(118, "rejects_limit", rejects_limit);
 	/* [Deleted] (vector<string>) "rejects_recovery_columns" */
 	/* [Deleted] (vector<idx_t>) "rejects_recovery_column_ids" */
@@ -155,7 +155,7 @@ void CSVReaderOptions::Serialize(Serializer &serializer) const {
 
 CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	CSVReaderOptions result;
-	deserializer.ReadPropertyWithDefault<CSVOption<bool>>(100, "ignore_errors", result.ignore_errors, false);
+	deserializer.ReadPropertyWithDefault<bool>(100, "ignore_errors", result.ignore_errors, false);
 	deserializer.ReadPropertyWithDefault<idx_t>(101, "buffer_sample_size", result.buffer_sample_size);
 	deserializer.ReadPropertyWithDefault<string>(102, "null_str", result.null_str);
 	deserializer.ReadProperty<FileCompressionType>(103, "compression", result.compression);
@@ -172,7 +172,7 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<idx_t>(114, "buffer_size", result.buffer_size);
 	deserializer.ReadProperty<MultiFileReaderOptions>(115, "file_options", result.file_options);
 	deserializer.ReadPropertyWithDefault<vector<bool>>(116, "force_quote", result.force_quote);
-	deserializer.ReadPropertyWithDefault<CSVOption<string>>(117, "rejects_table_name", result.rejects_table_name, {"reject_errors"});
+	deserializer.ReadPropertyWithDefault<string>(117, "rejects_table_name", result.rejects_table_name, "reject_errors");
 	deserializer.ReadPropertyWithDefault<idx_t>(118, "rejects_limit", result.rejects_limit);
 	deserializer.ReadDeletedProperty<vector<string>>(119, "rejects_recovery_columns");
 	deserializer.ReadDeletedProperty<vector<idx_t>>(120, "rejects_recovery_column_ids");
