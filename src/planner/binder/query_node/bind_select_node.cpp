@@ -552,7 +552,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 
 		if (expr->type == ExpressionType::BOUND_EXPANDED) {
 			if (!is_original_column) {
-				throw InternalException("Only original columns can have expanded expressions");
+				throw BinderException("UNNEST of struct cannot be used in ORDER BY/DISTINCT ON clause");
 			}
 			if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES) {
 				throw BinderException("UNNEST of struct cannot be combined with GROUP BY ALL");

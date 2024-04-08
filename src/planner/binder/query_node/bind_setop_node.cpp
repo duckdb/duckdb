@@ -43,10 +43,9 @@ static void GatherAliases(BoundQueryNode &node, SelectBindState &bind_state, con
 		// query node
 		D_ASSERT(node.type == QueryNodeType::SELECT_NODE);
 		auto &select = node.Cast<BoundSelectNode>();
-		// fill the alias lists
+		// fill the alias lists with the names
 		for (idx_t i = 0; i < select.names.size(); i++) {
 			auto &name = select.names[i];
-			auto &expr = select.bind_state.original_expressions[i];
 			// first check if the alias is already in there
 			auto entry = bind_state.alias_map.find(name);
 
@@ -56,6 +55,11 @@ static void GatherAliases(BoundQueryNode &node, SelectBindState &bind_state, con
 				// the alias is not in there yet, just assign it
 				bind_state.alias_map[name] = index;
 			}
+		}
+		// check if the expression matches one of the expressions in the original expression liset
+		for (idx_t i = 0; i < select.bind_state.original_expressions.size(); i++) {
+			auto &expr = select.bind_state.original_expressions[i];
+			idx_t index = reorder_idx[i];
 			// now check if the node is already in the set of expressions
 			auto expr_entry = bind_state.projection_map.find(*expr);
 			if (expr_entry != bind_state.projection_map.end()) {
