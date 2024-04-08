@@ -19,12 +19,16 @@ void CSVErrorHandler::ThrowError(CSVError csv_error) {
 	std::ostringstream error;
 	if (PrintLineNumber(csv_error)) {
 		error << "CSV Error on Line: " << GetLine(csv_error.error_info) << '\n';
+		if (!csv_error.csv_row.empty()) {
+			error << "Original Line: " << csv_error.csv_row << '\n';
+		}
 	}
 	if (csv_error.full_error_message.empty()) {
 		error << csv_error.error_message;
 	} else {
 		error << csv_error.full_error_message;
 	}
+
 	switch (csv_error.type) {
 	case CSVErrorType::CAST_ERROR:
 		throw ConversionException(error.str());
