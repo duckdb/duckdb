@@ -315,7 +315,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 		}
 	}
 	// can happen if a table has cardinality 0, a tdom is set to 0, or if a cross product is used.
-	if (subgraphs.size() == 0 || denom == 0) {
+	if (subgraphs.size() == 0 || subgraphs.at(0).denom == 0) {
 		// denominator is 1 and numerators are a cross product of cardinalities.
 		unordered_set<idx_t> numerator_relations(actual_set);
 		return DenomInfo(numerator_relations, 1, 1);
