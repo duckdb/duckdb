@@ -36,8 +36,8 @@
 
 namespace duckdb {
 
-void FindForeignKeyInformation(CatalogEntry &entry, AlterForeignKeyType alter_fk_type,
-                               vector<unique_ptr<AlterForeignKeyInfo>> &fk_arrays) {
+static void FindForeignKeyInformation(CatalogEntry &entry, AlterForeignKeyType alter_fk_type,
+                                      vector<unique_ptr<AlterForeignKeyInfo>> &fk_arrays) {
 	if (entry.type != CatalogType::TABLE_ENTRY) {
 		return;
 	}
@@ -60,6 +60,19 @@ void FindForeignKeyInformation(CatalogEntry &entry, AlterForeignKeyType alter_fk
 			throw CatalogException("Could not drop the table because this table is main key table of the table \"%s\"",
 			                       fk.info.table);
 		}
+	}
+}
+
+static void LazyLoadIndexes(ClientContext &context, CatalogEntry &entry) {
+	if (entry.type == CatalogType::TABLE_ENTRY) {
+		auto &table_entry = entry.Cast<TableCatalogEntry>();
+		table_entry.GetStorage().info->InitializeIndexes(context);
+	} else if (entry.type == CatalogType::INDEX_ENTRY) {
+		auto &index_entry = entry.Cast<IndexCatalogEntry>();
+		auto &table_entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, index_entry.catalog.GetName(),
+		                                      index_entry.GetSchemaName(), index_entry.GetTableName())
+		                        .Cast<TableCatalogEntry>();
+		table_entry.GetStorage().info->InitializeIndexes(context);
 	}
 }
 
@@ -286,6 +299,9 @@ void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
 		throw CatalogException("Existing object %s is of type %s, trying to replace with type %s", info.name,
 		                       CatalogTypeToString(existing_entry->type), CatalogTypeToString(info.type));
 	}
+
+	// if this is a index or table with indexes, initialize any unknown index instances
+	LazyLoadIndexes(context, *existing_entry);
 
 	// if there is a foreign key constraint, get that information
 	vector<unique_ptr<AlterForeignKeyInfo>> fk_arrays;
