@@ -21,12 +21,19 @@ TableCatalogEntry &CSVRejectsTable::GetScansTable(ClientContext &context) {
 
 shared_ptr<CSVRejectsTable> CSVRejectsTable::GetOrCreate(ClientContext &context, const string &rejects_scan,
                                                          const string &rejects_error) {
+	// Check that these names can't be the same
+	if (rejects_scan == rejects_error) {
+		throw BinderException("The names of the rejects scan and rejects error tables can't be the same. Use different "
+		                      "names for these tables.");
+	}
 	auto key =
 	    "CSV_REJECTS_TABLE_CACHE_ENTRY_" + StringUtil::Upper(rejects_scan) + "_" + StringUtil::Upper(rejects_error);
 	auto &cache = ObjectCache::GetObjectCache(context);
 	auto &catalog = Catalog::GetCatalog(context, TEMP_CATALOG);
-	auto rejects_scan_exist = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, DEFAULT_SCHEMA, rejects_scan, OnEntryNotFound::RETURN_NULL) != nullptr;
-	auto rejects_error_exist = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, DEFAULT_SCHEMA, rejects_error, OnEntryNotFound::RETURN_NULL) != nullptr;
+	auto rejects_scan_exist = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, DEFAULT_SCHEMA, rejects_scan,
+	                                           OnEntryNotFound::RETURN_NULL) != nullptr;
+	auto rejects_error_exist = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, DEFAULT_SCHEMA, rejects_error,
+	                                            OnEntryNotFound::RETURN_NULL) != nullptr;
 	if ((rejects_scan_exist || rejects_error_exist) && !cache.Get<CSVRejectsTable>(key)) {
 		std::ostringstream error;
 		if (rejects_scan_exist) {
@@ -38,6 +45,7 @@ shared_ptr<CSVRejectsTable> CSVRejectsTable::GetOrCreate(ClientContext &context,
 		error << "Either drop the used name(s), or give other name options in the CSV Reader function.\n";
 		throw BinderException(error.str());
 	}
+
 	return cache.GetOrCreate<CSVRejectsTable>(key, rejects_scan, rejects_error);
 }
 

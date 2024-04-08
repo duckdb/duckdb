@@ -156,8 +156,7 @@ SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), M
     rejects_scan = 't'
     );
 ----
-Reject Scan Table name "t" is already in use. Reject Error Table name "t" is already in use. Either drop the used name(s), or give other name options in the CSV Reader function.
-
+The names of the rejects scan and rejects error tables can't be the same. Use different names for these tables.
 
 # Test giving the name of the tables with store_rejects and/or ignore_errors set to false throws
 statement error
@@ -231,3 +230,24 @@ SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), M
     );
 ----
 REJECTS_SCAN option is only supported when store_rejects is not manually set to false
+
+# Add a test where both tables have the same name (This should fail, because they both have the same name)
+statement error
+SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), MAX(len(column1)) FROM read_csv_auto(
+    'test/sql/copy/csv/data/error/mismatch/big_bad*.csv',
+    sample_size=1,
+    rejects_scan = 'same_name_because_why_not',
+    rejects_table = 'same_name_because_why_not',
+    store_rejects = true
+    );
+----
+The names of the rejects scan and rejects error tables can't be the same. Use different names for these tables.
+
+# This hopefully doesn't fail because the names don't get registered if they fail.
+statement ok
+SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), MAX(len(column1)) FROM read_csv_auto(
+    'test/sql/copy/csv/data/error/mismatch/big_bad*.csv',
+    sample_size=1,
+    rejects_scan = 'same_name_because_why_not',
+    rejects_table = 'same_name_because_why_not_2',
+    store_rejects = true);

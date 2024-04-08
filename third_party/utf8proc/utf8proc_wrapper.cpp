@@ -1,6 +1,6 @@
 #include "utf8proc_wrapper.hpp"
 #include "utf8proc.hpp"
-
+#include "duckdb/common/assert.hpp"
 using namespace std;
 
 namespace duckdb {
@@ -103,6 +103,7 @@ UnicodeType Utf8Proc::Analyze(const char *s, size_t len, UnicodeInvalidReason *i
 }
 
 void Utf8Proc::MakeValid(char *s, size_t len, char special_flag){
+	D_ASSERT(special_flag <=127);
 	UnicodeType type = UnicodeType::ASCII;
 	for (size_t i = 0; i < len; i++) {
 		int c = (int) s[i];
@@ -133,6 +134,7 @@ void Utf8Proc::MakeValid(char *s, size_t len, char special_flag){
 			type = UnicodeType::ASCII;
 		}
 	}
+	D_ASSERT(Utf8Proc::IsValid(s,len));
 }
 
 char* Utf8Proc::Normalize(const char *s, size_t len) {
