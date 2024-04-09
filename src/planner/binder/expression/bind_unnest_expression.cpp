@@ -47,10 +47,15 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 	if (depth > 0) {
 		return BindResult(BinderException(function, "UNNEST() for correlated expressions is not supported yet"));
 	}
+
 	ErrorData error;
 	if (function.children.empty()) {
 		return BindResult(BinderException(function, "UNNEST() requires a single argument"));
 	}
+	if (inside_window) {
+		return BindResult(BinderException(function, UnsupportedUnnestMessage()));
+	}
+
 	idx_t max_depth = 1;
 	if (function.children.size() != 1) {
 		bool has_parameter = false;

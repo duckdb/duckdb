@@ -84,11 +84,11 @@ unique_ptr<Expression> OrderedAggregateOptimizer::Apply(ClientContext &context, 
 		types.emplace_back(child->return_type);
 	}
 	auto best_function = binder.BindFunction(func.name, func.functions, types, error);
-	if (best_function == DConstants::INVALID_INDEX) {
+	if (!best_function.IsValid()) {
 		error.Throw();
 	}
 	// found a matching function!
-	auto bound_function = func.functions.GetFunctionByOffset(best_function);
+	auto bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
 	return binder.BindAggregateFunction(bound_function, std::move(children), std::move(aggr.filter),
 	                                    aggr.IsDistinct() ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT);
 }

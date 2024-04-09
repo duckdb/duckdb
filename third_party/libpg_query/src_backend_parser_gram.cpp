@@ -1309,6 +1309,7 @@ typedef union YYSTYPE
 	PGOverridingKind       override;
 	PGSortByDir            sortorder;
 	PGSortByNulls          nullorder;
+	PGIgnoreNulls          ignorenulls;
 	PGConstrType           constr;
 	PGLockClauseStrength lockstrength;
 	PGLockWaitPolicy lockwaitpolicy;
@@ -1317,7 +1318,7 @@ typedef union YYSTYPE
 	PGInsertColumnOrder bynameorposition;
 }
 /* Line 193 of yacc.c.  */
-#line 1321 "third_party/libpg_query/grammar/grammar_out.cpp"
+#line 1322 "third_party/libpg_query/grammar/grammar_out.cpp"
 	YYSTYPE;
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
 # define YYSTYPE_IS_DECLARED 1
@@ -1342,7 +1343,7 @@ typedef struct YYLTYPE
 
 
 /* Line 216 of yacc.c.  */
-#line 1346 "third_party/libpg_query/grammar/grammar_out.cpp"
+#line 1347 "third_party/libpg_query/grammar/grammar_out.cpp"
 
 #ifdef short
 # undef short
@@ -2523,11 +2524,11 @@ static const yytype_int16 yyrhs[] =
 /* YYRLINE[YYN] -- source line where rule number YYN was defined.  */
 static const yytype_uint16 yyrline[] =
 {
-       0,   500,   500,   516,   528,   537,   538,   539,   540,   541,
-     542,   543,   544,   545,   546,   547,   548,   549,   550,   551,
-     552,   553,   554,   555,   556,   557,   558,   559,   560,   561,
-     562,   563,   564,   565,   566,   567,   568,   569,   570,   571,
-     572,   573,   574,   575,   576,   578,     9,    18,    27,    36,
+       0,   502,   502,   518,   530,   539,   540,   541,   542,   543,
+     544,   545,   546,   547,   548,   549,   550,   551,   552,   553,
+     554,   555,   556,   557,   558,   559,   560,   561,   562,   563,
+     564,   565,   566,   567,   568,   569,   570,   571,   572,   573,
+     574,   575,   576,   577,   578,   580,     9,    18,    27,    36,
       45,    54,    63,    72,    85,    87,    93,    94,    99,   103,
      107,   118,   126,   130,   139,   148,   157,   166,   175,   184,
      192,   200,   209,   218,   227,   236,   253,   262,   271,   280,
@@ -20004,14 +20005,14 @@ yyreduce:
   switch (yyn)
     {
         case 2:
-#line 501 "third_party/libpg_query/grammar/grammar.y"
+#line 503 "third_party/libpg_query/grammar/grammar.y"
     {
 				pg_yyget_extra(yyscanner)->parsetree = (yyvsp[(1) - (1)].list);
 			;}
     break;
 
   case 3:
-#line 517 "third_party/libpg_query/grammar/grammar.y"
+#line 519 "third_party/libpg_query/grammar/grammar.y"
     {
 					if ((yyvsp[(1) - (3)].list) != NIL)
 					{
@@ -20026,7 +20027,7 @@ yyreduce:
     break;
 
   case 4:
-#line 529 "third_party/libpg_query/grammar/grammar.y"
+#line 531 "third_party/libpg_query/grammar/grammar.y"
     {
 					if ((yyvsp[(1) - (1)].node) != NULL)
 						(yyval.list) = list_make1(makeRawStmt((yyvsp[(1) - (1)].node), 0));
@@ -20036,7 +20037,7 @@ yyreduce:
     break;
 
   case 45:
-#line 578 "third_party/libpg_query/grammar/grammar.y"
+#line 580 "third_party/libpg_query/grammar/grammar.y"
     { (yyval.node) = NULL; ;}
     break;
 
@@ -24353,17 +24354,17 @@ yyreduce:
 
   case 589:
 #line 578 "third_party/libpg_query/grammar/statements/select.y"
-    { (yyval.boolean) = true;;}
+    { (yyval.ignorenulls) = PG_IGNORE_NULLS;;}
     break;
 
   case 590:
 #line 579 "third_party/libpg_query/grammar/statements/select.y"
-    { (yyval.boolean) = false;;}
+    { (yyval.ignorenulls) = PG_RESPECT_NULLS;;}
     break;
 
   case 591:
 #line 580 "third_party/libpg_query/grammar/statements/select.y"
-    { (yyval.boolean) = false; ;}
+    { (yyval.ignorenulls) = PG_DEFAULT_NULLS; ;}
     break;
 
   case 592:
@@ -27388,7 +27389,7 @@ yyreduce:
     {
 					PGFuncCall *n = makeFuncCall((yyvsp[(1) - (6)].list), (yyvsp[(3) - (6)].list), (yylsp[(1) - (6)]));
 					n->agg_order = (yyvsp[(4) - (6)].list);
-					n->agg_ignore_nulls = (yyvsp[(5) - (6)].boolean);
+					n->agg_ignore_nulls = (yyvsp[(5) - (6)].ignorenulls);
 					(yyval.node) = (PGNode *)n;
 				;}
     break;
@@ -27399,7 +27400,7 @@ yyreduce:
 					PGFuncCall *n = makeFuncCall((yyvsp[(1) - (7)].list), list_make1((yyvsp[(4) - (7)].node)), (yylsp[(1) - (7)]));
 					n->func_variadic = true;
 					n->agg_order = (yyvsp[(5) - (7)].list);
-					n->agg_ignore_nulls = (yyvsp[(6) - (7)].boolean);
+					n->agg_ignore_nulls = (yyvsp[(6) - (7)].ignorenulls);
 					(yyval.node) = (PGNode *)n;
 				;}
     break;
@@ -27410,7 +27411,7 @@ yyreduce:
 					PGFuncCall *n = makeFuncCall((yyvsp[(1) - (9)].list), lappend((yyvsp[(3) - (9)].list), (yyvsp[(6) - (9)].node)), (yylsp[(1) - (9)]));
 					n->func_variadic = true;
 					n->agg_order = (yyvsp[(7) - (9)].list);
-					n->agg_ignore_nulls = (yyvsp[(8) - (9)].boolean);
+					n->agg_ignore_nulls = (yyvsp[(8) - (9)].ignorenulls);
 					(yyval.node) = (PGNode *)n;
 				;}
     break;
@@ -27420,7 +27421,7 @@ yyreduce:
     {
 					PGFuncCall *n = makeFuncCall((yyvsp[(1) - (7)].list), (yyvsp[(4) - (7)].list), (yylsp[(1) - (7)]));
 					n->agg_order = (yyvsp[(5) - (7)].list);
-					n->agg_ignore_nulls = (yyvsp[(6) - (7)].boolean);
+					n->agg_ignore_nulls = (yyvsp[(6) - (7)].ignorenulls);
 					/* Ideally we'd mark the PGFuncCall node to indicate
 					 * "must be an aggregate", but there's no provision
 					 * for that in PGFuncCall at the moment.
@@ -27434,7 +27435,7 @@ yyreduce:
     {
 					PGFuncCall *n = makeFuncCall((yyvsp[(1) - (7)].list), (yyvsp[(4) - (7)].list), (yylsp[(1) - (7)]));
 					n->agg_order = (yyvsp[(5) - (7)].list);
-					n->agg_ignore_nulls = (yyvsp[(6) - (7)].boolean);
+					n->agg_ignore_nulls = (yyvsp[(6) - (7)].ignorenulls);
 					n->agg_distinct = true;
 					(yyval.node) = (PGNode *)n;
 				;}
@@ -29029,7 +29030,7 @@ yyreduce:
 									(errcode(PG_ERRCODE_SYNTAX_ERROR),
 									 errmsg("type modifier cannot have ORDER BY"),
 									 parser_errposition((yylsp[(4) - (7)]))));
-					if ((yyvsp[(5) - (7)].boolean) != false)
+					if ((yyvsp[(5) - (7)].ignorenulls) != false)
 							ereport(ERROR,
 									(errcode(PG_ERRCODE_SYNTAX_ERROR),
 									 errmsg("type modifier cannot have IGNORE NULLS"),
@@ -30693,7 +30694,7 @@ yyreduce:
 
 
 /* Line 1267 of yacc.c.  */
-#line 30697 "third_party/libpg_query/grammar/grammar_out.cpp"
+#line 30698 "third_party/libpg_query/grammar/grammar_out.cpp"
       default: break;
     }
   YY_SYMBOL_PRINT ("-> $$ =", yyr1[yyn], &yyval, &yyloc);

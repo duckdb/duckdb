@@ -54,7 +54,7 @@ public:
 
 public:
 	RowGroup(RowGroupCollection &collection, idx_t start, idx_t count);
-	RowGroup(RowGroupCollection &collection, RowGroupPointer &&pointer);
+	RowGroup(RowGroupCollection &collection, RowGroupPointer pointer);
 	~RowGroup();
 
 private:

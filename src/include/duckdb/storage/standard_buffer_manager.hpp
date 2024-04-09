@@ -72,7 +72,7 @@ public:
 	//! Returns a list of all temporary files
 	vector<TemporaryFileInformation> GetTemporaryFiles() final;
 
-	const string &GetTemporaryDirectory() final {
+	const string &GetTemporaryDirectory() const final {
 		return temp_directory;
 	}
 
