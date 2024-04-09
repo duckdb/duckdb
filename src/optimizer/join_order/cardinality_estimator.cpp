@@ -157,7 +157,7 @@ vector<Subgraph2Denominator>::iterator FindMatchingSubGraph(Subgraph2Denominator
 	return subgraph;
 }
 
-double CardinalityEstimator::GetNumerator(unordered_set<idx_t> set) {
+double CardinalityEstimator::GetNumerator(unordered_set<idx_t> &set) {
 	double numerator = 1;
 	for (auto &relation_id : set) {
 		auto &single_node_set = set_manager.GetJoinRelation(relation_id);
@@ -314,9 +314,9 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 		}
 	}
 	// can happen if a table has cardinality 0, a tdom is set to 0, or if a cross product is used.
-	if (subgraphs.size() == 0 || subgraphs.at(0).denom == 0) {
+	if (subgraphs.empty() || subgraphs.at(0).denom == 0) {
 		// denominator is 1 and numerators are a cross product of cardinalities.
-		unordered_set<idx_t> numerator_relations(actual_set);
+		unordered_set<idx_t> &numerator_relations(actual_set);
 		return DenomInfo(numerator_relations, 1, 1);
 	}
 	return DenomInfo(subgraphs.at(0).numerator_relations, subgraphs.at(0).numerator_filter_strength,

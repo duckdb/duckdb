@@ -18,7 +18,7 @@ struct FilterInfo;
 
 struct DenomInfo {
 	DenomInfo(unordered_set<idx_t> numerator_relations, double filter_strength, double denominator)
-	    : numerator_relations(numerator_relations), filter_strength(filter_strength), denominator(denominator) {
+	    : numerator_relations(std::move(numerator_relations)), filter_strength(filter_strength), denominator(denominator) {
 	}
 
 	unordered_set<idx_t> numerator_relations;
@@ -94,7 +94,7 @@ public:
 	void PrintRelationToTdomInfo();
 
 private:
-	double GetNumerator(unordered_set<idx_t> set);
+	double GetNumerator(unordered_set<idx_t> &set);
 	DenomInfo GetDenominator(JoinRelationSet &set);
 
 	bool SingleColumnFilter(FilterInfo &filter_info);

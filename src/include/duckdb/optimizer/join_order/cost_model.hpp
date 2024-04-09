@@ -8,6 +8,7 @@
 #pragma once
 
 #include "duckdb/optimizer/join_order/join_node.hpp"
+#include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/optimizer/join_order/cardinality_estimator.hpp"
 
 namespace duckdb {
