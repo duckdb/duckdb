@@ -747,7 +747,7 @@ void JSONFunctions::RegisterJSONCreateCastFunctions(CastFunctionSet &casts) {
 			source_type = LogicalType::UNION({{"any", LogicalType::ANY}});
 			break;
 		case LogicalTypeId::ARRAY:
-			source_type = LogicalType::ARRAY(LogicalType::ANY, DConstants::INVALID_INDEX);
+			source_type = LogicalType::ARRAY(LogicalType::ANY, optional_idx());
 			break;
 		case LogicalTypeId::VARCHAR:
 			// We skip this one here as it's handled in json_functions.cpp
