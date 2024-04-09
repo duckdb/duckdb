@@ -70,7 +70,7 @@ inline
 shared_ptr<DATA_TYPE>
 make_refcounted(ARGS&&... args) // NOLINT: mimic std style
 {
-    return shared_ptr<DATA_TYPE>(new DATA_TYPE(std::forward<ARGS>(args)...));
+	return shared_ptr<DATA_TYPE>(std::make_shared<DATA_TYPE>(std::forward<ARGS>(args)...));
 }
 
 template<class DATA_TYPE, class... ARGS>
