@@ -231,7 +231,7 @@ struct AllowExtensionsMetadataMismatchSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct AllowUnredactedSecretsSetting {

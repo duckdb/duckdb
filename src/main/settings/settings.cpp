@@ -488,7 +488,7 @@ void AllowExtensionsMetadataMismatchSetting::ResetGlobal(DatabaseInstance *db, D
 	config.options.allow_extensions_metadata_mismatch = DBConfig().options.allow_extensions_metadata_mismatch;
 }
 
-Value AllowExtensionsMetadataMismatchSetting::GetSetting(ClientContext &context) {
+Value AllowExtensionsMetadataMismatchSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::BOOLEAN(config.options.allow_extensions_metadata_mismatch);
 }
