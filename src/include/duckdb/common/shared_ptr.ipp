@@ -92,7 +92,7 @@ public:
 
 	// Construct from auto_ptr
 #if _LIBCPP_STD_VER <= 14 || defined(_LIBCPP_ENABLE_CXX17_REMOVED_AUTO_PTR)
-	template <class U, std::enable_if<std::is_convertible<U *, T *>::value, int> = 0>
+	template <class U, typename std::enable_if<std::is_convertible<U *, T *>::value, int>::type = 0>
 	shared_ptr(std::auto_ptr<U> &&__r) : internal(__r.release()) {
 		__enable_weak_this(internal.get(), internal.get());
 	}
