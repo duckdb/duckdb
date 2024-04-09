@@ -44,9 +44,9 @@ public:
 		return *this;
 	}
 
-	template <class U, std::enable_if<__compatible_with<U, T>::value, int> = 0>
+	template <class U, typename std::enable_if<__compatible_with<U, T>::value, int>::type = 0>
 	weak_ptr &operator=(const shared_ptr<U, SAFE> &ptr) {
-		internal = ptr;
+		internal = ptr.internal;
 		return *this;
 	}
 

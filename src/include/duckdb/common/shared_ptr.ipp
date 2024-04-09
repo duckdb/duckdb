@@ -90,14 +90,6 @@ public:
 	explicit shared_ptr(weak_ptr<U> other) : internal(other.internal) {
 	}
 
-	// Construct from auto_ptr
-#if _LIBCPP_STD_VER <= 14 || defined(_LIBCPP_ENABLE_CXX17_REMOVED_AUTO_PTR)
-	template <class U, typename std::enable_if<std::is_convertible<U *, T *>::value, int>::type = 0>
-	shared_ptr(std::auto_ptr<U> &&__r) : internal(__r.release()) {
-		__enable_weak_this(internal.get(), internal.get());
-	}
-#endif
-
 	// Construct from unique_ptr, takes over ownership of the unique_ptr
 	template <class U, class DELETER, bool SAFE_P,
 	          typename std::enable_if<__compatible_with<U, T>::value &&
@@ -185,7 +177,7 @@ public:
 		return internal.operator bool();
 	}
 
-	std::__add_lvalue_reference_t<T> operator*() const {
+	typename std::add_lvalue_reference<T>::type operator*() const {
 		if (MemorySafety<SAFE>::ENABLED) {
 			const auto ptr = internal.get();
 			AssertNotNull(!ptr);
