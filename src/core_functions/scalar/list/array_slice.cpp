@@ -47,15 +47,17 @@ static idx_t CalculateSliceLength(idx_t begin, idx_t end, INDEX_TYPE step, bool 
 	if (step == 0 && svalid) {
 		throw InvalidInputException("Slice step cannot be zero");
 	}
+	auto step_unsigned = UnsafeNumericCast<idx_t>(step); // we called abs() on this above.
+
 	if (step == 1) {
-		return NumericCast<int>(end - begin);
-	} else if (static_cast<idx_t>(step) >= (end - begin)) {
+		return NumericCast<idx_t>(end - begin);
+	} else if (step_unsigned >= (end - begin)) {
 		return 1;
 	}
-	if ((end - begin) % step != 0) {
-		return (end - begin) / step + 1;
+	if ((end - begin) % step_unsigned != 0) {
+		return (end - begin) / step_unsigned + 1;
 	}
-	return (end - begin) / step;
+	return (end - begin) / step_unsigned;
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
@@ -65,7 +67,7 @@ INDEX_TYPE ValueLength(const INPUT_TYPE &value) {
 
 template <>
 int64_t ValueLength(const list_entry_t &value) {
-	return value.length;
+	return UnsafeNumericCast<int64_t>(value.length);
 }
 
 template <>
@@ -119,8 +121,8 @@ INPUT_TYPE SliceValue(Vector &result, INPUT_TYPE input, INDEX_TYPE begin, INDEX_
 
 template <>
 list_entry_t SliceValue(Vector &result, list_entry_t input, int64_t begin, int64_t end) {
-	input.offset += begin;
-	input.length = end - begin;
+	input.offset = UnsafeNumericCast<uint64_t>(UnsafeNumericCast<int64_t>(input.offset) + begin);
+	input.length = UnsafeNumericCast<uint64_t>(end - begin);
 	return input;
 }
 
@@ -144,15 +146,15 @@ list_entry_t SliceValueWithSteps(Vector &result, SelectionVector &sel, list_entr
 		input.offset = sel_idx;
 		return input;
 	}
-	input.length = CalculateSliceLength(begin, end, step, true);
-	idx_t child_idx = input.offset + begin;
+	input.length = CalculateSliceLength(UnsafeNumericCast<idx_t>(begin), UnsafeNumericCast<idx_t>(end), step, true);
+	int64_t child_idx = UnsafeNumericCast<int64_t>(input.offset) + begin;
 	if (step < 0) {
-		child_idx = input.offset + end - 1;
+		child_idx = UnsafeNumericCast<int64_t>(input.offset) + end - 1;
 	}
 	input.offset = sel_idx;
 	for (idx_t i = 0; i < input.length; i++) {
-		sel.set_index(sel_idx, child_idx);
-		child_idx += step;
+		sel.set_index(sel_idx, UnsafeNumericCast<idx_t>(child_idx));
+		child_idx = UnsafeNumericCast<int64_t>(child_idx) + step;
 		sel_idx++;
 	}
 	return input;
@@ -194,7 +196,8 @@ static void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &beg
 	idx_t sel_length = 0;
 	bool sel_valid = false;
 	if (step_vector && step_valid && str_valid && begin_valid && end_valid && step != 1 && end - begin > 0) {
-		sel_length = CalculateSliceLength(begin, end, step, step_valid);
+		sel_length =
+		    CalculateSliceLength(UnsafeNumericCast<idx_t>(begin), UnsafeNumericCast<idx_t>(end), step, step_valid);
 		sel.Initialize(sel_length);
 		sel_valid = true;
 	}
@@ -268,7 +271,8 @@ static void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_
 
 		idx_t length = 0;
 		if (end - begin > 0) {
-			length = CalculateSliceLength(begin, end, step, step_valid);
+			length =
+			    CalculateSliceLength(UnsafeNumericCast<idx_t>(begin), UnsafeNumericCast<idx_t>(end), step, step_valid);
 		}
 		sel_length += length;
 
