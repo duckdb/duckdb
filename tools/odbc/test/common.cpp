@@ -24,7 +24,7 @@ void ODBC_CHECK(SQLRETURN ret, const std::string &msg) {
 		fprintf(stderr, "%s: Unexpected return value\n", msg.c_str());
 		break;
 	}
-	REQUIRE(ret == SQL_SUCCESS);
+	REQUIRE(SQL_SUCCEEDED(ret));
 }
 
 void ACCESS_DIAGNOSTIC(std::string &state, std::string &message, SQLHANDLE handle, SQLSMALLINT handle_type) {
