@@ -1,5 +1,6 @@
 #include "duckdb/main/client_context_file_opener.hpp"
 
+#include "duckdb/main/database.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/main/client_context.hpp"
 
@@ -30,6 +31,19 @@ optional_ptr<DatabaseInstance> FileOpener::TryGetDatabase(optional_ptr<FileOpene
 		return nullptr;
 	}
 	return opener->TryGetDatabase();
+}
+
+optional_ptr<SecretManager> FileOpener::TryGetSecretManager(optional_ptr<FileOpener> opener) {
+	if (!opener) {
+		return nullptr;
+	}
+
+	auto db = opener->TryGetDatabase();
+	if (!db) {
+		return nullptr;
+	}
+
+	return &db->GetSecretManager();
 }
 
 SettingLookupResult FileOpener::TryGetCurrentSetting(optional_ptr<FileOpener> opener, const string &key,

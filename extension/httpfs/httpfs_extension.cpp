@@ -5,6 +5,7 @@
 #include "create_secret_functions.hpp"
 #include "duckdb.hpp"
 #include "s3fs.hpp"
+#include "hffs.hpp"
 
 namespace duckdb {
 
@@ -13,6 +14,7 @@ static void LoadInternal(DatabaseInstance &instance) {
 	auto &fs = instance.GetFileSystem();
 
 	fs.RegisterSubSystem(make_uniq<HTTPFileSystem>());
+	fs.RegisterSubSystem(make_uniq<HuggingFaceFileSystem>());
 	fs.RegisterSubSystem(make_uniq<S3FileSystem>(BufferManager::GetBufferManager(instance)));
 
 	auto &config = DBConfig::GetConfig(instance);
