@@ -1,4 +1,3 @@
-
 namespace duckdb {
 
 template <typename T, bool SAFE = true>
@@ -13,6 +12,17 @@ public:
 	using original = std::shared_ptr<T>;
 	using element_type = typename original::element_type;
 	using weak_type = weak_ptr<T, SAFE>;
+
+private:
+	static inline void AssertNotNull(const bool null) {
+#if defined(DUCKDB_DEBUG_NO_SAFETY) || defined(DUCKDB_CLANG_TIDY)
+		return;
+#else
+		if (DUCKDB_UNLIKELY(null)) {
+			throw duckdb::InternalException("Attempted to dereference shared_ptr that is NULL!");
+		}
+#endif
+	}
 
 private:
 	template <class U, bool SAFE_P>
@@ -134,13 +144,26 @@ public:
 		return *this;
 	}
 
-	void reset() {
+#ifdef DUCKDB_CLANG_TIDY
+	// This is necessary to tell clang-tidy that it reinitializes the variable after a move
+	[[clang::reinitializes]]
+#endif
+	void
+	reset() {
 		internal.reset();
 	}
+#ifdef DUCKDB_CLANG_TIDY
+	// This is necessary to tell clang-tidy that it reinitializes the variable after a move
+	[[clang::reinitializes]]
+#endif
 	template <typename U>
 	void reset(U *ptr) {
 		internal.reset(ptr);
 	}
+#ifdef DUCKDB_CLANG_TIDY
+	// This is necessary to tell clang-tidy that it reinitializes the variable after a move
+	[[clang::reinitializes]]
+#endif
 	template <typename U, typename Deleter>
 	void reset(U *ptr, Deleter deleter) {
 		internal.reset(ptr, deleter);
@@ -163,11 +186,23 @@ public:
 	}
 
 	std::__add_lvalue_reference_t<T> operator*() const {
-		return *internal;
+		if (MemorySafety<SAFE>::ENABLED) {
+			const auto ptr = internal.get();
+			AssertNotNull(!ptr);
+			return *ptr;
+		} else {
+			return *internal;
+		}
 	}
 
 	T *operator->() const {
-		return internal.operator->();
+		if (MemorySafety<SAFE>::ENABLED) {
+			const auto ptr = internal.get();
+			AssertNotNull(!ptr);
+			return ptr;
+		} else {
+			return internal.operator->();
+		}
 	}
 
 	// Relational operators

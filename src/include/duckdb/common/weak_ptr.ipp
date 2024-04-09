@@ -19,7 +19,8 @@ public:
 	}
 
 	template <class U>
-	weak_ptr(shared_ptr<U> const &ptr, typename std::enable_if<__compatible_with<U, T>::value, int>::type = 0) noexcept
+	weak_ptr(shared_ptr<U, SAFE> const &ptr,
+	         typename std::enable_if<__compatible_with<U, T>::value, int>::type = 0) noexcept
 	    : internal(ptr.internal) {
 	}
 	weak_ptr(weak_ptr const &other) noexcept : internal(other.internal) {
@@ -44,7 +45,7 @@ public:
 	}
 
 	template <class U, std::enable_if<__compatible_with<U, T>::value, int> = 0>
-	weak_ptr &operator=(const shared_ptr<U> &ptr) {
+	weak_ptr &operator=(const shared_ptr<U, SAFE> &ptr) {
 		internal = ptr;
 		return *this;
 	}
@@ -63,8 +64,8 @@ public:
 		return internal.expired();
 	}
 
-	shared_ptr<T> lock() const {
-		return shared_ptr<T>(internal.lock());
+	shared_ptr<T, SAFE> lock() const {
+		return shared_ptr<T, SAFE>(internal.lock());
 	}
 
 	// Relational operators

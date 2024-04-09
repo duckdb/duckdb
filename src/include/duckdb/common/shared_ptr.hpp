@@ -8,9 +8,12 @@
 
 #pragma once
 
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/likely.hpp"
+#include "duckdb/common/memory_safety.hpp"
+
 #include <memory>
 #include <type_traits>
-#include "duckdb/common/unique_ptr.hpp"
 
 #if _LIBCPP_STD_VER >= 17
 template <class _Yp, class _Tp>
@@ -29,3 +32,13 @@ struct __compatible_with : std::is_convertible<_Yp *, _Tp *> {};
 #include "duckdb/common/shared_ptr.ipp"
 #include "duckdb/common/weak_ptr.ipp"
 #include "duckdb/common/enable_shared_from_this.ipp"
+
+namespace duckdb {
+
+template <typename T>
+using unsafe_shared_ptr = shared_ptr<T, false>;
+
+template <typename T>
+using unsafe_weak_ptr = weak_ptr<T, false>;
+
+} // namespace duckdb
