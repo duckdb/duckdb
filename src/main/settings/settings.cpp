@@ -975,20 +975,18 @@ Value MaximumMemorySetting::GetSetting(ClientContext &context) {
 // Maximum Temp Directory Size
 //===--------------------------------------------------------------------===//
 void MaximumTempDirectorySize::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	idx_t maximum_swap_space = DConstants::INVALID_INDEX;
-	if (input.ToString() != "-1") {
-		maximum_swap_space = DBConfig::ParseMemoryLimit(input.ToString());
+	auto maximum_swap_space = DBConfig::ParseMemoryLimit(input.ToString());
+	if (maximum_swap_space == DConstants::INVALID_INDEX) {
+		// We use INVALID_INDEX to indicate that the value is not set by the user
+		// use one lower to indicate 'unlimited'
+		maximum_swap_space--;
 	}
 	if (!db) {
 		config.options.maximum_swap_space = maximum_swap_space;
 		return;
 	}
 	auto &buffer_manager = BufferManager::GetBufferManager(*db);
-	if (maximum_swap_space == DConstants::INVALID_INDEX) {
-		buffer_manager.SetSwapLimit();
-	} else {
-		buffer_manager.SetSwapLimit(maximum_swap_space);
-	}
+	buffer_manager.SetSwapLimit(maximum_swap_space);
 	config.options.maximum_swap_space = maximum_swap_space;
 }
 
