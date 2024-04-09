@@ -18,7 +18,7 @@ class Optimizer;
 
 class FilterPushdown {
 public:
-	explicit FilterPushdown(Optimizer &optimizer);
+	explicit FilterPushdown(Optimizer &optimizer, bool convert_mark_joins = true);
 
 	//! Perform filter pushdown
 	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> op);
@@ -40,7 +40,7 @@ public:
 private:
 	vector<unique_ptr<Filter>> filters;
 	Optimizer &optimizer;
-
+	bool convert_mark_joins;
 	//! Push down a LogicalAggregate op
 	unique_ptr<LogicalOperator> PushdownAggregate(unique_ptr<LogicalOperator> op);
 	//! Push down a distinct operator

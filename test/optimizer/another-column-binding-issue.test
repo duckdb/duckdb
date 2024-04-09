@@ -1,0 +1,18 @@
+# name: test/optimizer/another-column-binding-issue.test
+# description: Arithmetic test
+# group: [optimizer]
+
+statement ok
+attach 'bug.db' as bug;
+
+statement ok
+use bug;
+
+statement ok
+SELECT t1.Transaction_ID
+FROM transactions t1
+WHERE t1.Transaction_ID IN
+    (SELECT t2.Referred_Transaction_ID
+     FROM transactions t2
+     WHERE t2.Transaction_ID IN (123606, 123602, 131522, 123604, 131470)
+         AND t2.Transaction_ID NOT IN (SELECT t2_filter.Transaction_ID FROM transactions t2_filter))
