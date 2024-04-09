@@ -1,11 +1,17 @@
 namespace duckdb {
 
-template <typename T>
+template <typename T, bool SAFE>
 class weak_ptr {
+public:
+	using original = std::weak_ptr<T>;
+	using element_type = typename original::element_type;
+
 private:
-	template <class U>
+	template <class U, bool SAFE_P>
 	friend class shared_ptr;
-	std::weak_ptr<T> internal;
+
+private:
+	original internal;
 
 public:
 	// Constructors
@@ -22,11 +28,11 @@ public:
 	weak_ptr(weak_ptr<U> const &ptr, typename std::enable_if<__compatible_with<U, T>::value, int>::type = 0) noexcept
 	    : internal(ptr.internal) {
 	}
-	weak_ptr(weak_ptr &&ptr) noexcept : internal(ptr.internal) {
+	weak_ptr(weak_ptr &&ptr) noexcept : internal(std::move(ptr.internal)) {
 	}
 	template <class U>
 	weak_ptr(weak_ptr<U> &&ptr, typename std::enable_if<__compatible_with<U, T>::value, int>::type = 0) noexcept
-	    : internal(ptr.internal) {
+	    : internal(std::move(ptr.internal)) {
 	}
 	// Destructor
 	~weak_ptr() = default;

@@ -1,26 +1,31 @@
 
 namespace duckdb {
 
-template <typename T>
+template <typename T, bool SAFE = true>
 class weak_ptr;
 
 template <class T>
 class enable_shared_from_this;
 
-template <typename T>
+template <typename T, bool SAFE = true>
 class shared_ptr {
+public:
+	using original = std::shared_ptr<T>;
+	using element_type = typename original::element_type;
+	using weak_type = weak_ptr<T, SAFE>;
+
 private:
-	template <class U>
+	template <class U, bool SAFE_P>
 	friend class weak_ptr;
 
-	template <class U>
+	template <class U, bool SAFE_P>
 	friend class shared_ptr;
 
 	template <typename U, typename S>
 	friend shared_ptr<S> shared_ptr_cast(shared_ptr<U> src);
 
 private:
-	std::shared_ptr<T> internal;
+	original internal;
 
 public:
 	// Constructors
@@ -84,11 +89,11 @@ public:
 #endif
 
 	// Construct from unique_ptr, takes over ownership of the unique_ptr
-	template <class U, class DELETER, bool SAFE,
+	template <class U, class DELETER, bool SAFE_P,
 	          typename std::enable_if<__compatible_with<U, T>::value &&
 	                                      std::is_convertible<typename unique_ptr<U, DELETER>::pointer, T *>::value,
 	                                  int>::type = 0>
-	shared_ptr(unique_ptr<U, DELETER, SAFE> &&other) : internal(std::move(other)) {
+	shared_ptr(unique_ptr<U, DELETER, SAFE_P> &&other) : internal(std::move(other)) {
 		__enable_weak_this(internal.get(), internal.get());
 	}
 
@@ -120,11 +125,11 @@ public:
 	}
 
 	// Assign from moved unique_ptr
-	template <class U, class DELETER, bool SAFE,
+	template <class U, class DELETER, bool SAFE_P,
 	          typename std::enable_if<__compatible_with<U, T>::value &&
 	                                      std::is_convertible<typename unique_ptr<U, DELETER>::pointer, T *>::value,
 	                                  int>::type = 0>
-	shared_ptr<T> &operator=(unique_ptr<U, DELETER, SAFE> &&__r) {
+	shared_ptr<T> &operator=(unique_ptr<U, DELETER, SAFE_P> &&__r) {
 		shared_ptr(std::move(__r)).swap(*this);
 		return *this;
 	}

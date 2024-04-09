@@ -1,8 +1,13 @@
 namespace duckdb {
 
-template <class _Tp>
+template <class T>
 class enable_shared_from_this {
-	mutable weak_ptr<_Tp> __weak_this_;
+public:
+	template <class U, bool SAFE>
+	friend class shared_ptr;
+
+private:
+	mutable weak_ptr<T> __weak_this_;
 
 protected:
 	constexpr enable_shared_from_this() noexcept {
@@ -16,25 +21,22 @@ protected:
 	}
 
 public:
-	shared_ptr<_Tp> shared_from_this() {
-		return shared_ptr<_Tp>(__weak_this_);
+	shared_ptr<T> shared_from_this() {
+		return shared_ptr<T>(__weak_this_);
 	}
-	shared_ptr<_Tp const> shared_from_this() const {
-		return shared_ptr<const _Tp>(__weak_this_);
+	shared_ptr<T const> shared_from_this() const {
+		return shared_ptr<const T>(__weak_this_);
 	}
 
 #if _LIBCPP_STD_VER >= 17
-	weak_ptr<_Tp> weak_from_this() noexcept {
+	weak_ptr<T> weak_from_this() noexcept {
 		return __weak_this_;
 	}
 
-	weak_ptr<const _Tp> weak_from_this() const noexcept {
+	weak_ptr<const T> weak_from_this() const noexcept {
 		return __weak_this_;
 	}
 #endif // _LIBCPP_STD_VER >= 17
-
-	template <class _Up>
-	friend class shared_ptr;
 };
 
 } // namespace duckdb
