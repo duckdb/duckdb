@@ -533,7 +533,11 @@ class DuckDBPyRelation:
             timestamp_format: Optional[str] = None,
             quoting: Optional[str | int] = None,
             encoding: Optional[str] = None,
-            compression: Optional[str] = None
+            compression: Optional[str] = None,
+            overwrite: Optional[bool] = None,
+            per_thread_output: Optional[bool] = None,
+            use_tmp_file: Optional[bool] = None,
+            partition_by: Optional[List[str]] = None
     ) -> None: ...
     def write_parquet(
             self,

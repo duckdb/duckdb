@@ -50,6 +50,7 @@ public:
 	BufferPool &GetBufferPool() const;
 	DUCKDB_API SecretManager &GetSecretManager();
 	DUCKDB_API BufferManager &GetBufferManager();
+	DUCKDB_API const BufferManager &GetBufferManager() const;
 	DUCKDB_API DatabaseManager &GetDatabaseManager();
 	DUCKDB_API FileSystem &GetFileSystem();
 	DUCKDB_API TaskScheduler &GetScheduler();
@@ -61,12 +62,13 @@ public:
 	idx_t NumberOfThreads();
 
 	DUCKDB_API static DatabaseInstance &GetDatabase(ClientContext &context);
+	DUCKDB_API static const DatabaseInstance &GetDatabase(const ClientContext &context);
 
 	DUCKDB_API const unordered_set<std::string> &LoadedExtensions();
 	DUCKDB_API const unordered_map<string, ExtensionInfo> &LoadedExtensionsData();
 	DUCKDB_API bool ExtensionIsLoaded(const string &name);
 
-	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const string &key, Value &result);
+	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) const;
 
 	unique_ptr<AttachedDatabase> CreateAttachedDatabase(ClientContext &context, const AttachInfo &info,
 	                                                    const string &type, AccessMode access_mode);
