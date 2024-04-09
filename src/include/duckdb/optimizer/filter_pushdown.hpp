@@ -38,9 +38,11 @@ public:
 	};
 
 private:
-	vector<unique_ptr<Filter>> filters;
 	Optimizer &optimizer;
+	FilterCombiner combiner;
 	bool convert_mark_joins;
+
+	vector<unique_ptr<Filter>> filters;
 	//! Push down a LogicalAggregate op
 	unique_ptr<LogicalOperator> PushdownAggregate(unique_ptr<LogicalOperator> op);
 	//! Push down a distinct operator
@@ -90,8 +92,6 @@ private:
 	void GenerateFilters();
 	//! if there are filters in this FilterPushdown node, push them into the combiner
 	void PushFilters();
-
-	FilterCombiner combiner;
 };
 
 } // namespace duckdb
