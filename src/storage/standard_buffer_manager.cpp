@@ -13,6 +13,12 @@
 
 namespace duckdb {
 
+#ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
+static void WriteGarbageIntoBuffer(FileBuffer &buffer) {
+	memset(buffer.buffer, 0xa5, buffer.size); // 0xa5 is default memory in debug mode
+}
+#endif
+
 struct BufferAllocatorData : PrivateAllocatorData {
 	explicit BufferAllocatorData(StandardBufferManager &manager) : manager(manager) {
 	}
@@ -46,7 +52,7 @@ StandardBufferManager::StandardBufferManager(DatabaseInstance &db, string tmp)
     : BufferManager(), db(db), buffer_pool(db.GetBufferPool()), temp_directory(std::move(tmp)),
       temporary_id(MAXIMUM_BLOCK), buffer_allocator(BufferAllocatorAllocate, BufferAllocatorFree,
                                                     BufferAllocatorRealloc, make_uniq<BufferAllocatorData>(*this)) {
-	temp_block_manager = make_uniq<InMemoryBlockManager>(*this);
+	temp_block_manager = make_uniq<InMemoryBlockManager>(*this, DEFAULT_BLOCK_ALLOC_SIZE);
 	for (idx_t i = 0; i < MEMORY_TAG_COUNT; i++) {
 		evicted_data_per_tag[i] = 0;
 	}
@@ -85,14 +91,20 @@ TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(MemoryTag ta
 
 shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(idx_t block_size) {
 	D_ASSERT(block_size < Storage::BLOCK_SIZE);
-	auto res = EvictBlocksOrThrow(MemoryTag::BASE_TABLE, block_size, nullptr, "could not allocate block of size %s%s",
-	                              StringUtil::BytesToHumanReadableString(block_size));
+	auto reservation =
+	    EvictBlocksOrThrow(MemoryTag::BASE_TABLE, block_size, nullptr, "could not allocate block of size %s%s",
+	                       StringUtil::BytesToHumanReadableString(block_size));
 
 	auto buffer = ConstructManagedBuffer(block_size, nullptr, FileBufferType::TINY_BUFFER);
 
 	// create a new block pointer for this block
-	return make_shared<BlockHandle>(*temp_block_manager, ++temporary_id, MemoryTag::BASE_TABLE, std::move(buffer),
-	                                false, block_size, std::move(res));
+	auto result = make_shared<BlockHandle>(*temp_block_manager, ++temporary_id, MemoryTag::BASE_TABLE,
+	                                       std::move(buffer), false, block_size, std::move(reservation));
+#ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
+	// Initialize the memory with garbage data
+	WriteGarbageIntoBuffer(*result->buffer);
+#endif
+	return result;
 }
 
 shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx_t block_size, bool can_destroy) {
@@ -115,6 +127,10 @@ BufferHandle StandardBufferManager::Allocate(MemoryTag tag, idx_t block_size, bo
 	shared_ptr<BlockHandle> local_block;
 	auto block_ptr = block ? block : &local_block;
 	*block_ptr = RegisterMemory(tag, block_size, can_destroy);
+#ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
+	// Initialize the memory with garbage data
+	WriteGarbageIntoBuffer(*(*block_ptr)->buffer);
+#endif
 	return Pin(*block_ptr);
 }
 
@@ -206,7 +222,7 @@ void StandardBufferManager::VerifyZeroReaders(shared_ptr<BlockHandle> &handle) {
 	auto replacement_buffer = make_uniq<FileBuffer>(Allocator::Get(db), handle->buffer->type,
 	                                                handle->memory_usage - Storage::BLOCK_HEADER_SIZE);
 	memcpy(replacement_buffer->buffer, handle->buffer->buffer, handle->buffer->size);
-	memset(handle->buffer->buffer, 0xa5, handle->buffer->size); // 0xa5 is default memory in debug mode
+	WriteGarbageIntoBuffer(*handle->buffer);
 	handle->buffer = std::move(replacement_buffer);
 #endif
 }

@@ -34,7 +34,7 @@ template <class T>
 struct AlpRDCompressionState : public CompressionState {
 
 public:
-	using EXACT_TYPE = typename FloatingToExact<T>::type;
+	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 	explicit AlpRDCompressionState(ColumnDataCheckpointer &checkpointer, AlpRDAnalyzeState<T> *analyze_state)
 	    : checkpointer(checkpointer),
 	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_ALPRD)) {

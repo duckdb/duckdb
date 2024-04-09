@@ -26,6 +26,7 @@ class TaskScheduler;
 class ObjectCache;
 struct AttachInfo;
 struct AttachOptions;
+class DatabaseFileSystem;
 
 class DatabaseInstance : public std::enable_shared_from_this<DatabaseInstance> {
 	friend class DuckDB;
@@ -40,6 +41,7 @@ public:
 	BufferPool &GetBufferPool() const;
 	DUCKDB_API SecretManager &GetSecretManager();
 	DUCKDB_API BufferManager &GetBufferManager();
+	DUCKDB_API const BufferManager &GetBufferManager() const;
 	DUCKDB_API DatabaseManager &GetDatabaseManager();
 	DUCKDB_API FileSystem &GetFileSystem();
 	DUCKDB_API TaskScheduler &GetScheduler();
@@ -51,11 +53,12 @@ public:
 	idx_t NumberOfThreads();
 
 	DUCKDB_API static DatabaseInstance &GetDatabase(ClientContext &context);
+	DUCKDB_API static const DatabaseInstance &GetDatabase(const ClientContext &context);
 
 	DUCKDB_API const unordered_set<std::string> &LoadedExtensions();
 	DUCKDB_API bool ExtensionIsLoaded(const string &name);
 
-	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const string &key, Value &result);
+	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) const;
 
 	unique_ptr<AttachedDatabase> CreateAttachedDatabase(ClientContext &context, const AttachInfo &info,
 	                                                    const AttachOptions &options);
@@ -74,6 +77,7 @@ private:
 	unique_ptr<ConnectionManager> connection_manager;
 	unordered_set<std::string> loaded_extensions;
 	ValidChecker db_validity;
+	unique_ptr<DatabaseFileSystem> db_file_system;
 };
 
 //! The database object. This object holds the catalog and all the

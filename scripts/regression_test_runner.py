@@ -11,12 +11,20 @@ import shutil
 print = functools.partial(print, flush=True)
 
 
+def is_number(s):
+    try:
+        float(s)
+        return True
+    except ValueError:
+        return False
+
+
 # Geometric mean of an array of numbers
 def geomean(xs):
     if len(xs) == 0:
         return 'EMPTY'
     for entry in xs:
-        if isinstance(entry, str):
+        if not is_number(entry):
             return entry
     return math.exp(math.fsum(math.log(float(x)) for x in xs) / len(xs))
 

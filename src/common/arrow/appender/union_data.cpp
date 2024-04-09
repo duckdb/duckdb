@@ -55,8 +55,8 @@ void ArrowUnionData::Append(ArrowAppendData &append_data, Vector &input, idx_t f
 }
 
 void ArrowUnionData::Finalize(ArrowAppendData &append_data, const LogicalType &type, ArrowArray *result) {
-	result->n_buffers = 2;
-	result->buffers[1] = append_data.GetMainBuffer().data();
+	result->n_buffers = 1;
+	result->buffers[0] = append_data.GetMainBuffer().data();
 
 	auto &child_types = UnionType::CopyMemberTypes(type);
 	ArrowAppender::AddChildren(append_data, child_types.size());

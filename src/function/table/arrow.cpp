@@ -127,6 +127,10 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 	} else if (format == "+s") {
 		child_list_t<LogicalType> child_types;
 		vector<unique_ptr<ArrowType>> children;
+		if (schema.n_children == 0) {
+			throw InvalidInputException(
+			    "Attempted to convert a STRUCT with no fields to DuckDB which is not supported");
+		}
 		for (idx_t type_idx = 0; type_idx < (idx_t)schema.n_children; type_idx++) {
 			children.emplace_back(ArrowTableFunction::GetArrowLogicalType(*schema.children[type_idx]));
 			child_types.emplace_back(schema.children[type_idx]->name, children.back()->GetDuckType());
@@ -146,6 +150,9 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 
 		child_list_t<LogicalType> members;
 		vector<unique_ptr<ArrowType>> children;
+		if (schema.n_children == 0) {
+			throw InvalidInputException("Attempted to convert a UNION with no fields to DuckDB which is not supported");
+		}
 		for (idx_t type_idx = 0; type_idx < (idx_t)schema.n_children; type_idx++) {
 			auto type = schema.children[type_idx];
 
@@ -239,7 +246,6 @@ void ArrowTableFunction::PopulateArrowTableType(ArrowTableType &arrow_table, Arr
 		auto arrow_type = GetArrowLogicalType(schema);
 		return_types.emplace_back(arrow_type->GetDuckType(true));
 		arrow_table.AddColumn(col_idx, std::move(arrow_type));
-		auto format = string(schema.format);
 		auto name = string(schema.name);
 		if (name.empty()) {
 			name = string("v") + to_string(col_idx);
