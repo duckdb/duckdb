@@ -41,6 +41,10 @@ string CreateTableInfo::ToString() const {
 	}
 	ret += " TABLE ";
 
+	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+		ret += " IF NOT EXISTS ";
+	}
+
 	if (!catalog.empty()) {
 		ret += KeywordHelper::WriteOptionallyQuoted(catalog) + ".";
 		ret += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
