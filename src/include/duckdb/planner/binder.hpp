@@ -326,7 +326,7 @@ private:
 
 	void PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);
 	void BindModifiers(BoundQueryNode &result, idx_t table_index, const vector<string> &names,
-					   const vector<LogicalType> &sql_types, const SelectBindState &bind_state);
+	                   const vector<LogicalType> &sql_types, const SelectBindState &bind_state);
 
 	unique_ptr<BoundResultModifier> BindLimit(OrderBinder &order_binder, LimitModifier &limit_mod);
 	unique_ptr<BoundResultModifier> BindLimitPercent(OrderBinder &order_binder, LimitPercentModifier &limit_mod);

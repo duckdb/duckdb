@@ -231,13 +231,13 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 	}
 }
 
-unique_ptr<Expression> CreateOrderExpression(unique_ptr<Expression> expr, const vector<string> &names, const vector<LogicalType> &sql_types,
-                                             idx_t table_index, idx_t index) {
+unique_ptr<Expression> CreateOrderExpression(unique_ptr<Expression> expr, const vector<string> &names,
+                                             const vector<LogicalType> &sql_types, idx_t table_index, idx_t index) {
 	if (index >= sql_types.size()) {
 		throw BinderException(*expr, "ORDER term out of range - should be between 1 and %lld", sql_types.size());
 	}
 	auto result = make_uniq<BoundColumnRefExpression>(std::move(expr->alias), sql_types[index],
-	                                           ColumnBinding(table_index, index));
+	                                                  ColumnBinding(table_index, index));
 	if (result->alias.empty() && index < names.size()) {
 		result->alias = names[index];
 	}
@@ -245,8 +245,7 @@ unique_ptr<Expression> CreateOrderExpression(unique_ptr<Expression> expr, const 
 }
 
 unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression> expr, idx_t table_index,
-												   const vector<string> &names,
-                                                   const vector<LogicalType> &sql_types,
+                                                   const vector<string> &names, const vector<LogicalType> &sql_types,
                                                    const SelectBindState &bind_state) {
 	auto &constant = expr->Cast<BoundConstantExpression>();
 	switch (constant.value.type().id()) {
@@ -284,10 +283,8 @@ unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression> expr, 
 	}
 }
 
-static void AssignReturnType(unique_ptr<Expression> &expr, idx_t table_index,
-							 const vector<string> &names,
-							 const vector<LogicalType> &sql_types,
-							 const SelectBindState &bind_state) {
+static void AssignReturnType(unique_ptr<Expression> &expr, idx_t table_index, const vector<string> &names,
+                             const vector<LogicalType> &sql_types, const SelectBindState &bind_state) {
 	if (!expr) {
 		return;
 	}
@@ -302,7 +299,7 @@ static void AssignReturnType(unique_ptr<Expression> &expr, idx_t table_index,
 }
 
 void Binder::BindModifiers(BoundQueryNode &result, idx_t table_index, const vector<string> &names,
-						   const vector<LogicalType> &sql_types, const SelectBindState &bind_state) {
+                           const vector<LogicalType> &sql_types, const SelectBindState &bind_state) {
 	for (auto &bound_mod : result.modifiers) {
 		switch (bound_mod->type) {
 		case ResultModifierType::DISTINCT_MODIFIER: {
