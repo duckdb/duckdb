@@ -27,7 +27,7 @@ public:
 	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
 	                                optional_ptr<FileOpener> opener = nullptr) override {
 		VerifyNoOpener(opener);
-		return GetFileSystem().OpenFile(path, flags, GetOpener().get());
+		return GetFileSystem().OpenFile(path, flags, GetOpener());
 	}
 
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
@@ -66,28 +66,27 @@ public:
 
 	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
-		return GetFileSystem().DirectoryExists(directory);
+		return GetFileSystem().DirectoryExists(directory, GetOpener());
 	}
 	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
-		return GetFileSystem().CreateDirectory(directory);
+		return GetFileSystem().CreateDirectory(directory, GetOpener());
 	}
 
 	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
-		return GetFileSystem().RemoveDirectory(directory);
+		return GetFileSystem().RemoveDirectory(directory, GetOpener());
 	}
 
 	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
 	               FileOpener *opener = nullptr) override {
-		if (opener) {
-			throw InternalException("OpenerFileSystem cannot take an opener - the opener is pushed automatically");
-		}
+		VerifyNoOpener(opener);
 		return GetFileSystem().ListFiles(directory, callback, GetOpener().get());
 	}
 
 	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) override {
-		GetFileSystem().MoveFile(source, target);
+		VerifyNoOpener(opener);
+		GetFileSystem().MoveFile(source, target, GetOpener());
 	}
 
 	string GetHomeDirectory() override {
@@ -117,9 +116,7 @@ public:
 	}
 
 	vector<string> Glob(const string &path, FileOpener *opener = nullptr) override {
-		if (opener) {
-			throw InternalException("OpenerFileSystem cannot take an opener - the opener is pushed automatically");
-		}
+		VerifyNoOpener(opener);
 		return GetFileSystem().Glob(path, GetOpener().get());
 	}
 

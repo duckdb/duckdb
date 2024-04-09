@@ -254,7 +254,7 @@ MergeSortTree<E, O, CMP, F, C>::MergeSortTree(Elements &&lowest_level, const CMP
 	const auto fanout = F;
 	const auto cascading = C;
 	const auto count = lowest_level.size();
-	tree.emplace_back(Level(lowest_level, Offsets()));
+	tree.emplace_back(Level(std::move(lowest_level), Offsets()));
 
 	const RunElement SENTINEL(MergeSortTraits<ElementType>::SENTINEL(), MergeSortTraits<idx_t>::SENTINEL());
 

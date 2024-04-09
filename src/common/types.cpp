@@ -876,6 +876,10 @@ static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right,
 		child_list_t<LogicalType> child_types;
 		for (idx_t i = 0; i < left_child_types.size(); i++) {
 			LogicalType child_type;
+			// Child names must be in the same order
+			if (!StringUtil::CIEquals(left_child_types[i].first, right_child_types[i].first)) {
+				return false;
+			}
 			if (!OP::Operation(left_child_types[i].second, right_child_types[i].second, child_type)) {
 				return false;
 			}

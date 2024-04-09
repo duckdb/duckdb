@@ -62,6 +62,8 @@ public:
 
 	//! The amount of columns in the final result
 	idx_t column_count;
+	//! The amount of bound columns in the select list
+	idx_t bound_column_count = 0;
 
 	//! Index used by the LogicalProjection
 	idx_t projection_index;
