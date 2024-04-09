@@ -18,7 +18,8 @@ struct FilterInfo;
 
 struct DenomInfo {
 	DenomInfo(unordered_set<idx_t> numerator_relations, double filter_strength, double denominator)
-	    : numerator_relations(std::move(numerator_relations)), filter_strength(filter_strength), denominator(denominator) {
+	    : numerator_relations(std::move(numerator_relations)), filter_strength(filter_strength),
+	      denominator(denominator) {
 	}
 
 	unordered_set<idx_t> numerator_relations;
