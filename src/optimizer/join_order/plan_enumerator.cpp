@@ -133,7 +133,7 @@ unique_ptr<JoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
 		}
 	}
 	// need the filter info from the Neighborhood info.
-	auto cost = cost_model.ComputeCost(left, right, join_type);
+	auto cost = cost_model.ComputeCost(left, right);
 	auto result = make_uniq<JoinNode>(set, best_connection, left, right, cost);
 	result->cardinality = cost_model.cardinality_estimator.EstimateCardinalityWithSet<idx_t>(set);
 	return result;

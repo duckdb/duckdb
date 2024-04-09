@@ -27,7 +27,7 @@ public:
 	void InitCostModel();
 
 	//! Compute cost of a join relation set
-	double ComputeCost(JoinNode &left, JoinNode &right, JoinType join_type = JoinType::INNER);
+	double ComputeCost(JoinNode &left, JoinNode &right);
 
 	//! Cardinality Estimator used to calculate cost
 	CardinalityEstimator cardinality_estimator;
