@@ -2,6 +2,24 @@
 
 namespace duckdb {
 
+//! Determine Array index (>=0 from start, <0 from end)
+size_t DetermineArrayIndex(yyjson_mut_val *arr, int64_t idx) {
+	// Determine index
+	auto array_size = yyjson_mut_arr_size(arr);
+	size_t index = static_cast<size_t>(idx);
+
+	// negative indexes address from the rear
+	if (idx < 0) {
+		index = static_cast<size_t>(static_cast<int64_t>(array_size) + idx + 1);
+	}
+	// In case of |idx| > array_size clamp to 0
+	if (static_cast<int64_t>(index) < 0) {
+		index = 0;
+	}
+
+	return index;
+}
+
 //! Insert String or JSON value to an array
 yyjson_mut_val *ArrayInsertStringOrJSON(yyjson_mut_val *arr, yyjson_mut_doc *doc, string_t element, int64_t idx,
                                         yyjson_alc *alc, Vector &result) {
@@ -9,147 +27,39 @@ yyjson_mut_val *ArrayInsertStringOrJSON(yyjson_mut_val *arr, yyjson_mut_doc *doc
 		throw InvalidInputException("JSON input not an JSON Array");
 	}
 
-	// Determine index
-	auto array_size = yyjson_mut_arr_size(arr);
-	size_t index = static_cast<size_t>(idx);
-
-	// negative indexes address from the rear
-	if (idx < 0) {
-		index = static_cast<size_t>(static_cast<int64_t>(array_size) + idx + 1);
-	}
-	// In case of |idx| > array_size clamp to 0
-	if (static_cast<int64_t>(index) < 0) {
-		index = 0;
-	}
+	size_t index = DetermineArrayIndex(arr, idx);
 
 	// Fill remaining indeces with null until element index
 	for (size_t entries = yyjson_mut_arr_size(arr); entries < index; ++entries) {
 		yyjson_mut_arr_add_null(doc, arr);
 	}
+
 	auto edoc = JSONCommon::ReadDocument(element, JSONCommon::READ_FLAG, alc);
 	auto mut_edoc = yyjson_doc_mut_copy(edoc, alc);
 	yyjson_mut_arr_insert(arr, mut_edoc->root, index);
 	return arr;
 }
 
-//! Insert boolean value to an array
-yyjson_mut_val *ArrayInsertBoolean(yyjson_mut_val *arr, yyjson_mut_doc *doc, bool element, int64_t idx, yyjson_alc *alc,
-                                   Vector &result) {
-	if (!yyjson_mut_is_arr(arr)) {
-		throw InvalidInputException("JSON input not a JSON Array");
-	}
+//! Insert any yyjson_mut_ELEMENT_TYPE type and function
+template <class ELEMENT_TYPE>
+std::function<yyjson_mut_val *(yyjson_mut_val *, yyjson_mut_doc *, ELEMENT_TYPE, int64_t, yyjson_alc *, Vector &)>
+ArrayInsert(std::function<yyjson_mut_val *(yyjson_mut_doc *, ELEMENT_TYPE)> fconvert) {
+	return [&](yyjson_mut_val *arr, yyjson_mut_doc *doc, ELEMENT_TYPE element, int64_t idx, yyjson_alc *alc,
+	           Vector &result) {
+		if (!yyjson_mut_is_arr(arr)) {
+			throw InvalidInputException("JSON input not a JSON Array");
+		}
 
-	// Determine index
-	auto array_size = yyjson_mut_arr_size(arr);
-	size_t index = static_cast<size_t>(idx);
+		size_t index = DetermineArrayIndex(arr, idx);
 
-	// negative indexes address from the rear
-	if (idx < 0) {
-		index = static_cast<size_t>(static_cast<int64_t>(array_size) + idx + 1);
-	}
-	// In case of |idx| > array_size clamp to 0
-	if (static_cast<int64_t>(index) < 0) {
-		index = 0;
-	}
-
-	// Fill remaining indeces with null until element index
-	for (size_t entries = array_size; entries < index; ++entries) {
-		yyjson_mut_arr_add_null(doc, arr);
-	}
-
-	auto mut_value = yyjson_mut_bool(doc, element);
-	yyjson_mut_arr_insert(arr, mut_value, index);
-	return arr;
-}
-
-//! Insert unsigned Integers to an array
-yyjson_mut_val *ArrayInsertUnsignedIntegers(yyjson_mut_val *arr, yyjson_mut_doc *doc, uint64_t element, int64_t idx,
-                                            yyjson_alc *alc, Vector &result) {
-	if (!yyjson_mut_is_arr(arr)) {
-		throw InvalidInputException("JSON input not a JSON Array");
-	}
-
-	// Determine index
-	auto array_size = yyjson_mut_arr_size(arr);
-	size_t index = static_cast<size_t>(idx);
-
-	// negative indexes address from the rear
-	if (idx < 0) {
-		index = static_cast<size_t>(static_cast<int64_t>(array_size) + idx + 1);
-	}
-	// In case of |idx| > array_size clamp to 0
-	if (static_cast<int64_t>(index) < 0) {
-		index = 0;
-	}
-
-	// Fill remaining indeces with null until element index
-	for (size_t entries = array_size; entries < index; ++entries) {
-		yyjson_mut_arr_add_null(doc, arr);
-	}
-
-	auto mut_value = yyjson_mut_uint(doc, element);
-	yyjson_mut_arr_insert(arr, mut_value, index);
-	return arr;
-}
-
-//! Insert signed Integers to an array
-yyjson_mut_val *ArrayInsertSignedIntegers(yyjson_mut_val *arr, yyjson_mut_doc *doc, int64_t element, int64_t idx,
-                                          yyjson_alc *alc, Vector &result) {
-	if (!yyjson_mut_is_arr(arr)) {
-		throw InvalidInputException("JSON input not a JSON Array");
-	}
-
-	// Determine index
-	auto array_size = yyjson_mut_arr_size(arr);
-	size_t index = static_cast<size_t>(idx);
-
-	// negative indexes address from the rear
-	if (idx < 0) {
-		index = static_cast<size_t>(static_cast<int64_t>(array_size) + idx + 1);
-	}
-	// In case of |idx| > array_size clamp to 0
-	if (static_cast<int64_t>(index) < 0) {
-		index = 0;
-	}
-
-	// Fill remaining indeces with null until element index
-	for (size_t entries = array_size; entries < index; ++entries) {
-		yyjson_mut_arr_add_null(doc, arr);
-	}
-
-	// Insert Element add index
-	auto mut_value = yyjson_mut_sint(doc, element);
-	yyjson_mut_arr_insert(arr, mut_value, index);
-	return arr;
-}
-
-//! Insert floating values to an array
-yyjson_mut_val *ArrayInsertFloating(yyjson_mut_val *arr, yyjson_mut_doc *doc, double element, int64_t idx,
-                                    yyjson_alc *alc, Vector &result) {
-	if (!yyjson_mut_is_arr(arr)) {
-		throw InvalidInputException("JSON input not a JSON Array");
-	}
-
-	// Determine index
-	auto array_size = yyjson_mut_arr_size(arr);
-	size_t index = static_cast<size_t>(idx);
-
-	// negative indexes address from the rear
-	if (idx < 0) {
-		index = static_cast<size_t>(static_cast<int64_t>(array_size) + idx + 1);
-	}
-	// In case of |idx| > array_size clamp to 0
-	if (static_cast<int64_t>(index) < 0) {
-		index = 0;
-	}
-
-	// Fill remaining indeces with null until element index
-	for (size_t entries = yyjson_mut_arr_size(arr); entries < index; ++entries) {
-		yyjson_mut_arr_add_null(doc, arr);
-	}
-	auto mut_value = yyjson_mut_real(doc, element);
-	yyjson_mut_arr_insert(arr, mut_value, index);
-	return arr;
+		// Fill remaining indeces with null until element index
+		for (size_t entries = yyjson_mut_arr_size(arr); entries < index; ++entries) {
+			yyjson_mut_arr_add_null(doc, arr);
+		}
+		auto mut_value = fconvert(doc, element);
+		yyjson_mut_arr_insert(arr, mut_value, index);
+		return arr;
+	};
 }
 
 //! Insert function wrapper
@@ -166,16 +76,17 @@ static void ArrayInsertFunction(DataChunk &args, ExpressionState &state, Vector 
 		JSONExecutors::TernaryMutExecute<string_t, int64_t>(args, state, result, ArrayInsertStringOrJSON);
 		break;
 	case LogicalType::BOOLEAN:
-		JSONExecutors::TernaryMutExecute<bool, int64_t>(args, state, result, ArrayInsertBoolean);
+		JSONExecutors::TernaryMutExecute<bool, int64_t>(args, state, result, ArrayInsert<bool>(yyjson_mut_bool));
 		break;
 	case LogicalType::UBIGINT:
-		JSONExecutors::TernaryMutExecute<uint64_t, int64_t>(args, state, result, ArrayInsertUnsignedIntegers);
+		JSONExecutors::TernaryMutExecute<uint64_t, int64_t>(args, state, result,
+		                                                    ArrayInsert<uint64_t>(yyjson_mut_uint));
 		break;
 	case LogicalType::BIGINT:
-		JSONExecutors::TernaryMutExecute<int64_t, int64_t>(args, state, result, ArrayInsertSignedIntegers);
+		JSONExecutors::TernaryMutExecute<int64_t, int64_t>(args, state, result, ArrayInsert<int64_t>(yyjson_mut_sint));
 		break;
 	case LogicalType::DOUBLE:
-		JSONExecutors::TernaryMutExecute<double, int64_t>(args, state, result, ArrayInsertFloating);
+		JSONExecutors::TernaryMutExecute<double, int64_t>(args, state, result, ArrayInsert<double>(yyjson_mut_real));
 		break;
 	default:
 		// Shouldn't be thrown except implicit casting changes
