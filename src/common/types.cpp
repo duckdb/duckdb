@@ -1512,15 +1512,15 @@ LogicalType ArrayType::ConvertToList(const LogicalType &type) {
 }
 
 LogicalType LogicalType::ARRAY(const LogicalType &child, idx_t size) {
-	D_ASSERT(size > 0);
-	D_ASSERT(size < ArrayType::MAX_ARRAY_SIZE);
-	auto info = make_shared<ArrayTypeInfo>(child, size);
-	return LogicalType(LogicalTypeId::ARRAY, std::move(info));
-}
-
-LogicalType LogicalType::ARRAYUNBOUNDED(const LogicalType &child) {
-	auto info = make_shared<ArrayTypeInfo>(child, 0);
-	return LogicalType(LogicalTypeId::ARRAY, std::move(info));
+	if (size == DConstants::INVALID_INDEX) {
+		auto info = make_shared<ArrayTypeInfo>(child, 0);
+		return LogicalType(LogicalTypeId::ARRAY, std::move(info));
+	} else {
+		D_ASSERT(size > 0);
+		D_ASSERT(size < ArrayType::MAX_ARRAY_SIZE);
+		auto info = make_shared<ArrayTypeInfo>(child, size);
+		return LogicalType(LogicalTypeId::ARRAY, std::move(info));
+	}
 }
 
 //===--------------------------------------------------------------------===//

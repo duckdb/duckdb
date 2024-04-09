@@ -249,7 +249,7 @@ ScalarFunctionSet ArrayInnerProductFun::GetFunctions() {
 	ScalarFunctionSet set("array_inner_product");
 	// Generic array inner product function
 	for (auto &type : LogicalType::Real()) {
-		set.AddFunction(ScalarFunction({LogicalType::ARRAYUNBOUNDED(type), LogicalType::ARRAYUNBOUNDED(type)}, type,
+		set.AddFunction(ScalarFunction({LogicalType::ARRAY(type, DConstants::INVALID_INDEX), LogicalType::ARRAY(type, DConstants::INVALID_INDEX)}, type,
 		                               ArrayGenericBinaryFunction<InnerProductOp>,
 		                               ArrayGenericBinaryBind<InnerProductOp>));
 	}
@@ -260,7 +260,7 @@ ScalarFunctionSet ArrayDistanceFun::GetFunctions() {
 	ScalarFunctionSet set("array_distance");
 	// Generic array distance function
 	for (auto &type : LogicalType::Real()) {
-		set.AddFunction(ScalarFunction({LogicalType::ARRAYUNBOUNDED(type), LogicalType::ARRAYUNBOUNDED(type)}, type,
+		set.AddFunction(ScalarFunction({LogicalType::ARRAY(type, DConstants::INVALID_INDEX), LogicalType::ARRAY(type, DConstants::INVALID_INDEX)}, type,
 		                               ArrayGenericBinaryFunction<DistanceOp>, ArrayGenericBinaryBind<DistanceOp>));
 	}
 	return set;
@@ -270,7 +270,7 @@ ScalarFunctionSet ArrayCosineSimilarityFun::GetFunctions() {
 	ScalarFunctionSet set("array_cosine_similarity");
 	// Generic array cosine similarity function
 	for (auto &type : LogicalType::Real()) {
-		set.AddFunction(ScalarFunction({LogicalType::ARRAYUNBOUNDED(type), LogicalType::ARRAYUNBOUNDED(type)}, type,
+		set.AddFunction(ScalarFunction({LogicalType::ARRAY(type, DConstants::INVALID_INDEX), LogicalType::ARRAY(type, DConstants::INVALID_INDEX)}, type,
 		                               ArrayGenericBinaryFunction<CosineSimilarityOp>,
 		                               ArrayGenericBinaryBind<CosineSimilarityOp>));
 	}

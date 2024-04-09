@@ -1008,7 +1008,7 @@ void JSONFunctions::RegisterJSONTransformCastFunctions(CastFunctionSet &casts) {
 			target_type = LogicalType::UNION({{"any", LogicalType::ANY}});
 			break;
 		case LogicalTypeId::ARRAY:
-			target_type = LogicalType::ARRAYUNBOUNDED(LogicalType::ANY);
+			target_type = LogicalType::ARRAY(LogicalType::ANY, DConstants::INVALID_INDEX);
 			break;
 		case LogicalTypeId::VARCHAR:
 			// We skip this one here as it's handled in json_functions.cpp
