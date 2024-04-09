@@ -58,7 +58,7 @@ public:
 	}
 
 	shared_ptr<T> lock() const {
-		return internal.lock();
+		return shared_ptr<T>(internal.lock());
 	}
 
 	// Relational operators
