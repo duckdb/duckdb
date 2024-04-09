@@ -22,7 +22,10 @@ static void WriteCatalogEntries(stringstream &ss, vector<reference<CatalogEntry>
 		if (entry.get().internal) {
 			continue;
 		}
-		ss << entry.get().ToSQL() << '\n';
+		auto create_info = entry.get().GetInfo();
+		// Strip the catalog from the info
+		create_info->catalog.clear();
+		ss << create_info->ToString() << '\n';
 	}
 	ss << '\n';
 }
@@ -39,7 +42,8 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info,
                                CopyFunction const &function) {
 	ss << "COPY ";
 
-	if (exported_table.schema_name != DEFAULT_SCHEMA) {
+	//! NOTE: The catalog is explicitly not set here
+	if (exported_table.schema_name != DEFAULT_SCHEMA && !exported_table.schema_name.empty()) {
 		ss << KeywordHelper::WriteOptionallyQuoted(exported_table.schema_name) << ".";
 	}
 

@@ -24,6 +24,9 @@ public:
 	unique_ptr<CopyInfo> info;
 	// The SQL statement used instead of a table when copying data out to a file
 	unique_ptr<QueryNode> select_statement;
+	bool HasToString() const override {
+		return true;
+	}
 	string ToString() const override;
 	string CopyOptionsToString(const string &format, const case_insensitive_map_t<vector<Value>> &options) const;
 

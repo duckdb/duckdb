@@ -476,6 +476,9 @@ string LogicalType::ToString() const {
 	case LogicalTypeId::AGGREGATE_STATE: {
 		return AggregateStateType::GetTypeName(*this);
 	}
+	case LogicalTypeId::SQLNULL: {
+		return "\"NULL\"";
+	}
 	default:
 		return EnumUtil::ToString(id_);
 	}

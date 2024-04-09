@@ -30,9 +30,14 @@ string CreateViewInfo::ToString() const {
 		result += " TEMPORARY";
 	}
 	result += " VIEW ";
-	if (schema != DEFAULT_SCHEMA) {
-		result += KeywordHelper::WriteOptionallyQuoted(schema);
-		result += ".";
+	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+		result += " IF NOT EXISTS ";
+	}
+	if (!catalog.empty()) {
+		result += KeywordHelper::WriteOptionallyQuoted(catalog) + ".";
+		result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
+	} else if (schema != DEFAULT_SCHEMA && !schema.empty()) {
+		result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
 	}
 	result += KeywordHelper::WriteOptionallyQuoted(view_name);
 	if (!aliases.empty()) {

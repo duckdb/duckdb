@@ -12,6 +12,13 @@ unique_ptr<SQLStatement> CreateStatement::Copy() const {
 	return unique_ptr<CreateStatement>(new CreateStatement(*this));
 }
 
+bool CreateStatement::HasToString() const {
+	if (!info) {
+		return false;
+	}
+	return info->HasToString();
+}
+
 string CreateStatement::ToString() const {
 	return info->ToString();
 }

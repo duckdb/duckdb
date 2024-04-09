@@ -44,6 +44,9 @@ protected:
 	SQLStatement(const SQLStatement &other) = default;
 
 public:
+	virtual bool HasToString() const {
+		return false;
+	}
 	virtual string ToString() const {
 		throw InternalException("ToString not supported for this type of SQLStatement: '%s'",
 		                        StatementTypeToString(type));

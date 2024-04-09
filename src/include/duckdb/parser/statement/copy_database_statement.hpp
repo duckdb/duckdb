@@ -27,6 +27,9 @@ public:
 	string to_database;
 	CopyDatabaseType copy_type;
 
+	bool HasToString() const override {
+		return true;
+	}
 	string ToString() const override;
 
 protected:
