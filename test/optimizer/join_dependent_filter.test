@@ -20,6 +20,14 @@ where (t1.i = 2 and t2.i = 4) or (t1.i = 0 and t2.i = 2)
 ----
 physical_plan	<REGEX>:.*FILTER.*FILTER.*
 
+# not if the constants are volatile however
+query II
+explain select count(*)
+from test t1, test t2
+where (t1.i = random() and t2.i = random()) or (t1.i = 0 and t2.i = 2)
+----
+physical_plan	<!REGEX>:.*FILTER.*
+
 # which wouldn't be there without the expression rewriter
 statement ok
 set disabled_optimizers to 'expression_rewriter'

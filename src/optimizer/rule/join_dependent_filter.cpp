@@ -35,13 +35,12 @@ static inline bool ExpressionReferencesMultipleTables(const Expression &binding)
 
 static inline void ExtractConjunctedExpressions(Expression &expression,
                                                 unordered_map<idx_t, unique_ptr<Expression>> &expressions) {
-	if (expression.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
-	    expression.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
+	if (expression.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		auto &conjunction = expression.Cast<BoundConjunctionExpression>();
 		for (auto &child : conjunction.children) {
 			ExtractConjunctedExpressions(*child, expressions);
 		}
-	} else {
+	} else if (!expression.IsVolatile()) {
 		unordered_set<idx_t> table_idxs;
 		GetTableIndices(expression, table_idxs);
 		if (table_idxs.size() != 1) {
