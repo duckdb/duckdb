@@ -94,6 +94,7 @@ benchmark/micro/date/extract_multiple_icu.benchmark
 benchmark/micro/date/extract_struct.benchmark
 benchmark/micro/date/extract_struct_icu.benchmark
 benchmark/micro/date/extract_year.benchmark
+benchmark/micro/filter/in_conversion.benchmark
 benchmark/micro/filter/parallel_complex_filter.benchmark
 benchmark/micro/functions/random.benchmark
 benchmark/micro/functions/random_uuid.benchmark

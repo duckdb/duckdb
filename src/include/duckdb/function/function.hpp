@@ -64,7 +64,7 @@ struct FunctionData {
 	// FIXME: this function should be removed in the future
 	template <class TARGET>
 	TARGET &CastNoConst() const {
-		return const_cast<TARGET &>(reinterpret_cast<const TARGET &>(*this));
+		return const_cast<TARGET &>(reinterpret_cast<const TARGET &>(*this)); // NOLINT: FIXME
 	}
 };
 
