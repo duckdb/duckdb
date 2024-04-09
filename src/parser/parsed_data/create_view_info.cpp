@@ -33,9 +33,17 @@ string CreateViewInfo::ToString() const {
 	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 		result += " IF NOT EXISTS ";
 	}
-	if (!catalog.empty()) {
+	auto has_catalog = !catalog.empty();
+	if (has_catalog) {
+		if (temporary && catalog == TEMP_CATALOG) {
+			has_catalog = false;
+		}
+	}
+	if (has_catalog) {
 		result += KeywordHelper::WriteOptionallyQuoted(catalog) + ".";
-		result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
+		if (!schema.empty()) {
+			result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
+		}
 	} else if (schema != DEFAULT_SCHEMA && !schema.empty()) {
 		result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
 	}
@@ -48,6 +56,7 @@ string CreateViewInfo::ToString() const {
 	}
 	result += " AS ";
 	result += query->ToString();
+	result += ";";
 	return result;
 }
 

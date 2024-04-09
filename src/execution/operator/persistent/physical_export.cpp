@@ -23,9 +23,14 @@ static void WriteCatalogEntries(stringstream &ss, vector<reference<CatalogEntry>
 			continue;
 		}
 		auto create_info = entry.get().GetInfo();
-		// Strip the catalog from the info
-		create_info->catalog.clear();
-		ss << create_info->ToString() << '\n';
+		if (create_info->HasToString()) {
+			// Strip the catalog from the info
+			create_info->catalog.clear();
+			ss << create_info->ToString() << '\n';
+		} else {
+			// TODO: remove ToSQL in favor of GetInfo()->ToString()
+			ss << entry.get().ToSQL();
+		}
 	}
 	ss << '\n';
 }
