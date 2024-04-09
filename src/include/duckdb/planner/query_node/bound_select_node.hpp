@@ -14,6 +14,7 @@
 #include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/parser/group_by_node.hpp"
+#include "duckdb/planner/expression_binder/select_bind_state.hpp"
 
 namespace duckdb {
 
@@ -41,10 +42,8 @@ public:
 	BoundSelectNode() : BoundQueryNode(QueryNodeType::SELECT_NODE) {
 	}
 
-	//! The original unparsed expressions. This is exported after binding, because the binding might change the
-	//! expressions (e.g. when a * clause is present)
-	vector<unique_ptr<ParsedExpression>> original_expressions;
-
+	//! Bind information
+	SelectBindState bind_state;
 	//! The projection list
 	vector<unique_ptr<Expression>> select_list;
 	//! The FROM clause
