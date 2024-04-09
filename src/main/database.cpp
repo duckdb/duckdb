@@ -71,11 +71,19 @@ BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {
 	return db.GetBufferManager();
 }
 
+const BufferManager &BufferManager::GetBufferManager(const DatabaseInstance &db) {
+	return db.GetBufferManager();
+}
+
 BufferManager &BufferManager::GetBufferManager(AttachedDatabase &db) {
 	return BufferManager::GetBufferManager(db.GetDatabase());
 }
 
 DatabaseInstance &DatabaseInstance::GetDatabase(ClientContext &context) {
+	return *context.db;
+}
+
+const DatabaseInstance &DatabaseInstance::GetDatabase(const ClientContext &context) {
 	return *context.db;
 }
 
@@ -268,6 +276,10 @@ BufferManager &DatabaseInstance::GetBufferManager() {
 	return *buffer_manager;
 }
 
+const BufferManager &DatabaseInstance::GetBufferManager() const {
+	return *buffer_manager;
+}
+
 BufferPool &DatabaseInstance::GetBufferPool() const {
 	return *config.buffer_pool;
 }
@@ -406,7 +418,7 @@ void DatabaseInstance::SetExtensionLoaded(const std::string &name) {
 	}
 }
 
-SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) {
+SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) const {
 	// check the session values
 	auto &db_config = DBConfig::GetConfig(*this);
 	const auto &global_config_map = db_config.options.set_variables;

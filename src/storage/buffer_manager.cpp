@@ -35,7 +35,7 @@ vector<TemporaryFileInformation> BufferManager::GetTemporaryFiles() {
 	throw InternalException("This type of BufferManager does not allow temporary files");
 }
 
-const string &BufferManager::GetTemporaryDirectory() {
+const string &BufferManager::GetTemporaryDirectory() const {
 	throw InternalException("This type of BufferManager does not allow a temporary directory");
 }
 

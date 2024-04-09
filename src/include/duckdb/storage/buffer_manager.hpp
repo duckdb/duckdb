@@ -48,7 +48,7 @@ public:
 	//! Returns the currently used swap space
 	virtual idx_t GetUsedSwap() = 0;
 	//! Returns the maximum swap space that can be used
-	virtual optional_idx GetMaxSwap() = 0;
+	virtual optional_idx GetMaxSwap() const = 0;
 
 	//! Returns a new block of memory that is smaller than Storage::BLOCK_SIZE
 	virtual shared_ptr<BlockHandle> RegisterSmallMemory(idx_t block_size);
@@ -62,7 +62,7 @@ public:
 	virtual void SetSwapLimit(optional_idx limit = optional_idx());
 
 	virtual vector<TemporaryFileInformation> GetTemporaryFiles();
-	virtual const string &GetTemporaryDirectory();
+	virtual const string &GetTemporaryDirectory() const;
 	virtual void SetTemporaryDirectory(const string &new_dir);
 	virtual bool HasTemporaryDirectory() const;
 
@@ -75,7 +75,9 @@ public:
 	virtual DatabaseInstance &GetDatabase() = 0;
 	// Static methods
 	DUCKDB_API static BufferManager &GetBufferManager(DatabaseInstance &db);
+	DUCKDB_API static const BufferManager &GetBufferManager(const DatabaseInstance &db);
 	DUCKDB_API static BufferManager &GetBufferManager(ClientContext &context);
+	DUCKDB_API static const BufferManager &GetBufferManager(const ClientContext &context);
 	DUCKDB_API static BufferManager &GetBufferManager(AttachedDatabase &db);
 
 	static idx_t GetAllocSize(idx_t block_size) {

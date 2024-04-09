@@ -36,6 +36,7 @@ typedef int MutexType;
 #elif defined(MUTEX_IS_WIN32_SRWLOCK)
 typedef SRWLOCK MutexType;
 #elif defined(MUTEX_IS_PTHREAD_RWLOCK)
+#include <stdexcept>
 #include <pthread.h>
 #include <stdlib.h>
 typedef pthread_rwlock_t MutexType;
@@ -97,7 +98,7 @@ void Mutex::ReaderUnlock() { ReleaseSRWLockShared(&mutex_); }
   } while (0);
 
 Mutex::Mutex()             { SAFE_PTHREAD(pthread_rwlock_init(&mutex_, NULL)); }
-Mutex::~Mutex()            { SAFE_PTHREAD(pthread_rwlock_destroy(&mutex_)); }
+Mutex::~Mutex()            { pthread_rwlock_destroy(&mutex_); }
 void Mutex::Lock()         { SAFE_PTHREAD(pthread_rwlock_wrlock(&mutex_)); }
 void Mutex::Unlock()       { SAFE_PTHREAD(pthread_rwlock_unlock(&mutex_)); }
 void Mutex::ReaderLock()   { SAFE_PTHREAD(pthread_rwlock_rdlock(&mutex_)); }

@@ -51,7 +51,7 @@ public:
 	idx_t GetUsedMemory() const final;
 	idx_t GetMaxMemory() const final;
 	idx_t GetUsedSwap() final;
-	optional_idx GetMaxSwap() final;
+	optional_idx GetMaxSwap() const final;
 
 	//! Allocate an in-memory buffer with a single pin.
 	//! The allocated memory is released when the buffer handle is destroyed.
@@ -75,7 +75,7 @@ public:
 	//! Returns a list of all temporary files
 	vector<TemporaryFileInformation> GetTemporaryFiles() final;
 
-	const string &GetTemporaryDirectory() final {
+	const string &GetTemporaryDirectory() const final {
 		return temporary_directory.path;
 	}
 
@@ -145,8 +145,8 @@ protected:
 	struct TemporaryFileData {
 		//! The directory name where temporary files are stored
 		string path;
-		//! Lock for creating the temp handle
-		mutex lock;
+		//! Lock for creating the temp handle (marked mutable so 'GetMaxSwap' can be const)
+		mutable mutex lock;
 		//! Handle for the temporary directory
 		unique_ptr<TemporaryDirectoryHandle> handle;
 		//! The maximum swap space that can be used

@@ -39,7 +39,7 @@ BindResult QualifyBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, 
 BindResult QualifyBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
 	auto &expr = *expr_ptr;
 	// check if the expression binds to one of the groups
-	auto group_index = TryBindGroup(expr, depth);
+	auto group_index = TryBindGroup(expr);
 	if (group_index != DConstants::INVALID_INDEX) {
 		return BindGroup(expr, depth, group_index);
 	}
