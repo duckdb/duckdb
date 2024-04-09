@@ -16,6 +16,7 @@ body:
             * [duckdb-wasm](https://github.com/duckdb/duckdb-wasm/issues/new)
             * [go-duckdb](https://github.com/marcboeker/go-duckdb/issues/new)
           * Extensions:
+            * [Arrow extension](https://github.com/duckdb/duckdb_arrow/issues/new)
             * [AWS extension](https://github.com/duckdb/duckdb_aws/issues/new)
             * [Azure extension](https://github.com/duckdb/duckdb_azure/issues/new)
             * [Iceberg extension](https://github.com/duckdb/duckdb_iceberg/issues/new)
@@ -23,6 +24,8 @@ body:
             * [Postgres scanner](https://github.com/duckdb/postgres_scanner/issues/new)
             * [Spatial extension](https://github.com/duckdb/duckdb_spatial/issues/new)
             * [SQLite scanner](https://github.com/duckdb/sqlite_scanner/issues/new)
+          * Connectors:
+            * [dbt-duckdb](https://github.com/duckdb/dbt-duckdb)
 
         If none of the above repositories are applicable, feel free to raise it in this one
 
