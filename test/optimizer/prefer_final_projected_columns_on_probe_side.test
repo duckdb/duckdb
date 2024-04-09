@@ -31,4 +31,4 @@ from t
 ) as next
 where this.id=next.id and this.ts_start=next.ts_start;
 ----
-physical_plan	<REGEX>:.*HASH_JOIN.*PROJECTION.*SEQ_SCAN.*WINDOW.*SEQ_SCAN.*
+physical_plan	<REGEX>:.*HASH_JOIN.*SEQ_SCAN.*PROJECTION.*WINDOW.*SEQ_SCAN.*

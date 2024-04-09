@@ -2,21 +2,33 @@
 #include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 
 namespace duckdb {
 
+static void GetRowidBindings(LogicalOperator &op, vector<ColumnBinding> &bindings) {
+	if (op.type == LogicalOperatorType::LOGICAL_GET) {
+		auto &get = op.Cast<LogicalGet>();
+		auto get_bindings = get.GetColumnBindings();
+		auto column_ids = get.column_ids;
+		if (std::find(column_ids.begin(), column_ids.end(), DConstants::INVALID_INDEX) != column_ids.end()) {
+			for (auto &binding : get_bindings) {
+				bindings.push_back(binding);
+			}
+		}
+	}
+	for (auto &child : op.children) {
+		GetRowidBindings(*child, bindings);
+	}
+}
+
 BuildProbeSideOptimizer::BuildProbeSideOptimizer(ClientContext &context, LogicalOperator &op) : context(context) {
 	vector<ColumnBinding> updating_columns, current_op_bindings;
-	if (op.type == LogicalOperatorType::LOGICAL_UPDATE) {
-		auto child = op.children[0].get();
-		while (child->type != LogicalOperatorType::LOGICAL_PROJECTION) {
-			child = child->children[0].get();
-		}
-		updating_columns = child->GetColumnBindings();
-	}
-	preferred_on_probe_side = updating_columns;
+	auto bindings = op.GetColumnBindings();
+	vector<ColumnBinding> row_id_bindings;
+	GetRowidBindings(op, preferred_on_probe_side);
 }
 
 static void FlipChildren(LogicalOperator &op) {
