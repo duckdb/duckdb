@@ -40,3 +40,9 @@ query I
 SELECT * FROM tbl
 ----
 84
+
+statement ok
+CREATE SCHEMA """"
+
+statement ok
+USE """"
