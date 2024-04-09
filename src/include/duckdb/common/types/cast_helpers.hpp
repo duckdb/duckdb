@@ -59,16 +59,19 @@ public:
 		return ptr;
 	}
 
-	template <class SIGNED, class UNSIGNED>
-	static string_t FormatSigned(SIGNED value, Vector &vector) {
-		int sign = -(value < 0);
-		UNSIGNED unsigned_value = UnsafeNumericCast<UNSIGNED>(UNSIGNED(value ^ sign) - sign);
-		int length = UnsignedLength<UNSIGNED>(unsigned_value) - sign;
-		string_t result = StringVector::EmptyString(vector, NumericCast<idx_t>(length));
+	template <class T>
+	static string_t FormatSigned(T value, Vector &vector) {
+		auto is_negative = (value < 0);
+		auto unsigned_value = static_cast<typename MakeUnsigned<T>::type>(AbsValue(value));
+		auto length = UnsignedLength(unsigned_value);
+		if (is_negative) {
+			length++;
+		}
+		auto result = StringVector::EmptyString(vector, UnsafeNumericCast<idx_t>(length));
 		auto dataptr = result.GetDataWriteable();
 		auto endptr = dataptr + length;
 		endptr = FormatUnsigned(unsigned_value, endptr);
-		if (sign) {
+		if (is_negative) {
 			*--endptr = '-';
 		}
 		result.Finalize();

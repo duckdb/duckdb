@@ -24,37 +24,37 @@ string_t StringCast::Operation(bool input, Vector &vector) {
 
 template <>
 string_t StringCast::Operation(int8_t input, Vector &vector) {
-	return NumericHelper::FormatSigned<int8_t, uint8_t>(input, vector);
+	return NumericHelper::FormatSigned<int8_t>(input, vector);
 }
 
 template <>
 string_t StringCast::Operation(int16_t input, Vector &vector) {
-	return NumericHelper::FormatSigned<int16_t, uint16_t>(input, vector);
+	return NumericHelper::FormatSigned<int16_t>(input, vector);
 }
 template <>
 string_t StringCast::Operation(int32_t input, Vector &vector) {
-	return NumericHelper::FormatSigned<int32_t, uint32_t>(input, vector);
+	return NumericHelper::FormatSigned<int32_t>(input, vector);
 }
 
 template <>
 string_t StringCast::Operation(int64_t input, Vector &vector) {
-	return NumericHelper::FormatSigned<int64_t, uint64_t>(input, vector);
+	return NumericHelper::FormatSigned<int64_t>(input, vector);
 }
 template <>
 duckdb::string_t StringCast::Operation(uint8_t input, Vector &vector) {
-	return NumericHelper::FormatSigned<uint8_t, uint64_t>(input, vector);
+	return NumericHelper::FormatSigned<uint8_t>(input, vector);
 }
 template <>
 duckdb::string_t StringCast::Operation(uint16_t input, Vector &vector) {
-	return NumericHelper::FormatSigned<uint16_t, uint64_t>(input, vector);
+	return NumericHelper::FormatSigned<uint16_t>(input, vector);
 }
 template <>
 duckdb::string_t StringCast::Operation(uint32_t input, Vector &vector) {
-	return NumericHelper::FormatSigned<uint32_t, uint64_t>(input, vector);
+	return NumericHelper::FormatSigned<uint32_t>(input, vector);
 }
 template <>
 duckdb::string_t StringCast::Operation(uint64_t input, Vector &vector) {
-	return NumericHelper::FormatSigned<uint64_t, uint64_t>(input, vector);
+	return NumericHelper::FormatSigned<uint64_t>(input, vector);
 }
 
 template <>
