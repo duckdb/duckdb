@@ -62,7 +62,8 @@ void ListExtractTemplate(idx_t count, UnifiedVectorFormat &list_data, UnifiedVec
 				result_mask.SetInvalid(i);
 				continue;
 			}
-			child_offset = UnsafeNumericCast<idx_t>(UnsafeNumericCast<int64_t>(list_entry.offset + list_entry.length) + offsets_entry);
+			child_offset = UnsafeNumericCast<idx_t>(UnsafeNumericCast<int64_t>(list_entry.offset + list_entry.length) +
+			                                        offsets_entry);
 		} else {
 			if ((idx_t)offsets_entry >= list_entry.length) {
 				result_mask.SetInvalid(i);
