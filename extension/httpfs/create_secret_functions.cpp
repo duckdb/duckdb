@@ -1,6 +1,7 @@
 #include "create_secret_functions.hpp"
 #include "s3fs.hpp"
 #include "duckdb/main/extension_util.hpp"
+#include "duckdb/common/local_file_system.hpp"
 
 namespace duckdb {
 
@@ -130,5 +131,82 @@ void CreateS3SecretFunctions::RegisterCreateSecretFunction(DatabaseInstance &ins
 	SetBaseNamedParams(from_settings_fun2, type);
 	ExtensionUtil::RegisterFunction(instance, from_empty_config_fun2);
 	ExtensionUtil::RegisterFunction(instance, from_settings_fun2);
+}
+
+void CreateBearerTokenFunctions::Register(DatabaseInstance &instance) {
+	// Generic Bearer secret
+	SecretType secret_type;
+	secret_type.name = GENERIC_BEARER_TYPE;
+	secret_type.deserializer = KeyValueSecret::Deserialize<KeyValueSecret>;
+	secret_type.default_provider = "config";
+	ExtensionUtil::RegisterSecretType(instance, secret_type);
+
+	// Generic Bearer config provider
+	CreateSecretFunction config_fun = {GENERIC_BEARER_TYPE, "config", CreateBearerSecretFromConfig};
+	config_fun.named_parameters["token"] = LogicalType::VARCHAR;
+	ExtensionUtil::RegisterFunction(instance, config_fun);
+
+	// HuggingFace secret
+	SecretType secret_type_hf;
+	secret_type_hf.name = HUGGINGFACE_TYPE;
+	secret_type_hf.deserializer = KeyValueSecret::Deserialize<KeyValueSecret>;
+	secret_type_hf.default_provider = "config";
+	ExtensionUtil::RegisterSecretType(instance, secret_type_hf);
+
+	// Huggingface config provider
+	CreateSecretFunction hf_config_fun = {HUGGINGFACE_TYPE, "config", CreateBearerSecretFromConfig};
+	hf_config_fun.named_parameters["token"] = LogicalType::VARCHAR;
+	ExtensionUtil::RegisterFunction(instance, hf_config_fun);
+
+	// Huggingface cache provider
+	CreateSecretFunction hf_cache_fun = {HUGGINGFACE_TYPE, "cache", CreateHuggingFaceSecretFromCache};
+	ExtensionUtil::RegisterFunction(instance, hf_cache_fun);
+}
+
+unique_ptr<BaseSecret> CreateBearerTokenFunctions::CreateSecretFunctionInternal(ClientContext &context, CreateSecretInput &input, const string &token) {
+	// Set scope to user provided scope or the default
+	auto scope = input.scope;
+	if (scope.empty()) {
+		if (input.type == GENERIC_BEARER_TYPE) {
+			scope.push_back("");
+		} else if (input.type == HUGGINGFACE_TYPE) {
+			scope.push_back("hf://");
+		} else {
+			throw InternalException("Unknown secret type found in httpfs extension: '%s'", input.type);
+		}
+	}
+	auto return_value = make_uniq<KeyValueSecret>(scope, input.type, input.provider, input.name);
+
+	//! Set key value map
+	return_value->secret_map["token"] = token;
+
+	//! Set redact keys
+	return_value->redact_keys = {"token"};
+
+	return std::move(return_value);
+}
+
+unique_ptr<BaseSecret> CreateBearerTokenFunctions::CreateBearerSecretFromConfig(ClientContext &context,
+                                                                         CreateSecretInput &input) {
+	string token;
+
+	auto token_input = input.options.find("token");
+	for (const auto &named_param : input.options) {
+		auto lower_name = StringUtil::Lower(named_param.first);
+		if (lower_name == "token") {
+			token = named_param.second.ToString();
+		}
+	}
+
+	return CreateSecretFunctionInternal(context, input, token);
+}
+
+unique_ptr<BaseSecret> CreateBearerTokenFunctions::CreateHuggingFaceSecretFromCache(ClientContext &context, CreateSecretInput &input) {
+	LocalFileSystem fs;
+
+	auto handle = fs.OpenFile("~/.cache/huggingface/token", {FileOpenFlags::FILE_FLAGS_READ});
+	auto token = handle->ReadLine();
+
+	return CreateSecretFunctionInternal(context, input, token);
 }
 } // namespace duckdb

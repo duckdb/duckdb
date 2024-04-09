@@ -47,6 +47,8 @@ struct HTTPParams {
 	bool enable_server_cert_verification;
 	std::string ca_cert_file;
 
+	string bearer_token;
+
 	static HTTPParams ReadFrom(optional_ptr<FileOpener> opener);
 };
 
@@ -82,6 +84,8 @@ public:
 	constexpr static idx_t READ_BUFFER_LEN = 1000000;
 
 	shared_ptr<HTTPState> state;
+
+	void AddHeaders(HeaderMap &map);
 
 public:
 	void Close() override {

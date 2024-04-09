@@ -31,14 +31,40 @@ HuggingFaceFileSystem::~HuggingFaceFileSystem() {
 
 }
 
-// TODO deduplicate
+static string ParseNextUrlFromLinkHeader(const string &link_header_content) {
+	auto split_outer = StringUtil::Split(link_header_content, ',');
+	for (auto &split : split_outer) {
+		auto split_inner = StringUtil::Split(split, ';');
+		if(split_inner.size() != 2) {
+			throw IOException("Unexpected link header for huggingface pagination: %s", link_header_content);
+		}
+
+		StringUtil::Trim(split_inner[1]);
+		if(split_inner[1] == "rel=\"next\"") {
+			StringUtil::Trim(split_inner[0]);
+
+			if (!StringUtil::StartsWith(split_inner[0], "<") || !StringUtil::EndsWith(split_inner[0], ">")) {
+				throw IOException("Unexpected link header for huggingface pagination: %s", link_header_content);
+			}
+
+			return split_inner[0].substr(1, split_inner.size()-2);
+		}
+	}
+
+	return "";
+}
+
 string HuggingFaceFileSystem::ListHFRequest(ParsedHFUrl &url, HTTPParams &http_params, string &next_page_url, optional_ptr<HTTPState> state) {
 	string full_list_path = HuggingFaceFileSystem::GetTreeUrl(url);
-
 	HeaderMap header_map;
+	if(!http_params.bearer_token.empty()) {
+		header_map["Authorization"] = "Bearer " + 	http_params.bearer_token;
+	}
 	auto headers = initialize_http_headers(header_map);
 
 	auto client = HTTPFileSystem::GetClient(http_params, url.endpoint.c_str());
+
+	string link_header_result;
 
 	std::stringstream response;
 	auto res = client->Get(
@@ -46,6 +72,10 @@ string HuggingFaceFileSystem::ListHFRequest(ParsedHFUrl &url, HTTPParams &http_p
 	    [&](const duckdb_httplib_openssl::Response &response) {
 		    if (response.status >= 400) {
 			    throw HTTPException(response, "HTTP GET error on '%s' (HTTP %d)", full_list_path, response.status);
+		    }
+		    auto link_res = response.headers.find("link");
+		    if (link_res != response.headers.end()) {
+			    link_header_result = link_res->second;
 		    }
 		    return true;
 	    },
@@ -64,11 +94,12 @@ string HuggingFaceFileSystem::ListHFRequest(ParsedHFUrl &url, HTTPParams &http_p
 	}
 
 	// TODO: parse pagination url from headers and set it here
-	next_page_url = "";
+	if (!link_header_result.empty()) {
+		next_page_url = ParseNextUrlFromLinkHeader(link_header_result);
+	}
 
 	return response.str();
 }
-
 
 // TODO: dedup
 static bool Match(vector<string>::const_iterator key, vector<string>::const_iterator key_end,
@@ -172,9 +203,6 @@ end:
 }
 
 vector<string> HuggingFaceFileSystem::Glob(const string &path, FileOpener *opener) {
-
-	auto secret_manager = FileOpener::TryGetSecretManager(opener);
-
 	// Ensure the glob pattern is a valid HF url
 	auto parsed_glob_url = HFUrlParse(path);
 	auto first_wildcard_pos = parsed_glob_url.path.find_first_of("*[\\");
@@ -199,12 +227,12 @@ vector<string> HuggingFaceFileSystem::Glob(const string &path, FileOpener *opene
 	}
 
 	auto http_params = HTTPParams::ReadFrom(opener);
+	SetParams(http_params, path, opener);
 	auto http_state = HTTPState::TryGetState(opener).get();
 
 	ParsedHFUrl curr_hf_path = parsed_glob_url;
 	curr_hf_path.path = shared_path;
 
-	idx_t curr_checked_idx = 0;
 	vector<string> files;
 	vector<string> dirs = {shared_path};
 	string next_page_url = "";
@@ -212,6 +240,7 @@ vector<string> HuggingFaceFileSystem::Glob(const string &path, FileOpener *opene
 	// Loop over the paths and paginated responses for each path
 	while (true) {
 		if (next_page_url.empty() && !dirs.empty()) {
+			printf("Movin on to %s\n", dirs.back().c_str());
 			// Done with previous dir, but there are more dirs
 			curr_hf_path.path = dirs.back();
 			dirs.pop_back();
@@ -248,7 +277,23 @@ unique_ptr<HTTPFileHandle> HuggingFaceFileSystem::CreateHandle(const string &pat
 	auto parsed_url = HFUrlParse(path);
 	auto http_url = GetFileUrl(parsed_url);
 
-	return duckdb::make_uniq<HTTPFileHandle>(*this, http_url, flags, HTTPParams::ReadFrom(opener));
+	auto params = HTTPParams::ReadFrom(opener);
+	SetParams(params, path, opener);
+
+	return duckdb::make_uniq<HTTPFileHandle>(*this, http_url, flags, params);
+}
+
+void HuggingFaceFileSystem::SetParams(HTTPParams &params, const string &path, optional_ptr<FileOpener> opener) {
+	auto secret_manager = FileOpener::TryGetSecretManager(opener);
+	auto transaction = FileOpener::TryGetCatalogTransaction(opener);
+	if (secret_manager && transaction) {
+		auto secret_match = secret_manager->LookupSecret(*transaction, path, "huggingface");
+
+		if(secret_match.HasMatch()) {
+			const auto &kv_secret = dynamic_cast<const KeyValueSecret &>(*secret_match.secret_entry->secret);
+			params.bearer_token = kv_secret.TryGetValue("token", true).ToString();
+		}
+	}
 }
 
 ParsedHFUrl HuggingFaceFileSystem::HFUrlParse(const string &url) {

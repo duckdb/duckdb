@@ -29,4 +29,22 @@ protected:
 	static void RegisterCreateSecretFunction(DatabaseInstance &instance, string type);
 };
 
+struct CreateBearerTokenFunctions {
+public:
+	static constexpr const char *GENERIC_BEARER_TYPE = "bearer";
+	static constexpr const char *HUGGINGFACE_TYPE = "huggingface";
+
+	//! Register all CreateSecretFunctions
+	static void Register(DatabaseInstance &instance);
+
+protected:
+	//! Internal function to create bearer token
+	static unique_ptr<BaseSecret> CreateSecretFunctionInternal(ClientContext &context, CreateSecretInput &input,
+	                                                           const string& token);
+	//! Function for the "config" provider: creates secret from parameters passed by user
+	static unique_ptr<BaseSecret> CreateBearerSecretFromConfig(ClientContext &context, CreateSecretInput &input);
+	//! Function for the "config" provider: creates secret from parameters passed by user
+	static unique_ptr<BaseSecret> CreateHuggingFaceSecretFromCache(ClientContext &context, CreateSecretInput &input);
+};
+
 } // namespace duckdb

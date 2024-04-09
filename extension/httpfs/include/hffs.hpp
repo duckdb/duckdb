@@ -36,6 +36,8 @@ public:
 	string GetTreeUrl(const ParsedHFUrl &url);
 	string GetFileUrl(const ParsedHFUrl &url);
 
+	static void SetParams(HTTPParams &params, const string &path, optional_ptr<FileOpener> opener);
+
 protected:
 	duckdb::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, FileOpenFlags flags,
 	                                                        optional_ptr<FileOpener> opener) override;

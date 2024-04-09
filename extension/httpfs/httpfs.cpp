@@ -10,6 +10,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
 
 #include <chrono>
 #include <string>
@@ -154,6 +155,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
 	auto &hfs = handle.Cast<HTTPFileHandle>();
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
+	hfs.AddHeaders(header_map);
 	auto headers = initialize_http_headers(header_map);
 	idx_t out_offset = 0;
 
@@ -216,6 +218,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PutRequest(FileHandle &handle, strin
 	auto &hfs = handle.Cast<HTTPFileHandle>();
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
+	hfs.AddHeaders(header_map);
 	auto headers = initialize_http_headers(header_map);
 
 	std::function<duckdb_httplib_openssl::Result(void)> request([&]() {
@@ -234,6 +237,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, stri
 	auto &hfs = handle.Cast<HTTPFileHandle>();
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
+	hfs.AddHeaders(header_map);
 	auto headers = initialize_http_headers(header_map);
 
 	std::function<duckdb_httplib_openssl::Result(void)> request([&]() {
@@ -253,6 +257,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, strin
 	auto &hfh = handle.Cast<HTTPFileHandle>();
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
+	hfh.AddHeaders(header_map);
 	auto headers = initialize_http_headers(header_map);
 
 	D_ASSERT(hfh.cached_file_handle);
@@ -310,6 +315,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 	auto &hfs = handle.Cast<HTTPFileHandle>();
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
+	hfs.AddHeaders(header_map);
 	auto headers = initialize_http_headers(header_map);
 
 	// send the Range header to read only subset of file
@@ -380,7 +386,21 @@ HTTPFileHandle::HTTPFileHandle(FileSystem &fs, const string &path, FileOpenFlags
 unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const string &path, FileOpenFlags flags,
                                                         optional_ptr<FileOpener> opener) {
 	D_ASSERT(flags.Compression() == FileCompressionType::UNCOMPRESSED);
-	return duckdb::make_uniq<HTTPFileHandle>(*this, path, flags, HTTPParams::ReadFrom(opener));
+
+	auto params = HTTPParams::ReadFrom(opener);
+
+	auto secret_manager = FileOpener::TryGetSecretManager(opener);
+	auto transaction = FileOpener::TryGetCatalogTransaction(opener);
+	if (secret_manager && transaction) {
+		auto secret_match = secret_manager->LookupSecret(*transaction, path, "bearer");
+
+		if(secret_match.HasMatch()) {
+			const auto &kv_secret = dynamic_cast<const KeyValueSecret &>(*secret_match.secret_entry->secret);
+			params.bearer_token = kv_secret.TryGetValue("token", true).ToString();
+		}
+	}
+
+	return duckdb::make_uniq<HTTPFileHandle>(*this, path, flags, params);
 }
 
 unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, FileOpenFlags flags,
@@ -698,6 +718,12 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 
 	if (should_write_cache) {
 		current_cache->Insert(path, {length, last_modified});
+	}
+}
+
+void HTTPFileHandle::AddHeaders(HeaderMap &map) {
+	if (!http_params.bearer_token.empty()) {
+		map["authorization"] = "Bearer " + http_params.bearer_token;
 	}
 }
 
