@@ -36,7 +36,6 @@ string CreateIndexInfo::ToString() const {
 		result += " UNIQUE";
 	}
 	result += " INDEX ";
-	// FIXME: 'CONCURRENTLY' ??
 	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 		result += "IF NOT EXISTS ";
 	}
@@ -73,7 +72,6 @@ string CreateIndexInfo::ToString() const {
 		}
 		result += " )";
 	}
-	// FIXME: optional WHERE ???
 	return result;
 }
 
