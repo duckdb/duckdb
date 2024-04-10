@@ -567,20 +567,20 @@ def load_extension(extension, **kwargs):
     return conn.load_extension(extension, **kwargs)
 _exported_symbols.append('load_extension')
 
-def project(df, *args, **kwargs):
+def project(df, project_expr, **kwargs):
     if 'connection' in kwargs:
         conn =  kwargs.pop('connection')
     else:
         conn = duckdb.connect(":default:")
-    return conn.from_df(df).project(*args, **kwargs)
+    return conn.from_df(df).project(project_expr, **kwargs)
 _exported_symbols.append('project')
 
-def distinct(df, *args, **kwargs):
+def distinct(df, **kwargs):
     if 'connection' in kwargs:
         conn =  kwargs.pop('connection')
     else:
         conn = duckdb.connect(":default:")
-    return conn.from_df(df).distinct(*args, **kwargs)
+    return conn.from_df(df).distinct(**kwargs)
 _exported_symbols.append('distinct')
 
 def write_csv(df, *args, **kwargs):
@@ -591,52 +591,52 @@ def write_csv(df, *args, **kwargs):
     return conn.from_df(df).write_csv(*args, **kwargs)
 _exported_symbols.append('write_csv')
 
-def aggregate(df, *args, **kwargs):
+def aggregate(df, aggr_expr, group_expr = "", **kwargs):
     if 'connection' in kwargs:
         conn =  kwargs.pop('connection')
     else:
         conn = duckdb.connect(":default:")
-    return conn.from_df(df).aggregate(*args, **kwargs)
+    return conn.from_df(df).aggregate(aggr_expr, group_expr, **kwargs)
 _exported_symbols.append('aggregate')
 
-def alias(df, *args, **kwargs):
+def alias(df, alias, **kwargs):
     if 'connection' in kwargs:
         conn =  kwargs.pop('connection')
     else:
         conn = duckdb.connect(":default:")
-    return conn.from_df(df).set_alias(*args, **kwargs)
+    return conn.from_df(df).set_alias(alias, **kwargs)
 _exported_symbols.append('alias')
 
-def filter(df, *args, **kwargs):
+def filter(df, filter_expr, **kwargs):
     if 'connection' in kwargs:
         conn =  kwargs.pop('connection')
     else:
         conn = duckdb.connect(":default:")
-    return conn.from_df(df).filter(*args, **kwargs)
+    return conn.from_df(df).filter(filter_expr, **kwargs)
 _exported_symbols.append('filter')
 
-def limit(df, *args, **kwargs):
+def limit(df, n, offset = 0, **kwargs):
     if 'connection' in kwargs:
         conn =  kwargs.pop('connection')
     else:
         conn = duckdb.connect(":default:")
-    return conn.from_df(df).limit(*args, **kwargs)
+    return conn.from_df(df).limit(n, offset, **kwargs)
 _exported_symbols.append('limit')
 
-def order(df, *args, **kwargs):
+def order(df, order_expr, **kwargs):
     if 'connection' in kwargs:
         conn =  kwargs.pop('connection')
     else:
         conn = duckdb.connect(":default:")
-    return conn.from_df(df).order(*args, **kwargs)
+    return conn.from_df(df).order(order_expr, **kwargs)
 _exported_symbols.append('order')
 
-def query_df(df, *args, **kwargs):
+def query_df(df, virtual_table_name, sql_query, **kwargs):
     if 'connection' in kwargs:
         conn =  kwargs.pop('connection')
     else:
         conn = duckdb.connect(":default:")
-    return conn.from_df(df).query(*args, **kwargs)
+    return conn.from_df(df).query(virtual_table_name, sql_query, **kwargs)
 _exported_symbols.append('query_df')
 
 def description(**kwargs):

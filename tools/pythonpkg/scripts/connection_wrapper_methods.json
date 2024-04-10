@@ -3,20 +3,14 @@
         "name": "project",
         "args": [
             {
-                "name": "*args",
-                "type": "Any"
+                "name": "project_expr",
+                "type": "str"
             }
         ],
         "return": "DuckDBPyRelation"
     },
     {
         "name": "distinct",
-        "args": [
-            {
-                "name": "*args",
-                "type": "Any"
-            }
-        ],
         "return": "DuckDBPyRelation"
     },
     {
@@ -33,8 +27,13 @@
         "name": "aggregate",
         "args": [
             {
-                "name": "*args",
-                "type": "Any"
+                "name": "aggr_expr",
+                "type": "str"
+            },
+            {
+                "name": "group_expr",
+                "type" : "str",
+				"default": "\"\""
             }
         ],
         "return": "DuckDBPyRelation"
@@ -43,8 +42,8 @@
         "name": "alias",
         "args": [
             {
-                "name": "*args",
-                "type": "Any"
+                "name": "alias",
+                "type": "str"
             }
         ],
         "return": "DuckDBPyRelation"
@@ -53,8 +52,8 @@
         "name": "filter",
         "args": [
             {
-                "name": "*args",
-                "type": "Any"
+                "name": "filter_expr",
+                "type": "str"
             }
         ],
         "return": "DuckDBPyRelation"
@@ -63,8 +62,13 @@
         "name": "limit",
         "args": [
             {
-                "name": "*args",
-                "type": "Any"
+                "name": "n",
+                "type": "int"
+            },
+            {
+                "name": "offset",
+                "type": "int",
+                "default": "0"
             }
         ],
         "return": "DuckDBPyRelation"
@@ -73,8 +77,8 @@
         "name": "order",
         "args": [
             {
-                "name": "*args",
-                "type": "Any"
+                "name": "order_expr",
+                "type": "str"
             }
         ],
         "return": "DuckDBPyRelation"
@@ -83,8 +87,12 @@
         "name": "query_df",
         "args": [
             {
-                "name": "*args",
-                "type": "Any"
+                "name": "virtual_table_name",
+                "type": "str"
+            },
+            {
+                "name": "sql_query",
+                "type": "str"
             }
         ],
         "return": "DuckDBPyRelation"
