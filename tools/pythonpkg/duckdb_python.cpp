@@ -71,8 +71,7 @@ static py::list PyTokenize(const string &query) {
 }
 
 static void InitializeConnectionMethods(py::module_ &m) {
-	// We define these "wrapper" methods inside of C++ because they are overloaded
-	// every other wrapper method is defined inside of __init__.py
+	// We define these "wrapper" methods manually because they are overloaded
 	m.def(
 	    "arrow",
 	    [](idx_t rows_per_batch, shared_ptr<DuckDBPyConnection> conn) -> duckdb::pyarrow::Table {
