@@ -60,7 +60,7 @@ typedef void (*set_global_function_t)(DatabaseInstance *db, DBConfig &config, co
 typedef void (*set_local_function_t)(ClientContext &context, const Value &parameter);
 typedef void (*reset_global_function_t)(DatabaseInstance *db, DBConfig &config);
 typedef void (*reset_local_function_t)(ClientContext &context);
-typedef Value (*get_setting_function_t)(ClientContext &context);
+typedef Value (*get_setting_function_t)(const ClientContext &context);
 
 struct ConfigurationOption {
 	const char *name;
