@@ -1,20 +1,17 @@
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/collate_catalog_entry.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/decimal.hpp"
+#include "duckdb/function/function_binder.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/catalog/catalog_entry/collate_catalog_entry.hpp"
-#include "duckdb/common/string_util.hpp"
-
-#include "duckdb/function/scalar/string_functions.hpp"
-
-#include "duckdb/common/types/decimal.hpp"
-
-#include "duckdb/main/config.hpp"
-#include "duckdb/catalog/catalog.hpp"
-#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
@@ -198,6 +195,36 @@ LogicalType ExpressionBinder::GetExpressionReturnType(const Expression &expr) {
 	return expr.return_type;
 }
 
+static inline void TryResolveJSONComparison(ExpressionBinder &binder, ComparisonExpression &expr, idx_t depth) {
+	auto left_sql_type = ExpressionBinder::GetExpressionReturnType(*BoundExpression::GetExpression(*expr.left));
+	auto right_sql_type = ExpressionBinder::GetExpressionReturnType(*BoundExpression::GetExpression(*expr.right));
+
+	if (!left_sql_type.IsJSONType() && !right_sql_type.IsJSONType()) {
+		return; // neither is JSON, not applicable
+	}
+
+	auto &other_type = left_sql_type.IsJSONType() ? right_sql_type : left_sql_type;
+	if (other_type.IsJSONType() ||
+	    (other_type.id() != LogicalTypeId::VARCHAR && other_type.id() != LogicalTypeId::STRING_LITERAL)) {
+		return; // other type is also JSON, or non-VARCHAR/STRING_LITERAL
+	}
+
+	// use json_extract_string on the JSON
+	auto &json_expr = left_sql_type.IsJSONType() ? expr.left : expr.right;
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(std::move(json_expr));
+	children.push_back(make_uniq<ConstantExpression>("$"));
+	json_expr = make_uniq_base<ParsedExpression, FunctionExpression>("json_extract_string", std::move(children));
+
+	ErrorData error;
+	binder.BindChild(json_expr, depth, error);
+	if (error.HasError()) {
+		// this shouldn't happen, because the child has already been bound,
+		// and binding json_extract_string with the const argument should always succeed
+		throw InternalException("Unable to bind child in TryResolveJSONComparison");
+	}
+}
+
 BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t depth) {
 	// first try to bind the children of the case expression
 	ErrorData error;
@@ -207,11 +234,14 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 		return BindResult(std::move(error));
 	}
 
+	TryResolveJSONComparison(*this, expr, depth);
+
 	// the children have been successfully resolved
 	auto &left = BoundExpression::GetExpression(*expr.left);
 	auto &right = BoundExpression::GetExpression(*expr.right);
 	auto left_sql_type = ExpressionBinder::GetExpressionReturnType(*left);
 	auto right_sql_type = ExpressionBinder::GetExpressionReturnType(*right);
+
 	// cast the input types to the same type
 	// now obtain the result type of the input types
 	LogicalType input_type;
