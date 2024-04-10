@@ -468,7 +468,7 @@
 	{
 		"name": "table",
 		"function": "Table",
-		"docs": "Create a relation object for the name'd table",
+		"docs": "Create a relation object for the named table",
 		"args": [
 			{
 				"name": "table_name"
@@ -478,7 +478,7 @@
 	{
 		"name": "view",
 		"function": "View",
-		"docs": "Create a relation object for the name'd view",
+		"docs": "Create a relation object for the named view",
 		"args": [
 			{
 				"name": "view_name"
@@ -498,7 +498,7 @@
 	{
 		"name": "table_function",
 		"function": "TableFunction",
-		"docs": "Create a relation object from the name'd table function with given parameters",
+		"docs": "Create a relation object from the named table function with given parameters",
 		"args": [
 			{
 				"name": "name"
