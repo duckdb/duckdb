@@ -104,3 +104,12 @@ if (NOT WIN32)
             GIT_TAG 1116fb580edd3e26e675436dbdbdf4a0aa5e456e
             )
 endif()
+
+
+################# VSS
+duckdb_extension_load(vss
+        LOAD_TESTS
+        GIT_URL https://github.com/duckdb/duckdb_vss
+        GIT_TAG f03fe75e16dd67e404d6325d4f901d6958504730
+        TEST_DIR test/sql
+    )
