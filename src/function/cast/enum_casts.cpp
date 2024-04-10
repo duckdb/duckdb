@@ -7,43 +7,26 @@ namespace duckdb {
 
 template <class SRC_TYPE, class RES_TYPE>
 bool EnumEnumCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-
-	auto &str_vec = EnumType::GetValuesInsertOrder(source.GetType());
-	auto str_vec_ptr = FlatVector::GetData<string_t>(str_vec);
-
+	auto &enum_dictionary = EnumType::GetValuesInsertOrder(source.GetType());
+	auto dictionary_data = FlatVector::GetData<string_t>(enum_dictionary);
 	auto res_enum_type = result.GetType();
 
-	UnifiedVectorFormat vdata;
-	source.ToUnifiedFormat(count, vdata);
-
-	auto source_data = UnifiedVectorFormat::GetData<SRC_TYPE>(vdata);
-	auto source_sel = vdata.sel;
-	auto source_mask = vdata.validity;
-
-	auto result_data = FlatVector::GetData<RES_TYPE>(result);
-	auto &result_mask = FlatVector::Validity(result);
-
 	VectorTryCastData vector_cast_data(result, parameters);
-	for (idx_t i = 0; i < count; i++) {
-		auto src_idx = source_sel->get_index(i);
-		if (!source_mask.RowIsValid(src_idx)) {
-			result_mask.SetInvalid(i);
-			continue;
-		}
-		auto key = EnumType::GetPos(res_enum_type, str_vec_ptr[source_data[src_idx]]);
-		if (key == -1) {
-			// key doesn't exist on result enum
-			if (!parameters.error_message) {
-				result_data[i] = HandleVectorCastError::Operation<RES_TYPE>(
-				    CastExceptionText<SRC_TYPE, RES_TYPE>(source_data[src_idx]), result_mask, i, vector_cast_data);
-			} else {
-				result_mask.SetInvalid(i);
-			}
-			continue;
-		}
-		result_data[i] = UnsafeNumericCast<RES_TYPE>(key);
-	}
+	UnaryExecutor::ExecuteWithNulls<SRC_TYPE, RES_TYPE>(
+	    source, result, count, [&](SRC_TYPE value, ValidityMask &mask, idx_t row_idx) {
+		    auto key = EnumType::GetPos(res_enum_type, dictionary_data[value]);
+		    if (key == -1) {
+			    if (!parameters.error_message) {
+				    return HandleVectorCastError::Operation<RES_TYPE>(CastExceptionText<SRC_TYPE, RES_TYPE>(value),
+				                                                      mask, row_idx, vector_cast_data);
+			    } else {
+				    mask.SetInvalid(row_idx);
+			    }
+			    return RES_TYPE();
+		    } else {
+			    return UnsafeNumericCast<RES_TYPE>(key);
+		    }
+	    });
 	return vector_cast_data.all_converted;
 }
 
@@ -65,27 +48,9 @@ template <class SRC>
 static bool EnumToVarcharCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &enum_dictionary = EnumType::GetValuesInsertOrder(source.GetType());
 	auto dictionary_data = FlatVector::GetData<string_t>(enum_dictionary);
-	auto result_data = FlatVector::GetData<string_t>(result);
-	auto &result_mask = FlatVector::Validity(result);
 
-	UnifiedVectorFormat vdata;
-	source.ToUnifiedFormat(count, vdata);
-
-	auto source_data = UnifiedVectorFormat::GetData<SRC>(vdata);
-	for (idx_t i = 0; i < count; i++) {
-		auto source_idx = vdata.sel->get_index(i);
-		if (!vdata.validity.RowIsValid(source_idx)) {
-			result_mask.SetInvalid(i);
-			continue;
-		}
-		auto enum_idx = source_data[source_idx];
-		result_data[i] = dictionary_data[enum_idx];
-	}
-	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	} else {
-		result.SetVectorType(VectorType::FLAT_VECTOR);
-	}
+	UnaryExecutor::Execute<SRC, string_t>(source, result, count,
+	                                      [&](SRC enum_idx) { return dictionary_data[enum_idx]; });
 	return true;
 }
 

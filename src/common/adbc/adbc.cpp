@@ -235,16 +235,11 @@ AdbcStatusCode ConnectionGetTableSchema(struct AdbcConnection *connection, const
 		SetError(error, "Connection is not set");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	if (db_schema == nullptr) {
+	if (db_schema == nullptr || strlen(db_schema) == 0) {
 		// if schema is not set, we use the default schema
 		db_schema = "main";
 	}
-	if (catalog != nullptr && strlen(catalog) > 0) {
-		// In DuckDB this is the name of the database, not sure what's the expected functionality here, so for now,
-		// scream.
-		SetError(error, "Catalog Name is not used in DuckDB. It must be set to nullptr or an empty string");
-		return ADBC_STATUS_NOT_IMPLEMENTED;
-	} else if (table_name == nullptr) {
+	if (table_name == nullptr) {
 		SetError(error, "AdbcConnectionGetTableSchema: must provide table_name");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	} else if (strlen(table_name) == 0) {
@@ -254,9 +249,10 @@ AdbcStatusCode ConnectionGetTableSchema(struct AdbcConnection *connection, const
 	ArrowArrayStream arrow_stream;
 
 	std::string query = "SELECT * FROM ";
-	if (strlen(db_schema) > 0) {
-		query += std::string(db_schema) + ".";
+	if (catalog != nullptr && strlen(catalog) > 0) {
+		query += std::string(catalog) + ".";
 	}
+	query += std::string(db_schema) + ".";
 	query += std::string(table_name) + " LIMIT 0;";
 
 	auto success = QueryInternal(connection, &arrow_stream, query.c_str(), error);
@@ -983,57 +979,312 @@ AdbcStatusCode StatementSetOption(struct AdbcStatement *statement, const char *k
 AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth, const char *catalog,
                                     const char *db_schema, const char *table_name, const char **table_type,
                                     const char *column_name, struct ArrowArrayStream *out, struct AdbcError *error) {
-	if (catalog != nullptr) {
-		if (strcmp(catalog, "duckdb") == 0) {
-			SetError(error, "catalog must be NULL or 'duckdb'");
-			return ADBC_STATUS_INVALID_ARGUMENT;
-		}
-	}
-
 	if (table_type != nullptr) {
 		SetError(error, "Table types parameter not yet supported");
 		return ADBC_STATUS_NOT_IMPLEMENTED;
 	}
+
+	std::string catalog_filter = catalog ? catalog : "%";
+	std::string db_schema_filter = db_schema ? db_schema : "%";
+	std::string table_name_filter = table_name ? table_name : "%";
+	std::string column_name_filter = column_name ? column_name : "%";
+
 	std::string query;
 	switch (depth) {
 	case ADBC_OBJECT_DEPTH_CATALOGS:
-		SetError(error, "ADBC_OBJECT_DEPTH_CATALOGS not yet supported");
-		return ADBC_STATUS_NOT_IMPLEMENTED;
+		// Return metadata on catalogs.
+		query = duckdb::StringUtil::Format(R"(
+				WITH filtered_schemata AS (
+					SELECT
+						catalog_name,
+						schema_name,
+					FROM
+						information_schema.schemata
+					WHERE catalog_name NOT IN ('system', 'temp') AND schema_name NOT IN ('information_schema', 'pg_catalog')
+				)
+				SELECT
+					catalog_name,
+					[]::STRUCT(
+						db_schema_name VARCHAR,
+						db_schema_tables STRUCT(
+							table_name VARCHAR,
+							table_type VARCHAR,
+							table_columns STRUCT(
+								column_name VARCHAR,
+								ordinal_position INTEGER,
+								remarks VARCHAR,
+								xdbc_data_type SMALLINT,
+								xdbc_type_name VARCHAR,
+								xdbc_column_size INTEGER,
+								xdbc_decimal_digits SMALLINT,
+								xdbc_num_prec_radix SMALLINT,
+								xdbc_nullable SMALLINT,
+								xdbc_column_def VARCHAR,
+								xdbc_sql_data_type SMALLINT,
+								xdbc_datetime_sub SMALLINT,
+								xdbc_char_octet_length INTEGER,
+								xdbc_is_nullable VARCHAR,
+								xdbc_scope_catalog VARCHAR,
+								xdbc_scope_schema VARCHAR,
+								xdbc_scope_table VARCHAR,
+								xdbc_is_autoincrement BOOLEAN,
+								xdbc_is_generatedcolumn BOOLEAN
+							)[],
+							table_constraints STRUCT(
+								constraint_name VARCHAR,
+								constraint_type VARCHAR,
+								constraint_column_names VARCHAR[],
+								constraint_column_usage STRUCT(fk_catalog VARCHAR, fk_db_schema VARCHAR, fk_table VARCHAR, fk_column_name VARCHAR)[]
+							)[]
+						)[]
+					)[] catalog_db_schemas
+				FROM
+					filtered_schemata
+				WHERE catalog_name LIKE '%s'
+				GROUP BY catalog_name
+				)",
+		                                   catalog_filter);
+		break;
 	case ADBC_OBJECT_DEPTH_DB_SCHEMAS:
 		// Return metadata on catalogs and schemas.
 		query = duckdb::StringUtil::Format(R"(
-				SELECT table_schema db_schema_name
-				FROM information_schema.columns
-				WHERE table_schema LIKE '%s' AND table_name LIKE '%s' AND column_name LIKE '%s' ;
+				WITH filtered_schemata AS (
+					SELECT
+						catalog_name,
+						schema_name,
+					FROM
+						information_schema.schemata
+					WHERE catalog_name NOT IN ('system', 'temp') AND schema_name NOT IN ('information_schema', 'pg_catalog')
+				),
+				db_schemas AS (
+					SELECT
+						*
+					FROM
+						filtered_schemata
+					WHERE schema_name LIKE '%s'
+				)
+
+				SELECT
+					catalog_name,
+					LIST({
+						db_schema_name: dbs.schema_name,
+						db_schema_tables: []::STRUCT(
+							table_name VARCHAR,
+							table_type VARCHAR,
+							table_columns STRUCT(
+								column_name VARCHAR,
+								ordinal_position INTEGER,
+								remarks VARCHAR,
+								xdbc_data_type SMALLINT,
+								xdbc_type_name VARCHAR,
+								xdbc_column_size INTEGER,
+								xdbc_decimal_digits SMALLINT,
+								xdbc_num_prec_radix SMALLINT,
+								xdbc_nullable SMALLINT,
+								xdbc_column_def VARCHAR,
+								xdbc_sql_data_type SMALLINT,
+								xdbc_datetime_sub SMALLINT,
+								xdbc_char_octet_length INTEGER,
+								xdbc_is_nullable VARCHAR,
+								xdbc_scope_catalog VARCHAR,
+								xdbc_scope_schema VARCHAR,
+								xdbc_scope_table VARCHAR,
+								xdbc_is_autoincrement BOOLEAN,
+								xdbc_is_generatedcolumn BOOLEAN
+							)[],
+							table_constraints STRUCT(
+								constraint_name VARCHAR,
+								constraint_type VARCHAR,
+								constraint_column_names VARCHAR[],
+								constraint_column_usage STRUCT(fk_catalog VARCHAR, fk_db_schema VARCHAR, fk_table VARCHAR, fk_column_name VARCHAR)[]
+							)[]
+						)[],
+					}) FILTER (dbs.schema_name IS NOT null) AS catalog_db_schemas
+				FROM
+					filtered_schemata
+				LEFT JOIN db_schemas dbs
+				USING (catalog_name)
+				WHERE catalog_name LIKE '%s'
+				GROUP BY catalog_name
 				)",
-		                                   db_schema ? db_schema : "%", table_name ? table_name : "%",
-		                                   column_name ? column_name : "%");
+		                                   db_schema_filter, catalog_filter);
 		break;
 	case ADBC_OBJECT_DEPTH_TABLES:
 		// Return metadata on catalogs, schemas, and tables.
 		query = duckdb::StringUtil::Format(R"(
-				SELECT table_schema db_schema_name, LIST(table_schema_list) db_schema_tables
-				FROM (
-					SELECT table_schema, { table_name : table_name} table_schema_list
-					FROM information_schema.columns
-					WHERE table_schema LIKE '%s' AND table_name LIKE '%s' AND column_name LIKE '%s'  GROUP BY table_schema, table_name
-					) GROUP BY table_schema;
+				WITH filtered_schemata AS (
+					SELECT
+						catalog_name,
+						schema_name,
+					FROM
+						information_schema.schemata
+					WHERE catalog_name NOT IN ('system', 'temp') AND schema_name NOT IN ('information_schema', 'pg_catalog')
+				),
+				tables AS (
+					SELECT
+						table_catalog catalog_name,
+						table_schema schema_name,
+						LIST({
+							table_name: table_name,
+							table_type: table_type,
+							table_columns: []::STRUCT(
+								column_name VARCHAR,
+								ordinal_position INTEGER,
+								remarks VARCHAR,
+								xdbc_data_type SMALLINT,
+								xdbc_type_name VARCHAR,
+								xdbc_column_size INTEGER,
+								xdbc_decimal_digits SMALLINT,
+								xdbc_num_prec_radix SMALLINT,
+								xdbc_nullable SMALLINT,
+								xdbc_column_def VARCHAR,
+								xdbc_sql_data_type SMALLINT,
+								xdbc_datetime_sub SMALLINT,
+								xdbc_char_octet_length INTEGER,
+								xdbc_is_nullable VARCHAR,
+								xdbc_scope_catalog VARCHAR,
+								xdbc_scope_schema VARCHAR,
+								xdbc_scope_table VARCHAR,
+								xdbc_is_autoincrement BOOLEAN,
+								xdbc_is_generatedcolumn BOOLEAN
+							)[],
+							table_constraints: []::STRUCT(
+								constraint_name VARCHAR,
+								constraint_type VARCHAR,
+								constraint_column_names VARCHAR[],
+								constraint_column_usage STRUCT(fk_catalog VARCHAR, fk_db_schema VARCHAR, fk_table VARCHAR, fk_column_name VARCHAR)[]
+							)[],
+						}) db_schema_tables
+					FROM information_schema.tables
+					WHERE table_name LIKE '%s'
+					GROUP BY table_catalog, table_schema
+				),
+				db_schemas AS (
+					SELECT
+						catalog_name,
+						schema_name,
+						db_schema_tables,
+					FROM filtered_schemata fs
+					LEFT JOIN tables t
+					USING (catalog_name, schema_name)
+					WHERE schema_name LIKE '%s'
+				)
+
+				SELECT
+					catalog_name,
+					LIST({
+						db_schema_name: dbs.schema_name,
+						db_schema_tables: db_schema_tables,
+					}) FILTER (dbs.schema_name is not null) AS catalog_db_schemas
+				FROM
+					filtered_schemata
+				LEFT JOIN db_schemas dbs
+				USING (catalog_name)
+				WHERE catalog_name LIKE '%s'
+				GROUP BY catalog_name
 				)",
-		                                   db_schema ? db_schema : "%", table_name ? table_name : "%",
-		                                   column_name ? column_name : "%");
+		                                   table_name_filter, db_schema_filter, catalog_filter);
 		break;
 	case ADBC_OBJECT_DEPTH_COLUMNS:
 		// Return metadata on catalogs, schemas, tables, and columns.
 		query = duckdb::StringUtil::Format(R"(
-				SELECT table_schema db_schema_name, LIST(table_schema_list) db_schema_tables
-				FROM (
-					SELECT table_schema, { table_name : table_name, table_columns : LIST({column_name : column_name, ordinal_position : ordinal_position + 1, remarks : ''})} table_schema_list
+				WITH filtered_schemata AS (
+					SELECT
+						catalog_name,
+						schema_name,
+					FROM
+						information_schema.schemata
+					WHERE catalog_name NOT IN ('system', 'temp') AND schema_name NOT IN ('information_schema', 'pg_catalog')
+				),
+				columns AS (
+					SELECT
+						table_catalog,
+						table_schema,
+						table_name,
+						LIST({
+							column_name: column_name,
+							ordinal_position: ordinal_position,
+							remarks : '',
+							xdbc_data_type: NULL::SMALLINT,
+							xdbc_type_name: NULL::VARCHAR,
+							xdbc_column_size: NULL::INTEGER,
+							xdbc_decimal_digits: NULL::SMALLINT,
+							xdbc_num_prec_radix: NULL::SMALLINT,
+							xdbc_nullable: NULL::SMALLINT,
+							xdbc_column_def: NULL::VARCHAR,
+							xdbc_sql_data_type: NULL::SMALLINT,
+							xdbc_datetime_sub: NULL::SMALLINT,
+							xdbc_char_octet_length: NULL::INTEGER,
+							xdbc_is_nullable: NULL::VARCHAR,
+							xdbc_scope_catalog: NULL::VARCHAR,
+							xdbc_scope_schema: NULL::VARCHAR,
+							xdbc_scope_table: NULL::VARCHAR,
+							xdbc_is_autoincrement: NULL::BOOLEAN,
+							xdbc_is_generatedcolumn: NULL::BOOLEAN,
+						}) table_columns
 					FROM information_schema.columns
-					WHERE table_schema LIKE '%s' AND table_name LIKE '%s' AND column_name LIKE '%s' GROUP BY table_schema, table_name
-					) GROUP BY table_schema;
+					WHERE column_name LIKE '%s'
+					GROUP BY table_catalog, table_schema, table_name
+				),
+				constraints AS (
+					SELECT
+						table_catalog,
+						table_schema,
+						table_name,
+						LIST(
+							{
+								constraint_name: constraint_name,
+								constraint_type: constraint_type,
+								constraint_column_names: []::VARCHAR[],
+								constraint_column_usage: []::STRUCT(fk_catalog VARCHAR, fk_db_schema VARCHAR, fk_table VARCHAR, fk_column_name VARCHAR)[],
+							}
+						) table_constraints
+					FROM information_schema.table_constraints
+					GROUP BY table_catalog, table_schema, table_name
+				),
+				tables AS (
+					SELECT
+						table_catalog catalog_name,
+						table_schema schema_name,
+						LIST({
+							table_name: table_name,
+							table_type: table_type,
+							table_columns: table_columns,
+							table_constraints: table_constraints,
+						}) db_schema_tables
+					FROM information_schema.tables
+					LEFT JOIN columns
+					USING (table_catalog, table_schema, table_name)
+					LEFT JOIN constraints
+					USING (table_catalog, table_schema, table_name)
+					WHERE table_name LIKE '%s'
+					GROUP BY table_catalog, table_schema
+				),
+				db_schemas AS (
+					SELECT
+						catalog_name,
+						schema_name,
+						db_schema_tables,
+					FROM filtered_schemata fs
+					LEFT JOIN tables t
+					USING (catalog_name, schema_name)
+					WHERE schema_name LIKE '%s'
+				)
+
+				SELECT
+					catalog_name,
+					LIST({
+						db_schema_name: dbs.schema_name,
+						db_schema_tables: db_schema_tables,
+					}) FILTER (dbs.schema_name is not null) AS catalog_db_schemas
+				FROM
+					filtered_schemata
+				LEFT JOIN db_schemas dbs
+				USING (catalog_name)
+				WHERE catalog_name LIKE '%s'
+				GROUP BY catalog_name
 				)",
-		                                   db_schema ? db_schema : "%", table_name ? table_name : "%",
-		                                   column_name ? column_name : "%");
+		                                   column_name_filter, table_name_filter, db_schema_filter, catalog_filter);
 		break;
 	default:
 		SetError(error, "Invalid value of Depth");

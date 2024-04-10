@@ -16,6 +16,7 @@ body:
             * [duckdb-wasm](https://github.com/duckdb/duckdb-wasm/issues/new)
             * [go-duckdb](https://github.com/marcboeker/go-duckdb/issues/new)
           * Extensions:
+            * [Arrow extension](https://github.com/duckdb/duckdb_arrow/issues/new)
             * [AWS extension](https://github.com/duckdb/duckdb_aws/issues/new)
             * [Azure extension](https://github.com/duckdb/duckdb_azure/issues/new)
             * [Iceberg extension](https://github.com/duckdb/duckdb_iceberg/issues/new)
@@ -23,6 +24,8 @@ body:
             * [Postgres scanner](https://github.com/duckdb/postgres_scanner/issues/new)
             * [Spatial extension](https://github.com/duckdb/duckdb_spatial/issues/new)
             * [SQLite scanner](https://github.com/duckdb/sqlite_scanner/issues/new)
+          * Connectors:
+            * [dbt-duckdb](https://github.com/duckdb/dbt-duckdb)
 
         If none of the above repositories are applicable, feel free to raise it in this one
 
@@ -86,25 +89,42 @@ body:
       value: |
         If the above is not given and is not obvious from your GitHub profile page, we might close your issue without further review. Please refer to the [reasoning behind this rule](https://berthub.eu/articles/posts/anonymous-help/) if you have questions.
 
-        # Before Submitting
+        # Before Submitting:
 
   - type: dropdown
     attributes:
-      label: Have you tried this on the latest [nightly build](https://duckdb.org/docs/installation/?version=main)?
+      label: What is the latest build you tested with? If possible, we recommend testing with the latest nightly build.
       description: |
-        * **Python**: `pip install duckdb --upgrade --pre`
-        * **R**: `install.packages('duckdb', repos=c('https://duckdb.r-universe.dev', 'https://cloud.r-project.org'))`
-        * **Other Platforms**: You can find links to binaries [here](https://duckdb.org/docs/installation/) or compile from source.
+        Visit the [installation page](https://duckdb.org/docs/installation/) for instructions.
       options:
-        - I have tested with a nightly build
-        - I have tested with a release build (and could not test with a nightly build)
         - I have not tested with any build
+        - I have tested with a stable release
+        - I have tested with a nightly build
+        - I have tested with a source build
+    validations:
+      required: true
+
+  - type: dropdown
+    attributes:
+      label: Did you include all relevant data sets for reproducing the issue?
+      options:
+        - "No - Other reason (please specify in the issue body)"
+        - "No - I cannot share the data sets because they are confidential"
+        - "No - I cannot easily share my data sets due to their large size"
+        - "Not applicable - the reproduction does not require a data set"
+        - "Yes"
+      default: 0
     validations:
       required: true
 
   - type: checkboxes
     attributes:
-      label: Have you tried the steps to reproduce? Do they include all relevant data and configuration? Does the issue you report still appear there?
+      label: Did you include all code required to reproduce the issue?
       options:
         - label: Yes, I have
-          required: true
+
+  - type: checkboxes
+    attributes:
+      label: Did you include all relevant configuration (e.g., CPU architecture, Python version, Linux distribution) to reproduce the issue?
+      options:
+        - label: Yes, I have
