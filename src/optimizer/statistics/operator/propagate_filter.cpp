@@ -241,8 +241,12 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 			filter.expressions.erase(filter.expressions.begin() + i);
 			i--;
 			if (filter.expressions.empty()) {
-				// just break. The physical filter planner will plan a projection instead
-				// we don't remove the filter because it might have a projection map.
+				// if there is a projection map, we should keep the filter
+				// the physical planner will eventually skip the filter, but will keep
+				// the correct columns.
+				if (filter.projection_map.empty()) {
+					*node_ptr = std::move(filter.children[0]);
+				}
 				break;
 			}
 		} else if (ExpressionIsConstant(*condition, Value::BOOLEAN(false)) ||
