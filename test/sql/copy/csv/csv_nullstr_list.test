@@ -14,9 +14,26 @@ Pedro	31	1.73
 Mark	NULL	NULL
 Thijs	26	NULL
 
+# Test Quoted
+query III
+FROM read_csv('data/csv/null/multiple_quoted_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null']);
+----
+Pedro	31	1.73
+Mark	NULL	NULL
+Thijs	26	NULL
+
+query III
+FROM read_csv('data/csv/null/multiple_quoted_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null'], allow_quoted_nulls = false);
+----
+Pedro	31	1.73
+Mark	null	(empty)
+Thijs	26	none
+
+#allow_quoted_nulls
+
+# Test Null Strings equal to delim quote escape
 # Test From Copy
 
-# Test Quoted
 
 # Test where the last value is null over different strings
 
