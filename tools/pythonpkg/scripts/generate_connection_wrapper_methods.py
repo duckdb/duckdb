@@ -47,11 +47,18 @@ SPECIAL_METHODS = [
     {'name': 'query_df', 'args': [{'name': "*args", 'type': 'Any'}], 'return': 'DuckDBPyRelation'},
 ]
 
+READONLY_PROPERTIES = [
+    {'name': 'description', 'return': 'str'},
+    {'name': 'rowcount', 'return': 'int'},
+]
+
 connection_methods.extend(SPECIAL_METHODS)
+connection_methods.extend(READONLY_PROPERTIES)
 
 body = []
 
 SPECIAL_METHOD_NAMES = [x['name'] for x in SPECIAL_METHODS]
+READONLY_PROPERTY_NAMES = [x['name'] for x in READONLY_PROPERTIES]
 
 
 def generate_arguments(name, method) -> str:
@@ -70,13 +77,16 @@ def generate_arguments(name, method) -> str:
     return ', '.join(arguments)
 
 
-def generate_parameters(method) -> str:
+def generate_parameters(name, method) -> str:
+    if name in READONLY_PROPERTY_NAMES:
+        return ''
     arguments = []
     if 'args' in method:
         for arg in method['args']:
             arguments.append(f"{arg['name']}")
     arguments.append('**kwargs')
-    return ', '.join(arguments)
+    result = ', '.join(arguments)
+    return '(' + result + ')'
 
 
 def generate_function_call(name, method) -> str:
@@ -96,13 +106,16 @@ def generate_function_call(name, method) -> str:
 def create_definition(name, method) -> str:
     print(method)
     arguments = generate_arguments(name, method)
-    parameters = generate_parameters(method)
+    parameters = generate_parameters(name, method)
     function_call = generate_function_call(name, method)
 
     func = f"""
 def {name}({arguments}):
-    conn = __get_connection__(*kwargs)
-    return conn.{function_call}({parameters})
+    if 'connection' in kwargs:
+        conn =  kwargs.pop('connection')
+    else:
+        conn = duckdb.connect(":default:")
+    return conn.{function_call}{parameters}
 _exported_symbols.append('{name}')
 """
     return func
@@ -124,6 +137,9 @@ for method in connection_methods:
 
     for name in names:
         if name in written_methods:
+            continue
+        if name in ['arrow', 'df']:
+            # These methods are ambiguous and are handled in C++ code instead
             continue
         body.append(create_definition(name, method))
         written_methods.add(name)
