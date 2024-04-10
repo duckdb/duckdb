@@ -19,8 +19,8 @@ DROP TABLE lineitem;
 statement ok
 CREATE TABLE lineitem(l_orderkey INTEGER NOT NULL, l_partkey INTEGER NOT NULL, l_suppkey INTEGER NOT NULL, l_linenumber INTEGER NOT NULL, l_quantity DECIMAL(15,2) NOT NULL, l_extendedprice DECIMAL(15,2) NOT NULL, l_discount DECIMAL(15,2) NOT NULL, l_tax DECIMAL(15,2) NOT NULL, l_returnflag VARCHAR NOT NULL, l_linestatus VARCHAR NOT NULL, l_shipdate DATE NOT NULL, l_commitdate DATE NOT NULL, l_receiptdate DATE NOT NULL, l_shipinstruct VARCHAR NOT NULL, l_shipmode VARCHAR NOT NULL, l_comment VARCHAR NOT NULL);
 
-statement ok
-INSERT INTO lineitem FROM read_csv([
+query I
+select count(*) from read_csv([
 	'__TEST_DIR__/lineitem.csv.gz',
 	'__TEST_DIR__/lineitem.csv.gz',
 	'__TEST_DIR__/lineitem.csv.gz',
@@ -46,8 +46,5 @@ INSERT INTO lineitem FROM read_csv([
 	'__TEST_DIR__/lineitem.csv.gz',
 	'__TEST_DIR__/lineitem.csv.gz',
 ]);
-
-query I
-select count(*) from lineitem
 ----
 144029160
