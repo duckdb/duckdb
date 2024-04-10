@@ -13,6 +13,12 @@
 
 namespace duckdb {
 
+#ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
+static void WriteGarbageIntoBuffer(FileBuffer &buffer) {
+	memset(buffer.buffer, 0xa5, buffer.size); // 0xa5 is default memory in debug mode
+}
+#endif
+
 struct BufferAllocatorData : PrivateAllocatorData {
 	explicit BufferAllocatorData(StandardBufferManager &manager) : manager(manager) {
 	}
@@ -85,14 +91,20 @@ TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(MemoryTag ta
 
 shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(idx_t block_size) {
 	D_ASSERT(block_size < Storage::BLOCK_SIZE);
-	auto res = EvictBlocksOrThrow(MemoryTag::BASE_TABLE, block_size, nullptr, "could not allocate block of size %s%s",
-	                              StringUtil::BytesToHumanReadableString(block_size));
+	auto reservation =
+	    EvictBlocksOrThrow(MemoryTag::BASE_TABLE, block_size, nullptr, "could not allocate block of size %s%s",
+	                       StringUtil::BytesToHumanReadableString(block_size));
 
 	auto buffer = ConstructManagedBuffer(block_size, nullptr, FileBufferType::TINY_BUFFER);
 
 	// create a new block pointer for this block
-	return make_shared<BlockHandle>(*temp_block_manager, ++temporary_id, MemoryTag::BASE_TABLE, std::move(buffer),
-	                                false, block_size, std::move(res));
+	auto result = make_shared<BlockHandle>(*temp_block_manager, ++temporary_id, MemoryTag::BASE_TABLE,
+	                                       std::move(buffer), false, block_size, std::move(reservation));
+#ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
+	// Initialize the memory with garbage data
+	WriteGarbageIntoBuffer(*result->buffer);
+#endif
+	return result;
 }
 
 shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx_t block_size, bool can_destroy) {
@@ -115,27 +127,35 @@ BufferHandle StandardBufferManager::Allocate(MemoryTag tag, idx_t block_size, bo
 	shared_ptr<BlockHandle> local_block;
 	auto block_ptr = block ? block : &local_block;
 	*block_ptr = RegisterMemory(tag, block_size, can_destroy);
+#ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
+	// Initialize the memory with garbage data
+	WriteGarbageIntoBuffer(*(*block_ptr)->buffer);
+#endif
 	return Pin(*block_ptr);
 }
 
 void StandardBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) {
 	D_ASSERT(block_size >= Storage::BLOCK_SIZE);
-	lock_guard<mutex> lock(handle->lock);
+	unique_lock<mutex> lock(handle->lock);
 	D_ASSERT(handle->state == BlockState::BLOCK_LOADED);
 	D_ASSERT(handle->memory_usage == handle->buffer->AllocSize());
 	D_ASSERT(handle->memory_usage == handle->memory_charge.size);
 
 	auto req = handle->buffer->CalculateMemory(block_size);
-	int64_t memory_delta = (int64_t)req.alloc_size - handle->memory_usage;
+	int64_t memory_delta = NumericCast<int64_t>(req.alloc_size) - handle->memory_usage;
 
 	if (memory_delta == 0) {
 		return;
 	} else if (memory_delta > 0) {
 		// evict blocks until we have space to resize this block
+		// unlock the handle lock during the call to EvictBlocksOrThrow
+		lock.unlock();
 		auto reservation =
 		    EvictBlocksOrThrow(handle->tag, memory_delta, nullptr, "failed to resize block from %s to %s%s",
 		                       StringUtil::BytesToHumanReadableString(handle->memory_usage),
 		                       StringUtil::BytesToHumanReadableString(req.alloc_size));
+		lock.lock();
+
 		// EvictBlocks decrements 'current_memory' for us.
 		handle->memory_charge.Merge(std::move(reservation));
 	} else {
@@ -202,7 +222,7 @@ void StandardBufferManager::VerifyZeroReaders(shared_ptr<BlockHandle> &handle) {
 	auto replacement_buffer = make_uniq<FileBuffer>(Allocator::Get(db), handle->buffer->type,
 	                                                handle->memory_usage - Storage::BLOCK_HEADER_SIZE);
 	memcpy(replacement_buffer->buffer, handle->buffer->buffer, handle->buffer->size);
-	memset(handle->buffer->buffer, 0xa5, handle->buffer->size); // 0xa5 is default memory in debug mode
+	WriteGarbageIntoBuffer(*handle->buffer);
 	handle->buffer = std::move(replacement_buffer);
 #endif
 }

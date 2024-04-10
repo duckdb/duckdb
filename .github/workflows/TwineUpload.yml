@@ -34,13 +34,15 @@ jobs:
         shell: bash
         env:
           OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         run: |
+          TARGET=$(git describe --tags --long)
           # decide target for staging
-          if [ -z "$OVERRIDE_GIT_DESCRIBE" ]; then
-            TARGET=$(git describe --tags --abbrev=0)
-          else
-            TARGET="$OVERRIDE_GIT_DESCRIBE"
+          if [ "$OVERRIDE_GIT_DESCRIBE" ]; then
+            TARGET="$TARGET/$OVERRIDE_GIT_DESCRIBE"
           fi
+          cd tools/pythonpkg
           mkdir to_be_uploaded
           aws s3 cp --recursive "s3://duckdb-staging/$TARGET/$GITHUB_REPOSITORY/twine_upload" to_be_uploaded --region us-east-2
 
@@ -50,6 +52,7 @@ jobs:
           TWINE_PASSWORD: ${{ secrets.TWINE_TOKEN }}
         shell: bash
         run: |
+          cd tools/pythonpkg
           if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
             twine upload --non-interactive --disable-progress-bar --skip-existing to_be_uploaded/*
           fi

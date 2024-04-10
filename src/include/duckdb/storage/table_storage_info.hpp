@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/storage/block.hpp"
@@ -38,7 +39,7 @@ struct ColumnSegmentInfo {
 class TableStorageInfo {
 public:
 	//! The (estimated) cardinality of the table
-	idx_t cardinality = DConstants::INVALID_INDEX;
+	optional_idx cardinality;
 	//! Info of the indexes of a table
 	vector<IndexInfo> index_info;
 };

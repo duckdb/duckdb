@@ -66,7 +66,7 @@ unique_ptr<SecretEntry> CatalogSetSecretStorage::StoreSecret(unique_ptr<const Ba
 	secret_entry->temporary = !persistent;
 	secret_entry->secret->storage_mode = storage_name;
 	secret_entry->secret->persist_type = persistent ? SecretPersistType::PERSISTENT : SecretPersistType::TEMPORARY;
-	DependencyList l;
+	LogicalDependencyList l;
 	secrets->CreateEntry(GetTransactionOrDefault(transaction), secret_name, std::move(secret_entry), l);
 
 	auto secret_catalog_entry =
@@ -203,7 +203,13 @@ void LocalFileSecretStorage::WriteSecret(const BaseSecret &secret, OnCreateConfl
 		fs.RemoveFile(file_path);
 	}
 
-	auto file_writer = BufferedFileWriter(fs, file_path);
+	auto open_flags = FileFlags::FILE_FLAGS_WRITE;
+	// Ensure we are writing to a private file with 600 permission
+	open_flags |= FileFlags::FILE_FLAGS_PRIVATE;
+	// Ensure we overwrite anything that may have been placed there since our delete above
+	open_flags |= FileFlags::FILE_FLAGS_FILE_CREATE_NEW;
+
+	auto file_writer = BufferedFileWriter(fs, file_path, open_flags);
 
 	auto serializer = BinarySerializer(file_writer);
 	serializer.Begin();

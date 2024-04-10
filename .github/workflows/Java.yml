@@ -179,7 +179,7 @@ jobs:
         run: >
           python scripts/windows_ci.py
 
-          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DJDBC_DRIVER=1 -DBUILD_EXTENSIONS=json -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DBUILD_SHELL=0
+          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DJDBC_DRIVER=1 -DBUILD_EXTENSIONS=json -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DBUILD_SHELL=0 -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
 
           cmake --build . --config Release
       - name: Java Tests
@@ -253,6 +253,7 @@ jobs:
 
 
   java-combine:
+    if: ${{ inputs.override_git_describe == '' }}
     name: Java Combine
     runs-on: ubuntu-latest
     needs:

@@ -7,6 +7,9 @@ namespace duckdb {
 
 void CompressedMaterialization::CompressAggregate(unique_ptr<LogicalOperator> &op) {
 	auto &aggregate = op->Cast<LogicalAggregate>();
+	if (aggregate.grouping_sets.size() > 1) {
+		return; // FIXME: we should be able to compress here but for some reason the NULL statistics ain't right
+	}
 	auto &groups = aggregate.groups;
 	column_binding_set_t group_binding_set;
 	for (const auto &group : groups) {

@@ -78,11 +78,11 @@ Vector::Vector(Vector &other) : type(other.type) {
 	Reference(other);
 }
 
-Vector::Vector(Vector &other, const SelectionVector &sel, idx_t count) : type(other.type) {
+Vector::Vector(const Vector &other, const SelectionVector &sel, idx_t count) : type(other.type) {
 	Slice(other, sel, count);
 }
 
-Vector::Vector(Vector &other, idx_t offset, idx_t end) : type(other.type) {
+Vector::Vector(const Vector &other, idx_t offset, idx_t end) : type(other.type) {
 	Slice(other, offset, end);
 }
 
@@ -574,8 +574,8 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 			throw InternalException("FSST Vector with non-string datatype found!");
 		}
 		auto str_compressed = reinterpret_cast<string_t *>(data)[index];
-		Value result = FSSTPrimitives::DecompressValue(FSSTVector::GetDecoder(const_cast<Vector &>(*vector)),
-		                                               str_compressed.GetData(), str_compressed.GetSize());
+		Value result = FSSTPrimitives::DecompressValue(FSSTVector::GetDecoder(*vector), str_compressed.GetData(),
+		                                               str_compressed.GetSize());
 		return result;
 	}
 
@@ -776,8 +776,8 @@ string Vector::ToString(idx_t count) const {
 	case VectorType::FSST_VECTOR: {
 		for (idx_t i = 0; i < count; i++) {
 			string_t compressed_string = reinterpret_cast<string_t *>(data)[i];
-			Value val = FSSTPrimitives::DecompressValue(FSSTVector::GetDecoder(const_cast<Vector &>(*this)),
-			                                            compressed_string.GetData(), compressed_string.GetSize());
+			Value val = FSSTPrimitives::DecompressValue(FSSTVector::GetDecoder(*this), compressed_string.GetData(),
+			                                            compressed_string.GetSize());
 			retval += GetValue(i).ToString() + (i == count - 1 ? "" : ", ");
 		}
 	} break;
@@ -1672,7 +1672,7 @@ void FlatVector::SetNull(Vector &vector, idx_t idx, bool is_null) {
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
 	vector.validity.Set(idx, !is_null);
 	if (is_null) {
-		auto type = vector.GetType();
+		auto &type = vector.GetType();
 		auto internal_type = type.InternalType();
 		if (internal_type == PhysicalType::STRUCT) {
 			// set all child entries to null as well
@@ -2127,7 +2127,8 @@ const vector<unique_ptr<Vector>> &StructVector::GetEntries(const Vector &vector)
 //===--------------------------------------------------------------------===//
 // ListVector
 //===--------------------------------------------------------------------===//
-const Vector &ListVector::GetEntry(const Vector &vector) {
+template <class T>
+T &ListVector::GetEntryInternal(T &vector) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::LIST || vector.GetType().id() == LogicalTypeId::MAP);
 	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(vector);
@@ -2137,12 +2138,15 @@ const Vector &ListVector::GetEntry(const Vector &vector) {
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	D_ASSERT(vector.auxiliary);
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::LIST_BUFFER);
-	return vector.auxiliary->Cast<VectorListBuffer>().GetChild();
+	return vector.auxiliary->template Cast<VectorListBuffer>().GetChild();
+}
+
+const Vector &ListVector::GetEntry(const Vector &vector) {
+	return GetEntryInternal<const Vector>(vector);
 }
 
 Vector &ListVector::GetEntry(Vector &vector) {
-	const Vector &cvector = vector;
-	return const_cast<Vector &>(ListVector::GetEntry(cvector));
+	return GetEntryInternal<Vector>(vector);
 }
 
 void ListVector::Reserve(Vector &vector, idx_t required_capacity) {
@@ -2496,7 +2500,8 @@ UnionInvalidReason UnionVector::CheckUnionValidity(Vector &vector_p, idx_t count
 //===--------------------------------------------------------------------===//
 // ArrayVector
 //===--------------------------------------------------------------------===//
-const Vector &ArrayVector::GetEntry(const Vector &vector) {
+template <class T>
+T &ArrayVector::GetEntryInternal(T &vector) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::ARRAY);
 	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(vector);
@@ -2506,12 +2511,15 @@ const Vector &ArrayVector::GetEntry(const Vector &vector) {
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	D_ASSERT(vector.auxiliary);
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::ARRAY_BUFFER);
-	return vector.auxiliary->Cast<VectorArrayBuffer>().GetChild();
+	return vector.auxiliary->template Cast<VectorArrayBuffer>().GetChild();
+}
+
+const Vector &ArrayVector::GetEntry(const Vector &vector) {
+	return GetEntryInternal<const Vector>(vector);
 }
 
 Vector &ArrayVector::GetEntry(Vector &vector) {
-	const Vector &cvector = vector;
-	return const_cast<Vector &>(ArrayVector::GetEntry(cvector));
+	return GetEntryInternal<Vector>(vector);
 }
 
 idx_t ArrayVector::GetTotalSize(const Vector &vector) {

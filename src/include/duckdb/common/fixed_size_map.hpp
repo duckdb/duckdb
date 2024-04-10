@@ -15,13 +15,13 @@
 namespace duckdb {
 
 template <typename T>
-struct fixed_size_map_iterator_t;
+struct fixed_size_map_iterator_t; // NOLINT: match stl case
 
 template <typename T>
-struct const_fixed_size_map_iterator_t;
+struct const_fixed_size_map_iterator_t; // NOLINT: match stl case
 
 template <typename T>
-class fixed_size_map_t {
+class fixed_size_map_t { // NOLINT: match stl case
 	friend struct fixed_size_map_iterator_t<T>;
 	friend struct const_fixed_size_map_iterator_t<T>;
 
@@ -34,18 +34,18 @@ public:
 		resize(capacity);
 	}
 
-	idx_t size() const {
+	idx_t size() const { // NOLINT: match stl case
 		return count;
 	}
 
-	void resize(idx_t capacity_p) {
+	void resize(idx_t capacity_p) { // NOLINT: match stl case
 		capacity = capacity_p;
 		occupied = ValidityMask(capacity);
 		values = make_unsafe_uniq_array<T>(capacity + 1);
 		clear();
 	}
 
-	void clear() {
+	void clear() { // NOLINT: match stl case
 		count = 0;
 		occupied.SetAllInvalid(capacity);
 	}
@@ -62,23 +62,23 @@ public:
 		return values[key];
 	}
 
-	fixed_size_map_iterator_t<T> begin() {
+	fixed_size_map_iterator_t<T> begin() { // NOLINT: match stl case
 		return fixed_size_map_iterator_t<T>(begin_internal(), *this);
 	}
 
-	const_fixed_size_map_iterator_t<T> begin() const {
+	const_fixed_size_map_iterator_t<T> begin() const { // NOLINT: match stl case
 		return const_fixed_size_map_iterator_t<T>(begin_internal(), *this);
 	}
 
-	fixed_size_map_iterator_t<T> end() {
+	fixed_size_map_iterator_t<T> end() { // NOLINT: match stl case
 		return fixed_size_map_iterator_t<T>(capacity, *this);
 	}
 
-	const_fixed_size_map_iterator_t<T> end() const {
+	const_fixed_size_map_iterator_t<T> end() const { // NOLINT: match stl case
 		return const_fixed_size_map_iterator_t<T>(capacity, *this);
 	}
 
-	fixed_size_map_iterator_t<T> find(const idx_t &index) {
+	fixed_size_map_iterator_t<T> find(const idx_t &index) { // NOLINT: match stl case
 		if (occupied.RowIsValid(index)) {
 			return fixed_size_map_iterator_t<T>(index, *this);
 		} else {
@@ -86,7 +86,7 @@ public:
 		}
 	}
 
-	const_fixed_size_map_iterator_t<T> find(const idx_t &index) const {
+	const_fixed_size_map_iterator_t<T> find(const idx_t &index) const { // NOLINT: match stl case
 		if (occupied.RowIsValid(index)) {
 			return const_fixed_size_map_iterator_t<T>(index, *this);
 		} else {
@@ -95,7 +95,7 @@ public:
 	}
 
 private:
-	idx_t begin_internal() const {
+	idx_t begin_internal() const { // NOLINT: match stl case
 		idx_t index;
 		for (index = 0; index < capacity; index++) {
 			if (occupied.RowIsValid(index)) {

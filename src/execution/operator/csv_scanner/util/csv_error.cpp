@@ -16,7 +16,7 @@ CSVErrorHandler::CSVErrorHandler(bool ignore_errors_p) : ignore_errors(ignore_er
 void CSVErrorHandler::ThrowError(CSVError csv_error) {
 	std::ostringstream error;
 	if (PrintLineNumber(csv_error)) {
-		error << "CSV Error on Line: " << GetLine(csv_error.error_info) << std::endl;
+		error << "CSV Error on Line: " << GetLine(csv_error.error_info) << '\n';
 	}
 	error << csv_error.error_message;
 	switch (csv_error.type) {
@@ -106,24 +106,24 @@ CSVError CSVError::CastError(const CSVReaderOptions &options, string &column_nam
                              vector<Value> &row, LinesPerBoundary error_info, LogicalTypeId type) {
 	std::ostringstream error;
 	// Which column
-	error << "Error when converting column \"" << column_name << "\"." << std::endl;
+	error << "Error when converting column \"" << column_name << "\"." << '\n';
 	// What was the cast error
-	error << cast_error << std::endl;
+	error << cast_error << '\n';
 
-	error << "Column " << column_name << " is being converted as type " << LogicalTypeIdToString(type) << std::endl;
+	error << "Column " << column_name << " is being converted as type " << LogicalTypeIdToString(type) << '\n';
 	if (!options.WasTypeManuallySet(column_idx)) {
-		error << "This type was auto-detected from the CSV file." << std::endl;
-		error << "Possible solutions:" << std::endl;
+		error << "This type was auto-detected from the CSV file." << '\n';
+		error << "Possible solutions:" << '\n';
 		error << "* Override the type for this column manually by setting the type explicitly, e.g. types={'"
-		      << column_name << "': 'VARCHAR'}" << std::endl;
+		      << column_name << "': 'VARCHAR'}" << '\n';
 		error << "* Set the sample size to a larger value to enable the auto-detection to scan more values, e.g. "
 		         "sample_size=-1"
-		      << std::endl;
-		error << "* Use a COPY statement to automatically derive types from an existing table." << std::endl;
+		      << '\n';
+		error << "* Use a COPY statement to automatically derive types from an existing table." << '\n';
 	} else {
 		error << "This type was either manually set or derived from an existing table. Select a different type to "
 		         "correctly parse this column."
-		      << std::endl;
+		      << '\n';
 	}
 	error << options.ToString();
 
@@ -133,7 +133,7 @@ CSVError CSVError::CastError(const CSVReaderOptions &options, string &column_nam
 CSVError CSVError::LineSizeError(const CSVReaderOptions &options, idx_t actual_size, LinesPerBoundary error_info) {
 	std::ostringstream error;
 	error << "Maximum line size of " << options.maximum_line_size << " bytes exceeded. ";
-	error << "Actual Size:" << actual_size << " bytes." << std::endl;
+	error << "Actual Size:" << actual_size << " bytes." << '\n';
 	error << options.ToString();
 	return CSVError(error.str(), CSVErrorType::MAXIMUM_LINE_SIZE, error_info);
 }
@@ -141,8 +141,8 @@ CSVError CSVError::LineSizeError(const CSVReaderOptions &options, idx_t actual_s
 CSVError CSVError::SniffingError(string &file_path) {
 	std::ostringstream error;
 	// Which column
-	error << "Error when sniffing file \"" << file_path << "\"." << std::endl;
-	error << "CSV options could not be auto-detected. Consider setting parser options manually." << std::endl;
+	error << "Error when sniffing file \"" << file_path << "\"." << '\n';
+	error << "CSV options could not be auto-detected. Consider setting parser options manually." << '\n';
 	return CSVError(error.str(), CSVErrorType::SNIFFING, {});
 }
 
@@ -150,7 +150,7 @@ CSVError CSVError::NullPaddingFail(const CSVReaderOptions &options, LinesPerBoun
 	std::ostringstream error;
 	error << " The parallel scanner does not support null_padding in conjunction with quoted new lines. Please "
 	         "disable the parallel csv reader with parallel=false"
-	      << std::endl;
+	      << '\n';
 	// What were the options
 	error << options.ToString();
 	return CSVError(error.str(), CSVErrorType::NULLPADDED_QUOTED_NEW_VALUE, error_info);
@@ -159,8 +159,8 @@ CSVError CSVError::NullPaddingFail(const CSVReaderOptions &options, LinesPerBoun
 CSVError CSVError::UnterminatedQuotesError(const CSVReaderOptions &options, string_t *vector_ptr,
                                            idx_t vector_line_start, idx_t current_column, LinesPerBoundary error_info) {
 	std::ostringstream error;
-	error << "Value with unterminated quote found." << std::endl;
-	error << std::endl;
+	error << "Value with unterminated quote found." << '\n';
+	error << '\n';
 	// What were the options
 	error << options.ToString();
 	return CSVError(error.str(), CSVErrorType::UNTERMINATED_QUOTES, error_info);
@@ -171,8 +171,15 @@ CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, s
                                               LinesPerBoundary error_info) {
 	std::ostringstream error;
 	// How many columns were expected and how many were found
-	error << "Expected Number of Columns: " << options.dialect_options.num_cols << " Found: " << actual_columns
-	      << std::endl;
+	error << "Expected Number of Columns: " << options.dialect_options.num_cols << " Found: " << actual_columns << '\n';
+	error << '\n' << "Possible fixes:" << '\n';
+	if (!options.null_padding) {
+		error << "* Enable null padding (null_padding=true) to replace missing values with NULL" << '\n';
+	}
+	if (!options.ignore_errors) {
+		error << "* Enable ignore errors (ignore_errors=true) to skip this row" << '\n';
+	}
+	error << '\n';
 	// What were the options
 	error << options.ToString();
 	return CSVError(error.str(), CSVErrorType::INCORRECT_COLUMN_AMOUNT, error_info);
@@ -181,7 +188,7 @@ CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, s
 CSVError CSVError::InvalidUTF8(const CSVReaderOptions &options, LinesPerBoundary error_info) {
 	std::ostringstream error;
 	// How many columns were expected and how many were found
-	error << "Invalid unicode (byte sequence mismatch) detected." << std::endl;
+	error << "Invalid unicode (byte sequence mismatch) detected." << '\n';
 	// What were the options
 	error << options.ToString();
 	return CSVError(error.str(), CSVErrorType::INVALID_UNICODE, error_info);

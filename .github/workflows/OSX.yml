@@ -22,8 +22,6 @@ on:
       - '**'
       - '!main'
       - '!feature'
-    tags:
-      - '**'
     paths-ignore:
       - '**.md'
       - 'tools/**'
@@ -218,7 +216,7 @@ jobs:
             osx_arch: arm64
             duckdb_arch: osx_arm64
             vcpkg_triplet: arm64-osx
-            run_autoload_tests: ${{ inputs.skip_tests != 'true' }}
+            run_autoload_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
 
     env:
       DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}

@@ -15,12 +15,13 @@
 #include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/hugeint.hpp"
-#include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 #endif
 
+#include "lz4.hpp"
 #include "miniz_wrapper.hpp"
 #include "snappy.h"
 #include "zstd.h"
@@ -176,7 +177,7 @@ void RleBpEncoder::FinishWrite(WriteStream &writer) {
 ColumnWriter::ColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p, idx_t max_repeat,
                            idx_t max_define, bool can_have_nulls)
     : writer(writer), schema_idx(schema_idx), schema_path(std::move(schema_path_p)), max_repeat(max_repeat),
-      max_define(max_define), can_have_nulls(can_have_nulls), null_count(0) {
+      max_define(max_define), can_have_nulls(can_have_nulls) {
 }
 ColumnWriter::~ColumnWriter() {
 }
@@ -191,6 +192,7 @@ void ColumnWriter::CompressPage(MemoryStream &temp_writer, size_t &compressed_si
 		compressed_size = temp_writer.GetPosition();
 		compressed_data = temp_writer.GetData();
 		break;
+
 	case CompressionCodec::SNAPPY: {
 		compressed_size = duckdb_snappy::MaxCompressedLength(temp_writer.GetPosition());
 		compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
@@ -198,6 +200,15 @@ void ColumnWriter::CompressPage(MemoryStream &temp_writer, size_t &compressed_si
 		                           char_ptr_cast(compressed_buf.get()), &compressed_size);
 		compressed_data = compressed_buf.get();
 		D_ASSERT(compressed_size <= duckdb_snappy::MaxCompressedLength(temp_writer.GetPosition()));
+		break;
+	}
+	case CompressionCodec::LZ4_RAW: {
+		compressed_size = duckdb_lz4::LZ4_compressBound(temp_writer.GetPosition());
+		compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
+		compressed_size = duckdb_lz4::LZ4_compress_default(const_char_ptr_cast(temp_writer.GetData()),
+		                                                   char_ptr_cast(compressed_buf.get()),
+		                                                   temp_writer.GetPosition(), compressed_size);
+		compressed_data = compressed_buf.get();
 		break;
 	}
 	case CompressionCodec::GZIP: {
@@ -254,7 +265,7 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 				if (!can_have_nulls) {
 					throw IOException("Parquet writer: map key column is not allowed to contain NULL values");
 				}
-				null_count++;
+				state.null_count++;
 				state.definition_levels.push_back(null_value);
 			}
 			if (parent->is_empty.empty() || !parent->is_empty[current_index]) {
@@ -270,7 +281,7 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 				if (!can_have_nulls) {
 					throw IOException("Parquet writer: map key column is not allowed to contain NULL values");
 				}
-				null_count++;
+				state.null_count++;
 				state.definition_levels.push_back(null_value);
 			}
 		}
@@ -344,15 +355,18 @@ public:
 	~BasicColumnWriter() override = default;
 
 	//! We limit the uncompressed page size to 100MB
-	// The max size in Parquet is 2GB, but we choose a more conservative limit
+	//! The max size in Parquet is 2GB, but we choose a more conservative limit
 	static constexpr const idx_t MAX_UNCOMPRESSED_PAGE_SIZE = 100000000;
 	//! Dictionary pages must be below 2GB. Unlike data pages, there's only one dictionary page.
-	//  For this reason we go with a much higher, but still a conservative upper bound of 1GB;
+	//! For this reason we go with a much higher, but still a conservative upper bound of 1GB;
 	static constexpr const idx_t MAX_UNCOMPRESSED_DICT_PAGE_SIZE = 1e9;
+	//! If the dictionary has this many entries, but the compression ratio is still below 1,
+	//! we stop creating the dictionary
+	static constexpr const idx_t DICTIONARY_ANALYZE_THRESHOLD = 1e4;
 
-	// the maximum size a key entry in an RLE page takes
+	//! The maximum size a key entry in an RLE page takes
 	static constexpr const idx_t MAX_DICTIONARY_KEY_SIZE = sizeof(uint32_t);
-	// the size of encoding the string length
+	//! The size of encoding the string length
 	static constexpr const idx_t STRING_LENGTH_SIZE = sizeof(uint32_t);
 
 public:
@@ -614,7 +628,7 @@ void BasicColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t 
 void BasicColumnWriter::SetParquetStatistics(BasicColumnWriterState &state,
                                              duckdb_parquet::format::ColumnChunk &column_chunk) {
 	if (max_repeat == 0) {
-		column_chunk.meta_data.statistics.null_count = null_count;
+		column_chunk.meta_data.statistics.null_count = NumericCast<int64_t>(state.null_count);
 		column_chunk.meta_data.statistics.__isset.null_count = true;
 		column_chunk.meta_data.__isset.statistics = true;
 	}
@@ -1282,6 +1296,12 @@ public:
 
 	void Analyze(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) override {
 		auto &state = state_p.Cast<StringColumnWriterState>();
+		if (writer.DictionaryCompressionRatioThreshold() == NumericLimits<double>::Maximum() ||
+		    (state.dictionary.size() > DICTIONARY_ANALYZE_THRESHOLD && WontUseDictionary(state))) {
+			// Early out: compression ratio is less than the specified parameter
+			// after seeing more entries than the threshold
+			return;
+		}
 
 		idx_t vcount = parent ? parent->definition_levels.size() - state.definition_levels.size() : count;
 		idx_t parent_index = state.definition_levels.size();
@@ -1308,6 +1328,7 @@ public:
 					new_value_index++;
 					state.estimated_dict_page_size += value.GetSize() + MAX_DICTIONARY_KEY_SIZE;
 				}
+
 				// if the value changed, we will encode it in the page
 				if (last_value_index != found.first->second) {
 					// we will add the value index size later, when we know the total number of keys
@@ -1329,8 +1350,7 @@ public:
 
 		// check if a dictionary will require more space than a plain write, or if the dictionary page is going to
 		// be too large
-		if (state.estimated_dict_page_size > MAX_UNCOMPRESSED_DICT_PAGE_SIZE ||
-		    state.estimated_rle_pages_size + state.estimated_dict_page_size > state.estimated_plain_size) {
+		if (WontUseDictionary(state)) {
 			// clearing the dictionary signals a plain write
 			state.dictionary.clear();
 			state.key_bit_width = 0;
@@ -1445,6 +1465,23 @@ public:
 			auto strings = FlatVector::GetData<string_t>(vector);
 			return strings[index].GetSize();
 		}
+	}
+
+private:
+	bool WontUseDictionary(StringColumnWriterState &state) const {
+		return state.estimated_dict_page_size > MAX_UNCOMPRESSED_DICT_PAGE_SIZE ||
+		       DictionaryCompressionRatio(state) < writer.DictionaryCompressionRatioThreshold();
+	}
+
+	static double DictionaryCompressionRatio(StringColumnWriterState &state) {
+		// If any are 0, we just return a compression ratio of 1
+		if (state.estimated_plain_size == 0 || state.estimated_rle_pages_size == 0 ||
+		    state.estimated_dict_page_size == 0) {
+			return 1;
+		}
+		// Otherwise, plain size divided by compressed size
+		return double(state.estimated_plain_size) /
+		       double(state.estimated_rle_pages_size + state.estimated_dict_page_size);
 	}
 };
 
@@ -1685,7 +1722,7 @@ void StructColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	auto &state = state_p.Cast<StructColumnWriterState>();
 	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
 		// we add the null count of the struct to the null count of the children
-		child_writers[child_idx]->null_count += null_count;
+		state.child_states[child_idx]->null_count += state_p.null_count;
 		child_writers[child_idx]->FinalizeWrite(*state.child_states[child_idx]);
 	}
 }

@@ -24,6 +24,7 @@
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/common/error_data.hpp"
+#include "duckdb/common/enums/prepared_statement_mode.hpp"
 #include "duckdb/main/client_properties.hpp"
 #include "duckdb/main/client_context_state.hpp"
 #include "duckdb/main/settings.hpp"
@@ -166,7 +167,7 @@ public:
 	                                                 bool requires_valid_transaction = true);
 
 	//! Equivalent to CURRENT_SETTING(key) SQL function.
-	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const std::string &key, Value &result);
+	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const std::string &key, Value &result) const;
 
 	//! Returns the parser options for this client context
 	DUCKDB_API ParserOptions GetParserOptions() const;
@@ -215,14 +216,19 @@ private:
 	                                                                   unique_ptr<SQLStatement> statement,
 	                                                                   shared_ptr<PreparedStatementData> &prepared,
 	                                                                   const PendingQueryParameters &parameters);
-	unique_ptr<PendingQueryResult> PendingPreparedStatement(ClientContextLock &lock,
+	unique_ptr<PendingQueryResult> PendingPreparedStatement(ClientContextLock &lock, const string &query,
 	                                                        shared_ptr<PreparedStatementData> statement_p,
 	                                                        const PendingQueryParameters &parameters);
+	unique_ptr<PendingQueryResult> PendingPreparedStatementInternal(ClientContextLock &lock,
+	                                                                shared_ptr<PreparedStatementData> statement_p,
+	                                                                const PendingQueryParameters &parameters);
+	void CheckIfPreparedStatementIsExecutable(PreparedStatementData &statement);
 
 	//! Internally prepare a SQL statement. Caller must hold the context_lock.
 	shared_ptr<PreparedStatementData>
 	CreatePreparedStatement(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-	                        optional_ptr<case_insensitive_map_t<Value>> values = nullptr);
+	                        optional_ptr<case_insensitive_map_t<Value>> values = nullptr,
+	                        PreparedStatementMode mode = PreparedStatementMode::PREPARE_ONLY);
 	unique_ptr<PendingQueryResult> PendingStatementInternal(ClientContextLock &lock, const string &query,
 	                                                        unique_ptr<SQLStatement> statement,
 	                                                        const PendingQueryParameters &parameters);
@@ -251,6 +257,9 @@ private:
 
 	unique_ptr<PendingQueryResult> PendingQueryInternal(ClientContextLock &, const shared_ptr<Relation> &relation,
 	                                                    bool allow_stream_result);
+
+	void RebindPreparedStatement(ClientContextLock &lock, const string &query,
+	                             shared_ptr<PreparedStatementData> &prepared, const PendingQueryParameters &parameters);
 
 	template <class T>
 	unique_ptr<T> ErrorResult(ErrorData error, const string &query = string());

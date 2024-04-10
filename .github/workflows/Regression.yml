@@ -7,8 +7,6 @@ on:
       - '**'
       - '!main'
       - '!feature'
-    tags:
-      - '**'
     paths-ignore:
       - '**.md'
       - 'tools/**'
@@ -40,7 +38,6 @@ jobs:
  regression-test-benchmark-runner:
   name: Regression Tests
   runs-on: ubuntu-20.04
-  if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
   env:
     CC: gcc-10
     CXX: g++-10
@@ -132,10 +129,22 @@ jobs:
       run: |
         python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/csv.csv --verbose --threads=2
 
+    - name: Regression Test new micro benchmark
+      if: always()
+      shell: bash
+      run: |
+        git diff --name-only origin/main | (grep "benchmark/micro/*" || true) > .github/regression/updated_micro_benchmarks.csv
+        if [ $(wc -l < .github/regression/updated_micro_benchmarks.csv) -gt 0 ]; then
+          echo "Detected the following modified benchmarks. Running a regression test"
+          cat .github/regression/updated_micro_benchmarks.csv
+          python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/updated_micro_benchmarks.csv --verbose --threads=2
+        else
+          echo "No modified micro benchmarks"
+        fi
+
  regression-test-storage:
   name: Storage Size Regression Test
   runs-on: ubuntu-20.04
-  if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
   env:
     CC: gcc-10
     CXX: g++-10
@@ -217,7 +226,6 @@ jobs:
  regression-test-python:
   name: Regression Test (Python Client)
   runs-on: ubuntu-20.04
-  if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
   env:
     CC: gcc-10
     CXX: g++-10
@@ -285,7 +293,6 @@ jobs:
  regression-test-plan-cost:
   name: Regression Test Join Order Plan Cost
   runs-on: ubuntu-20.04
-  if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
   env:
     CC: gcc-10
     CXX: g++-10

@@ -217,6 +217,8 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 		}
 		return true;
 	}
+	lock_guard<mutex> l(state.lock);
+	scan_state.batch_index = state.batch_index;
 	return false;
 }
 
@@ -919,7 +921,7 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 	                                         merge_rows, state.row_start);
 	checkpoint_state.ScheduleTask(std::move(vacuum_task));
 	// skip vacuuming by the row groups we have merged
-	state.next_vacuum_idx = segment_idx + merge_count;
+	state.next_vacuum_idx = next_idx;
 	state.row_start += merge_rows;
 	return true;
 }

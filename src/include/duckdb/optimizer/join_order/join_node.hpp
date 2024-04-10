@@ -38,7 +38,7 @@ public:
 	//! Create a leaf node in the join tree
 	//! set cost to 0 for leaf nodes
 	//! cost will be the cost to *produce* an intermediate table
-	JoinNode(JoinRelationSet &set);
+	explicit JoinNode(JoinRelationSet &set);
 
 	bool operator==(const JoinNode &other) {
 		return other.set.ToString().compare(set.ToString()) == 0;

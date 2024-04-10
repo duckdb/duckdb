@@ -107,7 +107,7 @@ void StructStats::Deserialize(Deserializer &deserializer, BaseStatistics &base) 
 	auto &child_types = StructType::GetChildTypes(type);
 
 	deserializer.ReadList(200, "child_stats", [&](Deserializer::List &list, idx_t i) {
-		deserializer.Set<LogicalType &>(const_cast<LogicalType &>(child_types[i].second));
+		deserializer.Set<const LogicalType &>(child_types[i].second);
 		auto stat = list.ReadElement<BaseStatistics>();
 		base.child_stats[i].Copy(stat);
 		deserializer.Unset<LogicalType>();
