@@ -5,6 +5,7 @@
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/config.hpp"
@@ -804,8 +805,10 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 			T *target_ptr = result_data + result_offset + scanned;
 
 			for (idx_t i = 0; i < to_scan; i++) {
-				target_ptr[i] = (static_cast<T>(scan_state.current_group_offset + i) * scan_state.current_constant) +
-				                scan_state.current_frame_of_reference;
+				T multiplier;
+				auto success = TryCast::Operation<idx_t, T>(scan_state.current_group_offset + i, multiplier);
+				D_ASSERT(success);
+				target_ptr[i] = (multiplier * scan_state.current_constant) + scan_state.current_frame_of_reference;
 			}
 
 			scanned += to_scan;
@@ -890,16 +893,17 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 	}
 
 	if (scan_state.current_group.mode == BitpackingMode::CONSTANT_DELTA) {
+		T multiplier;
+		auto cast = TryCast::Operation<idx_t, T>(scan_state.current_group_offset, multiplier);
+		D_ASSERT(cast);
 #ifdef DEBUG
 		// overflow check
 		T result;
-		bool multiply = TryMultiplyOperator::Operation(static_cast<T>(scan_state.current_group_offset),
-		                                               scan_state.current_constant, result);
+		bool multiply = TryMultiplyOperator::Operation(multiplier, scan_state.current_constant, result);
 		bool add = TryAddOperator::Operation(result, scan_state.current_frame_of_reference, result);
 		D_ASSERT(multiply && add);
 #endif
-		*current_result_ptr = (static_cast<T>(scan_state.current_group_offset) * scan_state.current_constant) +
-		                      scan_state.current_frame_of_reference;
+		*current_result_ptr = (multiplier * scan_state.current_constant) + scan_state.current_frame_of_reference;
 		return;
 	}
 
