@@ -38,7 +38,7 @@ if (NOT MINGW)
     duckdb_extension_load(azure
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_azure
-            GIT_TAG 506b1fa0f3f892000130feac7a0e1de346095e80
+            GIT_TAG 4512a652479016d40d712f990cab9b9aab43d341
             APPLY_PATCHES
             )
 endif()
