@@ -36,9 +36,13 @@ with open(JSON_PATH, 'r') as json_file:
     connection_methods = json.load(json_file)
 
 body = []
-body.extend(['', ''])
 
-DEFAULT_ARGUMENT_MAP = {'True': 'true', 'False': 'false', 'None': 'py::none()'}
+DEFAULT_ARGUMENT_MAP = {
+    'True': 'true',
+    'False': 'false',
+    'None': 'py::none()',
+    'PythonUDFType.NATIVE': 'PythonUDFType::NATIVE',
+}
 
 
 def map_default(val):
