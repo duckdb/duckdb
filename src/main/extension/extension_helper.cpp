@@ -245,8 +245,7 @@ static ExtensionUpdateResult update_extension(DBConfig &config, FileSystem &fs, 
 		deserializer.End();
 
 		if (extension_install_info->mode == ExtensionInstallMode::REPOSITORY) {
-			result.repository = extension_install_info->repository;
-			D_ASSERT(StringUtil::StartsWith(extension_install_info->full_path, result.repository));
+			result.repository = ExtensionRepository::GetRepository(extension_install_info->repository_url);
 
 			// We force install the full url found in this file, throwing
 			try {

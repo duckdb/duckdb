@@ -2498,8 +2498,6 @@ const char* EnumUtil::ToChars<ExtensionInstallMode>(ExtensionInstallMode value) 
 	switch(value) {
 	case ExtensionInstallMode::REPOSITORY:
 		return "REPOSITORY";
-	case ExtensionInstallMode::LOCAL_FILE:
-		return "LOCAL_FILE";
 	case ExtensionInstallMode::CUSTOM_PATH:
 		return "CUSTOM_PATH";
 	default:
@@ -2511,9 +2509,6 @@ template<>
 ExtensionInstallMode EnumUtil::FromString<ExtensionInstallMode>(const char *value) {
 	if (StringUtil::Equals(value, "REPOSITORY")) {
 		return ExtensionInstallMode::REPOSITORY;
-	}
-	if (StringUtil::Equals(value, "LOCAL_FILE")) {
-		return ExtensionInstallMode::LOCAL_FILE;
 	}
 	if (StringUtil::Equals(value, "CUSTOM_PATH")) {
 		return ExtensionInstallMode::CUSTOM_PATH;

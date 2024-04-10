@@ -12,14 +12,16 @@ namespace duckdb {
 void ExtensionInstallInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<ExtensionInstallMode>(100, "mode", mode);
 	serializer.WritePropertyWithDefault<string>(101, "full_path", full_path);
-	serializer.WritePropertyWithDefault<string>(102, "repository", repository);
+	serializer.WritePropertyWithDefault<string>(102, "repository_url", repository_url);
+	serializer.WritePropertyWithDefault<string>(103, "version", version);
 }
 
 unique_ptr<ExtensionInstallInfo> ExtensionInstallInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<ExtensionInstallInfo>(new ExtensionInstallInfo());
 	deserializer.ReadProperty<ExtensionInstallMode>(100, "mode", result->mode);
 	deserializer.ReadPropertyWithDefault<string>(101, "full_path", result->full_path);
-	deserializer.ReadPropertyWithDefault<string>(102, "repository", result->repository);
+	deserializer.ReadPropertyWithDefault<string>(102, "repository_url", result->repository_url);
+	deserializer.ReadPropertyWithDefault<string>(103, "version", result->version);
 	return result;
 }
 

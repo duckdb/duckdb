@@ -49,9 +49,6 @@ struct ExtensionUpdateResult {
 
 class ExtensionHelper {
 public:
-	static constexpr const char *DEFAULT_REPOSITORY = "http://extensions.duckdb.org";
-	static constexpr const char *NIGHTLY_REPOSITORY = "http://nightly-extensions.duckdb.org";
-
 	static void LoadAllExtensions(DuckDB &db);
 
 	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension);

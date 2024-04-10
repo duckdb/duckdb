@@ -17,7 +17,12 @@
       },
       {
         "id": 102,
-        "name": "repository",
+        "name": "repository_url",
+        "type": "string"
+      },
+      {
+        "id": 103,
+        "name": "version",
         "type": "string"
       }
     ]

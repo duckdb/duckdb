@@ -116,12 +116,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 
 				info.install_mode = EnumUtil::ToString(extension_install_info->mode);
 				if (extension_install_info->mode == ExtensionInstallMode::REPOSITORY) {
-					auto resolved_repository = ExtensionRepository::TryConvertUrlToKnownRepository(extension_install_info->repository);
-					if (!resolved_repository.empty()) {
-						info.install_source = resolved_repository;
-					} else {
-						info.install_source = extension_install_info->repository;
-					}
+					info.install_source = ExtensionRepository::GetRepository(extension_install_info->repository_url);
 				} else {
 					info.install_source = extension_install_info->full_path;
 				}

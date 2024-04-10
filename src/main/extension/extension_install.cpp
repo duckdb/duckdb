@@ -5,6 +5,7 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/main/extension_install_info.hpp"
+#include "duckdb/common/local_file_system.hpp"
 
 #ifndef DISABLE_DUCKDB_REMOTE_INSTALL
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
@@ -191,7 +192,7 @@ static string ResolveRepository(optional_ptr<const DBConfig> db_config, const st
 	} else if (!custom_endpoint.empty()) {
 		return custom_endpoint;
 	}
-	return ExtensionHelper::DEFAULT_REPOSITORY;
+	return ExtensionRepository::DEFAULT_REPOSITORY_URL;
 }
 
 string ExtensionHelper::ExtensionUrlTemplate(optional_ptr<const DBConfig> db_config, const string &repository,
@@ -206,7 +207,7 @@ string ExtensionHelper::ExtensionUrlTemplate(optional_ptr<const DBConfig> db_con
 	string default_endpoint = DEFAULT_REPOSITORY;
 	versioned_path = versioned_path + ".wasm";
 #else
-	string default_endpoint = DEFAULT_REPOSITORY;
+	string default_endpoint = ExtensionRepository::DEFAULT_REPOSITORY_URL;
 	versioned_path = versioned_path + ".gz";
 #endif
 	string custom_endpoint = db_config ? db_config->options.custom_extension_repo : string();
@@ -254,10 +255,9 @@ static void WriteExtensionFiles(FileSystem &fs, const string &temp_path, const s
 }
 
 // Install an extension using a filesystem
-template <bool IS_LOCAL_FILESYSTEM>
 static void DirectInstallExtension(DBConfig &config, FileSystem &fs, const string &path, const string &temp_path,
                                    const string &extension_name, const string &local_extension_path,
-                                   bool force_install) {
+                                   bool force_install, const string &repository_url="") {
 	string file = fs.ConvertSeparators(path);
 	if (!fs.FileExists(file)) {
 		// check for non-gzipped variant
@@ -271,13 +271,21 @@ static void DirectInstallExtension(DBConfig &config, FileSystem &fs, const strin
 	auto in_buffer = ReadExtensionFileFromDisk(fs, file, file_size);
 
 	ExtensionInstallInfo info;
-	info.mode = IS_LOCAL_FILESYSTEM ? ExtensionInstallMode::LOCAL_FILE : ExtensionInstallMode::CUSTOM_PATH;
-	info.full_path = file;
+
+	if (repository_url.empty()) {
+		info.mode = ExtensionInstallMode::CUSTOM_PATH;
+		info.full_path = file;
+	} else {
+		info.mode = ExtensionInstallMode::REPOSITORY;
+		info.full_path = file;
+		info.repository_url = repository_url;
+	}
+
 	WriteExtensionFiles(fs, temp_path, local_extension_path, (void *)in_buffer.get(), file_size, force_install, info);
 }
 
 static void InstallFromHttpUrl(DBConfig &config, const string &url, const string &extension_name,
-                               const string &repository, const string &temp_path, const string &local_extension_path,
+                               const string &repository_url, const string &temp_path, const string &local_extension_path,
                                bool force_install) {
 	string no_http = StringUtil::Replace(url, "http://", "");
 
@@ -318,19 +326,20 @@ static void InstallFromHttpUrl(DBConfig &config, const string &url, const string
 	ExtensionInstallInfo info;
 	info.mode = ExtensionInstallMode::REPOSITORY;
 	info.full_path = url;
-	info.repository = repository;
+	info.repository_url = repository_url;
 
 	auto fs = FileSystem::CreateLocal();
 	WriteExtensionFiles(*fs, temp_path, local_extension_path, (void *)decompressed_body.data(),
 	                    decompressed_body.size(), force_install, info);
 }
 
-static void InstallFromRepository(DBConfig &config, const string &url, const string &extension_name,
-                                  const string &repository, const string &temp_path, const string &local_extension_path,
-                                  const string &version, bool force_install) {
-	string url_template = ExtensionHelper::ExtensionUrlTemplate(&config, repository, version);
+// Install an extension using a hand-rolled http request
+static void InstallFromHttpRepository(DBConfig &config, const string &url, const string &extension_name,
+                                        const string &repository_url, const string &temp_path, const string &local_extension_path,
+                                        const string &version, bool force_install) {
+	string url_template = ExtensionHelper::ExtensionUrlTemplate(&config, repository_url, version);
 	string generated_url = ExtensionHelper::ExtensionFinalizeUrlTemplate(url_template, extension_name);
-	return InstallFromHttpUrl(config, generated_url, extension_name, repository, temp_path, local_extension_path,
+	return InstallFromHttpUrl(config, generated_url, extension_name, repository_url, temp_path, local_extension_path,
 	                          force_install);
 }
 
@@ -356,10 +365,21 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs,
 		fs.RemoveFile(temp_path);
 	}
 
-	// Locally install the extension
-	if (ExtensionHelper::IsFullPath(extension) &&
-	    fs.GetSubsystem(extension).GetName() == "LocalFileSystem") { // TODO NAME not hardcoded
-		DirectInstallExtension<true>(config, fs, extension, temp_path, extension, local_extension_path, force_install);
+	// Resolve extension repository
+	auto repository_url = ResolveRepository(&config, repository);
+
+	// Install extension from local, direct url
+	if (ExtensionHelper::IsFullPath(extension) && !FileSystem::IsRemoteFile(extension)) {
+
+		DirectInstallExtension(config, fs, extension, temp_path, extension, local_extension_path, force_install);
+		return;
+	}
+
+	// Install extension from local url based on a repository (Note that this will install it as a local file)
+	if (ExtensionHelper::IsFullPath(repository_url) && !FileSystem::IsRemoteFile(repository_url)) {
+		string url_template = ExtensionHelper::ExtensionUrlTemplate(&config, repository, version);
+		string local_repo_path = ExtensionHelper::ExtensionFinalizeUrlTemplate(url_template, extension_name);
+		DirectInstallExtension(config, fs, local_repo_path, temp_path, extension, local_extension_path, force_install, repository_url);
 		return;
 	}
 
@@ -370,19 +390,16 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs,
 	// For files not supported by the LocalFileSystem; we can use any of DuckDB's filesystems to install it, with the
 	// exception of http files: these have custom handling to avoid requiring an extension for installation
 	if (IsFullPath(extension) && !StringUtil::StartsWith(extension, "http://")) {
-		DirectInstallExtension<false>(config, fs, extension, temp_path, extension, local_extension_path, force_install);
+		DirectInstallExtension(config, fs, extension, temp_path, extension, local_extension_path, force_install);
 		return;
 	}
-
-	// Default case -> install extension from repository
-	auto resolved_repository = ResolveRepository(&config, repository);
 
 	if (StringUtil::StartsWith(extension, "http://")) {
 		// Extension is a full http:// path
 		InstallFromHttpUrl(config, extension, extension_name, "", temp_path, local_extension_path, force_install);
 	} else {
-		// Extension is a regular repository
-		InstallFromRepository(config, extension, extension_name, resolved_repository, temp_path, local_extension_path,
+		// Extension is a regular remote repository
+		InstallFromHttpRepository(config, extension, extension_name, repository_url, temp_path, local_extension_path,
 		                      version, force_install);
 	}
 
