@@ -8,6 +8,7 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/main/extension_util.hpp"
+#include "duckdb/transaction/transaction.hpp"
 #endif
 
 #include "dbgen/dbgen.hpp"
@@ -51,14 +52,17 @@ static duckdb::unique_ptr<FunctionData> DbgenBind(ClientContext &context, TableF
 	if (result->children != 1 && result->step == -1) {
 		throw InvalidInputException("Step must be defined when children are defined");
 	}
-
+	if (input.binder) {
+		auto &catalog = Catalog::GetCatalog(context, result->catalog);
+		input.binder->properties.modified_databases.insert(catalog.GetName());
+	}
 	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");
 	return std::move(result);
 }
 
 static void DbgenFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (DBGenFunctionData &)*data_p.bind_data;
+	auto &data = data_p.bind_data->CastNoConst<DBGenFunctionData>();
 	if (data.finished) {
 		return;
 	}
@@ -92,7 +96,7 @@ static duckdb::unique_ptr<FunctionData> TPCHQueryBind(ClientContext &context, Ta
 }
 
 static void TPCHQueryFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (TPCHData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<TPCHData>();
 	idx_t tpch_queries = 22;
 	if (data.offset >= tpch_queries) {
 		// finished returning values
@@ -126,7 +130,7 @@ static duckdb::unique_ptr<FunctionData> TPCHQueryAnswerBind(ClientContext &conte
 }
 
 static void TPCHQueryAnswerFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (TPCHData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<TPCHData>();
 	idx_t tpch_queries = 22;
 	vector<double> scale_factors {0.01, 0.1, 1};
 	idx_t total_answers = tpch_queries * scale_factors.size();
