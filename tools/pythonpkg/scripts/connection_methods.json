@@ -14,7 +14,8 @@
 				"name": "filesystem",
 				"type": "str"
 			}
-		]
+		],
+		"return": "None"
 	},
 	{
 		"name": "unregister_filesystem",
@@ -25,7 +26,8 @@
 				"name": "name",
 				"type": "str"
 			}
-		]
+		],
+		"return": "None"
 	},
 	{
 		"name": "list_filesystems",
@@ -39,7 +41,8 @@
 		"docs": "Check if a filesystem with the provided name is currently registered",
 		"args": [
 			{
-				"name": "name"
+				"name": "name",
+				"type": "str"
 			}
 		],
 		"return": "bool"
@@ -130,7 +133,8 @@
 				"name": "size",
 				"type": "int"
 			}
-		]
+		],
+		"return": "DuckDBPyType"
 	},
 	{
 		"name": "list_type",
@@ -142,7 +146,8 @@
 				"type": "DuckDBPyType",
 				"allow_none": false
 			}
-		]
+		],
+		"return": "DuckDBPyType"
 	},
 	{
 		"name": "union_type",
@@ -154,7 +159,8 @@
 				"type": "DuckDBPyType",
 				"allow_none": false
 			}
-		]
+		],
+		"return": "DuckDBPyType"
 	},
 	{
 		"name": "string_type",
@@ -166,7 +172,8 @@
 				"type": "str",
 				"default": "\"\""
 			}
-		]
+		],
+		"return": "DuckDBPyType"
 	},
 	{
 		"name": "enum_type",
@@ -185,7 +192,8 @@
 				"name": "values",
 				"type": "List[Any]"
 			}
-		]
+		],
+		"return": "DuckDBPyType"
 	},
 	{
 		"name": "decimal_type",
@@ -200,7 +208,8 @@
 				"name": "scale",
 				"type": "int"
 			}
-		]
+		],
+		"return": "DuckDBPyType"
 	},
 	{
 		"name": ["struct_type", "row_type"],
@@ -211,7 +220,8 @@
 				"name": "fields",
 				"type": "Union[Dict[str, DuckDBPyType], List[str]]"
 			}
-		]
+		],
+		"return": "DuckDBPyType"
 	},
 	{
 		"name": "map_type",
@@ -220,18 +230,22 @@
 		"args": [
 			{
 				"name": "key",
-				"allow_none": false
+				"allow_none": false,
+				"type": "DuckDBPyType"
 			},
 			{
 				"name": "value",
-				"allow_none": false
+				"allow_none": false,
+				"type": "DuckDBPyType"
 			}
-		]
+		],
+		"return": "DuckDBPyType"
 	},
 	{
 		"name": "duplicate",
 		"function": "Cursor",
-		"docs": "Create a duplicate of the current connection"
+		"docs": "Create a duplicate of the current connection",
+		"return": "DuckDBPyConnection"
 	},
 	{
 		"name": "execute",
@@ -239,17 +253,21 @@
 		"docs": "Execute the given SQL query, optionally using prepared statements with parameters set",
 		"args": [
 			{
-				"name": "query"
+				"name": "query",
+				"type": "object"
 			},
 			{
 				"name": "parameters",
-				"default": "None"
+				"default": "None",
+				"type": "object"
 			},
 			{
 				"name": "multiple_parameter_sets",
-				"default": "false"
+				"default": "false",
+				"type": "bool"
 			}
-		]
+		],
+		"return": "DuckDBPyConnection"
 	},
 	{
 		"name": "executemany",
@@ -257,28 +275,34 @@
 		"docs": "Execute the given prepared statement multiple times using the list of parameter sets in parameters",
 		"args": [
 			{
-				"name": "query"
+				"name": "query",
+				"type": "object"
 			},
 			{
 				"name": "parameters",
-				"default": "None"
+				"default": "None",
+				"type": "object"
 			}
-		]
+		],
+		"return": "DuckDBPyConnection"
 	},
 	{
 		"name": "close",
 		"function": "Close",
-		"docs": "Close the connection"
+		"docs": "Close the connection",
+		"return": "None"
 	},
 	{
 		"name": "interrupt",
 		"function": "Interrupt",
-		"docs": "Interrupt pending operations"
+		"docs": "Interrupt pending operations",
+		"return": "None"
 	},
 	{
 		"name": "fetchone",
 		"function": "FetchOne",
-		"docs": "Fetch a single row from a result following execute"
+		"docs": "Fetch a single row from a result following execute",
+		"return": "Optional[tuple]"
 	},
 	{
 		"name": "fetchmany",
@@ -287,69 +311,56 @@
 		"args": [
 			{
 				"name": "size",
-				"default": "1"
+				"default": "1",
+				"type": "int"
 			}
-		]
+		],
+		"return": "List[Any]"
 	},
 	{
 		"name": "fetchall",
 		"function": "FetchAll",
-		"docs": "Fetch all rows from a result following execute"
+		"docs": "Fetch all rows from a result following execute",
+		"return": "List[Any]"
 	},
 	{
 		"name": "fetchnumpy",
 		"function": "FetchNumpy",
-		"docs": "Fetch a result as list of NumPy arrays following execute"
+		"docs": "Fetch a result as list of NumPy arrays following execute",
+		"return": "dict"
 	},
 	{
-		"name": "fetchdf",
+		"name": ["fetchdf", "fetch_df", "df"],
 		"function": "FetchDF",
 		"docs": "Fetch a result as DataFrame following execute()",
 		"kwargs": [
 			{
 				"name": "date_as_object",
-				"default": "false"
+				"default": "false",
+				"type": "bool"
 			}
-		]
-	},
-	{
-		"name": "fetch_df",
-		"function": "FetchDF",
-		"docs": "Fetch a result as DataFrame following execute()",
-		"kwargs": [
-			{
-				"name": "date_as_object",
-				"default": "false"
-			}
-		]
+		],
+		"return": "pandas.DataFrame"
 	},
 	{
 		"name": "fetch_df_chunk",
 		"function": "FetchDFChunk",
-		"docs": "Fetch a chunk of the result as Data.Frame following execute()",
+		"docs": "Fetch a chunk of the result as DataFrame following execute()",
 		"args": [
 			{
 				"name": "vectors_per_chunk",
-				"default": "1"
+				"default": "1",
+				"type": "int"
 			}
 		],
 		"kwargs": [
 			{
 				"name": "date_as_object",
-				"default": "false"
+				"default": "false",
+				"type": "bool"
 			}
-		]
-	},
-	{
-		"name": "df",
-		"function": "FetchDF",
-		"docs": "Fetch a result as DataFrame following execute()",
-		"kwargs": [
-			{
-				"name": "date_as_object",
-				"default": "false"
-			}
-		]
+		],
+		"return": "pandas.DataFrame"
 	},
 	{
 		"name": "pl",
@@ -358,20 +369,24 @@
 		"args": [
 			{
 				"name": "rows_per_batch",
-				"default": "1000000"
+				"default": "1000000",
+				"type": "int"
 			}
-		]
+		],
+		"return": "polars.DataFrame"
 	},
 	{
-		"name": "fetch_arrow_table",
+		"name": ["fetch_arrow_table", "arrow"],
 		"function": "FetchArrow",
 		"docs": "Fetch a result as Arrow table following execute()",
 		"args": [
 			{
 				"name": "rows_per_batch",
-				"default": "1000000"
+				"default": "1000000",
+				"type": "int"
 			}
-		]
+		],
+		"return": "pyarrow.lib.Table"
 	},
 	{
 		"name": "fetch_record_batch",
@@ -380,48 +395,41 @@
 		"args": [
 			{
 				"name": "rows_per_batch",
-				"default": "1000000"
+				"default": "1000000",
+				"type": "int"
 			}
-		]
-	},
-	{
-		"name": "arrow",
-		"function": "FetchArrow",
-		"docs": "Fetch a result as Arrow table following execute()",
-		"args": [
-			{
-				"name": "rows_per_batch",
-				"default": "1000000"
-			}
-		]
+		],
+		"return": "pyarrow.lib.RecordBatchReader"
 	},
 	{
 		"name": "torch",
 		"function": "FetchPyTorch",
-		"docs": "Fetch a result as dict of PyTorch Tensors following execute()"
-
+		"docs": "Fetch a result as dict of PyTorch Tensors following execute()",
+		"return": "dict"
 	},
 	{
 		"name": "tf",
 		"function": "FetchTF",
-		"docs": "Fetch a result as dict of TensorFlow Tensors following execute()"
-
+		"docs": "Fetch a result as dict of TensorFlow Tensors following execute()",
+		"return": "dict"
 	},
 	{
 		"name": "begin",
 		"function": "Begin",
-		"docs": "Start a new transaction"
-
+		"docs": "Start a new transaction",
+		"return": "DuckDBPyConnection"
 	},
 	{
 		"name": "commit",
 		"function": "Commit",
-		"docs": "Commit changes performed within a transaction"
+		"docs": "Commit changes performed within a transaction",
+		"return": "DuckDBPyConnection"
 	},
 	{
 		"name": "rollback",
 		"function": "Rollback",
-		"docs": "Roll back changes performed within a transaction"
+		"docs": "Roll back changes performed within a transaction",
+		"return": "DuckDBPyConnection"
 	},
 	{
 		"name": "append",
@@ -429,18 +437,22 @@
 		"docs": "Append the passed DataFrame to the named table",
 		"args": [
 			{
-				"name": "table_name"
+				"name": "table_name",
+				"type": "str"
 			},
 			{
-				"name": "df"
+				"name": "df",
+				"type": "pandas.DataFrame"
 			}
 		],
 		"kwargs": [
 			{
 				"name": "by_name",
-				"default": "false"
+				"default": "false",
+				"type": "bool"
 			}
-		]
+		],
+		"return": "DuckDBPyConnection"
 	},
 	{
 		"name": "register",
@@ -448,12 +460,15 @@
 		"docs": "Register the passed Python Object value for querying with a view",
 		"args": [
 			{
-				"name": "view_name"
+				"name": "view_name",
+				"type": "str"
 			},
 			{
-				"name": "python_object"
+				"name": "python_object",
+				"type": "object"
 			}
-		]
+		],
+		"return": "DuckDBPyConnection"
 	},
 	{
 		"name": "unregister",
@@ -461,9 +476,11 @@
 		"docs": "Unregister the view name",
 		"args": [
 			{
-				"name": "view_name"
+				"name": "view_name",
+				"type": "str"
 			}
-		]
+		],
+		"return": "DuckDBPyConnection"
 	},
 	{
 		"name": "table",
@@ -471,9 +488,11 @@
 		"docs": "Create a relation object for the named table",
 		"args": [
 			{
-				"name": "table_name"
+				"name": "table_name",
+				"type": "str"
 			}
-		]
+		],
+		"return": "DuckDBPyRelation"
 	},
 	{
 		"name": "view",
@@ -481,9 +500,11 @@
 		"docs": "Create a relation object for the named view",
 		"args": [
 			{
-				"name": "view_name"
+				"name": "view_name",
+				"type": "str"
 			}
-		]
+		],
+		"return": "DuckDBPyRelation"
 	},
 	{
 		"name": "values",
@@ -491,9 +512,11 @@
 		"docs": "Create a relation object from the passed values",
 		"args": [
 			{
-				"name": "values"
+				"name": "values",
+				"type": "List[Any]"
 			}
-		]
+		],
+		"return": "DuckDBPyRelation"
 	},
 	{
 		"name": "table_function",
@@ -501,13 +524,16 @@
 		"docs": "Create a relation object from the named table function with given parameters",
 		"args": [
 			{
-				"name": "name"
+				"name": "name",
+				"type": "str"
 			},
 			{
 				"name": "parameters",
-				"default": "None"
+				"default": "None",
+				"type": "object"
 			}
-		]
+		],
+		"return": "DuckDBPyRelation"
 	},
 	{
 		"name": "read_json",
@@ -515,31 +541,38 @@
 		"docs": "Create a relation object from the JSON file in 'name'",
 		"args": [
 			{
-				"name": "name"
+				"name": "name",
+				"type": "str"
 			}
 		],
 		"kwargs": [
 			{
 				"name": "columns",
-				"default": "None"
+				"default": "None",
+				"type": "Optional[Dict[str,str]]"
 			},
 			{
 				"name": "sample_size",
-				"default": "None"
+				"default": "None",
+				"type": "Optional[int]"
 			},
 			{
 				"name": "maximum_depth",
-				"default": "None"
+				"default": "None",
+				"type": "Optional[int]"
 			},
 			{
 				"name": "records",
-				"default": "None"
+				"default": "None",
+				"type": "Optional[str]"
 			},
 			{
 				"name": "format",
-				"default": "None"
+				"default": "None",
+				"type": "Optional[str]"
 			}
-		]
+		],
+		"return": "DuckDBPyRelation"
 	},
 	{
 		"name": "extract_statements",
@@ -547,9 +580,11 @@
 		"docs": "Parse the query string and extract the Statement object(s) produced",
 		"args": [
 			{
-				"name": "query"
+				"name": "query",
+				"type": "str"
 			}
-		]
+		],
+		"return": "List[Statement]"
 	},
 	{
 		"name": ["sql", "query", "from_query"],
@@ -557,119 +592,144 @@
 		"docs": "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, otherwise run the query as-is.",
 		"args": [
 			{
-				"name": "query"
+				"name": "query",
+				"type": "str"
 			}
 		],
 		"kwargs": [
 			{
 				"name": "alias",
-				"default": "\"\""
+				"default": "\"\"",
+				"type": "str"
 			},
 			{
 				"name": "params",
-				"default": "None"
+				"default": "None",
+				"type": "object"
 			}
-		]
+		],
+		"return": "DuckDBPyRelation"
 	},
-
 	{
 		"name": ["read_csv", "from_csv_auto"],
 		"function": "ReadCSV",
 		"docs": "Create a relation object from the CSV file in 'name'",
 		"args": [
 			{
-				"name": "name"
+				"name": "path_or_buffer",
+				"type": "Union[str, StringIO, TextIOBase]"
 			}
 		],
 		"kwargs": [
 			{
 				"name": "header",
-				"default": "None"
+				"default": "None",
+				"type": "Optional[bool | int]"
 			},
 			{
 				"name": "compression",
-				"default": "None"
+				"default": "None",
+				"type": "Optional[str]"
 			},
 			{
 				"name": "sep",
-				"default": "None"
+				"default": "None",
+				"type": "Optional[str]"
 			},
 			{
 				"name": "delimiter",
-				"default": "None"
+				"default": "None",
+				"type": "Optional[str]"
 			},
 			{
 				"name": "dtype",
-				"default": "None"
+				"default": "None",
+				"type": "Optional[Dict[str, str] | List[str]]"
 			},
 			{
 				"name": "na_values",
-				"default": "None"
+				"default": "None",
+				"type": "Optional[str]"
 			},
 			{
 				"name": "skiprows",
-				"default": "None"
+				"default": "None",
+				"type": "Optional[int]"
 			},
 			{
 				"name": "quotechar",
-				"default": "None"
+				"default": "None",
+				"type": "Optional[str]"
 			},
 			{
 				"name": "escapechar",
-				"default": "None"
+				"default": "None",
+				"type": "Optional[str]"
 			},
 			{
 				"name": "encoding",
-				"default": "None"
+				"default": "None",
+				"type": "Optional[str]"
 			},
 			{
 				"name": "parallel",
-				"default": "None"
+				"default": "None",
+				"type": "Optional[bool]"
 			},
 			{
 				"name": "date_format",
-				"default": "None"
+				"default": "None",
+				"type": "Optional[str]"
 			},
 			{
 				"name": "timestamp_format",
-				"default": "None"
+				"default": "None",
+				"type": "Optional[str]"
 			},
 			{
 				"name": "sample_size",
-				"default": "None"
+				"default": "None",
+				"type": "Optional[int]"
 			},
 			{
 				"name": "all_varchar",
-				"default": "None"
+				"default": "None",
+				"type": "Optional[bool]"
 			},
 			{
 				"name": "normalize_names",
-				"default": "None"
+				"default": "None",
+				"type": "Optional[bool]"
 			},
 			{
 				"name": "filename",
-				"default": "None"
+				"default": "None",
+				"type": "Optional[bool]"
 			},
 			{
 				"name": "null_padding",
-				"default": "None"
+				"default": "None",
+				"type": "Optional[bool]"
 			},
 			{
 				"name": "names",
-				"default": "None"
+				"default": "None",
+				"type": "Optional[List[str]]"
 			}
-		]
+		],
+		"return": "DuckDBPyRelation"
 	},
 	{
 		"name": "from_df",
 		"function": "FromDF",
-		"docs": "Create a relation object from the Data.Frame in df",
+		"docs": "Create a relation object from the DataFrame in df",
 		"args": [
 			{
 				"name": "df",
-				"default": "None"
+				"type": "pandas.DataFrame"
 			}
-		]
+		],
+		"return": "DuckDBPyRelation"
 	},
 	{
 		"name": "from_arrow",
@@ -677,9 +737,11 @@
 		"docs": "Create a relation object from an Arrow object",
 		"args": [
 			{
-				"name": "arrow_object"
+				"name": "arrow_object",
+				"type": "object"
 			}
-		]
+		],
+		"return": "DuckDBPyRelation"
 	},
 	{
 		"name": ["from_parquet", "read_parquet"],
@@ -687,35 +749,43 @@
 		"docs": "Create a relation object from the Parquet files in file_glob",
 		"args": [
 			{
-				"name": "file_glob"
+				"name": "file_glob",
+				"type": "str"
 			},
 			{
 				"name": "binary_as_string",
-				"default": "false"
+				"default": "false",
+				"type": "bool"
 			}
 		],
 		"kwargs": [
 			{
 				"name": "file_row_number",
-				"default": "false"
+				"default": "false",
+				"type": "bool"
 			},
 			{
 				"name": "filename",
-				"default": "false"
+				"default": "false",
+				"type": "bool"
 			},
 			{
 				"name": "hive_partitioning",
-				"default": "false"
+				"default": "false",
+				"type": "bool"
 			},
 			{
 				"name": "union_by_name",
-				"default": "false"
+				"default": "false",
+				"type": "bool"
 			},
 			{
 				"name": "compression",
-				"default": "None"
+				"default": "None",
+				"type": "str"
 			}
-		]
+		],
+		"return": "DuckDBPyRelation"
 	},
 	{
 		"name": ["from_parquet", "read_parquet"],
@@ -723,35 +793,43 @@
 		"docs": "Create a relation object from the Parquet files in file_globs",
 		"args": [
 			{
-				"name": "file_globs"
+				"name": "file_globs",
+				"type": "str"
 			},
 			{
 				"name": "binary_as_string",
-				"default": "false"
+				"default": "false",
+				"type": "bool"
 			}
 		],
 		"kwargs": [
 			{
 				"name": "file_row_number",
-				"default": "false"
+				"default": "false",
+				"type": "bool"
 			},
 			{
 				"name": "filename",
-				"default": "false"
+				"default": "false",
+				"type": "bool"
 			},
 			{
 				"name": "hive_partitioning",
-				"default": "false"
+				"default": "false",
+				"type": "bool"
 			},
 			{
 				"name": "union_by_name",
-				"default": "false"
+				"default": "false",
+				"type": "bool"
 			},
 			{
 				"name": "compression",
-				"default": "None"
+				"default": "None",
+				"type": "str"
 			}
-		]
+		],
+		"return": "DuckDBPyRelation"
 	},
 	{
 		"name": "from_substrait",
@@ -759,9 +837,11 @@
 		"docs": "Create a query object from protobuf plan",
 		"args": [
 			{
-				"name": "proto"
+				"name": "proto",
+				"type": "str"
 			}
-		]
+		],
+		"return": "DuckDBPyRelation"
 	},
 	{
 		"name": "get_substrait",
@@ -769,15 +849,18 @@
 		"docs": "Serialize a query to protobuf",
 		"args": [
 			{
-				"name": "query"
+				"name": "query",
+				"type": "str"
 			}
 		],
 		"kwargs": [
 			{
 				"name": "enable_optimizer",
-				"default": "True"
+				"default": "True",
+				"type": "bool"
 			}
-		]
+		],
+		"return": "str"
 	},
 	{
 		"name": "get_substrait_json",
@@ -785,15 +868,18 @@
 		"docs": "Serialize a query to protobuf on the JSON format",
 		"args": [
 			{
-				"name": "query"
+				"name": "query",
+				"type": "str"
 			}
 		],
 		"kwargs": [
 			{
 				"name": "enable_optimizer",
-				"default": "True"
+				"default": "True",
+				"type": "bool"
 			}
-		]
+		],
+		"return": "str"
 	},
 	{
 		"name": "from_substrait_json",
@@ -801,9 +887,11 @@
 		"docs": "Create a query object from a JSON protobuf plan",
 		"args": [
 			{
-				"name": "json"
+				"name": "json",
+				"type": "str"
 			}
-		]
+		],
+		"return": "DuckDBPyRelation"
 	},
 	{
 		"name": "get_table_names",
@@ -811,9 +899,11 @@
 		"docs": "Extract the required table names from a query",
 		"args": [
 			{
-				"name": "query"
+				"name": "query",
+				"type": "str"
 			}
-		]
+		],
+		"return": "List[str]"
 	},
 	{
 		"name": "install_extension",
@@ -821,15 +911,18 @@
 		"docs": "Install an extension by name",
 		"args": [
 			{
-				"name": "extension"
+				"name": "extension",
+				"type": "str"
 			}
 		],
 		"kwargs": [
 			{
 				"name": "force_install",
-				"default": "false"
+				"default": "false",
+				"type": "bool"
 			}
-		]
+		],
+		"return": "None"
 	},
 	{
 		"name": "load_extension",
@@ -837,8 +930,10 @@
 		"docs": "Load an installed extension",
 		"args": [
 			{
-				"name": "extension"
+				"name": "extension",
+				"type": "str"
 			}
-		]
+		],
+		"return": "None"
 	}
 ]
