@@ -99,7 +99,7 @@
     },
     {
         "name": "description",
-        "return": "str"
+        "return": "Optional[List[Any]]"
     },
     {
         "name": "rowcount",
