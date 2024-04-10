@@ -1,6 +1,6 @@
 # name: test/optimizer/topn/complex_top_n.test
-# description: topN 
-# group: [optimizer]
+# description: topN
+# group: [topn]
 
 statement ok
 SELECT SETSEED(0.42);

@@ -1,32 +1,48 @@
 # name: test/optimizer/arithmetic_simplification.test
-# description: topN 
+# description: Arithmetic simplification test
 # group: [optimizer]
 
 statement ok
-attach 'appian.duckdb' as appian;
+CREATE TABLE test(X INTEGER);
 
 statement ok
-use appian;
+PRAGMA explain_output = OPTIMIZED_ONLY;
 
-statement ok
-WITH CTE AS (
-  SELECT J1P, CUSTOMER_PRIORITY, CUSTOMER_ID FROM CUSTOMERVIEW
-  LEFT JOIN (
-    SELECT ORDER_CUSTOMERID, SUM(ORDERITEMVIEW.ORDERITEM_QUANTITY) AS J1P FROM ORDERVIEW
-    LEFT JOIN ORDERITEMVIEW ON (ORDERVIEW.ORDER_ID = ORDERITEMVIEW.ORDERITEM_ORDERID)
-    WHERE (ORDERVIEW.ORDER_ISEXPEDITEDSHIPPED IS TRUE)
-    GROUP BY ORDERVIEW.ORDER_CUSTOMERID
-  ) AS J1J ON (J1J.ORDER_CUSTOMERID = CUSTOMERVIEW.CUSTOMER_ID)
-  ORDER BY CUSTOMER_PRIORITY ASC
-  LIMIT 50 OFFSET 50
-) SELECT J1P, Q2P, Q3P FROM CTE
-LEFT JOIN (
-  SELECT ORDER_CUSTOMERID FROM ORDERVIEW
-) AS Q1J ON (Q1J.ORDER_CUSTOMERID = CTE.CUSTOMER_ID)
-LEFT JOIN (
-  SELECT CREDITCARD_CUSTOMERID AS Q2P FROM CREDITCARDVIEW
-) AS Q2J ON (Q2J.Q2P = CTE.CUSTOMER_ID)
-LEFT JOIN (
-  SELECT ORDER_CUSTOMERID Q3P FROM ORDERVIEW
-  LEFT JOIN ORDERITEMVIEW ON ORDERVIEW.ORDER_ID = ORDERITEM_ORDERID
-) AS Q3J ON (Q3J.Q3P = CTE.CUSTOMER_ID);
+# verify that nop arithmetic is flattened
+query I nosort xnorm
+EXPLAIN SELECT X FROM test
+----
+
+query I nosort xnorm
+EXPLAIN SELECT X+0 FROM test
+----
+
+query I nosort xnorm
+EXPLAIN SELECT 0+X FROM test
+----
+
+query I nosort xnorm
+EXPLAIN SELECT X-0 FROM test
+----
+
+query I nosort xnorm
+EXPLAIN SELECT X*1 FROM test
+----
+
+query I nosort xnorm
+EXPLAIN SELECT 1*X FROM test
+----
+
+query I nosort xnorm
+EXPLAIN SELECT X//1 FROM test
+----
+
+# division by zero results in a NULL
+query I nosort xnull
+EXPLAIN SELECT NULL FROM test
+----
+
+query I nosort xnull
+EXPLAIN SELECT X//0 FROM test
+----
+
