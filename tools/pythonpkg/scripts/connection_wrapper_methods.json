@@ -1,0 +1,100 @@
+[
+    {
+        "name": "project",
+        "args": [
+            {
+                "name": "*args",
+                "type": "Any"
+            }
+        ],
+        "return": "DuckDBPyRelation"
+    },
+    {
+        "name": "distinct",
+        "args": [
+            {
+                "name": "*args",
+                "type": "Any"
+            }
+        ],
+        "return": "DuckDBPyRelation"
+    },
+    {
+        "name": "write_csv",
+        "args": [
+            {
+                "name": "*args",
+                "type": "Any"
+            }
+        ],
+        "return": "None"
+    },
+    {
+        "name": "aggregate",
+        "args": [
+            {
+                "name": "*args",
+                "type": "Any"
+            }
+        ],
+        "return": "DuckDBPyRelation"
+    },
+    {
+        "name": "alias",
+        "args": [
+            {
+                "name": "*args",
+                "type": "Any"
+            }
+        ],
+        "return": "DuckDBPyRelation"
+    },
+    {
+        "name": "filter",
+        "args": [
+            {
+                "name": "*args",
+                "type": "Any"
+            }
+        ],
+        "return": "DuckDBPyRelation"
+    },
+    {
+        "name": "limit",
+        "args": [
+            {
+                "name": "*args",
+                "type": "Any"
+            }
+        ],
+        "return": "DuckDBPyRelation"
+    },
+    {
+        "name": "order",
+        "args": [
+            {
+                "name": "*args",
+                "type": "Any"
+            }
+        ],
+        "return": "DuckDBPyRelation"
+    },
+    {
+        "name": "query_df",
+        "args": [
+            {
+                "name": "*args",
+                "type": "Any"
+            }
+        ],
+        "return": "DuckDBPyRelation"
+    },
+    {
+        "name": "description",
+        "return": "str"
+    },
+    {
+        "name": "rowcount",
+        "return": "int"
+    }
+]

@@ -4,6 +4,7 @@ import json
 os.chdir(os.path.dirname(__file__))
 
 JSON_PATH = os.path.join("connection_methods.json")
+WRAPPER_JSON_PATH = os.path.join("connection_wrapper_methods.json")
 DUCKDB_INIT_FILE = os.path.join("..", "duckdb", "__init__.py")
 
 START_MARKER = "# START OF CONNECTION WRAPPER"
@@ -30,35 +31,25 @@ start_section = source_code[: start_index + 1]
 end_section = source_code[end_index:]
 # ---- Generate the definition code from the json ----
 
+methods = []
+
 # Read the JSON file
 with open(JSON_PATH, 'r') as json_file:
     connection_methods = json.load(json_file)
 
-# Artificial "wrapper" methods on pandas.DataFrames
-SPECIAL_METHODS = [
-    {'name': 'project', 'args': [{'name': "*args", 'type': 'Any'}], 'return': 'DuckDBPyRelation'},
-    {'name': 'distinct', 'args': [{'name': "*args", 'type': 'Any'}], 'return': 'DuckDBPyRelation'},
-    {'name': 'write_csv', 'args': [{'name': "*args", 'type': 'Any'}], 'return': 'None'},
-    {'name': 'aggregate', 'args': [{'name': "*args", 'type': 'Any'}], 'return': 'DuckDBPyRelation'},
-    {'name': 'alias', 'args': [{'name': "*args", 'type': 'Any'}], 'return': 'DuckDBPyRelation'},
-    {'name': 'filter', 'args': [{'name': "*args", 'type': 'Any'}], 'return': 'DuckDBPyRelation'},
-    {'name': 'limit', 'args': [{'name': "*args", 'type': 'Any'}], 'return': 'DuckDBPyRelation'},
-    {'name': 'order', 'args': [{'name': "*args", 'type': 'Any'}], 'return': 'DuckDBPyRelation'},
-    {'name': 'query_df', 'args': [{'name': "*args", 'type': 'Any'}], 'return': 'DuckDBPyRelation'},
-]
+with open(WRAPPER_JSON_PATH, 'r') as json_file:
+    wrapper_methods = json.load(json_file)
 
-READONLY_PROPERTIES = [
-    {'name': 'description', 'return': 'str'},
-    {'name': 'rowcount', 'return': 'int'},
-]
+methods.extend(connection_methods)
+methods.extend(wrapper_methods)
 
-connection_methods.extend(SPECIAL_METHODS)
-connection_methods.extend(READONLY_PROPERTIES)
+# On DuckDBPyConnection these are read_only_properties, they're basically functions without requiring () to invoke
+# that's not possible on 'duckdb' so it becomes a function call with no arguments (i.e duckdb.description())
+READONLY_PROPERTY_NAMES = ['description', 'rowcount']
 
-body = []
-
-SPECIAL_METHOD_NAMES = [x['name'] for x in SPECIAL_METHODS]
-READONLY_PROPERTY_NAMES = [x['name'] for x in READONLY_PROPERTIES]
+# These methods are not directly DuckDBPyConnection methods,
+# they first call 'from_df' and then call a method on the created DuckDBPyRelation
+SPECIAL_METHOD_NAMES = [x['name'] for x in wrapper_methods if x['name'] not in READONLY_PROPERTY_NAMES]
 
 
 def generate_arguments(name, method) -> str:
@@ -89,7 +80,7 @@ def generate_parameters(name, method) -> str:
     return '(' + result + ')'
 
 
-def generate_function_call(name, method) -> str:
+def generate_function_call(name) -> str:
     function_call = ''
     if name in SPECIAL_METHOD_NAMES:
         function_call += 'from_df(df).'
@@ -107,7 +98,7 @@ def create_definition(name, method) -> str:
     print(method)
     arguments = generate_arguments(name, method)
     parameters = generate_parameters(name, method)
-    function_call = generate_function_call(name, method)
+    function_call = generate_function_call(name)
 
     func = f"""
 def {name}({arguments}):
@@ -124,7 +115,8 @@ _exported_symbols.append('{name}')
 # We have "duplicate" methods, which are overloaded
 written_methods = set()
 
-for method in connection_methods:
+body = []
+for method in methods:
     if isinstance(method['name'], list):
         names = method['name']
     else:
