@@ -263,7 +263,7 @@
 			},
 			{
 				"name": "multiple_parameter_sets",
-				"default": "false",
+				"default": "False",
 				"type": "bool"
 			}
 		],
@@ -336,7 +336,7 @@
 		"kwargs": [
 			{
 				"name": "date_as_object",
-				"default": "false",
+				"default": "False",
 				"type": "bool"
 			}
 		],
@@ -356,7 +356,7 @@
 		"kwargs": [
 			{
 				"name": "date_as_object",
-				"default": "false",
+				"default": "False",
 				"type": "bool"
 			}
 		],
@@ -448,7 +448,7 @@
 		"kwargs": [
 			{
 				"name": "by_name",
-				"default": "false",
+				"default": "False",
 				"type": "bool"
 			}
 		],
@@ -754,29 +754,29 @@
 			},
 			{
 				"name": "binary_as_string",
-				"default": "false",
+				"default": "False",
 				"type": "bool"
 			}
 		],
 		"kwargs": [
 			{
 				"name": "file_row_number",
-				"default": "false",
+				"default": "False",
 				"type": "bool"
 			},
 			{
 				"name": "filename",
-				"default": "false",
+				"default": "False",
 				"type": "bool"
 			},
 			{
 				"name": "hive_partitioning",
-				"default": "false",
+				"default": "False",
 				"type": "bool"
 			},
 			{
 				"name": "union_by_name",
-				"default": "false",
+				"default": "False",
 				"type": "bool"
 			},
 			{
@@ -798,29 +798,29 @@
 			},
 			{
 				"name": "binary_as_string",
-				"default": "false",
+				"default": "False",
 				"type": "bool"
 			}
 		],
 		"kwargs": [
 			{
 				"name": "file_row_number",
-				"default": "false",
+				"default": "False",
 				"type": "bool"
 			},
 			{
 				"name": "filename",
-				"default": "false",
+				"default": "False",
 				"type": "bool"
 			},
 			{
 				"name": "hive_partitioning",
-				"default": "false",
+				"default": "False",
 				"type": "bool"
 			},
 			{
 				"name": "union_by_name",
-				"default": "false",
+				"default": "False",
 				"type": "bool"
 			},
 			{
@@ -918,7 +918,7 @@
 		"kwargs": [
 			{
 				"name": "force_install",
-				"default": "false",
+				"default": "False",
 				"type": "bool"
 			}
 		],

@@ -182,19 +182,19 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      py::arg("date_as_object") = false);
 	m.def("fetch_df", &DuckDBPyConnection::FetchDF, "Fetch a result as DataFrame following execute()", py::kw_only(),
 	      py::arg("date_as_object") = false);
-	m.def("fetch_df_chunk", &DuckDBPyConnection::FetchDFChunk,
-	      "Fetch a chunk of the result as Data.Frame following execute()", py::arg("vectors_per_chunk") = 1,
-	      py::kw_only(), py::arg("date_as_object") = false);
 	m.def("df", &DuckDBPyConnection::FetchDF, "Fetch a result as DataFrame following execute()", py::kw_only(),
 	      py::arg("date_as_object") = false);
+	m.def("fetch_df_chunk", &DuckDBPyConnection::FetchDFChunk,
+	      "Fetch a chunk of the result as DataFrame following execute()", py::arg("vectors_per_chunk") = 1,
+	      py::kw_only(), py::arg("date_as_object") = false);
 	m.def("pl", &DuckDBPyConnection::FetchPolars, "Fetch a result as Polars DataFrame following execute()",
 	      py::arg("rows_per_batch") = 1000000);
 	m.def("fetch_arrow_table", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
 	      py::arg("rows_per_batch") = 1000000);
-	m.def("fetch_record_batch", &DuckDBPyConnection::FetchRecordBatchReader,
-	      "Fetch an Arrow RecordBatchReader following execute()", py::arg("rows_per_batch") = 1000000);
 	m.def("arrow", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
 	      py::arg("rows_per_batch") = 1000000);
+	m.def("fetch_record_batch", &DuckDBPyConnection::FetchRecordBatchReader,
+	      "Fetch an Arrow RecordBatchReader following execute()", py::arg("rows_per_batch") = 1000000);
 	m.def("torch", &DuckDBPyConnection::FetchPyTorch, "Fetch a result as dict of PyTorch Tensors following execute()");
 	m.def("tf", &DuckDBPyConnection::FetchTF, "Fetch a result as dict of TensorFlow Tensors following execute()");
 	m.def("begin", &DuckDBPyConnection::Begin, "Start a new transaction");
@@ -230,7 +230,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      "run the query as-is.",
 	      py::arg("query"), py::kw_only(), py::arg("alias") = "", py::arg("params") = py::none());
 	m.def("read_csv", &DuckDBPyConnection::ReadCSV, "Create a relation object from the CSV file in 'name'",
-	      py::arg("name"), py::kw_only(), py::arg("header") = py::none(), py::arg("compression") = py::none(),
+	      py::arg("path_or_buffer"), py::kw_only(), py::arg("header") = py::none(), py::arg("compression") = py::none(),
 	      py::arg("sep") = py::none(), py::arg("delimiter") = py::none(), py::arg("dtype") = py::none(),
 	      py::arg("na_values") = py::none(), py::arg("skiprows") = py::none(), py::arg("quotechar") = py::none(),
 	      py::arg("escapechar") = py::none(), py::arg("encoding") = py::none(), py::arg("parallel") = py::none(),
@@ -239,7 +239,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      py::arg("normalize_names") = py::none(), py::arg("filename") = py::none(),
 	      py::arg("null_padding") = py::none(), py::arg("names") = py::none());
 	m.def("from_csv_auto", &DuckDBPyConnection::ReadCSV, "Create a relation object from the CSV file in 'name'",
-	      py::arg("name"), py::kw_only(), py::arg("header") = py::none(), py::arg("compression") = py::none(),
+	      py::arg("path_or_buffer"), py::kw_only(), py::arg("header") = py::none(), py::arg("compression") = py::none(),
 	      py::arg("sep") = py::none(), py::arg("delimiter") = py::none(), py::arg("dtype") = py::none(),
 	      py::arg("na_values") = py::none(), py::arg("skiprows") = py::none(), py::arg("quotechar") = py::none(),
 	      py::arg("escapechar") = py::none(), py::arg("encoding") = py::none(), py::arg("parallel") = py::none(),
@@ -247,8 +247,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      py::arg("sample_size") = py::none(), py::arg("all_varchar") = py::none(),
 	      py::arg("normalize_names") = py::none(), py::arg("filename") = py::none(),
 	      py::arg("null_padding") = py::none(), py::arg("names") = py::none());
-	m.def("from_df", &DuckDBPyConnection::FromDF, "Create a relation object from the Data.Frame in df",
-	      py::arg("df") = py::none());
+	m.def("from_df", &DuckDBPyConnection::FromDF, "Create a relation object from the DataFrame in df", py::arg("df"));
 	m.def("from_arrow", &DuckDBPyConnection::FromArrow, "Create a relation object from an Arrow object",
 	      py::arg("arrow_object"));
 	m.def("from_parquet", &DuckDBPyConnection::FromParquet,

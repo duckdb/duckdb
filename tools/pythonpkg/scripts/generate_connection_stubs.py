@@ -64,24 +64,29 @@ def create_definition(name, method) -> str:
     return definition
 
 
+# We have "duplicate" methods, which are overloaded
+# maybe we should add @overload to these instead, but this is easier
+written_methods = set()
+
 for method in connection_methods:
     if isinstance(method['name'], list):
         names = method['name']
     else:
         names = [method['name']]
     for name in names:
+        if name in written_methods:
+            continue
         body.append(create_definition(name, method))
+        written_methods.add(name)
 
 # ---- End of generation code ----
 
-with_newlines = ['\t' + x + '\n' for x in body]
+with_newlines = ['    ' + x + '\n' for x in body]
 # Recreate the file content by concatenating all the pieces together
 
 new_content = start_section + with_newlines + end_section
 
 print(with_newlines)
-
-exit()
 
 # Write out the modified DUCKDB_STUBS_FILE file
 with open(DUCKDB_STUBS_FILE, 'w') as source_file:
