@@ -277,8 +277,28 @@ bool CSVReaderOptions::SetBaseOption(const string &loption, const Value &value) 
 		SetEscape(ParseString(value, loption));
 	} else if (loption == "header") {
 		SetHeader(ParseBoolean(value, loption));
-	} else if (loption == "null" || loption == "nullstr") {
-		null_str = ParseString(value, loption);
+	} else if (loption == "nullstr" || loption == "null") {
+		auto &child_type = value.type();
+		null_str.clear();
+		if (child_type.id() != LogicalTypeId::LIST && child_type.id() != LogicalTypeId::VARCHAR) {
+			throw BinderException("read_csv %s option requires a string or a list as input", loption);
+		}
+		if (!sql_type_list.empty()) {
+			throw BinderException("read_csv_auto nullstr can only be supplied once");
+		}
+		if (child_type.id() == LogicalTypeId::LIST) {
+			auto &list_child = ListType::GetChildType(child_type);
+			if (list_child.id() != LogicalTypeId::VARCHAR) {
+				throw BinderException("read_csv_auto %s requires a list of types (varchar) as input", loption);
+			}
+			auto &children = ListValue::GetChildren(value);
+			for (auto &child : children) {
+				null_str.push_back(StringValue::Get(child));
+			}
+		} else {
+			null_str.push_back(StringValue::Get(ParseString(value, loption)));
+		}
+
 	} else if (loption == "encoding") {
 		auto encoding = StringUtil::Lower(ParseString(value, loption));
 		if (encoding != "utf8" && encoding != "utf-8") {

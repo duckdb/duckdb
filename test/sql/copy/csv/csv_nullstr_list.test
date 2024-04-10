@@ -1,0 +1,25 @@
+# name: test/sql/copy/csv/csv_nullstr_list.test
+# description: Test CSVs with multiple nullstring values
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+
+# Test List
+query III
+FROM read_csv('data/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null']);
+----
+Pedro	31	1.73
+Mark	NULL	NULL
+Thijs	26	NULL
+
+# Test From Copy
+
+# Test Quoted
+
+# Test where the last value is null over different strings
+
+# Check that write only supports ONE null string
+
+# Test white spaces

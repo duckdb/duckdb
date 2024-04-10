@@ -234,7 +234,7 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 	table_function.named_parameters["quote"] = LogicalType::VARCHAR;
 	table_function.named_parameters["new_line"] = LogicalType::VARCHAR;
 	table_function.named_parameters["escape"] = LogicalType::VARCHAR;
-	table_function.named_parameters["nullstr"] = LogicalType::VARCHAR;
+	table_function.named_parameters["nullstr"] = LogicalType::ANY;
 	table_function.named_parameters["columns"] = LogicalType::ANY;
 	table_function.named_parameters["auto_type_candidates"] = LogicalType::ANY;
 	table_function.named_parameters["header"] = LogicalType::BOOLEAN;

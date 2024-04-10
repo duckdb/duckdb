@@ -545,7 +545,7 @@
       },
       {"id": 102,
         "name": "null_str",
-        "type": "string"
+        "type": "vector<string>"
       },
       {"id": 103,
         "name": "compression",

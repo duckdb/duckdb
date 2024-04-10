@@ -51,8 +51,8 @@ struct CSVReaderOptions {
 	vector<idx_t> rejects_recovery_column_ids;
 	//! Number of samples to buffer
 	idx_t buffer_sample_size = (idx_t)STANDARD_VECTOR_SIZE * 50;
-	//! Specifies the string that represents a null value
-	string null_str;
+	//! Specifies the strings that represents a null value
+	vector<string> null_str = {""};
 	//! Whether file is compressed or not, and if so which compression type
 	//! AUTO_DETECT (default; infer from file extension)
 	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
