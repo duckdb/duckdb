@@ -13,6 +13,7 @@ CREATE TABLE "my""db".tbl(i int);
 statement ok
 INSERT INTO "my""db".tbl VALUES (42)
 
+# use with a table name in quotes
 statement ok
 USE "my""db";
 
