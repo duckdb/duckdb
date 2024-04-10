@@ -23,6 +23,7 @@ struct ExtensionInformation {
 	string install_source;
 	string description;
 	vector<Value> aliases;
+	string extension_version;
 };
 
 struct DuckDBExtensionsData : public GlobalTableFunctionState {
@@ -52,6 +53,9 @@ static unique_ptr<FunctionData> DuckDBExtensionsBind(ClientContext &context, Tab
 
 	names.emplace_back("aliases");
 	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
+
+	names.emplace_back("extension_version");
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("install_mode");
 	return_types.emplace_back(LogicalType::VARCHAR);
@@ -133,16 +137,20 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 	});
 #endif
 	// now check the list of currently loaded extensions
-	auto &loaded_extensions = db.LoadedExtensions();
-	for (auto &ext_name : loaded_extensions) {
+	auto &loaded_extensions = db.LoadedExtensionsData();
+	for (auto &e : loaded_extensions) {
+		auto &ext_name = e.first;
+		auto &ext_info = e.second;
 		auto entry = installed_extensions.find(ext_name);
 		if (entry == installed_extensions.end()) {
 			ExtensionInformation info;
 			info.name = ext_name;
 			info.loaded = true;
+			info.extension_version = ext_info.extension_version;
 			installed_extensions[ext_name] = std::move(info);
 		} else {
 			entry->second.loaded = true;
+			entry->second.extension_version = ext_info.extension_version;
 		}
 	}
 
@@ -178,10 +186,13 @@ void DuckDBExtensionsFunction(ClientContext &context, TableFunctionInput &data_p
 		output.SetValue(4, count, Value(entry.description));
 		// aliases     LogicalType::LIST(LogicalType::VARCHAR)
 		output.SetValue(5, count, Value::LIST(LogicalType::VARCHAR, entry.aliases));
+		// extension version     LogicalType::LIST(LogicalType::VARCHAR)
+		output.SetValue(6, count, Value(entry.extension_version));
 		// installed_mode LogicalType::VARCHAR
-		output.SetValue(6, count, Value(entry.install_mode));
+		output.SetValue(7, count, Value(entry.install_mode));
 		// installed_source LogicalType::VARCHAR
-		output.SetValue(7, count, Value(entry.install_source));
+		output.SetValue(8, count, Value(entry.install_source));
+
 
 		data.offset++;
 		count++;

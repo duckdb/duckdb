@@ -60,7 +60,7 @@ typedef void (*set_global_function_t)(DatabaseInstance *db, DBConfig &config, co
 typedef void (*set_local_function_t)(ClientContext &context, const Value &parameter);
 typedef void (*reset_global_function_t)(DatabaseInstance *db, DBConfig &config);
 typedef void (*reset_local_function_t)(ClientContext &context);
-typedef Value (*get_setting_function_t)(ClientContext &context);
+typedef Value (*get_setting_function_t)(const ClientContext &context);
 
 struct ConfigurationOption {
 	const char *name;
@@ -175,6 +175,8 @@ struct DBConfigOptions {
 	string extension_directory;
 	//! Whether unsigned extensions should be loaded
 	bool allow_unsigned_extensions = false;
+	//! Whether extensions with missing metadata should be loaded
+	bool allow_extensions_metadata_mismatch = false;
 	//! Enable emitting FSST Vectors
 	bool enable_fsst_vectors = false;
 	//! Start transactions immediately in all attached databases - instead of lazily when a database is referenced

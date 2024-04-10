@@ -10,6 +10,7 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
+#include "duckdb/parser/parsed_data/copy_database_info.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/parser/parsed_data/detach_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
@@ -33,6 +34,9 @@ unique_ptr<ParseInfo> ParseInfo::Deserialize(Deserializer &deserializer) {
 		break;
 	case ParseInfoType::ATTACH_INFO:
 		result = AttachInfo::Deserialize(deserializer);
+		break;
+	case ParseInfoType::COPY_DATABASE_INFO:
+		result = CopyDatabaseInfo::Deserialize(deserializer);
 		break;
 	case ParseInfoType::COPY_INFO:
 		result = CopyInfo::Deserialize(deserializer);
@@ -226,6 +230,19 @@ unique_ptr<AlterTableInfo> ChangeColumnTypeInfo::Deserialize(Deserializer &deser
 	deserializer.ReadPropertyWithDefault<string>(400, "column_name", result->column_name);
 	deserializer.ReadProperty<LogicalType>(401, "target_type", result->target_type);
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(402, "expression", result->expression);
+	return std::move(result);
+}
+
+void CopyDatabaseInfo::Serialize(Serializer &serializer) const {
+	ParseInfo::Serialize(serializer);
+	serializer.WritePropertyWithDefault<string>(200, "target_database", target_database);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<CreateInfo>>>(201, "entries", entries);
+}
+
+unique_ptr<ParseInfo> CopyDatabaseInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<CopyDatabaseInfo>(new CopyDatabaseInfo());
+	deserializer.ReadPropertyWithDefault<string>(200, "target_database", result->target_database);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<CreateInfo>>>(201, "entries", result->entries);
 	return std::move(result);
 }
 

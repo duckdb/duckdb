@@ -53,7 +53,7 @@ public:
 	//! blocks can be evicted
 	virtual void SetLimit(idx_t limit = (idx_t)-1);
 	virtual vector<TemporaryFileInformation> GetTemporaryFiles();
-	virtual const string &GetTemporaryDirectory();
+	virtual const string &GetTemporaryDirectory() const;
 	virtual void SetTemporaryDirectory(const string &new_dir);
 	virtual bool HasTemporaryDirectory() const;
 	//! Construct a managed buffer.
@@ -66,7 +66,9 @@ public:
 
 	// Static methods
 	DUCKDB_API static BufferManager &GetBufferManager(DatabaseInstance &db);
+	DUCKDB_API static const BufferManager &GetBufferManager(const DatabaseInstance &db);
 	DUCKDB_API static BufferManager &GetBufferManager(ClientContext &context);
+	DUCKDB_API static const BufferManager &GetBufferManager(const ClientContext &context);
 	DUCKDB_API static BufferManager &GetBufferManager(AttachedDatabase &db);
 
 	static idx_t GetAllocSize(idx_t block_size) {

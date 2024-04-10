@@ -146,7 +146,7 @@ static string PragmaTpcdsQuery(ClientContext &context, const FunctionParameters 
 	return tpcds::DSDGenWrapper::GetQuery(index);
 }
 
-void TpcdsExtension::Load(DuckDB &db) {
+static void LoadInternal(DuckDB &db) {
 	auto &db_instance = *db.instance;
 
 	TableFunction dsdgen_func("dsdgen", {}, DsdgenFunction, DsdgenBind);
@@ -172,6 +172,10 @@ void TpcdsExtension::Load(DuckDB &db) {
 	ExtensionUtil::RegisterFunction(db_instance, tpcds_query_answer_func);
 }
 
+void TpcdsExtension::Load(DuckDB &db) {
+	LoadInternal(db);
+}
+
 std::string TpcdsExtension::GetQuery(int query) {
 	return tpcds::DSDGenWrapper::GetQuery(query);
 }
@@ -189,7 +193,7 @@ std::string TpcdsExtension::Name() {
 extern "C" {
 DUCKDB_EXTENSION_API void tpcds_init(duckdb::DatabaseInstance &db) {
 	duckdb::DuckDB db_wrapper(db);
-	db_wrapper.LoadExtension<duckdb::TpcdsExtension>();
+	duckdb::LoadInternal(db_wrapper);
 }
 
 DUCKDB_EXTENSION_API const char *tpcds_version() {

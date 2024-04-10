@@ -24,7 +24,7 @@ void StatisticsPropagator::AddCardinalities(unique_ptr<NodeStatistics> &stats, N
 }
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalSetOperation &setop,
-                                                                     unique_ptr<LogicalOperator> *node_ptr) {
+                                                                     unique_ptr<LogicalOperator> &node_ptr) {
 	// first propagate statistics in the child nodes
 	auto left_stats = PropagateStatistics(setop.children[0]);
 	auto right_stats = PropagateStatistics(setop.children[1]);
