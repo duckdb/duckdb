@@ -34,4 +34,22 @@ public:
 	static unique_ptr<ExtensionInstallInfo> Deserialize(Deserializer &deserializer);
 };
 
+struct ExtensionRepository {
+	struct RepositoryEntry {
+		char name[32];
+		char url[64];
+	};
+
+	static constexpr const RepositoryEntry REPOSITORIES[] = {
+	        {"official", "http://extensions.duckdb.org"},
+	        {"official_nightly", "http://nightly-extensions.duckdb.org"},
+	    	{"community", "http://community-extensions.duckdb.org"},
+	};
+
+	//! Try to convert a repository to a url, will return empty string if the repository is unknown
+	static string TryGetRepositoryUrl(const string &repository);
+	//! Try to convert a url to a known repository name, will return empty string if the repository is unknown
+	static string TryConvertUrlToKnownRepository(const string &url);
+};
+
 } // namespace duckdb

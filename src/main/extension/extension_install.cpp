@@ -183,6 +183,10 @@ void WriteExtensionMetadataFileToDisk(FileSystem &fs, const string &path, Extens
 static string ResolveRepository(optional_ptr<const DBConfig> db_config, const string &repository) {
 	string custom_endpoint = db_config ? db_config->options.custom_extension_repo : string();
 	if (!repository.empty()) {
+		auto known_repository_url = ExtensionRepository::TryGetRepositoryUrl(repository);
+		if (!known_repository_url.empty()) {
+			return known_repository_url;
+		}
 		return repository;
 	} else if (!custom_endpoint.empty()) {
 		return custom_endpoint;
