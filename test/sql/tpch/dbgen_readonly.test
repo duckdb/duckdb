@@ -4,6 +4,8 @@
 
 require tpch
 
+require skip_reload
+
 load __TEST_DIR__/test_dbgen_ro.db
 
 statement ok
