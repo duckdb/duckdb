@@ -48,36 +48,43 @@ def map_default(val):
 
 
 for conn in connection_methods:
-    definition = f"m.def(\"{conn['name']}\""
-    definition += ", "
-    definition += f"""&DuckDBPyConnection::{conn['function']}"""
-    definition += ", "
-    definition += f"\"{conn['docs']}\""
-    if 'args' in conn:
+    if isinstance(conn['name'], list):
+        names = conn['name']
+    else:
+        names = [conn['name']]
+    for name in names:
+        definition = f"m.def(\"{name}\""
         definition += ", "
-        arguments = []
-        for arg in conn['args']:
-            argument = f"py::arg(\"{arg['name']}\")"
-            # Add the default argument if present
-            if 'default' in arg:
-                default = map_default(arg['default'])
-                argument += f" = {default}"
-            arguments.append(argument)
-        definition += ', '.join(arguments)
-    if 'kwargs' in conn:
+        definition += f"""&DuckDBPyConnection::{conn['function']}"""
         definition += ", "
-        definition += "py::kw_only(), "
-        keyword_arguments = []
-        for kwarg in conn['kwargs']:
-            keyword_argument = f"py::arg(\"{kwarg['name']}\")"
-            # Add the default argument if present
-            if 'default' in arg:
-                default = map_default(arg['default'])
-                keyword_argument += f" = {default}"
-            keyword_arguments.append(keyword_argument)
-        definition += ', '.join(keyword_arguments)
-    definition += ");"
-    body.append(definition)
+        definition += f"\"{conn['docs']}\""
+        if 'args' in conn:
+            definition += ", "
+            arguments = []
+            for arg in conn['args']:
+                argument = f"py::arg(\"{arg['name']}\")"
+                # TODO: add '.none(false)' if required (add 'allow_none' to the JSON)
+                # Add the default argument if present
+                if 'default' in arg:
+                    default = map_default(arg['default'])
+                    argument += f" = {default}"
+                arguments.append(argument)
+            definition += ', '.join(arguments)
+        if 'kwargs' in conn:
+            definition += ", "
+            definition += "py::kw_only(), "
+            keyword_arguments = []
+            for kwarg in conn['kwargs']:
+                keyword_argument = f"py::arg(\"{kwarg['name']}\")"
+                # TODO: add '.none(false)' if required (add 'allow_none' to the JSON)
+                # Add the default argument if present
+                if 'default' in arg:
+                    default = map_default(arg['default'])
+                    keyword_argument += f" = {default}"
+                keyword_arguments.append(keyword_argument)
+            definition += ', '.join(keyword_arguments)
+        definition += ");"
+        body.append(definition)
 
 # ---- End of generation code ----
 
