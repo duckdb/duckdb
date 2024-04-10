@@ -43,7 +43,7 @@ jobs:
       - name: 'Actually move to draft'
         shell: bash
         run: |
-          echo ${{ secrets.GH_TOKEN }} | gh auth login --with-token
+          echo ${{ secrets.MOVE_PR_TO_DRAFT_TOKEN }} | gh auth login --with-token
           gh api graphql -F id=${{ env.PR_NUMBER }} -f query='
             mutation($id: ID!) {
               convertPullRequestToDraft(input: { pullRequestId: $id }) {
