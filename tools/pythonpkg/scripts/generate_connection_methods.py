@@ -42,6 +42,8 @@ DEFAULT_ARGUMENT_MAP = {
     'False': 'false',
     'None': 'py::none()',
     'PythonUDFType.NATIVE': 'PythonUDFType::NATIVE',
+    'PythonExceptionHandling.DEFAULT': 'PythonExceptionHandling::FORWARD_ERROR',
+    'FunctionNullHandling.DEFAULT': 'FunctionNullHandling::DEFAULT_NULL_HANDLING',
 }
 
 
@@ -49,6 +51,7 @@ def map_default(val):
     if val in DEFAULT_ARGUMENT_MAP:
         return DEFAULT_ARGUMENT_MAP[val]
     return val
+
 
 def create_arguments(arguments) -> list:
     result = []
@@ -63,6 +66,7 @@ def create_arguments(arguments) -> list:
             argument += f" = {default}"
         result.append(argument)
     return result
+
 
 def create_definition(name, method) -> str:
     definition = f"m.def(\"{name}\""
@@ -82,6 +86,7 @@ def create_definition(name, method) -> str:
     definition += ");"
     return definition
 
+
 for method in connection_methods:
     if isinstance(method['name'], list):
         names = method['name']
@@ -92,9 +97,7 @@ for method in connection_methods:
 
 # ---- End of generation code ----
 
-with_newlines = [x + '\n' for x in body]
-print(''.join(with_newlines))
-exit()
+with_newlines = ['\t' + x + '\n' for x in body]
 # Recreate the file content by concatenating all the pieces together
 
 new_content = start_section + with_newlines + end_section

@@ -563,7 +563,7 @@
 		"kwargs": [
 			{
 				"name": "alias",
-				"default": ""
+				"default": "\"\""
 			},
 			{
 				"name": "params",
