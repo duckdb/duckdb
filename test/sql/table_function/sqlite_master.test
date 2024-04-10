@@ -8,7 +8,7 @@ CREATE TABLE integers(i INTEGER);
 query IIIII
 SELECT * FROM sqlite_master;
 ----
-table	integers	integers	0	CREATE TABLE memory.main.integers(i INTEGER);
+table	integers	integers	0	CREATE TABLE integers(i INTEGER);
 
 query I
 SELECT EXISTS(SELECT * FROM sqlite_master)
@@ -36,7 +36,7 @@ create table tconstraint1(i integer primary key default(3), j blob not null);
 query IIIII
 SELECT * FROM sqlite_master WHERE name='tconstraint1';
 ----
-table	tconstraint1	tconstraint1	0	CREATE TABLE memory.main.tconstraint1(i INTEGER DEFAULT(3) PRIMARY KEY, j BLOB NOT NULL);
+table	tconstraint1	tconstraint1	0	CREATE TABLE tconstraint1(i INTEGER DEFAULT(3) PRIMARY KEY, j BLOB NOT NULL);
 
 statement ok
 create table tconstraint2(i integer, j integer, k integer, l integer unique, primary key(i, j, k));
@@ -44,7 +44,7 @@ create table tconstraint2(i integer, j integer, k integer, l integer unique, pri
 query IIIII
 SELECT * FROM sqlite_master WHERE name='tconstraint2';
 ----
-table	tconstraint2	tconstraint2	0	CREATE TABLE memory.main.tconstraint2(i INTEGER, j INTEGER, k INTEGER, l INTEGER UNIQUE, PRIMARY KEY(i, j, k));
+table	tconstraint2	tconstraint2	0	CREATE TABLE tconstraint2(i INTEGER, j INTEGER, k INTEGER, l INTEGER UNIQUE, PRIMARY KEY(i, j, k));
 
 statement ok
 CREATE INDEX i_index ON integers(i);

@@ -37,21 +37,7 @@ string CreateSequenceInfo::ToString() const {
 	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 		ss << " IF NOT EXISTS ";
 	}
-	auto has_catalog = !catalog.empty();
-	if (has_catalog) {
-		if (temporary && catalog == TEMP_CATALOG) {
-			has_catalog = false;
-		}
-	}
-	if (has_catalog) {
-		ss << KeywordHelper::WriteOptionallyQuoted(catalog) + ".";
-		if (!schema.empty()) {
-			ss << KeywordHelper::WriteOptionallyQuoted(schema) + ".";
-		}
-	} else if (schema != DEFAULT_SCHEMA && !schema.empty()) {
-		ss << KeywordHelper::WriteOptionallyQuoted(schema) + ".";
-	}
-	ss << KeywordHelper::WriteOptionallyQuoted(name);
+	ss << QualifierToString(name);
 	ss << " INCREMENT BY " << increment;
 	ss << " MINVALUE " << min_value;
 	ss << " MAXVALUE " << max_value;

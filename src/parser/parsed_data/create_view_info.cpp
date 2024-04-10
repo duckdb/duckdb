@@ -33,21 +33,7 @@ string CreateViewInfo::ToString() const {
 	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 		result += " IF NOT EXISTS ";
 	}
-	auto has_catalog = !catalog.empty();
-	if (has_catalog) {
-		if (temporary && catalog == TEMP_CATALOG) {
-			has_catalog = false;
-		}
-	}
-	if (has_catalog) {
-		result += KeywordHelper::WriteOptionallyQuoted(catalog) + ".";
-		if (!schema.empty()) {
-			result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
-		}
-	} else if (schema != DEFAULT_SCHEMA && !schema.empty()) {
-		result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
-	}
-	result += KeywordHelper::WriteOptionallyQuoted(view_name);
+	result += QualifierToString(view_name);
 	if (!aliases.empty()) {
 		result += " (";
 		result += StringUtil::Join(aliases, aliases.size(), ", ",

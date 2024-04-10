@@ -44,14 +44,7 @@ string CreateTableInfo::ToString() const {
 	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 		ret += " IF NOT EXISTS ";
 	}
-
-	if (!catalog.empty()) {
-		ret += KeywordHelper::WriteOptionallyQuoted(catalog) + ".";
-		ret += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
-	} else if (schema != DEFAULT_SCHEMA && !schema.empty()) {
-		ret += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
-	}
-	ret += KeywordHelper::WriteOptionallyQuoted(table);
+	ret += QualifierToString(table);
 
 	if (query != nullptr) {
 		ret += " AS " + query->ToString();
