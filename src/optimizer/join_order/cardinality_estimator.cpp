@@ -169,8 +169,8 @@ double CardinalityEstimator::GetNumerator(unordered_set<idx_t> &set) {
 
 DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 	vector<Subgraph2Denominator> subgraphs;
-	bool done = false;
-	bool found_match = false;
+	bool all_relations_joined = false;
+	bool found_match;
 	// TODO: get rid of actual_set.
 	unordered_set<idx_t> actual_set;
 	for (idx_t i = 0; i < set.count; i++) {
@@ -185,12 +185,16 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 	// TODO: Implement a method to cache subgraphs so you don't have to build them up every
 	// time the cardinality of a new set is requested
 
-	// relations_to_tdoms has already been sorted.
+	// relations_to_tdoms has already been sorted by largest to smallest total domain
+	// then we look through the filters for the relations_to_tdoms
+	// and we start to choose the filters that join relations in the set.
+	//
 	for (auto &relation_2_tdom : relations_to_tdoms) {
 		// loop through each filter in the tdom.
-		if (done) {
+		if (all_relations_joined) {
 			break;
 		}
+
 		for (auto &filter : relation_2_tdom.filters) {
 			if (actual_set.count(filter->left_binding.table_index) == 0 ||
 			    actual_set.count(filter->right_binding.table_index) == 0) {
@@ -215,16 +219,10 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 					// subgraph
 					continue;
 				}
-				idx_t find_table;
-				if (left_in) {
-					find_table = filter->right_binding.table_index;
-				} else {
-					D_ASSERT(right_in);
-
-					find_table = filter->left_binding.table_index;
-				}
+				idx_t find_table = left_in ? filter->right_binding.table_index : filter->left_binding.table_index;
 				auto next_subgraph = it + 1;
-				if (filter->join_type == JoinType::INNER) {
+				switch (filter->join_type) {
+				case JoinType::INNER: {
 					// iterate through other subgraphs and merge.
 					FindSubgraphMatchAndMerge(*it, find_table, next_subgraph, subgraphs.end());
 					// Now insert the right binding and update denominator with the
@@ -233,7 +231,10 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 					it->relations.insert(find_table);
 					it->numerator_relations.insert(find_table);
 					UpdateDenom(*it, relation_2_tdom, filter);
-				} else if (filter->join_type == JoinType::SEMI || filter->join_type == JoinType::ANTI) {
+					break;
+				}
+				case JoinType::SEMI:
+				case JoinType::ANTI: {
 					// don't insert relations into the numerator_relations.
 					auto left = it;
 					auto right = FindMatchingSubGraph(*it, find_table, next_subgraph, subgraphs.end());
@@ -250,7 +251,9 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 						left->relations.insert(find_table);
 					}
 					left->numerator_filter_strength *= RelationStatisticsHelper::DEFAULT_SELECTIVITY;
-				} else {
+					break;
+				}
+				default:
 					// cross product.
 					auto left = it;
 					auto right = FindMatchingSubGraph(*it, find_table, next_subgraph, subgraphs.end());
@@ -263,6 +266,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 						it->relations.insert(find_table);
 						it->numerator_relations.insert(find_table);
 					}
+					break;
 				}
 				found_match = true;
 				break;
@@ -293,7 +297,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			if (subgraphs.size() == 1 && subgraphs.at(0).relations.size() == set.count) {
 				// You have found enough filters to connect the relations. These are guaranteed
 				// to be the filters with the highest Tdoms.
-				done = true;
+				all_relations_joined = true;
 				break;
 			}
 		}
