@@ -91,8 +91,9 @@ private:
 	//! Number of the file that is in this buffer
 	idx_t file_number = 0;
 	//! If we can seek in the file or not.
-	//! If we can't seek, this means we can't destroy the buffers
 	bool can_seek;
+	//! If this file is being fed by a pipe.
+	bool is_pipe;
 	//! Buffer Index, used as a batch index for insertion-order preservation
 	idx_t buffer_idx = 0;
 	//! -------- Allocated Block ---------//
