@@ -1,6 +1,7 @@
 #include "json_common.hpp"
 #include "json_functions.hpp"
 #include "json_scan.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 

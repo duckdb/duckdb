@@ -17,6 +17,7 @@
 #include <string>
 #include <vector>
 #ifndef DUCKDB_AMALGAMATION
+#include "duckdb/common/helper.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/constants.hpp"
@@ -129,6 +130,9 @@ struct ParquetWriteBindData : public TableFunctionData {
 
 	//! How/Whether to encrypt the data
 	shared_ptr<ParquetEncryptionConfig> encryption_config;
+
+	//! Dictionary compression is applied only if the compression ratio exceeds this threshold
+	double dictionary_compression_ratio_threshold = 1.0;
 
 	ChildFieldIDs field_ids;
 };
@@ -992,6 +996,15 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 			}
 		} else if (loption == "encryption_config") {
 			bind_data->encryption_config = ParquetEncryptionConfig::Create(context, option.second[0]);
+		} else if (loption == "dictionary_compression_ratio_threshold") {
+			auto val = option.second[0].GetValue<double>();
+			if (val == -1) {
+				val = NumericLimits<double>::Maximum();
+			} else if (val < 0) {
+				throw BinderException("dictionary_compression_ratio_threshold must be greater than 0, or -1 to disable "
+				                      "dictionary compression");
+			}
+			bind_data->dictionary_compression_ratio_threshold = val;
 		} else {
 			throw NotImplementedException("Unrecognized option for PARQUET: %s", option.first.c_str());
 		}
@@ -1017,9 +1030,10 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 	auto &parquet_bind = bind_data.Cast<ParquetWriteBindData>();
 
 	auto &fs = FileSystem::GetFileSystem(context);
-	global_state->writer = make_uniq<ParquetWriter>(fs, file_path, parquet_bind.sql_types, parquet_bind.column_names,
-	                                                parquet_bind.codec, parquet_bind.field_ids.Copy(),
-	                                                parquet_bind.kv_metadata, parquet_bind.encryption_config);
+	global_state->writer =
+	    make_uniq<ParquetWriter>(fs, file_path, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec,
+	                             parquet_bind.field_ids.Copy(), parquet_bind.kv_metadata,
+	                             parquet_bind.encryption_config, parquet_bind.dictionary_compression_ratio_threshold);
 	return std::move(global_state);
 }
 
@@ -1138,6 +1152,8 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	serializer.WriteProperty(106, "field_ids", bind_data.field_ids);
 	serializer.WritePropertyWithDefault<shared_ptr<ParquetEncryptionConfig>>(107, "encryption_config",
 	                                                                         bind_data.encryption_config, nullptr);
+	serializer.WriteProperty(108, "dictionary_compression_ratio_threshold",
+	                         bind_data.dictionary_compression_ratio_threshold);
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
@@ -1151,6 +1167,8 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	data->field_ids = deserializer.ReadProperty<ChildFieldIDs>(106, "field_ids");
 	deserializer.ReadPropertyWithDefault<shared_ptr<ParquetEncryptionConfig>>(107, "encryption_config",
 	                                                                          data->encryption_config, nullptr);
+	deserializer.ReadPropertyWithDefault<double>(108, "dictionary_compression_ratio_threshold",
+	                                             data->dictionary_compression_ratio_threshold, 1.0);
 	return std::move(data);
 }
 // LCOV_EXCL_STOP

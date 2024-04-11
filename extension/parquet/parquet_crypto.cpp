@@ -4,6 +4,7 @@
 #include "thrift_tools.hpp"
 
 #ifndef DUCKDB_AMALGAMATION
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
 #endif

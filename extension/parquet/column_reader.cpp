@@ -19,6 +19,7 @@
 #include "lz4.hpp"
 
 #ifndef DUCKDB_AMALGAMATION
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/blob.hpp"
 #endif

@@ -45,7 +45,7 @@ public:
 	}
 
 	// From raw pointer of type U convertible to T
-	template <class U, typename std::enable_if<__compatible_with<U, T>::value, int>::type = 0>
+	template <class U, typename std::enable_if<compatible_with_t<U, T>::value, int>::type = 0>
 	explicit shared_ptr(U *ptr) : internal(ptr) {
 		__enable_weak_this(internal.get(), internal.get());
 	}
@@ -66,13 +66,13 @@ public:
 #endif
 
 	// Copy constructor, share ownership with __r
-	template <class U, typename std::enable_if<__compatible_with<U, T>::value, int>::type = 0>
+	template <class U, typename std::enable_if<compatible_with_t<U, T>::value, int>::type = 0>
 	shared_ptr(const shared_ptr<U> &__r) noexcept : internal(__r.internal) {
 	}
 	shared_ptr(const shared_ptr &other) : internal(other.internal) {
 	}
 	// Move constructor, share ownership with __r
-	template <class U, typename std::enable_if<__compatible_with<U, T>::value, int>::type = 0>
+	template <class U, typename std::enable_if<compatible_with_t<U, T>::value, int>::type = 0>
 	shared_ptr(shared_ptr<U> &&__r) noexcept : internal(std::move(__r.internal)) {
 	}
 	shared_ptr(shared_ptr<T> &&other) : internal(std::move(other.internal)) {
@@ -92,7 +92,7 @@ public:
 
 	// Construct from unique_ptr, takes over ownership of the unique_ptr
 	template <class U, class DELETER, bool SAFE_P,
-	          typename std::enable_if<__compatible_with<U, T>::value &&
+	          typename std::enable_if<compatible_with_t<U, T>::value &&
 	                                      std::is_convertible<typename unique_ptr<U, DELETER>::pointer, T *>::value,
 	                                  int>::type = 0>
 	shared_ptr(unique_ptr<U, DELETER, SAFE_P> &&other) : internal(std::move(other)) {
@@ -108,7 +108,7 @@ public:
 		shared_ptr(other).swap(*this);
 		return *this;
 	}
-	template <class U, typename std::enable_if<__compatible_with<U, T>::value, int>::type = 0>
+	template <class U, typename std::enable_if<compatible_with_t<U, T>::value, int>::type = 0>
 	shared_ptr<T> &operator=(const shared_ptr<U> &other) {
 		shared_ptr(other).swap(*this);
 		return *this;
@@ -120,7 +120,7 @@ public:
 		shared_ptr(std::move(other)).swap(*this);
 		return *this;
 	}
-	template <class U, typename std::enable_if<__compatible_with<U, T>::value, int>::type = 0>
+	template <class U, typename std::enable_if<compatible_with_t<U, T>::value, int>::type = 0>
 	shared_ptr<T> &operator=(shared_ptr<U> &&other) {
 		shared_ptr(std::move(other)).swap(*this);
 		return *this;
@@ -128,7 +128,7 @@ public:
 
 	// Assign from moved unique_ptr
 	template <class U, class DELETER, bool SAFE_P,
-	          typename std::enable_if<__compatible_with<U, T>::value &&
+	          typename std::enable_if<compatible_with_t<U, T>::value &&
 	                                      std::is_convertible<typename unique_ptr<U, DELETER>::pointer, T *>::value,
 	                                  int>::type = 0>
 	shared_ptr<T> &operator=(unique_ptr<U, DELETER, SAFE_P> &&__r) {

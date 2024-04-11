@@ -19,6 +19,7 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"

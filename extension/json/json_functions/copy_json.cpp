@@ -5,6 +5,7 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/common/helper.hpp"
 #include "json_functions.hpp"
 #include "json_scan.hpp"
 #include "json_transform.hpp"

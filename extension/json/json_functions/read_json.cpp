@@ -3,6 +3,7 @@
 #include "json_scan.hpp"
 #include "json_structure.hpp"
 #include "json_transform.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 

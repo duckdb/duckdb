@@ -9,6 +9,7 @@
 #pragma once
 
 #include "column_reader.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 

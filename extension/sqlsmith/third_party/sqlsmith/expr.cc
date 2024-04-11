@@ -17,21 +17,21 @@ using impedance::matched;
 shared_ptr<value_expr> value_expr::factory(prod *p, sqltype *type_constraint) {
 	try {
 		if (1 == d20() && p->level < d6() && window_function::allowed(p))
-			return make_refcounted<window_function>(p, type_constraint);
+			return std::make_shared<window_function>(p, type_constraint);
 		else if (1 == d42() && p->level < d6())
-			return make_refcounted<coalesce>(p, type_constraint);
+			return std::make_shared<coalesce>(p, type_constraint);
 		else if (1 == d42() && p->level < d6())
-			return make_refcounted<nullif>(p, type_constraint);
+			return std::make_shared<nullif>(p, type_constraint);
 		else if (p->level < d6() && d6() == 1)
-			return make_refcounted<funcall>(p, type_constraint);
+			return std::make_shared<funcall>(p, type_constraint);
 		else if (d12() == 1)
-			return make_refcounted<atomic_subselect>(p, type_constraint);
+			return std::make_shared<atomic_subselect>(p, type_constraint);
 		else if (p->level < d6() && d9() == 1)
-			return make_refcounted<case_expr>(p, type_constraint);
+			return std::make_shared<case_expr>(p, type_constraint);
 		else if (p->scope->refs.size() && d20() > 1)
-			return make_refcounted<column_reference>(p, type_constraint);
+			return std::make_shared<column_reference>(p, type_constraint);
 		else
-			return make_refcounted<const_expr>(p, type_constraint);
+			return std::make_shared<const_expr>(p, type_constraint);
 	} catch (runtime_error &e) {
 	}
 	p->retry();
@@ -89,18 +89,18 @@ column_reference::column_reference(prod *p, sqltype *type_constraint) : value_ex
 shared_ptr<bool_expr> bool_expr::factory(prod *p) {
 	try {
 		if (p->level > d100())
-			return make_refcounted<truth_value>(p);
+			return std::make_shared<truth_value>(p);
 		if (d6() < 4)
-			return make_refcounted<comparison_op>(p);
+			return std::make_shared<comparison_op>(p);
 		else if (d6() < 4)
-			return make_refcounted<bool_term>(p);
+			return std::make_shared<bool_term>(p);
 		else if (d6() < 4)
-			return make_refcounted<null_predicate>(p);
+			return std::make_shared<null_predicate>(p);
 		else if (d6() < 4)
-			return make_refcounted<truth_value>(p);
+			return std::make_shared<truth_value>(p);
 		else
-			return make_refcounted<exists_predicate>(p);
-		//     return make_refcounted<distinct_pred>(q);
+			return std::make_shared<exists_predicate>(p);
+		//     return std::make_shared<distinct_pred>(q);
 	} catch (runtime_error &e) {
 	}
 	p->retry();
@@ -108,7 +108,7 @@ shared_ptr<bool_expr> bool_expr::factory(prod *p) {
 }
 
 exists_predicate::exists_predicate(prod *p) : bool_expr(p) {
-	subquery = make_refcounted<query_spec>(this, scope);
+	subquery = std::make_shared<query_spec>(this, scope);
 }
 
 void exists_predicate::accept(prod_visitor *v) {
@@ -123,8 +123,8 @@ void exists_predicate::out(std::ostream &out) {
 }
 
 distinct_pred::distinct_pred(prod *p) : bool_binop(p) {
-	lhs = make_refcounted<column_reference>(this);
-	rhs = make_refcounted<column_reference>(this, lhs->type);
+	lhs = std::make_shared<column_reference>(this);
+	rhs = std::make_shared<column_reference>(this, lhs->type);
 }
 
 comparison_op::comparison_op(prod *p) : bool_binop(p) {
@@ -330,15 +330,15 @@ void window_function::out(std::ostream &out) {
 
 window_function::window_function(prod *p, sqltype *type_constraint) : value_expr(p) {
 	match();
-	aggregate = make_refcounted<funcall>(this, type_constraint, true);
+	aggregate = std::make_shared<funcall>(this, type_constraint, true);
 	type = aggregate->type;
-	partition_by.push_back(make_refcounted<column_reference>(this));
+	partition_by.push_back(std::make_shared<column_reference>(this));
 	while (d6() > 4)
-		partition_by.push_back(make_refcounted<column_reference>(this));
+		partition_by.push_back(std::make_shared<column_reference>(this));
 
-	order_by.push_back(make_refcounted<column_reference>(this));
+	order_by.push_back(std::make_shared<column_reference>(this));
 	while (d6() > 4)
-		order_by.push_back(make_refcounted<column_reference>(this));
+		order_by.push_back(std::make_shared<column_reference>(this));
 }
 
 bool window_function::allowed(prod *p) {

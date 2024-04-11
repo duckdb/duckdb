@@ -9,6 +9,7 @@
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/common/helper.hpp"
 
 #include <chrono>
 #include <string>

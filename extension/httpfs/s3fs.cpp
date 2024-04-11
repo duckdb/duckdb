@@ -8,6 +8,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/common/exception/http_exception.hpp"
+#include "duckdb/common/helper.hpp"
 #endif
 
 #include <duckdb/function/scalar/string_functions.hpp>

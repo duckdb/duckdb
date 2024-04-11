@@ -470,9 +470,6 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 		storage.AppendToIndexes(transaction, append_state, append_count, true);
 	}
 
-	// try to initialize any unknown indexes
-	table.info->InitializeIndexes(context);
-
 	// possibly vacuum any excess index data
 	table.info->indexes.Scan([&](Index &index) {
 		index.Vacuum();
@@ -575,7 +572,6 @@ TableIndexList &LocalStorage::GetIndexes(DataTable &table) {
 	if (!storage) {
 		throw InternalException("LocalStorage::GetIndexes - local storage not found");
 	}
-	table.info->InitializeIndexes(context);
 	return storage->indexes;
 }
 
