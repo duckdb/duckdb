@@ -352,7 +352,8 @@ struct ConnectionHolder {
 	const duckdb::shared_ptr<duckdb::DuckDB> db;
 	const duckdb::unique_ptr<duckdb::Connection> connection;
 
-	ConnectionHolder(duckdb::shared_ptr<duckdb::DuckDB> _db) : db(_db), connection(make_uniq<duckdb::Connection>(*_db)) {
+	ConnectionHolder(duckdb::shared_ptr<duckdb::DuckDB> _db)
+	    : db(_db), connection(make_uniq<duckdb::Connection>(*_db)) {
 	}
 };
 
