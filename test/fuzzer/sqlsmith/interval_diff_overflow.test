@@ -1,0 +1,32 @@
+# name: test/fuzzer/sqlsmith/interval_diff_overflow.test
+# description: Overflow in interval part subtraction
+# group: [sqlsmith]
+
+statement ok
+create table all_types as 
+	select * exclude(small_enum, medium_enum, large_enum) 
+	from test_all_types();
+
+statement error
+SELECT subtract(
+	CAST(main.all_types."interval" AS INTERVAL), 
+	CAST(to_months(CAST(main.all_types."int" AS INTEGER)) AS INTERVAL))
+FROM main.all_types 
+----
+Out of Range Error: Interval months subtraction out of range
+
+statement error
+SELECT subtract(
+	CAST(main.all_types."interval" AS INTERVAL), 
+	CAST(to_days(CAST(main.all_types."int" AS INTEGER)) AS INTERVAL))
+FROM main.all_types 
+----
+Out of Range Error: Interval days subtraction out of range
+
+statement error
+SELECT subtract(
+	CAST(main.all_types."interval" AS INTERVAL), 
+	CAST(to_microseconds(CAST(main.all_types."bigint" AS BIGINT)) AS INTERVAL))
+FROM main.all_types 
+----
+Out of Range Error: Interval micros subtraction out of range

@@ -335,10 +335,9 @@ string DuckDBPyRelation::GenerateExpressionList(const string &function_name, con
 	                              projected_columns, window_spec);
 }
 
-string DuckDBPyRelation::GenerateExpressionList(const string &function_name, vector<string> &&input,
-                                                const string &groups, const string &function_parameter,
-                                                bool ignore_nulls, const string &projected_columns,
-                                                const string &window_spec) {
+string DuckDBPyRelation::GenerateExpressionList(const string &function_name, vector<string> input, const string &groups,
+                                                const string &function_parameter, bool ignore_nulls,
+                                                const string &projected_columns, const string &window_spec) {
 	string expr;
 
 	if (StringUtil::CIEquals("count", function_name) && input.empty()) {
@@ -1070,7 +1069,9 @@ void DuckDBPyRelation::ToParquet(const string &filename, const py::object &compr
 void DuckDBPyRelation::ToCSV(const string &filename, const py::object &sep, const py::object &na_rep,
                              const py::object &header, const py::object &quotechar, const py::object &escapechar,
                              const py::object &date_format, const py::object &timestamp_format,
-                             const py::object &quoting, const py::object &encoding, const py::object &compression) {
+                             const py::object &quoting, const py::object &encoding, const py::object &compression,
+                             const py::object &overwrite, const py::object &per_thread_output,
+                             const py::object &use_tmp_file, const py::object &partition_by) {
 	case_insensitive_map_t<vector<Value>> options;
 
 	if (!py::none().is(sep)) {
@@ -1159,6 +1160,42 @@ void DuckDBPyRelation::ToCSV(const string &filename, const py::object &sep, cons
 			throw InvalidInputException("to_csv only accepts 'compression' as a string");
 		}
 		options["compression"] = {Value(py::str(compression))};
+	}
+
+	if (!py::none().is(overwrite)) {
+		if (!py::isinstance<py::bool_>(overwrite)) {
+			throw InvalidInputException("to_csv only accepts 'overwrite' as a boolean");
+		}
+		options["overwrite_or_ignore"] = {Value::BOOLEAN(py::bool_(overwrite))};
+	}
+
+	if (!py::none().is(per_thread_output)) {
+		if (!py::isinstance<py::bool_>(per_thread_output)) {
+			throw InvalidInputException("to_csv only accepts 'per_thread_output' as a boolean");
+		}
+		options["per_thread_output"] = {Value::BOOLEAN(py::bool_(per_thread_output))};
+	}
+
+	if (!py::none().is(use_tmp_file)) {
+		if (!py::isinstance<py::bool_>(use_tmp_file)) {
+			throw InvalidInputException("to_csv only accepts 'use_tmp_file' as a boolean");
+		}
+		options["use_tmp_file"] = {Value::BOOLEAN(py::bool_(use_tmp_file))};
+	}
+
+	if (!py::none().is(partition_by)) {
+		if (!py::isinstance<py::list>(partition_by)) {
+			throw InvalidInputException("to_csv only accepts 'partition_by' as a list of strings");
+		}
+		vector<Value> partition_by_values;
+		const py::list &partition_fields = partition_by;
+		for (auto &field : partition_fields) {
+			if (!py::isinstance<py::str>(field)) {
+				throw InvalidInputException("to_csv only accepts 'partition_by' as a list of strings");
+			}
+			partition_by_values.emplace_back(Value(py::str(field)));
+		}
+		options["partition_by"] = {partition_by_values};
 	}
 
 	auto write_csv = rel->WriteCSVRel(filename, std::move(options));

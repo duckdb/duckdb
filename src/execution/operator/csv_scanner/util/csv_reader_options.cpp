@@ -189,7 +189,7 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 		string format = ParseString(value, loption);
 		SetDateFormat(LogicalTypeId::TIMESTAMP, format, true);
 	} else if (loption == "ignore_errors") {
-		ignore_errors = ParseBoolean(value, loption);
+		ignore_errors.Set(ParseBoolean(value, loption));
 	} else if (loption == "buffer_size") {
 		buffer_size = ParseInteger(value, loption);
 		if (buffer_size == 0) {
@@ -206,20 +206,22 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 		parallel = ParseBoolean(value, loption);
 	} else if (loption == "allow_quoted_nulls") {
 		allow_quoted_nulls = ParseBoolean(value, loption);
+	} else if (loption == "store_rejects") {
+		store_rejects.Set(ParseBoolean(value, loption));
 	} else if (loption == "rejects_table") {
 		// skip, handled in SetRejectsOptions
 		auto table_name = ParseString(value, loption);
 		if (table_name.empty()) {
 			throw BinderException("REJECTS_TABLE option cannot be empty");
 		}
-		rejects_table_name = table_name;
-	} else if (loption == "rejects_recovery_columns") {
-		// Get the list of columns to use as a recovery key
-		auto &children = ListValue::GetChildren(value);
-		for (auto &child : children) {
-			auto col_name = child.GetValue<string>();
-			rejects_recovery_columns.push_back(col_name);
+		rejects_table_name.Set(table_name);
+	} else if (loption == "rejects_scan") {
+		// skip, handled in SetRejectsOptions
+		auto table_name = ParseString(value, loption);
+		if (table_name.empty()) {
+			throw BinderException("rejects_scan option cannot be empty");
 		}
+		rejects_scan_name.Set(table_name);
 	} else if (loption == "rejects_limit") {
 		int64_t limit = ParseInteger(value, loption);
 		if (limit < 0) {
@@ -297,6 +299,13 @@ template <class T>
 string FormatOptionLine(const string &name, const CSVOption<T> option) {
 	return name + " = " + option.FormatValue() + " " + option.FormatSet() + "\n  ";
 }
+bool CSVReaderOptions::WasTypeManuallySet(idx_t i) const {
+	if (i >= was_type_manually_set.size()) {
+		return false;
+	}
+	return was_type_manually_set[i];
+}
+
 string CSVReaderOptions::ToString() const {
 	auto &delimiter = dialect_options.state_machine_options.delimiter;
 	auto &quote = dialect_options.state_machine_options.quote;
@@ -330,7 +339,7 @@ string CSVReaderOptions::ToString() const {
 	// sample_size
 	error += "sample_size=" + std::to_string(sample_size_chunks * STANDARD_VECTOR_SIZE) + "\n  ";
 	// ignore_errors
-	error += "ignore_errors=" + std::to_string(ignore_errors) + "\n  ";
+	error += "ignore_errors=" + ignore_errors.FormatValue() + "\n  ";
 	// all_varchar
 	error += "all_varchar=" + std::to_string(all_varchar) + "\n";
 
@@ -366,17 +375,26 @@ static uint8_t GetCandidateSpecificity(const LogicalType &candidate_type) {
 	}
 	return it->second;
 }
-
+bool StoreUserDefinedParameter(string &option) {
+	if (option == "column_types" || option == "types" || option == "dtypes" || option == "auto_detect" ||
+	    option == "auto_type_candidates" || option == "columns" || option == "names") {
+		// We don't store options related to types, names and auto-detection since these are either irrelevant to our
+		// prompt or are covered by the columns option.
+		return false;
+	}
+	return true;
+}
 void CSVReaderOptions::FromNamedParameters(named_parameter_map_t &in, ClientContext &context,
                                            vector<LogicalType> &return_types, vector<string> &names) {
+	map<string, string> ordered_user_defined_parameters;
 	for (auto &kv : in) {
 		if (MultiFileReader::ParseOption(kv.first, kv.second, file_options, context)) {
 			continue;
 		}
 		auto loption = StringUtil::Lower(kv.first);
 		// skip variables that are specific to auto detection
-		if (loption != "auto_detect" && loption != "auto_type_candidates") {
-			user_defined_parameters += loption + "=" + kv.second.ToSQLString() + ", ";
+		if (StoreUserDefinedParameter(loption)) {
+			ordered_user_defined_parameters[loption] = kv.second.ToSQLString();
 		}
 		if (loption == "columns") {
 			auto &child_type = kv.second.type();
@@ -481,6 +499,9 @@ void CSVReaderOptions::FromNamedParameters(named_parameter_map_t &in, ClientCont
 		} else {
 			SetReadOption(loption, kv.second, names);
 		}
+	}
+	for (auto &udf_parameter : ordered_user_defined_parameters) {
+		user_defined_parameters += udf_parameter.first + "=" + udf_parameter.second + ", ";
 	}
 	if (user_defined_parameters.size() >= 2) {
 		user_defined_parameters.erase(user_defined_parameters.size() - 2);

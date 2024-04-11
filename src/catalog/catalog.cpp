@@ -55,7 +55,11 @@ AttachedDatabase &Catalog::GetAttached() {
 	return db;
 }
 
-const string &Catalog::GetName() {
+const AttachedDatabase &Catalog::GetAttached() const {
+	return db;
+}
+
+const string &Catalog::GetName() const {
 	return GetAttached().GetName();
 }
 
@@ -730,17 +734,28 @@ CatalogEntryLookup Catalog::TryLookupEntry(ClientContext &context, CatalogType t
                                            QueryErrorContext error_context) {
 	auto entries = GetCatalogEntries(context, catalog, schema);
 	vector<CatalogLookup> lookups;
+	vector<CatalogLookup> final_lookups;
 	lookups.reserve(entries.size());
 	for (auto &entry : entries) {
+		optional_ptr<Catalog> catalog_entry;
 		if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-			auto catalog_entry = Catalog::GetCatalogEntry(context, entry.catalog);
-			if (!catalog_entry) {
-				return {nullptr, nullptr, ErrorData()};
-			}
-			lookups.emplace_back(*catalog_entry, entry.schema);
+			catalog_entry = Catalog::GetCatalogEntry(context, entry.catalog);
 		} else {
-			lookups.emplace_back(Catalog::GetCatalog(context, entry.catalog), entry.schema);
+			catalog_entry = &Catalog::GetCatalog(context, entry.catalog);
 		}
+		if (!catalog_entry) {
+			return {nullptr, nullptr, ErrorData()};
+		}
+		D_ASSERT(catalog_entry);
+		auto lookup_behavior = catalog_entry->CatalogTypeLookupRule(type);
+		if (lookup_behavior == CatalogLookupBehavior::STANDARD) {
+			lookups.emplace_back(*catalog_entry, entry.schema);
+		} else if (lookup_behavior == CatalogLookupBehavior::LOWER_PRIORITY) {
+			final_lookups.emplace_back(*catalog_entry, entry.schema);
+		}
+	}
+	for (auto &lookup : final_lookups) {
+		lookups.emplace_back(std::move(lookup));
 	}
 	return Catalog::TryLookupEntry(context, lookups, type, name, if_not_found, error_context);
 }

@@ -95,7 +95,7 @@ bool PartialBlockManager::GetPartialBlock(idx_t segment_size, unique_ptr<Partial
 	return true;
 }
 
-void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation &&allocation) {
+void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation allocation) {
 	auto &state = allocation.partial_block->state;
 	D_ASSERT(checkpoint_type != CheckpointType::FULL_CHECKPOINT || state.block_id >= 0);
 	if (state.block_use_count < max_use_count) {
@@ -139,11 +139,11 @@ void PartialBlockManager::Merge(PartialBlockManager &other) {
 		if (!e.second) {
 			throw InternalException("Empty partially filled block found");
 		}
-		auto used_space = Storage::BLOCK_SIZE - e.first;
-		if (HasBlockAllocation(NumericCast<uint32_t>(used_space))) {
+		auto used_space = NumericCast<uint32_t>(Storage::BLOCK_SIZE - e.first);
+		if (HasBlockAllocation(used_space)) {
 			// we can merge this block into an existing block - merge them
 			// merge blocks
-			auto allocation = GetBlockAllocation(NumericCast<uint32_t>(used_space));
+			auto allocation = GetBlockAllocation(used_space);
 			allocation.partial_block->Merge(*e.second, allocation.state.offset, used_space);
 
 			// re-register the partial block

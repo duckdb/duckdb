@@ -120,13 +120,13 @@ static idx_t SelectComparison(Vector &, Vector &, const SelectionVector &, idx_t
 template <>
 idx_t SelectComparison<Equals>(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
                                SelectionVector *true_sel, SelectionVector *false_sel) {
-	return VectorOperations::NestedEquals(left, right, sel, count, true_sel, false_sel);
+	return VectorOperations::NestedEquals(left, right, &sel, count, true_sel, false_sel);
 }
 
 template <>
 idx_t SelectComparison<NotEquals>(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
                                   SelectionVector *true_sel, SelectionVector *false_sel) {
-	return VectorOperations::NestedNotEquals(left, right, sel, count, true_sel, false_sel);
+	return VectorOperations::NestedNotEquals(left, right, &sel, count, true_sel, false_sel);
 }
 
 template <>
@@ -177,6 +177,7 @@ static idx_t GenericNestedMatch(Vector &lhs_vector, const TupleDataVectorFormat 
 	const auto gather_function = TupleDataCollection::GetGatherFunction(type);
 	gather_function.function(rhs_layout, rhs_row_locations, col_idx, sel, count, key,
 	                         *FlatVector::IncrementalSelectionVector(), nullptr, gather_function.child_functions);
+	Vector::Verify(key, *FlatVector::IncrementalSelectionVector(), count);
 
 	// Densify the input column
 	Vector sliced(lhs_vector, sel, count);

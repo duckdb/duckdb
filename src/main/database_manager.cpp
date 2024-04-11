@@ -36,6 +36,9 @@ optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &conte
 
 optional_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, const AttachInfo &info,
                                                                const string &db_type, AccessMode access_mode) {
+	if (AttachedDatabase::NameIsReserved(info.name)) {
+		throw BinderException("Attached database name \"%s\" cannot be used because it is a reserved name", info.name);
+	}
 	// now create the attached database
 	auto &db = DatabaseInstance::GetDatabase(context);
 	auto attached_db = db.CreateAttachedDatabase(context, info, db_type, access_mode);
@@ -46,7 +49,7 @@ optional_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &co
 
 	const auto name = attached_db->GetName();
 	attached_db->oid = ModifyCatalog();
-	DependencyList dependencies;
+	LogicalDependencyList dependencies;
 	if (default_database.empty()) {
 		default_database = name;
 	}
@@ -148,7 +151,8 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, string &db_type, A
 	if (db_type.empty()) {
 		CheckPathConflict(context, info.path);
 
-		DBPathAndType::CheckMagicBytes(info.path, db_type, config);
+		auto &fs = FileSystem::GetFileSystem(context);
+		DBPathAndType::CheckMagicBytes(fs, info.path, db_type);
 	}
 
 	// if we are loading a database type from an extension - check if that extension is loaded
@@ -205,7 +209,13 @@ vector<reference<AttachedDatabase>> DatabaseManager::GetDatabases(ClientContext 
 	return result;
 }
 
-void DatabaseManager::ResetDatabases() {
+void DatabaseManager::ResetDatabases(unique_ptr<TaskScheduler> &scheduler) {
+	vector<reference<AttachedDatabase>> result;
+	databases->Scan([&](CatalogEntry &entry) { result.push_back(entry.Cast<AttachedDatabase>()); });
+	for (auto &database : result) {
+		database.get().Close();
+	}
+	scheduler.reset();
 	databases.reset();
 }
 

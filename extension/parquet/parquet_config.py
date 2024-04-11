@@ -7,6 +7,7 @@ include_directories = [
         'extension/parquet/include',
         'third_party/parquet',
         'third_party/thrift',
+        'third_party/lz4',
         'third_party/snappy',
         'third_party/zstd/include',
         'third_party/mbedtls',
@@ -70,3 +71,5 @@ source_files += [
         'third_party/zstd/compress/zstd_opt.cpp',
     ]
 ]
+# lz4
+source_files += [os.path.sep.join(x.split('/')) for x in ['third_party/lz4/lz4.cpp']]

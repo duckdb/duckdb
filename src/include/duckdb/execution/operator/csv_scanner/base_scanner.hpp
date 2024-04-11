@@ -47,8 +47,8 @@ protected:
 class BaseScanner {
 public:
 	explicit BaseScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine,
-	                     shared_ptr<CSVErrorHandler> error_handler, shared_ptr<CSVFileScan> csv_file_scan = nullptr,
-	                     CSVIterator iterator = {});
+	                     shared_ptr<CSVErrorHandler> error_handler, bool sniffing = false,
+	                     shared_ptr<CSVFileScan> csv_file_scan = nullptr, CSVIterator iterator = {});
 
 	virtual ~BaseScanner() = default;
 	//! Returns true if the scanner is finished
@@ -142,38 +142,43 @@ protected:
 				return;
 			case CSVState::RECORD_SEPARATOR:
 				if (states.states[0] == CSVState::RECORD_SEPARATOR || states.states[0] == CSVState::NOT_SET) {
-					lines_read++;
 					if (T::EmptyLine(result, iterator.pos.buffer_pos)) {
 						iterator.pos.buffer_pos++;
 						bytes_read = iterator.pos.buffer_pos - start_pos;
+						lines_read++;
 						return;
 					}
-				} else if (states.states[0] != CSVState::CARRIAGE_RETURN) {
 					lines_read++;
+
+				} else if (states.states[0] != CSVState::CARRIAGE_RETURN) {
 					if (T::AddRow(result, iterator.pos.buffer_pos)) {
 						iterator.pos.buffer_pos++;
 						bytes_read = iterator.pos.buffer_pos - start_pos;
+						lines_read++;
 						return;
 					}
+					lines_read++;
 				}
 				iterator.pos.buffer_pos++;
 				break;
 			case CSVState::CARRIAGE_RETURN:
-				lines_read++;
 				if (states.states[0] == CSVState::RECORD_SEPARATOR || states.states[0] == CSVState::NOT_SET) {
 					if (T::EmptyLine(result, iterator.pos.buffer_pos)) {
 						iterator.pos.buffer_pos++;
 						bytes_read = iterator.pos.buffer_pos - start_pos;
+						lines_read++;
 						return;
 					}
 				} else if (states.states[0] != CSVState::CARRIAGE_RETURN) {
 					if (T::AddRow(result, iterator.pos.buffer_pos)) {
 						iterator.pos.buffer_pos++;
 						bytes_read = iterator.pos.buffer_pos - start_pos;
+						lines_read++;
 						return;
 					}
 				}
 				iterator.pos.buffer_pos++;
+				lines_read++;
 				break;
 			case CSVState::DELIMITER:
 				T::AddValue(result, iterator.pos.buffer_pos);
@@ -247,7 +252,7 @@ protected:
 			Initialize();
 			initialized = true;
 		}
-		if (!iterator.done) {
+		if (!iterator.done && cur_buffer_handle) {
 			Process(result);
 		}
 		FinalizeChunkProcess();

@@ -151,7 +151,7 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
                                         idx_t append_count, bool append_to_table) {
 	auto &table = table_ref.get();
 	if (append_to_table) {
-		table.InitializeAppend(transaction, append_state, append_count);
+		table.InitializeAppend(transaction, append_state);
 	}
 	ErrorData error;
 	if (append_to_table) {
@@ -201,6 +201,9 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 			return false;
 		});
 		error.Throw();
+	}
+	if (append_to_table) {
+		table.FinalizeAppend(transaction, append_state);
 	}
 }
 
@@ -352,7 +355,7 @@ bool LocalStorage::NextParallelScan(ClientContext &context, DataTable &table, Pa
 
 void LocalStorage::InitializeAppend(LocalAppendState &state, DataTable &table) {
 	state.storage = &table_manager.GetOrCreateStorage(table);
-	state.storage->row_groups->InitializeAppend(TransactionData(transaction), state.append_state, 0);
+	state.storage->row_groups->InitializeAppend(TransactionData(transaction), state.append_state);
 }
 
 void LocalStorage::Append(LocalAppendState &state, DataChunk &chunk) {
@@ -467,9 +470,6 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 		storage.AppendToIndexes(transaction, append_state, append_count, true);
 	}
 
-	// try to initialize any unknown indexes
-	table.info->InitializeIndexes(context);
-
 	// possibly vacuum any excess index data
 	table.info->indexes.Scan([&](Index &index) {
 		index.Vacuum();
@@ -572,7 +572,6 @@ TableIndexList &LocalStorage::GetIndexes(DataTable &table) {
 	if (!storage) {
 		throw InternalException("LocalStorage::GetIndexes - local storage not found");
 	}
-	table.info->InitializeIndexes(context);
 	return storage->indexes;
 }
 

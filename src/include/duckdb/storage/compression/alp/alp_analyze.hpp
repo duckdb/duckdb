@@ -21,7 +21,7 @@ namespace duckdb {
 template <class T>
 struct AlpAnalyzeState : public AnalyzeState {
 public:
-	using EXACT_TYPE = typename FloatingToExact<T>::type;
+	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
 	AlpAnalyzeState() : state() {
 	}

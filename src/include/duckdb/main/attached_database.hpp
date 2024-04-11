@@ -43,9 +43,11 @@ public:
 	                 const AttachInfo &info, AccessMode access_mode);
 	~AttachedDatabase() override;
 
-	void Initialize();
+	void Initialize(optional_ptr<ClientContext> context = nullptr);
+	void Close();
 
 	Catalog &ParentCatalog() override;
+	const Catalog &ParentCatalog() const override;
 	StorageManager &GetStorageManager();
 	Catalog &GetCatalog();
 	TransactionManager &GetTransactionManager();
@@ -60,7 +62,9 @@ public:
 	bool IsReadOnly() const;
 	bool IsInitialDatabase() const;
 	void SetInitialDatabase();
+	void SetReadOnlyDatabase();
 
+	static bool NameIsReserved(const string &name);
 	static string ExtractDatabaseName(const string &dbpath, FileSystem &fs);
 
 private:
@@ -71,6 +75,7 @@ private:
 	AttachedDatabaseType type;
 	optional_ptr<Catalog> parent_catalog;
 	bool is_initial_database = false;
+	bool is_closed = false;
 };
 
 } // namespace duckdb

@@ -24,6 +24,7 @@ public:
 		auto &config = DBConfig::GetConfig(context);
 		return *config.file_system;
 	}
+
 	optional_ptr<FileOpener> GetOpener() const override {
 		return ClientData::Get(context).file_opener.get();
 	}
@@ -46,6 +47,10 @@ ClientData::~ClientData() {
 }
 
 ClientData &ClientData::Get(ClientContext &context) {
+	return *context.client_data;
+}
+
+const ClientData &ClientData::Get(const ClientContext &context) {
 	return *context.client_data;
 }
 

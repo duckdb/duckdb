@@ -125,6 +125,11 @@ void CSVSniffer::InitializeDateAndTimeStampDetection(CSVStateMachine &candidate,
 	auto &format_candidate = format_candidates[sql_type.id()];
 	if (!format_candidate.initialized) {
 		format_candidate.initialized = true;
+		// if user set a format, we add that as well
+		auto user_format = options.dialect_options.date_format.find(sql_type.id());
+		if (user_format->second.IsSetByUser()) {
+			format_candidate.format.emplace_back(user_format->second.GetValue().format_specifier);
+		}
 		// order by preference
 		auto entry = format_template_candidates.find(sql_type.id());
 		if (entry != format_template_candidates.end()) {
@@ -273,7 +278,7 @@ void CSVSniffer::DetectTypes() {
 		// it's good if the dialect creates more non-varchar columns, but only if we sacrifice < 30% of
 		// best_num_cols.
 		if (varchar_cols < min_varchar_cols && info_sql_types_candidates.size() > (max_columns_found * 0.7) &&
-		    (!options.ignore_errors || candidate->error_handler->errors.size() < min_errors)) {
+		    (!options.ignore_errors.GetValue() || candidate->error_handler->errors.size() < min_errors)) {
 			min_errors = candidate->error_handler->errors.size();
 			best_header_row.clear();
 			// we have a new best_options candidate

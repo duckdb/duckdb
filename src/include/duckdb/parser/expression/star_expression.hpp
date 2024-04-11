@@ -19,7 +19,7 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::STAR;
 
 public:
-	StarExpression(string relation_name = string());
+	explicit StarExpression(string relation_name = string());
 
 	//! The relation name in case of tbl.*, or empty if this is a normal *
 	string relation_name;

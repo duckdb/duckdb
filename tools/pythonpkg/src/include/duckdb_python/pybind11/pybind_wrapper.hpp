@@ -76,7 +76,7 @@ template <class T>
 bool try_cast(const handle &object, T &result) {
 	try {
 		result = cast<T>(object);
-	} catch (cast_error &e) {
+	} catch (cast_error &) {
 		return false;
 	}
 	return true;

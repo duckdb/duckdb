@@ -12,6 +12,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/execution/column_binding_resolver.hpp"
 
 namespace duckdb {
 
@@ -166,6 +167,8 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 	if (!OperatorSupportsSerialization(*op)) {
 		return;
 	}
+	// verify the column bindings of the plan
+	ColumnBindingResolver::Verify(*op);
 
 	// format (de)serialization of this operator
 	try {
@@ -179,10 +182,10 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 			*map = std::move(parameters);
 		}
 		op = std::move(new_plan);
-	} catch (SerializationException &ex) {
-		// pass
-	} catch (NotImplementedException &ex) {
-		// pass
+	} catch (SerializationException &ex) {  // NOLINT: explicitly allowing these errors (for now)
+		                                    // pass
+	} catch (NotImplementedException &ex) { // NOLINT: explicitly allowing these errors (for now)
+		                                    // pass
 	}
 }
 

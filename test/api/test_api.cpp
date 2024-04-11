@@ -70,7 +70,7 @@ TEST_CASE("Test closing database during long running query", "[api]") {
 	auto conn = make_uniq<Connection>(*db);
 	// create the database
 	REQUIRE_NO_FAIL(conn->Query("CREATE TABLE integers(i INTEGER)"));
-	REQUIRE_NO_FAIL(conn->Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
+	REQUIRE_NO_FAIL(conn->Query("INSERT INTO integers FROM range(10000)"));
 	conn->DisableProfiling();
 	// perform a long running query in the background (many cross products)
 	bool correct = true;

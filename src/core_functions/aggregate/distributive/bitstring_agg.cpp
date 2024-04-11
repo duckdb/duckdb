@@ -64,6 +64,10 @@ struct BitStringAggOperation {
 			}
 			state.min = bind_agg_data.min.GetValue<INPUT_TYPE>();
 			state.max = bind_agg_data.max.GetValue<INPUT_TYPE>();
+			if (state.min > state.max) {
+				throw InvalidInputException("Invalid explicit bitstring range: Minimum (%s) > maximum (%s)",
+				                            NumericHelper::ToString(state.min), NumericHelper::ToString(state.max));
+			}
 			idx_t bit_range =
 			    GetRange(bind_agg_data.min.GetValue<INPUT_TYPE>(), bind_agg_data.max.GetValue<INPUT_TYPE>());
 			if (bit_range > MAX_BIT_RANGE) {
@@ -181,7 +185,7 @@ idx_t BitStringAggOperation::GetRange(hugeint_t min, hugeint_t max) {
 		return NumericLimits<idx_t>::Maximum();
 	}
 	idx_t range;
-	if (!Hugeint::TryCast(result + 1, range)) {
+	if (!Hugeint::TryCast(result + 1, range) || result == NumericLimits<hugeint_t>::Maximum()) {
 		return NumericLimits<idx_t>::Maximum();
 	}
 	return range;
@@ -204,7 +208,7 @@ idx_t BitStringAggOperation::GetRange(uhugeint_t min, uhugeint_t max) {
 		return NumericLimits<idx_t>::Maximum();
 	}
 	idx_t range;
-	if (!Uhugeint::TryCast(result + 1, range)) {
+	if (!Uhugeint::TryCast(result + 1, range) || result == NumericLimits<uhugeint_t>::Maximum()) {
 		return NumericLimits<idx_t>::Maximum();
 	}
 	return range;

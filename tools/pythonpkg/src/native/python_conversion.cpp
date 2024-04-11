@@ -69,8 +69,9 @@ Value TransformDictionaryToStruct(const PyDictionary &dict, const LogicalType &t
 	auto struct_keys = TransformStructKeys(dict.keys, dict.len, target_type);
 
 	bool struct_target = target_type.id() == LogicalTypeId::STRUCT;
-	if (struct_target) {
-		D_ASSERT(dict.len == StructType::GetChildCount(target_type));
+	if (struct_target && dict.len != StructType::GetChildCount(target_type)) {
+		throw InvalidInputException("We could not convert the object %s to the desired target type (%s)",
+		                            dict.ToString(), target_type.ToString());
 	}
 
 	child_list_t<Value> struct_values;
@@ -136,8 +137,16 @@ Value TransformDictionaryToMap(const PyDictionary &dict, const LogicalType &targ
 		return EmptyMapValue();
 	}
 	// dict == { 'key': [ ... ], 'value' : [ ... ] }
-	auto key_list = TransformPythonValue(keys);
-	auto value_list = TransformPythonValue(values);
+	LogicalType key_target = LogicalTypeId::UNKNOWN;
+	LogicalType value_target = LogicalTypeId::UNKNOWN;
+
+	if (target_type.id() != LogicalTypeId::UNKNOWN) {
+		key_target = LogicalType::LIST(MapType::KeyType(target_type));
+		value_target = LogicalType::LIST(MapType::ValueType(target_type));
+	}
+
+	auto key_list = TransformPythonValue(keys, key_target);
+	auto value_list = TransformPythonValue(values, value_target);
 
 	LogicalType key_type = LogicalType::SQLNULL;
 	LogicalType value_type = LogicalType::SQLNULL;
@@ -230,7 +239,7 @@ Value TransformArrayValue(py::handle ele, const LogicalType &target_type = Logic
 		values.push_back(std::move(new_value));
 	}
 
-	return Value::ARRAY(element_type, values);
+	return Value::ARRAY(element_type, std::move(values));
 }
 
 Value TransformDictionary(const PyDictionary &dict) {
@@ -297,7 +306,10 @@ bool TryTransformPythonNumeric(Value &res, py::handle ele, const LogicalType &ta
 			throw InvalidInputException(StringUtil::Format("Failed to cast value: Python value '%s' to INT64",
 			                                               std::string(pybind11::str(ele))));
 		}
-		return TryTransformPythonIntegerToDouble(res, ele);
+		auto cast_as = target_type.id() == LogicalTypeId::UNKNOWN ? LogicalType::HUGEINT : target_type;
+		auto numeric_string = std::string(py::str(ele));
+		res = Value(numeric_string).DefaultCastAs(cast_as);
+		return true;
 	} else if (overflow == 1) {
 		if (target_type.InternalType() == PhysicalType::INT64) {
 			throw InvalidInputException(StringUtil::Format("Failed to cast value: Python value '%s' to INT64",
@@ -436,6 +448,8 @@ PythonObjectType GetPythonObjectType(py::handle &ele) {
 		return PythonObjectType::Tuple;
 	} else if (py::isinstance<py::dict>(ele)) {
 		return PythonObjectType::Dict;
+	} else if (ele.is(import_cache.numpy.ma.masked())) {
+		return PythonObjectType::None;
 	} else if (py::isinstance(ele, import_cache.numpy.ndarray())) {
 		return PythonObjectType::NdArray;
 	} else if (py::isinstance(ele, import_cache.numpy.datetime64())) {
@@ -514,8 +528,13 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool 
 		auto timedelta = PyTimeDelta(ele);
 		return Value::INTERVAL(timedelta.ToInterval());
 	}
-	case PythonObjectType::String:
-		return ele.cast<string>();
+	case PythonObjectType::String: {
+		auto stringified = ele.cast<string>();
+		if (target_type.id() == LogicalTypeId::UNKNOWN) {
+			return Value(stringified);
+		}
+		return Value(stringified).DefaultCastAs(target_type);
+	}
 	case PythonObjectType::ByteArray: {
 		auto byte_array = ele;
 		const_data_ptr_t bytes = const_data_ptr_cast(PyByteArray_AsString(byte_array.ptr())); // NOLINT
