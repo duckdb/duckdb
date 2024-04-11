@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <ostream>
 #include <sstream>
+#include <stdexcept>
 
 #include "util/util.h"
 

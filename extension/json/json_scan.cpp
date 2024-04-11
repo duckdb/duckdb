@@ -878,7 +878,6 @@ void JSONScanLocalState::ParseNextChunk(JSONScanGlobalState &gstate) {
 	auto buffer_offset_before = buffer_offset;
 
 	const auto format = current_reader->GetFormat();
-	D_ASSERT(format != JSONFormat::AUTO_DETECT);
 	for (; scan_count < STANDARD_VECTOR_SIZE; scan_count++) {
 		SkipWhitespace(buffer_ptr, buffer_offset, buffer_size);
 		auto json_start = buffer_ptr + buffer_offset;
@@ -886,6 +885,7 @@ void JSONScanLocalState::ParseNextChunk(JSONScanGlobalState &gstate) {
 		if (remaining == 0) {
 			break;
 		}
+		D_ASSERT(format != JSONFormat::AUTO_DETECT);
 		const char *json_end = format == JSONFormat::NEWLINE_DELIMITED ? NextNewline(json_start, remaining)
 		                                                               : NextJSON(json_start, remaining);
 		if (json_end == nullptr) {

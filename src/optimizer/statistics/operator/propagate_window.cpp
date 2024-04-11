@@ -5,7 +5,7 @@
 namespace duckdb {
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalWindow &window,
-                                                                     unique_ptr<LogicalOperator> *node_ptr) {
+                                                                     unique_ptr<LogicalOperator> &node_ptr) {
 	// first propagate to the child
 	node_stats = PropagateStatistics(window.children[0]);
 
