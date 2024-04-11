@@ -85,6 +85,8 @@ struct CSVReaderOptions {
 	//! Whether or not header names shall be normalized
 	bool normalize_names = false;
 	//! True, if column with that index must skip null check
+	unordered_set<string> force_not_null_names;
+	//! True, if column with that index must skip null check
 	vector<bool> force_not_null;
 	//! Number of sample chunks used in auto-detection
 	idx_t sample_size_chunks = 20480 / STANDARD_VECTOR_SIZE;

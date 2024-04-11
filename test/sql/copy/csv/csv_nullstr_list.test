@@ -83,31 +83,36 @@ query III
 FROM read_csv('data/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null'], force_not_null = ['height']);
 ----
 Pedro	31	1.73
-Mark	NULL	NULL
-Thijs	26	NULL
+Mark	NULL	(empty)
+Thijs	26	(empty)
 
 query III
 FROM read_csv('data/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null'], force_not_null = ['age','height']);
 ----
 Pedro	31	1.73
-Mark	NULL	NULL
-Thijs	26	NULL
-
+Mark	(empty)	(empty)
+Thijs	26	(empty)
 
 # Test Quoted
 query III
 FROM read_csv('data/csv/null/multiple_quoted_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null'], force_not_null = ['height']);
 ----
 Pedro	31	1.73
-Mark	NULL	NULL
-Thijs	26	NULL
+Mark	NULL	(empty)
+Thijs	26	(empty)
 
 query III
-FROM read_csv('data/csv/null/multiple_quoted_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null'], force_not_null = ['age','height']);
+FROM read_csv('data/csv/null/multiple_quoted_nulls.csv', auto_detect=true, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, nullstr = ['','none','null'], force_not_null = ['age','height'], ALL_VARCHAR = 1);
 ----
 Pedro	31	1.73
-Mark	NULL	NULL
-Thijs	26	NULL
+Mark	(empty)	(empty)
+Thijs	26	(empty)
+
+# Test force_not_null fails for made-up column
+statement error
+FROM read_csv('data/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null'], force_not_null = ['dont_exist']);
+----
+Column name dont_exist specified in force_not_null parameter, does not exist in the CSV File.
 
 # Test where the last value is null over different strings
 

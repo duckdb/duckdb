@@ -142,7 +142,28 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	}
 	result->return_types = return_types;
 	result->return_names = names;
-
+	if (!options.force_not_null_names.empty()) {
+		// Lets first check all column names match
+		duckdb::unordered_set<string> column_names;
+		for (auto &name : names) {
+			column_names.insert(name);
+		}
+		for (auto &force_name : options.force_not_null_names) {
+			if (column_names.find(force_name) == column_names.end()) {
+				throw BinderException(
+				    "Column name %s specified in force_not_null parameter, does not exist in the CSV File.",
+				    force_name);
+			}
+		}
+		D_ASSERT(options.force_not_null.empty());
+		for (idx_t i = 0; i < names.size(); i++) {
+			if (options.force_not_null_names.find(names[i]) != options.force_not_null_names.end()) {
+				options.force_not_null.push_back(true);
+			} else {
+				options.force_not_null.push_back(false);
+			}
+		}
+	}
 	result->FinalizeRead(context);
 	return std::move(result);
 }
@@ -252,6 +273,7 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 	table_function.named_parameters["rejects_table"] = LogicalType::VARCHAR;
 	table_function.named_parameters["rejects_limit"] = LogicalType::BIGINT;
 	table_function.named_parameters["rejects_recovery_columns"] = LogicalType::LIST(LogicalType::VARCHAR);
+	table_function.named_parameters["force_not_null"] = LogicalType::LIST(LogicalType::VARCHAR);
 	table_function.named_parameters["buffer_size"] = LogicalType::UBIGINT;
 	table_function.named_parameters["decimal_separator"] = LogicalType::VARCHAR;
 	table_function.named_parameters["parallel"] = LogicalType::BOOLEAN;
