@@ -215,9 +215,9 @@ bool RefersToSameObject(const T &a, const T &b) {
 }
 
 template<class T, class SRC>
-void DynamicCastCheck(SRC *source) {
+void DynamicCastCheck(const SRC *source) {
 #ifndef __APPLE__
-	D_ASSERT(dynamic_cast<T *>(source));
+	D_ASSERT(dynamic_cast<const T *>(source));
 #endif
 }
 
