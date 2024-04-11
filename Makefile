@@ -445,6 +445,8 @@ generate-files:
 	python3 scripts/generate_enum_util.py
 	python3 tools/pythonpkg/scripts/generate_connection_code.py
 	./scripts/generate_micro_extended.sh
+# Run the formatter again after (re)generating the files
+	$(MAKE) format-main
 
 bundle-library: release
 	cd build/release && \
