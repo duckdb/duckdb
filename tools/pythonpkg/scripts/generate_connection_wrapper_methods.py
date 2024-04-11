@@ -95,20 +95,19 @@ def generate():
         return function_call
 
     def create_definition(name, method) -> str:
-        print(method)
         arguments = generate_arguments(name, method)
         parameters = generate_parameters(name, method)
         function_call = generate_function_call(name)
 
         func = f"""
-	def {name}({arguments}):
-		if 'connection' in kwargs:
-			conn =  kwargs.pop('connection')
-		else:
-			conn = duckdb.connect(":default:")
-		return conn.{function_call}{parameters}
-	_exported_symbols.append('{name}')
-	"""
+def {name}({arguments}):
+    if 'connection' in kwargs:
+        conn = kwargs.pop('connection')
+    else:
+        conn = duckdb.connect(":default:")
+    return conn.{function_call}{parameters}
+_exported_symbols.append('{name}')
+"""
         return func
 
     # We have "duplicate" methods, which are overloaded

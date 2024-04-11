@@ -67,7 +67,6 @@ def generate():
         return result
 
     def create_definition(name, method) -> str:
-        print(method)
         definition = f"def {name}("
         arguments = []
         if name in SPECIAL_METHOD_NAMES:

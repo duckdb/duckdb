@@ -52,7 +52,6 @@ def generate():
         return result
 
     def create_definition(name, method) -> str:
-        print(method)
         definition = f"def {name}(self"
         if 'args' in method:
             definition += ", "
