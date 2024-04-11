@@ -2,6 +2,8 @@
 # description: topN
 # group: [topn]
 
+require skip_reload
+
 statement ok
 SELECT SETSEED(0.42);
 
