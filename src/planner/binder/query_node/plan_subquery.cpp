@@ -411,8 +411,8 @@ void Binder::PlanSubqueries(unique_ptr<Expression> &expr_ptr, unique_ptr<Logical
 }
 
 unique_ptr<LogicalOperator> Binder::PlanLateralJoin(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right,
-                                                    vector<CorrelatedColumnInfo> &correlated,
-                                                    JoinType join_type, unique_ptr<Expression> condition) {
+                                                    vector<CorrelatedColumnInfo> &correlated, JoinType join_type,
+                                                    unique_ptr<Expression> condition) {
 	// scan the right operator for correlated columns
 	// correlated LATERAL JOIN
 	vector<JoinCondition> conditions;

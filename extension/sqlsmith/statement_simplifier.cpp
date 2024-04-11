@@ -142,20 +142,23 @@ void StatementSimplifier::Simplify(QueryNode &node) {
 	SimplifyList(node.modifiers);
 }
 
-void StatementSimplifier::SimplifyExpressionList(duckdb::unique_ptr<ParsedExpression> &expr, vector<unique_ptr<ParsedExpression>> &expression_list) {
-	for(auto &child : expression_list) {
+void StatementSimplifier::SimplifyExpressionList(duckdb::unique_ptr<ParsedExpression> &expr,
+                                                 vector<unique_ptr<ParsedExpression>> &expression_list) {
+	for (auto &child : expression_list) {
 		SimplifyChildExpression(expr, child);
 	}
 }
 
-void StatementSimplifier::SimplifyExpressionList(vector<unique_ptr<ParsedExpression>> &expression_list, bool is_optional) {
+void StatementSimplifier::SimplifyExpressionList(vector<unique_ptr<ParsedExpression>> &expression_list,
+                                                 bool is_optional) {
 	SimplifyList(expression_list, is_optional);
-	for(auto &child : expression_list) {
+	for (auto &child : expression_list) {
 		SimplifyExpression(child);
 	}
 }
 
-void StatementSimplifier::SimplifyChildExpression(duckdb::unique_ptr<ParsedExpression> &expr, unique_ptr<ParsedExpression> &child) {
+void StatementSimplifier::SimplifyChildExpression(duckdb::unique_ptr<ParsedExpression> &expr,
+                                                  unique_ptr<ParsedExpression> &child) {
 	if (!child) {
 		return;
 	}

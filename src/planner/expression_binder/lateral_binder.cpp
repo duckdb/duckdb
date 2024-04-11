@@ -107,7 +107,7 @@ public:
 	}
 
 	static void ReduceExpressionSubquery(BoundSubqueryExpression &expr,
-										 const vector<CorrelatedColumnInfo> &correlated_columns) {
+	                                     const vector<CorrelatedColumnInfo> &correlated_columns) {
 		ReduceColumnDepth(expr.binder->correlated_columns, correlated_columns);
 		ExpressionDepthReducerRecursive recursive(correlated_columns);
 		recursive.VisitBoundQueryNode(*expr.subquery);

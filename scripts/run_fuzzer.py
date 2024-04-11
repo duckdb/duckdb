@@ -50,6 +50,7 @@ if seed < 0:
 
 git_hash = os.getenv('DUCKDB_HASH')
 
+
 def create_db_script(db):
     if db == 'alltypes':
         return 'create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types();'
@@ -59,6 +60,7 @@ def create_db_script(db):
         return 'create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types() limit 0;'
     else:
         raise Exception("Unknown database creation script")
+
 
 def run_fuzzer_script(fuzzer):
     if fuzzer == 'sqlsmith':
@@ -70,6 +72,7 @@ def run_fuzzer_script(fuzzer):
     else:
         raise Exception("Unknown fuzzer type")
 
+
 def get_fuzzer_name(fuzzer):
     if fuzzer == 'sqlsmith':
         return 'SQLSmith'
@@ -79,6 +82,7 @@ def get_fuzzer_name(fuzzer):
         return 'DuckFuzz (Functions)'
     else:
         return 'Unknown'
+
 
 def run_shell_command(cmd):
     command = [shell, '--batch', '-init', '/dev/null']
@@ -96,13 +100,21 @@ max_queries = 2000
 last_query_log_file = 'sqlsmith.log'
 complete_log_file = 'sqlsmith.complete.log'
 
-print(f'''==========================================
+print(
+    f'''==========================================
         RUNNING {fuzzer} on {db}
-==========================================''')
+=========================================='''
+)
 
 load_script = create_db_script(db)
 fuzzer_name = get_fuzzer_name(fuzzer)
-fuzzer = run_fuzzer_script(fuzzer).replace('${MAX_QUERIES}', str(max_queries)).replace('${LAST_LOG_FILE}', last_query_log_file).replace('${COMPLETE_LOG_FILE}', complete_log_file).replace('${SEED}', str(seed))
+fuzzer = (
+    run_fuzzer_script(fuzzer)
+    .replace('${MAX_QUERIES}', str(max_queries))
+    .replace('${LAST_LOG_FILE}', last_query_log_file)
+    .replace('${COMPLETE_LOG_FILE}', complete_log_file)
+    .replace('${SEED}', str(seed))
+)
 
 print(load_script)
 print(fuzzer)
@@ -113,9 +125,11 @@ print("==========================================")
 
 (stdout, stderr, returncode) = run_shell_command(cmd)
 
-print(f'''==========================================
+print(
+    f'''==========================================
         FINISHED RUNNING
-==========================================''')
+=========================================='''
+)
 print("==============  STDOUT  ================")
 print(stdout)
 print("==============  STDERR  =================")
@@ -160,7 +174,10 @@ print("=========================================")
 # check if this is a duplicate issue
 if error_msg in current_errors:
     print("Skip filing duplicate issue")
-    print("Issue already exists: https://github.com/duckdb/duckdb-fuzzer/issues/" + str(current_errors[error_msg]['number']))
+    print(
+        "Issue already exists: https://github.com/duckdb/duckdb-fuzzer/issues/"
+        + str(current_errors[error_msg]['number'])
+    )
     exit(0)
 
 print(last_query)
