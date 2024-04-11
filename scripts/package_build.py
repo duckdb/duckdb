@@ -343,7 +343,7 @@ def build_package(target_dir, extensions, linenumbers=False, unity_count=32, fol
                         unity_build = True
                         # re-order the files in the unity build so that they follow the same order as the CMake
                         scores = {}
-                        filenames = [x[0] for x in re.findall('([a-zA-Z0-9_]+[.](cpp|cc|c|cxx))', text)]
+                        filenames = [x[0] for x in re.findall('([a-zA-Z0-9_]+[.](cpp|ipp|cc|c|cxx))', text)]
                         score = 0
                         for filename in filenames:
                             scores[filename] = score
