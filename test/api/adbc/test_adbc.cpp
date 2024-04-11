@@ -1064,18 +1064,22 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_CATALOGS, nullptr, nullptr, nullptr, nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		auto res = db.Query("Select * from result");
+		auto res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE(res->ColumnCount() == 2);
-		REQUIRE(res->RowCount() == 1);
-		REQUIRE(res->GetValue(0, 0).ToString() == "test_catalog_depth");
+		REQUIRE(res->RowCount() == 3);
+		REQUIRE(res->GetValue(0, 0).ToString() == "system");
+		REQUIRE(res->GetValue(0, 1).ToString() == "temp");
+		REQUIRE(res->GetValue(0, 2).ToString() == "test_catalog_depth");
 		REQUIRE(res->GetValue(1, 0).ToString() == "[]");
+		REQUIRE(res->GetValue(1, 1).ToString() == "[]");
+		REQUIRE(res->GetValue(1, 2).ToString() == "[]");
 		db.Query("Drop table result;");
 
 		// Test Filters
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_CATALOGS, "bla", nullptr, nullptr, nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		res = db.Query("Select * from result");
+		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE(res->ColumnCount() == 2);
 		REQUIRE(res->RowCount() == 0);
 		db.Query("Drop table result;");
@@ -1095,17 +1099,31 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_DB_SCHEMAS, nullptr, nullptr, nullptr, nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		auto res = db.Query("Select * from result");
+		auto res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE(res->ColumnCount() == 2);
-		REQUIRE(res->RowCount() == 1);
+		REQUIRE(res->RowCount() == 3);
 		REQUIRE(res->GetValue(0, 0).ToString() == "ADBC_OBJECT_DEPTH_DB_SCHEMAS");
+		REQUIRE(res->GetValue(0, 1).ToString() == "system");
+		REQUIRE(res->GetValue(0, 2).ToString() == "temp");
 		string expected = R"([
 			{
+				'db_schema_name': information_schema,
+				'db_schema_tables': []
+			},
+			{
 				'db_schema_name': main,
+				'db_schema_tables': []
+			},
+			{
+				'db_schema_name': pg_catalog,
 				'db_schema_tables': []
 			}
 		])";
 		REQUIRE(StringUtil::Replace(res->GetValue(1, 0).ToString(), " ", "") ==
+		        StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected, "\n", ""), "\t", ""), " ", ""));
+		REQUIRE(StringUtil::Replace(res->GetValue(1, 1).ToString(), " ", "") ==
+		        StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected, "\n", ""), "\t", ""), " ", ""));
+		REQUIRE(StringUtil::Replace(res->GetValue(1, 2).ToString(), " ", "") ==
 		        StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected, "\n", ""), "\t", ""), " ", ""));
 		db.Query("Drop table result;");
 
@@ -1113,7 +1131,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_DB_SCHEMAS, "bla", nullptr, nullptr, nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		res = db.Query("Select * from result");
+		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE(res->ColumnCount() == 2);
 		REQUIRE(res->RowCount() == 0);
 		db.Query("Drop table result;");
@@ -1121,10 +1139,12 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_DB_SCHEMAS, nullptr, "bla", nullptr, nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		res = db.Query("Select * from result");
+		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE(res->ColumnCount() == 2);
-		REQUIRE(res->RowCount() == 1);
+		REQUIRE(res->RowCount() == 3);
 		REQUIRE(res->GetValue(1, 0).ToString() == "NULL");
+		REQUIRE(res->GetValue(1, 1).ToString() == "NULL");
+		REQUIRE(res->GetValue(1, 2).ToString() == "NULL");
 		db.Query("Drop table result;");
 	}
 	// 3. Test ADBC_OBJECT_DEPTH_TABLES
@@ -1141,11 +1161,17 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, nullptr, nullptr, nullptr, nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		auto res = db.Query("Select * from result");
+		auto res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE(res->ColumnCount() == 2);
-		REQUIRE(res->RowCount() == 1);
-		REQUIRE(res->GetValue(0, 0).ToString() == "test_table_depth");
+		REQUIRE(res->RowCount() == 3);
+		REQUIRE(res->GetValue(0, 0).ToString() == "system");
+		REQUIRE(res->GetValue(0, 1).ToString() == "temp");
+		REQUIRE(res->GetValue(0, 2).ToString() == "test_table_depth");
 		string expected = R"([
+			{
+				'db_schema_name': information_schema,
+				'db_schema_tables': NULL
+			},
 			{
 				'db_schema_name': main,
 				'db_schema_tables': [
@@ -1156,9 +1182,13 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 						'table_constraints': []
 					}
 				]
+			},
+			{
+				'db_schema_name': pg_catalog,
+				'db_schema_tables': NULL
 			}
 		])";
-		REQUIRE(StringUtil::Replace(res->GetValue(1, 0).ToString(), " ", "") ==
+		REQUIRE(StringUtil::Replace(res->GetValue(1, 2).ToString(), " ", "") ==
 		        StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected, "\n", ""), "\t", ""), " ", ""));
 		db.Query("Drop table result;");
 
@@ -1166,7 +1196,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, "bla", nullptr, nullptr, nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		res = db.Query("Select * from result");
+		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE(res->ColumnCount() == 2);
 		REQUIRE(res->RowCount() == 0);
 		db.Query("Drop table result;");
@@ -1174,19 +1204,21 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, nullptr, "bla", nullptr, nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		res = db.Query("Select * from result");
+		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE(res->ColumnCount() == 2);
-		REQUIRE(res->RowCount() == 1);
+		REQUIRE(res->RowCount() == 3);
 		REQUIRE(res->GetValue(1, 0).ToString() == "NULL");
+		REQUIRE(res->GetValue(1, 1).ToString() == "NULL");
+		REQUIRE(res->GetValue(1, 2).ToString() == "NULL");
 		db.Query("Drop table result;");
 
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, nullptr, nullptr, "bla", nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		res = db.Query("Select * from result");
+		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE(res->ColumnCount() == 2);
-		REQUIRE(res->RowCount() == 1);
-		REQUIRE(res->GetValue(1, 0).ToString() == "[{'db_schema_name': main, 'db_schema_tables': NULL}]");
+		REQUIRE(res->RowCount() == 3);
+		REQUIRE(res->GetValue(1, 2).ToString() == "[{'db_schema_name': information_schema, 'db_schema_tables': NULL}, {'db_schema_name': main, 'db_schema_tables': NULL}, {'db_schema_name': pg_catalog, 'db_schema_tables': NULL}]");
 		db.Query("Drop table result;");
 	}
 	// 4.Test ADBC_OBJECT_DEPTH_COLUMNS
@@ -1203,11 +1235,17 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr, nullptr, nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		auto res = db.Query("Select * from result");
+		auto res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE(res->ColumnCount() == 2);
-		REQUIRE(res->RowCount() == 1);
-		REQUIRE(res->GetValue(0, 0).ToString() == "test_column_depth");
+		REQUIRE(res->RowCount() == 3);
+		REQUIRE(res->GetValue(0, 0).ToString() == "system");
+		REQUIRE(res->GetValue(0, 1).ToString() == "temp");
+		REQUIRE(res->GetValue(0, 2).ToString() == "test_column_depth");
 		string expected = R"([
+			{
+				'db_schema_name': information_schema,
+				'db_schema_tables': NULL
+			},
 			{
 				'db_schema_name': main,
 				'db_schema_tables': [
@@ -1240,9 +1278,13 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 						'table_constraints': NULL
 					}
 				]
+			},
+			{
+				'db_schema_name': pg_catalog,
+				'db_schema_tables': NULL
 			}
 		])";
-		REQUIRE(StringUtil::Replace(res->GetValue(1, 0).ToString(), " ", "") ==
+		REQUIRE(StringUtil::Replace(res->GetValue(1, 2).ToString(), " ", "") ==
 		        StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected, "\n", ""), "\t", ""), " ", ""));
 		db.Query("Drop table result;");
 
@@ -1250,7 +1292,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, "bla", nullptr, nullptr, nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		res = db.Query("Select * from result");
+		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE(res->ColumnCount() == 2);
 		REQUIRE(res->RowCount() == 0);
 		db.Query("Drop table result;");
@@ -1258,30 +1300,32 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, "bla", nullptr, nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		res = db.Query("Select * from result");
+		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE(res->ColumnCount() == 2);
-		REQUIRE(res->RowCount() == 1);
+		REQUIRE(res->RowCount() == 3);
 		REQUIRE(res->GetValue(1, 0).ToString() == "NULL");
+		REQUIRE(res->GetValue(1, 1).ToString() == "NULL");
+		REQUIRE(res->GetValue(1, 2).ToString() == "NULL");
 		db.Query("Drop table result;");
 
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr, "bla", nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		res = db.Query("Select * from result");
+		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE(res->ColumnCount() == 2);
-		REQUIRE(res->RowCount() == 1);
-		REQUIRE(res->GetValue(1, 0).ToString() == "[{'db_schema_name': main, 'db_schema_tables': NULL}]");
+		REQUIRE(res->RowCount() == 3);
+		REQUIRE(res->GetValue(1, 2).ToString() == "[{'db_schema_name': information_schema, 'db_schema_tables': NULL}, {'db_schema_name': main, 'db_schema_tables': NULL}, {'db_schema_name': pg_catalog, 'db_schema_tables': NULL}]");
 		db.Query("Drop table result;");
 
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr, nullptr, nullptr,
 		                         "bla", &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		res = db.Query("Select * from result");
+		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE(res->ColumnCount() == 2);
-		REQUIRE(res->RowCount() == 1);
-		REQUIRE(res->GetValue(1, 0).ToString() ==
-		        "[{'db_schema_name': main, 'db_schema_tables': [{'table_name': my_table, 'table_type': BASE TABLE, "
-		        "'table_columns': NULL, 'table_constraints': NULL}]}]");
+		REQUIRE(res->RowCount() == 3);
+		REQUIRE(res->GetValue(1, 2).ToString() ==
+		        "[{'db_schema_name': information_schema, 'db_schema_tables': NULL}, {'db_schema_name': main, 'db_schema_tables': [{'table_name': my_table, 'table_type': BASE TABLE, "
+		        "'table_columns': NULL, 'table_constraints': NULL}]}, {'db_schema_name': pg_catalog, 'db_schema_tables': NULL}]");
 		db.Query("Drop table result;");
 	}
 	// 5.Test ADBC_OBJECT_DEPTH_ALL
@@ -1298,11 +1342,16 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_ALL, nullptr, nullptr, nullptr, nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		auto res = db.Query("Select * from result");
-		REQUIRE(res->ColumnCount() == 2);
-		REQUIRE(res->RowCount() == 1);
-		REQUIRE(res->GetValue(0, 0).ToString() == "test_all_depth");
+		auto res = db.Query("Select * from result order by catalog_name asc");
+		REQUIRE(res->RowCount() == 3);
+		REQUIRE(res->GetValue(0, 0).ToString() == "system");
+		REQUIRE(res->GetValue(0, 1).ToString() == "temp");
+		REQUIRE(res->GetValue(0, 2).ToString() == "test_all_depth");
 		string expected = R"([
+			{
+				'db_schema_name': information_schema,
+				'db_schema_tables': NULL
+			},
 			{
 				'db_schema_name': main,
 				'db_schema_tables': [
@@ -1335,9 +1384,13 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 						'table_constraints': NULL
 					}
 				]
+			},
+			{
+				'db_schema_name': pg_catalog,
+				'db_schema_tables': NULL
 			}
 		])";
-		REQUIRE(StringUtil::Replace(res->GetValue(1, 0).ToString(), " ", "") ==
+		REQUIRE(StringUtil::Replace(res->GetValue(1, 2).ToString(), " ", "") ==
 		        StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected, "\n", ""), "\t", ""), " ", ""));
 		db.Query("Drop table result;");
 
@@ -1345,7 +1398,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, "bla", nullptr, nullptr, nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		res = db.Query("Select * from result");
+		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE(res->ColumnCount() == 2);
 		REQUIRE(res->RowCount() == 0);
 		db.Query("Drop table result;");
@@ -1353,30 +1406,32 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, "bla", nullptr, nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		res = db.Query("Select * from result");
+		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE(res->ColumnCount() == 2);
-		REQUIRE(res->RowCount() == 1);
+		REQUIRE(res->RowCount() == 3);
 		REQUIRE(res->GetValue(1, 0).ToString() == "NULL");
+		REQUIRE(res->GetValue(1, 1).ToString() == "NULL");
+		REQUIRE(res->GetValue(1, 2).ToString() == "NULL");
 		db.Query("Drop table result;");
 
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr, "bla", nullptr,
 		                         nullptr, &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		res = db.Query("Select * from result");
+		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE(res->ColumnCount() == 2);
-		REQUIRE(res->RowCount() == 1);
-		REQUIRE(res->GetValue(1, 0).ToString() == "[{'db_schema_name': main, 'db_schema_tables': NULL}]");
+		REQUIRE(res->RowCount() == 3);
+		REQUIRE(res->GetValue(1, 2).ToString() == "[{'db_schema_name': information_schema, 'db_schema_tables': NULL}, {'db_schema_name': main, 'db_schema_tables': NULL}, {'db_schema_name': pg_catalog, 'db_schema_tables': NULL}]");
 		db.Query("Drop table result;");
 
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr, nullptr, nullptr,
 		                         "bla", &arrow_stream, &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		res = db.Query("Select * from result");
+		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE(res->ColumnCount() == 2);
-		REQUIRE(res->RowCount() == 1);
-		REQUIRE(res->GetValue(1, 0).ToString() ==
-		        "[{'db_schema_name': main, 'db_schema_tables': [{'table_name': my_table, 'table_type': BASE TABLE, "
-		        "'table_columns': NULL, 'table_constraints': NULL}]}]");
+		REQUIRE(res->RowCount() == 3);
+		REQUIRE(res->GetValue(1, 2).ToString() ==
+		        "[{'db_schema_name': information_schema, 'db_schema_tables': NULL}, {'db_schema_name': main, 'db_schema_tables': [{'table_name': my_table, 'table_type': BASE TABLE, "
+		        "'table_columns': NULL, 'table_constraints': NULL}]}, {'db_schema_name': pg_catalog, 'db_schema_tables': NULL}]");
 		db.Query("Drop table result;");
 	}
 	//	 Now lets test some errors
