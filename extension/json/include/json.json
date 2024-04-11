@@ -140,7 +140,7 @@
         "id": 113,
         "name": "field_appearance_threshold",
         "type": "double",
-        "default": 0.25
+        "default": 0.1
       },
       {
         "id": 114,

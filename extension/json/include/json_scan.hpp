@@ -125,7 +125,7 @@ public:
 	//! We divide the number of appearances of each JSON field by the auto-detection sample size
 	//! If the average over the fields of an object is less than this threshold,
 	//! we default to the MAP type with value type of merged field types
-	double field_appearance_threshold = 0.25;
+	double field_appearance_threshold = 0.1;
 	//! The maximum number of files we sample to sample sample_size rows
 	idx_t maximum_sample_files = 32;
 	//! Whether we auto-detect and convert JSON strings to integers
