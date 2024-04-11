@@ -2,6 +2,8 @@
 # description: Test correct quotes in sqlite_master
 # group: [table_function]
 
+require noforcestorage
+
 # simple quotes
 statement ok
 CREATE TABLE "a b c"("d e" INTEGER, f INTEGER);

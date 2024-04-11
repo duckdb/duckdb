@@ -2,6 +2,8 @@
 # description: Test sqlite_master function
 # group: [table_function]
 
+require noforcestorage
+
 statement ok
 CREATE TABLE integers(i INTEGER);
 
