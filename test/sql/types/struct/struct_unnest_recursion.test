@@ -10,13 +10,12 @@ SELECT UNNEST ( ( '1,2,3,4,,6' , ( 1 ) ) ) , x x;
 ----
 cannot be referenced before it is defined
 
-mode skip
-
-# FIXME this should work
-statement error
-SELECT UNNEST ( ( '1,2,3,4,,6' , ( random() ) ) ), 42 x, x;
+query IIII
+SELECT UNNEST ( ( '1,2,3,4,,6' , ( case when random() < 10 then 0 else 1 end ) ) ), 42 x, x;
 ----
-1,2,3,4,,6	1	42	42
+1,2,3,4,,6	0	42	42
 
-mode unskip
+
+
+
 

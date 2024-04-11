@@ -28,6 +28,9 @@ public:
 	bool CanSeek();
 	void Seek(idx_t position);
 	bool OnDiskFile();
+	bool IsPipe();
+
+	void Reset();
 
 	idx_t FileSize();
 
@@ -50,6 +53,8 @@ private:
 	string path;
 	bool can_seek = false;
 	bool on_disk_file = false;
+	bool is_pipe = false;
+
 	idx_t file_size = 0;
 
 	idx_t requested_bytes = 0;
