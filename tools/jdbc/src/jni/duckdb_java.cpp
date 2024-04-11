@@ -1,6 +1,7 @@
 #include "functions.hpp"
 #include "duckdb.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/main/appender.hpp"
@@ -348,10 +349,10 @@ static Value create_value_from_bigdecimal(JNIEnv *env, jobject decimal) {
  * DuckDB is released as well.
  */
 struct ConnectionHolder {
-	const shared_ptr<duckdb::DuckDB> db;
+	const duckdb::shared_ptr<duckdb::DuckDB> db;
 	const duckdb::unique_ptr<duckdb::Connection> connection;
 
-	ConnectionHolder(shared_ptr<duckdb::DuckDB> _db) : db(_db), connection(make_uniq<duckdb::Connection>(*_db)) {
+	ConnectionHolder(duckdb::shared_ptr<duckdb::DuckDB> _db) : db(_db), connection(make_uniq<duckdb::Connection>(*_db)) {
 	}
 };
 
