@@ -42,7 +42,7 @@ SELECT 'a' FROM ORDER BY -0 COLLATE NOCASE;
 ----
 
 statement ok
-CREATE TABLE collate_test(s VARCHAR)
+CREATE TABLE collate_test(s VARCHAR);
 
 statement ok
 INSERT INTO collate_test VALUES ('ã'),('B'),('a'),('A');
@@ -96,14 +96,22 @@ NULL
 NULL
 
 
-statement error
+query I
 SELECT (SELECT s) FROM collate_test ORDER BY 1 COLLATE NOCASE;
 ----
+a
+A
+B
+ã
 
 statement error
 SELECT (SELECT s) AS c1 FROM collate_test ORDER BY c11 COLLATE NOCASE;
 ----
 
-statement error
+query I
 SELECT concat('a', (SELECT s)) FROM collate_test ORDER BY 1 COLLATE NOCASE;
 ----
+aa
+aA
+aB
+aã
