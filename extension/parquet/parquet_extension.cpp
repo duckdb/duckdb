@@ -1210,25 +1210,25 @@ idx_t ParquetWriteDesiredBatchSize(ClientContext &context, FunctionData &bind_da
 }
 
 //===--------------------------------------------------------------------===//
-// Current File Size
-//===--------------------------------------------------------------------===//
-idx_t ParquetWriteFileSize(GlobalFunctionData &gstate) {
-	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
-	return global_state.writer->FileSize();
-}
-
-//===--------------------------------------------------------------------===//
 // File rotation
 //===--------------------------------------------------------------------===//
-bool ParquetWriteRotateFiles(FunctionData &bind_data_p) {
+bool ParquetWriteRotateFiles(FunctionData &bind_data_p, const optional_idx &file_size_bytes) {
 	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
-	return bind_data.row_groups_per_file.IsValid();
+	return file_size_bytes.IsValid() || bind_data.row_groups_per_file.IsValid();
 }
 
-bool ParquetWriteRotateNextFile(GlobalFunctionData &gstate, FunctionData &bind_data_p) {
+bool ParquetWriteRotateNextFile(GlobalFunctionData &gstate, FunctionData &bind_data_p,
+                                const optional_idx &file_size_bytes) {
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
 	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
-	return global_state.writer->NumberOfRowGroups() >= bind_data.row_groups_per_file.GetIndex();
+	if (file_size_bytes.IsValid() && global_state.writer->FileSize() > file_size_bytes.GetIndex()) {
+		return true;
+	}
+	if (bind_data.row_groups_per_file.IsValid() &&
+	    global_state.writer->NumberOfRowGroups() >= bind_data.row_groups_per_file.GetIndex()) {
+		return true;
+	}
+	return false;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1292,7 +1292,6 @@ void ParquetExtension::Load(DuckDB &db) {
 	function.prepare_batch = ParquetWritePrepareBatch;
 	function.flush_batch = ParquetWriteFlushBatch;
 	function.desired_batch_size = ParquetWriteDesiredBatchSize;
-	function.file_size_bytes = ParquetWriteFileSize;
 	function.rotate_files = ParquetWriteRotateFiles;
 	function.rotate_next_file = ParquetWriteRotateNextFile;
 	function.serialize = ParquetCopySerialize;

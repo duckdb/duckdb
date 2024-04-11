@@ -91,7 +91,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 			if (option.second.empty()) {
 				throw BinderException("FILE_SIZE_BYTES cannot be empty");
 			}
-			if (!copy_function.function.file_size_bytes) {
+			if (!copy_function.function.rotate_files) {
 				throw NotImplementedException("FILE_SIZE_BYTES not implemented for FORMAT \"%s\"", stmt.info->format);
 			}
 			if (option.second[0].GetTypeMutable().id() == LogicalTypeId::VARCHAR) {
@@ -140,7 +140,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	auto function_data =
 	    copy_function.function.copy_to_bind(context, bind_input, unique_column_names, select_node.types);
 
-	const auto rotate = copy_function.function.rotate_files && copy_function.function.rotate_files(*function_data);
+	const auto rotate =
+	    copy_function.function.rotate_files && copy_function.function.rotate_files(*function_data, file_size_bytes);
 	if (rotate) {
 		if (!copy_function.function.rotate_next_file) {
 			throw InternalException("rotate_next_file not implemented for \"%s\"", copy_function.function.extension);

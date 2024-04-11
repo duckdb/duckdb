@@ -12,6 +12,7 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
+
 #include <limits>
 
 namespace duckdb {
@@ -350,11 +351,6 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 	return std::move(global_data);
 }
 
-idx_t WriteCSVFileSize(GlobalFunctionData &gstate) {
-	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
-	return global_state.FileSize();
-}
-
 static void WriteCSVChunkInternal(ClientContext &context, FunctionData &bind_data, DataChunk &cast_chunk,
                                   MemoryStream &writer, DataChunk &input, bool &written_anything) {
 	auto &csv_data = bind_data.Cast<WriteCSVData>();
@@ -522,6 +518,18 @@ void WriteCSVFlushBatch(ClientContext &context, FunctionData &bind_data, GlobalF
 	writer.Rewind();
 }
 
+//===--------------------------------------------------------------------===//
+// File rotation
+//===--------------------------------------------------------------------===//
+bool WriteCSVRotateFiles(FunctionData &, const optional_idx &file_size_bytes) {
+	return file_size_bytes.IsValid();
+}
+
+bool WriteCSVRotateNextFile(GlobalFunctionData &gstate, FunctionData &, const optional_idx &file_size_bytes) {
+	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
+	return global_state.FileSize() > file_size_bytes.GetIndex();
+}
+
 void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {
 	CopyFunction info("csv");
 	info.copy_to_bind = WriteCSVBind;
@@ -533,7 +541,8 @@ void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {
 	info.execution_mode = WriteCSVExecutionMode;
 	info.prepare_batch = WriteCSVPrepareBatch;
 	info.flush_batch = WriteCSVFlushBatch;
-	info.file_size_bytes = WriteCSVFileSize;
+	info.rotate_files = WriteCSVRotateFiles;
+	info.rotate_next_file = WriteCSVRotateNextFile;
 
 	info.copy_from_bind = ReadCSVBind;
 	info.copy_from_function = ReadCSVTableFunction::GetFunction();
