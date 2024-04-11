@@ -67,6 +67,11 @@ quoted:
 		if (input[idx] == '"') {
 			//! unquote
 			idx++;
+			if (idx < input.size() && input[idx] == '"') {
+				// escaped quote
+				entry += input[idx];
+				continue;
+			}
 			goto normal;
 		}
 		entry += input[idx];
