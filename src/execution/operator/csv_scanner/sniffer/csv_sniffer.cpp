@@ -93,6 +93,14 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 	DetectHeader();
 	// 5. Type Replacement
 	ReplaceTypes();
+
+	// We reset the buffer for compressed files
+	// This is done because we can't easily seek on compressed files, if a buffer goes out of scope we must read from
+	// the start
+	if (!buffer_manager->file_handle->uncompressed) {
+		buffer_manager->ResetBufferManager();
+	}
+
 	if (!best_candidate->error_handler->errors.empty() && !options.ignore_errors.GetValue()) {
 		for (auto &error_vector : best_candidate->error_handler->errors) {
 			for (auto &error : error_vector.second) {

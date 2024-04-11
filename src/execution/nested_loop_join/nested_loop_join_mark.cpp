@@ -41,7 +41,6 @@ static void TemplatedMarkJoin(Vector &left, Vector &right, idx_t lcount, idx_t r
 static void MarkJoinNested(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[],
                            ExpressionType comparison_type) {
 	Vector left_reference(left.GetType());
-	SelectionVector true_sel(rcount);
 	for (idx_t i = 0; i < lcount; i++) {
 		if (found_match[i]) {
 			continue;

@@ -24,7 +24,7 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
 		file_scans.emplace_back(
 		    make_uniq<CSVFileScan>(context, files[0], options, 0, bind_data, column_ids, file_schema));
 	};
-	//! There are situations where we only support single threaded scanning
+	// There are situations where we only support single threaded scanning
 	bool many_csv_files = files.size() > 1 && files.size() > system_threads * 2;
 	single_threaded = many_csv_files || !options.parallel;
 	last_file_idx = 0;
@@ -43,20 +43,20 @@ double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	idx_t total_files = bind_data.files.size();
 	// get the progress WITHIN the current file
-	double progress;
+	double percentage = 0;
 	if (file_scans.back()->file_size == 0) {
-		progress = 1.0;
+		percentage = 1.0;
 	} else {
 		// for compressed files, readed bytes may greater than files size.
-		progress = std::min(1.0, double(file_scans.back()->bytes_read) / double(file_scans.back()->file_size));
+		for (auto &file : file_scans) {
+			percentage +=
+			    (double(1) / double(total_files)) * std::min(1.0, double(file->bytes_read) / double(file->file_size));
+		}
 	}
-	// now get the total percentage of files read
-	double percentage = double(current_boundary.GetFileIdx()) / total_files;
-	percentage += (double(1) / double(total_files)) * progress;
 	return percentage * 100;
 }
 
-unique_ptr<StringValueScanner> CSVGlobalState::Next() {
+unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScanner> previous_scanner) {
 	if (single_threaded) {
 		idx_t cur_idx = last_file_idx++;
 		if (cur_idx >= bind_data.files.size()) {
@@ -66,8 +66,16 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 		if (cur_idx == 0) {
 			current_file = file_scans.back();
 		} else {
-			current_file = make_shared<CSVFileScan>(context, bind_data.files[cur_idx], bind_data.options, cur_idx,
-			                                        bind_data, column_ids, file_schema);
+			lock_guard<mutex> parallel_lock(main_mutex);
+			file_scans.emplace_back(make_shared<CSVFileScan>(context, bind_data.files[cur_idx], bind_data.options,
+			                                                 cur_idx, bind_data, column_ids, file_schema));
+			current_file = file_scans.back();
+		}
+		if (previous_scanner) {
+			lock_guard<mutex> parallel_lock(main_mutex);
+			previous_scanner->buffer_tracker.reset();
+			current_buffer_in_use.reset();
+			previous_scanner->csv_file_scan->Finish();
 		}
 		auto csv_scanner =
 		    make_uniq<StringValueScanner>(scanner_idx++, current_file->buffer_manager, current_file->state_machine,
@@ -87,7 +95,14 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 	auto csv_scanner =
 	    make_uniq<StringValueScanner>(scanner_idx++, current_file.buffer_manager, current_file.state_machine,
 	                                  current_file.error_handler, file_scans.back(), false, current_boundary);
-
+	threads_per_file[csv_scanner->csv_file_scan->file_idx]++;
+	if (previous_scanner) {
+		threads_per_file[previous_scanner->csv_file_scan->file_idx]--;
+		if (threads_per_file[previous_scanner->csv_file_scan->file_idx] == 0) {
+			previous_scanner->buffer_tracker.reset();
+			previous_scanner->csv_file_scan->Finish();
+		}
+	}
 	csv_scanner->buffer_tracker = current_buffer_in_use;
 
 	// We then produce the next boundary
