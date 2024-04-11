@@ -13,21 +13,16 @@
 #include "duckdb/catalog/dependency.hpp"
 #include "duckdb/catalog/catalog_entry_map.hpp"
 #include "duckdb/catalog/catalog_transaction.hpp"
+#include "duckdb/common/stack.hpp"
+#include "duckdb/common/string_util.hpp"
 
 #include <functional>
 
 namespace duckdb {
 class DuckCatalog;
 class ClientContext;
-class DependencyList;
 class DependencyEntry;
-class DependencySetCatalogEntry;
-
-struct CatalogEntryInfo {
-	CatalogType type;
-	string schema;
-	string name;
-};
+class LogicalDependencyList;
 
 // The subject of this dependency
 struct DependencySubject {
@@ -63,6 +58,14 @@ public:
 public:
 	//! Format: Type\0Schema\0Name
 	string name;
+
+public:
+	bool operator==(const MangledEntryName &other) const {
+		return StringUtil::CIEquals(other.name, name);
+	}
+	bool operator!=(const MangledEntryName &other) const {
+		return !(*this == other);
+	}
 };
 
 struct MangledDependencyName {
@@ -78,7 +81,6 @@ public:
 //! The DependencyManager is in charge of managing dependencies between catalog entries
 class DependencyManager {
 	friend class CatalogSet;
-	friend class DependencySetCatalogEntry;
 
 public:
 	explicit DependencyManager(DuckCatalog &catalog);
@@ -96,24 +98,27 @@ private:
 
 private:
 	bool IsSystemEntry(CatalogEntry &entry) const;
+	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, const LogicalDependency &dependency);
 	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, CatalogEntry &dependency);
 
 	void CleanupDependencies(CatalogTransaction transaction, CatalogEntry &entry);
 
 public:
-	static string GetSchema(CatalogEntry &entry);
+	static string GetSchema(const CatalogEntry &entry);
 	static MangledEntryName MangleName(const CatalogEntryInfo &info);
-	static MangledEntryName MangleName(CatalogEntry &entry);
-	static CatalogEntryInfo GetLookupProperties(CatalogEntry &entry);
+	static MangledEntryName MangleName(const CatalogEntry &entry);
+	static CatalogEntryInfo GetLookupProperties(const CatalogEntry &entry);
 
 private:
-	void AddObject(CatalogTransaction transaction, CatalogEntry &object, const DependencyList &dependencies);
+	void AddObject(CatalogTransaction transaction, CatalogEntry &object, const LogicalDependencyList &dependencies);
 	void DropObject(CatalogTransaction transaction, CatalogEntry &object, bool cascade);
 	void AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj);
 
 private:
 	void RemoveDependency(CatalogTransaction transaction, const DependencyInfo &info);
 	void CreateDependency(CatalogTransaction transaction, DependencyInfo &info);
+	void CreateDependencies(CatalogTransaction transaction, const CatalogEntry &object,
+	                        const LogicalDependencyList &dependencies);
 	using dependency_entry_func_t = const std::function<unique_ptr<DependencyEntry>(
 	    Catalog &catalog, const DependencyDependent &dependent, const DependencySubject &dependency)>;
 

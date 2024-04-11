@@ -470,7 +470,7 @@ WindowNaiveState::WindowNaiveState(const WindowNaiveAggregator &gstate)
       row_set(STANDARD_VECTOR_SIZE, hash_row, equal_row) {
 	InitSubFrames(frames, gstate.exclude_mode);
 
-	auto &inputs = const_cast<DataChunk &>(gstate.GetInputs());
+	auto &inputs = gstate.GetInputs();
 	if (inputs.ColumnCount() > 0) {
 		leaves.Initialize(Allocator::DefaultAllocator(), inputs.GetTypes());
 	}
@@ -494,9 +494,8 @@ void WindowNaiveState::FlushStates() {
 		return;
 	}
 
-	auto &inputs = const_cast<DataChunk &>(gstate.GetInputs());
-	leaves.Reference(inputs);
-	leaves.Slice(update_sel, flush_count);
+	auto &inputs = gstate.GetInputs();
+	leaves.Slice(inputs, update_sel, flush_count);
 
 	auto &aggr = gstate.aggr;
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
@@ -506,19 +505,18 @@ void WindowNaiveState::FlushStates() {
 }
 
 size_t WindowNaiveState::Hash(idx_t rid) {
-	auto &inputs = const_cast<DataChunk &>(gstate.GetInputs());
-	leaves.Reference(inputs);
+	auto &inputs = gstate.GetInputs();
 
 	auto s = UnsafeNumericCast<sel_t>(rid);
 	SelectionVector sel(&s);
-	leaves.Slice(sel, 1);
+	leaves.Slice(inputs, sel, 1);
 	leaves.Hash(hashes);
 
 	return *FlatVector::GetData<hash_t>(hashes);
 }
 
 bool WindowNaiveState::KeyEqual(const idx_t &lhs, const idx_t &rhs) {
-	auto &inputs = const_cast<DataChunk &>(gstate.GetInputs());
+	auto &inputs = gstate.GetInputs();
 
 	auto l = UnsafeNumericCast<sel_t>(lhs);
 	SelectionVector lsel(&l);
@@ -644,7 +642,7 @@ public:
 
 	enum FramePart : uint8_t { FULL = 0, LEFT = 1, RIGHT = 2 };
 
-	WindowSegmentTreePart(ArenaAllocator &allocator, const AggregateObject &aggr, DataChunk &inputs,
+	WindowSegmentTreePart(ArenaAllocator &allocator, const AggregateObject &aggr, const DataChunk &inputs,
 	                      const ValidityMask &filter_mask);
 	~WindowSegmentTreePart();
 
@@ -681,7 +679,7 @@ public:
 	//! Order insensitive aggregate (we can optimise internal combines)
 	const bool order_insensitive;
 	//! The partition arguments
-	DataChunk &inputs;
+	const DataChunk &inputs;
 	//! The filtered rows in inputs
 	const ValidityMask &filter_mask;
 	//! The size of a single aggregate state
@@ -706,14 +704,14 @@ public:
 
 class WindowSegmentTreeState : public WindowAggregatorState {
 public:
-	WindowSegmentTreeState(const AggregateObject &aggr, DataChunk &inputs, const ValidityMask &filter_mask)
+	WindowSegmentTreeState(const AggregateObject &aggr, const DataChunk &inputs, const ValidityMask &filter_mask)
 	    : aggr(aggr), inputs(inputs), filter_mask(filter_mask), part(allocator, aggr, inputs, filter_mask) {
 	}
 
 	//! The aggregate function
 	const AggregateObject &aggr;
 	//! The aggregate function
-	DataChunk &inputs;
+	const DataChunk &inputs;
 	//! The filtered rows in inputs
 	const ValidityMask &filter_mask;
 	//! The left (default) segment tree part
@@ -722,8 +720,8 @@ public:
 	unique_ptr<WindowSegmentTreePart> right_part;
 };
 
-WindowSegmentTreePart::WindowSegmentTreePart(ArenaAllocator &allocator, const AggregateObject &aggr, DataChunk &inputs,
-                                             const ValidityMask &filter_mask)
+WindowSegmentTreePart::WindowSegmentTreePart(ArenaAllocator &allocator, const AggregateObject &aggr,
+                                             const DataChunk &inputs, const ValidityMask &filter_mask)
     : allocator(allocator), aggr(aggr),
       order_insensitive(aggr.function.order_dependent == AggregateOrderDependent::NOT_ORDER_DEPENDENT), inputs(inputs),
       filter_mask(filter_mask), state_size(aggr.function.state_size()), state(state_size * STANDARD_VECTOR_SIZE),
@@ -749,7 +747,7 @@ WindowSegmentTreePart::~WindowSegmentTreePart() {
 }
 
 unique_ptr<WindowAggregatorState> WindowSegmentTree::GetLocalState() const {
-	return make_uniq<WindowSegmentTreeState>(aggr, const_cast<DataChunk &>(inputs), filter_mask);
+	return make_uniq<WindowSegmentTreeState>(aggr, inputs, filter_mask);
 }
 
 void WindowSegmentTreePart::FlushStates(bool combining) {
@@ -762,8 +760,7 @@ void WindowSegmentTreePart::FlushStates(bool combining) {
 		statel.Verify(flush_count);
 		aggr.function.combine(statel, statep, aggr_input_data, flush_count);
 	} else {
-		leaves.Reference(inputs);
-		leaves.Slice(filter_sel, flush_count);
+		leaves.Slice(inputs, filter_sel, flush_count);
 		aggr.function.update(&leaves.data[0], aggr_input_data, leaves.ColumnCount(), statep, flush_count);
 	}
 
@@ -1382,7 +1379,7 @@ WindowDistinctAggregator::DistinctSortTree::DistinctSortTree(ZippedElements &&pr
 
 class WindowDistinctState : public WindowAggregatorState {
 public:
-	WindowDistinctState(const AggregateObject &aggr, DataChunk &inputs, const WindowDistinctAggregator &tree);
+	WindowDistinctState(const AggregateObject &aggr, const DataChunk &inputs, const WindowDistinctAggregator &tree);
 
 	void Evaluate(const DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx);
 
@@ -1393,7 +1390,7 @@ protected:
 	//! The aggregate function
 	const AggregateObject &aggr;
 	//! The aggregate function
-	DataChunk &inputs;
+	const DataChunk &inputs;
 	//! The merge sort tree data
 	const WindowDistinctAggregator &tree;
 	//! The size of a single aggregate state
@@ -1412,7 +1409,7 @@ protected:
 	SubFrames frames;
 };
 
-WindowDistinctState::WindowDistinctState(const AggregateObject &aggr, DataChunk &inputs,
+WindowDistinctState::WindowDistinctState(const AggregateObject &aggr, const DataChunk &inputs,
                                          const WindowDistinctAggregator &tree)
     : aggr(aggr), inputs(inputs), tree(tree), state_size(aggr.function.state_size()),
       state((state_size * STANDARD_VECTOR_SIZE)), statef(LogicalType::POINTER), statep(LogicalType::POINTER),
@@ -1488,7 +1485,7 @@ void WindowDistinctState::Evaluate(const DataChunk &bounds, Vector &result, idx_
 }
 
 unique_ptr<WindowAggregatorState> WindowDistinctAggregator::GetLocalState() const {
-	return make_uniq<WindowDistinctState>(aggr, const_cast<DataChunk &>(inputs), *this);
+	return make_uniq<WindowDistinctState>(aggr, inputs, *this);
 }
 
 void WindowDistinctAggregator::Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result,

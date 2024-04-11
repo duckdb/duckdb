@@ -54,6 +54,10 @@ ClientData &ClientData::Get(ClientContext &context) {
 	return *context.client_data;
 }
 
+const ClientData &ClientData::Get(const ClientContext &context) {
+	return *context.client_data;
+}
+
 RandomEngine &RandomEngine::Get(ClientContext &context) {
 	return *ClientData::Get(context).random_engine;
 }

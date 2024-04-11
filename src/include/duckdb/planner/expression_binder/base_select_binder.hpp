@@ -56,9 +56,11 @@ protected:
 protected:
 	BindResult BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth);
 	BindResult BindGroupingFunction(OperatorExpression &op, idx_t depth) override;
+
+	//! Binds a WINDOW expression and returns the result.
 	BindResult BindWindow(WindowExpression &expr, idx_t depth);
 
-	idx_t TryBindGroup(ParsedExpression &expr, idx_t depth);
+	idx_t TryBindGroup(ParsedExpression &expr);
 	BindResult BindGroup(ParsedExpression &expr, idx_t depth, idx_t group_index);
 
 	bool QualifyColumnAlias(const ColumnRefExpression &colref) override;

@@ -45,6 +45,10 @@ BufferManager &BufferManager::GetBufferManager(ClientContext &context) {
 	return BufferManager::GetBufferManager(*context.db);
 }
 
+const BufferManager &BufferManager::GetBufferManager(const ClientContext &context) {
+	return BufferManager::GetBufferManager(*context.db);
+}
+
 ObjectCache &ObjectCache::GetObjectCache(ClientContext &context) {
 	return context.db->GetObjectCache();
 }
