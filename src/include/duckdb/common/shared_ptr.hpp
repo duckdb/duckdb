@@ -22,17 +22,17 @@ namespace duckdb {
 // originally named '__compatible_with'
 
 #if _LIBCPP_STD_VER >= 17
-template <class _Yp, class _Tp>
+template <class U, class T>
 struct __bounded_convertible_to_unbounded : false_type {};
 
-template <class _Up, std::size_t _Np, class _Tp>
-struct __bounded_convertible_to_unbounded<_Up[_Np], _Tp> : is_same<std::remove_cv<_Tp>, _Up[]> {};
+template <class _Up, std::size_t _Np, class T>
+struct __bounded_convertible_to_unbounded<_Up[_Np], T> : is_same<std::remove_cv<T>, _Up[]> {};
 
-template <class _Yp, class _Tp>
-struct compatible_with_t : _Or<std::is_convertible<_Yp *, _Tp *>, __bounded_convertible_to_unbounded<_Yp, _Tp>> {};
+template <class U, class T>
+struct compatible_with_t : _Or<std::is_convertible<U *, T *>, __bounded_convertible_to_unbounded<U, T>> {};
 #else
-template <class _Yp, class _Tp>
-struct compatible_with_t : std::is_convertible<_Yp *, _Tp *> {};
+template <class U, class T>
+struct compatible_with_t : std::is_convertible<U *, T *> {}; // NOLINT: invalid case style
 #endif // _LIBCPP_STD_VER >= 17
 
 } // namespace duckdb

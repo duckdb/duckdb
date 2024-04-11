@@ -1,7 +1,7 @@
 namespace duckdb {
 
 template <typename T, bool SAFE>
-class weak_ptr {
+class weak_ptr { // NOLINT: invalid case style
 public:
 	using original = std::weak_ptr<T>;
 	using element_type = typename original::element_type;
@@ -23,13 +23,13 @@ public:
 	         typename std::enable_if<compatible_with_t<U, T>::value, int>::type = 0) noexcept
 	    : internal(ptr.internal) {
 	}
-	weak_ptr(weak_ptr const &other) noexcept : internal(other.internal) {
+	weak_ptr(weak_ptr const &other) noexcept : internal(other.internal) { // NOLINT: not marked as explicit
 	}
 	template <class U>
 	weak_ptr(weak_ptr<U> const &ptr, typename std::enable_if<compatible_with_t<U, T>::value, int>::type = 0) noexcept
 	    : internal(ptr.internal) {
 	}
-	weak_ptr(weak_ptr &&ptr) noexcept : internal(std::move(ptr.internal)) {
+	weak_ptr(weak_ptr &&ptr) noexcept : internal(std::move(ptr.internal)) { // NOLINT: not marked as explicit
 	}
 	template <class U>
 	weak_ptr(weak_ptr<U> &&ptr, typename std::enable_if<compatible_with_t<U, T>::value, int>::type = 0) noexcept
@@ -51,20 +51,20 @@ public:
 	}
 
 	// Modifiers
-	void reset() {
+	void reset() { // NOLINT: invalid case style
 		internal.reset();
 	}
 
 	// Observers
-	long use_count() const {
+	long use_count() const { // NOLINT: invalid case style
 		return internal.use_count();
 	}
 
-	bool expired() const {
+	bool expired() const { // NOLINT: invalid case style
 		return internal.expired();
 	}
 
-	shared_ptr<T, SAFE> lock() const {
+	shared_ptr<T, SAFE> lock() const { // NOLINT: invalid case style
 		return shared_ptr<T, SAFE>(internal.lock());
 	}
 

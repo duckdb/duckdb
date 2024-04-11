@@ -7,7 +7,7 @@ template <class T>
 class enable_shared_from_this;
 
 template <typename T, bool SAFE = true>
-class shared_ptr {
+class shared_ptr { // NOLINT: invalid case style
 public:
 	using original = std::shared_ptr<T>;
 	using element_type = typename original::element_type;
@@ -49,33 +49,33 @@ public:
 	explicit shared_ptr(U *ptr) : internal(ptr) {
 		__enable_weak_this(internal.get(), internal.get());
 	}
-	// From raw pointer of type T with custom Deleter
-	template <typename Deleter>
-	shared_ptr(T *ptr, Deleter deleter) : internal(ptr, deleter) {
+	// From raw pointer of type T with custom DELETER
+	template <typename DELETER>
+	shared_ptr(T *ptr, DELETER deleter) : internal(ptr, deleter) {
 		__enable_weak_this(internal.get(), internal.get());
 	}
-	// Aliasing constructor: shares ownership information with __r but contains __p instead
-	// When the created shared_ptr goes out of scope, it will call the Deleter of __r, will not delete __p
+	// Aliasing constructor: shares ownership information with ref but contains ptr instead
+	// When the created shared_ptr goes out of scope, it will call the DELETER of ref, will not delete ptr
 	template <class U>
-	shared_ptr(const shared_ptr<U> &__r, T *__p) noexcept : internal(__r.internal, __p) {
+	shared_ptr(const shared_ptr<U> &ref, T *ptr) noexcept : internal(ref.internal, ptr) {
 	}
 #if _LIBCPP_STD_VER >= 20
 	template <class U>
-	shared_ptr(shared_ptr<U> &&__r, T *__p) noexcept : internal(std::move(__r.internal), __p) {
+	shared_ptr(shared_ptr<U> &&ref, T *ptr) noexcept : internal(std::move(ref.internal), ptr) {
 	}
 #endif
 
-	// Copy constructor, share ownership with __r
+	// Copy constructor, share ownership with ref
 	template <class U, typename std::enable_if<compatible_with_t<U, T>::value, int>::type = 0>
-	shared_ptr(const shared_ptr<U> &__r) noexcept : internal(__r.internal) {
+	shared_ptr(const shared_ptr<U> &ref) noexcept : internal(ref.internal) { // NOLINT: not marked as explicit
 	}
-	shared_ptr(const shared_ptr &other) : internal(other.internal) {
+	shared_ptr(const shared_ptr &other) : internal(other.internal) { // NOLINT: not marked as explicit
 	}
-	// Move constructor, share ownership with __r
+	// Move constructor, share ownership with ref
 	template <class U, typename std::enable_if<compatible_with_t<U, T>::value, int>::type = 0>
-	shared_ptr(shared_ptr<U> &&__r) noexcept : internal(std::move(__r.internal)) {
+	shared_ptr(shared_ptr<U> &&ref) noexcept : internal(std::move(ref.internal)) { // NOLINT: not marked as explicit
 	}
-	shared_ptr(shared_ptr<T> &&other) : internal(std::move(other.internal)) {
+	shared_ptr(shared_ptr<T> &&other) : internal(std::move(other.internal)) { // NOLINT: not marked as explicit
 	}
 
 	// Construct from std::shared_ptr
@@ -131,8 +131,8 @@ public:
 	          typename std::enable_if<compatible_with_t<U, T>::value &&
 	                                      std::is_convertible<typename unique_ptr<U, DELETER>::pointer, T *>::value,
 	                                  int>::type = 0>
-	shared_ptr<T> &operator=(unique_ptr<U, DELETER, SAFE_P> &&__r) {
-		shared_ptr(std::move(__r)).swap(*this);
+	shared_ptr<T> &operator=(unique_ptr<U, DELETER, SAFE_P> &&ref) {
+		shared_ptr(std::move(ref)).swap(*this);
 		return *this;
 	}
 
@@ -141,7 +141,7 @@ public:
 	[[clang::reinitializes]]
 #endif
 	void
-	reset() {
+	reset() { // NOLINT: invalid case style
 		internal.reset();
 	}
 #ifdef DUCKDB_CLANG_TIDY
@@ -149,15 +149,15 @@ public:
 	[[clang::reinitializes]]
 #endif
 	template <typename U>
-	void reset(U *ptr) {
+	void reset(U *ptr) { // NOLINT: invalid case style
 		internal.reset(ptr);
 	}
 #ifdef DUCKDB_CLANG_TIDY
 	// This is necessary to tell clang-tidy that it reinitializes the variable after a move
 	[[clang::reinitializes]]
 #endif
-	template <typename U, typename Deleter>
-	void reset(U *ptr, Deleter deleter) {
+	template <typename U, typename DELETER>
+	void reset(U *ptr, DELETER deleter) { // NOLINT: invalid case style
 		internal.reset(ptr, deleter);
 	}
 
@@ -236,12 +236,12 @@ private:
 	template <class U, class _OrigPtr,
 	          typename std::enable_if<std::is_convertible<_OrigPtr *, const enable_shared_from_this<U> *>::value,
 	                                  int>::type = 0>
-	void __enable_weak_this(const enable_shared_from_this<U> *__e, _OrigPtr *__ptr) noexcept {
+	void __enable_weak_this(const enable_shared_from_this<U> *object, _OrigPtr *ptr) noexcept {
 		typedef typename std::remove_cv<U>::type NonConstU;
-		if (__e && __e->__weak_this_.expired()) {
+		if (object && object->__weak_this_.expired()) {
 			// __weak_this__ is the mutable variable returned by 'shared_from_this'
 			// it is initialized here
-			__e->__weak_this_ = shared_ptr<NonConstU>(*this, const_cast<NonConstU *>(static_cast<const U *>(__ptr)));
+			object->__weak_this_ = shared_ptr<NonConstU>(*this, const_cast<NonConstU *>(static_cast<const U *>(ptr)));
 		}
 	}
 

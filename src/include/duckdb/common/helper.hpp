@@ -118,7 +118,7 @@ unique_ptr<S> unique_ptr_cast(unique_ptr<T> src) { // NOLINT: mimic std style
 }
 
 template <typename T, typename S>
-shared_ptr<S> shared_ptr_cast(shared_ptr<T> src) {
+shared_ptr<S> shared_ptr_cast(shared_ptr<T> src) { // NOLINT: mimic std style
 	return shared_ptr<S>(std::static_pointer_cast<S, T>(src.internal));
 }
 
