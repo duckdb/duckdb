@@ -31,6 +31,8 @@ public:
 
 class BoundNodeVisitor {
 public:
+	virtual ~BoundNodeVisitor() = default;
+
 	virtual void VisitBoundQueryNode(BoundQueryNode &op);
 	virtual void VisitBoundTableRef(BoundTableRef &ref);
 	virtual void VisitExpression(unique_ptr<Expression> &expression);

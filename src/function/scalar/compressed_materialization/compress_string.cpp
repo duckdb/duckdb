@@ -11,13 +11,13 @@ static string StringCompressFunctionName(const LogicalType &result_type) {
 }
 
 template <idx_t LENGTH>
-static inline void TemplatedReverseMemCpy(const data_ptr_t __restrict &dest, const const_data_ptr_t __restrict &src) {
+static inline void TemplatedReverseMemCpy(const data_ptr_t &__restrict dest, const const_data_ptr_t &__restrict src) {
 	for (idx_t i = 0; i < LENGTH; i++) {
 		dest[i] = src[LENGTH - 1 - i];
 	}
 }
 
-static inline void ReverseMemCpy(const data_ptr_t __restrict &dest, const const_data_ptr_t __restrict &src,
+static inline void ReverseMemCpy(const data_ptr_t &__restrict dest, const const_data_ptr_t &__restrict src,
                                  const idx_t &length) {
 	for (idx_t i = 0; i < length; i++) {
 		dest[i] = src[length - 1 - i];

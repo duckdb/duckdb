@@ -82,7 +82,7 @@ unique_ptr<CatalogEntry> DuckSchemaEntry::Copy(ClientContext &context) const {
 optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction transaction,
                                                              unique_ptr<StandardEntry> entry,
                                                              OnCreateConflict on_conflict,
-                                                             DependencyList dependencies) {
+                                                             LogicalDependencyList dependencies) {
 	auto entry_name = entry->name;
 	auto entry_type = entry->type;
 	auto result = entry.get();
@@ -184,7 +184,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateFunction(CatalogTransaction tr
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntry(CatalogTransaction transaction, unique_ptr<StandardEntry> entry,
                                                      OnCreateConflict on_conflict) {
-	DependencyList dependencies;
+	LogicalDependencyList dependencies;
 	return AddEntryInternal(transaction, std::move(entry), on_conflict, dependencies);
 }
 
@@ -205,7 +205,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateView(CatalogTransaction transa
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateIndex(ClientContext &context, CreateIndexInfo &info,
                                                         TableCatalogEntry &table) {
-	DependencyList dependencies;
+	LogicalDependencyList dependencies;
 	dependencies.AddDependency(table);
 
 	// currently, we can not alter PK/FK/UNIQUE constraints

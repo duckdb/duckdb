@@ -575,9 +575,9 @@ opt_all_clause:
 		;
 
 opt_ignore_nulls:
-			IGNORE_P NULLS_P						{ $$ = true;}
-			| RESPECT_P NULLS_P						{ $$ = false;}
-			| /*EMPTY*/								{ $$ = false; }
+			IGNORE_P NULLS_P						{ $$ = PG_IGNORE_NULLS;}
+			| RESPECT_P NULLS_P						{ $$ = PG_RESPECT_NULLS;}
+			| /*EMPTY*/								{ $$ = PG_DEFAULT_NULLS; }
 		;
 
 opt_sort_clause:

@@ -11,7 +11,7 @@
 #include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/uhugeint.hpp"
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(__clang__)
 #define __restrict__
 #define __BYTE_ORDER__          __ORDER_LITTLE_ENDIAN__
 #define __ORDER_LITTLE_ENDIAN__ 2

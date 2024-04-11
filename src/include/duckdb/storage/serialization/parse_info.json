@@ -339,6 +339,26 @@
     ]
   },
   {
+    "class": "CopyDatabaseInfo",
+    "base": "ParseInfo",
+    "enum": "COPY_DATABASE_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/copy_database_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "target_database",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "entries",
+        "type": "vector<CreateInfo*>"
+      }
+    ]
+  },
+  {
     "class": "CopyInfo",
     "base": "ParseInfo",
     "enum": "COPY_INFO",

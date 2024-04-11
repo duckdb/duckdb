@@ -4,7 +4,7 @@
 namespace duckdb {
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundAggregateExpression &aggr,
-                                                                     unique_ptr<Expression> *expr_ptr) {
+                                                                     unique_ptr<Expression> &expr_ptr) {
 	vector<BaseStatistics> stats;
 	stats.reserve(aggr.children.size());
 	for (auto &child : aggr.children) {
