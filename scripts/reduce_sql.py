@@ -6,13 +6,16 @@ import fuzzer_helper
 import multiprocessing
 import sqlite3
 
-multiprocessing.set_start_method('fork')
+try:
+    multiprocessing.set_start_method('fork')
+except RuntimeError:
+    pass
 get_reduced_query = '''
 SELECT * FROM reduce_sql_statement('${QUERY}');
 '''
 
 def sanitize_error(err):
-    err = re.sub('Error: near line \d+: ', '', err)
+    err = re.sub(r'Error: near line \d+: ', '', err)
     err = err.replace(os.getcwd() + '/', '')
     err = err.replace(os.getcwd(), '')
     if 'AddressSanitizer' in err:
@@ -202,6 +205,41 @@ def reduce_query_log(queries, shell, max_time_seconds=300):
         queries[i] = reduce_query_log_query(start, shell, queries, i, max_time_seconds)
     return queries
 
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description='Reduce a problematic SQL query')
+    parser.add_argument('--shell', dest='shell', action='store', help='Path to the shell executable', default='build/debug/duckdb')
+    parser.add_argument('--load', dest='load', action='store', help='Path to the data load script', required=True)
+    parser.add_argument('--exec', dest='exec', action='store', help='Path to the executable script', required=True)
+    parser.add_argument('--inplace', dest='inplace', action='store_true', help='If true, overrides the exec script with the final query')
+    parser.add_argument('--max-time', dest='max_time', action='store', help='Maximum time in seconds to run the reducer', default=300)
+
+    args = parser.parse_args()
+    print("Starting reduce process")
+
+    shell = args.shell
+    data_load = open(args.load).read()
+    sql_query = open(args.exec).read()
+    (stdout, stderr, returncode) = run_shell_command(shell, data_load + sql_query)
+    expected_error = sanitize_error(stderr)
+
+    print("===================================================")
+    print("Found expected error")
+    print("===================================================")
+    print(expected_error)
+    print("===================================================")
+
+
+    final_query = reduce(sql_query, data_load, shell, expected_error, args.max_time)
+    print("Found final reduced query")
+    print("===================================================")
+    print(final_query)
+    print("===================================================")
+    if args.inplace:
+        print(f"Writing to file {args.exec}")
+        with open(args.exec, 'w+') as f:
+            f.write(final_query)
 
 
 # Example usage:

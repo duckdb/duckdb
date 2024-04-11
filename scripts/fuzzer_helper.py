@@ -6,20 +6,8 @@ import subprocess
 import reduce_sql
 import fuzzer_helper
 
-if 'FUZZEROFDUCKSKEY' not in os.environ:
-    print("FUZZEROFDUCKSKEY not found in environment variables")
-    exit(1)
 
 USERNAME = 'fuzzerofducks'
-TOKEN = os.environ['FUZZEROFDUCKSKEY']
-
-if len(TOKEN) == 0:
-    print("FUZZEROFDUCKSKEY is set but is empty")
-    exit(1)
-
-if len(TOKEN) != 40:
-    print("Incorrect length for FUZZEROFDUCKSKEY")
-    exit(1)
 
 REPO_OWNER = 'duckdb'
 REPO_NAME = 'duckdb-fuzzer'
@@ -45,10 +33,24 @@ footer = '''
 def issue_url():
     return 'https://api.github.com/repos/%s/%s/issues' % (REPO_OWNER, REPO_NAME)
 
+
+def get_token():
+    if 'FUZZEROFDUCKSKEY' not in os.environ:
+        print("FUZZEROFDUCKSKEY not found in environment variables")
+        exit(1)
+    token = os.environ['FUZZEROFDUCKSKEY']
+    if len(token) == 0:
+        print("FUZZEROFDUCKSKEY is set but is empty")
+        exit(1)
+
+    if len(token) != 40:
+        print("Incorrect length for FUZZEROFDUCKSKEY")
+        exit(1)
+    return token
 def create_session():
     # Create an authenticated session to create the issue
     session = requests.Session()
-    session.headers.update({'Authorization': 'token %s' % (TOKEN,)})
+    session.headers.update({'Authorization': 'token %s' % (get_token(),)})
     return session
 
 def make_github_issue(title, body):
