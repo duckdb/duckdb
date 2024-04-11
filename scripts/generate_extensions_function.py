@@ -32,7 +32,6 @@ HEADER_PATH = os.path.join("..", "src", "include", "duckdb", "main", "extension_
 
 from enum import Enum
 
-
 class CatalogType(str, Enum):
     SCALAR = "CatalogType::SCALAR_FUNCTION_ENTRY"
     TABLE = "CatalogType::TABLE_FUNCTION_ENTRY"
@@ -125,6 +124,60 @@ class ExtensionType(NamedTuple):
         return output
 
 
+class ParsedEntries:
+    def __init__(self, file_path):
+        self.path = file_path
+        self.functions = {}
+        self.settings = {}
+        self.types = {}
+        self.copy_functions = {}
+
+        def parse_contents(input) -> list:
+            # Split the string by comma and remove any leading or trailing spaces
+            elements = input.split(",")
+            # Strip any leading or trailing spaces and surrounding double quotes from each element
+            elements = [element.strip().strip('"') for element in elements]
+            return elements
+
+        file = open(file_path, 'r')
+        pattern = re.compile("{(.*(?:, )?)}[,}\n]")
+        file_blob = file.read()
+
+        # Get the extension functions
+        ext_functions_file_blob = get_slice_of_file("EXTENSION_FUNCTIONS", file_blob)
+        res = pattern.findall(ext_functions_file_blob)
+        res = [parse_contents(x) for x in res]
+        res = [(x[0], x[1], x[2]) for x in res]
+        self.functions = ExtensionFunction.create_map(res)
+
+        # Get the extension settings
+        ext_settings_file_blob = get_slice_of_file("EXTENSION_SETTINGS", file_blob)
+        res = pattern.findall(ext_settings_file_blob)
+        res = [parse_contents(x) for x in res]
+        res = [(x[0], x[1]) for x in res]
+        self.settings = ExtensionSetting.create_map(res)
+
+        # Get the extension types
+        ext_copy_functions_blob = get_slice_of_file("EXTENSION_COPY_FUNCTIONS", file_blob)
+        res = pattern.findall(ext_copy_functions_blob)
+        res = [parse_contents(x) for x in res]
+        res = [(x[0], x[1]) for x in res]
+        self.copy_functions = ExtensionCopyFunction.create_map(res)
+
+        # Get the extension types
+        ext_types_file_blob = get_slice_of_file("EXTENSION_TYPES", file_blob)
+        res = pattern.findall(ext_types_file_blob)
+        res = [parse_contents(x) for x in res]
+        res = [(x[0], x[1]) for x in res]
+        self.types = ExtensionType.create_map(res)
+
+    def filter_entries(self, extensions: List[str]):
+        self.functions = {k: v for k, v in self.functions.items() if v.extension not in extensions}
+        self.copy_functions = {k: v for k, v in self.copy_functions.items() if v.extension not in extensions}
+        self.settings = {k: v for k, v in self.settings.items() if v.extension not in extensions}
+        self.types = {k: v for k, v in self.types.items() if v.extension not in extensions}
+
+
 def check_prerequisites():
     if not os.path.isfile(EXTENSIONS_PATH) or not os.path.isfile(DUCKDB_PATH):
         print(
@@ -210,6 +263,10 @@ class ExtensionData:
         self.base_functions: Set[Function] = get_functions()
         self.base_settings: Set[str] = get_settings()
 
+    def add_entries(self, entries: ParsedEntries):
+        self.function_map.update(entries.functions)
+        self.settings_map.update(entries.settings)
+
     def add_extension(self, extension_name: str):
         if extension_name in self.extensions:
             # Perform a LOAD and add the added settings/functions
@@ -259,19 +316,19 @@ Please double check if '{args.extension_dir}' is the right location to look for 
         self.function_map.update(functions_to_add)
 
     def validate(self):
-        parsed_entries = parse_extension_entries(HEADER_PATH)
-        if self.function_map != parsed_entries['functions']:
+        parsed_entries = ParsedEntries(HEADER_PATH)
+        if self.function_map != parsed_entries.functions:
             print("Function map mismatches:")
-            print_map_diff(self.function_map, parsed_entries['functions'])
+            print_map_diff(self.function_map, parsed_entries.functions)
             exit(1)
-        if self.settings_map != parsed_entries['settings']:
+        if self.settings_map != parsed_entries.settings:
             print("Settings map mismatches:")
-            print_map_diff(self.settings_map, parsed_entries['settings'])
+            print_map_diff(self.settings_map, parsed_entries.settings)
             exit(1)
 
         print("All entries found: ")
-        print(" > functions: " + str(len(parsed_entries['functions'])))
-        print(" > settings:  " + str(len(parsed_entries['settings'])))
+        print(" > functions: " + str(len(parsed_entries.functions)))
+        print(" > settings:  " + str(len(parsed_entries.settings)))
 
     def verify_export(self):
         if len(self.function_map) == 0 or len(self.settings_map) == 0:
@@ -315,55 +372,6 @@ def get_slice_of_file(var_name, file_str):
     begin = file_str.find(var_name)
     end = file_str.find("END_OF_" + var_name)
     return file_str[begin:end]
-
-
-# Parses the extension_entries.hpp file
-def parse_extension_entries(file_path):
-    def parse_contents(input) -> list:
-        # Split the string by comma and remove any leading or trailing spaces
-        elements = input.split(",")
-        # Strip any leading or trailing spaces and surrounding double quotes from each element
-        elements = [element.strip().strip('"') for element in elements]
-        return elements
-
-    file = open(file_path, 'r')
-    pattern = re.compile("{(.*(?:, )?)}[,}\n]")
-    file_blob = file.read()
-
-    # Get the extension functions
-    ext_functions_file_blob = get_slice_of_file("EXTENSION_FUNCTIONS", file_blob)
-    res = pattern.findall(ext_functions_file_blob)
-    res = [parse_contents(x) for x in res]
-    res = [(x[0], x[1], x[2]) for x in res]
-    cur_function_map = ExtensionFunction.create_map(res)
-
-    # Get the extension settings
-    ext_settings_file_blob = get_slice_of_file("EXTENSION_SETTINGS", file_blob)
-    res = pattern.findall(ext_settings_file_blob)
-    res = [parse_contents(x) for x in res]
-    res = [(x[0], x[1]) for x in res]
-    cur_settings_map = ExtensionSetting.create_map(res)
-
-    # Get the extension types
-    ext_copy_functions_blob = get_slice_of_file("EXTENSION_COPY_FUNCTIONS", file_blob)
-    res = pattern.findall(ext_copy_functions_blob)
-    res = [parse_contents(x) for x in res]
-    res = [(x[0], x[1]) for x in res]
-    cur_copy_functions_map = ExtensionCopyFunction.create_map(res)
-
-    # Get the extension types
-    ext_types_file_blob = get_slice_of_file("EXTENSION_TYPES", file_blob)
-    res = pattern.findall(ext_types_file_blob)
-    res = [parse_contents(x) for x in res]
-    res = [(x[0], x[1]) for x in res]
-    cur_types_map = ExtensionType.create_map(res)
-
-    return {
-        'functions': cur_function_map,
-        'settings': cur_settings_map,
-        'types': cur_types_map,
-        'copy_functions': cur_copy_functions_map,
-    }
 
 
 def print_map_diff(d1, d2):
@@ -551,10 +559,17 @@ def main():
     # Collect the list of functions/settings without any extensions loaded
     extension_data.set_base()
 
+    # TODO: add 'purge' option to ignore existing entries ??
+    parsed_entries = ParsedEntries(HEADER_PATH)
+    parsed_entries.filter_entries(extension_names)
+
     for extension_name in extension_names:
         print(extension_name)
         # For every extension, add the functions/settings added by the extension
         extension_data.add_extension(extension_name)
+
+    # Add the entries we initially parsed from the HEADER_PATH
+    extension_data.add_entries(parsed_entries)
 
     if args.validate:
         extension_data.validate()
