@@ -32,6 +32,7 @@ HEADER_PATH = os.path.join("..", "src", "include", "duckdb", "main", "extension_
 
 from enum import Enum
 
+
 class CatalogType(str, Enum):
     SCALAR = "CatalogType::SCALAR_FUNCTION_ENTRY"
     TABLE = "CatalogType::TABLE_FUNCTION_ENTRY"
