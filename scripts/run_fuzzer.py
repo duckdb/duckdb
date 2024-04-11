@@ -12,15 +12,22 @@ seed = -1
 fuzzer = None
 db = None
 shell = None
+perform_checks = True
 for param in sys.argv:
     if param == '--sqlsmith':
         fuzzer = 'sqlsmith'
     elif param == '--duckfuzz':
         fuzzer = 'duckfuzz'
+    elif param == '--duckfuzz_functions':
+        fuzzer = 'duckfuzz_functions'
     elif param == '--alltypes':
         db = 'alltypes'
     elif param == '--tpch':
         db = 'tpch'
+    elif param == '--emptyalltypes':
+        db = 'emptyalltypes'
+    elif param == '--no_checks':
+        perform_checks = False
     elif param.startswith('--shell='):
         shell = param.replace('--shell=', '')
     elif param.startswith('--seed='):
@@ -31,7 +38,7 @@ if fuzzer is None:
     exit(1)
 
 if db is None:
-    print("Unrecognized database to run on, expected either --tpch or --alltypes")
+    print("Unrecognized database to run on, expected either --tpch, --alltypes or --emptyalltypes")
     exit(1)
 
 if shell is None:
@@ -41,17 +48,17 @@ if shell is None:
 if seed < 0:
     seed = random.randint(0, 2**30)
 
-git_hash = fuzzer_helper.get_github_hash()
-
+git_hash = os.getenv('DUCKDB_HASH')
 
 def create_db_script(db):
     if db == 'alltypes':
         return 'create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types();'
     elif db == 'tpch':
         return 'call dbgen(sf=0.1);'
+    elif db == 'emptyalltypes':
+        return 'create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types() limit 0;'
     else:
         raise Exception("Unknown database creation script")
-
 
 def run_fuzzer_script(fuzzer):
     if fuzzer == 'sqlsmith':
@@ -63,7 +70,6 @@ def run_fuzzer_script(fuzzer):
     else:
         raise Exception("Unknown fuzzer type")
 
-
 def get_fuzzer_name(fuzzer):
     if fuzzer == 'sqlsmith':
         return 'SQLSmith'
@@ -73,7 +79,6 @@ def get_fuzzer_name(fuzzer):
         return 'DuckFuzz (Functions)'
     else:
         return 'Unknown'
-
 
 def run_shell_command(cmd):
     command = [shell, '--batch', '-init', '/dev/null']
@@ -85,27 +90,19 @@ def run_shell_command(cmd):
 
 
 # first get a list of all github issues, and check if we can still reproduce them
-current_errors = fuzzer_helper.extract_github_issues(shell)
+current_errors = fuzzer_helper.extract_github_issues(shell, perform_checks)
 
-max_queries = 1000
+max_queries = 2000
 last_query_log_file = 'sqlsmith.log'
 complete_log_file = 'sqlsmith.complete.log'
 
-print(
-    f'''==========================================
+print(f'''==========================================
         RUNNING {fuzzer} on {db}
-=========================================='''
-)
+==========================================''')
 
 load_script = create_db_script(db)
 fuzzer_name = get_fuzzer_name(fuzzer)
-fuzzer = (
-    run_fuzzer_script(fuzzer)
-    .replace('${MAX_QUERIES}', str(max_queries))
-    .replace('${LAST_LOG_FILE}', last_query_log_file)
-    .replace('${COMPLETE_LOG_FILE}', complete_log_file)
-    .replace('${SEED}', str(seed))
-)
+fuzzer = run_fuzzer_script(fuzzer).replace('${MAX_QUERIES}', str(max_queries)).replace('${LAST_LOG_FILE}', last_query_log_file).replace('${COMPLETE_LOG_FILE}', complete_log_file).replace('${SEED}', str(seed))
 
 print(load_script)
 print(fuzzer)
@@ -116,11 +113,9 @@ print("==========================================")
 
 (stdout, stderr, returncode) = run_shell_command(cmd)
 
-print(
-    f'''==========================================
+print(f'''==========================================
         FINISHED RUNNING
-=========================================='''
-)
+==========================================''')
 print("==============  STDOUT  ================")
 print(stdout)
 print("==============  STDERR  =================")
@@ -165,10 +160,7 @@ print("=========================================")
 # check if this is a duplicate issue
 if error_msg in current_errors:
     print("Skip filing duplicate issue")
-    print(
-        "Issue already exists: https://github.com/duckdb/duckdb-fuzzer/issues/"
-        + str(current_errors[error_msg]['number'])
-    )
+    print("Issue already exists: https://github.com/duckdb/duckdb-fuzzer/issues/" + str(current_errors[error_msg]['number']))
     exit(0)
 
 print(last_query)
