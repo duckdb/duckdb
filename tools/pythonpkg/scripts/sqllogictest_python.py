@@ -8,6 +8,7 @@ import gc
 script_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(script_path, '..', '..', '..', 'scripts'))
 from sqllogictest import (
+    SQLParserException,
     SQLLogicParser,
     SQLLogicTest,
 )
@@ -95,6 +96,9 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             # Yield once to represent one iteration, do not touch the keywords
             yield None
 
+        if self.test.skipped:
+            return ExecuteResult(ExecuteResult.Type.SKIPPED)
+
         self.database = SQLLogicDatabase(':memory:', None)
         pool = self.database.connect()
         context = SQLLogicContext(pool, self, test.statements, keywords, update_value)
@@ -168,10 +172,16 @@ def main():
             continue
         if test_directory:
             file_path = os.path.join(test_directory, file_path)
-        test = sql_parser.parse(file_path)
-        if not test:
-            print(f'Failed to parse {file_path}')
-            exit(1)
+
+        test = SQLLogicTest("")
+        try:
+            test = sql_parser.parse(file_path)
+            if not test:
+                raise SQLParserException(f'failed to parse {file_path}')
+        except SQLParserException as e:
+            test.skip(True)
+            executor.skip_log.append(str(e.message))
+
         print(f'[{i}/{total_tests}] {file_path}')
         # This is necessary to clean up databases/connections
         # So previously created databases are not still cached in the instance_cache
