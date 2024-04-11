@@ -347,7 +347,8 @@ py::list DuckDBPyType::Children() const {
 	case LogicalTypeId::STRUCT:
 	case LogicalTypeId::UNION:
 	case LogicalTypeId::MAP:
-		break;
+	case LogicalTypeId::ARRAY:
+	case LogicalTypeId::ENUM:
 	case LogicalTypeId::DECIMAL:
 		break;
 	default:
@@ -360,8 +361,21 @@ py::list DuckDBPyType::Children() const {
 		children.append(py::make_tuple("child", make_shared<DuckDBPyType>(ListType::GetChildType(type))));
 		return children;
 	}
-	// FIXME: where is ARRAY??
-	// it should expose 'child' and 'size'
+	if (id == LogicalTypeId::ARRAY) {
+		children.append(py::make_tuple("child", make_shared<DuckDBPyType>(ArrayType::GetChildType(type))));
+		children.append(py::make_tuple("size", ArrayType::GetSize(type)));
+		return children;
+	}
+	if (id == LogicalTypeId::ENUM) {
+		auto &values_insert_order = EnumType::GetValuesInsertOrder(type);
+		auto strings = FlatVector::GetData<string_t>(values_insert_order);
+		py::list strings_list;
+		for (size_t i = 0; i < EnumType::GetSize(type); i++) {
+			strings_list.append(py::str(strings[i].GetString()));
+		}
+		children.append(py::make_tuple("values", strings_list));
+		return children;
+	}
 	if (id == LogicalTypeId::STRUCT || id == LogicalTypeId::UNION) {
 		auto &struct_children = StructType::GetChildTypes(type);
 		for (idx_t i = 0; i < struct_children.size(); i++) {
