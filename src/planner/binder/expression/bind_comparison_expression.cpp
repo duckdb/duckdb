@@ -6,6 +6,7 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -213,7 +214,7 @@ static inline void TryResolveJSONComparison(ExpressionBinder &binder, Comparison
 	auto &json_expr = left_sql_type.IsJSONType() ? expr.left : expr.right;
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(std::move(json_expr));
-	children.push_back(make_uniq<ConstantExpression>("$"));
+	children.push_back(make_uniq_base<ParsedExpression, ConstantExpression>("$"));
 	json_expr = make_uniq_base<ParsedExpression, FunctionExpression>("json_extract_string", std::move(children));
 
 	ErrorData error;
