@@ -1218,7 +1218,9 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE(res->ColumnCount() == 2);
 		REQUIRE(res->RowCount() == 3);
-		REQUIRE(res->GetValue(1, 2).ToString() == "[{'db_schema_name': information_schema, 'db_schema_tables': NULL}, {'db_schema_name': main, 'db_schema_tables': NULL}, {'db_schema_name': pg_catalog, 'db_schema_tables': NULL}]");
+		REQUIRE(res->GetValue(1, 2).ToString() ==
+		        "[{'db_schema_name': information_schema, 'db_schema_tables': NULL}, {'db_schema_name': main, "
+		        "'db_schema_tables': NULL}, {'db_schema_name': pg_catalog, 'db_schema_tables': NULL}]");
 		db.Query("Drop table result;");
 	}
 	// 4.Test ADBC_OBJECT_DEPTH_COLUMNS
@@ -1314,7 +1316,9 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE(res->ColumnCount() == 2);
 		REQUIRE(res->RowCount() == 3);
-		REQUIRE(res->GetValue(1, 2).ToString() == "[{'db_schema_name': information_schema, 'db_schema_tables': NULL}, {'db_schema_name': main, 'db_schema_tables': NULL}, {'db_schema_name': pg_catalog, 'db_schema_tables': NULL}]");
+		REQUIRE(res->GetValue(1, 2).ToString() ==
+		        "[{'db_schema_name': information_schema, 'db_schema_tables': NULL}, {'db_schema_name': main, "
+		        "'db_schema_tables': NULL}, {'db_schema_name': pg_catalog, 'db_schema_tables': NULL}]");
 		db.Query("Drop table result;");
 
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr, nullptr, nullptr,
@@ -1324,8 +1328,10 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE(res->ColumnCount() == 2);
 		REQUIRE(res->RowCount() == 3);
 		REQUIRE(res->GetValue(1, 2).ToString() ==
-		        "[{'db_schema_name': information_schema, 'db_schema_tables': NULL}, {'db_schema_name': main, 'db_schema_tables': [{'table_name': my_table, 'table_type': BASE TABLE, "
-		        "'table_columns': NULL, 'table_constraints': NULL}]}, {'db_schema_name': pg_catalog, 'db_schema_tables': NULL}]");
+		        "[{'db_schema_name': information_schema, 'db_schema_tables': NULL}, {'db_schema_name': main, "
+		        "'db_schema_tables': [{'table_name': my_table, 'table_type': BASE TABLE, "
+		        "'table_columns': NULL, 'table_constraints': NULL}]}, {'db_schema_name': pg_catalog, "
+		        "'db_schema_tables': NULL}]");
 		db.Query("Drop table result;");
 	}
 	// 5.Test ADBC_OBJECT_DEPTH_ALL
@@ -1420,7 +1426,9 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE(res->ColumnCount() == 2);
 		REQUIRE(res->RowCount() == 3);
-		REQUIRE(res->GetValue(1, 2).ToString() == "[{'db_schema_name': information_schema, 'db_schema_tables': NULL}, {'db_schema_name': main, 'db_schema_tables': NULL}, {'db_schema_name': pg_catalog, 'db_schema_tables': NULL}]");
+		REQUIRE(res->GetValue(1, 2).ToString() ==
+		        "[{'db_schema_name': information_schema, 'db_schema_tables': NULL}, {'db_schema_name': main, "
+		        "'db_schema_tables': NULL}, {'db_schema_name': pg_catalog, 'db_schema_tables': NULL}]");
 		db.Query("Drop table result;");
 
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr, nullptr, nullptr,
@@ -1430,8 +1438,10 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE(res->ColumnCount() == 2);
 		REQUIRE(res->RowCount() == 3);
 		REQUIRE(res->GetValue(1, 2).ToString() ==
-		        "[{'db_schema_name': information_schema, 'db_schema_tables': NULL}, {'db_schema_name': main, 'db_schema_tables': [{'table_name': my_table, 'table_type': BASE TABLE, "
-		        "'table_columns': NULL, 'table_constraints': NULL}]}, {'db_schema_name': pg_catalog, 'db_schema_tables': NULL}]");
+		        "[{'db_schema_name': information_schema, 'db_schema_tables': NULL}, {'db_schema_name': main, "
+		        "'db_schema_tables': [{'table_name': my_table, 'table_type': BASE TABLE, "
+		        "'table_columns': NULL, 'table_constraints': NULL}]}, {'db_schema_name': pg_catalog, "
+		        "'db_schema_tables': NULL}]");
 		db.Query("Drop table result;");
 	}
 	//	 Now lets test some errors
