@@ -108,12 +108,23 @@ Pedro	31	1.73
 Mark	(empty)	(empty)
 Thijs	26	(empty)
 
+# Test with projection push-down
+query I
+select height FROM read_csv('data/csv/null/multiple_nulls.csv', delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, nullstr = ['','none','null']);
+----
+1.73
+NULL
+NULL
+
+query I
+select age FROM read_csv('data/csv/null/multiple_nulls.csv',  delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true,  nullstr = ['','none','null']);
+----
+31
+NULL
+26
+
 # Test force_not_null fails for made-up column
 statement error
 FROM read_csv('data/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null'], force_not_null = ['dont_exist']);
 ----
 Column name dont_exist specified in force_not_null parameter, does not exist in the CSV File.
-
-# Test where the last value is null over different strings
-
-# Test white spaces
