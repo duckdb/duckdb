@@ -675,7 +675,7 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(ClientContext &context, Scala
 	}
 	bound_function.arguments[0] = decimal_type;
 	bound_function.return_type = LogicalType::DECIMAL(width, target_scale);
-	return make_uniq<RoundPrecisionFunctionData>(round_value);
+	return make_uniq<RoundPrecisionFunctionData>(target_scale);
 }
 
 ScalarFunctionSet RoundFun::GetFunctions() {
