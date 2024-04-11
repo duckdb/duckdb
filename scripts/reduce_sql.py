@@ -6,6 +6,10 @@ import fuzzer_helper
 import multiprocessing
 import sqlite3
 
+# this script can be used as a library, but can also be directly called
+# example usage:
+# python3 scripts/reduce_sql.py --load load.sql --exec exec.sql
+
 try:
     multiprocessing.set_start_method('fork')
 except RuntimeError:
