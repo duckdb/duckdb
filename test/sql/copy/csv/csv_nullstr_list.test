@@ -5,7 +5,6 @@
 statement ok
 PRAGMA enable_verification
 
-
 # Test List
 query III
 FROM read_csv('data/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null']);
@@ -22,6 +21,7 @@ Pedro	31	1.73
 Mark	NULL	NULL
 Thijs	26	NULL
 
+#allow_quoted_nulls = false
 query III
 FROM read_csv('data/csv/null/multiple_quoted_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null'], allow_quoted_nulls = false);
 ----
@@ -29,14 +29,86 @@ Pedro	31	1.73
 Mark	null	(empty)
 Thijs	26	none
 
-#allow_quoted_nulls
 
 # Test Null Strings equal to delim quote escape
-# Test From Copy
+statement error
+FROM read_csv('data/csv/null/multiple_quoted_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['',',','null'], allow_quoted_nulls = false);
+----
+DELIMITER must not appear in the NULL specification and vice versa
 
+statement error
+FROM read_csv('data/csv/null/multiple_quoted_nulls.csv', auto_detect=false, delim=',', quote='"', escape='\', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','"','null'], allow_quoted_nulls = false);
+----
+QUOTE must not appear in the NULL specification and vice versa
+
+statement error
+FROM read_csv('data/csv/null/multiple_quoted_nulls.csv', auto_detect=false, delim=',', quote='"', escape='\', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','\','null'], allow_quoted_nulls = false);
+----
+ESCAPE must not appear in the NULL specification and vice versa
+
+# What if we have repeated values in our nullstr list?
+query III
+FROM read_csv('data/csv/null/multiple_quoted_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null','','none','null'], allow_quoted_nulls = false);
+----
+Pedro	31	1.73
+Mark	null	(empty)
+Thijs	26	none
+
+# Test Copy To
+statement ok
+create table t (a integer);
+
+statement ok
+insert into t values (0), (null)
+
+statement ok
+COPY t TO '__TEST_DIR__/t_i.csv' (nullstr 'none')
+
+# Not accepted in copy to/from
+statement error
+COPY t TO '__TEST_DIR__/t_i.csv' (nullstr ['none', ''])
+----
+syntax error at or near "["
+
+statement error
+COPY t FROM '__TEST_DIR__/t_i.csv' (nullstr ['none', ''])
+----
+syntax error at or near "["
+
+statement ok
+COPY t FROM '__TEST_DIR__/t_i.csv' (nullstr 'none')
+
+# Test with force_not_null
+query III
+FROM read_csv('data/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null'], force_not_null = ['height']);
+----
+Pedro	31	1.73
+Mark	NULL	NULL
+Thijs	26	NULL
+
+query III
+FROM read_csv('data/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null'], force_not_null = ['age','height']);
+----
+Pedro	31	1.73
+Mark	NULL	NULL
+Thijs	26	NULL
+
+
+# Test Quoted
+query III
+FROM read_csv('data/csv/null/multiple_quoted_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null'], force_not_null = ['height']);
+----
+Pedro	31	1.73
+Mark	NULL	NULL
+Thijs	26	NULL
+
+query III
+FROM read_csv('data/csv/null/multiple_quoted_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null'], force_not_null = ['age','height']);
+----
+Pedro	31	1.73
+Mark	NULL	NULL
+Thijs	26	NULL
 
 # Test where the last value is null over different strings
-
-# Check that write only supports ONE null string
 
 # Test white spaces
