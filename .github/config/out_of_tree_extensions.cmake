@@ -16,13 +16,11 @@
 #  VCPKG_TARGET_TRIPLET=arm64-osx
 
 ################# ARROW
-if (NOT WIN32)
-    duckdb_extension_load(arrow
-            LOAD_TESTS DONT_LINK
-            GIT_URL https://github.com/duckdb/arrow
-            GIT_TAG 9e10240da11f61ea7fbfe3fc9988ffe672ccd40f
-            )
-endif()
+duckdb_extension_load(arrow
+    LOAD_TESTS DONT_LINK
+    GIT_URL https://github.com/duckdb/arrow
+    GIT_TAG 9e10240da11f61ea7fbfe3fc9988ffe672ccd40f
+    )
 
 ################## AWS
 if (NOT MINGW)
@@ -67,7 +65,7 @@ if (NOT MINGW)
     duckdb_extension_load(postgres_scanner
             DONT_LINK
             GIT_URL https://github.com/duckdb/postgres_scanner
-            GIT_TAG 375710fd22a35107b2c28e744f787e1a93a99998
+            GIT_TAG 96206f41d5ca7015920a66b54e936c986fe0b0f8
             )
 endif()
 
