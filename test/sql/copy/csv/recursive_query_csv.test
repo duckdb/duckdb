@@ -1,0 +1,40 @@
+# name: test/sql/copy/csv/recursive_query_csv.test
+# description: Test read CSV function in a recursive
+# group: [csv]
+
+query I
+with recursive
+     base as
+     ( select *
+       from '/Users/holanda/Desktop/Real_Estate_Sales_2001-2021_GL.csv'
+       where '2003-01-01' < "date recorded" and  "date recorded" < '2010-01-01' and "sale amount" > 1000000
+     )
+   , chains as
+     (
+         select
+           town
+         , "date recorded" as begTS
+         , "date recorded" as endTS
+         , [struct_pack(date:= "date recorded", amt:="sale amount", type:="property type")] as chain
+         from base
+         where "property type" = 'Condo'
+       union all
+         select
+           chains.town
+         , chains.begTS
+         , base."date recorded" as endTS
+         , list_append(chains.chain, struct_pack(date:= "date recorded", amt:="sale amount", type:="property type")) as chain
+         from base, chains
+         where
+               base.town = chains.town
+           and
+           (
+                (len(chains.chain) = 1 and list_contains(['Residential', 'Single Family'], base."property type"))
+             or (len(chains.chain) = 2 and base."property type" = 'Condo')
+             or (len(chains.chain) = 3 and list_contains(['Residential', 'Single Family'], base."property type"))
+           )
+           and chains.endTS < base."date recorded"
+           and base."date recorded" < (chains.endTS + interval 6 days)
+     )
+   select * from chains;
+----
