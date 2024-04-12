@@ -61,7 +61,7 @@ private:
 
 	void Simplify(SelectNode &node);
 	void Simplify(SetOperationNode &node);
-	void Simplify(QueryNode &node);
+	void Simplify(unique_ptr<QueryNode> &node);
 
 	void Simplify(ResultModifier &modifier);
 	void Simplify(OrderModifier &modifier);
