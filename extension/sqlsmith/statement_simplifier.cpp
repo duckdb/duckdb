@@ -45,6 +45,46 @@ void StatementSimplifier::SimplifyList(vector<T> &list, bool is_optional) {
 }
 
 template <class T>
+void StatementSimplifier::SimplifyMap(T &map) {
+	if (map.empty()) {
+		return;
+	}
+	// copy the keys
+	vector<typename T::key_type> keys;
+	for(auto &entry : map) {
+		keys.push_back(entry.first);
+	}
+	// try to remove all of the keys
+	for(idx_t i = 0; i < keys.size(); i++) {
+		auto entry = map.find(keys[i]);
+		auto n = std::move(entry->second);
+		map.erase(entry);
+		Simplification();
+		map.insert(make_pair(std::move(keys[i]), std::move(n)));
+	}
+}
+
+template <class T>
+void StatementSimplifier::SimplifySet(T &set) {
+	if (set.empty()) {
+		return;
+	}
+	// copy the keys
+	vector<typename T::key_type> keys;
+	for(auto &entry : set) {
+		keys.push_back(entry);
+	}
+	// try to remove all of the keys
+	for(idx_t i = 0; i < keys.size(); i++) {
+		auto entry = set.find(keys[i]);
+		set.erase(entry);
+		Simplification();
+		set.insert(std::move(keys[i]));
+	}
+
+}
+
+template <class T>
 void StatementSimplifier::SimplifyOptional(duckdb::unique_ptr<T> &opt) {
 	if (!opt) {
 		return;
@@ -232,6 +272,15 @@ void StatementSimplifier::SimplifyExpression(duckdb::unique_ptr<ParsedExpression
 		auto &comp = expr->Cast<ComparisonExpression>();
 		SimplifyChildExpression(expr, comp.left);
 		SimplifyChildExpression(expr, comp.right);
+		break;
+	}
+	case ExpressionClass::STAR: {
+		auto &star = expr->Cast<StarExpression>();
+		SimplifyMap(star.replace_list);
+		SimplifySet(star.exclude_list);
+		for(auto &entry : star.replace_list) {
+			SimplifyChildExpression(expr, entry.second);
+		}
 		break;
 	}
 	case ExpressionClass::WINDOW: {

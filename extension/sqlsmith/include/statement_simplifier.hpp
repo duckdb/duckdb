@@ -46,6 +46,10 @@ private:
 
 	template <class T>
 	void SimplifyList(vector<T> &list, bool is_optional = true);
+	template <class T>
+	void SimplifyMap(T &map);
+	template <class T>
+	void SimplifySet(T &set);
 
 	template <class T>
 	void SimplifyReplace(T &element, T &other);
