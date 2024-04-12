@@ -905,7 +905,6 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TEST
           GIT_SUBMODULES "${SUBMODULES}"
           PATCH_COMMAND ${PATCH_COMMAND}
   )
-  message(STATUS "Load extension '${NAME}' from ${URL} @ ${COMMIT}")
   FETCHCONTENT_POPULATE(${NAME}_EXTENSION_FC)
 
   find_package(Git)
@@ -921,6 +920,7 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TEST
     set(GIT_SHORT_COMMIT "${COMMIT}")
   endif()
 
+  message(STATUS "Load extension '${NAME}' from ${URL} @ ${GIT_SHORT_COMMIT}")
   set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION "${GIT_SHORT_COMMIT}")
 
   if ("${INCLUDE_PATH}" STREQUAL "")
