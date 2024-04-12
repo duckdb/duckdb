@@ -1,0 +1,26 @@
+# name: test/sql/types/hugeint/hugeint_sum_overflow.test
+# description: Test hugeint sum overflow
+# group: [hugeint]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+SELECT SUM(170141183460469231731687303715884105727) FROM range(10);
+----
+Overflow
+
+statement error
+SELECT SUM(x) FROM (VALUES (170141183460469231731687303715884105727), (170141183460469231731687303715884105727)) t(x)
+----
+Overflow
+
+statement error
+SELECT AVG(170141183460469231731687303715884105727) FROM range(10);
+----
+Overflow
+
+statement error
+SELECT AVG(x) FROM (VALUES (170141183460469231731687303715884105727), (170141183460469231731687303715884105727)) t(x)
+----
+Overflow

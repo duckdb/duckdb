@@ -153,6 +153,12 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 		cse_optimizer.VisitOperator(*plan);
 	});
 
+	// transform ORDER BY + LIMIT to TopN
+	RunOptimizer(OptimizerType::TOP_N, [&]() {
+		TopN topn;
+		plan = topn.Optimize(std::move(plan));
+	});
+
 	// creates projection maps so unused columns are projected out early
 	RunOptimizer(OptimizerType::COLUMN_LIFETIME, [&]() {
 		ColumnLifetimeAnalyzer column_lifetime(true);
@@ -177,12 +183,6 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	RunOptimizer(OptimizerType::COLUMN_LIFETIME, [&]() {
 		ColumnLifetimeAnalyzer column_lifetime(true);
 		column_lifetime.VisitOperator(*plan);
-	});
-
-	// transform ORDER BY + LIMIT to TopN
-	RunOptimizer(OptimizerType::TOP_N, [&]() {
-		TopN topn;
-		plan = topn.Optimize(std::move(plan));
 	});
 
 	// apply simple expression heuristics to get an initial reordering

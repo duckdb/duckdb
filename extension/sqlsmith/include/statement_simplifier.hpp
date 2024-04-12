@@ -51,15 +51,9 @@ private:
 	void SimplifyReplace(T &element, T &other);
 
 	template <class T>
-	void SimplifyListReplace(T &element, vector<T> &list);
-
-	template <class T>
-	void SimplifyListReplaceNull(vector<T> &list);
-
-	template <class T>
 	void SimplifyOptional(duckdb::unique_ptr<T> &opt);
 
-	void Simplify(TableRef &ref);
+	void Simplify(unique_ptr<TableRef> &ref);
 
 	void Simplify(SelectNode &node);
 	void Simplify(SetOperationNode &node);
@@ -69,6 +63,11 @@ private:
 	void Simplify(OrderModifier &modifier);
 
 	void SimplifyExpression(duckdb::unique_ptr<ParsedExpression> &expr);
+	void SimplifyOptionalExpression(duckdb::unique_ptr<ParsedExpression> &expr);
+	void SimplifyChildExpression(duckdb::unique_ptr<ParsedExpression> &expr, unique_ptr<ParsedExpression> &child);
+	void SimplifyExpressionList(duckdb::unique_ptr<ParsedExpression> &expr,
+	                            vector<unique_ptr<ParsedExpression>> &expression_list);
+	void SimplifyExpressionList(vector<unique_ptr<ParsedExpression>> &expression_list, bool is_optional = true);
 	void Simplify(CommonTableExpressionMap &cte_map);
 
 	void Simplify(UpdateSetInfo &info);

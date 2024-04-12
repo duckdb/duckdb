@@ -114,6 +114,18 @@ public:
 		OnOptionalPropertyEnd(true);
 	}
 
+	template <typename T>
+	inline void ReadPropertyWithDefault(const field_id_t field_id, const char *tag, CSVOption<T> &ret,
+	                                    T &&default_value) {
+		if (!OnOptionalPropertyBegin(field_id, tag)) {
+			ret = std::forward<T>(default_value);
+			OnOptionalPropertyEnd(false);
+			return;
+		}
+		ret = Read<T>();
+		OnOptionalPropertyEnd(true);
+	}
+
 	// Special case:
 	// Read into an existing data_ptr_t
 	inline void ReadProperty(const field_id_t field_id, const char *tag, data_ptr_t ret, idx_t count) {
