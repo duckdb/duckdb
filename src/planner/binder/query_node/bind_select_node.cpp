@@ -515,16 +515,19 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 	}
 
 	// bind the QUALIFY clause, if any
-	unique_ptr<QualifyBinder> qualify_binder;
+	vector<BoundColumnReferenceInfo> bound_qualify_columns;
 	if (statement.qualify) {
 		if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES) {
 			throw BinderException("Combining QUALIFY with GROUP BY ALL is not supported yet");
 		}
-		qualify_binder = make_uniq<QualifyBinder>(*this, context, *result, info);
+		QualifyBinder qualify_binder(*this, context, *result, info);
 		ExpressionBinder::QualifyColumnNames(*this, statement.qualify);
-		result->qualify = qualify_binder->Bind(statement.qualify);
-		if (qualify_binder->HasBoundColumns() && qualify_binder->BoundAggregates()) {
-			throw BinderException("Cannot mix aggregates with non-aggregated columns!");
+		result->qualify = qualify_binder.Bind(statement.qualify);
+		if (qualify_binder.HasBoundColumns()) {
+			if (qualify_binder.BoundAggregates()) {
+				throw BinderException("Cannot mix aggregates with non-aggregated columns!");
+			}
+			bound_qualify_columns = qualify_binder.GetBoundColumns();
 		}
 	}
 
@@ -625,17 +628,14 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 		if (statement.aggregate_handling == AggregateHandling::NO_AGGREGATES_ALLOWED) {
 			throw BinderException("Aggregates cannot be present in a Project relation!");
 		} else {
-			vector<reference<BaseSelectBinder>> to_check_binders;
-			to_check_binders.push_back(select_binder);
-			if (qualify_binder) {
-				to_check_binders.push_back(*qualify_binder);
+			vector<BoundColumnReferenceInfo> bound_columns;
+			if (select_binder.HasBoundColumns()) {
+				bound_columns = select_binder.GetBoundColumns();
 			}
-			for (auto &binder : to_check_binders) {
-				auto &sel_binder = binder.get();
-				if (!sel_binder.HasBoundColumns()) {
-					continue;
-				}
-				auto &bound_columns = sel_binder.GetBoundColumns();
+			for (auto &bound_qualify_col : bound_qualify_columns) {
+				bound_columns.push_back(bound_qualify_col);
+			}
+			if (!bound_columns.empty()) {
 				string error;
 				error = "column \"%s\" must appear in the GROUP BY clause or must be part of an aggregate function.";
 				if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES) {
