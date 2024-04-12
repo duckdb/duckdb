@@ -221,7 +221,7 @@ static void SetICUCalendar(ClientContext &context, SetScope scope, Value &parame
 	}
 }
 
-void IcuExtension::Load(DuckDB &ddb) {
+static void LoadInternal(DuckDB &ddb) {
 	auto &db = *ddb.instance;
 
 	// iterate over all the collations
@@ -275,6 +275,10 @@ void IcuExtension::Load(DuckDB &ddb) {
 	ExtensionUtil::RegisterFunction(db, cal_names);
 }
 
+void IcuExtension::Load(DuckDB &ddb) {
+	LoadInternal(ddb);
+}
+
 std::string IcuExtension::Name() {
 	return "icu";
 }
@@ -285,7 +289,7 @@ extern "C" {
 
 DUCKDB_EXTENSION_API void icu_init(duckdb::DatabaseInstance &db) { // NOLINT
 	duckdb::DuckDB db_wrapper(db);
-	db_wrapper.LoadExtension<duckdb::IcuExtension>();
+	duckdb::LoadInternal(db_wrapper);
 }
 
 DUCKDB_EXTENSION_API const char *icu_version() { // NOLINT

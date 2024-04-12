@@ -13,7 +13,7 @@ CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager>
 	}
 	// Initialize max columns found to either 0 or however many were set
 	max_columns_found = set_columns.Size();
-	error_handler = make_shared<CSVErrorHandler>(options.ignore_errors);
+	error_handler = make_shared<CSVErrorHandler>(options.ignore_errors.GetValue());
 	detection_error_handler = make_shared<CSVErrorHandler>(true);
 }
 
@@ -102,7 +102,7 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 		buffer_manager->ResetBufferManager();
 	}
 	buffer_manager->sniffing = false;
-	if (!best_candidate->error_handler->errors.empty() && !options.ignore_errors) {
+	if (!best_candidate->error_handler->errors.empty() && !options.ignore_errors.GetValue()) {
 		for (auto &error_vector : best_candidate->error_handler->errors) {
 			for (auto &error : error_vector.second) {
 				if (error.type == CSVErrorType::MAXIMUM_LINE_SIZE) {

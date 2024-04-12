@@ -38,7 +38,7 @@ public:
 
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 	virtual unique_ptr<ExtraDropInfo> Copy() const = 0;
