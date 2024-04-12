@@ -1236,7 +1236,7 @@ unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relat
 	return ErrorResult<MaterializedQueryResult>(ErrorData(err_str));
 }
 
-SettingLookupResult ClientContext::TryGetCurrentSetting(const std::string &key, Value &result) {
+SettingLookupResult ClientContext::TryGetCurrentSetting(const std::string &key, Value &result) const {
 	// first check the built-in settings
 	auto &db_config = DBConfig::GetConfig(*this);
 	auto option = db_config.GetOptionByName(key);
@@ -1271,17 +1271,9 @@ ParserOptions ClientContext::GetParserOptions() const {
 ClientProperties ClientContext::GetClientProperties() const {
 	string timezone = "UTC";
 	Value result;
-	// 1) Check Set Variable
-	auto &client_config = ClientConfig::GetConfig(*this);
-	auto tz_config = client_config.set_variables.find("timezone");
-	if (tz_config == client_config.set_variables.end()) {
-		// 2) Check for Default Value
-		auto default_value = db->config.extension_parameters.find("timezone");
-		if (default_value != db->config.extension_parameters.end()) {
-			timezone = default_value->second.default_value.GetValue<string>();
-		}
-	} else {
-		timezone = tz_config->second.GetValue<string>();
+
+	if (TryGetCurrentSetting("TimeZone", result)) {
+		timezone = result.ToString();
 	}
 	return {timezone, db->config.options.arrow_offset_size};
 }

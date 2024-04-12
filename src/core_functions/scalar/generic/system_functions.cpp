@@ -47,6 +47,9 @@ public:
 
 static unique_ptr<FunctionData> CurrentSchemasBind(ClientContext &context, ScalarFunction &bound_function,
                                                    vector<unique_ptr<Expression>> &arguments) {
+	if (arguments[0]->return_type.id() != LogicalTypeId::BOOLEAN) {
+		throw BinderException("current_schemas requires a boolean input");
+	}
 	if (!arguments[0]->IsFoldable()) {
 		throw NotImplementedException("current_schemas requires a constant input");
 	}

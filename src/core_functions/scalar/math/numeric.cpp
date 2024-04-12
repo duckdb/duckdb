@@ -575,7 +575,7 @@ static void DecimalRoundNegativePrecisionFunction(DataChunk &input, ExpressionSt
 	auto &info = func_expr.bind_info->Cast<RoundPrecisionFunctionData>();
 	auto source_scale = DecimalType::GetScale(func_expr.children[0]->return_type);
 	auto width = DecimalType::GetWidth(func_expr.children[0]->return_type);
-	if (info.target_scale <= -int32_t(width)) {
+	if (info.target_scale <= -int32_t(width - source_scale)) {
 		// scale too big for width
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		result.SetValue(0, Value::INTEGER(0));

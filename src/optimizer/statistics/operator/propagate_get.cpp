@@ -31,7 +31,7 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &input, TableFi
 }
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet &get,
-                                                                     unique_ptr<LogicalOperator> *node_ptr) {
+                                                                     unique_ptr<LogicalOperator> &node_ptr) {
 	if (get.function.cardinality) {
 		node_stats = get.function.cardinality(context, get.bind_data.get());
 	}
@@ -85,7 +85,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 		case FilterPropagateResult::FILTER_FALSE_OR_NULL:
 		case FilterPropagateResult::FILTER_ALWAYS_FALSE:
 			// filter is always false; this entire filter should be replaced by an empty result block
-			ReplaceWithEmptyResult(*node_ptr);
+			ReplaceWithEmptyResult(node_ptr);
 			return make_uniq<NodeStatistics>(0U, 0U);
 		default:
 			// general case: filter can be true or false, update this columns' statistics

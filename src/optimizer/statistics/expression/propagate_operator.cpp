@@ -5,7 +5,7 @@
 namespace duckdb {
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundOperatorExpression &expr,
-                                                                     unique_ptr<Expression> *expr_ptr) {
+                                                                     unique_ptr<Expression> &expr_ptr) {
 	bool all_have_stats = true;
 	vector<unique_ptr<BaseStatistics>> child_stats;
 	child_stats.reserve(expr.children.size());
@@ -47,7 +47,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundOperat
 		D_ASSERT(expr.children.size() == child_stats.size());
 		if (expr.children.size() == 1) {
 			// coalesce of one entry: simply return that entry
-			*expr_ptr = std::move(expr.children[0]);
+			expr_ptr = std::move(expr.children[0]);
 		} else {
 			// coalesce of multiple entries
 			// merge the stats
@@ -59,25 +59,25 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundOperat
 	case ExpressionType::OPERATOR_IS_NULL:
 		if (!child_stats[0]->CanHaveNull()) {
 			// child has no null values: x IS NULL will always be false
-			*expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
-			return PropagateExpression(*expr_ptr);
+			expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
+			return PropagateExpression(expr_ptr);
 		}
 		if (!child_stats[0]->CanHaveNoNull()) {
 			// child has no valid values: x IS NULL will always be true
-			*expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
-			return PropagateExpression(*expr_ptr);
+			expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
+			return PropagateExpression(expr_ptr);
 		}
 		return nullptr;
 	case ExpressionType::OPERATOR_IS_NOT_NULL:
 		if (!child_stats[0]->CanHaveNull()) {
 			// child has no null values: x IS NOT NULL will always be true
-			*expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
-			return PropagateExpression(*expr_ptr);
+			expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
+			return PropagateExpression(expr_ptr);
 		}
 		if (!child_stats[0]->CanHaveNoNull()) {
 			// child has no valid values: x IS NOT NULL will always be false
-			*expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
-			return PropagateExpression(*expr_ptr);
+			expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
+			return PropagateExpression(expr_ptr);
 		}
 		return nullptr;
 	default:
