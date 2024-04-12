@@ -55,7 +55,7 @@ SinkCombineResultType PhysicalBufferedCollector::Combine(ExecutionContext &conte
 unique_ptr<GlobalSinkState> PhysicalBufferedCollector::GetGlobalSinkState(ClientContext &context) const {
 	auto state = make_uniq<BufferedCollectorGlobalState>();
 	state->context = context.shared_from_this();
-	state->buffered_data = make_refcounted<SimpleBufferedData>(state->context);
+	state->buffered_data = make_shared_ptr<SimpleBufferedData>(state->context);
 	return std::move(state);
 }
 

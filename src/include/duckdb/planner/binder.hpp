@@ -376,7 +376,7 @@ private:
 	unique_ptr<BoundTableRef> BindSummarize(ShowRef &ref);
 
 public:
-	// This should really be a private constructor, but make_refcounted does not allow it...
+	// This should really be a private constructor, but make_shared_ptr does not allow it...
 	// If you are thinking about calling this, you should probably call Binder::CreateBinder
 	Binder(bool i_know_what_i_am_doing, ClientContext &context, shared_ptr<Binder> parent, bool inherit_ctes);
 };

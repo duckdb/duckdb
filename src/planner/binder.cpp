@@ -47,7 +47,7 @@ shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, optional_ptr<Bin
 		                      "increase the maximum expression depth.",
 		                      context.config.max_expression_depth);
 	}
-	return make_refcounted<Binder>(true, context, parent ? parent->shared_from_this() : nullptr, inherit_ctes);
+	return make_shared_ptr<Binder>(true, context, parent ? parent->shared_from_this() : nullptr, inherit_ctes);
 }
 
 Binder::Binder(bool, ClientContext &context, shared_ptr<Binder> parent_p, bool inherit_ctes_p)

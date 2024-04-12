@@ -304,7 +304,7 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 
 void ColumnReader::AllocateBlock(idx_t size) {
 	if (!block) {
-		block = make_refcounted<ResizeableBuffer>(GetAllocator(), size);
+		block = make_shared_ptr<ResizeableBuffer>(GetAllocator(), size);
 	} else {
 		block->resize(GetAllocator(), size);
 	}
@@ -516,7 +516,7 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 			        result);
 		} else if (dbp_decoder) {
 			// TODO keep this in the state
-			auto read_buf = make_refcounted<ResizeableBuffer>();
+			auto read_buf = make_shared_ptr<ResizeableBuffer>();
 
 			switch (schema.type) {
 			case duckdb_parquet::format::Type::INT32:
@@ -537,7 +537,7 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 		} else if (rle_decoder) {
 			// RLE encoding for boolean
 			D_ASSERT(type.id() == LogicalTypeId::BOOLEAN);
-			auto read_buf = make_refcounted<ResizeableBuffer>();
+			auto read_buf = make_shared_ptr<ResizeableBuffer>();
 			read_buf->resize(reader.allocator, sizeof(bool) * (read_now - null_count));
 			rle_decoder->GetBatch<uint8_t>(read_buf->ptr, read_now - null_count);
 			PlainTemplated<bool, TemplatedParquetValueConversion<bool>>(read_buf, define_out, read_now, filter,
@@ -546,7 +546,7 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 			// DELTA_BYTE_ARRAY or DELTA_LENGTH_BYTE_ARRAY
 			DeltaByteArray(define_out, read_now, filter, result_offset, result);
 		} else if (bss_decoder) {
-			auto read_buf = make_refcounted<ResizeableBuffer>();
+			auto read_buf = make_shared_ptr<ResizeableBuffer>();
 
 			switch (schema.type) {
 			case duckdb_parquet::format::Type::FLOAT:
@@ -662,7 +662,7 @@ void StringColumnReader::Dictionary(shared_ptr<ResizeableBuffer> data, idx_t num
 static shared_ptr<ResizeableBuffer> ReadDbpData(Allocator &allocator, ResizeableBuffer &buffer, idx_t &value_count) {
 	auto decoder = make_uniq<DbpDecoder>(buffer.ptr, buffer.len);
 	value_count = decoder->TotalValues();
-	auto result = make_refcounted<ResizeableBuffer>();
+	auto result = make_shared_ptr<ResizeableBuffer>();
 	result->resize(allocator, sizeof(uint32_t) * value_count);
 	decoder->GetBatch<uint32_t>(result->ptr, value_count);
 	decoder->Finalize();

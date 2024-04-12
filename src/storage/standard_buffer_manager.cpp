@@ -98,7 +98,7 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(idx_t block_s
 	auto buffer = ConstructManagedBuffer(block_size, nullptr, FileBufferType::TINY_BUFFER);
 
 	// create a new block pointer for this block
-	auto result = make_refcounted<BlockHandle>(*temp_block_manager, ++temporary_id, MemoryTag::BASE_TABLE,
+	auto result = make_shared_ptr<BlockHandle>(*temp_block_manager, ++temporary_id, MemoryTag::BASE_TABLE,
 	                                           std::move(buffer), false, block_size, std::move(reservation));
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 	// Initialize the memory with garbage data
@@ -118,7 +118,7 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx
 	auto buffer = ConstructManagedBuffer(block_size, std::move(reusable_buffer));
 
 	// create a new block pointer for this block
-	return make_refcounted<BlockHandle>(*temp_block_manager, ++temporary_id, tag, std::move(buffer), can_destroy,
+	return make_shared_ptr<BlockHandle>(*temp_block_manager, ++temporary_id, tag, std::move(buffer), can_destroy,
 	                                    alloc_size, std::move(res));
 }
 

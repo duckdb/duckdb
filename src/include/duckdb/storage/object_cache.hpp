@@ -52,7 +52,7 @@ public:
 
 		auto entry = cache.find(key);
 		if (entry == cache.end()) {
-			auto value = make_refcounted<T>(args...);
+			auto value = make_shared_ptr<T>(args...);
 			cache[key] = value;
 			return value;
 		}

@@ -640,7 +640,7 @@ void DuckDBPyConnection::RegisterArrowObject(const py::object &arrow_object, con
 	}
 	vector<shared_ptr<ExternalDependency>> dependencies;
 	dependencies.push_back(
-	    make_refcounted<PythonDependencies>(make_uniq<RegisteredArrow>(std::move(stream_factory), arrow_object)));
+	    make_shared_ptr<PythonDependencies>(make_uniq<RegisteredArrow>(std::move(stream_factory), arrow_object)));
 	connection->context->external_dependencies[name] = std::move(dependencies);
 }
 
@@ -665,7 +665,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 
 			// keep a reference
 			vector<shared_ptr<ExternalDependency>> dependencies;
-			dependencies.push_back(make_refcounted<PythonDependencies>(make_uniq<RegisteredObject>(python_object),
+			dependencies.push_back(make_shared_ptr<PythonDependencies>(make_uniq<RegisteredObject>(python_object),
 			                                                           make_uniq<RegisteredObject>(new_df)));
 			connection->context->external_dependencies[name] = std::move(dependencies);
 		}
@@ -776,7 +776,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, co
 	}
 
 	auto read_json_relation =
-	    make_refcounted<ReadJSONRelation>(connection->context, name, std::move(options), auto_detect);
+	    make_shared_ptr<ReadJSONRelation>(connection->context, name, std::move(options), auto_detect);
 	if (read_json_relation == nullptr) {
 		throw BinderException("read_json can only be used when the JSON extension is (statically) loaded");
 	}
@@ -1319,7 +1319,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Cursor() {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
-	auto res = make_refcounted<DuckDBPyConnection>();
+	auto res = make_shared_ptr<DuckDBPyConnection>();
 	res->database = database;
 	res->connection = make_uniq<Connection>(*res->database);
 	cursors.push_back(res);
@@ -1598,7 +1598,7 @@ static void SetDefaultConfigArguments(ClientContext &context) {
 }
 
 static shared_ptr<DuckDBPyConnection> FetchOrCreateInstance(const string &database, DBConfig &config) {
-	auto res = make_refcounted<DuckDBPyConnection>();
+	auto res = make_shared_ptr<DuckDBPyConnection>();
 	res->database = instance_cache.GetInstance(database, config);
 	if (!res->database) {
 		//! No cached database, we must create a new instance
@@ -1676,7 +1676,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::DefaultConnection() {
 
 PythonImportCache *DuckDBPyConnection::ImportCache() {
 	if (!import_cache) {
-		import_cache = make_refcounted<PythonImportCache>();
+		import_cache = make_shared_ptr<PythonImportCache>();
 	}
 	return import_cache.get();
 }
@@ -1690,7 +1690,7 @@ ModifiedMemoryFileSystem &DuckDBPyConnection::GetObjectFileSystem() {
 			throw InvalidInputException(
 			    "This operation could not be completed because required module 'fsspec' is not installed");
 		}
-		internal_object_filesystem = make_refcounted<ModifiedMemoryFileSystem>(modified_memory_fs());
+		internal_object_filesystem = make_shared_ptr<ModifiedMemoryFileSystem>(modified_memory_fs());
 		auto &abstract_fs = reinterpret_cast<AbstractFileSystem &>(*internal_object_filesystem);
 		RegisterFilesystem(abstract_fs);
 	}

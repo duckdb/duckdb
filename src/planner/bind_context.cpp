@@ -514,13 +514,13 @@ void BindContext::AddGenericBinding(idx_t index, const string &alias, const vect
 
 void BindContext::AddCTEBinding(idx_t index, const string &alias, const vector<string> &names,
                                 const vector<LogicalType> &types) {
-	auto binding = make_refcounted<Binding>(BindingType::BASE, alias, types, names, index);
+	auto binding = make_shared_ptr<Binding>(BindingType::BASE, alias, types, names, index);
 
 	if (cte_bindings.find(alias) != cte_bindings.end()) {
 		throw BinderException("Duplicate alias \"%s\" in query!", alias);
 	}
 	cte_bindings[alias] = std::move(binding);
-	cte_references[alias] = make_refcounted<idx_t>(0);
+	cte_references[alias] = make_shared_ptr<idx_t>(0);
 }
 
 void BindContext::AddContext(BindContext other) {

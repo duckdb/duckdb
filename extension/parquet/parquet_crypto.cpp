@@ -14,7 +14,7 @@ namespace duckdb {
 ParquetKeys &ParquetKeys::Get(ClientContext &context) {
 	auto &cache = ObjectCache::GetObjectCache(context);
 	if (!cache.Get<ParquetKeys>(ParquetKeys::ObjectType())) {
-		cache.Put(ParquetKeys::ObjectType(), make_refcounted<ParquetKeys>());
+		cache.Put(ParquetKeys::ObjectType(), make_shared_ptr<ParquetKeys>());
 	}
 	return *cache.Get<ParquetKeys>(ParquetKeys::ObjectType());
 }

@@ -68,7 +68,7 @@ make_uniq(ARGS&&... args) // NOLINT: mimic std style
 template<class DATA_TYPE, class... ARGS>
 inline 
 shared_ptr<DATA_TYPE>
-make_refcounted(ARGS&&... args) // NOLINT: mimic std style
+make_shared_ptr(ARGS&&... args) // NOLINT: mimic std style
 {
 	return shared_ptr<DATA_TYPE>(std::make_shared<DATA_TYPE>(std::forward<ARGS>(args)...));
 }
@@ -125,7 +125,7 @@ shared_ptr<S> shared_ptr_cast(shared_ptr<T> src) { // NOLINT: mimic std style
 struct SharedConstructor {
 	template <class T, typename... ARGS>
 	static shared_ptr<T> Create(ARGS &&...args) {
-		return make_refcounted<T>(std::forward<ARGS>(args)...);
+		return make_shared_ptr<T>(std::forward<ARGS>(args)...);
 	}
 };
 

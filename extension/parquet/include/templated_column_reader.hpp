@@ -44,7 +44,7 @@ public:
 public:
 	void AllocateDict(idx_t size) {
 		if (!dict) {
-			dict = make_refcounted<ResizeableBuffer>(GetAllocator(), size);
+			dict = make_shared_ptr<ResizeableBuffer>(GetAllocator(), size);
 		} else {
 			dict->resize(GetAllocator(), size);
 		}

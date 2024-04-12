@@ -155,7 +155,7 @@
     "class": "GenericTypeInfo",
     "base": "ExtraTypeInfo",
     "enum": "GENERIC_TYPE_INFO",
-    "custom_switch_code": "result = make_refcounted<ExtraTypeInfo>(type);\nbreak;"
+    "custom_switch_code": "result = make_shared_ptr<ExtraTypeInfo>(type);\nbreak;"
   },
   {
     "class": "AnyTypeInfo",

@@ -185,7 +185,7 @@ CopyFunction JSONFunctions::GetJSONCopyFunction() {
 	function.plan = CopyToJSONPlan;
 
 	function.copy_from_bind = CopyFromJSONBind;
-	function.copy_from_function = JSONFunctions::GetReadJSONTableFunction(make_refcounted<JSONScanInfo>(
+	function.copy_from_function = JSONFunctions::GetReadJSONTableFunction(make_shared_ptr<JSONScanInfo>(
 	    JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED, JSONRecordType::RECORDS, false));
 
 	return function;

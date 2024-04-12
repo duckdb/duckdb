@@ -69,7 +69,7 @@ shared_ptr<HTTPState> HTTPState::TryGetState(ClientContext &context, bool create
 		return nullptr;
 	}
 
-	auto http_state = make_refcounted<HTTPState>();
+	auto http_state = make_shared_ptr<HTTPState>();
 	context.registered_state["http_state"] = http_state;
 	return http_state;
 }
@@ -87,7 +87,7 @@ shared_ptr<CachedFile> &HTTPState::GetCachedFile(const string &path) {
 	lock_guard<mutex> lock(cached_files_mutex);
 	auto &cache_entry_ref = cached_files[path];
 	if (!cache_entry_ref) {
-		cache_entry_ref = make_refcounted<CachedFile>();
+		cache_entry_ref = make_shared_ptr<CachedFile>();
 	}
 	return cache_entry_ref;
 }

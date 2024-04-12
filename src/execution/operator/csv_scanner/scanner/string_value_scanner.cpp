@@ -651,14 +651,14 @@ StringValueScanner::StringValueScanner(const shared_ptr<CSVBufferManager> &buffe
 }
 
 unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options) {
-	auto state_machine = make_refcounted<CSVStateMachine>(options, options.dialect_options.state_machine_options,
+	auto state_machine = make_shared_ptr<CSVStateMachine>(options, options.dialect_options.state_machine_options,
 	                                                      CSVStateMachineCache::Get(context));
 
 	state_machine->dialect_options.num_cols = options.dialect_options.num_cols;
 	state_machine->dialect_options.header = options.dialect_options.header;
-	auto buffer_manager = make_refcounted<CSVBufferManager>(context, options, options.file_path, 0);
-	auto scanner = make_uniq<StringValueScanner>(buffer_manager, state_machine, make_refcounted<CSVErrorHandler>());
-	scanner->csv_file_scan = make_refcounted<CSVFileScan>(context, options.file_path, options);
+	auto buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, options.file_path, 0);
+	auto scanner = make_uniq<StringValueScanner>(buffer_manager, state_machine, make_shared_ptr<CSVErrorHandler>());
+	scanner->csv_file_scan = make_shared_ptr<CSVFileScan>(context, options.file_path, options);
 	scanner->csv_file_scan->InitializeProjection();
 	return scanner;
 }
@@ -1222,7 +1222,7 @@ void StringValueScanner::SetStart() {
 		}
 
 		scan_finder =
-		    make_uniq<StringValueScanner>(0, buffer_manager, state_machine, make_refcounted<CSVErrorHandler>(true),
+		    make_uniq<StringValueScanner>(0, buffer_manager, state_machine, make_shared_ptr<CSVErrorHandler>(true),
 		                                  csv_file_scan, false, iterator, 1);
 		auto &tuples = scan_finder->ParseChunk();
 		line_found = true;

@@ -28,7 +28,7 @@ void CSVBufferManager::UnpinBuffer(const idx_t cache_idx) {
 void CSVBufferManager::Initialize() {
 	if (cached_buffers.empty()) {
 		cached_buffers.emplace_back(
-		    make_refcounted<CSVBuffer>(context, buffer_size, *file_handle, global_csv_pos, file_idx));
+		    make_shared_ptr<CSVBuffer>(context, buffer_size, *file_handle, global_csv_pos, file_idx));
 		last_buffer = cached_buffers.front();
 	}
 }

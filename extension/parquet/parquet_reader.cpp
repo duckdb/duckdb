@@ -113,7 +113,7 @@ LoadMetadata(Allocator &allocator, FileHandle &file_handle,
 		metadata->read(file_proto.get());
 	}
 
-	return make_refcounted<ParquetFileMetadataCache>(std::move(metadata), current_time);
+	return make_shared_ptr<ParquetFileMetadataCache>(std::move(metadata), current_time);
 }
 
 LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool binary_as_string) {

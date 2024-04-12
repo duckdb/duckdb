@@ -151,7 +151,7 @@ struct MultiFileReader {
 			return BindUnionReader<READER_CLASS>(context, return_types, names, result, options);
 		} else {
 			shared_ptr<READER_CLASS> reader;
-			reader = make_refcounted<READER_CLASS>(context, result.files[0], options);
+			reader = make_shared_ptr<READER_CLASS>(context, result.files[0], options);
 			return_types = reader->return_types;
 			names = reader->names;
 			result.Initialize(std::move(reader));

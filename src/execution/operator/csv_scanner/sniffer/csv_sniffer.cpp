@@ -13,8 +13,8 @@ CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager>
 	}
 	// Initialize max columns found to either 0 or however many were set
 	max_columns_found = set_columns.Size();
-	error_handler = make_refcounted<CSVErrorHandler>(options.ignore_errors.GetValue());
-	detection_error_handler = make_refcounted<CSVErrorHandler>(true);
+	error_handler = make_shared_ptr<CSVErrorHandler>(options.ignore_errors.GetValue());
+	detection_error_handler = make_shared_ptr<CSVErrorHandler>(true);
 }
 
 bool SetColumns::IsSet() {

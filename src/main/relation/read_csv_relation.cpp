@@ -56,7 +56,7 @@ ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const
 
 	shared_ptr<CSVBufferManager> buffer_manager;
 	context->RunFunctionInTransaction([&]() {
-		buffer_manager = make_refcounted<CSVBufferManager>(*context, csv_options, files[0], 0);
+		buffer_manager = make_shared_ptr<CSVBufferManager>(*context, csv_options, files[0], 0);
 		CSVSniffer sniffer(csv_options, buffer_manager, CSVStateMachineCache::Get(*context));
 		auto sniffer_result = sniffer.SniffCSV();
 		auto &types = sniffer_result.return_types;

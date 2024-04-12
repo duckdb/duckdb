@@ -425,7 +425,7 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 
 	// now we can look for the index in the catalog and assign the table info
 	auto &index = catalog.CreateIndex(context, info)->Cast<DuckIndexEntry>();
-	index.info = make_refcounted<IndexDataTableInfo>(table.GetStorage().info, info.index_name);
+	index.info = make_shared_ptr<IndexDataTableInfo>(table.GetStorage().info, info.index_name);
 
 	// insert the parsed expressions into the index so that we can (de)serialize them during consecutive checkpoints
 	for (auto &parsed_expr : info.parsed_expressions) {
