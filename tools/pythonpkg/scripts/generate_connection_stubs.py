@@ -52,13 +52,15 @@ def generate():
         return result
 
     def create_definition(name, method) -> str:
-        definition = f"def {name}(self"
+        definition = f"def {name}("
+        arguments = ['self']
         if 'args' in method:
-            definition += ", "
-            arguments = create_arguments(method['args'])
-            definition += ', '.join(arguments)
+            arguments.extend(create_arguments(method['args']))
         if 'kwargs' in method:
-            definition += ", **kwargs"
+            if not any(x.startswith('*') for x in arguments):
+                arguments.append("*")
+            arguments.extend(create_arguments(method['kwargs']))
+        definition += ", ".join(arguments)
         definition += ")"
         definition += f" -> {method['return']}: ..."
         return definition

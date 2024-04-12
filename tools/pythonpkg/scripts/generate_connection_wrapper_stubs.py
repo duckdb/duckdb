@@ -74,7 +74,9 @@ def generate():
         if 'args' in method:
             arguments.extend(create_arguments(method['args']))
         if 'kwargs' in method:
-            arguments.append("**kwargs")
+            if not any(x.startswith('*') for x in arguments):
+                arguments.append("*")
+            arguments.extend(create_arguments(method['kwargs']))
         definition += ', '.join(arguments)
         definition += ")"
         definition += f" -> {method['return']}: ..."

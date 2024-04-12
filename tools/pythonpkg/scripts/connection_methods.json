@@ -782,7 +782,7 @@
 			{
 				"name": "compression",
 				"default": "None",
-				"type": "str"
+				"type": "Optional[str]"
 			}
 		],
 		"return": "DuckDBPyRelation"
