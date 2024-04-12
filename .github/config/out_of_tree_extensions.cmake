@@ -20,6 +20,7 @@ duckdb_extension_load(arrow
     LOAD_TESTS DONT_LINK
     GIT_URL https://github.com/duckdb/arrow
     GIT_TAG 9e10240da11f61ea7fbfe3fc9988ffe672ccd40f
+    APPLY_PATCHES
     )
 
 ################## AWS
