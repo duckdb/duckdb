@@ -127,4 +127,4 @@ NULL
 statement error
 FROM read_csv('data/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null'], force_not_null = ['dont_exist']);
 ----
-Column name dont_exist specified in force_not_null parameter, does not exist in the CSV File.
+"force_not_null" expected to find dont_exist, but it was not found in the table

@@ -295,7 +295,7 @@ bool CSVReaderOptions::SetBaseOption(const string &loption, const Value &value) 
 		if (child_type.id() != LogicalTypeId::LIST && child_type.id() != LogicalTypeId::VARCHAR) {
 			throw BinderException("read_csv %s option requires a string or a list as input", loption);
 		}
-		if (!sql_type_list.empty()) {
+		if (!null_str.empty()) {
 			throw BinderException("read_csv_auto nullstr can only be supplied once");
 		}
 		if (child_type.id() == LogicalTypeId::LIST) {

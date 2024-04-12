@@ -140,9 +140,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		}
 		for (auto &force_name : options.force_not_null_names) {
 			if (column_names.find(force_name) == column_names.end()) {
-				throw BinderException(
-				    "Column name %s specified in force_not_null parameter, does not exist in the CSV File.",
-				    force_name);
+				throw BinderException("\"force_not_null\" expected to find %s, but it was not found in the table",
+				                      force_name);
 			}
 		}
 		D_ASSERT(options.force_not_null.empty());
