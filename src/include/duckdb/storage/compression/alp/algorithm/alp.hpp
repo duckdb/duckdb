@@ -254,7 +254,8 @@ struct AlpCompression {
 	static void FindBestFactorAndExponent(const T *input_vector, idx_t n_values, State &state) {
 		//! We sample equidistant values within a vector; to do this we skip a fixed number of values
 		vector<T> vector_sample;
-		uint32_t idx_increments = MaxValue(1, (int32_t)std::ceil((double)n_values / AlpConstants::SAMPLES_PER_VECTOR));
+		auto idx_increments = MaxValue<uint32_t>(
+		    1, UnsafeNumericCast<uint32_t>(std::ceil((double)n_values / AlpConstants::SAMPLES_PER_VECTOR)));
 		for (idx_t i = 0; i < n_values; i += idx_increments) {
 			vector_sample.push_back(input_vector[i]);
 		}
@@ -360,7 +361,7 @@ struct AlpCompression {
 		}
 		state.bit_width = bit_width; // in bits
 		state.bp_size = bp_size;     // in bytes
-		state.frame_of_reference = min_value;
+		state.frame_of_reference = static_cast<uint64_t>(min_value); // understood this can be negative
 	}
 
 	/*
