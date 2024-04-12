@@ -51,11 +51,11 @@ void StatementSimplifier::SimplifyMap(T &map) {
 	}
 	// copy the keys
 	vector<typename T::key_type> keys;
-	for(auto &entry : map) {
+	for (auto &entry : map) {
 		keys.push_back(entry.first);
 	}
 	// try to remove all of the keys
-	for(idx_t i = 0; i < keys.size(); i++) {
+	for (idx_t i = 0; i < keys.size(); i++) {
 		auto entry = map.find(keys[i]);
 		auto n = std::move(entry->second);
 		map.erase(entry);
@@ -71,17 +71,16 @@ void StatementSimplifier::SimplifySet(T &set) {
 	}
 	// copy the keys
 	vector<typename T::key_type> keys;
-	for(auto &entry : set) {
+	for (auto &entry : set) {
 		keys.push_back(entry);
 	}
 	// try to remove all of the keys
-	for(idx_t i = 0; i < keys.size(); i++) {
+	for (idx_t i = 0; i < keys.size(); i++) {
 		auto entry = set.find(keys[i]);
 		set.erase(entry);
 		Simplification();
 		set.insert(std::move(keys[i]));
 	}
-
 }
 
 template <class T>
@@ -94,7 +93,7 @@ void StatementSimplifier::SimplifyOptional(duckdb::unique_ptr<T> &opt) {
 	opt = std::move(n);
 }
 
-template<class T>
+template <class T>
 void StatementSimplifier::SimplifyEnum(T &enum_ref, T default_value) {
 	if (enum_ref == default_value) {
 		return;
@@ -105,7 +104,7 @@ void StatementSimplifier::SimplifyEnum(T &enum_ref, T default_value) {
 	enum_ref = current;
 }
 
-template<class T>
+template <class T>
 void StatementSimplifier::SimplifyAlias(T &input) {
 	auto alias = std::move(input.alias);
 	auto column_name_alias = std::move(input.column_name_alias);
@@ -171,7 +170,7 @@ void StatementSimplifier::Simplify(GroupByNode &groups) {
 	// try to remove grouping sets
 	SimplifyList(groups.grouping_sets, false);
 	// simplify expressions
-	for(auto &group : groups.group_expressions) {
+	for (auto &group : groups.group_expressions) {
 		SimplifyExpression(group);
 	}
 }
@@ -333,7 +332,7 @@ void StatementSimplifier::SimplifyExpression(duckdb::unique_ptr<ParsedExpression
 		auto &star = expr->Cast<StarExpression>();
 		SimplifyMap(star.replace_list);
 		SimplifySet(star.exclude_list);
-		for(auto &entry : star.replace_list) {
+		for (auto &entry : star.replace_list) {
 			SimplifyChildExpression(expr, entry.second);
 		}
 		break;

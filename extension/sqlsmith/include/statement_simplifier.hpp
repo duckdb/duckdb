@@ -57,9 +57,9 @@ private:
 
 	template <class T>
 	void SimplifyOptional(duckdb::unique_ptr<T> &opt);
-	template<class T>
+	template <class T>
 	void SimplifyAlias(T &input);
-	template<class T>
+	template <class T>
 	void SimplifyEnum(T &enum_ref, T default_value);
 
 	void Simplify(unique_ptr<TableRef> &ref);
