@@ -94,10 +94,31 @@ void StatementSimplifier::SimplifyOptional(duckdb::unique_ptr<T> &opt) {
 	opt = std::move(n);
 }
 
+template<class T>
+void StatementSimplifier::SimplifyEnum(T &enum_ref, T default_value) {
+	if (enum_ref == default_value) {
+		return;
+	}
+	auto current = enum_ref;
+	enum_ref = default_value;
+	Simplification();
+	enum_ref = current;
+}
+
+template<class T>
+void StatementSimplifier::SimplifyAlias(T &input) {
+	auto alias = std::move(input.alias);
+	auto column_name_alias = std::move(input.column_name_alias);
+	Simplification();
+	input.alias = std::move(alias);
+	input.column_name_alias = std::move(column_name_alias);
+}
+
 void StatementSimplifier::Simplify(unique_ptr<TableRef> &ref) {
 	switch (ref->type) {
 	case TableReferenceType::SUBQUERY: {
 		auto &subquery = ref->Cast<SubqueryRef>();
+		SimplifyAlias(subquery);
 		if (subquery.subquery->node->type == QueryNodeType::SELECT_NODE) {
 			auto &select_node = subquery.subquery->node->Cast<SelectNode>();
 			SimplifyReplace(ref, select_node.from_table);
@@ -109,7 +130,7 @@ void StatementSimplifier::Simplify(unique_ptr<TableRef> &ref) {
 		auto &cp = ref->Cast<JoinRef>();
 		Simplify(cp.left);
 		Simplify(cp.right);
-		SimplifyOptional(cp.condition);
+		SimplifyOptionalExpression(cp.condition);
 		SimplifyReplace(ref, cp.left);
 		SimplifyReplace(ref, cp.right);
 		break;
@@ -123,8 +144,35 @@ void StatementSimplifier::Simplify(unique_ptr<TableRef> &ref) {
 		}
 		break;
 	}
+	case TableReferenceType::TABLE_FUNCTION: {
+		auto &table_function = ref->Cast<TableFunctionRef>();
+		// try to remove aliases
+		SimplifyAlias(table_function);
+		break;
+	}
+	case TableReferenceType::BASE_TABLE: {
+		auto &table_ref = ref->Cast<BaseTableRef>();
+		SimplifyAlias(table_ref);
+		break;
+	}
 	default:
 		break;
+	}
+}
+
+void StatementSimplifier::Simplify(GroupByNode &groups) {
+	// try to remove all groups
+	auto group_expr = std::move(groups.group_expressions);
+	auto group_sets = std::move(groups.grouping_sets);
+	Simplification();
+	groups.group_expressions = std::move(group_expr);
+	groups.grouping_sets = std::move(group_sets);
+
+	// try to remove grouping sets
+	SimplifyList(groups.grouping_sets, false);
+	// simplify expressions
+	for(auto &group : groups.group_expressions) {
+		SimplifyExpression(group);
 	}
 }
 
@@ -134,12 +182,13 @@ void StatementSimplifier::Simplify(SelectNode &node) {
 	// from clause
 	SimplifyOptional(node.from_table);
 	// simplify groups
-	SimplifyList(node.groups.grouping_sets);
+	Simplify(node.groups);
 	// simplify filters
 	SimplifyOptionalExpression(node.where_clause);
 	SimplifyOptionalExpression(node.having);
 	SimplifyOptionalExpression(node.qualify);
 	SimplifyOptional(node.sample);
+	SimplifyEnum(node.aggregate_handling, AggregateHandling::STANDARD_HANDLING);
 
 	Simplify(node.from_table);
 }
@@ -159,6 +208,7 @@ void StatementSimplifier::Simplify(CommonTableExpressionMap &cte) {
 }
 
 void StatementSimplifier::Simplify(unique_ptr<QueryNode> &node) {
+	query_nodes.push_back(node);
 	Simplify(node->cte_map);
 	switch (node->type) {
 	case QueryNodeType::SELECT_NODE:
@@ -180,6 +230,7 @@ void StatementSimplifier::Simplify(unique_ptr<QueryNode> &node) {
 		Simplify(*modifier);
 	}
 	SimplifyList(node->modifiers);
+	query_nodes.pop_back();
 }
 
 void StatementSimplifier::SimplifyExpressionList(duckdb::unique_ptr<ParsedExpression> &expr,
@@ -264,6 +315,10 @@ void StatementSimplifier::SimplifyExpression(duckdb::unique_ptr<ParsedExpression
 	}
 	case ExpressionClass::SUBQUERY: {
 		auto &subq = expr->Cast<SubqueryExpression>();
+		// try to move this subquery fully into the outer query
+		if (!query_nodes.empty()) {
+			SimplifyReplace(query_nodes.back().get(), subq.subquery->node);
+		}
 		SimplifyChildExpression(expr, subq.child);
 		Simplify(subq.subquery->node);
 		break;
@@ -293,6 +348,11 @@ void StatementSimplifier::SimplifyExpression(duckdb::unique_ptr<ParsedExpression
 		SimplifyChildExpression(expr, window.end_expr);
 		SimplifyChildExpression(expr, window.offset_expr);
 		SimplifyChildExpression(expr, window.default_expr);
+		SimplifyEnum(window.ignore_nulls, false);
+		SimplifyEnum(window.distinct, false);
+		SimplifyEnum(window.start, WindowBoundary::INVALID);
+		SimplifyEnum(window.end, WindowBoundary::INVALID);
+		SimplifyEnum(window.exclude_clause, WindowExcludeMode::NO_OTHER);
 		break;
 	}
 	default:
