@@ -256,7 +256,11 @@ static idx_t GetDefaultMax(const string &path) {
 	auto disk_space = FileSystem::GetAvailableDiskSpace(path);
 	// Use the available disk space
 	// We have made sure that the file exists before we call this, it shouldn't fail
-	D_ASSERT(disk_space.IsValid());
+	if (!disk_space.IsValid()) {
+		// But if it does (i.e because the system call is not implemented)
+		// we don't cap the available swap space
+		return DConstants::INVALID_INDEX - 1;
+	}
 	// Only use 90% of the available disk space
 	return static_cast<idx_t>(static_cast<double>(disk_space.GetIndex()) * 0.9);
 }
