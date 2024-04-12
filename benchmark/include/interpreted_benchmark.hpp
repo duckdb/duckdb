@@ -50,10 +50,6 @@ public:
 		return in_memory;
 	}
 
-	bool IsStreaming() {
-		return streaming;
-	}
-
 	bool RequireReinit() override {
 		return require_reinit;
 	}
