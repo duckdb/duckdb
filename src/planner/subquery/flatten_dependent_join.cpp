@@ -577,8 +577,17 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		plan->children[1]->ResolveOperatorTypes();
 		D_ASSERT(plan->children[0]->types == plan->children[1]->types);
 #endif
-		plan->children[0] = PushDownDependentJoin(std::move(plan->children[0]));
-		plan->children[1] = PushDownDependentJoin(std::move(plan->children[1]));
+		if (setop.type == LogicalOperatorType::LOGICAL_UNION) {
+			if (plan->children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+				plan->children[0]->children[0] = PushDownDependentJoin(std::move(plan->children[0]->children[0]));
+			}
+			if (plan->children[1]->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+				plan->children[1]->children[0] = PushDownDependentJoin(std::move(plan->children[1]->children[0]));
+			}
+		} else {
+			plan->children[0] = PushDownDependentJoin(std::move(plan->children[0]));
+			plan->children[1] = PushDownDependentJoin(std::move(plan->children[1]));
+		}
 #ifdef DEBUG
 		D_ASSERT(plan->children[0]->GetColumnBindings().size() == plan->children[1]->GetColumnBindings().size());
 		plan->children[0]->ResolveOperatorTypes();
