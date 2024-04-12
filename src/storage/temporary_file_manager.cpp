@@ -190,11 +190,10 @@ idx_t TemporaryFileHandle::GetPositionInFile(idx_t index) {
 TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string path_p, optional_idx max_swap_space)
     : db(db), temp_directory(std::move(path_p)), temp_file(make_uniq<TemporaryFileManager>(db, temp_directory)) {
 	auto &fs = FileSystem::GetFileSystem(db);
-	if (!temp_directory.empty()) {
-		if (!fs.DirectoryExists(temp_directory)) {
-			fs.CreateDirectory(temp_directory);
-			created_directory = true;
-		}
+	D_ASSERT(!temp_directory.empty());
+	if (!fs.DirectoryExists(temp_directory)) {
+		fs.CreateDirectory(temp_directory);
+		created_directory = true;
 	}
 	temp_file->SetMaxSwapSpace(max_swap_space);
 }
@@ -253,14 +252,13 @@ bool TemporaryFileIndex::IsValid() const {
 //===--------------------------------------------------------------------===//
 
 static idx_t GetDefaultMax(const string &path) {
-	// Use the available disk space
+	D_ASSERT(!path.empty());
 	auto disk_space = FileSystem::GetAvailableDiskSpace(path);
-	idx_t default_value = 0;
-	if (disk_space.IsValid()) {
-		// Only use 90% of the available disk space
-		default_value = static_cast<idx_t>(static_cast<double>(disk_space.GetIndex()) * 0.9);
-	}
-	return default_value;
+	// Use the available disk space
+	// We have made sure that the file exists before we call this, it shouldn't fail
+	D_ASSERT(disk_space.IsValid());
+	// Only use 90% of the available disk space
+	return static_cast<idx_t>(static_cast<double>(disk_space.GetIndex()) * 0.9);
 }
 
 TemporaryFileManager::TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p)
