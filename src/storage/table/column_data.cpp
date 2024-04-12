@@ -105,7 +105,8 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 			if (state.scan_options && state.scan_options->force_fetch_row) {
 				for (idx_t i = 0; i < scan_count; i++) {
 					ColumnFetchState fetch_state;
-					state.current->FetchRow(fetch_state, UnsafeNumericCast<row_t>(state.row_index + i), result, result_offset + i);
+					state.current->FetchRow(fetch_state, UnsafeNumericCast<row_t>(state.row_index + i), result,
+					                        result_offset + i);
 				}
 			} else {
 				state.current->Scan(state, scan_count, result, result_offset,
@@ -342,7 +343,8 @@ idx_t ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	D_ASSERT(row_id >= 0);
 	D_ASSERT(idx_t(row_id) >= start);
 	// perform the fetch within the segment
-	state.row_index = start + ((UnsafeNumericCast<idx_t>(row_id) - start) / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE);
+	state.row_index =
+	    start + ((UnsafeNumericCast<idx_t>(row_id) - start) / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE);
 	state.current = data.GetSegment(state.row_index);
 	state.internal_index = state.current->start;
 	return ScanVector(state, result, STANDARD_VECTOR_SIZE, false);

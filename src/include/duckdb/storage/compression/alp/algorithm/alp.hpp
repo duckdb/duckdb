@@ -359,8 +359,8 @@ struct AlpCompression {
 			BitpackingPrimitives::PackBuffer<uint64_t, false>(state.values_encoded, u_encoded_integers, n_values,
 			                                                  bit_width);
 		}
-		state.bit_width = bit_width; // in bits
-		state.bp_size = bp_size;     // in bytes
+		state.bit_width = bit_width;                                 // in bits
+		state.bp_size = bp_size;                                     // in bytes
 		state.frame_of_reference = static_cast<uint64_t>(min_value); // understood this can be negative
 	}
 
