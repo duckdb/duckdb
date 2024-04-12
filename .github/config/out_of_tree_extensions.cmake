@@ -16,11 +16,13 @@
 #  VCPKG_TARGET_TRIPLET=arm64-osx
 
 ################# ARROW
-duckdb_extension_load(arrow
-    LOAD_TESTS DONT_LINK
-    GIT_URL https://github.com/duckdb/arrow
-    GIT_TAG 9e10240da11f61ea7fbfe3fc9988ffe672ccd40f
-    )
+if (NOT MINGW)
+    duckdb_extension_load(arrow
+            LOAD_TESTS DONT_LINK
+            GIT_URL https://github.com/duckdb/arrow
+            GIT_TAG 9e10240da11f61ea7fbfe3fc9988ffe672ccd40f
+            )
+endif()
 
 ################## AWS
 if (NOT MINGW)
@@ -90,8 +92,7 @@ endif()
 duckdb_extension_load(sqlite_scanner
         ${STATIC_LINK_SQLITE} LOAD_TESTS
         GIT_URL https://github.com/duckdb/sqlite_scanner
-        GIT_TAG 70a4c411434290b4af704940987a324d84af0024
-        APPLY_PATCHES
+        GIT_TAG 091197efb34579c7195afa43dfb5925023c915c0
         )
 
 ################# SUBSTRAIT
