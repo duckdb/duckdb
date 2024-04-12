@@ -12,7 +12,7 @@ LogicalUpdate::LogicalUpdate(TableCatalogEntry &table)
 LogicalUpdate::LogicalUpdate(ClientContext &context, const unique_ptr<CreateInfo> &table_info)
     : LogicalOperator(LogicalOperatorType::LOGICAL_UPDATE),
       table(Catalog::GetEntry<TableCatalogEntry>(context, table_info->catalog, table_info->schema,
-                                                 dynamic_cast<CreateTableInfo &>(*table_info).table)) {
+                                                 table_info->Cast<CreateTableInfo>().table)) {
 }
 
 idx_t LogicalUpdate::EstimateCardinality(ClientContext &context) {

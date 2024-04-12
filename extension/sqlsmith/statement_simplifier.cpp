@@ -45,21 +45,6 @@ void StatementSimplifier::SimplifyList(vector<T> &list, bool is_optional) {
 }
 
 template <class T>
-void StatementSimplifier::SimplifyListReplaceNull(vector<T> &list) {
-	for (idx_t i = 0; i < list.size(); i++) {
-		duckdb::unique_ptr<ParsedExpression> constant = make_uniq<ConstantExpression>(Value());
-		SimplifyReplace(list[i], constant);
-	}
-}
-
-template <class T>
-void StatementSimplifier::SimplifyListReplace(T &element, vector<T> &list) {
-	for (idx_t i = 0; i < list.size(); i++) {
-		SimplifyReplace(element, list[i]);
-	}
-}
-
-template <class T>
 void StatementSimplifier::SimplifyOptional(duckdb::unique_ptr<T> &opt) {
 	if (!opt) {
 		return;
@@ -69,21 +54,24 @@ void StatementSimplifier::SimplifyOptional(duckdb::unique_ptr<T> &opt) {
 	opt = std::move(n);
 }
 
-void StatementSimplifier::Simplify(TableRef &ref) {
-	switch (ref.type) {
+void StatementSimplifier::Simplify(unique_ptr<TableRef> &ref) {
+	switch (ref->type) {
 	case TableReferenceType::SUBQUERY: {
-		auto &subquery = ref.Cast<SubqueryRef>();
+		auto &subquery = ref->Cast<SubqueryRef>();
 		Simplify(*subquery.subquery->node);
 		break;
 	}
 	case TableReferenceType::JOIN: {
-		auto &cp = ref.Cast<JoinRef>();
-		Simplify(*cp.left);
-		Simplify(*cp.right);
+		auto &cp = ref->Cast<JoinRef>();
+		Simplify(cp.left);
+		Simplify(cp.right);
+		SimplifyOptional(cp.condition);
+		SimplifyReplace(ref, cp.left);
+		SimplifyReplace(ref, cp.right);
 		break;
 	}
 	case TableReferenceType::EXPRESSION_LIST: {
-		auto &expr_list = ref.Cast<ExpressionListRef>();
+		auto &expr_list = ref->Cast<ExpressionListRef>();
 		if (expr_list.values.size() == 1) {
 			SimplifyList(expr_list.values[0]);
 		} else if (expr_list.values.size() > 1) {
@@ -98,18 +86,18 @@ void StatementSimplifier::Simplify(TableRef &ref) {
 
 void StatementSimplifier::Simplify(SelectNode &node) {
 	// simplify projection list
-	SimplifyList(node.select_list, false);
+	SimplifyExpressionList(node.select_list, false);
 	// from clause
 	SimplifyOptional(node.from_table);
 	// simplify groups
 	SimplifyList(node.groups.grouping_sets);
 	// simplify filters
-	SimplifyOptional(node.where_clause);
-	SimplifyOptional(node.having);
-	SimplifyOptional(node.qualify);
+	SimplifyOptionalExpression(node.where_clause);
+	SimplifyOptionalExpression(node.having);
+	SimplifyOptionalExpression(node.qualify);
 	SimplifyOptional(node.sample);
 
-	Simplify(*node.from_table);
+	Simplify(node.from_table);
 }
 
 void StatementSimplifier::Simplify(SetOperationNode &node) {
@@ -154,13 +142,44 @@ void StatementSimplifier::Simplify(QueryNode &node) {
 	SimplifyList(node.modifiers);
 }
 
+void StatementSimplifier::SimplifyExpressionList(duckdb::unique_ptr<ParsedExpression> &expr,
+                                                 vector<unique_ptr<ParsedExpression>> &expression_list) {
+	for (auto &child : expression_list) {
+		SimplifyChildExpression(expr, child);
+	}
+}
+
+void StatementSimplifier::SimplifyExpressionList(vector<unique_ptr<ParsedExpression>> &expression_list,
+                                                 bool is_optional) {
+	SimplifyList(expression_list, is_optional);
+	for (auto &child : expression_list) {
+		SimplifyExpression(child);
+	}
+}
+
+void StatementSimplifier::SimplifyChildExpression(duckdb::unique_ptr<ParsedExpression> &expr,
+                                                  unique_ptr<ParsedExpression> &child) {
+	if (!child) {
+		return;
+	}
+	SimplifyReplace(expr, child);
+	SimplifyExpression(child);
+}
+
+void StatementSimplifier::SimplifyOptionalExpression(duckdb::unique_ptr<ParsedExpression> &expr) {
+	if (!expr) {
+		return;
+	}
+	SimplifyOptional(expr);
+	SimplifyExpression(expr);
+}
+
 void StatementSimplifier::SimplifyExpression(duckdb::unique_ptr<ParsedExpression> &expr) {
 	if (!expr) {
 		return;
 	}
 	auto expr_class = expr->GetExpressionClass();
 	switch (expr_class) {
-	case ExpressionClass::COLUMN_REF:
 	case ExpressionClass::CONSTANT:
 		return;
 	default:
@@ -171,37 +190,60 @@ void StatementSimplifier::SimplifyExpression(duckdb::unique_ptr<ParsedExpression
 	switch (expr_class) {
 	case ExpressionClass::CONJUNCTION: {
 		auto &conj = expr->Cast<ConjunctionExpression>();
-		SimplifyListReplace(expr, conj.children);
+		SimplifyExpressionList(expr, conj.children);
 		break;
 	}
 	case ExpressionClass::FUNCTION: {
 		auto &func = expr->Cast<FunctionExpression>();
-		SimplifyListReplace(expr, func.children);
-		SimplifyListReplaceNull(func.children);
+		SimplifyExpressionList(expr, func.children);
 		break;
 	}
 	case ExpressionClass::OPERATOR: {
 		auto &op = expr->Cast<OperatorExpression>();
-		SimplifyListReplace(expr, op.children);
+		SimplifyExpressionList(expr, op.children);
 		break;
 	}
 	case ExpressionClass::CASE: {
 		auto &op = expr->Cast<CaseExpression>();
-		SimplifyReplace(expr, op.else_expr);
+		SimplifyChildExpression(expr, op.else_expr);
 		for (auto &case_check : op.case_checks) {
-			SimplifyReplace(expr, case_check.then_expr);
-			SimplifyReplace(expr, case_check.when_expr);
+			SimplifyChildExpression(expr, case_check.then_expr);
+			SimplifyChildExpression(expr, case_check.when_expr);
 		}
 		break;
 	}
 	case ExpressionClass::CAST: {
 		auto &cast = expr->Cast<CastExpression>();
-		SimplifyReplace(expr, cast.child);
+		SimplifyChildExpression(expr, cast.child);
 		break;
 	}
 	case ExpressionClass::COLLATE: {
 		auto &collate = expr->Cast<CollateExpression>();
-		SimplifyReplace(expr, collate.child);
+		SimplifyChildExpression(expr, collate.child);
+		break;
+	}
+	case ExpressionClass::SUBQUERY: {
+		auto &subq = expr->Cast<SubqueryExpression>();
+		SimplifyChildExpression(expr, subq.child);
+		Simplify(*subq.subquery->node);
+		break;
+	}
+	case ExpressionClass::COMPARISON: {
+		auto &comp = expr->Cast<ComparisonExpression>();
+		SimplifyChildExpression(expr, comp.left);
+		SimplifyChildExpression(expr, comp.right);
+		break;
+	}
+	case ExpressionClass::WINDOW: {
+		auto &window = expr->Cast<WindowExpression>();
+		SimplifyExpressionList(expr, window.children);
+		SimplifyExpressionList(expr, window.partitions);
+		SimplifyList(window.orders);
+		SimplifyChildExpression(expr, window.filter_expr);
+		SimplifyChildExpression(expr, window.start_expr);
+		SimplifyChildExpression(expr, window.end_expr);
+		SimplifyChildExpression(expr, window.offset_expr);
+		SimplifyChildExpression(expr, window.default_expr);
 		break;
 	}
 	default:
@@ -212,7 +254,7 @@ void StatementSimplifier::SimplifyExpression(duckdb::unique_ptr<ParsedExpression
 void StatementSimplifier::Simplify(ResultModifier &modifier) {
 	switch (modifier.type) {
 	case ResultModifierType::ORDER_MODIFIER:
-		Simplify((OrderModifier &)modifier);
+		Simplify(modifier.Cast<OrderModifier>());
 		break;
 	default:
 		break;
@@ -267,9 +309,7 @@ void StatementSimplifier::Simplify(UpdateSetInfo &info) {
 
 void StatementSimplifier::Simplify(UpdateStatement &stmt) {
 	Simplify(stmt.cte_map);
-	if (stmt.from_table) {
-		Simplify(*stmt.from_table);
-	}
+	SimplifyOptional(stmt.from_table);
 	D_ASSERT(stmt.set_info);
 	Simplify(*stmt.set_info);
 	SimplifyList(stmt.returning_list);

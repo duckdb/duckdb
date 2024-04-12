@@ -42,17 +42,54 @@ public:
 		}
 		return other.buffer_size - other.buffer_pos + buffer_pos;
 	}
+
+	bool operator==(const LinePosition &other) const {
+		return buffer_pos == other.buffer_pos && buffer_idx == other.buffer_idx && buffer_size == other.buffer_size;
+	}
+
+	idx_t GetGlobalPosition(idx_t requested_buffer_size, bool first_char_nl = false) {
+		return requested_buffer_size * buffer_idx + buffer_pos + first_char_nl;
+	}
 	idx_t buffer_pos = 0;
 	idx_t buffer_size = 0;
 	idx_t buffer_idx = 0;
+};
+
+//! Keeps track of start and end of line positions in regard to the CSV file
+class FullLinePosition {
+public:
+	FullLinePosition() {};
+	LinePosition begin;
+	LinePosition end;
+
+	//! Reconstructs the current line to be used in error messages
+	string ReconstructCurrentLine(bool &first_char_nl,
+	                              unordered_map<idx_t, shared_ptr<CSVBufferHandle>> &buffer_handles);
+};
+
+class CurrentError {
+public:
+	CurrentError(CSVErrorType type, idx_t col_idx_p, LinePosition error_position_p)
+	    : type(type), col_idx(col_idx_p), error_position(error_position_p) {};
+
+	CSVErrorType type;
+	idx_t col_idx;
+	idx_t current_line_size;
+	string error_message;
+	//! Exact Position where the error happened
+	LinePosition error_position;
+
+	friend bool operator==(const CurrentError &error, CSVErrorType other) {
+		return error.type == other;
+	}
 };
 
 class StringValueResult : public ScannerResult {
 public:
 	StringValueResult(CSVStates &states, CSVStateMachine &state_machine,
 	                  const shared_ptr<CSVBufferHandle> &buffer_handle, Allocator &buffer_allocator, idx_t result_size,
-	                  idx_t buffer_position, CSVErrorHandler &error_hander, CSVIterator &iterator, bool store_line_size,
-	                  shared_ptr<CSVFileScan> csv_file_scan, idx_t &lines_read, bool sniffing);
+	                  idx_t buffer_position, CSVErrorHandler &error_handler, CSVIterator &iterator,
+	                  bool store_line_size, shared_ptr<CSVFileScan> csv_file_scan, idx_t &lines_read, bool sniffing);
 
 	~StringValueResult();
 
@@ -61,7 +98,7 @@ public:
 	unsafe_vector<ValidityMask *> validity_mask;
 
 	//! Variables to iterate over the CSV buffers
-	idx_t last_position;
+	LinePosition last_position;
 	char *buffer_ptr;
 	idx_t buffer_size;
 
@@ -82,16 +119,16 @@ public:
 	//! Information to properly handle errors
 	CSVErrorHandler &error_handler;
 	CSVIterator &iterator;
-	//! Where the previous line started, used to validate the maximum_line_size option
-	LinePosition previous_line_start;
-	LinePosition pre_previous_line_start;
+	//! Line position of the current line
+	FullLinePosition current_line_position;
+	//! Used for CSV line reconstruction on flushed errors
+	unordered_map<idx_t, FullLinePosition> line_positions_per_row;
 	bool store_line_size = false;
 	bool added_last_line = false;
 	bool quoted_new_line = false;
 
 	unsafe_unique_array<std::pair<LogicalTypeId, bool>> parse_types;
 	vector<string> names;
-	unordered_map<idx_t, string> cast_errors;
 
 	shared_ptr<CSVFileScan> csv_file_scan;
 	idx_t &lines_read;
@@ -101,10 +138,13 @@ public:
 	idx_t chunk_col_id = 0;
 
 	//! We must ensure that we keep the buffers alive until processing the query result
-	vector<shared_ptr<CSVBufferHandle>> buffer_handles;
+	unordered_map<idx_t, shared_ptr<CSVBufferHandle>> buffer_handles;
 
-	//! If the current row has an error, we have to skip it
-	bool ignore_current_row = false;
+	//! Requested size of buffers (i.e., either 32Mb or set by buffer_size parameter)
+	idx_t requested_size;
+
+	//! Errors happening in the current line (if any)
+	vector<CurrentError> current_errors;
 
 	bool sniffing;
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
@@ -121,8 +161,10 @@ public:
 	//! Handles EmptyLine states
 	static inline bool EmptyLine(StringValueResult &result, const idx_t buffer_pos);
 	inline bool AddRowInternal();
-
-	void HandleOverLimitRows();
+	//! Force the throw of a unicode error
+	void HandleUnicodeError(idx_t col_idx, LinePosition &error_position);
+	//! Certain errors should only be handled when adding the line, to ensure proper error propagation.
+	bool HandleError();
 
 	inline void AddValueToVector(const char *value_ptr, const idx_t size, bool allocate = false);
 

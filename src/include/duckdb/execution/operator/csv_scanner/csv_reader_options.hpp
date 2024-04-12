@@ -40,15 +40,15 @@ struct CSVReaderOptions {
 	//! See struct above.
 	DialectOptions dialect_options;
 	//! Whether or not we should ignore InvalidInput errors
-	bool ignore_errors = false;
-	//! Rejects table name
-	string rejects_table_name;
+	CSVOption<bool> ignore_errors = false;
+	//! Whether we store CSV Errors in the rejects table or not
+	CSVOption<bool> store_rejects = false;
+	//! Rejects table name (Name of the table the store rejects errors)
+	CSVOption<string> rejects_table_name = {"reject_errors"};
+	//! Rejects Scan name name  (Name of the table the store rejects scans)
+	CSVOption<string> rejects_scan_name = {"reject_scans"};
 	//! Rejects table entry limit (0 = no limit)
 	idx_t rejects_limit = 0;
-	//! Columns to use as recovery key for rejected rows when reading with ignore_errors = true
-	vector<string> rejects_recovery_columns;
-	//! Index of the recovery columns
-	vector<idx_t> rejects_recovery_column_ids;
 	//! Number of samples to buffer
 	idx_t buffer_sample_size = (idx_t)STANDARD_VECTOR_SIZE * 50;
 	//! Specifies the strings that represents a null value
@@ -109,6 +109,7 @@ struct CSVReaderOptions {
 
 	//! User defined parameters for the csv function concatenated on a string
 	string user_defined_parameters;
+
 	//===--------------------------------------------------------------------===//
 	// WriteCSVOptions
 	//===--------------------------------------------------------------------===//
@@ -164,5 +165,16 @@ struct CSVReaderOptions {
 	string ToString() const;
 	//! If the type for column with idx i was manually set
 	bool WasTypeManuallySet(idx_t i) const;
+
+	string NewLineIdentifierToString() {
+		switch (dialect_options.state_machine_options.new_line.GetValue()) {
+		case NewLineIdentifier::SINGLE:
+			return "\\n";
+		case NewLineIdentifier::CARRY_ON:
+			return "\\r\\n";
+		default:
+			return "";
+		}
+	}
 };
 } // namespace duckdb

@@ -41,22 +41,6 @@ ReadCSVData::ReadCSVData() {
 
 void ReadCSVData::FinalizeRead(ClientContext &context) {
 	BaseCSVData::Finalize();
-	if (!options.rejects_recovery_columns.empty()) {
-		for (auto &recovery_col : options.rejects_recovery_columns) {
-			bool found = false;
-			for (idx_t col_idx = 0; col_idx < return_names.size(); col_idx++) {
-				if (StringUtil::CIEquals(return_names[col_idx], recovery_col)) {
-					options.rejects_recovery_column_ids.push_back(col_idx);
-					found = true;
-					break;
-				}
-			}
-			if (!found) {
-				throw BinderException("Unsupported parameter for REJECTS_RECOVERY_COLUMNS: column \"%s\" not found",
-				                      recovery_col);
-			}
-		}
-	}
 }
 
 static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctionBindInput &input,
@@ -67,26 +51,32 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	result->files = MultiFileReader::GetFileList(context, input.inputs[0], "CSV");
 
 	options.FromNamedParameters(input.named_parameters, context, return_types, names);
-
+	if (options.rejects_table_name.IsSetByUser() && !options.store_rejects.GetValue() &&
+	    options.store_rejects.IsSetByUser()) {
+		throw BinderException("REJECTS_TABLE option is only supported when store_rejects is not manually set to false");
+	}
+	if (options.rejects_scan_name.IsSetByUser() && !options.store_rejects.GetValue() &&
+	    options.store_rejects.IsSetByUser()) {
+		throw BinderException("REJECTS_SCAN option is only supported when store_rejects is not manually set to false");
+	}
+	if (options.rejects_scan_name.IsSetByUser() || options.rejects_table_name.IsSetByUser()) {
+		// Ensure we set store_rejects to true automagically
+		options.store_rejects.Set(true, false);
+	}
 	// Validate rejects_table options
-	if (!options.rejects_table_name.empty()) {
-		if (!options.ignore_errors) {
-			throw BinderException("REJECTS_TABLE option is only supported when IGNORE_ERRORS is set to true");
+	if (options.store_rejects.GetValue()) {
+		if (!options.ignore_errors.GetValue() && options.ignore_errors.IsSetByUser()) {
+			throw BinderException(
+			    "STORE_REJECTS option is only supported when IGNORE_ERRORS is not manually set to false");
 		}
+		// Ensure we set ignore errors to true automagically
+		options.ignore_errors.Set(true, false);
 		if (options.file_options.union_by_name) {
 			throw BinderException("REJECTS_TABLE option is not supported when UNION_BY_NAME is set to true");
 		}
 	}
-
-	if (options.rejects_limit != 0) {
-		if (options.rejects_table_name.empty()) {
-			throw BinderException("REJECTS_LIMIT option is only supported when REJECTS_TABLE is set to a table name");
-		}
-	}
-
-	if (!options.rejects_recovery_columns.empty() && options.rejects_table_name.empty()) {
-		throw BinderException(
-		    "REJECTS_RECOVERY_COLUMNS option is only supported when REJECTS_TABLE is set to a table name");
+	if (options.rejects_limit != 0 && !options.store_rejects.GetValue()) {
+		throw BinderException("REJECTS_LIMIT option is only supported when REJECTS_TABLE is set to a table name");
 	}
 
 	options.file_options.AutoDetectHivePartitioning(result->files, context);
@@ -164,7 +154,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			}
 		}
 	}
-	result->FinalizeRead(context);
+	result->Finalize();
 	return std::move(result);
 }
 
@@ -188,9 +178,10 @@ static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &con
 	auto &bind_data = input.bind_data->Cast<ReadCSVData>();
 
 	// Create the temporary rejects table
-	auto rejects_table = bind_data.options.rejects_table_name;
-	if (!rejects_table.empty()) {
-		CSVRejectsTable::GetOrCreate(context, rejects_table)->InitializeTable(context, bind_data);
+	if (bind_data.options.store_rejects.GetValue()) {
+		CSVRejectsTable::GetOrCreate(context, bind_data.options.rejects_scan_name.GetValue(),
+		                             bind_data.options.rejects_table_name.GetValue())
+		    ->InitializeTable(context, bind_data);
 	}
 	if (bind_data.files.empty()) {
 		// This can happen when a filename based filter pushdown has eliminated all possible files for this scan.
@@ -206,7 +197,7 @@ unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, 
 		return nullptr;
 	}
 	auto &global_state = global_state_p->Cast<CSVGlobalState>();
-	auto csv_scanner = global_state.Next();
+	auto csv_scanner = global_state.Next(nullptr);
 	if (!csv_scanner) {
 		global_state.DecrementThread();
 	}
@@ -232,7 +223,7 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 			break;
 		}
 		if (csv_local_state.csv_reader->FinishedIterator()) {
-			csv_local_state.csv_reader = csv_global_state.Next();
+			csv_local_state.csv_reader = csv_global_state.Next(csv_local_state.csv_reader.get());
 			if (!csv_local_state.csv_reader) {
 				csv_global_state.DecrementThread();
 				break;
@@ -270,9 +261,10 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 	table_function.named_parameters["max_line_size"] = LogicalType::VARCHAR;
 	table_function.named_parameters["maximum_line_size"] = LogicalType::VARCHAR;
 	table_function.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["store_rejects"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["rejects_table"] = LogicalType::VARCHAR;
+	table_function.named_parameters["rejects_scan"] = LogicalType::VARCHAR;
 	table_function.named_parameters["rejects_limit"] = LogicalType::BIGINT;
-	table_function.named_parameters["rejects_recovery_columns"] = LogicalType::LIST(LogicalType::VARCHAR);
 	table_function.named_parameters["force_not_null"] = LogicalType::LIST(LogicalType::VARCHAR);
 	table_function.named_parameters["buffer_size"] = LogicalType::UBIGINT;
 	table_function.named_parameters["decimal_separator"] = LogicalType::VARCHAR;

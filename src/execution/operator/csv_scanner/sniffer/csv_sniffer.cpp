@@ -13,7 +13,7 @@ CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager>
 	}
 	// Initialize max columns found to either 0 or however many were set
 	max_columns_found = set_columns.Size();
-	error_handler = make_shared<CSVErrorHandler>(options.ignore_errors);
+	error_handler = make_shared<CSVErrorHandler>(options.ignore_errors.GetValue());
 	detection_error_handler = make_shared<CSVErrorHandler>(true);
 }
 
@@ -93,7 +93,15 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 	DetectHeader();
 	// 5. Type Replacement
 	ReplaceTypes();
-	if (!best_candidate->error_handler->errors.empty() && !options.ignore_errors) {
+
+	// We reset the buffer for compressed files
+	// This is done because we can't easily seek on compressed files, if a buffer goes out of scope we must read from
+	// the start
+	if (!buffer_manager->file_handle->uncompressed) {
+		buffer_manager->ResetBufferManager();
+	}
+
+	if (!best_candidate->error_handler->errors.empty() && !options.ignore_errors.GetValue()) {
 		for (auto &error_vector : best_candidate->error_handler->errors) {
 			for (auto &error : error_vector.second) {
 				if (error.type == CSVErrorType::MAXIMUM_LINE_SIZE) {
