@@ -999,7 +999,6 @@ void PartitionedWriteFlushThreshold::SetLocal(ClientContext &context, const Valu
 	ClientConfig::GetConfig(context).partitioned_write_flush_threshold = input.GetValue<idx_t>();
 }
 
-
 Value PartitionedWriteFlushThreshold::GetSetting(const ClientContext &context) {
 	return Value::BIGINT(NumericCast<int64_t>(ClientConfig::GetConfig(context).partitioned_write_flush_threshold));
 }

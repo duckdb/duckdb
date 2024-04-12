@@ -73,7 +73,7 @@ struct HugeintAdd {
 
 	template <class STATE, class T>
 	static void AddConstant(STATE &state, T input, idx_t count) {
-		AddNumber(state, Hugeint::Multiply(input, count));
+		AddNumber(state, Hugeint::Multiply(input, UnsafeNumericCast<int64_t>(count)));
 	}
 };
 

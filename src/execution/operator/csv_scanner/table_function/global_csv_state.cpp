@@ -289,12 +289,12 @@ void CSVGlobalState::FillRejectsTable() {
 						// 4. Byte Position of the row error
 						errors_appender.Append(error.row_byte_position + 1);
 						// 5. Byte Position where error occurred
-						if (error.byte_position == -1) {
+						if (!error.byte_position.IsValid()) {
 							// This means this error comes from a flush, and we don't support this yet, so we give it
 							// a null
 							errors_appender.Append(Value());
 						} else {
-							errors_appender.Append(error.byte_position + 1);
+							errors_appender.Append(error.byte_position.GetIndex() + 1);
 						}
 						// 6. Column Index
 						if (error.type == CSVErrorType::MAXIMUM_LINE_SIZE) {

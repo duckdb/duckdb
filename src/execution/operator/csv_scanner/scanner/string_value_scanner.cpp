@@ -777,8 +777,8 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 				auto csv_error = CSVError::CastError(
 				    state_machine->options, csv_file_scan->names[col_idx], error_message, col_idx, borked_line,
 				    lines_per_batch,
-				    result.line_positions_per_row[line_error].begin.GetGlobalPosition(result.result_size, first_nl), -1,
-				    result_vector.GetType().id());
+				    result.line_positions_per_row[line_error].begin.GetGlobalPosition(result.result_size, first_nl),
+				    optional_idx::Invalid(), result_vector.GetType().id());
 
 				error_handler->Error(csv_error);
 			}
@@ -802,7 +802,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					    state_machine->options, csv_file_scan->names[col_idx], error_message, col_idx, borked_line,
 					    lines_per_batch,
 					    result.line_positions_per_row[line_error].begin.GetGlobalPosition(result.result_size, first_nl),
-					    -1, result_vector.GetType().id());
+					    optional_idx::Invalid(), result_vector.GetType().id());
 					error_handler->Error(csv_error);
 				}
 			}
