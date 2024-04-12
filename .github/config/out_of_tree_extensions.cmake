@@ -108,7 +108,7 @@ endif()
 duckdb_extension_load(vss
         LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb_vss
-        GIT_TAG f03fe75e16dd67e404d6325d4f901d6958504730
+        GIT_TAG a85e973650a083e4b279126a0aec07924d84e765
         TEST_DIR test/sql
         APPLY_PATCHES
     )
