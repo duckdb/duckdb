@@ -63,12 +63,12 @@ bool CSVBufferManager::ReadNextAndCacheIt() {
 
 shared_ptr<CSVBufferHandle> CSVBufferManager::GetBuffer(const idx_t pos) {
 	lock_guard<mutex> parallel_lock(main_mutex);
-//	if (pos == 0 && done && cached_buffers.empty()){
-//		// This is a recursive CTE, we have to reset out whole buffer
-//		done = false;
-//		file_handle->Reset();
-//		Initialize();
-//	}
+	if (pos == 0 && done && cached_buffers.empty()) {
+		// This is a recursive CTE, we have to reset out whole buffer
+		done = false;
+		file_handle->Reset();
+		Initialize();
+	}
 	while (pos >= cached_buffers.size()) {
 		if (done) {
 			return nullptr;
@@ -104,12 +104,12 @@ void CSVBufferManager::ResetBuffer(const idx_t buffer_idx) {
 	}
 	// We only reset if previous one was also already reset
 	if (buffer_idx > 0 && !cached_buffers[buffer_idx - 1]) {
-//		if (cached_buffers[buffer_idx]->last_buffer){
-//			// We clear the whole shebang
-//			cached_buffers.clear();
-//			reset_when_possible.clear();
-//			return;
-//		}
+		if (cached_buffers[buffer_idx]->last_buffer) {
+			// We clear the whole shebang
+			cached_buffers.clear();
+			reset_when_possible.clear();
+			return;
+		}
 		cached_buffers[buffer_idx].reset();
 		idx_t cur_buffer = buffer_idx + 1;
 		while (reset_when_possible.find(cur_buffer) != reset_when_possible.end()) {
