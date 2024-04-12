@@ -57,6 +57,39 @@ static void ComputeSHA256FileSegment(FileHandle *handle, const idx_t start, cons
 }
 #endif
 
+static string FilterZeroAtEnd(string s) {
+	while (!s.empty() && s.back() == '\0') {
+		s.pop_back();
+	}
+	return s;
+}
+
+static string PrettyPrintString(const string &s) {
+	string res = "";
+	for (auto c : s) {
+		if (StringUtil::CharacterIsAlpha(c) || StringUtil::CharacterIsDigit(c) || c == '_' || c == '-' || c == ' ' ||
+		    c == '.') {
+			res += c;
+		} else {
+			uint8_t value = c;
+			res += "\\x";
+			uint8_t first = value / 16;
+			if (first < 10) {
+				res.push_back((char)('0' + first));
+			} else {
+				res.push_back((char)('a' + first - 10));
+			}
+			uint8_t second = value % 16;
+			if (second < 10) {
+				res.push_back((char)('0' + second));
+			} else {
+				res.push_back((char)('a' + second - 10));
+			}
+		}
+	}
+	return res;
+}
+
 bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const string &extension,
                                      ExtensionInitResult &result, string &error) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
@@ -119,15 +152,66 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		error = StringUtil::Format("Extension \"%s\" not found.\n%s", filename, message);
 		return false;
 	}
+
+	string metadata_segment;
+	metadata_segment.resize(512);
+
+	const std::string engine_version = std::string(GetVersionDirectoryName());
+	const std::string engine_platform = std::string(DuckDB::Platform());
+
+	auto handle = fs.OpenFile(filename, FileFlags::FILE_FLAGS_READ);
+
+	idx_t file_size = handle->GetFileSize();
+
+	if (file_size < 1024) {
+		throw InvalidInputException(
+		    "Extension \"%s\" do not have metadata compatible with DuckDB loading it "
+		    "(version %s, platform %s). File size in particular is lower than minimum threshold of 1024",
+		    filename, engine_version, engine_platform);
+	}
+
+	auto metadata_offset = file_size - metadata_segment.size();
+
+	handle->Read((void *)metadata_segment.data(), metadata_segment.size(), metadata_offset);
+
+	std::vector<std::string> metadata_field;
+	for (idx_t i = 0; i < 8; i++) {
+		metadata_field.emplace_back(metadata_segment, i * 32, 32);
+	}
+
+	std::reverse(metadata_field.begin(), metadata_field.end());
+
+	std::string extension_duckdb_platform = FilterZeroAtEnd(metadata_field[1]);
+	std::string extension_duckdb_version = FilterZeroAtEnd(metadata_field[2]);
+	std::string extension_version = FilterZeroAtEnd(metadata_field[3]);
+
+	string metadata_mismatch_error = "";
+	{
+		char a[32] = {0};
+		a[0] = '4';
+		if (strncmp(a, metadata_field[0].data(), 32) != 0) {
+			// metadata do not looks right, add this to the error message
+			metadata_mismatch_error =
+			    "\n" + StringUtil::Format("Extension \"%s\" do not have metadata compatible with DuckDB "
+			                              "loading it (version %s, platform %s)",
+			                              filename, engine_version, engine_platform);
+		} else if (engine_version != extension_duckdb_version || engine_platform != extension_duckdb_platform) {
+			metadata_mismatch_error = "\n" + StringUtil::Format("Extension \"%s\" (version %s, platfrom %s) does not "
+			                                                    "match DuckDB loading it (version %s, platform %s)",
+			                                                    filename, PrettyPrintString(extension_duckdb_version),
+			                                                    PrettyPrintString(extension_duckdb_platform),
+			                                                    engine_version, engine_platform);
+
+		} else {
+			// All looks good
+		}
+	}
+
 	if (!config.options.allow_unsigned_extensions) {
-		auto handle = fs.OpenFile(filename, FileFlags::FILE_FLAGS_READ);
-
 		// signature is the last 256 bytes of the file
+		string signature(metadata_segment, metadata_segment.size() - 256);
 
-		string signature;
-		signature.resize(256);
-
-		auto signature_offset = handle->GetFileSize() - signature.size();
+		auto signature_offset = metadata_offset + metadata_segment.size() - signature.size();
 
 		const idx_t maxLenChunks = 1024ULL * 1024ULL;
 		const idx_t numChunks = (signature_offset + maxLenChunks - 1) / maxLenChunks;
@@ -176,9 +260,26 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 			}
 		}
 		if (!any_valid) {
-			throw IOException(config.error_manager->FormatException(ErrorType::UNSIGNED_EXTENSION, filename));
+			throw IOException(config.error_manager->FormatException(ErrorType::UNSIGNED_EXTENSION, filename) +
+			                  metadata_mismatch_error);
+		}
+
+		if (!metadata_mismatch_error.empty()) {
+			// Signed extensions perform the full check
+			throw InvalidInputException(metadata_mismatch_error.substr(1));
+		}
+	} else if (!config.options.allow_extensions_metadata_mismatch) {
+		if (!metadata_mismatch_error.empty()) {
+			// Unsigned extensions AND configuration allowing metadata_mismatch_error, loading allowed, mainly for
+			// debugging purposes
+			throw InvalidInputException(metadata_mismatch_error.substr(1));
 		}
 	}
+
+	auto number_metadata_fields = 3;
+	D_ASSERT(number_metadata_fields == 3); // Currently hardcoded value
+	metadata_field.resize(number_metadata_fields + 1);
+
 	auto filebase = fs.ExtractBaseName(filename);
 
 #ifdef WASM_LOADABLE_EXTENSIONS
@@ -210,35 +311,8 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 
 	auto lowercase_extension_name = StringUtil::Lower(filebase);
 
-	ext_version_fun_t version_fun;
-	auto version_fun_name = lowercase_extension_name + "_version";
-
-	version_fun = LoadFunctionFromDLL<ext_version_fun_t>(lib_hdl, version_fun_name, filename);
-
-	std::string engine_version = std::string(DuckDB::LibraryVersion());
-
-	auto version_fun_result = (*version_fun)();
-	if (version_fun_result == nullptr) {
-		throw InvalidInputException("Extension \"%s\" returned a nullptr", filename);
-	}
-	std::string extension_version = std::string(version_fun_result);
-
-	// Trim v's if necessary
-	std::string extension_version_trimmed = extension_version;
-	std::string engine_version_trimmed = engine_version;
-	if (!extension_version.empty() && extension_version[0] == 'v') {
-		extension_version_trimmed = extension_version.substr(1);
-	}
-	if (!engine_version.empty() && engine_version[0] == 'v') {
-		engine_version_trimmed = engine_version.substr(1);
-	}
-
-	if (extension_version_trimmed != engine_version_trimmed) {
-		throw InvalidInputException("Extension \"%s\" version (%s) does not match DuckDB version (%s)", filename,
-		                            extension_version, engine_version);
-	}
-
 	result.filebase = lowercase_extension_name;
+	result.extension_version = extension_version;
 	result.filename = filename;
 	result.lib_hdl = lib_hdl;
 	return true;
@@ -304,7 +378,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 		                            init_fun_name, res.filename, error.RawMessage());
 	}
 
-	db.SetExtensionLoaded(extension);
+	db.SetExtensionLoaded(extension, res.extension_version);
 #endif
 }
 

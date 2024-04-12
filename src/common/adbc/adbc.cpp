@@ -994,14 +994,6 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 	case ADBC_OBJECT_DEPTH_CATALOGS:
 		// Return metadata on catalogs.
 		query = duckdb::StringUtil::Format(R"(
-				WITH filtered_schemata AS (
-					SELECT
-						catalog_name,
-						schema_name,
-					FROM
-						information_schema.schemata
-					WHERE catalog_name NOT IN ('system', 'temp') AND schema_name NOT IN ('information_schema', 'pg_catalog')
-				)
 				SELECT
 					catalog_name,
 					[]::STRUCT(
@@ -1039,7 +1031,7 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 						)[]
 					)[] catalog_db_schemas
 				FROM
-					filtered_schemata
+					information_schema.schemata
 				WHERE catalog_name LIKE '%s'
 				GROUP BY catalog_name
 				)",
@@ -1048,26 +1040,18 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 	case ADBC_OBJECT_DEPTH_DB_SCHEMAS:
 		// Return metadata on catalogs and schemas.
 		query = duckdb::StringUtil::Format(R"(
-				WITH filtered_schemata AS (
+				WITH db_schemas AS (
 					SELECT
 						catalog_name,
 						schema_name,
-					FROM
-						information_schema.schemata
-					WHERE catalog_name NOT IN ('system', 'temp') AND schema_name NOT IN ('information_schema', 'pg_catalog')
-				),
-				db_schemas AS (
-					SELECT
-						*
-					FROM
-						filtered_schemata
+					FROM information_schema.schemata
 					WHERE schema_name LIKE '%s'
 				)
 
 				SELECT
 					catalog_name,
 					LIST({
-						db_schema_name: dbs.schema_name,
+						db_schema_name: schema_name,
 						db_schema_tables: []::STRUCT(
 							table_name VARCHAR,
 							table_type VARCHAR,
@@ -1099,11 +1083,11 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 								constraint_column_usage STRUCT(fk_catalog VARCHAR, fk_db_schema VARCHAR, fk_table VARCHAR, fk_column_name VARCHAR)[]
 							)[]
 						)[],
-					}) FILTER (dbs.schema_name IS NOT null) AS catalog_db_schemas
+					}) FILTER (dbs.schema_name is not null) catalog_db_schemas
 				FROM
-					filtered_schemata
+					information_schema.schemata
 				LEFT JOIN db_schemas dbs
-				USING (catalog_name)
+				USING (catalog_name, schema_name)
 				WHERE catalog_name LIKE '%s'
 				GROUP BY catalog_name
 				)",
@@ -1112,15 +1096,7 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 	case ADBC_OBJECT_DEPTH_TABLES:
 		// Return metadata on catalogs, schemas, and tables.
 		query = duckdb::StringUtil::Format(R"(
-				WITH filtered_schemata AS (
-					SELECT
-						catalog_name,
-						schema_name,
-					FROM
-						information_schema.schemata
-					WHERE catalog_name NOT IN ('system', 'temp') AND schema_name NOT IN ('information_schema', 'pg_catalog')
-				),
-				tables AS (
+				WITH tables AS (
 					SELECT
 						table_catalog catalog_name,
 						table_schema schema_name,
@@ -1164,8 +1140,8 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 						catalog_name,
 						schema_name,
 						db_schema_tables,
-					FROM filtered_schemata fs
-					LEFT JOIN tables t
+					FROM information_schema.schemata
+					LEFT JOIN tables
 					USING (catalog_name, schema_name)
 					WHERE schema_name LIKE '%s'
 				)
@@ -1173,13 +1149,13 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 				SELECT
 					catalog_name,
 					LIST({
-						db_schema_name: dbs.schema_name,
+						db_schema_name: schema_name,
 						db_schema_tables: db_schema_tables,
-					}) FILTER (dbs.schema_name is not null) AS catalog_db_schemas
+					}) FILTER (dbs.schema_name is not null) catalog_db_schemas
 				FROM
-					filtered_schemata
+					information_schema.schemata
 				LEFT JOIN db_schemas dbs
-				USING (catalog_name)
+				USING (catalog_name, schema_name)
 				WHERE catalog_name LIKE '%s'
 				GROUP BY catalog_name
 				)",
@@ -1188,15 +1164,7 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 	case ADBC_OBJECT_DEPTH_COLUMNS:
 		// Return metadata on catalogs, schemas, tables, and columns.
 		query = duckdb::StringUtil::Format(R"(
-				WITH filtered_schemata AS (
-					SELECT
-						catalog_name,
-						schema_name,
-					FROM
-						information_schema.schemata
-					WHERE catalog_name NOT IN ('system', 'temp') AND schema_name NOT IN ('information_schema', 'pg_catalog')
-				),
-				columns AS (
+				WITH columns AS (
 					SELECT
 						table_catalog,
 						table_schema,
@@ -1265,8 +1233,8 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 						catalog_name,
 						schema_name,
 						db_schema_tables,
-					FROM filtered_schemata fs
-					LEFT JOIN tables t
+					FROM information_schema.schemata
+					LEFT JOIN tables
 					USING (catalog_name, schema_name)
 					WHERE schema_name LIKE '%s'
 				)
@@ -1274,13 +1242,13 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 				SELECT
 					catalog_name,
 					LIST({
-						db_schema_name: dbs.schema_name,
+						db_schema_name: schema_name,
 						db_schema_tables: db_schema_tables,
-					}) FILTER (dbs.schema_name is not null) AS catalog_db_schemas
+					}) FILTER (dbs.schema_name is not null) catalog_db_schemas
 				FROM
-					filtered_schemata
+					information_schema.schemata
 				LEFT JOIN db_schemas dbs
-				USING (catalog_name)
+				USING (catalog_name, schema_name)
 				WHERE catalog_name LIKE '%s'
 				GROUP BY catalog_name
 				)",
