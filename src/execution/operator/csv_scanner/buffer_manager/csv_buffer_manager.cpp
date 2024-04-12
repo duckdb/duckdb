@@ -8,6 +8,7 @@ CSVBufferManager::CSVBufferManager(ClientContext &context_p, const CSVReaderOpti
     : context(context_p), file_idx(file_idx_p), file_path(file_path_p), buffer_size(CSVBuffer::CSV_BUFFER_SIZE) {
 	D_ASSERT(!file_path.empty());
 	file_handle = ReadCSV::OpenCSV(file_path, options.compression, context);
+	is_pipe = file_handle->IsPipe();
 	skip_rows = options.dialect_options.skip_rows.GetValue();
 	auto file_size = file_handle->FileSize();
 	if (file_size > 0 && file_size < buffer_size) {
@@ -64,6 +65,9 @@ bool CSVBufferManager::ReadNextAndCacheIt() {
 shared_ptr<CSVBufferHandle> CSVBufferManager::GetBuffer(const idx_t pos) {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	if (pos == 0 && done && cached_buffers.empty()) {
+		if (is_pipe){
+			throw InvalidInputException("Recursive CTEs are not allowed when using piped csv files");
+		}
 		// This is a recursive CTE, we have to reset out whole buffer
 		done = false;
 		file_handle->Reset();
