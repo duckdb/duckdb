@@ -286,6 +286,12 @@ void StatementSimplifier::SimplifyExpression(duckdb::unique_ptr<ParsedExpression
 	case ExpressionClass::FUNCTION: {
 		auto &func = expr->Cast<FunctionExpression>();
 		SimplifyExpressionList(expr, func.children);
+		SimplifyEnum(func.distinct, false);
+		SimplifyOptionalExpression(func.filter);
+		SimplifyOptional(func.order_bys);
+		if (func.order_bys) {
+			Simplify(*func.order_bys);
+		}
 		break;
 	}
 	case ExpressionClass::OPERATOR: {
@@ -349,8 +355,8 @@ void StatementSimplifier::SimplifyExpression(duckdb::unique_ptr<ParsedExpression
 		SimplifyChildExpression(expr, window.default_expr);
 		SimplifyEnum(window.ignore_nulls, false);
 		SimplifyEnum(window.distinct, false);
-		SimplifyEnum(window.start, WindowBoundary::INVALID);
-		SimplifyEnum(window.end, WindowBoundary::INVALID);
+		SimplifyEnum(window.start, WindowBoundary::UNBOUNDED_PRECEDING);
+		SimplifyEnum(window.end, WindowBoundary::CURRENT_ROW_RANGE);
 		SimplifyEnum(window.exclude_clause, WindowExcludeMode::NO_OTHER);
 		break;
 	}
