@@ -50,6 +50,10 @@ public:
 		return in_memory;
 	}
 
+	bool IsStreaming() {
+		return streaming;
+	}
+
 	bool RequireReinit() override {
 		return require_reinit;
 	}
@@ -83,6 +87,7 @@ private:
 	string subgroup;
 
 	bool in_memory = true;
+	bool streaming = false;
 	bool require_reinit = false;
 };
 

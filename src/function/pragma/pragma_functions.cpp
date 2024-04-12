@@ -85,14 +85,6 @@ static void PragmaDisableFetchRowVerification(ClientContext &context, const Func
 	ClientConfig::GetConfig(context).verify_fetch_row = false;
 }
 
-static void PragmaEnableForceStreaming(ClientContext &context, const FunctionParameters &parameters) {
-	ClientConfig::GetConfig(context).verify_streaming = true;
-}
-
-static void PragmaDisableForceStreaming(ClientContext &context, const FunctionParameters &parameters) {
-	ClientConfig::GetConfig(context).verify_streaming = false;
-}
-
 static void PragmaEnableForceParallelism(ClientContext &context, const FunctionParameters &parameters) {
 	ClientConfig::GetConfig(context).verify_parallelism = true;
 }
@@ -149,9 +141,6 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(PragmaFunction::PragmaStatement("verify_parallelism", PragmaEnableForceParallelism));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_verify_parallelism", PragmaDisableForceParallelism));
-
-	set.AddFunction(PragmaFunction::PragmaStatement("verify_streaming", PragmaEnableForceStreaming));
-	set.AddFunction(PragmaFunction::PragmaStatement("disable_verify_streaming", PragmaDisableForceStreaming));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_object_cache", PragmaEnableObjectCache));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_object_cache", PragmaDisableObjectCache));

@@ -6,8 +6,7 @@ name batched_stream_query
 group micro
 subgroup result_collection
 
-init
-pragma verify_streaming;
+resultmode streaming
 
 load
 create table tbl (a varchar);
