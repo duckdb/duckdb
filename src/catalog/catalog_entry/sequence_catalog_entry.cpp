@@ -13,59 +13,9 @@
 
 namespace duckdb {
 
-static int64_t ReconstructValue(const CreateSequenceInfo &info, idx_t usage_count) {
-	int64_t result = info.start_value;
-	auto to_simulate = usage_count;
-	if (info.cycle) {
-		auto current = info.start_value;
-		auto increase = info.increment > 0;
-		if (increase) {
-			while (to_simulate > 0) {
-				auto maximum_increase = info.max_value - current;
-				uint64_t max_uses = 1 + (maximum_increase / info.increment);
-
-				if (to_simulate >= max_uses) {
-					// Uses would overflow, cycle around
-					to_simulate -= max_uses;
-					current = info.min_value;
-					result = current;
-				} else {
-					result = current + (info.increment * to_simulate);
-					break;
-				}
-			}
-		} else {
-			auto increment = info.increment * -1;
-			while (to_simulate > 0) {
-				auto maximum_decrease = current - info.min_value;
-				uint64_t max_uses = 1 + (maximum_decrease / increment);
-
-				if (to_simulate >= max_uses) {
-					// Decrementing would overflow, cycle around
-					to_simulate -= max_uses;
-					current = info.max_value;
-					result = current;
-				} else {
-					result = current - (increment * to_simulate);
-					break;
-				}
-			}
-		}
-		return result;
-	} else {
-		// This is guaranteed to be in bounds, otherwise nextval would have thrown trying to create this state
-		return info.start_value + (info.increment * to_simulate);
-	}
-}
-
 SequenceData::SequenceData(CreateSequenceInfo &info)
-    : usage_count(info.usage_count), counter(ReconstructValue(info, info.usage_count)), last_value(info.start_value),
-      increment(info.increment), start_value(info.start_value), min_value(info.min_value), max_value(info.max_value),
-      cycle(info.cycle) {
-
-	if (info.usage_count) {
-		last_value = ReconstructValue(info, info.usage_count - 1);
-	}
+    : usage_count(info.usage_count), counter(info.start_value), increment(info.increment),
+      start_value(info.start_value), min_value(info.min_value), max_value(info.max_value), cycle(info.cycle) {
 }
 
 SequenceCatalogEntry::SequenceCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateSequenceInfo &info)
@@ -146,7 +96,7 @@ unique_ptr<CreateInfo> SequenceCatalogEntry::GetInfo() const {
 	result->increment = seq_data.increment;
 	result->min_value = seq_data.min_value;
 	result->max_value = seq_data.max_value;
-	result->start_value = seq_data.start_value;
+	result->start_value = seq_data.counter;
 	result->cycle = seq_data.cycle;
 	result->comment = comment;
 	return std::move(result);
