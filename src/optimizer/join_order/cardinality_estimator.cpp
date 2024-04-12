@@ -167,6 +167,63 @@ double CardinalityEstimator::GetNumerator(unordered_set<idx_t> &set) {
 	return numerator;
 }
 
+
+vector<FilterInfoWithTotalDomains> GetEdges(vector<RelationsToTDom> relations_to_Tdom) {
+	vector<FilterInfoWithTotalDomains> res;
+	for (auto &relation_2_tdom : relations_to_Tdom) {
+		for (auto &filter : relation_2_tdom.filters) {
+			FilterInfoWithTotalDomains new_edge(filter, relation_2_tdom);
+			res.push_back(new_edge);
+		}
+	}
+	return res;
+}
+
+
+bool EdgeConnects(FilterInfoWithTotalDomains &edge, Subgraph2Denominator &subgraph) {
+	if (edge.left_set) {
+		if (JoinRelationSet::IsSubset(edge.left_set, subgraph.relations)) {
+			// cool
+			return true;
+		}
+	}
+	if (edge.right_set) {
+		if (JoinRelationSet::IsSubset(edge.right_set, subgraph.relations)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+
+unordered_set<idx_t> SubgraphsConnectedByEdge(FilterInfoWithTotalDomains &edge, vector<Subgraph2Denominator> &subgraphs) {
+    unordered_set<idx_t> res;
+	if (subgraphs.empty()) {
+		return res;
+	}
+	if (subgraphs.size() == 1 && EdgeConnects(edge, subgraphs.at(0))) {
+		// there is one subgraph, and the edge connects a relation outside the subgraph
+		// to inside it, so we expand the subgraph.
+		res.insert(0);
+		return res;
+	}
+	if (subgraphs.size() >= 2) {
+		// check the combinations of subgraphs and see if the edge connects two of them,
+		// if so, return the indexes of the two subgraphs within the vector
+		for (auto outer = 0; outer != subgraphs.size(); outer++) {
+			for (auto inner = outer + 1; inner != subgraphs.size(); inner++) {
+				if (EdgeConnects(edge, subgraphs.at(outer)) && EdgeConnects(edge, subgraphs.at(inner))) {
+					res.insert(inner);
+					res.insert(outer);
+					return res;
+				}
+			}
+		}
+	}
+	throw InternalException("whoops");
+}
+
+
 DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 	vector<Subgraph2Denominator> subgraphs;
 	bool all_relations_joined = false;
@@ -188,7 +245,24 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 	// relations_to_tdoms has already been sorted by largest to smallest total domain
 	// then we look through the filters for the relations_to_tdoms
 	// and we start to choose the filters that join relations in the set.
-	//
+
+
+	// edges are guaranteed to be in order of largest tdom to smallest tdom.
+	auto edges = GetEdges(relations_to_tdoms);
+
+	for (auto &edge : edges) {
+		auto subgraph_connections = SubgraphsConnectedByEdge(edge, subgraphs);
+		if (subgraph_connections.size() == 0) {
+			// add
+		}
+		if (subgraph_connections.size() == 1) {
+			// add the edges relations to the subgraph at the index
+		}
+		if (subgraph_connections.size() == 2) {
+			// Merge the two subgraphs.
+		}
+	}
+
 	for (auto &relation_2_tdom : relations_to_tdoms) {
 		// loop through each filter in the tdom.
 		if (all_relations_joined) {

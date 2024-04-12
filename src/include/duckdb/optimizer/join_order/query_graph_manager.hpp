@@ -38,12 +38,14 @@ struct GenerateJoinRelation {
 
 //! Filter info struct that is used by the cardinality estimator to set the initial cardinality
 //! but is also eventually transformed into a query edge.
-struct FilterInfo {
+class FilterInfo {
+
+
 	FilterInfo(unique_ptr<Expression> filter, JoinRelationSet &set, idx_t filter_index,
 	           JoinType join_type = JoinType::INNER)
 	    : filter(std::move(filter)), set(set), filter_index(filter_index), join_type(join_type) {
 	}
-
+public:
 	unique_ptr<Expression> filter;
 	JoinRelationSet &set;
 	idx_t filter_index;
@@ -52,7 +54,10 @@ struct FilterInfo {
 	optional_ptr<JoinRelationSet> right_set;
 	ColumnBinding left_binding;
 	ColumnBinding right_binding;
+
 };
+
+
 
 //! The QueryGraphManager manages the process of extracting the reorderable and nonreorderable operations
 //! from the logical plan and creating the intermediate structures needed by the plan enumerator.

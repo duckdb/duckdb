@@ -9,12 +9,11 @@
 
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/optimizer/join_order/query_graph.hpp"
+#include "duckdb/optimizer/join_order/query_graph_manager.hpp"
 
 #include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
 
 namespace duckdb {
-
-struct FilterInfo;
 
 struct DenomInfo {
 	DenomInfo(unordered_set<idx_t> numerator_relations, double filter_strength, double denominator)
@@ -42,6 +41,32 @@ struct RelationsToTDom {
 	explicit RelationsToTDom(const column_binding_set_t &column_binding_set)
 	    : equivalent_relations(column_binding_set), tdom_hll(0), tdom_no_hll(NumericLimits<idx_t>::Maximum()),
 	      has_tdom_hll(false) {};
+};
+
+class FilterInfoWithTotalDomains {
+public:
+	FilterInfoWithTotalDomains(FilterInfo *filter_info, RelationsToTDom relation2tdom) :
+	      left_binding(filter_info->left_binding), right_binding(filter_info->right_binding),
+	      tdom_hll(relation2tdom.tdom_hll), tdom_no_hll(relation2tdom.tdom_no_hll), has_tdom_hll(relation2tdom.has_tdom_hll) {
+		left_set = nullptr;
+		right_set = nullptr;
+		if (filter_info->left_set) {
+			left_set = filter_info->left_set.get();
+		}
+		if (filter_info->right_set) {
+			right_set = filter_info->right_set.get();
+		}
+	}
+
+	ColumnBinding left_binding;
+	ColumnBinding right_binding;
+	//!	the estimated total domains of the equivalent relations determined using HLL
+	idx_t tdom_hll;
+	//! the estimated total domains of each relation without using HLL
+	idx_t tdom_no_hll;
+	bool has_tdom_hll;
+	optional_ptr<JoinRelationSet> left_set;
+	optional_ptr<JoinRelationSet> right_set;
 };
 
 struct Subgraph2Denominator {
