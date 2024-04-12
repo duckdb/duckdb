@@ -144,6 +144,10 @@ SleepCommand::SleepCommand(SQLLogicTestRunner &runner, idx_t duration, SleepUnit
     : Command(runner), duration(duration), unit(unit) {
 }
 
+UnzipCommand::UnzipCommand(SQLLogicTestRunner &runner, string &input, string &output)
+    : Command(runner), input_path(input), extraction_path(output) {
+}
+
 struct ParallelExecuteContext {
 	ParallelExecuteContext(SQLLogicTestRunner &runner, const vector<duckdb::unique_ptr<Command>> &loop_commands,
 	                       LoopDefinition definition)
@@ -384,6 +388,38 @@ void Statement::ExecuteInternal(ExecuteContext &context) const {
 		} else {
 			FAIL_LINE(file_name, query_line, 0);
 		}
+	}
+}
+
+void UnzipCommand::ExecuteInternal(ExecuteContext &context) const {
+	VirtualFileSystem vfs;
+
+	// input
+	FileOpenFlags in_flags(FileFlags::FILE_FLAGS_READ);
+	in_flags.SetCompression(FileCompressionType::GZIP);
+	auto compressed_file_handle = vfs.OpenFile(input_path, in_flags);
+	if (compressed_file_handle == nullptr) {
+		throw CatalogException("Cannot open the file \"%s\"", input_path);
+	}
+
+	// read the compressed data from the file
+	int64_t file_size = vfs.GetFileSize(*compressed_file_handle);
+	std::unique_ptr<char[]> compressed_buffer(new char[BUFFER_SIZE]);
+	int64_t bytes_read = vfs.Read(*compressed_file_handle, compressed_buffer.get(), BUFFER_SIZE);
+	if (bytes_read < file_size) {
+		throw CatalogException("Cannot read the file \"%s\"", input_path);
+	}
+
+	// output
+	FileOpenFlags out_flags(FileOpenFlags::FILE_FLAGS_FILE_CREATE | FileOpenFlags::FILE_FLAGS_WRITE);
+	auto output_file = vfs.OpenFile(extraction_path, out_flags);
+	if (!output_file) {
+		throw CatalogException("Cannot open the file \"%s\"", extraction_path);
+	}
+
+	int64_t bytes_written = vfs.Write(*output_file, compressed_buffer.get(), BUFFER_SIZE);
+	if (bytes_written < file_size) {
+		throw CatalogException("Cannot write the file \"%s\"", extraction_path);
 	}
 }
 

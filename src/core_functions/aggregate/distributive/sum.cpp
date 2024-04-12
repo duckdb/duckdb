@@ -32,7 +32,7 @@ struct IntegerSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd
 	}
 };
 
-struct SumToHugeintOperation : public BaseSumOperation<SumSetOperation, HugeintAdd> {
+struct SumToHugeintOperation : public BaseSumOperation<SumSetOperation, AddToHugeint> {
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (!state.isset) {
@@ -58,7 +58,7 @@ struct DoubleSumOperation : public BaseSumOperation<SumSetOperation, ADD_OPERATO
 using NumericSumOperation = DoubleSumOperation<RegularAdd>;
 using KahanSumOperation = DoubleSumOperation<KahanAdd>;
 
-struct HugeintSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd> {
+struct HugeintSumOperation : public BaseSumOperation<SumSetOperation, HugeintAdd> {
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (!state.isset) {
