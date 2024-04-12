@@ -206,7 +206,9 @@ if 'BUILD_HTTPFS' in os.environ:
 for ext in extensions:
     define_macros.append(('DUCKDB_EXTENSION_{}_LINKED'.format(ext.upper()), None))
 
-define_macros.extend([('DUCKDB_EXTENSION_AUTOLOAD_DEFAULT', '1'), ('DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT', '1')])
+if not is_pyodide:
+    # currently pyodide environment is not compatible with dynamic extesion loading
+    define_macros.extend([('DUCKDB_EXTENSION_AUTOLOAD_DEFAULT', '1'), ('DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT', '1')])
 
 linker_args = toolchain_args[:]
 if platform.system() == 'Windows':
