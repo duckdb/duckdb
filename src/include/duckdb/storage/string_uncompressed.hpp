@@ -162,12 +162,8 @@ public:
 				memcpy(dict_pos, source_data[source_idx].GetData(), string_length);
 
 				// place the dictionary offset into the set of vectors
-<<<<<<< HEAD
-				result_data[target_idx] = NumericCast<int32_t>(*dictionary_size);
-=======
 				D_ASSERT(*dictionary_size <= int32_t(Storage::BLOCK_SIZE));
-				result_data[target_idx] = *dictionary_size;
->>>>>>> 40e2ff4837e79f2cc75e0d805595158a5409e680
+				result_data[target_idx] = NumericCast<int32_t>(*dictionary_size);
 			}
 			D_ASSERT(RemainingSpace(segment, handle) <= Storage::BLOCK_SIZE);
 #ifdef DEBUG
