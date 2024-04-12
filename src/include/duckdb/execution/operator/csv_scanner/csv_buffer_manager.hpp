@@ -71,6 +71,7 @@ private:
 	//! If the file_handle used seek
 	bool has_seeked = false;
 	unordered_set<idx_t> reset_when_possible;
+	bool can_seek;
 };
 
 } // namespace duckdb
