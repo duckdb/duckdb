@@ -65,7 +65,7 @@ bool CSVBufferManager::ReadNextAndCacheIt() {
 shared_ptr<CSVBufferHandle> CSVBufferManager::GetBuffer(const idx_t pos) {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	if (pos == 0 && done && cached_buffers.empty()) {
-		if (is_pipe){
+		if (is_pipe) {
 			throw InvalidInputException("Recursive CTEs are not allowed when using piped csv files");
 		}
 		// This is a recursive CTE, we have to reset out whole buffer
