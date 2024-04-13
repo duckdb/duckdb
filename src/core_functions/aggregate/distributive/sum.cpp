@@ -74,6 +74,15 @@ unique_ptr<FunctionData> SumNoOverflowBind(ClientContext &context, AggregateFunc
 	throw BinderException("sum_no_overflow is for internal use only!");
 }
 
+void SumNoOverflowSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+                            const AggregateFunction &function) {
+	return;
+}
+
+unique_ptr<FunctionData> SumNoOverflowDeserialize(Deserializer &deserializer, AggregateFunction &function) {
+	return nullptr;
+}
+
 AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::INT32: {
@@ -82,6 +91,8 @@ AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
 		function.name = "sum_no_overflow";
 		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 		function.bind = SumNoOverflowBind;
+		function.serialize = SumNoOverflowSerialize;
+		function.deserialize = SumNoOverflowDeserialize;
 		return function;
 	}
 	case PhysicalType::INT64: {
@@ -90,11 +101,21 @@ AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
 		function.name = "sum_no_overflow";
 		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 		function.bind = SumNoOverflowBind;
+		function.serialize = SumNoOverflowSerialize;
+		function.deserialize = SumNoOverflowDeserialize;
 		return function;
 	}
 	default:
 		throw BinderException("Unsupported internal type for sum_no_overflow");
 	}
+}
+
+AggregateFunction GetSumAggregateNoOverflowDecimal() {
+	AggregateFunction aggr({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr,
+	                       nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, SumNoOverflowBind);
+	aggr.serialize = SumNoOverflowSerialize;
+	aggr.deserialize = SumNoOverflowDeserialize;
+	return aggr;
 }
 
 unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggregateExpression &expr,
@@ -199,9 +220,7 @@ AggregateFunctionSet SumNoOverflowFun::GetFunctions() {
 	AggregateFunctionSet sum_no_overflow;
 	sum_no_overflow.AddFunction(GetSumAggregateNoOverflow(PhysicalType::INT32));
 	sum_no_overflow.AddFunction(GetSumAggregateNoOverflow(PhysicalType::INT64));
-	sum_no_overflow.AddFunction(
-	    AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr,
-	                      FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, SumNoOverflowBind));
+	sum_no_overflow.AddFunction(GetSumAggregateNoOverflowDecimal());
 	return sum_no_overflow;
 }
 
