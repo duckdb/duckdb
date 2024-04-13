@@ -27,7 +27,6 @@ protected:
 
 public:
 	unique_ptr<SQLStatement> Copy() const override;
-	bool HasToString() const override;
 	string ToString() const override;
 };
 

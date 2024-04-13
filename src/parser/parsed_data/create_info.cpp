@@ -29,9 +29,6 @@ string CreateInfo::QualifierToString(const string &name) const {
 		if (temporary && catalog == TEMP_CATALOG) {
 			has_catalog = false;
 		}
-		if (catalog == "memory") {
-			has_catalog = false;
-		}
 	}
 	if (has_catalog) {
 		result += KeywordHelper::WriteOptionallyQuoted(catalog) + ".";

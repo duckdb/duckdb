@@ -786,26 +786,20 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		}
 		default: {
 #ifndef DUCKDB_ALTERNATIVE_VERIFY
-			const bool alternative_verify = false;
+			bool reparse_statement = true;
 #else
-			const bool alternative_verify = true;
+			bool reparse_statement = false;
 #endif
-			if (!alternative_verify && statement->HasToString()) {
-				// ToString is defined for this statement type
-				Parser parser;
-				ErrorData error;
+			statement = std::move(copied_statement);
+			if (reparse_statement) {
 				try {
+					Parser parser;
+					ErrorData error;
 					parser.ParseQuery(statement->ToString());
-				} catch (std::exception &ex) {
-					error = ErrorData(ex);
+					statement = std::move(parser.statements[0]);
+				} catch (const NotImplementedException &) {
+					// ToString was not implemented, just use the copied statement
 				}
-				if (error.HasError()) {
-					// error in verifying query
-					return ErrorResult<PendingQueryResult>(std::move(error), query);
-				}
-				statement = std::move(parser.statements[0]);
-			} else {
-				statement = std::move(copied_statement);
 			}
 			break;
 		}

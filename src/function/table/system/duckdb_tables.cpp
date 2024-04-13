@@ -155,8 +155,9 @@ void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 		// check_constraint_count, LogicalType::BIGINT
 		output.SetValue(col++, count, Value::BIGINT(CheckConstraintCount(table)));
 		// sql, LogicalType::VARCHAR
-		output.SetValue(col++, count, Value(table.ToSQL()));
-
+		auto table_info = table.GetInfo();
+		table_info->catalog.clear();
+		output.SetValue(col++, count, Value(table_info->ToString()));
 		count++;
 	}
 	output.SetCardinality(count);

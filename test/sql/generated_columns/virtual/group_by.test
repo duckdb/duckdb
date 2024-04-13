@@ -1,8 +1,6 @@
 # name: test/sql/generated_columns/virtual/group_by.test
 # group: [virtual]
 
-require noforcestorage
-
 statement ok
 pragma enable_verification;
 

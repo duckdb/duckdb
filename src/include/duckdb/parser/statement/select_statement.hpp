@@ -37,9 +37,7 @@ protected:
 
 public:
 	//! Convert the SELECT statement to a string
-	bool HasToString() const override {
-		return true;
-	}
+
 	DUCKDB_API string ToString() const override;
 	//! Create a copy of this SelectStatement
 	DUCKDB_API unique_ptr<SQLStatement> Copy() const override;

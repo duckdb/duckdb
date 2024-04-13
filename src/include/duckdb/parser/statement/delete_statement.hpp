@@ -33,9 +33,6 @@ protected:
 	DeleteStatement(const DeleteStatement &other);
 
 public:
-	bool HasToString() const override {
-		return true;
-	}
 	string ToString() const override;
 	unique_ptr<SQLStatement> Copy() const override;
 };

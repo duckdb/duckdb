@@ -23,17 +23,6 @@ unique_ptr<CreateInfo> CreateTypeInfo::Copy() const {
 	return std::move(result);
 }
 
-bool CreateTypeInfo::HasToString() const {
-	switch (type.id()) {
-	case LogicalTypeId::ENUM:
-		return true;
-	case LogicalTypeId::USER:
-		return true;
-	default:
-		return false;
-	}
-}
-
 string CreateTypeInfo::ToString() const {
 	string result = "";
 	result += "CREATE TYPE ";
@@ -67,7 +56,8 @@ string CreateTypeInfo::ToString() const {
 		// FIXME: catalog, schema ??
 		result += user_info.user_type_name;
 	} else {
-		throw InternalException("CreateTypeInfo::ToString() not implemented for %s", LogicalTypeIdToString(type.id()));
+		result += " AS ";
+		result += type.ToString();
 	}
 	return result;
 }

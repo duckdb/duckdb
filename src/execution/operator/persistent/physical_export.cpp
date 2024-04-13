@@ -23,14 +23,15 @@ static void WriteCatalogEntries(stringstream &ss, vector<reference<CatalogEntry>
 			continue;
 		}
 		auto create_info = entry.get().GetInfo();
-		if (create_info->HasToString()) {
+		try {
 			// Strip the catalog from the info
 			create_info->catalog.clear();
-			ss << create_info->ToString() << '\n';
-		} else {
-			// TODO: remove ToSQL in favor of GetInfo()->ToString()
+			auto to_string = create_info->ToString();
+			ss << to_string;
+		} catch (const NotImplementedException &) {
 			ss << entry.get().ToSQL();
 		}
+		ss << '\n';
 	}
 	ss << '\n';
 }

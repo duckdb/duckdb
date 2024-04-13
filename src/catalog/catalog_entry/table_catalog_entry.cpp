@@ -136,13 +136,12 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 		bool is_multi_key_pk = multi_key_pks.find(column.Name()) != multi_key_pks.end();
 		bool is_unique = unique_columns.find(column.Logical()) != unique_columns.end();
 		if (column.Generated()) {
-			unique_ptr<ParsedExpression> optional_copy;
 			reference<const ParsedExpression> generated_expression = column.GeneratedExpression();
 			if (column_type.id() != LogicalTypeId::ANY) {
 				// We artificially add a cast if the type is specified, need to strip it
-				optional_copy = generated_expression.get().Copy();
-				D_ASSERT(optional_copy->type == ExpressionType::OPERATOR_CAST);
-				auto &cast_expr = optional_copy->Cast<CastExpression>();
+				auto &expr = generated_expression.get();
+				D_ASSERT(expr.type == ExpressionType::OPERATOR_CAST);
+				auto &cast_expr = expr.Cast<CastExpression>();
 				D_ASSERT(cast_expr.cast_type.id() == column_type.id());
 				generated_expression = *cast_expr.child;
 			}

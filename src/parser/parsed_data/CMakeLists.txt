@@ -16,6 +16,7 @@ add_library_unity(
   create_pragma_function_info.cpp
   create_secret_info.cpp
   create_sequence_info.cpp
+  create_schema_info.cpp
   create_scalar_function_info.cpp
   create_table_function_info.cpp
   create_table_info.cpp
