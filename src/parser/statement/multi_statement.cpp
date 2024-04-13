@@ -18,7 +18,7 @@ unique_ptr<SQLStatement> MultiStatement::Copy() const {
 string MultiStatement::ToString() const {
 	vector<string> stringified;
 	for (auto &stmt : statements) {
-		stringified.push_back(stmt.ToString());
+		stringified.push_back(stmt->ToString());
 	}
 	return StringUtil::Join(stringified, ";") + ";";
 }

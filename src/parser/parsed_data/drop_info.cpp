@@ -60,7 +60,7 @@ string DropInfo::ToString() const {
 	}
 	result += KeywordHelper::WriteOptionallyQuoted(name);
 	if (cascade) {
-		result += " " + "CASCADE";
+		result += " CASCADE";
 	}
 	result += ";";
 	return result;

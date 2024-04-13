@@ -11,42 +11,36 @@ CopyStatement::CopyStatement(const CopyStatement &other) : SQLStatement(other), 
 	}
 }
 
-string CopyStatement::CopyOptionsToString(const string &format,
-                                          const case_insensitive_map_t<vector<Value>> &options) const {
+string CopyStatement::CopyOptionsToString(const string &format, const case_insensitive_map_t<vector<Value>> &options) {
 	if (format.empty() && options.empty()) {
 		return string();
 	}
 	string result;
 
 	result += " (";
+	vector<string> stringified;
 	if (!format.empty()) {
-		result += " FORMAT ";
-		result += format;
+		stringified.push_back(StringUtil::Format(" FORMAT %s", format));
 	}
-	for (auto it = options.begin(); it != options.end(); it++) {
-		if (!format.empty() || it != options.begin()) {
-			result += ", ";
-		}
-		auto &name = it->first;
-		auto &values = it->second;
+	for (auto &opt : options) {
+		auto &name = opt.first;
+		auto &values = opt.second;
 
-		result += name + " ";
+		auto option = name + " ";
 		if (values.empty()) {
 			// Options like HEADER don't need an explicit value
 			// just providing the name already sets it to true
 		} else if (values.size() == 1) {
-			result += values[0].ToSQLString();
+			stringified.push_back(option + values[0].ToSQLString());
 		} else {
-			result += "( ";
-			for (idx_t i = 0; i < values.size(); i++) {
-				if (i) {
-					result += ", ";
-				}
-				result += values[i].ToSQLString();
+			vector<string> sub_values;
+			for (auto &val : values) {
+				sub_values.push_back(val.ToSQLString());
 			}
-			result += " )";
+			stringified.push_back(option + "( " + StringUtil::Join(sub_values, ", ") + " )");
 		}
 	}
+	result += StringUtil::Join(stringified, ", ");
 	result += " )";
 	return result;
 }

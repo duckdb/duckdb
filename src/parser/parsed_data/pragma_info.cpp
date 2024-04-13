@@ -17,7 +17,7 @@ unique_ptr<PragmaInfo> PragmaInfo::Copy() const {
 string PragmaInfo::ToString() const {
 	string result = "";
 	result += "PRAGMA";
-	result += " " + Keywordhelper::WriteOptionallyQuoted(name);
+	result += " " + KeywordHelper::WriteOptionallyQuoted(name);
 	if (!parameters.empty()) {
 		vector<string> stringified;
 		for (auto &param : parameters) {

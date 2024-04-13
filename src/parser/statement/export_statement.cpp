@@ -24,13 +24,8 @@ string ExportStatement::ToString() const {
 	D_ASSERT(info->is_from == false);
 	auto &options = info->options;
 	auto &format = info->format;
-	vector<string> stringified;
-	stringified.push_back("FORMAT " + format);
-	for (auto &opt : options) {
-		stringified.push_back(StringUtil::Format("%s '%s'", opt.first, opt.second.ToString()));
-	}
 	result += " " + path;
-	result += "(" + StringUtil::Join(stringified, ", ") + ")";
+	result += CopyStatement::CopyOptionsToString(format, options);
 	result += ";";
 	return result;
 }

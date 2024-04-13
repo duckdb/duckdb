@@ -36,13 +36,7 @@ static string ScopeToString(SetScope scope) {
 }
 
 string SetVariableStatement::ToString() const {
-	string result = "";
-	result += "SET";
-	result += " " + ScopeToString(scope);
-	result += " " + name;
-	result += " " + "TO";
-	result += " " + value->ToString();
-	result += ";" return result;
+	return StringUtil::Format("SET %s %s TO %s;", ScopeToString(scope), name, value->ToString());
 }
 
 // Reset Variable
@@ -60,7 +54,8 @@ string ResetVariableStatement::ToString() const {
 	result += "RESET";
 	result += " " + ScopeToString(scope);
 	result += " " + name;
-	result += ";" return result;
+	result += ";";
+	return result;
 }
 
 } // namespace duckdb

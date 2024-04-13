@@ -18,7 +18,7 @@ string DetachInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += " IF EXISTS";
 	}
-	result += " " + Keywordhelper::WriteOptionallyQuoted(name);
+	result += " " + KeywordHelper::WriteOptionallyQuoted(name);
 	result += ";";
 	return result;
 }

@@ -25,7 +25,7 @@ static string ExplainTypeToString(ExplainType type) {
 	}
 }
 
-string ExtensionStatement::ToString() const {
+string ExplainStatement::ToString() const {
 	string result = "";
 	result += ExplainTypeToString(explain_type);
 	result += " " + stmt->ToString();

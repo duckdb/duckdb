@@ -10,7 +10,7 @@ unique_ptr<LoadInfo> LoadInfo::Copy() const {
 	return result;
 }
 
-static LoadInfoToString(load_type) {
+static string LoadInfoToString(LoadType load_type) {
 	switch (load_type) {
 	case LoadType::LOAD:
 		return "LOAD";

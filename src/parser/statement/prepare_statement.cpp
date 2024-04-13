@@ -16,9 +16,12 @@ unique_ptr<SQLStatement> PrepareStatement::Copy() const {
 string PrepareStatement::ToString() const {
 	string result = "";
 	result += "PREPARE";
-	result += " " + name;
-	result += " " + "AS";
-	result += " " + statement->ToString();
+	result += " ";
+	result += name;
+	result += " ";
+	result += "AS";
+	result += " ";
+	result += statement->ToString();
 	// NOTE: We expect SQLStatement->ToString() to always end in a ';' ^
 	return result;
 }

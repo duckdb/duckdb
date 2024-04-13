@@ -14,7 +14,7 @@ unique_ptr<AttachInfo> AttachInfo::Copy() const {
 string AttachInfo::ToString() const {
 	string result = "";
 	result += "ATTACH DATABASE";
-	if (on_conflict == OnCreateNotFound::IGNORE_ON_CONFLICT) {
+	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 		result += " IF NOT EXISTS";
 	}
 	result += StringUtil::Format(" '%s'", path);
@@ -24,7 +24,7 @@ string AttachInfo::ToString() const {
 	if (!options.empty()) {
 		vector<string> stringified;
 		for (auto &opt : options) {
-			stringified.push_back(StringUtil::Format("%s = %s", opt.first, opt.second.ToString()));
+			stringified.push_back(StringUtil::Format("%s = %s", opt.first, opt.second.ToSQLString()));
 		}
 		result += " (" + StringUtil::Join(stringified, ", ") + ")";
 	}
