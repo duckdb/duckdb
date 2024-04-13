@@ -28,6 +28,8 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);
 
+	string ToString() const;
+
 private:
 	TransactionInfo();
 };

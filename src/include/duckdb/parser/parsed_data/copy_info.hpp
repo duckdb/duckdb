@@ -42,18 +42,8 @@ public:
 	case_insensitive_map_t<vector<Value>> options;
 
 public:
-	unique_ptr<CopyInfo> Copy() const {
-		auto result = make_uniq<CopyInfo>();
-		result->catalog = catalog;
-		result->schema = schema;
-		result->table = table;
-		result->select_list = select_list;
-		result->file_path = file_path;
-		result->is_from = is_from;
-		result->format = format;
-		result->options = options;
-		return result;
-	}
+	unique_ptr<CopyInfo> Copy() const;
+	string ToString() const;
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);

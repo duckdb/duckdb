@@ -12,4 +12,15 @@ unique_ptr<DetachInfo> DetachInfo::Copy() const {
 	return result;
 }
 
+string DetachInfo::ToString() const {
+	string result = "";
+	result += "DETACH DATABASE";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += " " + Keywordhelper::WriteOptionallyQuoted(name);
+	result += ";";
+	return result;
+}
+
 } // namespace duckdb

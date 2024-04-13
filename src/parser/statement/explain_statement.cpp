@@ -14,4 +14,22 @@ unique_ptr<SQLStatement> ExplainStatement::Copy() const {
 	return unique_ptr<ExplainStatement>(new ExplainStatement(*this));
 }
 
+static string ExplainTypeToString(ExplainType type) {
+	switch (type) {
+	case ExplainType::EXPLAIN_STANDARD:
+		return "EXPLAIN";
+	case ExplainType::EXPLAIN_ANALYZE:
+		return "EXPLAIN ANALYZE";
+	default:
+		throw InternalException("ToString for ExplainType with type: %s not implemented", EnumUtil::ToString(type));
+	}
+}
+
+string ExtensionStatement::ToString() const {
+	string result = "";
+	result += ExplainTypeToString(explain_type);
+	result += " " + stmt->ToString();
+	return result;
+}
+
 } // namespace duckdb

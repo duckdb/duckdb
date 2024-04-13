@@ -11,4 +11,25 @@ unique_ptr<AttachInfo> AttachInfo::Copy() const {
 	return result;
 }
 
+string AttachInfo::ToString() const {
+	string result = "";
+	result += "ATTACH DATABASE";
+	if (on_conflict == OnCreateNotFound::IGNORE_ON_CONFLICT) {
+		result += " IF NOT EXISTS";
+	}
+	result += StringUtil::Format(" '%s'", path);
+	if (!name.empty()) {
+		result += " AS " + name;
+	}
+	if (!options.empty()) {
+		vector<string> stringified;
+		for (auto &opt : options) {
+			stringified.push_back(StringUtil::Format("%s = %s", opt.first, opt.second.ToString()));
+		}
+		result += " (" + StringUtil::Join(stringified, ", ") + ")";
+	}
+	result += ";";
+	return result;
+}
+
 } // namespace duckdb
