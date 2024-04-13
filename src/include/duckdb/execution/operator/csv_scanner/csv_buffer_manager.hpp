@@ -47,6 +47,7 @@ public:
 
 	ClientContext &context;
 	idx_t skip_rows = 0;
+	bool sniffing = false;
 
 private:
 	//! Reads next buffer in reference to cached_buffers.front()
