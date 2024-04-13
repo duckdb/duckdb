@@ -25,7 +25,12 @@ unique_ptr<CreateInfo> CreateTypeInfo::Copy() const {
 
 string CreateTypeInfo::ToString() const {
 	string result = "";
-	result += "CREATE TYPE ";
+	result += "CREATE";
+	if (temporary) {
+		// These are created by PIVOT
+		throw NotImplementedException("CREATE TEMPORARY TYPE can't be parsed currently");
+	}
+	result += " TYPE ";
 	if (!catalog.empty()) {
 		result += KeywordHelper::WriteOptionallyQuoted(catalog);
 		result += ".";
@@ -47,6 +52,10 @@ string CreateTypeInfo::ToString() const {
 			}
 		}
 		result += " );";
+	} else if (type.id() == LogicalTypeId::INVALID) {
+		// CREATE TYPE mood AS ENUM (SELECT 'happy')
+		D_ASSERT(query);
+		result += " AS ENUM (" + query->ToString() + ")";
 	} else if (type.id() == LogicalTypeId::USER) {
 		result += " AS ";
 		auto extra_info = type.AuxInfo();
