@@ -1,6 +1,6 @@
 # name: test/fuzzer/duckfuzz/json_extract_string_null.test
 # description: NULL input to json_extract_string - found by fuzzer
-# group: [scalar]
+# group: [duckfuzz]
 
 require json
 
