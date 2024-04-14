@@ -245,7 +245,12 @@ if __name__ == "__main__":
     data_load = open(args.load).read()
     sql_query = open(args.exec).read()
     (stdout, stderr, returncode) = run_shell_command(shell, data_load + sql_query)
-    expected_error = sanitize_error(stderr)
+    expected_error = sanitize_error(stderr).strip()
+    if len(expected_error) == 0:
+        print("===================================================")
+        print("Could not find expected error - no error encountered")
+        print("===================================================")
+        exit(1)
 
     print("===================================================")
     print("Found expected error")

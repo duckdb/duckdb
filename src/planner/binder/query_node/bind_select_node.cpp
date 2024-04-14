@@ -46,21 +46,22 @@ unique_ptr<Expression> Binder::BindOrderExpression(OrderBinder &order_binder, un
 BoundLimitNode Binder::BindLimitValue(OrderBinder &order_binder, unique_ptr<ParsedExpression> limit_val,
                                       bool is_percentage, bool is_offset) {
 	auto new_binder = Binder::CreateBinder(context, this, true);
-	if (limit_val->HasSubquery()) {
+	ExpressionBinder expr_binder(*new_binder, context);
+	auto target_type = is_percentage ? LogicalType::DOUBLE : LogicalType::BIGINT;
+	expr_binder.target_type = target_type;
+	auto original_limit = limit_val->Copy();
+	auto expr = expr_binder.Bind(limit_val);
+	if (expr->HasSubquery()) {
 		if (!order_binder.HasExtraList()) {
 			throw BinderException("Subquery in LIMIT/OFFSET not supported in set operation");
 		}
-		auto bound_limit = order_binder.CreateExtraReference(std::move(limit_val));
+		auto bound_limit = order_binder.CreateExtraReference(std::move(original_limit));
 		if (is_percentage) {
 			return BoundLimitNode::ExpressionPercentage(std::move(bound_limit));
 		} else {
 			return BoundLimitNode::ExpressionValue(std::move(bound_limit));
 		}
 	}
-	ExpressionBinder expr_binder(*new_binder, context);
-	auto target_type = is_percentage ? LogicalType::DOUBLE : LogicalType::BIGINT;
-	expr_binder.target_type = target_type;
-	auto expr = expr_binder.Bind(limit_val);
 	if (expr->IsFoldable()) {
 		//! this is a constant
 		auto val = ExpressionExecutor::EvaluateScalar(context, *expr).CastAs(context, target_type);
