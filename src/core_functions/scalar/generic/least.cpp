@@ -100,6 +100,26 @@ ScalarFunction GetLeastGreatestFunction(const LogicalType &type) {
 	                      FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
 }
 
+static void CheckEnumParameter(const Expression &expr) {
+	if (expr.HasParameter()) {
+		throw ParameterNotResolvedException();
+	}
+}
+
+unique_ptr<FunctionData> BindEnumLeastGreatestFunction(ClientContext &context, ScalarFunction &bound_function,
+                                                       vector<unique_ptr<Expression>> &arguments) {
+	CheckEnumParameter(*arguments[0]);
+	if (arguments[0]->return_type.id() != LogicalTypeId::ENUM) {
+		throw BinderException("This function needs an ENUM as an argument");
+	}
+
+	bound_function.arguments[0] = arguments[0]->return_type;
+	bound_function.varargs = arguments[0]->return_type;
+	bound_function.return_type = arguments[0]->return_type;
+
+	return nullptr;
+}
+
 template <class OP>
 static ScalarFunctionSet GetLeastGreatestFunctions() {
 	ScalarFunctionSet fun_set;
@@ -122,6 +142,11 @@ static ScalarFunctionSet GetLeastGreatestFunctions() {
 
 	fun_set.AddFunction(GetLeastGreatestFunction<timestamp_t, OP>(LogicalType::TIMESTAMP_TZ));
 	fun_set.AddFunction(GetLeastGreatestFunction<time_t, OP>(LogicalType::TIME_TZ));
+
+	fun_set.AddFunction(ScalarFunction({LogicalTypeId::ENUM}, LogicalTypeId::VARCHAR, LeastGreatestFunction<int64_t, OP>,
+	                                   BindEnumLeastGreatestFunction, nullptr, nullptr, nullptr, LogicalTypeId::ENUM,
+	                                   FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING));
+
 	return fun_set;
 }
 
