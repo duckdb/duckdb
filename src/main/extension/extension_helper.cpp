@@ -222,9 +222,6 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 	}
 }
 
-// TODO: this function should either:
-//        - check if the extension has actually been updated in the remote
-//	      - check the version before updating, then recheck after and only return it in the result if it changed
 static ExtensionUpdateResult update_extension(DBConfig &config, FileSystem &fs, const string &full_extension_path,
                                               const string &extension_name) {
 	ExtensionUpdateResult result;
@@ -328,7 +325,15 @@ ExtensionUpdateResult ExtensionHelper::UpdateExtension(DBConfig &config, FileSys
 
 	auto full_extension_path = fs.JoinPath(ext_directory, extension_name + ".duckdb_extension");
 
-	return update_extension(config, fs, full_extension_path, extension_name);
+	auto update_result = update_extension(config, fs, full_extension_path, extension_name);
+
+	if (update_result.tag == ExtensionUpdateResultTag::NOT_INSTALLED) {
+		throw InvalidInputException("Failed to update the extension '%s', the extension is not installed!", extension_name);
+	}
+	else if (update_result.tag == ExtensionUpdateResultTag::UNKNOWN) {
+		throw InternalException("Failed to update extension '%s', an unknown error ocurred", extension_name);
+	}
+	return update_result;
 }
 
 void ExtensionHelper::AutoLoadExtension(ClientContext &context, const string &extension_name) {

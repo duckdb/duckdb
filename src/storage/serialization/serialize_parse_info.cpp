@@ -15,6 +15,7 @@
 #include "duckdb/parser/parsed_data/detach_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/parser/parsed_data/load_info.hpp"
+#include "duckdb/parser/parsed_data/update_extensions_info.hpp"
 #include "duckdb/parser/parsed_data/pragma_info.hpp"
 #include "duckdb/parser/parsed_data/transaction_info.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
@@ -55,6 +56,9 @@ unique_ptr<ParseInfo> ParseInfo::Deserialize(Deserializer &deserializer) {
 		break;
 	case ParseInfoType::TRANSACTION_INFO:
 		result = TransactionInfo::Deserialize(deserializer);
+		break;
+	case ParseInfoType::UPDATE_EXTENSIONS_INFO:
+		result = UpdateExtensionsInfo::Deserialize(deserializer);
 		break;
 	case ParseInfoType::VACUUM_INFO:
 		result = VacuumInfo::Deserialize(deserializer);
@@ -462,6 +466,17 @@ void TransactionInfo::Serialize(Serializer &serializer) const {
 unique_ptr<ParseInfo> TransactionInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<TransactionInfo>(new TransactionInfo());
 	deserializer.ReadProperty<TransactionType>(200, "type", result->type);
+	return std::move(result);
+}
+
+void UpdateExtensionsInfo::Serialize(Serializer &serializer) const {
+	ParseInfo::Serialize(serializer);
+	serializer.WritePropertyWithDefault<vector<string>>(200, "extensions_to_update", extensions_to_update);
+}
+
+unique_ptr<ParseInfo> UpdateExtensionsInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<UpdateExtensionsInfo>(new UpdateExtensionsInfo());
+	deserializer.ReadPropertyWithDefault<vector<string>>(200, "extensions_to_update", result->extensions_to_update);
 	return std::move(result);
 }
 

@@ -163,6 +163,8 @@ unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgque
 		return TransformDelete(PGCast<duckdb_libpgquery::PGDeleteStmt>(stmt));
 	case duckdb_libpgquery::T_PGUpdateStmt:
 		return TransformUpdate(PGCast<duckdb_libpgquery::PGUpdateStmt>(stmt));
+	case duckdb_libpgquery::T_PGUpdateExtensionsStmt:
+		return TransformUpdateExtensions(PGCast<duckdb_libpgquery::PGUpdateExtensionsStmt>(stmt));
 	case duckdb_libpgquery::T_PGIndexStmt:
 		return TransformCreateIndex(PGCast<duckdb_libpgquery::PGIndexStmt>(stmt));
 	case duckdb_libpgquery::T_PGAlterTableStmt:

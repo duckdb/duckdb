@@ -509,6 +509,21 @@
     ]
   },
   {
+    "class": "UpdateExtensionsInfo",
+    "base": "ParseInfo",
+    "enum": "UPDATE_EXTENSIONS_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/update_extensions_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "extensions_to_update",
+        "type": "vector<string>"
+      }
+    ]
+  },
+  {
     "class": "PragmaInfo",
     "base": "ParseInfo",
     "enum": "PRAGMA_INFO",

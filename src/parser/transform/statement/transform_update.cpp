@@ -1,4 +1,5 @@
 #include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/statement/update_extensions_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
@@ -34,6 +35,23 @@ unique_ptr<UpdateStatement> Transformer::TransformUpdate(duckdb_libpgquery::PGUp
 	if (stmt.returningList) {
 		TransformExpressionList(*stmt.returningList, result->returning_list);
 	}
+
+	return result;
+}
+
+unique_ptr<UpdateExtensionsStatement> Transformer::TransformUpdateExtensions(duckdb_libpgquery::PGUpdateExtensionsStmt &stmt) {
+	auto result = make_uniq<UpdateExtensionsStatement>();
+	auto info = make_uniq<UpdateExtensionsInfo>();
+
+	if (stmt.extensions) {
+		auto column_list = PGPointerCast<duckdb_libpgquery::PGList>(stmt.extensions);
+		for (auto c = column_list->head; c != nullptr; c = lnext(c)) {
+			auto extension =  reinterpret_cast<duckdb_libpgquery::PGValue *>(c->data.ptr_value)->val.str;
+			info->extensions_to_update.emplace_back(extension);
+		}
+	}
+
+	result->info = std::move(info);
 
 	return result;
 }

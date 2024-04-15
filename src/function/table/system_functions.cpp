@@ -17,7 +17,6 @@ void BuiltinFunctions::RegisterSQLiteFunctions() {
 	PragmaMetadataInfo::RegisterFunction(*this);
 	PragmaDatabaseSize::RegisterFunction(*this);
 	PragmaUserAgent::RegisterFunction(*this);
-	PragmaUpdateExtensions::RegisterFunction(*this);
 
 	DuckDBColumnsFun::RegisterFunction(*this);
 	DuckDBConstraintsFun::RegisterFunction(*this);

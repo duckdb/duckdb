@@ -3361,6 +3361,8 @@ const char* EnumUtil::ToChars<LogicalOperatorType>(LogicalOperatorType value) {
 		return "LOGICAL_LOAD";
 	case LogicalOperatorType::LOGICAL_RESET:
 		return "LOGICAL_RESET";
+	case LogicalOperatorType::LOGICAL_UPDATE_EXTENSIONS:
+		return "LOGICAL_UPDATE_EXTENSIONS";
 	case LogicalOperatorType::LOGICAL_CREATE_SECRET:
 		return "LOGICAL_CREATE_SECRET";
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
@@ -3545,6 +3547,9 @@ LogicalOperatorType EnumUtil::FromString<LogicalOperatorType>(const char *value)
 	}
 	if (StringUtil::Equals(value, "LOGICAL_RESET")) {
 		return LogicalOperatorType::LOGICAL_RESET;
+	}
+	if (StringUtil::Equals(value, "LOGICAL_UPDATE_EXTENSIONS")) {
+		return LogicalOperatorType::LOGICAL_UPDATE_EXTENSIONS;
 	}
 	if (StringUtil::Equals(value, "LOGICAL_CREATE_SECRET")) {
 		return LogicalOperatorType::LOGICAL_CREATE_SECRET;
@@ -4456,6 +4461,8 @@ const char* EnumUtil::ToChars<ParseInfoType>(ParseInfoType value) {
 		return "COMMENT_ON_COLUMN_INFO";
 	case ParseInfoType::COPY_DATABASE_INFO:
 		return "COPY_DATABASE_INFO";
+	case ParseInfoType::UPDATE_EXTENSIONS_INFO:
+		return "UPDATE_EXTENSIONS_INFO";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -4510,6 +4517,9 @@ ParseInfoType EnumUtil::FromString<ParseInfoType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "COPY_DATABASE_INFO")) {
 		return ParseInfoType::COPY_DATABASE_INFO;
+	}
+	if (StringUtil::Equals(value, "UPDATE_EXTENSIONS_INFO")) {
+		return ParseInfoType::UPDATE_EXTENSIONS_INFO;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -4822,6 +4832,8 @@ const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value) 
 		return "EXTENSION";
 	case PhysicalOperatorType::VERIFY_VECTOR:
 		return "VERIFY_VECTOR";
+	case PhysicalOperatorType::UPDATE_EXTENSIONS:
+		return "UPDATE_EXTENSIONS";
 	case PhysicalOperatorType::CREATE_SECRET:
 		return "CREATE_SECRET";
 	default:
@@ -5055,6 +5067,9 @@ PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *valu
 	}
 	if (StringUtil::Equals(value, "VERIFY_VECTOR")) {
 		return PhysicalOperatorType::VERIFY_VECTOR;
+	}
+	if (StringUtil::Equals(value, "UPDATE_EXTENSIONS")) {
+		return PhysicalOperatorType::UPDATE_EXTENSIONS;
 	}
 	if (StringUtil::Equals(value, "CREATE_SECRET")) {
 		return PhysicalOperatorType::CREATE_SECRET;
@@ -6165,6 +6180,8 @@ const char* EnumUtil::ToChars<StatementType>(StatementType value) {
 		return "MULTI_STATEMENT";
 	case StatementType::COPY_DATABASE_STATEMENT:
 		return "COPY_DATABASE_STATEMENT";
+	case StatementType::UPDATE_EXTENSIONS_STATEMENT:
+		return "UPDATE_EXTENSIONS_STATEMENT";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -6258,6 +6275,9 @@ StatementType EnumUtil::FromString<StatementType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "COPY_DATABASE_STATEMENT")) {
 		return StatementType::COPY_DATABASE_STATEMENT;
+	}
+	if (StringUtil::Equals(value, "UPDATE_EXTENSIONS_STATEMENT")) {
+		return StatementType::UPDATE_EXTENSIONS_STATEMENT;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

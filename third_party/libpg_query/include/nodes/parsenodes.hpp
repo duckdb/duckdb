@@ -1897,6 +1897,16 @@ typedef struct PGLoadStmt {
 } PGLoadStmt;
 
 /* ----------------------
+ *		Update Extensions Statement
+ * ----------------------
+ */
+
+typedef struct PGUpdateExtensionsStmt {
+	PGNodeTag type;
+	PGList * extensions;
+} PGUpdateExtensionsStmt;
+
+/* ----------------------
  *		Vacuum and Analyze Statements
  *
  * Even though these are nominally two statements, it's convenient to use
