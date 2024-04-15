@@ -9,8 +9,8 @@
 #include "duckdb/common/thread.hpp"
 #endif
 
-#include <cstdio>
 #include <cinttypes>
+#include <cstdio>
 
 namespace duckdb {
 
@@ -125,6 +125,8 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(DuckDBApiSetting),
     DUCKDB_GLOBAL(CustomUserAgentSetting),
     DUCKDB_LOCAL(PartitionedWriteFlushThreshold),
+    DUCKDB_LOCAL(EnableHTTPLoggingSetting),
+    DUCKDB_LOCAL(HTTPLoggingOutputSetting),
     FINAL_SETTING};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {

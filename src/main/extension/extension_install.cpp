@@ -1,7 +1,9 @@
-#include "duckdb/common/gzip_file_system.hpp"
-#include "duckdb/common/types/uuid.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/exception/http_exception.hpp"
+#include "duckdb/common/gzip_file_system.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/uuid.hpp"
+#include "duckdb/logging/http_logger.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/extension_helper.hpp"
 
 #ifndef DISABLE_DUCKDB_REMOTE_INSTALL
@@ -144,10 +146,12 @@ void ExtensionHelper::InstallExtension(ClientContext &context, const string &ext
 	// Install is currently a no-op
 	return;
 #endif
-	auto &config = DBConfig::GetConfig(context);
+	auto &db_config = DBConfig::GetConfig(context);
 	auto &fs = FileSystem::GetFileSystem(context);
 	string local_path = ExtensionDirectory(context);
-	InstallExtensionInternal(config, fs, local_path, extension, force_install, repository);
+	optional_ptr<HTTPLogger> http_logger =
+	    ClientConfig::GetConfig(context).enable_http_logging ? context.client_data->http_logger.get() : nullptr;
+	InstallExtensionInternal(db_config, fs, local_path, extension, force_install, repository, http_logger);
 }
 
 unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, const string &path, idx_t &file_size) {
@@ -197,7 +201,8 @@ string ExtensionHelper::ExtensionFinalizeUrlTemplate(const string &url_template,
 }
 
 void ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs, const string &local_path,
-                                               const string &extension, bool force_install, const string &repository) {
+                                               const string &extension, bool force_install, const string &repository,
+                                               optional_ptr<HTTPLogger> http_logger) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Installing external extensions is disabled through a compile time flag");
 #else
@@ -281,6 +286,9 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs,
 
 	auto url_base = "http://" + hostname_without_http;
 	duckdb_httplib::Client cli(url_base.c_str());
+	if (http_logger) {
+		cli.set_logger(http_logger->GetLogger());
+	}
 
 	duckdb_httplib::Headers headers = {
 	    {"User-Agent", StringUtil::Format("%s %s", config.UserAgent(), DuckDB::SourceID())}};

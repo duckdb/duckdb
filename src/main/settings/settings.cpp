@@ -1403,4 +1403,34 @@ Value CustomUserAgentSetting::GetSetting(const ClientContext &context) {
 	return Value(config.options.custom_user_agent);
 }
 
+//===--------------------------------------------------------------------===//
+// EnableHTTPLogging Setting
+//===--------------------------------------------------------------------===//
+void EnableHTTPLoggingSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).enable_http_logging = ClientConfig().enable_http_logging;
+}
+
+void EnableHTTPLoggingSetting::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).enable_http_logging = input.GetValue<bool>();
+}
+
+Value EnableHTTPLoggingSetting::GetSetting(const ClientContext &context) {
+	return Value(ClientConfig::GetConfig(context).enable_http_logging);
+}
+
+//===--------------------------------------------------------------------===//
+// HTTPLoggingOutput Setting
+//===--------------------------------------------------------------------===//
+void HTTPLoggingOutputSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).http_logging_output = ClientConfig().http_logging_output;
+}
+
+void HTTPLoggingOutputSetting::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).http_logging_output = input.GetValue<string>();
+}
+
+Value HTTPLoggingOutputSetting::GetSetting(const ClientContext &context) {
+	return Value(ClientConfig::GetConfig(context).http_logging_output);
+}
+
 } // namespace duckdb

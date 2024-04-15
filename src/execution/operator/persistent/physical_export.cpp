@@ -15,8 +15,6 @@
 
 namespace duckdb {
 
-using std::stringstream;
-
 static void WriteCatalogEntries(stringstream &ss, vector<reference<CatalogEntry>> &entries) {
 	for (auto &entry : entries) {
 		if (entry.get().internal) {
