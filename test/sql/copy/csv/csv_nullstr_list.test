@@ -29,6 +29,29 @@ Pedro	31	1.73
 Mark	null	(empty)
 Thijs	26	none
 
+# Test nullstr = []
+statement error
+FROM read_csv('data/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = []);
+----
+CSV Reader function option nullstr requires a non-empty list of possible null strings (varchar) as input
+
+# Test nullstr = ['a', NULL]
+statement error
+FROM read_csv('data/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['a', NULL]);
+----
+CSV Reader function option nullstr does not accept NULL values as a valid nullstr option
+
+# Test nullstr = NULL
+statement error
+FROM read_csv('data/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = NULL);
+----
+CSV Reader function option nullstr requires a string or a list as input
+
+# Test nullstr = [42]
+statement error
+FROM read_csv('data/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = [42]);
+----
+CSV Reader function option nullstr requires a non-empty list of possible null strings (varchar) as input
 
 # Test Null Strings equal to delim quote escape
 statement error

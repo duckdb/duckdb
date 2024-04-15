@@ -293,18 +293,24 @@ bool CSVReaderOptions::SetBaseOption(const string &loption, const Value &value) 
 		auto &child_type = value.type();
 		null_str.clear();
 		if (child_type.id() != LogicalTypeId::LIST && child_type.id() != LogicalTypeId::VARCHAR) {
-			throw BinderException("read_csv %s option requires a string or a list as input", loption);
+			throw BinderException("CSV Reader function option %s requires a string or a list as input", loption);
 		}
 		if (!null_str.empty()) {
-			throw BinderException("read_csv_auto nullstr can only be supplied once");
+			throw BinderException("CSV Reader function option nullstr can only be supplied once");
 		}
 		if (child_type.id() == LogicalTypeId::LIST) {
 			auto &list_child = ListType::GetChildType(child_type);
 			if (list_child.id() != LogicalTypeId::VARCHAR) {
-				throw BinderException("read_csv_auto %s requires a list of types (varchar) as input", loption);
+				throw BinderException("CSV Reader function option %s requires a non-empty list of possible null "
+				                      "strings (varchar) as input",
+				                      loption);
 			}
 			auto &children = ListValue::GetChildren(value);
 			for (auto &child : children) {
+				if (child.IsNull()) {
+					throw BinderException(
+					    "CSV Reader function option %s does not accept NULL values as a valid nullstr option", loption);
+				}
 				null_str.push_back(StringValue::Get(child));
 			}
 		} else {
