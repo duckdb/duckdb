@@ -1946,167 +1946,6 @@ static void sha3Func(
   sqlite3_result_blob(context, SHA3Final(&cx), iSize/8, SQLITE_TRANSIENT);
 }
 
-/* Compute a string using sqlite3_vsnprintf() with a maximum length
-** of 50 bytes and add it to the hash.
-*/
-static void hash_step_vformat(
-  SHA3Context *p,                 /* Add content to this context */
-  const char *zFormat,
-  ...
-){
-  va_list ap;
-  int n;
-  char zBuf[50];
-  va_start(ap, zFormat);
-  sqlite3_vsnprintf(sizeof(zBuf),zBuf,zFormat,ap);
-  va_end(ap);
-  n = (int)strlen(zBuf);
-  SHA3Update(p, (unsigned char*)zBuf, n);
-}
-
-/*
-** Implementation of the sha3_query(SQL,SIZE) function.
-**
-** This function compiles and runs the SQL statement(s) given in the
-** argument. The results are hashed using a SIZE-bit SHA3.  The default
-** size is 256.
-**
-** The format of the byte stream that is hashed is summarized as follows:
-**
-**       S<n>:<sql>
-**       R
-**       N
-**       I<int>
-**       F<ieee-float>
-**       B<size>:<bytes>
-**       T<size>:<text>
-**
-** <sql> is the original SQL text for each statement run and <n> is
-** the size of that text.  The SQL text is UTF-8.  A single R character
-** occurs before the start of each row.  N means a NULL value.
-** I mean an 8-byte little-endian integer <int>.  F is a floating point
-** number with an 8-byte little-endian IEEE floating point value <ieee-float>.
-** B means blobs of <size> bytes.  T means text rendered as <size>
-** bytes of UTF-8.  The <n> and <size> values are expressed as an ASCII
-** text integers.
-**
-** For each SQL statement in the X input, there is one S segment.  Each
-** S segment is followed by zero or more R segments, one for each row in the
-** result set.  After each R, there are one or more N, I, F, B, or T segments,
-** one for each column in the result set.  Segments are concatentated directly
-** with no delimiters of any kind.
-*/
-static void sha3QueryFunc(
-  sqlite3_context *context,
-  int argc,
-  sqlite3_value **argv
-){
-  sqlite3 *db = sqlite3_context_db_handle(context);
-  const char *zSql = (const char*)sqlite3_value_text(argv[0]);
-  sqlite3_stmt *pStmt = 0;
-  int nCol;                   /* Number of columns in the result set */
-  int i;                      /* Loop counter */
-  int rc;
-  int n;
-  const char *z;
-  SHA3Context cx;
-  int iSize;
-
-  if( argc==1 ){
-    iSize = 256;
-  }else{
-    iSize = sqlite3_value_int(argv[1]);
-    if( iSize!=224 && iSize!=256 && iSize!=384 && iSize!=512 ){
-      sqlite3_result_error(context, "SHA3 size should be one of: 224 256 "
-                                    "384 512", -1);
-      return;
-    }
-  }
-  if( zSql==0 ) return;
-  SHA3Init(&cx, iSize);
-  while( zSql[0] ){
-    rc = sqlite3_prepare_v2(db, zSql, -1, &pStmt, &zSql);
-    if( rc ){
-      char *zMsg = sqlite3_mprintf("error SQL statement [%s]: %s",
-                                   zSql, sqlite3_errmsg(db));
-      sqlite3_finalize(pStmt);
-      sqlite3_result_error(context, zMsg, -1);
-      sqlite3_free(zMsg);
-      return;
-    }
-    if( !sqlite3_stmt_readonly(pStmt) ){
-      char *zMsg = sqlite3_mprintf("non-query: [%s]", sqlite3_sql(pStmt));
-      sqlite3_finalize(pStmt);
-      sqlite3_result_error(context, zMsg, -1);
-      sqlite3_free(zMsg);
-      return;
-    }
-    nCol = sqlite3_column_count(pStmt);
-    z = sqlite3_sql(pStmt);
-    n = (int)strlen(z);
-    hash_step_vformat(&cx,"S%d:",n);
-    SHA3Update(&cx,(unsigned char*)z,n);
-
-    /* Compute a hash over the result of the query */
-    while( SQLITE_ROW==sqlite3_step(pStmt) ){
-      SHA3Update(&cx,(const unsigned char*)"R",1);
-      for(i=0; i<nCol; i++){
-        switch( sqlite3_column_type(pStmt,i) ){
-          case SQLITE_NULL: {
-            SHA3Update(&cx, (const unsigned char*)"N",1);
-            break;
-          }
-          case SQLITE_INTEGER: {
-            sqlite3_uint64 u;
-            int j;
-            unsigned char x[9];
-            sqlite3_int64 v = sqlite3_column_int64(pStmt,i);
-            memcpy(&u, &v, 8);
-            for(j=8; j>=1; j--){
-              x[j] = u & 0xff;
-              u >>= 8;
-            }
-            x[0] = 'I';
-            SHA3Update(&cx, x, 9);
-            break;
-          }
-          case SQLITE_FLOAT: {
-            sqlite3_uint64 u;
-            int j;
-            unsigned char x[9];
-            double r = sqlite3_column_double(pStmt,i);
-            memcpy(&u, &r, 8);
-            for(j=8; j>=1; j--){
-              x[j] = u & 0xff;
-              u >>= 8;
-            }
-            x[0] = 'F';
-            SHA3Update(&cx,x,9);
-            break;
-          }
-          case SQLITE_TEXT: {
-            int n2 = sqlite3_column_bytes(pStmt, i);
-            const unsigned char *z2 = sqlite3_column_text(pStmt, i);
-            hash_step_vformat(&cx,"T%d:",n2);
-            SHA3Update(&cx, z2, n2);
-            break;
-          }
-          case SQLITE_BLOB: {
-            int n2 = sqlite3_column_bytes(pStmt, i);
-            const unsigned char *z2 = sqlite3_column_blob(pStmt, i);
-            hash_step_vformat(&cx,"B%d:",n2);
-            SHA3Update(&cx, z2, n2);
-            break;
-          }
-        }
-      }
-    }
-    sqlite3_finalize(pStmt);
-  }
-  sqlite3_result_blob(context, SHA3Final(&cx), iSize/8, SQLITE_TRANSIENT);
-}
-
-
 #ifdef _WIN32
 
 #endif
@@ -2125,16 +1964,6 @@ int sqlite3_shathree_init(
     rc = sqlite3_create_function(db, "sha3", 2,
                       SQLITE_UTF8 | SQLITE_INNOCUOUS | SQLITE_DETERMINISTIC,
                       0, sha3Func, 0, 0);
-  }
-  if( rc==SQLITE_OK ){
-    rc = sqlite3_create_function(db, "sha3_query", 1,
-                      SQLITE_UTF8 | SQLITE_DIRECTONLY,
-                      0, sha3QueryFunc, 0, 0);
-  }
-  if( rc==SQLITE_OK ){
-    rc = sqlite3_create_function(db, "sha3_query", 2,
-                      SQLITE_UTF8 | SQLITE_DIRECTONLY,
-                      0, sha3QueryFunc, 0, 0);
   }
   return rc;
 }
@@ -14082,36 +13911,6 @@ readHexDb_error:
 #endif /* SQLITE_ENABLE_DESERIALIZE */
 
 /*
-** Scalar function "shell_int32". The first argument to this function
-** must be a blob. The second a non-negative integer. This function
-** reads and returns a 32-bit big-endian integer from byte
-** offset (4*<arg2>) of the blob.
-*/
-static void shellInt32(
-  sqlite3_context *context,
-  int argc,
-  sqlite3_value **argv
-){
-  const unsigned char *pBlob;
-  int nBlob;
-  int iInt;
-
-  UNUSED_PARAMETER(argc);
-  nBlob = sqlite3_value_bytes(argv[0]);
-  pBlob = (const unsigned char*)sqlite3_value_blob(argv[0]);
-  iInt = sqlite3_value_int(argv[1]);
-
-  if( iInt>=0 && (iInt+1)*4<=nBlob ){
-    const unsigned char *a = &pBlob[iInt*4];
-    sqlite3_int64 iVal = ((sqlite3_int64)a[0]<<24)
-                       + ((sqlite3_int64)a[1]<<16)
-                       + ((sqlite3_int64)a[2]<< 8)
-                       + ((sqlite3_int64)a[3]<< 0);
-    sqlite3_result_int64(context, iVal);
-  }
-}
-
-/*
 ** Scalar function "shell_idquote(X)" returns string X quoted as an identifier,
 ** using "..." with internal double-quote characters doubled.
 */
@@ -14288,8 +14087,6 @@ static void open_db(ShellState *p, int openFlags){
     sqlite3_fileio_init(p->db, 0, 0);
     sqlite3_shathree_init(p->db, 0, 0);
     sqlite3_completion_init(p->db, 0, 0);
-    sqlite3_uint_init(p->db, 0, 0);
-    sqlite3_decimal_init(p->db, 0, 0);
 #if !defined(SQLITE_OMIT_VIRTUALTABLE) && defined(SQLITE_ENABLE_DBPAGE_VTAB)
     sqlite3_dbdata_init(p->db, 0, 0);
 #endif
@@ -14305,8 +14102,6 @@ static void open_db(ShellState *p, int openFlags){
                             shellPutsFunc, 0, 0);
     sqlite3_create_function(p->db, "shell_escape_crnl", 1, SQLITE_UTF8, 0,
                             shellEscapeCrnl, 0, 0);
-    sqlite3_create_function(p->db, "shell_int32", 2, SQLITE_UTF8, 0,
-                            shellInt32, 0, 0);
     sqlite3_create_function(p->db, "shell_idquote", 1, SQLITE_UTF8, 0,
                             shellIdQuote, 0, 0);
 #ifndef SQLITE_NOHAVE_SYSTEM

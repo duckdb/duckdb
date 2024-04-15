@@ -43,7 +43,7 @@ void SelectBindState::AddRegularColumn() {
 }
 
 idx_t SelectBindState::GetFinalIndex(idx_t index) const {
-	if (expanded_column_indices.empty()) {
+	if (index >= expanded_column_indices.size()) {
 		return index;
 	}
 	return expanded_column_indices[index];
