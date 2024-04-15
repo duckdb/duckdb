@@ -96,9 +96,6 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             # Yield once to represent one iteration, do not touch the keywords
             yield None
 
-        if self.test.skipped:
-            return ExecuteResult(ExecuteResult.Type.SKIPPED)
-
         self.database = SQLLogicDatabase(':memory:', None)
         pool = self.database.connect()
         context = SQLLogicContext(pool, self, test.statements, keywords, update_value)
@@ -176,10 +173,8 @@ def main():
         try:
             test = sql_parser.parse(file_path)
         except SQLParserException as e:
-            if not ("test" in locals()):  # test hasn't been initialized because of the raised exception
-                test = SQLLogicTest("")
-            test.skip(True)
             executor.skip_log.append(str(e.message))
+            continue
 
         print(f'[{i}/{total_tests}] {file_path}')
         # This is necessary to clean up databases/connections
