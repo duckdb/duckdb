@@ -173,12 +173,11 @@ def main():
         if test_directory:
             file_path = os.path.join(test_directory, file_path)
 
-        test = SQLLogicTest("")
         try:
             test = sql_parser.parse(file_path)
-            if not test:
-                raise SQLParserException(f'failed to parse {file_path}')
         except SQLParserException as e:
+            if not ("test" in locals()):  # test hasn't been initialized because of the raised exception
+                test = SQLLogicTest("")
             test.skip(True)
             executor.skip_log.append(str(e.message))
 

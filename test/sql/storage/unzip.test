@@ -2,6 +2,16 @@
 # description: Support gzipped files in the test runner
 # group: [storage]
 
+# data/storage/index_0-9-1.db was written with a 64-bit version of duckdb
+require 64bit
+
+require block_size 262144
+
+require vector_size 2048
+
+statement ok
+PRAGMA enable_verification
+
 # unzip to specific path
 unzip data/storage/test.db.gz __TEST_DIR__/test.db
 
