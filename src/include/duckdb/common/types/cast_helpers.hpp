@@ -61,17 +61,15 @@ public:
 
 	template <class T>
 	static string_t FormatSigned(T value, Vector &vector) {
-		auto is_negative = (value < 0);
-		auto unsigned_value = static_cast<typename MakeUnsigned<T>::type>(AbsValue(value));
-		auto length = UnsignedLength(unsigned_value);
-		if (is_negative) {
-			length++;
-		}
-		auto result = StringVector::EmptyString(vector, UnsafeNumericCast<idx_t>(length));
+		typedef typename MakeUnsigned<T>::type UNSIGNED;
+		int8_t sign = -(value < 0);
+		UNSIGNED unsigned_value = UNSIGNED(value ^ T(sign)) + UNSIGNED(AbsValue(sign));
+		auto length = UnsafeNumericCast<idx_t>(UnsignedLength<UNSIGNED>(unsigned_value) + AbsValue(sign));
+		string_t result = StringVector::EmptyString(vector, length);
 		auto dataptr = result.GetDataWriteable();
 		auto endptr = dataptr + length;
 		endptr = FormatUnsigned(unsigned_value, endptr);
-		if (is_negative) {
+		if (sign) {
 			*--endptr = '-';
 		}
 		result.Finalize();
