@@ -21,7 +21,7 @@ namespace duckdb {
 //! 1. duckdb_httplib
 //! 2. duckdb_httplib_openssl
 //! These have essentially the same code, but we cannot convert between them
-//! We get around that by templating everything
+//! We get around that by templating everything, which requires implementing everything in the header
 class HTTPLogger {
 public:
 	explicit HTTPLogger(ClientContext &context_p) : context(context_p) {

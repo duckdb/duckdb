@@ -15,6 +15,8 @@ class Client;
 
 namespace duckdb {
 
+class HTTPLogger;
+
 using HeaderMap = case_insensitive_map_t<string>;
 
 // avoid including httplib in header
@@ -59,6 +61,7 @@ public:
 
 	// We keep an http client stored for connection reuse with keep-alive headers
 	duckdb::unique_ptr<duckdb_httplib_openssl::Client> http_client;
+	optional_ptr<HTTPLogger> http_logger;
 
 	const HTTPParams http_params;
 
@@ -93,8 +96,8 @@ protected:
 
 class HTTPFileSystem : public FileSystem {
 public:
-	static duckdb::unique_ptr<duckdb_httplib_openssl::Client> GetClient(const HTTPParams &http_params,
-	                                                                    const char *proto_host_port);
+	static duckdb::unique_ptr<duckdb_httplib_openssl::Client>
+	GetClient(const HTTPParams &http_params, const char *proto_host_port, optional_ptr<HTTPFileHandle> hfs);
 	static void ParseUrl(string &url, string &path_out, string &proto_host_port_out);
 	duckdb::unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
 	                                        optional_ptr<FileOpener> opener = nullptr) final;

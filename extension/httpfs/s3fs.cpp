@@ -364,7 +364,7 @@ void S3FileHandle::InitializeClient(optional_ptr<ClientContext> client_context) 
 	auto parsed_url = S3FileSystem::S3UrlParse(path, this->auth_params);
 
 	string proto_host_port = parsed_url.http_proto + parsed_url.host;
-	http_client = HTTPFileSystem::GetClient(this->http_params, proto_host_port.c_str());
+	http_client = HTTPFileSystem::GetClient(this->http_params, proto_host_port.c_str(), this);
 }
 
 // Opens the multipart upload and returns the ID
@@ -1118,8 +1118,8 @@ string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthPar
 	    create_s3_header(req_path, req_params, parsed_url.host, "s3", "GET", s3_auth_params, "", "", "", "");
 	auto headers = initialize_http_headers(header_map);
 
-	auto client = S3FileSystem::GetClient(
-	    http_params, (parsed_url.http_proto + parsed_url.host).c_str()); // Get requests use fresh connection
+	auto client = S3FileSystem::GetClient(http_params, (parsed_url.http_proto + parsed_url.host).c_str(),
+	                                      nullptr); // Get requests use fresh connection
 	std::stringstream response;
 	auto res = client->Get(
 	    listobjectv2_url.c_str(), *headers,
