@@ -45,7 +45,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSimple &op
 		return make_uniq<PhysicalDetach>(unique_ptr_cast<ParseInfo, DetachInfo>(std::move(op.info)),
 		                                 op.estimated_cardinality);
 	case LogicalOperatorType::LOGICAL_UPDATE_EXTENSIONS:
-		return make_uniq<PhysicalUpdateExtensions>(unique_ptr_cast<ParseInfo, UpdateExtensionsInfo>(std::move(op.info)),  op.estimated_cardinality);
+		return make_uniq<PhysicalUpdateExtensions>(unique_ptr_cast<ParseInfo, UpdateExtensionsInfo>(std::move(op.info)),
+		                                           op.estimated_cardinality);
 	default:
 		throw NotImplementedException("Unimplemented type for logical simple operator");
 	}

@@ -269,8 +269,7 @@ static ExtensionUpdateResult update_extension(DBConfig &config, FileSystem &fs, 
 			install_result = ExtensionHelper::InstallExtension(config, fs, extension_name, true, result.repository);
 		} catch (std::exception &e) {
 			ErrorData error(e);
-			error.Throw("Extension updating failed when trying to install '" + extension_name +
-						"', original error: ");
+			error.Throw("Extension updating failed when trying to install '" + extension_name + "', original error: ");
 		}
 
 		result.installed_version = install_result->version;
@@ -328,9 +327,9 @@ ExtensionUpdateResult ExtensionHelper::UpdateExtension(DBConfig &config, FileSys
 	auto update_result = update_extension(config, fs, full_extension_path, extension_name);
 
 	if (update_result.tag == ExtensionUpdateResultTag::NOT_INSTALLED) {
-		throw InvalidInputException("Failed to update the extension '%s', the extension is not installed!", extension_name);
-	}
-	else if (update_result.tag == ExtensionUpdateResultTag::UNKNOWN) {
+		throw InvalidInputException("Failed to update the extension '%s', the extension is not installed!",
+		                            extension_name);
+	} else if (update_result.tag == ExtensionUpdateResultTag::UNKNOWN) {
 		throw InternalException("Failed to update extension '%s', an unknown error ocurred", extension_name);
 	}
 	return update_result;

@@ -39,14 +39,15 @@ unique_ptr<UpdateStatement> Transformer::TransformUpdate(duckdb_libpgquery::PGUp
 	return result;
 }
 
-unique_ptr<UpdateExtensionsStatement> Transformer::TransformUpdateExtensions(duckdb_libpgquery::PGUpdateExtensionsStmt &stmt) {
+unique_ptr<UpdateExtensionsStatement>
+Transformer::TransformUpdateExtensions(duckdb_libpgquery::PGUpdateExtensionsStmt &stmt) {
 	auto result = make_uniq<UpdateExtensionsStatement>();
 	auto info = make_uniq<UpdateExtensionsInfo>();
 
 	if (stmt.extensions) {
 		auto column_list = PGPointerCast<duckdb_libpgquery::PGList>(stmt.extensions);
 		for (auto c = column_list->head; c != nullptr; c = lnext(c)) {
-			auto extension =  reinterpret_cast<duckdb_libpgquery::PGValue *>(c->data.ptr_value)->val.str;
+			auto extension = reinterpret_cast<duckdb_libpgquery::PGValue *>(c->data.ptr_value)->val.str;
 			info->extensions_to_update.emplace_back(extension);
 		}
 	}

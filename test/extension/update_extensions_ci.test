@@ -1,4 +1,4 @@
-# name: test/extension/update_extensions.test
+# name: test/extension/update_extensions_ci.test
 # description: Tests for the update extensions statement
 # group: [extension]
 

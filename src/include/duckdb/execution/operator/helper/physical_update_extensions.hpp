@@ -31,7 +31,9 @@ public:
 	explicit PhysicalUpdateExtensions(unique_ptr<UpdateExtensionsInfo> info, idx_t estimated_cardinality)
 	    : PhysicalOperator(PhysicalOperatorType::UPDATE_EXTENSIONS,
 	                       {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR,
-	                        LogicalType::VARCHAR}, estimated_cardinality), info(std::move(info)){
+	                        LogicalType::VARCHAR},
+	                       estimated_cardinality),
+	      info(std::move(info)) {
 	}
 
 	unique_ptr<UpdateExtensionsInfo> info;

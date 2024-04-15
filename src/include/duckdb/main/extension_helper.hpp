@@ -75,10 +75,12 @@ public:
 	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension);
 
 	//! Install an extension
-	static unique_ptr<ExtensionInstallInfo> InstallExtension(ClientContext &context, const string &extension, bool force_install,
-	                             const string &repository = "", const string &version = "");
-	static unique_ptr<ExtensionInstallInfo> InstallExtension(DBConfig &config, FileSystem &fs, const string &extension, bool force_install,
-	                             const string &respository = "", const string &version = "");
+	static unique_ptr<ExtensionInstallInfo> InstallExtension(ClientContext &context, const string &extension,
+	                                                         bool force_install, const string &repository = "",
+	                                                         const string &version = "");
+	static unique_ptr<ExtensionInstallInfo> InstallExtension(DBConfig &config, FileSystem &fs, const string &extension,
+	                                                         bool force_install, const string &respository = "",
+	                                                         const string &version = "");
 	//! Load an extension
 	static void LoadExternalExtension(ClientContext &context, const string &extension);
 	static void LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const string &extension);
@@ -102,7 +104,7 @@ public:
 	static string ExtensionDirectory(DBConfig &config, FileSystem &fs);
 
 	static bool CheckExtensionSignature(FileHandle &handle, ParsedExtensionMetaData &parsed_metadata);
-	static ParsedExtensionMetaData ParseExtensionMetaData(const char* metadata);
+	static ParsedExtensionMetaData ParseExtensionMetaData(const char *metadata);
 	static ParsedExtensionMetaData ParseExtensionMetaData(FileHandle &handle);
 
 	//! Get the extension url template, containing placeholders for version, platform and extension name
@@ -198,9 +200,10 @@ public:
 	static bool CreateSuggestions(const string &extension_name, string &message);
 
 private:
-	static unique_ptr<ExtensionInstallInfo> InstallExtensionInternal(DBConfig &config, FileSystem &fs, const string &local_path,
-	                                     const string &extension, bool force_install, const string &repository,
-	                                     const string &version);
+	static unique_ptr<ExtensionInstallInfo> InstallExtensionInternal(DBConfig &config, FileSystem &fs,
+	                                                                 const string &local_path, const string &extension,
+	                                                                 bool force_install, const string &repository,
+	                                                                 const string &version);
 	static const vector<string> PathComponents();
 	static string DefaultExtensionFolder(FileSystem &fs);
 	static bool AllowAutoInstall(const string &extension);

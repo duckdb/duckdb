@@ -131,8 +131,9 @@ bool ExtensionHelper::CreateSuggestions(const string &extension_name, string &me
 	return false;
 }
 
-unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtension(DBConfig &config, FileSystem &fs, const string &extension, bool force_install,
-                                       const string &repository, const string &version) {
+unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtension(DBConfig &config, FileSystem &fs,
+                                                                   const string &extension, bool force_install,
+                                                                   const string &repository, const string &version) {
 #ifdef WASM_LOADABLE_EXTENSIONS
 	// Install is currently a no-op
 	return nullptr;
@@ -141,8 +142,9 @@ unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtension(DBConfig &con
 	return InstallExtensionInternal(config, fs, local_path, extension, force_install, repository, version);
 }
 
-unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtension(ClientContext &context, const string &extension, bool force_install,
-                                       const string &repository, const string &version) {
+unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtension(ClientContext &context, const string &extension,
+                                                                   bool force_install, const string &repository,
+                                                                   const string &version) {
 #ifdef WASM_LOADABLE_EXTENSIONS
 	// Install is currently a no-op
 	return nullptr;
@@ -241,7 +243,8 @@ static void WriteExtensionFiles(FileSystem &fs, const string &temp_path, const s
 	fs.MoveFile(temp_path, local_extension_path);
 
 	// This is the moment to parse the metadata to get the version info from the buffer
-	auto parsed_metadata = ExtensionHelper::ParseExtensionMetaData(static_cast<char*>(in_buffer) + (file_size - ParsedExtensionMetaData::FOOTER_SIZE));
+	auto parsed_metadata = ExtensionHelper::ParseExtensionMetaData(static_cast<char *>(in_buffer) +
+	                                                               (file_size - ParsedExtensionMetaData::FOOTER_SIZE));
 	if (parsed_metadata.AppearsValid()) {
 		info.version = parsed_metadata.extension_version;
 	}
@@ -261,9 +264,10 @@ static void WriteExtensionFiles(FileSystem &fs, const string &temp_path, const s
 }
 
 // Install an extension using a filesystem
-static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DBConfig &config, FileSystem &fs, const string &path, const string &temp_path,
-                                   const string &extension_name, const string &local_extension_path,
-                                   bool force_install, const string &repository_url="") {
+static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DBConfig &config, FileSystem &fs, const string &path,
+                                                               const string &temp_path, const string &extension_name,
+                                                               const string &local_extension_path, bool force_install,
+                                                               const string &repository_url = "") {
 	string file = fs.ConvertSeparators(path);
 	if (!fs.FileExists(file)) {
 		// check for non-gzipped variant
@@ -292,9 +296,10 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DBConfig &config,
 	return make_uniq<ExtensionInstallInfo>(info);
 }
 
-static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DBConfig &config, const string &url, const string &extension_name,
-                               const string &repository_url, const string &temp_path, const string &local_extension_path,
-                               bool force_install) {
+static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DBConfig &config, const string &url,
+                                                           const string &extension_name, const string &repository_url,
+                                                           const string &temp_path, const string &local_extension_path,
+                                                           bool force_install) {
 	string no_http = StringUtil::Replace(url, "http://", "");
 
 	idx_t next = no_http.find('/', 0);
@@ -344,18 +349,22 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DBConfig &config, con
 }
 
 // Install an extension using a hand-rolled http request
-static unique_ptr<ExtensionInstallInfo> InstallFromHttpRepository(DBConfig &config, const string &url, const string &extension_name,
-                                        const string &repository_url, const string &temp_path, const string &local_extension_path,
-                                        const string &version, bool force_install) {
+static unique_ptr<ExtensionInstallInfo> InstallFromHttpRepository(DBConfig &config, const string &url,
+                                                                  const string &extension_name,
+                                                                  const string &repository_url, const string &temp_path,
+                                                                  const string &local_extension_path,
+                                                                  const string &version, bool force_install) {
 	string url_template = ExtensionHelper::ExtensionUrlTemplate(&config, repository_url, version);
 	string generated_url = ExtensionHelper::ExtensionFinalizeUrlTemplate(url_template, extension_name);
 	return InstallFromHttpUrl(config, generated_url, extension_name, repository_url, temp_path, local_extension_path,
 	                          force_install);
 }
 
-unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs, const string &local_path,
-                                               const string &extension, bool force_install, const string &repository,
-                                               const string &version) {
+unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs,
+                                                                           const string &local_path,
+                                                                           const string &extension, bool force_install,
+                                                                           const string &repository,
+                                                                           const string &version) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Installing external extensions is disabled through a compile time flag");
 #else
@@ -389,7 +398,9 @@ unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtensionInternal(DBCon
 		string url_template = ExtensionHelper::ExtensionUrlTemplate(&config, repository, version);
 		string local_repo_path = ExtensionHelper::ExtensionFinalizeUrlTemplate(url_template, extension_name);
 
-		return DirectInstallExtension(config, fs, local_repo_path, temp_path, extension, local_extension_path, force_install, repository_url);;
+		return DirectInstallExtension(config, fs, local_repo_path, temp_path, extension, local_extension_path,
+		                              force_install, repository_url);
+		;
 	}
 
 #ifdef DISABLE_DUCKDB_REMOTE_INSTALL
@@ -404,11 +415,12 @@ unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtensionInternal(DBCon
 
 	if (StringUtil::StartsWith(extension, "http://")) {
 		// Extension is a full http:// path
-		return InstallFromHttpUrl(config, extension, extension_name, "", temp_path, local_extension_path, force_install);
+		return InstallFromHttpUrl(config, extension, extension_name, "", temp_path, local_extension_path,
+		                          force_install);
 	} else {
 		// Extension is a regular remote repository
-		return InstallFromHttpRepository(config, extension, extension_name, repository_url, temp_path, local_extension_path,
-		                      version, force_install);
+		return InstallFromHttpRepository(config, extension, extension_name, repository_url, temp_path,
+		                                 local_extension_path, version, force_install);
 	}
 
 #endif

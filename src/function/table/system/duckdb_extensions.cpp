@@ -196,7 +196,6 @@ void DuckDBExtensionsFunction(ClientContext &context, TableFunctionInput &data_p
 		// installed_source LogicalType::VARCHAR
 		output.SetValue(8, count, Value(entry.installed_from));
 
-
 		data.offset++;
 		count++;
 	}

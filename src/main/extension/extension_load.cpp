@@ -91,12 +91,12 @@ static string PrettyPrintString(const string &s) {
 	return res;
 }
 
-ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(const char* metadata) {
+ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(const char *metadata) {
 	ParsedExtensionMetaData result;
 
 	vector<string> metadata_field;
 	for (idx_t i = 0; i < 8; i++) {
-		string field = string(metadata + i*32, 32);
+		string field = string(metadata + i * 32, 32);
 		metadata_field.emplace_back(field);
 	}
 
@@ -125,7 +125,8 @@ ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(FileHandle &hand
 		    handle.path, engine_version, engine_platform);
 	}
 
-	handle.Read((void *)metadata_segment.data(), metadata_segment.size(), handle.GetFileSize() - ParsedExtensionMetaData::FOOTER_SIZE);
+	handle.Read((void *)metadata_segment.data(), metadata_segment.size(),
+	            handle.GetFileSize() - ParsedExtensionMetaData::FOOTER_SIZE);
 
 	return ParseExtensionMetaData(metadata_segment.data());
 }

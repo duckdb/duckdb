@@ -3,7 +3,8 @@
 
 namespace duckdb {
 
-SourceResultType PhysicalUpdateExtensions::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+SourceResultType PhysicalUpdateExtensions::GetData(ExecutionContext &context, DataChunk &chunk,
+                                                   OperatorSourceInput &input) const {
 	auto &data = input.global_state.Cast<UpdateExtensionsGlobalState>();
 
 	if (data.offset >= data.update_result_entries.size()) {
@@ -33,12 +34,12 @@ SourceResultType PhysicalUpdateExtensions::GetData(ExecutionContext &context, Da
 	}
 	chunk.SetCardinality(count);
 
-	return data.offset >= data.update_result_entries.size() ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
+	return data.offset >= data.update_result_entries.size() ? SourceResultType::FINISHED
+	                                                        : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 unique_ptr<GlobalSourceState> PhysicalUpdateExtensions::GetGlobalSourceState(ClientContext &context) const {
 	auto res = make_uniq<UpdateExtensionsGlobalState>();
-
 
 	if (info->extensions_to_update.empty()) {
 		// Update all
@@ -50,7 +51,6 @@ unique_ptr<GlobalSourceState> PhysicalUpdateExtensions::GetGlobalSourceState(Cli
 		}
 	}
 	// TODO: update specific extensions;
-
 
 	return std::move(res);
 }

@@ -23,12 +23,12 @@ public:
 	DUCKDB_API virtual std::string Name() = 0;
 };
 
-
 //! The parsed extension metadata footer
 struct ParsedExtensionMetaData {
 	static constexpr const idx_t FOOTER_SIZE = 512;
 	static constexpr const idx_t SIGNATURE_SIZE = 256;
-	static constexpr const char* EXPECTED_MAGIC_VALUE = {"4\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"};
+	static constexpr const char *EXPECTED_MAGIC_VALUE = {
+	    "4\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"};
 
 	string magic_value;
 
