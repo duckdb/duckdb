@@ -22,7 +22,7 @@ public:
 
 public:
 	LogicalVacuum();
-	LogicalVacuum(unique_ptr<VacuumInfo> info);
+	explicit LogicalVacuum(unique_ptr<VacuumInfo> info);
 
 public:
 	VacuumInfo &GetInfo() {
