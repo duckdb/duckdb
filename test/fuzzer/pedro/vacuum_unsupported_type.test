@@ -2,11 +2,8 @@
 # description: Vacuum a table with arrays
 # group: [pedro]
 
-#statement ok
-#pragma enable_verification
-
 statement ok
-pragma verify_serializer
+pragma enable_verification
 
 statement ok
 CREATE TABLE t1 AS (VALUES ([], {'a': []}));
