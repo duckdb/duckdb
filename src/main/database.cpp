@@ -71,11 +71,19 @@ BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {
 	return db.GetBufferManager();
 }
 
+const BufferManager &BufferManager::GetBufferManager(const DatabaseInstance &db) {
+	return db.GetBufferManager();
+}
+
 BufferManager &BufferManager::GetBufferManager(AttachedDatabase &db) {
 	return BufferManager::GetBufferManager(db.GetDatabase());
 }
 
 DatabaseInstance &DatabaseInstance::GetDatabase(ClientContext &context) {
+	return *context.db;
+}
+
+const DatabaseInstance &DatabaseInstance::GetDatabase(const ClientContext &context) {
 	return *context.db;
 }
 
@@ -288,6 +296,10 @@ BufferManager &DatabaseInstance::GetBufferManager() {
 	return *buffer_manager;
 }
 
+const BufferManager &DatabaseInstance::GetBufferManager() const {
+	return *buffer_manager;
+}
+
 BufferPool &DatabaseInstance::GetBufferPool() const {
 	return *config.buffer_pool;
 }
@@ -388,6 +400,10 @@ const unordered_set<std::string> &DatabaseInstance::LoadedExtensions() {
 	return loaded_extensions;
 }
 
+const unordered_map<std::string, ExtensionInfo> &DatabaseInstance::LoadedExtensionsData() {
+	return loaded_extensions_data;
+}
+
 idx_t DuckDB::NumberOfThreads() {
 	return instance->NumberOfThreads();
 }
@@ -401,9 +417,10 @@ bool DuckDB::ExtensionIsLoaded(const std::string &name) {
 	return instance->ExtensionIsLoaded(name);
 }
 
-void DatabaseInstance::SetExtensionLoaded(const std::string &name) {
+void DatabaseInstance::SetExtensionLoaded(const std::string &name, const std::string &extension_version) {
 	auto extension_name = ExtensionHelper::GetExtensionName(name);
 	loaded_extensions.insert(extension_name);
+	loaded_extensions_data.insert({extension_name, ExtensionInfo(extension_version)});
 
 	auto &callbacks = DBConfig::GetConfig(*this).extension_callbacks;
 	for (auto &callback : callbacks) {
@@ -411,7 +428,7 @@ void DatabaseInstance::SetExtensionLoaded(const std::string &name) {
 	}
 }
 
-SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) {
+SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) const {
 	// check the session values
 	auto &db_config = DBConfig::GetConfig(*this);
 	const auto &global_config_map = db_config.options.set_variables;
