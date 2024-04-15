@@ -250,7 +250,7 @@ void CSVReaderOptions::SetWriteOption(const string &loption, const Value &value)
 		return;
 	}
 
-	if (SetBaseOption(loption, value)) {
+	if (SetBaseOption(loption, value, true)) {
 		return;
 	}
 
@@ -275,7 +275,7 @@ void CSVReaderOptions::SetWriteOption(const string &loption, const Value &value)
 	}
 }
 
-bool CSVReaderOptions::SetBaseOption(const string &loption, const Value &value) {
+bool CSVReaderOptions::SetBaseOption(const string &loption, const Value &value, bool write_option) {
 	// Make sure this function was only called after the option was turned into lowercase
 	D_ASSERT(!std::any_of(loption.begin(), loption.end(), ::isupper));
 
@@ -300,13 +300,26 @@ bool CSVReaderOptions::SetBaseOption(const string &loption, const Value &value) 
 		}
 		if (child_type.id() == LogicalTypeId::LIST) {
 			auto &list_child = ListType::GetChildType(child_type);
-			if (list_child.id() != LogicalTypeId::VARCHAR) {
+			const vector<Value> *children = nullptr;
+			if (list_child.id() == LogicalTypeId::LIST) {
+				// This can happen if it comes from a copy FROM/TO
+				auto &list_grandchild = ListType::GetChildType(list_child);
+				auto &children_ref = ListValue::GetChildren(value);
+				if (list_grandchild.id() != LogicalTypeId::VARCHAR || children_ref.size() != 1) {
+					throw BinderException("CSV Reader function option %s requires a non-empty list of possible null "
+					                      "strings (varchar) as input",
+					                      loption);
+				}
+				children = &ListValue::GetChildren(children_ref.back());
+			} else if (list_child.id() != LogicalTypeId::VARCHAR) {
 				throw BinderException("CSV Reader function option %s requires a non-empty list of possible null "
 				                      "strings (varchar) as input",
 				                      loption);
 			}
-			auto &children = ListValue::GetChildren(value);
-			for (auto &child : children) {
+			if (!children) {
+				children = &ListValue::GetChildren(value);
+			}
+			for (auto &child : *children) {
 				if (child.IsNull()) {
 					throw BinderException(
 					    "CSV Reader function option %s does not accept NULL values as a valid nullstr option", loption);
@@ -315,6 +328,9 @@ bool CSVReaderOptions::SetBaseOption(const string &loption, const Value &value) 
 			}
 		} else {
 			null_str.push_back(StringValue::Get(ParseString(value, loption)));
+		}
+		if (null_str.size() > 1 && write_option) {
+			throw BinderException("CSV Writer function option %s only accepts one nullstr value.", loption);
 		}
 
 	} else if (loption == "encoding") {
