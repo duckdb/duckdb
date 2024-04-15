@@ -57,7 +57,20 @@ string CreateIndexInfo::ToString() const {
 		// column ref expressions are qualified with the table name
 		// we need to remove them to reproduce the original query
 		RemoveTableQualificationRecursive(copy, table);
-		result += copy->ToString();
+		bool add_parenthesis = true;
+		if (copy->type == ExpressionType::COLUMN_REF) {
+			auto &column_ref = copy->Cast<ColumnRefExpression>();
+			if (!column_ref.IsQualified()) {
+				// Only when column references are not qualified, i.e (col1, col2)
+				// then these expressions do not need to be wrapped in parenthesis
+				add_parenthesis = false;
+			}
+		}
+		if (add_parenthesis) {
+			result += StringUtil::Format("(%s)", copy->ToString());
+		} else {
+			result += StringUtil::Format("%s", copy->ToString());
+		}
 	}
 	result += ")";
 	if (!options.empty()) {
@@ -72,6 +85,7 @@ string CreateIndexInfo::ToString() const {
 		}
 		result += " )";
 	}
+	result += ";";
 	return result;
 }
 
