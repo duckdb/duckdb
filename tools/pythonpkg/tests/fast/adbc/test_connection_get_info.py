@@ -6,6 +6,8 @@ import pytest
 pa = pytest.importorskip("pyarrow")
 adbc_driver_manager = pytest.importorskip("adbc_driver_manager")
 
+@pytest.mark.skipif(sys.version_info < (3, 9), reason="Requires python 3.9")
+
 try:
     adbc_driver_duckdb = pytest.importorskip("adbc_driver_duckdb.dbapi")
     con = adbc_driver_duckdb.connect()

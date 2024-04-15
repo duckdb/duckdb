@@ -4,6 +4,8 @@ import sys
 import datetime
 import os
 
+@pytest.mark.skipif(sys.version_info < (3, 9), reason="Requires python 3.9")
+
 adbc_driver_manager = pytest.importorskip("adbc_driver_manager.dbapi")
 adbc_driver_manager_lib = pytest.importorskip("adbc_driver_manager._lib")
 

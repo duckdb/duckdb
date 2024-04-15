@@ -9,6 +9,7 @@ adbc_driver_duckdb = pytest.importorskip("adbc_driver_duckdb.dbapi")
 con = adbc_driver_duckdb.connect()
 
 
+@pytest.mark.skipif(sys.version_info < (3, 9), reason="Requires python 3.9")
 def _import(handle):
     """Helper to import a C Data Interface handle."""
     if isinstance(handle, adbc_driver_manager.ArrowArrayStreamHandle):
