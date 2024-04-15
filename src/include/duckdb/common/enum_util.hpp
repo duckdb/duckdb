@@ -128,6 +128,8 @@ enum class ExtensionInstallMode : uint8_t;
 
 enum class ExtensionLoadResult : uint8_t;
 
+enum class ExtensionUpdateResultTag : uint8_t;
+
 enum class ExternalDependenciesType : uint8_t;
 
 enum class ExtraDropInfoType : uint8_t;
@@ -470,6 +472,9 @@ const char* EnumUtil::ToChars<ExtensionInstallMode>(ExtensionInstallMode value);
 
 template<>
 const char* EnumUtil::ToChars<ExtensionLoadResult>(ExtensionLoadResult value);
+
+template<>
+const char* EnumUtil::ToChars<ExtensionUpdateResultTag>(ExtensionUpdateResultTag value);
 
 template<>
 const char* EnumUtil::ToChars<ExternalDependenciesType>(ExternalDependenciesType value);
@@ -912,6 +917,9 @@ ExtensionInstallMode EnumUtil::FromString<ExtensionInstallMode>(const char *valu
 
 template<>
 ExtensionLoadResult EnumUtil::FromString<ExtensionLoadResult>(const char *value);
+
+template<>
+ExtensionUpdateResultTag EnumUtil::FromString<ExtensionUpdateResultTag>(const char *value);
 
 template<>
 ExternalDependenciesType EnumUtil::FromString<ExternalDependenciesType>(const char *value);

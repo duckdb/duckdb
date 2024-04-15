@@ -2545,6 +2545,49 @@ ExtensionLoadResult EnumUtil::FromString<ExtensionLoadResult>(const char *value)
 }
 
 template<>
+const char* EnumUtil::ToChars<ExtensionUpdateResultTag>(ExtensionUpdateResultTag value) {
+	switch(value) {
+	case ExtensionUpdateResultTag::UNKNOWN:
+		return "UNKNOWN";
+	case ExtensionUpdateResultTag::NO_UPDATE_AVAILABLE:
+		return "NO_UPDATE_AVAILABLE";
+	case ExtensionUpdateResultTag::NOT_A_REPOSITORY:
+		return "NOT_A_REPOSITORY";
+	case ExtensionUpdateResultTag::NOT_INSTALLED:
+		return "NOT_INSTALLED";
+	case ExtensionUpdateResultTag::REDOWNLOADED:
+		return "REDOWNLOADED";
+	case ExtensionUpdateResultTag::UPDATED:
+		return "UPDATED";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+ExtensionUpdateResultTag EnumUtil::FromString<ExtensionUpdateResultTag>(const char *value) {
+	if (StringUtil::Equals(value, "UNKNOWN")) {
+		return ExtensionUpdateResultTag::UNKNOWN;
+	}
+	if (StringUtil::Equals(value, "NO_UPDATE_AVAILABLE")) {
+		return ExtensionUpdateResultTag::NO_UPDATE_AVAILABLE;
+	}
+	if (StringUtil::Equals(value, "NOT_A_REPOSITORY")) {
+		return ExtensionUpdateResultTag::NOT_A_REPOSITORY;
+	}
+	if (StringUtil::Equals(value, "NOT_INSTALLED")) {
+		return ExtensionUpdateResultTag::NOT_INSTALLED;
+	}
+	if (StringUtil::Equals(value, "REDOWNLOADED")) {
+		return ExtensionUpdateResultTag::REDOWNLOADED;
+	}
+	if (StringUtil::Equals(value, "UPDATED")) {
+		return ExtensionUpdateResultTag::UPDATED;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
 const char* EnumUtil::ToChars<ExternalDependenciesType>(ExternalDependenciesType value) {
 	switch(value) {
 	case ExternalDependenciesType::PYTHON_DEPENDENCY:

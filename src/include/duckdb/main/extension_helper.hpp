@@ -10,6 +10,7 @@
 
 #include "duckdb.hpp"
 #include "duckdb/main/extension_entries.hpp"
+#include "duckdb/main/extension_install_info.hpp"
 
 #include <string>
 
@@ -37,10 +38,30 @@ struct ExtensionInitResult {
 	void *lib_hdl;
 };
 
+// Tags describe what happened during the updating process
+enum class ExtensionUpdateResultTag : uint8_t {
+	// Fallback, should not be used
+	UNKNOWN = 0,
+
+	// Either a fresh file was downloaded and versions are identical
+	NO_UPDATE_AVAILABLE = 1,
+	// Only extensions from repositories can be updated
+	NOT_A_REPOSITORY = 2,
+	// Only known, currently installed extensions can be updated
+	NOT_INSTALLED = 3,
+
+	// The extension was re-downloaded from the repository, but due to a lack of version information
+	// its impossible to tell if the extension is actually updated
+	REDOWNLOADED = 254,
+	// The version was updated to a new version
+	UPDATED = 255,
+};
+
 struct ExtensionUpdateResult {
+	ExtensionUpdateResultTag tag = ExtensionUpdateResultTag::UNKNOWN;
+
 	string extension_name;
 	string repository;
-	bool updated;
 
 	string extension_version;
 	string prev_version;
@@ -54,9 +75,9 @@ public:
 	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension);
 
 	//! Install an extension
-	static void InstallExtension(ClientContext &context, const string &extension, bool force_install,
+	static unique_ptr<ExtensionInstallInfo> InstallExtension(ClientContext &context, const string &extension, bool force_install,
 	                             const string &repository = "", const string &version = "");
-	static void InstallExtension(DBConfig &config, FileSystem &fs, const string &extension, bool force_install,
+	static unique_ptr<ExtensionInstallInfo> InstallExtension(DBConfig &config, FileSystem &fs, const string &extension, bool force_install,
 	                             const string &respository = "", const string &version = "");
 	//! Load an extension
 	static void LoadExternalExtension(ClientContext &context, const string &extension);
@@ -79,6 +100,10 @@ public:
 	//! Get the extension directory base on the current config
 	static string ExtensionDirectory(ClientContext &context);
 	static string ExtensionDirectory(DBConfig &config, FileSystem &fs);
+
+	static bool CheckExtensionSignature(FileHandle &handle, ParsedExtensionMetaData &parsed_metadata);
+	static ParsedExtensionMetaData ParseExtensionMetaData(const char* metadata);
+	static ParsedExtensionMetaData ParseExtensionMetaData(FileHandle &handle);
 
 	//! Get the extension url template, containing placeholders for version, platform and extension name
 	static string ExtensionUrlTemplate(optional_ptr<const DBConfig> config, const string &repository,
@@ -173,7 +198,7 @@ public:
 	static bool CreateSuggestions(const string &extension_name, string &message);
 
 private:
-	static void InstallExtensionInternal(DBConfig &config, FileSystem &fs, const string &local_path,
+	static unique_ptr<ExtensionInstallInfo> InstallExtensionInternal(DBConfig &config, FileSystem &fs, const string &local_path,
 	                                     const string &extension, bool force_install, const string &repository,
 	                                     const string &version);
 	static const vector<string> PathComponents();

@@ -20,7 +20,7 @@ struct ExtensionInformation {
 	bool installed = false;
 	string file_path;
 	string install_mode;
-	string install_source;
+	string installed_from;
 	string description;
 	vector<Value> aliases;
 	string extension_version;
@@ -60,7 +60,7 @@ static unique_ptr<FunctionData> DuckDBExtensionsBind(ClientContext &context, Tab
 	names.emplace_back("install_mode");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
-	names.emplace_back("install_source");
+	names.emplace_back("installed_from");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
 	return nullptr;
@@ -115,10 +115,11 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 				deserializer.End();
 
 				info.install_mode = EnumUtil::ToString(extension_install_info->mode);
+				info.extension_version = extension_install_info->version;
 				if (extension_install_info->mode == ExtensionInstallMode::REPOSITORY) {
-					info.install_source = ExtensionRepository::GetRepository(extension_install_info->repository_url);
+					info.installed_from = ExtensionRepository::GetRepository(extension_install_info->repository_url);
 				} else {
-					info.install_source = extension_install_info->full_path;
+					info.installed_from = extension_install_info->full_path;
 				}
 			}
 		}
@@ -129,8 +130,9 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 		} else {
 			if (!entry->second.loaded) {
 				entry->second.file_path = info.file_path;
-				entry->second.install_source = info.install_source;
+				entry->second.installed_from = info.installed_from;
 				entry->second.install_mode = info.install_mode;
+				entry->second.extension_version = info.extension_version;
 			}
 			entry->second.installed = true;
 		}
@@ -191,7 +193,7 @@ void DuckDBExtensionsFunction(ClientContext &context, TableFunctionInput &data_p
 		// installed_mode LogicalType::VARCHAR
 		output.SetValue(7, count, Value(entry.install_mode));
 		// installed_source LogicalType::VARCHAR
-		output.SetValue(8, count, Value(entry.install_source));
+		output.SetValue(8, count, Value(entry.installed_from));
 
 
 		data.offset++;

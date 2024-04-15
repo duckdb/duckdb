@@ -38,8 +38,8 @@ static unique_ptr<FunctionData> PragmaUpdateExtensionsBind(ClientContext &contex
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("repository");
 	return_types.emplace_back(LogicalType::VARCHAR);
-	names.emplace_back("updated");
-	return_types.emplace_back(LogicalType::BOOLEAN);
+	names.emplace_back("update_result");
+	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("previous_version");
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("current_version");
@@ -81,12 +81,13 @@ static void PragmaUpdateExtensionsFunction(ClientContext &context, TableFunction
 		output.SetValue(col++, count, Value(entry.extension_name));
 		// repository LogicalType::VARCHAR
 		output.SetValue(col++, count, Value(entry.repository));
-		// updated, BOOLEAN
-		output.SetValue(col++, count, Value::BOOLEAN(entry.updated));
+		// update_result
+		output.SetValue(col++, count, Value(EnumUtil::ToString(entry.tag)));
 		// previous_version LogicalType::VARCHAR
 		output.SetValue(col++, count, Value(entry.prev_version));
 		// current_version LogicalType::VARCHAR
 		output.SetValue(col++, count, Value(entry.installed_version));
+
 		data.offset++;
 		count++;
 	}

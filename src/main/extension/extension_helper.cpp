@@ -1,13 +1,14 @@
 #include "duckdb/main/extension_helper.hpp"
-#include "duckdb/common/serializer/buffered_file_reader.hpp"
-#include "duckdb/common/serializer/binary_deserializer.hpp"
-#include "duckdb/main/extension_install_info.hpp"
 
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/windows.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/extension.hpp"
+#include "duckdb/main/extension_install_info.hpp"
 
 // Note that c++ preprocessor doesn't have a nice way to clean this up so we need to set the defines we use to false
 // explicitly when they are undefined
@@ -228,13 +229,26 @@ static ExtensionUpdateResult update_extension(DBConfig &config, FileSystem &fs, 
                                               const string &extension_name) {
 	ExtensionUpdateResult result;
 	result.extension_name = extension_name;
-	result.updated = false;
 
 	// Extension exists, check for .info file
 	const string info_file_path = full_extension_path + ".info";
 	if (!fs.FileExists(info_file_path)) {
+		result.extension_name = extension_name;
+		result.tag = ExtensionUpdateResultTag::NOT_INSTALLED;
 		return result;
 	}
+
+	// Parse the version of the extension before updating
+	auto ext_binary_handle = fs.OpenFile(full_extension_path, FileOpenFlags::FILE_FLAGS_READ);
+	auto parsed_metadata = ExtensionHelper::ParseExtensionMetaData(*ext_binary_handle);
+	if (!parsed_metadata.AppearsValid() && !config.options.allow_extensions_metadata_mismatch) {
+		throw IOException(
+		    "Failed to update extension: '%s', the metadata of the extension appears invalid! To resolve this, either "
+		    "manually remove the file '%s' or enable 'allow_extensions_metadata_mismatch' and rerun this command",
+		    extension_name, full_extension_path);
+	}
+
+	result.prev_version = parsed_metadata.AppearsValid() ? parsed_metadata.extension_version : "";
 
 	// Read metadata file into buffer
 	auto file_reader = BufferedFileReader(fs, info_file_path.c_str());
@@ -244,22 +258,35 @@ static ExtensionUpdateResult update_extension(DBConfig &config, FileSystem &fs, 
 		auto extension_install_info = ExtensionInstallInfo::Deserialize(deserializer);
 		deserializer.End();
 
-		if (extension_install_info->mode == ExtensionInstallMode::REPOSITORY) {
-			result.repository = ExtensionRepository::GetRepository(extension_install_info->repository_url);
-
-			// We force install the full url found in this file, throwing
-			try {
-				ExtensionHelper::InstallExtension(config, fs, extension_name, true, result.repository);
-			} catch (std::exception &e) {
-				ErrorData error(e);
-				error.Throw("Extension updating failed when trying to install '" + extension_name +
-				            "', original error: ");
-			}
-
-			// TODO set prev and installed version;
-			result.updated = true;
+		if (extension_install_info->mode != ExtensionInstallMode::REPOSITORY) {
+			result.tag = ExtensionUpdateResultTag::NOT_A_REPOSITORY;
+			result.installed_version = result.prev_version;
 			return result;
 		}
+
+		result.repository = ExtensionRepository::GetRepository(extension_install_info->repository_url);
+
+		// We force install the full url found in this file, throwing
+		unique_ptr<ExtensionInstallInfo> install_result;
+		try {
+			install_result = ExtensionHelper::InstallExtension(config, fs, extension_name, true, result.repository);
+		} catch (std::exception &e) {
+			ErrorData error(e);
+			error.Throw("Extension updating failed when trying to install '" + extension_name +
+						"', original error: ");
+		}
+
+		result.installed_version = install_result->version;
+
+		if (result.installed_version.empty()) {
+			result.tag = ExtensionUpdateResultTag::REDOWNLOADED;
+		} else if (result.installed_version != result.prev_version) {
+			result.tag = ExtensionUpdateResultTag::UPDATED;
+		} else {
+			result.tag = ExtensionUpdateResultTag::NO_UPDATE_AVAILABLE;
+		}
+
+		return result;
 	}
 
 	return result;
@@ -300,13 +327,6 @@ ExtensionUpdateResult ExtensionHelper::UpdateExtension(DBConfig &config, FileSys
 	auto ext_directory = ExtensionHelper::ExtensionDirectory(config, fs);
 
 	auto full_extension_path = fs.JoinPath(ext_directory, extension_name + ".duckdb_extension");
-
-	if (!fs.FileExists(full_extension_path)) {
-		ExtensionUpdateResult result;
-		result.extension_name = extension_name;
-		result.updated = false;
-		return result;
-	}
 
 	return update_extension(config, fs, full_extension_path, extension_name);
 }
