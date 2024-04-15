@@ -32,7 +32,7 @@ private:
 	friend class shared_ptr;
 
 	template <typename U, typename S>
-	friend shared_ptr<S> shared_ptr_cast(shared_ptr<U> src);
+	friend shared_ptr<S> shared_ptr_cast(shared_ptr<U> src); // NOLINT: invalid case style
 
 private:
 	original internal;
@@ -41,7 +41,7 @@ public:
 	// Constructors
 	shared_ptr() : internal() {
 	}
-	shared_ptr(std::nullptr_t) : internal(nullptr) {
+	shared_ptr(std::nullptr_t) : internal(nullptr) { // NOLINT: not marked as explicit
 	}
 
 	// From raw pointer of type U convertible to T
@@ -95,7 +95,7 @@ public:
 	          typename std::enable_if<compatible_with_t<U, T>::value &&
 	                                      std::is_convertible<typename unique_ptr<U, DELETER>::pointer, T *>::value,
 	                                  int>::type = 0>
-	shared_ptr(unique_ptr<U, DELETER, SAFE_P> &&other) : internal(std::move(other)) {
+	shared_ptr(unique_ptr<U, DELETER, SAFE_P> &&other) : internal(std::move(other)) { // NOLINT: not marked as explicit
 		__enable_weak_this(internal.get(), internal.get());
 	}
 
@@ -161,15 +161,15 @@ public:
 		internal.reset(ptr, deleter);
 	}
 
-	void swap(shared_ptr &r) noexcept {
+	void swap(shared_ptr &r) noexcept { // NOLINT: invalid case style
 		internal.swap(r.internal);
 	}
 
-	T *get() const {
+	T *get() const { // NOLINT: invalid case style
 		return internal.get();
 	}
 
-	long use_count() const {
+	long use_count() const { // NOLINT: invalid case style
 		return internal.use_count();
 	}
 
@@ -236,7 +236,8 @@ private:
 	template <class U, class _OrigPtr,
 	          typename std::enable_if<std::is_convertible<_OrigPtr *, const enable_shared_from_this<U> *>::value,
 	                                  int>::type = 0>
-	void __enable_weak_this(const enable_shared_from_this<U> *object, _OrigPtr *ptr) noexcept {
+	void __enable_weak_this(const enable_shared_from_this<U> *object,
+	                        _OrigPtr *ptr) noexcept { // NOLINT: invalid case style
 		typedef typename std::remove_cv<U>::type NonConstU;
 		if (object && object->__weak_this_.expired()) {
 			// __weak_this__ is the mutable variable returned by 'shared_from_this'
@@ -245,7 +246,7 @@ private:
 		}
 	}
 
-	void __enable_weak_this(...) noexcept {
+	void __enable_weak_this(...) noexcept { // NOLINT: invalid case style
 	}
 };
 

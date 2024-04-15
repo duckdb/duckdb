@@ -18,23 +18,25 @@ public:
 	weak_ptr() : internal() {
 	}
 
+	// NOLINTBEGIN
 	template <class U>
 	weak_ptr(shared_ptr<U, SAFE> const &ptr,
 	         typename std::enable_if<compatible_with_t<U, T>::value, int>::type = 0) noexcept
 	    : internal(ptr.internal) {
 	}
-	weak_ptr(weak_ptr const &other) noexcept : internal(other.internal) { // NOLINT: not marked as explicit
+	weak_ptr(weak_ptr const &other) noexcept : internal(other.internal) {
 	}
 	template <class U>
 	weak_ptr(weak_ptr<U> const &ptr, typename std::enable_if<compatible_with_t<U, T>::value, int>::type = 0) noexcept
 	    : internal(ptr.internal) {
 	}
-	weak_ptr(weak_ptr &&ptr) noexcept : internal(std::move(ptr.internal)) { // NOLINT: not marked as explicit
+	weak_ptr(weak_ptr &&ptr) noexcept : internal(std::move(ptr.internal)) {
 	}
 	template <class U>
 	weak_ptr(weak_ptr<U> &&ptr, typename std::enable_if<compatible_with_t<U, T>::value, int>::type = 0) noexcept
 	    : internal(std::move(ptr.internal)) {
 	}
+	// NOLINTEND
 	// Destructor
 	~weak_ptr() = default;
 
