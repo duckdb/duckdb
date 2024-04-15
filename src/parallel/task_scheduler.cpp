@@ -16,6 +16,8 @@
 #include <queue>
 #endif
 
+#include <unistd.h> // ssize_t
+
 namespace duckdb {
 
 struct SchedulerThread {
