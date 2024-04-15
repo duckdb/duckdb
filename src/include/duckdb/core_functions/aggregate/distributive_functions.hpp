@@ -255,7 +255,7 @@ struct SumFun {
 struct SumNoOverflowFun {
 	static constexpr const char *Name = "sum_no_overflow";
 	static constexpr const char *Parameters = "arg";
-	static constexpr const char *Description = "Calculates the sum value for all tuples in arg without overflow checks.";
+	static constexpr const char *Description = "Internal only. Calculates the sum value for all tuples in arg without overflow checks.";
 	static constexpr const char *Example = "sum_no_overflow(A)";
 
 	static AggregateFunctionSet GetFunctions();

@@ -330,8 +330,12 @@ void CardinalityEstimator::AddRelationNamesToTdoms(vector<RelationStats> &stats)
 	for (auto &total_domain : relations_to_tdoms) {
 		for (auto &binding : total_domain.equivalent_relations) {
 			D_ASSERT(binding.table_index < stats.size());
-			D_ASSERT(binding.column_index < stats.at(binding.table_index).column_names.size());
-			string column_name = stats.at(binding.table_index).column_names.at(binding.column_index);
+			string column_name;
+			if (binding.column_index < stats[binding.table_index].column_names.size()) {
+				column_name = stats[binding.table_index].column_names[binding.column_index];
+			} else {
+				column_name = "[unknown]";
+			}
 			total_domain.column_names.push_back(column_name);
 		}
 	}

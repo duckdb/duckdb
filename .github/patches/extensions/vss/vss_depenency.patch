@@ -1,0 +1,13 @@
+diff --git a/src/hnsw/hnsw_index_scan.cpp b/src/hnsw/hnsw_index_scan.cpp
+index d53d7ee..954b439 100644
+--- a/src/hnsw/hnsw_index_scan.cpp
++++ b/src/hnsw/hnsw_index_scan.cpp
+@@ -104,7 +104,7 @@ static unique_ptr<BaseStatistics> HNSWIndexScanStatistics(ClientContext &context
+ //-------------------------------------------------------------------------
+ // Dependency
+ //-------------------------------------------------------------------------
+-void HNSWIndexScanDependency(DependencyList &entries, const FunctionData *bind_data_p) {
++void HNSWIndexScanDependency(LogicalDependencyList &entries, const FunctionData *bind_data_p) {
+ 	auto &bind_data = bind_data_p->Cast<HNSWIndexScanBindData>();
+ 	entries.AddDependency(bind_data.table);
+ 

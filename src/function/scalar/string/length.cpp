@@ -70,7 +70,6 @@ static unique_ptr<BaseStatistics> LengthPropagateStats(ClientContext &context, F
 //------------------------------------------------------------------
 // ARRAY / LIST LENGTH
 //------------------------------------------------------------------
-
 static void ListLengthFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input = args.data[0];
 	D_ASSERT(input.GetType().id() == LogicalTypeId::LIST);
@@ -83,9 +82,31 @@ static void ListLengthFunction(DataChunk &args, ExpressionState &state, Vector &
 
 static void ArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input = args.data[0];
-	// If the input is an array, the length is constant
+
+	UnifiedVectorFormat format;
+	args.data[0].ToUnifiedFormat(args.size(), format);
+
+	// for arrays the length is constant
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	ConstantVector::GetData<int64_t>(result)[0] = static_cast<int64_t>(ArrayType::GetSize(input.GetType()));
+
+	// but we do need to take null values into account
+	if (format.validity.AllValid()) {
+		// if there are no null values we can just return the constant
+		return;
+	}
+	// otherwise we flatten and inherit the null values of the parent
+	result.Flatten(args.size());
+	auto &result_validity = FlatVector::Validity(result);
+	for (idx_t r = 0; r < args.size(); r++) {
+		auto idx = format.sel->get_index(r);
+		if (!format.validity.RowIsValid(idx)) {
+			result_validity.SetInvalid(r);
+		}
+	}
+	if (args.AllConstant()) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
 }
 
 static unique_ptr<FunctionData> ArrayOrListLengthBind(ClientContext &context, ScalarFunction &bound_function,

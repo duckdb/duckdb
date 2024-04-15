@@ -167,7 +167,8 @@ ScalarFunctionSet AbsOperatorFun::GetFunctions() {
 		case LogicalTypeId::TINYINT:
 		case LogicalTypeId::SMALLINT:
 		case LogicalTypeId::INTEGER:
-		case LogicalTypeId::BIGINT: {
+		case LogicalTypeId::BIGINT:
+		case LogicalTypeId::HUGEINT: {
 			ScalarFunction func({type}, type, ScalarFunction::GetScalarUnaryFunction<TryAbsOperator>(type));
 			func.statistics = PropagateAbsStats;
 			abs.AddFunction(func);

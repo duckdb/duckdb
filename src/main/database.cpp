@@ -400,6 +400,10 @@ const unordered_set<std::string> &DatabaseInstance::LoadedExtensions() {
 	return loaded_extensions;
 }
 
+const unordered_map<std::string, ExtensionInfo> &DatabaseInstance::LoadedExtensionsData() {
+	return loaded_extensions_data;
+}
+
 idx_t DuckDB::NumberOfThreads() {
 	return instance->NumberOfThreads();
 }
@@ -413,9 +417,10 @@ bool DuckDB::ExtensionIsLoaded(const std::string &name) {
 	return instance->ExtensionIsLoaded(name);
 }
 
-void DatabaseInstance::SetExtensionLoaded(const std::string &name) {
+void DatabaseInstance::SetExtensionLoaded(const std::string &name, const std::string &extension_version) {
 	auto extension_name = ExtensionHelper::GetExtensionName(name);
 	loaded_extensions.insert(extension_name);
+	loaded_extensions_data.insert({extension_name, ExtensionInfo(extension_version)});
 
 	auto &callbacks = DBConfig::GetConfig(*this).extension_callbacks;
 	for (auto &callback : callbacks) {
