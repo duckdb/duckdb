@@ -104,7 +104,7 @@ runs:
       run: |
         echo "VCPKG_TOOLCHAIN_PATH=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" >> $GITHUB_ENV
         echo "VCPKG_TARGET_TRIPLET=${{ inputs.vcpkg_target_triplet }}" >> $GITHUB_ENV
-        
+
     - name: workaround for https://github.com/duckdb/duckdb/issues/8360
       if: inputs.vcpkg_target_triplet == 'x64-windows-static-md'
       shell: bash
@@ -120,8 +120,8 @@ runs:
       shell: bash
       if: inputs.deploy_as == 'windows_amd64'
       env:
-        OVERLAY_TRIPLET_SRC:  ${{ github.workspace }}/vcpkg/triplets/community/x64-windows-static-md.cmake
-        OVERLAY_TRIPLET_DST:  ${{ github.workspace }}/overlay_triplets/x64-windows-static-md.cmake
+        OVERLAY_TRIPLET_SRC: ${{ github.workspace }}/vcpkg/triplets/community/x64-windows-static-md.cmake
+        OVERLAY_TRIPLET_DST: ${{ github.workspace }}/overlay_triplets/x64-windows-static-md.cmake
       run: |
         mkdir overlay_triplets
         cp $OVERLAY_TRIPLET_SRC $OVERLAY_TRIPLET_DST
@@ -216,6 +216,28 @@ runs:
         ${{ inputs.unittest_script }} '-f test.list'
         rm -rf build/release/extension
         mv build/extension_tmp build/release/extension
+
+    # This step runs the UPDATE EXTENSIONS test by using loadable_extension_demo and loadable_extension_demo_2
+    - name: Run extension update test
+      if: ${{ inputs.run_autoload_tests == 1 }}
+      shell: bash
+      env:
+        RUN_EXTENSION_UPDATE_TEST: 1
+        LOCAL_EXTENSION_REPO: './build/extension_updating_test_repository'
+        LOCAL_EXTENSION_DIR: './build/extension_updating_test_directory'
+      run: |
+        mkdir $LOCAL_EXTENSION_REPO
+        mkdir $LOCAL_EXTENSION_DIR
+        # Populate LOCAL_EXTENSION_REPO with loadable_extension_demo (using duckdb itself to create the correct directory structure)
+        ./build/debug/duckdb -unsigned -c "set extension_directory='$LOCAL_EXTENSION_REPO'; install 'build/debug/test/extension/loadable_extension_demo.duckdb_extension';"
+        # Install loadable_extension_demo from LOCAL_EXTENSION_REPO to LOCAL_EXTENSION_DIR
+        ./build/debug/duckdb -unsigned -c "set extension_directory='$LOCAL_EXTENSION_DIR'; set custom_extension_repository='$LOCAL_EXTENSION_REPO'; install loadable_extension_demo;"
+        # Now create the updated loadable_extension_demo by moving loadable_extension_demo onto it
+        mv ./build/debug/test/extension/loadable_extension_demo_2.duckdb_extension ./build/debug/test/extension/loadable_extension_demo.duckdb_extension 
+        # Now populate the repository with the updated extension
+        ./build/debug/duckdb -unsigned -c "set extension_directory='$LOCAL_EXTENSION_REPO'; force install 'build/debug/test/extension/loadable_extension_demo.duckdb_extension';"
+        # Now run the test 
+        ./build/debug/test/unittest test/extension/update_extensions_ci.test
 
     - name: Deploy
       if: ${{ inputs.deploy_as != '' }}

@@ -1,0 +1,26 @@
+# name: test/extension/update_extensions.test
+# description: Tests for the update extensions statement
+# group: [extension]
+
+# NOTE: this test requires specific setup and can only be ran once, check out relevant CI job for reproduction
+
+# This test expects a specific state, which is marked to be present through setting this env variable.
+require-env RUN_EXTENSION_UPDATE_TEST
+
+# This repo is expected to contain loadable_extension_demo.duckdb_extension at version default-version-2
+require-env LOCAL_EXTENSION_REPO
+
+# This extension install dir is expected to contain loadable_extension_demo.duckdb_extension at version default-version
+require-env LOCAL_EXTENSION_DIR
+
+statement ok
+set custom_extension_repository='${LOCAL_EXTENSION_REPO}'
+
+statement ok
+set extension_directory='${LOCAL_EXTENSION_DIR}'
+
+# The loadable_extension_demo is loaded as a direct URL, these are not considered for updating
+query IIIII rowsort
+UPDATE EXTENSIONS;
+----
+loadable_extension_demo	<REGEX>:.*	UPDATED	default-version	default-version-2

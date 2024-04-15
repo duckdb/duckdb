@@ -100,6 +100,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 		}
 		ExtensionInformation info;
 		info.name = fs.ExtractBaseName(path);
+		info.installed = true;
 		info.loaded = false;
 		info.file_path = fs.JoinPath(ext_directory, path);
 
