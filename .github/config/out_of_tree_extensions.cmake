@@ -16,12 +16,14 @@
 #  VCPKG_TARGET_TRIPLET=arm64-osx
 
 ################# ARROW
-duckdb_extension_load(arrow
-    LOAD_TESTS DONT_LINK
-    GIT_URL https://github.com/duckdb/arrow
-    GIT_TAG 9e10240da11f61ea7fbfe3fc9988ffe672ccd40f
-    APPLY_PATCHES
-    )
+if (NOT MINGW)
+    duckdb_extension_load(arrow
+            LOAD_TESTS DONT_LINK
+            GIT_URL https://github.com/duckdb/arrow
+            GIT_TAG 9e10240da11f61ea7fbfe3fc9988ffe672ccd40f
+            APPLY_PATCHES
+            )
+endif()
 
 ################## AWS
 if (NOT MINGW)
@@ -76,10 +78,9 @@ endif()
 duckdb_extension_load(spatial
     DONT_LINK LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb_spatial.git
-    GIT_TAG 05c4ba01c500140287bf6946fb6910122e5c2acf
+    GIT_TAG 8ac803e986ccda34f32dee82a7faae95b72b3492
     INCLUDE_DIR spatial/include
     TEST_DIR test/sql
-    APPLY_PATCHES
     )
 
 ################# SQLITE_SCANNER
@@ -93,8 +94,7 @@ endif()
 duckdb_extension_load(sqlite_scanner
         ${STATIC_LINK_SQLITE} LOAD_TESTS
         GIT_URL https://github.com/duckdb/sqlite_scanner
-        GIT_TAG 70a4c411434290b4af704940987a324d84af0024
-        APPLY_PATCHES
+        GIT_TAG 091197efb34579c7195afa43dfb5925023c915c0
         )
 
 ################# SUBSTRAIT
@@ -106,3 +106,13 @@ if (NOT WIN32)
             APPLY_PATCHES
             )
 endif()
+
+
+################# VSS
+duckdb_extension_load(vss
+        LOAD_TESTS
+        GIT_URL https://github.com/duckdb/duckdb_vss
+        GIT_TAG a85e973650a083e4b279126a0aec07924d84e765
+        TEST_DIR test/sql
+        APPLY_PATCHES
+    )

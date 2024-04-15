@@ -83,6 +83,7 @@ void CSVSniffer::SetResultOptions() {
 }
 
 SnifferResult CSVSniffer::SniffCSV(bool force_match) {
+	buffer_manager->sniffing = true;
 	// 1. Dialect Detection
 	DetectDialect();
 	// 2. Type Detection
@@ -100,7 +101,7 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 	if (!buffer_manager->file_handle->uncompressed) {
 		buffer_manager->ResetBufferManager();
 	}
-
+	buffer_manager->sniffing = false;
 	if (!best_candidate->error_handler->errors.empty() && !options.ignore_errors.GetValue()) {
 		for (auto &error_vector : best_candidate->error_handler->errors) {
 			for (auto &error : error_vector.second) {
