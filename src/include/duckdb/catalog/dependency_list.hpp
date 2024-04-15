@@ -30,7 +30,9 @@ public:
 
 public:
 	explicit LogicalDependency(CatalogEntry &entry);
+	explicit LogicalDependency(const string &catalog, const CatalogEntryInfo &entry);
 	LogicalDependency();
+	unique_ptr<LogicalDependency> Copy() const;
 	bool operator==(const LogicalDependency &other) const;
 };
 

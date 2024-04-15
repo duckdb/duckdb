@@ -13,6 +13,7 @@
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 
 namespace duckdb {
 class Serializer;
@@ -37,17 +38,10 @@ public:
 	explicit VacuumInfo(VacuumOptions options);
 
 	const VacuumOptions options;
-	TableCatalogEntry &GetTable();
-	bool HasTable() const;
-	void SetTable(TableCatalogEntry &table);
-
-public:
+	vector<string> columns;
 	bool has_table;
 	unique_ptr<TableRef> ref;
-	unordered_map<idx_t, idx_t> column_id_map;
-	vector<string> columns;
-private:
-	optional_ptr<TableCatalogEntry> table;
+
 public:
 	unique_ptr<VacuumInfo> Copy();
 

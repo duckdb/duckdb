@@ -40,6 +40,10 @@ bool LogicalDependencyEquality::operator()(const LogicalDependency &a, const Log
 LogicalDependency::LogicalDependency() : entry(), catalog() {
 }
 
+unique_ptr<LogicalDependency> LogicalDependency::Copy() const {
+	return make_uniq<LogicalDependency>(catalog, entry);
+}
+
 static string GetSchema(CatalogEntry &entry) {
 	if (entry.type == CatalogType::SCHEMA_ENTRY) {
 		return entry.name;
@@ -59,6 +63,10 @@ LogicalDependency::LogicalDependency(CatalogEntry &entry) {
 		this->entry.type = entry.type;
 		catalog = entry.ParentCatalog().GetName();
 	}
+}
+
+LogicalDependency::LogicalDependency(const string &catalog, const CatalogEntryInfo &entry)
+    : entry(entry), catalog(catalog) {
 }
 
 bool LogicalDependency::operator==(const LogicalDependency &other) const {

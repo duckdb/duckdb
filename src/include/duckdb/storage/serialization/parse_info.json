@@ -568,16 +568,6 @@
       },
       {
         "id": 203,
-        "name": "table",
-        "type": "optional_ptr<TableCatalogEntry>"
-      },
-      {
-        "id": 204,
-        "name": "column_id_map",
-        "type": "unordered_map<idx_t, idx_t>"
-      },
-      {
-        "id": 205,
         "name": "columns",
         "type": "vector<string>"
       }
