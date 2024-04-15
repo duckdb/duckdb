@@ -75,6 +75,8 @@ public:
 	virtual void SetStart(idx_t new_start);
 	//! The root type of the column
 	const LogicalType &RootType() const;
+	//! Whether or not the column has any updates
+	virtual bool HasUpdates() const;
 
 	//! Initialize a scan of the column
 	virtual void InitializeScan(ColumnScanState &state);
@@ -163,7 +165,7 @@ protected:
 	//! The segments holding the data of this column segment
 	ColumnSegmentTree data;
 	//! The lock for the updates
-	mutex update_lock;
+	mutable mutex update_lock;
 	//! The updates for this column segment
 	unique_ptr<UpdateSegment> updates;
 	//! The stats of the root segment

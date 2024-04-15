@@ -57,6 +57,11 @@ const LogicalType &ColumnData::RootType() const {
 	return type;
 }
 
+bool ColumnData::HasUpdates() const {
+	lock_guard<mutex> update_guard(update_lock);
+	return updates.get();
+}
+
 idx_t ColumnData::GetMaxEntry() {
 	return count;
 }
@@ -135,11 +140,7 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 
 template <bool SCAN_COMMITTED, bool ALLOW_UPDATES>
 idx_t ColumnData::ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
-	bool has_updates;
-	{
-		lock_guard<mutex> update_guard(update_lock);
-		has_updates = updates ? true : false;
-	}
+	bool has_updates = HasUpdates();
 	idx_t current_row = vector_index * STANDARD_VECTOR_SIZE;
 	auto vector_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - current_row);
 
@@ -180,61 +181,62 @@ idx_t ColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vect
 	}
 }
 
-void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count, Vector &result) {
+void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t s_count, Vector &result) {
 	ColumnScanState child_state;
 	InitializeScanWithOffset(child_state, row_group_start + offset_in_row_group);
-	auto scan_count = ScanVector(child_state, result, count, updates ? true : false);
-	if (updates) {
+	bool has_updates = HasUpdates();
+	auto scan_count = ScanVector(child_state, result, s_count, has_updates);
+	if (has_updates) {
 		result.Flatten(scan_count);
-		updates->FetchCommittedRange(offset_in_row_group, count, result);
+		updates->FetchCommittedRange(offset_in_row_group, s_count, result);
 	}
 }
 
-idx_t ColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
-	if (count == 0) {
+idx_t ColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t scan_count) {
+	if (scan_count == 0) {
 		return 0;
 	}
 	// ScanCount can only be used if there are no updates
-	D_ASSERT(!updates);
-	return ScanVector(state, result, count, false);
+	D_ASSERT(!HasUpdates());
+	return ScanVector(state, result, scan_count, false);
 }
 
 void ColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                        SelectionVector &sel, idx_t &count, const TableFilter &filter) {
+                        SelectionVector &sel, idx_t &s_count, const TableFilter &filter) {
 	idx_t scan_count = Scan(transaction, vector_index, state, result);
 
 	UnifiedVectorFormat vdata;
 	result.ToUnifiedFormat(scan_count, vdata);
-	ColumnSegment::FilterSelection(sel, result, vdata, filter, scan_count, count);
+	ColumnSegment::FilterSelection(sel, result, vdata, filter, scan_count, s_count);
 }
 
 void ColumnData::FilterScan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                            SelectionVector &sel, idx_t count) {
+                            SelectionVector &sel, idx_t s_count) {
 	Scan(transaction, vector_index, state, result);
-	result.Slice(sel, count);
+	result.Slice(sel, s_count);
 }
 
 void ColumnData::FilterScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, SelectionVector &sel,
-                                     idx_t count, bool allow_updates) {
+                                     idx_t s_count, bool allow_updates) {
 	ScanCommitted(vector_index, state, result, allow_updates);
-	result.Slice(sel, count);
+	result.Slice(sel, s_count);
 }
 
-void ColumnData::Skip(ColumnScanState &state, idx_t count) {
-	state.Next(count);
+void ColumnData::Skip(ColumnScanState &state, idx_t s_count) {
+	state.Next(s_count);
 }
 
-void ColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) {
+void ColumnData::Append(BaseStatistics &append_stats, ColumnAppendState &state, Vector &vector, idx_t append_count) {
 	UnifiedVectorFormat vdata;
 	vector.ToUnifiedFormat(count, vdata);
-	AppendData(stats, state, vdata, count);
+	AppendData(append_stats, state, vdata, append_count);
 }
 
-void ColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t count) {
+void ColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t append_count) {
 	if (parent || !stats) {
 		throw InternalException("ColumnData::Append called on a column with a parent or without stats");
 	}
-	Append(stats->statistics, state, vector, count);
+	Append(stats->statistics, state, vector, append_count);
 }
 
 bool ColumnData::CheckZonemap(TableFilter &filter) {
@@ -291,14 +293,15 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	D_ASSERT(state.current->function.get().append);
 }
 
-void ColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) {
+void ColumnData::AppendData(BaseStatistics &append_stats, ColumnAppendState &state, UnifiedVectorFormat &vdata,
+                            idx_t append_count) {
 	idx_t offset = 0;
-	this->count += count;
+	this->count += append_count;
 	while (true) {
 		// append the data from the vector
-		idx_t copied_elements = state.current->Append(state, vdata, offset, count);
-		stats.Merge(state.current->stats.statistics);
-		if (copied_elements == count) {
+		idx_t copied_elements = state.current->Append(state, vdata, offset, append_count);
+		append_stats.Merge(state.current->stats.statistics);
+		if (copied_elements == append_count) {
 			// finished copying everything
 			break;
 		}
@@ -311,7 +314,7 @@ void ColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &state, Uni
 			state.current->InitializeAppend(state);
 		}
 		offset += copied_elements;
-		count -= copied_elements;
+		append_count -= copied_elements;
 	}
 }
 
@@ -419,16 +422,17 @@ unique_ptr<ColumnCheckpointState> ColumnData::CreateCheckpointState(RowGroup &ro
 
 void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
                                 Vector &scan_vector) {
+	bool has_updates = HasUpdates();
 	if (state.scan_options && state.scan_options->force_fetch_row) {
 		for (idx_t i = 0; i < count; i++) {
 			ColumnFetchState fetch_state;
 			segment.FetchRow(fetch_state, state.row_index + i, scan_vector, i);
 		}
 	} else {
-		segment.Scan(state, count, scan_vector, 0, true);
+		segment.Scan(state, count, scan_vector, 0, !has_updates);
 	}
 
-	if (updates) {
+	if (has_updates) {
 		scan_vector.Flatten(count);
 		updates->FetchCommittedRange(state.row_index - row_group_start, count, scan_vector);
 	}
