@@ -4,8 +4,8 @@ namespace duckdb {
 
 idx_t LogicalTopN::EstimateCardinality(ClientContext &context) {
 	auto child_cardinality = LogicalOperator::EstimateCardinality(context);
-	if (limit >= 0 && child_cardinality < idx_t(limit)) {
-		return NumericCast<idx_t>(limit);
+	if (child_cardinality < limit) {
+		return limit;
 	}
 	return child_cardinality;
 }
