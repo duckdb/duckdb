@@ -3,16 +3,16 @@
 #include "crypto.hpp"
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
+#include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/http_state.hpp"
 #include "duckdb/common/thread.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
-#include "duckdb/common/exception/http_exception.hpp"
 #endif
 
 #include <duckdb/function/scalar/string_functions.hpp>
-#include <duckdb/storage/buffer_manager.hpp>
 #include <duckdb/main/secret/secret_manager.hpp>
+#include <duckdb/storage/buffer_manager.hpp>
 #include <iostream>
 #include <thread>
 
@@ -360,7 +360,7 @@ void S3FileHandle::Close() {
 	}
 }
 
-void S3FileHandle::InitializeClient() {
+void S3FileHandle::InitializeClient(optional_ptr<ClientContext> client_context) {
 	auto parsed_url = S3FileSystem::S3UrlParse(path, this->auth_params);
 
 	string proto_host_port = parsed_url.http_proto + parsed_url.host;

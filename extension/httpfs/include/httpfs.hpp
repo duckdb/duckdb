@@ -88,7 +88,7 @@ public:
 	}
 
 protected:
-	virtual void InitializeClient();
+	virtual void InitializeClient(optional_ptr<ClientContext> client_context);
 };
 
 class HTTPFileSystem : public FileSystem {

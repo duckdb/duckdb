@@ -7,6 +7,7 @@
 #include "duckdb/common/thread.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
+#include "duckdb/logging/http_logger.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 
@@ -567,7 +568,7 @@ static optional_ptr<HTTPMetadataCache> TryGetMetadataCache(optional_ptr<FileOpen
 }
 
 void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
-	InitializeClient();
+	InitializeClient(FileOpener::TryGetClientContext(opener));
 	auto &hfs = file_system.Cast<HTTPFileSystem>();
 	state = HTTPState::TryGetState(opener);
 	if (!state) {
@@ -700,10 +701,14 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 	}
 }
 
-void HTTPFileHandle::InitializeClient() {
+void HTTPFileHandle::InitializeClient(optional_ptr<ClientContext> context) {
 	string path_out, proto_host_port;
 	HTTPFileSystem::ParseUrl(path, path_out, proto_host_port);
 	http_client = HTTPFileSystem::GetClient(this->http_params, proto_host_port.c_str());
+	if (context && ClientConfig::GetConfig(*context).enable_http_logging) {
+		http_client->set_logger(context->client_data->http_logger
+		                            ->GetLogger<duckdb_httplib_openssl::Request, duckdb_httplib_openssl::Response>());
+	}
 }
 
 ResponseWrapper::ResponseWrapper(duckdb_httplib_openssl::Response &res, string &original_url) {

@@ -287,7 +287,7 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs,
 	auto url_base = "http://" + hostname_without_http;
 	duckdb_httplib::Client cli(url_base.c_str());
 	if (http_logger) {
-		cli.set_logger(http_logger->GetLogger());
+		cli.set_logger(http_logger->GetLogger<duckdb_httplib::Request, duckdb_httplib::Response>());
 	}
 
 	duckdb_httplib::Headers headers = {
