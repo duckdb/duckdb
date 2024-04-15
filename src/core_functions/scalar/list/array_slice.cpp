@@ -47,17 +47,15 @@ static idx_t CalculateSliceLength(idx_t begin, idx_t end, INDEX_TYPE step, bool 
 	if (step == 0 && svalid) {
 		throw InvalidInputException("Slice step cannot be zero");
 	}
-	auto step_unsigned = UnsafeNumericCast<idx_t>(step); // we called abs() on this above.
-
 	if (step == 1) {
 		return NumericCast<idx_t>(end - begin);
-	} else if (step_unsigned >= (end - begin)) {
+	} else if (static_cast<idx_t>(step) >= (end - begin)) {
 		return 1;
 	}
-	if ((end - begin) % step_unsigned != 0) {
-		return (end - begin) / step_unsigned + 1;
+	if ((end - begin) % UnsafeNumericCast<idx_t>(step) != 0) {
+		return (end - begin) / UnsafeNumericCast<idx_t>(step) + 1;
 	}
-	return (end - begin) / step_unsigned;
+	return (end - begin) / UnsafeNumericCast<idx_t>(step);
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
@@ -147,14 +145,14 @@ list_entry_t SliceValueWithSteps(Vector &result, SelectionVector &sel, list_entr
 		return input;
 	}
 	input.length = CalculateSliceLength(UnsafeNumericCast<idx_t>(begin), UnsafeNumericCast<idx_t>(end), step, true);
-	int64_t child_idx = UnsafeNumericCast<int64_t>(input.offset) + begin;
+	idx_t child_idx = input.offset + UnsafeNumericCast<idx_t>(begin);
 	if (step < 0) {
-		child_idx = UnsafeNumericCast<int64_t>(input.offset) + end - 1;
+		child_idx = input.offset + UnsafeNumericCast<idx_t>(end) - 1;
 	}
 	input.offset = sel_idx;
 	for (idx_t i = 0; i < input.length; i++) {
-		sel.set_index(sel_idx, UnsafeNumericCast<idx_t>(child_idx));
-		child_idx = UnsafeNumericCast<int64_t>(child_idx) + step;
+		sel.set_index(sel_idx, child_idx);
+		child_idx += static_cast<idx_t>(step); // intentional overflow??
 		sel_idx++;
 	}
 	return input;
