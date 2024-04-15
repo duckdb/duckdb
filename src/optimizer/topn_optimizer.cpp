@@ -29,10 +29,10 @@ unique_ptr<LogicalOperator> TopN::Optimize(unique_ptr<LogicalOperator> op) {
 	if (CanOptimize(*op)) {
 		auto &limit = op->Cast<LogicalLimit>();
 		auto &order_by = (op->children[0])->Cast<LogicalOrder>();
-		auto limit_val = NumericCast<idx_t>(limit.limit_val.GetConstantValue());
+		auto limit_val = limit.limit_val.GetConstantValue();
 		idx_t offset_val = 0;
 		if (limit.offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
-			offset_val = NumericCast<idx_t>(limit.offset_val.GetConstantValue());
+			offset_val = limit.offset_val.GetConstantValue();
 		}
 		auto topn = make_uniq<LogicalTopN>(std::move(order_by.orders), limit_val, offset_val);
 		topn->AddChild(std::move(order_by.children[0]));

@@ -985,7 +985,7 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
 			auto tag = NumericCast<uint8_t>(type_ids[row_idx]);
 
-			auto out_of_range = tag < 0 || tag >= array.n_children;
+			auto out_of_range = tag >= array.n_children;
 			if (out_of_range) {
 				throw InvalidInputException("Arrow union tag out of range: %d", tag);
 			}
