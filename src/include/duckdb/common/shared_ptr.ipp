@@ -144,19 +144,19 @@ public:
 	reset() { // NOLINT: invalid case style
 		internal.reset();
 	}
+	template <typename U>
 #ifdef DUCKDB_CLANG_TIDY
 	// This is necessary to tell clang-tidy that it reinitializes the variable after a move
 	[[clang::reinitializes]]
 #endif
-	template <typename U>
 	void reset(U *ptr) { // NOLINT: invalid case style
 		internal.reset(ptr);
 	}
+	template <typename U, typename DELETER>
 #ifdef DUCKDB_CLANG_TIDY
 	// This is necessary to tell clang-tidy that it reinitializes the variable after a move
 	[[clang::reinitializes]]
 #endif
-	template <typename U, typename DELETER>
 	void reset(U *ptr, DELETER deleter) { // NOLINT: invalid case style
 		internal.reset(ptr, deleter);
 	}

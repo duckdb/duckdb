@@ -53,6 +53,10 @@ public:
 	}
 
 	// Modifiers
+#ifdef DUCKDB_CLANG_TIDY
+	// This is necessary to tell clang-tidy that it reinitializes the variable after a move
+	[[clang::reinitializes]]
+#endif
 	void reset() { // NOLINT: invalid case style
 		internal.reset();
 	}
