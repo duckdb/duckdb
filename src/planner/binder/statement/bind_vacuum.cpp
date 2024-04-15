@@ -14,7 +14,7 @@ BoundStatement Binder::Bind(VacuumStatement &stmt) {
 	unique_ptr<LogicalOperator> root;
 
 	if (stmt.info->has_table) {
-		D_ASSERT(!stmt.info->table);
+		D_ASSERT(!stmt.info->HasTable());
 		D_ASSERT(stmt.info->column_id_map.empty());
 		auto bound_table = Bind(*stmt.info->ref);
 		if (bound_table->type != TableReferenceType::BASE_TABLE) {
@@ -22,7 +22,7 @@ BoundStatement Binder::Bind(VacuumStatement &stmt) {
 		}
 		auto ref = unique_ptr_cast<BoundTableRef, BoundBaseTableRef>(std::move(bound_table));
 		auto &table = ref->table;
-		stmt.info->table = &table;
+		stmt.info->SetTable(table);
 
 		auto &columns = stmt.info->columns;
 		vector<unique_ptr<Expression>> select_list;

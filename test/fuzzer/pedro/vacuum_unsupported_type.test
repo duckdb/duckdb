@@ -2,6 +2,12 @@
 # description: Vacuum a table with arrays
 # group: [pedro]
 
+#statement ok
+#pragma enable_verification
+
+statement ok
+pragma verify_serializer
+
 statement ok
 CREATE TABLE t1 AS (VALUES ([], {'a': []}));
 

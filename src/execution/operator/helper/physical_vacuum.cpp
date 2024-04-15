@@ -16,7 +16,8 @@ class VacuumLocalSinkState : public LocalSinkState {
 public:
 	explicit VacuumLocalSinkState(VacuumInfo &info) {
 		for (const auto &column_name : info.columns) {
-			auto &column = info.table->GetColumn(column_name);
+			auto &table = info.GetTable();
+			auto &column = table.GetColumn(column_name);
 			if (DistinctStatistics::TypeIsSupported(column.GetType())) {
 				column_distinct_stats.push_back(make_uniq<DistinctStatistics>());
 			} else {
@@ -37,7 +38,8 @@ public:
 	explicit VacuumGlobalSinkState(VacuumInfo &info) {
 
 		for (const auto &column_name : info.columns) {
-			auto &column = info.table->GetColumn(column_name);
+			auto &table = info.GetTable();
+			auto &column = table.GetColumn(column_name);
 			if (DistinctStatistics::TypeIsSupported(column.GetType())) {
 				column_distinct_stats.push_back(make_uniq<DistinctStatistics>());
 			} else {
@@ -89,9 +91,9 @@ SinkFinalizeType PhysicalVacuum::Finalize(Pipeline &pipeline, Event &event, Clie
                                           OperatorSinkFinalizeInput &input) const {
 	auto &sink = input.global_state.Cast<VacuumGlobalSinkState>();
 
-	auto table = info->table;
+	auto &table = info->GetTable();
 	for (idx_t col_idx = 0; col_idx < sink.column_distinct_stats.size(); col_idx++) {
-		table->GetStorage().SetDistinct(info->column_id_map.at(col_idx),
+		table.GetStorage().SetDistinct(info->column_id_map.at(col_idx),
 		                                std::move(sink.column_distinct_stats[col_idx]));
 	}
 

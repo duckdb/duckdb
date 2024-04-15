@@ -37,14 +37,17 @@ public:
 	explicit VacuumInfo(VacuumOptions options);
 
 	const VacuumOptions options;
+	TableCatalogEntry &GetTable();
+	bool HasTable() const;
+	void SetTable(TableCatalogEntry &table);
 
 public:
 	bool has_table;
 	unique_ptr<TableRef> ref;
-	optional_ptr<TableCatalogEntry> table;
 	unordered_map<idx_t, idx_t> column_id_map;
 	vector<string> columns;
-
+private:
+	optional_ptr<TableCatalogEntry> table;
 public:
 	unique_ptr<VacuumInfo> Copy();
 
