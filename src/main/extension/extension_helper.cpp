@@ -222,7 +222,7 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 	}
 }
 
-static ExtensionUpdateResult update_extension(DBConfig &config, FileSystem &fs, const string &full_extension_path,
+static ExtensionUpdateResult UpdateExtensionInternal(DBConfig &config, FileSystem &fs, const string &full_extension_path,
                                               const string &extension_name) {
 	ExtensionUpdateResult result;
 	result.extension_name = extension_name;
@@ -241,8 +241,9 @@ static ExtensionUpdateResult update_extension(DBConfig &config, FileSystem &fs, 
 	if (!parsed_metadata.AppearsValid() && !config.options.allow_extensions_metadata_mismatch) {
 		throw IOException(
 		    "Failed to update extension: '%s', the metadata of the extension appears invalid! To resolve this, either "
-		    "manually remove the file '%s' or enable 'allow_extensions_metadata_mismatch' and rerun this command",
-		    extension_name, full_extension_path);
+		    "reinstall the extension using 'FORCE INSTALL %s', manually remove the file '%s', or enable '"
+		    "SET allow_extensions_metadata_mismatch=true'",
+		    extension_name, extension_name, full_extension_path);
 	}
 
 	result.prev_version = parsed_metadata.AppearsValid() ? parsed_metadata.extension_version : "";
@@ -307,7 +308,7 @@ vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(DBConfig &config
 		auto extension_file_name = StringUtil::GetFileName(path);
 		auto extension_name = StringUtil::Split(extension_file_name, ".")[0];
 
-		result.push_back(update_extension(config, fs, fs.JoinPath(ext_directory, path), extension_name));
+		result.push_back(UpdateExtensionInternal(config, fs, fs.JoinPath(ext_directory, path), extension_name));
 	});
 #endif
 
@@ -324,7 +325,7 @@ ExtensionUpdateResult ExtensionHelper::UpdateExtension(DBConfig &config, FileSys
 
 	auto full_extension_path = fs.JoinPath(ext_directory, extension_name + ".duckdb_extension");
 
-	auto update_result = update_extension(config, fs, full_extension_path, extension_name);
+	auto update_result = UpdateExtensionInternal(config, fs, full_extension_path, extension_name);
 
 	if (update_result.tag == ExtensionUpdateResultTag::NOT_INSTALLED) {
 		throw InvalidInputException("Failed to update the extension '%s', the extension is not installed!",

@@ -50,7 +50,6 @@ unique_ptr<GlobalSourceState> PhysicalUpdateExtensions::GetGlobalSourceState(Cli
 			res->update_result_entries.emplace_back(ExtensionHelper::UpdateExtension(context, ext));
 		}
 	}
-	// TODO: update specific extensions;
 
 	return std::move(res);
 }

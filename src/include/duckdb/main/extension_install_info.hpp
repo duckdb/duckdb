@@ -25,8 +25,6 @@ public:
 	ExtensionInstallMode mode;
 	//! Full path where the extension was generated from
 	string full_path;
-	//!  This extension was installed at an explicit version, it will not be updated
-	bool pinned_version = false;
 	//! (optional) Repository url where the extension came from
 	string repository_url;
 	//! (optional) Version of the extension
