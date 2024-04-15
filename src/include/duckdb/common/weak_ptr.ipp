@@ -42,6 +42,9 @@ public:
 
 	// Assignment operators
 	weak_ptr &operator=(const weak_ptr &other) {
+		if (this == &other) {
+			return *this;
+		}
 		internal = other.internal;
 		return *this;
 	}

@@ -104,6 +104,9 @@ public:
 
 	// Assign from shared_ptr copy
 	shared_ptr<T> &operator=(const shared_ptr &other) noexcept {
+		if (this == &other) {
+			return *this;
+		}
 		// Create a new shared_ptr using the copy constructor, then swap out the ownership to *this
 		shared_ptr(other).swap(*this);
 		return *this;
@@ -235,16 +238,17 @@ public:
 
 private:
 	// This overload is used when the class inherits from 'enable_shared_from_this<U>'
-	template <class U, class _OrigPtr,
-	          typename std::enable_if<std::is_convertible<_OrigPtr *, const enable_shared_from_this<U> *>::value,
+	template <class U, class V,
+	          typename std::enable_if<std::is_convertible<V *, const enable_shared_from_this<U> *>::value,
 	                                  int>::type = 0>
-	void __enable_weak_this(const enable_shared_from_this<U> *object,
-	                        _OrigPtr *ptr) noexcept { // NOLINT: invalid case style
-		typedef typename std::remove_cv<U>::type NonConstU;
+	void __enable_weak_this(const enable_shared_from_this<U> *object, // NOLINT: invalid case style
+	                        V *ptr) noexcept {
+		typedef typename std::remove_cv<U>::type non_const_u_t;
 		if (object && object->__weak_this_.expired()) {
 			// __weak_this__ is the mutable variable returned by 'shared_from_this'
 			// it is initialized here
-			object->__weak_this_ = shared_ptr<NonConstU>(*this, const_cast<NonConstU *>(static_cast<const U *>(ptr)));
+			auto non_const = const_cast<non_const_u_t *>(static_cast<const U *>(ptr)); // NOLINT: const cast
+			object->__weak_this_ = shared_ptr<non_const_u_t>(*this, non_const);
 		}
 	}
 
