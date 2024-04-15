@@ -422,18 +422,17 @@ unique_ptr<ColumnCheckpointState> ColumnData::CreateCheckpointState(RowGroup &ro
 
 void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
                                 Vector &scan_vector) {
-	bool has_updates = HasUpdates();
 	if (state.scan_options && state.scan_options->force_fetch_row) {
 		for (idx_t i = 0; i < count; i++) {
 			ColumnFetchState fetch_state;
 			segment.FetchRow(fetch_state, state.row_index + i, scan_vector, i);
 		}
 	} else {
-		segment.Scan(state, count, scan_vector, 0, !has_updates);
+		segment.Scan(state, count, scan_vector, 0, !HasUpdates());
 	}
 
-	if (has_updates) {
-		scan_vector.Flatten(count);
+	if (updates) {
+		D_ASSERT(scan_vector.GetVectorType() == VectorType::FLAT_VECTOR);
 		updates->FetchCommittedRange(state.row_index - row_group_start, count, scan_vector);
 	}
 }
