@@ -34,7 +34,7 @@ struct UninitializedRegion {
 //! The current state of a partial block
 struct PartialBlockState {
 	//! The block id of the partial block
-	block_id_t block_id;
+	block_id_t block_id = INVALID_BLOCK;
 	//! The total bytes that we can assign to this block
 	uint32_t block_size;
 	//! Next allocation offset, and also the current allocation size
