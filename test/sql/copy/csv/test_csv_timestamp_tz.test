@@ -15,4 +15,3 @@ query II
 select * from read_csv_auto('__TEST_DIR__/timestamps.csv');
 ----
 Tuesday	Tuesday
-
