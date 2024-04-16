@@ -232,6 +232,23 @@ string ExtensionHelper::ExtensionFinalizeUrlTemplate(const string &url_template,
 	return url;
 }
 
+static void CheckExtensionMetadataOnInstall(DBConfig &config, void *in_buffer, idx_t file_size, ExtensionInstallInfo &info, const string &extension_name) {
+	if (file_size < ParsedExtensionMetaData::FOOTER_SIZE) {
+		throw IOException("Failed to install '%s', file too small to be a valid DuckDB extension!", extension_name);
+	}
+
+	auto parsed_metadata = ExtensionHelper::ParseExtensionMetaData(static_cast<char *>(in_buffer) +
+	                                                               (file_size - ParsedExtensionMetaData::FOOTER_SIZE));
+
+	auto metadata_mismatch_error = parsed_metadata.GetInvalidMetadataError();
+
+	if (!metadata_mismatch_error.empty() && !config.options.allow_extensions_metadata_mismatch) {
+		throw IOException("Failed to install '%s', %s", extension_name, metadata_mismatch_error);
+	}
+
+	info.version = parsed_metadata.extension_version;
+}
+
 static void WriteExtensionFiles(FileSystem &fs, const string &temp_path, const string &local_extension_path,
                                 void *in_buffer, idx_t file_size, bool force_install, ExtensionInstallInfo &info) {
 	// Write files
@@ -241,13 +258,6 @@ static void WriteExtensionFiles(FileSystem &fs, const string &temp_path, const s
 		fs.RemoveFile(local_extension_path);
 	}
 	fs.MoveFile(temp_path, local_extension_path);
-
-	// This is the moment to parse the metadata to get the version info from the buffer
-	auto parsed_metadata = ExtensionHelper::ParseExtensionMetaData(static_cast<char *>(in_buffer) +
-	                                                               (file_size - ParsedExtensionMetaData::FOOTER_SIZE));
-	if (parsed_metadata.AppearsValid()) {
-		info.version = parsed_metadata.extension_version;
-	}
 
 	// Write metadata
 	auto metadata_tmp_path = temp_path + ".info";
@@ -281,6 +291,7 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DBConfig &config,
 	auto in_buffer = ReadExtensionFileFromDisk(fs, file, file_size);
 
 	ExtensionInstallInfo info;
+	CheckExtensionMetadataOnInstall(config, (void *)in_buffer.get(), file_size, info, extension_name);
 
 	if (repository_url.empty()) {
 		info.mode = ExtensionInstallMode::CUSTOM_PATH;
@@ -337,6 +348,8 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DBConfig &config, con
 	auto decompressed_body = GZipFileSystem::UncompressGZIPString(res->body);
 
 	ExtensionInstallInfo info;
+	CheckExtensionMetadataOnInstall(config, (void *)decompressed_body.data(), decompressed_body.size(), info, extension_name);
+
 	info.mode = ExtensionInstallMode::REPOSITORY;
 	info.full_path = url;
 	info.repository_url = repository_url;

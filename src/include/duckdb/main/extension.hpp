@@ -40,6 +40,9 @@ struct ParsedExtensionMetaData {
 	bool AppearsValid() {
 		return magic_value == EXPECTED_MAGIC_VALUE;
 	}
+
+	// Returns an error string describing which parts of the metadata are mismatcheds
+	string GetInvalidMetadataError();
 };
 
 } // namespace duckdb

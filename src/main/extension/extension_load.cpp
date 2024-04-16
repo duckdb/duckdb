@@ -65,32 +65,6 @@ static string FilterZeroAtEnd(string s) {
 	return s;
 }
 
-static string PrettyPrintString(const string &s) {
-	string res = "";
-	for (auto c : s) {
-		if (StringUtil::CharacterIsAlpha(c) || StringUtil::CharacterIsDigit(c) || c == '_' || c == '-' || c == ' ' ||
-		    c == '.') {
-			res += c;
-		} else {
-			uint8_t value = c;
-			res += "\\x";
-			uint8_t first = value / 16;
-			if (first < 10) {
-				res.push_back((char)('0' + first));
-			} else {
-				res.push_back((char)('a' + first - 10));
-			}
-			uint8_t second = value % 16;
-			if (second < 10) {
-				res.push_back((char)('0' + second));
-			} else {
-				res.push_back((char)('a' + second - 10));
-			}
-		}
-	}
-	return res;
-}
-
 ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(const char *metadata) {
 	ParsedExtensionMetaData result;
 
@@ -250,31 +224,11 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 	// Parse the extension metadata from the extension binary
 	auto parsed_metadata = ParseExtensionMetaData(*handle);
 
-	string metadata_mismatch_error;
-	const string engine_version = string(ExtensionHelper::GetVersionDirectoryName());
-	const string engine_platform = string(DuckDB::Platform());
+	auto metadata_mismatch_error = parsed_metadata.GetInvalidMetadataError();
 
-	// Check the parsed
-	if (!parsed_metadata.AppearsValid()) {
-		// metadata do not looks right, add this to the error message
-		metadata_mismatch_error = StringUtil::Format("\nFile '%s' is not a DuckDB extension. The metadata at the end of the file is invalid. "
-		                              "This version of DuckDB can only load extensions that are compiled for DuckDB "
-		                              "version '%s', platform '%s'.", handle->path, engine_version, engine_platform);
-	} else if (engine_version != parsed_metadata.duckdb_version ||  engine_platform != parsed_metadata.platform) {
-		metadata_mismatch_error = StringUtil::Format("\nFile '%s' is a DuckDB extension, but the metadata does not match:", handle->path);
-
-		if (engine_version != parsed_metadata.duckdb_version) {
-			metadata_mismatch_error +=
-			    "\n" + StringUtil::Format("\nThe file was built for DuckDB version '%s', but we can only load extensions built for DuckDB version '%s'.",
-			                               PrettyPrintString(parsed_metadata.duckdb_version), engine_version);
-		}
-		if (engine_platform != parsed_metadata.platform) {
-			metadata_mismatch_error +=
-			    "\n" + StringUtil::Format("\nThe file was built for the platform '%s', but we can only load extensions built for platform '%s'.",
-			                             PrettyPrintString(parsed_metadata.platform), engine_platform);
-		}
+	if (!metadata_mismatch_error.empty()) {
+		metadata_mismatch_error = StringUtil::Format("Failed to load '%s'",extension) + "\n" + metadata_mismatch_error;
 	}
-
 
 	if (!config.options.allow_unsigned_extensions) {
 		bool signature_valid = CheckExtensionSignature(*handle, parsed_metadata);
