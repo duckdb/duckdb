@@ -2,7 +2,7 @@
 #ifndef JEMALLOC_INTERNAL_DEFS_H_
 #define JEMALLOC_INTERNAL_DEFS_H_
 
-#include <climits>
+#include <limits.h>
 
 /*
  * If JEMALLOC_PREFIX is defined via --with-jemalloc-prefix, it will cause all
@@ -30,7 +30,7 @@
  * from being exported, but for static libraries, naming collisions are a real
  * possibility.
  */
-#define JEMALLOC_PRIVATE_NAMESPACE duckdb_je_je_
+#define JEMALLOC_PRIVATE_NAMESPACE duckdb_je_
 
 /*
  * Hyper-threaded CPUs may need a special instruction inside spin loops in
@@ -427,13 +427,13 @@
 /*
  * If defined, all the features necessary for background threads are present.
  */
-/* #undef JEMALLOC_BACKGROUND_THREAD */
+#define JEMALLOC_BACKGROUND_THREAD
 
 /*
  * If defined, jemalloc symbols are not exported (doesn't work when
  * JEMALLOC_PREFIX is not defined).
  */
-/* #undef JEMALLOC_EXPORT */
+#define JEMALLOC_EXPORT
 
 /* config.malloc_conf options string. */
 #define JEMALLOC_CONFIG_MALLOC_CONF ""

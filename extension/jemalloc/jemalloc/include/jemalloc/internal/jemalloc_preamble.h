@@ -23,7 +23,7 @@
 #  include "../jemalloc.h"
 #  undef JEMALLOC_NO_RENAME
 #else
-#  define JEMALLOC_N(n) duckdb_je_je_##n
+#  define JEMALLOC_N(n) duckdb_je_##n
 #  include "../jemalloc.h"
 #endif
 

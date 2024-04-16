@@ -64,19 +64,8 @@ add_library(
   src/ticker.c
   src/tsd.c
   src/util.c
-  src/witness.c)
-
-# TODO check if we want this: src/zone.c
-
-# we don't want this
-target_compile_definitions(jemalloc PRIVATE -DJEMALLOC_NO_PRIVATE_NAMESPACE)
-target_compile_definitions(jemalloc PRIVATE -DJEMALLOC_NO_RENAME)
-
-# some extra debug defs
-if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
-  target_compile_definitions(jemalloc PRIVATE -DJEMALLOC_DEBUG)
-  target_compile_definitions(jemalloc PRIVATE -DJEMALLOC_LOG)
-endif()
+  src/witness.c
+  src/zone.c)
 
 set(JEMALLOC_OBJECT_FILES
     ${JEMALLOC_OBJECT_FILES} $<TARGET_OBJECTS:jemalloc>

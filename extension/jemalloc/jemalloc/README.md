@@ -10,7 +10,7 @@ export DUCKDB_DIR=<duckdb_dir>
 Copy jemalloc source files:
 ```sh
 cd <jemalloc_dir>
-./configure --with-jemalloc-prefix="duckdb_je_" --with-private-namespace="duckdb_je_"
+./configure --with-jemalloc-prefix="duckdb_je_" --with-private-namespace="duckdb_"
 cp -r src/* $DUCKDB_DIR/extension/jemalloc/jemalloc/src/
 cp -r include/* $DUCKDB_DIR/extension/jemalloc/jemalloc/include/
 cp COPYING $DUCKDB_DIR/extension/jemalloc/jemalloc/LICENSE
@@ -26,7 +26,31 @@ find . -name "*.txt" -type f -delete
 find . -name "*.py" -type f -delete
 ```
 
-Restore these
+Restore these files:
 ```sh
-git checkout -- include/jemalloc/internal/jemalloc_internal_defs.h CMakeLists.txt
+git checkout -- \
+  include/jemalloc/internal/jemalloc_internal_defs.h \
+  include/jemalloc/jemalloc.h \
+  CMakeLists.txt
+```
+
+The logarithm of the size of a pointer is defined in `jemalloc.h`, around line 50.
+This is not portable, but we can make it portable if we replace all of it with this:
+```c++
+#ifdef _MSC_VER
+#  ifdef _WIN64
+#    define LG_SIZEOF_PTR_WIN 3
+#  else
+#    define LG_SIZEOF_PTR_WIN 2
+#  endif
+#endif
+
+/* sizeof(void *) == 2^LG_SIZEOF_PTR. */
+#ifdef _MSC_VER
+#  define LG_SIZEOF_PTR LG_SIZEOF_PTR_WIN
+#elif INTPTR_MAX == INT64_MAX
+#  define LG_SIZEOF_PTR 3
+#else
+#  define LG_SIZEOF_PTR 2
+#endif
 ```
