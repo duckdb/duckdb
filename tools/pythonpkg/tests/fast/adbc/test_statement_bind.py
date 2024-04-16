@@ -2,6 +2,12 @@ import sys
 
 import pytest
 
+if sys.version_info < (3, 9):
+    pytest.skip(
+        "Python Version must be higher or equal to 3.9 to run this test",
+        allow_module_level=True,
+    )
+
 pa = pytest.importorskip("pyarrow")
 adbc_driver_manager = pytest.importorskip("adbc_driver_manager")
 
@@ -9,7 +15,6 @@ adbc_driver_duckdb = pytest.importorskip("adbc_driver_duckdb.dbapi")
 con = adbc_driver_duckdb.connect()
 
 
-@pytest.mark.skipif(sys.version_info < (3, 9), reason="Requires python 3.9")
 def _import(handle):
     """Helper to import a C Data Interface handle."""
     if isinstance(handle, adbc_driver_manager.ArrowArrayStreamHandle):
