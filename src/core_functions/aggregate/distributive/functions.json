@@ -153,7 +153,7 @@
     {
         "name": "sum_no_overflow",
         "parameters": "arg",
-        "description": "Calculates the sum value for all tuples in arg without overflow checks.",
+        "description": "Internal only. Calculates the sum value for all tuples in arg without overflow checks.",
         "example": "sum_no_overflow(A)",
         "type": "aggregate_function_set"
     }

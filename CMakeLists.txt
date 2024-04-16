@@ -822,7 +822,7 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY EXTENSION_VERS
     TARGET ${TARGET_NAME}
     POST_BUILD
     COMMAND
-    ${CMAKE_COMMAND} -DEXTENSION=$<TARGET_FILE:${TARGET_NAME}> -DPLATFORM_FILE=${CMAKE_BINARY_DIR}/duckdb_platform_out -DDUCKDB_VERSION="${DUCKDB_NORMALIZED_VERSION}" -DEXTENSION_VERSION="${EXTENSION_VERSION}" -DNULL_FILE=${CMAKE_SOURCE_DIR}/scripts/null.txt -P ${CMAKE_SOURCE_DIR}/scripts/append_metadata.cmake
+    ${CMAKE_COMMAND} -DEXTENSION=$<TARGET_FILE:${TARGET_NAME}> -DPLATFORM_FILE=${DuckDB_BINARY_DIR}/duckdb_platform_out -DDUCKDB_VERSION="${DUCKDB_NORMALIZED_VERSION}" -DEXTENSION_VERSION="${EXTENSION_VERSION}" -DNULL_FILE=${CMAKE_CURRENT_FUNCTION_LIST_DIR}/scripts/null.txt -P ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/scripts/append_metadata.cmake
     )
   add_dependencies(${TARGET_NAME} duckdb_platform)
   if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_TIDY)
@@ -907,8 +907,23 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TEST
           GIT_SUBMODULES "${SUBMODULES}"
           PATCH_COMMAND ${PATCH_COMMAND}
   )
-  message(STATUS "Load extension '${NAME}' from ${URL} @ ${COMMIT}")
   FETCHCONTENT_POPULATE(${NAME}_EXTENSION_FC)
+
+  find_package(Git)
+  if(Git_FOUND)
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
+        WORKING_DIRECTORY "${${NAME}_extension_fc_SOURCE_DIR}"
+        RESULT_VARIABLE GIT_RESULT
+        OUTPUT_VARIABLE GIT_SHORT_COMMIT
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+  else()
+    message(WARNING "Git not found, using ${COMMIT} as GIT_SHORT_COMMIT")
+    set(GIT_SHORT_COMMIT "${COMMIT}")
+  endif()
+
+  message(STATUS "Load extension '${NAME}' from ${URL} @ ${GIT_SHORT_COMMIT}")
+  set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION "${GIT_SHORT_COMMIT}")
 
   if ("${INCLUDE_PATH}" STREQUAL "")
     set(INCLUDE_FULL_PATH "${${NAME}_extension_fc_SOURCE_DIR}/src/include")

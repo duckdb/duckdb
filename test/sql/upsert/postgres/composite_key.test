@@ -66,11 +66,15 @@ statement ok
 insert into insertconflicttest values (12, 'Date', 0) on conflict (fruit, key) do update set other = 1
 
 # Partial index tests, no inference predicate specified
-statement ok
+statement error
 create unique index part_comp_key_index on insertconflicttest(key, fruit) where key < 5;
+----
+Creating partial indexes is not supported currently
 
-statement ok
+statement error
 create unique index expr_part_comp_key_index on insertconflicttest(key, fruit) where key < 5;
+----
+Creating partial indexes is not supported currently
 
 # Expression index tests
 statement ok
