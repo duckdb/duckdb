@@ -147,10 +147,6 @@ vector<string> VirtualFileSystem::ListSubSystems() {
 	return names;
 }
 
-FileSystem &VirtualFileSystem::GetSubsystem(const string &fpath) {
-	return FindFileSystem(fpath).GetSubsystem(fpath);
-}
-
 std::string VirtualFileSystem::GetName() const {
 	return "VirtualFileSystem";
 }

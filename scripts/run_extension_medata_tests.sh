@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Please consider the your energy footprint by only running this script with ccache.
+# Please consider your energy footprint by only running this script with ccache.
 # note that subsequent runs used cached artifacts, use `make clean` or rm -rf build/debug to clean
 
 set -x
