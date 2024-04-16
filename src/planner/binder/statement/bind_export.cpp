@@ -16,6 +16,7 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/constraints/not_null_constraint.hpp"
 
 #include <algorithm>
 
