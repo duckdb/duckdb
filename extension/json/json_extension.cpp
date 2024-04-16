@@ -23,7 +23,7 @@ static DefaultMacro json_macros[] = {
     {DEFAULT_SCHEMA, "json", {"x", nullptr}, "json_extract(x, '$')"},
     {nullptr, nullptr, {nullptr}, nullptr}};
 
-void JsonExtension::Load(DuckDB &db) {
+static void LoadInternal(DuckDB &db) {
 	auto &db_instance = *db.instance;
 	// JSON type
 	auto json_type = LogicalType::JSON();
@@ -64,6 +64,10 @@ void JsonExtension::Load(DuckDB &db) {
 	}
 }
 
+void JsonExtension::Load(DuckDB &db) {
+	LoadInternal(db);
+}
+
 std::string JsonExtension::Name() {
 	return "json";
 }
@@ -74,12 +78,9 @@ extern "C" {
 
 DUCKDB_EXTENSION_API void json_init(duckdb::DatabaseInstance &db) {
 	duckdb::DuckDB db_wrapper(db);
-	db_wrapper.LoadExtension<duckdb::JsonExtension>();
+	LoadInternal(db_wrapper);
 }
 
-DUCKDB_EXTENSION_API const char *json_version() {
-	return duckdb::DuckDB::LibraryVersion();
-}
 }
 
 #ifndef DUCKDB_EXTENSION_MAIN
