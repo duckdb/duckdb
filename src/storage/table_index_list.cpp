@@ -69,7 +69,9 @@ void TableIndexList::InitializeIndexes(ClientContext &context, DataTableInfo &ta
 		auto index_type = context.db->config.GetIndexTypes().FindByName(index_type_name);
 		if (!index_type) {
 			if (throw_on_failure) {
-				throw MissingExtensionException("Cannot initialize index '%s', unknown index type '%s'. You probably need to load an extension.", unknown_index.name, index_type_name);
+				throw MissingExtensionException(
+				    "Cannot initialize index '%s', unknown index type '%s'. You probably need to load an extension.",
+				    unknown_index.name, index_type_name);
 			}
 			continue;
 		}
