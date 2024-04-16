@@ -89,6 +89,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 		column_definitions.emplace_back(column_def.Copy());
 	}
 
+	info->InitializeIndexes(context);
+
 	// first check if there are any indexes that exist that point to the removed column
 	info->indexes.Scan([&](Index &index) {
 		for (auto &column_id : index.column_ids) {
@@ -135,6 +137,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<Bound
 		column_definitions.emplace_back(column_def.Copy());
 	}
 
+	info->InitializeIndexes(context);
+
 	// Verify the new constraint against current persistent/local data
 	VerifyNewConstraint(context, parent, constraint.get());
 
@@ -153,6 +157,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	for (auto &column_def : parent.column_definitions) {
 		column_definitions.emplace_back(column_def.Copy());
 	}
+
+	info->InitializeIndexes(context);
 
 	// first check if there are any indexes that exist that point to the changed column
 	info->indexes.Scan([&](Index &index) {
