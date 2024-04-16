@@ -27,4 +27,4 @@ SET allow_unsigned_extensions=false;
 statement error
 LOAD 'README.md';
 ----
-IO Error: Extension "README.md" could not be loaded because its signature is either missing or invalid and unsigned extensions are disabled by configuration
+The file is not a DuckDB extension. The metadata at the end of the file is invalid

@@ -217,28 +217,6 @@ runs:
         rm -rf build/release/extension
         mv build/extension_tmp build/release/extension
 
-    # This step runs the UPDATE EXTENSIONS test by using loadable_extension_demo and loadable_extension_demo_2
-    - name: Run extension update test
-      if: ${{ inputs.run_autoload_tests == 1 }}
-      shell: bash
-      env:
-        RUN_EXTENSION_UPDATE_TEST: 1
-        LOCAL_EXTENSION_REPO: './build/extension_updating_test_repository'
-        LOCAL_EXTENSION_DIR: './build/extension_updating_test_directory'
-      run: |
-        mkdir $LOCAL_EXTENSION_REPO
-        mkdir $LOCAL_EXTENSION_DIR
-        # Populate LOCAL_EXTENSION_REPO with loadable_extension_demo (using duckdb itself to create the correct directory structure)
-        ./build/debug/duckdb -unsigned -c "set extension_directory='$LOCAL_EXTENSION_REPO'; install 'build/debug/test/extension/loadable_extension_demo.duckdb_extension';"
-        # Install loadable_extension_demo from LOCAL_EXTENSION_REPO to LOCAL_EXTENSION_DIR
-        ./build/debug/duckdb -unsigned -c "set extension_directory='$LOCAL_EXTENSION_DIR'; set custom_extension_repository='$LOCAL_EXTENSION_REPO'; install loadable_extension_demo;"
-        # Now create the updated loadable_extension_demo by moving loadable_extension_demo onto it
-        mv ./build/debug/test/extension/loadable_extension_demo_2.duckdb_extension ./build/debug/test/extension/loadable_extension_demo.duckdb_extension 
-        # Now populate the repository with the updated extension
-        ./build/debug/duckdb -unsigned -c "set extension_directory='$LOCAL_EXTENSION_REPO'; force install 'build/debug/test/extension/loadable_extension_demo.duckdb_extension';"
-        # Now run the test 
-        ./build/debug/test/unittest test/extension/update_extensions_ci.test
-
     - name: Deploy
       if: ${{ inputs.deploy_as != '' }}
       shell: bash

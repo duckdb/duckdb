@@ -227,7 +227,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 	auto metadata_mismatch_error = parsed_metadata.GetInvalidMetadataError();
 
 	if (!metadata_mismatch_error.empty()) {
-		metadata_mismatch_error = StringUtil::Format("Failed to load '%s'", extension) + "\n" + metadata_mismatch_error;
+		metadata_mismatch_error = StringUtil::Format("Failed to load '%s', %s", extension, metadata_mismatch_error);
 	}
 
 	if (!config.options.allow_unsigned_extensions) {
@@ -240,13 +240,13 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 
 		if (!metadata_mismatch_error.empty()) {
 			// Signed extensions perform the full check
-			throw InvalidInputException(metadata_mismatch_error.substr(1));
+			throw InvalidInputException(metadata_mismatch_error);
 		}
 	} else if (!config.options.allow_extensions_metadata_mismatch) {
 		if (!metadata_mismatch_error.empty()) {
 			// Unsigned extensions AND configuration allowing metadata_mismatch_error, loading allowed, mainly for
 			// debugging purposes
-			throw InvalidInputException(metadata_mismatch_error.substr(1));
+			throw InvalidInputException(metadata_mismatch_error);
 		}
 	}
 

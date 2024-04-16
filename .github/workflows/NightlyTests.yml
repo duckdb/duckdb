@@ -401,6 +401,35 @@ jobs:
        shell: bash
        run: python3 scripts/test_zero_initialize.py
 
+  extension-updating:
+    name: Extension updating test
+    runs-on: ubuntu-20.04
+    needs: linux-memory-leaks
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ env.CCACHE_SAVE }}
+
+      - name: Build
+        shell: bash
+        run: |
+          ./scripts/run_extension_medata_tests.sh
+
   no-string-inline:
     name: No String Inline / Destroy Unpinned Blocks
     runs-on: ubuntu-20.04

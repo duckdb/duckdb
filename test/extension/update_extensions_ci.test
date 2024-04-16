@@ -2,25 +2,167 @@
 # description: Tests for the update extensions statement
 # group: [extension]
 
-# NOTE: this test requires specific setup and can only be ran once, check out relevant CI job for reproduction
+# NOTE: this test requires specific setup and should probably only by ran through `scripts/run_extension_medata_tests.sh`
+
+load __TEST_DIR__/update_extensions_ci.db
 
 # This test expects a specific state, which is marked to be present through setting this env variable.
 require-env RUN_EXTENSION_UPDATE_TEST
 
-# This repo is expected to contain loadable_extension_demo.duckdb_extension at version default-version-2
-require-env LOCAL_EXTENSION_REPO
+# This repo is expected to contain json and tpch, where tpch was updated from v0.0.1 to v0.0.2
+require-env LOCAL_EXTENSION_REPO_UPDATED
 
-# This extension install dir is expected to contain loadable_extension_demo.duckdb_extension at version default-version
+# This repo is expected to contain the json extension built with a binary with an incorrect platform
+require-env LOCAL_EXTENSION_REPO_INCORRECT_PLATFORM
+
+# This repo is expected to contain the json extension built with a binary with an incorrect duckdb_version
+require-env LOCAL_EXTENSION_REPO_INCORRECT_DUCKDB_VERSION
+
+# This repo is expected to contain the json extension built with a binary with an incorrect version and platform
+require-env LOCAL_EXTENSION_REPO_VERSION_AND_PLATFORM_INCORRECT
+
+# This extension dir is expected to contain json, tpch and tpcds all at version v0.0.1 and tpcds installed directly, not through
+# a repo
 require-env LOCAL_EXTENSION_DIR
 
+# This dir holds some directly installable, incorrectly matched extensions, but also a correctly installable
+require-env DIRECT_INSTALL_DIR
+
 statement ok
-set custom_extension_repository='${LOCAL_EXTENSION_REPO}'
+set custom_extension_repository='${LOCAL_EXTENSION_REPO_UPDATED}'
 
 statement ok
 set extension_directory='${LOCAL_EXTENSION_DIR}'
+
+query IIII rowsort
+SELECT extension_name, install_mode, installed_from, extension_version FROM duckdb_extensions() where installed
+----
+json	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.1
+parquet	(empty)	(empty)	(empty)
+tpcds	CUSTOM_PATH	./build/extension_metadata_test_data/direct_install/tpcds.duckdb_extension	v0.0.1
+tpch	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.1
 
 # The loadable_extension_demo is loaded as a direct URL, these are not considered for updating
 query IIIII rowsort
 UPDATE EXTENSIONS;
 ----
-loadable_extension_demo	<REGEX>:.*	UPDATED	default-version	default-version-2
+json	<REGEX>:.*	NO_UPDATE_AVAILABLE	v0.0.1	v0.0.1
+tpcds	<REGEX>:.*	NOT_A_REPOSITORY	v0.0.1	v0.0.1
+tpch	<REGEX>:.*	UPDATED	v0.0.1	v0.0.2
+
+# duckdb_extensions() now also showing updated version
+query IIII rowsort
+SELECT extension_name, install_mode, installed_from, extension_version FROM duckdb_extensions() where installed
+----
+json	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.1
+parquet	(empty)	(empty)	(empty)
+tpcds	CUSTOM_PATH	./build/extension_metadata_test_data/direct_install/tpcds.duckdb_extension	v0.0.1
+tpch	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.2
+
+# Rerunning update will now show everything being up-to-date
+query IIIII rowsort
+UPDATE EXTENSIONS;
+----
+json	<REGEX>:.*	NO_UPDATE_AVAILABLE	v0.0.1	v0.0.1
+tpcds	<REGEX>:.*	NOT_A_REPOSITORY	v0.0.1	v0.0.1
+tpch	<REGEX>:.*	NO_UPDATE_AVAILABLE	v0.0.2	v0.0.2
+
+statement ok
+load json;
+
+statement ok
+load tpch;
+
+statement ok
+load tpcds;
+
+# Ensure the result is still fine after loading
+query IIII rowsort
+SELECT extension_name, install_mode, installed_from, extension_version FROM duckdb_extensions() where installed
+----
+json	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.1
+parquet	(empty)	(empty)	(empty)
+tpcds	CUSTOM_PATH	./build/extension_metadata_test_data/direct_install/tpcds.duckdb_extension	v0.0.1
+tpch	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.2
+
+## Try various failing installations and match their error
+statement error
+FORCE INSTALL '${DIRECT_INSTALL_DIR}/json_incorrect_platform.duckdb_extension';
+----
+Failed to install './build/extension_metadata_test_data/direct_install/json_incorrect_platform.duckdb_extension', The file was built for the platform 'test_platform', but we can only load extensions built for platform
+
+statement error
+FORCE INSTALL json_incorrect_platform FROM '${LOCAL_EXTENSION_REPO_INCORRECT_PLATFORM}'
+----
+Failed to install 'json_incorrect_platform', The file was built for the platform 'test_platform', but we can only load extensions built for platform
+
+statement error
+FORCE INSTALL '${DIRECT_INSTALL_DIR}/json_incorrect_version.duckdb_extension';
+----
+Failed to install './build/extension_metadata_test_data/direct_install/json_incorrect_version.duckdb_extension', The file was built for DuckDB version 'v1337', but we can only load extensions built for DuckDB version
+
+statement error
+FORCE INSTALL json_incorrect_version FROM '${LOCAL_EXTENSION_REPO_INCORRECT_DUCKDB_VERSION}';
+----
+Failed to install 'json_incorrect_version', The file was built for DuckDB version 'v1337', but we can only load extensions built for DuckDB version
+
+# These should print both errors
+statement error
+FORCE INSTALL '${DIRECT_INSTALL_DIR}/json_incorrect_version_and_platform.duckdb_extension';
+----
+Also, the file was built for the platform 'test_platform', but we can only load extensions built for platform
+
+statement error
+FORCE INSTALL json_incorrect_version_and_platform FROM '${LOCAL_EXTENSION_REPO_VERSION_AND_PLATFORM_INCORRECT}'
+----
+Also, the file was built for the platform 'test_platform', but we can only load extensions built for platform
+
+## Now try the same for loading, this time only with the direct load syntax
+statement error
+LOAD '${DIRECT_INSTALL_DIR}/json_incorrect_version_and_platform.duckdb_extension';
+----
+Also, the file was built for the platform 'test_platform', but we can only load extensions built for platform
+
+statement error
+LOAD '${DIRECT_INSTALL_DIR}/json_incorrect_platform.duckdb_extension';
+----
+The file was built for the platform 'test_platform', but we can only load extensions built for platform
+
+statement error
+LOAD '${DIRECT_INSTALL_DIR}/json_incorrect_version.duckdb_extension';
+----
+The file was built for DuckDB version 'v1337', but we can only load extensions built for DuckDB version
+
+# Note that this is the json extension with incorrect platform and version
+statement error
+FORCE INSTALL '${DIRECT_INSTALL_DIR}/json.duckdb_extension';
+----
+Also, the file was built for the platform 'test_platform', but we can only load extensions built for platform
+
+# Now we allow mismatching metadata
+statement ok
+set allow_extensions_metadata_mismatch=true;
+
+# Meaning that now it works
+statement ok
+FORCE INSTALL '${DIRECT_INSTALL_DIR}/json.duckdb_extension';
+
+# We can even load it
+statement ok
+LOAD json;
+
+restart
+
+# However, when signed unsigned extensions are not allowed, things are different
+statement ok
+set allow_unsigned_extensions=false
+
+# Installing is still fine
+statement ok
+FORCE INSTALL '${DIRECT_INSTALL_DIR}/json.duckdb_extension';
+
+# But loading is not
+statement error
+LOAD json;
+----
+ Also, the file was built for the platform 'test_platform', but we can only load extensions built for platform
