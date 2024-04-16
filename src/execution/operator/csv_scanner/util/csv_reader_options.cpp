@@ -180,8 +180,6 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 		SetSkipRows(ParseInteger(value, loption));
 	} else if (loption == "max_line_size" || loption == "maximum_line_size") {
 		maximum_line_size = NumericCast<idx_t>(ParseInteger(value, loption));
-	} else if (loption == "force_not_null") {
-		force_not_null = ParseColumnList(value, expected_names, loption);
 	} else if (loption == "date_format" || loption == "dateformat") {
 		string format = ParseString(value, loption);
 		SetDateFormat(LogicalTypeId::DATE, format, true);
