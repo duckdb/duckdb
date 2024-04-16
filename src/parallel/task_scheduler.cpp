@@ -109,7 +109,11 @@ TaskScheduler::TaskScheduler(DatabaseInstance &db)
 
 TaskScheduler::~TaskScheduler() {
 #ifndef DUCKDB_NO_THREADS
-	RelaunchThreadsInternal(0);
+	try {
+		RelaunchThreadsInternal(0);
+	} catch (...) {
+		// nothing we can do in the destructor if this fails
+	}
 #endif
 }
 
