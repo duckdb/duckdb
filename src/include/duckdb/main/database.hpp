@@ -112,7 +112,7 @@ public:
 			return;
 		}
 		extension.Load(*this);
-		instance->SetExtensionLoaded(extension.Name());
+		instance->SetExtensionLoaded(extension.Name(), extension.Version());
 	}
 
 	DUCKDB_API FileSystem &GetFileSystem();
