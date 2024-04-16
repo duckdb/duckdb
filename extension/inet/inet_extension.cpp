@@ -17,7 +17,7 @@ namespace duckdb {
 
 static constexpr auto INET_TYPE_NAME = "INET";
 
-void InetExtension::Load(DuckDB &db) {
+static void LoadInternal(DuckDB &db) {
 	// add the "inet" type
 	child_list_t<LogicalType> children;
 	children.push_back(make_pair("ip_type", LogicalType::UTINYINT));
@@ -49,6 +49,10 @@ void InetExtension::Load(DuckDB &db) {
 	ExtensionUtil::AddFunctionOverload(*db.instance, add_fun);
 }
 
+void InetExtension::Load(DuckDB &db) {
+	LoadInternal(db);
+}
+
 std::string InetExtension::Name() {
 	return "inet";
 }
@@ -59,12 +63,9 @@ extern "C" {
 
 DUCKDB_EXTENSION_API void inet_init(duckdb::DatabaseInstance &db) {
 	duckdb::DuckDB db_wrapper(db);
-	db_wrapper.LoadExtension<duckdb::InetExtension>();
+	LoadInternal(db_wrapper);
 }
 
-DUCKDB_EXTENSION_API const char *inet_version() {
-	return duckdb::DuckDB::LibraryVersion();
-}
 }
 
 #ifndef DUCKDB_EXTENSION_MAIN
