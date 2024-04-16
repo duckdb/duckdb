@@ -78,9 +78,9 @@
 /*
  * Defined if os_unfair_lock_*() functions are available, as provided by Darwin.
  */
-//#if defined(__APPLE__)
-//#define JEMALLOC_OS_UNFAIR_LOCK
-//#endif
+// #if defined(__APPLE__)
+// #define JEMALLOC_OS_UNFAIR_LOCK
+// #endif
 
 /* Defined if syscall(2) is usable. */
 /* #undef JEMALLOC_USE_SYSCALL */
@@ -304,9 +304,9 @@
 /*
  * Darwin (OS X) uses zones to work around Mach-O symbol override shortcomings.
  */
-//#if defined(__APPLE__)
-//#define JEMALLOC_ZONE
-//#endif
+// #if defined(__APPLE__)
+// #define JEMALLOC_ZONE
+// #endif
 
 /*
  * Methods for determining whether the OS overcommits.
@@ -421,7 +421,7 @@
 #define JEMALLOC_HAVE_PTHREAD
 
 /* dlsym() support */
-#define JEMALLOC_HAVE_DLSYM
+// #define JEMALLOC_HAVE_DLSYM
 
 /* Adaptive mutex support in pthreads. */
 /* #undef JEMALLOC_HAVE_PTHREAD_MUTEX_ADAPTIVE_NP */
