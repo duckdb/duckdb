@@ -86,6 +86,10 @@ void JemallocExtension::FlushAll() {
 	SetJemallocCTL("thread.peak.reset");
 }
 
+std::string JemallocExtension::Version() const {
+	return EXT_VERSION_JEMALLOC;
+}
+
 } // namespace duckdb
 
 extern "C" {

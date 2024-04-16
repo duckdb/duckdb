@@ -283,6 +283,10 @@ std::string IcuExtension::Name() {
 	return "icu";
 }
 
+std::string IcuExtension::Version() const {
+	return EXT_VERSION_ICU;
+}
+
 } // namespace duckdb
 
 extern "C" {

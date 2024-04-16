@@ -202,6 +202,10 @@ std::string TpchExtension::Name() {
 	return "tpch";
 }
 
+std::string TpchExtension::Version() const {
+	return EXT_VERSION_TPCH;
+}
+
 } // namespace duckdb
 
 extern "C" {

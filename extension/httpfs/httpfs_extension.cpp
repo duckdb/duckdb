@@ -68,6 +68,10 @@ std::string HttpfsExtension::Name() {
 	return "httpfs";
 }
 
+std::string HttpfsExtension::Version() const {
+	return EXT_VERSION_HTTPFS;
+}
+
 } // namespace duckdb
 
 extern "C" {
