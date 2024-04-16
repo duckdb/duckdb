@@ -87,7 +87,7 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 					string error;
 					if (constant_expr.value.DefaultTryCastAs(LogicalType::BIGINT, bigint_value, &error)) {
 						int64_t order_index = BigIntValue::Get(bigint_value);
-						idx_t positional_index = order_index < 0 ? NumericLimits<idx_t>::Maximum() : order_index;
+						idx_t positional_index = order_index < 0 ? NumericLimits<idx_t>::Maximum() : idx_t(order_index);
 						order.expression = make_uniq<PositionalReferenceExpression>(positional_index);
 					}
 				}
