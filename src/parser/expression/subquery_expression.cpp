@@ -14,6 +14,9 @@ SubqueryExpression::SubqueryExpression()
 string SubqueryExpression::ToString() const {
 	switch (subquery_type) {
 	case SubqueryType::ANY:
+		if (comparison_type == ExpressionType::COMPARE_EQUAL) {
+			return "(" + child->ToString() + " IN (" + subquery->ToString() + "))";
+		}
 		return "(" + child->ToString() + " " + ExpressionTypeToOperator(comparison_type) + " ANY(" +
 		       subquery->ToString() + "))";
 	case SubqueryType::EXISTS:
