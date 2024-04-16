@@ -1,4 +1,4 @@
-from sqllogictest import SQLLogicParser, SQLLogicTest
+from sqllogictest import SQLParserException, SQLLogicParser, SQLLogicTest
 
 from typing import Optional
 import argparse
@@ -14,7 +14,7 @@ def main():
     parser = SQLLogicParser()
     out: Optional[SQLLogicTest] = parser.parse(filename)
     if not out:
-        raise Exception(f"Test {filename} could not be parsed")
+        raise SQLParserException(f"Test {filename} could not be parsed")
 
 
 if __name__ == "__main__":
