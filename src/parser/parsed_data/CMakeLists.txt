@@ -29,6 +29,7 @@ add_library_unity(
   sample_options.cpp
   transaction_info.cpp
   pragma_info.cpp
+  parse_info.cpp
   vacuum_info.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_parsed_data>

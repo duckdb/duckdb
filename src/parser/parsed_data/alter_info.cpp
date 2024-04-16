@@ -25,10 +25,4 @@ AlterEntryData AlterInfo::GetAlterEntryData() const {
 	return data;
 }
 
-string AlterInfo::ToString() const {
-	string result = "";
-	result += ";";
-	return result;
-}
-
 } // namespace duckdb

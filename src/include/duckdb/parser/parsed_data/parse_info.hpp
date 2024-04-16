@@ -12,6 +12,8 @@
 
 namespace duckdb {
 
+enum class CatalogType : uint8_t;
+
 enum class ParseInfoType : uint8_t {
 	ALTER_INFO,
 	ATTACH_INFO,
@@ -54,6 +56,7 @@ public:
 
 	virtual void Serialize(Serializer &serializer) const;
 	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);
+	static string TypeToString(CatalogType type);
 };
 
 } // namespace duckdb

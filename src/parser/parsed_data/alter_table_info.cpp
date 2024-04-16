@@ -44,6 +44,21 @@ unique_ptr<AlterInfo> SetCommentInfo::Copy() const {
 	                                                 if_not_found);
 }
 
+string SetCommentInfo::ToString() const {
+	string result = "";
+
+	result += "COMMENT ON ";
+	result += ParseInfo::TypeToString(entry_catalog_type);
+	result += " ";
+	// FIXME: QualifierToString ...
+	result += KeywordHelper::WriteOptionallyQuoted(name);
+	result += " IS ";
+	result += comment_value.ToSQLString();
+
+	result += ";";
+	return result;
+}
+
 SetCommentInfo::SetCommentInfo() : AlterInfo(AlterType::SET_COMMENT) {
 }
 
@@ -135,6 +150,23 @@ unique_ptr<AlterInfo> RemoveColumnInfo::Copy() const {
 	return make_uniq_base<AlterInfo, RemoveColumnInfo>(GetAlterEntryData(), removed_column, if_column_exists, cascade);
 }
 
+string RemoveColumnInfo::ToString() const {
+	string result = "";
+	result += "ALTER TABLE ";
+	// FIXME: QualifierToString
+	result += KeywordHelper::WriteOptionallyQuoted(name);
+	result += " DROP COLUMN ";
+	if (if_column_exists) {
+		result += "IF EXISTS ";
+	}
+	result += KeywordHelper::WriteOptionallyQuoted(removed_column);
+	if (cascade) {
+		result += " CASCADE";
+	}
+	result += ";";
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // ChangeColumnTypeInfo
 //===--------------------------------------------------------------------===//
@@ -152,6 +184,25 @@ ChangeColumnTypeInfo::~ChangeColumnTypeInfo() {
 unique_ptr<AlterInfo> ChangeColumnTypeInfo::Copy() const {
 	return make_uniq_base<AlterInfo, ChangeColumnTypeInfo>(GetAlterEntryData(), column_name, target_type,
 	                                                       expression->Copy());
+}
+
+string ChangeColumnTypeInfo::ToString() const {
+	string result = "";
+	result += "ALTER TABLE ";
+	// FIXME: QualifierToString
+	result += KeywordHelper::WriteOptionallyQuoted(name);
+	result += " ALTER COLUMN ";
+	result += KeywordHelper::WriteOptionallyQuoted(column_name);
+	result += " TYPE ";
+	result += target_type.ToString(); // FIXME: ToSQLString ?
+	// FIXME: ^ opt_collate
+	if (expression) {
+		result += " USING ";
+		result += expression->ToString();
+	}
+	// FIXME: restrict/cascade ?
+	result += ";";
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
@@ -172,6 +223,19 @@ unique_ptr<AlterInfo> SetDefaultInfo::Copy() const {
 	                                                 expression ? expression->Copy() : nullptr);
 }
 
+string SetDefaultInfo::ToString() const {
+	string result = "";
+	result += "ALTER TABLE ";
+	// FIXME: QualifierToString
+	result += KeywordHelper::WriteOptionallyQuoted(name);
+	result += " ALTER COLUMN ";
+	result += KeywordHelper::WriteOptionallyQuoted(column_name);
+	result += " SET DEFAULT ";
+	result += expression->ToString();
+	result += ";";
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // SetNotNullInfo
 //===--------------------------------------------------------------------===//
@@ -188,6 +252,18 @@ unique_ptr<AlterInfo> SetNotNullInfo::Copy() const {
 	return make_uniq_base<AlterInfo, SetNotNullInfo>(GetAlterEntryData(), column_name);
 }
 
+string SetNotNullInfo::ToString() const {
+	string result = "";
+	result += "ALTER TABLE ";
+	// FIXME: QualifierToString
+	result += KeywordHelper::WriteOptionallyQuoted(name);
+	result += " ALTER COLUMN ";
+	result += KeywordHelper::WriteOptionallyQuoted(column_name);
+	result += " SET NOT NULL";
+	result += ";";
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // DropNotNullInfo
 //===--------------------------------------------------------------------===//
@@ -202,6 +278,18 @@ DropNotNullInfo::~DropNotNullInfo() {
 
 unique_ptr<AlterInfo> DropNotNullInfo::Copy() const {
 	return make_uniq_base<AlterInfo, DropNotNullInfo>(GetAlterEntryData(), column_name);
+}
+
+string DropNotNullInfo::ToString() const {
+	string result = "";
+	result += "ALTER TABLE ";
+	// FIXME: QualifierToString
+	result += KeywordHelper::WriteOptionallyQuoted(name);
+	result += " ALTER COLUMN ";
+	result += KeywordHelper::WriteOptionallyQuoted(column_name);
+	result += " DROP NOT NULL";
+	result += ";";
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
@@ -223,6 +311,10 @@ AlterForeignKeyInfo::~AlterForeignKeyInfo() {
 unique_ptr<AlterInfo> AlterForeignKeyInfo::Copy() const {
 	return make_uniq_base<AlterInfo, AlterForeignKeyInfo>(GetAlterEntryData(), fk_table, pk_columns, fk_columns,
 	                                                      pk_keys, fk_keys, type);
+}
+
+string AlterForeignKeyInfo::ToString() const {
+	throw NotImplementedException("NOT PARSABLE CURRENTLY");
 }
 
 //===--------------------------------------------------------------------===//
@@ -256,6 +348,17 @@ RenameViewInfo::~RenameViewInfo() {
 
 unique_ptr<AlterInfo> RenameViewInfo::Copy() const {
 	return make_uniq_base<AlterInfo, RenameViewInfo>(GetAlterEntryData(), new_view_name);
+}
+
+string RenameViewInfo::ToString() const {
+	string result = "";
+	result += "ALTER VIEW ";
+	// FIXME: QualifierToString
+	result += KeywordHelper::WriteOptionallyQuoted(name);
+	result += " RENAME TO ";
+	result += KeywordHelper::WriteOptionallyQuoted(new_view_name);
+	result += ";";
+	return result;
 }
 
 } // namespace duckdb

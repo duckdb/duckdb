@@ -21,6 +21,19 @@ unique_ptr<AlterInfo> SetColumnCommentInfo::Copy() const {
 	return std::move(result);
 }
 
+string SetColumnCommentInfo::ToString() const {
+	string result = "";
+
+	D_ASSERT(catalog_entry_type == CatalogType::INVALID);
+	result += "COMMENT ON COLUMN ";
+	// FIXME: QualifierToString ...
+	result += KeywordHelper::WriteOptionallyQuoted(name);
+	result += " IS ";
+	result += comment_value.ToSQLString();
+	result += ";";
+	return result;
+}
+
 optional_ptr<CatalogEntry> SetColumnCommentInfo::TryResolveCatalogEntry(ClientContext &context) {
 	auto entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, catalog, schema, name, if_not_found);
 
