@@ -1323,7 +1323,6 @@ DUCKDB_EXTENSION_API void parquet_init(duckdb::DatabaseInstance &db) { // NOLINT
 	duckdb::DuckDB db_wrapper(db);
 	LoadInternal(db_wrapper);
 }
-
 }
 #endif
 

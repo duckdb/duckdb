@@ -65,7 +65,6 @@ DUCKDB_EXTENSION_API void inet_init(duckdb::DatabaseInstance &db) {
 	duckdb::DuckDB db_wrapper(db);
 	LoadInternal(db_wrapper);
 }
-
 }
 
 #ifndef DUCKDB_EXTENSION_MAIN
