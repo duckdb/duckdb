@@ -19,20 +19,20 @@ std::string JemallocExtension::Name() {
 }
 
 data_ptr_t JemallocExtension::Allocate(PrivateAllocatorData *private_data, idx_t size) {
-	return data_ptr_cast(duckdb_jemalloc::je_malloc(size));
+	return data_ptr_cast(duckdb_je_malloc(size));
 }
 
 void JemallocExtension::Free(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
-	duckdb_jemalloc::je_free(pointer);
+	duckdb_je_free(pointer);
 }
 
 data_ptr_t JemallocExtension::Reallocate(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
                                          idx_t size) {
-	return data_ptr_cast(duckdb_jemalloc::je_realloc(pointer, size));
+	return data_ptr_cast(duckdb_je_realloc(pointer, size));
 }
 
 static void JemallocCTL(const char *name, void *old_ptr, size_t *old_len, void *new_ptr, size_t new_len) {
-	if (duckdb_jemalloc::je_mallctl(name, old_ptr, old_len, new_ptr, new_len) != 0) {
+	if (duckdb_je_mallctl(name, old_ptr, old_len, new_ptr, new_len) != 0) {
 #ifdef DEBUG
 		// We only want to throw an exception here when debugging
 		throw InternalException("je_mallctl failed for setting \"%s\"", name);
