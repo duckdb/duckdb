@@ -21,6 +21,9 @@ public:
 
 	DUCKDB_API virtual void Load(DuckDB &db) = 0;
 	DUCKDB_API virtual std::string Name() = 0;
+	DUCKDB_API virtual std::string Version() const {
+		return "";
+	}
 };
 
 //! The parsed extension metadata footer
