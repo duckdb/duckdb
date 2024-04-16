@@ -649,7 +649,7 @@
 			{
 				"name": "na_values",
 				"default": "None",
-				"type": "Optional[str]"
+				"type": "Optional[str| List[str]]"
 			},
 			{
 				"name": "skiprows",

@@ -25,6 +25,7 @@ class ParsedExpression;
 class ResultModifier;
 class OrderModifier;
 class UpdateSetInfo;
+class GroupByNode;
 
 class StatementSimplifier {
 public:
@@ -46,18 +47,26 @@ private:
 
 	template <class T>
 	void SimplifyList(vector<T> &list, bool is_optional = true);
+	template <class T>
+	void SimplifyMap(T &map);
+	template <class T>
+	void SimplifySet(T &set);
 
 	template <class T>
 	void SimplifyReplace(T &element, T &other);
 
 	template <class T>
 	void SimplifyOptional(duckdb::unique_ptr<T> &opt);
+	template <class T>
+	void SimplifyAlias(T &input);
+	template <class T>
+	void SimplifyEnum(T &enum_ref, T default_value);
 
 	void Simplify(unique_ptr<TableRef> &ref);
 
 	void Simplify(SelectNode &node);
 	void Simplify(SetOperationNode &node);
-	void Simplify(QueryNode &node);
+	void Simplify(unique_ptr<QueryNode> &node);
 
 	void Simplify(ResultModifier &modifier);
 	void Simplify(OrderModifier &modifier);
@@ -69,8 +78,12 @@ private:
 	                            vector<unique_ptr<ParsedExpression>> &expression_list);
 	void SimplifyExpressionList(vector<unique_ptr<ParsedExpression>> &expression_list, bool is_optional = true);
 	void Simplify(CommonTableExpressionMap &cte_map);
+	void Simplify(GroupByNode &groups);
 
 	void Simplify(UpdateSetInfo &info);
+
+private:
+	vector<reference<unique_ptr<QueryNode>>> query_nodes;
 };
 
 } // namespace duckdb
