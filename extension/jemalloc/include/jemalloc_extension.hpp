@@ -23,6 +23,7 @@ public:
 
 	static void ThreadFlush(idx_t threshold);
 	static void FlushAll();
+	static void SetBackgroundThreads(bool enable);
 };
 
 } // namespace duckdb

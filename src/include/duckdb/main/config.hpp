@@ -191,6 +191,8 @@ struct DBConfigOptions {
 	static bool debug_print_bindings; // NOLINT: debug setting
 	//! The peak allocation threshold at which to flush the allocator after completing a task (1 << 27, ~128MB)
 	idx_t allocator_flush_threshold = 134217728;
+	//! Whether the allocator background thread is enabled
+	bool allocator_background_threads = false;
 	//! DuckDB API surface
 	string duckdb_api;
 	//! Metadata from DuckDB callers

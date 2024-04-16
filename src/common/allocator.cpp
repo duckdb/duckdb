@@ -215,6 +215,12 @@ void Allocator::FlushAll() {
 #endif
 }
 
+void Allocator::SetBackgroundThreads(bool enable) {
+#ifdef USE_JEMALLOC
+	JemallocExtension::SetBackgroundThreads(enable);
+#endif
+}
+
 //===--------------------------------------------------------------------===//
 // Debug Info (extended)
 //===--------------------------------------------------------------------===//

@@ -42,7 +42,7 @@ static void JemallocCTL(const char *name, void *old_ptr, size_t *old_len, void *
 
 template <class T>
 static void SetJemallocCTL(const char *name, T &val) {
-	JemallocCTL(name, &val, sizeof(T));
+	JemallocCTL(name, nullptr, nullptr, &val, sizeof(T));
 }
 
 static void SetJemallocCTL(const char *name) {
@@ -57,6 +57,10 @@ static T GetJemallocCTL(const char *name) {
 	return result;
 }
 
+static inline string PurgeArenaString(idx_t arena_idx) {
+	return StringUtil::Format("arena.%llu.purge", arena_idx);
+}
+
 void JemallocExtension::ThreadFlush(idx_t threshold) {
 	// We flush after exceeding the threshold
 	if (GetJemallocCTL<uint64_t>("thread.peak.read") < threshold) {
@@ -67,7 +71,7 @@ void JemallocExtension::ThreadFlush(idx_t threshold) {
 	SetJemallocCTL("thread.tcache.flush");
 
 	// Flush this thread's arena
-	const auto purge_arena = StringUtil::Format("arena.%llu.purge", idx_t(GetJemallocCTL<unsigned>("thread.arena")));
+	const auto purge_arena = PurgeArenaString(idx_t(GetJemallocCTL<unsigned>("thread.arena")));
 	SetJemallocCTL(purge_arena.c_str());
 
 	// Reset the peak after resetting
@@ -79,11 +83,15 @@ void JemallocExtension::FlushAll() {
 	SetJemallocCTL("thread.tcache.flush");
 
 	// Flush all arenas
-	const auto purge_arena = StringUtil::Format("arena.%llu.purge", MALLCTL_ARENAS_ALL);
+	const auto purge_arena = PurgeArenaString(MALLCTL_ARENAS_ALL);
 	SetJemallocCTL(purge_arena.c_str());
 
 	// Reset the peak after resetting
 	SetJemallocCTL("thread.peak.reset");
+}
+
+void JemallocExtension::SetBackgroundThreads(bool enable) {
+	SetJemallocCTL("background_thread", enable);
 }
 
 } // namespace duckdb

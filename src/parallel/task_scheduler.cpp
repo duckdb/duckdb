@@ -22,10 +22,6 @@ struct SchedulerThread {
 	explicit SchedulerThread(unique_ptr<thread> thread_p) : internal_thread(std::move(thread_p)) {
 	}
 
-	~SchedulerThread() {
-		Allocator::ThreadFlush(0);
-	}
-
 	unique_ptr<thread> internal_thread;
 #endif
 };
@@ -102,8 +98,10 @@ ProducerToken::~ProducerToken() {
 
 TaskScheduler::TaskScheduler(DatabaseInstance &db)
     : db(db), queue(make_uniq<ConcurrentQueue>()),
-      allocator_flush_threshold(db.config.options.allocator_flush_threshold), requested_thread_count(0),
+      allocator_flush_threshold(db.config.options.allocator_flush_threshold),
+      allocator_background_threads(db.config.options.allocator_background_threads), requested_thread_count(0),
       current_thread_count(1) {
+	SetAllocatorBackgroundThreads(db.config.options.allocator_background_threads);
 }
 
 TaskScheduler::~TaskScheduler() {
@@ -157,8 +155,10 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 				break;
 			}
 
-			// Flushes the outstanding allocator's outstanding allocations
-			Allocator::ThreadFlush(allocator_flush_threshold);
+			if (!allocator_background_threads) {
+				// Flushes the outstanding allocator's outstanding allocations
+				Allocator::ThreadFlush(allocator_flush_threshold);
+			}
 		}
 	}
 #else
@@ -256,6 +256,12 @@ void TaskScheduler::SetThreads(idx_t total_threads, idx_t external_threads) {
 }
 
 void TaskScheduler::SetAllocatorFlushTreshold(idx_t threshold) {
+	allocator_flush_threshold = threshold;
+}
+
+void TaskScheduler::SetAllocatorBackgroundThreads(bool enable) {
+	allocator_background_threads = enable;
+	Allocator::SetBackgroundThreads(enable);
 }
 
 void TaskScheduler::Signal(idx_t n) {

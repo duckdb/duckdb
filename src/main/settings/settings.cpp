@@ -1355,6 +1355,28 @@ Value FlushAllocatorSetting::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Allocator Background Thread
+//===--------------------------------------------------------------------===//
+void AllocatorBackgroundThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.allocator_background_threads = input.GetValue<bool>();
+	if (db) {
+		TaskScheduler::GetScheduler(*db).SetAllocatorBackgroundThreads(config.options.allocator_background_threads);
+	}
+}
+
+void AllocatorBackgroundThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.allocator_background_threads = DBConfig().options.allocator_background_threads;
+	if (db) {
+		TaskScheduler::GetScheduler(*db).SetAllocatorBackgroundThreads(config.options.allocator_background_threads);
+	}
+}
+
+Value AllocatorBackgroundThreadsSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(config.options.allocator_background_threads);
+}
+
+//===--------------------------------------------------------------------===//
 // DuckDBApi Setting
 //===--------------------------------------------------------------------===//
 
