@@ -139,9 +139,12 @@ JoinNode &PlanEnumerator::EmitPair(JoinRelationSet &left, JoinRelationSet &right
 	if (left_plan == plans.end() || right_plan == plans.end()) {
 		throw InternalException("No left or right plan: internal error in join order optimizer");
 	}
+	left_plan->second->Verify();
+	right_plan->second->Verify();
 	auto &new_set = query_graph_manager.set_manager.Union(left, right);
 	// create the join tree based on combining the two plans
 	auto new_plan = CreateJoinTree(new_set, info, *left_plan->second, *right_plan->second);
+	new_plan->Verify();
 	// check if this plan is the optimal plan we found for this set of relations
 	auto entry = plans.find(new_set);
 	auto new_cost = new_plan->cost;
@@ -167,14 +170,28 @@ JoinNode &PlanEnumerator::EmitPair(JoinRelationSet &left, JoinRelationSet &right
 			// nodes in the SolveExactly plan
 			// If we know a node in the full plan is updated, we can prevent ourselves from exiting the
 			// DP algorithm until the last plan updated is a full plan
+			result.Verify();
 			UpdateJoinNodesInFullPlan(result);
 			if (must_update_full_plan) {
 				must_update_full_plan = false;
 			}
 		}
 
+		if (new_set.ToString() == "[0, 1, 2, 5, 6, 9]") {
+			auto break_here = 0;
+		}
 		D_ASSERT(new_plan);
 		plans[new_set] = std::move(new_plan);
+		std::cout << "updating set " << new_set.ToString() << "with children " << left.ToString() << " and " << right.ToString() << std::endl;
+		if (new_set.ToString() == "[0, 2, 5, 6]") {
+			unordered_set<idx_t> bindings = {0, 1, 2, 5, 6, 9};
+			JoinRelationSet &desired_set = query_graph_manager.set_manager.GetJoinRelation(bindings);
+			auto desired_set_plan = plans.find(desired_set);
+			if (desired_set_plan != plans.end()) {
+				desired_set_plan->second->Verify();
+				std::cout << "verify ok? I don't think so" << std::endl;
+			}
+		}
 		return result;
 	}
 	return *entry->second;

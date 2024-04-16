@@ -48,6 +48,7 @@ private:
 public:
 	void Print();
 	string ToString();
+	void Verify();
 };
 
 } // namespace duckdb
