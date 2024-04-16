@@ -1247,7 +1247,7 @@ unique_ptr<TableRef> ParquetScanReplacement(ClientContext &context, const string
 	return std::move(table_function);
 }
 
-void ParquetExtension::Load(DuckDB &db) {
+static void LoadInternal(DuckDB &db) {
 	auto &db_instance = *db.instance;
 	auto &fs = db.GetFileSystem();
 	fs.RegisterSubSystem(FileCompressionType::ZSTD, make_uniq<ZStdFileSystem>());
@@ -1306,6 +1306,10 @@ void ParquetExtension::Load(DuckDB &db) {
 	                          LogicalType::BOOLEAN);
 }
 
+void ParquetExtension::Load(DuckDB &db) {
+	LoadInternal(db);
+}
+
 std::string ParquetExtension::Name() {
 	return "parquet";
 }
@@ -1317,12 +1321,9 @@ extern "C" {
 
 DUCKDB_EXTENSION_API void parquet_init(duckdb::DatabaseInstance &db) { // NOLINT
 	duckdb::DuckDB db_wrapper(db);
-	db_wrapper.LoadExtension<duckdb::ParquetExtension>();
+	LoadInternal(db_wrapper);
 }
 
-DUCKDB_EXTENSION_API const char *parquet_version() { // NOLINT
-	return duckdb::DuckDB::LibraryVersion();
-}
 }
 #endif
 
