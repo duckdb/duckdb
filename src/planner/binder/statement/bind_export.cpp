@@ -303,7 +303,14 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 		// We can not export generated columns
 		child_list_t<LogicalType> select_list;
-
+		// Let's verify if any on these columns have not null constraints
+		vector<string> not_null_columns;
+		for (auto &constaint : table.GetConstraints()) {
+			if (constaint->type == ConstraintType::NOT_NULL) {
+				auto &not_null_constraint = constaint->Cast<NotNullConstraint>();
+				not_null_columns.push_back(table.GetColumn(not_null_constraint.index).GetName());
+			}
+		}
 		for (auto &col : table.GetColumns().Physical()) {
 			select_list.push_back(std::make_pair(col.Name(), col.Type()));
 		}
@@ -315,7 +322,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 		exported_data.file_path = info->file_path;
 
-		ExportedTableInfo table_info(table, std::move(exported_data));
+		ExportedTableInfo table_info(table, std::move(exported_data), not_null_columns);
 		exported_tables.data.push_back(table_info);
 		id++;
 

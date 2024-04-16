@@ -45,7 +45,6 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info,
 
 	auto file_path = StringUtil::Replace(exported_table.file_path, "\\", "/");
 	ss << StringUtil::Format("%s FROM %s (", SQLIdentifier(exported_table.table_name), SQLString(file_path));
-
 	// write the copy options
 	ss << "FORMAT '" << info.format << "'";
 	if (info.format == "csv") {
@@ -59,6 +58,10 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info,
 		}
 		if (info.options.find("quote") == info.options.end()) {
 			info.options["quote"].push_back(Value("\""));
+		}
+		info.options.erase("force_not_null");
+		for (auto &not_null_column : exported_table.not_null_columns) {
+			info.options["force_not_null"].push_back(not_null_column);
 		}
 	}
 	for (auto &copy_option : info.options) {
