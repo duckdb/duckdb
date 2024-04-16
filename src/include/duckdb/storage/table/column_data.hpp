@@ -161,6 +161,13 @@ protected:
 	template <bool SCAN_COMMITTED, bool ALLOW_UPDATES>
 	idx_t ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result);
 
+	void ClearUpdates();
+	void FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result, idx_t scan_count,
+	                  bool allow_updates, bool scan_committed);
+	void FetchUpdateRow(TransactionData transaction, row_t row_id, Vector &result, idx_t result_idx);
+	void UpdateInternal(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
+	                    idx_t update_count, Vector &base_vector);
+
 protected:
 	//! The segments holding the data of this column segment
 	ColumnSegmentTree data;

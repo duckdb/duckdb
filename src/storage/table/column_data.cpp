@@ -62,6 +62,11 @@ bool ColumnData::HasUpdates() const {
 	return updates.get();
 }
 
+void ColumnData::ClearUpdates() {
+	lock_guard<mutex> update_guard(update_lock);
+	updates.reset();
+}
+
 idx_t ColumnData::GetMaxEntry() {
 	return count;
 }
@@ -138,25 +143,52 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 	return initial_remaining - remaining;
 }
 
+unique_ptr<BaseStatistics> ColumnData::GetUpdateStatistics() {
+	lock_guard<mutex> update_guard(update_lock);
+	return updates ? updates->GetStatistics() : nullptr;
+}
+
+void ColumnData::FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result, idx_t scan_count,
+                              bool allow_updates, bool scan_committed) {
+	lock_guard<mutex> update_guard(update_lock);
+	if (!updates) {
+		return;
+	}
+	if (!allow_updates && updates->HasUncommittedUpdates(vector_index)) {
+		throw TransactionException("Cannot create index with outstanding updates");
+	}
+	result.Flatten(scan_count);
+	if (scan_committed) {
+		updates->FetchCommitted(vector_index, result);
+	} else {
+		updates->FetchUpdates(transaction, vector_index, result);
+	}
+}
+
+void ColumnData::FetchUpdateRow(TransactionData transaction, row_t row_id, Vector &result, idx_t result_idx) {
+	lock_guard<mutex> update_guard(update_lock);
+	if (!updates) {
+		return;
+	}
+	updates->FetchRow(transaction, row_id, result, result_idx);
+}
+
+void ColumnData::UpdateInternal(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
+                                idx_t update_count, Vector &base_vector) {
+	lock_guard<mutex> update_guard(update_lock);
+	if (!updates) {
+		updates = make_uniq<UpdateSegment>(*this);
+	}
+	updates->Update(transaction, column_index, update_vector, row_ids, update_count, base_vector);
+}
+
 template <bool SCAN_COMMITTED, bool ALLOW_UPDATES>
 idx_t ColumnData::ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
-	bool has_updates = HasUpdates();
 	idx_t current_row = vector_index * STANDARD_VECTOR_SIZE;
 	auto vector_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - current_row);
 
-	auto scan_count = ScanVector(state, result, vector_count, has_updates);
-	if (has_updates) {
-		lock_guard<mutex> update_guard(update_lock);
-		if (!ALLOW_UPDATES && updates->HasUncommittedUpdates(vector_index)) {
-			throw TransactionException("Cannot create index with outstanding updates");
-		}
-		result.Flatten(scan_count);
-		if (SCAN_COMMITTED) {
-			updates->FetchCommitted(vector_index, result);
-		} else {
-			updates->FetchUpdates(transaction, vector_index, result);
-		}
-	}
+	auto scan_count = ScanVector(state, result, vector_count, HasUpdates());
+	FetchUpdates(transaction, vector_index, result, scan_count, ALLOW_UPDATES, SCAN_COMMITTED);
 	return scan_count;
 }
 
@@ -358,24 +390,17 @@ void ColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, 
 	// now perform the fetch within the segment
 	segment->FetchRow(state, row_id, result, result_idx);
 	// merge any updates made to this row
-	lock_guard<mutex> update_guard(update_lock);
-	if (updates) {
-		updates->FetchRow(transaction, row_id, result, result_idx);
-	}
+	FetchUpdateRow(transaction, row_id, result, result_idx);
 }
 
 void ColumnData::Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
                         idx_t update_count) {
-	lock_guard<mutex> update_guard(update_lock);
-	if (!updates) {
-		updates = make_uniq<UpdateSegment>(*this);
-	}
 	Vector base_vector(type);
 	ColumnScanState state;
 	auto fetch_count = Fetch(state, row_ids[0], base_vector);
 
 	base_vector.Flatten(fetch_count);
-	updates->Update(transaction, column_index, update_vector, row_ids, update_count, base_vector);
+	UpdateInternal(transaction, column_index, update_vector, row_ids, update_count, base_vector);
 }
 
 void ColumnData::UpdateColumn(TransactionData transaction, const vector<column_t> &column_path, Vector &update_vector,
@@ -383,11 +408,6 @@ void ColumnData::UpdateColumn(TransactionData transaction, const vector<column_t
 	// this method should only be called at the end of the path in the base column case
 	D_ASSERT(depth >= column_path.size());
 	ColumnData::Update(transaction, column_path[0], update_vector, row_ids, update_count);
-}
-
-unique_ptr<BaseStatistics> ColumnData::GetUpdateStatistics() {
-	lock_guard<mutex> update_guard(update_lock);
-	return updates ? updates->GetStatistics() : nullptr;
 }
 
 void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
@@ -451,14 +471,13 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group,
 		// empty table: flush the empty list
 		return checkpoint_state;
 	}
-	lock_guard<mutex> update_guard(update_lock);
 
 	ColumnDataCheckpointer checkpointer(*this, row_group, *checkpoint_state, checkpoint_info);
 	checkpointer.Checkpoint(std::move(nodes));
 
 	// replace the old tree with the new one
 	data.Replace(l, checkpoint_state->new_tree);
-	updates.reset();
+	ClearUpdates();
 
 	return checkpoint_state;
 }
@@ -533,10 +552,7 @@ void ColumnData::GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_p
 		column_info.segment_count = segment->count;
 		column_info.compression_type = CompressionTypeToString(segment->function.get().type);
 		column_info.segment_stats = segment->stats.statistics.ToString();
-		{
-			lock_guard<mutex> ulock(update_lock);
-			column_info.has_updates = updates ? true : false;
-		}
+		column_info.has_updates = ColumnData::HasUpdates();
 		// persistent
 		// block_id
 		// block_offset
