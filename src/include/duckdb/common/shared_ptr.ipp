@@ -76,12 +76,14 @@ public:
 #ifdef DUCKDB_CLANG_TIDY
 	[[clang::reinitializes]]
 #endif
-	shared_ptr(shared_ptr<U> &&ref) noexcept : internal(std::move(ref.internal)) { // NOLINT: not marked as explicit
+	shared_ptr(shared_ptr<U> &&ref) noexcept // NOLINT: not marked as explicit
+	    : internal(std::move(ref.internal)) {
 	}
 #ifdef DUCKDB_CLANG_TIDY
 	[[clang::reinitializes]]
 #endif
-	shared_ptr(shared_ptr<T> &&other) : internal(std::move(other.internal)) { // NOLINT: not marked as explicit
+	shared_ptr(shared_ptr<T> &&other) // NOLINT: not marked as explicit
+	    : internal(std::move(other.internal)) {
 	}
 
 	// Construct from std::shared_ptr
@@ -104,7 +106,8 @@ public:
 #ifdef DUCKDB_CLANG_TIDY
 	[[clang::reinitializes]]
 #endif
-	shared_ptr(unique_ptr<U, DELETER, SAFE_P> &&other) : internal(std::move(other)) { // NOLINT: not marked as explicit
+	shared_ptr(unique_ptr<U, DELETER, SAFE_P> &&other) // NOLINT: not marked as explicit
+	    : internal(std::move(other)) {
 		__enable_weak_this(internal.get(), internal.get());
 	}
 
