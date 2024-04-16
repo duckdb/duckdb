@@ -101,7 +101,7 @@ public:
 		return get<SAFE>(original::size() - 1);
 	}
 
-	void erase_at(idx_t idx) {
+	void erase_at(idx_t idx) { // NOLINT: not using camelcase on purpose here
 		if (MemorySafety<SAFE>::ENABLED && idx > original::size()) {
 			throw InternalException("Can't remove offset %d from vector of size %d", idx, original::size());
 		}

@@ -16,7 +16,7 @@
 #include <queue>
 #endif
 
-#include <unistd.h> // ssize_t
+#include <sys/types.h> // ssize_t
 
 namespace duckdb {
 

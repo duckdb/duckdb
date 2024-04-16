@@ -808,6 +808,7 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 				T multiplier;
 				auto success = TryCast::Operation<idx_t, T>(scan_state.current_group_offset + i, multiplier);
 				D_ASSERT(success);
+				(void)success;
 				target_ptr[i] = (multiplier * scan_state.current_constant) + scan_state.current_frame_of_reference;
 			}
 
