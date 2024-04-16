@@ -29,6 +29,9 @@
 /* Data. */
 
 /* Runtime configuration options. */
+const int JE_MALLOC_CONF_BUFFER_SIZE = 200;
+const char JE_MALLOC_CONF_BUFFER[JE_MALLOC_CONF_BUFFER_SIZE];
+
 const char	*je_malloc_conf
 #ifndef _WIN32
     JEMALLOC_ATTR(weak)
@@ -4250,6 +4253,13 @@ label_done:
 JEMALLOC_ATTR(constructor)
 static void
 jemalloc_constructor(void) {
+	unsigned long long cpu_count = malloc_ncpus();
+	unsigned long long bgt_count = cpu_count / 8;
+	if (bgt_count == 0) {
+		bgt_count = 1;
+	}
+	snprintf(JE_MALLOC_CONF_BUFFER, JE_MALLOC_CONF_BUFFER_SIZE, "narenas:%llu,dirty_decay_ms:10000,muzzy_decay_ms:10000,max_background_threads:%llu", cpu_count, bgt_count);
+	je_malloc_conf = JE_MALLOC_CONF_BUFFER;
 	malloc_init();
 }
 #endif
