@@ -344,7 +344,9 @@ unique_ptr<BoundTableRef> Binder::BindBoundPivot(PivotRef &ref) {
 	result->bound_pivot.group_count = ref.bound_group_names.size();
 	result->bound_pivot.types = types;
 	auto subquery_alias = ref.alias.empty() ? "__unnamed_pivot" : ref.alias;
+	QueryResult::DeduplicateColumns(names);
 	bind_context.AddGenericBinding(result->bind_index, subquery_alias, names, types);
+
 	MoveCorrelatedExpressions(*result->child_binder);
 	return std::move(result);
 }
