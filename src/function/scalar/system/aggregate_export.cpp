@@ -216,13 +216,13 @@ static unique_ptr<FunctionData> BindAggregateState(ClientContext &context, Scala
 	ErrorData error;
 
 	FunctionBinder function_binder(context);
-	idx_t best_function =
+	auto best_function =
 	    function_binder.BindFunction(aggr.name, aggr.functions, state_type.bound_argument_types, error);
-	if (best_function == DConstants::INVALID_INDEX) {
+	if (!best_function.IsValid()) {
 		throw InternalException("Could not re-bind exported aggregate %s: %s", state_type.function_name,
 		                        error.Message());
 	}
-	auto bound_aggr = aggr.functions.GetFunctionByOffset(best_function);
+	auto bound_aggr = aggr.functions.GetFunctionByOffset(best_function.GetIndex());
 	if (bound_aggr.bind) {
 		// FIXME: this is really hacky
 		// but the aggregate state export needs a rework around how it handles more complex aggregates anyway

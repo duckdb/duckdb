@@ -43,6 +43,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 		result = LogicalComparisonJoin::Deserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_COPY_DATABASE:
+		result = LogicalCopyDatabase::Deserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
 		result = LogicalCopyToFile::Deserialize(deserializer);
 		break;
@@ -184,16 +187,16 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 }
 
 void FilenamePattern::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<string>(200, "base", _base);
-	serializer.WritePropertyWithDefault<idx_t>(201, "pos", _pos);
-	serializer.WritePropertyWithDefault<bool>(202, "uuid", _uuid);
+	serializer.WritePropertyWithDefault<string>(200, "base", base);
+	serializer.WritePropertyWithDefault<idx_t>(201, "pos", pos);
+	serializer.WritePropertyWithDefault<bool>(202, "uuid", uuid);
 }
 
 FilenamePattern FilenamePattern::Deserialize(Deserializer &deserializer) {
 	FilenamePattern result;
-	deserializer.ReadPropertyWithDefault<string>(200, "base", result._base);
-	deserializer.ReadPropertyWithDefault<idx_t>(201, "pos", result._pos);
-	deserializer.ReadPropertyWithDefault<bool>(202, "uuid", result._uuid);
+	deserializer.ReadPropertyWithDefault<string>(200, "base", result.base);
+	deserializer.ReadPropertyWithDefault<idx_t>(201, "pos", result.pos);
+	deserializer.ReadPropertyWithDefault<bool>(202, "uuid", result.uuid);
 	return result;
 }
 
@@ -295,6 +298,17 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::Deserialize(Deserializer &des
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(205, "mark_types", result->mark_types);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(206, "duplicate_eliminated_columns", result->duplicate_eliminated_columns);
 	deserializer.ReadPropertyWithDefault<bool>(207, "delim_flipped", result->delim_flipped, false);
+	return std::move(result);
+}
+
+void LogicalCopyDatabase::Serialize(Serializer &serializer) const {
+	LogicalOperator::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<CopyDatabaseInfo>>(200, "info", info);
+}
+
+unique_ptr<LogicalOperator> LogicalCopyDatabase::Deserialize(Deserializer &deserializer) {
+	auto info = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info");
+	auto result = duckdb::unique_ptr<LogicalCopyDatabase>(new LogicalCopyDatabase(std::move(info)));
 	return std::move(result);
 }
 

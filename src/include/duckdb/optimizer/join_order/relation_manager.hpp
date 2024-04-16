@@ -31,7 +31,7 @@ struct SingleJoinRelation {
 	SingleJoinRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent) : op(op), parent(parent) {
 	}
 	SingleJoinRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, RelationStats stats)
-	    : op(op), parent(parent), stats(stats) {
+	    : op(op), parent(parent), stats(std::move(stats)) {
 	}
 };
 

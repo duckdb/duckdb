@@ -82,7 +82,7 @@ public:
 struct ArrowScanLocalState;
 struct ArrowArrayScanState {
 public:
-	ArrowArrayScanState(ArrowScanLocalState &state);
+	explicit ArrowArrayScanState(ArrowScanLocalState &state);
 
 public:
 	ArrowScanLocalState &state;
@@ -146,7 +146,7 @@ public:
 		if (it == array_states.end()) {
 			auto child_p = make_uniq<ArrowArrayScanState>(*this);
 			auto &child = *child_p;
-			array_states.emplace(std::make_pair(child_idx, std::move(child_p)));
+			array_states.emplace(child_idx, std::move(child_p));
 			return child;
 		}
 		return *it->second;

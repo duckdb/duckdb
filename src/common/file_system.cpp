@@ -117,7 +117,7 @@ void FileSystem::SetWorkingDirectory(const string &path) {
 	}
 }
 
-idx_t FileSystem::GetAvailableMemory() {
+optional_idx FileSystem::GetAvailableMemory() {
 	errno = 0;
 
 #ifdef __MVS__
@@ -128,7 +128,7 @@ idx_t FileSystem::GetAvailableMemory() {
 	idx_t max_memory = MinValue<idx_t>((idx_t)sysconf(_SC_PHYS_PAGES) * (idx_t)sysconf(_SC_PAGESIZE), UINTPTR_MAX);
 #endif
 	if (errno != 0) {
-		return DConstants::INVALID_INDEX;
+		return optional_idx();
 	}
 	return max_memory;
 }
@@ -218,7 +218,7 @@ void FileSystem::SetWorkingDirectory(const string &path) {
 	}
 }
 
-idx_t FileSystem::GetAvailableMemory() {
+optional_idx FileSystem::GetAvailableMemory() {
 	ULONGLONG available_memory_kb;
 	if (GetPhysicallyInstalledSystemMemory(&available_memory_kb)) {
 		return MinValue<idx_t>(available_memory_kb * 1000, UINTPTR_MAX);
@@ -230,7 +230,7 @@ idx_t FileSystem::GetAvailableMemory() {
 	if (GlobalMemoryStatusEx(&mem_state)) {
 		return MinValue<idx_t>(mem_state.ullTotalPhys, UINTPTR_MAX);
 	}
-	return DConstants::INVALID_INDEX;
+	return optional_idx();
 }
 
 string FileSystem::GetWorkingDirectory() {
@@ -495,6 +495,10 @@ idx_t FileSystem::SeekPosition(FileHandle &handle) {
 
 bool FileSystem::CanSeek() {
 	throw NotImplementedException("%s: CanSeek is not implemented!", GetName());
+}
+
+bool FileSystem::IsManuallySet() {
+	return false;
 }
 
 unique_ptr<FileHandle> FileSystem::OpenCompressedFile(unique_ptr<FileHandle> handle, bool write) {

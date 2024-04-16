@@ -21,7 +21,7 @@ template <class OP>
 struct VectorStringCastOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto result = (Vector *)dataptr;
+		auto result = reinterpret_cast<Vector *>(dataptr);
 		return OP::template Operation<INPUT_TYPE>(input, *result);
 	}
 };
@@ -34,7 +34,7 @@ struct VectorTryCastOperator {
 		if (DUCKDB_LIKELY(OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, output))) {
 			return output;
 		}
-		auto data = (VectorTryCastData *)dataptr;
+		auto data = reinterpret_cast<VectorTryCastData *>(dataptr);
 		return HandleVectorCastError::Operation<RESULT_TYPE>(CastExceptionText<INPUT_TYPE, RESULT_TYPE>(input), mask,
 		                                                     idx, *data);
 	}
@@ -44,7 +44,7 @@ template <class OP>
 struct VectorTryCastStrictOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto data = (VectorTryCastData *)dataptr;
+		auto data = reinterpret_cast<VectorTryCastData *>(dataptr);
 		RESULT_TYPE output;
 		if (DUCKDB_LIKELY(OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, output, data->parameters.strict))) {
 			return output;
@@ -58,7 +58,7 @@ template <class OP>
 struct VectorTryCastErrorOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto data = (VectorTryCastData *)dataptr;
+		auto data = reinterpret_cast<VectorTryCastData *>(dataptr);
 		RESULT_TYPE output;
 		if (DUCKDB_LIKELY(OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, output, data->parameters))) {
 			return output;
@@ -74,7 +74,7 @@ template <class OP>
 struct VectorTryCastStringOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto data = (VectorTryCastData *)dataptr;
+		auto data = reinterpret_cast<VectorTryCastData *>(dataptr);
 		RESULT_TYPE output;
 		if (DUCKDB_LIKELY(
 		        OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, output, data->result, data->parameters))) {
@@ -99,7 +99,7 @@ template <class OP>
 struct VectorDecimalCastOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto data = (VectorDecimalCastData *)dataptr;
+		auto data = reinterpret_cast<VectorDecimalCastData *>(dataptr);
 		RESULT_TYPE result_value;
 		if (!OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, result_value, data->vector_cast_data.parameters,
 		                                                     data->width, data->scale)) {
