@@ -104,8 +104,8 @@ static vector<unique_ptr<Expression>> CreateCastExpressions(WriteCSVData &bind_d
 	auto &options = bind_data.options;
 	auto &formats = options.write_date_format;
 
-	bool has_dateformat = !formats[LogicalTypeId::DATE].Empty();
-	bool has_timestampformat = !formats[LogicalTypeId::TIMESTAMP].Empty();
+	bool has_dateformat = !formats[LogicalTypeId::DATE].IsNull();
+	bool has_timestampformat = !formats[LogicalTypeId::TIMESTAMP].IsNull();
 
 	// Create a binder
 	auto binder = Binder::CreateBinder(context);
@@ -127,7 +127,7 @@ static vector<unique_ptr<Expression>> CreateCastExpressions(WriteCSVData &bind_d
 			vector<unique_ptr<ParsedExpression>> children;
 			children.push_back(make_uniq<ColumnRefExpression>(name));
 			// TODO: set from user-provided format
-			children.push_back(make_uniq<ConstantExpression>("%m/%d/%Y, %-I:%-M %p"));
+			children.push_back(make_uniq<ConstantExpression>(formats[LogicalTypeId::DATE]));
 			auto func = make_uniq_base<ParsedExpression, FunctionExpression>("strftime", std::move(children));
 			unbound_expressions.push_back(std::move(func));
 		} else if (has_timestampformat && is_timestamp) {
@@ -135,7 +135,7 @@ static vector<unique_ptr<Expression>> CreateCastExpressions(WriteCSVData &bind_d
 			vector<unique_ptr<ParsedExpression>> children;
 			children.push_back(make_uniq<ColumnRefExpression>(name));
 			// TODO: set from user-provided format
-			children.push_back(make_uniq<ConstantExpression>("%x %X.%g%z"));
+			children.push_back(make_uniq<ConstantExpression>(formats[LogicalTypeId::TIMESTAMP]));
 			auto func = make_uniq_base<ParsedExpression, FunctionExpression>("strftime", std::move(children));
 			unbound_expressions.push_back(std::move(func));
 		} else {
@@ -572,7 +572,8 @@ unique_ptr<PreparedBatchData> WriteCSVPrepareBatch(ClientContext &context, Funct
 	DataChunk cast_chunk;
 	cast_chunk.Initialize(Allocator::Get(context), types);
 
-	auto expressions = CreateCastExpressions(csv_data, context, csv_data.options.name_list, types);
+	auto &original_types = collection->Types();
+	auto expressions = CreateCastExpressions(csv_data, context, csv_data.options.name_list, original_types);
 	ExpressionExecutor executor(context, expressions);
 
 	// write CSV chunks to the batch data
