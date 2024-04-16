@@ -25,15 +25,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSimple &op
 	case LogicalOperatorType::LOGICAL_TRANSACTION:
 		return make_uniq<PhysicalTransaction>(unique_ptr_cast<ParseInfo, TransactionInfo>(std::move(op.info)),
 		                                      op.estimated_cardinality);
-	case LogicalOperatorType::LOGICAL_VACUUM: {
-		auto result = make_uniq<PhysicalVacuum>(unique_ptr_cast<ParseInfo, VacuumInfo>(std::move(op.info)),
-		                                        op.estimated_cardinality);
-		if (!op.children.empty()) {
-			auto child = CreatePlan(*op.children[0]);
-			result->children.push_back(std::move(child));
-		}
-		return std::move(result);
-	}
 	case LogicalOperatorType::LOGICAL_LOAD:
 		return make_uniq<PhysicalLoad>(unique_ptr_cast<ParseInfo, LoadInfo>(std::move(op.info)),
 		                               op.estimated_cardinality);

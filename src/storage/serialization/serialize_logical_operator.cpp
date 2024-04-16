@@ -172,9 +172,6 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_UPDATE:
 		result = LogicalUpdate::Deserialize(deserializer);
 		break;
-	case LogicalOperatorType::LOGICAL_VACUUM:
-		result = LogicalSimple::Deserialize(deserializer);
-		break;
 	case LogicalOperatorType::LOGICAL_WINDOW:
 		result = LogicalWindow::Deserialize(deserializer);
 		break;
