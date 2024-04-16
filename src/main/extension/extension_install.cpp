@@ -232,7 +232,8 @@ string ExtensionHelper::ExtensionFinalizeUrlTemplate(const string &url_template,
 	return url;
 }
 
-static void CheckExtensionMetadataOnInstall(DBConfig &config, void *in_buffer, idx_t file_size, ExtensionInstallInfo &info, const string &extension_name) {
+static void CheckExtensionMetadataOnInstall(DBConfig &config, void *in_buffer, idx_t file_size,
+                                            ExtensionInstallInfo &info, const string &extension_name) {
 	if (file_size < ParsedExtensionMetaData::FOOTER_SIZE) {
 		throw IOException("Failed to install '%s', file too small to be a valid DuckDB extension!", extension_name);
 	}
@@ -348,7 +349,8 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DBConfig &config, con
 	auto decompressed_body = GZipFileSystem::UncompressGZIPString(res->body);
 
 	ExtensionInstallInfo info;
-	CheckExtensionMetadataOnInstall(config, (void *)decompressed_body.data(), decompressed_body.size(), info, extension_name);
+	CheckExtensionMetadataOnInstall(config, (void *)decompressed_body.data(), decompressed_body.size(), info,
+	                                extension_name);
 
 	info.mode = ExtensionInstallMode::REPOSITORY;
 	info.full_path = url;

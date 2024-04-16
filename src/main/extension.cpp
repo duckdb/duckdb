@@ -2,7 +2,6 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/extension_helper.hpp"
 
-
 namespace duckdb {
 
 Extension::~Extension() {
@@ -44,17 +43,19 @@ string ParsedExtensionMetaData::GetInvalidMetadataError() {
 
 	string result;
 	if (engine_version != duckdb_version) {
-		result += StringUtil::Format("The file was built for DuckDB version '%s', but we can only load extensions built for DuckDB version '%s'.",
-		                       PrettyPrintString(duckdb_version), engine_version);
+		result += StringUtil::Format("The file was built for DuckDB version '%s', but we can only load extensions "
+		                             "built for DuckDB version '%s'.",
+		                             PrettyPrintString(duckdb_version), engine_version);
 	}
 	if (engine_platform != platform) {
 		if (!result.empty()) {
-			result += "Also, t";
+			result += " Also, t";
 		} else {
 			result += "T";
 		}
-		result += StringUtil::Format("he file was built for the platform '%s', but we can only load extensions built for platform '%s'.",
-		                              PrettyPrintString(platform), engine_platform);
+		result += StringUtil::Format(
+		    "he file was built for the platform '%s', but we can only load extensions built for platform '%s'.",
+		    PrettyPrintString(platform), engine_platform);
 	}
 
 	return result;

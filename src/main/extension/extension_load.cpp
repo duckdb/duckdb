@@ -94,8 +94,8 @@ ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(FileHandle &hand
 
 	if (handle.GetFileSize() < ParsedExtensionMetaData::FOOTER_SIZE) {
 		throw InvalidInputException(
-		    "File '%s' is not a DuckDB extension. Valid DuckDB extensions must be at least %llu bytes",
-		    handle.path, ParsedExtensionMetaData::FOOTER_SIZE);
+		    "File '%s' is not a DuckDB extension. Valid DuckDB extensions must be at least %llu bytes", handle.path,
+		    ParsedExtensionMetaData::FOOTER_SIZE);
 	}
 
 	handle.Read((void *)metadata_segment.data(), metadata_segment.size(),
@@ -227,7 +227,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 	auto metadata_mismatch_error = parsed_metadata.GetInvalidMetadataError();
 
 	if (!metadata_mismatch_error.empty()) {
-		metadata_mismatch_error = StringUtil::Format("Failed to load '%s'",extension) + "\n" + metadata_mismatch_error;
+		metadata_mismatch_error = StringUtil::Format("Failed to load '%s'", extension) + "\n" + metadata_mismatch_error;
 	}
 
 	if (!config.options.allow_unsigned_extensions) {
