@@ -15,6 +15,10 @@ namespace duckdb {
 ColumnBindingResolver::ColumnBindingResolver(bool verify_only) : verify_only(verify_only) {
 }
 
+void ColumnBindingResolver::SetBindings(vector<ColumnBinding> &&bindings_p) {
+	bindings = std::move(bindings_p);
+}
+
 void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
