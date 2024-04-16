@@ -58,7 +58,7 @@ static void NumberFormatFunction(DataChunk &args, ExpressionState &state, Vector
 	    [&](double value, string_t format) { return NumberFormatScalarFunction(result, value, format); });
 }
 
-void ExcelExtension::Load(DuckDB &db) {
+static void LoadInternal(DuckDB &db) {
 	auto &db_instance = *db.instance;
 
 	ScalarFunction text_func("text", {LogicalType::DOUBLE, LogicalType::VARCHAR}, LogicalType::VARCHAR,
@@ -68,6 +68,10 @@ void ExcelExtension::Load(DuckDB &db) {
 	ScalarFunction excel_text_func("excel_text", {LogicalType::DOUBLE, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                               NumberFormatFunction);
 	ExtensionUtil::RegisterFunction(db_instance, excel_text_func);
+}
+
+void ExcelExtension::Load(DuckDB &db) {
+	LoadInternal(db);
 }
 
 std::string ExcelExtension::Name() {
@@ -80,12 +84,9 @@ extern "C" {
 
 DUCKDB_EXTENSION_API void excel_init(duckdb::DatabaseInstance &db) {
 	duckdb::DuckDB db_wrapper(db);
-	db_wrapper.LoadExtension<duckdb::ExcelExtension>();
+	LoadInternal(db_wrapper);
 }
 
-DUCKDB_EXTENSION_API const char *excel_version() {
-	return duckdb::DuckDB::LibraryVersion();
-}
 }
 
 #ifndef DUCKDB_EXTENSION_MAIN
