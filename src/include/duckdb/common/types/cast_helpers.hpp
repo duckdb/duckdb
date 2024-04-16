@@ -61,10 +61,10 @@ public:
 
 	template <class T>
 	static string_t FormatSigned(T value, Vector &vector) {
-		typedef typename MakeUnsigned<T>::type UNSIGNED;
+		typedef typename MakeUnsigned<T>::type unsigned_t;
 		int8_t sign = -(value < 0);
-		UNSIGNED unsigned_value = UNSIGNED(value ^ T(sign)) + UNSIGNED(AbsValue(sign));
-		auto length = UnsafeNumericCast<idx_t>(UnsignedLength<UNSIGNED>(unsigned_value) + AbsValue(sign));
+		unsigned_t unsigned_value = UNSIGNED(value ^ T(sign)) + unsigned_t(AbsValue(sign));
+		auto length = UnsafeNumericCast<idx_t>(UnsignedLength<unsigned_t>(unsigned_value) + AbsValue(sign));
 		string_t result = StringVector::EmptyString(vector, length);
 		auto dataptr = result.GetDataWriteable();
 		auto endptr = dataptr + length;

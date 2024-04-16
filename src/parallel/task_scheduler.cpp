@@ -16,8 +16,6 @@
 #include <queue>
 #endif
 
-#include <sys/types.h> // ssize_t
-
 namespace duckdb {
 
 struct SchedulerThread {
@@ -263,6 +261,7 @@ void TaskScheduler::SetAllocatorFlushTreshold(idx_t threshold) {
 
 void TaskScheduler::Signal(idx_t n) {
 #ifndef DUCKDB_NO_THREADS
+	typedef std::make_signed<std::size_t>::type ssize_t;
 	queue->semaphore.signal(NumericCast<ssize_t>(n));
 #endif
 }
