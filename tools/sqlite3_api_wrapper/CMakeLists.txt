@@ -11,6 +11,7 @@ add_definitions(-DUSE_DUCKDB_SHELL_WRAPPER)
 include_directories(../../third_party/utf8proc/include)
 
 if(DUCKDB_EXTENSION_AUTOCOMPLETE_SHOULD_LINK)
+  add_definitions(-DEXT_VERSION_AUTOCOMPLETE="")
   include_directories(../../extension/autocomplete/include)
   set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES}
                        ../../extension/autocomplete/autocomplete_extension.cpp)
