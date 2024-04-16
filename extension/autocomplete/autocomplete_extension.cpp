@@ -426,6 +426,10 @@ std::string AutocompleteExtension::Name() {
 	return "autocomplete";
 }
 
+std::string AutocompleteExtension::Version() const {
+	return EXT_VERSION_AUTOCOMPLETE;
+}
+
 } // namespace duckdb
 extern "C" {
 

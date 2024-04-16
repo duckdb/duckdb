@@ -76,6 +76,10 @@ std::string FtsExtension::Name() {
 	return "fts";
 }
 
+std::string FtsExtension::Version() const {
+	return EXT_VERSION_FTS;
+}
+
 } // namespace duckdb
 
 extern "C" {

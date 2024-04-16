@@ -204,6 +204,10 @@ std::string SqlsmithExtension::Name() {
 	return "sqlsmith";
 }
 
+std::string SqlsmithExtension::Version() const {
+	return EXT_VERSION_SQLSMITH;
+}
+
 } // namespace duckdb
 
 extern "C" {
