@@ -247,7 +247,7 @@
 #endif
 
 /* TLS is used to map arenas and magazine caches to threads. */
-#define JEMALLOC_TLS
+// #define JEMALLOC_TLS
 
 /*
  * Used to mark unreachable code to quiet "end of non-void" compiler warnings.
@@ -421,7 +421,9 @@
 #define JEMALLOC_HAVE_PTHREAD
 
 /* dlsym() support */
+// #if defined(__APPLE__)
 // #define JEMALLOC_HAVE_DLSYM
+// #endif
 
 /* Adaptive mutex support in pthreads. */
 /* #undef JEMALLOC_HAVE_PTHREAD_MUTEX_ADAPTIVE_NP */
@@ -467,9 +469,9 @@
 /* #undef JEMALLOC_UAF_DETECTION */
 
 /* Darwin VM_MAKE_TAG support */
-#if defined(__APPLE__)
-#define JEMALLOC_HAVE_VM_MAKE_TAG
-#endif
+// #if defined(__APPLE__)
+// #define JEMALLOC_HAVE_VM_MAKE_TAG
+// #endif
 
 /* If defined, realloc(ptr, 0) defaults to "free" instead of "alloc". */
 /* #undef JEMALLOC_ZERO_REALLOC_DEFAULT_FREE */

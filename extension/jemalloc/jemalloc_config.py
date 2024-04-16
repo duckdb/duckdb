@@ -8,6 +8,7 @@ include_directories = [
 source_files = [
     os.path.sep.join(x.split('/'))
     for x in [
+        'extension/jemalloc/jemalloc_extension.cpp',
         'extension/jemalloc/jemalloc/src/jemalloc.c',
         'extension/jemalloc/jemalloc/src/arena.c',
         'extension/jemalloc/jemalloc/src/background_thread.c',
