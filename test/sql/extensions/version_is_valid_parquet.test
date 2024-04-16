@@ -1,0 +1,12 @@
+# name: test/sql/extensions/version_is_valid_parquet.test
+# description: Test version metadata on load
+# group: [extensions]
+
+require no_extension_autoloading
+
+require parquet
+
+query I
+SELECT count(*) FROM duckdb_extensions() WHERE extension_version != '' AND extension_name == 'parquet';
+----
+1
