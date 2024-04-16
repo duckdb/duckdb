@@ -146,6 +146,15 @@ NULL	3
 1	NULL
 3	NULL
 
+# union by name with different types
+query I
+select '0' as c union all select 0 as c;
+----
+0
+0
 
-
-
+query I
+select '0' as c union all by name select 0 as c;
+----
+0
+0
