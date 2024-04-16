@@ -64,8 +64,7 @@ add_library(
   src/ticker.c
   src/tsd.c
   src/util.c
-  src/witness.c
-  src/zone.c)
+  src/witness.c)
 
 set(JEMALLOC_OBJECT_FILES
     ${JEMALLOC_OBJECT_FILES} $<TARGET_OBJECTS:jemalloc>
