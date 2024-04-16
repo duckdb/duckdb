@@ -34,8 +34,8 @@ DataTableInfo::DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> ta
       table(std::move(table)) {
 }
 
-void DataTableInfo::InitializeIndexes(ClientContext &context) {
-	indexes.InitializeIndexes(context, *this);
+void DataTableInfo::InitializeIndexes(ClientContext &context, bool throw_on_failure) {
+	indexes.InitializeIndexes(context, *this, throw_on_failure);
 }
 
 bool DataTableInfo::IsTemporary() const {
@@ -1006,6 +1006,8 @@ idx_t DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector
 		return 0;
 	}
 
+	info->InitializeIndexes(context, true);
+
 	auto &transaction = DuckTransaction::Get(context, db);
 	auto &local_storage = LocalStorage::Get(transaction);
 	bool has_delete_constraints = TableHasDeleteConstraints(table);
@@ -1162,6 +1164,9 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	if (!is_root) {
 		throw TransactionException("Transaction conflict: cannot update a table that has been altered!");
 	}
+
+	// check that there are no unknown indexes
+	info->InitializeIndexes(context, true);
 
 	// first verify that no constraints are violated
 	VerifyUpdateConstraints(context, table, updates, column_ids);
