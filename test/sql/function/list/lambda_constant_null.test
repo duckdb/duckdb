@@ -1,0 +1,8 @@
+# name: test/sql/function/list/lambda_constant_null.test
+# description: Test constant NULL values in lambdas
+# group: [list]
+
+statement error
+select quantile(NULL, filter(NULL, (c103 -> 'babea54a-2261-4b0c-b14b-1d0e9b794e1a')));
+----
+QUANTILE argument must not be NULL

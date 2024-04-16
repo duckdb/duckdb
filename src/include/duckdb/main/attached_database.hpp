@@ -65,6 +65,7 @@ public:
 	void Close();
 
 	Catalog &ParentCatalog() override;
+	const Catalog &ParentCatalog() const override;
 	StorageManager &GetStorageManager();
 	Catalog &GetCatalog();
 	TransactionManager &GetTransactionManager();
@@ -79,6 +80,7 @@ public:
 	bool IsReadOnly() const;
 	bool IsInitialDatabase() const;
 	void SetInitialDatabase();
+	void SetReadOnlyDatabase();
 
 	static bool NameIsReserved(const string &name);
 	static string ExtractDatabaseName(const string &dbpath, FileSystem &fs);

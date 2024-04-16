@@ -86,6 +86,8 @@ static jmethodID J_UUID_getLeastSignificantBits;
 static jclass J_DuckDBDate;
 static jmethodID J_DuckDBDate_getDaysSinceEpoch;
 
+static jmethodID J_Object_toString;
+
 void ThrowJNI(JNIEnv *env, const char *message) {
 	D_ASSERT(J_SQLException);
 	env->ThrowNew(J_SQLException, message);
@@ -250,6 +252,10 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 	J_ByteBuffer = (jclass)env->NewGlobalRef(tmpLocalRef);
 	env->DeleteLocalRef(tmpLocalRef);
 
+	tmpLocalRef = env->FindClass("java/lang/Object");
+	J_Object_toString = env->GetMethodID(tmpLocalRef, "toString", "()Ljava/lang/String;");
+	env->DeleteLocalRef(tmpLocalRef);
+
 	return JNI_VERSION;
 }
 
@@ -397,11 +403,9 @@ jobject _duckdb_jdbc_startup(JNIEnv *env, jclass, jbyteArray database_j, jboolea
 		jobject key = env->CallObjectMethod(pair, J_Entry_getKey);
 		jobject value = env->CallObjectMethod(pair, J_Entry_getValue);
 
-		D_ASSERT(env->IsInstanceOf(key, J_String));
-		const string &key_str = jstring_to_string(env, (jstring)key);
+		const string &key_str = jstring_to_string(env, (jstring)env->CallObjectMethod(key, J_Object_toString));
 
-		D_ASSERT(env->IsInstanceOf(value, J_String));
-		const string &value_str = jstring_to_string(env, (jstring)value);
+		const string &value_str = jstring_to_string(env, (jstring)env->CallObjectMethod(value, J_Object_toString));
 
 		try {
 			config.SetOptionByName(key_str, Value(value_str));

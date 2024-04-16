@@ -9,7 +9,7 @@ struct DefaultSchema {
 	const char *name;
 };
 
-static DefaultSchema internal_schemas[] = {{"information_schema"}, {"pg_catalog"}, {nullptr}};
+static const DefaultSchema internal_schemas[] = {{"information_schema"}, {"pg_catalog"}, {nullptr}};
 
 static bool GetDefaultSchema(const string &input_schema) {
 	auto schema = StringUtil::Lower(input_schema);

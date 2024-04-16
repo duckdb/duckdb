@@ -192,7 +192,7 @@ bool CatalogSet::CreateEntryInternal(CatalogTransaction transaction, const strin
 }
 
 bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name, unique_ptr<CatalogEntry> value,
-                             const DependencyList &dependencies) {
+                             const LogicalDependencyList &dependencies) {
 	CheckCatalogEntryInvariants(*value, name);
 
 	// Set the timestamp to the timestamp of the current transaction
@@ -210,7 +210,7 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 }
 
 bool CatalogSet::CreateEntry(ClientContext &context, const string &name, unique_ptr<CatalogEntry> value,
-                             const DependencyList &dependencies) {
+                             const LogicalDependencyList &dependencies) {
 	return CreateEntry(catalog.GetCatalogTransaction(context), name, std::move(value), dependencies);
 }
 

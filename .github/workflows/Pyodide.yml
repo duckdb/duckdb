@@ -1,0 +1,107 @@
+name: Pyodide
+on:
+  workflow_call:
+    inputs:
+      override_git_describe:
+        type: string
+      git_ref:
+        type: string
+      skip_tests:
+        type: string
+  workflow_dispatch:
+    inputs:
+      override_git_describe:
+        type: string
+      git_ref:
+        type: string
+      skip_tests:
+        type: string
+  repository_dispatch:
+  push:
+    branches:
+      - "**"
+      - "!main"
+      - "!feature"
+    paths-ignore:
+      - "**"
+      - "!.github/workflows/Pyodide.yml"
+
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+    paths-ignore:
+      - "**"
+      - "!.github/workflows/Pyodide.yml"
+
+jobs:
+  build_pyodide:
+    name: Build pyodide wheel
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        version:
+          - python: "3.10"
+            pyodide-build: "0.22.1"
+          - python: "3.11"
+            pyodide-build: "0.25.1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # fetch everything so that the version on the built wheel path is
+          # correct
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.version.python }}
+
+      - run: pip install 'pyodide-build==${{ matrix.version.pyodide-build }}' 'pydantic<2'
+
+      - name: get emscripten version
+        id: emscripten-version
+        run: |
+          echo "value=$(pyodide config get emscripten_version)" | tee -a "$GITHUB_OUTPUT"
+
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: ${{ steps.emscripten-version.outputs.value }}
+
+      - name: build wasm wheel
+        run: pyodide build --exports=whole_archive
+        working-directory: ./tools/pythonpkg
+        env:
+          DUCKDB_CUSTOM_PLATFORM: wasm_eh_pyodide
+          CFLAGS: "-fexceptions"
+          LDFLAGS: "-fexceptions"
+
+      - name: smoke test duckdb on pyodide
+        run: |
+          pyodide venv .venv-pyodide
+          source .venv-pyodide/bin/activate
+          pip install ./tools/pythonpkg/dist/*.whl
+
+          python -V
+
+          python <<EOF
+          import duckdb
+          print(duckdb.__version__)
+          print(duckdb.sql("SELECT 1 AS a"))
+
+          (platform,) = duckdb.execute("PRAGMA platform").fetchone()
+          assert platform == "wasm_eh_pyodide", platform
+          EOF
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: pyodide-python${{ matrix.version.python }}
+          if-no-files-found: error
+          path: |
+            ./tools/pythonpkg/dist/*.whl
+
+      - name: Deploy
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+        shell: bash
+        run: |
+          ./scripts/upload-assets-to-staging.sh pyodide tools/pythonpkg/dist/*.whl

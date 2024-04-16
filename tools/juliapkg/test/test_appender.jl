@@ -82,8 +82,8 @@ end
     DuckDB.append(appender, Dates.Date("1970-04-11"))
     DuckDB.append(appender, Dates.Time(0, 0, 0, 0, 200))
     DuckDB.append(appender, Dates.DateTime("1970-01-02T01:23:45.678"))
-    DuckDB.append(appender, Missing)
-    DuckDB.append(appender, Nothing)
+    DuckDB.append(appender, missing)
+    DuckDB.append(appender, nothing)
     DuckDB.append(appender, "Foo")
     # End the row of the appender
     DuckDB.end_row(appender)

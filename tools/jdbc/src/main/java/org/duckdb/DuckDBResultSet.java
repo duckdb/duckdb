@@ -440,9 +440,13 @@ public class DuckDBResultSet implements ResultSet {
             return new ByteBufferBackedInputStream(buffer);
         }
 
-        public byte[] getBytes(long pos, int length) {
+        @Override
+        public byte[] getBytes(long pos, int length) throws SQLException {
+            if (pos < 1 || length < 0) {
+                throw new SQLException("Invalid position or length");
+            }
             byte[] bytes = new byte[length];
-            buffer.position((int) pos);
+            buffer.position((int) pos - 1);
             buffer.get(bytes, 0, length);
             return bytes;
         }
