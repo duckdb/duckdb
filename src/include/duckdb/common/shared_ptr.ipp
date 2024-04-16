@@ -73,8 +73,14 @@ public:
 	}
 	// Move constructor, share ownership with ref
 	template <class U, typename std::enable_if<compatible_with_t<U, T>::value, int>::type = 0>
+#ifdef DUCKDB_CLANG_TIDY
+	[[clang::reinitializes]]
+#endif
 	shared_ptr(shared_ptr<U> &&ref) noexcept : internal(std::move(ref.internal)) { // NOLINT: not marked as explicit
 	}
+#ifdef DUCKDB_CLANG_TIDY
+	[[clang::reinitializes]]
+#endif
 	shared_ptr(shared_ptr<T> &&other) : internal(std::move(other.internal)) { // NOLINT: not marked as explicit
 	}
 
@@ -95,6 +101,9 @@ public:
 	          typename std::enable_if<compatible_with_t<U, T>::value &&
 	                                      std::is_convertible<typename unique_ptr<U, DELETER>::pointer, T *>::value,
 	                                  int>::type = 0>
+#ifdef DUCKDB_CLANG_TIDY
+	[[clang::reinitializes]]
+#endif
 	shared_ptr(unique_ptr<U, DELETER, SAFE_P> &&other) : internal(std::move(other)) { // NOLINT: not marked as explicit
 		__enable_weak_this(internal.get(), internal.get());
 	}
@@ -140,7 +149,6 @@ public:
 	}
 
 #ifdef DUCKDB_CLANG_TIDY
-	// This is necessary to tell clang-tidy that it reinitializes the variable after a move
 	[[clang::reinitializes]]
 #endif
 	void
@@ -149,7 +157,6 @@ public:
 	}
 	template <typename U>
 #ifdef DUCKDB_CLANG_TIDY
-	// This is necessary to tell clang-tidy that it reinitializes the variable after a move
 	[[clang::reinitializes]]
 #endif
 	void
@@ -158,7 +165,6 @@ public:
 	}
 	template <typename U, typename DELETER>
 #ifdef DUCKDB_CLANG_TIDY
-	// This is necessary to tell clang-tidy that it reinitializes the variable after a move
 	[[clang::reinitializes]]
 #endif
 	void

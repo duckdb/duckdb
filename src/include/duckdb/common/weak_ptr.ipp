@@ -30,9 +30,15 @@ public:
 	weak_ptr(weak_ptr<U> const &ptr, typename std::enable_if<compatible_with_t<U, T>::value, int>::type = 0) noexcept
 	    : internal(ptr.internal) {
 	}
+#ifdef DUCKDB_CLANG_TIDY
+	[[clang::reinitializes]]
+#endif
 	weak_ptr(weak_ptr &&ptr) noexcept : internal(std::move(ptr.internal)) {
 	}
 	template <class U>
+#ifdef DUCKDB_CLANG_TIDY
+	[[clang::reinitializes]]
+#endif
 	weak_ptr(weak_ptr<U> &&ptr, typename std::enable_if<compatible_with_t<U, T>::value, int>::type = 0) noexcept
 	    : internal(std::move(ptr.internal)) {
 	}
