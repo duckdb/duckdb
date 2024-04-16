@@ -205,6 +205,9 @@
 /* #undef LG_QUANTUM */
 
 /* One page is 2^LG_PAGE bytes. */
+// ----- DuckDB comment -----
+// The page size for jemalloc can always be bigger than the actual system page size, so we go with the max here,
+// but only for 64-bit systems, because we assume all 32-bit systems have a page size of 4KB
 #if INTPTR_MAX == INT64_MAX
 #define LG_PAGE 16
 #else
@@ -236,10 +239,15 @@
  * common sequences of mmap()/munmap() calls will cause virtual memory map
  * holes.
  */
+// ----- DuckDB comment -----
+// This makes it feasible to run the larger page size (https://github.com/duckdb/duckdb/discussions/11455),
+// but it is problematic on 32-bit systems, so we'll disable it there
+#if INTPTR_MAX == INT64_MAX
 #define JEMALLOC_RETAIN
+#endif
 
 /* TLS is used to map arenas and magazine caches to threads. */
-/* #undef JEMALLOC_TLS */
+#define JEMALLOC_TLS
 
 /*
  * Used to mark unreachable code to quiet "end of non-void" compiler warnings.
