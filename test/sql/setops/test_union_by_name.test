@@ -158,3 +158,19 @@ select '0' as c union all by name select 0 as c;
 ----
 0
 0
+
+query I
+select {'a': '0'} as c union all by name select {'a': 0} as c
+----
+{'a': 0}
+{'a': 0}
+
+statement error
+select {'a': 'hello'} as c union all by name select {'b': 'hello'} as c;
+----
+Type Error
+
+statement error
+select {'a': 'hello'} as c union all by name select {'a': 'hello', 'b': 'world'} as c;
+----
+Type Error
