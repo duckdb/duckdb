@@ -1342,11 +1342,11 @@ bool StrTimeFormat::Empty() const {
 	return format_specifier.empty();
 }
 
-string StrpTimeFormat::FormatStrpTimeError(const string &input, idx_t position) {
-	if (position == DConstants::INVALID_INDEX) {
+string StrpTimeFormat::FormatStrpTimeError(const string &input, optional_idx position) {
+	if (!position.IsValid()) {
 		return string();
 	}
-	return input + "\n" + string(position, ' ') + "^";
+	return input + "\n" + string(position.GetIndex(), ' ') + "^";
 }
 
 date_t StrpTimeFormat::ParseResult::ToDate() {
@@ -1360,6 +1360,20 @@ bool StrpTimeFormat::ParseResult::TryToDate(date_t &result) {
 	return Date::TryFromDate(data[0], data[1], data[2], result);
 }
 
+dtime_t StrpTimeFormat::ParseResult::ToTime() {
+	const auto hour_offset = data[7] / Interval::MINS_PER_HOUR;
+	const auto mins_offset = data[7] % Interval::MINS_PER_HOUR;
+	return Time::FromTime(data[3] - hour_offset, data[4] - mins_offset, data[5], data[6]);
+}
+
+bool StrpTimeFormat::ParseResult::TryToTime(dtime_t &result) {
+	if (data[7]) {
+		return false;
+	}
+	result = Time::FromTime(data[3], data[4], data[5], data[6]);
+	return true;
+}
+
 timestamp_t StrpTimeFormat::ParseResult::ToTimestamp() {
 	if (is_special) {
 		if (special == date_t::infinity()) {
@@ -1371,9 +1385,7 @@ timestamp_t StrpTimeFormat::ParseResult::ToTimestamp() {
 	}
 
 	date_t date = Date::FromDate(data[0], data[1], data[2]);
-	const auto hour_offset = data[7] / Interval::MINS_PER_HOUR;
-	const auto mins_offset = data[7] % Interval::MINS_PER_HOUR;
-	dtime_t time = Time::FromTime(data[3] - hour_offset, data[4] - mins_offset, data[5], data[6]);
+	dtime_t time = ToTime();
 	return Timestamp::FromDatetime(date, time);
 }
 
@@ -1382,9 +1394,7 @@ bool StrpTimeFormat::ParseResult::TryToTimestamp(timestamp_t &result) {
 	if (!TryToDate(date)) {
 		return false;
 	}
-	const auto hour_offset = data[7] / Interval::MINS_PER_HOUR;
-	const auto mins_offset = data[7] % Interval::MINS_PER_HOUR;
-	dtime_t time = Time::FromTime(data[3] - hour_offset, data[4] - mins_offset, data[5], data[6]);
+	dtime_t time = ToTime();
 	return Timestamp::TryFromDatetime(date, time, result);
 }
 
@@ -1403,6 +1413,15 @@ bool StrpTimeFormat::TryParseDate(string_t input, date_t &result, string &error_
 	return parse_result.TryToDate(result);
 }
 
+bool StrpTimeFormat::TryParseTime(string_t input, dtime_t &result, string &error_message) const {
+	ParseResult parse_result;
+	if (!Parse(input, parse_result)) {
+		error_message = parse_result.FormatError(input, format_specifier);
+		return false;
+	}
+	return parse_result.TryToTime(result);
+}
+
 bool StrpTimeFormat::TryParseTimestamp(string_t input, timestamp_t &result, string &error_message) const {
 	ParseResult parse_result;
 	if (!Parse(input, parse_result)) {
@@ -1410,22 +1429,6 @@ bool StrpTimeFormat::TryParseTimestamp(string_t input, timestamp_t &result, stri
 		return false;
 	}
 	return parse_result.TryToTimestamp(result);
-}
-
-date_t StrpTimeFormat::ParseDate(string_t input) {
-	ParseResult result;
-	if (!Parse(input, result)) {
-		throw InvalidInputException(result.FormatError(input, format_specifier));
-	}
-	return result.ToDate();
-}
-
-timestamp_t StrpTimeFormat::ParseTimestamp(string_t input) {
-	ParseResult result;
-	if (!Parse(input, result)) {
-		throw InvalidInputException(result.FormatError(input, format_specifier));
-	}
-	return result.ToTimestamp();
 }
 
 } // namespace duckdb

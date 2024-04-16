@@ -97,7 +97,7 @@ static bool ClampSlice(const INPUT_TYPE &value, INDEX_TYPE &begin, INDEX_TYPE &e
 	}
 
 	const auto length = ValueLength<INPUT_TYPE, INDEX_TYPE>(value);
-	if (begin < 0 && -begin > length && end < 0 && -end > length) {
+	if (begin < 0 && -begin > length && end < 0 && end < -length) {
 		begin = 0;
 		end = 0;
 		return true;

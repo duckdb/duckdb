@@ -37,7 +37,7 @@ void BufferedFileWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
 			Flush(); // Flush buffer before writing every things else
 		}
 		idx_t remaining_to_write = write_size - to_copy;
-		fs.Write(*handle, const_cast<data_ptr_t>(buffer + to_copy), remaining_to_write);
+		fs.Write(*handle, const_cast<data_ptr_t>(buffer + to_copy), remaining_to_write); // NOLINT: wrong API in Write
 		total_written += remaining_to_write;
 	} else {
 		// first copy anything we can from the buffer

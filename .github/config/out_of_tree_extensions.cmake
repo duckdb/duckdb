@@ -16,7 +16,7 @@
 #  VCPKG_TARGET_TRIPLET=arm64-osx
 
 ################# ARROW
-if (NOT WIN32)
+if (NOT MINGW)
     duckdb_extension_load(arrow
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/arrow
@@ -38,8 +38,7 @@ if (NOT MINGW)
     duckdb_extension_load(azure
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_azure
-            GIT_TAG 86f39d76157de970d16d6d6537bc90c0ee1c7d35
-            APPLY_PATCHES
+            GIT_TAG 09623777a366572bfb8fa53e47acdf72133a360e
             )
 endif()
 
@@ -55,8 +54,7 @@ if (NOT MINGW)
     duckdb_extension_load(iceberg
             ${LOAD_ICEBERG_TESTS}
             GIT_URL https://github.com/duckdb/duckdb_iceberg
-            GIT_TAG 7aa3d8e4cb7b513d35fdacfa28dc328771bc4047
-            APPLY_PATCHES
+            GIT_TAG d89423c2ff90a0b98a093a133c8dfe2a55b9e092
             )
 endif()
 
@@ -67,7 +65,7 @@ if (NOT MINGW)
     duckdb_extension_load(postgres_scanner
             DONT_LINK
             GIT_URL https://github.com/duckdb/postgres_scanner
-            GIT_TAG 375710fd22a35107b2c28e744f787e1a93a99998
+            GIT_TAG 96206f41d5ca7015920a66b54e936c986fe0b0f8
             )
 endif()
 
@@ -75,10 +73,9 @@ endif()
 duckdb_extension_load(spatial
     DONT_LINK LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb_spatial.git
-    GIT_TAG 05c4ba01c500140287bf6946fb6910122e5c2acf
+    GIT_TAG 8ac803e986ccda34f32dee82a7faae95b72b3492
     INCLUDE_DIR spatial/include
     TEST_DIR test/sql
-    APPLY_PATCHES
     )
 
 ################# SQLITE_SCANNER
@@ -92,7 +89,7 @@ endif()
 duckdb_extension_load(sqlite_scanner
         ${STATIC_LINK_SQLITE} LOAD_TESTS
         GIT_URL https://github.com/duckdb/sqlite_scanner
-        GIT_TAG c1343464ef4397665b858db9c193d33fac591b1c
+        GIT_TAG 091197efb34579c7195afa43dfb5925023c915c0
         )
 
 ################# SUBSTRAIT
@@ -103,3 +100,12 @@ if (NOT WIN32)
             GIT_TAG 1116fb580edd3e26e675436dbdbdf4a0aa5e456e
             )
 endif()
+
+
+################# VSS
+duckdb_extension_load(vss
+        LOAD_TESTS
+        GIT_URL https://github.com/duckdb/duckdb_vss
+        GIT_TAG 9038b50cefb8bfd6b8ab8a254d3c728f3f172d15
+        TEST_DIR test/sql
+    )

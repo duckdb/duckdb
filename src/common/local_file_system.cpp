@@ -40,6 +40,7 @@ extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG)
 #endif
 
 #if defined(__linux__)
+#include <linux/falloc.h>
 #include <libgen.h>
 // See e.g.:
 // https://opensource.apple.com/source/CarbonHeaders/CarbonHeaders-18.1/TargetConditionals.h.auto.html
@@ -212,7 +213,7 @@ static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 	try {
 		auto cmdline_file = fs.OpenFile(StringUtil::Format("/proc/%d/cmdline", pid), FileFlags::FILE_FLAGS_READ);
 		auto cmdline = cmdline_file->ReadLine();
-		process_name = basename(const_cast<char *>(cmdline.c_str()));
+		process_name = basename(const_cast<char *>(cmdline.c_str())); // NOLINT: old C API does not take const
 	} catch (std::exception &) {
 		// ignore
 	}

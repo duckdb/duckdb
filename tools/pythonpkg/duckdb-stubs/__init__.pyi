@@ -533,7 +533,11 @@ class DuckDBPyRelation:
             timestamp_format: Optional[str] = None,
             quoting: Optional[str | int] = None,
             encoding: Optional[str] = None,
-            compression: Optional[str] = None
+            compression: Optional[str] = None,
+            overwrite: Optional[bool] = None,
+            per_thread_output: Optional[bool] = None,
+            use_tmp_file: Optional[bool] = None,
+            partition_by: Optional[List[str]] = None
     ) -> None: ...
     def write_parquet(
             self,
@@ -663,7 +667,7 @@ def read_csv(
     sep: Optional[str] = None,
     delimiter: Optional[str] = None,
     dtype: Optional[Dict[str, str] | List[str]] = None,
-    na_values: Optional[str] = None,
+    na_values: Optional[str | List[str]] = None,
     skiprows: Optional[int] = None,
     quotechar: Optional[str] = None,
     escapechar: Optional[str] = None,
@@ -684,7 +688,7 @@ def from_csv_auto(
     sep: Optional[str] = None,
     delimiter: Optional[str] = None,
     dtype: Optional[Dict[str, str] | List[str]] = None,
-    na_values: Optional[str] = None,
+    na_values: Optional[str| List[str]] = None,
     skiprows: Optional[int] = None,
     quotechar: Optional[str] = None,
     escapechar: Optional[str] = None,
