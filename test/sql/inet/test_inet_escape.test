@@ -46,6 +46,38 @@ SELECT html_escape('duckdb');
 ----
 duckdb
 
+# escape values from table
+statement ok
+CREATE TABLE escapes(esc VARCHAR, quote BOOL);
+
+statement ok
+INSERT INTO escapes VALUES ('&', true), ('&', false), ('&&&&&&&&&&&&&&&&&&&&&', true), ('&&&&&&&&&&&&&&&&&&&&&', false);
+
+query I
+SELECT html_escape(esc, quote) FROM escapes;
+----
+&amp;
+&amp;
+&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;
+&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;
+
+query I
+SELECT html_escape(esc, true) FROM escapes;
+----
+&amp;
+&amp;
+&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;
+&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;
+
+query I
+SELECT html_escape(esc, false) FROM escapes;
+----
+&amp;
+&amp;
+&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;
+&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;&amp;
+
+# test incorrect usage
 query I
 SELECT html_escape(NULL);
 ----
@@ -57,9 +89,14 @@ SELECT html_escape(NULL, NULL);
 NULL
 
 query I
+SELECT html_escape(NULL, true);
+----
+NULL
+
+query I
 SELECT html_escape('<script>', NULL);
 ----
-&lt;script&gt;
+NULL
 
 query I
 SELECT html_escape('');
@@ -70,6 +107,17 @@ query I
 SELECT html_escape('', false);
 ----
 (empty)
+
+statement error
+SELECT html_escape();
+----
+Binder Error: No function matches the given name and argument types
+
+statement error
+SELECT html_escape('<script>', 'false', true);
+----
+Binder Error: No function matches the given name and argument types
+
 
 # html_unescape
 query I
@@ -105,11 +153,16 @@ SELECT html_unescape('&#xD800');
 �
 
 query I
+SELECT html_unescape('&#D800');
+----
+&#D800
+
+query I
 SELECT html_unescape('&#x0');
 ----
 �
 
-# check invalid charrefs map
+# check invalid_charref map
 query T
 SELECT * FROM (VALUES (html_unescape('&#x80')), (html_unescape('&#x95')), (html_unescape('&#x82')), (html_unescape('&#x8b')), (html_unescape('&#x99')), (html_unescape('&#x9f'))) tbl(i);
 ----
@@ -120,9 +173,21 @@ SELECT * FROM (VALUES (html_unescape('&#x80')), (html_unescape('&#x95')), (html_
 ™
 Ÿ
 
-# check code control points of invalid charref map
+# numeric character reference
+query I
+SELECT html_unescape('&#42');
+----
+*
+
+# numeric character reference followed by a character
+query I
+SELECT html_unescape('&#8b');
+----
+b
+
+# check code control points from the invalid charref map
 query T
-SELECT * FROM (VALUES (html_unescape('&#x81')), (html_unescape('&#x8d')), (html_unescape('&#x8f')), (html_unescape('&#x90')), (html_unescape('&#x9d'))) tbl(i);
+SELECT * FROM (VALUES (html_unescape('&#x81')), (html_unescape('&#x8d;')), (html_unescape('&#x8f')), (html_unescape('&#x90')), (html_unescape('&#x9d;'))) tbl(i);
 ----
 \x81
 \x8D
@@ -163,11 +228,12 @@ SELECT * FROM (VALUES (html_unescape('&#xD800;')), (html_unescape('&#xD801;')), 
 
 # check that multiple trailing semicolons are handled correctly
 query T
-SELECT * FROM (VALUES (html_unescape('&quot;;')), (html_unescape('&#34;;')), (html_unescape('&#x22;;')), (html_unescape('&#x22;quot;'))) tbl(i);
+SELECT * FROM (VALUES (html_unescape('&quot;;')), (html_unescape('&#34;;')), (html_unescape('&#x22;;')), (html_unescape('&#34;;&#x22;;')), (html_unescape('&#x22;quot;'))) tbl(i);
 ----
 ";
 ";
 ";
+";";
 "quot;
 
 query T
@@ -196,12 +262,6 @@ SELECT html_unescape('&notin;');
 ----
 ∉
 
-# check a big number
-query I
-SELECT html_unescape('&#x1000000000000000000');
-----
-�
-
 # longest valid name
 query I
 SELECT html_unescape('&CounterClockwiseContourIntegral;');
@@ -221,3 +281,63 @@ SELECT html_unescape('&Eacuteric&Eacute;ric&alphacentauri&alpha;centauri');
 ----
 ÉricÉric&alphacentauriαcentauri
 
+# unescape values from table
+statement ok
+CREATE TABLE unescapes(unesc VARCHAR);
+
+statement ok
+INSERT INTO unescapes VALUES ('&#34;'), ('&#x82'), ('&#x9d'), ('&szlig;'),('&lambda;&lambda;&lambda;&lambda;&lambda;&lambda;&lambda;');
+
+query I
+SELECT html_unescape(unesc) FROM unescapes;
+----
+"
+‚
+\x9D
+ß
+λλλλλλλ
+
+# test incorrect usage
+query I
+SELECT html_unescape(NULL);
+----
+NULL
+
+query I
+SELECT html_unescape('');
+----
+(empty)
+
+# check a big number
+query I
+SELECT html_unescape('&#x1000000000000000000');
+----
+�
+
+# INT_MAX
+query I
+SELECT html_unescape('&#x7FFFFFFF');
+----
+�
+
+# INT_MAX + 0x00000001
+query I
+SELECT html_unescape('&#x80000000');
+----
+�
+
+# UINT_MAX
+query I
+SELECT html_unescape('&#xffffffff');
+----
+�
+
+statement error
+SELECT html_unescape();
+----
+Binder Error: No function matches the given name and argument types
+
+statement error
+SELECT html_unescape('&notin', '&notin;');
+----
+Binder Error: No function matches the given name and argument types
