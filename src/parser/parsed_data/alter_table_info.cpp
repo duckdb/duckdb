@@ -240,12 +240,17 @@ string ChangeColumnTypeInfo::ToString() const {
 	result += KeywordHelper::WriteOptionallyQuoted(column_name);
 	result += " TYPE ";
 	result += target_type.ToString(); // FIXME: ToSQLString ?
-	// FIXME: ^ opt_collate
+	auto extra_type_info = target_type.AuxInfo();
+	if (extra_type_info && extra_type_info->type == ExtraTypeInfoType::STRING_TYPE_INFO) {
+		auto &string_info = extra_type_info->Cast<StringTypeInfo>();
+		if (!string_info.collation.empty()) {
+			result += " COLLATE " + string_info.collation;
+		}
+	}
 	if (expression) {
 		result += " USING ";
 		result += expression->ToString();
 	}
-	// FIXME: restrict/cascade ?
 	result += ";";
 	return result;
 }
