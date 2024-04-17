@@ -73,6 +73,7 @@ source_files = [
         'extension/jemalloc/jemalloc/src/tsd.c',
         'extension/jemalloc/jemalloc/src/util.c',
         'extension/jemalloc/jemalloc/src/witness.c',
+        'extension/jemalloc/jemalloc/src/jemalloc_cpp.cpp',
     ]
 ]
 
