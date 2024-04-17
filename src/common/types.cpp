@@ -1110,7 +1110,7 @@ bool ApproxEqual(float ldecimal, float rdecimal) {
 	if (!Value::FloatIsFinite(ldecimal) || !Value::FloatIsFinite(rdecimal)) {
 		return ldecimal == rdecimal;
 	}
-	float epsilon = std::fabs(rdecimal) * 0.01 + 0.00000001;
+	auto epsilon = UnsafeNumericCast<float>(std::fabs(rdecimal) * 0.01 + 0.00000001);
 	return std::fabs(ldecimal - rdecimal) <= epsilon;
 }
 

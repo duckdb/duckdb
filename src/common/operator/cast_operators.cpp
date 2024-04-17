@@ -1957,7 +1957,7 @@ struct DecimalCastOperation {
 		for (idx_t i = 0; i < state.excessive_decimals; i++) {
 			auto mod = state.result % 10;
 			round_up = NEGATIVE ? mod <= -5 : mod >= 5;
-			state.result /= 10.0;
+			state.result /= static_cast<typename T::StoreType>(10.0);
 		}
 		//! Only round up when exponents are involved
 		if (state.exponent_type == T::ExponentType::POSITIVE && round_up) {
@@ -2486,7 +2486,7 @@ bool DoubleToDecimalCast(SRC input, DST &result, CastParameters &parameters, uin
 		HandleCastError::AssignError(error, parameters);
 		return false;
 	}
-	result = Cast::Operation<SRC, DST>(value);
+	result = Cast::Operation<SRC, DST>(UnsafeNumericCast<SRC>(value));
 	return true;
 }
 
