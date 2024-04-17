@@ -575,7 +575,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 				    make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, fst_const_value_expr.value);
 				table_filters.PushFilter(column_index, std::move(bound_eq_comparison));
 				table_filters.PushFilter(column_index, make_uniq<IsNotNullFilter>());
-				remaining_filters.erase(remaining_filters.begin() + rem_fil_idx);
+				remaining_filters.erase_at(rem_fil_idx);
 				continue;
 			}
 

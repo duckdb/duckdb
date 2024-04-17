@@ -351,7 +351,7 @@ static void SetVectorStringView(Vector &vector, idx_t size, ArrowArray &array, i
 		if (FlatVector::IsNull(vector, row_idx)) {
 			continue;
 		}
-		int32_t length = arrow_string[row_idx].Length();
+		auto length = UnsafeNumericCast<uint32_t>(arrow_string[row_idx].Length());
 		if (arrow_string[row_idx].IsInline()) {
 			//	This string is inlined
 			//  | Bytes 0-3  | Bytes 4-15                            |
@@ -363,7 +363,7 @@ static void SetVectorStringView(Vector &vector, idx_t size, ArrowArray &array, i
 			//  | Bytes 0-3  | Bytes 4-7  | Bytes 8-11 | Bytes 12-15 |
 			//  |------------|------------|------------|-------------|
 			//  | length     | prefix     | buf. index | offset      |
-			int32_t buffer_index = arrow_string[row_idx].GetBufferIndex();
+			auto buffer_index = UnsafeNumericCast<uint32_t>(arrow_string[row_idx].GetBufferIndex());
 			int32_t offset = arrow_string[row_idx].GetOffset();
 			D_ASSERT(array.n_buffers > 2 + buffer_index);
 			auto c_data = ArrowBufferData<char>(array, 2 + buffer_index);
@@ -738,8 +738,9 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 			break;
 		}
 		case ArrowVariableSizeType::VIEW: {
-			SetVectorStringView(vector, size, array,
-			                    GetEffectiveOffset(array, parent_offset, scan_state, nested_offset));
+			SetVectorStringView(
+			    vector, size, array,
+			    GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), scan_state, nested_offset));
 			break;
 		}
 		}

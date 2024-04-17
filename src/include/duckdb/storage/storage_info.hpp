@@ -23,7 +23,7 @@ struct FileHandle;
 //! The maximum block id is 2^62
 #define MAXIMUM_BLOCK 4611686018427388000LL
 //! The default block allocation size.
-#define DEFAULT_BLOCK_ALLOC_SIZE 262144
+#define DEFAULT_BLOCK_ALLOC_SIZE 262144ULL
 //! The minimum block allocation size. This is the minimum size we test in our nightly tests.
 #define MIN_BLOCK_ALLOC_SIZE 16384
 
