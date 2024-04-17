@@ -49,23 +49,24 @@ private:
 	//! Cost model to evaluate cost of joins
 	CostModel &cost_model;
 	//! A map to store the optimal join plan found for a specific JoinRelationSet*
-	reference_map_t<JoinRelationSet, unique_ptr<JoinNode>> plans;
+	reference_map_t<JoinRelationSet, unique_ptr<DPJoinNode>> plans;
 
 	bool full_plan_found;
 	bool must_update_full_plan;
 	unordered_set<string> join_nodes_in_full_plan;
 
-	unique_ptr<JoinNode> CreateJoinTree(JoinRelationSet &set,
-	                                    const vector<reference<NeighborInfo>> &possible_connections, JoinNode &left,
-	                                    JoinNode &right);
+	unique_ptr<DPJoinNode> CreateJoinTree(JoinRelationSet &set,
+	                                    const vector<reference<NeighborInfo>> &possible_connections, DPJoinNode &left,
+	                                    DPJoinNode &right);
 
 	//! Emit a pair as a potential join candidate. Returns the best plan found for the (left, right) connection (either
 	//! the newly created plan, or an existing plan)
-	JoinNode &EmitPair(JoinRelationSet &left, JoinRelationSet &right, const vector<reference<NeighborInfo>> &info);
+	unique_ptr<JoinNode> EmitPair(JoinRelationSet &left, JoinRelationSet &right, const vector<reference<NeighborInfo>> &info);
 	//! Tries to emit a potential join candidate pair. Returns false if too many pairs have already been emitted,
 	//! cancelling the dynamic programming step.
 	bool TryEmitPair(JoinRelationSet &left, JoinRelationSet &right, const vector<reference<NeighborInfo>> &info);
 
+	unique_ptr<JoinNode> CreateJoinNodeFromDPJoinNode(DPJoinNode dp_node);
 	bool EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSet &right, unordered_set<idx_t> &exclusion_set);
 	//! Emit a relation set node
 	bool EmitCSG(JoinRelationSet &node);
