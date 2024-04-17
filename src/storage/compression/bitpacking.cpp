@@ -516,9 +516,9 @@ public:
 
 		// Compact the segment by moving the metadata next to the data.
 
-		idx_t unaligned_offset = data_ptr - base_ptr;
+		idx_t unaligned_offset = NumericCast<idx_t>(data_ptr - base_ptr);
 		idx_t metadata_offset = AlignValue(unaligned_offset);
-		idx_t metadata_size = base_ptr + Storage::BLOCK_SIZE - metadata_ptr;
+		idx_t metadata_size = NumericCast<idx_t>(base_ptr + Storage::BLOCK_SIZE - metadata_ptr);
 		idx_t total_segment_size = metadata_offset + metadata_size;
 
 		// Asserting things are still sane here

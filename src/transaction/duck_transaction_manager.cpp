@@ -311,7 +311,7 @@ void DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction) noe
 	if (i > 0) {
 		// we garbage collected transactions: remove them from the list
 		recently_committed_transactions.erase(recently_committed_transactions.begin(),
-		                                      recently_committed_transactions.begin() + UnsafeNumericCast<int64_t>(i));
+		                                      recently_committed_transactions.begin() + static_cast<int64_t>(i));
 	}
 	// check if we can free the memory of any old transactions
 	i = active_transactions.empty() ? old_transactions.size() : 0;
@@ -326,7 +326,7 @@ void DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction) noe
 	}
 	if (i > 0) {
 		// we garbage collected transactions: remove them from the list
-		old_transactions.erase(old_transactions.begin(), old_transactions.begin() + UnsafeNumericCast<int64_t>(i));
+		old_transactions.erase(old_transactions.begin(), old_transactions.begin() + static_cast<int64_t>(i));
 	}
 }
 
