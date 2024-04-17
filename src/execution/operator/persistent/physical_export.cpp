@@ -76,8 +76,15 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info,
 		if (copy_option.second.size() == 1) {
 			ss << copy_option.second[0].ToSQLString();
 		} else {
-			// FIXME handle multiple options
-			throw NotImplementedException("FIXME: serialize list of options");
+			// For Lists
+			ss << "(";
+			for (idx_t i = 0; i < copy_option.second.size(); i++) {
+				ss << copy_option.second[i].ToSQLString();
+				if (i != copy_option.second.size() - 1) {
+					ss << ", ";
+				}
+			}
+			ss << ")";
 		}
 	}
 	ss << ");" << '\n';
