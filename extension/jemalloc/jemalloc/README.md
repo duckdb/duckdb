@@ -34,7 +34,7 @@ git checkout -- \
   CMakeLists.txt
 ```
 
-The logarithm of the size of a pointer is defined in `jemalloc.h`, around line 50.
+The logarithm of the size of a pointer is defined in `jemalloc.h` and `jemalloc_defs.h`, around line 50.
 This is not portable, but we can make it portable if we replace all of it with this:
 ```c++
 #ifdef _MSC_VER
@@ -59,8 +59,8 @@ This is not portable, but we can make it portable if we replace all of it with t
 We also supply our own config string in `jemalloc.c`.
 Define this just after the `#include`s.
 ```c++
-const int JE_MALLOC_CONF_BUFFER_SIZE = 200;
-const char JE_MALLOC_CONF_BUFFER[JE_MALLOC_CONF_BUFFER_SIZE];
+#define JE_MALLOC_CONF_BUFFER_SIZE 200;
+char JE_MALLOC_CONF_BUFFER[JE_MALLOC_CONF_BUFFER_SIZE];
 ```
 Then put this before `malloc_init()` in `static void jemalloc_constructor(void)`:
 ```c++

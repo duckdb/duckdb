@@ -30,7 +30,7 @@
 
 /* Runtime configuration options. */
 const int JE_MALLOC_CONF_BUFFER_SIZE = 200;
-const char JE_MALLOC_CONF_BUFFER[JE_MALLOC_CONF_BUFFER_SIZE];
+char JE_MALLOC_CONF_BUFFER[JE_MALLOC_CONF_BUFFER_SIZE];
 
 const char	*je_malloc_conf
 #ifndef _WIN32

@@ -2,6 +2,10 @@
 #ifndef JEMALLOC_INTERNAL_DEFS_H_
 #define JEMALLOC_INTERNAL_DEFS_H_
 
+#ifdef __GNUC__
+#define _GNU_SOURCE
+#endif
+
 #include <limits.h>
 
 /*
@@ -17,10 +21,10 @@
  * present on the system.
  */
 /* #undef JEMALLOC_OVERRIDE___LIBC_CALLOC */
-// #define JEMALLOC_OVERRIDE___LIBC_FREE
-// #define JEMALLOC_OVERRIDE___LIBC_MALLOC
+/* #undef JEMALLOC_OVERRIDE___LIBC_FREE */
+/* #undef JEMALLOC_OVERRIDE___LIBC_MALLOC
 /* #undef JEMALLOC_OVERRIDE___LIBC_MEMALIGN */
-// #define JEMALLOC_OVERRIDE___LIBC_REALLOC
+/* #undef JEMALLOC_OVERRIDE___LIBC_REALLOC */
 /* #undef JEMALLOC_OVERRIDE___LIBC_VALLOC */
 /* #undef JEMALLOC_OVERRIDE___POSIX_MEMALIGN */
 
@@ -234,9 +238,6 @@
 #define LG_PAGE 12 // Default to the most common page size of 4KB
 #endif
 
-
-
-
 /* Maximum number of regions in a slab. */
 /* #undef CONFIG_LG_SLAB_MAXREGS */
 
@@ -444,18 +445,20 @@
 #define JEMALLOC_HAVE_PTHREAD
 
 /* dlsym() support */
-#if defined(__APPLE__)
 #define JEMALLOC_HAVE_DLSYM
-#endif
 
 /* Adaptive mutex support in pthreads. */
 /* #undef JEMALLOC_HAVE_PTHREAD_MUTEX_ADAPTIVE_NP */
 
 /* GNU specific sched_getcpu support */
-/* #undef JEMALLOC_HAVE_SCHED_GETCPU */
+#ifdef __GNUC__
+#define JEMALLOC_HAVE_SCHED_GETCPU
+#endif
 
 /* GNU specific sched_setaffinity support */
-/* #undef JEMALLOC_HAVE_SCHED_SETAFFINITY */
+#ifdef __GNUC__
+#define JEMALLOC_HAVE_SCHED_SETAFFINITY
+#endif
 
 /*
  * If defined, all the features necessary for background threads are present.
