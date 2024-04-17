@@ -21,6 +21,10 @@ void StandardColumnData::SetStart(idx_t new_start) {
 	validity.SetStart(new_start);
 }
 
+bool StandardColumnData::HasUpdates() const {
+	return ColumnData::HasUpdates() || validity.HasUpdates();
+}
+
 bool StandardColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
 	if (!state.segment_checked) {
 		if (!state.current) {
