@@ -62,6 +62,10 @@ public:
 	static string ExtensionDirectory(ClientContext &context);
 	static string ExtensionDirectory(DBConfig &config, FileSystem &fs);
 
+	static bool CheckExtensionSignature(FileHandle &handle, ParsedExtensionMetaData &parsed_metadata);
+	static ParsedExtensionMetaData ParseExtensionMetaData(const char *metadata);
+	static ParsedExtensionMetaData ParseExtensionMetaData(FileHandle &handle);
+
 	//! Get the extension url template, containing placeholders for version, platform and extension name
 	static string ExtensionUrlTemplate(optional_ptr<const DBConfig> config, const string &repository);
 	//! Return the extension url template with the variables replaced
