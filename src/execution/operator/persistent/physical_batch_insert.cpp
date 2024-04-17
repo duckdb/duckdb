@@ -125,8 +125,9 @@ public:
 
 class BatchInsertGlobalState : public GlobalSinkState {
 public:
-	explicit BatchInsertGlobalState(ClientContext &context, DuckTableEntry &table, idx_t initial_memory)
-	    : memory_manager(context, initial_memory), table(table), insert_count(0), optimistically_written(false) {
+	explicit BatchInsertGlobalState(ClientContext &context, DuckTableEntry &table, idx_t minimum_memory_per_thread)
+	    : memory_manager(context, minimum_memory_per_thread), table(table), insert_count(0),
+	      optimistically_written(false), minimum_memory_per_thread(minimum_memory_per_thread) {
 	}
 
 	BatchMemoryManager memory_manager;
@@ -137,6 +138,7 @@ public:
 	vector<RowGroupBatchEntry> collections;
 	idx_t next_start = 0;
 	atomic<bool> optimistically_written;
+	idx_t minimum_memory_per_thread;
 
 	static bool ReadyToMerge(idx_t count);
 	void ScheduleMergeTasks(idx_t min_batch_index);
@@ -146,6 +148,13 @@ public:
 	void AddCollection(ClientContext &context, idx_t batch_index, idx_t min_batch_index,
 	                   unique_ptr<RowGroupCollection> current_collection,
 	                   optional_ptr<OptimisticDataWriter> writer = nullptr);
+
+	idx_t MaxThreads(idx_t source_max_threads) override {
+		// try to request 4MB per column per thread
+		memory_manager.SetMemorySize(source_max_threads * minimum_memory_per_thread);
+		// cap the concurrent threads working on this task based on the amount of available memory
+		return MinValue<idx_t>(source_max_threads, memory_manager.AvailableMemory() / minimum_memory_per_thread + 1);
+	}
 };
 
 class BatchInsertLocalState : public LocalSinkState {
@@ -377,8 +386,8 @@ unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContex
 	}
 	// heuristic - we start off by allocating 4MB of cache space per column
 	static constexpr const idx_t MINIMUM_MEMORY_PER_COLUMN = 4ULL * 1024ULL * 1024ULL;
-	auto initial_memory = table->GetColumns().PhysicalColumnCount() * MINIMUM_MEMORY_PER_COLUMN;
-	auto result = make_uniq<BatchInsertGlobalState>(context, table->Cast<DuckTableEntry>(), initial_memory);
+	auto minimum_memory_per_thread = table->GetColumns().PhysicalColumnCount() * MINIMUM_MEMORY_PER_COLUMN;
+	auto result = make_uniq<BatchInsertGlobalState>(context, table->Cast<DuckTableEntry>(), minimum_memory_per_thread);
 	return std::move(result);
 }
 

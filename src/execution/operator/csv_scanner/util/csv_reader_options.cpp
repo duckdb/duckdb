@@ -180,8 +180,6 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 		SetSkipRows(ParseInteger(value, loption));
 	} else if (loption == "max_line_size" || loption == "maximum_line_size") {
 		maximum_line_size = ParseInteger(value, loption);
-	} else if (loption == "force_not_null") {
-		force_not_null = ParseColumnList(value, expected_names, loption);
 	} else if (loption == "date_format" || loption == "dateformat") {
 		string format = ParseString(value, loption);
 		SetDateFormat(LogicalTypeId::DATE, format, true);
@@ -208,6 +206,18 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 		allow_quoted_nulls = ParseBoolean(value, loption);
 	} else if (loption == "store_rejects") {
 		store_rejects.Set(ParseBoolean(value, loption));
+	} else if (loption == "force_not_null") {
+		if (!expected_names.empty()) {
+			force_not_null = ParseColumnList(value, expected_names, loption);
+		} else {
+			// Get the list of columns to use as a recovery key
+			auto &children = ListValue::GetChildren(value);
+			for (auto &child : children) {
+				auto col_name = child.GetValue<string>();
+				force_not_null_names.insert(col_name);
+			}
+		}
+
 	} else if (loption == "rejects_table") {
 		// skip, handled in SetRejectsOptions
 		auto table_name = ParseString(value, loption);
@@ -240,7 +250,7 @@ void CSVReaderOptions::SetWriteOption(const string &loption, const Value &value)
 		return;
 	}
 
-	if (SetBaseOption(loption, value)) {
+	if (SetBaseOption(loption, value, true)) {
 		return;
 	}
 
@@ -265,7 +275,7 @@ void CSVReaderOptions::SetWriteOption(const string &loption, const Value &value)
 	}
 }
 
-bool CSVReaderOptions::SetBaseOption(const string &loption, const Value &value) {
+bool CSVReaderOptions::SetBaseOption(const string &loption, const Value &value, bool write_option) {
 	// Make sure this function was only called after the option was turned into lowercase
 	D_ASSERT(!std::any_of(loption.begin(), loption.end(), ::isupper));
 
@@ -279,8 +289,50 @@ bool CSVReaderOptions::SetBaseOption(const string &loption, const Value &value) 
 		SetEscape(ParseString(value, loption));
 	} else if (loption == "header") {
 		SetHeader(ParseBoolean(value, loption));
-	} else if (loption == "null" || loption == "nullstr") {
-		null_str = ParseString(value, loption);
+	} else if (loption == "nullstr" || loption == "null") {
+		auto &child_type = value.type();
+		null_str.clear();
+		if (child_type.id() != LogicalTypeId::LIST && child_type.id() != LogicalTypeId::VARCHAR) {
+			throw BinderException("CSV Reader function option %s requires a string or a list as input", loption);
+		}
+		if (!null_str.empty()) {
+			throw BinderException("CSV Reader function option nullstr can only be supplied once");
+		}
+		if (child_type.id() == LogicalTypeId::LIST) {
+			auto &list_child = ListType::GetChildType(child_type);
+			const vector<Value> *children = nullptr;
+			if (list_child.id() == LogicalTypeId::LIST) {
+				// This can happen if it comes from a copy FROM/TO
+				auto &list_grandchild = ListType::GetChildType(list_child);
+				auto &children_ref = ListValue::GetChildren(value);
+				if (list_grandchild.id() != LogicalTypeId::VARCHAR || children_ref.size() != 1) {
+					throw BinderException("CSV Reader function option %s requires a non-empty list of possible null "
+					                      "strings (varchar) as input",
+					                      loption);
+				}
+				children = &ListValue::GetChildren(children_ref.back());
+			} else if (list_child.id() != LogicalTypeId::VARCHAR) {
+				throw BinderException("CSV Reader function option %s requires a non-empty list of possible null "
+				                      "strings (varchar) as input",
+				                      loption);
+			}
+			if (!children) {
+				children = &ListValue::GetChildren(value);
+			}
+			for (auto &child : *children) {
+				if (child.IsNull()) {
+					throw BinderException(
+					    "CSV Reader function option %s does not accept NULL values as a valid nullstr option", loption);
+				}
+				null_str.push_back(StringValue::Get(child));
+			}
+		} else {
+			null_str.push_back(StringValue::Get(ParseString(value, loption)));
+		}
+		if (null_str.size() > 1 && write_option) {
+			throw BinderException("CSV Writer function option %s only accepts one nullstr value.", loption);
+		}
+
 	} else if (loption == "encoding") {
 		auto encoding = StringUtil::Lower(ParseString(value, loption));
 		if (encoding != "utf8" && encoding != "utf-8") {
@@ -363,9 +415,10 @@ static uint8_t GetCandidateSpecificity(const LogicalType &candidate_type) {
 	    {(uint8_t)LogicalTypeId::VARCHAR, 0},  {(uint8_t)LogicalTypeId::TIMESTAMP, 1},
 	    {(uint8_t)LogicalTypeId::DATE, 2},     {(uint8_t)LogicalTypeId::TIME, 3},
 	    {(uint8_t)LogicalTypeId::DOUBLE, 4},   {(uint8_t)LogicalTypeId::FLOAT, 5},
-	    {(uint8_t)LogicalTypeId::BIGINT, 6},   {(uint8_t)LogicalTypeId::INTEGER, 7},
-	    {(uint8_t)LogicalTypeId::SMALLINT, 8}, {(uint8_t)LogicalTypeId::TINYINT, 9},
-	    {(uint8_t)LogicalTypeId::BOOLEAN, 10}, {(uint8_t)LogicalTypeId::SQLNULL, 11}};
+	    {(uint8_t)LogicalTypeId::DECIMAL, 6},  {(uint8_t)LogicalTypeId::BIGINT, 7},
+	    {(uint8_t)LogicalTypeId::INTEGER, 8},  {(uint8_t)LogicalTypeId::SMALLINT, 9},
+	    {(uint8_t)LogicalTypeId::TINYINT, 10}, {(uint8_t)LogicalTypeId::BOOLEAN, 11},
+	    {(uint8_t)LogicalTypeId::SQLNULL, 12}};
 
 	auto id = (uint8_t)candidate_type.id();
 	auto it = auto_type_candidates_specificity.find(id);
