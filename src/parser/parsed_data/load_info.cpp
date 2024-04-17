@@ -28,7 +28,7 @@ string LoadInfo::ToString() const {
 	result += LoadInfoToString(load_type);
 	result += StringUtil::Format(" '%s'", filename);
 	if (!repository.empty()) {
-		result += " FROM " + repository;
+		result += " FROM " + StringUtil::Format("'%s'", repository);
 	}
 	result += ";";
 	return result;
