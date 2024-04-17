@@ -76,15 +76,14 @@ load tpch;
 statement ok
 load tpcds;
 
-# Ensure the result is still fine after loading
-# FIXME: requires carlo's fix for adding version to loadable extensions too
-#query IIII rowsort
-#SELECT extension_name, install_mode, installed_from, extension_version FROM duckdb_extensions() where installed
-#----
-#json	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.1
-#parquet	(empty)	(empty)	(empty)
-#tpcds	CUSTOM_PATH	./build/extension_metadata_test_data/direct_install/tpcds.duckdb_extension	v0.0.1
-#tpch	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.2
+# Ensure the result is still fine after loading; this will ensure Version() call matches the encoded footer value
+query IIII rowsort
+SELECT extension_name, install_mode, installed_from, extension_version FROM duckdb_extensions() where installed
+----
+json	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.1
+parquet	(empty)	(empty)	(empty)
+tpcds	CUSTOM_PATH	./build/extension_metadata_test_data/direct_install/tpcds.duckdb_extension	v0.0.1
+tpch	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.2
 
 ## Try various failing installations and match their error
 statement error
