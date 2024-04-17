@@ -18,7 +18,6 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
     : ScannerResult(states, state_machine),
       number_of_columns(NumericCast<uint32_t>(state_machine.dialect_options.num_cols)),
       null_padding(state_machine.options.null_padding), ignore_errors(state_machine.options.ignore_errors.GetValue()),
-      null_str_ptr(state_machine.options.null_str.c_str()), null_str_size(state_machine.options.null_str.size()),
       result_size(result_size_p), error_handler(error_hander_p), iterator(iterator_p),
       store_line_size(store_line_size_p), csv_file_scan(std::move(csv_file_scan_p)), lines_read(lines_read_p),
       sniffing(sniffing_p) {
@@ -89,6 +88,15 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 		vector_ptr.push_back(FlatVector::GetData<string_t>(col));
 		validity_mask.push_back(&FlatVector::Validity(col));
 	}
+
+	// Setup the NullStr information
+	null_str_count = state_machine.options.null_str.size();
+	null_str_ptr = make_unsafe_uniq_array<const char *>(null_str_count);
+	null_str_size = make_unsafe_uniq_array<idx_t>(null_str_count);
+	for (idx_t i = 0; i < null_str_count; i++) {
+		null_str_ptr[i] = state_machine.options.null_str[i].c_str();
+		null_str_size[i] = state_machine.options.null_str[i].size();
+	}
 }
 
 StringValueResult::~StringValueResult() {
@@ -115,7 +123,11 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		bool error = true;
 		if (cur_col_id == number_of_columns && ((quoted && state_machine.options.allow_quoted_nulls) || !quoted)) {
 			// we make an exception if the first over-value is null
-			error = !IsValueNull(null_str_ptr, value_ptr, size);
+			bool is_value_null = false;
+			for (idx_t i = 0; i < null_str_count; i++) {
+				is_value_null = is_value_null || IsValueNull(null_str_ptr[i], value_ptr, size);
+			}
+			error = !is_value_null;
 		}
 		if (error) {
 			// We error pointing to the current value error.
@@ -131,29 +143,31 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 			return;
 		}
 	}
-	if (size == null_str_size) {
-		if (((quoted && state_machine.options.allow_quoted_nulls) || !quoted)) {
-			if (IsValueNull(null_str_ptr, value_ptr, size)) {
-				bool empty = false;
-				if (chunk_col_id < state_machine.options.force_not_null.size()) {
-					empty = state_machine.options.force_not_null[chunk_col_id];
-				}
-				if (empty) {
-					if (parse_types[chunk_col_id].first != LogicalTypeId::VARCHAR) {
-						// If it is not a varchar, empty values are not accepted, we must error.
-						current_errors.push_back({CSVErrorType::CAST_ERROR, cur_col_id, last_position});
+	for (idx_t i = 0; i < null_str_count; i++) {
+		if (size == null_str_size[i]) {
+			if (((quoted && state_machine.options.allow_quoted_nulls) || !quoted)) {
+				if (IsValueNull(null_str_ptr[i], value_ptr, size)) {
+					bool empty = false;
+					if (chunk_col_id < state_machine.options.force_not_null.size()) {
+						empty = state_machine.options.force_not_null[chunk_col_id];
 					}
-					static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] = string_t();
-				} else {
-					if (chunk_col_id == number_of_columns) {
-						// We check for a weird case, where we ignore an extra value, if it is a null value
-						return;
+					if (empty) {
+						if (parse_types[chunk_col_id].first != LogicalTypeId::VARCHAR) {
+							// If it is not a varchar, empty values are not accepted, we must error.
+							current_errors.push_back({CSVErrorType::CAST_ERROR, cur_col_id, last_position});
+						}
+						static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] = string_t();
+					} else {
+						if (chunk_col_id == number_of_columns) {
+							// We check for a weird case, where we ignore an extra value, if it is a null value
+							return;
+						}
+						validity_mask[chunk_col_id]->SetInvalid(number_of_rows);
 					}
-					validity_mask[chunk_col_id]->SetInvalid(number_of_rows);
+					cur_col_id++;
+					chunk_col_id++;
+					return;
 				}
-				cur_col_id++;
-				chunk_col_id++;
-				return;
 			}
 		}
 	}
@@ -609,17 +623,19 @@ bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_
 		result.last_position.buffer_pos++;
 	}
 	if (result.number_of_columns == 1) {
-		if (result.null_str_size == 0) {
-			bool empty = false;
-			if (!result.state_machine.options.force_not_null.empty()) {
-				empty = result.state_machine.options.force_not_null[0];
+		for (idx_t i = 0; i < result.null_str_count; i++) {
+			if (result.null_str_size[i] == 0) {
+				bool empty = false;
+				if (!result.state_machine.options.force_not_null.empty()) {
+					empty = result.state_machine.options.force_not_null[0];
+				}
+				if (empty) {
+					static_cast<string_t *>(result.vector_ptr[0])[result.number_of_rows] = string_t();
+				} else {
+					result.validity_mask[0]->SetInvalid(result.number_of_rows);
+				}
+				result.number_of_rows++;
 			}
-			if (empty) {
-				static_cast<string_t *>(result.vector_ptr[0])[result.number_of_rows] = string_t();
-			} else {
-				result.validity_mask[0]->SetInvalid(result.number_of_rows);
-			}
-			result.number_of_rows++;
 		}
 		if (result.number_of_rows >= result.result_size) {
 			// We have a full chunk

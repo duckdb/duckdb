@@ -51,8 +51,8 @@ struct CSVReaderOptions {
 	idx_t rejects_limit = 0;
 	//! Number of samples to buffer
 	idx_t buffer_sample_size = (idx_t)STANDARD_VECTOR_SIZE * 50;
-	//! Specifies the string that represents a null value
-	string null_str;
+	//! Specifies the strings that represents a null value
+	vector<string> null_str = {""};
 	//! Whether file is compressed or not, and if so which compression type
 	//! AUTO_DETECT (default; infer from file extension)
 	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
@@ -84,6 +84,8 @@ struct CSVReaderOptions {
 	idx_t maximum_line_size = 2097152;
 	//! Whether or not header names shall be normalized
 	bool normalize_names = false;
+	//! True, if column with that index must skip null check
+	unordered_set<string> force_not_null_names;
 	//! True, if column with that index must skip null check
 	vector<bool> force_not_null;
 	//! Number of sample chunks used in auto-detection
@@ -148,7 +150,7 @@ struct CSVReaderOptions {
 	void SetNewline(const string &input);
 	//! Set an option that is supported by both reading and writing functions, called by
 	//! the SetReadOption and SetWriteOption methods
-	bool SetBaseOption(const string &loption, const Value &value);
+	bool SetBaseOption(const string &loption, const Value &value, bool write_option = false);
 
 	//! loption - lowercase string
 	//! set - argument(s) to the option

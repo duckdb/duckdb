@@ -887,10 +887,21 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 	}
 
 	if (!py::none().is(na_values)) {
-		if (!py::isinstance<py::str>(na_values)) {
-			throw InvalidInputException("read_csv only accepts 'na_values' as a string");
+		vector<Value> null_values;
+		if (!py::isinstance<py::str>(na_values) && !py::isinstance<py::list>(na_values)) {
+			throw InvalidInputException("read_csv only accepts 'na_values' as a string or a list of strings");
+		} else if (py::isinstance<py::str>(na_values)) {
+			null_values.push_back(Value(py::str(na_values)));
+		} else {
+			py::list null_list = na_values;
+			for (auto &elem : null_list) {
+				if (!py::isinstance<py::str>(elem)) {
+					throw InvalidInputException("read_csv 'na_values' list has to consist of only strings");
+				}
+				null_values.push_back(Value(std::string(py::str(elem))));
+			}
 		}
-		bind_parameters["nullstr"] = Value(py::str(na_values));
+		bind_parameters["nullstr"] = Value::LIST(LogicalType::VARCHAR, std::move(null_values));
 	}
 
 	if (!py::none().is(skiprows)) {

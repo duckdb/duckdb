@@ -806,7 +806,7 @@
   {
     "class": "LogicalSimple",
     "base": "LogicalOperator",
-    "enum": ["LOGICAL_ALTER", "LOGICAL_VACUUM", "LOGICAL_LOAD", "LOGICAL_ATTACH", "LOGICAL_TRANSACTION", "LOGICAL_DROP", "LOGICAL_DETACH"],
+    "enum": ["LOGICAL_ALTER", "LOGICAL_LOAD", "LOGICAL_ATTACH", "LOGICAL_TRANSACTION", "LOGICAL_DROP", "LOGICAL_DETACH"],
     "members": [
       {
         "id": 200,
