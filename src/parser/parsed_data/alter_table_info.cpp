@@ -25,6 +25,22 @@ unique_ptr<AlterInfo> ChangeOwnershipInfo::Copy() const {
 	                                                      owner_name, if_not_found);
 }
 
+string ChangeOwnershipInfo::ToString() const {
+	string result = "";
+
+	result += "ALTER SEQUENCE";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	// FIXME: QualifierToString
+	result += KeywordHelper::WriteOptionallyQuoted(name);
+	result += " OWNED BY ";
+	// FIXME: QualifierToString
+	result += KeywordHelper::WriteOptionallyQuoted(owner_name);
+	result += ";";
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // SetCommentInfo
 //===--------------------------------------------------------------------===//
@@ -114,6 +130,20 @@ unique_ptr<AlterInfo> RenameTableInfo::Copy() const {
 	return make_uniq_base<AlterInfo, RenameTableInfo>(GetAlterEntryData(), new_table_name);
 }
 
+string RenameTableInfo::ToString() const {
+	string result = "";
+	result += "ALTER TABLE ";
+	// FIXME: QualifierToString
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += KeywordHelper::WriteOptionallyQuoted(name);
+	result += " RENAME TO";
+	result += KeywordHelper::WriteOptionallyQuoted(new_table_name);
+	result += ";";
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // AddColumnInfo
 //===--------------------------------------------------------------------===//
@@ -131,6 +161,23 @@ AddColumnInfo::~AddColumnInfo() {
 
 unique_ptr<AlterInfo> AddColumnInfo::Copy() const {
 	return make_uniq_base<AlterInfo, AddColumnInfo>(GetAlterEntryData(), new_column.Copy(), if_column_not_exists);
+}
+
+string AddColumnInfo::ToString() const {
+	string result = "";
+	result += "ALTER TABLE ";
+	// FIXME: QualifierToString
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += KeywordHelper::WriteOptionallyQuoted(name);
+	result += " ADD COLUMN";
+	if (if_column_not_exists) {
+		result += " IF NOT EXISTS";
+	}
+	throw NotImplementedException("COLUMN SERIALIZATION");
+	result += ";";
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
