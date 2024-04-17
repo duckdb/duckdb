@@ -23,8 +23,6 @@ public:
 
 	void VisitOperator(LogicalOperator &op) override;
 	static void Verify(LogicalOperator &op);
-	//! Manually set bindings
-	void SetBindings(vector<ColumnBinding> &&bindings);
 
 protected:
 	vector<ColumnBinding> bindings;

@@ -111,7 +111,6 @@ static vector<unique_ptr<Expression>> CreateCastExpressions(WriteCSVData &bind_d
 	// Create a binder
 	auto binder = Binder::CreateBinder(context);
 
-	// Create a Binding, used by the ExpressionBinder to turn our columns into BoundReferenceExpressions
 	auto &bind_context = binder->bind_context;
 	auto table_index = binder->GenerateTableIndex();
 	bind_context.AddGenericBinding(table_index, "copy_csv", names, sql_types);
@@ -126,7 +125,7 @@ static vector<unique_ptr<Expression>> CreateCastExpressions(WriteCSVData &bind_d
 		if (has_dateformat && type.id() == LogicalTypeId::DATE) {
 			// strftime(<name>, 'format')
 			vector<unique_ptr<ParsedExpression>> children;
-			children.push_back(make_uniq<ColumnRefExpression>(name));
+			children.push_back(make_uniq<BoundExpression>(make_uniq<BoundReferenceExpression>(name, type, i)));
 			// TODO: set from user-provided format
 			children.push_back(make_uniq<ConstantExpression>(formats[LogicalTypeId::DATE]));
 			auto func = make_uniq_base<ParsedExpression, FunctionExpression>("strftime", std::move(children));
@@ -134,14 +133,14 @@ static vector<unique_ptr<Expression>> CreateCastExpressions(WriteCSVData &bind_d
 		} else if (has_timestampformat && is_timestamp) {
 			// strftime(<name>, 'format')
 			vector<unique_ptr<ParsedExpression>> children;
-			children.push_back(make_uniq<ColumnRefExpression>(name));
+			children.push_back(make_uniq<BoundExpression>(make_uniq<BoundReferenceExpression>(name, type, i)));
 			// TODO: set from user-provided format
 			children.push_back(make_uniq<ConstantExpression>(formats[LogicalTypeId::TIMESTAMP]));
 			auto func = make_uniq_base<ParsedExpression, FunctionExpression>("strftime", std::move(children));
 			unbound_expressions.push_back(std::move(func));
 		} else {
 			// CAST <name> AS VARCHAR
-			auto column = make_uniq<ColumnRefExpression>(name);
+			auto column = make_uniq<BoundExpression>(make_uniq<BoundReferenceExpression>(name, type, i));
 			auto expr = make_uniq_base<ParsedExpression, CastExpression>(LogicalType::VARCHAR, std::move(column));
 			unbound_expressions.push_back(std::move(expr));
 		}
@@ -155,16 +154,6 @@ static vector<unique_ptr<Expression>> CreateCastExpressions(WriteCSVData &bind_d
 		expressions.push_back(expression_binder.Bind(expr));
 	}
 
-	ColumnBindingResolver resolver;
-	vector<ColumnBinding> bindings;
-	for (idx_t i = 0; i < sql_types.size(); i++) {
-		bindings.push_back(ColumnBinding(table_index, i));
-	}
-	resolver.SetBindings(std::move(bindings));
-
-	for (auto &expr : expressions) {
-		resolver.VisitExpression(&expr);
-	}
 	return expressions;
 }
 
