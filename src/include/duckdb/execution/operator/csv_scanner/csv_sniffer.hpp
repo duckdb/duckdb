@@ -167,6 +167,7 @@ private:
 	vector<Value> best_header_row;
 	//! Variable used for sniffing date and timestamp
 	map<LogicalTypeId, DateTimestampSniffing> format_candidates;
+	map<LogicalTypeId, DateTimestampSniffing> original_format_candidates;
 
 	//! ------------------------------------------------------//
 	//! ------------------ Type Refinement ------------------ //

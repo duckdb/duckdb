@@ -143,6 +143,7 @@ void CSVSniffer::InitializeDateAndTimeStampDetection(CSVStateMachine &candidate,
 				}
 			}
 		}
+		original_format_candidates = format_candidates;
 	}
 	//	initialise the first candidate
 	//	all formats are constructed to be valid
@@ -160,11 +161,11 @@ void CSVSniffer::DetectDateAndTimeStampFormats(CSVStateMachine &candidate, const
 	auto save_format_candidates = type_format_candidates;
 	bool had_format_candidates = !save_format_candidates.empty();
 	bool initial_format_candidates =
-	    save_format_candidates.size() == format_template_candidates.at(sql_type.id()).size();
+	    save_format_candidates.size() == original_format_candidates.at(sql_type.id()).format.size();
 	while (!type_format_candidates.empty()) {
 		//	avoid using exceptions for flow control...
 		auto &current_format = candidate.dialect_options.date_format[sql_type.id()].GetValue();
-		if (current_format.Parse(StringValue::Get(dummy_val), result)) {
+		if (current_format.Parse(dummy_val, result)) {
 			break;
 		}
 		//	doesn't work - move to the next one
@@ -182,10 +183,11 @@ void CSVSniffer::DetectDateAndTimeStampFormats(CSVStateMachine &candidate, const
 				// we reset the whole thing because we tried to sniff the wrong type.
 				format_candidates[sql_type.id()].initialized = false;
 				format_candidates[sql_type.id()].format.clear();
+				SetDateFormat(candidate, "", sql_type.id());
 				return;
 			}
 			type_format_candidates.swap(save_format_candidates);
-			SetDateFormat(candidate, "", sql_type.id());
+			SetDateFormat(candidate, type_format_candidates.back(), sql_type.id());
 		}
 	}
 }
@@ -230,7 +232,7 @@ void CSVSniffer::DetectTypes() {
 			auto vector_data = FlatVector::GetData<string_t>(cur_vector);
 			auto null_mask = FlatVector::Validity(cur_vector);
 			auto &col_type_candidates = info_sql_types_candidates[col_idx];
-			for (; row_idx < chunk_size; row_idx++) {
+			for (row_idx = start_idx_detection; row_idx < chunk_size; row_idx++) {
 				// col_type_candidates can't be empty since anything in a CSV file should at least be a string
 				// and we validate utf-8 compatibility when creating the type
 				D_ASSERT(!col_type_candidates.empty());
@@ -244,8 +246,11 @@ void CSVSniffer::DetectTypes() {
 					// If Value is not Null, Has a numeric date format, and the current investigated candidate is
 					// either a timestamp or a date
 					// fixme: make this string_t
-					auto str_val = vector_data[row_idx].GetString();
-					if (!null_mask.RowIsValid(row_idx) && StartsWithNumericDate(separator, str_val) &&
+					string str_val;
+					if (null_mask.RowIsValid(row_idx)) {
+						str_val = vector_data[row_idx].GetString();
+					}
+					if (null_mask.RowIsValid(row_idx) && StartsWithNumericDate(separator, str_val) &&
 					    (col_type_candidates.back().id() == LogicalTypeId::TIMESTAMP ||
 					     col_type_candidates.back().id() == LogicalTypeId::DATE)) {
 						DetectDateAndTimeStampFormats(candidate->GetStateMachine(), sql_type, separator,
