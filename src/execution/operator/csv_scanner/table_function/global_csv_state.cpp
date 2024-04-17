@@ -22,7 +22,7 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
 	} else {
 		// If not we need to construct it for the first file
 		file_scans.emplace_back(
-		    make_uniq<CSVFileScan>(context, files[0], options, 0, bind_data, column_ids, file_schema));
+		    make_uniq<CSVFileScan>(context, files[0], options, 0U, bind_data, column_ids, file_schema));
 	};
 	// There are situations where we only support single threaded scanning
 	bool many_csv_files = files.size() > 1 && files.size() > system_threads * 2;
@@ -289,12 +289,12 @@ void CSVGlobalState::FillRejectsTable() {
 						// 4. Byte Position of the row error
 						errors_appender.Append(error.row_byte_position + 1);
 						// 5. Byte Position where error occurred
-						if (error.byte_position == -1) {
+						if (!error.byte_position.IsValid()) {
 							// This means this error comes from a flush, and we don't support this yet, so we give it
 							// a null
 							errors_appender.Append(Value());
 						} else {
-							errors_appender.Append(error.byte_position + 1);
+							errors_appender.Append(error.byte_position.GetIndex() + 1);
 						}
 						// 6. Column Index
 						if (error.type == CSVErrorType::MAXIMUM_LINE_SIZE) {

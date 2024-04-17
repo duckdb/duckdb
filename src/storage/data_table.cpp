@@ -105,7 +105,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 
 	// erase the column definitions from this DataTable
 	D_ASSERT(removed_column < column_definitions.size());
-	column_definitions.erase(column_definitions.begin() + removed_column);
+	column_definitions.erase_at(removed_column);
 
 	storage_t storage_idx = 0;
 	for (idx_t i = 0; i < column_definitions.size(); i++) {
@@ -744,7 +744,7 @@ void DataTable::AppendLock(TableAppendState &state) {
 	if (!is_root) {
 		throw TransactionException("Transaction conflict: adding entries to a table that has been altered!");
 	}
-	state.row_start = row_groups->GetTotalRows();
+	state.row_start = NumericCast<row_t>(row_groups->GetTotalRows());
 	state.current_row = state.row_start;
 }
 
@@ -857,7 +857,7 @@ void DataTable::RevertAppend(idx_t start_row, idx_t count) {
 		idx_t scan_count = MinValue<idx_t>(count, row_groups->GetTotalRows() - start_row);
 		ScanTableSegment(start_row, scan_count, [&](DataChunk &chunk) {
 			for (idx_t i = 0; i < chunk.size(); i++) {
-				row_data[i] = current_row_base + i;
+				row_data[i] = NumericCast<row_t>(current_row_base + i);
 			}
 			info->indexes.Scan([&](Index &index) {
 				if (!index.IsUnknown()) {

@@ -91,7 +91,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 			}
 			left_pushdown.filters.push_back(std::move(filters[i]));
 			// erase the filter from the list of filters
-			filters.erase(filters.begin() + i);
+			filters.erase_at(i);
 			i--;
 		} else {
 			// bindings match right side or both sides: we cannot directly push it into the right
