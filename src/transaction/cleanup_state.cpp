@@ -72,12 +72,12 @@ void CleanupState::CleanupDelete(DeleteInfo &info) {
 	count = 0;
 	if (info.is_consecutive) {
 		for (idx_t i = 0; i < info.count; i++) {
-			row_numbers[count++] = info.base_row + i;
+			row_numbers[count++] = UnsafeNumericCast<int64_t>(info.base_row + i);
 		}
 	} else {
 		auto rows = info.GetRows();
 		for (idx_t i = 0; i < info.count; i++) {
-			row_numbers[count++] = info.base_row + rows[i];
+			row_numbers[count++] = UnsafeNumericCast<int64_t>(info.base_row + rows[i]);
 		}
 	}
 	Flush();

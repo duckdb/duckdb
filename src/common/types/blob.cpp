@@ -47,7 +47,7 @@ void Blob::ToString(string_t blob, char *output) {
 	for (idx_t i = 0; i < len; i++) {
 		if (IsRegularCharacter(data[i])) {
 			// ascii characters are rendered as-is
-			output[str_idx++] = data[i];
+			output[str_idx++] = UnsafeNumericCast<char>(data[i]);
 		} else {
 			auto byte_a = data[i] >> 4;
 			auto byte_b = data[i] & 0x0F;
@@ -244,8 +244,8 @@ uint32_t DecodeBase64Bytes(const string_t &str, const_data_ptr_t input_data, idx
 			    input_data[base_idx + decode_idx], base_idx + decode_idx);
 		}
 	}
-	return (decoded_bytes[0] << 3 * 6) + (decoded_bytes[1] << 2 * 6) + (decoded_bytes[2] << 1 * 6) +
-	       (decoded_bytes[3] << 0 * 6);
+	return UnsafeNumericCast<uint32_t>((decoded_bytes[0] << 3 * 6) + (decoded_bytes[1] << 2 * 6) +
+	                                   (decoded_bytes[2] << 1 * 6) + (decoded_bytes[3] << 0 * 6));
 }
 
 void Blob::FromBase64(string_t str, data_ptr_t output, idx_t output_size) {

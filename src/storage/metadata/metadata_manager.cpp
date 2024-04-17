@@ -33,7 +33,7 @@ MetadataHandle MetadataManager::AllocateHandle() {
 
 	// select the first free metadata block we can find
 	MetadataPointer pointer;
-	pointer.block_index = free_block;
+	pointer.block_index = UnsafeNumericCast<idx_t>(free_block);
 	auto &block = blocks[free_block];
 	if (block.block->BlockId() < MAXIMUM_BLOCK) {
 		// this block is a disk-backed block, yet we are planning to write to it
@@ -134,7 +134,7 @@ MetadataPointer MetadataManager::FromDiskPointer(MetaBlockPointer pointer) {
 		                        pointer.block_pointer);
 	} // LCOV_EXCL_STOP
 	MetadataPointer result;
-	result.block_index = block_id;
+	result.block_index = UnsafeNumericCast<idx_t>(block_id);
 	result.index = UnsafeNumericCast<uint8_t>(index);
 	return result;
 }

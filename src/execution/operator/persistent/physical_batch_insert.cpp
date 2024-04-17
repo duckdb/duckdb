@@ -175,7 +175,8 @@ public:
 	void CreateNewCollection(DuckTableEntry &table, const vector<LogicalType> &insert_types) {
 		auto &table_info = table.GetStorage().info;
 		auto &block_manager = TableIOManager::Get(table.GetStorage()).GetBlockManagerForRowData();
-		current_collection = make_uniq<RowGroupCollection>(table_info, block_manager, insert_types, MAX_ROW_ID);
+		current_collection =
+		    make_uniq<RowGroupCollection>(table_info, block_manager, insert_types, NumericCast<idx_t>(MAX_ROW_ID));
 		current_collection->InitializeEmpty();
 		current_collection->InitializeAppend(current_append_state);
 	}
@@ -312,8 +313,8 @@ void BatchInsertGlobalState::ScheduleMergeTasks(idx_t min_batch_index) {
 		auto &scheduled_task = to_be_scheduled_tasks[i - 1];
 		if (scheduled_task.start_index + 1 < scheduled_task.end_index) {
 			// erase all entries except the first one
-			collections.erase(collections.begin() + scheduled_task.start_index + 1,
-			                  collections.begin() + scheduled_task.end_index);
+			collections.erase(collections.begin() + NumericCast<int64_t>(scheduled_task.start_index) + 1,
+			                  collections.begin() + NumericCast<int64_t>(scheduled_task.end_index));
 		}
 	}
 }
@@ -622,7 +623,7 @@ SourceResultType PhysicalBatchInsert::GetData(ExecutionContext &context, DataChu
 	auto &insert_gstate = sink_state->Cast<BatchInsertGlobalState>();
 
 	chunk.SetCardinality(1);
-	chunk.SetValue(0, 0, Value::BIGINT(insert_gstate.insert_count));
+	chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(insert_gstate.insert_count)));
 
 	return SourceResultType::FINISHED;
 }
