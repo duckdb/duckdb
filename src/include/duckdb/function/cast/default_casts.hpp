@@ -30,7 +30,7 @@ struct BindCastInfo {
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -48,7 +48,7 @@ struct BoundCastData {
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -104,9 +104,9 @@ typedef unique_ptr<FunctionLocalState> (*init_cast_local_state_t)(CastLocalState
 
 struct BoundCastInfo {
 	DUCKDB_API
-	BoundCastInfo(
+	BoundCastInfo( // NOLINT: allow explicit cast from cast_function_t
 	    cast_function_t function, unique_ptr<BoundCastData> cast_data = nullptr,
-	    init_cast_local_state_t init_local_state = nullptr); // NOLINT: allow explicit cast from cast_function_t
+	    init_cast_local_state_t init_local_state = nullptr);
 	cast_function_t function;
 	init_cast_local_state_t init_local_state;
 	unique_ptr<BoundCastData> cast_data;

@@ -22,6 +22,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
+#include "duckdb/main/database_file_opener.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -70,11 +71,19 @@ BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {
 	return db.GetBufferManager();
 }
 
+const BufferManager &BufferManager::GetBufferManager(const DatabaseInstance &db) {
+	return db.GetBufferManager();
+}
+
 BufferManager &BufferManager::GetBufferManager(AttachedDatabase &db) {
 	return BufferManager::GetBufferManager(db.GetDatabase());
 }
 
 DatabaseInstance &DatabaseInstance::GetDatabase(ClientContext &context) {
+	return *context.db;
+}
+
+const DatabaseInstance &DatabaseInstance::GetDatabase(const ClientContext &context) {
 	return *context.db;
 }
 
@@ -221,17 +230,23 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		config.options.temporary_directory = string();
 	}
 
+	db_file_system = make_uniq<DatabaseFileSystem>(*this);
 	db_manager = make_uniq<DatabaseManager>(*this);
-	buffer_manager = make_uniq<StandardBufferManager>(*this, config.options.temporary_directory);
+	if (config.buffer_manager) {
+		buffer_manager = config.buffer_manager;
+	} else {
+		buffer_manager = make_uniq<StandardBufferManager>(*this, config.options.temporary_directory);
+	}
 	scheduler = make_uniq<TaskScheduler>(*this);
 	object_cache = make_uniq<ObjectCache>();
 	connection_manager = make_uniq<ConnectionManager>();
 
-	// resolve the type of teh database we are opening
-	DBPathAndType::ResolveDatabaseType(config.options.database_path, config.options.database_type, config);
-
 	// initialize the secret manager
 	config.secret_manager->Initialize(*this);
+
+	// resolve the type of teh database we are opening
+	auto &fs = FileSystem::GetFileSystem(*this);
+	DBPathAndType::ResolveDatabaseType(fs, config.options.database_path, config.options.database_type);
 
 	// initialize the system catalog
 	db_manager->InitializeSystemCatalog();
@@ -281,6 +296,10 @@ BufferManager &DatabaseInstance::GetBufferManager() {
 	return *buffer_manager;
 }
 
+const BufferManager &DatabaseInstance::GetBufferManager() const {
+	return *buffer_manager;
+}
+
 BufferPool &DatabaseInstance::GetBufferPool() const {
 	return *config.buffer_pool;
 }
@@ -302,7 +321,7 @@ ObjectCache &DatabaseInstance::GetObjectCache() {
 }
 
 FileSystem &DatabaseInstance::GetFileSystem() {
-	return *config.file_system;
+	return *db_file_system;
 }
 
 ConnectionManager &DatabaseInstance::GetConnectionManager() {
@@ -381,6 +400,10 @@ const unordered_set<std::string> &DatabaseInstance::LoadedExtensions() {
 	return loaded_extensions;
 }
 
+const unordered_map<std::string, ExtensionInfo> &DatabaseInstance::LoadedExtensionsData() {
+	return loaded_extensions_data;
+}
+
 idx_t DuckDB::NumberOfThreads() {
 	return instance->NumberOfThreads();
 }
@@ -394,9 +417,10 @@ bool DuckDB::ExtensionIsLoaded(const std::string &name) {
 	return instance->ExtensionIsLoaded(name);
 }
 
-void DatabaseInstance::SetExtensionLoaded(const std::string &name) {
+void DatabaseInstance::SetExtensionLoaded(const std::string &name, const std::string &extension_version) {
 	auto extension_name = ExtensionHelper::GetExtensionName(name);
 	loaded_extensions.insert(extension_name);
+	loaded_extensions_data.insert({extension_name, ExtensionInfo(extension_version)});
 
 	auto &callbacks = DBConfig::GetConfig(*this).extension_callbacks;
 	for (auto &callback : callbacks) {
@@ -404,7 +428,7 @@ void DatabaseInstance::SetExtensionLoaded(const std::string &name) {
 	}
 }
 
-SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) {
+SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) const {
 	// check the session values
 	auto &db_config = DBConfig::GetConfig(*this);
 	const auto &global_config_map = db_config.options.set_variables;

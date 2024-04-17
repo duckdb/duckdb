@@ -279,9 +279,9 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameColumn(ClientContext &context, Re
 		case ConstraintType::UNIQUE: {
 			// UNIQUE constraint: possibly need to rename columns
 			auto &unique = copy->Cast<UniqueConstraint>();
-			for (idx_t i = 0; i < unique.columns.size(); i++) {
-				if (unique.columns[i] == info.old_name) {
-					unique.columns[i] = info.new_name;
+			for (auto &column_name : unique.GetColumnNamesMutable()) {
+				if (column_name == info.old_name) {
+					column_name = info.new_name;
 				}
 			}
 			break;
@@ -399,13 +399,13 @@ void DuckTableEntry::UpdateConstraintsOnColumnDrop(const LogicalIndex &removed_i
 		case ConstraintType::UNIQUE: {
 			auto copy = constraint->Copy();
 			auto &unique = copy->Cast<UniqueConstraint>();
-			if (unique.index.index != DConstants::INVALID_INDEX) {
-				if (unique.index == removed_index) {
+			if (unique.HasIndex()) {
+				if (unique.GetIndex() == removed_index) {
 					throw CatalogException(
 					    "Cannot drop column \"%s\" because there is a UNIQUE constraint that depends on it",
 					    info.removed_column);
 				}
-				unique.index = adjusted_indices[unique.index.index];
+				unique.SetIndex(adjusted_indices[unique.GetIndex().index]);
 			}
 			create_info.constraints.push_back(std::move(copy));
 			break;
@@ -763,7 +763,7 @@ void DuckTableEntry::SetAsRoot() {
 
 void DuckTableEntry::CommitAlter(string &column_name) {
 	D_ASSERT(!column_name.empty());
-	idx_t removed_index = DConstants::INVALID_INDEX;
+	optional_idx removed_index;
 	for (auto &col : columns.Logical()) {
 		if (col.Name() == column_name) {
 			// No need to alter storage, removed column is generated column
@@ -774,8 +774,7 @@ void DuckTableEntry::CommitAlter(string &column_name) {
 			break;
 		}
 	}
-	D_ASSERT(removed_index != DConstants::INVALID_INDEX);
-	storage->CommitDropColumn(columns.LogicalToPhysical(LogicalIndex(removed_index)).index);
+	storage->CommitDropColumn(columns.LogicalToPhysical(LogicalIndex(removed_index.GetIndex())).index);
 }
 
 void DuckTableEntry::CommitDrop() {

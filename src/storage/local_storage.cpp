@@ -197,7 +197,11 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 		// we need to vacuum the indexes to remove any buffers that are now empty
 		// due to reverting the appends
 		table.info->indexes.Scan([&](Index &index) {
-			index.Vacuum();
+			try {
+				index.Vacuum();
+			} catch (std::exception &ex) { // LCOV_EXCL_START
+				error = ErrorData(ex);
+			} // LCOV_EXCL_STOP
 			return false;
 		});
 		error.Throw();
@@ -354,6 +358,7 @@ bool LocalStorage::NextParallelScan(ClientContext &context, DataTable &table, Pa
 }
 
 void LocalStorage::InitializeAppend(LocalAppendState &state, DataTable &table) {
+	table.info->InitializeIndexes(context);
 	state.storage = &table_manager.GetOrCreateStorage(table);
 	state.storage->row_groups->InitializeAppend(TransactionData(transaction), state.append_state);
 }
@@ -445,6 +450,8 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 	}
 	idx_t append_count = storage.row_groups->GetTotalRows() - storage.deleted_rows;
 
+	table.info->InitializeIndexes(context);
+
 	TableAppendState append_state;
 	table.AppendLock(append_state);
 	transaction.PushAppend(table, append_state.row_start, append_count);
@@ -469,9 +476,6 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 		// append to the indexes and append to the base table
 		storage.AppendToIndexes(transaction, append_state, append_count, true);
 	}
-
-	// try to initialize any unknown indexes
-	table.info->InitializeIndexes(context);
 
 	// possibly vacuum any excess index data
 	table.info->indexes.Scan([&](Index &index) {
@@ -575,7 +579,6 @@ TableIndexList &LocalStorage::GetIndexes(DataTable &table) {
 	if (!storage) {
 		throw InternalException("LocalStorage::GetIndexes - local storage not found");
 	}
-	table.info->InitializeIndexes(context);
 	return storage->indexes;
 }
 

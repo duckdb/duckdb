@@ -40,7 +40,7 @@ ClientContext &ExpressionState::GetContext() {
 ExpressionState::ExpressionState(const Expression &expr, ExpressionExecutorState &root) : expr(expr), root(root) {
 }
 
-ExpressionExecutorState::ExpressionExecutorState() : profiler() {
+ExpressionExecutorState::ExpressionExecutorState() {
 }
 
 void ExpressionState::Verify(ExpressionExecutorState &root_executor) {

@@ -9,11 +9,13 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/enums/prepared_statement_mode.hpp"
 
 namespace duckdb {
 class ClientContext;
 class ErrorData;
 class MetaTransaction;
+class PreparedStatementData;
 class SQLStatement;
 
 enum class RebindQueryInfo { DO_NOT_REBIND, ATTEMPT_TO_REBIND };
@@ -40,6 +42,14 @@ public:
 		return false;
 	}
 	virtual RebindQueryInfo OnPlanningError(ClientContext &context, SQLStatement &statement, ErrorData &error) {
+		return RebindQueryInfo::DO_NOT_REBIND;
+	}
+	virtual RebindQueryInfo OnFinalizePrepare(ClientContext &context, PreparedStatementData &prepared_statement,
+	                                          PreparedStatementMode mode) {
+		return RebindQueryInfo::DO_NOT_REBIND;
+	}
+	virtual RebindQueryInfo OnExecutePrepared(ClientContext &context, PreparedStatementData &prepared_statement,
+	                                          RebindQueryInfo current_rebind) {
 		return RebindQueryInfo::DO_NOT_REBIND;
 	}
 };

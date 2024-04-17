@@ -22,8 +22,6 @@ on:
       - '**'
       - '!main'
       - '!feature'
-    tags:
-      - '**'
     paths-ignore:
       - '**.md'
       - 'tools/**'
@@ -218,7 +216,7 @@ jobs:
             osx_arch: arm64
             duckdb_arch: osx_arm64
             vcpkg_triplet: arm64-osx
-            run_autoload_tests: ${{ inputs.skip_tests != 'true' }}
+            run_autoload_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
 
     env:
       DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
@@ -263,17 +261,6 @@ jobs:
         shell: bash
         run: |
           python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest
-
-      - name: Sign Extension Binaries
-        env:
-          BUILD_CERTIFICATE_BASE64: ${{ secrets.OSX_CODESIGN_BUILD_CERTIFICATE_BASE64 }}
-          P12_PASSWORD: ${{ secrets.OSX_CODESIGN_P12_PASSWORD }}
-          KEYCHAIN_PASSWORD: ${{ secrets.OSX_CODESIGN_KEYCHAIN_PASSWORD }}
-        run: |
-          if [[ "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-          . scripts/osx_import_codesign_certificate.sh
-          codesign --all-architectures --force --sign "Developer ID Application: Stichting DuckDB Foundation" build/release/extension/*/*.duckdb_extension
-          fi
 
       - name: Deploy
         shell: bash

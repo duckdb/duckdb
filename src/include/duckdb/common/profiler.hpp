@@ -32,8 +32,8 @@ public:
 	//! the total elapsed time. Otherwise returns how far along the timer is
 	//! right now.
 	double Elapsed() const {
-		auto _end = finished ? end : Tick();
-		return std::chrono::duration_cast<std::chrono::duration<double>>(_end - start).count();
+		auto measured_end = finished ? end : Tick();
+		return std::chrono::duration_cast<std::chrono::duration<double>>(measured_end - start).count();
 	}
 
 private:

@@ -17,7 +17,7 @@ py::handle PythonImportCacheItem::operator()(bool load) {
 
 	optional_ptr<PythonImportCacheItem> item = this;
 	while (item) {
-		hierarchy.push(*item);
+		hierarchy.emplace(*item);
 		item = item->parent;
 	}
 	return PythonImporter::Import(hierarchy, load);
@@ -79,8 +79,11 @@ py::handle PythonImportCacheItem::Load(PythonImportCache &cache, py::handle sour
 //===--------------------------------------------------------------------===//
 
 PythonImportCache::~PythonImportCache() {
-	py::gil_scoped_acquire acquire;
-	owned_objects.clear();
+	try {
+		py::gil_scoped_acquire acquire;
+		owned_objects.clear();
+	} catch (...) { // NOLINT
+	}
 }
 
 py::handle PythonImportCache::AddCache(py::object item) {

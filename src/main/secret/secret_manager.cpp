@@ -285,7 +285,7 @@ BoundStatement SecretManager::BindCreateSecret(CatalogTransaction transaction, C
 	BoundStatement result;
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
-	result.plan = make_uniq<LogicalCreateSecret>(*function, std::move(bound_info));
+	result.plan = make_uniq<LogicalCreateSecret>(std::move(bound_info));
 	return result;
 }
 
@@ -593,6 +593,13 @@ unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntry(ClientContex
 	// Note each file should contain 1 secret
 	try {
 		auto file_reader = BufferedFileReader(fs, secret_path.c_str());
+
+		if (!LocalFileSystem::IsPrivateFile(secret_path, nullptr)) {
+			throw IOException(
+			    "The secret file '%s' has incorrect permissions! Please set correct permissions or remove file",
+			    secret_path);
+		}
+
 		if (!file_reader.Finished()) {
 			BinaryDeserializer deserializer(file_reader);
 
@@ -600,7 +607,6 @@ unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntry(ClientContex
 			auto deserialized_secret = secret_manager.DeserializeSecret(deserializer);
 			deserializer.End();
 
-			auto name = deserialized_secret->GetName();
 			auto entry = make_uniq<SecretCatalogEntry>(std::move(deserialized_secret), catalog);
 			entry->secret->storage_mode = SecretManager::LOCAL_FILE_STORAGE_NAME;
 			entry->secret->persist_type = SecretPersistType::PERSISTENT;

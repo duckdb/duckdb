@@ -34,8 +34,8 @@ DataTableInfo::DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> ta
       table(std::move(table)) {
 }
 
-void DataTableInfo::InitializeIndexes(ClientContext &context) {
-	indexes.InitializeIndexes(context, *this);
+void DataTableInfo::InitializeIndexes(ClientContext &context, bool throw_on_failure) {
+	indexes.InitializeIndexes(context, *this, throw_on_failure);
 }
 
 bool DataTableInfo::IsTemporary() const {
@@ -89,8 +89,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 		column_definitions.emplace_back(column_def.Copy());
 	}
 
-	// try to initialize unknown indexes
 	info->InitializeIndexes(context);
+
 	// first check if there are any indexes that exist that point to the removed column
 	info->indexes.Scan([&](Index &index) {
 		for (auto &column_id : index.column_ids) {
@@ -137,6 +137,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<Bound
 		column_definitions.emplace_back(column_def.Copy());
 	}
 
+	info->InitializeIndexes(context);
+
 	// Verify the new constraint against current persistent/local data
 	VerifyNewConstraint(context, parent, constraint.get());
 
@@ -155,7 +157,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	for (auto &column_def : parent.column_definitions) {
 		column_definitions.emplace_back(column_def.Copy());
 	}
-	// try to initialize unknown indexes
+
 	info->InitializeIndexes(context);
 
 	// first check if there are any indexes that exist that point to the changed column
@@ -858,7 +860,9 @@ void DataTable::RevertAppend(idx_t start_row, idx_t count) {
 				row_data[i] = current_row_base + i;
 			}
 			info->indexes.Scan([&](Index &index) {
-				index.Delete(chunk, row_identifiers);
+				if (!index.IsUnknown()) {
+					index.Delete(chunk, row_identifiers);
+				}
 				return false;
 			});
 			current_row_base += chunk.size();
@@ -868,7 +872,9 @@ void DataTable::RevertAppend(idx_t start_row, idx_t count) {
 	// we need to vacuum the indexes to remove any buffers that are now empty
 	// due to reverting the appends
 	info->indexes.Scan([&](Index &index) {
-		index.Vacuum();
+		if (!index.IsUnknown()) {
+			index.Vacuum();
+		}
 		return false;
 	});
 
@@ -999,6 +1005,8 @@ idx_t DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector
 	if (count == 0) {
 		return 0;
 	}
+
+	info->InitializeIndexes(context, true);
 
 	auto &transaction = DuckTransaction::Get(context, db);
 	auto &local_storage = LocalStorage::Get(transaction);
@@ -1157,6 +1165,9 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 		throw TransactionException("Transaction conflict: cannot update a table that has been altered!");
 	}
 
+	// check that there are no unknown indexes
+	info->InitializeIndexes(context, true);
+
 	// first verify that no constraints are violated
 	VerifyUpdateConstraints(context, table, updates, column_ids);
 
@@ -1244,7 +1255,7 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	//   row-group pointers
 	//   table pointer
 	//   index data
-	writer.FinalizeTable(std::move(global_stats), info.get(), serializer);
+	writer.FinalizeTable(global_stats, info.get(), serializer);
 }
 
 void DataTable::CommitDropColumn(idx_t index) {

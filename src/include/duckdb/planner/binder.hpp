@@ -37,6 +37,7 @@ class ViewCatalogEntry;
 class TableMacroCatalogEntry;
 class UpdateSetInfo;
 class LogicalProjection;
+class LogicalVacuum;
 
 class ColumnList;
 class ExternalDependency;
@@ -61,6 +62,7 @@ struct CorrelatedColumnInfo {
 	string name;
 	idx_t depth;
 
+	// NOLINTNEXTLINE - work-around bug in clang-tidy
 	CorrelatedColumnInfo(ColumnBinding binding, LogicalType type_p, string name_p, idx_t depth)
 	    : binding(binding), type(std::move(type_p)), name(std::move(name_p)), depth(depth) {
 	}
@@ -135,8 +137,8 @@ public:
 
 	//! Add a common table expression to the binder
 	void AddCTE(const string &name, CommonTableExpressionInfo &cte);
-	//! Find a common table expression by name; returns nullptr if none exists
-	optional_ptr<CommonTableExpressionInfo> FindCTE(const string &name, bool skip = false);
+	//! Find all candidate common table expression by name; returns empty vector if none exists
+	vector<reference<CommonTableExpressionInfo>> FindCTE(const string &name, bool skip = false);
 
 	bool CTEIsAlreadyBound(CommonTableExpressionInfo &cte);
 
@@ -161,6 +163,8 @@ public:
 	void BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert &insert, UpdateSetInfo &set_info,
 	                                TableCatalogEntry &table, TableStorageInfo &storage_info);
 	void BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &table, InsertStatement &stmt);
+
+	void BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> &root);
 
 	static void BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema);
 	static void BindLogicalType(ClientContext &context, LogicalType &type, optional_ptr<Catalog> catalog = nullptr,
@@ -229,6 +233,8 @@ private:
 	unique_ptr<BoundTableRef> BindWithReplacementScan(ClientContext &context, const string &table_name,
 	                                                  BaseTableRef &ref);
 
+	template <class T>
+	BoundStatement BindWithCTE(T &statement);
 	BoundStatement Bind(SelectStatement &stmt);
 	BoundStatement Bind(InsertStatement &stmt);
 	BoundStatement Bind(CopyStatement &stmt);
@@ -262,6 +268,8 @@ private:
 
 	unique_ptr<QueryNode> BindTableMacro(FunctionExpression &function, TableMacroCatalogEntry &macro_func, idx_t depth);
 
+	unique_ptr<BoundCTENode> BindMaterializedCTE(CommonTableExpressionMap &cte_map);
+	unique_ptr<BoundCTENode> BindCTE(CTENode &statement);
 	unique_ptr<BoundQueryNode> BindNode(SelectNode &node);
 	unique_ptr<BoundQueryNode> BindNode(SetOperationNode &node);
 	unique_ptr<BoundQueryNode> BindNode(RecursiveCTENode &node);
@@ -271,6 +279,7 @@ private:
 	unique_ptr<LogicalOperator> VisitQueryNode(BoundQueryNode &node, unique_ptr<LogicalOperator> root);
 	unique_ptr<LogicalOperator> CreatePlan(BoundRecursiveCTENode &node);
 	unique_ptr<LogicalOperator> CreatePlan(BoundCTENode &node);
+	unique_ptr<LogicalOperator> CreatePlan(BoundCTENode &node, unique_ptr<LogicalOperator> base);
 	unique_ptr<LogicalOperator> CreatePlan(BoundSelectNode &statement);
 	unique_ptr<LogicalOperator> CreatePlan(BoundSetOperationNode &node);
 	unique_ptr<LogicalOperator> CreatePlan(BoundQueryNode &node);
@@ -318,9 +327,9 @@ private:
 	BoundStatement BindCopyTo(CopyStatement &stmt);
 	BoundStatement BindCopyFrom(CopyStatement &stmt);
 
-	void BindModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);
-	void BindModifierTypes(BoundQueryNode &result, const vector<LogicalType> &sql_types, idx_t projection_index,
-	                       const vector<idx_t> &expansion_count = {});
+	void PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);
+	void BindModifiers(BoundQueryNode &result, idx_t table_index, const vector<string> &names,
+	                   const vector<LogicalType> &sql_types, const SelectBindState &bind_state);
 
 	unique_ptr<BoundResultModifier> BindLimit(OrderBinder &order_binder, LimitModifier &limit_mod);
 	unique_ptr<BoundResultModifier> BindLimitPercent(OrderBinder &order_binder, LimitPercentModifier &limit_mod);
@@ -362,10 +371,8 @@ private:
 
 	unique_ptr<BoundQueryNode> BindSelectNode(SelectNode &statement, unique_ptr<BoundTableRef> from_table);
 
-	unique_ptr<LogicalOperator> BindCopyDatabaseSchema(CopyDatabaseStatement &stmt, Catalog &from_database,
-	                                                   Catalog &to_database);
-	unique_ptr<LogicalOperator> BindCopyDatabaseData(CopyDatabaseStatement &stmt, Catalog &from_database,
-	                                                 Catalog &to_database);
+	unique_ptr<LogicalOperator> BindCopyDatabaseSchema(Catalog &source_catalog, const string &target_database_name);
+	unique_ptr<LogicalOperator> BindCopyDatabaseData(Catalog &source_catalog, const string &target_database_name);
 
 	unique_ptr<BoundTableRef> BindShowQuery(ShowRef &ref);
 	unique_ptr<BoundTableRef> BindShowTable(ShowRef &ref);

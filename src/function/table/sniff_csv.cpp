@@ -83,17 +83,6 @@ static unique_ptr<FunctionData> CSVSniffBind(ClientContext &context, TableFuncti
 	return std::move(result);
 }
 
-string NewLineIdentifierToString(NewLineIdentifier identifier) {
-	switch (identifier) {
-	case NewLineIdentifier::SINGLE:
-		return "\\n";
-	case NewLineIdentifier::CARRY_ON:
-		return "\\r\\n";
-	default:
-		return "";
-	}
-}
-
 string FormatOptions(char opt) {
 	if (opt == '\'') {
 		return "''";
@@ -121,6 +110,12 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	sniffer_options.file_path = data.path;
 
 	auto buffer_manager = make_shared<CSVBufferManager>(context, sniffer_options, sniffer_options.file_path, 0);
+	if (sniffer_options.name_list.empty()) {
+		sniffer_options.name_list = data.names_csv;
+	}
+	if (sniffer_options.sql_type_list.empty()) {
+		sniffer_options.sql_type_list = data.return_types_csv;
+	}
 	CSVSniffer sniffer(sniffer_options, buffer_manager, CSVStateMachineCache::Get(context));
 	auto sniffer_result = sniffer.SniffCSV(true);
 	string str_opt;
@@ -138,8 +133,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	str_opt = sniffer_options.dialect_options.state_machine_options.escape.GetValue();
 	output.SetValue(2, 0, str_opt);
 	// 4. NewLine Delimiter
-	auto new_line_identifier =
-	    NewLineIdentifierToString(sniffer_options.dialect_options.state_machine_options.new_line.GetValue());
+	auto new_line_identifier = sniffer_options.NewLineIdentifierToString();
 	output.SetValue(3, 0, new_line_identifier);
 	// 5. Skip Rows
 	output.SetValue(4, 0, Value::UINTEGER(NumericCast<uint32_t>(sniffer_options.dialect_options.skip_rows.GetValue())));

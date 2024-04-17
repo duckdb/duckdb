@@ -61,17 +61,20 @@ void BaseCSVData::Finalize() {
 		AreOptionsEqual(options.dialect_options.state_machine_options.quote.GetValue(),
 		                options.dialect_options.state_machine_options.escape.GetValue(), "QUOTE", "ESCAPE");
 	}
-	if (!options.null_str.empty()) {
-		// null string and delimiter must not be substrings of each other
-		SubstringDetection(options.dialect_options.state_machine_options.delimiter.GetValue(), options.null_str,
-		                   "DELIMITER", "NULL");
 
-		// quote/escape and nullstr must not be substrings of each other
-		SubstringDetection(options.dialect_options.state_machine_options.quote.GetValue(), options.null_str, "QUOTE",
-		                   "NULL");
+	// null string and delimiter must not be substrings of each other
+	for (auto &null_str : options.null_str) {
+		if (!null_str.empty()) {
+			SubstringDetection(options.dialect_options.state_machine_options.delimiter.GetValue(), null_str,
+			                   "DELIMITER", "NULL");
 
-		SubstringDetection(options.dialect_options.state_machine_options.escape.GetValue(), options.null_str, "ESCAPE",
-		                   "NULL");
+			// quote/escape and nullstr must not be substrings of each other
+			SubstringDetection(options.dialect_options.state_machine_options.quote.GetValue(), null_str, "QUOTE",
+			                   "NULL");
+
+			SubstringDetection(options.dialect_options.state_machine_options.escape.GetValue(), null_str, "ESCAPE",
+			                   "NULL");
+		}
 	}
 
 	if (!options.prefix.empty() || !options.suffix.empty()) {
@@ -194,7 +197,7 @@ static string AddEscapes(char to_be_escaped, const char escape, const string &va
 static bool RequiresQuotes(WriteCSVData &csv_data, const char *str, idx_t len) {
 	auto &options = csv_data.options;
 	// check if the string is equal to the null string
-	if (len == options.null_str.size() && memcmp(str, options.null_str.c_str(), len) == 0) {
+	if (len == options.null_str[0].size() && memcmp(str, options.null_str[0].c_str(), len) == 0) {
 		return true;
 	}
 	auto str_data = reinterpret_cast<const_data_ptr_t>(str);
@@ -270,8 +273,8 @@ struct LocalWriteCSVData : public LocalFunctionData {
 struct GlobalWriteCSVData : public GlobalFunctionData {
 	GlobalWriteCSVData(FileSystem &fs, const string &file_path, FileCompressionType compression)
 	    : fs(fs), written_anything(false) {
-		handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW,
-		                     FileLockType::WRITE_LOCK, compression);
+		handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW |
+		                                    FileLockType::WRITE_LOCK | compression);
 	}
 
 	//! Write generic data, e.g., CSV header
@@ -393,13 +396,14 @@ static void WriteCSVChunkInternal(ClientContext &context, FunctionData &bind_dat
 			writer.WriteData(const_data_ptr_cast(csv_data.newline.c_str()), csv_data.newline.size());
 		}
 		// write values
+		D_ASSERT(options.null_str.size() == 1);
 		for (idx_t col_idx = 0; col_idx < cast_chunk.ColumnCount(); col_idx++) {
 			if (col_idx != 0) {
 				WriteQuoteOrEscape(writer, options.dialect_options.state_machine_options.delimiter.GetValue());
 			}
 			if (FlatVector::IsNull(cast_chunk.data[col_idx], row_idx)) {
 				// write null value
-				writer.WriteData(const_data_ptr_cast(options.null_str.c_str()), options.null_str.size());
+				writer.WriteData(const_data_ptr_cast(options.null_str[0].c_str()), options.null_str[0].size());
 				continue;
 			}
 

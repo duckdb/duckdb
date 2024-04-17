@@ -29,7 +29,7 @@ struct FlushMoveState;
    stores them in the HT. It uses linear probing for collision resolution.
 */
 
-struct aggr_ht_entry_t {
+struct aggr_ht_entry_t { // NOLINT
 public:
 	explicit aggr_ht_entry_t(hash_t value_p) : value(value_p) {
 	}

@@ -7,8 +7,6 @@ on:
       - '**'
       - '!main'
       - '!feature'
-    tags:
-      - '**'
     paths-ignore:
       - '**'
       - '!.github/workflows/NightlyTests.yml'
@@ -311,6 +309,40 @@ jobs:
        shell: bash
        run: |
          ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pytest tools/pythonpkg/tests/fast --skiplist TestMemoryLeaks
+
+  python-sqllogic:
+     name: Python SQLLogicTest Library (Linux)
+     runs-on: ubuntu-20.04
+     env:
+        GEN: ninja
+        DUCKDEBUG: 1
+        ASAN_OPTIONS: detect_leaks=0
+
+     steps:
+     - uses: actions/checkout@v3
+       with:
+         fetch-depth: 0
+
+     - uses: actions/setup-python@v5
+       with:
+         python-version: '3.10'
+
+     - name: Install Python Test Dependencies
+       shell: bash
+       run: |
+         cd tools/pythonpkg
+         python3 -m pip install -r requirements-dev.txt
+
+     - name: Install DuckDB Python
+       shell: bash
+       run: |
+         cd tools/pythonpkg
+         python3 -m pip install .
+
+     - name: Run Python SQLLogicTester
+       shell: bash
+       run: |
+         python3 tools/pythonpkg/scripts/sqllogictest_python.py
 
   sqllogic:
      name: Sqllogic tests
@@ -659,6 +691,7 @@ jobs:
       BUILD_JSON: 1
       BUILD_EXCEL: 1
       BUILD_JEMALLOC: 1
+      DUCKDB_PLATFORM: linux_amd64
       TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt
 
     steps:

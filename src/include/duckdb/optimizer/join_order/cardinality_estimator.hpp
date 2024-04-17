@@ -28,7 +28,7 @@ struct RelationsToTDom {
 	vector<FilterInfo *> filters;
 	vector<string> column_names;
 
-	RelationsToTDom(const column_binding_set_t &column_binding_set)
+	explicit RelationsToTDom(const column_binding_set_t &column_binding_set)
 	    : equivalent_relations(column_binding_set), tdom_hll(0), tdom_no_hll(NumericLimits<idx_t>::Maximum()),
 	      has_tdom_hll(false) {};
 };
@@ -82,7 +82,7 @@ public:
 	void PrintRelationToTdomInfo();
 
 private:
-	bool SingleColumnFilter(FilterInfo &filter_info);
+	bool SingleRelationFilter(FilterInfo &filter_info);
 	vector<idx_t> DetermineMatchingEquivalentSets(FilterInfo *filter_info);
 	//! Given a filter, add the column bindings to the matching equivalent set at the index
 	//! given in matching equivalent sets.
