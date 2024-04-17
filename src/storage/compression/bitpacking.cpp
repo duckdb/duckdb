@@ -515,8 +515,10 @@ public:
 		auto base_ptr = handle.Ptr();
 
 		// Compact the segment by moving the metadata next to the data.
-		auto metadata_offset = NumericCast<idx_t>(AlignValue(data_ptr - base_ptr));
-		auto metadata_size = NumericCast<idx_t>(base_ptr + Storage::BLOCK_SIZE - metadata_ptr);
+
+		idx_t unaligned_offset = data_ptr - base_ptr;
+		idx_t metadata_offset = AlignValue(unaligned_offset);
+		idx_t metadata_size = base_ptr + Storage::BLOCK_SIZE - metadata_ptr;
 		idx_t total_segment_size = metadata_offset + metadata_size;
 
 		// Asserting things are still sane here
@@ -524,6 +526,10 @@ public:
 			throw InternalException("Error in bitpacking size calculation");
 		}
 
+		if (unaligned_offset != metadata_offset) {
+			// zero initialize any padding bits
+			memset(base_ptr + unaligned_offset, 0, metadata_offset - unaligned_offset);
+		}
 		memmove(base_ptr + metadata_offset, metadata_ptr, metadata_size);
 
 		// Store the offset of the metadata of the first group (which is at the highest address).

@@ -415,9 +415,10 @@ static uint8_t GetCandidateSpecificity(const LogicalType &candidate_type) {
 	    {(uint8_t)LogicalTypeId::VARCHAR, 0},  {(uint8_t)LogicalTypeId::TIMESTAMP, 1},
 	    {(uint8_t)LogicalTypeId::DATE, 2},     {(uint8_t)LogicalTypeId::TIME, 3},
 	    {(uint8_t)LogicalTypeId::DOUBLE, 4},   {(uint8_t)LogicalTypeId::FLOAT, 5},
-	    {(uint8_t)LogicalTypeId::BIGINT, 6},   {(uint8_t)LogicalTypeId::INTEGER, 7},
-	    {(uint8_t)LogicalTypeId::SMALLINT, 8}, {(uint8_t)LogicalTypeId::TINYINT, 9},
-	    {(uint8_t)LogicalTypeId::BOOLEAN, 10}, {(uint8_t)LogicalTypeId::SQLNULL, 11}};
+	    {(uint8_t)LogicalTypeId::DECIMAL, 6},  {(uint8_t)LogicalTypeId::BIGINT, 7},
+	    {(uint8_t)LogicalTypeId::INTEGER, 8},  {(uint8_t)LogicalTypeId::SMALLINT, 9},
+	    {(uint8_t)LogicalTypeId::TINYINT, 10}, {(uint8_t)LogicalTypeId::BOOLEAN, 11},
+	    {(uint8_t)LogicalTypeId::SQLNULL, 12}};
 
 	auto id = (uint8_t)candidate_type.id();
 	auto it = auto_type_candidates_specificity.find(id);
