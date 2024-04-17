@@ -33,7 +33,7 @@ string CreateViewInfo::ToString() const {
 	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 		result += " IF NOT EXISTS ";
 	}
-	result += QualifierToString(view_name);
+	result += QualifierToString(catalog, schema, view_name);
 	if (!aliases.empty()) {
 		result += " (";
 		result += StringUtil::Join(aliases, aliases.size(), ", ",

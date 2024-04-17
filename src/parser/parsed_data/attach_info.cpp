@@ -19,7 +19,7 @@ string AttachInfo::ToString() const {
 	}
 	result += StringUtil::Format(" '%s'", path);
 	if (!name.empty()) {
-		result += " AS " + name;
+		result += " AS " + KeywordHelper::WriteOptionallyQuoted(name);
 	}
 	if (!options.empty()) {
 		vector<string> stringified;

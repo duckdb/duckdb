@@ -32,11 +32,8 @@ string ChangeOwnershipInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += " IF EXISTS";
 	}
-	// FIXME: QualifierToString
-	result += KeywordHelper::WriteOptionallyQuoted(name);
-	result += " OWNED BY ";
-	// FIXME: QualifierToString
-	result += KeywordHelper::WriteOptionallyQuoted(owner_name);
+	result += QualifierToString(catalog, schema, name) result += " OWNED BY ";
+	result += QualifierToString(catalog, owner_schema, owner_name);
 	result += ";";
 	return result;
 }
@@ -66,8 +63,7 @@ string SetCommentInfo::ToString() const {
 	result += "COMMENT ON ";
 	result += ParseInfo::TypeToString(entry_catalog_type);
 	result += " ";
-	// FIXME: QualifierToString ...
-	result += KeywordHelper::WriteOptionallyQuoted(name);
+	result += QualifierToString(catalog, schema, name);
 	result += " IS ";
 	result += comment_value.ToSQLString();
 
@@ -133,11 +129,10 @@ unique_ptr<AlterInfo> RenameTableInfo::Copy() const {
 string RenameTableInfo::ToString() const {
 	string result = "";
 	result += "ALTER TABLE ";
-	// FIXME: QualifierToString
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += " IF EXISTS";
 	}
-	result += KeywordHelper::WriteOptionallyQuoted(name);
+	result += QualifierToString(catalog, schema, name);
 	result += " RENAME TO";
 	result += KeywordHelper::WriteOptionallyQuoted(new_table_name);
 	result += ";";
@@ -166,11 +161,10 @@ unique_ptr<AlterInfo> AddColumnInfo::Copy() const {
 string AddColumnInfo::ToString() const {
 	string result = "";
 	result += "ALTER TABLE ";
-	// FIXME: QualifierToString
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += " IF EXISTS";
 	}
-	result += KeywordHelper::WriteOptionallyQuoted(name);
+	result += QualifierToString(catalog, schema, name);
 	result += " ADD COLUMN";
 	if (if_column_not_exists) {
 		result += " IF NOT EXISTS";
@@ -200,8 +194,10 @@ unique_ptr<AlterInfo> RemoveColumnInfo::Copy() const {
 string RemoveColumnInfo::ToString() const {
 	string result = "";
 	result += "ALTER TABLE ";
-	// FIXME: QualifierToString
-	result += KeywordHelper::WriteOptionallyQuoted(name);
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
 	result += " DROP COLUMN ";
 	if (if_column_exists) {
 		result += "IF EXISTS ";
@@ -236,8 +232,10 @@ unique_ptr<AlterInfo> ChangeColumnTypeInfo::Copy() const {
 string ChangeColumnTypeInfo::ToString() const {
 	string result = "";
 	result += "ALTER TABLE ";
-	// FIXME: QualifierToString
-	result += KeywordHelper::WriteOptionallyQuoted(name);
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
 	result += " ALTER COLUMN ";
 	result += KeywordHelper::WriteOptionallyQuoted(column_name);
 	result += " TYPE ";
@@ -273,8 +271,10 @@ unique_ptr<AlterInfo> SetDefaultInfo::Copy() const {
 string SetDefaultInfo::ToString() const {
 	string result = "";
 	result += "ALTER TABLE ";
-	// FIXME: QualifierToString
-	result += KeywordHelper::WriteOptionallyQuoted(name);
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
 	result += " ALTER COLUMN ";
 	result += KeywordHelper::WriteOptionallyQuoted(column_name);
 	result += " SET DEFAULT ";
@@ -302,8 +302,10 @@ unique_ptr<AlterInfo> SetNotNullInfo::Copy() const {
 string SetNotNullInfo::ToString() const {
 	string result = "";
 	result += "ALTER TABLE ";
-	// FIXME: QualifierToString
-	result += KeywordHelper::WriteOptionallyQuoted(name);
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
 	result += " ALTER COLUMN ";
 	result += KeywordHelper::WriteOptionallyQuoted(column_name);
 	result += " SET NOT NULL";
@@ -330,8 +332,10 @@ unique_ptr<AlterInfo> DropNotNullInfo::Copy() const {
 string DropNotNullInfo::ToString() const {
 	string result = "";
 	result += "ALTER TABLE ";
-	// FIXME: QualifierToString
-	result += KeywordHelper::WriteOptionallyQuoted(name);
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
 	result += " ALTER COLUMN ";
 	result += KeywordHelper::WriteOptionallyQuoted(column_name);
 	result += " DROP NOT NULL";
@@ -400,8 +404,10 @@ unique_ptr<AlterInfo> RenameViewInfo::Copy() const {
 string RenameViewInfo::ToString() const {
 	string result = "";
 	result += "ALTER VIEW ";
-	// FIXME: QualifierToString
-	result += KeywordHelper::WriteOptionallyQuoted(name);
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
 	result += " RENAME TO ";
 	result += KeywordHelper::WriteOptionallyQuoted(new_view_name);
 	result += ";";

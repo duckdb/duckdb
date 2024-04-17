@@ -12,24 +12,9 @@ unique_ptr<CreateInfo> CreateSchemaInfo::Copy() const {
 	return std::move(result);
 }
 
-string CreateSchemaInfo::CreateQualifiedName() const {
-	string result;
-	auto has_catalog = !catalog.empty();
-	if (has_catalog) {
-		if (temporary && catalog == TEMP_CATALOG) {
-			has_catalog = false;
-		}
-	}
-	if (has_catalog) {
-		result += KeywordHelper::WriteOptionallyQuoted(catalog) + ".";
-	}
-	result += KeywordHelper::WriteOptionallyQuoted(schema);
-	return result;
-}
-
 string CreateSchemaInfo::ToString() const {
 	string ret = "";
-	string qualified = CreateQualifiedName();
+	string qualified = QualifierToString(catalog, "", schema);
 
 	switch (on_conflict) {
 	case OnCreateConflict::ALTER_ON_CONFLICT: {
