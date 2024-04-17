@@ -36,7 +36,7 @@ struct TableFunctionInfo {
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -60,7 +60,7 @@ public:
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -75,7 +75,7 @@ struct LocalTableFunctionState {
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -83,9 +83,9 @@ struct LocalTableFunctionState {
 struct TableFunctionBindInput {
 	TableFunctionBindInput(vector<Value> &inputs, named_parameter_map_t &named_parameters,
 	                       vector<LogicalType> &input_table_types, vector<string> &input_table_names,
-	                       optional_ptr<TableFunctionInfo> info)
+	                       optional_ptr<TableFunctionInfo> info, optional_ptr<Binder> binder)
 	    : inputs(inputs), named_parameters(named_parameters), input_table_types(input_table_types),
-	      input_table_names(input_table_names), info(info) {
+	      input_table_names(input_table_names), info(info), binder(binder) {
 	}
 
 	vector<Value> &inputs;
@@ -93,6 +93,7 @@ struct TableFunctionBindInput {
 	vector<LogicalType> &input_table_types;
 	vector<string> &input_table_names;
 	optional_ptr<TableFunctionInfo> info;
+	optional_ptr<Binder> binder;
 };
 
 struct TableFunctionInitInput {

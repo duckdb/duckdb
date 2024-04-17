@@ -206,12 +206,12 @@ void CommitState::WriteDelete(DeleteInfo &info) {
 	auto rows = FlatVector::GetData<row_t>(delete_chunk->data[0]);
 	if (info.is_consecutive) {
 		for (idx_t i = 0; i < info.count; i++) {
-			rows[i] = info.base_row + i;
+			rows[i] = UnsafeNumericCast<int64_t>(info.base_row + i);
 		}
 	} else {
 		auto delete_rows = info.GetRows();
 		for (idx_t i = 0; i < info.count; i++) {
-			rows[i] = info.base_row + delete_rows[i];
+			rows[i] = UnsafeNumericCast<int64_t>(info.base_row) + delete_rows[i];
 		}
 	}
 	delete_chunk->SetCardinality(info.count);
@@ -245,7 +245,7 @@ void CommitState::WriteUpdate(UpdateInfo &info) {
 	auto row_ids = FlatVector::GetData<row_t>(update_chunk->data[1]);
 	idx_t start = column_data.start + info.vector_index * STANDARD_VECTOR_SIZE;
 	for (idx_t i = 0; i < info.N; i++) {
-		row_ids[info.tuples[i]] = start + info.tuples[i];
+		row_ids[info.tuples[i]] = UnsafeNumericCast<int64_t>(start + info.tuples[i]);
 	}
 	if (column_data.type.id() == LogicalTypeId::VALIDITY) {
 		// zero-initialize the booleans

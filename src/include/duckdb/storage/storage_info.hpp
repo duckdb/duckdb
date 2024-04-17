@@ -31,7 +31,7 @@ using block_id_t = int64_t;
 
 struct Storage {
 	//! The size of a hard disk sector, only really needed for Direct IO
-	constexpr static idx_t SECTOR_SIZE = 4096;
+	constexpr static idx_t SECTOR_SIZE = 4096U;
 	//! Block header size for blocks written to the storage
 	constexpr static idx_t BLOCK_HEADER_SIZE = sizeof(uint64_t);
 	//! Size of a memory slot managed by the StorageManager and the BlockManager.
@@ -41,7 +41,7 @@ struct Storage {
 	constexpr static idx_t BLOCK_SIZE = BLOCK_ALLOC_SIZE - BLOCK_HEADER_SIZE;
 	//! The size of the headers. This should be small and written more or less atomically by the hard disk. We default
 	//! to the page size, which is 4KB. (1 << 12)
-	constexpr static idx_t FILE_HEADER_SIZE = 4096;
+	constexpr static idx_t FILE_HEADER_SIZE = 4096U;
 	//! The number of rows per row group (must be a multiple of the vector size)
 	constexpr static const idx_t ROW_GROUP_SIZE = STANDARD_ROW_GROUPS_SIZE;
 	//! The number of vectors per row group

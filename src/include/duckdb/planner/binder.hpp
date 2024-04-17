@@ -37,6 +37,7 @@ class ViewCatalogEntry;
 class TableMacroCatalogEntry;
 class UpdateSetInfo;
 class LogicalProjection;
+class LogicalVacuum;
 
 class ColumnList;
 class ExternalDependency;
@@ -162,6 +163,8 @@ public:
 	void BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert &insert, UpdateSetInfo &set_info,
 	                                TableCatalogEntry &table, TableStorageInfo &storage_info);
 	void BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &table, InsertStatement &stmt);
+
+	void BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> &root);
 
 	static void BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema);
 	static void BindLogicalType(ClientContext &context, LogicalType &type, optional_ptr<Catalog> catalog = nullptr,
@@ -324,9 +327,9 @@ private:
 	BoundStatement BindCopyTo(CopyStatement &stmt);
 	BoundStatement BindCopyFrom(CopyStatement &stmt);
 
-	void BindModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);
-	void BindModifierTypes(BoundQueryNode &result, const vector<LogicalType> &sql_types, idx_t projection_index,
-	                       const vector<idx_t> &expansion_count = {});
+	void PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);
+	void BindModifiers(BoundQueryNode &result, idx_t table_index, const vector<string> &names,
+	                   const vector<LogicalType> &sql_types, const SelectBindState &bind_state);
 
 	unique_ptr<BoundResultModifier> BindLimit(OrderBinder &order_binder, LimitModifier &limit_mod);
 	unique_ptr<BoundResultModifier> BindLimitPercent(OrderBinder &order_binder, LimitPercentModifier &limit_mod);

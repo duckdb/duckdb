@@ -33,7 +33,7 @@ struct StrfTimeBindData : public FunctionData {
 template <bool REVERSED>
 static unique_ptr<FunctionData> StrfTimeBindFunction(ClientContext &context, ScalarFunction &bound_function,
                                                      vector<unique_ptr<Expression>> &arguments) {
-	auto format_idx = REVERSED ? 0 : 1;
+	auto format_idx = REVERSED ? 0U : 1U;
 	auto &format_arg = arguments[format_idx];
 	if (format_arg->HasParameter()) {
 		throw ParameterNotResolvedException();

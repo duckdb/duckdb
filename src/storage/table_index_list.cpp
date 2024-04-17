@@ -21,7 +21,7 @@ void TableIndexList::RemoveIndex(const string &name) {
 	for (idx_t index_idx = 0; index_idx < indexes.size(); index_idx++) {
 		auto &index_entry = indexes[index_idx];
 		if (index_entry->name == name) {
-			indexes.erase(indexes.begin() + index_idx);
+			indexes.erase_at(index_idx);
 			break;
 		}
 	}
@@ -55,7 +55,7 @@ bool TableIndexList::NameIsUnique(const string &name) {
 	return true;
 }
 
-void TableIndexList::InitializeIndexes(ClientContext &context, DataTableInfo &table_info) {
+void TableIndexList::InitializeIndexes(ClientContext &context, DataTableInfo &table_info, bool throw_on_failure) {
 	lock_guard<mutex> lock(indexes_lock);
 	for (auto &index : indexes) {
 		if (!index->IsUnknown()) {
@@ -68,6 +68,11 @@ void TableIndexList::InitializeIndexes(ClientContext &context, DataTableInfo &ta
 		// Do we know the type of this index now?
 		auto index_type = context.db->config.GetIndexTypes().FindByName(index_type_name);
 		if (!index_type) {
+			if (throw_on_failure) {
+				throw MissingExtensionException(
+				    "Cannot initialize index '%s', unknown index type '%s'. You probably need to load an extension.",
+				    unknown_index.name, index_type_name);
+			}
 			continue;
 		}
 
