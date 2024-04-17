@@ -1,4 +1,5 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include "duckdb/common/extra_type_info.hpp"
 
 #include "duckdb/parser/constraint.hpp"
 
@@ -32,7 +33,8 @@ string ChangeOwnershipInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += " IF EXISTS";
 	}
-	result += QualifierToString(catalog, schema, name) result += " OWNED BY ";
+	result += QualifierToString(catalog, schema, name);
+	result += " OWNED BY ";
 	result += QualifierToString(catalog, owner_schema, owner_name);
 	result += ";";
 	return result;
@@ -107,6 +109,21 @@ RenameColumnInfo::~RenameColumnInfo() {
 
 unique_ptr<AlterInfo> RenameColumnInfo::Copy() const {
 	return make_uniq_base<AlterInfo, RenameColumnInfo>(GetAlterEntryData(), old_name, new_name);
+}
+
+string RenameColumnInfo::ToString() const {
+	string result = "";
+	result += "ALTER TABLE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
+	result += " RENAME COLUMN ";
+	result += KeywordHelper::WriteOptionallyQuoted(old_name);
+	result += " TO";
+	result += KeywordHelper::WriteOptionallyQuoted(new_name);
+	result += ";";
+	return result;
 }
 
 //===--------------------------------------------------------------------===//

@@ -791,9 +791,12 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			bool reparse_statement = false;
 #endif
 			statement = std::move(copied_statement);
+			if (statement->type == StatementType::RELATION_STATEMENT) {
+				reparse_statement = false;
+			}
 			if (reparse_statement) {
 				try {
-					Parser parser;
+					Parser parser(GetParserOptions());
 					ErrorData error;
 					parser.ParseQuery(statement->ToString());
 					statement = std::move(parser.statements[0]);

@@ -24,7 +24,7 @@ string ExportStatement::ToString() const {
 	D_ASSERT(info->is_from == false);
 	auto &options = info->options;
 	auto &format = info->format;
-	result += " " + path;
+	result += StringUtil::Format(" '%s'", path);
 	result += CopyStatement::CopyOptionsToString(format, options);
 	result += ";";
 	return result;

@@ -20,13 +20,15 @@ string VacuumInfo::ToString() const {
 	if (options.analyze) {
 		result += " ANALYZE";
 	}
-	result += " " + ref->ToString();
-	if (!columns.empty()) {
-		vector<string> names;
-		for (auto &column : columns) {
-			names.push_back(KeywordHelper::WriteOptionallyQuoted(column));
+	if (ref) {
+		result += " " + ref->ToString();
+		if (!columns.empty()) {
+			vector<string> names;
+			for (auto &column : columns) {
+				names.push_back(KeywordHelper::WriteOptionallyQuoted(column));
+			}
+			result += "(" + StringUtil::Join(names, ", ") + ")";
 		}
-		result += "(" + StringUtil::Join(names, ", ") + ")";
 	}
 	result += ";";
 	return result;
