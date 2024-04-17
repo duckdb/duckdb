@@ -1,5 +1,6 @@
 #include "duckdb/main/config.hpp"
 
+#include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/settings.hpp"
@@ -96,6 +97,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(IntegerDivisionSetting),
     DUCKDB_LOCAL(MaximumExpressionDepthSetting),
     DUCKDB_GLOBAL(MaximumMemorySetting),
+    DUCKDB_GLOBAL(MaximumTempDirectorySize),
     DUCKDB_GLOBAL(OldImplicitCasting),
     DUCKDB_GLOBAL_ALIAS("memory_limit", MaximumMemorySetting),
     DUCKDB_GLOBAL_ALIAS("null_order", DefaultNullOrderSetting),
@@ -247,6 +249,21 @@ void DBConfig::AddExtensionOption(const string &name, string description, Logica
 	}
 }
 
+bool DBConfig::IsInMemoryDatabase(const char *database_path) {
+	if (!database_path) {
+		// Entirely empty
+		return true;
+	}
+	if (strlen(database_path) == 0) {
+		// '' empty string
+		return true;
+	}
+	if (strcmp(database_path, ":memory:") == 0) {
+		return true;
+	}
+	return false;
+}
+
 CastFunctionSet &DBConfig::GetCastFunctions() {
 	return *cast_functions;
 }
@@ -259,6 +276,14 @@ void DBConfig::SetDefaultMaxMemory() {
 	auto memory = FileSystem::GetAvailableMemory();
 	if (memory.IsValid()) {
 		options.maximum_memory = memory.GetIndex() * 8 / 10;
+	}
+}
+
+void DBConfig::SetDefaultTempDirectory() {
+	if (DBConfig::IsInMemoryDatabase(options.database_path.c_str())) {
+		options.temporary_directory = ".tmp";
+	} else {
+		options.temporary_directory = options.database_path + ".tmp";
 	}
 }
 
