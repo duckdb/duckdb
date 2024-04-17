@@ -1514,22 +1514,20 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 }
 
 static optional_idx GetLocalLimit(ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	auto it = config.options.set_variables.find("local_scan_frames");
-	if (it == config.options.set_variables.end()) {
+	Value result;
+	if (!context.TryGetCurrentSetting("local_scan_frames", result)) {
 		return optional_idx();
 	}
-	auto limit = it->second.GetValue<uint64_t>();
+	auto limit = result.GetValue<uint64_t>();
 	return optional_idx(limit);
 }
 
 static optional_idx GetGlobalLimit(ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	auto it = config.options.set_variables.find("global_scan_frames");
-	if (it == config.options.set_variables.end()) {
+	Value result;
+	if (!context.TryGetCurrentSetting("global_scan_frames", result)) {
 		return optional_idx();
 	}
-	auto limit = it->second.GetValue<uint64_t>();
+	auto limit = result.GetValue<uint64_t>();
 	return optional_idx(limit);
 }
 
