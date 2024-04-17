@@ -1,5 +1,5 @@
 # name: test/optimizer/joins/updating_the_join_node_hash_map_has_no_errors.test
-# description:
+# description: 
 # group: [joins]
 
 require tpch

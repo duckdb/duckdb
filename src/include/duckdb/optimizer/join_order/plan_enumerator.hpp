@@ -56,12 +56,13 @@ private:
 	unordered_set<string> join_nodes_in_full_plan;
 
 	unique_ptr<DPJoinNode> CreateJoinTree(JoinRelationSet &set,
-	                                    const vector<reference<NeighborInfo>> &possible_connections, DPJoinNode &left,
-	                                    DPJoinNode &right);
+	                                      const vector<reference<NeighborInfo>> &possible_connections, DPJoinNode &left,
+	                                      DPJoinNode &right);
 
 	//! Emit a pair as a potential join candidate. Returns the best plan found for the (left, right) connection (either
 	//! the newly created plan, or an existing plan)
-	unique_ptr<JoinNode> EmitPair(JoinRelationSet &left, JoinRelationSet &right, const vector<reference<NeighborInfo>> &info);
+	unique_ptr<JoinNode> EmitPair(JoinRelationSet &left, JoinRelationSet &right,
+	                              const vector<reference<NeighborInfo>> &info);
 	//! Tries to emit a potential join candidate pair. Returns false if too many pairs have already been emitted,
 	//! cancelling the dynamic programming step.
 	bool TryEmitPair(JoinRelationSet &left, JoinRelationSet &right, const vector<reference<NeighborInfo>> &info);

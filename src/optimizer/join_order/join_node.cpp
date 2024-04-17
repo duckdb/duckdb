@@ -9,7 +9,8 @@ namespace duckdb {
 JoinNode::JoinNode(JoinRelationSet &set) : set(set) {
 }
 
-JoinNode::JoinNode(JoinRelationSet &set, optional_ptr<NeighborInfo> info, unique_ptr<JoinNode> left, unique_ptr<JoinNode> right, double cost)
+JoinNode::JoinNode(JoinRelationSet &set, optional_ptr<NeighborInfo> info, unique_ptr<JoinNode> left,
+                   unique_ptr<JoinNode> right, double cost)
     : set(set), info(info), left(std::move(left)), right(std::move(right)), cost(cost) {
 }
 
@@ -56,7 +57,8 @@ void JoinNode::Verify() {
 DPJoinNode::DPJoinNode(JoinRelationSet &set) : set(set), info(nullptr), is_leaf(true), left_set(set), right_set(set) {
 }
 
-DPJoinNode::DPJoinNode(JoinRelationSet &set, optional_ptr<NeighborInfo> info, JoinRelationSet &left, JoinRelationSet &right, double cost)
+DPJoinNode::DPJoinNode(JoinRelationSet &set, optional_ptr<NeighborInfo> info, JoinRelationSet &left,
+                       JoinRelationSet &right, double cost)
     : set(set), info(info), is_leaf(false), left_set(left), right_set(right), cost(cost) {
 }
 

@@ -115,8 +115,7 @@ unique_ptr<JoinNode> PlanEnumerator::CreateJoinNodeFromDPJoinNode(DPJoinNode dp_
 		auto res = make_uniq<JoinNode>(dp_node.set);
 		res->cardinality = dp_node.cardinality;
 		return res;
-	}
-	else {
+	} else {
 		auto left_DPJoinNode = plans.find(dp_node.left_set);
 		auto right_DPJoinNode = plans.find(dp_node.right_set);
 		D_ASSERT(left_DPJoinNode->second);
@@ -131,8 +130,8 @@ unique_ptr<JoinNode> PlanEnumerator::CreateJoinNodeFromDPJoinNode(DPJoinNode dp_
 
 //! Create a new JoinTree node by joining together two previous JoinTree nodes
 unique_ptr<DPJoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
-                                                    const vector<reference<NeighborInfo>> &possible_connections,
-                                                    DPJoinNode &left, DPJoinNode &right) {
+                                                      const vector<reference<NeighborInfo>> &possible_connections,
+                                                      DPJoinNode &left, DPJoinNode &right) {
 	// for the hash join we want the right side (build side) to have the smallest cardinality
 	// also just a heuristic but for now...
 	// FIXME: we should probably actually benchmark that as well
@@ -151,7 +150,7 @@ unique_ptr<DPJoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
 }
 
 unique_ptr<JoinNode> PlanEnumerator::EmitPair(JoinRelationSet &left, JoinRelationSet &right,
-                                   const vector<reference<NeighborInfo>> &info) {
+                                              const vector<reference<NeighborInfo>> &info) {
 	// get the left and right join plans
 	auto left_plan = plans.find(left);
 	auto right_plan = plans.find(right);
@@ -186,7 +185,7 @@ unique_ptr<JoinNode> PlanEnumerator::EmitPair(JoinRelationSet &left, JoinRelatio
 			// nodes in the SolveExactly plan
 			// If we know a node in the full plan is updated, we can prevent ourselves from exiting the
 			// DP algorithm until the last plan updated is a full plan
-//			UpdateJoinNodesInFullPlan(result);
+			//			UpdateJoinNodesInFullPlan(result);
 			if (must_update_full_plan) {
 				must_update_full_plan = false;
 			}
@@ -197,7 +196,8 @@ unique_ptr<JoinNode> PlanEnumerator::EmitPair(JoinRelationSet &left, JoinRelatio
 		}
 		D_ASSERT(new_plan);
 		plans[new_set] = std::move(new_plan);
-//		std::cout << "updating set " << new_set.ToString() << "with children " << left.ToString() << " and " << right.ToString() << std::endl;
+		//		std::cout << "updating set " << new_set.ToString() << "with children " << left.ToString() << " and " <<
+		//right.ToString() << std::endl;
 		if (new_set.ToString() == "[0, 2, 5, 6]") {
 			unordered_set<idx_t> bindings = {0, 1, 2, 5, 6, 9};
 			JoinRelationSet &desired_set = query_graph_manager.set_manager.GetJoinRelation(bindings);
@@ -388,37 +388,37 @@ bool PlanEnumerator::SolveJoinOrderExactly() {
 
 void PlanEnumerator::UpdateDPTree(JoinNode &new_plan) {
 	return;
-//	if (!NodeInFullPlan(new_plan)) {
-//		// if the new node is not in the full plan, feel free to return
-//		// because you won't be updating the full plan.
-//		return;
-//	}
-//	auto &new_set = new_plan.set;
-//	// now update every plan that uses this plan
-//	unordered_set<idx_t> exclusion_set;
-//	for (idx_t i = 0; i < new_set.count; i++) {
-//		exclusion_set.insert(new_set.relations[i]);
-//	}
-//	auto neighbors = query_graph.GetNeighbors(new_set, exclusion_set);
-//	auto all_neighbors = GetAllNeighborSets(neighbors);
-//	for (const auto &neighbor : all_neighbors) {
-//		auto &neighbor_relation = query_graph_manager.set_manager.GetJoinRelation(neighbor);
-//		auto &combined_set = query_graph_manager.set_manager.Union(new_set, neighbor_relation);
-//
-//		auto combined_set_plan = plans.find(combined_set);
-//		if (combined_set_plan == plans.end()) {
-//			continue;
-//		}
-//
-//		double combined_set_plan_cost = combined_set_plan->second->cost; // combined_set_plan->second->GetCost();
-//		auto connections = query_graph.GetConnections(new_set, neighbor_relation);
-//		// recurse and update up the tree if the combined set produces a plan with a lower cost
-//		// only recurse on neighbor relations that have plans.
-//		auto right_plan = plans.find(neighbor_relation);
-//		if (right_plan == plans.end()) {
-//			continue;
-//		}
-//	}
+	//	if (!NodeInFullPlan(new_plan)) {
+	//		// if the new node is not in the full plan, feel free to return
+	//		// because you won't be updating the full plan.
+	//		return;
+	//	}
+	//	auto &new_set = new_plan.set;
+	//	// now update every plan that uses this plan
+	//	unordered_set<idx_t> exclusion_set;
+	//	for (idx_t i = 0; i < new_set.count; i++) {
+	//		exclusion_set.insert(new_set.relations[i]);
+	//	}
+	//	auto neighbors = query_graph.GetNeighbors(new_set, exclusion_set);
+	//	auto all_neighbors = GetAllNeighborSets(neighbors);
+	//	for (const auto &neighbor : all_neighbors) {
+	//		auto &neighbor_relation = query_graph_manager.set_manager.GetJoinRelation(neighbor);
+	//		auto &combined_set = query_graph_manager.set_manager.Union(new_set, neighbor_relation);
+	//
+	//		auto combined_set_plan = plans.find(combined_set);
+	//		if (combined_set_plan == plans.end()) {
+	//			continue;
+	//		}
+	//
+	//		double combined_set_plan_cost = combined_set_plan->second->cost; // combined_set_plan->second->GetCost();
+	//		auto connections = query_graph.GetConnections(new_set, neighbor_relation);
+	//		// recurse and update up the tree if the combined set produces a plan with a lower cost
+	//		// only recurse on neighbor relations that have plans.
+	//		auto right_plan = plans.find(neighbor_relation);
+	//		if (right_plan == plans.end()) {
+	//			continue;
+	//		}
+	//	}
 }
 
 void PlanEnumerator::SolveJoinOrderApproximately() {
@@ -505,7 +505,7 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 			best_left = smallest_index[0];
 			best_right = smallest_index[1];
 
-//			UpdateDPTree(*best_connection);
+			//			UpdateDPTree(*best_connection);
 			// the code below assumes best_right > best_left
 			if (best_left > best_right) {
 				std::swap(best_left, best_right);

@@ -34,14 +34,14 @@ public:
 	idx_t cardinality;
 
 	//! Create an intermediate node in the join tree. base_cardinality = estimated_props.cardinality
-	DPJoinNode(JoinRelationSet &set, optional_ptr<NeighborInfo> info, JoinRelationSet &left, JoinRelationSet &right, double cost);
+	DPJoinNode(JoinRelationSet &set, optional_ptr<NeighborInfo> info, JoinRelationSet &left, JoinRelationSet &right,
+	           double cost);
 
 	//! Create a leaf node in the join tree
 	//! set cost to 0 for leaf nodes
 	//! cost will be the cost to *produce* an intermediate table
 	explicit DPJoinNode(JoinRelationSet &set);
 };
-
 
 class JoinNode {
 public:
@@ -62,7 +62,8 @@ public:
 	idx_t cardinality;
 
 	//! Create an intermediate node in the join tree. base_cardinality = estimated_props.cardinality
-	JoinNode(JoinRelationSet &set, optional_ptr<NeighborInfo> info, unique_ptr<JoinNode> left, unique_ptr<JoinNode> right, double cost);
+	JoinNode(JoinRelationSet &set, optional_ptr<NeighborInfo> info, unique_ptr<JoinNode> left,
+	         unique_ptr<JoinNode> right, double cost);
 
 	//! Create a leaf node in the join tree
 	//! set cost to 0 for leaf nodes
