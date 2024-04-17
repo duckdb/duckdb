@@ -115,7 +115,7 @@ static void PrepareStrForTypeCasting(string &match) {
 	// represents a character by its Unicode code point or its hexadecimal value.
 	// To apply the TryCast::Operation, this string requires "cleaning"
 	match.erase(match.begin()); // rmv # char
-	if (match.back() == ';') { // rmv ; char
+	if (match.back() == ';') {  // rmv ; char
 		match.pop_back();
 	}
 	// TryCast::Operation needs the hexadecimal values to start with 0x
