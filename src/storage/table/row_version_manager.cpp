@@ -69,7 +69,7 @@ bool RowVersionManager::Fetch(TransactionData transaction, idx_t row) {
 	if (!info) {
 		return true;
 	}
-	return info->Fetch(transaction, row - vector_index * STANDARD_VECTOR_SIZE);
+	return info->Fetch(transaction, UnsafeNumericCast<row_t>(row - vector_index * STANDARD_VECTOR_SIZE));
 }
 
 void RowVersionManager::AppendVersionInfo(TransactionData transaction, idx_t count, idx_t row_group_start,

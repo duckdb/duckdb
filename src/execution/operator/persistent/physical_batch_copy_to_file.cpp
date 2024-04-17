@@ -434,7 +434,7 @@ void PhysicalBatchCopyToFile::RepartitionBatches(ClientContext &context, GlobalS
 				// create an empty collection
 				auto new_collection =
 				    make_uniq<ColumnDataCollection>(context, children[0]->types, ColumnDataAllocatorType::HYBRID);
-				append_batch = make_uniq<FixedRawBatchData>(0, std::move(new_collection));
+				append_batch = make_uniq<FixedRawBatchData>(0U, std::move(new_collection));
 			}
 			if (append_batch) {
 				append_batch->collection->InitializeAppend(append_state);
@@ -459,7 +459,7 @@ void PhysicalBatchCopyToFile::RepartitionBatches(ClientContext &context, GlobalS
 
 			auto new_collection =
 			    make_uniq<ColumnDataCollection>(context, children[0]->types, ColumnDataAllocatorType::HYBRID);
-			append_batch = make_uniq<FixedRawBatchData>(0, std::move(new_collection));
+			append_batch = make_uniq<FixedRawBatchData>(0U, std::move(new_collection));
 			append_batch->collection->InitializeAppend(append_state);
 		}
 	}
@@ -605,7 +605,7 @@ SourceResultType PhysicalBatchCopyToFile::GetData(ExecutionContext &context, Dat
 	auto &g = sink_state->Cast<FixedBatchCopyGlobalState>();
 
 	chunk.SetCardinality(1);
-	chunk.SetValue(0, 0, Value::BIGINT(g.rows_copied));
+	chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
 	return SourceResultType::FINISHED;
 }
 

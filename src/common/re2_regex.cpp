@@ -17,10 +17,11 @@ bool RegexSearchInternal(const char *input, Match &match, const Regex &r, RE2::A
                          size_t end) {
 	auto &regex = r.GetRegex();
 	duckdb::vector<StringPiece> target_groups;
-	auto group_count = regex.NumberOfCapturingGroups() + 1;
+	auto group_count = duckdb::UnsafeNumericCast<size_t>(regex.NumberOfCapturingGroups() + 1);
 	target_groups.resize(group_count);
 	match.groups.clear();
-	if (!regex.Match(StringPiece(input), start, end, anchor, target_groups.data(), group_count)) {
+	if (!regex.Match(StringPiece(input), start, end, anchor, target_groups.data(),
+	                 duckdb::UnsafeNumericCast<int>(group_count))) {
 		return false;
 	}
 	for (auto &group : target_groups) {
@@ -41,7 +42,8 @@ bool RegexMatch(const std::string &input, Match &match, const Regex &regex) {
 }
 
 bool RegexMatch(const char *start, const char *end, Match &match, const Regex &regex) {
-	return RegexSearchInternal(start, match, regex, RE2::ANCHOR_BOTH, 0, end - start);
+	return RegexSearchInternal(start, match, regex, RE2::ANCHOR_BOTH, 0,
+	                           duckdb::UnsafeNumericCast<size_t>(end - start));
 }
 
 bool RegexMatch(const std::string &input, const Regex &regex) {

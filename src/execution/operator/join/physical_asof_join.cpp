@@ -159,7 +159,7 @@ SinkFinalizeType PhysicalAsOfJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	// The data is all in so we can initialise the left partitioning.
 	const vector<unique_ptr<BaseStatistics>> partitions_stats;
 	gstate.lhs_sink = make_uniq<PartitionGlobalSinkState>(context, lhs_partitions, lhs_orders, children[0]->types,
-	                                                      partitions_stats, 0);
+	                                                      partitions_stats, 0U);
 	gstate.lhs_sink->SyncPartitioning(gstate.rhs_sink);
 
 	// Find the first group to sort

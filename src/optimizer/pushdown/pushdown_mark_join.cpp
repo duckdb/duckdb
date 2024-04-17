@@ -27,7 +27,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 			// bindings match left side: push into left
 			left_pushdown.filters.push_back(std::move(filters[i]));
 			// erase the filter from the list of filters
-			filters.erase(filters.begin() + i);
+			filters.erase_at(i);
 			i--;
 		} else if (side == JoinSide::RIGHT) {
 #ifdef DEBUG
@@ -41,7 +41,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 				simplified_mark_join = true;
 #endif
 				join.join_type = JoinType::SEMI;
-				filters.erase(filters.begin() + i);
+				filters.erase_at(i);
 				i--;
 				continue;
 			}
@@ -67,7 +67,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 #endif
 						// all null values are equal, convert to ANTI join
 						join.join_type = JoinType::ANTI;
-						filters.erase(filters.begin() + i);
+						filters.erase_at(i);
 						i--;
 						continue;
 					}

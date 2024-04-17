@@ -374,7 +374,7 @@ unique_ptr<QueryNode> Relation::GetQueryNode() {
 }
 
 void Relation::Head(idx_t limit) {
-	auto limit_node = Limit(limit);
+	auto limit_node = Limit(NumericCast<int64_t>(limit));
 	limit_node->Execute()->Print();
 }
 // LCOV_EXCL_STOP

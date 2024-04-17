@@ -390,7 +390,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 
 void LocalFileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
-	off_t offset = lseek(fd, location, SEEK_SET);
+	off_t offset = lseek(fd, UnsafeNumericCast<off_t>(location), SEEK_SET);
 	if (offset == (off_t)-1) {
 		throw IOException("Could not seek to location %lld for file \"%s\": %s", {{"errno", std::to_string(errno)}},
 		                  location, handle.path, strerror(errno));
@@ -404,14 +404,15 @@ idx_t LocalFileSystem::GetFilePointer(FileHandle &handle) {
 		throw IOException("Could not get file position file \"%s\": %s", {{"errno", std::to_string(errno)}},
 		                  handle.path, strerror(errno));
 	}
-	return position;
+	return UnsafeNumericCast<idx_t>(position);
 }
 
 void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	auto read_buffer = char_ptr_cast(buffer);
 	while (nr_bytes > 0) {
-		int64_t bytes_read = pread(fd, read_buffer, nr_bytes, location);
+		int64_t bytes_read =
+		    pread(fd, read_buffer, UnsafeNumericCast<size_t>(nr_bytes), UnsafeNumericCast<off_t>(location));
 		if (bytes_read == -1) {
 			throw IOException("Could not read from file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
 			                  strerror(errno));
@@ -423,13 +424,13 @@ void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 		}
 		read_buffer += bytes_read;
 		nr_bytes -= bytes_read;
-		location += bytes_read;
+		location += UnsafeNumericCast<idx_t>(bytes_read);
 	}
 }
 
 int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
-	int64_t bytes_read = read(fd, buffer, nr_bytes);
+	int64_t bytes_read = read(fd, buffer, UnsafeNumericCast<size_t>(nr_bytes));
 	if (bytes_read == -1) {
 		throw IOException("Could not read from file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
 		                  strerror(errno));
@@ -441,7 +442,8 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	auto write_buffer = char_ptr_cast(buffer);
 	while (nr_bytes > 0) {
-		int64_t bytes_written = pwrite(fd, write_buffer, nr_bytes, location);
+		int64_t bytes_written =
+		    pwrite(fd, write_buffer, UnsafeNumericCast<size_t>(nr_bytes), UnsafeNumericCast<off_t>(location));
 		if (bytes_written < 0) {
 			throw IOException("Could not write file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
 			                  strerror(errno));
@@ -452,7 +454,7 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 		}
 		write_buffer += bytes_written;
 		nr_bytes -= bytes_written;
-		location += bytes_written;
+		location += UnsafeNumericCast<idx_t>(bytes_written);
 	}
 }
 

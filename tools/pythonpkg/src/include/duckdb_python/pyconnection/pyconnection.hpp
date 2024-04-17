@@ -117,7 +117,7 @@ public:
 	                                        bool many = false);
 
 	shared_ptr<DuckDBPyConnection> Execute(const py::object &query, py::object params = py::list(), bool many = false);
-	shared_ptr<DuckDBPyConnection> Execute(const string &query);
+	shared_ptr<DuckDBPyConnection> ExecuteFromString(const string &query);
 
 	shared_ptr<DuckDBPyConnection> Append(const string &name, const PandasDataFrame &value, bool by_name);
 

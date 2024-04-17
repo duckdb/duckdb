@@ -79,6 +79,7 @@ TEST_CASE("Modifying the buffer manager limit at runtime for an in-memory databa
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("PRAGMA threads=1"));
 	REQUIRE_NO_FAIL(con.Query("PRAGMA force_compression='uncompressed'"));
+	REQUIRE_NO_FAIL(con.Query("PRAGMA temp_directory=''"));
 
 	// initialize an in-memory database of size 10MB
 	uint64_t table_size = (1000 * 1000) / sizeof(int);

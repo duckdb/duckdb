@@ -7,9 +7,9 @@ namespace duckdb {
 
 // Helper function to generate column names
 static string GenerateColumnName(const idx_t total_cols, const idx_t col_number, const string &prefix = "column") {
-	int max_digits = NumericHelper::UnsignedLength(total_cols - 1);
-	int digits = NumericHelper::UnsignedLength(col_number);
-	string leading_zeros = string(max_digits - digits, '0');
+	auto max_digits = NumericHelper::UnsignedLength(total_cols - 1);
+	auto digits = NumericHelper::UnsignedLength(col_number);
+	string leading_zeros = string(NumericCast<idx_t>(max_digits - digits), '0');
 	string value = to_string(col_number);
 	return string(prefix + leading_zeros + value);
 }
@@ -22,21 +22,21 @@ static string TrimWhitespace(const string &col_name) {
 	// Find the first character that is not left trimmed
 	idx_t begin = 0;
 	while (begin < size) {
-		auto bytes = utf8proc_iterate(str + begin, size - begin, &codepoint);
+		auto bytes = utf8proc_iterate(str + begin, NumericCast<utf8proc_ssize_t>(size - begin), &codepoint);
 		D_ASSERT(bytes > 0);
 		if (utf8proc_category(codepoint) != UTF8PROC_CATEGORY_ZS) {
 			break;
 		}
-		begin += bytes;
+		begin += NumericCast<idx_t>(bytes);
 	}
 
 	// Find the last character that is not right trimmed
 	idx_t end;
 	end = begin;
 	for (auto next = begin; next < col_name.size();) {
-		auto bytes = utf8proc_iterate(str + next, size - next, &codepoint);
+		auto bytes = utf8proc_iterate(str + next, NumericCast<utf8proc_ssize_t>(size - next), &codepoint);
 		D_ASSERT(bytes > 0);
-		next += bytes;
+		next += NumericCast<idx_t>(bytes);
 		if (utf8proc_category(codepoint) != UTF8PROC_CATEGORY_ZS) {
 			end = next;
 		}
@@ -48,7 +48,8 @@ static string TrimWhitespace(const string &col_name) {
 
 static string NormalizeColumnName(const string &col_name) {
 	// normalize UTF8 characters to NFKD
-	auto nfkd = utf8proc_NFKD(reinterpret_cast<const utf8proc_uint8_t *>(col_name.c_str()), col_name.size());
+	auto nfkd = utf8proc_NFKD(reinterpret_cast<const utf8proc_uint8_t *>(col_name.c_str()),
+	                          NumericCast<utf8proc_ssize_t>(col_name.size()));
 	const string col_name_nfkd = string(const_char_ptr_cast(nfkd), strlen(const_char_ptr_cast(nfkd)));
 	free(nfkd);
 

@@ -329,8 +329,8 @@ void PartitionedTupleData::Repartition(PartitionedTupleData &new_partitioned_dat
 	const int64_t update = reverse ? -1 : 1;
 	const int64_t adjustment = reverse ? -1 : 0;
 
-	for (idx_t partition_idx = start_idx; partition_idx != end_idx; partition_idx += update) {
-		auto actual_partition_idx = partition_idx + adjustment;
+	for (idx_t partition_idx = start_idx; partition_idx != end_idx; partition_idx += idx_t(update)) {
+		auto actual_partition_idx = partition_idx + idx_t(adjustment);
 		auto &partition = *partitions[actual_partition_idx];
 
 		if (partition.Count() > 0) {

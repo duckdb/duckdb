@@ -454,7 +454,7 @@ void UngroupedDistinctAggregateFinalizeEvent::Schedule() {
 		global_source_states.push_back(radix_table_p.GetGlobalSourceState(context));
 	}
 	n_tasks = MaxValue<idx_t>(n_tasks, 1);
-	n_tasks = MinValue<idx_t>(n_tasks, TaskScheduler::GetScheduler(context).NumberOfThreads());
+	n_tasks = MinValue<idx_t>(n_tasks, NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads()));
 
 	vector<shared_ptr<Task>> tasks;
 	for (idx_t i = 0; i < n_tasks; i++) {

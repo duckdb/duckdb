@@ -96,7 +96,12 @@ shared_ptr<DuckDBPyType> DuckDBPyConnection::Type(const string &type_str) {
 	if (!connection) {
 		throw ConnectionException("Connection already closed!");
 	}
-	return make_shared_ptr<DuckDBPyType>(TransformStringToLogicalType(type_str, *connection->context));
+	auto &context = *connection->context;
+	shared_ptr<DuckDBPyType> result;
+	context.RunFunctionInTransaction([&result, &type_str, &context]() {
+		result = make_shared_ptr<DuckDBPyType>(TransformStringToLogicalType(type_str, context));
+	});
+	return std::move(result);
 }
 
 } // namespace duckdb
