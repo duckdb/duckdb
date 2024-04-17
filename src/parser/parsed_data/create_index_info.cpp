@@ -39,7 +39,7 @@ string CreateIndexInfo::ToString() const {
 	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 		result += "IF NOT EXISTS ";
 	}
-	result += QualifierToString(catalog, schema, index_name);
+	result += KeywordHelper::WriteOptionallyQuoted(index_name);
 	result += " ON ";
 	result += QualifierToString(catalog, schema, table);
 	if (index_type != "ART") {
