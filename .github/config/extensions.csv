@@ -13,6 +13,6 @@ substrait,https://github.com/duckdb/substrait,1116fb580edd3e26e675436dbdbdf4a0aa
 arrow,https://github.com/duckdb/arrow,9e10240da11f61ea7fbfe3fc9988ffe672ccd40f,no-windows
 aws,https://github.com/duckdb/duckdb_aws,f7b8729f1cce5ada5d4add70e1486de50763fb97,
 azure,https://github.com/duckdb/duckdb_azure,86f39d76157de970d16d6d6537bc90c0ee1c7d35,
-spatial,https://github.com/duckdb/duckdb_spatial,05c4ba01c500140287bf6946fb6910122e5c2acf,
+spatial,https://github.com/duckdb/duckdb_spatial,8ac803e986ccda34f32dee82a7faae95b72b3492,
 iceberg,https://github.com/duckdb/duckdb_iceberg,7aa3d8e4cb7b513d35fdacfa28dc328771bc4047,
 vss,https://github.com/duckdb/duckdb_vss,a85e973650a083e4b279126a0aec07924d84e765,

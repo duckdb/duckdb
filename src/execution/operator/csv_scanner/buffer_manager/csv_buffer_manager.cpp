@@ -81,7 +81,9 @@ shared_ptr<CSVBufferHandle> CSVBufferManager::GetBuffer(const idx_t pos) {
 			done = true;
 		}
 	}
-	if (pos != 0) {
+	if (pos != 0 && (sniffing || file_handle->CanSeek())) {
+		// We don't need to unpin the buffers here if we are not sniffing since we
+		// control it per-thread on the scan
 		if (cached_buffers[pos - 1]) {
 			cached_buffers[pos - 1]->Unpin();
 		}

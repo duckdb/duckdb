@@ -43,7 +43,7 @@ class TestType(object):
         # todo: add tests with invalid type_str
 
     def test_primitive_types(self):
-        assert str(SQLNULL) == 'NULL'
+        assert str(SQLNULL) == '"NULL"'
         assert str(BOOLEAN) == 'BOOLEAN'
         assert str(TINYINT) == 'TINYINT'
         assert str(UTINYINT) == 'UTINYINT'
