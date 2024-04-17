@@ -12,58 +12,35 @@
 
 namespace duckdb {
 
-struct UnescapeBindData : public FunctionData {
-	unique_ptr<RE2> charref;
+struct RegexpUnescapeBindData : public RegexpMatchesBindData {
 	const unordered_map<string, uint32_t> html5_names;
 	const unordered_set<uint32_t> invalid_codepoints;
 	const unordered_map<uint32_t, string> invalid_charrefs;
 
-	UnescapeBindData()
-	    : html5_names(ReturnHTML5NameCharrefs()), invalid_codepoints(ReturnInvalidCodepoints()),
+	RegexpUnescapeBindData(duckdb_re2::RE2::Options options)
+	    : RegexpMatchesBindData(options, std::move("&(#[0-9]+;?|#[xX][0-9a-fA-F]+;?|[^\t\n\f <&#;]{1,32};?)"), true),
+	      html5_names(ReturnHTML5NameCharrefs()), invalid_codepoints(ReturnInvalidCodepoints()),
 	      invalid_charrefs(ReturnInvalidCharrefs()) {
-		RE2::Options options;
-		options.set_log_errors(false); // disable error logging for performance
-		options.set_case_sensitive(false);
-		charref = make_uniq<RE2>(R"(&(#[0-9]+;?|#[xX][0-9a-fA-F]+;?|[^\t\n\f <&#;]{1,32};?))", options);
-	}
-
-	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<UnescapeBindData>();
-	}
-
-	bool Equals(const FunctionData &other_p) const override {
-		auto &other = other_p.Cast<UnescapeBindData>();
-		bool equal_sizes = (html5_names.size() == other.html5_names.size() &&
-		                    invalid_codepoints.size() == other.invalid_codepoints.size() &&
-		                    invalid_charrefs.size() == other.invalid_charrefs.size());
-		return (equal_sizes && (html5_names == other.html5_names && invalid_codepoints == other.invalid_codepoints &&
-		                        invalid_charrefs == other.invalid_charrefs));
 	}
 };
 
 unique_ptr<FunctionData> UnescapeBind(ClientContext &context, ScalarFunction &bound_function,
                                       vector<unique_ptr<Expression>> &arguments) {
-	return make_uniq<UnescapeBindData>();
-}
-
-static bool AddBlob(uint32_t code_point, string &result) {
-	int sz = 0;
-	char c[4] = {'\0', '\0', '\0', '\0'};
-	if (!Utf8Proc::CodepointToUtf8(code_point, sz, c)) {
-		return false;
-	}
-	result += c;
-	return true;
+	duckdb_re2::RE2::Options options;
+	options.set_log_errors(false); // disable error logging for performance
+	options.set_case_sensitive(false);
+	return make_uniq<RegexpUnescapeBindData>(options);
 }
 
 static void PrepareStrForTypeCasting(string &match) {
-	// in HTML, the sequence &# followed by a number and a semicolon(;)
-	// represents a character by its Unicode code point or its hexadecimal value.
-	// To apply the TryCast::Operation, this string requires "cleaning"
+	// in HTML, the sequence &#<number>; represents a character by its Unicode code point or in the form
+	// &#x<hex_number>; represents its hexadecimal value.
+	// To apply the TryCast::Operation, this string requires some "cleaning"
 	match.erase(match.begin()); // rmv # char
 	if (match.back() == ';') {  // rmv ; char
 		match.pop_back();
 	}
+
 	// TryCast::Operation needs the hexadecimal values to start with 0x
 	if (match[0] == 'x' || match[0] == 'X') {
 		match.insert(0, "0");
@@ -78,14 +55,24 @@ static idx_t Find(const char *input_data, idx_t input_size, const string &sep_da
 	                         sep_data.size());
 }
 
-static string ReplaceCharref(string_t &str, UnescapeBindData &info) {
+static bool AddBlob(uint32_t code_point, string &result) {
+	int sz = 0;
+	char c[4] = {'\0', '\0', '\0', '\0'};
+	if (!Utf8Proc::CodepointToUtf8(code_point, sz, c)) {
+		return false;
+	}
+	result += c;
+	return true;
+}
+
+static string ReplaceCharref(string_t &str, RegexpUnescapeBindData &info, RE2 &pattern) {
 	string match;
 	string result {""};
 	idx_t start_pos = 0;
 	auto input_data = str.GetData();
 	auto input_size = str.GetSize();
 	auto input = regexp_util::CreateStringPiece(str); // wrap a StringPiece around it
-	while (RE2::FindAndConsume(&input, *info.charref, &match)) {
+	while (RE2::FindAndConsume(&input, pattern, &match)) {
 		// include the input value until the current match
 		idx_t match_pos = input_size - (match.length() + 1) - input.length(); // +1 to include also the & ampersand char
 		result += string(input_data + start_pos, match_pos - start_pos);
@@ -93,7 +80,7 @@ static string ReplaceCharref(string_t &str, UnescapeBindData &info) {
 		// the position after the end of the current match
 		start_pos = (match_pos + 1) + match.length();
 
-		if (match[0] == '#') { // it represents a hexadecimal value or a Unicode point
+		if (match[0] == '#') { // true, if it represents a hexadecimal value or a Unicode point
 			int32_t num;
 			PrepareStrForTypeCasting(match);
 			if (!TryCast::Operation<string_t, int32_t>(string_t(match), num)) {
@@ -119,8 +106,7 @@ static string ReplaceCharref(string_t &str, UnescapeBindData &info) {
 			} else {
 				result += static_cast<char>(num);
 			}
-		} else {
-			// named charref
+		} else { // named character reference
 			auto it = info.html5_names.find(match);
 			if (it != info.html5_names.end()) {
 				if (!AddBlob(it->second, result)) {
@@ -203,12 +189,13 @@ void INetFunctions::Escape(DataChunk &args, ExpressionState &state, Vector &resu
 
 void INetFunctions::Unescape(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<UnescapeBindData>();
+	auto &info = func_expr.bind_info->Cast<RegexpUnescapeBindData>();
+	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
 	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input_st) {
 		if (Find(input_st.GetData(), input_st.GetSize(), "&") == DConstants::INVALID_INDEX) {
 			return StringVector::AddString(result, input_st);
 		}
-		string unescaped = ReplaceCharref(input_st, info);
+		string unescaped = ReplaceCharref(input_st, info, lstate.constant_pattern);
 		return StringVector::AddString(result, unescaped);
 	});
 }
@@ -226,8 +213,8 @@ ScalarFunctionSet InetExtension::GetEscapeFunctionSet() {
 
 ScalarFunction InetExtension::GetUnescapeFunction() {
 	return ScalarFunction("html_unescape", {LogicalType::VARCHAR}, LogicalType::VARCHAR, INetFunctions::Unescape,
-	                      UnescapeBind, nullptr, nullptr, nullptr, LogicalType::INVALID, FunctionStability::CONSISTENT,
-	                      FunctionNullHandling::DEFAULT_NULL_HANDLING);
+	                      UnescapeBind, nullptr, nullptr, RegexInitLocalState, LogicalType::INVALID,
+	                      FunctionStability::CONSISTENT, FunctionNullHandling::DEFAULT_NULL_HANDLING);
 }
 
 } // namespace duckdb
