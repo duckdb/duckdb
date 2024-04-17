@@ -273,6 +273,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 		if (i == changed_idx) {
 			// this is the altered column: use the new column
 			row_group->columns.push_back(std::move(column_data));
+			column_data.reset();
 		} else {
 			// this column was not altered: use the data directly
 			row_group->columns.push_back(cols[i]);
