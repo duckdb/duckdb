@@ -171,7 +171,7 @@ void ColumnData::FetchUpdateRow(TransactionData transaction, row_t row_id, Vecto
 	if (!updates) {
 		return;
 	}
-	updates->FetchRow(transaction, row_id, result, result_idx);
+	updates->FetchRow(transaction, NumericCast<idx_t>(row_id), result, result_idx);
 }
 
 void ColumnData::UpdateInternal(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
