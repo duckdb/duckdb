@@ -157,7 +157,7 @@
 /* #undef JEMALLOC_MUTEX_INIT_CB */
 
 /* Non-empty if the tls_model attribute is supported. */
-#define JEMALLOC_TLS_MODEL __attribute__((tls_model("local-dynamic")))
+#define JEMALLOC_TLS_MODEL __attribute__((tls_model("global-dynamic")))
 
 /*
  * JEMALLOC_DEBUG enables assertions and other sanity checks, and disables
