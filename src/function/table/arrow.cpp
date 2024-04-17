@@ -134,9 +134,9 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 		return CreateListType(*schema.children[0], ArrowVariableSizeType::SUPER_SIZE, true);
 	} else if (format[0] == '+' && format[1] == 'w') {
 		std::string parameters = format.substr(format.find(':') + 1);
+		auto fixed_size = NumericCast<idx_t>(std::stoi(parameters));
 		auto child_type = ArrowTableFunction::GetArrowLogicalType(*schema.children[0]);
 
-		idx_t fixed_size = std::stoi(parameters);
 		auto array_type = LogicalType::ARRAY(child_type->GetDuckType(), fixed_size);
 		auto type_info = make_uniq<ArrowArrayInfo>(std::move(child_type), fixed_size);
 		return make_uniq<ArrowType>(array_type, std::move(type_info));
@@ -222,9 +222,8 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 		return make_uniq<ArrowType>(LogicalType::BLOB, std::move(type_info));
 	} else if (format[0] == 'w') {
 		std::string parameters = format.substr(format.find(':') + 1);
-		idx_t fixed_size = std::stoi(parameters);
-		auto type_info = make_uniq<ArrowStringInfo>(fixed_size);
-		return make_uniq<ArrowType>(LogicalType::BLOB, std::move(type_info));
+		auto fixed_size = NumericCast<idx_t>(std::stoi(parameters));
+		return make_uniq<ArrowType>(LogicalType::BLOB, fixed_size);
 	} else if (format[0] == 't' && format[1] == 's') {
 		// Timestamp with Timezone
 		// TODO right now we just get the UTC value. We probably want to support this properly in the future
@@ -394,7 +393,8 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, TableFunction
 			return;
 		}
 	}
-	int64_t output_size = MinValue<int64_t>(STANDARD_VECTOR_SIZE, state.chunk->arrow_array.length - state.chunk_offset);
+	auto output_size =
+	    MinValue<idx_t>(STANDARD_VECTOR_SIZE, NumericCast<idx_t>(state.chunk->arrow_array.length) - state.chunk_offset);
 	data.lines_read += output_size;
 	if (global_state.CanRemoveFilterColumns()) {
 		state.all_columns.Reset();

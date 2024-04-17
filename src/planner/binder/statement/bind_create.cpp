@@ -42,6 +42,7 @@
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/planner/expression_binder/select_bind_state.hpp"
 
 namespace duckdb {
 
@@ -184,11 +185,10 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 
 	// bind it to verify the function was defined correctly
 	ErrorData error;
-	auto sel_node = make_uniq<BoundSelectNode>();
-	auto group_info = make_uniq<BoundGroupInformation>();
-	SelectBinder binder(*this, context, *sel_node, *group_info);
+	BoundSelectNode sel_node;
+	BoundGroupInformation group_info;
+	SelectBinder binder(*this, context, sel_node, group_info);
 	error = binder.Bind(expression, 0, false);
-
 	if (error.HasError()) {
 		error.Throw();
 	}

@@ -46,7 +46,14 @@ SQLRETURN Connect::FindKeyValPair(const std::string &row) {
 		                            SQLStateType::ST_HY000, ""));
 	}
 
-	SQLRETURN ret = FindMatchingKey(StringUtil::Lower(row.substr(0, val_pos)), key);
+	std::string key_candidate = StringUtil::Lower(row.substr(0, val_pos));
+
+	// Check if the key can be ignored
+	if (std::find(PQIgnoreKeys.begin(), PQIgnoreKeys.end(), key_candidate) != PQIgnoreKeys.end()) {
+		return SQL_SUCCESS;
+	}
+
+	SQLRETURN ret = FindMatchingKey(key_candidate, key);
 	if (ret != SQL_SUCCESS) {
 		return ret;
 	}

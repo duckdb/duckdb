@@ -29,7 +29,7 @@ union arrow_string_view_t {
 	arrow_string_view_t(int32_t length, const char *data) {
 		D_ASSERT(length <= ArrowStringViewConstants::MAX_INLINED_BYTES);
 		inlined.length = length;
-		memcpy(inlined.data, data, length);
+		memcpy(inlined.data, data, UnsafeNumericCast<idx_t>(length));
 		if (length < ArrowStringViewConstants::MAX_INLINED_BYTES) {
 			// have to 0 pad
 			uint8_t remaining_bytes = ArrowStringViewConstants::MAX_INLINED_BYTES - NumericCast<uint8_t>(length);

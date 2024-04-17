@@ -8,7 +8,7 @@ import tempfile
 class TestNonDefaultConn(object):
     def test_values(self, duckdb_cursor):
         duckdb_cursor.execute("create table t (a integer)")
-        duckdb.values([1], duckdb_cursor).insert_into("t")
+        duckdb.values([1], connection=duckdb_cursor).insert_into("t")
         assert duckdb_cursor.execute("select count(*) from t").fetchall()[0] == (1,)
 
     def test_query(self, duckdb_cursor):

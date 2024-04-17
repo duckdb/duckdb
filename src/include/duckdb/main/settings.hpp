@@ -225,6 +225,15 @@ struct AllowUnsignedExtensionsSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct AllowExtensionsMetadataMismatchSetting {
+	static constexpr const char *Name = "allow_extensions_metadata_mismatch";
+	static constexpr const char *Description = "Allow to load extensions with not compatible metadata";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct AllowUnredactedSecretsSetting {
 	static constexpr const char *Name = "allow_unredacted_secrets";
 	static constexpr const char *Description = "Allow printing unredacted secrets";
@@ -456,6 +465,16 @@ struct MaximumExpressionDepthSetting {
 struct MaximumMemorySetting {
 	static constexpr const char *Name = "max_memory";
 	static constexpr const char *Description = "The maximum memory of the system (e.g. 1GB)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct MaximumTempDirectorySize {
+	static constexpr const char *Name = "max_temp_directory_size";
+	static constexpr const char *Description =
+	    "The maximum amount of data stored inside the 'temp_directory' (when set) (e.g. 1GB)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
