@@ -902,6 +902,7 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 	if (scan_state.current_group.mode == BitpackingMode::CONSTANT_DELTA) {
 		T multiplier;
 		auto cast = TryCast::Operation<idx_t, T>(scan_state.current_group_offset, multiplier);
+		(void)cast;
 		D_ASSERT(cast);
 #ifdef DEBUG
 		// overflow check
