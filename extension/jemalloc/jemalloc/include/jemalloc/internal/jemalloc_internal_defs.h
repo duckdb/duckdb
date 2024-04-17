@@ -2,7 +2,7 @@
 #ifndef JEMALLOC_INTERNAL_DEFS_H_
 #define JEMALLOC_INTERNAL_DEFS_H_
 
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__)
 #define _GNU_SOURCE
 #endif
 
@@ -138,7 +138,9 @@
  * _malloc_thread_cleanup() exists, use it as the basis for thread cleanup in
  * malloc_tsd.
  */
-/* #undef JEMALLOC_MALLOC_THREAD_CLEANUP */
+#if defined(__APPLE__) || defined(__FreeBSD__)
+#define JEMALLOC_MALLOC_THREAD_CLEANUP
+#endif
 
 /*
  * Defined if threaded initialization is known to be safe on this platform.
@@ -200,7 +202,7 @@
 /* #undef JEMALLOC_XMALLOC */
 
 /* Support lazy locking (avoid locking unless a second thread is launched). */
-/* #undef JEMALLOC_LAZY_LOCK */
+#define JEMALLOC_LAZY_LOCK
 
 /*
  * Minimum allocation alignment is 2^LG_QUANTUM bytes (ignoring tiny size
@@ -211,12 +213,6 @@
 /* One page is 2^LG_PAGE bytes. */
 // ----- DuckDB comment -----
 // The page size for jemalloc can always be bigger than the actual system page size
-#if INTPTR_MAX != INT64_MAX
-#define LG_PAGE 12 // 32-bit systems typically have a 4KB page size
-#elifdef __APPLE__
-#define LG_PAGE 12
-#endif
-
 #if INTPTR_MAX != INT64_MAX
 #define LG_PAGE 12 // 32-bit systems typically have a 4KB page size
 #elif defined(__i386__) || defined(__x86_64__) || defined(__amd64__) ||                                                \
@@ -256,7 +252,9 @@
  * VirtualAlloc()/VirtualFree() operations must be precisely matched, i.e.
  * mappings do *not* coalesce/fragment.
  */
+#ifndef _MSC_VER
 #define JEMALLOC_MAPS_COALESCE
+#endif
 
 /*
  * If defined, retain memory for later reuse by default rather than using e.g.
@@ -452,12 +450,12 @@
 /* #undef JEMALLOC_HAVE_PTHREAD_MUTEX_ADAPTIVE_NP */
 
 /* GNU specific sched_getcpu support */
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__)
 #define JEMALLOC_HAVE_SCHED_GETCPU
 #endif
 
 /* GNU specific sched_setaffinity support */
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__)
 #define JEMALLOC_HAVE_SCHED_SETAFFINITY
 #endif
 

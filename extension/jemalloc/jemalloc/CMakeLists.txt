@@ -63,7 +63,8 @@ set(JEMALLOC_C_FILES
   src/ticker.c
   src/tsd.c
   src/util.c
-  src/witness.c)
+  src/witness.c
+  src/jemalloc_cpp.cpp)
 
 if (OS_NAME STREQUAL "osx")
   list(APPEND JEMALLOC_C_FILES src/zone.c)
