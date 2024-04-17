@@ -205,6 +205,7 @@ if 'BUILD_HTTPFS' in os.environ:
 
 for ext in extensions:
     define_macros.append(('DUCKDB_EXTENSION_{}_LINKED'.format(ext.upper()), None))
+    define_macros.append(('EXT_VERSION_{}'.format(ext.upper()), ''))
 
 if not is_pyodide:
     # currently pyodide environment is not compatible with dynamic extension loading
