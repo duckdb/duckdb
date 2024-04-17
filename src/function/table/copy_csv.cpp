@@ -126,7 +126,6 @@ static vector<unique_ptr<Expression>> CreateCastExpressions(WriteCSVData &bind_d
 			// strftime(<name>, 'format')
 			vector<unique_ptr<ParsedExpression>> children;
 			children.push_back(make_uniq<BoundExpression>(make_uniq<BoundReferenceExpression>(name, type, i)));
-			// TODO: set from user-provided format
 			children.push_back(make_uniq<ConstantExpression>(formats[LogicalTypeId::DATE]));
 			auto func = make_uniq_base<ParsedExpression, FunctionExpression>("strftime", std::move(children));
 			unbound_expressions.push_back(std::move(func));
@@ -134,7 +133,6 @@ static vector<unique_ptr<Expression>> CreateCastExpressions(WriteCSVData &bind_d
 			// strftime(<name>, 'format')
 			vector<unique_ptr<ParsedExpression>> children;
 			children.push_back(make_uniq<BoundExpression>(make_uniq<BoundReferenceExpression>(name, type, i)));
-			// TODO: set from user-provided format
 			children.push_back(make_uniq<ConstantExpression>(formats[LogicalTypeId::TIMESTAMP]));
 			auto func = make_uniq_base<ParsedExpression, FunctionExpression>("strftime", std::move(children));
 			unbound_expressions.push_back(std::move(func));
