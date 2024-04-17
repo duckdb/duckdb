@@ -16,6 +16,7 @@
 namespace duckdb {
 struct DateTimestampSniffing {
 	bool initialized = false;
+	bool had_match = false;
 	vector<string> format;
 };
 //! Struct to store the result of the Sniffer
