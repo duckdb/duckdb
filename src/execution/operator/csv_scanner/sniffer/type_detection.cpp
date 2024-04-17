@@ -85,8 +85,8 @@ string GenerateDateFormat(const string &separator, const char *format_template) 
 }
 
 bool CSVSniffer::TryCastValue(const DialectOptions &dialect_options, const string &decimal_separator,
-                              const Value &value, const LogicalType &sql_type) {
-	if (value.IsNull()) {
+                              const string_t &value, const LogicalType &sql_type, bool is_null) {
+	if (is_null) {
 		return true;
 	}
 	if (!dialect_options.date_format.find(LogicalTypeId::DATE)->second.GetValue().Empty() &&
@@ -95,7 +95,7 @@ bool CSVSniffer::TryCastValue(const DialectOptions &dialect_options, const strin
 		string error_message;
 		return dialect_options.date_format.find(LogicalTypeId::DATE)
 		    ->second.GetValue()
-		    .TryParseDate(string_t(StringValue::Get(value)), result, error_message);
+		    .TryParseDate(value, result, error_message);
 	}
 	if (!dialect_options.date_format.find(LogicalTypeId::TIMESTAMP)->second.GetValue().Empty() &&
 	    sql_type.id() == LogicalTypeId::TIMESTAMP) {
@@ -103,14 +103,15 @@ bool CSVSniffer::TryCastValue(const DialectOptions &dialect_options, const strin
 		string error_message;
 		return dialect_options.date_format.find(LogicalTypeId::TIMESTAMP)
 		    ->second.GetValue()
-		    .TryParseTimestamp(string_t(StringValue::Get(value)), result, error_message);
+		    .TryParseTimestamp(value, result, error_message);
 	}
 	if (decimal_separator != "." && (sql_type.id() == LogicalTypeId::DOUBLE)) {
-		return TryCastFloatingOperator::Operation<TryCastErrorMessageCommaSeparated, double>(StringValue::Get(value));
+		return TryCastFloatingOperator::Operation<TryCastErrorMessageCommaSeparated, double>(value);
 	}
 	Value new_value;
 	string error_message;
-	return value.TryCastAs(buffer_manager->context, sql_type, new_value, &error_message, true);
+	Value str_value(value);
+	return str_value.TryCastAs(buffer_manager->context, sql_type, new_value, &error_message, true);
 }
 
 void CSVSniffer::SetDateFormat(CSVStateMachine &candidate, const string &format_specifier,
@@ -149,7 +150,7 @@ void CSVSniffer::InitializeDateAndTimeStampDetection(CSVStateMachine &candidate,
 }
 
 void CSVSniffer::DetectDateAndTimeStampFormats(CSVStateMachine &candidate, const LogicalType &sql_type,
-                                               const string &separator, Value &dummy_val) {
+                                               const string &separator, string_t &dummy_val) {
 	// If it is the first time running date/timestamp detection we must initilize the format variables
 	InitializeDateAndTimeStampDetection(candidate, separator, sql_type);
 	// generate date format candidates the first time through
@@ -210,9 +211,10 @@ void CSVSniffer::DetectTypes() {
 		auto candidate = candidate_cc->UpgradeToStringValueScanner();
 
 		// Parse chunk and read csv with info candidate
-		auto &tuples = candidate->ParseChunk();
+		auto &data_chunk = candidate->ParseChunk().ToChunk();
 		idx_t row_idx = 0;
-		if (tuples.number_of_rows > 1 &&
+		idx_t chunk_size = data_chunk.size();
+		if (chunk_size > 1 &&
 		    (!options.dialect_options.header.IsSetByUser() ||
 		     (options.dialect_options.header.IsSetByUser() && options.dialect_options.header.GetValue()))) {
 			// This means we have more than one row, hence we can use the first row to detect if we have a header
@@ -220,14 +222,19 @@ void CSVSniffer::DetectTypes() {
 		}
 		// First line where we start our type detection
 		const idx_t start_idx_detection = row_idx;
-		for (; row_idx < tuples.number_of_rows; row_idx++) {
-			for (idx_t col_idx = 0; col_idx < tuples.number_of_columns; col_idx++) {
-				auto &col_type_candidates = info_sql_types_candidates[col_idx];
+
+		for (idx_t col_idx = 0; col_idx < data_chunk.ColumnCount(); col_idx++) {
+			auto &cur_vector = data_chunk.data[col_idx];
+			D_ASSERT(cur_vector.GetVectorType() == VectorType::FLAT_VECTOR);
+			D_ASSERT(cur_vector.GetType() == LogicalType::VARCHAR);
+			auto vector_data = FlatVector::GetData<string_t>(cur_vector);
+			auto null_mask = FlatVector::Validity(cur_vector);
+			auto &col_type_candidates = info_sql_types_candidates[col_idx];
+			for (; row_idx < chunk_size; row_idx++) {
 				// col_type_candidates can't be empty since anything in a CSV file should at least be a string
 				// and we validate utf-8 compatibility when creating the type
 				D_ASSERT(!col_type_candidates.empty());
 				auto cur_top_candidate = col_type_candidates.back();
-				auto dummy_val = tuples.GetValue(row_idx, col_idx);
 				// try cast from string to sql_type
 				while (col_type_candidates.size() > 1) {
 					const auto &sql_type = col_type_candidates.back();
@@ -236,10 +243,13 @@ void CSVSniffer::DetectTypes() {
 					string separator;
 					// If Value is not Null, Has a numeric date format, and the current investigated candidate is
 					// either a timestamp or a date
-					if (!dummy_val.IsNull() && StartsWithNumericDate(separator, StringValue::Get(dummy_val)) &&
+					// fixme: make this string_t
+					auto str_val = vector_data[row_idx].GetString();
+					if (!null_mask.RowIsValid(row_idx) && StartsWithNumericDate(separator, str_val) &&
 					    (col_type_candidates.back().id() == LogicalTypeId::TIMESTAMP ||
 					     col_type_candidates.back().id() == LogicalTypeId::DATE)) {
-						DetectDateAndTimeStampFormats(candidate->GetStateMachine(), sql_type, separator, dummy_val);
+						DetectDateAndTimeStampFormats(candidate->GetStateMachine(), sql_type, separator,
+						                              vector_data[row_idx]);
 					}
 					// try cast from string to sql_type
 					if (sql_type == LogicalType::VARCHAR) {
@@ -247,7 +257,8 @@ void CSVSniffer::DetectTypes() {
 						continue;
 					}
 					if (TryCastValue(sniffing_state_machine.dialect_options,
-					                 sniffing_state_machine.options.decimal_separator, dummy_val, sql_type)) {
+					                 sniffing_state_machine.options.decimal_separator, vector_data[row_idx], sql_type,
+					                 !null_mask.RowIsValid(row_idx))) {
 						break;
 					} else {
 						if (row_idx != start_idx_detection && cur_top_candidate == LogicalType::BOOLEAN) {
@@ -288,9 +299,10 @@ void CSVSniffer::DetectTypes() {
 			for (auto &format_candidate : format_candidates) {
 				best_format_candidates[format_candidate.first] = format_candidate.second.format;
 			}
-			if (tuples.number_of_rows > 0) {
-				for (idx_t col_idx = 0; col_idx < tuples.number_of_columns; col_idx++) {
-					best_header_row.emplace_back(tuples.GetValue(0, col_idx));
+			if (chunk_size > 0) {
+				for (idx_t col_idx = 0; col_idx < data_chunk.ColumnCount(); col_idx++) {
+					// fixme: make this string_t
+					best_header_row.emplace_back(data_chunk.GetValue(col_idx, 0));
 				}
 			}
 		}

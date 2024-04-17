@@ -168,8 +168,6 @@ public:
 
 	inline void AddValueToVector(const char *value_ptr, const idx_t size, bool allocate = false);
 
-	Value GetValue(idx_t row_idx, idx_t col_idx);
-
 	DataChunk &ToChunk();
 	//! Resets the state of the result
 	void Reset();
