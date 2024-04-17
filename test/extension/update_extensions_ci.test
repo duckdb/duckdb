@@ -35,7 +35,7 @@ statement ok
 set extension_directory='${LOCAL_EXTENSION_DIR}'
 
 query IIII rowsort
-SELECT extension_name, install_mode, installed_from, extension_version FROM duckdb_extensions() where installed
+SELECT extension_name, install_mode, installed_from, extension_version FROM duckdb_extensions() where installed and extension_name != 'jemalloc'
 ----
 json	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.1
 parquet	(empty)	(empty)	(empty)
@@ -52,7 +52,7 @@ tpch	<REGEX>:.*	UPDATED	v0.0.1	v0.0.2
 
 # duckdb_extensions() now also showing updated version
 query IIII rowsort
-SELECT extension_name, install_mode, installed_from, extension_version FROM duckdb_extensions() where installed
+SELECT extension_name, install_mode, installed_from, extension_version FROM duckdb_extensions() where installed and extension_name != 'jemalloc'
 ----
 json	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.1
 parquet	(empty)	(empty)	(empty)
@@ -78,7 +78,7 @@ load tpcds;
 
 # Ensure the result is still fine after loading; this will ensure Version() call matches the encoded footer value
 query IIII rowsort
-SELECT extension_name, install_mode, installed_from, extension_version FROM duckdb_extensions() where installed
+SELECT extension_name, install_mode, installed_from, extension_version FROM duckdb_extensions() where installed and extension_name != 'jemalloc'
 ----
 json	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.1
 parquet	(empty)	(empty)	(empty)

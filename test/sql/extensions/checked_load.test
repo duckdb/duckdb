@@ -19,7 +19,7 @@ Error: Extension "README.md" could not be loaded
 statement error
 LOAD 'data/csv/no_opt.csv';
 ----
-File 'data/csv/no_opt.csv' is not a DuckDB extension. Valid DuckDB extensions must be at least 512 bytes
+is not a DuckDB extension. Valid DuckDB extensions must be at least 512 bytes
 
 statement ok
 SET allow_unsigned_extensions=false;
