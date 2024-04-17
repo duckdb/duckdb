@@ -277,7 +277,7 @@ void DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction) noe
 		}
 	}
 	// remove the transaction from the set of currently active transactions
-	active_transactions.erase_at(t_index);
+	active_transactions.unsafe_erase_at(t_index);
 	// traverse the recently_committed transactions to see if we can remove any
 	idx_t i = 0;
 	for (; i < recently_committed_transactions.size(); i++) {

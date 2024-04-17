@@ -72,9 +72,7 @@ void BufferPool::UpdateUsedMemory(MemoryTag tag, int64_t size) {
 		memory_usage_per_tag[uint8_t(tag)] -= UnsafeNumericCast<idx_t>(-size);
 	} else {
 		current_memory += UnsafeNumericCast<idx_t>(size);
-		;
 		memory_usage_per_tag[uint8_t(tag)] += UnsafeNumericCast<idx_t>(size);
-		;
 	}
 }
 
