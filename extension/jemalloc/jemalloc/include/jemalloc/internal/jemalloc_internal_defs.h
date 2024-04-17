@@ -202,7 +202,7 @@
 /* #undef JEMALLOC_XMALLOC */
 
 /* Support lazy locking (avoid locking unless a second thread is launched). */
-#define JEMALLOC_LAZY_LOCK
+// #define JEMALLOC_LAZY_LOCK
 
 /*
  * Minimum allocation alignment is 2^LG_QUANTUM bytes (ignoring tiny size
