@@ -12,7 +12,7 @@ def test_http_logging_stderr(shell):
     test = (
         ShellTest(shell)
         .statement("SET enable_http_logging=true;")
-        .statement("install 'https://extensions.duckdb.org/v0.10.1/osx_arm64/httpfs.duckdb_extension.gzzz';")
+        .statement("install 'http://extensions.duckdb.org/v0.10.1/osx_arm64/httpfs.duckdb_extension.gzzz';")
     )
     result = test.run()
     result.check_stderr("HTTP Request")
@@ -28,7 +28,7 @@ def test_http_logging_file(shell, tmp_path):
         ShellTest(shell)
         .statement("SET enable_http_logging=true;")
         .statement(f"SET http_logging_output='{temp_file.as_posix()}'")
-        .statement("install 'https://extensions.duckdb.org/v0.10.1/osx_arm64/httpfs.duckdb_extension.gzzz';")
+        .statement("install 'http://extensions.duckdb.org/v0.10.1/osx_arm64/httpfs.duckdb_extension.gzzz';")
     )
     result = test.run()
 
