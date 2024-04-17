@@ -1513,6 +1513,26 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 	return std::move(table_function);
 }
 
+static optional_idx GetLocalLimit(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	auto it = config.options.set_variables.find("local_scan_frames");
+	if (it == config.options.set_variables.end()) {
+		return optional_idx();
+	}
+	auto limit = it->second.GetValue<uint64_t>();
+	return optional_idx(limit);
+}
+
+static optional_idx GetGlobalLimit(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	auto it = config.options.set_variables.find("global_scan_frames");
+	if (it == config.options.set_variables.end()) {
+		return optional_idx();
+	}
+	auto limit = it->second.GetValue<uint64_t>();
+	return optional_idx(limit);
+}
+
 static unique_ptr<TableRef> ScanReplacement(ClientContext &context, const string &table_name,
                                             ReplacementScanData *data) {
 	py::gil_scoped_acquire acquire;
@@ -1520,10 +1540,19 @@ static unique_ptr<TableRef> ScanReplacement(ClientContext &context, const string
 	// Here we do an exhaustive search on the frame lineage
 	auto current_frame = py::module::import("inspect").attr("currentframe")();
 	auto client_properties = context.GetClientProperties();
+
+	auto global_limit = GetGlobalLimit(context);
+	auto local_limit = GetLocalLimit(context);
+
+	idx_t depth = 0;
 	while (hasattr(current_frame, "f_locals")) {
 		auto local_dict = py::reinterpret_borrow<py::dict>(current_frame.attr("f_locals"));
 		// search local dictionary
-		if (local_dict) {
+
+		auto can_search_local = !local_limit.IsValid() || depth < local_limit.GetIndex();
+		auto can_search_global = !global_limit.IsValid() || depth < global_limit.GetIndex();
+
+		if (local_dict && can_search_local) {
 			auto result = TryReplacement(local_dict, py_table_name, client_properties, current_frame);
 			if (result) {
 				return result;
@@ -1531,13 +1560,17 @@ static unique_ptr<TableRef> ScanReplacement(ClientContext &context, const string
 		}
 		// search global dictionary
 		auto global_dict = py::reinterpret_borrow<py::dict>(current_frame.attr("f_globals"));
-		if (global_dict) {
+		if (global_dict && can_search_global) {
 			auto result = TryReplacement(global_dict, py_table_name, client_properties, current_frame);
 			if (result) {
 				return result;
 			}
 		}
+		if (!can_search_local && !can_search_global) {
+			break;
+		}
 		current_frame = current_frame.attr("f_back");
+		depth++;
 	}
 	// Not found :(
 	return nullptr;
@@ -1641,6 +1674,12 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 	config.AddExtensionOption("pandas_analyze_sample",
 	                          "The maximum number of rows to sample when analyzing a pandas object column.",
 	                          LogicalType::UBIGINT, Value::UBIGINT(1000));
+	config.AddExtensionOption("local_scan_frames",
+	                          "The maximum amount of frames of the 'f_locals' to traverse in a replacement scan.",
+	                          LogicalType::BIGINT);
+	config.AddExtensionOption("global_scan_frames",
+	                          "The maximum amount of frames of the 'f_globals' to traverse in a replacement scan.",
+	                          LogicalType::BIGINT);
 	if (!DuckDBPyConnection::IsJupyter()) {
 		config_dict["duckdb_api"] = Value("python");
 	} else {
