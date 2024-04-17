@@ -71,7 +71,7 @@ static string PrettyPrintString(const string &s) {
 		    c == '.') {
 			res += c;
 		} else {
-			uint8_t value = c;
+			auto value = UnsafeNumericCast<uint8_t>(c);
 			res += "\\x";
 			uint8_t first = value / 16;
 			if (first < 10) {
@@ -276,7 +276,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		}
 	}
 
-	auto number_metadata_fields = 3;
+	idx_t number_metadata_fields = 3;
 	D_ASSERT(number_metadata_fields == 3); // Currently hardcoded value
 	metadata_field.resize(number_metadata_fields + 1);
 

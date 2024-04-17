@@ -549,7 +549,7 @@ FileHandle::~FileHandle() {
 }
 
 int64_t FileHandle::Read(void *buffer, idx_t nr_bytes) {
-	return file_system.Read(*this, buffer, nr_bytes);
+	return file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
 }
 
 bool FileHandle::Trim(idx_t offset_bytes, idx_t length_bytes) {
@@ -557,15 +557,15 @@ bool FileHandle::Trim(idx_t offset_bytes, idx_t length_bytes) {
 }
 
 int64_t FileHandle::Write(void *buffer, idx_t nr_bytes) {
-	return file_system.Write(*this, buffer, nr_bytes);
+	return file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
 }
 
 void FileHandle::Read(void *buffer, idx_t nr_bytes, idx_t location) {
-	file_system.Read(*this, buffer, nr_bytes, location);
+	file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
 }
 
 void FileHandle::Write(void *buffer, idx_t nr_bytes, idx_t location) {
-	file_system.Write(*this, buffer, nr_bytes, location);
+	file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
 }
 
 void FileHandle::Seek(idx_t location) {
@@ -592,7 +592,7 @@ string FileHandle::ReadLine() {
 	string result;
 	char buffer[1];
 	while (true) {
-		idx_t tuples_read = Read(buffer, 1);
+		auto tuples_read = UnsafeNumericCast<idx_t>(Read(buffer, 1));
 		if (tuples_read == 0 || buffer[0] == '\n') {
 			return result;
 		}
@@ -607,7 +607,7 @@ bool FileHandle::OnDiskFile() {
 }
 
 idx_t FileHandle::GetFileSize() {
-	return file_system.GetFileSize(*this);
+	return NumericCast<idx_t>(file_system.GetFileSize(*this));
 }
 
 void FileHandle::Sync() {

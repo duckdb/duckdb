@@ -487,7 +487,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 				if (column == COLUMN_IDENTIFIER_ROW_ID) {
 					// scan row id
 					D_ASSERT(result.data[i].GetType().InternalType() == ROW_TYPE);
-					result.data[i].Sequence(this->start + current_row, 1, count);
+					result.data[i].Sequence(UnsafeNumericCast<int64_t>(this->start + current_row), 1, count);
 				} else {
 					auto &col_data = GetColumn(column);
 					if (TYPE != TableScanType::TABLE_SCAN_REGULAR) {
@@ -551,7 +551,8 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 						result.data[i].SetVectorType(VectorType::FLAT_VECTOR);
 						auto result_data = FlatVector::GetData<int64_t>(result.data[i]);
 						for (size_t sel_idx = 0; sel_idx < approved_tuple_count; sel_idx++) {
-							result_data[sel_idx] = this->start + current_row + sel.get_index(sel_idx);
+							result_data[sel_idx] =
+							    UnsafeNumericCast<int64_t>(this->start + current_row + sel.get_index(sel_idx));
 						}
 					} else {
 						auto &col_data = GetColumn(column);
@@ -703,7 +704,7 @@ void RowGroup::RevertAppend(idx_t row_group_start) {
 	auto &vinfo = GetOrCreateVersionInfo();
 	vinfo.RevertAppend(row_group_start - this->start);
 	for (auto &column : columns) {
-		column->RevertAppend(row_group_start);
+		column->RevertAppend(UnsafeNumericCast<row_t>(row_group_start));
 	}
 	this->count = MinValue<idx_t>(row_group_start - this->start, this->count);
 	Verify();
@@ -955,7 +956,7 @@ idx_t RowGroup::Delete(TransactionData transaction, DataTable &table, row_t *ids
 	for (idx_t i = 0; i < count; i++) {
 		D_ASSERT(ids[i] >= 0);
 		D_ASSERT(idx_t(ids[i]) >= this->start && idx_t(ids[i]) < this->start + this->count);
-		del_state.Delete(ids[i] - this->start);
+		del_state.Delete(ids[i] - UnsafeNumericCast<row_t>(this->start));
 	}
 	del_state.Flush();
 	return del_state.delete_count;
@@ -975,15 +976,15 @@ idx_t RowGroup::DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t
 
 void VersionDeleteState::Delete(row_t row_id) {
 	D_ASSERT(row_id >= 0);
-	idx_t vector_idx = row_id / STANDARD_VECTOR_SIZE;
-	idx_t idx_in_vector = row_id - vector_idx * STANDARD_VECTOR_SIZE;
+	idx_t vector_idx = UnsafeNumericCast<idx_t>(row_id) / STANDARD_VECTOR_SIZE;
+	idx_t idx_in_vector = UnsafeNumericCast<idx_t>(row_id) - vector_idx * STANDARD_VECTOR_SIZE;
 	if (current_chunk != vector_idx) {
 		Flush();
 
 		current_chunk = vector_idx;
 		chunk_row = vector_idx * STANDARD_VECTOR_SIZE;
 	}
-	rows[count++] = idx_in_vector;
+	rows[count++] = UnsafeNumericCast<row_t>(idx_in_vector);
 }
 
 void VersionDeleteState::Flush() {

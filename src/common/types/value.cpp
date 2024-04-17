@@ -1209,11 +1209,11 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 		return Value::UINTEGER((uint32_t)value);
 	case LogicalTypeId::UBIGINT:
 		D_ASSERT(value >= 0);
-		return Value::UBIGINT(value);
+		return Value::UBIGINT(NumericCast<uint64_t>(value));
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(value);
 	case LogicalTypeId::UHUGEINT:
-		return Value::UHUGEINT(value);
+		return Value::UHUGEINT(NumericCast<uint64_t>(value));
 	case LogicalTypeId::DECIMAL:
 		return Value::DECIMAL(value, DecimalType::GetWidth(type), DecimalType::GetScale(type));
 	case LogicalTypeId::FLOAT:
@@ -1221,7 +1221,7 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 	case LogicalTypeId::DOUBLE:
 		return Value((double)value);
 	case LogicalTypeId::POINTER:
-		return Value::POINTER(value);
+		return Value::POINTER(NumericCast<uintptr_t>(value));
 	case LogicalTypeId::DATE:
 		D_ASSERT(value >= NumericLimits<int32_t>::Minimum() && value <= NumericLimits<int32_t>::Maximum());
 		return Value::DATE(date_t(NumericCast<int32_t>(value)));
@@ -1662,7 +1662,7 @@ hugeint_t IntegralValue::Get(const Value &value) {
 	case PhysicalType::UINT32:
 		return UIntegerValue::Get(value);
 	case PhysicalType::UINT64:
-		return UBigIntValue::Get(value);
+		return NumericCast<int64_t>(UBigIntValue::Get(value));
 	case PhysicalType::UINT128:
 		return static_cast<hugeint_t>(UhugeIntValue::Get(value));
 	default:

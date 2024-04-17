@@ -133,7 +133,7 @@ void TemporaryFileHandle::EraseBlockIndex(block_id_t block_index) {
 	// remove the block (and potentially truncate the temp file)
 	TemporaryFileLock lock(file_lock);
 	D_ASSERT(handle);
-	RemoveTempBlockIndex(lock, block_index);
+	RemoveTempBlockIndex(lock, NumericCast<idx_t>(block_index));
 }
 
 bool TemporaryFileHandle::DeleteIfEmpty() {
@@ -174,7 +174,7 @@ void TemporaryFileHandle::RemoveTempBlockIndex(TemporaryFileLock &, idx_t index)
 #ifndef WIN32 // this ended up causing issues when sorting
 		auto max_index = index_manager.GetMaxIndex();
 		auto &fs = FileSystem::GetFileSystem(db);
-		fs.Truncate(*handle, GetPositionInFile(max_index + 1));
+		fs.Truncate(*handle, NumericCast<int64_t>(GetPositionInFile(max_index + 1)));
 #endif
 	}
 }
@@ -404,7 +404,7 @@ void TemporaryFileManager::EraseUsedBlock(TemporaryManagerLock &lock, block_id_t
 		throw InternalException("EraseUsedBlock - Block %llu not found in used blocks", id);
 	}
 	used_blocks.erase(entry);
-	handle->EraseBlockIndex(index.block_index);
+	handle->EraseBlockIndex(NumericCast<block_id_t>(index.block_index));
 	if (handle->DeleteIfEmpty()) {
 		EraseFileHandle(lock, index.file_index);
 	}

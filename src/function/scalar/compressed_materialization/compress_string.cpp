@@ -39,7 +39,7 @@ static inline RESULT_TYPE StringCompressInternal(const string_t &input) {
 		ReverseMemCpy(result_ptr + remainder, data_ptr_cast(input.GetPointer()), input.GetSize());
 		memset(result_ptr, '\0', remainder);
 	}
-	result_ptr[0] = UnsafeNumericCast<char>(input.GetSize());
+	result_ptr[0] = UnsafeNumericCast<data_t>(input.GetSize());
 	return result;
 }
 

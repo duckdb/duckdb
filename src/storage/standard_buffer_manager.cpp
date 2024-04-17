@@ -160,7 +160,7 @@ void StandardBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t bl
 	D_ASSERT(handle->memory_usage == handle->memory_charge.size);
 
 	auto req = handle->buffer->CalculateMemory(block_size);
-	int64_t memory_delta = NumericCast<int64_t>(req.alloc_size) - handle->memory_usage;
+	int64_t memory_delta = NumericCast<int64_t>(req.alloc_size) - NumericCast<int64_t>(handle->memory_usage);
 
 	if (memory_delta == 0) {
 		return;
@@ -168,10 +168,10 @@ void StandardBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t bl
 		// evict blocks until we have space to resize this block
 		// unlock the handle lock during the call to EvictBlocksOrThrow
 		lock.unlock();
-		auto reservation =
-		    EvictBlocksOrThrow(handle->tag, memory_delta, nullptr, "failed to resize block from %s to %s%s",
-		                       StringUtil::BytesToHumanReadableString(handle->memory_usage),
-		                       StringUtil::BytesToHumanReadableString(req.alloc_size));
+		auto reservation = EvictBlocksOrThrow(handle->tag, NumericCast<idx_t>(memory_delta), nullptr,
+		                                      "failed to resize block from %s to %s%s",
+		                                      StringUtil::BytesToHumanReadableString(handle->memory_usage),
+		                                      StringUtil::BytesToHumanReadableString(req.alloc_size));
 		lock.lock();
 
 		// EvictBlocks decrements 'current_memory' for us.
@@ -217,10 +217,10 @@ BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	auto buf = handle->Load(handle, std::move(reusable_buffer));
 	handle->memory_charge = std::move(reservation);
 	// In the case of a variable sized block, the buffer may be smaller than a full block.
-	int64_t delta = handle->buffer->AllocSize() - handle->memory_usage;
+	int64_t delta = NumericCast<int64_t>(handle->buffer->AllocSize()) - NumericCast<int64_t>(handle->memory_usage);
 	if (delta) {
 		D_ASSERT(delta < 0);
-		handle->memory_usage += delta;
+		handle->memory_usage += NumericCast<idx_t>(delta);
 		handle->memory_charge.Resize(handle->memory_usage);
 	}
 	D_ASSERT(handle->memory_usage == handle->buffer->AllocSize());
@@ -411,7 +411,7 @@ vector<TemporaryFileInformation> StandardBufferManager::GetTemporaryFiles() {
 		TemporaryFileInformation info;
 		info.path = name;
 		auto handle = fs.OpenFile(name, FileFlags::FILE_FLAGS_READ);
-		info.size = fs.GetFileSize(*handle);
+		info.size = NumericCast<idx_t>(fs.GetFileSize(*handle));
 		handle.reset();
 		result.push_back(info);
 	});
