@@ -197,7 +197,11 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 		// we need to vacuum the indexes to remove any buffers that are now empty
 		// due to reverting the appends
 		table.info->indexes.Scan([&](Index &index) {
-			index.Vacuum();
+			try {
+				index.Vacuum();
+			} catch (std::exception &ex) { // LCOV_EXCL_START
+				error = ErrorData(ex);
+			} // LCOV_EXCL_STOP
 			return false;
 		});
 		error.Throw();
