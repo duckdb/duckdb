@@ -206,13 +206,36 @@
 
 /* One page is 2^LG_PAGE bytes. */
 // ----- DuckDB comment -----
-// The page size for jemalloc can always be bigger than the actual system page size, so we go with the max here,
-// but only for 64-bit systems, because we assume all 32-bit systems have a page size of 4KB
-#if INTPTR_MAX == INT64_MAX
-#define LG_PAGE 16
-#else
+// The page size for jemalloc can always be bigger than the actual system page size
+#if INTPTR_MAX != INT64_MAX
+#define LG_PAGE 12 // 32-bit systems typically have a 4KB page size
+#elifdef __APPLE__
 #define LG_PAGE 12
 #endif
+
+#if INTPTR_MAX != INT64_MAX
+#define LG_PAGE 12 // 32-bit systems typically have a 4KB page size
+#elif defined(__i386__) || defined(__x86_64__) || defined(__amd64__) || defined(COMPILER_MSVC) && (defined(_M_IX86) || defined(_M_X64))
+#define LG_PAGE 12 // x86 and x86_64 typically have a 4KB page size
+#elif defined(__powerpc__) || defined(__ppc__)
+#define LG_PAGE 16 // PowerPC architectures often use 64KB page size
+#elif defined(__sparc__)
+#define LG_PAGE 13 // SPARC architectures usually have an 8KB page size
+#elif defined(__aarch64__) || defined(__ARM_ARCH)
+
+// ARM architectures are less well-defined
+#if defined(__APPLE__)
+#define LG_PAGE 14 // Apple Silicon uses a 16KB page size
+#else
+#define LG_PAGE 16 // Use max known page size for ARM
+#endif
+
+#else
+#define LG_PAGE 12 // Default to the most common page size of 4KB
+#endif
+
+
+
 
 /* Maximum number of regions in a slab. */
 /* #undef CONFIG_LG_SLAB_MAXREGS */
@@ -304,9 +327,9 @@
 /*
  * Darwin (OS X) uses zones to work around Mach-O symbol override shortcomings.
  */
-// #if defined(__APPLE__)
-// #define JEMALLOC_ZONE
-// #endif
+#if defined(__APPLE__)
+#define JEMALLOC_ZONE
+#endif
 
 /*
  * Methods for determining whether the OS overcommits.
@@ -421,9 +444,9 @@
 #define JEMALLOC_HAVE_PTHREAD
 
 /* dlsym() support */
-// #if defined(__APPLE__)
-// #define JEMALLOC_HAVE_DLSYM
-// #endif
+#if defined(__APPLE__)
+#define JEMALLOC_HAVE_DLSYM
+#endif
 
 /* Adaptive mutex support in pthreads. */
 /* #undef JEMALLOC_HAVE_PTHREAD_MUTEX_ADAPTIVE_NP */
@@ -469,9 +492,9 @@
 /* #undef JEMALLOC_UAF_DETECTION */
 
 /* Darwin VM_MAKE_TAG support */
-// #if defined(__APPLE__)
-// #define JEMALLOC_HAVE_VM_MAKE_TAG
-// #endif
+#if defined(__APPLE__)
+#define JEMALLOC_HAVE_VM_MAKE_TAG
+#endif
 
 /* If defined, realloc(ptr, 0) defaults to "free" instead of "alloc". */
 /* #undef JEMALLOC_ZERO_REALLOC_DEFAULT_FREE */

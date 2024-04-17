@@ -1,7 +1,6 @@
 include_directories(include)
 
-add_library(
-  jemalloc OBJECT
+set(JEMALLOC_C_FILES
   src/jemalloc.c
   src/arena.c
   src/background_thread.c
@@ -65,6 +64,12 @@ add_library(
   src/tsd.c
   src/util.c
   src/witness.c)
+
+if (OS_NAME STREQUAL "osx")
+  list(APPEND JEMALLOC_C_FILES src/zone.c)
+endif()
+
+add_library(jemalloc OBJECT ${JEMALLOC_C_FILES})
 
 set(JEMALLOC_OBJECT_FILES
     ${JEMALLOC_OBJECT_FILES} $<TARGET_OBJECTS:jemalloc>

@@ -34,7 +34,7 @@ extern "C" {
  * present on the system.
  */
 /* #undef JEMALLOC_OVERRIDE_MEMALIGN */
-#define JEMALLOC_OVERRIDE_VALLOC
+/* #undef JEMALLOC_OVERRIDE_VALLOC */
 /* #undef JEMALLOC_OVERRIDE_PVALLOC */
 
 /*

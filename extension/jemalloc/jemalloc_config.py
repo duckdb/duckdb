@@ -1,4 +1,5 @@
 import os
+import platform
 
 # list all include directories
 include_directories = [
@@ -74,3 +75,6 @@ source_files = [
         'extension/jemalloc/jemalloc/src/witness.c',
     ]
 ]
+
+if platform.system() == 'Darwin':
+    source_files.append(os.path.sep.join('extension/jemalloc/jemalloc/src/zone.c'.split('/')))

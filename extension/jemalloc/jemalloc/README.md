@@ -55,3 +55,20 @@ This is not portable, but we can make it portable if we replace all of it with t
 #  define LG_SIZEOF_PTR 2
 #endif
 ```
+
+We also supply our own config string in `jemalloc.c`.
+Define this just after the `#include`s.
+```c++
+const int JE_MALLOC_CONF_BUFFER_SIZE = 200;
+const char JE_MALLOC_CONF_BUFFER[JE_MALLOC_CONF_BUFFER_SIZE];
+```
+Then put this before `malloc_init()` in `static void jemalloc_constructor(void)`:
+```c++
+unsigned long long cpu_count = malloc_ncpus();
+unsigned long long bgt_count = cpu_count / 8;
+if (bgt_count == 0) {
+    bgt_count = 1;
+}
+snprintf(JE_MALLOC_CONF_BUFFER, JE_MALLOC_CONF_BUFFER_SIZE, "narenas:%llu,dirty_decay_ms:10000,muzzy_decay_ms:10000,max_background_threads:%llu", cpu_count, bgt_count);
+je_malloc_conf = JE_MALLOC_CONF_BUFFER;
+```
