@@ -219,7 +219,8 @@
 
 #if INTPTR_MAX != INT64_MAX
 #define LG_PAGE 12 // 32-bit systems typically have a 4KB page size
-#elif defined(__i386__) || defined(__x86_64__) || defined(__amd64__) || defined(COMPILER_MSVC) && (defined(_M_IX86) || defined(_M_X64))
+#elif defined(__i386__) || defined(__x86_64__) || defined(__amd64__) ||                                                \
+    defined(COMPILER_MSVC) && (defined(_M_IX86) || defined(_M_X64))
 #define LG_PAGE 12 // x86 and x86_64 typically have a 4KB page size
 #elif defined(__powerpc__) || defined(__ppc__)
 #define LG_PAGE 16 // PowerPC architectures often use 64KB page size
@@ -271,7 +272,7 @@
 #endif
 
 /* TLS is used to map arenas and magazine caches to threads. */
-// #define JEMALLOC_TLS
+#define JEMALLOC_TLS
 
 /*
  * Used to mark unreachable code to quiet "end of non-void" compiler warnings.
