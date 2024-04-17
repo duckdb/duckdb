@@ -24,15 +24,7 @@ string DropInfo::ToString() const {
 		result += " IF EXISTS";
 	}
 	result += " ";
-	if (!catalog.empty()) {
-		result += KeywordHelper::WriteOptionallyQuoted(catalog) + ".";
-		if (!schema.empty()) {
-			result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
-		}
-	} else if (!schema.empty() && schema != DEFAULT_SCHEMA) {
-		result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
-	}
-	result += KeywordHelper::WriteOptionallyQuoted(name);
+	result += QualifierToString(catalog, schema, name);
 	if (cascade) {
 		result += " CASCADE";
 	}

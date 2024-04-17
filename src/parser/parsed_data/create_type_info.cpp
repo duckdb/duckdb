@@ -31,15 +31,7 @@ string CreateTypeInfo::ToString() const {
 		throw NotImplementedException("CREATE TEMPORARY TYPE can't be parsed currently");
 	}
 	result += " TYPE ";
-	if (!catalog.empty()) {
-		result += KeywordHelper::WriteOptionallyQuoted(catalog);
-		result += ".";
-	}
-	if (!schema.empty()) {
-		result += KeywordHelper::WriteOptionallyQuoted(schema);
-		result += ".";
-	}
-	result += KeywordHelper::WriteOptionallyQuoted(name);
+	result += QualifierToString(catalog, schema, name);
 	if (type.id() == LogicalTypeId::ENUM) {
 		auto &values_insert_order = EnumType::GetValuesInsertOrder(type);
 		idx_t size = EnumType::GetSize(type);

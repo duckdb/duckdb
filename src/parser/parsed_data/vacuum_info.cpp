@@ -22,7 +22,11 @@ string VacuumInfo::ToString() const {
 	}
 	result += " " + ref->ToString();
 	if (!columns.empty()) {
-		result += "(" + StringUtil::Join(columns, ", ") + ")";
+		vector<string> names;
+		for (auto &column : columns) {
+			names.push_back(KeywordHelper::WriteOptionallyQuoted(column));
+		}
+		result += "(" + StringUtil::Join(names, ", ") + ")";
 	}
 	result += ";";
 	return result;

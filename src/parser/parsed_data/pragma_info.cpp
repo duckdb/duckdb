@@ -17,6 +17,7 @@ unique_ptr<PragmaInfo> PragmaInfo::Copy() const {
 string PragmaInfo::ToString() const {
 	string result = "";
 	result += "PRAGMA";
+	// FIXME: Can pragma's live in different catalog/schemas ?
 	result += " " + KeywordHelper::WriteOptionallyQuoted(name);
 	if (!parameters.empty()) {
 		vector<string> stringified;
