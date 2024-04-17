@@ -13,10 +13,11 @@ unique_ptr<AttachInfo> AttachInfo::Copy() const {
 
 string AttachInfo::ToString() const {
 	string result = "";
-	result += "ATTACH DATABASE";
+	result += "ATTACH";
 	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 		result += " IF NOT EXISTS";
 	}
+	result += " DATABASE";
 	result += StringUtil::Format(" '%s'", path);
 	if (!name.empty()) {
 		result += " AS " + KeywordHelper::WriteOptionallyQuoted(name);
@@ -24,7 +25,7 @@ string AttachInfo::ToString() const {
 	if (!options.empty()) {
 		vector<string> stringified;
 		for (auto &opt : options) {
-			stringified.push_back(StringUtil::Format("%s = %s", opt.first, opt.second.ToSQLString()));
+			stringified.push_back(StringUtil::Format("%s %s", opt.first, opt.second.ToSQLString()));
 		}
 		result += " (" + StringUtil::Join(stringified, ", ") + ")";
 	}

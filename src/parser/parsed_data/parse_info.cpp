@@ -31,7 +31,7 @@ string ParseInfo::TypeToString(CatalogType type) {
 
 string ParseInfo::QualifierToString(const string &catalog, const string &schema, const string &name) {
 	string result;
-	if (!catalog.empty() && catalog != TEMP_CATALOG) {
+	if (!catalog.empty()) {
 		result += KeywordHelper::WriteOptionallyQuoted(catalog) + ".";
 		if (!schema.empty()) {
 			result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";

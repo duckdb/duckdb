@@ -44,7 +44,7 @@ string CreateTableInfo::ToString() const {
 	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 		ret += " IF NOT EXISTS ";
 	}
-	ret += QualifierToString(catalog, schema, table);
+	ret += QualifierToString(temporary ? "" : catalog, schema, table);
 
 	if (query != nullptr) {
 		ret += " AS " + query->ToString();

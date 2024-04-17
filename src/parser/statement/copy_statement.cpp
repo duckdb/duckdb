@@ -30,6 +30,7 @@ string CopyStatement::CopyOptionsToString(const string &format, const case_insen
 		if (values.empty()) {
 			// Options like HEADER don't need an explicit value
 			// just providing the name already sets it to true
+			stringified.push_back(option);
 		} else if (values.size() == 1) {
 			stringified.push_back(option + values[0].ToSQLString());
 		} else {

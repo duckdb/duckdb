@@ -120,7 +120,7 @@ string RenameColumnInfo::ToString() const {
 	result += QualifierToString(catalog, schema, name);
 	result += " RENAME COLUMN ";
 	result += KeywordHelper::WriteOptionallyQuoted(old_name);
-	result += " TO";
+	result += " TO ";
 	result += KeywordHelper::WriteOptionallyQuoted(new_name);
 	result += ";";
 	return result;
@@ -150,7 +150,7 @@ string RenameTableInfo::ToString() const {
 		result += " IF EXISTS";
 	}
 	result += QualifierToString(catalog, schema, name);
-	result += " RENAME TO";
+	result += " RENAME TO ";
 	result += KeywordHelper::WriteOptionallyQuoted(new_table_name);
 	result += ";";
 	return result;
@@ -299,8 +299,12 @@ string SetDefaultInfo::ToString() const {
 	result += QualifierToString(catalog, schema, name);
 	result += " ALTER COLUMN ";
 	result += KeywordHelper::WriteOptionallyQuoted(column_name);
-	result += " SET DEFAULT ";
-	result += expression->ToString();
+	if (expression) {
+		result += " SET DEFAULT ";
+		result += expression->ToString();
+	} else {
+		result += " DROP DEFAULT";
+	}
 	result += ";";
 	return result;
 }

@@ -22,7 +22,7 @@ string ExecuteStatement::ToString() const {
 	if (!named_values.empty()) {
 		vector<string> stringified;
 		for (auto &val : named_values) {
-			stringified.push_back(StringUtil::Format("%s := %s", val.first, val.second->ToString()));
+			stringified.push_back(StringUtil::Format("\"%s\" := %s", val.first, val.second->ToString()));
 		}
 		result += "(" + StringUtil::Join(stringified, ", ") + ")";
 	}

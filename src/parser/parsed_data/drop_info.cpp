@@ -18,15 +18,20 @@ unique_ptr<DropInfo> DropInfo::Copy() const {
 
 string DropInfo::ToString() const {
 	string result = "";
-	result += "DROP";
-	result += " " + ParseInfo::TypeToString(type);
-	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		result += " IF EXISTS";
-	}
-	result += " ";
-	result += QualifierToString(catalog, schema, name);
-	if (cascade) {
-		result += " CASCADE";
+	if (type == CatalogType::PREPARED_STATEMENT) {
+		result += "DEALLOCATE PREPARE ";
+		result += KeywordHelper::WriteOptionallyQuoted(name);
+	} else {
+		result += "DROP";
+		result += " " + ParseInfo::TypeToString(type);
+		if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+			result += " IF EXISTS";
+		}
+		result += " ";
+		result += QualifierToString(catalog, schema, name);
+		if (cascade) {
+			result += " CASCADE";
+		}
 	}
 	result += ";";
 	return result;

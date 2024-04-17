@@ -37,7 +37,7 @@ string CreateSequenceInfo::ToString() const {
 	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 		ss << " IF NOT EXISTS ";
 	}
-	ss << QualifierToString(catalog, schema, name);
+	ss << QualifierToString(temporary ? "" : catalog, schema, name);
 	ss << " INCREMENT BY " << increment;
 	ss << " MINVALUE " << min_value;
 	ss << " MAXVALUE " << max_value;
