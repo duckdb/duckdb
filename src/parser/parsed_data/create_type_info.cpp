@@ -31,15 +31,7 @@ string CreateTypeInfo::ToString() const {
 		throw NotImplementedException("CREATE TEMPORARY TYPE can't be parsed currently");
 	}
 	result += " TYPE ";
-	if (!catalog.empty()) {
-		result += KeywordHelper::WriteOptionallyQuoted(catalog);
-		result += ".";
-	}
-	if (!schema.empty()) {
-		result += KeywordHelper::WriteOptionallyQuoted(schema);
-		result += ".";
-	}
-	result += KeywordHelper::WriteOptionallyQuoted(name);
+	result += QualifierToString(temporary ? "" : catalog, schema, name);
 	if (type.id() == LogicalTypeId::ENUM) {
 		auto &values_insert_order = EnumType::GetValuesInsertOrder(type);
 		idx_t size = EnumType::GetSize(type);
@@ -62,8 +54,7 @@ string CreateTypeInfo::ToString() const {
 		D_ASSERT(extra_info);
 		D_ASSERT(extra_info->type == ExtraTypeInfoType::USER_TYPE_INFO);
 		auto &user_info = extra_info->Cast<UserTypeInfo>();
-		// FIXME: catalog, schema ??
-		result += user_info.user_type_name;
+		result += QualifierToString(user_info.catalog, user_info.schema, user_info.user_type_name);
 	} else {
 		result += " AS ";
 		result += type.ToString();

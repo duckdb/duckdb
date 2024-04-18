@@ -41,7 +41,7 @@ string CreateIndexInfo::ToString() const {
 	}
 	result += KeywordHelper::WriteOptionallyQuoted(index_name);
 	result += " ON ";
-	result += KeywordHelper::WriteOptionallyQuoted(table);
+	result += QualifierToString(temporary ? "" : catalog, schema, table);
 	if (index_type != "ART") {
 		result += " USING ";
 		result += KeywordHelper::WriteOptionallyQuoted(index_type);

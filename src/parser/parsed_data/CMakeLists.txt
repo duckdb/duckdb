@@ -26,6 +26,7 @@ add_library_unity(
   drop_info.cpp
   extra_drop_info.cpp
   sample_options.cpp
+  parse_info.cpp
   transaction_info.cpp
   vacuum_info.cpp)
 set(ALL_OBJECT_FILES

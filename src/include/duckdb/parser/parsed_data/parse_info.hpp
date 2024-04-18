@@ -54,6 +54,7 @@ public:
 
 	virtual void Serialize(Serializer &serializer) const;
 	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);
+	static string QualifierToString(const string &catalog, const string &schema, const string &name);
 };
 
 } // namespace duckdb

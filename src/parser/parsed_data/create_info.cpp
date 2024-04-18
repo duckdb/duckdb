@@ -22,26 +22,6 @@ void CreateInfo::CopyProperties(CreateInfo &other) const {
 	other.comment = comment;
 }
 
-string CreateInfo::QualifierToString(const string &name) const {
-	string result;
-	auto has_catalog = !catalog.empty();
-	if (has_catalog) {
-		if (temporary && catalog == TEMP_CATALOG) {
-			has_catalog = false;
-		}
-	}
-	if (has_catalog) {
-		result += KeywordHelper::WriteOptionallyQuoted(catalog) + ".";
-		if (!schema.empty()) {
-			result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
-		}
-	} else if (schema != DEFAULT_SCHEMA && !schema.empty()) {
-		result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
-	}
-	result += KeywordHelper::WriteOptionallyQuoted(name);
-	return result;
-}
-
 unique_ptr<AlterInfo> CreateInfo::GetAlterInfo() const {
 	throw NotImplementedException("GetAlterInfo not implemented for this type");
 }

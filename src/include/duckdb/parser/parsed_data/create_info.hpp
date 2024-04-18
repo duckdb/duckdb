@@ -61,10 +61,6 @@ public:
 		throw NotImplementedException("ToString not supported for this type of CreateInfo: '%s'",
 		                              EnumUtil::ToString(info_type));
 	}
-
-protected:
-	// FIXME: name should really become part of CreateInfo
-	string QualifierToString(const string &name) const;
 };
 
 } // namespace duckdb
