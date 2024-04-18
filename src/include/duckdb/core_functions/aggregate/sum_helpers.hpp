@@ -61,7 +61,7 @@ struct RegularAdd {
 
 	template <class STATE, class T>
 	static void AddConstant(STATE &state, T input, idx_t count) {
-		state.value += input * count;
+		state.value += input * int64_t(count);
 	}
 };
 
@@ -73,7 +73,7 @@ struct HugeintAdd {
 
 	template <class STATE, class T>
 	static void AddConstant(STATE &state, T input, idx_t count) {
-		AddNumber(state, Hugeint::Multiply(input, count));
+		AddNumber(state, Hugeint::Multiply(input, UnsafeNumericCast<int64_t>(count)));
 	}
 };
 
@@ -135,7 +135,7 @@ struct AddToHugeint {
 					AddValue(state.value, uint64_t(input), input >= 0);
 				}
 			} else {
-				hugeint_t addition = hugeint_t(input) * count;
+				hugeint_t addition = hugeint_t(input) * Hugeint::Convert(count);
 				state.value += addition;
 			}
 		}
