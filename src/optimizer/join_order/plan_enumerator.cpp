@@ -97,12 +97,12 @@ unique_ptr<JoinNode> PlanEnumerator::CreateJoinNodeFromDPJoinNode(DPJoinNode dp_
 		res->cardinality = dp_node.cardinality;
 		return res;
 	} else {
-		auto left_DPJoinNode = plans.find(dp_node.left_set);
-		auto right_DPJoinNode = plans.find(dp_node.right_set);
-		D_ASSERT(left_DPJoinNode->second);
-		D_ASSERT(right_DPJoinNode->second);
-		auto left = CreateJoinNodeFromDPJoinNode(*left_DPJoinNode->second);
-		auto right = CreateJoinNodeFromDPJoinNode(*right_DPJoinNode->second);
+		auto left_dp_join_node = plans.find(dp_node.left_set);
+		auto right_dp_join_node = plans.find(dp_node.right_set);
+		D_ASSERT(left_dp_join_node->second);
+		D_ASSERT(right_dp_join_node->second);
+		auto left = CreateJoinNodeFromDPJoinNode(*left_dp_join_node->second);
+		auto right = CreateJoinNodeFromDPJoinNode(*right_dp_join_node->second);
 		auto res = make_uniq<JoinNode>(dp_node.set, dp_node.info, std::move(left), std::move(right), dp_node.cost);
 		res->cardinality = dp_node.cardinality;
 		return res;
