@@ -1818,12 +1818,13 @@ with `duckdb_free`.
 
 * type: The logical type object
 * values: The array to store the values in
-* length: The length of the values parameter
-* returns: The number of values written to values. This will be the min betwen
-* the lenght parameter and the size of the enum dictionary size (i.e.
-* `duckdb_enum_dictionary_size`).
+* values_length: The length of the values parameter
+* count: The number of values written into the values parameter. On success this
+will be the min between `values_length` and the size of the enum dictionary (i.e.
+`duckdb_enum_dictionary_size`)
+* returns: The duckdb state. Returns DuckDBError if values is null or type isn't an enum.
 */
-idx_t duckdb_enum_values(duckdb_logical_type type, char **values, idx_t length);
+DUCKDB_API duckdb_state duckdb_enum_values(duckdb_logical_type type, char **values, idx_t values_length, idx_t *count);
 
 /*!
 Retrieves the child type of the given list type.
