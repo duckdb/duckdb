@@ -47,7 +47,7 @@ void TemporaryMemoryManager::UpdateConfiguration(ClientContext &context) {
 
 	memory_limit = MAXIMUM_MEMORY_LIMIT_RATIO * double(buffer_manager.GetMaxMemory());
 	has_temporary_directory = buffer_manager.HasTemporaryDirectory();
-	num_threads = task_scheduler.NumberOfThreads();
+	num_threads = NumericCast<idx_t>(task_scheduler.NumberOfThreads());
 	query_max_memory = buffer_manager.GetQueryMaxMemory();
 }
 

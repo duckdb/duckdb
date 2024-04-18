@@ -448,7 +448,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 			auto &table_info = storage.info;
 			auto &block_manager = TableIOManager::Get(storage).GetBlockManagerForRowData();
 			lstate.local_collection =
-			    make_uniq<RowGroupCollection>(table_info, block_manager, insert_types, MAX_ROW_ID);
+			    make_uniq<RowGroupCollection>(table_info, block_manager, insert_types, NumericCast<idx_t>(MAX_ROW_ID));
 			lstate.local_collection->InitializeEmpty();
 			lstate.local_collection->InitializeAppend(lstate.local_append_state);
 			lstate.writer = &gstate.table.GetStorage().CreateOptimisticWriter(context.client);
@@ -540,7 +540,7 @@ SourceResultType PhysicalInsert::GetData(ExecutionContext &context, DataChunk &c
 	auto &insert_gstate = sink_state->Cast<InsertGlobalState>();
 	if (!return_chunk) {
 		chunk.SetCardinality(1);
-		chunk.SetValue(0, 0, Value::BIGINT(insert_gstate.insert_count));
+		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(insert_gstate.insert_count)));
 		return SourceResultType::FINISHED;
 	}
 

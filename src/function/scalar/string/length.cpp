@@ -29,14 +29,14 @@ struct GraphemeCountOperator {
 struct StrLenOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
-		return input.GetSize();
+		return UnsafeNumericCast<TR>(input.GetSize());
 	}
 };
 
 struct OctetLenOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
-		return Bit::OctetLength(input);
+		return UnsafeNumericCast<TR>(Bit::OctetLength(input));
 	}
 };
 
@@ -44,7 +44,7 @@ struct OctetLenOperator {
 struct BitLenOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
-		return 8 * input.GetSize();
+		return UnsafeNumericCast<TR>(8 * input.GetSize());
 	}
 };
 
@@ -52,7 +52,7 @@ struct BitLenOperator {
 struct BitStringLenOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
-		return Bit::BitLength(input);
+		return UnsafeNumericCast<TR>(Bit::BitLength(input));
 	}
 };
 
@@ -70,12 +70,11 @@ static unique_ptr<BaseStatistics> LengthPropagateStats(ClientContext &context, F
 //------------------------------------------------------------------
 // ARRAY / LIST LENGTH
 //------------------------------------------------------------------
-
 static void ListLengthFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input = args.data[0];
 	D_ASSERT(input.GetType().id() == LogicalTypeId::LIST);
-	UnaryExecutor::Execute<list_entry_t, int64_t>(input, result, args.size(),
-	                                              [](list_entry_t input) { return input.length; });
+	UnaryExecutor::Execute<list_entry_t, int64_t>(
+	    input, result, args.size(), [](list_entry_t input) { return UnsafeNumericCast<int64_t>(input.length); });
 	if (args.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
@@ -83,9 +82,31 @@ static void ListLengthFunction(DataChunk &args, ExpressionState &state, Vector &
 
 static void ArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input = args.data[0];
-	// If the input is an array, the length is constant
+
+	UnifiedVectorFormat format;
+	args.data[0].ToUnifiedFormat(args.size(), format);
+
+	// for arrays the length is constant
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	ConstantVector::GetData<int64_t>(result)[0] = static_cast<int64_t>(ArrayType::GetSize(input.GetType()));
+
+	// but we do need to take null values into account
+	if (format.validity.AllValid()) {
+		// if there are no null values we can just return the constant
+		return;
+	}
+	// otherwise we flatten and inherit the null values of the parent
+	result.Flatten(args.size());
+	auto &result_validity = FlatVector::Validity(result);
+	for (idx_t r = 0; r < args.size(); r++) {
+		auto idx = format.sel->get_index(r);
+		if (!format.validity.RowIsValid(idx)) {
+			result_validity.SetInvalid(r);
+		}
+	}
+	if (args.AllConstant()) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
 }
 
 static unique_ptr<FunctionData> ArrayOrListLengthBind(ClientContext &context, ScalarFunction &bound_function,
@@ -117,7 +138,7 @@ static void ListLengthBinaryFunction(DataChunk &args, ExpressionState &, Vector 
 		    if (dimension != 1) {
 			    throw NotImplementedException("array_length for lists with dimensions other than 1 not implemented");
 		    }
-		    return input.length;
+		    return UnsafeNumericCast<int64_t>(input.length);
 	    });
 	if (args.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -153,7 +174,7 @@ static void ArrayLengthBinaryFunction(DataChunk &args, ExpressionState &state, V
 			throw OutOfRangeException(StringUtil::Format(
 			    "array_length dimension '%lld' out of range (min: '1', max: '%lld')", dimension, max_dimension));
 		}
-		return dimensions[dimension - 1];
+		return dimensions[UnsafeNumericCast<idx_t>(dimension - 1)];
 	});
 
 	if (args.AllConstant()) {
@@ -175,7 +196,7 @@ static unique_ptr<FunctionData> ArrayOrListLengthBinaryBind(ClientContext &conte
 		vector<int64_t> dimensions;
 		while (true) {
 			if (type.id() == LogicalTypeId::ARRAY) {
-				dimensions.push_back(ArrayType::GetSize(type));
+				dimensions.push_back(UnsafeNumericCast<int64_t>(ArrayType::GetSize(type)));
 				type = ArrayType::GetChildType(type);
 			} else {
 				break;

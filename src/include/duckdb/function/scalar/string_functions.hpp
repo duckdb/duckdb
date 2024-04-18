@@ -78,7 +78,7 @@ struct LengthFun {
 				return length;
 			}
 		}
-		return input_length;
+		return UnsafeNumericCast<TR>(input_length);
 	}
 };
 

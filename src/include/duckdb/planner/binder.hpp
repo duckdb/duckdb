@@ -37,6 +37,7 @@ class ViewCatalogEntry;
 class TableMacroCatalogEntry;
 class UpdateSetInfo;
 class LogicalProjection;
+class LogicalVacuum;
 
 class ColumnList;
 class ExternalDependency;
@@ -195,6 +196,8 @@ public:
 	void BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert &insert, UpdateSetInfo &set_info,
 	                                TableCatalogEntry &table, TableStorageInfo &storage_info);
 	void BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &table, InsertStatement &stmt);
+
+	void BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> &root);
 
 	static void BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema);
 	static void BindLogicalType(ClientContext &context, LogicalType &type, optional_ptr<Catalog> catalog = nullptr,

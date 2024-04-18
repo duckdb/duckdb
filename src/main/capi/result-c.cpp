@@ -117,7 +117,7 @@ struct CDecimalConverter : public CBaseConverter {
 	template <class SRC, class DST>
 	static DST Convert(SRC input) {
 		duckdb_hugeint result;
-		result.lower = input;
+		result.lower = static_cast<uint64_t>(input);
 		result.upper = 0;
 		return result;
 	}
@@ -350,7 +350,7 @@ bool DeprecatedMaterializeResult(duckdb_result *result) {
 		// update total changes
 		auto row_changes = materialized.GetValue(0, 0);
 		if (!row_changes.IsNull() && row_changes.DefaultTryCastAs(LogicalType::BIGINT)) {
-			result->__deprecated_rows_changed = row_changes.GetValue<int64_t>();
+			result->__deprecated_rows_changed = NumericCast<idx_t>(row_changes.GetValue<int64_t>());
 		}
 	}
 	// now write the data

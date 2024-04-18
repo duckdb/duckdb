@@ -63,7 +63,7 @@ static unique_ptr<LocalTableFunctionState> UnnestLocalInit(ExecutionContext &con
 static unique_ptr<GlobalTableFunctionState> UnnestInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->Cast<UnnestBindData>();
 	auto result = make_uniq<UnnestGlobalState>();
-	auto ref = make_uniq<BoundReferenceExpression>(bind_data.input_type, 0);
+	auto ref = make_uniq<BoundReferenceExpression>(bind_data.input_type, 0U);
 	auto bound_unnest = make_uniq<BoundUnnestExpression>(ListType::GetChildType(bind_data.input_type));
 	bound_unnest->child = std::move(ref);
 	result->select_list.push_back(std::move(bound_unnest));

@@ -480,7 +480,7 @@ void BasicColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 		auto &page_info = state.page_info[page_idx];
 		if (page_info.row_count == 0) {
 			D_ASSERT(page_idx + 1 == state.page_info.size());
-			state.page_info.erase(state.page_info.begin() + page_idx);
+			state.page_info.erase_at(page_idx);
 			break;
 		}
 		PageWriteInformation write_info;

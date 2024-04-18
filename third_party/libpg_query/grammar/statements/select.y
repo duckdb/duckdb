@@ -2793,9 +2793,8 @@ indirection_expr:
 				}
 			| case_expr
 				{ $$ = $1; }
-			| '[' opt_expr_list_opt_comma ']' {
-				PGFuncCall *n = makeFuncCall(SystemFuncName("list_value"), $2, @2);
-				$$ = (PGNode *) n;
+			 | list_expr {
+                $$ = $1;
 			}
 			| list_comprehension {
 				$$ = $1;
@@ -2829,7 +2828,11 @@ indirection_expr:
 				}
 		;
 
-
+list_expr:  '[' opt_expr_list_opt_comma ']' {
+                PGFuncCall *n = makeFuncCall(SystemFuncName("list_value"), $2, @2);
+                $$ = (PGNode *) n;
+            }
+        ;
 
 struct_expr:		'{' dict_arguments_opt_comma '}'
 				{

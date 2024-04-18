@@ -19,7 +19,7 @@ struct ValidityMask;
 template <typename V>
 struct TemplatedValidityData {
 	static constexpr const int BITS_PER_VALUE = sizeof(V) * 8;
-	static constexpr const V MAX_ENTRY = ~V(0);
+	static constexpr const V MAX_ENTRY = V(~V(0));
 
 public:
 	inline explicit TemplatedValidityData(idx_t count) {
