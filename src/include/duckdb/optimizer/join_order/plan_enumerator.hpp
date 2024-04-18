@@ -30,8 +30,7 @@ class PlanEnumerator {
 public:
 	explicit PlanEnumerator(QueryGraphManager &query_graph_manager, CostModel &cost_model,
 	                        const QueryGraphEdges &query_graph)
-	    : query_graph(query_graph), query_graph_manager(query_graph_manager), cost_model(cost_model),
-	      full_plan_found(false), must_update_full_plan(false) {
+	    : query_graph(query_graph), query_graph_manager(query_graph_manager), cost_model(cost_model) {
 	}
 
 	//! Perform the join order solving
@@ -51,8 +50,6 @@ private:
 	//! A map to store the optimal join plan found for a specific JoinRelationSet*
 	reference_map_t<JoinRelationSet, unique_ptr<DPJoinNode>> plans;
 
-	bool full_plan_found;
-	bool must_update_full_plan;
 	unordered_set<string> join_nodes_in_full_plan;
 
 	unique_ptr<DPJoinNode> CreateJoinTree(JoinRelationSet &set,

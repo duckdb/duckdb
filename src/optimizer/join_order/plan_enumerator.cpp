@@ -149,7 +149,7 @@ unique_ptr<JoinNode> PlanEnumerator::EmitPair(JoinRelationSet &left, JoinRelatio
 		old_cost = entry->second->cost;
 	}
 	if (entry == plans.end() || new_cost < old_cost) {
-		// the new plan costs less than the old plan. Update our DP tree and cost tree
+		// the new plan costs less than the old plan. Update our DP table.
 		plans[new_set] = std::move(new_plan);
 		return CreateJoinNodeFromDPJoinNode(*plans[new_set]);
 	}
@@ -163,7 +163,7 @@ bool PlanEnumerator::TryEmitPair(JoinRelationSet &left, JoinRelationSet &right,
 	// If a full plan is created, it's possible a node in the plan gets updated. When this happens, make sure you keep
 	// emitting pairs until you emit another final plan. Another final plan is guaranteed to be produced because of
 	// our symmetry guarantees.
-	if (pairs >= 10000 && !must_update_full_plan) {
+	if (pairs >= 10000) {
 		// when the amount of pairs gets too large we exit the dynamic programming and resort to a greedy algorithm
 		// FIXME: simple heuristic currently
 		// at 10K pairs stop searching exactly and switch to heuristic
@@ -195,7 +195,7 @@ bool PlanEnumerator::EmitCSG(JoinRelationSet &node) {
 		D_ASSERT(neighbors[i] > neighbors[i + 1]);
 	}
 
-	// Dphyp paper missiing this.
+	// Dphyp paper missing this.
 	// Because we are traversing in reverse order, we need to add neighbors whose number is smaller than the current
 	// node to exclusion_set
 	// This avoids duplicated enumeration
@@ -414,7 +414,6 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 			best_left = smallest_index[0];
 			best_right = smallest_index[1];
 
-			//			UpdateDPTree(*best_connection);
 			// the code below assumes best_right > best_left
 			if (best_left > best_right) {
 				std::swap(best_left, best_right);
