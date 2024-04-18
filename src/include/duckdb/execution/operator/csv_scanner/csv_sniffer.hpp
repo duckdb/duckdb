@@ -153,6 +153,8 @@ private:
 	//! Functions that performs detection for date and timestamp formats
 	void DetectDateAndTimeStampFormats(CSVStateMachine &candidate, const LogicalType &sql_type, const string &separator,
 	                                   string_t &dummy_val);
+	//! If a string_t value can be cast to a type
+	inline bool ValueIsCastable(string_t &value, LogicalType &type);
 
 	//! Variables for Type Detection
 	//! Format Candidates for Date and Timestamp Types

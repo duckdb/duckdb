@@ -121,6 +121,58 @@ void CSVSniffer::SetDateFormat(CSVStateMachine &candidate, const string &format_
 	candidate.dialect_options.date_format[sql_type].Set(strpformat, false);
 }
 
+inline bool CSVSniffer::ValueIsCastable(string_t &value, LogicalType &type) {
+	bool success = true;
+	switch (type.id()) {
+	case LogicalTypeId::TINYINT:
+		return TrySimpleIntegerCast(value_ptr, size, static_cast<int8_t *>(vector_ptr[chunk_col_id])[number_of_rows],
+		                            false);
+	case LogicalTypeId::SMALLINT:
+		return TrySimpleIntegerCast(value_ptr, size, static_cast<int16_t *>(vector_ptr[chunk_col_id])[number_of_rows],
+		                           false);
+	case LogicalTypeId::INTEGER:
+		return TrySimpleIntegerCast(value_ptr, size,
+		                               static_cast<int32_t *>(vector_ptr[chunk_col_id])[number_of_rows], false);
+	case LogicalTypeId::BIGINT:
+		return TrySimpleIntegerCast(value_ptr, size,
+		                               static_cast<int64_t *>(vector_ptr[chunk_col_id])[number_of_rows], false);
+	case LogicalTypeId::UTINYINT:
+		return TrySimpleIntegerCast<uint8_t, false>(
+		    value_ptr, size, static_cast<uint8_t *>(vector_ptr[chunk_col_id])[number_of_rows], false);
+	case LogicalTypeId::USMALLINT:
+		return TrySimpleIntegerCast<uint16_t, false>(
+		    value_ptr, size, static_cast<uint16_t *>(vector_ptr[chunk_col_id])[number_of_rows], false);
+	case LogicalTypeId::UINTEGER:
+		return TrySimpleIntegerCast<uint32_t, false>(
+		    value_ptr, size, static_cast<uint32_t *>(vector_ptr[chunk_col_id])[number_of_rows], false);
+	case LogicalTypeId::UBIGINT:
+		return TrySimpleIntegerCast<uint64_t, false>(
+		    value_ptr, size, static_cast<uint64_t *>(vector_ptr[chunk_col_id])[number_of_rows], false);
+	case LogicalTypeId::DOUBLE:
+		return TryDoubleCast<double>(value_ptr, size, static_cast<double *>(vector_ptr[chunk_col_id])[number_of_rows],
+		                          false, state_machine.options.decimal_separator[0]);
+	case LogicalTypeId::FLOAT:
+		return TryDoubleCast<float>(value_ptr, size, static_cast<float *>(vector_ptr[chunk_col_id])[number_of_rows],
+		                               false, state_machine.options.decimal_separator[0]);
+	case LogicalTypeId::DATE: {
+		idx_t pos;
+		bool special;
+		return Date::TryConvertDate(value_ptr, size, pos,
+		                               static_cast<date_t *>(vector_ptr[chunk_col_id])[number_of_rows], special, false);
+	}
+	case LogicalTypeId::TIMESTAMP:
+		return Timestamp::TryConvertTimestamp(
+		              value_ptr, size, static_cast<timestamp_t *>(vector_ptr[chunk_col_id])[number_of_rows]) ==
+		          TimestampCastResult::SUCCESS;
+
+	case LogicalTypeId::VARCHAR:
+		return true;
+
+	case default:{
+		// We do Value Try Cast for non-basic types.
+	}
+	}
+};
 void CSVSniffer::InitializeDateAndTimeStampDetection(CSVStateMachine &candidate, const string &separator,
                                                      const LogicalType &sql_type) {
 	auto &format_candidate = format_candidates[sql_type.id()];
