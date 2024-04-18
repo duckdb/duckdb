@@ -20,9 +20,12 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::VACUUM;
 
 public:
-	PhysicalVacuum(unique_ptr<VacuumInfo> info, idx_t estimated_cardinality);
+	PhysicalVacuum(unique_ptr<VacuumInfo> info, optional_ptr<TableCatalogEntry> table,
+	               unordered_map<idx_t, idx_t> column_id_map, idx_t estimated_cardinality);
 
 	unique_ptr<VacuumInfo> info;
+	optional_ptr<TableCatalogEntry> table;
+	unordered_map<idx_t, idx_t> column_id_map;
 
 public:
 	// Source interface

@@ -220,6 +220,7 @@ struct IEJoinUnion {
 		DataChunk payload;
 		payload.Initialize(Allocator::DefaultAllocator(), gstate.payload_layout.GetTypes());
 		for (;;) {
+			payload.Reset();
 			scanner.Scan(payload);
 			const auto count = payload.size();
 			if (!count) {
@@ -301,6 +302,7 @@ idx_t IEJoinUnion::AppendKey(SortedTable &table, ExpressionExecutor &executor, S
 
 	idx_t inserted = 0;
 	for (auto rid = base; table_idx < valid;) {
+		scanned.Reset();
 		scanner.Scan(scanned);
 
 		// NULLs are at the end, so stop when we reach them
@@ -323,7 +325,7 @@ idx_t IEJoinUnion::AppendKey(SortedTable &table, ExpressionExecutor &executor, S
 		payload.data[0].Sequence(rid, increment, scan_count);
 		payload.SetCardinality(scan_count);
 		keys.Fuse(payload);
-		rid += increment * scan_count;
+		rid += increment * UnsafeNumericCast<int64_t>(scan_count);
 
 		// Sort on the sort columns (which will no longer be needed)
 		keys.Split(payload, payload_idx);
@@ -383,7 +385,7 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 	payload_layout.Initialize(types);
 
 	// Sort on the first expression
-	auto ref = make_uniq<BoundReferenceExpression>(order1.expression->return_type, 0);
+	auto ref = make_uniq<BoundReferenceExpression>(order1.expression->return_type, 0U);
 	vector<BoundOrderByNode> orders;
 	orders.emplace_back(order1.type, order1.null_order, std::move(ref));
 
@@ -424,7 +426,7 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 
 	// Sort on the first expression
 	orders.clear();
-	ref = make_uniq<BoundReferenceExpression>(order2.expression->return_type, 0);
+	ref = make_uniq<BoundReferenceExpression>(order2.expression->return_type, 0U);
 	orders.emplace_back(order2.type, order2.null_order, std::move(ref));
 
 	ExpressionExecutor executor(context);
@@ -432,7 +434,7 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 
 	l2 = make_uniq<SortedTable>(context, orders, payload_layout);
 	for (idx_t base = 0, block_idx = 0; block_idx < l1->BlockCount(); ++block_idx) {
-		base += AppendKey(*l1, executor, *l2, 1, base, block_idx);
+		base += AppendKey(*l1, executor, *l2, 1, NumericCast<int64_t>(base), block_idx);
 	}
 
 	Sort(*l2);

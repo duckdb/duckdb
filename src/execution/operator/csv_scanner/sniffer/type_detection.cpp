@@ -50,7 +50,8 @@ static bool StartsWithNumericDate(string &separator, const string &value) {
 	}
 
 	//	second literal must match first
-	if (((field3 - literal2) != (field2 - literal1)) || strncmp(literal1, literal2, (field2 - literal1)) != 0) {
+	if (((field3 - literal2) != (field2 - literal1)) ||
+	    strncmp(literal1, literal2, NumericCast<size_t>((field2 - literal1))) != 0) {
 		return false;
 	}
 
@@ -69,7 +70,7 @@ static bool StartsWithNumericDate(string &separator, const string &value) {
 
 string GenerateDateFormat(const string &separator, const char *format_template) {
 	string format_specifier = format_template;
-	auto amount_of_dashes = std::count(format_specifier.begin(), format_specifier.end(), '-');
+	auto amount_of_dashes = NumericCast<idx_t>(std::count(format_specifier.begin(), format_specifier.end(), '-'));
 	// All our date formats must have at least one -
 	D_ASSERT(amount_of_dashes);
 	string result;
@@ -278,7 +279,7 @@ void CSVSniffer::DetectTypes() {
 		// it's good if the dialect creates more non-varchar columns, but only if we sacrifice < 30% of
 		// best_num_cols.
 		if (varchar_cols < min_varchar_cols && info_sql_types_candidates.size() > (max_columns_found * 0.7) &&
-		    (!options.ignore_errors || candidate->error_handler->errors.size() < min_errors)) {
+		    (!options.ignore_errors.GetValue() || candidate->error_handler->errors.size() < min_errors)) {
 			min_errors = candidate->error_handler->errors.size();
 			best_header_row.clear();
 			// we have a new best_options candidate

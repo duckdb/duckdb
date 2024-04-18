@@ -22,28 +22,33 @@ struct FileHandle;
 #define INVALID_BLOCK (-1)
 //! The maximum block id is 2^62
 #define MAXIMUM_BLOCK 4611686018427388000LL
-//! The default block size
-#define DEFAULT_BLOCK_ALLOC_SIZE 262144
+//! The default block allocation size.
+#define DEFAULT_BLOCK_ALLOC_SIZE 262144ULL
+//! The minimum block allocation size. This is the minimum size we test in our nightly tests.
+#define MIN_BLOCK_ALLOC_SIZE 16384
 
 using block_id_t = int64_t;
 
 struct Storage {
 	//! The size of a hard disk sector, only really needed for Direct IO
-	constexpr static idx_t SECTOR_SIZE = 4096;
+	constexpr static idx_t SECTOR_SIZE = 4096U;
 	//! Block header size for blocks written to the storage
 	constexpr static idx_t BLOCK_HEADER_SIZE = sizeof(uint64_t);
-	//! Size of a memory slot managed by the StorageManager. This is the quantum of allocation for Blocks on DuckDB. We
-	//! default to 256KB. (1 << 18)
+	//! Size of a memory slot managed by the StorageManager and the BlockManager.
+	//! Defaults to DEFAULT_BLOCK_ALLOC_SIZE.
 	constexpr static idx_t BLOCK_ALLOC_SIZE = DEFAULT_BLOCK_ALLOC_SIZE;
-	//! The actual memory space that is available within the blocks
+	//! The actual memory space that is available within a block.
 	constexpr static idx_t BLOCK_SIZE = BLOCK_ALLOC_SIZE - BLOCK_HEADER_SIZE;
 	//! The size of the headers. This should be small and written more or less atomically by the hard disk. We default
 	//! to the page size, which is 4KB. (1 << 12)
-	constexpr static idx_t FILE_HEADER_SIZE = 4096;
+	constexpr static idx_t FILE_HEADER_SIZE = 4096U;
 	//! The number of rows per row group (must be a multiple of the vector size)
 	constexpr static const idx_t ROW_GROUP_SIZE = STANDARD_ROW_GROUPS_SIZE;
 	//! The number of vectors per row group
 	constexpr static const idx_t ROW_GROUP_VECTOR_COUNT = ROW_GROUP_SIZE / STANDARD_VECTOR_SIZE;
+
+	//! Ensures that a user-provided block allocation size matches all requirements.
+	static void VerifyBlockAllocSize(const idx_t block_alloc_size);
 };
 
 //! The version number of the database storage format
@@ -66,10 +71,10 @@ struct MainHeader {
 	static void CheckMagicBytes(FileHandle &handle);
 
 	string LibraryGitDesc() {
-		return string((char *)library_git_desc, 0, MAX_VERSION_SIZE);
+		return string(char_ptr_cast(library_git_desc), 0, MAX_VERSION_SIZE);
 	}
 	string LibraryGitHash() {
-		return string((char *)library_git_hash, 0, MAX_VERSION_SIZE);
+		return string(char_ptr_cast(library_git_hash), 0, MAX_VERSION_SIZE);
 	}
 
 	void Write(WriteStream &ser);
@@ -94,8 +99,8 @@ struct DatabaseHeader {
 	//! The number of blocks that is in the file as of this database header. If the file is larger than BLOCK_SIZE *
 	//! block_count any blocks appearing AFTER block_count are implicitly part of the free_list.
 	uint64_t block_count;
-	//! The block size of the database file
-	idx_t block_size;
+	//! The allocation size of blocks in this database file. Defaults to default_block_alloc_size (DBConfig).
+	idx_t block_alloc_size;
 	//! The vector size of the database file
 	idx_t vector_size;
 
@@ -110,6 +115,12 @@ struct DatabaseHeader {
 #endif
 #if (STANDARD_ROW_GROUPS_SIZE < STANDARD_VECTOR_SIZE)
 #error Row groups must be able to hold at least one vector
+#endif
+#if (DEFAULT_BLOCK_ALLOC_SIZE & (DEFAULT_BLOCK_ALLOC_SIZE - 1) != 0)
+#error The default block allocation size must be a power of two
+#endif
+#if (MIN_BLOCK_ALLOC_SIZE & (MIN_BLOCK_ALLOC_SIZE - 1) != 0)
+#error The minimum block allocation size must be a power of two
 #endif
 
 static_assert(Storage::BLOCK_ALLOC_SIZE % Storage::SECTOR_SIZE == 0,

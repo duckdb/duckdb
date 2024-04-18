@@ -313,7 +313,7 @@ static string DrawPadded(const string &str, idx_t width) {
 	} else {
 		width -= str.size();
 		auto half_spaces = width / 2;
-		auto extra_left_space = width % 2 != 0 ? 1 : 0;
+		auto extra_left_space = NumericCast<idx_t>(width % 2 != 0 ? 1 : 0);
 		return string(half_spaces + extra_left_space, ' ') + str + string(half_spaces, ' ');
 	}
 }
@@ -470,7 +470,7 @@ static string JSONSanitize(const string &text) {
 	return result;
 }
 
-static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int depth = 1) {
+static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, idx_t depth = 1) {
 	ss << string(depth * 3, ' ') << " {\n";
 	ss << string(depth * 3, ' ') << "   \"name\": \"" + JSONSanitize(node.name) + "\",\n";
 	ss << string(depth * 3, ' ') << "   \"timing\":" + to_string(node.info.time) + ",\n";

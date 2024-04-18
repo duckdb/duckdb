@@ -46,14 +46,14 @@ public:
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
 struct ExecuteFunctionState : public ExpressionState {
 	ExecuteFunctionState(const Expression &expr, ExpressionExecutorState &root);
-	~ExecuteFunctionState();
+	~ExecuteFunctionState() override;
 
 	unique_ptr<FunctionLocalState> local_state;
 

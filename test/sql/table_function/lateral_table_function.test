@@ -1,0 +1,17 @@
+# name: test/sql/table_function/lateral_table_function.test
+# description: Test lateral join table function parameters for functions that do not support it
+# group: [table_function]
+
+statement ok
+pragma enable_verification
+
+statement error
+SELECT * FROM read_csv(thisishopefullyanonexistentfile)
+----
+No files found that match the pattern
+
+# lateral join parameter
+statement error
+SELECT * FROM (SELECT 'myfile.csv' AS thisishopefullyanonexistentfile), read_csv(thisishopefullyanonexistentfile)
+----
+does not support lateral join column parameters

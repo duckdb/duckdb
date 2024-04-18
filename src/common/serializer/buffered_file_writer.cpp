@@ -15,7 +15,7 @@ BufferedFileWriter::BufferedFileWriter(FileSystem &fs, const string &path_p, Fil
 }
 
 int64_t BufferedFileWriter::GetFileSize() {
-	return fs.GetFileSize(*handle) + offset;
+	return fs.GetFileSize(*handle) + NumericCast<int64_t>(offset);
 }
 
 idx_t BufferedFileWriter::GetTotalWritten() {
@@ -23,7 +23,7 @@ idx_t BufferedFileWriter::GetTotalWritten() {
 }
 
 void BufferedFileWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
-	if (write_size >= (2 * FILE_BUFFER_SIZE - offset)) {
+	if (write_size >= (2ULL * FILE_BUFFER_SIZE - offset)) {
 		idx_t to_copy = 0;
 		// Check before performing direct IO if there is some data in the current internal buffer.
 		// If so, then fill the buffer (to avoid to small write operation), flush it and then write
@@ -37,13 +37,14 @@ void BufferedFileWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
 			Flush(); // Flush buffer before writing every things else
 		}
 		idx_t remaining_to_write = write_size - to_copy;
-		fs.Write(*handle, const_cast<data_ptr_t>(buffer + to_copy), remaining_to_write);
+		fs.Write(*handle, const_cast<data_ptr_t>(buffer + to_copy), // NOLINT: wrong API in Write
+		         UnsafeNumericCast<int64_t>(remaining_to_write));
 		total_written += remaining_to_write;
 	} else {
 		// first copy anything we can from the buffer
 		const_data_ptr_t end_ptr = buffer + write_size;
 		while (buffer < end_ptr) {
-			idx_t to_write = MinValue<idx_t>((end_ptr - buffer), FILE_BUFFER_SIZE - offset);
+			idx_t to_write = MinValue<idx_t>(UnsafeNumericCast<idx_t>((end_ptr - buffer)), FILE_BUFFER_SIZE - offset);
 			D_ASSERT(to_write > 0);
 			memcpy(data.get() + offset, buffer, to_write);
 			offset += to_write;
@@ -59,7 +60,7 @@ void BufferedFileWriter::Flush() {
 	if (offset == 0) {
 		return;
 	}
-	fs.Write(*handle, data.get(), offset);
+	fs.Write(*handle, data.get(), UnsafeNumericCast<int64_t>(offset));
 	total_written += offset;
 	offset = 0;
 }
@@ -70,11 +71,11 @@ void BufferedFileWriter::Sync() {
 }
 
 void BufferedFileWriter::Truncate(int64_t size) {
-	uint64_t persistent = fs.GetFileSize(*handle);
-	D_ASSERT((uint64_t)size <= persistent + offset);
-	if (persistent <= (uint64_t)size) {
+	auto persistent = fs.GetFileSize(*handle);
+	D_ASSERT(size <= persistent + NumericCast<int64_t>(offset));
+	if (persistent <= size) {
 		// truncating into the pending write buffer.
-		offset = size - persistent;
+		offset = NumericCast<idx_t>(size - persistent);
 	} else {
 		// truncate the physical file on disk
 		handle->Truncate(size);

@@ -18,12 +18,16 @@ public:
 	virtual FileSystem &GetFileSystem() const = 0;
 	virtual optional_ptr<FileOpener> GetOpener() const = 0;
 
-	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
-	                                optional_ptr<FileOpener> opener = nullptr) override {
+	void VerifyNoOpener(optional_ptr<FileOpener> opener) {
 		if (opener) {
 			throw InternalException("OpenerFileSystem cannot take an opener - the opener is pushed automatically");
 		}
-		return GetFileSystem().OpenFile(path, flags, GetOpener().get());
+	}
+
+	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
+	                                optional_ptr<FileOpener> opener = nullptr) override {
+		VerifyNoOpener(opener);
+		return GetFileSystem().OpenFile(path, flags, GetOpener());
 	}
 
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
@@ -60,27 +64,29 @@ public:
 		GetFileSystem().FileSync(handle);
 	}
 
-	bool DirectoryExists(const string &directory) override {
-		return GetFileSystem().DirectoryExists(directory);
+	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) override {
+		VerifyNoOpener(opener);
+		return GetFileSystem().DirectoryExists(directory, GetOpener());
 	}
-	void CreateDirectory(const string &directory) override {
-		return GetFileSystem().CreateDirectory(directory);
+	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) override {
+		VerifyNoOpener(opener);
+		return GetFileSystem().CreateDirectory(directory, GetOpener());
 	}
 
-	void RemoveDirectory(const string &directory) override {
-		return GetFileSystem().RemoveDirectory(directory);
+	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) override {
+		VerifyNoOpener(opener);
+		return GetFileSystem().RemoveDirectory(directory, GetOpener());
 	}
 
 	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
 	               FileOpener *opener = nullptr) override {
-		if (opener) {
-			throw InternalException("OpenerFileSystem cannot take an opener - the opener is pushed automatically");
-		}
+		VerifyNoOpener(opener);
 		return GetFileSystem().ListFiles(directory, callback, GetOpener().get());
 	}
 
-	void MoveFile(const string &source, const string &target) override {
-		GetFileSystem().MoveFile(source, target);
+	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) override {
+		VerifyNoOpener(opener);
+		GetFileSystem().MoveFile(source, target, GetOpener());
 	}
 
 	string GetHomeDirectory() override {
@@ -91,15 +97,18 @@ public:
 		return FileSystem::ExpandPath(path, GetOpener());
 	}
 
-	bool FileExists(const string &filename) override {
-		return GetFileSystem().FileExists(filename);
+	bool FileExists(const string &filename, optional_ptr<FileOpener> opener) override {
+		VerifyNoOpener(opener);
+		return GetFileSystem().FileExists(filename, GetOpener());
 	}
 
-	bool IsPipe(const string &filename) override {
-		return GetFileSystem().IsPipe(filename);
+	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener) override {
+		VerifyNoOpener(opener);
+		return GetFileSystem().IsPipe(filename, GetOpener());
 	}
-	void RemoveFile(const string &filename) override {
-		GetFileSystem().RemoveFile(filename);
+	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener) override {
+		VerifyNoOpener(opener);
+		GetFileSystem().RemoveFile(filename, GetOpener());
 	}
 
 	string PathSeparator(const string &path) override {
@@ -107,14 +116,32 @@ public:
 	}
 
 	vector<string> Glob(const string &path, FileOpener *opener = nullptr) override {
-		if (opener) {
-			throw InternalException("OpenerFileSystem cannot take an opener - the opener is pushed automatically");
-		}
+		VerifyNoOpener(opener);
 		return GetFileSystem().Glob(path, GetOpener().get());
 	}
 
 	std::string GetName() const override {
 		return "OpenerFileSystem - " + GetFileSystem().GetName();
+	}
+
+	void RegisterSubSystem(unique_ptr<FileSystem> sub_fs) override {
+		GetFileSystem().RegisterSubSystem(std::move(sub_fs));
+	}
+
+	void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs) override {
+		GetFileSystem().RegisterSubSystem(compression_type, std::move(fs));
+	}
+
+	void UnregisterSubSystem(const string &name) override {
+		GetFileSystem().UnregisterSubSystem(name);
+	}
+
+	void SetDisabledFileSystems(const vector<string> &names) override {
+		GetFileSystem().SetDisabledFileSystems(names);
+	}
+
+	vector<string> ListSubSystems() override {
+		return GetFileSystem().ListSubSystems();
 	}
 };
 

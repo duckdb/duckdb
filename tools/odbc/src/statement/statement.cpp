@@ -375,7 +375,7 @@ SQLRETURN SQL_API SQLTables(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQ
                             SQLSMALLINT name_length3, SQLCHAR *table_type, SQLSMALLINT name_length4) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
 	SQLRETURN ret = ConvertHSTMT(statement_handle, hstmt);
-	if (ret != SQL_SUCCESS) {
+	if (!SQL_SUCCEEDED(ret)) {
 		return ret;
 	}
 

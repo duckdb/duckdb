@@ -48,7 +48,7 @@ public:
 	//! blocks can be evicted
 	void SetLimit(idx_t limit, const char *exception_postscript);
 
-	void IncreaseUsedMemory(MemoryTag tag, idx_t size);
+	void UpdateUsedMemory(MemoryTag tag, int64_t size);
 
 	idx_t GetUsedMemory() const;
 

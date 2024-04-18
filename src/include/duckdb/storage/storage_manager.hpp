@@ -45,8 +45,10 @@ public:
 	static StorageManager &Get(AttachedDatabase &db);
 	static StorageManager &Get(Catalog &catalog);
 
-	//! Initialize a database or load an existing database from the given path
-	void Initialize(optional_ptr<ClientContext> context);
+	//! Initialize a database or load an existing database from the database file path. The block_alloc_size is
+	//! either set, or invalid. If invalid, then DuckDB defaults to the default_block_alloc_size (DBConfig),
+	//! or the file's block allocation size, if it is an existing database.
+	void Initialize(const optional_idx block_alloc_size, optional_ptr<ClientContext> context);
 
 	DatabaseInstance &GetDatabase();
 	AttachedDatabase &GetAttached() {
@@ -73,7 +75,7 @@ public:
 	virtual shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) = 0;
 
 protected:
-	virtual void LoadDatabase(optional_ptr<ClientContext> context = nullptr) = 0;
+	virtual void LoadDatabase(const optional_idx block_alloc_size, optional_ptr<ClientContext> context = nullptr) = 0;
 
 protected:
 	//! The database this storage manager belongs to
@@ -96,7 +98,7 @@ public:
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -104,6 +106,7 @@ public:
 //! Stores database in a single file.
 class SingleFileStorageManager : public StorageManager {
 public:
+	SingleFileStorageManager() = delete;
 	SingleFileStorageManager(AttachedDatabase &db, string path, bool read_only);
 
 	//! The BlockManager to read/store meta information and data in blocks
@@ -121,6 +124,6 @@ public:
 	shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) override;
 
 protected:
-	void LoadDatabase(optional_ptr<ClientContext> context = nullptr) override;
+	void LoadDatabase(const optional_idx block_alloc_size, optional_ptr<ClientContext> context = nullptr) override;
 };
 } // namespace duckdb

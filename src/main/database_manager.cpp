@@ -24,7 +24,8 @@ DatabaseManager &DatabaseManager::Get(AttachedDatabase &db) {
 }
 
 void DatabaseManager::InitializeSystemCatalog() {
-	system->Initialize();
+	// The SYSTEM_DATABASE has no persistent storage.
+	system->Initialize(optional_idx());
 }
 
 optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &context, const string &name) {
@@ -49,7 +50,7 @@ optional_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &co
 
 	const auto name = attached_db->GetName();
 	attached_db->oid = ModifyCatalog();
-	DependencyList dependencies;
+	LogicalDependencyList dependencies;
 	if (default_database.empty()) {
 		default_database = name;
 	}
@@ -150,7 +151,9 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 	// Try to extract the database type from the path.
 	if (options.db_type.empty()) {
 		CheckPathConflict(context, info.path);
-		DBPathAndType::CheckMagicBytes(info.path, options.db_type, config);
+
+		auto &fs = FileSystem::GetFileSystem(context);
+		DBPathAndType::CheckMagicBytes(fs, info.path, options.db_type);
 	}
 
 	// If we are loading a database type from an extension, then we need to check if that extension is loaded.
@@ -164,8 +167,9 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 		return;
 	}
 
-	// The DUCKDB format does not allow unrecognized options.
-	if (!options.unrecognized_option.empty()) {
+	// The DuckDB file format does not allow unrecognized options, except for the block_size option,
+	// which is specific to DuckDB files.
+	if (!options.unrecognized_option.empty() && options.unrecognized_option != "block_size") {
 		throw BinderException("Unrecognized option for attach \"%s\"", options.unrecognized_option);
 	}
 }

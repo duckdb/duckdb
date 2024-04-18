@@ -68,6 +68,9 @@ static void ThrowNumericCastError(FROM in, TO minval, TO maxval) {
 
 template <class TO, class FROM>
 TO NumericCast(FROM val) {
+	if (std::is_same<TO, FROM>::value) {
+		return static_cast<TO>(val);
+	}
 	// some dance around signed-unsigned integer comparison below
 	auto minval = NumericLimits<TO>::Minimum();
 	auto maxval = NumericLimits<TO>::Maximum();

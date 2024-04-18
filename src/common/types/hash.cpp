@@ -12,22 +12,22 @@ namespace duckdb {
 
 template <>
 hash_t Hash(uint64_t val) {
-	return murmurhash64(val);
+	return MurmurHash64(val);
 }
 
 template <>
 hash_t Hash(int64_t val) {
-	return murmurhash64((uint64_t)val);
+	return MurmurHash64((uint64_t)val);
 }
 
 template <>
 hash_t Hash(hugeint_t val) {
-	return murmurhash64(val.lower) ^ murmurhash64(val.upper);
+	return MurmurHash64(val.lower) ^ MurmurHash64(static_cast<uint64_t>(val.upper));
 }
 
 template <>
 hash_t Hash(uhugeint_t val) {
-	return murmurhash64(val.lower) ^ murmurhash64(val.upper);
+	return MurmurHash64(val.lower) ^ MurmurHash64(val.upper);
 }
 
 template <class T>
@@ -47,7 +47,7 @@ hash_t Hash(float val) {
 	static_assert(sizeof(float) == sizeof(uint32_t), "");
 	FloatingPointEqualityTransform<float>::OP(val);
 	uint32_t uval = Load<uint32_t>(const_data_ptr_cast(&val));
-	return murmurhash64(uval);
+	return MurmurHash64(uval);
 }
 
 template <>
@@ -55,7 +55,7 @@ hash_t Hash(double val) {
 	static_assert(sizeof(double) == sizeof(uint64_t), "");
 	FloatingPointEqualityTransform<double>::OP(val);
 	uint64_t uval = Load<uint64_t>(const_data_ptr_cast(&val));
-	return murmurhash64(uval);
+	return MurmurHash64(uval);
 }
 
 template <>

@@ -22,7 +22,7 @@ class TupleDataLayout;
 
 struct TupleDataChunkPart {
 public:
-	TupleDataChunkPart(mutex &lock);
+	explicit TupleDataChunkPart(mutex &lock);
 
 	//! Disable copy constructors
 	TupleDataChunkPart(const TupleDataChunkPart &other) = delete;

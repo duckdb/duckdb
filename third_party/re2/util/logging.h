@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <ostream>
 #include <sstream>
+#include <stdexcept>
 
 #include "util/util.h"
 
@@ -54,23 +55,18 @@
 
 #define VLOG(x) if((x)>0){}else LOG_INFO.stream()
 
-namespace duckdb_re2 {
-
-
 class LogMessage {
  public:
   LogMessage(const char* file, int line)
       : flushed_(false) {
-    stream() << file << ":" << line << ": ";
+//    stream() << file << ":" << line << ": ";
   }
   void Flush() {
-    stream() << "\n";
-	/*// R does not allow us to have a reference to stderr even if we are not using it
-    std::string s = str_.str();
-    size_t n = s.size();
-    if (fwrite(s.data(), 1, n, stderr) < n) {}  // shut up gcc
-    */
-    flushed_ = true;
+//    stream() << "\n";
+//    std::string s = str_.str();
+//    size_t n = s.size();
+//    if (fwrite(s.data(), 1, n, stderr) < n) {}  // shut up gcc
+//    flushed_ = true;
   }
   ~LogMessage() {
     if (!flushed_) {
@@ -90,26 +86,26 @@ class LogMessage {
 // Silence "destructor never returns" warning for ~LogMessageFatal().
 // Since this is a header file, push and then pop to limit the scope.
 #ifdef _MSC_VER
-//#pragma warning(push)
-//#pragma warning(disable: 4722)
+#pragma warning(push)
+#pragma warning(disable: 4722)
 #endif
 
 class LogMessageFatal : public LogMessage {
  public:
   LogMessageFatal(const char* file, int line)
-      : LogMessage(file, line) {}
-  ATTRIBUTE_NORETURN ~LogMessageFatal() {
+      : LogMessage(file, line) {
+	  throw std::runtime_error("RE2 Fatal Error");
+  }
+  ~LogMessageFatal() {
     Flush();
-    abort();
   }
  private:
   LogMessageFatal(const LogMessageFatal&) = delete;
   LogMessageFatal& operator=(const LogMessageFatal&) = delete;
 };
-} // namespace
 
 #ifdef _MSC_VER
-//#pragma warning(pop)
+#pragma warning(pop)
 #endif
 
 #endif  // UTIL_LOGGING_H_
