@@ -39,20 +39,6 @@ static bool FilterIsOnPartition(column_binding_set_t partition_bindings, Express
 	return filter_is_on_partition;
 }
 
-bool FilterPushdown::CanPushdownFilter(vector<column_binding_set_t> window_exprs_partition_bindings, vector<ColumnBinding> bindings) {
-	bool ret = true;
-	for (auto &partition_bindings : window_exprs_partition_bindings) {
-		bool filter_on_partitions_bindings = true;
-		for (auto &binding : bindings) {
-			if (partition_bindings.find(binding) == partition_bindings.end()) {
-				filter_on_partitions_bindings = false;
-			}
-		}
-		ret = ret && filter_on_partitions_bindings;
-	}
-	return ret;
-}
-
 unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_WINDOW);
 	auto &window = op->Cast<LogicalWindow>();
@@ -104,19 +90,14 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOpe
 		auto can_pushdown_filter = true;
 
 		// the filter must be on all partition bindings
-		vector<ColumnBinding> bindings;
-		ExtractFilterBindings(*filters.at(i)->filter, bindings);
-		if (CanPushdownFilter(window_exprs_partition_bindings, bindings)) {
-
+		for (auto &partition_bindings : window_exprs_partition_bindings) {
+			can_pushdown_filter = can_pushdown_filter && FilterIsOnPartition(partition_bindings, *filters.at(i)->filter);
 		}
-//		for (auto &partition_bindings : window_exprs_partition_bindings) {
-//			can_pushdown_filter = can_pushdown_filter && FilterIsOnPartition(partition_bindings, *filters.at(i)->filter);
-//		}
-//		if (can_pushdown_filter) {
-//			pushdown.filters.push_back(std::move(filters.at(i)));
-//		} else {
-//			leftover_filters.push_back(std::move(filters.at(i)));
-//		}
+		if (can_pushdown_filter) {
+			pushdown.filters.push_back(std::move(filters.at(i)));
+		} else {
+			leftover_filters.push_back(std::move(filters.at(i)));
+		}
 	}
 	op->children[0] = pushdown.Rewrite(std::move(op->children[0]));
 	filters = std::move(leftover_filters);
