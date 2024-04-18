@@ -186,7 +186,7 @@ void CSVSniffer::DetectHeader() {
 				if (!dummy_val.IsNull()) {
 					val = StringValue::Get(dummy_val);
 				}
-				if (!IsCasteable(val, sql_type, options.dialect_options, dummy_val.IsNull())) {
+				if (!IsCasteable(val, sql_type, sniffer_state_machine.dialect_options, dummy_val.IsNull())) {
 					first_row_consistent = false;
 				}
 			}
