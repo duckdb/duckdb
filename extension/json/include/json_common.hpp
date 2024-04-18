@@ -306,4 +306,6 @@ inline char *JSONCommon::WriteVal(yyjson_mut_val *val, yyjson_alc *alc, idx_t &l
 	return yyjson_mut_val_write_opts(val, JSONCommon::WRITE_FLAG, alc, reinterpret_cast<size_t *>(&len), nullptr);
 }
 
+size_t DetermineArrayIndex(yyjson_mut_val *arr, int64_t idx);
+
 } // namespace duckdb
