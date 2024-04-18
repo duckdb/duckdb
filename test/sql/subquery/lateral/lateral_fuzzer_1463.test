@@ -1,0 +1,28 @@
+# name: test/sql/subquery/lateral/lateral_fuzzer_1463.test
+# description: Test case for fuzzer issue 1463: Expression with depth > 1 detected in non-lateral join
+# group: [lateral]
+
+query II
+SELECT *
+FROM
+  (SELECT 42 AS c1) AS ref,
+  (SELECT a + b + 1
+   FROM
+     (SELECT 1) t1(a),
+     (SELECT (SELECT (SELECT ref.c1 + 1)) + 1) t2(b)
+   )
+;
+----
+42	46
+
+# postgres compatible variant
+query I
+SELECT NULL
+FROM
+  (SELECT 42 AS c1) AS ref,
+  LATERAL (SELECT NULL
+   FROM
+     (SELECT NULL) AS r2,
+     (SELECT (SELECT (SELECT ref.c1))) AS r3) AS r4;
+----
+NULL

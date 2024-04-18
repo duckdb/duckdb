@@ -1076,8 +1076,29 @@ int sqlite3_get_autocommit(sqlite3 *db) {
 }
 
 int sqlite3_limit(sqlite3 *, int id, int newVal) {
-	fprintf(stderr, "sqlite3_limit: unsupported.\n");
-	return -1;
+	if (newVal >= 0) {
+		// attempting to set limit value
+		return SQLITE_OK;
+	}
+	switch (id) {
+	case SQLITE_LIMIT_LENGTH:
+	case SQLITE_LIMIT_SQL_LENGTH:
+	case SQLITE_LIMIT_COLUMN:
+	case SQLITE_LIMIT_LIKE_PATTERN_LENGTH:
+		return std::numeric_limits<int>::max();
+	case SQLITE_LIMIT_EXPR_DEPTH:
+		return 1000;
+	case SQLITE_LIMIT_FUNCTION_ARG:
+	case SQLITE_LIMIT_VARIABLE_NUMBER:
+		return 256;
+	case SQLITE_LIMIT_ATTACHED:
+		return 1000;
+	case SQLITE_LIMIT_WORKER_THREADS:
+	case SQLITE_LIMIT_TRIGGER_DEPTH:
+		return 0;
+	default:
+		return SQLITE_ERROR;
+	}
 }
 
 int sqlite3_stmt_readonly(sqlite3_stmt *pStmt) {

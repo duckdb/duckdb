@@ -10,25 +10,25 @@ add_library_unity(
   duckdb_optimizer
   OBJECT
   column_binding_replacer.cpp
+  column_lifetime_analyzer.cpp
   common_aggregate_optimizer.cpp
   compressed_materialization.cpp
   cse_optimizer.cpp
   deliminator.cpp
-  unnest_rewriter.cpp
-  column_lifetime_analyzer.cpp
   expression_heuristics.cpp
+  expression_rewriter.cpp
   filter_combiner.cpp
-  filter_pushdown.cpp
   filter_pullup.cpp
+  filter_pushdown.cpp
   in_clause_rewriter.cpp
   optimizer.cpp
-  expression_rewriter.cpp
   regex_range_filter.cpp
   remove_duplicate_groups.cpp
   remove_unused_columns.cpp
   statistics_propagator.cpp
   limit_pushdown.cpp
-  topn_optimizer.cpp)
+  topn_optimizer.cpp
+  unnest_rewriter.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_optimizer>
     PARENT_SCOPE)

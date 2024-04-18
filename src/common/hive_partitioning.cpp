@@ -359,8 +359,8 @@ void HivePartitionedColumnData::GrowPartitions(PartitionedColumnDataAppendState 
 
 void HivePartitionedColumnData::SynchronizeLocalMap() {
 	// Synchronise global map into local, may contain changes from other threads too
-	for (auto it = global_state->partitions.begin() + local_partition_map.size(); it < global_state->partitions.end();
-	     it++) {
+	for (auto it = global_state->partitions.begin() + NumericCast<int64_t>(local_partition_map.size());
+	     it < global_state->partitions.end(); it++) {
 		local_partition_map[(*it)->first] = (*it)->second;
 	}
 }

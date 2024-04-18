@@ -157,7 +157,7 @@ void StructColumnData::RevertAppend(row_t start_row) {
 	for (auto &sub_column : sub_columns) {
 		sub_column->RevertAppend(start_row);
 	}
-	this->count = start_row - this->start;
+	this->count = UnsafeNumericCast<idx_t>(start_row) - this->start;
 }
 
 idx_t StructColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {

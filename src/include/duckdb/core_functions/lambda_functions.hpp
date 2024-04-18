@@ -88,7 +88,8 @@ public:
 			result_validity = &FlatVector::Validity(result);
 
 			if (list_column.GetType().id() == LogicalTypeId::SQLNULL) {
-				result_validity->SetInvalid(0);
+				result.SetVectorType(VectorType::CONSTANT_VECTOR);
+				ConstantVector::SetNull(result, true);
 				result_is_null = true;
 				return;
 			}

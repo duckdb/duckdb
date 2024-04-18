@@ -356,8 +356,10 @@ struct Interpolator<true> {
 			//	Integer arithmetic for accuracy
 			const auto integral = q.integral;
 			const auto scaling = q.scaling;
-			const auto scaled_q = DecimalMultiplyOverflowCheck::Operation<hugeint_t, hugeint_t, hugeint_t>(n, integral);
-			const auto scaled_n = DecimalMultiplyOverflowCheck::Operation<hugeint_t, hugeint_t, hugeint_t>(n, scaling);
+			const auto scaled_q =
+			    DecimalMultiplyOverflowCheck::Operation<hugeint_t, hugeint_t, hugeint_t>(Hugeint::Convert(n), integral);
+			const auto scaled_n =
+			    DecimalMultiplyOverflowCheck::Operation<hugeint_t, hugeint_t, hugeint_t>(Hugeint::Convert(n), scaling);
 			floored = Cast::Operation<hugeint_t, idx_t>((scaled_n - scaled_q) / scaling);
 			break;
 		}
@@ -1502,6 +1504,9 @@ unique_ptr<FunctionData> BindQuantile(ClientContext &context, AggregateFunction 
 		throw BinderException("QUANTILE can only take constant parameters");
 	}
 	Value quantile_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
+	if (quantile_val.IsNull()) {
+		throw BinderException("QUANTILE argument must not be NULL");
+	}
 	vector<Value> quantiles;
 	if (quantile_val.type().id() != LogicalTypeId::LIST) {
 		quantiles.push_back(CheckQuantile(quantile_val));
