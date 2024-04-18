@@ -31,6 +31,7 @@ set(JSON_EXTENSION_FILES
     json_functions/read_json.cpp
     json_functions/read_json_objects.cpp
     json_functions/json_array_tail.cpp
+    json_functions/json_array_take.cpp
     json_functions/json_array_append.cpp
     json_functions/json_array_prepend.cpp
     json_functions/json_array_insert.cpp

@@ -104,6 +104,7 @@ private:
 	static ScalarFunctionSet GetSerializePlanFunction();
 
 	static ScalarFunctionSet GetArrayTailFunction();
+	static ScalarFunctionSet GetArrayTakeFunction();
 	static ScalarFunctionSet GetArrayAppendFunction();
 	static ScalarFunctionSet GetArrayPrependFunction();
 	static ScalarFunctionSet GetArrayInsertFunction();
