@@ -90,13 +90,32 @@ def parse_assertions(stdout):
             return "0 assertions"
 
         # Parse assertions in format
-        pos = line.find("assertion")
+        pos = line.find("assertions ")
         if pos != -1:
             space_before_num = line.rfind(' ', 0, pos - 2)
             return line[space_before_num + 2 : pos + 10]
 
     return "ERROR"
 
+def last_line_of_test(file_path, stdout):
+    last_line = 0
+    lines = stdout.splitlines()
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        i += 1
+        if 'REQUIRE' not in line:
+            continue
+        line = lines[i]
+        i += 1
+        if 'with expansion' not in line:
+            continue
+        line = lines[i]
+        line = line.strip(' ').strip('"')
+        i += 1
+        res = line.find(file_path + ':')
+        last_line = line[res + len(file_path) + 1:]
+    return last_line
 
 for test_number, test_case in enumerate(test_cases):
     if not profile:
@@ -104,7 +123,7 @@ for test_number, test_case in enumerate(test_cases):
     start = time.time()
     try:
         res = subprocess.run(
-            [unittest_program, test_case], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout
+            [unittest_program, test_case, '-s'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout
         )
     except subprocess.TimeoutExpired as e:
         print(" (TIMED OUT)", flush=True)
@@ -117,7 +136,8 @@ for test_number, test_case in enumerate(test_cases):
 
     additional_data = ""
     if assertions:
-        additional_data += " (" + parse_assertions(stdout) + ")"
+        assertion_count = parse_assertions(stdout)
+        additional_data += " (" + assertion_count + ")"
     if args.time_execution:
         additional_data += f" (Time: {end - start:.4f} seconds)"
 
@@ -129,19 +149,14 @@ for test_number, test_case in enumerate(test_cases):
 
     print("FAILURE IN RUNNING TEST")
     print(
-        """--------------------
+        f"""--------------------
 RETURNCODE
 --------------------
+{res.returncode}
 """
     )
-    print(res.returncode)
-    print(
-        """--------------------
-STDOUT
---------------------
-"""
-    )
-    print(stdout)
+    last_line = last_line_of_test(test_case, stdout)
+    print(f"The last valid assertion was on {test_case}:{last_line}")
     print(
         """--------------------
 STDERR
