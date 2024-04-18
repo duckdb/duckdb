@@ -197,7 +197,8 @@ RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context_p, const R
       count_before_combining(0), max_partition_size(0) {
 
 	auto tuples_per_block = Storage::BLOCK_ALLOC_SIZE / radix_ht.GetLayout().GetRowWidth();
-	idx_t ht_count = config.sink_capacity / GroupedAggregateHashTable::LOAD_FACTOR;
+	idx_t ht_count =
+	    NumericCast<idx_t>(static_cast<double>(config.sink_capacity) / GroupedAggregateHashTable::LOAD_FACTOR);
 	auto num_partitions = RadixPartitioning::NumberOfPartitions(config.GetRadixBits());
 	auto count_per_partition = ht_count / num_partitions;
 	auto blocks_per_partition = (count_per_partition + tuples_per_block) / tuples_per_block + 1;
@@ -305,7 +306,8 @@ idx_t RadixHTConfig::SinkCapacity(ClientContext &context) {
 
 	// Divide cache per active thread by entry size, round up to next power of two, to get capacity
 	const auto size_per_entry = sizeof(aggr_ht_entry_t) * GroupedAggregateHashTable::LOAD_FACTOR;
-	const auto capacity = NextPowerOfTwo(cache_per_active_thread / size_per_entry);
+	const auto capacity =
+	    NextPowerOfTwo(NumericCast<uint64_t>(static_cast<double>(cache_per_active_thread) / size_per_entry));
 
 	// Capacity must be at least the minimum capacity
 	return MaxValue<idx_t>(capacity, GroupedAggregateHashTable::InitialCapacity());
@@ -718,7 +720,7 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 		// However, we will limit the initial capacity so we don't do a huge over-allocation
 		const auto n_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(gstate.context).NumberOfThreads());
 		const auto memory_limit = BufferManager::GetBufferManager(gstate.context).GetMaxMemory();
-		const idx_t thread_limit = 0.6 * memory_limit / n_threads;
+		const idx_t thread_limit = NumericCast<idx_t>(0.6 * memory_limit / n_threads);
 
 		const idx_t size_per_entry = partition.data->SizeInBytes() / MaxValue<idx_t>(partition.data->Count(), 1) +
 		                             idx_t(GroupedAggregateHashTable::LOAD_FACTOR * sizeof(aggr_ht_entry_t));

@@ -312,7 +312,7 @@ ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock, const st
                                                unique_ptr<SQLStatement> statement,
                                                optional_ptr<case_insensitive_map_t<Value>> values) {
 	StatementType statement_type = statement->type;
-	auto result = make_shared<PreparedStatementData>(statement_type);
+	auto result = make_shared_ptr<PreparedStatementData>(statement_type);
 
 	auto &profiler = QueryProfiler::Get(*this);
 	profiler.StartQuery(query, IsExplainAnalyze(statement.get()), true);

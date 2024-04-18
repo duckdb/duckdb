@@ -21,7 +21,7 @@ public:
 	static bool check_(const py::handle &object);
 };
 
-class DuckDBPyType : public std::enable_shared_from_this<DuckDBPyType> {
+class DuckDBPyType : public enable_shared_from_this<DuckDBPyType> {
 public:
 	explicit DuckDBPyType(LogicalType type);
 
