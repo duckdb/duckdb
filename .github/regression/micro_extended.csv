@@ -182,6 +182,7 @@ benchmark/micro/string/equality_long.benchmark
 benchmark/micro/string/equality_short.benchmark
 benchmark/micro/string/greater_than_long.benchmark
 benchmark/micro/string/greater_than_short.benchmark
+benchmark/micro/string/inet_escape_function.benchmark
 benchmark/micro/string/length_long.benchmark
 benchmark/micro/string/length_short.benchmark
 benchmark/micro/string/like_regular.benchmark
