@@ -38,5 +38,6 @@ source_files = [
         'extension/json/json_array_take.cpp',
         'extension/json/json_array_rotate.cpp',
         'extension/json/json_object_add.cpp',
+        'extension/json/json_object_replace.cpp',
     ]
 ]

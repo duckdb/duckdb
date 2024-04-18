@@ -38,6 +38,7 @@ set(JSON_EXTENSION_FILES
     json_functions/json_array_remove.cpp
     json_functions/json_array_rotate.cpp
     json_functions/json_object_add.cpp
+    json_functions/json_object_replace.cpp
     ${YYJSON_OBJECT_FILES})
 
 build_static_extension(json ${JSON_EXTENSION_FILES})
