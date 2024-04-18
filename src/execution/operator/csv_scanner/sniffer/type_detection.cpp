@@ -177,7 +177,8 @@ bool CSVSniffer::IsCasteable(const string_t value, const LogicalType &type, cons
 		return str_value.TryCastAs(buffer_manager->context, type, new_value, &error_message, true);
 	}
 	}
-};
+}
+
 void CSVSniffer::InitializeDateAndTimeStampDetection(CSVStateMachine &candidate, const string &separator,
                                                      const LogicalType &sql_type) {
 	auto &format_candidate = format_candidates[sql_type.id()];
