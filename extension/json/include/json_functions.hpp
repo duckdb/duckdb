@@ -109,6 +109,7 @@ private:
 	static ScalarFunctionSet GetArrayPrependFunction();
 	static ScalarFunctionSet GetArrayInsertFunction();
 	static ScalarFunctionSet GetArrayRemoveFunction();
+	static ScalarFunctionSet GetArrayRotateFunction();
 	static ScalarFunctionSet GetObjectAddFunction();
 	static PragmaFunctionSet GetExecuteJsonSerializedSqlPragmaFunction();
 

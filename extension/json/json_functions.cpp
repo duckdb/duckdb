@@ -173,6 +173,7 @@ vector<ScalarFunctionSet> JSONFunctions::GetScalarFunctions() {
 	functions.push_back(GetArrayPrependFunction());
 	functions.push_back(GetArrayInsertFunction());
 	functions.push_back(GetArrayRemoveFunction());
+	functions.push_back(GetArrayRotateFunction());
 	functions.push_back(GetObjectAddFunction());
 	return functions;
 }
