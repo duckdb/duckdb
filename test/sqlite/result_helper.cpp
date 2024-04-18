@@ -181,7 +181,8 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 						return false;
 					}
 					// we do this just to increment the assertion counter
-					string success_log = StringUtil::Format("CheckQueryResult: %s:%d", query.file_name, query.query_line);
+					string success_log =
+					    StringUtil::Format("CheckQueryResult: %s:%d", query.file_name, query.query_line);
 					REQUIRE(success_log.c_str());
 				}
 				current_row++;
@@ -293,7 +294,8 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 	if (error) {
 		REQUIRE(false);
 	} else {
-		string success_log = StringUtil::Format("CheckStatementResult: %s:%d", statement.file_name, statement.query_line);
+		string success_log =
+		    StringUtil::Format("CheckStatementResult: %s:%d", statement.file_name, statement.query_line);
 		REQUIRE(success_log.c_str());
 	}
 	return true;
