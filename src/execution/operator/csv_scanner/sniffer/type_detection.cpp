@@ -86,36 +86,6 @@ string GenerateDateFormat(const string &separator, const char *format_template) 
 	return result;
 }
 
-bool CSVSniffer::TryCastValue(const DialectOptions &dialect_options, const string &decimal_separator,
-                              const string_t &value, const LogicalType &sql_type, bool is_null) {
-	if (is_null) {
-		return true;
-	}
-	if (!dialect_options.date_format.find(LogicalTypeId::DATE)->second.GetValue().Empty() &&
-	    sql_type.id() == LogicalTypeId::DATE) {
-		date_t result;
-		string error_message;
-		return dialect_options.date_format.find(LogicalTypeId::DATE)
-		    ->second.GetValue()
-		    .TryParseDate(value, result, error_message);
-	}
-	if (!dialect_options.date_format.find(LogicalTypeId::TIMESTAMP)->second.GetValue().Empty() &&
-	    sql_type.id() == LogicalTypeId::TIMESTAMP) {
-		timestamp_t result;
-		string error_message;
-		return dialect_options.date_format.find(LogicalTypeId::TIMESTAMP)
-		    ->second.GetValue()
-		    .TryParseTimestamp(value, result, error_message);
-	}
-	if (decimal_separator != "." && (sql_type.id() == LogicalTypeId::DOUBLE)) {
-		return TryCastFloatingOperator::Operation<TryCastErrorMessageCommaSeparated, double>(value);
-	}
-	Value new_value;
-	string error_message;
-	Value str_value(value);
-	return str_value.TryCastAs(buffer_manager->context, sql_type, new_value, &error_message, true);
-}
-
 void CSVSniffer::SetDateFormat(CSVStateMachine &candidate, const string &format_specifier,
                                const LogicalTypeId &sql_type) {
 	StrpTimeFormat strpformat;
@@ -123,12 +93,13 @@ void CSVSniffer::SetDateFormat(CSVStateMachine &candidate, const string &format_
 	candidate.dialect_options.date_format[sql_type].Set(strpformat, false);
 }
 
-inline bool CSVSniffer::ValueIsCastable(const char *value_ptr, const idx_t value_size, LogicalType &type,
-                                        bool is_null) {
+bool CSVSniffer::IsCasteable(const string_t value, const LogicalType &type, const DialectOptions &dialect_options,
+                             const bool is_null) {
 	if (is_null) {
 		return true;
 	}
-	bool success = true;
+	auto value_ptr = value.GetData();
+	auto value_size = value.GetSize();
 	switch (type.id()) {
 	case LogicalTypeId::TINYINT: {
 		int8_t dummy_value;
@@ -171,22 +142,39 @@ inline bool CSVSniffer::ValueIsCastable(const char *value_ptr, const idx_t value
 		return TryDoubleCast<float>(value_ptr, value_size, dummy_value, false, options.decimal_separator[0]);
 	}
 	case LogicalTypeId::DATE: {
-		idx_t pos;
-		bool special;
-		return Date::TryConvertDate(value_ptr, value_size, pos,
-		                            static_cast<date_t *>(vector_ptr[chunk_col_id])[number_of_rows], special, false);
+		if (!dialect_options.date_format.find(LogicalTypeId::DATE)->second.GetValue().Empty()) {
+			date_t result;
+			string error_message;
+			return dialect_options.date_format.find(LogicalTypeId::DATE)
+			    ->second.GetValue()
+			    .TryParseDate(value, result, error_message);
+		} else {
+			idx_t pos;
+			bool special;
+			date_t dummy_value;
+			return Date::TryConvertDate(value_ptr, value_size, pos, dummy_value, special, false);
+		}
 	}
-	case LogicalTypeId::TIMESTAMP:
-		return Timestamp::TryConvertTimestamp(value_ptr, value_size,
-		                                      static_cast<timestamp_t *>(vector_ptr[chunk_col_id])[number_of_rows]) ==
-		       TimestampCastResult::SUCCESS;
-
+	case LogicalTypeId::TIMESTAMP: {
+		if (!dialect_options.date_format.find(LogicalTypeId::TIMESTAMP)->second.GetValue().Empty()) {
+			timestamp_t result;
+			string error_message;
+			return dialect_options.date_format.find(LogicalTypeId::TIMESTAMP)
+			    ->second.GetValue()
+			    .TryParseTimestamp(value, result, error_message);
+		} else {
+			timestamp_t dummy_value;
+			return Timestamp::TryConvertTimestamp(value_ptr, value_size, dummy_value) == TimestampCastResult::SUCCESS;
+		}
+	}
 	case LogicalTypeId::VARCHAR:
 		return true;
-
 	default: {
 		// We do Value Try Cast for non-basic types.
-		return true;
+		Value new_value;
+		string error_message;
+		Value str_value(value);
+		return str_value.TryCastAs(buffer_manager->context, type, new_value, &error_message, true);
 	}
 	}
 };
@@ -331,9 +319,8 @@ void CSVSniffer::DetectTypes() {
 						// Nothing to convert it to
 						continue;
 					}
-					if (TryCastValue(sniffing_state_machine.dialect_options,
-					                 sniffing_state_machine.options.decimal_separator, vector_data[row_idx], sql_type,
-					                 !null_mask.RowIsValid(row_idx))) {
+					if (IsCasteable(vector_data[row_idx], sql_type, sniffing_state_machine.dialect_options,
+					                !null_mask.RowIsValid(row_idx))) {
 						break;
 					} else {
 						if (row_idx != start_idx_detection && cur_top_candidate == LogicalType::BOOLEAN) {
