@@ -152,6 +152,14 @@ static duckdb::unique_ptr<T> make_unique(ARGS&&... __args) { // NOLINT: mimic st
 	return unique_ptr<T>(new T(std::forward<ARGS>(__args)...));
 }
 
+template <class T, class... ARGS>
+static duckdb::shared_ptr<T> make_shared(ARGS&&... __args) { // NOLINT: mimic std style
+#ifndef DUCKDB_ENABLE_DEPRECATED_API
+	static_assert(sizeof(T) == 0, "Use make_shared_ptr instead of make_shared!");
+#endif // DUCKDB_ENABLE_DEPRECATED_API
+	return shared_ptr<T>(new T(std::forward<ARGS>(__args)...));
+}
+
 template <typename T>
 constexpr T MaxValue(T a, T b) {
 	return a > b ? a : b;
