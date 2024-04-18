@@ -129,8 +129,8 @@ bool CSVSniffer::DetectHeaderWithSetColumn() {
 				if (!dummy_val.IsNull()) {
 					val = StringValue::Get(dummy_val);
 				}
-				if (!TryCastValue(options.dialect_options, options.decimal_separator, val, sql_type,
-				                  dummy_val.IsNull())) {
+
+				if (!IsCasteable(val, sql_type, options.dialect_options, dummy_val.IsNull())) {
 					first_row_consistent = false;
 				}
 			}
@@ -186,8 +186,7 @@ void CSVSniffer::DetectHeader() {
 				if (!dummy_val.IsNull()) {
 					val = StringValue::Get(dummy_val);
 				}
-				if (!TryCastValue(sniffer_state_machine.dialect_options,
-				                  sniffer_state_machine.options.decimal_separator, val, sql_type, dummy_val.IsNull())) {
+				if (!IsCasteable(val, sql_type, options.dialect_options, dummy_val.IsNull())) {
 					first_row_consistent = false;
 				}
 			}
