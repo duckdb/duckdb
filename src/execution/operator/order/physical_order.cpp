@@ -143,7 +143,7 @@ public:
 
 		// Schedule tasks equal to the number of threads, which will each merge multiple partitions
 		auto &ts = TaskScheduler::GetScheduler(context);
-		idx_t num_threads = ts.NumberOfThreads();
+		auto num_threads = NumericCast<idx_t>(ts.NumberOfThreads());
 
 		vector<shared_ptr<Task>> merge_tasks;
 		for (idx_t tnum = 0; tnum < num_threads; tnum++) {

@@ -1593,12 +1593,12 @@ struct HugeIntCastData {
 	using ResultType = T;
 	using Operation = OP;
 	ResultType result;
-	int64_t intermediate;
+	ResultType intermediate;
 	uint8_t digits;
 
 	ResultType decimal;
 	uint16_t decimal_total_digits;
-	int64_t decimal_intermediate;
+	ResultType decimal_intermediate;
 	uint16_t decimal_intermediate_digits;
 
 	bool Flush() {
@@ -1647,7 +1647,8 @@ struct HugeIntegerCastOperation {
 	template <class T, bool NEGATIVE>
 	static bool HandleDigit(T &state, uint8_t digit) {
 		if (NEGATIVE) {
-			if (DUCKDB_UNLIKELY(state.intermediate < (NumericLimits<int64_t>::Minimum() + digit) / 10)) {
+			if (DUCKDB_UNLIKELY(static_cast<int64_t>(state.intermediate) <
+			                    (NumericLimits<int64_t>::Minimum() + digit) / 10)) {
 				// intermediate is full: need to flush it
 				if (!state.Flush()) {
 					return false;
@@ -1694,10 +1695,14 @@ struct HugeIntegerCastOperation {
 		if (e < 0) {
 			state.result = T::Operation::DivMod(state.result, T::Operation::POWERS_OF_TEN[-e], remainder);
 			if (remainder < 0) {
-				remainder *= -1;
+				result_t negate_result;
+				if (!T::Operation::TryNegate(remainder, negate_result)) {
+					return false;
+				}
+				remainder = negate_result;
 			}
 			state.decimal = remainder;
-			state.decimal_total_digits = UnsafeNumericCast<uint16_t>(-e);
+			state.decimal_total_digits = static_cast<uint16_t>(-e);
 			state.decimal_intermediate = 0;
 			state.decimal_intermediate_digits = 0;
 			return Finalize<T, NEGATIVE>(state);

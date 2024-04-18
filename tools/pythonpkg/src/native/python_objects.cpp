@@ -575,7 +575,16 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 		auto &array_values = ArrayValue::GetChildren(val);
 		auto array_size = ArrayType::GetSize(type);
 		auto &child_type = ArrayType::GetChildType(type);
-		py::tuple arr(array_size);
+
+		// do not remove the static cast here, it's required for building
+		// duckdb-python with Emscripten.
+		//
+		// without this cast, a static_assert fails in pybind11
+		// because the return type of ArrayType::GetSize is idx_t,
+		// which is typedef'd to uint64_t and ssize_t is 4 bytes with Emscripten
+		// and pybind11 requires that the input be castable to ssize_t
+		py::tuple arr(static_cast<py::ssize_t>(array_size));
+
 		for (idx_t elem_idx = 0; elem_idx < array_size; elem_idx++) {
 			arr[elem_idx] = FromValue(array_values[elem_idx], child_type, client_properties);
 		}

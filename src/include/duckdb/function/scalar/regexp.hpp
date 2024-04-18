@@ -140,7 +140,7 @@ struct RegexLocalState : public FunctionLocalState {
 		if (extract_all) {
 			auto group_count_p = constant_pattern.NumberOfCapturingGroups();
 			if (group_count_p != -1) {
-				group_buffer.Init(group_count_p);
+				group_buffer.Init(NumericCast<idx_t>(group_count_p));
 			}
 		}
 		D_ASSERT(info.constant_pattern);

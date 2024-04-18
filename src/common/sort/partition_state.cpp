@@ -318,7 +318,7 @@ void PartitionLocalSinkState::Sink(DataChunk &input_chunk) {
 			const auto entry_size = payload_layout.GetRowWidth();
 			const auto capacity = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_SIZE / entry_size) + 1);
 			rows = make_uniq<RowDataCollection>(gstate.buffer_manager, capacity, entry_size);
-			strings = make_uniq<RowDataCollection>(gstate.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
+			strings = make_uniq<RowDataCollection>(gstate.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1U, true);
 		}
 		const auto row_count = input_chunk.size();
 		const auto row_sel = FlatVector::IncrementalSelectionVector();
@@ -402,8 +402,8 @@ void PartitionLocalSinkState::Combine() {
 PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &sink, GroupDataPtr group_data_p,
                                                      hash_t hash_bin)
     : sink(sink), group_data(std::move(group_data_p)), memory_per_thread(sink.memory_per_thread),
-      num_threads(TaskScheduler::GetScheduler(sink.context).NumberOfThreads()), stage(PartitionSortStage::INIT),
-      total_tasks(0), tasks_assigned(0), tasks_completed(0) {
+      num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(sink.context).NumberOfThreads())),
+      stage(PartitionSortStage::INIT), total_tasks(0), tasks_assigned(0), tasks_completed(0) {
 
 	const auto group_idx = sink.hash_groups.size();
 	auto new_group = make_uniq<PartitionGlobalHashGroup>(sink.buffer_manager, sink.partitions, sink.orders,
@@ -424,8 +424,8 @@ PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &s
 
 PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &sink)
     : sink(sink), memory_per_thread(sink.memory_per_thread),
-      num_threads(TaskScheduler::GetScheduler(sink.context).NumberOfThreads()), stage(PartitionSortStage::INIT),
-      total_tasks(0), tasks_assigned(0), tasks_completed(0) {
+      num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(sink.context).NumberOfThreads())),
+      stage(PartitionSortStage::INIT), total_tasks(0), tasks_assigned(0), tasks_completed(0) {
 
 	const hash_t hash_bin = 0;
 	const size_t group_idx = 0;
@@ -661,7 +661,7 @@ void PartitionMergeEvent::Schedule() {
 
 	// Schedule tasks equal to the number of threads, which will each merge multiple partitions
 	auto &ts = TaskScheduler::GetScheduler(context);
-	idx_t num_threads = ts.NumberOfThreads();
+	auto num_threads = NumericCast<idx_t>(ts.NumberOfThreads());
 
 	vector<shared_ptr<Task>> merge_tasks;
 	for (idx_t tnum = 0; tnum < num_threads; tnum++) {

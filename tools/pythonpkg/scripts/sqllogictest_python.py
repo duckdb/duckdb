@@ -8,6 +8,7 @@ import gc
 script_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(script_path, '..', '..', '..', 'scripts'))
 from sqllogictest import (
+    SQLParserException,
     SQLLogicParser,
     SQLLogicTest,
 )
@@ -168,10 +169,13 @@ def main():
             continue
         if test_directory:
             file_path = os.path.join(test_directory, file_path)
-        test = sql_parser.parse(file_path)
-        if not test:
-            print(f'Failed to parse {file_path}')
-            exit(1)
+
+        try:
+            test = sql_parser.parse(file_path)
+        except SQLParserException as e:
+            executor.skip_log.append(str(e.message))
+            continue
+
         print(f'[{i}/{total_tests}] {file_path}')
         # This is necessary to clean up databases/connections
         # So previously created databases are not still cached in the instance_cache

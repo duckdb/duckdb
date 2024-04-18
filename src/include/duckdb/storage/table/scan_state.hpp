@@ -44,7 +44,7 @@ struct SegmentScanState {
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -60,7 +60,7 @@ struct IndexScanState {
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
