@@ -66,3 +66,10 @@ query I
 select 2 in (*COLUMNS(*)) from (select 1, 2, 3) t(a, b, c);
 ----
 true
+
+# IN in WHERE clause
+query III
+from (VALUES (1, 2, 3), (2, 3, 0), (0, 0, 1)) tbl(a, b, c) where 1 IN (*COLUMNS(*));
+----
+1	2	3
+0	0	1
