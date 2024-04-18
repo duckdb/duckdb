@@ -91,6 +91,38 @@ TEST_CASE("Test enum types C API", "[capi]") {
 	REQUIRE(duckdb_enum_internal_type(nullptr) == DUCKDB_TYPE_INVALID);
 	REQUIRE(duckdb_enum_dictionary_size(nullptr) == 0);
 	REQUIRE(duckdb_enum_dictionary_value(nullptr, 0) == nullptr);
+
+	{
+		char *values[3];
+		auto logical_type = duckdb_vector_get_column_type(duckdb_data_chunk_get_vector(chunk->GetChunk(), 0));
+		auto value_count = duckdb_enum_values(logical_type, values, 3);
+		REQUIRE(value_count == 2);
+		REQUIRE(string(values[0]) == "DUCK_DUCK_ENUM");
+		REQUIRE(string(values[1]) == "GOOSE");
+		for (idx_t i = 0; i < value_count; i++) {
+			duckdb_free(values[i]);
+		}
+	}
+
+	{
+		// pass in a smaller size, it's ok, but we only get part of the enum
+		char *values[1];
+		auto logical_type = duckdb_vector_get_column_type(duckdb_data_chunk_get_vector(chunk->GetChunk(), 0));
+		auto value_count = duckdb_enum_values(logical_type, values, 1);
+		REQUIRE(value_count == 1);
+		REQUIRE(string(values[0]) == "DUCK_DUCK_ENUM");
+		for (idx_t i = 0; i < value_count; i++) {
+			duckdb_free(values[i]);
+		}
+	}
+
+	{
+		// no names for non-enum column
+		char *values[1];
+		auto logical_type = duckdb_vector_get_column_type(duckdb_data_chunk_get_vector(chunk->GetChunk(), 3));
+		auto value_count = duckdb_enum_values(logical_type, values, 1);
+		REQUIRE(value_count == 0);
+	}
 }
 
 TEST_CASE("Test list types C API", "[capi]") {

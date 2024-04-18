@@ -204,6 +204,24 @@ char *duckdb_enum_dictionary_value(duckdb_logical_type type, idx_t index) {
 	return strdup(duckdb::StringValue::Get(value).c_str());
 }
 
+idx_t duckdb_enum_values(duckdb_logical_type type, char **values, idx_t length) {
+	if (!AssertLogicalTypeId(type, duckdb::LogicalTypeId::ENUM)) {
+		return 0;
+	}
+	auto &ltype = *(reinterpret_cast<duckdb::LogicalType *>(type));
+
+	auto &vector = duckdb::EnumType::GetValuesInsertOrder(ltype);
+	auto strings = duckdb::FlatVector::GetData<string_t>(vector);
+
+	auto enum_count = duckdb::EnumType::GetSize(ltype);
+	auto fill_count = length < enum_count ? length : enum_count;
+	for (idx_t i = 0; i < fill_count; i++) {
+		auto value = strings[i];
+		values[i] = strdup(duckdb::StringValue::Get(value).c_str());
+	}
+	return fill_count;
+}
+
 duckdb_logical_type duckdb_list_type_child_type(duckdb_logical_type type) {
 	if (!AssertLogicalTypeId(type, duckdb::LogicalTypeId::LIST) &&
 	    !AssertLogicalTypeId(type, duckdb::LogicalTypeId::MAP)) {

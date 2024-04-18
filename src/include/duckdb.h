@@ -1811,6 +1811,21 @@ The result must be freed with `duckdb_free`.
 DUCKDB_API char *duckdb_enum_dictionary_value(duckdb_logical_type type, idx_t index);
 
 /*!
+Retrieves the dictionary values from the enum.
+
+While the values array is owned by the caller, the individual string must be freed
+with `duckdb_free`.
+
+* type: The logical type object
+* values: The array to store the values in
+* length: The length of the values parameter
+* returns: The number of values written to values. This will be the min betwen
+* the lenght parameter and the size of the enum dictionary size (i.e.
+* `duckdb_enum_dictionary_size`).
+*/
+idx_t duckdb_enum_values(duckdb_logical_type type, char **values, idx_t length);
+
+/*!
 Retrieves the child type of the given list type.
 
 The result must be freed with `duckdb_destroy_logical_type`.
