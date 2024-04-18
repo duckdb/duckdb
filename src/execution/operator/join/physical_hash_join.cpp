@@ -409,7 +409,7 @@ public:
 			total_size += sink_collection.SizeInBytes();
 			total_count += sink_collection.Count();
 		}
-		auto total_blocks = (double(total_size) + Storage::BLOCK_SIZE - 1) / Storage::BLOCK_SIZE;
+		auto total_blocks = NumericCast<idx_t>((double(total_size) + Storage::BLOCK_SIZE - 1) / Storage::BLOCK_SIZE);
 		auto count_per_block = total_count / total_blocks;
 		auto blocks_per_vector = MaxValue<idx_t>(STANDARD_VECTOR_SIZE / count_per_block, 2);
 

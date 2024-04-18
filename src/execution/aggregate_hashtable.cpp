@@ -122,7 +122,7 @@ idx_t GroupedAggregateHashTable::InitialCapacity() {
 
 idx_t GroupedAggregateHashTable::GetCapacityForCount(idx_t count) {
 	count = MaxValue<idx_t>(InitialCapacity(), count);
-	return NextPowerOfTwo(count * LOAD_FACTOR);
+	return NextPowerOfTwo(NumericCast<uint64_t>(static_cast<double>(count) * LOAD_FACTOR));
 }
 
 idx_t GroupedAggregateHashTable::Capacity() const {
@@ -130,7 +130,7 @@ idx_t GroupedAggregateHashTable::Capacity() const {
 }
 
 idx_t GroupedAggregateHashTable::ResizeThreshold() const {
-	return Capacity() / LOAD_FACTOR;
+	return NumericCast<idx_t>(static_cast<double>(Capacity()) / LOAD_FACTOR);
 }
 
 idx_t GroupedAggregateHashTable::ApplyBitMask(hash_t hash) const {

@@ -45,7 +45,7 @@ void TemporaryMemoryManager::UpdateConfiguration(ClientContext &context) {
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	auto &task_scheduler = TaskScheduler::GetScheduler(context);
 
-	memory_limit = MAXIMUM_MEMORY_LIMIT_RATIO * double(buffer_manager.GetMaxMemory());
+	memory_limit = NumericCast<idx_t>(MAXIMUM_MEMORY_LIMIT_RATIO * static_cast<double>(buffer_manager.GetMaxMemory()));
 	has_temporary_directory = buffer_manager.HasTemporaryDirectory();
 	num_threads = NumericCast<idx_t>(task_scheduler.NumberOfThreads());
 	query_max_memory = buffer_manager.GetQueryMaxMemory();
@@ -92,14 +92,14 @@ void TemporaryMemoryManager::UpdateState(ClientContext &context, TemporaryMemory
 		// 3. MAXIMUM_FREE_MEMORY_RATIO * free memory
 		auto upper_bound = MinValue<idx_t>(temporary_memory_state.remaining_size, query_max_memory);
 		auto free_memory = memory_limit - (reservation - temporary_memory_state.reservation);
-		upper_bound = MinValue<idx_t>(upper_bound, MAXIMUM_FREE_MEMORY_RATIO * free_memory);
+		upper_bound = MinValue<idx_t>(upper_bound, NumericCast<idx_t>(MAXIMUM_FREE_MEMORY_RATIO * free_memory));
 
 		if (remaining_size > memory_limit) {
 			// We're processing more data than fits in memory, so we must further limit memory usage.
 			// The upper bound for the reservation of this state is now also the minimum of:
 			// 3. The ratio of the remaining size of this state and the total remaining size * memory limit
 			auto ratio_of_remaining = double(temporary_memory_state.remaining_size) / double(remaining_size);
-			upper_bound = MinValue<idx_t>(upper_bound, ratio_of_remaining * memory_limit);
+			upper_bound = MinValue<idx_t>(upper_bound, NumericCast<idx_t>(ratio_of_remaining * memory_limit));
 		}
 
 		SetReservation(temporary_memory_state, MaxValue<idx_t>(lower_bound, upper_bound));

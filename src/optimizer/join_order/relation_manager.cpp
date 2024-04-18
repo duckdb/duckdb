@@ -183,7 +183,8 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		auto &aggr = op->Cast<LogicalAggregate>();
 		auto operator_stats = RelationStatisticsHelper::ExtractAggregationStats(aggr, child_stats);
 		if (!datasource_filters.empty()) {
-			operator_stats.cardinality *= RelationStatisticsHelper::DEFAULT_SELECTIVITY;
+			operator_stats.cardinality = NumericCast<idx_t>(static_cast<double>(operator_stats.cardinality) *
+			                                                RelationStatisticsHelper::DEFAULT_SELECTIVITY);
 		}
 		AddAggregateOrWindowRelation(input_op, parent, operator_stats, op->type);
 		return true;
@@ -196,7 +197,8 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		auto &window = op->Cast<LogicalWindow>();
 		auto operator_stats = RelationStatisticsHelper::ExtractWindowStats(window, child_stats);
 		if (!datasource_filters.empty()) {
-			operator_stats.cardinality *= RelationStatisticsHelper::DEFAULT_SELECTIVITY;
+			operator_stats.cardinality = NumericCast<idx_t>(static_cast<double>(operator_stats.cardinality) *
+			                                                RelationStatisticsHelper::DEFAULT_SELECTIVITY);
 		}
 		AddAggregateOrWindowRelation(input_op, parent, operator_stats, op->type);
 		return true;
