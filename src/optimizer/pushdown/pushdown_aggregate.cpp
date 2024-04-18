@@ -58,9 +58,11 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<Logical
 			// empty grouping set - we cannot pushdown the filter
 			can_pushdown_filter = false;
 		}
+		vector<column_binding_set_t> grouping_sets_bindings;
 		for (auto &grp : aggr.grouping_sets) {
 			// check for each of the grouping sets if they contain all groups
 			if (bindings.empty()) {
+				// ??
 				// we can never push down empty grouping sets
 				can_pushdown_filter = false;
 				break;

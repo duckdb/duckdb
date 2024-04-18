@@ -8,6 +8,7 @@
 
 namespace duckdb {
 
+// if a filter expression is on one of the bindings in the partition set.
 static bool FilterIsOnPartition(column_binding_set_t partition_bindings, Expression &filter_expression) {
 	bool filter_is_on_partition = false;
 	ExpressionIterator::EnumerateChildren(filter_expression, [&](unique_ptr<Expression> &child) {
@@ -38,19 +39,32 @@ static bool FilterIsOnPartition(column_binding_set_t partition_bindings, Express
 	return filter_is_on_partition;
 }
 
+bool FilterPushdown::CanPushdownFilter(vector<column_binding_set_t> window_exprs_partition_bindings, vector<ColumnBinding> bindings) {
+	bool ret = true;
+	for (auto &partition_bindings : window_exprs_partition_bindings) {
+		bool filter_on_partitions_bindings = true;
+		for (auto &binding : bindings) {
+			if (partition_bindings.find(binding) == partition_bindings.end()) {
+				filter_on_partitions_bindings = false;
+			}
+		}
+		ret = ret && filter_on_partitions_bindings;
+	}
+	return ret;
+}
+
 unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_WINDOW);
 	auto &window = op->Cast<LogicalWindow>();
 	// go into expressions, then look into the partitions.
 	// if the filter applies to a partition in each window expression then you can push the filter
 	// into the children.
-	auto pushdown = FilterPushdown(optimizer);
-	vector<int8_t> filters_to_pushdown;
-	filters_to_pushdown.reserve(filters.size());
-	for (idx_t i = 0; i < filters.size(); i++) {
-		filters_to_pushdown.push_back(0);
-	}
-	// 1. Check every window expression
+	FilterPushdown pushdown(optimizer);
+	vector<unique_ptr<Filter>> leftover_filters;
+
+	// First loop through the window expressions. If all window expressions
+	// have partitions, maybe we can push down a filter through the partition.
+	vector<column_binding_set_t> window_exprs_partition_bindings;
 	for (auto &expr : window.expressions) {
 		if (expr->expression_class != ExpressionClass::BOUND_WINDOW) {
 			continue;
@@ -58,12 +72,13 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOpe
 		auto &window_expr = expr->Cast<BoundWindowExpression>();
 		auto &partitions = window_expr.partitions;
 		if (partitions.empty()) {
+			// If any window expression does not have partitions, we cannot push any filters.
 			// all window expressions need to be partitioned by the same column
 			// in order to push down the window.
 			return FinishPushdown(std::move(op));
 		}
 		column_binding_set_t partition_bindings;
-		// 2. Get the binding information of the partitions
+		// 2. Get the binding information of the partitions of the window expression
 		for (auto &partition_expr : partitions) {
 			switch (partition_expr->type) {
 			// TODO: Add expressions for function expressions like FLOOR, CEIL etc.
@@ -76,36 +91,36 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOpe
 				break;
 			}
 		}
-
-		// 3. Check if a filter is on one of the partitions
-		//    in the event there are multiple window functions, a fiter can only be pushed down
-		//    if each window function is partitioned on the filtered value
-		//    if a filter is not on a partition fiters_to_parition[filter_index] = -1
-		//    which means the filter will no longer be pushed down, even if the filter is on a partition.
-		//    tpcds q47 caught this
-		for (idx_t i = 0; i < filters.size(); i++) {
-			auto &filter = filters.at(i);
-			if (FilterIsOnPartition(partition_bindings, *filter->filter) && filters_to_pushdown[i] >= 0) {
-				filters_to_pushdown[i] = 1;
-				continue;
-			}
-			filters_to_pushdown[i] = -1;
-		}
+		window_exprs_partition_bindings.push_back(partition_bindings);
 	}
-	// push the new filters into the child.
-	vector<unique_ptr<Filter>> leftover_filters;
+
+	if (window_exprs_partition_bindings.empty()) {
+		return FinishPushdown(std::move(op));
+	}
+
+	// Loop through the filters. If a filter is on a partition in every window expression
+	// it can be pushed down.
 	for (idx_t i = 0; i < filters.size(); i++) {
-		if (filters_to_pushdown[i] == 1) {
-			pushdown.filters.push_back(std::move(filters.at(i)));
-			continue;
-		}
-		leftover_filters.push_back(std::move(filters.at(i)));
-	}
-	if (!pushdown.filters.empty()) {
-		op->children[0] = pushdown.Rewrite(std::move(op->children[0]));
-	}
-	filters = std::move(leftover_filters);
+		auto can_pushdown_filter = true;
 
+		// the filter must be on all partition bindings
+		vector<ColumnBinding> bindings;
+		ExtractFilterBindings(*filters.at(i)->filter, bindings);
+		if (CanPushdownFilter(window_exprs_partition_bindings, bindings)) {
+
+		}
+//		for (auto &partition_bindings : window_exprs_partition_bindings) {
+//			can_pushdown_filter = can_pushdown_filter && FilterIsOnPartition(partition_bindings, *filters.at(i)->filter);
+//		}
+//		if (can_pushdown_filter) {
+//			pushdown.filters.push_back(std::move(filters.at(i)));
+//		} else {
+//			leftover_filters.push_back(std::move(filters.at(i)));
+//		}
+	}
+	op->children[0] = pushdown.Rewrite(std::move(op->children[0]));
+	filters = std::move(leftover_filters);
 	return FinishPushdown(std::move(op));
+
 }
 } // namespace duckdb
