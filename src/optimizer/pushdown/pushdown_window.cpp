@@ -91,7 +91,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOpe
 
 		// the filter must be on all partition bindings
 		for (auto &partition_bindings : window_exprs_partition_bindings) {
-			can_pushdown_filter = can_pushdown_filter && FilterIsOnPartition(partition_bindings, *filters.at(i)->filter);
+			can_pushdown_filter =
+			    can_pushdown_filter && FilterIsOnPartition(partition_bindings, *filters.at(i)->filter);
 		}
 		if (can_pushdown_filter) {
 			pushdown.filters.push_back(std::move(filters.at(i)));
@@ -102,6 +103,5 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOpe
 	op->children[0] = pushdown.Rewrite(std::move(op->children[0]));
 	filters = std::move(leftover_filters);
 	return FinishPushdown(std::move(op));
-
 }
 } // namespace duckdb
