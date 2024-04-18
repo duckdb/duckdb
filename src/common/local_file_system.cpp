@@ -40,7 +40,11 @@ extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG)
 #endif
 
 #if defined(__linux__)
-#include <linux/falloc.h>
+// See https://man7.org/linux/man-pages/man2/fallocate.2.html
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE /* See feature_test_macros(7) */
+#endif
+#include <fcntl.h>
 #include <libgen.h>
 // See e.g.:
 // https://opensource.apple.com/source/CarbonHeaders/CarbonHeaders-18.1/TargetConditionals.h.auto.html
