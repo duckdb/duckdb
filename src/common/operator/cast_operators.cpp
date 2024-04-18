@@ -2486,7 +2486,7 @@ bool DoubleToDecimalCast(SRC input, DST &result, CastParameters &parameters, uin
 		HandleCastError::AssignError(error, parameters);
 		return false;
 	}
-	result = Cast::Operation<SRC, DST>(UnsafeNumericCast<SRC>(value));
+	result = Cast::Operation<SRC, DST>(static_cast<SRC>(value));
 	return true;
 }
 
