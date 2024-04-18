@@ -221,9 +221,10 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 		auto type_info = make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE);
 		return make_uniq<ArrowType>(LogicalType::BLOB, std::move(type_info));
 	} else if (format[0] == 'w') {
-		std::string parameters = format.substr(format.find(':') + 1);
+		string parameters = format.substr(format.find(':') + 1);
 		auto fixed_size = NumericCast<idx_t>(std::stoi(parameters));
-		return make_uniq<ArrowType>(LogicalType::BLOB, fixed_size);
+		auto type_info = make_uniq<ArrowStringInfo>(fixed_size);
+		return make_uniq<ArrowType>(LogicalType::BLOB, std::move(type_info));
 	} else if (format[0] == 't' && format[1] == 's') {
 		// Timestamp with Timezone
 		// TODO right now we just get the UTC value. We probably want to support this properly in the future
