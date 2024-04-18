@@ -38,22 +38,6 @@ void JoinNode::Print() {
 	Printer::Print(ToString());
 }
 
-void JoinNode::Verify() {
-#ifdef DEBUG
-	D_ASSERT(set.count >= 1);
-	idx_t left_count = 0, right_count = 0;
-	if (left) {
-		left->Verify();
-		left_count = left->set.count;
-	}
-	if (right) {
-		right->Verify();
-		right_count = right->set.count;
-	}
-	D_ASSERT(set.count == left_count + right_count || set.count == 1);
-#endif
-}
-
 DPJoinNode::DPJoinNode(JoinRelationSet &set) : set(set), info(nullptr), is_leaf(true), left_set(set), right_set(set) {
 }
 
