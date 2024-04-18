@@ -540,7 +540,8 @@ void LocalFileSystem::CreateDirectory(const string &directory, optional_ptr<File
 	if (stat(directory.c_str(), &st) != 0) {
 		/* Directory does not exist. EEXIST for race condition */
 		if (mkdir(directory.c_str(), 0755) != 0 && errno != EEXIST) {
-			throw IOException("Failed to create directory \"%s\"!", {{"errno", std::to_string(errno)}}, directory);
+			throw IOException("Failed to create directory \"%s\": %s", {{"errno", std::to_string(errno)}}, directory,
+			                  strerror(errno));
 		}
 	} else if (!S_ISDIR(st.st_mode)) {
 		throw IOException("Failed to create directory \"%s\": path exists but is not a directory!",
@@ -989,7 +990,8 @@ void LocalFileSystem::CreateDirectory(const string &directory, optional_ptr<File
 	}
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(directory.c_str());
 	if (directory.empty() || !CreateDirectoryW(unicode_path.c_str(), NULL) || !DirectoryExists(directory)) {
-		throw IOException("Could not create directory: \'%s\'", directory.c_str());
+		auto error = LocalFileSystem::GetLastErrorAsString();
+		throw IOException("Failed to create directory \'%s\': %s", directory.c_str(), error);
 	}
 }
 
