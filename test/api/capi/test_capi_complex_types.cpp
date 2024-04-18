@@ -105,6 +105,7 @@ TEST_CASE("Test enum types C API", "[capi]") {
 		for (idx_t i = 0; i < value_count; i++) {
 			duckdb_free(values[i]);
 		}
+		duckdb_destroy_logical_type(&logical_type);
 	}
 
 	{
@@ -120,6 +121,7 @@ TEST_CASE("Test enum types C API", "[capi]") {
 		for (idx_t i = 0; i < value_count; i++) {
 			duckdb_free(values[i]);
 		}
+		duckdb_destroy_logical_type(&logical_type);
 	}
 
 	{
@@ -130,6 +132,7 @@ TEST_CASE("Test enum types C API", "[capi]") {
 		auto status = duckdb_enum_values(logical_type, values, 1, &value_count);
 		REQUIRE(status == DuckDBError);
 		REQUIRE(value_count == 0);
+		duckdb_destroy_logical_type(&logical_type);
 	}
 
 	{
@@ -137,6 +140,7 @@ TEST_CASE("Test enum types C API", "[capi]") {
 		auto logical_type = duckdb_vector_get_column_type(duckdb_data_chunk_get_vector(chunk->GetChunk(), 0));
 		auto status = duckdb_enum_values(logical_type, NULL, 100, NULL);
 		REQUIRE(status == DuckDBError);
+		duckdb_destroy_logical_type(&logical_type);
 	}
 }
 

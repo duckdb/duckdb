@@ -206,7 +206,8 @@ char *duckdb_enum_dictionary_value(duckdb_logical_type type, idx_t index) {
 
 duckdb_state duckdb_enum_values(duckdb_logical_type type, char **values, idx_t values_length, idx_t *filled_count) {
 	if (!AssertLogicalTypeId(type, duckdb::LogicalTypeId::ENUM) || values == NULL) {
-		if (filled_count != NULL) *filled_count = 0;
+		if (filled_count != NULL)
+			*filled_count = 0;
 		return duckdb_state::DuckDBError;
 	}
 	auto &ltype = *(reinterpret_cast<duckdb::LogicalType *>(type));
