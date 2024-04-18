@@ -991,7 +991,7 @@ void LocalFileSystem::CreateDirectory(const string &directory, optional_ptr<File
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(directory.c_str());
 	if (directory.empty() || !CreateDirectoryW(unicode_path.c_str(), NULL) || !DirectoryExists(directory)) {
 		auto error = LocalFileSystem::GetLastErrorAsString();
-		throw IOException("Failed to create directory \'%s\': %s", directory.c_str(), error);
+		throw IOException("Failed to create directory \"%s\": %s", directory.c_str(), error);
 	}
 }
 
