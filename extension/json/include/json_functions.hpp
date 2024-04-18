@@ -112,6 +112,7 @@ private:
 	static ScalarFunctionSet GetArrayRotateFunction();
 	static ScalarFunctionSet GetObjectAddFunction();
 	static ScalarFunctionSet GetObjectReplaceFunction();
+	static ScalarFunctionSet GetObjectRenameKeyFunction();
 	static PragmaFunctionSet GetExecuteJsonSerializedSqlPragmaFunction();
 
 	template <class FUNCTION_INFO>
