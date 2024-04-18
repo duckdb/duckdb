@@ -75,6 +75,19 @@ struct SetColumns {
 	}
 };
 
+struct HeaderValue {
+	HeaderValue() : is_null(true) {
+	}
+	explicit HeaderValue(string_t value_p) {
+		value = value_p;
+	}
+	bool IsNull() {
+		return is_null;
+	}
+	bool is_null = false;
+	string_t value {};
+};
+
 //! Sniffer that detects Header, Dialect and Types of CSV Files
 class CSVSniffer {
 public:
@@ -166,7 +179,7 @@ private:
 	unordered_map<idx_t, vector<LogicalType>> best_sql_types_candidates_per_column_idx;
 	map<LogicalTypeId, vector<string>> best_format_candidates;
 	unique_ptr<StringValueScanner> best_candidate;
-	vector<Value> best_header_row;
+	vector<HeaderValue> best_header_row;
 	//! Variable used for sniffing date and timestamp
 	map<LogicalTypeId, DateTimestampSniffing> format_candidates;
 	map<LogicalTypeId, DateTimestampSniffing> original_format_candidates;

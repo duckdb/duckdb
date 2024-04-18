@@ -16,9 +16,9 @@ struct TryCastFloatingOperator {
 	}
 };
 
-static bool StartsWithNumericDate(string &separator, const string &value) {
-	auto begin = value.c_str();
-	auto end = begin + value.size();
+static bool StartsWithNumericDate(string &separator, const string_t &value) {
+	auto begin = value.GetData();
+	auto end = begin + value.GetSize();
 
 	//	StrpTimeFormat::Parse will skip whitespace, so we can too
 	auto field1 = std::find_if_not(begin, end, StringUtil::CharacterIsSpace);
@@ -303,12 +303,7 @@ void CSVSniffer::DetectTypes() {
 					string separator;
 					// If Value is not Null, Has a numeric date format, and the current investigated candidate is
 					// either a timestamp or a date
-					// fixme: make this string_t
-					string str_val;
-					if (null_mask.RowIsValid(row_idx)) {
-						str_val = vector_data[row_idx].GetString();
-					}
-					if (null_mask.RowIsValid(row_idx) && StartsWithNumericDate(separator, str_val) &&
+					if (null_mask.RowIsValid(row_idx) && StartsWithNumericDate(separator, vector_data[row_idx]) &&
 					    (col_type_candidates.back().id() == LogicalTypeId::TIMESTAMP ||
 					     col_type_candidates.back().id() == LogicalTypeId::DATE)) {
 						DetectDateAndTimeStampFormats(candidate->GetStateMachine(), sql_type, separator,
@@ -363,8 +358,15 @@ void CSVSniffer::DetectTypes() {
 			}
 			if (chunk_size > 0) {
 				for (idx_t col_idx = 0; col_idx < data_chunk.ColumnCount(); col_idx++) {
-					// fixme: make this string_t
-					best_header_row.emplace_back(data_chunk.GetValue(col_idx, 0));
+					auto &cur_vector = data_chunk.data[col_idx];
+					auto vector_data = FlatVector::GetData<string_t>(cur_vector);
+					auto null_mask = FlatVector::Validity(cur_vector);
+					if (null_mask.RowIsValid(0)) {
+						auto value = HeaderValue(vector_data[0]);
+						best_header_row.push_back(value);
+					} else {
+						best_header_row.push_back({});
+					}
 				}
 			}
 		}

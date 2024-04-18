@@ -111,7 +111,7 @@ bool CSVSniffer::DetectHeaderWithSetColumn() {
 			if (best_header_row[i].IsNull()) {
 				return false;
 			}
-			if (best_header_row[i] != (*set_columns.names)[i]) {
+			if (best_header_row[i].value.GetString() != (*set_columns.names)[i]) {
 				has_header = false;
 				break;
 			}
@@ -120,17 +120,12 @@ bool CSVSniffer::DetectHeaderWithSetColumn() {
 	if (!has_header) {
 		// We verify if the types are consistent
 		for (idx_t col = 0; col < set_columns.Size(); col++) {
-			auto dummy_val = best_header_row[col];
 			// try cast to sql_type of column
 			const auto &sql_type = (*set_columns.types)[col];
 			if (sql_type != LogicalType::VARCHAR) {
 				all_varchar = false;
-				string_t val;
-				if (!dummy_val.IsNull()) {
-					val = StringValue::Get(dummy_val);
-				}
-
-				if (!IsCasteable(val, sql_type, options.dialect_options, dummy_val.IsNull())) {
+				if (!IsCasteable(best_header_row[col].value, sql_type, options.dialect_options,
+				                 best_header_row[col].IsNull())) {
 					first_row_consistent = false;
 				}
 			}
@@ -174,19 +169,15 @@ void CSVSniffer::DetectHeader() {
 		has_header = DetectHeaderWithSetColumn();
 	} else {
 		for (idx_t col = 0; col < best_header_row.size(); col++) {
-			auto dummy_val = best_header_row[col];
-			if (!dummy_val.IsNull()) {
+			if (!best_header_row[col].IsNull()) {
 				first_row_nulls = false;
 			}
 			// try cast to sql_type of column
 			const auto &sql_type = best_sql_types_candidates_per_column_idx[col].back();
 			if (sql_type != LogicalType::VARCHAR) {
 				all_varchar = false;
-				string_t val;
-				if (!dummy_val.IsNull()) {
-					val = StringValue::Get(dummy_val);
-				}
-				if (!IsCasteable(val, sql_type, sniffer_state_machine.dialect_options, dummy_val.IsNull())) {
+				if (!IsCasteable(best_header_row[col].value, sql_type, sniffer_state_machine.dialect_options,
+				                 best_header_row[col].IsNull())) {
 					first_row_consistent = false;
 				}
 			}
@@ -217,11 +208,10 @@ void CSVSniffer::DetectHeader() {
 
 		// get header names from CSV
 		for (idx_t col = 0; col < best_header_row.size(); col++) {
-			const auto &val = best_header_row[col];
-			string col_name = val.ToString();
+			string col_name = best_header_row[col].value.GetString();
 
 			// generate name if field is empty
-			if (col_name.empty() || val.IsNull()) {
+			if (col_name.empty() || best_header_row[col].IsNull()) {
 				col_name = GenerateColumnName(sniffer_state_machine.dialect_options.num_cols, col);
 			}
 
