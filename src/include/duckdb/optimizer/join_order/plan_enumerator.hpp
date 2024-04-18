@@ -81,11 +81,6 @@ private:
 	bool SolveJoinOrderExactly();
 	//! Solve the join order approximately using a greedy algorithm
 	void SolveJoinOrderApproximately();
-
-	void UpdateDPTree(JoinNode &new_plan);
-
-	void UpdateJoinNodesInFullPlan(JoinNode &node);
-	bool NodeInFullPlan(JoinNode &node);
 };
 
 } // namespace duckdb

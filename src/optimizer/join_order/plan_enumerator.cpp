@@ -8,25 +8,6 @@
 
 namespace duckdb {
 
-bool PlanEnumerator::NodeInFullPlan(JoinNode &node) {
-	return join_nodes_in_full_plan.find(node.set.ToString()) != join_nodes_in_full_plan.end();
-}
-
-void PlanEnumerator::UpdateJoinNodesInFullPlan(JoinNode &node) {
-	if (node.set.count == query_graph_manager.relation_manager.NumRelations()) {
-		join_nodes_in_full_plan.clear();
-	}
-	if (node.set.count < query_graph_manager.relation_manager.NumRelations()) {
-		join_nodes_in_full_plan.insert(node.set.ToString());
-	}
-	if (node.left) {
-		UpdateJoinNodesInFullPlan(*node.left);
-	}
-	if (node.right) {
-		UpdateJoinNodesInFullPlan(*node.right);
-	}
-}
-
 static vector<unordered_set<idx_t>> AddSuperSets(const vector<unordered_set<idx_t>> &current,
                                                  const vector<idx_t> &all_neighbors) {
 	vector<unordered_set<idx_t>> ret;
@@ -169,47 +150,10 @@ unique_ptr<JoinNode> PlanEnumerator::EmitPair(JoinRelationSet &left, JoinRelatio
 	}
 	if (entry == plans.end() || new_cost < old_cost) {
 		// the new plan costs less than the old plan. Update our DP tree and cost tree
-		auto &result = *new_plan;
-
-		if (full_plan_found &&
-		    join_nodes_in_full_plan.find(new_plan->set.ToString()) != join_nodes_in_full_plan.end()) {
-			must_update_full_plan = true;
-		}
-		if (new_set.count == query_graph_manager.relation_manager.NumRelations()) {
-			full_plan_found = true;
-			// If we find a full plan, we need to keep track of which nodes are in the full plan.
-			// It's possible the DP algorithm updates a node in the current full plan, then moves on
-			// to the SolveApproximately. SolveApproximately may find a full plan with a higher cost than
-			// what SolveExactly found. In this case, we revert to the SolveExactly plan, but it is
-			// possible to get use-after-free errors if the SolveApproximately algorithm updated some (but not all)
-			// nodes in the SolveExactly plan
-			// If we know a node in the full plan is updated, we can prevent ourselves from exiting the
-			// DP algorithm until the last plan updated is a full plan
-			//			UpdateJoinNodesInFullPlan(result);
-			if (must_update_full_plan) {
-				must_update_full_plan = false;
-			}
-		}
-
-		if (new_set.ToString() == "[0, 1, 2, 5, 6, 9]") {
-			auto break_here = 0;
-		}
-		D_ASSERT(new_plan);
 		plans[new_set] = std::move(new_plan);
-		//		std::cout << "updating set " << new_set.ToString() << "with children " << left.ToString() << " and " <<
-		//right.ToString() << std::endl;
-		if (new_set.ToString() == "[0, 2, 5, 6]") {
-			unordered_set<idx_t> bindings = {0, 1, 2, 5, 6, 9};
-			JoinRelationSet &desired_set = query_graph_manager.set_manager.GetJoinRelation(bindings);
-			auto desired_set_plan = plans.find(desired_set);
-			if (desired_set_plan != plans.end()) {
-				std::cout << "verify ok? I don't think so" << std::endl;
-			}
-		}
-		return CreateJoinNodeFromDPJoinNode(result);
+		return CreateJoinNodeFromDPJoinNode(*plans[new_set]);
 	}
-	// Create new join node.
-
+	// Create join node from the plan currently in the DP table.
 	return CreateJoinNodeFromDPJoinNode(*entry->second);
 }
 
@@ -384,41 +328,6 @@ bool PlanEnumerator::SolveJoinOrderExactly() {
 		}
 	}
 	return true;
-}
-
-void PlanEnumerator::UpdateDPTree(JoinNode &new_plan) {
-	return;
-	//	if (!NodeInFullPlan(new_plan)) {
-	//		// if the new node is not in the full plan, feel free to return
-	//		// because you won't be updating the full plan.
-	//		return;
-	//	}
-	//	auto &new_set = new_plan.set;
-	//	// now update every plan that uses this plan
-	//	unordered_set<idx_t> exclusion_set;
-	//	for (idx_t i = 0; i < new_set.count; i++) {
-	//		exclusion_set.insert(new_set.relations[i]);
-	//	}
-	//	auto neighbors = query_graph.GetNeighbors(new_set, exclusion_set);
-	//	auto all_neighbors = GetAllNeighborSets(neighbors);
-	//	for (const auto &neighbor : all_neighbors) {
-	//		auto &neighbor_relation = query_graph_manager.set_manager.GetJoinRelation(neighbor);
-	//		auto &combined_set = query_graph_manager.set_manager.Union(new_set, neighbor_relation);
-	//
-	//		auto combined_set_plan = plans.find(combined_set);
-	//		if (combined_set_plan == plans.end()) {
-	//			continue;
-	//		}
-	//
-	//		double combined_set_plan_cost = combined_set_plan->second->cost; // combined_set_plan->second->GetCost();
-	//		auto connections = query_graph.GetConnections(new_set, neighbor_relation);
-	//		// recurse and update up the tree if the combined set produces a plan with a lower cost
-	//		// only recurse on neighbor relations that have plans.
-	//		auto right_plan = plans.find(neighbor_relation);
-	//		if (right_plan == plans.end()) {
-	//			continue;
-	//		}
-	//	}
 }
 
 void PlanEnumerator::SolveJoinOrderApproximately() {
