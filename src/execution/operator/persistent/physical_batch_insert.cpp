@@ -171,6 +171,7 @@ public:
 	TableAppendState current_append_state;
 	unique_ptr<RowGroupCollection> current_collection;
 	optional_ptr<OptimisticDataWriter> writer;
+	unique_ptr<ConstraintVerificationState> constraint_state;
 
 	void CreateNewCollection(DuckTableEntry &table, const vector<LogicalType> &insert_types) {
 		auto &table_info = table.GetStorage().info;
@@ -494,7 +495,10 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &c
 		throw InternalException("Current batch differs from batch - but NextBatch was not called!?");
 	}
 
-	table.GetStorage().VerifyAppendConstraints(table, context.client, lstate.insert_chunk);
+	if (!lstate.constraint_state) {
+		lstate.constraint_state = table.GetStorage().InitializeConstraintVerification(table, context.client);
+	}
+	table.GetStorage().VerifyAppendConstraints(*lstate.constraint_state, context.client, lstate.insert_chunk);
 
 	auto new_row_group = lstate.current_collection->Append(lstate.insert_chunk, lstate.current_append_state);
 	if (new_row_group) {
@@ -595,7 +599,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 		auto &table = gstate.table;
 		auto &storage = table.GetStorage();
 		LocalAppendState append_state;
-		storage.InitializeLocalAppend(append_state, context);
+		storage.InitializeLocalAppend(append_state, table, context);
 		auto &transaction = DuckTransaction::Get(context, table.catalog);
 		for (auto &entry : gstate.collections) {
 			if (entry.type != RowGroupBatchType::NOT_FLUSHED) {

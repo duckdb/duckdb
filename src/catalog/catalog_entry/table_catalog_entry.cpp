@@ -172,11 +172,6 @@ const vector<unique_ptr<Constraint>> &TableCatalogEntry::GetConstraints() {
 DataTable &TableCatalogEntry::GetStorage() {
 	throw InternalException("Calling GetStorage on a TableCatalogEntry that is not a DuckTableEntry");
 }
-
-const vector<unique_ptr<BoundConstraint>> &TableCatalogEntry::GetBoundConstraints() {
-	throw InternalException("Calling GetBoundConstraints on a TableCatalogEntry that is not a DuckTableEntry");
-}
-
 // LCOV_EXCL_STOP
 
 static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,
@@ -239,14 +234,15 @@ vector<ColumnSegmentInfo> TableCatalogEntry::GetColumnSegmentInfo() {
 	return {};
 }
 
-void TableCatalogEntry::BindUpdateConstraints(LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,
+void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,
                                               ClientContext &context) {
 	// check the constraints and indexes of the table to see if we need to project any additional columns
 	// we do this for indexes with multiple columns and CHECK constraints in the UPDATE clause
 	// suppose we have a constraint CHECK(i + j < 10); now we need both i and j to check the constraint
 	// if we are only updating one of the two columns we add the other one to the UPDATE set
 	// with a "useless" update (i.e. i=i) so we can verify that the CHECK constraint is not violated
-	for (auto &constraint : GetBoundConstraints()) {
+	auto bound_constraints = binder.BindConstraints(constraints, name, columns);
+	for (auto &constraint : bound_constraints) {
 		if (constraint->type == ConstraintType::CHECK) {
 			auto &check = constraint->Cast<BoundCheckConstraint>();
 			// check constraint! check if we need to add any extra columns to the UPDATE clause

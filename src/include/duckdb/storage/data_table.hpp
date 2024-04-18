@@ -41,6 +41,9 @@ class WriteAheadLog;
 class TableDataWriter;
 class ConflictManager;
 class TableScanState;
+struct TableDeleteState;
+struct ConstraintVerificationState;
+struct TableUpdateState;
 enum class VerifyExistenceType : uint8_t;
 
 //! DataTable represents a physical table on disk
@@ -92,7 +95,7 @@ public:
 	           const Vector &row_ids, idx_t fetch_count, ColumnFetchState &state);
 
 	//! Initializes an append to transaction-local storage
-	void InitializeLocalAppend(LocalAppendState &state, ClientContext &context);
+	void InitializeLocalAppend(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context);
 	//! Append a DataChunk to the transaction-local storage of the table.
 	void LocalAppend(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
 	                 bool unsafe = false);
@@ -108,10 +111,14 @@ public:
 	OptimisticDataWriter &CreateOptimisticWriter(ClientContext &context);
 	void FinalizeOptimisticWriter(ClientContext &context, OptimisticDataWriter &writer);
 
+	unique_ptr<TableDeleteState> InitializeDelete(TableCatalogEntry &table, ClientContext &context);
 	//! Delete the entries with the specified row identifier from the table
-	idx_t Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, idx_t count);
+	idx_t Delete(TableDeleteState &state, ClientContext &context, Vector &row_ids, idx_t count);
+
+
+	unique_ptr<TableUpdateState> InitializeUpdate(TableCatalogEntry &table, ClientContext &context);
 	//! Update the entries with the specified row identifier from the table
-	void Update(TableCatalogEntry &table, ClientContext &context, Vector &row_ids,
+	void Update(TableUpdateState &state, ClientContext &context, Vector &row_ids,
 	            const vector<PhysicalIndex> &column_ids, DataChunk &data);
 	//! Update a single (sub-)column along a column path
 	//! The column_path vector is a *path* towards a column within the table
@@ -186,22 +193,24 @@ public:
 	//! FIXME: This is only necessary until we treat all indexes as catalog entries, allowing to alter constraints
 	bool IndexNameIsUnique(const string &name);
 
+	//! Initialize constraint verification
+	unique_ptr<ConstraintVerificationState> InitializeConstraintVerification(TableCatalogEntry &table, ClientContext &context);
 	//! Verify constraints with a chunk from the Append containing all columns of the table
-	void VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
-	                             ConflictManager *conflict_manager = nullptr);
+	void VerifyAppendConstraints(ConstraintVerificationState &state, ClientContext &context, DataChunk &chunk,
+								 optional_ptr<ConflictManager> conflict_manager = nullptr);
 
 public:
 	static void VerifyUniqueIndexes(TableIndexList &indexes, ClientContext &context, DataChunk &chunk,
-	                                ConflictManager *conflict_manager);
+									optional_ptr<ConflictManager> conflict_manager);
 
 private:
 	//! Verify the new added constraints against current persistent&local data
 	void VerifyNewConstraint(ClientContext &context, DataTable &parent, const BoundConstraint *constraint);
 	//! Verify constraints with a chunk from the Update containing only the specified column_ids
-	void VerifyUpdateConstraints(ClientContext &context, TableCatalogEntry &table, DataChunk &chunk,
+	void VerifyUpdateConstraints(ConstraintVerificationState &state, ClientContext &context, DataChunk &chunk,
 	                             const vector<PhysicalIndex> &column_ids);
 	//! Verify constraints with a chunk from the Delete containing all columns of the table
-	void VerifyDeleteConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
+	void VerifyDeleteConstraints(TableDeleteState &state, ClientContext &context, DataChunk &chunk);
 
 	void InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids, idx_t start_row,
 	                              idx_t end_row);

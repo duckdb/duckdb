@@ -17,6 +17,7 @@
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/storage/table/update_state.hpp"
 
 namespace duckdb {
 
@@ -105,6 +106,14 @@ public:
 	// Rows in the transaction-local storage that have been updated by a DO UPDATE conflict
 	unordered_set<row_t> updated_local_rows;
 	idx_t update_count = 0;
+	unique_ptr<ConstraintVerificationState> constraint_state;
+
+	ConstraintVerificationState &GetConstraintState(DataTable &table, TableCatalogEntry &tableref, ClientContext &context) {
+		if (!constraint_state) {
+			constraint_state = table.InitializeConstraintVerification(tableref, context);
+		}
+		return *constraint_state;
+	}
 };
 
 unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &context) const {
@@ -278,7 +287,8 @@ static idx_t PerformOnConflictAction(ExecutionContext &context, DataChunk &chunk
 	auto &data_table = table.GetStorage();
 	// Perform the update, using the results of the SET expressions
 	if (GLOBAL) {
-		data_table.Update(table, context.client, row_ids, set_columns, update_chunk);
+		auto update_state = data_table.InitializeUpdate(table, context.client);
+		data_table.Update(*update_state, context.client, row_ids, set_columns, update_chunk);
 	} else {
 		auto &local_storage = LocalStorage::Get(context.client, data_table.db);
 		// Perform the update, using the results of the SET expressions
@@ -320,7 +330,8 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 	ConflictInfo conflict_info(conflict_target);
 	ConflictManager conflict_manager(VerifyExistenceType::APPEND, lstate.insert_chunk.size(), &conflict_info);
 	if (GLOBAL) {
-		data_table.VerifyAppendConstraints(table, context.client, lstate.insert_chunk, &conflict_manager);
+		auto &constraint_state = lstate.GetConstraintState(data_table, table, context.client);
+		data_table.VerifyAppendConstraints(constraint_state, context.client, lstate.insert_chunk, &conflict_manager);
 	} else {
 		DataTable::VerifyUniqueIndexes(local_storage.GetIndexes(data_table), context.client, lstate.insert_chunk,
 		                               &conflict_manager);
@@ -380,7 +391,8 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 			combined_chunk.Slice(sel.Selection(), sel.Count());
 			row_ids.Slice(sel.Selection(), sel.Count());
 			if (GLOBAL) {
-				data_table.VerifyAppendConstraints(table, context.client, combined_chunk, nullptr);
+				auto &constraint_state = lstate.GetConstraintState(data_table, table, context.client);
+				data_table.VerifyAppendConstraints(constraint_state, context.client, combined_chunk, nullptr);
 			} else {
 				DataTable::VerifyUniqueIndexes(local_storage.GetIndexes(data_table), context.client,
 				                               lstate.insert_chunk, nullptr);
@@ -406,7 +418,8 @@ idx_t PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionCont
                                          InsertLocalState &lstate) const {
 	auto &data_table = table.GetStorage();
 	if (action_type == OnConflictAction::THROW) {
-		data_table.VerifyAppendConstraints(table, context.client, lstate.insert_chunk, nullptr);
+		auto &constraint_state = lstate.GetConstraintState(data_table, table, context.client);
+		data_table.VerifyAppendConstraints(constraint_state, context.client, lstate.insert_chunk, nullptr);
 		return 0;
 	}
 	// Check whether any conflicts arise, and if they all meet the conflict_target + condition
@@ -429,7 +442,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 
 	if (!parallel) {
 		if (!gstate.initialized) {
-			storage.InitializeLocalAppend(gstate.append_state, context.client);
+			storage.InitializeLocalAppend(gstate.append_state, table, context.client);
 			gstate.initialized = true;
 		}
 
@@ -487,7 +500,7 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 		// we have few rows - append to the local storage directly
 		auto &table = gstate.table;
 		auto &storage = table.GetStorage();
-		storage.InitializeLocalAppend(gstate.append_state, context.client);
+		storage.InitializeLocalAppend(gstate.append_state, table, context.client);
 		auto &transaction = DuckTransaction::Get(context.client, table.catalog);
 		lstate.local_collection->Scan(transaction, [&](DataChunk &insert_chunk) {
 			storage.LocalAppend(gstate.append_state, table, context.client, insert_chunk);

@@ -678,9 +678,10 @@ void WriteAheadLogDeserializer::ReplayDelete() {
 
 	auto source_ids = FlatVector::GetData<row_t>(chunk.data[0]);
 	// delete the tuples from the current table
+	TableDeleteState delete_state;
 	for (idx_t i = 0; i < chunk.size(); i++) {
 		row_ids[0] = source_ids[i];
-		state.current_table->GetStorage().Delete(*state.current_table, context, row_identifiers, 1);
+		state.current_table->GetStorage().Delete(delete_state, context, row_identifiers, 1);
 	}
 }
 

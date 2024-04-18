@@ -6,6 +6,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/storage/table/delete_state.hpp"
 
 namespace duckdb {
 
@@ -25,10 +26,12 @@ public:
 
 class DeleteLocalState : public LocalSinkState {
 public:
-	DeleteLocalState(Allocator &allocator, const vector<LogicalType> &table_types) {
-		delete_chunk.Initialize(allocator, table_types);
+	DeleteLocalState(ClientContext &context, TableCatalogEntry &table) {
+		delete_chunk.Initialize(Allocator::Get(context), table.GetTypes());
+		delete_state = table.GetStorage().InitializeDelete(table, context);
 	}
 	DataChunk delete_chunk;
+	unique_ptr<TableDeleteState> delete_state;
 };
 
 SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
@@ -52,8 +55,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 		table.Fetch(transaction, ustate.delete_chunk, column_ids, row_identifiers, chunk.size(), cfs);
 		gstate.return_collection.Append(ustate.delete_chunk);
 	}
-	gstate.deleted_count += table.Delete(tableref, context.client, row_identifiers, chunk.size());
-
+	gstate.deleted_count += table.Delete(*ustate.delete_state, context.client, row_identifiers, chunk.size());
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -62,7 +64,7 @@ unique_ptr<GlobalSinkState> PhysicalDelete::GetGlobalSinkState(ClientContext &co
 }
 
 unique_ptr<LocalSinkState> PhysicalDelete::GetLocalSinkState(ExecutionContext &context) const {
-	return make_uniq<DeleteLocalState>(Allocator::Get(context.client), table.GetTypes());
+	return make_uniq<DeleteLocalState>(context.client, tableref);
 }
 
 //===--------------------------------------------------------------------===//

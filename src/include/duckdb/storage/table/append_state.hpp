@@ -14,6 +14,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/transaction/transaction_data.hpp"
+#include "duckdb/planner/bound_constraint.hpp"
 
 namespace duckdb {
 class ColumnSegment;
@@ -69,9 +70,17 @@ struct TableAppendState {
 	TransactionData transaction;
 };
 
+struct ConstraintVerificationState {
+	explicit ConstraintVerificationState(TableCatalogEntry &table_p) : table(table_p) {}
+
+	TableCatalogEntry &table;
+	vector<unique_ptr<BoundConstraint>> bound_constraints;
+};
+
 struct LocalAppendState {
 	TableAppendState append_state;
 	LocalTableStorage *storage;
+	unique_ptr<ConstraintVerificationState> constraint_state;
 };
 
 } // namespace duckdb

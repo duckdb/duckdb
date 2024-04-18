@@ -24,8 +24,6 @@ public:
 	void UndoAlter(ClientContext &context, AlterInfo &info) override;
 	//! Returns the underlying storage of the table
 	DataTable &GetStorage() override;
-	//! Returns a list of the bound constraints of the table
-	const vector<unique_ptr<BoundConstraint>> &GetBoundConstraints() override;
 
 	//! Get statistics of a column (physical or virtual) within the table
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id) override;
@@ -60,13 +58,11 @@ private:
 	unique_ptr<CatalogEntry> SetColumnComment(ClientContext &context, SetColumnCommentInfo &info);
 
 	void UpdateConstraintsOnColumnDrop(const LogicalIndex &removed_index, const vector<LogicalIndex> &adjusted_indices,
-	                                   const RemoveColumnInfo &info, CreateTableInfo &create_info, bool is_generated);
+	                                   const RemoveColumnInfo &info, CreateTableInfo &create_info, const vector<unique_ptr<BoundConstraint>> &bound_constraints, bool is_generated);
 
 private:
 	//! A reference to the underlying storage unit used for this table
 	std::shared_ptr<DataTable> storage;
-	//! A list of constraints that are part of this table
-	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	//! Manages dependencies of the individual columns of the table
 	ColumnDependencyManager column_dependency_manager;
 };

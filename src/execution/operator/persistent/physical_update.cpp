@@ -8,6 +8,8 @@
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/table/delete_state.hpp"
+#include "duckdb/storage/table/update_state.hpp"
 
 namespace duckdb {
 
@@ -55,6 +57,22 @@ public:
 	DataChunk update_chunk;
 	DataChunk mock_chunk;
 	ExpressionExecutor default_executor;
+	unique_ptr<TableDeleteState> delete_state;
+	unique_ptr<TableUpdateState> update_state;
+
+	TableDeleteState &GetDeleteState(DataTable &table, TableCatalogEntry &tableref, ClientContext &context) {
+		if (!delete_state) {
+			delete_state = table.InitializeDelete(tableref, context);
+		}
+		return *delete_state;
+	}
+
+	TableUpdateState &GetUpdateState(DataTable &table, TableCatalogEntry &tableref, ClientContext &context) {
+		if (!update_state) {
+			update_state = table.InitializeUpdate(tableref, context);
+		}
+		return *update_state;
+	}
 };
 
 SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
@@ -106,7 +124,8 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 			// we need to slice here
 			update_chunk.Slice(sel, update_count);
 		}
-		table.Delete(tableref, context.client, row_ids, update_chunk.size());
+		auto &delete_state = lstate.GetDeleteState(table, tableref, context.client);
+		table.Delete(delete_state, context.client, row_ids, update_chunk.size());
 		// for the append we need to arrange the columns in a specific manner (namely the "standard table order")
 		mock_chunk.SetCardinality(update_chunk);
 		for (idx_t i = 0; i < columns.size(); i++) {
@@ -120,7 +139,8 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 				mock_chunk.data[columns[i].index].Reference(update_chunk.data[i]);
 			}
 		}
-		table.Update(tableref, context.client, row_ids, columns, update_chunk);
+		auto &update_state = lstate.GetUpdateState(table, tableref, context.client);
+		table.Update(update_state, context.client, row_ids, columns, update_chunk);
 	}
 
 	if (return_chunk) {
