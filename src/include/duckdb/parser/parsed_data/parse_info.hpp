@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/enums/catalog_type.hpp"
 
 namespace duckdb {
 
@@ -55,6 +56,7 @@ public:
 	virtual void Serialize(Serializer &serializer) const;
 	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);
 	static string QualifierToString(const string &catalog, const string &schema, const string &name);
+	static string TypeToString(CatalogType type);
 };
 
 } // namespace duckdb

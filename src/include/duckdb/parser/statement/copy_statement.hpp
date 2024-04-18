@@ -26,7 +26,7 @@ public:
 	unique_ptr<QueryNode> select_statement;
 
 	string ToString() const override;
-	string CopyOptionsToString(const string &format, const case_insensitive_map_t<vector<Value>> &options) const;
+	static string CopyOptionsToString(const string &format, const case_insensitive_map_t<vector<Value>> &options);
 
 protected:
 	CopyStatement(const CopyStatement &other);
