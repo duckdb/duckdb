@@ -1,4 +1,6 @@
 #include "duckdb/parser/parsed_data/load_info.hpp"
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 

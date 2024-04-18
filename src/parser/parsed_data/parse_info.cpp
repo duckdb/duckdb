@@ -1,5 +1,7 @@
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {
 

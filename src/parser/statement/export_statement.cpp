@@ -1,4 +1,5 @@
 #include "duckdb/parser/statement/export_statement.hpp"
+#include "duckdb/parser/statement/copy_statement.hpp"
 
 namespace duckdb {
 
