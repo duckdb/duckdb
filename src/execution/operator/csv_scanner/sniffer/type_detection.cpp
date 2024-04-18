@@ -107,39 +107,39 @@ bool CSVSniffer::IsCasteable(const string_t value, const LogicalType &type, cons
 	}
 	case LogicalTypeId::SMALLINT: {
 		int16_t dummy_value;
-		return TrySimpleIntegerCast(value_ptr, value_size, dummy_value, false);
+		return TrySimpleIntegerCast(value_ptr, value_size, dummy_value, true);
 	}
 	case LogicalTypeId::INTEGER: {
 		int32_t dummy_value;
-		return TrySimpleIntegerCast(value_ptr, value_size, dummy_value, false);
+		return TrySimpleIntegerCast(value_ptr, value_size, dummy_value, true);
 	}
 	case LogicalTypeId::BIGINT: {
 		int64_t dummy_value;
-		return TrySimpleIntegerCast(value_ptr, value_size, dummy_value, false);
+		return TrySimpleIntegerCast(value_ptr, value_size, dummy_value, true);
 	}
 	case LogicalTypeId::UTINYINT: {
 		uint8_t dummy_value;
-		return TrySimpleIntegerCast(value_ptr, value_size, dummy_value, false);
+		return TrySimpleIntegerCast(value_ptr, value_size, dummy_value, true);
 	}
 	case LogicalTypeId::USMALLINT: {
 		uint16_t dummy_value;
-		return TrySimpleIntegerCast(value_ptr, value_size, dummy_value, false);
+		return TrySimpleIntegerCast(value_ptr, value_size, dummy_value, true);
 	}
 	case LogicalTypeId::UINTEGER: {
 		uint32_t dummy_value;
-		return TrySimpleIntegerCast(value_ptr, value_size, dummy_value, false);
+		return TrySimpleIntegerCast(value_ptr, value_size, dummy_value, true);
 	}
 	case LogicalTypeId::UBIGINT: {
 		uint64_t dummy_value;
-		return TrySimpleIntegerCast(value_ptr, value_size, dummy_value, false);
+		return TrySimpleIntegerCast(value_ptr, value_size, dummy_value, true);
 	}
 	case LogicalTypeId::DOUBLE: {
 		double dummy_value;
-		return TryDoubleCast<double>(value_ptr, value_size, dummy_value, false, options.decimal_separator[0]);
+		return TryDoubleCast<double>(value_ptr, value_size, dummy_value, true, options.decimal_separator[0]);
 	}
 	case LogicalTypeId::FLOAT: {
 		float dummy_value;
-		return TryDoubleCast<float>(value_ptr, value_size, dummy_value, false, options.decimal_separator[0]);
+		return TryDoubleCast<float>(value_ptr, value_size, dummy_value, true, options.decimal_separator[0]);
 	}
 	case LogicalTypeId::DATE: {
 		if (!dialect_options.date_format.find(LogicalTypeId::DATE)->second.GetValue().Empty()) {
@@ -152,7 +152,7 @@ bool CSVSniffer::IsCasteable(const string_t value, const LogicalType &type, cons
 			idx_t pos;
 			bool special;
 			date_t dummy_value;
-			return Date::TryConvertDate(value_ptr, value_size, pos, dummy_value, special, false);
+			return Date::TryConvertDate(value_ptr, value_size, pos, dummy_value, special, true);
 		}
 	}
 	case LogicalTypeId::TIMESTAMP: {
