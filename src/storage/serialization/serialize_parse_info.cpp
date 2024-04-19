@@ -466,11 +466,17 @@ unique_ptr<ParseInfo> TransactionInfo::Deserialize(Deserializer &deserializer) {
 void VacuumInfo::Serialize(Serializer &serializer) const {
 	ParseInfo::Serialize(serializer);
 	serializer.WriteProperty<VacuumOptions>(200, "options", options);
+	serializer.WritePropertyWithDefault<bool>(201, "has_table", has_table);
+	serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(202, "ref", ref);
+	serializer.WritePropertyWithDefault<vector<string>>(203, "columns", columns);
 }
 
 unique_ptr<ParseInfo> VacuumInfo::Deserialize(Deserializer &deserializer) {
 	auto options = deserializer.ReadProperty<VacuumOptions>(200, "options");
 	auto result = duckdb::unique_ptr<VacuumInfo>(new VacuumInfo(options));
+	deserializer.ReadPropertyWithDefault<bool>(201, "has_table", result->has_table);
+	deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(202, "ref", result->ref);
+	deserializer.ReadPropertyWithDefault<vector<string>>(203, "columns", result->columns);
 	return std::move(result);
 }
 

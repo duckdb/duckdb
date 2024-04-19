@@ -88,7 +88,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	}
 	if (options.auto_detect && !options.file_options.union_by_name) {
 		options.file_path = result->files[0];
-		result->buffer_manager = make_shared<CSVBufferManager>(context, options, result->files[0], 0);
+		result->buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, result->files[0], 0);
 		CSVSniffer sniffer(options, result->buffer_manager, CSVStateMachineCache::Get(context),
 		                   {&return_types, &names});
 		auto sniffer_result = sniffer.SniffCSV();
@@ -132,7 +132,27 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	}
 	result->return_types = return_types;
 	result->return_names = names;
-
+	if (!options.force_not_null_names.empty()) {
+		// Lets first check all column names match
+		duckdb::unordered_set<string> column_names;
+		for (auto &name : names) {
+			column_names.insert(name);
+		}
+		for (auto &force_name : options.force_not_null_names) {
+			if (column_names.find(force_name) == column_names.end()) {
+				throw BinderException("\"force_not_null\" expected to find %s, but it was not found in the table",
+				                      force_name);
+			}
+		}
+		D_ASSERT(options.force_not_null.empty());
+		for (idx_t i = 0; i < names.size(); i++) {
+			if (options.force_not_null_names.find(names[i]) != options.force_not_null_names.end()) {
+				options.force_not_null.push_back(true);
+			} else {
+				options.force_not_null.push_back(false);
+			}
+		}
+	}
 	result->Finalize();
 	return std::move(result);
 }
@@ -225,7 +245,7 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 	table_function.named_parameters["quote"] = LogicalType::VARCHAR;
 	table_function.named_parameters["new_line"] = LogicalType::VARCHAR;
 	table_function.named_parameters["escape"] = LogicalType::VARCHAR;
-	table_function.named_parameters["nullstr"] = LogicalType::VARCHAR;
+	table_function.named_parameters["nullstr"] = LogicalType::ANY;
 	table_function.named_parameters["columns"] = LogicalType::ANY;
 	table_function.named_parameters["auto_type_candidates"] = LogicalType::ANY;
 	table_function.named_parameters["header"] = LogicalType::BOOLEAN;
@@ -244,6 +264,7 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 	table_function.named_parameters["rejects_table"] = LogicalType::VARCHAR;
 	table_function.named_parameters["rejects_scan"] = LogicalType::VARCHAR;
 	table_function.named_parameters["rejects_limit"] = LogicalType::BIGINT;
+	table_function.named_parameters["force_not_null"] = LogicalType::LIST(LogicalType::VARCHAR);
 	table_function.named_parameters["buffer_size"] = LogicalType::UBIGINT;
 	table_function.named_parameters["decimal_separator"] = LogicalType::VARCHAR;
 	table_function.named_parameters["parallel"] = LogicalType::BOOLEAN;

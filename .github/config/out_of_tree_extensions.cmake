@@ -21,6 +21,7 @@ if (NOT MINGW)
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/arrow
             GIT_TAG 9e10240da11f61ea7fbfe3fc9988ffe672ccd40f
+            APPLY_PATCHES
             )
 endif()
 
@@ -30,6 +31,7 @@ if (NOT MINGW)
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_aws
             GIT_TAG f7b8729f1cce5ada5d4add70e1486de50763fb97
+            APPLY_PATCHES
             )
 endif()
 
@@ -38,8 +40,8 @@ if (NOT MINGW)
     duckdb_extension_load(azure
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_azure
-            GIT_TAG 4512a652479016d40d712f990cab9b9aab43d341
-            APPLY_PATCHES
+            GIT_TAG 09623777a366572bfb8fa53e47acdf72133a360e
+			APPLY_PATCHES
             )
 endif()
 
@@ -55,8 +57,7 @@ if (NOT MINGW)
     duckdb_extension_load(iceberg
             ${LOAD_ICEBERG_TESTS}
             GIT_URL https://github.com/duckdb/duckdb_iceberg
-            GIT_TAG 7aa3d8e4cb7b513d35fdacfa28dc328771bc4047
-            APPLY_PATCHES
+            GIT_TAG d89423c2ff90a0b98a093a133c8dfe2a55b9e092
             )
 endif()
 
@@ -68,6 +69,7 @@ if (NOT MINGW)
             DONT_LINK
             GIT_URL https://github.com/duckdb/postgres_scanner
             GIT_TAG 96206f41d5ca7015920a66b54e936c986fe0b0f8
+            APPLY_PATCHES
             )
 endif()
 
@@ -100,6 +102,7 @@ if (NOT WIN32)
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/substrait
             GIT_TAG 1116fb580edd3e26e675436dbdbdf4a0aa5e456e
+            APPLY_PATCHES
             )
 endif()
 
@@ -108,7 +111,6 @@ endif()
 duckdb_extension_load(vss
         LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb_vss
-        GIT_TAG a85e973650a083e4b279126a0aec07924d84e765
+        GIT_TAG 8145f41d97178e82bed3376215eb8d02bcf1eec5
         TEST_DIR test/sql
-        APPLY_PATCHES
     )

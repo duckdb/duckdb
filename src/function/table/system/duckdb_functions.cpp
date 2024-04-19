@@ -453,7 +453,7 @@ bool ExtractFunctionData(FunctionEntry &entry, idx_t function_idx, DataChunk &ou
 	output.SetValue(col++, output_offset, Value(function.schema.catalog.GetName()));
 
 	// database_oid, BIGINT
-	output.SetValue(col++, output_offset, Value::BIGINT(function.schema.catalog.GetOid()));
+	output.SetValue(col++, output_offset, Value::BIGINT(NumericCast<int64_t>(function.schema.catalog.GetOid())));
 
 	// schema_name, LogicalType::VARCHAR
 	output.SetValue(col++, output_offset, Value(function.schema.name));
@@ -497,7 +497,7 @@ bool ExtractFunctionData(FunctionEntry &entry, idx_t function_idx, DataChunk &ou
 	output.SetValue(col++, output_offset, Value::BOOLEAN(function.internal));
 
 	// function_oid, LogicalType::BIGINT
-	output.SetValue(col++, output_offset, Value::BIGINT(function.oid));
+	output.SetValue(col++, output_offset, Value::BIGINT(NumericCast<int64_t>(function.oid)));
 
 	// example, LogicalType::VARCHAR
 	output.SetValue(col++, output_offset, entry.example.empty() ? Value() : entry.example);
