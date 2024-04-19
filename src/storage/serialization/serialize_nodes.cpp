@@ -120,7 +120,7 @@ CSVOption<T> CSVOption<T>::Deserialize(Deserializer &deserializer) {
 void CSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(100, "ignore_errors", ignore_errors, false);
 	serializer.WritePropertyWithDefault<idx_t>(101, "buffer_sample_size", buffer_sample_size);
-	serializer.WritePropertyWithDefault<string>(102, "null_str", null_str);
+	serializer.WritePropertyWithDefault<vector<string>>(102, "null_str", null_str);
 	serializer.WriteProperty<FileCompressionType>(103, "compression", compression);
 	serializer.WritePropertyWithDefault<bool>(104, "allow_quoted_nulls", allow_quoted_nulls);
 	serializer.WritePropertyWithDefault<idx_t>(105, "maximum_line_size", maximum_line_size);
@@ -157,7 +157,7 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	CSVReaderOptions result;
 	deserializer.ReadPropertyWithDefault<bool>(100, "ignore_errors", result.ignore_errors, false);
 	deserializer.ReadPropertyWithDefault<idx_t>(101, "buffer_sample_size", result.buffer_sample_size);
-	deserializer.ReadPropertyWithDefault<string>(102, "null_str", result.null_str);
+	deserializer.ReadPropertyWithDefault<vector<string>>(102, "null_str", result.null_str);
 	deserializer.ReadProperty<FileCompressionType>(103, "compression", result.compression);
 	deserializer.ReadPropertyWithDefault<bool>(104, "allow_quoted_nulls", result.allow_quoted_nulls);
 	deserializer.ReadPropertyWithDefault<idx_t>(105, "maximum_line_size", result.maximum_line_size);

@@ -24,7 +24,7 @@ from .statement import (
 )
 from .decorator import SkipIf, OnlyIf
 from .expected_result import ExpectedResult
-from .parser import SQLLogicParser
+from .parser import SQLLogicParser, SQLParserException
 
 __all__ = [
     TokenType,
@@ -54,4 +54,5 @@ __all__ = [
     SkipIf,
     OnlyIf,
     SQLLogicParser,
+    SQLParserException,
 ]

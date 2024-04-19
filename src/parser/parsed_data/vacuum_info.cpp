@@ -11,6 +11,7 @@ unique_ptr<VacuumInfo> VacuumInfo::Copy() {
 	if (has_table) {
 		result->ref = ref->Copy();
 	}
+	result->columns = columns;
 	return result;
 }
 

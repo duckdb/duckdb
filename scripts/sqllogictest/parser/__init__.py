@@ -1,3 +1,3 @@
-from .parser import SQLLogicParser, SQLLogicTest
+from .parser import SQLLogicParser, SQLParserException, SQLLogicTest
 
-__all__ = [SQLLogicParser, SQLLogicTest]
+__all__ = [SQLLogicParser, SQLParserException, SQLLogicTest]

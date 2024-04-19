@@ -52,7 +52,7 @@ class CSVError {
 public:
 	CSVError() {};
 	CSVError(string error_message, CSVErrorType type, idx_t column_idx, string csv_row, LinesPerBoundary error_info,
-	         idx_t row_byte_position, int64_t byte_position, const CSVReaderOptions &reader_options,
+	         idx_t row_byte_position, optional_idx byte_position, const CSVReaderOptions &reader_options,
 	         const string &fixes);
 	CSVError(string error_message, CSVErrorType type, LinesPerBoundary error_info);
 	//! Produces error messages for column name -> type mismatch.
@@ -60,7 +60,7 @@ public:
 	//! Produces error messages for casting errors
 	static CSVError CastError(const CSVReaderOptions &options, string &column_name, string &cast_error,
 	                          idx_t column_idx, string &csv_row, LinesPerBoundary error_info, idx_t row_byte_position,
-	                          int64_t byte_position, LogicalTypeId type);
+	                          optional_idx byte_position, LogicalTypeId type);
 	//! Produces error for when the line size exceeds the maximum line size option
 	static CSVError LineSizeError(const CSVReaderOptions &options, idx_t actual_size, LinesPerBoundary error_info,
 	                              string &csv_row, idx_t byte_position);
@@ -69,15 +69,15 @@ public:
 	//! Produces error messages for unterminated quoted values
 	static CSVError UnterminatedQuotesError(const CSVReaderOptions &options, idx_t current_column,
 	                                        LinesPerBoundary error_info, string &csv_row, idx_t row_byte_position,
-	                                        int64_t byte_position);
+	                                        optional_idx byte_position);
 	//! Produces error messages for null_padding option is set and we have quoted new values in parallel
 	static CSVError NullPaddingFail(const CSVReaderOptions &options, LinesPerBoundary error_info);
 	//! Produces error for incorrect (e.g., smaller and lower than the predefined) number of columns in a CSV Line
 	static CSVError IncorrectColumnAmountError(const CSVReaderOptions &state_machine, idx_t actual_columns,
 	                                           LinesPerBoundary error_info, string &csv_row, idx_t row_byte_position,
-	                                           int64_t byte_position);
+	                                           optional_idx byte_position);
 	static CSVError InvalidUTF8(const CSVReaderOptions &options, idx_t current_column, LinesPerBoundary error_info,
-	                            string &csv_row, idx_t row_byte_position, int64_t byte_position);
+	                            string &csv_row, idx_t row_byte_position, optional_idx byte_position);
 
 	idx_t GetBoundaryIndex() {
 		return error_info.boundary_idx;
@@ -104,7 +104,7 @@ public:
 	//! Byte position of where the row starts
 	idx_t row_byte_position;
 	//! Byte Position where error occurred.
-	int64_t byte_position;
+	optional_idx byte_position;
 };
 
 class CSVErrorHandler {

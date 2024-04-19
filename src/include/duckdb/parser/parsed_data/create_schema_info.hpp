@@ -21,9 +21,6 @@ public:
 
 	unique_ptr<CreateInfo> Copy() const override;
 	string ToString() const override;
-
-private:
-	string CreateQualifiedName() const;
 };
 
 } // namespace duckdb

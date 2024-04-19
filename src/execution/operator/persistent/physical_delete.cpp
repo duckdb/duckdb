@@ -91,7 +91,7 @@ SourceResultType PhysicalDelete::GetData(ExecutionContext &context, DataChunk &c
 	auto &g = sink_state->Cast<DeleteGlobalState>();
 	if (!return_chunk) {
 		chunk.SetCardinality(1);
-		chunk.SetValue(0, 0, Value::BIGINT(g.deleted_count));
+		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.deleted_count)));
 		return SourceResultType::FINISHED;
 	}
 

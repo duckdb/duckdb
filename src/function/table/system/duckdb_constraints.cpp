@@ -180,15 +180,15 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			// database_name, LogicalType::VARCHAR
 			output.SetValue(col++, count, Value(table.schema.catalog.GetName()));
 			// database_oid, LogicalType::BIGINT
-			output.SetValue(col++, count, Value::BIGINT(table.schema.catalog.GetOid()));
+			output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(table.schema.catalog.GetOid())));
 			// schema_name, LogicalType::VARCHAR
 			output.SetValue(col++, count, Value(table.schema.name));
 			// schema_oid, LogicalType::BIGINT
-			output.SetValue(col++, count, Value::BIGINT(table.schema.oid));
+			output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(table.schema.oid)));
 			// table_name, LogicalType::VARCHAR
 			output.SetValue(col++, count, Value(table.name));
 			// table_oid, LogicalType::BIGINT
-			output.SetValue(col++, count, Value::BIGINT(table.oid));
+			output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(table.oid)));
 
 			// constraint_index, BIGINT
 			UniqueKeyInfo uk_info;
@@ -224,15 +224,16 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			}
 
 			if (uk_info.columns.empty()) {
-				output.SetValue(col++, count, Value::BIGINT(data.unique_constraint_offset++));
+				output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(data.unique_constraint_offset++)));
 			} else {
 				auto known_unique_constraint_offset = data.known_fk_unique_constraint_offsets.find(uk_info);
 				if (known_unique_constraint_offset == data.known_fk_unique_constraint_offsets.end()) {
 					data.known_fk_unique_constraint_offsets.insert(make_pair(uk_info, data.unique_constraint_offset));
-					output.SetValue(col++, count, Value::BIGINT(data.unique_constraint_offset));
+					output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(data.unique_constraint_offset)));
 					data.unique_constraint_offset++;
 				} else {
-					output.SetValue(col++, count, Value::BIGINT(known_unique_constraint_offset->second));
+					output.SetValue(col++, count,
+					                Value::BIGINT(NumericCast<int64_t>(known_unique_constraint_offset->second)));
 				}
 			}
 			output.SetValue(col++, count, Value(constraint_type));
@@ -286,7 +287,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			vector<Value> index_list;
 			vector<Value> column_name_list;
 			for (auto column_index : column_index_list) {
-				index_list.push_back(Value::BIGINT(column_index.index));
+				index_list.push_back(Value::BIGINT(NumericCast<int64_t>(column_index.index)));
 				column_name_list.emplace_back(table.GetColumn(column_index).Name());
 			}
 

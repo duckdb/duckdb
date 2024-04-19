@@ -126,13 +126,15 @@ idx_t AlpRDFinalAnalyze(AnalyzeState &state) {
 	//! Overhead per vector: Pointer to data + Exceptions count
 	double per_vector_overhead = AlpRDConstants::METADATA_POINTER_SIZE + AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
 
-	uint32_t n_vectors = std::ceil((double)analyze_state.total_values_count / AlpRDConstants::ALP_VECTOR_SIZE);
+	uint32_t n_vectors =
+	    NumericCast<uint32_t>(std::ceil((double)analyze_state.total_values_count / AlpRDConstants::ALP_VECTOR_SIZE));
 
 	auto estimated_size = (estimed_compressed_bytes * factor_of_sampling) + (n_vectors * per_vector_overhead);
-	uint32_t estimated_n_blocks = std::ceil(estimated_size / (Storage::BLOCK_SIZE - per_segment_overhead));
+	uint32_t estimated_n_blocks =
+	    NumericCast<uint32_t>(std::ceil(estimated_size / (Storage::BLOCK_SIZE - per_segment_overhead)));
 
 	auto final_analyze_size = estimated_size + (estimated_n_blocks * per_segment_overhead);
-	return final_analyze_size;
+	return NumericCast<idx_t>(final_analyze_size);
 }
 
 } // namespace duckdb

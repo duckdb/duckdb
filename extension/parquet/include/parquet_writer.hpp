@@ -112,7 +112,7 @@ private:
 	double dictionary_compression_ratio_threshold;
 
 	unique_ptr<BufferedFileWriter> writer;
-	shared_ptr<duckdb_apache::thrift::protocol::TProtocol> protocol;
+	std::shared_ptr<duckdb_apache::thrift::protocol::TProtocol> protocol;
 	duckdb_parquet::format::FileMetaData file_meta_data;
 	std::mutex lock;
 

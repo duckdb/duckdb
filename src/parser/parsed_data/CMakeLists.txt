@@ -28,6 +28,7 @@ add_library_unity(
   extra_drop_info.cpp
   load_info.cpp
   sample_options.cpp
+  parse_info.cpp
   transaction_info.cpp
   pragma_info.cpp
   parse_info.cpp

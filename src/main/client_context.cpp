@@ -312,7 +312,7 @@ ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock, const st
                                                unique_ptr<SQLStatement> statement,
                                                optional_ptr<case_insensitive_map_t<Value>> values) {
 	StatementType statement_type = statement->type;
-	auto result = make_shared<PreparedStatementData>(statement_type);
+	auto result = make_shared_ptr<PreparedStatementData>(statement_type);
 
 	auto &profiler = QueryProfiler::Get(*this);
 	profiler.StartQuery(query, IsExplainAnalyze(statement.get()), true);
@@ -482,7 +482,8 @@ ClientContext::PendingPreparedStatementInternal(ClientContextLock &lock, shared_
 			display_create_func =
 			    config.display_create_func ? config.display_create_func : ProgressBar::DefaultProgressBarDisplay;
 		}
-		active_query->progress_bar = make_uniq<ProgressBar>(executor, config.wait_time, display_create_func);
+		active_query->progress_bar =
+		    make_uniq<ProgressBar>(executor, NumericCast<idx_t>(config.wait_time), display_create_func);
 		active_query->progress_bar->Start();
 		query_progress.Restart();
 	}

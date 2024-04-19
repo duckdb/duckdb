@@ -101,6 +101,13 @@ class TestReadCSV(object):
         print(res)
         assert res == (1, None, datetime.datetime(2006, 2, 15, 4, 46, 27))
 
+    def test_na_values_list(self, duckdb_cursor):
+        rel = duckdb_cursor.read_csv(TestFile('category.csv'), na_values=['Action', 'Animation'])
+        res = rel.fetchone()
+        assert res == (1, None, datetime.datetime(2006, 2, 15, 4, 46, 27))
+        res = rel.fetchone()
+        assert res == (2, None, datetime.datetime(2006, 2, 15, 4, 46, 27))
+
     def test_skiprows(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile('category.csv'), skiprows=1)
         res = rel.fetchone()

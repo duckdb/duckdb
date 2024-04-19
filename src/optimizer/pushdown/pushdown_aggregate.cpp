@@ -87,7 +87,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<Logical
 			return make_uniq<LogicalEmptyResult>(std::move(op));
 		}
 		// erase the filter from here
-		filters.erase(filters.begin() + i);
+		filters.erase_at(i);
 		i--;
 	}
 	child_pushdown.GenerateFilters();

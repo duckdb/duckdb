@@ -72,7 +72,7 @@ IndexStorageInfo GetIndexInfo(const IndexConstraintType &constraint_type, unique
 }
 
 DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info,
-                               std::shared_ptr<DataTable> inherited_storage)
+                               shared_ptr<DataTable> inherited_storage)
     : TableCatalogEntry(catalog, schema, info.Base()), storage(std::move(inherited_storage)),
       bound_constraints(std::move(info.bound_constraints)),
       column_dependency_manager(std::move(info.column_dependency_manager)) {
@@ -83,8 +83,9 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 		for (auto &col_def : columns.Physical()) {
 			storage_columns.push_back(col_def.Copy());
 		}
-		storage = make_shared<DataTable>(catalog.GetAttached(), StorageManager::Get(catalog).GetTableIOManager(&info),
-		                                 schema.name, name, std::move(storage_columns), std::move(info.data));
+		storage =
+		    make_shared_ptr<DataTable>(catalog.GetAttached(), StorageManager::Get(catalog).GetTableIOManager(&info),
+		                               schema.name, name, std::move(storage_columns), std::move(info.data));
 
 		// create the unique indexes for the UNIQUE and PRIMARY KEY and FOREIGN KEY constraints
 		idx_t indexes_idx = 0;
@@ -342,9 +343,9 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 	create_info->columns.AddColumn(std::move(col));
 
 	auto binder = Binder::CreateBinder(context);
-	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema);
-	auto new_storage =
-	    make_shared<DataTable>(context, *storage, info.new_column, *bound_create_info->bound_defaults.back());
+	vector<unique_ptr<Expression>> bound_defaults;
+	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, bound_defaults);
+	auto new_storage = make_shared_ptr<DataTable>(context, *storage, info.new_column, *bound_defaults.back());
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
 }
 
@@ -480,7 +481,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::RemoveColumn(ClientContext &context, Re
 		return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
 	}
 	auto new_storage =
-	    make_shared<DataTable>(context, *storage, columns.LogicalToPhysical(LogicalIndex(removed_index)).index);
+	    make_shared_ptr<DataTable>(context, *storage, columns.LogicalToPhysical(LogicalIndex(removed_index)).index);
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
 }
 
@@ -548,7 +549,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetNotNull(ClientContext &context, SetN
 	}
 
 	// Return with new storage info. Note that we need the bound column index here.
-	auto new_storage = make_shared<DataTable>(
+	auto new_storage = make_shared_ptr<DataTable>(
 	    context, *storage, make_uniq<BoundNotNullConstraint>(columns.LogicalToPhysical(LogicalIndex(not_null_idx))));
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
 }
@@ -659,8 +660,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 	}
 
 	auto new_storage =
-	    make_shared<DataTable>(context, *storage, columns.LogicalToPhysical(LogicalIndex(change_idx)).index,
-	                           info.target_type, std::move(storage_oids), *bound_expression);
+	    make_shared_ptr<DataTable>(context, *storage, columns.LogicalToPhysical(LogicalIndex(change_idx)).index,
+	                               info.target_type, std::move(storage_oids), *bound_expression);
 	auto result = make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
 	return std::move(result);
 }
