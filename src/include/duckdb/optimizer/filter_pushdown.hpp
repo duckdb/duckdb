@@ -94,7 +94,7 @@ private:
 	void PushFilters();
 
 	bool CanPushdownFilter(vector<column_binding_set_t> window_exprs_partition_bindings,
-	                       vector<ColumnBinding> bindings);
+	                       const vector<ColumnBinding> &bindings);
 
 	FilterCombiner combiner;
 };

@@ -6,7 +6,17 @@ statement ok
 pragma enable_verification;
 
 statement ok
-create table t1 as from VALUES ('A', 1), ('B', 3), ('C', 12), ('A', 5), ('B', 8), ('C', 9), ('A', 10), ('B', 20), ('C', 3) t(a, b);
+create table t1 as from VALUES 
+	('A', 1), 
+	('B', 3),
+	('C', 12), 
+	('A', 5), 
+	('B', 8), 
+	('C', 9), 
+	('A', 10), 
+	('B', 20), 
+	('C', 3) 
+	t(a, b);
 
 statement ok
 pragma explain_output=OPTIMIZED_ONLY
@@ -16,7 +26,6 @@ create view window_with_filter as select a,  b, LEAD(b) OVER (partition by a) as
 
 statement ok
 create view window_no_filter as select a,  b, LEAD(b) OVER (partition by a) as lead from t1;
-
 
 query III no_sort result_1
 select * from window_with_filter where a != 'C' order by a;
@@ -127,4 +136,18 @@ explain select * from window_no_filter where a != 'C' order by a;
 ----
 logical_opt	<REGEX>:.*WINDOW.*FILTER.*
 
+statement ok
+create table t2 as select range a, range%50 b, range%25 c from range(500);
+
+# second window expression is not paritioned on b, so filter expression cannot be 
+# pushed down
+query II
+explain select * from (select a, b, c, sum(a) OVER (PARTITION BY b, c), sum(b) OVER (PARTITION BY a, c) from t2) where b > 25;
+----
+logical_opt	<REGEX>:.*FILTER.*WINDOW.*
+
+query II
+explain select * from (select a, b, c, sum(a) OVER (PARTITION BY b, c), sum(b) OVER (PARTITION BY a, c) from t2) where c = 20;
+----
+logical_opt	<REGEX>:.*WINDOW.*c=20.*
 
