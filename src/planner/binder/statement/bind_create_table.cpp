@@ -239,8 +239,8 @@ static void ExtractExpressionDependencies(Expression &expr, LogicalDependencyLis
 	    expr, [&](Expression &child) { ExtractExpressionDependencies(child, dependencies); });
 }
 
-static void ExtractDependencies(BoundCreateTableInfo &info) {
-	for (auto &default_value : info.bound_defaults) {
+static void ExtractDependencies(BoundCreateTableInfo &info, vector<unique_ptr<Expression>> &bound_defaults) {
+	for (auto &default_value : bound_defaults) {
 		if (default_value) {
 			ExtractExpressionDependencies(*default_value, info.dependencies);
 		}
@@ -252,7 +252,14 @@ static void ExtractDependencies(BoundCreateTableInfo &info) {
 		}
 	}
 }
+
 unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema) {
+	vector<unique_ptr<Expression>> bound_defaults;
+	return BindCreateTableInfo(std::move(info), schema, bound_defaults);
+}
+
+unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema,
+                                                             vector<unique_ptr<Expression>> &bound_defaults) {
 	auto &base = info->Cast<CreateTableInfo>();
 	auto result = make_uniq<BoundCreateTableInfo>(schema, std::move(info));
 	if (base.query) {
@@ -279,10 +286,10 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		// bind any constraints
 		BindConstraints(*this, *result);
 		// bind the default values
-		BindDefaultValues(base.columns, result->bound_defaults);
+		BindDefaultValues(base.columns, bound_defaults);
 	}
 	// extract dependencies from any default values or CHECK constraints
-	ExtractDependencies(*result);
+	ExtractDependencies(*result, bound_defaults);
 
 	if (base.columns.PhysicalColumnCount() == 0) {
 		throw BinderException("Creating a table without physical (non-generated) columns is not supported");
