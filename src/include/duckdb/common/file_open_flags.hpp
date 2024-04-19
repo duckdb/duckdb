@@ -25,6 +25,7 @@ public:
 	static constexpr idx_t FILE_FLAGS_APPEND = idx_t(1 << 5);
 	static constexpr idx_t FILE_FLAGS_PRIVATE = idx_t(1 << 6);
 	static constexpr idx_t FILE_FLAGS_NULL_IF_NOT_EXISTS = idx_t(1 << 7);
+	static constexpr idx_t FILE_FLAGS_PARALLEL_ACCESS = idx_t(1 << 8);
 
 public:
 	FileOpenFlags() = default;
@@ -95,6 +96,9 @@ public:
 	inline bool ReturnNullIfNotExists() const {
 		return flags & FILE_FLAGS_NULL_IF_NOT_EXISTS;
 	}
+	inline bool RequireParallelAccess() const {
+		return flags & FILE_FLAGS_PARALLEL_ACCESS;
+	}
 
 private:
 	idx_t flags = 0;
@@ -122,6 +126,9 @@ public:
 	//! Return NULL if the file does not exist instead of throwing an error
 	static constexpr FileOpenFlags FILE_FLAGS_NULL_IF_NOT_EXISTS =
 	    FileOpenFlags(FileOpenFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
+	//! Multiple threads may perform reads and writes in parallel
+	static constexpr FileOpenFlags FILE_FLAGS_PARALLEL_ACCESS =
+	    FileOpenFlags(FileOpenFlags::FILE_FLAGS_PARALLEL_ACCESS);
 };
 
 } // namespace duckdb

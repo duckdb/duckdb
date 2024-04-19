@@ -95,7 +95,7 @@ bool PartialBlockManager::GetPartialBlock(idx_t segment_size, unique_ptr<Partial
 	return true;
 }
 
-void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation &&allocation) {
+void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation allocation) {
 	auto &state = allocation.partial_block->state;
 	D_ASSERT(checkpoint_type != CheckpointType::FULL_CHECKPOINT || state.block_id >= 0);
 	if (state.block_use_count < max_use_count) {

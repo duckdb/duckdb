@@ -10,7 +10,7 @@ struct DefaultOptimizerType {
 	OptimizerType type;
 };
 
-static DefaultOptimizerType internal_optimizer_types[] = {
+static const DefaultOptimizerType internal_optimizer_types[] = {
     {"expression_rewriter", OptimizerType::EXPRESSION_REWRITER},
     {"filter_pullup", OptimizerType::FILTER_PULLUP},
     {"filter_pushdown", OptimizerType::FILTER_PUSHDOWN},
@@ -24,6 +24,7 @@ static DefaultOptimizerType internal_optimizer_types[] = {
     {"common_subexpressions", OptimizerType::COMMON_SUBEXPRESSIONS},
     {"common_aggregate", OptimizerType::COMMON_AGGREGATE},
     {"column_lifetime", OptimizerType::COLUMN_LIFETIME},
+    {"limit_pushdown", OptimizerType::LIMIT_PUSHDOWN},
     {"top_n", OptimizerType::TOP_N},
     {"compressed_materialization", OptimizerType::COMPRESSED_MATERIALIZATION},
     {"duplicate_groups", OptimizerType::DUPLICATE_GROUPS},

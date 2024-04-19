@@ -58,13 +58,12 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<Logical
 			// empty grouping set - we cannot pushdown the filter
 			can_pushdown_filter = false;
 		}
+		if (bindings.empty()) {
+			// we can never push down empty grouping sets
+			continue;
+		}
 		for (auto &grp : aggr.grouping_sets) {
 			// check for each of the grouping sets if they contain all groups
-			if (bindings.empty()) {
-				// we can never push down empty grouping sets
-				can_pushdown_filter = false;
-				break;
-			}
 			for (auto &binding : bindings) {
 				if (grp.find(binding.column_index) == grp.end()) {
 					can_pushdown_filter = false;
@@ -87,7 +86,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<Logical
 			return make_uniq<LogicalEmptyResult>(std::move(op));
 		}
 		// erase the filter from here
-		filters.erase(filters.begin() + i);
+		filters.erase_at(i);
 		i--;
 	}
 	child_pushdown.GenerateFilters();

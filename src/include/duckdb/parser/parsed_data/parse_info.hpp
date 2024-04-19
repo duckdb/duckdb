@@ -27,7 +27,8 @@ enum class ParseInfoType : uint8_t {
 	TRANSACTION_INFO,
 	VACUUM_INFO,
 	COMMENT_ON_INFO,
-	COMMENT_ON_COLUMN_INFO
+	COMMENT_ON_COLUMN_INFO,
+	COPY_DATABASE_INFO
 };
 
 struct ParseInfo {
@@ -47,7 +48,7 @@ public:
 
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 

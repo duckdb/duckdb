@@ -763,7 +763,7 @@ void DuckTableEntry::SetAsRoot() {
 
 void DuckTableEntry::CommitAlter(string &column_name) {
 	D_ASSERT(!column_name.empty());
-	idx_t removed_index = DConstants::INVALID_INDEX;
+	optional_idx removed_index;
 	for (auto &col : columns.Logical()) {
 		if (col.Name() == column_name) {
 			// No need to alter storage, removed column is generated column
@@ -774,8 +774,7 @@ void DuckTableEntry::CommitAlter(string &column_name) {
 			break;
 		}
 	}
-	D_ASSERT(removed_index != DConstants::INVALID_INDEX);
-	storage->CommitDropColumn(columns.LogicalToPhysical(LogicalIndex(removed_index)).index);
+	storage->CommitDropColumn(columns.LogicalToPhysical(LogicalIndex(removed_index.GetIndex())).index);
 }
 
 void DuckTableEntry::CommitDrop() {

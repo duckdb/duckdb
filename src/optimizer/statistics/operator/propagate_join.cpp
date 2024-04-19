@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, unique_ptr<LogicalOperator> *node_ptr) {
+void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, unique_ptr<LogicalOperator> &node_ptr) {
 	for (idx_t i = 0; i < join.conditions.size(); i++) {
 		auto &condition = join.conditions[i];
 		const auto stats_left = PropagateExpression(condition.left);
@@ -40,7 +40,7 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 				case JoinType::SEMI:
 				case JoinType::INNER:
 					// semi or inner join on false; entire node can be pruned
-					ReplaceWithEmptyResult(*node_ptr);
+					ReplaceWithEmptyResult(node_ptr);
 					return;
 				case JoinType::RIGHT_ANTI:
 				case JoinType::ANTI: {
@@ -48,7 +48,7 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 						std::swap(join.children[0], join.children[1]);
 					}
 					// If the filter is always false or Null, just return the left child.
-					*node_ptr = std::move(join.children[0]);
+					node_ptr = std::move(join.children[0]);
 					return;
 				}
 				case JoinType::LEFT:
@@ -85,7 +85,7 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 				}
 				if (join.conditions.size() > 1) {
 					// there are multiple conditions: erase this condition
-					join.conditions.erase(join.conditions.begin() + i);
+					join.conditions.erase_at(i);
 					// remove the corresponding statistics
 					join.join_stats.clear();
 					i--;
@@ -106,19 +106,19 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 						auto limit = make_uniq<LogicalLimit>(BoundLimitNode::ConstantValue(1), BoundLimitNode());
 						limit->AddChild(std::move(join.children[1]));
 						auto cross_product = LogicalCrossProduct::Create(std::move(join.children[0]), std::move(limit));
-						*node_ptr = std::move(cross_product);
+						node_ptr = std::move(cross_product);
 						return;
 					}
 					case JoinType::INNER: {
 						// inner, replace with cross product
 						auto cross_product =
 						    LogicalCrossProduct::Create(std::move(join.children[0]), std::move(join.children[1]));
-						*node_ptr = std::move(cross_product);
+						node_ptr = std::move(cross_product);
 						return;
 					}
 					case JoinType::ANTI:
 					case JoinType::RIGHT_ANTI: {
-						ReplaceWithEmptyResult(*node_ptr);
+						ReplaceWithEmptyResult(node_ptr);
 						return;
 					}
 					default:
@@ -175,7 +175,7 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 	}
 }
 
-void StatisticsPropagator::PropagateStatistics(LogicalAnyJoin &join, unique_ptr<LogicalOperator> *node_ptr) {
+void StatisticsPropagator::PropagateStatistics(LogicalAnyJoin &join, unique_ptr<LogicalOperator> &node_ptr) {
 	// propagate the expression into the join condition
 	PropagateExpression(join.condition);
 }
@@ -187,7 +187,8 @@ void StatisticsPropagator::MultiplyCardinalities(unique_ptr<NodeStatistics> &sta
 		return;
 	}
 	stats->estimated_cardinality = MaxValue<idx_t>(stats->estimated_cardinality, new_stats.estimated_cardinality);
-	auto new_max = Hugeint::Multiply(stats->max_cardinality, new_stats.max_cardinality);
+	auto new_max = Hugeint::Multiply(NumericCast<int64_t>(stats->max_cardinality),
+	                                 NumericCast<int64_t>(new_stats.max_cardinality));
 	if (new_max < NumericLimits<int64_t>::Maximum()) {
 		int64_t result;
 		if (!Hugeint::TryCast<int64_t>(new_max, result)) {
@@ -201,7 +202,7 @@ void StatisticsPropagator::MultiplyCardinalities(unique_ptr<NodeStatistics> &sta
 }
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin &join,
-                                                                     unique_ptr<LogicalOperator> *node_ptr) {
+                                                                     unique_ptr<LogicalOperator> &node_ptr) {
 	// first propagate through the children of the join
 	node_stats = PropagateStatistics(join.children[0]);
 	for (idx_t child_idx = 1; child_idx < join.children.size(); child_idx++) {
@@ -274,7 +275,7 @@ static void MaxCardinalities(unique_ptr<NodeStatistics> &stats, NodeStatistics &
 }
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalPositionalJoin &join,
-                                                                     unique_ptr<LogicalOperator> *node_ptr) {
+                                                                     unique_ptr<LogicalOperator> &node_ptr) {
 	D_ASSERT(join.type == LogicalOperatorType::LOGICAL_POSITIONAL_JOIN);
 
 	// first propagate through the children of the join

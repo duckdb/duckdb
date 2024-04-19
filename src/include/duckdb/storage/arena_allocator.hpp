@@ -28,7 +28,7 @@ class ArenaAllocator {
 	static constexpr const idx_t ARENA_ALLOCATOR_INITIAL_CAPACITY = 2048;
 
 public:
-	DUCKDB_API ArenaAllocator(Allocator &allocator, idx_t initial_capacity = ARENA_ALLOCATOR_INITIAL_CAPACITY);
+	DUCKDB_API explicit ArenaAllocator(Allocator &allocator, idx_t initial_capacity = ARENA_ALLOCATOR_INITIAL_CAPACITY);
 	DUCKDB_API ~ArenaAllocator();
 
 	DUCKDB_API data_ptr_t Allocate(idx_t size);

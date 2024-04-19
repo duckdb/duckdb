@@ -331,7 +331,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 		if (child_operator) {
 			// use UNION ALL to combine the individual copy statements into a single node
-			auto copy_union = make_uniq<LogicalSetOperation>(GenerateTableIndex(), 1, std::move(child_operator),
+			auto copy_union = make_uniq<LogicalSetOperation>(GenerateTableIndex(), 1U, std::move(child_operator),
 			                                                 std::move(plan), LogicalOperatorType::LOGICAL_UNION, true);
 			child_operator = std::move(copy_union);
 		} else {

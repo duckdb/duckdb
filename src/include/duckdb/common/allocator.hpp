@@ -36,7 +36,7 @@ struct PrivateAllocatorData {
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -58,10 +58,10 @@ public:
 	DUCKDB_API AllocatedData(AllocatedData &&other) noexcept;
 	DUCKDB_API AllocatedData &operator=(AllocatedData &&) noexcept;
 
-	data_ptr_t get() {
+	data_ptr_t get() { // NOLINT: matching std style
 		return pointer;
 	}
-	const_data_ptr_t get() const {
+	const_data_ptr_t get() const { // NOLINT: matching std style
 		return pointer;
 	}
 	idx_t GetSize() const {

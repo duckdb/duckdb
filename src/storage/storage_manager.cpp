@@ -18,12 +18,13 @@ namespace duckdb {
 
 StorageManager::StorageManager(AttachedDatabase &db, string path_p, bool read_only)
     : db(db), path(std::move(path_p)), read_only(read_only) {
+
 	if (path.empty()) {
 		path = IN_MEMORY_PATH;
-	} else {
-		auto &fs = FileSystem::Get(db);
-		this->path = fs.ExpandPath(path);
+		return;
 	}
+	auto &fs = FileSystem::Get(db);
+	path = fs.ExpandPath(path);
 }
 
 StorageManager::~StorageManager() {
@@ -41,6 +42,10 @@ DatabaseInstance &StorageManager::GetDatabase() {
 }
 
 BufferManager &BufferManager::GetBufferManager(ClientContext &context) {
+	return BufferManager::GetBufferManager(*context.db);
+}
+
+const BufferManager &BufferManager::GetBufferManager(const ClientContext &context) {
 	return BufferManager::GetBufferManager(*context.db);
 }
 
@@ -83,14 +88,14 @@ bool StorageManager::InMemory() {
 	return path == IN_MEMORY_PATH;
 }
 
-void StorageManager::Initialize(optional_ptr<ClientContext> context) {
+void StorageManager::Initialize(const optional_idx block_alloc_size, optional_ptr<ClientContext> context) {
 	bool in_memory = InMemory();
 	if (in_memory && read_only) {
 		throw CatalogException("Cannot launch in-memory database in read-only mode!");
 	}
 
-	// create or load the database from disk, if not in-memory mode
-	LoadDatabase(context);
+	// Create or load the database from disk, if not in-memory mode.
+	LoadDatabase(block_alloc_size, context);
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -117,9 +122,14 @@ SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string 
     : StorageManager(db, std::move(path), read_only) {
 }
 
-void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context) {
+void SingleFileStorageManager::LoadDatabase(const optional_idx block_alloc_size, optional_ptr<ClientContext> context) {
+
 	if (InMemory()) {
-		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db));
+		// NOTE: this becomes DEFAULT_BLOCK_ALLOC_SIZE once we start supporting different block sizes.
+		if (block_alloc_size.IsValid() && block_alloc_size.GetIndex() != Storage::BLOCK_ALLOC_SIZE) {
+			throw InternalException("in-memory databases must have the compiled block allocation size");
+		}
+		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db), DEFAULT_BLOCK_ALLOC_SIZE);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager);
 		return;
 	}
@@ -137,7 +147,8 @@ void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context)
 	options.use_direct_io = config.options.use_direct_io;
 	options.debug_initialize = config.options.debug_initialize;
 
-	// first check if the database exists
+	// Check if the database file already exists.
+	// Note: a file can also exist if there was a ROLLBACK on a previous transaction creating that file.
 	if (!read_only && !fs.FileExists(path)) {
 		// file does not exist and we are in read-write mode
 		// create a new file
@@ -150,16 +161,28 @@ void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context)
 			fs.RemoveFile(wal_path);
 		}
 
-		// initialize the block manager while creating a new db file
+		// Set the block allocation size for the new database file.
+		if (block_alloc_size.IsValid()) {
+			// Use the option provided by the user.
+			options.block_alloc_size = block_alloc_size;
+		} else {
+			// No explicit option provided: use the default option.
+			options.block_alloc_size = config.options.default_block_alloc_size;
+		}
+
+		// Initialize the block manager before creating a new database.
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
 		sf_block_manager->CreateNewDatabase();
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager);
-	} else {
-		// either the file exists, or we are in read-only mode
-		// try to read the existing file on disk
 
-		// initialize the block manager while loading the current db file
+	} else {
+		// Either the file exists, or we are in read-only mode, so we
+		// try to read the existing file on disk.
+
+		// Initialize the block manager while loading the database file.
+		// We'll construct the SingleFileBlockManager with the default block allocation size,
+		// and later adjust it when reading the file header.
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
 		sf_block_manager->LoadExistingDatabase();
 		block_manager = std::move(sf_block_manager);
@@ -200,7 +223,7 @@ public:
 			wal.skip_writing = false;
 			if (wal.GetTotalWritten() > initial_written) {
 				// remove any entries written into the WAL by truncating it
-				wal.Truncate(initial_wal_size);
+				wal.Truncate(NumericCast<int64_t>(initial_wal_size));
 			}
 		}
 	}
@@ -284,7 +307,7 @@ DatabaseSize SingleFileStorageManager::GetDatabaseSize() {
 		ds.used_blocks = ds.total_blocks - ds.free_blocks;
 		ds.bytes = (ds.total_blocks * ds.block_size);
 		if (auto wal = GetWriteAheadLog()) {
-			ds.wal_size = wal->GetWALSize();
+			ds.wal_size = NumericCast<idx_t>(wal->GetWALSize());
 		}
 	}
 	return ds;
@@ -302,7 +325,7 @@ bool SingleFileStorageManager::AutomaticCheckpoint(idx_t estimated_wal_bytes) {
 	}
 
 	auto &config = DBConfig::Get(db);
-	auto initial_size = log->GetWALSize();
+	auto initial_size = NumericCast<idx_t>(log->GetWALSize());
 	idx_t expected_wal_size = initial_size + estimated_wal_bytes;
 	return expected_wal_size > config.options.checkpoint_wal_size;
 }

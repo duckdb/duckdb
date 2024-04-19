@@ -26,7 +26,8 @@ public:
 
 	optional_ptr<ClientContext> TryGetClientContext() override {
 		return &context;
-	};
+	}
+	optional_ptr<DatabaseInstance> TryGetDatabase() override;
 
 private:
 	ClientContext &context;

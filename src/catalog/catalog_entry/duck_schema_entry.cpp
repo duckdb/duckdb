@@ -36,8 +36,8 @@
 
 namespace duckdb {
 
-void FindForeignKeyInformation(CatalogEntry &entry, AlterForeignKeyType alter_fk_type,
-                               vector<unique_ptr<AlterForeignKeyInfo>> &fk_arrays) {
+static void FindForeignKeyInformation(CatalogEntry &entry, AlterForeignKeyType alter_fk_type,
+                                      vector<unique_ptr<AlterForeignKeyInfo>> &fk_arrays) {
 	if (entry.type != CatalogType::TABLE_ENTRY) {
 		return;
 	}
@@ -63,6 +63,19 @@ void FindForeignKeyInformation(CatalogEntry &entry, AlterForeignKeyType alter_fk
 	}
 }
 
+static void LazyLoadIndexes(ClientContext &context, CatalogEntry &entry) {
+	if (entry.type == CatalogType::TABLE_ENTRY) {
+		auto &table_entry = entry.Cast<TableCatalogEntry>();
+		table_entry.GetStorage().info->InitializeIndexes(context);
+	} else if (entry.type == CatalogType::INDEX_ENTRY) {
+		auto &index_entry = entry.Cast<IndexCatalogEntry>();
+		auto &table_entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, index_entry.catalog.GetName(),
+		                                      index_entry.GetSchemaName(), index_entry.GetTableName())
+		                        .Cast<TableCatalogEntry>();
+		table_entry.GetStorage().info->InitializeIndexes(context);
+	}
+}
+
 DuckSchemaEntry::DuckSchemaEntry(Catalog &catalog, CreateSchemaInfo &info)
     : SchemaCatalogEntry(catalog, info), tables(catalog, make_uniq<DefaultViewGenerator>(catalog, *this)),
       indexes(catalog), table_functions(catalog), copy_functions(catalog), pragma_functions(catalog),
@@ -82,7 +95,7 @@ unique_ptr<CatalogEntry> DuckSchemaEntry::Copy(ClientContext &context) const {
 optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction transaction,
                                                              unique_ptr<StandardEntry> entry,
                                                              OnCreateConflict on_conflict,
-                                                             DependencyList dependencies) {
+                                                             LogicalDependencyList dependencies) {
 	auto entry_name = entry->name;
 	auto entry_type = entry->type;
 	auto result = entry.get();
@@ -184,7 +197,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateFunction(CatalogTransaction tr
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntry(CatalogTransaction transaction, unique_ptr<StandardEntry> entry,
                                                      OnCreateConflict on_conflict) {
-	DependencyList dependencies;
+	LogicalDependencyList dependencies;
 	return AddEntryInternal(transaction, std::move(entry), on_conflict, dependencies);
 }
 
@@ -205,7 +218,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateView(CatalogTransaction transa
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateIndex(ClientContext &context, CreateIndexInfo &info,
                                                         TableCatalogEntry &table) {
-	DependencyList dependencies;
+	LogicalDependencyList dependencies;
 	dependencies.AddDependency(table);
 
 	// currently, we can not alter PK/FK/UNIQUE constraints
@@ -286,6 +299,9 @@ void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
 		throw CatalogException("Existing object %s is of type %s, trying to replace with type %s", info.name,
 		                       CatalogTypeToString(existing_entry->type), CatalogTypeToString(info.type));
 	}
+
+	// if this is a index or table with indexes, initialize any unknown index instances
+	LazyLoadIndexes(context, *existing_entry);
 
 	// if there is a foreign key constraint, get that information
 	vector<unique_ptr<AlterForeignKeyInfo>> fk_arrays;

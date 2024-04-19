@@ -30,7 +30,7 @@
 
 namespace duckdb {
 
-static void CheckInsertColumnCountMismatch(int64_t expected_columns, int64_t result_columns, bool columns_provided,
+static void CheckInsertColumnCountMismatch(idx_t expected_columns, idx_t result_columns, bool columns_provided,
                                            const char *tname) {
 	if (result_columns != expected_columns) {
 		string msg = StringUtil::Format(!columns_provided ? "table %s has %lld columns but %lld values were supplied"
@@ -305,25 +305,23 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 	}
 
 	auto bindings = insert.children[0]->GetColumnBindings();
-	idx_t projection_index = DConstants::INVALID_INDEX;
-	vector<unique_ptr<LogicalOperator>> *insert_child_operators;
-	insert_child_operators = &insert.children;
-	while (projection_index == DConstants::INVALID_INDEX) {
-		if (insert_child_operators->empty()) {
+	optional_idx projection_index;
+	reference<vector<unique_ptr<LogicalOperator>>> insert_child_operators = insert.children;
+	while (!projection_index.IsValid()) {
+		if (insert_child_operators.get().empty()) {
 			// No further children to visit
 			break;
 		}
-		D_ASSERT(insert_child_operators->size() >= 1);
-		auto &current_child = (*insert_child_operators)[0];
+		auto &current_child = insert_child_operators.get()[0];
 		auto table_indices = current_child->GetTableIndex();
 		if (table_indices.empty()) {
 			// This operator does not have a table index to refer to, we have to visit its children
-			insert_child_operators = &current_child->children;
+			insert_child_operators = current_child->children;
 			continue;
 		}
 		projection_index = table_indices[0];
 	}
-	if (projection_index == DConstants::INVALID_INDEX) {
+	if (!projection_index.IsValid()) {
 		throw InternalException("Could not locate a table_index from the children of the insert");
 	}
 
@@ -335,7 +333,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 
 	// Replace any column bindings to refer to the projection table_index, rather than the source table
 	if (insert.on_conflict_condition) {
-		ReplaceColumnBindings(*insert.on_conflict_condition, table_index, projection_index);
+		ReplaceColumnBindings(*insert.on_conflict_condition, table_index, projection_index.GetIndex());
 	}
 
 	if (insert.action_type == OnConflictAction::REPLACE) {
@@ -387,11 +385,11 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 	// Replace the column bindings to refer to the child operator
 	for (auto &expr : insert.expressions) {
 		// Change the non-excluded column references to refer to the projection index
-		ReplaceColumnBindings(*expr, table_index, projection_index);
+		ReplaceColumnBindings(*expr, table_index, projection_index.GetIndex());
 	}
 	// Do the same for the (optional) DO UPDATE condition
 	if (insert.do_update_condition) {
-		ReplaceColumnBindings(*insert.do_update_condition, table_index, projection_index);
+		ReplaceColumnBindings(*insert.do_update_condition, table_index, projection_index.GetIndex());
 	}
 }
 
@@ -442,7 +440,6 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 			if (!entry.second) {
 				throw BinderException("Duplicate column name \"%s\" in INSERT", stmt.columns[i]);
 			}
-			column_name_map[stmt.columns[i]] = i;
 			auto column_index = table.GetColumnIndex(stmt.columns[i]);
 			if (column_index.index == COLUMN_IDENTIFIER_ROW_ID) {
 				throw BinderException("Cannot explicitly insert values into rowid column");
