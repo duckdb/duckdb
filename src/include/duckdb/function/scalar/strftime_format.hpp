@@ -161,6 +161,10 @@ public:
 
 	DUCKDB_API bool Parse(string_t str, ParseResult &result) const;
 
+	DUCKDB_API bool Parse(const char *data, size_t size, ParseResult &result) const;
+
+	DUCKDB_API bool TryParseDate(const char *data, size_t size, date_t &result, string &error_message) const;
+
 	DUCKDB_API bool TryParseDate(string_t str, date_t &result, string &error_message) const;
 	DUCKDB_API bool TryParseTime(string_t str, dtime_t &result, string &error_message) const;
 	DUCKDB_API bool TryParseTimestamp(string_t str, timestamp_t &result, string &error_message) const;
