@@ -9,14 +9,6 @@ namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
 
-static void ExtractFilterBindings(Expression &expr, vector<ColumnBinding> &bindings) {
-	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &colref = expr.Cast<BoundColumnRefExpression>();
-		bindings.push_back(colref.binding);
-	}
-	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { ExtractFilterBindings(child, bindings); });
-}
-
 static unique_ptr<Expression> ReplaceGroupBindings(LogicalAggregate &proj, unique_ptr<Expression> expr) {
 	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = expr->Cast<BoundColumnRefExpression>();
@@ -29,6 +21,14 @@ static unique_ptr<Expression> ReplaceGroupBindings(LogicalAggregate &proj, uniqu
 	ExpressionIterator::EnumerateChildren(
 	    *expr, [&](unique_ptr<Expression> &child) { child = ReplaceGroupBindings(proj, std::move(child)); });
 	return expr;
+}
+
+void FilterPushdown::ExtractFilterBindings(Expression &expr, vector<ColumnBinding> &bindings) {
+	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+		auto &colref = expr.Cast<BoundColumnRefExpression>();
+		bindings.push_back(colref.binding);
+	}
+	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { ExtractFilterBindings(child, bindings); });
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<LogicalOperator> op) {
