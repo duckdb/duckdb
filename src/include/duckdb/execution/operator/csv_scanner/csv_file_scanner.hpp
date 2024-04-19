@@ -15,6 +15,23 @@
 
 namespace duckdb {
 struct ReadCSVData;
+//! Basic CSV Column Info
+struct CSVColumnInfo {
+	CSVColumnInfo(string &name_p, LogicalType &type_p) : name(name_p), type(type_p) {
+	}
+	string name;
+	LogicalType type;
+};
+
+//! Basic CSV Schema
+struct CSVColumnSchema {
+	void Initialize(vector<string> &names, vector<LogicalType> &types);
+	bool Empty();
+	bool SchemasMatch(string &error_message, vector<string> &names, vector<LogicalType> &types);
+	vector<CSVColumnInfo> columns;
+	unordered_map<string, idx_t> name_idx_map;
+};
+
 //! Struct holding information over a CSV File we will scan
 class CSVFileScan {
 public:
@@ -22,12 +39,11 @@ public:
 	//! This means the options are alreadu set, and the buffer manager is already up and runinng.
 	CSVFileScan(ClientContext &context, shared_ptr<CSVBufferManager> buffer_manager,
 	            shared_ptr<CSVStateMachine> state_machine, const CSVReaderOptions &options,
-	            const ReadCSVData &bind_data, const vector<column_t> &column_ids, vector<LogicalType> &file_schema);
+	            const ReadCSVData &bind_data, const vector<column_t> &column_ids, CSVColumnSchema &file_schema);
 	//! Constructor for new CSV Files, we must initialize the buffer manager and the state machine
 	//! Path to this file
 	CSVFileScan(ClientContext &context, const string &file_path, const CSVReaderOptions &options, const idx_t file_idx,
-	            const ReadCSVData &bind_data, const vector<column_t> &column_ids,
-	            const vector<LogicalType> &file_schema);
+	            const ReadCSVData &bind_data, const vector<column_t> &column_ids, const CSVColumnSchema &file_schema);
 
 	CSVFileScan(ClientContext &context, const string &file_name, CSVReaderOptions &options);
 

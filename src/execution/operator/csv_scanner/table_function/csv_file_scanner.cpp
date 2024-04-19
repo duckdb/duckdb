@@ -4,10 +4,46 @@
 
 namespace duckdb {
 
+void CSVColumnSchema::Initialize(vector<string> &names, vector<LogicalType> &types) {
+	if (!columns.empty()) {
+		throw InternalException("CSV Schema is already populated, this should not happen.");
+	}
+	D_ASSERT(names.size() == types.size() && !names.empty());
+	for (idx_t i = 0; i < names.size(); i++) {
+		// Populate our little schema
+		columns.push_back({names[i], types[i]});
+		name_idx_map[names[i]] = i;
+	}
+}
+
+bool CSVColumnSchema::Empty() {
+	return columns.empty();
+}
+
+bool CSVColumnSchema::SchemasMatch(string &error_message, vector<string> &names, vector<LogicalType> &types) {
+	D_ASSERT(names.size() == types.size() && !names.empty());
+	bool match = true;
+	unordered_map<string, LogicalType> current_schema;
+	for (idx_t i = 0; i < names.size(); i++) {
+		// Populate our little schema
+		current_schema[names[i]] = types[i];
+	}
+	// Here we check if the schema of a given file matched our original schema
+	// We consider it's not a match if
+	// 1. The file misses columns that were defined in the original schema.
+	// 2. They have a column match, but the types do not match.
+	for (auto &column : columns) {
+		if (current_schema.find(column.name) == current_schema.end()) {
+
+		} else {
+		}
+	}
+	return match;
+}
+
 CSVFileScan::CSVFileScan(ClientContext &context, shared_ptr<CSVBufferManager> buffer_manager_p,
                          shared_ptr<CSVStateMachine> state_machine_p, const CSVReaderOptions &options_p,
-                         const ReadCSVData &bind_data, const vector<column_t> &column_ids,
-                         vector<LogicalType> &file_schema)
+                         const ReadCSVData &bind_data, const vector<column_t> &column_ids, CSVColumnSchema &file_schema)
     : file_path(options_p.file_path), file_idx(0), buffer_manager(std::move(buffer_manager_p)),
       state_machine(std::move(state_machine_p)), file_size(buffer_manager->file_handle->FileSize()),
       error_handler(make_shared<CSVErrorHandler>(options_p.ignore_errors.GetValue())),
@@ -32,7 +68,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, shared_ptr<CSVBufferManager> bu
 	}
 	names = bind_data.return_names;
 	types = bind_data.return_types;
-	file_schema = bind_data.return_types;
+	file_schema.Initialize(names, types);
 	MultiFileReader::InitializeReader(*this, options.file_options, bind_data.reader_bind, bind_data.return_types,
 	                                  bind_data.return_names, column_ids, nullptr, file_path, context);
 
@@ -41,7 +77,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, shared_ptr<CSVBufferManager> bu
 
 CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, const CSVReaderOptions &options_p,
                          const idx_t file_idx_p, const ReadCSVData &bind_data, const vector<column_t> &column_ids,
-                         const vector<LogicalType> &file_schema)
+                         CSVColumnSchema &file_schema)
     : file_path(file_path_p), file_idx(file_idx_p),
       error_handler(make_shared<CSVErrorHandler>(options_p.ignore_errors.GetValue())), options(options_p) {
 	if (file_idx < bind_data.union_readers.size()) {
@@ -97,16 +133,17 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 		InitializeFileNamesTypes();
 		return;
 	}
-	// Sniff it (We only really care about dialect detection, if types or number of columns are different this will
-	// error out during scanning)
+	// Sniff it!
 	if (options.auto_detect && file_idx > 0) {
 		CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
 		auto result = sniffer.SniffCSV();
-		if (!file_schema.empty()) {
-			if (!options.file_options.filename && !options.file_options.hive_partitioning &&
-			    file_schema.size() != result.return_types.size()) {
-				throw InvalidInputException("Mismatch between the schema of different files");
+		if (!options.file_options.filename && !options.file_options.hive_partitioning) {
+			if (file_schema.Empty()) {
+				throw InternalException(
+				    "CSV File Schema can't be empty since at this point we already sniffed one file");
 			}
+
+			// We do schema matching here
 		}
 	}
 	if (options.dialect_options.num_cols == 0) {
