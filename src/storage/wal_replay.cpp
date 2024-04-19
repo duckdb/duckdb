@@ -659,7 +659,9 @@ void WriteAheadLogDeserializer::ReplayInsert() {
 	}
 
 	// append to the current table
-	state.current_table->GetStorage().LocalAppend(*state.current_table, context, chunk);
+	// we don't do any constraint verification here
+	vector<unique_ptr<BoundConstraint>> bound_constraints;
+	state.current_table->GetStorage().LocalAppend(*state.current_table, context, chunk, bound_constraints);
 }
 
 void WriteAheadLogDeserializer::ReplayDelete() {

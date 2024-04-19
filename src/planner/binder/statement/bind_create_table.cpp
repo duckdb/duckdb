@@ -55,6 +55,10 @@ vector<unique_ptr<BoundConstraint>> Binder::BindConstraints(ClientContext &conte
 	return binder->BindConstraints(constraints, table_name, columns);
 }
 
+vector<unique_ptr<BoundConstraint>> Binder::BindConstraints(const TableCatalogEntry &table) {
+	return BindConstraints(table.GetConstraints(), table.name, table.GetColumns());
+}
+
 vector<unique_ptr<BoundConstraint>> Binder::BindConstraints(const vector<unique_ptr<Constraint>> &constraints,
                                                             const string &table_name, const ColumnList &columns) {
 	vector<unique_ptr<BoundConstraint>> bound_constraints;

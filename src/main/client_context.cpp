@@ -1121,7 +1121,9 @@ void ClientContext::Append(TableDescription &description, ColumnDataCollection &
 				throw InvalidInputException("Failed to append: table entry has different number of columns!");
 			}
 		}
-		table_entry.GetStorage().LocalAppend(table_entry, *this, collection);
+		auto binder = Binder::CreateBinder(*this);
+		auto bound_constraints = binder->BindConstraints(table_entry);
+		table_entry.GetStorage().LocalAppend(table_entry, *this, collection, bound_constraints);
 	});
 }
 

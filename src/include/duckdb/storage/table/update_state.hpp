@@ -14,7 +14,7 @@ namespace duckdb {
 class TableCatalogEntry;
 
 struct TableUpdateState {
-	unique_ptr<ConstraintVerificationState> constraint_state;
+	unique_ptr<ConstraintState> constraint_state;
 };
 
 } // namespace duckdb

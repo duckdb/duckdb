@@ -164,7 +164,7 @@ const ColumnDefinition &TableCatalogEntry::GetColumn(LogicalIndex idx) {
 	return columns.GetColumn(idx);
 }
 
-const vector<unique_ptr<Constraint>> &TableCatalogEntry::GetConstraints() {
+const vector<unique_ptr<Constraint>> &TableCatalogEntry::GetConstraints() const {
 	return constraints;
 }
 

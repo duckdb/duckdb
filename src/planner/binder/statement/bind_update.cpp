@@ -106,6 +106,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	}
 	// bind the default values
 	BindDefaultValues(table.GetColumns(), update->bound_defaults);
+	update->bound_constraints = BindConstraints(table);
 
 	// project any additional columns required for the condition/expressions
 	if (stmt.set_info->condition) {

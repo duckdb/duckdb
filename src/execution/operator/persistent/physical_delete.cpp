@@ -10,6 +10,13 @@
 
 namespace duckdb {
 
+PhysicalDelete::PhysicalDelete(vector<LogicalType> types, TableCatalogEntry &tableref, DataTable &table,
+                               vector<unique_ptr<BoundConstraint>> bound_constraints, idx_t row_id_index,
+                               idx_t estimated_cardinality, bool return_chunk)
+    : PhysicalOperator(PhysicalOperatorType::DELETE_OPERATOR, std::move(types), estimated_cardinality),
+      tableref(tableref), table(table), bound_constraints(std::move(bound_constraints)), row_id_index(row_id_index),
+      return_chunk(return_chunk) {
+}
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
@@ -26,9 +33,10 @@ public:
 
 class DeleteLocalState : public LocalSinkState {
 public:
-	DeleteLocalState(ClientContext &context, TableCatalogEntry &table) {
+	DeleteLocalState(ClientContext &context, TableCatalogEntry &table,
+	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
 		delete_chunk.Initialize(Allocator::Get(context), table.GetTypes());
-		delete_state = table.GetStorage().InitializeDelete(table, context);
+		delete_state = table.GetStorage().InitializeDelete(table, context, bound_constraints);
 	}
 	DataChunk delete_chunk;
 	unique_ptr<TableDeleteState> delete_state;
@@ -64,7 +72,7 @@ unique_ptr<GlobalSinkState> PhysicalDelete::GetGlobalSinkState(ClientContext &co
 }
 
 unique_ptr<LocalSinkState> PhysicalDelete::GetLocalSinkState(ExecutionContext &context) const {
-	return make_uniq<DeleteLocalState>(context.client, tableref);
+	return make_uniq<DeleteLocalState>(context.client, tableref, bound_constraints);
 }
 
 //===--------------------------------------------------------------------===//

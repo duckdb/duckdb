@@ -15,11 +15,13 @@ namespace duckdb {
 
 PhysicalUpdate::PhysicalUpdate(vector<LogicalType> types, TableCatalogEntry &tableref, DataTable &table,
                                vector<PhysicalIndex> columns, vector<unique_ptr<Expression>> expressions,
-                               vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality,
+                               vector<unique_ptr<Expression>> bound_defaults,
+                               vector<unique_ptr<BoundConstraint>> bound_constraints, idx_t estimated_cardinality,
                                bool return_chunk)
     : PhysicalOperator(PhysicalOperatorType::UPDATE, std::move(types), estimated_cardinality), tableref(tableref),
       table(table), columns(std::move(columns)), expressions(std::move(expressions)),
-      bound_defaults(std::move(bound_defaults)), return_chunk(return_chunk) {
+      bound_defaults(std::move(bound_defaults)), bound_constraints(std::move(bound_constraints)),
+      return_chunk(return_chunk) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -40,8 +42,9 @@ public:
 class UpdateLocalState : public LocalSinkState {
 public:
 	UpdateLocalState(ClientContext &context, const vector<unique_ptr<Expression>> &expressions,
-	                 const vector<LogicalType> &table_types, const vector<unique_ptr<Expression>> &bound_defaults)
-	    : default_executor(context, bound_defaults) {
+	                 const vector<LogicalType> &table_types, const vector<unique_ptr<Expression>> &bound_defaults,
+	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints)
+	    : default_executor(context, bound_defaults), bound_constraints(bound_constraints) {
 		// initialize the update chunk
 		auto &allocator = Allocator::Get(context);
 		vector<LogicalType> update_types;
@@ -59,17 +62,18 @@ public:
 	ExpressionExecutor default_executor;
 	unique_ptr<TableDeleteState> delete_state;
 	unique_ptr<TableUpdateState> update_state;
+	const vector<unique_ptr<BoundConstraint>> &bound_constraints;
 
 	TableDeleteState &GetDeleteState(DataTable &table, TableCatalogEntry &tableref, ClientContext &context) {
 		if (!delete_state) {
-			delete_state = table.InitializeDelete(tableref, context);
+			delete_state = table.InitializeDelete(tableref, context, bound_constraints);
 		}
 		return *delete_state;
 	}
 
 	TableUpdateState &GetUpdateState(DataTable &table, TableCatalogEntry &tableref, ClientContext &context) {
 		if (!update_state) {
-			update_state = table.InitializeUpdate(tableref, context);
+			update_state = table.InitializeUpdate(tableref, context, bound_constraints);
 		}
 		return *update_state;
 	}
@@ -131,7 +135,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 		for (idx_t i = 0; i < columns.size(); i++) {
 			mock_chunk.data[columns[i].index].Reference(update_chunk.data[i]);
 		}
-		table.LocalAppend(tableref, context.client, mock_chunk);
+		table.LocalAppend(tableref, context.client, mock_chunk, bound_constraints);
 	} else {
 		if (return_chunk) {
 			mock_chunk.SetCardinality(update_chunk);
@@ -157,7 +161,8 @@ unique_ptr<GlobalSinkState> PhysicalUpdate::GetGlobalSinkState(ClientContext &co
 }
 
 unique_ptr<LocalSinkState> PhysicalUpdate::GetLocalSinkState(ExecutionContext &context) const {
-	return make_uniq<UpdateLocalState>(context.client, expressions, table.GetTypes(), bound_defaults);
+	return make_uniq<UpdateLocalState>(context.client, expressions, table.GetTypes(), bound_defaults,
+	                                   bound_constraints);
 }
 
 SinkCombineResultType PhysicalUpdate::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {

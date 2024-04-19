@@ -616,7 +616,7 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, ClientContext &cont
 	});
 }
 
-void DataTable::VerifyAppendConstraints(ConstraintVerificationState &state, ClientContext &context, DataChunk &chunk,
+void DataTable::VerifyAppendConstraints(ConstraintState &state, ClientContext &context, DataChunk &chunk,
                                         optional_ptr<ConflictManager> conflict_manager) {
 	auto &table = state.table;
 	if (table.HasGeneratedColumns()) {
@@ -675,22 +675,21 @@ void DataTable::VerifyAppendConstraints(ConstraintVerificationState &state, Clie
 	}
 }
 
-unique_ptr<ConstraintVerificationState> DataTable::InitializeConstraintVerification(TableCatalogEntry &table,
-                                                                                    ClientContext &context) {
-	auto result = make_uniq<ConstraintVerificationState>(table);
-	auto binder = Binder::CreateBinder(context);
-	result->bound_constraints = binder->BindConstraints(table.GetConstraints(), table.name, table.GetColumns());
-	return result;
+unique_ptr<ConstraintState>
+DataTable::InitializeConstraintState(TableCatalogEntry &table,
+                                     const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
+	return make_uniq<ConstraintState>(table, bound_constraints);
 }
 
-void DataTable::InitializeLocalAppend(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context) {
+void DataTable::InitializeLocalAppend(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context,
+                                      const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
 	if (!is_root) {
 		throw TransactionException("Transaction conflict: adding entries to a table that has been altered!");
 	}
 	auto &local_storage = LocalStorage::Get(context, db);
 	local_storage.InitializeAppend(state, *this);
 
-	state.constraint_state = InitializeConstraintVerification(table, context);
+	state.constraint_state = InitializeConstraintState(table, bound_constraints);
 }
 
 void DataTable::LocalAppend(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
@@ -733,18 +732,20 @@ void DataTable::LocalMerge(ClientContext &context, RowGroupCollection &collectio
 	local_storage.LocalMerge(*this, collection);
 }
 
-void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {
+void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
+                            const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
 	LocalAppendState append_state;
 	auto &storage = table.GetStorage();
-	storage.InitializeLocalAppend(append_state, table, context);
+	storage.InitializeLocalAppend(append_state, table, context, bound_constraints);
 	storage.LocalAppend(append_state, table, context, chunk);
 	storage.FinalizeLocalAppend(append_state);
 }
 
-void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, ColumnDataCollection &collection) {
+void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, ColumnDataCollection &collection,
+                            const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
 	LocalAppendState append_state;
 	auto &storage = table.GetStorage();
-	storage.InitializeLocalAppend(append_state, table, context);
+	storage.InitializeLocalAppend(append_state, table, context, bound_constraints);
 	for (auto &chunk : collection.Chunks()) {
 		storage.LocalAppend(append_state, table, context, chunk);
 	}
@@ -990,7 +991,7 @@ static bool TableHasDeleteConstraints(TableCatalogEntry &table) {
 }
 
 void DataTable::VerifyDeleteConstraints(TableDeleteState &state, ClientContext &context, DataChunk &chunk) {
-	for (auto &constraint : state.bound_constraints) {
+	for (auto &constraint : state.constraint_state->bound_constraints) {
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL:
 		case ConstraintType::CHECK:
@@ -1010,12 +1011,12 @@ void DataTable::VerifyDeleteConstraints(TableDeleteState &state, ClientContext &
 	}
 }
 
-unique_ptr<TableDeleteState> DataTable::InitializeDelete(TableCatalogEntry &table, ClientContext &context) {
+unique_ptr<TableDeleteState> DataTable::InitializeDelete(TableCatalogEntry &table, ClientContext &context,
+                                                         const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
 	// initialize indexes (if any)
 	info->InitializeIndexes(context, true);
 
 	auto binder = Binder::CreateBinder(context);
-	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	vector<LogicalType> types;
 	auto result = make_uniq<TableDeleteState>();
 	result->has_delete_constraints = TableHasDeleteConstraints(table);
@@ -1026,7 +1027,7 @@ unique_ptr<TableDeleteState> DataTable::InitializeDelete(TableCatalogEntry &tabl
 			types.emplace_back(column_definitions[i].Type());
 		}
 		result->verify_chunk.Initialize(Allocator::Get(context), types);
-		result->bound_constraints = binder->BindConstraints(table.GetConstraints(), table.name, table.GetColumns());
+		result->constraint_state = make_uniq<ConstraintState>(table, bound_constraints);
 	}
 	return result;
 }
@@ -1120,7 +1121,7 @@ static bool CreateMockChunk(TableCatalogEntry &table, const vector<PhysicalIndex
 	return true;
 }
 
-void DataTable::VerifyUpdateConstraints(ConstraintVerificationState &state, ClientContext &context, DataChunk &chunk,
+void DataTable::VerifyUpdateConstraints(ConstraintState &state, ClientContext &context, DataChunk &chunk,
                                         const vector<PhysicalIndex> &column_ids) {
 	auto &table = state.table;
 	auto &constraints = table.GetConstraints();
@@ -1170,12 +1171,13 @@ void DataTable::VerifyUpdateConstraints(ConstraintVerificationState &state, Clie
 #endif
 }
 
-unique_ptr<TableUpdateState> DataTable::InitializeUpdate(TableCatalogEntry &table, ClientContext &context) {
+unique_ptr<TableUpdateState> DataTable::InitializeUpdate(TableCatalogEntry &table, ClientContext &context,
+                                                         const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
 	// check that there are no unknown indexes
 	info->InitializeIndexes(context, true);
 
 	auto result = make_uniq<TableUpdateState>();
-	result->constraint_state = InitializeConstraintVerification(table, context);
+	result->constraint_state = InitializeConstraintState(table, bound_constraints);
 	return result;
 }
 

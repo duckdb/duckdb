@@ -22,13 +22,15 @@ public:
 public:
 	PhysicalUpdate(vector<LogicalType> types, TableCatalogEntry &tableref, DataTable &table,
 	               vector<PhysicalIndex> columns, vector<unique_ptr<Expression>> expressions,
-	               vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality, bool return_chunk);
+	               vector<unique_ptr<Expression>> bound_defaults, vector<unique_ptr<BoundConstraint>> bound_constraints,
+	               idx_t estimated_cardinality, bool return_chunk);
 
 	TableCatalogEntry &tableref;
 	DataTable &table;
 	vector<PhysicalIndex> columns;
 	vector<unique_ptr<Expression>> expressions;
 	vector<unique_ptr<Expression>> bound_defaults;
+	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	bool update_is_del_and_insert;
 	//! If the returning statement is present, return the whole chunk
 	bool return_chunk;

@@ -13,12 +13,14 @@
 
 namespace duckdb {
 
-PhysicalBatchInsert::PhysicalBatchInsert(vector<LogicalType> types, TableCatalogEntry &table,
-                                         physical_index_vector_t<idx_t> column_index_map,
-                                         vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::BATCH_INSERT, std::move(types), estimated_cardinality),
-      column_index_map(std::move(column_index_map)), insert_table(&table), insert_types(table.GetTypes()),
-      bound_defaults(std::move(bound_defaults)) {
+PhysicalBatchInsert::PhysicalBatchInsert(vector<LogicalType> types_p, TableCatalogEntry &table,
+                                         physical_index_vector_t<idx_t> column_index_map_p,
+                                         vector<unique_ptr<Expression>> bound_defaults_p,
+                                         vector<unique_ptr<BoundConstraint>> bound_constraints_p,
+                                         idx_t estimated_cardinality)
+    : PhysicalOperator(PhysicalOperatorType::BATCH_INSERT, std::move(types_p), estimated_cardinality),
+      column_index_map(std::move(column_index_map_p)), insert_table(&table), insert_types(table.GetTypes()),
+      bound_defaults(std::move(bound_defaults_p)), bound_constraints(std::move(bound_constraints_p)) {
 }
 
 PhysicalBatchInsert::PhysicalBatchInsert(LogicalOperator &op, SchemaCatalogEntry &schema,
@@ -171,7 +173,7 @@ public:
 	TableAppendState current_append_state;
 	unique_ptr<RowGroupCollection> current_collection;
 	optional_ptr<OptimisticDataWriter> writer;
-	unique_ptr<ConstraintVerificationState> constraint_state;
+	unique_ptr<ConstraintState> constraint_state;
 
 	void CreateNewCollection(DuckTableEntry &table, const vector<LogicalType> &insert_types) {
 		auto &table_info = table.GetStorage().info;
@@ -496,7 +498,7 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &c
 	}
 
 	if (!lstate.constraint_state) {
-		lstate.constraint_state = table.GetStorage().InitializeConstraintVerification(table, context.client);
+		lstate.constraint_state = table.GetStorage().InitializeConstraintState(table, bound_constraints);
 	}
 	table.GetStorage().VerifyAppendConstraints(*lstate.constraint_state, context.client, lstate.insert_chunk);
 
@@ -599,7 +601,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 		auto &table = gstate.table;
 		auto &storage = table.GetStorage();
 		LocalAppendState append_state;
-		storage.InitializeLocalAppend(append_state, table, context);
+		storage.InitializeLocalAppend(append_state, table, context, bound_constraints);
 		auto &transaction = DuckTransaction::Get(context, table.catalog);
 		for (auto &entry : gstate.collections) {
 			if (entry.type != RowGroupBatchType::NOT_FLUSHED) {

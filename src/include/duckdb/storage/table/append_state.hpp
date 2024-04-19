@@ -70,18 +70,19 @@ struct TableAppendState {
 	TransactionData transaction;
 };
 
-struct ConstraintVerificationState {
-	explicit ConstraintVerificationState(TableCatalogEntry &table_p) : table(table_p) {
+struct ConstraintState {
+	explicit ConstraintState(TableCatalogEntry &table_p, const vector<unique_ptr<BoundConstraint>> &bound_constraints)
+	    : table(table_p), bound_constraints(bound_constraints) {
 	}
 
 	TableCatalogEntry &table;
-	vector<unique_ptr<BoundConstraint>> bound_constraints;
+	const vector<unique_ptr<BoundConstraint>> &bound_constraints;
 };
 
 struct LocalAppendState {
 	TableAppendState append_state;
 	LocalTableStorage *storage;
-	unique_ptr<ConstraintVerificationState> constraint_state;
+	unique_ptr<ConstraintState> constraint_state;
 };
 
 } // namespace duckdb

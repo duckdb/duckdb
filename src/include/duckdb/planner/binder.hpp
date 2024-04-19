@@ -127,6 +127,7 @@ public:
 	                                                           const string &table_name, const ColumnList &columns);
 	vector<unique_ptr<BoundConstraint>> BindConstraints(const vector<unique_ptr<Constraint>> &constraints,
 	                                                    const string &table_name, const ColumnList &columns);
+	vector<unique_ptr<BoundConstraint>> BindConstraints(const TableCatalogEntry &table);
 	vector<unique_ptr<BoundConstraint>> BindNewConstraints(vector<unique_ptr<Constraint>> &constraints,
 	                                                       const string &table_name, const ColumnList &columns);
 
