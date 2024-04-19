@@ -72,7 +72,15 @@ IndexStorageInfo GetIndexInfo(const IndexConstraintType &constraint_type, unique
 }
 
 vector<PhysicalIndex> GetUniqueConstraintKeys(const ColumnList &columns, const UniqueConstraint &constraint) {
-	throw InternalException("FIXME: GetUniqueConstraintKeys");
+	vector<PhysicalIndex> indexes;
+	if (constraint.HasIndex()) {
+		indexes.push_back(columns.LogicalToPhysical(constraint.GetIndex()));
+	} else {
+		for(auto &keyname : constraint.GetColumnNames()) {
+			indexes.push_back(columns.GetColumn(keyname).Physical());
+		}
+	}
+	return indexes;
 }
 
 DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info,
