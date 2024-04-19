@@ -96,24 +96,6 @@ const reference_map_t<JoinRelationSet, unique_ptr<DPJoinNode>> &PlanEnumerator::
 	return plans;
 }
 
-// DPJoinNode &PlanEnumerator::CreateJoinNodeFromDPJoinNode(DPJoinNode dp_node) {
-//	if (dp_node.is_leaf) {
-//		auto res = make_uniq<JoinNode>(dp_node.set);
-//		res->cardinality = dp_node.cardinality;
-//		return res;
-//	} else {
-//		auto left_dp_join_node = plans.find(dp_node.left_set);
-//		auto right_dp_join_node = plans.find(dp_node.right_set);
-//		D_ASSERT(left_dp_join_node->second);
-//		D_ASSERT(right_dp_join_node->second);
-//		auto left = CreateJoinNodeFromDPJoinNode(*left_dp_join_node->second);
-//		auto right = CreateJoinNodeFromDPJoinNode(*right_dp_join_node->second);
-//		auto res = make_uniq<JoinNode>(dp_node.set, dp_node.info, std::move(left), std::move(right), dp_node.cost);
-//		res->cardinality = dp_node.cardinality;
-//		return res;
-//	}
-//}
-
 //! Create a new JoinTree node by joining together two previous JoinTree nodes
 unique_ptr<DPJoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
                                                       const vector<reference<NeighborInfo>> &possible_connections,
