@@ -10,7 +10,7 @@ namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
 
-bool FilterPushdown::CanPushdownFilter(vector<column_binding_set_t> window_exprs_partition_bindings,
+bool CanPushdownFilter(vector<column_binding_set_t> window_exprs_partition_bindings,
                                        const vector<ColumnBinding> &bindings) {
 	auto filter_on_all_partitions = true;
 	for (auto &partition_binding_set : window_exprs_partition_bindings) {
