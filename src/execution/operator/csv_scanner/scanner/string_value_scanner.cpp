@@ -97,6 +97,8 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 		null_str_ptr[i] = state_machine.options.null_str[i].c_str();
 		null_str_size[i] = state_machine.options.null_str[i].size();
 	}
+	date_format = state_machine.options.dialect_options.date_format.at(LogicalTypeId::DATE).GetValue();
+	timestamp_format = state_machine.options.dialect_options.date_format.at(LogicalTypeId::TIMESTAMP).GetValue();
 }
 
 StringValueResult::~StringValueResult() {
@@ -215,11 +217,9 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		                               false, state_machine.options.decimal_separator[0]);
 		break;
 	case LogicalTypeId::DATE: {
-		if (!state_machine.dialect_options.date_format.find(LogicalTypeId::DATE)->second.GetValue().Empty()) {
-			success =
-			    state_machine.dialect_options.date_format.find(LogicalTypeId::DATE)
-			        ->second.GetValue()
-			        .TryParseDate(value_ptr, size, static_cast<date_t *>(vector_ptr[chunk_col_id])[number_of_rows]);
+		if (!date_format.Empty()) {
+			success = date_format.TryParseDate(value_ptr, size,
+			                                   static_cast<date_t *>(vector_ptr[chunk_col_id])[number_of_rows]);
 		} else {
 			idx_t pos;
 			bool special;
@@ -229,11 +229,9 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		break;
 	}
 	case LogicalTypeId::TIMESTAMP: {
-		if (!state_machine.dialect_options.date_format.find(LogicalTypeId::TIMESTAMP)->second.GetValue().Empty()) {
-			success = state_machine.dialect_options.date_format.find(LogicalTypeId::TIMESTAMP)
-			              ->second.GetValue()
-			              .TryParseTimestamp(value_ptr, size,
-			                                 static_cast<timestamp_t *>(vector_ptr[chunk_col_id])[number_of_rows]);
+		if (!timestamp_format.Empty()) {
+			success = timestamp_format.TryParseTimestamp(
+			    value_ptr, size, static_cast<timestamp_t *>(vector_ptr[chunk_col_id])[number_of_rows]);
 		} else {
 			success = Timestamp::TryConvertTimestamp(
 			              value_ptr, size, static_cast<timestamp_t *>(vector_ptr[chunk_col_id])[number_of_rows]) ==
