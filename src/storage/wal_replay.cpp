@@ -25,6 +25,7 @@
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/storage/table/delete_state.hpp"
 
 namespace duckdb {
 
