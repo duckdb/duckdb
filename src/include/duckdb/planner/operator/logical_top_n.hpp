@@ -19,15 +19,15 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_TOP_N;
 
 public:
-	LogicalTopN(vector<BoundOrderByNode> orders, int64_t limit, int64_t offset)
+	LogicalTopN(vector<BoundOrderByNode> orders, idx_t limit, idx_t offset)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_TOP_N), orders(std::move(orders)), limit(limit), offset(offset) {
 	}
 
 	vector<BoundOrderByNode> orders;
 	//! The maximum amount of elements to emit
-	int64_t limit;
+	idx_t limit;
 	//! The offset from the start to begin emitting elements
-	int64_t offset;
+	idx_t offset;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override {

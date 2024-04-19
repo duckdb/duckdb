@@ -24,9 +24,11 @@ project(DuckDB)
 
 find_package(Threads REQUIRED)
 
+set(DUCKDB_MODULE_BASE_DIR "${CMAKE_CURRENT_LIST_DIR}")
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-set (CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD "11" CACHE STRING "C++ standard to enforce")
 
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -83,6 +85,13 @@ if (EXTENSION_STATIC_BUILD AND "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
 endif()
 
 option(DISABLE_UNITY "Disable unity builds." FALSE)
+option(USE_WASM_THREADS "Should threads be used" FALSE)
+if (${USE_WASM_THREADS})
+   set(WASM_THREAD_FLAGS
+       -pthread
+       -sSHARED_MEMORY=1
+   )
+endif()
 
 option(FORCE_COLORED_OUTPUT
        "Always produce ANSI-colored output (GNU/Clang only)." FALSE)
@@ -553,7 +562,6 @@ include_directories(third_party/fast_float)
 include_directories(third_party/re2)
 include_directories(third_party/miniz)
 include_directories(third_party/utf8proc/include)
-include_directories(third_party/miniparquet)
 include_directories(third_party/concurrentqueue)
 include_directories(third_party/pcg)
 include_directories(third_party/tdigest)
@@ -709,6 +717,8 @@ endif()
 set(LOCAL_EXTENSION_REPO FALSE)
 if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_TIDY)
   if (NOT Python3_FOUND)
+    add_custom_target(
+          duckdb_local_extension_repo ALL)
     MESSAGE(STATUS "Could not find python3, create extension directory step will be skipped")
   else()
     add_custom_target(
@@ -810,17 +820,18 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY EXTENSION_VERS
       COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${TARGET_NAME}> $<TARGET_FILE:${TARGET_NAME}>.lib
       )
     # Compile the library into the actual wasm file
+    string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
     add_custom_command(
       TARGET ${TARGET_NAME}
       POST_BUILD
-      COMMAND emcc $<TARGET_FILE:${TARGET_NAME}>.lib -o $<TARGET_FILE:${TARGET_NAME}> -sSIDE_MODULE=1 -O3
+      COMMAND emcc $<TARGET_FILE:${TARGET_NAME}>.lib -o $<TARGET_FILE:${TARGET_NAME}> -O3 -sSIDE_MODULE=2 -sEXPORTED_FUNCTIONS="_${NAME}_init" ${WASM_THREAD_FLAGS} ${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LINKED_LIBS}
       )
   endif()
   add_custom_command(
     TARGET ${TARGET_NAME}
     POST_BUILD
     COMMAND
-    ${CMAKE_COMMAND} -DEXTENSION=$<TARGET_FILE:${TARGET_NAME}> -DPLATFORM_FILE=${DuckDB_BINARY_DIR}/duckdb_platform_out -DDUCKDB_VERSION="${DUCKDB_NORMALIZED_VERSION}" -DEXTENSION_VERSION="${EXTENSION_VERSION}" -DNULL_FILE=${CMAKE_CURRENT_FUNCTION_LIST_DIR}/scripts/null.txt -P ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/scripts/append_metadata.cmake
+    ${CMAKE_COMMAND} -DEXTENSION=$<TARGET_FILE:${TARGET_NAME}> -DPLATFORM_FILE=${DuckDB_BINARY_DIR}/duckdb_platform_out -DDUCKDB_VERSION="${DUCKDB_NORMALIZED_VERSION}" -DEXTENSION_VERSION="${EXTENSION_VERSION}" -DNULL_FILE=${DUCKDB_MODULE_BASE_DIR}/scripts/null.txt -P ${DUCKDB_MODULE_BASE_DIR}/scripts/append_metadata.cmake
     )
   add_dependencies(${TARGET_NAME} duckdb_platform)
   if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_TIDY)
@@ -846,7 +857,7 @@ function(build_static_extension NAME PARAMETERS)
 endfunction()
 
 # Internal extension register function
-function(register_extension NAME DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PATH TEST_PATH)
+function(register_extension NAME DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PATH TEST_PATH LINKED_LIBS)
   string(TOLOWER ${NAME} EXTENSION_NAME_LOWERCASE)
   string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
 
@@ -867,6 +878,8 @@ function(register_extension NAME DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PA
       set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK FALSE PARENT_SCOPE)
     endif()
   endif()
+
+  set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LINKED_LIBS "${LINKED_LIBS}" PARENT_SCOPE)
 
   # Allows explicitly disabling extensions that may be specified in other configurations
   if (NOT ${DONT_BUILD} AND NOT ${EXTENSION_TESTS_ONLY})
@@ -893,7 +906,7 @@ function(register_extension NAME DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PA
 endfunction()
 
 # Downloads the external extension repo at the specified commit and calls register_extension
-macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PATH TEST_PATH APPLY_PATCHES SUBMODULES)
+macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PATH TEST_PATH APPLY_PATCHES LINKED_LIBS SUBMODULES)
   include(FetchContent)
   if (${APPLY_PATCHES})
     set(PATCH_COMMAND python3 ${CMAKE_SOURCE_DIR}/scripts/apply_extension_patches.py ${CMAKE_SOURCE_DIR}/.github/patches/extensions/${NAME}/)
@@ -921,6 +934,8 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TEST
   endif()
 
   message(STATUS "Load extension '${NAME}' from ${URL} @ ${GIT_SHORT_COMMIT}")
+
+  string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
   set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION "${GIT_SHORT_COMMIT}" PARENT_SCOPE)
 
   if ("${INCLUDE_PATH}" STREQUAL "")
@@ -935,13 +950,13 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TEST
     set(TEST_FULL_PATH "${${NAME}_extension_fc_SOURCE_DIR}/${TEST_PATH}")
   endif()
 
-  register_extension(${NAME} ${DONT_LINK} ${DONT_BUILD} ${LOAD_TESTS} ${${NAME}_extension_fc_SOURCE_DIR}/${PATH} "${INCLUDE_FULL_PATH}" "${TEST_FULL_PATH}")
+  register_extension(${NAME} ${DONT_LINK} ${DONT_BUILD} ${LOAD_TESTS} ${${NAME}_extension_fc_SOURCE_DIR}/${PATH} "${INCLUDE_FULL_PATH}" "${TEST_FULL_PATH}" "${LINKED_LIBS}")
 endmacro()
 
 function(duckdb_extension_load NAME)
   # Parameter parsing
   set(options DONT_LINK DONT_BUILD LOAD_TESTS APPLY_PATCHES)
-  set(oneValueArgs SOURCE_DIR INCLUDE_DIR TEST_DIR GIT_URL GIT_TAG SUBMODULES EXTENSION_VERSION)
+  set(oneValueArgs SOURCE_DIR INCLUDE_DIR TEST_DIR GIT_URL GIT_TAG SUBMODULES EXTENSION_VERSION LINKED_LIBS)
   cmake_parse_arguments(duckdb_extension_load "${options}" "${oneValueArgs}" "" ${ARGN})
 
   string(TOLOWER ${NAME} EXTENSION_NAME_LOWERCASE)
@@ -960,12 +975,12 @@ function(duckdb_extension_load NAME)
 
   # Remote Git extension
   if (${duckdb_extension_load_DONT_BUILD})
-    register_extension(${NAME} "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "" "" "" "")
+    register_extension(${NAME} "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "" "" "" "" "")
   elseif (NOT "${duckdb_extension_load_GIT_URL}" STREQUAL "")
     if ("${duckdb_extension_load_GIT_TAG}" STREQUAL "")
       error("Git URL specified but no valid GIT_TAG was found for ${NAME} extension")
     endif()
-    register_external_extension(${NAME} "${duckdb_extension_load_GIT_URL}" "${duckdb_extension_load_GIT_TAG}" "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${duckdb_extension_load_SOURCE_DIR}" "${duckdb_extension_load_INCLUDE_DIR}" "${duckdb_extension_load_TEST_DIR}" "${duckdb_extension_load_APPLY_PATCHES}" "${duckdb_extension_load_SUBMODULES}")
+    register_external_extension(${NAME} "${duckdb_extension_load_GIT_URL}" "${duckdb_extension_load_GIT_TAG}" "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${duckdb_extension_load_SOURCE_DIR}" "${duckdb_extension_load_INCLUDE_DIR}" "${duckdb_extension_load_TEST_DIR}" "${duckdb_extension_load_APPLY_PATCHES}" "${duckdb_extension_load_LINKED_LIBS}" "${duckdb_extension_load_SUBMODULES}")
     if (NOT "${duckdb_extension_load_EXTENSION_VERSION}" STREQUAL "")
       set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION "${duckdb_extension_load_EXTENSION_VERSION}" PARENT_SCOPE)
     endif()
@@ -1003,7 +1018,7 @@ function(duckdb_extension_load NAME)
         set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION "" PARENT_SCOPE)
       endif()
     endif()
-    register_extension(${NAME} "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${duckdb_extension_load_SOURCE_DIR}" "${INCLUDE_PATH_DEFAULT}" "${TEST_PATH_DEFAULT}")
+    register_extension(${NAME} "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${duckdb_extension_load_SOURCE_DIR}" "${INCLUDE_PATH_DEFAULT}" "${TEST_PATH_DEFAULT}" "${duckdb_extension_load_LINKED_LIBS}")
   elseif(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/extension_external/${NAME})
     # Local extension, default path
     message(STATUS "Load extension '${NAME}' from '${CMAKE_CURRENT_SOURCE_DIR}/extension_external'")
@@ -1012,7 +1027,7 @@ function(duckdb_extension_load NAME)
   else()
     # Local extension, default path
     message(STATUS "Load extension '${NAME}' from '${CMAKE_CURRENT_SOURCE_DIR}/extensions'")
-    register_extension(${NAME} ${duckdb_extension_load_DONT_LINK} "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${CMAKE_CURRENT_SOURCE_DIR}/extension/${NAME}" "${CMAKE_CURRENT_SOURCE_DIR}/extension/${NAME}/include" "${CMAKE_CURRENT_SOURCE_DIR}/extension/${NAME}/test/sql")
+    register_extension(${NAME} ${duckdb_extension_load_DONT_LINK} "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${CMAKE_CURRENT_SOURCE_DIR}/extension/${NAME}" "${CMAKE_CURRENT_SOURCE_DIR}/extension/${NAME}/include" "${CMAKE_CURRENT_SOURCE_DIR}/extension/${NAME}/test/sql" "${duckdb_extension_load_LINKED_LIBS}")
     set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION "${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION}" PARENT_SCOPE)
   endif()
 
@@ -1024,6 +1039,7 @@ function(duckdb_extension_load NAME)
   set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_PATH ${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_PATH} PARENT_SCOPE)
   set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_INCLUDE_PATH ${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_INCLUDE_PATH} PARENT_SCOPE)
   set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_TEST_PATH ${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_TEST_PATH} PARENT_SCOPE)
+  set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LINKED_LIBS ${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LINKED_LIBS} PARENT_SCOPE)
 endfunction()
 
 if(${EXPORT_DLL_SYMBOLS})

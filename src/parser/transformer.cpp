@@ -134,8 +134,8 @@ unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgque
 		auto &raw_stmt = PGCast<duckdb_libpgquery::PGRawStmt>(stmt);
 		auto result = TransformStatement(*raw_stmt.stmt);
 		if (result) {
-			result->stmt_location = raw_stmt.stmt_location;
-			result->stmt_length = raw_stmt.stmt_len;
+			result->stmt_location = NumericCast<idx_t>(raw_stmt.stmt_location);
+			result->stmt_length = NumericCast<idx_t>(raw_stmt.stmt_len);
 		}
 		return result;
 	}

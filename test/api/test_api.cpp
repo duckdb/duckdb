@@ -139,6 +139,16 @@ static void parallel_query(Connection *conn, bool *correct, size_t threadnr) {
 	}
 }
 
+TEST_CASE("Test temp_directory defaults", "[api][.]") {
+	const char *db_paths[] = {nullptr, "", ":memory:"};
+	for (auto &path : db_paths) {
+		auto db = make_uniq<DuckDB>(path);
+		auto conn = make_uniq<Connection>(*db);
+
+		REQUIRE(db->instance->config.options.temporary_directory == ".tmp");
+	}
+}
+
 TEST_CASE("Test parallel usage of single client", "[api][.]") {
 	auto db = make_uniq<DuckDB>(nullptr);
 	auto conn = make_uniq<Connection>(*db);

@@ -115,7 +115,8 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 			if (state.scan_options && state.scan_options->force_fetch_row) {
 				for (idx_t i = 0; i < scan_count; i++) {
 					ColumnFetchState fetch_state;
-					state.current->FetchRow(fetch_state, state.row_index + i, result, result_offset + i);
+					state.current->FetchRow(fetch_state, UnsafeNumericCast<row_t>(state.row_index + i), result,
+					                        result_offset + i);
 				}
 			} else {
 				state.current->Scan(state, scan_count, result, result_offset,
@@ -170,7 +171,7 @@ void ColumnData::FetchUpdateRow(TransactionData transaction, row_t row_id, Vecto
 	if (!updates) {
 		return;
 	}
-	updates->FetchRow(transaction, row_id, result, result_idx);
+	updates->FetchRow(transaction, NumericCast<idx_t>(row_id), result, result_idx);
 }
 
 void ColumnData::UpdateInternal(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
@@ -360,24 +361,25 @@ void ColumnData::RevertAppend(row_t start_row) {
 		return;
 	}
 	// find the segment index that the current row belongs to
-	idx_t segment_index = data.GetSegmentIndex(l, start_row);
-	auto segment = data.GetSegmentByIndex(l, segment_index);
+	idx_t segment_index = data.GetSegmentIndex(l, UnsafeNumericCast<idx_t>(start_row));
+	auto segment = data.GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(segment_index));
 	auto &transient = *segment;
 	D_ASSERT(transient.segment_type == ColumnSegmentType::TRANSIENT);
 
 	// remove any segments AFTER this segment: they should be deleted entirely
 	data.EraseSegments(l, segment_index);
 
-	this->count = start_row - this->start;
+	this->count = UnsafeNumericCast<idx_t>(start_row) - this->start;
 	segment->next = nullptr;
-	transient.RevertAppend(start_row);
+	transient.RevertAppend(UnsafeNumericCast<idx_t>(start_row));
 }
 
 idx_t ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	D_ASSERT(row_id >= 0);
 	D_ASSERT(idx_t(row_id) >= start);
 	// perform the fetch within the segment
-	state.row_index = start + ((row_id - start) / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE);
+	state.row_index =
+	    start + ((UnsafeNumericCast<idx_t>(row_id) - start) / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE);
 	state.current = data.GetSegment(state.row_index);
 	state.internal_index = state.current->start;
 	return ScanVector(state, result, STANDARD_VECTOR_SIZE, false);
@@ -385,11 +387,12 @@ idx_t ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 
 void ColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
                           idx_t result_idx) {
-	auto segment = data.GetSegment(row_id);
+	auto segment = data.GetSegment(UnsafeNumericCast<idx_t>(row_id));
 
 	// now perform the fetch within the segment
 	segment->FetchRow(state, row_id, result, result_idx);
 	// merge any updates made to this row
+
 	FetchUpdateRow(transaction, row_id, result, result_idx);
 }
 
@@ -445,7 +448,7 @@ void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, 
 	if (state.scan_options && state.scan_options->force_fetch_row) {
 		for (idx_t i = 0; i < count; i++) {
 			ColumnFetchState fetch_state;
-			segment.FetchRow(fetch_state, state.row_index + i, scan_vector, i);
+			segment.FetchRow(fetch_state, UnsafeNumericCast<row_t>(state.row_index + i), scan_vector, i);
 		}
 	} else {
 		segment.Scan(state, count, scan_vector, 0, !HasUpdates());

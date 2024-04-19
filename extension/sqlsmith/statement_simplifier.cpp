@@ -132,6 +132,8 @@ void StatementSimplifier::Simplify(unique_ptr<TableRef> &ref) {
 		SimplifyOptionalExpression(cp.condition);
 		SimplifyReplace(ref, cp.left);
 		SimplifyReplace(ref, cp.right);
+		SimplifyEnum(cp.type, JoinType::INNER);
+		SimplifyEnum(cp.ref_type, JoinRefType::REGULAR);
 		break;
 	}
 	case TableReferenceType::EXPRESSION_LIST: {

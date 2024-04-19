@@ -81,7 +81,7 @@ struct CorrelatedColumnInfo {
   tables and columns in the catalog. In the process, it also resolves types of
   all expressions.
 */
-class Binder : public std::enable_shared_from_this<Binder> {
+class Binder : public enable_shared_from_this<Binder> {
 	friend class ExpressionBinder;
 	friend class RecursiveDependentJoinPlanner;
 
@@ -119,6 +119,8 @@ public:
 
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info);
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema);
+	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema,
+	                                                     vector<unique_ptr<Expression>> &bound_defaults);
 
 	void BindCreateViewInfo(CreateViewInfo &base);
 	SchemaCatalogEntry &BindSchema(CreateInfo &info);
@@ -379,7 +381,7 @@ private:
 	unique_ptr<BoundTableRef> BindSummarize(ShowRef &ref);
 
 public:
-	// This should really be a private constructor, but make_shared does not allow it...
+	// This should really be a private constructor, but make_shared_ptr does not allow it...
 	// If you are thinking about calling this, you should probably call Binder::CreateBinder
 	Binder(bool i_know_what_i_am_doing, ClientContext &context, shared_ptr<Binder> parent, bool inherit_ctes);
 };
