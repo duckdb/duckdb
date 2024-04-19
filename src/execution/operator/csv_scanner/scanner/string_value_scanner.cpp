@@ -790,8 +790,12 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 				bool first_nl;
 				auto borked_line =
 				    result.line_positions_per_row[line_error].ReconstructCurrentLine(first_nl, result.buffer_handles);
+				std::ostringstream error;
+				error << "Could not convert string \"" << parse_vector.GetValue(line_error) << "\" to \'"
+					  << LogicalTypeIdToString(type.id()) << "\'";
+				string error_msg = error.str();
 				auto csv_error = CSVError::CastError(
-				    state_machine->options, csv_file_scan->names[col_idx], error_message, col_idx, borked_line,
+				    state_machine->options, csv_file_scan->names[col_idx], error_msg, col_idx, borked_line,
 				    lines_per_batch,
 				    result.line_positions_per_row[line_error].begin.GetGlobalPosition(result.result_size, first_nl), -1,
 				    result_vector.GetType().id());
@@ -814,8 +818,13 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					bool first_nl;
 					auto borked_line = result.line_positions_per_row[line_error].ReconstructCurrentLine(
 					    first_nl, result.buffer_handles);
+									std::ostringstream error;
+					// Casting Error Message
+					error << "Could not convert string \"" << parse_vector.GetValue(line_error) << "\" to \'"
+						  << LogicalTypeIdToString(type.id()) << "\'";
+					string error_msg = error.str();
 					auto csv_error = CSVError::CastError(
-					    state_machine->options, csv_file_scan->names[col_idx], error_message, col_idx, borked_line,
+					    state_machine->options, csv_file_scan->names[col_idx], error_msg, col_idx, borked_line,
 					    lines_per_batch,
 					    result.line_positions_per_row[line_error].begin.GetGlobalPosition(result.result_size, first_nl),
 					    -1, result_vector.GetType().id());

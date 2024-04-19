@@ -61,8 +61,8 @@ oogie boogie	3	2023-01-02	2023-01-03
 query IIIIIIIII rowsort
 SElECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
 ----
-0	4	110	NULL	3	current_day	CAST	oogie boogie,3, bla_2, bla_1	Error when converting column "current_day". date field value out of range: " bla_2", expected format is (YYYY-MM-DD)
-0	4	110	NULL	4	tomorrow	CAST	oogie boogie,3, bla_2, bla_1	Error when converting column "tomorrow". date field value out of range: " bla_1", expected format is (YYYY-MM-DD)
+0	4	110	NULL	3	current_day	CAST	oogie boogie,3, bla_2, bla_1	Error when converting column "current_day". Could not convert string " bla_2" to 'DATE'
+0	4	110	NULL	4	tomorrow	CAST	oogie boogie,3, bla_2, bla_1	Error when converting column "tomorrow". Could not convert string " bla_1" to 'DATE'
 
 statement ok
 DROP TABLE reject_errors;
