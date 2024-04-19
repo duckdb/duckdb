@@ -216,11 +216,10 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		break;
 	case LogicalTypeId::DATE: {
 		if (!state_machine.dialect_options.date_format.find(LogicalTypeId::DATE)->second.GetValue().Empty()) {
-			string error_message;
-			success = state_machine.dialect_options.date_format.find(LogicalTypeId::DATE)
-			              ->second.GetValue()
-			              .TryParseDate(value_ptr, size,
-			                            static_cast<date_t *>(vector_ptr[chunk_col_id])[number_of_rows], error_message);
+			success =
+			    state_machine.dialect_options.date_format.find(LogicalTypeId::DATE)
+			        ->second.GetValue()
+			        .TryParseDate(value_ptr, size, static_cast<date_t *>(vector_ptr[chunk_col_id])[number_of_rows]);
 		} else {
 			idx_t pos;
 			bool special;
@@ -231,11 +230,10 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 	}
 	case LogicalTypeId::TIMESTAMP: {
 		if (!state_machine.dialect_options.date_format.find(LogicalTypeId::TIMESTAMP)->second.GetValue().Empty()) {
-			timestamp_t result;
-			string error_message;
-			//			success =  state_machine.dialect_options.date_format.find(LogicalTypeId::TIMESTAMP)
-			//			    ->second.GetValue()
-			//			    .TryParseTimestamp(value, result, error_message);
+			success = state_machine.dialect_options.date_format.find(LogicalTypeId::TIMESTAMP)
+			              ->second.GetValue()
+			              .TryParseTimestamp(value_ptr, size,
+			                                 static_cast<timestamp_t *>(vector_ptr[chunk_col_id])[number_of_rows]);
 		} else {
 			success = Timestamp::TryConvertTimestamp(
 			              value_ptr, size, static_cast<timestamp_t *>(vector_ptr[chunk_col_id])[number_of_rows]) ==

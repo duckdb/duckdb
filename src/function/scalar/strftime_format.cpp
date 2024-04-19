@@ -1414,7 +1414,7 @@ bool StrpTimeFormat::TryParseDate(string_t input, date_t &result, string &error_
 	return parse_result.TryToDate(result);
 }
 
-bool StrpTimeFormat::TryParseDate(const char *data, size_t size, date_t &result, string &error_message) const {
+bool StrpTimeFormat::TryParseDate(const char *data, size_t size, date_t &result) const {
 	ParseResult parse_result;
 	if (!Parse(data, size, parse_result)) {
 		return false;
@@ -1435,6 +1435,14 @@ bool StrpTimeFormat::TryParseTimestamp(string_t input, timestamp_t &result, stri
 	ParseResult parse_result;
 	if (!Parse(input, parse_result)) {
 		error_message = parse_result.FormatError(input, format_specifier);
+		return false;
+	}
+	return parse_result.TryToTimestamp(result);
+}
+
+bool StrpTimeFormat::TryParseTimestamp(const char *data, size_t size, timestamp_t &result) const {
+	ParseResult parse_result;
+	if (!Parse(data, size, parse_result)) {
 		return false;
 	}
 	return parse_result.TryToTimestamp(result);
