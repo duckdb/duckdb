@@ -617,7 +617,7 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, ClientContext &cont
 }
 
 void DataTable::VerifyAppendConstraints(ConstraintVerificationState &state, ClientContext &context, DataChunk &chunk,
-										optional_ptr<ConflictManager> conflict_manager) {
+                                        optional_ptr<ConflictManager> conflict_manager) {
 	auto &table = state.table;
 	if (table.HasGeneratedColumns()) {
 		// Verify that the generated columns expression work with the inserted values
@@ -675,7 +675,8 @@ void DataTable::VerifyAppendConstraints(ConstraintVerificationState &state, Clie
 	}
 }
 
-unique_ptr<ConstraintVerificationState> DataTable::InitializeConstraintVerification(TableCatalogEntry &table, ClientContext &context) {
+unique_ptr<ConstraintVerificationState> DataTable::InitializeConstraintVerification(TableCatalogEntry &table,
+                                                                                    ClientContext &context) {
 	auto result = make_uniq<ConstraintVerificationState>(table);
 	auto binder = Binder::CreateBinder(context);
 	result->bound_constraints = binder->BindConstraints(table.GetConstraints(), table.name, table.GetColumns());
@@ -1063,7 +1064,8 @@ idx_t DataTable::Delete(TableDeleteState &state, ClientContext &context, Vector 
 			if (state.has_delete_constraints) {
 				// perform the constraint verification
 				ColumnFetchState fetch_state;
-				local_storage.FetchChunk(*this, offset_ids, current_count, state.col_ids, state.verify_chunk, fetch_state);
+				local_storage.FetchChunk(*this, offset_ids, current_count, state.col_ids, state.verify_chunk,
+				                         fetch_state);
 				VerifyDeleteConstraints(state, context, state.verify_chunk);
 			}
 			delete_count += local_storage.Delete(*this, offset_ids, current_count);
@@ -1118,7 +1120,7 @@ static bool CreateMockChunk(TableCatalogEntry &table, const vector<PhysicalIndex
 	return true;
 }
 
-void DataTable::VerifyUpdateConstraints(ConstraintVerificationState &state,	ClientContext &context, DataChunk &chunk,
+void DataTable::VerifyUpdateConstraints(ConstraintVerificationState &state, ClientContext &context, DataChunk &chunk,
                                         const vector<PhysicalIndex> &column_ids) {
 	auto &table = state.table;
 	auto &constraints = table.GetConstraints();

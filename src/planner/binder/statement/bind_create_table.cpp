@@ -35,7 +35,8 @@ static void CreateColumnDependencyManager(BoundCreateTableInfo &info) {
 	}
 }
 
-static unique_ptr<BoundConstraint> BindCheckConstraint(Binder &binder, const string &table_name, const ColumnList &columns, const unique_ptr<Constraint> &cond) {
+static unique_ptr<BoundConstraint> BindCheckConstraint(Binder &binder, const string &table_name,
+                                                       const ColumnList &columns, const unique_ptr<Constraint> &cond) {
 	auto bound_constraint = make_uniq<BoundCheckConstraint>();
 	// check constraint: bind the expression
 	CheckBinder check_binder(binder, binder.context, table_name, columns, bound_constraint->bound_columns);
@@ -47,12 +48,15 @@ static unique_ptr<BoundConstraint> BindCheckConstraint(Binder &binder, const str
 	return std::move(bound_constraint);
 }
 
-vector<unique_ptr<BoundConstraint>> Binder::BindConstraints(ClientContext &context, const vector<unique_ptr<Constraint>> &constraints, const string &table_name, const ColumnList &columns) {
+vector<unique_ptr<BoundConstraint>> Binder::BindConstraints(ClientContext &context,
+                                                            const vector<unique_ptr<Constraint>> &constraints,
+                                                            const string &table_name, const ColumnList &columns) {
 	auto binder = Binder::CreateBinder(context);
 	return binder->BindConstraints(constraints, table_name, columns);
 }
 
-vector<unique_ptr<BoundConstraint>> Binder::BindConstraints(const vector<unique_ptr<Constraint>> &constraints, const string &table_name, const ColumnList &columns) {
+vector<unique_ptr<BoundConstraint>> Binder::BindConstraints(const vector<unique_ptr<Constraint>> &constraints,
+                                                            const string &table_name, const ColumnList &columns) {
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	for (auto &constr : constraints) {
 		switch (constr->type) {
@@ -128,16 +132,17 @@ vector<unique_ptr<BoundConstraint>> Binder::BindConstraints(const vector<unique_
 	return bound_constraints;
 }
 
-vector<unique_ptr<BoundConstraint>> Binder::BindNewConstraints(vector<unique_ptr<Constraint>> &constraints, const string &table_name, const ColumnList &columns) {
+vector<unique_ptr<BoundConstraint>> Binder::BindNewConstraints(vector<unique_ptr<Constraint>> &constraints,
+                                                               const string &table_name, const ColumnList &columns) {
 	auto bound_constraints = BindConstraints(constraints, table_name, columns);
 
 	// handle primary keys/not null constraints
 	bool has_primary_key = false;
 	logical_index_set_t not_null_columns;
 	vector<LogicalIndex> primary_keys;
-	for(idx_t c = 0; c < constraints.size(); c++) {
+	for (idx_t c = 0; c < constraints.size(); c++) {
 		auto &constr = constraints[c];
-		switch(constr->type) {
+		switch (constr->type) {
 		case ConstraintType::NOT_NULL: {
 			auto &not_null = constr->Cast<NotNullConstraint>();
 			auto &col = columns.GetColumn(LogicalIndex(not_null.index));
@@ -263,7 +268,8 @@ static void ExtractExpressionDependencies(Expression &expr, LogicalDependencyLis
 	    expr, [&](Expression &child) { ExtractExpressionDependencies(child, dependencies); });
 }
 
-static void ExtractDependencies(BoundCreateTableInfo &info, vector<unique_ptr<Expression>> &defaults, vector<unique_ptr<BoundConstraint>> &constraints) {
+static void ExtractDependencies(BoundCreateTableInfo &info, vector<unique_ptr<Expression>> &defaults,
+                                vector<unique_ptr<BoundConstraint>> &constraints) {
 	for (auto &default_value : defaults) {
 		if (default_value) {
 			ExtractExpressionDependencies(*default_value, info.dependencies);

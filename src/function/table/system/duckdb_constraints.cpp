@@ -132,7 +132,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBConstraintsInit(ClientContext &contex
 		});
 
 		sort(entries.begin(), entries.end(), [&](CatalogEntry &x, CatalogEntry &y) { return (x.name < y.name); });
-		for(auto &entry : entries) {
+		for (auto &entry : entries) {
 			result->entries.emplace_back(context, entry.get().Cast<TableCatalogEntry>());
 		}
 	};

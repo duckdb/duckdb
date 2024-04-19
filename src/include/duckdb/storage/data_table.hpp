@@ -115,7 +115,6 @@ public:
 	//! Delete the entries with the specified row identifier from the table
 	idx_t Delete(TableDeleteState &state, ClientContext &context, Vector &row_ids, idx_t count);
 
-
 	unique_ptr<TableUpdateState> InitializeUpdate(TableCatalogEntry &table, ClientContext &context);
 	//! Update the entries with the specified row identifier from the table
 	void Update(TableUpdateState &state, ClientContext &context, Vector &row_ids,
@@ -194,14 +193,15 @@ public:
 	bool IndexNameIsUnique(const string &name);
 
 	//! Initialize constraint verification
-	unique_ptr<ConstraintVerificationState> InitializeConstraintVerification(TableCatalogEntry &table, ClientContext &context);
+	unique_ptr<ConstraintVerificationState> InitializeConstraintVerification(TableCatalogEntry &table,
+	                                                                         ClientContext &context);
 	//! Verify constraints with a chunk from the Append containing all columns of the table
 	void VerifyAppendConstraints(ConstraintVerificationState &state, ClientContext &context, DataChunk &chunk,
-								 optional_ptr<ConflictManager> conflict_manager = nullptr);
+	                             optional_ptr<ConflictManager> conflict_manager = nullptr);
 
 public:
 	static void VerifyUniqueIndexes(TableIndexList &indexes, ClientContext &context, DataChunk &chunk,
-									optional_ptr<ConflictManager> conflict_manager);
+	                                optional_ptr<ConflictManager> conflict_manager);
 
 private:
 	//! Verify the new added constraints against current persistent&local data

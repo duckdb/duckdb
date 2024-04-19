@@ -71,7 +71,8 @@ struct TableAppendState {
 };
 
 struct ConstraintVerificationState {
-	explicit ConstraintVerificationState(TableCatalogEntry &table_p) : table(table_p) {}
+	explicit ConstraintVerificationState(TableCatalogEntry &table_p) : table(table_p) {
+	}
 
 	TableCatalogEntry &table;
 	vector<unique_ptr<BoundConstraint>> bound_constraints;

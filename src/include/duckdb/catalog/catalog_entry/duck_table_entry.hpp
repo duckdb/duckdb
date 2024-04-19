@@ -58,7 +58,8 @@ private:
 	unique_ptr<CatalogEntry> SetColumnComment(ClientContext &context, SetColumnCommentInfo &info);
 
 	void UpdateConstraintsOnColumnDrop(const LogicalIndex &removed_index, const vector<LogicalIndex> &adjusted_indices,
-	                                   const RemoveColumnInfo &info, CreateTableInfo &create_info, const vector<unique_ptr<BoundConstraint>> &bound_constraints, bool is_generated);
+	                                   const RemoveColumnInfo &info, CreateTableInfo &create_info,
+	                                   const vector<unique_ptr<BoundConstraint>> &bound_constraints, bool is_generated);
 
 private:
 	//! A reference to the underlying storage unit used for this table

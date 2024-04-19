@@ -76,7 +76,7 @@ vector<PhysicalIndex> GetUniqueConstraintKeys(const ColumnList &columns, const U
 	if (constraint.HasIndex()) {
 		indexes.push_back(columns.LogicalToPhysical(constraint.GetIndex()));
 	} else {
-		for(auto &keyname : constraint.GetColumnNames()) {
+		for (auto &keyname : constraint.GetColumnNames()) {
 			indexes.push_back(columns.GetColumn(keyname).Physical());
 		}
 	}
@@ -360,7 +360,7 @@ void DuckTableEntry::UpdateConstraintsOnColumnDrop(const LogicalIndex &removed_i
                                                    const vector<LogicalIndex> &adjusted_indices,
                                                    const RemoveColumnInfo &info, CreateTableInfo &create_info,
                                                    const vector<unique_ptr<BoundConstraint>> &bound_constraints,
-												   bool is_generated) {
+                                                   bool is_generated) {
 	// handle constraints for the new table
 	D_ASSERT(constraints.size() == bound_constraints.size());
 	for (idx_t constr_idx = 0; constr_idx < constraints.size(); constr_idx++) {
@@ -483,7 +483,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::RemoveColumn(ClientContext &context, Re
 	auto binder = Binder::CreateBinder(context);
 	auto bound_constraints = binder->BindConstraints(constraints, name, columns);
 
-	UpdateConstraintsOnColumnDrop(removed_index, adjusted_indices, info, *create_info, bound_constraints, dropped_column_is_generated);
+	UpdateConstraintsOnColumnDrop(removed_index, adjusted_indices, info, *create_info, bound_constraints,
+	                              dropped_column_is_generated);
 
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema);
 	if (columns.GetColumn(LogicalIndex(removed_index)).Generated()) {

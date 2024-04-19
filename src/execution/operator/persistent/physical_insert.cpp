@@ -108,7 +108,8 @@ public:
 	idx_t update_count = 0;
 	unique_ptr<ConstraintVerificationState> constraint_state;
 
-	ConstraintVerificationState &GetConstraintState(DataTable &table, TableCatalogEntry &tableref, ClientContext &context) {
+	ConstraintVerificationState &GetConstraintState(DataTable &table, TableCatalogEntry &tableref,
+	                                                ClientContext &context) {
 		if (!constraint_state) {
 			constraint_state = table.InitializeConstraintVerification(tableref, context);
 		}
