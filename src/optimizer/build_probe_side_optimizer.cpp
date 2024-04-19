@@ -28,6 +28,10 @@ BuildProbeSideOptimizer::BuildProbeSideOptimizer(ClientContext &context, Logical
 	vector<ColumnBinding> updating_columns, current_op_bindings;
 	auto bindings = op.GetColumnBindings();
 	vector<ColumnBinding> row_id_bindings;
+	// If any column bindings are a row_id, there is a good chance the statement is an insert/delete/update statement.
+	// As an initialization step, we travers the plan and find which bindings are row_id bindings.
+	// When we eventually do our build side probe side optimizations, if we get to a join where the left and right
+	// cardinalities are the same, we prefer to have the child with the rowid bindings in the probe side.
 	GetRowidBindings(op, preferred_on_probe_side);
 }
 
