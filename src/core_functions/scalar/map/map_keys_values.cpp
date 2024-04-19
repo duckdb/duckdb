@@ -10,7 +10,16 @@ namespace duckdb {
 
 static void MapKeyValueFunction(DataChunk &args, ExpressionState &state, Vector &result,
                                 Vector &(*get_child_vector)(Vector &)) {
-	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
+	auto &result_type = result.GetType();
+	D_ASSERT(result_type.id() == LogicalTypeId::LIST);
+	auto &result_child_type = ListType::GetChildType(result_type);
+	if (result_child_type.id() == LogicalTypeId::SQLNULL) {
+		auto &validity = FlatVector::Validity(result);
+		validity.SetInvalid(0);
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		return;
+	}
+
 	auto count = args.size();
 
 	auto &map = args.data[0];
@@ -60,6 +69,12 @@ static unique_ptr<FunctionData> MapKeyValueBind(ClientContext &context, ScalarFu
 		return nullptr;
 	}
 
+	if (map.id() == LogicalTypeId::SQLNULL) {
+		// Input is NULL, output is NULL[]
+		bound_function.return_type = LogicalType::LIST(LogicalTypeId::SQLNULL);
+		return make_uniq<VariableReturnBindData>(bound_function.return_type);
+	}
+
 	if (map.id() != LogicalTypeId::MAP) {
 		throw InvalidInputException("The provided argument is not a map");
 	}
@@ -83,14 +98,14 @@ static unique_ptr<FunctionData> MapValuesBind(ClientContext &context, ScalarFunc
 ScalarFunction MapKeysFun::GetFunction() {
 	//! the arguments and return types are actually set in the binder function
 	ScalarFunction fun({}, LogicalTypeId::LIST, MapKeysFunction, MapKeysBind);
-	fun.null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING;
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	fun.varargs = LogicalType::ANY;
 	return fun;
 }
 
 ScalarFunction MapValuesFun::GetFunction() {
 	ScalarFunction fun({}, LogicalTypeId::LIST, MapValuesFunction, MapValuesBind);
-	fun.null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING;
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	fun.varargs = LogicalType::ANY;
 	return fun;
 }
