@@ -222,10 +222,12 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 	}
 }
 
-static ExtensionUpdateResult UpdateExtensionInternal(DBConfig &config, FileSystem &fs,
+static ExtensionUpdateResult UpdateExtensionInternal(DatabaseInstance &db, FileSystem &fs,
                                                      const string &full_extension_path, const string &extension_name) {
 	ExtensionUpdateResult result;
 	result.extension_name = extension_name;
+
+	auto &config = DBConfig::GetConfig(db);
 
 	// Extension exists, check for .info file
 	const string info_file_path = full_extension_path + ".info";
@@ -291,13 +293,17 @@ static ExtensionUpdateResult UpdateExtensionInternal(DBConfig &config, FileSyste
 
 vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(ClientContext &context) {
 	auto fs = FileSystem::CreateLocal();
-	return ExtensionHelper::UpdateExtensions(DBConfig::GetConfig(context), *fs);
+	return ExtensionHelper::UpdateExtensions(DatabaseInstance::GetDatabase(context), *fs);
 }
 
-vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(DBConfig &config, FileSystem &fs) {
+vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(DatabaseInstance &db, FileSystem &fs) {
 	vector<ExtensionUpdateResult> result;
 
+	auto &config = DBConfig::GetConfig(db);
+
 #ifndef WASM_LOADABLE_EXTENSIONS
+	case_insensitive_set_t seen_extensions;
+
 	// scan the install directory for installed extensions
 	auto ext_directory = ExtensionHelper::ExtensionDirectory(config, fs);
 	fs.ListFiles(ext_directory, [&](const string &path, bool is_directory) {
@@ -308,24 +314,53 @@ vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(DBConfig &config
 		auto extension_file_name = StringUtil::GetFileName(path);
 		auto extension_name = StringUtil::Split(extension_file_name, ".")[0];
 
-		result.push_back(UpdateExtensionInternal(config, fs, fs.JoinPath(ext_directory, path), extension_name));
+		seen_extensions.insert(extension_name);
+
+		result.push_back(UpdateExtensionInternal(db, fs, fs.JoinPath(ext_directory, path), extension_name));
 	});
 #endif
+
+	// TODO unstdstringify?
+	for (const auto& extension : db.LoadedExtensions()) {
+		if (seen_extensions.find(extension) != seen_extensions.end()) {
+			const auto &loaded_extension_data = db.LoadedExtensionsData();
+			const auto &loaded_install_info = loaded_extension_data.find(extension);
+
+			ExtensionUpdateResult statically_loaded_ext_result;
+
+			if (loaded_install_info == loaded_extension_data.end()) {
+				// TODO: throw error instead?
+				statically_loaded_ext_result.tag = ExtensionUpdateResultTag::UNKNOWN;
+			} else if (loaded_install_info->second.mode == ExtensionInstallMode::STATICALLY_LINKED) {
+				statically_loaded_ext_result.tag = ExtensionUpdateResultTag::STATICALLY_LOADED;
+				statically_loaded_ext_result.installed_version = loaded_install_info->second.version;
+			} else {
+				// TODO: help user recover from this
+				statically_loaded_ext_result.tag = ExtensionUpdateResultTag::UNKNOWN;
+			}
+
+			result.push_back(std::move(statically_loaded_ext_result));
+		}
+	}
+
+//	auto &loaded_extensions = db.LoadedExtensions();
+//	auto &loaded_extensions_data = db.LoadedExtensionsData();
 
 	return result;
 }
 
 ExtensionUpdateResult ExtensionHelper::UpdateExtension(ClientContext &context, const string &extension_name) {
 	auto fs = FileSystem::CreateLocal();
-	return ExtensionHelper::UpdateExtension(DBConfig::GetConfig(context), *fs, extension_name);
+	return ExtensionHelper::UpdateExtension(DatabaseInstance::GetDatabase(context), *fs, extension_name);
 }
 
-ExtensionUpdateResult ExtensionHelper::UpdateExtension(DBConfig &config, FileSystem &fs, const string &extension_name) {
+ExtensionUpdateResult ExtensionHelper::UpdateExtension(DatabaseInstance &db, FileSystem &fs, const string &extension_name) {
+	auto &config = DBConfig::GetConfig(db);
 	auto ext_directory = ExtensionHelper::ExtensionDirectory(config, fs);
 
 	auto full_extension_path = fs.JoinPath(ext_directory, extension_name + ".duckdb_extension");
 
-	auto update_result = UpdateExtensionInternal(config, fs, full_extension_path, extension_name);
+	auto update_result = UpdateExtensionInternal(db, fs, full_extension_path, extension_name);
 
 	if (update_result.tag == ExtensionUpdateResultTag::NOT_INSTALLED) {
 		throw InvalidInputException("Failed to update the extension '%s', the extension is not installed!",
@@ -431,83 +466,83 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 	// TODO: rewrite package_build.py to allow also loading out-of-tree extensions in non-cmake builds
 	if (extension == "parquet") {
 #if DUCKDB_EXTENSION_PARQUET_LINKED
-		db.LoadExtension<ParquetExtension>();
+		db.LoadStaticExtension<ParquetExtension>();
 #else
 		// parquet extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "icu") {
 #if DUCKDB_EXTENSION_ICU_LINKED
-		db.LoadExtension<IcuExtension>();
+		db.LoadStaticExtension<IcuExtension>();
 #else
 		// icu extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "tpch") {
 #if DUCKDB_EXTENSION_TPCH_LINKED
-		db.LoadExtension<TpchExtension>();
+		db.LoadStaticExtension<TpchExtension>();
 #else
 		// icu extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "tpcds") {
 #if DUCKDB_EXTENSION_TPCDS_LINKED
-		db.LoadExtension<TpcdsExtension>();
+		db.LoadStaticExtension<TpcdsExtension>();
 #else
 		// icu extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "fts") {
 #if DUCKDB_EXTENSION_FTS_LINKED
-//		db.LoadExtension<FtsExtension>();
+//		db.LoadStaticExtension<FtsExtension>();
 #else
 		// fts extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "httpfs") {
 #if DUCKDB_EXTENSION_HTTPFS_LINKED
-		db.LoadExtension<HttpfsExtension>();
+		db.LoadStaticExtension<HttpfsExtension>();
 #else
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "json") {
 #if DUCKDB_EXTENSION_JSON_LINKED
-		db.LoadExtension<JsonExtension>();
+		db.LoadStaticExtension<JsonExtension>();
 #else
 		// json extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "excel") {
 #if DUCKDB_EXTENSION_EXCEL_LINKED
-		db.LoadExtension<ExcelExtension>();
+		db.LoadStaticExtension<ExcelExtension>();
 #else
 		// excel extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "sqlsmith") {
 #if DUCKDB_EXTENSION_SQLSMITH_LINKED
-		db.LoadExtension<SqlsmithExtension>();
+		db.LoadStaticExtension<SqlsmithExtension>();
 #else
 		// excel extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "jemalloc") {
 #if DUCKDB_EXTENSION_JEMALLOC_LINKED
-		db.LoadExtension<JemallocExtension>();
+		db.LoadStaticExtension<JemallocExtension>();
 #else
 		// jemalloc extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "autocomplete") {
 #if DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED
-		db.LoadExtension<AutocompleteExtension>();
+		db.LoadStaticExtension<AutocompleteExtension>();
 #else
 		// autocomplete extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "inet") {
 #if DUCKDB_EXTENSION_INET_LINKED
-		db.LoadExtension<InetExtension>();
+		db.LoadStaticExtension<InetExtension>();
 #else
 		// inet extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;

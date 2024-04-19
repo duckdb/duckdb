@@ -214,13 +214,6 @@ string ExtensionHelper::ExtensionUrlTemplate(optional_ptr<const DBConfig> db_con
 #endif
 	string custom_endpoint = db_config ? db_config->options.custom_extension_repo : string();
 	string endpoint = ResolveRepository(db_config, repository);
-	if (!repository.empty()) {
-		endpoint = repository;
-	} else if (!custom_endpoint.empty()) {
-		endpoint = custom_endpoint;
-	} else {
-		endpoint = default_endpoint;
-	}
 	string url_template = endpoint + versioned_path;
 	return url_template;
 }
@@ -258,7 +251,6 @@ static void WriteExtensionFiles(FileSystem &fs, const string &temp_path, const s
 	if (fs.FileExists(local_extension_path) && force_install) {
 		fs.RemoveFile(local_extension_path);
 	}
-	fs.MoveFile(temp_path, local_extension_path);
 
 	// Write metadata
 	auto metadata_tmp_path = temp_path + ".info";
@@ -271,6 +263,8 @@ static void WriteExtensionFiles(FileSystem &fs, const string &temp_path, const s
 		fs.RemoveFile(metadata_file_path);
 	}
 
+	// TODO: test this
+	fs.MoveFile(temp_path, local_extension_path);
 	fs.MoveFile(metadata_tmp_path, metadata_file_path);
 }
 

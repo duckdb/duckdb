@@ -33,7 +33,9 @@ struct ExtensionAlias {
 struct ExtensionInitResult {
 	string filename;
 	string filebase;
-	string extension_version;
+
+	// The deserialized install from the `<ext>.duckdb_extension.info` file
+	unique_ptr<ExtensionInstallInfo> install_info;
 
 	void *lib_hdl;
 };
@@ -49,6 +51,8 @@ enum class ExtensionUpdateResultTag : uint8_t {
 	NOT_A_REPOSITORY = 2,
 	// Only known, currently installed extensions can be updated
 	NOT_INSTALLED = 3,
+	// Statically loaded extensions can not be updated; they are baked into the DuckDB executable
+	STATICALLY_LOADED = 4,
 
 	// The extension was re-downloaded from the repository, but due to a lack of version information
 	// its impossible to tell if the extension is actually updated
@@ -94,10 +98,10 @@ public:
 
 	//! Update all extensions, return a vector of extension names that were updated;
 	static vector<ExtensionUpdateResult> UpdateExtensions(ClientContext &context);
-	static vector<ExtensionUpdateResult> UpdateExtensions(DBConfig &config, FileSystem &fs);
+	static vector<ExtensionUpdateResult> UpdateExtensions(DatabaseInstance &db, FileSystem &fs);
 	//! Update a specific extension
 	static ExtensionUpdateResult UpdateExtension(ClientContext &context, const string &extension_name);
-	static ExtensionUpdateResult UpdateExtension(DBConfig &config, FileSystem &fs, const string &extension_name);
+	static ExtensionUpdateResult UpdateExtension(DatabaseInstance &db, FileSystem &fs, const string &extension_name);
 
 	//! Get the extension directory base on the current config
 	static string ExtensionDirectory(ClientContext &context);

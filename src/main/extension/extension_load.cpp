@@ -1,5 +1,7 @@
 #include "duckdb/common/dl.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension.hpp"
 #include "duckdb/main/error_manager.hpp"
@@ -166,8 +168,11 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 	}
 	auto filename = fs.ConvertSeparators(extension);
 
+	bool direct_load;
+
 	// shorthand case
 	if (!ExtensionHelper::IsFullPath(extension)) {
+		direct_load = false;
 		string extension_name = ApplyExtensionAlias(extension);
 #ifdef WASM_LOADABLE_EXTENSIONS
 		string url_template = ExtensionUrlTemplate(&config, "");
@@ -207,6 +212,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		filename = fs.JoinPath(local_path, extension_name + ".duckdb_extension");
 #endif
 	} else {
+		direct_load = true;
 		filename = fs.ExpandPath(filename);
 	}
 	if (!fs.FileExists(filename)) {
@@ -281,10 +287,31 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 
 	auto lowercase_extension_name = StringUtil::Lower(filebase);
 
-	result.filebase = lowercase_extension_name;
-	result.extension_version = parsed_metadata.extension_version;
-	result.filename = filename;
-	result.lib_hdl = lib_hdl;
+	if (!direct_load) {
+		auto info_file_name = filename + ".info";
+
+		result.filebase = lowercase_extension_name;
+		result.filename = filename;
+		result.lib_hdl = lib_hdl;
+
+		// If there's an info file, we parse that for some more metadata
+		if (fs.FileExists(info_file_name)) {
+			auto file_reader = BufferedFileReader(fs, info_file_name.c_str());
+			if (!file_reader.Finished()) {
+				BinaryDeserializer deserializer(file_reader);
+				deserializer.Begin();
+				result.install_info = ExtensionInstallInfo::Deserialize(deserializer);
+				deserializer.End();
+
+				D_ASSERT(result.install_info->version == parsed_metadata.extension_version);
+			}
+		}
+	} else {
+		result.install_info = make_uniq<ExtensionInstallInfo>();
+		result.install_info->mode = ExtensionInstallMode::NOT_INSTALLED;
+		result.install_info->full_path = filename;
+	}
+
 	return true;
 #endif
 }
@@ -348,7 +375,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 		                            init_fun_name, res.filename, error.RawMessage());
 	}
 
-	db.SetExtensionLoaded(extension, res.extension_version);
+	db.SetExtensionLoaded(extension, *res.install_info);
 #endif
 }
 

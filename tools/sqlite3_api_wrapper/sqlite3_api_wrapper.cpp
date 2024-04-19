@@ -122,9 +122,9 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 		    "(e.g. duckdb -unsigned).");
 		pDb->db = make_uniq<DuckDB>(filename, &config);
 #ifdef SHELL_INLINE_AUTOCOMPLETE
-		pDb->db->LoadExtension<AutocompleteExtension>();
+		pDb->db->LoadStaticExtension<AutocompleteExtension>();
 #endif
-		pDb->db->LoadExtension<ShellExtension>();
+		pDb->db->LoadStaticExtension<ShellExtension>();
 		pDb->con = make_uniq<Connection>(*pDb->db);
 	} catch (const Exception &ex) {
 		if (pDb) {

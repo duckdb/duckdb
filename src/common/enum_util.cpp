@@ -2506,10 +2506,16 @@ ExpressionType EnumUtil::FromString<ExpressionType>(const char *value) {
 template<>
 const char* EnumUtil::ToChars<ExtensionInstallMode>(ExtensionInstallMode value) {
 	switch(value) {
+	case ExtensionInstallMode::UNKNOWN:
+		return "UNKNOWN";
 	case ExtensionInstallMode::REPOSITORY:
 		return "REPOSITORY";
 	case ExtensionInstallMode::CUSTOM_PATH:
 		return "CUSTOM_PATH";
+	case ExtensionInstallMode::STATICALLY_LINKED:
+		return "STATICALLY_LINKED";
+	case ExtensionInstallMode::NOT_INSTALLED:
+		return "NOT_INSTALLED";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -2517,11 +2523,20 @@ const char* EnumUtil::ToChars<ExtensionInstallMode>(ExtensionInstallMode value) 
 
 template<>
 ExtensionInstallMode EnumUtil::FromString<ExtensionInstallMode>(const char *value) {
+	if (StringUtil::Equals(value, "UNKNOWN")) {
+		return ExtensionInstallMode::UNKNOWN;
+	}
 	if (StringUtil::Equals(value, "REPOSITORY")) {
 		return ExtensionInstallMode::REPOSITORY;
 	}
 	if (StringUtil::Equals(value, "CUSTOM_PATH")) {
 		return ExtensionInstallMode::CUSTOM_PATH;
+	}
+	if (StringUtil::Equals(value, "STATICALLY_LINKED")) {
+		return ExtensionInstallMode::STATICALLY_LINKED;
+	}
+	if (StringUtil::Equals(value, "NOT_INSTALLED")) {
+		return ExtensionInstallMode::NOT_INSTALLED;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -2565,6 +2580,8 @@ const char* EnumUtil::ToChars<ExtensionUpdateResultTag>(ExtensionUpdateResultTag
 		return "NOT_A_REPOSITORY";
 	case ExtensionUpdateResultTag::NOT_INSTALLED:
 		return "NOT_INSTALLED";
+	case ExtensionUpdateResultTag::STATICALLY_LOADED:
+		return "STATICALLY_LOADED";
 	case ExtensionUpdateResultTag::REDOWNLOADED:
 		return "REDOWNLOADED";
 	case ExtensionUpdateResultTag::UPDATED:
@@ -2587,6 +2604,9 @@ ExtensionUpdateResultTag EnumUtil::FromString<ExtensionUpdateResultTag>(const ch
 	}
 	if (StringUtil::Equals(value, "NOT_INSTALLED")) {
 		return ExtensionUpdateResultTag::NOT_INSTALLED;
+	}
+	if (StringUtil::Equals(value, "STATICALLY_LOADED")) {
+		return ExtensionUpdateResultTag::STATICALLY_LOADED;
 	}
 	if (StringUtil::Equals(value, "REDOWNLOADED")) {
 		return ExtensionUpdateResultTag::REDOWNLOADED;

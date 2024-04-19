@@ -1,0 +1,86 @@
+# name: test/tmp.test
+# description: Test COMMENT ON to add comments to various catalog entries
+# group: [test]
+
+require parquet
+
+#require httpfs
+
+mode output_result
+
+query I rowsort
+select extension_version from duckdb_extensions() where extension_name = 'json' or extension_name = 'tpch'
+----
+v0.0.1
+v0.0.2
+
+mode skip
+
+statement ok
+install tpch from './build/debug/repository';
+
+statement ok
+select * from duckdb_extensions() where extension_name='tpch';
+
+statement ok
+pragma update_extension('tpch');
+
+mode skip
+
+statement ok
+CREATE SECRET hf (TYPE HUGGINGFACE, PROVIDER CACHE);
+
+query I
+FROM glob("hf://datasets/samansmink/test-public/*.parquet")
+----
+hf://datasets/samansmink/test-public/test.parquet
+
+query I
+FROM glob('hf://datasets/lhoestq/demo1@~parquet/**/0000.parquet') order by file
+----
+hf://datasets/lhoestq/demo1@~parquet/default/test/0000.parquet
+hf://datasets/lhoestq/demo1@~parquet/default/train/0000.parquet
+
+query I
+FROM glob('hf://datasets/lhoestq/demo1@~parquet/*/0000.parquet') order by file
+----
+
+query I
+FROM glob('hf://datasets/lhoestq/demo1@~parquet/default/t[ea]*/0000.parquet') order by file
+----
+hf://datasets/lhoestq/demo1@~parquet/default/test/0000.parquet
+
+query I
+FROM glob('hf://datasets/lhoestq/demo1@~parquet/**/train/0000.parquet') order by file
+----
+hf://datasets/lhoestq/demo1@~parquet/default/train/0000.parquet
+
+query I
+FROM glob('hf://datasets/lhoestq/demo1@~parquet/**/**/0000.parquet') order by file
+----
+hf://datasets/lhoestq/demo1@~parquet/default/test/0000.parquet
+hf://datasets/lhoestq/demo1@~parquet/default/train/0000.parquet
+
+mode skip
+
+query I
+SELECT count(*)
+FROM parquet_scan("hf://datasets/samansmink/test-public/test.parquet")
+----
+1
+
+# TODO: do we need more aliases / special handling here? 
+query I
+SELECT count(*)
+FROM parquet_scan("hf://datasets/lhoestq/demo1@~parquet/default/train/0000.parquet")
+----
+5
+
+statement ok
+CREATE SECRET hf_token (TYPE HUGGINGFACE, token 'some_hf_token');
+
+statement ok
+CREATE SECRET hf_token_from_cache (TYPE HUGGINGFACE, PROVIDER cache);
+
+statement ok
+CREATE SECRET core_bearer (TYPE HUGGINGFACE, PROVIDER cache);
