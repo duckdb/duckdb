@@ -21,21 +21,28 @@ static void MapFunctionEmptyInput(Vector &result, const idx_t row_count) {
 	result.Verify(row_count);
 }
 
+static bool MapIsNull(const LogicalType &map) {
+	D_ASSERT(map.id() == LogicalTypeId::MAP);
+	auto &key = MapType::KeyType(map);
+	auto &value = MapType::ValueType(map);
+	return (key.id() == LogicalTypeId::SQLNULL && value.id() == LogicalTypeId::SQLNULL);
+}
+
 static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 
 	// internal MAP representation
 	// - LIST-vector that contains STRUCTs as child entries
 	// - STRUCTs have exactly two fields, a key-field, and a value-field
 	// - key names are unique
+	D_ASSERT(result.GetType().id() == LogicalTypeId::MAP);
 
-	if (result.GetType().id() == LogicalTypeId::SQLNULL) {
+	if (MapIsNull(result.GetType())) {
 		auto &validity = FlatVector::Validity(result);
 		validity.SetInvalid(0);
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		return;
 	}
 
-	D_ASSERT(result.GetType().id() == LogicalTypeId::MAP);
 	auto row_count = args.size();
 
 	// early-out, if no data
@@ -162,16 +169,20 @@ static unique_ptr<FunctionData> MapBind(ClientContext &, ScalarFunction &bound_f
 		MapVector::EvalMapInvalidReason(MapInvalidReason::INVALID_PARAMS);
 	}
 
-	// bind an empty MAP
+	bool is_null = false;
 	if (arguments.empty()) {
-		bound_function.return_type = LogicalType::MAP(LogicalTypeId::SQLNULL, LogicalTypeId::SQLNULL);
-		return make_uniq<VariableReturnBindData>(bound_function.return_type);
+		is_null = true;
+	}
+	if (!is_null) {
+		auto key_id = arguments[0]->return_type.id();
+		auto value_id = arguments[1]->return_type.id();
+		if (key_id == LogicalTypeId::SQLNULL || value_id == LogicalTypeId::SQLNULL) {
+			is_null = true;
+		}
 	}
 
-	auto key_id = arguments[0]->return_type.id();
-	auto value_id = arguments[1]->return_type.id();
-	if (key_id == LogicalTypeId::SQLNULL || value_id == LogicalTypeId::SQLNULL) {
-		bound_function.return_type = LogicalTypeId::SQLNULL;
+	if (is_null) {
+		bound_function.return_type = LogicalType::MAP(LogicalTypeId::SQLNULL, LogicalTypeId::SQLNULL);
 		return make_uniq<VariableReturnBindData>(bound_function.return_type);
 	}
 
