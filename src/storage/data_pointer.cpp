@@ -9,7 +9,7 @@ namespace duckdb {
 unique_ptr<ColumnSegmentState> ColumnSegmentState::Deserialize(Deserializer &deserializer) {
 	auto compression_type = deserializer.Get<CompressionType>();
 	auto &db = deserializer.Get<DatabaseInstance &>();
-	auto &type = deserializer.Get<LogicalType &>();
+	auto &type = deserializer.Get<const LogicalType &>();
 	auto compression_function = DBConfig::GetConfig(db).GetCompressionFunction(compression_type, type.InternalType());
 	if (!compression_function || !compression_function->deserialize_state) {
 		throw SerializationException("Deserializing a ColumnSegmentState but could not find deserialize method");

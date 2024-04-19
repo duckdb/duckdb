@@ -6,7 +6,7 @@
 namespace duckdb {
 
 template <class T>
-void FillExtraInfo(StaticFunctionDefinition &function, T &info) {
+void FillExtraInfo(const StaticFunctionDefinition &function, T &info) {
 	info.internal = true;
 	info.description = function.description;
 	info.parameter_names = StringUtil::Split(function.parameters, ",");

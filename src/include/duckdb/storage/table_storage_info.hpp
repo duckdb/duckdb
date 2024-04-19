@@ -13,6 +13,7 @@
 #include "duckdb/storage/block.hpp"
 #include "duckdb/storage/index_storage_info.hpp"
 #include "duckdb/storage/storage_info.hpp"
+#include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
 
@@ -38,7 +39,7 @@ struct ColumnSegmentInfo {
 class TableStorageInfo {
 public:
 	//! The (estimated) cardinality of the table
-	idx_t cardinality = DConstants::INVALID_INDEX;
+	optional_idx cardinality;
 	//! Info of the indexes of a table
 	vector<IndexInfo> index_info;
 };

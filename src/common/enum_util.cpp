@@ -2017,6 +2017,8 @@ const char* EnumUtil::ToChars<ExpressionClass>(ExpressionClass value) {
 		return "BOUND_LAMBDA_REF";
 	case ExpressionClass::BOUND_EXPRESSION:
 		return "BOUND_EXPRESSION";
+	case ExpressionClass::BOUND_EXPANDED:
+		return "BOUND_EXPANDED";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -2140,6 +2142,9 @@ ExpressionClass EnumUtil::FromString<ExpressionClass>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "BOUND_EXPRESSION")) {
 		return ExpressionClass::BOUND_EXPRESSION;
+	}
+	if (StringUtil::Equals(value, "BOUND_EXPANDED")) {
+		return ExpressionClass::BOUND_EXPANDED;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -2283,6 +2288,8 @@ const char* EnumUtil::ToChars<ExpressionType>(ExpressionType value) {
 		return "POSITIONAL_REFERENCE";
 	case ExpressionType::BOUND_LAMBDA_REF:
 		return "BOUND_LAMBDA_REF";
+	case ExpressionType::BOUND_EXPANDED:
+		return "BOUND_EXPANDED";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -2493,6 +2500,9 @@ ExpressionType EnumUtil::FromString<ExpressionType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "BOUND_LAMBDA_REF")) {
 		return ExpressionType::BOUND_LAMBDA_REF;
+	}
+	if (StringUtil::Equals(value, "BOUND_EXPANDED")) {
+		return ExpressionType::BOUND_EXPANDED;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -4402,6 +4412,8 @@ const char* EnumUtil::ToChars<ParseInfoType>(ParseInfoType value) {
 		return "COMMENT_ON_INFO";
 	case ParseInfoType::COMMENT_ON_COLUMN_INFO:
 		return "COMMENT_ON_COLUMN_INFO";
+	case ParseInfoType::COPY_DATABASE_INFO:
+		return "COPY_DATABASE_INFO";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -4453,6 +4465,9 @@ ParseInfoType EnumUtil::FromString<ParseInfoType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "COMMENT_ON_COLUMN_INFO")) {
 		return ParseInfoType::COMMENT_ON_COLUMN_INFO;
+	}
+	if (StringUtil::Equals(value, "COPY_DATABASE_INFO")) {
+		return ParseInfoType::COPY_DATABASE_INFO;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

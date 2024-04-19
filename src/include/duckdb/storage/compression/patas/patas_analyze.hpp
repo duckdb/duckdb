@@ -33,7 +33,6 @@ bool PatasAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 template <class T>
 idx_t PatasFinalAnalyze(AnalyzeState &state) {
 	throw InternalException("Patas has been deprecated, can no longer be used to compress data");
-	return DConstants::INVALID_INDEX;
 }
 
 } // namespace duckdb

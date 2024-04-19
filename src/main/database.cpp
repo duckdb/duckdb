@@ -71,11 +71,19 @@ BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {
 	return db.GetBufferManager();
 }
 
+const BufferManager &BufferManager::GetBufferManager(const DatabaseInstance &db) {
+	return db.GetBufferManager();
+}
+
 BufferManager &BufferManager::GetBufferManager(AttachedDatabase &db) {
 	return BufferManager::GetBufferManager(db.GetDatabase());
 }
 
 DatabaseInstance &DatabaseInstance::GetDatabase(ClientContext &context) {
+	return *context.db;
+}
+
+const DatabaseInstance &DatabaseInstance::GetDatabase(const ClientContext &context) {
 	return *context.db;
 }
 
@@ -197,27 +205,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		config_ptr = user_config;
 	}
 
-	if (config_ptr->options.duckdb_api.empty()) {
-		config_ptr->SetOptionByName("duckdb_api", "cpp");
-	}
-
-	if (config_ptr->options.temporary_directory.empty() && database_path) {
-		// no directory specified: use default temp path
-		config_ptr->options.temporary_directory = string(database_path) + ".tmp";
-
-		// special treatment for in-memory mode
-		if (strcmp(database_path, IN_MEMORY_PATH) == 0) {
-			config_ptr->options.temporary_directory = ".tmp";
-		}
-	}
-
-	if (database_path) {
-		config_ptr->options.database_path = database_path;
-	} else {
-		config_ptr->options.database_path.clear();
-	}
-
-	Configure(*config_ptr);
+	Configure(*config_ptr, database_path);
 
 	if (user_config && !user_config->options.use_temporary_directory) {
 		// temporary directories explicitly disabled
@@ -290,6 +278,10 @@ BufferManager &DatabaseInstance::GetBufferManager() {
 	return *buffer_manager;
 }
 
+const BufferManager &DatabaseInstance::GetBufferManager() const {
+	return *buffer_manager;
+}
+
 BufferPool &DatabaseInstance::GetBufferPool() const {
 	return *config.buffer_pool;
 }
@@ -334,8 +326,23 @@ Allocator &Allocator::Get(AttachedDatabase &db) {
 	return Allocator::Get(db.GetDatabase());
 }
 
-void DatabaseInstance::Configure(DBConfig &new_config) {
+void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path) {
 	config.options = new_config.options;
+
+	if (new_config.options.duckdb_api.empty()) {
+		config.SetOptionByName("duckdb_api", "cpp");
+	}
+
+	if (database_path) {
+		config.options.database_path = database_path;
+	} else {
+		config.options.database_path.clear();
+	}
+
+	if (new_config.options.temporary_directory.empty()) {
+		config.SetDefaultTempDirectory();
+	}
+
 	if (config.options.access_mode == AccessMode::UNDEFINED) {
 		config.options.access_mode = AccessMode::READ_WRITE;
 	}
@@ -348,10 +355,10 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	if (new_config.secret_manager) {
 		config.secret_manager = std::move(new_config.secret_manager);
 	}
-	if (config.options.maximum_memory == (idx_t)-1) {
+	if (config.options.maximum_memory == DConstants::INVALID_INDEX) {
 		config.SetDefaultMaxMemory();
 	}
-	if (new_config.options.maximum_threads == (idx_t)-1) {
+	if (new_config.options.maximum_threads == DConstants::INVALID_INDEX) {
 		config.options.maximum_threads = config.GetSystemMaxThreads(*config.file_system);
 	}
 	config.allocator = std::move(new_config.allocator);
@@ -383,11 +390,15 @@ const DBConfig &DBConfig::GetConfig(const ClientContext &context) {
 }
 
 idx_t DatabaseInstance::NumberOfThreads() {
-	return scheduler->NumberOfThreads();
+	return NumericCast<idx_t>(scheduler->NumberOfThreads());
 }
 
 const unordered_set<std::string> &DatabaseInstance::LoadedExtensions() {
 	return loaded_extensions;
+}
+
+const unordered_map<std::string, ExtensionInfo> &DatabaseInstance::LoadedExtensionsData() {
+	return loaded_extensions_data;
 }
 
 idx_t DuckDB::NumberOfThreads() {
@@ -403,9 +414,10 @@ bool DuckDB::ExtensionIsLoaded(const std::string &name) {
 	return instance->ExtensionIsLoaded(name);
 }
 
-void DatabaseInstance::SetExtensionLoaded(const std::string &name) {
+void DatabaseInstance::SetExtensionLoaded(const std::string &name, const std::string &extension_version) {
 	auto extension_name = ExtensionHelper::GetExtensionName(name);
 	loaded_extensions.insert(extension_name);
+	loaded_extensions_data.insert({extension_name, ExtensionInfo(extension_version)});
 
 	auto &callbacks = DBConfig::GetConfig(*this).extension_callbacks;
 	for (auto &callback : callbacks) {
@@ -413,7 +425,7 @@ void DatabaseInstance::SetExtensionLoaded(const std::string &name) {
 	}
 }
 
-SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) {
+SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) const {
 	// check the session values
 	auto &db_config = DBConfig::GetConfig(*this);
 	const auto &global_config_map = db_config.options.set_variables;

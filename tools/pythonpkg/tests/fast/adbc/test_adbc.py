@@ -4,6 +4,12 @@ import sys
 import datetime
 import os
 
+if sys.version_info < (3, 9):
+    pytest.skip(
+        "Python Version must be higher or equal to 3.9 to run this test",
+        allow_module_level=True,
+    )
+
 adbc_driver_manager = pytest.importorskip("adbc_driver_manager.dbapi")
 adbc_driver_manager_lib = pytest.importorskip("adbc_driver_manager._lib")
 
@@ -45,18 +51,513 @@ def test_connection_get_table_types(duck_conn):
 
 def test_connection_get_objects(duck_conn):
     with duck_conn.cursor() as cursor:
-        cursor.execute("CREATE TABLE getobjects (ints BIGINT)")
-    assert duck_conn.adbc_get_objects(depth="all").read_all().to_pylist() == [
-        {
-            'db_schema_name': 'main',
-            'db_schema_tables': [
-                {
-                    'table_name': 'getobjects',
-                    'table_columns': [{'column_name': 'ints', 'ordinal_position': 2, 'remarks': ''}],
-                }
-            ],
-        }
-    ]
+        cursor.execute("CREATE TABLE getobjects (ints BIGINT PRIMARY KEY)")
+        depth_all = duck_conn.adbc_get_objects(depth="all").read_all()
+    assert sorted_get_objects(depth_all.to_pylist()) == sorted_get_objects(
+        [
+            {
+                'catalog_name': 'system',
+                'catalog_db_schemas': [
+                    {
+                        'db_schema_name': 'information_schema',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'main',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'pg_catalog',
+                        'db_schema_tables': None,
+                    },
+                ],
+            },
+            {
+                'catalog_name': 'temp',
+                'catalog_db_schemas': [
+                    {
+                        'db_schema_name': 'information_schema',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'main',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'pg_catalog',
+                        'db_schema_tables': None,
+                    },
+                ],
+            },
+            {
+                'catalog_name': 'memory',
+                'catalog_db_schemas': [
+                    {
+                        'db_schema_name': 'information_schema',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'main',
+                        'db_schema_tables': [
+                            {
+                                'table_name': 'getobjects',
+                                'table_type': 'BASE TABLE',
+                                'table_columns': [
+                                    {
+                                        'column_name': 'ints',
+                                        'ordinal_position': 1,
+                                        'remarks': '',
+                                        'xdbc_char_octet_length': None,
+                                        'xdbc_column_def': None,
+                                        'xdbc_column_size': None,
+                                        'xdbc_data_type': None,
+                                        'xdbc_datetime_sub': None,
+                                        'xdbc_decimal_digits': None,
+                                        'xdbc_is_autoincrement': None,
+                                        'xdbc_is_generatedcolumn': None,
+                                        'xdbc_is_nullable': None,
+                                        'xdbc_nullable': None,
+                                        'xdbc_num_prec_radix': None,
+                                        'xdbc_scope_catalog': None,
+                                        'xdbc_scope_schema': None,
+                                        'xdbc_scope_table': None,
+                                        'xdbc_sql_data_type': None,
+                                        'xdbc_type_name': None,
+                                    },
+                                ],
+                                'table_constraints': [
+                                    {
+                                        'constraint_column_names': [],
+                                        'constraint_column_usage': [],
+                                        'constraint_name': 'getobjects_ints_pkey',
+                                        'constraint_type': 'PRIMARY KEY',
+                                    },
+                                    {
+                                        'constraint_column_names': [],
+                                        'constraint_column_usage': [],
+                                        'constraint_name': 'getobjects_ints_not_null',
+                                        'constraint_type': 'CHECK',
+                                    },
+                                ],
+                            }
+                        ],
+                    },
+                    {
+                        'db_schema_name': 'pg_catalog',
+                        'db_schema_tables': None,
+                    },
+                ],
+            },
+        ]
+    )
+
+    depth_tables = duck_conn.adbc_get_objects(depth="tables").read_all()
+    assert sorted_get_objects(depth_tables.to_pylist()) == sorted_get_objects(
+        [
+            {
+                'catalog_name': 'system',
+                'catalog_db_schemas': [
+                    {
+                        'db_schema_name': 'information_schema',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'main',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'pg_catalog',
+                        'db_schema_tables': None,
+                    },
+                ],
+            },
+            {
+                'catalog_name': 'temp',
+                'catalog_db_schemas': [
+                    {
+                        'db_schema_name': 'information_schema',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'main',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'pg_catalog',
+                        'db_schema_tables': None,
+                    },
+                ],
+            },
+            {
+                'catalog_name': 'memory',
+                'catalog_db_schemas': [
+                    {
+                        'db_schema_name': 'information_schema',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'pg_catalog',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'main',
+                        'db_schema_tables': [
+                            {
+                                'table_name': 'getobjects',
+                                'table_type': 'BASE TABLE',
+                                'table_columns': [],
+                                'table_constraints': [],
+                            }
+                        ],
+                    },
+                ],
+            },
+        ]
+    )
+
+    depth_db_schemas = duck_conn.adbc_get_objects(depth="db_schemas").read_all()
+    assert sorted_get_objects(depth_db_schemas.to_pylist()) == sorted_get_objects(
+        [
+            {
+                'catalog_name': 'system',
+                'catalog_db_schemas': [
+                    {
+                        'db_schema_name': 'information_schema',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'main',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'pg_catalog',
+                        'db_schema_tables': None,
+                    },
+                ],
+            },
+            {
+                'catalog_name': 'temp',
+                'catalog_db_schemas': [
+                    {
+                        'db_schema_name': 'information_schema',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'main',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'pg_catalog',
+                        'db_schema_tables': None,
+                    },
+                ],
+            },
+            {
+                'catalog_name': 'memory',
+                'catalog_db_schemas': [
+                    {
+                        'db_schema_name': 'information_schema',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'pg_catalog',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'main',
+                        'db_schema_tables': [],
+                    },
+                ],
+            },
+        ]
+    )
+
+    depth_catalogs = duck_conn.adbc_get_objects(depth="catalogs").read_all()
+    assert sorted_get_objects(depth_catalogs.to_pylist()) == sorted_get_objects(
+        [
+            {
+                'catalog_name': 'system',
+                'catalog_db_schemas': [],
+            },
+            {
+                'catalog_name': 'temp',
+                'catalog_db_schemas': [],
+            },
+            {
+                'catalog_name': 'memory',
+                'catalog_db_schemas': [],
+            },
+        ]
+    )
+
+    # All result schemas should be the same
+    assert depth_all.schema == depth_tables.schema
+    assert depth_all.schema == depth_db_schemas.schema
+    assert depth_all.schema == depth_catalogs.schema
+
+
+def test_connection_get_objects_filters(duck_conn):
+    with duck_conn.cursor() as cursor:
+        cursor.execute("CREATE TABLE getobjects (ints BIGINT PRIMARY KEY)")
+
+    no_filter = duck_conn.adbc_get_objects(depth="all").read_all()
+    assert sorted_get_objects(no_filter.to_pylist()) == sorted_get_objects(
+        [
+            {
+                'catalog_name': 'system',
+                'catalog_db_schemas': [
+                    {
+                        'db_schema_name': 'information_schema',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'main',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'pg_catalog',
+                        'db_schema_tables': None,
+                    },
+                ],
+            },
+            {
+                'catalog_name': 'temp',
+                'catalog_db_schemas': [
+                    {
+                        'db_schema_name': 'information_schema',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'main',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'pg_catalog',
+                        'db_schema_tables': None,
+                    },
+                ],
+            },
+            {
+                'catalog_name': 'memory',
+                'catalog_db_schemas': [
+                    {
+                        'db_schema_name': 'information_schema',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'main',
+                        'db_schema_tables': [
+                            {
+                                'table_name': 'getobjects',
+                                'table_type': 'BASE TABLE',
+                                'table_columns': [
+                                    {
+                                        'column_name': 'ints',
+                                        'ordinal_position': 1,
+                                        'remarks': '',
+                                        'xdbc_char_octet_length': None,
+                                        'xdbc_column_def': None,
+                                        'xdbc_column_size': None,
+                                        'xdbc_data_type': None,
+                                        'xdbc_datetime_sub': None,
+                                        'xdbc_decimal_digits': None,
+                                        'xdbc_is_autoincrement': None,
+                                        'xdbc_is_generatedcolumn': None,
+                                        'xdbc_is_nullable': None,
+                                        'xdbc_nullable': None,
+                                        'xdbc_num_prec_radix': None,
+                                        'xdbc_scope_catalog': None,
+                                        'xdbc_scope_schema': None,
+                                        'xdbc_scope_table': None,
+                                        'xdbc_sql_data_type': None,
+                                        'xdbc_type_name': None,
+                                    },
+                                ],
+                                'table_constraints': [
+                                    {
+                                        'constraint_column_names': [],
+                                        'constraint_column_usage': [],
+                                        'constraint_name': 'getobjects_ints_pkey',
+                                        'constraint_type': 'PRIMARY KEY',
+                                    },
+                                    {
+                                        'constraint_column_names': [],
+                                        'constraint_column_usage': [],
+                                        'constraint_name': 'getobjects_ints_not_null',
+                                        'constraint_type': 'CHECK',
+                                    },
+                                ],
+                            }
+                        ],
+                    },
+                    {
+                        'db_schema_name': 'pg_catalog',
+                        'db_schema_tables': None,
+                    },
+                ],
+            },
+        ]
+    )
+
+    column_filter = duck_conn.adbc_get_objects(depth="all", column_name_filter="notexist").read_all()
+    assert sorted_get_objects(column_filter.to_pylist()) == sorted_get_objects(
+        [
+            {
+                'catalog_name': 'system',
+                'catalog_db_schemas': [
+                    {
+                        'db_schema_name': 'information_schema',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'main',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'pg_catalog',
+                        'db_schema_tables': None,
+                    },
+                ],
+            },
+            {
+                'catalog_name': 'temp',
+                'catalog_db_schemas': [
+                    {
+                        'db_schema_name': 'information_schema',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'main',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'pg_catalog',
+                        'db_schema_tables': None,
+                    },
+                ],
+            },
+            {
+                'catalog_name': 'memory',
+                'catalog_db_schemas': [
+                    {
+                        'db_schema_name': 'information_schema',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'pg_catalog',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'main',
+                        'db_schema_tables': [
+                            {
+                                'table_name': 'getobjects',
+                                'table_type': 'BASE TABLE',
+                                'table_columns': None,
+                                'table_constraints': [
+                                    {
+                                        'constraint_column_names': [],
+                                        'constraint_column_usage': [],
+                                        'constraint_name': 'getobjects_ints_pkey',
+                                        'constraint_type': 'PRIMARY KEY',
+                                    },
+                                    {
+                                        'constraint_column_names': [],
+                                        'constraint_column_usage': [],
+                                        'constraint_name': 'getobjects_ints_not_null',
+                                        'constraint_type': 'CHECK',
+                                    },
+                                ],
+                            }
+                        ],
+                    },
+                ],
+            },
+        ]
+    )
+
+    table_name_filter = duck_conn.adbc_get_objects(depth="all", table_name_filter="notexist").read_all()
+    assert sorted_get_objects(table_name_filter.to_pylist()) == sorted_get_objects(
+        [
+            {
+                'catalog_name': 'system',
+                'catalog_db_schemas': [
+                    {
+                        'db_schema_name': 'information_schema',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'main',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'pg_catalog',
+                        'db_schema_tables': None,
+                    },
+                ],
+            },
+            {
+                'catalog_name': 'temp',
+                'catalog_db_schemas': [
+                    {
+                        'db_schema_name': 'information_schema',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'main',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'pg_catalog',
+                        'db_schema_tables': None,
+                    },
+                ],
+            },
+            {
+                'catalog_name': 'memory',
+                'catalog_db_schemas': [
+                    {
+                        'db_schema_name': 'information_schema',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'main',
+                        'db_schema_tables': None,
+                    },
+                    {
+                        'db_schema_name': 'pg_catalog',
+                        'db_schema_tables': None,
+                    },
+                ],
+            },
+        ]
+    )
+
+    db_schema_filter = duck_conn.adbc_get_objects(depth="all", db_schema_filter="notexist").read_all()
+    assert sorted_get_objects(db_schema_filter.to_pylist()) == sorted_get_objects(
+        [
+            {
+                'catalog_name': 'system',
+                'catalog_db_schemas': None,
+            },
+            {
+                'catalog_name': 'temp',
+                'catalog_db_schemas': None,
+            },
+            {
+                'catalog_name': 'memory',
+                'catalog_db_schemas': None,
+            },
+        ]
+    )
+
+    catalog_filter = duck_conn.adbc_get_objects(depth="all", catalog_filter="notexist").read_all()
+    assert catalog_filter.to_pylist() == []
+
+    assert no_filter.schema == column_filter.schema
+    assert no_filter.schema == table_name_filter.schema
+    assert no_filter.schema == db_schema_filter.schema
+    assert no_filter.schema == catalog_filter.schema
 
 
 def test_commit(tmp_path):
@@ -128,12 +629,28 @@ def test_connection_get_table_schema(duck_conn):
             ]
         )
 
-        # Catalog name is currently not supported
+        # Test invalid catalog name
         with pytest.raises(
-            adbc_driver_manager_lib.NotSupportedError,
-            match=r'Catalog Name is not used in DuckDB. It must be set to nullptr or an empty string',
+            adbc_driver_manager.InternalError,
+            match=r'Catalog "bla" does not exist',
         ):
             duck_conn.adbc_get_table_schema("tableschema", catalog_filter="bla", db_schema_filter="test")
+
+        # Catalog and DB Schema name
+        assert duck_conn.adbc_get_table_schema(
+            "tableschema", catalog_filter="memory", db_schema_filter="test"
+        ) == pyarrow.schema(
+            [
+                ("test_ints", "int64"),
+            ]
+        )
+
+        # DB Schema is inferred to be "main" if unspecified
+        assert duck_conn.adbc_get_table_schema("tableschema", catalog_filter="memory") == pyarrow.schema(
+            [
+                ("ints", "int64"),
+            ]
+        )
 
 
 def test_prepared_statement(duck_conn):
@@ -223,3 +740,38 @@ def test_read(duck_conn):
                 datetime.datetime(2006, 2, 15, 4, 46, 27),
             ],
         }
+
+
+def sorted_get_objects(catalogs):
+    res = []
+    for catalog in sorted(catalogs, key=lambda cat: cat['catalog_name']):
+        new_catalog = {
+            "catalog_name": catalog['catalog_name'],
+            "catalog_db_schemas": [],
+        }
+
+        for db_schema in sorted(catalog['catalog_db_schemas'] or [], key=lambda sch: sch['db_schema_name']):
+            new_db_schema = {
+                "db_schema_name": db_schema['db_schema_name'],
+                "db_schema_tables": [],
+            }
+
+            for table in sorted(db_schema['db_schema_tables'] or [], key=lambda tab: tab['table_name']):
+                new_table = {
+                    "table_name": table['table_name'],
+                    "table_type": table['table_type'],
+                    "table_columns": [],
+                    "table_constraints": [],
+                }
+
+                for column in sorted(table['table_columns'] or [], key=lambda col: col['ordinal_position']):
+                    new_table["table_columns"].append(column)
+
+                for constraint in sorted(table['table_constraints'] or [], key=lambda con: con['constraint_name']):
+                    new_table["table_constraints"].append(constraint)
+
+                new_db_schema["db_schema_tables"].append(new_table)
+            new_catalog["catalog_db_schemas"].append(new_db_schema)
+        res.append(new_catalog)
+
+    return res

@@ -456,7 +456,8 @@ unique_ptr<SegmentScanState> DictionaryCompressionStorage::StringInitScan(Column
 	for (uint32_t i = 0; i < index_buffer_count; i++) {
 		// NOTE: the passing of dict_child_vector, will not be used, its for big strings
 		uint16_t str_len = GetStringLength(index_buffer_ptr, i);
-		dict_child_data[i] = FetchStringFromDict(segment, dict, baseptr, index_buffer_ptr[i], str_len);
+		dict_child_data[i] =
+		    FetchStringFromDict(segment, dict, baseptr, UnsafeNumericCast<int32_t>(index_buffer_ptr[i]), str_len);
 	}
 
 	return std::move(state);
@@ -509,7 +510,8 @@ void DictionaryCompressionStorage::StringScanPartial(ColumnSegment &segment, Col
 			auto string_number = scan_state.sel_vec->get_index(i + start_offset);
 			auto dict_offset = index_buffer_ptr[string_number];
 			auto str_len = GetStringLength(index_buffer_ptr, UnsafeNumericCast<sel_t>(string_number));
-			result_data[result_offset + i] = FetchStringFromDict(segment, dict, baseptr, dict_offset, str_len);
+			result_data[result_offset + i] =
+			    FetchStringFromDict(segment, dict, baseptr, UnsafeNumericCast<int32_t>(dict_offset), str_len);
 		}
 
 	} else {
@@ -559,11 +561,11 @@ void DictionaryCompressionStorage::StringFetchRow(ColumnSegment &segment, Column
 	auto result_data = FlatVector::GetData<string_t>(result);
 
 	// Handling non-bitpacking-group-aligned start values;
-	idx_t start_offset = row_id % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+	idx_t start_offset = NumericCast<idx_t>(row_id) % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 
 	// Decompress part of selection buffer we need for this value.
 	sel_t decompression_buffer[BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE];
-	data_ptr_t src = data_ptr_cast(&base_data[((row_id - start_offset) * width) / 8]);
+	data_ptr_t src = data_ptr_cast(&base_data[((NumericCast<idx_t>(row_id) - start_offset) * width) / 8]);
 	BitpackingPrimitives::UnPackBuffer<sel_t>(data_ptr_cast(decompression_buffer), src,
 	                                          BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE, width);
 
@@ -571,7 +573,7 @@ void DictionaryCompressionStorage::StringFetchRow(ColumnSegment &segment, Column
 	auto dict_offset = index_buffer_ptr[selection_value];
 	uint16_t str_len = GetStringLength(index_buffer_ptr, selection_value);
 
-	result_data[result_idx] = FetchStringFromDict(segment, dict, baseptr, dict_offset, str_len);
+	result_data[result_idx] = FetchStringFromDict(segment, dict, baseptr, NumericCast<int32_t>(dict_offset), str_len);
 }
 
 //===--------------------------------------------------------------------===//

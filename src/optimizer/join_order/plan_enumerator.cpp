@@ -490,8 +490,8 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 		// important to erase the biggest element first
 		// if we erase the smallest element first the index of the biggest element changes
 		D_ASSERT(best_right > best_left);
-		join_relations.erase(join_relations.begin() + best_right);
-		join_relations.erase(join_relations.begin() + best_left);
+		join_relations.erase_at(best_right);
+		join_relations.erase_at(best_left);
 		join_relations.push_back(best_connection->set);
 	}
 }

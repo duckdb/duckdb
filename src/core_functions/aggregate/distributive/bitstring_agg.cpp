@@ -107,7 +107,7 @@ struct BitStringAggOperation {
 		if (!TrySubtractOperator::Operation(max, min, result)) {
 			return NumericLimits<idx_t>::Maximum();
 		}
-		idx_t val(result);
+		auto val = NumericCast<idx_t>(result);
 		if (val == NumericLimits<idx_t>::Maximum()) {
 			return val;
 		}
@@ -116,7 +116,7 @@ struct BitStringAggOperation {
 
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input, INPUT_TYPE min) {
-		Bit::SetBit(state.value, input - min, 1);
+		Bit::SetBit(state.value, UnsafeNumericCast<idx_t>(input - min), 1);
 	}
 
 	template <class STATE, class OP>

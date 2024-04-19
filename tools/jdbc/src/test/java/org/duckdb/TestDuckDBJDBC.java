@@ -2764,7 +2764,7 @@ public class TestDuckDBJDBC {
     }
 
     private static String blob_to_string(Blob b) throws SQLException {
-        return new String(b.getBytes(0, (int) b.length()), StandardCharsets.US_ASCII);
+        return new String(b.getBytes(1, (int) b.length()), StandardCharsets.US_ASCII);
     }
 
     public static void test_blob_bug1090() throws Exception {
@@ -3218,6 +3218,17 @@ public class TestDuckDBJDBC {
         p2.setProperty("PASSWORD", "quack");
         Connection conn2 = DriverManager.getConnection(jdbc_url, p2);
         conn2.close();
+    }
+
+    public static void test_boolean_config() throws Exception {
+        Properties config = new Properties();
+        config.put("enable_external_access", false);
+        try (Connection conn = DriverManager.getConnection(JDBC_URL, config);
+             PreparedStatement stmt = conn.prepareStatement("SELECT current_setting('enable_external_access')");
+             ResultSet rs = stmt.executeQuery()) {
+            rs.next();
+            assertEquals("false", rs.getString(1));
+        }
     }
 
     public static void test_readonly_remains_bug5593() throws Exception {

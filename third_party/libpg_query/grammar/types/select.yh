@@ -4,11 +4,12 @@
 
 %type <sortorder> opt_asc_desc
 %type <nullorder> opt_nulls_order
+%type <ignorenulls> opt_ignore_nulls
 
 %type <node> opt_collate_clause
 
 %type <node> indirection_expr indirection_expr_or_a_expr
-%type <node> struct_expr
+%type <node> struct_expr list_expr
 
 
 %type <lockwaitpolicy>	opt_nowait_or_skip
@@ -61,7 +62,6 @@
 				columnref in_expr having_clause qualify_clause func_table
 %type <list>	rowsfrom_item rowsfrom_list opt_col_def_list
 %type <boolean> opt_ordinality
-%type <boolean> opt_ignore_nulls
 %type <list>	func_arg_list
 %type <node>	func_arg_expr
 %type <node>	list_comprehension

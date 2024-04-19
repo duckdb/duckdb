@@ -43,6 +43,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 		result = LogicalComparisonJoin::Deserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_COPY_DATABASE:
+		result = LogicalCopyDatabase::Deserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
 		result = LogicalCopyToFile::Deserialize(deserializer);
 		break;
@@ -169,9 +172,6 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_UPDATE:
 		result = LogicalUpdate::Deserialize(deserializer);
 		break;
-	case LogicalOperatorType::LOGICAL_VACUUM:
-		result = LogicalSimple::Deserialize(deserializer);
-		break;
 	case LogicalOperatorType::LOGICAL_WINDOW:
 		result = LogicalWindow::Deserialize(deserializer);
 		break;
@@ -295,6 +295,17 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::Deserialize(Deserializer &des
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(205, "mark_types", result->mark_types);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(206, "duplicate_eliminated_columns", result->duplicate_eliminated_columns);
 	deserializer.ReadPropertyWithDefault<bool>(207, "delim_flipped", result->delim_flipped, false);
+	return std::move(result);
+}
+
+void LogicalCopyDatabase::Serialize(Serializer &serializer) const {
+	LogicalOperator::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<CopyDatabaseInfo>>(200, "info", info);
+}
+
+unique_ptr<LogicalOperator> LogicalCopyDatabase::Deserialize(Deserializer &deserializer) {
+	auto info = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info");
+	auto result = duckdb::unique_ptr<LogicalCopyDatabase>(new LogicalCopyDatabase(std::move(info)));
 	return std::move(result);
 }
 
