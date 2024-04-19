@@ -81,19 +81,9 @@ static void MapExtractFunction(DataChunk &args, ExpressionState &state, Vector &
 	auto &map = args.data[0];
 	auto &key = args.data[1];
 
-	if (ArgumentIsConstantNull(map)) {
-		// Input is a constant NULL
-		auto &validity = FlatVector::Validity(result);
-		validity.SetInvalid(0);
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		return;
-	}
-
-	D_ASSERT(map.GetType().id() == LogicalTypeId::MAP);
-
 	idx_t tuple_count = args.size();
 	// Optimization: because keys are not allowed to be NULL, we can early-out
-	if (ArgumentIsConstantNull(key)) {
+	if (ArgumentIsConstantNull(map) || ArgumentIsConstantNull(key)) {
 		//! We don't need to look through the map if the 'key' to look for is NULL
 		ListVector::SetListSize(result, 0);
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -103,6 +93,7 @@ static void MapExtractFunction(DataChunk &args, ExpressionState &state, Vector &
 		result.Verify(tuple_count);
 		return;
 	}
+	D_ASSERT(map.GetType().id() == LogicalTypeId::MAP);
 
 	UnifiedVectorFormat map_data;
 

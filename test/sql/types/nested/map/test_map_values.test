@@ -143,3 +143,30 @@ select map_values(col) from filtered where idx % 2 != 0;
 ----
 [0, NULL, 5, NULL]
 [NULL, NULL, 4, 5, 6, 7]
+
+query I
+select MAP_VALUES(MAP([],[]))
+----
+[]
+
+query I
+select MAP_VALUES(MAP(NULL, NULL))
+----
+NULL
+
+query I
+select MAP_VALUES(NULL)
+----
+NULL
+
+# FIXME: depends on #11625 for "NULL" ToString support
+
+#query I
+#select MAP_VALUES(NULL::MAP("NULL", "NULL"))
+#----
+#NULL
+
+query I
+select MAP_VALUES(NULL::MAP(INT, BIGINT))
+----
+NULL

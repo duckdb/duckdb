@@ -11,9 +11,10 @@ namespace duckdb {
 static void MapKeyValueFunction(DataChunk &args, ExpressionState &state, Vector &result,
                                 Vector &(*get_child_vector)(Vector &)) {
 	auto &result_type = result.GetType();
+	auto &map = args.data[0];
+
 	D_ASSERT(result_type.id() == LogicalTypeId::LIST);
-	auto &result_child_type = ListType::GetChildType(result_type);
-	if (result_child_type.id() == LogicalTypeId::SQLNULL) {
+	if (map.GetType().id() == LogicalTypeId::SQLNULL) {
 		auto &validity = FlatVector::Validity(result);
 		validity.SetInvalid(0);
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -21,8 +22,6 @@ static void MapKeyValueFunction(DataChunk &args, ExpressionState &state, Vector 
 	}
 
 	auto count = args.size();
-
-	auto &map = args.data[0];
 	D_ASSERT(map.GetType().id() == LogicalTypeId::MAP);
 	auto child = get_child_vector(map);
 
