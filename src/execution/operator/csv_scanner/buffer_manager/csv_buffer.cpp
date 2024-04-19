@@ -41,8 +41,8 @@ shared_ptr<CSVBuffer> CSVBuffer::Next(CSVFileHandle &file_handle, idx_t buffer_s
 		file_handle.Seek(global_csv_start + actual_buffer_size);
 		has_seaked = false;
 	}
-	auto next_csv_buffer = make_shared<CSVBuffer>(file_handle, context, buffer_size,
-	                                              global_csv_start + actual_buffer_size, file_number_p, buffer_idx + 1);
+	auto next_csv_buffer = make_shared_ptr<CSVBuffer>(
+	    file_handle, context, buffer_size, global_csv_start + actual_buffer_size, file_number_p, buffer_idx + 1);
 	if (next_csv_buffer->GetBufferSize() == 0) {
 		// We are done reading
 		return nullptr;
@@ -76,8 +76,8 @@ shared_ptr<CSVBufferHandle> CSVBuffer::Pin(CSVFileHandle &file_handle, bool &has
 		Reload(file_handle);
 		has_seeked = true;
 	}
-	return make_shared<CSVBufferHandle>(buffer_manager.Pin(block), actual_buffer_size, requested_size, last_buffer,
-	                                    file_number, buffer_idx);
+	return make_shared_ptr<CSVBufferHandle>(buffer_manager.Pin(block), actual_buffer_size, requested_size, last_buffer,
+	                                        file_number, buffer_idx);
 }
 
 void CSVBuffer::Unpin() {

@@ -21,7 +21,7 @@ class WriteAheadLog;
 struct LocalAppendState;
 struct TableAppendState;
 
-class LocalTableStorage : public std::enable_shared_from_this<LocalTableStorage> {
+class LocalTableStorage : public enable_shared_from_this<LocalTableStorage> {
 public:
 	// Create a new LocalTableStorage
 	explicit LocalTableStorage(DataTable &table);
