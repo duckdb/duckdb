@@ -124,8 +124,8 @@ bool CSVSniffer::DetectHeaderWithSetColumn() {
 			const auto &sql_type = (*set_columns.types)[col];
 			if (sql_type != LogicalType::VARCHAR) {
 				all_varchar = false;
-				if (!IsCasteable(best_header_row[col].value, sql_type, options.dialect_options,
-				                 best_header_row[col].IsNull())) {
+				if (!CanYouCastIt(best_header_row[col].value, sql_type, options.dialect_options,
+				                  best_header_row[col].IsNull())) {
 					first_row_consistent = false;
 				}
 			}
@@ -176,8 +176,8 @@ void CSVSniffer::DetectHeader() {
 			const auto &sql_type = best_sql_types_candidates_per_column_idx[col].back();
 			if (sql_type != LogicalType::VARCHAR) {
 				all_varchar = false;
-				if (!IsCasteable(best_header_row[col].value, sql_type, sniffer_state_machine.dialect_options,
-				                 best_header_row[col].IsNull())) {
+				if (!CanYouCastIt(best_header_row[col].value, sql_type, sniffer_state_machine.dialect_options,
+				                  best_header_row[col].IsNull())) {
 					first_row_consistent = false;
 				}
 			}

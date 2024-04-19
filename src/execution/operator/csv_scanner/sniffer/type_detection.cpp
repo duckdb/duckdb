@@ -93,8 +93,8 @@ void CSVSniffer::SetDateFormat(CSVStateMachine &candidate, const string &format_
 	candidate.dialect_options.date_format[sql_type].Set(strpformat, false);
 }
 
-bool CSVSniffer::IsCasteable(const string_t value, const LogicalType &type, const DialectOptions &dialect_options,
-                             const bool is_null) {
+bool CSVSniffer::CanYouCastIt(const string_t value, const LogicalType &type, const DialectOptions &dialect_options,
+                              const bool is_null) {
 	if (is_null) {
 		return true;
 	}
@@ -315,8 +315,8 @@ void CSVSniffer::DetectTypes() {
 						// Nothing to convert it to
 						continue;
 					}
-					if (IsCasteable(vector_data[row_idx], sql_type, sniffing_state_machine.dialect_options,
-					                !null_mask.RowIsValid(row_idx))) {
+					if (CanYouCastIt(vector_data[row_idx], sql_type, sniffing_state_machine.dialect_options,
+					                 !null_mask.RowIsValid(row_idx))) {
 						break;
 					} else {
 						if (row_idx != start_idx_detection && cur_top_candidate == LogicalType::BOOLEAN) {
