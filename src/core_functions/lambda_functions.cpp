@@ -154,7 +154,7 @@ struct ListFilterFunctor {
 
 		// slice the input chunk's corresponding vector to get the new lists
 		// and append them to the result
-		auto source_list_idx = execute_info.has_index ? 1 : 0;
+		idx_t source_list_idx = execute_info.has_index ? 1 : 0;
 		Vector result_lists(execute_info.input_chunk.data[source_list_idx], sel, count);
 		ListVector::Append(result, result_lists, count, 0);
 	}
@@ -353,7 +353,7 @@ void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result) {
 
 			// set the index vector
 			if (info.has_index) {
-				index_vector.SetValue(elem_cnt, Value::BIGINT(child_idx + 1));
+				index_vector.SetValue(elem_cnt, Value::BIGINT(NumericCast<int64_t>(child_idx + 1)));
 			}
 
 			elem_cnt++;

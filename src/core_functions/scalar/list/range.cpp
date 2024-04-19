@@ -80,7 +80,7 @@ struct TimestampRangeInfo {
 		if (start_value < end_value && is_negative) {
 			return 0;
 		}
-		int64_t total_values = 0;
+		uint64_t total_values = 0;
 		if (is_negative) {
 			// negative interval, start_value is going down
 			while (inclusive_bound ? start_value >= end_value : start_value > end_value) {
@@ -203,7 +203,7 @@ static void ListRangeFunction(DataChunk &args, ExpressionState &state, Vector &r
 	}
 	auto list_data = FlatVector::GetData<list_entry_t>(result);
 	auto &result_validity = FlatVector::Validity(result);
-	int64_t total_size = 0;
+	uint64_t total_size = 0;
 	for (idx_t i = 0; i < args_size; i++) {
 		if (!info.RowIsValid(i)) {
 			result_validity.SetInvalid(i);

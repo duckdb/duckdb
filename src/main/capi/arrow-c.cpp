@@ -127,7 +127,7 @@ idx_t duckdb_arrow_rows_changed(duckdb_arrow result) {
 		auto rows = collection.GetRows();
 		D_ASSERT(row_count == 1);
 		D_ASSERT(rows.size() == 1);
-		rows_changed = rows[0].GetValue(0).GetValue<int64_t>();
+		rows_changed = duckdb::NumericCast<idx_t>(rows[0].GetValue(0).GetValue<int64_t>());
 	}
 	return rows_changed;
 }
@@ -291,8 +291,8 @@ duckdb_state duckdb_arrow_scan(duckdb_connection connection, const char *table_n
 	}
 
 	typedef void (*release_fn_t)(ArrowSchema *);
-	std::vector<release_fn_t> release_fns(schema.n_children);
-	for (int64_t i = 0; i < schema.n_children; i++) {
+	std::vector<release_fn_t> release_fns(duckdb::NumericCast<idx_t>(schema.n_children));
+	for (idx_t i = 0; i < duckdb::NumericCast<idx_t>(schema.n_children); i++) {
 		auto child = schema.children[i];
 		release_fns[i] = child->release;
 		child->release = arrow_array_stream_wrapper::EmptySchemaRelease;
@@ -301,7 +301,7 @@ duckdb_state duckdb_arrow_scan(duckdb_connection connection, const char *table_n
 	auto ret = arrow_array_stream_wrapper::Ingest(connection, table_name, stream);
 
 	// Restore release functions.
-	for (int64_t i = 0; i < schema.n_children; i++) {
+	for (idx_t i = 0; i < duckdb::NumericCast<idx_t>(schema.n_children); i++) {
 		schema.children[i]->release = release_fns[i];
 	}
 

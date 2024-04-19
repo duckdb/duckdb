@@ -88,6 +88,7 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"immediate_transaction_mode", {true}},
 	    {"max_expression_depth", {50}},
 	    {"max_memory", {"4.0 GiB"}},
+	    {"max_temp_directory_size", {"10.0 GiB"}},
 	    {"memory_limit", {"4.0 GiB"}},
 	    {"ordered_aggregate_threshold", {Value::UBIGINT(idx_t(1) << 12)}},
 	    {"null_order", {"nulls_first"}},

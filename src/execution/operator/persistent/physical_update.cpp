@@ -175,7 +175,7 @@ SourceResultType PhysicalUpdate::GetData(ExecutionContext &context, DataChunk &c
 	auto &g = sink_state->Cast<UpdateGlobalState>();
 	if (!return_chunk) {
 		chunk.SetCardinality(1);
-		chunk.SetValue(0, 0, Value::BIGINT(g.updated_count));
+		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.updated_count)));
 		return SourceResultType::FINISHED;
 	}
 
