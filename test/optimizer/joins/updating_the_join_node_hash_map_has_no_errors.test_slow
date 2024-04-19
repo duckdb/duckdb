@@ -1,9 +1,8 @@
-# name: test/optimizer/joins/updating_the_join_node_hash_map_has_no_errors.test
+# name: test/optimizer/joins/updating_the_join_node_hash_map_has_no_errors.test_slow
 # description: 
 # group: [joins]
 
 require tpch
-
 
 statement ok
 call dbgen(sf=0.05);
