@@ -21,11 +21,21 @@ static void MapFunctionEmptyInput(Vector &result, const idx_t row_count) {
 	result.Verify(row_count);
 }
 
-static bool MapIsNull(const LogicalType &map) {
-	D_ASSERT(map.id() == LogicalTypeId::MAP);
-	auto &key = MapType::KeyType(map);
-	auto &value = MapType::ValueType(map);
-	return (key.id() == LogicalTypeId::SQLNULL && value.id() == LogicalTypeId::SQLNULL);
+static bool MapIsNull(DataChunk &chunk) {
+	if (chunk.data.empty()) {
+		return false;
+	}
+	D_ASSERT(chunk.data.size() == 2);
+	auto &keys = chunk.data[0];
+	auto &values = chunk.data[1];
+
+	if (keys.GetType().id() == LogicalTypeId::SQLNULL) {
+		return true;
+	}
+	if (values.GetType().id() == LogicalTypeId::SQLNULL) {
+		return true;
+	}
+	return false;
 }
 
 static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
@@ -36,7 +46,7 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	// - key names are unique
 	D_ASSERT(result.GetType().id() == LogicalTypeId::MAP);
 
-	if (MapIsNull(result.GetType())) {
+	if (MapIsNull(args)) {
 		auto &validity = FlatVector::Validity(result);
 		validity.SetInvalid(0);
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
