@@ -97,6 +97,8 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 		null_str_ptr[i] = state_machine.options.null_str[i].c_str();
 		null_str_size[i] = state_machine.options.null_str[i].size();
 	}
+	date_format = state_machine.options.dialect_options.date_format.at(LogicalTypeId::DATE).GetValue();
+	timestamp_format = state_machine.options.dialect_options.date_format.at(LogicalTypeId::TIMESTAMP).GetValue();
 }
 
 StringValueResult::~StringValueResult() {
@@ -215,16 +217,26 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		                               false, state_machine.options.decimal_separator[0]);
 		break;
 	case LogicalTypeId::DATE: {
-		idx_t pos;
-		bool special;
-		success = Date::TryConvertDate(value_ptr, size, pos,
-		                               static_cast<date_t *>(vector_ptr[chunk_col_id])[number_of_rows], special, false);
+		if (!date_format.Empty()) {
+			success = date_format.TryParseDate(value_ptr, size,
+			                                   static_cast<date_t *>(vector_ptr[chunk_col_id])[number_of_rows]);
+		} else {
+			idx_t pos;
+			bool special;
+			success = Date::TryConvertDate(
+			    value_ptr, size, pos, static_cast<date_t *>(vector_ptr[chunk_col_id])[number_of_rows], special, false);
+		}
 		break;
 	}
 	case LogicalTypeId::TIMESTAMP: {
-		success = Timestamp::TryConvertTimestamp(
-		              value_ptr, size, static_cast<timestamp_t *>(vector_ptr[chunk_col_id])[number_of_rows]) ==
-		          TimestampCastResult::SUCCESS;
+		if (!timestamp_format.Empty()) {
+			success = timestamp_format.TryParseTimestamp(
+			    value_ptr, size, static_cast<timestamp_t *>(vector_ptr[chunk_col_id])[number_of_rows]);
+		} else {
+			success = Timestamp::TryConvertTimestamp(
+			              value_ptr, size, static_cast<timestamp_t *>(vector_ptr[chunk_col_id])[number_of_rows]) ==
+			          TimestampCastResult::SUCCESS;
+		}
 		break;
 	}
 	default: {
@@ -1185,7 +1197,6 @@ bool StringValueScanner::CanDirectlyCast(const LogicalType &type,
                                          const map<LogicalTypeId, CSVOption<StrpTimeFormat>> &format_options) {
 
 	switch (type.id()) {
-		// All Integers (Except HugeInt)
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
@@ -1196,20 +1207,8 @@ bool StringValueScanner::CanDirectlyCast(const LogicalType &type,
 	case LogicalTypeId::UBIGINT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::FLOAT:
-		return true;
 	case LogicalTypeId::DATE:
-		// We can only internally cast YYYY-MM-DD
-		if (format_options.at(LogicalTypeId::DATE).GetValue().format_specifier == "%Y-%m-%d") {
-			return true;
-		} else {
-			return false;
-		}
 	case LogicalTypeId::TIMESTAMP:
-		if (format_options.at(LogicalTypeId::TIMESTAMP).GetValue().format_specifier == "%Y-%m-%d %H:%M:%S") {
-			return true;
-		} else {
-			return false;
-		}
 	case LogicalType::VARCHAR:
 		return true;
 	default:
