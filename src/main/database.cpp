@@ -226,6 +226,10 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		ExtensionHelper::LoadExternalExtension(*this, *config.file_system, config.options.database_type, nullptr);
 	}
 
+	if (config.options.kafka_redo_log) {
+		ExtensionHelper::LoadExternalExtension(*this, *config.file_system, config.options.log_extension, nullptr);
+	}
+
 	if (!config.options.unrecognized_options.empty()) {
 		ThrowExtensionSetUnrecognizedOptions(config.options.unrecognized_options);
 	}
@@ -239,7 +243,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 }
 
 DuckDB::DuckDB(const char *path, DBConfig *new_config) : instance(make_shared<DatabaseInstance>()) {
-	instance->Initialize(path, new_config);
+    	instance->Initialize(path, new_config);
 	if (instance->config.options.load_extensions) {
 		ExtensionHelper::LoadAllExtensions(*this);
 	}

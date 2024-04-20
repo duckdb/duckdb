@@ -59,6 +59,18 @@ jobs:
       shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
+      # Note instead of using scripts/setup_manylinux2014.sh vcpkg, we prefer to use
+      # lukka/run-vcpkg@v11.1 here as it configures vcpkg to cache to GH actions.
+    - name: Setup vcpkg
+      uses: lukka/run-vcpkg@v11.1
+      with:
+        vcpkgGitCommitId: a1a1cbc975abf909a6c8985a6a2b8fe20bbd9bd6
+
+    - name: Install librdkafka
+      shell: bash
+      run: |
+        cd $VCPKG_ROOT && ./vcpkg install librdkafka
+
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
       with:
@@ -67,7 +79,7 @@ jobs:
 
     - name: Build
       shell: bash
-      run:  make debug
+      run:  VCPKG_TOOLCHAIN_PATH='${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake' make debug
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
       shell: bash

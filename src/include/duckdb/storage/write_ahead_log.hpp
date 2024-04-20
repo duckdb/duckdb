@@ -101,7 +101,7 @@ public:
 
 public:
 	//! Replay the WAL
-	static bool Replay(AttachedDatabase &database, string &path);
+  	static bool Replay(AttachedDatabase &database, string &path);
 
 	//! Returns the current size of the WAL in bytes
 	int64_t GetWALSize();

@@ -96,6 +96,11 @@ struct DBConfigOptions {
 	bool use_direct_io = false;
 	//! Whether extensions should be loaded on start-up
 	bool load_extensions = true;
+	bool kafka_redo_log = false;
+	bool kafka_writer = false;
+	string kafka_bootstrap_server_and_port;
+	string kafka_topic_name;
+	string log_extension;
 #ifdef DUCKDB_EXTENSION_AUTOLOAD_DEFAULT
 	//! Whether known extensions are allowed to be automatically loaded when a query depends on them
 	bool autoload_known_extensions = DUCKDB_EXTENSION_AUTOLOAD_DEFAULT;

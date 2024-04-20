@@ -368,6 +368,56 @@ struct ImmediateTransactionModeSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct KafkaWriter {
+	static constexpr const char *Name = "kafka_writer";
+	static constexpr const char *Description =
+	    "Indicates if the instance should write to the Kafka WAL file or not";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct KafkaTopicName {
+	static constexpr const char *Name = "kafka_topic_name";
+	static constexpr const char *Description =
+	    "Specifies the topic name for kafka redo log";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct KafkaRedoLog {
+	static constexpr const char *Name = "kafka_redo_log";
+	static constexpr const char *Description =
+	    "Set this flag to true to write the redo log to a kafka topic";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct KafkaBootstrapServerAndPort {
+	static constexpr const char *Name = "kafka_bootstrap_server_and_port";
+	static constexpr const char *Description =
+	    "Specifies the hostname and port of the kafka server";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct LogExtension {
+	static constexpr const char *Name = "log_extension";
+	static constexpr const char *Description =
+	    "Specifies the full path for the duckdb kafka extension";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+  
 struct MaximumExpressionDepthSetting {
 	static constexpr const char *Name = "max_expression_depth";
 	static constexpr const char *Description =

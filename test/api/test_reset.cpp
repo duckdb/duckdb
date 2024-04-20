@@ -127,6 +127,10 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "profiling_output", // just an alias
 	    "profiler_history_size",
 	    "duckdb_api",
+	    "kafka_redo_log",
+	    "kafka_topic_name",
+	    "kafka_bootstrap_server_and_port",
+	    "log_extension",
 	    "custom_user_agent"};
 	return excluded_options.count(name) == 1;
 }

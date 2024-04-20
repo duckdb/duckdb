@@ -17,7 +17,7 @@
 namespace duckdb {
 
 StorageManager::StorageManager(AttachedDatabase &db, string path_p, bool read_only)
-    : db(db), path(std::move(path_p)), read_only(read_only) {
+  	: db(db), path(std::move(path_p)), read_only(read_only) {
 	if (path.empty()) {
 		path = IN_MEMORY_PATH;
 	} else {
@@ -113,6 +113,15 @@ void SingleFileStorageManager::LoadDatabase() {
 		}
 	}
 
+	if (config.options.kafka_redo_log) {
+		wal_path = "kafka://";
+		wal_path += config.options.kafka_bootstrap_server_and_port;
+		wal_path += "/";
+		wal_path += config.options.kafka_topic_name;
+		wal_path += "/";
+		wal_path += config.options.kafka_writer ? "writer" : "reader";
+	}
+	
 	StorageManagerOptions options;
 	options.read_only = read_only;
 	options.use_direct_io = config.options.use_direct_io;
@@ -122,11 +131,13 @@ void SingleFileStorageManager::LoadDatabase() {
 		if (read_only) {
 			throw CatalogException("Cannot open database \"%s\" in read-only mode: database does not exist", path);
 		}
-		// check if the WAL exists
-		if (fs.FileExists(wal_path)) {
-			// WAL file exists but database file does not
-			// remove the WAL
-			fs.RemoveFile(wal_path);
+		// check if the WAL exists - JO/MV - Revisit
+		if (!config.options.kafka_redo_log) {
+			if (fs.FileExists(wal_path)) {
+				// WAL file exists but database file does not
+				// remove the WAL
+				fs.RemoveFile(wal_path);
+			}
 		}
 		// initialize the block manager while creating a new db file
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);

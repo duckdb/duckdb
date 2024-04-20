@@ -94,16 +94,19 @@ TEST_CASE("Convert DuckDB Chunk column to Arrow Array in C API", "[capi][arrow]"
 	REQUIRE(duckdb_data_chunk_column_to_arrow_array(con, chunks, count, 1, (duckdb_arrow_array *)&s_arrow_array) == DuckDBSuccess);
 	REQUIRE(s_arrow_array->length == 2);
 	REQUIRE(s_arrow_array->n_buffers == 1);
-	REQUIRE(i_arrow_array->n_children == 1);
+	REQUIRE(s_arrow_array->n_children == 1);
 
 	i_arrow_array->release(i_arrow_array);
+	s_arrow_array->release(s_arrow_array);
 	delete i_arrow_array;
+	delete s_arrow_array;
 	duckdb_destroy_result(&result); // segmentation failure happens here
 	duckdb_disconnect(&con);
 	duckdb_close(&db);
 	for (auto i = 0; i < count; i++) {
 		duckdb_destroy_data_chunk(&chunks[i]);
 	}
+	delete[] chunks;
 }
 
 TEST_CASE("Test arrow in C API", "[capi][arrow]") {

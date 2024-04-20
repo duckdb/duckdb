@@ -839,6 +839,74 @@ Value ImmediateTransactionModeSetting::GetSetting(ClientContext &context) {
 	return Value::BOOLEAN(config.options.immediate_transaction_mode);
 }
 
+void KafkaRedoLog::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.kafka_redo_log = BooleanValue::Get(input);
+}
+
+void KafkaRedoLog::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.kafka_redo_log = DBConfig().options.kafka_redo_log;
+}
+
+Value KafkaRedoLog::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.kafka_redo_log);
+}
+
+void KafkaWriter::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.kafka_writer = BooleanValue::Get(input);
+}
+
+void KafkaWriter::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.kafka_writer = DBConfig().options.kafka_writer;
+}
+
+Value KafkaWriter::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.kafka_writer);
+}
+
+void KafkaBootstrapServerAndPort::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+        auto parameter = StringUtil::Lower(input.ToString());
+	config.options.kafka_bootstrap_server_and_port = parameter;
+}
+
+void KafkaBootstrapServerAndPort::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.kafka_bootstrap_server_and_port = DBConfig().options.kafka_bootstrap_server_and_port;
+}
+
+Value KafkaBootstrapServerAndPort::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(config.options.kafka_bootstrap_server_and_port);
+}
+
+void KafkaTopicName::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+        auto parameter = StringUtil::Lower(input.ToString());
+	config.options.kafka_topic_name = parameter;
+}
+
+void KafkaTopicName::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.kafka_topic_name = DBConfig().options.kafka_topic_name;
+}
+
+Value KafkaTopicName::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(config.options.kafka_topic_name);
+}
+
+void LogExtension::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+        auto parameter = StringUtil::Lower(input.ToString());
+	config.options.log_extension = parameter;
+}
+
+void LogExtension::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.log_extension = DBConfig().options.log_extension;
+}
+
+Value LogExtension::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(config.options.log_extension);
+}
+
 //===--------------------------------------------------------------------===//
 // Maximum Expression Depth
 //===--------------------------------------------------------------------===//
