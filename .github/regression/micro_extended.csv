@@ -87,6 +87,7 @@ benchmark/micro/csv/read.benchmark
 benchmark/micro/csv/small_csv.benchmark
 benchmark/micro/csv/sniffer.benchmark
 benchmark/micro/csv/sniffer_quotes.benchmark
+benchmark/micro/csv/time_type.benchmark
 benchmark/micro/cte/cte.benchmark
 benchmark/micro/cte/materialized_cte.benchmark
 benchmark/micro/date/extract_month.benchmark

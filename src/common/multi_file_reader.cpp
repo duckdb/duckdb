@@ -176,7 +176,7 @@ MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &opt
 			auto lookup = std::find(names.begin(), names.end(), part.first);
 			if (lookup != names.end()) {
 				// hive partitioning column also exists in file - override
-				auto idx = lookup - names.begin();
+				auto idx = NumericCast<idx_t>(lookup - names.begin());
 				hive_partitioning_index = idx;
 				return_types[idx] = options.GetHiveLogicalType(part.first);
 			} else {

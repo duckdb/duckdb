@@ -5,6 +5,7 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/common/helper.hpp"
 #include "json_functions.hpp"
 #include "json_scan.hpp"
 #include "json_transform.hpp"
@@ -184,7 +185,7 @@ CopyFunction JSONFunctions::GetJSONCopyFunction() {
 	function.plan = CopyToJSONPlan;
 
 	function.copy_from_bind = CopyFromJSONBind;
-	function.copy_from_function = JSONFunctions::GetReadJSONTableFunction(make_shared<JSONScanInfo>(
+	function.copy_from_function = JSONFunctions::GetReadJSONTableFunction(make_shared_ptr<JSONScanInfo>(
 	    JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED, JSONRecordType::RECORDS, false));
 
 	return function;

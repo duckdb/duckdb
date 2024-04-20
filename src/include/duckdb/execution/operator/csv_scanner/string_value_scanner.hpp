@@ -145,7 +145,7 @@ public:
 
 	//! Errors happening in the current line (if any)
 	vector<CurrentError> current_errors;
-
+	StrpTimeFormat date_format, timestamp_format;
 	bool sniffing;
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);

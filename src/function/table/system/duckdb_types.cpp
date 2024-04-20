@@ -89,17 +89,17 @@ void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 		// database_name, VARCHAR
 		output.SetValue(col++, count, type_entry.catalog.GetName());
 		// database_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(type_entry.catalog.GetOid()));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(type_entry.catalog.GetOid())));
 		// schema_name, LogicalType::VARCHAR
 		output.SetValue(col++, count, Value(type_entry.schema.name));
 		// schema_oid, LogicalType::BIGINT
-		output.SetValue(col++, count, Value::BIGINT(type_entry.schema.oid));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(type_entry.schema.oid)));
 		// type_oid, BIGINT
 		int64_t oid;
 		if (type_entry.internal) {
-			oid = int64_t(type.id());
+			oid = NumericCast<int64_t>(type.id());
 		} else {
-			oid = type_entry.oid;
+			oid = NumericCast<int64_t>(type_entry.oid);
 		}
 		Value oid_val;
 		if (data.oids.find(oid) == data.oids.end()) {
@@ -114,7 +114,9 @@ void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 		// type_size, BIGINT
 		auto internal_type = type.InternalType();
 		output.SetValue(col++, count,
-		                internal_type == PhysicalType::INVALID ? Value() : Value::BIGINT(GetTypeIdSize(internal_type)));
+		                internal_type == PhysicalType::INVALID
+		                    ? Value()
+		                    : Value::BIGINT(NumericCast<int64_t>(GetTypeIdSize(internal_type))));
 		// logical_type, VARCHAR
 		output.SetValue(col++, count, Value(EnumUtil::ToString(type.id())));
 		// type_category, VARCHAR

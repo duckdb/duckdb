@@ -52,7 +52,8 @@ static bool StartsWithNumericDate(string &separator, const string_t &value) {
 	}
 
 	//	second literal must match first
-	if (((field3 - literal2) != (field2 - literal1)) || strncmp(literal1, literal2, (field2 - literal1)) != 0) {
+	if (((field3 - literal2) != (field2 - literal1)) ||
+	    strncmp(literal1, literal2, NumericCast<size_t>((field2 - literal1))) != 0) {
 		return false;
 	}
 
@@ -71,7 +72,7 @@ static bool StartsWithNumericDate(string &separator, const string_t &value) {
 
 string GenerateDateFormat(const string &separator, const char *format_template) {
 	string format_specifier = format_template;
-	auto amount_of_dashes = std::count(format_specifier.begin(), format_specifier.end(), '-');
+	auto amount_of_dashes = NumericCast<idx_t>(std::count(format_specifier.begin(), format_specifier.end(), '-'));
 	// All our date formats must have at least one -
 	D_ASSERT(amount_of_dashes);
 	string result;
