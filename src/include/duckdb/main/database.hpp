@@ -28,16 +28,16 @@ struct AttachInfo;
 class DatabaseFileSystem;
 
 struct ExtensionInfo {
-	explicit ExtensionInfo(const std::string &version) : extension_version(version) {
+	explicit ExtensionInfo(const string &version) : extension_version(version) {
 	}
 	ExtensionInfo() : ExtensionInfo("defaultme") {
 	}
 	ExtensionInfo(const ExtensionInfo &x) : ExtensionInfo(x.extension_version) {
 	}
-	std::string extension_version;
+	string extension_version;
 };
 
-class DatabaseInstance : public std::enable_shared_from_this<DatabaseInstance> {
+class DatabaseInstance : public enable_shared_from_this<DatabaseInstance> {
 	friend class DuckDB;
 
 public:
@@ -85,8 +85,8 @@ private:
 	unique_ptr<TaskScheduler> scheduler;
 	unique_ptr<ObjectCache> object_cache;
 	unique_ptr<ConnectionManager> connection_manager;
-	unordered_set<std::string> loaded_extensions;
-	unordered_map<std::string, ExtensionInfo> loaded_extensions_data;
+	unordered_set<string> loaded_extensions;
+	unordered_map<string, ExtensionInfo> loaded_extensions_data;
 	ValidChecker db_validity;
 	unique_ptr<DatabaseFileSystem> db_file_system;
 };

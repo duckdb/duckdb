@@ -171,7 +171,7 @@ SinkFinalizeType PhysicalWindow::Finalize(Pipeline &pipeline, Event &event, Clie
 	}
 
 	// Schedule all the sorts for maximum thread utilisation
-	auto new_event = make_shared<PartitionMergeEvent>(*state.global_partition, pipeline);
+	auto new_event = make_shared_ptr<PartitionMergeEvent>(*state.global_partition, pipeline);
 	event.InsertEvent(std::move(new_event));
 
 	return SinkFinalizeType::READY;
@@ -205,6 +205,8 @@ public:
 	mutable mutex built_lock;
 	//! The number of unfinished tasks
 	atomic<idx_t> tasks_remaining;
+	//! The number of rows returned
+	atomic<idx_t> returned;
 
 public:
 	idx_t MaxThreads() override {
@@ -217,7 +219,7 @@ private:
 };
 
 WindowGlobalSourceState::WindowGlobalSourceState(ClientContext &context_p, WindowGlobalSinkState &gsink_p)
-    : context(context_p), gsink(gsink_p), next_build(0), tasks_remaining(0) {
+    : context(context_p), gsink(gsink_p), next_build(0), tasks_remaining(0), returned(0) {
 	auto &hash_groups = gsink.global_partition->hash_groups;
 
 	auto &gpart = gsink.global_partition;
@@ -681,6 +683,15 @@ OrderPreservationType PhysicalWindow::SourceOrder() const {
 	return SupportsBatchIndex() ? OrderPreservationType::FIXED_ORDER : OrderPreservationType::NO_ORDER;
 }
 
+double PhysicalWindow::GetProgress(ClientContext &context, GlobalSourceState &gsource_p) const {
+	auto &gsource = gsource_p.Cast<WindowGlobalSourceState>();
+	const auto returned = gsource.returned.load();
+
+	auto &gsink = gsource.gsink;
+	const auto count = gsink.global_partition->count.load();
+	return count ? (returned / double(count)) : -1;
+}
+
 idx_t PhysicalWindow::GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                                     LocalSourceState &lstate_p) const {
 	auto &lstate = lstate_p.Cast<WindowLocalSourceState>();
@@ -689,6 +700,7 @@ idx_t PhysicalWindow::GetBatchIndex(ExecutionContext &context, DataChunk &chunk,
 
 SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk,
                                          OperatorSourceInput &input) const {
+	auto &gsource = input.global_state.Cast<WindowGlobalSourceState>();
 	auto &lsource = input.local_state.Cast<WindowLocalSourceState>();
 	while (chunk.size() == 0) {
 		//	Move to the next bin if we are done.
@@ -699,6 +711,7 @@ SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &c
 		}
 
 		lsource.Scan(chunk);
+		gsource.returned += chunk.size();
 	}
 
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
