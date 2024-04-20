@@ -57,10 +57,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(unique_ptr<Logica
 
 	// then create the main physical plan
 	profiler.StartPhase("create_plan");
-	vector<shared_ptr<ExternalDependency>> dependencies;
-	op->CollectDependencies(dependencies);
 	auto plan = CreatePlan(*op);
-	plan->external_dependencies = std::move(dependencies);
 	profiler.EndPhase();
 
 	plan->Verify();
