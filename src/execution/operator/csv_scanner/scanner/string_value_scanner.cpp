@@ -742,26 +742,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 			bool success;
 			idx_t line_error = 0;
 			bool line_error_set = true;
-
-			if (!state_machine->options.dialect_options.date_format.at(LogicalTypeId::DATE).GetValue().Empty() &&
-			    type.id() == LogicalTypeId::DATE) {
-				// use the date format to cast the chunk
-				success = CSVCast::TryCastDateVector(state_machine->options.dialect_options.date_format, parse_vector,
-				                                     result_vector, parse_chunk.size(), parameters, line_error, true);
-			} else if (!state_machine->options.dialect_options.date_format.at(LogicalTypeId::TIMESTAMP)
-			                .GetValue()
-			                .Empty() &&
-			           type.id() == LogicalTypeId::TIMESTAMP) {
-				// use the date format to cast the chunk
-				success =
-				    CSVCast::TryCastTimestampVector(state_machine->options.dialect_options.date_format, parse_vector,
-				                                    result_vector, parse_chunk.size(), parameters, true);
-			} else if (state_machine->options.decimal_separator != "." &&
-			           (type.id() == LogicalTypeId::FLOAT || type.id() == LogicalTypeId::DOUBLE)) {
-				success =
-				    CSVCast::TryCastFloatingVectorCommaSeparated(state_machine->options, parse_vector, result_vector,
-				                                                 parse_chunk.size(), parameters, type, line_error);
-			} else if (state_machine->options.decimal_separator != "." && type.id() == LogicalTypeId::DECIMAL) {
+			if (state_machine->options.decimal_separator != "." && type.id() == LogicalTypeId::DECIMAL) {
 				success =
 				    CSVCast::TryCastDecimalVectorCommaSeparated(state_machine->options, parse_vector, result_vector,
 				                                                parse_chunk.size(), parameters, type, line_error);
@@ -802,8 +783,12 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 				bool first_nl;
 				auto borked_line =
 				    result.line_positions_per_row[line_error].ReconstructCurrentLine(first_nl, result.buffer_handles);
+				std::ostringstream error;
+				error << "Could not convert string \"" << parse_vector.GetValue(line_error) << "\" to \'"
+				      << LogicalTypeIdToString(type.id()) << "\'";
+				string error_msg = error.str();
 				auto csv_error = CSVError::CastError(
-				    state_machine->options, csv_file_scan->names[col_idx], error_message, col_idx, borked_line,
+				    state_machine->options, csv_file_scan->names[col_idx], error_msg, col_idx, borked_line,
 				    lines_per_batch,
 				    result.line_positions_per_row[line_error].begin.GetGlobalPosition(result.result_size, first_nl),
 				    optional_idx::Invalid(), result_vector.GetType().id());
@@ -826,8 +811,13 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					bool first_nl;
 					auto borked_line = result.line_positions_per_row[line_error].ReconstructCurrentLine(
 					    first_nl, result.buffer_handles);
+					std::ostringstream error;
+					// Casting Error Message
+					error << "Could not convert string \"" << parse_vector.GetValue(line_error) << "\" to \'"
+					      << LogicalTypeIdToString(type.id()) << "\'";
+					string error_msg = error.str();
 					auto csv_error = CSVError::CastError(
-					    state_machine->options, csv_file_scan->names[col_idx], error_message, col_idx, borked_line,
+					    state_machine->options, csv_file_scan->names[col_idx], error_msg, col_idx, borked_line,
 					    lines_per_batch,
 					    result.line_positions_per_row[line_error].begin.GetGlobalPosition(result.result_size, first_nl),
 					    optional_idx::Invalid(), result_vector.GetType().id());
