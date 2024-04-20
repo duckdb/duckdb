@@ -276,17 +276,6 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 	chunk_col_id++;
 }
 
-Value StringValueResult::GetValue(idx_t row_idx, idx_t col_idx) {
-	if (validity_mask[col_idx]->AllValid()) {
-		return Value(static_cast<string_t *>(vector_ptr[col_idx])[row_idx]);
-	} else {
-		if (validity_mask[col_idx]->RowIsValid(row_idx)) {
-			return Value(static_cast<string_t *>(vector_ptr[col_idx])[row_idx]);
-		} else {
-			return Value();
-		}
-	}
-}
 DataChunk &StringValueResult::ToChunk() {
 	parse_chunk.SetCardinality(number_of_rows);
 	return parse_chunk;
