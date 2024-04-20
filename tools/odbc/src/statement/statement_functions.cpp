@@ -483,6 +483,7 @@ SQLRETURN duckdb::GetDataStmtResult(OdbcHandleStmt *hstmt, SQLUSMALLINT col_or_p
 			time = val.GetValue<dtime_t>();
 			break;
 		case LogicalTypeId::TIME_TZ:
+		case LogicalTypeId::TIMESTAMP_TZ:
 			if (!val.TryCastAs(*hstmt->dbc->conn->context, duckdb::LogicalType::TIME, true)) {
 				return ThrowInvalidCast("GetDataStmtResult", val.type(), LogicalType::TIME, hstmt);
 			}
