@@ -410,6 +410,8 @@ SQLRETURN duckdb::GetDataStmtResult(OdbcHandleStmt *hstmt, SQLUSMALLINT col_or_p
 		}
 		return SQL_SUCCESS;
 	}
+	// https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/datetime-data-type-changes
+	case SQL_C_DATE:
 	case SQL_C_TYPE_DATE: {
 		date_t date;
 		switch (val.type().id()) {
@@ -432,6 +434,13 @@ SQLRETURN duckdb::GetDataStmtResult(OdbcHandleStmt *hstmt, SQLUSMALLINT col_or_p
 			if (!CastTimestampValue<duckdb::Cast, date_t>(hstmt, val, date, duckdb::Timestamp::FromEpochMicroSeconds)) {
 				return SQL_ERROR;
 			}
+			break;
+		}
+		case LogicalTypeId::TIMESTAMP_TZ: {
+			if (!val.TryCastAs(*hstmt->dbc->conn->context, duckdb::LogicalType::DATE, true)) {
+				return ThrowInvalidCast("GetDataStmtResult", val.type(), LogicalType::DATE, hstmt);
+			}
+			date = val.GetValue<date_t>();
 			break;
 		}
 		case LogicalTypeId::TIMESTAMP_NS: {
@@ -465,10 +474,18 @@ SQLRETURN duckdb::GetDataStmtResult(OdbcHandleStmt *hstmt, SQLUSMALLINT col_or_p
 		}
 		return SQL_SUCCESS;
 	}
+	// https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/datetime-data-type-changes
+	case SQL_C_TIME:
 	case SQL_C_TYPE_TIME: {
 		dtime_t time;
 		switch (val.type().id()) {
 		case LogicalTypeId::TIME:
+			time = val.GetValue<dtime_t>();
+			break;
+		case LogicalTypeId::TIME_TZ:
+			if (!val.TryCastAs(*hstmt->dbc->conn->context, duckdb::LogicalType::TIME, true)) {
+				return ThrowInvalidCast("GetDataStmtResult", val.type(), LogicalType::TIME, hstmt);
+			}
 			time = val.GetValue<dtime_t>();
 			break;
 		case LogicalTypeId::TIMESTAMP_SEC: {
@@ -522,6 +539,8 @@ SQLRETURN duckdb::GetDataStmtResult(OdbcHandleStmt *hstmt, SQLUSMALLINT col_or_p
 		}
 		return SQL_SUCCESS;
 	}
+	// https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/datetime-data-type-changes
+	case SQL_C_TIMESTAMP:
 	case SQL_C_TYPE_TIMESTAMP: {
 		timestamp_t timestamp;
 		switch (val.type().id()) {
@@ -548,6 +567,15 @@ SQLRETURN duckdb::GetDataStmtResult(OdbcHandleStmt *hstmt, SQLUSMALLINT col_or_p
 			timestamp = duckdb::Timestamp::FromEpochMicroSeconds(timestamp.value);
 			break;
 		}
+		case LogicalTypeId::TIMESTAMP_TZ: {
+			if (!val.TryCastAs(*hstmt->dbc->conn->context, duckdb::LogicalType::TIMESTAMP, true)) {
+				return ThrowInvalidCast("GetDataStmtResult", val.type(), LogicalType::TIMESTAMP, hstmt);
+			}
+			timestamp = timestamp_t(val.GetValue<int64_t>());
+			timestamp = duckdb::Timestamp::FromEpochMicroSeconds(timestamp.value);
+			break;
+		}
+
 		case LogicalTypeId::TIMESTAMP_NS: {
 			timestamp = timestamp_t(val.GetValue<int64_t>());
 			// FIXME: add test for casting infinity/-infinity timestamp values
