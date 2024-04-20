@@ -58,6 +58,19 @@ index e20a803..4fe45f6 100644
  
  namespace duckdb {
  struct DropInfo;
+diff --git a/src/include/storage/postgres_table_entry.hpp b/src/include/storage/postgres_table_entry.hpp
+index d96dfad..529c234 100644
+--- a/src/include/storage/postgres_table_entry.hpp
++++ b/src/include/storage/postgres_table_entry.hpp
+@@ -50,7 +50,7 @@ public:
+ 
+ 	TableStorageInfo GetStorageInfo(ClientContext &context) override;
+ 
+-	void BindUpdateConstraints(LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,
++	void BindUpdateConstraints(Binder &binder, LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,
+ 	                           ClientContext &context) override;
+ 
+ 	//! Get the copy format (text or binary) that should be used when writing data to this table
 diff --git a/src/postgres_binary_copy.cpp b/src/postgres_binary_copy.cpp
 index f0d86a3..4c89c3f 100644
 --- a/src/postgres_binary_copy.cpp
@@ -212,3 +225,17 @@ index 93c3f28..cd3b46f 100644
  
  namespace duckdb {
  
+diff --git a/src/storage/postgres_table_entry.cpp b/src/storage/postgres_table_entry.cpp
+index d791678..7ba1ad6 100644
+--- a/src/storage/postgres_table_entry.cpp
++++ b/src/storage/postgres_table_entry.cpp
+@@ -31,7 +31,8 @@ unique_ptr<BaseStatistics> PostgresTableEntry::GetStatistics(ClientContext &cont
+ 	return nullptr;
+ }
+ 
+-void PostgresTableEntry::BindUpdateConstraints(LogicalGet &, LogicalProjection &, LogicalUpdate &, ClientContext &) {
++void PostgresTableEntry::BindUpdateConstraints(Binder &binder, LogicalGet &, LogicalProjection &, LogicalUpdate &,
++											   ClientContext &) {
+ }
+ 
+ TableFunction PostgresTableEntry::GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) {

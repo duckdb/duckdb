@@ -763,6 +763,11 @@ void ClientContext::SetActiveResult(ClientContextLock &lock, BaseQueryResult &re
 unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatementInternal(
     ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
     shared_ptr<PreparedStatementData> &prepared, const PendingQueryParameters &parameters) {
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
+	if (statement && statement->type != StatementType::LOGICAL_PLAN_STATEMENT) {
+		statement = statement->Copy();
+	}
+#endif
 	// check if we are on AutoCommit. In this case we should start a transaction.
 	if (statement && config.AnyVerification()) {
 		// query verification is enabled
@@ -1121,7 +1126,9 @@ void ClientContext::Append(TableDescription &description, ColumnDataCollection &
 				throw InvalidInputException("Failed to append: table entry has different number of columns!");
 			}
 		}
-		table_entry.GetStorage().LocalAppend(table_entry, *this, collection);
+		auto binder = Binder::CreateBinder(*this);
+		auto bound_constraints = binder->BindConstraints(table_entry);
+		table_entry.GetStorage().LocalAppend(table_entry, *this, collection, bound_constraints);
 	});
 }
 
