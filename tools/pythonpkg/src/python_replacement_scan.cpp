@@ -190,13 +190,18 @@ unique_ptr<TableRef> PythonReplacementScan::Replace(ClientContext &context, Repl
 	if (!result) {
 		return nullptr;
 	}
-	//! a ProxyDependencies object should have been created
-	D_ASSERT(table_ref.external_dependency);
-	D_ASSERT(result->external_dependency);
+	if (table_ref.external_dependency) {
+		// If we came from 'sql' / 'query' the ProxyDependencies is set
+		// this delegates to the ExternalDependency object that lives inside the original TableRef of the QueryRelation
+		D_ASSERT(table_ref.external_dependency);
+		D_ASSERT(result->external_dependency);
 
-	auto dependency_item = result->external_dependency->GetDependency("replacement_cache");
-	D_ASSERT(dependency_item && dependency_item->type == ExternalDependencyItemType::PYTHON_DEPENDENCY);
-	table_ref.external_dependency->AddDependency("replacement_cache", std::move(dependency_item));
+		D_ASSERT(result->external_dependency->GetDependency("replacement_cache") != nullptr);
+		result->external_dependency->ScanDependencies(
+		    [&table_ref](const string &name, shared_ptr<DependencyItem> item) {
+			    table_ref.external_dependency->AddDependency(name, item);
+		    });
+	}
 	return result;
 }
 

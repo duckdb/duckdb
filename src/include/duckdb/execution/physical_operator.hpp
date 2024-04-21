@@ -56,6 +56,8 @@ public:
 	unique_ptr<GlobalOperatorState> op_state;
 	//! Lock for (re)setting any of the operator states
 	mutex lock;
+	//! External Dependencies, used to keep (external) objects created during Bind alive
+	vector<shared_ptr<ExternalDependency>> external_dependencies;
 
 public:
 	virtual string GetName() const;

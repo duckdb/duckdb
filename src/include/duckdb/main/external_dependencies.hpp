@@ -59,6 +59,11 @@ public:
 		}
 		return it->second;
 	}
+	virtual void ScanDependencies(std::function<void(const string &name, shared_ptr<DependencyItem> item)> callback) {
+		for (auto &kv : objects) {
+			callback(kv.first, kv.second);
+		}
+	}
 
 private:
 	//! The objects encompassed by this dependency
@@ -75,6 +80,9 @@ public:
 	}
 	shared_ptr<DependencyItem> GetDependency(const string &name) const override {
 		return other->GetDependency(name);
+	}
+	void ScanDependencies(std::function<void(const string &name, shared_ptr<DependencyItem> item)> callback) override {
+		other->ScanDependencies(callback);
 	}
 
 public:
