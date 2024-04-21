@@ -13,6 +13,7 @@
 #include "duckdb/transaction/undo_buffer.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/transaction/transaction_data.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 
 namespace duckdb {
 class SequenceCatalogEntry;
@@ -66,7 +67,7 @@ public:
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };

@@ -284,7 +284,7 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 		}
 
 		if (partition_output) {
-			state->partition_state = make_shared<GlobalHivePartitionState>();
+			state->partition_state = make_shared_ptr<GlobalHivePartitionState>();
 		}
 
 		return std::move(state);
@@ -423,7 +423,7 @@ SourceResultType PhysicalCopyToFile::GetData(ExecutionContext &context, DataChun
 	auto &g = sink_state->Cast<CopyToFunctionGlobalState>();
 
 	chunk.SetCardinality(1);
-	chunk.SetValue(0, 0, Value::BIGINT(g.rows_copied));
+	chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
 
 	return SourceResultType::FINISHED;
 }

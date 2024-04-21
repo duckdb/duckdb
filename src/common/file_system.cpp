@@ -12,6 +12,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/common/windows_util.hpp"
+#include "duckdb/common/operator/multiply.hpp"
 
 #include <cstdint>
 #include <cstdio>
@@ -21,6 +22,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -117,7 +119,7 @@ void FileSystem::SetWorkingDirectory(const string &path) {
 	}
 }
 
-idx_t FileSystem::GetAvailableMemory() {
+optional_idx FileSystem::GetAvailableMemory() {
 	errno = 0;
 
 #ifdef __MVS__
@@ -128,9 +130,27 @@ idx_t FileSystem::GetAvailableMemory() {
 	idx_t max_memory = MinValue<idx_t>((idx_t)sysconf(_SC_PHYS_PAGES) * (idx_t)sysconf(_SC_PAGESIZE), UINTPTR_MAX);
 #endif
 	if (errno != 0) {
-		return DConstants::INVALID_INDEX;
+		return optional_idx();
 	}
 	return max_memory;
+}
+
+optional_idx FileSystem::GetAvailableDiskSpace(const string &path) {
+	struct statvfs vfs;
+
+	auto ret = statvfs(path.c_str(), &vfs);
+	if (ret == -1) {
+		return optional_idx();
+	}
+	auto block_size = vfs.f_frsize;
+	// These are the blocks available for creating new files or extending existing ones
+	auto available_blocks = vfs.f_bfree;
+	idx_t available_disk_space = DConstants::INVALID_INDEX;
+	if (!TryMultiplyOperator::Operation(static_cast<idx_t>(block_size), static_cast<idx_t>(available_blocks),
+	                                    available_disk_space)) {
+		return optional_idx();
+	}
+	return available_disk_space;
 }
 
 string FileSystem::GetWorkingDirectory() {
@@ -218,7 +238,7 @@ void FileSystem::SetWorkingDirectory(const string &path) {
 	}
 }
 
-idx_t FileSystem::GetAvailableMemory() {
+optional_idx FileSystem::GetAvailableMemory() {
 	ULONGLONG available_memory_kb;
 	if (GetPhysicallyInstalledSystemMemory(&available_memory_kb)) {
 		return MinValue<idx_t>(available_memory_kb * 1000, UINTPTR_MAX);
@@ -230,7 +250,19 @@ idx_t FileSystem::GetAvailableMemory() {
 	if (GlobalMemoryStatusEx(&mem_state)) {
 		return MinValue<idx_t>(mem_state.ullTotalPhys, UINTPTR_MAX);
 	}
-	return DConstants::INVALID_INDEX;
+	return optional_idx();
+}
+
+optional_idx FileSystem::GetAvailableDiskSpace(const string &path) {
+	ULARGE_INTEGER available_bytes, total_bytes, free_bytes;
+
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(path.c_str());
+	if (!GetDiskFreeSpaceExW(unicode_path.c_str(), &available_bytes, &total_bytes, &free_bytes)) {
+		return optional_idx();
+	}
+	(void)total_bytes;
+	(void)free_bytes;
+	return NumericCast<idx_t>(available_bytes.QuadPart);
 }
 
 string FileSystem::GetWorkingDirectory() {
@@ -517,7 +549,7 @@ FileHandle::~FileHandle() {
 }
 
 int64_t FileHandle::Read(void *buffer, idx_t nr_bytes) {
-	return file_system.Read(*this, buffer, nr_bytes);
+	return file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
 }
 
 bool FileHandle::Trim(idx_t offset_bytes, idx_t length_bytes) {
@@ -525,15 +557,15 @@ bool FileHandle::Trim(idx_t offset_bytes, idx_t length_bytes) {
 }
 
 int64_t FileHandle::Write(void *buffer, idx_t nr_bytes) {
-	return file_system.Write(*this, buffer, nr_bytes);
+	return file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
 }
 
 void FileHandle::Read(void *buffer, idx_t nr_bytes, idx_t location) {
-	file_system.Read(*this, buffer, nr_bytes, location);
+	file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
 }
 
 void FileHandle::Write(void *buffer, idx_t nr_bytes, idx_t location) {
-	file_system.Write(*this, buffer, nr_bytes, location);
+	file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
 }
 
 void FileHandle::Seek(idx_t location) {
@@ -560,7 +592,7 @@ string FileHandle::ReadLine() {
 	string result;
 	char buffer[1];
 	while (true) {
-		idx_t tuples_read = Read(buffer, 1);
+		auto tuples_read = UnsafeNumericCast<idx_t>(Read(buffer, 1));
 		if (tuples_read == 0 || buffer[0] == '\n') {
 			return result;
 		}
@@ -575,7 +607,7 @@ bool FileHandle::OnDiskFile() {
 }
 
 idx_t FileHandle::GetFileSize() {
-	return file_system.GetFileSize(*this);
+	return NumericCast<idx_t>(file_system.GetFileSize(*this));
 }
 
 void FileHandle::Sync() {

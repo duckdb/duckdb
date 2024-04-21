@@ -12,15 +12,22 @@ seed = -1
 fuzzer = None
 db = None
 shell = None
+perform_checks = True
 for param in sys.argv:
     if param == '--sqlsmith':
         fuzzer = 'sqlsmith'
     elif param == '--duckfuzz':
         fuzzer = 'duckfuzz'
+    elif param == '--duckfuzz_functions':
+        fuzzer = 'duckfuzz_functions'
     elif param == '--alltypes':
         db = 'alltypes'
     elif param == '--tpch':
         db = 'tpch'
+    elif param == '--emptyalltypes':
+        db = 'emptyalltypes'
+    elif param == '--no_checks':
+        perform_checks = False
     elif param.startswith('--shell='):
         shell = param.replace('--shell=', '')
     elif param.startswith('--seed='):
@@ -31,7 +38,7 @@ if fuzzer is None:
     exit(1)
 
 if db is None:
-    print("Unrecognized database to run on, expected either --tpch or --alltypes")
+    print("Unrecognized database to run on, expected either --tpch, --alltypes or --emptyalltypes")
     exit(1)
 
 if shell is None:
@@ -41,7 +48,7 @@ if shell is None:
 if seed < 0:
     seed = random.randint(0, 2**30)
 
-git_hash = fuzzer_helper.get_github_hash()
+git_hash = os.getenv('DUCKDB_HASH')
 
 
 def create_db_script(db):
@@ -49,6 +56,8 @@ def create_db_script(db):
         return 'create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types();'
     elif db == 'tpch':
         return 'call dbgen(sf=0.1);'
+    elif db == 'emptyalltypes':
+        return 'create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types() limit 0;'
     else:
         raise Exception("Unknown database creation script")
 
@@ -85,9 +94,9 @@ def run_shell_command(cmd):
 
 
 # first get a list of all github issues, and check if we can still reproduce them
-current_errors = fuzzer_helper.extract_github_issues(shell)
+current_errors = fuzzer_helper.extract_github_issues(shell, perform_checks)
 
-max_queries = 1000
+max_queries = 2000
 last_query_log_file = 'sqlsmith.log'
 complete_log_file = 'sqlsmith.complete.log'
 

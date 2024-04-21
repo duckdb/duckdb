@@ -1,3 +1,4 @@
+
 #include "duckdb/optimizer/rule/empty_needle_removal.hpp"
 
 #include "duckdb/execution/expression_executor.hpp"

@@ -13,6 +13,12 @@ fi
 
 set -e
 
+# skip if repo is not in duckdb organization
+if [ "$GITHUB_REPOSITORY_OWNER" != "duckdb" ]; then
+  echo "Repository is $GITHUB_REPOSITORY_OWNER (not duckdb)"
+  exit 0
+fi
+
 FOLDER="$1"
 DRY_RUN_PARAM=""
 
@@ -39,7 +45,7 @@ if [ -z "$AWS_ACCESS_KEY_ID" ]; then
 fi
 
 
-TARGET=$(git describe --tags --long)
+TARGET=$(git log -1 --format=%h)
 
 if [ "$UPLOAD_ASSETS_TO_STAGING_TARGET" ]; then
   TARGET="$UPLOAD_ASSETS_TO_STAGING_TARGET"

@@ -1,0 +1,89 @@
+# name: test/sql/copy/csv/rejects/csv_rejects_maximum_line.test
+# description: Tests rejects tables on max line size parameter
+# group: [rejects]
+
+require skip_reload
+
+# Test will fail on windows because byte_position is slightly different due to \r\n instead of \n
+require notwindows
+
+statement ok
+SELECT * FROM read_csv(
+    'data/csv/rejects/maximum_line/max_10.csv',
+    columns = {'a': 'VARCHAR', 'b': 'INTEGER'},
+    store_rejects=true, auto_detect=false, header = 1, max_line_size=10);
+
+query IIIIIIIII
+SELECT * EXCLUDE (scan_id) FROM reject_errors order by all;
+----
+0	5	23	23	NULL	NULL	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaa,4	Maximum line size of 10 bytes exceeded. Actual Size:19 bytes.
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+# Test with buffer sizes
+
+loop buffer_size 22 27
+
+statement ok
+SELECT * FROM read_csv(
+    'data/csv/rejects/maximum_line/max_10.csv',
+    columns = {'a': 'VARCHAR', 'b': 'INTEGER'},
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=10, buffer_size=${buffer_size});
+
+query IIIIIIIII
+SELECT * EXCLUDE (scan_id) FROM reject_errors order by all;
+----
+0	5	23	23	NULL	NULL	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaa,4	Maximum line size of 10 bytes exceeded. Actual Size:19 bytes.
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+endloop
+
+# Test over vector size file
+statement ok
+SELECT * FROM read_csv(
+    'data/csv/rejects/maximum_line/over_vector.csv',
+    columns = {'a': 'VARCHAR', 'b': 'INTEGER'},
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=20);
+
+query IIIIIIIII
+SELECT * EXCLUDE (scan_id) FROM reject_errors order by all;
+----
+0	2282	13685	13685	NULL	NULL	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,1	Maximum line size of 20 bytes exceeded. Actual Size:25 bytes.
+0	2591	15558	15558	NULL	NULL	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,1	Maximum line size of 20 bytes exceeded. Actual Size:25 bytes.
+0	2923	17569	17569	NULL	NULL	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,3	Maximum line size of 20 bytes exceeded. Actual Size:25 bytes.
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+# Read Multiple Files
+statement ok
+SELECT * FROM read_csv(
+    'data/csv/rejects/maximum_line/*.csv',
+    columns = {'a': 'VARCHAR', 'b': 'INTEGER'},
+     store_rejects = true, auto_detect=false, header = 1, max_line_size=10);
+
+query IIIIIIIII
+SELECT * EXCLUDE (scan_id) FROM reject_errors order by all;
+----
+0	5	23	23	NULL	NULL	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaa,4	Maximum line size of 10 bytes exceeded. Actual Size:19 bytes.
+1	2282	13685	13685	NULL	NULL	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,1	Maximum line size of 10 bytes exceeded. Actual Size:25 bytes.
+1	2591	15558	15558	NULL	NULL	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,1	Maximum line size of 10 bytes exceeded. Actual Size:25 bytes.
+1	2923	17569	17569	NULL	NULL	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,3	Maximum line size of 10 bytes exceeded. Actual Size:25 bytes.
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;

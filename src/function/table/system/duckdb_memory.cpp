@@ -48,9 +48,9 @@ void DuckDBMemoryFunction(ClientContext &context, TableFunctionInput &data_p, Da
 		// tag, VARCHAR
 		output.SetValue(col++, count, EnumUtil::ToString(entry.tag));
 		// memory_usage_bytes, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(entry.size));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(entry.size)));
 		// temporary_storage_bytes, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(entry.evicted_data));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(entry.evicted_data)));
 		count++;
 	}
 	output.SetCardinality(count);

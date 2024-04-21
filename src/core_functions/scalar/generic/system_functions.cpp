@@ -47,6 +47,9 @@ public:
 
 static unique_ptr<FunctionData> CurrentSchemasBind(ClientContext &context, ScalarFunction &bound_function,
                                                    vector<unique_ptr<Expression>> &arguments) {
+	if (arguments[0]->return_type.id() != LogicalTypeId::BOOLEAN) {
+		throw BinderException("current_schemas requires a boolean input");
+	}
 	if (!arguments[0]->IsFoldable()) {
 		throw NotImplementedException("current_schemas requires a constant input");
 	}
@@ -89,7 +92,7 @@ static void TransactionIdCurrent(DataChunk &input, ExpressionState &state, Vecto
 	auto &context = state.GetContext();
 	auto &catalog = Catalog::GetCatalog(context, DatabaseManager::GetDefaultDatabase(context));
 	auto &transaction = DuckTransaction::Get(context, catalog);
-	auto val = Value::BIGINT(transaction.start_time);
+	auto val = Value::UBIGINT(transaction.start_time);
 	result.Reference(val);
 }
 
@@ -133,7 +136,7 @@ ScalarFunction InSearchPathFun::GetFunction() {
 }
 
 ScalarFunction CurrentTransactionIdFun::GetFunction() {
-	ScalarFunction txid_current({}, LogicalType::BIGINT, TransactionIdCurrent);
+	ScalarFunction txid_current({}, LogicalType::UBIGINT, TransactionIdCurrent);
 	txid_current.stability = FunctionStability::CONSISTENT_WITHIN_QUERY;
 	return txid_current;
 }

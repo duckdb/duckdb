@@ -140,7 +140,7 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 	vector<string> return_names;
 	if (table_function.bind || table_function.bind_replace) {
 		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names,
-		                                  table_function.function_info.get());
+		                                  table_function.function_info.get(), this);
 		if (table_function.bind_replace) {
 			auto new_plan = table_function.bind_replace(context, bind_input);
 			if (new_plan != nullptr) {
@@ -251,12 +251,12 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 
 	// select the function based on the input parameters
 	FunctionBinder function_binder(context);
-	idx_t best_function_idx = function_binder.BindFunction(function.name, function.functions, arguments, error);
-	if (best_function_idx == DConstants::INVALID_INDEX) {
+	auto best_function_idx = function_binder.BindFunction(function.name, function.functions, arguments, error);
+	if (!best_function_idx.IsValid()) {
 		error.AddQueryLocation(ref);
 		error.Throw();
 	}
-	auto table_function = function.functions.GetFunctionByOffset(best_function_idx);
+	auto table_function = function.functions.GetFunctionByOffset(best_function_idx.GetIndex());
 
 	// now check the named parameters
 	BindNamedParameters(table_function.named_parameters, named_parameters, error_context, table_function.name);

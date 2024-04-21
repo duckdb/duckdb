@@ -23,15 +23,19 @@ void BufferManager::FreeReservedMemory(idx_t size) {
 	throw NotImplementedException("This type of BufferManager can not free reserved memory");
 }
 
-void BufferManager::SetLimit(idx_t limit) {
-	throw NotImplementedException("This type of BufferManager can not set a limit");
+void BufferManager::SetMemoryLimit(idx_t limit) {
+	throw NotImplementedException("This type of BufferManager can not set a memory limit");
+}
+
+void BufferManager::SetSwapLimit(optional_idx limit) {
+	throw NotImplementedException("This type of BufferManager can not set a swap limit");
 }
 
 vector<TemporaryFileInformation> BufferManager::GetTemporaryFiles() {
 	throw InternalException("This type of BufferManager does not allow temporary files");
 }
 
-const string &BufferManager::GetTemporaryDirectory() {
+const string &BufferManager::GetTemporaryDirectory() const {
 	throw InternalException("This type of BufferManager does not allow a temporary directory");
 }
 

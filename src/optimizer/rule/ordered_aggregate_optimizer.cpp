@@ -1,5 +1,3 @@
-#include "duckdb/optimizer/rule/ordered_aggregate_optimizer.hpp"
-
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
@@ -8,6 +6,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/optimizer/rule/ordered_aggregate_optimizer.hpp"
 
 namespace duckdb {
 
@@ -84,11 +83,11 @@ unique_ptr<Expression> OrderedAggregateOptimizer::Apply(ClientContext &context, 
 		types.emplace_back(child->return_type);
 	}
 	auto best_function = binder.BindFunction(func.name, func.functions, types, error);
-	if (best_function == DConstants::INVALID_INDEX) {
+	if (!best_function.IsValid()) {
 		error.Throw();
 	}
 	// found a matching function!
-	auto bound_function = func.functions.GetFunctionByOffset(best_function);
+	auto bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
 	return binder.BindAggregateFunction(bound_function, std::move(children), std::move(aggr.filter),
 	                                    aggr.IsDistinct() ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT);
 }

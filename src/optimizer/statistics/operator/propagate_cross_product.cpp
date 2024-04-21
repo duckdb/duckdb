@@ -4,7 +4,7 @@
 namespace duckdb {
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalCrossProduct &cp,
-                                                                     unique_ptr<LogicalOperator> *node_ptr) {
+                                                                     unique_ptr<LogicalOperator> &node_ptr) {
 	// first propagate statistics in the child node
 	auto left_stats = PropagateStatistics(cp.children[0]);
 	auto right_stats = PropagateStatistics(cp.children[1]);
