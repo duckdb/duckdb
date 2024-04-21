@@ -21,7 +21,17 @@ struct ReplacementScanData {
 	}
 };
 
-typedef unique_ptr<TableRef> (*replacement_scan_t)(ClientContext &context, const string &table_name,
+struct ReplacementScanInput {
+public:
+	ReplacementScanInput(TableRef &ref, const string &table_name) : ref(ref), table_name(table_name) {
+	}
+
+public:
+	TableRef &ref;
+	const string &table_name;
+};
+
+typedef unique_ptr<TableRef> (*replacement_scan_t)(ClientContext &context, ReplacementScanInput &input,
                                                    ReplacementScanData *data);
 
 //! Replacement table scans are automatically attempted when a table name cannot be found in the schema

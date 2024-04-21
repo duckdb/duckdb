@@ -48,7 +48,8 @@ unique_ptr<BoundTableRef> Binder::BindWithReplacementScan(ClientContext &context
 	auto &config = DBConfig::GetConfig(context);
 	if (context.config.use_replacement_scans) {
 		for (auto &scan : config.replacement_scans) {
-			auto replacement_function = scan.function(context, table_name, scan.data.get());
+			ReplacementScanInput input(ref.Cast<TableRef>(), table_name);
+			auto replacement_function = scan.function(context, input, scan.data.get());
 			if (replacement_function) {
 				if (!ref.alias.empty()) {
 					// user-provided alias overrides the default alias

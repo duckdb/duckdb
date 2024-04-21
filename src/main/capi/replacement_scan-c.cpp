@@ -28,8 +28,9 @@ struct CAPIReplacementScanInfo {
 	string error;
 };
 
-unique_ptr<TableRef> duckdb_capi_replacement_callback(ClientContext &context, const string &table_name,
+unique_ptr<TableRef> duckdb_capi_replacement_callback(ClientContext &context, ReplacementScanInput &input,
                                                       ReplacementScanData *data) {
+	auto &table_name = input.table_name;
 	auto &scan_data = reinterpret_cast<CAPIReplacementScanData &>(*data);
 
 	CAPIReplacementScanInfo info(&scan_data);

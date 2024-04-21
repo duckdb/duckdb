@@ -1229,8 +1229,9 @@ idx_t ParquetWriteFileSize(GlobalFunctionData &gstate) {
 //===--------------------------------------------------------------------===//
 // Scan Replacement
 //===--------------------------------------------------------------------===//
-unique_ptr<TableRef> ParquetScanReplacement(ClientContext &context, const string &table_name,
+unique_ptr<TableRef> ParquetScanReplacement(ClientContext &context, ReplacementScanInput &input,
                                             ReplacementScanData *data) {
+	auto &table_name = input.table_name;
 	if (!ReplacementScan::CanReplace(table_name, {"parquet"})) {
 		return nullptr;
 	}

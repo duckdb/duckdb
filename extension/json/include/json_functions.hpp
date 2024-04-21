@@ -70,7 +70,7 @@ public:
 	static vector<ScalarFunctionSet> GetScalarFunctions();
 	static vector<PragmaFunctionSet> GetPragmaFunctions();
 	static vector<TableFunctionSet> GetTableFunctions();
-	static unique_ptr<TableRef> ReadJSONReplacement(ClientContext &context, const string &table_name,
+	static unique_ptr<TableRef> ReadJSONReplacement(ClientContext &context, ReplacementScanInput &input,
 	                                                ReplacementScanData *data);
 	static TableFunction GetReadJSONTableFunction(shared_ptr<JSONScanInfo> function_info);
 	static CopyFunction GetJSONCopyFunction();

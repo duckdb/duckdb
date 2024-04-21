@@ -352,7 +352,9 @@ void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(MultiFileReader::CreateFunctionSet(ReadCSVTableFunction::GetAutoFunction()));
 }
 
-unique_ptr<TableRef> ReadCSVReplacement(ClientContext &context, const string &table_name, ReplacementScanData *data) {
+unique_ptr<TableRef> ReadCSVReplacement(ClientContext &context, ReplacementScanInput &input,
+                                        ReplacementScanData *data) {
+	auto &table_name = input.table_name;
 	auto lower_name = StringUtil::Lower(table_name);
 	// remove any compression
 	if (StringUtil::EndsWith(lower_name, ".gz")) {

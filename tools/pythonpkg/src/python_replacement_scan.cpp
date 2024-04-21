@@ -153,8 +153,9 @@ static PythonContextState &GetContextState(ClientContext &context) {
 	return dynamic_cast<PythonContextState &>(*context.registered_state.at("python_state"));
 }
 
-unique_ptr<TableRef> PythonReplacementScan::Replace(ClientContext &context, const string &table_name,
+unique_ptr<TableRef> PythonReplacementScan::Replace(ClientContext &context, ReplacementScanInput &input,
                                                     ReplacementScanData *data) {
+	auto &table_name = input.table_name;
 	auto &state = GetContextState(context);
 	auto &cache = state.cache;
 	// Check to see if this lookup is cached
@@ -167,6 +168,7 @@ unique_ptr<TableRef> PythonReplacementScan::Replace(ClientContext &context, cons
 	if (!result) {
 		return nullptr;
 	}
+	input.ref.external_dependency = result->external_dependency;
 	// Add it to the cache if we got a hit
 	cache.Add(table_name, result->Copy());
 	return std::move(result);
