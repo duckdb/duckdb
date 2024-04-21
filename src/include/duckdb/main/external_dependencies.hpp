@@ -47,6 +47,8 @@ class ExternalDependency {
 public:
 	explicit ExternalDependency() {
 	}
+	virtual ~ExternalDependency() {
+	}
 
 public:
 	virtual void AddDependency(const string &name, shared_ptr<DependencyItem> item) {
@@ -75,6 +77,10 @@ class ProxyDependencies : public ExternalDependency {
 public:
 	ProxyDependencies(shared_ptr<ExternalDependency> other) : other(other) {
 	}
+	~ProxyDependencies() override {
+	}
+
+public:
 	void AddDependency(const string &name, shared_ptr<DependencyItem> item) override {
 		other->AddDependency(name, std::move(item));
 	}
