@@ -68,9 +68,11 @@ class TestRuntimeError(object):
         conn.execute("create view x as select * from df_in")
         rel = conn.query("select * from x")
         del df_in
-        res = rel.fetchall()
-        print(res)
-        assert res == [(1,), (2,), (3,), (4,), (5,)]
+        with pytest.raises(duckdb.ProgrammingError, match='Table with name df_in does not exist'):
+            # Even when we preserve ExternalDependency objects correctly, this is not supported
+            # Relations only save dependencies for their immediate TableRefs,
+            # so the dependency of 'x' on 'df_in' is not registered in 'rel'
+            rel.fetchall()
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_relation_cache_execute(self, pandas):
@@ -83,9 +85,8 @@ class TestRuntimeError(object):
         conn.execute("create view x as select * from df_in")
         rel = conn.query("select * from x")
         del df_in
-        res = rel.execute().fetchall()
-        print(res)
-        assert res == [(1,), (2,), (3,), (4,), (5,)]
+        with pytest.raises(duckdb.ProgrammingError, match='Table with name df_in does not exist'):
+            rel.execute()
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_relation_query_error(self, pandas):

@@ -4,6 +4,7 @@ import tempfile
 import os
 import pandas as pd
 import pytest
+from conftest import ArrowPandas, NumpyPandas
 
 from duckdb.typing import BIGINT, VARCHAR, TINYINT, BOOLEAN
 
@@ -25,6 +26,25 @@ class TestRelation(object):
         # now create a relation from it
         csv_rel = duckdb.from_csv_auto(temp_file_name)
         assert df_rel.execute().fetchall() == csv_rel.execute().fetchall()
+
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_relation_view(self, duckdb_cursor, pandas):
+        def create_view(duckdb_cursor):
+            df_in = pandas.DataFrame({'numbers': [1, 2, 3, 4, 5]})
+            rel = duckdb_cursor.query("select * from df_in")
+            rel.to_view("my_view")
+
+        create_view(duckdb_cursor)
+        with pytest.raises(duckdb.CatalogException, match="df_in does not exist"):
+            # The df_in object is no longer reachable
+            rel1 = duckdb_cursor.query("select * from df_in")
+        # But it **is** reachable through our 'my_view' VIEW
+        # Because a Relation was created that references the df_in, the 'df_in' TableRef was injected with an ExternalDependency on the dataframe object
+        # We then created a VIEW from that Relation, which in turn copied this 'df_in' TableRef into the ViewCatalogEntry
+        # Because of this, the df_in object will stay alive for as long as our 'my_view' entry exists.
+        rel2 = duckdb_cursor.query("select * from my_view")
+        res = rel2.fetchall()
+        assert res == [(1,), (2,), (3,), (4,), (5,)]
 
     def test_filter_operator(self):
         conn = duckdb.connect()
