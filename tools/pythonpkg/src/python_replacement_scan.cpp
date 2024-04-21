@@ -25,8 +25,9 @@ static void CreateArrowScan(const string &name, py::object entry, TableFunctionR
 	children.push_back(make_uniq<ConstantExpression>(Value::POINTER(CastPointerToValue(stream_factory_get_schema))));
 
 	table_function.function = make_uniq<FunctionExpression>("arrow_scan", std::move(children));
-	auto dependency = make_uniq<PythonDependencies>(name);
-	dependency->AddObject("replacement_cache", make_uniq<RegisteredArrow>(std::move(stream_factory), entry));
+	auto dependency = make_uniq<ExternalDependency>();
+	auto dependency_item = PythonDependencyItem::Create(make_uniq<RegisteredArrow>(std::move(stream_factory), entry));
+	dependency->AddDependency("replacement_cache", std::move(dependency_item));
 	table_function.external_dependency = std::move(dependency);
 }
 
@@ -44,9 +45,9 @@ static unique_ptr<TableRef> TryReplacementObject(const py::object &entry, const 
 			auto new_df = PandasScanFunction::PandasReplaceCopiedNames(entry);
 			children.push_back(make_uniq<ConstantExpression>(Value::POINTER(CastPointerToValue(new_df.ptr()))));
 			table_function->function = make_uniq<FunctionExpression>("pandas_scan", std::move(children));
-			auto dependency = make_uniq<PythonDependencies>(name);
-			dependency->AddObject("replacement_cache", entry);
-			dependency->AddObject("copy", new_df);
+			auto dependency = make_uniq<ExternalDependency>();
+			dependency->AddDependency("replacement_cache", PythonDependencyItem::Create(entry));
+			dependency->AddDependency("copy", PythonDependencyItem::Create(new_df));
 			table_function->external_dependency = std::move(dependency);
 		}
 	} else if (DuckDBPyConnection::IsAcceptedArrowObject(entry)) {
@@ -57,8 +58,8 @@ static unique_ptr<TableRef> TryReplacementObject(const py::object &entry, const 
 		auto select = make_uniq<SelectStatement>();
 		select->node = pyrel->GetRel().GetQueryNode();
 		auto subquery = make_uniq<SubqueryRef>(std::move(select));
-		auto dependency = make_uniq<PythonDependencies>(name);
-		dependency->AddObject("replacement_cache", entry);
+		auto dependency = make_uniq<ExternalDependency>();
+		dependency->AddDependency("replacement_cache", PythonDependencyItem::Create(entry));
 		subquery->external_dependency = std::move(dependency);
 		return std::move(subquery);
 	} else if (PolarsDataFrame::IsDataFrame(entry)) {
@@ -99,9 +100,9 @@ static unique_ptr<TableRef> TryReplacementObject(const py::object &entry, const 
 		}
 		children.push_back(make_uniq<ConstantExpression>(Value::POINTER(CastPointerToValue(data.ptr()))));
 		table_function->function = make_uniq<FunctionExpression>("pandas_scan", std::move(children));
-		auto dependency = make_uniq<PythonDependencies>(name);
-		dependency->AddObject("replacement_cache", entry);
-		dependency->AddObject("data", data);
+		auto dependency = make_uniq<ExternalDependency>();
+		dependency->AddDependency("replacement_cache", PythonDependencyItem::Create(entry));
+		dependency->AddDependency("data", PythonDependencyItem::Create(data));
 		table_function->external_dependency = std::move(dependency);
 	} else {
 		// This throws an error later on!
@@ -170,13 +171,10 @@ unique_ptr<TableRef> PythonReplacementScan::Replace(ClientContext &context, Repl
 
 	auto &table_ref = input.ref;
 	if (table_ref.external_dependency) {
-		// FIXME: probably we should store a case_insensitive_map_t<shared_ptr<ExternalDependency>>
-		// but for now we only have PythonDependencies
-		D_ASSERT(table_ref.external_dependency->type == ExternalDependenciesType::PYTHON_DEPENDENCY);
-		auto &python_dependency = table_ref.external_dependency->Cast<PythonDependencies>();
-		auto it = python_dependency.objects.find("replacement_cache");
-		if (it != python_dependency.objects.end()) {
-			auto &registered_object = *it->second;
+		auto dependency_item = table_ref.external_dependency->GetDependency("replacement_cache");
+		if (dependency_item && dependency_item->type == ExternalDependencyItemType::PYTHON_DEPENDENCY) {
+			auto &python_dependency = dependency_item->Cast<PythonDependencyItem>();
+			auto &registered_object = *python_dependency.object;
 			auto &py_object = registered_object.obj;
 			auto client_properties = context.GetClientProperties();
 			auto result = TryReplacementObject(py_object, table_name, client_properties);
@@ -191,15 +189,13 @@ unique_ptr<TableRef> PythonReplacementScan::Replace(ClientContext &context, Repl
 	if (!result) {
 		return nullptr;
 	}
-	D_ASSERT(!table_ref.external_dependency);
+	//! a ProxyDependencies object should have been created
+	D_ASSERT(table_ref.external_dependency);
 	D_ASSERT(result->external_dependency);
-#ifdef DEBUG
-	D_ASSERT(result->external_dependency->type == ExternalDependenciesType::PYTHON_DEPENDENCY);
-	auto &python_dependency = result->external_dependency->Cast<PythonDependencies>();
-	D_ASSERT(python_dependency.objects.count("replacement_cache"));
-#endif
 
-	table_ref.external_dependency = result->external_dependency;
+	auto dependency_item = result->external_dependency->GetDependency("replacement_cache");
+	D_ASSERT(dependency_item && dependency_item->type == ExternalDependencyItemType::PYTHON_DEPENDENCY);
+	table_ref.external_dependency->AddDependency("replacement_cache", std::move(dependency_item));
 	return result;
 }
 

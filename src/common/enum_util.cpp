@@ -2531,9 +2531,9 @@ ExtensionLoadResult EnumUtil::FromString<ExtensionLoadResult>(const char *value)
 }
 
 template<>
-const char* EnumUtil::ToChars<ExternalDependenciesType>(ExternalDependenciesType value) {
+const char* EnumUtil::ToChars<ExternalDependencyItemType>(ExternalDependencyItemType value) {
 	switch(value) {
-	case ExternalDependenciesType::PYTHON_DEPENDENCY:
+	case ExternalDependencyItemType::PYTHON_DEPENDENCY:
 		return "PYTHON_DEPENDENCY";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
@@ -2541,9 +2541,9 @@ const char* EnumUtil::ToChars<ExternalDependenciesType>(ExternalDependenciesType
 }
 
 template<>
-ExternalDependenciesType EnumUtil::FromString<ExternalDependenciesType>(const char *value) {
+ExternalDependencyItemType EnumUtil::FromString<ExternalDependencyItemType>(const char *value) {
 	if (StringUtil::Equals(value, "PYTHON_DEPENDENCY")) {
-		return ExternalDependenciesType::PYTHON_DEPENDENCY;
+		return ExternalDependencyItemType::PYTHON_DEPENDENCY;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

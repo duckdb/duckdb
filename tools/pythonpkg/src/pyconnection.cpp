@@ -377,8 +377,8 @@ DuckDBPyConnection::RegisterScalarUDF(const string &name, const py::function &ud
 
 	context.RegisterFunction(info);
 
-	auto dependency = make_uniq<PythonDependencies>(name);
-	dependency->AddObject("function", std::move(udf));
+	auto dependency = make_uniq<ExternalDependency>();
+	dependency->AddDependency("function", PythonDependencyItem::Create(std::move(udf)));
 	registered_functions[name] = std::move(dependency);
 
 	return shared_from_this();
@@ -630,8 +630,10 @@ void DuckDBPyConnection::RegisterArrowObject(const py::object &arrow_object, con
 		        ->CreateView(name, true, true);
 	}
 	vector<shared_ptr<ExternalDependency>> dependencies;
-	auto dependency = make_shared<PythonDependencies>(name);
-	dependency->AddObject("object", make_uniq<RegisteredArrow>(std::move(stream_factory), arrow_object));
+	auto dependency = make_shared<ExternalDependency>();
+	auto dependency_item =
+	    PythonDependencyItem::Create(make_uniq<RegisteredArrow>(std::move(stream_factory), arrow_object));
+	dependency->AddDependency("object", std::move(dependency_item));
 	dependencies.push_back(std::move(dependency));
 	connection->context->external_dependencies[name] = std::move(dependencies);
 }
@@ -655,11 +657,10 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 				        ->CreateView(name, true, true);
 			}
 
-			auto dependency = make_shared<PythonDependencies>(name);
-			dependency->AddObject("original", std::move(python_object));
-			dependency->AddObject("copy", std::move(new_df));
+			auto dependency = make_shared<ExternalDependency>();
+			dependency->AddDependency("original", PythonDependencyItem::Create(std::move(python_object)));
+			dependency->AddDependency("copy", PythonDependencyItem::Create(std::move(new_df)));
 
-			// keep a reference
 			vector<shared_ptr<ExternalDependency>> dependencies;
 			dependencies.push_back(std::move(dependency));
 			connection->context->external_dependencies[name] = std::move(dependencies);
@@ -1115,9 +1116,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const PandasDataFrame &v
 	vector<Value> params;
 	params.emplace_back(Value::POINTER(CastPointerToValue(new_df.ptr())));
 	auto rel = connection->TableFunction("pandas_scan", params)->Alias(name);
-	auto dependency = make_shared<PythonDependencies>();
-	dependency->AddObject("original", value);
-	dependency->AddObject("copy", new_df);
+	auto dependency = make_shared<ExternalDependency>();
+	dependency->AddDependency("original", PythonDependencyItem::Create(value));
+	dependency->AddDependency("copy", PythonDependencyItem::Create(new_df));
 	rel->AddExternalDependency(std::move(dependency));
 	return make_uniq<DuckDBPyRelation>(std::move(rel));
 }
@@ -1200,8 +1201,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_obj
 	                                              Value::POINTER(CastPointerToValue(stream_factory_produce)),
 	                                              Value::POINTER(CastPointerToValue(stream_factory_get_schema))})
 	               ->Alias(name);
-	auto dependency = make_shared<PythonDependencies>();
-	dependency->AddObject("object", make_uniq<RegisteredArrow>(std::move(stream_factory), arrow_object));
+	auto dependency = make_shared<ExternalDependency>();
+	auto dependency_item =
+	    PythonDependencyItem::Create(make_uniq<RegisteredArrow>(std::move(stream_factory), arrow_object));
+	dependency->AddDependency("object", std::move(dependency_item));
 	rel->AddExternalDependency(std::move(dependency));
 	return make_uniq<DuckDBPyRelation>(std::move(rel));
 }

@@ -42,12 +42,12 @@ BoundStatement QueryRelation::Bind(Binder &binder) {
 	SelectStatement stmt;
 	stmt.node = GetQueryNode();
 	auto &original_ref = *select_stmt->node->Cast<SelectNode>().from_table;
-	auto &copied_ref = *stmt.node->Cast<SelectNode>().from_table;
-	auto result = binder.Bind(stmt.Cast<SQLStatement>());
-
 	if (!original_ref.external_dependency) {
-		original_ref.external_dependency = copied_ref.external_dependency;
+		original_ref.external_dependency = make_shared<ExternalDependency>();
 	}
+	auto &copied_ref = *stmt.node->Cast<SelectNode>().from_table;
+	copied_ref.external_dependency = make_shared<ProxyDependencies>(original_ref.external_dependency);
+	auto result = binder.Bind(stmt.Cast<SQLStatement>());
 	return result;
 }
 

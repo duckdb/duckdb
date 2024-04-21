@@ -1,28 +1,24 @@
 #include "duckdb_python/python_dependency.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 
-void PythonDependencies::AddObject(const string &name, py::object object) {
-	auto registered_object = make_uniq<RegisteredObject>(std::move(object));
-	AddObject(name, std::move(registered_object));
+PythonDependencyItem::PythonDependencyItem(unique_ptr<RegisteredObject> &&object)
+    : DependencyItem(ExternalDependencyItemType::PYTHON_DEPENDENCY), object(std::move(object)) {
 }
 
-void PythonDependencies::AddObject(const string &name, unique_ptr<RegisteredObject> &&object) {
-	objects.emplace(std::make_pair(name, std::move(object)));
-}
-
-PythonDependencies::~PythonDependencies() {
+PythonDependencyItem::~PythonDependencyItem() {
 	py::gil_scoped_acquire gil;
-	objects.clear();
+	object.reset();
 }
 
-bool PythonDependencies::HasName() const {
-	return !name.empty();
+shared_ptr<DependencyItem> PythonDependencyItem::Create(py::object object) {
+	auto registered_object = make_uniq<RegisteredObject>(std::move(object));
+	return make_shared<PythonDependencyItem>(std::move(registered_object));
 }
 
-const string &PythonDependencies::GetName() const {
-	D_ASSERT(HasName());
-	return name;
+shared_ptr<DependencyItem> PythonDependencyItem::Create(unique_ptr<RegisteredObject> &&object) {
+	return make_shared<PythonDependencyItem>(std::move(object));
 }
 
 } // namespace duckdb

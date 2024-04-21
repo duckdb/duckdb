@@ -9,27 +9,20 @@
 
 namespace duckdb {
 
-class PythonDependencies : public ExternalDependency {
+class PythonDependencyItem : public DependencyItem {
 public:
-	static constexpr const ExternalDependenciesType TYPE = ExternalDependenciesType::PYTHON_DEPENDENCY;
+	static constexpr const ExternalDependencyItemType TYPE = ExternalDependencyItemType::PYTHON_DEPENDENCY;
 
 public:
-	explicit PythonDependencies(string name = string())
-	    : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY), name(name) {
-	}
-	~PythonDependencies() override;
+	PythonDependencyItem(unique_ptr<RegisteredObject> &&object);
+	~PythonDependencyItem() override;
 
 public:
-	void AddObject(const string &name, py::object object);
-	void AddObject(const string &name, unique_ptr<RegisteredObject> &&object);
-	bool HasName() const;
-	const string &GetName() const;
+	static shared_ptr<DependencyItem> Create(py::object object);
+	static shared_ptr<DependencyItem> Create(unique_ptr<RegisteredObject> &&object);
 
 public:
-	//! Optional name for the dependency
-	string name;
-	//! The objects encompassed by this dependency
-	case_insensitive_map_t<unique_ptr<RegisteredObject>> objects;
+	unique_ptr<RegisteredObject> object;
 };
 
 } // namespace duckdb
