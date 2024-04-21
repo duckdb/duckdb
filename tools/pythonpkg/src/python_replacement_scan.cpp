@@ -173,6 +173,7 @@ unique_ptr<TableRef> PythonReplacementScan::Replace(ClientContext &context, Repl
 	if (table_ref.external_dependency) {
 		auto dependency_item = table_ref.external_dependency->GetDependency("replacement_cache");
 		if (dependency_item && dependency_item->type == ExternalDependencyItemType::PYTHON_DEPENDENCY) {
+			py::gil_scoped_acquire acquire;
 			auto &python_dependency = dependency_item->Cast<PythonDependencyItem>();
 			auto &registered_object = *python_dependency.object;
 			auto &py_object = registered_object.obj;
