@@ -362,7 +362,7 @@ py::list DuckDBPyType::Children() const {
 		return children;
 	}
 	if (id == LogicalTypeId::ARRAY) {
-		children.append(py::make_tuple("child", make_shared<DuckDBPyType>(ArrayType::GetChildType(type))));
+		children.append(py::make_tuple("child", make_shared_ptr<DuckDBPyType>(ArrayType::GetChildType(type))));
 		children.append(py::make_tuple("size", ArrayType::GetSize(type)));
 		return children;
 	}
