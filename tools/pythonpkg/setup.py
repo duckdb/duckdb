@@ -355,6 +355,8 @@ def setup_data_files(data_files):
 
 
 data_files = setup_data_files(extra_files + header_files)
+if is_pyodide:
+    data_files = []
 
 packages = [
     lib_name,
