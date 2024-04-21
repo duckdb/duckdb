@@ -1299,8 +1299,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Map(py::function fun, Optional<py
 	params.emplace_back(Value::POINTER(CastPointerToValue(schema.ptr())));
 	auto relation = make_uniq<DuckDBPyRelation>(rel->TableFunction("python_map_function", params));
 	auto rel_dependency = make_uniq<PythonDependencies>();
-	rel_dependency->map_function = std::move(fun);
-	rel_dependency->py_object_list.push_back(make_uniq<RegisteredObject>(std::move(schema)));
+	rel_dependency->AddObject("map", std::move(fun));
+	rel_dependency->AddObject("schema", std::move(schema));
 	relation->rel->AddExternalDependency(std::move(rel_dependency));
 	return relation;
 }

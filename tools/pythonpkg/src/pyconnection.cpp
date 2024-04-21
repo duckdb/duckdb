@@ -50,7 +50,6 @@
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/main/pending_query_result.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
-#include "duckdb_python/python_context_state.hpp"
 #include "duckdb_python/python_replacement_scan.hpp"
 
 #include <random>
@@ -378,7 +377,9 @@ DuckDBPyConnection::RegisterScalarUDF(const string &name, const py::function &ud
 
 	context.RegisterFunction(info);
 
-	registered_functions[name] = make_uniq<PythonDependencies>(udf);
+	auto dependency = make_uniq<PythonDependencies>(name);
+	dependency->AddObject("function", std::move(udf));
+	registered_functions[name] = std::move(dependency);
 
 	return shared_from_this();
 }
@@ -629,8 +630,9 @@ void DuckDBPyConnection::RegisterArrowObject(const py::object &arrow_object, con
 		        ->CreateView(name, true, true);
 	}
 	vector<shared_ptr<ExternalDependency>> dependencies;
-	dependencies.push_back(
-	    make_shared<PythonDependencies>(make_uniq<RegisteredArrow>(std::move(stream_factory), arrow_object)));
+	auto dependency = make_shared<PythonDependencies>(name);
+	dependency->AddObject("object", make_uniq<RegisteredArrow>(std::move(stream_factory), arrow_object));
+	dependencies.push_back(std::move(dependency));
 	connection->context->external_dependencies[name] = std::move(dependencies);
 }
 
@@ -653,10 +655,13 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 				        ->CreateView(name, true, true);
 			}
 
+			auto dependency = make_shared<PythonDependencies>(name);
+			dependency->AddObject("original", std::move(python_object));
+			dependency->AddObject("copy", std::move(new_df));
+
 			// keep a reference
 			vector<shared_ptr<ExternalDependency>> dependencies;
-			dependencies.push_back(make_shared<PythonDependencies>(make_uniq<RegisteredObject>(python_object),
-			                                                       make_uniq<RegisteredObject>(new_df)));
+			dependencies.push_back(std::move(dependency));
 			connection->context->external_dependencies[name] = std::move(dependencies);
 		}
 	} else if (IsAcceptedArrowObject(python_object) || IsPolarsDataframe(python_object)) {
@@ -1110,8 +1115,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const PandasDataFrame &v
 	vector<Value> params;
 	params.emplace_back(Value::POINTER(CastPointerToValue(new_df.ptr())));
 	auto rel = connection->TableFunction("pandas_scan", params)->Alias(name);
-	rel->AddExternalDependency(
-	    make_shared<PythonDependencies>(make_uniq<RegisteredObject>(value), make_uniq<RegisteredObject>(new_df)));
+	auto dependency = make_shared<PythonDependencies>();
+	dependency->AddObject("original", value);
+	dependency->AddObject("copy", new_df);
+	rel->AddExternalDependency(std::move(dependency));
 	return make_uniq<DuckDBPyRelation>(std::move(rel));
 }
 
@@ -1193,8 +1200,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_obj
 	                                              Value::POINTER(CastPointerToValue(stream_factory_produce)),
 	                                              Value::POINTER(CastPointerToValue(stream_factory_get_schema))})
 	               ->Alias(name);
-	rel->AddExternalDependency(
-	    make_shared<PythonDependencies>(make_uniq<RegisteredArrow>(std::move(stream_factory), arrow_object)));
+	auto dependency = make_shared<PythonDependencies>();
+	dependency->AddObject("object", make_uniq<RegisteredArrow>(std::move(stream_factory), arrow_object));
+	rel->AddExternalDependency(std::move(dependency));
 	return make_uniq<DuckDBPyRelation>(std::move(rel));
 }
 
@@ -1321,9 +1329,6 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Cursor() {
 	auto res = make_shared<DuckDBPyConnection>();
 	res->database = database;
 	res->connection = make_uniq<Connection>(*res->database);
-	auto &client_context = *res->connection->context;
-	// FIXME: should this context state be shared with the parent?
-	client_context.registered_state["python_state"] = std::make_shared<PythonContextState>();
 	cursors.push_back(res);
 	return res;
 }
@@ -1511,7 +1516,6 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 
 	auto res = FetchOrCreateInstance(database, config);
 	auto &client_context = *res->connection->context;
-	client_context.registered_state["python_state"] = std::make_shared<PythonContextState>();
 	SetDefaultConfigArguments(client_context);
 	return res;
 }

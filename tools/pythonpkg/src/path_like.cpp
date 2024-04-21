@@ -71,7 +71,9 @@ PathLike PathLikeProcessor::Finalize() {
 
 	// Create the dependency, which contains the logic to clean up the files in its destructor
 	auto &fs = GetFS();
-	result.dependency = make_uniq<PythonDependencies>(make_uniq<FileSystemObject>(fs, std::move(fs_files)));
+	auto dependency = make_uniq<PythonDependencies>();
+	dependency->AddObject("file_handles", make_uniq<FileSystemObject>(fs, std::move(fs_files)));
+	result.dependency = std::move(dependency);
 	return result;
 }
 

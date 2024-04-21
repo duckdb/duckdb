@@ -38,6 +38,19 @@ unique_ptr<QueryNode> QueryRelation::GetQueryNode() {
 	return std::move(select->node);
 }
 
+BoundStatement QueryRelation::Bind(Binder &binder) {
+	SelectStatement stmt;
+	stmt.node = GetQueryNode();
+	auto &original_ref = *select_stmt->node->Cast<SelectNode>().from_table;
+	auto &copied_ref = *stmt.node->Cast<SelectNode>().from_table;
+	auto result = binder.Bind(stmt.Cast<SQLStatement>());
+
+	if (!original_ref.external_dependency) {
+		original_ref.external_dependency = copied_ref.external_dependency;
+	}
+	return result;
+}
+
 unique_ptr<TableRef> QueryRelation::GetTableRef() {
 	auto subquery_ref = make_uniq<SubqueryRef>(GetSelectStatement(), GetAlias());
 	return std::move(subquery_ref);

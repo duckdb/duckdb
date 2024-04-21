@@ -26,6 +26,7 @@ add_library(
   pystatement.cpp
   python_import_cache.cpp
   python_replacement_scan.cpp
+  python_dependency.cpp
   python_context_state.cpp
   pyrelation.cpp
   pyexpression.cpp

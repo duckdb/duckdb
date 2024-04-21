@@ -362,8 +362,7 @@ void Binder::BindModifiers(BoundQueryNode &result, idx_t table_index, const vect
 unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	D_ASSERT(statement.from_table);
 	// first bind the FROM table statement
-	auto from = std::move(statement.from_table);
-	auto from_table = Bind(*from);
+	auto from_table = Bind(*statement.from_table);
 	return BindSelectNode(statement, std::move(from_table));
 }
 
