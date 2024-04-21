@@ -145,7 +145,7 @@ public:
 
 	//! Errors happening in the current line (if any)
 	vector<CurrentError> current_errors;
-
+	StrpTimeFormat date_format, timestamp_format;
 	bool sniffing;
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
@@ -167,8 +167,6 @@ public:
 	bool HandleError();
 
 	inline void AddValueToVector(const char *value_ptr, const idx_t size, bool allocate = false);
-
-	Value GetValue(idx_t row_idx, idx_t col_idx);
 
 	DataChunk &ToChunk();
 	//! Resets the state of the result

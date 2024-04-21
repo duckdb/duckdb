@@ -23,6 +23,7 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb_python/pybind11/conversions/exception_handling_enum.hpp"
 #include "duckdb_python/pybind11/conversions/python_udf_type_enum.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 
 namespace duckdb {
 
@@ -38,7 +39,7 @@ public:
 	unique_ptr<PythonTableArrowArrayStreamFactory> arrow_factory;
 };
 
-struct DuckDBPyConnection : public std::enable_shared_from_this<DuckDBPyConnection> {
+struct DuckDBPyConnection : public enable_shared_from_this<DuckDBPyConnection> {
 public:
 	shared_ptr<DuckDB> database;
 	unique_ptr<Connection> connection;
@@ -117,7 +118,7 @@ public:
 	                                        bool many = false);
 
 	shared_ptr<DuckDBPyConnection> Execute(const py::object &query, py::object params = py::list(), bool many = false);
-	shared_ptr<DuckDBPyConnection> Execute(const string &query);
+	shared_ptr<DuckDBPyConnection> ExecuteFromString(const string &query);
 
 	shared_ptr<DuckDBPyConnection> Append(const string &name, const PandasDataFrame &value, bool by_name);
 

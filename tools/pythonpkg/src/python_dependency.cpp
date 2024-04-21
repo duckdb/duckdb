@@ -14,11 +14,11 @@ PythonDependencyItem::~PythonDependencyItem() {
 
 shared_ptr<DependencyItem> PythonDependencyItem::Create(py::object object) {
 	auto registered_object = make_uniq<RegisteredObject>(std::move(object));
-	return make_shared<PythonDependencyItem>(std::move(registered_object));
+	return make_shared_ptr<PythonDependencyItem>(std::move(registered_object));
 }
 
 shared_ptr<DependencyItem> PythonDependencyItem::Create(unique_ptr<RegisteredObject> &&object) {
-	return make_shared<PythonDependencyItem>(std::move(object));
+	return make_shared_ptr<PythonDependencyItem>(std::move(object));
 }
 
 } // namespace duckdb

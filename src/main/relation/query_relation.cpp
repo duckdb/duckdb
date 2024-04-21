@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-QueryRelation::QueryRelation(const std::shared_ptr<ClientContext> &context, unique_ptr<SelectStatement> select_stmt_p,
+QueryRelation::QueryRelation(const shared_ptr<ClientContext> &context, unique_ptr<SelectStatement> select_stmt_p,
                              string alias_p)
     : Relation(context, RelationType::QUERY_RELATION), select_stmt(std::move(select_stmt_p)),
       alias(std::move(alias_p)) {
@@ -43,10 +43,10 @@ BoundStatement QueryRelation::Bind(Binder &binder) {
 	stmt.node = GetQueryNode();
 	auto &original_ref = *select_stmt->node->Cast<SelectNode>().from_table;
 	if (!original_ref.external_dependency) {
-		original_ref.external_dependency = make_shared<ExternalDependency>();
+		original_ref.external_dependency = make_shared_ptr<ExternalDependency>();
 	}
 	auto &copied_ref = *stmt.node->Cast<SelectNode>().from_table;
-	copied_ref.external_dependency = make_shared<ProxyDependencies>(original_ref.external_dependency);
+	copied_ref.external_dependency = make_shared_ptr<ProxyDependencies>(original_ref.external_dependency);
 	auto result = binder.Bind(stmt.Cast<SQLStatement>());
 	return result;
 }

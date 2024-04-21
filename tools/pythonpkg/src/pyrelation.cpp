@@ -148,7 +148,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectFromTypes(const py::object
 	return ProjectFromExpression(projection);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::EmptyResult(const std::shared_ptr<ClientContext> &context,
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::EmptyResult(const shared_ptr<ClientContext> &context,
                                                            const vector<LogicalType> &types, vector<string> names) {
 	vector<Value> dummy_values;
 	D_ASSERT(types.size() == names.size());
@@ -159,7 +159,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::EmptyResult(const std::shared_ptr
 	}
 	vector<vector<Value>> single_row(1, dummy_values);
 	auto values_relation =
-	    make_uniq<DuckDBPyRelation>(make_shared<ValueRelation>(context, single_row, std::move(names)));
+	    make_uniq<DuckDBPyRelation>(make_shared_ptr<ValueRelation>(context, single_row, std::move(names)));
 	// Add a filter on an impossible condition
 	return values_relation->FilterFromExpression("true = false");
 }
@@ -1238,7 +1238,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, co
 	if (statement.type == StatementType::SELECT_STATEMENT) {
 		auto select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));
 		auto query_relation =
-		    make_shared<QueryRelation>(rel->context.GetContext(), std::move(select_statement), "query_relation");
+		    make_shared_ptr<QueryRelation>(rel->context.GetContext(), std::move(select_statement), "query_relation");
 		return make_uniq<DuckDBPyRelation>(std::move(query_relation));
 	} else if (IsDescribeStatement(statement)) {
 		auto query = PragmaShow(view_name);
