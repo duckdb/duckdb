@@ -1139,10 +1139,6 @@ void ClientContext::TryBindRelation(Relation &relation, vector<ColumnDefinition>
 		for (idx_t i = 0; i < result.names.size(); i++) {
 			result_columns.emplace_back(result.names[i], result.types[i]);
 		}
-
-		// Add the dependencies discovered during bind to the Relation
-		// so we ensure they are kept alive
-		result.plan->CollectDependencies(relation.external_dependencies);
 	});
 }
 
