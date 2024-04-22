@@ -35,9 +35,9 @@ void CardinalityEstimator::AddRelationTdom(FilterInfo &filter_info) {
 	relations_to_tdoms.emplace_back(new_r2tdom);
 }
 
-bool CardinalityEstimator::SingleColumnFilter(FilterInfo &filter_info) {
-	if (filter_info.left_set && filter_info.right_set) {
-		// Both set
+bool CardinalityEstimator::SingleRelationFilter(FilterInfo &filter_info) {
+	if (filter_info.left_set && filter_info.right_set && filter_info.set.count > 1) {
+		// Both set and are from different relations
 		return false;
 	}
 	if (EmptyFilter(filter_info)) {
@@ -48,7 +48,7 @@ bool CardinalityEstimator::SingleColumnFilter(FilterInfo &filter_info) {
 
 vector<idx_t> CardinalityEstimator::DetermineMatchingEquivalentSets(FilterInfo *filter_info) {
 	vector<idx_t> matching_equivalent_sets;
-	auto equivalent_relation_index = 0;
+	idx_t equivalent_relation_index = 0;
 
 	for (const RelationsToTDom &r2tdom : relations_to_tdoms) {
 		auto &i_set = r2tdom.equivalent_relations;
@@ -428,6 +428,8 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set
 	if (relation_set_2_cardinality.find(new_set.ToString()) != relation_set_2_cardinality.end()) {
 		return relation_set_2_cardinality[new_set.ToString()].cardinality_before_filters;
 	}
+	// can happen if a table has cardinality 0, or a tdom is set to 0
+
 	auto denom = GetDenominator(new_set);
 	auto numerator = GetNumerator(denom.numerator_relations) * denom.filter_strength;
 
@@ -441,7 +443,6 @@ template <>
 idx_t CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set) {
 	auto cardinality_as_double = EstimateCardinalityWithSet<double>(new_set);
 	auto max = NumericLimits<idx_t>::Maximum();
-	// need to add a buffer
 	if (cardinality_as_double >= max) {
 		return max;
 	}
@@ -513,8 +514,12 @@ void CardinalityEstimator::AddRelationNamesToTdoms(vector<RelationStats> &stats)
 	for (auto &total_domain : relations_to_tdoms) {
 		for (auto &binding : total_domain.equivalent_relations) {
 			D_ASSERT(binding.table_index < stats.size());
-			D_ASSERT(binding.column_index < stats.at(binding.table_index).column_names.size());
-			string column_name = stats.at(binding.table_index).column_names.at(binding.column_index);
+			string column_name;
+			if (binding.column_index < stats[binding.table_index].column_names.size()) {
+				column_name = stats[binding.table_index].column_names[binding.column_index];
+			} else {
+				column_name = "[unknown]";
+			}
 			total_domain.column_names.push_back(column_name);
 		}
 	}

@@ -25,15 +25,15 @@
 
 namespace duckdb {
 
-RowGroup::RowGroup(RowGroupCollection &collection, idx_t start, idx_t count)
-    : SegmentBase<RowGroup>(start, count), collection(collection), allocation_size(0) {
+RowGroup::RowGroup(RowGroupCollection &collection_p, idx_t start, idx_t count)
+    : SegmentBase<RowGroup>(start, count), collection(collection_p), allocation_size(0) {
 	Verify();
 }
 
-RowGroup::RowGroup(RowGroupCollection &collection, RowGroupPointer &&pointer)
-    : SegmentBase<RowGroup>(pointer.row_start, pointer.tuple_count), collection(collection), allocation_size(0) {
+RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
+    : SegmentBase<RowGroup>(pointer.row_start, pointer.tuple_count), collection(collection_p), allocation_size(0) {
 	// deserialize the columns
-	if (pointer.data_pointers.size() != collection.GetTypes().size()) {
+	if (pointer.data_pointers.size() != collection_p.GetTypes().size()) {
 		throw IOException("Row group column count is unaligned with table column count. Corrupt file?");
 	}
 	this->column_pointers = std::move(pointer.data_pointers);
@@ -48,8 +48,8 @@ RowGroup::RowGroup(RowGroupCollection &collection, RowGroupPointer &&pointer)
 	Verify();
 }
 
-void RowGroup::MoveToCollection(RowGroupCollection &collection, idx_t new_start) {
-	this->collection = collection;
+void RowGroup::MoveToCollection(RowGroupCollection &collection_p, idx_t new_start) {
+	this->collection = collection_p;
 	this->start = new_start;
 	for (auto &column : GetColumns()) {
 		column->SetStart(new_start);
@@ -273,6 +273,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 		if (i == changed_idx) {
 			// this is the altered column: use the new column
 			row_group->columns.push_back(std::move(column_data));
+			column_data.reset();
 		} else {
 			// this column was not altered: use the data directly
 			row_group->columns.push_back(cols[i]);
@@ -487,7 +488,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 				if (column == COLUMN_IDENTIFIER_ROW_ID) {
 					// scan row id
 					D_ASSERT(result.data[i].GetType().InternalType() == ROW_TYPE);
-					result.data[i].Sequence(this->start + current_row, 1, count);
+					result.data[i].Sequence(UnsafeNumericCast<int64_t>(this->start + current_row), 1, count);
 				} else {
 					auto &col_data = GetColumn(column);
 					if (TYPE != TableScanType::TABLE_SCAN_REGULAR) {
@@ -551,7 +552,8 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 						result.data[i].SetVectorType(VectorType::FLAT_VECTOR);
 						auto result_data = FlatVector::GetData<int64_t>(result.data[i]);
 						for (size_t sel_idx = 0; sel_idx < approved_tuple_count; sel_idx++) {
-							result_data[sel_idx] = this->start + current_row + sel.get_index(sel_idx);
+							result_data[sel_idx] =
+							    UnsafeNumericCast<int64_t>(this->start + current_row + sel.get_index(sel_idx));
 						}
 					} else {
 						auto &col_data = GetColumn(column);
@@ -624,7 +626,7 @@ shared_ptr<RowVersionManager> &RowGroup::GetOrCreateVersionInfoPtr() {
 	if (!vinfo) {
 		lock_guard<mutex> lock(row_group_lock);
 		if (!version_info) {
-			version_info = make_shared<RowVersionManager>(start);
+			version_info = make_shared_ptr<RowVersionManager>(start);
 		}
 	}
 	return version_info;
@@ -703,7 +705,7 @@ void RowGroup::RevertAppend(idx_t row_group_start) {
 	auto &vinfo = GetOrCreateVersionInfo();
 	vinfo.RevertAppend(row_group_start - this->start);
 	for (auto &column : columns) {
-		column->RevertAppend(row_group_start);
+		column->RevertAppend(UnsafeNumericCast<row_t>(row_group_start));
 	}
 	this->count = MinValue<idx_t>(row_group_start - this->start, this->count);
 	Verify();
@@ -955,7 +957,7 @@ idx_t RowGroup::Delete(TransactionData transaction, DataTable &table, row_t *ids
 	for (idx_t i = 0; i < count; i++) {
 		D_ASSERT(ids[i] >= 0);
 		D_ASSERT(idx_t(ids[i]) >= this->start && idx_t(ids[i]) < this->start + this->count);
-		del_state.Delete(ids[i] - this->start);
+		del_state.Delete(ids[i] - UnsafeNumericCast<row_t>(this->start));
 	}
 	del_state.Flush();
 	return del_state.delete_count;
@@ -975,15 +977,15 @@ idx_t RowGroup::DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t
 
 void VersionDeleteState::Delete(row_t row_id) {
 	D_ASSERT(row_id >= 0);
-	idx_t vector_idx = row_id / STANDARD_VECTOR_SIZE;
-	idx_t idx_in_vector = row_id - vector_idx * STANDARD_VECTOR_SIZE;
+	idx_t vector_idx = UnsafeNumericCast<idx_t>(row_id) / STANDARD_VECTOR_SIZE;
+	idx_t idx_in_vector = UnsafeNumericCast<idx_t>(row_id) - vector_idx * STANDARD_VECTOR_SIZE;
 	if (current_chunk != vector_idx) {
 		Flush();
 
 		current_chunk = vector_idx;
 		chunk_row = vector_idx * STANDARD_VECTOR_SIZE;
 	}
-	rows[count++] = idx_in_vector;
+	rows[count++] = UnsafeNumericCast<row_t>(idx_in_vector);
 }
 
 void VersionDeleteState::Flush() {

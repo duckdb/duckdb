@@ -17,6 +17,12 @@ SELECT list_grade_up(NULL::INT[]);
 NULL
 
 query I
+SELECT list_grade_up(l) FROM VALUES ([1,2,3]), (NULL) as v(l);
+----
+[1, 2, 3]
+NULL
+
+query I
 SELECT list_grade_up([NULL])
 ----
 [1]

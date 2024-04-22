@@ -116,7 +116,7 @@ static unique_ptr<LogicalOperator> ExtractJoinRelation(unique_ptr<SingleJoinRela
 		if (children[i].get() == &rel->op) {
 			// found it! take ownership o/**/f it from the parent
 			auto result = std::move(children[i]);
-			children.erase(children.begin() + i);
+			children.erase_at(i);
 			return result;
 		}
 	}

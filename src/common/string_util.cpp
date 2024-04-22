@@ -203,7 +203,8 @@ string StringUtil::Upper(const string &str) {
 
 string StringUtil::Lower(const string &str) {
 	string copy(str);
-	transform(copy.begin(), copy.end(), copy.begin(), [](unsigned char c) { return StringUtil::CharacterToLower(c); });
+	transform(copy.begin(), copy.end(), copy.begin(),
+	          [](unsigned char c) { return StringUtil::CharacterToLower(static_cast<char>(c)); });
 	return (copy);
 }
 
@@ -215,7 +216,7 @@ bool StringUtil::IsLower(const string &str) {
 uint64_t StringUtil::CIHash(const string &str) {
 	uint32_t hash = 0;
 	for (auto c : str) {
-		hash += StringUtil::CharacterToLower(c);
+		hash += static_cast<uint32_t>(StringUtil::CharacterToLower(static_cast<char>(c)));
 		hash += hash << 10;
 		hash ^= hash >> 6;
 	}
@@ -229,7 +230,7 @@ bool StringUtil::CIEquals(const string &l1, const string &l2) {
 	if (l1.size() != l2.size()) {
 		return false;
 	}
-	const auto charmap = LowerFun::ascii_to_lower_map;
+	const auto charmap = LowerFun::ASCII_TO_LOWER_MAP;
 	for (idx_t c = 0; c < l1.size(); c++) {
 		if (charmap[(uint8_t)l1[c]] != charmap[(uint8_t)l2[c]]) {
 			return false;
@@ -239,7 +240,7 @@ bool StringUtil::CIEquals(const string &l1, const string &l2) {
 }
 
 bool StringUtil::CILessThan(const string &s1, const string &s2) {
-	const auto charmap = UpperFun::ascii_to_upper_map;
+	const auto charmap = UpperFun::ASCII_TO_UPPER_MAP;
 
 	unsigned char u1, u2;
 

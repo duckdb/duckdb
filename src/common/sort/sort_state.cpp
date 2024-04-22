@@ -171,13 +171,13 @@ void LocalSortState::Initialize(GlobalSortState &global_sort_state, BufferManage
 		auto blob_row_width = sort_layout->blob_layout.GetRowWidth();
 		blob_sorting_data = make_uniq<RowDataCollection>(
 		    *buffer_manager, RowDataCollection::EntriesPerBlock(blob_row_width), blob_row_width);
-		blob_sorting_heap = make_uniq<RowDataCollection>(*buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
+		blob_sorting_heap = make_uniq<RowDataCollection>(*buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1U, true);
 	}
 	// Payload data
 	auto payload_row_width = payload_layout->GetRowWidth();
 	payload_data = make_uniq<RowDataCollection>(*buffer_manager, RowDataCollection::EntriesPerBlock(payload_row_width),
 	                                            payload_row_width);
-	payload_heap = make_uniq<RowDataCollection>(*buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
+	payload_heap = make_uniq<RowDataCollection>(*buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1U, true);
 	// Init done
 	initialized = true;
 }
@@ -323,7 +323,7 @@ void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataColl
 		    std::accumulate(heap.blocks.begin(), heap.blocks.end(), (idx_t)0,
 		                    [](idx_t a, const unique_ptr<RowDataBlock> &b) { return a + b->byte_offset; });
 		idx_t heap_block_size = MaxValue(total_byte_offset, (idx_t)Storage::BLOCK_SIZE);
-		auto ordered_heap_block = make_uniq<RowDataBlock>(MemoryTag::ORDER_BY, *buffer_manager, heap_block_size, 1);
+		auto ordered_heap_block = make_uniq<RowDataBlock>(MemoryTag::ORDER_BY, *buffer_manager, heap_block_size, 1U);
 		ordered_heap_block->count = count;
 		ordered_heap_block->byte_offset = total_byte_offset;
 		auto ordered_heap_handle = buffer_manager->Pin(ordered_heap_block->block);

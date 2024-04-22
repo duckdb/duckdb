@@ -41,7 +41,7 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_n
 		if (!type_name.typmods || type_name.typmods->length == 0) {
 			throw ParserException("Enum needs a set of entries");
 		}
-		Vector enum_vector(LogicalType::VARCHAR, type_name.typmods->length);
+		Vector enum_vector(LogicalType::VARCHAR, NumericCast<idx_t>(type_name.typmods->length));
 		auto string_data = FlatVector::GetData<string_t>(enum_vector);
 		idx_t pos = 0;
 		for (auto node = type_name.typmods->head; node; node = node->next) {
@@ -52,7 +52,7 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_n
 			}
 			string_data[pos++] = StringVector::AddString(enum_vector, constant_value->val.val.str);
 		}
-		return LogicalType::ENUM(enum_vector, type_name.typmods->length);
+		return LogicalType::ENUM(enum_vector, NumericCast<idx_t>(type_name.typmods->length));
 	} else if (base_type == LogicalTypeId::STRUCT) {
 		if (!type_name.typmods || type_name.typmods->length == 0) {
 			throw ParserException("Struct needs a name and entries");
@@ -154,12 +154,12 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_n
 					throw ParserException("Negative modifier not supported");
 				}
 				if (modifier_idx == 0) {
-					width = const_val.val.val.ival;
+					width = NumericCast<idx_t>(const_val.val.val.ival);
 					if (base_type == LogicalTypeId::BIT && const_val.location != -1) {
 						width = 0;
 					}
 				} else if (modifier_idx == 1) {
-					scale = const_val.val.val.ival;
+					scale = NumericCast<idx_t>(const_val.val.val.ival);
 				} else {
 					throw ParserException("A maximum of two modifiers is supported");
 				}
@@ -255,7 +255,7 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_n
 			} else if (array_size > static_cast<int64_t>(ArrayType::MAX_ARRAY_SIZE)) {
 				throw ParserException("Arrays must have a size of at most %d", ArrayType::MAX_ARRAY_SIZE);
 			} else {
-				result_type = LogicalType::ARRAY(result_type, array_size);
+				result_type = LogicalType::ARRAY(result_type, NumericCast<idx_t>(array_size));
 			}
 		}
 	}

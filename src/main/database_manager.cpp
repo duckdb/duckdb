@@ -50,7 +50,7 @@ optional_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &co
 
 	const auto name = attached_db->GetName();
 	attached_db->oid = ModifyCatalog();
-	DependencyList dependencies;
+	LogicalDependencyList dependencies;
 	if (default_database.empty()) {
 		default_database = name;
 	}

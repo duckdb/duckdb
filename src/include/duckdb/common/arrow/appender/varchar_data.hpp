@@ -80,8 +80,9 @@ struct ArrowVarcharData {
 			auto string_length = OP::GetLength(data[source_idx]);
 
 			// append the offset data
-			auto current_offset = last_offset + string_length;
-			if (!LARGE_STRING && (int64_t)last_offset + string_length > NumericLimits<int32_t>::Maximum()) {
+			auto current_offset = UnsafeNumericCast<idx_t>(last_offset) + string_length;
+			if (!LARGE_STRING &&
+			    UnsafeNumericCast<idx_t>(last_offset) + string_length > NumericLimits<int32_t>::Maximum()) {
 				D_ASSERT(append_data.options.arrow_offset_size == ArrowOffsetSize::REGULAR);
 				throw InvalidInputException(
 				    "Arrow Appender: The maximum total string size for regular string buffers is "
@@ -182,7 +183,8 @@ struct ArrowVarcharToStringViewData {
 		// Buffer 2 is our only data buffer, could theoretically be more [ buffers ]
 		result->buffers[2] = append_data.GetAuxBuffer().data();
 		// Buffer 3 is the data-buffer lengths buffer, and we also populate it in to finalize
-		reinterpret_cast<int64_t *>(append_data.GetBufferSizeBuffer().data())[0] = append_data.offset;
+		reinterpret_cast<int64_t *>(append_data.GetBufferSizeBuffer().data())[0] =
+		    UnsafeNumericCast<int64_t>(append_data.offset);
 		result->buffers[3] = append_data.GetBufferSizeBuffer().data();
 	}
 };

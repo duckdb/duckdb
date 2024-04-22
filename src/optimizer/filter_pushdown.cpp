@@ -3,14 +3,15 @@
 #include "duckdb/optimizer/filter_combiner.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
+#include "duckdb/planner/operator/logical_window.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 
 namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
 
-FilterPushdown::FilterPushdown(Optimizer &optimizer, bool rewrite_mark_joins)
-    : optimizer(optimizer), combiner(optimizer.context), rewrite_mark_joins(rewrite_mark_joins) {
+FilterPushdown::FilterPushdown(Optimizer &optimizer, bool convert_mark_joins)
+    : optimizer(optimizer), combiner(optimizer.context), convert_mark_joins(convert_mark_joins) {
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> op) {
@@ -44,6 +45,8 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 		return PushdownGet(std::move(op));
 	case LogicalOperatorType::LOGICAL_LIMIT:
 		return PushdownLimit(std::move(op));
+	case LogicalOperatorType::LOGICAL_WINDOW:
+		return PushdownWindow(std::move(op));
 	default:
 		return FinishPushdown(std::move(op));
 	}
@@ -145,7 +148,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushFinalFilters(unique_ptr<LogicalO
 unique_ptr<LogicalOperator> FilterPushdown::FinishPushdown(unique_ptr<LogicalOperator> op) {
 	// unhandled type, first perform filter pushdown in its children
 	for (auto &child : op->children) {
-		FilterPushdown pushdown(optimizer, rewrite_mark_joins);
+		FilterPushdown pushdown(optimizer, convert_mark_joins);
 		child = pushdown.Rewrite(std::move(child));
 	}
 	// now push any existing filters

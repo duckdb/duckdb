@@ -204,8 +204,15 @@ void CommitState::WriteDelete(DeleteInfo &info) {
 		delete_chunk->Initialize(Allocator::DefaultAllocator(), delete_types);
 	}
 	auto rows = FlatVector::GetData<row_t>(delete_chunk->data[0]);
-	for (idx_t i = 0; i < info.count; i++) {
-		rows[i] = info.base_row + info.rows[i];
+	if (info.is_consecutive) {
+		for (idx_t i = 0; i < info.count; i++) {
+			rows[i] = UnsafeNumericCast<int64_t>(info.base_row + i);
+		}
+	} else {
+		auto delete_rows = info.GetRows();
+		for (idx_t i = 0; i < info.count; i++) {
+			rows[i] = UnsafeNumericCast<int64_t>(info.base_row) + delete_rows[i];
+		}
 	}
 	delete_chunk->SetCardinality(info.count);
 	log->WriteDelete(*delete_chunk);
@@ -238,7 +245,7 @@ void CommitState::WriteUpdate(UpdateInfo &info) {
 	auto row_ids = FlatVector::GetData<row_t>(update_chunk->data[1]);
 	idx_t start = column_data.start + info.vector_index * STANDARD_VECTOR_SIZE;
 	for (idx_t i = 0; i < info.N; i++) {
-		row_ids[info.tuples[i]] = start + info.tuples[i];
+		row_ids[info.tuples[i]] = UnsafeNumericCast<int64_t>(start + info.tuples[i]);
 	}
 	if (column_data.type.id() == LogicalTypeId::VALIDITY) {
 		// zero-initialize the booleans
@@ -310,7 +317,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 			WriteDelete(*info);
 		}
 		// mark the tuples as committed
-		info->version_info->CommitDelete(info->vector_idx, commit_id, info->rows, info->count);
+		info->version_info->CommitDelete(info->vector_idx, commit_id, *info);
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {
@@ -351,7 +358,7 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 		auto info = reinterpret_cast<DeleteInfo *>(data);
 		info->table->info->cardinality += info->count;
 		// revert the commit by writing the (uncommitted) transaction_id back into the version info
-		info->version_info->CommitDelete(info->vector_idx, transaction_id, info->rows, info->count);
+		info->version_info->CommitDelete(info->vector_idx, transaction_id, *info);
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {

@@ -193,7 +193,7 @@ BindInfo TableScanGetBindInfo(const optional_ptr<FunctionData> bind_data_p) {
 	return BindInfo(bind_data.table);
 }
 
-void TableScanDependency(DependencyList &entries, const FunctionData *bind_data_p) {
+void TableScanDependency(LogicalDependencyList &entries, const FunctionData *bind_data_p) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 	entries.AddDependency(bind_data.table);
 }
@@ -305,9 +305,6 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 		// no indexes or no filters: skip the pushdown
 		return;
 	}
-
-	// Lazily initialize any unknown indexes that might have been loaded by an extension
-	storage.info->InitializeIndexes(context);
 
 	// behold
 	storage.info->indexes.Scan([&](Index &index) {

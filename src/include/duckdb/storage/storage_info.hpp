@@ -23,7 +23,7 @@ struct FileHandle;
 //! The maximum block id is 2^62
 #define MAXIMUM_BLOCK 4611686018427388000LL
 //! The default block allocation size.
-#define DEFAULT_BLOCK_ALLOC_SIZE 262144
+#define DEFAULT_BLOCK_ALLOC_SIZE 262144ULL
 //! The minimum block allocation size. This is the minimum size we test in our nightly tests.
 #define MIN_BLOCK_ALLOC_SIZE 16384
 
@@ -31,7 +31,7 @@ using block_id_t = int64_t;
 
 struct Storage {
 	//! The size of a hard disk sector, only really needed for Direct IO
-	constexpr static idx_t SECTOR_SIZE = 4096;
+	constexpr static idx_t SECTOR_SIZE = 4096U;
 	//! Block header size for blocks written to the storage
 	constexpr static idx_t BLOCK_HEADER_SIZE = sizeof(uint64_t);
 	//! Size of a memory slot managed by the StorageManager and the BlockManager.
@@ -41,7 +41,7 @@ struct Storage {
 	constexpr static idx_t BLOCK_SIZE = BLOCK_ALLOC_SIZE - BLOCK_HEADER_SIZE;
 	//! The size of the headers. This should be small and written more or less atomically by the hard disk. We default
 	//! to the page size, which is 4KB. (1 << 12)
-	constexpr static idx_t FILE_HEADER_SIZE = 4096;
+	constexpr static idx_t FILE_HEADER_SIZE = 4096U;
 	//! The number of rows per row group (must be a multiple of the vector size)
 	constexpr static const idx_t ROW_GROUP_SIZE = STANDARD_ROW_GROUPS_SIZE;
 	//! The number of vectors per row group

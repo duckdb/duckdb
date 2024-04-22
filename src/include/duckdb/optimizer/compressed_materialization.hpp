@@ -8,15 +8,15 @@
 
 #pragma once
 
-#include "duckdb/common/unordered_set.hpp"
-#include "duckdb/function/scalar/compressed_materialization_functions.hpp"
+#include "duckdb/common/types.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 
+class Optimizer;
+class ClientContext;
 class LogicalOperator;
-struct JoinCondition;
 
 struct CMChildInfo {
 public:
@@ -75,14 +75,11 @@ typedef column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map_t;
 //! but only if the data enters a materializing operator
 class CompressedMaterialization {
 public:
-	explicit CompressedMaterialization(ClientContext &context, Binder &binder, statistics_map_t &&statistics_map);
+	CompressedMaterialization(Optimizer &optimizer, LogicalOperator &root, statistics_map_t &statistics_map);
 
 	void Compress(unique_ptr<LogicalOperator> &op);
 
 private:
-	//! Depth-first traversal of the plan
-	void CompressInternal(unique_ptr<LogicalOperator> &op);
-
 	//! Compress materializing operators
 	void CompressAggregate(unique_ptr<LogicalOperator> &op);
 	void CompressDistinct(unique_ptr<LogicalOperator> &op);
@@ -102,7 +99,7 @@ private:
 	bool TryCompressChild(CompressedMaterializationInfo &info, const CMChildInfo &child_info,
 	                      vector<unique_ptr<CompressExpression>> &compress_expressions);
 	void CreateCompressProjection(unique_ptr<LogicalOperator> &child_op,
-	                              vector<unique_ptr<CompressExpression>> &&compress_exprs,
+	                              vector<unique_ptr<CompressExpression>> compress_exprs,
 	                              CompressedMaterializationInfo &info, CMChildInfo &child_info);
 	void CreateDecompressProjection(unique_ptr<LogicalOperator> &op, CompressedMaterializationInfo &info);
 
@@ -122,12 +119,12 @@ private:
 	                                           const BaseStatistics &stats);
 
 private:
+	Optimizer &optimizer;
 	ClientContext &context;
-	Binder &binder;
-	statistics_map_t statistics_map;
-	unordered_set<idx_t> compression_table_indices;
-	unordered_set<idx_t> decompression_table_indices;
+	//! The root of the query plan
 	optional_ptr<LogicalOperator> root;
+	//! The map of ColumnBinding -> statistics for the various nodes
+	statistics_map_t &statistics_map;
 };
 
 } // namespace duckdb

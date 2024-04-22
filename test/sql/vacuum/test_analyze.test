@@ -14,7 +14,7 @@ statement ok
 analyze
 
 statement ok
-vacuum
+vacuum;
 
 statement error
 vacuum test

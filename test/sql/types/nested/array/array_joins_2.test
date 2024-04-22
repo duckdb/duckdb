@@ -1,0 +1,42 @@
+# name: test/sql/types/nested/array/array_joins_2.test
+# group: [array]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA verify_external
+
+statement ok
+CREATE TABLE test_array (c1 int[3]);
+
+statement ok
+INSERT INTO test_array values (null), (array[1, 2, 3]), (array[4, 5, 6]), (array[7, 8, 9]);
+
+query II rowsort
+SELECT * FROM test_array JOIN test_array AS t2 ON t2.c1 = test_array.c1;
+----
+[1, 2, 3]	[1, 2, 3]
+[4, 5, 6]	[4, 5, 6]
+[7, 8, 9]	[7, 8, 9]
+
+statement ok
+INSERT INTO test_array values (null);
+
+query II rowsort
+SELECT * FROM test_array JOIN test_array AS t2 ON t2.c1 = test_array.c1;
+----
+[1, 2, 3]	[1, 2, 3]
+[4, 5, 6]	[4, 5, 6]
+[7, 8, 9]	[7, 8, 9]
+
+statement ok
+INSERT INTO test_array values (array[10, 11, 12]);
+
+query II
+SELECT * FROM test_array JOIN test_array AS t2 ON t2.c1 = test_array.c1 ORDER BY test_array.c1;
+----
+[1, 2, 3]	[1, 2, 3]
+[4, 5, 6]	[4, 5, 6]
+[7, 8, 9]	[7, 8, 9]
+[10, 11, 12]	[10, 11, 12]

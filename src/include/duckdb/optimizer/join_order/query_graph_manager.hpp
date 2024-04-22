@@ -9,13 +9,12 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/pair.hpp"
-#include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/vector.hpp"
-
 #include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/optimizer/join_order/join_relation.hpp"
 #include "duckdb/optimizer/join_order/query_graph.hpp"
@@ -26,6 +25,8 @@
 #include <functional>
 
 namespace duckdb {
+
+class QueryGraphEdges;
 
 struct GenerateJoinRelation {
 	GenerateJoinRelation(optional_ptr<JoinRelationSet> set, unique_ptr<LogicalOperator> op_p)
@@ -79,7 +80,7 @@ public:
 	bool Build(LogicalOperator &op);
 
 	//! Reconstruct the logical plan using the plan found by the plan enumerator
-	unique_ptr<LogicalOperator> Reconstruct(unique_ptr<LogicalOperator> plan, JoinNode &node);
+	unique_ptr<LogicalOperator> Reconstruct(unique_ptr<LogicalOperator> plan, JoinNode node);
 
 	//! Get a reference to the QueryGraphEdges structure that stores edges between
 	//! nodes and hypernodes.

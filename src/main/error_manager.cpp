@@ -10,7 +10,7 @@ struct DefaultError {
 	const char *error;
 };
 
-static DefaultError internal_errors[] = {
+static const DefaultError internal_errors[] = {
     {ErrorType::UNSIGNED_EXTENSION,
      "Extension \"%s\" could not be loaded because its signature is either missing or invalid and unsigned extensions "
      "are disabled by configuration (allow_unsigned_extensions)"},

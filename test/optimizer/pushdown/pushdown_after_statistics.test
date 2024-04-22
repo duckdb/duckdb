@@ -32,3 +32,11 @@ explain select * from big_probe, into_semi, into_get where c in (select e from m
 ----
 logical_opt	<REGEX>:.*SEMI.*
 
+
+statement ok
+select t1.a from big_probe t1
+where t1.a in 
+	(select t2.b 
+	from big_probe t2
+	where t2.b in (1206, 1202, 1322, 1204, 1370)
+	and t2.b not in (select t2_filter.a from big_probe t2_filter));
