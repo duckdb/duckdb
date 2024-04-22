@@ -67,7 +67,7 @@ private:
 
 	const ReadCSVData &bind_data;
 
-	vector<LogicalType> file_schema;
+	CSVColumnSchema file_schema;
 
 	bool single_threaded = false;
 

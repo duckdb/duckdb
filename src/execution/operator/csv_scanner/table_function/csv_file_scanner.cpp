@@ -16,7 +16,7 @@ void CSVColumnSchema::Initialize(vector<string> &names, vector<LogicalType> &typ
 	}
 }
 
-bool CSVColumnSchema::Empty() {
+bool CSVColumnSchema::Empty() const {
 	return columns.empty();
 }
 
@@ -137,15 +137,16 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 	if (options.auto_detect && file_idx > 0) {
 		CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
 		auto result = sniffer.SniffCSV();
-		if (!options.file_options.filename && !options.file_options.hive_partitioning) {
-			if (file_schema.Empty()) {
-				throw InternalException(
-				    "CSV File Schema can't be empty since at this point we already sniffed one file");
+		if (file_schema.Empty()) {
+			file_schema.Initialize(result.names, result.return_types);
+		} else {
+			if (!options.file_options.filename && !options.file_options.hive_partitioning) {
+				// We do schema matching here
+				throw InternalException("Oh noo|!!");
 			}
-
-			// We do schema matching here
 		}
 	}
+
 	if (options.dialect_options.num_cols == 0) {
 		// We need to define the number of columns, if the sniffer is not running this must be in the sql_type_list
 		options.dialect_options.num_cols = options.sql_type_list.size();

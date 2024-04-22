@@ -26,7 +26,7 @@ struct CSVColumnInfo {
 //! Basic CSV Schema
 struct CSVColumnSchema {
 	void Initialize(vector<string> &names, vector<LogicalType> &types);
-	bool Empty();
+	bool Empty() const;
 	bool SchemasMatch(string &error_message, vector<string> &names, vector<LogicalType> &types);
 	vector<CSVColumnInfo> columns;
 	unordered_map<string, idx_t> name_idx_map;
@@ -43,7 +43,7 @@ public:
 	//! Constructor for new CSV Files, we must initialize the buffer manager and the state machine
 	//! Path to this file
 	CSVFileScan(ClientContext &context, const string &file_path, const CSVReaderOptions &options, const idx_t file_idx,
-	            const ReadCSVData &bind_data, const vector<column_t> &column_ids, const CSVColumnSchema &file_schema);
+	            const ReadCSVData &bind_data, const vector<column_t> &column_ids, CSVColumnSchema &file_schema);
 
 	CSVFileScan(ClientContext &context, const string &file_name, CSVReaderOptions &options);
 
