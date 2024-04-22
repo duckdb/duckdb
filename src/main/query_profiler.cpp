@@ -153,7 +153,6 @@ void QueryProfiler::EndQuery() {
 	if (IsEnabled() && !is_explain_analyze) {
 		// initialize the query info
 		if (root) {
-			query_info = make_uniq<QueryProfiler::QueryInfo>();
 			query_info->query = query;
 			query_info->settings = ProfilingInfo(ClientConfig::GetConfig(context).profiler_settings);
 			if (query_info->settings.Enabled(MetricsType::OPERATOR_TIMING)) {
@@ -244,6 +243,7 @@ void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
 	this->query_requires_profiling = false;
 	ClientConfig &config = ClientConfig::GetConfig(context);
 	this->root = CreateTree(root_op, config.profiler_settings, 0);
+	this->query_info = make_uniq<QueryProfiler::QueryInfo>();
 	if (!query_requires_profiling) {
 		// query does not require profiling: disable profiling for this query
 		this->running = false;
@@ -495,8 +495,8 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 string QueryProfiler::JSONSanitize(const std::string &text) {
 	string result;
 	result.reserve(text.size());
-	for (idx_t i = 0; i < text.size(); i++) {
-		switch (text[i]) {
+	for (char i : text) {
+		switch (i) {
 		case '\b':
 			result += "\\b";
 			break;
@@ -519,7 +519,7 @@ string QueryProfiler::JSONSanitize(const std::string &text) {
 			result += "\\\\";
 			break;
 		default:
-			result += text[i];
+			result += i;
 			break;
 		}
 	}
@@ -565,7 +565,7 @@ static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, idx
 	auto &settings = node.profiling_info;
 
 	ss << string(depth * 3, ' ') << " {\n";
-	ss << string(depth * 3, ' ') << "   \"name\": \"" + QueryProfiler::JSONSanitize(node.name) + "\",\n";
+	ss << string(depth * 3, ' ') << R"(   "name": ")" + QueryProfiler::JSONSanitize(node.name) + "\",\n";
 	settings.PrintAllMetricsToSS(ss, string(depth * 3, ' '));
 	if (settings.Enabled(MetricsType::EXTRA_INFO)) {
 		ss << string(depth * 3, ' ') << "   \"timings\": [";
