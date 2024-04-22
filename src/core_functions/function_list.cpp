@@ -385,7 +385,6 @@ static const StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(WeekFun),
 	DUCKDB_SCALAR_FUNCTION_SET(WeekDayFun),
 	DUCKDB_SCALAR_FUNCTION_SET(WeekOfYearFun),
-	DUCKDB_SCALAR_FUNCTION(WhichSecretFun),
 	DUCKDB_SCALAR_FUNCTION_SET(BitwiseXorFun),
 	DUCKDB_SCALAR_FUNCTION_SET(YearFun),
 	DUCKDB_SCALAR_FUNCTION_SET(YearWeekFun),

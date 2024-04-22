@@ -86,7 +86,7 @@ typedef struct {
 } dictionary_compression_header_t;
 
 struct DictionaryCompressionStorage {
-	static constexpr float MINIMUM_COMPRESSION_RATIO = 1.2;
+	static constexpr float MINIMUM_COMPRESSION_RATIO = 1.2F;
 	static constexpr uint16_t DICTIONARY_HEADER_SIZE = sizeof(dictionary_compression_header_t);
 	static constexpr size_t COMPACTION_FLUSH_LIMIT = (size_t)Storage::BLOCK_SIZE / 5 * 4;
 
@@ -402,7 +402,7 @@ idx_t DictionaryCompressionStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	auto req_space =
 	    RequiredSpace(state.current_tuple_count, state.current_unique_count, state.current_dict_size, width);
 
-	return MINIMUM_COMPRESSION_RATIO * (state.segment_count * Storage::BLOCK_SIZE + req_space);
+	return NumericCast<idx_t>(MINIMUM_COMPRESSION_RATIO * (state.segment_count * Storage::BLOCK_SIZE + req_space));
 }
 
 //===--------------------------------------------------------------------===//

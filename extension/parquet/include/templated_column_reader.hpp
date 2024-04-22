@@ -9,6 +9,7 @@
 #pragma once
 
 #include "column_reader.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 
@@ -43,7 +44,7 @@ public:
 public:
 	void AllocateDict(idx_t size) {
 		if (!dict) {
-			dict = make_shared<ResizeableBuffer>(GetAllocator(), size);
+			dict = make_shared_ptr<ResizeableBuffer>(GetAllocator(), size);
 		} else {
 			dict->resize(GetAllocator(), size);
 		}

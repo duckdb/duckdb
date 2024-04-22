@@ -387,9 +387,6 @@ static void ArrowToDuckDBMapVerify(Vector &vector, idx_t count) {
 	case MapInvalidReason::NULL_KEY: {
 		throw InvalidInputException("Arrow map contains NULL as map key, which isn't supported by DuckDB map type");
 	}
-	case MapInvalidReason::NULL_KEY_LIST: {
-		throw InvalidInputException("Arrow map contains NULL as key list, which isn't supported by DuckDB map type");
-	}
 	default: {
 		throw InternalException("MapInvalidReason not implemented");
 	}

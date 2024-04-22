@@ -24,9 +24,11 @@ project(DuckDB)
 
 find_package(Threads REQUIRED)
 
+set(DUCKDB_MODULE_BASE_DIR "${CMAKE_CURRENT_LIST_DIR}")
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-set (CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD "11" CACHE STRING "C++ standard to enforce")
 
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -715,6 +717,8 @@ endif()
 set(LOCAL_EXTENSION_REPO FALSE)
 if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_TIDY)
   if (NOT Python3_FOUND)
+    add_custom_target(
+          duckdb_local_extension_repo ALL)
     MESSAGE(STATUS "Could not find python3, create extension directory step will be skipped")
   else()
     add_custom_target(
@@ -827,7 +831,7 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY EXTENSION_VERS
     TARGET ${TARGET_NAME}
     POST_BUILD
     COMMAND
-    ${CMAKE_COMMAND} -DEXTENSION=$<TARGET_FILE:${TARGET_NAME}> -DPLATFORM_FILE=${DuckDB_BINARY_DIR}/duckdb_platform_out -DDUCKDB_VERSION="${DUCKDB_NORMALIZED_VERSION}" -DEXTENSION_VERSION="${EXTENSION_VERSION}" -DNULL_FILE=${CMAKE_CURRENT_FUNCTION_LIST_DIR}/scripts/null.txt -P ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/scripts/append_metadata.cmake
+    ${CMAKE_COMMAND} -DEXTENSION=$<TARGET_FILE:${TARGET_NAME}> -DPLATFORM_FILE=${DuckDB_BINARY_DIR}/duckdb_platform_out -DDUCKDB_VERSION="${DUCKDB_NORMALIZED_VERSION}" -DEXTENSION_VERSION="${EXTENSION_VERSION}" -DNULL_FILE=${DUCKDB_MODULE_BASE_DIR}/scripts/null.txt -P ${DUCKDB_MODULE_BASE_DIR}/scripts/append_metadata.cmake
     )
   add_dependencies(${TARGET_NAME} duckdb_platform)
   if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_TIDY)
