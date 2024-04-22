@@ -141,6 +141,10 @@ void CSVReaderOptions::SetNewline(const string &input) {
 	}
 }
 
+bool CSVReaderOptions::IgnoreErrors(){
+	return ignore_errors.GetValue() && store_rejects.GetValue();
+}
+
 void CSVReaderOptions::SetDateFormat(LogicalTypeId type, const string &format, bool read_format) {
 	string error;
 	if (read_format) {
