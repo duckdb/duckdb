@@ -286,6 +286,18 @@ select distinct typeof(a) from read_json_auto('data/json/map_of_struct_with_null
 ----
 MAP(VARCHAR, STRUCT(a JSON[]))
 
+# Candidate types are properly handled for map inference
+query I
+SELECT distinct typeof(a) FROM read_json_auto('data/json/map_of_dates.jsonl')
+----
+MAP(VARCHAR, DATE)
+
+# Mixed candidate types are also handled
+query I
+SELECT distinct typeof(a) FROM read_json_auto('data/json/map_of_mixed_date_timestamps.jsonl')
+----
+MAP(VARCHAR, VARCHAR)
+
 # Incompatible types are handled correctly
 query T
 select distinct typeof(a) from read_json_auto('data/json/map_incompatible.jsonl', map_inference_threshold=10)

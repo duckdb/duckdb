@@ -543,8 +543,26 @@ static void MergeNodes(JSONStructureNode &merged, const JSONStructureNode &node,
 			}
 			break;
 		}
-		default:
-			merged.GetOrCreateDescription(desc.type);
+		default: {
+			const auto &prev_size = merged.descriptions.size();
+			const bool prev_was_null = prev_size == 1 && merged.descriptions[0].type == LogicalTypeId::SQLNULL;
+			auto &merged_desc = merged.GetOrCreateDescription(desc.type);
+			if (desc.type == LogicalTypeId::SQLNULL) {
+				break;
+			}
+
+			if (prev_was_null || prev_size != merged.descriptions.size()) {
+				// New non-null description, copy the last candidate type
+				if (!desc.candidate_types.empty()) {
+					merged_desc.candidate_types = {desc.candidate_types.back()};
+				}
+			} else if (!merged_desc.candidate_types.empty() &&
+			           (desc.candidate_types.empty() ||
+			            merged_desc.candidate_types.back() != desc.candidate_types.back())) {
+				// Remove candidate type since it is not equal to the last candidate type of desc
+				merged_desc.candidate_types.clear();
+			}
+		}
 		}
 	}
 }
@@ -634,8 +652,9 @@ static double CalculateTypeSimilarity(const LogicalType &merged, const LogicalTy
 		return CalculateTypeSimilarity(merged_child_type, type_child_type, max_depth, depth + 1);
 	}
 	default:
-		// This is unreachable if types were merged properly
-		throw InternalException("Unexpected merged type in map detection");
+		// This is only reachable if type has been inferred using candidate_types, but candidate_types were not
+		// consistent among all map values
+		return 1;
 	}
 }
 
