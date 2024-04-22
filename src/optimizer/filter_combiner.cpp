@@ -67,7 +67,7 @@ FilterResult FilterCombiner::AddConstantComparison(vector<ExpressionValueInforma
 		switch (comparison) {
 		case ValueComparisonResult::PRUNE_LEFT:
 			// prune the entry from the info list
-			info_list.erase(info_list.begin() + i);
+			info_list.erase_at(i);
 			i--;
 			break;
 		case ValueComparisonResult::PRUNE_RIGHT:
@@ -569,6 +569,16 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			auto &fst_const_value_expr = func.children[1]->Cast<BoundConstantExpression>();
 			auto &type = fst_const_value_expr.value.type();
 
+			if ((type.IsNumeric() || type.id() == LogicalTypeId::VARCHAR || type.id() == LogicalTypeId::BOOLEAN) &&
+			    func.children.size() == 2) {
+				auto bound_eq_comparison =
+				    make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, fst_const_value_expr.value);
+				table_filters.PushFilter(column_index, std::move(bound_eq_comparison));
+				table_filters.PushFilter(column_index, make_uniq<IsNotNullFilter>());
+				remaining_filters.erase_at(rem_fil_idx);
+				continue;
+			}
+
 			//! Check if values are consecutive, if yes transform them to >= <= (only for integers)
 			// e.g. if we have x IN (1, 2, 3, 4, 5) we transform this into x >= 1 AND x <= 5
 			if (!type.IsIntegral()) {
@@ -607,7 +617,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			table_filters.PushFilter(column_index, std::move(upper_bound));
 			table_filters.PushFilter(column_index, make_uniq<IsNotNullFilter>());
 
-			remaining_filters.erase(remaining_filters.begin() + rem_fil_idx);
+			remaining_filters.erase_at(rem_fil_idx);
 		}
 	}
 
@@ -971,7 +981,7 @@ unique_ptr<Expression> FilterCombiner::FindTransitiveFilter(Expression &expr) {
 			auto &comparison = remaining_filters[i]->Cast<BoundComparisonExpression>();
 			if (expr.Equals(*comparison.right) && comparison.type != ExpressionType::COMPARE_NOTEQUAL) {
 				auto filter = std::move(remaining_filters[i]);
-				remaining_filters.erase(remaining_filters.begin() + i);
+				remaining_filters.erase_at(i);
 				return filter;
 			}
 		}

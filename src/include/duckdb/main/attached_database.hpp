@@ -61,10 +61,11 @@ public:
 	~AttachedDatabase() override;
 
 	//! Initializes the catalog and storage of the attached database.
-	void Initialize();
+	void Initialize(const optional_idx block_alloc_size, optional_ptr<ClientContext> context = nullptr);
 	void Close();
 
 	Catalog &ParentCatalog() override;
+	const Catalog &ParentCatalog() const override;
 	StorageManager &GetStorageManager();
 	Catalog &GetCatalog();
 	TransactionManager &GetTransactionManager();
@@ -79,6 +80,7 @@ public:
 	bool IsReadOnly() const;
 	bool IsInitialDatabase() const;
 	void SetInitialDatabase();
+	void SetReadOnlyDatabase();
 
 	static bool NameIsReserved(const string &name);
 	static string ExtractDatabaseName(const string &dbpath, FileSystem &fs);

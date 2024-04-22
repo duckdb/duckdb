@@ -8,6 +8,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/common/exception/http_exception.hpp"
+#include "duckdb/common/helper.hpp"
 #endif
 
 #include <duckdb/function/scalar/string_functions.hpp>
@@ -156,39 +157,41 @@ void AWSEnvironmentCredentialsProvider::SetExtensionOptionValue(string key, cons
 }
 
 void AWSEnvironmentCredentialsProvider::SetAll() {
-	this->SetExtensionOptionValue("s3_region", this->DEFAULT_REGION_ENV_VAR);
-	this->SetExtensionOptionValue("s3_region", this->REGION_ENV_VAR);
-	this->SetExtensionOptionValue("s3_access_key_id", this->ACCESS_KEY_ENV_VAR);
-	this->SetExtensionOptionValue("s3_secret_access_key", this->SECRET_KEY_ENV_VAR);
-	this->SetExtensionOptionValue("s3_session_token", this->SESSION_TOKEN_ENV_VAR);
-	this->SetExtensionOptionValue("s3_endpoint", this->DUCKDB_ENDPOINT_ENV_VAR);
-	this->SetExtensionOptionValue("s3_use_ssl", this->DUCKDB_USE_SSL_ENV_VAR);
+	this->SetExtensionOptionValue("s3_region", DEFAULT_REGION_ENV_VAR);
+	this->SetExtensionOptionValue("s3_region", REGION_ENV_VAR);
+	this->SetExtensionOptionValue("s3_access_key_id", ACCESS_KEY_ENV_VAR);
+	this->SetExtensionOptionValue("s3_secret_access_key", SECRET_KEY_ENV_VAR);
+	this->SetExtensionOptionValue("s3_session_token", SESSION_TOKEN_ENV_VAR);
+	this->SetExtensionOptionValue("s3_endpoint", DUCKDB_ENDPOINT_ENV_VAR);
+	this->SetExtensionOptionValue("s3_use_ssl", DUCKDB_USE_SSL_ENV_VAR);
 }
 
 S3AuthParams AWSEnvironmentCredentialsProvider::CreateParams() {
 	S3AuthParams params;
 
-	params.region = this->DEFAULT_REGION_ENV_VAR;
-	params.region = this->REGION_ENV_VAR;
-	params.access_key_id = this->ACCESS_KEY_ENV_VAR;
-	params.secret_access_key = this->SECRET_KEY_ENV_VAR;
-	params.session_token = this->SESSION_TOKEN_ENV_VAR;
-	params.endpoint = this->DUCKDB_ENDPOINT_ENV_VAR;
-	params.use_ssl = this->DUCKDB_USE_SSL_ENV_VAR;
+	params.region = DEFAULT_REGION_ENV_VAR;
+	params.region = REGION_ENV_VAR;
+	params.access_key_id = ACCESS_KEY_ENV_VAR;
+	params.secret_access_key = SECRET_KEY_ENV_VAR;
+	params.session_token = SESSION_TOKEN_ENV_VAR;
+	params.endpoint = DUCKDB_ENDPOINT_ENV_VAR;
+	params.use_ssl = DUCKDB_USE_SSL_ENV_VAR;
 
 	return params;
 }
 
-unique_ptr<S3AuthParams> S3AuthParams::ReadFromStoredCredentials(FileOpener *opener, string path) {
+unique_ptr<S3AuthParams> S3AuthParams::ReadFromStoredCredentials(optional_ptr<FileOpener> opener, string path) {
 	if (!opener) {
 		return nullptr;
 	}
-	auto context = opener->TryGetClientContext();
-	if (!context) {
+	auto db = opener->TryGetDatabase();
+	if (!db) {
 		return nullptr;
 	}
-	auto &secret_manager = context->db->GetSecretManager();
-	auto transaction = CatalogTransaction::GetSystemCatalogTransaction(*context);
+	auto &secret_manager = db->GetSecretManager();
+	auto context = opener->TryGetClientContext();
+	auto transaction = context ? CatalogTransaction::GetSystemCatalogTransaction(*context)
+	                           : CatalogTransaction::GetSystemTransaction(*db);
 
 	auto secret_match = secret_manager.LookupSecret(transaction, path, "s3");
 	if (!secret_match.HasMatch()) {
@@ -208,7 +211,7 @@ unique_ptr<S3AuthParams> S3AuthParams::ReadFromStoredCredentials(FileOpener *ope
 	return make_uniq<S3AuthParams>(S3SecretHelper::GetParams(kv_secret));
 }
 
-S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener, FileOpenerInfo &info) {
+S3AuthParams S3AuthParams::ReadFrom(optional_ptr<FileOpener> opener, FileOpenerInfo &info) {
 	S3AuthParams result;
 	Value value;
 
@@ -321,7 +324,7 @@ S3FileHandle::~S3FileHandle() {
 	Close();
 }
 
-S3ConfigParams S3ConfigParams::ReadFrom(FileOpener *opener) {
+S3ConfigParams S3ConfigParams::ReadFrom(optional_ptr<FileOpener> opener) {
 	uint64_t uploader_max_filesize;
 	uint64_t max_parts_per_file;
 	uint64_t max_upload_threads;
@@ -350,7 +353,7 @@ S3ConfigParams S3ConfigParams::ReadFrom(FileOpener *opener) {
 
 void S3FileHandle::Close() {
 	auto &s3fs = (S3FileSystem &)file_system;
-	if ((flags & FileFlags::FILE_FLAGS_WRITE) && !upload_finalized) {
+	if (flags.OpenForWriting() && !upload_finalized) {
 		s3fs.FlushAllBuffers(*this);
 		if (parts_uploaded) {
 			s3fs.FinalizeMultipartUpload(*this);
@@ -565,7 +568,7 @@ shared_ptr<S3WriteBuffer> S3FileHandle::GetBuffer(uint16_t write_buffer_idx) {
 
 	auto buffer_handle = s3fs.Allocate(part_size, config_params.max_upload_threads);
 	auto new_write_buffer =
-	    make_shared<S3WriteBuffer>(write_buffer_idx * part_size, part_size, std::move(buffer_handle));
+	    make_shared_ptr<S3WriteBuffer>(write_buffer_idx * part_size, part_size, std::move(buffer_handle));
 	{
 		unique_lock<mutex> lck(write_buffers_lock);
 		auto lookup_result = write_buffers.find(write_buffer_idx);
@@ -713,7 +716,7 @@ string S3FileSystem::GetPayloadHash(char *buffer, idx_t buffer_len) {
 	}
 }
 
-string ParsedS3Url::GetHTTPUrl(S3AuthParams &auth_params, string http_query_string) {
+string ParsedS3Url::GetHTTPUrl(S3AuthParams &auth_params, const string &http_query_string) {
 	string full_url = http_proto + host + S3FileSystem::UrlEncode(path);
 
 	if (!http_query_string.empty()) {
@@ -725,7 +728,7 @@ string ParsedS3Url::GetHTTPUrl(S3AuthParams &auth_params, string http_query_stri
 unique_ptr<ResponseWrapper> S3FileSystem::PostRequest(FileHandle &handle, string url, HeaderMap header_map,
                                                       duckdb::unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len,
                                                       char *buffer_in, idx_t buffer_in_len, string http_params) {
-	auto auth_params = static_cast<S3FileHandle &>(handle).auth_params;
+	auto auth_params = handle.Cast<S3FileHandle>().auth_params;
 	auto parsed_s3_url = S3UrlParse(url, auth_params);
 	string http_url = parsed_s3_url.GetHTTPUrl(auth_params, http_params);
 	auto payload_hash = GetPayloadHash(buffer_in, buffer_in_len);
@@ -737,7 +740,7 @@ unique_ptr<ResponseWrapper> S3FileSystem::PostRequest(FileHandle &handle, string
 
 unique_ptr<ResponseWrapper> S3FileSystem::PutRequest(FileHandle &handle, string url, HeaderMap header_map,
                                                      char *buffer_in, idx_t buffer_in_len, string http_params) {
-	auto auth_params = static_cast<S3FileHandle &>(handle).auth_params;
+	auto auth_params = handle.Cast<S3FileHandle>().auth_params;
 	auto parsed_s3_url = S3UrlParse(url, auth_params);
 	string http_url = parsed_s3_url.GetHTTPUrl(auth_params, http_params);
 	auto content_type = "application/octet-stream";
@@ -749,7 +752,7 @@ unique_ptr<ResponseWrapper> S3FileSystem::PutRequest(FileHandle &handle, string 
 }
 
 unique_ptr<ResponseWrapper> S3FileSystem::HeadRequest(FileHandle &handle, string s3_url, HeaderMap header_map) {
-	auto auth_params = static_cast<S3FileHandle &>(handle).auth_params;
+	auto auth_params = handle.Cast<S3FileHandle>().auth_params;
 	auto parsed_s3_url = S3UrlParse(s3_url, auth_params);
 	string http_url = parsed_s3_url.GetHTTPUrl(auth_params);
 	auto headers =
@@ -758,7 +761,7 @@ unique_ptr<ResponseWrapper> S3FileSystem::HeadRequest(FileHandle &handle, string
 }
 
 unique_ptr<ResponseWrapper> S3FileSystem::GetRequest(FileHandle &handle, string s3_url, HeaderMap header_map) {
-	auto auth_params = static_cast<S3FileHandle &>(handle).auth_params;
+	auto auth_params = handle.Cast<S3FileHandle>().auth_params;
 	auto parsed_s3_url = S3UrlParse(s3_url, auth_params);
 	string http_url = parsed_s3_url.GetHTTPUrl(auth_params);
 	auto headers =
@@ -768,7 +771,7 @@ unique_ptr<ResponseWrapper> S3FileSystem::GetRequest(FileHandle &handle, string 
 
 unique_ptr<ResponseWrapper> S3FileSystem::GetRangeRequest(FileHandle &handle, string s3_url, HeaderMap header_map,
                                                           idx_t file_offset, char *buffer_out, idx_t buffer_out_len) {
-	auto auth_params = static_cast<S3FileHandle &>(handle).auth_params;
+	auto auth_params = handle.Cast<S3FileHandle>().auth_params;
 	auto parsed_s3_url = S3UrlParse(s3_url, auth_params);
 	string http_url = parsed_s3_url.GetHTTPUrl(auth_params);
 	auto headers =
@@ -776,8 +779,8 @@ unique_ptr<ResponseWrapper> S3FileSystem::GetRangeRequest(FileHandle &handle, st
 	return HTTPFileSystem::GetRangeRequest(handle, http_url, headers, file_offset, buffer_out, buffer_out_len);
 }
 
-unique_ptr<HTTPFileHandle> S3FileSystem::CreateHandle(const string &path, uint8_t flags, FileLockType lock,
-                                                      FileCompressionType compression, FileOpener *opener) {
+unique_ptr<HTTPFileHandle> S3FileSystem::CreateHandle(const string &path, FileOpenFlags flags,
+                                                      optional_ptr<FileOpener> opener) {
 	FileOpenerInfo info = {path};
 
 	S3AuthParams auth_params;
@@ -889,12 +892,12 @@ void S3FileSystem::Verify() {
 	// TODO add a test that checks the signing for path-style
 }
 
-void S3FileHandle::Initialize(FileOpener *opener) {
+void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
 	HTTPFileHandle::Initialize(opener);
 
-	auto &s3fs = (S3FileSystem &)file_system;
+	auto &s3fs = file_system.Cast<S3FileSystem>();
 
-	if (flags & FileFlags::FILE_FLAGS_WRITE) {
+	if (flags.OpenForWriting()) {
 		auto aws_minimum_part_size = 5242880; // 5 MiB https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html
 		auto max_part_count = config_params.max_parts_per_file;
 		auto required_part_size = config_params.max_file_size / max_part_count;
@@ -916,7 +919,7 @@ bool S3FileSystem::CanHandleFile(const string &fpath) {
 }
 
 void S3FileSystem::FileSync(FileHandle &handle) {
-	auto &s3fh = (S3FileHandle &)handle;
+	auto &s3fh = handle.Cast<S3FileHandle>();
 	if (!s3fh.upload_finalized) {
 		FlushAllBuffers(s3fh);
 		FinalizeMultipartUpload(s3fh);
@@ -924,8 +927,8 @@ void S3FileSystem::FileSync(FileHandle &handle) {
 }
 
 void S3FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	auto &s3fh = (S3FileHandle &)handle;
-	if (!(s3fh.flags & FileFlags::FILE_FLAGS_WRITE)) {
+	auto &s3fh = handle.Cast<S3FileHandle>();
+	if (!s3fh.flags.OpenForWriting()) {
 		throw InternalException("Write called on file not opened in write mode");
 	}
 	int64_t bytes_written = 0;
@@ -1020,7 +1023,7 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 
 	// Do main listobjectsv2 request
 	vector<string> s3_keys;
-	string main_continuation_token = "";
+	string main_continuation_token;
 
 	// Main paging loop
 	do {
@@ -1038,7 +1041,7 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 
 			// TODO we could optimize here by doing a match on the prefix, if it doesn't match we can skip this prefix
 			// Paging loop for common prefix requests
-			string common_prefix_continuation_token = "";
+			string common_prefix_continuation_token;
 			do {
 				auto prefix_res =
 				    AWSListObjectV2::Request(prefix_path, http_params, s3_auth_params, common_prefix_continuation_token,
@@ -1098,7 +1101,7 @@ string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthPar
 	// Construct the ListObjectsV2 call
 	string req_path = parsed_url.path.substr(0, parsed_url.path.length() - parsed_url.key.length());
 
-	string req_params = "";
+	string req_params;
 	if (!continuation_token.empty()) {
 		req_params += "continuation-token=" + S3FileSystem::UrlEncode(continuation_token, true);
 		req_params += "&";

@@ -30,70 +30,13 @@ class ExpressionExecutor;
 class PhysicalOperator;
 class SQLStatement;
 
-//! The ExpressionInfo keeps information related to an expression
-struct ExpressionInfo {
-	explicit ExpressionInfo() : hasfunction(false) {
-	}
-	// A vector of children
-	vector<unique_ptr<ExpressionInfo>> children;
-	// Extract ExpressionInformation from a given expression state
-	void ExtractExpressionsRecursive(unique_ptr<ExpressionState> &state);
-
-	//! Whether or not expression has function
-	bool hasfunction;
-	//! The function Name
-	string function_name;
-	//! The function time
-	uint64_t function_time = 0;
-	//! Count the number of ALL tuples
-	uint64_t tuples_count = 0;
-	//! Count the number of tuples sampled
-	uint64_t sample_tuples_count = 0;
-};
-
-//! The ExpressionRootInfo keeps information related to the root of an expression tree
-struct ExpressionRootInfo {
-	ExpressionRootInfo(ExpressionExecutorState &executor, string name);
-
-	//! Count the number of time the executor called
-	uint64_t total_count = 0;
-	//! Count the number of time the executor called since last sampling
-	uint64_t current_count = 0;
-	//! Count the number of samples
-	uint64_t sample_count = 0;
-	//! Count the number of tuples in all samples
-	uint64_t sample_tuples_count = 0;
-	//! Count the number of tuples processed by this executor
-	uint64_t tuples_count = 0;
-	//! A vector which contain the pointer to root of each expression tree
-	unique_ptr<ExpressionInfo> root;
-	//! Name
-	string name;
-	//! Elapsed time
-	double time;
-	//! Extra Info
-	string extra_info;
-};
-
-struct ExpressionExecutorInfo {
-	explicit ExpressionExecutorInfo() {};
-	explicit ExpressionExecutorInfo(ExpressionExecutor &executor, const string &name, int id);
-
-	//! A vector which contain the pointer to all ExpressionRootInfo
-	vector<unique_ptr<ExpressionRootInfo>> roots;
-	//! Id, it will be used as index for executors_info vector
-	idx_t id;
-};
-
-struct OperatorInfo {
-	explicit OperatorInfo() : time(0), elements(0) {
+struct OperatorInformation {
+	explicit OperatorInformation(double time_p = 0, idx_t elements_p = 0) : time(time_p), elements(elements_p) {
 	}
 
 	double time;
 	idx_t elements;
 	string name;
-	//! A vector of Expression Executor Info
-	vector<unique_ptr<ExpressionExecutorInfo>> executors_info;
 
 	void AddTime(double n_time) {
 		this->time += n_time;
@@ -118,7 +61,7 @@ public:
 	//! Adds the timings gathered in the OperatorProfiler (tree) to the QueryProfiler (tree)
 	DUCKDB_API void Flush(const PhysicalOperator &phys_op, ExpressionExecutor &expression_executor, const string &name,
 	                      int id);
-	DUCKDB_API OperatorInfo &GetOperatorInfo(const PhysicalOperator &phys_op);
+	DUCKDB_API OperatorInformation &GetOperatorInfo(const PhysicalOperator &phys_op);
 
 	static bool SettingEnabled(const MetricsType setting) {
 		return SettingSetFunctions::Enabled(ProfilingInfo::DefaultSettings(), setting);
@@ -136,13 +79,13 @@ private:
 	//! The stack of Physical Operators that are currently active
 	optional_ptr<const PhysicalOperator> active_operator;
 	//! A mapping of physical operators to recorded timings
-	reference_map_t<const PhysicalOperator, OperatorInfo> timings;
+	reference_map_t<const PhysicalOperator, OperatorInformation> timings;
 };
 
 //! The QueryProfiler can be used to measure timings of queries
 class QueryProfiler {
 public:
-	DUCKDB_API QueryProfiler(ClientContext &context);
+	DUCKDB_API explicit QueryProfiler(ClientContext &context);
 
 public:
 	// Recursive tree that mirrors the operator tree
@@ -150,7 +93,6 @@ public:
 		PhysicalOperatorType type;
 		string name;
 		ProfilingInfo profiling_info;
-		vector<unique_ptr<ExpressionExecutorInfo>> executors_info;
 		vector<unique_ptr<TreeNode>> children;
 		idx_t depth = 0;
 	};

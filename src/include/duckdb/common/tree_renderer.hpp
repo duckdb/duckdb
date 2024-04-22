@@ -39,36 +39,36 @@ public:
 };
 
 struct TreeRendererConfig {
-	void enable_detailed() {
-		MAX_EXTRA_LINES = 1000;
+	void EnableDetailed() {
+		max_extra_lines = 1000;
 		detailed = true;
 	}
 
-	void enable_standard() {
-		MAX_EXTRA_LINES = 30;
+	void EnableStandard() {
+		max_extra_lines = 30;
 		detailed = false;
 	}
 
-	idx_t MAXIMUM_RENDER_WIDTH = 240;
-	idx_t NODE_RENDER_WIDTH = 29;
-	idx_t MINIMUM_RENDER_WIDTH = 15;
-	idx_t MAX_EXTRA_LINES = 30;
+	idx_t maximum_render_width = 240;
+	idx_t node_render_width = 29;
+	idx_t minimum_render_width = 15;
+	idx_t max_extra_lines = 30;
 	bool detailed = false;
 
 #ifndef DUCKDB_ASCII_TREE_RENDERER
-	const char *LTCORNER = "\342\224\214"; // "┌";
-	const char *RTCORNER = "\342\224\220"; // "┐";
-	const char *LDCORNER = "\342\224\224"; // "└";
-	const char *RDCORNER = "\342\224\230"; // "┘";
+	const char *LTCORNER = "\342\224\214"; // NOLINT "┌";
+	const char *RTCORNER = "\342\224\220"; // NOLINT "┐";
+	const char *LDCORNER = "\342\224\224"; // NOLINT "└";
+	const char *RDCORNER = "\342\224\230"; // NOLINT "┘";
 
-	const char *MIDDLE = "\342\224\274";  // "┼";
-	const char *TMIDDLE = "\342\224\254"; // "┬";
-	const char *LMIDDLE = "\342\224\234"; // "├";
-	const char *RMIDDLE = "\342\224\244"; // "┤";
-	const char *DMIDDLE = "\342\224\264"; // "┴";
+	const char *MIDDLE = "\342\224\274";  // NOLINT "┼";
+	const char *TMIDDLE = "\342\224\254"; // NOLINT "┬";
+	const char *LMIDDLE = "\342\224\234"; // NOLINT "├";
+	const char *RMIDDLE = "\342\224\244"; // NOLINT "┤";
+	const char *DMIDDLE = "\342\224\264"; // NOLINT "┴";
 
-	const char *VERTICAL = "\342\224\202";   // "│";
-	const char *HORIZONTAL = "\342\224\200"; // "─";
+	const char *VERTICAL = "\342\224\202";   // NOLINT "│";
+	const char *HORIZONTAL = "\342\224\200"; // NOLINT "─";
 #else
 	// ASCII version
 	const char *LTCORNER = "<";
@@ -89,7 +89,7 @@ struct TreeRendererConfig {
 
 class TreeRenderer {
 public:
-	explicit TreeRenderer(TreeRendererConfig config_p = TreeRendererConfig()) : config(std::move(config_p)) {
+	explicit TreeRenderer(TreeRendererConfig config_p = TreeRendererConfig()) : config(config_p) {
 	}
 
 	string ToString(const LogicalOperator &op);
@@ -105,10 +105,10 @@ public:
 	void ToStream(RenderTree &root, std::ostream &ss);
 
 	void EnableDetailed() {
-		config.enable_detailed();
+		config.EnableDetailed();
 	}
 	void EnableStandard() {
-		config.enable_standard();
+		config.EnableStandard();
 	}
 
 private:
@@ -144,7 +144,6 @@ private:
 
 	template <class T>
 	unique_ptr<RenderTree> CreateRenderTree(const T &op);
-	string ExtractExpressionsRecursive(ExpressionInfo &states);
 };
 
 } // namespace duckdb

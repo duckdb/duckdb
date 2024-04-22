@@ -82,11 +82,13 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"file_search_path", {"test"}},
 	    {"force_compression", {"uncompressed", "Uncompressed"}},
 	    {"home_directory", {"test"}},
+	    {"allow_extensions_metadata_mismatch", {"true"}},
 	    {"integer_division", {true}},
 	    {"extension_directory", {"test"}},
 	    {"immediate_transaction_mode", {true}},
 	    {"max_expression_depth", {50}},
 	    {"max_memory", {"4.0 GiB"}},
+	    {"max_temp_directory_size", {"10.0 GiB"}},
 	    {"memory_limit", {"4.0 GiB"}},
 	    {"ordered_aggregate_threshold", {Value::UBIGINT(idx_t(1) << 12)}},
 	    {"null_order", {"nulls_first"}},
@@ -135,7 +137,9 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "profiling_output", // just an alias
 	    "duckdb_api",
 	    "custom_user_agent",
-	    "custom_profiling_settings"};
+	    "custom_profiling_settings",
+	    "custom_user_agent",
+	    "default_block_size"};
 	return excluded_options.count(name) == 1;
 }
 
@@ -143,12 +147,12 @@ bool ValueEqual(const Value &left, const Value &right) {
 	return Value::NotDistinctFrom(left, right);
 }
 
-void RequireValueEqual(ConfigurationOption *op, const Value &left, const Value &right, int line) {
+void RequireValueEqual(const ConfigurationOption &op, const Value &left, const Value &right, int line) {
 	if (ValueEqual(left, right)) {
 		return;
 	}
 	auto error = StringUtil::Format("\nLINE[%d] (Option:%s) | Expected left:'%s' and right:'%s' to be equal", line,
-	                                op->name, left.ToString(), right.ToString());
+	                                op.name, left.ToString(), right.ToString());
 	cerr << error << endl;
 	REQUIRE(false);
 }
@@ -210,7 +214,7 @@ TEST_CASE("Test RESET statement for ClientConfig options", "[api]") {
 			}
 			// Get the value of the option again
 			auto changed_value = op->get_setting(*con.context);
-			REQUIRE_VALUE_EQUAL(op, changed_value, value_pair.output);
+			REQUIRE_VALUE_EQUAL(*op, changed_value, value_pair.output);
 
 			if (op->reset_local) {
 				op->reset_local(*con.context);
@@ -220,7 +224,7 @@ TEST_CASE("Test RESET statement for ClientConfig options", "[api]") {
 
 			// Get the reset value of the option
 			auto reset_value = op->get_setting(*con.context);
-			REQUIRE_VALUE_EQUAL(op, reset_value, original_value);
+			REQUIRE_VALUE_EQUAL(*op, reset_value, original_value);
 		}
 	}
 }

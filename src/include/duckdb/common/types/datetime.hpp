@@ -57,10 +57,10 @@ struct dtime_t { // NOLINT
 		return dtime_t(this->micros - micros);
 	};
 	inline dtime_t operator*(const idx_t &copies) const {
-		return dtime_t(this->micros * copies);
+		return dtime_t(this->micros * UnsafeNumericCast<int64_t>(copies));
 	};
 	inline dtime_t operator/(const idx_t &copies) const {
-		return dtime_t(this->micros / copies);
+		return dtime_t(this->micros / UnsafeNumericCast<int64_t>(copies));
 	};
 	inline int64_t operator-(const dtime_t &other) const {
 		return this->micros - other.micros;
@@ -149,7 +149,7 @@ template <>
 struct hash<duckdb::dtime_tz_t> {
 	std::size_t operator()(const duckdb::dtime_tz_t &k) const {
 		using std::hash;
-		return hash<int64_t>()(k.bits);
+		return hash<uint64_t>()(k.bits);
 	}
 };
 } // namespace std

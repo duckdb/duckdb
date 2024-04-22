@@ -26,7 +26,7 @@ void CachedFileHandle::AllocateBuffer(idx_t size) {
 	if (file->initialized) {
 		throw InternalException("Cannot allocate a buffer for a cached file that was already initialized");
 	}
-	file->data = std::shared_ptr<char>(new char[size], std::default_delete<char[]>());
+	file->data = shared_ptr<char>(new char[size], std::default_delete<char[]>());
 	file->capacity = size;
 }
 
@@ -62,19 +62,19 @@ shared_ptr<HTTPState> HTTPState::TryGetState(ClientContext &context, bool create
 	auto lookup = context.registered_state.find("http_state");
 
 	if (lookup != context.registered_state.end()) {
-		return std::static_pointer_cast<HTTPState, ClientContextState>(lookup->second);
+		return shared_ptr_cast<ClientContextState, HTTPState>(lookup->second);
 	}
 
 	if (!create_on_missing) {
 		return nullptr;
 	}
 
-	auto http_state = make_shared<HTTPState>();
+	auto http_state = make_shared_ptr<HTTPState>();
 	context.registered_state["http_state"] = http_state;
 	return http_state;
 }
 
-shared_ptr<HTTPState> HTTPState::TryGetState(FileOpener *opener, bool create_on_missing) {
+shared_ptr<HTTPState> HTTPState::TryGetState(optional_ptr<FileOpener> opener, bool create_on_missing) {
 	auto client_context = FileOpener::TryGetClientContext(opener);
 	if (client_context) {
 		return TryGetState(*client_context, create_on_missing);
@@ -87,7 +87,7 @@ shared_ptr<CachedFile> &HTTPState::GetCachedFile(const string &path) {
 	lock_guard<mutex> lock(cached_files_mutex);
 	auto &cache_entry_ref = cached_files[path];
 	if (!cache_entry_ref) {
-		cache_entry_ref = make_shared<CachedFile>();
+		cache_entry_ref = make_shared_ptr<CachedFile>();
 	}
 	return cache_entry_ref;
 }

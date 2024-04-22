@@ -17,7 +17,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSingleJoin(unique_ptr<Logica
 			// bindings match left side: push into left
 			left_pushdown.filters.push_back(std::move(filters[i]));
 			// erase the filter from the list of filters
-			filters.erase(filters.begin() + i);
+			filters.erase_at(i);
 			i--;
 		}
 	}

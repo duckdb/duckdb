@@ -1,35 +1,34 @@
 #ifdef USE_DUCKDB_SHELL_WRAPPER
 #include "duckdb_shell_wrapper.h"
 #endif
-#include "sqlite3.h"
-#include "udf_struct_sqlite3.h"
-#include "sqlite3_udf_wrapper.hpp"
 #include "cast_sqlite.hpp"
-
 #include "duckdb.hpp"
-#include "duckdb/parser/parser.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/common/types.hpp"
-#include "duckdb/common/operator/cast_operators.hpp"
-#include "duckdb/common/error_data.hpp"
-#include "duckdb/main/error_manager.hpp"
-#include "utf8proc_wrapper.hpp"
 #include "duckdb/common/box_renderer.hpp"
+#include "duckdb/common/error_data.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/error_manager.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "sqlite3.h"
+#include "sqlite3_udf_wrapper.hpp"
+#include "udf_struct_sqlite3.h"
+#include "utf8proc_wrapper.hpp"
 #ifdef SHELL_INLINE_AUTOCOMPLETE
 #include "autocomplete_extension.hpp"
 #endif
 #include "shell_extension.hpp"
 
+#include <cassert>
+#include <chrono>
+#include <climits>
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 #include <string>
-#include <chrono>
-#include <cassert>
-#include <climits>
 #include <thread>
+#include <time.h>
 
 using namespace duckdb;
 using namespace std;
@@ -480,6 +479,9 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 		return SQLITE_NULL;
 	}
 	auto column_type = pStmt->result->types[iCol];
+	if (column_type.IsJSONType()) {
+		return 0; // Does not need to be surrounded in quotes like VARCHAR
+	}
 	switch (column_type.id()) {
 	case LogicalTypeId::BOOLEAN:
 	case LogicalTypeId::TINYINT:
@@ -1074,8 +1076,29 @@ int sqlite3_get_autocommit(sqlite3 *db) {
 }
 
 int sqlite3_limit(sqlite3 *, int id, int newVal) {
-	fprintf(stderr, "sqlite3_limit: unsupported.\n");
-	return -1;
+	if (newVal >= 0) {
+		// attempting to set limit value
+		return SQLITE_OK;
+	}
+	switch (id) {
+	case SQLITE_LIMIT_LENGTH:
+	case SQLITE_LIMIT_SQL_LENGTH:
+	case SQLITE_LIMIT_COLUMN:
+	case SQLITE_LIMIT_LIKE_PATTERN_LENGTH:
+		return std::numeric_limits<int>::max();
+	case SQLITE_LIMIT_EXPR_DEPTH:
+		return 1000;
+	case SQLITE_LIMIT_FUNCTION_ARG:
+	case SQLITE_LIMIT_VARIABLE_NUMBER:
+		return 256;
+	case SQLITE_LIMIT_ATTACHED:
+		return 1000;
+	case SQLITE_LIMIT_WORKER_THREADS:
+	case SQLITE_LIMIT_TRIGGER_DEPTH:
+		return 0;
+	default:
+		return SQLITE_ERROR;
+	}
 }
 
 int sqlite3_stmt_readonly(sqlite3_stmt *pStmt) {

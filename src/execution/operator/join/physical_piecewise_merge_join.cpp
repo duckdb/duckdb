@@ -105,7 +105,7 @@ unique_ptr<GlobalSinkState> PhysicalPiecewiseMergeJoin::GetGlobalSinkState(Clien
 
 unique_ptr<LocalSinkState> PhysicalPiecewiseMergeJoin::GetLocalSinkState(ExecutionContext &context) const {
 	// We only sink the RHS
-	return make_uniq<MergeJoinLocalState>(context.client, *this, 1);
+	return make_uniq<MergeJoinLocalState>(context.client, *this, 1U);
 }
 
 SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, DataChunk &chunk,
@@ -223,7 +223,7 @@ public:
 	void ResolveJoinKeys(DataChunk &input) {
 		// sort by join key
 		lhs_global_state = make_uniq<GlobalSortState>(buffer_manager, lhs_order, lhs_layout);
-		lhs_local_table = make_uniq<LocalSortedTable>(context, op, 0);
+		lhs_local_table = make_uniq<LocalSortedTable>(context, op, 0U);
 		lhs_local_table->Sink(input, *lhs_global_state);
 
 		// Set external (can be forced with the PRAGMA)

@@ -3,6 +3,7 @@
 #include "duckdb/common/types/row/tuple_data_segment.hpp"
 #include "duckdb/common/types/row/tuple_data_states.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/common/fast_mem.hpp"
 
 namespace duckdb {
 
@@ -80,6 +81,18 @@ void TupleDataAllocator::Build(TupleDataSegment &segment, TupleDataPinState &pin
 		segment.data_size += chunk_part.count * layout.GetRowWidth();
 		if (!layout.AllConstant()) {
 			segment.data_size += chunk_part.total_heap_size;
+		}
+
+		if (layout.HasDestructor()) {
+			const auto base_row_ptr = GetRowPointer(pin_state, chunk_part);
+			for (auto &aggr_idx : layout.GetAggregateDestructorIndices()) {
+				const auto aggr_offset = layout.GetOffsets()[layout.ColumnCount() + aggr_idx];
+				auto &aggr_fun = layout.GetAggregates()[aggr_idx];
+				for (idx_t i = 0; i < next; i++) {
+					duckdb::FastMemset(base_row_ptr + i * layout.GetRowWidth() + aggr_offset, '\0',
+					                   aggr_fun.payload_size);
+				}
+			}
 		}
 
 		offset += next;

@@ -22,16 +22,16 @@ static void WriteCatalogEntries(stringstream &ss, vector<reference<CatalogEntry>
 		if (entry.get().internal) {
 			continue;
 		}
-		ss << entry.get().ToSQL() << std::endl;
+		ss << entry.get().ToSQL() << '\n';
 	}
-	ss << std::endl;
+	ss << '\n';
 }
 
 static void WriteStringStreamToFile(FileSystem &fs, stringstream &ss, const string &path) {
 	auto ss_string = ss.str();
-	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW,
-	                          FileLockType::WRITE_LOCK);
-	fs.Write(*handle, (void *)ss_string.c_str(), ss_string.size());
+	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW |
+	                                    FileLockType::WRITE_LOCK);
+	fs.Write(*handle, (void *)ss_string.c_str(), NumericCast<int64_t>(ss_string.size()));
 	handle.reset();
 }
 
@@ -77,7 +77,7 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info,
 			throw NotImplementedException("FIXME: serialize list of options");
 		}
 	}
-	ss << ");" << std::endl;
+	ss << ");" << '\n';
 }
 
 //===--------------------------------------------------------------------===//

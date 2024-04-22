@@ -14,7 +14,7 @@ ColumnStatistics::ColumnStatistics(BaseStatistics stats_p, unique_ptr<DistinctSt
 }
 
 shared_ptr<ColumnStatistics> ColumnStatistics::CreateEmptyStats(const LogicalType &type) {
-	return make_shared<ColumnStatistics>(BaseStatistics::CreateEmpty(type));
+	return make_shared_ptr<ColumnStatistics>(BaseStatistics::CreateEmpty(type));
 }
 
 void ColumnStatistics::Merge(ColumnStatistics &other) {
@@ -53,7 +53,7 @@ void ColumnStatistics::UpdateDistinctStatistics(Vector &v, idx_t count) {
 }
 
 shared_ptr<ColumnStatistics> ColumnStatistics::Copy() const {
-	return make_shared<ColumnStatistics>(stats.Copy(), distinct_stats ? distinct_stats->Copy() : nullptr);
+	return make_shared_ptr<ColumnStatistics>(stats.Copy(), distinct_stats ? distinct_stats->Copy() : nullptr);
 }
 
 void ColumnStatistics::Serialize(Serializer &serializer) const {
@@ -65,7 +65,7 @@ shared_ptr<ColumnStatistics> ColumnStatistics::Deserialize(Deserializer &deseria
 	auto stats = deserializer.ReadProperty<BaseStatistics>(100, "statistics");
 	auto distinct_stats = deserializer.ReadPropertyWithDefault<unique_ptr<DistinctStatistics>>(
 	    101, "distinct", unique_ptr<DistinctStatistics>());
-	return make_shared<ColumnStatistics>(std::move(stats), std::move(distinct_stats));
+	return make_shared_ptr<ColumnStatistics>(std::move(stats), std::move(distinct_stats));
 }
 
 } // namespace duckdb

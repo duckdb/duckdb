@@ -20,7 +20,7 @@ namespace duckdb {
 class CachedFileHandle;
 
 //! Represents a file that is intended to be fully downloaded, then used in parallel by multiple threads
-class CachedFile : public std::enable_shared_from_this<CachedFile> {
+class CachedFile : public enable_shared_from_this<CachedFile> {
 	friend class CachedFileHandle;
 
 public:
@@ -84,7 +84,7 @@ public:
 	shared_ptr<CachedFile> &GetCachedFile(const string &path);
 	//! Helper functions to get the HTTP state
 	static shared_ptr<HTTPState> TryGetState(ClientContext &context, bool create_on_missing = true);
-	static shared_ptr<HTTPState> TryGetState(FileOpener *opener, bool create_on_missing = true);
+	static shared_ptr<HTTPState> TryGetState(optional_ptr<FileOpener> opener, bool create_on_missing = true);
 
 	bool IsEmpty() {
 		return head_count == 0 && get_count == 0 && put_count == 0 && post_count == 0 && total_bytes_received == 0 &&

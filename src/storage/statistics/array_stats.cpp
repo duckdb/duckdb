@@ -78,7 +78,7 @@ void ArrayStats::Deserialize(Deserializer &deserializer, BaseStatistics &base) {
 	auto &child_type = ArrayType::GetChildType(type);
 
 	// Push the logical type of the child type to the deserialization context
-	deserializer.Set<LogicalType &>(const_cast<LogicalType &>(child_type));
+	deserializer.Set<const LogicalType &>(child_type);
 	base.child_stats[0].Copy(deserializer.ReadProperty<BaseStatistics>(200, "child_stats"));
 	deserializer.Unset<LogicalType>();
 }
