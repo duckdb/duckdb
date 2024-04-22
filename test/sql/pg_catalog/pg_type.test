@@ -95,3 +95,8 @@ query I
 SELECT count(*) FROM pg_type where typname = 'greeting'
 ----
 1
+
+query I
+SELECT oid FROM pg_type WHERE typname = 'numeric' AND oid IS NOT NULL
+----
+1700
