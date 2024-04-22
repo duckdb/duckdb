@@ -41,8 +41,6 @@ public:
 	//! Estimated Cardinality
 	idx_t estimated_cardinality;
 	bool has_estimated_cardinality;
-	//! External Dependencies
-	vector<shared_ptr<ExternalDependency>> external_dependencies;
 
 public:
 	virtual vector<ColumnBinding> GetColumnBindings();
@@ -54,8 +52,6 @@ public:
 
 	//! Resolve the types of the logical operator and its children
 	void ResolveOperatorTypes();
-	void AddExternalDependency(shared_ptr<ExternalDependency> dependency);
-	void CollectDependencies(vector<shared_ptr<ExternalDependency>> &dependencies) const;
 
 	virtual string GetName() const;
 	virtual string ParamsToString() const;

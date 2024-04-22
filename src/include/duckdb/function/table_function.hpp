@@ -83,9 +83,10 @@ struct LocalTableFunctionState {
 struct TableFunctionBindInput {
 	TableFunctionBindInput(vector<Value> &inputs, named_parameter_map_t &named_parameters,
 	                       vector<LogicalType> &input_table_types, vector<string> &input_table_names,
-	                       optional_ptr<TableFunctionInfo> info, optional_ptr<Binder> binder)
+	                       optional_ptr<TableFunctionInfo> info, optional_ptr<Binder> binder,
+	                       const TableFunctionRef &ref)
 	    : inputs(inputs), named_parameters(named_parameters), input_table_types(input_table_types),
-	      input_table_names(input_table_names), info(info), binder(binder) {
+	      input_table_names(input_table_names), info(info), binder(binder), ref(ref) {
 	}
 
 	vector<Value> &inputs;
@@ -94,6 +95,7 @@ struct TableFunctionBindInput {
 	vector<string> &input_table_names;
 	optional_ptr<TableFunctionInfo> info;
 	optional_ptr<Binder> binder;
+	const TableFunctionRef &ref;
 };
 
 struct TableFunctionInitInput {
