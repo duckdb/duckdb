@@ -147,7 +147,7 @@ struct CSVReaderOptions {
 	string GetDelimiter() const;
 
 	//! If we can safely ignore errors (i.e., they are being ignored and not being stored in a rejects table)
-	bool IgnoreErrors();
+	bool IgnoreErrors() const;
 
 	NewLineIdentifier GetNewline() const;
 	void SetNewline(const string &input);
