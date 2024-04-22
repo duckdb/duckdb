@@ -213,6 +213,36 @@ class TestRelation(object):
         rel = duckdb.project(test_df, 'i')
         assert rel.execute().fetchall() == [(1,), (2,), (3,), (4,)]
 
+    def test_relation_lifetime(self, duckdb_cursor):
+        def create_relation(con):
+            df = pd.DataFrame({'a': [1, 2, 3]})
+            return con.sql("select * from df")
+
+        assert create_relation(duckdb_cursor).fetchall() == [(1,), (2,), (3,)]
+
+        def create_simple_join(con):
+            df1 = pd.DataFrame({'a': ['a', 'b', 'c'], 'b': [1, 2, 3]})
+            df2 = pd.DataFrame({'a': ['a', 'b', 'c'], 'b': [4, 5, 6]})
+
+            return con.sql("select * from df1 JOIN df2 USING (a, a)")
+
+        assert create_simple_join(duckdb_cursor).fetchall() == [('a', 1, 4), ('b', 2, 5), ('c', 3, 6)]
+
+        def create_complex_join(con):
+            df1 = pd.DataFrame({'a': [1], '1': [1]})
+            df2 = pd.DataFrame({'a': [1], '2': [2]})
+            df3 = pd.DataFrame({'a': [1], '3': [3]})
+            df4 = pd.DataFrame({'a': [1], '4': [4]})
+            df5 = pd.DataFrame({'a': [1], '5': [5]})
+            df6 = pd.DataFrame({'a': [1], '6': [6]})
+            query = "select * from df1"
+            for i in range(5):
+                query += f" JOIN df{i + 2} USING (a, a)"
+            return con.sql(query)
+
+        rel = create_complex_join(duckdb_cursor)
+        assert rel.fetchall() == [(1, 1, 2, 3, 4, 5, 6)]
+
     def test_project_on_types(self):
         con = duckdb.connect()
         con.sql(
