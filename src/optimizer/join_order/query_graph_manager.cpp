@@ -184,10 +184,10 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 	}
 	auto &node = dp_entry->second;
 	if (!dp_entry->second->is_leaf) {
+
 		// generate the left and right children
 		auto left = GenerateJoins(extracted_relations, node->left_set);
 		auto right = GenerateJoins(extracted_relations, node->right_set);
-
 		if (dp_entry->second->info->filters.empty()) {
 			// no filters, create a cross product
 			result_operator = LogicalCrossProduct::Create(std::move(left.op), std::move(right.op));
@@ -235,23 +235,23 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 		result_relation = &set_manager.Union(*left.set, *right.set);
 	} else {
 		// base node, get the entry from the list of extracted relations
-		D_ASSERT(dp_entry->second->set.count == 1);
-		D_ASSERT(extracted_relations[dp_entry->second->set.relations[0]]);
-		result_relation = &dp_entry->second->set;
-		result_operator = std::move(extracted_relations[dp_entry->second->set.relations[0]]);
+		D_ASSERT(node->set.count == 1);
+		D_ASSERT(extracted_relations[node->set.relations[0]]);
+		result_relation = &node->set;
+		result_operator = std::move(extracted_relations[result_relation->relations[0]]);
 	}
 	// TODO: this is where estimated properties start coming into play.
 	//  when creating the result operator, we should ask the cost model and cardinality estimator what
 	//  the cost and cardinality are
 	//	result_operator->estimated_props = node.estimated_props->Copy();
-	result_operator->estimated_cardinality = dp_entry->second->cardinality;
+	result_operator->estimated_cardinality = node->cardinality;
 	result_operator->has_estimated_cardinality = true;
 	if (result_operator->type == LogicalOperatorType::LOGICAL_FILTER &&
 	    result_operator->children[0]->type == LogicalOperatorType::LOGICAL_GET) {
 		// FILTER on top of GET, add estimated properties to both
 		// auto &filter_props = *result_operator->estimated_props;
 		auto &child_operator = *result_operator->children[0];
-		child_operator.estimated_cardinality = dp_entry->second->cardinality;
+		child_operator.estimated_cardinality = node->cardinality;
 		child_operator.has_estimated_cardinality = true;
 	}
 	// check if we should do a pushdown on this node

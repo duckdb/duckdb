@@ -348,7 +348,7 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 
 					if (!best_connection || node.cost < best_connection->cost) {
 						// best pair found so far
-						best_connection = &node;
+						best_connection = &EmitPair(left, right, connection);
 						best_left = i;
 						best_right = j;
 					}
