@@ -9,8 +9,6 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
-#include <cmath>
-
 namespace duckdb {
 
 const vector<RelationStats> RelationManager::GetRelationStats() {

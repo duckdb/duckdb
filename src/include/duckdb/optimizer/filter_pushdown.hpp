@@ -18,11 +18,7 @@ class Optimizer;
 
 class FilterPushdown {
 public:
-<<<<<<< HEAD
-	explicit FilterPushdown(Optimizer &optimizer, bool rewrite_mark_joins = true);
-=======
 	explicit FilterPushdown(Optimizer &optimizer, bool convert_mark_joins = true);
->>>>>>> feature
 
 	//! Perform filter pushdown
 	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> op);
@@ -101,7 +97,6 @@ private:
 	void GenerateFilters();
 	//! if there are filters in this FilterPushdown node, push them into the combiner
 	void PushFilters();
-
 };
 
 } // namespace duckdb

@@ -35,7 +35,7 @@ void CardinalityEstimator::AddRelationTdom(FilterInfo &filter_info) {
 	relations_to_tdoms.emplace_back(new_r2tdom);
 }
 
-bool CardinalityEstimator::SingleRelationFilter(FilterInfo &filter_info) {
+bool CardinalityEstimator::SingleColumnFilter(duckdb::FilterInfo &filter_info) {
 	if (filter_info.left_set && filter_info.right_set && filter_info.set.count > 1) {
 		// Both set and are from different relations
 		return false;
@@ -121,7 +121,6 @@ void CardinalityEstimator::RemoveEmptyTotalDomains() {
 	relations_to_tdoms.erase(remove_start, relations_to_tdoms.end());
 }
 
-
 double CardinalityEstimator::GetNumerator(JoinRelationSet &set) {
 	double numerator = 1;
 	for (idx_t i = 0; i < set.count; i++) {
@@ -131,7 +130,6 @@ double CardinalityEstimator::GetNumerator(JoinRelationSet &set) {
 	}
 	return numerator;
 }
-
 
 vector<FilterInfoWithTotalDomains> GetEdges(vector<RelationsToTDom> &relations_to_tdom) {
 	vector<FilterInfoWithTotalDomains> res;
@@ -143,7 +141,6 @@ vector<FilterInfoWithTotalDomains> GetEdges(vector<RelationsToTDom> &relations_t
 	}
 	return res;
 }
-
 
 bool EdgeConnects(FilterInfoWithTotalDomains &edge, Subgraph2Denominator &subgraph) {
 	if (edge.filter_info->left_set) {
@@ -159,7 +156,6 @@ bool EdgeConnects(FilterInfoWithTotalDomains &edge, Subgraph2Denominator &subgra
 	}
 	return false;
 }
-
 
 vector<idx_t> SubgraphsConnectedByEdge(FilterInfoWithTotalDomains &edge, vector<Subgraph2Denominator> &subgraphs) {
 	vector<idx_t> res;
@@ -185,11 +181,13 @@ vector<idx_t> SubgraphsConnectedByEdge(FilterInfoWithTotalDomains &edge, vector<
 			}
 		}
 	}
-	throw InternalException("whoops");
+	// this edge connects only the relations it connects. Return an empty result so a new subgraph is created.
+	return res;
+	//	throw InternalException("whoops");
 }
 
-
-JoinRelationSet &CardinalityEstimator::UpdateNumeratorRelations(Subgraph2Denominator left, Subgraph2Denominator right, FilterInfoWithTotalDomains &filter) {
+JoinRelationSet &CardinalityEstimator::UpdateNumeratorRelations(Subgraph2Denominator left, Subgraph2Denominator right,
+                                                                FilterInfoWithTotalDomains &filter) {
 	switch (filter.filter_info->join_type) {
 	case JoinType::SEMI:
 	case JoinType::ANTI: {
@@ -205,8 +203,8 @@ JoinRelationSet &CardinalityEstimator::UpdateNumeratorRelations(Subgraph2Denomin
 	}
 }
 
-
-double CardinalityEstimator::CalculateUpdatedDemo(Subgraph2Denominator left, Subgraph2Denominator right, FilterInfoWithTotalDomains &filter) {
+double CardinalityEstimator::CalculateUpdatedDemo(Subgraph2Denominator left, Subgraph2Denominator right,
+                                                  FilterInfoWithTotalDomains &filter) {
 	double new_denom = left.denom * right.denom;
 	switch (filter.filter_info->join_type) {
 	case JoinType::INNER: {
@@ -229,7 +227,6 @@ double CardinalityEstimator::CalculateUpdatedDemo(Subgraph2Denominator left, Sub
 	}
 }
 
-
 DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 	vector<Subgraph2Denominator> subgraphs;
 
@@ -244,7 +241,6 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 	// relations_to_tdoms has already been sorted by largest to smallest total domain
 	// then we look through the filters for the relations_to_tdoms,
 	// and we start to choose the filters that join relations in the set.
-
 
 	// edges are guaranteed to be in order of largest tdom to smallest tdom.
 	auto edges = GetEdges(relations_to_tdoms);
@@ -262,7 +258,8 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 		}
 		if (subgraph_connections.size() == 1) {
 			// the current edge connections to the subgraph at the index in subgraph_connections
-			// add the relations at both ends of the edge to the subgraph. (The subgraph is a JoinRelationSet, double adding relations will be fine).
+			// add the relations at both ends of the edge to the subgraph. (The subgraph is a JoinRelationSet, double
+			// adding relations will be fine).
 			auto subgraph_to_update = subgraphs.at(subgraph_connections.at(0));
 			subgraph_to_update.relations = &set_manager.Union(*subgraph_to_update.relations, edge.filter_info->set);
 			subgraph_to_update.numerator_relations = &UpdateNumeratorRelations(subgraph_to_update, new_subgraph, edge);
@@ -272,12 +269,14 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			// The two subgraphs in the subgraph_connections can be merged by this edge.
 			auto subgraph_to_merge_into = subgraphs.at(subgraph_connections.at(0));
 			auto subgraph_to_delete = subgraphs.at(subgraph_connections.at(1));
-			subgraph_to_merge_into.relations = &set_manager.Union(*subgraph_to_merge_into.relations, *subgraph_to_delete.relations);
-			subgraph_to_merge_into.numerator_relations = &UpdateNumeratorRelations(subgraph_to_merge_into, subgraph_to_delete, edge);
+			subgraph_to_merge_into.relations =
+			    &set_manager.Union(*subgraph_to_merge_into.relations, *subgraph_to_delete.relations);
+			subgraph_to_merge_into.numerator_relations =
+			    &UpdateNumeratorRelations(subgraph_to_merge_into, subgraph_to_delete, edge);
 			subgraph_to_delete.numerator_relations = nullptr;
 			subgraph_to_merge_into.denom = CalculateUpdatedDemo(subgraph_to_merge_into, subgraph_to_delete, edge);
 			auto remove_start = std::remove_if(subgraphs.begin(), subgraphs.end(),
-					                                   [](Subgraph2Denominator &s) { return !s.relations; });
+			                                   [](Subgraph2Denominator &s) { return !s.relations; });
 			subgraphs.erase(remove_start, subgraphs.end());
 		}
 		if (subgraphs.size() == 1 && subgraphs.at(0).relations->count == set.count) {
@@ -287,119 +286,119 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 		}
 	}
 
-//	for (auto &relation_2_tdom : relations_to_tdoms) {
-//		// loop through each filter in the tdom.
-//		if (all_relations_joined) {
-//			break;
-//		}
-//
-//		for (auto &filter : relation_2_tdom.filters) {
-//			if (actual_set.count(filter->left_binding.table_index) == 0 ||
-//			    actual_set.count(filter->right_binding.table_index) == 0) {
-//				continue;
-//			}
-//			// the join filter is on relations in the new set.
-//			found_match = false;
-//			vector<Subgraph2Denominator>::iterator it;
-//			for (it = subgraphs.begin(); it != subgraphs.end(); it++) {
-//				auto left_in = it->relations.count(filter->left_binding.table_index) > 0;
-//				auto right_in = it->relations.count(filter->right_binding.table_index) > 0;
-//				if (left_in && right_in) {
-//					// if both left and right bindings are in the subgraph, continue.
-//					// This means another filter is connecting relations already in the
-//					// subgraph it, but it has a tdom that is less, and we don't care.
-//					found_match = true;
-//					continue;
-//				}
-//				if (!left_in && !right_in) {
-//					// if both left and right bindings are *not* in the subgraph, continue
-//					// without finding a match. This will trigger the process to add a new
-//					// subgraph
-//					continue;
-//				}
-//				idx_t find_table = left_in ? filter->right_binding.table_index : filter->left_binding.table_index;
-//				auto next_subgraph = it + 1;
-//				switch (filter->join_type) {
-//				case JoinType::INNER: {
-//					// iterate through other subgraphs and merge.
-//					FindSubgraphMatchAndMerge(*it, find_table, next_subgraph, subgraphs.end());
-//					// Now insert the right binding and update denominator with the
-//					// tdom of the filter
-//					// insert find_table again in case there was no other subgraph.
-//					it->relations.insert(find_table);
-//					it->numerator_relations.insert(find_table);
-//					UpdateDenom(*it, relation_2_tdom, filter);
-//					break;
-//				}
-//				case JoinType::SEMI:
-//				case JoinType::ANTI: {
-//					// don't insert relations into the numerator_relations.
-//					auto left = it;
-//					auto right = FindMatchingSubGraph(*it, find_table, next_subgraph, subgraphs.end());
-//					if (right != subgraphs.end()) {
-//						if (right_in) {
-//							std::swap(left, right);
-//						}
-//						for (auto &relation : right->relations) {
-//							left->relations.insert(relation);
-//						}
-//						right->relations.clear();
-//					} else {
-//						D_ASSERT(!right_in);
-//						left->relations.insert(find_table);
-//					}
-//					left->numerator_filter_strength *= RelationStatisticsHelper::DEFAULT_SELECTIVITY;
-//					break;
-//				}
-//				default:
-//					// cross product.
-//					auto left = it;
-//					auto right = FindMatchingSubGraph(*it, find_table, next_subgraph, subgraphs.end());
-//					if (right != subgraphs.end()) {
-//						for (auto &rel : right->numerator_relations) {
-//							left->relations.insert(rel);
-//							left->numerator_relations.insert(rel);
-//						}
-//					} else {
-//						it->relations.insert(find_table);
-//						it->numerator_relations.insert(find_table);
-//					}
-//					break;
-//				}
-//				found_match = true;
-//				break;
-//			}
-//			// means that the filter joins relations in the given set, but there is no
-//			// connection to any subgraph in subgraphs. Add a new subgraph, and maybe later there will be
-//			// a connection.
-//			if (!found_match) {
-//				subgraphs.emplace_back();
-//				auto &subgraph = subgraphs.back();
-//				subgraph.relations.insert(filter->left_binding.table_index);
-//				subgraph.numerator_relations.insert(filter->left_binding.table_index);
-//				if (filter->join_type == JoinType::INNER) {
-//					subgraph.relations.insert(filter->right_binding.table_index);
-//					subgraph.numerator_relations.insert(filter->right_binding.table_index);
-//					UpdateDenom(subgraph, relation_2_tdom, filter);
-//				} else if (filter->join_type == JoinType::SEMI || filter->join_type == JoinType::ANTI) {
-//					subgraph.relations.insert(filter->right_binding.table_index);
-//					// don't insert into numerator relations. cardinality of a semi join is
-//					// ({{left_relations}} * default_selectivity)
-//					subgraph.numerator_filter_strength *= RelationStatisticsHelper::DEFAULT_SELECTIVITY;
-//				}
-//			}
-//			auto remove_start = std::remove_if(subgraphs.begin(), subgraphs.end(),
-//			                                   [](Subgraph2Denominator &s) { return s.relations.empty(); });
-//			subgraphs.erase(remove_start, subgraphs.end());
-//
-//			if (subgraphs.size() == 1 && subgraphs.at(0).relations.size() == set.count) {
-//				// You have found enough filters to connect the relations. These are guaranteed
-//				// to be the filters with the highest Tdoms.
-//				all_relations_joined = true;
-//				break;
-//			}
-//		}
-//	}
+	//	for (auto &relation_2_tdom : relations_to_tdoms) {
+	//		// loop through each filter in the tdom.
+	//		if (all_relations_joined) {
+	//			break;
+	//		}
+	//
+	//		for (auto &filter : relation_2_tdom.filters) {
+	//			if (actual_set.count(filter->left_binding.table_index) == 0 ||
+	//			    actual_set.count(filter->right_binding.table_index) == 0) {
+	//				continue;
+	//			}
+	//			// the join filter is on relations in the new set.
+	//			found_match = false;
+	//			vector<Subgraph2Denominator>::iterator it;
+	//			for (it = subgraphs.begin(); it != subgraphs.end(); it++) {
+	//				auto left_in = it->relations.count(filter->left_binding.table_index) > 0;
+	//				auto right_in = it->relations.count(filter->right_binding.table_index) > 0;
+	//				if (left_in && right_in) {
+	//					// if both left and right bindings are in the subgraph, continue.
+	//					// This means another filter is connecting relations already in the
+	//					// subgraph it, but it has a tdom that is less, and we don't care.
+	//					found_match = true;
+	//					continue;
+	//				}
+	//				if (!left_in && !right_in) {
+	//					// if both left and right bindings are *not* in the subgraph, continue
+	//					// without finding a match. This will trigger the process to add a new
+	//					// subgraph
+	//					continue;
+	//				}
+	//				idx_t find_table = left_in ? filter->right_binding.table_index : filter->left_binding.table_index;
+	//				auto next_subgraph = it + 1;
+	//				switch (filter->join_type) {
+	//				case JoinType::INNER: {
+	//					// iterate through other subgraphs and merge.
+	//					FindSubgraphMatchAndMerge(*it, find_table, next_subgraph, subgraphs.end());
+	//					// Now insert the right binding and update denominator with the
+	//					// tdom of the filter
+	//					// insert find_table again in case there was no other subgraph.
+	//					it->relations.insert(find_table);
+	//					it->numerator_relations.insert(find_table);
+	//					UpdateDenom(*it, relation_2_tdom, filter);
+	//					break;
+	//				}
+	//				case JoinType::SEMI:
+	//				case JoinType::ANTI: {
+	//					// don't insert relations into the numerator_relations.
+	//					auto left = it;
+	//					auto right = FindMatchingSubGraph(*it, find_table, next_subgraph, subgraphs.end());
+	//					if (right != subgraphs.end()) {
+	//						if (right_in) {
+	//							std::swap(left, right);
+	//						}
+	//						for (auto &relation : right->relations) {
+	//							left->relations.insert(relation);
+	//						}
+	//						right->relations.clear();
+	//					} else {
+	//						D_ASSERT(!right_in);
+	//						left->relations.insert(find_table);
+	//					}
+	//					left->numerator_filter_strength *= RelationStatisticsHelper::DEFAULT_SELECTIVITY;
+	//					break;
+	//				}
+	//				default:
+	//					// cross product.
+	//					auto left = it;
+	//					auto right = FindMatchingSubGraph(*it, find_table, next_subgraph, subgraphs.end());
+	//					if (right != subgraphs.end()) {
+	//						for (auto &rel : right->numerator_relations) {
+	//							left->relations.insert(rel);
+	//							left->numerator_relations.insert(rel);
+	//						}
+	//					} else {
+	//						it->relations.insert(find_table);
+	//						it->numerator_relations.insert(find_table);
+	//					}
+	//					break;
+	//				}
+	//				found_match = true;
+	//				break;
+	//			}
+	//			// means that the filter joins relations in the given set, but there is no
+	//			// connection to any subgraph in subgraphs. Add a new subgraph, and maybe later there will be
+	//			// a connection.
+	//			if (!found_match) {
+	//				subgraphs.emplace_back();
+	//				auto &subgraph = subgraphs.back();
+	//				subgraph.relations.insert(filter->left_binding.table_index);
+	//				subgraph.numerator_relations.insert(filter->left_binding.table_index);
+	//				if (filter->join_type == JoinType::INNER) {
+	//					subgraph.relations.insert(filter->right_binding.table_index);
+	//					subgraph.numerator_relations.insert(filter->right_binding.table_index);
+	//					UpdateDenom(subgraph, relation_2_tdom, filter);
+	//				} else if (filter->join_type == JoinType::SEMI || filter->join_type == JoinType::ANTI) {
+	//					subgraph.relations.insert(filter->right_binding.table_index);
+	//					// don't insert into numerator relations. cardinality of a semi join is
+	//					// ({{left_relations}} * default_selectivity)
+	//					subgraph.numerator_filter_strength *= RelationStatisticsHelper::DEFAULT_SELECTIVITY;
+	//				}
+	//			}
+	//			auto remove_start = std::remove_if(subgraphs.begin(), subgraphs.end(),
+	//			                                   [](Subgraph2Denominator &s) { return s.relations.empty(); });
+	//			subgraphs.erase(remove_start, subgraphs.end());
+	//
+	//			if (subgraphs.size() == 1 && subgraphs.at(0).relations.size() == set.count) {
+	//				// You have found enough filters to connect the relations. These are guaranteed
+	//				// to be the filters with the highest Tdoms.
+	//				all_relations_joined = true;
+	//				break;
+	//			}
+	//		}
+	//	}
 	// TODO: It's possible cross-products were added and are not present in the filters in the relation_2_tdom
 	//       structures. When that's the case, merge all subgraphs
 	if (subgraphs.size() > 1) {
@@ -408,7 +407,8 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			D_ASSERT(final_subgraph.relations && merge_with->relations);
 			final_subgraph.relations = &set_manager.Union(*final_subgraph.relations, *merge_with->relations);
 			D_ASSERT(final_subgraph.numerator_relations && merge_with->numerator_relations);
-			final_subgraph.numerator_relations = &set_manager.Union(*final_subgraph.numerator_relations, *merge_with->numerator_relations);
+			final_subgraph.numerator_relations =
+			    &set_manager.Union(*final_subgraph.numerator_relations, *merge_with->numerator_relations);
 			final_subgraph.denom *= merge_with->denom;
 			final_subgraph.numerator_filter_strength *= merge_with->numerator_filter_strength;
 		}
@@ -418,8 +418,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 		// denominator is 1 and numerators are a cross product of cardinalities.
 		return DenomInfo(set, 1, 1);
 	}
-	return DenomInfo(*subgraphs.at(0).relations, subgraphs.at(0).numerator_filter_strength,
-	                 subgraphs.at(0).denom);
+	return DenomInfo(*subgraphs.at(0).relations, subgraphs.at(0).numerator_filter_strength, subgraphs.at(0).denom);
 }
 
 template <>

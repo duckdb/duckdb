@@ -245,7 +245,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 				// the physical planner will eventually skip the filter, but will keep
 				// the correct columns.
 				if (filter.projection_map.empty()) {
-					*node_ptr = std::move(filter.children[0]);
+					node_ptr = std::move(filter.children[0]);
 				}
 				break;
 			}

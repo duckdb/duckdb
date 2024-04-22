@@ -9,16 +9,16 @@
 
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/optimizer/join_order/query_graph.hpp"
-#include "duckdb/optimizer/join_order/query_graph_manager.hpp"
 
 #include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
 
 namespace duckdb {
 
+class FilterInfo;
+
 struct DenomInfo {
 	DenomInfo(JoinRelationSet &numerator_relations, double filter_strength, double denominator)
-	    : numerator_relations(numerator_relations), filter_strength(filter_strength),
-	      denominator(denominator) {
+	    : numerator_relations(numerator_relations), filter_strength(filter_strength), denominator(denominator) {
 	}
 
 	JoinRelationSet &numerator_relations;
@@ -45,8 +45,9 @@ struct RelationsToTDom {
 
 class FilterInfoWithTotalDomains {
 public:
-	FilterInfoWithTotalDomains(FilterInfo *filter_info, RelationsToTDom &relation2tdom) : filter_info(filter_info),
-	      tdom_hll(relation2tdom.tdom_hll), tdom_no_hll(relation2tdom.tdom_no_hll), has_tdom_hll(relation2tdom.has_tdom_hll) {
+	FilterInfoWithTotalDomains(FilterInfo *filter_info, RelationsToTDom &relation2tdom)
+	    : filter_info(filter_info), tdom_hll(relation2tdom.tdom_hll), tdom_no_hll(relation2tdom.tdom_no_hll),
+	      has_tdom_hll(relation2tdom.has_tdom_hll) {
 	}
 
 	FilterInfo *filter_info;
@@ -63,7 +64,8 @@ struct Subgraph2Denominator {
 	double denom;
 	double numerator_filter_strength;
 
-	Subgraph2Denominator() : relations(nullptr), numerator_relations(nullptr), denom(1), numerator_filter_strength(1) {};
+	Subgraph2Denominator()
+	    : relations(nullptr), numerator_relations(nullptr), denom(1), numerator_filter_strength(1) {};
 };
 
 class CardinalityHelper {
@@ -118,8 +120,10 @@ private:
 	//! If there are multiple equivalence sets, they are merged.
 	void AddToEquivalenceSets(FilterInfo *filter_info, vector<idx_t> matching_equivalent_sets);
 
-	double CalculateUpdatedDemo(Subgraph2Denominator left, Subgraph2Denominator right, FilterInfoWithTotalDomains &filter);
-	JoinRelationSet &UpdateNumeratorRelations(Subgraph2Denominator left, Subgraph2Denominator right, FilterInfoWithTotalDomains &filter);
+	double CalculateUpdatedDemo(Subgraph2Denominator left, Subgraph2Denominator right,
+	                            FilterInfoWithTotalDomains &filter);
+	JoinRelationSet &UpdateNumeratorRelations(Subgraph2Denominator left, Subgraph2Denominator right,
+	                                          FilterInfoWithTotalDomains &filter);
 
 	void AddRelationTdom(FilterInfo &filter_info);
 	bool EmptyFilter(FilterInfo &filter_info);
