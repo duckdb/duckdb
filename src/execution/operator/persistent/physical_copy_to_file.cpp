@@ -83,11 +83,10 @@ public:
 
 		auto l = lock.GetExclusiveLock();
 		lock_guard<mutex> global_lock_on_partition_state(partition_state->lock);
-		const auto &global_partitions = partition_state->partitions;
+		const auto &global_partitions = partition_state->partition_map;
 		// global_partitions have partitions added only at the back, so it's fine to only traverse the last part
-
-		for (idx_t i = created_directories; i < global_partitions.size(); i++) {
-			CreateDirectories(op.partition_columns, op.names, global_partitions[i]->first.values, trimmed_path, fs);
+		for (auto &entry : global_partitions) {
+			CreateDirectories(op.partition_columns, op.names, entry.first.values, trimmed_path, fs);
 		}
 		created_directories = global_partitions.size();
 	}
@@ -162,7 +161,7 @@ string PhysicalCopyToFile::GetTrimmedPath(ClientContext &context) const {
 class CopyToFunctionLocalState : public LocalSinkState {
 public:
 	explicit CopyToFunctionLocalState(unique_ptr<LocalFunctionData> local_state)
-	    : local_state(std::move(local_state)), writer_offset(0) {
+	    : local_state(std::move(local_state)) {
 	}
 	unique_ptr<GlobalFunctionData> global_state;
 	unique_ptr<LocalFunctionData> local_state;
@@ -171,7 +170,6 @@ public:
 	unique_ptr<HivePartitionedColumnData> part_buffer;
 	unique_ptr<PartitionedColumnDataAppendState> part_buffer_append_state;
 
-	idx_t writer_offset;
 	idx_t append_count = 0;
 
 	void InitializeAppendState(ClientContext &context, const PhysicalCopyToFile &op,
@@ -215,8 +213,12 @@ public:
 		g.CreatePartitionDirectories(context.client, op);
 
 		for (idx_t i = 0; i < partitions.size(); i++) {
+			auto entry = partition_key_map.find(i);
+			if (entry == partition_key_map.end()) {
+				continue;
+			}
 			// get the partition write info for this buffer
-			auto &info = g.GetPartitionWriteInfo(context, op, partition_key_map[i]->values);
+			auto &info = g.GetPartitionWriteInfo(context, op, entry->second->values);
 
 			auto local_copy_state = op.function.copy_to_initialize_local(context, *op.bind_data);
 			// push the chunks into the write state
@@ -248,7 +250,6 @@ unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContex
 		auto &g = sink_state->Cast<CopyToFunctionGlobalState>();
 
 		auto state = make_uniq<CopyToFunctionLocalState>(nullptr);
-		state->writer_offset = g.last_file_offset++;
 		state->InitializeAppendState(context.client, *this, g);
 		return std::move(state);
 	}
