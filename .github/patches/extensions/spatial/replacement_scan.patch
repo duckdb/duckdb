@@ -1,0 +1,74 @@
+diff --git a/duckdb b/duckdb
+index 6598220..3c695d7 160000
+--- a/duckdb
++++ b/duckdb
+@@ -1 +1 @@
+-Subproject commit 6598220b953b0be8a612ea1a9d5c1bd85c5379c8
++Subproject commit 3c695d7ba94d95d9facee48d395f46ed0bd72b46
+diff --git a/spatial/include/spatial/gdal/functions.hpp b/spatial/include/spatial/gdal/functions.hpp
+index 9bf2945..ae54a4d 100644
+--- a/spatial/include/spatial/gdal/functions.hpp
++++ b/spatial/include/spatial/gdal/functions.hpp
+@@ -3,6 +3,7 @@
+ #include "duckdb/function/table/arrow.hpp"
+ #include "duckdb/parser/parsed_data/copy_info.hpp"
+ #include "duckdb/function/copy_function.hpp"
++#include "duckdb/function/replacement_scan.hpp"
+ 
+ #include "spatial/common.hpp"
+ 
+@@ -26,7 +27,7 @@ private:
+ 
+ 	static unique_ptr<NodeStatistics> Cardinality(ClientContext &context, const FunctionData *data);
+ 
+-	static unique_ptr<TableRef> ReplacementScan(ClientContext &context, const string &table_name,
++	static unique_ptr<TableRef> ReplacementScan(ClientContext &context, ReplacementScanInput &input,
+ 	                                            ReplacementScanData *data);
+ 
+ public:
+diff --git a/spatial/src/spatial/core/io/osm/st_read_osm.cpp b/spatial/src/spatial/core/io/osm/st_read_osm.cpp
+index 11055c9..eb6323f 100644
+--- a/spatial/src/spatial/core/io/osm/st_read_osm.cpp
++++ b/spatial/src/spatial/core/io/osm/st_read_osm.cpp
+@@ -839,8 +839,9 @@ static idx_t GetBatchIndex(ClientContext &context, const FunctionData *bind_data
+ 	return state.block->block_idx;
+ }
+ 
+-static unique_ptr<TableRef> ReadOsmPBFReplacementScan(ClientContext &context, const string &table_name,
++static unique_ptr<TableRef> ReadOsmPBFReplacementScan(ClientContext &context, ReplacementScanInput &input,
+                                                       ReplacementScanData *data) {
++	auto &table_name = input.table_name;
+ 	// Check if the table name ends with .osm.pbf
+ 	if (!StringUtil::EndsWith(StringUtil::Lower(table_name), ".osm.pbf")) {
+ 		return nullptr;
+diff --git a/spatial/src/spatial/core/io/shapefile/read_shapefile.cpp b/spatial/src/spatial/core/io/shapefile/read_shapefile.cpp
+index fcc182e..05d1687 100644
+--- a/spatial/src/spatial/core/io/shapefile/read_shapefile.cpp
++++ b/spatial/src/spatial/core/io/shapefile/read_shapefile.cpp
+@@ -540,8 +540,9 @@ static unique_ptr<NodeStatistics> GetCardinality(ClientContext &context, const F
+ 	return result;
+ }
+ 
+-static unique_ptr<TableRef> GetReplacementScan(ClientContext &context, const string &table_name,
++static unique_ptr<TableRef> GetReplacementScan(ClientContext &context, ReplacementScanInput &input,
+                                                ReplacementScanData *data) {
++	auto &table_name = input.table_name;
+ 	// Check if the table name ends with .shp
+ 	if (!StringUtil::EndsWith(StringUtil::Lower(table_name), ".shp")) {
+ 		return nullptr;
+diff --git a/spatial/src/spatial/gdal/functions/st_read.cpp b/spatial/src/spatial/gdal/functions/st_read.cpp
+index 9edf968..c19b80c 100644
+--- a/spatial/src/spatial/gdal/functions/st_read.cpp
++++ b/spatial/src/spatial/gdal/functions/st_read.cpp
+@@ -592,9 +592,9 @@ unique_ptr<NodeStatistics> GdalTableFunction::Cardinality(ClientContext &context
+ 	return result;
+ }
+ 
+-unique_ptr<TableRef> GdalTableFunction::ReplacementScan(ClientContext &, const string &table_name,
++unique_ptr<TableRef> GdalTableFunction::ReplacementScan(ClientContext &, ReplacementScanInput &input,
+                                                         ReplacementScanData *) {
+-
++	auto &table_name = input.table_name;
+ 	auto lower_name = StringUtil::Lower(table_name);
+ 	// Check if the table name ends with some common geospatial file extensions
+ 	if (StringUtil::EndsWith(lower_name, ".gpkg") || StringUtil::EndsWith(lower_name, ".fgb")) {

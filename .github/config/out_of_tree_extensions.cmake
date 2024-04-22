@@ -79,6 +79,7 @@ duckdb_extension_load(spatial
     GIT_URL https://github.com/duckdb/duckdb_spatial.git
     GIT_TAG 8ac803e986ccda34f32dee82a7faae95b72b3492
     INCLUDE_DIR spatial/include
+    APPLY_PATCHES
     TEST_DIR test/sql
     )
 
