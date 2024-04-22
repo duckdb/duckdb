@@ -16,12 +16,12 @@
 namespace duckdb {
 
 struct DenomInfo {
-	DenomInfo(unordered_set<idx_t> numerator_relations, double filter_strength, double denominator)
-	    : numerator_relations(std::move(numerator_relations)), filter_strength(filter_strength),
+	DenomInfo(JoinRelationSet &numerator_relations, double filter_strength, double denominator)
+	    : numerator_relations(numerator_relations), filter_strength(filter_strength),
 	      denominator(denominator) {
 	}
 
-	unordered_set<idx_t> numerator_relations;
+	JoinRelationSet &numerator_relations;
 	double filter_strength;
 	double denominator;
 };
@@ -45,37 +45,25 @@ struct RelationsToTDom {
 
 class FilterInfoWithTotalDomains {
 public:
-	FilterInfoWithTotalDomains(FilterInfo *filter_info, RelationsToTDom relation2tdom) :
-	      left_binding(filter_info->left_binding), right_binding(filter_info->right_binding),
+	FilterInfoWithTotalDomains(FilterInfo *filter_info, RelationsToTDom &relation2tdom) : filter_info(filter_info),
 	      tdom_hll(relation2tdom.tdom_hll), tdom_no_hll(relation2tdom.tdom_no_hll), has_tdom_hll(relation2tdom.has_tdom_hll) {
-		left_set = nullptr;
-		right_set = nullptr;
-		if (filter_info->left_set) {
-			left_set = filter_info->left_set.get();
-		}
-		if (filter_info->right_set) {
-			right_set = filter_info->right_set.get();
-		}
 	}
 
-	ColumnBinding left_binding;
-	ColumnBinding right_binding;
+	FilterInfo *filter_info;
 	//!	the estimated total domains of the equivalent relations determined using HLL
 	idx_t tdom_hll;
 	//! the estimated total domains of each relation without using HLL
 	idx_t tdom_no_hll;
 	bool has_tdom_hll;
-	optional_ptr<JoinRelationSet> left_set;
-	optional_ptr<JoinRelationSet> right_set;
 };
 
 struct Subgraph2Denominator {
-	unordered_set<idx_t> relations;
-	unordered_set<idx_t> numerator_relations;
+	optional_ptr<JoinRelationSet> relations;
+	optional_ptr<JoinRelationSet> numerator_relations;
 	double denom;
 	double numerator_filter_strength;
 
-	Subgraph2Denominator() : relations(), numerator_relations(), denom(1), numerator_filter_strength(1) {};
+	Subgraph2Denominator() : relations(nullptr), numerator_relations(nullptr), denom(1), numerator_filter_strength(1) {};
 };
 
 class CardinalityHelper {
@@ -120,7 +108,7 @@ public:
 	void PrintRelationToTdomInfo();
 
 private:
-	double GetNumerator(unordered_set<idx_t> &set);
+	double GetNumerator(JoinRelationSet &set);
 	DenomInfo GetDenominator(JoinRelationSet &set);
 
 	bool SingleColumnFilter(FilterInfo &filter_info);
@@ -129,6 +117,10 @@ private:
 	//! given in matching equivalent sets.
 	//! If there are multiple equivalence sets, they are merged.
 	void AddToEquivalenceSets(FilterInfo *filter_info, vector<idx_t> matching_equivalent_sets);
+
+	double CalculateUpdatedDemo(Subgraph2Denominator left, Subgraph2Denominator right, FilterInfoWithTotalDomains &filter);
+	JoinRelationSet &UpdateNumeratorRelations(Subgraph2Denominator left, Subgraph2Denominator right, FilterInfoWithTotalDomains &filter);
+
 	void AddRelationTdom(FilterInfo &filter_info);
 	bool EmptyFilter(FilterInfo &filter_info);
 };
