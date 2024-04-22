@@ -213,7 +213,7 @@ duckdb_state duckdb_enum_values(duckdb_logical_type type, char **values, idx_t v
 	auto &ltype = *(reinterpret_cast<duckdb::LogicalType *>(type));
 
 	auto &vector = duckdb::EnumType::GetValuesInsertOrder(ltype);
-	auto strings = duckdb::FlatVector::GetData<string_t>(vector);
+	auto strings = duckdb::FlatVector::GetData<duckdb::string_t>(vector);
 
 	auto enum_count = duckdb::EnumType::GetSize(ltype);
 	*filled_count = values_length < enum_count ? values_length : enum_count;
