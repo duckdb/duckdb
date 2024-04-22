@@ -93,6 +93,10 @@ jobs:
           assert platform == "wasm_eh_pyodide", platform
           EOF
 
+      - name: Wheel sizes
+        run: |
+          ls -lah ./tools/pythonpkg/dist/*.whl
+
       - uses: actions/upload-artifact@v3
         with:
           name: pyodide-python${{ matrix.version.python }}
