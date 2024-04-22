@@ -3,6 +3,7 @@
 #include "duckdb/optimizer/filter_combiner.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
+#include "duckdb/planner/operator/logical_window.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 
 namespace duckdb {
@@ -43,6 +44,8 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 		return PushdownGet(std::move(op));
 	case LogicalOperatorType::LOGICAL_LIMIT:
 		return PushdownLimit(std::move(op));
+	case LogicalOperatorType::LOGICAL_WINDOW:
+		return PushdownWindow(std::move(op));
 	default:
 		return FinishPushdown(std::move(op));
 	}
