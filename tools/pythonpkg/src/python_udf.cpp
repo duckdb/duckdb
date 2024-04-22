@@ -66,7 +66,6 @@ static void ConvertPyArrowToDataChunk(const py::object &table, Vector &out, Clie
 	vector<LogicalType> input_types;
 	vector<string> input_names;
 
-	// FIXME: should we populate this?
 	TableFunctionRef empty;
 	TableFunctionBindInput bind_input(children, named_params, input_types, input_names, nullptr, nullptr, empty);
 	vector<LogicalType> return_types;
