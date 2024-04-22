@@ -52,52 +52,31 @@ public:
 	atomic<idx_t> rows_copied;
 	atomic<idx_t> last_file_offset;
 	unique_ptr<GlobalFunctionData> global_state;
-	idx_t created_directories = 0;
-
+	//! Created directories
+	unordered_set<string> created_directories;
 	//! shared state for HivePartitionedColumnData
 	shared_ptr<GlobalHivePartitionState> partition_state;
 
-	static void CreateDir(const string &dir_path, FileSystem &fs) {
+	void CreateDir(const string &dir_path, FileSystem &fs) {
+		if (created_directories.find(dir_path) != created_directories.end()) {
+			// already attempted to create this directory
+			return;
+		}
 		if (!fs.DirectoryExists(dir_path)) {
 			fs.CreateDirectory(dir_path);
 		}
+		created_directories.insert(dir_path);
 	}
 
-	static void CreateDirectories(const vector<idx_t> &cols, const vector<string> &names, const vector<Value> &values,
-	                              string path, FileSystem &fs) {
+	string GetOrCreateDirectory(const vector<idx_t> &cols, const vector<string> &names, const vector<Value> &values,
+	                            string path, FileSystem &fs) {
 		CreateDir(path, fs);
-
 		for (idx_t i = 0; i < cols.size(); i++) {
 			const auto &partition_col_name = names[cols[i]];
 			const auto &partition_value = values[i];
 			string p_dir = partition_col_name + "=" + partition_value.ToString();
 			path = fs.JoinPath(path, p_dir);
 			CreateDir(path, fs);
-		}
-	}
-
-	void CreatePartitionDirectories(ClientContext &context, const PhysicalCopyToFile &op) {
-		auto &fs = FileSystem::GetFileSystem(context);
-
-		auto trimmed_path = op.GetTrimmedPath(context);
-
-		auto l = lock.GetExclusiveLock();
-		lock_guard<mutex> global_lock_on_partition_state(partition_state->lock);
-		const auto &global_partitions = partition_state->partition_map;
-		// global_partitions have partitions added only at the back, so it's fine to only traverse the last part
-		for (auto &entry : global_partitions) {
-			CreateDirectories(op.partition_columns, op.names, entry.first.values, trimmed_path, fs);
-		}
-		created_directories = global_partitions.size();
-	}
-
-	static string GetDirectory(const vector<idx_t> &cols, const vector<string> &names, const vector<Value> &values,
-	                           string path, FileSystem &fs) {
-		for (idx_t i = 0; i < cols.size(); i++) {
-			const auto &partition_col_name = names[cols[i]];
-			const auto &partition_value = values[i];
-			string p_dir = partition_col_name + "=" + partition_value.ToString();
-			path = fs.JoinPath(path, p_dir);
 		}
 		return path;
 	}
@@ -131,7 +110,7 @@ public:
 		auto &fs = FileSystem::GetFileSystem(context.client);
 		// Create a writer for the current file
 		auto trimmed_path = op.GetTrimmedPath(context.client);
-		string hive_path = GetDirectory(op.partition_columns, op.names, values, trimmed_path, fs);
+		string hive_path = GetOrCreateDirectory(op.partition_columns, op.names, values, trimmed_path, fs);
 		string full_path(op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, 0));
 		if (fs.FileExists(full_path) && !op.overwrite_or_ignore) {
 			throw IOException("failed to create %s, file exists! Enable OVERWRITE_OR_IGNORE option to force writing",
@@ -207,9 +186,6 @@ public:
 		part_buffer->FlushAppendState(*part_buffer_append_state);
 		auto &partitions = part_buffer->GetPartitions();
 		auto partition_key_map = part_buffer->GetReverseMap();
-
-		// ensure all partition directories are created before we start writing
-		g.CreatePartitionDirectories(context.client, op);
 
 		for (idx_t i = 0; i < partitions.size(); i++) {
 			auto entry = partition_key_map.find(i);
