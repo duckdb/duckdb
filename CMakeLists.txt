@@ -264,6 +264,9 @@ if (OVERRIDE_GIT_DESCRIBE)
             OUTPUT_VARIABLE GIT_COMMIT_HASH
             OUTPUT_STRIP_TRAILING_WHITESPACE)
         set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE}-0-g${GIT_COMMIT_HASH}")
+        if (GIT_RESULT)
+          message(FATAL_ERROR "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'log -1 --format=%h'. Consider providing explicit GIT_COMMIT_HASH")
+	endif()
     else()
       set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE}-0-g0123456789")
     endif()
@@ -280,16 +283,27 @@ else()
             RESULT_VARIABLE GIT_RESULT
             OUTPUT_VARIABLE GIT_COMMIT_HASH
             OUTPUT_STRIP_TRAILING_WHITESPACE)
+        if (GIT_RESULT)
+          message(FATAL_ERROR "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'log -1 --format=%h'. Consider providing explicit GIT_COMMIT_HASH or OVERRIDE_GIT_DESCRIBE")
+	endif()
     endif()
     execute_process(
           COMMAND ${GIT_EXECUTABLE} describe --tags --long
           WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+          RESULT_VARIABLE GIT_RESULT
           OUTPUT_VARIABLE GIT_DESCRIBE
           OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if (GIT_RESULT)
+      message(FATAL_ERROR "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'describe --tags --long'. Consider providing explicit OVERRIDE_GIT_DESCRIBE")
+    endif()
   else()
     message("Git NOT FOUND and EXTERNAL_GIT_DESCRIBE not provided, continuing with dummy version v0.0.1")
     set(GIT_DESCRIBE "v0.0.1-0-g0123456789")
   endif()
+endif()
+
+if (NOT GIT_DESCRIBE MATCHES "^v[0-9]+\.[0-9]+\.[0-9]+\-[0-9]+\-g[a-f0-9]+$")
+  message(FATAL_ERROR "Computed GIT_DESCRIBE '${GIT_DESCRIBE}' is not in the expected form 'vX.Y.Z-N-gGITHASH123'. Consider providing OVERRIDE_GIT_DESCRIBE explicitly to CMake")
 endif()
 
 string(REGEX REPLACE "v([0-9]+)\.[0-9]+\.[0-9]+\-.*" "\\1" DUCKDB_MAJOR_VERSION "${GIT_DESCRIBE}")
