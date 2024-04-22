@@ -148,7 +148,7 @@ void CSVReaderOptions::SetDateFormat(LogicalTypeId type, const string &format, b
 		error = StrTimeFormat::ParseFormatSpecifier(format, strpformat);
 		dialect_options.date_format[type].Set(strpformat);
 	} else {
-		error = StrTimeFormat::ParseFormatSpecifier(format, write_date_format[type]);
+		write_date_format[type] = Value(format);
 	}
 	if (!error.empty()) {
 		throw InvalidInputException("Could not parse DATEFORMAT: %s", error.c_str());

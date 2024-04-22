@@ -9,7 +9,7 @@ CREATE TABLE tbl(id int, ts timestamp);
 statement error
 COPY tbl FROM 'data/csv/timestamp_with_tz.csv' (HEADER)
 ----
-timestamp that is not UTC
+Error when converting column "ts". Could not convert string "2021-05-25 04:55:03.382494 EST" to 'TIMESTAMP'
 
 require icu
 

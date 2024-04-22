@@ -3807,14 +3807,10 @@ const char* EnumUtil::ToChars<MapInvalidReason>(MapInvalidReason value) {
 	switch(value) {
 	case MapInvalidReason::VALID:
 		return "VALID";
-	case MapInvalidReason::NULL_KEY_LIST:
-		return "NULL_KEY_LIST";
 	case MapInvalidReason::NULL_KEY:
 		return "NULL_KEY";
 	case MapInvalidReason::DUPLICATE_KEY:
 		return "DUPLICATE_KEY";
-	case MapInvalidReason::NULL_VALUE_LIST:
-		return "NULL_VALUE_LIST";
 	case MapInvalidReason::NOT_ALIGNED:
 		return "NOT_ALIGNED";
 	case MapInvalidReason::INVALID_PARAMS:
@@ -3829,17 +3825,11 @@ MapInvalidReason EnumUtil::FromString<MapInvalidReason>(const char *value) {
 	if (StringUtil::Equals(value, "VALID")) {
 		return MapInvalidReason::VALID;
 	}
-	if (StringUtil::Equals(value, "NULL_KEY_LIST")) {
-		return MapInvalidReason::NULL_KEY_LIST;
-	}
 	if (StringUtil::Equals(value, "NULL_KEY")) {
 		return MapInvalidReason::NULL_KEY;
 	}
 	if (StringUtil::Equals(value, "DUPLICATE_KEY")) {
 		return MapInvalidReason::DUPLICATE_KEY;
-	}
-	if (StringUtil::Equals(value, "NULL_VALUE_LIST")) {
-		return MapInvalidReason::NULL_VALUE_LIST;
 	}
 	if (StringUtil::Equals(value, "NOT_ALIGNED")) {
 		return MapInvalidReason::NOT_ALIGNED;

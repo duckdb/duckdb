@@ -425,7 +425,7 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 		throw ParserException("Unknown unit for memory_limit: %s (expected: KB, MB, GB, TB for 1000^i units or KiB, "
 		                      "MiB, GiB, TiB for 1024^i unites)");
 	}
-	return (idx_t)multiplier * limit;
+	return NumericCast<idx_t>(multiplier * limit);
 }
 
 // Right now we only really care about access mode when comparing DBConfigs
