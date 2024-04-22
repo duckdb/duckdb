@@ -226,6 +226,25 @@ SELECT * FROM (VALUES (html_unescape('&#xD800;')), (html_unescape('&#xD801;')), 
 (empty)
 (empty)
 
+# check invalid code points
+query T
+SELECT * FROM (VALUES (html_unescape('&#xD800;')), (html_unescape('&#xD801;')), (html_unescape('&#xDB00')), (html_unescape('&#xDC00')), (html_unescape('&#xDFFF')), (html_unescape('&#x110000')), (html_unescape('&#x1')), (html_unescape('&#xb')), (html_unescape('&#xe')), (html_unescape('&#x7f')), (html_unescape('&#xfffe')), (html_unescape('&#xffff')), (html_unescape('&#x10fffe')), (html_unescape('&#x10ffff'))) tbl(i);
+----
+�
+�
+�
+�
+�
+�
+(empty)
+(empty)
+(empty)
+(empty)
+(empty)
+(empty)
+(empty)
+(empty)
+
 # check that multiple trailing semicolons are handled correctly
 query T
 SELECT * FROM (VALUES (html_unescape('&quot;;')), (html_unescape('&#34;;')), (html_unescape('&#x22;;')), (html_unescape('&#34;;&#x22;;')), (html_unescape('&#x22;quot;'))) tbl(i);
@@ -248,9 +267,9 @@ SELECT html_unescape('&not');
 ¬
 
 query I
-SELECT html_unescape('&not&not;');
+SELECT html_unescape('not &notin');
 ----
-¬¬
+not ¬in
 
 query I
 SELECT html_unescape('&notin');

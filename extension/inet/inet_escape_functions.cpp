@@ -1,8 +1,9 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/function/scalar/regexp.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
-#include "duckdb/main/extension_util.hpp"
 #include "duckdb/common/types/blob.hpp"
+#include "duckdb/main/extension_util.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "inet_extension.hpp"
 #include "inet_functions.hpp"
@@ -69,20 +70,30 @@ static void PrepareStrForTypeCasting(string &match) {
 	}
 }
 
-static string ReplaceCharref(string &str, UnescapeBindData &info) {
+static idx_t Find(const char *input_data, idx_t input_size, const string &sep_data) {
+	if (sep_data.empty()) {
+		return 0;
+	}
+	return ContainsFun::Find(const_uchar_ptr_cast(input_data), input_size, const_uchar_ptr_cast(sep_data.c_str()),
+	                         sep_data.size());
+}
+
+static string ReplaceCharref(string_t &str, UnescapeBindData &info) {
 	string match;
 	string result {""};
 	idx_t start_pos = 0;
-	duckdb_re2::StringPiece input(str); // wrap a StringPiece around it
+	auto input_data = str.GetData();
+	auto input_size = str.GetSize();
+	auto input = regexp_util::CreateStringPiece(str); // wrap a StringPiece around it
 	while (RE2::FindAndConsume(&input, *info.charref, &match)) {
-		// include the input value until the match
-		idx_t match_pos = str.find(match, start_pos) - 1; // include also the & ampersand char
-		result += str.substr(start_pos, match_pos - start_pos);
+		// include the input value until the current match
+		idx_t match_pos = input_size - (match.length() + 1) - input.length(); // +1 to include also the & ampersand char
+		result += string(input_data + start_pos, match_pos - start_pos);
 
 		// the position after the end of the current match
 		start_pos = (match_pos + 1) + match.length();
 
-		if (match[0] == '#') {
+		if (match[0] == '#') { // it represents a hexadecimal value or a Unicode point
 			int32_t num;
 			PrepareStrForTypeCasting(match);
 			if (!TryCast::Operation<string_t, int32_t>(string_t(match), num)) {
@@ -117,7 +128,6 @@ static string ReplaceCharref(string &str, UnescapeBindData &info) {
 				}
 				continue;
 			}
-
 			for (idx_t x = match.length() - 1; x >= 1; --x) {
 				string substr = match.substr(0, x);
 				it = info.html5_names.find(substr);
@@ -125,7 +135,8 @@ static string ReplaceCharref(string &str, UnescapeBindData &info) {
 					if (!AddBlob(it->second, result)) {
 						throw ConversionException("Cannot convert codepoint of %s to utf8", match);
 					}
-					start_pos = x + 1;
+					start_pos -= (match.length() - x);
+					input.set(input_data + start_pos, input_size - start_pos);
 					break;
 				}
 			}
@@ -134,7 +145,7 @@ static string ReplaceCharref(string &str, UnescapeBindData &info) {
 			}
 		}
 	}
-	result += str.substr(start_pos);
+	input.AppendToString(&result);
 	return result;
 }
 
@@ -194,11 +205,10 @@ void INetFunctions::Unescape(DataChunk &args, ExpressionState &state, Vector &re
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.bind_info->Cast<UnescapeBindData>();
 	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input_st) {
-		auto str = input_st.GetString();
-		if (str.find('&') == str.npos) {
-			return StringVector::AddString(result, str);
+		if (Find(input_st.GetData(), input_st.GetSize(), "&") == DConstants::INVALID_INDEX) {
+			return StringVector::AddString(result, input_st);
 		}
-		string unescaped = ReplaceCharref(str, info);
+		string unescaped = ReplaceCharref(input_st, info);
 		return StringVector::AddString(result, unescaped);
 	});
 }
