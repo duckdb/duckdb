@@ -43,13 +43,11 @@ unique_ptr<QueryNode> QueryRelation::GetQueryNode() {
 
 BoundStatement QueryRelation::Bind(Binder &binder) {
 	SelectStatement stmt;
-	stmt.node = GetQueryNode();
 	auto &original_ref = *select_stmt->node->Cast<SelectNode>().from_table;
 	if (!original_ref.external_dependency) {
 		original_ref.external_dependency = make_shared_ptr<ExternalDependency>();
 	}
-	auto &copied_ref = *stmt.node->Cast<SelectNode>().from_table;
-	copied_ref.external_dependency = make_shared_ptr<ProxyDependencies>(original_ref.external_dependency);
+	stmt.node = GetQueryNode();
 	auto result = binder.Bind(stmt.Cast<SQLStatement>());
 	return result;
 }

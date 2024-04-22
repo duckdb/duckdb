@@ -190,8 +190,6 @@ unique_ptr<TableRef> PythonReplacementScan::Replace(ClientContext &context, Repl
 	if (!result) {
 		return nullptr;
 	}
-	// If we came from 'sql' / 'query' the ProxyDependencies is set
-	// this delegates to the ExternalDependency object that lives inside the original TableRef of the QueryRelation
 	if (table_ref.external_dependency) {
 		D_ASSERT(result->external_dependency);
 

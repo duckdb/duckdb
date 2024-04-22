@@ -50,21 +50,21 @@ class ExternalDependency {
 public:
 	explicit ExternalDependency() {
 	}
-	virtual ~ExternalDependency() {
+	~ExternalDependency() {
 	}
 
 public:
-	virtual void AddDependency(const string &name, shared_ptr<DependencyItem> item) {
+	void AddDependency(const string &name, shared_ptr<DependencyItem> item) {
 		objects[name] = std::move(item);
 	}
-	virtual shared_ptr<DependencyItem> GetDependency(const string &name) const {
+	shared_ptr<DependencyItem> GetDependency(const string &name) const {
 		auto it = objects.find(name);
 		if (it == objects.end()) {
 			return nullptr;
 		}
 		return it->second;
 	}
-	virtual void ScanDependencies(const dependency_scan_t &callback) {
+	void ScanDependencies(const dependency_scan_t &callback) {
 		for (auto &kv : objects) {
 			callback(kv.first, kv.second);
 		}
@@ -73,29 +73,6 @@ public:
 private:
 	//! The objects encompassed by this dependency
 	case_insensitive_map_t<shared_ptr<DependencyItem>> objects;
-};
-
-//! Not actually storing any dependencies, just forwards to an existing ExternalDependency object
-class ProxyDependencies : public ExternalDependency {
-public:
-	explicit ProxyDependencies(shared_ptr<ExternalDependency> other) : other(std::move(other)) {
-	}
-	~ProxyDependencies() override {
-	}
-
-public:
-	void AddDependency(const string &name, shared_ptr<DependencyItem> item) override {
-		other->AddDependency(name, std::move(item));
-	}
-	shared_ptr<DependencyItem> GetDependency(const string &name) const override {
-		return other->GetDependency(name);
-	}
-	void ScanDependencies(const dependency_scan_t &callback) override {
-		other->ScanDependencies(callback);
-	}
-
-public:
-	shared_ptr<ExternalDependency> other;
 };
 
 } // namespace duckdb
