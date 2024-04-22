@@ -392,8 +392,6 @@ void Relation::AddExternalDependency(shared_ptr<ExternalDependency> dependency) 
 }
 
 vector<shared_ptr<ExternalDependency>> Relation::GetAllDependencies() {
-	// FIXME: this method should not be necessary
-	// ideally we attach the ExternalDependency to the TableRef only
 	vector<shared_ptr<ExternalDependency>> all_dependencies;
 	Relation *cur = this;
 	while (cur) {
