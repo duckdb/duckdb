@@ -115,7 +115,6 @@ class TestRAPIQuery(object):
         res = duckdb_cursor.query('drop table tbl_non_select_result')
         assert res is None
 
-    @pytest.mark.skip(reason="FIXME: This behavior breaks because of replacement scan caching")
     def test_replacement_scan_recursion(self, duckdb_cursor):
         depth_limit = 1000
         import sys
@@ -126,7 +125,6 @@ class TestRAPIQuery(object):
         duckdb_cursor.execute(f"SET max_expression_depth TO {depth_limit}")
         rel = duckdb_cursor.sql('select 42 a, 21 b')
         rel = duckdb_cursor.sql('select a+a a, b+b b from rel')
-        with pytest.raises(duckdb.BinderException, match=f'Max expression depth limit of {depth_limit} exceeded'):
-            other_rel = duckdb_cursor.sql('select a from rel')
-            res = other_rel.fetchall()
-            print(res)
+        other_rel = duckdb_cursor.sql('select a from rel')
+        res = other_rel.fetchall()
+        assert res == [(84,)]

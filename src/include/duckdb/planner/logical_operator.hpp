@@ -15,7 +15,6 @@
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
-#include "duckdb/main/external_dependencies.hpp"
 
 #include <algorithm>
 #include <functional>
