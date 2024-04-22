@@ -3,6 +3,9 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/planner/bound_statement.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
 
 namespace duckdb {
 

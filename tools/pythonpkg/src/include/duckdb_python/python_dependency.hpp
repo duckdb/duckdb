@@ -14,7 +14,7 @@ public:
 	static constexpr const ExternalDependencyItemType TYPE = ExternalDependencyItemType::PYTHON_DEPENDENCY;
 
 public:
-	PythonDependencyItem(unique_ptr<RegisteredObject> &&object);
+	explicit PythonDependencyItem(unique_ptr<RegisteredObject> &&object);
 	~PythonDependencyItem() override;
 
 public:

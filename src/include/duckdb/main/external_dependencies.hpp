@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "duckdb/common/case_insensitive_map.hpp"
+#include <functional>
 
 #pragma once
 
@@ -43,6 +44,8 @@ protected:
 	}
 };
 
+using dependency_scan_t = std::function<void(const string &name, shared_ptr<DependencyItem> item)>;
+
 class ExternalDependency {
 public:
 	explicit ExternalDependency() {
@@ -61,7 +64,7 @@ public:
 		}
 		return it->second;
 	}
-	virtual void ScanDependencies(std::function<void(const string &name, shared_ptr<DependencyItem> item)> callback) {
+	virtual void ScanDependencies(const dependency_scan_t &callback) {
 		for (auto &kv : objects) {
 			callback(kv.first, kv.second);
 		}
@@ -75,7 +78,7 @@ private:
 //! Not actually storing any dependencies, just forwards to an existing ExternalDependency object
 class ProxyDependencies : public ExternalDependency {
 public:
-	ProxyDependencies(shared_ptr<ExternalDependency> other) : other(other) {
+	explicit ProxyDependencies(shared_ptr<ExternalDependency> other) : other(std::move(other)) {
 	}
 	~ProxyDependencies() override {
 	}
@@ -87,7 +90,7 @@ public:
 	shared_ptr<DependencyItem> GetDependency(const string &name) const override {
 		return other->GetDependency(name);
 	}
-	void ScanDependencies(std::function<void(const string &name, shared_ptr<DependencyItem> item)> callback) override {
+	void ScanDependencies(const dependency_scan_t &callback) override {
 		other->ScanDependencies(callback);
 	}
 
