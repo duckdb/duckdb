@@ -12,7 +12,7 @@ statement ok
 SELECT * FROM pg_catalog.pg_type
 
 query I
-SELECT oid FROM pg_type WHERE typname = 'bigint' AND oid IS NOT NULL
+SELECT oid FROM pg_type WHERE typname = 'int8' AND oid IS NOT NULL
 ----
 20
 
@@ -27,12 +27,12 @@ SELECT oid FROM pg_type WHERE typname = 'bit' AND oid IS NOT NULL
 1560
 
 query I
-SELECT oid FROM pg_type WHERE typname = 'boolean' AND oid IS NOT NULL
+SELECT oid FROM pg_type WHERE typname = 'bool' AND oid IS NOT NULL
 ----
 16
 
 query I
-SELECT oid FROM pg_type WHERE typname = 'character varying' AND oid IS NOT NULL
+SELECT oid FROM pg_type WHERE typname = 'varchar' AND oid IS NOT NULL
 ----
 1043
 
@@ -42,17 +42,12 @@ SELECT oid FROM pg_type WHERE typname = 'date' AND oid IS NOT NULL
 1082
 
 query I
-SELECT oid FROM pg_type WHERE typname = 'timestamp without time zone' AND oid IS NOT NULL
-----
-1114
-
-query I
-SELECT oid FROM pg_type WHERE typname = 'double precision' AND oid IS NOT NULL
+SELECT oid FROM pg_type WHERE typname = 'float8' AND oid IS NOT NULL
 ----
 701
 
 query I
-SELECT oid FROM pg_type WHERE typname = 'real' AND oid IS NOT NULL
+SELECT oid FROM pg_type WHERE typname = 'float4' AND oid IS NOT NULL
 ----
 700
 
@@ -62,12 +57,12 @@ SELECT oid FROM pg_type WHERE typname = 'uuid' AND oid IS NOT NULL
 2950
 
 query I
-SELECT oid FROM pg_type WHERE typname = 'integer' AND oid IS NOT NULL
+SELECT oid FROM pg_type WHERE typname = 'int4' AND oid IS NOT NULL
 ----
 23
 
 query I
-SELECT oid FROM pg_type WHERE typname = 'smallint' AND oid IS NOT NULL
+SELECT oid FROM pg_type WHERE typname = 'int2' AND oid IS NOT NULL
 ----
 21
 
@@ -77,17 +72,22 @@ SELECT oid FROM pg_type WHERE typname = 'interval' AND oid IS NOT NULL
 1186
 
 query I
-SELECT oid FROM pg_type WHERE typname = 'time without time zone' AND oid IS NOT NULL
+SELECT oid FROM pg_type WHERE typname = 'time' AND oid IS NOT NULL
 ----
 1083
 
 query I
-SELECT oid FROM pg_type WHERE typname = 'timestamp with time zone' AND oid IS NOT NULL
+SELECT oid FROM pg_type WHERE typname = 'timestamp' AND oid IS NOT NULL
+----
+1114
+
+query I
+SELECT oid FROM pg_type WHERE typname = 'timestamptz' AND oid IS NOT NULL
 ----
 1184
 
 query I
-SELECT oid FROM pg_type WHERE typname = 'time with time zone' AND oid IS NOT NULL
+SELECT oid FROM pg_type WHERE typname = 'timetz' AND oid IS NOT NULL
 ----
 1266
 
