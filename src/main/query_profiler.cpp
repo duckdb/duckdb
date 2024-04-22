@@ -512,8 +512,10 @@ static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, idx
 	ss << string(depth * 3, ' ') << " {\n";
 	ss << string(depth * 3, ' ') << "   \"name\": \"" + QueryProfiler::JSONSanitize(node.name) + "\",\n";
 	ss << string(depth * 3, ' ') << "   \"timing\":" + to_string(node.profiling_info.metrics.operator_timing) + ",\n";
-	ss << string(depth * 3, ' ') << "   \"cardinality\":" + to_string(node.profiling_info.metrics.operator_cardinality) + ",\n";
-	ss << string(depth * 3, ' ') << "   \"extra_info\": \"" + QueryProfiler::JSONSanitize(node.profiling_info.metrics.extra_info) + "\",\n";
+	ss << string(depth * 3, ' ')
+	   << "   \"cardinality\":" + to_string(node.profiling_info.metrics.operator_cardinality) + ",\n";
+	ss << string(depth * 3, ' ')
+	   << "   \"extra_info\": \"" + QueryProfiler::JSONSanitize(node.profiling_info.metrics.extra_info) + "\",\n";
 	ss << string(depth * 3, ' ') << "   \"children\": [\n";
 	if (node.children.empty()) {
 		ss << string(depth * 3, ' ') << "   ]\n";
