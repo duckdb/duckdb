@@ -329,7 +329,9 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 		// now in every step of the algorithm, we greedily pick the join between the to-be-joined relations that has the
 		// smallest cost. This is O(r^2) per step, and every step will reduce the total amount of relations to-be-joined
 		// by 1, so the total cost is O(r^3) in the amount of relations
-		idx_t best_left = 0, best_right = 0;
+		// long is needed to prevent clang-tidy complaints. (idx_t) cannot be added to an iterator position because it is
+		// unsigned.
+		long best_left = 0, best_right = 0;
 		optional_ptr<DPJoinNode> best_connection;
 		for (idx_t i = 0; i < join_relations.size(); i++) {
 			auto left = join_relations[i];
