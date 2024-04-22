@@ -198,7 +198,7 @@ unique_ptr<TableRef> PythonReplacementScan::Replace(ClientContext &context, Repl
 		D_ASSERT(result->external_dependency->GetDependency("replacement_cache") != nullptr);
 		result->external_dependency->ScanDependencies(
 		    [&table_ref](const string &name, shared_ptr<DependencyItem> item) {
-			    table_ref.external_dependency->AddDependency(name, item);
+			    table_ref.external_dependency->AddDependency(name, std::move(item));
 		    });
 	}
 	return result;

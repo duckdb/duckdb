@@ -404,7 +404,7 @@ DuckDBPyConnection::RegisterScalarUDF(const string &name, const py::function &ud
 	context.RegisterFunction(info);
 
 	auto dependency = make_uniq<ExternalDependency>();
-	dependency->AddDependency("function", PythonDependencyItem::Create(std::move(udf)));
+	dependency->AddDependency("function", PythonDependencyItem::Create(udf));
 	registered_functions[name] = std::move(dependency);
 
 	return shared_from_this();
