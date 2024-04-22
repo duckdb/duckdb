@@ -91,22 +91,22 @@ void DuckDBIndexesFunction(ClientContext &context, TableFunctionInput &data_p, D
 		// database_name, VARCHAR
 		output.SetValue(col++, count, index.catalog.GetName());
 		// database_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(index.catalog.GetOid()));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(index.catalog.GetOid())));
 		// schema_name, VARCHAR
 		output.SetValue(col++, count, Value(index.schema.name));
 		// schema_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(index.schema.oid));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(index.schema.oid)));
 		// index_name, VARCHAR
 		output.SetValue(col++, count, Value(index.name));
 		// index_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(index.oid));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(index.oid)));
 		// find the table in the catalog
 		auto &table_entry =
 		    index.schema.catalog.GetEntry<TableCatalogEntry>(context, index.GetSchemaName(), index.GetTableName());
 		// table_name, VARCHAR
 		output.SetValue(col++, count, Value(table_entry.name));
 		// table_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(table_entry.oid));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(table_entry.oid)));
 		// comment, VARCHAR
 		output.SetValue(col++, count, Value(index.comment));
 		// is_unique, BOOLEAN
