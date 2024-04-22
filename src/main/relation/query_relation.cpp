@@ -13,6 +13,7 @@ QueryRelation::QueryRelation(const shared_ptr<ClientContext> &context, unique_pt
                              string alias_p)
     : Relation(context, RelationType::QUERY_RELATION), select_stmt(std::move(select_stmt_p)),
       alias(std::move(alias_p)) {
+	select_stmt->node->Cast<SelectNode>().from_table->external_dependency = make_shared_ptr<ExternalDependency>();
 	context->TryBindRelation(*this, this->columns);
 }
 
@@ -39,17 +40,6 @@ unique_ptr<SelectStatement> QueryRelation::GetSelectStatement() {
 unique_ptr<QueryNode> QueryRelation::GetQueryNode() {
 	auto select = GetSelectStatement();
 	return std::move(select->node);
-}
-
-BoundStatement QueryRelation::Bind(Binder &binder) {
-	SelectStatement stmt;
-	auto &original_ref = *select_stmt->node->Cast<SelectNode>().from_table;
-	if (!original_ref.external_dependency) {
-		original_ref.external_dependency = make_shared_ptr<ExternalDependency>();
-	}
-	stmt.node = GetQueryNode();
-	auto result = binder.Bind(stmt.Cast<SQLStatement>());
-	return result;
 }
 
 unique_ptr<TableRef> QueryRelation::GetTableRef() {
