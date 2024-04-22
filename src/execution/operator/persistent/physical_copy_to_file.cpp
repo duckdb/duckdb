@@ -112,10 +112,6 @@ public:
 		auto trimmed_path = op.GetTrimmedPath(context.client);
 		string hive_path = GetOrCreateDirectory(op.partition_columns, op.names, values, trimmed_path, fs);
 		string full_path(op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, 0));
-		if (fs.FileExists(full_path) && !op.overwrite_or_ignore) {
-			throw IOException("failed to create %s, file exists! Enable OVERWRITE_OR_IGNORE option to force writing",
-			                  full_path);
-		}
 		// initialize writes
 		auto info = make_uniq<PartitionWriteInfo>();
 		info->global_state = op.function.copy_to_initialize_global(context.client, *op.bind_data, full_path);
@@ -214,8 +210,8 @@ unique_ptr<GlobalFunctionData> PhysicalCopyToFile::CreateFileState(ClientContext
 	idx_t this_file_offset = g.last_file_offset++;
 	auto &fs = FileSystem::GetFileSystem(context);
 	string output_path(filename_pattern.CreateFilename(fs, file_path, file_extension, this_file_offset));
-	if (fs.FileExists(output_path) && !overwrite_or_ignore) {
-		throw IOException("%s exists! Enable OVERWRITE_OR_IGNORE option to force writing", output_path);
+	if (fs.FileExists(output_path)) {
+		throw InternalException("%s exists!");
 	}
 	return function.copy_to_initialize_global(context, *bind_data, output_path);
 }
@@ -235,23 +231,41 @@ unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContex
 	return std::move(res);
 }
 
+void CheckDirectory(FileSystem &fs, const string &file_path, bool overwrite) {
+	vector<string> file_list;
+	vector<string> directory_list;
+	directory_list.push_back(file_path);
+	for (idx_t dir_idx = 0; dir_idx < directory_list.size(); dir_idx++) {
+		auto directory = directory_list[dir_idx];
+		fs.ListFiles(directory, [&](const string &path, bool is_directory) {
+			auto full_path = fs.JoinPath(directory, path);
+			if (is_directory) {
+				directory_list.emplace_back(std::move(full_path));
+			} else {
+				file_list.emplace_back(std::move(full_path));
+			}
+		});
+	}
+	if (!file_list.empty()) {
+		if (overwrite) {
+			for (auto &file : file_list) {
+				fs.RemoveFile(file);
+			}
+		} else {
+			throw IOException("Directory %s is not empty! Enable OVERWRITE_OR_IGNORE option to force writing",
+			                  file_path);
+		}
+	}
+}
+
 unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext &context) const {
 
 	if (partition_output || per_thread_output || file_size_bytes.IsValid()) {
 		auto &fs = FileSystem::GetFileSystem(context);
-
-		if (fs.FileExists(file_path) && !overwrite_or_ignore) {
-			throw IOException("%s exists! Enable OVERWRITE_OR_IGNORE option to force writing", file_path);
-		}
 		if (!fs.DirectoryExists(file_path)) {
 			fs.CreateDirectory(file_path);
-		} else if (!overwrite_or_ignore) {
-			idx_t n_files = 0;
-			fs.ListFiles(file_path, [&n_files](const string &path, bool) { n_files++; });
-			if (n_files > 0) {
-				throw IOException("Directory %s is not empty! Enable OVERWRITE_OR_IGNORE option to force writing",
-				                  file_path);
-			}
+		} else {
+			CheckDirectory(fs, file_path, overwrite_or_ignore);
 		}
 
 		auto state = make_uniq<CopyToFunctionGlobalState>(nullptr);
