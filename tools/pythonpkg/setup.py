@@ -122,6 +122,7 @@ if platform.system() == 'Windows':
 
 is_android = hasattr(sys, 'getandroidapilevel')
 is_pyodide = 'PYODIDE' in os.environ
+no_source_wheel = is_pyodide
 use_jemalloc = (
     not is_android
     and not is_pyodide
@@ -355,7 +356,7 @@ def setup_data_files(data_files):
 
 
 data_files = setup_data_files(extra_files + header_files)
-if is_pyodide:
+if no_source_wheel:
     data_files = []
 
 packages = [
