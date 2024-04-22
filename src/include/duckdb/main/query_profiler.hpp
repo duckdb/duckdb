@@ -73,7 +73,7 @@ public:
 private:
 	//! Whether or not the profiler is enabled
 	bool enabled;
-	ProfilerSettings settings;
+	profiler_settings_t settings;
 	//! The timer used to time the execution time of the individual Physical Operators
 	Profiler op;
 	//! The stack of Physical Operators that are currently active
@@ -109,7 +109,7 @@ public:
 	using TreeMap = reference_map_t<const PhysicalOperator, reference<TreeNode>>;
 
 private:
-	unique_ptr<TreeNode> CreateTree(const PhysicalOperator &root, ProfilerSettings settings, idx_t depth = 0);
+	unique_ptr<TreeNode> CreateTree(const PhysicalOperator &root, profiler_settings_t settings, idx_t depth = 0);
 	void Render(const TreeNode &node, std::ostream &str) const;
 
 public:

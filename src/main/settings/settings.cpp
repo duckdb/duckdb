@@ -597,8 +597,8 @@ Value EnableProfilingSetting::GetSetting(const ClientContext &context) {
 // Custom Profiling Settings
 //===--------------------------------------------------------------------===//
 
-static ProfilerSettings FillTreeNodeSettings(unordered_map<string, string> &json) {
-	ProfilerSettings metrics;
+static profiler_settings_t FillTreeNodeSettings(unordered_map<string, string> &json) {
+	profiler_settings_t metrics;
 
 	string invalid_settings;
 	for (auto &entry : json) {
