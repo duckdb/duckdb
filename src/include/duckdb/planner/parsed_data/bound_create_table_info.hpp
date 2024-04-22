@@ -36,8 +36,6 @@ struct BoundCreateTableInfo {
 	ColumnDependencyManager column_dependency_manager;
 	//! List of constraints on the table
 	vector<unique_ptr<Constraint>> constraints;
-	//! List of bound constraints on the table
-	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	//! Dependents of the table (in e.g. default values)
 	LogicalDependencyList dependencies;
 	//! The existing table data on disk (if any)
