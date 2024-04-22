@@ -224,7 +224,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateIndex(ClientContext &context, 
 	// currently, we can not alter PK/FK/UNIQUE constraints
 	// concurrency-safe name checks against other INDEX catalog entries happens in the catalog
 	if (!table.GetStorage().IndexNameIsUnique(info.index_name)) {
-		throw CatalogException("An index with the name " + info.index_name + "already exists!");
+		throw CatalogException("An index with the name " + info.index_name + " already exists!");
 	}
 
 	auto index = make_uniq<DuckIndexEntry>(catalog, *this, info);
