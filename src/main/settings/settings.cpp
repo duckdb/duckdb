@@ -673,7 +673,7 @@ void CustomProfilingSettings::ResetLocal(ClientContext &context) {
 	config.profiler_settings = ProfilingInfo::DefaultSettings();
 }
 
-Value CustomProfilingSettings::GetSetting(ClientContext &context) {
+Value CustomProfilingSettings::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 
 	string profiling_settings_str;

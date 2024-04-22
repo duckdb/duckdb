@@ -303,13 +303,13 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 	active_operator = nullptr;
 }
 
-OperatorInfo &OperatorProfiler::GetOperatorInfo(const PhysicalOperator &phys_op) {
+OperatorInformation &OperatorProfiler::GetOperatorInfo(const PhysicalOperator &phys_op) {
 	auto entry = timings.find(phys_op);
 	if (entry != timings.end()) {
 		return entry->second;
 	} else {
 		// add new entry
-		timings[phys_op] = OperatorInfo();
+		timings[phys_op] = OperatorInformation();
 		return timings[phys_op];
 	}
 }
@@ -340,20 +340,6 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 		}
 		if (profiler.SettingEnabled(MetricsType::OPERATOR_CARDINALITY)) {
 			tree_node.profiling_info.metrics.operator_cardinality += node.second.elements;
-		}
-		tree_node.executors_info = std::move(node.second.executors_info);
-		if (!IsDetailedEnabled()) {
-			continue;
-		}
-		for (auto &info : node.second.executors_info) {
-			if (!info) {
-				continue;
-			}
-			auto info_id = info->id;
-			if (tree_node.executors_info.size() <= info_id) {
-				tree_node.executors_info.resize(info_id + 1);
-			}
-			tree_node.executors_info[info_id] = std::move(info);
 		}
 	}
 	profiler.timings.clear();
@@ -528,7 +514,6 @@ static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, idx
 	ss << string(depth * 3, ' ') << "   \"timing\":" + to_string(node.profiling_info.metrics.operator_timing) + ",\n";
 	ss << string(depth * 3, ' ') << "   \"cardinality\":" + to_string(node.profiling_info.metrics.operator_cardinality) + ",\n";
 	ss << string(depth * 3, ' ') << "   \"extra_info\": \"" + QueryProfiler::JSONSanitize(node.profiling_info.metrics.extra_info) + "\",\n";
-	ss << string(depth * 3, ' ') << "   \"timings\": [";
 	ss << string(depth * 3, ' ') << "   \"children\": [\n";
 	if (node.children.empty()) {
 		ss << string(depth * 3, ' ') << "   ]\n";
