@@ -23,14 +23,28 @@ unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<LogicalTyp
 	if (node->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 		// "node" is a projection; we can just do the casts in there
 		D_ASSERT(node->expressions.size() == source_types.size());
+		if (node->children.size() == 1 && node->children[0]->type == LogicalOperatorType::LOGICAL_GET) {
+			// Is this a CSV Scan?
+			auto &logical_get = node->children[0]->Cast<LogicalGet>();
+			// yuck string matching, maybe there is a better way?
+			if (logical_get.function.name == "read_csv" || logical_get.function.name == "read_csv_auto") {
+				// we have to do some type switcharoo
+				if (logical_get.projection_ids.empty()) {
+					logical_get.returned_types = target_types;
+					int x = 0;
+					// We early out here, since we don't need to add casts
+					return op;
+				}
+			}
+		}
 		// add the casts to the selection list
 		for (idx_t i = 0; i < target_types.size(); i++) {
 			if (source_types[i] != target_types[i]) {
 				// differing types, have to add a cast
-				string alias = node->expressions[i]->alias;
+				string cur_alias = node->expressions[i]->alias;
 				node->expressions[i] =
 				    BoundCastExpression::AddCastToType(context, std::move(node->expressions[i]), target_types[i]);
-				node->expressions[i]->alias = alias;
+				node->expressions[i]->alias = cur_alias;
 			}
 		}
 		return op;
