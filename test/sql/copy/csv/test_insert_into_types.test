@@ -1,0 +1,19 @@
+# name: test/sql/copy/csv/test_insert_into_types.test
+# description: Test type pushdown from insert into operator
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+
+statement ok
+CREATE TABLE users (
+        id INTEGER NOT NULL,  /*primary key*/
+        name VARCHAR(10) NOT NULL,
+        email VARCHAR
+);
+
+statement ok
+INSERT INTO users
+SELECT *
+FROM read_csv('data/csv/file_error.csv', rejects_table='rejects_table', ignore_errors=true, null_padding=true);
