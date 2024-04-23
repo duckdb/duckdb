@@ -290,7 +290,7 @@ void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionD
 	SimpleMultiFileList file_list(data.files);
 	auto reset_reader = data.multi_file_reader->ComplexFilterPushdown(context, file_list, data.options.file_options, get, filters);
 	if (reset_reader) {
-		MultiFileReader::PruneReaders(data, data.files);
+		MultiFileReader::PruneReaders(data, file_list);
 	}
 }
 

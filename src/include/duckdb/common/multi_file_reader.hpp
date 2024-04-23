@@ -235,9 +235,14 @@ struct MultiFileReader {
 	}
 
 	template <class BIND_DATA>
-	static void PruneReaders(BIND_DATA &data, vector<string> &files) {
+	static void PruneReaders(BIND_DATA &data, MultiFileList &files) {
 		unordered_set<string> file_set;
-		for (auto &file : files) {
+
+		for(idx_t i = 0;; i++) {
+			const auto& file = files.GetFile(i);
+			if (file.empty()) {
+				break;
+			}
 			file_set.insert(file);
 		}
 

@@ -467,10 +467,11 @@ public:
 			names = result->names;
 		} else {
 			if (return_types.size() != result->types.size()) {
-                auto raw_file_list = result->files->GetPaths();
-                auto file_string = StringUtil::Join(raw_file_list, ",");
-                throw InternalException("Failed to read file(s) \"%s\" - column count mismatch: expected %d columns but found %d",
-                                        file_string, return_types.size(), result->types.size());
+				auto raw_file_list = result->files->GetPaths();
+				auto file_string = StringUtil::Join(raw_file_list, ",");
+				throw std::runtime_error(StringUtil::Format(
+				    "Failed to read file(s) \"%s\" - column count mismatch: expected %d columns but found %d",
+				    file_string, return_types.size(), result->types.size()));
 
 			}
 			// expected types - overwrite the types we want to read instead
@@ -615,13 +616,17 @@ public:
                 //       i'm thinking we could just have a map from filename -> reader
             }
 		}
+
+		// Initialize file mutexes, marking files as OPEN if there exists an initialized reader
 		for (auto &reader : result->readers) {
-			result->file_states.push_back(ParquetFileState::OPEN);
 			result->file_mutexes.push_back(make_uniq<mutex>());
 
 			if (!reader) {
+				result->file_states.push_back(ParquetFileState::OPEN);
 				continue;
 			}
+
+			result->file_states.push_back(ParquetFileState::UNOPENED);
 			InitializeParquetReader(*reader, bind_data, input.column_ids, input.filters, context);
 		}
 
@@ -799,12 +804,7 @@ public:
 		auto reset_reader = data.multi_file_reader->ComplexFilterPushdown(context, *data.files,
 		                                                           data.parquet_options.file_options, get, filters);
 		if (reset_reader) {
-
-            if (!data.union_readers.empty()) { // TODO this if is just for testing
-                // TODO clean this up!
-                vector<string> files = data.files->GetAllExpandedFiles();
-                MultiFileReader::PruneReaders(data, files);
-            }
+			MultiFileReader::PruneReaders(data, *data.files);
 		}
 	}
 
