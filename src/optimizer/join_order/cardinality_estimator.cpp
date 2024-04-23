@@ -252,9 +252,6 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 
 	for (auto &edge : edges) {
 		auto subgraph_connections = SubgraphsConnectedByEdge(edge, subgraphs);
-		if (edge.has_tdom_hll && edge.tdom_hll == 25) {
-			auto break_here = 0;
-		}
 		auto new_subgraph = Subgraph2Denominator();
 		new_subgraph.relations = &edge.filter_info->set;
 		new_subgraph.numerator_relations = &edge.filter_info->set;
