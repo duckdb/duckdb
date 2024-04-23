@@ -210,9 +210,6 @@ unique_ptr<GlobalFunctionData> PhysicalCopyToFile::CreateFileState(ClientContext
 	idx_t this_file_offset = g.last_file_offset++;
 	auto &fs = FileSystem::GetFileSystem(context);
 	string output_path(filename_pattern.CreateFilename(fs, file_path, file_extension, this_file_offset));
-	if (fs.FileExists(output_path)) {
-		throw InternalException("%s exists!");
-	}
 	return function.copy_to_initialize_global(context, *bind_data, output_path);
 }
 
