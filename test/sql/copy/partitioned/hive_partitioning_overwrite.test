@@ -31,9 +31,7 @@ COPY (SELECT 42 AS part_col) TO '__TEST_DIR__/overwrite_test2' (FORMAT PARQUET);
 statement error
 COPY (SELECT 84 AS part_col) TO '__TEST_DIR__/overwrite_test2' (FORMAT PARQUET, PARTITION_BY (part_col));
 ----
-path exists but is not a directory
 
 statement error
 COPY (SELECT 84 AS part_col) TO '__TEST_DIR__/overwrite_test2' (FORMAT PARQUET, PARTITION_BY (part_col), OVERWRITE_OR_IGNORE 1);
 ----
-path exists but is not a directory
