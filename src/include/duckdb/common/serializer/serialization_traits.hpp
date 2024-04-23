@@ -128,7 +128,7 @@ template <typename T>
 struct is_pointer : std::false_type {};
 
 template <typename T>
-struct is_pointer<T*> : std::true_type {};
+struct is_pointer<T *> : std::true_type {};
 
 template <typename T>
 struct is_pair : std::false_type {};

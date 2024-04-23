@@ -141,12 +141,14 @@ def requires_move(type):
 def replace_pointer(type):
     return re.sub('([a-zA-Z0-9]+)[*]', 'unique_ptr<\\1>', type)
 
+
 def raw_pointer(type):
     if type.startswith('shared_ptr'):
         return re.sub('shared_ptr<([a-zA-Z0-9]+)>', '\\1*', type)
     if type.startswith('unique_ptr'):
         return re.sub('unique_ptr<([a-zA-Z0-9]+)>', '\\1*', type)
     return re.sub('([a-zA-Z0-9]+)[*]', '\\1*', type)
+
 
 def optional_pointer(type):
     replacement = 'optional_ptr<\\1>'
