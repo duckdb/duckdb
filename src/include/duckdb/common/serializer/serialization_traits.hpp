@@ -125,6 +125,12 @@ struct is_optional_ptr<optional_ptr<T>> : std::true_type {
 };
 
 template <typename T>
+struct is_pointer : std::false_type {};
+
+template <typename T>
+struct is_pointer<T *> : std::true_type {};
+
+template <typename T>
 struct is_pair : std::false_type {};
 template <typename T, typename U>
 struct is_pair<std::pair<T, U>> : std::true_type {
@@ -201,6 +207,16 @@ struct SerializationDefaultValue {
 
 	template <typename T = void>
 	static inline bool IsDefault(const typename std::enable_if<is_optional_ptr<T>::value, T>::type &value) {
+		return !value;
+	}
+
+	template <typename T = void>
+	static inline typename std::enable_if<is_pointer<T>::value, T>::type GetDefault() {
+		return T();
+	}
+
+	template <typename T = void>
+	static inline bool IsDefault(const typename std::enable_if<is_pointer<T>::value, T>::type &value) {
 		return !value;
 	}
 

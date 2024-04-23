@@ -114,7 +114,7 @@ def is_container(type):
 
 
 def is_pointer(type):
-    return type.endswith('*') or type.startswith('shared_ptr<')
+    return type.endswith('*') or type.startswith('shared_ptr<') or type.startswith('unique_ptr<')
 
 
 def is_zeroable(type):
@@ -140,6 +140,14 @@ def requires_move(type):
 
 def replace_pointer(type):
     return re.sub('([a-zA-Z0-9]+)[*]', 'unique_ptr<\\1>', type)
+
+
+def raw_pointer(type):
+    if type.startswith('shared_ptr'):
+        return re.sub('shared_ptr<([a-zA-Z0-9]+)>', '\\1*', type)
+    if type.startswith('unique_ptr'):
+        return re.sub('unique_ptr<([a-zA-Z0-9]+)>', '\\1*', type)
+    return re.sub('([a-zA-Z0-9]+)[*]', '\\1*', type)
 
 
 def get_default_argument(default_value):
@@ -282,6 +290,7 @@ class MemberVariable:
         self.has_default = False
         self.default = None
         self.deleted = False
+        self.custom_serialize_property = False
         if 'property' in entry:
             self.serialize_property = entry['property']
             self.deserialize_property = entry['property']
@@ -289,6 +298,7 @@ class MemberVariable:
             self.serialize_property = self.name
             self.deserialize_property = self.name
         if 'serialize_property' in entry:
+            self.custom_serialize_property = True
             self.serialize_property = entry['serialize_property']
         if 'deserialize_property' in entry:
             self.deserialize_property = entry['deserialize_property']
@@ -586,7 +596,12 @@ def generate_class_code(class_entry):
             deserialize_template_str = deserialize_element_class_base.replace(
                 '${BASE_PROPERTY}', entry.base.replace('*', '')
             ).replace('${DERIVED_PROPERTY}', entry.type.replace('*', ''))
-        type_name = replace_pointer(entry.type)
+        if entry.custom_serialize_property == True and is_pointer(entry.type):
+            # A custom serialize property was explicitly set
+            # as long as a pointer is provided, this should be accepted
+            type_name = raw_pointer(entry.type)
+        else:
+            type_name = replace_pointer(entry.type)
         class_serialize += get_serialize_element(
             write_property_name,
             property_id,
