@@ -44,7 +44,7 @@ uint64_t ListColumnData::FetchListOffset(idx_t row_idx) {
 	auto segment = data.GetSegment(row_idx);
 	ColumnFetchState fetch_state;
 	Vector result(type, 1);
-	segment->FetchRow(fetch_state, row_idx, result, 0);
+	segment->FetchRow(fetch_state, UnsafeNumericCast<row_t>(row_idx), result, 0U);
 
 	// initialize the child scan with the required offset
 	return FlatVector::GetData<uint64_t>(result)[0];
@@ -235,7 +235,7 @@ void ListColumnData::RevertAppend(row_t start_row) {
 	if (column_count > start) {
 		// revert append in the child column
 		auto list_offset = FetchListOffset(column_count - 1);
-		child_column->RevertAppend(list_offset);
+		child_column->RevertAppend(UnsafeNumericCast<row_t>(list_offset));
 	}
 }
 
@@ -269,8 +269,8 @@ void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &sta
 	}
 
 	// now perform the fetch within the segment
-	auto start_offset = idx_t(row_id) == this->start ? 0 : FetchListOffset(row_id - 1);
-	auto end_offset = FetchListOffset(row_id);
+	auto start_offset = idx_t(row_id) == this->start ? 0 : FetchListOffset(UnsafeNumericCast<idx_t>(row_id - 1));
+	auto end_offset = FetchListOffset(UnsafeNumericCast<idx_t>(row_id));
 	validity.FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
 
 	auto &validity = FlatVector::Validity(result);
