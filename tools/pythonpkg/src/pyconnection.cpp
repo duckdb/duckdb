@@ -51,6 +51,9 @@
 #include "duckdb/main/pending_query_result.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/common/shared_ptr.hpp"
+#include "duckdb/main/materialized_query_result.hpp"
+#include "duckdb/main/stream_query_result.hpp"
+#include "duckdb/main/relation/materialized_relation.hpp"
 
 #include <random>
 
@@ -1042,33 +1045,13 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const py::object &quer
 	if (res->properties.return_type != StatementReturnType::QUERY_RESULT) {
 		return nullptr;
 	}
-	// FIXME: we should add support for a relation object over a column data collection to make this more efficient
-	vector<vector<Value>> values;
-	vector<string> names = res->names;
-	{
-		py::gil_scoped_release release;
-
-		while (true) {
-			auto chunk = res->Fetch();
-			if (res->HasError()) {
-				res->ThrowError();
-			}
-			if (!chunk || chunk->size() == 0) {
-				break;
-			}
-			for (idx_t r = 0; r < chunk->size(); r++) {
-				vector<Value> row;
-				for (idx_t c = 0; c < chunk->ColumnCount(); c++) {
-					row.push_back(chunk->data[c].GetValue(r));
-				}
-				values.push_back(std::move(row));
-			}
-		}
-		if (values.empty()) {
-			return DuckDBPyRelation::EmptyResult(connection->context, res->types, res->names);
-		}
+	if (res->type == QueryResultType::STREAM_RESULT) {
+		auto &stream_result = res->Cast<StreamQueryResult>();
+		res = stream_result.Materialize();
 	}
-	return make_uniq<DuckDBPyRelation>(make_uniq<ValueRelation>(connection->context, values, names, alias));
+	auto &materialized_result = res->Cast<MaterializedQueryResult>();
+	return make_uniq<DuckDBPyRelation>(
+	    make_uniq<MaterializedRelation>(connection->context, materialized_result.Collection(), res->names, alias));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Table(const string &tname) {

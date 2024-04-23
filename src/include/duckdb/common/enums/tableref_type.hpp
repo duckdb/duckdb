@@ -22,6 +22,7 @@ enum class TableReferenceType : uint8_t {
 	JOIN = 3,            // output of join
 	TABLE_FUNCTION = 5,  // table producing function
 	EXPRESSION_LIST = 6, // expression list
+	COLUMN_DATA = 7,     // column data collection
 	CTE = 7,             // Recursive CTE
 	EMPTY_FROM = 8,      // placeholder for empty FROM
 	PIVOT = 9,           // pivot statement
