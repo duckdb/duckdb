@@ -589,7 +589,7 @@ unique_ptr<FunctionData> ParquetMetaDataBind(ClientContext &context, TableFuncti
 	auto result = make_uniq<ParquetMetaDataBindData>();
 	result->return_types = return_types;
 	MultiFileReader mfr;
-	result->files = mfr.GetFileList(context, input.inputs[0], "Parquet")->GetRawList();
+	result->files = mfr.GetFileList(context, input.inputs[0], "Parquet")->GetAllExpandedFiles();
 	return std::move(result);
 }
 

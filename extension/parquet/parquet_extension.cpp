@@ -151,7 +151,7 @@ BindInfo ParquetGetBindInfo(const optional_ptr<FunctionData> bind_data) {
 	auto bind_info = BindInfo(ScanType::PARQUET);
 	auto &parquet_bind = bind_data->Cast<ParquetReadBindData>();
 
-	vector<string> file_list = parquet_bind.files->GetRawList(); // TODO fix
+	vector<string> file_list = parquet_bind.files->GetPaths();
 	vector<Value> file_path;
 	for (auto &path : file_list) {
 		file_path.emplace_back(path);
@@ -163,6 +163,19 @@ BindInfo ParquetGetBindInfo(const optional_ptr<FunctionData> bind_data) {
 	parquet_bind.parquet_options.file_options.AddBatchInfo(bind_info);
 	// LCOV_EXCL_STOP
 	return bind_info;
+}
+
+static void ParseFileRowNumberOption (MultiFileReaderBindData &bind_data, ParquetOptions &options, vector<LogicalType> &return_types, vector<string> &names) {
+    if (options.file_row_number) {
+        if (std::find(names.begin(), names.end(), "file_row_number") != names.end()) {
+            throw BinderException(
+                    "Using file_row_number option on file with column named file_row_number is not supported");
+        }
+
+        bind_data.file_row_number_idx = names.size();
+        return_types.emplace_back(LogicalType::BIGINT);
+        names.emplace_back("file_row_number");
+    }
 }
 
 static MultiFileReaderBindData BindSchema(ClientContext &context, vector<LogicalType> &return_types,
@@ -190,16 +203,7 @@ static MultiFileReaderBindData BindSchema(ClientContext &context, vector<Logical
 	return_types = schema_col_types;
 	D_ASSERT(names.size() == return_types.size());
 
-	if (options.file_row_number) {
-		if (std::find(names.begin(), names.end(), "file_row_number") != names.end()) {
-			throw BinderException(
-			    "Using file_row_number option on file with column named file_row_number is not supported");
-		}
-
-		bind_data.file_row_number_idx = names.size();
-		return_types.emplace_back(LogicalType::BIGINT);
-		names.emplace_back("file_row_number");
-	}
+    ParseFileRowNumberOption(bind_data, options, return_types, names);
 
 	return bind_data;
 }
@@ -352,7 +356,8 @@ public:
 			}
 		}
 
-		auto multi_file_reader = make_uniq<MultiFileReader>(); // TODO: allow injecting this;
+        // TODO: Allow overriding the MultiFileReader for COPY FROM
+		auto multi_file_reader = make_uniq<MultiFileReader>();
 		return ParquetScanBindInternal(context,std::move(multi_file_reader), Value(info.file_path), expected_types, expected_names, parquet_options);
 	}
 
@@ -367,7 +372,7 @@ public:
 		// NOTE: we do not want to parse the Parquet metadata for the sole purpose of getting column statistics
 
 		auto &config = DBConfig::GetConfig(context);
-		auto complete_file_list = bind_data.files->GetRawList();
+		auto complete_file_list = bind_data.files->GetAllExpandedFiles();
 		if (complete_file_list.size() < 2) {
 			if (bind_data.initial_reader) {
 				// most common path, scanning single parquet file
@@ -432,17 +437,7 @@ public:
 
         // Firstly, we try to use the multifilereader to bind
         if (result->multi_file_reader->Bind(parquet_options.file_options, *result->files, result->types, result->names, result->reader_bind)) {
-            // TODO: deduplicate with BindSchema
-            if (parquet_options.file_row_number) {
-                if (std::find(names.begin(), names.end(), "file_row_number") != names.end()) {
-                    throw BinderException(
-                            "Using file_row_number option on file with column named file_row_number is not supported");
-                }
-                result->reader_bind.file_row_number_idx = names.size();
-                result->types.emplace_back(LogicalType::BIGINT);
-                result->names.emplace_back("file_row_number");
-            }
-
+            ParseFileRowNumberOption(result->reader_bind, parquet_options, result->types, result->names);
             // The MultiFileReader has provided a bind; we only need to bind any multifilereader options present, and then
             // we are done.
             result->multi_file_reader->BindOptions(
@@ -472,8 +467,8 @@ public:
 		} else {
 			if (return_types.size() != result->types.size()) {
 				throw std::runtime_error(StringUtil::Format(
-				    "Failed to read file \"%s\" - column count mismatch: expected %d columns but found %d",
-				    result->files->GetFile(0), return_types.size(), result->types.size()));
+				    "Failed to read file(s) \"%s\" - column count mismatch: expected %d columns but found %d",
+                    files.ToString().c_str(), return_types.size(), result->types.size()));
 			}
 			// expected types - overwrite the types we want to read instead
 			result->types = return_types;
@@ -484,9 +479,9 @@ public:
 
 	static unique_ptr<FunctionData> ParquetScanBind(ClientContext &context, TableFunctionBindInput &input,
 	                                                vector<LogicalType> &return_types, vector<string> &names) {
-
 		unique_ptr<MultiFileReader> multi_file_reader;
 		if (input.table_function.get_multi_file_reader) {
+            // Use the MultiFileReader from the Table Function
 			multi_file_reader = input.table_function.get_multi_file_reader();
 		} else {
 			// Use the default Parquet MultiFileReader
@@ -522,7 +517,7 @@ public:
 				parquet_options.encryption_config = ParquetEncryptionConfig::Create(context, kv.second);
 			}
 		}
-//		parquet_options.file_options.AutoDetectHivePartitioning(files, context); TODO restore
+//		parquet_options.file_options.AutoDetectHivePartitioning(files, context);
 
 		return ParquetScanBindInternal(context, std::move(multi_file_reader), input.inputs[0], return_types, names, parquet_options);
 	}
@@ -532,7 +527,7 @@ public:
 		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
 		auto &gstate = global_state->Cast<ParquetReadGlobalState>();
 
-		auto full_file_list = bind_data.files->GetRawList();
+		auto full_file_list = bind_data.files->GetAllExpandedFiles();
 		if (full_file_list.empty()) {
 			return 100.0;
 		}
@@ -569,14 +564,14 @@ public:
 		if (bind_data.files->GetFile(0).empty()) {
 			result->readers = {};
 		} else if (!bind_data.union_readers.empty()) {
-            vector<string> full_file_list = bind_data.files->GetRawList();
+            vector<string> full_file_list = bind_data.files->GetAllExpandedFiles();
             result->readers = std::move(bind_data.union_readers);
 			// TODO: wtf is this? it was copied from before refactor
             if (result->readers.size() != full_file_list.size()) {
 				result->readers = {};
 			}
         } else if (bind_data.initial_reader) {
-			//! Ensure the initial reader was actually constructed from the first file
+			// Ensure the initial reader was actually constructed from the first file
 			D_ASSERT(bind_data.initial_reader->file_name == bind_data.files->GetFile(0));
 			result->readers.push_back(bind_data.initial_reader);
 		}
@@ -621,7 +616,7 @@ public:
 	static void ParquetScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
 	                                 const TableFunction &function) {
 		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
-		serializer.WriteProperty(100, "files", bind_data.files->GetRawList());
+		serializer.WriteProperty(100, "files", bind_data.files->GetPaths());
 		serializer.WriteProperty(101, "types", bind_data.types);
 		serializer.WriteProperty(102, "names", bind_data.names);
 		serializer.WriteProperty(103, "parquet_options", bind_data.parquet_options);
@@ -634,7 +629,6 @@ public:
 		auto names = deserializer.ReadProperty<vector<string>>(102, "names");
 		auto parquet_options = deserializer.ReadProperty<ParquetOptions>(103, "parquet_options");
 
-		// TODO?
 		vector<Value> file_path;
 		for (auto &path : files) {
 			file_path.emplace_back(path);
@@ -675,8 +669,8 @@ public:
 
 	static unique_ptr<NodeStatistics> ParquetCardinality(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = bind_data->Cast<ParquetReadBindData>();
-		// TODO: clean this up
-		return make_uniq<NodeStatistics>(data.initial_file_cardinality * data.files->GetRawList().size());
+		// TODO: reconsider fully expanding filelist for cardinality estimation; hinders potential optimization?
+		return make_uniq<NodeStatistics>(data.initial_file_cardinality * data.files->GetAllExpandedFiles().size());
 	}
 
 	static idx_t ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data) {
@@ -768,7 +762,7 @@ public:
 
             if (!data.union_readers.empty()) { // TODO this if is just for testing
                 // TODO clean this up!
-                vector<string> files = data.files->GetRawList();
+                vector<string> files = data.files->GetAllExpandedFiles();
                 MultiFileReader::PruneReaders(data, files);
             }
 		}

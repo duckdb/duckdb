@@ -41,7 +41,7 @@ ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, 
 
 	MultiFileReader multi_file_reader;
 	vector<string> files;
-	context->RunFunctionInTransaction([&]() { files = multi_file_reader.GetFileList(*context, file_list, "CSV")->GetRawList(); });
+	context->RunFunctionInTransaction([&]() { files = multi_file_reader.GetFileList(*context, file_list, "CSV")->GetAllExpandedFiles(); });
 	D_ASSERT(!files.empty());
 
 	auto &file_name = files[0];

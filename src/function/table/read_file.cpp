@@ -54,7 +54,7 @@ static unique_ptr<FunctionData> ReadFileBind(ClientContext &context, TableFuncti
                                              vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_uniq<ReadFileBindData>();
 	MultiFileReader multi_file_reader;
-	result->files = multi_file_reader.GetFileList(context, input.inputs[0], OP::FILE_TYPE, FileGlobOptions::ALLOW_EMPTY)->GetRawList();
+	result->files = multi_file_reader.GetFileList(context, input.inputs[0], OP::FILE_TYPE, FileGlobOptions::ALLOW_EMPTY)->GetAllExpandedFiles();
 
 	return_types.push_back(LogicalType::VARCHAR);
 	names.push_back("filename");

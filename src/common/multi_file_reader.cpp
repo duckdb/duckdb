@@ -22,7 +22,7 @@ bool MultiFileList::ComplexFilterPushdown(ClientContext &context, const MultiFil
     return false;
 }
 
-vector<string> MultiFileList::GetRawList() {
+vector<string> MultiFileList::GetAllExpandedFiles() {
 	vector<string> result;
 	idx_t i = 0;
 	while(true) {
@@ -40,7 +40,7 @@ vector<string> MultiFileList::GetRawList() {
 SimpleMultiFileList::SimpleMultiFileList(vector<string> files) : files(files) {
 }
 
-vector<string> SimpleMultiFileList::GetRawList() {
+vector<string> SimpleMultiFileList::GetAllExpandedFiles() {
     return files;
 }
 
@@ -77,6 +77,10 @@ bool SimpleMultiFileList::ComplexFilterPushdown(ClientContext &context, const Mu
 	}
 
 	return false;
+}
+
+const vector<string> SimpleMultiFileList::GetPaths() {
+    return files;
 }
 
 CustomMultiFileReaderBindData::~CustomMultiFileReaderBindData() {
@@ -179,6 +183,7 @@ bool MultiFileReader::ComplexFilterPushdown(ClientContext &context, MultiFileLis
 
 bool MultiFileReader::Bind(MultiFileReaderOptions &options, MultiFileList &files,
           vector<LogicalType> &return_types, vector<string> &names, MultiFileReaderBindData &bind_data) {
+    // The Default MultiFileReader can not perform any binding as it uses MultiFileLists with no schema information.
     return false;
 }
 
@@ -196,7 +201,7 @@ void MultiFileReader::BindOptions(MultiFileReaderOptions &options, MultiFileList
 
 	// Add generated constant columns from hive partitioning scheme
 	if (options.hive_partitioning) {
-		auto file_list = files.GetRawList(); // TODO: don't load the full list here
+		auto file_list = files.GetAllExpandedFiles(); // TODO: don't load the full list here
 		D_ASSERT(!file_list.empty());
 		auto partitions = HivePartitioning::Parse(file_list[0]);
 		// verify that all files have the same hive partitioning scheme
