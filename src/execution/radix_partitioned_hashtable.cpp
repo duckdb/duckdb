@@ -230,6 +230,7 @@ void RadixHTGlobalSinkState::Destroy() {
 	}
 
 	// There are aggregates with destructors: Call the destructor for each of the aggregates
+	lock_guard<mutex> guard(lock);
 	RowOperationsState row_state(*stored_allocators.back());
 	for (auto &partition : partitions) {
 		auto &data_collection = *partition->data;
@@ -591,7 +592,6 @@ public:
 	vector<column_t> column_ids;
 
 	//! For synchronizing tasks
-	mutex lock;
 	idx_t task_idx;
 	atomic<idx_t> task_done;
 };
@@ -651,7 +651,7 @@ RadixHTGlobalSourceState::RadixHTGlobalSourceState(ClientContext &context_p, con
 SourceResultType RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTLocalSourceState &lstate,
                                                       InterruptState &interrupt_state) {
 	// First, try to get a partition index
-	lock_guard<mutex> gstate_guard(lock);
+	lock_guard<mutex> gstate_guard(sink.lock);
 	if (finished) {
 		return SourceResultType::FINISHED;
 	}
@@ -720,7 +720,7 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 		// However, we will limit the initial capacity so we don't do a huge over-allocation
 		const auto n_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(gstate.context).NumberOfThreads());
 		const auto memory_limit = BufferManager::GetBufferManager(gstate.context).GetMaxMemory();
-		const idx_t thread_limit = NumericCast<idx_t>(0.6 * memory_limit / n_threads);
+		const idx_t thread_limit = NumericCast<idx_t>(0.6 * double(memory_limit) / double(n_threads));
 
 		const idx_t size_per_entry = partition.data->SizeInBytes() / MaxValue<idx_t>(partition.data->Count(), 1) +
 		                             idx_t(GroupedAggregateHashTable::LOAD_FACTOR * sizeof(aggr_ht_entry_t));
@@ -745,7 +745,7 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 	partition.data->Combine(*ht->GetPartitionedData()->GetPartitions()[0]);
 
 	// Update thread-global state
-	lock_guard<mutex> global_guard(gstate.lock);
+	lock_guard<mutex> global_guard(sink.lock);
 	sink.stored_allocators.emplace_back(ht->GetAggregateAllocator());
 	const auto finalizes_done = ++sink.finalize_done;
 	D_ASSERT(finalizes_done <= sink.partitions.size());
@@ -785,7 +785,7 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 			data_collection.Reset();
 		}
 		scan_status = RadixHTScanStatus::DONE;
-		lock_guard<mutex> gstate_guard(gstate.lock);
+		lock_guard<mutex> gstate_guard(sink.lock);
 		if (++gstate.task_done == sink.partitions.size()) {
 			gstate.finished = true;
 		}
