@@ -70,8 +70,8 @@ ArrowArray *ArrowAppender::FinalizeChild(const LogicalType &type, unique_ptr<Arr
 	result->offset = 0;
 	result->dictionary = nullptr;
 	result->buffers = append_data.buffers.data();
-	result->null_count = append_data.null_count;
-	result->length = append_data.row_count;
+	result->null_count = NumericCast<int64_t>(append_data.null_count);
+	result->length = NumericCast<int64_t>(append_data.row_count);
 	result->buffers[0] = append_data.validity.data();
 
 	if (append_data.finalize) {
@@ -90,10 +90,10 @@ ArrowArray ArrowAppender::Finalize() {
 	ArrowArray result;
 	AddChildren(*root_holder, types.size());
 	result.children = root_holder->child_pointers.data();
-	result.n_children = types.size();
+	result.n_children = NumericCast<int64_t>(types.size());
 
 	// Configure root array
-	result.length = row_count;
+	result.length = NumericCast<int64_t>(row_count);
 	result.n_buffers = 1;
 	result.buffers = root_holder->buffers.data(); // there is no actual buffer there since we don't have NULLs
 	result.offset = 0;

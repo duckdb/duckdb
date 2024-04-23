@@ -69,7 +69,7 @@ public:
 
 	py::str GetAlias();
 
-	static unique_ptr<DuckDBPyRelation> EmptyResult(const std::shared_ptr<ClientContext> &context,
+	static unique_ptr<DuckDBPyRelation> EmptyResult(const shared_ptr<ClientContext> &context,
 	                                                const vector<LogicalType> &types, vector<string> names);
 
 	unique_ptr<DuckDBPyRelation> SetAlias(const string &expr);
@@ -234,13 +234,17 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Join(DuckDBPyRelation *other, const py::object &condition, const string &type);
 
-	void ToParquet(const string &filename, const py::object &compression = py::none());
+	void ToParquet(const string &filename, const py::object &compression = py::none(),
+	               const py::object &field_ids = py::none(), const py::object &row_group_size_bytes = py::none(),
+	               const py::object &row_group_size = py::none());
 
 	void ToCSV(const string &filename, const py::object &sep = py::none(), const py::object &na_rep = py::none(),
 	           const py::object &header = py::none(), const py::object &quotechar = py::none(),
 	           const py::object &escapechar = py::none(), const py::object &date_format = py::none(),
 	           const py::object &timestamp_format = py::none(), const py::object &quoting = py::none(),
-	           const py::object &encoding = py::none(), const py::object &compression = py::none());
+	           const py::object &encoding = py::none(), const py::object &compression = py::none(),
+	           const py::object &overwrite = py::none(), const py::object &per_thread_output = py::none(),
+	           const py::object &use_tmp_file = py::none(), const py::object &partition_by = py::none());
 
 	// should this return a rel with the new view?
 	unique_ptr<DuckDBPyRelation> CreateView(const string &view_name, bool replace = true);
@@ -281,7 +285,7 @@ private:
 	                              const string &groups = "", const string &function_parameter = "",
 	                              bool ignore_nulls = false, const string &projected_columns = "",
 	                              const string &window_spec = "");
-	string GenerateExpressionList(const string &function_name, vector<string> &&aggregated_columns,
+	string GenerateExpressionList(const string &function_name, vector<string> aggregated_columns,
 	                              const string &groups = "", const string &function_parameter = "",
 	                              bool ignore_nulls = false, const string &projected_columns = "",
 	                              const string &window_spec = "");

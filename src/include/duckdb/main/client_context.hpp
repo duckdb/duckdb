@@ -59,7 +59,7 @@ struct PendingQueryParameters {
 
 //! The ClientContext holds information relevant to the current client session
 //! during execution
-class ClientContext : public std::enable_shared_from_this<ClientContext> {
+class ClientContext : public enable_shared_from_this<ClientContext> {
 	friend class PendingQueryResult; // LockContext
 	friend class SimpleBufferedData; // ExecuteTaskInternal
 	friend class StreamQueryResult;  // LockContext
@@ -167,7 +167,7 @@ public:
 	                                                 bool requires_valid_transaction = true);
 
 	//! Equivalent to CURRENT_SETTING(key) SQL function.
-	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const std::string &key, Value &result);
+	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const std::string &key, Value &result) const;
 
 	//! Returns the parser options for this client context
 	DUCKDB_API ParserOptions GetParserOptions() const;
@@ -304,7 +304,7 @@ public:
 	}
 
 private:
-	std::weak_ptr<ClientContext> client_context;
+	weak_ptr<ClientContext> client_context;
 };
 
 } // namespace duckdb

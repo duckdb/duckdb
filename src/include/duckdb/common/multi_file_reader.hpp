@@ -148,8 +148,6 @@ public:
 //
 // Note that while the MultiFileReader currently holds no state, its methods are not static. This is to allow overriding
 // the MultiFileReader class and dependency-inject a different MultiFileReader into existing Table Functions.
-//
-// TODO: Consider refactoring the MultiFileList, MultiFileReader into a single class
 struct MultiFileReader {
 	virtual ~MultiFileReader();
 	//! Add the parameters for multi-file readers (e.g. union_by_name, filename) to a table function
@@ -236,7 +234,7 @@ struct MultiFileReader {
 		} else {
 			// Default behaviour: get the 1st file and use its schema for scanning all files
 			shared_ptr<READER_CLASS> reader;
-			reader = make_shared<READER_CLASS>(context, files.GetFile(0), options);
+			reader = make_shared_ptr<READER_CLASS>(context, files.GetFile(0), options);
 			return_types = reader->return_types;
 			names = reader->names;
 			result.Initialize(std::move(reader));
@@ -280,14 +278,14 @@ struct MultiFileReader {
 		}
 		for (idx_t r = 0; r < data.union_readers.size(); r++) {
 			if (!data.union_readers[r]) {
-				data.union_readers.erase(data.union_readers.begin() + r);
+				data.union_readers.erase_at(r);
 				r--;
 				continue;
 			}
 			// check if the union reader should still be read or not
 			auto entry = file_set.find(data.union_readers[r]->GetFileName());
 			if (entry == file_set.end()) {
-				data.union_readers.erase(data.union_readers.begin() + r);
+				data.union_readers.erase_at(r);
 				r--;
 				continue;
 			}

@@ -24,7 +24,7 @@ public:
 	}
 };
 
-enum class ParquetMetadataOperatorType { META_DATA, SCHEMA, KEY_VALUE_META_DATA, FILE_META_DATA };
+enum class ParquetMetadataOperatorType : uint8_t { META_DATA, SCHEMA, KEY_VALUE_META_DATA, FILE_META_DATA };
 
 struct ParquetMetaDataOperatorData : public GlobalTableFunctionState {
 	explicit ParquetMetaDataOperatorData(ClientContext &context, const vector<LogicalType> &types)

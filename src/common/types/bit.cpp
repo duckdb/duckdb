@@ -51,6 +51,7 @@ void Bit::Finalize(string_t &str) {
 	for (idx_t i = 0; i < idx_t(padding); i++) {
 		Bit::SetBitInternal(str, i, 1);
 	}
+	str.Finalize();
 	Bit::Verify(str);
 }
 
@@ -145,7 +146,6 @@ void Bit::ToBit(string_t str, string_t &output_str) {
 		*(output++) = byte;
 	}
 	Bit::Finalize(output_str);
-	Bit::Verify(output_str);
 }
 
 string Bit::ToBit(string_t str) {
@@ -179,7 +179,7 @@ void Bit::BitToBlob(string_t bit, string_t &output_blob) {
 	auto output = output_blob.GetDataWriteable();
 	idx_t size = output_blob.GetSize();
 
-	output[0] = GetFirstByte(bit);
+	output[0] = UnsafeNumericCast<char>(GetFirstByte(bit));
 	if (size > 2) {
 		++output;
 		// First byte in bitstring contains amount of padded bits,
@@ -287,6 +287,7 @@ idx_t Bit::GetBitInternal(string_t bit_string, idx_t n) {
 
 void Bit::SetBit(string_t &bit_string, idx_t n, idx_t new_value) {
 	SetBitInternal(bit_string, n + GetBitPadding(bit_string), new_value);
+	Bit::Finalize(bit_string);
 }
 
 void Bit::SetBitInternal(string_t &bit_string, idx_t n, idx_t new_value) {
@@ -332,7 +333,6 @@ void Bit::LeftShift(const string_t &bit_string, const idx_t &shift, string_t &re
 		}
 	}
 	Bit::Finalize(result);
-	Bit::Verify(result);
 }
 
 void Bit::BitwiseAnd(const string_t &rhs, const string_t &lhs, string_t &result) {
@@ -348,8 +348,7 @@ void Bit::BitwiseAnd(const string_t &rhs, const string_t &lhs, string_t &result)
 	for (idx_t i = 1; i < lhs.GetSize(); i++) {
 		buf[i] = l_buf[i] & r_buf[i];
 	}
-	// and should preserve padding bits
-	Bit::Verify(result);
+	Bit::Finalize(result);
 }
 
 void Bit::BitwiseOr(const string_t &rhs, const string_t &lhs, string_t &result) {
@@ -365,8 +364,7 @@ void Bit::BitwiseOr(const string_t &rhs, const string_t &lhs, string_t &result) 
 	for (idx_t i = 1; i < lhs.GetSize(); i++) {
 		buf[i] = l_buf[i] | r_buf[i];
 	}
-	// or should preserve padding bits
-	Bit::Verify(result);
+	Bit::Finalize(result);
 }
 
 void Bit::BitwiseXor(const string_t &rhs, const string_t &lhs, string_t &result) {
@@ -403,6 +401,8 @@ void Bit::Verify(const string_t &input) {
 	for (idx_t i = 0; i < padding; i++) {
 		D_ASSERT(Bit::GetBitInternal(input, i));
 	}
+	// verify bit respects the "normal" string_t rules (i.e. null padding for inlined strings, prefix matches)
+	input.VerifyCharacters();
 #endif
 }
 

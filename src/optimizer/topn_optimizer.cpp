@@ -29,8 +29,8 @@ unique_ptr<LogicalOperator> TopN::Optimize(unique_ptr<LogicalOperator> op) {
 	if (CanOptimize(*op)) {
 		auto &limit = op->Cast<LogicalLimit>();
 		auto &order_by = (op->children[0])->Cast<LogicalOrder>();
-		auto limit_val = int64_t(limit.limit_val.GetConstantValue());
-		int64_t offset_val = 0;
+		auto limit_val = limit.limit_val.GetConstantValue();
+		idx_t offset_val = 0;
 		if (limit.offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
 			offset_val = limit.offset_val.GetConstantValue();
 		}

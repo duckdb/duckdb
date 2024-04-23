@@ -7,9 +7,19 @@ namespace duckdb {
 using Filter = FilterPushdown::Filter;
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<LogicalOperator> op) {
-	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT);
-	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
+	D_ASSERT(op->children.size() > 1);
+	FilterPushdown left_pushdown(optimizer, convert_mark_joins), right_pushdown(optimizer, convert_mark_joins);
 	vector<unique_ptr<Expression>> join_expressions;
+	auto join_ref_type = JoinRefType::REGULAR;
+	switch (op->type) {
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
+		break;
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+		join_ref_type = JoinRefType::ASOF;
+		break;
+	default:
+		throw InternalException("Unsupported join type for cross product push down");
+	}
 	unordered_set<idx_t> left_bindings, right_bindings;
 	if (!filters.empty()) {
 		// check to see into which side we should push the filters
@@ -41,16 +51,17 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<Logi
 		// extract join conditions
 		vector<JoinCondition> conditions;
 		vector<unique_ptr<Expression>> arbitrary_expressions;
-		auto join_type = JoinType::INNER;
+		const auto join_type = JoinType::INNER;
 		LogicalComparisonJoin::ExtractJoinConditions(GetContext(), join_type, op->children[0], op->children[1],
 		                                             left_bindings, right_bindings, join_expressions, conditions,
 		                                             arbitrary_expressions);
 		// create the join from the join conditions
-		return LogicalComparisonJoin::CreateJoin(GetContext(), JoinType::INNER, JoinRefType::REGULAR,
-		                                         std::move(op->children[0]), std::move(op->children[1]),
-		                                         std::move(conditions), std::move(arbitrary_expressions));
+		return LogicalComparisonJoin::CreateJoin(GetContext(), join_type, join_ref_type, std::move(op->children[0]),
+		                                         std::move(op->children[1]), std::move(conditions),
+		                                         std::move(arbitrary_expressions));
 	} else {
 		// no join conditions found: keep as cross product
+		D_ASSERT(op->type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT);
 		return op;
 	}
 }

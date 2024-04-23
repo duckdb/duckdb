@@ -14,6 +14,7 @@ void ArrowUnionData::Initialize(ArrowAppendData &result, const LogicalType &type
 		auto child_buffer = ArrowAppender::InitializeChild(child.second, capacity, result.options);
 		result.child_data.push_back(std::move(child_buffer));
 	}
+	(void)AppendValidity; // silence a compiler warning about unused static functiondep
 }
 
 void ArrowUnionData::Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
@@ -55,13 +56,13 @@ void ArrowUnionData::Append(ArrowAppendData &append_data, Vector &input, idx_t f
 }
 
 void ArrowUnionData::Finalize(ArrowAppendData &append_data, const LogicalType &type, ArrowArray *result) {
-	result->n_buffers = 2;
-	result->buffers[1] = append_data.main_buffer.data();
+	result->n_buffers = 1;
+	result->buffers[0] = append_data.main_buffer.data();
 
 	auto &child_types = UnionType::CopyMemberTypes(type);
 	ArrowAppender::AddChildren(append_data, child_types.size());
 	result->children = append_data.child_pointers.data();
-	result->n_children = child_types.size();
+	result->n_children = NumericCast<int64_t>(child_types.size());
 	for (idx_t i = 0; i < child_types.size(); i++) {
 		auto &child_type = child_types[i].second;
 		append_data.child_arrays[i] = *ArrowAppender::FinalizeChild(child_type, std::move(append_data.child_data[i]));

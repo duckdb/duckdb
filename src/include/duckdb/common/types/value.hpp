@@ -17,6 +17,7 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/datetime.hpp"
 #include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 
 namespace duckdb {
 
@@ -191,13 +192,13 @@ public:
 	DUCKDB_API static Value BIT(const string &data);
 
 	//! Creates an aggregate state
-	DUCKDB_API static Value AGGREGATE_STATE(const LogicalType &type, const_data_ptr_t data, idx_t len);
+	DUCKDB_API static Value AGGREGATE_STATE(const LogicalType &type, const_data_ptr_t data, idx_t len); // NOLINT
 
 	template <class T>
 	T GetValue() const;
 	template <class T>
 	static Value CreateValue(T value) {
-		static_assert(AlwaysFalse<T>::value, "No specialization exists for this type");
+		static_assert(AlwaysFalse<T>::VALUE, "No specialization exists for this type");
 		return Value(nullptr);
 	}
 	// Returns the internal value. Unlike GetValue(), this method does not perform casting, and assumes T matches the

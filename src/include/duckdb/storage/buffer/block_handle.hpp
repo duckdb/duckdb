@@ -11,6 +11,7 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
@@ -38,7 +39,7 @@ struct BufferPoolReservation {
 	~BufferPoolReservation();
 
 	void Resize(idx_t new_size);
-	void Merge(BufferPoolReservation &&src);
+	void Merge(BufferPoolReservation src);
 };
 
 struct TempBufferPoolReservation : BufferPoolReservation {
@@ -76,7 +77,7 @@ public:
 		D_ASSERT(buffer);
 		// resize and adjust current memory
 		buffer->Resize(block_size);
-		memory_usage += memory_delta;
+		memory_usage = NumericCast<idx_t>(NumericCast<int64_t>(memory_usage) + memory_delta);
 		D_ASSERT(memory_usage == buffer->AllocSize());
 	}
 

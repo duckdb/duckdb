@@ -10,6 +10,7 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
+#include "duckdb/parser/parsed_data/copy_database_info.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/parser/parsed_data/detach_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
@@ -33,6 +34,9 @@ unique_ptr<ParseInfo> ParseInfo::Deserialize(Deserializer &deserializer) {
 		break;
 	case ParseInfoType::ATTACH_INFO:
 		result = AttachInfo::Deserialize(deserializer);
+		break;
+	case ParseInfoType::COPY_DATABASE_INFO:
+		result = CopyDatabaseInfo::Deserialize(deserializer);
 		break;
 	case ParseInfoType::COPY_INFO:
 		result = CopyInfo::Deserialize(deserializer);
@@ -226,6 +230,19 @@ unique_ptr<AlterTableInfo> ChangeColumnTypeInfo::Deserialize(Deserializer &deser
 	deserializer.ReadPropertyWithDefault<string>(400, "column_name", result->column_name);
 	deserializer.ReadProperty<LogicalType>(401, "target_type", result->target_type);
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(402, "expression", result->expression);
+	return std::move(result);
+}
+
+void CopyDatabaseInfo::Serialize(Serializer &serializer) const {
+	ParseInfo::Serialize(serializer);
+	serializer.WritePropertyWithDefault<string>(200, "target_database", target_database);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<CreateInfo>>>(201, "entries", entries);
+}
+
+unique_ptr<ParseInfo> CopyDatabaseInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<CopyDatabaseInfo>(new CopyDatabaseInfo());
+	deserializer.ReadPropertyWithDefault<string>(200, "target_database", result->target_database);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<CreateInfo>>>(201, "entries", result->entries);
 	return std::move(result);
 }
 
@@ -449,11 +466,17 @@ unique_ptr<ParseInfo> TransactionInfo::Deserialize(Deserializer &deserializer) {
 void VacuumInfo::Serialize(Serializer &serializer) const {
 	ParseInfo::Serialize(serializer);
 	serializer.WriteProperty<VacuumOptions>(200, "options", options);
+	serializer.WritePropertyWithDefault<bool>(201, "has_table", has_table);
+	serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(202, "ref", ref);
+	serializer.WritePropertyWithDefault<vector<string>>(203, "columns", columns);
 }
 
 unique_ptr<ParseInfo> VacuumInfo::Deserialize(Deserializer &deserializer) {
 	auto options = deserializer.ReadProperty<VacuumOptions>(200, "options");
 	auto result = duckdb::unique_ptr<VacuumInfo>(new VacuumInfo(options));
+	deserializer.ReadPropertyWithDefault<bool>(201, "has_table", result->has_table);
+	deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(202, "ref", result->ref);
+	deserializer.ReadPropertyWithDefault<vector<string>>(203, "columns", result->columns);
 	return std::move(result);
 }
 

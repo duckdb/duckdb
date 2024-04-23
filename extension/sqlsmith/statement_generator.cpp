@@ -45,8 +45,8 @@ StatementGenerator::StatementGenerator(StatementGenerator &parent_p)
 StatementGenerator::~StatementGenerator() {
 }
 
-shared_ptr<GeneratorContext> StatementGenerator::GetDatabaseState(ClientContext &context) {
-	auto result = make_shared<GeneratorContext>();
+std::shared_ptr<GeneratorContext> StatementGenerator::GetDatabaseState(ClientContext &context) {
+	auto result = std::make_shared<GeneratorContext>();
 	result->test_types = TestAllTypesFun::GetTestTypes();
 
 	auto schemas = Catalog::GetAllSchemas(context);

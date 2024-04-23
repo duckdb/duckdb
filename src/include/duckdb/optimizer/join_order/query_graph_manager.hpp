@@ -57,7 +57,7 @@ struct FilterInfo {
 //! When the plan enumerator finishes, the Query Graph Manger can then recreate the logical plan.
 class QueryGraphManager {
 public:
-	QueryGraphManager(ClientContext &context) : relation_manager(context), context(context) {
+	explicit QueryGraphManager(ClientContext &context) : relation_manager(context), context(context) {
 	}
 
 	//! manage relations and the logical operators they represent

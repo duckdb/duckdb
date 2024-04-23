@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 
 namespace duckdb {
 
@@ -101,18 +102,19 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	if (sniffed_column_counts.result_position > rows_read) {
 		rows_read = sniffed_column_counts.result_position;
 	}
-	if (set_columns.IsCandidateUnacceptable(num_cols, options.null_padding, options.ignore_errors,
+	if (set_columns.IsCandidateUnacceptable(num_cols, options.null_padding, options.ignore_errors.GetValue(),
 	                                        sniffed_column_counts.last_value_always_empty)) {
 		// Not acceptable
 		return;
 	}
 	for (idx_t row = start_row; row < sniffed_column_counts.result_position; row++) {
-		if (set_columns.IsCandidateUnacceptable(sniffed_column_counts[row], options.null_padding, options.ignore_errors,
+		if (set_columns.IsCandidateUnacceptable(sniffed_column_counts[row], options.null_padding,
+		                                        options.ignore_errors.GetValue(),
 		                                        sniffed_column_counts.last_value_always_empty)) {
 			// Not acceptable
 			return;
 		}
-		if (sniffed_column_counts[row] == num_cols || options.ignore_errors) {
+		if (sniffed_column_counts[row] == num_cols || (options.ignore_errors.GetValue() && !options.null_padding)) {
 			consistent_rows++;
 		} else if (num_cols < sniffed_column_counts[row] && !options.dialect_options.skip_rows.IsSetByUser() &&
 		           (!set_columns.IsSet() || options.null_padding)) {
@@ -176,10 +178,19 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 		}
 		auto &sniffing_state_machine = scanner->GetStateMachine();
 
+		if (!candidates.empty() && candidates.front()->ever_quoted && !scanner->ever_quoted) {
+			// Give preference to quoted boys.
+			return;
+		}
+
 		best_consistent_rows = consistent_rows;
 		max_columns_found = num_cols;
 		prev_padding_count = padding_count;
-		sniffing_state_machine.dialect_options.skip_rows = start_row;
+		if (!options.null_padding && !options.ignore_errors.GetValue()) {
+			sniffing_state_machine.dialect_options.skip_rows = start_row;
+		} else {
+			sniffing_state_machine.dialect_options.skip_rows = options.dialect_options.skip_rows.GetValue();
+		}
 		candidates.clear();
 		sniffing_state_machine.dialect_options.num_cols = num_cols;
 		candidates.emplace_back(std::move(scanner));
@@ -200,7 +211,11 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 			}
 		}
 		if (!same_quote_is_candidate) {
-			sniffing_state_machine.dialect_options.skip_rows = start_row;
+			if (!options.null_padding && !options.ignore_errors.GetValue()) {
+				sniffing_state_machine.dialect_options.skip_rows = start_row;
+			} else {
+				sniffing_state_machine.dialect_options.skip_rows = options.dialect_options.skip_rows.GetValue();
+			}
 			sniffing_state_machine.dialect_options.num_cols = num_cols;
 			candidates.emplace_back(std::move(scanner));
 		}
@@ -212,10 +227,11 @@ bool CSVSniffer::RefineCandidateNextChunk(ColumnCountScanner &candidate) {
 	for (idx_t i = 0; i < sniffed_column_counts.result_position; i++) {
 		if (set_columns.IsSet()) {
 			return !set_columns.IsCandidateUnacceptable(sniffed_column_counts[i], options.null_padding,
-			                                            options.ignore_errors,
+			                                            options.ignore_errors.GetValue(),
 			                                            sniffed_column_counts.last_value_always_empty);
 		} else {
-			if (max_columns_found != sniffed_column_counts[i] && (!options.null_padding && !options.ignore_errors)) {
+			if (max_columns_found != sniffed_column_counts[i] &&
+			    (!options.null_padding && !options.ignore_errors.GetValue())) {
 				return false;
 			}
 		}

@@ -501,7 +501,9 @@ void UpdateSegment::RollbackUpdate(UpdateInfo &info) {
 	auto lock_handle = lock.GetExclusiveLock();
 
 	// move the data from the UpdateInfo back into the base info
-	D_ASSERT(root->info[info.vector_index]);
+	if (!root->info[info.vector_index]) {
+		return;
+	}
 	rollback_update_function(*root->info[info.vector_index]->info, info);
 
 	// clean up the update chain
@@ -579,7 +581,7 @@ void UpdateSegment::InitializeUpdateInfo(UpdateInfo &info, row_t *ids, const Sel
 		auto idx = sel.get_index(i);
 		auto id = ids[idx];
 		D_ASSERT(idx_t(id) >= vector_offset && idx_t(id) < vector_offset + STANDARD_VECTOR_SIZE);
-		info.tuples[i] = NumericCast<sel_t>(id - vector_offset);
+		info.tuples[i] = NumericCast<sel_t>(NumericCast<idx_t>(id) - vector_offset);
 	};
 }
 
@@ -695,7 +697,7 @@ static idx_t MergeLoop(row_t a[], sel_t b[], idx_t acount, idx_t bcount, idx_t a
 	idx_t count = 0;
 	while (aidx < acount && bidx < bcount) {
 		auto a_index = asel.get_index(aidx);
-		auto a_id = a[a_index] - aoffset;
+		auto a_id = UnsafeNumericCast<idx_t>(a[a_index]) - aoffset;
 		auto b_id = b[bidx];
 		if (a_id == b_id) {
 			merge(a_id, a_index, bidx, count);
@@ -714,7 +716,7 @@ static idx_t MergeLoop(row_t a[], sel_t b[], idx_t acount, idx_t bcount, idx_t a
 	}
 	for (; aidx < acount; aidx++) {
 		auto a_index = asel.get_index(aidx);
-		pick_a(a[a_index] - aoffset, a_index, count);
+		pick_a(UnsafeNumericCast<idx_t>(a[a_index]) - aoffset, a_index, count);
 		count++;
 	}
 	for (; bidx < bcount; bidx++) {
@@ -775,7 +777,7 @@ static void MergeUpdateLoopInternal(UpdateInfo *base_info, V *base_table_data, U
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
 		// we have to merge the info for "ids[i]"
-		auto update_id = ids[idx] - base_id;
+		auto update_id = UnsafeNumericCast<idx_t>(ids[idx]) - base_id;
 
 		while (update_info_offset < update_info->N && update_info->tuples[update_info_offset] < update_id) {
 			// old id comes before the current id: write it
@@ -1101,7 +1103,7 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 	// get the vector index based on the first id
 	// we assert that all updates must be part of the same vector
 	auto first_id = ids[sel.get_index(0)];
-	idx_t vector_index = (first_id - column_data.start) / STANDARD_VECTOR_SIZE;
+	idx_t vector_index = (UnsafeNumericCast<idx_t>(first_id) - column_data.start) / STANDARD_VECTOR_SIZE;
 	idx_t vector_offset = column_data.start + vector_index * STANDARD_VECTOR_SIZE;
 
 	D_ASSERT(idx_t(first_id) >= column_data.start);
@@ -1114,7 +1116,7 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 		// there is already a version here, check if there are any conflicts and search for the node that belongs to
 		// this transaction in the version chain
 		auto base_info = root->info[vector_index]->info.get();
-		CheckForConflicts(base_info->next, transaction, ids, sel, count, vector_offset, node);
+		CheckForConflicts(base_info->next, transaction, ids, sel, count, UnsafeNumericCast<row_t>(vector_offset), node);
 
 		// there are no conflicts
 		// first, check if this thread has already done any updates

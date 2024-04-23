@@ -18,16 +18,17 @@ namespace duckdb {
 
 class CSVBufferHandle {
 public:
-	CSVBufferHandle(BufferHandle handle_p, idx_t actual_size_p, const bool is_final_buffer_p, idx_t file_idx_p,
-	                idx_t buffer_index_p)
-	    : handle(std::move(handle_p)), actual_size(actual_size_p), is_last_buffer(is_final_buffer_p),
-	      file_idx(file_idx_p), buffer_idx(buffer_index_p) {};
-	CSVBufferHandle() : actual_size(0), is_last_buffer(false), file_idx(0), buffer_idx(0) {};
+	CSVBufferHandle(BufferHandle handle_p, idx_t actual_size_p, idx_t requested_size_p, const bool is_final_buffer_p,
+	                idx_t file_idx_p, idx_t buffer_index_p)
+	    : handle(std::move(handle_p)), actual_size(actual_size_p), requested_size(requested_size_p),
+	      is_last_buffer(is_final_buffer_p), file_idx(file_idx_p), buffer_idx(buffer_index_p) {};
+	CSVBufferHandle() : actual_size(0), requested_size(0), is_last_buffer(false), file_idx(0), buffer_idx(0) {};
 	~CSVBufferHandle() {
 	}
 	//! Handle created during allocation
 	BufferHandle handle;
 	const idx_t actual_size;
+	const idx_t requested_size;
 	const bool is_last_buffer;
 	const idx_t file_idx;
 	const idx_t buffer_idx;
@@ -86,13 +87,15 @@ private:
 	ClientContext &context;
 	//! Actual size can be smaller than the buffer size in case we allocate it too optimistically.
 	idx_t actual_buffer_size;
+	idx_t requested_size;
 	//! Global position from the CSV File where this buffer starts
 	idx_t global_csv_start = 0;
 	//! Number of the file that is in this buffer
 	idx_t file_number = 0;
 	//! If we can seek in the file or not.
-	//! If we can't seek, this means we can't destroy the buffers
 	bool can_seek;
+	//! If this file is being fed by a pipe.
+	bool is_pipe;
 	//! Buffer Index, used as a batch index for insertion-order preservation
 	idx_t buffer_idx = 0;
 	//! -------- Allocated Block ---------//

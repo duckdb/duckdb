@@ -30,7 +30,7 @@ static Value CreateValueFromFileList(const vector<string> &file_list) {
 	return Value::LIST(std::move(files));
 }
 
-ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, const vector<string> &input,
+ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const vector<string> &input,
                                  named_parameter_map_t &&options, string alias_p)
     : TableFunctionRelation(context, "read_csv_auto", {CreateValueFromFileList(input)}, nullptr, false),
       alias(std::move(alias_p)) {
@@ -58,7 +58,7 @@ ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, 
 
 	shared_ptr<CSVBufferManager> buffer_manager;
 	context->RunFunctionInTransaction([&]() {
-		buffer_manager = make_shared<CSVBufferManager>(*context, csv_options, files[0], 0);
+		buffer_manager = make_shared_ptr<CSVBufferManager>(*context, csv_options, files[0], 0);
 		CSVSniffer sniffer(csv_options, buffer_manager, CSVStateMachineCache::Get(*context));
 		auto sniffer_result = sniffer.SniffCSV();
 		auto &types = sniffer_result.return_types;

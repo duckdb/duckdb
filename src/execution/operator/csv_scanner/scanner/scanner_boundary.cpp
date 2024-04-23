@@ -31,19 +31,19 @@ CSVIterator::CSVIterator() : is_set(false) {
 
 void CSVBoundary::Print() {
 #ifndef DUCKDB_DISABLE_PRINT
-	std::cout << "---Boundary: " << boundary_idx << " ---" << std::endl;
-	std::cout << "File Index:: " << file_idx << std::endl;
-	std::cout << "Buffer Index: " << buffer_idx << std::endl;
-	std::cout << "Buffer Pos: " << buffer_pos << std::endl;
-	std::cout << "End Pos: " << end_pos << std::endl;
-	std::cout << "------------" << end_pos << std::endl;
+	std::cout << "---Boundary: " << boundary_idx << " ---" << '\n';
+	std::cout << "File Index:: " << file_idx << '\n';
+	std::cout << "Buffer Index: " << buffer_idx << '\n';
+	std::cout << "Buffer Pos: " << buffer_pos << '\n';
+	std::cout << "End Pos: " << end_pos << '\n';
+	std::cout << "------------" << end_pos << '\n';
 #endif
 }
 
 void CSVIterator::Print() {
 #ifndef DUCKDB_DISABLE_PRINT
 	boundary.Print();
-	std::cout << "Is set: " << is_set << std::endl;
+	std::cout << "Is set: " << is_set << '\n';
 #endif
 }
 

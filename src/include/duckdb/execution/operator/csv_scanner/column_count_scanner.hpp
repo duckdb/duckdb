@@ -13,6 +13,7 @@
 #include "duckdb/execution/operator/csv_scanner/scanner_boundary.hpp"
 #include "duckdb/execution/operator/csv_scanner/string_value_scanner.hpp"
 #include "duckdb/execution/operator/csv_scanner/base_scanner.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 
 namespace duckdb {
 
@@ -47,9 +48,6 @@ class ColumnCountScanner : public BaseScanner {
 public:
 	ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manager, const shared_ptr<CSVStateMachine> &state_machine,
 	                   shared_ptr<CSVErrorHandler> error_handler);
-
-	~ColumnCountScanner() {
-	}
 
 	ColumnCountResult &ParseChunk() override;
 

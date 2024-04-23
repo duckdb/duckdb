@@ -2,15 +2,15 @@
 
 namespace duckdb {
 
-static ExtensionAlias internal_aliases[] = {{"http", "httpfs"}, // httpfs
-                                            {"https", "httpfs"},
-                                            {"md", "motherduck"},       // motherduck
-                                            {"mysql", "mysql_scanner"}, // mysql
-                                            {"s3", "httpfs"},
-                                            {"postgres", "postgres_scanner"}, // postgres
-                                            {"sqlite", "sqlite_scanner"},     // sqlite
-                                            {"sqlite3", "sqlite_scanner"},
-                                            {nullptr, nullptr}};
+static const ExtensionAlias internal_aliases[] = {{"http", "httpfs"}, // httpfs
+                                                  {"https", "httpfs"},
+                                                  {"md", "motherduck"},       // motherduck
+                                                  {"mysql", "mysql_scanner"}, // mysql
+                                                  {"s3", "httpfs"},
+                                                  {"postgres", "postgres_scanner"}, // postgres
+                                                  {"sqlite", "sqlite_scanner"},     // sqlite
+                                                  {"sqlite3", "sqlite_scanner"},
+                                                  {nullptr, nullptr}};
 
 idx_t ExtensionHelper::ExtensionAliasCount() {
 	idx_t index;

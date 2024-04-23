@@ -10,7 +10,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, shared_ptr<CSVBufferManager> bu
                          vector<LogicalType> &file_schema)
     : file_path(options_p.file_path), file_idx(0), buffer_manager(std::move(buffer_manager_p)),
       state_machine(std::move(state_machine_p)), file_size(buffer_manager->file_handle->FileSize()),
-      error_handler(make_shared<CSVErrorHandler>(options_p.ignore_errors)),
+      error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())),
       on_disk_file(buffer_manager->file_handle->OnDiskFile()), options(options_p) {
 	if (bind_data.initial_reader.get()) {
 		auto &union_reader = *bind_data.initial_reader;
@@ -43,7 +43,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
                          const idx_t file_idx_p, const ReadCSVData &bind_data, const vector<column_t> &column_ids,
                          const vector<LogicalType> &file_schema)
     : file_path(file_path_p), file_idx(file_idx_p),
-      error_handler(make_shared<CSVErrorHandler>(options_p.ignore_errors)), options(options_p) {
+      error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())), options(options_p) {
 	if (file_idx < bind_data.union_readers.size()) {
 		// we are doing UNION BY NAME - fetch the options from the union reader for this file
 		optional_ptr<CSVFileScan> union_reader_ptr;
@@ -74,7 +74,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 	}
 
 	// Initialize Buffer Manager
-	buffer_manager = make_shared<CSVBufferManager>(context, options, file_path, file_idx);
+	buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, file_path, file_idx);
 	// Initialize On Disk and Size of file
 	on_disk_file = buffer_manager->file_handle->OnDiskFile();
 	file_size = buffer_manager->file_handle->FileSize();
@@ -90,7 +90,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 			CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
 			sniffer.SniffCSV();
 		}
-		state_machine = make_shared<CSVStateMachine>(
+		state_machine = make_shared_ptr<CSVStateMachine>(
 		    state_machine_cache.Get(options.dialect_options.state_machine_options), options);
 
 		multi_file_reader.InitializeReader(*this, options.file_options, bind_data.reader_bind, bind_data.return_types,
@@ -121,8 +121,8 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 
 	names = bind_data.csv_names;
 	types = bind_data.csv_types;
-	state_machine =
-	    make_shared<CSVStateMachine>(state_machine_cache.Get(options.dialect_options.state_machine_options), options);
+	state_machine = make_shared_ptr<CSVStateMachine>(
+	    state_machine_cache.Get(options.dialect_options.state_machine_options), options);
 
 	multi_file_reader.InitializeReader(*this, options.file_options, bind_data.reader_bind, bind_data.return_types,
 	                                   bind_data.return_names, column_ids, nullptr, file_path, context);
@@ -130,9 +130,9 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 }
 
 CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, CSVReaderOptions &options_p)
-    : file_path(file_name), file_idx(0), error_handler(make_shared<CSVErrorHandler>(options_p.ignore_errors)),
-      options(options_p) {
-	buffer_manager = make_shared<CSVBufferManager>(context, options, file_path, file_idx);
+    : file_path(file_name), file_idx(0),
+      error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())), options(options_p) {
+	buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, file_path, file_idx);
 	// Initialize On Disk and Size of file
 	on_disk_file = buffer_manager->file_handle->OnDiskFile();
 	file_size = buffer_manager->file_handle->FileSize();
@@ -152,8 +152,8 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, CSVRea
 		options.dialect_options.num_cols = options.sql_type_list.size();
 	}
 	// Initialize State Machine
-	state_machine =
-	    make_shared<CSVStateMachine>(state_machine_cache.Get(options.dialect_options.state_machine_options), options);
+	state_machine = make_shared_ptr<CSVStateMachine>(
+	    state_machine_cache.Get(options.dialect_options.state_machine_options), options);
 }
 
 void CSVFileScan::InitializeFileNamesTypes() {
@@ -171,20 +171,6 @@ void CSVFileScan::InitializeFileNamesTypes() {
 		file_types.emplace_back(types[result_idx]);
 		projected_columns.insert(result_idx);
 		projection_ids.emplace_back(result_idx, i);
-	}
-
-	if (!projected_columns.empty()) {
-		// We might have to add recovery rejects column ids
-		for (idx_t i = 0; i < options.rejects_recovery_column_ids.size(); i++) {
-			idx_t col_id = options.rejects_recovery_column_ids[i];
-			if (projected_columns.find(col_id) == projected_columns.end()) {
-				// We have to insert this column in our projection
-				projected_columns.insert(col_id);
-				file_types.emplace_back(LogicalType::VARCHAR);
-				projected_columns.insert(col_id);
-				projection_ids.emplace_back(col_id, col_id);
-			}
-		}
 	}
 
 	if (reader_data.column_ids.empty()) {
@@ -223,4 +209,9 @@ void CSVFileScan::InitializeProjection() {
 		reader_data.column_mapping.push_back(i);
 	}
 }
+
+void CSVFileScan::Finish() {
+	buffer_manager.reset();
+}
+
 } // namespace duckdb

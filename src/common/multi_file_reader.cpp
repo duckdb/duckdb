@@ -272,11 +272,11 @@ void MultiFileReader::BindOptions(MultiFileReaderOptions &options, MultiFileList
 		}
 
 		for (auto &part : partitions) {
-			idx_t hive_partitioning_index = DConstants::INVALID_INDEX;
+			idx_t hive_partitioning_index;
 			auto lookup = std::find(names.begin(), names.end(), part.first);
 			if (lookup != names.end()) {
 				// hive partitioning column also exists in file - override
-				auto idx = lookup - names.begin();
+				auto idx = NumericCast<idx_t>(lookup - names.begin());
 				hive_partitioning_index = idx;
 				return_types[idx] = options.GetHiveLogicalType(part.first);
 			} else {
@@ -528,38 +528,58 @@ bool MultiFileReaderOptions::AutoDetectHivePartitioningInternal(MultiFileList &f
 	}
 	return true;
 }
-void MultiFileReaderOptions::AutoDetectHiveTypesInternal(const string &file, ClientContext &context) {
+void MultiFileReaderOptions::AutoDetectHiveTypesInternal(MultiFileList &files, ClientContext &context) {
+	const LogicalType candidates[] = {LogicalType::DATE, LogicalType::TIMESTAMP, LogicalType::BIGINT};
+
 	auto &fs = FileSystem::GetFileSystem(context);
 
-	std::map<string, string> partitions;
-	auto splits = StringUtil::Split(file, fs.PathSeparator(file));
-	if (splits.size() < 2) {
-		return;
-	}
-	for (auto it = splits.begin(); it != std::prev(splits.end()); it++) {
-		auto part = StringUtil::Split(*it, "=");
-		if (part.size() == 2) {
-			partitions[part.front()] = part.back();
+	unordered_map<string, LogicalType> detected_types;
+	for (auto &file : files.GetAllFiles()) {
+		unordered_map<string, string> partitions;
+		auto splits = StringUtil::Split(file, fs.PathSeparator(file));
+		if (splits.size() < 2) {
+			return;
 		}
-	}
-	if (partitions.empty()) {
-		return;
-	}
-
-	const LogicalType candidates[] = {LogicalType::DATE, LogicalType::TIMESTAMP, LogicalType::BIGINT};
-	for (auto &part : partitions) {
-		const string &name = part.first;
-		if (hive_types_schema.find(name) != hive_types_schema.end()) {
-			continue;
-		}
-		Value value(part.second);
-		for (auto &candidate : candidates) {
-			const bool success = value.TryCastAs(context, candidate, true);
-			if (success) {
-				hive_types_schema[name] = candidate;
-				break;
+		for (auto it = splits.begin(); it != std::prev(splits.end()); it++) {
+			auto part = StringUtil::Split(*it, "=");
+			if (part.size() == 2) {
+				partitions[part.front()] = part.back();
 			}
 		}
+		if (partitions.empty()) {
+			return;
+		}
+
+		for (auto &part : partitions) {
+			const string &name = part.first;
+			if (hive_types_schema.find(name) != hive_types_schema.end()) {
+				// type was explicitly provided by the user
+				continue;
+			}
+			LogicalType detected_type = LogicalType::VARCHAR;
+			Value value(part.second);
+			for (auto &candidate : candidates) {
+				const bool success = value.TryCastAs(context, candidate, true);
+				if (success) {
+					detected_type = candidate;
+					break;
+				}
+			}
+			auto entry = detected_types.find(name);
+			if (entry == detected_types.end()) {
+				// type was not yet detected - insert it
+				detected_types.insert(make_pair(name, std::move(detected_type)));
+			} else {
+				// type was already detected - check if the type matches
+				// if not promote to VARCHAR
+				if (entry->second != detected_type) {
+					entry->second = LogicalType::VARCHAR;
+				}
+			}
+		}
+	}
+	for (auto &entry : detected_types) {
+		hive_types_schema.insert(make_pair(entry.first, std::move(entry.second)));
 	}
 }
 void MultiFileReaderOptions::AutoDetectHivePartitioning(MultiFileList &files, ClientContext &context) {
@@ -578,7 +598,7 @@ void MultiFileReaderOptions::AutoDetectHivePartitioning(MultiFileList &files, Cl
 		hive_partitioning = AutoDetectHivePartitioningInternal(files, context);
 	}
 	if (hive_partitioning && hive_types_autocast) {
-		AutoDetectHiveTypesInternal(files.GetFile(0), context);
+		AutoDetectHiveTypesInternal(files, context);
 	}
 }
 void MultiFileReaderOptions::VerifyHiveTypesArePartitions(const std::map<string, string> &partitions) const {

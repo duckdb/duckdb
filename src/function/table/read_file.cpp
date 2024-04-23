@@ -162,7 +162,8 @@ static void ReadFileExecute(ClientContext &context, TableFunctionInput &input, D
 				} break;
 				case ReadFileBindData::FILE_SIZE_COLUMN: {
 					auto &file_size_vector = output.data[col_idx];
-					FlatVector::GetData<int64_t>(file_size_vector)[out_idx] = file_handle->GetFileSize();
+					FlatVector::GetData<int64_t>(file_size_vector)[out_idx] =
+					    NumericCast<int64_t>(file_handle->GetFileSize());
 				} break;
 				case ReadFileBindData::FILE_LAST_MODIFIED_COLUMN: {
 					auto &last_modified_vector = output.data[col_idx];

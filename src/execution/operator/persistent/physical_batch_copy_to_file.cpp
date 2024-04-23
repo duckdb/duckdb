@@ -62,7 +62,7 @@ struct FixedPreparedBatchData {
 class FixedBatchCopyGlobalState : public GlobalSinkState {
 public:
 	// heuristic - we need at least 4MB of cache space per column per thread we launch
-	static constexpr const idx_t MINIMUM_MEMORY_PER_COLUMN_PER_THREAD = 4 * 1024 * 1024;
+	static constexpr const idx_t MINIMUM_MEMORY_PER_COLUMN_PER_THREAD = 4ULL * 1024ULL * 1024ULL;
 
 public:
 	explicit FixedBatchCopyGlobalState(ClientContext &context_p, unique_ptr<GlobalFunctionData> global_state,
@@ -117,7 +117,7 @@ public:
 	}
 };
 
-enum class FixedBatchCopyState { SINKING_DATA = 1, PROCESSING_TASKS = 2 };
+enum class FixedBatchCopyState : uint8_t { SINKING_DATA = 1, PROCESSING_TASKS = 2 };
 
 class FixedBatchCopyLocalState : public LocalSinkState {
 public:
@@ -308,7 +308,7 @@ SinkFinalizeType PhysicalBatchCopyToFile::Finalize(Pipeline &pipeline, Event &ev
 		FinalFlush(context, input.global_state);
 	} else {
 		// we have multiple tasks remaining - launch an event to execute the tasks in parallel
-		auto new_event = make_shared<ProcessRemainingBatchesEvent>(*this, gstate, pipeline, context);
+		auto new_event = make_shared_ptr<ProcessRemainingBatchesEvent>(*this, gstate, pipeline, context);
 		event.InsertEvent(std::move(new_event));
 	}
 	return SinkFinalizeType::READY;
@@ -434,7 +434,7 @@ void PhysicalBatchCopyToFile::RepartitionBatches(ClientContext &context, GlobalS
 				// create an empty collection
 				auto new_collection =
 				    make_uniq<ColumnDataCollection>(context, children[0]->types, ColumnDataAllocatorType::HYBRID);
-				append_batch = make_uniq<FixedRawBatchData>(0, std::move(new_collection));
+				append_batch = make_uniq<FixedRawBatchData>(0U, std::move(new_collection));
 			}
 			if (append_batch) {
 				append_batch->collection->InitializeAppend(append_state);
@@ -459,7 +459,7 @@ void PhysicalBatchCopyToFile::RepartitionBatches(ClientContext &context, GlobalS
 
 			auto new_collection =
 			    make_uniq<ColumnDataCollection>(context, children[0]->types, ColumnDataAllocatorType::HYBRID);
-			append_batch = make_uniq<FixedRawBatchData>(0, std::move(new_collection));
+			append_batch = make_uniq<FixedRawBatchData>(0U, std::move(new_collection));
 			append_batch->collection->InitializeAppend(append_state);
 		}
 	}
@@ -605,7 +605,7 @@ SourceResultType PhysicalBatchCopyToFile::GetData(ExecutionContext &context, Dat
 	auto &g = sink_state->Cast<FixedBatchCopyGlobalState>();
 
 	chunk.SetCardinality(1);
-	chunk.SetValue(0, 0, Value::BIGINT(g.rows_copied));
+	chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
 	return SourceResultType::FINISHED;
 }
 

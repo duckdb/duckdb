@@ -32,7 +32,7 @@ CREATE TABLE non_generated as select * from tbl;
 query I
 SELECT sql FROM sqlite_master WHERE name = 'tbl' and contains(sql, 'GENERATED');
 ----
-CREATE TABLE tbl(foo INTEGER, bar INTEGER GENERATED ALWAYS AS(CAST((foo + 1) AS INTEGER)), foobar INTEGER);
+CREATE TABLE tbl(foo INTEGER, bar INTEGER GENERATED ALWAYS AS((foo + 1)), foobar INTEGER);
 
 query I
 SELECT sql FROM sqlite_master WHERE name = 'non_generated' and contains(sql, 'GENERATED');
