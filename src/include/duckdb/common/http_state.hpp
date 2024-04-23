@@ -20,7 +20,7 @@ namespace duckdb {
 class CachedFileHandle;
 
 //! Represents a file that is intended to be fully downloaded, then used in parallel by multiple threads
-class CachedFile : public std::enable_shared_from_this<CachedFile> {
+class CachedFile : public enable_shared_from_this<CachedFile> {
 	friend class CachedFileHandle;
 
 public:

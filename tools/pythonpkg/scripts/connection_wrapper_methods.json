@@ -1,0 +1,108 @@
+[
+    {
+        "name": "project",
+        "args": [
+            {
+                "name": "project_expr",
+                "type": "str"
+            }
+        ],
+        "return": "DuckDBPyRelation"
+    },
+    {
+        "name": "distinct",
+        "return": "DuckDBPyRelation"
+    },
+    {
+        "name": "write_csv",
+        "args": [
+            {
+                "name": "*args",
+                "type": "Any"
+            }
+        ],
+        "return": "None"
+    },
+    {
+        "name": "aggregate",
+        "args": [
+            {
+                "name": "aggr_expr",
+                "type": "str"
+            },
+            {
+                "name": "group_expr",
+                "type" : "str",
+				"default": "\"\""
+            }
+        ],
+        "return": "DuckDBPyRelation"
+    },
+    {
+        "name": "alias",
+        "args": [
+            {
+                "name": "alias",
+                "type": "str"
+            }
+        ],
+        "return": "DuckDBPyRelation"
+    },
+    {
+        "name": "filter",
+        "args": [
+            {
+                "name": "filter_expr",
+                "type": "str"
+            }
+        ],
+        "return": "DuckDBPyRelation"
+    },
+    {
+        "name": "limit",
+        "args": [
+            {
+                "name": "n",
+                "type": "int"
+            },
+            {
+                "name": "offset",
+                "type": "int",
+                "default": "0"
+            }
+        ],
+        "return": "DuckDBPyRelation"
+    },
+    {
+        "name": "order",
+        "args": [
+            {
+                "name": "order_expr",
+                "type": "str"
+            }
+        ],
+        "return": "DuckDBPyRelation"
+    },
+    {
+        "name": "query_df",
+        "args": [
+            {
+                "name": "virtual_table_name",
+                "type": "str"
+            },
+            {
+                "name": "sql_query",
+                "type": "str"
+            }
+        ],
+        "return": "DuckDBPyRelation"
+    },
+    {
+        "name": "description",
+        "return": "Optional[List[Any]]"
+    },
+    {
+        "name": "rowcount",
+        "return": "int"
+    }
+]

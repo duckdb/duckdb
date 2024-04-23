@@ -219,7 +219,7 @@ public:
 				pq.push((*iter));
 			}
 			std::vector<const TDigest *> batch;
-			batch.reserve(size);
+			batch.reserve(size_t(size));
 
 			size_t totalSize = 0;
 			while (!pq.empty()) {
@@ -324,7 +324,7 @@ public:
 			CentroidComparator cc;
 			auto iter = std::upper_bound(processed_.cbegin(), processed_.cend(), Centroid(x, 0), cc);
 
-			auto i = std::distance(processed_.cbegin(), iter);
+			auto i = size_t(std::distance(processed_.cbegin(), iter));
 			auto z1 = x - (iter - 1)->mean();
 			auto z2 = (iter)->mean() - x;
 			return weightedAverage(cumulative_[i - 1], z2, cumulative_[i], z1) / processedWeight_;
@@ -369,7 +369,7 @@ public:
 		auto iter = std::lower_bound(cumulative_.cbegin(), cumulative_.cend(), index);
 
 		if (iter + 1 != cumulative_.cend()) {
-			auto i = std::distance(cumulative_.cbegin(), iter);
+			auto i = size_t(std::distance(cumulative_.cbegin(), iter));
 			auto z1 = index - *(iter - 1);
 			auto z2 = *(iter)-index;
 			// LOG(INFO) << "z2 " << z2 << " index " << index << " z1 " << z1;
@@ -406,9 +406,9 @@ public:
 
 	inline void add(std::vector<Centroid>::const_iterator iter, std::vector<Centroid>::const_iterator end) {
 		while (iter != end) {
-			const size_t diff = std::distance(iter, end);
+			const size_t diff = size_t(std::distance(iter, end));
 			const size_t room = maxUnprocessed_ - unprocessed_.size();
-			auto mid = iter + std::min(diff, room);
+			auto mid = iter + int64_t(std::min(diff, room));
 			while (iter != mid) {
 				unprocessed_.push_back(*(iter++));
 			}
@@ -538,7 +538,7 @@ private:
 		std::sort(unprocessed_.begin(), unprocessed_.end(), cc);
 		auto count = unprocessed_.size();
 		unprocessed_.insert(unprocessed_.end(), processed_.cbegin(), processed_.cend());
-		std::inplace_merge(unprocessed_.begin(), unprocessed_.begin() + count, unprocessed_.end(), cc);
+		std::inplace_merge(unprocessed_.begin(), unprocessed_.begin() + int64_t(count), unprocessed_.end(), cc);
 
 		processedWeight_ += unprocessedWeight_;
 		unprocessedWeight_ = 0;

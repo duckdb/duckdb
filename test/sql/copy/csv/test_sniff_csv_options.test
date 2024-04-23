@@ -82,7 +82,7 @@ FROM sniff_csv('test/sql/copy/csv/data/auto/time_date_timestamp_yyyy.mm.dd.csv',
 query IIIIIIIIIII
 FROM sniff_csv('test/sql/copy/csv/data/auto/time_date_timestamp_yyyy.mm.dd.csv', dateformat='%Y.%m.%d', timestampformat='%Y.%m.%d %H:%M:%S')
 ----
-,	"	"	\n	0	true	{'a': 'BIGINT', 'b': 'VARCHAR', 't': 'TIME', 'd': 'DATE', 'ts': 'TIMESTAMP'}	%Y.%m.%d	%Y.%m.%d %H:%M:%S	timestampformat='%Y.%m.%d %H:%M:%S', dateformat='%Y.%m.%d'	FROM read_csv('test/sql/copy/csv/data/auto/time_date_timestamp_yyyy.mm.dd.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'a': 'BIGINT', 'b': 'VARCHAR', 't': 'TIME', 'd': 'DATE', 'ts': 'TIMESTAMP'}, timestampformat='%Y.%m.%d %H:%M:%S', dateformat='%Y.%m.%d');
+,	"	"	\n	0	1	{'a': 'BIGINT', 'b': 'VARCHAR', 't': 'TIME', 'd': 'DATE', 'ts': 'TIMESTAMP'}	%Y.%m.%d	%Y.%m.%d %H:%M:%S	dateformat='%Y.%m.%d', timestampformat='%Y.%m.%d %H:%M:%S'	FROM read_csv('test/sql/copy/csv/data/auto/time_date_timestamp_yyyy.mm.dd.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'a': 'BIGINT', 'b': 'VARCHAR', 't': 'TIME', 'd': 'DATE', 'ts': 'TIMESTAMP'}, dateformat='%Y.%m.%d', timestampformat='%Y.%m.%d %H:%M:%S');
 
 query IIIII
 FROM read_csv('test/sql/copy/csv/data/auto/time_date_timestamp_yyyy.mm.dd.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'a': 'BIGINT', 'b': 'VARCHAR', 't': 'TIME', 'd': 'DATE', 'ts': 'TIMESTAMP'}, timestampformat='%Y.%m.%d %H:%M:%S', dateformat='%Y.%m.%d') order by all limit 1;

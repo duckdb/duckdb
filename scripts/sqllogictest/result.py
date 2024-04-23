@@ -772,10 +772,9 @@ class SQLLogicContext:
         # set up the config file
         additional_config = {}
         if readonly:
-            additional_config['temp_directory'] = False
+            additional_config['temp_directory'] = ""
             additional_config['access_mode'] = 'read_only'
         else:
-            additional_config['temp_directory'] = True
             additional_config['access_mode'] = 'automatic'
 
         self.pool = None

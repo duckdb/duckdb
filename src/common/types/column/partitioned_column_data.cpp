@@ -9,7 +9,7 @@ namespace duckdb {
 PartitionedColumnData::PartitionedColumnData(PartitionedColumnDataType type_p, ClientContext &context_p,
                                              vector<LogicalType> types_p)
     : type(type_p), context(context_p), types(std::move(types_p)),
-      allocators(make_shared<PartitionColumnDataAllocators>()) {
+      allocators(make_shared_ptr<PartitionColumnDataAllocators>()) {
 }
 
 PartitionedColumnData::PartitionedColumnData(const PartitionedColumnData &other)
@@ -165,7 +165,7 @@ vector<unique_ptr<ColumnDataCollection>> &PartitionedColumnData::GetPartitions()
 }
 
 void PartitionedColumnData::CreateAllocator() {
-	allocators->allocators.emplace_back(make_shared<ColumnDataAllocator>(BufferManager::GetBufferManager(context)));
+	allocators->allocators.emplace_back(make_shared_ptr<ColumnDataAllocator>(BufferManager::GetBufferManager(context)));
 	allocators->allocators.back()->MakeShared();
 }
 

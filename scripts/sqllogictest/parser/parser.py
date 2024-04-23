@@ -53,6 +53,10 @@ def is_space(char: str):
 
 
 ### -------- PARSER ----------
+class SQLParserException(Exception):
+    def __init__(self, message):
+        self.message = "Parser Error: " + message
+        super().__init__(self.message)
 
 
 class SQLLogicParser:
@@ -102,18 +106,18 @@ class SQLLogicParser:
 
     def peek_no_strip(self):
         if self.current_line >= len(self.lines):
-            raise Exception("File already fully consumed")
+            raise SQLParserException("File already fully consumed")
         return self.lines[self.current_line]
 
     def consume(self):
         if self.current_line >= len(self.lines):
-            raise Exception("File already fully consumed")
+            raise SQLParserException("File already fully consumed")
         self.current_line += 1
 
     def fail(self, message):
         file_path = self.current_test.path
         error_message = f"{file_path}:{self.current_line + 1}: {message}"
-        raise Exception(error_message)
+        raise SQLParserException(error_message)
 
     def get_expected_result(self, statement_type: str) -> ExpectedResult:
         type_map = {
@@ -530,7 +534,7 @@ def main():
     parser = SQLLogicParser()
     out: Optional[SQLLogicTest] = parser.parse(filename)
     if not out:
-        raise Exception(f"Test {filename} could not be parsed")
+        raise SQLParserException(f"Test {filename} could not be parsed")
 
 
 if __name__ == "__main__":

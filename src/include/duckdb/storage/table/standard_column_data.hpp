@@ -23,6 +23,8 @@ public:
 	ValidityColumnData validity;
 
 public:
+	bool HasUpdates() const override;
+
 	void SetStart(idx_t new_start) override;
 	bool CheckZonemap(ColumnScanState &state, TableFilter &filter) override;
 

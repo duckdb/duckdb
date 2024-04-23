@@ -3220,6 +3220,17 @@ public class TestDuckDBJDBC {
         conn2.close();
     }
 
+    public static void test_boolean_config() throws Exception {
+        Properties config = new Properties();
+        config.put("enable_external_access", false);
+        try (Connection conn = DriverManager.getConnection(JDBC_URL, config);
+             PreparedStatement stmt = conn.prepareStatement("SELECT current_setting('enable_external_access')");
+             ResultSet rs = stmt.executeQuery()) {
+            rs.next();
+            assertEquals("false", rs.getString(1));
+        }
+    }
+
     public static void test_readonly_remains_bug5593() throws Exception {
         Path database_file = Files.createTempFile("duckdb-instance-cache-test-", ".duckdb");
         database_file.toFile().delete();

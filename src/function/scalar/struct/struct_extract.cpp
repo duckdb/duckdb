@@ -133,8 +133,8 @@ static unique_ptr<FunctionData> StructExtractBindIndex(ClientContext &context, S
 		throw BinderException("Key index %lld for struct_extract out of range - expected an index between 1 and %llu",
 		                      index, struct_children.size());
 	}
-	bound_function.return_type = struct_children[index - 1].second;
-	return make_uniq<StructExtractBindData>(index - 1);
+	bound_function.return_type = struct_children[NumericCast<idx_t>(index - 1)].second;
+	return make_uniq<StructExtractBindData>(NumericCast<idx_t>(index - 1));
 }
 
 static unique_ptr<BaseStatistics> PropagateStructExtractStats(ClientContext &context, FunctionStatisticsInput &input) {

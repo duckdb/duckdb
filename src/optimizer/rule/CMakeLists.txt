@@ -11,9 +11,9 @@ add_library_unity(
   empty_needle_removal.cpp
   enum_comparison.cpp
   equal_or_null_simplification.cpp
-  move_constants.cpp
-  like_optimizations.cpp
   in_clause_simplification_rule.cpp
+  like_optimizations.cpp
+  move_constants.cpp
   ordered_aggregate_optimizer.cpp
   regex_optimizations.cpp)
 set(ALL_OBJECT_FILES

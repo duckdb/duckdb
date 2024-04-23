@@ -119,7 +119,7 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 		return list_type;
 	} else if (format[0] == '+' && format[1] == 'w') {
 		std::string parameters = format.substr(format.find(':') + 1);
-		idx_t fixed_size = std::stoi(parameters);
+		auto fixed_size = NumericCast<idx_t>(std::stoi(parameters));
 		auto child_type = ArrowTableFunction::GetArrowLogicalType(*schema.children[0]);
 		auto list_type = make_uniq<ArrowType>(LogicalType::ARRAY(child_type->GetDuckType(), fixed_size), fixed_size);
 		list_type->AddChild(std::move(child_type));
@@ -206,7 +206,7 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 		return make_uniq<ArrowType>(LogicalType::BLOB, ArrowVariableSizeType::SUPER_SIZE);
 	} else if (format[0] == 'w') {
 		std::string parameters = format.substr(format.find(':') + 1);
-		idx_t fixed_size = std::stoi(parameters);
+		auto fixed_size = NumericCast<idx_t>(std::stoi(parameters));
 		return make_uniq<ArrowType>(LogicalType::BLOB, fixed_size);
 	} else if (format[0] == 't' && format[1] == 's') {
 		// Timestamp with Timezone
@@ -375,7 +375,8 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, TableFunction
 			return;
 		}
 	}
-	int64_t output_size = MinValue<int64_t>(STANDARD_VECTOR_SIZE, state.chunk->arrow_array.length - state.chunk_offset);
+	auto output_size =
+	    MinValue<idx_t>(STANDARD_VECTOR_SIZE, NumericCast<idx_t>(state.chunk->arrow_array.length) - state.chunk_offset);
 	data.lines_read += output_size;
 	if (global_state.CanRemoveFilterColumns()) {
 		state.all_columns.Reset();
