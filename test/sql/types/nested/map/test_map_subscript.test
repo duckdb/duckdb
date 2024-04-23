@@ -221,12 +221,10 @@ select MAP_EXTRACT(NULL, NULL)
 ----
 []
 
-# FIXME: depends on #11625 for "NULL" ToString support
-
-#query I
-#select MAP_EXTRACT(NULL::MAP("NULL", "NULL"), NULL)
-#----
-#[]
+query I
+select MAP_EXTRACT(NULL::MAP("NULL", "NULL"), NULL)
+----
+[]
 
 query I
 select MAP_EXTRACT(NULL::MAP(INT, BIGINT), NULL)
