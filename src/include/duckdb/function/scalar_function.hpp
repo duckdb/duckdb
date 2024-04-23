@@ -49,7 +49,6 @@ struct ScalarFunctionInfo {
 	}
 };
 
-
 class Binder;
 class BoundFunctionExpression;
 class LogicalDependencyList;

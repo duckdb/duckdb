@@ -2222,7 +2222,8 @@ Sets the return type of the scalar function.
 * scalar_function: The scalar function
 * type: The return type to set
 */
-DUCKDB_API void duckdb_scalar_function_set_return_type(duckdb_scalar_function scalar_function, duckdb_logical_type type);
+DUCKDB_API void duckdb_scalar_function_set_return_type(duckdb_scalar_function scalar_function,
+                                                       duckdb_logical_type type);
 
 /*!
 Assigns extra information to the scalar function that can be fetched during binding, etc.
@@ -2232,8 +2233,7 @@ Assigns extra information to the scalar function that can be fetched during bind
 * destroy: The callback that will be called to destroy the bind data (if any)
 */
 DUCKDB_API void duckdb_scalar_function_set_extra_info(duckdb_scalar_function scalar_function, void *extra_info,
-													 duckdb_delete_callback_t destroy);
-
+                                                      duckdb_delete_callback_t destroy);
 
 /*!
 Sets the main function of the table function.
@@ -2242,7 +2242,7 @@ Sets the main function of the table function.
 * function: The function
 */
 DUCKDB_API void duckdb_scalar_function_set_function(duckdb_scalar_function scalar_function,
-												    duckdb_scalar_function_t function);
+                                                    duckdb_scalar_function_t function);
 
 /*!
 Register the scalar function object within the given connection.
