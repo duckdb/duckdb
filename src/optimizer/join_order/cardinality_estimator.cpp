@@ -186,15 +186,8 @@ vector<idx_t> SubgraphsConnectedByEdge(FilterInfoWithTotalDomains &edge, vector<
 			}
 		}
 	}
-	//	std::cout << "edge doesn't connect to any subgraph and edge connects the following join relation sets: ";
-	//	std::cout << edge.filter_info->left_set->ToString()  << ", " << edge.filter_info->right_set->ToString() <<
-	//std::endl; 	std::cout << "current subgraphs have the following join relation sets:" << std::endl; 	for (auto &sub :
-	//subgraphs) { 		std::cout << sub.relations->ToString() << std::endl;
-	//	}
-	//	std::cout << "--------------------------- " << std::endl;
 	// this edge connects only the relations it connects. Return an empty result so a new subgraph is created.
 	return res;
-	//	throw InternalException("whoops");
 }
 
 JoinRelationSet &CardinalityEstimator::UpdateNumeratorRelations(Subgraph2Denominator left, Subgraph2Denominator right,
@@ -300,11 +293,6 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			                                   [](Subgraph2Denominator &s) { return !s.relations; });
 			subgraphs.erase(remove_start, subgraphs.end());
 		}
-		//		std::cout << "BLOOT: current subgraphs have the following join relation sets:" << std::endl;
-		//		for (auto &sub : subgraphs) {
-		//			std::cout << sub.relations->ToString() << std::endl;
-		//		}
-		//		std::cout << "------------------------------" << std::endl;
 		if (subgraphs.size() == 1 && subgraphs.at(0).relations->ToString() == set.ToString()) {
 			// the first subgraph has connected all of the desired relations, no need to iterate
 			// through the rest of the edges.
@@ -358,7 +346,7 @@ idx_t CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set)
 	if (cardinality_as_double >= max) {
 		return max;
 	}
-	return (idx_t)(ceil(cardinality_as_double));
+	return (idx_t)cardinality_as_double;
 }
 
 bool SortTdoms(const RelationsToTDom &a, const RelationsToTDom &b) {
