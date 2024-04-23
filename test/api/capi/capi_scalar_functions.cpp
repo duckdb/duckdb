@@ -49,10 +49,10 @@ static void CAPIRegisterAddition(duckdb_connection connection, const char *name)
 
 	// add a two bigint parameters
 	duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
-	duckdb_table_function_add_parameter(nullptr, type);
-	duckdb_table_function_add_parameter(function, nullptr);
-	duckdb_table_function_add_parameter(function, type);
-	duckdb_table_function_add_parameter(function, type);
+	duckdb_scalar_function_add_parameter(nullptr, type);
+	duckdb_scalar_function_add_parameter(function, nullptr);
+	duckdb_scalar_function_add_parameter(function, type);
+	duckdb_scalar_function_add_parameter(function, type);
 
 	// set the return type to bigint
 	duckdb_scalar_function_set_return_type(nullptr, type);
@@ -142,7 +142,7 @@ static void CAPIRegisterStringInfo(duckdb_connection connection, const char *nam
 
 	// add a single varchar parameter
 	duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR);
-	duckdb_table_function_add_parameter(function, type);
+	duckdb_scalar_function_add_parameter(function, type);
 
 	// set the return type to varchar
 	duckdb_scalar_function_set_return_type(function, type);

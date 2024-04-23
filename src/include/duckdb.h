@@ -433,13 +433,17 @@ typedef struct _duckdb_value {
 // Function types
 //===--------------------------------------------------------------------===//
 //! Additional function info. When setting this info, it is necessary to pass a destroy-callback function.
-typedef void *duckdb_function_info;
+typedef struct _duckdb_function_info {
+	void *__val;
+} * duckdb_function_info;
 
 //===--------------------------------------------------------------------===//
 // Scalar function types
 //===--------------------------------------------------------------------===//
 //! A scalar function. Must be destroyed with `duckdb_destroy_scalar_function`.
-typedef void *duckdb_scalar_function;
+typedef struct _duckdb_scalar_function {
+	void *__val;
+} * duckdb_scalar_function;
 
 //! The main function of the scalar function.
 typedef void (*duckdb_scalar_function_t)(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output);
@@ -449,13 +453,19 @@ typedef void (*duckdb_scalar_function_t)(duckdb_function_info info, duckdb_data_
 //===--------------------------------------------------------------------===//
 
 //! A table function. Must be destroyed with `duckdb_destroy_table_function`.
-typedef void *duckdb_table_function;
+typedef struct _duckdb_table_function {
+	void *__val;
+} * duckdb_table_function;
 
 //! The bind info of the function. When setting this info, it is necessary to pass a destroy-callback function.
-typedef void *duckdb_bind_info;
+typedef struct _duckdb_bind_info {
+	void *__val;
+} * duckdb_bind_info;
 
 //! Additional function init info. When setting this info, it is necessary to pass a destroy-callback function.
-typedef void *duckdb_init_info;
+typedef struct _duckdb_init_info {
+	void *__val;
+} * duckdb_init_info;
 
 //! The bind function of the table function.
 typedef void (*duckdb_table_function_bind_t)(duckdb_bind_info info);
@@ -471,7 +481,9 @@ typedef void (*duckdb_table_function_t)(duckdb_function_info info, duckdb_data_c
 //===--------------------------------------------------------------------===//
 
 //! Additional replacement scan info. When setting this info, it is necessary to pass a destroy-callback function.
-typedef void *duckdb_replacement_scan_info;
+typedef struct _duckdb_replacement_scan_info {
+	void *__val;
+} * duckdb_replacement_scan_info;
 
 //! A replacement scan function that can be added to a database.
 typedef void (*duckdb_replacement_callback_t)(duckdb_replacement_scan_info info, const char *table_name, void *data);

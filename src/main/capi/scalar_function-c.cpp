@@ -17,12 +17,12 @@ struct CScalarFunctionInfo : public ScalarFunctionInfo {
 	}
 
 	duckdb_scalar_function_t function = nullptr;
-	void *extra_info = nullptr;
+	duckdb_function_info extra_info = nullptr;
 	duckdb_delete_callback_t delete_callback = nullptr;
 };
 
 struct CScalarFunctionBindData : public FunctionData {
-	CScalarFunctionBindData(CScalarFunctionInfo &info) : info(info) {
+	explicit CScalarFunctionBindData(CScalarFunctionInfo &info) : info(info) {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
@@ -35,6 +35,10 @@ struct CScalarFunctionBindData : public FunctionData {
 
 	CScalarFunctionInfo &info;
 };
+
+duckdb::ScalarFunction &GetCScalarFunction(duckdb_scalar_function function) {
+	return *reinterpret_cast<duckdb::ScalarFunction *>(function);
+}
 
 unique_ptr<FunctionData> BindCAPIScalarFunction(ClientContext &context, ScalarFunction &bound_function,
                                                 vector<unique_ptr<Expression>> &arguments) {
@@ -58,11 +62,13 @@ void CAPIScalarFunction(DataChunk &input, ExpressionState &state, Vector &result
 
 } // namespace duckdb
 
+using duckdb::GetCScalarFunction;
+
 duckdb_scalar_function duckdb_create_scalar_function() {
 	auto function = new duckdb::ScalarFunction("", {}, duckdb::LogicalType::INVALID, duckdb::CAPIScalarFunction,
 	                                           duckdb::BindCAPIScalarFunction);
 	function->function_info = duckdb::make_shared_ptr<duckdb::CScalarFunctionInfo>();
-	return function;
+	return reinterpret_cast<duckdb_scalar_function>(function);
 }
 
 void duckdb_destroy_scalar_function(duckdb_scalar_function *function) {
@@ -77,26 +83,26 @@ void duckdb_scalar_function_set_name(duckdb_scalar_function function, const char
 	if (!function || !name) {
 		return;
 	}
-	auto scalar_function = reinterpret_cast<duckdb::ScalarFunction *>(function);
-	scalar_function->name = name;
+	auto &scalar_function = GetCScalarFunction(function);
+	scalar_function.name = name;
 }
 
 void duckdb_scalar_function_add_parameter(duckdb_scalar_function function, duckdb_logical_type type) {
 	if (!function || !type) {
 		return;
 	}
-	auto scalar_function = reinterpret_cast<duckdb::ScalarFunction *>(function);
+	auto &scalar_function = GetCScalarFunction(function);
 	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
-	scalar_function->arguments.push_back(*logical_type);
+	scalar_function.arguments.push_back(*logical_type);
 }
 
 void duckdb_scalar_function_set_return_type(duckdb_scalar_function function, duckdb_logical_type type) {
 	if (!function || !type) {
 		return;
 	}
-	auto scalar_function = reinterpret_cast<duckdb::ScalarFunction *>(function);
+	auto &scalar_function = GetCScalarFunction(function);
 	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
-	scalar_function->return_type = *logical_type;
+	scalar_function.return_type = *logical_type;
 }
 
 void duckdb_scalar_function_set_extra_info(duckdb_scalar_function function, void *extra_info,
@@ -104,9 +110,9 @@ void duckdb_scalar_function_set_extra_info(duckdb_scalar_function function, void
 	if (!function || !extra_info) {
 		return;
 	}
-	auto scalar_function = reinterpret_cast<duckdb::ScalarFunction *>(function);
-	auto &info = scalar_function->function_info->Cast<duckdb::CScalarFunctionInfo>();
-	info.extra_info = extra_info;
+	auto &scalar_function = GetCScalarFunction(function);
+	auto &info = scalar_function.function_info->Cast<duckdb::CScalarFunctionInfo>();
+	info.extra_info = reinterpret_cast<duckdb_function_info>(extra_info);
 	info.delete_callback = destroy;
 }
 
@@ -114,8 +120,8 @@ void duckdb_scalar_function_set_function(duckdb_scalar_function function, duckdb
 	if (!function || !execute_func) {
 		return;
 	}
-	auto scalar_function = reinterpret_cast<duckdb::ScalarFunction *>(function);
-	auto &info = scalar_function->function_info->Cast<duckdb::CScalarFunctionInfo>();
+	auto &scalar_function = GetCScalarFunction(function);
+	auto &info = scalar_function.function_info->Cast<duckdb::CScalarFunctionInfo>();
 	info.function = execute_func;
 }
 
@@ -123,16 +129,16 @@ duckdb_state duckdb_register_scalar_function(duckdb_connection connection, duckd
 	if (!connection || !function) {
 		return DuckDBError;
 	}
-	auto scalar_function = reinterpret_cast<duckdb::ScalarFunction *>(function);
-	auto &info = scalar_function->function_info->Cast<duckdb::CScalarFunctionInfo>();
-	if (scalar_function->name.empty() || !info.function ||
-	    scalar_function->return_type.id() == duckdb::LogicalTypeId::INVALID) {
+	auto &scalar_function = GetCScalarFunction(function);
+	auto &info = scalar_function.function_info->Cast<duckdb::CScalarFunctionInfo>();
+	if (scalar_function.name.empty() || !info.function ||
+	    scalar_function.return_type.id() == duckdb::LogicalTypeId::INVALID) {
 		return DuckDBError;
 	}
 	auto con = reinterpret_cast<duckdb::Connection *>(connection);
 	con->context->RunFunctionInTransaction([&]() {
 		auto &catalog = duckdb::Catalog::GetSystemCatalog(*con->context);
-		duckdb::CreateScalarFunctionInfo sf_info(*scalar_function);
+		duckdb::CreateScalarFunctionInfo sf_info(scalar_function);
 
 		// create the function in the catalog
 		catalog.CreateFunction(*con->context, sf_info);
