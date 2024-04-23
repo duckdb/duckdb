@@ -232,6 +232,11 @@ unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContex
 }
 
 void CheckDirectory(FileSystem &fs, const string &file_path, bool overwrite) {
+	if (fs.IsRemoteFile(file_path) && overwrite) {
+		// we only remove files for local file systems
+		// as remote file systems (e.g. S3) do not support RemoveFile
+		return;
+	}
 	vector<string> file_list;
 	vector<string> directory_list;
 	directory_list.push_back(file_path);
@@ -246,15 +251,16 @@ void CheckDirectory(FileSystem &fs, const string &file_path, bool overwrite) {
 			}
 		});
 	}
-	if (!file_list.empty()) {
-		if (overwrite) {
-			for (auto &file : file_list) {
-				fs.RemoveFile(file);
-			}
-		} else {
-			throw IOException("Directory %s is not empty! Enable OVERWRITE_OR_IGNORE option to force writing",
-			                  file_path);
+	if (file_list.empty()) {
+		return;
+	}
+	if (overwrite) {
+		for (auto &file : file_list) {
+			fs.RemoveFile(file);
 		}
+	} else {
+		throw IOException("Directory \"%s\" is not empty! Enable OVERWRITE_OR_IGNORE option to force writing",
+		                  file_path);
 	}
 }
 
@@ -262,6 +268,23 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 
 	if (partition_output || per_thread_output || file_size_bytes.IsValid()) {
 		auto &fs = FileSystem::GetFileSystem(context);
+		if (fs.FileExists(file_path)) {
+			// the target file exists AND is a file (not a directory)
+			if (fs.IsRemoteFile(file_path)) {
+				// for remote files we cannot do anything - as we cannot delete the file
+				throw IOException("Cannot write to \"%s\" - it exists and is a file, not a directory!", file_path);
+			} else {
+				// for local files we can remove the file if OVERWRITE_OR_IGNORE is enabled
+				if (overwrite_or_ignore) {
+					fs.RemoveFile(file_path);
+				} else {
+					throw IOException("Cannot write to \"%s\" - it exists and is a file, not a directory! Enable "
+					                  "OVERWRITE_OR_IGNORE option to force writing",
+					                  file_path);
+				}
+			}
+		}
+		// what if the target exists and is a directory
 		if (!fs.DirectoryExists(file_path)) {
 			fs.CreateDirectory(file_path);
 		} else {
