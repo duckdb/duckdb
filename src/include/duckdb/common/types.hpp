@@ -12,6 +12,7 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/helper.hpp"
 
 #include <limits>
 
@@ -34,7 +35,7 @@ using buffer_ptr = shared_ptr<T>;
 
 template <class T, typename... ARGS>
 buffer_ptr<T> make_buffer(ARGS &&...args) { // NOLINT: mimic std casing
-	return make_shared<T>(std::forward<ARGS>(args)...);
+	return make_shared_ptr<T>(std::forward<ARGS>(args)...);
 }
 
 struct list_entry_t { // NOLINT: mimic std casing
@@ -393,9 +394,7 @@ public:
 	DUCKDB_API static LogicalType MAP(const LogicalType &child);                 // NOLINT
 	DUCKDB_API static LogicalType MAP(LogicalType key, LogicalType value);       // NOLINT
 	DUCKDB_API static LogicalType UNION(child_list_t<LogicalType> members);      // NOLINT
-	DUCKDB_API static LogicalType ARRAY(const LogicalType &child, idx_t size);   // NOLINT
-	// an array of unknown size (only used for binding)
-	DUCKDB_API static LogicalType ARRAY(const LogicalType &child);        // NOLINT
+	DUCKDB_API static LogicalType ARRAY(const LogicalType &child, optional_idx index);   // NOLINT
 	DUCKDB_API static LogicalType ENUM(Vector &ordered_data, idx_t size); // NOLINT
 	// ANY but with special rules (default is LogicalType::ANY, 5)
 	DUCKDB_API static LogicalType ANY_PARAMS(LogicalType target, idx_t cast_score = 5); // NOLINT

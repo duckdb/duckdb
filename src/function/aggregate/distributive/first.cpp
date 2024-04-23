@@ -88,7 +88,7 @@ struct FirstFunctionString : public FirstFunctionBase {
 				auto ptr = LAST ? new char[len] : char_ptr_cast(input_data.allocator.Allocate(len));
 				memcpy(ptr, value.GetData(), len);
 
-				state.value = string_t(ptr, UnsafeNumericCast<int>(len));
+				state.value = string_t(ptr, UnsafeNumericCast<uint32_t>(len));
 			}
 		}
 	}

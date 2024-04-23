@@ -141,6 +141,27 @@ class TestReadFromStdin(object):
             '5|Raising Arizona'
         ])
 
+    def test_read_stdin_json_array(self, shell, json_extension):
+        test = (
+            ShellTest(shell)
+            .input_file('data/json/11407.json')
+            .statement("""
+                create table mytable as select * from
+                read_json_auto('/dev/stdin')
+            """)
+            .statement("select * from mytable;")
+            .add_argument(
+                '-list',
+                ':memory:'
+            )
+        )
+        result = test.run()
+        result.check_stdout([
+            'k',
+            'v',
+            'v2'
+        ])
+
     def test_read_stdin_json_auto_recursive_cte(self, shell, json_extension):
         test = (
             ShellTest(shell)

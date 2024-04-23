@@ -71,7 +71,7 @@ public:
 		sel_vector = sel;
 	}
 	void Initialize(idx_t count = STANDARD_VECTOR_SIZE) {
-		selection_data = make_shared<SelectionData>(count);
+		selection_data = make_shared_ptr<SelectionData>(count);
 		sel_vector = selection_data->owned_data.get();
 	}
 	void Initialize(buffer_ptr<SelectionData> data) {

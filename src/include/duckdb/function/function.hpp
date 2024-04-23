@@ -58,13 +58,13 @@ struct FunctionData {
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 	// FIXME: this function should be removed in the future
 	template <class TARGET>
 	TARGET &CastNoConst() const {
-		return const_cast<TARGET &>(reinterpret_cast<const TARGET &>(*this));
+		return const_cast<TARGET &>(Cast<TARGET>()); // NOLINT: FIXME
 	}
 };
 

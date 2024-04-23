@@ -37,11 +37,13 @@ class ViewCatalogEntry;
 class TableMacroCatalogEntry;
 class UpdateSetInfo;
 class LogicalProjection;
+class LogicalVacuum;
 
 class ColumnList;
 class ExternalDependency;
 class TableFunction;
 class TableStorageInfo;
+class BoundConstraint;
 
 struct CreateInfo;
 struct BoundCreateTableInfo;
@@ -80,7 +82,7 @@ struct CorrelatedColumnInfo {
   tables and columns in the catalog. In the process, it also resolves types of
   all expressions.
 */
-class Binder : public std::enable_shared_from_this<Binder> {
+class Binder : public enable_shared_from_this<Binder> {
 	friend class ExpressionBinder;
 	friend class RecursiveDependentJoinPlanner;
 
@@ -118,6 +120,16 @@ public:
 
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info);
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema);
+	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema,
+	                                                     vector<unique_ptr<Expression>> &bound_defaults);
+	static vector<unique_ptr<BoundConstraint>> BindConstraints(ClientContext &context,
+	                                                           const vector<unique_ptr<Constraint>> &constraints,
+	                                                           const string &table_name, const ColumnList &columns);
+	vector<unique_ptr<BoundConstraint>> BindConstraints(const vector<unique_ptr<Constraint>> &constraints,
+	                                                    const string &table_name, const ColumnList &columns);
+	vector<unique_ptr<BoundConstraint>> BindConstraints(const TableCatalogEntry &table);
+	vector<unique_ptr<BoundConstraint>> BindNewConstraints(vector<unique_ptr<Constraint>> &constraints,
+	                                                       const string &table_name, const ColumnList &columns);
 
 	void BindCreateViewInfo(CreateViewInfo &base);
 	SchemaCatalogEntry &BindSchema(CreateInfo &info);
@@ -136,8 +148,8 @@ public:
 
 	//! Add a common table expression to the binder
 	void AddCTE(const string &name, CommonTableExpressionInfo &cte);
-	//! Find a common table expression by name; returns nullptr if none exists
-	optional_ptr<CommonTableExpressionInfo> FindCTE(const string &name, bool skip = false);
+	//! Find all candidate common table expression by name; returns empty vector if none exists
+	vector<reference<CommonTableExpressionInfo>> FindCTE(const string &name, bool skip = false);
 
 	bool CTEIsAlreadyBound(CommonTableExpressionInfo &cte);
 
@@ -162,6 +174,8 @@ public:
 	void BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert &insert, UpdateSetInfo &set_info,
 	                                TableCatalogEntry &table, TableStorageInfo &storage_info);
 	void BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &table, InsertStatement &stmt);
+
+	void BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> &root);
 
 	static void BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema);
 	static void BindLogicalType(ClientContext &context, LogicalType &type, optional_ptr<Catalog> catalog = nullptr,
@@ -324,9 +338,9 @@ private:
 	BoundStatement BindCopyTo(CopyStatement &stmt);
 	BoundStatement BindCopyFrom(CopyStatement &stmt);
 
-	void BindModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);
-	void BindModifierTypes(BoundQueryNode &result, const vector<LogicalType> &sql_types, idx_t projection_index,
-	                       const vector<idx_t> &expansion_count = {});
+	void PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);
+	void BindModifiers(BoundQueryNode &result, idx_t table_index, const vector<string> &names,
+	                   const vector<LogicalType> &sql_types, const SelectBindState &bind_state);
 
 	unique_ptr<BoundResultModifier> BindLimit(OrderBinder &order_binder, LimitModifier &limit_mod);
 	unique_ptr<BoundResultModifier> BindLimitPercent(OrderBinder &order_binder, LimitPercentModifier &limit_mod);
@@ -368,17 +382,15 @@ private:
 
 	unique_ptr<BoundQueryNode> BindSelectNode(SelectNode &statement, unique_ptr<BoundTableRef> from_table);
 
-	unique_ptr<LogicalOperator> BindCopyDatabaseSchema(CopyDatabaseStatement &stmt, Catalog &from_database,
-	                                                   Catalog &to_database);
-	unique_ptr<LogicalOperator> BindCopyDatabaseData(CopyDatabaseStatement &stmt, Catalog &from_database,
-	                                                 Catalog &to_database);
+	unique_ptr<LogicalOperator> BindCopyDatabaseSchema(Catalog &source_catalog, const string &target_database_name);
+	unique_ptr<LogicalOperator> BindCopyDatabaseData(Catalog &source_catalog, const string &target_database_name);
 
 	unique_ptr<BoundTableRef> BindShowQuery(ShowRef &ref);
 	unique_ptr<BoundTableRef> BindShowTable(ShowRef &ref);
 	unique_ptr<BoundTableRef> BindSummarize(ShowRef &ref);
 
 public:
-	// This should really be a private constructor, but make_shared does not allow it...
+	// This should really be a private constructor, but make_shared_ptr does not allow it...
 	// If you are thinking about calling this, you should probably call Binder::CreateBinder
 	Binder(bool i_know_what_i_am_doing, ClientContext &context, shared_ptr<Binder> parent, bool inherit_ctes);
 };

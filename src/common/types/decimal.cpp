@@ -6,9 +6,9 @@ namespace duckdb {
 template <class SIGNED, class UNSIGNED>
 string TemplatedDecimalToString(SIGNED value, uint8_t width, uint8_t scale) {
 	auto len = DecimalToString::DecimalLength<SIGNED, UNSIGNED>(value, width, scale);
-	auto data = make_unsafe_uniq_array<char>(len + 1);
-	DecimalToString::FormatDecimal<SIGNED, UNSIGNED>(value, width, scale, data.get(), len);
-	return string(data.get(), len);
+	auto data = make_unsafe_uniq_array<char>(UnsafeNumericCast<size_t>(len + 1));
+	DecimalToString::FormatDecimal<SIGNED, UNSIGNED>(value, width, scale, data.get(), UnsafeNumericCast<idx_t>(len));
+	return string(data.get(), UnsafeNumericCast<uint32_t>(len));
 }
 
 string Decimal::ToString(int16_t value, uint8_t width, uint8_t scale) {
@@ -25,9 +25,9 @@ string Decimal::ToString(int64_t value, uint8_t width, uint8_t scale) {
 
 string Decimal::ToString(hugeint_t value, uint8_t width, uint8_t scale) {
 	auto len = HugeintToStringCast::DecimalLength(value, width, scale);
-	auto data = make_unsafe_uniq_array<char>(len + 1);
-	HugeintToStringCast::FormatDecimal(value, width, scale, data.get(), len);
-	return string(data.get(), len);
+	auto data = make_unsafe_uniq_array<char>(UnsafeNumericCast<size_t>(len + 1));
+	HugeintToStringCast::FormatDecimal(value, width, scale, data.get(), UnsafeNumericCast<int>(len));
+	return string(data.get(), UnsafeNumericCast<uint32_t>(len));
 }
 
 } // namespace duckdb

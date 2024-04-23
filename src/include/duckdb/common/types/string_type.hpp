@@ -14,6 +14,7 @@
 #include "duckdb/common/numeric_utils.hpp"
 
 #include <cstring>
+#include <algorithm>
 
 namespace duckdb {
 

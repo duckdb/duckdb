@@ -1,13 +1,13 @@
+#include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/optimizer/expression_rewriter.hpp"
 
 namespace duckdb {
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundBetweenExpression &between,
-                                                                     unique_ptr<Expression> *expr_ptr) {
+                                                                     unique_ptr<Expression> &expr_ptr) {
 	// propagate in all the children
 	auto input_stats = PropagateExpression(between.input);
 	auto lower_stats = PropagateExpression(between.lower);
@@ -29,11 +29,11 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundBetwee
 	if (lower_prune == FilterPropagateResult::FILTER_ALWAYS_TRUE &&
 	    upper_prune == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
 		// both filters are always true: replace the between expression with a constant true
-		*expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
+		expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
 	} else if (lower_prune == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
 	           upper_prune == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 		// either one of the filters is always false: replace the between expression with a constant false
-		*expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
+		expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
 	} else if (lower_prune == FilterPropagateResult::FILTER_FALSE_OR_NULL ||
 	           upper_prune == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
 		// either one of the filters is false or null: replace with a constant or null (false)
@@ -41,7 +41,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundBetwee
 		children.push_back(std::move(between.input));
 		children.push_back(std::move(between.lower));
 		children.push_back(std::move(between.upper));
-		*expr_ptr = ExpressionRewriter::ConstantOrNull(std::move(children), Value::BOOLEAN(false));
+		expr_ptr = ExpressionRewriter::ConstantOrNull(std::move(children), Value::BOOLEAN(false));
 	} else if (lower_prune == FilterPropagateResult::FILTER_TRUE_OR_NULL &&
 	           upper_prune == FilterPropagateResult::FILTER_TRUE_OR_NULL) {
 		// both filters are true or null: replace with a true or null
@@ -49,14 +49,14 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundBetwee
 		children.push_back(std::move(between.input));
 		children.push_back(std::move(between.lower));
 		children.push_back(std::move(between.upper));
-		*expr_ptr = ExpressionRewriter::ConstantOrNull(std::move(children), Value::BOOLEAN(true));
+		expr_ptr = ExpressionRewriter::ConstantOrNull(std::move(children), Value::BOOLEAN(true));
 	} else if (lower_prune == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
 		// lower filter is always true: replace with upper comparison
-		*expr_ptr =
+		expr_ptr =
 		    make_uniq<BoundComparisonExpression>(upper_comparison, std::move(between.input), std::move(between.upper));
 	} else if (upper_prune == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
 		// upper filter is always true: replace with lower comparison
-		*expr_ptr =
+		expr_ptr =
 		    make_uniq<BoundComparisonExpression>(lower_comparison, std::move(between.input), std::move(between.lower));
 	}
 	return nullptr;

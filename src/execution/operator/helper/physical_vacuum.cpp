@@ -7,16 +7,17 @@
 
 namespace duckdb {
 
-PhysicalVacuum::PhysicalVacuum(unique_ptr<VacuumInfo> info_p, idx_t estimated_cardinality)
+PhysicalVacuum::PhysicalVacuum(unique_ptr<VacuumInfo> info_p, optional_ptr<TableCatalogEntry> table,
+                               unordered_map<idx_t, idx_t> column_id_map, idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::VACUUM, {LogicalType::BOOLEAN}, estimated_cardinality),
-      info(std::move(info_p)) {
+      info(std::move(info_p)), table(table), column_id_map(std::move(column_id_map)) {
 }
 
 class VacuumLocalSinkState : public LocalSinkState {
 public:
-	explicit VacuumLocalSinkState(VacuumInfo &info) {
+	explicit VacuumLocalSinkState(VacuumInfo &info, optional_ptr<TableCatalogEntry> table) {
 		for (const auto &column_name : info.columns) {
-			auto &column = info.table->GetColumn(column_name);
+			auto &column = table->GetColumn(column_name);
 			if (DistinctStatistics::TypeIsSupported(column.GetType())) {
 				column_distinct_stats.push_back(make_uniq<DistinctStatistics>());
 			} else {
@@ -29,15 +30,14 @@ public:
 };
 
 unique_ptr<LocalSinkState> PhysicalVacuum::GetLocalSinkState(ExecutionContext &context) const {
-	return make_uniq<VacuumLocalSinkState>(*info);
+	return make_uniq<VacuumLocalSinkState>(*info, table);
 }
 
 class VacuumGlobalSinkState : public GlobalSinkState {
 public:
-	explicit VacuumGlobalSinkState(VacuumInfo &info) {
-
+	explicit VacuumGlobalSinkState(VacuumInfo &info, optional_ptr<TableCatalogEntry> table) {
 		for (const auto &column_name : info.columns) {
-			auto &column = info.table->GetColumn(column_name);
+			auto &column = table->GetColumn(column_name);
 			if (DistinctStatistics::TypeIsSupported(column.GetType())) {
 				column_distinct_stats.push_back(make_uniq<DistinctStatistics>());
 			} else {
@@ -51,12 +51,12 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalVacuum::GetGlobalSinkState(ClientContext &context) const {
-	return make_uniq<VacuumGlobalSinkState>(*info);
+	return make_uniq<VacuumGlobalSinkState>(*info, table);
 }
 
 SinkResultType PhysicalVacuum::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &lstate = input.local_state.Cast<VacuumLocalSinkState>();
-	D_ASSERT(lstate.column_distinct_stats.size() == info->column_id_map.size());
+	D_ASSERT(lstate.column_distinct_stats.size() == column_id_map.size());
 
 	for (idx_t col_idx = 0; col_idx < chunk.data.size(); col_idx++) {
 		if (!DistinctStatistics::TypeIsSupported(chunk.data[col_idx].GetType())) {
@@ -89,10 +89,9 @@ SinkFinalizeType PhysicalVacuum::Finalize(Pipeline &pipeline, Event &event, Clie
                                           OperatorSinkFinalizeInput &input) const {
 	auto &sink = input.global_state.Cast<VacuumGlobalSinkState>();
 
-	auto table = info->table;
+	auto tbl = table;
 	for (idx_t col_idx = 0; col_idx < sink.column_distinct_stats.size(); col_idx++) {
-		table->GetStorage().SetDistinct(info->column_id_map.at(col_idx),
-		                                std::move(sink.column_distinct_stats[col_idx]));
+		tbl->GetStorage().SetDistinct(column_id_map.at(col_idx), std::move(sink.column_distinct_stats[col_idx]));
 	}
 
 	return SinkFinalizeType::READY;

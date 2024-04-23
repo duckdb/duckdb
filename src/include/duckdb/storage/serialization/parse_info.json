@@ -339,6 +339,26 @@
     ]
   },
   {
+    "class": "CopyDatabaseInfo",
+    "base": "ParseInfo",
+    "enum": "COPY_DATABASE_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/copy_database_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "target_database",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "entries",
+        "type": "vector<CreateInfo*>"
+      }
+    ]
+  },
+  {
     "class": "CopyInfo",
     "base": "ParseInfo",
     "enum": "COPY_INFO",
@@ -535,6 +555,21 @@
         "id": 200,
         "name": "options",
         "type": "VacuumOptions"
+      },
+      {
+        "id": 201,
+        "name": "has_table",
+        "type": "bool"
+      },
+      {
+        "id": 202,
+        "name": "ref",
+        "type": "unique_ptr<TableRef>"
+      },
+      {
+        "id": 203,
+        "name": "columns",
+        "type": "vector<string>"
       }
     ],
     "constructor": ["options"]

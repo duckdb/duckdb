@@ -142,7 +142,12 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 		}
 		return true;
 	}
-	if (source_type.id() == LogicalTypeId::TIMESTAMP || source_type.id() == LogicalTypeId::TIMESTAMP_TZ) {
+	switch (source_type.id()) {
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
 		switch (target_type.id()) {
 		case LogicalTypeId::DATE:
 		case LogicalTypeId::TIME:
@@ -151,8 +156,8 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 		default:
 			break;
 		}
-	}
-	if (source_type.id() == LogicalTypeId::VARCHAR) {
+		break;
+	case LogicalTypeId::VARCHAR:
 		switch (target_type.id()) {
 		case LogicalTypeId::TIMESTAMP:
 		case LogicalTypeId::TIMESTAMP_NS:
@@ -163,6 +168,9 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 		default:
 			return false;
 		}
+		break;
+	default:
+		break;
 	}
 	if (target_type.id() == LogicalTypeId::VARCHAR) {
 		switch (source_type.id()) {

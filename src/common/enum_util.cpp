@@ -81,7 +81,9 @@
 #include "duckdb/function/macro_function.hpp"
 #include "duckdb/function/scalar/compressed_materialization_functions.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
-#include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
+#include "duckdb/function/table/arrow/enum/arrow_datetime_type.hpp"
+#include "duckdb/function/table/arrow/enum/arrow_type_info_type.hpp"
+#include "duckdb/function/table/arrow/enum/arrow_variable_size_type.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
@@ -572,12 +574,50 @@ ArrowOffsetSize EnumUtil::FromString<ArrowOffsetSize>(const char *value) {
 }
 
 template<>
+const char* EnumUtil::ToChars<ArrowTypeInfoType>(ArrowTypeInfoType value) {
+	switch(value) {
+	case ArrowTypeInfoType::LIST:
+		return "LIST";
+	case ArrowTypeInfoType::STRUCT:
+		return "STRUCT";
+	case ArrowTypeInfoType::DATE_TIME:
+		return "DATE_TIME";
+	case ArrowTypeInfoType::STRING:
+		return "STRING";
+	case ArrowTypeInfoType::ARRAY:
+		return "ARRAY";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+ArrowTypeInfoType EnumUtil::FromString<ArrowTypeInfoType>(const char *value) {
+	if (StringUtil::Equals(value, "LIST")) {
+		return ArrowTypeInfoType::LIST;
+	}
+	if (StringUtil::Equals(value, "STRUCT")) {
+		return ArrowTypeInfoType::STRUCT;
+	}
+	if (StringUtil::Equals(value, "DATE_TIME")) {
+		return ArrowTypeInfoType::DATE_TIME;
+	}
+	if (StringUtil::Equals(value, "STRING")) {
+		return ArrowTypeInfoType::STRING;
+	}
+	if (StringUtil::Equals(value, "ARRAY")) {
+		return ArrowTypeInfoType::ARRAY;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
 const char* EnumUtil::ToChars<ArrowVariableSizeType>(ArrowVariableSizeType value) {
 	switch(value) {
-	case ArrowVariableSizeType::FIXED_SIZE:
-		return "FIXED_SIZE";
 	case ArrowVariableSizeType::NORMAL:
 		return "NORMAL";
+	case ArrowVariableSizeType::FIXED_SIZE:
+		return "FIXED_SIZE";
 	case ArrowVariableSizeType::SUPER_SIZE:
 		return "SUPER_SIZE";
 	case ArrowVariableSizeType::VIEW:
@@ -589,11 +629,11 @@ const char* EnumUtil::ToChars<ArrowVariableSizeType>(ArrowVariableSizeType value
 
 template<>
 ArrowVariableSizeType EnumUtil::FromString<ArrowVariableSizeType>(const char *value) {
-	if (StringUtil::Equals(value, "FIXED_SIZE")) {
-		return ArrowVariableSizeType::FIXED_SIZE;
-	}
 	if (StringUtil::Equals(value, "NORMAL")) {
 		return ArrowVariableSizeType::NORMAL;
+	}
+	if (StringUtil::Equals(value, "FIXED_SIZE")) {
+		return ArrowVariableSizeType::FIXED_SIZE;
 	}
 	if (StringUtil::Equals(value, "SUPER_SIZE")) {
 		return ArrowVariableSizeType::SUPER_SIZE;
@@ -2017,6 +2057,8 @@ const char* EnumUtil::ToChars<ExpressionClass>(ExpressionClass value) {
 		return "BOUND_LAMBDA_REF";
 	case ExpressionClass::BOUND_EXPRESSION:
 		return "BOUND_EXPRESSION";
+	case ExpressionClass::BOUND_EXPANDED:
+		return "BOUND_EXPANDED";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -2140,6 +2182,9 @@ ExpressionClass EnumUtil::FromString<ExpressionClass>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "BOUND_EXPRESSION")) {
 		return ExpressionClass::BOUND_EXPRESSION;
+	}
+	if (StringUtil::Equals(value, "BOUND_EXPANDED")) {
+		return ExpressionClass::BOUND_EXPANDED;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -2283,6 +2328,8 @@ const char* EnumUtil::ToChars<ExpressionType>(ExpressionType value) {
 		return "POSITIONAL_REFERENCE";
 	case ExpressionType::BOUND_LAMBDA_REF:
 		return "BOUND_LAMBDA_REF";
+	case ExpressionType::BOUND_EXPANDED:
+		return "BOUND_EXPANDED";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -2493,6 +2540,9 @@ ExpressionType EnumUtil::FromString<ExpressionType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "BOUND_LAMBDA_REF")) {
 		return ExpressionType::BOUND_LAMBDA_REF;
+	}
+	if (StringUtil::Equals(value, "BOUND_EXPANDED")) {
+		return ExpressionType::BOUND_EXPANDED;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -3797,14 +3847,10 @@ const char* EnumUtil::ToChars<MapInvalidReason>(MapInvalidReason value) {
 	switch(value) {
 	case MapInvalidReason::VALID:
 		return "VALID";
-	case MapInvalidReason::NULL_KEY_LIST:
-		return "NULL_KEY_LIST";
 	case MapInvalidReason::NULL_KEY:
 		return "NULL_KEY";
 	case MapInvalidReason::DUPLICATE_KEY:
 		return "DUPLICATE_KEY";
-	case MapInvalidReason::NULL_VALUE_LIST:
-		return "NULL_VALUE_LIST";
 	case MapInvalidReason::NOT_ALIGNED:
 		return "NOT_ALIGNED";
 	case MapInvalidReason::INVALID_PARAMS:
@@ -3819,17 +3865,11 @@ MapInvalidReason EnumUtil::FromString<MapInvalidReason>(const char *value) {
 	if (StringUtil::Equals(value, "VALID")) {
 		return MapInvalidReason::VALID;
 	}
-	if (StringUtil::Equals(value, "NULL_KEY_LIST")) {
-		return MapInvalidReason::NULL_KEY_LIST;
-	}
 	if (StringUtil::Equals(value, "NULL_KEY")) {
 		return MapInvalidReason::NULL_KEY;
 	}
 	if (StringUtil::Equals(value, "DUPLICATE_KEY")) {
 		return MapInvalidReason::DUPLICATE_KEY;
-	}
-	if (StringUtil::Equals(value, "NULL_VALUE_LIST")) {
-		return MapInvalidReason::NULL_VALUE_LIST;
 	}
 	if (StringUtil::Equals(value, "NOT_ALIGNED")) {
 		return MapInvalidReason::NOT_ALIGNED;
@@ -4165,6 +4205,8 @@ const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
 		return "COMMON_AGGREGATE";
 	case OptimizerType::COLUMN_LIFETIME:
 		return "COLUMN_LIFETIME";
+	case OptimizerType::LIMIT_PUSHDOWN:
+		return "LIMIT_PUSHDOWN";
 	case OptimizerType::TOP_N:
 		return "TOP_N";
 	case OptimizerType::COMPRESSED_MATERIALIZATION:
@@ -4223,6 +4265,9 @@ OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "COLUMN_LIFETIME")) {
 		return OptimizerType::COLUMN_LIFETIME;
+	}
+	if (StringUtil::Equals(value, "LIMIT_PUSHDOWN")) {
+		return OptimizerType::LIMIT_PUSHDOWN;
 	}
 	if (StringUtil::Equals(value, "TOP_N")) {
 		return OptimizerType::TOP_N;
@@ -4392,6 +4437,8 @@ const char* EnumUtil::ToChars<ParseInfoType>(ParseInfoType value) {
 		return "COMMENT_ON_INFO";
 	case ParseInfoType::COMMENT_ON_COLUMN_INFO:
 		return "COMMENT_ON_COLUMN_INFO";
+	case ParseInfoType::COPY_DATABASE_INFO:
+		return "COPY_DATABASE_INFO";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -4443,6 +4490,9 @@ ParseInfoType EnumUtil::FromString<ParseInfoType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "COMMENT_ON_COLUMN_INFO")) {
 		return ParseInfoType::COMMENT_ON_COLUMN_INFO;
+	}
+	if (StringUtil::Equals(value, "COPY_DATABASE_INFO")) {
+		return ParseInfoType::COPY_DATABASE_INFO;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

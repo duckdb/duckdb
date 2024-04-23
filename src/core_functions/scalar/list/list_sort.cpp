@@ -52,8 +52,8 @@ ListSortBindData::ListSortBindData(OrderType order_type_p, OrderByNullType null_
 	payload_layout.Initialize(payload_types);
 
 	// get the BoundOrderByNode
-	auto idx_col_expr = make_uniq_base<Expression, BoundReferenceExpression>(LogicalType::USMALLINT, 0);
-	auto lists_col_expr = make_uniq_base<Expression, BoundReferenceExpression>(child_type, 1);
+	auto idx_col_expr = make_uniq_base<Expression, BoundReferenceExpression>(LogicalType::USMALLINT, 0U);
+	auto lists_col_expr = make_uniq_base<Expression, BoundReferenceExpression>(child_type, 1U);
 	orders.emplace_back(OrderType::ASCENDING, OrderByNullType::ORDER_DEFAULT, std::move(idx_col_expr));
 	orders.emplace_back(order_type, null_order, std::move(lists_col_expr));
 }
@@ -239,9 +239,12 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 			auto &result_entry = ListVector::GetEntry(result);
 			auto result_data = ListVector::GetData(result);
 			for (idx_t i = 0; i < count; i++) {
+				if (!result_validity.RowIsValid(i)) {
+					continue;
+				}
 				for (idx_t j = result_data[i].offset; j < result_data[i].offset + result_data[i].length; j++) {
 					auto b = sel_sorted.get_index(j) - result_data[i].offset;
-					result_entry.SetValue(j, Value::BIGINT(b + 1));
+					result_entry.SetValue(j, Value::BIGINT(UnsafeNumericCast<int64_t>(b + 1)));
 				}
 			}
 		} else {

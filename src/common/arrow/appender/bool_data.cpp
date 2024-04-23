@@ -6,6 +6,7 @@ namespace duckdb {
 void ArrowBoolData::Initialize(ArrowAppendData &result, const LogicalType &type, idx_t capacity) {
 	auto byte_count = (capacity + 7) / 8;
 	result.GetMainBuffer().reserve(byte_count);
+	(void)AppendValidity; // silence a compiler warning about unused static function
 }
 
 void ArrowBoolData::Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {

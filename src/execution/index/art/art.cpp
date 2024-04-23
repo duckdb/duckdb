@@ -54,7 +54,8 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 		    make_uniq<FixedSizeAllocator>(sizeof(Node16), block_manager),
 		    make_uniq<FixedSizeAllocator>(sizeof(Node48), block_manager),
 		    make_uniq<FixedSizeAllocator>(sizeof(Node256), block_manager)};
-		allocators = make_shared<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>>(std::move(allocator_array));
+		allocators =
+		    make_shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>>(std::move(allocator_array));
 	}
 
 	// deserialize lazily
@@ -133,13 +134,13 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Transaction &transaction
 	// match on a comparison type
 	matcher.expr_type = make_uniq<ComparisonExpressionTypeMatcher>();
 	// match on a constant comparison with the indexed expression
-	matcher.matchers.push_back(make_uniq<ExpressionEqualityMatcher>(const_cast<Expression &>(index_expr)));
+	matcher.matchers.push_back(make_uniq<ExpressionEqualityMatcher>(index_expr));
 	matcher.matchers.push_back(make_uniq<ConstantExpressionMatcher>());
 
 	matcher.policy = SetMatcher::Policy::UNORDERED;
 
 	vector<reference<Expression>> bindings;
-	if (matcher.Match(const_cast<Expression &>(filter_expr), bindings)) {
+	if (matcher.Match(const_cast<Expression &>(filter_expr), bindings)) { // NOLINT: Match does not alter the expr
 		// range or equality comparison with constant value
 		// we can use our index here
 		// bindings[0] = the expression

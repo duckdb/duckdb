@@ -21,14 +21,38 @@ static void MapFunctionEmptyInput(Vector &result, const idx_t row_count) {
 	result.Verify(row_count);
 }
 
+static bool MapIsNull(DataChunk &chunk) {
+	if (chunk.data.empty()) {
+		return false;
+	}
+	D_ASSERT(chunk.data.size() == 2);
+	auto &keys = chunk.data[0];
+	auto &values = chunk.data[1];
+
+	if (keys.GetType().id() == LogicalTypeId::SQLNULL) {
+		return true;
+	}
+	if (values.GetType().id() == LogicalTypeId::SQLNULL) {
+		return true;
+	}
+	return false;
+}
+
 static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 
 	// internal MAP representation
 	// - LIST-vector that contains STRUCTs as child entries
 	// - STRUCTs have exactly two fields, a key-field, and a value-field
 	// - key names are unique
-
 	D_ASSERT(result.GetType().id() == LogicalTypeId::MAP);
+
+	if (MapIsNull(args)) {
+		auto &validity = FlatVector::Validity(result);
+		validity.SetInvalid(0);
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		return;
+	}
+
 	auto row_count = args.size();
 
 	// early-out, if no data
@@ -63,13 +87,15 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	UnifiedVectorFormat result_data;
 	result.ToUnifiedFormat(row_count, result_data);
 	auto result_entries = UnifiedVectorFormat::GetDataNoConst<list_entry_t>(result_data);
-	result_data.validity.SetAllValid(row_count);
+
+	auto &result_validity = FlatVector::Validity(result);
 
 	// get the resulting size of the key/value child lists
 	idx_t result_child_size = 0;
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		auto keys_idx = keys_data.sel->get_index(row_idx);
-		if (!keys_data.validity.RowIsValid(keys_idx)) {
+		auto values_idx = values_data.sel->get_index(row_idx);
+		if (!keys_data.validity.RowIsValid(keys_idx) || !values_data.validity.RowIsValid(values_idx)) {
 			continue;
 		}
 		auto keys_entry = keys_entries[keys_idx];
@@ -87,22 +113,15 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 		auto values_idx = values_data.sel->get_index(row_idx);
 		auto result_idx = result_data.sel->get_index(row_idx);
 
-		// empty map
-		if (!keys_data.validity.RowIsValid(keys_idx) && !values_data.validity.RowIsValid(values_idx)) {
-			result_entries[result_idx] = list_entry_t();
+		// NULL MAP
+		if (!keys_data.validity.RowIsValid(keys_idx) || !values_data.validity.RowIsValid(values_idx)) {
+			result_validity.SetInvalid(row_idx);
 			continue;
 		}
 
 		auto keys_entry = keys_entries[keys_idx];
 		auto values_entry = values_entries[values_idx];
 
-		// validity checks
-		if (!keys_data.validity.RowIsValid(keys_idx)) {
-			MapVector::EvalMapInvalidReason(MapInvalidReason::NULL_KEY_LIST);
-		}
-		if (!values_data.validity.RowIsValid(values_idx)) {
-			MapVector::EvalMapInvalidReason(MapInvalidReason::NULL_VALUE_LIST);
-		}
 		if (keys_entry.length != values_entry.length) {
 			MapVector::EvalMapInvalidReason(MapInvalidReason::NOT_ALIGNED);
 		}
@@ -160,8 +179,19 @@ static unique_ptr<FunctionData> MapBind(ClientContext &, ScalarFunction &bound_f
 		MapVector::EvalMapInvalidReason(MapInvalidReason::INVALID_PARAMS);
 	}
 
-	// bind an empty MAP
+	bool is_null = false;
 	if (arguments.empty()) {
+		is_null = true;
+	}
+	if (!is_null) {
+		auto key_id = arguments[0]->return_type.id();
+		auto value_id = arguments[1]->return_type.id();
+		if (key_id == LogicalTypeId::SQLNULL || value_id == LogicalTypeId::SQLNULL) {
+			is_null = true;
+		}
+	}
+
+	if (is_null) {
 		bound_function.return_type = LogicalType::MAP(LogicalTypeId::SQLNULL, LogicalTypeId::SQLNULL);
 		return make_uniq<VariableReturnBindData>(bound_function.return_type);
 	}

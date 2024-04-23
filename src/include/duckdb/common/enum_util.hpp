@@ -60,6 +60,8 @@ enum class ArrowDateTimeType : uint8_t;
 
 enum class ArrowOffsetSize : uint8_t;
 
+enum class ArrowTypeInfoType : uint8_t;
+
 enum class ArrowVariableSizeType : uint8_t;
 
 enum class BindingMode : uint8_t;
@@ -366,6 +368,9 @@ const char* EnumUtil::ToChars<ArrowDateTimeType>(ArrowDateTimeType value);
 
 template<>
 const char* EnumUtil::ToChars<ArrowOffsetSize>(ArrowOffsetSize value);
+
+template<>
+const char* EnumUtil::ToChars<ArrowTypeInfoType>(ArrowTypeInfoType value);
 
 template<>
 const char* EnumUtil::ToChars<ArrowVariableSizeType>(ArrowVariableSizeType value);
@@ -805,6 +810,9 @@ ArrowDateTimeType EnumUtil::FromString<ArrowDateTimeType>(const char *value);
 
 template<>
 ArrowOffsetSize EnumUtil::FromString<ArrowOffsetSize>(const char *value);
+
+template<>
+ArrowTypeInfoType EnumUtil::FromString<ArrowTypeInfoType>(const char *value);
 
 template<>
 ArrowVariableSizeType EnumUtil::FromString<ArrowVariableSizeType>(const char *value);
