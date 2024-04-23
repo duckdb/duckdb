@@ -15,7 +15,7 @@ CREATE TABLE users (
 statement ok
 INSERT INTO users
 SELECT *
-FROM read_csv('data/csv/file_error.csv', rejects_table='rejects_table', ignore_errors=true, null_padding=true);
+FROM read_csv('data/csv/file_error.csv', ignore_errors=true, null_padding=true);
 
 query III
 select * from users;
@@ -32,7 +32,7 @@ CREATE TABLE proj (
 statement ok
 INSERT INTO proj
 SELECT id
-FROM read_csv('data/csv/file_error.csv', rejects_table='rejects_table', ignore_errors=true, null_padding=true);
+FROM read_csv('data/csv/file_error.csv', ignore_errors=true, null_padding=true);
 
 query I
 select * from proj;
@@ -59,7 +59,7 @@ CREATE TABLE proj (
 statement ok
 INSERT INTO proj
 SELECT name, id
-FROM read_csv('data/csv/file_error.csv', rejects_table='rejects_table', ignore_errors=true, null_padding=true);
+FROM read_csv('data/csv/file_error.csv', ignore_errors=true, null_padding=true);
 
 query II
 select * from proj;
@@ -86,7 +86,7 @@ CREATE TABLE proj (
 statement ok
 INSERT INTO proj
 SELECT email, id
-FROM read_csv('data/csv/file_error.csv', rejects_table='rejects_table', ignore_errors=true, null_padding=true);
+FROM read_csv('data/csv/file_error.csv', ignore_errors=true, null_padding=true);
 
 query II
 select * from proj;
@@ -159,7 +159,56 @@ FROM read_csv('data/csv/file_error.csv') T inner join ppl on (ppl.name = T.name)
 Could not convert string '3r' to INT32
 
 # Test Glob
+statement ok
+DROP table users;
+
+statement ok
+CREATE TABLE users (
+        id INTEGER NOT NULL,  /*primary key*/
+        name VARCHAR(10) NOT NULL,
+        email VARCHAR
+);
+
+statement ok
+INSERT INTO users
+SELECT *
+FROM read_csv('data/csv/glob/f_*.csv', ignore_errors=true, null_padding=true);
+
+query III
+select * from users;
+----
+1	alice	alice@email.com
+2	eve	eve@email.com
+1	alice	alice@email.com
+3	bob	bob@email.com
+1	alice	alice@email.com
+3	bob	bob@email.com
 
 # Test Glob + Projection
+
+statement ok
+DROP table proj;
+
+statement ok
+CREATE TABLE proj (
+        email VARCHAR,
+        id integer NOT NULL
+);
+
+statement ok
+INSERT INTO proj
+SELECT email, id
+FROM read_csv('data/csv/glob/f_*.csv', ignore_errors=true, null_padding=true);
+
+query II
+select * from proj;
+----
+alice@email.com	1
+eve@email.com	2
+alice@email.com	1
+bob@email.com	3
+alice@email.com	1
+bob@email.com	3
+
 
 # Test union by name
