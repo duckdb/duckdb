@@ -29,18 +29,24 @@ unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<LogicalTyp
 			auto &logical_get = node->children[0]->Cast<LogicalGet>();
 			// yuck string matching, maybe there is a better way?
 			if (logical_get.function.name == "read_csv" || logical_get.function.name == "read_csv_auto") {
-				auto &csv_bind = logical_get.bind_data->Cast<ReadCSVData>();
-				// we have to do some type switcharoo
-				vector<LogicalType> pushdown_types = csv_bind.csv_types;
-				for (idx_t tgt_idx =0; tgt_idx < logical_get.column_ids.size(); tgt_idx++){
-					pushdown_types[logical_get.column_ids[tgt_idx]] =  target_types[tgt_idx];
+				// We loop in the expressions and bail out if there is anything weird (i.e., not a bound column ref)
+				bool can_pushdown_types = true;
+				for (auto &expr : op->expressions) {
+					can_pushdown_types = can_pushdown_types && expr->type == ExpressionType::BOUND_COLUMN_REF;
 				}
-				csv_bind.csv_types = pushdown_types;
-				csv_bind.return_types = pushdown_types;
-				logical_get.returned_types = pushdown_types;
-				// We early out here, since we don't need to add casts
-				return op;
-
+				if (can_pushdown_types) {
+					auto &csv_bind = logical_get.bind_data->Cast<ReadCSVData>();
+					// we have to do some type switcharoo
+					vector<LogicalType> pushdown_types = csv_bind.csv_types;
+					for (idx_t tgt_idx = 0; tgt_idx < logical_get.column_ids.size(); tgt_idx++) {
+						pushdown_types[logical_get.column_ids[tgt_idx]] = target_types[tgt_idx];
+					}
+					csv_bind.csv_types = pushdown_types;
+					csv_bind.return_types = pushdown_types;
+					logical_get.returned_types = pushdown_types;
+					// We early out here, since we don't need to add casts
+					return op;
+				}
 			}
 		}
 		// add the casts to the selection list

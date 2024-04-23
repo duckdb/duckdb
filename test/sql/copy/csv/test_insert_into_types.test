@@ -101,11 +101,65 @@ FROM read_csv('data/csv/file_error.csv');
 ----
 Could not convert string "3r" to 'INTEGER'
 
+statement ok
+DROP table proj;
+
+statement ok
+CREATE TABLE proj (
+        email VARCHAR,
+        id VARCHAR NOT NULL,  /*primary key*/
+);
+
+# A cast will not be pushed down
+statement error
+INSERT INTO proj
+SELECT name, id::INTEGER
+FROM read_csv('data/csv/file_error.csv');
+----
+Could not convert string '3r' to INT32
+
+statement ok
+DROP table proj;
+
+statement ok
+CREATE TABLE proj (
+        email VARCHAR,
+        id integer NOT NULL,  /*primary key*/
+);
+
+# No pushdown if we have weird projections
+statement error
+INSERT INTO proj
+SELECT 'Pedro', id
+FROM read_csv('data/csv/file_error.csv');
+----
+Could not convert string '3r' to INT32
+
+# No pushdown with mid-ops
+statement ok
+CREATE TABLE ppl (
+        name VARCHAR
+);
+
+statement ok
+insert into ppl values ('alice'), ('bob'), ('pedro')
+
+statement error
+INSERT INTO proj
+SELECT ppl.name,id
+FROM read_csv('data/csv/file_error.csv') T inner join ppl on (ppl.name = T.name);
+----
+Could not convert string '3r' to INT32
+
+statement error
+INSERT INTO proj
+SELECT T.name,id
+FROM read_csv('data/csv/file_error.csv') T inner join ppl on (ppl.name = T.name);
+----
+Could not convert string '3r' to INT32
 
 # Test Glob
 
 # Test Glob + Projection
 
 # Test union by name
-
-# Test complex projection
