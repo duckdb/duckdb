@@ -25,12 +25,14 @@ on:
     paths-ignore:
       - "**"
       - "!.github/workflows/Pyodide.yml"
+      - "!tools/pythonpkg/setup.py"
 
   pull_request:
     types: [opened, reopened, ready_for_review]
     paths-ignore:
       - "**"
       - "!.github/workflows/Pyodide.yml"
+      - "!tools/pythonpkg/setup.py"
 
 jobs:
   build_pyodide:
@@ -90,6 +92,10 @@ jobs:
           (platform,) = duckdb.execute("PRAGMA platform").fetchone()
           assert platform == "wasm_eh_pyodide", platform
           EOF
+
+      - name: Wheel sizes
+        run: |
+          ls -lah ./tools/pythonpkg/dist/*.whl
 
       - uses: actions/upload-artifact@v3
         with:
