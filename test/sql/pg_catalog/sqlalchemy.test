@@ -82,21 +82,25 @@ n.nspname='main' and relname='f'
 ----
 
 # has_type
-statement ok
+query I
 SELECT EXISTS (
 	SELECT * FROM pg_catalog.pg_type t, pg_catalog.pg_namespace n
 	WHERE t.typnamespace = n.oid
-	AND t.typname = 'INTEGER'
+	AND t.typname = 'integer'
 	AND n.nspname = 'main'
 	)
+----
+false
 
-statement ok
+query I
 SELECT EXISTS (
 	SELECT * FROM pg_catalog.pg_type t, pg_catalog.pg_namespace n
 	WHERE t.typnamespace = n.oid
-	AND t.typname = 'INTEGER'
+	AND t.typname = 'int4'
 	AND n.nspname = 'main'
 	)
+----
+true
 
 # get_table_oid
 query I
