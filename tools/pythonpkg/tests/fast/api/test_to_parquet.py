@@ -27,3 +27,23 @@ class TestToParquet(object):
         rel.to_parquet(temp_file_name, compression="gzip")
         csv_rel = duckdb.read_parquet(temp_file_name, compression="gzip")
         assert rel.execute().fetchall() == csv_rel.execute().fetchall()
+
+    @pytest.mark.parametrize('row_group_size_bytes', [122880 * 1024, '2MB'])
+    def test_row_group_size_bytes(self, row_group_size_bytes):
+        con = duckdb.connect()
+        con.execute("SET preserve_insertion_order=false;")
+
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        df = pd.DataFrame({'a': ['string1', 'string2', 'string3']})
+        rel = con.from_df(df)
+        rel.to_parquet(temp_file_name, row_group_size_bytes=row_group_size_bytes)
+        parquet_rel = con.read_parquet(temp_file_name)
+        assert rel.execute().fetchall() == parquet_rel.execute().fetchall()
+
+    def test_row_group_size(self):
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        df = pd.DataFrame({'a': ['string1', 'string2', 'string3']})
+        rel = duckdb.from_df(df)
+        rel.to_parquet(temp_file_name, row_group_size=122880)
+        parquet_rel = duckdb.read_parquet(temp_file_name)
+        assert rel.execute().fetchall() == parquet_rel.execute().fetchall()
