@@ -18,12 +18,12 @@ public:
 	static constexpr const TableReferenceType TYPE = TableReferenceType::COLUMN_DATA;
 
 public:
-	ColumnDataRef(ColumnDataCollection &collection)
+	explicit ColumnDataRef(ColumnDataCollection &collection)
 	    : TableRef(TableReferenceType::COLUMN_DATA), owned_collection(nullptr), collection(collection) {
 	}
 	ColumnDataRef(vector<string> expected_names, unique_ptr<ColumnDataCollection> owned_collection_p)
 	    : TableRef(TableReferenceType::COLUMN_DATA), owned_collection(std::move(owned_collection_p)),
-	      collection(*owned_collection), expected_names(expected_names) {
+	      collection(*owned_collection), expected_names(std::move(expected_names)) {
 	}
 
 public:

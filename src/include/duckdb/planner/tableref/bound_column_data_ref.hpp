@@ -18,7 +18,7 @@ public:
 	static constexpr const TableReferenceType TYPE = TableReferenceType::COLUMN_DATA;
 
 public:
-	BoundColumnDataRef(ColumnDataCollection &collection)
+	explicit BoundColumnDataRef(ColumnDataCollection &collection)
 	    : BoundTableRef(TableReferenceType::COLUMN_DATA), collection(collection) {
 	}
 	//! The materialized column data to scan
