@@ -66,6 +66,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDistinct &
 			if (ClientConfig::GetConfig(context).enable_optimizer) {
 				bool changes_made = false;
 				auto new_expr = OrderedAggregateOptimizer::Apply(context, *first_aggregate, groups, changes_made);
+				D_ASSERT(new_expr->return_type == first_aggregate->return_type);
 				if (new_expr) {
 					D_ASSERT(new_expr->type == ExpressionType::BOUND_AGGREGATE);
 					first_aggregate = unique_ptr_cast<Expression, BoundAggregateExpression>(std::move(new_expr));
