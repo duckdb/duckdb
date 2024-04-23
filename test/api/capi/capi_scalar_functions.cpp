@@ -37,7 +37,7 @@ void AddNumbersTogether(duckdb_function_info info, duckdb_data_chunk input, duck
 	}
 }
 
-static void CAPIRegisterAddition(duckdb_connection connection, const char *name) {
+static void CAPIRegisterAddition(duckdb_connection connection, const char *name, duckdb_state expected_outcome) {
 	duckdb_state status;
 
 	// create a scalar function
@@ -67,7 +67,7 @@ static void CAPIRegisterAddition(duckdb_connection connection, const char *name)
 
 	// register and cleanup
 	status = duckdb_register_scalar_function(connection, function);
-	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(status == expected_outcome);
 
 	duckdb_destroy_scalar_function(&function);
 	duckdb_destroy_scalar_function(&function);
@@ -79,7 +79,9 @@ TEST_CASE("Test Scalar Functions C API", "[capi]") {
 	duckdb::unique_ptr<CAPIResult> result;
 
 	REQUIRE(tester.OpenDatabase(nullptr));
-	CAPIRegisterAddition(tester.connection, "my_addition");
+	CAPIRegisterAddition(tester.connection, "my_addition", DuckDBSuccess);
+	// try to register it again - this should be an error
+	CAPIRegisterAddition(tester.connection, "my_addition", DuckDBError);
 
 	// now call it
 	result = tester.Query("SELECT my_addition(40, 2)");

@@ -136,12 +136,16 @@ duckdb_state duckdb_register_scalar_function(duckdb_connection connection, duckd
 		return DuckDBError;
 	}
 	auto con = reinterpret_cast<duckdb::Connection *>(connection);
-	con->context->RunFunctionInTransaction([&]() {
-		auto &catalog = duckdb::Catalog::GetSystemCatalog(*con->context);
-		duckdb::CreateScalarFunctionInfo sf_info(scalar_function);
+	try {
+		con->context->RunFunctionInTransaction([&]() {
+			auto &catalog = duckdb::Catalog::GetSystemCatalog(*con->context);
+			duckdb::CreateScalarFunctionInfo sf_info(scalar_function);
 
-		// create the function in the catalog
-		catalog.CreateFunction(*con->context, sf_info);
-	});
+			// create the function in the catalog
+			catalog.CreateFunction(*con->context, sf_info);
+		});
+	} catch (...) {
+		return DuckDBError;
+	}
 	return DuckDBSuccess;
 }
