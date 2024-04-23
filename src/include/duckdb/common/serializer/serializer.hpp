@@ -144,6 +144,12 @@ protected:
 		}
 	}
 
+	// Optional Pointer Ref
+	template <typename T>
+	void WriteValue(const optional_ptr<T> &ptr) {
+		WriteValue(ptr.get());
+	}
+
 	// Unique Pointer Ref
 	template <typename T>
 	void WriteValue(const unique_ptr<T> &ptr) {
