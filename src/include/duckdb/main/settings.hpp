@@ -568,6 +568,16 @@ struct PreserveInsertionOrder {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct ArrowOutputListView {
+	static constexpr const char *Name = "arrow_output_list_view";
+	static constexpr const char *Description =
+	    "If export to arrow format should use ListView as the physical layout for LIST columns";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct ProduceArrowStringView {
 	static constexpr const char *Name = "produce_arrow_string_view";
 	static constexpr const char *Description =
