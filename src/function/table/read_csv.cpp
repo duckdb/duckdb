@@ -91,7 +91,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		    "REJECTS_RECOVERY_COLUMNS option is only supported when REJECTS_TABLE is set to a table name");
 	}
 
-	options.file_options.AutoDetectHivePartitioning(result->files, context);
+	options.file_options.AutoDetectHivePartitioning(*mfl, context);
 
 	if (!options.auto_detect && return_types.empty()) {
 		throw BinderException("read_csv requires columns to be specified through the 'columns' option. Use "

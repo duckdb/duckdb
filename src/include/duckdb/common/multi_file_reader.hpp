@@ -119,10 +119,17 @@ protected:
 	vector<string> files;
 };
 
-// TODO: This API can be made simpler probably; its verbosity stems from the fact that this used to be all static.
-//       perhaps we can make all state related to the MultiFileReader just live in the MultiFileReader? That way it has access to
-//       everything and we solve the ugly dual ComplexFilterPushdown on the MultiFileList/MultiFileReader and the passing around
-//       of MultiFileReaderData
+//! The MultiFileReader class provides a set of helper methods to handle scanning from multiple files such as:
+// - producing a lazily iterable list of files to be scanned
+// - pushing down filters into the filelist generation logic
+// - parsing options related to scanning from a list of files
+// - injecting extra (constant) values into scan chunks
+// - a `bind` method to completely replace the regular bind (replacing the default behaviour of binding on the first file)
+//
+// Note that while the MultiFileReader currently holds no state, its methods are not static. This is to allow overriding
+// the MultiFileReader class and dependency-inject a different MultiFileReader into existing Table Functions.
+//
+// TODO: Consider refactoring the MultiFileList, MultiFileReader into a single class
 struct MultiFileReader {
 	virtual ~MultiFileReader();
 	//! Add the parameters for multi-file readers (e.g. union_by_name, filename) to a table function
