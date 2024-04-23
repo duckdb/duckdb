@@ -544,7 +544,7 @@
         "id": 200,
         "name": "table_info",
         "type": "CreateInfo*",
-        "serialize_property": "table.GetInfo().get()"
+        "serialize_property": "table.GetInfo()"
       },
       {
         "id": 201,
@@ -643,7 +643,7 @@
         "id": 200,
         "name": "table_info",
         "type": "CreateInfo*",
-        "serialize_property": "table.GetInfo().get()"
+        "serialize_property": "table.GetInfo()"
       },
       {
         "id": 201,
@@ -672,7 +672,7 @@
         "id": 200,
         "name": "table_info",
         "type": "CreateInfo*",
-        "serialize_property": "table.GetInfo().get()"
+        "serialize_property": "table.GetInfo()"
       },
       {
         "id": 201,
@@ -716,7 +716,7 @@
         "id": 200,
         "name": "info",
         "type": "CreateInfo*",
-        "serialize_property": "info->base.get()"
+        "serialize_property": "info->base"
       }
     ],
     "constructor": ["$ClientContext", "info"]

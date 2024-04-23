@@ -16,7 +16,7 @@
         "id": 101,
         "name": "type_info",
         "type": "shared_ptr<ExtraTypeInfo>",
-        "serialize_property": "type_info_.get()"
+        "serialize_property": "type_info_"
       }
     ],
     "pointer_type": "none",
