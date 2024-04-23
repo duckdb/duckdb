@@ -39,7 +39,7 @@ void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, idx_t table_id
 		auto entry = column_references.find(current_binding);
 		if (entry == column_references.end()) {
 			// this entry is not referred to, erase it from the set of expressions
-			list.erase(list.begin() + col_idx);
+			list.erase_at(col_idx);
 			offset++;
 			col_idx--;
 		} else if (offset > 0 && replace) {
@@ -233,17 +233,17 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			// for every table filter, push a column binding into the column references map to prevent the column from
 			// being projected out
 			for (auto &filter : get.table_filters.filters) {
-				idx_t index = DConstants::INVALID_INDEX;
+				optional_idx index;
 				for (idx_t i = 0; i < get.column_ids.size(); i++) {
 					if (get.column_ids[i] == filter.first) {
 						index = i;
 						break;
 					}
 				}
-				if (index == DConstants::INVALID_INDEX) {
+				if (!index.IsValid()) {
 					throw InternalException("Could not find column index for table filter");
 				}
-				ColumnBinding filter_binding(get.table_index, index);
+				ColumnBinding filter_binding(get.table_index, index.GetIndex());
 				if (column_references.find(filter_binding) == column_references.end()) {
 					column_references.insert(make_pair(filter_binding, vector<BoundColumnRefExpression *>()));
 				}

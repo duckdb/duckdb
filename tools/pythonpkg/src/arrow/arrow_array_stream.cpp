@@ -86,7 +86,7 @@ py::object PythonTableArrowArrayStreamFactory::ProduceScanner(py::object &arrow_
 unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(uintptr_t factory_ptr,
                                                                                 ArrowStreamParameters &parameters) {
 	py::gil_scoped_acquire acquire;
-	auto factory = static_cast<PythonTableArrowArrayStreamFactory *>(reinterpret_cast<void *>(factory_ptr));
+	auto factory = static_cast<PythonTableArrowArrayStreamFactory *>(reinterpret_cast<void *>(factory_ptr)); // NOLINT
 	D_ASSERT(factory->arrow_object);
 	py::handle arrow_obj_handle(factory->arrow_object);
 	auto arrow_object_type = GetArrowType(arrow_obj_handle);
@@ -158,7 +158,7 @@ void PythonTableArrowArrayStreamFactory::GetSchemaInternal(py::handle arrow_obj_
 
 void PythonTableArrowArrayStreamFactory::GetSchema(uintptr_t factory_ptr, ArrowSchemaWrapper &schema) {
 	py::gil_scoped_acquire acquire;
-	auto factory = static_cast<PythonTableArrowArrayStreamFactory *>(reinterpret_cast<void *>(factory_ptr));
+	auto factory = static_cast<PythonTableArrowArrayStreamFactory *>(reinterpret_cast<void *>(factory_ptr)); // NOLINT
 	D_ASSERT(factory->arrow_object);
 	py::handle arrow_obj_handle(factory->arrow_object);
 	GetSchemaInternal(arrow_obj_handle, schema);
@@ -240,8 +240,9 @@ py::object GetScalar(Value &constant, const string &timezone_config, const Arrow
 		return dataset_scalar(scalar(constant.GetValue<int64_t>(), date_type("s")));
 	}
 	case LogicalTypeId::TIMESTAMP_TZ: {
+		auto &datetime_info = type.GetTypeInfo<ArrowDateTimeInfo>();
 		auto base_value = constant.GetValue<int64_t>();
-		auto arrow_datetime_type = type.GetDateTimeType();
+		auto arrow_datetime_type = datetime_info.GetDateTimeType();
 		auto time_unit_string = ConvertTimestampUnit(arrow_datetime_type);
 		auto converted_value = ConvertTimestampTZValue(base_value, arrow_datetime_type);
 		py::object date_type = py::module_::import("pyarrow").attr("timestamp");
@@ -366,10 +367,12 @@ py::object TransformFilterRecursive(TableFilter *filter, vector<string> &column_
 		auto &struct_filter = filter->Cast<StructFilter>();
 		auto &child_type = StructType::GetChildType(type.GetDuckType(), struct_filter.child_idx);
 		auto &child_name = struct_filter.child_name;
+		auto &struct_type_info = type.GetTypeInfo<ArrowStructInfo>();
+		auto &struct_child_type = struct_type_info.GetChild(struct_filter.child_idx);
 
 		column_ref.push_back(child_name);
 		auto child_expr =
-		    TransformFilterRecursive(struct_filter.child_filter.get(), column_ref, timezone_config, child_type);
+		    TransformFilterRecursive(struct_filter.child_filter.get(), column_ref, timezone_config, struct_child_type);
 		column_ref.pop_back();
 
 		return child_expr;

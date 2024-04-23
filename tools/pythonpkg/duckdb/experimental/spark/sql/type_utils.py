@@ -1,4 +1,3 @@
-import typing
 from duckdb.typing import DuckDBPyType
 from typing import List, Tuple, cast
 from .types import (
@@ -75,7 +74,7 @@ _sqltype_to_spark_class = {
 
 def convert_nested_type(dtype: DuckDBPyType) -> DataType:
     id = dtype.id
-    if id == 'list':
+    if id == 'list' or id == 'array':
         children = dtype.children
         return ArrayType(convert_type(children[0][1]))
     # TODO: add support for 'union'
@@ -90,7 +89,7 @@ def convert_nested_type(dtype: DuckDBPyType) -> DataType:
 
 def convert_type(dtype: DuckDBPyType) -> DataType:
     id = dtype.id
-    if id in ['list', 'struct', 'map']:
+    if id in ['list', 'struct', 'map', 'array']:
         return convert_nested_type(dtype)
     if id == 'decimal':
         children: List[Tuple[str, DuckDBPyType]] = dtype.children

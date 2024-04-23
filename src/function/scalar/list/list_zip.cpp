@@ -22,23 +22,23 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 	}
 
 	vector<UnifiedVectorFormat> input_lists;
+	input_lists.resize(args.ColumnCount());
 	for (idx_t i = 0; i < args.ColumnCount(); i++) {
-		UnifiedVectorFormat curr;
-		args.data[i].ToUnifiedFormat(count, curr);
-		input_lists.push_back(curr);
+		args.data[i].ToUnifiedFormat(count, input_lists[i]);
 	}
 
 	// Handling output row for each input row
 	idx_t result_size = 0;
 	vector<idx_t> lengths;
 	for (idx_t j = 0; j < count; j++) {
-
 		// Is flag for current row set
 		bool truncate_to_shortest = false;
 		if (truncate_flags_set) {
-			idx_t flag_idx = input_lists.back().sel->get_index(j);
-			auto flag_data = UnifiedVectorFormat::GetData<bool>(input_lists.back());
-			truncate_to_shortest = flag_data[flag_idx];
+			auto &flag_vec = input_lists.back();
+			idx_t flag_idx = flag_vec.sel->get_index(j);
+			if (flag_vec.validity.RowIsValid(flag_idx)) {
+				truncate_to_shortest = UnifiedVectorFormat::GetData<bool>(flag_vec)[flag_idx];
+			}
 		}
 
 		// Calculation of the outgoing list size
@@ -77,7 +77,7 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 	for (idx_t j = 0; j < count; j++) {
 		idx_t len = lengths[j];
 		for (idx_t i = 0; i < args_size; i++) {
-			UnifiedVectorFormat curr = input_lists[i];
+			auto &curr = input_lists[i];
 			idx_t sel_idx = curr.sel->get_index(j);
 			idx_t curr_off = 0;
 			idx_t curr_len = 0;

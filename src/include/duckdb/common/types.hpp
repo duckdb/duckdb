@@ -12,6 +12,7 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/helper.hpp"
 
 #include <limits>
 
@@ -24,7 +25,7 @@ class TypeCatalogEntry;
 class Vector;
 class ClientContext;
 
-struct string_t;
+struct string_t; // NOLINT: mimic std casing
 
 template <class T>
 using child_list_t = vector<std::pair<std::string, T>>;
@@ -32,12 +33,12 @@ using child_list_t = vector<std::pair<std::string, T>>;
 template <class T>
 using buffer_ptr = shared_ptr<T>;
 
-template <class T, typename... Args>
-buffer_ptr<T> make_buffer(Args &&...args) {
-	return make_shared<T>(std::forward<Args>(args)...);
+template <class T, typename... ARGS>
+buffer_ptr<T> make_buffer(ARGS &&...args) { // NOLINT: mimic std casing
+	return make_shared_ptr<T>(std::forward<ARGS>(args)...);
 }
 
-struct list_entry_t {
+struct list_entry_t { // NOLINT: mimic std casing
 	list_entry_t() = default;
 	list_entry_t(uint64_t offset, uint64_t length) : offset(offset), length(length) {
 	}
@@ -234,7 +235,7 @@ enum class LogicalTypeId : uint8_t {
 
 struct ExtraTypeInfo;
 
-struct aggregate_state_t;
+struct aggregate_state_t; // NOLINT: mimic std casing
 
 struct LogicalType {
 	DUCKDB_API LogicalType();
@@ -245,7 +246,7 @@ struct LogicalType {
 
 	DUCKDB_API ~LogicalType();
 
-	inline LogicalTypeId id() const {
+	inline LogicalTypeId id() const { // NOLINT: mimic std casing
 		return id_;
 	}
 	inline PhysicalType InternalType() const {
@@ -279,6 +280,9 @@ struct LogicalType {
 
 	// copy assignment
 	inline LogicalType &operator=(const LogicalType &other) {
+		if (this == &other) {
+			return *this;
+		}
 		id_ = other.id_;
 		physical_type_ = other.physical_type_;
 		type_info_ = other.type_info_;
@@ -337,9 +341,9 @@ struct LogicalType {
 	bool Contains(LogicalTypeId type_id) const;
 
 private:
-	LogicalTypeId id_;
-	PhysicalType physical_type_;
-	shared_ptr<ExtraTypeInfo> type_info_;
+	LogicalTypeId id_; // NOLINT: allow this naming for legacy reasons
+	PhysicalType physical_type_; // NOLINT: allow this naming for legacy reasons
+	shared_ptr<ExtraTypeInfo> type_info_; // NOLINT: allow this naming for legacy reasons
 
 private:
 	PhysicalType GetInternalType();
@@ -390,9 +394,7 @@ public:
 	DUCKDB_API static LogicalType MAP(const LogicalType &child);                 // NOLINT
 	DUCKDB_API static LogicalType MAP(LogicalType key, LogicalType value);       // NOLINT
 	DUCKDB_API static LogicalType UNION(child_list_t<LogicalType> members);      // NOLINT
-	DUCKDB_API static LogicalType ARRAY(const LogicalType &child, idx_t size);   // NOLINT
-	// an array of unknown size (only used for binding)
-	DUCKDB_API static LogicalType ARRAY(const LogicalType &child);        // NOLINT
+	DUCKDB_API static LogicalType ARRAY(const LogicalType &child, optional_idx index);   // NOLINT
 	DUCKDB_API static LogicalType ENUM(Vector &ordered_data, idx_t size); // NOLINT
 	// ANY but with special rules (default is LogicalType::ANY, 5)
 	DUCKDB_API static LogicalType ANY_PARAMS(LogicalType target, idx_t cast_score = 5); // NOLINT
@@ -520,6 +522,7 @@ bool ApproxEqual(double l, double r);
 struct aggregate_state_t {
 	aggregate_state_t() {
 	}
+	// NOLINTNEXTLINE: work around bug in clang-tidy
 	aggregate_state_t(string function_name_p, LogicalType return_type_p, vector<LogicalType> bound_argument_types_p)
 	    : function_name(std::move(function_name_p)), return_type(std::move(return_type_p)),
 	      bound_argument_types(std::move(bound_argument_types_p)) {

@@ -1,12 +1,14 @@
 
 #include "catch.hpp"
-
-#include "sqllogic_test_runner.hpp"
 #include "test_helpers.hpp"
+#include "sqllogic_parser.hpp"
+#include "sqllogic_test_runner.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension/generated_extension_loader.hpp"
 #include "duckdb/main/extension_entries.hpp"
-#include "sqllogic_parser.hpp"
+#include "duckdb/common/virtual_file_system.hpp"
+#include "duckdb/common/file_open_flags.hpp"
+
 #ifdef DUCKDB_OUT_OF_TREE
 #include DUCKDB_EXTENSION_HEADER
 #endif
@@ -291,7 +293,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 			parser.Fail("require vector_size requires a parameter");
 		}
 		// require a specific vector size
-		auto required_vector_size = std::stoi(params[1]);
+		auto required_vector_size = NumericCast<idx_t>(std::stoi(params[1]));
 		if (STANDARD_VECTOR_SIZE < required_vector_size) {
 			// vector size is too low for this test: skip it
 			return RequireResult::MISSING;
@@ -304,7 +306,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 			parser.Fail("require exact_vector_size requires a parameter");
 		}
 		// require an exact vector size
-		auto required_vector_size = std::stoi(params[1]);
+		auto required_vector_size = NumericCast<idx_t>(std::stoi(params[1]));
 		if (STANDARD_VECTOR_SIZE != required_vector_size) {
 			// vector size does not match the required vector size: skip it
 			return RequireResult::MISSING;
@@ -317,7 +319,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 			parser.Fail("require block_size requires a parameter");
 		}
 		// require a specific block size
-		auto required_block_size = std::stoi(params[1]);
+		auto required_block_size = NumericCast<idx_t>(std::stoi(params[1]));
 		if (Storage::BLOCK_ALLOC_SIZE != required_block_size) {
 			// block size does not match the required block size: skip it
 			return RequireResult::MISSING;
@@ -332,6 +334,14 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 
 	if (param == "noalternativeverify") {
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
+		return RequireResult::MISSING;
+#else
+		return RequireResult::PRESENT;
+#endif
+	}
+
+	if (param == "no_vector_verification") {
+#ifdef DUCKDB_VERIFY_VECTOR
 		return RequireResult::MISSING;
 #else
 		return RequireResult::PRESENT;
@@ -723,6 +733,32 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			auto sleep_duration = std::stoull(token.parameters[0]);
 			auto sleep_unit = SleepCommand::ParseUnit(token.parameters[1]);
 			auto command = make_uniq<SleepCommand>(*this, sleep_duration, sleep_unit);
+			ExecuteCommand(std::move(command));
+		} else if (token.type == SQLLogicTokenType::SQLLOGIC_UNZIP) {
+			if (token.parameters.size() != 1 && token.parameters.size() != 2) {
+				parser.Fail("unzip requires 1 argument: <path/to/file.db.gz> [optional: "
+				            "<path/to/unzipped_file.db>, default: __TEST_DIR__/<file.db>]");
+			}
+
+			// set input path
+			auto input_path = ReplaceKeywords(token.parameters[0]);
+
+			// file name
+			idx_t filename_start_pos = input_path.find_last_of("/") + 1;
+			if (!StringUtil::EndsWith(input_path, ".gz")) {
+				parser.Fail("unzip: input has not a GZIP extension");
+			}
+			string filename = input_path.substr(filename_start_pos, input_path.size() - filename_start_pos - 3);
+
+			// extraction path
+			string default_extraction_path = ReplaceKeywords("__TEST_DIR__/" + filename);
+			string extraction_path =
+			    (token.parameters.size() == 2) ? ReplaceKeywords(token.parameters[1]) : default_extraction_path;
+			if (extraction_path == "NULL") {
+				extraction_path = default_extraction_path;
+			}
+
+			auto command = make_uniq<UnzipCommand>(*this, input_path, extraction_path);
 			ExecuteCommand(std::move(command));
 		}
 	}

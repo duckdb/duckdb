@@ -7,6 +7,8 @@ ExtraDropSecretInfo::ExtraDropSecretInfo() : ExtraDropInfo(ExtraDropInfoType::SE
 
 ExtraDropSecretInfo::ExtraDropSecretInfo(const ExtraDropSecretInfo &info)
     : ExtraDropInfo(ExtraDropInfoType::SECRET_INFO) {
+	persist_mode = info.persist_mode;
+	secret_storage = info.secret_storage;
 }
 
 unique_ptr<ExtraDropInfo> ExtraDropSecretInfo::Copy() const {

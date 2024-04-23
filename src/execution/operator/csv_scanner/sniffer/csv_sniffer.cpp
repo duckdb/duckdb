@@ -13,8 +13,8 @@ CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager>
 	}
 	// Initialize max columns found to either 0 or however many were set
 	max_columns_found = set_columns.Size();
-	error_handler = make_shared<CSVErrorHandler>(options.ignore_errors);
-	detection_error_handler = make_shared<CSVErrorHandler>(true);
+	error_handler = make_shared_ptr<CSVErrorHandler>(options.ignore_errors.GetValue());
+	detection_error_handler = make_shared_ptr<CSVErrorHandler>(true);
 }
 
 bool SetColumns::IsSet() {
@@ -83,6 +83,7 @@ void CSVSniffer::SetResultOptions() {
 }
 
 SnifferResult CSVSniffer::SniffCSV(bool force_match) {
+	buffer_manager->sniffing = true;
 	// 1. Dialect Detection
 	DetectDialect();
 	// 2. Type Detection
@@ -93,7 +94,15 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 	DetectHeader();
 	// 5. Type Replacement
 	ReplaceTypes();
-	if (!best_candidate->error_handler->errors.empty() && !options.ignore_errors) {
+
+	// We reset the buffer for compressed files
+	// This is done because we can't easily seek on compressed files, if a buffer goes out of scope we must read from
+	// the start
+	if (!buffer_manager->file_handle->uncompressed) {
+		buffer_manager->ResetBufferManager();
+	}
+	buffer_manager->sniffing = false;
+	if (!best_candidate->error_handler->errors.empty() && !options.ignore_errors.GetValue()) {
 		for (auto &error_vector : best_candidate->error_handler->errors) {
 			for (auto &error : error_vector.second) {
 				if (error.type == CSVErrorType::MAXIMUM_LINE_SIZE) {
@@ -136,6 +145,8 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 			if (set_types[i] != detected_types[i] && !(set_types[i].IsNumeric() && detected_types[i].IsNumeric())) {
 				type_error += "Column at position: " + to_string(i) + " Set type: " + set_types[i].ToString() +
 				              " Sniffed type: " + detected_types[i].ToString() + "\n";
+				detected_types[i] = set_types[i];
+				manually_set[i] = true;
 				match = false;
 			}
 		}
@@ -146,13 +157,14 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 		if (!error.empty() && force_match) {
 			throw InvalidInputException(error);
 		}
-
+		options.was_type_manually_set = manually_set;
 		// We do not need to run type refinement, since the types have been given by the user
 		return SnifferResult({}, {});
 	}
 	if (!error.empty() && force_match) {
 		throw InvalidInputException(error);
 	}
+	options.was_type_manually_set = manually_set;
 	return SnifferResult(detected_types, names);
 }
 

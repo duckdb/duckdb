@@ -8,7 +8,7 @@
 namespace duckdb {
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundConjunctionExpression &expr,
-                                                                     unique_ptr<Expression> *expr_ptr) {
+                                                                     unique_ptr<Expression> &expr_ptr) {
 	auto is_and = expr.type == ExpressionType::CONJUNCTION_AND;
 	for (idx_t expr_idx = 0; expr_idx < expr.children.size(); expr_idx++) {
 		auto &child = expr.children[expr_idx];
@@ -46,20 +46,20 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundConjun
 			}
 		}
 		if (prune_child) {
-			expr.children.erase(expr.children.begin() + expr_idx);
+			expr.children.erase_at(expr_idx);
 			expr_idx--;
 			continue;
 		}
-		*expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(constant_value));
-		return PropagateExpression(*expr_ptr);
+		expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(constant_value));
+		return PropagateExpression(expr_ptr);
 	}
 	if (expr.children.empty()) {
 		// if there are no children left, replace the conjunction with TRUE (for AND) or FALSE (for OR)
-		*expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(is_and));
-		return PropagateExpression(*expr_ptr);
+		expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(is_and));
+		return PropagateExpression(expr_ptr);
 	} else if (expr.children.size() == 1) {
 		// if there is one child left, replace the conjunction with that one child
-		*expr_ptr = std::move(expr.children[0]);
+		expr_ptr = std::move(expr.children[0]);
 	}
 	return nullptr;
 }

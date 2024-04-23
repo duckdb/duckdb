@@ -68,8 +68,6 @@ public:
 	DataTableInfo &GetTableInfo() const;
 	virtual idx_t GetMaxEntry();
 
-	void IncrementVersion();
-
 	idx_t GetAllocationSize() const {
 		return allocation_size;
 	}
@@ -77,6 +75,8 @@ public:
 	virtual void SetStart(idx_t new_start);
 	//! The root type of the column
 	const LogicalType &RootType() const;
+	//! Whether or not the column has any updates
+	virtual bool HasUpdates() const;
 
 	//! Initialize a scan of the column
 	virtual void InitializeScan(ColumnScanState &state);
@@ -161,15 +161,20 @@ protected:
 	template <bool SCAN_COMMITTED, bool ALLOW_UPDATES>
 	idx_t ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result);
 
+	void ClearUpdates();
+	void FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result, idx_t scan_count,
+	                  bool allow_updates, bool scan_committed);
+	void FetchUpdateRow(TransactionData transaction, row_t row_id, Vector &result, idx_t result_idx);
+	void UpdateInternal(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
+	                    idx_t update_count, Vector &base_vector);
+
 protected:
 	//! The segments holding the data of this column segment
 	ColumnSegmentTree data;
 	//! The lock for the updates
-	mutex update_lock;
+	mutable mutex update_lock;
 	//! The updates for this column segment
 	unique_ptr<UpdateSegment> updates;
-	//! The internal version of the column data
-	idx_t version;
 	//! The stats of the root segment
 	unique_ptr<SegmentStatistics> stats;
 	//! Total transient allocation size

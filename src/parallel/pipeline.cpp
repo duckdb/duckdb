@@ -16,7 +16,7 @@
 namespace duckdb {
 
 PipelineTask::PipelineTask(Pipeline &pipeline_p, shared_ptr<Event> event_p)
-    : ExecutorTask(pipeline_p.executor), pipeline(pipeline_p), event(std::move(event_p)) {
+    : ExecutorTask(pipeline_p.executor, std::move(event_p)), pipeline(pipeline_p) {
 }
 
 bool PipelineTask::TaskBlockedOnResult() const {
@@ -110,9 +110,9 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 			    "Attempting to schedule a pipeline where the sink requires batch index but source does not support it");
 		}
 	}
-	idx_t max_threads = source_state->MaxThreads();
+	auto max_threads = source_state->MaxThreads();
 	auto &scheduler = TaskScheduler::GetScheduler(executor.context);
-	idx_t active_threads = scheduler.NumberOfThreads();
+	auto active_threads = NumericCast<idx_t>(scheduler.NumberOfThreads());
 	if (max_threads > active_threads) {
 		max_threads = active_threads;
 	}

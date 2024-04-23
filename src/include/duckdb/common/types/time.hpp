@@ -14,8 +14,8 @@
 
 namespace duckdb {
 
-struct dtime_t;
-struct dtime_tz_t;
+struct dtime_t;    // NOLINT
+struct dtime_tz_t; // NOLINT
 
 //! The Time class is a static class that holds helper functions for the Time
 //! type.
@@ -26,7 +26,7 @@ public:
 	DUCKDB_API static dtime_t FromCString(const char *buf, idx_t len, bool strict = false);
 	DUCKDB_API static bool TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict = false);
 	DUCKDB_API static bool TryConvertTimeTZ(const char *buf, idx_t len, idx_t &pos, dtime_tz_t &result,
-	                                        bool strict = false);
+	                                        bool &has_offset, bool strict = false);
 	// No hour limit
 	DUCKDB_API static bool TryConvertInterval(const char *buf, idx_t len, idx_t &pos, dtime_t &result,
 	                                          bool strict = false);

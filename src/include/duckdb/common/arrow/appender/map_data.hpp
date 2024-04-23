@@ -16,7 +16,7 @@ public:
 		// map types are stored in a (too) clever way
 		// the main buffer holds the null values and the offsets
 		// then we have a single child, which is a struct of the map_type, and the key_type
-		result.main_buffer.reserve((capacity + 1) * sizeof(BUFTYPE));
+		result.GetMainBuffer().reserve((capacity + 1) * sizeof(BUFTYPE));
 
 		auto &key_type = MapType::KeyType(type);
 		auto &value_type = MapType::ValueType(type);
@@ -59,7 +59,7 @@ public:
 		// set up the main map buffer
 		D_ASSERT(result);
 		result->n_buffers = 2;
-		result->buffers[1] = append_data.main_buffer.data();
+		result->buffers[1] = append_data.GetMainBuffer().data();
 
 		// the main map buffer has a single child: a struct
 		ArrowAppender::AddChildren(append_data, 1);
@@ -75,7 +75,7 @@ public:
 		struct_result->children = struct_data.child_pointers.data();
 		struct_result->n_buffers = 1;
 		struct_result->n_children = struct_child_count;
-		struct_result->length = struct_data.child_data[0]->row_count;
+		struct_result->length = NumericCast<int64_t>(struct_data.child_data[0]->row_count);
 
 		append_data.child_arrays[0] = *struct_result;
 

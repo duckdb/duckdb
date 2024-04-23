@@ -11,7 +11,6 @@ struct ReduceExecuteInfo {
 		active_rows.Resize(0, info.row_count);
 		active_rows.SetAllValid(info.row_count);
 
-		right_sel.Initialize(info.row_count);
 		left_sel.Initialize(info.row_count);
 		active_rows_sel.Initialize(info.row_count);
 
@@ -50,7 +49,6 @@ struct ReduceExecuteInfo {
 	unique_ptr<ExpressionExecutor> expr_executor;
 	vector<LogicalType> input_types;
 
-	SelectionVector right_sel;
 	SelectionVector left_sel;
 	SelectionVector active_rows_sel;
 };
@@ -63,6 +61,10 @@ static bool ExecuteReduce(idx_t loops, ReduceExecuteInfo &execute_info, LambdaFu
 
 	// create selection vectors for the left and right slice
 	auto data = execute_info.active_rows.GetData();
+
+	// reset right_sel each iteration to prevent referencing issues
+	SelectionVector right_sel;
+	right_sel.Initialize(info.row_count);
 
 	idx_t bits_per_entry = sizeof(idx_t) * 8;
 	for (idx_t entry_idx = 0; original_row_idx < info.row_count; entry_idx++) {
@@ -78,8 +80,7 @@ static bool ExecuteReduce(idx_t loops, ReduceExecuteInfo &execute_info, LambdaFu
 			}
 			auto list_column_format_index = info.list_column_format.sel->get_index(original_row_idx);
 			if (info.list_entries[list_column_format_index].length > loops + 1) {
-				execute_info.right_sel.set_index(reduced_row_idx,
-				                                 info.list_entries[list_column_format_index].offset + loops + 1);
+				right_sel.set_index(reduced_row_idx, info.list_entries[list_column_format_index].offset + loops + 1);
 				execute_info.left_sel.set_index(reduced_row_idx, valid_row_idx);
 				execute_info.active_rows_sel.set_index(reduced_row_idx, original_row_idx);
 
@@ -98,11 +99,11 @@ static bool ExecuteReduce(idx_t loops, ReduceExecuteInfo &execute_info, LambdaFu
 	}
 
 	// create the index vector
-	Vector index_vector(Value::BIGINT(loops + 1));
+	Vector index_vector(Value::BIGINT(UnsafeNumericCast<int64_t>(loops + 1)));
 
 	// slice the left and right slice
 	execute_info.left_slice.Slice(execute_info.left_slice, execute_info.left_sel, reduced_row_idx);
-	Vector right_slice(*info.child_vector, execute_info.right_sel, reduced_row_idx);
+	Vector right_slice(*info.child_vector, right_sel, reduced_row_idx);
 
 	// create the input chunk
 	DataChunk input_chunk;

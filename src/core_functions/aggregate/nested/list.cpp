@@ -63,6 +63,7 @@ static void ListUpdateFunction(Vector inputs[], AggregateInputData &aggr_input_d
 
 	for (idx_t i = 0; i < count; i++) {
 		auto &state = *states[states_data.sel->get_index(i)];
+		aggr_input_data.allocator.AlignNext();
 		list_bind_data.functions.AppendRow(aggr_input_data.allocator, state.linked_list, input_data, i);
 	}
 }
@@ -178,6 +179,7 @@ static void ListCombineFunction(Vector &states_vector, Vector &combined, Aggrega
 		Vector::RecursiveToUnifiedFormat(input, entry_count, input_data);
 
 		for (idx_t entry_idx = 0; entry_idx < entry_count; ++entry_idx) {
+			aggr_input_data.allocator.AlignNext();
 			list_bind_data.functions.AppendRow(aggr_input_data.allocator, target.linked_list, input_data, entry_idx);
 		}
 	}

@@ -1,6 +1,7 @@
 #include "functions.hpp"
 #include "duckdb.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/main/appender.hpp"
@@ -85,6 +86,8 @@ static jmethodID J_UUID_getLeastSignificantBits;
 
 static jclass J_DuckDBDate;
 static jmethodID J_DuckDBDate_getDaysSinceEpoch;
+
+static jmethodID J_Object_toString;
 
 void ThrowJNI(JNIEnv *env, const char *message) {
 	D_ASSERT(J_SQLException);
@@ -250,6 +253,10 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 	J_ByteBuffer = (jclass)env->NewGlobalRef(tmpLocalRef);
 	env->DeleteLocalRef(tmpLocalRef);
 
+	tmpLocalRef = env->FindClass("java/lang/Object");
+	J_Object_toString = env->GetMethodID(tmpLocalRef, "toString", "()Ljava/lang/String;");
+	env->DeleteLocalRef(tmpLocalRef);
+
 	return JNI_VERSION;
 }
 
@@ -348,10 +355,11 @@ static Value create_value_from_bigdecimal(JNIEnv *env, jobject decimal) {
  * DuckDB is released as well.
  */
 struct ConnectionHolder {
-	const shared_ptr<duckdb::DuckDB> db;
+	const duckdb::shared_ptr<duckdb::DuckDB> db;
 	const duckdb::unique_ptr<duckdb::Connection> connection;
 
-	ConnectionHolder(shared_ptr<duckdb::DuckDB> _db) : db(_db), connection(make_uniq<duckdb::Connection>(*_db)) {
+	ConnectionHolder(duckdb::shared_ptr<duckdb::DuckDB> _db)
+	    : db(_db), connection(make_uniq<duckdb::Connection>(*_db)) {
 	}
 };
 
@@ -397,11 +405,9 @@ jobject _duckdb_jdbc_startup(JNIEnv *env, jclass, jbyteArray database_j, jboolea
 		jobject key = env->CallObjectMethod(pair, J_Entry_getKey);
 		jobject value = env->CallObjectMethod(pair, J_Entry_getValue);
 
-		D_ASSERT(env->IsInstanceOf(key, J_String));
-		const string &key_str = jstring_to_string(env, (jstring)key);
+		const string &key_str = jstring_to_string(env, (jstring)env->CallObjectMethod(key, J_Object_toString));
 
-		D_ASSERT(env->IsInstanceOf(value, J_String));
-		const string &value_str = jstring_to_string(env, (jstring)value);
+		const string &value_str = jstring_to_string(env, (jstring)env->CallObjectMethod(value, J_Object_toString));
 
 		try {
 			config.SetOptionByName(key_str, Value(value_str));
@@ -844,7 +850,15 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 	case LogicalTypeId::DOUBLE:
 		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(double));
 		break;
+	case LogicalTypeId::DATE:
+		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(date_t));
+		break;
+	case LogicalTypeId::TIME:
+		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(dtime_t));
+		break;
 	case LogicalTypeId::TIME_TZ:
+		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(dtime_tz_t));
+		break;
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP:

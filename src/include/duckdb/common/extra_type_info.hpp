@@ -50,7 +50,7 @@ public:
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 
@@ -219,7 +219,7 @@ private:
 };
 
 struct IntegerLiteralTypeInfo : public ExtraTypeInfo {
-	IntegerLiteralTypeInfo(Value constant_value);
+	explicit IntegerLiteralTypeInfo(Value constant_value);
 
 	Value constant_value;
 

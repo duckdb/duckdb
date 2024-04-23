@@ -40,6 +40,23 @@ SELECT * FROM parquet_scan('__TEST_DIR__/zstd.parquet');
 ----
 42	hello
 
+# codec lz4
+statement ok
+COPY (SELECT 42, 'hello') TO '__TEST_DIR__/lz4.parquet' (FORMAT 'parquet', CODEC 'LZ4');
+
+query II
+SELECT * FROM parquet_scan('__TEST_DIR__/lz4.parquet');
+----
+42	hello
+
+statement ok
+COPY (SELECT 42, 'hello') TO '__TEST_DIR__/lz4_raw.parquet' (FORMAT 'parquet', CODEC 'LZ4_RAW');
+
+query II
+SELECT * FROM parquet_scan('__TEST_DIR__/lz4_raw.parquet');
+----
+42	hello
+
 # unsupported codec
 statement error
 COPY (SELECT 42, 'hello') TO '__TEST_DIR__/gzip.parquet' (FORMAT 'parquet', CODEC 'BLABLABLA');

@@ -129,10 +129,14 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	case LogicalTypeId::UUID:
 	case LogicalTypeId::VARCHAR:
-		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
-			child.format = "U";
+		if (options.produce_arrow_string_view) {
+			child.format = "vu";
 		} else {
-			child.format = "u";
+			if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+				child.format = "U";
+			} else {
+				child.format = "u";
+			}
 		}
 		break;
 	case LogicalTypeId::DATE:
@@ -187,10 +191,18 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	}
 	case LogicalTypeId::LIST: {
-		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
-			child.format = "+L";
+		if (options.arrow_use_list_view) {
+			if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+				child.format = "+vL";
+			} else {
+				child.format = "+vl";
+			}
 		} else {
-			child.format = "+l";
+			if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+				child.format = "+L";
+			} else {
+				child.format = "+l";
+			}
 		}
 		child.n_children = 1;
 		root_holder.nested_children.emplace_back();
@@ -206,7 +218,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	case LogicalTypeId::STRUCT: {
 		child.format = "+s";
 		auto &child_types = StructType::GetChildTypes(type);
-		child.n_children = child_types.size();
+		child.n_children = NumericCast<int64_t>(child_types.size());
 		root_holder.nested_children.emplace_back();
 		root_holder.nested_children.back().resize(child_types.size());
 		root_holder.nested_children_ptr.emplace_back();
@@ -251,7 +263,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		std::string format = "+us:";
 
 		auto &child_types = UnionType::CopyMemberTypes(type);
-		child.n_children = child_types.size();
+		child.n_children = NumericCast<int64_t>(child_types.size());
 		root_holder.nested_children.emplace_back();
 		root_holder.nested_children.back().resize(child_types.size());
 		root_holder.nested_children_ptr.emplace_back();
@@ -323,7 +335,7 @@ void ArrowConverter::ToArrowSchema(ArrowSchema *out_schema, const vector<Logical
 		root_holder->children_ptrs[i] = &root_holder->children[i];
 	}
 	out_schema->children = root_holder->children_ptrs.data();
-	out_schema->n_children = column_count;
+	out_schema->n_children = NumericCast<int64_t>(column_count);
 
 	// Store the schema
 	out_schema->format = "+s"; // struct apparently

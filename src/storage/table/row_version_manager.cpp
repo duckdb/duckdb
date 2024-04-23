@@ -69,7 +69,7 @@ bool RowVersionManager::Fetch(TransactionData transaction, idx_t row) {
 	if (!info) {
 		return true;
 	}
-	return info->Fetch(transaction, row - vector_index * STANDARD_VECTOR_SIZE);
+	return info->Fetch(transaction, UnsafeNumericCast<row_t>(row - vector_index * STANDARD_VECTOR_SIZE));
 }
 
 void RowVersionManager::AppendVersionInfo(TransactionData transaction, idx_t count, idx_t row_group_start,
@@ -159,10 +159,10 @@ idx_t RowVersionManager::DeleteRows(idx_t vector_idx, transaction_t transaction_
 	return GetVectorInfo(vector_idx).Delete(transaction_id, rows, count);
 }
 
-void RowVersionManager::CommitDelete(idx_t vector_idx, transaction_t commit_id, row_t rows[], idx_t count) {
+void RowVersionManager::CommitDelete(idx_t vector_idx, transaction_t commit_id, const DeleteInfo &info) {
 	lock_guard<mutex> lock(version_lock);
 	has_changes = true;
-	GetVectorInfo(vector_idx).CommitDelete(commit_id, rows, count);
+	GetVectorInfo(vector_idx).CommitDelete(commit_id, info);
 }
 
 vector<MetaBlockPointer> RowVersionManager::Checkpoint(MetadataManager &manager) {
@@ -212,7 +212,7 @@ shared_ptr<RowVersionManager> RowVersionManager::Deserialize(MetaBlockPointer de
 	if (!delete_pointer.IsValid()) {
 		return nullptr;
 	}
-	auto version_info = make_shared<RowVersionManager>(start);
+	auto version_info = make_shared_ptr<RowVersionManager>(start);
 	MetadataReader source(manager, delete_pointer, &version_info->storage_pointers);
 	auto chunk_count = source.Read<idx_t>();
 	D_ASSERT(chunk_count > 0);

@@ -17,6 +17,7 @@
 #include <string>
 #include <vector>
 #ifndef DUCKDB_AMALGAMATION
+#include "duckdb/common/helper.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/constants.hpp"
@@ -47,7 +48,6 @@ struct ParquetReadBindData : public TableFunctionData {
 	shared_ptr<ParquetReader> initial_reader;
 	vector<string> files;
 	atomic<idx_t> chunk_count;
-	atomic<idx_t> cur_file;
 	vector<string> names;
 	vector<LogicalType> types;
 
@@ -96,7 +96,7 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 	bool error_opening_file = false;
 
 	//! Index of file currently up for scanning
-	idx_t file_index;
+	atomic<idx_t> file_index;
 	//! Index of row group within file currently up for scanning
 	idx_t row_group_index;
 	//! Batch index of the next row group to be scanned
@@ -130,6 +130,9 @@ struct ParquetWriteBindData : public TableFunctionData {
 
 	//! How/Whether to encrypt the data
 	shared_ptr<ParquetEncryptionConfig> encryption_config;
+
+	//! Dictionary compression is applied only if the compression ratio exceeds this threshold
+	double dictionary_compression_ratio_threshold = 1.0;
 
 	ChildFieldIDs field_ids;
 };
@@ -389,10 +392,15 @@ public:
 					// missing metadata entry in cache, no usable stats
 					return nullptr;
 				}
-				auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
-				// we need to check if the metadata cache entries are current
-				if (fs.GetLastModifiedTime(*handle) >= metadata->read_time) {
-					// missing or invalid metadata entry in cache, no usable stats overall
+				if (!fs.IsRemoteFile(file_name)) {
+					auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
+					// we need to check if the metadata cache entries are current
+					if (fs.GetLastModifiedTime(*handle) >= metadata->read_time) {
+						// missing or invalid metadata entry in cache, no usable stats overall
+						return nullptr;
+					}
+				} else {
+					// for remote files we just avoid reading stats entirely
 					return nullptr;
 				}
 				ParquetReader reader(context, bind_data.parquet_options, metadata);
@@ -484,15 +492,16 @@ public:
 	static double ParquetProgress(ClientContext &context, const FunctionData *bind_data_p,
 	                              const GlobalTableFunctionState *global_state) {
 		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
+		auto &gstate = global_state->Cast<ParquetReadGlobalState>();
 		if (bind_data.files.empty()) {
 			return 100.0;
 		}
 		if (bind_data.initial_file_cardinality == 0) {
-			return (100.0 * (bind_data.cur_file + 1)) / bind_data.files.size();
+			return (100.0 * (gstate.file_index + 1)) / bind_data.files.size();
 		}
-		auto percentage = std::min(
+		auto percentage = MinValue<double>(
 		    100.0, (bind_data.chunk_count * STANDARD_VECTOR_SIZE * 100.0 / bind_data.initial_file_cardinality));
-		return (percentage + 100.0 * bind_data.cur_file) / bind_data.files.size();
+		return (percentage + 100.0 * gstate.file_index) / bind_data.files.size();
 	}
 
 	static unique_ptr<LocalTableFunctionState>
@@ -535,7 +544,7 @@ public:
 				result->initial_reader = result->readers[0];
 			} else {
 				result->initial_reader =
-				    make_shared<ParquetReader>(context, bind_data.files[0], bind_data.parquet_options);
+				    make_shared_ptr<ParquetReader>(context, bind_data.files[0], bind_data.parquet_options);
 				result->readers[0] = result->initial_reader;
 			}
 			result->file_states[0] = ParquetFileState::OPEN;
@@ -741,7 +750,7 @@ public:
 
 				shared_ptr<ParquetReader> reader;
 				try {
-					reader = make_shared<ParquetReader>(context, file, pq_options);
+					reader = make_shared_ptr<ParquetReader>(context, file, pq_options);
 					InitializeParquetReader(*reader, bind_data, parallel_state.column_ids, parallel_state.filters,
 					                        context);
 				} catch (...) {
@@ -942,6 +951,10 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 				bind_data->codec = duckdb_parquet::format::CompressionCodec::GZIP;
 			} else if (roption == "zstd") {
 				bind_data->codec = duckdb_parquet::format::CompressionCodec::ZSTD;
+			} else if (roption == "lz4" || roption == "lz4_raw") {
+				/* LZ4 is technically another compression scheme, but deprecated and arrow also uses them
+				 * interchangeably */
+				bind_data->codec = duckdb_parquet::format::CompressionCodec::LZ4_RAW;
 			} else {
 				throw BinderException("Expected %s argument to be either [uncompressed, snappy, gzip or zstd]",
 				                      loption);
@@ -983,6 +996,15 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 			}
 		} else if (loption == "encryption_config") {
 			bind_data->encryption_config = ParquetEncryptionConfig::Create(context, option.second[0]);
+		} else if (loption == "dictionary_compression_ratio_threshold") {
+			auto val = option.second[0].GetValue<double>();
+			if (val == -1) {
+				val = NumericLimits<double>::Maximum();
+			} else if (val < 0) {
+				throw BinderException("dictionary_compression_ratio_threshold must be greater than 0, or -1 to disable "
+				                      "dictionary compression");
+			}
+			bind_data->dictionary_compression_ratio_threshold = val;
 		} else {
 			throw NotImplementedException("Unrecognized option for PARQUET: %s", option.first.c_str());
 		}
@@ -1008,9 +1030,10 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 	auto &parquet_bind = bind_data.Cast<ParquetWriteBindData>();
 
 	auto &fs = FileSystem::GetFileSystem(context);
-	global_state->writer = make_uniq<ParquetWriter>(fs, file_path, parquet_bind.sql_types, parquet_bind.column_names,
-	                                                parquet_bind.codec, parquet_bind.field_ids.Copy(),
-	                                                parquet_bind.kv_metadata, parquet_bind.encryption_config);
+	global_state->writer =
+	    make_uniq<ParquetWriter>(fs, file_path, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec,
+	                             parquet_bind.field_ids.Copy(), parquet_bind.kv_metadata,
+	                             parquet_bind.encryption_config, parquet_bind.dictionary_compression_ratio_threshold);
 	return std::move(global_state);
 }
 
@@ -1076,6 +1099,9 @@ const char *EnumUtil::ToChars<duckdb_parquet::format::CompressionCodec::type>(
 	case CompressionCodec::LZ4:
 		return "LZ4";
 		break;
+	case CompressionCodec::LZ4_RAW:
+		return "LZ4_RAW";
+		break;
 	case CompressionCodec::ZSTD:
 		return "ZSTD";
 		break;
@@ -1105,6 +1131,9 @@ EnumUtil::FromString<duckdb_parquet::format::CompressionCodec::type>(const char 
 	if (StringUtil::Equals(value, "LZ4")) {
 		return CompressionCodec::LZ4;
 	}
+	if (StringUtil::Equals(value, "LZ4_RAW")) {
+		return CompressionCodec::LZ4_RAW;
+	}
 	if (StringUtil::Equals(value, "ZSTD")) {
 		return CompressionCodec::ZSTD;
 	}
@@ -1123,6 +1152,8 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	serializer.WriteProperty(106, "field_ids", bind_data.field_ids);
 	serializer.WritePropertyWithDefault<shared_ptr<ParquetEncryptionConfig>>(107, "encryption_config",
 	                                                                         bind_data.encryption_config, nullptr);
+	serializer.WriteProperty(108, "dictionary_compression_ratio_threshold",
+	                         bind_data.dictionary_compression_ratio_threshold);
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
@@ -1136,6 +1167,8 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	data->field_ids = deserializer.ReadProperty<ChildFieldIDs>(106, "field_ids");
 	deserializer.ReadPropertyWithDefault<shared_ptr<ParquetEncryptionConfig>>(107, "encryption_config",
 	                                                                          data->encryption_config, nullptr);
+	deserializer.ReadPropertyWithDefault<double>(108, "dictionary_compression_ratio_threshold",
+	                                             data->dictionary_compression_ratio_threshold, 1.0);
 	return std::move(data);
 }
 // LCOV_EXCL_STOP

@@ -113,7 +113,6 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
                                                     GlobalOperatorState &gstate_p, OperatorState &state_p) const {
 	auto &gstate = gstate_p.Cast<StreamingWindowGlobalState>();
 	auto &state = state_p.Cast<StreamingWindowState>();
-	state.allocator.Reset();
 
 	if (!state.initialized) {
 		state.Initialize(context.client, input, select_list);
@@ -143,7 +142,7 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 				auto data = FlatVector::GetData<int64_t>(result);
 				int64_t start_row = gstate.row_number;
 				for (idx_t i = 0; i < input.size(); ++i) {
-					data[i] = start_row + i;
+					data[i] = NumericCast<int64_t>(start_row + NumericCast<int64_t>(i));
 				}
 				break;
 			}
@@ -193,7 +192,7 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 			int64_t start_row = gstate.row_number;
 			auto rdata = FlatVector::GetData<int64_t>(chunk.data[col_idx]);
 			for (idx_t i = 0; i < count; i++) {
-				rdata[i] = start_row + i;
+				rdata[i] = NumericCast<int64_t>(start_row + NumericCast<int64_t>(i));
 			}
 			break;
 		}
@@ -201,7 +200,7 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 			throw NotImplementedException("%s for StreamingWindow", ExpressionTypeToString(expr.GetExpressionType()));
 		}
 	}
-	gstate.row_number += count;
+	gstate.row_number += NumericCast<int64_t>(count);
 	chunk.SetCardinality(count);
 	return OperatorResultType::NEED_MORE_INPUT;
 }

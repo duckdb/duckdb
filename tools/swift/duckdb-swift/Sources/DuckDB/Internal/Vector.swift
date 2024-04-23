@@ -46,7 +46,7 @@ struct Vector {
   }
 }
 
-private extension Vector {
+extension Vector {
   
   func unwrapNull(at index: Int) -> Bool {
     precondition(index < count, "vector index out of bounds")
@@ -283,6 +283,9 @@ extension Vector.Element {
   func unwrap(_ type: Data.Type) throws -> Data  { try vector.unwrap(type, at: index) }
   func unwrap(_ type: Decimal.Type) throws -> Decimal  { try vector.unwrap(type, at: index) }
   func unwrap(_ type: TimeTz.Type) throws -> TimeTz { try vector.unwrap(type, at: index) }
+  func unwrapDecodable<T: Decodable>(_ type: T.Type) throws -> T {
+    try VectorElementDecoder.default.decode(T.self, element: self)
+  }
 }
 
 // MARK: - Map Contents accessors

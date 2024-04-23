@@ -31,8 +31,8 @@ struct S3AuthParams {
 	bool use_ssl = true;
 	bool s3_url_compatibility_mode = false;
 
-	static S3AuthParams ReadFrom(FileOpener *opener, FileOpenerInfo &info);
-	static unique_ptr<S3AuthParams> ReadFromStoredCredentials(FileOpener *opener, string path);
+	static S3AuthParams ReadFrom(optional_ptr<FileOpener> opener, FileOpenerInfo &info);
+	static unique_ptr<S3AuthParams> ReadFromStoredCredentials(optional_ptr<FileOpener> opener, string path);
 };
 
 struct AWSEnvironmentCredentialsProvider {
@@ -63,7 +63,7 @@ struct ParsedS3Url {
 	const string query_param;
 	const string trimmed_s3_url;
 
-	string GetHTTPUrl(S3AuthParams &auth_params, string http_query_string = "");
+	string GetHTTPUrl(S3AuthParams &auth_params, const string &http_query_string = "");
 };
 
 struct S3ConfigParams {
@@ -75,7 +75,7 @@ struct S3ConfigParams {
 	uint64_t max_parts_per_file;
 	uint64_t max_upload_threads;
 
-	static S3ConfigParams ReadFrom(FileOpener *opener);
+	static S3ConfigParams ReadFrom(optional_ptr<FileOpener> opener);
 };
 
 class S3SecretHelper {
@@ -117,14 +117,14 @@ class S3FileHandle : public HTTPFileHandle {
 	friend class S3FileSystem;
 
 public:
-	S3FileHandle(FileSystem &fs, string path_p, uint8_t flags, const HTTPParams &http_params,
+	S3FileHandle(FileSystem &fs, string path_p, FileOpenFlags flags, const HTTPParams &http_params,
 	             const S3AuthParams &auth_params_p, const S3ConfigParams &config_params_p)
 	    : HTTPFileHandle(fs, std::move(path_p), flags, http_params), auth_params(auth_params_p),
 	      config_params(config_params_p), uploads_in_progress(0), parts_uploaded(0), upload_finalized(false),
 	      uploader_has_error(false), upload_exception(nullptr) {
-		if (flags & FileFlags::FILE_FLAGS_WRITE && flags & FileFlags::FILE_FLAGS_READ) {
+		if (flags.OpenForReading() && flags.OpenForWriting()) {
 			throw NotImplementedException("Cannot open an HTTP file for both reading and writing");
-		} else if (flags & FileFlags::FILE_FLAGS_APPEND) {
+		} else if (flags.OpenForAppending()) {
 			throw NotImplementedException("Cannot open an HTTP file for appending");
 		}
 	}
@@ -135,7 +135,7 @@ public:
 
 public:
 	void Close() override;
-	void Initialize(FileOpener *opener) override;
+	void Initialize(optional_ptr<FileOpener> opener) override;
 
 	shared_ptr<S3WriteBuffer> GetBuffer(uint16_t write_buffer_idx);
 
@@ -150,6 +150,7 @@ protected:
 	//! Synchronization for upload threads
 	mutex uploads_in_progress_lock;
 	std::condition_variable uploads_in_progress_cv;
+	std::condition_variable final_flush_cv;
 	uint16_t uploads_in_progress;
 
 	//! Etags are stored for each part
@@ -178,12 +179,6 @@ class S3FileSystem : public HTTPFileSystem {
 public:
 	explicit S3FileSystem(BufferManager &buffer_manager) : buffer_manager(buffer_manager) {
 	}
-
-	// Global limits to write buffers
-	mutex buffers_available_lock;
-	std::condition_variable buffers_available_cv;
-	uint16_t buffers_in_use = 0;
-	uint16_t threads_waiting_for_memory = 0;
 
 	BufferManager &buffer_manager;
 	string GetName() const override;
@@ -234,13 +229,14 @@ public:
 	BufferHandle Allocate(idx_t part_size, uint16_t max_threads);
 
 	//! S3 is object storage so directories effectively always exist
-	bool DirectoryExists(const string &directory) override {
+	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener = nullptr) override {
 		return true;
 	}
 
 protected:
-	duckdb::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, uint8_t flags, FileLockType lock,
-	                                                FileCompressionType compression, FileOpener *opener) override;
+	static void NotifyUploadsInProgress(S3FileHandle &file_handle);
+	duckdb::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, FileOpenFlags flags,
+	                                                optional_ptr<FileOpener> opener) override;
 
 	void FlushBuffer(S3FileHandle &handle, shared_ptr<S3WriteBuffer> write_buffer);
 	string GetPayloadHash(char *buffer, idx_t buffer_len);

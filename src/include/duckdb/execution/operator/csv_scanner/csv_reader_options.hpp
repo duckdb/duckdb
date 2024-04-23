@@ -40,19 +40,19 @@ struct CSVReaderOptions {
 	//! See struct above.
 	DialectOptions dialect_options;
 	//! Whether or not we should ignore InvalidInput errors
-	bool ignore_errors = false;
-	//! Rejects table name
-	string rejects_table_name;
+	CSVOption<bool> ignore_errors = false;
+	//! Whether we store CSV Errors in the rejects table or not
+	CSVOption<bool> store_rejects = false;
+	//! Rejects table name (Name of the table the store rejects errors)
+	CSVOption<string> rejects_table_name = {"reject_errors"};
+	//! Rejects Scan name name  (Name of the table the store rejects scans)
+	CSVOption<string> rejects_scan_name = {"reject_scans"};
 	//! Rejects table entry limit (0 = no limit)
 	idx_t rejects_limit = 0;
-	//! Columns to use as recovery key for rejected rows when reading with ignore_errors = true
-	vector<string> rejects_recovery_columns;
-	//! Index of the recovery columns
-	vector<idx_t> rejects_recovery_column_ids;
 	//! Number of samples to buffer
 	idx_t buffer_sample_size = (idx_t)STANDARD_VECTOR_SIZE * 50;
-	//! Specifies the string that represents a null value
-	string null_str;
+	//! Specifies the strings that represents a null value
+	vector<string> null_str = {""};
 	//! Whether file is compressed or not, and if so which compression type
 	//! AUTO_DETECT (default; infer from file extension)
 	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
@@ -74,7 +74,8 @@ struct CSVReaderOptions {
 	                                            LogicalType::BOOLEAN, LogicalType::SQLNULL};
 	//! In case the sniffer found a mismatch error from user defined types or dialect
 	string sniffer_user_mismatch_error;
-
+	//! In case the sniffer found a mismatch error from user defined types or dialect
+	vector<bool> was_type_manually_set;
 	//===--------------------------------------------------------------------===//
 	// ReadCSVOptions
 	//===--------------------------------------------------------------------===//
@@ -83,6 +84,8 @@ struct CSVReaderOptions {
 	idx_t maximum_line_size = 2097152;
 	//! Whether or not header names shall be normalized
 	bool normalize_names = false;
+	//! True, if column with that index must skip null check
+	unordered_set<string> force_not_null_names;
 	//! True, if column with that index must skip null check
 	vector<bool> force_not_null;
 	//! Number of sample chunks used in auto-detection
@@ -106,6 +109,7 @@ struct CSVReaderOptions {
 
 	//! User defined parameters for the csv function concatenated on a string
 	string user_defined_parameters;
+
 	//===--------------------------------------------------------------------===//
 	// WriteCSVOptions
 	//===--------------------------------------------------------------------===//
@@ -119,7 +123,7 @@ struct CSVReaderOptions {
 	//! The date format to use (if any is specified)
 	map<LogicalTypeId, StrpTimeFormat> date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
 	//! The date format to use for writing (if any is specified)
-	map<LogicalTypeId, StrfTimeFormat> write_date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
+	map<LogicalTypeId, Value> write_date_format = {{LogicalTypeId::DATE, Value()}, {LogicalTypeId::TIMESTAMP, Value()}};
 	//! Whether or not a type format is specified
 	map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
 
@@ -146,7 +150,7 @@ struct CSVReaderOptions {
 	void SetNewline(const string &input);
 	//! Set an option that is supported by both reading and writing functions, called by
 	//! the SetReadOption and SetWriteOption methods
-	bool SetBaseOption(const string &loption, const Value &value);
+	bool SetBaseOption(const string &loption, const Value &value, bool write_option = false);
 
 	//! loption - lowercase string
 	//! set - argument(s) to the option
@@ -159,5 +163,18 @@ struct CSVReaderOptions {
 	                         vector<string> &names);
 
 	string ToString() const;
+	//! If the type for column with idx i was manually set
+	bool WasTypeManuallySet(idx_t i) const;
+
+	string NewLineIdentifierToString() {
+		switch (dialect_options.state_machine_options.new_line.GetValue()) {
+		case NewLineIdentifier::SINGLE:
+			return "\\n";
+		case NewLineIdentifier::CARRY_ON:
+			return "\\r\\n";
+		default:
+			return "";
+		}
+	}
 };
 } // namespace duckdb

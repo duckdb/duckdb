@@ -557,7 +557,7 @@ public class TestDuckDBJDBC {
             assertEquals(meta.getColumnCount(), 1);
             assertEquals(meta.getColumnName(1), "struct");
             assertEquals(meta.getColumnTypeName(1), "STRUCT(i INTEGER, j VARCHAR)");
-            assertEquals(meta.getColumnType(1), Types.JAVA_OBJECT);
+            assertEquals(meta.getColumnType(1), Types.STRUCT);
         }
     }
 
@@ -1698,7 +1698,7 @@ public class TestDuckDBJDBC {
         ResultSet rs = stmt.executeQuery("SELECT '5131-08-05 (BC)'::date d");
 
         assertTrue(rs.next());
-        assertNull(rs.getDate("d"));
+        assertEquals(rs.getDate("d"), Date.valueOf(LocalDate.of(-5130, 8, 5)));
 
         assertFalse(rs.next());
         rs.close();
@@ -1726,6 +1726,10 @@ public class TestDuckDBJDBC {
         Statement stmt = conn.createStatement();
         stmt.execute("CREATE TABLE a (i INTEGER)");
         stmt.execute("CREATE VIEW b AS SELECT i::STRING AS j FROM a");
+        stmt.execute("COMMENT ON TABLE a IS 'a table'");
+        stmt.execute("COMMENT ON COLUMN a.i IS 'a column'");
+        stmt.execute("COMMENT ON VIEW b IS 'a view'");
+        stmt.execute("COMMENT ON COLUMN b.j IS 'a column'");
 
         DatabaseMetaData md = conn.getMetaData();
         ResultSet rs;
@@ -1756,8 +1760,8 @@ public class TestDuckDBJDBC {
         assertEquals(rs.getString(3), "a");
         assertEquals(rs.getString("TABLE_TYPE"), "BASE TABLE");
         assertEquals(rs.getString(4), "BASE TABLE");
-        assertNull(rs.getObject("REMARKS"));
-        assertNull(rs.getObject(5));
+        assertEquals(rs.getObject("REMARKS"), "a table");
+        assertEquals(rs.getObject(5), "a table");
         assertNull(rs.getObject("TYPE_CAT"));
         assertNull(rs.getObject(6));
         assertNull(rs.getObject("TYPE_SCHEM"));
@@ -1777,8 +1781,8 @@ public class TestDuckDBJDBC {
         assertEquals(rs.getString(3), "b");
         assertEquals(rs.getString("TABLE_TYPE"), "VIEW");
         assertEquals(rs.getString(4), "VIEW");
-        assertNull(rs.getObject("REMARKS"));
-        assertNull(rs.getObject(5));
+        assertEquals(rs.getObject("REMARKS"), "a view");
+        assertEquals(rs.getObject(5), "a view");
         assertNull(rs.getObject("TYPE_CAT"));
         assertNull(rs.getObject(6));
         assertNull(rs.getObject("TYPE_SCHEM"));
@@ -1803,8 +1807,8 @@ public class TestDuckDBJDBC {
         assertEquals(rs.getString(3), "a");
         assertEquals(rs.getString("TABLE_TYPE"), "BASE TABLE");
         assertEquals(rs.getString(4), "BASE TABLE");
-        assertNull(rs.getObject("REMARKS"));
-        assertNull(rs.getObject(5));
+        assertEquals(rs.getObject("REMARKS"), "a table");
+        assertEquals(rs.getObject(5), "a table");
         assertNull(rs.getObject("TYPE_CAT"));
         assertNull(rs.getObject(6));
         assertNull(rs.getObject("TYPE_SCHEM"));
@@ -1830,6 +1834,7 @@ public class TestDuckDBJDBC {
         assertEquals(rs.getString("TABLE_NAME"), "a");
         assertEquals(rs.getString(3), "a");
         assertEquals(rs.getString("COLUMN_NAME"), "i");
+        assertEquals(rs.getString("REMARKS"), "a column");
         assertEquals(rs.getString(4), "i");
         assertEquals(rs.getInt("DATA_TYPE"), Types.INTEGER);
         assertEquals(rs.getInt(5), Types.INTEGER);
@@ -1862,6 +1867,7 @@ public class TestDuckDBJDBC {
         assertNull(rs.getObject(7));
         assertNull(rs.getObject("BUFFER_LENGTH"));
         assertNull(rs.getObject(8));
+        assertEquals(rs.getString("REMARKS"), "a column");
 
         rs.close();
 
@@ -1908,7 +1914,7 @@ public class TestDuckDBJDBC {
                 rs.next();
 
                 assertEquals(rs.getString("TYPE_NAME"), "TIME WITH TIME ZONE");
-                assertEquals(rs.getInt("DATA_TYPE"), Types.JAVA_OBJECT);
+                assertEquals(rs.getInt("DATA_TYPE"), Types.TIME_WITH_TIMEZONE);
             }
 
             s.execute(
@@ -2758,7 +2764,7 @@ public class TestDuckDBJDBC {
     }
 
     private static String blob_to_string(Blob b) throws SQLException {
-        return new String(b.getBytes(0, (int) b.length()), StandardCharsets.US_ASCII);
+        return new String(b.getBytes(1, (int) b.length()), StandardCharsets.US_ASCII);
     }
 
     public static void test_blob_bug1090() throws Exception {
@@ -3212,6 +3218,17 @@ public class TestDuckDBJDBC {
         p2.setProperty("PASSWORD", "quack");
         Connection conn2 = DriverManager.getConnection(jdbc_url, p2);
         conn2.close();
+    }
+
+    public static void test_boolean_config() throws Exception {
+        Properties config = new Properties();
+        config.put("enable_external_access", false);
+        try (Connection conn = DriverManager.getConnection(JDBC_URL, config);
+             PreparedStatement stmt = conn.prepareStatement("SELECT current_setting('enable_external_access')");
+             ResultSet rs = stmt.executeQuery()) {
+            rs.next();
+            assertEquals("false", rs.getString(1));
+        }
     }
 
     public static void test_readonly_remains_bug5593() throws Exception {
@@ -3709,8 +3726,8 @@ public class TestDuckDBJDBC {
         correct_answer_map.put("double_array",
                                trio(42.0, Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY, null, -42.0));
         correct_answer_map.put(
-            "date_array", trio(LocalDate.parse("1970-01-01"), LocalDate.parse("999999999-12-31", FORMAT_DATE),
-                               LocalDate.parse("-999999999-01-01", FORMAT_DATE), null, LocalDate.parse("2022-05-12")));
+            "date_array", trio(LocalDate.parse("1970-01-01"), LocalDate.parse("5881580-07-11", FORMAT_DATE),
+                               LocalDate.parse("-5877641-06-24", FORMAT_DATE), null, LocalDate.parse("2022-05-12")));
         correct_answer_map.put("timestamp_array", trio(Timestamp.valueOf("1970-01-01 00:00:00.0"),
                                                        DuckDBTimestamp.toSqlTimestamp(9223372036854775807L),
                                                        DuckDBTimestamp.toSqlTimestamp(-9223372036854775807L), null,
@@ -4217,6 +4234,15 @@ public class TestDuckDBJDBC {
             }
 
             assertEquals(out, "YWJj");
+        }
+    }
+
+    public static void test_fractional_time() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL);
+             PreparedStatement stmt = conn.prepareStatement("SELECT '01:02:03.123'::TIME");
+             ResultSet rs = stmt.executeQuery()) {
+            assertTrue(rs.next());
+            assertEquals(rs.getTime(1), Time.valueOf(LocalTime.of(1, 2, 3, 123)));
         }
     }
 

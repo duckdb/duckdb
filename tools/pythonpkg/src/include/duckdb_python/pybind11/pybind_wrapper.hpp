@@ -17,6 +17,7 @@
 #include <memory>
 
 PYBIND11_DECLARE_HOLDER_TYPE(T, duckdb::unique_ptr<T>)
+PYBIND11_DECLARE_HOLDER_TYPE(T, duckdb::shared_ptr<T>)
 
 namespace pybind11 {
 
@@ -76,7 +77,7 @@ template <class T>
 bool try_cast(const handle &object, T &result) {
 	try {
 		result = cast<T>(object);
-	} catch (cast_error &e) {
+	} catch (cast_error &) {
 		return false;
 	}
 	return true;

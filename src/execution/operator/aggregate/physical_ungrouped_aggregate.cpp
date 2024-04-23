@@ -12,6 +12,7 @@
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/parallel/executor_task.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
@@ -402,8 +403,8 @@ public:
 	UngroupedDistinctAggregateFinalizeTask(Executor &executor, shared_ptr<Event> event_p,
 	                                       const PhysicalUngroupedAggregate &op,
 	                                       UngroupedAggregateGlobalSinkState &state_p)
-	    : ExecutorTask(executor), event(std::move(event_p)), op(op), gstate(state_p),
-	      allocator(gstate.CreateAllocator()), aggregate_state(op.aggregates) {
+	    : ExecutorTask(executor, std::move(event_p)), op(op), gstate(state_p), allocator(gstate.CreateAllocator()),
+	      aggregate_state(op.aggregates) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
@@ -412,8 +413,6 @@ private:
 	TaskExecutionResult AggregateDistinct();
 
 private:
-	shared_ptr<Event> event;
-
 	const PhysicalUngroupedAggregate &op;
 	UngroupedAggregateGlobalSinkState &gstate;
 
@@ -455,7 +454,7 @@ void UngroupedDistinctAggregateFinalizeEvent::Schedule() {
 		global_source_states.push_back(radix_table_p.GetGlobalSourceState(context));
 	}
 	n_tasks = MaxValue<idx_t>(n_tasks, 1);
-	n_tasks = MinValue<idx_t>(n_tasks, TaskScheduler::GetScheduler(context).NumberOfThreads());
+	n_tasks = MinValue<idx_t>(n_tasks, NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads()));
 
 	vector<shared_ptr<Task>> tasks;
 	for (idx_t i = 0; i < n_tasks; i++) {
@@ -587,7 +586,7 @@ SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline
 		auto &radix_state = *distinct_state.radix_states[table_idx];
 		radix_table_p->Finalize(context, radix_state);
 	}
-	auto new_event = make_shared<UngroupedDistinctAggregateFinalizeEvent>(context, *this, gstate, pipeline);
+	auto new_event = make_shared_ptr<UngroupedDistinctAggregateFinalizeEvent>(context, *this, gstate, pipeline);
 	event.InsertEvent(std::move(new_event));
 	return SinkFinalizeType::READY;
 }

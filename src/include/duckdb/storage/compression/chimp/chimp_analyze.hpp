@@ -33,7 +33,6 @@ bool ChimpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 template <class T>
 idx_t ChimpFinalAnalyze(AnalyzeState &state) {
 	throw InternalException("Chimp has been deprecated, can no longer be used to compress data");
-	return DConstants::INVALID_INDEX;
 }
 
 } // namespace duckdb

@@ -41,44 +41,44 @@ NULL	[NULL, NULL]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
 [1]	[1]	False	True	True	False	False	True	True	False
 [1]	[1, 2]	True	True	False	True	False	False	False	True
 [1]	[1, NULL]	True	True	False	True	False	False	False	True
-[1]	[NULL]	True	True	False	True	False	False	False	True
-[1]	[NULL, 2]	True	True	False	True	False	False	False	True
-[1]	[NULL, NULL]	True	True	False	True	False	False	False	True
+[1]	[NULL]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[1]	[NULL, 2]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[1]	[NULL, NULL]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
 [1, 2]	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
 [1, 2]	[1]	False	False	False	True	True	True	False	True
 [1, 2]	[1, 2]	False	True	True	False	False	True	True	False
-[1, 2]	[1, NULL]	True	True	False	True	False	False	False	True
-[1, 2]	[NULL]	True	True	False	True	False	False	False	True
-[1, 2]	[NULL, 2]	True	True	False	True	False	False	False	True
-[1, 2]	[NULL, NULL]	True	True	False	True	False	False	False	True
+[1, 2]	[1, NULL]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[1, 2]	[NULL]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[1, 2]	[NULL, 2]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[1, 2]	[NULL, NULL]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
 [1, NULL]	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
 [1, NULL]	[1]	False	False	False	True	True	True	False	True
-[1, NULL]	[1, 2]	False	False	False	True	True	True	False	True
-[1, NULL]	[1, NULL]	False	True	True	False	False	True	True	False
-[1, NULL]	[NULL]	True	True	False	True	False	False	False	True
-[1, NULL]	[NULL, 2]	True	True	False	True	False	False	False	True
-[1, NULL]	[NULL, NULL]	True	True	False	True	False	False	False	True
+[1, NULL]	[1, 2]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[1, NULL]	[1, NULL]	NULL	NULL	NULL	NULL	NULL	NULL	True	False
+[1, NULL]	[NULL]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[1, NULL]	[NULL, 2]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[1, NULL]	[NULL, NULL]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
 [NULL]	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
-[NULL]	[1]	False	False	False	True	True	True	False	True
-[NULL]	[1, 2]	False	False	False	True	True	True	False	True
-[NULL]	[1, NULL]	False	False	False	True	True	True	False	True
-[NULL]	[NULL]	False	True	True	False	False	True	True	False
-[NULL]	[NULL, 2]	True	True	False	True	False	False	False	True
-[NULL]	[NULL, NULL]	True	True	False	True	False	False	False	True
+[NULL]	[1]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[NULL]	[1, 2]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[NULL]	[1, NULL]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[NULL]	[NULL]	NULL	NULL	NULL	NULL	NULL	NULL	True	False
+[NULL]	[NULL, 2]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[NULL]	[NULL, NULL]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
 [NULL, 2]	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
-[NULL, 2]	[1]	False	False	False	True	True	True	False	True
-[NULL, 2]	[1, 2]	False	False	False	True	True	True	False	True
-[NULL, 2]	[1, NULL]	False	False	False	True	True	True	False	True
-[NULL, 2]	[NULL]	False	False	False	True	True	True	False	True
-[NULL, 2]	[NULL, 2]	False	True	True	False	False	True	True	False
-[NULL, 2]	[NULL, NULL]	True	True	False	True	False	False	False	True
+[NULL, 2]	[1]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[NULL, 2]	[1, 2]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[NULL, 2]	[1, NULL]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[NULL, 2]	[NULL]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[NULL, 2]	[NULL, 2]	NULL	NULL	NULL	NULL	NULL	NULL	True	False
+[NULL, 2]	[NULL, NULL]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
 [NULL, NULL]	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
-[NULL, NULL]	[1]	False	False	False	True	True	True	False	True
-[NULL, NULL]	[1, 2]	False	False	False	True	True	True	False	True
-[NULL, NULL]	[1, NULL]	False	False	False	True	True	True	False	True
-[NULL, NULL]	[NULL]	False	False	False	True	True	True	False	True
-[NULL, NULL]	[NULL, 2]	False	False	False	True	True	True	False	True
-[NULL, NULL]	[NULL, NULL]	False	True	True	False	False	True	True	False
+[NULL, NULL]	[1]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[NULL, NULL]	[1, 2]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[NULL, NULL]	[1, NULL]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[NULL, NULL]	[NULL]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[NULL, NULL]	[NULL, 2]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[NULL, NULL]	[NULL, NULL]	NULL	NULL	NULL	NULL	NULL	NULL	True	False
 
 # String lists with NULLs in various positions
 statement ok
@@ -113,41 +113,41 @@ NULL	[NULL, NULL]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
 [duck]	[duck]	False	True	True	False	False	True	True	False
 [duck]	[duck, goose]	True	True	False	True	False	False	False	True
 [duck]	[duck, NULL]	True	True	False	True	False	False	False	True
-[duck]	[NULL]	True	True	False	True	False	False	False	True
-[duck]	[NULL, goose]	True	True	False	True	False	False	False	True
-[duck]	[NULL, NULL]	True	True	False	True	False	False	False	True
+[duck]	[NULL]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[duck]	[NULL, goose]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[duck]	[NULL, NULL]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
 [duck, goose]	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
 [duck, goose]	[duck]	False	False	False	True	True	True	False	True
 [duck, goose]	[duck, goose]	False	True	True	False	False	True	True	False
-[duck, goose]	[duck, NULL]	True	True	False	True	False	False	False	True
-[duck, goose]	[NULL]	True	True	False	True	False	False	False	True
-[duck, goose]	[NULL, goose]	True	True	False	True	False	False	False	True
-[duck, goose]	[NULL, NULL]	True	True	False	True	False	False	False	True
+[duck, goose]	[duck, NULL]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[duck, goose]	[NULL]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[duck, goose]	[NULL, goose]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[duck, goose]	[NULL, NULL]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
 [duck, NULL]	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
 [duck, NULL]	[duck]	False	False	False	True	True	True	False	True
-[duck, NULL]	[duck, goose]	False	False	False	True	True	True	False	True
-[duck, NULL]	[duck, NULL]	False	True	True	False	False	True	True	False
-[duck, NULL]	[NULL]	True	True	False	True	False	False	False	True
-[duck, NULL]	[NULL, goose]	True	True	False	True	False	False	False	True
-[duck, NULL]	[NULL, NULL]	True	True	False	True	False	False	False	True
+[duck, NULL]	[duck, goose]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[duck, NULL]	[duck, NULL]	NULL	NULL	NULL	NULL	NULL	NULL	True	False
+[duck, NULL]	[NULL]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[duck, NULL]	[NULL, goose]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[duck, NULL]	[NULL, NULL]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
 [NULL]	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
-[NULL]	[duck]	False	False	False	True	True	True	False	True
-[NULL]	[duck, goose]	False	False	False	True	True	True	False	True
-[NULL]	[duck, NULL]	False	False	False	True	True	True	False	True
-[NULL]	[NULL]	False	True	True	False	False	True	True	False
-[NULL]	[NULL, goose]	True	True	False	True	False	False	False	True
-[NULL]	[NULL, NULL]	True	True	False	True	False	False	False	True
+[NULL]	[duck]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[NULL]	[duck, goose]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[NULL]	[duck, NULL]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[NULL]	[NULL]	NULL	NULL	NULL	NULL	NULL	NULL	True	False
+[NULL]	[NULL, goose]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[NULL]	[NULL, NULL]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
 [NULL, goose]	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
-[NULL, goose]	[duck]	False	False	False	True	True	True	False	True
-[NULL, goose]	[duck, goose]	False	False	False	True	True	True	False	True
-[NULL, goose]	[duck, NULL]	False	False	False	True	True	True	False	True
-[NULL, goose]	[NULL]	False	False	False	True	True	True	False	True
-[NULL, goose]	[NULL, goose]	False	True	True	False	False	True	True	False
-[NULL, goose]	[NULL, NULL]	True	True	False	True	False	False	False	True
+[NULL, goose]	[duck]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[NULL, goose]	[duck, goose]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[NULL, goose]	[duck, NULL]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[NULL, goose]	[NULL]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[NULL, goose]	[NULL, goose]	NULL	NULL	NULL	NULL	NULL	NULL	True	False
+[NULL, goose]	[NULL, NULL]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
 [NULL, NULL]	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
-[NULL, NULL]	[duck]	False	False	False	True	True	True	False	True
-[NULL, NULL]	[duck, goose]	False	False	False	True	True	True	False	True
-[NULL, NULL]	[duck, NULL]	False	False	False	True	True	True	False	True
-[NULL, NULL]	[NULL]	False	False	False	True	True	True	False	True
-[NULL, NULL]	[NULL, goose]	False	False	False	True	True	True	False	True
-[NULL, NULL]	[NULL, NULL]	False	True	True	False	False	True	True	False
+[NULL, NULL]	[duck]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[NULL, NULL]	[duck, goose]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[NULL, NULL]	[duck, NULL]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[NULL, NULL]	[NULL]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[NULL, NULL]	[NULL, goose]	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+[NULL, NULL]	[NULL, NULL]	NULL	NULL	NULL	NULL	NULL	NULL	True	False

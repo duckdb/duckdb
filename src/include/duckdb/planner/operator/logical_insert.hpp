@@ -37,6 +37,8 @@ public:
 	bool return_chunk;
 	//! The default statements used by the table
 	vector<unique_ptr<Expression>> bound_defaults;
+	//! The constraints used by the table
+	vector<unique_ptr<BoundConstraint>> bound_constraints;
 
 	//! Which action to take on conflict
 	OnConflictAction action_type;
@@ -53,7 +55,7 @@ public:
 	// The types of the columns targeted by the DO UPDATE SET expressions
 	vector<LogicalType> set_types;
 	// The table_index referring to the column references qualified with 'excluded'
-	idx_t excluded_table_index;
+	idx_t excluded_table_index = 0;
 	// The columns to fetch from the 'destination' table
 	vector<column_t> columns_to_fetch;
 	// The columns to fetch from the 'source' table

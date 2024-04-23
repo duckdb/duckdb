@@ -14,7 +14,7 @@
 namespace duckdb {
 
 void MultiFileReader::AddParameters(TableFunction &table_function) {
-	table_function.named_parameters["filename"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["filename"] = LogicalType::ANY;
 	table_function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["hive_types"] = LogicalType::ANY;
@@ -65,7 +65,18 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
                                   ClientContext &context) {
 	auto loption = StringUtil::Lower(key);
 	if (loption == "filename") {
-		options.filename = BooleanValue::Get(val);
+		if (val.type() == LogicalType::VARCHAR) {
+			// If not, we interpret it as the name of the column containing the filename
+			options.filename = true;
+			options.filename_column = StringValue::Get(val);
+		} else {
+			Value boolean_value;
+			string error_message;
+			if (val.DefaultTryCastAs(LogicalType::BOOLEAN, boolean_value, &error_message)) {
+				// If the argument can be cast to boolean, we just interpret it as a boolean
+				options.filename = BooleanValue::Get(boolean_value);
+			}
+		}
 	} else if (loption == "hive_partitioning") {
 		options.hive_partitioning = BooleanValue::Get(val);
 		options.auto_detect_hive_partitioning = false;
@@ -132,12 +143,14 @@ MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &opt
 	MultiFileReaderBindData bind_data;
 	// Add generated constant column for filename
 	if (options.filename) {
-		if (std::find(names.begin(), names.end(), "filename") != names.end()) {
-			throw BinderException("Using filename option on file with column named filename is not supported");
+		if (std::find(names.begin(), names.end(), options.filename_column) != names.end()) {
+			throw BinderException("Option filename adds column \"%s\", but a column with this name is also in the "
+			                      "file. Try setting a different name: filename='<filename column name>'",
+			                      options.filename_column);
 		}
 		bind_data.filename_idx = names.size();
 		return_types.emplace_back(LogicalType::VARCHAR);
-		names.emplace_back("filename");
+		names.emplace_back(options.filename_column);
 	}
 
 	// Add generated constant columns from hive partitioning scheme
@@ -172,11 +185,11 @@ MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &opt
 		}
 
 		for (auto &part : partitions) {
-			idx_t hive_partitioning_index = DConstants::INVALID_INDEX;
+			idx_t hive_partitioning_index;
 			auto lookup = std::find(names.begin(), names.end(), part.first);
 			if (lookup != names.end()) {
 				// hive partitioning column also exists in file - override
-				auto idx = lookup - names.begin();
+				auto idx = NumericCast<idx_t>(lookup - names.begin());
 				hive_partitioning_index = idx;
 				return_types[idx] = options.GetHiveLogicalType(part.first);
 			} else {
@@ -359,7 +372,7 @@ HivePartitioningIndex::HivePartitioningIndex(string value_p, idx_t index) : valu
 }
 
 void MultiFileReaderOptions::AddBatchInfo(BindInfo &bind_info) const {
-	bind_info.InsertOption("filename", Value::BOOLEAN(filename));
+	bind_info.InsertOption("filename", Value(filename_column));
 	bind_info.InsertOption("hive_partitioning", Value::BOOLEAN(hive_partitioning));
 	bind_info.InsertOption("auto_detect_hive_partitioning", Value::BOOLEAN(auto_detect_hive_partitioning));
 	bind_info.InsertOption("union_by_name", Value::BOOLEAN(union_by_name));
@@ -421,38 +434,58 @@ bool MultiFileReaderOptions::AutoDetectHivePartitioningInternal(const vector<str
 	}
 	return true;
 }
-void MultiFileReaderOptions::AutoDetectHiveTypesInternal(const string &file, ClientContext &context) {
+void MultiFileReaderOptions::AutoDetectHiveTypesInternal(const vector<string> &files, ClientContext &context) {
+	const LogicalType candidates[] = {LogicalType::DATE, LogicalType::TIMESTAMP, LogicalType::BIGINT};
+
 	auto &fs = FileSystem::GetFileSystem(context);
 
-	std::map<string, string> partitions;
-	auto splits = StringUtil::Split(file, fs.PathSeparator(file));
-	if (splits.size() < 2) {
-		return;
-	}
-	for (auto it = splits.begin(); it != std::prev(splits.end()); it++) {
-		auto part = StringUtil::Split(*it, "=");
-		if (part.size() == 2) {
-			partitions[part.front()] = part.back();
+	unordered_map<string, LogicalType> detected_types;
+	for (auto &file : files) {
+		unordered_map<string, string> partitions;
+		auto splits = StringUtil::Split(file, fs.PathSeparator(file));
+		if (splits.size() < 2) {
+			return;
 		}
-	}
-	if (partitions.empty()) {
-		return;
-	}
-
-	const LogicalType candidates[] = {LogicalType::DATE, LogicalType::TIMESTAMP, LogicalType::BIGINT};
-	for (auto &part : partitions) {
-		const string &name = part.first;
-		if (hive_types_schema.find(name) != hive_types_schema.end()) {
-			continue;
-		}
-		Value value(part.second);
-		for (auto &candidate : candidates) {
-			const bool success = value.TryCastAs(context, candidate, true);
-			if (success) {
-				hive_types_schema[name] = candidate;
-				break;
+		for (auto it = splits.begin(); it != std::prev(splits.end()); it++) {
+			auto part = StringUtil::Split(*it, "=");
+			if (part.size() == 2) {
+				partitions[part.front()] = part.back();
 			}
 		}
+		if (partitions.empty()) {
+			return;
+		}
+
+		for (auto &part : partitions) {
+			const string &name = part.first;
+			if (hive_types_schema.find(name) != hive_types_schema.end()) {
+				// type was explicitly provided by the user
+				continue;
+			}
+			LogicalType detected_type = LogicalType::VARCHAR;
+			Value value(part.second);
+			for (auto &candidate : candidates) {
+				const bool success = value.TryCastAs(context, candidate, true);
+				if (success) {
+					detected_type = candidate;
+					break;
+				}
+			}
+			auto entry = detected_types.find(name);
+			if (entry == detected_types.end()) {
+				// type was not yet detected - insert it
+				detected_types.insert(make_pair(name, std::move(detected_type)));
+			} else {
+				// type was already detected - check if the type matches
+				// if not promote to VARCHAR
+				if (entry->second != detected_type) {
+					entry->second = LogicalType::VARCHAR;
+				}
+			}
+		}
+	}
+	for (auto &entry : detected_types) {
+		hive_types_schema.insert(make_pair(entry.first, std::move(entry.second)));
 	}
 }
 void MultiFileReaderOptions::AutoDetectHivePartitioning(const vector<string> &files, ClientContext &context) {
@@ -471,7 +504,7 @@ void MultiFileReaderOptions::AutoDetectHivePartitioning(const vector<string> &fi
 		hive_partitioning = AutoDetectHivePartitioningInternal(files, context);
 	}
 	if (hive_partitioning && hive_types_autocast) {
-		AutoDetectHiveTypesInternal(files.front(), context);
+		AutoDetectHiveTypesInternal(files, context);
 	}
 }
 void MultiFileReaderOptions::VerifyHiveTypesArePartitions(const std::map<string, string> &partitions) const {

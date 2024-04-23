@@ -32,7 +32,7 @@ template <class T>
 struct AlpCompressionState : public CompressionState {
 
 public:
-	using EXACT_TYPE = typename FloatingToExact<T>::type;
+	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 	explicit AlpCompressionState(ColumnDataCheckpointer &checkpointer, AlpAnalyzeState<T> *analyze_state)
 	    : checkpointer(checkpointer), function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_ALP)) {
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
@@ -183,10 +183,10 @@ public:
 		// Verify that the metadata_ptr is not smaller than the space used by the data
 		D_ASSERT(dataptr + metadata_offset <= metadata_ptr);
 
-		idx_t bytes_used_by_metadata = dataptr + Storage::BLOCK_SIZE - metadata_ptr;
+		auto bytes_used_by_metadata = UnsafeNumericCast<idx_t>(dataptr + Storage::BLOCK_SIZE - metadata_ptr);
 
 		// Initially the total segment size is the size of the block
-		idx_t total_segment_size = Storage::BLOCK_SIZE;
+		auto total_segment_size = Storage::BLOCK_SIZE;
 
 		//! We compact the block if the space used is less than a threshold
 		const auto used_space_percentage =

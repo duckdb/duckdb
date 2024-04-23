@@ -31,6 +31,7 @@ struct ExtensionAlias {
 struct ExtensionInitResult {
 	string filename;
 	string filebase;
+	string extension_version;
 
 	void *lib_hdl;
 };
@@ -139,6 +140,8 @@ public:
 	static string WrapAutoLoadExtensionErrorMsg(ClientContext &context, const string &base_error,
 	                                            const string &extension_name);
 	static string AddExtensionInstallHintToErrorMsg(ClientContext &context, const string &base_error,
+	                                                const string &extension_name);
+	static string AddExtensionInstallHintToErrorMsg(DBConfig &config, const string &base_error,
 	                                                const string &extension_name);
 
 	//! For tagged releases we use the tag, else we use the git commit hash

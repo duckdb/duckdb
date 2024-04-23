@@ -84,6 +84,13 @@ class TestDuckDBConnection(object):
         with pytest.raises(duckdb.CatalogException):
             dup_conn.table("tbl").fetchall()
 
+    def test_readonly_properties(self):
+        duckdb.execute("select 42")
+        description = duckdb.description()
+        rowcount = duckdb.rowcount()
+        assert description == [('42', 'NUMBER', None, None, None, None, None)]
+        assert rowcount == -1
+
     def test_execute(self):
         assert [([4, 2],)] == duckdb.execute("select [4,2]").fetchall()
 
@@ -94,6 +101,51 @@ class TestDuckDBConnection(object):
         duckdb.executemany("insert into tbl VALUES (?, ?)", [(5, 'test'), (2, 'duck'), (42, 'quack')])
         res = duckdb.table("tbl").fetchall()
         assert res == [(5, 'test'), (2, 'duck'), (42, 'quack')]
+        duckdb.execute("drop table tbl")
+
+    def test_pystatement(self):
+        with pytest.raises(duckdb.ParserException, match='seledct'):
+            statements = duckdb.extract_statements('seledct 42; select 21')
+
+        statements = duckdb.extract_statements('select $1; select 21')
+        assert len(statements) == 2
+        assert statements[0].query == 'select $1'
+        assert statements[0].type == duckdb.StatementType.SELECT
+        assert statements[0].named_parameters == set('1')
+        assert statements[0].expected_result_type == [duckdb.ExpectedResultType.QUERY_RESULT]
+
+        assert statements[1].query == ' select 21'
+        assert statements[1].type == duckdb.StatementType.SELECT
+        assert statements[1].named_parameters == set()
+
+        with pytest.raises(
+            duckdb.InvalidInputException,
+            match='Please provide either a DuckDBPyStatement or a string representing the query',
+        ):
+            rel = duckdb.query(statements)
+
+        with pytest.raises(duckdb.BinderException, match="This type of statement can't be prepared!"):
+            rel = duckdb.query(statements[0])
+
+        assert duckdb.query(statements[1]).fetchall() == [(21,)]
+        assert duckdb.execute(statements[1]).fetchall() == [(21,)]
+
+        with pytest.raises(duckdb.InvalidInputException, match='Prepared statement needs 1 parameters, 0 given'):
+            duckdb.execute(statements[0])
+        assert duckdb.execute(statements[0], {'1': 42}).fetchall() == [(42,)]
+
+        duckdb.execute("create table tbl(a integer)")
+        statements = duckdb.extract_statements('insert into tbl select $1')
+        assert statements[0].expected_result_type == [
+            duckdb.ExpectedResultType.CHANGED_ROWS,
+            duckdb.ExpectedResultType.QUERY_RESULT,
+        ]
+        with pytest.raises(
+            duckdb.InvalidInputException, match='executemany requires a non-empty list of parameter sets to be provided'
+        ):
+            duckdb.executemany(statements[0])
+        duckdb.executemany(statements[0], [(21,), (22,), (23,)])
+        assert duckdb.table('tbl').fetchall() == [(21,), (22,), (23,)]
         duckdb.execute("drop table tbl")
 
     def test_fetch_arrow_table(self):

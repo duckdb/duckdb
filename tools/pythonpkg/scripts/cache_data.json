@@ -93,6 +93,7 @@
             "datetime.date",
             "datetime.time",
             "datetime.timedelta",
+            "datetime.timezone",
             "datetime.datetime"
         ]
     },
@@ -135,7 +136,8 @@
         "name": "datetime",
         "children": [
             "datetime.datetime.min",
-            "datetime.datetime.max"
+            "datetime.datetime.max",
+            "datetime.datetime.combine"
         ]
     },
     "datetime.datetime.min": {
@@ -148,6 +150,18 @@
         "type": "attribute",
         "full_path": "datetime.datetime.max",
         "name": "max",
+        "children": []
+    },
+    "datetime.datetime.combine": {
+        "type": "attribute",
+        "full_path": "datetime.datetime.combine",
+        "name": "combine",
+        "children": []
+    },
+    "datetime.timezone": {
+        "type": "attribute",
+        "full_path": "datetime.timezone",
+        "name": "timezone",
         "children": []
     },
     "decimal": {
@@ -214,7 +228,8 @@
         "full_path": "numpy",
         "name": "numpy",
         "children": [
-			"numpy.core",
+            "numpy.core",
+            "numpy.ma",
             "numpy.ndarray",
             "numpy.datetime64",
             "numpy.generic",
@@ -251,6 +266,20 @@
         "type": "attribute",
         "full_path": "numpy.core.multiarray",
         "name": "multiarray",
+        "children": []
+    },
+    "numpy.ma": {
+        "type": "attribute",
+        "full_path": "numpy.ma",
+        "name": "ma",
+        "children": [
+            "numpy.ma.masked"
+        ]
+    },
+    "numpy.ma.masked": {
+        "type": "attribute",
+        "full_path": "numpy.ma.masked",
+        "name": "masked",
         "children": []
     },
     "numpy.ndarray": {

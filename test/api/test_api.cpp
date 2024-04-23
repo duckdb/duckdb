@@ -70,7 +70,7 @@ TEST_CASE("Test closing database during long running query", "[api]") {
 	auto conn = make_uniq<Connection>(*db);
 	// create the database
 	REQUIRE_NO_FAIL(conn->Query("CREATE TABLE integers(i INTEGER)"));
-	REQUIRE_NO_FAIL(conn->Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
+	REQUIRE_NO_FAIL(conn->Query("INSERT INTO integers FROM range(10000)"));
 	conn->DisableProfiling();
 	// perform a long running query in the background (many cross products)
 	bool correct = true;
@@ -136,6 +136,16 @@ static void parallel_query(Connection *conn, bool *correct, size_t threadnr) {
 		if (!CHECK_COLUMN(result, 0, {1, 2, 3, Value()})) {
 			correct[threadnr] = false;
 		}
+	}
+}
+
+TEST_CASE("Test temp_directory defaults", "[api][.]") {
+	const char *db_paths[] = {nullptr, "", ":memory:"};
+	for (auto &path : db_paths) {
+		auto db = make_uniq<DuckDB>(path);
+		auto conn = make_uniq<Connection>(*db);
+
+		REQUIRE(db->instance->config.options.temporary_directory == ".tmp");
 	}
 }
 

@@ -26,6 +26,7 @@ from duckdb.typing import (
     TIMESTAMP_MS,
     TIMESTAMP_NS,
     TIMESTAMP_S,
+    DuckDBPyType,
     TIME,
     TIME_TZ,
     TIMESTAMP_TZ,
@@ -196,6 +197,13 @@ class TestType(object):
         child_type = type.v2.child
         assert str(child_type) == 'MAP(BLOB, BIT)'
 
+    def test_json_type(self):
+        json_type = duckdb.type('JSON')
+
+        val = duckdb.Value('{"duck": 42}', json_type)
+        res = duckdb.execute("select typeof($1)", [val]).fetchone()
+        assert res == ('JSON',)
+
     # NOTE: we can support this, but I don't think going through hoops for an outdated version of python is worth it
     @pytest.mark.skipif(sys.version_info < (3, 9), reason="python3.7 does not store Optional[..] in a recognized way")
     def test_optional(self):
@@ -220,3 +228,9 @@ class TestType(object):
     def test_optional_310(self):
         type = duckdb.typing.DuckDBPyType(str | None)
         assert type == 'VARCHAR'
+
+    def test_children_attribute(self):
+        assert DuckDBPyType('INTEGER[]').children == [('child', DuckDBPyType('INTEGER'))]
+        assert DuckDBPyType('INTEGER[2]').children == [('child', DuckDBPyType('INTEGER')), ('size', 2)]
+        assert DuckDBPyType('INTEGER[2][3]').children == [('child', DuckDBPyType('INTEGER[2]')), ('size', 3)]
+        assert DuckDBPyType("ENUM('a', 'b', 'c')").children == [('values', ['a', 'b', 'c'])]

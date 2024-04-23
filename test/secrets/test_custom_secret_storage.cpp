@@ -91,8 +91,8 @@ TEST_CASE("Test secret lookups by secret type", "[secret][.]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE SECRET s2 (TYPE secret_type_2, SCOPE '')"));
 
 	// Note that the secrets collide completely, except for their types
-	auto res1 = con.Query("SELECT which_secret('blablabla', 'secret_type_1')");
-	auto res2 = con.Query("SELECT which_secret('blablabla', 'secret_type_2')");
+	auto res1 = con.Query("SELECT name FROM which_secret('blablabla', 'secret_type_1')");
+	auto res2 = con.Query("SELECT name FROM which_secret('blablabla', 'secret_type_2')");
 
 	// Correct secret is selected
 	REQUIRE(res1->GetValue(0, 0).ToString() == "s1");
@@ -154,14 +154,14 @@ TEST_CASE("Test adding a custom secret storage", "[secret][.]") {
 	REQUIRE(secret_ptr->secret->GetName() == "s2");
 
 	// Now try resolve secret by path -> this will return s1 because its scope matches best
-	auto which_secret_result = con.Query("SELECT which_secret('s3://foo/bar.csv', 's3');");
+	auto which_secret_result = con.Query("SELECT name FROM which_secret('s3://foo/bar.csv', 'S3');");
 	REQUIRE(which_secret_result->GetValue(0, 0).ToString() == "s1");
 
 	// Exclude the storage from lookups
 	storage_ref.include_in_lookups = false;
 
 	// Now the lookup will choose the other storage
-	which_secret_result = con.Query("SELECT which_secret('s3://foo/bar.csv', 's3');");
+	which_secret_result = con.Query("SELECT name FROM which_secret('s3://foo/bar.csv', 's3');");
 	REQUIRE(which_secret_result->GetValue(0, 0).ToString() == "s2");
 
 	// Lets drop stuff now
@@ -222,17 +222,17 @@ TEST_CASE("Test tie-break behaviour for custom secret storage", "[secret][.]") {
 	REQUIRE(result->GetValue(0, 2).ToString() == "s3");
 	REQUIRE(result->GetValue(1, 2).ToString() == "test_storage_before");
 
-	result = con.Query("SELECT which_secret('s3://', 's3');");
+	result = con.Query("SELECT name FROM which_secret('s3://', 's3');");
 	REQUIRE(result->GetValue(0, 0).ToString() == "s3");
 
 	REQUIRE_NO_FAIL(con.Query("DROP SECRET s3"));
 
-	result = con.Query("SELECT which_secret('s3://', 's3');");
+	result = con.Query("SELECT name FROM which_secret('s3://', 's3');");
 	REQUIRE(result->GetValue(0, 0).ToString() == "s1");
 
 	REQUIRE_NO_FAIL(con.Query("DROP SECRET s1"));
 
-	result = con.Query("SELECT which_secret('s3://', 's3');");
+	result = con.Query("SELECT name FROM which_secret('s3://', 's3');");
 	REQUIRE(result->GetValue(0, 0).ToString() == "s2");
 
 	REQUIRE_NO_FAIL(con.Query("DROP SECRET s2"));

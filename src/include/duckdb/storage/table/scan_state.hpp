@@ -44,7 +44,7 @@ struct SegmentScanState {
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -60,7 +60,7 @@ struct IndexScanState {
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -84,10 +84,6 @@ struct ColumnScanState {
 	bool initialized = false;
 	//! If this segment has already been checked for skipping purposes
 	bool segment_checked = false;
-	//! The version of the column data that we are scanning.
-	//! This is used to detect if the ColumnData has been changed out from under us during a scan
-	//! If this is the case, we re-initialize the scan
-	idx_t version = 0;
 	//! We initialize one SegmentScanState per segment, however, if scanning a DataChunk requires us to scan over more
 	//! than one Segment, we need to keep the scan states of the previous segments around
 	vector<unique_ptr<SegmentScanState>> previous_states;
@@ -115,7 +111,7 @@ struct ColumnFetchState {
 
 class CollectionScanState {
 public:
-	CollectionScanState(TableScanState &parent_p);
+	explicit CollectionScanState(TableScanState &parent_p);
 
 	//! The current row_group we are scanning
 	RowGroup *row_group;

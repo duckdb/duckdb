@@ -33,8 +33,8 @@ static void ExecuteMakeDate(DataChunk &input, ExpressionState &state, Vector &re
 template <typename T>
 static date_t FromDateCast(T year, T month, T day) {
 	date_t result;
-	if (!Date::TryFromDate(UnsafeNumericCast<int32_t>(year), UnsafeNumericCast<int32_t>(month),
-	                       UnsafeNumericCast<int32_t>(day), result)) {
+	if (!Date::TryFromDate(Cast::Operation<T, int32_t>(year), Cast::Operation<T, int32_t>(month),
+	                       Cast::Operation<T, int32_t>(day), result)) {
 		throw ConversionException("Date out of range: %d-%d-%d", year, month, day);
 	}
 	return result;
