@@ -78,6 +78,7 @@ benchmark/micro/copy/to_parquet_partition_by_few.benchmark
 benchmark/micro/copy/to_parquet_partition_by_many.benchmark
 benchmark/micro/csv/16_byte_values.benchmark
 benchmark/micro/csv/1_byte_values.benchmark
+benchmark/micro/csv/ignore_errors.benchmark
 benchmark/micro/csv/multiple_read.benchmark
 benchmark/micro/csv/multiple_small_files.benchmark
 benchmark/micro/csv/multiple_small_read_csv.benchmark
