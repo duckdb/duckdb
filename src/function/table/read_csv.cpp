@@ -115,8 +115,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	D_ASSERT(return_types.size() == names.size());
 	result->options.dialect_options.num_cols = names.size();
 	if (options.file_options.union_by_name) {
-		result->reader_bind =
-		    MultiFileReader::BindUnionReader<CSVFileScan>(context, *result->multi_file_reader, return_types, names, *mfl, *result, options);
+		result->reader_bind = result->multi_file_reader->BindUnionReader<CSVFileScan>(context, return_types, names, *mfl, *result, options);
 		if (result->union_readers.size() > 1) {
 			result->column_info.emplace_back(result->initial_reader->names, result->initial_reader->types);
 			for (idx_t i = 1; i < result->union_readers.size(); i++) {

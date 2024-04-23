@@ -214,7 +214,7 @@ static void InitializeParquetReader(ParquetReader &reader, const ParquetReadBind
 	auto &parquet_options = bind_data.parquet_options;
 	auto &reader_data = reader.reader_data;
 	if (bind_data.parquet_options.schema.empty()) {
-		MultiFileReader::InitializeReader(*bind_data.multi_file_reader, reader, parquet_options.file_options, bind_data.reader_bind, bind_data.types,
+        bind_data.multi_file_reader->InitializeReader(reader, parquet_options.file_options, bind_data.reader_bind, bind_data.types,
 		                                  bind_data.names, global_column_ids, table_filters, bind_data.files->GetFile(0),
 		                                  context);
 		return;
@@ -450,9 +450,8 @@ public:
             // a schema was supplied
             result->reader_bind = BindSchema(context, result->types, result->names, *result, parquet_options);
         } else {
-            result->reader_bind = MultiFileReader::BindReader<ParquetReader>(
+            result->reader_bind = result->multi_file_reader->BindReader<ParquetReader>(
                     context,
-                    *result->multi_file_reader,
                     result->types,
                     result->names,
                     *result->files,
