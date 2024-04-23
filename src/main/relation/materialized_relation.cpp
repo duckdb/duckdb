@@ -7,11 +7,11 @@
 
 namespace duckdb {
 
-MaterializedRelation::MaterializedRelation(const shared_ptr<ClientContext> &context, ColumnDataCollection &collection_p,
+MaterializedRelation::MaterializedRelation(const shared_ptr<ClientContext> &context, unique_ptr<ColumnDataCollection> &&collection_p,
                                            vector<string> names, string alias_p)
-    : Relation(context, RelationType::MATERIALIZED_RELATION), collection(collection_p), alias(std::move(alias_p)) {
+    : Relation(context, RelationType::MATERIALIZED_RELATION), collection(std::move(collection_p)), alias(std::move(alias_p)) {
 	// create constant expressions for the values
-	auto types = collection.Types();
+	auto types = collection->Types();
 	D_ASSERT(types.size() == names.size());
 
 	QueryResult::DeduplicateColumns(names);
@@ -31,32 +31,13 @@ unique_ptr<QueryNode> MaterializedRelation::GetQueryNode() {
 }
 
 unique_ptr<TableRef> MaterializedRelation::GetTableRef() {
-	auto table_ref = make_uniq<ColumnDataRef>(collection);
+	auto table_ref = make_uniq<ColumnDataRef>(*collection);
 	for (auto &col : columns) {
 		table_ref->expected_names.push_back(col.Name());
 	}
 	table_ref->alias = GetAlias();
 	return std::move(table_ref);
 }
-
-// BoundStatement MaterializedRelation::Bind(Binder &binder) {
-//	auto return_types = collection.Types();
-//	vector<string> names;
-
-//	for (auto &col : columns) {
-//		names.push_back(col.Name());
-//	}
-//	auto to_scan = make_uniq<ColumnDataCollection>(collection);
-//	auto logical_get = make_uniq_base<LogicalOperator, LogicalColumnDataGet>(binder.GenerateTableIndex(), return_types,
-// std::move(to_scan));
-//	// FIXME: add Binding???
-
-//	BoundStatement result;
-//	result.plan = std::move(logical_get);
-//	result.types = std::move(return_types);
-//	result.names = std::move(names);
-//	return result;
-//}
 
 string MaterializedRelation::GetAlias() {
 	return alias;
@@ -67,7 +48,7 @@ const vector<ColumnDefinition> &MaterializedRelation::Columns() {
 }
 
 string MaterializedRelation::ToString(idx_t depth) {
-	return collection.ToString();
+	return collection->ToString();
 }
 
 } // namespace duckdb

@@ -170,9 +170,11 @@
       {
         "id": 202,
         "name": "owned_collection",
-        "type": "ColumnDataCollection*"
+        "type": "ColumnDataCollection*",
+        "serialize_property": "&collection"
       }
-    ]
+    ],
+    "constructor": ["expected_names", "owned_collection"]
   },
   {
     "class": "PivotRef",

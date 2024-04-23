@@ -18,13 +18,17 @@ public:
 	static constexpr const TableReferenceType TYPE = TableReferenceType::COLUMN_DATA;
 
 public:
-	ColumnDataRef() : TableRef(TableReferenceType::COLUMN_DATA) {
-	}
 	ColumnDataRef(ColumnDataCollection &collection)
-	    : TableRef(TableReferenceType::COLUMN_DATA), collection(collection) {
+	    : TableRef(TableReferenceType::COLUMN_DATA), owned_collection(nullptr), collection(collection) {
+	}
+	ColumnDataRef(vector<string> expected_names, unique_ptr<ColumnDataCollection> owned_collection_p)
+	    : TableRef(TableReferenceType::COLUMN_DATA), owned_collection(std::move(owned_collection_p)),
+	      collection(*owned_collection), expected_names(expected_names) {
 	}
 
 public:
+	//! (optional) The owned materialized column data
+	unique_ptr<ColumnDataCollection> owned_collection;
 	//! The materialized column data
 	ColumnDataCollection &collection;
 	//! The set of expected names

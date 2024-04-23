@@ -247,7 +247,8 @@
       {
         "id": 202,
         "name": "collection",
-        "type": "ColumnDataCollection*"
+        "type": "ColumnDataCollection*",
+        "serialize_property": "&to_scan"
       }
     ],
     "constructor": ["table_index", "chunk_types", "collection"]
@@ -544,7 +545,7 @@
         "id": 200,
         "name": "table_info",
         "type": "CreateInfo*",
-        "serialize_property": "table.GetInfo()"
+        "serialize_property": "table.GetInfo().get()"
       },
       {
         "id": 201,
@@ -643,7 +644,7 @@
         "id": 200,
         "name": "table_info",
         "type": "CreateInfo*",
-        "serialize_property": "table.GetInfo()"
+        "serialize_property": "table.GetInfo().get()"
       },
       {
         "id": 201,
@@ -672,7 +673,7 @@
         "id": 200,
         "name": "table_info",
         "type": "CreateInfo*",
-        "serialize_property": "table.GetInfo()"
+        "serialize_property": "table.GetInfo().get()"
       },
       {
         "id": 201,
@@ -716,7 +717,7 @@
         "id": 200,
         "name": "info",
         "type": "CreateInfo*",
-        "serialize_property": "info->base"
+        "serialize_property": "info->base.get()"
       }
     ],
     "constructor": ["$ClientContext", "info"]
