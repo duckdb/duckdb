@@ -242,8 +242,9 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 		D_ASSERT(return_types.size() == names.size());
 	}
 
-	bind_data->reader_bind =
-	    MultiFileReader::BindOptions(bind_data->options.file_options, bind_data->files, return_types, names);
+	SimpleMultiFileList file_list(std::move(bind_data->files));
+	MultiFileReader().BindOptions(bind_data->options.file_options, file_list , return_types, names, bind_data->reader_bind);
+	bind_data->files = file_list.ToStringVector();
 
 	auto &transform_options = bind_data->transform_options;
 	transform_options.strict_cast = !bind_data->ignore_errors;
@@ -310,7 +311,8 @@ static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p,
 	}
 
 	if (output.size() != 0) {
-		MultiFileReader::FinalizeChunk(gstate.bind_data.reader_bind, lstate.GetReaderData(), output);
+		// TODO: pass current file
+		MultiFileReader().FinalizeChunk(context, gstate.bind_data.reader_bind, lstate.GetReaderData(), output, "");
 	}
 }
 
@@ -343,7 +345,7 @@ TableFunctionSet CreateJSONFunctionInfo(string name, shared_ptr<JSONScanInfo> in
 	table_function.named_parameters["maximum_depth"] = LogicalType::BIGINT;
 	table_function.named_parameters["field_appearance_threshold"] = LogicalType::DOUBLE;
 	table_function.named_parameters["convert_strings_to_integers"] = LogicalType::BOOLEAN;
-	return MultiFileReader::CreateFunctionSet(table_function);
+	return MultiFileReader().CreateFunctionSet(table_function);
 }
 
 TableFunctionSet JSONFunctions::GetReadJSONFunction() {

@@ -65,9 +65,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	auto result = make_uniq<ReadCSVData>();
 	auto &options = result->options;
 	MultiFileReader multi_file_reader;
-	// TODO: make the CSV reader use MultiFileList instead of vector<string> for passing the file list
 	auto multi_file_list = multi_file_reader.GetFileList(context, input.inputs[0], "CSV");
-	result->files = multi_file_list->GetAllExpandedFiles();
 
 	options.FromNamedParameters(input.named_parameters, context, return_types, names);
 
@@ -100,8 +98,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		                      "AUTO_DETECT=TRUE) to automatically guess columns.");
 	}
 	if (options.auto_detect && !options.file_options.union_by_name) {
-		options.file_path = result->files[0];
-		result->buffer_manager = make_shared<CSVBufferManager>(context, options, result->files[0], 0);
+		options.file_path = multi_file_list->GetFile(0);
+		result->buffer_manager = make_shared<CSVBufferManager>(context, options, multi_file_list->GetFile(0), 0);
 		CSVSniffer sniffer(options, result->buffer_manager, CSVStateMachineCache::Get(context),
 		                   {&return_types, &names});
 		auto sniffer_result = sniffer.SniffCSV();
@@ -145,6 +143,9 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	}
 	result->return_types = return_types;
 	result->return_names = names;
+
+	// TODO: make the CSV reader use MultiFileList throughout, instead of converting to vector<string>
+	result->files = multi_file_list->ToStringVector();
 
 	result->FinalizeRead(context);
 	return std::move(result);
@@ -296,7 +297,7 @@ void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionD
 	if (reset_reader) {
 		MultiFileReader::PruneReaders(data, file_list);
 	}
-	data.files = file_list.GetAllExpandedFiles();
+	data.files = file_list.ToStringVector();
 }
 
 unique_ptr<NodeStatistics> CSVReaderCardinality(ClientContext &context, const FunctionData *bind_data_p) {

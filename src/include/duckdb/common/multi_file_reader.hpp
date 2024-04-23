@@ -49,8 +49,9 @@ struct MultiFileReaderBindData {
 	//! The index of the file_row_number column (if any)
 	idx_t file_row_number_idx = DConstants::INVALID_INDEX;
 
-	//! Overridable data for custom multifilereader implementations
-	unique_ptr<CustomMultiFileReaderBindData> custom_data;
+	//
+//	//! Overridable data for custom multifilereader implementations
+//	unique_ptr<CustomMultiFileReaderBindData> custom_data;
 
 	DUCKDB_API void Serialize(Serializer &serializer) const;
 	DUCKDB_API static MultiFileReaderBindData Deserialize(Deserializer &deserializer);
@@ -91,35 +92,70 @@ struct MultiFileReaderData {
 	unordered_map<column_t, LogicalType> cast_map;
 };
 
+
 //! Base class for a multi-file list that can be lazily generated
-struct MultiFileList {
+
+// What do I need? Two Interfaces:
+// - one to materialize the file internally and just have it be a file list
+// - on to incrementally fetch the files efficiently
+
+// Requirements:
+// - no unnecessary copies
+// - intuitive interface for materializing non-materializing access
+// -
+class MultiFileList {
+public:
+	MultiFileList();
 	virtual ~MultiFileList();
-	//! Get the file at index i. First(!) access to an index is only allowed sequentially, subsequent accesses can be
-	//! random
-	//! TODO: Should we just make a PopFile and only allow GetAllExpandedFiles for indexed access?
+	//! Construct the MultiFileList with a set of preexpanded files
+	explicit MultiFileList(vector<string> files);
+
+	//! Abstract Interface for subclasses
+
+	//! Get the file at index i. Note that i MUST be <= GetCurrentSize(). TODO: make API not require copy?
 	virtual string GetFile(idx_t i) = 0;
-	//! Returns the path(s) that make up this MultiFileList
-	virtual const vector<string> GetPaths() = 0;
-	//! Get the full list of files. Use this sparingly as materializing a file list may be expensive. Also, calling this
-	//! before ComplexFilterPushdown has been called may result in a suboptimally large list.
-	virtual vector<string> GetAllExpandedFiles();
-	//! (optional) Push down filters into the MultiFileList; sometimes the filters can be used to skip files completely
+	//! Returns the source path(s) (the paths that are used to drive generation of the file list)
+	//! TODO: currently we are sortof assuming this to play ball with existing serialization code by assuming that a
+	//!       MultiFileList can always be reconstructed from a vector of paths. Is this assumption valid?
+	virtual vector<string> GetPaths() = 0;
+
+	//! Interface for usage of MultiFileList objects
+
+	//! Returns the current size of the expanded size
+	virtual idx_t GetCurrentSize();
+	//! Completely expands the list, allowing fast access to it and final size determination. Should only be used sparingly
+	virtual void ExpandAll();
+	//! Calls ExpandAll() and returns the resulting size
+	virtual idx_t GetTotalFileCount();
+	//! Calls ExpandAll() and returns the resulting size
+	virtual const vector<string> &GetAllFiles();
+
+	//! Push down filters into the MultiFileList; sometimes the filters can be used to skip files completely
 	virtual bool ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
 	                                   vector<unique_ptr<Expression>> &filters);
+
+	//! Note: comparison is currently only possible if both sides are fully expanded
+	bool operator== (const MultiFileList &other) const;
+
+	//! Moves the vector out of the MultiFileList, caller is responsible to not use the MultiFileListAfter this
+	//! DEPRECATED: should be removed once all DuckDB code can properly handle MultiFileLists
+	vector<string> ToStringVector();
+protected:
+	//! The generated files
+	vector<string> expanded_files;
+	bool fully_expanded = false;
 };
 
-// TODO: prevent the unnecessary copy that comes where code uses the placeholder variant of this.
-//! Simplest implementation of a MultiFilelist with a list of files.
-struct SimpleMultiFileList : public MultiFileList {
+//! Simplest implementation of a MultiFileList which is fully expanded on creation
+class SimpleMultiFileList : public MultiFileList {
+public:
 	explicit SimpleMultiFileList(vector<string> files);
-	vector<string> GetAllExpandedFiles() override;
+
 	string GetFile(idx_t i) override;
 	bool ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
 	                           vector<unique_ptr<Expression>> &filters) override;
-	const vector<string> GetPaths() override;
-
-protected:
-	vector<string> files;
+	vector<string> GetPaths() override;
+	void ExpandAll() override;
 };
 
 //! The MultiFileReader class provides a set of helper methods to handle scanning from multiple files such as:
@@ -197,7 +233,7 @@ struct MultiFileReader {
 		// obtain the set of union column names + types by unifying the types of all of the files
 		// note that this requires opening readers for each file and reading the metadata of each file
 		// note also that it requires fully expanding the MultiFileList
-		auto materialized_file_list = files.GetAllExpandedFiles();
+		auto materialized_file_list = files.GetAllFiles();
 		auto union_readers = UnionByName::UnionCols<READER_CLASS>(context, materialized_file_list, union_col_types,
 		                                                          union_col_names, options);
 

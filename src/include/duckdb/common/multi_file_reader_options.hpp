@@ -15,7 +15,7 @@
 
 namespace duckdb {
 struct BindInfo;
-struct MultiFileList;
+class MultiFileList;
 
 struct MultiFileReaderOptions {
 	bool filename = false;

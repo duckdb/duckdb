@@ -14,7 +14,20 @@
 
 namespace duckdb {
 
+MultiFileList::MultiFileList() : expanded_files(), fully_expanded(false){
+}
+
+MultiFileList::MultiFileList(vector<string> files) : expanded_files(std::move(files)), fully_expanded(false) {
+}
+
 MultiFileList::~MultiFileList() {
+}
+
+bool MultiFileList::operator==(const MultiFileList &other) const {
+	if (!fully_expanded || !other.fully_expanded) {
+		throw InternalException("Attempted to compare non-fully-expanded MultiFileLists");
+	}
+	return expanded_files == other.expanded_files;
 }
 
 bool MultiFileList::ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options,
@@ -23,37 +36,65 @@ bool MultiFileList::ComplexFilterPushdown(ClientContext &context, const MultiFil
 	return false;
 }
 
-vector<string> MultiFileList::GetAllExpandedFiles() {
-	vector<string> result;
-	idx_t i = 0;
+idx_t MultiFileList::GetCurrentSize() {
+	return expanded_files.size();
+}
+
+void MultiFileList::ExpandAll() {
+	if (fully_expanded) {
+		return;
+	}
+
+	idx_t i = expanded_files.size();
 	while (true) {
 		auto next_file = GetFile(i++);
-
 		if (next_file.empty()) {
 			break;
 		}
-		result.push_back(next_file);
+		expanded_files[i] = next_file;
 	}
-	return result;
 }
 
-SimpleMultiFileList::SimpleMultiFileList(vector<string> files) : files(files) {
+idx_t MultiFileList::GetTotalFileCount() {
+	if (!fully_expanded) {
+		ExpandAll();
+	}
+	return expanded_files.size();
 }
 
-vector<string> SimpleMultiFileList::GetAllExpandedFiles() {
-	return files;
+const vector<string> &MultiFileList::GetAllFiles() {
+	if (!fully_expanded) {
+		ExpandAll();
+	}
+	return expanded_files;
+}
+
+vector<string> MultiFileList::ToStringVector() {
+	if (!fully_expanded) {
+		ExpandAll();
+	}
+	return std::move(expanded_files);
+}
+
+SimpleMultiFileList::SimpleMultiFileList(vector<string> files) : MultiFileList() {
+	expanded_files = std::move(files);
+	fully_expanded = true;
+}
+
+vector<string> SimpleMultiFileList::GetPaths() {
+	return expanded_files;
 }
 
 string SimpleMultiFileList::GetFile(idx_t i) {
-	if (files.size() <= i) {
+	if (expanded_files.size() <= i) {
 		return "";
 	}
-	return files[i];
+	return expanded_files[i];
 }
 
 bool SimpleMultiFileList::ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options,
                                                 LogicalGet &get, vector<unique_ptr<Expression>> &filters) {
-	if (files.empty()) {
+	if (expanded_files.empty()) {
 		return false;
 	}
 
@@ -68,19 +109,19 @@ bool SimpleMultiFileList::ComplexFilterPushdown(ClientContext &context, const Mu
 		}
 	}
 
-	auto start_files = files.size();
-	HivePartitioning::ApplyFiltersToFileList(context, files, filters, column_map, get, options.hive_partitioning,
+	auto start_files = expanded_files.size();
+	HivePartitioning::ApplyFiltersToFileList(context, expanded_files, filters, column_map, get, options.hive_partitioning,
 	                                         options.filename);
 
-	if (files.size() != start_files) {
+	if (expanded_files.size() != start_files) {
 		return true;
 	}
 
 	return false;
 }
 
-const vector<string> SimpleMultiFileList::GetPaths() {
-	return files;
+void SimpleMultiFileList::ExpandAll() {
+    // Is a NOP: a SimpleMultiFileList is fully expanded on creation
 }
 
 CustomMultiFileReaderBindData::~CustomMultiFileReaderBindData() {
@@ -203,28 +244,32 @@ void MultiFileReader::BindOptions(MultiFileReaderOptions &options, MultiFileList
 
 	// Add generated constant columns from hive partitioning scheme
 	if (options.hive_partitioning) {
-		auto file_list = files.GetAllExpandedFiles(); // TODO: don't load the full list here
-		D_ASSERT(!file_list.empty());
-		auto partitions = HivePartitioning::Parse(file_list[0]);
+		D_ASSERT(!files.GetFile(0).empty());
+		auto partitions = HivePartitioning::Parse(files.GetFile(0));
 		// verify that all files have the same hive partitioning scheme
-		for (auto &f : file_list) {
+		idx_t i = 0;
+		while (true) {
+			auto f = files.GetFile(i++);
+			if (f.empty()) {
+				break;
+			}
 			auto file_partitions = HivePartitioning::Parse(f);
 			for (auto &part_info : partitions) {
 				if (file_partitions.find(part_info.first) == file_partitions.end()) {
 					string error = "Hive partition mismatch between file \"%s\" and \"%s\": key \"%s\" not found";
 					if (options.auto_detect_hive_partitioning == true) {
-						throw InternalException(error + "(hive partitioning was autodetected)", file_list[0], f,
+						throw InternalException(error + "(hive partitioning was autodetected)", files.GetFile(0), f,
 						                        part_info.first);
 					}
-					throw BinderException(error.c_str(), file_list[0], f, part_info.first);
+					throw BinderException(error.c_str(), files.GetFile(0), f, part_info.first);
 				}
 			}
 			if (partitions.size() != file_partitions.size()) {
 				string error_msg = "Hive partition mismatch between file \"%s\" and \"%s\"";
 				if (options.auto_detect_hive_partitioning == true) {
-					throw InternalException(error_msg + "(hive partitioning was autodetected)", file_list[0], f);
+					throw InternalException(error_msg + "(hive partitioning was autodetected)", files.GetFile(0), f);
 				}
-				throw BinderException(error_msg.c_str(), file_list[0], f);
+				throw BinderException(error_msg.c_str(), files.GetFile(0), f);
 			}
 		}
 

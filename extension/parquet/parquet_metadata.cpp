@@ -15,12 +15,12 @@ namespace duckdb {
 
 struct ParquetMetaDataBindData : public TableFunctionData {
 	vector<LogicalType> return_types;
-	vector<string> files;
+	unique_ptr<MultiFileList> file_list;
 
 public:
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<ParquetMetaDataBindData>();
-		return other.return_types == return_types && files == other.files;
+		return other.return_types == return_types && file_list == other.file_list;
 	}
 };
 
@@ -589,28 +589,28 @@ unique_ptr<FunctionData> ParquetMetaDataBind(ClientContext &context, TableFuncti
 	auto result = make_uniq<ParquetMetaDataBindData>();
 	result->return_types = return_types;
 	MultiFileReader mfr;
-	result->files = mfr.GetFileList(context, input.inputs[0], "Parquet")->GetAllExpandedFiles();
+	result->file_list = mfr.GetFileList(context, input.inputs[0], "Parquet");
 	return std::move(result);
 }
 
 template <ParquetMetadataOperatorType TYPE>
 unique_ptr<GlobalTableFunctionState> ParquetMetaDataInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->Cast<ParquetMetaDataBindData>();
-	D_ASSERT(!bind_data.files.empty());
+	D_ASSERT(bind_data.file_list->GetTotalFileCount() > 0);
 
 	auto result = make_uniq<ParquetMetaDataOperatorData>(context, bind_data.return_types);
 	switch (TYPE) {
 	case ParquetMetadataOperatorType::SCHEMA:
-		result->LoadSchemaData(context, bind_data.return_types, bind_data.files[0]);
+		result->LoadSchemaData(context, bind_data.return_types, bind_data.file_list->GetFile(0));
 		break;
 	case ParquetMetadataOperatorType::META_DATA:
-		result->LoadRowGroupMetadata(context, bind_data.return_types, bind_data.files[0]);
+		result->LoadRowGroupMetadata(context, bind_data.return_types, bind_data.file_list->GetFile(0));
 		break;
 	case ParquetMetadataOperatorType::KEY_VALUE_META_DATA:
-		result->LoadKeyValueMetaData(context, bind_data.return_types, bind_data.files[0]);
+		result->LoadKeyValueMetaData(context, bind_data.return_types, bind_data.file_list->GetFile(0));
 		break;
 	case ParquetMetadataOperatorType::FILE_META_DATA:
-		result->LoadFileMetaData(context, bind_data.return_types, bind_data.files[0]);
+		result->LoadFileMetaData(context, bind_data.return_types, bind_data.file_list->GetFile(0));
 		break;
 	default:
 		throw InternalException("Unsupported ParquetMetadataOperatorType");
@@ -626,21 +626,21 @@ void ParquetMetaDataImplementation(ClientContext &context, TableFunctionInput &d
 
 	while (true) {
 		if (!data.collection.Scan(data.scan_state, output)) {
-			if (data.file_index + 1 < bind_data.files.size()) {
+			if (data.file_index + 1 < bind_data.file_list->GetTotalFileCount()) {
 				// load the metadata for the next file
 				data.file_index++;
 				switch (TYPE) {
 				case ParquetMetadataOperatorType::SCHEMA:
-					data.LoadSchemaData(context, bind_data.return_types, bind_data.files[data.file_index]);
+					data.LoadSchemaData(context, bind_data.return_types, bind_data.file_list->GetFile(data.file_index));
 					break;
 				case ParquetMetadataOperatorType::META_DATA:
-					data.LoadRowGroupMetadata(context, bind_data.return_types, bind_data.files[data.file_index]);
+					data.LoadRowGroupMetadata(context, bind_data.return_types, bind_data.file_list->GetFile(data.file_index));
 					break;
 				case ParquetMetadataOperatorType::KEY_VALUE_META_DATA:
-					data.LoadKeyValueMetaData(context, bind_data.return_types, bind_data.files[data.file_index]);
+					data.LoadKeyValueMetaData(context, bind_data.return_types, bind_data.file_list->GetFile(data.file_index));
 					break;
 				case ParquetMetadataOperatorType::FILE_META_DATA:
-					data.LoadFileMetaData(context, bind_data.return_types, bind_data.files[data.file_index]);
+					data.LoadFileMetaData(context, bind_data.return_types, bind_data.file_list->GetFile(data.file_index));
 					break;
 				default:
 					throw InternalException("Unsupported ParquetMetadataOperatorType");

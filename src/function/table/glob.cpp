@@ -8,15 +8,13 @@
 namespace duckdb {
 
 struct GlobFunctionBindData : public TableFunctionData {
-	vector<string> files;
+	unique_ptr<MultiFileList> files;
 };
 
 static unique_ptr<FunctionData> GlobFunctionBind(ClientContext &context, TableFunctionBindInput &input,
                                                  vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_uniq<GlobFunctionBindData>();
-	result->files = MultiFileReader()
-	                    .GetFileList(context, input.inputs[0], "Globbing", FileGlobOptions::ALLOW_EMPTY)
-	                    ->GetAllExpandedFiles();
+	result->files = MultiFileReader().GetFileList(context, input.inputs[0], "Globbing", FileGlobOptions::ALLOW_EMPTY);
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("file");
 	return std::move(result);
@@ -38,9 +36,9 @@ static void GlobFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 	auto &state = data_p.global_state->Cast<GlobFunctionState>();
 
 	idx_t count = 0;
-	idx_t next_idx = MinValue<idx_t>(state.current_idx + STANDARD_VECTOR_SIZE, bind_data.files.size());
+	idx_t next_idx = MinValue<idx_t>(state.current_idx + STANDARD_VECTOR_SIZE, bind_data.files->GetTotalFileCount());
 	for (; state.current_idx < next_idx; state.current_idx++) {
-		output.data[0].SetValue(count, bind_data.files[state.current_idx]);
+		output.data[0].SetValue(count, bind_data.files->GetFile(state.current_idx));
 		count++;
 	}
 	output.SetCardinality(count);

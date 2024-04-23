@@ -377,7 +377,7 @@ public:
 		// NOTE: we do not want to parse the Parquet metadata for the sole purpose of getting column statistics
 
 		auto &config = DBConfig::GetConfig(context);
-		auto complete_file_list = bind_data.files->GetAllExpandedFiles();
+		auto complete_file_list = bind_data.files->GetAllFiles();
 		if (complete_file_list.size() < 2) {
 			if (bind_data.initial_reader) {
 				// most common path, scanning single parquet file
@@ -531,7 +531,7 @@ public:
 		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
 		auto &gstate = global_state->Cast<ParquetReadGlobalState>();
 
-		auto full_file_list = bind_data.files->GetAllExpandedFiles();
+		auto full_file_list = bind_data.files->GetAllFiles();
 		if (full_file_list.empty()) {
 			return 100.0;
 		}
@@ -601,7 +601,7 @@ public:
 		if (bind_data.files->GetFile(0).empty()) {
 			result->readers = {};
 		} else if (!bind_data.union_readers.empty()) {
-			vector<string> full_file_list = bind_data.files->GetAllExpandedFiles();
+			vector<string> full_file_list = bind_data.files->GetAllFiles();
 			result->readers = std::move(bind_data.union_readers);
 			// TODO: wtf is this? it was copied from before refactor
 			if (result->readers.size() != full_file_list.size()) {
@@ -718,7 +718,7 @@ public:
 	static unique_ptr<NodeStatistics> ParquetCardinality(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = bind_data->Cast<ParquetReadBindData>();
 		// TODO: reconsider fully expanding filelist for cardinality estimation; hinders potential optimization?
-		return make_uniq<NodeStatistics>(data.initial_file_cardinality * data.files->GetAllExpandedFiles().size());
+		return make_uniq<NodeStatistics>(data.initial_file_cardinality * data.files->GetAllFiles().size());
 	}
 
 	static idx_t ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data) {
