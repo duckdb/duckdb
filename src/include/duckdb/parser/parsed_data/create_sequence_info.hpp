@@ -52,6 +52,8 @@ public:
 public:
 	DUCKDB_API void Serialize(Serializer &serializer) const override;
 	DUCKDB_API static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
+
+	string ToString() const override;
 };
 
 } // namespace duckdb
