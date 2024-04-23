@@ -146,8 +146,8 @@ bool EdgeConnects(FilterInfoWithTotalDomains &edge, Subgraph2Denominator &subgra
 	return false;
 }
 
-
-vector<FilterInfoWithTotalDomains> GetEdges(vector<RelationsToTDom> &relations_to_tdom, JoinRelationSet &requested_set) {
+vector<FilterInfoWithTotalDomains> GetEdges(vector<RelationsToTDom> &relations_to_tdom,
+                                            JoinRelationSet &requested_set) {
 	vector<FilterInfoWithTotalDomains> res;
 	for (auto &relation_2_tdom : relations_to_tdom) {
 		for (auto &filter : relation_2_tdom.filters) {
@@ -165,8 +165,7 @@ vector<idx_t> SubgraphsConnectedByEdge(FilterInfoWithTotalDomains &edge, vector<
 	vector<idx_t> res;
 	if (subgraphs.empty()) {
 		return res;
-	}
-	else {
+	} else {
 		// check the combinations of subgraphs and see if the edge connects two of them,
 		// if so, return the indexes of the two subgraphs within the vector
 		for (idx_t outer = 0; outer != subgraphs.size(); outer++) {
@@ -187,13 +186,12 @@ vector<idx_t> SubgraphsConnectedByEdge(FilterInfoWithTotalDomains &edge, vector<
 			}
 		}
 	}
-//	std::cout << "edge doesn't connect to any subgraph and edge connects the following join relation sets: ";
-//	std::cout << edge.filter_info->left_set->ToString()  << ", " << edge.filter_info->right_set->ToString() << std::endl;
-//	std::cout << "current subgraphs have the following join relation sets:" << std::endl;
-//	for (auto &sub : subgraphs) {
-//		std::cout << sub.relations->ToString() << std::endl;
-//	}
-//	std::cout << "--------------------------- " << std::endl;
+	//	std::cout << "edge doesn't connect to any subgraph and edge connects the following join relation sets: ";
+	//	std::cout << edge.filter_info->left_set->ToString()  << ", " << edge.filter_info->right_set->ToString() <<
+	//std::endl; 	std::cout << "current subgraphs have the following join relation sets:" << std::endl; 	for (auto &sub :
+	//subgraphs) { 		std::cout << sub.relations->ToString() << std::endl;
+	//	}
+	//	std::cout << "--------------------------- " << std::endl;
 	// this edge connects only the relations it connects. Return an empty result so a new subgraph is created.
 	return res;
 	//	throw InternalException("whoops");
@@ -241,7 +239,7 @@ double CardinalityEstimator::CalculateUpdatedDemo(Subgraph2Denominator left, Sub
 }
 
 DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
-//	std::cout << "finding denom for set " << set.ToString() << std::endl;
+	//	std::cout << "finding denom for set " << set.ToString() << std::endl;
 	vector<Subgraph2Denominator> subgraphs;
 
 	// Finding the denominator is tricky. You need to go through the tdoms in decreasing order
@@ -272,17 +270,22 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			// create one subgraph with both relations.
 			new_subgraph.denom = edge.has_tdom_hll ? edge.tdom_hll : edge.tdom_no_hll;
 			subgraphs.push_back(new_subgraph);
-		}
-		else if (subgraph_connections.size() == 1) {
+		} else if (subgraph_connections.size() == 1) {
 			// the current edge connections to the subgraph at the index in subgraph_connections
 			// add the relations at both ends of the edge to the subgraph. (The subgraph is a JoinRelationSet, double
 			// adding relations will be fine).
 			auto subgraph_to_update = &subgraphs.at(subgraph_connections.at(0));
+			if (JoinRelationSet::IsSubset(*subgraph_to_update->relations, *edge.filter_info->left_set) &&
+			    JoinRelationSet::IsSubset(*subgraph_to_update->relations, *edge.filter_info->right_set)) {
+				// here we have an edge that connects the same subgraph to the same subgraph. Just continue. no need to
+				// update the denom
+				continue;
+			}
 			subgraph_to_update->relations = &set_manager.Union(*subgraph_to_update->relations, edge.filter_info->set);
-			subgraph_to_update->numerator_relations = &UpdateNumeratorRelations(*subgraph_to_update, new_subgraph, edge);
+			subgraph_to_update->numerator_relations =
+			    &UpdateNumeratorRelations(*subgraph_to_update, new_subgraph, edge);
 			subgraph_to_update->denom = CalculateUpdatedDemo(*subgraph_to_update, new_subgraph, edge);
-		}
-		else if (subgraph_connections.size() == 2) {
+		} else if (subgraph_connections.size() == 2) {
 			// The two subgraphs in the subgraph_connections can be merged by this edge.
 			D_ASSERT(subgraph_connections.at(0) < subgraph_connections.at(1));
 			auto subgraph_to_merge_into = &subgraphs.at(subgraph_connections.at(0));
@@ -297,11 +300,11 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			                                   [](Subgraph2Denominator &s) { return !s.relations; });
 			subgraphs.erase(remove_start, subgraphs.end());
 		}
-//		std::cout << "BLOOT: current subgraphs have the following join relation sets:" << std::endl;
-//		for (auto &sub : subgraphs) {
-//			std::cout << sub.relations->ToString() << std::endl;
-//		}
-//		std::cout << "------------------------------" << std::endl;
+		//		std::cout << "BLOOT: current subgraphs have the following join relation sets:" << std::endl;
+		//		for (auto &sub : subgraphs) {
+		//			std::cout << sub.relations->ToString() << std::endl;
+		//		}
+		//		std::cout << "------------------------------" << std::endl;
 		if (subgraphs.size() == 1 && subgraphs.at(0).relations->ToString() == set.ToString()) {
 			// the first subgraph has connected all of the desired relations, no need to iterate
 			// through the rest of the edges.

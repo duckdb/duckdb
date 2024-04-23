@@ -151,9 +151,6 @@ unique_ptr<JoinNode> PlanEnumerator::EmitPair(JoinRelationSet &left, JoinRelatio
 		throw InternalException("No left or right plan: internal error in join order optimizer");
 	}
 	auto &new_set = query_graph_manager.set_manager.Union(left, right);
-	if (new_set.ToString() == "[0, 1, 3, 5]") {
-		auto break_here = 0;
-	}
 	// create the join tree based on combining the two plans
 	auto new_plan = CreateJoinTree(new_set, info, *left_plan->second, *right_plan->second);
 	// check if this plan is the optimal plan we found for this set of relations
@@ -452,9 +449,6 @@ void PlanEnumerator::InitLeafPlans() {
 	// function ensures that a unique combination of relations will have a unique JoinRelationSet object.
 	// first initialize equivalent relations based on the filters
 	auto relation_stats = query_graph_manager.relation_manager.GetRelationStats();
-	for (idx_t i = 0; i < relation_stats.size(); i++) {
-		std::cout << "relation " << i << " = " << relation_stats.at(i).table_name << std::endl;
-	}
 
 	cost_model.cardinality_estimator.InitEquivalentRelations(query_graph_manager.GetFilterBindings());
 	cost_model.cardinality_estimator.AddRelationNamesToTdoms(relation_stats);
