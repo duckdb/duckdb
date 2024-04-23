@@ -165,7 +165,8 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 		deserializer.ReadProperty(208, "input_table_types", result->input_table_types);
 		deserializer.ReadProperty(209, "input_table_names", result->input_table_names);
 		TableFunctionBindInput input(result->parameters, result->named_parameters, result->input_table_types,
-		                             result->input_table_names, function.function_info.get(), nullptr, result->function);
+		                             result->input_table_names, function.function_info.get(), nullptr,
+		                             result->function);
 
 		vector<LogicalType> bind_return_types;
 		vector<string> bind_names;
