@@ -1,5 +1,10 @@
 #include <string>
-#include "duckdb/common/string_util.hpp"
+
+// duplicated from string_util.h to avoid linking issues
+#ifndef DUCKDB_QUOTE_DEFINE
+#define DUCKDB_QUOTE_DEFINE_IMPL(x) #x
+#define DUCKDB_QUOTE_DEFINE(x)      DUCKDB_QUOTE_DEFINE_IMPL(x)
+#endif
 
 namespace duckdb {
 

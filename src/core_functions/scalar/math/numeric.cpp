@@ -167,7 +167,8 @@ ScalarFunctionSet AbsOperatorFun::GetFunctions() {
 		case LogicalTypeId::TINYINT:
 		case LogicalTypeId::SMALLINT:
 		case LogicalTypeId::INTEGER:
-		case LogicalTypeId::BIGINT: {
+		case LogicalTypeId::BIGINT:
+		case LogicalTypeId::HUGEINT: {
 			ScalarFunction func({type}, type, ScalarFunction::GetScalarUnaryFunction<TryAbsOperator>(type));
 			func.statistics = PropagateAbsStats;
 			abs.AddFunction(func);
@@ -515,7 +516,7 @@ struct RoundOperatorPrecision {
 				return input;
 			}
 		}
-		return rounded_value;
+		return UnsafeNumericCast<TR>(rounded_value);
 	}
 };
 
@@ -526,7 +527,7 @@ struct RoundOperator {
 		if (std::isinf(rounded_value) || std::isnan(rounded_value)) {
 			return input;
 		}
-		return rounded_value;
+		return UnsafeNumericCast<TR>(rounded_value);
 	}
 };
 

@@ -71,7 +71,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 			if (!function.children[i]->IsScalar()) {
 				break;
 			}
-			auto alias = function.children[i]->alias;
+			auto alias = StringUtil::Lower(function.children[i]->alias);
 			BindChild(function.children[i], depth, error);
 			if (error.HasError()) {
 				return BindResult(std::move(error));

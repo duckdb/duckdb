@@ -15,7 +15,7 @@ struct UnicodeOperator {
 		auto str = reinterpret_cast<const utf8proc_uint8_t *>(input.GetData());
 		auto len = input.GetSize();
 		utf8proc_int32_t codepoint;
-		(void)utf8proc_iterate(str, len, &codepoint);
+		(void)utf8proc_iterate(str, UnsafeNumericCast<utf8proc_ssize_t>(len), &codepoint);
 		return codepoint;
 	}
 };
