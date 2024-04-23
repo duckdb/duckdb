@@ -134,15 +134,17 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 		return;
 	}
 	// Sniff it!
-	if (options.auto_detect && file_idx > 0) {
-		CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
-		auto result = sniffer.SniffCSV();
+	if (options.auto_detect) {
 		if (file_schema.Empty()) {
+			CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
+			auto result = sniffer.SniffCSV();
 			file_schema.Initialize(result.names, result.return_types);
-		} else {
-			if (!options.file_options.filename && !options.file_options.hive_partitioning) {
-				// We do schema matching here
-				throw InternalException("Oh noo|!!");
+		} else if (file_idx > 0) {
+			CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
+			auto result = sniffer.SniffCSV();
+			if (!options.file_options.union_by_name) {
+				// Union By name has its own mystical rules
+
 			}
 		}
 	}
