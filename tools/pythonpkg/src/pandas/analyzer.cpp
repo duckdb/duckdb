@@ -331,6 +331,10 @@ LogicalType PandasAnalyzer::DictToMap(const PyDictionary &dict, bool &can_conver
 	auto keys = dict.values.attr("__getitem__")(0);
 	auto values = dict.values.attr("__getitem__")(1);
 
+	if (py::none().is(keys) || py::none().is(values)) {
+		return LogicalType::MAP(LogicalTypeId::SQLNULL, LogicalTypeId::SQLNULL);
+	}
+
 	auto key_type = GetListType(keys, can_convert);
 	if (!can_convert) {
 		return EmptyMap();
