@@ -6,8 +6,8 @@
 namespace duckdb {
 
 unique_ptr<BoundTableRef> Binder::Bind(ColumnDataRef &ref) {
-	auto types = ref.collection->Types();
-	auto result = make_uniq<BoundColumnDataRef>(std::move(ref.collection));
+	auto types = ref.collection.Types();
+	auto result = make_uniq<BoundColumnDataRef>(ref.collection);
 	result->bind_index = GenerateTableIndex();
 	bind_context.AddGenericBinding(result->bind_index, ref.alias, ref.expected_names, types);
 	return result;

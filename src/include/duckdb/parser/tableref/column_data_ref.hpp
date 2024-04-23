@@ -21,12 +21,12 @@ public:
 	ColumnDataRef() : TableRef(TableReferenceType::COLUMN_DATA) {
 	}
 	ColumnDataRef(ColumnDataCollection &collection)
-	    : TableRef(TableReferenceType::COLUMN_DATA), collection(make_uniq<ColumnDataCollection>(collection)) {
+	    : TableRef(TableReferenceType::COLUMN_DATA), collection(collection) {
 	}
 
 public:
 	//! The materialized column data
-	unique_ptr<ColumnDataCollection> collection;
+	ColumnDataCollection &collection;
 	//! The set of expected names
 	vector<string> expected_names;
 

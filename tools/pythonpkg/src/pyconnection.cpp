@@ -1051,7 +1051,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const py::object &quer
 	}
 	auto &materialized_result = res->Cast<MaterializedQueryResult>();
 	return make_uniq<DuckDBPyRelation>(
-	    make_uniq<MaterializedRelation>(connection->context, materialized_result.Collection(), res->names, alias));
+	    make_uniq<MaterializedRelation>(connection->context, materialized_result.TakeCollection(), res->names, alias));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Table(const string &tname) {

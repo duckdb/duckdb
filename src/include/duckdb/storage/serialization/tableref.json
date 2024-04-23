@@ -169,7 +169,7 @@
       },
       {
         "id": 202,
-        "name": "collection",
+        "name": "owned_collection",
         "type": "ColumnDataCollection*"
       }
     ]

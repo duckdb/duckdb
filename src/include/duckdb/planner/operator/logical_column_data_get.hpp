@@ -20,13 +20,16 @@ public:
 
 public:
 	LogicalColumnDataGet(idx_t table_index, vector<LogicalType> types, unique_ptr<ColumnDataCollection> collection);
+	LogicalColumnDataGet(idx_t table_index, vector<LogicalType> types, ColumnDataCollection &collection);
 
 	//! The table index in the current bind context
 	idx_t table_index;
 	//! The types of the chunk
 	vector<LogicalType> chunk_types;
-	//! The chunk collection to scan
-	unique_ptr<ColumnDataCollection> collection;
+	//! Owned column data collection, if any
+	unique_ptr<ColumnDataCollection> owned_collection;
+	// the column data collection to scan
+	optional_ptr<ColumnDataCollection> collection;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
