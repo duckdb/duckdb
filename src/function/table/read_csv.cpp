@@ -293,6 +293,7 @@ void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionD
 	if (reset_reader) {
 		MultiFileReader::PruneReaders(data, file_list);
 	}
+	data.files = file_list.GetAllExpandedFiles();
 }
 
 unique_ptr<NodeStatistics> CSVReaderCardinality(ClientContext &context, const FunctionData *bind_data_p) {

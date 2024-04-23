@@ -107,6 +107,7 @@ struct MultiFileList {
 	                                             vector<unique_ptr<Expression>> &filters);
 };
 
+// TODO: prevent the unnecessary copy that comes where code uses the placeholder variant of this.
 //! Simplest implementation of a MultiFilelist with a list of files.
 struct SimpleMultiFileList : public MultiFileList {
 	explicit SimpleMultiFileList(vector<string> files);
