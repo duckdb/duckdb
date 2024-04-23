@@ -634,13 +634,16 @@ void ParquetMetaDataImplementation(ClientContext &context, TableFunctionInput &d
 					data.LoadSchemaData(context, bind_data.return_types, bind_data.file_list->GetFile(data.file_index));
 					break;
 				case ParquetMetadataOperatorType::META_DATA:
-					data.LoadRowGroupMetadata(context, bind_data.return_types, bind_data.file_list->GetFile(data.file_index));
+					data.LoadRowGroupMetadata(context, bind_data.return_types,
+					                          bind_data.file_list->GetFile(data.file_index));
 					break;
 				case ParquetMetadataOperatorType::KEY_VALUE_META_DATA:
-					data.LoadKeyValueMetaData(context, bind_data.return_types, bind_data.file_list->GetFile(data.file_index));
+					data.LoadKeyValueMetaData(context, bind_data.return_types,
+					                          bind_data.file_list->GetFile(data.file_index));
 					break;
 				case ParquetMetadataOperatorType::FILE_META_DATA:
-					data.LoadFileMetaData(context, bind_data.return_types, bind_data.file_list->GetFile(data.file_index));
+					data.LoadFileMetaData(context, bind_data.return_types,
+					                      bind_data.file_list->GetFile(data.file_index));
 					break;
 				default:
 					throw InternalException("Unsupported ParquetMetadataOperatorType");

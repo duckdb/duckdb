@@ -34,12 +34,6 @@ struct HivePartitioningIndex {
 	DUCKDB_API static HivePartitioningIndex Deserialize(Deserializer &deserializer);
 };
 
-struct CustomMultiFileReaderBindData {
-	virtual ~CustomMultiFileReaderBindData();
-	// To be overridden
-	// TODO how to serialize/deserialize? can we just rebind?
-};
-
 //! The bind data for the multi-file reader, obtained through MultiFileReader::BindReader
 struct MultiFileReaderBindData {
 	//! The index of the filename column (if any)
@@ -48,10 +42,6 @@ struct MultiFileReaderBindData {
 	vector<HivePartitioningIndex> hive_partitioning_indexes;
 	//! The index of the file_row_number column (if any)
 	idx_t file_row_number_idx = DConstants::INVALID_INDEX;
-
-	//
-//	//! Overridable data for custom multifilereader implementations
-//	unique_ptr<CustomMultiFileReaderBindData> custom_data;
 
 	DUCKDB_API void Serialize(Serializer &serializer) const;
 	DUCKDB_API static MultiFileReaderBindData Deserialize(Deserializer &deserializer);
@@ -92,23 +82,11 @@ struct MultiFileReaderData {
 	unordered_map<column_t, LogicalType> cast_map;
 };
 
-
-//! Base class for a multi-file list that can be lazily generated
-
-// What do I need? Two Interfaces:
-// - one to materialize the file internally and just have it be a file list
-// - on to incrementally fetch the files efficiently
-
-// Requirements:
-// - no unnecessary copies
-// - intuitive interface for materializing non-materializing access
-// -
+// Abstract base class for lazily generated list of file paths/globs
 class MultiFileList {
 public:
 	MultiFileList();
 	virtual ~MultiFileList();
-	//! Construct the MultiFileList with a set of preexpanded files
-	explicit MultiFileList(vector<string> files);
 
 	//! Abstract Interface for subclasses
 
@@ -123,7 +101,8 @@ public:
 
 	//! Returns the current size of the expanded size
 	virtual idx_t GetCurrentSize();
-	//! Completely expands the list, allowing fast access to it and final size determination. Should only be used sparingly
+	//! Completely expands the list, allowing fast access to it and final size determination. Should only be used
+	//! sparingly
 	virtual void ExpandAll();
 	//! Calls ExpandAll() and returns the resulting size
 	virtual idx_t GetTotalFileCount();
@@ -135,11 +114,12 @@ public:
 	                                   vector<unique_ptr<Expression>> &filters);
 
 	//! Note: comparison is currently only possible if both sides are fully expanded
-	bool operator== (const MultiFileList &other) const;
+	bool operator==(const MultiFileList &other) const;
 
 	//! Moves the vector out of the MultiFileList, caller is responsible to not use the MultiFileListAfter this
 	//! DEPRECATED: should be removed once all DuckDB code can properly handle MultiFileLists
 	vector<string> ToStringVector();
+
 protected:
 	//! The generated files
 	vector<string> expanded_files;

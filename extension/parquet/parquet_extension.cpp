@@ -560,39 +560,6 @@ public:
 		return std::move(result);
 	}
 
-	//    // TODO: make generative
-	//    result->file_states = vector<ParquetFileState>(bind_data.metadata_provider->GetFiles().size(),
-	//    ParquetFileState::UNOPENED); result->file_mutexes = unique_ptr<mutex[]>(new
-	//    mutex[bind_data.metadata_provider->GetFiles().size()]); if (bind_data.metadata_provider->GetFiles().empty()) {
-	//        result->initial_reader = nullptr;
-	//    } else {
-	//        result->readers = std::move(bind_data.union_readers);
-	//        if (result->readers.size() != bind_data.metadata_provider->GetFiles().size()) {
-	//            result->readers = vector<shared_ptr<ParquetReader>>(bind_data.metadata_provider->GetFiles().size(),
-	//            nullptr);
-	//        } else {
-	//            std::fill(result->file_states.begin(), result->file_states.end(), ParquetFileState::OPEN);
-	//        }
-	//        if (bind_data.initial_reader) {
-	//            result->initial_reader = std::move(bind_data.initial_reader);
-	//            result->readers[0] = result->initial_reader;
-	//        } else if (result->readers[0]) {
-	//            result->initial_reader = result->readers[0];
-	//        } else {
-	//            result->initial_reader =
-	//                    make_shared<ParquetReader>(context, bind_data.metadata_provider->GetFile(0),
-	//                    bind_data.parquet_options);
-	//            result->readers[0] = result->initial_reader;
-	//        }
-	//        result->file_states[0] = ParquetFileState::OPEN;
-	//    }
-	//    for (auto &reader : result->readers) {
-	//        if (!reader) {
-	//            continue;
-	//        }
-	//        InitializeParquetReader(*reader, bind_data, input.column_ids, input.filters, context);
-	//    }
-
 	static unique_ptr<GlobalTableFunctionState> ParquetScanInitGlobal(ClientContext &context,
 	                                                                  TableFunctionInitInput &input) {
 		auto &bind_data = input.bind_data->CastNoConst<ParquetReadBindData>();
@@ -603,8 +570,10 @@ public:
 		} else if (!bind_data.union_readers.empty()) {
 			vector<string> full_file_list = bind_data.files->GetAllFiles();
 			result->readers = std::move(bind_data.union_readers);
-			// TODO: wtf is this? it was copied from before refactor
 			if (result->readers.size() != full_file_list.size()) {
+				// FIXME This should not happen: didn't want to break things but this should probably be an
+				// InternalException
+				D_ASSERT(false);
 				result->readers = {};
 			}
 		} else if (bind_data.initial_reader) {
@@ -612,8 +581,9 @@ public:
 			if (bind_data.initial_reader->file_name == bind_data.files->GetFile(0)) {
 				result->readers = {bind_data.initial_reader};
 			} else {
-				// TODO: can we reuse the initial reader here? Can we maybe simplify the initial_reader thing?
-				//       i'm thinking we could just have a map from filename -> reader
+				// FIXME This should not happen: didn't want to break things but this should probably be an
+				// InternalException
+				D_ASSERT(false);
 			}
 		}
 
@@ -838,7 +808,6 @@ public:
 	                            unique_lock<mutex> &parallel_lock) {
 		const auto num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 
-		// TODO: should we ResizeFiles here as well?
 		const auto file_index_limit =
 		    MinValue<idx_t>(parallel_state.file_index + num_threads, parallel_state.file_states.size());
 
@@ -846,8 +815,7 @@ public:
 			if (parallel_state.file_states[i] == ParquetFileState::UNOPENED) {
 				string file = bind_data.files->GetFile(i);
 				parallel_state.file_states[i] = ParquetFileState::OPENING;
-				auto pq_options = bind_data.parquet_options; // TODO: check if this runs into issues! This used to be
-				                                             // the options from the initial reader
+				auto pq_options = bind_data.parquet_options;
 
 				// Now we switch which lock we are holding, instead of locking the global state, we grab the lock on
 				// the file we are opening. This file lock allows threads to wait for a file to be opened.

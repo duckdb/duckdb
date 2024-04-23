@@ -243,7 +243,8 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 	}
 
 	SimpleMultiFileList file_list(std::move(bind_data->files));
-	MultiFileReader().BindOptions(bind_data->options.file_options, file_list , return_types, names, bind_data->reader_bind);
+	MultiFileReader().BindOptions(bind_data->options.file_options, file_list, return_types, names,
+	                              bind_data->reader_bind);
 	bind_data->files = file_list.ToStringVector();
 
 	auto &transform_options = bind_data->transform_options;

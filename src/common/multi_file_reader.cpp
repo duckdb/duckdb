@@ -14,10 +14,7 @@
 
 namespace duckdb {
 
-MultiFileList::MultiFileList() : expanded_files(), fully_expanded(false){
-}
-
-MultiFileList::MultiFileList(vector<string> files) : expanded_files(std::move(files)), fully_expanded(false) {
+MultiFileList::MultiFileList() : expanded_files(), fully_expanded(false) {
 }
 
 MultiFileList::~MultiFileList() {
@@ -110,8 +107,8 @@ bool SimpleMultiFileList::ComplexFilterPushdown(ClientContext &context, const Mu
 	}
 
 	auto start_files = expanded_files.size();
-	HivePartitioning::ApplyFiltersToFileList(context, expanded_files, filters, column_map, get, options.hive_partitioning,
-	                                         options.filename);
+	HivePartitioning::ApplyFiltersToFileList(context, expanded_files, filters, column_map, get,
+	                                         options.hive_partitioning, options.filename);
 
 	if (expanded_files.size() != start_files) {
 		return true;
@@ -121,10 +118,7 @@ bool SimpleMultiFileList::ComplexFilterPushdown(ClientContext &context, const Mu
 }
 
 void SimpleMultiFileList::ExpandAll() {
-    // Is a NOP: a SimpleMultiFileList is fully expanded on creation
-}
-
-CustomMultiFileReaderBindData::~CustomMultiFileReaderBindData() {
+	// Is a NOP: a SimpleMultiFileList is fully expanded on creation
 }
 
 MultiFileReader::~MultiFileReader() {
@@ -138,7 +132,6 @@ void MultiFileReader::AddParameters(TableFunction &table_function) {
 	table_function.named_parameters["hive_types_autocast"] = LogicalType::BOOLEAN;
 }
 
-// TODO vector of strings
 unique_ptr<MultiFileList> MultiFileReader::GetFileList(ClientContext &context, const Value &input, const string &name,
                                                        FileGlobOptions options) {
 	auto &config = DBConfig::GetConfig(context);
