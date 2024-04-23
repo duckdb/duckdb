@@ -438,7 +438,9 @@ SQLRETURN duckdb::GetDataStmtResult(OdbcHandleStmt *hstmt, SQLUSMALLINT col_or_p
 		}
 		case LogicalTypeId::TIMESTAMP_TZ: {
 			if (!val.TryCastAs(*hstmt->dbc->conn->context, duckdb::LogicalType::DATE, true)) {
-				return ThrowInvalidCast("GetDataStmtResult", val.type(), LogicalType::DATE, hstmt);
+				return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetDataStmtResult",
+				                                   "Conversion from timestamp tz to date failed",
+				                                   SQLStateType::ST_07006, hstmt->dbc->GetDataSourceName());
 			}
 			date = val.GetValue<date_t>();
 			break;
@@ -485,7 +487,9 @@ SQLRETURN duckdb::GetDataStmtResult(OdbcHandleStmt *hstmt, SQLUSMALLINT col_or_p
 		case LogicalTypeId::TIME_TZ:
 		case LogicalTypeId::TIMESTAMP_TZ:
 			if (!val.TryCastAs(*hstmt->dbc->conn->context, duckdb::LogicalType::TIME, true)) {
-				return ThrowInvalidCast("GetDataStmtResult", val.type(), LogicalType::TIME, hstmt);
+				return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetDataStmtResult",
+				                                   "Conversion from tz to time failed", SQLStateType::ST_07006,
+				                                   hstmt->dbc->GetDataSourceName());
 			}
 			time = val.GetValue<dtime_t>();
 			break;
@@ -570,7 +574,9 @@ SQLRETURN duckdb::GetDataStmtResult(OdbcHandleStmt *hstmt, SQLUSMALLINT col_or_p
 		}
 		case LogicalTypeId::TIMESTAMP_TZ: {
 			if (!val.TryCastAs(*hstmt->dbc->conn->context, duckdb::LogicalType::TIMESTAMP, true)) {
-				return ThrowInvalidCast("GetDataStmtResult", val.type(), LogicalType::TIMESTAMP, hstmt);
+				return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetDataStmtResult",
+				                                   "Conversion from timestamp tz to timestamps failed",
+				                                   SQLStateType::ST_07006, hstmt->dbc->GetDataSourceName());
 			}
 			timestamp = timestamp_t(val.GetValue<int64_t>());
 			timestamp = duckdb::Timestamp::FromEpochMicroSeconds(timestamp.value);
