@@ -676,7 +676,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 			}
 
 			auto dependency = make_shared_ptr<ExternalDependency>();
-			dependency->AddDependency("original", PythonDependencyItem::Create(std::move(python_object)));
+			dependency->AddDependency("original", PythonDependencyItem::Create(python_object));
 			dependency->AddDependency("copy", PythonDependencyItem::Create(std::move(new_df)));
 
 			vector<shared_ptr<ExternalDependency>> dependencies;

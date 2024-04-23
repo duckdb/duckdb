@@ -7,7 +7,7 @@ PythonDependencyItem::PythonDependencyItem(unique_ptr<RegisteredObject> &&object
     : DependencyItem(ExternalDependencyItemType::PYTHON_DEPENDENCY), object(std::move(object)) {
 }
 
-PythonDependencyItem::~PythonDependencyItem() {
+PythonDependencyItem::~PythonDependencyItem() { // NOLINT - cannot throw in exception
 	py::gil_scoped_acquire gil;
 	object.reset();
 }
