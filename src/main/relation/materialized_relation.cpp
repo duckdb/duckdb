@@ -4,6 +4,7 @@
 #include "duckdb/planner/bound_statement.hpp"
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
 #include "duckdb/parser/tableref/column_data_ref.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 
 namespace duckdb {
 
