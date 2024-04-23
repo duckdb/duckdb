@@ -1,7 +1,7 @@
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/optimizer/join_order/join_node.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/optimizer/join_order/query_graph_manager.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/printer.hpp"
@@ -212,7 +212,7 @@ double CardinalityEstimator::CalculateUpdatedDemo(Subgraph2Denominator left, Sub
 	double new_denom = left.denom * right.denom;
 	switch (filter.filter_info->join_type) {
 	case JoinType::INNER: {
-		new_denom *= filter.has_tdom_hll ? filter.tdom_hll : filter.tdom_no_hll;
+		new_denom *= filter.has_tdom_hll ? (double)filter.tdom_hll : (double)filter.tdom_no_hll;
 		return new_denom;
 	}
 	case JoinType::SEMI:
@@ -258,7 +258,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 		if (subgraph_connections.empty()) {
 			// edge does not connect any subgraphs. If the current edge has only one relation at both vertices,
 			// create one subgraph with both relations.
-			new_subgraph.denom = edge.has_tdom_hll ? edge.tdom_hll : edge.tdom_no_hll;
+			new_subgraph.denom = edge.has_tdom_hll ? (double)edge.tdom_hll : (double)edge.tdom_no_hll;
 			subgraphs.push_back(new_subgraph);
 		} else if (subgraph_connections.size() == 1) {
 			// the current edge connections to the subgraph at the index in subgraph_connections
@@ -340,7 +340,7 @@ template <>
 idx_t CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set) {
 	auto cardinality_as_double = EstimateCardinalityWithSet<double>(new_set);
 	auto max = NumericLimits<idx_t>::Maximum();
-	if (cardinality_as_double >= max) {
+	if (cardinality_as_double >= (double)max) {
 		return max;
 	}
 	return (idx_t)cardinality_as_double;
@@ -365,7 +365,7 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(optional_ptr<JoinRelati
 	auto relation_cardinality = stats.cardinality;
 	auto relation_filter = stats.filter_strength;
 
-	auto card_helper = CardinalityHelper(relation_cardinality, relation_filter);
+	auto card_helper = CardinalityHelper((double)relation_cardinality, relation_filter);
 	relation_set_2_cardinality[set->ToString()] = card_helper;
 
 	UpdateTotalDomains(set, stats);

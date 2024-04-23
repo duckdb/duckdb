@@ -175,7 +175,7 @@ bool PlanEnumerator::TryEmitPair(JoinRelationSet &left, JoinRelationSet &right,
 	// If a full plan is created, it's possible a node in the plan gets updated. When this happens, make sure you keep
 	// emitting pairs until you emit another final plan. Another final plan is guaranteed to be produced because of
 	// our symmetry guarantees.
-	if (pairs >= 20000) {
+	if (pairs >= 10000) {
 		// when the amount of pairs gets too large we exit the dynamic programming and resort to a greedy algorithm
 		// FIXME: simple heuristic currently
 		// at 10K pairs stop searching exactly and switch to heuristic
@@ -464,7 +464,6 @@ void PlanEnumerator::InitLeafPlans() {
 		plans[relation_set] = std::move(join_node);
 		cost_model.cardinality_estimator.InitCardinalityEstimatorProps(&relation_set, stats);
 	}
-	cost_model.cardinality_estimator.PrintRelationToTdomInfo();
 }
 
 // the plan enumeration is a straight implementation of the paper "Dynamic Programming Strikes Back" by Guido
