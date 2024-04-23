@@ -790,29 +790,25 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			statement = std::move(copied_statement);
 			break;
 		}
+		default: {
 #ifndef DUCKDB_ALTERNATIVE_VERIFY
-		case StatementType::COPY_STATEMENT:
-		case StatementType::INSERT_STATEMENT:
-		case StatementType::DELETE_STATEMENT:
-		case StatementType::UPDATE_STATEMENT: {
-			Parser parser;
-			ErrorData error;
-			try {
-				parser.ParseQuery(statement->ToString());
-			} catch (std::exception &ex) {
-				error = ErrorData(ex);
+			bool reparse_statement = true;
+#else
+			bool reparse_statement = false;
+#endif
+			statement = std::move(copied_statement);
+			if (reparse_statement) {
+				try {
+					Parser parser;
+					ErrorData error;
+					parser.ParseQuery(statement->ToString());
+					statement = std::move(parser.statements[0]);
+				} catch (const NotImplementedException &) {
+					// ToString was not implemented, just use the copied statement
+				}
 			}
-			if (error.HasError()) {
-				// error in verifying query
-				return ErrorResult<PendingQueryResult>(std::move(error), query);
-			}
-			statement = std::move(parser.statements[0]);
 			break;
 		}
-#endif
-		default:
-			statement = std::move(copied_statement);
-			break;
 		}
 	}
 	return PendingStatementOrPreparedStatement(lock, query, std::move(statement), prepared, parameters);
