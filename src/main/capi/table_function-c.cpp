@@ -8,7 +8,7 @@
 namespace duckdb {
 
 struct CTableFunctionInfo : public TableFunctionInfo {
-	~CTableFunctionInfo() {
+	~CTableFunctionInfo() override {
 		if (extra_info && delete_callback) {
 			delete_callback(extra_info);
 		}

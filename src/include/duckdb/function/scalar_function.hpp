@@ -34,6 +34,22 @@ struct FunctionLocalState {
 	}
 };
 
+struct ScalarFunctionInfo {
+	DUCKDB_API virtual ~ScalarFunctionInfo();
+
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+};
+
+
 class Binder;
 class BoundFunctionExpression;
 class LogicalDependencyList;
@@ -105,6 +121,8 @@ public:
 
 	function_serialize_t serialize;
 	function_deserialize_t deserialize;
+	//! Additional function info, passed to the bind
+	shared_ptr<ScalarFunctionInfo> function_info;
 
 	DUCKDB_API bool operator==(const ScalarFunction &rhs) const;
 	DUCKDB_API bool operator!=(const ScalarFunction &rhs) const;
