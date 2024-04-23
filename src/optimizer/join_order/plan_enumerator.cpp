@@ -416,8 +416,8 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 		auto &new_set = query_graph_manager.set_manager.Union(join_relations.at(best_left).get(),
 		                                                      join_relations.at(best_right).get());
 		D_ASSERT(best_right > best_left);
-		join_relations.erase(join_relations.begin() + best_right);
-		join_relations.erase(join_relations.begin() + best_left);
+		join_relations.erase(join_relations.begin() + (long)best_right);
+		join_relations.erase(join_relations.begin() + (long)best_left);
 		join_relations.push_back(new_set);
 	}
 }
