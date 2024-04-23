@@ -148,6 +148,15 @@ def raw_pointer(type):
         return re.sub('unique_ptr<([a-zA-Z0-9]+)>', '\\1*', type)
     return re.sub('([a-zA-Z0-9]+)[*]', '\\1*', type)
 
+def optional_pointer(type):
+    replacement = 'optional_ptr<\\1>'
+    if type.startswith('shared_ptr'):
+        return re.sub('shared_ptr<([a-zA-Z0-9]+)>', replacement, type)
+    if type.startswith('unique_ptr'):
+        return re.sub('unique_ptr<([a-zA-Z0-9]+)>', replacement, type)
+    return re.sub('([a-zA-Z0-9]+)[*]', replacement, type)
+
+
 def get_default_argument(default_value):
     return f'{default_value}'.lower() if type(default_value) == bool else f'{default_value}'
 
@@ -597,7 +606,7 @@ def generate_class_code(class_entry):
         if entry.custom_serialize_property == True and is_pointer(entry.type):
             # A custom serialize property was explicitly set
             # as long as a pointer is provided, this should be accepted
-            type_name = raw_pointer(entry.type)
+            type_name = optional_pointer(entry.type)
         else:
             type_name = replace_pointer(entry.type)
         class_serialize += get_serialize_element(

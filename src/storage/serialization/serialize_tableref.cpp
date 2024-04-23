@@ -79,7 +79,7 @@ unique_ptr<TableRef> BaseTableRef::Deserialize(Deserializer &deserializer) {
 void ColumnDataRef::Serialize(Serializer &serializer) const {
 	TableRef::Serialize(serializer);
 	serializer.WritePropertyWithDefault<vector<string>>(200, "expected_names", expected_names);
-	serializer.WritePropertyWithDefault<ColumnDataCollection*>(202, "owned_collection", &collection);
+	serializer.WritePropertyWithDefault<optional_ptr<ColumnDataCollection>>(202, "owned_collection", &collection);
 }
 
 unique_ptr<TableRef> ColumnDataRef::Deserialize(Deserializer &deserializer) {

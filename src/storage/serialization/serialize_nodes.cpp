@@ -309,7 +309,7 @@ JoinCondition JoinCondition::Deserialize(Deserializer &deserializer) {
 
 void LogicalType::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<LogicalTypeId>(100, "id", id_);
-	serializer.WritePropertyWithDefault<ExtraTypeInfo*>(101, "type_info", type_info_.get());
+	serializer.WritePropertyWithDefault<optional_ptr<ExtraTypeInfo>>(101, "type_info", type_info_.get());
 }
 
 LogicalType LogicalType::Deserialize(Deserializer &deserializer) {
