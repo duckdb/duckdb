@@ -1052,6 +1052,33 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, con
 	return make_uniq<DuckDBPyRelation>(rel->Join(other->rel, std::move(conditions), dtype));
 }
 
+static Value NestedDictToStruct(const py::object &dictionary) {
+	if (!py::isinstance<py::dict>(dictionary)) {
+		throw InvalidInputException("NestedDictToStruct only accepts a dictionary as input");
+	}
+	py::dict dict_casted = py::dict(dictionary);
+
+	child_list_t<Value> children;
+	for (auto item : dict_casted) {
+            py::object item_key = item.first.cast<py::object>();
+            py::object item_value = item.second.cast<py::object>();
+
+			if (!py::isinstance<py::str>(item_key)) {
+				throw InvalidInputException("NestedDictToStruct only accepts a dictionary with string keys");
+			}
+
+			if (py::isinstance<py::int_>(item_value)) {
+				int32_t item_value_int = py::int_(item_value);
+				children.push_back(std::make_pair(py::str(item_key), Value(item_value_int)));
+			} else if (py::isinstance<py::dict>(item_value)) {
+				children.push_back(std::make_pair(py::str(item_key), NestedDictToStruct(item_value)));
+			} else {
+				throw InvalidInputException("NestedDictToStruct only accepts a dictionary with integer values or nested dictionaries");
+			}     
+    }
+	return Value::STRUCT(std::move(children));
+}
+
 void DuckDBPyRelation::ToParquet(const string &filename, const py::object &compression,
 								 const py::object &field_ids, const py::object &row_group_size_bytes,
 								 const py::object &row_group_size) {
@@ -1065,11 +1092,14 @@ void DuckDBPyRelation::ToParquet(const string &filename, const py::object &compr
 	}
 
 	if (!py::none().is(field_ids)) {
-		if (!(py::isinstance<py::dict>(field_ids) || py::isinstance<py::str>(field_ids))) {
-			throw InvalidInputException("to_parquet only accepts 'field_ids' as a dictionary or a string");
+		if (py::isinstance<py::dict>(field_ids)) {
+			Value field_ids_value = NestedDictToStruct(field_ids);
+			options["field_ids"] = {field_ids_value};
+		} else if (py::isinstance<py::str>(field_ids)) {
+			options["field_ids"] = {Value(py::str(field_ids))};
+		} else {
+			throw InvalidInputException("to_parquet only accepts 'field_ids' as a dictionary or 'auto'");
 		}
-		// TODO: implement field_ids
-		// Value::STRUCT({std::make_pair("key", bucket_value), std::make_pair("value", count_value)});
 	}
 
 	if (!py::none().is(row_group_size_bytes)) {
