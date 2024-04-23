@@ -4,6 +4,7 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/query_node/bound_set_operation_node.hpp"
+#include "duckdb/function/table/read_csv.hpp"
 
 namespace duckdb {
 
@@ -30,6 +31,9 @@ unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<LogicalTyp
 			if (logical_get.function.name == "read_csv" || logical_get.function.name == "read_csv_auto") {
 				// we have to do some type switcharoo
 				if (logical_get.projection_ids.empty()) {
+					auto &csv_bind = logical_get.bind_data->Cast<ReadCSVData>();
+					csv_bind.csv_types = target_types;
+					csv_bind.return_types = target_types;
 					logical_get.returned_types = target_types;
 					int x = 0;
 					// We early out here, since we don't need to add casts
