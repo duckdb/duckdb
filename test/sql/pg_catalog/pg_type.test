@@ -105,3 +105,13 @@ query I
 SELECT count(*) FROM pg_type where typname = 'enum' AND oid is NOT NULL
 ----
 0
+
+query I
+SELECT pg_catalog.format_pg_type('DECIMAL', 'test');
+----
+numeric
+
+query I
+SELECT pg_catalog.format_pg_type('decimal', 'test');
+----
+numeric
