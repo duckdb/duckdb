@@ -85,13 +85,13 @@ void DuckDBDependenciesFunction(ClientContext &context, TableFunctionInput &data
 		// classid, LogicalType::BIGINT
 		output.SetValue(0, count, Value::BIGINT(0));
 		// objid, LogicalType::BIGINT
-		output.SetValue(1, count, Value::BIGINT(entry.object.oid));
+		output.SetValue(1, count, Value::BIGINT(NumericCast<int64_t>(entry.object.oid)));
 		// objsubid, LogicalType::INTEGER
 		output.SetValue(2, count, Value::INTEGER(0));
 		// refclassid, LogicalType::BIGINT
 		output.SetValue(3, count, Value::BIGINT(0));
 		// refobjid, LogicalType::BIGINT
-		output.SetValue(4, count, Value::BIGINT(entry.dependent.oid));
+		output.SetValue(4, count, Value::BIGINT(NumericCast<int64_t>(entry.dependent.oid)));
 		// refobjsubid, LogicalType::INTEGER
 		output.SetValue(5, count, Value::INTEGER(0));
 		// deptype, LogicalType::VARCHAR

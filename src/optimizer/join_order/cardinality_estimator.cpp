@@ -37,9 +37,9 @@ void CardinalityEstimator::AddRelationTdom(FilterInfo &filter_info) {
 	relations_to_tdoms.emplace_back(new_r2tdom);
 }
 
-bool CardinalityEstimator::SingleColumnFilter(FilterInfo &filter_info) {
-	if (filter_info.left_set && filter_info.right_set) {
-		// Both set
+bool CardinalityEstimator::SingleRelationFilter(FilterInfo &filter_info) {
+	if (filter_info.left_set && filter_info.right_set && filter_info.set.count > 1) {
+		// Both set and are from different relations
 		return false;
 	}
 	if (EmptyFilter(filter_info)) {
@@ -50,7 +50,7 @@ bool CardinalityEstimator::SingleColumnFilter(FilterInfo &filter_info) {
 
 vector<idx_t> CardinalityEstimator::DetermineMatchingEquivalentSets(FilterInfo *filter_info) {
 	vector<idx_t> matching_equivalent_sets;
-	auto equivalent_relation_index = 0;
+	idx_t equivalent_relation_index = 0;
 
 	for (const RelationsToTDom &r2tdom : relations_to_tdoms) {
 		auto &i_set = r2tdom.equivalent_relations;
@@ -100,7 +100,7 @@ void CardinalityEstimator::InitEquivalentRelations(const vector<unique_ptr<Filte
 	// For each filter, we fill keep track of the index of the equivalent relation set
 	// the left and right relation needs to be added to.
 	for (auto &filter : filter_infos) {
-		if (SingleColumnFilter(*filter)) {
+		if (SingleRelationFilter(*filter)) {
 			// Filter on one relation, (i.e string or range filter on a column).
 			// Grab the first relation and add it to  the equivalence_relations
 			AddRelationTdom(*filter);
@@ -246,7 +246,7 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set
 		denom *= match.denom;
 	}
 	// can happen if a table has cardinality 0, or a tdom is set to 0
-	if (denom == 0) {
+	if (denom <= 1) {
 		denom = 1;
 	}
 	auto result = numerator / denom;
@@ -259,7 +259,7 @@ template <>
 idx_t CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set) {
 	auto cardinality_as_double = EstimateCardinalityWithSet<double>(new_set);
 	auto max = NumericLimits<idx_t>::Maximum();
-	if (cardinality_as_double > max) {
+	if (cardinality_as_double >= max) {
 		return max;
 	}
 	return (idx_t)cardinality_as_double;
@@ -330,8 +330,12 @@ void CardinalityEstimator::AddRelationNamesToTdoms(vector<RelationStats> &stats)
 	for (auto &total_domain : relations_to_tdoms) {
 		for (auto &binding : total_domain.equivalent_relations) {
 			D_ASSERT(binding.table_index < stats.size());
-			D_ASSERT(binding.column_index < stats.at(binding.table_index).column_names.size());
-			string column_name = stats.at(binding.table_index).column_names.at(binding.column_index);
+			string column_name;
+			if (binding.column_index < stats[binding.table_index].column_names.size()) {
+				column_name = stats[binding.table_index].column_names[binding.column_index];
+			} else {
+				column_name = "[unknown]";
+			}
 			total_domain.column_names.push_back(column_name);
 		}
 	}

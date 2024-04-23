@@ -5,3 +5,5 @@ benchmark/micro/csv/null_padding.benchmark
 benchmark/micro/csv/projection_pushdown.benchmark
 benchmark/micro/csv/1_byte_values.benchmark
 benchmark/micro/csv/16_byte_values.benchmark
+benchmark/micro/csv/multiple_small_files.benchmark
+benchmark/micro/csv/time_type.benchmark

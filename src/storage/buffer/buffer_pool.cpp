@@ -88,7 +88,7 @@ private:
 };
 
 bool EvictionQueue::AddToEvictionQueue(BufferEvictionNode &&node) {
-	q.enqueue(node);
+	q.enqueue(std::move(node));
 	return ++evict_queue_insertions % INSERT_INTERVAL == 0;
 }
 
@@ -221,9 +221,14 @@ void BufferPool::IncrementDeadNodes(FileBufferType type) {
 	GetEvictionQueueForType(type).IncrementDeadNodes();
 }
 
-void BufferPool::IncreaseUsedMemory(MemoryTag tag, idx_t size) {
-	current_memory += size;
-	memory_usage_per_tag[uint8_t(tag)] += size;
+void BufferPool::UpdateUsedMemory(MemoryTag tag, int64_t size) {
+	if (size < 0) {
+		current_memory -= UnsafeNumericCast<idx_t>(-size);
+		memory_usage_per_tag[uint8_t(tag)] -= UnsafeNumericCast<idx_t>(-size);
+	} else {
+		current_memory += UnsafeNumericCast<idx_t>(size);
+		memory_usage_per_tag[uint8_t(tag)] += UnsafeNumericCast<idx_t>(size);
+	}
 }
 
 idx_t BufferPool::GetUsedMemory() const {

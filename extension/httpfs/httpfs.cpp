@@ -9,6 +9,7 @@
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/common/helper.hpp"
 
 #include <chrono>
 #include <string>
@@ -556,7 +557,7 @@ static optional_ptr<HTTPMetadataCache> TryGetMetadataCache(optional_ptr<FileOpen
 	} else if (client_context) {
 		auto lookup = client_context->registered_state.find("http_cache");
 		if (lookup == client_context->registered_state.end()) {
-			auto cache = make_shared<HTTPMetadataCache>(true, true);
+			auto cache = make_shared_ptr<HTTPMetadataCache>(true, true);
 			client_context->registered_state["http_cache"] = cache;
 			return cache.get();
 		} else {
@@ -571,7 +572,7 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 	auto &hfs = file_system.Cast<HTTPFileSystem>();
 	state = HTTPState::TryGetState(opener);
 	if (!state) {
-		state = make_shared<HTTPState>();
+		state = make_shared_ptr<HTTPState>();
 	}
 
 	auto current_cache = TryGetMetadataCache(opener, hfs);

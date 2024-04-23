@@ -31,7 +31,7 @@ static void WriteStringStreamToFile(FileSystem &fs, stringstream &ss, const stri
 	auto ss_string = ss.str();
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW |
 	                                    FileLockType::WRITE_LOCK);
-	fs.Write(*handle, (void *)ss_string.c_str(), ss_string.size());
+	fs.Write(*handle, (void *)ss_string.c_str(), NumericCast<int64_t>(ss_string.size()));
 	handle.reset();
 }
 
@@ -45,7 +45,6 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info,
 
 	auto file_path = StringUtil::Replace(exported_table.file_path, "\\", "/");
 	ss << StringUtil::Format("%s FROM %s (", SQLIdentifier(exported_table.table_name), SQLString(file_path));
-
 	// write the copy options
 	ss << "FORMAT '" << info.format << "'";
 	if (info.format == "csv") {
@@ -60,6 +59,10 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info,
 		if (info.options.find("quote") == info.options.end()) {
 			info.options["quote"].push_back(Value("\""));
 		}
+		info.options.erase("force_not_null");
+		for (auto &not_null_column : exported_table.not_null_columns) {
+			info.options["force_not_null"].push_back(not_null_column);
+		}
 	}
 	for (auto &copy_option : info.options) {
 		if (copy_option.first == "force_quote") {
@@ -73,8 +76,15 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info,
 		if (copy_option.second.size() == 1) {
 			ss << copy_option.second[0].ToSQLString();
 		} else {
-			// FIXME handle multiple options
-			throw NotImplementedException("FIXME: serialize list of options");
+			// For Lists
+			ss << "(";
+			for (idx_t i = 0; i < copy_option.second.size(); i++) {
+				ss << copy_option.second[i].ToSQLString();
+				if (i != copy_option.second.size() - 1) {
+					ss << ", ";
+				}
+			}
+			ss << ")";
 		}
 	}
 	ss << ");" << '\n';

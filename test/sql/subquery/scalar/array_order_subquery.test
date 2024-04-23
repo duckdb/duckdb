@@ -37,3 +37,46 @@ select array(select unnest(l) AS i order by i desc nulls first) as a from (value
 []
 [12, 11, 10]
 
+# use integer literals
+query I
+SELECT ARRAY
+  (SELECT 1 UNION ALL
+   SELECT 2 UNION ALL
+   SELECT 3
+   ORDER by 1) AS new_array;
+----
+[1, 2, 3]
+
+query I
+SELECT ARRAY
+  (SELECT 1 UNION ALL
+   SELECT 2 UNION ALL
+   SELECT 3
+   ORDER by 1 DESC) AS new_array;
+----
+[3, 2, 1]
+
+statement error
+SELECT ARRAY
+  (SELECT 1 UNION ALL
+   SELECT 2 UNION ALL
+   SELECT 3
+   ORDER by -1) AS new_array;
+----
+ORDER term out of range
+
+statement error
+SELECT ARRAY
+  (SELECT 1 UNION ALL
+   SELECT 2 UNION ALL
+   SELECT 3
+   ORDER by 2) AS new_array;
+----
+ORDER term out of range
+
+statement ok
+SELECT ARRAY
+  (SELECT 1 UNION ALL
+   SELECT 2 UNION ALL
+   SELECT 3
+   ORDER by 'hello world') AS new_array;

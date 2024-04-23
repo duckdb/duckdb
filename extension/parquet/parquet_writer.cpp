@@ -350,9 +350,11 @@ void VerifyUniqueNames(const vector<string> &names) {
 ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, vector<LogicalType> types_p, vector<string> names_p,
                              CompressionCodec::type codec, ChildFieldIDs field_ids_p,
                              const vector<pair<string, string>> &kv_metadata,
-                             shared_ptr<ParquetEncryptionConfig> encryption_config_p)
+                             shared_ptr<ParquetEncryptionConfig> encryption_config_p,
+                             double dictionary_compression_ratio_threshold_p)
     : file_name(std::move(file_name_p)), sql_types(std::move(types_p)), column_names(std::move(names_p)), codec(codec),
-      field_ids(std::move(field_ids_p)), encryption_config(std::move(encryption_config_p)) {
+      field_ids(std::move(field_ids_p)), encryption_config(std::move(encryption_config_p)),
+      dictionary_compression_ratio_threshold(dictionary_compression_ratio_threshold_p) {
 	// initialize the file writer
 	writer = make_uniq<BufferedFileWriter>(fs, file_name.c_str(),
 	                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
@@ -366,7 +368,7 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, vector<LogicalT
 		writer->WriteData(const_data_ptr_cast("PAR1"), 4);
 	}
 	TCompactProtocolFactoryT<MyTransport> tproto_factory;
-	protocol = tproto_factory.getProtocol(make_shared<MyTransport>(*writer));
+	protocol = tproto_factory.getProtocol(std::make_shared<MyTransport>(*writer));
 
 	file_meta_data.num_rows = 0;
 	file_meta_data.version = 1;
