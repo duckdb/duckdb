@@ -64,9 +64,10 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 
 	auto result = make_uniq<ReadCSVData>();
 	auto &options = result->options;
-	result->multi_file_reader = make_uniq<MultiFileReader>();
-	auto mfl = result->multi_file_reader->GetFileList(context, input.inputs[0], "CSV");
-	result->files = mfl->GetAllExpandedFiles();
+	MultiFileReader multi_file_reader;
+	// TODO: make the CSV reader use MultiFileList instead of vector<string> for passing the file list
+	auto multi_file_list = multi_file_reader.GetFileList(context, input.inputs[0], "CSV");
+	result->files = multi_file_list->GetAllExpandedFiles();
 
 	options.FromNamedParameters(input.named_parameters, context, return_types, names);
 
@@ -91,7 +92,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		    "REJECTS_RECOVERY_COLUMNS option is only supported when REJECTS_TABLE is set to a table name");
 	}
 
-	options.file_options.AutoDetectHivePartitioning(*mfl, context);
+	options.file_options.AutoDetectHivePartitioning(*multi_file_list, context);
 
 	if (!options.auto_detect && return_types.empty()) {
 		throw BinderException("read_csv requires columns to be specified through the 'columns' option. Use "
@@ -115,7 +116,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	D_ASSERT(return_types.size() == names.size());
 	result->options.dialect_options.num_cols = names.size();
 	if (options.file_options.union_by_name) {
-		result->reader_bind = result->multi_file_reader->BindUnionReader<CSVFileScan>(context, return_types, names, *mfl, *result, options);
+		result->reader_bind = multi_file_reader.BindUnionReader<CSVFileScan>(context, return_types, names, *multi_file_list, *result, options);
 		if (result->union_readers.size() > 1) {
 			result->column_info.emplace_back(result->initial_reader->names, result->initial_reader->types);
 			for (idx_t i = 1; i < result->union_readers.size(); i++) {
@@ -139,7 +140,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	} else {
 		result->csv_types = return_types;
 		result->csv_names = names;
-        result->multi_file_reader->BindOptions(options.file_options, *mfl, return_types, names, result->reader_bind);
+        multi_file_reader.BindOptions(options.file_options, *multi_file_list, return_types, names, result->reader_bind);
 	}
 	result->return_types = return_types;
 	result->return_names = names;
@@ -207,7 +208,7 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 	}
 	do {
 		if (output.size() != 0) {
-			bind_data.multi_file_reader->FinalizeChunk(context, bind_data.reader_bind,
+			MultiFileReader().FinalizeChunk(context, bind_data.reader_bind,
 			                               csv_local_state.csv_reader->csv_file_scan->reader_data, output, csv_local_state.csv_reader->csv_file_scan->file_path);
 			break;
 		}
@@ -288,7 +289,7 @@ void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionD
                               vector<unique_ptr<Expression>> &filters) {
 	auto &data = bind_data_p->Cast<ReadCSVData>();
 	SimpleMultiFileList file_list(data.files);
-	auto reset_reader = data.multi_file_reader->ComplexFilterPushdown(context, file_list, data.options.file_options, get, filters);
+	auto reset_reader = MultiFileReader().ComplexFilterPushdown(context, file_list, data.options.file_options, get, filters);
 	if (reset_reader) {
 		MultiFileReader::PruneReaders(data, file_list);
 	}
