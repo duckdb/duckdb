@@ -16,19 +16,23 @@ void AddNumbersTogether(duckdb_function_info info, duckdb_data_chunk input, duck
 	// get the validity vectors
 	auto a_validity = duckdb_vector_get_validity(a);
 	auto b_validity = duckdb_vector_get_validity(b);
-	uint64_t *result_validity = nullptr;
 	if (a_validity || b_validity) {
 		// if either a_validity or b_validity is defined there might be NULL values
 		duckdb_vector_ensure_validity_writable(output);
-		result_validity = duckdb_vector_get_validity(output);
-	}
-	for(idx_t row = 0; row < input_size; row++) {
-		if (duckdb_validity_row_is_valid(a_validity, row) && duckdb_validity_row_is_valid(b_validity, row)) {
-			// not null - do the addition
+		auto result_validity = duckdb_vector_get_validity(output);
+		for(idx_t row = 0; row < input_size; row++) {
+			if (duckdb_validity_row_is_valid(a_validity, row) && duckdb_validity_row_is_valid(b_validity, row)) {
+				// not null - do the addition
+				result_data[row] = a_data[row] + b_data[row];
+			} else {
+				// either a or b is NULL - set the result row to NULL
+				duckdb_validity_set_row_invalid(result_validity, row);
+			}
+		}
+	} else {
+		// no NULL values - iterate and do the operation directly
+		for(idx_t row = 0; row < input_size; row++) {
 			result_data[row] = a_data[row] + b_data[row];
-		} else {
-			// either a or b is NULL - set the result row to NULL
-			duckdb_validity_set_row_invalid(result_validity, row);
 		}
 	}
 }
@@ -91,9 +95,9 @@ TEST_CASE("Test Scalar Functions C API", "[capi]") {
 	REQUIRE(result->IsNull(0, 0));
 
 	// call it over a vector of values
-	result = tester.Query("SELECT my_addition(1000000, i) FROm range(10000) t(i)");
+	result = tester.Query("SELECT my_addition(1000000, i) FROM range(10000) t(i)");
 	REQUIRE_NO_FAIL(*result);
 	for(idx_t row = 0; row < 10000; row++) {
-		REQUIRE(result->Fetch<int64_t>(0, row) == 1000000 + row);
+		REQUIRE(result->Fetch<int64_t>(0, row) == static_cast<int64_t>(1000000 + row));
 	}
 }
