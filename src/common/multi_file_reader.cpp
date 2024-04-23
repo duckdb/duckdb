@@ -17,16 +17,16 @@ namespace duckdb {
 MultiFileList::~MultiFileList() {
 }
 
-bool MultiFileList::ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
-                           vector<unique_ptr<Expression>> &filters) {
+bool MultiFileList::ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options,
+                                          LogicalGet &get, vector<unique_ptr<Expression>> &filters) {
 	// By default the filter pushdown into a multifilelist does nothing
-    return false;
+	return false;
 }
 
 vector<string> MultiFileList::GetAllExpandedFiles() {
 	vector<string> result;
 	idx_t i = 0;
-	while(true) {
+	while (true) {
 		auto next_file = GetFile(i++);
 
 		if (next_file.empty()) {
@@ -37,23 +37,22 @@ vector<string> MultiFileList::GetAllExpandedFiles() {
 	return result;
 }
 
-
 SimpleMultiFileList::SimpleMultiFileList(vector<string> files) : files(files) {
 }
 
 vector<string> SimpleMultiFileList::GetAllExpandedFiles() {
-    return files;
+	return files;
 }
 
 string SimpleMultiFileList::GetFile(idx_t i) {
-    if (files.size() <= i) {
+	if (files.size() <= i) {
 		return "";
 	}
 	return files[i];
 }
 
-bool SimpleMultiFileList::ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
-                                          vector<unique_ptr<Expression>> &filters) {
+bool SimpleMultiFileList::ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options,
+                                                LogicalGet &get, vector<unique_ptr<Expression>> &filters) {
 	if (files.empty()) {
 		return false;
 	}
@@ -81,7 +80,7 @@ bool SimpleMultiFileList::ComplexFilterPushdown(ClientContext &context, const Mu
 }
 
 const vector<string> SimpleMultiFileList::GetPaths() {
-    return files;
+	return files;
 }
 
 CustomMultiFileReaderBindData::~CustomMultiFileReaderBindData() {
@@ -100,7 +99,7 @@ void MultiFileReader::AddParameters(TableFunction &table_function) {
 
 // TODO vector of strings
 unique_ptr<MultiFileList> MultiFileReader::GetFileList(ClientContext &context, const Value &input, const string &name,
-                                            FileGlobOptions options) {
+                                                       FileGlobOptions options) {
 	auto &config = DBConfig::GetConfig(context);
 	if (!config.options.enable_external_access) {
 		throw PermissionException("Scanning %s files is disabled through configuration", name);
@@ -183,14 +182,15 @@ bool MultiFileReader::ComplexFilterPushdown(ClientContext &context, MultiFileLis
 	return files.ComplexFilterPushdown(context, options, get, filters);
 }
 
-bool MultiFileReader::Bind(MultiFileReaderOptions &options, MultiFileList &files,
-          vector<LogicalType> &return_types, vector<string> &names, MultiFileReaderBindData &bind_data) {
-    // The Default MultiFileReader can not perform any binding as it uses MultiFileLists with no schema information.
-    return false;
+bool MultiFileReader::Bind(MultiFileReaderOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
+                           vector<string> &names, MultiFileReaderBindData &bind_data) {
+	// The Default MultiFileReader can not perform any binding as it uses MultiFileLists with no schema information.
+	return false;
 }
 
-void MultiFileReader::BindOptions(MultiFileReaderOptions &options, MultiFileList& files,
-                                                     vector<LogicalType> &return_types, vector<string> &names, MultiFileReaderBindData& bind_data) {
+void MultiFileReader::BindOptions(MultiFileReaderOptions &options, MultiFileList &files,
+                                  vector<LogicalType> &return_types, vector<string> &names,
+                                  MultiFileReaderBindData &bind_data) {
 	// Add generated constant column for filename
 	if (options.filename) {
 		if (std::find(names.begin(), names.end(), "filename") != names.end()) {
@@ -398,8 +398,8 @@ void MultiFileReader::CreateFilterMap(const vector<LogicalType> &global_types, o
 	}
 }
 
-void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileReaderBindData &bind_data, const MultiFileReaderData &reader_data,
-                                    DataChunk &chunk, const string &path) {
+void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileReaderBindData &bind_data,
+                                    const MultiFileReaderData &reader_data, DataChunk &chunk, const string &path) {
 	// reference all the constants set up in MultiFileReader::FinalizeBind
 	for (auto &entry : reader_data.constant_map) {
 		chunk.data[entry.column_id].Reference(entry.value);
@@ -452,7 +452,7 @@ bool MultiFileReaderOptions::AutoDetectHivePartitioningInternal(MultiFileList &f
 	std::unordered_set<string> partitions;
 	auto &fs = FileSystem::GetFileSystem(context);
 
-    auto first_file = files.GetFile(0);
+	auto first_file = files.GetFile(0);
 	auto splits_first_file = StringUtil::Split(first_file, fs.PathSeparator(first_file));
 	if (splits_first_file.size() < 2) {
 		return false;
@@ -467,13 +467,13 @@ bool MultiFileReaderOptions::AutoDetectHivePartitioningInternal(MultiFileList &f
 		return false;
 	}
 
-    idx_t current_file = 0; // TODO should be 1?
+	idx_t current_file = 0; // TODO should be 1?
 
-	while(true) {
-        auto file = files.GetFile(current_file++);
-        if (file.empty()) {
-            break;
-        }
+	while (true) {
+		auto file = files.GetFile(current_file++);
+		if (file.empty()) {
+			break;
+		}
 		auto splits = StringUtil::Split(file, fs.PathSeparator(file));
 		if (splits.size() != splits_first_file.size()) {
 			return false;
@@ -525,7 +525,7 @@ void MultiFileReaderOptions::AutoDetectHiveTypesInternal(const string &file, Cli
 	}
 }
 void MultiFileReaderOptions::AutoDetectHivePartitioning(MultiFileList &files, ClientContext &context) {
-    D_ASSERT(!files.GetFile(0).empty());
+	D_ASSERT(!files.GetFile(0).empty());
 	const bool hp_explicitly_disabled = !auto_detect_hive_partitioning && !hive_partitioning;
 	const bool ht_enabled = !hive_types_schema.empty();
 	if (hp_explicitly_disabled && ht_enabled) {

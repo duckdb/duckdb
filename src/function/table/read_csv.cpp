@@ -116,7 +116,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	D_ASSERT(return_types.size() == names.size());
 	result->options.dialect_options.num_cols = names.size();
 	if (options.file_options.union_by_name) {
-		result->reader_bind = multi_file_reader.BindUnionReader<CSVFileScan>(context, return_types, names, *multi_file_list, *result, options);
+		result->reader_bind = multi_file_reader.BindUnionReader<CSVFileScan>(context, return_types, names,
+		                                                                     *multi_file_list, *result, options);
 		if (result->union_readers.size() > 1) {
 			result->column_info.emplace_back(result->initial_reader->names, result->initial_reader->types);
 			for (idx_t i = 1; i < result->union_readers.size(); i++) {
@@ -140,7 +141,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	} else {
 		result->csv_types = return_types;
 		result->csv_names = names;
-        multi_file_reader.BindOptions(options.file_options, *multi_file_list, return_types, names, result->reader_bind);
+		multi_file_reader.BindOptions(options.file_options, *multi_file_list, return_types, names, result->reader_bind);
 	}
 	result->return_types = return_types;
 	result->return_names = names;
@@ -209,7 +210,8 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 	do {
 		if (output.size() != 0) {
 			MultiFileReader().FinalizeChunk(context, bind_data.reader_bind,
-			                               csv_local_state.csv_reader->csv_file_scan->reader_data, output, csv_local_state.csv_reader->csv_file_scan->file_path);
+			                                csv_local_state.csv_reader->csv_file_scan->reader_data, output,
+			                                csv_local_state.csv_reader->csv_file_scan->file_path);
 			break;
 		}
 		if (csv_local_state.csv_reader->FinishedIterator()) {
@@ -289,7 +291,8 @@ void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionD
                               vector<unique_ptr<Expression>> &filters) {
 	auto &data = bind_data_p->Cast<ReadCSVData>();
 	SimpleMultiFileList file_list(data.files);
-	auto reset_reader = MultiFileReader().ComplexFilterPushdown(context, file_list, data.options.file_options, get, filters);
+	auto reset_reader =
+	    MultiFileReader().ComplexFilterPushdown(context, file_list, data.options.file_options, get, filters);
 	if (reset_reader) {
 		MultiFileReader::PruneReaders(data, file_list);
 	}
