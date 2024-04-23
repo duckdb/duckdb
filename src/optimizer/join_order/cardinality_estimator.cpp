@@ -211,7 +211,7 @@ JoinRelationSet &CardinalityEstimator::UpdateNumeratorRelations(Subgraph2Denomin
 		return *right.relations;
 	}
 	default:
-		// cross product
+		// cross product or inner join
 		return set_manager.Union(*left.relations, *right.relations);
 	}
 }
@@ -261,13 +261,16 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 
 	for (auto &edge : edges) {
 		auto subgraph_connections = SubgraphsConnectedByEdge(edge, subgraphs);
+		if (edge.has_tdom_hll && edge.tdom_hll == 25) {
+			auto break_here = 0;
+		}
 		auto new_subgraph = Subgraph2Denominator();
 		new_subgraph.relations = &edge.filter_info->set;
 		new_subgraph.numerator_relations = &edge.filter_info->set;
-		new_subgraph.denom = edge.has_tdom_hll ? edge.tdom_hll : edge.tdom_no_hll;
 		if (subgraph_connections.empty()) {
 			// edge does not connect any subgraphs. If the current edge has only one relation at both vertices,
 			// create one subgraph with both relations.
+			new_subgraph.denom = edge.has_tdom_hll ? edge.tdom_hll : edge.tdom_no_hll;
 			subgraphs.push_back(new_subgraph);
 		}
 		else if (subgraph_connections.size() == 1) {
@@ -352,7 +355,7 @@ idx_t CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set)
 	if (cardinality_as_double >= max) {
 		return max;
 	}
-	return (idx_t)cardinality_as_double;
+	return (idx_t)(ceil(cardinality_as_double));
 }
 
 bool SortTdoms(const RelationsToTDom &a, const RelationsToTDom &b) {

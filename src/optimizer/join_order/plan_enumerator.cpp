@@ -151,6 +151,9 @@ unique_ptr<JoinNode> PlanEnumerator::EmitPair(JoinRelationSet &left, JoinRelatio
 		throw InternalException("No left or right plan: internal error in join order optimizer");
 	}
 	auto &new_set = query_graph_manager.set_manager.Union(left, right);
+	if (new_set.ToString() == "[0, 1, 3, 5]") {
+		auto break_here = 0;
+	}
 	// create the join tree based on combining the two plans
 	auto new_plan = CreateJoinTree(new_set, info, *left_plan->second, *right_plan->second);
 	// check if this plan is the optimal plan we found for this set of relations
@@ -175,7 +178,7 @@ bool PlanEnumerator::TryEmitPair(JoinRelationSet &left, JoinRelationSet &right,
 	// If a full plan is created, it's possible a node in the plan gets updated. When this happens, make sure you keep
 	// emitting pairs until you emit another final plan. Another final plan is guaranteed to be produced because of
 	// our symmetry guarantees.
-	if (pairs >= 10000) {
+	if (pairs >= 20000) {
 		// when the amount of pairs gets too large we exit the dynamic programming and resort to a greedy algorithm
 		// FIXME: simple heuristic currently
 		// at 10K pairs stop searching exactly and switch to heuristic
@@ -449,6 +452,9 @@ void PlanEnumerator::InitLeafPlans() {
 	// function ensures that a unique combination of relations will have a unique JoinRelationSet object.
 	// first initialize equivalent relations based on the filters
 	auto relation_stats = query_graph_manager.relation_manager.GetRelationStats();
+	for (idx_t i = 0; i < relation_stats.size(); i++) {
+		std::cout << "relation " << i << " = " << relation_stats.at(i).table_name << std::endl;
+	}
 
 	cost_model.cardinality_estimator.InitEquivalentRelations(query_graph_manager.GetFilterBindings());
 	cost_model.cardinality_estimator.AddRelationNamesToTdoms(relation_stats);
@@ -464,6 +470,7 @@ void PlanEnumerator::InitLeafPlans() {
 		plans[relation_set] = std::move(join_node);
 		cost_model.cardinality_estimator.InitCardinalityEstimatorProps(&relation_set, stats);
 	}
+	cost_model.cardinality_estimator.PrintRelationToTdomInfo();
 }
 
 // the plan enumeration is a straight implementation of the paper "Dynamic Programming Strikes Back" by Guido
