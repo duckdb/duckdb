@@ -73,9 +73,13 @@ source_files = [
         'extension/jemalloc/jemalloc/src/tsd.c',
         'extension/jemalloc/jemalloc/src/util.c',
         'extension/jemalloc/jemalloc/src/witness.c',
-        'extension/jemalloc/jemalloc/src/jemalloc_cpp.cpp',
     ]
 ]
+
+# if we add this jemalloc overrides new/delete
+# would be great but causes trouble in our Python client
+# should be resolvable, with some effort
+# 'extension/jemalloc/jemalloc/src/jemalloc_cpp.cpp',
 
 if platform.system() == 'Darwin':
     source_files.append(os.path.sep.join('extension/jemalloc/jemalloc/src/zone.c'.split('/')))
