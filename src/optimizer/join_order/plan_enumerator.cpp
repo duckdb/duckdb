@@ -91,7 +91,7 @@ void PlanEnumerator::GenerateCrossProducts() {
 	// query_graph = query_graph_manager.GetQueryGraph();
 }
 
-const reference_map_t<JoinRelationSet, unique_ptr<DPJoinNode>> &PlanEnumerator::GetPlans() {
+const reference_map_t<JoinRelationSet, unique_ptr<DPJoinNode>> &PlanEnumerator::GetPlans() const {
 	//	optional_ptr<reference_map_t<JoinRelationSet, unique_ptr<DPJoinNode>>> res = &plans;
 	return plans;
 }

@@ -37,7 +37,7 @@ public:
 	void SolveJoinOrder();
 	void InitLeafPlans();
 
-	const reference_map_t<JoinRelationSet, unique_ptr<DPJoinNode>> &GetPlans();
+	const reference_map_t<JoinRelationSet, unique_ptr<DPJoinNode>> &GetPlans() const;
 
 private:
 	//! The set of edges used in the join optimizer
