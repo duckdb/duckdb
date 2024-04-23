@@ -47,6 +47,60 @@ FROM read_csv('data/csv/file_error.csv');
 ----
 Error when converting column "id". Could not convert string "3r" to 'INTEGER'
 
+statement ok
+DROP table proj;
+
+statement ok
+CREATE TABLE proj (
+        name VARCHAR(10) NOT NULL,
+        id INTEGER NOT NULL,  /*primary key*/
+);
+
+statement ok
+INSERT INTO proj
+SELECT name, id
+FROM read_csv('data/csv/file_error.csv', rejects_table='rejects_table', ignore_errors=true, null_padding=true);
+
+query II
+select * from proj;
+----
+alice	1
+eve	2
+
+statement error
+INSERT INTO proj
+SELECT name, id
+FROM read_csv('data/csv/file_error.csv');
+----
+Could not convert string "3r" to 'INTEGER'
+
+statement ok
+DROP table proj;
+
+statement ok
+CREATE TABLE proj (
+        email VARCHAR,
+        id INTEGER NOT NULL,  /*primary key*/
+);
+
+statement ok
+INSERT INTO proj
+SELECT email, id
+FROM read_csv('data/csv/file_error.csv', rejects_table='rejects_table', ignore_errors=true, null_padding=true);
+
+query II
+select * from proj;
+----
+alice@email.com	1
+NULL	2
+
+statement error
+INSERT INTO proj
+SELECT name, id
+FROM read_csv('data/csv/file_error.csv');
+----
+Could not convert string "3r" to 'INTEGER'
+
 
 # Test Glob
 

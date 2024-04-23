@@ -29,19 +29,15 @@ unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<LogicalTyp
 			auto &logical_get = node->children[0]->Cast<LogicalGet>();
 			// yuck string matching, maybe there is a better way?
 			if (logical_get.function.name == "read_csv" || logical_get.function.name == "read_csv_auto") {
-				// we have to do some type switcharoo
-				vector<LogicalType> pushdown_types;
-				vector<string> pushdown_names;
 				auto &csv_bind = logical_get.bind_data->Cast<ReadCSVData>();
-				for (auto& col_idx : logical_get.column_ids){
-					pushdown_names.push_back(csv_bind.csv_names[col_idx]);
+				// we have to do some type switcharoo
+				vector<LogicalType> pushdown_types = csv_bind.csv_types;
+				for (idx_t tgt_idx =0; tgt_idx < logical_get.column_ids.size(); tgt_idx++){
+					pushdown_types[logical_get.column_ids[tgt_idx]] =  target_types[tgt_idx];
 				}
-				csv_bind.csv_types = target_types;
-				csv_bind.csv_names = pushdown_names;
-				csv_bind.return_types = target_types;
-				csv_bind.return_names = pushdown_names;
-				logical_get.returned_types = target_types;
-				int x = 0;
+				csv_bind.csv_types = pushdown_types;
+				csv_bind.return_types = pushdown_types;
+				logical_get.returned_types = pushdown_types;
 				// We early out here, since we don't need to add casts
 				return op;
 
