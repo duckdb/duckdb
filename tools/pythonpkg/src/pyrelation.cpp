@@ -1060,28 +1060,28 @@ static Value NestedDictToStruct(const py::object &dictionary) {
 
 	child_list_t<Value> children;
 	for (auto item : dict_casted) {
-            py::object item_key = item.first.cast<py::object>();
-            py::object item_value = item.second.cast<py::object>();
+		py::object item_key = item.first.cast<py::object>();
+		py::object item_value = item.second.cast<py::object>();
 
-			if (!py::isinstance<py::str>(item_key)) {
-				throw InvalidInputException("NestedDictToStruct only accepts a dictionary with string keys");
-			}
+		if (!py::isinstance<py::str>(item_key)) {
+			throw InvalidInputException("NestedDictToStruct only accepts a dictionary with string keys");
+		}
 
-			if (py::isinstance<py::int_>(item_value)) {
-				int32_t item_value_int = py::int_(item_value);
-				children.push_back(std::make_pair(py::str(item_key), Value(item_value_int)));
-			} else if (py::isinstance<py::dict>(item_value)) {
-				children.push_back(std::make_pair(py::str(item_key), NestedDictToStruct(item_value)));
-			} else {
-				throw InvalidInputException("NestedDictToStruct only accepts a dictionary with integer values or nested dictionaries");
-			}     
-    }
+		if (py::isinstance<py::int_>(item_value)) {
+			int32_t item_value_int = py::int_(item_value);
+			children.push_back(std::make_pair(py::str(item_key), Value(item_value_int)));
+		} else if (py::isinstance<py::dict>(item_value)) {
+			children.push_back(std::make_pair(py::str(item_key), NestedDictToStruct(item_value)));
+		} else {
+			throw InvalidInputException(
+			    "NestedDictToStruct only accepts a dictionary with integer values or nested dictionaries");
+		}
+	}
 	return Value::STRUCT(std::move(children));
 }
 
-void DuckDBPyRelation::ToParquet(const string &filename, const py::object &compression,
-								 const py::object &field_ids, const py::object &row_group_size_bytes,
-								 const py::object &row_group_size) {
+void DuckDBPyRelation::ToParquet(const string &filename, const py::object &compression, const py::object &field_ids,
+                                 const py::object &row_group_size_bytes, const py::object &row_group_size) {
 	case_insensitive_map_t<vector<Value>> options;
 
 	if (!py::none().is(compression)) {
@@ -1109,7 +1109,8 @@ void DuckDBPyRelation::ToParquet(const string &filename, const py::object &compr
 		} else if (py::isinstance<py::str>(row_group_size_bytes)) {
 			options["row_group_size_bytes"] = {Value(py::str(row_group_size_bytes))};
 		} else {
-			throw InvalidInputException("to_parquet only accepts 'row_group_size_bytes' as an integer or 'auto' string");
+			throw InvalidInputException(
+			    "to_parquet only accepts 'row_group_size_bytes' as an integer or 'auto' string");
 		}
 	}
 

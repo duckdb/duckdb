@@ -41,15 +41,17 @@ class TestToParquet(object):
         rel.to_parquet(temp_file_name, field_ids=dict(i=42, my_struct={'__duckdb_field_id': 43, 'j': 44}))
         parquet_rel = duckdb.read_parquet(temp_file_name)
         assert rel.execute().fetchall() == parquet_rel.execute().fetchall()
-        assert [
-            ('duckdb_schema', None),
-            ('i', 42),
-            ('my_struct', 43),
-            ('j', 44)
-        ] == duckdb.sql(f'''
+        assert (
+            [('duckdb_schema', None), ('i', 42), ('my_struct', 43), ('j', 44)]
+            == duckdb.sql(
+                f'''
             select name,field_id
             from parquet_schema('{temp_file_name}')
-        ''').execute().fetchall()
+        '''
+            )
+            .execute()
+            .fetchall()
+        )
 
     @pytest.mark.parametrize('row_group_size_bytes', [122880 * 1024, '2MB'])
     def test_row_group_size_bytes(self, row_group_size_bytes):
