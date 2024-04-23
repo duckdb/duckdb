@@ -158,6 +158,23 @@
     ]
   },
   {
+    "class": "ColumnDataRef",
+    "base": "TableRef",
+    "enum": "COLUMN_DATA",
+    "members": [
+      {
+        "id": 200,
+        "name": "expected_names",
+        "type": "vector<string>"
+      },
+      {
+        "id": 202,
+        "name": "collection",
+        "type": "ColumnDataCollection*"
+      }
+    ]
+  },
+  {
     "class": "PivotRef",
     "base": "TableRef",
     "enum": "PIVOT",

@@ -1,0 +1,13 @@
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/tableref/bound_column_data_ref.hpp"
+
+namespace duckdb {
+
+unique_ptr<LogicalOperator> Binder::CreatePlan(BoundColumnDataRef &ref) {
+	auto types = ref.collection->Types();
+	auto root = make_uniq_base<LogicalOperator, LogicalColumnDataGet>(GenerateTableIndex(), std::move(types),
+	                                                                  std::move(ref.collection));
+	return root;
+}
+
+} // namespace duckdb

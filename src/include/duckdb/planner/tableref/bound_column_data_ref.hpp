@@ -18,12 +18,11 @@ public:
 	static constexpr const TableReferenceType TYPE = TableReferenceType::COLUMN_DATA;
 
 public:
-	BoundColumnDataRef() : BoundTableRef(TableReferenceType::COLUMN_DATA) {
+	BoundColumnDataRef(unique_ptr<ColumnDataCollection> &&collection)
+	    : BoundTableRef(TableReferenceType::COLUMN_DATA), collection(std::move(collection)) {
 	}
 	//! The materialized column data to scan
 	unique_ptr<ColumnDataCollection> collection;
-	//! The names associated with the columns
-	vector<string> names;
 	//! The index in the bind context
 	idx_t bind_index;
 };

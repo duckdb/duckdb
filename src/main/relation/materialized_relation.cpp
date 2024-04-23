@@ -3,13 +3,13 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/bound_statement.hpp"
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
-#include "duckdb/planner/tableref/column_data_ref.hpp"
+#include "duckdb/parser/tableref/column_data_ref.hpp"
 
 namespace duckdb {
 
 MaterializedRelation::MaterializedRelation(const shared_ptr<ClientContext> &context, ColumnDataCollection &collection_p,
                                            vector<string> names, string alias_p)
-    : Relation(context, RelationType::MATERIALIZED_RELATION), alias(std::move(alias_p)), collection(collection_p) {
+    : Relation(context, RelationType::MATERIALIZED_RELATION), collection(collection_p), alias(std::move(alias_p)) {
 	// create constant expressions for the values
 	auto types = collection.Types();
 	D_ASSERT(types.size() == names.size());
@@ -30,22 +30,10 @@ unique_ptr<QueryNode> MaterializedRelation::GetQueryNode() {
 	return std::move(result);
 }
 
-unique_ptr<TableRef> ValueRelation::GetTableRef() {
-	auto table_ref = make_uniq<ColumnDataRef>();
-	// set the expected types/names
-	for (idx_t i = 0; i < columns.size(); i++) {
-		table_ref->expected_names.push_back(columns[i].Name());
-		table_ref->expected_types.push_back(columns[i].Type());
-		D_ASSERT(names.size() == 0 || columns[i].Name() == names[i]);
-	}
-	// copy the expressions
-	for (auto &expr_list : expressions) {
-		vector<unique_ptr<ParsedExpression>> copied_list;
-		copied_list.reserve(expr_list.size());
-		for (auto &expr : expr_list) {
-			copied_list.push_back(expr->Copy());
-		}
-		table_ref->values.push_back(std::move(copied_list));
+unique_ptr<TableRef> MaterializedRelation::GetTableRef() {
+	auto table_ref = make_uniq<ColumnDataRef>(collection);
+	for (auto &col : columns) {
+		table_ref->expected_names.push_back(col.Name());
 	}
 	table_ref->alias = GetAlias();
 	return std::move(table_ref);
@@ -60,7 +48,7 @@ unique_ptr<TableRef> ValueRelation::GetTableRef() {
 //	}
 //	auto to_scan = make_uniq<ColumnDataCollection>(collection);
 //	auto logical_get = make_uniq_base<LogicalOperator, LogicalColumnDataGet>(binder.GenerateTableIndex(), return_types,
-//std::move(to_scan));
+// std::move(to_scan));
 //	// FIXME: add Binding???
 
 //	BoundStatement result;

@@ -1,18 +1,18 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/planner/tableref/column_data_ref.hpp
+// duckdb/parser/tableref/column_data_ref.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/planner/bound_tableref.hpp"
+#include "duckdb/parser/tableref.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 
 namespace duckdb {
-//! Represents a TableReference to a base table in the schema
+//! Represents a TableReference to a materialized result
 class ColumnDataRef : public TableRef {
 public:
 	static constexpr const TableReferenceType TYPE = TableReferenceType::COLUMN_DATA;
@@ -20,10 +20,13 @@ public:
 public:
 	ColumnDataRef() : TableRef(TableReferenceType::COLUMN_DATA) {
 	}
+	ColumnDataRef(ColumnDataCollection &collection)
+	    : TableRef(TableReferenceType::COLUMN_DATA), collection(make_uniq<ColumnDataCollection>(collection)) {
+	}
 
 public:
-	//! Expected SQL types
-	vector<LogicalType> expected_types;
+	//! The materialized column data
+	unique_ptr<ColumnDataCollection> collection;
 	//! The set of expected names
 	vector<string> expected_names;
 
@@ -33,7 +36,7 @@ public:
 
 	unique_ptr<TableRef> Copy() override;
 
-	//! Deserializes a blob back into a ExpressionListRef
+	//! Deserializes a blob back into a ColumnDataRef
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<TableRef> Deserialize(Deserializer &source);
 };

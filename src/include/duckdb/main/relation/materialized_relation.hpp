@@ -20,7 +20,7 @@ public:
 	MaterializedRelation(const shared_ptr<ClientContext> &context, const string &values, vector<string> names,
 	                     string alias = "materialized");
 
-	ColumnDataCollection &collection;
+	ColumnDataCollection collection;
 	vector<ColumnDefinition> columns;
 	string alias;
 

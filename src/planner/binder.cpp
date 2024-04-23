@@ -17,6 +17,7 @@
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/parser/query_node/list.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/enum_util.hpp"
 
 #include <algorithm>
 
@@ -272,6 +273,9 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 	case TableReferenceType::EXPRESSION_LIST:
 		result = Bind(ref.Cast<ExpressionListRef>());
 		break;
+	case TableReferenceType::COLUMN_DATA:
+		result = Bind(ref.Cast<ColumnDataRef>());
+		break;
 	case TableReferenceType::PIVOT:
 		result = Bind(ref.Cast<PivotRef>());
 		break;
@@ -281,7 +285,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 	case TableReferenceType::CTE:
 	case TableReferenceType::INVALID:
 	default:
-		throw InternalException("Unknown table ref type");
+		throw InternalException("Unknown table ref type (%s)", EnumUtil::ToString(ref.type));
 	}
 	result->sample = std::move(ref.sample);
 	return result;
@@ -308,6 +312,9 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 	case TableReferenceType::EXPRESSION_LIST:
 		root = CreatePlan(ref.Cast<BoundExpressionListRef>());
 		break;
+	case TableReferenceType::COLUMN_DATA:
+		root = CreatePlan(ref.Cast<BoundColumnDataRef>());
+		break;
 	case TableReferenceType::CTE:
 		root = CreatePlan(ref.Cast<BoundCTERef>());
 		break;
@@ -316,7 +323,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 		break;
 	case TableReferenceType::INVALID:
 	default:
-		throw InternalException("Unsupported bound table ref type");
+		throw InternalException("Unsupported bound table ref type (%s)", EnumUtil::ToString(ref.type));
 	}
 	// plan the sample clause
 	if (ref.sample) {

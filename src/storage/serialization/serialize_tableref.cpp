@@ -26,6 +26,9 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &deserializer) {
 	case TableReferenceType::BASE_TABLE:
 		result = BaseTableRef::Deserialize(deserializer);
 		break;
+	case TableReferenceType::COLUMN_DATA:
+		result = ColumnDataRef::Deserialize(deserializer);
+		break;
 	case TableReferenceType::EMPTY_FROM:
 		result = EmptyTableRef::Deserialize(deserializer);
 		break;
@@ -70,6 +73,19 @@ unique_ptr<TableRef> BaseTableRef::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<string>(201, "table_name", result->table_name);
 	deserializer.ReadPropertyWithDefault<vector<string>>(202, "column_name_alias", result->column_name_alias);
 	deserializer.ReadPropertyWithDefault<string>(203, "catalog_name", result->catalog_name);
+	return std::move(result);
+}
+
+void ColumnDataRef::Serialize(Serializer &serializer) const {
+	TableRef::Serialize(serializer);
+	serializer.WritePropertyWithDefault<vector<string>>(200, "expected_names", expected_names);
+	serializer.WritePropertyWithDefault<unique_ptr<ColumnDataCollection>>(202, "collection", collection);
+}
+
+unique_ptr<TableRef> ColumnDataRef::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<ColumnDataRef>(new ColumnDataRef());
+	deserializer.ReadPropertyWithDefault<vector<string>>(200, "expected_names", result->expected_names);
+	deserializer.ReadPropertyWithDefault<unique_ptr<ColumnDataCollection>>(202, "collection", result->collection);
 	return std::move(result);
 }
 
