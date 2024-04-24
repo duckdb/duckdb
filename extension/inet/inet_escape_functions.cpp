@@ -34,7 +34,7 @@ unique_ptr<FunctionData> UnescapeBind(ClientContext &context, ScalarFunction &bo
 
 static void PrepareStrForTypeCasting(string &match) {
 	// in HTML, the sequence &#<number>; represents a character by its Unicode code point or in the form
-	// &#x<hex_number>; represents its hexadecimal value.
+	// &#x<hex_number>; which represents its hexadecimal value.
 	// To apply the TryCast::Operation, this string requires some "cleaning"
 	match.erase(match.begin()); // rmv # char
 	if (match.back() == ';') {  // rmv ; char
@@ -45,14 +45,6 @@ static void PrepareStrForTypeCasting(string &match) {
 	if (match[0] == 'x' || match[0] == 'X') {
 		match.insert(0, "0");
 	}
-}
-
-static idx_t Find(const char *input_data, idx_t input_size, const string &sep_data) {
-	if (sep_data.empty()) {
-		return 0;
-	}
-	return ContainsFun::Find(const_uchar_ptr_cast(input_data), input_size, const_uchar_ptr_cast(sep_data.c_str()),
-	                         sep_data.size());
 }
 
 static bool AddBlob(uint32_t code_point, string &result) {
@@ -176,7 +168,6 @@ void INetFunctions::Escape(DataChunk &args, ExpressionState &state, Vector &resu
 		EscapeInputStr(input_str, escaped, input_quote);
 		return StringVector::AddString(result, escaped);
 	};
-
 	if (args.ColumnCount() == 1) {
 		UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(),
 		                                           [&](string_t input_str) { return escape_string(input_str, true); });
@@ -192,7 +183,8 @@ void INetFunctions::Unescape(DataChunk &args, ExpressionState &state, Vector &re
 	auto &info = func_expr.bind_info->Cast<RegexpUnescapeBindData>();
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
 	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input_st) {
-		if (Find(input_st.GetData(), input_st.GetSize(), "&") == DConstants::INVALID_INDEX) {
+		// check whether the input contains an ampersand character. If not, return the input value unchanged.
+		if (ContainsFun::Find(const_uchar_ptr_cast(input_st.GetData()), input_st.GetSize(), const_uchar_ptr_cast("&"), 1) == DConstants::INVALID_INDEX) {
 			return StringVector::AddString(result, input_st);
 		}
 		string unescaped = ReplaceCharref(input_st, info, lstate.constant_pattern);
