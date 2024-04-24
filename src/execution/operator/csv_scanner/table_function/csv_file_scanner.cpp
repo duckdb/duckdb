@@ -29,14 +29,30 @@ bool CSVColumnSchema::SchemasMatch(string &error_message, vector<string> &names,
 		current_schema[names[i]] = types[i];
 	}
 	// Here we check if the schema of a given file matched our original schema
-	// We consider it's not a match if
+	// We consider it's not a match if:
 	// 1. The file misses columns that were defined in the original schema.
 	// 2. They have a column match, but the types do not match.
+	std::ostringstream error;
+	error << "Schema mismatch between globbed files."
+	      << "\n";
 	for (auto &column : columns) {
 		if (current_schema.find(column.name) == current_schema.end()) {
-
+			error << "Column with name: \"" << column.name << " is missing"
+			      << "\n";
+			match = false;
 		} else {
+			if (current_schema[column.name].id() != column.type.id()) {
+				error << "Column with name: \"" << column.name
+				      << " is expected to have type: " << column.type.ToString();
+				error << " But has type: " << current_schema[column.name].ToString() << "\n";
+				match = false;
+			}
 		}
+	}
+	// Lets suggest some potential fixes
+	error << "Potential Fix: Since your schema has a mismatch, consider setting union_by_name=true.";
+	if (!match) {
+		error_message = error.str();
 	}
 	return match;
 }
@@ -144,7 +160,6 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 			auto result = sniffer.SniffCSV();
 			if (!options.file_options.union_by_name) {
 				// Union By name has its own mystical rules
-
 			}
 		}
 	}
