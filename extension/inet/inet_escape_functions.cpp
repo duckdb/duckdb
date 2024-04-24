@@ -184,7 +184,8 @@ void INetFunctions::Unescape(DataChunk &args, ExpressionState &state, Vector &re
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
 	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input_st) {
 		// check whether the input contains an ampersand character. If not, return the input value unchanged.
-		if (ContainsFun::Find(const_uchar_ptr_cast(input_st.GetData()), input_st.GetSize(), const_uchar_ptr_cast("&"), 1) == DConstants::INVALID_INDEX) {
+		if (ContainsFun::Find(const_uchar_ptr_cast(input_st.GetData()), input_st.GetSize(), const_uchar_ptr_cast("&"),
+		                      1) == DConstants::INVALID_INDEX) {
 			return StringVector::AddString(result, input_st);
 		}
 		string unescaped = ReplaceCharref(input_st, info, lstate.constant_pattern);
