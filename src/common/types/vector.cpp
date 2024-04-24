@@ -555,7 +555,7 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		case VectorType::SEQUENCE_VECTOR: {
 			int64_t start, increment;
 			SequenceVector::GetSequence(*vector, start, increment);
-			return Value::Numeric(vector->GetType(), start + increment * index);
+			return Value::Numeric(vector->GetType(), start + increment * NumericCast<int64_t>(index));
 		}
 		default:
 			throw InternalException("Unimplemented vector type for Vector::GetValue");
@@ -788,7 +788,7 @@ string Vector::ToString(idx_t count) const {
 		int64_t start, increment;
 		SequenceVector::GetSequence(*this, start, increment);
 		for (idx_t i = 0; i < count; i++) {
-			retval += to_string(start + increment * i) + (i == count - 1 ? "" : ", ");
+			retval += to_string(start + increment * UnsafeNumericCast<int64_t>(i)) + (i == count - 1 ? "" : ", ");
 		}
 		break;
 	}
@@ -1006,7 +1006,7 @@ void Vector::Flatten(idx_t count) {
 
 		buffer = VectorBuffer::CreateStandardVector(GetType());
 		data = buffer->GetData();
-		VectorOperations::GenerateSequence(*this, sequence_count, start, increment);
+		VectorOperations::GenerateSequence(*this, NumericCast<idx_t>(sequence_count), start, increment);
 		break;
 	}
 	default:
@@ -2089,10 +2089,6 @@ void MapVector::EvalMapInvalidReason(MapInvalidReason reason) {
 		throw InvalidInputException("Map keys must be unique.");
 	case MapInvalidReason::NULL_KEY:
 		throw InvalidInputException("Map keys can not be NULL.");
-	case MapInvalidReason::NULL_KEY_LIST:
-		throw InvalidInputException("The list of map keys must not be NULL.");
-	case MapInvalidReason::NULL_VALUE_LIST:
-		throw InvalidInputException("The list of map values must not be NULL.");
 	case MapInvalidReason::NOT_ALIGNED:
 		throw InvalidInputException("The map key list does not align with the map value list.");
 	case MapInvalidReason::INVALID_PARAMS:

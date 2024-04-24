@@ -227,7 +227,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 	node_stats = PropagateStatistics(filter.children[0]);
 	if (filter.children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
 		ReplaceWithEmptyResult(node_ptr);
-		return make_uniq<NodeStatistics>(0, 0);
+		return make_uniq<NodeStatistics>(0U, 0U);
 	}
 
 	// then propagate to each of the expressions
@@ -238,7 +238,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 		if (ExpressionIsConstant(*condition, Value::BOOLEAN(true))) {
 			// filter is always true; it is useless to execute it
 			// erase this condition
-			filter.expressions.erase(filter.expressions.begin() + i);
+			filter.expressions.erase_at(i);
 			i--;
 			if (filter.expressions.empty()) {
 				// just break. The physical filter planner will plan a projection instead
@@ -248,7 +248,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 		           ExpressionIsConstantOrNull(*condition, Value::BOOLEAN(false))) {
 			// filter is always false or null; this entire filter should be replaced by an empty result block
 			ReplaceWithEmptyResult(node_ptr);
-			return make_uniq<NodeStatistics>(0, 0);
+			return make_uniq<NodeStatistics>(0U, 0U);
 		} else {
 			// cannot prune this filter: propagate statistics from the filter
 			UpdateFilterStatistics(*condition);

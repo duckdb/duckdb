@@ -50,7 +50,7 @@ void ArrowArrayStreamWrapper::GetSchema(ArrowSchemaWrapper &schema) {
 }
 
 shared_ptr<ArrowArrayWrapper> ArrowArrayStreamWrapper::GetNextChunk() {
-	auto current_chunk = make_shared<ArrowArrayWrapper>();
+	auto current_chunk = make_shared_ptr<ArrowArrayWrapper>();
 	if (arrow_array_stream.get_next(&arrow_array_stream, &current_chunk->arrow_array)) { // LCOV_EXCL_START
 		throw InvalidInputException("arrow_scan: get_next failed(): %s", string(GetError()));
 	} // LCOV_EXCL_STOP

@@ -106,6 +106,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	}
 	// bind the default values
 	BindDefaultValues(table.GetColumns(), update->bound_defaults);
+	update->bound_constraints = BindConstraints(table);
 
 	// project any additional columns required for the condition/expressions
 	if (stmt.set_info->condition) {
@@ -126,7 +127,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	auto proj = unique_ptr_cast<LogicalOperator, LogicalProjection>(std::move(proj_tmp));
 
 	// bind any extra columns necessary for CHECK constraints or indexes
-	table.BindUpdateConstraints(*get, *proj, *update, context);
+	table.BindUpdateConstraints(*this, *get, *proj, *update, context);
 
 	// finally add the row id column to the projection list
 	proj->expressions.push_back(make_uniq<BoundColumnRefExpression>(
