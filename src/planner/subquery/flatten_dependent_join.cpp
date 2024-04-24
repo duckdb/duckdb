@@ -136,6 +136,27 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			}
 		}
 
+		if (plan->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+			auto left_columns = plan->GetColumnBindings().size();
+			auto delim_index = binder.GenerateTableIndex();
+			this->base_binding = ColumnBinding(delim_index, 0);
+			this->delim_offset = left_columns;
+			this->data_offset = 0;
+			auto delim_scan = make_uniq<LogicalDelimGet>(delim_index, delim_types);
+
+			auto proj_column_bindings = plan->GetColumnBindings();
+			auto delim_scan_bindings = delim_scan->GetColumnBindings();
+
+			auto cross_product = LogicalCrossProduct::Create(std::move(plan->children[0]), std::move(delim_scan));
+
+			auto &proj = plan->Cast<LogicalProjection>();
+			for (idx_t i = 0; i < delim_scan_bindings.size(); i++) {
+				plan->expressions.push_back(make_uniq<BoundColumnRefExpression>(delim_types.at(i), delim_scan_bindings.at(i)));
+			}
+			plan->children[0] = std::move(cross_product);
+			return plan;
+		}
+
 		// create cross product with Delim Join
 		auto left_columns = plan->GetColumnBindings().size();
 		auto delim_index = binder.GenerateTableIndex();
@@ -144,23 +165,24 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		this->data_offset = 0;
 		auto delim_scan = make_uniq<LogicalDelimGet>(delim_index, delim_types);
 		auto cross_product = LogicalCrossProduct::Create(std::move(plan), std::move(delim_scan));
+		return cross_product;
 
 		// Add a projection on top of the cross product to make sure Join order optimizer does not
 		// flip column ordering
-		vector<unique_ptr<Expression>> new_expressions;
-		auto bindings = cross_product->GetColumnBindings();
-		cross_product->ResolveOperatorTypes();
-		auto types = cross_product->types;
-		auto new_table_index = binder.GenerateTableIndex();
-		D_ASSERT(types.size() == bindings.size());
-		for (idx_t i = 0; i < bindings.size(); i++) {
-			auto new_binding = ColumnBinding(new_table_index, i);
-			replacement_bindings.push_back(ReplacementBinding(bindings.at(i), new_binding));
-			new_expressions.push_back(make_uniq<BoundColumnRefExpression>(types.at(i), bindings.at(i)));
-		}
-		auto new_proj = make_uniq<LogicalProjection>(new_table_index, std::move(new_expressions));
-		new_proj->children.push_back(std::move(cross_product));
-		return new_proj;
+//		vector<unique_ptr<Expression>> new_expressions;
+//		auto bindings = cross_product->GetColumnBindings();
+//		cross_product->ResolveOperatorTypes();
+//		auto types = cross_product->types;
+//		auto new_table_index = binder.GenerateTableIndex();
+//		D_ASSERT(types.size() == bindings.size());
+//		for (idx_t i = 0; i < bindings.size(); i++) {
+//			auto new_binding = ColumnBinding(new_table_index, i);
+//			replacement_bindings.push_back(ReplacementBinding(bindings.at(i), new_binding));
+//			new_expressions.push_back(make_uniq<BoundColumnRefExpression>(types.at(i), bindings.at(i)));
+//		}
+//		auto new_proj = make_uniq<LogicalProjection>(new_table_index, std::move(new_expressions));
+//		new_proj->children.push_back(std::move(cross_product));
+//		return new_proj;
 	}
 	switch (plan->type) {
 	case LogicalOperatorType::LOGICAL_UNNEST:
