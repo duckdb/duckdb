@@ -248,7 +248,7 @@
         "id": 202,
         "name": "collection",
         "type": "ColumnDataCollection*",
-        "serialize_property": "&to_scan"
+        "serialize_property": "to_scan"
       }
     ],
     "constructor": ["table_index", "chunk_types", "collection"]

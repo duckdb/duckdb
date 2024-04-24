@@ -262,7 +262,7 @@ void LogicalColumnDataGet::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WritePropertyWithDefault<idx_t>(200, "table_index", table_index);
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(201, "chunk_types", chunk_types);
-	serializer.WritePropertyWithDefault<optional_ptr<ColumnDataCollection>>(202, "collection", &to_scan);
+	serializer.WritePropertyWithDefault<optional_ptr<ColumnDataCollection>>(202, "collection", to_scan);
 }
 
 unique_ptr<LogicalOperator> LogicalColumnDataGet::Deserialize(Deserializer &deserializer) {
