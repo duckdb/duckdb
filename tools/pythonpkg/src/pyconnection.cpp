@@ -1331,6 +1331,7 @@ void DuckDBPyConnection::Close() {
 	connection = nullptr;
 	database = nullptr;
 	temporary_views.clear();
+	// https://peps.python.org/pep-0249/#Connection.close
 	for (auto &cur : cursors) {
 		cur->Close();
 	}
