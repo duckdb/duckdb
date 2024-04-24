@@ -6,17 +6,17 @@ namespace duckdb {
 
 struct ParsedHFUrl {
 	//! Path within the
-    string path;
+	string path;
 	//! Name of the repo (i presume)
-    string repository;
+	string repository;
 
 	//! Endpoint, defaults to HF
 	string endpoint = "https://huggingface.co";
 	//! Which revision/branch/tag to use
 	string revision = "main";
 	//! For DuckDB this may be a sensible default?
-    string repo_type = "datasets";
-    };
+	string repo_type = "datasets";
+};
 
 class HuggingFaceFileSystem : public HTTPFileSystem {
 public:
@@ -46,16 +46,18 @@ public:
 
 protected:
 	duckdb::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, FileOpenFlags flags,
-	                                                        optional_ptr<FileOpener> opener) override;
+	                                                optional_ptr<FileOpener> opener) override;
 
-	string ListHFRequest(ParsedHFUrl &url, HTTPParams &http_params, string &next_page_url, optional_ptr<HTTPState> state);
+	string ListHFRequest(ParsedHFUrl &url, HTTPParams &http_params, string &next_page_url,
+	                     optional_ptr<HTTPState> state);
 };
 
 class HFFileHandle : public HTTPFileHandle {
 	friend class HuggingFaceFileSystem;
 
 public:
-	HFFileHandle(FileSystem &fs, ParsedHFUrl hf_url, string http_url, FileOpenFlags flags, const HTTPParams &http_params)
+	HFFileHandle(FileSystem &fs, ParsedHFUrl hf_url, string http_url, FileOpenFlags flags,
+	             const HTTPParams &http_params)
 	    : HTTPFileHandle(fs, std::move(http_url), flags, http_params), parsed_url(std::move(hf_url)) {
 	}
 	~HFFileHandle() override;

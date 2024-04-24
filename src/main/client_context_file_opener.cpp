@@ -25,7 +25,7 @@ unique_ptr<CatalogTransaction> FileOpener::TryGetCatalogTransaction(optional_ptr
 		return nullptr;
 	}
 	auto context = opener->TryGetClientContext();
-	if(context) {
+	if (context) {
 		return make_uniq<CatalogTransaction>(CatalogTransaction::GetSystemCatalogTransaction(*context));
 	}
 

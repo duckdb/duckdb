@@ -28,44 +28,43 @@ static duckdb::unique_ptr<duckdb_httplib_openssl::Headers> initialize_http_heade
 }
 
 HuggingFaceFileSystem::~HuggingFaceFileSystem() {
-
 }
 
 static string ParseNextUrlFromLinkHeader(const string &link_header_content) {
 	auto split_outer = StringUtil::Split(link_header_content, ',');
 	for (auto &split : split_outer) {
 		auto split_inner = StringUtil::Split(split, ';');
-		if(split_inner.size() != 2) {
+		if (split_inner.size() != 2) {
 			throw IOException("Unexpected link header for huggingface pagination: %s", link_header_content);
 		}
 
 		StringUtil::Trim(split_inner[1]);
-		if(split_inner[1] == "rel=\"next\"") {
+		if (split_inner[1] == "rel=\"next\"") {
 			StringUtil::Trim(split_inner[0]);
 
 			if (!StringUtil::StartsWith(split_inner[0], "<") || !StringUtil::EndsWith(split_inner[0], ">")) {
 				throw IOException("Unexpected link header for huggingface pagination: %s", link_header_content);
 			}
 
-			return split_inner[0].substr(1, split_inner.size()-2);
+			return split_inner[0].substr(1, split_inner.size() - 2);
 		}
 	}
 
 	return "";
 }
 
-HFFileHandle::~HFFileHandle(){
-};
+HFFileHandle::~HFFileHandle() {};
 
 void HFFileHandle::InitializeClient() {
 	http_client = HTTPFileSystem::GetClient(this->http_params, parsed_url.endpoint.c_str());
 }
 
-string HuggingFaceFileSystem::ListHFRequest(ParsedHFUrl &url, HTTPParams &http_params, string &next_page_url, optional_ptr<HTTPState> state) {
+string HuggingFaceFileSystem::ListHFRequest(ParsedHFUrl &url, HTTPParams &http_params, string &next_page_url,
+                                            optional_ptr<HTTPState> state) {
 	string full_list_path = HuggingFaceFileSystem::GetTreeUrl(url);
 	HeaderMap header_map;
-	if(!http_params.bearer_token.empty()) {
-		header_map["Authorization"] = "Bearer " + 	http_params.bearer_token;
+	if (!http_params.bearer_token.empty()) {
+		header_map["Authorization"] = "Bearer " + http_params.bearer_token;
 	}
 	auto headers = initialize_http_headers(header_map);
 
@@ -133,13 +132,8 @@ static bool Match(vector<string>::const_iterator key, vector<string>::const_iter
 	return key == key_end && pattern == pattern_end;
 }
 
-
 void ParseListResult(string &input, vector<string> &files, vector<string> &directories, const string &base_dir) {
-	enum parse_entry {
-		FILE,
-		DIR,
-		UNKNOWN
-	};
+	enum parse_entry { FILE, DIR, UNKNOWN };
 	idx_t idx = 0;
 	idx_t nested = 0;
 	bool found_path;
@@ -148,13 +142,13 @@ void ParseListResult(string &input, vector<string> &files, vector<string> &direc
 base:
 	found_path = false;
 	type = parse_entry::UNKNOWN;
-    for (; idx < input.size(); idx++) {
-        if (input[idx] == '{') {
+	for (; idx < input.size(); idx++) {
+		if (input[idx] == '{') {
 			idx++;
 			goto entry;
-        }
-    }
-    goto end;
+		}
+	}
+	goto end;
 entry:
 	while (idx < input.size()) {
 		if (input[idx] == '}') {
@@ -177,12 +171,12 @@ entry:
 			idx++;
 		} else if (strncmp(input.c_str() + idx, "\"type\":\"directory\"", 18) == 0) {
 			type = parse_entry::DIR;
-			idx+=18;
+			idx += 18;
 		} else if (strncmp(input.c_str() + idx, "\"type\":\"file\"", 13) == 0) {
 			type = parse_entry::FILE;
-			idx+=13;
+			idx += 13;
 		} else if (strncmp(input.c_str() + idx, "\"path\":\"", 8) == 0) {
-			idx+=8;
+			idx += 8;
 			found_path = true;
 			goto pathname;
 		} else {
@@ -193,9 +187,9 @@ entry:
 pathname:
 	while (idx < input.size()) {
 		// Handle escaped quote in url
-		if (input[idx] == '\\' && idx+1 < input.size() && input[idx] == '\"') {
+		if (input[idx] == '\\' && idx + 1 < input.size() && input[idx] == '\"') {
 			current_string += '\"';
-			idx+=2;
+			idx += 2;
 		} else if (input[idx] == '\"') {
 			idx++;
 			goto entry;
@@ -205,7 +199,7 @@ pathname:
 		}
 	}
 end:
-    return;
+	return;
 }
 
 vector<string> HuggingFaceFileSystem::Glob(const string &path, FileOpener *opener) {
@@ -217,19 +211,19 @@ vector<string> HuggingFaceFileSystem::Glob(const string &path, FileOpener *opene
 		return {path};
 	}
 
-    // https://huggingface.co/api/datasets/lhoestq/demo1/tree/main/default/train/0000.parquet
-    // https://huggingface.co/api/datasets/lhoestq/demo1/tree/main/default/train/*.parquet
-    // https://huggingface.co/api/datasets/lhoestq/demo1/tree/main/*/train/*.parquet
-    // https://huggingface.co/api/datasets/lhoestq/demo1/tree/main/**/train/*.parquet
+	// https://huggingface.co/api/datasets/lhoestq/demo1/tree/main/default/train/0000.parquet
+	// https://huggingface.co/api/datasets/lhoestq/demo1/tree/main/default/train/*.parquet
+	// https://huggingface.co/api/datasets/lhoestq/demo1/tree/main/*/train/*.parquet
+	// https://huggingface.co/api/datasets/lhoestq/demo1/tree/main/**/train/*.parquet
 	string shared_path = parsed_glob_url.path.substr(0, first_wildcard_pos);
-    auto last_path_slash = shared_path.find_last_of('/', first_wildcard_pos);
+	auto last_path_slash = shared_path.find_last_of('/', first_wildcard_pos);
 
 	// trim the final
 	if (last_path_slash == string::npos) {
 		// Root path
 		shared_path = "";
 	} else {
-        shared_path = shared_path.substr(0, last_path_slash);
+		shared_path = shared_path.substr(0, last_path_slash);
 	}
 
 	auto http_params = HTTPParams::ReadFrom(opener);
@@ -275,7 +269,8 @@ vector<string> HuggingFaceFileSystem::Glob(const string &path, FileOpener *opene
 	return result;
 }
 
-unique_ptr<ResponseWrapper> HuggingFaceFileSystem::HeadRequest(FileHandle &handle, string hf_url, HeaderMap header_map) {
+unique_ptr<ResponseWrapper> HuggingFaceFileSystem::HeadRequest(FileHandle &handle, string hf_url,
+                                                               HeaderMap header_map) {
 	auto &hf_handle = handle.Cast<HFFileHandle>();
 	auto http_url = HuggingFaceFileSystem::GetFileUrl(hf_handle.parsed_url);
 	return HTTPFileSystem::HeadRequest(handle, http_url, header_map);
@@ -287,15 +282,16 @@ unique_ptr<ResponseWrapper> HuggingFaceFileSystem::GetRequest(FileHandle &handle
 	return HTTPFileSystem::GetRequest(handle, http_url, header_map);
 }
 
-unique_ptr<ResponseWrapper> HuggingFaceFileSystem::GetRangeRequest(FileHandle &handle, string s3_url, HeaderMap header_map,
-                                                          idx_t file_offset, char *buffer_out, idx_t buffer_out_len) {
+unique_ptr<ResponseWrapper> HuggingFaceFileSystem::GetRangeRequest(FileHandle &handle, string s3_url,
+                                                                   HeaderMap header_map, idx_t file_offset,
+                                                                   char *buffer_out, idx_t buffer_out_len) {
 	auto &hf_handle = handle.Cast<HFFileHandle>();
 	auto http_url = HuggingFaceFileSystem::GetFileUrl(hf_handle.parsed_url);
 	return HTTPFileSystem::GetRangeRequest(handle, http_url, header_map, file_offset, buffer_out, buffer_out_len);
 }
 
 unique_ptr<HTTPFileHandle> HuggingFaceFileSystem::CreateHandle(const string &path, FileOpenFlags flags,
-                                                        optional_ptr<FileOpener> opener) {
+                                                               optional_ptr<FileOpener> opener) {
 	D_ASSERT(flags.Compression() == FileCompressionType::UNCOMPRESSED);
 
 	auto parsed_url = HFUrlParse(path);
@@ -312,7 +308,7 @@ void HuggingFaceFileSystem::SetParams(HTTPParams &params, const string &path, op
 	if (secret_manager && transaction) {
 		auto secret_match = secret_manager->LookupSecret(*transaction, path, "huggingface");
 
-		if(secret_match.HasMatch()) {
+		if (secret_match.HasMatch()) {
 			const auto &kv_secret = dynamic_cast<const KeyValueSecret &>(*secret_match.secret_entry->secret);
 			params.bearer_token = kv_secret.TryGetValue("token", true).ToString();
 		}
@@ -326,10 +322,10 @@ ParsedHFUrl HuggingFaceFileSystem::HFUrlParse(const string &url) {
 		throw InternalException("Not an hf url");
 	}
 
-    size_t last_delim = 5;
-    size_t curr_delim;
+	size_t last_delim = 5;
+	size_t curr_delim;
 
-    // Parse Repository type
+	// Parse Repository type
 	curr_delim = url.find('/', last_delim);
 	if (curr_delim == string::npos) {
 		throw IOException("URL needs to contain a '/' after the repository type: (%s)", url);
@@ -338,23 +334,23 @@ ParsedHFUrl HuggingFaceFileSystem::HFUrlParse(const string &url) {
 	last_delim = curr_delim;
 
 	// Parse repository and revision
-	auto repo_delim = url.find('/', last_delim+1);
+	auto repo_delim = url.find('/', last_delim + 1);
 	if (repo_delim == string::npos) {
 		throw IOException("Failed to parse: (%s)", url);
 	}
 
-	auto next_at = url.find('@', repo_delim+1);
-	auto next_slash = url.find('/', repo_delim+1);
+	auto next_at = url.find('@', repo_delim + 1);
+	auto next_slash = url.find('/', repo_delim + 1);
 
 	if (next_slash == string::npos) {
 		throw IOException("Failed to parse: (%s)", url);
 	}
 
 	if (next_at != string::npos && next_at < next_slash) {
-		result.repository = url.substr(last_delim+1, next_at - last_delim - 1);
-		result.revision = url.substr(next_at+1, next_slash - next_at - 1);
+		result.repository = url.substr(last_delim + 1, next_at - last_delim - 1);
+		result.revision = url.substr(next_at + 1, next_slash - next_at - 1);
 	} else {
-		result.repository = url.substr(last_delim+1, next_slash-last_delim-1);
+		result.repository = url.substr(last_delim + 1, next_slash - last_delim - 1);
 	}
 	last_delim = next_slash;
 
@@ -391,8 +387,8 @@ string HuggingFaceFileSystem::GetFileUrl(const ParsedHFUrl &url) {
 	string http_url = url.endpoint;
 	http_url = JoinPath(http_url, url.repo_type);
 	http_url = JoinPath(http_url, url.repository);
-    http_url = JoinPath(http_url, "resolve");
-    http_url = JoinPath(http_url, url.revision);
+	http_url = JoinPath(http_url, "resolve");
+	http_url = JoinPath(http_url, url.revision);
 	http_url += url.path;
 
 	return http_url;

@@ -163,7 +163,9 @@ void CreateBearerTokenFunctions::Register(DatabaseInstance &instance) {
 	ExtensionUtil::RegisterFunction(instance, hf_cache_fun);
 }
 
-unique_ptr<BaseSecret> CreateBearerTokenFunctions::CreateSecretFunctionInternal(ClientContext &context, CreateSecretInput &input, const string &token) {
+unique_ptr<BaseSecret> CreateBearerTokenFunctions::CreateSecretFunctionInternal(ClientContext &context,
+                                                                                CreateSecretInput &input,
+                                                                                const string &token) {
 	// Set scope to user provided scope or the default
 	auto scope = input.scope;
 	if (scope.empty()) {
@@ -187,7 +189,7 @@ unique_ptr<BaseSecret> CreateBearerTokenFunctions::CreateSecretFunctionInternal(
 }
 
 unique_ptr<BaseSecret> CreateBearerTokenFunctions::CreateBearerSecretFromConfig(ClientContext &context,
-                                                                         CreateSecretInput &input) {
+                                                                                CreateSecretInput &input) {
 	string token;
 
 	auto token_input = input.options.find("token");
@@ -201,7 +203,8 @@ unique_ptr<BaseSecret> CreateBearerTokenFunctions::CreateBearerSecretFromConfig(
 	return CreateSecretFunctionInternal(context, input, token);
 }
 
-unique_ptr<BaseSecret> CreateBearerTokenFunctions::CreateHuggingFaceSecretFromCache(ClientContext &context, CreateSecretInput &input) {
+unique_ptr<BaseSecret> CreateBearerTokenFunctions::CreateHuggingFaceSecretFromCache(ClientContext &context,
+                                                                                    CreateSecretInput &input) {
 	LocalFileSystem fs;
 
 	auto handle = fs.OpenFile("~/.cache/huggingface/token", {FileOpenFlags::FILE_FLAGS_READ});

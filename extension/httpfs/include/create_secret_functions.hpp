@@ -40,7 +40,7 @@ public:
 protected:
 	//! Internal function to create bearer token
 	static unique_ptr<BaseSecret> CreateSecretFunctionInternal(ClientContext &context, CreateSecretInput &input,
-	                                                           const string& token);
+	                                                           const string &token);
 	//! Function for the "config" provider: creates secret from parameters passed by user
 	static unique_ptr<BaseSecret> CreateBearerSecretFromConfig(ClientContext &context, CreateSecretInput &input);
 	//! Function for the "config" provider: creates secret from parameters passed by user
