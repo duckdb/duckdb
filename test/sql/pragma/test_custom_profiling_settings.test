@@ -144,9 +144,9 @@ Referenced column "operator_timing" not found in FROM clause!
 
 # Error cases
 statement error
-PRAGMA custom_profiling_settings='{{'
+PRAGMA custom_profiling_settings='}}}}}}'
 ----
-Could not parse the custom profiler settings file due to incorrect JSON: "{{"
+Could not parse the custom profiler settings file due to incorrect JSON: "}}}}}}"
 
 statement error
 PRAGMA custom_profiling_settings=BONJOUR
