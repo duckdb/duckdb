@@ -204,6 +204,8 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	m.def("begin", &DuckDBPyConnection::Begin, "Start a new transaction");
 	m.def("commit", &DuckDBPyConnection::Commit, "Commit changes performed within a transaction");
 	m.def("rollback", &DuckDBPyConnection::Rollback, "Roll back changes performed within a transaction");
+	m.def("checkpoint", &DuckDBPyConnection::Checkpoint,
+	      "Synchronizes data in the write-ahead log (WAL) to the database data file (no-op for in-memory connections)");
 	m.def("append", &DuckDBPyConnection::Append, "Append the passed DataFrame to the named table",
 	      py::arg("table_name"), py::arg("df"), py::kw_only(), py::arg("by_name") = false);
 	m.def("register", &DuckDBPyConnection::RegisterPythonObject,
@@ -1304,6 +1306,11 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Rollback() {
 	return shared_from_this();
 }
 
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Checkpoint() {
+	ExecuteFromString("CHECKPOINT");
+	return shared_from_this();
+}
+
 Optional<py::list> DuckDBPyConnection::GetDescription() {
 	if (!result) {
 		return py::none();
@@ -1325,6 +1332,7 @@ void DuckDBPyConnection::Close() {
 	}
 	registered_functions.clear();
 	cursors.clear();
+	// FIXME: should this call Checkpoint() ?
 }
 
 void DuckDBPyConnection::Interrupt() {

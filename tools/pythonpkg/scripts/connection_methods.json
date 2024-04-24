@@ -432,6 +432,12 @@
 		"return": "DuckDBPyConnection"
 	},
 	{
+		"name": "checkpoint",
+		"function": "Checkpoint",
+		"docs": "Synchronizes data in the write-ahead log (WAL) to the database data file (no-op for in-memory connections)",
+		"return": "DuckDBPyConnection"
+	},
+	{
 		"name": "append",
 		"function": "Append",
 		"docs": "Append the passed DataFrame to the named table",
