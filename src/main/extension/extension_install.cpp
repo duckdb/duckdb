@@ -221,7 +221,16 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs,
 		if (fs.FileExists(extension)) {
 			idx_t file_size;
 			auto in_buffer = ReadExtensionFileFromDisk(fs, extension, file_size);
-			WriteExtensionFileToDisk(fs, temp_path, in_buffer.get(), file_size);
+
+			const bool gzipped = StringUtil::EndsWith(extension, ".gz");
+			if (gzipped) {
+				string data(const_char_ptr_cast(in_buffer.get()), file_size);
+				auto decompressed_body = GZipFileSystem::UncompressGZIPString(data);
+
+				WriteExtensionFileToDisk(fs, temp_path, (void *)decompressed_body.data(), decompressed_body.size());
+			} else {
+				WriteExtensionFileToDisk(fs, temp_path, in_buffer.get(), file_size);
+			}
 
 			if (fs.FileExists(local_extension_path) && force_install) {
 				fs.RemoveFile(local_extension_path);
@@ -256,17 +265,27 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs,
 	// Special case to install extension from a local file, useful for testing
 	if (!StringUtil::Contains(url_template, "http://")) {
 		string file = fs.ConvertSeparators(url);
+		bool gzipped = StringUtil::EndsWith(file, ".gz");
 		if (!fs.FileExists(file)) {
 			// check for non-gzipped variant
+			gzipped = false;
 			file = file.substr(0, file.size() - 3);
 			if (!fs.FileExists(file)) {
 				throw IOException("Failed to copy local extension \"%s\" at PATH \"%s\"\n", extension_name, file);
 			}
 		}
 		auto read_handle = fs.OpenFile(file, FileFlags::FILE_FLAGS_READ);
-		auto test_data = std::unique_ptr<unsigned char[]> {new unsigned char[read_handle->GetFileSize()]};
+		auto test_data = std::unique_ptr<char[]> {new char[read_handle->GetFileSize()]};
 		read_handle->Read(test_data.get(), read_handle->GetFileSize());
-		WriteExtensionFileToDisk(fs, temp_path, (void *)test_data.get(), read_handle->GetFileSize());
+
+		if (gzipped) {
+			string data(const_char_ptr_cast(test_data.get()), read_handle->GetFileSize());
+			auto decompressed_body = GZipFileSystem::UncompressGZIPString(data);
+
+			WriteExtensionFileToDisk(fs, temp_path, (void *)decompressed_body.data(), decompressed_body.size());
+		} else {
+			WriteExtensionFileToDisk(fs, temp_path, (void *)test_data.get(), read_handle->GetFileSize());
+		}
 
 		if (fs.FileExists(local_extension_path) && force_install) {
 			fs.RemoveFile(local_extension_path);
