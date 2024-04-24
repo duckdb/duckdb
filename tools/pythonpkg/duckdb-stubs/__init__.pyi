@@ -481,7 +481,10 @@ class DuckDBPyRelation:
     def write_parquet(
             self,
             file_name: str,
-            compression: Optional[str] = None
+            compression: Optional[str] = None,
+            field_ids: Optional[dict | str] = None,
+            row_group_size_bytes: Optional[int | str] = None,
+            row_group_size: Optional[int] = None
     ) -> None: ...
     def __len__(self) -> int: ...
     @property
