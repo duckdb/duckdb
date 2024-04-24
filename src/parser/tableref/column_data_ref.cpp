@@ -50,8 +50,26 @@ unique_ptr<TableRef> ColumnDataRef::Copy() {
 	unique_ptr<ColumnDataRef> result;
 	if (collection.is_owned()) {
 		// This collection is owned, the copy should be self sufficient so it needs a copy
-		// ????
-		result = nullptr;
+		auto new_collection = make_uniq<ColumnDataCollection>(*collection);
+
+		DataChunk chunk;
+		collection->InitializeScanChunk(chunk);
+
+		ColumnDataScanState scan_state;
+		collection->InitializeScan(scan_state);
+
+		ColumnDataAppendState append_state;
+		new_collection->InitializeAppend(append_state);
+		while (collection->Scan(scan_state, chunk)) {
+			new_collection->Append(append_state, chunk);
+		}
+#ifdef DEBUG
+		string error_message;
+		if (!ColumnDataCollection::ResultEquals(*collection, *new_collection, error_message, true)) {
+			throw InternalException("Copied ColumnDataCollection was not equal: %s", error_message);
+		}
+#endif
+		result = make_uniq<ColumnDataRef>(expected_names, std::move(new_collection));
 	} else {
 		result = make_uniq<ColumnDataRef>(*collection);
 	}
