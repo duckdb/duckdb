@@ -241,10 +241,18 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		InitializeAppenderForType<ArrowFixedSizeListData>(append_data);
 		break;
 	case LogicalTypeId::LIST: {
-		if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
-			InitializeAppenderForType<ArrowListData<int64_t>>(append_data);
+		if (append_data.options.arrow_use_list_view) {
+			if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+				InitializeAppenderForType<ArrowListViewData<int64_t>>(append_data);
+			} else {
+				InitializeAppenderForType<ArrowListViewData<int32_t>>(append_data);
+			}
 		} else {
-			InitializeAppenderForType<ArrowListData<int32_t>>(append_data);
+			if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+				InitializeAppenderForType<ArrowListData<int64_t>>(append_data);
+			} else {
+				InitializeAppenderForType<ArrowListData<int32_t>>(append_data);
+			}
 		}
 		break;
 	}

@@ -34,7 +34,7 @@ union arrow_string_view_t {
 			// have to 0 pad
 			uint8_t remaining_bytes = ArrowStringViewConstants::MAX_INLINED_BYTES - NumericCast<uint8_t>(length);
 
-			memset(&inlined.data[length], '0', remaining_bytes);
+			memset(&inlined.data[length], '\0', remaining_bytes);
 		}
 	}
 
@@ -56,8 +56,9 @@ union arrow_string_view_t {
 	//! Representation of non-inlined arrow string views
 	struct {
 		int32_t length;
-		char prefix[ArrowStringViewConstants::MAX_INLINED_BYTES];
-		int32_t buffer_index, offset;
+		char prefix[ArrowStringViewConstants::PREFIX_BYTES];
+		int32_t buffer_index;
+		int32_t offset;
 	} ref;
 
 	int32_t Length() const {
