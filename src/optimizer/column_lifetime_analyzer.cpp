@@ -124,15 +124,12 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 		if (!everything_referenced) {
 			auto &order = op.Cast<LogicalOrder>();
-			D_ASSERT(order.projections.empty()); // should not yet be set
-
-			LogicalOperatorVisitor::VisitOperatorExpressions(op);
 
 			column_binding_set_t unused_bindings;
-			auto old_op_bindings = op.GetColumnBindings();
 			ExtractUnusedColumnBindings(op.children[0]->GetColumnBindings(), unused_bindings);
 
-			// now recurse into the filter and its children
+			// now recurse into the order and its children
+			LogicalOperatorVisitor::VisitOperatorExpressions(op);
 			LogicalOperatorVisitor::VisitOperatorChildren(op);
 
 			// then generate the projection map
