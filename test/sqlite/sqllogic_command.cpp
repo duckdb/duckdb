@@ -105,8 +105,58 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(ExecuteContext &contex
 #endif
 }
 
+bool CheckLoopCondition(ExecuteContext &context, const vector<Condition> &conditions) {
+	if (conditions.empty()) {
+		// no conditions
+		return true;
+	}
+	if (context.running_loops.empty()) {
+		throw BinderException("Conditions (onlyif/skipif) on loop parameters can only occur within a loop");
+	}
+	for(auto &condition : conditions) {
+		bool found_loop = false;
+		for(auto &loop : context.running_loops) {
+			if (loop.loop_iterator_name != condition.keyword) {
+				continue;
+			}
+			string loop_value;
+			if (loop.tokens.empty()) {
+				loop_value = to_string(loop.loop_idx);
+			} else {
+				loop_value = loop.tokens[loop.loop_idx];
+			}
+			found_loop = true;
+			switch(condition.comparison) {
+			case ExpressionType::COMPARE_EQUAL:
+				if (loop_value != condition.value) {
+					// not equal but we need them to be equal
+					return false;
+				}
+				break;
+			case ExpressionType::COMPARE_NOTEQUAL:
+				if (loop_value == condition.value) {
+					// equal but we need them to be not equal
+					return false;
+				}
+				break;
+			default:
+				throw BinderException("Unrecognized comparison for loop condition");
+			}
+		}
+		if (!found_loop) {
+			throw BinderException("Condition in onlyif/skipif not found: %s must be a loop iterator name", condition.keyword);
+		}
+	}
+	// all conditions pass - execute
+	return true;
+}
+
 void Command::Execute(ExecuteContext &context) const {
 	if (runner.finished_processing_file) {
+		return;
+	}
+	if (!CheckLoopCondition(context, conditions)) {
+		// condition excludes this file
 		return;
 	}
 	if (context.running_loops.empty()) {

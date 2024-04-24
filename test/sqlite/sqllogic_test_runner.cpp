@@ -418,6 +418,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			parser.Fail("all test statements need to be separated by an empty line");
 		}
 
+		vector<Condition> conditions;
 		bool skip_statement = false;
 		while (token.type == SQLLogicTokenType::SQLLOGIC_SKIP_IF || token.type == SQLLogicTokenType::SQLLOGIC_ONLY_IF) {
 			// skipif/onlyif
@@ -426,16 +427,42 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				parser.Fail("skipif/onlyif requires a single parameter (e.g. skipif duckdb)");
 			}
 			auto system_name = StringUtil::Lower(token.parameters[0]);
-			bool our_system = system_name == "duckdb";
-			if (original_sqlite_test) {
-				our_system = our_system || system_name == "postgresql";
-			}
-			if (our_system == skip_if) {
-				// we skip this command in two situations
-				// (1) skipif duckdb
-				// (2) onlyif <other_system>
-				skip_statement = true;
-				break;
+			// we support two kinds of conditions here
+			// (for original sqllogictests) system comparisons, e.g.:
+			// (1) skipif duckdb
+			// (2) onlyif <other_system>
+			// conditions on loop variables, e.g.:
+			// (1) skipif i=2
+			// (2) onlyif threadid=0
+			// the latter is only supported in our own tests (not in original sqllogic tests)
+			if (!original_sqlite_test && StringUtil::Contains(system_name, "=")) {
+				// loop condition, e.g. skipif threadid=0
+				auto splits = StringUtil::Split(system_name, "=");
+				if (splits.size() != 2) {
+					parser.Fail("skipif/onlyif must be in the form of x=y");
+				}
+				// strip white space
+				for(auto &split : splits) {
+					StringUtil::Trim(split);
+				}
+				// now create the condition
+				Condition condition;
+				condition.keyword = splits[0];
+				condition.value = splits[1];
+				condition.comparison = skip_if ? ExpressionType::COMPARE_NOTEQUAL : ExpressionType::COMPARE_EQUAL;
+				conditions.push_back(condition);
+			} else {
+				bool our_system = system_name == "duckdb";
+				if (original_sqlite_test) {
+					our_system = our_system || system_name == "postgresql";
+				}
+				if (our_system == skip_if) {
+					// we skip this command in two situations
+					// (1) skipif duckdb
+					// (2) onlyif <other_system>
+					skip_statement = true;
+					break;
+				}
 			}
 			parser.NextLine();
 			token = parser.Tokenize();
@@ -482,6 +509,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			if (token.parameters.size() >= 2) {
 				command->connection_name = token.parameters[1];
 			}
+			command->conditions = std::move(conditions);
 			ExecuteCommand(std::move(command));
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_QUERY) {
 			if (token.parameters.size() < 1) {
@@ -543,6 +571,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			} else {
 				command->query_has_label = false;
 			}
+			command->conditions = std::move(conditions);
 			ExecuteCommand(std::move(command));
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_HASH_THRESHOLD) {
 			if (token.parameters.size() != 1) {

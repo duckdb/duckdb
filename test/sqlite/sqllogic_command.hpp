@@ -41,6 +41,12 @@ struct ExecuteContext {
 	int error_line;
 };
 
+struct Condition {
+	string keyword;
+	string value;
+	ExpressionType comparison;
+};
+
 class Command {
 public:
 	Command(SQLLogicTestRunner &runner);
@@ -51,6 +57,7 @@ public:
 	int query_line;
 	string base_sql_query;
 	string file_name;
+	vector<Condition> conditions;
 
 public:
 	Connection *CommandConnection(ExecuteContext &context) const;
