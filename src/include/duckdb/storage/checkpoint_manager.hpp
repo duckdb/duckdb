@@ -47,6 +47,10 @@ protected:
 	virtual void WriteTableMacro(TableMacroCatalogEntry &table, Serializer &serializer);
 	virtual void WriteIndex(IndexCatalogEntry &index_catalog_entry, Serializer &serializer);
 	virtual void WriteType(TypeCatalogEntry &type, Serializer &serializer);
+
+private:
+	//! Locks held over specific tables
+	vector<unique_ptr<StorageLockKey>> table_locks;
 };
 
 class CheckpointReader {

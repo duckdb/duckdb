@@ -538,6 +538,7 @@ void CheckpointWriter::WriteTable(TableCatalogEntry &table, Serializer &serializ
 	serializer.WriteProperty(100, "table", &table);
 
 	// Write the table data
+	table_locks.push_back(table.GetStorage().GetCheckpointLock());
 	if (auto writer = GetTableDataWriter(table)) {
 		writer->WriteTableData(serializer);
 	}

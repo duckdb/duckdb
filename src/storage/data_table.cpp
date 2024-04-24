@@ -204,6 +204,7 @@ TableIOManager &TableIOManager::Get(DataTable &table) {
 //===--------------------------------------------------------------------===//
 void DataTable::InitializeScan(TableScanState &state, const vector<column_t> &column_ids,
                                TableFilterSet *table_filters) {
+	state.checkpoint_lock = checkpoint_lock.GetSharedLock();
 	state.Initialize(column_ids, table_filters);
 	row_groups->InitializeScan(state.table_state, column_ids, table_filters);
 }
@@ -217,6 +218,7 @@ void DataTable::InitializeScan(DuckTransaction &transaction, TableScanState &sta
 
 void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids, idx_t start_row,
                                          idx_t end_row) {
+	state.checkpoint_lock = checkpoint_lock.GetSharedLock();
 	state.Initialize(column_ids);
 	row_groups->InitializeScanWithOffset(state.table_state, column_ids, start_row, end_row);
 }
@@ -231,6 +233,7 @@ idx_t DataTable::MaxThreads(ClientContext &context) {
 }
 
 void DataTable::InitializeParallelScan(ClientContext &context, ParallelTableScanState &state) {
+	state.checkpoint_lock = checkpoint_lock.GetSharedLock();
 	row_groups->InitializeParallelScan(state.scan_state);
 
 	auto &local_storage = LocalStorage::Get(context, db);
@@ -275,6 +278,7 @@ bool DataTable::IndexNameIsUnique(const string &name) {
 //===--------------------------------------------------------------------===//
 void DataTable::Fetch(DuckTransaction &transaction, DataChunk &result, const vector<column_t> &column_ids,
                       const Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state) {
+	auto lock = checkpoint_lock.GetSharedLock();
 	row_groups->Fetch(transaction, result, column_ids, row_identifiers, fetch_count, state);
 }
 
@@ -1271,8 +1275,11 @@ void DataTable::SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> d
 //===--------------------------------------------------------------------===//
 // Checkpoint
 //===--------------------------------------------------------------------===//
-void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
+unique_ptr<StorageLockKey> DataTable::GetCheckpointLock() {
+	return checkpoint_lock.GetExclusiveLock();
+}
 
+void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	// checkpoint each individual row group
 	TableStatistics global_stats;
 	row_groups->CopyStats(global_stats);
