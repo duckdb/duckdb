@@ -271,6 +271,17 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, strin
 				    }
 				    throw IOException(error);
 			    }
+
+			    if (response.has_header("Content-Length")) {
+				    auto content_length = stoll(response.get_header_value("Content-Length", 0));
+				    // Pre-allocate up to 2gb of space for the contents to be read, limit the allocation
+				    // to prevent webservers from be able to cause too many problems by returning invalid
+				    // contents lengths.
+				    if (content_length > 0) {
+					    hfh.cached_file_handle->AllocateBuffer(std::min(2LL * 1024 * 1024 * 1024, content_length));
+				    }
+			    }
+
 			    return true;
 		    },
 		    [&](const char *data, size_t data_length) {
