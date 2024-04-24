@@ -1332,7 +1332,7 @@ void DuckDBPyConnection::Close() {
 	}
 	registered_functions.clear();
 	cursors.clear();
-	// FIXME: should this call Checkpoint() ?
+	Checkpoint();
 }
 
 void DuckDBPyConnection::Interrupt() {
