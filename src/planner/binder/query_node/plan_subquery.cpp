@@ -283,7 +283,6 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		flatten.DetectCorrelatedExpressions(*plan);
 		auto dependent_join = flatten.PushDownDependentJoin(std::move(plan));
 
-
 		// fetch the set of columns
 		auto plan_columns = dependent_join->GetColumnBindings();
 

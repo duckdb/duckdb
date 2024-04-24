@@ -68,7 +68,6 @@ bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator &op, boo
 	return has_correlation;
 }
 
-
 bool FlattenDependentJoins::MarkSubtreeCorrelated(LogicalOperator &op) {
 	// Do not mark base table scans as correlated
 	auto entry = has_correlated_expressions.find(op);

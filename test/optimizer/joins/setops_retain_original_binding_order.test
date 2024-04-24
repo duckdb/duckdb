@@ -1,5 +1,5 @@
 # name: test/optimizer/joins/setops_retain_original_binding_order.test
-# description: Set operations need to retain their original binding order on the left and right sides. 
+# description: Set operations need to retain their original binding order on the left and right sides.
 # group: [joins]
 
 statement ok
