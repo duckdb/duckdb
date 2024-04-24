@@ -625,44 +625,15 @@ static profiler_settings_t FillTreeNodeSettings(unordered_map<string, string> &j
 
 void CustomProfilingSettings::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
-	auto input_str = input.ToString();
-	unique_ptr<duckdb::FileSystem> fs = duckdb::FileSystem::CreateLocal();
-	if (!fs->FileExists(input_str)) {
-		throw IOException("Could not locate the file containing the custom profiler settings: \"%s\"", input_str);
-	}
-	if (StringUtil::GetFileExtension(input_str) != "json") {
-		throw IOException("The custom profiler settings file must be a JSON file: \"%s\"", input_str);
-	}
-	auto file = fs->OpenFile(input_str, FileFlags::FILE_FLAGS_READ);
-
-	// read file into string
-	string file_content;
-	auto line = file->ReadLine();
-	idx_t line_count = 0;
-	while (!line.empty()) {
-		line_count++;
-		if (StringUtil::Equals(&line.back(), "\n")) {
-			line.substr(0, line.size() - 1);
-		}
-
-		file_content += line;
-		line = file->ReadLine();
-	}
-	if (line_count == 0) {
-		throw IOException("File is empty");
-	}
-	file->Close();
 
 	// parse the file content
 	unordered_map<string, string> json;
 	try {
-		json = StringUtil::ParseJSONMap(file_content);
+		json = StringUtil::ParseJSONMap(input.ToString());
 	} catch (std::exception &ex) {
-		throw IOException("Could not parse the custom profiler settings file due to incorrect JSON: \"%s\"", input_str);
-	}
-
-	if (json.empty()) {
-		throw IOException("Could not parse the custom profiler settings file due to incorrect JSON: \"%s\"", input_str);
+		throw IOException("Could not parse the custom profiler settings file due to incorrect JSON: \"%s\".  Make sure "
+		                  "all the keys and values start with a quote. ",
+		                  input.ToString());
 	}
 
 	config.profiler_settings = FillTreeNodeSettings(json);

@@ -512,6 +512,7 @@ unordered_map<string, string> StringUtil::ParseJSONMap(const string &json) {
 			return result;
 		}
 		pos++;
+		SkipSpaces(json, pos);
 		string value = ParseJSONValue(json, pos);
 		auto entry = result.find(key);
 		if (entry != result.end()) {

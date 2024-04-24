@@ -33,16 +33,7 @@ OPERATOR_TIMING
 
 # Turn off all settings
 statement ok
-CREATE TABLE custom_settings (CPU_TIME TEXT);
-
-statement ok
-INSERT INTO custom_settings VALUES ('false');
-
-statement ok
-COPY custom_settings TO '__WORKING_DIRECTORY__/test/sql/pragma/settings.json';
-
-statement ok
-PRAGMA custom_profiling_settings='__WORKING_DIRECTORY__/test/sql/pragma/settings.json'
+PRAGMA custom_profiling_settings='{}'
 
 query I rowsort
 SELECT string_split(current_setting('custom_profiling_settings'), ', ');
@@ -83,22 +74,7 @@ Referenced column "operator_timing" not found in FROM clause!
 
 # change the cpu time to false and the rest to true and re-run the query
 statement ok
-ALTER TABLE custom_settings ADD COLUMN EXTRA_INFO TEXT
-
-statement ok
-ALTER TABLE custom_settings ADD COLUMN OPERATOR_CARDINALITY TEXT
-
-statement ok
-ALTER TABLE custom_settings ADD COLUMN OPERATOR_TIMING TEXT;
-
-statement ok
-UPDATE custom_settings SET CPU_TIME = 'false', EXTRA_INFO = 'true', OPERATOR_CARDINALITY = 'true', OPERATOR_TIMING = 'true'
-
-statement ok
-COPY custom_settings TO '__WORKING_DIRECTORY__/test/sql/pragma/settings.json';
-
-statement ok
-PRAGMA custom_profiling_settings='__WORKING_DIRECTORY__/test/sql/pragma/settings.json'
+PRAGMA custom_profiling_settings='{"CPU_TIME": "false", "EXTRA_INFO": "true", "OPERATOR_CARDINALITY": "true", "OPERATOR_TIMING": "true"}'
 
 query I rowsort
 SELECT unnest(string_split(current_setting('custom_profiling_settings'), ', '));
@@ -129,13 +105,7 @@ SELECT extra_info, operator_cardinality, operator_timing FROM metrics_output;
 
 # Remove time from the settings file but add back the cpu time
 statement ok
-UPDATE custom_settings SET CPU_TIME = 'true', OPERATOR_TIMING = 'false';
-
-statement ok
-COPY custom_settings TO '__WORKING_DIRECTORY__/test/sql/pragma/settings.json';
-
-statement ok
-PRAGMA custom_profiling_settings='__WORKING_DIRECTORY__/test/sql/pragma/settings.json'
+PRAGMA custom_profiling_settings='{"CPU_TIME": "true", "EXTRA_INFO": "true", "OPERATOR_CARDINALITY": "true"}'
 
 query I rowsort
 SELECT unnest(string_split(current_setting('custom_profiling_settings'), ', '));
@@ -174,31 +144,22 @@ Referenced column "operator_timing" not found in FROM clause!
 
 # Error cases
 statement error
-PRAGMA custom_profiling_settings='hello_I_am_a_file_that_does_not_exist.json'
+PRAGMA custom_profiling_settings='{{'
 ----
-Could not locate the file containing the custom profiler settings
+Could not parse the custom profiler settings file due to incorrect JSON: "{{"
 
 statement error
-PRAGMA custom_profiling_settings='__WORKING_DIRECTORY__/test/sql/pragma/pragma_database_size_readonly.test'
+PRAGMA custom_profiling_settings=BONJOUR
 ----
-The custom profiler settings file must be a JSON file
+IO Error: Could not parse the custom profiler settings file due to incorrect JSON: "BONJOUR"
 
 statement error
-PRAGMA custom_profiling_settings='__WORKING_DIRECTORY__/test/sql/pragma/not_a_valid.json'
+PRAGMA custom_profiling_settings=[NOT_A_JSON]
 ----
-Could not parse the custom profiler settings file
+Binder Error: SET value cannot contain column names
 
-# add an invalid setting to the file
-statement ok
-ALTER TABLE custom_settings ADD COLUMN INVALID_SETTING TEXT;
-
-statement ok
-UPDATE custom_settings SET INVALID_SETTING = 'true';
-
-statement ok
-COPY custom_settings TO '__WORKING_DIRECTORY__/test/sql/pragma/settings.json';
-
+## add an invalid setting to the file
 statement error
-PRAGMA custom_profiling_settings='__WORKING_DIRECTORY__/test/sql/pragma/settings.json'
+PRAGMA custom_profiling_settings='{"INVALID_SETTING": "true"}'
 ----
 Invalid custom profiler settings: "INVALID_SETTING"
