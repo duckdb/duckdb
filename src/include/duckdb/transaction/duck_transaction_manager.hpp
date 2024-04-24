@@ -17,8 +17,6 @@ class DuckTransaction;
 //! The Transaction Manager is responsible for creating and managing
 //! transactions
 class DuckTransactionManager : public TransactionManager {
-	friend struct CheckpointLock;
-
 public:
 	explicit DuckTransactionManager(AttachedDatabase &db);
 	~DuckTransactionManager() override;
@@ -45,6 +43,9 @@ public:
 	bool IsDuckTransactionManager() override {
 		return true;
 	}
+
+	//! Obtains a shared lock to the checkpoint lock
+	unique_ptr<StorageLockKey> SharedCheckpointLock();
 
 protected:
 	struct CheckpointDecision {

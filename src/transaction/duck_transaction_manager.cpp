@@ -17,8 +17,7 @@
 
 namespace duckdb {
 
-DuckTransactionManager::DuckTransactionManager(AttachedDatabase &db)
-    : TransactionManager(db) {
+DuckTransactionManager::DuckTransactionManager(AttachedDatabase &db) : TransactionManager(db) {
 	// start timestamp starts at two
 	current_start_timestamp = 2;
 	// transaction ID starts very high:
@@ -90,8 +89,9 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 	// try to get the checkpoint lock
 	auto lock = checkpoint_lock.TryGetExclusiveLock();
 	if (!lock && !force) {
-		throw TransactionException("Cannot CHECKPOINT: there are other write transactions active. Use FORCE CHECKPOINT to abort "
-								   "the other transactions and force a checkpoint");
+		throw TransactionException(
+		    "Cannot CHECKPOINT: there are other write transactions active. Use FORCE CHECKPOINT to abort "
+		    "the other transactions and force a checkpoint");
 	}
 	if (force) {
 		// lock all the clients AND the connection manager now
@@ -120,10 +120,15 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 		}
 		lock = checkpoint_lock.TryGetExclusiveLock();
 		if (!lock) {
-			throw TransactionException("Cannot FORCE CHECKPOINT: failed to grab checkpoint lock after aborting all other transactions");
+			throw TransactionException(
+			    "Cannot FORCE CHECKPOINT: failed to grab checkpoint lock after aborting all other transactions");
 		}
 	}
 	storage_manager.CreateCheckpoint();
+}
+
+unique_ptr<StorageLockKey> DuckTransactionManager::SharedCheckpointLock() {
+	return checkpoint_lock.GetSharedLock();
 }
 
 ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction_p) {
@@ -137,7 +142,8 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			// try to lock the
 			lock = checkpoint_lock.TryGetExclusiveLock();
 			if (!lock) {
-				checkpoint_decision = {false, "Failed to obtain checkpoint lock - another thread is writing/checkpointing"};
+				checkpoint_decision = {false,
+				                       "Failed to obtain checkpoint lock - another thread is writing/checkpointing"};
 			} else {
 				checkpoint_decision = {true, ""};
 			}

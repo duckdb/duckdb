@@ -16,6 +16,7 @@
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/storage/storage_lock.hpp"
 
 namespace duckdb {
 
@@ -26,10 +27,11 @@ TransactionData::TransactionData(transaction_t transaction_id_p, transaction_t s
     : transaction(nullptr), transaction_id(transaction_id_p), start_time(start_time_p) {
 }
 
-DuckTransaction::DuckTransaction(TransactionManager &manager, ClientContext &context_p, transaction_t start_time,
+DuckTransaction::DuckTransaction(DuckTransactionManager &manager, ClientContext &context_p, transaction_t start_time,
                                  transaction_t transaction_id)
     : Transaction(manager, context_p), start_time(start_time), transaction_id(transaction_id), commit_id(0),
-      highest_active_query(0), undo_buffer(context_p), storage(make_uniq<LocalStorage>(context_p, *this)) {
+      highest_active_query(0), transaction_manager(manager), undo_buffer(context_p),
+      storage(make_uniq<LocalStorage>(context_p, *this)) {
 }
 
 DuckTransaction::~DuckTransaction() {
@@ -176,6 +178,12 @@ void DuckTransaction::Rollback() noexcept {
 
 void DuckTransaction::Cleanup() {
 	undo_buffer.Cleanup();
+}
+
+void DuckTransaction::SetReadWrite() {
+	Transaction::SetReadWrite();
+	// obtain a shared checkpoint lock to prevent concurrent checkpoints while this transaction is running
+	write_lock = transaction_manager.SharedCheckpointLock();
 }
 
 } // namespace duckdb

@@ -12,10 +12,12 @@
 
 namespace duckdb {
 class RowVersionManager;
+class DuckTransactionManager;
+class StorageLockKey;
 
 class DuckTransaction : public Transaction {
 public:
-	DuckTransaction(TransactionManager &manager, ClientContext &context, transaction_t start_time,
+	DuckTransaction(DuckTransactionManager &manager, ClientContext &context, transaction_t start_time,
 	                transaction_t transaction_id);
 	~DuckTransaction() override;
 
@@ -36,6 +38,8 @@ public:
 	LocalStorage &GetLocalStorage();
 
 	void PushCatalogEntry(CatalogEntry &entry, data_ptr_t extra_data = nullptr, idx_t extra_data_size = 0);
+
+	void SetReadWrite() override;
 
 	//! Commit the current transaction with the given commit identifier. Returns an error message if the transaction
 	//! commit failed, or an empty string if the commit was sucessful
@@ -60,11 +64,14 @@ public:
 	}
 
 private:
+	DuckTransactionManager &transaction_manager;
 	//! The undo buffer is used to store old versions of rows that are updated
 	//! or deleted
 	UndoBuffer undo_buffer;
 	//! The set of uncommitted appends for the transaction
 	unique_ptr<LocalStorage> storage;
+	//! Write lock
+	unique_ptr<StorageLockKey> write_lock;
 };
 
 } // namespace duckdb
