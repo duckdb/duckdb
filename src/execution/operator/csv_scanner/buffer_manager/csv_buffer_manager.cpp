@@ -8,6 +8,7 @@ CSVBufferManager::CSVBufferManager(ClientContext &context_p, const CSVReaderOpti
     : context(context_p), file_idx(file_idx_p), file_path(file_path_p), buffer_size(CSVBuffer::CSV_BUFFER_SIZE) {
 	D_ASSERT(!file_path.empty());
 	file_handle = ReadCSV::OpenCSV(file_path, options.compression, context);
+	is_pipe = file_handle->IsPipe();
 	skip_rows = options.dialect_options.skip_rows.GetValue();
 	auto file_size = file_handle->FileSize();
 	if (file_size > 0 && file_size < buffer_size) {
@@ -28,7 +29,7 @@ void CSVBufferManager::UnpinBuffer(const idx_t cache_idx) {
 void CSVBufferManager::Initialize() {
 	if (cached_buffers.empty()) {
 		cached_buffers.emplace_back(
-		    make_shared<CSVBuffer>(context, buffer_size, *file_handle, global_csv_pos, file_idx));
+		    make_shared_ptr<CSVBuffer>(context, buffer_size, *file_handle, global_csv_pos, file_idx));
 		last_buffer = cached_buffers.front();
 	}
 }
@@ -63,6 +64,15 @@ bool CSVBufferManager::ReadNextAndCacheIt() {
 
 shared_ptr<CSVBufferHandle> CSVBufferManager::GetBuffer(const idx_t pos) {
 	lock_guard<mutex> parallel_lock(main_mutex);
+	if (pos == 0 && done && cached_buffers.empty()) {
+		if (is_pipe) {
+			throw InvalidInputException("Recursive CTEs are not allowed when using piped csv files");
+		}
+		// This is a recursive CTE, we have to reset out whole buffer
+		done = false;
+		file_handle->Reset();
+		Initialize();
+	}
 	while (pos >= cached_buffers.size()) {
 		if (done) {
 			return nullptr;
@@ -71,7 +81,9 @@ shared_ptr<CSVBufferHandle> CSVBufferManager::GetBuffer(const idx_t pos) {
 			done = true;
 		}
 	}
-	if (pos != 0) {
+	if (pos != 0 && (sniffing || file_handle->CanSeek())) {
+		// We don't need to unpin the buffers here if we are not sniffing since we
+		// control it per-thread on the scan
 		if (cached_buffers[pos - 1]) {
 			cached_buffers[pos - 1]->Unpin();
 		}
@@ -98,6 +110,12 @@ void CSVBufferManager::ResetBuffer(const idx_t buffer_idx) {
 	}
 	// We only reset if previous one was also already reset
 	if (buffer_idx > 0 && !cached_buffers[buffer_idx - 1]) {
+		if (cached_buffers[buffer_idx]->last_buffer) {
+			// We clear the whole shebang
+			cached_buffers.clear();
+			reset_when_possible.clear();
+			return;
+		}
 		cached_buffers[buffer_idx].reset();
 		idx_t cur_buffer = buffer_idx + 1;
 		while (reset_when_possible.find(cur_buffer) != reset_when_possible.end()) {

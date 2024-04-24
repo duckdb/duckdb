@@ -56,6 +56,8 @@ struct WriteCSVData : public BaseCSVData {
 	idx_t flush_size = 4096ULL * 8ULL;
 	//! For each byte whether or not the CSV file requires quotes when containing the byte
 	unsafe_unique_array<bool> requires_quotes;
+	//! Expressions used to convert the input into strings
+	vector<unique_ptr<Expression>> cast_expressions;
 };
 
 struct ColumnInfo {

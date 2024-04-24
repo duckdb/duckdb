@@ -106,8 +106,10 @@ public:
 	const uint32_t number_of_columns;
 	const bool null_padding;
 	const bool ignore_errors;
-	const char *null_str_ptr;
-	const idx_t null_str_size;
+
+	unsafe_unique_array<const char *> null_str_ptr;
+	unsafe_unique_array<idx_t> null_str_size;
+	idx_t null_str_count;
 
 	//! Internal Data Chunk used for flushing
 	DataChunk parse_chunk;
@@ -143,7 +145,7 @@ public:
 
 	//! Errors happening in the current line (if any)
 	vector<CurrentError> current_errors;
-
+	StrpTimeFormat date_format, timestamp_format;
 	bool sniffing;
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
@@ -165,8 +167,6 @@ public:
 	bool HandleError();
 
 	inline void AddValueToVector(const char *value_ptr, const idx_t size, bool allocate = false);
-
-	Value GetValue(idx_t row_idx, idx_t col_idx);
 
 	DataChunk &ToChunk();
 	//! Resets the state of the result

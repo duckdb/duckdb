@@ -8,6 +8,7 @@ import gc
 script_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(script_path, '..', '..', '..', 'scripts'))
 from sqllogictest import (
+    SQLParserException,
     SQLLogicParser,
     SQLLogicTest,
 )
@@ -40,6 +41,7 @@ class SQLLogicTestExecutor(SQLLogicRunner):
                 'test/sql/types/timestamp/test_timestamp_tz.test',  # <-- Python client is always loaded wih ICU available - making the TIMESTAMPTZ::DATE cast pass
                 'test/sql/parser/invisible_spaces.test',  # <-- Parser is getting tripped up on the invisible spaces
                 'test/sql/copy/csv/code_cov/csv_state_machine_invalid_utf.test',  # <-- ConversionException is empty, see Python Mega Issue (duckdb-internal #1488)
+                'test/sql/copy/csv/test_csv_timestamp_tz.test',  # <-- ICU is always loaded
             ]
         )
         # TODO: get this from the `duckdb` package
@@ -168,10 +170,13 @@ def main():
             continue
         if test_directory:
             file_path = os.path.join(test_directory, file_path)
-        test = sql_parser.parse(file_path)
-        if not test:
-            print(f'Failed to parse {file_path}')
-            exit(1)
+
+        try:
+            test = sql_parser.parse(file_path)
+        except SQLParserException as e:
+            executor.skip_log.append(str(e.message))
+            continue
+
         print(f'[{i}/{total_tests}] {file_path}')
         # This is necessary to clean up databases/connections
         # So previously created databases are not still cached in the instance_cache

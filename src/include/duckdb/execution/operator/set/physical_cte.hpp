@@ -26,7 +26,7 @@ public:
 
 	vector<const_reference<PhysicalOperator>> cte_scans;
 
-	std::shared_ptr<ColumnDataCollection> working_table;
+	shared_ptr<ColumnDataCollection> working_table;
 
 	idx_t table_index;
 	string ctename;

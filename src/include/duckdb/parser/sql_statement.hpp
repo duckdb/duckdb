@@ -45,8 +45,8 @@ protected:
 
 public:
 	virtual string ToString() const {
-		throw InternalException("ToString not supported for this type of SQLStatement: '%s'",
-		                        StatementTypeToString(type));
+		throw NotImplementedException("ToString not supported for this type of SQLStatement: '%s'",
+		                              StatementTypeToString(type));
 	}
 	//! Create a copy of this SelectStatement
 	DUCKDB_API virtual unique_ptr<SQLStatement> Copy() const = 0;

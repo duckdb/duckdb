@@ -24,37 +24,37 @@ string_t StringCast::Operation(bool input, Vector &vector) {
 
 template <>
 string_t StringCast::Operation(int8_t input, Vector &vector) {
-	return NumericHelper::FormatSigned<int8_t, uint8_t>(input, vector);
+	return NumericHelper::FormatSigned<int8_t>(input, vector);
 }
 
 template <>
 string_t StringCast::Operation(int16_t input, Vector &vector) {
-	return NumericHelper::FormatSigned<int16_t, uint16_t>(input, vector);
+	return NumericHelper::FormatSigned<int16_t>(input, vector);
 }
 template <>
 string_t StringCast::Operation(int32_t input, Vector &vector) {
-	return NumericHelper::FormatSigned<int32_t, uint32_t>(input, vector);
+	return NumericHelper::FormatSigned<int32_t>(input, vector);
 }
 
 template <>
 string_t StringCast::Operation(int64_t input, Vector &vector) {
-	return NumericHelper::FormatSigned<int64_t, uint64_t>(input, vector);
+	return NumericHelper::FormatSigned<int64_t>(input, vector);
 }
 template <>
 duckdb::string_t StringCast::Operation(uint8_t input, Vector &vector) {
-	return NumericHelper::FormatSigned<uint8_t, uint64_t>(input, vector);
+	return NumericHelper::FormatSigned<uint8_t>(input, vector);
 }
 template <>
 duckdb::string_t StringCast::Operation(uint16_t input, Vector &vector) {
-	return NumericHelper::FormatSigned<uint16_t, uint64_t>(input, vector);
+	return NumericHelper::FormatSigned<uint16_t>(input, vector);
 }
 template <>
 duckdb::string_t StringCast::Operation(uint32_t input, Vector &vector) {
-	return NumericHelper::FormatSigned<uint32_t, uint64_t>(input, vector);
+	return NumericHelper::FormatSigned<uint32_t>(input, vector);
 }
 template <>
 duckdb::string_t StringCast::Operation(uint64_t input, Vector &vector) {
-	return NumericHelper::FormatSigned<uint64_t, uint64_t>(input, vector);
+	return NumericHelper::FormatSigned<uint64_t>(input, vector);
 }
 
 template <>
@@ -181,7 +181,7 @@ string_t StringCastTZ::Operation(dtime_tz_t input, Vector &vector) {
 	auto ss = std::abs(offset);
 	const auto hh = ss / Interval::SECS_PER_HOUR;
 
-	const auto hh_length = (hh < 100) ? 2 : NumericHelper::UnsignedLength(uint32_t(hh));
+	const auto hh_length = UnsafeNumericCast<idx_t>((hh < 100) ? 2 : NumericHelper::UnsignedLength(uint32_t(hh)));
 	length += hh_length;
 
 	ss %= Interval::SECS_PER_HOUR;

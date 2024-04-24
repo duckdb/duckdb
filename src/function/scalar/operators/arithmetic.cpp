@@ -446,8 +446,8 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 struct NegateOperator {
 	template <class T>
 	static bool CanNegate(T input) {
-		using Limits = std::numeric_limits<T>;
-		return !(Limits::is_integer && Limits::is_signed && Limits::lowest() == input);
+		using Limits = NumericLimits<T>;
+		return !(Limits::IsSigned() && Limits::Minimum() == input);
 	}
 
 	template <class TA, class TR>

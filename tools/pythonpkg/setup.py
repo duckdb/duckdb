@@ -122,6 +122,7 @@ if platform.system() == 'Windows':
 
 is_android = hasattr(sys, 'getandroidapilevel')
 is_pyodide = 'PYODIDE' in os.environ
+no_source_wheel = is_pyodide
 use_jemalloc = (
     not is_android
     and not is_pyodide
@@ -206,7 +207,9 @@ if 'BUILD_HTTPFS' in os.environ:
 for ext in extensions:
     define_macros.append(('DUCKDB_EXTENSION_{}_LINKED'.format(ext.upper()), None))
 
-define_macros.extend([('DUCKDB_EXTENSION_AUTOLOAD_DEFAULT', '1'), ('DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT', '1')])
+if not is_pyodide:
+    # currently pyodide environment is not compatible with dynamic extension loading
+    define_macros.extend([('DUCKDB_EXTENSION_AUTOLOAD_DEFAULT', '1'), ('DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT', '1')])
 
 linker_args = toolchain_args[:]
 if platform.system() == 'Windows':
@@ -353,6 +356,8 @@ def setup_data_files(data_files):
 
 
 data_files = setup_data_files(extra_files + header_files)
+if no_source_wheel:
+    data_files = []
 
 packages = [
     lib_name,

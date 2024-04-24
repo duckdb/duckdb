@@ -16,7 +16,7 @@ struct ChrOperator {
 		char c[5] = {'\0', '\0', '\0', '\0', '\0'};
 		int utf8_bytes;
 		GetCodepoint(input, c, utf8_bytes);
-		return string_t(&c[0], utf8_bytes);
+		return string_t(&c[0], UnsafeNumericCast<uint32_t>(utf8_bytes));
 	}
 };
 

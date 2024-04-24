@@ -1,0 +1,14 @@
+# name: test/fuzzer/duckfuzz/complex_join_cardinality_assert.test
+# description: Complex join that triggered an issue in debug code in the cardinality estimator
+# group: [duckfuzz]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table integers(i int);
+
+query I
+SELECT NULL FROM integers AS t1 RIGHT JOIN integers AS t2 ON (NULL) WHERE EXISTS(SELECT NULL FROM integers AS t3 INNER JOIN integers ON ((t3.i + t1.i)) , (SELECT t2.i AS c0))
+----
+

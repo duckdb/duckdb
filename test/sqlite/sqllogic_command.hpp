@@ -146,7 +146,7 @@ private:
 class UnzipCommand : public Command {
 public:
 	// 1 MB
-	static constexpr const int64_t BUFFER_SIZE = 1u << 23;
+	static constexpr const int64_t BUFFER_SIZE = 1u << 20;
 
 public:
 	UnzipCommand(SQLLogicTestRunner &runner, string &input, string &output);
