@@ -30,17 +30,20 @@ unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<LogicalTyp
 			// yuck string matching, maybe there is a better way?
 			if (logical_get.function.name == "read_csv" || logical_get.function.name == "read_csv_auto") {
 				// We loop in the expressions and bail out if there is anything weird (i.e., not a bound column ref)
+				auto &csv_bind = logical_get.bind_data->Cast<ReadCSVData>();
+				// we have to do some type switcharoo
+				vector<LogicalType> pushdown_types = csv_bind.csv_types;
 				bool can_pushdown_types = true;
-				for (auto &expr : op->expressions) {
-					can_pushdown_types = can_pushdown_types && expr->type == ExpressionType::BOUND_COLUMN_REF;
-				}
-				if (can_pushdown_types) {
-					auto &csv_bind = logical_get.bind_data->Cast<ReadCSVData>();
-					// we have to do some type switcharoo
-					vector<LogicalType> pushdown_types = csv_bind.csv_types;
-					for (idx_t tgt_idx = 0; tgt_idx < logical_get.column_ids.size(); tgt_idx++) {
-						pushdown_types[logical_get.column_ids[tgt_idx]] = target_types[tgt_idx];
+				for (idx_t i = 0; i <  op->expressions.size(); i ++) {
+					if(op->expressions[i]->type == ExpressionType::BOUND_COLUMN_REF){
+						auto &col_ref = op->expressions[i]->Cast<BoundColumnRefExpression>();
+						pushdown_types[logical_get.column_ids[col_ref.binding.column_index]] = target_types[i];
+					} else {
+						can_pushdown_types = false;
+						break;
 					}
+				}
+				if (can_pushdown_types){
 					csv_bind.csv_types = pushdown_types;
 					csv_bind.return_types = pushdown_types;
 					logical_get.returned_types = pushdown_types;
