@@ -26,29 +26,10 @@ unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<LogicalTyp
 		// "node" is a projection; we can just do the casts in there
 		D_ASSERT(node->expressions.size() == source_types.size());
 		if (node->children.size() == 1 && node->children[0]->type == LogicalOperatorType::LOGICAL_GET) {
-			// Is this a CSV Scan?
+			// If this projection only has one child and that child is a logical get we can try to pushdown types
 			auto &logical_get = node->children[0]->Cast<LogicalGet>();
-			// yuck string matching, maybe there is a better way?
-			if (logical_get.function.name == "read_csv" || logical_get.function.name == "read_csv_auto") {
-				// We loop in the expressions and bail out if there is anything weird (i.e., not a bound column ref)
-				auto &csv_bind = logical_get.bind_data->Cast<ReadCSVData>();
-				// we have to do some type switcharoo
-				vector<LogicalType> pushdown_types = csv_bind.csv_types;
-				bool can_pushdown_types = true;
-				for (idx_t i = 0; i <  op->expressions.size(); i ++) {
-					if(op->expressions[i]->type == ExpressionType::BOUND_COLUMN_REF){
-						auto &col_ref = op->expressions[i]->Cast<BoundColumnRefExpression>();
-						pushdown_types[logical_get.column_ids[col_ref.binding.column_index]] = target_types[i];
-					} else {
-						can_pushdown_types = false;
-						break;
-					}
-				}
-				if (can_pushdown_types){
-					csv_bind.csv_types = pushdown_types;
-					csv_bind.return_types = pushdown_types;
-					logical_get.returned_types = pushdown_types;
-					// We early out here, since we don't need to add casts
+			if (logical_get.function.type_pushdown) {
+				if (logical_get.function.type_pushdown(logical_get, target_types, op->expressions)) {
 					return op;
 				}
 			}

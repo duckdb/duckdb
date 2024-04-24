@@ -326,6 +326,27 @@ static unique_ptr<FunctionData> CSVReaderDeserialize(Deserializer &deserializer,
 	return std::move(result);
 }
 
+bool PushdownTypeToCSVScanner(LogicalGet &logical_get, const vector<LogicalType> &target_types,
+                              const vector<unique_ptr<Expression>> &expressions) {
+	// We loop in the expressions and bail out if there is anything weird (i.e., not a bound column ref)
+	auto &csv_bind = logical_get.bind_data->Cast<ReadCSVData>();
+	// we have to do some type switcharoo
+	vector<LogicalType> pushdown_types = csv_bind.csv_types;
+	for (idx_t i = 0; i < expressions.size(); i++) {
+		if (expressions[i]->type == ExpressionType::BOUND_COLUMN_REF) {
+			auto &col_ref = expressions[i]->Cast<BoundColumnRefExpression>();
+			pushdown_types[logical_get.column_ids[col_ref.binding.column_index]] = target_types[i];
+		} else {
+			return false;
+		}
+	}
+	csv_bind.csv_types = pushdown_types;
+	csv_bind.return_types = pushdown_types;
+	logical_get.returned_types = pushdown_types;
+	// We early out here, since we don't need to add casts
+	return true;
+}
+
 TableFunction ReadCSVTableFunction::GetFunction() {
 	TableFunction read_csv("read_csv", {LogicalType::VARCHAR}, ReadCSVFunction, ReadCSVBind, ReadCSVInitGlobal,
 	                       ReadCSVInitLocal);
@@ -336,6 +357,7 @@ TableFunction ReadCSVTableFunction::GetFunction() {
 	read_csv.get_batch_index = CSVReaderGetBatchIndex;
 	read_csv.cardinality = CSVReaderCardinality;
 	read_csv.projection_pushdown = true;
+	read_csv.type_pushdown = PushdownTypeToCSVScanner;
 	ReadCSVAddNamedParameters(read_csv);
 	return read_csv;
 }
