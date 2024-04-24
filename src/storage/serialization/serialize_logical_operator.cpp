@@ -262,13 +262,13 @@ void LogicalColumnDataGet::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WritePropertyWithDefault<idx_t>(200, "table_index", table_index);
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(201, "chunk_types", chunk_types);
-	serializer.WritePropertyWithDefault<optional_ptr<ColumnDataCollection>>(202, "collection", to_scan);
+	serializer.WritePropertyWithDefault<optionally_owned_ptr<ColumnDataCollection>>(202, "collection", collection);
 }
 
 unique_ptr<LogicalOperator> LogicalColumnDataGet::Deserialize(Deserializer &deserializer) {
 	auto table_index = deserializer.ReadPropertyWithDefault<idx_t>(200, "table_index");
 	auto chunk_types = deserializer.ReadPropertyWithDefault<vector<LogicalType>>(201, "chunk_types");
-	auto collection = deserializer.ReadPropertyWithDefault<unique_ptr<ColumnDataCollection>>(202, "collection");
+	auto collection = deserializer.ReadPropertyWithDefault<optionally_owned_ptr<ColumnDataCollection>>(202, "collection");
 	auto result = duckdb::unique_ptr<LogicalColumnDataGet>(new LogicalColumnDataGet(table_index, std::move(chunk_types), std::move(collection)));
 	return std::move(result);
 }

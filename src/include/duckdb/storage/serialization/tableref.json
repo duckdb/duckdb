@@ -169,12 +169,11 @@
       },
       {
         "id": 202,
-        "name": "owned_collection",
-        "type": "ColumnDataCollection*",
-        "serialize_property": "collection"
+        "name": "collection",
+        "type": "optionally_owned_ptr<ColumnDataCollection>"
       }
     ],
-    "constructor": ["expected_names", "owned_collection"]
+    "constructor": ["expected_names", "collection"]
   },
   {
     "class": "PivotRef",

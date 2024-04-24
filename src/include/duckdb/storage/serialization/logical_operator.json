@@ -247,8 +247,7 @@
       {
         "id": 202,
         "name": "collection",
-        "type": "ColumnDataCollection*",
-        "serialize_property": "to_scan"
+        "type": "optionally_owned_ptr<ColumnDataCollection>"
       }
     ],
     "constructor": ["table_index", "chunk_types", "collection"]

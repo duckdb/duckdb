@@ -16,6 +16,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optionally_owned_ptr.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 
@@ -144,9 +145,9 @@ protected:
 		}
 	}
 
-	// Optional Pointer Ref
+	// Optionally Owned Pointer Ref
 	template <typename T>
-	void WriteValue(const optional_ptr<T> &ptr) {
+	void WriteValue(const optionally_owned_ptr<T> &ptr) {
 		WriteValue(ptr.get());
 	}
 

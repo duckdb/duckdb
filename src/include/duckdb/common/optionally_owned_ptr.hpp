@@ -10,7 +10,6 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/unique_ptr.hpp"
-#include "duckdb/common/shared_ptr.hpp"
 
 namespace duckdb {
 
@@ -23,15 +22,15 @@ public:
 	}
 	optionally_owned_ptr(T &ref) : ptr(&ref) { // NOLINT: allow implicit creation from reference
 	}
-	explicit optionally_owned_ptr(unique_ptr<T> &&owned_p) : owned(std::move(owned_p)), ptr(owned) {
+	optionally_owned_ptr(unique_ptr<T> &&owned_p)
+	    : owned(std::move(owned_p)), ptr(owned) { // NOLINT: allow implicit creation from moved unique_ptr
 	}
 	// Move constructor
-	explicit optionally_owned_ptr(optionally_owned_ptr &&other) : owned(std::move(other.owned)), ptr(other.ptr) {
+	optionally_owned_ptr(optionally_owned_ptr &&other) : owned(std::move(other.owned)), ptr(other.ptr) {
 		other.ptr = nullptr;
 	}
 	// Copy constructor
-	explicit optionally_owned_ptr(const optionally_owned_ptr &other) : owned(nullptr), ptr(other.ptr) {
-	}
+	optionally_owned_ptr(const optionally_owned_ptr &other) = delete;
 
 	operator bool() const { // NOLINT: allow implicit conversion to bool
 		return ptr;
@@ -60,6 +59,17 @@ public:
 	// this looks dirty - but this is the default behavior of raw pointers
 	T *get_mutable() const { // NOLINT: mimic std casing
 		return ptr.get();
+	}
+
+	optionally_owned_ptr<T> &operator=(T &ref) {
+		owned = nullptr;
+		ptr = optional_ptr<T>(ref);
+		return *this;
+	}
+	optionally_owned_ptr<T> &operator=(T *ref) {
+		owned = nullptr;
+		ptr = optional_ptr<T>(ref);
+		return *this;
 	}
 
 	bool operator==(const optionally_owned_ptr<T> &rhs) const {

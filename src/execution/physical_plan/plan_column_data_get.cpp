@@ -7,16 +7,8 @@ namespace duckdb {
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalColumnDataGet &op) {
 	D_ASSERT(op.children.size() == 0);
 
-	if (op.collection) {
-		// create a PhysicalChunkScan pointing towards the owned collection
-		return make_uniq<PhysicalColumnDataScan>(op.types, PhysicalOperatorType::COLUMN_DATA_SCAN,
-		                                         op.estimated_cardinality, std::move(op.collection));
-	} else {
-		auto non_owning = make_uniq<PhysicalColumnDataScan>(op.types, PhysicalOperatorType::COLUMN_DATA_SCAN,
-		                                                    op.estimated_cardinality);
-		non_owning->collection = &op.to_scan;
-		return std::move(non_owning);
-	}
+	return make_uniq<PhysicalColumnDataScan>(op.types, PhysicalOperatorType::COLUMN_DATA_SCAN, op.estimated_cardinality,
+	                                         std::move(op.collection));
 }
 
 } // namespace duckdb

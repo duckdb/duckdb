@@ -10,6 +10,7 @@
 
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/common/optionally_owned_ptr.hpp"
 
 namespace duckdb {
 
@@ -21,15 +22,15 @@ public:
 public:
 	LogicalColumnDataGet(idx_t table_index, vector<LogicalType> types, unique_ptr<ColumnDataCollection> collection);
 	LogicalColumnDataGet(idx_t table_index, vector<LogicalType> types, ColumnDataCollection &to_scan);
+	LogicalColumnDataGet(idx_t table_index, vector<LogicalType> types,
+	                     optionally_owned_ptr<ColumnDataCollection> to_scan);
 
 	//! The table index in the current bind context
 	idx_t table_index;
 	//! The types of the chunk
 	vector<LogicalType> chunk_types;
-	//! Owned column data collection, if any
-	unique_ptr<ColumnDataCollection> collection;
-	// the column data collection to scan
-	ColumnDataCollection &to_scan;
+	//! (optionally owned) column data collection
+	optionally_owned_ptr<ColumnDataCollection> collection;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;

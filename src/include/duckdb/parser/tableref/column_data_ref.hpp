@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/parser/tableref.hpp"
+#include "duckdb/common/optionally_owned_ptr.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 
 namespace duckdb {
@@ -19,18 +20,16 @@ public:
 
 public:
 	explicit ColumnDataRef(ColumnDataCollection &collection)
-	    : TableRef(TableReferenceType::COLUMN_DATA), owned_collection(nullptr), collection(collection) {
+	    : TableRef(TableReferenceType::COLUMN_DATA), collection(collection) {
 	}
-	ColumnDataRef(vector<string> expected_names, unique_ptr<ColumnDataCollection> owned_collection_p)
-	    : TableRef(TableReferenceType::COLUMN_DATA), owned_collection(std::move(owned_collection_p)),
-	      collection(*owned_collection), expected_names(std::move(expected_names)) {
+	ColumnDataRef(vector<string> expected_names, optionally_owned_ptr<ColumnDataCollection> collection_p)
+	    : TableRef(TableReferenceType::COLUMN_DATA), collection(std::move(collection_p)),
+	      expected_names(std::move(expected_names)) {
 	}
 
 public:
-	//! (optional) The owned materialized column data
-	unique_ptr<ColumnDataCollection> owned_collection;
-	//! The materialized column data
-	ColumnDataCollection &collection;
+	//! (optionally owned) materialized column data
+	optionally_owned_ptr<ColumnDataCollection> collection;
 	//! The set of expected names
 	vector<string> expected_names;
 

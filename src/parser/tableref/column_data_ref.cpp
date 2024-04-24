@@ -7,7 +7,7 @@
 namespace duckdb {
 
 string ColumnDataRef::ToString() const {
-	auto result = collection.ToString();
+	auto result = collection->ToString();
 	return BaseToString(result, expected_names);
 }
 
@@ -16,8 +16,8 @@ bool ColumnDataRef::Equals(const TableRef &other_p) const {
 		return false;
 	}
 	auto &other = other_p.Cast<ColumnDataRef>();
-	auto expected_types = collection.Types();
-	auto other_expected_types = other.collection.Types();
+	auto expected_types = collection->Types();
+	auto other_expected_types = other.collection->Types();
 	if (expected_types.size() != other_expected_types.size()) {
 		return false;
 	}
@@ -40,14 +40,21 @@ bool ColumnDataRef::Equals(const TableRef &other_p) const {
 		}
 	}
 	string unused;
-	if (!ColumnDataCollection::ResultEquals(collection, other.collection, unused, true)) {
+	if (!ColumnDataCollection::ResultEquals(*collection, *other.collection, unused, true)) {
 		return false;
 	}
 	return true;
 }
 
 unique_ptr<TableRef> ColumnDataRef::Copy() {
-	auto result = make_uniq<ColumnDataRef>(collection);
+	unique_ptr<ColumnDataRef> result;
+	if (collection.is_owned()) {
+		// This collection is owned, the copy should be self sufficient so it needs a copy
+		// ????
+		result = nullptr;
+	} else {
+		result = make_uniq<ColumnDataRef>(*collection);
+	}
 	result->expected_names = expected_names;
 	CopyProperties(*result);
 	return std::move(result);
