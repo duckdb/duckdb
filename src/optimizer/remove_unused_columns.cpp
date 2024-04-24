@@ -167,20 +167,6 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		}
 		return;
 	}
-	case LogicalOperatorType::LOGICAL_ORDER_BY: {
-		if (!everything_referenced) {
-			auto &order = op.Cast<LogicalOrder>();
-			D_ASSERT(order.projections.empty()); // should not yet be set
-			const auto all_bindings = order.GetColumnBindings();
-
-			for (idx_t col_idx = 0; col_idx < all_bindings.size(); col_idx++) {
-				if (column_references.find(all_bindings[col_idx]) != column_references.end()) {
-					order.projections.push_back(col_idx);
-				}
-			}
-		}
-		break;
-	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		if (!everything_referenced) {
 			auto &proj = op.Cast<LogicalProjection>();
