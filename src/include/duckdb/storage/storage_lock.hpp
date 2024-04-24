@@ -37,6 +37,8 @@ public:
 	unique_ptr<StorageLockKey> GetExclusiveLock();
 	//! Get a shared lock
 	unique_ptr<StorageLockKey> GetSharedLock();
+	//! Try to get an exclusive lock - if we cannot get it immediately we return `nullptr`
+	unique_ptr<StorageLockKey> TryGetExclusiveLock();
 
 private:
 	mutex exclusive_lock;

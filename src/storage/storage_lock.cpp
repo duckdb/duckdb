@@ -26,6 +26,20 @@ unique_ptr<StorageLockKey> StorageLock::GetExclusiveLock() {
 	return make_uniq<StorageLockKey>(*this, StorageLockType::EXCLUSIVE);
 }
 
+unique_ptr<StorageLockKey> StorageLock::TryGetExclusiveLock() {
+	if (!exclusive_lock.try_lock()) {
+		// could not lock mutex
+		return nullptr;
+	}
+	if (read_count != 0) {
+		// there are active readers - cannot get exclusive lock
+		exclusive_lock.unlock();
+		return nullptr;
+	}
+	// success!
+	return make_uniq<StorageLockKey>(*this, StorageLockType::EXCLUSIVE);
+}
+
 unique_ptr<StorageLockKey> StorageLock::GetSharedLock() {
 	exclusive_lock.lock();
 	read_count++;

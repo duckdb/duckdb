@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/storage/storage_lock.hpp"
 
 namespace duckdb {
 class DuckTransaction;
@@ -52,9 +53,11 @@ protected:
 	};
 
 private:
-	CheckpointDecision CanCheckpoint(optional_ptr<DuckTransaction> current = nullptr);
 	//! Remove the given transaction from the list of active transactions
 	void RemoveTransaction(DuckTransaction &transaction) noexcept;
+
+	//! Whether or not we can checkpoint
+	CheckpointDecision CanCheckpoint();
 
 private:
 	//! The current start timestamp used by transactions
@@ -73,8 +76,8 @@ private:
 	vector<unique_ptr<DuckTransaction>> old_transactions;
 	//! The lock used for transaction operations
 	mutex transaction_lock;
-
-	bool thread_is_checkpointing;
+	//! The checkpoint lock
+	StorageLock checkpoint_lock;
 
 protected:
 	virtual void OnCommitCheckpointDecision(const CheckpointDecision &decision, DuckTransaction &transaction) {
