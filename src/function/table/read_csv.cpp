@@ -328,9 +328,8 @@ static unique_ptr<FunctionData> CSVReaderDeserialize(Deserializer &deserializer,
 
 bool PushdownTypeToCSVScanner(LogicalGet &logical_get, const vector<LogicalType> &target_types,
                               const vector<unique_ptr<Expression>> &expressions) {
-	// We loop in the expressions and bail out if there is anything weird (i.e., not a bound column ref)
 	auto &csv_bind = logical_get.bind_data->Cast<ReadCSVData>();
-	// we have to do some type switcharoo
+	// We loop in the expressions and bail out if there is anything weird (i.e., not a bound column ref)
 	vector<LogicalType> pushdown_types = csv_bind.csv_types;
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		if (expressions[i]->type == ExpressionType::BOUND_COLUMN_REF) {
@@ -343,7 +342,6 @@ bool PushdownTypeToCSVScanner(LogicalGet &logical_get, const vector<LogicalType>
 	csv_bind.csv_types = pushdown_types;
 	csv_bind.return_types = pushdown_types;
 	logical_get.returned_types = pushdown_types;
-	// We early out here, since we don't need to add casts
 	return true;
 }
 
