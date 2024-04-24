@@ -25,11 +25,13 @@ struct CSVColumnInfo {
 
 //! Basic CSV Schema
 struct CSVColumnSchema {
-	void Initialize(vector<string> &names, vector<LogicalType> &types);
+	void Initialize(vector<string> &names, vector<LogicalType> &types, const string &file_path);
 	bool Empty() const;
-	bool SchemasMatch(string &error_message, vector<string> &names, vector<LogicalType> &types);
+	bool SchemasMatch(string &error_message, vector<string> &names, vector<LogicalType> &types,
+	                  const string &file_path);
 	vector<CSVColumnInfo> columns;
 	unordered_map<string, idx_t> name_idx_map;
+	string file_path;
 };
 
 //! Struct holding information over a CSV File we will scan

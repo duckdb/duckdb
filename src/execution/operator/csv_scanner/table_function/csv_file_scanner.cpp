@@ -4,10 +4,11 @@
 
 namespace duckdb {
 
-void CSVColumnSchema::Initialize(vector<string> &names, vector<LogicalType> &types) {
+void CSVColumnSchema::Initialize(vector<string> &names, vector<LogicalType> &types, const string &file_path_p) {
 	if (!columns.empty()) {
 		throw InternalException("CSV Schema is already populated, this should not happen.");
 	}
+	file_path = file_path_p;
 	D_ASSERT(names.size() == types.size() && !names.empty());
 	for (idx_t i = 0; i < names.size(); i++) {
 		// Populate our little schema
@@ -20,7 +21,8 @@ bool CSVColumnSchema::Empty() const {
 	return columns.empty();
 }
 
-bool CSVColumnSchema::SchemasMatch(string &error_message, vector<string> &names, vector<LogicalType> &types) {
+bool CSVColumnSchema::SchemasMatch(string &error_message, vector<string> &names, vector<LogicalType> &types,
+                                   const string &cur_file_path) {
 	D_ASSERT(names.size() == types.size() && !names.empty());
 	bool match = true;
 	unordered_map<string, LogicalType> current_schema;
@@ -35,15 +37,18 @@ bool CSVColumnSchema::SchemasMatch(string &error_message, vector<string> &names,
 	std::ostringstream error;
 	error << "Schema mismatch between globbed files."
 	      << "\n";
+	error << "Main file schema: " << file_path << "\n";
+	error << "Current file: " << cur_file_path << "\n";
+
 	for (auto &column : columns) {
 		if (current_schema.find(column.name) == current_schema.end()) {
-			error << "Column with name: \"" << column.name << " is missing"
+			error << "Column with name: \"" << column.name << "\" is missing"
 			      << "\n";
 			match = false;
 		} else {
 			if (current_schema[column.name].id() != column.type.id()) {
 				error << "Column with name: \"" << column.name
-				      << " is expected to have type: " << column.type.ToString();
+				      << "\" is expected to have type: " << column.type.ToString();
 				error << " But has type: " << current_schema[column.name].ToString() << "\n";
 				match = false;
 			}
@@ -84,7 +89,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, shared_ptr<CSVBufferManager> bu
 	}
 	names = bind_data.return_names;
 	types = bind_data.return_types;
-	file_schema.Initialize(names, types);
+	file_schema.Initialize(names, types, file_path);
 	MultiFileReader::InitializeReader(*this, options.file_options, bind_data.reader_bind, bind_data.return_types,
 	                                  bind_data.return_names, column_ids, nullptr, file_path, context);
 
@@ -154,12 +159,16 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 		if (file_schema.Empty()) {
 			CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
 			auto result = sniffer.SniffCSV();
-			file_schema.Initialize(result.names, result.return_types);
+			file_schema.Initialize(result.names, result.return_types, options.file_path);
 		} else if (file_idx > 0) {
 			CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
 			auto result = sniffer.SniffCSV();
 			if (!options.file_options.union_by_name) {
 				// Union By name has its own mystical rules
+				string error;
+				if (!file_schema.SchemasMatch(error, result.names, result.return_types, file_path)) {
+					throw InvalidInputException(error);
+				}
 			}
 		}
 	}
