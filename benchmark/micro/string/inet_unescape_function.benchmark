@@ -1,0 +1,15 @@
+# name: benchmark/micro/string/inet_unescape_function.benchmark
+# description: inet's extension unescape function benchmark
+# group: [string]
+
+name html_unescape benchmark
+group string
+require inet
+
+load
+CREATE TABLE charrefs AS SELECT * FROM (VALUES ('&amp'), ('&Colon;'), ('&CounterClockwiseContourIntegral;'), ('&;'), ('&GreaterLess;'), ('&lambda;&lambda;&lambda;&lambda;&lambda;&lambda;&lambda;'), ('&LeftArrowRightArrow;'), ('&downarrow;'), ('not &notin'), ('&quot;;'), ('&no charref'));
+CREATE TABLE html_hex_tbl AS SELECT format('&#x{:x}', i) html_text FROM range(10000000) t(i);
+INSERT INTO html_hex_tbl SELECT * FROM charrefs;
+
+run
+SELECT html_unescape(html_text) FROM html_hex_tbl;
