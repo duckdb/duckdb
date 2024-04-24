@@ -335,7 +335,7 @@ unique_ptr<LogicalOperator> LogicalCreateIndex::Deserialize(Deserializer &deseri
 
 void LogicalCreateTable::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	serializer.WritePropertyWithDefault<optional_ptr<CreateInfo>>(200, "info", info->base.get());
+	serializer.WritePropertyWithDefault<optional_ptr<CreateInfo>>(200, "info", info->base);
 }
 
 unique_ptr<LogicalOperator> LogicalCreateTable::Deserialize(Deserializer &deserializer) {
@@ -355,7 +355,7 @@ unique_ptr<LogicalOperator> LogicalCrossProduct::Deserialize(Deserializer &deser
 
 void LogicalDelete::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	serializer.WritePropertyWithDefault<optional_ptr<CreateInfo>>(200, "table_info", table.GetInfo().get());
+	serializer.WritePropertyWithDefault<optional_ptr<CreateInfo>>(200, "table_info", table.GetInfo());
 	serializer.WritePropertyWithDefault<idx_t>(201, "table_index", table_index);
 	serializer.WritePropertyWithDefault<bool>(202, "return_chunk", return_chunk);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(203, "expressions", expressions);
@@ -469,7 +469,7 @@ unique_ptr<LogicalOperator> LogicalFilter::Deserialize(Deserializer &deserialize
 
 void LogicalInsert::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	serializer.WritePropertyWithDefault<optional_ptr<CreateInfo>>(200, "table_info", table.GetInfo().get());
+	serializer.WritePropertyWithDefault<optional_ptr<CreateInfo>>(200, "table_info", table.GetInfo());
 	serializer.WritePropertyWithDefault<vector<vector<unique_ptr<Expression>>>>(201, "insert_values", insert_values);
 	serializer.WriteProperty<IndexVector<idx_t, PhysicalIndex>>(202, "column_index_map", column_index_map);
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(203, "expected_types", expected_types);
@@ -702,7 +702,7 @@ unique_ptr<LogicalOperator> LogicalUnnest::Deserialize(Deserializer &deserialize
 
 void LogicalUpdate::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	serializer.WritePropertyWithDefault<optional_ptr<CreateInfo>>(200, "table_info", table.GetInfo().get());
+	serializer.WritePropertyWithDefault<optional_ptr<CreateInfo>>(200, "table_info", table.GetInfo());
 	serializer.WritePropertyWithDefault<idx_t>(201, "table_index", table_index);
 	serializer.WritePropertyWithDefault<bool>(202, "return_chunk", return_chunk);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(203, "expressions", expressions);
