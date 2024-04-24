@@ -331,7 +331,7 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 		// by 1, so the total cost is O(r^3) in the amount of relations
 		// long is needed to prevent clang-tidy complaints. (idx_t) cannot be added to an iterator position because it
 		// is unsigned.
-		int64_t best_left = 0, best_right = 0;
+		idx_t best_left = 0, best_right = 0;
 		optional_ptr<DPJoinNode> best_connection;
 		for (idx_t i = 0; i < join_relations.size(); i++) {
 			auto left = join_relations[i];
@@ -416,8 +416,8 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 		auto &new_set = query_graph_manager.set_manager.Union(join_relations.at(best_left).get(),
 		                                                      join_relations.at(best_right).get());
 		D_ASSERT(best_right > best_left);
-		join_relations.erase(join_relations.begin() + best_right);
-		join_relations.erase(join_relations.begin() + best_left);
+		join_relations.erase(join_relations.begin() + (int64_t)best_right);
+		join_relations.erase(join_relations.begin() + (int64_t)best_left);
 		join_relations.push_back(new_set);
 	}
 }
