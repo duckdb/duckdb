@@ -201,7 +201,7 @@ typedef idx_t (*table_function_get_batch_index_t)(ClientContext &context, const 
 
 typedef BindInfo (*table_function_get_bind_info_t)(const optional_ptr<FunctionData> bind_data);
 
-typedef unique_ptr<MultiFileReader> (*table_function_get_multi_file_reader)();
+typedef unique_ptr<MultiFileReader> (*table_function_get_multi_file_reader_t)();
 
 typedef double (*table_function_progress_t)(ClientContext &context, const FunctionData *bind_data,
                                             const GlobalTableFunctionState *global_state);
@@ -273,7 +273,7 @@ public:
 	//! (Optional) returns extra bind info
 	table_function_get_bind_info_t get_bind_info;
 	//! (Optional) allows re-using existing table functions with a custom MultiFileReader implementation
-	table_function_get_multi_file_reader get_multi_file_reader;
+	table_function_get_multi_file_reader_t get_multi_file_reader;
 
 	table_function_serialize_t serialize;
 	table_function_deserialize_t deserialize;

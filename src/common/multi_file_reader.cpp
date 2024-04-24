@@ -505,8 +505,7 @@ bool MultiFileReaderOptions::AutoDetectHivePartitioningInternal(MultiFileList &f
 		return false;
 	}
 
-	idx_t current_file = 0; // TODO should be 1?
-
+	idx_t current_file = 1;
 	while (true) {
 		auto file = files.GetFile(current_file++);
 		if (file.empty()) {
@@ -534,7 +533,12 @@ void MultiFileReaderOptions::AutoDetectHiveTypesInternal(MultiFileList &files, C
 	auto &fs = FileSystem::GetFileSystem(context);
 
 	unordered_map<string, LogicalType> detected_types;
-	for (auto &file : files.GetAllFiles()) {
+	idx_t current_file = 0;
+	while (true) {
+		auto file = files.GetFile(current_file++);
+		if (file.empty()) {
+			break;
+		}
 		unordered_map<string, string> partitions;
 		auto splits = StringUtil::Split(file, fs.PathSeparator(file));
 		if (splits.size() < 2) {
