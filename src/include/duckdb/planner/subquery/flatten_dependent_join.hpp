@@ -12,6 +12,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/optimizer/column_binding_replacer.hpp"
 
 namespace duckdb {
 
@@ -41,12 +42,15 @@ struct FlattenDependentJoins {
 	const vector<CorrelatedColumnInfo> &correlated_columns;
 	vector<LogicalType> delim_types;
 
+	vector<ReplacementBinding> replacement_bindings;
+
 	bool perform_delim;
 	bool any_join;
 
 private:
 	unique_ptr<LogicalOperator> PushDownDependentJoinInternal(unique_ptr<LogicalOperator> plan,
 	                                                          bool &parent_propagate_null_values, idx_t lateral_depth);
+
 };
 
 } // namespace duckdb

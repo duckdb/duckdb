@@ -136,13 +136,31 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			}
 		}
 
+		// create cross product with Delim Join
 		auto left_columns = plan->GetColumnBindings().size();
 		auto delim_index = binder.GenerateTableIndex();
 		this->base_binding = ColumnBinding(delim_index, 0);
 		this->delim_offset = left_columns;
 		this->data_offset = 0;
 		auto delim_scan = make_uniq<LogicalDelimGet>(delim_index, delim_types);
-		return LogicalCrossProduct::Create(std::move(plan), std::move(delim_scan));
+		auto cross_product = LogicalCrossProduct::Create(std::move(plan), std::move(delim_scan));
+
+		// Add a projection on top of the cross product to make sure Join order optimizer does not
+		// flip column ordering
+		vector<unique_ptr<Expression>> new_expressions;
+		auto bindings = cross_product->GetColumnBindings();
+		cross_product->ResolveOperatorTypes();
+		auto types = cross_product->types;
+		auto new_table_index = binder.GenerateTableIndex();
+		D_ASSERT(types.size() == bindings.size());
+		for (idx_t i = 0; i < bindings.size(); i++) {
+			auto new_binding = ColumnBinding(new_table_index, i);
+			replacement_bindings.push_back(ReplacementBinding(bindings.at(i), new_binding));
+			new_expressions.push_back(make_uniq<BoundColumnRefExpression>(types.at(i), bindings.at(i)));
+		}
+		auto new_proj = make_uniq<LogicalProjection>(new_table_index, std::move(new_expressions));
+		new_proj->children.push_back(std::move(cross_product));
+		return new_proj;
 	}
 	switch (plan->type) {
 	case LogicalOperatorType::LOGICAL_UNNEST:
@@ -577,17 +595,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		plan->children[1]->ResolveOperatorTypes();
 		D_ASSERT(plan->children[0]->types == plan->children[1]->types);
 #endif
-		if (setop.type == LogicalOperatorType::LOGICAL_UNION) {
-			if (plan->children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION) {
-				plan->children[0]->children[0] = PushDownDependentJoin(std::move(plan->children[0]->children[0]));
-			}
-			if (plan->children[1]->type == LogicalOperatorType::LOGICAL_PROJECTION) {
-				plan->children[1]->children[0] = PushDownDependentJoin(std::move(plan->children[1]->children[0]));
-			}
-		} else {
-			plan->children[0] = PushDownDependentJoin(std::move(plan->children[0]));
-			plan->children[1] = PushDownDependentJoin(std::move(plan->children[1]));
-		}
+		plan->children[0] = PushDownDependentJoin(std::move(plan->children[0]));
+		plan->children[1] = PushDownDependentJoin(std::move(plan->children[1]));
 #ifdef DEBUG
 		D_ASSERT(plan->children[0]->GetColumnBindings().size() == plan->children[1]->GetColumnBindings().size());
 		plan->children[0]->ResolveOperatorTypes();

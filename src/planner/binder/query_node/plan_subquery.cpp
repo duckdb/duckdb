@@ -18,6 +18,7 @@
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
 #include "duckdb/planner/expression_binder/lateral_binder.hpp"
 #include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
+#include "duckdb/optimizer/column_binding_replacer.hpp"
 
 namespace duckdb {
 
@@ -281,6 +282,10 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		FlattenDependentJoins flatten(binder, correlated_columns, perform_delim, true);
 		flatten.DetectCorrelatedExpressions(*plan);
 		auto dependent_join = flatten.PushDownDependentJoin(std::move(plan));
+		auto replacer = ColumnBindingReplacer();
+		replacer.replacement_bindings = flatten.replacement_bindings;
+		replacer.VisitOperator(*delim_join);
+
 
 		// fetch the set of columns
 		auto plan_columns = dependent_join->GetColumnBindings();
