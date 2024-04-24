@@ -415,6 +415,7 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 
 	connection_module.def("__enter__", &DuckDBPyConnection::Enter)
 	    .def("__exit__", &DuckDBPyConnection::Exit, py::arg("exc_type"), py::arg("exc"), py::arg("traceback"));
+	connection_module.def("__del__", &DuckDBPyConnection::Close);
 
 	InitializeConnectionMethods(connection_module);
 	connection_module.def_property_readonly("description", &DuckDBPyConnection::GetDescription,
@@ -1323,6 +1324,9 @@ int DuckDBPyConnection::GetRowcount() {
 }
 
 void DuckDBPyConnection::Close() {
+	if (connection) {
+		Checkpoint();
+	}
 	result = nullptr;
 	connection = nullptr;
 	database = nullptr;
@@ -1332,7 +1336,6 @@ void DuckDBPyConnection::Close() {
 	}
 	registered_functions.clear();
 	cursors.clear();
-	Checkpoint();
 }
 
 void DuckDBPyConnection::Interrupt() {
