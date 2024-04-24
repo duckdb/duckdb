@@ -22,8 +22,8 @@ public:
 	}
 	optionally_owned_ptr(T &ref) : ptr(&ref) { // NOLINT: allow implicit creation from reference
 	}
-	optionally_owned_ptr(unique_ptr<T> &&owned_p)
-	    : owned(std::move(owned_p)), ptr(owned) { // NOLINT: allow implicit creation from moved unique_ptr
+	optionally_owned_ptr(unique_ptr<T> &&owned_p) // NOLINT: allow implicit creation from moved unique_ptr
+	    : owned(std::move(owned_p)), ptr(owned) {
 	}
 	// Move constructor
 	optionally_owned_ptr(optionally_owned_ptr &&other) : owned(std::move(other.owned)), ptr(other.ptr) {

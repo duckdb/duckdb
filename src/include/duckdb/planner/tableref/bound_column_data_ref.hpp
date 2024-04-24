@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/planner/bound_tableref.hpp"
+#include "duckdb/common/optionally_owned_ptr.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 
 namespace duckdb {
@@ -18,11 +19,11 @@ public:
 	static constexpr const TableReferenceType TYPE = TableReferenceType::COLUMN_DATA;
 
 public:
-	explicit BoundColumnDataRef(ColumnDataCollection &collection)
-	    : BoundTableRef(TableReferenceType::COLUMN_DATA), collection(collection) {
+	explicit BoundColumnDataRef(optionally_owned_ptr<ColumnDataCollection> collection)
+	    : BoundTableRef(TableReferenceType::COLUMN_DATA), collection(std::move(collection)) {
 	}
-	//! The materialized column data to scan
-	ColumnDataCollection &collection;
+	//! The (optionally owned) materialized column data to scan
+	optionally_owned_ptr<ColumnDataCollection> collection;
 	//! The index in the bind context
 	idx_t bind_index;
 };
