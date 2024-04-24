@@ -24,6 +24,12 @@ public:
 
 	vector<string> Glob(const string &path, FileOpener *opener = nullptr) override;
 
+	duckdb::unique_ptr<ResponseWrapper> HeadRequest(FileHandle &handle, string hf_url, HeaderMap header_map) override;
+	duckdb::unique_ptr<ResponseWrapper> GetRequest(FileHandle &handle, string hf_url, HeaderMap header_map) override;
+	duckdb::unique_ptr<ResponseWrapper> GetRangeRequest(FileHandle &handle, string hf_url, HeaderMap header_map,
+	                                                    idx_t file_offset, char *buffer_out,
+	                                                    idx_t buffer_out_len) override;
+
 	bool CanHandleFile(const string &fpath) override {
 		return fpath.rfind("hf://", 0) == 0;
 	};
@@ -43,6 +49,21 @@ protected:
 	                                                        optional_ptr<FileOpener> opener) override;
 
 	string ListHFRequest(ParsedHFUrl &url, HTTPParams &http_params, string &next_page_url, optional_ptr<HTTPState> state);
+};
+
+class HFFileHandle : public HTTPFileHandle {
+	friend class HuggingFaceFileSystem;
+
+public:
+	HFFileHandle(FileSystem &fs, ParsedHFUrl hf_url, string http_url, FileOpenFlags flags, const HTTPParams &http_params)
+	    : HTTPFileHandle(fs, std::move(http_url), flags, http_params), parsed_url(std::move(hf_url)) {
+	}
+	~HFFileHandle() override;
+
+	void InitializeClient() override;
+
+protected:
+	ParsedHFUrl parsed_url;
 };
 
 } // namespace duckdb
