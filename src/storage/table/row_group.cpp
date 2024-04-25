@@ -22,8 +22,6 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
-#include "duckdb/parser/parsed_data/sample_options.hpp"
-// #include "duckdb/common/printer.hpp"
 
 namespace duckdb {
 
@@ -459,13 +457,10 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 		auto max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.max_row_group_row - current_row);
 
 		// table sample blocks
-		if (result.pipeline->operators.size() > 0) {
-			auto op = result.pipeline->operators[0].get()
-			if (op->method == SampleMethod::CHUNK_SAMPLE) {
-				if (state.random.NextRandom() > op->percentage) {
-					NextVector(state);
-					continue;
-				}
+		if (result.chunk_sample_op.do_chunk_sample) {
+			if (state.random.NextRandom() > result.chunk_sample_op.percentage) {
+				NextVector(state);
+				continue;
 			}
 		}
 

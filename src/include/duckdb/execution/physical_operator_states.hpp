@@ -167,7 +167,6 @@ struct OperatorSourceInput {
 	GlobalSourceState &global_state;
 	LocalSourceState &local_state;
 	InterruptState &interrupt_state;
-	Pipeline *pipeline;
 };
 
 struct OperatorSinkCombineInput {
