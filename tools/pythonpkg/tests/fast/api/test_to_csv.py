@@ -209,8 +209,8 @@ class TestToCSV(object):
             rel.to_csv(temp_file_name, header=True, partition_by=["c_category_1"])
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
-    def test_to_csv_per_thread_output(self, pandas, temp_file_name):
-        num_threads = duckdb.sql("select current_setting('threads')").fetchone()[0]
+    def test_to_csv_per_thread_output(self, pandas, temp_file_name, duckdb_cursor):
+        num_threads = duckdb_cursor.sql("select current_setting('threads')").fetchone()[0]
         print('num_threads:', num_threads)
         df = pandas.DataFrame(
             {
@@ -221,9 +221,15 @@ class TestToCSV(object):
                 "c_string": ["a", "b,c", "e", "f"],
             }
         )
-        rel = duckdb.from_df(df)
+        rel = duckdb_cursor.from_df(df)
         rel.to_csv(temp_file_name, header=True, per_thread_output=True)
-        csv_rel = duckdb.read_csv(f'{temp_file_name}/*.csv', header=True)
+        created_files = duckdb_cursor.sql(f"select * from glob('{temp_file_name}/*.csv')").fetchall()
+        print(created_files)
+        assert len(created_files) == 1
+        content = open(created_files[0][0]).read()
+        print(content)
+
+        csv_rel = duckdb_cursor.read_csv(f'{temp_file_name}/*.csv', header=True)
         assert rel.execute().fetchall() == csv_rel.execute().fetchall()
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
