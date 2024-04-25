@@ -124,6 +124,9 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 			expected_column_count = result.ColumnCount();
 			column_count_mismatch = true;
 		}
+		if (expected_column_count == 0) {
+			return false;
+		}
 		idx_t expected_rows = comparison_values.size() / expected_column_count;
 		// we first check the counts: if the values are equal to the amount of rows we expect the results to be row-wise
 		bool row_wise = expected_column_count > 1 && comparison_values.size() == result.RowCount();

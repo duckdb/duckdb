@@ -26,6 +26,7 @@
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/storage/table/delete_state.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 
 namespace duckdb {
 
@@ -168,6 +169,7 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, unique_ptr<FileHandle> ha
 	}
 
 	con.BeginTransaction();
+	MetaTransaction::Get(*con.context).ModifyDatabase(database);
 
 	// first deserialize the WAL to look for a checkpoint flag
 	// if there is a checkpoint flag, we might have already flushed the contents of the WAL to disk
@@ -229,6 +231,7 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, unique_ptr<FileHandle> ha
 					break;
 				}
 				con.BeginTransaction();
+				MetaTransaction::Get(*con.context).ModifyDatabase(database);
 			}
 		}
 	} catch (std::exception &ex) { // LCOV_EXCL_START

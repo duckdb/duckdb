@@ -30,6 +30,7 @@
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/unknown_index.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 
 namespace duckdb {
 
@@ -239,6 +240,8 @@ void SingleFileCheckpointReader::LoadFromStorage(optional_ptr<ClientContext> con
 	}
 
 	if (context) {
+		auto &meta_transaction = MetaTransaction::Get(*context);
+		meta_transaction.ModifyDatabase(catalog.GetAttached());
 		// create the MetadataReader to read from the storage
 		MetadataReader reader(metadata_manager, meta_block);
 		//	reader.SetContext(*con.context);
@@ -246,6 +249,8 @@ void SingleFileCheckpointReader::LoadFromStorage(optional_ptr<ClientContext> con
 	} else {
 		Connection con(storage.GetDatabase());
 		con.BeginTransaction();
+		auto &meta_transaction = MetaTransaction::Get(*con.context);
+		meta_transaction.ModifyDatabase(catalog.GetAttached());
 		// create the MetadataReader to read from the storage
 		MetadataReader reader(metadata_manager, meta_block);
 		//	reader.SetContext(*con.context);
