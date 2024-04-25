@@ -1377,7 +1377,6 @@ void DataTable::CommitDropColumn(idx_t index) {
 	row_groups->CommitDropColumn(index);
 }
 
-
 idx_t DataTable::ColumnCount() const {
 	return column_definitions.size();
 }

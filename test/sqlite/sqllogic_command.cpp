@@ -113,10 +113,10 @@ bool CheckLoopCondition(ExecuteContext &context, const vector<Condition> &condit
 	if (context.running_loops.empty()) {
 		throw BinderException("Conditions (onlyif/skipif) on loop parameters can only occur within a loop");
 	}
-	for(auto &condition : conditions) {
+	for (auto &condition : conditions) {
 		bool condition_holds = false;
 		bool found_loop = false;
-		for(auto &loop : context.running_loops) {
+		for (auto &loop : context.running_loops) {
 			if (loop.loop_iterator_name != condition.keyword) {
 				continue;
 			}
@@ -129,7 +129,7 @@ bool CheckLoopCondition(ExecuteContext &context, const vector<Condition> &condit
 				loop_value = loop.tokens[loop.loop_idx];
 			}
 			if (condition.comparison == ExpressionType::COMPARE_EQUAL ||
-				condition.comparison == ExpressionType::COMPARE_NOTEQUAL) {
+			    condition.comparison == ExpressionType::COMPARE_NOTEQUAL) {
 				// equality/non-equality is done on the string value
 				if (condition.comparison == ExpressionType::COMPARE_EQUAL) {
 					condition_holds = loop_value == condition.value;
@@ -140,7 +140,7 @@ bool CheckLoopCondition(ExecuteContext &context, const vector<Condition> &condit
 				// > >= < <= are done on numeric values
 				int64_t loop_val = std::stoll(loop_value);
 				int64_t condition_val = std::stoll(condition.value);
-				switch(condition.comparison) {
+				switch (condition.comparison) {
 				case ExpressionType::COMPARE_GREATERTHAN:
 					condition_holds = loop_val > condition_val;
 					break;
@@ -159,7 +159,8 @@ bool CheckLoopCondition(ExecuteContext &context, const vector<Condition> &condit
 			}
 		}
 		if (!found_loop) {
-			throw BinderException("Condition in onlyif/skipif not found: %s must be a loop iterator name", condition.keyword);
+			throw BinderException("Condition in onlyif/skipif not found: %s must be a loop iterator name",
+			                      condition.keyword);
 		}
 		if (condition_holds) {
 			// the condition holds

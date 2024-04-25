@@ -381,10 +381,11 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 	return RequireResult::PRESENT;
 }
 
-bool TryParseConditions(SQLLogicParser &parser, const string &condition_text, vector<Condition> &conditions, bool skip_if) {
+bool TryParseConditions(SQLLogicParser &parser, const string &condition_text, vector<Condition> &conditions,
+                        bool skip_if) {
 	bool is_condition = false;
-	for(auto &c : condition_text) {
-		switch(c) {
+	for (auto &c : condition_text) {
+		switch (c) {
 		case '=':
 		case '>':
 		case '<':
@@ -400,18 +401,14 @@ bool TryParseConditions(SQLLogicParser &parser, const string &condition_text, ve
 	}
 	// split based on &&
 	auto condition_strings = StringUtil::Split(condition_text, "&&");
-	for(auto &condition_str : condition_strings) {
+	for (auto &condition_str : condition_strings) {
 		vector<pair<string, ExpressionType>> comparators {
-			{"<>", ExpressionType::COMPARE_NOTEQUAL},
-			{">=", ExpressionType::COMPARE_GREATERTHANOREQUALTO},
-			{">", ExpressionType::COMPARE_GREATERTHAN},
-			{"<=", ExpressionType::COMPARE_LESSTHANOREQUALTO},
-			{"<", ExpressionType::COMPARE_LESSTHAN},
-			{"=", ExpressionType::COMPARE_EQUAL}
-		};
+		    {"<>", ExpressionType::COMPARE_NOTEQUAL},   {">=", ExpressionType::COMPARE_GREATERTHANOREQUALTO},
+		    {">", ExpressionType::COMPARE_GREATERTHAN}, {"<=", ExpressionType::COMPARE_LESSTHANOREQUALTO},
+		    {"<", ExpressionType::COMPARE_LESSTHAN},    {"=", ExpressionType::COMPARE_EQUAL}};
 		ExpressionType comparison_type = ExpressionType::INVALID;
 		vector<string> splits;
-		for(auto &comparator : comparators) {
+		for (auto &comparator : comparators) {
 			if (!StringUtil::Contains(condition_str, comparator.first)) {
 				continue;
 			}
@@ -424,7 +421,7 @@ bool TryParseConditions(SQLLogicParser &parser, const string &condition_text, ve
 			parser.Fail("skipif/onlyif must be in the form of x=y or x>y, potentially separated by &&");
 		}
 		// strip white space
-		for(auto &split : splits) {
+		for (auto &split : splits) {
 			StringUtil::Trim(split);
 		}
 

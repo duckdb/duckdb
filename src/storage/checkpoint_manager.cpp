@@ -484,8 +484,8 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	// built-in (ART) as unknown
 	if (info.index_type == ART::TYPE_NAME) {
 		data_table.AddIndex(make_uniq<ART>(info.index_name, info.constraint_type, info.column_ids,
-		                                                 TableIOManager::Get(data_table), unbound_expressions,
-		                                                 data_table.db, nullptr, index_storage_info));
+		                                   TableIOManager::Get(data_table), unbound_expressions, data_table.db, nullptr,
+		                                   index_storage_info));
 	} else {
 		auto unknown_index = make_uniq<UnknownIndex>(info.index_name, info.index_type, info.constraint_type,
 		                                             info.column_ids, TableIOManager::Get(data_table),
