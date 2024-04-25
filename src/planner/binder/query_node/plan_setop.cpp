@@ -34,6 +34,12 @@ unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<LogicalTyp
 				for (idx_t i = 0; i < op->expressions.size(); i++) {
 					if (op->expressions[i]->type == ExpressionType::BOUND_COLUMN_REF) {
 						auto &col_ref = op->expressions[i]->Cast<BoundColumnRefExpression>();
+						if (new_column_types.find(logical_get.column_ids[col_ref.binding.column_index]) !=
+						    new_column_types.end()) {
+							// Only one reference per column is accepted
+							do_pushdown = false;
+							break;
+						}
 						new_column_types[logical_get.column_ids[col_ref.binding.column_index]] = target_types[i];
 					} else {
 						do_pushdown = false;

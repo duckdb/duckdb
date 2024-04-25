@@ -231,3 +231,15 @@ select * from users_age;
 2	eve	eve@email.com	NULL
 1	alice	NULL	20
 3	bob	NULL	32
+
+# Only accept one reference per column
+statement ok
+create table timestamps(ts timestamp, dt date);
+
+statement ok
+insert into timestamps select ts,ts from read_csv('data/csv/timestamp.csv');
+
+query II
+from timestamps;
+----
+2020-01-01 01:02:03	2020-01-01
