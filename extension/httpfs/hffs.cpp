@@ -375,7 +375,7 @@ string HuggingFaceFileSystem::GetHFUrl(const ParsedHFUrl &url) {
 }
 
 string HuggingFaceFileSystem::GetTreeUrl(const ParsedHFUrl &url, idx_t limit) {
-	//! Url format {endpoint}/api/{repo_type}s/{repository}/tree/{revision}{encoded_path_in_repo}
+	//! Url format {endpoint}/api/{repo_type}/{repository}/tree/{revision}{encoded_path_in_repo}
 	string http_url = url.endpoint;
 
 	http_url = JoinPath(http_url, "api");
@@ -393,7 +393,7 @@ string HuggingFaceFileSystem::GetTreeUrl(const ParsedHFUrl &url, idx_t limit) {
 }
 
 string HuggingFaceFileSystem::GetFileUrl(const ParsedHFUrl &url) {
-	//! Url format {endpoint}/{repo_type}s[/{repository}/{revision}{encoded_path_in_repo}
+	//! Url format {endpoint}/{repo_type}[/{repository}/{revision}{encoded_path_in_repo}
 	string http_url = url.endpoint;
 	http_url = JoinPath(http_url, url.repo_type);
 	http_url = JoinPath(http_url, url.repository);
