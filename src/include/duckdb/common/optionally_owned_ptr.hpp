@@ -26,7 +26,7 @@ public:
 	    : owned(std::move(owned_p)), ptr(owned) {
 	}
 	// Move constructor
-	optionally_owned_ptr(optionally_owned_ptr &&other) : owned(std::move(other.owned)), ptr(other.ptr) {
+	optionally_owned_ptr(optionally_owned_ptr &&other) noexcept : owned(std::move(other.owned)), ptr(other.ptr) {
 		other.ptr = nullptr;
 	}
 	// Copy constructor
