@@ -1591,9 +1591,10 @@ bool TryCastErrorMessage::Operation(string_t input, interval_t &result, CastPara
 template <typename T, typename OP, typename INTERMEDIATE_T>
 struct HugeIntCastData {
 	using ResultType = T;
+	using IntermediateType = INTERMEDIATE_T;
 	using Operation = OP;
 	ResultType result;
-	INTERMEDIATE_T intermediate;
+	IntermediateType intermediate;
 	uint8_t digits;
 
 	ResultType decimal;
@@ -1647,8 +1648,8 @@ struct HugeIntegerCastOperation {
 	template <class T, bool NEGATIVE>
 	static bool HandleDigit(T &state, uint8_t digit) {
 		if (NEGATIVE) {
-			if (DUCKDB_UNLIKELY(static_cast<int64_t>(state.intermediate) <
-			                    (NumericLimits<int64_t>::Minimum() + digit) / 10)) {
+			if (DUCKDB_UNLIKELY(state.intermediate <
+			                    (NumericLimits<typename T::IntermediateType>::Minimum() + digit) / 10)) {
 				// intermediate is full: need to flush it
 				if (!state.Flush()) {
 					return false;
@@ -1656,7 +1657,8 @@ struct HugeIntegerCastOperation {
 			}
 			state.intermediate = state.intermediate * 10 - digit;
 		} else {
-			if (DUCKDB_UNLIKELY(state.intermediate > (NumericLimits<int64_t>::Maximum() - digit) / 10)) {
+			if (DUCKDB_UNLIKELY(state.intermediate >
+			                    (NumericLimits<typename T::IntermediateType>::Maximum() - digit) / 10)) {
 				if (!state.Flush()) {
 					return false;
 				}
