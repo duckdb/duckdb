@@ -326,23 +326,14 @@ static unique_ptr<FunctionData> CSVReaderDeserialize(Deserializer &deserializer,
 	return std::move(result);
 }
 
-bool PushdownTypeToCSVScanner(LogicalGet &logical_get, const vector<LogicalType> &target_types,
-                              const vector<unique_ptr<Expression>> &expressions) {
-	auto &csv_bind = logical_get.bind_data->Cast<ReadCSVData>();
-	// We loop in the expressions and bail out if there is anything weird (i.e., not a bound column ref)
-	vector<LogicalType> pushdown_types = csv_bind.csv_types;
-	for (idx_t i = 0; i < expressions.size(); i++) {
-		if (expressions[i]->type == ExpressionType::BOUND_COLUMN_REF) {
-			auto &col_ref = expressions[i]->Cast<BoundColumnRefExpression>();
-			pushdown_types[logical_get.column_ids[col_ref.binding.column_index]] = target_types[i];
-		} else {
-			return false;
-		}
+vector<LogicalType> PushdownTypeToCSVScanner(ClientContext &context, optional_ptr<FunctionData> bind_data,
+                                             const unordered_map<idx_t, LogicalType> &new_column_types) {
+	auto &csv_bind = bind_data->Cast<ReadCSVData>();
+	for (auto &type : new_column_types) {
+		csv_bind.csv_types[type.first] = type.second;
+		csv_bind.return_types[type.first] = type.second;
 	}
-	csv_bind.csv_types = pushdown_types;
-	csv_bind.return_types = pushdown_types;
-	logical_get.returned_types = pushdown_types;
-	return true;
+	return csv_bind.csv_types;
 }
 
 TableFunction ReadCSVTableFunction::GetFunction() {

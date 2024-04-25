@@ -212,8 +212,9 @@ typedef void (*table_function_serialize_t)(Serializer &serializer, const optiona
                                            const TableFunction &function);
 typedef unique_ptr<FunctionData> (*table_function_deserialize_t)(Deserializer &deserializer, TableFunction &function);
 
-typedef bool (*table_function_type_pushdown_t)(LogicalGet &op, const vector<LogicalType> &target_types,
-                                               const vector<unique_ptr<Expression>> &expressions);
+typedef vector<LogicalType> (*table_function_type_pushdown_t)(
+    ClientContext &context, optional_ptr<FunctionData> bind_data,
+    const unordered_map<idx_t, LogicalType> &new_column_types);
 
 class TableFunction : public SimpleNamedParameterFunction { // NOLINT: work-around bug in clang-tidy
 public:

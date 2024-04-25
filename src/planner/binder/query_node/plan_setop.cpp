@@ -29,7 +29,20 @@ unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<LogicalTyp
 			// If this projection only has one child and that child is a logical get we can try to pushdown types
 			auto &logical_get = node->children[0]->Cast<LogicalGet>();
 			if (logical_get.function.type_pushdown) {
-				if (logical_get.function.type_pushdown(logical_get, target_types, op->expressions)) {
+				unordered_map<idx_t, LogicalType> new_column_types;
+				bool do_pushdown = true;
+				for (idx_t i = 0; i < op->expressions.size(); i++) {
+					if (op->expressions[i]->type == ExpressionType::BOUND_COLUMN_REF) {
+						auto &col_ref = op->expressions[i]->Cast<BoundColumnRefExpression>();
+						new_column_types[logical_get.column_ids[col_ref.binding.column_index]] = target_types[i];
+					} else {
+						do_pushdown = false;
+						break;
+					}
+				}
+				if (do_pushdown) {
+					logical_get.returned_types =
+					    logical_get.function.type_pushdown(context, logical_get.bind_data, new_column_types);
 					return op;
 				}
 			}
