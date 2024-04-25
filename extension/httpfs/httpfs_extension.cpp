@@ -58,8 +58,8 @@ static void LoadInternal(DatabaseInstance &instance) {
 	                          Value(50));
 
 	// HuggingFace options
-	config.AddExtensionOption("hf_max_per_page", "Debug option to limit number of items returned in list requests", LogicalType::UBIGINT,
-	                          Value::UBIGINT(0));
+	config.AddExtensionOption("hf_max_per_page", "Debug option to limit number of items returned in list requests",
+	                          LogicalType::UBIGINT, Value::UBIGINT(0));
 
 	auto provider = make_uniq<AWSEnvironmentCredentialsProvider>(config);
 	provider->SetAll();

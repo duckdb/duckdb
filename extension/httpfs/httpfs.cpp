@@ -71,9 +71,16 @@ HTTPParams HTTPParams::ReadFrom(optional_ptr<FileOpener> opener) {
 		hf_max_per_page = value.GetValue<uint64_t>();
 	}
 
-	return {
-	    timeout,     retries, retry_wait_ms, retry_backoff, force_download, keep_alive, enable_server_cert_verification,
-	    ca_cert_file, "", hf_max_per_page};
+	return {timeout,
+	        retries,
+	        retry_wait_ms,
+	        retry_backoff,
+	        force_download,
+	        keep_alive,
+	        enable_server_cert_verification,
+	        ca_cert_file,
+	        "",
+	        hf_max_per_page};
 }
 
 void HTTPFileSystem::ParseUrl(string &url, string &path_out, string &proto_host_port_out) {
