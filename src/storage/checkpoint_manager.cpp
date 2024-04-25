@@ -425,7 +425,8 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 
 	// now we can look for the index in the catalog and assign the table info
 	auto &index = catalog.CreateIndex(context, info)->Cast<DuckIndexEntry>();
-	index.info = make_shared_ptr<IndexDataTableInfo>(table.GetStorage().info, info.index_name);
+	auto data_table_info = table.GetStorage().GetDataTableInfo();
+	index.info = make_shared_ptr<IndexDataTableInfo>(data_table_info, info.index_name);
 
 	// insert the parsed expressions into the index so that we can (de)serialize them during consecutive checkpoints
 	for (auto &parsed_expr : info.parsed_expressions) {
@@ -469,7 +470,7 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 
 	} else {
 		// get the matching index storage info
-		for (auto const &elem : data_table.info->index_storage_infos) {
+		for (auto const &elem : data_table.GetDataTableInfo()->index_storage_infos) {
 			if (elem.name == info.index_name) {
 				index_storage_info = elem;
 				break;
@@ -482,7 +483,7 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	// This is executed before any extensions can be loaded, which is why we must treat any index type that is not
 	// built-in (ART) as unknown
 	if (info.index_type == ART::TYPE_NAME) {
-		data_table.info->indexes.AddIndex(make_uniq<ART>(info.index_name, info.constraint_type, info.column_ids,
+		data_table.AddIndex(make_uniq<ART>(info.index_name, info.constraint_type, info.column_ids,
 		                                                 TableIOManager::Get(data_table), unbound_expressions,
 		                                                 data_table.db, nullptr, index_storage_info));
 	} else {
@@ -490,7 +491,7 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 		                                             info.column_ids, TableIOManager::Get(data_table),
 		                                             unbound_expressions, data_table.db, info, index_storage_info);
 
-		data_table.info->indexes.AddIndex(std::move(unknown_index));
+		data_table.AddIndex(std::move(unknown_index));
 	}
 }
 

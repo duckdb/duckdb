@@ -176,10 +176,10 @@ public:
 	unique_ptr<ConstraintState> constraint_state;
 
 	void CreateNewCollection(DuckTableEntry &table, const vector<LogicalType> &insert_types) {
-		auto &table_info = table.GetStorage().info;
+		auto table_info = table.GetStorage().GetDataTableInfo();
 		auto &block_manager = TableIOManager::Get(table.GetStorage()).GetBlockManagerForRowData();
 		current_collection =
-		    make_uniq<RowGroupCollection>(table_info, block_manager, insert_types, NumericCast<idx_t>(MAX_ROW_ID));
+		    make_uniq<RowGroupCollection>(std::move(table_info), block_manager, insert_types, NumericCast<idx_t>(MAX_ROW_ID));
 		current_collection->InitializeEmpty();
 		current_collection->InitializeAppend(current_append_state);
 	}

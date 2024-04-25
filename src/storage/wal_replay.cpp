@@ -581,7 +581,7 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	// create the index in the catalog
 	auto &table = catalog.GetEntry<TableCatalogEntry>(context, create_info->schema, info.table).Cast<DuckTableEntry>();
 	auto &index = catalog.CreateIndex(context, info)->Cast<DuckIndexEntry>();
-	index.info = make_shared_ptr<IndexDataTableInfo>(table.GetStorage().info, index.name);
+	index.info = make_shared_ptr<IndexDataTableInfo>(table.GetStorage().GetDataTableInfo(), index.name);
 
 	// insert the parsed expressions into the index so that we can (de)serialize them during consecutive checkpoints
 	for (auto &parsed_expr : info.parsed_expressions) {
@@ -622,7 +622,7 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	                       info.column_ids, unbound_expressions, index_info, info.options);
 
 	auto index_instance = index_type->create_instance(input);
-	data_table.info->indexes.AddIndex(std::move(index_instance));
+	data_table.AddIndex(std::move(index_instance));
 }
 
 void WriteAheadLogDeserializer::ReplayDropIndex() {

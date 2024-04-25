@@ -16,6 +16,10 @@ onlyif threadid=0
 statement ok
 INSERT INTO integers SELECT * FROM range(100);
 
+endloop
+
+loop i 0 200
+
 skipif threadid=0
 statement ok
 SELECT COUNT(*), SUM(i) FROM integers;

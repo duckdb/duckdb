@@ -66,13 +66,13 @@ static void FindForeignKeyInformation(CatalogEntry &entry, AlterForeignKeyType a
 static void LazyLoadIndexes(ClientContext &context, CatalogEntry &entry) {
 	if (entry.type == CatalogType::TABLE_ENTRY) {
 		auto &table_entry = entry.Cast<TableCatalogEntry>();
-		table_entry.GetStorage().info->InitializeIndexes(context);
+		table_entry.GetStorage().InitializeIndexes(context);
 	} else if (entry.type == CatalogType::INDEX_ENTRY) {
 		auto &index_entry = entry.Cast<IndexCatalogEntry>();
 		auto &table_entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, index_entry.catalog.GetName(),
 		                                      index_entry.GetSchemaName(), index_entry.GetTableName())
 		                        .Cast<TableCatalogEntry>();
-		table_entry.GetStorage().info->InitializeIndexes(context);
+		table_entry.GetStorage().InitializeIndexes(context);
 	}
 }
 
@@ -128,9 +128,6 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction 
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTable(CatalogTransaction transaction, BoundCreateTableInfo &info) {
 	auto table = make_uniq<DuckTableEntry>(catalog, *this, info);
-	auto &storage = table->GetStorage();
-	storage.info->cardinality = storage.GetTotalRows();
-
 	auto entry = AddEntryInternal(transaction, std::move(table), info.Base().on_conflict, info.dependencies);
 	if (!entry) {
 		return nullptr;

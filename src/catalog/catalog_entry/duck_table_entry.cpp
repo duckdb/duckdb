@@ -50,7 +50,7 @@ void AddDataTableIndex(DataTable &storage, const ColumnList &columns, const vect
 	if (!info.IsValid() && !info.name.empty() && !storage.IsRoot()) {
 		throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
 	}
-	storage.info->indexes.AddIndex(std::move(art));
+	storage.AddIndex(std::move(art));
 }
 
 void AddDataTableIndex(DataTable &storage, const ColumnList &columns, vector<LogicalIndex> &keys,
@@ -153,7 +153,7 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 	}
 
 	if (!info.indexes.empty()) {
-		storage->info->index_storage_infos = info.indexes;
+		storage->SetIndexStorageInfo(std::move(info.indexes));
 	}
 }
 
@@ -190,7 +190,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 		auto &rename_info = table_info.Cast<RenameTableInfo>();
 		auto copied_table = Copy(context);
 		copied_table->name = rename_info.new_table_name;
-		storage->info->table = rename_info.new_table_name;
+		storage->SetTableName(rename_info.new_table_name);
 		return copied_table;
 	}
 	case AlterTableType::ADD_COLUMN: {
@@ -236,7 +236,7 @@ void DuckTableEntry::UndoAlter(ClientContext &context, AlterInfo &info) {
 	auto &table_info = info.Cast<AlterTableInfo>();
 	switch (table_info.alter_table_type) {
 	case AlterTableType::RENAME_TABLE: {
-		storage->info->table = this->name;
+		storage->SetTableName(this->name);
 		break;
 	default:
 		break;
@@ -771,7 +771,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::Copy(ClientContext &context) const {
 
 void DuckTableEntry::SetAsRoot() {
 	storage->SetAsRoot();
-	storage->info->table = name;
+	storage->SetTableName(name);
 }
 
 void DuckTableEntry::CommitAlter(string &column_name) {
@@ -808,18 +808,7 @@ vector<ColumnSegmentInfo> DuckTableEntry::GetColumnSegmentInfo() {
 }
 
 TableStorageInfo DuckTableEntry::GetStorageInfo(ClientContext &context) {
-	TableStorageInfo result;
-	result.cardinality = storage->info->cardinality.load();
-	storage->info->indexes.Scan([&](Index &index) {
-		IndexInfo info;
-		info.is_primary = index.IsPrimary();
-		info.is_unique = index.IsUnique() || info.is_primary;
-		info.is_foreign = index.IsForeign();
-		info.column_set = index.column_id_set;
-		result.index_info.push_back(std::move(info));
-		return false;
-	});
-	return result;
+	return storage->GetStorageInfo();
 }
 
 } // namespace duckdb

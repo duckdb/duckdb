@@ -140,13 +140,8 @@ void UndoBuffer::Cleanup() {
 	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CleanupEntry(type, data); });
 
 	// possibly vacuum indexes
-	for (const auto &table : state.indexed_tables) {
-		table.second->info->indexes.Scan([&](Index &index) {
-			if (!index.IsUnknown()) {
-				index.Vacuum();
-			}
-			return false;
-		});
+	for (auto &table : state.indexed_tables) {
+		table.second->VacuumIndexes();
 	}
 }
 

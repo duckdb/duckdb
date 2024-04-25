@@ -1142,7 +1142,7 @@ void RowGroupCollection::VerifyNewConstraint(DataTable &parent, const BoundConst
 		// Check constraint
 		if (VectorOperations::HasNull(scan_chunk.data[0], scan_chunk.size())) {
 			throw ConstraintException("NOT NULL constraint failed: %s.%s", info->table,
-			                          parent.column_definitions[physical_index].GetName());
+			                          parent.Columns()[physical_index].GetName());
 		}
 	}
 }

@@ -573,9 +573,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				FindForeignKeyIndexes(pk_table_entry_ptr.GetColumns(), fk.pk_columns, fk.info.pk_keys);
 				CheckForeignKeyTypes(pk_table_entry_ptr.GetColumns(), create_info.columns, fk);
 				auto &storage = pk_table_entry_ptr.GetStorage();
-				auto index = storage.info->indexes.FindForeignKeyIndex(fk.info.pk_keys,
-				                                                       ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE);
-				if (!index) {
+
+				if (!storage.HasForeignKeyIndex(fk.info.pk_keys, ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE)) {
 					auto fk_column_names = StringUtil::Join(fk.pk_columns, ",");
 					throw BinderException("Failed to create foreign key on %s(%s): no UNIQUE or PRIMARY KEY constraint "
 					                      "present on these columns",

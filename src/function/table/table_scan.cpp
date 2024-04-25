@@ -202,8 +202,9 @@ unique_ptr<NodeStatistics> TableScanCardinality(ClientContext &context, const Fu
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 	auto &local_storage = LocalStorage::Get(context, bind_data.table.catalog);
 	auto &storage = bind_data.table.GetStorage();
-	idx_t estimated_cardinality = storage.info->cardinality + local_storage.AddedRows(bind_data.table.GetStorage());
-	return make_uniq<NodeStatistics>(storage.info->cardinality, estimated_cardinality);
+	idx_t table_rows = storage.GetTotalRows();
+	idx_t estimated_cardinality = table_rows + local_storage.AddedRows(bind_data.table.GetStorage());
+	return make_uniq<NodeStatistics>(table_rows, estimated_cardinality);
 }
 
 //===--------------------------------------------------------------------===//
@@ -306,8 +307,9 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 		return;
 	}
 
-	// behold
-	storage.info->indexes.Scan([&](Index &index) {
+	auto checkpoint_lock = storage.GetSharedCheckpointLock();
+	auto &info = storage.GetDataTableInfo();
+	info->indexes.Scan([&](Index &index) {
 		// first rewrite the index expression so the ColumnBindings align with the column bindings of the current table
 
 		if (index.IsUnknown()) {

@@ -47,8 +47,8 @@ bool DataTableInfo::IsTemporary() const {
 DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, const string &schema,
                      const string &table, vector<ColumnDefinition> column_definitions_p,
                      unique_ptr<PersistentTableData> data)
-    : info(make_shared_ptr<DataTableInfo>(db, std::move(table_io_manager_p), schema, table)),
-      column_definitions(std::move(column_definitions_p)), db(db), is_root(true) {
+    : db(db), info(make_shared_ptr<DataTableInfo>(db, std::move(table_io_manager_p), schema, table)),
+      column_definitions(std::move(column_definitions_p)), is_root(true) {
 	// initialize the table with the existing data from disk, if any
 	auto types = GetTypes();
 	this->row_groups =
@@ -63,7 +63,7 @@ DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_m
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression &default_value)
-    : info(parent.info), db(parent.db), is_root(true) {
+    : db(parent.db), info(parent.info), is_root(true) {
 	// add the column definitions from this DataTable
 	for (auto &column_def : parent.column_definitions) {
 		column_definitions.emplace_back(column_def.Copy());
@@ -83,7 +83,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_column)
-    : info(parent.info), db(parent.db), is_root(true) {
+    : db(parent.db), info(parent.info), is_root(true) {
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
 
@@ -132,7 +132,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 
 // Alter column to add new constraint
 DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<BoundConstraint> constraint)
-    : info(parent.info), db(parent.db), row_groups(parent.row_groups), is_root(true) {
+    : db(parent.db), info(parent.info), row_groups(parent.row_groups), is_root(true) {
 
 	lock_guard<mutex> parent_lock(parent.append_lock);
 	for (auto &column_def : parent.column_definitions) {
@@ -153,7 +153,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<Bound
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, const LogicalType &target_type,
                      const vector<column_t> &bound_columns, Expression &cast_expr)
-    : info(parent.info), db(parent.db), is_root(true) {
+    : db(parent.db), info(parent.info), is_root(true) {
 	// prevent any tuples from being added to the parent
 	lock_guard<mutex> lock(append_lock);
 	for (auto &column_def : parent.column_definitions) {
@@ -195,8 +195,25 @@ vector<LogicalType> DataTable::GetTypes() {
 	return types;
 }
 
+bool DataTable::IsTemporary() const {
+	return info->IsTemporary();
+}
+
+AttachedDatabase &DataTable::GetAttached() {
+	D_ASSERT(RefersToSameObject(db, info->db));
+	return db;
+}
+
+const vector<ColumnDefinition> &DataTable::Columns() const {
+	return column_definitions;
+}
+
+TableIOManager &DataTable::GetTableIOManager() {
+	return *info->table_io_manager;
+}
+
 TableIOManager &TableIOManager::Get(DataTable &table) {
-	return *table.info->table_io_manager;
+	return table.GetTableIOManager();
 }
 
 //===--------------------------------------------------------------------===//
@@ -269,8 +286,67 @@ bool DataTable::CreateIndexScan(TableScanState &state, DataChunk &result, TableS
 	return state.table_state.ScanCommitted(result, type);
 }
 
+//===--------------------------------------------------------------------===//
+// Index Methods
+//===--------------------------------------------------------------------===//
+shared_ptr<DataTableInfo> &DataTable::GetDataTableInfo() {
+	return info;
+}
+
+void DataTable::InitializeIndexes(ClientContext &context) {
+	info->InitializeIndexes(context);
+}
+
+bool DataTable::HasIndexes() const {
+	return !info->indexes.Empty();
+}
+
+void DataTable::AddIndex(unique_ptr<Index> index) {
+	info->indexes.AddIndex(std::move(index));
+}
+
+bool DataTable::HasForeignKeyIndex(const vector<PhysicalIndex> &keys, ForeignKeyType type) {
+	return info->indexes.FindForeignKeyIndex(keys, type) != nullptr;
+}
+
+void DataTable::SetIndexStorageInfo(vector<IndexStorageInfo> index_storage_info) {
+	info->index_storage_infos = std::move(index_storage_info);
+}
+
+void DataTable::VacuumIndexes() {
+	info->indexes.Scan([&](Index &index) {
+		if (!index.IsUnknown()) {
+			index.Vacuum();
+		}
+		return false;
+	});
+}
+
 bool DataTable::IndexNameIsUnique(const string &name) {
 	return info->indexes.NameIsUnique(name);
+}
+
+const string &DataTable::GetTableName() const {
+	return info->table;
+}
+
+void DataTable::SetTableName(string new_name) {
+	info->table = std::move(new_name);
+}
+
+TableStorageInfo DataTable::GetStorageInfo() {
+	TableStorageInfo result;
+	result.cardinality = GetTotalRows();
+	info->indexes.Scan([&](Index &index) {
+		IndexInfo index_info;
+		index_info.is_primary = index.IsPrimary();
+		index_info.is_unique = index.IsUnique() || index_info.is_primary;
+		index_info.is_foreign = index.IsForeign();
+		index_info.column_set = index.column_id_set;
+		result.index_info.push_back(std::move(index_info));
+		return false;
+	});
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1275,6 +1351,10 @@ void DataTable::SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> d
 //===--------------------------------------------------------------------===//
 // Checkpoint
 //===--------------------------------------------------------------------===//
+unique_ptr<StorageLockKey> DataTable::GetSharedCheckpointLock() {
+	return checkpoint_lock.GetSharedLock();
+}
+
 unique_ptr<StorageLockKey> DataTable::GetCheckpointLock() {
 	return checkpoint_lock.GetExclusiveLock();
 }
@@ -1297,7 +1377,12 @@ void DataTable::CommitDropColumn(idx_t index) {
 	row_groups->CommitDropColumn(index);
 }
 
-idx_t DataTable::GetTotalRows() {
+
+idx_t DataTable::ColumnCount() const {
+	return column_definitions.size();
+}
+
+idx_t DataTable::GetTotalRows() const {
 	return row_groups->GetTotalRows();
 }
 

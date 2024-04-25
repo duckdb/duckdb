@@ -4,8 +4,8 @@
 
 namespace duckdb {
 
-IndexDataTableInfo::IndexDataTableInfo(shared_ptr<DataTableInfo> &info_p, const string &index_name_p)
-    : info(info_p), index_name(index_name_p) {
+IndexDataTableInfo::IndexDataTableInfo(shared_ptr<DataTableInfo> info_p, const string &index_name_p)
+    : info(std::move(info_p)), index_name(index_name_p) {
 }
 
 IndexDataTableInfo::~IndexDataTableInfo() {

@@ -18,11 +18,12 @@ LocalTableStorage::LocalTableStorage(DataTable &table)
     : table_ref(table), allocator(Allocator::Get(table.db)), deleted_rows(0), optimistic_writer(table),
       merged_storage(false) {
 	auto types = table.GetTypes();
-	row_groups = make_shared_ptr<RowGroupCollection>(table.info, TableIOManager::Get(table).GetBlockManagerForRowData(),
+	auto data_table_info = table.GetDataTableInfo();
+	row_groups = make_shared_ptr<RowGroupCollection>(data_table_info, TableIOManager::Get(table).GetBlockManagerForRowData(),
 	                                                 types, MAX_ROW_ID, 0);
 	row_groups->InitializeEmpty();
 
-	table.info->indexes.Scan([&](Index &index) {
+	data_table_info->indexes.Scan([&](Index &index) {
 		if (index.index_type != ART::TYPE_NAME) {
 			return false;
 		}
@@ -167,8 +168,9 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 			return true;
 		});
 	} else {
-		error =
-		    AppendToIndexes(transaction, *row_groups, table.info->indexes, table.GetTypes(), append_state.current_row);
+		auto data_table_info = table.GetDataTableInfo();
+		auto &index_list = data_table_info->indexes;
+		error = AppendToIndexes(transaction, *row_groups, index_list, table.GetTypes(), append_state.current_row);
 	}
 	if (error.HasError()) {
 		// need to revert all appended row ids
@@ -196,14 +198,7 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 
 		// we need to vacuum the indexes to remove any buffers that are now empty
 		// due to reverting the appends
-		table.info->indexes.Scan([&](Index &index) {
-			try {
-				index.Vacuum();
-			} catch (std::exception &ex) { // LCOV_EXCL_START
-				error = ErrorData(ex);
-			} // LCOV_EXCL_STOP
-			return false;
-		});
+		table.VacuumIndexes();
 		error.Throw();
 	}
 	if (append_to_table) {
@@ -358,7 +353,7 @@ bool LocalStorage::NextParallelScan(ClientContext &context, DataTable &table, Pa
 }
 
 void LocalStorage::InitializeAppend(LocalAppendState &state, DataTable &table) {
-	table.info->InitializeIndexes(context);
+	table.InitializeIndexes(context);
 	state.storage = &table_manager.GetOrCreateStorage(table);
 	state.storage->row_groups->InitializeAppend(TransactionData(transaction), state.append_state);
 }
@@ -451,7 +446,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 	}
 	idx_t append_count = storage.row_groups->GetTotalRows() - storage.deleted_rows;
 
-	table.info->InitializeIndexes(context);
+	table.InitializeIndexes(context);
 
 	TableAppendState append_state;
 	table.AppendLock(append_state);
@@ -464,7 +459,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 		// now append to the indexes (if there are any)
 		// FIXME: we should be able to merge the transaction-local index directly into the main table index
 		// as long we just rewrite some row-ids
-		if (!table.info->indexes.Empty()) {
+		if (table.HasIndexes()) {
 			storage.AppendToIndexes(transaction, append_state, append_count, false);
 		}
 		// finally move over the row groups
@@ -479,10 +474,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 	}
 
 	// possibly vacuum any excess index data
-	table.info->indexes.Scan([&](Index &index) {
-		index.Vacuum();
-		return false;
-	});
+	table.VacuumIndexes();
 }
 
 void LocalStorage::Commit(LocalStorage::CommitState &commit_state, DuckTransaction &transaction) {
