@@ -25,6 +25,8 @@ public:
 	TableReferenceType type;
 	//! The sample options (if any)
 	unique_ptr<SampleOptions> sample;
+	//! The replacement scan that happened (if any)
+	unique_ptr<TableRef> replacement_scan;
 
 public:
 	template <class TARGET>
