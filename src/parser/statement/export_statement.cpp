@@ -1,5 +1,5 @@
 #include "duckdb/parser/statement/export_statement.hpp"
-#include "duckdb/parser/statement/copy_statement.hpp"
+#include "duckdb/parser/parsed_data/copy_info.hpp"
 
 namespace duckdb {
 
@@ -26,7 +26,7 @@ string ExportStatement::ToString() const {
 	auto &options = info->options;
 	auto &format = info->format;
 	result += StringUtil::Format(" '%s'", path);
-	result += CopyStatement::CopyOptionsToString(format, options);
+	result += CopyInfo::CopyOptionsToString(format, options);
 	result += ";";
 	return result;
 }
