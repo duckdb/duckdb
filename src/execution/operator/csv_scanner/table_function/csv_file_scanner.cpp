@@ -1,3 +1,5 @@
+#include <utility>
+
 #include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
@@ -21,14 +23,24 @@ bool CSVColumnSchema::Empty() const {
 	return columns.empty();
 }
 
+struct TypeIdxPair{
+	TypeIdxPair(LogicalType type_p, idx_t idx_p): type(std::move(type_p)), idx(idx_p){
+
+	}
+	TypeIdxPair(){
+	}
+	LogicalType type;
+	idx_t idx;
+};
+
 bool CSVColumnSchema::SchemasMatch(string &error_message, vector<string> &names, vector<LogicalType> &types,
-                                   const string &cur_file_path) {
+                                   const string &cur_file_path, vector<idx_t> &projection_order) {
 	D_ASSERT(names.size() == types.size() && !names.empty());
 	bool match = true;
-	unordered_map<string, LogicalType> current_schema;
+	unordered_map<string, TypeIdxPair> current_schema;
 	for (idx_t i = 0; i < names.size(); i++) {
 		// Populate our little schema
-		current_schema[names[i]] = types[i];
+		current_schema[names[i]] = {types[i],i};
 	}
 	// Here we check if the schema of a given file matched our original schema
 	// We consider it's not a match if:
@@ -46,11 +58,15 @@ bool CSVColumnSchema::SchemasMatch(string &error_message, vector<string> &names,
 			      << "\n";
 			match = false;
 		} else {
-			if (current_schema[column.name].id() != column.type.id()) {
+			if (current_schema[column.name].type.id() != column.type.id()) {
+				//FIXME: Should we check if they have an implicit cast?
 				error << "Column with name: \"" << column.name
 				      << "\" is expected to have type: " << column.type.ToString();
-				error << " But has type: " << current_schema[column.name].ToString() << "\n";
+				error << " But has type: " << current_schema[column.name].type.ToString() << "\n";
 				match = false;
+			} else{
+				// We have a good match
+				projection_order.push_back(current_schema[column.name].idx);
 			}
 		}
 	}
