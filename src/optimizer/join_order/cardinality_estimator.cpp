@@ -196,13 +196,13 @@ JoinRelationSet &CardinalityEstimator::UpdateNumeratorRelations(Subgraph2Denomin
 	case JoinType::ANTI: {
 		if (JoinRelationSet::IsSubset(*left.relations, *filter.filter_info->left_set) &&
 		    JoinRelationSet::IsSubset(*right.relations, *filter.filter_info->right_set)) {
-			return *left.relations;
+			return *left.numerator_relations;
 		}
-		return *right.relations;
+		return *right.numerator_relations;
 	}
 	default:
 		// cross product or inner join
-		return set_manager.Union(*left.relations, *right.relations);
+		return set_manager.Union(*left.numerator_relations, *right.numerator_relations);
 	}
 }
 
@@ -247,7 +247,6 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 
 	// edges are guaranteed to be in order of largest tdom to smallest tdom.
 	auto edges = GetEdges(relations_to_tdoms, set);
-
 	for (auto &edge : edges) {
 		auto subgraph_connections = SubgraphsConnectedByEdge(edge, subgraphs);
 
@@ -257,29 +256,33 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			auto left_subgraph = Subgraph2Denominator();
 			auto right_subgraph = Subgraph2Denominator();
 			left_subgraph.relations = edge.filter_info->left_set;
+			left_subgraph.numerator_relations = edge.filter_info->left_set;
 			right_subgraph.relations = edge.filter_info->right_set;
-			left_subgraph.relations = &set_manager.Union(*left_subgraph.relations, edge.filter_info->set);
+			right_subgraph.numerator_relations = edge.filter_info->right_set;
+
 			left_subgraph.numerator_relations = &UpdateNumeratorRelations(left_subgraph, right_subgraph, edge);
+			left_subgraph.relations = &edge.filter_info->set;
 			left_subgraph.denom = CalculateUpdatedDenom(left_subgraph, right_subgraph, edge);
 			subgraphs.push_back(left_subgraph);
 		} else if (subgraph_connections.size() == 1) {
-			auto new_subgraph = Subgraph2Denominator();
-			new_subgraph.relations = &edge.filter_info->set;
-			new_subgraph.numerator_relations = &edge.filter_info->set;
-			// the current edge connections to the subgraph at the index in subgraph_connections
-			// add the relations at both ends of the edge to the subgraph. (The subgraph is a JoinRelationSet, double
-			// adding relations will be fine).
-			auto subgraph_to_update = &subgraphs.at(subgraph_connections.at(0));
-			if (JoinRelationSet::IsSubset(*subgraph_to_update->relations, *edge.filter_info->left_set) &&
-			    JoinRelationSet::IsSubset(*subgraph_to_update->relations, *edge.filter_info->right_set)) {
+			auto left_subgraph = &subgraphs.at(subgraph_connections.at(0));
+			auto right_subgraph = Subgraph2Denominator();
+			right_subgraph.relations = edge.filter_info->right_set;
+			right_subgraph.numerator_relations = edge.filter_info->right_set;
+			if (JoinRelationSet::IsSubset(*left_subgraph->relations, *right_subgraph.relations)) {
+				right_subgraph.relations = edge.filter_info->left_set;
+				right_subgraph.numerator_relations = edge.filter_info->left_set;
+			}
+
+			if (JoinRelationSet::IsSubset(*left_subgraph->relations, *edge.filter_info->left_set) &&
+			    JoinRelationSet::IsSubset(*left_subgraph->relations, *edge.filter_info->right_set)) {
 				// here we have an edge that connects the same subgraph to the same subgraph. Just continue. no need to
 				// update the denom
 				continue;
 			}
-			subgraph_to_update->relations = &set_manager.Union(*subgraph_to_update->relations, edge.filter_info->set);
-			subgraph_to_update->numerator_relations =
-			    &UpdateNumeratorRelations(*subgraph_to_update, new_subgraph, edge);
-			subgraph_to_update->denom = CalculateUpdatedDenom(*subgraph_to_update, new_subgraph, edge);
+			left_subgraph->numerator_relations = &UpdateNumeratorRelations(*left_subgraph, right_subgraph, edge);
+			left_subgraph->relations = &set_manager.Union(*left_subgraph->relations, *right_subgraph.relations);
+			left_subgraph->denom = CalculateUpdatedDenom(*left_subgraph, right_subgraph, edge);
 		} else if (subgraph_connections.size() == 2) {
 			// The two subgraphs in the subgraph_connections can be merged by this edge.
 			D_ASSERT(subgraph_connections.at(0) < subgraph_connections.at(1));
@@ -321,7 +324,8 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 		// denominator is 1 and numerators are a cross product of cardinalities.
 		return DenomInfo(set, 1, 1);
 	}
-	return DenomInfo(*subgraphs.at(0).relations, subgraphs.at(0).numerator_filter_strength, subgraphs.at(0).denom);
+	return DenomInfo(*subgraphs.at(0).numerator_relations, subgraphs.at(0).numerator_filter_strength,
+	                 subgraphs.at(0).denom);
 }
 
 template <>
