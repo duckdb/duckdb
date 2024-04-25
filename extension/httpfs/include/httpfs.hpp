@@ -38,6 +38,7 @@ struct HTTPParams {
 	static constexpr bool DEFAULT_FORCE_DOWNLOAD = false;
 	static constexpr bool DEFAULT_KEEP_ALIVE = true;
 	static constexpr bool DEFAULT_ENABLE_SERVER_CERT_VERIFICATION = false;
+	static constexpr uint64_t DEFAULT_HF_MAX_PER_PAGE = 0;
 
 	uint64_t timeout;
 	uint64_t retries;
@@ -49,6 +50,8 @@ struct HTTPParams {
 	std::string ca_cert_file;
 
 	string bearer_token;
+
+	idx_t hf_max_per_page;
 
 	static HTTPParams ReadFrom(optional_ptr<FileOpener> opener);
 };
@@ -159,9 +162,9 @@ protected:
 	virtual duckdb::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, FileOpenFlags flags,
 	                                                        optional_ptr<FileOpener> opener);
 
-	static duckdb::unique_ptr<ResponseWrapper> RunRequestWithRetry(
-	    const std::function<duckdb_httplib_openssl::Result(void)> &request, string &url, string method,
-	    const HTTPParams &params, const std::function<void(void)> &retry_cb = {});
+	static duckdb::unique_ptr<ResponseWrapper>
+	RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &request, string &url, string method,
+	                    const HTTPParams &params, const std::function<void(void)> &retry_cb = {});
 
 private:
 	// Global cache

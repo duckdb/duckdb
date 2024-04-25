@@ -39,7 +39,7 @@ public:
 	}
 	static ParsedHFUrl HFUrlParse(const string &url);
 	string GetHFUrl(const ParsedHFUrl &url);
-	string GetTreeUrl(const ParsedHFUrl &url);
+	string GetTreeUrl(const ParsedHFUrl &url, idx_t limit);
 	string GetFileUrl(const ParsedHFUrl &url);
 
 	static void SetParams(HTTPParams &params, const string &path, optional_ptr<FileOpener> opener);

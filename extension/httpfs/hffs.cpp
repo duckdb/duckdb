@@ -46,7 +46,7 @@ static string ParseNextUrlFromLinkHeader(const string &link_header_content) {
 				throw IOException("Unexpected link header for huggingface pagination: %s", link_header_content);
 			}
 
-			return split_inner[0].substr(1, split_inner.size() - 2);
+			return split_inner[0].substr(1, split_inner[0].size() - 2);
 		}
 	}
 
@@ -72,30 +72,29 @@ string HuggingFaceFileSystem::ListHFRequest(ParsedHFUrl &url, HTTPParams &http_p
 	std::stringstream response;
 
 	std::function<duckdb_httplib_openssl::Result(void)> request([&]() {
-		printf("Requesting %s\n", next_page_url.c_str());
 		if (state) {
 			state->get_count++;
 		}
 
 		return client->Get(
-			next_page_url.c_str(), *headers,
-			[&](const duckdb_httplib_openssl::Response &response) {
-				if (response.status >= 400) {
-					throw HTTPException(response, "HTTP GET error on '%s' (HTTP %d)", next_page_url, response.status);
-				}
-				auto link_res = response.headers.find("link");
-				if (link_res != response.headers.end()) {
-					link_header_result = link_res->second;
-				}
-				return true;
-			},
-			[&](const char *data, size_t data_length) {
-				if (state) {
-					state->total_bytes_received += data_length;
-				}
-				response << string(data, data_length);
-				return true;
-			});
+		    next_page_url.c_str(), *headers,
+		    [&](const duckdb_httplib_openssl::Response &response) {
+			    if (response.status >= 400) {
+				    throw HTTPException(response, "HTTP GET error on '%s' (HTTP %d)", next_page_url, response.status);
+			    }
+			    auto link_res = response.headers.find("Link");
+			    if (link_res != response.headers.end()) {
+				    link_header_result = link_res->second;
+			    }
+			    return true;
+		    },
+		    [&](const char *data, size_t data_length) {
+			    if (state) {
+				    state->total_bytes_received += data_length;
+			    }
+			    response << string(data, data_length);
+			    return true;
+		    });
 	});
 
 	auto res = RunRequestWithRetry(request, next_page_url, "GET", http_params, nullptr);
@@ -249,7 +248,7 @@ vector<string> HuggingFaceFileSystem::Glob(const string &path, FileOpener *opene
 			// Done with previous dir, load the next one
 			curr_hf_path.path = dirs.back();
 			dirs.pop_back();
-			next_page_url = HuggingFaceFileSystem::GetTreeUrl(curr_hf_path);
+			next_page_url = HuggingFaceFileSystem::GetTreeUrl(curr_hf_path, http_params.hf_max_per_page);
 		} else if (next_page_url.empty()) {
 			// No more pages to read, also no more dirs
 			break;
@@ -375,7 +374,7 @@ string HuggingFaceFileSystem::GetHFUrl(const ParsedHFUrl &url) {
 	}
 }
 
-string HuggingFaceFileSystem::GetTreeUrl(const ParsedHFUrl &url) {
+string HuggingFaceFileSystem::GetTreeUrl(const ParsedHFUrl &url, idx_t limit) {
 	//! Url format {endpoint}/api/{repo_type}s/{repository}/tree/{revision}{encoded_path_in_repo}
 	string http_url = url.endpoint;
 
@@ -384,7 +383,11 @@ string HuggingFaceFileSystem::GetTreeUrl(const ParsedHFUrl &url) {
 	http_url = JoinPath(http_url, url.repository);
 	http_url = JoinPath(http_url, "tree");
 	http_url = JoinPath(http_url, url.revision);
-	http_url += url.path + "?per_page=1";
+	http_url += url.path;
+
+	if (limit > 0) {
+		http_url += "?limit=" + to_string(limit);
+	}
 
 	return http_url;
 }

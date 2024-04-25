@@ -9,26 +9,18 @@ require httpfs
 # FIXME: currently this will not fail the Linux HTTPFS ci job if it fails, because it might do so due to networking issues
 #        however having a CI job dedicated to remote tests that may spuriously fail would solve this
 
-## Non existent repos get a 401
-#statement error
-#FROM parquet_scan('hf://datasets/samansmink/non-existent/*.parquet');
-#----
-#HTTP 401
-#
-## Globbing non-existent repo is also 401
-#statement error
-#FROM parquet_scan('hf://datasets/samansmink/non-existent/**/*.parquet');
-#----
-#HTTP 401
-
-#mode skip
-
-query I rowsort
-SELECT COUNT(*) FROM parquet_scan('hf://datasets/samansmink/test_many_files/**/*.parquet');
+# Non existent repos get a 401
+statement error
+FROM parquet_scan('hf://datasets/samansmink/non-existent/*.parquet');
 ----
-asdasd
+HTTP 401
 
-mode skip
+# Globbing non-existent repo is also 401
+statement error
+FROM parquet_scan('hf://datasets/samansmink/non-existent/**/*.parquet');
+----
+HTTP 401
+
 
 query III rowsort
 FROM parquet_scan('hf://datasets/samansmink/duckdb_ci_tests/hive_data/**/*.parquet', FILENAME=1, hive_partitioning=0);
@@ -49,16 +41,26 @@ FROM parquet_scan('hf://datasets/samansmink/duckdb_ci_tests/hive_data/part=[ab]/
 1	value1	hf://datasets/samansmink/duckdb_ci_tests/hive_data/part=a/date=2012-01-01/test.parquet
 2	value2	hf://datasets/samansmink/duckdb_ci_tests/hive_data/part=b/date=2013-01-01/test.parquet
 
+# This ensures the next query is forced to use pagination, testing our support for it
+statement ok
+set hf_max_per_page=1;
+
 query III rowsort
 FROM parquet_scan('hf://datasets/samansmink/duckdb_ci_tests/hive_data/part=[b]/**/*.parquet', FILENAME=1, hive_partitioning=0);
 ----
 2	value2	hf://datasets/samansmink/duckdb_ci_tests/hive_data/part=b/date=2013-01-01/test.parquet
+
+statement ok
+reset hf_max_per_page;
 
 # Ensure we only open 1 of the files here to confirm filter pushdown has eliminated the other paths
 query II rowsort
 explain analyze SELECT id, part FROM parquet_scan('hf://datasets/samansmink/duckdb_ci_tests/hive_data/**/*.parquet') where part='a';
 ----
 analyzed_plan	<REGEX>:.*HTTP Stats.*\#HEAD\: 1 .*
+
+statement ok
+set hf_max_per_page=1;
 
 # Branches can be specified, including the special branch types with '~'
 query III rowsort

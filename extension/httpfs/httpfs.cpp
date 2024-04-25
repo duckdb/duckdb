@@ -40,6 +40,7 @@ HTTPParams HTTPParams::ReadFrom(optional_ptr<FileOpener> opener) {
 	bool keep_alive = DEFAULT_KEEP_ALIVE;
 	bool enable_server_cert_verification = DEFAULT_ENABLE_SERVER_CERT_VERIFICATION;
 	std::string ca_cert_file;
+	uint64_t hf_max_per_page = DEFAULT_HF_MAX_PER_PAGE;
 
 	Value value;
 	if (FileOpener::TryGetCurrentSetting(opener, "http_timeout", value)) {
@@ -66,10 +67,13 @@ HTTPParams HTTPParams::ReadFrom(optional_ptr<FileOpener> opener) {
 	if (FileOpener::TryGetCurrentSetting(opener, "ca_cert_file", value)) {
 		ca_cert_file = value.ToString();
 	}
+	if (FileOpener::TryGetCurrentSetting(opener, "hf_max_per_page", value)) {
+		hf_max_per_page = value.GetValue<uint64_t>();
+	}
 
 	return {
 	    timeout,     retries, retry_wait_ms, retry_backoff, force_download, keep_alive, enable_server_cert_verification,
-	    ca_cert_file};
+	    ca_cert_file, "", hf_max_per_page};
 }
 
 void HTTPFileSystem::ParseUrl(string &url, string &path_out, string &proto_host_port_out) {
@@ -92,8 +96,9 @@ void HTTPFileSystem::ParseUrl(string &url, string &path_out, string &proto_host_
 // Retry the request performed by fun using the exponential backoff strategy defined in params. Before retry, the
 // retry callback is called
 duckdb::unique_ptr<ResponseWrapper>
-HTTPFileSystem::RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &request, string &url, string method,
-                    const HTTPParams &params, const std::function<void(void)> &retry_cb) {
+HTTPFileSystem::RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &request, string &url,
+                                    string method, const HTTPParams &params,
+                                    const std::function<void(void)> &retry_cb) {
 	idx_t tries = 0;
 	while (true) {
 		std::exception_ptr caught_e = nullptr;
