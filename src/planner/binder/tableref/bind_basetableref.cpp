@@ -46,37 +46,34 @@ static bool TryLoadExtensionForReplacementScan(ClientContext &context, const str
 unique_ptr<BoundTableRef> Binder::BindWithReplacementScan(ClientContext &context, const string &table_name,
                                                           BaseTableRef &ref) {
 	auto &config = DBConfig::GetConfig(context);
-	if (!context.config.use_replacement_scans) {
-		return nullptr;
+	if (context.config.use_replacement_scans) {
+		for (auto &scan : config.replacement_scans) {
+			ReplacementScanInput input(ref.Cast<TableRef>(), table_name);
+			auto replacement_function = scan.function(context, input, scan.data.get());
+			if (replacement_function) {
+				if (!ref.alias.empty()) {
+					// user-provided alias overrides the default alias
+					replacement_function->alias = ref.alias;
+				} else if (replacement_function->alias.empty()) {
+					// if the replacement scan itself did not provide an alias we use the table name
+					replacement_function->alias = ref.table_name;
+				}
+				if (replacement_function->type == TableReferenceType::TABLE_FUNCTION) {
+					auto &table_function = replacement_function->Cast<TableFunctionRef>();
+					table_function.column_name_alias = ref.column_name_alias;
+				} else if (replacement_function->type == TableReferenceType::SUBQUERY) {
+					auto &subquery = replacement_function->Cast<SubqueryRef>();
+					subquery.column_name_alias = ref.column_name_alias;
+				} else {
+					throw InternalException("Replacement scan should return either a table function or a subquery");
+				}
+				auto copied_replacement = replacement_function->Copy();
+				auto result = Bind(*copied_replacement);
+				result->replacement_scan = std::move(replacement_function);
+				return result;
+			}
+		}
 	}
-	for (auto &scan : config.replacement_scans) {
-		ReplacementScanInput input(ref.Cast<TableRef>(), table_name);
-		auto replacement_function = scan.function(context, input, scan.data.get());
-		if (!replacement_function) {
-			continue;
-		}
-		if (!ref.alias.empty()) {
-			// user-provided alias overrides the default alias
-			replacement_function->alias = ref.alias;
-		} else if (replacement_function->alias.empty()) {
-			// if the replacement scan itself did not provide an alias we use the table name
-			replacement_function->alias = ref.table_name;
-		}
-		if (replacement_function->type == TableReferenceType::TABLE_FUNCTION) {
-			auto &table_function = replacement_function->Cast<TableFunctionRef>();
-			table_function.column_name_alias = ref.column_name_alias;
-		} else if (replacement_function->type == TableReferenceType::SUBQUERY) {
-			auto &subquery = replacement_function->Cast<SubqueryRef>();
-			subquery.column_name_alias = ref.column_name_alias;
-		} else {
-			throw InternalException("Replacement scan should return either a table function or a subquery");
-		}
-		auto copied_replacement = replacement_function->Copy();
-		auto result = Bind(*copied_replacement);
-		result->replacement_scan = std::move(replacement_function);
-		return result;
-	}
-
 	return nullptr;
 }
 
