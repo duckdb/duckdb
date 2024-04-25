@@ -114,37 +114,65 @@ bool CheckLoopCondition(ExecuteContext &context, const vector<Condition> &condit
 		throw BinderException("Conditions (onlyif/skipif) on loop parameters can only occur within a loop");
 	}
 	for(auto &condition : conditions) {
+		bool condition_holds = false;
 		bool found_loop = false;
 		for(auto &loop : context.running_loops) {
 			if (loop.loop_iterator_name != condition.keyword) {
 				continue;
 			}
+			found_loop = true;
+
 			string loop_value;
 			if (loop.tokens.empty()) {
 				loop_value = to_string(loop.loop_idx);
 			} else {
 				loop_value = loop.tokens[loop.loop_idx];
 			}
-			found_loop = true;
-			switch(condition.comparison) {
-			case ExpressionType::COMPARE_EQUAL:
-				if (loop_value != condition.value) {
-					// not equal but we need them to be equal
-					return false;
+			if (condition.comparison == ExpressionType::COMPARE_EQUAL ||
+				condition.comparison == ExpressionType::COMPARE_NOTEQUAL) {
+				// equality/non-equality is done on the string value
+				if (condition.comparison == ExpressionType::COMPARE_EQUAL) {
+					condition_holds = loop_value == condition.value;
+				} else {
+					condition_holds = loop_value != condition.value;
 				}
-				break;
-			case ExpressionType::COMPARE_NOTEQUAL:
-				if (loop_value == condition.value) {
-					// equal but we need them to be not equal
-					return false;
+			} else {
+				// > >= < <= are done on numeric values
+				int64_t loop_val = std::stoll(loop_value);
+				int64_t condition_val = std::stoll(condition.value);
+				switch(condition.comparison) {
+				case ExpressionType::COMPARE_GREATERTHAN:
+					condition_holds = loop_val > condition_val;
+					break;
+				case ExpressionType::COMPARE_LESSTHAN:
+					condition_holds = loop_val < condition_val;
+					break;
+				case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+					condition_holds = loop_val >= condition_val;
+					break;
+				case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+					condition_holds = loop_val <= condition_val;
+					break;
+				default:
+					throw BinderException("Unrecognized comparison for loop condition");
 				}
-				break;
-			default:
-				throw BinderException("Unrecognized comparison for loop condition");
 			}
 		}
 		if (!found_loop) {
 			throw BinderException("Condition in onlyif/skipif not found: %s must be a loop iterator name", condition.keyword);
+		}
+		if (condition_holds) {
+			// the condition holds
+			if (condition.skip_if) {
+				// skip on condition holding
+				return false;
+			}
+		} else {
+			// the condition does not hold
+			if (!condition.skip_if) {
+				// skip on condition not holding
+				return false;
+			}
 		}
 	}
 	// all conditions pass - execute

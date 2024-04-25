@@ -45,6 +45,7 @@ struct Condition {
 	string keyword;
 	string value;
 	ExpressionType comparison;
+	bool skip_if;
 };
 
 class Command {

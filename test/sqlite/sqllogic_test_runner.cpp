@@ -381,6 +381,64 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 	return RequireResult::PRESENT;
 }
 
+bool TryParseConditions(SQLLogicParser &parser, const string &condition_text, vector<Condition> &conditions, bool skip_if) {
+	bool is_condition = false;
+	for(auto &c : condition_text) {
+		switch(c) {
+		case '=':
+		case '>':
+		case '<':
+			is_condition = true;
+			break;
+		default:
+			break;
+		}
+	}
+	if (!is_condition) {
+		// not a condition
+		return false;
+	}
+	// split based on &&
+	auto condition_strings = StringUtil::Split(condition_text, "&&");
+	for(auto &condition_str : condition_strings) {
+		vector<pair<string, ExpressionType>> comparators {
+			{"<>", ExpressionType::COMPARE_NOTEQUAL},
+			{">=", ExpressionType::COMPARE_GREATERTHANOREQUALTO},
+			{">", ExpressionType::COMPARE_GREATERTHAN},
+			{"<=", ExpressionType::COMPARE_LESSTHANOREQUALTO},
+			{"<", ExpressionType::COMPARE_LESSTHAN},
+			{"=", ExpressionType::COMPARE_EQUAL}
+		};
+		ExpressionType comparison_type = ExpressionType::INVALID;
+		vector<string> splits;
+		for(auto &comparator : comparators) {
+			if (!StringUtil::Contains(condition_str, comparator.first)) {
+				continue;
+			}
+			splits = StringUtil::Split(condition_str, comparator.first);
+			comparison_type = comparator.second;
+			break;
+		}
+		// loop condition, e.g. skipif threadid=0
+		if (splits.size() != 2) {
+			parser.Fail("skipif/onlyif must be in the form of x=y or x>y, potentially separated by &&");
+		}
+		// strip white space
+		for(auto &split : splits) {
+			StringUtil::Trim(split);
+		}
+
+		// now create the condition
+		Condition condition;
+		condition.keyword = splits[0];
+		condition.value = splits[1];
+		condition.comparison = comparison_type;
+		condition.skip_if = skip_if;
+		conditions.push_back(condition);
+	}
+	return true;
+}
+
 void SQLLogicTestRunner::ExecuteFile(string script) {
 	SQLLogicParser parser;
 	idx_t skip_level = 0;
@@ -435,23 +493,13 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			// (1) skipif i=2
 			// (2) onlyif threadid=0
 			// the latter is only supported in our own tests (not in original sqllogic tests)
-			if (!original_sqlite_test && StringUtil::Contains(system_name, "=")) {
-				// loop condition, e.g. skipif threadid=0
-				auto splits = StringUtil::Split(system_name, "=");
-				if (splits.size() != 2) {
-					parser.Fail("skipif/onlyif must be in the form of x=y");
-				}
-				// strip white space
-				for(auto &split : splits) {
-					StringUtil::Trim(split);
-				}
-				// now create the condition
-				Condition condition;
-				condition.keyword = splits[0];
-				condition.value = splits[1];
-				condition.comparison = skip_if ? ExpressionType::COMPARE_NOTEQUAL : ExpressionType::COMPARE_EQUAL;
-				conditions.push_back(condition);
+			bool is_system_comparison;
+			if (original_sqlite_test) {
+				is_system_comparison = true;
 			} else {
+				is_system_comparison = !TryParseConditions(parser, system_name, conditions, skip_if);
+			}
+			if (is_system_comparison) {
 				bool our_system = system_name == "duckdb";
 				if (original_sqlite_test) {
 					our_system = our_system || system_name == "postgresql";

@@ -418,6 +418,9 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 		if (!read_segment) {
 
 			idx_t target_row = GetFilterScanCount(state.column_scans[column_idx], *entry.second);
+			if (target_row >= state.max_row) {
+				target_row = state.max_row;
+			}
 
 			D_ASSERT(target_row >= this->start);
 			D_ASSERT(target_row <= this->start + this->count);
