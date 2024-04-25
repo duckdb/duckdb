@@ -49,6 +49,11 @@ void PhysicalStreamingSample::BernoulliSample(DataChunk &input, DataChunk &resul
 	}
 }
 
+void PhysicalStreamingSample::ChunkSample(DataChunk &input, DataChunk &result, OperatorState &state_p) const {
+	// chunk sampling: identity function
+	result.Reference(input);
+}
+
 unique_ptr<OperatorState> PhysicalStreamingSample::GetOperatorState(ExecutionContext &context) const {
 	return make_uniq<StreamingSampleOperatorState>(seed);
 }
@@ -63,6 +68,7 @@ OperatorResultType PhysicalStreamingSample::Execute(ExecutionContext &context, D
 		SystemSample(input, chunk, state);
 		break;
 	case SampleMethod::CHUNK_SAMPLE:
+		ChunkSample(input, chunk, state);
 		break;
 	default:
 		throw InternalException("Unsupported sample method for streaming sample");

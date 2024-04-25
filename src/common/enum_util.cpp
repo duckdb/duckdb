@@ -5555,6 +5555,8 @@ const char* EnumUtil::ToChars<SampleMethod>(SampleMethod value) {
 		return "Bernoulli";
 	case SampleMethod::RESERVOIR_SAMPLE:
 		return "Reservoir";
+	case SampleMethod::CHUNK_SAMPLE:
+		return "Chunk";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
