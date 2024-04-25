@@ -22,6 +22,7 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
+// #include "duckdb/common/printer.hpp"
 
 namespace duckdb {
 
@@ -405,6 +406,12 @@ static idx_t GetFilterScanCount(ColumnScanState &state, TableFilter &filter) {
 }
 
 bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
+	// table sample blocks
+	if (state.random.NextRandom() > 0.1) {
+		NextVector(state);
+		return false;
+	}
+
 	auto &column_ids = state.GetColumnIds();
 	auto filters = state.GetFilters();
 	if (!filters) {

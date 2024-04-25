@@ -76,7 +76,7 @@ ParallelCollectionScanState::ParallelCollectionScanState()
 }
 
 CollectionScanState::CollectionScanState(TableScanState &parent_p)
-    : row_group(nullptr), vector_index(0), max_row_group_row(0), row_groups(nullptr), max_row(0), batch_index(0),
+    : row_group(nullptr), vector_index(0), max_row_group_row(0), row_groups(nullptr), max_row(0), batch_index(0), random(-1),
       parent(parent_p) {
 }
 

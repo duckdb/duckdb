@@ -12,6 +12,7 @@
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
+#include "duckdb/common/random_engine.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
 #include "duckdb/storage/table/segment_lock.hpp"
 
@@ -127,6 +128,8 @@ public:
 	idx_t max_row;
 	//! The current batch index
 	idx_t batch_index;
+
+	RandomEngine random;
 
 public:
 	void Initialize(const vector<LogicalType> &types);
