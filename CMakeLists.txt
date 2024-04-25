@@ -1243,11 +1243,13 @@ if(NOT DUCKDB_EXPLICIT_PLATFORM)
   link_threads(duckdb_platform_binary)
 
   set_target_properties(duckdb_platform_binary PROPERTIES OUTPUT_NAME duckdb_platform_binary)
+  set_target_properties(duckdb_platform_binary PROPERTIES WORKING_DIRECTORY
+          ${PROJECT_SOURCE_DIR})
   set_target_properties(duckdb_platform_binary PROPERTIES RUNTIME_OUTPUT_DIRECTORY
                                          ${PROJECT_BINARY_DIR})
   add_custom_target(
           duckdb_platform ALL
-          COMMAND duckdb_platform_binary > duckdb_platform_out || ( echo "Provide explicit DUCKDB_PLATFORM=your_target_arch to avoid build-type detection of the platform" && exit 1 )
+          COMMAND ${PROJECT_BINARY_DIR}/duckdb_platform_binary > ${PROJECT_BINARY_DIR}/duckdb_platform_out || ( echo "Provide explicit DUCKDB_PLATFORM=your_target_arch to avoid build-type detection of the platform" && exit 1 )
           )
   add_dependencies(duckdb_platform duckdb_platform_binary)
 else()
