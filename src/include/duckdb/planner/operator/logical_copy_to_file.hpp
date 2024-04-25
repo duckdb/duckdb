@@ -34,6 +34,7 @@ public:
 	FilenamePattern filename_pattern;
 	string file_extension;
 	bool overwrite_or_ignore;
+	//! If set, causes every thread to write to a separate output file in a folder
 	bool per_thread_output;
 	optional_idx file_size_bytes;
 

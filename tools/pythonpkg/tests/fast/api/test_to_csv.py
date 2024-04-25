@@ -225,9 +225,9 @@ class TestToCSV(object):
         rel.to_csv(temp_file_name, header=True, per_thread_output=True)
         created_files = duckdb_cursor.sql(f"select * from glob('{temp_file_name}/*.csv')").fetchall()
         print(created_files)
-        assert len(created_files) == 1
-        content = open(created_files[0][0]).read()
-        print(content)
+        for i, item in enumerate(created_files):
+            print(f'File {i}')
+            print(open(item[0]).read())
 
         csv_rel = duckdb_cursor.read_csv(f'{temp_file_name}/*.csv', header=True)
         assert rel.execute().fetchall() == csv_rel.execute().fetchall()
