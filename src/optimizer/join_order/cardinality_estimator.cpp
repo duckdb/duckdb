@@ -152,7 +152,9 @@ vector<FilterInfoWithTotalDomains> GetEdges(vector<RelationsToTDom> &relations_t
 	for (auto &relation_2_tdom : relations_to_tdom) {
 		for (auto &filter : relation_2_tdom.filters) {
 			if (JoinRelationSet::IsSubset(requested_set, filter->set)) {
-
+				if (filter->join_type == JoinType::SEMI || filter->join_type == JoinType::ANTI) {
+					auto break_here = 0;
+				}
 				FilterInfoWithTotalDomains new_edge(filter, relation_2_tdom);
 				res.push_back(new_edge);
 			}
@@ -207,8 +209,8 @@ JoinRelationSet &CardinalityEstimator::UpdateNumeratorRelations(Subgraph2Denomin
 	}
 }
 
-double CardinalityEstimator::CalculateUpdatedDemo(Subgraph2Denominator left, Subgraph2Denominator right,
-                                                  FilterInfoWithTotalDomains &filter) {
+double CardinalityEstimator::CalculateUpdatedDenom(Subgraph2Denominator left, Subgraph2Denominator right,
+                                                   FilterInfoWithTotalDomains &filter) {
 	double new_denom = left.denom * right.denom;
 	switch (filter.filter_info->join_type) {
 	case JoinType::INNER: {
@@ -232,7 +234,6 @@ double CardinalityEstimator::CalculateUpdatedDemo(Subgraph2Denominator left, Sub
 }
 
 DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
-	//	std::cout << "finding denom for set " << set.ToString() << std::endl;
 	vector<Subgraph2Denominator> subgraphs;
 
 	// Finding the denominator is tricky. You need to go through the tdoms in decreasing order
@@ -252,15 +253,22 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 
 	for (auto &edge : edges) {
 		auto subgraph_connections = SubgraphsConnectedByEdge(edge, subgraphs);
-		auto new_subgraph = Subgraph2Denominator();
-		new_subgraph.relations = &edge.filter_info->set;
-		new_subgraph.numerator_relations = &edge.filter_info->set;
+
 		if (subgraph_connections.empty()) {
-			// edge does not connect any subgraphs. If the current edge has only one relation at both vertices,
-			// create one subgraph with both relations.
-			new_subgraph.denom = edge.has_tdom_hll ? (double)edge.tdom_hll : (double)edge.tdom_no_hll;
-			subgraphs.push_back(new_subgraph);
+			// create a subgraph out of left and right, then merge right into left and add left to subgraphs.
+			// this helps cover a case where there are no subgraphs yet, and the only join filter is a SEMI JOIN
+			auto left_subgraph = Subgraph2Denominator();
+			auto right_subgraph = Subgraph2Denominator();
+			left_subgraph.relations = edge.filter_info->left_set;
+			right_subgraph.relations = edge.filter_info->right_set;
+			left_subgraph.relations = &set_manager.Union(*left_subgraph.relations, edge.filter_info->set);
+			left_subgraph.numerator_relations = &UpdateNumeratorRelations(left_subgraph, right_subgraph, edge);
+			left_subgraph.denom = CalculateUpdatedDenom(left_subgraph, right_subgraph, edge);
+			subgraphs.push_back(left_subgraph);
 		} else if (subgraph_connections.size() == 1) {
+			auto new_subgraph = Subgraph2Denominator();
+			new_subgraph.relations = &edge.filter_info->set;
+			new_subgraph.numerator_relations = &edge.filter_info->set;
 			// the current edge connections to the subgraph at the index in subgraph_connections
 			// add the relations at both ends of the edge to the subgraph. (The subgraph is a JoinRelationSet, double
 			// adding relations will be fine).
@@ -274,7 +282,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			subgraph_to_update->relations = &set_manager.Union(*subgraph_to_update->relations, edge.filter_info->set);
 			subgraph_to_update->numerator_relations =
 			    &UpdateNumeratorRelations(*subgraph_to_update, new_subgraph, edge);
-			subgraph_to_update->denom = CalculateUpdatedDemo(*subgraph_to_update, new_subgraph, edge);
+			subgraph_to_update->denom = CalculateUpdatedDenom(*subgraph_to_update, new_subgraph, edge);
 		} else if (subgraph_connections.size() == 2) {
 			// The two subgraphs in the subgraph_connections can be merged by this edge.
 			D_ASSERT(subgraph_connections.at(0) < subgraph_connections.at(1));
@@ -285,7 +293,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			subgraph_to_merge_into->numerator_relations =
 			    &UpdateNumeratorRelations(*subgraph_to_merge_into, *subgraph_to_delete, edge);
 			subgraph_to_delete->relations = nullptr;
-			subgraph_to_merge_into->denom = CalculateUpdatedDemo(*subgraph_to_merge_into, *subgraph_to_delete, edge);
+			subgraph_to_merge_into->denom = CalculateUpdatedDenom(*subgraph_to_merge_into, *subgraph_to_delete, edge);
 			auto remove_start = std::remove_if(subgraphs.begin(), subgraphs.end(),
 			                                   [](Subgraph2Denominator &s) { return !s.relations; });
 			subgraphs.erase(remove_start, subgraphs.end());
@@ -328,7 +336,7 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set
 	// can happen if a table has cardinality 0, or a tdom is set to 0
 
 	auto denom = GetDenominator(new_set);
-	auto numerator = GetNumerator(denom.numerator_relations) * denom.filter_strength;
+	auto numerator = GetNumerator(denom.numerator_relations);
 
 	double result = numerator / denom.denominator;
 	auto new_entry = CardinalityHelper(result, 1);

@@ -120,8 +120,8 @@ private:
 	//! If there are multiple equivalence sets, they are merged.
 	void AddToEquivalenceSets(FilterInfo *filter_info, vector<idx_t> matching_equivalent_sets);
 
-	double CalculateUpdatedDemo(Subgraph2Denominator left, Subgraph2Denominator right,
-	                            FilterInfoWithTotalDomains &filter);
+	double CalculateUpdatedDenom(Subgraph2Denominator left, Subgraph2Denominator right,
+	                             FilterInfoWithTotalDomains &filter);
 	JoinRelationSet &UpdateNumeratorRelations(Subgraph2Denominator left, Subgraph2Denominator right,
 	                                          FilterInfoWithTotalDomains &filter);
 
