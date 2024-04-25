@@ -62,6 +62,8 @@ OperatorResultType PhysicalStreamingSample::Execute(ExecutionContext &context, D
 	case SampleMethod::SYSTEM_SAMPLE:
 		SystemSample(input, chunk, state);
 		break;
+	case SampleMethod::CHUNK_SAMPLE:
+		break;
 	default:
 		throw InternalException("Unsupported sample method for streaming sample");
 	}

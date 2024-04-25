@@ -462,7 +462,7 @@ SourceResultType PipelineExecutor::GetData(DataChunk &chunk, OperatorSourceInput
 		return SourceResultType::BLOCKED;
 	}
 #endif
-
+	chunk.pipeline = &pipeline;
 	return pipeline.source->GetData(context, chunk, input);
 }
 

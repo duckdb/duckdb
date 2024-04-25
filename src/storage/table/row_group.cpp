@@ -22,6 +22,7 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
+#include "duckdb/parser/parsed_data/sample_options.hpp"
 // #include "duckdb/common/printer.hpp"
 
 namespace duckdb {
@@ -406,12 +407,6 @@ static idx_t GetFilterScanCount(ColumnScanState &state, TableFilter &filter) {
 }
 
 bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
-	// table sample blocks
-	if (state.random.NextRandom() > 0.1) {
-		NextVector(state);
-		return false;
-	}
-
 	auto &column_ids = state.GetColumnIds();
 	auto filters = state.GetFilters();
 	if (!filters) {
@@ -462,6 +457,17 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 		}
 		idx_t current_row = state.vector_index * STANDARD_VECTOR_SIZE;
 		auto max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.max_row_group_row - current_row);
+
+		// table sample blocks
+		if (result.pipeline->operators.size() > 0) {
+			auto op = result.pipeline->operators[0].get()
+			if (op->method == SampleMethod::CHUNK_SAMPLE) {
+				if (state.random.NextRandom() > op->percentage) {
+					NextVector(state);
+					continue;
+				}
+			}
+		}
 
 		//! first check the zonemap if we have to scan this partition
 		if (!CheckZonemapSegments(state)) {

@@ -13,6 +13,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/winapi.hpp"
+#include "duckdb/parallel/pipeline.hpp"
 
 namespace duckdb {
 class Allocator;
@@ -48,6 +49,8 @@ public:
 
 	//! The vectors owned by the DataChunk.
 	vector<Vector> data;
+
+	Pipeline* pipeline;
 
 public:
 	inline idx_t size() const { // NOLINT

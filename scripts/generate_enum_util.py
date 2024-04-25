@@ -31,7 +31,7 @@ overrides = {
         "NULLS_FIRST": ["NULLS_FIRST", "NULLS FIRST"],
         "NULLS_LAST": ["NULLS_LAST", "NULLS LAST"],
     },
-    "SampleMethod": {"SYSTEM_SAMPLE": "System", "BERNOULLI_SAMPLE": "Bernoulli", "RESERVOIR_SAMPLE": "Reservoir"},
+    "SampleMethod": {"SYSTEM_SAMPLE": "System", "BERNOULLI_SAMPLE": "Bernoulli", "RESERVOIR_SAMPLE": "Reservoir", "CHUNK_SAMPLE": "Chunk"},
     "TableReferenceType": {"EMPTY_FROM": "EMPTY"},
 }
 

@@ -5571,6 +5571,9 @@ SampleMethod EnumUtil::FromString<SampleMethod>(const char *value) {
 	if (StringUtil::Equals(value, "Reservoir")) {
 		return SampleMethod::RESERVOIR_SAMPLE;
 	}
+	if (StringUtil::Equals(value, "Chunk")) {
+		return SampleMethod::CHUNK_SAMPLE;
+	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
 
