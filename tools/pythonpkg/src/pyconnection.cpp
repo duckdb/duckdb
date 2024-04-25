@@ -1324,9 +1324,6 @@ int DuckDBPyConnection::GetRowcount() {
 }
 
 void DuckDBPyConnection::Close() {
-	if (connection) {
-		Checkpoint();
-	}
 	result = nullptr;
 	connection = nullptr;
 	database = nullptr;
