@@ -1,12 +1,12 @@
 #include "duckdb/storage/table/table_index_list.hpp"
 
-#include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
-#include "duckdb/execution/index/unknown_index.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
-#include "duckdb/storage/table/data_table_info.hpp"
-#include "duckdb/main/database.hpp"
+#include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
 
 namespace duckdb {
 void TableIndexList::AddIndex(unique_ptr<Index> index) {
@@ -58,12 +58,12 @@ bool TableIndexList::NameIsUnique(const string &name) {
 void TableIndexList::InitializeIndexes(ClientContext &context, DataTableInfo &table_info, bool throw_on_failure) {
 	lock_guard<mutex> lock(indexes_lock);
 	for (auto &index : indexes) {
-		if (!index->IsUnknown()) {
+		if (!index->IsUnbound()) {
 			continue;
 		}
 
-		auto &unknown_index = index->Cast<UnknownIndex>();
-		auto &index_type_name = unknown_index.GetIndexType();
+		auto &unbound_index = index->Cast<UnboundIndex>();
+		auto &index_type_name = unbound_index.GetIndexType();
 
 		// Do we know the type of this index now?
 		auto index_type = context.db->config.GetIndexTypes().FindByName(index_type_name);
@@ -71,17 +71,17 @@ void TableIndexList::InitializeIndexes(ClientContext &context, DataTableInfo &ta
 			if (throw_on_failure) {
 				throw MissingExtensionException(
 				    "Cannot initialize index '%s', unknown index type '%s'. You probably need to load an extension.",
-				    unknown_index.name, index_type_name);
+				    unbound_index.name, index_type_name);
 			}
 			continue;
 		}
 
 		// Swap this with a new index
-		auto &create_info = unknown_index.GetCreateInfo();
-		auto &storage_info = unknown_index.GetStorageInfo();
+		auto &create_info = unbound_index.GetCreateInfo();
+		auto &storage_info = unbound_index.GetStorageInfo();
 
 		CreateIndexInput input(*table_info.table_io_manager, table_info.db, create_info.constraint_type,
-		                       create_info.index_name, create_info.column_ids, unknown_index.unbound_expressions,
+		                       create_info.index_name, create_info.column_ids, unbound_index.unbound_expressions,
 		                       storage_info, create_info.options);
 
 		auto index_instance = index_type->create_instance(input);

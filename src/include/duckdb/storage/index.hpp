@@ -60,7 +60,7 @@ public:
 
 public:
 	//! Returns true if the index is a unknown index, and false otherwise
-	virtual bool IsUnknown() {
+	virtual bool IsUnbound() {
 		return false;
 	}
 

@@ -310,7 +310,7 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 	storage.info->indexes.Scan([&](Index &index) {
 		// first rewrite the index expression so the ColumnBindings align with the column bindings of the current table
 
-		if (index.IsUnknown()) {
+		if (index.IsUnbound()) {
 			// unknown index: skip
 			return false;
 		}

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/index/unknown_index.hpp
+// duckdb/execution/index/unbound_index.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -17,14 +17,14 @@ namespace duckdb {
 // It is used as a placeholder for the index until the extension is loaded, at which point the extension will replace
 // all recognized unknown indexes with the correct index type.
 // Calling any function on an unknown index will throw a NotImplementedException
-class UnknownIndex final : public Index {
+class UnboundIndex final : public Index {
 private:
 	CreateIndexInfo create_info;
 	IndexStorageInfo storage_info;
 	string GenerateErrorMessage() const;
 
 public:
-	UnknownIndex(const string &name, const string &index_type, IndexConstraintType index_constraint_type,
+	UnboundIndex(const string &name, const string &index_type, IndexConstraintType index_constraint_type,
 	             const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	             const vector<unique_ptr<Expression>> &unbound_expressions, AttachedDatabase &db,
 	             const CreateIndexInfo &create_info, IndexStorageInfo storage_info);
@@ -40,7 +40,7 @@ public:
 	}
 
 public:
-	bool IsUnknown() override {
+	bool IsUnbound() override {
 		return true;
 	}
 

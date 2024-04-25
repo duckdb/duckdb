@@ -873,7 +873,7 @@ void DataTable::RevertAppend(idx_t start_row, idx_t count) {
 				row_data[i] = NumericCast<row_t>(current_row_base + i);
 			}
 			info->indexes.Scan([&](Index &index) {
-				if (!index.IsUnknown()) {
+				if (!index.IsUnbound()) {
 					index.Delete(chunk, row_identifiers);
 				}
 				return false;
@@ -885,7 +885,7 @@ void DataTable::RevertAppend(idx_t start_row, idx_t count) {
 	// we need to vacuum the indexes to remove any buffers that are now empty
 	// due to reverting the appends
 	info->indexes.Scan([&](Index &index) {
-		if (!index.IsUnknown()) {
+		if (!index.IsUnbound()) {
 			index.Vacuum();
 		}
 		return false;
