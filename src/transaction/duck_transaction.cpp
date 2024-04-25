@@ -124,6 +124,24 @@ UpdateInfo *DuckTransaction::CreateUpdateInfo(idx_t type_size, idx_t entries) {
 	return update_info;
 }
 
+void DuckTransaction::PushSequenceUsage(SequenceCatalogEntry &sequence, const SequenceData &data) {
+	lock_guard<mutex> l(sequence_lock);
+	auto entry = sequence_usage.find(sequence);
+	if (entry == sequence_usage.end()) {
+		auto sequence_ptr = undo_buffer.CreateEntry(UndoFlags::SEQUENCE_VALUE, sizeof(SequenceValue));
+		auto sequence_info = reinterpret_cast<SequenceValue *>(sequence_ptr);
+		sequence_info->entry = &sequence;
+		sequence_info->usage_count = data.usage_count;
+		sequence_info->counter = data.counter;
+		sequence_usage.emplace(sequence, *sequence_info);
+	} else {
+		auto &sequence_info = entry->second.get();
+		D_ASSERT(RefersToSameObject(*sequence_info.entry, sequence));
+		sequence_info.usage_count = data.usage_count;
+		sequence_info.counter = data.counter;
+	}
+}
+
 bool DuckTransaction::ChangesMade() {
 	return undo_buffer.ChangesMade() || storage->ChangesMade();
 }
@@ -143,7 +161,7 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t commit_id,
 	//          This method only makes commit in memory, expecting caller to checkpoint/flush.
 	//    false: Then this function WILL write to the WAL and Flush/Persist it.
 	this->commit_id = commit_id;
-	if (!ChangesMade() && sequence_usage.empty()) {
+	if (!ChangesMade()) {
 		// no need to flush anything if we made no changes
 		return ErrorData();
 	}
@@ -163,12 +181,6 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t commit_id,
 	try {
 		storage->Commit(commit_state, *this);
 		undo_buffer.Commit(iterator_state, log, commit_id);
-		if (log) {
-			// commit any sequences that were used to the WAL
-			for (auto &entry : sequence_usage) {
-				log->WriteSequenceValue(*entry.first, entry.second);
-			}
-		}
 		if (storage_commit_state) {
 			storage_commit_state->FlushCommit();
 		}

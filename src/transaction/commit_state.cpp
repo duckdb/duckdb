@@ -329,6 +329,12 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 		info->version_number = commit_id;
 		break;
 	}
+	case UndoFlags::SEQUENCE_VALUE: {
+		auto info = reinterpret_cast<SequenceValue *>(data);
+		if (HAS_LOG) {
+			log->WriteSequenceValue(*info);
+		}
+	}
 	default:
 		throw InternalException("UndoBuffer - don't know how to commit this type!");
 	}

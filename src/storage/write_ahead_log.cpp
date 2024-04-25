@@ -202,10 +202,11 @@ void WriteAheadLog::WriteDropSequence(const SequenceCatalogEntry &entry) {
 	serializer.End();
 }
 
-void WriteAheadLog::WriteSequenceValue(const SequenceCatalogEntry &entry, SequenceValue val) {
+void WriteAheadLog::WriteSequenceValue(SequenceValue val) {
+	auto &sequence = *val.entry;
 	WriteAheadLogSerializer serializer(*this, WALType::SEQUENCE_VALUE);
-	serializer.WriteProperty(101, "schema", entry.schema.name);
-	serializer.WriteProperty(102, "name", entry.name);
+	serializer.WriteProperty(101, "schema", sequence.schema.name);
+	serializer.WriteProperty(102, "name", sequence.name);
 	serializer.WriteProperty(103, "usage_count", val.usage_count);
 	serializer.WriteProperty(104, "counter", val.counter);
 	serializer.End();

@@ -76,7 +76,7 @@ public:
 
 	void WriteCreateSequence(const SequenceCatalogEntry &entry);
 	void WriteDropSequence(const SequenceCatalogEntry &entry);
-	void WriteSequenceValue(const SequenceCatalogEntry &entry, SequenceValue val);
+	void WriteSequenceValue(SequenceValue val);
 
 	void WriteCreateMacro(const ScalarMacroCatalogEntry &entry);
 	void WriteDropMacro(const ScalarMacroCatalogEntry &entry);

@@ -27,8 +27,6 @@ public:
 	transaction_t transaction_id;
 	//! The commit id of this transaction, if it has successfully been committed
 	transaction_t commit_id;
-	//! Map of all sequences that were used during the transaction and the value they had in this transaction
-	unordered_map<SequenceCatalogEntry *, SequenceValue> sequence_usage;
 	//! Highest active query when the transaction finished, used for cleaning up
 	transaction_t highest_active_query;
 
@@ -56,6 +54,7 @@ public:
 
 	void PushDelete(DataTable &table, RowVersionManager &info, idx_t vector_idx, row_t rows[], idx_t count,
 	                idx_t base_row);
+	void PushSequenceUsage(SequenceCatalogEntry &entry, const SequenceData &data);
 	void PushAppend(DataTable &table, idx_t row_start, idx_t row_count);
 	UpdateInfo *CreateUpdateInfo(idx_t type_size, idx_t entries);
 
@@ -72,6 +71,9 @@ private:
 	unique_ptr<LocalStorage> storage;
 	//! Write lock
 	unique_ptr<StorageLockKey> write_lock;
+	//! Map of all sequences that were used during the transaction and the value they had in this transaction
+	mutex sequence_lock;
+	reference_map_t<SequenceCatalogEntry, reference<SequenceValue>> sequence_usage;
 };
 
 } // namespace duckdb
