@@ -30,7 +30,7 @@ public:
 	}
 
 	//! Two-argument JSON read function (with path query), i.e. json_type('[1, 2, 3]', '$[0]')
-	template <class T>
+	template <class T, bool NULL_IF_NULL = true>
 	static void BinaryExecute(DataChunk &args, ExpressionState &state, Vector &result,
 	                          std::function<T(yyjson_val *, yyjson_alc *, Vector &)> fun) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
@@ -48,7 +48,7 @@ public:
 					    auto doc =
 					        JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, lstate.json_allocator.GetYYAlc());
 					    auto val = JSONCommon::GetUnsafe(doc->root, ptr, len);
-					    if (!val || unsafe_yyjson_is_null(val)) {
+					    if (!val || (NULL_IF_NULL && unsafe_yyjson_is_null(val))) {
 						    mask.SetInvalid(idx);
 						    return T {};
 					    } else {
@@ -76,7 +76,7 @@ public:
 					for (idx_t i = 0; i < vals.size(); i++) {
 						auto &val = vals[i];
 						D_ASSERT(val != nullptr); // Wildcard extract shouldn't give back nullptrs
-						if (unsafe_yyjson_is_null(val)) {
+						if (NULL_IF_NULL && unsafe_yyjson_is_null(val)) {
 							child_validity.SetInvalid(current_size + i);
 						} else {
 							child_vals[current_size + i] = fun(val, alc, result);
@@ -109,7 +109,7 @@ public:
 	}
 
 	//! JSON read function with list of path queries, i.e. json_type('[1, 2, 3]', ['$[0]', '$[1]'])
-	template <class T>
+	template <class T, bool NULL_IF_NULL = true>
 	static void ExecuteMany(DataChunk &args, ExpressionState &state, Vector &result,
 	                        std::function<T(yyjson_val *, yyjson_alc *, Vector &)> fun) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
@@ -148,7 +148,7 @@ public:
 			for (idx_t path_i = 0; path_i < num_paths; path_i++) {
 				auto child_idx = offset + path_i;
 				val = JSONCommon::GetUnsafe(doc->root, info.ptrs[path_i], info.lens[path_i]);
-				if (!val || unsafe_yyjson_is_null(val)) {
+				if (!val || (NULL_IF_NULL && unsafe_yyjson_is_null(val))) {
 					child_validity.SetInvalid(child_idx);
 				} else {
 					child_data[child_idx] = fun(val, alc, child);
