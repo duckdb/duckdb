@@ -106,7 +106,7 @@ ColumnData &RowGroup::GetColumn(storage_t c) {
 	if (this->columns[c]->count != this->count) {
 		throw InternalException("Corrupted database - loaded column with index %llu at row start %llu, count %llu did "
 		                        "not match count of row group %llu",
-		                        c, start, this->columns[c]->count, this->count.load());
+		                        c, start, this->columns[c]->count.load(), this->count.load());
 	}
 	return *columns[c];
 }
@@ -846,7 +846,7 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 		if (column.count != this->count) {
 			throw InternalException("Corrupted in-memory column - column with index %llu has misaligned count (row "
 			                        "group has %llu rows, column has %llu)",
-			                        column_idx, this->count.load(), column.count);
+			                        column_idx, this->count.load(), column.count.load());
 		}
 		compression_types.push_back(writer.GetColumnCompressionType(column_idx));
 	}

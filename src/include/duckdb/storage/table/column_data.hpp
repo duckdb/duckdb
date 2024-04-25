@@ -46,7 +46,7 @@ public:
 	//! The start row
 	idx_t start;
 	//! The count of the column data
-	idx_t count;
+	atomic<idx_t> count;
 	//! The block manager
 	BlockManager &block_manager;
 	//! Table info for the column

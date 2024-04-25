@@ -301,7 +301,7 @@ void StructColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatist
 		list.ReadObject([&](Deserializer &item) { sub_columns[i]->DeserializeColumn(item, child_stats); });
 	});
 
-	this->count = validity.count;
+	this->count = validity.count.load();
 }
 
 void StructColumnData::GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,

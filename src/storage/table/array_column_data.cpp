@@ -219,7 +219,7 @@ void ArrayColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatisti
 	auto &child_stats = ArrayStats::GetChildStats(target_stats);
 	deserializer.ReadObject(102, "child_column",
 	                        [&](Deserializer &source) { child_column->DeserializeColumn(source, child_stats); });
-	this->count = validity.count;
+	this->count = validity.count.load();
 }
 
 void ArrayColumnData::GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_path,
