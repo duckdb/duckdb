@@ -3,7 +3,8 @@
 
 namespace duckdb {
 
-ClientContextWrapper::ClientContextWrapper(const shared_ptr<ClientContext> &context) : client_context(context) {}
+ClientContextWrapper::ClientContextWrapper(const shared_ptr<ClientContext> &context) : client_context(context) {
+}
 
 shared_ptr<ClientContext> ClientContextWrapper::GetContext() {
 	auto actual_context = client_context.lock();
