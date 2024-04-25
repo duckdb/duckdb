@@ -44,12 +44,12 @@ time_execution = args.time_execution
 timeout = args.timeout
 
 # Use the '-l' parameter to output the list of tests to run
-proc = subprocess.Popen([unittest_program, '-l'] + extra_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-stdout = proc.stdout.read().decode('utf8')
-stderr = proc.stderr.read().decode('utf8')
-if proc.returncode is not None and proc.returncode != 0:
+proc = subprocess.run([unittest_program, '-l'] + extra_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+stdout = proc.stdout.decode('utf8').strip()
+stderr = proc.stderr.decode('utf8').strip()
+if len(stderr) > 0:
     print("Failed to run program " + unittest_program)
-    print(proc.returncode)
+    print("Returncode:", proc.returncode)
     print(stdout)
     print(stderr)
     exit(1)
@@ -96,7 +96,6 @@ def parse_assertions(stdout):
             return line[space_before_num + 2 : pos + 10]
 
     return "ERROR"
-
 
 for test_number, test_case in enumerate(test_cases):
     if not profile:
