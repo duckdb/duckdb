@@ -105,7 +105,7 @@ class TestReplacementScan(object):
 
     def test_replacement_scan_caching(self, duckdb_cursor):
         def return_rel(conn):
-            df = pd.DataFrame({'a': [1,2,3]})
+            df = pd.DataFrame({'a': [1, 2, 3]})
             rel = conn.sql("select * from df")
             return rel
 
