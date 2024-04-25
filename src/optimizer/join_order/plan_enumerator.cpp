@@ -92,7 +92,6 @@ void PlanEnumerator::GenerateCrossProducts() {
 }
 
 const reference_map_t<JoinRelationSet, unique_ptr<DPJoinNode>> &PlanEnumerator::GetPlans() const {
-	//	optional_ptr<reference_map_t<JoinRelationSet, unique_ptr<DPJoinNode>>> res = &plans;
 	return plans;
 }
 
