@@ -142,7 +142,7 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 		string type_error = "The Column types set by the user do not match the ones found by the sniffer. \n";
 		auto &set_types = *set_columns.types;
 		for (idx_t i = 0; i < set_columns.Size(); i++) {
-			if (set_types[i] != detected_types[i] && !(set_types[i].IsNumeric() && detected_types[i].IsNumeric())) {
+			if (set_types[i] != detected_types[i]) {
 				type_error += "Column at position: " + to_string(i) + " Set type: " + set_types[i].ToString() +
 				              " Sniffed type: " + detected_types[i].ToString() + "\n";
 				detected_types[i] = set_types[i];
@@ -158,8 +158,6 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 			throw InvalidInputException(error);
 		}
 		options.was_type_manually_set = manually_set;
-		// We do not need to run type refinement, since the types have been given by the user
-		return SnifferResult({}, {});
 	}
 	if (!error.empty() && force_match) {
 		throw InvalidInputException(error);

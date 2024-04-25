@@ -23,11 +23,10 @@ bool CSVColumnSchema::Empty() const {
 	return columns.empty();
 }
 
-struct TypeIdxPair{
-	TypeIdxPair(LogicalType type_p, idx_t idx_p): type(std::move(type_p)), idx(idx_p){
-
+struct TypeIdxPair {
+	TypeIdxPair(LogicalType type_p, idx_t idx_p) : type(std::move(type_p)), idx(idx_p) {
 	}
-	TypeIdxPair(){
+	TypeIdxPair() {
 	}
 	LogicalType type;
 	idx_t idx;
@@ -40,7 +39,7 @@ bool CSVColumnSchema::SchemasMatch(string &error_message, vector<string> &names,
 	unordered_map<string, TypeIdxPair> current_schema;
 	for (idx_t i = 0; i < names.size(); i++) {
 		// Populate our little schema
-		current_schema[names[i]] = {types[i],i};
+		current_schema[names[i]] = {types[i], i};
 	}
 	// Here we check if the schema of a given file matched our original schema
 	// We consider it's not a match if:
@@ -59,12 +58,12 @@ bool CSVColumnSchema::SchemasMatch(string &error_message, vector<string> &names,
 			match = false;
 		} else {
 			if (current_schema[column.name].type.id() != column.type.id()) {
-				//FIXME: Should we check if they have an implicit cast?
+				// FIXME: Should we check if they have an implicit cast?
 				error << "Column with name: \"" << column.name
 				      << "\" is expected to have type: " << column.type.ToString();
 				error << " But has type: " << current_schema[column.name].type.ToString() << "\n";
 				match = false;
-			} else{
+			} else {
 				// We have a good match
 				projection_order.push_back(current_schema[column.name].idx);
 			}
@@ -171,18 +170,20 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 		return;
 	}
 	// Sniff it!
-	if (options.auto_detect) {
+	vector<idx_t> projection_order;
+	if (options.auto_detect && bind_data.files.size() > 1) {
 		if (file_schema.Empty()) {
 			CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
 			auto result = sniffer.SniffCSV();
 			file_schema.Initialize(result.names, result.return_types, options.file_path);
 		} else if (file_idx > 0) {
-			CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
+			CSVSniffer sniffer(options, buffer_manager, state_machine_cache,
+			                   {&bind_data.return_types, &bind_data.return_names});
 			auto result = sniffer.SniffCSV();
 			if (!options.file_options.union_by_name) {
 				// Union By name has its own mystical rules
 				string error;
-				if (!file_schema.SchemasMatch(error, result.names, result.return_types, file_path)) {
+				if (!file_schema.SchemasMatch(error, result.names, result.return_types, file_path, projection_order)) {
 					throw InvalidInputException(error);
 				}
 			}
@@ -205,6 +206,9 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 
 	MultiFileReader::InitializeReader(*this, options.file_options, bind_data.reader_bind, bind_data.return_types,
 	                                  bind_data.return_names, column_ids, nullptr, file_path, context);
+	if (!projection_order.empty()) {
+		reader_data.column_mapping = projection_order;
+	}
 	InitializeFileNamesTypes();
 }
 

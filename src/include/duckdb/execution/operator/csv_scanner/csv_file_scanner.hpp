@@ -27,8 +27,8 @@ struct CSVColumnInfo {
 struct CSVColumnSchema {
 	void Initialize(vector<string> &names, vector<LogicalType> &types, const string &file_path);
 	bool Empty() const;
-	bool SchemasMatch(string &error_message, vector<string> &names, vector<LogicalType> &types,
-	                  const string &file_path, vector<idx_t> &projection_order);
+	bool SchemasMatch(string &error_message, vector<string> &names, vector<LogicalType> &types, const string &file_path,
+	                  vector<idx_t> &projection_order);
 	vector<CSVColumnInfo> columns;
 	unordered_map<string, idx_t> name_idx_map;
 	string file_path;
