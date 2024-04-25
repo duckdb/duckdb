@@ -1054,14 +1054,74 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, con
 	return make_uniq<DuckDBPyRelation>(rel->Join(other->rel, std::move(conditions), dtype));
 }
 
-void DuckDBPyRelation::ToParquet(const string &filename, const py::object &compression) {
+static Value NestedDictToStruct(const py::object &dictionary) {
+	if (!py::isinstance<py::dict>(dictionary)) {
+		throw InvalidInputException("NestedDictToStruct only accepts a dictionary as input");
+	}
+	py::dict dict_casted = py::dict(dictionary);
+
+	child_list_t<Value> children;
+	for (auto item : dict_casted) {
+		py::object item_key = item.first.cast<py::object>();
+		py::object item_value = item.second.cast<py::object>();
+
+		if (!py::isinstance<py::str>(item_key)) {
+			throw InvalidInputException("NestedDictToStruct only accepts a dictionary with string keys");
+		}
+
+		if (py::isinstance<py::int_>(item_value)) {
+			int32_t item_value_int = py::int_(item_value);
+			children.push_back(std::make_pair(py::str(item_key), Value(item_value_int)));
+		} else if (py::isinstance<py::dict>(item_value)) {
+			children.push_back(std::make_pair(py::str(item_key), NestedDictToStruct(item_value)));
+		} else {
+			throw InvalidInputException(
+			    "NestedDictToStruct only accepts a dictionary with integer values or nested dictionaries");
+		}
+	}
+	return Value::STRUCT(std::move(children));
+}
+
+void DuckDBPyRelation::ToParquet(const string &filename, const py::object &compression, const py::object &field_ids,
+                                 const py::object &row_group_size_bytes, const py::object &row_group_size) {
 	case_insensitive_map_t<vector<Value>> options;
 
 	if (!py::none().is(compression)) {
 		if (!py::isinstance<py::str>(compression)) {
-			throw InvalidInputException("to_csv only accepts 'compression' as a string");
+			throw InvalidInputException("to_parquet only accepts 'compression' as a string");
 		}
 		options["compression"] = {Value(py::str(compression))};
+	}
+
+	if (!py::none().is(field_ids)) {
+		if (py::isinstance<py::dict>(field_ids)) {
+			Value field_ids_value = NestedDictToStruct(field_ids);
+			options["field_ids"] = {field_ids_value};
+		} else if (py::isinstance<py::str>(field_ids)) {
+			options["field_ids"] = {Value(py::str(field_ids))};
+		} else {
+			throw InvalidInputException("to_parquet only accepts 'field_ids' as a dictionary or 'auto'");
+		}
+	}
+
+	if (!py::none().is(row_group_size_bytes)) {
+		if (py::isinstance<py::int_>(row_group_size_bytes)) {
+			int64_t row_group_size_bytes_int = py::int_(row_group_size_bytes);
+			options["row_group_size_bytes"] = {Value(row_group_size_bytes_int)};
+		} else if (py::isinstance<py::str>(row_group_size_bytes)) {
+			options["row_group_size_bytes"] = {Value(py::str(row_group_size_bytes))};
+		} else {
+			throw InvalidInputException(
+			    "to_parquet only accepts 'row_group_size_bytes' as an integer or 'auto' string");
+		}
+	}
+
+	if (!py::none().is(row_group_size)) {
+		if (!py::isinstance<py::int_>(row_group_size)) {
+			throw InvalidInputException("to_parquet only accepts 'row_group_size' as an integer");
+		}
+		int64_t row_group_size_int = py::int_(row_group_size);
+		options["row_group_size"] = {Value(row_group_size_int)};
 	}
 
 	auto write_parquet = rel->WriteParquetRel(filename, std::move(options));
