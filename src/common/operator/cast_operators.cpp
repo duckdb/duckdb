@@ -1588,12 +1588,12 @@ bool TryCastErrorMessage::Operation(string_t input, interval_t &result, CastPara
 // when that value is full, we perform a HUGEINT multiplication to flush it into the hugeint
 // this takes the number of HUGEINT multiplications down from [0-38] to [0-2]
 
-template <typename T, typename OP>
+template <typename T, typename OP, typename INTERMEDIATE_T>
 struct HugeIntCastData {
 	using ResultType = T;
 	using Operation = OP;
 	ResultType result;
-	ResultType intermediate;
+	INTERMEDIATE_T intermediate;
 	uint8_t digits;
 
 	ResultType decimal;
@@ -1790,8 +1790,8 @@ struct HugeIntegerCastOperation {
 
 template <>
 bool TryCast::Operation(string_t input, hugeint_t &result, bool strict) {
-	HugeIntCastData<hugeint_t, Hugeint> state {};
-	if (!TryIntegerCast<HugeIntCastData<hugeint_t, Hugeint>, true, true, HugeIntegerCastOperation>(
+	HugeIntCastData<hugeint_t, Hugeint, int64_t> state {};
+	if (!TryIntegerCast<HugeIntCastData<hugeint_t, Hugeint, int64_t>, true, true, HugeIntegerCastOperation>(
 	        input.GetData(), input.GetSize(), state, strict)) {
 		return false;
 	}
@@ -1801,8 +1801,8 @@ bool TryCast::Operation(string_t input, hugeint_t &result, bool strict) {
 
 template <>
 bool TryCast::Operation(string_t input, uhugeint_t &result, bool strict) {
-	HugeIntCastData<uhugeint_t, Uhugeint> state {};
-	if (!TryIntegerCast<HugeIntCastData<uhugeint_t, Uhugeint>, false, true, HugeIntegerCastOperation>(
+	HugeIntCastData<uhugeint_t, Uhugeint, uint64_t> state {};
+	if (!TryIntegerCast<HugeIntCastData<uhugeint_t, Uhugeint, uint64_t>, false, true, HugeIntegerCastOperation>(
 	        input.GetData(), input.GetSize(), state, strict)) {
 		return false;
 	}
