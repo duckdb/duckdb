@@ -7,13 +7,35 @@ require parquet
 require httpfs
 
 # FIXME: currently this will not fail the Linux HTTPFS ci job if it fails, because it might do so due to networking issues
-#        however having a CI job dedicated
+#        however having a CI job dedicated to remote tests that may spuriously fail would solve this
+
+## Non existent repos get a 401
+#statement error
+#FROM parquet_scan('hf://datasets/samansmink/non-existent/*.parquet');
+#----
+#HTTP 401
+#
+## Globbing non-existent repo is also 401
+#statement error
+#FROM parquet_scan('hf://datasets/samansmink/non-existent/**/*.parquet');
+#----
+#HTTP 401
+
+#mode skip
+
+query I rowsort
+SELECT COUNT(*) FROM parquet_scan('hf://datasets/samansmink/test_many_files/**/*.parquet');
+----
+asdasd
+
+mode skip
 
 query III rowsort
 FROM parquet_scan('hf://datasets/samansmink/duckdb_ci_tests/hive_data/**/*.parquet', FILENAME=1, hive_partitioning=0);
 ----
 1	value1	hf://datasets/samansmink/duckdb_ci_tests/hive_data/part=a/date=2012-01-01/test.parquet
 2	value2	hf://datasets/samansmink/duckdb_ci_tests/hive_data/part=b/date=2013-01-01/test.parquet
+
 
 query III rowsort
 FROM parquet_scan('hf://datasets/samansmink/duckdb_ci_tests/hive_data/*/*/**/*.parquet', FILENAME=1, hive_partitioning=0);
@@ -38,20 +60,53 @@ explain analyze SELECT id, part FROM parquet_scan('hf://datasets/samansmink/duck
 ----
 analyzed_plan	<REGEX>:.*HTTP Stats.*\#HEAD\: 1 .*
 
+# Branches can be specified, including the special branch types with '~'
+query III rowsort
+FROM parquet_scan('hf://datasets/samansmink/duckdb_ci_tests@~parquet/**/*.parquet', FILENAME=1, hive_partitioning=0);
+----
+1	value1	hf://datasets/samansmink/duckdb_ci_tests@~parquet/default/test/0000.parquet
+2	value2	hf://datasets/samansmink/duckdb_ci_tests@~parquet/default/test/0001.parquet
+
+# Secret provider 'config' (default) allows setting the token directly
 statement ok
 CREATE SECRET hf_token (TYPE HUGGINGFACE, token 'some_hf_token');
 
+# Secret provider 'cache' scans the ~/.cache/huggingface/token file for a token
 statement ok
 CREATE SECRET hf_token_from_cache (TYPE HUGGINGFACE, PROVIDER cache);
 
 statement ok
-CREATE SECRET core_bearer (TYPE HUGGINGFACE, TOKEN 'hf_fake_token_123', SCOPE 'hf://datasets/samansmink/some_other_thing');
-
-# FIXME: push auth key into CI for this to ensure it is tested in CI properly
-#mode skip
+DROP SECRET hf_token
 
 statement ok
-CREATE SECRET core_bearer_2 (TYPE HUGGINGFACE, PROVIDER cache);
+DROP SECRET hf_token_from_cache
+
+# Private bucket is not allowed without credentials
+statement error
+FROM parquet_scan('hf://datasets/samansmink/duckdb_ci_private/hive_data/**/*.parquet', FILENAME=1, hive_partitioning=0);
+----
+401
+
+# FIXME: push auth key into CI for this to ensure it is tested in CI properly
+require-env HUGGING_FACE_TOKEN
+
+statement ok
+CREATE SECRET hf1 (TYPE HUGGINGFACE, TOKEN '${HUGGING_FACE_TOKEN}');
+
+query III rowsort
+FROM parquet_scan('hf://datasets/samansmink/duckdb_ci_private/hive_data/**/*.parquet', FILENAME=1, hive_partitioning=0);
+----
+1	value1	hf://datasets/samansmink/duckdb_ci_private/hive_data/part=a/date=2012-01-01/test.parquet
+2	value2	hf://datasets/samansmink/duckdb_ci_private/hive_data/part=b/date=2013-01-01/test.parquet
+
+statement ok
+DROP SECRET hf1
+
+# FIXME: test this from CI as well
+require-env HUGGING_FACE_TOKEN_IN_CACHE
+
+statement ok
+CREATE SECRET hf1 (TYPE HUGGINGFACE, PROVIDER cache);
 
 query III rowsort
 FROM parquet_scan('hf://datasets/samansmink/duckdb_ci_private/hive_data/**/*.parquet', FILENAME=1, hive_partitioning=0);

@@ -10,6 +10,7 @@
 
 namespace duckdb_httplib_openssl {
 struct Response;
+struct Result;
 class Client;
 } // namespace duckdb_httplib_openssl
 
@@ -157,6 +158,10 @@ public:
 protected:
 	virtual duckdb::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, FileOpenFlags flags,
 	                                                        optional_ptr<FileOpener> opener);
+
+	static duckdb::unique_ptr<ResponseWrapper> RunRequestWithRetry(
+	    const std::function<duckdb_httplib_openssl::Result(void)> &request, string &url, string method,
+	    const HTTPParams &params, const std::function<void(void)> &retry_cb = {});
 
 private:
 	// Global cache

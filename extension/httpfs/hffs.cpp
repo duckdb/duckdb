@@ -50,7 +50,7 @@ static string ParseNextUrlFromLinkHeader(const string &link_header_content) {
 		}
 	}
 
-	return "";
+	throw IOException("Failed to parse Link header for paginated response, pagination support");
 }
 
 HFFileHandle::~HFFileHandle() {};
@@ -61,47 +61,53 @@ void HFFileHandle::InitializeClient() {
 
 string HuggingFaceFileSystem::ListHFRequest(ParsedHFUrl &url, HTTPParams &http_params, string &next_page_url,
                                             optional_ptr<HTTPState> state) {
-	string full_list_path = HuggingFaceFileSystem::GetTreeUrl(url);
 	HeaderMap header_map;
 	if (!http_params.bearer_token.empty()) {
 		header_map["Authorization"] = "Bearer " + http_params.bearer_token;
 	}
 	auto headers = initialize_http_headers(header_map);
-
-	auto client = HTTPFileSystem::GetClient(http_params, url.endpoint.c_str());
-
 	string link_header_result;
 
+	auto client = HTTPFileSystem::GetClient(http_params, url.endpoint.c_str());
 	std::stringstream response;
-	auto res = client->Get(
-	    full_list_path.c_str(), *headers,
-	    [&](const duckdb_httplib_openssl::Response &response) {
-		    if (response.status >= 400) {
-			    throw HTTPException(response, "HTTP GET error on '%s' (HTTP %d)", full_list_path, response.status);
-		    }
-		    auto link_res = response.headers.find("link");
-		    if (link_res != response.headers.end()) {
-			    link_header_result = link_res->second;
-		    }
-		    return true;
-	    },
-	    [&](const char *data, size_t data_length) {
-		    if (state) {
-			    state->total_bytes_received += data_length;
-		    }
-		    response << string(data, data_length);
-		    return true;
-	    });
-	if (state) {
-		state->get_count++;
-	}
-	if (res.error() != duckdb_httplib_openssl::Error::Success) {
-		throw IOException(to_string(res.error()) + " error for HTTP GET to '" + full_list_path + "'");
+
+	std::function<duckdb_httplib_openssl::Result(void)> request([&]() {
+		printf("Requesting %s\n", next_page_url.c_str());
+		if (state) {
+			state->get_count++;
+		}
+
+		return client->Get(
+			next_page_url.c_str(), *headers,
+			[&](const duckdb_httplib_openssl::Response &response) {
+				if (response.status >= 400) {
+					throw HTTPException(response, "HTTP GET error on '%s' (HTTP %d)", next_page_url, response.status);
+				}
+				auto link_res = response.headers.find("link");
+				if (link_res != response.headers.end()) {
+					link_header_result = link_res->second;
+				}
+				return true;
+			},
+			[&](const char *data, size_t data_length) {
+				if (state) {
+					state->total_bytes_received += data_length;
+				}
+				response << string(data, data_length);
+				return true;
+			});
+	});
+
+	auto res = RunRequestWithRetry(request, next_page_url, "GET", http_params, nullptr);
+
+	if (res->code != 200) {
+		throw IOException(res->error + " error for HTTP GET to '" + next_page_url + "'");
 	}
 
-	// TODO: test this
 	if (!link_header_result.empty()) {
 		next_page_url = ParseNextUrlFromLinkHeader(link_header_result);
+	} else {
+		next_page_url = "";
 	}
 
 	return response.str();
@@ -132,7 +138,7 @@ static bool Match(vector<string>::const_iterator key, vector<string>::const_iter
 	return key == key_end && pattern == pattern_end;
 }
 
-void ParseListResult(string &input, vector<string> &files, vector<string> &directories, const string &base_dir) {
+void ParseListResult(string &input, vector<string> &files, vector<string> &directories) {
 	enum parse_entry { FILE, DIR, UNKNOWN };
 	idx_t idx = 0;
 	idx_t nested = 0;
@@ -240,16 +246,17 @@ vector<string> HuggingFaceFileSystem::Glob(const string &path, FileOpener *opene
 	// Loop over the paths and paginated responses for each path
 	while (true) {
 		if (next_page_url.empty() && !dirs.empty()) {
-			// Done with previous dir, but there are more dirs
+			// Done with previous dir, load the next one
 			curr_hf_path.path = dirs.back();
 			dirs.pop_back();
+			next_page_url = HuggingFaceFileSystem::GetTreeUrl(curr_hf_path);
 		} else if (next_page_url.empty()) {
 			// No more pages to read, also no more dirs
 			break;
 		}
 
 		auto response_str = ListHFRequest(curr_hf_path, http_params, next_page_url, http_state);
-		ParseListResult(response_str, files, dirs, curr_hf_path.path);
+		ParseListResult(response_str, files, dirs);
 	}
 
 	vector<string> pattern_splits = StringUtil::Split(parsed_glob_url.path, "/");
@@ -377,7 +384,7 @@ string HuggingFaceFileSystem::GetTreeUrl(const ParsedHFUrl &url) {
 	http_url = JoinPath(http_url, url.repository);
 	http_url = JoinPath(http_url, "tree");
 	http_url = JoinPath(http_url, url.revision);
-	http_url += url.path;
+	http_url += url.path + "?per_page=1";
 
 	return http_url;
 }

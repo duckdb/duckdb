@@ -91,9 +91,9 @@ void HTTPFileSystem::ParseUrl(string &url, string &path_out, string &proto_host_
 
 // Retry the request performed by fun using the exponential backoff strategy defined in params. Before retry, the
 // retry callback is called
-static duckdb::unique_ptr<ResponseWrapper>
-RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &request, string &url, string method,
-                    const HTTPParams &params, const std::function<void(void)> &retry_cb = {}) {
+duckdb::unique_ptr<ResponseWrapper>
+HTTPFileSystem::RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &request, string &url, string method,
+                    const HTTPParams &params, const std::function<void(void)> &retry_cb) {
 	idx_t tries = 0;
 	while (true) {
 		std::exception_ptr caught_e = nullptr;
