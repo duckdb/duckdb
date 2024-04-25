@@ -1,0 +1,52 @@
+# name: test/sql/upsert/upsert_lambda.test
+# group: [upsert]
+
+statement ok
+pragma enable_verification;
+
+statement ok
+create or replace table foo(bar int primary key, baz varchar, other varchar[], other2 int);
+
+statement ok
+insert into foo
+select 1, '', ['a', 'b', 'c'], 7
+on conflict do
+update set
+  baz = list_reduce(
+    excluded.other,
+    (x, y) -> x || ' || ' || y
+  )
+;
+
+statement ok
+insert into foo
+select 1, '', ['a', 'b', 'c'], 3
+on conflict do
+update set
+  baz = list_reduce(
+    excluded.other,
+    (x, y) -> x || ' || ' || y
+  )
+;
+
+query IIII
+select * from foo;
+----
+1	a || b || c	[a, b, c]	7
+
+statement ok
+insert into foo
+select 1, '', ['1', '2'], 9
+on conflict do
+update set
+  baz = list_reduce(
+    excluded.other,
+    (x, y) -> x || ' || ' || y
+  ),
+  other2 = other2
+;
+
+query IIII
+select * from foo;
+----
+1	1 || 2	[a, b, c]	7

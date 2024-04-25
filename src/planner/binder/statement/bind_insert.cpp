@@ -54,9 +54,9 @@ void ReplaceDefaultExpression(unique_ptr<ParsedExpression> &expr, const ColumnDe
 	expr = ExpandDefaultExpression(column);
 }
 
-void QualifyColumnReferences(unique_ptr<ParsedExpression> &expr, const string &table_name) {
+void QualifyColumnReferences(unique_ptr<ParsedExpression> &expr, const string &table_name, bool toggle = true) {
 	// To avoid ambiguity with 'excluded', we explicitly qualify all column references
-	if (expr->type == ExpressionType::COLUMN_REF) {
+	if (toggle && expr->type == ExpressionType::COLUMN_REF) {
 		auto &column_ref = expr->Cast<ColumnRefExpression>();
 		if (column_ref.IsQualified()) {
 			return;
@@ -64,8 +64,11 @@ void QualifyColumnReferences(unique_ptr<ParsedExpression> &expr, const string &t
 		auto column_name = column_ref.GetColumnName();
 		expr = make_uniq<ColumnRefExpression>(column_name, table_name);
 	}
+	if (expr->type == ExpressionType::LAMBDA) {
+		toggle = false;
+	}
 	ParsedExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<ParsedExpression> &child) { QualifyColumnReferences(child, table_name); });
+	    *expr, [&](unique_ptr<ParsedExpression> &child) { QualifyColumnReferences(child, table_name, toggle); });
 }
 
 // Replace binding.table_index with 'dest' if it's 'source'
