@@ -601,16 +601,16 @@ unique_ptr<GlobalTableFunctionState> ParquetMetaDataInit(ClientContext &context,
 	auto result = make_uniq<ParquetMetaDataOperatorData>(context, bind_data.return_types);
 	switch (TYPE) {
 	case ParquetMetadataOperatorType::SCHEMA:
-		result->LoadSchemaData(context, bind_data.return_types, bind_data.file_list->GetFile(0));
+		result->LoadSchemaData(context, bind_data.return_types, bind_data.file_list->GetFirstFile());
 		break;
 	case ParquetMetadataOperatorType::META_DATA:
-		result->LoadRowGroupMetadata(context, bind_data.return_types, bind_data.file_list->GetFile(0));
+		result->LoadRowGroupMetadata(context, bind_data.return_types, bind_data.file_list->GetFirstFile());
 		break;
 	case ParquetMetadataOperatorType::KEY_VALUE_META_DATA:
-		result->LoadKeyValueMetaData(context, bind_data.return_types, bind_data.file_list->GetFile(0));
+		result->LoadKeyValueMetaData(context, bind_data.return_types, bind_data.file_list->GetFirstFile());
 		break;
 	case ParquetMetadataOperatorType::FILE_META_DATA:
-		result->LoadFileMetaData(context, bind_data.return_types, bind_data.file_list->GetFile(0));
+		result->LoadFileMetaData(context, bind_data.return_types, bind_data.file_list->GetFirstFile());
 		break;
 	default:
 		throw InternalException("Unsupported ParquetMetadataOperatorType");

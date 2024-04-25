@@ -224,7 +224,7 @@ static void InitializeParquetReader(ParquetReader &reader, const ParquetReadBind
 	if (bind_data.parquet_options.schema.empty()) {
 		bind_data.multi_file_reader->InitializeReader(reader, parquet_options.file_options, bind_data.reader_bind,
 		                                              bind_data.types, bind_data.names, global_column_ids,
-		                                              table_filters, bind_data.files->GetFile(0), context);
+		                                              table_filters, bind_data.files->GetFirstFile(), context);
 		return;
 	}
 
@@ -447,6 +447,7 @@ public:
 		auto result = make_uniq<ParquetReadBindData>();
 		result->multi_file_reader = std::move(multi_file_reader);
 		result->files = std::move(files);
+		bool bound_on_first_file = true;
 
 		// Firstly, we try to use the multifilereader to bind
 		if (result->multi_file_reader->Bind(parquet_options.file_options, *result->files, result->types, result->names,
@@ -456,6 +457,9 @@ public:
 			// then we are done.
 			result->multi_file_reader->BindOptions(parquet_options.file_options, *result->files, result->types,
 			                                       result->names, result->reader_bind);
+
+			// We don't actually know how the bind was performed here: the MultiFileReader has implemented a custom bind
+			bound_on_first_file = false;
 		} else if (!parquet_options.schema.empty()) {
 			// a schema was supplied
 			result->reader_bind = BindSchema(context, result->types, result->names, *result, parquet_options);
@@ -470,8 +474,7 @@ public:
 			names = result->names;
 		} else {
 			if (return_types.size() != result->types.size()) {
-				auto raw_file_list = result->files->GetPaths();
-				auto file_string = StringUtil::Join(raw_file_list, ",");
+				auto file_string = bound_on_first_file ? result->files->GetFirstFile() : StringUtil::Join(result->files->GetPaths(), ",");
 				throw std::runtime_error(StringUtil::Format(
 				    "Failed to read file(s) \"%s\" - column count mismatch: expected %d columns but found %d",
 				    file_string, return_types.size(), result->types.size()));
@@ -537,16 +540,16 @@ public:
 		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
 		auto &gstate = global_state->Cast<ParquetReadGlobalState>();
 
-		auto full_file_list = bind_data.files->GetAllFiles();
-		if (full_file_list.empty()) {
+		auto total_file_count = bind_data.files->GetTotalFileCount();
+		if (total_file_count == 0) {
 			return 100.0;
 		}
 		if (bind_data.initial_file_cardinality == 0) {
-			return (100.0 * (gstate.file_index + 1)) / full_file_list.size();
+			return (100.0 * (gstate.file_index + 1)) / total_file_count;
 		}
 		auto percentage = MinValue<double>(
 		    100.0, (bind_data.chunk_count * STANDARD_VECTOR_SIZE * 100.0 / bind_data.initial_file_cardinality));
-		return (percentage + 100.0 * gstate.file_index) / full_file_list.size();
+		return (percentage + 100.0 * gstate.file_index) / total_file_count;
 	}
 
 	static unique_ptr<LocalTableFunctionState>
@@ -571,7 +574,7 @@ public:
 		auto &bind_data = input.bind_data->CastNoConst<ParquetReadBindData>();
 		auto result = make_uniq<ParquetReadGlobalState>();
 
-		if (bind_data.files->GetFile(0).empty()) {
+		if (bind_data.files->IsEmpty()) {
 			result->readers = {};
 		} else if (!bind_data.union_readers.empty()) {
 			vector<string> full_file_list = bind_data.files->GetAllFiles();
@@ -584,7 +587,7 @@ public:
 			}
 		} else if (bind_data.initial_reader) {
 			// Ensure the initial reader was actually constructed from the first file
-			if (bind_data.initial_reader->file_name == bind_data.files->GetFile(0)) {
+			if (bind_data.initial_reader->file_name == bind_data.files->GetFirstFile()) {
 				result->readers = {bind_data.initial_reader};
 			} else {
 				// FIXME This should not happen: didn't want to break things but this should probably be an
@@ -636,7 +639,7 @@ public:
 	static void ParquetScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
 	                                 const TableFunction &function) {
 		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
-		serializer.WriteProperty(100, "files", bind_data.files->GetPaths());
+		serializer.WriteProperty(100, "files", bind_data.files->GetAllFiles());
 		serializer.WriteProperty(101, "types", bind_data.types);
 		serializer.WriteProperty(102, "names", bind_data.names);
 		serializer.WriteProperty(103, "parquet_options", bind_data.parquet_options);
@@ -673,12 +676,12 @@ public:
 				data.all_columns.Reset();
 				data.reader->Scan(data.scan_state, data.all_columns);
 				bind_data.multi_file_reader->FinalizeChunk(context, bind_data.reader_bind, data.reader->reader_data,
-				                                           data.all_columns, data.reader->file_name);
+				                                           data.all_columns);
 				output.ReferenceColumns(data.all_columns, gstate.projection_ids);
 			} else {
 				data.reader->Scan(data.scan_state, output);
 				bind_data.multi_file_reader->FinalizeChunk(context, bind_data.reader_bind, data.reader->reader_data,
-				                                           output, data.reader->file_name);
+				                                           output);
 			}
 
 			bind_data.chunk_count++;
@@ -694,13 +697,13 @@ public:
 	static unique_ptr<NodeStatistics> ParquetCardinality(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = bind_data->Cast<ParquetReadBindData>();
 		// TODO: reconsider fully expanding filelist for cardinality estimation; hinders potential optimization?
-		return make_uniq<NodeStatistics>(data.initial_file_cardinality * data.files->GetAllFiles().size());
+		return make_uniq<NodeStatistics>(data.initial_file_cardinality * data.files->GetTotalFileCount());
 	}
 
 	static idx_t ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = bind_data->Cast<ParquetReadBindData>();
 
-		if (!data.files->GetFile(0).empty() && !data.files->GetFile(1).empty()) {
+		if (data.files->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
 			return TaskScheduler::GetScheduler(context).NumberOfThreads();
 		}
 

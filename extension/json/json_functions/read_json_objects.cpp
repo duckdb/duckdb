@@ -14,10 +14,10 @@ unique_ptr<FunctionData> ReadJSONObjectsBind(ClientContext &context, TableFuncti
 	return_types.push_back(LogicalType::JSON());
 	names.emplace_back("json");
 
-	SimpleMultiFileList file_list(bind_data->files);
-
+	SimpleMultiFileList file_list(std::move(bind_data->files));
 	MultiFileReader().BindOptions(bind_data->options.file_options, file_list, return_types, names,
 	                              bind_data->reader_bind);
+	bind_data->files = file_list.ToStringVector();
 
 	return std::move(bind_data);
 }
@@ -47,10 +47,7 @@ static void ReadJSONObjectsFunction(ClientContext &context, TableFunctionInput &
 	output.SetCardinality(count);
 
 	if (output.size() != 0) {
-		// TODO: pass current file
-		string current_file = "";
-		MultiFileReader().FinalizeChunk(context, gstate.bind_data.reader_bind, lstate.GetReaderData(), output,
-		                                current_file);
+		MultiFileReader().FinalizeChunk(context, gstate.bind_data.reader_bind, lstate.GetReaderData(), output);
 	}
 }
 

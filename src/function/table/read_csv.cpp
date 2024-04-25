@@ -88,8 +88,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		                      "AUTO_DETECT=TRUE) to automatically guess columns.");
 	}
 	if (options.auto_detect && !options.file_options.union_by_name) {
-		options.file_path = multi_file_list->GetFile(0);
-		result->buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, multi_file_list->GetFile(0), 0);
+		options.file_path = multi_file_list->GetFirstFile();
+		result->buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, multi_file_list->GetFirstFile(), 0);
 		CSVSniffer sniffer(options, result->buffer_manager, CSVStateMachineCache::Get(context),
 		                   {&return_types, &names});
 		auto sniffer_result = sniffer.SniffCSV();
@@ -223,8 +223,7 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 	do {
 		if (output.size() != 0) {
 			MultiFileReader().FinalizeChunk(context, bind_data.reader_bind,
-			                                csv_local_state.csv_reader->csv_file_scan->reader_data, output,
-			                                csv_local_state.csv_reader->csv_file_scan->file_path);
+			                                csv_local_state.csv_reader->csv_file_scan->reader_data, output);
 			break;
 		}
 		if (csv_local_state.csv_reader->FinishedIterator()) {

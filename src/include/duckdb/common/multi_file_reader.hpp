@@ -82,6 +82,12 @@ struct MultiFileReaderData {
 	unordered_map<column_t, LogicalType> cast_map;
 };
 
+enum class FileExpandResult : uint8_t {
+	NO_FILES,
+	SINGLE_FILE,
+	MULTIPLE_FILES
+};
+
 // Abstract base class for lazily generated list of file paths/globs
 class MultiFileList {
 public:
@@ -99,6 +105,12 @@ public:
 
 	//! Interface for usage of MultiFileList objects
 
+	//! Checks whether the MultiFileList is empty (without expanding it fully)
+	virtual bool IsEmpty();
+	//! Returns the first file or an empty string if GetTotalFileCount() == 0
+	virtual string GetFirstFile();
+	//! Returns a FileExpandResult to give a very rough idea of the total count
+	virtual FileExpandResult GetExpandResult();
 	//! Returns the current size of the expanded size
 	virtual idx_t GetCurrentSize();
 	//! Completely expands the list, allowing fast access to it and final size determination. Should only be used
@@ -192,8 +204,7 @@ struct MultiFileReader {
 	                                        optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data);
 	//! Finalize the reading of a chunk - applying any constants that are required
 	DUCKDB_API virtual void FinalizeChunk(ClientContext &context, const MultiFileReaderBindData &bind_data,
-	                                      const MultiFileReaderData &reader_data, DataChunk &chunk,
-	                                      const string &filename);
+	                                      const MultiFileReaderData &reader_data, DataChunk &chunk);
 
 	//! Can remain static?
 
@@ -234,7 +245,7 @@ struct MultiFileReader {
 		} else {
 			// Default behaviour: get the 1st file and use its schema for scanning all files
 			shared_ptr<READER_CLASS> reader;
-			reader = make_shared_ptr<READER_CLASS>(context, files.GetFile(0), options);
+			reader = make_shared_ptr<READER_CLASS>(context, files.GetFirstFile(), options);
 			return_types = reader->return_types;
 			names = reader->names;
 			result.Initialize(std::move(reader));
