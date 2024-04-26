@@ -195,11 +195,14 @@ public:
 	optional_ptr<SQLStatement> GetRootStatement() {
 		return root_statement;
 	}
+	void SetRootStatement(SQLStatement &statement) {
+		root_statement = &statement;
+	}
 
 	void SetCanContainNulls(bool can_contain_nulls);
 	void SetAlwaysRequireRebind();
 	BoundStatement Bind(unique_ptr<BoundQueryNode> bound_node);
-	unique_ptr<BoundQueryNode> BindNode(SelectNode &node);
+	unique_ptr<BoundQueryNode> BindNode(QueryNode &node);
 
 private:
 	//! The parent binder (if any)
@@ -287,7 +290,7 @@ private:
 	unique_ptr<BoundQueryNode> BindNode(SetOperationNode &node);
 	unique_ptr<BoundQueryNode> BindNode(RecursiveCTENode &node);
 	unique_ptr<BoundQueryNode> BindNode(CTENode &node);
-	unique_ptr<BoundQueryNode> BindNode(QueryNode &node);
+	unique_ptr<BoundQueryNode> BindNode(SelectNode &node);
 
 	unique_ptr<LogicalOperator> VisitQueryNode(BoundQueryNode &node, unique_ptr<LogicalOperator> root);
 	unique_ptr<LogicalOperator> CreatePlan(BoundRecursiveCTENode &node);

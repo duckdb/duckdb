@@ -54,9 +54,10 @@ BoundStatement QueryRelation::Bind(Binder &binder) {
 	SelectStatement stmt;
 	stmt.node = GetQueryNode();
 
+	binder.SetRootStatement(stmt.Cast<SQLStatement>());
 	binder.properties.allow_stream_result = true;
 	binder.properties.return_type = StatementReturnType::QUERY_RESULT;
-	auto bound_node = binder.BindNode(stmt.node->Cast<SelectNode>());
+	auto bound_node = binder.BindNode(*stmt.node);
 	D_ASSERT(bound_node->type == QueryNodeType::SELECT_NODE);
 	auto &bound_select_node = bound_node->Cast<BoundSelectNode>();
 	if (bound_select_node.from_table->replacement_scan) {
