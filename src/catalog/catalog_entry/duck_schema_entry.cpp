@@ -33,6 +33,8 @@
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
@@ -100,6 +102,16 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction 
 	auto entry_type = entry->type;
 	auto result = entry.get();
 
+	if (transaction.context) {
+		auto &meta = MetaTransaction::Get(transaction.GetContext());
+		auto modified_database = meta.ModifiedDatabase();
+		auto &db = ParentCatalog().GetAttached();
+		if (!db.IsTemporary() && !db.IsSystem()) {
+			if (!modified_database || !RefersToSameObject(*modified_database, ParentCatalog().GetAttached())) {
+				throw InternalException("DuckSchemaEntry::AddEntryInternal called but this database is not marked as modified");
+			}
+		}
+	}
 	// first find the set for this entry
 	auto &set = GetCatalogSet(entry_type);
 	dependencies.AddDependency(*this);

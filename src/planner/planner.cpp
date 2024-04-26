@@ -13,6 +13,7 @@
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
@@ -46,6 +47,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		this->types = bound_statement.types;
 		this->plan = std::move(bound_statement.plan);
 
+
 		auto max_tree_depth = ClientConfig::GetConfig(context).max_expression_depth;
 		CheckTreeDepth(*plan, max_tree_depth);
 	} catch (const std::exception &ex) {
@@ -76,7 +78,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 			throw;
 		}
 	}
-	this->properties = binder->properties;
+	this->properties = binder->GetStatementProperties();
 	this->properties.parameter_count = parameter_count;
 	properties.bound_all_parameters = !bound_parameters.rebind && parameters_resolved;
 

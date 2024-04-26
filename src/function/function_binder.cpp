@@ -279,7 +279,7 @@ void FunctionBinder::CastToFunctionArguments(SimpleFunction &function, vector<un
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(const string &schema, const string &name,
                                                           vector<unique_ptr<Expression>> children, ErrorData &error,
-                                                          bool is_operator, Binder *binder) {
+                                                          bool is_operator, optional_ptr<Binder> binder) {
 	// bind the function
 	auto &function =
 	    Catalog::GetSystemCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, schema, name);
@@ -290,7 +290,7 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const string &schema, 
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogEntry &func,
                                                           vector<unique_ptr<Expression>> children, ErrorData &error,
-                                                          bool is_operator, Binder *binder) {
+                                                          bool is_operator, optional_ptr<Binder> binder) {
 	// bind the function
 	auto best_function = BindFunction(func.name, func.functions, children, error);
 	if (!best_function.IsValid()) {
@@ -335,15 +335,20 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogE
 			}
 		}
 	}
-	return BindScalarFunction(bound_function, std::move(children), is_operator);
+	return BindScalarFunction(bound_function, std::move(children), is_operator, binder);
 }
 
 unique_ptr<BoundFunctionExpression> FunctionBinder::BindScalarFunction(ScalarFunction bound_function,
                                                                        vector<unique_ptr<Expression>> children,
-                                                                       bool is_operator) {
+																	   bool is_operator, optional_ptr<Binder> binder) {
 	unique_ptr<FunctionData> bind_info;
 	if (bound_function.bind) {
 		bind_info = bound_function.bind(context, bound_function, children);
+	}
+	if (bound_function.get_modified_databases && binder) {
+		auto &properties = binder->GetStatementProperties();
+		FunctionModifiedDatabasesInput input(bind_info, properties.modified_databases);
+		bound_function.get_modified_databases(input);
 	}
 	// check if we need to add casts to the children
 	CastToFunctionArguments(bound_function, children);

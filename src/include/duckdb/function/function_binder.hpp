@@ -50,14 +50,15 @@ public:
 
 	DUCKDB_API unique_ptr<Expression> BindScalarFunction(const string &schema, const string &name,
 	                                                     vector<unique_ptr<Expression>> children, ErrorData &error,
-	                                                     bool is_operator = false, Binder *binder = nullptr);
+	                                                     bool is_operator = false, optional_ptr<Binder> binder = nullptr);
 	DUCKDB_API unique_ptr<Expression> BindScalarFunction(ScalarFunctionCatalogEntry &function,
 	                                                     vector<unique_ptr<Expression>> children, ErrorData &error,
-	                                                     bool is_operator = false, Binder *binder = nullptr);
+	                                                     bool is_operator = false, optional_ptr<Binder> binder = nullptr);
 
 	DUCKDB_API unique_ptr<BoundFunctionExpression> BindScalarFunction(ScalarFunction bound_function,
 	                                                                  vector<unique_ptr<Expression>> children,
-	                                                                  bool is_operator = false);
+	                                                                  bool is_operator = false,
+																	  optional_ptr<Binder> binder = nullptr);
 
 	DUCKDB_API unique_ptr<BoundAggregateExpression>
 	BindAggregateFunction(AggregateFunction bound_function, vector<unique_ptr<Expression>> children,

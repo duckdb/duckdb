@@ -127,7 +127,6 @@ BoundStatement Binder::BindWithCTE(T &statement) {
 			tail.child_binder->AddCorrelatedColumn(c);
 		}
 		MoveCorrelatedExpressions(*tail.child_binder);
-		properties = tail.child_binder->properties;
 
 		// extract operator below root operation
 		auto plan = std::move(bound_statement.plan->children[0]);
@@ -377,6 +376,11 @@ idx_t Binder::GenerateTableIndex() {
 	return root_binder.bound_tables++;
 }
 
+StatementProperties &Binder::GetStatementProperties() {
+	auto &root_binder = GetRootBinder();
+	return root_binder.prop;
+}
+
 void Binder::PushExpressionBinder(ExpressionBinder &binder) {
 	GetActiveBinders().push_back(binder);
 }
@@ -489,15 +493,8 @@ void Binder::SetCanContainNulls(bool can_contain_nulls_p) {
 }
 
 void Binder::SetAlwaysRequireRebind() {
-	reference<Binder> current_binder = *this;
-	while (true) {
-		auto &current = current_binder.get();
-		current.properties.always_require_rebind = true;
-		if (!current.parent) {
-			break;
-		}
-		current_binder = *current.parent;
-	}
+	auto &properties = GetStatementProperties();
+	properties.always_require_rebind = true;
 }
 
 void Binder::AddTableName(string table_name) {
@@ -573,6 +570,7 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 	// where the data modification doesn't take place until the streamed result is exhausted. Once a row is
 	// returned, it should be guaranteed that the row has been inserted.
 	// see https://github.com/duckdb/duckdb/issues/8310
+	auto &properties = GetStatementProperties();
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::QUERY_RESULT;
 	return result;

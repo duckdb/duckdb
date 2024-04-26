@@ -51,6 +51,15 @@ struct FunctionStatisticsInput {
 	unique_ptr<Expression> *expr_ptr;
 };
 
+struct FunctionModifiedDatabasesInput {
+	FunctionModifiedDatabasesInput(optional_ptr<FunctionData> bind_data_p, unordered_set<string> &modified_databases_p) :
+	    bind_data(bind_data_p), modified_databases(modified_databases_p) {
+	}
+
+	optional_ptr<FunctionData> bind_data;
+	unordered_set<string> &modified_databases;
+};
+
 //! The scalar function type
 typedef std::function<void(DataChunk &, ExpressionState &, Vector &)> scalar_function_t;
 //! The type to bind the scalar function and to create the function data
@@ -66,6 +75,8 @@ typedef void (*dependency_function_t)(BoundFunctionExpression &expr, LogicalDepe
 typedef unique_ptr<BaseStatistics> (*function_statistics_t)(ClientContext &context, FunctionStatisticsInput &input);
 //! The type to bind lambda-specific parameter types
 typedef LogicalType (*bind_lambda_function_t)(const idx_t parameter_idx, const LogicalType &list_child_type);
+//! The type to bind lambda-specific parameter types
+typedef void (*get_modified_databases_t)(FunctionModifiedDatabasesInput &input);
 
 typedef void (*function_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                      const ScalarFunction &function);
@@ -102,6 +113,8 @@ public:
 	function_statistics_t statistics;
 	//! The lambda bind function (if any)
 	bind_lambda_function_t bind_lambda;
+	//! Gets the modified databases (if any)
+	get_modified_databases_t get_modified_databases;
 
 	function_serialize_t serialize;
 	function_deserialize_t deserialize;
