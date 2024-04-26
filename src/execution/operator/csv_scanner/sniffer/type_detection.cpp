@@ -174,6 +174,12 @@ bool CSVSniffer::CanYouCastIt(const string_t value, const LogicalType &type, con
 		dtime_t dummy_value;
 		return Time::TryConvertTime(value_ptr, value_size, pos, dummy_value, true);
 	}
+	case LogicalTypeId::TIME_TZ: {
+		idx_t pos;
+		bool special;
+		dtime_tz_t dummy_value;
+		return Time::TryConvertTimeTZ(value_ptr, value_size, pos, dummy_value, special, true);
+	}
 	case LogicalTypeId::VARCHAR:
 		return true;
 	default: {

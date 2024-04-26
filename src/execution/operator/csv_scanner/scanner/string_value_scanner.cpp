@@ -235,6 +235,13 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		                               static_cast<dtime_t *>(vector_ptr[chunk_col_id])[number_of_rows], false);
 		break;
 	}
+	case LogicalTypeId::TIME_TZ: {
+		idx_t pos;
+		bool special;
+		success = Time::TryConvertTimeTZ(
+		    value_ptr, size, pos, static_cast<dtime_tz_t *>(vector_ptr[chunk_col_id])[number_of_rows], special, false);
+		break;
+	}
 	case LogicalTypeId::TIMESTAMP: {
 		if (!timestamp_format.Empty()) {
 			success = timestamp_format.TryParseTimestamp(
@@ -1213,8 +1220,9 @@ bool StringValueScanner::CanDirectlyCast(const LogicalType &type,
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIMESTAMP:
-	case LogicalType::VARCHAR:
 	case LogicalType::TIME:
+	case LogicalType::TIME_TZ:
+	case LogicalType::VARCHAR:
 		return true;
 	default:
 		return false;
