@@ -194,6 +194,8 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	m.def("begin", &DuckDBPyConnection::Begin, "Start a new transaction");
 	m.def("commit", &DuckDBPyConnection::Commit, "Commit changes performed within a transaction");
 	m.def("rollback", &DuckDBPyConnection::Rollback, "Roll back changes performed within a transaction");
+	m.def("checkpoint", &DuckDBPyConnection::Checkpoint,
+	      "Synchronizes data in the write-ahead log (WAL) to the database data file (no-op for in-memory connections)");
 	m.def("append", &DuckDBPyConnection::Append, "Append the passed DataFrame to the named table",
 	      py::arg("table_name"), py::arg("df"), py::kw_only(), py::arg("by_name") = false);
 	m.def("register", &DuckDBPyConnection::RegisterPythonObject,
@@ -405,6 +407,7 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 
 	connection_module.def("__enter__", &DuckDBPyConnection::Enter)
 	    .def("__exit__", &DuckDBPyConnection::Exit, py::arg("exc_type"), py::arg("exc"), py::arg("traceback"));
+	connection_module.def("__del__", &DuckDBPyConnection::Close);
 
 	InitializeConnectionMethods(connection_module);
 	connection_module.def_property_readonly("description", &DuckDBPyConnection::GetDescription,
@@ -1305,6 +1308,11 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Rollback() {
 	return shared_from_this();
 }
 
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Checkpoint() {
+	ExecuteFromString("CHECKPOINT");
+	return shared_from_this();
+}
+
 Optional<py::list> DuckDBPyConnection::GetDescription() {
 	if (!result) {
 		return py::none();
@@ -1321,6 +1329,7 @@ void DuckDBPyConnection::Close() {
 	connection = nullptr;
 	database = nullptr;
 	temporary_views.clear();
+	// https://peps.python.org/pep-0249/#Connection.close
 	for (auto &cur : cursors) {
 		cur->Close();
 	}

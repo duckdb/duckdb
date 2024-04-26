@@ -5,6 +5,7 @@ import os
 import pandas as pd
 import pytest
 from conftest import ArrowPandas, NumpyPandas
+import datetime
 
 from duckdb.typing import BIGINT, VARCHAR, TINYINT, BOOLEAN
 
@@ -88,6 +89,37 @@ class TestRelation(object):
             ('three', 3),
             ('four', 4),
         ]
+
+    def test_relation_fetch_df_chunk(self, duckdb_cursor):
+        duckdb_cursor.execute(f"create table tbl as select * from range({duckdb.__standard_vector_size__ * 3})")
+
+        rel = duckdb_cursor.table('tbl')
+        # default arguments
+        df1 = rel.fetch_df_chunk()
+        assert len(df1) == duckdb.__standard_vector_size__
+
+        df2 = rel.fetch_df_chunk(2)
+        assert len(df2) == duckdb.__standard_vector_size__ * 2
+
+        duckdb_cursor.execute(
+            f"create table dates as select (DATE '2021/02/21' + INTERVAL (i) DAYS)::DATE a from range({duckdb.__standard_vector_size__ * 4}) t(i)"
+        )
+
+        rel = duckdb_cursor.table('dates')
+        # default arguments
+        df1 = rel.fetch_df_chunk()
+        assert len(df1) == duckdb.__standard_vector_size__
+        assert df1['a'][0].__class__ == pd.Timestamp
+
+        # date as object
+        df1 = rel.fetch_df_chunk(date_as_object=True)
+        assert len(df1) == duckdb.__standard_vector_size__
+        assert df1['a'][0].__class__ == datetime.date
+
+        # vectors and date as object
+        df1 = rel.fetch_df_chunk(2, date_as_object=True)
+        assert len(df1) == duckdb.__standard_vector_size__ * 2
+        assert df1['a'][0].__class__ == datetime.date
 
     def test_distinct_operator(self):
         conn = duckdb.connect()
