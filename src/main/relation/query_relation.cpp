@@ -50,26 +50,6 @@ unique_ptr<SelectStatement> QueryRelation::GetSelectStatement() {
 	return unique_ptr_cast<SQLStatement, SelectStatement>(select_stmt->Copy());
 }
 
-BoundStatement QueryRelation::Bind(Binder &binder) {
-	SelectStatement stmt;
-	stmt.node = GetQueryNode();
-
-	binder.SetRootStatement(stmt.Cast<SQLStatement>());
-	binder.properties.allow_stream_result = true;
-	binder.properties.return_type = StatementReturnType::QUERY_RESULT;
-	auto bound_node = binder.BindNode(*stmt.node);
-	D_ASSERT(bound_node->type == QueryNodeType::SELECT_NODE);
-	auto &bound_select_node = bound_node->Cast<BoundSelectNode>();
-	if (bound_select_node.from_table->replacement_scan) {
-		// A replacement scan took place to bind this node, replace the original with it
-		auto replacement = std::move(bound_select_node.from_table->replacement_scan);
-		auto &select_node = select_stmt->node->Cast<SelectNode>();
-		select_node.from_table = std::move(replacement);
-	}
-	auto result = binder.Bind(std::move(bound_node));
-	return result;
-}
-
 unique_ptr<QueryNode> QueryRelation::GetQueryNode() {
 	auto select = GetSelectStatement();
 	return std::move(select->node);

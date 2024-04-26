@@ -71,10 +71,7 @@ unique_ptr<BoundTableRef> Binder::BindWithReplacementScan(ClientContext &context
 		} else {
 			throw InternalException("Replacement scan should return either a table function or a subquery");
 		}
-		auto copied_replacement = replacement_function->Copy();
-		auto result = Bind(*copied_replacement);
-		result->replacement_scan = std::move(replacement_function);
-		return result;
+		return Bind(*replacement_function);
 	}
 	return nullptr;
 }

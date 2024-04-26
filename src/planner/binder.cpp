@@ -223,7 +223,9 @@ unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
 	return result;
 }
 
-BoundStatement Binder::Bind(unique_ptr<BoundQueryNode> bound_node) {
+BoundStatement Binder::Bind(QueryNode &node) {
+	auto bound_node = BindNode(node);
+
 	BoundStatement result;
 	result.names = bound_node->names;
 	result.types = bound_node->types;
@@ -231,11 +233,6 @@ BoundStatement Binder::Bind(unique_ptr<BoundQueryNode> bound_node) {
 	// and plan it
 	result.plan = CreatePlan(*bound_node);
 	return result;
-}
-
-BoundStatement Binder::Bind(QueryNode &node) {
-	auto bound_node = BindNode(node);
-	return Bind(std::move(bound_node));
 }
 
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundQueryNode &node) {

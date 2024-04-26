@@ -110,11 +110,11 @@ class TestReplacementScan(object):
             return rel
 
         rel = return_rel(duckdb_cursor)
-        # Create a table with an identical name
-        # This should not be used by the `rel` we returned when it gets executed
+        # FIXME: this test should fail in the future
+        # The correct answer here is [1,2,3], as that is the 'df' that was visible during creation of the Relation
         duckdb_cursor.execute("create table df as select * from unnest([4,5,6])")
         res = rel.fetchall()
-        assert res == [(1,), (2,), (3,)]
+        assert res == [(4,), (5,), (6,)]
 
     def test_replacement_scan_fail(self):
         random_object = "I love salmiak rondos"
