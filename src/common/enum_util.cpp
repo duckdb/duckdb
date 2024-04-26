@@ -58,6 +58,7 @@
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/file_open_flags.hpp"
+#include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/sort/partition_state.hpp"
 #include "duckdb/common/types.hpp"
@@ -1950,6 +1951,34 @@ ExplainType EnumUtil::FromString<ExplainType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "EXPLAIN_ANALYZE")) {
 		return ExplainType::EXPLAIN_ANALYZE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<ExponentType>(ExponentType value) {
+	switch(value) {
+	case ExponentType::NONE:
+		return "NONE";
+	case ExponentType::POSITIVE:
+		return "POSITIVE";
+	case ExponentType::NEGATIVE:
+		return "NEGATIVE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+ExponentType EnumUtil::FromString<ExponentType>(const char *value) {
+	if (StringUtil::Equals(value, "NONE")) {
+		return ExponentType::NONE;
+	}
+	if (StringUtil::Equals(value, "POSITIVE")) {
+		return ExponentType::POSITIVE;
+	}
+	if (StringUtil::Equals(value, "NEGATIVE")) {
+		return ExponentType::NEGATIVE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
