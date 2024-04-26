@@ -94,6 +94,11 @@ vector<string> MultiFileList::ToStringVector() {
 	return std::move(expanded_files);
 }
 
+unique_ptr<MultiFileList> MultiFileList::Copy() {
+	ExpandAll();
+	return make_uniq<SimpleMultiFileList>(expanded_files);
+}
+
 SimpleMultiFileList::SimpleMultiFileList(vector<string> files) : MultiFileList() {
 	expanded_files = std::move(files);
 	fully_expanded = true;

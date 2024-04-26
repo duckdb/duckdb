@@ -100,11 +100,14 @@ struct ParquetReadGlobalConstantState {
 	ParquetReadGlobalConstantState(const vector<column_t> column_ids_p, TableFilterSet *filters_p) : column_ids(column_ids_p), filters(filters_p) {
 	}
 	const vector<column_t> column_ids;
-	const TableFilterSet *filters = nullptr;
+	TableFilterSet *filters = nullptr; //FIXME: make actually const
 };
 
 struct ParquetReadGlobalState : public GlobalTableFunctionState {
 	ParquetReadGlobalState(ParquetReadGlobalConstantState constant_state_p) : constant_state(std::move(constant_state_p)) {}
+
+	//! The files to be scanned, copied from Bind Phase
+	unique_ptr<MultiFileList> files;
 
 	//! Global state that is safe for use without lock
 	const ParquetReadGlobalConstantState constant_state;
@@ -601,6 +604,9 @@ public:
 
 		auto result = make_uniq<ParquetReadGlobalState>(constant_state);
 
+		// FIXME: avoid copying the files?
+		result->files = bind_data.files->Copy();
+
 		// TODO: don't empty initialize vector?
 		if (bind_data.files->IsEmpty()) {
 			result->readers = {};
@@ -853,13 +859,6 @@ public:
 
 				auto &constant_global_state = parallel_state.constant_state;
 
-				// We need to copy the filter set to ensure can be accessed in a thread-safe manner
-				// FIXME: make const in multifilereader?
-				TableFilterSet filter_copy;
-				if (constant_global_state.filters) {
-					filter_copy = *constant_global_state.filters;
-				}
-
 				// Now we switch which lock we are holding, instead of locking the global state, we grab the lock on
 				// the file we are opening. This file lock allows threads to wait for a file to be opened.
 				parallel_lock.unlock();
@@ -868,7 +867,7 @@ public:
 				shared_ptr<ParquetReader> reader;
 				try {
 					reader = make_shared_ptr<ParquetReader>(context, file, pq_options);
-					InitializeParquetReader(*reader, bind_data, constant_global_state.column_ids, &filter_copy,
+					InitializeParquetReader(*reader, bind_data, constant_global_state.column_ids, constant_global_state.filters,
 					                        context);
 				} catch (...) {
 					parallel_lock.lock();

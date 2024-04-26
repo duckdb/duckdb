@@ -132,6 +132,9 @@ public:
 	//! DEPRECATED: should be removed once all DuckDB code can properly handle MultiFileLists
 	vector<string> ToStringVector();
 
+	//! This function creates a copy of the MultiFileList by fully expanding everything and returning a SimpleMultiFileList from that
+	virtual unique_ptr<MultiFileList> Copy();
+
 protected:
 	//! The generated files
 	vector<string> expanded_files;
