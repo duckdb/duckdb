@@ -92,7 +92,8 @@ public:
 
 class RestartCommand : public Command {
 public:
-	RestartCommand(SQLLogicTestRunner &runner);
+	bool load_extensions;
+	RestartCommand(SQLLogicTestRunner &runner, bool load_extensions);
 
 public:
 	void ExecuteInternal(ExecuteContext &context) const override;

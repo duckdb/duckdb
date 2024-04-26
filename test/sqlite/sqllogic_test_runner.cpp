@@ -77,7 +77,7 @@ void SQLLogicTestRunner::EndLoop() {
 	}
 }
 
-void SQLLogicTestRunner::LoadDatabase(string dbpath) {
+void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
 	loaded_databases.push_back(dbpath);
 
 	// restart the database with the specified db path
@@ -90,8 +90,10 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath) {
 	Reconnect();
 
 	// load any previously loaded extensions again
-	for (auto &extension : extensions) {
-		ExtensionHelper::LoadExtension(*db, extension);
+	if (load_extensions) {
+		for (auto &extension : extensions) {
+			ExtensionHelper::LoadExtension(*db, extension);
+		}
 	}
 }
 
@@ -400,7 +402,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 	}
 
 	// initialize the database with the default dbpath
-	LoadDatabase(dbpath);
+	LoadDatabase(dbpath, true);
 
 	// open the file and parse it
 	bool success = parser.OpenFile(script);
@@ -714,13 +716,16 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				config->options.access_mode = AccessMode::AUTOMATIC;
 			}
 			// now create the database file
-			LoadDatabase(dbpath);
+			LoadDatabase(dbpath, true);
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_RESTART) {
 			if (dbpath.empty()) {
 				parser.Fail("cannot restart an in-memory database, did you forget to call \"load\"?");
 			}
+
+			bool load_extensions = !(token.parameters.size() == 1 && token.parameters[0] == "no_extension_load");
+
 			// restart the current database
-			auto command = make_uniq<RestartCommand>(*this);
+			auto command = make_uniq<RestartCommand>(*this, load_extensions);
 			ExecuteCommand(std::move(command));
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_RECONNECT) {
 			auto command = make_uniq<ReconnectCommand>(*this);
