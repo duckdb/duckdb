@@ -253,6 +253,18 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		}
 		break;
 	}
+	case LogicalTypeId::TIMESTAMP_TZ: {
+		if (!timestamp_format.Empty()) {
+			success = timestamp_format.TryParseTimestamp(
+			    value_ptr, size, static_cast<timestamp_t *>(vector_ptr[chunk_col_id])[number_of_rows]);
+		} else {
+			bool has_offset;
+			string_t tz;
+			success = Timestamp::TryConvertTimestampTZ(
+			              value_ptr, size, static_cast<timestamp_t *>(vector_ptr[chunk_col_id])[number_of_rows], has_offset, tz);
+		}
+		break;
+	}
 	default: {
 		// By default, we add a string
 		// We only evaluate if a string is utf8 valid, if it's actually a varchar
@@ -1220,6 +1232,7 @@ bool StringValueScanner::CanDirectlyCast(const LogicalType &type,
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalType::TIME:
 	case LogicalType::TIME_TZ:
 	case LogicalType::VARCHAR:
@@ -1321,7 +1334,6 @@ void StringValueScanner::FinalizeChunkProcess() {
 				iterator.done = true;
 			}
 		}
-
 		// We read until the next line or until we have nothing else to read.
 		// Move to next buffer
 		if (!cur_buffer_handle) {
