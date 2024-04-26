@@ -12,7 +12,6 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/optimizer/column_binding_replacer.hpp"
 
 namespace duckdb {
 
