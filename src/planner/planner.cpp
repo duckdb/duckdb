@@ -47,7 +47,6 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		this->types = bound_statement.types;
 		this->plan = std::move(bound_statement.plan);
 
-
 		auto max_tree_depth = ClientConfig::GetConfig(context).max_expression_depth;
 		CheckTreeDepth(*plan, max_tree_depth);
 	} catch (const std::exception &ex) {

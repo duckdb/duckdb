@@ -340,7 +340,7 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogE
 
 unique_ptr<BoundFunctionExpression> FunctionBinder::BindScalarFunction(ScalarFunction bound_function,
                                                                        vector<unique_ptr<Expression>> children,
-																	   bool is_operator, optional_ptr<Binder> binder) {
+                                                                       bool is_operator, optional_ptr<Binder> binder) {
 	unique_ptr<FunctionData> bind_info;
 	if (bound_function.bind) {
 		bind_info = bound_function.bind(context, bound_function, children);

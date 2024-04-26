@@ -52,8 +52,8 @@ struct FunctionStatisticsInput {
 };
 
 struct FunctionModifiedDatabasesInput {
-	FunctionModifiedDatabasesInput(optional_ptr<FunctionData> bind_data_p, unordered_set<string> &modified_databases_p) :
-	    bind_data(bind_data_p), modified_databases(modified_databases_p) {
+	FunctionModifiedDatabasesInput(optional_ptr<FunctionData> bind_data_p, unordered_set<string> &modified_databases_p)
+	    : bind_data(bind_data_p), modified_databases(modified_databases_p) {
 	}
 
 	optional_ptr<FunctionData> bind_data;

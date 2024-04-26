@@ -108,7 +108,8 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction 
 		auto &db = ParentCatalog().GetAttached();
 		if (!db.IsTemporary() && !db.IsSystem()) {
 			if (!modified_database || !RefersToSameObject(*modified_database, ParentCatalog().GetAttached())) {
-				throw InternalException("DuckSchemaEntry::AddEntryInternal called but this database is not marked as modified");
+				throw InternalException(
+				    "DuckSchemaEntry::AddEntryInternal called but this database is not marked as modified");
 			}
 		}
 	}
