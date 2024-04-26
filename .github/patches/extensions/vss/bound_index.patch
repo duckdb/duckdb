@@ -1,0 +1,139 @@
+diff --git a/src/hnsw/hnsw_index.cpp b/src/hnsw/hnsw_index.cpp
+index 92d7c67c30..48c8f52bb1 100644
+--- a/src/hnsw/hnsw_index.cpp
++++ b/src/hnsw/hnsw_index.cpp
+@@ -122,7 +122,7 @@ HNSWIndex::HNSWIndex(const string &name, IndexConstraintType index_constraint_ty
+                      TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
+                      AttachedDatabase &db, const case_insensitive_map_t<Value> &options, const IndexStorageInfo &info,
+                      idx_t estimated_cardinality)
+-    : Index(name, TYPE_NAME, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db) {
++    : BoundIndex(name, TYPE_NAME, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db) {
+ 
+ 	if (index_constraint_type != IndexConstraintType::NONE) {
+ 		throw NotImplementedException("HNSW indexes do not support unique or primary key constraints");
+@@ -186,7 +186,7 @@ HNSWIndex::HNSWIndex(const string &name, IndexConstraintType index_constraint_ty
+ 		config.connectivity_base = m0_opt->second.GetValue<int32_t>();
+ 	}
+ 
+-	index = unum::usearch::index_dense_t::make(metric, config);
++	index = unum::usearch::index_dense_gt<row_t>::make(metric, config);
+ 
+ 	auto lock = rwlock.GetExclusiveLock();
+ 	// Is this a new index or an existing index?
+@@ -310,7 +310,7 @@ unique_ptr<IndexScanState> HNSWIndex::InitializeScan(float *query_vector, idx_t
+ 	state->total_rows = search_result.size();
+ 	state->row_ids = make_uniq_array<row_t>(search_result.size());
+ 
+-	search_result.dump_to(reinterpret_cast<uint64_t *>(state->row_ids.get()));
++	search_result.dump_to(state->row_ids.get());
+ 	return std::move(state);
+ }
+ 
+@@ -421,6 +421,9 @@ void HNSWIndex::Delete(IndexLock &lock, DataChunk &input, Vector &rowid_vec) {
+ 
+ 	for (idx_t i = 0; i < input.size(); i++) {
+ 		auto result = index.remove(row_id_data[i]);
++		if (!result) {
++			throw InternalException("Failed to remove from the HNSW index: %s", result.error.what());
++		}
+ 	}
+ 
+ 	index_size = index.size();
+@@ -496,7 +499,7 @@ idx_t HNSWIndex::GetInMemorySize(IndexLock &state) {
+ 	return index.memory_usage();
+ }
+ 
+-bool HNSWIndex::MergeIndexes(IndexLock &state, Index &other_index) {
++bool HNSWIndex::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
+ 	throw NotImplementedException("HNSWIndex::MergeIndexes() not implemented");
+ }
+ 
+@@ -519,7 +522,7 @@ void HNSWModule::RegisterIndex(DatabaseInstance &db) {
+ 	IndexType index_type;
+ 	index_type.name = HNSWIndex::TYPE_NAME;
+ 
+-	index_type.create_instance = [](CreateIndexInput &input) -> unique_ptr<Index> {
++	index_type.create_instance = [](CreateIndexInput &input) -> unique_ptr<BoundIndex> {
+ 		auto res = make_uniq<HNSWIndex>(input.name, input.constraint_type, input.column_ids, input.table_io_manager,
+ 		                                input.unbound_expressions, input.db, input.options, input.storage_info);
+ 		return std::move(res);
+diff --git a/src/hnsw/hnsw_index_physical_create.cpp b/src/hnsw/hnsw_index_physical_create.cpp
+index 67ba14c2af..d0e24f4dc4 100644
+--- a/src/hnsw/hnsw_index_physical_create.cpp
++++ b/src/hnsw/hnsw_index_physical_create.cpp
+@@ -33,7 +33,7 @@ PhysicalCreateHNSWIndex::PhysicalCreateHNSWIndex(LogicalOperator &op, TableCatal
+ class CreateHNSWIndexGlobalState : public GlobalSinkState {
+ public:
+ 	//! Global index to be added to the table
+-	unique_ptr<Index> global_index;
++	unique_ptr<BoundIndex> global_index;
+ 	atomic<idx_t> next_thread_id = {0};
+ };
+ 
+diff --git a/src/include/hnsw/hnsw_index.hpp b/src/include/hnsw/hnsw_index.hpp
+index 04c2470188..70b3594c6d 100644
+--- a/src/include/hnsw/hnsw_index.hpp
++++ b/src/include/hnsw/hnsw_index.hpp
+@@ -1,7 +1,7 @@
+ #pragma once
+ 
+-#include "duckdb/storage/index.hpp"
+ #include "duckdb/common/array.hpp"
++#include "duckdb/execution/index/bound_index.hpp"
+ #include "duckdb/execution/index/index_pointer.hpp"
+ #include "duckdb/execution/index/fixed_size_allocator.hpp"
+ #include "duckdb/common/unordered_map.hpp"
+@@ -18,10 +18,10 @@ struct HNSWIndexStats {
+ 	idx_t count;
+ 	idx_t capacity;
+ 	idx_t approx_size;
+-	vector<unum::usearch::index_dense_t::stats_t> level_stats;
++	vector<unum::usearch::index_dense_gt<row_t>::stats_t> level_stats;
+ };
+ 
+-class HNSWIndex : public Index {
++class HNSWIndex : public BoundIndex {
+ public:
+ 	// The type name of the HNSWIndex
+ 	static constexpr const char *TYPE_NAME = "HNSW";
+@@ -33,7 +33,7 @@ public:
+ 	          const IndexStorageInfo &info = IndexStorageInfo(), idx_t estimated_cardinality = 0);
+ 
+ 	//! The actual usearch index
+-	unum::usearch::index_dense_t index;
++	unum::usearch::index_dense_gt<row_t> index;
+ 
+ 	//! Block pointer to the root of the index
+ 	IndexPointer root_block_ptr;
+@@ -77,7 +77,7 @@ public:
+ 
+ 	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
+ 	//! index must also be locked during the merge
+-	bool MergeIndexes(IndexLock &state, Index &other_index) override;
++	bool MergeIndexes(IndexLock &state, BoundIndex &other_index) override;
+ 
+ 	//! Traverses an HNSWIndex and vacuums the qualifying nodes. The lock obtained from InitializeLock must be held
+ 	void Vacuum(IndexLock &state) override;
+diff --git a/test/sql/hnsw/hnsw_insert_wal.test b/test/sql/hnsw/hnsw_insert_wal.test
+index 80e0558540..f21eab6396 100644
+--- a/test/sql/hnsw/hnsw_insert_wal.test
++++ b/test/sql/hnsw/hnsw_insert_wal.test
+@@ -15,7 +15,7 @@ PRAGMA disable_checkpoint_on_shutdown;
+ statement ok
+ CREATE TABLE t1 (vec FLOAT[3]);
+ 
+-# Step 1: Create a new indexl
++# Step 1: Create a new index
+ statement ok
+ CREATE INDEX my_idx ON t1 USING HNSW (vec);
+ 
+@@ -24,9 +24,6 @@ SELECT count FROM pragma_hnsw_index_info();
+ ----
+ 0
+ 
+-statement ok
+-CHECKPOINT;
+-
+ # Step 3: Restart the database
+ restart
+ 
