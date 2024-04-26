@@ -84,6 +84,22 @@ public:
 	}
 };
 
+struct ParseTypeInfo {
+	ParseTypeInfo() {};
+	ParseTypeInfo(LogicalType &type, bool validate_utf_8_p) : validate_utf8(validate_utf_8_p) {
+		type_id = type.id();
+		internal_type = type.InternalType();
+		if (type.id() == LogicalTypeId::DECIMAL) {
+			// We onlyc are about these if we have a decimal value
+			type.GetDecimalProperties(width, scale);
+		}
+	}
+	bool validate_utf8;
+	LogicalTypeId type_id;
+	PhysicalType internal_type;
+	uint8_t scale;
+	uint8_t width;
+};
 class StringValueResult : public ScannerResult {
 public:
 	StringValueResult(CSVStates &states, CSVStateMachine &state_machine,
@@ -127,7 +143,7 @@ public:
 	bool added_last_line = false;
 	bool quoted_new_line = false;
 
-	unsafe_unique_array<std::pair<LogicalTypeId, bool>> parse_types;
+	unsafe_unique_array<ParseTypeInfo> parse_types;
 	vector<string> names;
 
 	shared_ptr<CSVFileScan> csv_file_scan;
@@ -147,6 +163,8 @@ public:
 	vector<CurrentError> current_errors;
 	StrpTimeFormat date_format, timestamp_format;
 	bool sniffing;
+
+	char decimal_separator;
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
 	//! Adds a Value to the result

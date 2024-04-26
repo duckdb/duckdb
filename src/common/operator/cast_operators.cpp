@@ -1816,8 +1816,6 @@ bool TryCast::Operation(string_t input, uhugeint_t &result, bool strict) {
 // Decimal String Cast
 //===--------------------------------------------------------------------===//
 
-
-
 template <>
 bool TryCastToDecimal::Operation(string_t input, int16_t &result, CastParameters &parameters, uint8_t width,
                                  uint8_t scale) {

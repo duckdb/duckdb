@@ -8,6 +8,7 @@
 #include <algorithm>
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/types/time.hpp"
+#include "duckdb/common/operator/decimal_cast_operators.hpp"
 
 namespace duckdb {
 
@@ -36,10 +37,11 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 	current_line_position.end = current_line_position.begin;
 	// Fill out Parse Types
 	vector<LogicalType> logical_types;
-	parse_types = make_unsafe_uniq_array<pair<LogicalTypeId, bool>>(number_of_columns);
+	parse_types = make_unsafe_uniq_array<ParseTypeInfo>(number_of_columns);
+	LogicalType varchar_type = LogicalType::VARCHAR;
 	if (!csv_file_scan) {
 		for (idx_t i = 0; i < number_of_columns; i++) {
-			parse_types[i] = {LogicalTypeId::VARCHAR, true};
+			parse_types[i] = ParseTypeInfo(varchar_type, true);
 			logical_types.emplace_back(LogicalType::VARCHAR);
 			string name = "Column_" + to_string(i);
 			names.emplace_back(name);
@@ -53,10 +55,10 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 		for (idx_t i = 0; i < csv_file_scan->file_types.size(); i++) {
 			auto &type = csv_file_scan->file_types[i];
 			if (StringValueScanner::CanDirectlyCast(type, state_machine.options.dialect_options.date_format)) {
-				parse_types[i] = {type.id(), true};
+				parse_types[i] = ParseTypeInfo(type, true);
 				logical_types.emplace_back(type);
 			} else {
-				parse_types[i] = {LogicalTypeId::VARCHAR, type.id() == LogicalTypeId::VARCHAR || type.IsNested()};
+				parse_types[i] = ParseTypeInfo(varchar_type, type.id() == LogicalTypeId::VARCHAR || type.IsNested());
 				logical_types.emplace_back(LogicalType::VARCHAR);
 			}
 		}
@@ -77,7 +79,7 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 		if (!projecting_columns) {
 			for (idx_t j = logical_types.size(); j < number_of_columns; j++) {
 				// This can happen if we have sneaky null columns at the end that we wish to ignore
-				parse_types[j] = {LogicalTypeId::VARCHAR, true};
+				parse_types[j] = ParseTypeInfo(varchar_type, true);
 				logical_types.emplace_back(LogicalType::VARCHAR);
 			}
 		}
@@ -100,6 +102,7 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 	}
 	date_format = state_machine.options.dialect_options.date_format.at(LogicalTypeId::DATE).GetValue();
 	timestamp_format = state_machine.options.dialect_options.date_format.at(LogicalTypeId::TIMESTAMP).GetValue();
+	decimal_separator = state_machine.options.decimal_separator[0];
 }
 
 StringValueResult::~StringValueResult() {
@@ -155,7 +158,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 						empty = state_machine.options.force_not_null[chunk_col_id];
 					}
 					if (empty) {
-						if (parse_types[chunk_col_id].first != LogicalTypeId::VARCHAR) {
+						if (parse_types[chunk_col_id].type_id != LogicalTypeId::VARCHAR) {
 							// If it is not a varchar, empty values are not accepted, we must error.
 							current_errors.push_back({CSVErrorType::CAST_ERROR, cur_col_id, last_position});
 						}
@@ -175,7 +178,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		}
 	}
 	bool success = true;
-	switch (parse_types[chunk_col_id].first) {
+	switch (parse_types[chunk_col_id].type_id) {
 	case LogicalTypeId::TINYINT:
 		success = TrySimpleIntegerCast(value_ptr, size, static_cast<int8_t *>(vector_ptr[chunk_col_id])[number_of_rows],
 		                               false);
@@ -253,6 +256,65 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		}
 		break;
 	}
+	case LogicalTypeId::DECIMAL: {
+		if (decimal_separator == ',') {
+			switch (parse_types[chunk_col_id].internal_type) {
+			case PhysicalType::INT16:
+				success = TryDecimalStringCast<int16_t, ','>(
+				    value_ptr, size, static_cast<int16_t *>(vector_ptr[chunk_col_id])[number_of_rows],
+				    parse_types[chunk_col_id].width, parse_types[chunk_col_id].scale);
+				break;
+			case PhysicalType::INT32:
+				success = TryDecimalStringCast<int32_t, ','>(
+				    value_ptr, size, static_cast<int32_t *>(vector_ptr[chunk_col_id])[number_of_rows],
+				    parse_types[chunk_col_id].width, parse_types[chunk_col_id].scale);
+				break;
+			case PhysicalType::INT64:
+				success = TryDecimalStringCast<int64_t, ','>(
+				    value_ptr, size, static_cast<int64_t *>(vector_ptr[chunk_col_id])[number_of_rows],
+				    parse_types[chunk_col_id].width, parse_types[chunk_col_id].scale);
+				break;
+			case PhysicalType::INT128:
+				success = TryDecimalStringCast<hugeint_t, ','>(
+				    value_ptr, size, static_cast<hugeint_t *>(vector_ptr[chunk_col_id])[number_of_rows],
+				    parse_types[chunk_col_id].width, parse_types[chunk_col_id].scale);
+				break;
+			default:
+				throw InternalException("Invalid Physical Type for Decimal Value. Physical Type: " +
+				                        TypeIdToString(parse_types[chunk_col_id].internal_type));
+			}
+
+		} else if (decimal_separator == '.') {
+			switch (parse_types[chunk_col_id].internal_type) {
+			case PhysicalType::INT16:
+				success = TryDecimalStringCast(value_ptr, size,
+				                               static_cast<int16_t *>(vector_ptr[chunk_col_id])[number_of_rows],
+				                               parse_types[chunk_col_id].width, parse_types[chunk_col_id].scale);
+				break;
+			case PhysicalType::INT32:
+				success = TryDecimalStringCast(value_ptr, size,
+				                               static_cast<int32_t *>(vector_ptr[chunk_col_id])[number_of_rows],
+				                               parse_types[chunk_col_id].width, parse_types[chunk_col_id].scale);
+				break;
+			case PhysicalType::INT64:
+				success = TryDecimalStringCast(value_ptr, size,
+				                               static_cast<int64_t *>(vector_ptr[chunk_col_id])[number_of_rows],
+				                               parse_types[chunk_col_id].width, parse_types[chunk_col_id].scale);
+				break;
+			case PhysicalType::INT128:
+				success = TryDecimalStringCast(value_ptr, size,
+				                               static_cast<hugeint_t *>(vector_ptr[chunk_col_id])[number_of_rows],
+				                               parse_types[chunk_col_id].width, parse_types[chunk_col_id].scale);
+				break;
+			default:
+				throw InternalException("Invalid Physical Type for Decimal Value. Physical Type: " +
+				                        TypeIdToString(parse_types[chunk_col_id].internal_type));
+			}
+		} else {
+			throw InvalidInputException("Decimals can only have ',' and '.' as decimal separators");
+		}
+		break;
+	}
 	case LogicalTypeId::TIMESTAMP_TZ: {
 		if (!timestamp_format.Empty()) {
 			success = timestamp_format.TryParseTimestamp(
@@ -261,14 +323,15 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 			bool has_offset;
 			string_t tz;
 			success = Timestamp::TryConvertTimestampTZ(
-			              value_ptr, size, static_cast<timestamp_t *>(vector_ptr[chunk_col_id])[number_of_rows], has_offset, tz);
+			    value_ptr, size, static_cast<timestamp_t *>(vector_ptr[chunk_col_id])[number_of_rows], has_offset, tz);
 		}
 		break;
 	}
 	default: {
 		// By default, we add a string
 		// We only evaluate if a string is utf8 valid, if it's actually a varchar
-		if (parse_types[chunk_col_id].second && !Utf8Proc::IsValid(value_ptr, UnsafeNumericCast<uint32_t>(size))) {
+		if (parse_types[chunk_col_id].validate_utf8 &&
+		    !Utf8Proc::IsValid(value_ptr, UnsafeNumericCast<uint32_t>(size))) {
 			bool force_error = !state_machine.options.ignore_errors.GetValue() && sniffing;
 			// Invalid unicode, we must error
 			if (force_error) {
@@ -294,7 +357,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		std::ostringstream error;
 		// Casting Error Message
 		error << "Could not convert string \"" << std::string(value_ptr, size) << "\" to \'"
-		      << LogicalTypeIdToString(parse_types[cur_col_id].first) << "\'";
+		      << LogicalTypeIdToString(parse_types[cur_col_id].type_id) << "\'";
 		current_errors.push_back({CSVErrorType::CAST_ERROR, cur_col_id, last_position});
 		current_errors.back().error_message = error.str();
 	}
@@ -457,13 +520,13 @@ bool StringValueResult::HandleError() {
 				    state_machine.options, names[cur_error.col_idx], cur_error.error_message, cur_error.col_idx,
 				    borked_line, lines_per_batch,
 				    current_line_position.begin.GetGlobalPosition(requested_size, first_nl),
-				    line_pos.GetGlobalPosition(requested_size, first_nl), parse_types[cur_error.col_idx].first);
+				    line_pos.GetGlobalPosition(requested_size, first_nl), parse_types[cur_error.col_idx].type_id);
 			} else {
 				csv_error = CSVError::CastError(
 				    state_machine.options, names[cur_error.col_idx], cur_error.error_message, cur_error.col_idx,
 				    borked_line, lines_per_batch,
 				    current_line_position.begin.GetGlobalPosition(requested_size, first_nl),
-				    line_pos.GetGlobalPosition(requested_size), parse_types[cur_error.col_idx].first);
+				    line_pos.GetGlobalPosition(requested_size), parse_types[cur_error.col_idx].type_id);
 			}
 			break;
 		case CSVErrorType::MAXIMUM_LINE_SIZE:
@@ -737,7 +800,6 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 	auto &parse_chunk = process_result.ToChunk();
 	// We have to check if we got to error
 	error_handler->ErrorIfNeeded();
-
 	if (parse_chunk.size() == 0) {
 		return;
 	}
@@ -772,17 +834,9 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 			bool success;
 			idx_t line_error = 0;
 			bool line_error_set = true;
-			if (state_machine->options.decimal_separator != "." && type.id() == LogicalTypeId::DECIMAL) {
-				success =
-				    CSVCast::TryCastDecimalVectorCommaSeparated(state_machine->options, parse_vector, result_vector,
-				                                                parse_chunk.size(), parameters, type, line_error);
-
-			} else {
-				// target type is not varchar: perform a cast
-				success = VectorOperations::TryCast(buffer_manager->context, parse_vector, result_vector,
-				                                    parse_chunk.size(), &error_message, false, true);
-				line_error_set = false;
-			}
+			success = VectorOperations::TryCast(buffer_manager->context, parse_vector, result_vector,
+			                                    parse_chunk.size(), &error_message, false, true);
+			line_error_set = false;
 			if (success) {
 				continue;
 			}
@@ -1233,8 +1287,9 @@ bool StringValueScanner::CanDirectlyCast(const LogicalType &type,
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
-	case LogicalType::TIME:
-	case LogicalType::TIME_TZ:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::DECIMAL:
 	case LogicalType::VARCHAR:
 		return true;
 	default:
