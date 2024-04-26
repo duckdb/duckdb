@@ -83,15 +83,37 @@ struct ParquetReadLocalState : public LocalTableFunctionState {
 
 enum class ParquetFileState : uint8_t { UNOPENED, OPENING, OPEN, CLOSED };
 
+struct ParquetFileReaderData {
+	ParquetFileReaderData(shared_ptr<ParquetReader> reader_p, ParquetFileState state = ParquetFileState::OPEN) :
+	      reader(std::move(reader_p)), file_state(state), file_mutex(make_uniq<mutex>())  {
+	}
+
+	//! Currently opened reader for the file
+	shared_ptr<ParquetReader> reader;
+	//! Flag to indicate the file is being opened
+	ParquetFileState file_state;
+	//! Mutexes to wait for the file when it is being opened
+	unique_ptr<mutex> file_mutex;
+};
+
+struct ParquetReadGlobalConstantState {
+	ParquetReadGlobalConstantState(const vector<column_t> column_ids_p, TableFilterSet *filters_p) : column_ids(column_ids_p), filters(filters_p) {
+	}
+	const vector<column_t> column_ids;
+	const TableFilterSet *filters = nullptr;
+};
+
 struct ParquetReadGlobalState : public GlobalTableFunctionState {
+	ParquetReadGlobalState(ParquetReadGlobalConstantState constant_state_p) : constant_state(std::move(constant_state_p)) {}
+
+	//! Global state that is safe for use without lock
+	const ParquetReadGlobalConstantState constant_state;
+
 	mutex lock;
 
-	//! Currently opened readers
-	vector<shared_ptr<ParquetReader>> readers;
-	//! Flag to indicate a file is being opened
-	vector<ParquetFileState> file_states;
-	//! Mutexes to wait for a file that is currently being opened
-	vector<unique_ptr<mutex>> file_mutexes;
+	//! The current set of parquet readers
+	vector<ParquetFileReaderData> readers;
+
 	//! Signal to other threads that a file failed to open, letting every thread abort.
 	bool error_opening_file = false;
 
@@ -105,8 +127,6 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 	idx_t max_threads;
 	vector<idx_t> projection_ids;
 	vector<LogicalType> scanned_types;
-	vector<column_t> column_ids;
-	TableFilterSet *filters;
 
 	idx_t MaxThreads() const override {
 		return max_threads;
@@ -572,13 +592,27 @@ public:
 	static unique_ptr<GlobalTableFunctionState> ParquetScanInitGlobal(ClientContext &context,
 	                                                                  TableFunctionInitInput &input) {
 		auto &bind_data = input.bind_data->CastNoConst<ParquetReadBindData>();
-		auto result = make_uniq<ParquetReadGlobalState>();
 
+		// Initialize the constant global state.
+		ParquetReadGlobalConstantState constant_state = {
+		    input.column_ids,
+		    input.filters.get()
+		};
+
+		auto result = make_uniq<ParquetReadGlobalState>(constant_state);
+
+		// TODO: don't empty initialize vector?
 		if (bind_data.files->IsEmpty()) {
 			result->readers = {};
 		} else if (!bind_data.union_readers.empty()) {
 			vector<string> full_file_list = bind_data.files->GetAllFiles();
-			result->readers = std::move(bind_data.union_readers);
+			// TODO: confirm we are not changing behaviour by modifying the order here?
+			for (auto& reader: bind_data.union_readers) {
+				if (reader) {
+					result->readers.push_back(ParquetFileReaderData(std::move(reader)));
+				}
+			}
+
 			if (result->readers.size() != full_file_list.size()) {
 				// FIXME This should not happen: didn't want to break things but this should probably be an
 				// InternalException
@@ -588,7 +622,7 @@ public:
 		} else if (bind_data.initial_reader) {
 			// Ensure the initial reader was actually constructed from the first file
 			if (bind_data.initial_reader->file_name == bind_data.files->GetFirstFile()) {
-				result->readers = {bind_data.initial_reader};
+				result->readers.push_back(ParquetFileReaderData(bind_data.initial_reader));
 			} else {
 				// FIXME This should not happen: didn't want to break things but this should probably be an
 				// InternalException
@@ -596,21 +630,6 @@ public:
 			}
 		}
 
-		// Initialize file mutexes, marking files as OPEN if there exists an initialized reader
-		for (auto &reader : result->readers) {
-			result->file_mutexes.push_back(make_uniq<mutex>());
-
-			if (!reader) {
-				result->file_states.push_back(ParquetFileState::OPEN);
-				continue;
-			}
-
-			result->file_states.push_back(ParquetFileState::UNOPENED);
-			InitializeParquetReader(*reader, bind_data, input.column_ids, input.filters, context);
-		}
-
-		result->column_ids = input.column_ids;
-		result->filters = input.filters.get();
 		result->row_group_index = 0;
 		result->file_index = 0;
 		result->batch_index = 0;
@@ -720,11 +739,7 @@ public:
 		}
 
 		// Resize our files/readers list
-		idx_t new_size = parallel_state.file_states.size() + 1;
-		parallel_state.readers.resize(new_size, nullptr);
-		parallel_state.file_states.resize(new_size, ParquetFileState::UNOPENED);
-		parallel_state.file_mutexes.resize(new_size);
-		parallel_state.file_mutexes[new_size - 1] = make_uniq<mutex>();
+		parallel_state.readers.push_back({nullptr, ParquetFileState::UNOPENED});
 
 		return true;
 	}
@@ -744,11 +759,12 @@ public:
 				return false;
 			}
 
-			if (parallel_state.file_states[parallel_state.file_index] == ParquetFileState::OPEN) {
+			auto &current_reader_data = parallel_state.readers[parallel_state.file_index];
+			if (current_reader_data.file_state == ParquetFileState::OPEN) {
 				if (parallel_state.row_group_index <
-				    parallel_state.readers[parallel_state.file_index]->NumRowGroups()) {
+				    current_reader_data.reader->NumRowGroups()) {
 					// The current reader has rowgroups left to be scanned
-					scan_data.reader = parallel_state.readers[parallel_state.file_index];
+					scan_data.reader = current_reader_data.reader;
 					vector<idx_t> group_indexes {parallel_state.row_group_index};
 					scan_data.reader->InitializeScan(scan_data.scan_state, group_indexes);
 					scan_data.batch_index = parallel_state.batch_index++;
@@ -757,8 +773,8 @@ public:
 					return true;
 				} else {
 					// Close current file
-					parallel_state.file_states[parallel_state.file_index] = ParquetFileState::CLOSED;
-					parallel_state.readers[parallel_state.file_index] = nullptr;
+					current_reader_data.file_state = ParquetFileState::CLOSED;
+					current_reader_data.reader = nullptr;
 
 					// Set state to the next file
 					parallel_state.file_index++;
@@ -773,7 +789,7 @@ public:
 			}
 
 			// Check if the current file is being opened, in that case we need to wait for it.
-			if (parallel_state.file_states[parallel_state.file_index] == ParquetFileState::OPENING) {
+			if (parallel_state.readers[parallel_state.file_index].file_state == ParquetFileState::OPENING) {
 				WaitForFile(parallel_state.file_index, parallel_state, parallel_lock);
 			}
 		}
@@ -794,9 +810,14 @@ public:
 	static void WaitForFile(idx_t file_index, ParquetReadGlobalState &parallel_state,
 	                        unique_lock<mutex> &parallel_lock) {
 		while (true) {
-			// To get the file lock, we first need to release the parallel_lock to prevent deadlocking
+
+			// Get pointer to file mutex before unlocking
+			auto &file_mutex = *parallel_state.readers[file_index].file_mutex;
+
+			// To get the file lock, we first need to release the parallel_lock to prevent deadlocking. Note that this
+			// requires getting the ref to the file mutex pointer with the lock stil held: readers get be resized
 			parallel_lock.unlock();
-			unique_lock<mutex> current_file_lock(*parallel_state.file_mutexes[file_index]);
+			unique_lock<mutex> current_file_lock(file_mutex);
 			parallel_lock.lock();
 
 			// Here we have both locks which means we can stop waiting if:
@@ -804,7 +825,7 @@ public:
 			// - the thread opening the file has failed
 			// - the file was somehow scanned till the end while we were waiting
 			if (parallel_state.file_index >= parallel_state.readers.size() ||
-			    parallel_state.file_states[parallel_state.file_index] != ParquetFileState::OPENING ||
+			    parallel_state.readers[parallel_state.file_index].file_state != ParquetFileState::OPENING ||
 			    parallel_state.error_opening_file) {
 				return;
 			}
@@ -818,24 +839,36 @@ public:
 		const auto num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 
 		const auto file_index_limit =
-		    MinValue<idx_t>(parallel_state.file_index + num_threads, parallel_state.file_states.size());
+		    MinValue<idx_t>(parallel_state.file_index + num_threads, parallel_state.readers.size());
 
 		for (idx_t i = parallel_state.file_index; i < file_index_limit; i++) {
-			if (parallel_state.file_states[i] == ParquetFileState::UNOPENED) {
+			if (parallel_state.readers[i].file_state == ParquetFileState::UNOPENED) {
+				auto &current_reader_data = parallel_state.readers[i];
 				string file = bind_data.files->GetFile(i);
-				parallel_state.file_states[i] = ParquetFileState::OPENING;
+				current_reader_data.file_state = ParquetFileState::OPENING;
 				auto pq_options = bind_data.parquet_options;
+
+				// Get pointer to file mutex before unlocking
+				auto &current_file_lock = *current_reader_data.file_mutex;
+
+				auto &constant_global_state = parallel_state.constant_state;
+
+				// We need to copy the filter set to ensure can be accessed in a thread-safe manner
+				// FIXME: make const in multifilereader?
+				TableFilterSet filter_copy;
+				if (constant_global_state.filters) {
+					filter_copy = *constant_global_state.filters;
+				}
 
 				// Now we switch which lock we are holding, instead of locking the global state, we grab the lock on
 				// the file we are opening. This file lock allows threads to wait for a file to be opened.
 				parallel_lock.unlock();
-
-				unique_lock<mutex> file_lock(*parallel_state.file_mutexes[i]);
+				unique_lock<mutex> file_lock(current_file_lock);
 
 				shared_ptr<ParquetReader> reader;
 				try {
 					reader = make_shared_ptr<ParquetReader>(context, file, pq_options);
-					InitializeParquetReader(*reader, bind_data, parallel_state.column_ids, parallel_state.filters,
+					InitializeParquetReader(*reader, bind_data, constant_global_state.column_ids, &filter_copy,
 					                        context);
 				} catch (...) {
 					parallel_lock.lock();
@@ -845,8 +878,8 @@ public:
 
 				// Now re-lock the state and add the reader
 				parallel_lock.lock();
-				parallel_state.readers[i] = reader;
-				parallel_state.file_states[i] = ParquetFileState::OPEN;
+				current_reader_data.reader = reader;
+				current_reader_data.file_state = ParquetFileState::OPEN;
 
 				return true;
 			}
