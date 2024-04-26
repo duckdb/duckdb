@@ -29,7 +29,8 @@ unique_ptr<AlterInfo> ChangeOwnershipInfo::Copy() const {
 string ChangeOwnershipInfo::ToString() const {
 	string result = "";
 
-	result += "ALTER SEQUENCE";
+	result += "ALTER ";
+	result += TypeToString(entry_catalog_type);
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += " IF EXISTS";
 	}
