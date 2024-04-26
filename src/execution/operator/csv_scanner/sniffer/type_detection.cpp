@@ -158,16 +158,29 @@ bool CSVSniffer::CanYouCastIt(const string_t value, const LogicalType &type, con
 		}
 	}
 	case LogicalTypeId::TIMESTAMP: {
+		timestamp_t dummy_value;
 		if (!dialect_options.date_format.find(LogicalTypeId::TIMESTAMP)->second.GetValue().Empty()) {
-			timestamp_t result;
 			string error_message;
 			return dialect_options.date_format.find(LogicalTypeId::TIMESTAMP)
 			    ->second.GetValue()
-			    .TryParseTimestamp(value, result, error_message);
+			    .TryParseTimestamp(value, dummy_value, error_message);
 		} else {
-			timestamp_t dummy_value;
 			return Timestamp::TryConvertTimestamp(value_ptr, value_size, dummy_value) == TimestampCastResult::SUCCESS;
 		}
+	}
+	case LogicalTypeId::TIMESTAMP_TZ: {
+		timestamp_t dummy_value;
+		string error_message;
+		if (!dialect_options.date_format.find(LogicalTypeId::TIMESTAMP)->second.GetValue().Empty()) {
+			return dialect_options.date_format.find(LogicalTypeId::TIMESTAMP)
+			    ->second.GetValue()
+			    .TryParseTimestamp(value, dummy_value, error_message);
+		} else {
+			bool has_offset;
+			string_t tz;
+			return Timestamp::TryConvertTimestampTZ(value_ptr, value_size, dummy_value, has_offset, tz);
+		}
+		break;
 	}
 	case LogicalTypeId::TIME: {
 		idx_t pos;
