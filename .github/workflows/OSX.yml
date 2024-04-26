@@ -110,9 +110,9 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.7'
+          python-version: '3.12'
 
       - name: Install Ninja
         run: brew install ninja
@@ -126,7 +126,6 @@ jobs:
       - name: Install UnixODBC
         shell: bash
         run: |
-          brew remove --ignore-dependencies unixodbc
           CFLAGS="-arch x86_64 -arch arm64" ./scripts/install_unixodbc.sh
 
       - name: Install pytest

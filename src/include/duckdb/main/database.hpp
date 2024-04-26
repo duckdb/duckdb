@@ -58,7 +58,7 @@ public:
 	                                                    AccessMode access_mode);
 
 private:
-	void Initialize(const char *path, DBConfig *config);
+	void Initialize(const char *path, DBConfig *config, DuckDB *db);
 	void CreateMainDatabase();
 
 	void Configure(DBConfig &config);
