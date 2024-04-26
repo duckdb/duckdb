@@ -171,6 +171,7 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 			}
 		}
 	}
+	Allocator::ThreadFlush(0);
 #else
 	throw NotImplementedException("DuckDB was compiled without threads! Background thread loop is not allowed.");
 #endif
