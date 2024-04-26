@@ -431,36 +431,9 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	for (auto &parsed_expr : info.parsed_expressions) {
 		index.parsed_expressions.push_back(parsed_expr->Copy());
 	}
-
-	// obtain the parsed expressions of the ART from the index metadata
-	vector<unique_ptr<ParsedExpression>> parsed_expressions;
-	for (auto &parsed_expr : info.parsed_expressions) {
-		parsed_expressions.push_back(parsed_expr->Copy());
-	}
-	D_ASSERT(!parsed_expressions.empty());
-
-	// add the table to the bind context to bind the parsed expressions
-	auto binder = Binder::CreateBinder(context);
-	vector<LogicalType> column_types;
-	vector<string> column_names;
-	for (auto &col : table.GetColumns().Logical()) {
-		column_types.push_back(col.Type());
-		column_names.push_back(col.Name());
-	}
-
-	// create a binder to bind the parsed expressions
-	vector<column_t> column_ids;
-	binder->bind_context.AddBaseTable(0, info.table, column_names, column_types, column_ids, &table);
-	IndexBinder idx_binder(*binder, context);
-
-	// bind the parsed expressions to create unbound expressions
-	vector<unique_ptr<Expression>> unbound_expressions;
-	unbound_expressions.reserve(parsed_expressions.size());
-	for (auto &expr : parsed_expressions) {
-		unbound_expressions.push_back(idx_binder.Bind(expr));
-	}
-
+	D_ASSERT(!info.parsed_expressions.empty());
 	auto &data_table = table.GetStorage();
+
 	IndexStorageInfo index_storage_info;
 	if (root_block_pointer.IsValid()) {
 		// this code path is necessary to read older duckdb files
@@ -479,19 +452,11 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 
 	D_ASSERT(index_storage_info.IsValid() && !index_storage_info.name.empty());
 
-	// This is executed before any extensions can be loaded, which is why we must treat any index type that is not
-	// built-in (ART) as unknown
-	if (info.index_type == ART::TYPE_NAME) {
-		data_table.info->indexes.AddIndex(make_uniq<ART>(info.index_name, info.constraint_type, info.column_ids,
-		                                                 TableIOManager::Get(data_table), unbound_expressions,
-		                                                 data_table.db, nullptr, index_storage_info));
-	} else {
-		auto unbound_index = make_uniq<UnboundIndex>(info.index_name, info.index_type, info.constraint_type,
-		                                             info.column_ids, TableIOManager::Get(data_table),
-		                                             unbound_expressions, data_table.db, info, index_storage_info);
+	// Create an unbound index and add it to the table
+	auto unbound_index =
+	    make_uniq<UnboundIndex>(info, index_storage_info, TableIOManager::Get(data_table), data_table.db);
 
-		data_table.info->indexes.AddIndex(std::move(unbound_index));
-	}
+	data_table.info->indexes.AddIndex(std::move(unbound_index));
 }
 
 //===--------------------------------------------------------------------===//

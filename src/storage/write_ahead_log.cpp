@@ -246,7 +246,9 @@ void WriteAheadLog::WriteDropTableMacro(const TableMacroCatalogEntry &entry) {
 
 void SerializeIndexToWAL(WriteAheadLogSerializer &serializer, const unique_ptr<Index> &index) {
 
-	auto index_storage_info = index->GetStorageInfo(true);
+	// We will never write an index to the WAL that is not bound
+	D_ASSERT(index->IsBound());
+	auto index_storage_info = index->Cast<BoundIndex>().GetStorageInfo(true);
 	serializer.WriteProperty(102, "index_storage_info", index_storage_info);
 
 	serializer.WriteList(103, "index_storage", index_storage_info.buffers.size(), [&](Serializer::List &list, idx_t i) {

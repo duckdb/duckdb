@@ -43,7 +43,7 @@ public:
 	bool NameIsUnique(const string &name);
 	//! Initializes unknown indexes that might now be present after an extension load, optionally throwing an exception
 	//! if a index cant be initialized
-	void InitializeIndexes(ClientContext &context, DataTableInfo &table_info, bool throw_on_failure = false);
+	void InitializeIndexes(ClientContext &context, DataTableInfo &table_info, const char *index_type = nullptr);
 	bool Empty();
 	idx_t Count();
 	void Move(TableIndexList &other);

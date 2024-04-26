@@ -97,7 +97,10 @@ idx_t LocalTableStorage::EstimatedSize() {
 	// get the index size
 	idx_t index_sizes = 0;
 	indexes.Scan([&](Index &index) {
-		index_sizes += index.GetInMemorySize();
+		// We expect that unbound indexes havent been instantiated yet and thus occupy no memory
+		if (index.IsBound()) {
+			index_sizes += index.Cast<BoundIndex>().GetInMemorySize();
+		}
 		return false;
 	});
 
@@ -198,7 +201,9 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 		// due to reverting the appends
 		table.info->indexes.Scan([&](Index &index) {
 			try {
-				index.Vacuum();
+				if (index.IsBound()) {
+					index.Cast<BoundIndex>().Vacuum();
+				}
 			} catch (std::exception &ex) { // LCOV_EXCL_START
 				error = ErrorData(ex);
 			} // LCOV_EXCL_STOP
@@ -480,7 +485,9 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 
 	// possibly vacuum any excess index data
 	table.info->indexes.Scan([&](Index &index) {
-		index.Vacuum();
+		if (index.IsBound()) {
+			index.Cast<BoundIndex>().Vacuum();
+		}
 		return false;
 	});
 }

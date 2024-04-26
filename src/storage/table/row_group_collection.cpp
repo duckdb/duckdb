@@ -14,6 +14,7 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/execution/task_error_manager.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
+#include "duckdb/execution/index/bound_index.hpp"
 
 namespace duckdb {
 
@@ -574,7 +575,9 @@ void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_
 		result.Slice(sel, sel_count);
 
 		indexes.Scan([&](Index &index) {
-			index.Delete(result, row_identifiers);
+			if (index.IsBound()) {
+				index.Cast<BoundIndex>().Delete(result, row_identifiers);
+			}
 			return false;
 		});
 	}

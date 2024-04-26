@@ -39,7 +39,7 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
          TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
          AttachedDatabase &db, const shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr,
          const IndexStorageInfo &info)
-    : Index(name, ART::TYPE_NAME, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db),
+    : BoundIndex(name, ART::TYPE_NAME, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db),
       allocators(allocators_ptr), owns_data(false) {
 
 	// initialize all allocators
@@ -1231,7 +1231,7 @@ void ART::InitializeMerge(ARTFlags &flags) {
 	}
 }
 
-bool ART::MergeIndexes(IndexLock &state, Index &other_index) {
+bool ART::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
 
 	auto &other_art = other_index.Cast<ART>();
 	if (!other_art.tree.HasMetadata()) {

@@ -10,6 +10,7 @@
 #include "duckdb/transaction/cleanup_state.hpp"
 #include "duckdb/transaction/commit_state.hpp"
 #include "duckdb/transaction/rollback_state.hpp"
+#include "duckdb/execution/index/bound_index.hpp"
 
 namespace duckdb {
 constexpr uint32_t UNDO_ENTRY_HEADER_SIZE = sizeof(UndoFlags) + sizeof(uint32_t);
@@ -142,8 +143,8 @@ void UndoBuffer::Cleanup() {
 	// possibly vacuum indexes
 	for (const auto &table : state.indexed_tables) {
 		table.second->info->indexes.Scan([&](Index &index) {
-			if (!index.IsUnbound()) {
-				index.Vacuum();
+			if (index.IsBound()) {
+				index.Cast<BoundIndex>().Vacuum();
 			}
 			return false;
 		});

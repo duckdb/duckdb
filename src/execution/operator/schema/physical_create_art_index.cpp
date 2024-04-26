@@ -4,9 +4,9 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
+#include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database_manager.hpp"
-#include "duckdb/storage/index.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
@@ -34,14 +34,14 @@ PhysicalCreateARTIndex::PhysicalCreateARTIndex(LogicalOperator &op, TableCatalog
 class CreateARTIndexGlobalSinkState : public GlobalSinkState {
 public:
 	//! Global index to be added to the table
-	unique_ptr<Index> global_index;
+	unique_ptr<BoundIndex> global_index;
 };
 
 class CreateARTIndexLocalSinkState : public LocalSinkState {
 public:
 	explicit CreateARTIndexLocalSinkState(ClientContext &context) : arena_allocator(Allocator::Get(context)) {};
 
-	unique_ptr<Index> local_index;
+	unique_ptr<BoundIndex> local_index;
 	ArenaAllocator arena_allocator;
 	vector<ARTKey> keys;
 	DataChunk key_chunk;
