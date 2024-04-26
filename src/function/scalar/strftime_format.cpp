@@ -582,6 +582,9 @@ string StrTimeFormat::ParseFormatSpecifier(const string &format_string, StrTimeF
 					specifier = StrTimeSpecifier::WEEK_NUMBER_ISO;
 					break;
 				case '_':
+					if (i + 1 < format_string.size()) {
+						return "%_ needs to be the last entry in format string";
+					}
 					specifier = StrTimeSpecifier::SKIP_FOLLOWING;
 					break;
 				case 'c':

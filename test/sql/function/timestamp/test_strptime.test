@@ -693,3 +693,24 @@ query I
 select strptime('Thu Jul 05 2018 13:51:55 GMT+0200 (Central European Summer Time)', '%a %b %d %Y %_')::DATE
 ----
 2018-07-05
+
+# %_ has to be last entry in format string
+statement error
+SELECT strptime('2024-02-', '%Y-%_ ')
+----
+%_ needs to be the last entry in format string
+
+statement error
+SELECT strptime('2024-02-', '%Y-%_%')
+----
+%_ needs to be the last entry in format string
+
+statement error
+SELECT strptime('2024-02-', '%Y-%_%_')
+----
+%_ needs to be the last entry in format string
+
+statement error
+SELECT strptime('2024-02-', '%Y-%_%Y')
+----
+%_ needs to be the last entry in format string
