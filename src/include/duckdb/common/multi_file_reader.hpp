@@ -88,6 +88,41 @@ enum class FileExpandResult : uint8_t {
 	MULTIPLE_FILES
 };
 
+struct MultiFileListScanData {
+	idx_t current_file_idx = DConstants::INVALID_INDEX;
+};
+
+class MultiFileListIterationHelper {
+public:
+	DUCKDB_API MultiFileListIterationHelper(MultiFileList &collection);
+
+private:
+	MultiFileList &file_list;
+
+private:
+	class MultiFileListIterator;
+
+	class MultiFileListIterator {
+	public:
+		DUCKDB_API explicit MultiFileListIterator(MultiFileList *file_list);
+
+		MultiFileList *file_list;
+		MultiFileListScanData file_scan_data;
+		string current_file;
+
+	public:
+		DUCKDB_API void Next();
+
+		DUCKDB_API MultiFileListIterator &operator++();
+		DUCKDB_API bool operator!=(const MultiFileListIterator &other) const;
+		DUCKDB_API const string &operator*() const;
+	};
+
+public:
+	MultiFileListIterator begin();
+	MultiFileListIterator end();
+};
+
 // Abstract base class for lazily generated list of file paths/globs
 class MultiFileList {
 public:
@@ -105,6 +140,12 @@ public:
 
 	//! Interface for usage of MultiFileList objects
 
+	//! Scanning the file list
+	void InitializeScan(MultiFileListScanData &iterator);
+	bool Scan(MultiFileListScanData &iterator, string &result_file);
+	//! Get Iterator over the files
+	MultiFileListIterationHelper Files();
+
 	//! Checks whether the MultiFileList is empty (without expanding it fully)
 	virtual bool IsEmpty();
 	//! Returns the first file or an empty string if GetTotalFileCount() == 0
@@ -116,6 +157,8 @@ public:
 	//! Completely expands the list, allowing fast access to it and final size determination. Should only be used
 	//! sparingly
 	virtual void ExpandAll();
+	//! Expand the file list to n files
+	virtual void ExpandTo(idx_t n);
 	//! Calls ExpandAll() and returns the resulting size
 	virtual idx_t GetTotalFileCount();
 	//! Calls ExpandAll() and returns the resulting size
@@ -126,6 +169,7 @@ public:
 	                                   vector<unique_ptr<Expression>> &filters);
 
 	//! Note: comparison is currently only possible if both sides are fully expanded
+	//! todo: remove this?
 	bool operator==(const MultiFileList &other) const;
 
 	//! Moves the vector out of the MultiFileList, caller is responsible to not use the MultiFileListAfter this
@@ -133,6 +177,7 @@ public:
 	vector<string> ToStringVector();
 
 	//! This function creates a copy of the MultiFileList by fully expanding everything and returning a SimpleMultiFileList from that
+	//! todo: remove this?
 	virtual unique_ptr<MultiFileList> Copy();
 
 protected:
@@ -165,6 +210,12 @@ public:
 // the MultiFileReader class and dependency-inject a different MultiFileReader into existing Table Functions.
 struct MultiFileReader {
 	virtual ~MultiFileReader();
+
+	//! The Preferred way to create a MultiFileReader
+	static unique_ptr<MultiFileReader> Create(ClientContext & context, const TableFunction &table_function);
+	//! Create a default MultiFileReader
+	static unique_ptr<MultiFileReader> CreateDefault();
+
 	//! Add the parameters for multi-file readers (e.g. union_by_name, filename) to a table function
 	DUCKDB_API virtual void AddParameters(TableFunction &table_function);
 	//! Performs any globbing for the multi-file reader and returns a list of files to be read

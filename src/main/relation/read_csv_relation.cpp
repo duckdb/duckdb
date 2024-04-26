@@ -42,7 +42,7 @@ ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const
 	MultiFileReader multi_file_reader;
 	vector<string> files;
 	context->RunFunctionInTransaction(
-	    [&]() { files = multi_file_reader.GetFileList(*context, file_list, "CSV")->GetAllFiles(); });
+	    [&]() { files = multi_file_reader.GetFileList(*context, file_list, "CSV")->ToStringVector(); });
 	D_ASSERT(!files.empty());
 
 	auto &file_name = files[0];

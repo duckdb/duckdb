@@ -406,8 +406,8 @@ public:
 		// NOTE: we do not want to parse the Parquet metadata for the sole purpose of getting column statistics
 
 		auto &config = DBConfig::GetConfig(context);
-		auto complete_file_list = bind_data.files->GetAllFiles();
-		if (complete_file_list.size() < 2) {
+
+		if (bind_data.files->GetExpandResult() != FileExpandResult::MULTIPLE_FILES) {
 			if (bind_data.initial_reader) {
 				// most common path, scanning single parquet file
 				return bind_data.initial_reader->ReadStatistics(bind_data.names[column_index]);
@@ -424,8 +424,7 @@ public:
 			// enabled at all)
 			FileSystem &fs = FileSystem::GetFileSystem(context);
 
-			for (idx_t file_idx = 0; file_idx < complete_file_list.size(); file_idx++) {
-				auto &file_name = complete_file_list[file_idx];
+		    for (const auto& file_name : bind_data.files->Files()){
 				auto metadata = cache.Get<ParquetFileMetadataCache>(file_name);
 				if (!metadata) {
 					// missing metadata entry in cache, no usable stats
@@ -511,14 +510,7 @@ public:
 
 	static unique_ptr<FunctionData> ParquetScanBind(ClientContext &context, TableFunctionBindInput &input,
 	                                                vector<LogicalType> &return_types, vector<string> &names) {
-		unique_ptr<MultiFileReader> multi_file_reader;
-		if (input.table_function.get_multi_file_reader) {
-			// Use the MultiFileReader from the Table Function
-			multi_file_reader = input.table_function.get_multi_file_reader();
-		} else {
-			// Use the default Parquet MultiFileReader
-			multi_file_reader = make_uniq<MultiFileReader>();
-		}
+		auto multi_file_reader = MultiFileReader::Create(context, input.table_function);
 
 		ParquetOptions parquet_options(context);
 		for (auto &kv : input.named_parameters) {
@@ -611,15 +603,13 @@ public:
 		if (bind_data.files->IsEmpty()) {
 			result->readers = {};
 		} else if (!bind_data.union_readers.empty()) {
-			vector<string> full_file_list = bind_data.files->GetAllFiles();
 			// TODO: confirm we are not changing behaviour by modifying the order here?
 			for (auto& reader: bind_data.union_readers) {
 				if (reader) {
 					result->readers.push_back(ParquetFileReaderData(std::move(reader)));
 				}
 			}
-
-			if (result->readers.size() != full_file_list.size()) {
+			if (result->readers.size() != bind_data.files->GetTotalFileCount()) {
 				// FIXME This should not happen: didn't want to break things but this should probably be an
 				// InternalException
 				D_ASSERT(false);

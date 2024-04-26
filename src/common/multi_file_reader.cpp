@@ -14,6 +14,58 @@
 
 namespace duckdb {
 
+//===--------------------------------------------------------------------===//
+// ColumnDataRowIterator
+//===--------------------------------------------------------------------===//
+MultiFileListIterationHelper MultiFileList::Files() {
+	return MultiFileListIterationHelper(*this);
+}
+
+MultiFileListIterationHelper::MultiFileListIterationHelper(MultiFileList &file_list_p)
+    : file_list(file_list_p) {
+}
+
+MultiFileListIterationHelper::MultiFileListIterator::MultiFileListIterator(MultiFileList *file_list_p)
+    : file_list(file_list_p) {
+	if (!file_list) {
+		return;
+	}
+
+	file_list->InitializeScan(file_scan_data);
+	file_list->Scan(file_scan_data, current_file);
+}
+
+void MultiFileListIterationHelper::MultiFileListIterator::Next() {
+	if (!file_list) {
+		return;
+	}
+
+	if (!file_list->Scan(file_scan_data, current_file)) {
+		// exhausted collection: move iterator to nop state
+		file_list = nullptr;
+	}
+}
+
+MultiFileListIterationHelper::MultiFileListIterator MultiFileListIterationHelper::begin() { // NOLINT
+	return MultiFileListIterationHelper::MultiFileListIterator(file_list.GetExpandResult() == FileExpandResult::NO_FILES ? nullptr : &file_list);
+}
+MultiFileListIterationHelper::MultiFileListIterator MultiFileListIterationHelper::end() { // NOLINT
+	return MultiFileListIterationHelper::MultiFileListIterator(nullptr);
+}
+
+MultiFileListIterationHelper::MultiFileListIterator &MultiFileListIterationHelper::MultiFileListIterator::operator++() {
+	Next();
+	return *this;
+}
+
+bool MultiFileListIterationHelper::MultiFileListIterator::operator!=(const MultiFileListIterator &other) const {
+	return file_list != other.file_list || file_scan_data.current_file_idx != other.file_scan_data.current_file_idx;
+}
+
+const string &MultiFileListIterationHelper::MultiFileListIterator::operator*() const {
+	return current_file;
+}
+
 MultiFileList::MultiFileList() : expanded_files(), fully_expanded(false) {
 }
 
@@ -33,12 +85,33 @@ bool MultiFileList::ComplexFilterPushdown(ClientContext &context, const MultiFil
 	return false;
 }
 
+
+void MultiFileList::InitializeScan(MultiFileListScanData &iterator) {
+	iterator.current_file_idx = 0;
+}
+
+bool MultiFileList::Scan(MultiFileListScanData &iterator, string &result_file) {
+	D_ASSERT(iterator.current_file_idx != DConstants::INVALID_INDEX);
+	ExpandTo(iterator.current_file_idx);
+
+	if (iterator.current_file_idx >= expanded_files.size()) {
+		return false;
+	}
+
+	result_file = expanded_files[iterator.current_file_idx++];
+	return true;
+}
+
 bool MultiFileList::IsEmpty() {
 	return !GetFirstFile().empty();
 }
 
 string MultiFileList::GetFirstFile() {
-	return GetFile(0);
+	ExpandTo(0);
+	if (!expanded_files.empty()) {
+		return expanded_files[0];
+	}
+	return "";
 }
 
 FileExpandResult MultiFileList::GetExpandResult() {
@@ -59,20 +132,23 @@ idx_t MultiFileList::GetCurrentSize() {
 }
 
 void MultiFileList::ExpandAll() {
+	ExpandTo(NumericLimits<idx_t>::Maximum());
+}
+
+void MultiFileList::ExpandTo(idx_t n) {
 	if (fully_expanded) {
 		return;
 	}
 
 	idx_t i = expanded_files.size();
-	while (true) {
+	while (i <= n) {
 		auto next_file = GetFile(i++);
 		if (next_file.empty()) {
+			fully_expanded = true;
 			break;
 		}
 		expanded_files[i] = next_file;
 	}
-
-	fully_expanded = true;
 }
 
 idx_t MultiFileList::GetTotalFileCount() {
@@ -150,6 +226,18 @@ void SimpleMultiFileList::ExpandAll() {
 }
 
 MultiFileReader::~MultiFileReader() {
+}
+
+unique_ptr<MultiFileReader> MultiFileReader::Create(ClientContext & context, const TableFunction &table_function) {
+	if (table_function.get_multi_file_reader) {
+		return table_function.get_multi_file_reader(context);
+	} else {
+		return make_uniq<MultiFileReader>();
+	}
+}
+
+unique_ptr<MultiFileReader> MultiFileReader::CreateDefault() {
+	return make_uniq<MultiFileReader>();
 }
 
 void MultiFileReader::AddParameters(TableFunction &table_function) {
@@ -268,29 +356,24 @@ void MultiFileReader::BindOptions(MultiFileReaderOptions &options, MultiFileList
 		D_ASSERT(files.GetExpandResult() != FileExpandResult::NO_FILES);
 		auto partitions = HivePartitioning::Parse(files.GetFirstFile());
 		// verify that all files have the same hive partitioning scheme
-		idx_t i = 0;
-		while (true) {
-			auto f = files.GetFile(i++);
-			if (f.empty()) {
-				break;
-			}
-			auto file_partitions = HivePartitioning::Parse(f);
+		for (const auto& file : files.Files()) {
+			auto file_partitions = HivePartitioning::Parse(file);
 			for (auto &part_info : partitions) {
 				if (file_partitions.find(part_info.first) == file_partitions.end()) {
 					string error = "Hive partition mismatch between file \"%s\" and \"%s\": key \"%s\" not found";
 					if (options.auto_detect_hive_partitioning == true) {
-						throw InternalException(error + "(hive partitioning was autodetected)", files.GetFirstFile(), f,
+						throw InternalException(error + "(hive partitioning was autodetected)", files.GetFirstFile(), file,
 						                        part_info.first);
 					}
-					throw BinderException(error.c_str(), files.GetFirstFile(), f, part_info.first);
+					throw BinderException(error.c_str(), files.GetFirstFile(), file, part_info.first);
 				}
 			}
 			if (partitions.size() != file_partitions.size()) {
 				string error_msg = "Hive partition mismatch between file \"%s\" and \"%s\"";
 				if (options.auto_detect_hive_partitioning == true) {
-					throw InternalException(error_msg + "(hive partitioning was autodetected)", files.GetFirstFile(), f);
+					throw InternalException(error_msg + "(hive partitioning was autodetected)", files.GetFirstFile(), file);
 				}
-				throw BinderException(error_msg.c_str(), files.GetFirstFile(), f);
+				throw BinderException(error_msg.c_str(), files.GetFirstFile(), file);
 			}
 		}
 
@@ -533,12 +616,7 @@ bool MultiFileReaderOptions::AutoDetectHivePartitioningInternal(MultiFileList &f
 		return false;
 	}
 
-	idx_t current_file = 1;
-	while (true) {
-		auto file = files.GetFile(current_file++);
-		if (file.empty()) {
-			break;
-		}
+	for (const auto& file : files.Files()) {
 		auto splits = StringUtil::Split(file, fs.PathSeparator(file));
 		if (splits.size() != splits_first_file.size()) {
 			return false;
@@ -561,12 +639,7 @@ void MultiFileReaderOptions::AutoDetectHiveTypesInternal(MultiFileList &files, C
 	auto &fs = FileSystem::GetFileSystem(context);
 
 	unordered_map<string, LogicalType> detected_types;
-	idx_t current_file = 0;
-	while (true) {
-		auto file = files.GetFile(current_file++);
-		if (file.empty()) {
-			break;
-		}
+	for (const auto& file : files.Files()) {
 		unordered_map<string, string> partitions;
 		auto splits = StringUtil::Split(file, fs.PathSeparator(file));
 		if (splits.size() < 2) {

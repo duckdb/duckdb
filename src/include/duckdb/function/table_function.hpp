@@ -201,7 +201,7 @@ typedef idx_t (*table_function_get_batch_index_t)(ClientContext &context, const 
 
 typedef BindInfo (*table_function_get_bind_info_t)(const optional_ptr<FunctionData> bind_data);
 
-typedef unique_ptr<MultiFileReader> (*table_function_get_multi_file_reader_t)();
+typedef unique_ptr<MultiFileReader> (*table_function_get_multi_file_reader_t)(ClientContext &context);
 
 typedef double (*table_function_progress_t)(ClientContext &context, const FunctionData *bind_data,
                                             const GlobalTableFunctionState *global_state);

@@ -282,13 +282,8 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 	table_function.named_parameters["column_names"] = LogicalType::LIST(LogicalType::VARCHAR);
 	table_function.named_parameters["parallel"] = LogicalType::BOOLEAN;
 
-	if (table_function.get_multi_file_reader) {
-		auto mfr = table_function.get_multi_file_reader();
-		mfr->AddParameters(table_function);
-	} else {
-		MultiFileReader mfr;
-		mfr.AddParameters(table_function);
-	}
+	auto multi_file_reader = MultiFileReader::CreateDefault();
+	multi_file_reader->AddParameters(table_function);
 }
 
 double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p,
