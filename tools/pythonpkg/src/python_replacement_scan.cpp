@@ -167,8 +167,6 @@ unique_ptr<TableRef> PythonReplacementScan::Replace(ClientContext &context, Repl
                                                     ReplacementScanData *data) {
 	auto &table_name = input.table_name;
 
-	// TODO: look up the replacement scan cache from the TableRef
-
 	auto &table_ref = input.ref;
 	if (table_ref.external_dependency) {
 		auto dependency_item = table_ref.external_dependency->GetDependency("replacement_cache");
