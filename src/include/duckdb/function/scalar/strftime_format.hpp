@@ -60,6 +60,7 @@ enum class StrTimeSpecifier : uint8_t {
 	WEEKDAY_ISO = 34,     // %u - ISO 8601 weekday as a decimal number where 1 is Monday (1..7)
 	WEEK_NUMBER_ISO = 35, // %V - ISO 8601 week as a decimal number with Monday as the first day of the week.
 	                      // Week 01 is the week containing Jan 4. (01..53)
+	SKIP_FOLLOWING = 36,  // %_
 };
 
 struct StrTimeFormat {

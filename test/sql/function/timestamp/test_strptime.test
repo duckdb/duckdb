@@ -661,3 +661,35 @@ SELECT strptime('9999', '%g')
 statement error
 SELECT strptime('2000/10/10', random()::varchar)
 ----
+
+# skip trailing characters with %_
+query I
+SELECT strptime('', '%_')
+----
+1900-01-01 00:00:00
+
+query I
+SELECT strptime(NULL, '%_')
+----
+NULL
+
+query I
+SELECT strptime('asdf', '%_')
+----
+1900-01-01 00:00:00
+
+query I
+SELECT strptime('2024', '%Y%_')
+----
+2024-01-01 00:00:00
+
+query I
+SELECT strptime('2024-02-', '%Y-%_')
+----
+2024-01-01 00:00:00
+
+# 'twas this case that triggered addition of %_
+query I
+select strptime('Thu Jul 05 2018 13:51:55 GMT+0200 (Central European Summer Time)', '%a %b %d %Y %_')::DATE
+----
+2018-07-05
