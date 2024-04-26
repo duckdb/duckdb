@@ -7,6 +7,7 @@
 #include "duckdb/common/operator/double_cast_operator.hpp"
 #include <algorithm>
 #include "utf8proc_wrapper.hpp"
+#include "duckdb/common/types/time.hpp"
 
 namespace duckdb {
 
@@ -226,6 +227,12 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 			success = Date::TryConvertDate(
 			    value_ptr, size, pos, static_cast<date_t *>(vector_ptr[chunk_col_id])[number_of_rows], special, false);
 		}
+		break;
+	}
+	case LogicalTypeId::TIME: {
+		idx_t pos;
+		success = Time::TryConvertTime(value_ptr, size, pos,
+		                               static_cast<dtime_t *>(vector_ptr[chunk_col_id])[number_of_rows], false);
 		break;
 	}
 	case LogicalTypeId::TIMESTAMP: {
@@ -1207,6 +1214,7 @@ bool StringValueScanner::CanDirectlyCast(const LogicalType &type,
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalType::VARCHAR:
+	case LogicalType::TIME:
 		return true;
 	default:
 		return false;

@@ -1,9 +1,10 @@
-#include "duckdb/common/operator/decimal_cast_operators.hpp"
-#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
 #include "duckdb/common/algorithm.hpp"
-#include "duckdb/common/string.hpp"
-#include "duckdb/common/operator/integer_cast_operator.hpp"
+#include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/operator/double_cast_operator.hpp"
+#include "duckdb/common/operator/integer_cast_operator.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/types/time.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
 
 namespace duckdb {
 struct TryCastFloatingOperator {
@@ -167,6 +168,11 @@ bool CSVSniffer::CanYouCastIt(const string_t value, const LogicalType &type, con
 			timestamp_t dummy_value;
 			return Timestamp::TryConvertTimestamp(value_ptr, value_size, dummy_value) == TimestampCastResult::SUCCESS;
 		}
+	}
+	case LogicalTypeId::TIME: {
+		idx_t pos;
+		dtime_t dummy_value;
+		return Time::TryConvertTime(value_ptr, value_size, pos, dummy_value, true);
 	}
 	case LogicalTypeId::VARCHAR:
 		return true;

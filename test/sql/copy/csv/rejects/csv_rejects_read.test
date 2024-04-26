@@ -231,3 +231,20 @@ DROP TABLE reject_errors;
 statement ok
 DROP TABLE reject_scans;
 
+query IIII rowsort
+FROM read_csv('data/csv/rejects/dr_who.csv', columns={ 'date': 'DATE', 'datetime': 'TIMESTAMPTZ', 'time': 'TIME', 'timestamp': 'TIMESTAMP' }, store_rejects=true);
+----
+
+
+query IIIIIIIII
+SELECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
+----
+0	2	30	30	1	date	CAST	not-a-date,not-a-datetime,not-a-time,not-a-timestamp	Error when converting column "date". Could not convert string "not-a-date" to 'DATE'
+0	2	30	56	3	time	CAST	not-a-date,not-a-datetime,not-a-time,not-a-timestamp	Error when converting column "time". Could not convert string "not-a-time" to 'TIME'
+0	2	30	67	4	timestamp	CAST	not-a-date,not-a-datetime,not-a-time,not-a-timestamp	Error when converting column "timestamp". Could not convert string "not-a-timestamp" to 'TIMESTAMP'
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
