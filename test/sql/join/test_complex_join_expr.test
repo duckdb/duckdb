@@ -51,7 +51,42 @@ select count(*) from (select * from t1 INTERSECT select * From t2);
 ----
 5
 
+
+statement ok
+set default_collation=c
+
+statement ok
+create table t3 as select NULL product_id, region, sum(amount_sold) from sales group by region
+UNION ALL
+select NULL product_id, NULL region, sum(amount_sold) from sales
+UNION ALL
+select product_id, NULL region, sum(amount_sold) from sales group by product_id order by 1,2;
+
+
+statement ok
+set default_collation=en_us;
+
+statement ok
+create table t4 as select NULL product_id, region, sum(amount_sold) from sales group by region
+UNION ALL
+select NULL product_id, NULL region, sum(amount_sold) from sales
+UNION ALL
+select product_id, NULL region, sum(amount_sold) from sales group by product_id order by 1,2;
+
+query I
+select count(*) from (select * from t3 INTERSECT select * From t4);
+----
+5
+
+
 mode skip
+
+statement ok
+select NULL product_id, region, sum(amount_sold) from sales group by region
+UNION ALL
+select NULL product_id, NULL region, sum(amount_sold) from sales
+UNION ALL
+select product_id, NULL region, sum(amount_sold) from sales group by product_id order by 1,2;
 
 statement ok
 SET default_null_order='nulls_first';
@@ -70,7 +105,7 @@ statement ok
 CREATE TABLE test2 (b INTEGER, c INTEGER);
 
 statement ok
-INSERT INTO test2 VALUES (1, 2), (3, 0)
+INSERT INTO test2 VALUES (1, 2), (3, 0)	
 
 query IIII
 SELECT * FROM test JOIN test2 ON test.a+test2.c=test.b+test2.b
