@@ -640,6 +640,11 @@ struct DecimalCastOperation {
 
 template <class T, char decimal_separator = '.'>
 bool TryDecimalStringCast(string_t input, T &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+	return TryDecimalStringCast<T,decimal_separator>(input.GetData(), input.GetSize(),result,parameters,width,scale);
+}
+
+template <class T, char decimal_separator = '.'>
+bool TryDecimalStringCast(const char* string_ptr, idx_t string_size, T &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
 	DecimalCastData<T> state;
 	state.result = 0;
 	state.width = width;
@@ -651,8 +656,8 @@ bool TryDecimalStringCast(string_t input, T &result, CastParameters &parameters,
 	state.round_set = false;
 	state.should_round = false;
 	if (!TryIntegerCast<DecimalCastData<T>, true, true, DecimalCastOperation, false, decimal_separator>(
-	        input.GetData(), input.GetSize(), state, false)) {
-		string error = StringUtil::Format("Could not convert string \"%s\" to DECIMAL(%d,%d)", input.GetString(),
+	        string_ptr, string_size, state, false)) {
+		string error = StringUtil::Format("Could not convert string \"%s\" to DECIMAL(%d,%d)", string_ptr,
 		                                  (int)width, (int)scale);
 		HandleCastError::AssignError(error, parameters);
 		return false;
@@ -660,5 +665,6 @@ bool TryDecimalStringCast(string_t input, T &result, CastParameters &parameters,
 	result = state.result;
 	return true;
 }
+
 
 } // namespace duckdb
