@@ -4258,7 +4258,7 @@ jemalloc_constructor(void) {
 	if (bgt_count == 0) {
 		bgt_count = 1;
 	}
-	snprintf(JE_MALLOC_CONF_BUFFER, JE_MALLOC_CONF_BUFFER_SIZE, "narenas:%llu,dirty_decay_ms:10000,muzzy_decay_ms:10000,max_background_threads:%llu", cpu_count, bgt_count);
+	snprintf(JE_MALLOC_CONF_BUFFER, JE_MALLOC_CONF_BUFFER_SIZE, "metadata_thp:always,dirty_decay_ms:5000,muzzy_decay_ms:5000,narenas:%llu,max_background_threads:%llu", cpu_count, bgt_count);
 	je_malloc_conf = JE_MALLOC_CONF_BUFFER;
 	malloc_init();
 }

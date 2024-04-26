@@ -63,7 +63,7 @@ static inline string PurgeArenaString(idx_t arena_idx) {
 
 void JemallocExtension::ThreadFlush(idx_t threshold) {
 	// We flush after exceeding the threshold
-	if (GetJemallocCTL<uint64_t>("thread.peak.read") < threshold) {
+	if (GetJemallocCTL<uint64_t>("thread.peak.read") > threshold) {
 		return;
 	}
 
@@ -73,6 +73,14 @@ void JemallocExtension::ThreadFlush(idx_t threshold) {
 	// Flush this thread's arena
 	const auto purge_arena = PurgeArenaString(idx_t(GetJemallocCTL<unsigned>("thread.arena")));
 	SetJemallocCTL(purge_arena.c_str());
+
+	// Reset the peak after resetting
+	SetJemallocCTL("thread.peak.reset");
+}
+
+void JemallocExtension::ThreadIdle() {
+	// Indicate that this thread is idle
+	SetJemallocCTL("thread.idle");
 
 	// Reset the peak after resetting
 	SetJemallocCTL("thread.peak.reset");

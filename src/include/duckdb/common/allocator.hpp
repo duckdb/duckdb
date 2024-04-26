@@ -113,6 +113,7 @@ public:
 	DUCKDB_API static shared_ptr<Allocator> &DefaultAllocatorReference();
 
 	static void ThreadFlush(idx_t threshold);
+	static void ThreadIdle();
 	static void FlushAll();
 	static void SetBackgroundThreads(bool enable);
 

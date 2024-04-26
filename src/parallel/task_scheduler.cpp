@@ -142,8 +142,13 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 	shared_ptr<Task> task;
 	// loop until the marker is set to false
 	while (*marker) {
-		// wait for a signal with a timeout
-		queue->semaphore.wait();
+		// wait for a signal with a 5s timeout
+		if (!queue->semaphore.wait(5000000)) {
+			// we didn't get a signal within the timeout, mark thread as idle
+			Allocator::ThreadIdle();
+			// start an untimed wait
+			queue->semaphore.wait();
+		}
 		if (queue->q.try_dequeue(task)) {
 			auto execute_result = task->Execute(TaskExecutionMode::PROCESS_ALL);
 
@@ -258,6 +263,7 @@ void TaskScheduler::SetThreads(idx_t total_threads, idx_t external_threads) {
 	}
 #endif
 	requested_thread_count = NumericCast<int32_t>(total_threads - external_threads);
+	Allocator::FlushAll();
 }
 
 void TaskScheduler::SetAllocatorFlushTreshold(idx_t threshold) {
