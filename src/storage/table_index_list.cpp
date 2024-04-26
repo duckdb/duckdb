@@ -20,12 +20,7 @@ void TableIndexList::RemoveIndex(const string &name) {
 
 	for (idx_t index_idx = 0; index_idx < indexes.size(); index_idx++) {
 		auto &index_entry = indexes[index_idx];
-		if (!index_entry) {
-			// This can happen when an internal exception (which should be fixed) is thrown during index initialization,
-			// resulting in a null index entry, at which point this nullpointer access obscures the original error.
-			indexes.erase_at(index_idx);
-			continue;
-		}
+
 		if (index_entry->name == name) {
 			indexes.erase_at(index_idx);
 			break;
@@ -103,7 +98,8 @@ void TableIndexList::InitializeIndexes(ClientContext &context, DataTableInfo &ta
 			IndexBinder idx_binder(*binder, context);
 
 			// Replace the unbound index with a bound index
-			index = std::move(idx_binder.BindIndex(std::move(index)));
+			auto bound_idx = idx_binder.BindIndex(index->Cast<UnboundIndex>());
+			index = std::move(bound_idx);
 		}
 	}
 }

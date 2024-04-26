@@ -16,11 +16,7 @@ IndexBinder::IndexBinder(Binder &binder, ClientContext &context, optional_ptr<Ta
     : ExpressionBinder(binder, context), table(table), info(info) {
 }
 
-unique_ptr<BoundIndex> IndexBinder::BindIndex(unique_ptr<Index> index) {
-	if (!index->IsUnbound()) {
-		return unique_ptr_cast<Index, BoundIndex>(std::move(index));
-	}
-	auto &unbound_index = index->Cast<UnboundIndex>();
+unique_ptr<BoundIndex> IndexBinder::BindIndex(const UnboundIndex &unbound_index) {
 	auto &index_type_name = unbound_index.GetIndexType();
 
 	// Do we know the type of this index now?
