@@ -39,6 +39,9 @@ public:
 	const vector<unique_ptr<ParsedExpression>> &GetParsedExpressions() const {
 		return create_info.parsed_expressions;
 	}
+	const string &GetTableName() const {
+		return create_info.table;
+	}
 
 	void CommitDrop() override;
 };

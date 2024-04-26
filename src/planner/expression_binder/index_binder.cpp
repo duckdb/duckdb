@@ -18,13 +18,12 @@ IndexBinder::IndexBinder(Binder &binder, ClientContext &context, optional_ptr<Ta
 
 unique_ptr<BoundIndex> IndexBinder::BindIndex(const UnboundIndex &unbound_index) {
 	auto &index_type_name = unbound_index.GetIndexType();
-
 	// Do we know the type of this index now?
 	auto index_type = context.db->config.GetIndexTypes().FindByName(index_type_name);
 	if (!index_type) {
-		throw MissingExtensionException(
-		    "Cannot initialize index '%s', unknown index type '%s'. You probably need to load an extension.",
-		    unbound_index.name, index_type_name);
+		throw MissingExtensionException("Cannot bind index '%s', unknown index type '%s'. You need to load the "
+		                                "extension that provides this index type before table '%s' can be modified.",
+		                                unbound_index.name, index_type_name, unbound_index.GetTableName());
 	}
 
 	auto &create_info = unbound_index.GetCreateInfo();
