@@ -177,7 +177,7 @@ void ThrowExtensionSetUnrecognizedOptions(const unordered_map<string, Value> &un
 	throw InvalidInputException("Unrecognized configuration property \"%s\"", unrecognized_option_keys);
 }
 
-void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_config) {
+void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_config, DuckDB *db) {
 	DBConfig default_config;
 	DBConfig *config_ptr = &default_config;
 	if (user_config) {
@@ -227,7 +227,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	}
 
 	if (config.options.kafka_redo_log) {
-		ExtensionHelper::LoadExternalExtension(*this, *config.file_system, config.options.log_extension, nullptr);
+	        ExtensionHelper::LoadExtension(*db, "kafkaredo");
 	}
 
 	if (!config.options.unrecognized_options.empty()) {
@@ -243,7 +243,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 }
 
 DuckDB::DuckDB(const char *path, DBConfig *new_config) : instance(make_shared<DatabaseInstance>()) {
-    	instance->Initialize(path, new_config);
+	instance->Initialize(path, new_config, this);
 	if (instance->config.options.load_extensions) {
 		ExtensionHelper::LoadAllExtensions(*this);
 	}
