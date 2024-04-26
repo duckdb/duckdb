@@ -151,6 +151,12 @@ bool DuckTransaction::AutomaticCheckpoint(AttachedDatabase &db) {
 		// read-only transactions cannot trigger an automated checkpoint
 		return false;
 	}
+	if (db.IsReadOnly()) {
+		// when attaching a database in read-only mode we cannot checkpoint
+		// note that attaching a database in read-only mode does NOT mean we never make changes
+		// WAL replay can make changes to the database - but only in the in-memory copy of the
+		return false;
+	}
 	auto &storage_manager = db.GetStorageManager();
 	return storage_manager.AutomaticCheckpoint(storage->EstimatedSize() + undo_buffer.EstimatedSize());
 }
@@ -165,7 +171,7 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t commit_id,
 		// no need to flush anything if we made no changes
 		return ErrorData();
 	}
-	D_ASSERT(db.IsSystem() || !IsReadOnly());
+	D_ASSERT(db.IsSystem() || db.IsTemporary() || !IsReadOnly());
 
 	UndoBuffer::IteratorState iterator_state;
 	LocalStorage::CommitState commit_state;

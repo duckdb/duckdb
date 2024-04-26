@@ -291,6 +291,7 @@ TEST_CASE("Logical types with aliases", "[capi]") {
 		REQUIRE(logical_type);
 
 		auto alias = duckdb_logical_type_get_alias(logical_type);
+		REQUIRE(alias);
 		REQUIRE(string(alias) == "test_type");
 		duckdb_free(alias);
 

@@ -1124,6 +1124,7 @@ void ClientContext::Append(TableDescription &description, ColumnDataCollection &
 		}
 		auto binder = Binder::CreateBinder(*this);
 		auto bound_constraints = binder->BindConstraints(table_entry);
+		MetaTransaction::Get(*this).ModifyDatabase(table_entry.ParentCatalog().GetAttached());
 		table_entry.GetStorage().LocalAppend(table_entry, *this, collection, bound_constraints);
 	});
 }
