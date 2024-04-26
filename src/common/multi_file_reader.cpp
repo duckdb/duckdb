@@ -32,7 +32,11 @@ MultiFileListIterationHelper::MultiFileListIterator::MultiFileListIterator(Multi
 	}
 
 	file_list->InitializeScan(file_scan_data);
-	file_list->Scan(file_scan_data, current_file);
+	if (!file_list->Scan(file_scan_data, current_file)) {
+		// There is no first file: move iterator to nop state
+		file_list = nullptr;
+		file_scan_data.current_file_idx = DConstants::INVALID_INDEX;
+	}
 }
 
 void MultiFileListIterationHelper::MultiFileListIterator::Next() {
@@ -43,6 +47,7 @@ void MultiFileListIterationHelper::MultiFileListIterator::Next() {
 	if (!file_list->Scan(file_scan_data, current_file)) {
 		// exhausted collection: move iterator to nop state
 		file_list = nullptr;
+		file_scan_data.current_file_idx = DConstants::INVALID_INDEX;
 	}
 }
 
