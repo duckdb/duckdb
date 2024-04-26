@@ -71,6 +71,8 @@ void MultiFileList::ExpandAll() {
 		}
 		expanded_files[i] = next_file;
 	}
+
+	fully_expanded = true;
 }
 
 idx_t MultiFileList::GetTotalFileCount() {
