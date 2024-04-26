@@ -20,7 +20,7 @@ UPDATE test SET i=i+1;
 statement error con2
 CHECKPOINT
 ----
-Cannot CHECKPOINT: there are other transactions
+Cannot CHECKPOINT: there are other write transactions
 
 statement ok con2
 FORCE CHECKPOINT
@@ -86,7 +86,7 @@ UPDATE test SET i=i+1 WHERE i > 3000 AND i < 4000
 statement error
 CHECKPOINT
 ----
-Cannot CHECKPOINT: there are other transactions
+Cannot CHECKPOINT: there are other write transactions
 
 statement ok
 FORCE CHECKPOINT
