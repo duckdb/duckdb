@@ -47,8 +47,11 @@ unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<LogicalTyp
 					}
 				}
 				if (do_pushdown) {
-					logical_get.returned_types =
-					    logical_get.function.type_pushdown(context, logical_get.bind_data, new_column_types);
+					logical_get.function.type_pushdown(context, logical_get.bind_data, new_column_types);
+					// We also have to modify the types to the logical_get.returned_types
+					for (auto &type : new_column_types) {
+						logical_get.returned_types[type.first] = type.second;
+					}
 					return op;
 				}
 			}

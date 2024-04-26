@@ -326,14 +326,13 @@ static unique_ptr<FunctionData> CSVReaderDeserialize(Deserializer &deserializer,
 	return std::move(result);
 }
 
-vector<LogicalType> PushdownTypeToCSVScanner(ClientContext &context, optional_ptr<FunctionData> bind_data,
-                                             const unordered_map<idx_t, LogicalType> &new_column_types) {
+void PushdownTypeToCSVScanner(ClientContext &context, optional_ptr<FunctionData> bind_data,
+                              const unordered_map<idx_t, LogicalType> &new_column_types) {
 	auto &csv_bind = bind_data->Cast<ReadCSVData>();
 	for (auto &type : new_column_types) {
 		csv_bind.csv_types[type.first] = type.second;
 		csv_bind.return_types[type.first] = type.second;
 	}
-	return csv_bind.csv_types;
 }
 
 TableFunction ReadCSVTableFunction::GetFunction() {
