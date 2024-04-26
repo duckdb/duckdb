@@ -44,16 +44,17 @@ def dataframe_b(spark):
 class TestDataFrameJoin(object):
     def test_inner_join(self, dataframe_a, dataframe_b):
         df = dataframe_a.join(dataframe_b, dataframe_a.emp_dept_id == dataframe_b.dept_id, "inner")
+        df = df.sort(*df.columns)
         res = df.collect()
         expected = [
             Row(
-                emp_id=4,
-                name='Jones',
-                superior_emp_id=2,
-                year_joined='2005',
+                emp_id=1,
+                name='Smith',
+                superior_emp_id=-1,
+                year_joined='2018',
                 emp_dept_id='10',
-                gender='F',
-                salary=2000,
+                gender='M',
+                salary=3000,
                 dept_name='Finance',
                 dept_id=10,
             ),
@@ -69,17 +70,6 @@ class TestDataFrameJoin(object):
                 dept_id=20,
             ),
             Row(
-                emp_id=5,
-                name='Brown',
-                superior_emp_id=2,
-                year_joined='2010',
-                emp_dept_id='40',
-                gender='',
-                salary=-1,
-                dept_name='IT',
-                dept_id=40,
-            ),
-            Row(
                 emp_id=3,
                 name='Williams',
                 superior_emp_id=1,
@@ -91,15 +81,26 @@ class TestDataFrameJoin(object):
                 dept_id=10,
             ),
             Row(
-                emp_id=1,
-                name='Smith',
-                superior_emp_id=-1,
-                year_joined='2018',
+                emp_id=4,
+                name='Jones',
+                superior_emp_id=2,
+                year_joined='2005',
                 emp_dept_id='10',
-                gender='M',
-                salary=3000,
+                gender='F',
+                salary=2000,
                 dept_name='Finance',
                 dept_id=10,
+            ),
+            Row(
+                emp_id=5,
+                name='Brown',
+                superior_emp_id=2,
+                year_joined='2010',
+                emp_dept_id='40',
+                gender='',
+                salary=-1,
+                dept_name='IT',
+                dept_id=40,
             ),
         ]
         assert res == expected
@@ -107,16 +108,17 @@ class TestDataFrameJoin(object):
     @pytest.mark.parametrize('how', ['outer', 'fullouter', 'full', 'full_outer'])
     def test_outer_join(self, dataframe_a, dataframe_b, how):
         df = dataframe_a.join(dataframe_b, dataframe_a.emp_dept_id == dataframe_b.dept_id, how)
+        df = df.sort(*df.columns)
         res1 = df.collect()
         assert res1 == [
             Row(
-                emp_id=4,
-                name='Jones',
-                superior_emp_id=2,
-                year_joined='2005',
+                emp_id=1,
+                name='Smith',
+                superior_emp_id=-1,
+                year_joined='2018',
                 emp_dept_id='10',
-                gender='F',
-                salary=2000,
+                gender='M',
+                salary=3000,
                 dept_name='Finance',
                 dept_id=10,
             ),
@@ -132,17 +134,6 @@ class TestDataFrameJoin(object):
                 dept_id=20,
             ),
             Row(
-                emp_id=5,
-                name='Brown',
-                superior_emp_id=2,
-                year_joined='2010',
-                emp_dept_id='40',
-                gender='',
-                salary=-1,
-                dept_name='IT',
-                dept_id=40,
-            ),
-            Row(
                 emp_id=3,
                 name='Williams',
                 superior_emp_id=1,
@@ -154,26 +145,26 @@ class TestDataFrameJoin(object):
                 dept_id=10,
             ),
             Row(
-                emp_id=1,
-                name='Smith',
-                superior_emp_id=-1,
-                year_joined='2018',
+                emp_id=4,
+                name='Jones',
+                superior_emp_id=2,
+                year_joined='2005',
                 emp_dept_id='10',
-                gender='M',
-                salary=3000,
+                gender='F',
+                salary=2000,
                 dept_name='Finance',
                 dept_id=10,
             ),
             Row(
-                emp_id=None,
-                name=None,
-                superior_emp_id=None,
-                year_joined=None,
-                emp_dept_id=None,
-                gender=None,
-                salary=None,
-                dept_name='Sales',
-                dept_id=30,
+                emp_id=5,
+                name='Brown',
+                superior_emp_id=2,
+                year_joined='2010',
+                emp_dept_id='40',
+                gender='',
+                salary=-1,
+                dept_name='IT',
+                dept_id=40,
             ),
             Row(
                 emp_id=6,
@@ -186,11 +177,23 @@ class TestDataFrameJoin(object):
                 dept_name=None,
                 dept_id=None,
             ),
+            Row(
+                emp_id=None,
+                name=None,
+                superior_emp_id=None,
+                year_joined=None,
+                emp_dept_id=None,
+                gender=None,
+                salary=None,
+                dept_name='Sales',
+                dept_id=30,
+            ),
         ]
 
     @pytest.mark.parametrize('how', ['right', 'rightouter', 'right_outer'])
     def test_right_join(self, dataframe_a, dataframe_b, how):
         df = dataframe_a.join(dataframe_b, dataframe_a.emp_dept_id == dataframe_b.dept_id, how)
+        df = df.sort(*df.columns)
         res = df.collect()
         assert res == [
             Row(
@@ -264,7 +267,7 @@ class TestDataFrameJoin(object):
     @pytest.mark.parametrize('how', ['semi', 'leftsemi', 'left_semi'])
     def test_semi_join(self, dataframe_a, dataframe_b, how):
         df = dataframe_a.join(dataframe_b, dataframe_a.emp_dept_id == dataframe_b.dept_id, how)
-        df = df.orderBy(*df.columns)
+        df = df.sort(*df.columns)
         res = df.collect()
         assert res == [
             Row(
