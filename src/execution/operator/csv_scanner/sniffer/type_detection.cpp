@@ -96,7 +96,7 @@ void CSVSniffer::SetDateFormat(CSVStateMachine &candidate, const string &format_
 }
 
 bool CSVSniffer::CanYouCastIt(const string_t value, const LogicalType &type, const DialectOptions &dialect_options,
-                              const bool is_null) {
+                              const bool is_null, const char decimal_separator) {
 	if (is_null) {
 		return true;
 	}
@@ -192,6 +192,67 @@ bool CSVSniffer::CanYouCastIt(const string_t value, const LogicalType &type, con
 		bool special;
 		dtime_tz_t dummy_value;
 		return Time::TryConvertTimeTZ(value_ptr, value_size, pos, dummy_value, special, true);
+	}
+	case LogicalTypeId::DECIMAL: {
+		uint8_t width, scale;
+		type.GetDecimalProperties(width, scale);
+		if (decimal_separator == ',') {
+			switch (type.InternalType()) {
+			case PhysicalType::INT16: {
+				int16_t dummy_value;
+				return TryDecimalStringCast<int16_t, ','>(value_ptr, value_size, dummy_value, width, scale);
+			}
+
+			case PhysicalType::INT32: {
+				int32_t dummy_value;
+				return TryDecimalStringCast<int32_t, ','>(value_ptr, value_size, dummy_value, width, scale);
+			}
+
+			case PhysicalType::INT64: {
+				int64_t dummy_value;
+				return TryDecimalStringCast<int64_t, ','>(value_ptr, value_size, dummy_value, width, scale);
+			}
+
+			case PhysicalType::INT128: {
+				hugeint_t dummy_value;
+				return TryDecimalStringCast<hugeint_t, ','>(value_ptr, value_size, dummy_value, width, scale);
+			}
+
+			default:
+				throw InternalException("Invalid Physical Type for Decimal Value. Physical Type: " +
+				                        TypeIdToString(type.InternalType()));
+			}
+
+		} else if (decimal_separator == '.') {
+			switch (type.InternalType()) {
+			case PhysicalType::INT16: {
+				int16_t dummy_value;
+				return TryDecimalStringCast(value_ptr, value_size, dummy_value, width, scale);
+			}
+
+			case PhysicalType::INT32: {
+				int32_t dummy_value;
+				return TryDecimalStringCast(value_ptr, value_size, dummy_value, width, scale);
+			}
+
+			case PhysicalType::INT64: {
+				int64_t dummy_value;
+				return TryDecimalStringCast(value_ptr, value_size, dummy_value, width, scale);
+			}
+
+			case PhysicalType::INT128: {
+				hugeint_t dummy_value;
+				return TryDecimalStringCast(value_ptr, value_size, dummy_value, width, scale);
+			}
+
+			default:
+				throw InternalException("Invalid Physical Type for Decimal Value. Physical Type: " +
+				                        TypeIdToString(type.InternalType()));
+			}
+		} else {
+			throw InvalidInputException("Decimals can only have ',' and '.' as decimal separators");
+		}
+		break;
 	}
 	case LogicalTypeId::VARCHAR:
 		return true;
@@ -342,7 +403,8 @@ void CSVSniffer::DetectTypes() {
 						continue;
 					}
 					if (CanYouCastIt(vector_data[row_idx], sql_type, sniffing_state_machine.dialect_options,
-					                 !null_mask.RowIsValid(row_idx))) {
+					                 !null_mask.RowIsValid(row_idx),
+					                 sniffing_state_machine.options.decimal_separator[0])) {
 						break;
 					} else {
 						if (row_idx != start_idx_detection && cur_top_candidate == LogicalType::BOOLEAN) {
