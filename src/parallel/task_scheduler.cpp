@@ -142,12 +142,17 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 	shared_ptr<Task> task;
 	// loop until the marker is set to false
 	while (*marker) {
-		// wait for a signal with a 5s timeout
-		if (!queue->semaphore.wait(5000000)) {
-			// we didn't get a signal within the timeout, mark thread as idle
-			Allocator::ThreadIdle();
-			// start an untimed wait
+		if (allocator_background_threads) {
+			// background threads clean up allocations, just start an untimed wait
 			queue->semaphore.wait();
+		} else if (!queue->semaphore.wait(500000)) {
+			// thread was idle for 0.5s, flush its outstanding allocations
+			Allocator::ThreadFlush(allocator_flush_threshold);
+			if (!queue->semaphore.wait(5000000)) {
+				// thread was idle for another 5 seconds, mark it as idle and start an untimed wait
+				Allocator::ThreadIdle();
+				queue->semaphore.wait();
+			}
 		}
 		if (queue->q.try_dequeue(task)) {
 			auto execute_result = task->Execute(TaskExecutionMode::PROCESS_ALL);
@@ -163,11 +168,6 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 				task->Deschedule();
 				task.reset();
 				break;
-			}
-
-			if (!allocator_background_threads) {
-				// Flushes the outstanding allocator's outstanding allocations
-				Allocator::ThreadFlush(allocator_flush_threshold);
 			}
 		}
 	}
