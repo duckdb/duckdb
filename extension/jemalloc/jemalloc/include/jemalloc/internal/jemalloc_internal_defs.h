@@ -106,7 +106,7 @@
 /* #undef JEMALLOC_HAVE_PTHREAD_SETNAME_NP */
 
 /* Defined if pthread_getname_np(3) is available. */
-#define JEMALLOC_HAVE_PTHREAD_GETNAME_NP
+// #define JEMALLOC_HAVE_PTHREAD_GETNAME_NP
 
 /* Defined if pthread_get_name_np(3) is available. */
 /* #undef JEMALLOC_HAVE_PTHREAD_GET_NAME_NP */
