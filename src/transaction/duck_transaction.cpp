@@ -212,4 +212,8 @@ void DuckTransaction::SetReadWrite() {
 	write_lock = transaction_manager.SharedCheckpointLock();
 }
 
+unique_ptr<StorageLockKey> DuckTransaction::TryGetCheckpointLock() {
+	return transaction_manager.TryUpgradeCheckpointLock(write_lock);
+}
+
 } // namespace duckdb

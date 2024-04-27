@@ -47,6 +47,23 @@ unique_ptr<StorageLockKey> StorageLock::GetSharedLock() {
 	return make_uniq<StorageLockKey>(*this, StorageLockType::SHARED);
 }
 
+bool StorageLock::TryUpgradeLock(StorageLockKey &lock) {
+	if (lock.type != StorageLockType::SHARED) {
+		throw InternalException("StorageLock::TryUpgradeLock called on an exclusive lock");
+	}
+	exclusive_lock.lock();
+	if (read_count != 1) {
+		// other shared locks are active: failed to upgrade
+		D_ASSERT(read_count != 0);
+		exclusive_lock.unlock();
+		return false;
+	}
+	// no shared locks active: success!
+	read_count = 0;
+	lock.type = StorageLockType::EXCLUSIVE;
+	return true;
+}
+
 void StorageLock::ReleaseExclusiveLock() {
 	exclusive_lock.unlock();
 }

@@ -18,6 +18,8 @@ class StorageLock;
 enum class StorageLockType { SHARED = 0, EXCLUSIVE = 1 };
 
 class StorageLockKey {
+	friend class StorageLock;
+
 public:
 	StorageLockKey(StorageLock &lock, StorageLockType type);
 	~StorageLockKey();
@@ -39,6 +41,8 @@ public:
 	unique_ptr<StorageLockKey> GetSharedLock();
 	//! Try to get an exclusive lock - if we cannot get it immediately we return `nullptr`
 	unique_ptr<StorageLockKey> TryGetExclusiveLock();
+	//! Try to upgrade a lock from a shared lock to an exclusive lock
+	bool TryUpgradeLock(StorageLockKey &lock);
 
 private:
 	mutex exclusive_lock;

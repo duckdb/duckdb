@@ -46,6 +46,7 @@ public:
 
 	//! Obtains a shared lock to the checkpoint lock
 	unique_ptr<StorageLockKey> SharedCheckpointLock();
+	unique_ptr<StorageLockKey> TryUpgradeCheckpointLock(unique_ptr<StorageLockKey> &lock);
 
 protected:
 	struct CheckpointDecision {

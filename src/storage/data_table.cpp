@@ -32,8 +32,7 @@ namespace duckdb {
 
 DataTableInfo::DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, string schema,
                              string table)
-    : db(db), table_io_manager(std::move(table_io_manager_p)), cardinality(0), schema(std::move(schema)),
-      table(std::move(table)) {
+    : db(db), table_io_manager(std::move(table_io_manager_p)), schema(std::move(schema)), table(std::move(table)) {
 }
 
 void DataTableInfo::InitializeIndexes(ClientContext &context, bool throw_on_failure) {
@@ -928,12 +927,9 @@ void DataTable::WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count) {
 void DataTable::CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count) {
 	lock_guard<mutex> lock(append_lock);
 	row_groups->CommitAppend(commit_id, row_start, count);
-	info->cardinality += count;
 }
 
 void DataTable::RevertAppendInternal(idx_t start_row) {
-	// adjust the cardinality
-	info->cardinality = start_row;
 	D_ASSERT(is_root);
 	// revert appends made to row_groups
 	row_groups->RevertAppendInternal(start_row);

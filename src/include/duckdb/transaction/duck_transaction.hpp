@@ -62,6 +62,8 @@ public:
 		return true;
 	}
 
+	unique_ptr<StorageLockKey> TryGetCheckpointLock();
+
 private:
 	DuckTransactionManager &transaction_manager;
 	//! The undo buffer is used to store old versions of rows that are updated

@@ -27,9 +27,6 @@ struct DataTableInfo {
 	AttachedDatabase &db;
 	//! The table IO manager
 	shared_ptr<TableIOManager> table_io_manager;
-	//! The amount of elements in the table. Note that this number signifies the amount of COMMITTED entries in the
-	//! table. It can be inaccurate inside of transactions. More work is needed to properly support that.
-	atomic<idx_t> cardinality;
 	//! The schema of the table
 	string schema;
 	//! The name of the table

@@ -131,6 +131,17 @@ unique_ptr<StorageLockKey> DuckTransactionManager::SharedCheckpointLock() {
 	return checkpoint_lock.GetSharedLock();
 }
 
+unique_ptr<StorageLockKey> DuckTransactionManager::TryUpgradeCheckpointLock(unique_ptr<StorageLockKey> &lock) {
+	if (!lock) {
+		// no lock - try to get an exclusive lock
+		return checkpoint_lock.TryGetExclusiveLock();
+	}
+	// existing shared lock - try to upgrade to an exclusive lock
+	if (!checkpoint_lock.TryUpgradeLock(*lock)) {
+		return nullptr;
+	}
+	return std::move(lock);
+}
 ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction_p) {
 	auto &transaction = transaction_p.Cast<DuckTransaction>();
 	unique_lock<mutex> tlock(transaction_lock);
@@ -147,8 +158,8 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	auto checkpoint_decision = CanCheckpoint();
 	if (checkpoint_decision.can_checkpoint) {
 		if (transaction.AutomaticCheckpoint(db)) {
-			// try to lock the
-			lock = checkpoint_lock.TryGetExclusiveLock();
+			// try to lock the checkpoint lock
+			lock = transaction.TryGetCheckpointLock();
 			if (!lock) {
 				checkpoint_decision = {false,
 				                       "Failed to obtain checkpoint lock - another thread is writing/checkpointing"};
@@ -171,8 +182,9 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		transaction.commit_id = 0;
 		transaction.Rollback();
 	}
-	if (!checkpoint_decision.can_checkpoint) {
+	if (!checkpoint_decision.can_checkpoint && lock) {
 		// we won't checkpoint after all: unlock the checkpoint lock again
+		// FIXME: we should probably move a shared lock into the transaction again here
 		lock.reset();
 	}
 
