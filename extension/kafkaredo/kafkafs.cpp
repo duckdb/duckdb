@@ -121,8 +121,6 @@ KafkaFileHandle::KafkaFileHandle(FileSystem &fs, string bootstrap_server, string
 		error = rd_kafka_init_transactions(rk, -1);
 		if (error)
 			fatal_error("init_transactions()", error);
-		else
-			fprintf(stderr, "success init_kafka_txn\n");
 	}
 }
 
@@ -163,7 +161,6 @@ int64_t KafkaFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_byte
 	if (!is_writer)
 		return nr_bytes;
 
-	std::cout << "Writing to topic " << topic << std::endl;
 	rd_kafka_error_t *error;
 	rd_kafka_resp_err_t err;
 
@@ -195,11 +192,7 @@ int64_t KafkaFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_byte
 
 	error = rd_kafka_commit_transaction(producer, -1);
 
-	if (error) {
-
-	} else {
-		fprintf(stderr, "success\n");
-	}
+	
 	return nr_bytes;
 }
 
@@ -224,7 +217,7 @@ int64_t KafkaFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes
 
 	/* Proper message. */
 	memcpy(buffer, rkm->payload, rkm->len);
-	fprintf(stderr, "success-read\n");
+
 	int64_t ret = rkm->len;
 
 	rd_kafka_message_destroy(rkm);
