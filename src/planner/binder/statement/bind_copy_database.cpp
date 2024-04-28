@@ -81,7 +81,7 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseData(Catalog &source_catalog
 		if (result) {
 			// use UNION ALL to combine the individual copy statements into a single node
 			auto copy_union =
-			    make_uniq<LogicalSetOperation>(GenerateTableIndex(), 1, std::move(insert_plan), std::move(result),
+			    make_uniq<LogicalSetOperation>(GenerateTableIndex(), 1U, std::move(insert_plan), std::move(result),
 			                                   LogicalOperatorType::LOGICAL_UNION, true, false);
 			result = std::move(copy_union);
 		} else {

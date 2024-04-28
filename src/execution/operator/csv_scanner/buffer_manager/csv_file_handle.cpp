@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/csv_scanner/csv_file_handle.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 
 namespace duckdb {
 
@@ -71,7 +72,7 @@ idx_t CSVFileHandle::Read(void *buffer, idx_t nr_bytes) {
 	if (!finished) {
 		finished = bytes_read == 0;
 	}
-	return bytes_read;
+	return UnsafeNumericCast<idx_t>(bytes_read);
 }
 
 string CSVFileHandle::ReadLine() {

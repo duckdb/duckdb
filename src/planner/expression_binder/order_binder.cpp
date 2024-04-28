@@ -58,7 +58,8 @@ unique_ptr<Expression> OrderBinder::BindConstant(ParsedExpression &expr, const V
 		return nullptr;
 	}
 	// INTEGER constant: we use the integer as an index into the select list (e.g. ORDER BY 1)
-	auto index = idx_t(val.GetValue<int64_t>() - 1);
+	auto order_value = val.GetValue<int64_t>();
+	auto index = order_value <= 0 ? NumericLimits<idx_t>::Maximum() : idx_t(order_value - 1);
 	child_list_t<Value> values;
 	values.push_back(make_pair("index", Value::UBIGINT(index)));
 	auto result = make_uniq<BoundConstantExpression>(Value::STRUCT(std::move(values)));
@@ -107,7 +108,8 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		auto &collation = expr->Cast<CollateExpression>();
 		if (collation.child->expression_class == ExpressionClass::CONSTANT) {
 			auto &constant = collation.child->Cast<ConstantExpression>();
-			auto index = NumericCast<idx_t>(constant.value.GetValue<idx_t>()) - 1;
+			D_ASSERT(constant.value.GetValue<idx_t>() > 0);
+			auto index = constant.value.GetValue<idx_t>() - 1;
 			child_list_t<Value> values;
 			values.push_back(make_pair("index", Value::UBIGINT(index)));
 			values.push_back(make_pair("collation", Value(std::move(collation.collation))));

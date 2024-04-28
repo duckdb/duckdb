@@ -277,7 +277,7 @@ void DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction) noe
 		}
 	}
 	// remove the transaction from the set of currently active transactions
-	active_transactions.erase(active_transactions.begin() + t_index);
+	active_transactions.unsafe_erase_at(t_index);
 	// traverse the recently_committed transactions to see if we can remove any
 	idx_t i = 0;
 	for (; i < recently_committed_transactions.size(); i++) {
@@ -311,7 +311,7 @@ void DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction) noe
 	if (i > 0) {
 		// we garbage collected transactions: remove them from the list
 		recently_committed_transactions.erase(recently_committed_transactions.begin(),
-		                                      recently_committed_transactions.begin() + i);
+		                                      recently_committed_transactions.begin() + static_cast<int64_t>(i));
 	}
 	// check if we can free the memory of any old transactions
 	i = active_transactions.empty() ? old_transactions.size() : 0;
@@ -326,7 +326,7 @@ void DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction) noe
 	}
 	if (i > 0) {
 		// we garbage collected transactions: remove them from the list
-		old_transactions.erase(old_transactions.begin(), old_transactions.begin() + i);
+		old_transactions.erase(old_transactions.begin(), old_transactions.begin() + static_cast<int64_t>(i));
 	}
 }
 

@@ -2,6 +2,9 @@
 # description: Test cardinality function for maps
 # group: [map]
 
+statement ok
+pragma enable_verification
+
 # Single element on map
 query I
 select m[1] from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as m) as T

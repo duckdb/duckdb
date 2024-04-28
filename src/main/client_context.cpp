@@ -312,7 +312,7 @@ ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock, const st
                                                unique_ptr<SQLStatement> statement,
                                                optional_ptr<case_insensitive_map_t<Value>> values) {
 	StatementType statement_type = statement->type;
-	auto result = make_shared<PreparedStatementData>(statement_type);
+	auto result = make_shared_ptr<PreparedStatementData>(statement_type);
 
 	auto &profiler = QueryProfiler::Get(*this);
 	profiler.StartQuery(query, IsExplainAnalyze(statement.get()), true);
@@ -482,7 +482,8 @@ ClientContext::PendingPreparedStatementInternal(ClientContextLock &lock, shared_
 			display_create_func =
 			    config.display_create_func ? config.display_create_func : ProgressBar::DefaultProgressBarDisplay;
 		}
-		active_query->progress_bar = make_uniq<ProgressBar>(executor, config.wait_time, display_create_func);
+		active_query->progress_bar =
+		    make_uniq<ProgressBar>(executor, NumericCast<idx_t>(config.wait_time), display_create_func);
 		active_query->progress_bar->Start();
 		query_progress.Restart();
 	}
@@ -762,6 +763,11 @@ void ClientContext::SetActiveResult(ClientContextLock &lock, BaseQueryResult &re
 unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatementInternal(
     ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
     shared_ptr<PreparedStatementData> &prepared, const PendingQueryParameters &parameters) {
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
+	if (statement && statement->type != StatementType::LOGICAL_PLAN_STATEMENT) {
+		statement = statement->Copy();
+	}
+#endif
 	// check if we are on AutoCommit. In this case we should start a transaction.
 	if (statement && config.AnyVerification()) {
 		// query verification is enabled
@@ -784,29 +790,25 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			statement = std::move(copied_statement);
 			break;
 		}
+		default: {
 #ifndef DUCKDB_ALTERNATIVE_VERIFY
-		case StatementType::COPY_STATEMENT:
-		case StatementType::INSERT_STATEMENT:
-		case StatementType::DELETE_STATEMENT:
-		case StatementType::UPDATE_STATEMENT: {
-			Parser parser;
-			ErrorData error;
-			try {
-				parser.ParseQuery(statement->ToString());
-			} catch (std::exception &ex) {
-				error = ErrorData(ex);
+			bool reparse_statement = true;
+#else
+			bool reparse_statement = false;
+#endif
+			statement = std::move(copied_statement);
+			if (reparse_statement) {
+				try {
+					Parser parser;
+					ErrorData error;
+					parser.ParseQuery(statement->ToString());
+					statement = std::move(parser.statements[0]);
+				} catch (const NotImplementedException &) {
+					// ToString was not implemented, just use the copied statement
+				}
 			}
-			if (error.HasError()) {
-				// error in verifying query
-				return ErrorResult<PendingQueryResult>(std::move(error), query);
-			}
-			statement = std::move(parser.statements[0]);
 			break;
 		}
-#endif
-		default:
-			statement = std::move(copied_statement);
-			break;
 		}
 	}
 	return PendingStatementOrPreparedStatement(lock, query, std::move(statement), prepared, parameters);
@@ -1120,7 +1122,9 @@ void ClientContext::Append(TableDescription &description, ColumnDataCollection &
 				throw InvalidInputException("Failed to append: table entry has different number of columns!");
 			}
 		}
-		table_entry.GetStorage().LocalAppend(table_entry, *this, collection);
+		auto binder = Binder::CreateBinder(*this);
+		auto bound_constraints = binder->BindConstraints(table_entry);
+		table_entry.GetStorage().LocalAppend(table_entry, *this, collection, bound_constraints);
 	});
 }
 

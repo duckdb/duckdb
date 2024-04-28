@@ -27,7 +27,17 @@ class ObjectCache;
 struct AttachInfo;
 class DatabaseFileSystem;
 
-class DatabaseInstance : public std::enable_shared_from_this<DatabaseInstance> {
+struct ExtensionInfo {
+	explicit ExtensionInfo(const string &version) : extension_version(version) {
+	}
+	ExtensionInfo() : ExtensionInfo("defaultme") {
+	}
+	ExtensionInfo(const ExtensionInfo &x) : ExtensionInfo(x.extension_version) {
+	}
+	string extension_version;
+};
+
+class DatabaseInstance : public enable_shared_from_this<DatabaseInstance> {
 	friend class DuckDB;
 
 public:
@@ -47,7 +57,7 @@ public:
 	DUCKDB_API ObjectCache &GetObjectCache();
 	DUCKDB_API ConnectionManager &GetConnectionManager();
 	DUCKDB_API ValidChecker &GetValidChecker();
-	DUCKDB_API void SetExtensionLoaded(const std::string &extension_name);
+	DUCKDB_API void SetExtensionLoaded(const std::string &extension_name, const std::string &extension_version = "");
 
 	idx_t NumberOfThreads();
 
@@ -55,6 +65,7 @@ public:
 	DUCKDB_API static const DatabaseInstance &GetDatabase(const ClientContext &context);
 
 	DUCKDB_API const unordered_set<std::string> &LoadedExtensions();
+	DUCKDB_API const unordered_map<string, ExtensionInfo> &LoadedExtensionsData();
 	DUCKDB_API bool ExtensionIsLoaded(const string &name);
 
 	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) const;
@@ -66,7 +77,7 @@ private:
 	void Initialize(const char *path, DBConfig *config);
 	void CreateMainDatabase();
 
-	void Configure(DBConfig &config);
+	void Configure(DBConfig &config, const char *path);
 
 private:
 	shared_ptr<BufferManager> buffer_manager;
@@ -74,7 +85,8 @@ private:
 	unique_ptr<TaskScheduler> scheduler;
 	unique_ptr<ObjectCache> object_cache;
 	unique_ptr<ConnectionManager> connection_manager;
-	unordered_set<std::string> loaded_extensions;
+	unordered_set<string> loaded_extensions;
+	unordered_map<string, ExtensionInfo> loaded_extensions_data;
 	ValidChecker db_validity;
 	unique_ptr<DatabaseFileSystem> db_file_system;
 };

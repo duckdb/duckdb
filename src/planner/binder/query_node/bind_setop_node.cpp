@@ -118,8 +118,8 @@ static void BuildUnionByNameInfo(ClientContext &context, BoundSetOperationNode &
 		bool right_exist = right_index != right_names_map.end();
 		LogicalType result_type;
 		if (left_exist && right_exist) {
-			result_type = LogicalType::MaxLogicalType(context, left_node.types[left_index->second],
-			                                          right_node.types[right_index->second]);
+			result_type = LogicalType::ForceMaxLogicalType(left_node.types[left_index->second],
+			                                               right_node.types[right_index->second]);
 			if (left_index->second != i || right_index->second != i) {
 				need_reorder = true;
 			}

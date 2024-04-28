@@ -221,11 +221,16 @@ void ColumnWriter::CompressPage(MemoryStream &temp_writer, size_t &compressed_si
 		break;
 	}
 	case CompressionCodec::ZSTD: {
+		auto configured_compression = writer.CompressionLevel();
+		int compress_level = ZSTD_CLEVEL_DEFAULT;
+		if (configured_compression.IsValid()) {
+			compress_level = static_cast<int>(configured_compression.GetIndex());
+		}
 		compressed_size = duckdb_zstd::ZSTD_compressBound(temp_writer.GetPosition());
 		compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
-		compressed_size = duckdb_zstd::ZSTD_compress((void *)compressed_buf.get(), compressed_size,
-		                                             (const void *)temp_writer.GetData(), temp_writer.GetPosition(),
-		                                             ZSTD_CLEVEL_DEFAULT);
+		compressed_size =
+		    duckdb_zstd::ZSTD_compress((void *)compressed_buf.get(), compressed_size,
+		                               (const void *)temp_writer.GetData(), temp_writer.GetPosition(), compress_level);
 		compressed_data = compressed_buf.get();
 		break;
 	}
@@ -480,7 +485,7 @@ void BasicColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 		auto &page_info = state.page_info[page_idx];
 		if (page_info.row_count == 0) {
 			D_ASSERT(page_idx + 1 == state.page_info.size());
-			state.page_info.erase(state.page_info.begin() + page_idx);
+			state.page_info.erase_at(page_idx);
 			break;
 		}
 		PageWriteInformation write_info;
