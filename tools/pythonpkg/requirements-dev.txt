@@ -5,11 +5,12 @@ setuptools>=58
 pytest
 pandas
 pytest-timeout
-pyarrow>=8.0
 mypy
 psutil>=5.9.0
 requests>=2.26
 fsspec
-polars
+pyarrow>=8.0
 torch
+polars<0.20.22
+adbc_driver_manager
 tensorflow
