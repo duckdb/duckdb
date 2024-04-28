@@ -8,6 +8,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/parser/common_table_expression_info.hpp"
 
 namespace duckdb {
 
@@ -58,6 +59,41 @@ unique_ptr<QueryNode> QueryRelation::GetQueryNode() {
 unique_ptr<TableRef> QueryRelation::GetTableRef() {
 	auto subquery_ref = make_uniq<SubqueryRef>(GetSelectStatement(), GetAlias());
 	return std::move(subquery_ref);
+}
+
+BoundStatement QueryRelation::Bind(Binder &binder) {
+	auto saved_binding_mode = binder.GetBindingMode();
+	binder.SetBindingMode(BindingMode::EXTRACT_REPLACEMENT_SCANS);
+	bool replacements_should_be_empty = !columns.empty();
+	auto result = Relation::Bind(binder);
+	auto &replacements = binder.GetReplacementScans();
+	if (!replacements_should_be_empty) {
+		auto &query_node = *select_stmt->node;
+		auto &cte_map = query_node.cte_map;
+		for (auto &kv : replacements) {
+			auto &name = kv.first;
+			auto &tableref = kv.second;
+
+			auto select = make_uniq<SelectStatement>();
+			auto select_node = make_uniq<SelectNode>();
+			select_node->select_list.push_back(make_uniq<StarExpression>());
+			select_node->from_table = std::move(tableref);
+			select->node = std::move(select_node);
+
+			auto cte_info = make_uniq<CommonTableExpressionInfo>();
+			cte_info->query = std::move(select);
+
+			cte_map.map[name] = std::move(cte_info);
+		}
+	} else if (!replacements.empty()) {
+		// This Bind is called with the goal to execute the Relation, that means the Relation was bound before, during
+		// creation. For every replacement scan that was possible at creation, a CTE was pushed that makes sure no
+		// replacement scan will take place
+		throw BinderException("Tables or Views were removed inbetween creation and execution of this relation!");
+	}
+	replacements.clear();
+	binder.SetBindingMode(saved_binding_mode);
+	return result;
 }
 
 string QueryRelation::GetAlias() {

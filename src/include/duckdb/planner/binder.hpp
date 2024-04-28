@@ -55,7 +55,7 @@ struct BoundLimitNode;
 struct PivotColumnEntry;
 struct UnpivotEntry;
 
-enum class BindingMode : uint8_t { STANDARD_BINDING, EXTRACT_NAMES };
+enum class BindingMode : uint8_t { STANDARD_BINDING, EXTRACT_NAMES, EXTRACT_REPLACEMENT_SCANS };
 enum class BinderType : uint8_t { REGULAR_BINDER, VIEW_BINDER };
 
 struct CorrelatedColumnInfo {
@@ -191,7 +191,9 @@ public:
 	void SetBindingMode(BindingMode mode);
 	BindingMode GetBindingMode();
 	void AddTableName(string table_name);
+	void AddReplacementScan(const string &table_name, unique_ptr<TableRef> replacement);
 	const unordered_set<string> &GetTableNames();
+	case_insensitive_map_t<unique_ptr<TableRef>> &GetReplacementScans();
 	optional_ptr<SQLStatement> GetRootStatement() {
 		return root_statement;
 	}
@@ -220,6 +222,8 @@ private:
 	BindingMode mode = BindingMode::STANDARD_BINDING;
 	//! Table names extracted for BindingMode::EXTRACT_NAMES
 	unordered_set<string> table_names;
+	//! Replacement Scans extracted for BindingMode::EXTRACT_REPLACEMENT_SCANS
+	case_insensitive_map_t<unique_ptr<TableRef>> replacement_scans;
 	//! The set of bound views
 	reference_set_t<ViewCatalogEntry> bound_views;
 	//! Unnamed subquery index

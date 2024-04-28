@@ -103,6 +103,18 @@ class TestReplacementScan(object):
         df3 = con.query('from df1 join df2 using(i)')
         assert df3.fetchall() == [(1, 2, 10)]
 
+    def test_replacement_scan_after_creation(self, duckdb_cursor):
+        duckdb_cursor.execute("create table df (a varchar)")
+        rel = duckdb_cursor.sql("select * from df")
+
+        duckdb_cursor.execute("drop table df")
+        df = pd.DataFrame({'b': [1, 2, 3]})
+        with pytest.raises(
+            duckdb.InvalidInputException,
+            match=r'Tables or Views were removed inbetween creation and execution of this relation!',
+        ):
+            res = rel.fetchall()
+
     def test_replacement_scan_caching(self, duckdb_cursor):
         def return_rel(conn):
             df = pd.DataFrame({'a': [1, 2, 3]})
@@ -110,11 +122,9 @@ class TestReplacementScan(object):
             return rel
 
         rel = return_rel(duckdb_cursor)
-        # FIXME: this test should fail in the future
-        # The correct answer here is [1,2,3], as that is the 'df' that was visible during creation of the Relation
         duckdb_cursor.execute("create table df as select * from unnest([4,5,6])")
         res = rel.fetchall()
-        assert res == [(4,), (5,), (6,)]
+        assert res == [(1,), (2,), (3,)]
 
     def test_replacement_scan_fail(self):
         random_object = "I love salmiak rondos"
