@@ -425,6 +425,10 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 			}
 			break;
 		}
+		case AlterType::SET_COMMENT: {
+			disallow_alter = false;
+			break;
+		}
 		default:
 			break;
 		}
