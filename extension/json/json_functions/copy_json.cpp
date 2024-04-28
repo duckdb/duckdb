@@ -58,7 +58,7 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	}
 
 	// Bind the select statement of the original to resolve the types
-	auto dummy_binder = Binder::CreateBinder(binder.context, &binder, true);
+	auto dummy_binder = Binder::CreateBinder(binder.context, &binder);
 	auto bound_original = dummy_binder->Bind(*stmt.select_statement);
 
 	// Create new SelectNode with the original SelectNode as a subquery in the FROM clause

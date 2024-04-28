@@ -20,8 +20,6 @@ unique_ptr<PartitionedColumnData> PartitionedColumnData::CreateShared() {
 	switch (type) {
 	case PartitionedColumnDataType::RADIX:
 		return make_uniq<RadixPartitionedColumnData>(Cast<RadixPartitionedColumnData>());
-	case PartitionedColumnDataType::HIVE:
-		return make_uniq<HivePartitionedColumnData>(Cast<HivePartitionedColumnData>());
 	default:
 		throw NotImplementedException("CreateShared for this type of PartitionedColumnData");
 	}
@@ -136,6 +134,9 @@ void PartitionedColumnData::Append(PartitionedColumnDataAppendState &state, Data
 
 void PartitionedColumnData::FlushAppendState(PartitionedColumnDataAppendState &state) {
 	for (idx_t i = 0; i < state.partition_buffers.size(); i++) {
+		if (!state.partition_buffers[i]) {
+			continue;
+		}
 		auto &partition_buffer = *state.partition_buffers[i];
 		if (partition_buffer.size() > 0) {
 			partitions[i]->Append(partition_buffer);
@@ -155,7 +156,14 @@ void PartitionedColumnData::Combine(PartitionedColumnData &other) {
 		D_ASSERT(partitions.size() == other.partitions.size());
 		// Combine the append state's partitions into this PartitionedColumnData
 		for (idx_t i = 0; i < other.partitions.size(); i++) {
-			partitions[i]->Combine(*other.partitions[i]);
+			if (!other.partitions[i]) {
+				continue;
+			}
+			if (!partitions[i]) {
+				partitions[i] = std::move(other.partitions[i]);
+			} else {
+				partitions[i]->Combine(*other.partitions[i]);
+			}
 		}
 	}
 }
