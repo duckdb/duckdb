@@ -24,6 +24,6 @@ if __name__ == "__main__":
 
     result = []
     for package in packages:
-        package_name = package.replace('=', '>').split('>')[0]
+        package_name = package.replace('=', '>').replace('<', '>').split('>')[0]
         is_optional = package_name in optional_packages
         install_package(package, is_optional)
