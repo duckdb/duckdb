@@ -8,6 +8,7 @@ def install_package(package_name, is_optional):
     except subprocess.CalledProcessError:
         if is_optional:
             print(f'WARNING: Failed to install (optional) "{package_name}", might require manual review')
+            return
         raise
 
 
