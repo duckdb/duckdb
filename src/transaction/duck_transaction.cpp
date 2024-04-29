@@ -52,6 +52,7 @@ LocalStorage &DuckTransaction::GetLocalStorage() {
 }
 
 void DuckTransaction::PushCatalogEntry(CatalogEntry &entry, data_ptr_t extra_data, idx_t extra_data_size) {
+	manager.GetDB().GetCatalog().ModifyCatalog(transaction_id);
 	idx_t alloc_size = sizeof(CatalogEntry *);
 	if (extra_data_size > 0) {
 		alloc_size += extra_data_size + sizeof(idx_t);
@@ -162,6 +163,7 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t commit_id,
 		if (storage_commit_state) {
 			storage_commit_state->FlushCommit();
 		}
+		db.GetCatalog().CommitCatalogChanges(transaction_id, commit_id);
 		return ErrorData();
 	} catch (std::exception &ex) {
 		undo_buffer.RevertCommit(iterator_state, this->transaction_id);
@@ -172,10 +174,12 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t commit_id,
 void DuckTransaction::Rollback() noexcept {
 	storage->Rollback();
 	undo_buffer.Rollback();
+	manager.GetDB().GetCatalog().CleanupCatalogChanges(transaction_id);
 }
 
 void DuckTransaction::Cleanup() {
 	undo_buffer.Cleanup();
+	manager.GetDB().GetCatalog().CleanupCatalogChanges(transaction_id);
 }
 
 } // namespace duckdb

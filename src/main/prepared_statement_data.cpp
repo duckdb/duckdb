@@ -61,7 +61,8 @@ bool PreparedStatementData::RequireRebind(ClientContext &context, optional_ptr<c
 	for (auto &catalog_name : properties.modified_databases) {
 		StartTransactionInCatalog(context, catalog_name);
 	}
-	if (Catalog::GetSystemCatalog(context).GetCatalogVersion() != catalog_version) {
+	// TODO: amend checks here
+	if (context.db->GetDatabaseManager().CurrentOid() != catalog_version) {
 		//! context is out of bounds
 		return true;
 	}

@@ -14,6 +14,7 @@
 #include "duckdb/catalog/catalog_transaction.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/map.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
 #include "duckdb/common/error_data.hpp"
@@ -103,9 +104,15 @@ public:
 	bool IsTemporaryCatalog() const;
 
 	//! Returns the current version of the catalog (incremented whenever anything changes, not stored between restarts)
-	DUCKDB_API idx_t GetCatalogVersion();
-	//! Trigger a modification in the catalog, increasing the catalog version and returning the previous version
-	DUCKDB_API idx_t ModifyCatalog();
+	DUCKDB_API idx_t GetCatalogVersion(ClientContext &context);
+	//! Trigger a modification in the catalog, increasing the catalog version for the given transaction_id
+	DUCKDB_API void ModifyCatalog(transaction_t transaction_id);
+
+	DUCKDB_API void CommitCatalogChanges(transaction_t transaction_id, transaction_t commit_id);
+
+	DUCKDB_API void CleanupCatalogChanges(transaction_t transaction_id);
+
+	DUCKDB_API idx_t NextOid();
 
 	//! Returns the catalog name - based on how the catalog was attached
 	DUCKDB_API const string &GetName() const;
@@ -371,6 +378,14 @@ public:
 		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
+
+	idx_t UNCOMMITTED_CATALOG_VERSION_START = 4611686018427388000ULL; // similar approach to TRANSACTION_ID_START
+
+private:
+	mutex version_mutex;
+	map<transaction_t, idx_t> version_by_transaction;
+	idx_t last_uncommitted_catalog_version = UNCOMMITTED_CATALOG_VERSION_START;
+	idx_t last_committed_version = 0;
 };
 
 } // namespace duckdb

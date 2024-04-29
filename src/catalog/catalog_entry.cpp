@@ -12,7 +12,7 @@ CatalogEntry::CatalogEntry(CatalogType type, string name_p, idx_t oid)
 }
 
 CatalogEntry::CatalogEntry(CatalogType type, Catalog &catalog, string name_p)
-    : CatalogEntry(type, std::move(name_p), catalog.ModifyCatalog()) {
+    : CatalogEntry(type, std::move(name_p), catalog.NextOid()) {
 }
 
 CatalogEntry::~CatalogEntry() {

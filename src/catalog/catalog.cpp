@@ -316,7 +316,7 @@ struct CatalogEntryLookup {
 // Generic
 //===--------------------------------------------------------------------===//
 void Catalog::DropEntry(ClientContext &context, DropInfo &info) {
-	ModifyCatalog();
+	ModifyCatalog(GetCatalogTransaction(context).transaction_id);
 	if (info.type == CatalogType::SCHEMA_ENTRY) {
 		// DROP SCHEMA
 		DropSchema(context, info);
@@ -913,7 +913,7 @@ vector<reference<SchemaCatalogEntry>> Catalog::GetAllSchemas(ClientContext &cont
 }
 
 void Catalog::Alter(ClientContext &context, AlterInfo &info) {
-	ModifyCatalog();
+	ModifyCatalog(GetCatalogTransaction(context).transaction_id);
 
 	auto lookup = LookupEntry(context, info.GetCatalogType(), info.schema, info.name, info.if_not_found);
 
@@ -933,12 +933,52 @@ void Catalog::Verify() {
 //===--------------------------------------------------------------------===//
 // Catalog Version
 //===--------------------------------------------------------------------===//
-idx_t Catalog::GetCatalogVersion() {
-	return GetDatabase().GetDatabaseManager().catalog_version;
+idx_t Catalog::GetCatalogVersion(ClientContext &context) {
+	auto transaction = GetCatalogTransaction(context);
+	lock_guard<mutex> lock(version_mutex);
+	// first check if there were catalog modifications by the current transaction
+	auto it = version_by_transaction.find(transaction.transaction_id);
+	if (it != version_by_transaction.end()) {
+		return it->second;
+	}
+	// next, iterate through the map to find the highest valid version
+	idx_t version = 0;
+	for (auto &version_entry : version_by_transaction) {
+		auto transaction_id = version_entry.first;
+		// Only look at committed versions here (when there were no local modifications)
+		if (transaction_id < transaction.start_time) {
+			version = version_entry.second;
+		} else {
+			break;
+		}
+	}
+	return version;
 }
 
-idx_t Catalog::ModifyCatalog() {
-	return GetDatabase().GetDatabaseManager().ModifyCatalog();
+void Catalog::ModifyCatalog(transaction_t transaction_id) {
+	NextOid(); // so that catalog modifications are also centrally recorded
+	lock_guard<mutex> lock(version_mutex);
+	last_uncommitted_catalog_version++;
+	version_by_transaction[transaction_id] = last_uncommitted_catalog_version;
+}
+
+void Catalog::CommitCatalogChanges(duckdb::transaction_t transaction_id, duckdb::transaction_t commit_id) {
+	lock_guard<mutex> lock(version_mutex);
+	auto it = version_by_transaction.find(transaction_id);
+	if (it != version_by_transaction.end()) {
+		last_committed_version++;
+		version_by_transaction[commit_id] = last_committed_version;
+		version_by_transaction[transaction_id] = last_committed_version;
+	}
+}
+
+void Catalog::CleanupCatalogChanges(duckdb::transaction_t transaction_id) {
+	lock_guard<mutex> lock(version_mutex);
+	version_by_transaction.erase(transaction_id);
+}
+
+idx_t Catalog::NextOid() {
+	return GetDatabase().GetDatabaseManager().NextOid();
 }
 
 bool Catalog::IsSystemCatalog() const {

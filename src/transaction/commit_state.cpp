@@ -292,7 +292,8 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 			catalog_entry->set->UpdateTimestamp(*catalog_entry, commit_id);
 		}
 		// modify catalog on commit
-		duck_catalog.ModifyCatalog();
+		// duck_catalog.ModifyCatalog(); // TODO: pass transaction_id as parameter to CommitEntry
+		duck_catalog.NextOid();
 
 		if (HAS_LOG) {
 			// push the catalog update to the WAL

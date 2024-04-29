@@ -11,7 +11,7 @@
 
 namespace duckdb {
 
-DatabaseManager::DatabaseManager(DatabaseInstance &db) : catalog_version(0), current_query_number(1) {
+DatabaseManager::DatabaseManager(DatabaseInstance &db) : next_oid(0), current_query_number(1) {
 	system = make_uniq<AttachedDatabase>(db);
 	databases = make_uniq<CatalogSet>(system->GetCatalog());
 }
@@ -48,7 +48,9 @@ optional_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &co
 	}
 
 	const auto name = attached_db->GetName();
-	attached_db->oid = ModifyCatalog();
+	attached_db->oid = NextOid();
+	// We have to mark system catalog as changed
+	system->GetCatalog().ModifyCatalog(system->GetCatalog().GetCatalogTransaction(context).transaction_id);
 	LogicalDependencyList dependencies;
 	if (default_database.empty()) {
 		default_database = name;
