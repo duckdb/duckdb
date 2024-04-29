@@ -14,9 +14,9 @@
 namespace duckdb {
 
 struct ParquetMetaDataBindData : public TableFunctionData {
+	vector<string> paths;
 	vector<LogicalType> return_types;
 	unique_ptr<MultiFileReader> multi_file_reader;
-	string path;
 };
 
 enum class ParquetMetadataOperatorType : uint8_t { META_DATA, SCHEMA, KEY_VALUE_META_DATA, FILE_META_DATA };
@@ -586,8 +586,8 @@ unique_ptr<FunctionData> ParquetMetaDataBind(ClientContext &context, TableFuncti
 
 	auto result = make_uniq<ParquetMetaDataBindData>();
 	result->return_types = return_types;
-	result->path = input.inputs[0].ToString();
-	result->multi_file_reader = MultiFileReader::Create(context, input.table_function);
+	result->multi_file_reader = MultiFileReader::Create(input.table_function);
+	result->paths = result->multi_file_reader->ParsePaths(input.inputs[0]);
 	return std::move(result);
 }
 
@@ -597,7 +597,7 @@ unique_ptr<GlobalTableFunctionState> ParquetMetaDataInit(ClientContext &context,
 
 	auto result = make_uniq<ParquetMetaDataOperatorData>(context, bind_data.return_types);
 
-	result->file_list = bind_data.multi_file_reader->GetFileList(context, bind_data.path, "Parquet");
+	result->file_list = bind_data.multi_file_reader->CreateFileList(context, bind_data.paths);
 	result->file_list->InitializeScan(result->file_list_scan);
 
 	D_ASSERT(!result->file_list->IsEmpty());

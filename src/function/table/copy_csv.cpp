@@ -199,7 +199,9 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 	bind_data->csv_names = expected_names;
 	bind_data->return_types = expected_types;
 	bind_data->return_names = expected_names;
-	bind_data->files = MultiFileReader().GetFileList(context, Value(info.file_path), "CSV")->ToStringVector();
+
+	auto multi_file_reader = MultiFileReader::CreateDefault("CSVCopy");
+	bind_data->files = multi_file_reader->CreateFileList(context, Value(info.file_path))->ToStringVector();
 
 	auto &options = bind_data->options;
 

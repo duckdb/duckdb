@@ -60,7 +60,8 @@ void JSONScanData::Bind(ClientContext &context, TableFunctionBindInput &input) {
 		}
 	}
 
-	auto file_list = MultiFileReader().GetFileList(context, input.inputs[0], "JSON");
+	auto multi_file_reader = MultiFileReader::Create(input.table_function);
+	auto file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
 	options.file_options.AutoDetectHivePartitioning(*file_list, context);
 
 	// TODO: store the MultiFilelist instead

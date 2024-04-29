@@ -53,8 +53,10 @@ template <class OP>
 static unique_ptr<FunctionData> ReadFileBind(ClientContext &context, TableFunctionBindInput &input,
                                              vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_uniq<ReadFileBindData>();
-	result->files = MultiFileReader()
-	                    .GetFileList(context, input.inputs[0], OP::FILE_TYPE, FileGlobOptions::ALLOW_EMPTY)
+
+	auto multi_file_reader = MultiFileReader::Create(input.table_function);
+	result->files = multi_file_reader
+	                    ->CreateFileList(context, input.inputs[0], FileGlobOptions::ALLOW_EMPTY)
 	                    ->ToStringVector();
 
 	return_types.push_back(LogicalType::VARCHAR);

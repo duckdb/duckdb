@@ -101,7 +101,7 @@ bool MultiFileList::Scan(MultiFileListScanData &iterator, string &result_file) {
 }
 
 bool MultiFileList::IsEmpty() {
-	return !GetFirstFile().empty();
+	return GetFirstFile().empty();
 }
 
 string MultiFileList::GetFirstFile() {
@@ -270,16 +270,22 @@ bool FileSystemGlobMultiFileList::ExpandPathInternal() {
 MultiFileReader::~MultiFileReader() {
 }
 
-unique_ptr<MultiFileReader> MultiFileReader::Create(ClientContext & context, const TableFunction &table_function) {
+unique_ptr<MultiFileReader> MultiFileReader::Create(const TableFunction &table_function) {
+	unique_ptr<MultiFileReader> res;
 	if (table_function.get_multi_file_reader) {
-		return table_function.get_multi_file_reader(context);
+		res = table_function.get_multi_file_reader();
+		res->function_name = table_function.name;
 	} else {
-		return make_uniq<MultiFileReader>();
+		res = make_uniq<MultiFileReader>();
+		res->function_name = table_function.name;
 	}
+	return res;
 }
 
-unique_ptr<MultiFileReader> MultiFileReader::CreateDefault() {
-	return make_uniq<MultiFileReader>();
+unique_ptr<MultiFileReader> MultiFileReader::CreateDefault(const string &function_name) {
+	auto res = make_uniq<MultiFileReader>();
+	res->function_name = function_name;
+	return res;
 }
 
 void MultiFileReader::AddParameters(TableFunction &table_function) {
@@ -290,58 +296,59 @@ void MultiFileReader::AddParameters(TableFunction &table_function) {
 	table_function.named_parameters["hive_types_autocast"] = LogicalType::BOOLEAN;
 }
 
-unique_ptr<MultiFileList> MultiFileReader::GetFileList(ClientContext &context, const Value &input, const string &name,
-                                                       FileGlobOptions options) {
-	auto &config = DBConfig::GetConfig(context);
-	if (!config.options.enable_external_access) {
-		throw PermissionException("Scanning %s files is disabled through configuration", name);
-	}
+vector<string> MultiFileReader::ParsePaths(const Value &input) {
 	if (input.IsNull()) {
-		throw ParserException("%s reader cannot take NULL list as parameter", name);
-	}
-	FileSystem &fs = FileSystem::GetFileSystem(context);
-	vector<string> files;
-
-	if (config.options.use_late_glob_expansion) {
-		vector<string> paths;
-		if (input.type().id() == LogicalTypeId::VARCHAR) {
-			paths =  {StringValue::Get(input)};
-		} else {
-			for (auto &val : ListValue::GetChildren(input)) {
-				paths.push_back(StringValue::Get(val));
-			}
-		}
-
-		return make_uniq<FileSystemGlobMultiFileList>(context, paths);
+		throw ParserException("%s cannot take NULL list as parameter", function_name);
 	}
 
 	if (input.type().id() == LogicalTypeId::VARCHAR) {
-		auto file_name = StringValue::Get(input);
-		files = fs.GlobFiles(file_name, context, options);
-
-		// Sort the files to ensure that the order is deterministic
-		std::sort(files.begin(), files.end());
-
+		return {StringValue::Get(input)};
 	} else if (input.type().id() == LogicalTypeId::LIST) {
+		vector<string> paths;
 		for (auto &val : ListValue::GetChildren(input)) {
 			if (val.IsNull()) {
-				throw ParserException("%s reader cannot take NULL input as parameter", name);
+				throw ParserException("%s reader cannot take NULL input as parameter", function_name);
 			}
 			if (val.type().id() != LogicalTypeId::VARCHAR) {
-				throw ParserException("%s reader can only take a list of strings as a parameter", name);
+				throw ParserException("%s reader can only take a list of strings as a parameter", function_name);
 			}
-			auto glob_files = fs.GlobFiles(StringValue::Get(val), context, options);
-			std::sort(glob_files.begin(), glob_files.end());
-			files.insert(files.end(), glob_files.begin(), glob_files.end());
+			paths.push_back(StringValue::Get(val));
 		}
+		return paths;
 	} else {
-		throw InternalException("Unsupported type for MultiFileReader::GetFileList");
+		throw InternalException("Unsupported type for MultiFileReader::ParsePaths called with: '%s'");
 	}
-	if (files.empty() && options == FileGlobOptions::DISALLOW_EMPTY) {
-		throw IOException("%s reader needs at least one file to read", name);
+}
+
+unique_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const vector<string> &paths, FileGlobOptions options) {
+	auto &config = DBConfig::GetConfig(context);
+	if (!config.options.enable_external_access) {
+		throw PermissionException("Scanning %s files is disabled through configuration", function_name);
+	}
+	FileSystem &fs = FileSystem::GetFileSystem(context);
+	vector<string> result_files;
+
+	if (config.options.use_late_glob_expansion) {
+		return make_uniq<FileSystemGlobMultiFileList>(context, paths);
 	}
 
-	return make_uniq<SimpleMultiFileList>(files);
+	for (const auto& path: paths) {
+		auto glob_files = fs.GlobFiles(path, context, options);
+		// Sort the files to ensure that the order is deterministic
+		std::sort(glob_files.begin(), glob_files.end());
+		result_files.insert(result_files.end(), glob_files.begin(), glob_files.end());
+	}
+
+	if (result_files.empty() && options == FileGlobOptions::DISALLOW_EMPTY) {
+		throw IOException("%s needs at least one file to read", function_name);
+	}
+
+	return make_uniq<SimpleMultiFileList>(std::move(result_files));
+}
+
+unique_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const Value &input, FileGlobOptions options) {
+	auto paths = ParsePaths(input);
+	return CreateFileList(context, paths, options);
 }
 
 bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFileReaderOptions &options,
@@ -606,6 +613,7 @@ void MultiFileReader::CreateFilterMap(const vector<LogicalType> &global_types, o
 void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileReaderBindData &bind_data,
                                     const MultiFileReaderData &reader_data, DataChunk &chunk) {
 	// reference all the constants set up in MultiFileReader::FinalizeBind
+	chunk.Verify();
 	for (auto &entry : reader_data.constant_map) {
 		chunk.data[entry.column_id].Reference(entry.value);
 	}

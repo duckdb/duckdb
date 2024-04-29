@@ -225,20 +225,26 @@ protected:
 //
 // Note that while the MultiFileReader currently holds no state, its methods are not static. This is to allow overriding
 // the MultiFileReader class and dependency-inject a different MultiFileReader into existing Table Functions.
+//
+// TODO: we need to document the proper Bind + init global + init local workflow for MultiFileReader based functions
 struct MultiFileReader {
 	virtual ~MultiFileReader();
 
-	//! The Preferred way to create a MultiFileReader
-	static unique_ptr<MultiFileReader> Create(ClientContext & context, const TableFunction &table_function);
-	//! Create a default MultiFileReader
-	static unique_ptr<MultiFileReader> CreateDefault();
+	//! Create a MultiFileReader for a specific TableFunction
+	static unique_ptr<MultiFileReader> Create(const TableFunction &table_function);
+	//! Create a default MultiFileReader, the function name is used for error printing
+	static unique_ptr<MultiFileReader> CreateDefault(const string &function_name = "");
 
 	//! Add the parameters for multi-file readers (e.g. union_by_name, filename) to a table function
 	DUCKDB_API virtual void AddParameters(TableFunction &table_function);
-	//! Performs any globbing for the multi-file reader and returns a list of files to be read
-	DUCKDB_API virtual unique_ptr<MultiFileList> GetFileList(ClientContext &context, const Value &input,
-	                                                         const string &name,
-	                                                         FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY);
+
+	//! Parse a Value containing 1 or more paths into a vector of paths. Note: no expansion is performed here
+	DUCKDB_API virtual vector<string> ParsePaths(const Value &input);
+	//! Create a MultiFileList from a vector of paths. Any paths that are globs will be expanded using the default filesystem
+	DUCKDB_API virtual unique_ptr<MultiFileList> CreateFileList(ClientContext &context, const vector<string> &paths, FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY);
+	//! Syntactic sugar for ParsePaths + CreateFileList
+	DUCKDB_API unique_ptr<MultiFileList> CreateFileList(ClientContext &context, const Value &input, FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY);
+
 	//! Parse the named parameters of a multi-file reader
 	DUCKDB_API virtual bool ParseOption(const string &key, const Value &val, MultiFileReaderOptions &options,
 	                                    ClientContext &context);
@@ -379,6 +385,10 @@ protected:
 	                               const vector<string> &local_names, const vector<LogicalType> &global_types,
 	                               const vector<string> &global_names, const vector<column_t> &global_column_ids,
 	                               MultiFileReaderData &reader_data, const string &initial_file);
+
+
+	//! Used in errors to report which function is using this MultiFileReader
+	string function_name;
 };
 
 } // namespace duckdb

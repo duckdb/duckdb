@@ -387,9 +387,10 @@ public:
 			}
 		}
 
-		// TODO: Allow overriding the MultiFileReader for COPY FROM
-		auto multi_file_reader = make_uniq<MultiFileReader>();
-		auto file_list = multi_file_reader->GetFileList(context, Value(info.file_path), "Parquet");
+		// TODO: Allow overriding the MultiFileReader for COPY FROM?
+		auto multi_file_reader = MultiFileReader::CreateDefault("ParquetCopy");
+		vector<string> paths = {info.file_path};
+		auto file_list = multi_file_reader->CreateFileList(context, paths);
 
 		return ParquetScanBindInternal(context, std::move(multi_file_reader), std::move(file_list), expected_types,
 		                               expected_names, parquet_options);
@@ -510,7 +511,7 @@ public:
 
 	static unique_ptr<FunctionData> ParquetScanBind(ClientContext &context, TableFunctionBindInput &input,
 	                                                vector<LogicalType> &return_types, vector<string> &names) {
-		auto multi_file_reader = MultiFileReader::Create(context, input.table_function);
+		auto multi_file_reader = MultiFileReader::Create(input.table_function);
 
 		ParquetOptions parquet_options(context);
 		for (auto &kv : input.named_parameters) {
@@ -542,8 +543,7 @@ public:
 			}
 		}
 
-		auto files = multi_file_reader->GetFileList(context, input.inputs[0], "Parquet Scan Bind",
-		                                            FileGlobOptions::DISALLOW_EMPTY);
+		auto files = multi_file_reader->CreateFileList(context, input.inputs[0]);
 		parquet_options.file_options.AutoDetectHivePartitioning(*files, context);
 
 		return ParquetScanBindInternal(context, std::move(multi_file_reader), std::move(files), return_types, names,
@@ -575,6 +575,8 @@ public:
 		auto result = make_uniq<ParquetReadLocalState>();
 		result->is_parallel = true;
 		result->batch_index = 0;
+
+		// TODO: needs lock?
 		if (input.CanRemoveFilterColumns()) {
 			result->all_columns.Initialize(context.client, gstate.scanned_types);
 		}
@@ -618,7 +620,7 @@ public:
 		} else if (bind_data.initial_reader) {
 			// Ensure the initial reader was actually constructed from the first file
 			if (bind_data.initial_reader->file_name == bind_data.files->GetFirstFile()) {
-				result->readers.push_back(ParquetFileReaderData(bind_data.initial_reader));
+				result->readers.push_back(ParquetFileReaderData(std::move(bind_data.initial_reader), ParquetFileState::OPEN));
 			} else {
 				// FIXME This should not happen: didn't want to break things but this should probably be an
 				// InternalException
@@ -672,10 +674,9 @@ public:
 			file_path.emplace_back(path);
 		}
 
-		auto mfr = make_uniq<MultiFileReader>();
-		auto file_list = mfr->GetFileList(context, Value::LIST(LogicalType::VARCHAR, file_path),
-		                                  "Parquet Scan Deserialize", FileGlobOptions::DISALLOW_EMPTY);
-		return ParquetScanBindInternal(context, std::move(mfr), std::move(file_list), types, names, parquet_options);
+		auto multi_file_reader = MultiFileReader::Create(function);
+		auto file_list = multi_file_reader->CreateFileList(context, Value::LIST(LogicalType::VARCHAR, file_path), FileGlobOptions::DISALLOW_EMPTY);
+		return ParquetScanBindInternal(context, std::move(multi_file_reader), std::move(file_list), types, names, parquet_options);
 	}
 
 	static void ParquetScanImplementation(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
