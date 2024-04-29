@@ -27,3 +27,4 @@ class TestQueryInterruption(object):
             assert True
         except KeyboardInterrupt:
             pytest.fail()
+        thread.join()
