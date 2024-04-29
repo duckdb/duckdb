@@ -791,7 +791,7 @@ public:
 				scan_chunk.Reset();
 
 				current_row_group.ScanCommitted(scan_state.table_state, scan_chunk,
-				                                TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
+				                                TableScanType::TABLE_SCAN_LATEST_COMMITTED_ROWS);
 				if (scan_chunk.size() == 0) {
 					break;
 				}

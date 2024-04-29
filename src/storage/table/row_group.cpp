@@ -590,9 +590,17 @@ void RowGroup::Scan(TransactionData transaction, CollectionScanState &state, Dat
 void RowGroup::ScanCommitted(CollectionScanState &state, DataChunk &result, TableScanType type) {
 	auto &transaction_manager = DuckTransactionManager::Get(GetCollection().GetAttached());
 
-	auto lowest_active_start = transaction_manager.LowestActiveStart();
-	auto lowest_active_id = transaction_manager.LowestActiveId();
-	TransactionData data(lowest_active_id, lowest_active_start);
+	transaction_t start_ts;
+	transaction_t transaction_id;
+	if (type == TableScanType::TABLE_SCAN_LATEST_COMMITTED_ROWS) {
+		start_ts = transaction_manager.GetLastCommit() + 1;
+		;
+		transaction_id = MAX_TRANSACTION_ID;
+	} else {
+		start_ts = transaction_manager.LowestActiveStart();
+		transaction_id = transaction_manager.LowestActiveId();
+	}
+	TransactionData data(transaction_id, start_ts);
 	switch (type) {
 	case TableScanType::TABLE_SCAN_COMMITTED_ROWS:
 		TemplatedScan<TableScanType::TABLE_SCAN_COMMITTED_ROWS>(data, state, result);
@@ -601,6 +609,7 @@ void RowGroup::ScanCommitted(CollectionScanState &state, DataChunk &result, Tabl
 		TemplatedScan<TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES>(data, state, result);
 		break;
 	case TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED:
+	case TableScanType::TABLE_SCAN_LATEST_COMMITTED_ROWS:
 		TemplatedScan<TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED>(data, state, result);
 		break;
 	default:

@@ -33,11 +33,14 @@ public:
 
 	void Checkpoint(ClientContext &context, bool force = false) override;
 
-	transaction_t LowestActiveId() {
+	transaction_t LowestActiveId() const {
 		return lowest_active_id;
 	}
-	transaction_t LowestActiveStart() {
+	transaction_t LowestActiveStart() const {
 		return lowest_active_start;
+	}
+	transaction_t GetLastCommit() const {
+		return last_commit;
 	}
 
 	bool IsDuckTransactionManager() override {
@@ -55,6 +58,8 @@ protected:
 	};
 
 private:
+	//! Generates a new commit timestamp
+	transaction_t GetCommitTimestamp();
 	//! Remove the given transaction from the list of active transactions
 	void RemoveTransaction(DuckTransaction &transaction) noexcept;
 
@@ -70,6 +75,8 @@ private:
 	atomic<transaction_t> lowest_active_id;
 	//! The lowest active transaction timestamp
 	atomic<transaction_t> lowest_active_start;
+	//! The last commit timestamp
+	atomic<transaction_t> last_commit;
 	//! Set of currently running transactions
 	vector<unique_ptr<DuckTransaction>> active_transactions;
 	//! Set of recently committed transactions

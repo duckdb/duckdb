@@ -133,8 +133,9 @@ unique_ptr<StorageLockKey> DuckTransactionManager::SharedCheckpointLock() {
 
 unique_ptr<StorageLockKey> DuckTransactionManager::TryUpgradeCheckpointLock(unique_ptr<StorageLockKey> &lock) {
 	if (!lock) {
-		// no lock - try to get an exclusive lock
-		return checkpoint_lock.TryGetExclusiveLock();
+		throw InternalException("TryUpgradeCheckpointLock - but thread has no shared lock!?");
+		//		// no lock - try to get an exclusive lock
+		//		return checkpoint_lock.TryGetExclusiveLock();
 	}
 	// existing shared lock - try to upgrade to an exclusive lock
 	if (!checkpoint_lock.TryUpgradeLock(*lock)) {
@@ -142,6 +143,13 @@ unique_ptr<StorageLockKey> DuckTransactionManager::TryUpgradeCheckpointLock(uniq
 	}
 	return std::move(lock);
 }
+
+transaction_t DuckTransactionManager::GetCommitTimestamp() {
+	auto commit_ts = current_start_timestamp++;
+	last_commit = commit_ts;
+	return commit_ts;
+}
+
 ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction_p) {
 	auto &transaction = transaction_p.Cast<DuckTransaction>();
 	unique_lock<mutex> tlock(transaction_lock);
@@ -173,7 +181,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	OnCommitCheckpointDecision(checkpoint_decision, transaction);
 
 	// obtain a commit id for the transaction
-	transaction_t commit_id = current_start_timestamp++;
+	transaction_t commit_id = GetCommitTimestamp();
 	// commit the UndoBuffer of the transaction
 	auto error = transaction.Commit(db, commit_id, checkpoint_decision.can_checkpoint);
 	if (error.HasError()) {
