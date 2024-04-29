@@ -18,6 +18,7 @@ class TestConnectionInterrupt(object):
         thread.start()
         with pytest.raises(duckdb.InterruptException):
             conn.execute("select count(*) from range(1000000000)").fetchall()
+        thread.join()
 
     def test_interrupt_closed_connection(self):
         conn = duckdb.connect()
