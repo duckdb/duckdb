@@ -43,4 +43,4 @@ test-command = "python -m pytest {project}/tests/fast --verbose"
 
 # See https://github.com/duckdblabs/duckdb-internal/issues/1923 for context
 [tool.cibuildwheel.macos]
-before-test = 'python scripts/optional_requirements.py --exclude polars'
+before-test = 'python scripts/optional_requirements.py --exclude polars --exclude tensorflow'
