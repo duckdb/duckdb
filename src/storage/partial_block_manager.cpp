@@ -34,10 +34,10 @@ void PartialBlock::FlushInternal(const idx_t free_space_left) {
 // PartialBlockManager
 //===--------------------------------------------------------------------===//
 
-PartialBlockManager::PartialBlockManager(BlockManager &block_manager, CheckpointType checkpoint_type,
-                                         uint32_t max_partial_block_size, uint32_t max_use_count)
-    : block_manager(block_manager), checkpoint_type(checkpoint_type), max_partial_block_size(max_partial_block_size),
-      max_use_count(max_use_count) {
+PartialBlockManager::PartialBlockManager(BlockManager &block_manager, PartialBlockType partial_block_type,
+										 uint32_t max_partial_block_size, uint32_t max_use_count)
+    : block_manager(block_manager), partial_block_type(partial_block_type), max_partial_block_size(max_partial_block_size),
+	  max_use_count(max_use_count) {
 }
 PartialBlockManager::~PartialBlockManager() {
 }
@@ -54,7 +54,7 @@ PartialBlockAllocation PartialBlockManager::GetBlockAllocation(uint32_t segment_
 		//! there is! increase the reference count of this block
 		allocation.partial_block->state.block_use_count += 1;
 		allocation.state = allocation.partial_block->state;
-		if (checkpoint_type == CheckpointType::FULL_CHECKPOINT) {
+		if (partial_block_type == PartialBlockType::FULL_CHECKPOINT) {
 			block_manager.IncreaseBlockReferenceCount(allocation.state.block_id);
 		}
 	} else {
@@ -71,7 +71,7 @@ bool PartialBlockManager::HasBlockAllocation(uint32_t segment_size) {
 
 void PartialBlockManager::AllocateBlock(PartialBlockState &state, uint32_t segment_size) {
 	D_ASSERT(segment_size <= Storage::BLOCK_SIZE);
-	if (checkpoint_type == CheckpointType::FULL_CHECKPOINT) {
+	if (partial_block_type == PartialBlockType::FULL_CHECKPOINT) {
 		state.block_id = block_manager.GetFreeBlockId();
 	} else {
 		state.block_id = INVALID_BLOCK;
@@ -97,7 +97,7 @@ bool PartialBlockManager::GetPartialBlock(idx_t segment_size, unique_ptr<Partial
 
 void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation allocation) {
 	auto &state = allocation.partial_block->state;
-	D_ASSERT(checkpoint_type != CheckpointType::FULL_CHECKPOINT || state.block_id >= 0);
+	D_ASSERT(partial_block_type != PartialBlockType::FULL_CHECKPOINT || state.block_id >= 0);
 	if (state.block_use_count < max_use_count) {
 		auto unaligned_size = allocation.allocation_size + state.offset;
 		auto new_size = AlignValue(unaligned_size);

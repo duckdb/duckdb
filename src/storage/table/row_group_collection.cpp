@@ -845,7 +845,7 @@ private:
 	idx_t row_start;
 };
 
-void RowGroupCollection::InitializeVacuumState(VacuumState &state, vector<SegmentNode<RowGroup>> &segments) {
+void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state, vector<SegmentNode<RowGroup>> &segments) {
 	state.can_vacuum_deletes = info->indexes.Empty();
 	if (!state.can_vacuum_deletes) {
 		return;
@@ -943,7 +943,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	CollectionCheckpointState checkpoint_state(*this, writer, segments, global_stats);
 
 	VacuumState vacuum_state;
-	InitializeVacuumState(vacuum_state, segments);
+	InitializeVacuumState(checkpoint_state, vacuum_state, segments);
 	// schedule tasks
 	for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
 		auto &entry = segments[segment_idx];
