@@ -40,7 +40,7 @@ ORDER BY ALL
 statement error
 DROP TABLE test.t
 ----
-Dependency Error: Cannot drop entry "t" because there are entries that depend on it
+view "v" depends on table "t".
 
 statement ok
 DROP TABLE test.t CASCADE;
