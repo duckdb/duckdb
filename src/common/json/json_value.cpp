@@ -220,7 +220,7 @@ private:
 				str += c;
 				c = Peek();
 				while (c >= '0' && c <= '9') {
-					str += c;
+					str += Next();
 					c = Peek();
 				}
 			}
@@ -232,7 +232,7 @@ private:
 					Error("Expected digit after decimal point");
 				}
 				while (c >= '0' && c <= '9') {
-					str += c;
+					str += Next();
 					c = Peek();
 				}
 			}
@@ -241,14 +241,14 @@ private:
 				str += c;
 				c = Peek();
 				if (c == '+' || c == '-') {
-					str += c;
+					str += Next();
 				}
 				c = Peek();
 				if (c < '0' || c > '9') {
 					Error("Expected digit after exponent");
 				}
 				while (c >= '0' && c <= '9') {
-					str += c;
+					str += Next();
 					c = Peek();
 				}
 			}

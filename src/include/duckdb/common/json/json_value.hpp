@@ -8,22 +8,22 @@
 namespace duckdb {
 
 enum class JsonKind : uint8_t {
-	OBJECT,
-	ARRAY,
+	NULLVALUE = 0,
+	BOOLEAN,
 	NUMBER,
 	STRING,
-	BOOLEAN,
-	NULLVALUE,
+	ARRAY,
+	OBJECT,
 };
 
 class JsonValue {
 	JsonKind kind;
 	union {
-		string *str_value;
-		double num_value;
-		bool bool_value;
-		unordered_map<string, JsonValue> *object_value;
 		vector<JsonValue> *array_value;
+		bool bool_value;
+		double num_value;
+		unordered_map<string, JsonValue> *object_value;
+		string *str_value;
 	};
 
 public:
@@ -116,6 +116,8 @@ inline JsonValue::JsonValue() : JsonValue(JsonKind::OBJECT) {
 
 inline JsonValue::JsonValue(JsonKind kind) : kind(kind) {
 	switch (kind) {
+	case JsonKind::NULLVALUE:
+		break;
 	case JsonKind::BOOLEAN:
 		bool_value = false;
 		break;
@@ -125,13 +127,11 @@ inline JsonValue::JsonValue(JsonKind kind) : kind(kind) {
 	case JsonKind::STRING:
 		str_value = new string();
 		break;
-	case JsonKind::OBJECT:
-		object_value = new unordered_map<string, JsonValue>();
-		break;
 	case JsonKind::ARRAY:
 		array_value = new vector<JsonValue>();
 		break;
-	case JsonKind::NULLVALUE:
+	case JsonKind::OBJECT:
+		object_value = new unordered_map<string, JsonValue>();
 		break;
 	default:
 		throw InvalidInputException("Unrecognized JSON kind!");
@@ -388,14 +388,20 @@ inline idx_t JsonValue::Count() const {
 //------------------------------------------------------------------------------
 inline JsonValue::JsonValue(const JsonValue &value) : kind(value.kind) {
 	switch (kind) {
+	case JsonKind::BOOLEAN:
+		bool_value = value.bool_value;
+		break;
+	case JsonKind::NUMBER:
+		num_value = value.num_value;
+		break;
 	case JsonKind::STRING:
 		str_value = new string(*value.str_value);
 		break;
-	case JsonKind::OBJECT:
-		object_value = new unordered_map<string, JsonValue>(*value.object_value);
-		break;
 	case JsonKind::ARRAY:
 		array_value = new vector<JsonValue>(*value.array_value);
+		break;
+	case JsonKind::OBJECT:
+		object_value = new unordered_map<string, JsonValue>(*value.object_value);
 		break;
 	default:
 		break;
@@ -404,17 +410,23 @@ inline JsonValue::JsonValue(const JsonValue &value) : kind(value.kind) {
 
 inline JsonValue::JsonValue(JsonValue &&value) noexcept : kind(value.kind) {
 	switch (kind) {
+	case JsonKind::BOOLEAN:
+		bool_value = value.bool_value;
+		break;
+	case JsonKind::NUMBER:
+		num_value = value.num_value;
+		break;
 	case JsonKind::STRING:
 		str_value = value.str_value;
 		value.str_value = nullptr;
 		break;
-	case JsonKind::OBJECT:
-		object_value = value.object_value;
-		value.object_value = nullptr;
-		break;
 	case JsonKind::ARRAY:
 		array_value = value.array_value;
 		value.array_value = nullptr;
+		break;
+	case JsonKind::OBJECT:
+		object_value = value.object_value;
+		value.object_value = nullptr;
 		break;
 	default:
 		break;
@@ -429,14 +441,20 @@ inline JsonValue &JsonValue::operator=(const JsonValue &value) {
 	this->~JsonValue();
 	kind = value.kind;
 	switch (kind) {
+	case JsonKind::BOOLEAN:
+		bool_value = value.bool_value;
+		break;
+	case JsonKind::NUMBER:
+		num_value = value.num_value;
+		break;
 	case JsonKind::STRING:
 		str_value = new string(*value.str_value);
 		break;
-	case JsonKind::OBJECT:
-		object_value = new unordered_map<string, JsonValue>(*value.object_value);
-		break;
 	case JsonKind::ARRAY:
 		array_value = new vector<JsonValue>(*value.array_value);
+		break;
+	case JsonKind::OBJECT:
+		object_value = new unordered_map<string, JsonValue>(*value.object_value);
 		break;
 	default:
 		break;
@@ -451,17 +469,23 @@ inline JsonValue &JsonValue::operator=(JsonValue &&value) noexcept {
 	this->~JsonValue();
 	kind = value.kind;
 	switch (kind) {
+	case JsonKind::BOOLEAN:
+		bool_value = value.bool_value;
+		break;
+	case JsonKind::NUMBER:
+		num_value = value.num_value;
+		break;
 	case JsonKind::STRING:
 		str_value = value.str_value;
 		value.str_value = nullptr;
 		break;
-	case JsonKind::OBJECT:
-		object_value = value.object_value;
-		value.object_value = nullptr;
-		break;
 	case JsonKind::ARRAY:
 		array_value = value.array_value;
 		value.array_value = nullptr;
+		break;
+	case JsonKind::OBJECT:
+		object_value = value.object_value;
+		value.object_value = nullptr;
 		break;
 	default:
 		break;

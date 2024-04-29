@@ -8,7 +8,8 @@ add_library_unity(
   test_numeric_cast.cpp
   test_utf.cpp
   test_strftime.cpp
-  test_string_util.cpp)
+  test_string_util.cpp
+  test_json.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_common>
     PARENT_SCOPE)
