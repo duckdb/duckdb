@@ -4,6 +4,7 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
@@ -13,8 +14,11 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_expanded_expression.hpp"
 #include "duckdb/planner/expression_binder/column_alias_binder.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
@@ -28,6 +32,8 @@
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/expression_binder/select_bind_state.hpp"
+
+#include "iostream"
 
 namespace duckdb {
 
@@ -479,6 +485,12 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 			auto &bound_expr_ref = *bound_expr;
 			bool contains_subquery = bound_expr_ref.HasSubquery();
 
+			// How to add a case statement for grouping sets?
+
+			//
+			// when a collation is pushed, so the FIRST(region) is added so that correct column can be projected with the correct value/varchar
+			// when the aggregate makes the grouping sets, it needs to change the first into a NULL when the region column is not grouped on
+
 			// push a potential collation, if necessary
 			bool requires_collation = ExpressionBinder::PushCollation(context, bound_expr, group_type, true);
 			if (!contains_subquery && requires_collation) {
@@ -486,14 +498,28 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 				// but also push a first(x) aggregate in case x is selected (uncollated)
 				info.collated_groups[i] = result->aggregates.size();
 
+				auto collated_expr = bound_expr->Copy();
+				std::cout << "collated expr printed = " << collated_expr->ToString() << std::endl;
+				D_ASSERT(collated_expr->expression_class == ExpressionClass::BOUND_FUNCTION);
+
+
 				auto first_fun = FirstFun::GetFunction(LogicalType::VARCHAR);
 				vector<unique_ptr<Expression>> first_children;
 				// FIXME: would be better to just refer to this expression, but for now we copy
 				first_children.push_back(bound_expr_ref.Copy());
-
+				auto case_copy = bound_expr_ref.Copy();
 				FunctionBinder function_binder(context);
 				auto function = function_binder.BindAggregateFunction(first_fun, std::move(first_children));
-				result->aggregates.push_back(std::move(function));
+
+				auto sql_null = make_uniq<BoundConstantExpression>(Value(LogicalType::VARCHAR));
+				std::cout << sql_null->ToString() << std::endl;
+				auto when_expr = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
+				when_expr->children.push_back(std::move(collated_expr));
+				auto then_expr = make_uniq<BoundConstantExpression>(Value(LogicalType::VARCHAR));
+				auto else_expr = std::move(function);
+				auto case_expr = make_uniq<BoundCaseExpression>(std::move(when_expr), std::move(then_expr), std::move(else_expr));
+
+				result->aggregates.push_back(std::move(case_expr));
 				info.collated_group_original[i] = result->aggregates.size();
 				// FIXME: need to NULLify the non-collated first aggr function just like how we nullify the collated group
 				//        this is if there are grouping sets.
