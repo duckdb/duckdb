@@ -182,6 +182,38 @@ static void BuildUnionByNameInfo(ClientContext &context, BoundSetOperationNode &
 	}
 }
 
+void GroupCollation(unique_ptr<BoundSetOperationNode> &bound_set_op, ClientContext &context) {
+	if (bound_set_op->left->type != QueryNodeType::SELECT_NODE) {
+		return;
+	}
+	auto &bound_sel_node = bound_set_op->left->Cast<BoundSelectNode>();
+	auto &bind_state = bound_sel_node.bind_state;
+	for (idx_t i = 0; i < bound_sel_node.collation_sel_idx.size(); i++) {
+		idx_t collate_idx = bound_sel_node.collation_sel_idx[i];
+		D_ASSERT(bind_state.original_expressions[collate_idx]->GetExpressionClass() == ExpressionClass::COLLATE);
+
+		auto bound_expr = bound_sel_node.select_list[collate_idx]->Copy();
+		auto &bound_expr_ref = *bound_expr;
+		bool contains_subquery = bound_expr_ref.HasSubquery();
+
+		// ExpressionBinder::PushCollation(bound_set_op->left_binder->context, bound_expr, bound_expr->return_type, true);
+		ExpressionBinder::PushCollation(context, bound_expr, bound_expr->return_type, true);
+		// if (!contains_subquery) {
+		// 	auto first_fun = FirstFun::GetFunction(LogicalType::VARCHAR);
+
+		// 	vector<unique_ptr<Expression>> first_children;
+		// 	first_children.push_back(bound_expr_ref.Copy());
+
+		// 	// FunctionBinder function_binder(bound_set_op->left_binder->context);
+		// 	FunctionBinder function_binder(context);
+		// 	auto function = function_binder.BindAggregateFunction(first_fun, std::move(first_children));
+		// 	bound_set_op->aggregates.push_back(std::move(function));
+		// }
+		bound_set_op->group_expressions.push_back(std::move(bound_expr));
+		// bound_set_op->groups.grouping_sets.push_back({i});
+	}
+}
+
 unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 	auto result = make_uniq<BoundSetOperationNode>();
 	result->setop_type = statement.setop_type;
@@ -197,6 +229,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 	result->left_binder = Binder::CreateBinder(context, this);
 	result->left_binder->can_contain_nulls = true;
 	result->left = result->left_binder->BindNode(*statement.left);
+	GroupCollation(result, context);
+
 	result->right_binder = Binder::CreateBinder(context, this);
 	result->right_binder->can_contain_nulls = true;
 	result->right = result->right_binder->BindNode(*statement.right);

@@ -49,6 +49,9 @@ public:
 	vector<idx_t> left_reorder_idx;
 	vector<idx_t> right_reorder_idx;
 
+	// BoundGroupByNode groups;
+	vector<unique_ptr<Expression>> group_expressions;
+
 public:
 	idx_t GetRootIndex() override {
 		return setop_index;

@@ -108,13 +108,30 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 	if (!op.setop_all) { // no ALL, use distinct semantics
 		auto &types = result->GetTypes();
 		vector<unique_ptr<Expression>> groups, aggregates /* left empty */;
-		for (idx_t i = 0; i < types.size(); i++) {
-			groups.push_back(make_uniq<BoundReferenceExpression>(types[i], i));
+		if (op.group_expressions.empty()) {
+			for (idx_t i = 0; i < types.size(); i++) {
+				groups.push_back(make_uniq<BoundReferenceExpression>(types[i], i));
+			}
+		} else {
+			vector<unique_ptr<Expression>> expressions;
+			vector<LogicalType> types;
+			groups = std::move(op.group_expressions);
+			for (auto &group : groups) {
+				auto ref = make_uniq<BoundReferenceExpression>(group->return_type, expressions.size());
+				types.push_back(group->return_type);
+				expressions.push_back(std::move(group));
+				group = std::move(ref);
+			}
+			auto projection = make_uniq<PhysicalProjection>(std::move(types), std::move(expressions), op.estimated_cardinality);
+			projection->children.push_back(std::move(result));
+			result = std::move(projection);
 		}
+
 		auto groupby = make_uniq<PhysicalHashAggregate>(context, op.types, std::move(aggregates), std::move(groups),
-		                                                result->estimated_cardinality);
+														result->estimated_cardinality);
 		groupby->children.push_back(std::move(result));
 		result = std::move(groupby);
+
 	}
 
 	D_ASSERT(result);

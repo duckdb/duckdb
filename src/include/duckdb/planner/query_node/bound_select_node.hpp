@@ -96,6 +96,8 @@ public:
 	idx_t prune_index;
 	bool need_prune = false;
 
+	vector<idx_t> collation_sel_idx;
+
 public:
 	idx_t GetRootIndex() override {
 		return need_prune ? prune_index : projection_index;

@@ -116,8 +116,16 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 		break;
 	}
 
+	// unique_ptr<CollationGroupInfo> collation_info = make_uniq<CollationGroupInfo>(node.groups);
+
+	// auto root = make_uniq<LogicalSetOperation>(node.setop_index, node.types.size(), std::move(left_node),
+	//                                            std::move(right_node), logical_type, node.setop_all, true,
+	// 										   std::move(collation_info)));
+
+	// TODO std::move(node.group_expressions) 
 	auto root = make_uniq<LogicalSetOperation>(node.setop_index, node.types.size(), std::move(left_node),
-	                                           std::move(right_node), logical_type, node.setop_all);
+	                                           std::move(right_node), logical_type, node.setop_all, true,
+											   node.group_expressions);
 
 	return VisitQueryNode(node, std::move(root));
 }

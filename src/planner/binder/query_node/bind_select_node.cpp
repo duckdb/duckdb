@@ -435,6 +435,10 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 		}
 		bind_state.projection_map[*expr] = i;
 		bind_state.original_expressions.push_back(expr->Copy());
+
+		if (expr->GetExpressionClass() == ExpressionClass::COLLATE) {
+			result->collation_sel_idx.push_back(i);
+		}
 	}
 	result->column_count = statement.select_list.size();
 
