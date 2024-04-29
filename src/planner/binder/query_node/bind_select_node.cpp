@@ -494,6 +494,9 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 				FunctionBinder function_binder(context);
 				auto function = function_binder.BindAggregateFunction(first_fun, std::move(first_children));
 				result->aggregates.push_back(std::move(function));
+				info.collated_group_original[i] = result->aggregates.size();
+				// FIXME: need to NULLify the non-collated first aggr function just like how we nullify the collated group
+				//        this is if there are grouping sets.
 			}
 			result->groups.group_expressions.push_back(std::move(bound_expr));
 

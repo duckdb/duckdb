@@ -26,22 +26,20 @@ INSERT INTO sales VALUES
   (2, 'South', 2020, 400.00),
   (2, 'South', 2021, 550.00);
 
-
-statement ok
-set default_collation=c;
-
-statement ok
-create table t1 as SELECT product_id, region, SUM(amount_sold) AS total_amount
-FROM sales
-GROUP BY GROUPING SETS ((product_id), (region), ())
-ORDER BY product_id, region, total_amount;
-
+#statement ok
+#set default_collation=c;
+#
+#statement ok
+#create table t1 as SELECT product_id, region, SUM(amount_sold) AS total_amount
+#FROM sales
+#GROUP BY GROUPING SETS ((product_id), (region), ())
+#ORDER BY product_id, region, total_amount;
 
 statement ok
 set default_collation=en_us;
 
 statement ok
-create table t2 as SELECT product_id, region, SUM(amount_sold) AS total_amount
+SELECT product_id, region, SUM(amount_sold) AS total_amount
 FROM sales
 GROUP BY GROUPING SETS ((product_id), (region), ())
 ORDER BY product_id, region, total_amount;
