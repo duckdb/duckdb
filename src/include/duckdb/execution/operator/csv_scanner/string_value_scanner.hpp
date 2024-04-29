@@ -165,6 +165,10 @@ public:
 	bool sniffing;
 
 	char decimal_separator;
+
+	//! We store borked rows so we can generate multiple errors during flushing
+	unordered_set<idx_t> borked_rows;
+
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
 	//! Adds a Value to the result

@@ -374,6 +374,7 @@ void StringValueResult::Reset() {
 		buffer_handles[cur_buffer->buffer_idx] = cur_buffer;
 	}
 	current_errors.clear();
+	borked_rows.clear();
 }
 
 void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t buffer_pos) {
@@ -442,6 +443,7 @@ void StringValueResult::HandleUnicodeError(idx_t col_idx, LinePosition &error_po
 
 bool StringValueResult::HandleError() {
 	if (state_machine.options.IgnoreErrors() && !current_errors.empty()) {
+		borked_rows.insert(number_of_rows);
 		current_errors.clear();
 		cur_col_id = 0;
 		chunk_col_id = 0;
@@ -524,6 +526,7 @@ bool StringValueResult::HandleError() {
 		error_handler.Error(csv_error);
 	}
 	if (!current_errors.empty()) {
+		borked_rows.insert(number_of_rows);
 		current_errors.clear();
 		cur_col_id = 0;
 		chunk_col_id = 0;
@@ -605,6 +608,12 @@ bool StringValueResult::AddRowInternal() {
 		}
 	}
 	if (HandleError()) {
+		line_positions_per_row[number_of_rows] = current_line_position;
+		number_of_rows++;
+		if (number_of_rows >= result_size) {
+			// We have a full chunk
+			return true;
+		}
 		return false;
 	}
 	NullPaddingQuotedNewlineCheck();
@@ -791,7 +800,6 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 	insert_chunk.SetCardinality(parse_chunk);
 
 	// We keep track of the borked lines, in case we are ignoring errors
-	unordered_set<idx_t> borked_lines;
 	D_ASSERT(csv_file_scan);
 
 	auto &reader_data = csv_file_scan->reader_data;
@@ -863,13 +871,13 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					error_handler->Error(csv_error);
 				}
 			}
-			borked_lines.insert(line_error++);
+			result.borked_rows.insert(line_error++);
 			D_ASSERT(state_machine->options.ignore_errors.GetValue());
 			// We are ignoring errors. We must continue but ignoring borked rows
 			for (; line_error < parse_chunk.size(); line_error++) {
 				if (!inserted_column_data.validity.RowIsValid(line_error) &&
 				    parse_column_data.validity.RowIsValid(line_error)) {
-					borked_lines.insert(line_error);
+					result.borked_rows.insert(line_error);
 					vector<Value> row;
 					for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
 						row.push_back(parse_chunk.GetValue(col, line_error));
@@ -897,12 +905,12 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 			}
 		}
 	}
-	if (!borked_lines.empty()) {
+	if (!result.borked_rows.empty()) {
 		// We must remove the borked lines from our chunk
-		SelectionVector succesful_rows(parse_chunk.size() - borked_lines.size());
+		SelectionVector succesful_rows(parse_chunk.size() - result.borked_rows.size());
 		idx_t sel_idx = 0;
 		for (idx_t row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
-			if (borked_lines.find(row_idx) == borked_lines.end()) {
+			if (result.borked_rows.find(row_idx) == result.borked_rows.end()) {
 				succesful_rows.set_index(sel_idx++, row_idx);
 			}
 		}
@@ -1297,13 +1305,12 @@ void StringValueScanner::SetStart() {
 			// When Null Padding, we assume we start from the correct new-line
 			return;
 		}
-
 		scan_finder =
 		    make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, make_shared_ptr<CSVErrorHandler>(true),
 		                                  csv_file_scan, false, iterator, 1U);
 		auto &tuples = scan_finder->ParseChunk();
 		line_found = true;
-		if (tuples.number_of_rows != 1) {
+		if (tuples.number_of_rows != 1 || !tuples.borked_rows.empty()) {
 			line_found = false;
 			// If no tuples were parsed, this is not the correct start, we need to skip until the next new line
 			// Or if columns don't match, this is not the correct start, we need to skip until the next new line
@@ -1318,7 +1325,7 @@ void StringValueScanner::SetStart() {
 				}
 			}
 			if (iterator.pos.buffer_pos == cur_buffer_handle->actual_size ||
-			    scan_finder->iterator.GetBufferIdx() >= iterator.GetBufferIdx()) {
+			    scan_finder->iterator.GetBufferIdx() > iterator.GetBufferIdx()) {
 				// Propagate any errors
 				if (!scan_finder->error_handler->errors.empty() && state_machine->options.ignore_errors.GetValue()) {
 					for (auto &error_vector : scan_finder->error_handler->errors) {

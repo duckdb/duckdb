@@ -240,10 +240,10 @@ query IIIIIIIII
 SELECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
 ----
 0	2	38	38	1	date	CAST	not-a-date,not-a-datetime,not-a-time,not-a-timestamp,not-a-time-tz	Error when converting column "date". Could not convert string "not-a-date" to 'DATE'
-0	2	38	49	2	datetime	CAST	not-a-date,not-a-datetime,not-a-time,not-a-timestamp,not-a-time-tz	Error when converting column "datetime". Could not convert string "not-a-datetime" to 'TIMESTAMP WITH TIME ZONE'
 0	2	38	64	3	time	CAST	not-a-date,not-a-datetime,not-a-time,not-a-timestamp,not-a-time-tz	Error when converting column "time". Could not convert string "not-a-time" to 'TIME'
 0	2	38	75	4	timestamp	CAST	not-a-date,not-a-datetime,not-a-time,not-a-timestamp,not-a-time-tz	Error when converting column "timestamp". Could not convert string "not-a-timestamp" to 'TIMESTAMP'
-0	2	38	91	5	time_tz	CAST	not-a-date,not-a-datetime,not-a-time,not-a-timestamp,not-a-time-tz	Error when converting column "time_tz". Could not convert string "not-a-time-tz" to 'TIME WITH TIME ZONE'
+0	2	38	NULL	2	datetime	CAST	not-a-date,not-a-datetime,not-a-time,not-a-timestamp,not-a-time-tz	Error when converting column "datetime". Could not convert string "not-a-datetime" to 'TIMESTAMP WITH TIME ZONE'
+0	2	38	NULL	5	time_tz	CAST	not-a-date,not-a-datetime,not-a-time,not-a-timestamp,not-a-time-tz	Error when converting column "time_tz". Could not convert string "not-a-time-tz" to 'TIME WITH TIME ZONE'
 
 statement ok
 DROP TABLE reject_errors;
