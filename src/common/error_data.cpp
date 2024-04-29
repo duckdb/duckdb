@@ -7,6 +7,7 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/query_error_context.hpp"
 #include "duckdb/parser/tableref.hpp"
+#include "duckdb/common/json/json_value.hpp"
 
 namespace duckdb {
 
@@ -28,14 +29,14 @@ ErrorData::ErrorData(const string &message) : initialized(true), type(ExceptionT
 		raw_message = message;
 		return;
 	} else {
-		auto info = StringUtil::ParseJSONMap(message);
-		for (auto &entry : info) {
+		auto info = JsonValue::Parse(message);
+		for (auto &entry : info.Properties()) {
 			if (entry.first == "exception_type") {
-				type = Exception::StringToExceptionType(entry.second);
+				type = Exception::StringToExceptionType(entry.second.As<string>());
 			} else if (entry.first == "exception_message") {
-				raw_message = SanitizeErrorMessage(entry.second);
+				raw_message = SanitizeErrorMessage(entry.second.As<string>());
 			} else {
-				extra_info[entry.first] = entry.second;
+				extra_info[entry.first] = entry.second.As<string>();
 			}
 		}
 	}
