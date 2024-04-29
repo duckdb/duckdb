@@ -124,7 +124,12 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 			    "Cannot FORCE CHECKPOINT: failed to grab checkpoint lock after aborting all other transactions");
 		}
 	}
-	storage_manager.CreateCheckpoint();
+	CheckpointOptions options;
+	if (GetLastCommit() > LowestActiveStart()) {
+		// we cannot do a full checkpoint if any transaction needs to read old data
+		options.type = CheckpointType::CONCURRENT_CHECKPOINT;
+	}
+	storage_manager.CreateCheckpoint(options);
 }
 
 unique_ptr<StorageLockKey> DuckTransactionManager::SharedCheckpointLock() {
@@ -204,10 +209,17 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	if (checkpoint_decision.can_checkpoint) {
 		D_ASSERT(lock);
 		// we can unlock the transaction lock while checkpointing
+		auto lowest_active_start = LowestActiveStart();
 		tlock.unlock();
 		// checkpoint the database to disk
 		auto &storage_manager = db.GetStorageManager();
-		storage_manager.CreateCheckpoint(false, true);
+		CheckpointOptions options;
+		options.action = CheckpointAction::FORCE_CHECKPOINT;
+		if (lowest_active_start < commit_id) {
+			// we cannot do a full checkpoint if any transaction needs to read old data
+			options.type = CheckpointType::CONCURRENT_CHECKPOINT;
+		}
+		storage_manager.CreateCheckpoint(options);
 	}
 	return error;
 }

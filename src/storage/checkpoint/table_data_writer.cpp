@@ -42,6 +42,10 @@ unique_ptr<RowGroupWriter> SingleFileTableDataWriter::GetRowGroupWriter(RowGroup
 	return make_uniq<SingleFileRowGroupWriter>(table, checkpoint_manager.partial_block_manager, table_data_writer);
 }
 
+CheckpointType SingleFileTableDataWriter::GetCheckpointType() const {
+	return checkpoint_manager.GetCheckpointType();
+}
+
 void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo *info,
                                               Serializer &serializer) {
 	// store the current position in the metadata writer

@@ -845,8 +845,11 @@ private:
 	idx_t row_start;
 };
 
-void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state, vector<SegmentNode<RowGroup>> &segments) {
-	state.can_vacuum_deletes = info->indexes.Empty();
+void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
+                                               vector<SegmentNode<RowGroup>> &segments) {
+	bool is_full_checkpoint = checkpoint_state.writer.GetCheckpointType() == CheckpointType::FULL_CHECKPOINT;
+	// currently we can only vacuum deletes if we are doing a full checkpoint and there are no indexes
+	state.can_vacuum_deletes = info->indexes.Empty() && is_full_checkpoint;
 	if (!state.can_vacuum_deletes) {
 		return;
 	}

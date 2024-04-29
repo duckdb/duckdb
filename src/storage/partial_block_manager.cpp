@@ -35,9 +35,9 @@ void PartialBlock::FlushInternal(const idx_t free_space_left) {
 //===--------------------------------------------------------------------===//
 
 PartialBlockManager::PartialBlockManager(BlockManager &block_manager, PartialBlockType partial_block_type,
-										 uint32_t max_partial_block_size, uint32_t max_use_count)
-    : block_manager(block_manager), partial_block_type(partial_block_type), max_partial_block_size(max_partial_block_size),
-	  max_use_count(max_use_count) {
+                                         uint32_t max_partial_block_size, uint32_t max_use_count)
+    : block_manager(block_manager), partial_block_type(partial_block_type),
+      max_partial_block_size(max_partial_block_size), max_use_count(max_use_count) {
 }
 PartialBlockManager::~PartialBlockManager() {
 }

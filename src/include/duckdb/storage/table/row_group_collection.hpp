@@ -90,7 +90,8 @@ public:
 
 	void Checkpoint(TableDataWriter &writer, TableStatistics &global_stats);
 
-	void InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state, vector<SegmentNode<RowGroup>> &segments);
+	void InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
+	                           vector<SegmentNode<RowGroup>> &segments);
 	bool ScheduleVacuumTasks(CollectionCheckpointState &checkpoint_state, VacuumState &state, idx_t segment_idx);
 	void ScheduleCheckpointTask(CollectionCheckpointState &checkpoint_state, idx_t segment_idx);
 
