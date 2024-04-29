@@ -162,6 +162,8 @@ enum class JoinRefType : uint8_t;
 
 enum class JoinType : uint8_t;
 
+enum class JsonKind : uint8_t;
+
 enum class KeywordCategory : uint8_t;
 
 enum class LimitNodeType : uint8_t;
@@ -521,6 +523,9 @@ const char* EnumUtil::ToChars<JoinRefType>(JoinRefType value);
 
 template<>
 const char* EnumUtil::ToChars<JoinType>(JoinType value);
+
+template<>
+const char* EnumUtil::ToChars<JsonKind>(JsonKind value);
 
 template<>
 const char* EnumUtil::ToChars<KeywordCategory>(KeywordCategory value);
@@ -963,6 +968,9 @@ JoinRefType EnumUtil::FromString<JoinRefType>(const char *value);
 
 template<>
 JoinType EnumUtil::FromString<JoinType>(const char *value);
+
+template<>
+JsonKind EnumUtil::FromString<JsonKind>(const char *value);
 
 template<>
 KeywordCategory EnumUtil::FromString<KeywordCategory>(const char *value);

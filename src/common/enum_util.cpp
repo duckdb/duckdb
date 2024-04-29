@@ -58,6 +58,7 @@
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/file_open_flags.hpp"
+#include "duckdb/common/json/json_value.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/sort/partition_state.hpp"
 #include "duckdb/common/types.hpp"
@@ -3105,6 +3106,49 @@ JoinType EnumUtil::FromString<JoinType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "RIGHT_ANTI")) {
 		return JoinType::RIGHT_ANTI;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<JsonKind>(JsonKind value) {
+	switch(value) {
+	case JsonKind::NULLVALUE:
+		return "NULLVALUE";
+	case JsonKind::BOOLEAN:
+		return "BOOLEAN";
+	case JsonKind::NUMBER:
+		return "NUMBER";
+	case JsonKind::STRING:
+		return "STRING";
+	case JsonKind::ARRAY:
+		return "ARRAY";
+	case JsonKind::OBJECT:
+		return "OBJECT";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+JsonKind EnumUtil::FromString<JsonKind>(const char *value) {
+	if (StringUtil::Equals(value, "NULLVALUE")) {
+		return JsonKind::NULLVALUE;
+	}
+	if (StringUtil::Equals(value, "BOOLEAN")) {
+		return JsonKind::BOOLEAN;
+	}
+	if (StringUtil::Equals(value, "NUMBER")) {
+		return JsonKind::NUMBER;
+	}
+	if (StringUtil::Equals(value, "STRING")) {
+		return JsonKind::STRING;
+	}
+	if (StringUtil::Equals(value, "ARRAY")) {
+		return JsonKind::ARRAY;
+	}
+	if (StringUtil::Equals(value, "OBJECT")) {
+		return JsonKind::OBJECT;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
