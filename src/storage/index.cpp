@@ -1,11 +1,6 @@
 #include "duckdb/storage/index.hpp"
-
 #include "duckdb/common/radix.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/storage/table/append_state.hpp"
 
 namespace duckdb {
 

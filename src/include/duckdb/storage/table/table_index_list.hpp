@@ -10,6 +10,7 @@
 
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/storage/index.hpp"
+#include "duckdb/parser/constraint.hpp"
 
 namespace duckdb {
 

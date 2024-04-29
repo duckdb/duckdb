@@ -18,10 +18,6 @@ BoundIndex::BoundIndex(const string &name, const string &index_type, IndexConstr
                        const vector<unique_ptr<Expression>> &unbound_expressions_p, AttachedDatabase &db)
     : Index(name, index_type, index_constraint_type, column_ids, table_io_manager, db) {
 
-	if (!Radix::IsLittleEndian()) {
-		throw NotImplementedException("indexes are not supported on big endian architectures");
-	}
-
 	for (auto &expr : unbound_expressions_p) {
 		types.push_back(expr->return_type.InternalType());
 		logical_types.push_back(expr->return_type);

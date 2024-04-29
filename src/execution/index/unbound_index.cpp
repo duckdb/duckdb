@@ -1,5 +1,7 @@
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
+#include "duckdb/storage/table_io_manager.hpp"
+#include "duckdb/storage/index_storage_info.hpp"
 
 namespace duckdb {
 

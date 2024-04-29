@@ -12,9 +12,11 @@
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/storage/optimistic_data_writer.hpp"
+#include "duckdb/common/reference_map.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
+class Catalog;
 class DataTable;
 class Transaction;
 class WriteAheadLog;

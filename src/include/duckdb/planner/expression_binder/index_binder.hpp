@@ -19,7 +19,7 @@ namespace duckdb {
 
 class BoundColumnRefExpression;
 
-//! The IndexBinder is responsible for binding an expression within an index statement
+//! The IndexBinder is responsible for binding indexes, as well as expressions within an index statement
 class IndexBinder : public ExpressionBinder {
 public:
 	IndexBinder(Binder &binder, ClientContext &context, optional_ptr<TableCatalogEntry> table = nullptr,
