@@ -120,7 +120,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	// first check if the logical operator has correlated expressions
 	auto entry = has_correlated_expressions.find(*plan);
 	bool exit_projection = false;
-	unique_ptr<LogicalDelimGet> delim_scan = nullptr;
+	unique_ptr<LogicalDelimGet> delim_scan;
 	D_ASSERT(entry != has_correlated_expressions.end());
 	if (!entry->second) {
 		// we reached a node without correlated expressions
