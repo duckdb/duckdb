@@ -639,11 +639,11 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 		create_info->columns.AddColumn(std::move(copy));
 	}
 
-	for (idx_t i = 0; i < constraints.size(); i++) {
-		auto constraint = constraints[i]->Copy();
+	for (idx_t constr_idx = 0; constr_idx < constraints.size(); constr_idx++) {
+		auto constraint = constraints[constr_idx]->Copy();
 		switch (constraint->type) {
 		case ConstraintType::CHECK: {
-			auto &bound_check = bound_constraints[i]->Cast<BoundCheckConstraint>();
+			auto &bound_check = bound_constraints[constr_idx]->Cast<BoundCheckConstraint>();
 			auto physical_index = columns.LogicalToPhysical(change_idx);
 			if (bound_check.bound_columns.find(physical_index) != bound_check.bound_columns.end()) {
 				throw BinderException("Cannot change the type of a column that has a CHECK constraint specified");
@@ -653,21 +653,22 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 		case ConstraintType::NOT_NULL:
 			break;
 		case ConstraintType::UNIQUE: {
-			auto &bound_unique = bound_constraints[i]->Cast<BoundUniqueConstraint>();
-			if (bound_unique.key_set.find(change_idx) != bound_unique.key_set.end()) {
+			auto &bound_unique = bound_constraints[constr_idx]->Cast<BoundUniqueConstraint>();
+			auto physical_index = columns.LogicalToPhysical(change_idx);
+			if (bound_unique.key_set.find(physical_index) != bound_unique.key_set.end()) {
 				throw BinderException(
 				    "Cannot change the type of a column that has a UNIQUE or PRIMARY KEY constraint specified");
 			}
 			break;
 		}
 		case ConstraintType::FOREIGN_KEY: {
-			auto &bfk = bound_constraints[i]->Cast<BoundForeignKeyConstraint>();
+			auto &bfk = bound_constraints[constr_idx]->Cast<BoundForeignKeyConstraint>();
 			auto key_set = bfk.pk_key_set;
 			if (bfk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
 				key_set = bfk.fk_key_set;
 			} else if (bfk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
-				for (idx_t i = 0; i < bfk.info.fk_keys.size(); i++) {
-					key_set.insert(bfk.info.fk_keys[i]);
+				for (idx_t key_idx = 0; key_idx < bfk.info.fk_keys.size(); key_idx++) {
+					key_set.insert(bfk.info.fk_keys[key_idx]);
 				}
 			}
 			if (key_set.find(columns.LogicalToPhysical(change_idx)) != key_set.end()) {
