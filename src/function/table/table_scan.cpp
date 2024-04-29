@@ -306,21 +306,12 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 		return;
 	}
 
+	// Initialize any ART indexes
+	storage.info->InitializeIndexes(context, ART::TYPE_NAME);
+
 	// behold
-	storage.info->indexes.Scan([&](Index &index) {
+	storage.info->indexes.ScanBound<ART>([&](ART &art_index) {
 		// first rewrite the index expression so the ColumnBindings align with the column bindings of the current table
-
-		if (index.IsUnbound()) {
-			// unknown index: skip
-			return false;
-		}
-
-		if (index.index_type != ART::TYPE_NAME) {
-			// only ART indexes are supported for now
-			return false;
-		}
-
-		auto &art_index = index.Cast<ART>();
 
 		if (art_index.unbound_expressions.size() > 1) {
 			// NOTE: index scans are not (yet) supported for compound index keys

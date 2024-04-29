@@ -30,6 +30,20 @@ public:
 			}
 		}
 	}
+
+	//! Scan the indexes, invoking the callback method for every bound entry of a specific type
+	template <class T, class FUNC>
+	void ScanBound(FUNC &&callback) {
+		lock_guard<mutex> lock(indexes_lock);
+		for (auto &index : indexes) {
+			if (index->IsBound() && T::TYPE_NAME == index->index_type) {
+				if (callback(index->Cast<T>())) {
+					break;
+				}
+			}
+		}
+	}
+
 	//! Returns a reference to the indexes of this table
 	const vector<unique_ptr<Index>> &Indexes() const {
 		return indexes;
