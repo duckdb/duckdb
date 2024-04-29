@@ -93,7 +93,17 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlte
 			result->info = make_uniq<DropNotNullInfo>(std::move(data), command->name);
 			break;
 		}
-		case duckdb_libpgquery::PG_AT_DropConstraint:
+		case duckdb_libpgquery::PG_AT_AddConstraint: {
+			auto pg_constraint = PGPointerCast<duckdb_libpgquery::PGConstraint>(command->def);
+			auto constraint = TransformConstraint(pg_constraint.get());
+
+			if (pg_constraint->contype != duckdb_libpgquery::PGConstrType::PG_CONSTR_PRIMARY) {
+				throw NotImplementedException("No support for that ALTER TABLE option yet!");
+			}
+
+			result->info = make_uniq<AddConstraintInfo>(std::move(data), std::move(constraint));
+			break;
+		}
 		default:
 			throw NotImplementedException("No support for that ALTER TABLE option yet!");
 		}
