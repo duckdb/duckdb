@@ -10,7 +10,7 @@ export DUCKDB_DIR=<duckdb_dir>
 Copy jemalloc source files:
 ```sh
 cd <jemalloc_dir>
-./configure --with-jemalloc-prefix="duckdb_je_" --with-private-namespace="duckdb_"
+./configure --with-jemalloc-prefix="duckdb_je_" --with-private-namespace="duckdb_" --without-export
 cp -r src/* $DUCKDB_DIR/extension/jemalloc/jemalloc/src/
 cp -r include/* $DUCKDB_DIR/extension/jemalloc/jemalloc/include/
 cp COPYING $DUCKDB_DIR/extension/jemalloc/jemalloc/LICENSE
@@ -69,7 +69,7 @@ unsigned long long bgt_count = cpu_count / 32;
 if (bgt_count == 0) {
     bgt_count = 1;
 }
-snprintf(JE_MALLOC_CONF_BUFFER, JE_MALLOC_CONF_BUFFER_SIZE, "metadata_thp:always,oversize_threshold:262136,dirty_decay_ms:10000,muzzy_decay_ms:10000,narenas:%llu,max_background_threads:%llu", cpu_count, bgt_count);
+snprintf(JE_MALLOC_CONF_BUFFER, JE_MALLOC_CONF_BUFFER_SIZE, "metadata_thp:always,oversize_threshold:0,dirty_decay_ms:10000,muzzy_decay_ms:10000,narenas:%llu,max_background_threads:%llu", cpu_count, bgt_count);
 je_malloc_conf = JE_MALLOC_CONF_BUFFER;
 ```
 
