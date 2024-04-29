@@ -146,10 +146,10 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 			// background threads clean up allocations, just start an untimed wait
 			queue->semaphore.wait();
 		} else if (!queue->semaphore.wait(500000)) {
-			// thread was idle for 0.5s, flush its outstanding allocations
+			// no background threads, flush this threads outstanding allocations after it was idle for 0.5s
 			Allocator::ThreadFlush(allocator_flush_threshold);
-			if (!queue->semaphore.wait(5000000)) {
-				// thread was idle for another 5 seconds, mark it as idle and start an untimed wait
+			if (!queue->semaphore.wait(9500000)) {
+				// thread was idle for another 9.5 seconds, mark it as idle and start an untimed wait
 				Allocator::ThreadIdle();
 				queue->semaphore.wait();
 			}
@@ -171,7 +171,9 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 			}
 		}
 	}
+	// this thread will exit, flush all of its outstanding allocations
 	Allocator::ThreadFlush(0);
+	Allocator::ThreadIdle();
 #else
 	throw NotImplementedException("DuckDB was compiled without threads! Background thread loop is not allowed.");
 #endif
