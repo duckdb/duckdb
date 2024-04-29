@@ -199,6 +199,8 @@ struct DBConfigOptions {
 	string custom_user_agent;
 	//! Use old implicit casting style (i.e. allow everything to be implicitly casted to VARCHAR)
 	bool old_implicit_casting = false;
+	//! Currently used only for testing MultiFileList code. In the future could be used for glob-related optimizations
+	bool use_late_glob_expansion = true;
 
 	bool operator==(const DBConfigOptions &other) const;
 };

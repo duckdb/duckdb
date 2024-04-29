@@ -77,13 +77,6 @@ MultiFileList::MultiFileList() : expanded_files(), fully_expanded(false) {
 MultiFileList::~MultiFileList() {
 }
 
-bool MultiFileList::operator==(const MultiFileList &other) const {
-	if (!fully_expanded || !other.fully_expanded) {
-		throw InternalException("Attempted to compare non-fully-expanded MultiFileLists");
-	}
-	return expanded_files == other.expanded_files;
-}
-
 bool MultiFileList::ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options,
                                           LogicalGet &get, vector<unique_ptr<Expression>> &filters) {
 	// By default the filter pushdown into a multifilelist does nothing
@@ -112,7 +105,7 @@ bool MultiFileList::IsEmpty() {
 }
 
 string MultiFileList::GetFirstFile() {
-	ExpandTo(0);
+	ExpandTo(1);
 	if (!expanded_files.empty()) {
 		return expanded_files[0];
 	}
@@ -146,13 +139,14 @@ void MultiFileList::ExpandTo(idx_t n) {
 	}
 
 	idx_t i = expanded_files.size();
-	while (i <= n) {
-		auto next_file = GetFile(i++);
+	while (i < n) {
+		auto next_file = GetFile(i);
 		if (next_file.empty()) {
 			fully_expanded = true;
 			break;
 		}
 		expanded_files[i] = next_file;
+		i++;
 	}
 }
 
@@ -230,6 +224,49 @@ void SimpleMultiFileList::ExpandAll() {
 	// Is a NOP: a SimpleMultiFileList is fully expanded on creation
 }
 
+FileSystemGlobMultiFileList::FileSystemGlobMultiFileList(ClientContext &context_p, vector<string> paths_p) : MultiFileList(),
+      context(context_p), paths(std::move(paths_p)), current_path(0){
+}
+
+vector<string> FileSystemGlobMultiFileList::GetPaths() {
+	return paths;
+}
+
+string FileSystemGlobMultiFileList::GetFile(idx_t i) {
+	while(GetCurrentSize() <= i) {
+		if (!ExpandPathInternal()) {
+			return "";
+		}
+	}
+
+	D_ASSERT(GetCurrentSize() > i);
+	return expanded_files[i];
+}
+
+void FileSystemGlobMultiFileList::ExpandAll() {
+	while(ExpandPathInternal()) {
+	}
+}
+
+bool FileSystemGlobMultiFileList::ExpandPathInternal() {
+	if (current_path >= paths.size()) {
+		return false;
+	}
+
+	auto &fs = FileSystem::GetFileSystem(context);
+	auto glob_files = fs.GlobFiles(paths[current_path], context, FileGlobOptions::DISALLOW_EMPTY);
+	std::sort(glob_files.begin(), glob_files.end());
+	expanded_files.insert(expanded_files.end(), glob_files.begin(), glob_files.end());
+
+	current_path++;
+
+	if (current_path >= paths.size()) {
+		fully_expanded = true;
+	}
+
+	return true;
+}
+
 MultiFileReader::~MultiFileReader() {
 }
 
@@ -264,6 +301,20 @@ unique_ptr<MultiFileList> MultiFileReader::GetFileList(ClientContext &context, c
 	}
 	FileSystem &fs = FileSystem::GetFileSystem(context);
 	vector<string> files;
+
+	if (config.options.use_late_glob_expansion) {
+		vector<string> paths;
+		if (input.type().id() == LogicalTypeId::VARCHAR) {
+			paths =  {StringValue::Get(input)};
+		} else {
+			for (auto &val : ListValue::GetChildren(input)) {
+				paths.push_back(StringValue::Get(val));
+			}
+		}
+
+		return make_uniq<FileSystemGlobMultiFileList>(context, paths);
+	}
+
 	if (input.type().id() == LogicalTypeId::VARCHAR) {
 		auto file_name = StringValue::Get(input);
 		files = fs.GlobFiles(file_name, context, options);

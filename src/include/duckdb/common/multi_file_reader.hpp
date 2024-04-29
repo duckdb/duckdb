@@ -168,11 +168,7 @@ public:
 	virtual bool ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
 	                                   vector<unique_ptr<Expression>> &filters);
 
-	//! Note: comparison is currently only possible if both sides are fully expanded
-	//! todo: remove this?
-	bool operator==(const MultiFileList &other) const;
-
-	//! Moves the vector out of the MultiFileList, caller is responsible to not use the MultiFileListAfter this
+	//! Moves the vector out of the MultiFileList, caller is responsible to not use the MultiFileList after calling this
 	//! DEPRECATED: should be removed once all DuckDB code can properly handle MultiFileLists
 	vector<string> ToStringVector();
 
@@ -196,6 +192,27 @@ public:
 	                           vector<unique_ptr<Expression>> &filters) override;
 	vector<string> GetPaths() override;
 	void ExpandAll() override;
+};
+
+//! MultiFileList that will expand globs into files
+class FileSystemGlobMultiFileList : public MultiFileList {
+public:
+	explicit FileSystemGlobMultiFileList(ClientContext &context, vector<string> paths);
+
+	string GetFile(idx_t i) override;
+	vector<string> GetPaths() override;
+	void ExpandAll() override;
+
+protected:
+	//! Grabs the next path and expands it into Expanded paths:
+	bool ExpandPathInternal();
+
+	//! The ClientContext for globbing
+	ClientContext &context;
+	//! The input paths/globs
+	vector<string> paths;
+	//! The current path to expand
+	idx_t current_path;
 };
 
 //! The MultiFileReader class provides a set of helper methods to handle scanning from multiple files such as:
