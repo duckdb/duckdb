@@ -25,6 +25,14 @@ public:
 	BoundCheckConstraint() : BoundConstraint(ConstraintType::CHECK) {
 	}
 
+	vector<PhysicalIndex> GetColumnIndices() const final {
+		vector<PhysicalIndex> indexes;
+		for (const auto &index : bound_columns) {
+			indexes.push_back(index);
+		}
+		return indexes;
+	}
+
 	//! The expression
 	unique_ptr<Expression> expression;
 	//! The columns used by the CHECK constraint

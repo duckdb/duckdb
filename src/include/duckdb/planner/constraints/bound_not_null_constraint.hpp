@@ -20,6 +20,10 @@ public:
 	explicit BoundNotNullConstraint(PhysicalIndex index) : BoundConstraint(ConstraintType::NOT_NULL), index(index) {
 	}
 
+	vector<PhysicalIndex> GetColumnIndices() const final {
+	    return vector<PhysicalIndex>{index};
+	}
+
 	//! Column index this constraint pertains to
 	PhysicalIndex index;
 };
