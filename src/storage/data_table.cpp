@@ -1437,4 +1437,31 @@ vector<ColumnSegmentInfo> DataTable::GetColumnSegmentInfo() {
 	return row_groups->GetColumnSegmentInfo();
 }
 
+void DataTable::AddConstraintIndex(const vector<const ColumnDefinition*> &columns, IndexConstraintType constraint_type,
+								  const IndexStorageInfo &index_info) {
+	// fetch types and create expressions for the index from the columns
+	vector<column_t> column_ids;
+	vector<unique_ptr<Expression>> unbound_expressions;
+	vector<unique_ptr<Expression>> bound_expressions;
+	idx_t key_nr = 0;
+	column_ids.reserve(columns.size());
+	unbound_expressions.reserve(columns.size());
+	bound_expressions.reserve(columns.size());
+	for (const auto &column : columns) {
+		D_ASSERT(!column->Generated());
+		unbound_expressions.push_back(
+		    make_uniq<BoundColumnRefExpression>(column->Name(), column->Type(), ColumnBinding(0, column_ids.size())));
+
+		bound_expressions.push_back(make_uniq<BoundReferenceExpression>(column->Type(), key_nr++));
+		column_ids.push_back(column->StorageOid());
+	}
+	// create an adaptive radix tree around the expressions
+	auto art = make_uniq<ART>(index_info.name, constraint_type, column_ids, TableIOManager::Get(*this),
+	                          std::move(unbound_expressions), db, nullptr, index_info);
+	if (!index_info.IsValid() && !index_info.name.empty() && !IsRoot()) {
+		throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
+	}
+	info->indexes.AddIndex(std::move(art));
+}
+
 } // namespace duckdb

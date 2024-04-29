@@ -65,7 +65,6 @@ void AddDataTableIndex(DataTable &storage, const ColumnList &columns, vector<Log
 
 IndexStorageInfo GetIndexInfo(const IndexConstraintType &constraint_type, unique_ptr<CreateInfo> &create_info,
                               idx_t idx) {
-
 	auto &create_table_info = create_info->Cast<CreateTableInfo>();
 	auto constraint_name = EnumUtil::ToString(constraint_type) + "_";
 	return IndexStorageInfo(constraint_name + create_table_info.table + "_" + to_string(idx));
@@ -110,10 +109,17 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 				if (unique.is_primary_key) {
 					constraint_type = IndexConstraintType::PRIMARY;
 				}
+
+				vector<const ColumnDefinition*> index_columns;
+				index_columns.reserve(unique.keys.size());
+				for (const auto &key: unique.keys) {
+					index_columns.push_back(&columns.GetColumn(key));
+				}
+
 				auto unique_keys = GetUniqueConstraintKeys(columns, unique);
 				if (info.indexes.empty()) {
-					AddDataTableIndex(*storage, columns, unique_keys, constraint_type,
-					                  GetIndexInfo(constraint_type, info.base, i));
+					storage->AddConstraintIndex(index_columns, constraint_type,
+					                  		   GetIndexInfo(constraint_type, info.base, i));
 				} else {
 					// we read the index from an old storage version, so we have to apply a dummy name
 					if (info.indexes[indexes_idx].name.empty()) {
@@ -122,7 +128,7 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 					}
 
 					// now add the index
-					AddDataTableIndex(*storage, columns, unique_keys, constraint_type, info.indexes[indexes_idx++]);
+					storage->AddConstraintIndex(index_columns, constraint_type, info.indexes[indexes_idx++]);
 				}
 
 			} else if (constraint->type == ConstraintType::FOREIGN_KEY) {
@@ -131,10 +137,16 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 				if (bfk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE ||
 				    bfk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
 
+					vector<const ColumnDefinition*> index_columns;
+					index_columns.reserve(bfk.info.fk_keys.size());
+					for (const auto &key: bfk.info.fk_keys) {
+						index_columns.push_back(&columns.GetColumn(key));
+					}
+
 					if (info.indexes.empty()) {
 						auto constraint_type = IndexConstraintType::FOREIGN;
-						AddDataTableIndex(*storage, columns, bfk.info.fk_keys, constraint_type,
-						                  GetIndexInfo(constraint_type, info.base, i));
+						storage->AddConstraintIndex(index_columns, constraint_type,
+						                           GetIndexInfo(constraint_type, info.base, i));
 
 					} else {
 						// we read the index from an old storage version, so we have to apply a dummy name
@@ -144,10 +156,11 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 						}
 
 						// now add the index
-						AddDataTableIndex(*storage, columns, bfk.info.fk_keys, IndexConstraintType::FOREIGN,
-						                  info.indexes[indexes_idx++]);
+						storage->AddConstraintIndex(index_columns, IndexConstraintType::FOREIGN,
+						                           info.indexes[indexes_idx++]);
 					}
 				}
+
 			}
 		}
 	}

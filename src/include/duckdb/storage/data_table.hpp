@@ -225,13 +225,17 @@ public:
 
 	TableStorageInfo GetStorageInfo();
 
-public:
 	static void VerifyUniqueIndexes(TableIndexList &indexes, ClientContext &context, DataChunk &chunk,
 	                                optional_ptr<ConflictManager> conflict_manager);
 
-private:
 	//! Verify the new added constraints against current persistent&local data
 	void VerifyNewConstraint(LocalStorage &local_storage, DataTable &parent, const BoundConstraint &constraint);
+	void VerifyNewConstraint(ClientContext &context, DataTable &parent, const BoundConstraint &constraint);
+
+	void AddConstraintIndex(const vector<const ColumnDefinition*> &columns, IndexConstraintType constraint_type,
+						   const IndexStorageInfo &index_info = IndexStorageInfo());
+
+private:
 	//! Verify constraints with a chunk from the Update containing only the specified column_ids
 	void VerifyUpdateConstraints(ConstraintState &state, ClientContext &context, DataChunk &chunk,
 	                             const vector<PhysicalIndex> &column_ids);
