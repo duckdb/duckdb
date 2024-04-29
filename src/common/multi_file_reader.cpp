@@ -232,6 +232,33 @@ vector<string> FileSystemGlobMultiFileList::GetPaths() {
 	return paths;
 }
 
+bool FileSystemGlobMultiFileList::ComplexFilterPushdown(ClientContext &context_p, const MultiFileReaderOptions &options,
+                                                LogicalGet &get, vector<unique_ptr<Expression>> &filters) {
+	// TODO: implement special glob that makes use of hive partition filters to do more efficient globbing
+	ExpandAll();
+
+	if (!options.hive_partitioning && !options.filename) {
+		return false;
+	}
+
+	unordered_map<string, column_t> column_map;
+	for (idx_t i = 0; i < get.column_ids.size(); i++) {
+		if (!IsRowIdColumnId(get.column_ids[i])) {
+			column_map.insert({get.names[get.column_ids[i]], i});
+		}
+	}
+
+	auto start_files = expanded_files.size();
+	HivePartitioning::ApplyFiltersToFileList(context, expanded_files, filters, column_map, get,
+	                                         options.hive_partitioning, options.filename);
+
+	if (expanded_files.size() != start_files) {
+		return true;
+	}
+
+	return false;
+}
+
 string FileSystemGlobMultiFileList::GetFile(idx_t i) {
 	while(GetCurrentSize() <= i) {
 		if (!ExpandPathInternal()) {
@@ -249,7 +276,7 @@ void FileSystemGlobMultiFileList::ExpandAll() {
 }
 
 bool FileSystemGlobMultiFileList::ExpandPathInternal() {
-	if (current_path >= paths.size()) {
+	if (fully_expanded) {
 		return false;
 	}
 
@@ -329,7 +356,11 @@ unique_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context
 	vector<string> result_files;
 
 	if (config.options.use_late_glob_expansion) {
-		return make_uniq<FileSystemGlobMultiFileList>(context, paths);
+		auto res = make_uniq<FileSystemGlobMultiFileList>(context, paths);
+		if (res->GetExpandResult() == FileExpandResult::NO_FILES && options == FileGlobOptions::DISALLOW_EMPTY) {
+			throw IOException("%s needs at least one file to read", function_name);
+		}
+		return res;
 	}
 
 	for (const auto& path: paths) {

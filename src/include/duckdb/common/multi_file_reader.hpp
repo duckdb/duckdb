@@ -198,8 +198,9 @@ public:
 class FileSystemGlobMultiFileList : public MultiFileList {
 public:
 	explicit FileSystemGlobMultiFileList(ClientContext &context, vector<string> paths);
-
 	string GetFile(idx_t i) override;
+	bool ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
+	                           vector<unique_ptr<Expression>> &filters) override;
 	vector<string> GetPaths() override;
 	void ExpandAll() override;
 
