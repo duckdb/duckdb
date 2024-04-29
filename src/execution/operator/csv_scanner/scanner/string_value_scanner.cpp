@@ -1,14 +1,17 @@
 #include "duckdb/execution/operator/csv_scanner/string_value_scanner.hpp"
-#include "duckdb/execution/operator/csv_scanner/csv_casting.hpp"
-#include "duckdb/execution/operator/csv_scanner/skip_scanner.hpp"
-#include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
-#include "duckdb/main/client_data.hpp"
-#include "duckdb/common/operator/integer_cast_operator.hpp"
-#include "duckdb/common/operator/double_cast_operator.hpp"
-#include <algorithm>
-#include "utf8proc_wrapper.hpp"
-#include "duckdb/common/types/time.hpp"
+
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
+#include "duckdb/common/operator/double_cast_operator.hpp"
+#include "duckdb/common/operator/integer_cast_operator.hpp"
+#include "duckdb/common/types/time.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_casting.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
+#include "duckdb/execution/operator/csv_scanner/skip_scanner.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/main/client_data.hpp"
+#include "utf8proc_wrapper.hpp"
+
+#include <algorithm>
 
 namespace duckdb {
 
@@ -54,7 +57,7 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 		}
 		for (idx_t i = 0; i < csv_file_scan->file_types.size(); i++) {
 			auto &type = csv_file_scan->file_types[i];
-			if (StringValueScanner::CanDirectlyCast(type, state_machine.options.dialect_options.date_format)) {
+			if (StringValueScanner::CanDirectlyCast(type)) {
 				parse_types[i] = ParseTypeInfo(type, true);
 				logical_types.emplace_back(type);
 			} else {
@@ -238,13 +241,6 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		                               static_cast<dtime_t *>(vector_ptr[chunk_col_id])[number_of_rows], false);
 		break;
 	}
-	case LogicalTypeId::TIME_TZ: {
-		idx_t pos;
-		bool special;
-		success = Time::TryConvertTimeTZ(
-		    value_ptr, size, pos, static_cast<dtime_tz_t *>(vector_ptr[chunk_col_id])[number_of_rows], special, false);
-		break;
-	}
 	case LogicalTypeId::TIMESTAMP: {
 		if (!timestamp_format.Empty()) {
 			success = timestamp_format.TryParseTimestamp(
@@ -312,18 +308,6 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 			}
 		} else {
 			throw InvalidInputException("Decimals can only have ',' and '.' as decimal separators");
-		}
-		break;
-	}
-	case LogicalTypeId::TIMESTAMP_TZ: {
-		if (!timestamp_format.Empty()) {
-			success = timestamp_format.TryParseTimestamp(
-			    value_ptr, size, static_cast<timestamp_t *>(vector_ptr[chunk_col_id])[number_of_rows]);
-		} else {
-			bool has_offset;
-			string_t tz;
-			success = Timestamp::TryConvertTimestampTZ(
-			    value_ptr, size, static_cast<timestamp_t *>(vector_ptr[chunk_col_id])[number_of_rows], has_offset, tz);
 		}
 		break;
 	}
@@ -1270,8 +1254,7 @@ void StringValueScanner::SkipUntilNewLine() {
 	}
 }
 
-bool StringValueScanner::CanDirectlyCast(const LogicalType &type,
-                                         const map<LogicalTypeId, CSVOption<StrpTimeFormat>> &format_options) {
+bool StringValueScanner::CanDirectlyCast(const LogicalType &type) {
 
 	switch (type.id()) {
 	case LogicalTypeId::TINYINT:
@@ -1286,9 +1269,7 @@ bool StringValueScanner::CanDirectlyCast(const LogicalType &type,
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::DECIMAL:
 	case LogicalType::VARCHAR:
 		return true;

@@ -168,30 +168,10 @@ bool CSVSniffer::CanYouCastIt(const string_t value, const LogicalType &type, con
 			return Timestamp::TryConvertTimestamp(value_ptr, value_size, dummy_value) == TimestampCastResult::SUCCESS;
 		}
 	}
-	case LogicalTypeId::TIMESTAMP_TZ: {
-		timestamp_t dummy_value;
-		string error_message;
-		if (!dialect_options.date_format.find(LogicalTypeId::TIMESTAMP)->second.GetValue().Empty()) {
-			return dialect_options.date_format.find(LogicalTypeId::TIMESTAMP)
-			    ->second.GetValue()
-			    .TryParseTimestamp(value, dummy_value, error_message);
-		} else {
-			bool has_offset;
-			string_t tz;
-			return Timestamp::TryConvertTimestampTZ(value_ptr, value_size, dummy_value, has_offset, tz);
-		}
-		break;
-	}
 	case LogicalTypeId::TIME: {
 		idx_t pos;
 		dtime_t dummy_value;
 		return Time::TryConvertTime(value_ptr, value_size, pos, dummy_value, true);
-	}
-	case LogicalTypeId::TIME_TZ: {
-		idx_t pos;
-		bool special;
-		dtime_tz_t dummy_value;
-		return Time::TryConvertTimeTZ(value_ptr, value_size, pos, dummy_value, special, true);
 	}
 	case LogicalTypeId::DECIMAL: {
 		uint8_t width, scale;
@@ -252,7 +232,6 @@ bool CSVSniffer::CanYouCastIt(const string_t value, const LogicalType &type, con
 		} else {
 			throw InvalidInputException("Decimals can only have ',' and '.' as decimal separators");
 		}
-		break;
 	}
 	case LogicalTypeId::VARCHAR:
 		return true;
