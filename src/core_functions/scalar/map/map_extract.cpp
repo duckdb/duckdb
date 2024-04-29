@@ -58,7 +58,7 @@ void FillResult(Vector &map, Vector &offsets, Vector &result, idx_t count) {
 		auto &value_list_entry = UnifiedVectorFormat::GetData<list_entry_t>(map_data)[value_index];
 
 		// Add the values to the result
-		idx_t list_offset = value_list_entry.offset + offset;
+		idx_t list_offset = value_list_entry.offset + UnsafeNumericCast<idx_t>(offset);
 		// All keys are unique, only one will ever match
 		idx_t length = 1;
 		ListVector::Append(result, values_entries, length + list_offset, list_offset);

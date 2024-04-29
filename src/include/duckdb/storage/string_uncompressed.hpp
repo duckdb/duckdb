@@ -61,6 +61,7 @@ public:
 
 	static unique_ptr<CompressionAppendState> StringInitAppend(ColumnSegment &segment) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+		// This block was initialized in StringInitSegment
 		auto handle = buffer_manager.Pin(segment.block);
 		return make_uniq<CompressionAppendState>(std::move(handle));
 	}
@@ -148,7 +149,9 @@ public:
 
 				// place the dictionary offset into the set of vectors
 				// note: for overflow strings we write negative value
-				result_data[target_idx] = -(*dictionary_size);
+
+				D_ASSERT(*dictionary_size <= int32_t(Storage::BLOCK_SIZE));
+				result_data[target_idx] = -NumericCast<int32_t>((*dictionary_size));
 			} else {
 				// string fits in block, append to dictionary and increment dictionary position
 				D_ASSERT(string_length < NumericLimits<uint16_t>::Maximum());
@@ -159,7 +162,8 @@ public:
 				memcpy(dict_pos, source_data[source_idx].GetData(), string_length);
 
 				// place the dictionary offset into the set of vectors
-				result_data[target_idx] = *dictionary_size;
+				D_ASSERT(*dictionary_size <= int32_t(Storage::BLOCK_SIZE));
+				result_data[target_idx] = NumericCast<int32_t>(*dictionary_size);
 			}
 			D_ASSERT(RemainingSpace(segment, handle) <= Storage::BLOCK_SIZE);
 #ifdef DEBUG

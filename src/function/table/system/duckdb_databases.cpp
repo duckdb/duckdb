@@ -66,7 +66,7 @@ void DuckDBDatabasesFunction(ClientContext &context, TableFunctionInput &data_p,
 		// database_name, VARCHAR
 		output.SetValue(col++, count, attached.GetName());
 		// database_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(attached.oid));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(attached.oid)));
 		bool is_internal = attached.IsSystem() || attached.IsTemporary();
 		bool is_readonly = attached.IsReadOnly();
 		// path, VARCHAR

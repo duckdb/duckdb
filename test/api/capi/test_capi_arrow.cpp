@@ -223,7 +223,7 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 				auto data_chunk = &data_chunks[i];
 				data_chunk->Initialize(allocator, logical_types, STANDARD_VECTOR_SIZE);
 				data_chunk->SetCardinality(STANDARD_VECTOR_SIZE);
-				for (int row = 0; row < STANDARD_VECTOR_SIZE; row++) {
+				for (idx_t row = 0; row < STANDARD_VECTOR_SIZE; row++) {
 					data_chunk->SetValue(0, row, duckdb::Value(i));
 				}
 				appender.Append(*data_chunk, 0, data_chunk->size(), data_chunk->size());

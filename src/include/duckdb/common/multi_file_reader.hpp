@@ -151,7 +151,7 @@ struct MultiFileReader {
 			return BindUnionReader<READER_CLASS>(context, return_types, names, result, options);
 		} else {
 			shared_ptr<READER_CLASS> reader;
-			reader = make_shared<READER_CLASS>(context, result.files[0], options);
+			reader = make_shared_ptr<READER_CLASS>(context, result.files[0], options);
 			return_types = reader->return_types;
 			names = reader->names;
 			result.Initialize(std::move(reader));
@@ -188,14 +188,14 @@ struct MultiFileReader {
 		}
 		for (idx_t r = 0; r < data.union_readers.size(); r++) {
 			if (!data.union_readers[r]) {
-				data.union_readers.erase(data.union_readers.begin() + r);
+				data.union_readers.erase_at(r);
 				r--;
 				continue;
 			}
 			// check if the union reader should still be read or not
 			auto entry = file_set.find(data.union_readers[r]->GetFileName());
 			if (entry == file_set.end()) {
-				data.union_readers.erase(data.union_readers.begin() + r);
+				data.union_readers.erase_at(r);
 				r--;
 				continue;
 			}

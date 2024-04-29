@@ -64,7 +64,8 @@ public:
 	ParquetWriter(FileSystem &fs, string file_name, vector<LogicalType> types, vector<string> names,
 	              duckdb_parquet::format::CompressionCodec::type codec, ChildFieldIDs field_ids,
 	              const vector<pair<string, string>> &kv_metadata,
-	              shared_ptr<ParquetEncryptionConfig> encryption_config);
+	              shared_ptr<ParquetEncryptionConfig> encryption_config, double dictionary_compression_ratio_threshold,
+	              optional_idx compression_level);
 
 public:
 	void PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result);
@@ -91,6 +92,12 @@ public:
 		lock_guard<mutex> glock(lock);
 		return writer->total_written;
 	}
+	double DictionaryCompressionRatioThreshold() const {
+		return dictionary_compression_ratio_threshold;
+	}
+	optional_idx CompressionLevel() const {
+		return compression_level;
+	}
 
 	static CopyTypeSupport TypeIsSupported(const LogicalType &type);
 
@@ -106,9 +113,11 @@ private:
 	duckdb_parquet::format::CompressionCodec::type codec;
 	ChildFieldIDs field_ids;
 	shared_ptr<ParquetEncryptionConfig> encryption_config;
+	double dictionary_compression_ratio_threshold;
+	optional_idx compression_level;
 
 	unique_ptr<BufferedFileWriter> writer;
-	shared_ptr<duckdb_apache::thrift::protocol::TProtocol> protocol;
+	std::shared_ptr<duckdb_apache::thrift::protocol::TProtocol> protocol;
 	duckdb_parquet::format::FileMetaData file_meta_data;
 	std::mutex lock;
 

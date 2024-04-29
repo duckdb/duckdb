@@ -5,6 +5,7 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/common/helper.hpp"
 #include "json_functions.hpp"
 #include "json_scan.hpp"
 #include "json_transform.hpp"
@@ -57,7 +58,7 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	}
 
 	// Bind the select statement of the original to resolve the types
-	auto dummy_binder = Binder::CreateBinder(binder.context, &binder, true);
+	auto dummy_binder = Binder::CreateBinder(binder.context, &binder);
 	auto bound_original = dummy_binder->Bind(*stmt.select_statement);
 
 	// Create new SelectNode with the original SelectNode as a subquery in the FROM clause
@@ -184,7 +185,7 @@ CopyFunction JSONFunctions::GetJSONCopyFunction() {
 	function.plan = CopyToJSONPlan;
 
 	function.copy_from_bind = CopyFromJSONBind;
-	function.copy_from_function = JSONFunctions::GetReadJSONTableFunction(make_shared<JSONScanInfo>(
+	function.copy_from_function = JSONFunctions::GetReadJSONTableFunction(make_shared_ptr<JSONScanInfo>(
 	    JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED, JSONRecordType::RECORDS, false));
 
 	return function;
