@@ -257,8 +257,9 @@ private:
 	//===--------------------------------------------------------------------===//
 	// Constraints transform
 	//===--------------------------------------------------------------------===//
-	unique_ptr<Constraint> TransformConstraint(duckdb_libpgquery::PGListCell &cell);
-	unique_ptr<Constraint> TransformConstraint(duckdb_libpgquery::PGListCell &cell, ColumnDefinition &column,
+	unique_ptr<Constraint> TransformConstraint(duckdb_libpgquery::PGConstraint *constraint);
+
+	unique_ptr<Constraint> TransformConstraint(duckdb_libpgquery::PGConstraint *constraint, ColumnDefinition &column,
 	                                           idx_t index);
 
 	//===--------------------------------------------------------------------===//

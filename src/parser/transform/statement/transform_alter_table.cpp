@@ -39,8 +39,9 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlte
 
 			auto column_entry = TransformColumnDefinition(*column_def);
 			if (column_def->constraints) {
-				for (auto constr = column_def->constraints->head; constr != nullptr; constr = constr->next) {
-					auto constraint = TransformConstraint(*constr, column_entry, 0);
+				for (auto cell = column_def->constraints->head; cell != nullptr; cell = cell->next) {
+					auto pg_constraint = reinterpret_cast<duckdb_libpgquery::PGConstraint *>(cell->data.ptr_value);
+					auto constraint = TransformConstraint(pg_constraint, column_entry, 0);
 					if (!constraint) {
 						continue;
 					}
