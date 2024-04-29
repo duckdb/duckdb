@@ -96,21 +96,10 @@ struct ParquetFileReaderData {
 	unique_ptr<mutex> file_mutex;
 };
 
-struct ParquetReadGlobalConstantState {
-	ParquetReadGlobalConstantState(const vector<column_t> column_ids_p, TableFilterSet *filters_p) : column_ids(column_ids_p), filters(filters_p) {
-	}
-	const vector<column_t> column_ids;
-	TableFilterSet *filters = nullptr; //FIXME: make actually const
-};
-
 struct ParquetReadGlobalState : public GlobalTableFunctionState {
-	ParquetReadGlobalState(ParquetReadGlobalConstantState constant_state_p) : constant_state(std::move(constant_state_p)) {}
 
 	//! The files to be scanned, copied from Bind Phase
 	unique_ptr<MultiFileList> files;
-
-	//! Global state that is safe for use without lock
-	const ParquetReadGlobalConstantState constant_state;
 
 	mutex lock;
 
@@ -130,6 +119,8 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 	idx_t max_threads;
 	vector<idx_t> projection_ids;
 	vector<LogicalType> scanned_types;
+	vector<column_t> column_ids;
+	TableFilterSet *filters;
 
 	idx_t MaxThreads() const override {
 		return max_threads;
@@ -589,14 +580,7 @@ public:
 	static unique_ptr<GlobalTableFunctionState> ParquetScanInitGlobal(ClientContext &context,
 	                                                                  TableFunctionInitInput &input) {
 		auto &bind_data = input.bind_data->CastNoConst<ParquetReadBindData>();
-
-		// Initialize the constant global state.
-		ParquetReadGlobalConstantState constant_state = {
-		    input.column_ids,
-		    input.filters.get()
-		};
-
-		auto result = make_uniq<ParquetReadGlobalState>(constant_state);
+		auto result = make_uniq<ParquetReadGlobalState>();
 
 		// FIXME: avoid copying the files?
 		result->files = bind_data.files->Copy();
@@ -607,9 +591,10 @@ public:
 		} else if (!bind_data.union_readers.empty()) {
 			// TODO: confirm we are not changing behaviour by modifying the order here?
 			for (auto& reader: bind_data.union_readers) {
-				if (reader) {
-					result->readers.push_back(ParquetFileReaderData(std::move(reader)));
+				if (!reader) {
+					break;
 				}
+				result->readers.push_back(ParquetFileReaderData(std::move(reader)));
 			}
 			if (result->readers.size() != bind_data.files->GetTotalFileCount()) {
 				// FIXME This should not happen: didn't want to break things but this should probably be an
@@ -628,6 +613,13 @@ public:
 			}
 		}
 
+		// Ensure all readers are initialized
+		for (auto &reader_data : result->readers) {
+			InitializeParquetReader(*reader_data.reader, bind_data, input.column_ids, input.filters, context);
+		}
+
+		result->column_ids = input.column_ids;
+		result->filters = input.filters.get();
 		result->row_group_index = 0;
 		result->file_index = 0;
 		result->batch_index = 0;
@@ -848,8 +840,6 @@ public:
 				// Get pointer to file mutex before unlocking
 				auto &current_file_lock = *current_reader_data.file_mutex;
 
-				auto &constant_global_state = parallel_state.constant_state;
-
 				// Now we switch which lock we are holding, instead of locking the global state, we grab the lock on
 				// the file we are opening. This file lock allows threads to wait for a file to be opened.
 				parallel_lock.unlock();
@@ -858,8 +848,7 @@ public:
 				shared_ptr<ParquetReader> reader;
 				try {
 					reader = make_shared_ptr<ParquetReader>(context, file, pq_options);
-					InitializeParquetReader(*reader, bind_data, constant_global_state.column_ids, constant_global_state.filters,
-					                        context);
+					InitializeParquetReader(*reader, bind_data, parallel_state.column_ids, parallel_state.filters, context);
 				} catch (...) {
 					parallel_lock.lock();
 					parallel_state.error_opening_file = true;

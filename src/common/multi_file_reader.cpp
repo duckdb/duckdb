@@ -613,7 +613,6 @@ void MultiFileReader::CreateFilterMap(const vector<LogicalType> &global_types, o
 void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileReaderBindData &bind_data,
                                     const MultiFileReaderData &reader_data, DataChunk &chunk) {
 	// reference all the constants set up in MultiFileReader::FinalizeBind
-	chunk.Verify();
 	for (auto &entry : reader_data.constant_map) {
 		chunk.data[entry.column_id].Reference(entry.value);
 	}
