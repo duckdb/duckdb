@@ -6,6 +6,9 @@ import argparse
 parser = argparse.ArgumentParser(description='Generate serialization code')
 parser.add_argument('--source', type=str, help='Source directory')
 parser.add_argument('--target', type=str, help='Target directory')
+
+# This option will override 'serialize' and 'deserialize' settings if set
+parser.add_argument('--debug_serialization', action='store_true', help='Flag to enable debugging of serialization')
 args = parser.parse_args()
 
 if args.source is None:
@@ -254,6 +257,8 @@ supported_member_entries = [
     'base',
     'default',
     'deleted',
+    'serialize',
+    'deserialize',
 ]
 
 
@@ -273,6 +278,18 @@ def has_default_by_default(type):
     return False
 
 
+def set_serialize(value):
+    if args.debug_serialization:
+        return True
+    return value
+
+
+def set_deserialize(value):
+    if args.debug_serialization:
+        return True
+    return value
+
+
 class MemberVariable:
     def __init__(self, entry):
         self.id = entry['id']
@@ -282,12 +299,18 @@ class MemberVariable:
         self.has_default = False
         self.default = None
         self.deleted = False
+        self.serialize: bool = True
+        self.deserialize: bool = True
         if 'property' in entry:
             self.serialize_property = entry['property']
             self.deserialize_property = entry['property']
         else:
             self.serialize_property = self.name
             self.deserialize_property = self.name
+        if 'serialize' in entry:
+            self.serialize = set_serialize(entry['serialize'])
+        if 'deserialize' in entry:
+            self.deserialize = set_deserialize(entry['deserialize'])
         if 'serialize_property' in entry:
             self.serialize_property = entry['serialize_property']
         if 'deserialize_property' in entry:
@@ -397,27 +420,29 @@ def generate_base_class_code(base_class):
         if entry.serialize_property == base_class.enum_value:
             enum_type = entry.type
         default = entry.default
-        base_class_serialize += get_serialize_element(
-            entry.serialize_property,
-            entry.id,
-            entry.name,
-            type_name,
-            entry.has_default,
-            default,
-            entry.deleted,
-            base_class.pointer_type,
-        )
-        base_class_deserialize += get_deserialize_element(
-            entry.deserialize_property,
-            entry.name,
-            entry.id,
-            type_name,
-            entry.has_default,
-            default,
-            entry.deleted,
-            None,
-            base_class.pointer_type,
-        )
+        if entry.serialize:
+            base_class_serialize += get_serialize_element(
+                entry.serialize_property,
+                entry.id,
+                entry.name,
+                type_name,
+                entry.has_default,
+                default,
+                entry.deleted,
+                base_class.pointer_type,
+            )
+        if entry.deserialize:
+            base_class_deserialize += get_deserialize_element(
+                entry.deserialize_property,
+                entry.name,
+                entry.id,
+                type_name,
+                entry.has_default,
+                default,
+                entry.deleted,
+                None,
+                base_class.pointer_type,
+            )
     expressions = [x for x in base_class.children.items()]
     expressions = sorted(expressions, key=lambda x: x[0])
 
@@ -587,6 +612,7 @@ def generate_class_code(class_entry):
                 '${BASE_PROPERTY}', entry.base.replace('*', '')
             ).replace('${DERIVED_PROPERTY}', entry.type.replace('*', ''))
         type_name = replace_pointer(entry.type)
+
         class_serialize += get_serialize_element(
             write_property_name,
             property_id,

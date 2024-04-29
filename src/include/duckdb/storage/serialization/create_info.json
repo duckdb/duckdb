@@ -49,6 +49,14 @@
         "name": "comment",
         "type": "Value",
         "default": "Value()"
+      },
+      {
+        "id": 108,
+        "name": "dependencies",
+        "type": "LogicalDependencyList",
+        "default": "LogicalDependencyList()",
+        "deserialize": true,
+        "serialize": false
       }
     ]
   },
