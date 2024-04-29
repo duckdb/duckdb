@@ -28,6 +28,7 @@ class JsonValue {
 
 public:
 	JsonValue();
+	// NOLINTBEGIN
 	JsonValue(JsonKind kind);
 	JsonValue(const string &value);
 	JsonValue(const char *value);
@@ -35,6 +36,7 @@ public:
 	JsonValue(bool value);
 	JsonValue(const unordered_map<string, JsonValue> &value);
 	JsonValue(const vector<JsonValue> &value);
+	// NOLINTEND
 
 	// Parses a JSON value from a string
 	static JsonValue Parse(const string &str);
