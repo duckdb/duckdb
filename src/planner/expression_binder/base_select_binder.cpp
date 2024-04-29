@@ -3,9 +3,12 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/expression_binder/select_bind_state.hpp"
@@ -98,8 +101,25 @@ BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, idx_
 	if (it != info.collated_groups.end()) {
 		// This is an implicitly collated group, so we need to refer to the first() aggregate
 		const auto &aggr_index = it->second;
-		return BindResult(make_uniq<BoundColumnRefExpression>(expr.GetName(), node.aggregates[aggr_index]->return_type,
-		                                                      ColumnBinding(node.aggregate_index, aggr_index), depth));
+		auto first_expr = make_uniq<BoundColumnRefExpression>(expr.GetName(), node.aggregates[aggr_index]->return_type,
+		                                    ColumnBinding(node.aggregate_index, aggr_index), depth);
+//		if (NO GROUPING SET) {
+//			return BindResult(std::move(first_expr));
+//		}
+
+		auto &group = node.groups.group_expressions[group_index];
+		auto original_group_expression = make_uniq<BoundColumnRefExpression>(expr.GetName(), group->return_type,
+		                                                          ColumnBinding(node.group_index, group_index), depth);
+
+		auto sql_null = make_uniq<BoundConstantExpression>(Value(LogicalType::VARCHAR));
+//		std::cout << sql_null->ToString() << std::endl;
+		auto when_expr = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
+		when_expr->children.push_back(std::move(first_expr));
+		auto then_expr = make_uniq<BoundConstantExpression>(Value(LogicalType::VARCHAR));
+		auto else_expr = std::move(original_group_expression);
+		auto case_expr = make_uniq<BoundCaseExpression>(std::move(when_expr), std::move(then_expr), std::move(else_expr));
+		return BindResult(std::move(case_expr));
+//		return BindResult();
 	} else {
 		auto &group = node.groups.group_expressions[group_index];
 		return BindResult(make_uniq<BoundColumnRefExpression>(expr.GetName(), group->return_type,
