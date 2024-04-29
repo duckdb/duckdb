@@ -135,7 +135,7 @@ private:
 			if (!Match("ull")) {
 				Error("Found 'n' but expected 'null'");
 			}
-			return JsonValue();
+			return JsonValue(JsonKind::NULLVALUE);
 		}
 		case 't': {
 			if (!Match("rue")) {

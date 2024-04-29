@@ -12,7 +12,10 @@ TEST_CASE("Test that JsonValue parsing works", "[json]") {
 			"key3": [1, 2, 3],
 			"key4": {
 				"key5": 43
-			}
+			},
+			"key6": null,
+			"key7": true,
+			"key8": false
 		}
 	)";
 
@@ -32,4 +35,12 @@ TEST_CASE("Test that JsonValue parsing works", "[json]") {
 
 	REQUIRE(json["key4"].GetType() == JsonKind::OBJECT);
 	REQUIRE(json["key4"]["key5"].GetNumber() == 43);
+
+	REQUIRE(json["key6"].GetType() == JsonKind::NULLVALUE);
+
+	REQUIRE(json["key7"].GetType() == JsonKind::BOOLEAN);
+	REQUIRE(json["key7"].GetBool() == true);
+
+	REQUIRE(json["key8"].GetType() == JsonKind::BOOLEAN);
+	REQUIRE(json["key8"].GetBool() == false);
 }
