@@ -251,7 +251,7 @@ table "new_tablename" depends on index "sequence1".
 statement error
 CREATE OR REPLACE SEQUENCE sequence1;
 ----
-there are entries that depend on it
+table "new_tablename" depends on index "sequence1".
 
 # Owning the sequence with the same table shouldn't return any error
 statement ok

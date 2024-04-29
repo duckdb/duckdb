@@ -16,7 +16,7 @@ CREATE TABLE t1(c1 INT, CHECK(${fun}('seq')));
 statement error
 DROP SEQUENCE seq;
 ----
-there are entries that depend
+table "t1" depends on index "seq".
 
 statement ok
 DROP SEQUENCE seq CASCADE;
