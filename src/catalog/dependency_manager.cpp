@@ -392,7 +392,8 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 	}
 }
 
-void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj) {
+void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj,
+                                    AlterInfo &alter_info) {
 	if (IsSystemEntry(new_obj)) {
 		D_ASSERT(IsSystemEntry(old_obj));
 		// Don't do anything for this
@@ -408,9 +409,30 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 		// It makes no sense to have a schema depend on anything
 		D_ASSERT(dep.EntryInfo().type != CatalogType::SCHEMA_ENTRY);
 
-		throw DependencyException("Cannot alter entry \"%s\" because there are entries that "
-		                          "depend on it.",
-		                          old_obj.name);
+		bool disallow_alter = true;
+		switch (alter_info.type) {
+		case AlterType::ALTER_TABLE: {
+			auto &alter_table = alter_info.Cast<AlterTableInfo>();
+			switch (alter_table.alter_table_type) {
+			case AlterTableType::FOREIGN_KEY_CONSTRAINT: {
+				// These alters are made as part of a CREATE or DROP table statement when a foreign key column is
+				// present either adding or removing a reference to the referenced primary key table
+				disallow_alter = false;
+				break;
+			}
+			default:
+				break;
+			}
+			break;
+		}
+		default:
+			break;
+		}
+		if (disallow_alter) {
+			throw DependencyException("Cannot alter entry \"%s\" because there are entries that "
+			                          "depend on it.",
+			                          old_obj.name);
+		}
 
 		auto dep_info = DependencyInfo::FromDependent(dep);
 		dep_info.subject.entry = new_info;

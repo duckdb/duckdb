@@ -454,7 +454,7 @@ void UngroupedDistinctAggregateFinalizeEvent::Schedule() {
 		global_source_states.push_back(radix_table_p.GetGlobalSourceState(context));
 	}
 	n_tasks = MaxValue<idx_t>(n_tasks, 1);
-	n_tasks = MinValue<idx_t>(n_tasks, TaskScheduler::GetScheduler(context).NumberOfThreads());
+	n_tasks = MinValue<idx_t>(n_tasks, NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads()));
 
 	vector<shared_ptr<Task>> tasks;
 	for (idx_t i = 0; i < n_tasks; i++) {
@@ -586,7 +586,7 @@ SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline
 		auto &radix_state = *distinct_state.radix_states[table_idx];
 		radix_table_p->Finalize(context, radix_state);
 	}
-	auto new_event = make_shared<UngroupedDistinctAggregateFinalizeEvent>(context, *this, gstate, pipeline);
+	auto new_event = make_shared_ptr<UngroupedDistinctAggregateFinalizeEvent>(context, *this, gstate, pipeline);
 	event.InsertEvent(std::move(new_event));
 	return SinkFinalizeType::READY;
 }

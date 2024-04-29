@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/csv_scanner/csv_file_handle.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 
 namespace duckdb {
 
@@ -9,6 +10,7 @@ CSVFileHandle::CSVFileHandle(FileSystem &fs, Allocator &allocator, unique_ptr<Fi
 	can_seek = file_handle->CanSeek();
 	on_disk_file = file_handle->OnDiskFile();
 	file_size = file_handle->GetFileSize();
+	is_pipe = file_handle->IsPipe();
 	uncompressed = compression == FileCompressionType::UNCOMPRESSED;
 }
 
@@ -33,13 +35,26 @@ bool CSVFileHandle::CanSeek() {
 
 void CSVFileHandle::Seek(idx_t position) {
 	if (!can_seek) {
-		throw InternalException("Cannot seek in this file");
+		if (is_pipe) {
+			throw InternalException("Trying to seek a piped CSV File.");
+		}
+		throw InternalException("Trying to seek a compressed CSV File.");
 	}
 	file_handle->Seek(position);
 }
 
 bool CSVFileHandle::OnDiskFile() {
 	return on_disk_file;
+}
+
+void CSVFileHandle::Reset() {
+	file_handle->Reset();
+	finished = false;
+	requested_bytes = 0;
+}
+
+bool CSVFileHandle::IsPipe() {
+	return is_pipe;
 }
 
 idx_t CSVFileHandle::FileSize() {
@@ -57,7 +72,7 @@ idx_t CSVFileHandle::Read(void *buffer, idx_t nr_bytes) {
 	if (!finished) {
 		finished = bytes_read == 0;
 	}
-	return bytes_read;
+	return UnsafeNumericCast<idx_t>(bytes_read);
 }
 
 string CSVFileHandle::ReadLine() {

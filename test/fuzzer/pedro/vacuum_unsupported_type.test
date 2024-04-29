@@ -3,6 +3,9 @@
 # group: [pedro]
 
 statement ok
+pragma enable_verification
+
+statement ok
 CREATE TABLE t1 AS (VALUES ([], {'a': []}));
 
 statement ok

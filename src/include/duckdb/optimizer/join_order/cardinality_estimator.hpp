@@ -82,7 +82,7 @@ public:
 	void PrintRelationToTdomInfo();
 
 private:
-	bool SingleColumnFilter(FilterInfo &filter_info);
+	bool SingleRelationFilter(FilterInfo &filter_info);
 	vector<idx_t> DetermineMatchingEquivalentSets(FilterInfo *filter_info);
 	//! Given a filter, add the column bindings to the matching equivalent set at the index
 	//! given in matching equivalent sets.
