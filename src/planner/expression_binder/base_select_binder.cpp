@@ -101,25 +101,30 @@ BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, idx_
 	if (it != info.collated_groups.end()) {
 		// This is an implicitly collated group, so we need to refer to the first() aggregate
 		const auto &aggr_index = it->second;
-		auto first_expr = make_uniq<BoundColumnRefExpression>(expr.GetName(), node.aggregates[aggr_index]->return_type,
-		                                    ColumnBinding(node.aggregate_index, aggr_index), depth);
-//		if (NO GROUPING SET) {
-//			return BindResult(std::move(first_expr));
-//		}
+		auto uncollated_first_expression =
+		    make_uniq<BoundColumnRefExpression>(expr.GetName(), node.aggregates[aggr_index]->return_type,
+		                                        ColumnBinding(node.aggregate_index, aggr_index), depth);
 
+		if (node.groups.grouping_sets.size() <= 1) {
+			// if there are no more than two grouping sets, you can return the uncollated first expression.
+			// "first" meaning the aggreagte function.
+			return BindResult(std::move(uncollated_first_expression));
+		}
+
+		// otherwise we insert a case statement to return NULL when the collated group expression is NULL
+		// otherwise you can return the "first" of the uncollated expression.
 		auto &group = node.groups.group_expressions[group_index];
-		auto original_group_expression = make_uniq<BoundColumnRefExpression>(expr.GetName(), group->return_type,
-		                                                          ColumnBinding(node.group_index, group_index), depth);
+		auto collated_group_expression = make_uniq<BoundColumnRefExpression>(
+		    expr.GetName(), group->return_type, ColumnBinding(node.group_index, group_index), depth);
 
 		auto sql_null = make_uniq<BoundConstantExpression>(Value(LogicalType::VARCHAR));
-//		std::cout << sql_null->ToString() << std::endl;
 		auto when_expr = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
-		when_expr->children.push_back(std::move(first_expr));
+		when_expr->children.push_back(std::move(collated_group_expression));
 		auto then_expr = make_uniq<BoundConstantExpression>(Value(LogicalType::VARCHAR));
-		auto else_expr = std::move(original_group_expression);
-		auto case_expr = make_uniq<BoundCaseExpression>(std::move(when_expr), std::move(then_expr), std::move(else_expr));
+		auto else_expr = std::move(uncollated_first_expression);
+		auto case_expr =
+		    make_uniq<BoundCaseExpression>(std::move(when_expr), std::move(then_expr), std::move(else_expr));
 		return BindResult(std::move(case_expr));
-//		return BindResult();
 	} else {
 		auto &group = node.groups.group_expressions[group_index];
 		return BindResult(make_uniq<BoundColumnRefExpression>(expr.GetName(), group->return_type,
