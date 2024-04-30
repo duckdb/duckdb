@@ -121,7 +121,7 @@ public:
 	             const S3AuthParams &auth_params_p, const S3ConfigParams &config_params_p)
 	    : HTTPFileHandle(fs, std::move(path_p), flags, http_params), auth_params(auth_params_p),
 	      config_params(config_params_p), uploads_in_progress(0), parts_uploaded(0), upload_finalized(false),
-	      uploader_has_error(false), upload_exception(nullptr) {
+	      uploader_has_error(false), upload_exception(nullptr), s3_multipart_finalize(true) {
 		if (flags.OpenForReading() && flags.OpenForWriting()) {
 			throw NotImplementedException("Cannot open an HTTP file for both reading and writing");
 		} else if (flags.OpenForAppending()) {
@@ -160,6 +160,7 @@ protected:
 	//! Info for upload
 	atomic<uint16_t> parts_uploaded;
 	bool upload_finalized = true;
+	bool s3_multipart_finalize;
 
 	//! Error handling in upload threads
 	atomic<bool> uploader_has_error {false};
@@ -173,6 +174,8 @@ protected:
 			std::rethrow_exception(upload_exception);
 		}
 	}
+
+	string getMultipartUploadId(const string& path);
 };
 
 class S3FileSystem : public HTTPFileSystem {
@@ -243,6 +246,12 @@ protected:
 
 	// helper for ReadQueryParams
 	void GetQueryParam(const string &key, string &param, CPPHTTPLIB_NAMESPACE::Params &query_params);
+
+	pair<bool, string> getStatusAndFilenameIfS3MultipartFinalizeIsInProgress(const string& s3_file_path);
+
+	void saveCurrentStateForS3MultipartFinalize(S3FileHandle &file_handle);
+
+	void removeTmpFileIfExist(const string& s3_file_path);
 };
 
 // Helper class to do s3 ListObjectV2 api call https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
