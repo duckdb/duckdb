@@ -571,26 +571,6 @@ static bool ConvertColumnRegular(NumpyAppendData &append_data) {
 	return ConvertColumn<T, T, duckdb_py_convert::RegularConvert>(append_data);
 }
 
-template <class UNSIGNED_VALUE>
-static void PopulateDigitsUnsigned(UNSIGNED_VALUE value, py::tuple &digits, idx_t &ptr) {
-	while (value >= 100) {
-		// Integer division is slow so do it for a group of two digits instead
-		// of for every digit. The idea comes from the talk by Alexandrescu
-		// "Three Optimization Tips for C++".
-		auto index = NumericCast<unsigned>((value % 100) * 2);
-		value /= 100;
-		digits[--ptr] = py::int_(duckdb_fmt::internal::data::digits[index + 1]);
-		digits[--ptr] = py::int_(duckdb_fmt::internal::data::digits[index]);
-	}
-	if (value < 10) {
-		digits[--ptr] = py::int_(NumericCast<char>('0' + value));
-		return;
-	}
-	auto index = NumericCast<unsigned>(value * 2);
-	digits[--ptr] = py::int_(duckdb_fmt::internal::data::digits[index + 1]);
-	digits[--ptr] = py::int_(duckdb_fmt::internal::data::digits[index]);
-}
-
 template <class DUCKDB_T>
 static PyObject *ConstructDecimal(DUCKDB_T value, uint8_t width, uint8_t scale) {
 	auto decimal_length = DecimalToString::DecimalLength<DUCKDB_T>(value, width, scale);
@@ -598,43 +578,12 @@ static PyObject *ConstructDecimal(DUCKDB_T value, uint8_t width, uint8_t scale) 
 	auto &python_import_cache = *DuckDBPyConnection::ImportCache();
 	auto decimal = python_import_cache.decimal.Decimal();
 
-	// int32_t sign = value < 0 ? 1 : 0;
-	// int32_t exponent = -scale;
-
-	// if (value < 0) {
-	//	value = -value;
-	//}
-	// py::tuple digits(decimal_length);
-
-	// if (scale == 0) {
-	//	auto unsigned_value = UnsafeNumericCast<UNSIGNED>(value);
-	//	PopulateDigitsUnsigned(unsigned_value, digits, decimal_length);
-	//	auto input = py::make_tuple(sign, std::move(digits), exponent);
-	//	auto py_obj = decimal(input);
-	//	return py_obj.release().ptr();
-	//}
-	//// we write two numbers:
-	//// the numbers BEFORE the decimal (major)
-	//// and the numbers AFTER the decimal (minor)
-	// auto minor =
-	//	UnsafeNumericCast<UNSIGNED>(value) % UnsafeNumericCast<UNSIGNED>(NumericHelper::POWERS_OF_TEN[scale]);
-	// auto major =
-	//	UnsafeNumericCast<UNSIGNED>(value) / UnsafeNumericCast<UNSIGNED>(NumericHelper::POWERS_OF_TEN[scale]);
-
-	// auto major_length = NumericHelper::UnsignedLength(major);
-	// auto minor_length = NumericHelper::UnsignedLength(minor);
-
 	unique_ptr<char[]> raw_string(new char[decimal_length]);
-
 	DecimalToString::FormatDecimal<DUCKDB_T>(value, width, scale, raw_string.get(),
 	                                         UnsafeNumericCast<idx_t>(decimal_length));
 	auto stringified = string(raw_string.get(), decimal_length);
 	auto py_obj = decimal(py::str(stringified));
 	return py_obj.release().ptr();
-}
-
-PyObject *ReturnNone() {
-	Py_RETURN_NONE;
 }
 
 template <class DUCKDB_T>
@@ -656,7 +605,7 @@ static bool ConvertDecimalInternal(NumpyAppendData &append_data, const LogicalTy
 			idx_t src_idx = idata.sel->get_index(i + source_offset);
 			idx_t offset = target_offset + i;
 			if (!idata.validity.RowIsValidUnsafe(src_idx)) {
-				out_ptr[offset] = ReturnNone();
+				out_ptr[offset] = nullptr;
 				target_mask[offset] = true;
 			} else {
 				out_ptr[offset] = ConstructDecimal(src_ptr[src_idx], width, scale);
