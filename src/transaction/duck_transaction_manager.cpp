@@ -65,16 +65,19 @@ Transaction &DuckTransactionManager::StartTransaction(ClientContext &context) {
 	return transaction_ref;
 }
 
-DuckTransactionManager::CheckpointDecision::CheckpointDecision(string reason_p) : can_checkpoint(false), reason(std::move(reason_p)) {}
-
-DuckTransactionManager::CheckpointDecision::CheckpointDecision(CheckpointType type) :
-    can_checkpoint(true), type(type) {}
-
-DuckTransactionManager::CheckpointDecision::~CheckpointDecision() {
-
+DuckTransactionManager::CheckpointDecision::CheckpointDecision(string reason_p)
+    : can_checkpoint(false), reason(std::move(reason_p)) {
 }
 
-DuckTransactionManager::CheckpointDecision DuckTransactionManager::CanCheckpoint(DuckTransaction &transaction, unique_ptr<StorageLockKey> &lock) {
+DuckTransactionManager::CheckpointDecision::CheckpointDecision(CheckpointType type) : can_checkpoint(true), type(type) {
+}
+
+DuckTransactionManager::CheckpointDecision::~CheckpointDecision() {
+}
+
+DuckTransactionManager::CheckpointDecision
+DuckTransactionManager::CanCheckpoint(DuckTransaction &transaction, unique_ptr<StorageLockKey> &lock,
+                                      const UndoBufferProperties &undo_properties) {
 	if (db.IsSystem()) {
 		return CheckpointDecision("system transaction");
 	}
@@ -82,14 +85,14 @@ DuckTransactionManager::CheckpointDecision DuckTransactionManager::CanCheckpoint
 	if (storage_manager.InMemory()) {
 		return CheckpointDecision("in memory db");
 	}
-	auto undo_properties = transaction.GetUndoProperties();
 	if (!transaction.AutomaticCheckpoint(db, undo_properties)) {
 		return CheckpointDecision("no reason to automatically checkpoint");
 	}
 	// try to lock the checkpoint lock
 	lock = transaction.TryGetCheckpointLock();
 	if (!lock) {
-		return CheckpointDecision("Failed to obtain checkpoint lock - another thread is writing/checkpointing or another read transaction relies on data that is not yet committed");
+		return CheckpointDecision("Failed to obtain checkpoint lock - another thread is writing/checkpointing or "
+		                          "another read transaction relies on data that is not yet committed");
 	}
 	auto checkpoint_type = CheckpointType::FULL_CHECKPOINT;
 	if (undo_properties.has_updates || undo_properties.has_deletes) {
@@ -110,7 +113,9 @@ DuckTransactionManager::CheckpointDecision DuckTransactionManager::CanCheckpoint
 			// we might need to change our strategy here based on what changes THIS transaction has made
 			if (undo_properties.has_updates) {
 				// this transaction has performed updates - we cannot checkpoint
-				return CheckpointDecision("Transaction has performed updates and there are other transactions active\nActive transactions: " + other_transactions);
+				return CheckpointDecision(
+				    "Transaction has performed updates and there are other transactions active\nActive transactions: " +
+				    other_transactions);
 			} else {
 				// this transaction has performed deletes - we cannot vacuum - initiate a concurrent checkpoint instead
 				D_ASSERT(undo_properties.has_deletes);
@@ -210,7 +215,8 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 
 	// check if we can checkpoint
 	unique_ptr<StorageLockKey> lock;
-	auto checkpoint_decision = CanCheckpoint(transaction, lock);
+	auto undo_properties = transaction.GetUndoProperties();
+	auto checkpoint_decision = CanCheckpoint(transaction, lock, undo_properties);
 	// commit the UndoBuffer of the transaction
 	auto error = transaction.Commit(db, commit_id, checkpoint_decision.can_checkpoint);
 	if (error.HasError()) {
@@ -228,7 +234,8 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 
 	// commit successful: remove the transaction id from the list of active transactions
 	// potentially resulting in garbage collection
-	RemoveTransaction(transaction);
+	bool store_transaction = undo_properties.has_updates || undo_properties.has_catalog_changes;
+	RemoveTransaction(transaction, store_transaction);
 	// now perform a checkpoint if (1) we are able to checkpoint, and (2) the WAL has reached sufficient size to
 	// checkpoint
 	if (checkpoint_decision.can_checkpoint) {
@@ -259,7 +266,10 @@ void DuckTransactionManager::RollbackTransaction(Transaction &transaction_p) {
 }
 
 void DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction) noexcept {
-	bool changes_made = transaction.ChangesMade();
+	RemoveTransaction(transaction, transaction.ChangesMade());
+}
+
+void DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction, bool store_transaction) noexcept {
 	// remove the transaction from the list of active transactions
 	idx_t t_index = active_transactions.size();
 	// check for the lowest and highest start time in the list of transactions
@@ -283,7 +293,7 @@ void DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction) noe
 	D_ASSERT(t_index != active_transactions.size());
 	auto current_transaction = std::move(active_transactions[t_index]);
 	auto current_query = DatabaseManager::Get(db).ActiveQueryNumber();
-	if (changes_made) {
+	if (store_transaction) {
 		// if the transaction made any changes we need to keep it around
 		if (transaction.commit_id != 0) {
 			// the transaction was committed, add it to the list of recently
@@ -295,6 +305,9 @@ void DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction) noe
 			current_transaction->highest_active_query = current_query;
 			old_transactions.push_back(std::move(current_transaction));
 		}
+	} else if (transaction.ChangesMade()) {
+		D_ASSERT(transaction.commit_id != 0);
+		transaction.Cleanup();
 	}
 	// remove the transaction from the set of currently active transactions
 	active_transactions.unsafe_erase_at(t_index);

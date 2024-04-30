@@ -105,6 +105,9 @@ bool UndoBuffer::ChangesMade() {
 
 UndoBufferProperties UndoBuffer::GetProperties() {
 	UndoBufferProperties properties;
+	if (!ChangesMade()) {
+		return properties;
+	}
 	auto node = allocator.GetHead();
 	while (node) {
 		properties.estimated_size += node->current_position;
@@ -114,7 +117,7 @@ UndoBufferProperties UndoBuffer::GetProperties() {
 	// we need to search for any index creation entries
 	IteratorState iterator_state;
 	IterateEntries(iterator_state, [&](UndoFlags entry_type, data_ptr_t data) {
-		switch(entry_type) {
+		switch (entry_type) {
 		case UndoFlags::UPDATE_TUPLE:
 			properties.has_updates = true;
 			break;
@@ -122,6 +125,8 @@ UndoBufferProperties UndoBuffer::GetProperties() {
 			properties.has_deletes = true;
 			break;
 		case UndoFlags::CATALOG_ENTRY: {
+			properties.has_catalog_changes = true;
+
 			auto catalog_entry = Load<CatalogEntry *>(data);
 			if (catalog_entry->Parent().type == CatalogType::INDEX_ENTRY) {
 				auto &index = catalog_entry->Parent().Cast<DuckIndexEntry>();

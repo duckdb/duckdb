@@ -68,9 +68,12 @@ private:
 	transaction_t GetCommitTimestamp();
 	//! Remove the given transaction from the list of active transactions
 	void RemoveTransaction(DuckTransaction &transaction) noexcept;
+	//! Remove the given transaction from the list of active transactions
+	void RemoveTransaction(DuckTransaction &transaction, bool store_transaction) noexcept;
 
 	//! Whether or not we can checkpoint
-	CheckpointDecision CanCheckpoint(DuckTransaction &transaction, unique_ptr<StorageLockKey> &checkpoint_lock);
+	CheckpointDecision CanCheckpoint(DuckTransaction &transaction, unique_ptr<StorageLockKey> &checkpoint_lock,
+	                                 const UndoBufferProperties &properties);
 
 private:
 	//! The current start timestamp used by transactions

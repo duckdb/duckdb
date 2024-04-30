@@ -20,6 +20,7 @@ struct UndoBufferProperties {
 	idx_t estimated_size = 0;
 	bool has_updates = false;
 	bool has_deletes = false;
+	bool has_catalog_changes = false;
 };
 
 //! The undo buffer of a transaction is used to hold previous versions of tuples
