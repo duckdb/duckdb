@@ -444,7 +444,6 @@ void StringValueResult::HandleUnicodeError(idx_t col_idx, LinePosition &error_po
 
 bool StringValueResult::HandleError() {
 	if (state_machine.options.IgnoreErrors() && !current_errors.empty()) {
-		borked_rows.insert(number_of_rows);
 		current_errors.clear();
 		cur_col_id = 0;
 		chunk_col_id = 0;
@@ -609,6 +608,10 @@ bool StringValueResult::AddRowInternal() {
 		}
 	}
 	if (HandleError()) {
+		if (state_machine.options.IgnoreErrors()) {
+			// If we are ignoring errors we just throw it away.
+			return false;
+		}
 		line_positions_per_row[number_of_rows] = current_line_position;
 		number_of_rows++;
 		if (number_of_rows >= result_size) {

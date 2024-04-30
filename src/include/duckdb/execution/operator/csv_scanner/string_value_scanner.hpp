@@ -95,10 +95,11 @@ struct ParseTypeInfo {
 		type_id = type.id();
 		internal_type = type.InternalType();
 		if (type.id() == LogicalTypeId::DECIMAL) {
-			// We onlyc are about these if we have a decimal value
+			// We only care about these if we have a decimal value
 			type.GetDecimalProperties(width, scale);
 		}
 	}
+
 	bool validate_utf8;
 	LogicalTypeId type_id;
 	PhysicalType internal_type;
@@ -214,6 +215,7 @@ public:
 
 	StringValueResult &ParseChunk() override;
 
+	void RemoveErrors();
 	//! Flushes the result to the insert_chunk
 	void Flush(DataChunk &insert_chunk);
 
