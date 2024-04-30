@@ -59,32 +59,6 @@ public:
 		*--ptr = duckdb_fmt::internal::data::digits[index];
 		return ptr;
 	}
-	template <>
-	char *FormatUnsigned(hugeint_t value, char *ptr) {
-		while (value.upper > 0) {
-			// while integer division is slow, hugeint division is MEGA slow
-			// we want to avoid doing as many divisions as possible
-			// for that reason we start off doing a division by a large power of ten that uint64_t can hold
-			// (100000000000000000) - this is the third largest
-			// the reason we don't use the largest is because that can result in an overflow inside the division
-			// function
-			uint64_t remainder;
-			value = Hugeint::DivModPositive(value, 100000000000000000ULL, remainder);
-
-			auto startptr = ptr;
-			// now we format the remainder: note that we need to pad with zero's in case
-			// the remainder is small (i.e. less than 10000000000000000)
-			ptr = NumericHelper::FormatUnsigned<uint64_t>(remainder, ptr);
-
-			int format_length = UnsafeNumericCast<int>(startptr - ptr);
-			// pad with zero
-			for (int i = format_length; i < 17; i++) {
-				*--ptr = '0';
-			}
-		}
-		// once the value falls in the range of a uint64_t, fallback to formatting as uint64_t to avoid hugeint division
-		return NumericHelper::FormatUnsigned<uint64_t>(value.lower, ptr);
-	}
 
 	template <class T>
 	static string_t FormatSigned(T value, Vector &vector) {
@@ -119,6 +93,9 @@ template <>
 int NumericHelper::UnsignedLength(uint64_t value);
 template <>
 int NumericHelper::UnsignedLength(hugeint_t value);
+
+template <>
+char *NumericHelper::FormatUnsigned(hugeint_t value, char *ptr);
 
 template <>
 std::string NumericHelper::ToString(hugeint_t value);
