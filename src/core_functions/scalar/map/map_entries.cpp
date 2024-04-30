@@ -15,7 +15,6 @@ static void MapEntriesFunction(DataChunk &args, ExpressionState &state, Vector &
 	auto &map = args.data[0];
 	if (map.GetType().id() == LogicalTypeId::SQLNULL) {
 		// Input is a constant NULL
-		auto &validity = FlatVector::Validity(result);
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		ConstantVector::SetNull(result, true);
 		return;
