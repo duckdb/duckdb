@@ -593,14 +593,7 @@ static void PopulateDigitsUnsigned(UNSIGNED_VALUE value, py::tuple &digits, idx_
 
 template <class DUCKDB_T>
 static PyObject *ConstructDecimal(DUCKDB_T value, uint8_t width, uint8_t scale) {
-	using UNSIGNED = typename MakeUnsigned<DUCKDB_T>::type;
-	idx_t decimal_length;
-
-	if (std::is_same<DUCKDB_T, hugeint_t>::value) {
-		decimal_length = HugeintToStringCast::DecimalLength(value, width, scale);
-	} else {
-		decimal_length = DecimalToString::DecimalLength<DUCKDB_T, UNSIGNED>(value, width, scale);
-	}
+	auto decimal_length = DecimalToString::DecimalLength<DUCKDB_T>(value, width, scale);
 
 	auto &python_import_cache = *DuckDBPyConnection::ImportCache();
 	auto decimal = python_import_cache.decimal.Decimal();
@@ -633,16 +626,15 @@ static PyObject *ConstructDecimal(DUCKDB_T value, uint8_t width, uint8_t scale) 
 
 	unique_ptr<char[]> raw_string(new char[decimal_length]);
 
-	if (std::is_same<DUCKDB_T, hugeint_t>::value) {
-		HugeintToStringCast::FormatDecimal(value, width, scale, raw_string.get(),
-		                                   UnsafeNumericCast<idx_t>(decimal_length));
-	} else {
-		DecimalToString::FormatDecimal<DUCKDB_T, UNSIGNED>(value, width, scale, raw_string.get(),
-		                                                   UnsafeNumericCast<idx_t>(decimal_length));
-	}
+	DecimalToString::FormatDecimal<DUCKDB_T>(value, width, scale, raw_string.get(),
+	                                         UnsafeNumericCast<idx_t>(decimal_length));
 	auto stringified = string(raw_string.get(), decimal_length);
 	auto py_obj = decimal(py::str(stringified));
 	return py_obj.release().ptr();
+}
+
+PyObject *ReturnNone() {
+	Py_RETURN_NONE;
 }
 
 template <class DUCKDB_T>
@@ -657,8 +649,6 @@ static bool ConvertDecimalInternal(NumpyAppendData &append_data, const LogicalTy
 	auto width = DecimalType::GetWidth(type);
 	auto scale = DecimalType::GetScale(type);
 
-	// Decimal((0, (1, 4, 1, 4), -3)) -> Decimal('1.414')
-
 	auto src_ptr = UnifiedVectorFormat::GetData<DUCKDB_T>(idata);
 	auto out_ptr = reinterpret_cast<PyObject **>(target_data);
 	if (!idata.validity.AllValid()) {
@@ -666,6 +656,7 @@ static bool ConvertDecimalInternal(NumpyAppendData &append_data, const LogicalTy
 			idx_t src_idx = idata.sel->get_index(i + source_offset);
 			idx_t offset = target_offset + i;
 			if (!idata.validity.RowIsValidUnsafe(src_idx)) {
+				out_ptr[offset] = ReturnNone();
 				target_mask[offset] = true;
 			} else {
 				out_ptr[offset] = ConstructDecimal(src_ptr[src_idx], width, scale);
@@ -686,8 +677,6 @@ static bool ConvertDecimalInternal(NumpyAppendData &append_data, const LogicalTy
 
 static bool ConvertDecimal(NumpyAppendData &append_data) {
 	auto &decimal_type = append_data.input.GetType();
-	auto dec_scale = DecimalType::GetScale(decimal_type);
-	double division = pow(10, dec_scale);
 	switch (decimal_type.InternalType()) {
 	case PhysicalType::INT16:
 		return ConvertDecimalInternal<int16_t>(append_data, decimal_type);
@@ -796,9 +785,10 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t source_size
 	case LogicalTypeId::DOUBLE:
 		may_have_null = ConvertColumnRegular<double>(append_data);
 		break;
-	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::DECIMAL: {
 		may_have_null = ConvertDecimal(append_data);
 		break;
+	}
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalTypeId::TIMESTAMP_SEC:

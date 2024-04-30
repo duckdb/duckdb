@@ -19,8 +19,8 @@ class TestDecimal(object):
         )
         result = duckdb_cursor.fetchnumpy()
         assert result == {
-            'a': numpy.array([1.2]),
-            'b': numpy.array([100.3]),
-            'c': numpy.array([320938.4298]),
-            'd': numpy.array([49082094824.904820482094]),
+            'a': numpy.array([Decimal('1.2')], dtype=object),
+            'b': numpy.array([Decimal('100.3')], dtype=object),
+            'c': numpy.array([Decimal('320938.4298')], dtype=object),
+            'd': numpy.array([Decimal('49082094824.904820482094')], dtype=object),
         }

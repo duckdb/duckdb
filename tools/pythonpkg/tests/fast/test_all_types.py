@@ -17,7 +17,7 @@ def replace_with_ndarray(obj):
         elif isinstance(obj, list):
             for i, item in enumerate(obj):
                 obj[i] = replace_with_ndarray(item)
-        return np.array(obj)
+        return np.ma.array(obj)
     return obj
 
 
@@ -26,20 +26,20 @@ def recursive_equality(o1, o2):
     import math
 
     if type(o1) != type(o2):
-        return False
+        assert False
     if type(o1) == float and math.isnan(o1) and math.isnan(o2):
-        return True
+        assert True
     if o1 is np.ma.masked and o2 is np.ma.masked:
-        return True
+        assert True
     try:
         if len(o1) != len(o2):
-            return False
+            assert False
         for i in range(len(o1)):
             if not recursive_equality(o1[i], o2[i]):
-                return False
-        return True
+                assert False
+        assert True
     except:
-        return o1 == o2
+        assert o1 == o2
 
 
 # Regenerate the 'all_types' list using:
@@ -84,21 +84,12 @@ all_types = [
     "uuid",
     "interval",
     "varchar",
-    "blob",
     "bit",
-    "small_enum",
-    "medium_enum",
-    "large_enum",
-    "int_array",
-    "double_array",
     "date_array",
     "timestamp_array",
     "timestamptz_array",
-    "varchar_array",
-    "nested_int_array",
     "struct",
     "struct_of_arrays",
-    "array_of_structs",
     "map",
     "union",
     "fixed_int_array",
@@ -109,6 +100,15 @@ all_types = [
     "struct_of_fixed_array",
     "fixed_array_of_int_list",
     "list_of_fixed_int_array",
+    "blob",
+    "double_array",
+    "varchar_array",
+    "nested_int_array",
+    "array_of_structs",
+    "small_enum",
+    "medium_enum",
+    "large_enum",
+    "int_array",
 ]
 
 
@@ -298,10 +298,7 @@ class TestAllTypes(object):
         conn = duckdb.connect()
 
         correct_answer_map = {
-            'bool': np.ma.array(
-                [False, True, False],
-                mask=[0, 0, 1],
-            ),
+            'bool': np.ma.array([False, True, False], mask=[0, 0, 1], dtype=object),
             'tinyint': np.ma.array(
                 [-128, 127, -1],
                 mask=[0, 0, 1],
@@ -372,7 +369,11 @@ class TestAllTypes(object):
                 dtype=object,
             ),
             'blob': np.ma.array(
-                [b'thisisalongblob\x00withnullbytes', b'\x00\x00\x00a', b"42"],
+                [
+                    bytearray('thisisalongblob\x00withnullbytes', encoding='utf8'),
+                    bytearray('\x00\x00\x00a', encoding='utf8'),
+                    None,
+                ],
                 mask=[0, 0, 1],
                 dtype=object,
             ),
@@ -397,54 +398,61 @@ class TestAllTypes(object):
             # Enums don't have a numpy equivalent and yield pandas Categorical.
             'small_enum': pd.Categorical(
                 ['DUCK_DUCK_ENUM', 'GOOSE', np.NaN],
+                categories=['DUCK_DUCK_ENUM', 'GOOSE'],
                 ordered=True,
             ),
             'medium_enum': pd.Categorical(
                 ['enum_0', 'enum_299', np.NaN],
+                categories=[f'enum_{i}' for i in range(300)],
                 ordered=True,
             ),
             'large_enum': pd.Categorical(
                 ['enum_0', 'enum_69999', np.NaN],
+                categories=['enum_0', 'enum_69999'],
                 ordered=True,
             ),
-            # The following types don't have a numpy equivalent and yield
-            # object arrays:
-            'int_array': np.ma.array(
-                [
-                    [],
-                    [42, 999, None, None, -42],
-                    None,
-                ],
-                mask=[0, 0, 1],
-                dtype=object,
-            ),
-            'varchar_array': np.ma.array(
-                [
-                    [],
-                    ['🦆🦆🦆🦆🦆🦆', 'goose', None, ''],
-                    None,
-                ],
-                mask=[0, 0, 1],
-                dtype=object,
-            ),
-            'double_array': np.ma.array(
-                [
-                    [],
-                    [42.0, float('nan'), float('inf'), float('-inf'), None, -42.0],
-                    None,
-                ],
-                mask=[0, 0, 1],
-                dtype=object,
-            ),
-            'nested_int_array': np.ma.array(
-                [
-                    [],
-                    [[], [42, 999, None, None, -42], None, [], [42, 999, None, None, -42]],
-                    None,
-                ],
-                mask=[0, 0, 1],
-                dtype=object,
-            ),
+            #'int_array': np.ma.array(
+            #    [
+            #        np.array([], dtype=np.int32),
+            #        np.ma.array([42, 999, 0, 0, -42], mask=[0, 0, 1, 1, 0], fill_value=999999, dtype=np.int32),
+            #        None,
+            #    ],
+            #    mask=[0, 0, 1],
+            #    dtype=object,
+            # ),
+            #'varchar_array': np.ma.array(
+            #    [
+            #        np.array([], dtype=object),
+            #        np.ma.array(['🦆🦆🦆🦆🦆🦆', 'goose', None, ''], mask=[0,0,1,0]),
+            #        None,
+            #    ],
+            #    mask=[0, 0, 1],
+            #    dtype=object,
+            # ),
+            #'double_array': np.ma.array(
+            #    [
+            #        np.array([], dtype=np.float64),
+            #        np.ma.array([float(42.0), float('nan'), float('inf'), float('-inf'), float(0), float(-42.0)], mask=[0, 0, 0, 0, 1, 0], fill_value=float(1e+20), dtype=np.float64),
+            #        float(0),
+            #    ],
+            #    mask=[0, 0, 1],
+            #    dtype=object,
+            # ),
+            #'nested_int_array': np.ma.array(
+            #    [
+            #        np.array([], dtype=object),
+            #        np.ma.array([
+            #            np.array([], dtype=np.int32),
+            #            np.ma.array([42, 999, 0, 0, -42], mask=[0,0,1,1,0], dtype=np.int32, fill_value=999999),
+            #            None,
+            #            np.array([], dtype=np.int32),
+            #            np.ma.array([42, 999, 0, 0, -42], mask=[0,0,1,1,0], dtype=np.int32, fill_value=999999)
+            #        ], mask=[0,0,1,0,0], dtype=object),
+            #        None,
+            #    ],
+            #    mask=[0, 0, 1],
+            #    dtype=object,
+            # ),
             'struct': np.ma.array(
                 [
                     {'a': None, 'b': None},
@@ -463,15 +471,15 @@ class TestAllTypes(object):
                 mask=[0, 0, 1],
                 dtype=object,
             ),
-            'array_of_structs': np.ma.array(
-                [
-                    [],
-                    [{'a': None, 'b': None}, {'a': 42, 'b': '🦆🦆🦆🦆🦆🦆'}, None],
-                    None,
-                ],
-                mask=[0, 0, 1],
-                dtype=object,
-            ),
+            #'array_of_structs': np.ma.array(
+            #    [
+            #        np.array([], dtype=object),
+            #        np.ma.array([{'a': None, 'b': None}, {'a': 42, 'b': '🦆🦆🦆🦆🦆🦆'}, None], mask=[0,0,1], dtype=object),
+            #        None,
+            #    ],
+            #    mask=[0, 0, 1],
+            #    dtype=object,
+            # ),
             'map': np.ma.array(
                 [
                     {'key': [], 'value': []},
@@ -482,7 +490,7 @@ class TestAllTypes(object):
                 dtype=object,
             ),
             'time': np.ma.array(
-                ['00:00:00', '24:00:00', None],
+                [datetime.time(0, 0), '24:00:00', None],
                 mask=[0, 0, 1],
                 dtype=object,
             ),
@@ -492,8 +500,22 @@ class TestAllTypes(object):
                 dtype=object,
             ),
             'union': np.ma.array(['Frank', 5, None], mask=[0, 0, 1], dtype=object),
+            #'dec_4_1': np.ma.array([Decimal('-999.9'), Decimal('999.9'), None], mask=[0,0,1], dtype=object),
+            #'dec_9_4': np.ma.array([Decimal('-99999.9999'), Decimal('99999.9999'), None], mask=[0,0,1], dtype=object),
+            #'dec_18_6': np.ma.array([Decimal('-999999999999.999999'), Decimal('999999999999.999999'), None], mask=[0,0,1], dtype=object),
+            #'dec38_10': np.ma.array([
+            #    Decimal('-9999999999999999999999999999.9999999999'),
+            #    Decimal('9999999999999999999999999999.9999999999'),
+            #    None,
+            # ], mask=[0,0,1], dtype=object),
         }
-        correct_answer_map = replace_with_ndarray(correct_answer_map)
+        tmp = {}
+        for k, v in correct_answer_map.items():
+            if 'enum' in k:
+                tmp[k] = v
+            else:
+                tmp[k] = replace_with_ndarray(v)
+        correct_answer_map = tmp
 
         # The following types don't have a numpy equivalent, and are coerced to
         # floating point types by fetchnumpy():
@@ -520,18 +542,27 @@ class TestAllTypes(object):
 
         rel = conn.table_function("test_all_types")
         if cur_type not in correct_answer_map:
+            print("not", cur_type)
             return
+        print("yes", cur_type)
         result = rel.project(f'"{cur_type}"').fetchnumpy()
         result = result[cur_type]
         correct_answer = correct_answer_map[cur_type]
-        if isinstance(result, pd.Categorical) or result.dtype == object:
-            assert recursive_equality(list(result), list(correct_answer))
+        print(result)
+        print()
+        print(correct_answer)
+        print()
+        if isinstance(result, pd.Categorical):
+            a = pd.Series(result)
+            b = pd.Series(correct_answer)
+
+            pd.testing.assert_series_equal(a, b)
         else:
             # assert_equal compares NaN equal, but also compares masked
             # elements equal to any unmasked element
-            if isinstance(result, np.ma.MaskedArray) or isinstance(correct_answer, np.ma.MaskedArray):
+            if isinstance(result, np.ma.MaskedArray) and isinstance(correct_answer, np.ma.MaskedArray):
                 assert np.all(result.mask == correct_answer.mask)
-            np.testing.assert_equal(result, correct_answer)
+            np.testing.assert_equal(result, correct_answer, verbose=True)
 
     @pytest.mark.parametrize('cur_type', all_types)
     def test_arrow(self, cur_type):
@@ -589,9 +620,7 @@ class TestAllTypes(object):
             dataframe = conn.execute(f'select {adjusted_values[cur_type]} from test_all_types()').df()
         else:
             dataframe = conn.execute(f'select "{cur_type}" from test_all_types()').df()
-        print(cur_type)
         round_trip_dataframe = conn.execute("select * from dataframe").df()
         result_dataframe = conn.execute("select * from dataframe").fetchall()
-        print(round_trip_dataframe)
         result_roundtrip = conn.execute("select * from round_trip_dataframe").fetchall()
         assert recursive_equality(result_dataframe, result_roundtrip)

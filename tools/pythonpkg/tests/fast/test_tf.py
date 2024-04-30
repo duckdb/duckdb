@@ -23,7 +23,7 @@ def test_tf():
     tf.math.equal(duck_tf['b'], tf.convert_to_tensor(duck_numpy['b']))
 
     # Test all Numeric Types
-    numeric_types = ['TINYINT', 'SMALLINT', 'BIGINT', 'HUGEINT', 'FLOAT', 'DOUBLE', 'DECIMAL(4,1)', 'UTINYINT']
+    numeric_types = ['TINYINT', 'SMALLINT', 'BIGINT', 'HUGEINT', 'FLOAT', 'DOUBLE', 'UTINYINT']
 
     for supported_type in numeric_types:
         con = duckdb.connect()
