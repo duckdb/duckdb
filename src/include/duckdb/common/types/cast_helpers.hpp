@@ -30,140 +30,86 @@ public:
 public:
 	template <class T>
 	static int UnsignedLength(T value);
-	template <class SIGNED, class UNSIGNED>
-	static int SignedLength(SIGNED value) {
-		int sign = -(value < 0);
-		UNSIGNED unsigned_value = UnsafeNumericCast<UNSIGNED>((value ^ sign) - sign);
-		return UnsignedLength(unsigned_value) - sign;
+
+	template <>
+	int UnsignedLength(uint8_t value) {
+		int length = 1;
+		length += value >= 10;
+		length += value >= 100;
+		return length;
 	}
 
-	// Formats value in reverse and returns a pointer to the beginning.
-	template <class T>
-	static char *FormatUnsigned(T value, char *ptr) {
-		while (value >= 100) {
-			// Integer division is slow so do it for a group of two digits instead
-			// of for every digit. The idea comes from the talk by Alexandrescu
-			// "Three Optimization Tips for C++".
-			auto index = NumericCast<unsigned>((value % 100) * 2);
-			value /= 100;
-			*--ptr = duckdb_fmt::internal::data::digits[index + 1];
-			*--ptr = duckdb_fmt::internal::data::digits[index];
-		}
-		if (value < 10) {
-			*--ptr = NumericCast<char>('0' + value);
-			return ptr;
-		}
-		auto index = NumericCast<unsigned>(value * 2);
-		*--ptr = duckdb_fmt::internal::data::digits[index + 1];
-		*--ptr = duckdb_fmt::internal::data::digits[index];
-		return ptr;
+	template <>
+	int UnsignedLength(uint16_t value) {
+		int length = 1;
+		length += value >= 10;
+		length += value >= 100;
+		length += value >= 1000;
+		length += value >= 10000;
+		return length;
 	}
 
-	template <class T>
-	static string_t FormatSigned(T value, Vector &vector) {
-		typedef typename MakeUnsigned<T>::type unsigned_t;
-		int8_t sign = -(value < 0);
-		unsigned_t unsigned_value = unsigned_t(value ^ T(sign)) + unsigned_t(AbsValue(sign));
-		auto length = UnsafeNumericCast<idx_t>(UnsignedLength<unsigned_t>(unsigned_value) + AbsValue(sign));
-		string_t result = StringVector::EmptyString(vector, length);
-		auto dataptr = result.GetDataWriteable();
-		auto endptr = dataptr + length;
-		endptr = FormatUnsigned(unsigned_value, endptr);
-		if (sign) {
-			*--endptr = '-';
-		}
-		result.Finalize();
-		return result;
-	}
-
-	template <class T>
-	static std::string ToString(T value) {
-		return std::to_string(value);
-	}
-};
-
-template <>
-int NumericHelper::UnsignedLength(uint8_t value);
-template <>
-int NumericHelper::UnsignedLength(uint16_t value);
-template <>
-int NumericHelper::UnsignedLength(uint32_t value);
-template <>
-int NumericHelper::UnsignedLength(uint64_t value);
-
-template <>
-std::string NumericHelper::ToString(hugeint_t value);
-
-template <>
-std::string NumericHelper::ToString(uhugeint_t value);
-
-struct DecimalToString {
-	template <class SIGNED, class UNSIGNED>
-	static int DecimalLength(SIGNED value, uint8_t width, uint8_t scale) {
-		if (scale == 0) {
-			// scale is 0: regular number
-			return NumericHelper::SignedLength<SIGNED, UNSIGNED>(value);
-		}
-		// length is max of either:
-		// scale + 2 OR
-		// integer length + 1
-		// scale + 2 happens when the number is in the range of (-1, 1)
-		// in that case we print "0.XXX", which is the scale, plus "0." (2 chars)
-		// integer length + 1 happens when the number is outside of that range
-		// in that case we print the integer number, but with one extra character ('.')
-		auto extra_characters = width > scale ? 2 : 1;
-		return MaxValue(scale + extra_characters + (value < 0 ? 1 : 0),
-		                NumericHelper::SignedLength<SIGNED, UNSIGNED>(value) + 1);
-	}
-
-	template <class SIGNED, class UNSIGNED>
-	static void FormatDecimal(SIGNED value, uint8_t width, uint8_t scale, char *dst, idx_t len) {
-		char *end = dst + len;
-		if (value < 0) {
-			value = -value;
-			*dst = '-';
-		}
-		if (scale == 0) {
-			NumericHelper::FormatUnsigned<UNSIGNED>(UnsafeNumericCast<UNSIGNED>(value), end);
-			return;
-		}
-		// we write two numbers:
-		// the numbers BEFORE the decimal (major)
-		// and the numbers AFTER the decimal (minor)
-		auto minor =
-		    UnsafeNumericCast<UNSIGNED>(value) % UnsafeNumericCast<UNSIGNED>(NumericHelper::POWERS_OF_TEN[scale]);
-		auto major =
-		    UnsafeNumericCast<UNSIGNED>(value) / UnsafeNumericCast<UNSIGNED>(NumericHelper::POWERS_OF_TEN[scale]);
-		// write the number after the decimal
-		dst = NumericHelper::FormatUnsigned<UNSIGNED>(UnsafeNumericCast<UNSIGNED>(minor), end);
-		// (optionally) pad with zeros and add the decimal point
-		while (dst > (end - scale)) {
-			*--dst = '0';
-		}
-		*--dst = '.';
-		// now write the part before the decimal
-		D_ASSERT(width > scale || major == 0);
-		if (width > scale) {
-			// there are numbers after the comma
-			dst = NumericHelper::FormatUnsigned<UNSIGNED>(UnsafeNumericCast<UNSIGNED>(major), dst);
+	template <>
+	int UnsignedLength(uint32_t value) {
+		if (value >= 10000) {
+			int length = 5;
+			length += value >= 100000;
+			length += value >= 1000000;
+			length += value >= 10000000;
+			length += value >= 100000000;
+			length += value >= 1000000000;
+			return length;
+		} else {
+			int length = 1;
+			length += value >= 10;
+			length += value >= 100;
+			length += value >= 1000;
+			return length;
 		}
 	}
 
-	template <class SIGNED, class UNSIGNED>
-	static string_t Format(SIGNED value, uint8_t width, uint8_t scale, Vector &vector) {
-		int len = DecimalLength<SIGNED, UNSIGNED>(value, width, scale);
-		string_t result = StringVector::EmptyString(vector, NumericCast<size_t>(len));
-		FormatDecimal<SIGNED, UNSIGNED>(value, width, scale, result.GetDataWriteable(), UnsafeNumericCast<idx_t>(len));
-		result.Finalize();
-		return result;
+	template <>
+	int UnsignedLength(uint64_t value) {
+		if (value >= 10000000000ULL) {
+			if (value >= 1000000000000000ULL) {
+				int length = 16;
+				length += value >= 10000000000000000ULL;
+				length += value >= 100000000000000000ULL;
+				length += value >= 1000000000000000000ULL;
+				length += value >= 10000000000000000000ULL;
+				return length;
+			} else {
+				int length = 11;
+				length += value >= 100000000000ULL;
+				length += value >= 1000000000000ULL;
+				length += value >= 10000000000000ULL;
+				length += value >= 100000000000000ULL;
+				return length;
+			}
+		} else {
+			if (value >= 100000ULL) {
+				int length = 6;
+				length += value >= 1000000ULL;
+				length += value >= 10000000ULL;
+				length += value >= 100000000ULL;
+				length += value >= 1000000000ULL;
+				return length;
+			} else {
+				int length = 1;
+				length += value >= 10ULL;
+				length += value >= 100ULL;
+				length += value >= 1000ULL;
+				length += value >= 10000ULL;
+				return length;
+			}
+		}
 	}
-};
 
-struct HugeintToStringCast {
-	static int UnsignedLength(hugeint_t value) {
+	template <>
+	int UnsignedLength(hugeint_t value) {
 		D_ASSERT(value.upper >= 0);
 		if (value.upper == 0) {
-			return NumericHelper::UnsignedLength<uint64_t>(value.lower);
+			return UnsignedLength<uint64_t>(value.lower);
 		}
 		// search the length using the POWERS_OF_TEN array
 		// the length has to be between [17] and [38], because the hugeint is bigger than 2^63
@@ -226,8 +172,36 @@ struct HugeintToStringCast {
 		}
 	}
 
+	template <class SIGNED, class UNSIGNED>
+	static int SignedLength(SIGNED value) {
+		int sign = -(value < 0);
+		UNSIGNED unsigned_value = UnsafeNumericCast<UNSIGNED>((value ^ sign) - sign);
+		return UnsignedLength(unsigned_value) - sign;
+	}
+
 	// Formats value in reverse and returns a pointer to the beginning.
-	static char *FormatUnsigned(hugeint_t value, char *ptr) {
+	template <class T>
+	static char *FormatUnsigned(T value, char *ptr) {
+		while (value >= 100) {
+			// Integer division is slow so do it for a group of two digits instead
+			// of for every digit. The idea comes from the talk by Alexandrescu
+			// "Three Optimization Tips for C++".
+			auto index = NumericCast<unsigned>((value % 100) * 2);
+			value /= 100;
+			*--ptr = duckdb_fmt::internal::data::digits[index + 1];
+			*--ptr = duckdb_fmt::internal::data::digits[index];
+		}
+		if (value < 10) {
+			*--ptr = NumericCast<char>('0' + value);
+			return ptr;
+		}
+		auto index = NumericCast<unsigned>(value * 2);
+		*--ptr = duckdb_fmt::internal::data::digits[index + 1];
+		*--ptr = duckdb_fmt::internal::data::digits[index];
+		return ptr;
+	}
+	template <>
+	char *FormatUnsigned(hugeint_t value, char *ptr) {
 		while (value.upper > 0) {
 			// while integer division is slow, hugeint division is MEGA slow
 			// we want to avoid doing as many divisions as possible
@@ -253,7 +227,24 @@ struct HugeintToStringCast {
 		return NumericHelper::FormatUnsigned<uint64_t>(value.lower, ptr);
 	}
 
-	static string_t FormatSigned(hugeint_t value, Vector &vector) {
+	template <class T>
+	static string_t FormatSigned(T value, Vector &vector) {
+		typedef typename MakeUnsigned<T>::type unsigned_t;
+		int8_t sign = -(value < 0);
+		unsigned_t unsigned_value = unsigned_t(value ^ T(sign)) + unsigned_t(AbsValue(sign));
+		auto length = UnsafeNumericCast<idx_t>(UnsignedLength<unsigned_t>(unsigned_value) + AbsValue(sign));
+		string_t result = StringVector::EmptyString(vector, length);
+		auto dataptr = result.GetDataWriteable();
+		auto endptr = dataptr + length;
+		endptr = FormatUnsigned(unsigned_value, endptr);
+		if (sign) {
+			*--endptr = '-';
+		}
+		result.Finalize();
+		return result;
+	}
+	template <>
+	string_t FormatSigned(hugeint_t value, Vector &vector) {
 		int negative = value.upper < 0;
 		if (negative) {
 			if (value == NumericLimits<hugeint_t>::Minimum()) {
@@ -280,7 +271,40 @@ struct HugeintToStringCast {
 		return result;
 	}
 
-	static int DecimalLength(hugeint_t value, uint8_t width, uint8_t scale) {
+	template <class T>
+	static std::string ToString(T value) {
+		return std::to_string(value);
+	}
+};
+
+template <>
+std::string NumericHelper::ToString(hugeint_t value);
+
+template <>
+std::string NumericHelper::ToString(uhugeint_t value);
+
+struct DecimalToString {
+	template <class SIGNED>
+	static int DecimalLength(SIGNED value, uint8_t width, uint8_t scale) {
+		using UNSIGNED = typename MakeUnsigned<SIGNED>::type;
+		if (scale == 0) {
+			// scale is 0: regular number
+			return NumericHelper::SignedLength<SIGNED, UNSIGNED>(value);
+		}
+		// length is max of either:
+		// scale + 2 OR
+		// integer length + 1
+		// scale + 2 happens when the number is in the range of (-1, 1)
+		// in that case we print "0.XXX", which is the scale, plus "0." (2 chars)
+		// integer length + 1 happens when the number is outside of that range
+		// in that case we print the integer number, but with one extra character ('.')
+		auto extra_characters = width > scale ? 2 : 1;
+		return MaxValue(scale + extra_characters + (value < 0 ? 1 : 0),
+		                NumericHelper::SignedLength<SIGNED, UNSIGNED>(value) + 1);
+	}
+
+	template <>
+	int DecimalLength(hugeint_t value, uint8_t width, uint8_t scale) {
 		D_ASSERT(value > NumericLimits<hugeint_t>::Minimum());
 		int negative;
 
@@ -292,7 +316,7 @@ struct HugeintToStringCast {
 		}
 		if (scale == 0) {
 			// scale is 0: regular number
-			return UnsignedLength(value) + negative;
+			return NumericHelper::UnsignedLength(value) + negative;
 		}
 		// length is max of either:
 		// scale + 2 OR
@@ -302,10 +326,44 @@ struct HugeintToStringCast {
 		// integer length + 1 happens when the number is outside of that range
 		// in that case we print the integer number, but with one extra character ('.')
 		auto extra_numbers = width > scale ? 2 : 1;
-		return MaxValue(scale + extra_numbers, UnsignedLength(value) + 1) + negative;
+		return MaxValue(scale + extra_numbers, NumericHelper::UnsignedLength(value) + 1) + negative;
 	}
 
-	static void FormatDecimal(hugeint_t value, uint8_t width, uint8_t scale, char *dst, int len) {
+	template <class SIGNED>
+	static void FormatDecimal(SIGNED value, uint8_t width, uint8_t scale, char *dst, idx_t len) {
+		using UNSIGNED = typename MakeUnsigned<SIGNED>::type;
+		char *end = dst + len;
+		if (value < 0) {
+			value = -value;
+			*dst = '-';
+		}
+		if (scale == 0) {
+			NumericHelper::FormatUnsigned<UNSIGNED>(UnsafeNumericCast<UNSIGNED>(value), end);
+			return;
+		}
+		// we write two numbers:
+		// the numbers BEFORE the decimal (major)
+		// and the numbers AFTER the decimal (minor)
+		auto minor =
+		    UnsafeNumericCast<UNSIGNED>(value) % UnsafeNumericCast<UNSIGNED>(NumericHelper::POWERS_OF_TEN[scale]);
+		auto major =
+		    UnsafeNumericCast<UNSIGNED>(value) / UnsafeNumericCast<UNSIGNED>(NumericHelper::POWERS_OF_TEN[scale]);
+		// write the number after the decimal
+		dst = NumericHelper::FormatUnsigned<UNSIGNED>(UnsafeNumericCast<UNSIGNED>(minor), end);
+		// (optionally) pad with zeros and add the decimal point
+		while (dst > (end - scale)) {
+			*--dst = '0';
+		}
+		*--dst = '.';
+		// now write the part before the decimal
+		D_ASSERT(width > scale || major == 0);
+		if (width > scale) {
+			// there are numbers after the comma
+			dst = NumericHelper::FormatUnsigned<UNSIGNED>(UnsafeNumericCast<UNSIGNED>(major), dst);
+		}
+	}
+	template <>
+	void FormatDecimal(hugeint_t value, uint8_t width, uint8_t scale, char *dst, idx_t len) {
 		auto endptr = dst + len;
 
 		int negative = value.upper < 0;
@@ -316,7 +374,7 @@ struct HugeintToStringCast {
 		}
 		if (scale == 0) {
 			// with scale=0 we format the number as a regular number
-			FormatUnsigned(value, endptr);
+			NumericHelper::FormatUnsigned(value, endptr);
 			return;
 		}
 
@@ -327,7 +385,7 @@ struct HugeintToStringCast {
 		hugeint_t major = Hugeint::DivMod(value, Hugeint::POWERS_OF_TEN[scale], minor);
 
 		// write the number after the decimal
-		dst = FormatUnsigned(minor, endptr);
+		dst = NumericHelper::FormatUnsigned(minor, endptr);
 		// (optionally) pad with zeros and add the decimal point
 		while (dst > (endptr - scale)) {
 			*--dst = '0';
@@ -336,17 +394,26 @@ struct HugeintToStringCast {
 		// now write the part before the decimal
 		D_ASSERT(width > scale || major == 0);
 		if (width > scale) {
-			dst = FormatUnsigned(major, dst);
+			dst = NumericHelper::FormatUnsigned(major, dst);
 		}
 	}
 
-	static string_t FormatDecimal(hugeint_t value, uint8_t width, uint8_t scale, Vector &vector) {
+	template <class SIGNED>
+	static string_t Format(SIGNED value, uint8_t width, uint8_t scale, Vector &vector) {
+		int len = DecimalLength<SIGNED>(value, width, scale);
+		string_t result = StringVector::EmptyString(vector, NumericCast<size_t>(len));
+		FormatDecimal<SIGNED>(value, width, scale, result.GetDataWriteable(), UnsafeNumericCast<idx_t>(len));
+		result.Finalize();
+		return result;
+	}
+	template <>
+	string_t Format(hugeint_t value, uint8_t width, uint8_t scale, Vector &vector) {
 		int length = DecimalLength(value, width, scale);
 		string_t result = StringVector::EmptyString(vector, NumericCast<idx_t>(length));
 
 		auto dst = result.GetDataWriteable();
 
-		FormatDecimal(value, width, scale, dst, length);
+		FormatDecimal(value, width, scale, dst, NumericCast<idx_t>(length));
 
 		result.Finalize();
 		return result;
