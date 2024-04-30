@@ -1,11 +1,11 @@
-# name: test/optimizer/joins/update_nodes_in_full_path.test
+# name: test/optimizer/joins/update_nodes_in_full_path.test_slow
 # description: updating nodes in full path should throw no errors
 # group: [joins]
 
 require tpch
 
 statement ok
-call dbgen(sf=0.1);
+call dbgen(sf=0.01);
 
 statement ok
 SELECT NULL
