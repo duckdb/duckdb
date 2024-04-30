@@ -40,6 +40,7 @@ struct AddTableFunctionOverloadInfo : public AlterTableFunctionInfo {
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;
+	string ToString() const override;
 };
 
 } // namespace duckdb
