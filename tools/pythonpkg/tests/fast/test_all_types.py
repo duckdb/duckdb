@@ -26,20 +26,20 @@ def recursive_equality(o1, o2):
     import math
 
     if type(o1) != type(o2):
-        assert False
+        return False
     if type(o1) == float and math.isnan(o1) and math.isnan(o2):
-        assert True
+        return True
     if o1 is np.ma.masked and o2 is np.ma.masked:
-        assert True
+        return True
     try:
         if len(o1) != len(o2):
-            assert False
+            return False
         for i in range(len(o1)):
             if not recursive_equality(o1[i], o2[i]):
-                assert False
-        assert True
+                return False
+        return True
     except:
-        assert o1 == o2
+        return o1 == o2
 
 
 # Regenerate the 'all_types' list using:
