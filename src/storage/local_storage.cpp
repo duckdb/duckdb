@@ -23,21 +23,21 @@ LocalTableStorage::LocalTableStorage(DataTable &table)
 	row_groups->InitializeEmpty();
 
 	table.info->indexes.Scan([&](Index &index) {
-		if (index.index_type != ART::TYPE_NAME) {
+		if (index.GetIndexType() != ART::TYPE_NAME) {
 			return false;
 		}
-		D_ASSERT(index.index_type == ART::TYPE_NAME);
+		D_ASSERT(index.GetIndexType() == ART::TYPE_NAME);
 
 		auto &art = index.Cast<ART>();
-		if (art.index_constraint_type != IndexConstraintType::NONE) {
+		if (art.GetConstraintType() != IndexConstraintType::NONE) {
 			// unique index: create a local ART index that maintains the same unique constraint
 			vector<unique_ptr<Expression>> unbound_expressions;
 			unbound_expressions.reserve(art.unbound_expressions.size());
 			for (auto &expr : art.unbound_expressions) {
 				unbound_expressions.push_back(expr->Copy());
 			}
-			indexes.AddIndex(make_uniq<ART>(art.name, art.index_constraint_type, art.column_ids, art.table_io_manager,
-			                                std::move(unbound_expressions), art.db));
+			indexes.AddIndex(make_uniq<ART>(art.GetIndexName(), art.GetConstraintType(), art.GetColumnIds(),
+			                                art.table_io_manager, std::move(unbound_expressions), art.db));
 		}
 		return false;
 	});
@@ -97,10 +97,8 @@ idx_t LocalTableStorage::EstimatedSize() {
 	// get the index size
 	idx_t index_sizes = 0;
 	indexes.Scan([&](Index &index) {
-		// We expect that unbound indexes havent been instantiated yet and thus occupy no memory
-		if (index.IsBound()) {
-			index_sizes += index.Cast<BoundIndex>().GetInMemorySize();
-		}
+		D_ASSERT(index.IsBound());
+		index_sizes += index.Cast<BoundIndex>().GetInMemorySize();
 		return false;
 	});
 

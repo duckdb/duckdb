@@ -104,9 +104,9 @@ SinkResultType PhysicalCreateARTIndex::SinkSorted(Vector &row_identifiers, Opera
 	auto &l_index = l_state.local_index;
 
 	// create an ART from the chunk
-	auto art =
-	    make_uniq<ART>(info->index_name, l_index->index_constraint_type, l_index->column_ids, l_index->table_io_manager,
-	                   l_index->unbound_expressions, storage.db, l_index->Cast<ART>().allocators);
+	auto art = make_uniq<ART>(info->index_name, l_index->GetConstraintType(), l_index->GetColumnIds(),
+	                          l_index->table_io_manager, l_index->unbound_expressions, storage.db,
+	                          l_index->Cast<ART>().allocators);
 	if (!art->ConstructFromSorted(l_state.key_chunk.size(), l_state.keys, row_identifiers)) {
 		throw ConstraintException("Data contains duplicates on indexed column(s)");
 	}

@@ -16,31 +16,45 @@ namespace duckdb {
 class UnboundIndex final : public Index {
 private:
 	// The create info of the index
-	CreateIndexInfo create_info;
+	unique_ptr<CreateInfo> create_info;
 
 	// The serialized storage info of the index
 	IndexStorageInfo storage_info;
 
-	//! Unbound expressions used by the index during optimizations
-	// vector<unique_ptr<ParsedExpression>> parsed_expressions;
 public:
-	UnboundIndex(const CreateIndexInfo &create_info, IndexStorageInfo storage_info, TableIOManager &table_io_manager,
+	UnboundIndex(unique_ptr<CreateInfo> create_info, IndexStorageInfo storage_info, TableIOManager &table_io_manager,
 	             AttachedDatabase &db);
 
-	bool IsUnbound() override {
-		return true;
+	bool IsBound() const override {
+		return false;
 	}
+
+	const string &GetIndexType() const override {
+		return GetCreateInfo().index_type;
+	}
+
+	const string &GetIndexName() const override {
+		return GetCreateInfo().index_name;
+	}
+
+	IndexConstraintType GetConstraintType() const override {
+		return GetCreateInfo().constraint_type;
+	}
+
 	const CreateIndexInfo &GetCreateInfo() const {
-		return create_info;
+		return create_info->Cast<CreateIndexInfo>();
 	}
+
 	const IndexStorageInfo &GetStorageInfo() const {
 		return storage_info;
 	}
+
 	const vector<unique_ptr<ParsedExpression>> &GetParsedExpressions() const {
-		return create_info.parsed_expressions;
+		return GetCreateInfo().parsed_expressions;
 	}
+
 	const string &GetTableName() const {
-		return create_info.table;
+		return GetCreateInfo().table;
 	}
 
 	void CommitDrop() override;

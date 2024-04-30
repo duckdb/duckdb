@@ -577,6 +577,11 @@ void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_
 		indexes.Scan([&](Index &index) {
 			if (index.IsBound()) {
 				index.Cast<BoundIndex>().Delete(result, row_identifiers);
+			} else {
+				throw MissingExtensionException(
+				    "Cannot delete from index '%s', unknown index type '%s'. You need to load the "
+				    "extension that provides this index type before table '%s' can be modified.",
+				    index.GetIndexName(), index.GetIndexType(), info->table);
 			}
 			return false;
 		});

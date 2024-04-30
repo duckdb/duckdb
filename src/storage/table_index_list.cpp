@@ -23,7 +23,7 @@ void TableIndexList::RemoveIndex(const string &name) {
 	for (idx_t index_idx = 0; index_idx < indexes.size(); index_idx++) {
 		auto &index_entry = indexes[index_idx];
 
-		if (index_entry->name == name) {
+		if (index_entry->GetIndexName() == name) {
 			indexes.erase_at(index_idx);
 			break;
 		}
@@ -35,7 +35,7 @@ void TableIndexList::CommitDrop(const string &name) {
 
 	for (idx_t index_idx = 0; index_idx < indexes.size(); index_idx++) {
 		auto &index_entry = indexes[index_idx];
-		if (index_entry->name == name) {
+		if (index_entry->GetIndexName() == name) {
 			index_entry->CommitDrop();
 		}
 	}
@@ -48,7 +48,7 @@ bool TableIndexList::NameIsUnique(const string &name) {
 	for (idx_t index_idx = 0; index_idx < indexes.size(); index_idx++) {
 		auto &index_entry = indexes[index_idx];
 		if (index_entry->IsPrimary() || index_entry->IsForeign() || index_entry->IsUnique()) {
-			if (index_entry->name == name) {
+			if (index_entry->GetIndexName() == name) {
 				return false;
 			}
 		}
@@ -63,7 +63,7 @@ void TableIndexList::InitializeIndexes(ClientContext &context, DataTableInfo &ta
 	{
 		lock_guard<mutex> lock(indexes_lock);
 		for (auto &index : indexes) {
-			if (!index->IsBound() && (index_type == nullptr || index->index_type == index_type)) {
+			if (!index->IsBound() && (index_type == nullptr || index->GetIndexType() == index_type)) {
 				needs_binding = true;
 				break;
 			}
@@ -86,7 +86,7 @@ void TableIndexList::InitializeIndexes(ClientContext &context, DataTableInfo &ta
 
 	lock_guard<mutex> lock(indexes_lock);
 	for (auto &index : indexes) {
-		if (!index->IsBound() && (index_type == nullptr || index->index_type == index_type)) {
+		if (!index->IsBound() && (index_type == nullptr || index->GetIndexType() == index_type)) {
 			// Create a binder to bind this index (we cant reuse this binder for other indexes)
 			auto binder = Binder::CreateBinder(context);
 
@@ -154,7 +154,7 @@ vector<column_t> TableIndexList::GetRequiredColumns() {
 	lock_guard<mutex> lock(indexes_lock);
 	set<column_t> unique_indexes;
 	for (auto &index : indexes) {
-		for (auto col_index : index->column_ids) {
+		for (auto col_index : index->GetColumnIds()) {
 			unique_indexes.insert(col_index);
 		}
 	}

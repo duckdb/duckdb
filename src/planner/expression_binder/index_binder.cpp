@@ -23,7 +23,7 @@ unique_ptr<BoundIndex> IndexBinder::BindIndex(const UnboundIndex &unbound_index)
 	if (!index_type) {
 		throw MissingExtensionException("Cannot bind index '%s', unknown index type '%s'. You need to load the "
 		                                "extension that provides this index type before table '%s' can be modified.",
-		                                unbound_index.name, index_type_name, unbound_index.GetTableName());
+		                                unbound_index.GetTableName(), index_type_name, unbound_index.GetTableName());
 	}
 
 	auto &create_info = unbound_index.GetCreateInfo();

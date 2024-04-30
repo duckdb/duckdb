@@ -95,7 +95,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 
 	// first check if there are any indexes that exist that point to the removed column
 	info->indexes.Scan([&](Index &index) {
-		for (auto &column_id : index.column_ids) {
+		for (auto &column_id : index.GetColumnIds()) {
 			if (column_id == removed_column) {
 				throw CatalogException("Cannot drop this column: an index depends on it!");
 			} else if (column_id > removed_column) {
@@ -164,7 +164,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 
 	// first check if there are any indexes that exist that point to the changed column
 	info->indexes.Scan([&](Index &index) {
-		for (auto &column_id : index.column_ids) {
+		for (auto &column_id : index.GetColumnIds()) {
 			if (column_id == changed_idx) {
 				throw CatalogException("Cannot change the type of this column: an index depends on it!");
 			}
@@ -335,12 +335,12 @@ bool DataTable::IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, Index &i
 	if (fk_type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE ? !index.IsUnique() : !index.IsForeign()) {
 		return false;
 	}
-	if (fk_keys.size() != index.column_ids.size()) {
+	if (fk_keys.size() != index.GetColumnIds().size()) {
 		return false;
 	}
 	for (auto &fk_key : fk_keys) {
 		bool is_found = false;
-		for (auto &index_key : index.column_ids) {
+		for (auto &index_key : index.GetColumnIds()) {
 			if (fk_key.index == index_key) {
 				is_found = true;
 				break;

@@ -10,15 +10,10 @@ namespace duckdb {
 // Unbound index
 //-------------------------------------------------------------------------------
 
-UnboundIndex::UnboundIndex(const CreateIndexInfo &info, IndexStorageInfo storage_info_p,
+UnboundIndex::UnboundIndex(unique_ptr<CreateInfo> create_info, IndexStorageInfo storage_info_p,
                            TableIOManager &table_io_manager, AttachedDatabase &db)
-    : Index(info.index_name, info.index_type, info.constraint_type, info.column_ids, table_io_manager, db),
-      create_info(info), storage_info(std::move(storage_info_p)) {
-
-	// Annoyingly, parsed expressions are not copied in the CreateIndexInfo copy constructor
-	for (auto &expr : info.parsed_expressions) {
-		create_info.parsed_expressions.push_back(expr->Copy());
-	}
+    : Index(create_info->Cast<CreateIndexInfo>().column_ids, table_io_manager, db), create_info(std::move(create_info)),
+      storage_info(std::move(storage_info_p)) {
 }
 
 void UnboundIndex::CommitDrop() {

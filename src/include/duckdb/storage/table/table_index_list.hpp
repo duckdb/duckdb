@@ -36,12 +36,21 @@ public:
 	void ScanBound(FUNC &&callback) {
 		lock_guard<mutex> lock(indexes_lock);
 		for (auto &index : indexes) {
-			if (index->IsBound() && T::TYPE_NAME == index->index_type) {
+			if (index->IsBound() && T::TYPE_NAME == index->GetIndexType()) {
 				if (callback(index->Cast<T>())) {
 					break;
 				}
 			}
 		}
+	}
+
+	// Bind any unbound indexes of the specified type and invoke the callback method for every bound entry of the
+	// specified type, regardless if it was bound before or not
+	template <class T, class FUNC>
+	void BindAndScan(ClientContext &context, DataTableInfo &table_info, FUNC &&callback) {
+		// FIXME: optimize this by only looping through the indexes once without re-acquiring the lock
+		InitializeIndexes(context, table_info, T::TYPE_NAME);
+		ScanBound<T>(callback);
 	}
 
 	//! Returns a reference to the indexes of this table

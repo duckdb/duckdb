@@ -4,11 +4,9 @@
 
 namespace duckdb {
 
-Index::Index(const string &name, const string &index_type, IndexConstraintType index_constraint_type,
-             const vector<column_t> &column_ids, TableIOManager &table_io_manager, AttachedDatabase &db)
+Index::Index(const vector<column_t> &column_ids, TableIOManager &table_io_manager, AttachedDatabase &db)
 
-    : name(name), index_type(index_type), index_constraint_type(index_constraint_type), column_ids(column_ids),
-      table_io_manager(table_io_manager), db(db) {
+    : column_ids(column_ids), table_io_manager(table_io_manager), db(db) {
 
 	if (!Radix::IsLittleEndian()) {
 		throw NotImplementedException("indexes are not supported on big endian architectures");

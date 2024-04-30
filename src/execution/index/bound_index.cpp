@@ -16,7 +16,8 @@ namespace duckdb {
 BoundIndex::BoundIndex(const string &name, const string &index_type, IndexConstraintType index_constraint_type,
                        const vector<column_t> &column_ids, TableIOManager &table_io_manager,
                        const vector<unique_ptr<Expression>> &unbound_expressions_p, AttachedDatabase &db)
-    : Index(name, index_type, index_constraint_type, column_ids, table_io_manager, db) {
+    : Index(column_ids, table_io_manager, db), name(name), index_type(index_type),
+      index_constraint_type(index_constraint_type) {
 
 	for (auto &expr : unbound_expressions_p) {
 		types.push_back(expr->return_type.InternalType());
@@ -25,9 +26,6 @@ BoundIndex::BoundIndex(const string &name, const string &index_type, IndexConstr
 		bound_expressions.push_back(BindExpression(expr->Copy()));
 		executor.AddExpression(*bound_expressions.back());
 	}
-
-	// create the column id set
-	column_id_set.insert(column_ids.begin(), column_ids.end());
 }
 
 void BoundIndex::InitializeLock(IndexLock &state) {

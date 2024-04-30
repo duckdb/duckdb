@@ -263,7 +263,8 @@ static void RewriteIndexExpression(Index &index, LogicalGet &get, Expression &ex
 		auto &bound_colref = expr.Cast<BoundColumnRefExpression>();
 		// bound column ref: rewrite to fit in the current set of bound column ids
 		bound_colref.binding.table_index = get.table_index;
-		column_t referenced_column = index.column_ids[bound_colref.binding.column_index];
+		auto &column_ids = index.GetColumnIds();
+		column_t referenced_column = column_ids[bound_colref.binding.column_index];
 		// search for the referenced column in the set of column_ids
 		for (idx_t i = 0; i < get.column_ids.size(); i++) {
 			if (get.column_ids[i] == referenced_column) {
@@ -306,11 +307,8 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 		return;
 	}
 
-	// Initialize any ART indexes
-	storage.info->InitializeIndexes(context, ART::TYPE_NAME);
-
-	// behold
-	storage.info->indexes.ScanBound<ART>([&](ART &art_index) {
+	// bind and scan any ART indexes
+	storage.info->indexes.BindAndScan<ART>(context, *storage.info, [&](ART &art_index) {
 		// first rewrite the index expression so the ColumnBindings align with the column bindings of the current table
 
 		if (art_index.unbound_expressions.size() > 1) {

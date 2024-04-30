@@ -70,6 +70,54 @@ index 67ba14c2af..d0e24f4dc4 100644
  	atomic<idx_t> next_thread_id = {0};
  };
  
+diff --git a/src/hnsw/hnsw_index_pragmas.cpp b/src/hnsw/hnsw_index_pragmas.cpp
+index cef1293dae..af397b50a5 100644
+--- a/src/hnsw/hnsw_index_pragmas.cpp
++++ b/src/hnsw/hnsw_index_pragmas.cpp
+@@ -100,7 +100,7 @@ static void HNSWIndexInfoExecute(ClientContext &context, TableFunctionInput &dat
+ 
+ 		storage.info->InitializeIndexes(context);
+ 		storage.info->indexes.Scan([&](Index &index) {
+-			if (index.name == index_entry.name && index.index_type == HNSWIndex::TYPE_NAME) {
++			if (index.GetIndexName() == index_entry.name && index.GetIndexType() == HNSWIndex::TYPE_NAME) {
+ 				hnsw_index = &index.Cast<HNSWIndex>();
+ 				return true;
+ 			}
+@@ -173,7 +173,7 @@ static void CompactIndexPragma(ClientContext &context, const FunctionParameters
+ 	auto &storage = table_entry.GetStorage();
+ 	bool found_index = false;
+ 	storage.info->indexes.Scan([&](Index &index_entry) {
+-		if (index_entry.name == index_name && index_entry.index_type == HNSWIndex::TYPE_NAME) {
++		if (index_entry.GetIndexName() == index_name && index_entry.GetIndexType() == HNSWIndex::TYPE_NAME) {
+ 			auto &hnsw_index = index_entry.Cast<HNSWIndex>();
+ 			hnsw_index.Compact();
+ 			found_index = true;
+diff --git a/src/hnsw/hnsw_index_scan.cpp b/src/hnsw/hnsw_index_scan.cpp
+index 954b439f91..7b4d3c3132 100644
+--- a/src/hnsw/hnsw_index_scan.cpp
++++ b/src/hnsw/hnsw_index_scan.cpp
+@@ -124,7 +124,7 @@ unique_ptr<NodeStatistics> HNSWIndexScanCardinality(ClientContext &context, cons
+ //-------------------------------------------------------------------------
+ static string HNSWIndexScanToString(const FunctionData *bind_data_p) {
+ 	auto &bind_data = bind_data_p->Cast<HNSWIndexScanBindData>();
+-	return bind_data.table.name + " (HNSW INDEX SCAN : " + bind_data.index.name + ")";
++	return bind_data.table.name + " (HNSW INDEX SCAN : " + bind_data.index.GetIndexName() + ")";
+ }
+ 
+ //-------------------------------------------------------------------------
+diff --git a/src/hnsw/hnsw_plan_index_scan.cpp b/src/hnsw/hnsw_plan_index_scan.cpp
+index 09a7de9b47..6dce49a456 100644
+--- a/src/hnsw/hnsw_plan_index_scan.cpp
++++ b/src/hnsw/hnsw_plan_index_scan.cpp
+@@ -136,7 +136,7 @@ public:
+ 		// Find the index
+ 		unique_ptr<HNSWIndexScanBindData> bind_data = nullptr;
+ 		table_info->indexes.Scan([&](Index &index_entry) {
+-			if (index_entry.index_type == HNSWIndex::TYPE_NAME) {
++			if (index_entry.GetIndexType() == HNSWIndex::TYPE_NAME) {
+ 				auto &hnsw_index = index_entry.Cast<HNSWIndex>();
+ 
+ 				if (hnsw_index.GetVectorSize() != array_size) {
 diff --git a/src/include/hnsw/hnsw_index.hpp b/src/include/hnsw/hnsw_index.hpp
 index 04c2470188..70b3594c6d 100644
 --- a/src/include/hnsw/hnsw_index.hpp

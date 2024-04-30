@@ -35,18 +35,33 @@ public:
 	           const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	           const vector<unique_ptr<Expression>> &unbound_expressions, AttachedDatabase &db);
 
-	// vector<column_t> column_ids;
-	//! Unordered set of column_ids used by the index
-	// unordered_set<column_t> column_id_set;
 	//! The physical types stored in the index
 	vector<PhysicalType> types;
 	//! The logical types of the expressions
 	vector<LogicalType> logical_types;
 
+	//! The name of the index
+	string name;
+	//! The index type (ART, B+-tree, Skip-List, ...)
+	string index_type;
+	//! The index constraint type
+	IndexConstraintType index_constraint_type;
+
 public:
-	//! Returns true if the index is a unknown index, and false otherwise
-	bool IsUnbound() override {
-		return false;
+	bool IsBound() const override {
+		return true;
+	}
+
+	const string &GetIndexType() const override {
+		return index_type;
+	}
+
+	const string &GetIndexName() const override {
+		return name;
+	}
+
+	IndexConstraintType GetConstraintType() const override {
+		return index_constraint_type;
 	}
 
 public: // Index interface

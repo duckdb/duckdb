@@ -274,7 +274,7 @@ void WriteAheadLog::WriteCreateIndex(const IndexCatalogEntry &entry) {
 
 	// get the matching index and serialize its storage info
 	for (auto const &index : indexes) {
-		if (duck_index_entry.name == index->name) {
+		if (duck_index_entry.name == index->GetIndexName()) {
 			SerializeIndexToWAL(serializer, index);
 			break;
 		}

@@ -453,8 +453,8 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	D_ASSERT(index_storage_info.IsValid() && !index_storage_info.name.empty());
 
 	// Create an unbound index and add it to the table
-	auto unbound_index =
-	    make_uniq<UnboundIndex>(info, index_storage_info, TableIOManager::Get(data_table), data_table.db);
+	auto unbound_index = make_uniq<UnboundIndex>(std::move(create_info), index_storage_info,
+	                                             TableIOManager::Get(data_table), data_table.db);
 
 	data_table.info->indexes.AddIndex(std::move(unbound_index));
 }
