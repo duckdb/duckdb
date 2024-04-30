@@ -571,8 +571,82 @@ static bool ConvertColumnRegular(NumpyAppendData &append_data) {
 	return ConvertColumn<T, T, duckdb_py_convert::RegularConvert>(append_data);
 }
 
+template <class UNSIGNED_VALUE>
+static void PopulateDigitsUnsigned(UNSIGNED_VALUE value, py::tuple &digits, idx_t &ptr) {
+	while (value >= 100) {
+		// Integer division is slow so do it for a group of two digits instead
+		// of for every digit. The idea comes from the talk by Alexandrescu
+		// "Three Optimization Tips for C++".
+		auto index = NumericCast<unsigned>((value % 100) * 2);
+		value /= 100;
+		digits[--ptr] = py::int_(duckdb_fmt::internal::data::digits[index + 1]);
+		digits[--ptr] = py::int_(duckdb_fmt::internal::data::digits[index]);
+	}
+	if (value < 10) {
+		digits[--ptr] = py::int_(NumericCast<char>('0' + value));
+		return;
+	}
+	auto index = NumericCast<unsigned>(value * 2);
+	digits[--ptr] = py::int_(duckdb_fmt::internal::data::digits[index + 1]);
+	digits[--ptr] = py::int_(duckdb_fmt::internal::data::digits[index]);
+}
+
 template <class DUCKDB_T>
-static bool ConvertDecimalInternal(NumpyAppendData &append_data, double division) {
+static PyObject *ConstructDecimal(DUCKDB_T value, uint8_t width, uint8_t scale) {
+	using UNSIGNED = typename MakeUnsigned<DUCKDB_T>::type;
+	idx_t decimal_length;
+
+	if (std::is_same<DUCKDB_T, hugeint_t>::value) {
+		decimal_length = HugeintToStringCast::DecimalLength(value, width, scale);
+	} else {
+		decimal_length = DecimalToString::DecimalLength<DUCKDB_T, UNSIGNED>(value, width, scale);
+	}
+
+	auto &python_import_cache = *DuckDBPyConnection::ImportCache();
+	auto decimal = python_import_cache.decimal.Decimal();
+
+	// int32_t sign = value < 0 ? 1 : 0;
+	// int32_t exponent = -scale;
+
+	// if (value < 0) {
+	//	value = -value;
+	//}
+	// py::tuple digits(decimal_length);
+
+	// if (scale == 0) {
+	//	auto unsigned_value = UnsafeNumericCast<UNSIGNED>(value);
+	//	PopulateDigitsUnsigned(unsigned_value, digits, decimal_length);
+	//	auto input = py::make_tuple(sign, std::move(digits), exponent);
+	//	auto py_obj = decimal(input);
+	//	return py_obj.release().ptr();
+	//}
+	//// we write two numbers:
+	//// the numbers BEFORE the decimal (major)
+	//// and the numbers AFTER the decimal (minor)
+	// auto minor =
+	//	UnsafeNumericCast<UNSIGNED>(value) % UnsafeNumericCast<UNSIGNED>(NumericHelper::POWERS_OF_TEN[scale]);
+	// auto major =
+	//	UnsafeNumericCast<UNSIGNED>(value) / UnsafeNumericCast<UNSIGNED>(NumericHelper::POWERS_OF_TEN[scale]);
+
+	// auto major_length = NumericHelper::UnsignedLength(major);
+	// auto minor_length = NumericHelper::UnsignedLength(minor);
+
+	unique_ptr<char[]> raw_string(new char[decimal_length]);
+
+	if (std::is_same<DUCKDB_T, hugeint_t>::value) {
+		HugeintToStringCast::FormatDecimal(value, width, scale, raw_string.get(),
+		                                   UnsafeNumericCast<idx_t>(decimal_length));
+	} else {
+		DecimalToString::FormatDecimal<DUCKDB_T, UNSIGNED>(value, width, scale, raw_string.get(),
+		                                                   UnsafeNumericCast<idx_t>(decimal_length));
+	}
+	auto stringified = string(raw_string.get(), decimal_length);
+	auto py_obj = decimal(py::str(stringified));
+	return py_obj.release().ptr();
+}
+
+template <class DUCKDB_T>
+static bool ConvertDecimalInternal(NumpyAppendData &append_data, const LogicalType &type) {
 	auto target_offset = append_data.target_offset;
 	auto target_data = append_data.target_data;
 	auto target_mask = append_data.target_mask;
@@ -580,8 +654,13 @@ static bool ConvertDecimalInternal(NumpyAppendData &append_data, double division
 	auto count = append_data.count;
 	auto source_offset = append_data.source_offset;
 
+	auto width = DecimalType::GetWidth(type);
+	auto scale = DecimalType::GetScale(type);
+
+	// Decimal((0, (1, 4, 1, 4), -3)) -> Decimal('1.414')
+
 	auto src_ptr = UnifiedVectorFormat::GetData<DUCKDB_T>(idata);
-	auto out_ptr = reinterpret_cast<double *>(target_data);
+	auto out_ptr = reinterpret_cast<PyObject **>(target_data);
 	if (!idata.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			idx_t src_idx = idata.sel->get_index(i + source_offset);
@@ -589,9 +668,7 @@ static bool ConvertDecimalInternal(NumpyAppendData &append_data, double division
 			if (!idata.validity.RowIsValidUnsafe(src_idx)) {
 				target_mask[offset] = true;
 			} else {
-				out_ptr[offset] =
-				    duckdb_py_convert::IntegralConvert::ConvertValue<DUCKDB_T, double>(src_ptr[src_idx], append_data) /
-				    division;
+				out_ptr[offset] = ConstructDecimal(src_ptr[src_idx], width, scale);
 				target_mask[offset] = false;
 			}
 		}
@@ -600,9 +677,7 @@ static bool ConvertDecimalInternal(NumpyAppendData &append_data, double division
 		for (idx_t i = 0; i < count; i++) {
 			idx_t src_idx = idata.sel->get_index(i + source_offset);
 			idx_t offset = target_offset + i;
-			out_ptr[offset] =
-			    duckdb_py_convert::IntegralConvert::ConvertValue<DUCKDB_T, double>(src_ptr[src_idx], append_data) /
-			    division;
+			out_ptr[offset] = ConstructDecimal(src_ptr[src_idx], width, scale);
 			target_mask[offset] = false;
 		}
 		return false;
@@ -615,13 +690,13 @@ static bool ConvertDecimal(NumpyAppendData &append_data) {
 	double division = pow(10, dec_scale);
 	switch (decimal_type.InternalType()) {
 	case PhysicalType::INT16:
-		return ConvertDecimalInternal<int16_t>(append_data, division);
+		return ConvertDecimalInternal<int16_t>(append_data, decimal_type);
 	case PhysicalType::INT32:
-		return ConvertDecimalInternal<int32_t>(append_data, division);
+		return ConvertDecimalInternal<int32_t>(append_data, decimal_type);
 	case PhysicalType::INT64:
-		return ConvertDecimalInternal<int64_t>(append_data, division);
+		return ConvertDecimalInternal<int64_t>(append_data, decimal_type);
 	case PhysicalType::INT128:
-		return ConvertDecimalInternal<hugeint_t>(append_data, division);
+		return ConvertDecimalInternal<hugeint_t>(append_data, decimal_type);
 	default:
 		throw NotImplementedException("Unimplemented internal type for DECIMAL");
 	}

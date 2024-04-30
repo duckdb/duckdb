@@ -280,6 +280,7 @@ PandasDataFrame DuckDBPyResult::FrameFromNumpy(bool date_as_object, const py::ha
 
 PandasDataFrame DuckDBPyResult::FetchDF(bool date_as_object) {
 	auto conversion = InitializeNumpyConversion(true);
+	DuckDBPyConnection::ImportCache()->decimal.Decimal();
 	return FrameFromNumpy(date_as_object, FetchNumpyInternal(false, 1, std::move(conversion)));
 }
 

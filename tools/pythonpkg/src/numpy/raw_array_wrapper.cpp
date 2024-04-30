@@ -37,8 +37,9 @@ static idx_t GetNumpyTypeWidth(const LogicalType &type) {
 		return sizeof(float);
 	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::DOUBLE:
-	case LogicalTypeId::DECIMAL:
 		return sizeof(double);
+	case LogicalTypeId::DECIMAL:
+		return sizeof(PyObject *);
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
@@ -93,7 +94,6 @@ string RawArrayWrapper::DuckDBToNumpyDtype(const LogicalType &type) {
 		return "float32";
 	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::DOUBLE:
-	case LogicalTypeId::DECIMAL:
 		return "float64";
 	case LogicalTypeId::TIMESTAMP:
 		return "datetime64[us]";
@@ -120,6 +120,7 @@ string RawArrayWrapper::DuckDBToNumpyDtype(const LogicalType &type) {
 	case LogicalTypeId::UNION:
 	case LogicalTypeId::UUID:
 	case LogicalTypeId::ARRAY:
+	case LogicalTypeId::DECIMAL:
 		return "object";
 	case LogicalTypeId::ENUM: {
 		auto size = EnumType::GetSize(type);
