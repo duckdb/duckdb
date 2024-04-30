@@ -68,10 +68,10 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 	} else {
 		new_line_id = DetectNewLineDelimiter(*buffer_manager);
 	}
-	for (const auto &delimiter : delimiter_candidates) {
-		for (const auto quoterule : quoterule_candidates) {
-			const auto &quote_candidates = quote_candidates_map.at((uint8_t)quoterule);
-			for (const auto &quote : quote_candidates) {
+	for (const auto quoterule : quoterule_candidates) {
+		const auto &quote_candidates = quote_candidates_map.at((uint8_t)quoterule);
+		for (const auto &quote : quote_candidates) {
+			for (const auto &delimiter : delimiter_candidates) {
 				const auto &escape_candidates = escape_candidates_map.at((uint8_t)quoterule);
 				for (const auto &escape : escape_candidates) {
 					D_ASSERT(buffer_manager);
@@ -271,7 +271,14 @@ void CSVSniffer::RefineCandidates() {
 	if (!successful_candidates.empty()) {
 		unique_ptr<ColumnCountScanner> cc_best_candidate;
 		for (idx_t i = 0; i < successful_candidates.size(); i++) {
-			candidates.push_back(std::move(successful_candidates[i]));
+			cc_best_candidate = std::move(successful_candidates[i]);
+			if (cc_best_candidate->state_machine->state_machine_options.quote != '\0' &&
+			    cc_best_candidate->ever_quoted) {
+				candidates.clear();
+				candidates.push_back(std::move(cc_best_candidate));
+				return;
+			}
+			candidates.push_back(std::move(cc_best_candidate));
 		}
 		return;
 	}
