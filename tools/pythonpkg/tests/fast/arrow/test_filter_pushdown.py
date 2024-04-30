@@ -17,12 +17,10 @@ re = pytest.importorskip("re")
 def create_pyarrow_pandas(rel):
     if not pandas_supports_arrow_backend():
         pytest.skip(reason="Pandas version doesn't support 'pyarrow' backend")
-    rel.show()
     return rel.df().convert_dtypes(dtype_backend='pyarrow')
 
 
 def create_pyarrow_table(rel):
-    rel.show()
     return rel.arrow()
 
 
@@ -53,7 +51,6 @@ def numeric_operators(connection, data_type, tbl_name, create_table):
     duck_tbl = connection.table(tbl_name)
     arrow_table = create_table(duck_tbl)
 
-    print(arrow_table)
     # Try ==
     assert connection.execute("SELECT count(*) from arrow_table where a = 1").fetchone()[0] == 1
     # Try >
@@ -164,20 +161,20 @@ class TestArrowFilterPushdown(object):
     @pytest.mark.parametrize(
         'data_type',
         [
-            #'TINYINT',
-            #'SMALLINT',
-            #'INTEGER',
-            #'BIGINT',
-            #'UTINYINT',
-            #'USMALLINT',
-            #'UINTEGER',
-            #'UBIGINT',
-            #'FLOAT',
-            #'DOUBLE',
-            #'HUGEINT',
-            #'DECIMAL(4,1)',
-            #'DECIMAL(9,1)',
-            #'DECIMAL(18,4)',
+            'TINYINT',
+            'SMALLINT',
+            'INTEGER',
+            'BIGINT',
+            'UTINYINT',
+            'USMALLINT',
+            'UINTEGER',
+            'UBIGINT',
+            'FLOAT',
+            'DOUBLE',
+            'HUGEINT',
+            'DECIMAL(4,1)',
+            'DECIMAL(9,1)',
+            'DECIMAL(18,4)',
             'DECIMAL(30,12)',
         ],
     )
