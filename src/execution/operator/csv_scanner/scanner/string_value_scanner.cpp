@@ -140,7 +140,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		}
 		if (error) {
 			// We error pointing to the current value error.
-			current_errors.push_back({CSVErrorType::TOO_MANY_COLUMNS, cur_col_id, last_position});
+			current_errors.push_back({CSVErrorType::TOO_MANY_COLUMNS, cur_col_id, chunk_col_id, last_position});
 			cur_col_id++;
 		}
 		return;
@@ -163,7 +163,8 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 					if (empty) {
 						if (parse_types[chunk_col_id].type_id != LogicalTypeId::VARCHAR) {
 							// If it is not a varchar, empty values are not accepted, we must error.
-							current_errors.push_back({CSVErrorType::CAST_ERROR, cur_col_id, last_position});
+							current_errors.push_back(
+							    {CSVErrorType::CAST_ERROR, cur_col_id, chunk_col_id, last_position});
 						}
 						static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] = string_t();
 					} else {
@@ -322,7 +323,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 				HandleUnicodeError(cur_col_id, last_position);
 			}
 			// If we got here, we are ingoring errors, hence we must ignore this line.
-			current_errors.push_back({CSVErrorType::INVALID_UNICODE, cur_col_id, last_position});
+			current_errors.push_back({CSVErrorType::INVALID_UNICODE, cur_col_id, chunk_col_id, last_position});
 			break;
 		}
 		if (allocate) {
@@ -341,8 +342,8 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		std::ostringstream error;
 		// Casting Error Message
 		error << "Could not convert string \"" << std::string(value_ptr, size) << "\" to \'"
-		      << LogicalTypeIdToString(parse_types[cur_col_id].type_id) << "\'";
-		current_errors.push_back({CSVErrorType::CAST_ERROR, cur_col_id, last_position});
+		      << LogicalTypeIdToString(parse_types[chunk_col_id].type_id) << "\'";
+		current_errors.push_back({CSVErrorType::CAST_ERROR, cur_col_id, chunk_col_id, last_position});
 		current_errors.back().error_message = error.str();
 	}
 	cur_col_id++;
@@ -506,13 +507,13 @@ bool StringValueResult::HandleError() {
 				    state_machine.options, names[cur_error.col_idx], cur_error.error_message, cur_error.col_idx,
 				    borked_line, lines_per_batch,
 				    current_line_position.begin.GetGlobalPosition(requested_size, first_nl),
-				    line_pos.GetGlobalPosition(requested_size, first_nl), parse_types[cur_error.col_idx].type_id);
+				    line_pos.GetGlobalPosition(requested_size, first_nl), parse_types[cur_error.chunk_idx].type_id);
 			} else {
 				csv_error = CSVError::CastError(
 				    state_machine.options, names[cur_error.col_idx], cur_error.error_message, cur_error.col_idx,
 				    borked_line, lines_per_batch,
 				    current_line_position.begin.GetGlobalPosition(requested_size, first_nl),
-				    line_pos.GetGlobalPosition(requested_size), parse_types[cur_error.col_idx].type_id);
+				    line_pos.GetGlobalPosition(requested_size), parse_types[cur_error.chunk_idx].type_id);
 			}
 			break;
 		case CSVErrorType::MAXIMUM_LINE_SIZE:
@@ -598,13 +599,13 @@ bool StringValueResult::AddRowInternal() {
 	current_line_position.begin = current_line_position.end;
 	current_line_position.end = current_line_start;
 	if (current_line_size > state_machine.options.maximum_line_size && !state_machine.options.IgnoreErrors()) {
-		current_errors.push_back({CSVErrorType::MAXIMUM_LINE_SIZE, 1, last_position});
+		current_errors.push_back({CSVErrorType::MAXIMUM_LINE_SIZE, 1, chunk_col_id, last_position});
 		current_errors.back().current_line_size = current_line_size;
 	}
 	if (!current_errors.empty() && !state_machine.options.IgnoreErrors()) {
 		// We need to add a few columns error
 		for (idx_t col_idx = cur_col_id; col_idx < number_of_columns; col_idx++) {
-			current_errors.push_back({CSVErrorType::TOO_FEW_COLUMNS, col_idx - 1, last_position});
+			current_errors.push_back({CSVErrorType::TOO_FEW_COLUMNS, col_idx - 1, chunk_col_id, last_position});
 		}
 	}
 	if (HandleError()) {
@@ -709,7 +710,8 @@ void StringValueResult::InvalidState(StringValueResult &result) {
 		if (force_error) {
 			result.HandleUnicodeError(result.cur_col_id, result.last_position);
 		}
-		result.current_errors.push_back({CSVErrorType::UNTERMINATED_QUOTES, result.cur_col_id, result.last_position});
+		result.current_errors.push_back(
+		    {CSVErrorType::UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id, result.last_position});
 	}
 }
 

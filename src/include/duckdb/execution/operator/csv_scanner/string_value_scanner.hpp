@@ -69,12 +69,17 @@ public:
 
 class CurrentError {
 public:
-	CurrentError(CSVErrorType type, idx_t col_idx_p, LinePosition error_position_p)
-	    : type(type), col_idx(col_idx_p), error_position(error_position_p) {};
-
+	CurrentError(CSVErrorType type, idx_t col_idx_p, idx_t chunk_idx_p, LinePosition error_position_p)
+	    : type(type), col_idx(col_idx_p), chunk_idx(chunk_idx_p), error_position(error_position_p) {};
+	//! Error Type (e.g., Cast, Wrong # of columns, ...)
 	CSVErrorType type;
+	//! Column index related to the CSV File columns
 	idx_t col_idx;
+	//! Column index related to the produced chunk (i.e., with projection applied)
+	idx_t chunk_idx;
+	//! Current CSV Line size in Bytes
 	idx_t current_line_size;
+	//! Error Message produced
 	string error_message;
 	//! Exact Position where the error happened
 	LinePosition error_position;
