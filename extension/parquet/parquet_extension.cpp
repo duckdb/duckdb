@@ -45,8 +45,12 @@
 namespace duckdb {
 
 struct ParquetReadBindData : public TableFunctionData {
+	// TODO: the file list mutex is currently required to do thread-safe access into the file_list in the bind_data
+	unique_ptr<mutex> file_list_lock;
 	unique_ptr<MultiFileList> file_list;
 	unique_ptr<MultiFileReader> multi_file_reader;
+	string first_file;
+	idx_t total_file_count;
 
 	shared_ptr<ParquetReader> initial_reader;
 	atomic<idx_t> chunk_count;
@@ -181,12 +185,14 @@ BindInfo ParquetGetBindInfo(const optional_ptr<FunctionData> bind_data) {
 	auto bind_info = BindInfo(ScanType::PARQUET);
 	auto &parquet_bind = bind_data->Cast<ParquetReadBindData>();
 
-	// TODO: should this be GetAllFiles?
-	vector<string> file_list = parquet_bind.file_list->GetPaths();
 	vector<Value> file_path;
-	for (auto &path : file_list) {
-		file_path.emplace_back(path);
+	{
+		unique_lock<mutex> lck(*parquet_bind.file_list_lock);
+		for (const auto &file : parquet_bind.file_list->Files()) {
+			file_path.emplace_back(file);
+		}
 	}
+
 	// LCOV_EXCL_START
 	bind_info.InsertOption("file_path", Value::LIST(LogicalType::VARCHAR, file_path));
 	bind_info.InsertOption("binary_as_string", Value::BOOLEAN(parquet_bind.parquet_options.binary_as_string));
@@ -249,7 +255,7 @@ static void InitializeParquetReader(ParquetReader &reader, const ParquetReadBind
 	if (bind_data.parquet_options.schema.empty()) {
 		bind_data.multi_file_reader->InitializeReader(reader, parquet_options.file_options, bind_data.reader_bind,
 		                                              bind_data.types, bind_data.names, global_column_ids,
-		                                              table_filters, bind_data.file_list->GetFirstFile(), context);
+		                                              table_filters, bind_data.first_file, context);
 		return;
 	}
 
@@ -411,6 +417,7 @@ public:
 
 		auto &config = DBConfig::GetConfig(context);
 
+		unique_lock<mutex> lck(*bind_data.file_list_lock);
 		if (bind_data.file_list->GetExpandResult() != FileExpandResult::MULTIPLE_FILES) {
 			if (bind_data.initial_reader) {
 				// most common path, scanning single parquet file
@@ -473,6 +480,10 @@ public:
 		auto result = make_uniq<ParquetReadBindData>();
 		result->multi_file_reader = std::move(multi_file_reader);
 		result->file_list = std::move(file_list);
+		result->first_file = result->file_list->GetFirstFile();
+		result->total_file_count = result->file_list->GetTotalFileCount();
+		result->file_list_lock = make_uniq<mutex>();
+
 		bool bound_on_first_file = true;
 		if (result->multi_file_reader->Bind(parquet_options.file_options, *result->file_list, result->types,
 		                                    result->names, result->reader_bind)) {
@@ -555,16 +566,15 @@ public:
 		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
 		auto &gstate = global_state->Cast<ParquetReadGlobalState>();
 
-		auto total_file_count = gstate.file_list->GetTotalFileCount();
-		if (total_file_count == 0) {
+		if (bind_data.total_file_count == 0) {
 			return 100.0;
 		}
 		if (bind_data.initial_file_cardinality == 0) {
-			return (100.0 * (gstate.file_index + 1)) / total_file_count;
+			return (100.0 * (gstate.file_index + 1)) / bind_data.total_file_count;
 		}
 		auto percentage = MinValue<double>(
 		    100.0, (bind_data.chunk_count * STANDARD_VECTOR_SIZE * 100.0 / bind_data.initial_file_cardinality));
-		return (percentage + 100.0 * gstate.file_index) / total_file_count;
+		return (percentage + 100.0 * gstate.file_index) / bind_data.total_file_count;
 	}
 
 	static unique_ptr<LocalTableFunctionState>
@@ -590,8 +600,10 @@ public:
 	                                                                  TableFunctionInitInput &input) {
 		auto &bind_data = input.bind_data->CastNoConst<ParquetReadBindData>();
 		auto result = make_uniq<ParquetReadGlobalState>();
-
-		result->file_list = bind_data.file_list->Copy();
+		{
+			unique_lock<mutex> lck(*bind_data.file_list_lock);
+			result->file_list = bind_data.file_list->Copy();
+		}
 		result->file_list->InitializeScan(result->file_list_scan);
 
 		if (result->file_list->IsEmpty()) {
@@ -661,7 +673,11 @@ public:
 	static void ParquetScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
 	                                 const TableFunction &function) {
 		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
-		serializer.WriteProperty(100, "files", bind_data.file_list->GetAllFiles());
+
+		{
+			unique_lock<mutex> lck(*bind_data.file_list_lock);
+			serializer.WriteProperty(100, "files", bind_data.file_list->GetAllFiles());
+		}
 		serializer.WriteProperty(101, "types", bind_data.types);
 		serializer.WriteProperty(102, "names", bind_data.names);
 		serializer.WriteProperty(103, "parquet_options", bind_data.parquet_options);
@@ -719,8 +735,7 @@ public:
 
 	static unique_ptr<NodeStatistics> ParquetCardinality(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = bind_data->Cast<ParquetReadBindData>();
-		// TODO: reconsider fully expanding filelist for cardinality estimation; hinders potential optimization?
-		return make_uniq<NodeStatistics>(data.initial_file_cardinality * data.file_list->GetTotalFileCount());
+		return make_uniq<NodeStatistics>(data.initial_file_cardinality * data.total_file_count);
 	}
 
 	static idx_t ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data) {

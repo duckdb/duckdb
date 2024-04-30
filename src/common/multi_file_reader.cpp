@@ -75,7 +75,7 @@ unique_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context
 	}
 	vector<string> result_files;
 
-	auto res = make_uniq<GlobMultiFileList>(context, paths);
+	auto res = make_uniq<GlobMultiFileList>(context, paths, options);
 	if (res->GetExpandResult() == FileExpandResult::NO_FILES && options == FileGlobOptions::DISALLOW_EMPTY) {
 		throw IOException("%s needs at least one file to read", function_name);
 	}

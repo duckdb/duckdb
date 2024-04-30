@@ -63,10 +63,10 @@ public:
 };
 
 //! Abstract base class for lazily generated list of file paths/globs
-//! note: most methods are NOT threadsafe
+//! note: most methods are NOT threadsafe: use
 class MultiFileList {
 public:
-	MultiFileList();
+	MultiFileList(FileGlobOptions options);
 	virtual ~MultiFileList();
 
 	//! Returns the raw, unexpanded paths
@@ -103,6 +103,8 @@ public:
 	virtual bool ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
 	                                   vector<unique_ptr<Expression>> &filters);
 
+	//! Thread
+
 	//! Moves the vector out of the MultiFileList, caller is responsible to not use the MultiFileList after calling this
 	//! DEPRECATED: should be removed once all DuckDB code can properly handle MultiFileLists
 	vector<string> ToStringVector();
@@ -121,6 +123,8 @@ protected:
 	//! The generated files
 	vector<string> expanded_files;
 	bool fully_expanded = false;
+
+	FileGlobOptions glob_options;
 };
 
 //! Simplest implementation of a MultiFileList which is fully expanded on creation
@@ -141,7 +145,7 @@ protected:
 //! MultiFileList that will expand globs into files
 class GlobMultiFileList : public MultiFileList {
 public:
-	GlobMultiFileList(ClientContext &context, vector<string> paths);
+	GlobMultiFileList(ClientContext &context, vector<string> paths, FileGlobOptions options);
 	//! Calls ExpandAll, then prunes the expanded_files using the hive/filename filters
 	bool ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
 	                           vector<unique_ptr<Expression>> &filters) override;

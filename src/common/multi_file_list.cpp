@@ -98,7 +98,7 @@ const string &MultiFileListIterationHelper::MultiFileListIterator::operator*() c
 //===--------------------------------------------------------------------===//
 // MultiFileList
 //===--------------------------------------------------------------------===//
-MultiFileList::MultiFileList() : expanded_files(), fully_expanded(false) {
+MultiFileList::MultiFileList(FileGlobOptions options) : expanded_files(), fully_expanded(false), glob_options(options) {
 }
 
 MultiFileList::~MultiFileList() {
@@ -123,6 +123,7 @@ bool MultiFileList::Scan(MultiFileListScanData &iterator, string &result_file) {
 	ExpandTo(iterator.current_file_idx);
 
 	if (iterator.current_file_idx >= expanded_files.size()) {
+		D_ASSERT(fully_expanded);
 		return false;
 	}
 
@@ -168,7 +169,7 @@ void MultiFileList::ExpandTo(idx_t n) {
 	}
 
 	idx_t i = expanded_files.size();
-	while (i < n) {
+	while (i <= n) {
 		auto next_file = GetFileInternal(i);
 		if (next_file.empty()) {
 			fully_expanded = true;
@@ -210,7 +211,7 @@ unique_ptr<MultiFileList> MultiFileList::Copy() {
 //===--------------------------------------------------------------------===//
 // SimpleMultiFileList
 //===--------------------------------------------------------------------===//
-SimpleMultiFileList::SimpleMultiFileList(vector<string> files) : MultiFileList() {
+SimpleMultiFileList::SimpleMultiFileList(vector<string> files) : MultiFileList(FileGlobOptions::DISALLOW_EMPTY) {
 	expanded_files = std::move(files);
 	fully_expanded = true;
 }
@@ -234,8 +235,8 @@ bool SimpleMultiFileList::ComplexFilterPushdown(ClientContext &context, const Mu
 //===--------------------------------------------------------------------===//
 // GlobMultiFileList
 //===--------------------------------------------------------------------===//
-GlobMultiFileList::GlobMultiFileList(ClientContext &context_p, vector<string> paths_p)
-    : MultiFileList(), context(context_p), paths(std::move(paths_p)), current_path(0) {
+GlobMultiFileList::GlobMultiFileList(ClientContext &context_p, vector<string> paths_p, FileGlobOptions options)
+    : MultiFileList(options), context(context_p), paths(std::move(paths_p)), current_path(0) {
 }
 
 vector<string> GlobMultiFileList::GetPathsInternal() {
@@ -261,14 +262,11 @@ string GlobMultiFileList::GetFileInternal(idx_t i) {
 }
 
 unique_ptr<MultiFileList> GlobMultiFileList::Copy() {
-	auto res = make_uniq<GlobMultiFileList>(context, std::move(paths));
-	res->current_path = current_path;
-	res->expanded_files = std::move(expanded_files);
-	res->fully_expanded = fully_expanded;
+	auto res = make_uniq<GlobMultiFileList>(context, paths, glob_options);
 
-	current_path = res->current_path;
-	expanded_files = res->expanded_files;
-	paths = res->paths;
+	res->current_path = current_path;
+	res->expanded_files = expanded_files;
+	res->fully_expanded = fully_expanded;
 
 	return std::move(res);
 }
@@ -279,7 +277,7 @@ bool GlobMultiFileList::ExpandPathInternal() {
 	}
 
 	auto &fs = FileSystem::GetFileSystem(context);
-	auto glob_files = fs.GlobFiles(paths[current_path], context, FileGlobOptions::DISALLOW_EMPTY);
+	auto glob_files = fs.GlobFiles(paths[current_path], context, glob_options);
 	std::sort(glob_files.begin(), glob_files.end());
 	expanded_files.insert(expanded_files.end(), glob_files.begin(), glob_files.end());
 
