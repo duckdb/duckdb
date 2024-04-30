@@ -249,9 +249,9 @@ ScalarFunctionSet ArrayInnerProductFun::GetFunctions() {
 	ScalarFunctionSet set("array_inner_product");
 	// Generic array inner product function
 	for (auto &type : LogicalType::Real()) {
-		set.AddFunction(ScalarFunction({LogicalType::ARRAY(type), LogicalType::ARRAY(type)}, type,
-		                               ArrayGenericBinaryFunction<InnerProductOp>,
-		                               ArrayGenericBinaryBind<InnerProductOp>));
+		set.AddFunction(
+		    ScalarFunction({LogicalType::ARRAY(type, optional_idx()), LogicalType::ARRAY(type, optional_idx())}, type,
+		                   ArrayGenericBinaryFunction<InnerProductOp>, ArrayGenericBinaryBind<InnerProductOp>));
 	}
 	return set;
 }
@@ -260,8 +260,9 @@ ScalarFunctionSet ArrayDistanceFun::GetFunctions() {
 	ScalarFunctionSet set("array_distance");
 	// Generic array distance function
 	for (auto &type : LogicalType::Real()) {
-		set.AddFunction(ScalarFunction({LogicalType::ARRAY(type), LogicalType::ARRAY(type)}, type,
-		                               ArrayGenericBinaryFunction<DistanceOp>, ArrayGenericBinaryBind<DistanceOp>));
+		set.AddFunction(
+		    ScalarFunction({LogicalType::ARRAY(type, optional_idx()), LogicalType::ARRAY(type, optional_idx())}, type,
+		                   ArrayGenericBinaryFunction<DistanceOp>, ArrayGenericBinaryBind<DistanceOp>));
 	}
 	return set;
 }
@@ -270,9 +271,9 @@ ScalarFunctionSet ArrayCosineSimilarityFun::GetFunctions() {
 	ScalarFunctionSet set("array_cosine_similarity");
 	// Generic array cosine similarity function
 	for (auto &type : LogicalType::Real()) {
-		set.AddFunction(ScalarFunction({LogicalType::ARRAY(type), LogicalType::ARRAY(type)}, type,
-		                               ArrayGenericBinaryFunction<CosineSimilarityOp>,
-		                               ArrayGenericBinaryBind<CosineSimilarityOp>));
+		set.AddFunction(
+		    ScalarFunction({LogicalType::ARRAY(type, optional_idx()), LogicalType::ARRAY(type, optional_idx())}, type,
+		                   ArrayGenericBinaryFunction<CosineSimilarityOp>, ArrayGenericBinaryBind<CosineSimilarityOp>));
 	}
 	return set;
 }

@@ -1198,6 +1198,24 @@ Value ExportLargeBufferArrow::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// ArrowOutputListView
+//===--------------------------------------------------------------------===//
+void ArrowOutputListView::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto arrow_output_list_view = input.GetValue<bool>();
+
+	config.options.arrow_use_list_view = arrow_output_list_view;
+}
+
+void ArrowOutputListView::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.arrow_use_list_view = DBConfig().options.arrow_use_list_view;
+}
+
+Value ArrowOutputListView::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	bool arrow_output_list_view = config.options.arrow_use_list_view;
+	return Value::BOOLEAN(arrow_output_list_view);
+}
+
 // ProduceArrowStringView
 //===--------------------------------------------------------------------===//
 void ProduceArrowStringView::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -1211,6 +1229,7 @@ void ProduceArrowStringView::ResetGlobal(DatabaseInstance *db, DBConfig &config)
 Value ProduceArrowStringView::GetSetting(const ClientContext &context) {
 	return Value::BOOLEAN(DBConfig::GetConfig(context).options.produce_arrow_string_views);
 }
+
 //===--------------------------------------------------------------------===//
 // Profile Output
 //===--------------------------------------------------------------------===//

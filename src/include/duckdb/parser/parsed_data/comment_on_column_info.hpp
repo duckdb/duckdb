@@ -38,6 +38,7 @@ public:
 	optional_ptr<CatalogEntry> TryResolveCatalogEntry(ClientContext &context);
 	unique_ptr<AlterInfo> Copy() const override;
 	CatalogType GetCatalogType() const override;
+	string ToString() const override;
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<AlterInfo> Deserialize(Deserializer &deserializer);
