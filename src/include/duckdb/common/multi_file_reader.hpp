@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
 #include "duckdb/common/multi_file_reader_options.hpp"
+#include "duckdb/common/multi_file_list.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/union_by_name.hpp"
@@ -82,168 +83,27 @@ struct MultiFileReaderData {
 	unordered_map<column_t, LogicalType> cast_map;
 };
 
-enum class FileExpandResult : uint8_t { NO_FILES, SINGLE_FILE, MULTIPLE_FILES };
-
-struct MultiFileListScanData {
-	idx_t current_file_idx = DConstants::INVALID_INDEX;
-};
-
-class MultiFileListIterationHelper {
-public:
-	DUCKDB_API MultiFileListIterationHelper(MultiFileList &collection);
-
-private:
-	MultiFileList &file_list;
-
-private:
-	class MultiFileListIterator;
-
-	class MultiFileListIterator {
-	public:
-		DUCKDB_API explicit MultiFileListIterator(MultiFileList *file_list);
-
-		MultiFileList *file_list;
-		MultiFileListScanData file_scan_data;
-		string current_file;
-
-	public:
-		DUCKDB_API void Next();
-
-		DUCKDB_API MultiFileListIterator &operator++();
-		DUCKDB_API bool operator!=(const MultiFileListIterator &other) const;
-		DUCKDB_API const string &operator*() const;
-	};
-
-public:
-	MultiFileListIterator begin();
-	MultiFileListIterator end();
-};
-
-//! Abstract base class for lazily generated list of file paths/globs
-//! note: most methods are NOT threadsafe
-class MultiFileList {
-public:
-	MultiFileList();
-	virtual ~MultiFileList();
-
-	//! Abstract Interface for subclasses
-
-	//! Get the file at index i. Note that i MUST be <= GetCurrentSize(). TODO: make API not require copy?
-	virtual string GetFile(idx_t i) = 0;
-	//! Returns the source path(s) (the paths that are used to drive generation of the file list)
-	//! TODO: currently we are sortof assuming this to play ball with existing serialization code by assuming that a
-	//!       MultiFileList can always be reconstructed from a vector of paths. Is this assumption valid?
-	virtual vector<string> GetPaths() = 0;
-
-	//! Interface for usage of MultiFileList objects
-
-	//! Scanning the file list
-	void InitializeScan(MultiFileListScanData &iterator);
-	bool Scan(MultiFileListScanData &iterator, string &result_file);
-	//! Get Iterator over the files
-	MultiFileListIterationHelper Files();
-
-	//! Checks whether the MultiFileList is empty (without expanding it fully)
-	virtual bool IsEmpty();
-	//! Returns the first file or an empty string if GetTotalFileCount() == 0
-	virtual string GetFirstFile();
-	//! Returns a FileExpandResult to give a very rough idea of the total count
-	virtual FileExpandResult GetExpandResult();
-	//! Returns the current size of the expanded size
-	virtual idx_t GetCurrentSize();
-	//! Completely expands the list, allowing fast access to it and final size determination. Should only be used
-	//! sparingly
-	virtual void ExpandAll();
-	//! Expand the file list to n files
-	virtual void ExpandTo(idx_t n);
-	//! Calls ExpandAll() and returns the resulting size
-	virtual idx_t GetTotalFileCount();
-	//! Calls ExpandAll() and returns the resulting size
-	virtual const vector<string> &GetAllFiles();
-
-	//! Push down filters into the MultiFileList; sometimes the filters can be used to skip files completely
-	virtual bool ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
-	                                   vector<unique_ptr<Expression>> &filters);
-
-	//! Moves the vector out of the MultiFileList, caller is responsible to not use the MultiFileList after calling this
-	//! DEPRECATED: should be removed once all DuckDB code can properly handle MultiFileLists
-	vector<string> ToStringVector();
-
-	//! Naive copy method: CallsExpandAll() then creates a SimpleMultiFileList from expanded_files
-	virtual unique_ptr<MultiFileList> Copy();
-
-protected:
-	//! The generated files
-	vector<string> expanded_files;
-	bool fully_expanded = false;
-};
-
-//! Simplest implementation of a MultiFileList which is fully expanded on creation
-class SimpleMultiFileList : public MultiFileList {
-public:
-	explicit SimpleMultiFileList(vector<string> files);
-
-	string GetFile(idx_t i) override;
-	bool ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
-	                           vector<unique_ptr<Expression>> &filters) override;
-	vector<string> GetPaths() override;
-	void ExpandAll() override;
-};
-
-//! MultiFileList that will expand globs into files
-class GlobMultiFileList : public MultiFileList {
-public:
-	GlobMultiFileList(ClientContext &context, vector<string> paths);
-	string GetFile(idx_t i) override;
-	bool ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
-	                           vector<unique_ptr<Expression>> &filters) override;
-	vector<string> GetPaths() override;
-	void ExpandAll() override;
-	unique_ptr<MultiFileList> Copy() override;
-
-protected:
-	//! Grabs the next path and expands it into Expanded paths:
-	bool ExpandPathInternal();
-
-	//! The ClientContext for globbing
-	ClientContext &context;
-	//! The input paths/globs
-	vector<string> paths;
-	//! The current path to expand
-	idx_t current_path;
-};
-
-//! The MultiFileReader class provides a set of helper methods to handle scanning from multiple files such as:
-// - producing a lazily iterable list of files to be scanned
-// - pushing down filters into the filelist generation logic
-// - parsing options related to scanning from a list of files
-// - injecting extra (constant) values into scan chunks
-// - a `bind` method to completely replace the regular bind (replacing the default behaviour of binding on the first
-// file)
-//
-// Note that while the MultiFileReader currently holds no state, its methods are not static. This is to allow overriding
-// the MultiFileReader class and dependency-inject a different MultiFileReader into existing Table Functions.
-//
-// TODO: we need to document the proper Bind + init global + init local workflow for MultiFileReader based functions
+//! The MultiFileReader class provides a set of helper methods to handle scanning from multiple files
 struct MultiFileReader {
 	virtual ~MultiFileReader();
 
-	//! Create a MultiFileReader for a specific TableFunction
-	static unique_ptr<MultiFileReader> Create(const TableFunction &table_function);
-	//! Create a default MultiFileReader, the function name is used for error printing
-	static unique_ptr<MultiFileReader> CreateDefault(const string &function_name = "");
+	//! Create a MultiFileReader for a specific TableFunction, using its function name for errors
+	DUCKDB_API static unique_ptr<MultiFileReader> Create(const TableFunction &table_function);
+	//! Create a default MultiFileReader, function_name is used for errors
+	DUCKDB_API static unique_ptr<MultiFileReader> CreateDefault(const string &function_name = "");
 
 	//! Add the parameters for multi-file readers (e.g. union_by_name, filename) to a table function
 	DUCKDB_API static void AddParameters(TableFunction &table_function);
+	//! Creates a table function set from a single reader function (including e.g. list parameters, etc)
+	DUCKDB_API static TableFunctionSet CreateFunctionSet(TableFunction table_function);
 
 	//! Parse a Value containing 1 or more paths into a vector of paths. Note: no expansion is performed here
 	DUCKDB_API virtual vector<string> ParsePaths(const Value &input);
-	//! Create a MultiFileList from a vector of paths. Any paths that are globs will be expanded using the default
-	//! filesystem
+	//! Create a MultiFileList from a vector of paths. Any globs will be expanded using the default filesystem
 	DUCKDB_API virtual unique_ptr<MultiFileList>
 	CreateFileList(ClientContext &context, const vector<string> &paths,
 	               FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY);
-	//! Syntactic sugar for ParsePaths + CreateFileList
+	//! Shorthand for ParsePaths + CreateFileList
 	DUCKDB_API unique_ptr<MultiFileList> CreateFileList(ClientContext &context, const Value &input,
 	                                                    FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY);
 
@@ -284,11 +144,6 @@ struct MultiFileReader {
 	//! Finalize the reading of a chunk - applying any constants that are required
 	DUCKDB_API virtual void FinalizeChunk(ClientContext &context, const MultiFileReaderBindData &bind_data,
 	                                      const MultiFileReaderData &reader_data, DataChunk &chunk);
-
-	//! Can remain static?
-
-	//! Creates a table function set from a single reader function (including e.g. list parameters, etc)
-	DUCKDB_API static TableFunctionSet CreateFunctionSet(TableFunction table_function);
 
 	template <class READER_CLASS, class RESULT_CLASS, class OPTIONS_CLASS>
 	MultiFileReaderBindData BindUnionReader(ClientContext &context, vector<LogicalType> &return_types,
@@ -350,7 +205,7 @@ struct MultiFileReader {
 	static void PruneReaders(BIND_DATA &data, MultiFileList &file_list) {
 		unordered_set<string> file_set;
 
-		for (const auto& file: file_list.Files()) {
+		for (const auto &file : file_list.Files()) {
 			file_set.insert(file);
 		}
 
