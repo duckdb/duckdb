@@ -500,14 +500,20 @@ class TestAllTypes(object):
                 dtype=object,
             ),
             'union': np.ma.array(['Frank', 5, None], mask=[0, 0, 1], dtype=object),
-            #'dec_4_1': np.ma.array([Decimal('-999.9'), Decimal('999.9'), None], mask=[0,0,1], dtype=object),
-            #'dec_9_4': np.ma.array([Decimal('-99999.9999'), Decimal('99999.9999'), None], mask=[0,0,1], dtype=object),
-            #'dec_18_6': np.ma.array([Decimal('-999999999999.999999'), Decimal('999999999999.999999'), None], mask=[0,0,1], dtype=object),
-            #'dec38_10': np.ma.array([
-            #    Decimal('-9999999999999999999999999999.9999999999'),
-            #    Decimal('9999999999999999999999999999.9999999999'),
-            #    None,
-            # ], mask=[0,0,1], dtype=object),
+            'dec_4_1': np.ma.array([Decimal('-999.9'), Decimal('999.9'), None], mask=[0, 0, 1], dtype=object),
+            'dec_9_4': np.ma.array([Decimal('-99999.9999'), Decimal('99999.9999'), None], mask=[0, 0, 1], dtype=object),
+            'dec_18_6': np.ma.array(
+                [Decimal('-999999999999.999999'), Decimal('999999999999.999999'), None], mask=[0, 0, 1], dtype=object
+            ),
+            'dec38_10': np.ma.array(
+                [
+                    Decimal('-9999999999999999999999999999.9999999999'),
+                    Decimal('9999999999999999999999999999.9999999999'),
+                    None,
+                ],
+                mask=[0, 0, 1],
+                dtype=object,
+            ),
         }
         tmp = {}
         for k, v in correct_answer_map.items():
@@ -521,10 +527,6 @@ class TestAllTypes(object):
         # floating point types by fetchnumpy():
         # - 'uhugeint'
         # - 'hugeint'
-        # - 'dec_4_1'
-        # - 'dec_9_4'
-        # - 'dec_18_6'
-        # - 'dec38_10'
 
         # The following types lead to errors:
         # Conversion Error: Could not convert DATE to nanoseconds
@@ -542,16 +544,10 @@ class TestAllTypes(object):
 
         rel = conn.table_function("test_all_types")
         if cur_type not in correct_answer_map:
-            print("not", cur_type)
             return
-        print("yes", cur_type)
         result = rel.project(f'"{cur_type}"').fetchnumpy()
         result = result[cur_type]
         correct_answer = correct_answer_map[cur_type]
-        print(result)
-        print()
-        print(correct_answer)
-        print()
         if isinstance(result, pd.Categorical):
             a = pd.Series(result)
             b = pd.Series(correct_answer)
