@@ -617,20 +617,17 @@ public:
 				result->readers.push_back(ParquetFileReaderData(std::move(reader)));
 			}
 			if (result->readers.size() != result->file_list->GetTotalFileCount()) {
-				// FIXME This should not happen: didn't want to break things but this should probably be an
-				// InternalException
-				D_ASSERT(false);
+				// This case happens with recursive CTEs: the first execution the readers have already
+				// been moved out of the bind data.
+				// FIXME: clean up this process and make it more explicit
 				result->readers = {};
 			}
 		} else if (bind_data.initial_reader) {
 			// Ensure the initial reader was actually constructed from the first file
 			if (bind_data.initial_reader->file_name == result->file_list->GetFirstFile()) {
 				result->readers.push_back({std::move(bind_data.initial_reader)});
-			} else {
-				// FIXME This should not happen: didn't want to break things but this should probably be an
-				// InternalException
-				D_ASSERT(false);
 			}
+			// FIXME: improve reader re-use here as well. If we have an initial reader, we should try to reuse it
 		}
 
 		// Ensure all readers are initialized and FileListScan is sync with readers list
