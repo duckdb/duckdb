@@ -101,6 +101,13 @@ class TestReadCSV(object):
         print(res)
         assert res == (1, None, datetime.datetime(2006, 2, 15, 4, 46, 27))
 
+    def test_na_values_list(self, duckdb_cursor):
+        rel = duckdb_cursor.read_csv(TestFile('category.csv'), na_values=['Action', 'Animation'])
+        res = rel.fetchone()
+        assert res == (1, None, datetime.datetime(2006, 2, 15, 4, 46, 27))
+        res = rel.fetchone()
+        assert res == (2, None, datetime.datetime(2006, 2, 15, 4, 46, 27))
+
     def test_skiprows(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile('category.csv'), skiprows=1)
         res = rel.fetchone()
@@ -195,7 +202,12 @@ class TestReadCSV(object):
 
         rel = duckdb_cursor.read_csv(TestFile('nullpadding.csv'), null_padding=True, header=False)
         res = rel.fetchall()
-        assert res == [('one', 'two', 'three', 'four'), ('1', 'a', 'alice', None), ('2', 'b', 'bob', None)]
+        assert res == [
+            ('# this file has a bunch of gunk at the top', None, None, None),
+            ('one', 'two', 'three', 'four'),
+            ('1', 'a', 'alice', None),
+            ('2', 'b', 'bob', None),
+        ]
 
         rel = duckdb.read_csv(TestFile('nullpadding.csv'), null_padding=False, header=False)
         res = rel.fetchall()
@@ -208,7 +220,12 @@ class TestReadCSV(object):
 
         rel = duckdb.read_csv(TestFile('nullpadding.csv'), null_padding=True, header=False)
         res = rel.fetchall()
-        assert res == [('one', 'two', 'three', 'four'), ('1', 'a', 'alice', None), ('2', 'b', 'bob', None)]
+        assert res == [
+            ('# this file has a bunch of gunk at the top', None, None, None),
+            ('one', 'two', 'three', 'four'),
+            ('1', 'a', 'alice', None),
+            ('2', 'b', 'bob', None),
+        ]
 
         rel = duckdb_cursor.from_csv_auto(TestFile('nullpadding.csv'), null_padding=False, header=False)
         res = rel.fetchall()
@@ -222,6 +239,7 @@ class TestReadCSV(object):
         rel = duckdb_cursor.from_csv_auto(TestFile('nullpadding.csv'), null_padding=True, header=False)
         res = rel.fetchall()
         assert res == [
+            ('# this file has a bunch of gunk at the top', None, None, None),
             ('one', 'two', 'three', 'four'),
             ('1', 'a', 'alice', None),
             ('2', 'b', 'bob', None),

@@ -82,6 +82,18 @@ class TestDBAPICursor(object):
         cursor1.close()
         cursor2.close()
 
+    def test_cursor_timezone(self):
+        db = duckdb.connect()
+
+        # We set the 'timezone' setting globally
+        con1 = db.cursor()
+        db.execute("set global timezone='UTC'")
+
+        # Because the 'timezone' setting was not explicitly set for the connection
+        # the setting of the DBConfig is used instead
+        res = con1.execute("SELECT make_timestamptz(2000,01,20,03,30,59)").fetchone()
+        assert str(res) == '(datetime.datetime(2000, 1, 20, 3, 30, 59, tzinfo=<UTC>),)'
+
     def test_cursor_closed(self):
         con = duckdb.connect(':memory:')
         con.close()

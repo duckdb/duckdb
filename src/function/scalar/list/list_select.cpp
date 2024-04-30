@@ -3,6 +3,7 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 
 namespace duckdb {
 
@@ -140,6 +141,10 @@ static void ListSelectFunction(DataChunk &args, ExpressionState &state, Vector &
 static unique_ptr<FunctionData> ListSelectBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
+
+	// If the first argument is an array, cast it to a list
+	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
+
 	LogicalType child_type;
 	if (arguments[0]->return_type == LogicalTypeId::UNKNOWN || arguments[1]->return_type == LogicalTypeId::UNKNOWN) {
 		bound_function.arguments[0] = LogicalTypeId::UNKNOWN;
@@ -149,8 +154,6 @@ static unique_ptr<FunctionData> ListSelectBind(ClientContext &context, ScalarFun
 
 	D_ASSERT(LogicalTypeId::LIST == arguments[0]->return_type.id() ||
 	         LogicalTypeId::SQLNULL == arguments[0]->return_type.id());
-	D_ASSERT(LogicalTypeId::LIST == arguments[1]->return_type.id() ||
-	         LogicalTypeId::SQLNULL == arguments[1]->return_type.id());
 
 	bound_function.return_type = arguments[0]->return_type;
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);

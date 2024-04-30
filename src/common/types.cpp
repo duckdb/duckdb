@@ -868,6 +868,8 @@ static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right,
 		// struct: perform recursively on each child
 		auto &left_child_types = StructType::GetChildTypes(left);
 		auto &right_child_types = StructType::GetChildTypes(right);
+		bool left_unnamed = StructType::IsUnnamed(left);
+		auto any_unnamed = left_unnamed || StructType::IsUnnamed(right);
 		if (left_child_types.size() != right_child_types.size()) {
 			// child types are not of equal size, we can't cast
 			// return false
@@ -876,10 +878,15 @@ static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right,
 		child_list_t<LogicalType> child_types;
 		for (idx_t i = 0; i < left_child_types.size(); i++) {
 			LogicalType child_type;
+			// Child names must be in the same order OR either one of the structs must be unnamed
+			if (!any_unnamed && !StringUtil::CIEquals(left_child_types[i].first, right_child_types[i].first)) {
+				return false;
+			}
 			if (!OP::Operation(left_child_types[i].second, right_child_types[i].second, child_type)) {
 				return false;
 			}
-			child_types.emplace_back(left_child_types[i].first, std::move(child_type));
+			auto &child_name = left_unnamed ? right_child_types[i].first : left_child_types[i].first;
+			child_types.emplace_back(child_name, std::move(child_type));
 		}
 		result = LogicalType::STRUCT(child_types);
 		return true;

@@ -1,0 +1,8 @@
+name,age,current_day, barks
+oogie boogie,3, 2023-01-01, 2
+oogie boogie,3, 2023-01-02, 5
+oogie boogie,3, 2023-01-03, bla, 7
+oogie boogie,3, bla, bla, 7
+"oogie boogie"bla,3, 2023-01-04
+oogie boogie,3, bla
+oogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogie,3, bla

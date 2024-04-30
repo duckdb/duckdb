@@ -66,8 +66,8 @@ public:
 	DUCKDB_API case_insensitive_map_t<LogicalType> GetExpectedParameterTypes() const;
 
 	//! Create a pending query result of the prepared statement with the given set of arguments
-	template <typename... Args>
-	unique_ptr<PendingQueryResult> PendingQuery(Args... args) {
+	template <typename... ARGS>
+	unique_ptr<PendingQueryResult> PendingQuery(ARGS... args) {
 		vector<Value> values;
 		return PendingQueryRecursive(values, args...);
 	}
@@ -87,8 +87,8 @@ public:
 	                                           bool allow_stream_result = true);
 
 	//! Execute the prepared statement with the given set of arguments
-	template <typename... Args>
-	unique_ptr<QueryResult> Execute(Args... args) {
+	template <typename... ARGS>
+	unique_ptr<QueryResult> Execute(ARGS... args) {
 		vector<Value> values;
 		return ExecuteRecursive(values, args...);
 	}
@@ -158,8 +158,8 @@ private:
 		return PendingQuery(values);
 	}
 
-	template <typename T, typename... Args>
-	unique_ptr<PendingQueryResult> PendingQueryRecursive(vector<Value> &values, T value, Args... args) {
+	template <typename T, typename... ARGS>
+	unique_ptr<PendingQueryResult> PendingQueryRecursive(vector<Value> &values, T value, ARGS... args) {
 		values.push_back(Value::CreateValue<T>(value));
 		return PendingQueryRecursive(values, args...);
 	}
@@ -168,8 +168,8 @@ private:
 		return Execute(values);
 	}
 
-	template <typename T, typename... Args>
-	unique_ptr<QueryResult> ExecuteRecursive(vector<Value> &values, T value, Args... args) {
+	template <typename T, typename... ARGS>
+	unique_ptr<QueryResult> ExecuteRecursive(vector<Value> &values, T value, ARGS... args) {
 		values.push_back(Value::CreateValue<T>(value));
 		return ExecuteRecursive(values, args...);
 	}

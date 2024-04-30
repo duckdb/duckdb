@@ -622,6 +622,7 @@ union YYSTYPE
 	PGOverridingKind       override;
 	PGSortByDir            sortorder;
 	PGSortByNulls          nullorder;
+	PGIgnoreNulls          ignorenulls;
 	PGConstrType           constr;
 	PGLockClauseStrength lockstrength;
 	PGLockWaitPolicy lockwaitpolicy;
@@ -629,7 +630,7 @@ union YYSTYPE
 	PGViewCheckOption viewcheckoption;
 	PGInsertColumnOrder bynameorposition;
 
-#line 633 "third_party/libpg_query/grammar/grammar_out.hpp"
+#line 634 "third_party/libpg_query/grammar/grammar_out.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

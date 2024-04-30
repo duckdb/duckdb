@@ -31,7 +31,7 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::DELETE_TUPLE: {
 		auto info = reinterpret_cast<DeleteInfo *>(data);
 		// reset the deleted flag on rollback
-		info->version_info->CommitDelete(info->vector_idx, NOT_DELETED_ID, info->rows, info->count);
+		info->version_info->CommitDelete(info->vector_idx, NOT_DELETED_ID, *info);
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {

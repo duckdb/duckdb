@@ -232,7 +232,7 @@ class Expression:
 
     def show(self, max_width: Optional[int] = None, max_rows: Optional[int] = None, max_col_width: Optional[int] = None, null_value: Optional[str] = None, render_mode: Optional[RenderMode] = None) -> None: ...
     def __repr__(self) -> str: ...
-    def alias(self, alias: str) -> None: ...
+    def alias(self, alias: str) -> "Expression": ...
     def when(self, condition: "Expression", value: "Expression") -> "Expression": ...
     def otherwise(self, value: "Expression") -> "Expression": ...
     def cast(self, type: DuckDBPyType) -> "Expression": ...
@@ -480,7 +480,7 @@ class DuckDBPyRelation:
     def intersect(self, other_rel: DuckDBPyRelation) -> DuckDBPyRelation: ...
     def join(self, other_rel: DuckDBPyRelation, condition: str, how: str = ...) -> DuckDBPyRelation: ...
     def limit(self, n: int, offset: int = ...) -> DuckDBPyRelation: ...
-    def map(self, map_function: function, schema: Optional[Dict[str, DuckDBPyType]]) -> DuckDBPyRelation: ...
+    def map(self, map_function: function, schema: Optional[Dict[str, DuckDBPyType]] = None) -> DuckDBPyRelation: ...
     def order(self, order_expr: str) -> DuckDBPyRelation: ...
     def sort(self, *cols: Expression) -> DuckDBPyRelation: ...
     def project(self, *cols: Union[str, Expression]) -> DuckDBPyRelation: ...
@@ -497,22 +497,22 @@ class DuckDBPyRelation:
     def to_csv(
             self,
             file_name: str,
-            sep: Optional[str],
-            na_rep: Optional[str],
-            header: Optional[bool],
-            quotechar: Optional[str],
-            escapechar: Optional[str],
-            date_format: Optional[str],
-            timestamp_format: Optional[str],
-            quoting: Optional[str | int],
-            encoding: Optional[str],
-            compression: Optional[str]
+            sep: Optional[str] = None,
+            na_rep: Optional[str] = None,
+            header: Optional[bool] = None,
+            quotechar: Optional[str] = None,
+            escapechar: Optional[str] = None,
+            date_format: Optional[str] = None,
+            timestamp_format: Optional[str] = None,
+            quoting: Optional[str | int] = None,
+            encoding: Optional[str] = None,
+            compression: Optional[str] = None
     ) -> None: ...
     def to_df(self, *args, **kwargs) -> pandas.DataFrame: ...
     def to_parquet(
             self,
             file_name: str,
-            compression: Optional[str]
+            compression: Optional[str] = None
     ) -> None: ...
     def fetch_df_chunk(self, *args, **kwargs) -> pandas.DataFrame: ...
     def to_table(self, table_name: str) -> None: ...
@@ -524,21 +524,25 @@ class DuckDBPyRelation:
     def write_csv(
             self,
             file_name: str,
-            sep: Optional[str],
-            na_rep: Optional[str],
-            header: Optional[bool],
-            quotechar: Optional[str],
-            escapechar: Optional[str],
-            date_format: Optional[str],
-            timestamp_format: Optional[str],
-            quoting: Optional[str | int],
-            encoding: Optional[str],
-            compression: Optional[str]
+            sep: Optional[str] = None,
+            na_rep: Optional[str] = None,
+            header: Optional[bool] = None,
+            quotechar: Optional[str] = None,
+            escapechar: Optional[str] = None,
+            date_format: Optional[str] = None,
+            timestamp_format: Optional[str] = None,
+            quoting: Optional[str | int] = None,
+            encoding: Optional[str] = None,
+            compression: Optional[str] = None,
+            overwrite: Optional[bool] = None,
+            per_thread_output: Optional[bool] = None,
+            use_tmp_file: Optional[bool] = None,
+            partition_by: Optional[List[str]] = None
     ) -> None: ...
     def write_parquet(
             self,
             file_name: str,
-            compression: Optional[str]
+            compression: Optional[str] = None
     ) -> None: ...
     def __len__(self) -> int: ...
     @property
@@ -663,7 +667,7 @@ def read_csv(
     sep: Optional[str] = None,
     delimiter: Optional[str] = None,
     dtype: Optional[Dict[str, str] | List[str]] = None,
-    na_values: Optional[str] = None,
+    na_values: Optional[str | List[str]] = None,
     skiprows: Optional[int] = None,
     quotechar: Optional[str] = None,
     escapechar: Optional[str] = None,
@@ -684,7 +688,7 @@ def from_csv_auto(
     sep: Optional[str] = None,
     delimiter: Optional[str] = None,
     dtype: Optional[Dict[str, str] | List[str]] = None,
-    na_values: Optional[str] = None,
+    na_values: Optional[str| List[str]] = None,
     skiprows: Optional[int] = None,
     quotechar: Optional[str] = None,
     escapechar: Optional[str] = None,

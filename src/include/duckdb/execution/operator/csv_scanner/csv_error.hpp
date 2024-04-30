@@ -37,61 +37,79 @@ public:
 };
 
 enum CSVErrorType : uint8_t {
-	CAST_ERROR = 0,                // If when casting a value from string to the column type fails
-	COLUMN_NAME_TYPE_MISMATCH = 1, // If there is a mismatch between Column Names and Types
-	INCORRECT_COLUMN_AMOUNT = 2,   // If the CSV is missing a column
-	UNTERMINATED_QUOTES = 3,       // If a quote is not terminated
-	SNIFFING = 4,          // If something went wrong during sniffing and was not possible to find suitable candidates
-	MAXIMUM_LINE_SIZE = 5, // Maximum line size was exceeded by a line in the CSV File
-	NULLPADDED_QUOTED_NEW_VALUE = 6, // If the null_padding option is set and we have quoted new values in parallel
-	INVALID_UNICODE = 7
-
+	CAST_ERROR = 0,                //! If when casting a value from string to the column type fails
+	COLUMN_NAME_TYPE_MISMATCH = 1, //! If there is a mismatch between Column Names and Types
+	TOO_FEW_COLUMNS = 2,           //! If the CSV has too few columns
+	TOO_MANY_COLUMNS = 3,          //! If the CSV has too many  column
+	UNTERMINATED_QUOTES = 4,       //! If a quote is not terminated
+	SNIFFING = 5,          //! If something went wrong during sniffing and was not possible to find suitable candidates
+	MAXIMUM_LINE_SIZE = 6, //! Maximum line size was exceeded by a line in the CSV File
+	NULLPADDED_QUOTED_NEW_VALUE = 7, //! If the null_padding option is set, and we have quoted new values in parallel
+	INVALID_UNICODE = 8              //! If we have invalid unicode values
 };
 
 class CSVError {
 public:
 	CSVError() {};
-	CSVError(string error_message, CSVErrorType type, idx_t column_idx, vector<Value> row, LinesPerBoundary error_info);
+	CSVError(string error_message, CSVErrorType type, idx_t column_idx, string csv_row, LinesPerBoundary error_info,
+	         idx_t row_byte_position, int64_t byte_position, const CSVReaderOptions &reader_options,
+	         const string &fixes);
 	CSVError(string error_message, CSVErrorType type, LinesPerBoundary error_info);
 	//! Produces error messages for column name -> type mismatch.
 	static CSVError ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names);
 	//! Produces error messages for casting errors
 	static CSVError CastError(const CSVReaderOptions &options, string &column_name, string &cast_error,
-	                          idx_t column_idx, vector<Value> &row, LinesPerBoundary error_info, LogicalTypeId type);
+	                          idx_t column_idx, string &csv_row, LinesPerBoundary error_info, idx_t row_byte_position,
+	                          int64_t byte_position, LogicalTypeId type);
 	//! Produces error for when the line size exceeds the maximum line size option
-	static CSVError LineSizeError(const CSVReaderOptions &options, idx_t actual_size, LinesPerBoundary error_info);
+	static CSVError LineSizeError(const CSVReaderOptions &options, idx_t actual_size, LinesPerBoundary error_info,
+	                              string &csv_row, idx_t byte_position);
 	//! Produces error for when the sniffer couldn't find viable options
 	static CSVError SniffingError(string &file_path);
 	//! Produces error messages for unterminated quoted values
-	static CSVError UnterminatedQuotesError(const CSVReaderOptions &options, string_t *vector_ptr,
-	                                        idx_t vector_line_start, idx_t current_column, LinesPerBoundary error_info);
+	static CSVError UnterminatedQuotesError(const CSVReaderOptions &options, idx_t current_column,
+	                                        LinesPerBoundary error_info, string &csv_row, idx_t row_byte_position,
+	                                        int64_t byte_position);
 	//! Produces error messages for null_padding option is set and we have quoted new values in parallel
 	static CSVError NullPaddingFail(const CSVReaderOptions &options, LinesPerBoundary error_info);
 	//! Produces error for incorrect (e.g., smaller and lower than the predefined) number of columns in a CSV Line
-	static CSVError IncorrectColumnAmountError(const CSVReaderOptions &options, string_t *vector_ptr,
-	                                           idx_t vector_line_start, idx_t actual_columns,
-	                                           LinesPerBoundary error_info);
-	//! Produces error message when we detect an invalid utf-8 value
-	static CSVError InvalidUTF8(const CSVReaderOptions &options, LinesPerBoundary error_info);
+	static CSVError IncorrectColumnAmountError(const CSVReaderOptions &state_machine, idx_t actual_columns,
+	                                           LinesPerBoundary error_info, string &csv_row, idx_t row_byte_position,
+	                                           int64_t byte_position);
+	static CSVError InvalidUTF8(const CSVReaderOptions &options, idx_t current_column, LinesPerBoundary error_info,
+	                            string &csv_row, idx_t row_byte_position, int64_t byte_position);
+
 	idx_t GetBoundaryIndex() {
 		return error_info.boundary_idx;
 	}
 
+	//! We might want to remove newline in errors if we are doing them for the rejects tables
+	void RemoveNewLine(string &error);
+
 	//! Actual error message
 	string error_message;
+	//! Full error message used in throws
+	//! 1. The Actual error
+	//! 2. How to fix it
+	//! 3. Options that generated the error
+	string full_error_message;
 	//! Error Type
 	CSVErrorType type;
 	//! Column Index where error happened
 	idx_t column_idx;
-	//! Values from the row where error happened
-	vector<Value> row;
+	//! Original CSV row where error happened
+	string csv_row;
 	//! Line information regarding this error
 	LinesPerBoundary error_info;
+	//! Byte position of where the row starts
+	idx_t row_byte_position;
+	//! Byte Position where error occurred.
+	int64_t byte_position;
 };
 
 class CSVErrorHandler {
 public:
-	CSVErrorHandler(bool ignore_errors = false);
+	explicit CSVErrorHandler(bool ignore_errors = false);
 	//! Throws the error
 	void Error(CSVError csv_error, bool force_error = false);
 	//! If we have a cached error, and we can now error, we error.

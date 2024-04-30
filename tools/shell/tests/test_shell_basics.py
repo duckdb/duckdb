@@ -326,14 +326,6 @@ def test_show_basic(shell):
     result = test.run()
     result.check_stdout("rowseparator")
 
-def test_limit_error(shell):
-    test = (
-        ShellTest(shell)
-        .statement(".limit length 42")
-    )
-    result = test.run()
-    result.check_stderr("sqlite3_limit")
-
 def test_timeout(shell):
     test = (
         ShellTest(shell)
@@ -498,6 +490,15 @@ def test_jsonlines(shell):
     )
     result = test.run()
     result.check_stdout('{"42":42,"43":43}')
+
+def test_nested_jsonlines(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode jsonlines")
+        .statement("SELECT [1,2,3]::JSON AS x;")
+    )
+    result = test.run()
+    result.check_stdout('{"x":[1,2,3]}')
 
 def test_separator(shell):
     test = (
@@ -1030,8 +1031,6 @@ def test_nullbyte_error_rendering(shell):
     result.check_stderr('INT32')
 
 @pytest.mark.parametrize("stmt", [
-	"select decimal_mul(NULL, NULL);",
-	"select decimal_mul(NULL, i) FROM range(3) t(i);",
 	"select sha3(NULL);"
 ])
 def test_sqlite_udf_null(shell, stmt):

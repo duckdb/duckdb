@@ -23,7 +23,7 @@ struct FlattenDependentJoins {
 
 	//! Detects which Logical Operators have correlated expressions that they are dependent upon, filling the
 	//! has_correlated_expressions map.
-	bool DetectCorrelatedExpressions(LogicalOperator *op, bool lateral = false, idx_t lateral_depth = 0);
+	bool DetectCorrelatedExpressions(LogicalOperator &op, bool lateral = false, idx_t lateral_depth = 0);
 
 	//! Mark entire subtree of Logical Operators as correlated by adding them to the has_correlated_expressions map.
 	bool MarkSubtreeCorrelated(LogicalOperator &op);
@@ -35,7 +35,7 @@ struct FlattenDependentJoins {
 	ColumnBinding base_binding;
 	idx_t delim_offset;
 	idx_t data_offset;
-	unordered_map<LogicalOperator *, bool> has_correlated_expressions;
+	reference_map_t<LogicalOperator, bool> has_correlated_expressions;
 	column_binding_map_t<idx_t> correlated_map;
 	column_binding_map_t<idx_t> replacement_map;
 	const vector<CorrelatedColumnInfo> &correlated_columns;

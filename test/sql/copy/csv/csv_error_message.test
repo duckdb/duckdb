@@ -26,3 +26,7 @@ SELECT * FROM read_csv('__TEST_DIR__/int_parse_error.csv', columns={'i': 'INT'},
 ----
 Line: 104
 
+statement error
+SELECT * FROM read_csv('__TEST_DIR__/int_parse_error.csv', columns={'i': 'INT'}, header=False, auto_detect=false)
+----
+Original Line: hello
