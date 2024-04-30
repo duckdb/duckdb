@@ -186,11 +186,8 @@ unique_ptr<StorageLockKey> DuckTransactionManager::SharedCheckpointLock() {
 	return checkpoint_lock.GetSharedLock();
 }
 
-unique_ptr<StorageLockKey> DuckTransactionManager::TryUpgradeCheckpointLock(unique_ptr<StorageLockKey> &lock) {
-	if (!lock) {
-		throw InternalException("TryUpgradeCheckpointLock - but thread has no shared lock!?");
-	}
-	return checkpoint_lock.TryUpgradeCheckpointLock(*lock);
+unique_ptr<StorageLockKey> DuckTransactionManager::TryUpgradeCheckpointLock(StorageLockKey &lock) {
+	return checkpoint_lock.TryUpgradeCheckpointLock(lock);
 }
 
 transaction_t DuckTransactionManager::GetCommitTimestamp() {

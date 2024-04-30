@@ -217,7 +217,10 @@ void DuckTransaction::SetReadWrite() {
 }
 
 unique_ptr<StorageLockKey> DuckTransaction::TryGetCheckpointLock() {
-	return transaction_manager.TryUpgradeCheckpointLock(write_lock);
+	if (!write_lock) {
+		throw InternalException("TryUpgradeCheckpointLock - but thread has no shared lock!?");
+	}
+	return transaction_manager.TryUpgradeCheckpointLock(*write_lock);
 }
 
 } // namespace duckdb
