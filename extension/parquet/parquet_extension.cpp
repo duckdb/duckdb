@@ -201,7 +201,7 @@ static void ParseFileRowNumberOption(MultiFileReaderBindData &bind_data, Parquet
 	if (options.file_row_number) {
 		if (StringUtil::CIFind(names, "file_row_number") != DConstants::INVALID_INDEX) {
 			throw BinderException(
-				"Using file_row_number option on file with column named file_row_number is not supported");
+			    "Using file_row_number option on file with column named file_row_number is not supported");
 		}
 
 		bind_data.file_row_number_idx = names.size();
@@ -474,22 +474,18 @@ public:
 		result->multi_file_reader = std::move(multi_file_reader);
 		result->file_list = std::move(file_list);
 		bool bound_on_first_file = true;
-
-		// Firstly, we try to use the multifilereader to bind
 		if (result->multi_file_reader->Bind(parquet_options.file_options, *result->file_list, result->types,
 		                                    result->names, result->reader_bind)) {
+			// The MultiFileReader has performed a full bind
 			ParseFileRowNumberOption(result->reader_bind, parquet_options, result->types, result->names);
-			// The MultiFileReader has provided a bind; we only need to bind any multifilereader options present, and
-			// then we are done.
 			result->multi_file_reader->BindOptions(parquet_options.file_options, *result->file_list, result->types,
 			                                       result->names, result->reader_bind);
-
-			// We don't actually know how the bind was performed here: the MultiFileReader has implemented a custom bind
 			bound_on_first_file = false;
 		} else if (!parquet_options.schema.empty()) {
-			// a schema was supplied
+			// A schema was suppliedParquetProgress
 			result->reader_bind = BindSchema(context, result->types, result->names, *result, parquet_options);
 		} else {
+			// Default bind
 			result->reader_bind = result->multi_file_reader->BindReader<ParquetReader>(
 			    context, result->types, result->names, *result->file_list, *result, parquet_options);
 		}
