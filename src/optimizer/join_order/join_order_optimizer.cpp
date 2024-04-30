@@ -37,7 +37,6 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 
 		// Ask the plan enumerator to enumerate a number of join orders
 		auto final_plan = plan_enumerator.SolveJoinOrder();
-		// TODO: add in the check that if no plan exists, you have to add a cross product.
 
 		// now reconstruct a logical plan from the query graph plan
 		new_logical_plan = query_graph_manager.Reconstruct(std::move(plan), *final_plan);

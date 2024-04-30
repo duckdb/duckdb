@@ -191,10 +191,18 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	}
 	case LogicalTypeId::LIST: {
-		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
-			child.format = "+L";
+		if (options.arrow_use_list_view) {
+			if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+				child.format = "+vL";
+			} else {
+				child.format = "+vl";
+			}
 		} else {
-			child.format = "+l";
+			if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+				child.format = "+L";
+			} else {
+				child.format = "+l";
+			}
 		}
 		child.n_children = 1;
 		root_holder.nested_children.emplace_back();

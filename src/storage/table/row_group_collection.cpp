@@ -55,7 +55,7 @@ RowGroupCollection::RowGroupCollection(shared_ptr<DataTableInfo> info_p, BlockMa
                                        vector<LogicalType> types_p, idx_t row_start_p, idx_t total_rows_p)
     : block_manager(block_manager), total_rows(total_rows_p), info(std::move(info_p)), types(std::move(types_p)),
       row_start(row_start_p), allocation_size(0) {
-	row_groups = make_shared<RowGroupSegmentTree>(*this);
+	row_groups = make_shared_ptr<RowGroupSegmentTree>(*this);
 }
 
 idx_t RowGroupCollection::GetTotalRows() const {
@@ -1033,7 +1033,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 	auto new_types = types;
 	new_types.push_back(new_column.GetType());
 	auto result =
-	    make_shared<RowGroupCollection>(info, block_manager, std::move(new_types), row_start, total_rows.load());
+	    make_shared_ptr<RowGroupCollection>(info, block_manager, std::move(new_types), row_start, total_rows.load());
 
 	ExpressionExecutor executor(context);
 	DataChunk dummy_chunk;
@@ -1061,7 +1061,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::RemoveColumn(idx_t col_idx) {
 	new_types.erase_at(col_idx);
 
 	auto result =
-	    make_shared<RowGroupCollection>(info, block_manager, std::move(new_types), row_start, total_rows.load());
+	    make_shared_ptr<RowGroupCollection>(info, block_manager, std::move(new_types), row_start, total_rows.load());
 	result->stats.InitializeRemoveColumn(stats, col_idx);
 
 	for (auto &current_row_group : row_groups->Segments()) {
@@ -1079,7 +1079,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 	new_types[changed_idx] = target_type;
 
 	auto result =
-	    make_shared<RowGroupCollection>(info, block_manager, std::move(new_types), row_start, total_rows.load());
+	    make_shared_ptr<RowGroupCollection>(info, block_manager, std::move(new_types), row_start, total_rows.load());
 	result->stats.InitializeAlterType(stats, changed_idx, target_type);
 
 	vector<LogicalType> scan_types;

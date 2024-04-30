@@ -1588,12 +1588,13 @@ bool TryCastErrorMessage::Operation(string_t input, interval_t &result, CastPara
 // when that value is full, we perform a HUGEINT multiplication to flush it into the hugeint
 // this takes the number of HUGEINT multiplications down from [0-38] to [0-2]
 
-template <typename T, typename OP>
+template <typename T, typename OP, typename INTERMEDIATE_T>
 struct HugeIntCastData {
 	using ResultType = T;
+	using IntermediateType = INTERMEDIATE_T;
 	using Operation = OP;
 	ResultType result;
-	ResultType intermediate;
+	IntermediateType intermediate;
 	uint8_t digits;
 
 	ResultType decimal;
@@ -1647,8 +1648,8 @@ struct HugeIntegerCastOperation {
 	template <class T, bool NEGATIVE>
 	static bool HandleDigit(T &state, uint8_t digit) {
 		if (NEGATIVE) {
-			if (DUCKDB_UNLIKELY(static_cast<int64_t>(state.intermediate) <
-			                    (NumericLimits<int64_t>::Minimum() + digit) / 10)) {
+			if (DUCKDB_UNLIKELY(state.intermediate <
+			                    (NumericLimits<typename T::IntermediateType>::Minimum() + digit) / 10)) {
 				// intermediate is full: need to flush it
 				if (!state.Flush()) {
 					return false;
@@ -1656,7 +1657,8 @@ struct HugeIntegerCastOperation {
 			}
 			state.intermediate = state.intermediate * 10 - digit;
 		} else {
-			if (DUCKDB_UNLIKELY(state.intermediate > (NumericLimits<int64_t>::Maximum() - digit) / 10)) {
+			if (DUCKDB_UNLIKELY(state.intermediate >
+			                    (NumericLimits<typename T::IntermediateType>::Maximum() - digit) / 10)) {
 				if (!state.Flush()) {
 					return false;
 				}
@@ -1790,8 +1792,8 @@ struct HugeIntegerCastOperation {
 
 template <>
 bool TryCast::Operation(string_t input, hugeint_t &result, bool strict) {
-	HugeIntCastData<hugeint_t, Hugeint> state {};
-	if (!TryIntegerCast<HugeIntCastData<hugeint_t, Hugeint>, true, true, HugeIntegerCastOperation>(
+	HugeIntCastData<hugeint_t, Hugeint, int64_t> state {};
+	if (!TryIntegerCast<HugeIntCastData<hugeint_t, Hugeint, int64_t>, true, true, HugeIntegerCastOperation>(
 	        input.GetData(), input.GetSize(), state, strict)) {
 		return false;
 	}
@@ -1801,8 +1803,8 @@ bool TryCast::Operation(string_t input, hugeint_t &result, bool strict) {
 
 template <>
 bool TryCast::Operation(string_t input, uhugeint_t &result, bool strict) {
-	HugeIntCastData<uhugeint_t, Uhugeint> state {};
-	if (!TryIntegerCast<HugeIntCastData<uhugeint_t, Uhugeint>, false, true, HugeIntegerCastOperation>(
+	HugeIntCastData<uhugeint_t, Uhugeint, uint64_t> state {};
+	if (!TryIntegerCast<HugeIntCastData<uhugeint_t, Uhugeint, uint64_t>, false, true, HugeIntegerCastOperation>(
 	        input.GetData(), input.GetSize(), state, strict)) {
 		return false;
 	}
@@ -1957,7 +1959,7 @@ struct DecimalCastOperation {
 		for (idx_t i = 0; i < state.excessive_decimals; i++) {
 			auto mod = state.result % 10;
 			round_up = NEGATIVE ? mod <= -5 : mod >= 5;
-			state.result /= 10.0;
+			state.result /= static_cast<typename T::StoreType>(10.0);
 		}
 		//! Only round up when exponents are involved
 		if (state.exponent_type == T::ExponentType::POSITIVE && round_up) {
@@ -2486,7 +2488,7 @@ bool DoubleToDecimalCast(SRC input, DST &result, CastParameters &parameters, uin
 		HandleCastError::AssignError(error, parameters);
 		return false;
 	}
-	result = Cast::Operation<SRC, DST>(value);
+	result = Cast::Operation<SRC, DST>(static_cast<SRC>(value));
 	return true;
 }
 

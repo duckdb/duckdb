@@ -157,7 +157,7 @@ struct CastInterpolation {
 	template <typename TARGET_TYPE>
 	static inline TARGET_TYPE Interpolate(const TARGET_TYPE &lo, const double d, const TARGET_TYPE &hi) {
 		const auto delta = hi - lo;
-		return lo + delta * d;
+		return UnsafeNumericCast<TARGET_TYPE>(lo + delta * d);
 	}
 };
 
@@ -295,7 +295,8 @@ bool operator==(const QuantileValue &x, const QuantileValue &y) {
 template <bool DISCRETE>
 struct Interpolator {
 	Interpolator(const QuantileValue &q, const idx_t n_p, const bool desc_p)
-	    : desc(desc_p), RN((double)(n_p - 1) * q.dbl), FRN(floor(RN)), CRN(ceil(RN)), begin(0), end(n_p) {
+	    : desc(desc_p), RN((double)(n_p - 1) * q.dbl), FRN(UnsafeNumericCast<idx_t>(floor(RN))),
+	      CRN(UnsafeNumericCast<idx_t>(ceil(RN))), begin(0), end(n_p) {
 	}
 
 	template <class INPUT_TYPE, class TARGET_TYPE, typename ACCESSOR = QuantileDirect<INPUT_TYPE>>
@@ -365,7 +366,7 @@ struct Interpolator<true> {
 		}
 		default:
 			const auto scaled_q = (double)(n * q.dbl);
-			floored = floor(n - scaled_q);
+			floored = UnsafeNumericCast<idx_t>(floor(n - scaled_q));
 			break;
 		}
 

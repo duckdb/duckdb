@@ -11,6 +11,7 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/parallel/task.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 #include <condition_variable>
 #include <memory>
 

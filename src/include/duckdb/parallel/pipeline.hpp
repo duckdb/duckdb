@@ -66,7 +66,7 @@ public:
 };
 
 //! The Pipeline class represents an execution pipeline starting at a
-class Pipeline : public std::enable_shared_from_this<Pipeline> {
+class Pipeline : public enable_shared_from_this<Pipeline> {
 	friend class Executor;
 	friend class PipelineExecutor;
 	friend class PipelineEvent;

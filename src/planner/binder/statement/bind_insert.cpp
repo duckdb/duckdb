@@ -472,6 +472,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 	// bind the default values
 	BindDefaultValues(table.GetColumns(), insert->bound_defaults);
+	insert->bound_constraints = BindConstraints(table);
 	if (!stmt.select_statement && !stmt.default_values) {
 		result.plan = std::move(insert);
 		return result;

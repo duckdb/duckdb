@@ -18,8 +18,8 @@ LocalTableStorage::LocalTableStorage(DataTable &table)
     : table_ref(table), allocator(Allocator::Get(table.db)), deleted_rows(0), optimistic_writer(table),
       merged_storage(false) {
 	auto types = table.GetTypes();
-	row_groups = make_shared<RowGroupCollection>(table.info, TableIOManager::Get(table).GetBlockManagerForRowData(),
-	                                             types, MAX_ROW_ID, 0);
+	row_groups = make_shared_ptr<RowGroupCollection>(table.info, TableIOManager::Get(table).GetBlockManagerForRowData(),
+	                                                 types, MAX_ROW_ID, 0);
 	row_groups->InitializeEmpty();
 
 	table.info->indexes.Scan([&](Index &index) {
@@ -254,7 +254,7 @@ LocalTableStorage &LocalTableManager::GetOrCreateStorage(DataTable &table) {
 	lock_guard<mutex> l(table_storage_lock);
 	auto entry = table_storage.find(table);
 	if (entry == table_storage.end()) {
-		auto new_storage = make_shared<LocalTableStorage>(table);
+		auto new_storage = make_shared_ptr<LocalTableStorage>(table);
 		auto storage = new_storage.get();
 		table_storage.insert(make_pair(reference<DataTable>(table), std::move(new_storage)));
 		return *storage;
@@ -539,7 +539,7 @@ void LocalStorage::AddColumn(DataTable &old_dt, DataTable &new_dt, ColumnDefinit
 	if (!storage) {
 		return;
 	}
-	auto new_storage = make_shared<LocalTableStorage>(context, new_dt, *storage, new_column, default_value);
+	auto new_storage = make_shared_ptr<LocalTableStorage>(context, new_dt, *storage, new_column, default_value);
 	table_manager.InsertEntry(new_dt, std::move(new_storage));
 }
 
@@ -549,7 +549,7 @@ void LocalStorage::DropColumn(DataTable &old_dt, DataTable &new_dt, idx_t remove
 	if (!storage) {
 		return;
 	}
-	auto new_storage = make_shared<LocalTableStorage>(new_dt, *storage, removed_column);
+	auto new_storage = make_shared_ptr<LocalTableStorage>(new_dt, *storage, removed_column);
 	table_manager.InsertEntry(new_dt, std::move(new_storage));
 }
 
@@ -560,8 +560,8 @@ void LocalStorage::ChangeType(DataTable &old_dt, DataTable &new_dt, idx_t change
 	if (!storage) {
 		return;
 	}
-	auto new_storage =
-	    make_shared<LocalTableStorage>(context, new_dt, *storage, changed_idx, target_type, bound_columns, cast_expr);
+	auto new_storage = make_shared_ptr<LocalTableStorage>(context, new_dt, *storage, changed_idx, target_type,
+	                                                      bound_columns, cast_expr);
 	table_manager.InsertEntry(new_dt, std::move(new_storage));
 }
 

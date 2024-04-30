@@ -50,6 +50,13 @@ struct has_deserialize<
     T, typename std::enable_if<std::is_same<decltype(T::Deserialize), shared_ptr<T>(Deserializer &)>::value, T>::type>
     : std::true_type {};
 
+// Accept `static shared_ptr<T> Deserialize(Deserializer& deserializer)`
+template <typename T>
+struct has_deserialize<
+    T,
+    typename std::enable_if<std::is_same<decltype(T::Deserialize), std::shared_ptr<T>(Deserializer &)>::value, T>::type>
+    : std::true_type {};
+
 // Accept `static T Deserialize(Deserializer& deserializer)`
 template <typename T>
 struct has_deserialize<
@@ -103,6 +110,10 @@ template <typename T>
 struct is_shared_ptr : std::false_type {};
 template <typename T>
 struct is_shared_ptr<shared_ptr<T>> : std::true_type {
+	typedef T ELEMENT_TYPE;
+};
+template <typename T>
+struct is_shared_ptr<std::shared_ptr<T>> : std::true_type {
 	typedef T ELEMENT_TYPE;
 };
 
