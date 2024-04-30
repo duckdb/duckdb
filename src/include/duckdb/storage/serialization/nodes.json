@@ -54,7 +54,7 @@
       {
         "id": 100,
         "name": "map",
-        "type": "case_insensitive_map_t<CommonTableExpressionInfo*>"
+        "type": "std::map<string, CommonTableExpressionInfo*>"
       }
     ],
     "pointer_type": "none"
