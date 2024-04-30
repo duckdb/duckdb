@@ -68,10 +68,10 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 	} else {
 		new_line_id = DetectNewLineDelimiter(*buffer_manager);
 	}
+	for (const auto &delimiter : delimiter_candidates) {
 	for (const auto quoterule : quoterule_candidates) {
 		const auto &quote_candidates = quote_candidates_map.at((uint8_t)quoterule);
 		for (const auto &quote : quote_candidates) {
-			for (const auto &delimiter : delimiter_candidates) {
 				const auto &escape_candidates = escape_candidates_map.at((uint8_t)quoterule);
 				for (const auto &escape : escape_candidates) {
 					D_ASSERT(buffer_manager);

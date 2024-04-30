@@ -1,0 +1,25 @@
+# name: test/sql/copy/csv/test_quote_default.test
+# description: Test quote as default quoted option
+# group: [csv]
+
+#statement ok
+#create table t (a varchar)
+#
+#statement ok
+#insert into t select 'bla' from range (30000);
+#
+#statement ok
+#insert into t values ('"bla"');
+#
+#statement ok
+#copy t to 'test.csv'
+
+query I
+select quote from sniff_csv('test.csv')
+----
+"
+
+query I
+select count(*) from read_csv('test.csv', sample_size = 1, header = 1) where a = '"bla"'
+----
+0
