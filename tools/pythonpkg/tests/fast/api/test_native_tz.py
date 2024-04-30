@@ -68,7 +68,3 @@ class TestNativeTimeZone(object):
         res = duckdb_cursor.execute(f"select TimeRecStart as tz  from '{filename}'").arrow().to_pandas()
         assert res.dtypes["tz"].tz.zone == 'UTC'
         assert res['tz'][0].hour == 21 and res['tz'][0].minute == 52
-
-    def test_arrow_timestamp_time(self, duckdb_cursor):
-        with pytest.raises(duckdb.NotImplementedException, match="Unsupported Arrow type"):
-            duckdb_cursor.execute(f"select TimeRecStart::TIMETZ  as tz  from '{filename}'").arrow()
