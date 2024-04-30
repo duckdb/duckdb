@@ -978,7 +978,6 @@ void JSONScan::ComplexFilterPushdown(ClientContext &context, LogicalGet &get, Fu
                                      vector<unique_ptr<Expression>> &filters) {
 	auto &data = bind_data_p->Cast<JSONScanData>();
 
-	// Todo avoid this back and forth by storing the multifilelist instead
 	SimpleMultiFileList file_list(std::move(data.files));
 
 	auto reset_reader =

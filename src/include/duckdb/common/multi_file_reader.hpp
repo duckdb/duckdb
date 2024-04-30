@@ -123,7 +123,8 @@ public:
 	MultiFileListIterator end();
 };
 
-// Abstract base class for lazily generated list of file paths/globs
+//! Abstract base class for lazily generated list of file paths/globs
+//! note: most methods are NOT threadsafe
 class MultiFileList {
 public:
 	MultiFileList();
@@ -172,8 +173,7 @@ public:
 	//! DEPRECATED: should be removed once all DuckDB code can properly handle MultiFileLists
 	vector<string> ToStringVector();
 
-	//! This function creates a copy of the MultiFileList by fully expanding everything and returning a SimpleMultiFileList from that
-	//! todo: remove this?
+	//! Naive copy method: CallsExpandAll() then creates a SimpleMultiFileList from expanded_files
 	virtual unique_ptr<MultiFileList> Copy();
 
 protected:
@@ -195,14 +195,15 @@ public:
 };
 
 //! MultiFileList that will expand globs into files
-class FileSystemGlobMultiFileList : public MultiFileList {
+class GlobMultiFileList : public MultiFileList {
 public:
-	explicit FileSystemGlobMultiFileList(ClientContext &context, vector<string> paths);
+	GlobMultiFileList(ClientContext &context, vector<string> paths);
 	string GetFile(idx_t i) override;
 	bool ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
 	                           vector<unique_ptr<Expression>> &filters) override;
 	vector<string> GetPaths() override;
 	void ExpandAll() override;
+	unique_ptr<MultiFileList> Copy() override;
 
 protected:
 	//! Grabs the next path and expands it into Expanded paths:

@@ -8,17 +8,14 @@
 namespace duckdb {
 
 struct GlobFunctionBindData : public TableFunctionData {
-	//! The path to glob
-	vector<string> paths;
-	//! The MultiFileReader to use
-	unique_ptr<MultiFileReader> multi_file_reader;
+	unique_ptr<MultiFileList> file_list;
 };
 
 static unique_ptr<FunctionData> GlobFunctionBind(ClientContext &context, TableFunctionBindInput &input,
                                                  vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_uniq<GlobFunctionBindData>();
-	result->multi_file_reader = MultiFileReader::Create(input.table_function);
-	result->paths = result->multi_file_reader->ParsePaths(input.inputs[0]);
+	auto multi_file_reader = MultiFileReader::Create(input.table_function);
+	result->file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("file");
 	return std::move(result);
@@ -36,7 +33,7 @@ static unique_ptr<GlobalTableFunctionState> GlobFunctionInit(ClientContext &cont
 	auto &bind_data = input.bind_data->Cast<GlobFunctionBindData>();
 	auto res = make_uniq<GlobFunctionState>();
 
-	res->file_list = bind_data.multi_file_reader->CreateFileList(context, bind_data.paths, FileGlobOptions::ALLOW_EMPTY);
+	res->file_list = bind_data.file_list->Copy();
 	res->file_list->InitializeScan(res->file_list_scan);
 
 	return std::move(res);

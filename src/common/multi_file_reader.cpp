@@ -173,7 +173,9 @@ vector<string> MultiFileList::ToStringVector() {
 
 unique_ptr<MultiFileList> MultiFileList::Copy() {
 	ExpandAll();
-	return make_uniq<SimpleMultiFileList>(expanded_files);
+	auto res = make_uniq<SimpleMultiFileList>(std::move(expanded_files));
+	expanded_files = res->expanded_files;
+	return res;
 }
 
 SimpleMultiFileList::SimpleMultiFileList(vector<string> files) : MultiFileList() {
@@ -224,15 +226,15 @@ void SimpleMultiFileList::ExpandAll() {
 	// Is a NOP: a SimpleMultiFileList is fully expanded on creation
 }
 
-FileSystemGlobMultiFileList::FileSystemGlobMultiFileList(ClientContext &context_p, vector<string> paths_p) : MultiFileList(),
+GlobMultiFileList::GlobMultiFileList(ClientContext &context_p, vector<string> paths_p) : MultiFileList(),
       context(context_p), paths(std::move(paths_p)), current_path(0){
 }
 
-vector<string> FileSystemGlobMultiFileList::GetPaths() {
+vector<string> GlobMultiFileList::GetPaths() {
 	return paths;
 }
 
-bool FileSystemGlobMultiFileList::ComplexFilterPushdown(ClientContext &context_p, const MultiFileReaderOptions &options,
+bool GlobMultiFileList::ComplexFilterPushdown(ClientContext &context_p, const MultiFileReaderOptions &options,
                                                 LogicalGet &get, vector<unique_ptr<Expression>> &filters) {
 	// TODO: implement special glob that makes use of hive partition filters to do more efficient globbing
 	ExpandAll();
@@ -259,7 +261,7 @@ bool FileSystemGlobMultiFileList::ComplexFilterPushdown(ClientContext &context_p
 	return false;
 }
 
-string FileSystemGlobMultiFileList::GetFile(idx_t i) {
+string GlobMultiFileList::GetFile(idx_t i) {
 	while(GetCurrentSize() <= i) {
 		if (!ExpandPathInternal()) {
 			return "";
@@ -270,13 +272,26 @@ string FileSystemGlobMultiFileList::GetFile(idx_t i) {
 	return expanded_files[i];
 }
 
-void FileSystemGlobMultiFileList::ExpandAll() {
+void GlobMultiFileList::ExpandAll() {
 	while(ExpandPathInternal()) {
 	}
 }
 
-bool FileSystemGlobMultiFileList::ExpandPathInternal() {
-	if (fully_expanded) {
+unique_ptr<MultiFileList> GlobMultiFileList::Copy() {
+	auto res = make_uniq<GlobMultiFileList>(context, std::move(paths));
+	res->current_path = current_path;
+	res->expanded_files = std::move(expanded_files);
+	res->fully_expanded = fully_expanded;
+
+	current_path = res->current_path;
+	expanded_files = res->expanded_files;
+	paths = res->paths;
+
+	return std::move(res);
+}
+
+bool GlobMultiFileList::ExpandPathInternal() {
+	if (fully_expanded || current_path >= paths.size()) {
 		return false;
 	}
 
@@ -352,29 +367,13 @@ unique_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context
 	if (!config.options.enable_external_access) {
 		throw PermissionException("Scanning %s files is disabled through configuration", function_name);
 	}
-	FileSystem &fs = FileSystem::GetFileSystem(context);
 	vector<string> result_files;
 
-	if (config.options.use_late_glob_expansion) {
-		auto res = make_uniq<FileSystemGlobMultiFileList>(context, paths);
-		if (res->GetExpandResult() == FileExpandResult::NO_FILES && options == FileGlobOptions::DISALLOW_EMPTY) {
-			throw IOException("%s needs at least one file to read", function_name);
-		}
-		return res;
-	}
-
-	for (const auto& path: paths) {
-		auto glob_files = fs.GlobFiles(path, context, options);
-		// Sort the files to ensure that the order is deterministic
-		std::sort(glob_files.begin(), glob_files.end());
-		result_files.insert(result_files.end(), glob_files.begin(), glob_files.end());
-	}
-
-	if (result_files.empty() && options == FileGlobOptions::DISALLOW_EMPTY) {
+	auto res = make_uniq<GlobMultiFileList>(context, paths);
+	if (res->GetExpandResult() == FileExpandResult::NO_FILES && options == FileGlobOptions::DISALLOW_EMPTY) {
 		throw IOException("%s needs at least one file to read", function_name);
 	}
-
-	return make_uniq<SimpleMultiFileList>(std::move(result_files));
+	return res;
 }
 
 unique_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const Value &input, FileGlobOptions options) {

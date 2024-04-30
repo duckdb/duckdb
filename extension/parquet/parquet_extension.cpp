@@ -46,7 +46,7 @@ namespace duckdb {
 
 struct ParquetReadBindData : public TableFunctionData {
 	shared_ptr<ParquetReader> initial_reader;
-	unique_ptr<MultiFileList> files;
+	unique_ptr<MultiFileList> file_list;
 	atomic<idx_t> chunk_count;
 	vector<string> names;
 	vector<LogicalType> types;
@@ -99,7 +99,7 @@ struct ParquetFileReaderData {
 struct ParquetReadGlobalState : public GlobalTableFunctionState {
 
 	//! The files to be scanned, copied from Bind Phase
-	unique_ptr<MultiFileList> files;
+	unique_ptr<MultiFileList> file_list;
 
 	mutex lock;
 
@@ -171,7 +171,8 @@ BindInfo ParquetGetBindInfo(const optional_ptr<FunctionData> bind_data) {
 	auto bind_info = BindInfo(ScanType::PARQUET);
 	auto &parquet_bind = bind_data->Cast<ParquetReadBindData>();
 
-	vector<string> file_list = parquet_bind.files->GetPaths();
+	// TODO: should this be GetAllFiles?
+	vector<string> file_list = parquet_bind.file_list->GetPaths();
 	vector<Value> file_path;
 	for (auto &path : file_list) {
 		file_path.emplace_back(path);
@@ -218,7 +219,7 @@ static MultiFileReaderBindData BindSchema(ClientContext &context, vector<Logical
 
 	// perform the binding on the obtained set of names + types
 	MultiFileReaderBindData bind_data;
-	result.multi_file_reader->BindOptions(options.file_options, *result.files, schema_col_types, schema_col_names,
+	result.multi_file_reader->BindOptions(options.file_options, *result.file_list, schema_col_types, schema_col_names,
 	                                      bind_data);
 
 	names = schema_col_names;
@@ -238,7 +239,7 @@ static void InitializeParquetReader(ParquetReader &reader, const ParquetReadBind
 	if (bind_data.parquet_options.schema.empty()) {
 		bind_data.multi_file_reader->InitializeReader(reader, parquet_options.file_options, bind_data.reader_bind,
 		                                              bind_data.types, bind_data.names, global_column_ids,
-		                                              table_filters, bind_data.files->GetFirstFile(), context);
+		                                              table_filters, bind_data.file_list->GetFirstFile(), context);
 		return;
 	}
 
@@ -399,7 +400,7 @@ public:
 
 		auto &config = DBConfig::GetConfig(context);
 
-		if (bind_data.files->GetExpandResult() != FileExpandResult::MULTIPLE_FILES) {
+		if (bind_data.file_list->GetExpandResult() != FileExpandResult::MULTIPLE_FILES) {
 			if (bind_data.initial_reader) {
 				// most common path, scanning single parquet file
 				return bind_data.initial_reader->ReadStatistics(bind_data.names[column_index]);
@@ -416,7 +417,7 @@ public:
 			// enabled at all)
 			FileSystem &fs = FileSystem::GetFileSystem(context);
 
-		    for (const auto& file_name : bind_data.files->Files()){
+		    for (const auto& file_name : bind_data.file_list->Files()){
 				auto metadata = cache.Get<ParquetFileMetadataCache>(file_name);
 				if (!metadata) {
 					// missing metadata entry in cache, no usable stats
@@ -455,21 +456,21 @@ public:
 
 	static unique_ptr<FunctionData> ParquetScanBindInternal(ClientContext &context,
 	                                                        unique_ptr<MultiFileReader> multi_file_reader,
-	                                                        unique_ptr<MultiFileList> files,
+	                                                        unique_ptr<MultiFileList> file_list,
 	                                                        vector<LogicalType> &return_types, vector<string> &names,
 	                                                        ParquetOptions parquet_options) {
 		auto result = make_uniq<ParquetReadBindData>();
 		result->multi_file_reader = std::move(multi_file_reader);
-		result->files = std::move(files);
+		result->file_list = file_list->Copy();
 		bool bound_on_first_file = true;
 
 		// Firstly, we try to use the multifilereader to bind
-		if (result->multi_file_reader->Bind(parquet_options.file_options, *result->files, result->types, result->names,
+		if (result->multi_file_reader->Bind(parquet_options.file_options, *result->file_list, result->types, result->names,
 		                                    result->reader_bind)) {
 			ParseFileRowNumberOption(result->reader_bind, parquet_options, result->types, result->names);
 			// The MultiFileReader has provided a bind; we only need to bind any multifilereader options present, and
 			// then we are done.
-			result->multi_file_reader->BindOptions(parquet_options.file_options, *result->files, result->types,
+			result->multi_file_reader->BindOptions(parquet_options.file_options, *result->file_list, result->types,
 			                                       result->names, result->reader_bind);
 
 			// We don't actually know how the bind was performed here: the MultiFileReader has implemented a custom bind
@@ -479,7 +480,7 @@ public:
 			result->reader_bind = BindSchema(context, result->types, result->names, *result, parquet_options);
 		} else {
 			result->reader_bind = result->multi_file_reader->BindReader<ParquetReader>(
-			    context, result->types, result->names, *result->files, *result, parquet_options);
+			    context, result->types, result->names, *result->file_list, *result, parquet_options);
 		}
 
 		if (return_types.empty()) {
@@ -488,7 +489,7 @@ public:
 			names = result->names;
 		} else {
 			if (return_types.size() != result->types.size()) {
-				auto file_string = bound_on_first_file ? result->files->GetFirstFile() : StringUtil::Join(result->files->GetPaths(), ",");
+				auto file_string = bound_on_first_file ? result->file_list->GetFirstFile() : StringUtil::Join(result->file_list->GetPaths(), ",");
 				throw std::runtime_error(StringUtil::Format(
 				    "Failed to read file(s) \"%s\" - column count mismatch: expected %d columns but found %d",
 				    file_string, return_types.size(), result->types.size()));
@@ -534,10 +535,10 @@ public:
 			}
 		}
 
-		auto files = multi_file_reader->CreateFileList(context, input.inputs[0]);
-		parquet_options.file_options.AutoDetectHivePartitioning(*files, context);
+		auto file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
+		parquet_options.file_options.AutoDetectHivePartitioning(*file_list, context);
 
-		return ParquetScanBindInternal(context, std::move(multi_file_reader), std::move(files), return_types, names,
+		return ParquetScanBindInternal(context, std::move(multi_file_reader), std::move(file_list), return_types, names,
 		                               parquet_options);
 	}
 
@@ -546,7 +547,7 @@ public:
 		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
 		auto &gstate = global_state->Cast<ParquetReadGlobalState>();
 
-		auto total_file_count = bind_data.files->GetTotalFileCount();
+		auto total_file_count = bind_data.file_list->GetTotalFileCount();
 		if (total_file_count == 0) {
 			return 100.0;
 		}
@@ -582,11 +583,9 @@ public:
 		auto &bind_data = input.bind_data->CastNoConst<ParquetReadBindData>();
 		auto result = make_uniq<ParquetReadGlobalState>();
 
-		// FIXME: avoid copying the files?
-		result->files = bind_data.files->Copy();
+		result->file_list = bind_data.file_list->Copy();
 
-		// TODO: don't empty initialize vector?
-		if (bind_data.files->IsEmpty()) {
+		if (bind_data.file_list->IsEmpty()) {
 			result->readers = {};
 		} else if (!bind_data.union_readers.empty()) {
 			// TODO: confirm we are not changing behaviour by modifying the order here?
@@ -596,7 +595,7 @@ public:
 				}
 				result->readers.push_back(ParquetFileReaderData(std::move(reader)));
 			}
-			if (result->readers.size() != bind_data.files->GetTotalFileCount()) {
+			if (result->readers.size() != bind_data.file_list->GetTotalFileCount()) {
 				// FIXME This should not happen: didn't want to break things but this should probably be an
 				// InternalException
 				D_ASSERT(false);
@@ -604,7 +603,7 @@ public:
 			}
 		} else if (bind_data.initial_reader) {
 			// Ensure the initial reader was actually constructed from the first file
-			if (bind_data.initial_reader->file_name == bind_data.files->GetFirstFile()) {
+			if (bind_data.initial_reader->file_name == bind_data.file_list->GetFirstFile()) {
 				result->readers.push_back(ParquetFileReaderData(std::move(bind_data.initial_reader), ParquetFileState::OPEN));
 			} else {
 				// FIXME This should not happen: didn't want to break things but this should probably be an
@@ -648,7 +647,7 @@ public:
 	static void ParquetScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
 	                                 const TableFunction &function) {
 		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
-		serializer.WriteProperty(100, "files", bind_data.files->GetAllFiles());
+		serializer.WriteProperty(100, "files", bind_data.file_list->GetAllFiles());
 		serializer.WriteProperty(101, "types", bind_data.types);
 		serializer.WriteProperty(102, "names", bind_data.names);
 		serializer.WriteProperty(103, "parquet_options", bind_data.parquet_options);
@@ -705,13 +704,13 @@ public:
 	static unique_ptr<NodeStatistics> ParquetCardinality(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = bind_data->Cast<ParquetReadBindData>();
 		// TODO: reconsider fully expanding filelist for cardinality estimation; hinders potential optimization?
-		return make_uniq<NodeStatistics>(data.initial_file_cardinality * data.files->GetTotalFileCount());
+		return make_uniq<NodeStatistics>(data.initial_file_cardinality * data.file_list->GetTotalFileCount());
 	}
 
 	static idx_t ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = bind_data->Cast<ParquetReadBindData>();
 
-		if (data.files->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
+		if (data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
 			return TaskScheduler::GetScheduler(context).NumberOfThreads();
 		}
 
@@ -722,7 +721,7 @@ public:
 	// Returns true if resized
 	static bool ResizeFiles(const ParquetReadBindData &bind_data, ParquetReadGlobalState &parallel_state) {
 		// Check if the metadata provider has another file
-		auto maybe_file = bind_data.files->GetFile(parallel_state.readers.size());
+		auto maybe_file = bind_data.file_list->GetFile(parallel_state.readers.size());
 		if (maybe_file.empty()) {
 			return false;
 		}
@@ -789,9 +788,9 @@ public:
 		auto &data = bind_data_p->Cast<ParquetReadBindData>();
 
 		auto reset_reader = data.multi_file_reader->ComplexFilterPushdown(
-		    context, *data.files, data.parquet_options.file_options, get, filters);
+		    context, *data.file_list, data.parquet_options.file_options, get, filters);
 		if (reset_reader) {
-			MultiFileReader::PruneReaders(data, *data.files);
+			MultiFileReader::PruneReaders(data, *data.file_list);
 		}
 	}
 
@@ -833,7 +832,7 @@ public:
 		for (idx_t i = parallel_state.file_index; i < file_index_limit; i++) {
 			if (parallel_state.readers[i].file_state == ParquetFileState::UNOPENED) {
 				auto &current_reader_data = parallel_state.readers[i];
-				string file = bind_data.files->GetFile(i);
+				string file = bind_data.file_list->GetFile(i);
 				current_reader_data.file_state = ParquetFileState::OPENING;
 				auto pq_options = bind_data.parquet_options;
 
