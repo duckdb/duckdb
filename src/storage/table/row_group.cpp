@@ -800,8 +800,11 @@ void RowGroup::MergeIntoStatistics(idx_t column_idx, BaseStatistics &other) {
 	col_data.MergeIntoStatistics(other);
 }
 
-RowGroupWriteData RowGroup::WriteToDisk(PartialBlockManager &manager,
-                                        const vector<CompressionType> &compression_types) {
+CompressionType ColumnCheckpointInfo::GetCompressionType() {
+	return info.compression_types[column_idx];
+}
+
+RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriteInfo &info) {
 	RowGroupWriteData result;
 	result.states.reserve(columns.size());
 	result.statistics.reserve(columns.size());
@@ -816,8 +819,8 @@ RowGroupWriteData RowGroup::WriteToDisk(PartialBlockManager &manager,
 	// pointers all end up densely packed, and thus more cache-friendly.
 	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
 		auto &column = GetColumn(column_idx);
-		ColumnCheckpointInfo checkpoint_info {compression_types[column_idx]};
-		auto checkpoint_state = column.Checkpoint(*this, manager, checkpoint_info);
+		ColumnCheckpointInfo checkpoint_info(info, column_idx);
+		auto checkpoint_state = column.Checkpoint(*this, checkpoint_info);
 		D_ASSERT(checkpoint_state);
 
 		auto stats = checkpoint_state->GetStatistics();
@@ -860,7 +863,8 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 		compression_types.push_back(writer.GetColumnCompressionType(column_idx));
 	}
 
-	return WriteToDisk(writer.GetPartialBlockManager(), compression_types);
+	RowGroupWriteInfo info(writer.GetPartialBlockManager(), compression_types);
+	return WriteToDisk(info);
 }
 
 RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWriter &writer,

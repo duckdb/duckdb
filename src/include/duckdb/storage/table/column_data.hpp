@@ -29,10 +29,16 @@ struct TransactionData;
 struct TableScanOptions;
 
 struct DataTableInfo;
+struct RowGroupWriteInfo;
 
 struct ColumnCheckpointInfo {
-	explicit ColumnCheckpointInfo(CompressionType compression_type_p) : compression_type(compression_type_p) {};
-	CompressionType compression_type;
+	ColumnCheckpointInfo(RowGroupWriteInfo &info, idx_t column_idx) : info(info), column_idx(column_idx) {}
+
+	RowGroupWriteInfo &info;
+	idx_t column_idx;
+
+public:
+	CompressionType GetCompressionType();
 };
 
 class ColumnData {
@@ -124,8 +130,7 @@ public:
 
 	virtual unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group,
 	                                                                PartialBlockManager &partial_block_manager);
-	virtual unique_ptr<ColumnCheckpointState>
-	Checkpoint(RowGroup &row_group, PartialBlockManager &partial_block_manager, ColumnCheckpointInfo &checkpoint_info);
+	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &info);
 
 	virtual void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
 	                            Vector &scan_vector);

@@ -461,11 +461,10 @@ void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, 
 }
 
 unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group,
-                                                         PartialBlockManager &partial_block_manager,
-                                                         ColumnCheckpointInfo &checkpoint_info) {
+														 ColumnCheckpointInfo &checkpoint_info) {
 	// scan the segments of the column data
 	// set up the checkpoint state
-	auto checkpoint_state = CreateCheckpointState(row_group, partial_block_manager);
+	auto checkpoint_state = CreateCheckpointState(row_group, checkpoint_info.info.manager);
 	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
 
 	auto l = data.Lock();

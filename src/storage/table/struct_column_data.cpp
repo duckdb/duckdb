@@ -281,13 +281,12 @@ unique_ptr<ColumnCheckpointState> StructColumnData::CreateCheckpointState(RowGro
 }
 
 unique_ptr<ColumnCheckpointState> StructColumnData::Checkpoint(RowGroup &row_group,
-                                                               PartialBlockManager &partial_block_manager,
-                                                               ColumnCheckpointInfo &checkpoint_info) {
-	auto checkpoint_state = make_uniq<StructColumnCheckpointState>(row_group, *this, partial_block_manager);
-	checkpoint_state->validity_state = validity.Checkpoint(row_group, partial_block_manager, checkpoint_info);
+															   ColumnCheckpointInfo &checkpoint_info) {
+	auto checkpoint_state = make_uniq<StructColumnCheckpointState>(row_group, *this, checkpoint_info.info.manager);
+	checkpoint_state->validity_state = validity.Checkpoint(row_group, checkpoint_info);
 	for (auto &sub_column : sub_columns) {
 		checkpoint_state->child_states.push_back(
-		    sub_column->Checkpoint(row_group, partial_block_manager, checkpoint_info));
+		    sub_column->Checkpoint(row_group, checkpoint_info));
 	}
 	return std::move(checkpoint_state);
 }

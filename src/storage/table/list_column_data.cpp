@@ -339,11 +339,10 @@ unique_ptr<ColumnCheckpointState> ListColumnData::CreateCheckpointState(RowGroup
 }
 
 unique_ptr<ColumnCheckpointState> ListColumnData::Checkpoint(RowGroup &row_group,
-                                                             PartialBlockManager &partial_block_manager,
-                                                             ColumnCheckpointInfo &checkpoint_info) {
-	auto base_state = ColumnData::Checkpoint(row_group, partial_block_manager, checkpoint_info);
-	auto validity_state = validity.Checkpoint(row_group, partial_block_manager, checkpoint_info);
-	auto child_state = child_column->Checkpoint(row_group, partial_block_manager, checkpoint_info);
+															 ColumnCheckpointInfo &checkpoint_info) {
+	auto base_state = ColumnData::Checkpoint(row_group, checkpoint_info);
+	auto validity_state = validity.Checkpoint(row_group, checkpoint_info);
+	auto child_state = child_column->Checkpoint(row_group, checkpoint_info);
 
 	auto &checkpoint_state = base_state->Cast<ListColumnCheckpointState>();
 	checkpoint_state.validity_state = std::move(validity_state);

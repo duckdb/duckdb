@@ -47,18 +47,20 @@ protected:
 class SingleFileRowGroupWriter : public RowGroupWriter {
 public:
 	SingleFileRowGroupWriter(TableCatalogEntry &table, PartialBlockManager &partial_block_manager,
-	                         MetadataWriter &table_data_writer)
-	    : RowGroupWriter(table, partial_block_manager), table_data_writer(table_data_writer) {
-	}
-
-	//! MetadataWriter is a cursor on a given BlockManager. This returns the
-	//! cursor against which we should write payload data for the specified RowGroup.
-	MetadataWriter &table_data_writer;
+	                         TableDataWriter &writer, MetadataWriter &table_data_writer);
 
 public:
 	void WriteColumnDataPointers(ColumnCheckpointState &column_checkpoint_state, Serializer &serializer) override;
 
+	CheckpointType GetCheckpointType() const;
 	MetadataWriter &GetPayloadWriter() override;
+
+private:
+	//! Underlying writer object
+	TableDataWriter &writer;
+	//! MetadataWriter is a cursor on a given BlockManager. This returns the
+	//! cursor against which we should write payload data for the specified RowGroup.
+	MetadataWriter &table_data_writer;
 };
 
 } // namespace duckdb

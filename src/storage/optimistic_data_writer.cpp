@@ -64,7 +64,8 @@ void OptimisticDataWriter::FlushToDisk(RowGroup *row_group) {
 	for (auto &column : table.Columns()) {
 		compression_types.push_back(column.CompressionType());
 	}
-	row_group->WriteToDisk(*partial_manager, compression_types);
+	RowGroupWriteInfo info(*partial_manager, compression_types);
+	row_group->WriteToDisk(info);
 }
 
 void OptimisticDataWriter::Merge(OptimisticDataWriter &other) {
