@@ -16,6 +16,12 @@ namespace duckdb {
 
 class WriteAheadLog;
 
+struct UndoBufferProperties {
+	idx_t estimated_size = 0;
+	bool has_updates = false;
+	bool has_deletes = false;
+};
+
 //! The undo buffer of a transaction is used to hold previous versions of tuples
 //! that might be required in the future (because of rollbacks or previous
 //! transactions accessing them)
@@ -35,7 +41,7 @@ public:
 	data_ptr_t CreateEntry(UndoFlags type, idx_t len);
 
 	bool ChangesMade();
-	idx_t EstimatedSize();
+	UndoBufferProperties GetProperties();
 
 	//! Cleanup the undo buffer
 	void Cleanup();

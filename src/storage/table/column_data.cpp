@@ -478,10 +478,7 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Co
 
 	// replace the old tree with the new one
 	data.Replace(l, checkpoint_state->new_tree);
-	if (checkpoint_info.info.checkpoint_type != CheckpointType::CONCURRENT_CHECKPOINT) {
-		// we cannot clear updates when doing a concurrent checkpoint
-		ClearUpdates();
-	}
+	ClearUpdates();
 
 	return checkpoint_state;
 }

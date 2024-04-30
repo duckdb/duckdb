@@ -146,7 +146,11 @@ bool DuckTransaction::ChangesMade() {
 	return undo_buffer.ChangesMade() || storage->ChangesMade();
 }
 
-bool DuckTransaction::AutomaticCheckpoint(AttachedDatabase &db) {
+UndoBufferProperties DuckTransaction::GetUndoProperties() {
+	return undo_buffer.GetProperties();
+}
+
+bool DuckTransaction::AutomaticCheckpoint(AttachedDatabase &db, const UndoBufferProperties &properties) {
 	if (!ChangesMade()) {
 		// read-only transactions cannot trigger an automated checkpoint
 		return false;
@@ -158,15 +162,15 @@ bool DuckTransaction::AutomaticCheckpoint(AttachedDatabase &db) {
 		return false;
 	}
 	auto &storage_manager = db.GetStorageManager();
-	return storage_manager.AutomaticCheckpoint(storage->EstimatedSize() + undo_buffer.EstimatedSize());
+	return storage_manager.AutomaticCheckpoint(storage->EstimatedSize() + properties.estimated_size);
 }
 
-ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t commit_id, bool checkpoint) noexcept {
+ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t new_commit_id, bool checkpoint) noexcept {
 	// "checkpoint" parameter indicates if the caller will checkpoint. If checkpoint ==
 	//    true: Then this function will NOT write to the WAL or flush/persist.
 	//          This method only makes commit in memory, expecting caller to checkpoint/flush.
 	//    false: Then this function WILL write to the WAL and Flush/Persist it.
-	this->commit_id = commit_id;
+	this->commit_id = new_commit_id;
 	if (!ChangesMade()) {
 		// no need to flush anything if we made no changes
 		return ErrorData();

@@ -14,6 +14,7 @@ namespace duckdb {
 class RowVersionManager;
 class DuckTransactionManager;
 class StorageLockKey;
+struct UndoBufferProperties;
 
 class DuckTransaction : public Transaction {
 public:
@@ -43,7 +44,7 @@ public:
 	//! commit failed, or an empty string if the commit was sucessful
 	ErrorData Commit(AttachedDatabase &db, transaction_t commit_id, bool checkpoint) noexcept;
 	//! Returns whether or not a commit of this transaction should trigger an automatic checkpoint
-	bool AutomaticCheckpoint(AttachedDatabase &db);
+	bool AutomaticCheckpoint(AttachedDatabase &db, const UndoBufferProperties &properties);
 
 	//! Rollback
 	void Rollback() noexcept;
@@ -51,6 +52,7 @@ public:
 	void Cleanup();
 
 	bool ChangesMade();
+	UndoBufferProperties GetUndoProperties();
 
 	void PushDelete(DataTable &table, RowVersionManager &info, idx_t vector_idx, row_t rows[], idx_t count,
 	                idx_t base_row);

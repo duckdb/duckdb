@@ -10,6 +10,7 @@
 
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/storage/storage_lock.hpp"
+#include "duckdb/common/enums/checkpoint_type.hpp"
 
 namespace duckdb {
 class DuckTransaction;
@@ -53,8 +54,13 @@ public:
 
 protected:
 	struct CheckpointDecision {
+		explicit CheckpointDecision(string reason_p);
+		explicit CheckpointDecision(CheckpointType type);
+		~CheckpointDecision();
+
 		bool can_checkpoint;
 		string reason;
+		CheckpointType type;
 	};
 
 private:
@@ -64,7 +70,7 @@ private:
 	void RemoveTransaction(DuckTransaction &transaction) noexcept;
 
 	//! Whether or not we can checkpoint
-	CheckpointDecision CanCheckpoint();
+	CheckpointDecision CanCheckpoint(DuckTransaction &transaction, unique_ptr<StorageLockKey> &checkpoint_lock);
 
 private:
 	//! The current start timestamp used by transactions

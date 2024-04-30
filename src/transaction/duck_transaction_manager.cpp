@@ -65,15 +65,60 @@ Transaction &DuckTransactionManager::StartTransaction(ClientContext &context) {
 	return transaction_ref;
 }
 
-DuckTransactionManager::CheckpointDecision DuckTransactionManager::CanCheckpoint() {
+DuckTransactionManager::CheckpointDecision::CheckpointDecision(string reason_p) : can_checkpoint(false), reason(std::move(reason_p)) {}
+
+DuckTransactionManager::CheckpointDecision::CheckpointDecision(CheckpointType type) :
+    can_checkpoint(true), type(type) {}
+
+DuckTransactionManager::CheckpointDecision::~CheckpointDecision() {
+
+}
+
+DuckTransactionManager::CheckpointDecision DuckTransactionManager::CanCheckpoint(DuckTransaction &transaction, unique_ptr<StorageLockKey> &lock) {
 	if (db.IsSystem()) {
-		return {false, "system transaction"};
+		return CheckpointDecision("system transaction");
 	}
 	auto &storage_manager = db.GetStorageManager();
 	if (storage_manager.InMemory()) {
-		return {false, "in memory db"};
+		return CheckpointDecision("in memory db");
 	}
-	return {true, ""};
+	auto undo_properties = transaction.GetUndoProperties();
+	if (!transaction.AutomaticCheckpoint(db, undo_properties)) {
+		return CheckpointDecision("no reason to automatically checkpoint");
+	}
+	// try to lock the checkpoint lock
+	lock = transaction.TryGetCheckpointLock();
+	if (!lock) {
+		return CheckpointDecision("Failed to obtain checkpoint lock - another thread is writing/checkpointing or another read transaction relies on data that is not yet committed");
+	}
+	auto checkpoint_type = CheckpointType::FULL_CHECKPOINT;
+	if (undo_properties.has_updates || undo_properties.has_deletes) {
+		// if we have made updates or deletes in this transaction we might need to change our strategy
+		// in the presence of other transactions
+		string other_transactions;
+		for (auto &active_transaction : active_transactions) {
+			if (!RefersToSameObject(*active_transaction, transaction)) {
+				if (!other_transactions.empty()) {
+					other_transactions += ", ";
+				}
+				other_transactions += "[" + to_string(active_transaction->transaction_id) + "]";
+			}
+		}
+		if (!other_transactions.empty()) {
+			// there are other transactions!
+			// these active transactions might need data from BEFORE this transaction
+			// we might need to change our strategy here based on what changes THIS transaction has made
+			if (undo_properties.has_updates) {
+				// this transaction has performed updates - we cannot checkpoint
+				return CheckpointDecision("Transaction has performed updates and there are other transactions active\nActive transactions: " + other_transactions);
+			} else {
+				// this transaction has performed deletes - we cannot vacuum - initiate a concurrent checkpoint instead
+				D_ASSERT(undo_properties.has_deletes);
+				checkpoint_type = CheckpointType::CONCURRENT_CHECKPOINT;
+			}
+		}
+	}
+	return CheckpointDecision(checkpoint_type);
 }
 
 void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
@@ -139,10 +184,7 @@ unique_ptr<StorageLockKey> DuckTransactionManager::SharedCheckpointLock() {
 unique_ptr<StorageLockKey> DuckTransactionManager::TryUpgradeCheckpointLock(unique_ptr<StorageLockKey> &lock) {
 	if (!lock) {
 		throw InternalException("TryUpgradeCheckpointLock - but thread has no shared lock!?");
-		//		// no lock - try to get an exclusive lock
-		//		return checkpoint_lock.TryGetExclusiveLock();
 	}
-	// existing shared lock - try to upgrade to an exclusive lock
 	return checkpoint_lock.TryUpgradeCheckpointLock(*lock);
 }
 
@@ -163,38 +205,24 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			}
 		}
 	}
-	// check if we can checkpoint
-	unique_ptr<StorageLockKey> lock;
-	auto checkpoint_decision = CanCheckpoint();
-	if (checkpoint_decision.can_checkpoint) {
-		if (transaction.AutomaticCheckpoint(db)) {
-			// try to lock the checkpoint lock
-			lock = transaction.TryGetCheckpointLock();
-			if (!lock) {
-				checkpoint_decision = {false,
-				                       "Failed to obtain checkpoint lock - another thread is writing/checkpointing"};
-			} else {
-				checkpoint_decision = {true, ""};
-			}
-		} else {
-			checkpoint_decision = {false, "no reason to automatically checkpoint"};
-		}
-	}
-	OnCommitCheckpointDecision(checkpoint_decision, transaction);
-
 	// obtain a commit id for the transaction
 	transaction_t commit_id = GetCommitTimestamp();
+
+	// check if we can checkpoint
+	unique_ptr<StorageLockKey> lock;
+	auto checkpoint_decision = CanCheckpoint(transaction, lock);
 	// commit the UndoBuffer of the transaction
 	auto error = transaction.Commit(db, commit_id, checkpoint_decision.can_checkpoint);
 	if (error.HasError()) {
 		// commit unsuccessful: rollback the transaction instead
-		checkpoint_decision = CheckpointDecision {false, error.Message()};
+		checkpoint_decision = CheckpointDecision(error.Message());
 		transaction.commit_id = 0;
 		transaction.Rollback();
 	}
+	OnCommitCheckpointDecision(checkpoint_decision, transaction);
+
 	if (!checkpoint_decision.can_checkpoint && lock) {
 		// we won't checkpoint after all: unlock the checkpoint lock again
-		// FIXME: we should probably move a shared lock into the transaction again here
 		lock.reset();
 	}
 
@@ -206,16 +234,12 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	if (checkpoint_decision.can_checkpoint) {
 		D_ASSERT(lock);
 		// we can unlock the transaction lock while checkpointing
-		auto lowest_active_start = LowestActiveStart();
 		tlock.unlock();
 		// checkpoint the database to disk
 		auto &storage_manager = db.GetStorageManager();
 		CheckpointOptions options;
 		options.action = CheckpointAction::FORCE_CHECKPOINT;
-		if (lowest_active_start < commit_id) {
-			// we cannot do a full checkpoint if any transaction needs to read old data
-			options.type = CheckpointType::CONCURRENT_CHECKPOINT;
-		}
+		options.type = checkpoint_decision.type;
 		storage_manager.CreateCheckpoint(options);
 	}
 	return error;
