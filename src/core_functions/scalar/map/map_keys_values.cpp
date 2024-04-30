@@ -15,8 +15,8 @@ static void MapKeyValueFunction(DataChunk &args, ExpressionState &state, Vector 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	if (map.GetType().id() == LogicalTypeId::SQLNULL) {
 		auto &validity = FlatVector::Validity(result);
-		validity.SetInvalid(0);
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, true);
 		return;
 	}
 
