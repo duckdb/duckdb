@@ -19,6 +19,9 @@ require-env DUCKDB_S3_ENDPOINT
 
 require-env DUCKDB_S3_USE_SSL
 
+# override the default behaviour of skipping HTTP errors and connection failures: this test fails on connection issues
+set ignore_error_messages
+
 # Parquet filename name conflict
 statement ok
 CREATE TABLE test AS SELECT 1 as id, 'value1' as value;
