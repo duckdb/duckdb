@@ -205,7 +205,7 @@ unique_ptr<MultiFileList> MultiFileList::Copy() {
 	ExpandAll();
 	auto res = make_uniq<SimpleMultiFileList>(std::move(expanded_files));
 	expanded_files = res->expanded_files;
-	return res;
+	return std::move(res);
 }
 
 //===--------------------------------------------------------------------===//

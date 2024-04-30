@@ -79,7 +79,7 @@ unique_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context
 	if (res->GetExpandResult() == FileExpandResult::NO_FILES && options == FileGlobOptions::DISALLOW_EMPTY) {
 		throw IOException("%s needs at least one file to read", function_name);
 	}
-	return res;
+	return std::move(res);
 }
 
 unique_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const Value &input,
