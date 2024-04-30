@@ -172,6 +172,14 @@ struct QuackExtensionData : public ParserExtensionParseData {
 	duckdb::unique_ptr<ParserExtensionParseData> Copy() const override {
 		return make_uniq<QuackExtensionData>(number_of_quacks);
 	}
+
+	string ToString() const override {
+		vector<string> quacks;
+		for (idx_t i = 0; i < number_of_quacks; i++) {
+			quacks.push_back("QUACK");
+		}
+		return StringUtil::Join(quacks, " ");
+	}
 };
 
 class QuackExtension : public ParserExtension {

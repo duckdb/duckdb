@@ -168,6 +168,8 @@ public:
 
 	shared_ptr<DuckDBPyConnection> Rollback();
 
+	shared_ptr<DuckDBPyConnection> Checkpoint();
+
 	void Close();
 
 	void Interrupt();

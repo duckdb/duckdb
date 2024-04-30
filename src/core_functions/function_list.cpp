@@ -341,6 +341,7 @@ static const StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_AGGREGATE_FUNCTION_ALIAS(SumkahanFun),
 	DUCKDB_SCALAR_FUNCTION(TanFun),
 	DUCKDB_SCALAR_FUNCTION_SET(TimeBucketFun),
+	DUCKDB_SCALAR_FUNCTION(TimeTZSortKeyFun),
 	DUCKDB_SCALAR_FUNCTION_SET(TimezoneFun),
 	DUCKDB_SCALAR_FUNCTION_SET(TimezoneHourFun),
 	DUCKDB_SCALAR_FUNCTION_SET(TimezoneMinuteFun),
