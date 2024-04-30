@@ -274,4 +274,40 @@ char *NumericHelper::FormatUnsigned(hugeint_t value, char *ptr) {
 	return NumericHelper::FormatUnsigned<uint64_t>(value.lower, ptr);
 }
 
+template <>
+void DecimalToString::FormatDecimal(hugeint_t value, uint8_t width, uint8_t scale, char *dst, idx_t len) {
+	auto endptr = dst + len;
+
+	int negative = value.upper < 0;
+	if (negative) {
+		Hugeint::NegateInPlace(value);
+		*dst = '-';
+		dst++;
+	}
+	if (scale == 0) {
+		// with scale=0 we format the number as a regular number
+		NumericHelper::FormatUnsigned(value, endptr);
+		return;
+	}
+
+	// we write two numbers:
+	// the numbers BEFORE the decimal (major)
+	// and the numbers AFTER the decimal (minor)
+	hugeint_t minor;
+	hugeint_t major = Hugeint::DivMod(value, Hugeint::POWERS_OF_TEN[scale], minor);
+
+	// write the number after the decimal
+	dst = NumericHelper::FormatUnsigned(minor, endptr);
+	// (optionally) pad with zeros and add the decimal point
+	while (dst > (endptr - scale)) {
+		*--dst = '0';
+	}
+	*--dst = '.';
+	// now write the part before the decimal
+	D_ASSERT(width > scale || major == 0);
+	if (width > scale) {
+		dst = NumericHelper::FormatUnsigned(major, dst);
+	}
+}
+
 } // namespace duckdb
