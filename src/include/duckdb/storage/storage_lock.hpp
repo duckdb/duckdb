@@ -41,8 +41,11 @@ public:
 	unique_ptr<StorageLockKey> GetSharedLock();
 	//! Try to get an exclusive lock - if we cannot get it immediately we return `nullptr`
 	unique_ptr<StorageLockKey> TryGetExclusiveLock();
-	//! Try to upgrade a lock from a shared lock to an exclusive lock
-	bool TryUpgradeLock(StorageLockKey &lock);
+	//! This is a special method that only exists for checkpointing
+	//! This method takes a shared lock, and returns an exclusive lock if the parameter is the only active shared lock
+	//! If this method succeeds, we have **both** a shared and exclusive lock active (which normally is not allowed)
+	//! But this behavior is required for checkpointing
+	unique_ptr<StorageLockKey> TryUpgradeCheckpointLock(StorageLockKey &lock);
 
 private:
 	mutex exclusive_lock;

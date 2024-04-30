@@ -82,8 +82,8 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 		return;
 	}
 
-	auto current = &DuckTransaction::Get(context, db);
-	if (current->ChangesMade()) {
+	auto &current = DuckTransaction::Get(context, db);
+	if (current.ChangesMade()) {
 		throw TransactionException("Cannot CHECKPOINT: the current transaction has transaction local changes");
 	}
 	// try to get the checkpoint lock
@@ -143,10 +143,7 @@ unique_ptr<StorageLockKey> DuckTransactionManager::TryUpgradeCheckpointLock(uniq
 		//		return checkpoint_lock.TryGetExclusiveLock();
 	}
 	// existing shared lock - try to upgrade to an exclusive lock
-	if (!checkpoint_lock.TryUpgradeLock(*lock)) {
-		return nullptr;
-	}
-	return std::move(lock);
+	return checkpoint_lock.TryUpgradeCheckpointLock(*lock);
 }
 
 transaction_t DuckTransactionManager::GetCommitTimestamp() {
