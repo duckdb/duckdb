@@ -45,8 +45,9 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 		return copy_function.function.plan(*this, stmt);
 	}
 
+	auto &copy_info = *stmt.info;
 	// bind the select statement
-	auto select_node = Bind(*stmt.select_statement);
+	auto select_node = Bind(*copy_info.select_statement);
 
 	if (!copy_function.function.copy_to_bind) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
@@ -246,7 +247,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 }
 
 BoundStatement Binder::Bind(CopyStatement &stmt) {
-	if (!stmt.info->is_from && !stmt.select_statement) {
+	if (!stmt.info->is_from && !stmt.info->select_statement) {
 		// copy table into file without a query
 		// generate SELECT * FROM table;
 		auto ref = make_uniq<BaseTableRef>();
@@ -263,7 +264,7 @@ BoundStatement Binder::Bind(CopyStatement &stmt) {
 		} else {
 			statement->select_list.push_back(make_uniq<StarExpression>());
 		}
-		stmt.select_statement = std::move(statement);
+		stmt.info->select_statement = std::move(statement);
 	}
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;

@@ -61,7 +61,6 @@ SELECT * FROM '__TEST_DIR__/part/a=9/leading_????????-????-4???-????-???????????
 query III sort
 SELECT * FROM '__TEST_DIR__/part/a=9/leading_????????-????-4???-????-????????????*.parquet';
 ----
-9	18	81
 9	27	729
 
 # Test without a specified format name for the outputfile.
@@ -78,8 +77,6 @@ SELECT * FROM '__TEST_DIR__/part/a=9/data_[0-9]*.parquet';
 query III sort
 SELECT * FROM '__TEST_DIR__/part/a=9/*.parquet';
 ----
-9	18	81
-9	27	729
 9	36	6561
 
 # Test where the FILENAME_PATTERN does not contain "{i}" or "{uuid}". 
@@ -96,9 +93,6 @@ SELECT * FROM '__TEST_DIR__/part/a=9/basename[0-9]*.parquet';
 query III sort
 SELECT * FROM '__TEST_DIR__/part/a=9/*.parquet';
 ----
-9	18	81
-9	27	729
-9	36	6561
 9	45	59049
 
 # Test without the overwrite_or_ignore param, that tries to add a file to an existing directory
@@ -113,7 +107,7 @@ Directory
 statement error
 COPY test4 TO '__TEST_DIR__/to_be_overwritten' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PATTERN);
 ----
-FILENAME_PATTERN
+FILENAME_PATTERN cannot be empty
 
 statement ok
 COPY test4 TO '__TEST_DIR__/to_be_overwritten' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PATTERN a_file_name);

@@ -69,6 +69,17 @@ BUILTIN_EXTENSIONS = [
     'icu',
 ]
 
+from duckdb import DuckDBPyConnection
+
+# def patch_execute(method):
+#    def patched_execute(self, *args, **kwargs):
+#        print(*args)
+#        return method(self, *args, **kwargs)
+#    return patched_execute
+
+# patched_execute = patch_execute(getattr(DuckDBPyConnection, "execute"))
+# setattr(DuckDBPyConnection, "execute", patched_execute)
+
 
 class SQLLogicStatementData:
     # Context information about a statement

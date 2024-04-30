@@ -476,6 +476,9 @@ string LogicalType::ToString() const {
 	case LogicalTypeId::AGGREGATE_STATE: {
 		return AggregateStateType::GetTypeName(*this);
 	}
+	case LogicalTypeId::SQLNULL: {
+		return "\"NULL\"";
+	}
 	default:
 		return EnumUtil::ToString(id_);
 	}
@@ -1518,16 +1521,18 @@ LogicalType ArrayType::ConvertToList(const LogicalType &type) {
 	}
 }
 
-LogicalType LogicalType::ARRAY(const LogicalType &child, idx_t size) {
-	D_ASSERT(size > 0);
-	D_ASSERT(size < ArrayType::MAX_ARRAY_SIZE);
-	auto info = make_shared_ptr<ArrayTypeInfo>(child, size);
-	return LogicalType(LogicalTypeId::ARRAY, std::move(info));
-}
-
-LogicalType LogicalType::ARRAY(const LogicalType &child) {
-	auto info = make_shared_ptr<ArrayTypeInfo>(child, 0);
-	return LogicalType(LogicalTypeId::ARRAY, std::move(info));
+LogicalType LogicalType::ARRAY(const LogicalType &child, optional_idx size) {
+	if (!size.IsValid()) {
+		// Create an incomplete ARRAY type, used for binding
+		auto info = make_shared_ptr<ArrayTypeInfo>(child, 0);
+		return LogicalType(LogicalTypeId::ARRAY, std::move(info));
+	} else {
+		auto array_size = size.GetIndex();
+		D_ASSERT(array_size > 0);
+		D_ASSERT(array_size < ArrayType::MAX_ARRAY_SIZE);
+		auto info = make_shared_ptr<ArrayTypeInfo>(child, array_size);
+		return LogicalType(LogicalTypeId::ARRAY, std::move(info));
+	}
 }
 
 //===--------------------------------------------------------------------===//

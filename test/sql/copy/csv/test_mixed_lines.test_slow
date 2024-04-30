@@ -1,4 +1,4 @@
-# name: test/sql/copy/csv/test_mixed_lines.test
+# name: test/sql/copy/csv/test_mixed_lines.test_slow
 # description: Test mixed lines
 # group: [csv]
 

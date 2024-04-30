@@ -330,7 +330,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		// generate the copy statement and bind it
 		CopyStatement copy_stmt;
 		copy_stmt.info = std::move(info);
-		copy_stmt.select_statement =
+		copy_stmt.info->select_statement =
 		    CreateSelectStatement(copy_stmt, select_list, copy_function.function.supports_type);
 
 		auto copy_binder = Binder::CreateBinder(context, this);
