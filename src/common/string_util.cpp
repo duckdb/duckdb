@@ -256,6 +256,16 @@ bool StringUtil::CILessThan(const string &s1, const string &s2) {
 	return (charmap[u1] - charmap[u2]) < 0;
 }
 
+idx_t StringUtil::CIFind(vector<string> &vector, const string &search_string) {
+	for (idx_t i = 0; i < vector.size(); i++) {
+		const auto& string = vector[i];
+		if (CIEquals(string, search_string)) {
+			return i;
+		}
+	}
+	return DConstants::INVALID_INDEX;
+}
+
 vector<string> StringUtil::Split(const string &input, const string &split) {
 	vector<string> splits;
 

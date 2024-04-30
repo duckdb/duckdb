@@ -199,9 +199,9 @@ BindInfo ParquetGetBindInfo(const optional_ptr<FunctionData> bind_data) {
 static void ParseFileRowNumberOption(MultiFileReaderBindData &bind_data, ParquetOptions &options,
                                      vector<LogicalType> &return_types, vector<string> &names) {
 	if (options.file_row_number) {
-		if (std::find(names.begin(), names.end(), "file_row_number") != names.end()) {
+		if (StringUtil::CIFind(names, "file_row_number") != DConstants::INVALID_INDEX) {
 			throw BinderException(
-			    "Using file_row_number option on file with column named file_row_number is not supported");
+				"Using file_row_number option on file with column named file_row_number is not supported");
 		}
 
 		bind_data.file_row_number_idx = names.size();
