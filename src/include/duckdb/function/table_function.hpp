@@ -277,7 +277,7 @@ public:
 	table_function_get_bind_info_t get_bind_info;
 	//! (Optional) pushes down type information to scanner, returns true if pushdown was successful
 	table_function_type_pushdown_t type_pushdown;
-	//! (Optional) allows re-using existing table functions with a custom MultiFileReader implementation
+	//! (Optional) allows injecting a custom MultiFileReader implementation
 	table_function_get_multi_file_reader_t get_multi_file_reader;
 
 	table_function_serialize_t serialize;

@@ -340,8 +340,6 @@ public:
 		                                                                 {"type", LogicalType::VARCHAR},
 		                                                                 {"default_value", LogicalType::VARCHAR}}}));
 		table_function.named_parameters["encryption_config"] = LogicalTypeId::ANY;
-		MultiFileReader mfr;
-		mfr.AddParameters(table_function);
 		table_function.get_batch_index = ParquetScanGetBatchIndex;
 		table_function.serialize = ParquetScanSerialize;
 		table_function.deserialize = ParquetScanDeserialize;
@@ -350,6 +348,9 @@ public:
 		table_function.filter_pushdown = true;
 		table_function.filter_prune = true;
 		table_function.pushdown_complex_filter = ParquetComplexFilterPushdown;
+
+		MultiFileReader::AddParameters(table_function);
+
 		return MultiFileReader::CreateFunctionSet(table_function);
 	}
 

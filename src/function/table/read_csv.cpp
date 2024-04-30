@@ -89,8 +89,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	}
 	if (options.auto_detect && !options.file_options.union_by_name) {
 		options.file_path = multi_file_list->GetFirstFile();
-		result->buffer_manager =
-		    make_shared_ptr<CSVBufferManager>(context, options, multi_file_list->GetFirstFile(), 0);
+		result->buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, options.file_path, 0);
 		CSVSniffer sniffer(options, result->buffer_manager, CSVStateMachineCache::Get(context),
 		                   {&return_types, &names});
 		auto sniffer_result = sniffer.SniffCSV();
@@ -284,8 +283,7 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 	table_function.named_parameters["column_names"] = LogicalType::LIST(LogicalType::VARCHAR);
 	table_function.named_parameters["parallel"] = LogicalType::BOOLEAN;
 
-	auto multi_file_reader = MultiFileReader::CreateDefault();
-	multi_file_reader->AddParameters(table_function);
+	MultiFileReader::AddParameters(table_function);
 }
 
 double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p,

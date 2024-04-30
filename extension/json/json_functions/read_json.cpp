@@ -380,7 +380,7 @@ TableFunctionSet CreateJSONFunctionInfo(string name, shared_ptr<JSONScanInfo> in
 	table_function.named_parameters["maximum_depth"] = LogicalType::BIGINT;
 	table_function.named_parameters["field_appearance_threshold"] = LogicalType::DOUBLE;
 	table_function.named_parameters["convert_strings_to_integers"] = LogicalType::BOOLEAN;
-	return MultiFileReader().CreateFunctionSet(table_function);
+	return MultiFileReader::CreateFunctionSet(table_function);
 }
 
 TableFunctionSet JSONFunctions::GetReadJSONFunction() {

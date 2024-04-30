@@ -234,7 +234,7 @@ struct MultiFileReader {
 	static unique_ptr<MultiFileReader> CreateDefault(const string &function_name = "");
 
 	//! Add the parameters for multi-file readers (e.g. union_by_name, filename) to a table function
-	DUCKDB_API virtual void AddParameters(TableFunction &table_function);
+	DUCKDB_API static void AddParameters(TableFunction &table_function);
 
 	//! Parse a Value containing 1 or more paths into a vector of paths. Note: no expansion is performed here
 	DUCKDB_API virtual vector<string> ParsePaths(const Value &input);
@@ -322,7 +322,6 @@ struct MultiFileReader {
 		if (options.file_options.union_by_name) {
 			return BindUnionReader<READER_CLASS>(context, return_types, names, files, result, options);
 		} else {
-			// Default behaviour: get the 1st file and use its schema for scanning all files
 			shared_ptr<READER_CLASS> reader;
 			reader = make_shared_ptr<READER_CLASS>(context, files.GetFirstFile(), options);
 			return_types = reader->return_types;
@@ -348,14 +347,10 @@ struct MultiFileReader {
 	}
 
 	template <class BIND_DATA>
-	static void PruneReaders(BIND_DATA &data, MultiFileList &files) {
+	static void PruneReaders(BIND_DATA &data, MultiFileList &file_list) {
 		unordered_set<string> file_set;
 
-		for (idx_t i = 0;; i++) {
-			const auto &file = files.GetFile(i);
-			if (file.empty()) {
-				break;
-			}
+		for (const auto& file: file_list.Files()) {
 			file_set.insert(file);
 		}
 
