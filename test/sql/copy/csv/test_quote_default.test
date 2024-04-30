@@ -6,3 +6,8 @@ query III
 select quote,escape,delimiter from sniff_csv('data/csv/test_default_option.csv')
 ----
 "	"	,
+
+query III
+select quote,escape,delimiter from sniff_csv('data/csv/test_default_option_2.csv')
+----
+"	"	|
