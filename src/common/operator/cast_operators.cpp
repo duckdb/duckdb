@@ -2065,22 +2065,22 @@ bool TryCastToDecimalCommaSeparated::Operation(string_t input, hugeint_t &result
 
 template <>
 string_t StringCastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale, Vector &result) {
-	return DecimalToString::Format<int16_t, uint16_t>(input, width, scale, result);
+	return DecimalToString::Format<int16_t>(input, width, scale, result);
 }
 
 template <>
 string_t StringCastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale, Vector &result) {
-	return DecimalToString::Format<int32_t, uint32_t>(input, width, scale, result);
+	return DecimalToString::Format<int32_t>(input, width, scale, result);
 }
 
 template <>
 string_t StringCastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale, Vector &result) {
-	return DecimalToString::Format<int64_t, uint64_t>(input, width, scale, result);
+	return DecimalToString::Format<int64_t>(input, width, scale, result);
 }
 
 template <>
 string_t StringCastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale, Vector &result) {
-	return HugeintToStringCast::FormatDecimal(input, width, scale, result);
+	return DecimalToString::Format<hugeint_t>(input, width, scale, result);
 }
 
 //===--------------------------------------------------------------------===//

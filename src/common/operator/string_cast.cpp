@@ -56,6 +56,10 @@ template <>
 duckdb::string_t StringCast::Operation(uint64_t input, Vector &vector) {
 	return NumericHelper::FormatSigned<uint64_t>(input, vector);
 }
+template <>
+duckdb::string_t StringCast::Operation(hugeint_t input, Vector &vector) {
+	return NumericHelper::FormatSigned<hugeint_t>(input, vector);
+}
 
 template <>
 string_t StringCast::Operation(float input, Vector &vector) {
@@ -74,11 +78,6 @@ string_t StringCast::Operation(interval_t input, Vector &vector) {
 	char buffer[70];
 	idx_t length = IntervalToStringCast::Format(input, buffer);
 	return StringVector::AddString(vector, buffer, length);
-}
-
-template <>
-duckdb::string_t StringCast::Operation(hugeint_t input, Vector &vector) {
-	return HugeintToStringCast::FormatSigned(input, vector);
 }
 
 template <>
