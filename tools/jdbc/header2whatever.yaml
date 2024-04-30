@@ -1,8 +1,0 @@
-- headers:
-    - "../../build/debug/tools/jdbc/CMakeFiles/duckdb_jdbc.dir/native_headers/org_duckdb_DuckDBNative.h"
-  hooks: generator.py
-  templates:
-    - src: "src/jni/functions.hpp.template"
-      dst: "functions.hpp"
-    - src: "src/jni/functions.cpp.template"
-      dst: "functions.cpp"

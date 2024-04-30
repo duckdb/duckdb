@@ -91,22 +91,8 @@ void PlanEnumerator::GenerateCrossProducts() {
 	// query_graph = query_graph_manager.GetQueryGraph();
 }
 
-unique_ptr<JoinNode> PlanEnumerator::CreateJoinNodeFromDPJoinNode(DPJoinNode dp_node) {
-	if (dp_node.is_leaf) {
-		auto res = make_uniq<JoinNode>(dp_node.set);
-		res->cardinality = dp_node.cardinality;
-		return res;
-	} else {
-		auto left_dp_join_node = plans.find(dp_node.left_set);
-		auto right_dp_join_node = plans.find(dp_node.right_set);
-		D_ASSERT(left_dp_join_node->second);
-		D_ASSERT(right_dp_join_node->second);
-		auto left = CreateJoinNodeFromDPJoinNode(*left_dp_join_node->second);
-		auto right = CreateJoinNodeFromDPJoinNode(*right_dp_join_node->second);
-		auto res = make_uniq<JoinNode>(dp_node.set, dp_node.info, std::move(left), std::move(right), dp_node.cost);
-		res->cardinality = dp_node.cardinality;
-		return res;
-	}
+const reference_map_t<JoinRelationSet, unique_ptr<DPJoinNode>> &PlanEnumerator::GetPlans() const {
+	return plans;
 }
 
 //! Create a new JoinTree node by joining together two previous JoinTree nodes
@@ -130,8 +116,8 @@ unique_ptr<DPJoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
 	return result;
 }
 
-unique_ptr<JoinNode> PlanEnumerator::EmitPair(JoinRelationSet &left, JoinRelationSet &right,
-                                              const vector<reference<NeighborInfo>> &info) {
+DPJoinNode &PlanEnumerator::EmitPair(JoinRelationSet &left, JoinRelationSet &right,
+                                     const vector<reference<NeighborInfo>> &info) {
 	// get the left and right join plans
 	auto left_plan = plans.find(left);
 	auto right_plan = plans.find(right);
@@ -151,10 +137,10 @@ unique_ptr<JoinNode> PlanEnumerator::EmitPair(JoinRelationSet &left, JoinRelatio
 	if (entry == plans.end() || new_cost < old_cost) {
 		// the new plan costs less than the old plan. Update our DP table.
 		plans[new_set] = std::move(new_plan);
-		return CreateJoinNodeFromDPJoinNode(*plans[new_set]);
+		return *plans[new_set];
 	}
 	// Create join node from the plan currently in the DP table.
-	return CreateJoinNodeFromDPJoinNode(*entry->second);
+	return *entry->second;
 }
 
 bool PlanEnumerator::TryEmitPair(JoinRelationSet &left, JoinRelationSet &right,
@@ -342,8 +328,10 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 		// now in every step of the algorithm, we greedily pick the join between the to-be-joined relations that has the
 		// smallest cost. This is O(r^2) per step, and every step will reduce the total amount of relations to-be-joined
 		// by 1, so the total cost is O(r^3) in the amount of relations
+		// long is needed to prevent clang-tidy complaints. (idx_t) cannot be added to an iterator position because it
+		// is unsigned.
 		idx_t best_left = 0, best_right = 0;
-		unique_ptr<JoinNode> best_connection;
+		optional_ptr<DPJoinNode> best_connection;
 		for (idx_t i = 0; i < join_relations.size(); i++) {
 			auto left = join_relations[i];
 			for (idx_t j = i + 1; j < join_relations.size(); j++) {
@@ -359,9 +347,9 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 					// error if future plans rely on the old node that was just replaced.
 					// if node in FullPath, then updateDP tree.
 
-					if (!best_connection || node->cost < best_connection->cost) {
+					if (!best_connection || node.cost < best_connection->cost) {
 						// best pair found so far
-						best_connection = std::move(node);
+						best_connection = &EmitPair(left, right, connection);
 						best_left = i;
 						best_right = j;
 					}
@@ -371,15 +359,15 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 		if (!best_connection) {
 			// could not find a connection, but we were not done with finding a completed plan
 			// we have to add a cross product; we add it between the two smallest relations
-			unique_ptr<JoinNode> smallest_plans[2];
-			idx_t smallest_index[2];
+			optional_ptr<DPJoinNode> smallest_plans[2];
+			size_t smallest_index[2];
 			D_ASSERT(join_relations.size() >= 2);
 
 			// first just add the first two join relations. It doesn't matter the cost as the JOO
 			// will swap them on estimated cardinality anyway.
 			for (idx_t i = 0; i < 2; i++) {
-				auto current_plan = CreateJoinNodeFromDPJoinNode(*plans[join_relations[i]]);
-				smallest_plans[i] = std::move(current_plan);
+				optional_ptr<DPJoinNode> current_plan = plans[join_relations[i]];
+				smallest_plans[i] = current_plan;
 				smallest_index[i] = i;
 			}
 
@@ -387,11 +375,11 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 			// add them if they have lower estimated cardinality.
 			for (idx_t i = 2; i < join_relations.size(); i++) {
 				// get the plan for this relation
-				auto current_plan = CreateJoinNodeFromDPJoinNode(*plans[join_relations[i]]);
+				optional_ptr<DPJoinNode> current_plan = plans[join_relations[i]];
 				// check if the cardinality is smaller than the smallest two found so far
 				for (idx_t j = 0; j < 2; j++) {
 					if (!smallest_plans[j] || smallest_plans[j]->cost > current_plan->cost) {
-						smallest_plans[j] = std::move(current_plan);
+						smallest_plans[j] = current_plan;
 						smallest_index[j] = i;
 						break;
 					}
@@ -410,7 +398,7 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 			auto connections = query_graph.GetConnections(left, right);
 			D_ASSERT(!connections.empty());
 
-			best_connection = EmitPair(left, right, connections);
+			best_connection = &EmitPair(left, right, connections);
 			best_left = smallest_index[0];
 			best_right = smallest_index[1];
 
@@ -424,10 +412,12 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 
 		// important to erase the biggest element first
 		// if we erase the smallest element first the index of the biggest element changes
+		auto &new_set = query_graph_manager.set_manager.Union(join_relations.at(best_left).get(),
+		                                                      join_relations.at(best_right).get());
 		D_ASSERT(best_right > best_left);
-		join_relations.erase_at(best_right);
-		join_relations.erase_at(best_left);
-		join_relations.push_back(best_connection->set);
+		join_relations.erase(join_relations.begin() + (int64_t)best_right);
+		join_relations.erase(join_relations.begin() + (int64_t)best_left);
+		join_relations.push_back(new_set);
 	}
 }
 
@@ -457,7 +447,7 @@ void PlanEnumerator::InitLeafPlans() {
 // the plan enumeration is a straight implementation of the paper "Dynamic Programming Strikes Back" by Guido
 // Moerkotte and Thomas Neumannn, see that paper for additional info/documentation bonus slides:
 // https://db.in.tum.de/teaching/ws1415/queryopt/chapter3.pdf?lang=de
-unique_ptr<JoinNode> PlanEnumerator::SolveJoinOrder() {
+void PlanEnumerator::SolveJoinOrder() {
 	bool force_no_cross_product = query_graph_manager.context.config.force_no_cross_product;
 	// first try to solve the join order exactly
 	if (!SolveJoinOrderExactly()) {
@@ -485,7 +475,6 @@ unique_ptr<JoinNode> PlanEnumerator::SolveJoinOrder() {
 		//! solve the join order again, returning the final plan
 		return SolveJoinOrder();
 	}
-	return CreateJoinNodeFromDPJoinNode(*final_plan->second);
 }
 
 } // namespace duckdb
