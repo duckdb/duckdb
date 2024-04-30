@@ -49,7 +49,7 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 
 * To build the project, run `make`.
 * To build the project for debugging, run `make debug`.
-* To build optional components, use the flags defined in the Makefile, e.g. to build the JDBC driver, run `BUILD_JDBC=1 make`.
+* To build optional components, use the flags defined in the Makefile, e.g. to build the ODBC driver, run `BUILD_ODBC=1 make`.
 * For parallel builds, you can use the [Ninja](https://ninja-build.org/) build system: `GEN=ninja make`.
   * The default number of parallel processes can lock up the system depending on the CPU-to-memory ratio. If this happens, restrict the maximum number of build processes: `CMAKE_BUILD_PARALLEL_LEVEL=4 GEN=ninja make`.
   * Without using Ninja, build times can still be reduced by setting `CMAKE_BUILD_PARALLEL_LEVEL=$(nproc)`.
