@@ -253,8 +253,6 @@ private:
 	shared_ptr<DataTableInfo> info;
 	//! The set of physical columns stored by this DataTable
 	vector<ColumnDefinition> column_definitions;
-	//! Lock held while checkpointing
-	StorageLock checkpoint_lock;
 	//! Lock for appending entries to the table
 	mutex append_lock;
 	//! The row groups of the table

@@ -35,6 +35,8 @@ struct DataTableInfo {
 	TableIndexList indexes;
 	//! Index storage information of the indexes created by this table
 	vector<IndexStorageInfo> index_storage_infos;
+	//! Lock held while checkpointing
+	StorageLock checkpoint_lock;
 
 	bool IsTemporary() const;
 };

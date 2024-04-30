@@ -119,8 +119,8 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 					                        result_offset + i);
 				}
 			} else {
-				state.current->Scan(state, scan_count, result, result_offset,
-				                    !has_updates && scan_count == initial_remaining);
+				bool entire_vector = !has_updates && scan_count == initial_remaining;
+				state.current->Scan(state, scan_count, result, result_offset, entire_vector);
 			}
 
 			state.row_index += scan_count;
