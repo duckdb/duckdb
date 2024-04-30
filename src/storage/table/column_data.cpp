@@ -460,8 +460,7 @@ void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, 
 	}
 }
 
-unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group,
-														 ColumnCheckpointInfo &checkpoint_info) {
+unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &checkpoint_info) {
 	// scan the segments of the column data
 	// set up the checkpoint state
 	auto checkpoint_state = CreateCheckpointState(row_group, checkpoint_info.info.manager);
@@ -479,7 +478,10 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group,
 
 	// replace the old tree with the new one
 	data.Replace(l, checkpoint_state->new_tree);
-	ClearUpdates();
+	if (checkpoint_info.info.checkpoint_type != CheckpointType::CONCURRENT_CHECKPOINT) {
+		// we cannot clear updates when doing a concurrent checkpoint
+		ClearUpdates();
+	}
 
 	return checkpoint_state;
 }

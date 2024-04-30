@@ -10,8 +10,8 @@ CompressionType RowGroupWriter::GetColumnCompressionType(idx_t i) {
 }
 
 SingleFileRowGroupWriter::SingleFileRowGroupWriter(TableCatalogEntry &table, PartialBlockManager &partial_block_manager,
-		TableDataWriter &writer, MetadataWriter &table_data_writer)
-: RowGroupWriter(table, partial_block_manager), writer(writer), table_data_writer(table_data_writer) {
+                                                   TableDataWriter &writer, MetadataWriter &table_data_writer)
+    : RowGroupWriter(table, partial_block_manager), writer(writer), table_data_writer(table_data_writer) {
 }
 
 void SingleFileRowGroupWriter::WriteColumnDataPointers(ColumnCheckpointState &column_checkpoint_state,

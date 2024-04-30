@@ -17,6 +17,7 @@
 #include "duckdb/parser/column_list.hpp"
 #include "duckdb/storage/table/segment_base.hpp"
 #include "duckdb/storage/block.hpp"
+#include "duckdb/common/enums/checkpoint_type.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
@@ -44,11 +45,14 @@ class MetadataManager;
 class RowVersionManager;
 
 struct RowGroupWriteInfo {
-	RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types) :
-		manager(manager), compression_types(compression_types) {}
+	RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types,
+	                  CheckpointType checkpoint_type = CheckpointType::FULL_CHECKPOINT)
+	    : manager(manager), compression_types(compression_types), checkpoint_type(checkpoint_type) {
+	}
 
 	PartialBlockManager &manager;
 	const vector<CompressionType> &compression_types;
+	CheckpointType checkpoint_type;
 };
 
 struct RowGroupWriteData {

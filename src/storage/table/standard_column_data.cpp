@@ -192,7 +192,7 @@ StandardColumnData::CreateCheckpointState(RowGroup &row_group, PartialBlockManag
 }
 
 unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_group,
-																 ColumnCheckpointInfo &checkpoint_info) {
+                                                                 ColumnCheckpointInfo &checkpoint_info) {
 	// we need to checkpoint the main column data first
 	// that is because the checkpointing of the main column data ALSO scans the validity data
 	// to prevent reading the validity data immediately after it is checkpointed we first checkpoint the main column

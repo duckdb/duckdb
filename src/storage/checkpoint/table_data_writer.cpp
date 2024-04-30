@@ -39,7 +39,8 @@ SingleFileTableDataWriter::SingleFileTableDataWriter(SingleFileCheckpointWriter 
 }
 
 unique_ptr<RowGroupWriter> SingleFileTableDataWriter::GetRowGroupWriter(RowGroup &row_group) {
-	return make_uniq<SingleFileRowGroupWriter>(table, checkpoint_manager.partial_block_manager, *this, table_data_writer);
+	return make_uniq<SingleFileRowGroupWriter>(table, checkpoint_manager.partial_block_manager, *this,
+	                                           table_data_writer);
 }
 
 CheckpointType SingleFileTableDataWriter::GetCheckpointType() const {

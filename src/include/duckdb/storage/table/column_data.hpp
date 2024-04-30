@@ -32,7 +32,8 @@ struct DataTableInfo;
 struct RowGroupWriteInfo;
 
 struct ColumnCheckpointInfo {
-	ColumnCheckpointInfo(RowGroupWriteInfo &info, idx_t column_idx) : info(info), column_idx(column_idx) {}
+	ColumnCheckpointInfo(RowGroupWriteInfo &info, idx_t column_idx) : info(info), column_idx(column_idx) {
+	}
 
 	RowGroupWriteInfo &info;
 	idx_t column_idx;

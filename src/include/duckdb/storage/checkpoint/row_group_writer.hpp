@@ -32,6 +32,7 @@ public:
 
 	virtual void WriteColumnDataPointers(ColumnCheckpointState &column_checkpoint_state, Serializer &serializer) = 0;
 
+	virtual CheckpointType GetCheckpointType() const = 0;
 	virtual MetadataWriter &GetPayloadWriter() = 0;
 
 	PartialBlockManager &GetPartialBlockManager() {
@@ -52,7 +53,7 @@ public:
 public:
 	void WriteColumnDataPointers(ColumnCheckpointState &column_checkpoint_state, Serializer &serializer) override;
 
-	CheckpointType GetCheckpointType() const;
+	CheckpointType GetCheckpointType() const override;
 	MetadataWriter &GetPayloadWriter() override;
 
 private:

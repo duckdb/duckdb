@@ -203,7 +203,7 @@ unique_ptr<ColumnCheckpointState> ArrayColumnData::CreateCheckpointState(RowGrou
 }
 
 unique_ptr<ColumnCheckpointState> ArrayColumnData::Checkpoint(RowGroup &row_group,
-															  ColumnCheckpointInfo &checkpoint_info) {
+                                                              ColumnCheckpointInfo &checkpoint_info) {
 
 	auto checkpoint_state = make_uniq<ArrayColumnCheckpointState>(row_group, *this, checkpoint_info.info.manager);
 	checkpoint_state->validity_state = validity.Checkpoint(row_group, checkpoint_info);

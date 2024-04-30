@@ -863,7 +863,7 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 		compression_types.push_back(writer.GetColumnCompressionType(column_idx));
 	}
 
-	RowGroupWriteInfo info(writer.GetPartialBlockManager(), compression_types);
+	RowGroupWriteInfo info(writer.GetPartialBlockManager(), compression_types, writer.GetCheckpointType());
 	return WriteToDisk(info);
 }
 
