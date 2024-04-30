@@ -280,6 +280,8 @@ public:
 	table_function_type_pushdown_t type_pushdown;
 	//! (Optional) allows injecting a custom MultiFileReader implementation
 	table_function_get_multi_file_reader_t get_multi_file_reader;
+	//! Boolean used to determine if WITH ORDINALITY clause has been invoked
+	bool with_ordinality = false;
 
 	table_function_serialize_t serialize;
 	table_function_deserialize_t deserialize;

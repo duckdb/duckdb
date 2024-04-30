@@ -20,6 +20,9 @@
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/function/table/read_csv.hpp"
+#include "duckdb/planner/expression/list.hpp"
+#include "duckdb/planner/operator/list.hpp"
+
 
 namespace duckdb {
 
@@ -200,6 +203,20 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 	// now add the table function to the bind context so its columns can be bound
 	bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->column_ids,
 	                              get->GetTable().get());
+
+	if (table_function.with_ordinality) {
+		auto window_index = GenerateTableIndex();
+		auto window = make_uniq<duckdb::LogicalWindow>(window_index);
+		auto row_number =
+				make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT, nullptr, nullptr);
+		auto partition_count = 1;
+		row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
+		row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
+		window->expressions.push_back(std::move(row_number));
+		window->children.push_back(std::move(get));
+		return std::move(window);
+	}
+
 	return std::move(get);
 }
 
@@ -269,6 +286,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		error.Throw();
 	}
 	auto table_function = function.functions.GetFunctionByOffset(best_function_idx.GetIndex());
+	table_function.with_ordinality = ref.with_ordinality;
 
 	// now check the named parameters
 	BindNamedParameters(table_function.named_parameters, named_parameters, error_context, table_function.name);
