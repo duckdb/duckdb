@@ -56,6 +56,7 @@ struct PivotColumnEntry;
 struct UnpivotEntry;
 
 enum class BindingMode : uint8_t { STANDARD_BINDING, EXTRACT_NAMES };
+enum class BinderType : uint8_t { REGULAR_BINDER, VIEW_BINDER };
 
 struct CorrelatedColumnInfo {
 	ColumnBinding binding;
@@ -88,7 +89,7 @@ class Binder : public enable_shared_from_this<Binder> {
 
 public:
 	DUCKDB_API static shared_ptr<Binder> CreateBinder(ClientContext &context, optional_ptr<Binder> parent = nullptr,
-	                                                  bool inherit_ctes = true);
+	                                                  BinderType binder_type = BinderType::REGULAR_BINDER);
 
 	//! The client context
 	ClientContext &context;
@@ -209,8 +210,8 @@ private:
 	bool has_unplanned_dependent_joins = false;
 	//! Whether or not outside dependent joins have been planned and flattened
 	bool is_outside_flattened = true;
-	//! Whether CTEs should reference the parent binder (if it exists)
-	bool inherit_ctes = true;
+	//! What kind of node we are binding using this binder
+	BinderType binder_type = BinderType::REGULAR_BINDER;
 	//! Whether or not the binder can contain NULLs as the root of expressions
 	bool can_contain_nulls = false;
 	//! The root statement of the query that is currently being parsed
@@ -392,7 +393,7 @@ private:
 public:
 	// This should really be a private constructor, but make_shared_ptr does not allow it...
 	// If you are thinking about calling this, you should probably call Binder::CreateBinder
-	Binder(bool i_know_what_i_am_doing, ClientContext &context, shared_ptr<Binder> parent, bool inherit_ctes);
+	Binder(bool i_know_what_i_am_doing, ClientContext &context, shared_ptr<Binder> parent, BinderType binder_type);
 };
 
 } // namespace duckdb

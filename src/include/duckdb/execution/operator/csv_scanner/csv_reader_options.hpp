@@ -146,6 +146,9 @@ struct CSVReaderOptions {
 	void SetDelimiter(const string &delimiter);
 	string GetDelimiter() const;
 
+	//! If we can safely ignore errors (i.e., they are being ignored and not being stored in a rejects table)
+	bool IgnoreErrors() const;
+
 	NewLineIdentifier GetNewline() const;
 	void SetNewline(const string &input);
 	//! Set an option that is supported by both reading and writing functions, called by

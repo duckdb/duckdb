@@ -147,6 +147,8 @@ struct ArrowVarcharToStringViewData {
 				idx_t current_byte;
 				GetBitPosition(result_idx, current_byte, current_bit);
 				SetNull(append_data, validity_data, current_byte, current_bit);
+				// We have to set these bytes to 0, for some reason
+				arrow_data[result_idx] = arrow_string_view_t(0, "");
 				continue;
 			}
 			// These two are now the same buffer
