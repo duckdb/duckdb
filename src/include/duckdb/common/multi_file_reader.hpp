@@ -82,11 +82,7 @@ struct MultiFileReaderData {
 	unordered_map<column_t, LogicalType> cast_map;
 };
 
-enum class FileExpandResult : uint8_t {
-	NO_FILES,
-	SINGLE_FILE,
-	MULTIPLE_FILES
-};
+enum class FileExpandResult : uint8_t { NO_FILES, SINGLE_FILE, MULTIPLE_FILES };
 
 struct MultiFileListScanData {
 	idx_t current_file_idx = DConstants::INVALID_INDEX;
@@ -242,10 +238,14 @@ struct MultiFileReader {
 
 	//! Parse a Value containing 1 or more paths into a vector of paths. Note: no expansion is performed here
 	DUCKDB_API virtual vector<string> ParsePaths(const Value &input);
-	//! Create a MultiFileList from a vector of paths. Any paths that are globs will be expanded using the default filesystem
-	DUCKDB_API virtual unique_ptr<MultiFileList> CreateFileList(ClientContext &context, const vector<string> &paths, FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY);
+	//! Create a MultiFileList from a vector of paths. Any paths that are globs will be expanded using the default
+	//! filesystem
+	DUCKDB_API virtual unique_ptr<MultiFileList>
+	CreateFileList(ClientContext &context, const vector<string> &paths,
+	               FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY);
 	//! Syntactic sugar for ParsePaths + CreateFileList
-	DUCKDB_API unique_ptr<MultiFileList> CreateFileList(ClientContext &context, const Value &input, FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY);
+	DUCKDB_API unique_ptr<MultiFileList> CreateFileList(ClientContext &context, const Value &input,
+	                                                    FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY);
 
 	//! Parse the named parameters of a multi-file reader
 	DUCKDB_API virtual bool ParseOption(const string &key, const Value &val, MultiFileReaderOptions &options,
@@ -387,7 +387,6 @@ protected:
 	                               const vector<string> &local_names, const vector<LogicalType> &global_types,
 	                               const vector<string> &global_names, const vector<column_t> &global_column_ids,
 	                               MultiFileReaderData &reader_data, const string &initial_file);
-
 
 	//! Used in errors to report which function is using this MultiFileReader
 	string function_name;

@@ -84,8 +84,8 @@ struct ParquetReadLocalState : public LocalTableFunctionState {
 enum class ParquetFileState : uint8_t { UNOPENED, OPENING, OPEN, CLOSED };
 
 struct ParquetFileReaderData {
-	ParquetFileReaderData(shared_ptr<ParquetReader> reader_p, ParquetFileState state = ParquetFileState::OPEN) :
-	      reader(std::move(reader_p)), file_state(state), file_mutex(make_uniq<mutex>())  {
+	ParquetFileReaderData(shared_ptr<ParquetReader> reader_p, ParquetFileState state = ParquetFileState::OPEN)
+	    : reader(std::move(reader_p)), file_state(state), file_mutex(make_uniq<mutex>()) {
 	}
 
 	//! Currently opened reader for the file
@@ -417,7 +417,7 @@ public:
 			// enabled at all)
 			FileSystem &fs = FileSystem::GetFileSystem(context);
 
-		    for (const auto& file_name : bind_data.file_list->Files()){
+			for (const auto &file_name : bind_data.file_list->Files()) {
 				auto metadata = cache.Get<ParquetFileMetadataCache>(file_name);
 				if (!metadata) {
 					// missing metadata entry in cache, no usable stats
@@ -465,8 +465,8 @@ public:
 		bool bound_on_first_file = true;
 
 		// Firstly, we try to use the multifilereader to bind
-		if (result->multi_file_reader->Bind(parquet_options.file_options, *result->file_list, result->types, result->names,
-		                                    result->reader_bind)) {
+		if (result->multi_file_reader->Bind(parquet_options.file_options, *result->file_list, result->types,
+		                                    result->names, result->reader_bind)) {
 			ParseFileRowNumberOption(result->reader_bind, parquet_options, result->types, result->names);
 			// The MultiFileReader has provided a bind; we only need to bind any multifilereader options present, and
 			// then we are done.
@@ -489,7 +489,8 @@ public:
 			names = result->names;
 		} else {
 			if (return_types.size() != result->types.size()) {
-				auto file_string = bound_on_first_file ? result->file_list->GetFirstFile() : StringUtil::Join(result->file_list->GetPaths(), ",");
+				auto file_string = bound_on_first_file ? result->file_list->GetFirstFile()
+				                                       : StringUtil::Join(result->file_list->GetPaths(), ",");
 				throw std::runtime_error(StringUtil::Format(
 				    "Failed to read file(s) \"%s\" - column count mismatch: expected %d columns but found %d",
 				    file_string, return_types.size(), result->types.size()));
@@ -589,7 +590,7 @@ public:
 			result->readers = {};
 		} else if (!bind_data.union_readers.empty()) {
 			// TODO: confirm we are not changing behaviour by modifying the order here?
-			for (auto& reader: bind_data.union_readers) {
+			for (auto &reader : bind_data.union_readers) {
 				if (!reader) {
 					break;
 				}
@@ -604,7 +605,8 @@ public:
 		} else if (bind_data.initial_reader) {
 			// Ensure the initial reader was actually constructed from the first file
 			if (bind_data.initial_reader->file_name == bind_data.file_list->GetFirstFile()) {
-				result->readers.push_back(ParquetFileReaderData(std::move(bind_data.initial_reader), ParquetFileState::OPEN));
+				result->readers.push_back(
+				    ParquetFileReaderData(std::move(bind_data.initial_reader), ParquetFileState::OPEN));
 			} else {
 				// FIXME This should not happen: didn't want to break things but this should probably be an
 				// InternalException
@@ -666,8 +668,10 @@ public:
 		}
 
 		auto multi_file_reader = MultiFileReader::Create(function);
-		auto file_list = multi_file_reader->CreateFileList(context, Value::LIST(LogicalType::VARCHAR, file_path), FileGlobOptions::DISALLOW_EMPTY);
-		return ParquetScanBindInternal(context, std::move(multi_file_reader), std::move(file_list), types, names, parquet_options);
+		auto file_list = multi_file_reader->CreateFileList(context, Value::LIST(LogicalType::VARCHAR, file_path),
+		                                                   FileGlobOptions::DISALLOW_EMPTY);
+		return ParquetScanBindInternal(context, std::move(multi_file_reader), std::move(file_list), types, names,
+		                               parquet_options);
 	}
 
 	static void ParquetScanImplementation(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -749,8 +753,7 @@ public:
 
 			auto &current_reader_data = parallel_state.readers[parallel_state.file_index];
 			if (current_reader_data.file_state == ParquetFileState::OPEN) {
-				if (parallel_state.row_group_index <
-				    current_reader_data.reader->NumRowGroups()) {
+				if (parallel_state.row_group_index < current_reader_data.reader->NumRowGroups()) {
 					// The current reader has rowgroups left to be scanned
 					scan_data.reader = current_reader_data.reader;
 					vector<idx_t> group_indexes {parallel_state.row_group_index};
@@ -847,7 +850,8 @@ public:
 				shared_ptr<ParquetReader> reader;
 				try {
 					reader = make_shared_ptr<ParquetReader>(context, file, pq_options);
-					InitializeParquetReader(*reader, bind_data, parallel_state.column_ids, parallel_state.filters, context);
+					InitializeParquetReader(*reader, bind_data, parallel_state.column_ids, parallel_state.filters,
+					                        context);
 				} catch (...) {
 					parallel_lock.lock();
 					parallel_state.error_opening_file = true;

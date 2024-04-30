@@ -21,8 +21,7 @@ MultiFileListIterationHelper MultiFileList::Files() {
 	return MultiFileListIterationHelper(*this);
 }
 
-MultiFileListIterationHelper::MultiFileListIterationHelper(MultiFileList &file_list_p)
-    : file_list(file_list_p) {
+MultiFileListIterationHelper::MultiFileListIterationHelper(MultiFileList &file_list_p) : file_list(file_list_p) {
 }
 
 MultiFileListIterationHelper::MultiFileListIterator::MultiFileListIterator(MultiFileList *file_list_p)
@@ -52,7 +51,8 @@ void MultiFileListIterationHelper::MultiFileListIterator::Next() {
 }
 
 MultiFileListIterationHelper::MultiFileListIterator MultiFileListIterationHelper::begin() { // NOLINT
-	return MultiFileListIterationHelper::MultiFileListIterator(file_list.GetExpandResult() == FileExpandResult::NO_FILES ? nullptr : &file_list);
+	return MultiFileListIterationHelper::MultiFileListIterator(
+	    file_list.GetExpandResult() == FileExpandResult::NO_FILES ? nullptr : &file_list);
 }
 MultiFileListIterationHelper::MultiFileListIterator MultiFileListIterationHelper::end() { // NOLINT
 	return MultiFileListIterationHelper::MultiFileListIterator(nullptr);
@@ -82,7 +82,6 @@ bool MultiFileList::ComplexFilterPushdown(ClientContext &context, const MultiFil
 	// By default the filter pushdown into a multifilelist does nothing
 	return false;
 }
-
 
 void MultiFileList::InitializeScan(MultiFileListScanData &iterator) {
 	iterator.current_file_idx = 0;
@@ -226,8 +225,8 @@ void SimpleMultiFileList::ExpandAll() {
 	// Is a NOP: a SimpleMultiFileList is fully expanded on creation
 }
 
-GlobMultiFileList::GlobMultiFileList(ClientContext &context_p, vector<string> paths_p) : MultiFileList(),
-      context(context_p), paths(std::move(paths_p)), current_path(0){
+GlobMultiFileList::GlobMultiFileList(ClientContext &context_p, vector<string> paths_p)
+    : MultiFileList(), context(context_p), paths(std::move(paths_p)), current_path(0) {
 }
 
 vector<string> GlobMultiFileList::GetPaths() {
@@ -235,7 +234,7 @@ vector<string> GlobMultiFileList::GetPaths() {
 }
 
 bool GlobMultiFileList::ComplexFilterPushdown(ClientContext &context_p, const MultiFileReaderOptions &options,
-                                                LogicalGet &get, vector<unique_ptr<Expression>> &filters) {
+                                              LogicalGet &get, vector<unique_ptr<Expression>> &filters) {
 	// TODO: implement special glob that makes use of hive partition filters to do more efficient globbing
 	ExpandAll();
 
@@ -262,7 +261,7 @@ bool GlobMultiFileList::ComplexFilterPushdown(ClientContext &context_p, const Mu
 }
 
 string GlobMultiFileList::GetFile(idx_t i) {
-	while(GetCurrentSize() <= i) {
+	while (GetCurrentSize() <= i) {
 		if (!ExpandPathInternal()) {
 			return "";
 		}
@@ -273,7 +272,7 @@ string GlobMultiFileList::GetFile(idx_t i) {
 }
 
 void GlobMultiFileList::ExpandAll() {
-	while(ExpandPathInternal()) {
+	while (ExpandPathInternal()) {
 	}
 }
 
@@ -362,7 +361,8 @@ vector<string> MultiFileReader::ParsePaths(const Value &input) {
 	}
 }
 
-unique_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const vector<string> &paths, FileGlobOptions options) {
+unique_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const vector<string> &paths,
+                                                          FileGlobOptions options) {
 	auto &config = DBConfig::GetConfig(context);
 	if (!config.options.enable_external_access) {
 		throw PermissionException("Scanning %s files is disabled through configuration", function_name);
@@ -376,7 +376,8 @@ unique_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context
 	return res;
 }
 
-unique_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const Value &input, FileGlobOptions options) {
+unique_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const Value &input,
+                                                          FileGlobOptions options) {
 	auto paths = ParsePaths(input);
 	return CreateFileList(context, paths, options);
 }
@@ -449,14 +450,14 @@ void MultiFileReader::BindOptions(MultiFileReaderOptions &options, MultiFileList
 		D_ASSERT(files.GetExpandResult() != FileExpandResult::NO_FILES);
 		auto partitions = HivePartitioning::Parse(files.GetFirstFile());
 		// verify that all files have the same hive partitioning scheme
-		for (const auto& file : files.Files()) {
+		for (const auto &file : files.Files()) {
 			auto file_partitions = HivePartitioning::Parse(file);
 			for (auto &part_info : partitions) {
 				if (file_partitions.find(part_info.first) == file_partitions.end()) {
 					string error = "Hive partition mismatch between file \"%s\" and \"%s\": key \"%s\" not found";
 					if (options.auto_detect_hive_partitioning == true) {
-						throw InternalException(error + "(hive partitioning was autodetected)", files.GetFirstFile(), file,
-						                        part_info.first);
+						throw InternalException(error + "(hive partitioning was autodetected)", files.GetFirstFile(),
+						                        file, part_info.first);
 					}
 					throw BinderException(error.c_str(), files.GetFirstFile(), file, part_info.first);
 				}
@@ -464,7 +465,8 @@ void MultiFileReader::BindOptions(MultiFileReaderOptions &options, MultiFileList
 			if (partitions.size() != file_partitions.size()) {
 				string error_msg = "Hive partition mismatch between file \"%s\" and \"%s\"";
 				if (options.auto_detect_hive_partitioning == true) {
-					throw InternalException(error_msg + "(hive partitioning was autodetected)", files.GetFirstFile(), file);
+					throw InternalException(error_msg + "(hive partitioning was autodetected)", files.GetFirstFile(),
+					                        file);
 				}
 				throw BinderException(error_msg.c_str(), files.GetFirstFile(), file);
 			}
@@ -709,7 +711,7 @@ bool MultiFileReaderOptions::AutoDetectHivePartitioningInternal(MultiFileList &f
 		return false;
 	}
 
-	for (const auto& file : files.Files()) {
+	for (const auto &file : files.Files()) {
 		auto splits = StringUtil::Split(file, fs.PathSeparator(file));
 		if (splits.size() != splits_first_file.size()) {
 			return false;
@@ -732,7 +734,7 @@ void MultiFileReaderOptions::AutoDetectHiveTypesInternal(MultiFileList &files, C
 	auto &fs = FileSystem::GetFileSystem(context);
 
 	unordered_map<string, LogicalType> detected_types;
-	for (const auto& file : files.Files()) {
+	for (const auto &file : files.Files()) {
 		unordered_map<string, string> partitions;
 		auto splits = StringUtil::Split(file, fs.PathSeparator(file));
 		if (splits.size() < 2) {
