@@ -44,6 +44,11 @@ ErrorData::ErrorData(const string &message) : initialized(true), type(ExceptionT
 const string &ErrorData::Message() {
 	if (final_message.empty()) {
 		final_message = Exception::ExceptionTypeToString(type) + " Error: " + raw_message;
+		if (type == ExceptionType::INTERNAL) {
+			final_message += "\nThis error signals an assertion failure within DuckDB. This usually occurs due to "
+			                 "unexpected conditions or errors in the program's logic.\nFor more information, see "
+			                 "https://duckdb.org/docs/dev/internal_errors";
+		}
 	}
 	return final_message;
 }

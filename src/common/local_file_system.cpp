@@ -383,6 +383,10 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 						           "using the -readonly parameter in the CLI";
 					}
 				}
+				rc = close(fd);
+				if (rc == -1) {
+					message += ". Also, failed closing file";
+				}
 				message += ". See also https://duckdb.org/docs/connect/concurrency";
 				throw IOException("Could not set lock on file \"%s\": %s", {{"errno", std::to_string(retained_errno)}},
 				                  path, message);

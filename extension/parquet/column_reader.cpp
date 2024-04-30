@@ -12,6 +12,7 @@
 #include "row_number_column_reader.hpp"
 #include "snappy.h"
 #include "string_column_reader.hpp"
+#include "null_column_reader.hpp"
 #include "struct_column_reader.hpp"
 #include "templated_column_reader.hpp"
 #include "utf8proc_wrapper.hpp"
@@ -1534,6 +1535,8 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 		return make_uniq<UUIDColumnReader>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::INTERVAL:
 		return make_uniq<IntervalColumnReader>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+	case LogicalTypeId::SQLNULL:
+		return make_uniq<NullColumnReader>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	default:
 		break;
 	}

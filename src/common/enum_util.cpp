@@ -645,6 +645,29 @@ ArrowVariableSizeType EnumUtil::FromString<ArrowVariableSizeType>(const char *va
 }
 
 template<>
+const char* EnumUtil::ToChars<BinderType>(BinderType value) {
+	switch(value) {
+	case BinderType::REGULAR_BINDER:
+		return "REGULAR_BINDER";
+	case BinderType::VIEW_BINDER:
+		return "VIEW_BINDER";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+BinderType EnumUtil::FromString<BinderType>(const char *value) {
+	if (StringUtil::Equals(value, "REGULAR_BINDER")) {
+		return BinderType::REGULAR_BINDER;
+	}
+	if (StringUtil::Equals(value, "VIEW_BINDER")) {
+		return BinderType::VIEW_BINDER;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
 const char* EnumUtil::ToChars<BindingMode>(BindingMode value) {
 	switch(value) {
 	case BindingMode::STANDARD_BINDING:
