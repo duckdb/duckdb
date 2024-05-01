@@ -13,6 +13,12 @@ fi
 
 set -e
 
+# skip if repo is not in duckdb organization
+if [ "$GITHUB_REPOSITORY_OWNER" != "duckdb" ]; then
+  echo "Repository is $GITHUB_REPOSITORY_OWNER (not duckdb)"
+  exit 0
+fi
+
 FOLDER="$1"
 DRY_RUN_PARAM=""
 
