@@ -252,7 +252,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	scheduler->RelaunchThreads();
 }
 
-DuckDB::DuckDB(const char *path, DBConfig *new_config) : instance(make_shared<DatabaseInstance>()) {
+DuckDB::DuckDB(const char *path, DBConfig *new_config) : instance(make_shared_ptr<DatabaseInstance>()) {
 	instance->Initialize(path, new_config);
 	if (instance->config.options.load_extensions) {
 		ExtensionHelper::LoadAllExtensions(*this);
@@ -375,7 +375,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (new_config.buffer_pool) {
 		config.buffer_pool = std::move(new_config.buffer_pool);
 	} else {
-		config.buffer_pool = make_shared<BufferPool>(config.options.maximum_memory);
+		config.buffer_pool = make_shared_ptr<BufferPool>(config.options.maximum_memory);
 	}
 }
 

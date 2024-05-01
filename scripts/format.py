@@ -41,6 +41,7 @@ except Exception as e:
 
 extensions = [
     '.cpp',
+    '.ipp',
     '.c',
     '.hpp',
     '.h',
@@ -240,6 +241,7 @@ if confirm and not check_only:
 
 format_commands = {
     '.cpp': cpp_format_command,
+    '.ipp': cpp_format_command,
     '.c': cpp_format_command,
     '.hpp': cpp_format_command,
     '.h': cpp_format_command,

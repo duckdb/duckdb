@@ -10,6 +10,7 @@ body:
 
           * [Documentation/website](https://github.com/duckdb/duckdb-web/issues/new)
           * APIs:
+            * [duckdb-java](https://github.com/duckdb/duckdb-java/issues/new)
             * [duckdb-node](https://github.com/duckdb/duckdb-node/issues/new)
             * [duckdb-r](https://github.com/duckdb/duckdb-r/issues/new)
             * [duckdb-rs](https://github.com/duckdb/duckdb-rs/issues/new)

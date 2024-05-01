@@ -141,6 +141,10 @@ void CSVReaderOptions::SetNewline(const string &input) {
 	}
 }
 
+bool CSVReaderOptions::IgnoreErrors() const {
+	return ignore_errors.GetValue() && !store_rejects.GetValue();
+}
+
 void CSVReaderOptions::SetDateFormat(LogicalTypeId type, const string &format, bool read_format) {
 	string error;
 	if (read_format) {
@@ -148,7 +152,7 @@ void CSVReaderOptions::SetDateFormat(LogicalTypeId type, const string &format, b
 		error = StrTimeFormat::ParseFormatSpecifier(format, strpformat);
 		dialect_options.date_format[type].Set(strpformat);
 	} else {
-		error = StrTimeFormat::ParseFormatSpecifier(format, write_date_format[type]);
+		write_date_format[type] = Value(format);
 	}
 	if (!error.empty()) {
 		throw InvalidInputException("Could not parse DATEFORMAT: %s", error.c_str());
@@ -412,12 +416,12 @@ static Value StringVectorToValue(const vector<string> &vec) {
 static uint8_t GetCandidateSpecificity(const LogicalType &candidate_type) {
 	//! Const ht with accepted auto_types and their weights in specificity
 	const duckdb::unordered_map<uint8_t, uint8_t> auto_type_candidates_specificity {
-	    {(uint8_t)LogicalTypeId::VARCHAR, 0},  {(uint8_t)LogicalTypeId::TIMESTAMP, 1},
-	    {(uint8_t)LogicalTypeId::DATE, 2},     {(uint8_t)LogicalTypeId::TIME, 3},
-	    {(uint8_t)LogicalTypeId::DOUBLE, 4},   {(uint8_t)LogicalTypeId::FLOAT, 5},
-	    {(uint8_t)LogicalTypeId::DECIMAL, 6},  {(uint8_t)LogicalTypeId::BIGINT, 7},
-	    {(uint8_t)LogicalTypeId::INTEGER, 8},  {(uint8_t)LogicalTypeId::SMALLINT, 9},
-	    {(uint8_t)LogicalTypeId::TINYINT, 10}, {(uint8_t)LogicalTypeId::BOOLEAN, 11},
+	    {(uint8_t)LogicalTypeId::VARCHAR, 0},   {(uint8_t)LogicalTypeId::DOUBLE, 1},
+	    {(uint8_t)LogicalTypeId::FLOAT, 2},     {(uint8_t)LogicalTypeId::DECIMAL, 3},
+	    {(uint8_t)LogicalTypeId::BIGINT, 4},    {(uint8_t)LogicalTypeId::INTEGER, 5},
+	    {(uint8_t)LogicalTypeId::SMALLINT, 6},  {(uint8_t)LogicalTypeId::TINYINT, 7},
+	    {(uint8_t)LogicalTypeId::TIMESTAMP, 8}, {(uint8_t)LogicalTypeId::DATE, 9},
+	    {(uint8_t)LogicalTypeId::TIME, 10},     {(uint8_t)LogicalTypeId::BOOLEAN, 11},
 	    {(uint8_t)LogicalTypeId::SQLNULL, 12}};
 
 	auto id = (uint8_t)candidate_type.id();

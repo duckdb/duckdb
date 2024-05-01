@@ -42,7 +42,7 @@ public:
 		//! We sample equidistant values within a vector; to do this we jump a fixed number of values
 		uint32_t n_sampled_increments = MaxValue<uint32_t>(
 		    1, UnsafeNumericCast<uint32_t>(std::ceil((double)n_lookup_values / AlpConstants::SAMPLES_PER_VECTOR)));
-		uint32_t n_sampled_values = std::ceil((double)n_lookup_values / n_sampled_increments);
+		uint32_t n_sampled_values = NumericCast<uint32_t>(std::ceil((double)n_lookup_values / n_sampled_increments));
 		D_ASSERT(n_sampled_values < AlpConstants::ALP_VECTOR_SIZE);
 
 		AlpSamplingParameters sampling_params = {n_lookup_values, n_sampled_increments, n_sampled_values};
