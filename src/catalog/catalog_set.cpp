@@ -306,9 +306,6 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 
 	auto &context = *transaction.context;
 
-	// lock the catalog for writing
-	unique_lock<mutex> write_lock(catalog.GetWriteLock());
-
 	unique_ptr<CatalogEntry> value;
 	if (alter_info.type == AlterType::SET_COMMENT) {
 		// Copy the existing entry; we are only changing metadata here
@@ -323,6 +320,8 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 		}
 	}
 
+	// lock the catalog for writing
+	unique_lock<mutex> write_lock(catalog.GetWriteLock());
 	// lock this catalog set to disallow reading
 	unique_lock<mutex> read_lock(catalog_lock);
 
