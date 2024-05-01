@@ -757,9 +757,9 @@ StringValueScanner::StringValueScanner(const shared_ptr<CSVBufferManager> &buffe
                                        const shared_ptr<CSVStateMachine> &state_machine,
                                        const shared_ptr<CSVErrorHandler> &error_handler)
     : BaseScanner(buffer_manager, state_machine, error_handler, false, nullptr, {}), scanner_idx(0),
-      result(states, *state_machine, cur_buffer_handle, Allocator::DefaultAllocator(), STANDARD_VECTOR_SIZE,
-             iterator.pos.buffer_pos, *error_handler, iterator,
-             buffer_manager->context.client_data->debug_set_max_line_length, csv_file_scan, lines_read, sniffing) {
+      result(states, *state_machine, cur_buffer_handle, Allocator::DefaultAllocator(), false, iterator.pos.buffer_pos,
+             *error_handler, iterator, buffer_manager->context.client_data->debug_set_max_line_length, csv_file_scan,
+             lines_read, sniffing) {
 }
 
 unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options) {
