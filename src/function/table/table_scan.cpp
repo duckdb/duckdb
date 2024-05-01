@@ -309,6 +309,7 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 
 	auto checkpoint_lock = storage.GetSharedCheckpointLock();
 	auto &info = storage.GetDataTableInfo();
+	auto &transaction = Transaction::Get(context, bind_data.table.catalog);
 	info->indexes.Scan([&](Index &index) {
 		// first rewrite the index expression so the ColumnBindings align with the column bindings of the current table
 
@@ -338,8 +339,6 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 		}
 
 		// try to find a matching index for any of the filter expressions
-		auto &transaction = Transaction::Get(context, bind_data.table.catalog);
-
 		for (auto &filter : filters) {
 			auto index_state = art_index.TryInitializeScan(transaction, *index_expression, *filter);
 			if (index_state != nullptr) {
