@@ -29,8 +29,8 @@ INSERT INTO sales VALUES
 statement ok
 set default_collation=c;
 
-statement ok
-create table t1 as SELECT product_id, region, SUM(amount_sold) AS total_amount
+query III nosort grouping_sets_collation_result 
+SELECT product_id, region, SUM(amount_sold) AS total_amount
 FROM sales
 GROUP BY GROUPING SETS ((product_id), (region), ())
 ORDER BY product_id, region, total_amount;
@@ -38,24 +38,18 @@ ORDER BY product_id, region, total_amount;
 statement ok
 set default_collation=en_us;
 
-statement ok
-create table t2 as SELECT product_id, region, SUM(amount_sold) AS total_amount
+query III nosort grouping_sets_collation_result
+SELECT product_id, region, SUM(amount_sold) AS total_amount
 FROM sales
 GROUP BY GROUPING SETS ((product_id), (region), ())
 ORDER BY product_id, region, total_amount;
 
-query I
-select count(*) from (select * from t1 INTERSECT select * From t2);
-----
-5
-
-mode skip
 
 statement ok
 set default_collation=c
 
-statement ok
-create table t3 as select NULL product_id, region, sum(amount_sold) from sales group by region
+query III nosort union_groups_collation_result
+select NULL product_id, region, sum(amount_sold) from sales group by region
 UNION ALL
 select NULL product_id, NULL region, sum(amount_sold) from sales
 UNION ALL
@@ -65,14 +59,24 @@ select product_id, NULL region, sum(amount_sold) from sales group by product_id 
 statement ok
 set default_collation=en_us;
 
-statement ok
-create table t4 as select NULL product_id, region, sum(amount_sold) from sales group by region
+query III nosort union_groups_collation_result
+select NULL product_id, region, sum(amount_sold) from sales group by region
 UNION ALL
 select NULL product_id, NULL region, sum(amount_sold) from sales
 UNION ALL
 select product_id, NULL region, sum(amount_sold) from sales group by product_id order by 1,2;
 
-query I
-select count(*) from (select * from t3 INTERSECT select * From t4);
-----
-5
+# also test that union all is the same as using grouping sets
+
+query III nosort grouping_sets_collation
+SELECT product_id, region, SUM(amount_sold) AS total_amount
+FROM sales
+GROUP BY GROUPING SETS ((product_id), (region), ())
+ORDER BY product_id, region, total_amount;
+
+query III nosort grouping_sets_collation
+select NULL product_id, region, sum(amount_sold) from sales group by region
+UNION ALL
+select NULL product_id, NULL region, sum(amount_sold) from sales
+UNION ALL
+select product_id, NULL region, sum(amount_sold) from sales group by product_id order by 1,2;
