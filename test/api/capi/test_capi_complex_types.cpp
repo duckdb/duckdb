@@ -310,7 +310,7 @@ static void RoundTrip(CAPITester &tester, T expected, duckdb_type type) {
 	REQUIRE(duckdb_prepare(tester.connection, "SELECT ?", &prepped) == DuckDBSuccess);
 	REQUIRE(duckdb_bind_value(prepped, 1, val) == DuckDBSuccess);
 
-	auto res = tester.Execute(prepped);
+	auto res = tester.QueryPrepared(prepped);
 
 	REQUIRE(res->ColumnCount() == 1);
 	REQUIRE(res->ColumnName(0) == "$1");
