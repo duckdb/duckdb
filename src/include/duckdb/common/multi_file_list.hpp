@@ -11,19 +11,8 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/multi_file_reader_options.hpp"
 
-//#include "duckdb/common/types/value.hpp"
-//#include "duckdb/common/enums/file_glob_options.hpp"
-//#include "duckdb/common/optional_ptr.hpp"
-//#include "duckdb/common/union_by_name.hpp"
-
 namespace duckdb {
 class MultiFileList;
-// class TableFunctionSet;
-// class TableFilterSet;
-// class LogicalGet;
-// class Expression;
-// class ClientContext;
-// class DataChunk;
 
 enum class FileExpandResult : uint8_t { NO_FILES, SINGLE_FILE, MULTIPLE_FILES };
 
@@ -58,15 +47,15 @@ private:
 	};
 
 public:
-	MultiFileListIterator begin();
-	MultiFileListIterator end();
+	MultiFileListIterator begin(); // NOLINT: match stl API
+	MultiFileListIterator end();   // NOLINT: match stl API
 };
 
 //! Abstract base class for lazily generated list of file paths/globs
 //! note: most methods are NOT threadsafe: use
 class MultiFileList {
 public:
-	MultiFileList(FileGlobOptions options);
+	explicit MultiFileList(FileGlobOptions options);
 	virtual ~MultiFileList();
 
 	//! Returns the raw, unexpanded paths

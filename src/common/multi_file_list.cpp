@@ -74,11 +74,11 @@ void MultiFileListIterationHelper::MultiFileListIterator::Next() {
 	}
 }
 
-MultiFileListIterationHelper::MultiFileListIterator MultiFileListIterationHelper::begin() { // NOLINT
+MultiFileListIterationHelper::MultiFileListIterator MultiFileListIterationHelper::begin() { // NOLINT: match stl API
 	return MultiFileListIterationHelper::MultiFileListIterator(
 	    file_list.GetExpandResult() == FileExpandResult::NO_FILES ? nullptr : &file_list);
 }
-MultiFileListIterationHelper::MultiFileListIterator MultiFileListIterationHelper::end() { // NOLINT
+MultiFileListIterationHelper::MultiFileListIterator MultiFileListIterationHelper::end() { // NOLINT: match stl API
 	return MultiFileListIterationHelper::MultiFileListIterator(nullptr);
 }
 
