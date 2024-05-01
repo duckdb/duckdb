@@ -72,6 +72,8 @@ class TPCHData:
 
     def get_tables(self, convertor) -> Dict[str, Any]:
         res = {}
+        # Without this, the DECIMAL type analyzed could be too small depending on the distribution
+        self.conn.execute("set global pandas_analyze_sample=2048")
         for table in self.TABLES:
             res[table] = convertor(self.conn, table)
         return res
