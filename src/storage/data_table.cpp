@@ -68,13 +68,15 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 		column_definitions.emplace_back(column_def.Copy());
 	}
 	column_definitions.emplace_back(new_column.Copy());
+
+	auto &local_storage = LocalStorage::Get(context, db);
+
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
 
 	this->row_groups = parent.row_groups->AddColumn(context, new_column, default_value);
 
 	// also add this column to client local storage
-	auto &local_storage = LocalStorage::Get(context, db);
 	local_storage.AddColumn(parent, *this, new_column, default_value);
 
 	// this table replaces the previous table, hence the parent is no longer the root DataTable
