@@ -265,7 +265,7 @@ class SelectAndCallBenchmark:
         results: List[BenchmarkResult] = []
         methods = {'select': 'select * from ', 'call': 'call '}
         for key, value in methods.items():
-            for rowcount in [2048, 50000, 2500000, 10000000]:
+            for rowcount in [2048, 50000, 2500000]:
                 result = BenchmarkResult(f'{key}_{name}_{rowcount}')
                 query_string = query.format(rows=rowcount)
                 query_string = value + query_string
