@@ -21,7 +21,6 @@ FROM parquet_scan('hf://datasets/samansmink/non-existent/**/*.parquet');
 ----
 HTTP 401
 
-
 query III rowsort
 FROM parquet_scan('hf://datasets/samansmink/duckdb_ci_tests/hive_data/**/*.parquet', FILENAME=1, hive_partitioning=0);
 ----
@@ -73,15 +72,15 @@ FROM parquet_scan('hf://datasets/samansmink/duckdb_ci_tests@~parquet/**/*.parque
 statement ok
 CREATE SECRET hf_token (TYPE HUGGINGFACE, token 'some_hf_token');
 
-# Secret provider 'cache' scans the ~/.cache/huggingface/token file for a token
+# Secret provider 'credential chain' scans several places for a token
 statement ok
-CREATE SECRET hf_token_from_cache (TYPE HUGGINGFACE, PROVIDER cache);
+CREATE SECRET hf_token_from_credential_chain (TYPE HUGGINGFACE, PROVIDER credential_chain);
 
 statement ok
 DROP SECRET hf_token
 
 statement ok
-DROP SECRET hf_token_from_cache
+DROP SECRET hf_token_from_credential_chain
 
 # Private bucket is not allowed without credentials
 statement error
@@ -108,7 +107,7 @@ DROP SECRET hf1
 require-env HUGGING_FACE_TOKEN_IN_CACHE
 
 statement ok
-CREATE SECRET hf1 (TYPE HUGGINGFACE, PROVIDER cache);
+CREATE SECRET hf1 (TYPE HUGGINGFACE, PROVIDER credential_chain);
 
 query III rowsort
 FROM parquet_scan('hf://datasets/samansmink/duckdb_ci_private/hive_data/**/*.parquet', FILENAME=1, hive_partitioning=0);

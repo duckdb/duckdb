@@ -62,9 +62,6 @@ void HFFileHandle::InitializeClient() {
 string HuggingFaceFileSystem::ListHFRequest(ParsedHFUrl &url, HTTPParams &http_params, string &next_page_url,
                                             optional_ptr<HTTPState> state) {
 	HeaderMap header_map;
-	if (!http_params.bearer_token.empty()) {
-		header_map["Authorization"] = "Bearer " + http_params.bearer_token;
-	}
 	auto headers = initialize_http_headers(header_map);
 	string link_header_result;
 
@@ -207,6 +204,11 @@ end:
 	return;
 }
 
+// Some valid example Urls:
+// - hf://datasets/lhoestq/demo1/default/train/0000.parquet
+// - hf://datasets/lhoestq/demo1/default/train/*.parquet
+// - hf://datasets/lhoestq/demo1/*/train/file_[abc].parquet
+// - hf://datasets/lhoestq/demo1/**/train/*.parquet
 vector<string> HuggingFaceFileSystem::Glob(const string &path, FileOpener *opener) {
 	// Ensure the glob pattern is a valid HF url
 	auto parsed_glob_url = HFUrlParse(path);
@@ -216,10 +218,6 @@ vector<string> HuggingFaceFileSystem::Glob(const string &path, FileOpener *opene
 		return {path};
 	}
 
-	// https://huggingface.co/api/datasets/lhoestq/demo1/tree/main/default/train/0000.parquet
-	// https://huggingface.co/api/datasets/lhoestq/demo1/tree/main/default/train/*.parquet
-	// https://huggingface.co/api/datasets/lhoestq/demo1/tree/main/*/train/*.parquet
-	// https://huggingface.co/api/datasets/lhoestq/demo1/tree/main/**/train/*.parquet
 	string shared_path = parsed_glob_url.path.substr(0, first_wildcard_pos);
 	auto last_path_slash = shared_path.find_last_of('/', first_wildcard_pos);
 
@@ -321,6 +319,12 @@ void HuggingFaceFileSystem::SetParams(HTTPParams &params, const string &path, op
 	}
 }
 
+static void ThrowParseError(const string &url) {
+	throw IOException(
+	    "Failed to parse '%s'. Please format url like: 'hf://datasets/my-username/my-dataset/path/to/file.parquet'",
+	    url);
+}
+
 ParsedHFUrl HuggingFaceFileSystem::HFUrlParse(const string &url) {
 	ParsedHFUrl result;
 
@@ -334,22 +338,28 @@ ParsedHFUrl HuggingFaceFileSystem::HFUrlParse(const string &url) {
 	// Parse Repository type
 	curr_delim = url.find('/', last_delim);
 	if (curr_delim == string::npos) {
-		throw IOException("URL needs to contain a '/' after the repository type: (%s)", url);
+		ThrowParseError(url);
 	}
 	result.repo_type = url.substr(last_delim, curr_delim - last_delim);
+	if (result.repo_type != "datasets") {
+		throw IOException("Failed to parse: '%s'. Currently DuckDB only supports querying datasets, so the url should "
+		                  "start with 'hf://datasets'",
+		                  url);
+	}
+
 	last_delim = curr_delim;
 
 	// Parse repository and revision
 	auto repo_delim = url.find('/', last_delim + 1);
 	if (repo_delim == string::npos) {
-		throw IOException("Failed to parse: (%s)", url);
+		ThrowParseError(url);
 	}
 
 	auto next_at = url.find('@', repo_delim + 1);
 	auto next_slash = url.find('/', repo_delim + 1);
 
 	if (next_slash == string::npos) {
-		throw IOException("Failed to parse: (%s)", url);
+		ThrowParseError(url);
 	}
 
 	if (next_at != string::npos && next_at < next_slash) {

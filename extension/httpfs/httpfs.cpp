@@ -167,7 +167,6 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
 	auto &hfs = handle.Cast<HTTPFileHandle>();
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
-	hfs.AddHeaders(header_map);
 	auto headers = initialize_http_headers(header_map);
 	idx_t out_offset = 0;
 
@@ -222,6 +221,9 @@ unique_ptr<duckdb_httplib_openssl::Client> HTTPFileSystem::GetClient(const HTTPP
 	client->set_read_timeout(http_params.timeout);
 	client->set_connection_timeout(http_params.timeout);
 	client->set_decompress(false);
+	if (!http_params.bearer_token.empty()) {
+		client->set_bearer_token_auth(http_params.bearer_token.c_str());
+	}
 	return client;
 }
 
@@ -230,7 +232,6 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PutRequest(FileHandle &handle, strin
 	auto &hfs = handle.Cast<HTTPFileHandle>();
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
-	hfs.AddHeaders(header_map);
 	auto headers = initialize_http_headers(header_map);
 
 	std::function<duckdb_httplib_openssl::Result(void)> request([&]() {
@@ -249,7 +250,6 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, stri
 	auto &hfs = handle.Cast<HTTPFileHandle>();
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
-	hfs.AddHeaders(header_map);
 	auto headers = initialize_http_headers(header_map);
 
 	std::function<duckdb_httplib_openssl::Result(void)> request([&]() {
@@ -269,7 +269,6 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, strin
 	auto &hfh = handle.Cast<HTTPFileHandle>();
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
-	hfh.AddHeaders(header_map);
 	auto headers = initialize_http_headers(header_map);
 
 	D_ASSERT(hfh.cached_file_handle);
@@ -327,7 +326,6 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 	auto &hfs = handle.Cast<HTTPFileHandle>();
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
-	hfs.AddHeaders(header_map);
 	auto headers = initialize_http_headers(header_map);
 
 	// send the Range header to read only subset of file
@@ -730,12 +728,6 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 
 	if (should_write_cache) {
 		current_cache->Insert(path, {length, last_modified});
-	}
-}
-
-void HTTPFileHandle::AddHeaders(HeaderMap &map) {
-	if (!http_params.bearer_token.empty()) {
-		map["authorization"] = "Bearer " + http_params.bearer_token;
 	}
 }
 

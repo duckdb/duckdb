@@ -44,7 +44,8 @@ protected:
 	//! Function for the "config" provider: creates secret from parameters passed by user
 	static unique_ptr<BaseSecret> CreateBearerSecretFromConfig(ClientContext &context, CreateSecretInput &input);
 	//! Function for the "config" provider: creates secret from parameters passed by user
-	static unique_ptr<BaseSecret> CreateHuggingFaceSecretFromCache(ClientContext &context, CreateSecretInput &input);
+	static unique_ptr<BaseSecret> CreateHuggingFaceSecretFromCredentialChain(ClientContext &context,
+	                                                                         CreateSecretInput &input);
 };
 
 } // namespace duckdb
