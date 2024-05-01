@@ -1601,7 +1601,23 @@ Creates a value from a string
 */
 DUCKDB_API duckdb_value duckdb_create_varchar_length(const char *text, idx_t length);
 
-DUCKDB_API duckdb_value duckdb_create_value(duckdb_type type, void *data);
+DUCKDB_API duckdb_value duckdb_create_varchar(const char *text);
+DUCKDB_API duckdb_value duckdb_create_int64(int64_t input);
+DUCKDB_API duckdb_value duckdb_create_bool(bool input);
+DUCKDB_API duckdb_value duckdb_create_tinyint(int8_t input);
+DUCKDB_API duckdb_value duckdb_create_utinyint(uint8_t input);
+DUCKDB_API duckdb_value duckdb_create_integer(int32_t input);
+DUCKDB_API duckdb_value duckdb_create_uinteger(uint32_t input);
+DUCKDB_API duckdb_value duckdb_create_ubigint(uint64_t input);
+DUCKDB_API duckdb_value duckdb_create_bigint(int64_t input);
+DUCKDB_API duckdb_value duckdb_create_float(float input);
+DUCKDB_API duckdb_value duckdb_create_double(double input);
+DUCKDB_API duckdb_value duckdb_create_date(duckdb_date input);
+DUCKDB_API duckdb_value duckdb_create_time(duckdb_time input);
+DUCKDB_API duckdb_value duckdb_create_timestamp(duckdb_timestamp input);
+DUCKDB_API duckdb_value duckdb_create_interval(duckdb_interval input);
+DUCKDB_API duckdb_value duckdb_create_hugeint(duckdb_hugeint input);
+DUCKDB_API duckdb_value duckdb_create_blob(const char *data, idx_t length);
 
 /*!
 Creates a value from an int64
@@ -2996,3 +3012,4 @@ DUCKDB_API duckdb_data_chunk duckdb_stream_fetch_chunk(duckdb_result result);
 #ifdef __cplusplus
 }
 #endif
+

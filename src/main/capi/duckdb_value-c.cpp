@@ -34,45 +34,50 @@ duckdb_value duckdb_create_int64(int64_t input) {
 	return reinterpret_cast<duckdb_value>(new duckdb::Value(val));
 }
 
-duckdb_value duckdb_create_value(duckdb_type type, void *data) {
-	switch (type) {
-	case DUCKDB_TYPE_VARCHAR:
-		return duckdb_create_varchar(reinterpret_cast<const char *>(data));
-	case DUCKDB_TYPE_BIGINT:
-		return duckdb_create_int64(*reinterpret_cast<int64_t *>(data));
-	case DUCKDB_TYPE_INTEGER:
-		return WrapValue(new duckdb::Value(*reinterpret_cast<int32_t *>(data)));
-	case DUCKDB_TYPE_BOOLEAN:
-		return WrapValue(new duckdb::Value(duckdb::Value::BOOLEAN(*reinterpret_cast<bool *>(data))));
-	case DUCKDB_TYPE_TINYINT:
-		return WrapValue(new duckdb::Value(duckdb::Value::TINYINT(*reinterpret_cast<int8_t *>(data))));
-	case DUCKDB_TYPE_UTINYINT:
-		return WrapValue(new duckdb::Value(duckdb::Value::UTINYINT(*reinterpret_cast<uint8_t *>(data))));
-	case DUCKDB_TYPE_UINTEGER:
-		return WrapValue(new duckdb::Value(duckdb::Value::UINTEGER(*reinterpret_cast<uint32_t *>(data))));
-	case DUCKDB_TYPE_UBIGINT:
-		return WrapValue(new duckdb::Value(duckdb::Value::UBIGINT(*reinterpret_cast<uint64_t *>(data))));
-	case DUCKDB_TYPE_DOUBLE:
-		return WrapValue(new duckdb::Value(duckdb::Value::DOUBLE(*reinterpret_cast<double *>(data))));
-	case DUCKDB_TYPE_DATE:
-		return WrapValue(new duckdb::Value(duckdb::Value::DATE(*reinterpret_cast<duckdb::date_t *>(data))));
-	case DUCKDB_TYPE_TIME:
-		return WrapValue(new duckdb::Value(duckdb::Value::TIME(*reinterpret_cast<duckdb::dtime_t *>(data))));
-	case DUCKDB_TYPE_TIMESTAMP:
-		return WrapValue(new duckdb::Value(duckdb::Value::TIMESTAMP(*reinterpret_cast<duckdb::timestamp_t *>(data))));
-	case DUCKDB_TYPE_INTERVAL:
-		return WrapValue(new duckdb::Value(duckdb::Value::INTERVAL(*reinterpret_cast<duckdb::interval_t *>(data))));
-	case DUCKDB_TYPE_HUGEINT:
-		return WrapValue(new duckdb::Value(duckdb::Value::HUGEINT(*reinterpret_cast<duckdb::hugeint_t *>(data))));
-	case DUCKDB_TYPE_FLOAT:
-		return WrapValue(new duckdb::Value(duckdb::Value::FLOAT(*reinterpret_cast<float *>(data))));
-	case DUCKDB_TYPE_BLOB:
-		return WrapValue(new duckdb::Value(duckdb::Value::BLOB_RAW(reinterpret_cast<const char *>(data))));
-	case DUCKDB_TYPE_INVALID:
-		return nullptr;
-	default:
-		return nullptr;
-	}
+duckdb_value duckdb_create_bool(bool input) {
+	return WrapValue(new duckdb::Value(duckdb::Value::BOOLEAN(input)));
+}
+duckdb_value duckdb_create_tinyint(int8_t input) {
+	return WrapValue(new duckdb::Value(duckdb::Value::TINYINT(input)));
+}
+duckdb_value duckdb_create_utinyint(uint8_t input) {
+	return WrapValue(new duckdb::Value(duckdb::Value::UTINYINT(input)));
+}
+duckdb_value duckdb_create_integer(int32_t input) {
+	return WrapValue(new duckdb::Value(duckdb::Value::INTEGER(input)));
+}
+duckdb_value duckdb_create_uinteger(uint32_t input) {
+	return WrapValue(new duckdb::Value(duckdb::Value::UINTEGER(input)));
+}
+duckdb_value duckdb_create_ubigint(uint64_t input) {
+	return WrapValue(new duckdb::Value(duckdb::Value::UBIGINT(input)));
+}
+duckdb_value duckdb_create_bigint(int64_t input) {
+	return WrapValue(new duckdb::Value(duckdb::Value::BIGINT(input)));
+}
+duckdb_value duckdb_create_float(float input) {
+	return WrapValue(new duckdb::Value(duckdb::Value::FLOAT(input)));
+}
+duckdb_value duckdb_create_double(double input) {
+	return WrapValue(new duckdb::Value(duckdb::Value::DOUBLE(input)));
+}
+duckdb_value duckdb_create_date(duckdb_date input) {
+	return WrapValue(new duckdb::Value(duckdb::Value::DATE(duckdb::date_t(input.days))));
+}
+duckdb_value duckdb_create_time(duckdb_time input) {
+	return WrapValue(new duckdb::Value(duckdb::Value::TIME(duckdb::dtime_t(input.micros))));
+}
+duckdb_value duckdb_create_timestamp(duckdb_timestamp input) {
+	return WrapValue(new duckdb::Value(duckdb::Value::TIMESTAMP(duckdb::timestamp_t(input.micros))));
+}
+duckdb_value duckdb_create_interval(duckdb_interval input) {
+	return WrapValue(new duckdb::Value(duckdb::Value::INTERVAL(input.months, input.days, input.micros)));
+}
+duckdb_value duckdb_create_hugeint(duckdb_hugeint input) {
+	return WrapValue(new duckdb::Value(duckdb::Value::HUGEINT(duckdb::hugeint_t(input.upper, input.lower))));
+}
+duckdb_value duckdb_create_blob(const char *data, idx_t length) {
+	return WrapValue(new duckdb::Value(duckdb::Value::BLOB((const uint8_t*) data, length)));
 }
 
 char *duckdb_get_varchar(duckdb_value value) {
