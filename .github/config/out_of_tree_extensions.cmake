@@ -41,7 +41,7 @@ if (NOT MINGW)
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_azure
             GIT_TAG 09623777a366572bfb8fa53e47acdf72133a360e
-			APPLY_PATCHES
+            APPLY_PATCHES
             )
 endif()
 
@@ -114,4 +114,5 @@ duckdb_extension_load(vss
         GIT_URL https://github.com/duckdb/duckdb_vss
         GIT_TAG 8145f41d97178e82bed3376215eb8d02bcf1eec5
         TEST_DIR test/sql
+        APPLY_PATCHES
     )
