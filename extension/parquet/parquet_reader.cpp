@@ -243,12 +243,14 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 			return LogicalType::INTERVAL;
 		case ConvertedType::JSON:
 			return LogicalType::VARCHAR;
+		case ConvertedType::NULL_TYPE:
+			return LogicalTypeId::SQLNULL;
 		case ConvertedType::MAP:
 		case ConvertedType::MAP_KEY_VALUE:
 		case ConvertedType::LIST:
 		case ConvertedType::BSON:
 		default:
-			throw IOException("Unsupported converted type");
+			throw IOException("Unsupported converted type (%d)", (int32_t)s_ele.converted_type);
 		}
 	} else {
 		// no converted type set

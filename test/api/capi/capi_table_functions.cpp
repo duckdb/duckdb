@@ -52,7 +52,7 @@ void my_function(duckdb_function_info info, duckdb_data_chunk output) {
 
 static void capi_register_table_function(duckdb_connection connection, const char *name,
                                          duckdb_table_function_bind_t bind, duckdb_table_function_init_t init,
-                                         duckdb_table_function_t f) {
+                                         duckdb_table_function_t f, duckdb_state expected_state = DuckDBSuccess) {
 	duckdb_state status;
 
 	// create a table function
@@ -79,7 +79,7 @@ static void capi_register_table_function(duckdb_connection connection, const cha
 
 	// register and cleanup
 	status = duckdb_register_table_function(connection, function);
-	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(status == expected_state);
 
 	duckdb_destroy_table_function(&function);
 	duckdb_destroy_table_function(&function);
@@ -92,6 +92,8 @@ TEST_CASE("Test Table Functions C API", "[capi]") {
 
 	REQUIRE(tester.OpenDatabase(nullptr));
 	capi_register_table_function(tester.connection, "my_function", my_bind, my_init, my_function);
+	// registering again causes an error
+	capi_register_table_function(tester.connection, "my_function", my_bind, my_init, my_function, DuckDBError);
 
 	// now call it
 	result = tester.Query("SELECT * FROM my_function(1)");
