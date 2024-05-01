@@ -22,9 +22,8 @@ BIGINT	VARCHAR	11044	11044	2
 query IIIIIIIIIII rowsort
 SELECT * EXCLUDE (scan_id, user_arguments) FROM reject_scans order by all;
 ----
-0	test/sql/copy/csv/data/error/mismatch/big_bad.csv	,	\0	\0	\n	0	false	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL
-1	test/sql/copy/csv/data/error/mismatch/big_bad2.csv	,	\0	\0	\n	0	false	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL
-
+0	test/sql/copy/csv/data/error/mismatch/big_bad.csv	,	"	"	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL
+1	test/sql/copy/csv/data/error/mismatch/big_bad2.csv	,	"	"	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL
 
 query IIIIIIIII rowsort
 SELECT * EXCLUDE (scan_id) FROM reject_errors order by all;
