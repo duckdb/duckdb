@@ -201,10 +201,10 @@ void StatementSimplifier::Simplify(SetOperationNode &node) {
 
 void StatementSimplifier::Simplify(CommonTableExpressionMap &cte) {
 	// remove individual CTEs
-	SimplifyMap(cte.map);
+	SimplifyList(cte.map);
 	for (auto &cte_child : cte.map) {
 		// simplify individual ctes
-		Simplify(cte_child.second->query->node);
+		Simplify(cte_child->query->node);
 	}
 }
 
