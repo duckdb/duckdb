@@ -9,6 +9,8 @@
 #pragma once
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/parser/constraints/unique_constraint.hpp"
+#include "duckdb/planner/constraints/bound_unique_constraint.hpp"
 
 namespace duckdb {
 
@@ -57,6 +59,10 @@ private:
 	unique_ptr<CatalogEntry> AddForeignKeyConstraint(optional_ptr<ClientContext> context, AlterForeignKeyInfo &info);
 	unique_ptr<CatalogEntry> DropForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info);
 	unique_ptr<CatalogEntry> SetColumnComment(ClientContext &context, SetColumnCommentInfo &info);
+	unique_ptr<CatalogEntry> AddConstraint(ClientContext &context, AddConstraintInfo &info);
+
+	// Checks if a primary key constraint already exists and throws if it does.
+	void EnsureNoPrimaryKey();
 
 	void UpdateConstraintsOnColumnDrop(const LogicalIndex &removed_index, const vector<LogicalIndex> &adjusted_indices,
 	                                   const RemoveColumnInfo &info, CreateTableInfo &create_info,
