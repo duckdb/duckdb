@@ -483,6 +483,65 @@ static py::object FindFirstNonNull(const py::handle &row, idx_t offset, idx_t ra
 	return py::none();
 }
 
+static uint8_t IncreaseDecimalWidth(uint8_t original) {
+	// Increase the detected width to the max allowed by the physical type
+	// we do this so that failing to find a DECIMAL of width 8 in an array of width 7 does not cause a cast failure.
+	if (original < Decimal::MAX_WIDTH_INT16) {
+		return Decimal::MAX_WIDTH_INT16;
+	}
+	if (original < Decimal::MAX_WIDTH_INT32) {
+		return Decimal::MAX_WIDTH_INT32;
+	}
+	if (original < Decimal::MAX_WIDTH_INT64) {
+		return Decimal::MAX_WIDTH_INT64;
+	}
+	return Decimal::MAX_WIDTH_INT128;
+}
+
+static LogicalType WidenDecimals(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::DECIMAL: {
+		auto width = DecimalType::GetWidth(type);
+		auto scale = DecimalType::GetScale(type);
+		return LogicalType::DECIMAL(IncreaseDecimalWidth(width), scale);
+	}
+	case LogicalTypeId::LIST: {
+		auto &child = ListType::GetChildType(type);
+		return LogicalType::LIST(WidenDecimals(child));
+	}
+	case LogicalTypeId::ARRAY: {
+		auto &child = ArrayType::GetChildType(type);
+		auto size = ArrayType::GetSize(type);
+		return LogicalType::ARRAY(WidenDecimals(child), size);
+	}
+	case LogicalTypeId::STRUCT: {
+		auto &children = StructType::GetChildTypes(type);
+		child_list_t<LogicalType> new_children;
+		for (auto &child : children) {
+			new_children.push_back(make_pair(child.first, WidenDecimals(child.second)));
+		}
+		return LogicalType::STRUCT(std::move(new_children));
+	}
+	case LogicalTypeId::UNION: {
+		auto count = UnionType::GetMemberCount(type);
+		child_list_t<LogicalType> new_children;
+		for (idx_t i = 0; i < count; i++) {
+			auto &child = UnionType::GetMemberType(type, i);
+			auto &name = UnionType::GetMemberName(type, i);
+			new_children.push_back(make_pair(name, WidenDecimals(child)));
+		}
+		return LogicalType::UNION(std::move(new_children));
+	}
+	case LogicalTypeId::MAP: {
+		auto &key_type = MapType::KeyType(type);
+		auto &value_type = MapType::ValueType(type);
+		return LogicalType::MAP(WidenDecimals(key_type), WidenDecimals(value_type));
+	}
+	default:
+		return type;
+	}
+}
+
 LogicalType PandasAnalyzer::InnerAnalyze(py::object column, bool &can_convert, bool sample, idx_t increment) {
 	idx_t rows = py::len(column);
 
@@ -516,6 +575,8 @@ LogicalType PandasAnalyzer::InnerAnalyze(py::object column, bool &can_convert, b
 			return next_item_type;
 		}
 	}
+
+	item_type = WidenDecimals(item_type);
 
 	if (can_convert && item_type.id() == LogicalTypeId::STRUCT) {
 		can_convert = VerifyStructValidity(types);
