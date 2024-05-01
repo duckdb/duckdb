@@ -1619,6 +1619,21 @@ DUCKDB_API duckdb_value duckdb_create_interval(duckdb_interval input);
 DUCKDB_API duckdb_value duckdb_create_hugeint(duckdb_hugeint input);
 DUCKDB_API duckdb_value duckdb_create_blob(const char *data, idx_t length);
 
+DUCKDB_API bool duckdb_get_bool(duckdb_value val);
+DUCKDB_API int8_t duckdb_get_tinyint(duckdb_value val);
+DUCKDB_API uint8_t duckdb_get_utinyint(duckdb_value val);
+DUCKDB_API int32_t duckdb_get_integer(duckdb_value val);
+DUCKDB_API uint32_t duckdb_get_uinteger(duckdb_value val);
+DUCKDB_API uint64_t duckdb_get_ubigint(duckdb_value val);
+DUCKDB_API int64_t duckdb_get_bigint(duckdb_value val);
+DUCKDB_API float duckdb_get_float(duckdb_value val);
+DUCKDB_API double duckdb_get_double(duckdb_value val);
+DUCKDB_API duckdb_date duckdb_get_date(duckdb_value val);
+DUCKDB_API duckdb_time duckdb_get_time(duckdb_value val);
+DUCKDB_API duckdb_timestamp duckdb_get_timestamp(duckdb_value val);
+DUCKDB_API duckdb_interval duckdb_get_interval(duckdb_value val);
+DUCKDB_API duckdb_hugeint duckdb_get_hugeint(duckdb_value val);
+
 /*!
 Creates a value from an int64
 
@@ -3012,4 +3027,3 @@ DUCKDB_API duckdb_data_chunk duckdb_stream_fetch_chunk(duckdb_result result);
 #ifdef __cplusplus
 }
 #endif
-

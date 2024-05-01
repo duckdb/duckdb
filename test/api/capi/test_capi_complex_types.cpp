@@ -326,6 +326,8 @@ TEST_CASE("duckdb_create_value", "[capi]") {
 	CAPITester tester;
 	REQUIRE(tester.OpenDatabase(nullptr));
 
+	REQUIRE(duckdb_get_utinyint(duckdb_create_utinyint(32)) == 32);
+
 	RoundTrip<uint8_t>(tester, 1, DUCKDB_TYPE_UTINYINT, duckdb_create_utinyint(1));
 	RoundTrip<bool>(tester, true, DUCKDB_TYPE_BOOLEAN, duckdb_create_bool(true));
 	/*
