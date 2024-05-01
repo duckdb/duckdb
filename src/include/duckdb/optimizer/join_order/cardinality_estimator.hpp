@@ -35,7 +35,7 @@ struct RelationsToTDom {
 	//! the estimated total domains of each relation without using HLL
 	idx_t tdom_no_hll;
 	bool has_tdom_hll;
-	vector<FilterInfo *> filters;
+	vector<optional_ptr<FilterInfo>> filters;
 	vector<string> column_names;
 
 	explicit RelationsToTDom(const column_binding_set_t &column_binding_set)
@@ -45,12 +45,12 @@ struct RelationsToTDom {
 
 class FilterInfoWithTotalDomains {
 public:
-	FilterInfoWithTotalDomains(FilterInfo *filter_info, RelationsToTDom &relation2tdom)
+	FilterInfoWithTotalDomains(optional_ptr<FilterInfo> filter_info, RelationsToTDom &relation2tdom)
 	    : filter_info(filter_info), tdom_hll(relation2tdom.tdom_hll), tdom_no_hll(relation2tdom.tdom_no_hll),
 	      has_tdom_hll(relation2tdom.has_tdom_hll) {
 	}
 
-	FilterInfo *filter_info;
+	optional_ptr<FilterInfo> filter_info;
 	//!	the estimated total domains of the equivalent relations determined using HLL
 	idx_t tdom_hll;
 	//! the estimated total domains of each relation without using HLL
@@ -72,12 +72,15 @@ class CardinalityHelper {
 public:
 	CardinalityHelper() {
 	}
-	CardinalityHelper(double cardinality_before_filters, double filter_string)
-	    : cardinality_before_filters(cardinality_before_filters), filter_strength(filter_string) {};
+	CardinalityHelper(double cardinality_before_filters) : cardinality_before_filters(cardinality_before_filters) {};
 
 public:
+	// must be a double. Otherwise we can lose significance between different join orders.
+	// our cardinality estimator severely underestimates cardinalities for 3+ joins. However,
+	// if one join order has an estimate of 0.8, and another has an estimate of 0.6, rounding
+	// them means there is no estimated difference, when in reality there could be a very large
+	// difference.
 	double cardinality_before_filters;
-	double filter_strength;
 
 	vector<string> table_names_joined;
 	vector<string> column_names;
@@ -85,6 +88,7 @@ public:
 
 class CardinalityEstimator {
 public:
+	static constexpr double DEFAULT_SEMI_ANTI_SELECTIVITY = 0.2;
 	explicit CardinalityEstimator() {};
 
 private:
@@ -114,11 +118,11 @@ private:
 	DenomInfo GetDenominator(JoinRelationSet &set);
 
 	bool SingleColumnFilter(FilterInfo &filter_info);
-	vector<idx_t> DetermineMatchingEquivalentSets(FilterInfo *filter_info);
+	vector<idx_t> DetermineMatchingEquivalentSets(optional_ptr<FilterInfo> filter_info);
 	//! Given a filter, add the column bindings to the matching equivalent set at the index
 	//! given in matching equivalent sets.
 	//! If there are multiple equivalence sets, they are merged.
-	void AddToEquivalenceSets(FilterInfo *filter_info, vector<idx_t> matching_equivalent_sets);
+	void AddToEquivalenceSets(optional_ptr<FilterInfo> filter_info, vector<idx_t> matching_equivalent_sets);
 
 	double CalculateUpdatedDenom(Subgraph2Denominator left, Subgraph2Denominator right,
 	                             FilterInfoWithTotalDomains &filter);

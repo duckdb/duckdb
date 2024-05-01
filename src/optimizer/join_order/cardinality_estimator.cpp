@@ -46,7 +46,7 @@ bool CardinalityEstimator::SingleColumnFilter(duckdb::FilterInfo &filter_info) {
 	return true;
 }
 
-vector<idx_t> CardinalityEstimator::DetermineMatchingEquivalentSets(FilterInfo *filter_info) {
+vector<idx_t> CardinalityEstimator::DetermineMatchingEquivalentSets(optional_ptr<FilterInfo> filter_info) {
 	vector<idx_t> matching_equivalent_sets;
 	idx_t equivalent_relation_index = 0;
 
@@ -64,7 +64,8 @@ vector<idx_t> CardinalityEstimator::DetermineMatchingEquivalentSets(FilterInfo *
 	return matching_equivalent_sets;
 }
 
-void CardinalityEstimator::AddToEquivalenceSets(FilterInfo *filter_info, vector<idx_t> matching_equivalent_sets) {
+void CardinalityEstimator::AddToEquivalenceSets(optional_ptr<FilterInfo> filter_info,
+                                                vector<idx_t> matching_equivalent_sets) {
 	D_ASSERT(matching_equivalent_sets.size() <= 2);
 	if (matching_equivalent_sets.size() > 1) {
 		// an equivalence relation is connecting two sets of equivalence relations
@@ -218,10 +219,10 @@ double CardinalityEstimator::CalculateUpdatedDenom(Subgraph2Denominator left, Su
 	case JoinType::ANTI: {
 		if (JoinRelationSet::IsSubset(*left.relations, *filter.filter_info->left_set) &&
 		    JoinRelationSet::IsSubset(*right.relations, *filter.filter_info->right_set)) {
-			new_denom = left.denom * 5;
+			new_denom = left.denom * CardinalityEstimator::DEFAULT_SEMI_ANTI_SELECTIVITY;
 			return new_denom;
 		}
-		new_denom = right.denom * 5;
+		new_denom = right.denom * CardinalityEstimator::DEFAULT_SEMI_ANTI_SELECTIVITY;
 		return new_denom;
 	}
 	default:
@@ -299,7 +300,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			subgraphs.erase(remove_start, subgraphs.end());
 		}
 		if (subgraphs.size() == 1 && subgraphs.at(0).relations->ToString() == set.ToString()) {
-			// the first subgraph has connected all of the desired relations, no need to iterate
+			// the first subgraph has connected all the desired relations, no need to iterate
 			// through the rest of the edges.
 			break;
 		}
@@ -334,13 +335,13 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set
 	if (relation_set_2_cardinality.find(new_set.ToString()) != relation_set_2_cardinality.end()) {
 		return relation_set_2_cardinality[new_set.ToString()].cardinality_before_filters;
 	}
-	// can happen if a table has cardinality 0, or a tdom is set to 0
 
+	// can happen if a table has cardinality 0, or a tdom is set to 0
 	auto denom = GetDenominator(new_set);
 	auto numerator = GetNumerator(denom.numerator_relations);
 
 	double result = numerator / denom.denominator;
-	auto new_entry = CardinalityHelper(result, 1);
+	auto new_entry = CardinalityHelper(result);
 	relation_set_2_cardinality[new_set.ToString()] = new_entry;
 	return result;
 }
@@ -374,7 +375,7 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(optional_ptr<JoinRelati
 	auto relation_cardinality = stats.cardinality;
 	auto relation_filter = stats.filter_strength;
 
-	auto card_helper = CardinalityHelper((double)relation_cardinality, relation_filter);
+	auto card_helper = CardinalityHelper((double)relation_cardinality);
 	relation_set_2_cardinality[set->ToString()] = card_helper;
 
 	UpdateTotalDomains(set, stats);
