@@ -303,7 +303,6 @@ void DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction, boo
 			old_transactions.push_back(std::move(current_transaction));
 		}
 	} else if (transaction.ChangesMade()) {
-		D_ASSERT(transaction.commit_id != 0);
 		transaction.Cleanup();
 	}
 	// remove the transaction from the set of currently active transactions
