@@ -54,8 +54,6 @@ private:
 	AttachedDatabase &db;
 	//! The table IO manager
 	shared_ptr<TableIOManager> table_io_manager;
-	//! Lock for modifying the name
-	mutex name_lock;
 	//! The schema of the table
 	string schema;
 	//! The name of the table

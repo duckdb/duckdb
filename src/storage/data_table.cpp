@@ -332,12 +332,10 @@ string DataTableInfo::GetSchemaName() {
 }
 
 string DataTableInfo::GetTableName() {
-	lock_guard<mutex> l(name_lock);
 	return table;
 }
 
 void DataTableInfo::SetTableName(string name) {
-	lock_guard<mutex> l(name_lock);
 	table = std::move(name);
 }
 
