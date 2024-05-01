@@ -1319,15 +1319,6 @@ void StringValueScanner::SetStart() {
 			}
 			if (iterator.pos.buffer_pos == cur_buffer_handle->actual_size ||
 			    scan_finder->iterator.GetBufferIdx() > iterator.GetBufferIdx()) {
-				// Propagate any errors
-				if (!scan_finder->error_handler->errors.empty() && state_machine->options.ignore_errors.GetValue()) {
-					for (auto &error_vector : scan_finder->error_handler->errors) {
-						for (auto &error : error_vector.second) {
-							error_handler->Error(error);
-						}
-					}
-					result.lines_read++;
-				}
 				// If things go terribly wrong, we never loop indefinetly.
 				iterator.pos.buffer_idx = scan_finder->iterator.pos.buffer_idx;
 				iterator.pos.buffer_pos = scan_finder->iterator.pos.buffer_pos;
@@ -1337,15 +1328,6 @@ void StringValueScanner::SetStart() {
 			}
 		}
 	} while (!line_found);
-	// Propagate any errors
-	if (!scan_finder->error_handler->errors.empty() && state_machine->options.ignore_errors.GetValue()) {
-		for (auto &error_vector : scan_finder->error_handler->errors) {
-			for (auto &error : error_vector.second) {
-				error_handler->Error(error);
-			}
-		}
-		result.lines_read++;
-	}
 	iterator.pos.buffer_idx = scan_finder->result.current_line_position.begin.buffer_idx;
 	iterator.pos.buffer_pos = scan_finder->result.current_line_position.begin.buffer_pos;
 	result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
