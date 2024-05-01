@@ -572,16 +572,14 @@ static bool ConvertColumnRegular(NumpyAppendData &append_data) {
 }
 
 template <class DUCKDB_T>
-static PyObject *ConstructDecimal(DUCKDB_T value, uint8_t width, uint8_t scale) {
+static PyObject *ConstructDecimal(DUCKDB_T value, uint8_t width, uint8_t scale, char *buffer) {
 	auto decimal_length = DecimalToString::DecimalLength<DUCKDB_T>(value, width, scale);
 
 	auto &python_import_cache = *DuckDBPyConnection::ImportCache();
 	auto decimal = python_import_cache.decimal.Decimal();
 
-	unique_ptr<char[]> raw_string(new char[decimal_length]);
-	DecimalToString::FormatDecimal<DUCKDB_T>(value, width, scale, raw_string.get(),
-	                                         UnsafeNumericCast<idx_t>(decimal_length));
-	auto stringified = string(raw_string.get(), decimal_length);
+	DecimalToString::FormatDecimal<DUCKDB_T>(value, width, scale, buffer, UnsafeNumericCast<idx_t>(decimal_length));
+	auto stringified = string(buffer, decimal_length);
 	auto py_obj = decimal(py::str(stringified));
 	return py_obj.release().ptr();
 }
@@ -601,6 +599,9 @@ static bool ConvertDecimalInternal(NumpyAppendData &append_data, const LogicalTy
 	auto src_ptr = UnifiedVectorFormat::GetData<DUCKDB_T>(idata);
 	auto out_ptr = reinterpret_cast<PyObject **>(target_data);
 
+	auto max_length = DecimalWidth<DUCKDB_T>::max + 3;
+	unique_ptr<char[]> raw_string(new char[max_length]);
+
 	if (!idata.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			idx_t src_idx = idata.sel->get_index(i + source_offset);
@@ -609,7 +610,7 @@ static bool ConvertDecimalInternal(NumpyAppendData &append_data, const LogicalTy
 				out_ptr[offset] = nullptr;
 				target_mask[offset] = true;
 			} else {
-				out_ptr[offset] = ConstructDecimal(src_ptr[src_idx], width, scale);
+				out_ptr[offset] = ConstructDecimal(src_ptr[src_idx], width, scale, raw_string.get());
 				target_mask[offset] = false;
 			}
 		}
@@ -618,7 +619,7 @@ static bool ConvertDecimalInternal(NumpyAppendData &append_data, const LogicalTy
 		for (idx_t i = 0; i < count; i++) {
 			idx_t src_idx = idata.sel->get_index(i + source_offset);
 			idx_t offset = target_offset + i;
-			out_ptr[offset] = ConstructDecimal(src_ptr[src_idx], width, scale);
+			out_ptr[offset] = ConstructDecimal(src_ptr[src_idx], width, scale, raw_string.get());
 			target_mask[offset] = false;
 		}
 		return false;
