@@ -303,9 +303,7 @@ TEST_CASE("Logical types with aliases", "[capi]") {
 }
 
 template <class T>
-static void RoundTrip(CAPITester &tester, T expected, duckdb_type type) {
-	auto val = duckdb_create_value(type, &expected);
-
+static void RoundTrip(CAPITester &tester, T expected, duckdb_type type, duckdb_value val) {
 	duckdb_prepared_statement prepped;
 	REQUIRE(duckdb_prepare(tester.connection, "SELECT ?", &prepped) == DuckDBSuccess);
 	REQUIRE(duckdb_bind_value(prepped, 1, val) == DuckDBSuccess);
@@ -329,7 +327,7 @@ TEST_CASE("duckdb_create_value", "[capi]") {
 	REQUIRE(tester.OpenDatabase(nullptr));
 
 	RoundTrip<uint8_t>(tester, 1, DUCKDB_TYPE_UTINYINT);
-	RoundTrip<bool>(tester, true, DUCKDB_TYPE_BOOLEAN);
+	RoundTrip<bool>(tester, true, DUCKDB_TYPE_BOOLEAN, duckdb_create_bool(true));
 	RoundTrip<int8_t>(tester, 1, DUCKDB_TYPE_TINYINT);
 	RoundTrip<int16_t>(tester, 1, DUCKDB_TYPE_SMALLINT);
 	RoundTrip<int32_t>(tester, 1, DUCKDB_TYPE_INTEGER);
