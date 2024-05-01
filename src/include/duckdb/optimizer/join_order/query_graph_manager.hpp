@@ -72,7 +72,7 @@ public:
 	bool Build(LogicalOperator &op);
 
 	//! Reconstruct the logical plan using the plan found by the plan enumerator
-	unique_ptr<LogicalOperator> Reconstruct(unique_ptr<LogicalOperator> plan, JoinNode &node);
+	unique_ptr<LogicalOperator> Reconstruct(unique_ptr<LogicalOperator> plan);
 
 	//! Get a reference to the QueryGraphEdges structure that stores edges between
 	//! nodes and hypernodes.
@@ -86,6 +86,9 @@ public:
 	//! products to create edges.
 	void CreateQueryGraphCrossProduct(JoinRelationSet &left, JoinRelationSet &right);
 
+	//! A map to store the optimal join plan found for a specific JoinRelationSet*
+	optional_ptr<const reference_map_t<JoinRelationSet, unique_ptr<DPJoinNode>>> plans;
+
 private:
 	vector<reference<LogicalOperator>> filter_operators;
 
@@ -97,14 +100,9 @@ private:
 
 	void GetColumnBinding(Expression &expression, ColumnBinding &binding);
 
-	bool ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings);
-	bool LeftCardLessThanRight(LogicalOperator &op);
-
 	void CreateHyperGraphEdges();
 
-	GenerateJoinRelation GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinNode &node);
-
-	unique_ptr<LogicalOperator> RewritePlan(unique_ptr<LogicalOperator> plan, JoinNode &node);
+	GenerateJoinRelation GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinRelationSet &set);
 };
 
 } // namespace duckdb
