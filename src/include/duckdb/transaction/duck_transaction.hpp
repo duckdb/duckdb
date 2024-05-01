@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/common/reference_map.hpp"
 
 namespace duckdb {
 class RowVersionManager;
@@ -75,8 +76,9 @@ private:
 	unique_ptr<LocalStorage> storage;
 	//! Write lock
 	unique_ptr<StorageLockKey> write_lock;
-	//! Map of all sequences that were used during the transaction and the value they had in this transaction
+	//! Lock for accessing sequence_usage
 	mutex sequence_lock;
+	//! Map of all sequences that were used during the transaction and the value they had in this transaction
 	reference_map_t<SequenceCatalogEntry, reference<SequenceValue>> sequence_usage;
 };
 

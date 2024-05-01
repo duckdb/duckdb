@@ -11,6 +11,7 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
+#include "duckdb/storage/storage_lock.hpp"
 
 namespace duckdb {
 class DatabaseInstance;
