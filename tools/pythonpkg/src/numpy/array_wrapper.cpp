@@ -600,6 +600,7 @@ static bool ConvertDecimalInternal(NumpyAppendData &append_data, const LogicalTy
 
 	auto src_ptr = UnifiedVectorFormat::GetData<DUCKDB_T>(idata);
 	auto out_ptr = reinterpret_cast<PyObject **>(target_data);
+
 	if (!idata.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			idx_t src_idx = idata.sel->get_index(i + source_offset);

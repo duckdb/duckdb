@@ -381,9 +381,11 @@ py::str GetTypeToPython(const LogicalType &type) {
 	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::FLOAT:
-	case LogicalTypeId::DOUBLE:
-	case LogicalTypeId::DECIMAL: {
+	case LogicalTypeId::DOUBLE: {
 		return py::str("NUMBER");
+	}
+	case LogicalTypeId::DECIMAL: {
+		return py::str("DECIMAL");
 	}
 	case LogicalTypeId::VARCHAR: {
 		if (type.HasAlias() && type.GetAlias() == "JSON") {
