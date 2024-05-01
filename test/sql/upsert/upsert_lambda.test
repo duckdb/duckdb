@@ -5,7 +5,12 @@ statement ok
 pragma enable_verification;
 
 statement ok
-create or replace table foo(bar int primary key, baz varchar, other varchar[], other2 int);
+create or replace table foo(
+	bar int primary key,
+	baz varchar,
+	other varchar[],
+	other2 int
+);
 
 statement ok
 insert into foo
@@ -50,3 +55,69 @@ query IIII
 select * from foo;
 ----
 1	1 || 2	[a, b, c]	7
+
+# Inside the lambda we don't implicitly qualify the column reference
+# so it becomes ambiguous if it's not qualified
+
+statement error
+insert into foo
+select 1, '', ['a', 'b', 'c'], 7
+on conflict do
+update set
+  baz = list_reduce(
+    excluded.other,
+    (x, y) -> x || baz || y
+  )
+;
+----
+Ambiguous reference to column name "baz" (use: "excluded.baz" or "foo.baz")
+
+statement ok
+insert into foo
+select 1, '', ['a', 'b', 'c'], 7
+on conflict do
+update set
+  baz = ' || '
+
+statement ok
+insert into foo
+select 1, '', ['a', 'b', 'c'], 7
+on conflict do
+update set
+  baz = list_reduce(
+    excluded.other,
+    (x, y) -> x || foo.baz || y
+  )
+;
+
+# The ' || ' string (foo.baz) got concatenated inbetween 'a', 'b', and 'c'
+
+query IIII
+select * from foo;
+----
+1	a || b || c	[a, b, c]	7
+
+statement ok
+insert into foo
+select 1, '', ['a', 'b', 'c'], 7
+on conflict do
+update set
+  baz = ' || '
+
+statement ok
+insert into foo
+select 1, '', ['a', 'b', 'c'], 7
+on conflict do
+update set
+  baz = list_reduce(
+    excluded.other,
+    (x, y) -> x || excluded.baz || y
+  )
+;
+
+# An empty string got concatenated inbetween 'a', 'b', and 'c'
+
+query IIII
+select * from foo;
+----
+1	abc	[a, b, c]	7
