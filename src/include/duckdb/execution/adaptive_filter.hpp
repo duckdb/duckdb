@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/planner/expression/list.hpp"
+#include "duckdb/planner/table_filter.hpp"
 
 #include <random>
 namespace duckdb {

@@ -17,6 +17,7 @@
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/common/named_parameter_map.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_context_wrapper.hpp"
 #include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
@@ -28,7 +29,6 @@
 namespace duckdb {
 struct BoundStatement;
 
-class ClientContextWrapper;
 class Binder;
 class LogicalOperator;
 class QueryNode;

@@ -15,4 +15,24 @@ unique_ptr<VacuumInfo> VacuumInfo::Copy() {
 	return result;
 }
 
+string VacuumInfo::ToString() const {
+	string result = "";
+	result += "VACUUM";
+	if (options.analyze) {
+		result += " ANALYZE";
+	}
+	if (ref) {
+		result += " " + ref->ToString();
+		if (!columns.empty()) {
+			vector<string> names;
+			for (auto &column : columns) {
+				names.push_back(KeywordHelper::WriteOptionallyQuoted(column));
+			}
+			result += "(" + StringUtil::Join(names, ", ") + ")";
+		}
+	}
+	result += ";";
+	return result;
+}
+
 } // namespace duckdb
