@@ -122,6 +122,10 @@ duckdb_value duckdb_create_blob(const char *data, idx_t length) {
 	return WrapValue(new duckdb::Value(duckdb::Value::BLOB((const uint8_t *)data, length)));
 }
 // TODO: duckdb_get_blob
+duckdb_logical_type duckdb_get_value_type(duckdb_value val) {
+	auto &type = UnwrapValue(val).type();
+	return WrapType(new LogicalType(type));
+}
 
 char *duckdb_get_varchar(duckdb_value value) {
 	auto val = reinterpret_cast<duckdb::Value *>(value);

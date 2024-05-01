@@ -255,6 +255,9 @@ duckdb_value WrapValue(duckdb::Value *value) {
 duckdb::Value &UnwrapValue(duckdb_value value) {
 	return *reinterpret_cast<duckdb::Value *>(value);
 }
+duckdb_logical_type WrapType(duckdb::LogicalType* type) {
+	return reinterpret_cast<duckdb_logical_type>(type);
+}
 
 } // namespace duckdb
 
