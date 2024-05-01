@@ -595,8 +595,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetNotNull(ClientContext &context, SetN
 	}
 
 	// Return with new storage info. Note that we need the bound column index here.
-	auto new_storage = make_shared_ptr<DataTable>(
-	    context, *storage, make_uniq<BoundNotNullConstraint>(columns.LogicalToPhysical(LogicalIndex(not_null_idx))));
+	auto bound_constraint = make_uniq<BoundNotNullConstraint>(columns.LogicalToPhysical(LogicalIndex(not_null_idx)));
+	auto new_storage = make_shared_ptr<DataTable>(context, *storage, bound_constraint.get());
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
 }
 
