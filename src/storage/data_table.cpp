@@ -86,6 +86,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_column)
     : db(parent.db), info(parent.info), is_root(true) {
 	// prevent any new tuples from being added to the parent
+	auto &local_storage = LocalStorage::Get(context, db);
 	lock_guard<mutex> parent_lock(parent.append_lock);
 
 	for (auto &column_def : parent.column_definitions) {
@@ -124,7 +125,6 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 	this->row_groups = parent.row_groups->RemoveColumn(removed_column);
 
 	// scan the original table, and fill the new column with the transformed value
-	auto &local_storage = LocalStorage::Get(context, db);
 	local_storage.DropColumn(parent, *this, removed_column);
 
 	// this table replaces the previous table, hence the parent is no longer the root DataTable
@@ -135,6 +135,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<BoundConstraint> constraint)
     : db(parent.db), info(parent.info), row_groups(parent.row_groups), is_root(true) {
 
+	auto &local_storage = LocalStorage::Get(context, db);
 	lock_guard<mutex> parent_lock(parent.append_lock);
 	for (auto &column_def : parent.column_definitions) {
 		column_definitions.emplace_back(column_def.Copy());
@@ -146,7 +147,6 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<Bound
 	VerifyNewConstraint(context, parent, constraint.get());
 
 	// Get the local data ownership from old dt
-	auto &local_storage = LocalStorage::Get(context, db);
 	local_storage.MoveStorage(parent, *this);
 	// this table replaces the previous table, hence the parent is no longer the root DataTable
 	parent.is_root = false;
