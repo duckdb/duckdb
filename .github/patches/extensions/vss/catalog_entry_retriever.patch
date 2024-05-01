@@ -1,0 +1,15 @@
+diff --git a/src/hnsw/hnsw_index_pragmas.cpp b/src/hnsw/hnsw_index_pragmas.cpp
+index cef1293..4cdfd9d 100644
+--- a/src/hnsw/hnsw_index_pragmas.cpp
++++ b/src/hnsw/hnsw_index_pragmas.cpp
+@@ -162,8 +162,9 @@ static void CompactIndexPragma(ClientContext &context, const FunctionParameters
+ 
+ 	auto qname = QualifiedName::Parse(index_name);
+ 
++	auto binder = Binder::CreateBinder(context);
+ 	// look up the index name in the catalog
+-	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
++	binder->BindSchemaOrCatalog(qname.catalog, qname.schema);
+ 	auto &index_entry = Catalog::GetEntry(context, CatalogType::INDEX_ENTRY, qname.catalog, qname.schema, qname.name)
+ 	                        .Cast<IndexCatalogEntry>();
+ 	auto &table_entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, qname.catalog, index_entry.GetSchemaName(),

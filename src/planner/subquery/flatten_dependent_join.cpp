@@ -119,6 +119,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
                                                                                  idx_t lateral_depth) {
 	// first check if the logical operator has correlated expressions
 	auto entry = has_correlated_expressions.find(*plan);
+	bool exit_projection = false;
+	unique_ptr<LogicalDelimGet> delim_scan;
 	D_ASSERT(entry != has_correlated_expressions.end());
 	if (!entry->second) {
 		// we reached a node without correlated expressions
@@ -136,13 +138,21 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			}
 		}
 
-		auto left_columns = plan->GetColumnBindings().size();
+		// create cross product with Delim Join
 		auto delim_index = binder.GenerateTableIndex();
-		this->base_binding = ColumnBinding(delim_index, 0);
-		this->delim_offset = left_columns;
-		this->data_offset = 0;
-		auto delim_scan = make_uniq<LogicalDelimGet>(delim_index, delim_types);
-		return LogicalCrossProduct::Create(std::move(plan), std::move(delim_scan));
+		base_binding = ColumnBinding(delim_index, 0);
+
+		auto left_columns = plan->GetColumnBindings().size();
+		delim_offset = left_columns;
+		data_offset = 0;
+		delim_scan = make_uniq<LogicalDelimGet>(delim_index, delim_types);
+		if (plan->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+			// we want to keep the logical projection for positionality.
+			exit_projection = true;
+		} else {
+			auto cross_product = LogicalCrossProduct::Create(std::move(plan), std::move(delim_scan));
+			return cross_product;
+		}
 	}
 	switch (plan->type) {
 	case LogicalOperatorType::LOGICAL_UNNEST:
@@ -166,8 +176,18 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		for (auto &expr : plan->expressions) {
 			parent_propagate_null_values &= expr->PropagatesNullValues();
 		}
-		plan->children[0] =
-		    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
+
+		// if the node has no correlated expressions,
+		// push the cross product with the delim get only below the projection.
+		// This will preserve positionality of the columns and prevent errors when reordering of
+		// delim gets is enabled.
+		if (exit_projection) {
+			auto cross_product = LogicalCrossProduct::Create(std::move(plan->children[0]), std::move(delim_scan));
+			plan->children[0] = std::move(cross_product);
+		} else {
+			plan->children[0] = PushDownDependentJoinInternal(std::move(plan->children[0]),
+			                                                  parent_propagate_null_values, lateral_depth);
+		}
 
 		// then we replace any correlated expressions with the corresponding entry in the correlated_map
 		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, lateral_depth);
@@ -248,7 +268,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				}
 			}
 			auto left_index = binder.GenerateTableIndex();
-			auto delim_scan = make_uniq<LogicalDelimGet>(left_index, delim_types);
+			delim_scan = make_uniq<LogicalDelimGet>(left_index, delim_types);
 			join->children.push_back(std::move(delim_scan));
 			join->children.push_back(std::move(plan));
 			for (idx_t i = 0; i < new_group_count; i++) {

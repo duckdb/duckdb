@@ -435,6 +435,15 @@ struct TimezoneMinuteFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct TimeTZSortKeyFun {
+	static constexpr const char *Name = "timetz_byte_comparable";
+	static constexpr const char *Parameters = "time_tz";
+	static constexpr const char *Description = "Converts a TIME WITH TIME ZONE to an integer sort key";
+	static constexpr const char *Example = "timetz_byte_comparable('18:18:16.21-07:00'::TIME_TZ)";
+
+	static ScalarFunction GetFunction();
+};
+
 struct ToCenturiesFun {
 	static constexpr const char *Name = "to_centuries";
 	static constexpr const char *Parameters = "integer";
