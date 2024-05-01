@@ -11,7 +11,7 @@
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 
 namespace duckdb {
-Index* TableIndexList::AddIndex(unique_ptr<Index> index) {
+Index *TableIndexList::AddIndex(unique_ptr<Index> index) {
 	D_ASSERT(index);
 	lock_guard<mutex> lock(indexes_lock);
 	indexes.push_back(std::move(index));

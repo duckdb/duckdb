@@ -21,7 +21,7 @@ public:
 	}
 
 	vector<PhysicalIndex> GetColumnIndices() const final {
-	    return vector<PhysicalIndex>{index};
+		return vector<PhysicalIndex> {index};
 	}
 
 	//! Column index this constraint pertains to

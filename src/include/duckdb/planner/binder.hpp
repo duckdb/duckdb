@@ -132,7 +132,8 @@ public:
 	vector<unique_ptr<BoundConstraint>> BindNewConstraints(vector<unique_ptr<Constraint>> &constraints,
 	                                                       const string &table_name, const ColumnList &columns);
 
-	unique_ptr<BoundConstraint> BindConstraint(Constraint &constraint, const string &table_name, const ColumnList &columns);
+	unique_ptr<BoundConstraint> BindConstraint(Constraint &constraint, const string &table_name,
+	                                           const ColumnList &columns);
 
 	void SetCatalogLookupCallback(catalog_entry_callback_t callback);
 	void BindCreateViewInfo(CreateViewInfo &base);

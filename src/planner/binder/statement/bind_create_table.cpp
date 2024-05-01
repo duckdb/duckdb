@@ -93,7 +93,8 @@ vector<unique_ptr<BoundConstraint>> Binder::BindNewConstraints(vector<unique_ptr
 	return bound_constraints;
 }
 
-unique_ptr<BoundConstraint> Binder::BindConstraint(Constraint &constraint, const string &table_name, const ColumnList &columns) {
+unique_ptr<BoundConstraint> Binder::BindConstraint(Constraint &constraint, const string &table_name,
+                                                   const ColumnList &columns) {
 	switch (constraint.type) {
 	case ConstraintType::CHECK: {
 		unique_ptr<BoundConstraint> bound_constraint = make_uniq<BoundCheckConstraint>();
@@ -137,8 +138,8 @@ unique_ptr<BoundConstraint> Binder::BindConstraint(Constraint &constraint, const
 				auto column_index = column.Physical();
 				if (key_set.find(column_index) != key_set.end()) {
 					throw ParserException("column \"%s\" appears twice in "
-										  "primary key constraint",
-										  keyname);
+					                      "primary key constraint",
+					                      keyname);
 				}
 				keys.push_back(column_index);
 				key_set.insert(column_index);
@@ -149,8 +150,8 @@ unique_ptr<BoundConstraint> Binder::BindConstraint(Constraint &constraint, const
 	case ConstraintType::FOREIGN_KEY: {
 		auto &fk = constraint.Cast<ForeignKeyConstraint>();
 		D_ASSERT((fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE && !fk.info.pk_keys.empty()) ||
-				 (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE && !fk.info.pk_keys.empty()) ||
-				 fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE);
+		         (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE && !fk.info.pk_keys.empty()) ||
+		         fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE);
 		physical_index_set_t fk_key_set, pk_key_set;
 		for (auto &pk_key : fk.info.pk_keys) {
 			if (pk_key_set.find(pk_key) != pk_key_set.end()) {
