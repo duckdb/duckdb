@@ -278,9 +278,7 @@ void CSVSniffer::RefineCandidates() {
 				candidates.push_back(std::move(cc_best_candidate));
 				return;
 			}
-			if (cc_best_candidate->state_machine->state_machine_options.quote == '\0') {
-				candidates.push_back(std::move(cc_best_candidate));
-			}
+			candidates.push_back(std::move(cc_best_candidate));
 		}
 		return;
 	}

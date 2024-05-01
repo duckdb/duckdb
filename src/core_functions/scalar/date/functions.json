@@ -313,6 +313,14 @@
         "type": "scalar_function_set"
     },
     {
+        "struct": "TimeTZSortKeyFun",
+        "name": "timetz_byte_comparable",
+        "parameters": "time_tz",
+        "description": "Converts a TIME WITH TIME ZONE to an integer sort key",
+        "example": "timetz_byte_comparable('18:18:16.21-07:00'::TIME_TZ)",
+        "type": "scalar_function"
+    },
+    {
         "name": "to_centuries",
         "parameters": "integer",
         "description": "Construct a century interval",

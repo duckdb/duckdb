@@ -855,7 +855,7 @@ class TestArrowFilterPushdown(object):
         )
 
         match = re.search(
-            ".*ARROW_SCAN.*Filters: s\\.d\\.f=bar AND s\\.d.*\\.f IS NOT NULL.*",
+            ".*ARROW_SCAN.*Filters: s\\.d\\.f='bar' AND s.*\\.d\\.f IS NOT NULL.*",
             query_res.fetchone()[1],
             flags=re.DOTALL,
         )
