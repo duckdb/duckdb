@@ -70,6 +70,21 @@ PyDecimal::PyDecimal(py::handle &obj) : obj(obj) {
 	}
 }
 
+static int32_t WidenDecimal(int32_t original) {
+	// Increase the detected width to the max allowed by the physical type
+	// we do this so that failing to find a DECIMAL of width 8 in an array of width 7 does not cause a cast failure.
+	if (original < Decimal::MAX_WIDTH_INT16) {
+		return Decimal::MAX_WIDTH_INT16;
+	}
+	if (original < Decimal::MAX_WIDTH_INT32) {
+		return Decimal::MAX_WIDTH_INT32;
+	}
+	if (original < Decimal::MAX_WIDTH_INT64) {
+		return Decimal::MAX_WIDTH_INT64;
+	}
+	return Decimal::MAX_WIDTH_INT128;
+}
+
 bool PyDecimal::TryGetType(LogicalType &type) {
 	int32_t width = digits.size();
 
@@ -89,6 +104,7 @@ bool PyDecimal::TryGetType(LogicalType &type) {
 			type = LogicalType::DOUBLE;
 			return true;
 		}
+		width = WidenDecimal(width);
 		type = LogicalType::DECIMAL(width, scale);
 		return true;
 	}
