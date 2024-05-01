@@ -442,6 +442,9 @@ void StringValueResult::HandleUnicodeError(idx_t col_idx, LinePosition &error_po
 
 bool LineError::HandleErrors(StringValueResult &result) {
 	if (ignore_errors && is_error_in_line) {
+		result.cur_col_id = 0;
+		result.chunk_col_id = 0;
+		result.number_of_rows--;
 		Reset();
 		return true;
 	}
@@ -523,10 +526,10 @@ bool LineError::HandleErrors(StringValueResult &result) {
 		result.error_handler.Error(csv_error);
 	}
 	if (is_error_in_line) {
-		Reset();
 		result.borked_rows.insert(result.number_of_rows);
 		result.cur_col_id = 0;
 		result.chunk_col_id = 0;
+		Reset();
 		return true;
 	}
 	return false;
@@ -594,19 +597,15 @@ bool StringValueResult::AddRowInternal() {
 	current_line_position.begin = current_line_position.end;
 	current_line_position.end = current_line_start;
 	if (current_line_size > state_machine.options.maximum_line_size) {
-		current_errors.Insert(CSVErrorType::MAXIMUM_LINE_SIZE, 1, chunk_col_id, last_position);
+		current_errors.Insert(CSVErrorType::MAXIMUM_LINE_SIZE, 1, chunk_col_id, last_position, current_line_size);
 	}
-
-	// We need to add a few columns error
-	for (idx_t col_idx = cur_col_id; col_idx < number_of_columns; col_idx++) {
+	if (!state_machine.options.null_padding){
+		for (idx_t col_idx = cur_col_id; col_idx < number_of_columns; col_idx++) {
 		current_errors.Insert(CSVErrorType::TOO_FEW_COLUMNS, col_idx - 1, chunk_col_id, last_position);
+	}
 	}
 
 	if (current_errors.HandleErrors(*this)) {
-		if (state_machine.options.IgnoreErrors()) {
-			// If we are ignoring errors we just throw it away.
-			return false;
-		}
 		line_positions_per_row[number_of_rows] = current_line_position;
 		number_of_rows++;
 		if (number_of_rows >= result_size) {
