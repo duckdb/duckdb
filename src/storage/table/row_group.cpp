@@ -594,7 +594,6 @@ void RowGroup::ScanCommitted(CollectionScanState &state, DataChunk &result, Tabl
 	transaction_t transaction_id;
 	if (type == TableScanType::TABLE_SCAN_LATEST_COMMITTED_ROWS) {
 		start_ts = transaction_manager.GetLastCommit() + 1;
-		;
 		transaction_id = MAX_TRANSACTION_ID;
 	} else {
 		start_ts = transaction_manager.LowestActiveStart();
