@@ -155,6 +155,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<Bound
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, const LogicalType &target_type,
                      const vector<column_t> &bound_columns, Expression &cast_expr)
     : db(parent.db), info(parent.info), is_root(true) {
+	auto &local_storage = LocalStorage::Get(context, db);
 	// prevent any tuples from being added to the parent
 	lock_guard<mutex> lock(append_lock);
 	for (auto &column_def : parent.column_definitions) {
@@ -181,7 +182,6 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	this->row_groups = parent.row_groups->AlterType(context, changed_idx, target_type, bound_columns, cast_expr);
 
 	// scan the original table, and fill the new column with the transformed value
-	auto &local_storage = LocalStorage::Get(context, db);
 	local_storage.ChangeType(parent, *this, changed_idx, target_type, bound_columns, cast_expr);
 
 	// this table replaces the previous table, hence the parent is no longer the root DataTable
