@@ -70,13 +70,19 @@ Binder::Binder(bool, ClientContext &context, shared_ptr<Binder> parent_p, bool i
 unique_ptr<BoundCTENode> Binder::BindMaterializedCTE(CommonTableExpressionMap &cte_map) {
 	// Extract materialized CTEs from cte_map
 	vector<unique_ptr<CTENode>> materialized_ctes;
-	for (auto &cte : cte_map.map) {
-		auto &cte_entry = cte.second;
-		if (cte_entry->materialized == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
+	vector<string> names;
+	names.resize(cte_map.map.size());
+	for (auto &kv : cte_map.map_idx) {
+		names[kv.second] = kv.first;
+	}
+
+	for (idx_t i = 0; i < cte_map.map.size(); i++) {
+		auto &cte = cte_map.map[i];
+		if (cte->materialized == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
 			auto mat_cte = make_uniq<CTENode>();
-			mat_cte->ctename = cte.first;
-			mat_cte->query = cte_entry->query->node->Copy();
-			mat_cte->aliases = cte_entry->aliases;
+			mat_cte->ctename = names[i];
+			mat_cte->query = cte->query->node->Copy();
+			mat_cte->aliases = cte->aliases;
 			materialized_ctes.push_back(std::move(mat_cte));
 		}
 	}
@@ -195,8 +201,8 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 }
 
 void Binder::AddCTEMap(CommonTableExpressionMap &cte_map) {
-	for (auto &cte_it : cte_map.map) {
-		AddCTE(cte_it.first, *cte_it.second);
+	for (auto &cte_it : cte_map.map_idx) {
+		AddCTE(cte_it.first, *cte_map.map[cte_it.second]);
 	}
 }
 

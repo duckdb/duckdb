@@ -34,7 +34,8 @@ class CommonTableExpressionMap {
 public:
 	CommonTableExpressionMap();
 
-	std::map<string, unique_ptr<CommonTableExpressionInfo>> map;
+	vector<unique_ptr<CommonTableExpressionInfo>> map;
+	case_insensitive_map_t<idx_t> map_idx;
 
 public:
 	string ToString() const;

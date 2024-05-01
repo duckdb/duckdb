@@ -272,12 +272,14 @@ unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::Deserialize(Des
 }
 
 void CommonTableExpressionMap::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<std::map<string, unique_ptr<CommonTableExpressionInfo>>>(100, "map", map);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<CommonTableExpressionInfo>>>(100, "map", map);
+	serializer.WritePropertyWithDefault<case_insensitive_map_t<idx_t>>(101, "map_idx", map_idx);
 }
 
 CommonTableExpressionMap CommonTableExpressionMap::Deserialize(Deserializer &deserializer) {
 	CommonTableExpressionMap result;
-	deserializer.ReadPropertyWithDefault<std::map<string, unique_ptr<CommonTableExpressionInfo>>>(100, "map", result.map);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<CommonTableExpressionInfo>>>(100, "map", result.map);
+	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<idx_t>>(101, "map_idx", result.map_idx);
 	return result;
 }
 

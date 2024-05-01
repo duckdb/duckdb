@@ -54,7 +54,12 @@
       {
         "id": 100,
         "name": "map",
-        "type": "std::map<string, CommonTableExpressionInfo*>"
+        "type": "vector<CommonTableExpressionInfo*>"
+      },
+      {
+        "id": 101,
+        "name": "map_idx",
+        "type": "case_insensitive_map_t<idx_t>"
       }
     ],
     "pointer_type": "none"

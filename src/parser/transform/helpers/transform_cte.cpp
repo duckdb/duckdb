@@ -17,13 +17,14 @@ unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::Copy() {
 
 void Transformer::ExtractCTEsRecursive(CommonTableExpressionMap &cte_map) {
 	for (auto &cte_entry : stored_cte_map) {
-		for (auto &entry : cte_entry->map) {
-			auto found_entry = cte_map.map.find(entry.first);
-			if (found_entry != cte_map.map.end()) {
+		for (auto &entry : cte_entry->map_idx) {
+			auto found_entry = cte_map.map_idx.find(entry.first);
+			if (found_entry != cte_map.map_idx.end()) {
 				// entry already present - use top-most entry
 				continue;
 			}
-			cte_map.map[entry.first] = entry.second->Copy();
+			cte_map.map_idx[entry.first] = cte_map.map.size();
+			cte_map.map.push_back(cte_entry->map[entry.second]->Copy());
 		}
 	}
 	if (parent) {
@@ -76,8 +77,8 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 		D_ASSERT(info->query);
 		auto cte_name = string(cte.ctename);
 
-		auto it = cte_map.map.find(cte_name);
-		if (it != cte_map.map.end()) {
+		auto it = cte_map.map_idx.find(cte_name);
+		if (it != cte_map.map_idx.end()) {
 			// can't have two CTEs with same name
 			throw ParserException("Duplicate CTE name \"%s\"", cte_name);
 		}
@@ -90,7 +91,8 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 			info->materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
 		}
 
-		cte_map.map[cte_name] = std::move(info);
+		cte_map.map_idx[cte_name] = cte_map.map.size();
+		cte_map.map.push_back(std::move(info));
 	}
 }
 
