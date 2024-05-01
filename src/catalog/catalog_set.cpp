@@ -292,13 +292,8 @@ bool CatalogSet::RenameEntryInternal(CatalogTransaction transaction, CatalogEntr
 }
 
 bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, AlterInfo &alter_info) {
-	// lock the catalog for writing
-	unique_lock<mutex> write_lock(catalog.GetWriteLock());
-	// lock this catalog set to disallow reading
-	unique_lock<mutex> read_lock(catalog_lock);
-
 	// If the entry does not exist, we error
-	auto entry = GetEntryInternal(transaction, name);
+	auto entry = GetEntry(transaction, name);
 	if (!entry) {
 		return false;
 	}
@@ -324,6 +319,15 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 			return true;
 		}
 	}
+
+	// lock the catalog for writing
+	unique_lock<mutex> write_lock(catalog.GetWriteLock());
+	// lock this catalog set to disallow reading
+	unique_lock<mutex> read_lock(catalog_lock);
+
+	// fetch the entry again before doing the modification
+	// this will catch any write-write conflicts between transactions
+	entry = GetEntryInternal(transaction, name);
 
 	// Mark this entry as being created by this transaction
 	value->timestamp = transaction.transaction_id;

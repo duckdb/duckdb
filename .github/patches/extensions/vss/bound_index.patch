@@ -71,7 +71,7 @@ index 67ba14c2af..d0e24f4dc4 100644
  };
  
 diff --git a/src/hnsw/hnsw_index_pragmas.cpp b/src/hnsw/hnsw_index_pragmas.cpp
-index cef1293dae..af397b50a5 100644
+index cef1293dae..48fd926376 100644
 --- a/src/hnsw/hnsw_index_pragmas.cpp
 +++ b/src/hnsw/hnsw_index_pragmas.cpp
 @@ -100,7 +100,7 @@ static void HNSWIndexInfoExecute(ClientContext &context, TableFunctionInput &dat
@@ -83,15 +83,30 @@ index cef1293dae..af397b50a5 100644
  				hnsw_index = &index.Cast<HNSWIndex>();
  				return true;
  			}
-@@ -173,7 +173,7 @@ static void CompactIndexPragma(ClientContext &context, const FunctionParameters
+@@ -172,18 +172,16 @@ static void CompactIndexPragma(ClientContext &context, const FunctionParameters
+ 
  	auto &storage = table_entry.GetStorage();
  	bool found_index = false;
- 	storage.info->indexes.Scan([&](Index &index_entry) {
+-	storage.info->indexes.Scan([&](Index &index_entry) {
 -		if (index_entry.name == index_name && index_entry.index_type == HNSWIndex::TYPE_NAME) {
-+		if (index_entry.GetIndexName() == index_name && index_entry.GetIndexType() == HNSWIndex::TYPE_NAME) {
- 			auto &hnsw_index = index_entry.Cast<HNSWIndex>();
- 			hnsw_index.Compact();
+-			auto &hnsw_index = index_entry.Cast<HNSWIndex>();
+-			hnsw_index.Compact();
++	storage.info->indexes.BindAndScan<HNSWIndex>(context, *storage.info, [&](HNSWIndex &index){
++		if (index.GetIndexName() == index_name) {
++			index.Compact();
  			found_index = true;
+ 			return true;
+ 		}
+ 		return false;
+-	});
+-
++ 	});
+ 	if (!found_index) {
+-		throw BinderException("Index %s not found", index_name);
++		throw InvalidInputException("Index %s not found", index_name);
+ 	}
+ }
+ 
 diff --git a/src/hnsw/hnsw_index_scan.cpp b/src/hnsw/hnsw_index_scan.cpp
 index 954b439f91..7b4d3c3132 100644
 --- a/src/hnsw/hnsw_index_scan.cpp
@@ -163,25 +178,18 @@ index 04c2470188..70b3594c6d 100644
  	//! Traverses an HNSWIndex and vacuums the qualifying nodes. The lock obtained from InitializeLock must be held
  	void Vacuum(IndexLock &state) override;
 diff --git a/test/sql/hnsw/hnsw_insert_wal.test b/test/sql/hnsw/hnsw_insert_wal.test
-index 80e0558540..f21eab6396 100644
+index f21eab6396..beb8733788 100644
 --- a/test/sql/hnsw/hnsw_insert_wal.test
 +++ b/test/sql/hnsw/hnsw_insert_wal.test
-@@ -15,7 +15,7 @@ PRAGMA disable_checkpoint_on_shutdown;
+@@ -9,8 +9,9 @@ require vector_size 2048
  statement ok
- CREATE TABLE t1 (vec FLOAT[3]);
- 
--# Step 1: Create a new indexl
-+# Step 1: Create a new index
- statement ok
- CREATE INDEX my_idx ON t1 USING HNSW (vec);
- 
-@@ -24,9 +24,6 @@ SELECT count FROM pragma_hnsw_index_info();
- ----
- 0
+ PRAGMA enable_verification;
  
 -statement ok
--CHECKPOINT;
--
- # Step 3: Restart the database
- restart
+-PRAGMA disable_checkpoint_on_shutdown;
++# TODO: We should run with this pragma enabled, but we need to add extension loading to the WAL first
++#statement ok
++#PRAGMA disable_checkpoint_on_shutdown;
  
+ statement ok
+ CREATE TABLE t1 (vec FLOAT[3]);
