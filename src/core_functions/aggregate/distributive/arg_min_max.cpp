@@ -1,12 +1,12 @@
-#include "duckdb/core_functions/aggregate/distributive_functions.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/core_functions/aggregate/distributive_functions.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
 
 namespace duckdb {
 
@@ -174,7 +174,9 @@ struct ArgMinMaxBase {
 
 	static unique_ptr<FunctionData> Bind(ClientContext &context, AggregateFunction &function,
 	                                     vector<unique_ptr<Expression>> &arguments) {
-		ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->return_type, false);
+		if (arguments[1]->return_type.InternalType() == PhysicalType::VARCHAR) {
+			ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->return_type, false);
+		}
 		function.arguments[0] = arguments[0]->return_type;
 		function.return_type = arguments[0]->return_type;
 		return nullptr;
@@ -318,9 +320,7 @@ AggregateFunction GetArgMinMaxFunctionInternal(const LogicalType &by_type, const
 	if (type.InternalType() == PhysicalType::VARCHAR || by_type.InternalType() == PhysicalType::VARCHAR) {
 		function.destructor = AggregateFunction::StateDestroy<STATE, OP>;
 	}
-	if (by_type.InternalType() == PhysicalType::VARCHAR) {
-		function.bind = OP::Bind;
-	}
+	function.bind = OP::Bind;
 	return function;
 }
 
