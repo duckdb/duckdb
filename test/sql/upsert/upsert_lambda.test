@@ -70,7 +70,7 @@ update set
   )
 ;
 ----
-Ambiguous reference to column name "baz" (use: "excluded.baz" or "foo.baz")
+Ambiguous reference to column name "baz"
 
 statement ok
 insert into foo
