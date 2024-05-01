@@ -17,13 +17,13 @@ namespace duckdb {
 
 StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_machine,
                                      const shared_ptr<CSVBufferHandle> &buffer_handle, Allocator &buffer_allocator,
-                                     idx_t result_size_p, idx_t buffer_position, CSVErrorHandler &error_hander_p,
+                                     bool figure_out_new_line_p, idx_t buffer_position, CSVErrorHandler &error_hander_p,
                                      CSVIterator &iterator_p, bool store_line_size_p,
                                      shared_ptr<CSVFileScan> csv_file_scan_p, idx_t &lines_read_p, bool sniffing_p)
     : ScannerResult(states, state_machine),
       number_of_columns(NumericCast<uint32_t>(state_machine.dialect_options.num_cols)),
       null_padding(state_machine.options.null_padding), ignore_errors(state_machine.options.ignore_errors.GetValue()),
-      result_size(result_size_p), error_handler(error_hander_p), iterator(iterator_p),
+      figure_out_new_line(figure_out_new_line_p), error_handler(error_hander_p), iterator(iterator_p),
       store_line_size(store_line_size_p), csv_file_scan(std::move(csv_file_scan_p)), lines_read(lines_read_p),
       current_errors(state_machine.options.IgnoreErrors()), sniffing(sniffing_p) {
 	// Vector information
@@ -34,6 +34,7 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 	buffer_size = buffer_handle->actual_size;
 	last_position = {buffer_handle->buffer_idx, buffer_position, buffer_size};
 	requested_size = buffer_handle->requested_size;
+	result_size = figure_out_new_line ? 1 : STANDARD_VECTOR_SIZE;
 
 	// Current Result information
 	current_line_position.begin = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, buffer_handle->actual_size};
@@ -441,7 +442,7 @@ void StringValueResult::HandleUnicodeError(idx_t col_idx, LinePosition &error_po
 }
 
 bool LineError::HandleErrors(StringValueResult &result) {
-	if (ignore_errors && is_error_in_line) {
+	if (ignore_errors && is_error_in_line && !result.figure_out_new_line) {
 		result.cur_col_id = 0;
 		result.chunk_col_id = 0;
 		result.number_of_rows--;
@@ -599,10 +600,10 @@ bool StringValueResult::AddRowInternal() {
 	if (current_line_size > state_machine.options.maximum_line_size) {
 		current_errors.Insert(CSVErrorType::MAXIMUM_LINE_SIZE, 1, chunk_col_id, last_position, current_line_size);
 	}
-	if (!state_machine.options.null_padding){
+	if (!state_machine.options.null_padding) {
 		for (idx_t col_idx = cur_col_id; col_idx < number_of_columns; col_idx++) {
-		current_errors.Insert(CSVErrorType::TOO_FEW_COLUMNS, col_idx - 1, chunk_col_id, last_position);
-	}
+			current_errors.Insert(CSVErrorType::TOO_FEW_COLUMNS, col_idx - 1, chunk_col_id, last_position);
+		}
 	}
 
 	if (current_errors.HandleErrors(*this)) {
@@ -744,10 +745,10 @@ StringValueScanner::StringValueScanner(idx_t scanner_idx_p, const shared_ptr<CSV
                                        const shared_ptr<CSVStateMachine> &state_machine,
                                        const shared_ptr<CSVErrorHandler> &error_handler,
                                        const shared_ptr<CSVFileScan> &csv_file_scan, bool sniffing,
-                                       CSVIterator boundary, idx_t result_size)
+                                       CSVIterator boundary, bool figure_out_nl)
     : BaseScanner(buffer_manager, state_machine, error_handler, sniffing, csv_file_scan, boundary),
       scanner_idx(scanner_idx_p),
-      result(states, *state_machine, cur_buffer_handle, BufferAllocator::Get(buffer_manager->context), result_size,
+      result(states, *state_machine, cur_buffer_handle, BufferAllocator::Get(buffer_manager->context), figure_out_nl,
              iterator.pos.buffer_pos, *error_handler, iterator,
              buffer_manager->context.client_data->debug_set_max_line_length, csv_file_scan, lines_read, sniffing) {
 }
@@ -819,12 +820,9 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 			result_vector.Reinterpret(parse_vector);
 		} else {
 			string error_message;
-			CastParameters parameters(false, &error_message);
-			bool success;
 			idx_t line_error = 0;
-			success = VectorOperations::TryCast(buffer_manager->context, parse_vector, result_vector,
-			                                    parse_chunk.size(), &error_message, false, true);
-			if (success) {
+			if (VectorOperations::TryCast(buffer_manager->context, parse_vector, result_vector, parse_chunk.size(),
+			                              &error_message, false, true)) {
 				continue;
 			}
 			// An error happened, to propagate it we need to figure out the exact line where the casting failed.
@@ -839,7 +837,6 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					break;
 				}
 			}
-
 			{
 				vector<Value> row;
 
@@ -1302,10 +1299,11 @@ void StringValueScanner::SetStart() {
 		}
 		scan_finder =
 		    make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, make_shared_ptr<CSVErrorHandler>(true),
-		                                  csv_file_scan, false, iterator, 1U);
+		                                  csv_file_scan, false, iterator, true);
 		auto &tuples = scan_finder->ParseChunk();
 		line_found = true;
-		if (tuples.number_of_rows != 1 || !tuples.borked_rows.empty()) {
+		if (tuples.number_of_rows != 1 ||
+		    (!tuples.borked_rows.empty() && !state_machine->options.ignore_errors.GetValue())) {
 			line_found = false;
 			// If no tuples were parsed, this is not the correct start, we need to skip until the next new line
 			// Or if columns don't match, this is not the correct start, we need to skip until the next new line
