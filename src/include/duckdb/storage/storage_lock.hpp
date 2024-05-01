@@ -13,27 +13,28 @@
 #include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
-class StorageLock;
+struct StorageLockInternals;
 
 enum class StorageLockType { SHARED = 0, EXCLUSIVE = 1 };
 
 class StorageLockKey {
-	friend class StorageLock;
-
 public:
-	StorageLockKey(StorageLock &lock, StorageLockType type);
+	StorageLockKey(shared_ptr<StorageLockInternals> internals, StorageLockType type);
 	~StorageLockKey();
 
+	StorageLockType GetType() const {
+		return type;
+	}
+
 private:
-	StorageLock &lock;
+	shared_ptr<StorageLockInternals> internals;
 	StorageLockType type;
 };
 
 class StorageLock {
-	friend class StorageLockKey;
-
 public:
 	StorageLock();
+	~StorageLock();
 
 	//! Get an exclusive lock
 	unique_ptr<StorageLockKey> GetExclusiveLock();
@@ -48,14 +49,7 @@ public:
 	unique_ptr<StorageLockKey> TryUpgradeCheckpointLock(StorageLockKey &lock);
 
 private:
-	mutex exclusive_lock;
-	atomic<idx_t> read_count;
-
-private:
-	//! Release an exclusive lock
-	void ReleaseExclusiveLock();
-	//! Release a shared lock
-	void ReleaseSharedLock();
+	shared_ptr<StorageLockInternals> internals;
 };
 
 } // namespace duckdb
