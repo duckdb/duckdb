@@ -797,9 +797,12 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			bool reparse_statement = false;
 #endif
 			statement = std::move(copied_statement);
+			if (statement->type == StatementType::RELATION_STATEMENT) {
+				reparse_statement = false;
+			}
 			if (reparse_statement) {
 				try {
-					Parser parser;
+					Parser parser(GetParserOptions());
 					ErrorData error;
 					parser.ParseQuery(statement->ToString());
 					statement = std::move(parser.statements[0]);
@@ -1278,7 +1281,8 @@ ClientProperties ClientContext::GetClientProperties() const {
 	if (TryGetCurrentSetting("TimeZone", result)) {
 		timezone = result.ToString();
 	}
-	return {timezone, db->config.options.arrow_offset_size};
+	return {timezone, db->config.options.arrow_offset_size, db->config.options.arrow_use_list_view,
+	        db->config.options.produce_arrow_string_views};
 }
 
 bool ClientContext::ExecutionIsFinished() {

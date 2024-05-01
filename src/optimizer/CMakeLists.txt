@@ -26,6 +26,7 @@ add_library_unity(
   remove_duplicate_groups.cpp
   remove_unused_columns.cpp
   statistics_propagator.cpp
+  limit_pushdown.cpp
   topn_optimizer.cpp
   unnest_rewriter.cpp)
 set(ALL_OBJECT_FILES

@@ -10,8 +10,8 @@
 #include "duckdb/common/thread.hpp"
 #endif
 
-#include <cstdio>
 #include <cinttypes>
+#include <cstdio>
 
 namespace duckdb {
 
@@ -120,6 +120,8 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(ThreadsSetting),
     DUCKDB_GLOBAL(UsernameSetting),
     DUCKDB_GLOBAL(ExportLargeBufferArrow),
+    DUCKDB_GLOBAL(ArrowOutputListView),
+    DUCKDB_GLOBAL(ProduceArrowStringView),
     DUCKDB_GLOBAL_ALIAS("user", UsernameSetting),
     DUCKDB_GLOBAL_ALIAS("wal_autocheckpoint", CheckpointThresholdSetting),
     DUCKDB_GLOBAL_ALIAS("worker_threads", ThreadsSetting),
@@ -128,6 +130,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(DuckDBApiSetting),
     DUCKDB_GLOBAL(CustomUserAgentSetting),
     DUCKDB_LOCAL(PartitionedWriteFlushThreshold),
+    DUCKDB_GLOBAL(DefaultBlockAllocSize),
     FINAL_SETTING};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {

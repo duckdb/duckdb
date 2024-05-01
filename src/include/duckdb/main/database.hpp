@@ -25,6 +25,7 @@ class FileSystem;
 class TaskScheduler;
 class ObjectCache;
 struct AttachInfo;
+struct AttachOptions;
 class DatabaseFileSystem;
 
 struct ExtensionInfo {
@@ -71,7 +72,7 @@ public:
 	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) const;
 
 	unique_ptr<AttachedDatabase> CreateAttachedDatabase(ClientContext &context, const AttachInfo &info,
-	                                                    const string &type, AccessMode access_mode);
+	                                                    const AttachOptions &options);
 
 private:
 	void Initialize(const char *path, DBConfig *config);

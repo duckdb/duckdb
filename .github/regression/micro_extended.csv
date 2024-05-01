@@ -97,6 +97,7 @@ benchmark/micro/date/extract_multiple_icu.benchmark
 benchmark/micro/date/extract_struct.benchmark
 benchmark/micro/date/extract_struct_icu.benchmark
 benchmark/micro/date/extract_year.benchmark
+benchmark/micro/filter/in_conversion.benchmark
 benchmark/micro/filter/parallel_complex_filter.benchmark
 benchmark/micro/functions/random.benchmark
 benchmark/micro/functions/random_uuid.benchmark
@@ -169,8 +170,10 @@ benchmark/micro/map/map_extract.benchmark
 benchmark/micro/map/map_lookup.benchmark
 benchmark/micro/nulls/no_nulls_addition.benchmark
 benchmark/micro/nulls/null_addition.benchmark
+benchmark/micro/optimizer/topn_optimization.benchmark
 benchmark/micro/order/orderby.benchmark
 benchmark/micro/pushdown/or_pushdown.benchmark
+benchmark/micro/pushdown/window_partition_pushdown.benchmark
 benchmark/micro/result_collection/batched_stream_query.benchmark
 benchmark/micro/simd/auto-vectorization.benchmark
 benchmark/micro/string/bitstring.benchmark

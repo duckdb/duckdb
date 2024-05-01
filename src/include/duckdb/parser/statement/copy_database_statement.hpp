@@ -27,13 +27,12 @@ public:
 	string to_database;
 	CopyDatabaseType copy_type;
 
-	string ToString() const override;
-
 protected:
 	CopyDatabaseStatement(const CopyDatabaseStatement &other);
 
 public:
 	DUCKDB_API unique_ptr<SQLStatement> Copy() const override;
+	string ToString() const override;
 
 private:
 };
