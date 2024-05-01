@@ -11,7 +11,6 @@
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/queue.hpp"
 #include "duckdb/parser/expression/list.hpp"
@@ -20,8 +19,6 @@
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
-
-#include <algorithm>
 
 namespace duckdb {
 
@@ -33,19 +30,6 @@ static void CreateColumnDependencyManager(BoundCreateTableInfo &info) {
 		}
 		info.column_dependency_manager.AddGeneratedColumn(col, base.columns);
 	}
-}
-
-static unique_ptr<BoundConstraint> BindCheckConstraint(Binder &binder, const string &table_name,
-                                                       const ColumnList &columns, const unique_ptr<Constraint> &cond) {
-	auto bound_constraint = make_uniq<BoundCheckConstraint>();
-	// check constraint: bind the expression
-	CheckBinder check_binder(binder, binder.context, table_name, columns, bound_constraint->bound_columns);
-	auto &check = cond->Cast<CheckConstraint>();
-	// create a copy of the unbound expression because the binding destroys the constraint
-	auto unbound_expression = check.expression->Copy();
-	// now bind the constraint and create a new BoundCheckConstraint
-	bound_constraint->expression = check_binder.Bind(unbound_expression);
-	return std::move(bound_constraint);
 }
 
 vector<unique_ptr<BoundConstraint>> Binder::BindConstraints(ClientContext &context,
@@ -62,76 +46,8 @@ vector<unique_ptr<BoundConstraint>> Binder::BindConstraints(const TableCatalogEn
 vector<unique_ptr<BoundConstraint>> Binder::BindConstraints(const vector<unique_ptr<Constraint>> &constraints,
                                                             const string &table_name, const ColumnList &columns) {
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
-	for (auto &constr : constraints) {
-		switch (constr->type) {
-		case ConstraintType::CHECK: {
-			bound_constraints.push_back(BindCheckConstraint(*this, table_name, columns, constr));
-			break;
-		}
-		case ConstraintType::NOT_NULL: {
-			auto &not_null = constr->Cast<NotNullConstraint>();
-			auto &col = columns.GetColumn(LogicalIndex(not_null.index));
-			bound_constraints.push_back(make_uniq<BoundNotNullConstraint>(PhysicalIndex(col.StorageOid())));
-			break;
-		}
-		case ConstraintType::UNIQUE: {
-			auto &unique = constr->Cast<UniqueConstraint>();
-			// have to resolve columns of the unique constraint
-			vector<LogicalIndex> keys;
-			logical_index_set_t key_set;
-			if (unique.HasIndex()) {
-				D_ASSERT(unique.GetIndex().index < columns.LogicalColumnCount());
-				// unique constraint is given by single index
-				unique.SetColumnName(columns.GetColumn(unique.GetIndex()).Name());
-				keys.push_back(unique.GetIndex());
-				key_set.insert(unique.GetIndex());
-			} else {
-				// unique constraint is given by list of names
-				// have to resolve names
-				for (auto &keyname : unique.GetColumnNames()) {
-					if (!columns.ColumnExists(keyname)) {
-						throw ParserException("column \"%s\" named in key does not exist", keyname);
-					}
-					auto &column = columns.GetColumn(keyname);
-					auto column_index = column.Logical();
-					if (key_set.find(column_index) != key_set.end()) {
-						throw ParserException("column \"%s\" appears twice in "
-						                      "primary key constraint",
-						                      keyname);
-					}
-					keys.push_back(column_index);
-					key_set.insert(column_index);
-				}
-			}
-			bound_constraints.push_back(
-			    make_uniq<BoundUniqueConstraint>(std::move(keys), std::move(key_set), unique.IsPrimaryKey()));
-			break;
-		}
-		case ConstraintType::FOREIGN_KEY: {
-			auto &fk = constr->Cast<ForeignKeyConstraint>();
-			D_ASSERT((fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE && !fk.info.pk_keys.empty()) ||
-			         (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE && !fk.info.pk_keys.empty()) ||
-			         fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE);
-			physical_index_set_t fk_key_set, pk_key_set;
-			for (auto &pk_key : fk.info.pk_keys) {
-				if (pk_key_set.find(pk_key) != pk_key_set.end()) {
-					throw BinderException("Duplicate primary key referenced in FOREIGN KEY constraint");
-				}
-				pk_key_set.insert(pk_key);
-			}
-			for (auto &fk_key : fk.info.fk_keys) {
-				if (fk_key_set.find(fk_key) != fk_key_set.end()) {
-					throw BinderException("Duplicate key specified in FOREIGN KEY constraint");
-				}
-				fk_key_set.insert(fk_key);
-			}
-			bound_constraints.push_back(
-			    make_uniq<BoundForeignKeyConstraint>(fk.info, std::move(pk_key_set), std::move(fk_key_set)));
-			break;
-		}
-		default:
-			throw NotImplementedException("unrecognized constraint type in bind");
-		}
+	for (const auto &constr : constraints) {
+		bound_constraints.push_back(BindConstraint(*constr, table_name, columns));
 	}
 	return bound_constraints;
 }
@@ -142,35 +58,25 @@ vector<unique_ptr<BoundConstraint>> Binder::BindNewConstraints(vector<unique_ptr
 
 	// handle primary keys/not null constraints
 	bool has_primary_key = false;
-	logical_index_set_t not_null_columns;
-	vector<LogicalIndex> primary_keys;
-	for (idx_t c = 0; c < constraints.size(); c++) {
-		auto &constr = constraints[c];
-		switch (constr->type) {
-		case ConstraintType::NOT_NULL: {
-			auto &not_null = constr->Cast<NotNullConstraint>();
-			auto &col = columns.GetColumn(LogicalIndex(not_null.index));
-			bound_constraints.push_back(make_uniq<BoundNotNullConstraint>(PhysicalIndex(col.StorageOid())));
+	physical_index_set_t not_null_columns;
+	vector<PhysicalIndex> primary_keys;
+	for (const auto &bound_constr : bound_constraints) {
+		if (bound_constr->type == ConstraintType::NOT_NULL) {
+			auto &not_null = bound_constr->Cast<BoundNotNullConstraint>();
 			not_null_columns.insert(not_null.index);
-			break;
-		}
-		case ConstraintType::UNIQUE: {
-			auto &unique = constr->Cast<UniqueConstraint>();
-			auto &bound_unique = bound_constraints[c]->Cast<BoundUniqueConstraint>();
-			if (unique.IsPrimaryKey()) {
+		} else if (bound_constr->type == ConstraintType::UNIQUE) {
+			auto &unique = bound_constr->Cast<BoundUniqueConstraint>();
+			if (unique.is_primary_key) {
 				// we can only have one primary key per table
 				if (has_primary_key) {
 					throw ParserException("table \"%s\" has more than one primary key", table_name);
 				}
 				has_primary_key = true;
-				primary_keys = bound_unique.keys;
+				primary_keys = unique.keys;
 			}
-			break;
-		}
-		default:
-			break;
 		}
 	}
+
 	if (has_primary_key) {
 		// if there is a primary key index, also create a NOT NULL constraint for each of the columns
 		for (auto &column_index : primary_keys) {
@@ -178,12 +84,91 @@ vector<unique_ptr<BoundConstraint>> Binder::BindNewConstraints(vector<unique_ptr
 				//! No need to create a NotNullConstraint, it's already present
 				continue;
 			}
-			auto physical_index = columns.LogicalToPhysical(column_index);
-			constraints.push_back(make_uniq<NotNullConstraint>(column_index));
-			bound_constraints.push_back(make_uniq<BoundNotNullConstraint>(physical_index));
+			auto logical_index = columns.PhysicalToLogical(column_index);
+			constraints.push_back(make_uniq<NotNullConstraint>(logical_index));
+			bound_constraints.push_back(make_uniq<BoundNotNullConstraint>(column_index));
 		}
 	}
+
 	return bound_constraints;
+}
+
+unique_ptr<BoundConstraint> Binder::BindConstraint(Constraint &constraint, const string &table_name, const ColumnList &columns) {
+	switch (constraint.type) {
+	case ConstraintType::CHECK: {
+		unique_ptr<BoundConstraint> bound_constraint = make_uniq<BoundCheckConstraint>();
+		auto check_constraint = reinterpret_cast<BoundCheckConstraint *>(bound_constraint.get());
+		// check constraint: bind the expression
+		CheckBinder check_binder(*this, context, table_name, columns, check_constraint->bound_columns);
+		auto &check = constraint.Cast<CheckConstraint>();
+		// create a copy of the unbound expression because the binding destroys the constraint
+		auto unbound_expression = check.expression->Copy();
+		// now bind the constraint and create a new BoundCheckConstraint
+		check_constraint->expression = check_binder.Bind(check.expression);
+		// move the unbound constraint back into the original check expression
+		check.expression = std::move(unbound_expression);
+		return bound_constraint;
+	}
+	case ConstraintType::NOT_NULL: {
+		auto &not_null = constraint.Cast<NotNullConstraint>();
+		auto &col = columns.GetColumn(LogicalIndex(not_null.index));
+		return make_uniq<BoundNotNullConstraint>(PhysicalIndex(col.StorageOid()));
+	}
+	case ConstraintType::UNIQUE: {
+		auto &unique = constraint.Cast<UniqueConstraint>();
+		// have to resolve columns of the unique constraint
+		vector<PhysicalIndex> keys;
+		physical_index_set_t key_set;
+		if (unique.HasIndex()) {
+			D_ASSERT(unique.GetIndex().index < columns.LogicalColumnCount());
+			auto &col = columns.GetColumn(unique.GetIndex());
+			// unique constraint is given by single index
+			unique.SetColumnName(col.Name());
+			keys.push_back(col.Physical());
+			key_set.insert(col.Physical());
+		} else {
+			// unique constraint is given by list of names
+			// have to resolve names
+			for (auto &keyname : unique.GetColumnNames()) {
+				if (!columns.ColumnExists(keyname)) {
+					throw ParserException("Table \"%s\" does not have a column named \"%s\"", table_name, keyname);
+				}
+				auto &column = columns.GetColumn(keyname);
+				auto column_index = column.Physical();
+				if (key_set.find(column_index) != key_set.end()) {
+					throw ParserException("column \"%s\" appears twice in "
+										  "primary key constraint",
+										  keyname);
+				}
+				keys.push_back(column_index);
+				key_set.insert(column_index);
+			}
+		}
+		return make_uniq<BoundUniqueConstraint>(std::move(keys), std::move(key_set), unique.IsPrimaryKey());
+	}
+	case ConstraintType::FOREIGN_KEY: {
+		auto &fk = constraint.Cast<ForeignKeyConstraint>();
+		D_ASSERT((fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE && !fk.info.pk_keys.empty()) ||
+				 (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE && !fk.info.pk_keys.empty()) ||
+				 fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE);
+		physical_index_set_t fk_key_set, pk_key_set;
+		for (auto &pk_key : fk.info.pk_keys) {
+			if (pk_key_set.find(pk_key) != pk_key_set.end()) {
+				throw BinderException("Duplicate primary key referenced in FOREIGN KEY constraint");
+			}
+			pk_key_set.insert(pk_key);
+		}
+		for (auto &fk_key : fk.info.fk_keys) {
+			if (fk_key_set.find(fk_key) != fk_key_set.end()) {
+				throw BinderException("Duplicate key specified in FOREIGN KEY constraint");
+			}
+			fk_key_set.insert(fk_key);
+		}
+		return make_uniq<BoundForeignKeyConstraint>(fk.info, std::move(pk_key_set), std::move(fk_key_set));
+	}
+	default:
+		throw NotImplementedException("unrecognized constraint type in bind");
+	}
 }
 
 void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
