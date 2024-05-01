@@ -229,8 +229,8 @@ void DataTable::InitializeScan(TableScanState &state, const vector<column_t> &co
 
 void DataTable::InitializeScan(DuckTransaction &transaction, TableScanState &state, const vector<column_t> &column_ids,
                                TableFilterSet *table_filters) {
-	InitializeScan(state, column_ids, table_filters);
 	auto &local_storage = LocalStorage::Get(transaction);
+	InitializeScan(state, column_ids, table_filters);
 	local_storage.InitializeScan(*this, state.local_state, table_filters);
 }
 
@@ -251,10 +251,10 @@ idx_t DataTable::MaxThreads(ClientContext &context) {
 }
 
 void DataTable::InitializeParallelScan(ClientContext &context, ParallelTableScanState &state) {
+	auto &local_storage = LocalStorage::Get(context, db);
 	state.checkpoint_lock = info->checkpoint_lock.GetSharedLock();
 	row_groups->InitializeParallelScan(state.scan_state);
 
-	auto &local_storage = LocalStorage::Get(context, db);
 	local_storage.InitializeParallelScan(*this, state.local_state);
 }
 
