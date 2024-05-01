@@ -220,7 +220,7 @@ public:
 	void SetIndexStorageInfo(vector<IndexStorageInfo> index_storage_info);
 	void VacuumIndexes();
 
-	const string &GetTableName() const;
+	string GetTableName() const;
 	void SetTableName(string new_name);
 
 	TableStorageInfo GetStorageInfo();

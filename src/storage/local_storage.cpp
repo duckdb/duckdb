@@ -23,7 +23,7 @@ LocalTableStorage::LocalTableStorage(DataTable &table)
 	    data_table_info, TableIOManager::Get(table).GetBlockManagerForRowData(), types, MAX_ROW_ID, 0);
 	row_groups->InitializeEmpty();
 
-	data_table_info->indexes.Scan([&](Index &index) {
+	data_table_info->GetIndexes().Scan([&](Index &index) {
 		if (index.index_type != ART::TYPE_NAME) {
 			return false;
 		}
@@ -169,7 +169,7 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 		});
 	} else {
 		auto data_table_info = table.GetDataTableInfo();
-		auto &index_list = data_table_info->indexes;
+		auto &index_list = data_table_info->GetIndexes();
 		error = AppendToIndexes(transaction, *row_groups, index_list, table.GetTypes(), append_state.current_row);
 	}
 	if (error.HasError()) {

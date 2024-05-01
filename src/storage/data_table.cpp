@@ -327,12 +327,26 @@ bool DataTable::IndexNameIsUnique(const string &name) {
 	return info->indexes.NameIsUnique(name);
 }
 
-const string &DataTable::GetTableName() const {
-	return info->table;
+string DataTableInfo::GetSchemaName() {
+	return schema;
+}
+
+string DataTableInfo::GetTableName() {
+	lock_guard<mutex> l(name_lock);
+	return table;
+}
+
+void DataTableInfo::SetTableName(string name) {
+	lock_guard<mutex> l(name_lock);
+	table = std::move(name);
+}
+
+string DataTable::GetTableName() const {
+	return info->GetTableName();
 }
 
 void DataTable::SetTableName(string new_name) {
-	info->table = std::move(new_name);
+	info->SetTableName(std::move(new_name));
 }
 
 TableStorageInfo DataTable::GetStorageInfo() {

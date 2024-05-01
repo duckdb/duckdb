@@ -29,7 +29,7 @@ CommitState::CommitState(transaction_t commit_id, optional_ptr<WriteAheadLog> lo
 void CommitState::SwitchTable(DataTableInfo *table_info, UndoFlags new_op) {
 	if (current_table_info != table_info) {
 		// write the current table to the log
-		log->WriteSetTable(table_info->schema, table_info->table);
+		log->WriteSetTable(table_info->GetSchemaName(), table_info->GetTableName());
 		current_table_info = table_info;
 	}
 }

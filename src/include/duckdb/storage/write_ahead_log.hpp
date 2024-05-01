@@ -90,7 +90,7 @@ public:
 	void WriteCreateType(const TypeCatalogEntry &entry);
 	void WriteDropType(const TypeCatalogEntry &entry);
 	//! Sets the table used for subsequent insert/delete/update commands
-	void WriteSetTable(string &schema, string &table);
+	void WriteSetTable(const string &schema, const string &table);
 
 	void WriteAlter(const AlterInfo &info);
 

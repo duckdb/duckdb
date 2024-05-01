@@ -477,7 +477,7 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 
 	} else {
 		// get the matching index storage info
-		for (auto const &elem : data_table.GetDataTableInfo()->index_storage_infos) {
+		for (auto const &elem : data_table.GetDataTableInfo()->GetIndexStorageInfo()) {
 			if (elem.name == info.index_name) {
 				index_storage_info = elem;
 				break;

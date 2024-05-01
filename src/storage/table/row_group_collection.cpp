@@ -67,11 +67,11 @@ const vector<LogicalType> &RowGroupCollection::GetTypes() const {
 }
 
 Allocator &RowGroupCollection::GetAllocator() const {
-	return Allocator::Get(info->db);
+	return Allocator::Get(info->GetDB());
 }
 
 AttachedDatabase &RowGroupCollection::GetAttached() {
-	return GetTableInfo().db;
+	return GetTableInfo().GetDB();
 }
 
 MetadataManager &RowGroupCollection::GetMetadataManager() {
@@ -849,7 +849,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
                                                vector<SegmentNode<RowGroup>> &segments) {
 	bool is_full_checkpoint = checkpoint_state.writer.GetCheckpointType() == CheckpointType::FULL_CHECKPOINT;
 	// currently we can only vacuum deletes if we are doing a full checkpoint and there are no indexes
-	state.can_vacuum_deletes = info->indexes.Empty() && is_full_checkpoint;
+	state.can_vacuum_deletes = info->GetIndexes().Empty() && is_full_checkpoint;
 	if (!state.can_vacuum_deletes) {
 		return;
 	}
@@ -1144,7 +1144,7 @@ void RowGroupCollection::VerifyNewConstraint(DataTable &parent, const BoundConst
 		}
 		// Check constraint
 		if (VectorOperations::HasNull(scan_chunk.data[0], scan_chunk.size())) {
-			throw ConstraintException("NOT NULL constraint failed: %s.%s", info->table,
+			throw ConstraintException("NOT NULL constraint failed: %s.%s", info->GetTableName(),
 			                          parent.Columns()[physical_index].GetName());
 		}
 	}

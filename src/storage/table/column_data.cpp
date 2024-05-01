@@ -43,7 +43,7 @@ void ColumnData::SetStart(idx_t new_start) {
 }
 
 DatabaseInstance &ColumnData::GetDatabase() const {
-	return info.db.GetDatabase();
+	return info.GetDB().GetDatabase();
 }
 
 DataTableInfo &ColumnData::GetTableInfo() const {
@@ -485,7 +485,7 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Co
 
 void ColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats) {
 	// load the data pointers for the column
-	deserializer.Set<DatabaseInstance &>(info.db.GetDatabase());
+	deserializer.Set<DatabaseInstance &>(info.GetDB().GetDatabase());
 	deserializer.Set<LogicalType &>(type);
 
 	vector<DataPointer> data_pointers;
