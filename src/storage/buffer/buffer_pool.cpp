@@ -103,7 +103,7 @@ BufferPool::EvictionResult BufferPool::EvictBlocks(MemoryTag tag, idx_t extra_me
 		return {true, std::move(r)};
 	}
 
-	IterateUnloadableBlocks([&](BufferEvictionNode &, const std::shared_ptr<BlockHandle> &handle) {
+	IterateUnloadableBlocks([&](BufferEvictionNode &, const shared_ptr<BlockHandle> &handle) {
 		// hooray, we can unload the block
 		if (buffer && handle->buffer->AllocSize() == extra_memory) {
 			// we can re-use the memory directly
@@ -135,7 +135,7 @@ idx_t BufferPool::PurgeAgedBlocks(uint32_t max_age_sec) {
 	int64_t now = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()).time_since_epoch().count();
 	int64_t limit = now - (static_cast<int64_t>(max_age_sec) * 1000);
 	idx_t purged_bytes = 0;
-	IterateUnloadableBlocks([&](BufferEvictionNode &node, const std::shared_ptr<BlockHandle> &handle) {
+	IterateUnloadableBlocks([&](BufferEvictionNode &node, const shared_ptr<BlockHandle> &handle) {
 		// We will unload this block regardless. But stop the iteration immediately afterward if this
 		// block is younger than the age threshold.
 		bool is_fresh = handle->lru_timestamp_msec >= limit && handle->lru_timestamp_msec <= now;
