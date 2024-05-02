@@ -402,9 +402,42 @@ static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ExecutionContext &c
 }
 
 static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &context, FunctionData &bind_data,
-                                                               const string &file_path) {
+                                                               const string &file_path_p) {
 	auto &csv_data = bind_data.Cast<WriteCSVData>();
 	auto &options = csv_data.options;
+	// Verify that file path has the correct compression extension, otherwise fix it.
+	string file_path = file_path_p;
+	switch (csv_data.options.compression) {
+	case FileCompressionType::GZIP:
+		if (!StringUtil::EndsWith(file_path, ".csv.gz")) {
+			if (StringUtil::EndsWith(file_path, ".csv")) {
+				// We just add .gz
+				file_path += ".gz";
+			} else {
+				file_path += ".csv.gz";
+			}
+		}
+		break;
+	case FileCompressionType::UNCOMPRESSED:
+		if (!StringUtil::EndsWith(file_path, ".csv")) {
+			file_path += ".csv";
+		}
+		break;
+	case FileCompressionType::ZSTD:
+		if (!StringUtil::EndsWith(file_path, ".csv.zst")) {
+			if (StringUtil::EndsWith(file_path, ".csv")) {
+				// We just add .gz
+				file_path += ".zst";
+			} else {
+				file_path += ".csv.zst";
+			}
+		}
+		break;
+	case FileCompressionType::AUTO_DETECT:
+		break;
+	default:
+		throw InternalException("Invalid file compression format for CSV files");
+	}
 	auto global_data =
 	    make_uniq<GlobalWriteCSVData>(FileSystem::GetFileSystem(context), file_path, options.compression);
 
