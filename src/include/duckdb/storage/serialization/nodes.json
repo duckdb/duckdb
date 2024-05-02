@@ -54,12 +54,7 @@
       {
         "id": 100,
         "name": "map",
-        "type": "vector<CommonTableExpressionInfo*>"
-      },
-      {
-        "id": 101,
-        "name": "map_idx",
-        "type": "case_insensitive_map_t<idx_t>"
+        "type": "InsertionOrderPreservingMap<idx_t, CommonTableExpressionInfo*>"
       }
     ],
     "pointer_type": "none"

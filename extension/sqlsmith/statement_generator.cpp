@@ -175,7 +175,7 @@ void StatementGenerator::GenerateCTEs(QueryNode &node) {
 		for (idx_t i = 0; i < 1 + RandomValue(10); i++) {
 			cte->aliases.push_back(GenerateIdentifier());
 		}
-		node.cte_map.map_idx[GenerateTableIdentifier()] = node.cte_map.map.size();
+		node.cte_map.map.map_idx[GenerateTableIdentifier()] = node.cte_map.map.size();
 		node.cte_map.map.push_back(std::move(cte));
 	}
 }

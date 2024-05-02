@@ -12,7 +12,7 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/common_table_expression_info.hpp"
-#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/insertion_order_preserving_map.hpp"
 #include "duckdb/common/exception.hpp"
 
 namespace duckdb {
@@ -34,8 +34,7 @@ class CommonTableExpressionMap {
 public:
 	CommonTableExpressionMap();
 
-	vector<unique_ptr<CommonTableExpressionInfo>> map;
-	case_insensitive_map_t<idx_t> map_idx;
+	InsertionOrderPreservingMap<idx_t, unique_ptr<CommonTableExpressionInfo>> map;
 
 public:
 	string ToString() const;

@@ -16,7 +16,7 @@ CommonTableExpressionMap::CommonTableExpressionMap() {
 CommonTableExpressionMap CommonTableExpressionMap::Copy() const {
 	CommonTableExpressionMap res;
 	res.map.resize(this->map.size());
-	for (auto &kv_idx : this->map_idx) {
+	for (auto &kv_idx : this->map.map_idx) {
 		auto kv_info = make_uniq<CommonTableExpressionInfo>();
 		auto &kv = this->map.at(kv_idx.second);
 		for (auto &al : kv->aliases) {
@@ -25,7 +25,7 @@ CommonTableExpressionMap CommonTableExpressionMap::Copy() const {
 		kv_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(kv->query->Copy());
 		kv_info->materialized = kv->materialized;
 		res.map[kv_idx.second] = std::move(kv_info);
-		res.map_idx[kv_idx.first] = kv_idx.second;
+		res.map.map_idx[kv_idx.first] = kv_idx.second;
 	}
 
 	return res;
@@ -49,11 +49,7 @@ string CommonTableExpressionMap::ToString() const {
 	}
 	bool first_cte = true;
 
-	vector<string> names;
-	names.resize(map.size());
-	for (auto &kv : map_idx) {
-		names[kv.second] = kv.first;
-	}
+	vector<string> names = map.Keys();
 
 	for (idx_t i = 0; i < map.size(); i++) {
 		auto &kv = map[i];
@@ -163,7 +159,7 @@ void QueryNode::CopyProperties(QueryNode &other) const {
 		other.modifiers.push_back(modifier->Copy());
 	}
 	other.cte_map.map.resize(cte_map.map.size());
-	for (auto &kv_idx : cte_map.map_idx) {
+	for (auto &kv_idx : cte_map.map.map_idx) {
 		auto &kv = cte_map.map[kv_idx.second];
 		auto kv_info = make_uniq<CommonTableExpressionInfo>();
 		for (auto &al : kv->aliases) {
@@ -172,7 +168,7 @@ void QueryNode::CopyProperties(QueryNode &other) const {
 		kv_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(kv->query->Copy());
 		kv_info->materialized = kv->materialized;
 		other.cte_map.map[kv_idx.second] = std::move(kv_info);
-		other.cte_map.map_idx[kv_idx.first] = kv_idx.second;
+		other.cte_map.map.map_idx[kv_idx.first] = kv_idx.second;
 	}
 }
 

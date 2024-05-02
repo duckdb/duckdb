@@ -72,7 +72,7 @@ unique_ptr<BoundCTENode> Binder::BindMaterializedCTE(CommonTableExpressionMap &c
 	vector<unique_ptr<CTENode>> materialized_ctes;
 	vector<string> names;
 	names.resize(cte_map.map.size());
-	for (auto &kv : cte_map.map_idx) {
+	for (auto &kv : cte_map.map.map_idx) {
 		names[kv.second] = kv.first;
 	}
 
@@ -201,7 +201,7 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 }
 
 void Binder::AddCTEMap(CommonTableExpressionMap &cte_map) {
-	for (auto &cte_it : cte_map.map_idx) {
+	for (auto &cte_it : cte_map.map.map_idx) {
 		AddCTE(cte_it.first, *cte_map.map[cte_it.second]);
 	}
 }
