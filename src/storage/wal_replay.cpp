@@ -241,11 +241,11 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, unique_ptr<FileHandle> ha
 			Printer::PrintF("Exception in WAL playback: %s\n", error.RawMessage());
 			// exception thrown in WAL replay: rollback
 		}
-		con.Rollback();
+		con.Query("ROLLBACK");
 	} catch (...) {
 		Printer::Print("Unknown Exception in WAL playback: %s\n");
 		// exception thrown in WAL replay: rollback
-		con.Rollback();
+		con.Query("ROLLBACK");
 	} // LCOV_EXCL_STOP
 	return false;
 }

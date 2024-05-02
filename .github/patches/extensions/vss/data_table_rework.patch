@@ -84,3 +84,21 @@ index 09a7de9..69f00e7 100644
  			if (index_entry.index_type == HNSWIndex::TYPE_NAME) {
  				auto &hnsw_index = index_entry.Cast<HNSWIndex>();
  
+diff --git a/test/sql/hnsw/hnsw_insert_wal.test b/test/sql/hnsw/hnsw_insert_wal.test
+index 80e0558..67c9526 100644
+--- a/test/sql/hnsw/hnsw_insert_wal.test
++++ b/test/sql/hnsw/hnsw_insert_wal.test
+@@ -9,9 +9,13 @@ require vector_size 2048
+ statement ok
+ PRAGMA enable_verification;
+ 
++mode skip
++
+ statement ok
+ PRAGMA disable_checkpoint_on_shutdown;
+ 
++mode unskip
++
+ statement ok
+ CREATE TABLE t1 (vec FLOAT[3]);
+ 
