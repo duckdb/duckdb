@@ -51,15 +51,15 @@ public:
 	MultiFileListIterator end();   // NOLINT: match stl API
 };
 
-//! Abstract base class for lazily generated list of file paths/globs
-//! note: most methods are NOT threadsafe: use
+//! Abstract class for lazily generated list of file paths/globs
+//! NOTE: subclasses are responsible for ensuring thread-safety
 class MultiFileList {
 public:
-	explicit MultiFileList(FileGlobOptions options);
+	explicit MultiFileList(vector<string> paths, FileGlobOptions options);
 	virtual ~MultiFileList();
 
-	//! Returns the raw, unexpanded paths
-	vector<string> GetPaths();
+	//! Returns the raw, unexpanded paths, pre-filter
+	const vector<string> GetPaths() const;
 
 	//! Get Iterator over the files for pretty for loops
 	MultiFileListIterationHelper Files();
@@ -69,91 +69,91 @@ public:
 	//! Scan the next file into result_file, returns false when out of files
 	bool Scan(MultiFileListScanData &iterator, string &result_file);
 
-	//! Checks whether the MultiFileList is empty
-	bool IsEmpty();
 	//! Returns the first file or an empty string if GetTotalFileCount() == 0
 	string GetFirstFile();
-	//! Returns a FileExpandResult to give an indication of the total count. Calls ExpandTo(2).
-	FileExpandResult GetExpandResult();
+	//! Syntactic sugar for GetExpandResult() == FileExpandResult::NO_FILES
+	bool IsEmpty();
 
-	//! Returns the current size of the expanded size
-	idx_t GetCurrentFileCount();
-	//! Expand the file list to n files
-	void ExpandTo(idx_t n);
-
-	//! Completely expands the list (potentially expensive for big datasets!)
-	void ExpandAll();
-	//! Calls ExpandAll() and returns the resulting size
-	virtual idx_t GetTotalFileCount();
-	//! Calls ExpandAll() and returns a reference to the fully expanded files
-	virtual const vector<string> &GetAllFiles();
-
-	//! Push down filters into the MultiFileList; sometimes the filters can be used to skip files completely
+	//! Virtual functions for subclasses
+public:
 	virtual bool ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
 	                                   vector<unique_ptr<Expression>> &filters);
+	virtual vector<string> GetAllFiles() = 0;
+	virtual unique_ptr<MultiFileList> Copy() = 0;
+	virtual FileExpandResult GetExpandResult() = 0;
+	virtual idx_t GetTotalFileCount() = 0;
 
-	//! Thread
-
-	//! Moves the vector out of the MultiFileList, caller is responsible to not use the MultiFileList after calling this
-	//! DEPRECATED: should be removed once all DuckDB code can properly handle MultiFileLists
-	vector<string> ToStringVector();
-
-	//! Default copy method: CallsExpandAll() then creates a SimpleMultiFileList from expanded_files
-	virtual unique_ptr<MultiFileList> Copy();
-
-	//! API to implement for subclasses
 protected:
 	//! Get the i-th expanded file
-	virtual string GetFileInternal(idx_t i) = 0;
-	//! Get the raw unexpanded paths
-	virtual vector<string> GetPathsInternal() = 0;
+	virtual string GetFile(idx_t i) = 0;
 
 protected:
-	//! The generated files
-	vector<string> expanded_files;
-	bool fully_expanded = false;
-
-	FileGlobOptions glob_options;
+	//! The unexpanded input paths
+	const vector<string> paths;
+	//! Whether paths can expand to 0 files
+	const FileGlobOptions glob_options;
 };
 
-//! Simplest implementation of a MultiFileList which is fully expanded on creation
+//! MultiFileList that takes a list of files and produces the same list of paths. Useful for quickly wrapping
+//! existing vectors of paths in a MultiFileList without changing any code
 class SimpleMultiFileList : public MultiFileList {
 public:
 	//! Construct a SimpleMultiFileList from a list of already expanded files
-	explicit SimpleMultiFileList(vector<string> files);
-	//! Pruned the expanded_files using the hive/filename filters
+	explicit SimpleMultiFileList(vector<string> paths);
+	//! Copy `paths` to `filtered_files` and apply the filters
 	bool ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
 	                           vector<unique_ptr<Expression>> &filters) override;
 
+	//! Main MultiFileList API
+	unique_ptr<MultiFileList> Copy() override;
+	vector<string> GetAllFiles() override;
+	FileExpandResult GetExpandResult() override;
+	idx_t GetTotalFileCount() override;
+
 protected:
-	//! MultiFileList abstract interface implementation
-	string GetFileInternal(idx_t i) override;
-	vector<string> GetPathsInternal() override;
+	//! Main MultiFileList API
+	string GetFile(idx_t i) override;
+
+	//! Depending on whether the list has been filtered, returns the paths vector or filtered_files
+	const vector<string> &CurrentSource();
+
+	vector<string> filtered_files;
+	mutex lock;
 };
 
-//! MultiFileList that will expand globs into files
+//! MultiFileList that takes a list of paths and produces a list of files with all globs expanded
 class GlobMultiFileList : public MultiFileList {
 public:
 	GlobMultiFileList(ClientContext &context, vector<string> paths, FileGlobOptions options);
 	//! Calls ExpandAll, then prunes the expanded_files using the hive/filename filters
 	bool ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
 	                           vector<unique_ptr<Expression>> &filters) override;
+
+	//! Main MultiFileList API
 	unique_ptr<MultiFileList> Copy() override;
+	vector<string> GetAllFiles() override;
+	FileExpandResult GetExpandResult() override;
+	idx_t GetTotalFileCount() override;
 
 protected:
-	//! MultiFileList abstract interface implementation
-	string GetFileInternal(idx_t i) override;
-	vector<string> GetPathsInternal() override;
+	//! Main MultiFileList API
+	string GetFile(idx_t i) override;
 
-	//! Grabs the next path and expands it into Expanded paths:
+	//! Get the i-th expanded file
+	string GetFileInternal(idx_t i);
+	//! Grabs the next path and expands it into Expanded paths: returns false if no more files to expand
 	bool ExpandPathInternal();
+	//! Whether all files have been expanded
+	bool IsFullyExpanded();
 
 	//! The ClientContext for globbing
 	ClientContext &context;
-	//! The input paths/globs
-	vector<string> paths;
 	//! The current path to expand
 	idx_t current_path;
+	//! The expanded files
+	vector<string> expanded_files;
+
+	mutex lock;
 };
 
 } // namespace duckdb

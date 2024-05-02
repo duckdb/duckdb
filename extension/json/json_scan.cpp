@@ -65,7 +65,7 @@ void JSONScanData::Bind(ClientContext &context, TableFunctionBindInput &input) {
 	options.file_options.AutoDetectHivePartitioning(*file_list, context);
 
 	// TODO: store the MultiFilelist instead
-	files = file_list->ToStringVector();
+	files = file_list->GetAllFiles();
 
 	InitializeReaders(context);
 }
@@ -986,7 +986,7 @@ void JSONScan::ComplexFilterPushdown(ClientContext &context, LogicalGet &get, Fu
 		MultiFileReader().PruneReaders(data, file_list);
 	}
 
-	data.files = file_list.ToStringVector();
+	data.files = file_list.GetAllFiles();
 }
 
 void JSONScan::Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p, const TableFunction &) {

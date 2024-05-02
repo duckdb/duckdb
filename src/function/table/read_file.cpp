@@ -56,7 +56,7 @@ static unique_ptr<FunctionData> ReadFileBind(ClientContext &context, TableFuncti
 
 	auto multi_file_reader = MultiFileReader::Create(input.table_function);
 	result->files =
-	    multi_file_reader->CreateFileList(context, input.inputs[0], FileGlobOptions::ALLOW_EMPTY)->ToStringVector();
+	    multi_file_reader->CreateFileList(context, input.inputs[0], FileGlobOptions::ALLOW_EMPTY)->GetAllFiles();
 
 	return_types.push_back(LogicalType::VARCHAR);
 	names.push_back("filename");

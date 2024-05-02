@@ -157,7 +157,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	}
 
 	// TODO: make the CSV reader use MultiFileList throughout, instead of converting to vector<string>
-	result->files = multi_file_list->ToStringVector();
+	result->files = multi_file_list->GetAllFiles();
 
 	result->Finalize();
 	return std::move(result);
@@ -305,7 +305,7 @@ void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionD
 	if (reset_reader) {
 		MultiFileReader::PruneReaders(data, file_list);
 	}
-	data.files = file_list.ToStringVector();
+	data.files = file_list.GetAllFiles();
 }
 
 unique_ptr<NodeStatistics> CSVReaderCardinality(ClientContext &context, const FunctionData *bind_data_p) {

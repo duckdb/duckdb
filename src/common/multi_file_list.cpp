@@ -98,20 +98,15 @@ const string &MultiFileListIterationHelper::MultiFileListIterator::operator*() c
 //===--------------------------------------------------------------------===//
 // MultiFileList
 //===--------------------------------------------------------------------===//
-MultiFileList::MultiFileList(FileGlobOptions options) : expanded_files(), fully_expanded(false), glob_options(options) {
+MultiFileList::MultiFileList(vector<string> paths, FileGlobOptions options)
+    : paths(std::move(paths)), glob_options(options) {
 }
 
 MultiFileList::~MultiFileList() {
 }
 
-vector<string> MultiFileList::GetPaths() {
-	return GetPathsInternal();
-}
-
-bool MultiFileList::ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options,
-                                          LogicalGet &get, vector<unique_ptr<Expression>> &filters) {
-	// By default the filter pushdown into a multifilelist does nothing
-	return false;
+const vector<string> MultiFileList::GetPaths() const {
+	return paths;
 }
 
 void MultiFileList::InitializeScan(MultiFileListScanData &iterator) {
@@ -120,159 +115,173 @@ void MultiFileList::InitializeScan(MultiFileListScanData &iterator) {
 
 bool MultiFileList::Scan(MultiFileListScanData &iterator, string &result_file) {
 	D_ASSERT(iterator.current_file_idx != DConstants::INVALID_INDEX);
-	ExpandTo(iterator.current_file_idx);
+	auto maybe_file = GetFile(iterator.current_file_idx);
 
-	if (iterator.current_file_idx >= expanded_files.size()) {
-		D_ASSERT(fully_expanded);
+	if (maybe_file.empty()) {
+		D_ASSERT(iterator.current_file_idx >= GetTotalFileCount());
 		return false;
 	}
 
-	result_file = expanded_files[iterator.current_file_idx++];
+	result_file = maybe_file;
+	iterator.current_file_idx++;
 	return true;
 }
 
-bool MultiFileList::IsEmpty() {
-	return GetFirstFile().empty();
+bool MultiFileList::ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options,
+                                          LogicalGet &get, vector<unique_ptr<Expression>> &filters) {
+	// By default the filter pushdown into a multifilelist does nothing
+	return false;
 }
 
 string MultiFileList::GetFirstFile() {
-	ExpandTo(1);
-	if (!expanded_files.empty()) {
-		return expanded_files[0];
-	}
-	return "";
+	return GetFile(0);
 }
 
-FileExpandResult MultiFileList::GetExpandResult() {
-	ExpandTo(2);
+bool MultiFileList::IsEmpty() {
+	return GetExpandResult() == FileExpandResult::NO_FILES;
+}
 
-	if (GetCurrentFileCount() >= 2) {
+//===--------------------------------------------------------------------===//
+// SimpleMultiFileList
+//===--------------------------------------------------------------------===//
+SimpleMultiFileList::SimpleMultiFileList(vector<string> paths_p)
+    : MultiFileList(std::move(paths_p), FileGlobOptions::ALLOW_EMPTY) {
+}
+
+bool SimpleMultiFileList::ComplexFilterPushdown(ClientContext &context_p, const MultiFileReaderOptions &options,
+                                                LogicalGet &get, vector<unique_ptr<Expression>> &filters) {
+	lock_guard<mutex> lck(lock);
+	// When applying filters to a SimpleMultiFileList, we copy them from paths over to filtered_files
+	if (filtered_files.empty()) {
+		filtered_files = paths;
+	}
+	// Then apply the filters to the copied list
+	return PushdownInternal(context_p, options, get, filters, filtered_files);
+}
+
+vector<string> SimpleMultiFileList::GetAllFiles() {
+	lock_guard<mutex> lck(lock);
+	if (!filtered_files.empty()) {
+		return filtered_files;
+	}
+	return paths;
+}
+
+unique_ptr<MultiFileList> SimpleMultiFileList::Copy() {
+	lock_guard<mutex> lck(lock);
+
+	auto res = make_uniq<SimpleMultiFileList>(paths);
+	res->filtered_files = filtered_files;
+	return std::move(res);
+}
+
+FileExpandResult SimpleMultiFileList::GetExpandResult() {
+	lock_guard<mutex> lck(lock);
+
+	auto &source = CurrentSource();
+	if (source.size() > 1) {
 		return FileExpandResult::MULTIPLE_FILES;
-	} else if (GetCurrentFileCount() == 1) {
+	} else if (source.size() == 1) {
 		return FileExpandResult::SINGLE_FILE;
 	}
 
 	return FileExpandResult::NO_FILES;
 }
 
-idx_t MultiFileList::GetCurrentFileCount() {
-	return expanded_files.size();
-}
+string SimpleMultiFileList::GetFile(idx_t i) {
+	lock_guard<mutex> lck(lock);
 
-void MultiFileList::ExpandAll() {
-	ExpandTo(NumericLimits<idx_t>::Maximum());
-}
-
-void MultiFileList::ExpandTo(idx_t n) {
-	if (fully_expanded) {
-		return;
-	}
-
-	idx_t i = expanded_files.size();
-	while (i <= n) {
-		auto next_file = GetFileInternal(i);
-		if (next_file.empty()) {
-			fully_expanded = true;
-			break;
+	auto &source = CurrentSource();
+	if (!source.empty()) {
+		if (i >= source.size()) {
+			return "";
 		}
-		expanded_files[i] = next_file;
-		i++;
+		return source[i];
 	}
+	return "";
 }
 
-idx_t MultiFileList::GetTotalFileCount() {
-	if (!fully_expanded) {
-		ExpandAll();
-	}
-	return expanded_files.size();
+idx_t SimpleMultiFileList::GetTotalFileCount() {
+	lock_guard<mutex> lck(lock);
+	auto &source = CurrentSource();
+	return source.size();
 }
 
-const vector<string> &MultiFileList::GetAllFiles() {
-	if (!fully_expanded) {
-		ExpandAll();
-	}
-	return expanded_files;
-}
-
-vector<string> MultiFileList::ToStringVector() {
-	if (!fully_expanded) {
-		ExpandAll();
-	}
-	return std::move(expanded_files);
-}
-
-unique_ptr<MultiFileList> MultiFileList::Copy() {
-	ExpandAll();
-	auto res = make_uniq<SimpleMultiFileList>(std::move(expanded_files));
-	expanded_files = res->expanded_files;
-	return std::move(res);
-}
-
-//===--------------------------------------------------------------------===//
-// SimpleMultiFileList
-//===--------------------------------------------------------------------===//
-SimpleMultiFileList::SimpleMultiFileList(vector<string> files) : MultiFileList(FileGlobOptions::DISALLOW_EMPTY) {
-	expanded_files = std::move(files);
-	fully_expanded = true;
-}
-
-vector<string> SimpleMultiFileList::GetPathsInternal() {
-	return expanded_files;
-}
-
-string SimpleMultiFileList::GetFileInternal(idx_t i) {
-	if (expanded_files.size() <= i) {
-		return "";
-	}
-	return expanded_files[i];
-}
-
-bool SimpleMultiFileList::ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options,
-                                                LogicalGet &get, vector<unique_ptr<Expression>> &filters) {
-	return PushdownInternal(context, options, get, filters, expanded_files);
+const vector<string> &SimpleMultiFileList::CurrentSource() {
+	return filtered_files.empty() ? paths : filtered_files;
 }
 
 //===--------------------------------------------------------------------===//
 // GlobMultiFileList
 //===--------------------------------------------------------------------===//
 GlobMultiFileList::GlobMultiFileList(ClientContext &context_p, vector<string> paths_p, FileGlobOptions options)
-    : MultiFileList(options), context(context_p), paths(std::move(paths_p)), current_path(0) {
+    : MultiFileList(std::move(paths_p), options), context(context_p), current_path(0) {
 }
 
-vector<string> GlobMultiFileList::GetPathsInternal() {
-	return paths;
-}
-
+// TODO: implement special glob that makes use of hive partition filters to do more efficient globbing
 bool GlobMultiFileList::ComplexFilterPushdown(ClientContext &context_p, const MultiFileReaderOptions &options,
                                               LogicalGet &get, vector<unique_ptr<Expression>> &filters) {
-	// TODO: implement special glob that makes use of hive partition filters to do more efficient globbing
-	ExpandAll();
+	lock_guard<mutex> lck(lock);
+	while (ExpandPathInternal()) {
+	}
 	return PushdownInternal(context, options, get, filters, expanded_files);
 }
 
-string GlobMultiFileList::GetFileInternal(idx_t i) {
-	while (GetCurrentFileCount() <= i) {
-		if (!ExpandPathInternal()) {
-			return "";
-		}
-	}
-
-	D_ASSERT(GetCurrentFileCount() > i);
-	return expanded_files[i];
-}
-
 unique_ptr<MultiFileList> GlobMultiFileList::Copy() {
+	lock_guard<mutex> lck(lock);
+
 	auto res = make_uniq<GlobMultiFileList>(context, paths, glob_options);
 
 	res->current_path = current_path;
 	res->expanded_files = expanded_files;
-	res->fully_expanded = fully_expanded;
 
 	return std::move(res);
 }
 
+vector<string> GlobMultiFileList::GetAllFiles() {
+	lock_guard<mutex> lck(lock);
+	while (ExpandPathInternal()) {
+	}
+	return expanded_files;
+}
+
+idx_t GlobMultiFileList::GetTotalFileCount() {
+	lock_guard<mutex> lck(lock);
+	while (ExpandPathInternal()) {
+	}
+	return expanded_files.size();
+}
+
+FileExpandResult GlobMultiFileList::GetExpandResult() {
+	// GetFile(1) will ensure at least the first 2 files are expanded if they are available
+	GetFile(1);
+
+	if (expanded_files.size() > 1) {
+		return FileExpandResult::MULTIPLE_FILES;
+	} else if (expanded_files.size() == 1) {
+		return FileExpandResult::SINGLE_FILE;
+	}
+
+	return FileExpandResult::NO_FILES;
+}
+
+string GlobMultiFileList::GetFile(idx_t i) {
+	lock_guard<mutex> lck(lock);
+	return GetFileInternal(i);
+}
+
+string GlobMultiFileList::GetFileInternal(idx_t i) {
+	while (expanded_files.size() <= i) {
+		if (!ExpandPathInternal()) {
+			return "";
+		}
+	}
+	D_ASSERT(expanded_files.size() > i);
+	return expanded_files[i];
+}
+
 bool GlobMultiFileList::ExpandPathInternal() {
-	if (fully_expanded || current_path >= paths.size()) {
+	if (IsFullyExpanded()) {
 		return false;
 	}
 
@@ -283,11 +292,11 @@ bool GlobMultiFileList::ExpandPathInternal() {
 
 	current_path++;
 
-	if (current_path >= paths.size()) {
-		fully_expanded = true;
-	}
-
 	return true;
+}
+
+bool GlobMultiFileList::IsFullyExpanded() {
+	return current_path == paths.size();
 }
 
 } // namespace duckdb

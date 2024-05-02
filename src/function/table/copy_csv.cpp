@@ -201,7 +201,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 	bind_data->return_names = expected_names;
 
 	auto multi_file_reader = MultiFileReader::CreateDefault("CSVCopy");
-	bind_data->files = multi_file_reader->CreateFileList(context, Value(info.file_path))->ToStringVector();
+	bind_data->files = multi_file_reader->CreateFileList(context, Value(info.file_path))->GetAllFiles();
 
 	auto &options = bind_data->options;
 
