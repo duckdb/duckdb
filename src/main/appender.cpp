@@ -382,9 +382,7 @@ void Appender::AppendDefault() {
 		throw InvalidInputException("Failed to append DEFAULT, this column does not have a DEFAULT value");
 	}
 	auto &default_expr = *defaults[column];
-	if (!default_expr.IsScalar()) {
-		throw InvalidInputException("Only columns with simple DEFAULT values are supported");
-	}
+	D_ASSERT(default_expr.IsScalar());
 
 	auto default_copy = default_expr.Copy();
 
@@ -392,7 +390,9 @@ void Appender::AppendDefault() {
 	auto binder = Binder::CreateBinder(*context);
 	ConstantBinder default_binder(*binder, *context, "DEFAULT value");
 	default_binder.target_type = type;
-	auto bound_default = default_binder.Bind(default_copy);
+
+	unique_ptr<Expression> bound_default;
+	context->RunFunctionInTransaction([&]() { bound_default = default_binder.Bind(default_copy); });
 
 	Value result_value;
 	if (!ExpressionExecutor::TryEvaluateScalar(*context, *bound_default, result_value)) {

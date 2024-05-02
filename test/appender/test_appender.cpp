@@ -199,6 +199,19 @@ TEST_CASE("Test default value appender", "[appender]") {
 		REQUIRE_THROWS(appender.EndRow());
 		REQUIRE_NOTHROW(appender.Close());
 	}
+
+	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq"));
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE integers(i iNTEGER, j INTEGER DEFAULT nextval('seq'))"));
+	{
+		Appender appender(con, "integers");
+		appender.BeginRow();
+		appender.Append<int32_t>(1);
+		REQUIRE_NOTHROW(appender.AppendDefault());
+		REQUIRE_NOTHROW(appender.EndRow());
+		REQUIRE_NOTHROW(appender.Close());
+	}
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(1)}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value::INTEGER(0)}));
 }
 
 TEST_CASE("Test incorrect usage of appender", "[appender]") {
