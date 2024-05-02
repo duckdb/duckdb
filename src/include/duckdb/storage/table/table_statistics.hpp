@@ -58,7 +58,7 @@ public:
 
 private:
 	//! The statistics lock
-	mutex stats_lock;
+	shared_ptr<mutex> stats_lock;
 	//! Column statistics
 	vector<shared_ptr<ColumnStatistics>> column_stats;
 	//! The table sample
