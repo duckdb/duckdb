@@ -47,7 +47,7 @@ idx_t PhysicalRecursiveKeyCTE::ProbeHT(DataChunk &chunk, RecursiveKeyCTEState &s
 
 	// Adds incoming rows to the recurring ht
 	auto new_group_count =
-	    state.recurring_ht->FindOrCreateGroupsWithKey(chunk, dummy_addresses, state.new_groups, key_columns);
+	    state.ht->FindOrCreateGroupsWithKey(chunk, dummy_addresses, state.new_groups, key_columns);
 
 	// Unlike normal recCTE, which only returns unseen rows,
 	// we return all new computed rows
@@ -93,11 +93,15 @@ SourceResultType PhysicalRecursiveKeyCTE::GetData(ExecutionContext &context, Dat
 			// now we need to recurse
 			// we set up the working table as the data we gathered in this iteration of the recursion
 
-			// The recurring hash table contains all the rows calculated in this iteration,
-			// we can now add all the old rows.
-			gstate.recurring_ht->Combine(*gstate.ht, key_columns);
-			gstate.ht->Reset();
-			gstate.recurring_ht.swap(gstate.ht);
+
+			// To omit old rows, we retrieve them from the recurring table and group them with the new rows.
+			DataChunk old_rows;
+			recurring_table->InitializeScanChunk(old_rows);
+			while(recurring_table->Scan(gstate.scan_state, old_rows)) {
+				Vector dummy_addresses(LogicalType::POINTER, STANDARD_VECTOR_SIZE);
+				SelectionVector dummyOut(STANDARD_VECTOR_SIZE);
+				gstate.ht->FindOrCreateGroupsWithKey(old_rows, dummy_addresses, dummyOut, key_columns);
+			}
 
 			// After an iteration, we reset the recurring table
 			// and fill it up with the new hash table rows for the next iteration.
@@ -105,6 +109,9 @@ SourceResultType PhysicalRecursiveKeyCTE::GetData(ExecutionContext &context, Dat
 			DataChunk all_rows;
 			all_rows.Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
 			gstate.ht->FetchAll(all_rows);
+
+			gstate.ht->Reset();
+
 			recurring_table->Append(all_rows);
 
 			working_table->Reset();
@@ -121,6 +128,7 @@ SourceResultType PhysicalRecursiveKeyCTE::GetData(ExecutionContext &context, Dat
 			// if not, we are done
 			if (gstate.intermediate_table.Count() == 0) {
 				gstate.finished_scan = true;
+				recurring_table->InitializeScan(gstate.scan_state);
 				recurring_table->Scan(gstate.scan_state, chunk);
 				break;
 			}

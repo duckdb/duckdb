@@ -585,7 +585,6 @@ void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data, optiona
 }
 
 void GroupedAggregateHashTable::FetchAll(DataChunk &result) {
-	auto dummy_goups = SelectionVector(0, STANDARD_VECTOR_SIZE);
 	UnpinData();
 
 	for (auto &data_collection : partitioned_data->GetPartitions()) {
@@ -593,16 +592,15 @@ void GroupedAggregateHashTable::FetchAll(DataChunk &result) {
 			continue;
 		}
 
-		FlushMoveState collection(*data_collection);
-		collection.Scan();
-		result.Slice(collection.groups, dummy_goups, collection.groups.size());
 		// Initialise chunk to scan into,
 		// we cannot scan directly into the result chunk because we do not want the column with hashes
 		DataChunk scan_chunk;
 		data_collection->InitializeChunk(scan_chunk);
+
 		TupleDataScanState scan_state;
 		data_collection->InitializeScan(scan_state);
 		bool firstScan = true;
+
 		// As long as we can scan new chunks from a data collection,
 		// we will append them to our result.
 		while(data_collection->Scan(scan_state, scan_chunk)) {
@@ -612,6 +610,7 @@ void GroupedAggregateHashTable::FetchAll(DataChunk &result) {
 			// btodo: Manuel remove hash column everytime could be better
 			auto l = scan_chunk.data.back();
 			scan_chunk.data.pop_back();
+
 			if (firstScan) {
 				scan_chunk.Copy(result);
 				firstScan = false;
@@ -638,6 +637,7 @@ void GroupedAggregateHashTable::Reset() {
 	ClearPointerTable();
 	ResetCount();
 	UnpinData();
+	Verify();
 }
 
 } // namespace duckdb
