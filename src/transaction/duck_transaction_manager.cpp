@@ -143,7 +143,7 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 		    "Cannot CHECKPOINT: there are other write transactions active. Use FORCE CHECKPOINT to abort "
 		    "the other transactions and force a checkpoint");
 	}
-	if (force) {
+	if (!lock && force) {
 		// lock all the clients AND the connection manager now
 		// this ensures no new queries can be started, and no new connections to the database can be made
 		// to avoid deadlock we release the transaction lock while locking the clients
