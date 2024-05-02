@@ -19,12 +19,12 @@ IO Error: Failed to parse 'hf://file.parquet'. Please format url like: 'hf://dat
 statement error
 FROM 'hf://yepthisdoesntwork/file.parquet'
 ----
-IO Error: Failed to parse: 'hf://yepthisdoesntwork/file.parquet'. Currently DuckDB only supports querying datasets, so the url should start with 'hf://datasets'
+IO Error: Failed to parse: 'hf://yepthisdoesntwork/file.parquet'. Currently DuckDB only supports querying datasets or spaces, so the url should start with 'hf://datasets' or 'hf://spaces'
 
 statement error
 FROM 'hf://stil/not/file.parquet'
 ----
-IO Error: Failed to parse: 'hf://stil/not/file.parquet'. Currently DuckDB only supports querying datasets, so the url should start with 'hf://datasets'
+IO Error: Failed to parse: 'hf://stil/not/file.parquet'. Currently DuckDB only supports querying datasets or spaces, so the url should start with 'hf://datasets' or 'hf://spaces'
 
 statement error
 FROM 'hf://datasets/file.parquet'
