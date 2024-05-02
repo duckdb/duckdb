@@ -293,11 +293,6 @@ static void TransactionalAppendToPK(DuckDB *db, idx_t thread_idx) {
 }
 
 TEST_CASE("Parallel transactional appends to indexed table", "[index][.]") {
-
-	// FIXME: this test causes a data race in the statistics code
-	// FIXME: reproducible by running this test with THREADSAN=1 make reldebug
-
-#ifndef DUCKDB_THREAD_SANITIZER
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("SET immediate_transaction_mode=true"));
@@ -320,7 +315,6 @@ TEST_CASE("Parallel transactional appends to indexed table", "[index][.]") {
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(idx_t(CONCURRENT_INDEX_THREAD_COUNT * 50))}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(idx_t(CONCURRENT_INDEX_THREAD_COUNT * 50))}));
-#endif
 }
 
 static void JoinIntegers(Connection *con) {
