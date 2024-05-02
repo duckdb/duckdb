@@ -39,6 +39,7 @@ bool StandardColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filte
 				return true;
 			}
 		}
+		lock_guard<mutex> l(update_lock);
 		if (updates) {
 			auto update_stats = updates->GetStatistics();
 			prune_result = filter.CheckStatistics(*update_stats);
