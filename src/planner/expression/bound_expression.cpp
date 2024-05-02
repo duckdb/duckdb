@@ -31,14 +31,11 @@ hash_t BoundExpression::Hash() const {
 }
 
 unique_ptr<ParsedExpression> BoundExpression::Copy() const {
-	throw SerializationException("Cannot copy bound expression (type: %s, class: %s | %s)", EnumUtil::ToString(type),
-	                             EnumUtil::ToString(expression_class), expr ? expr->ToString() : "null");
+	throw SerializationException("Cannot copy bound expression");
 }
 
 void BoundExpression::Serialize(Serializer &serializer) const {
-	throw SerializationException("Cannot serialize bound expression (type: %s, class: %s | %s)",
-	                             EnumUtil::ToString(type), EnumUtil::ToString(expression_class),
-	                             expr ? expr->ToString() : "null");
+	throw SerializationException("Cannot serialize bound expression");
 }
 
 } // namespace duckdb
