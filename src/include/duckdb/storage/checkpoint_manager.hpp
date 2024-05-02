@@ -40,17 +40,13 @@ public:
 protected:
 	virtual void WriteEntry(CatalogEntry &entry, Serializer &serializer);
 	virtual void WriteSchema(SchemaCatalogEntry &schema, Serializer &serializer);
-	virtual void WriteTable(TableCatalogEntry &table, Serializer &serializer);
+	virtual void WriteTable(TableCatalogEntry &table, Serializer &serializer) = 0;
 	virtual void WriteView(ViewCatalogEntry &table, Serializer &serializer);
 	virtual void WriteSequence(SequenceCatalogEntry &table, Serializer &serializer);
 	virtual void WriteMacro(ScalarMacroCatalogEntry &table, Serializer &serializer);
 	virtual void WriteTableMacro(TableMacroCatalogEntry &table, Serializer &serializer);
 	virtual void WriteIndex(IndexCatalogEntry &index_catalog_entry, Serializer &serializer);
 	virtual void WriteType(TypeCatalogEntry &type, Serializer &serializer);
-
-private:
-	//! Locks held over specific tables
-	vector<unique_ptr<StorageLockKey>> table_locks;
 };
 
 class CheckpointReader {
@@ -114,6 +110,9 @@ public:
 	CheckpointType GetCheckpointType() const {
 		return checkpoint_type;
 	}
+
+public:
+	void WriteTable(TableCatalogEntry &table, Serializer &serializer) override;
 
 private:
 	//! The metadata writer is responsible for writing schema information

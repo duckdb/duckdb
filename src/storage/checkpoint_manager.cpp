@@ -179,7 +179,6 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	});
 	serializer.End();
 
-	partial_block_manager.FlushPartialBlocks();
 	metadata_writer->Flush();
 	table_metadata_writer->Flush();
 
@@ -541,15 +540,18 @@ void CheckpointReader::ReadTableMacro(ClientContext &context, Deserializer &dese
 //===--------------------------------------------------------------------===//
 // Table Metadata
 //===--------------------------------------------------------------------===//
-void CheckpointWriter::WriteTable(TableCatalogEntry &table, Serializer &serializer) {
+void SingleFileCheckpointWriter::WriteTable(TableCatalogEntry &table, Serializer &serializer) {
 	// Write the table metadata
 	serializer.WriteProperty(100, "table", &table);
 
 	// Write the table data
-	table_locks.push_back(table.GetStorage().GetCheckpointLock());
+	auto table_lock = table.GetStorage().GetCheckpointLock();
 	if (auto writer = GetTableDataWriter(table)) {
 		writer->WriteTableData(serializer);
 	}
+	// flush any partial blocks BEFORE releasing the table lock
+	// flushing partial blocks updates where data lives and is not thread-safe
+	partial_block_manager.FlushPartialBlocks();
 }
 
 void CheckpointReader::ReadTable(ClientContext &context, Deserializer &deserializer) {
