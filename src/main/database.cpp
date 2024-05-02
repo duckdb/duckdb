@@ -190,10 +190,33 @@ void DatabaseInstance::CreateMainDatabase() {
 void ThrowExtensionSetUnrecognizedOptions(const unordered_map<string, Value> &unrecognized_options) {
 	auto unrecognized_options_iter = unrecognized_options.begin();
 	string unrecognized_option_keys = unrecognized_options_iter->first;
-	while (++unrecognized_options_iter != unrecognized_options.end()) {
-		unrecognized_option_keys = "," + unrecognized_options_iter->first;
+	case_insensitive_map_t<vector<string>> extension_options;
+	vector<string> other_options;
+	for (; unrecognized_options_iter != unrecognized_options.end(); unrecognized_options_iter++) {
+		auto name = unrecognized_options_iter->first;
+		auto extension_name = ExtensionHelper::FindExtensionInEntries(name, EXTENSION_SETTINGS);
+		if (extension_name.empty()) {
+			other_options.push_back(name);
+		} else {
+			extension_options[extension_name].push_back(name);
+		}
 	}
-	throw InvalidInputException("Unrecognized configuration property \"%s\"", unrecognized_option_keys);
+	string error_message;
+	if (!extension_options.empty()) {
+		error_message += "The following settings are part of known extensions\n";
+		// FIXME: should we try to autoload these before throwing?
+		error_message += "Under normal circumstances we can autoload/autoinstall these, but that is only possible "
+		                 "after the Database is initialized\n\n";
+		for (auto &kv : extension_options) {
+			auto concatenated = StringUtil::Join(kv.second, ", ");
+			error_message += StringUtil::Format("[%s] : %s\n", kv.first, concatenated);
+		}
+	}
+	if (!other_options.empty()) {
+		auto concatenated = StringUtil::Join(other_options, ", ");
+		error_message += "The following options were not recognized: " + concatenated;
+	}
+	throw InvalidInputException(error_message);
 }
 
 void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_config) {
