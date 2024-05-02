@@ -147,7 +147,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<Bound
 	info->InitializeIndexes(context);
 
 	// Verify the new constraint against current persistent/local data
-	VerifyNewConstraint(context, parent, constraint.get());
+	VerifyNewConstraint(local_storage, parent, *constraint);
 
 	// Get the local data ownership from old dt
 	local_storage.MoveStorage(parent, *this);
@@ -609,7 +609,8 @@ void DataTable::VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk,
 		}
 		ThrowForeignKeyConstraintError(failed_index, true, *index, dst_chunk);
 	}
-	if (!is_append && transaction_check) {
+	if (!is_append) {
+		D_ASSERT(transaction_check);
 		auto &transaction_matches = transaction_conflicts.Conflicts();
 		if (error) {
 			auto failed_index = LocateErrorIndex(false, regular_matches);
@@ -635,14 +636,13 @@ void DataTable::VerifyDeleteForeignKeyConstraint(const BoundForeignKeyConstraint
 	VerifyForeignKeyConstraint(bfk, context, chunk, VerifyExistenceType::DELETE_FK);
 }
 
-void DataTable::VerifyNewConstraint(ClientContext &context, DataTable &parent, const BoundConstraint *constraint) {
-	if (constraint->type != ConstraintType::NOT_NULL) {
+void DataTable::VerifyNewConstraint(LocalStorage &local_storage, DataTable &parent, const BoundConstraint &constraint) {
+	if (constraint.type != ConstraintType::NOT_NULL) {
 		throw NotImplementedException("FIXME: ALTER COLUMN with such constraint is not supported yet");
 	}
 
-	parent.row_groups->VerifyNewConstraint(parent, *constraint);
-	auto &local_storage = LocalStorage::Get(context, db);
-	local_storage.VerifyNewConstraint(parent, *constraint);
+	parent.row_groups->VerifyNewConstraint(parent, constraint);
+	local_storage.VerifyNewConstraint(parent, constraint);
 }
 
 bool HasUniqueIndexes(TableIndexList &list) {

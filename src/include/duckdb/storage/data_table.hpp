@@ -231,7 +231,7 @@ public:
 
 private:
 	//! Verify the new added constraints against current persistent&local data
-	void VerifyNewConstraint(ClientContext &context, DataTable &parent, const BoundConstraint *constraint);
+	void VerifyNewConstraint(LocalStorage &local_storage, DataTable &parent, const BoundConstraint &constraint);
 	//! Verify constraints with a chunk from the Update containing only the specified column_ids
 	void VerifyUpdateConstraints(ConstraintState &state, ClientContext &context, DataChunk &chunk,
 	                             const vector<PhysicalIndex> &column_ids);
