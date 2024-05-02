@@ -25,7 +25,7 @@ public:
 	                        idx_t estimated_cardinality);
 	~PhysicalRecursiveKeyCTE() override;
 	// Contains the result of the key variant
-	std::shared_ptr<ColumnDataCollection> recurring_table;
+	shared_ptr<ColumnDataCollection> recurring_table;
 	// Contains the types of the payload and key columns.
 	vector<LogicalType> payload_types, distinct_types;
 	// Contains the payload and key indices

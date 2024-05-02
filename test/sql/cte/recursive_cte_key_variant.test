@@ -169,4 +169,27 @@ WITH RECURSIVE tbl(n) USING KEY (n) AS (SELECT 1 UNION SELECT n+1 FROM tbl WHERE
 ----
 4501500
 
+# You can use recursive CTE with and without a key in a query.
+query II
+WITH RECURSIVE tbl (a, b) USING KEY (a) AS (SELECT 1 , 1 UNION SELECT a, b+1 FROM tbl WHERE b < 3), tbl2(a,b) AS (SELECT 1, 1 UNION SELECT a, b+1 FROM tbl2 WHERE b < 3) SELECT * FROM tbl;
+----
+1	3
 
+query II
+WITH RECURSIVE tbl (a, b) USING KEY (a) AS (SELECT 1 , 1 UNION SELECT a, b+1 FROM tbl WHERE b < 3), tbl2(a,b) AS (SELECT 1, 1 UNION SELECT a, b+1 FROM tbl2 WHERE b < 3) SELECT * FROM tbl2;
+----
+1	1
+1	2
+1	3
+
+query II
+WITH RECURSIVE tbl2(a,b) AS (SELECT 1, 1 UNION SELECT a, b+1 FROM tbl2 WHERE b < 3), tbl (a, b) USING KEY (a) AS (SELECT 1 , 1 UNION SELECT a, b+1 FROM tbl WHERE b < 3) SELECT * FROM tbl2;
+----
+1	1
+1	2
+1	3
+
+query II
+WITH RECURSIVE tbl2(a,b) AS (SELECT 1, 1 UNION SELECT a, b+1 FROM tbl2 WHERE b < 3), tbl (a, b) USING KEY (a) AS (SELECT 1 , 1 UNION SELECT a, b+1 FROM tbl WHERE b < 3) SELECT * FROM tbl;
+----
+1	3

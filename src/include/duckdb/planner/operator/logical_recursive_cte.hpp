@@ -40,7 +40,6 @@ public:
 
 	vector<unique_ptr<Expression>> key_targets;
 	vector<CorrelatedColumnInfo> correlated_columns;
-	vector<idx_t> recursive_keys;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override {

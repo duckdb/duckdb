@@ -3,7 +3,6 @@
 #include "duckdb/execution/perfect_aggregate_hashtable.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
-#include "iostream"
 
 namespace duckdb {
 
@@ -46,7 +45,7 @@ unique_ptr<GlobalSinkState> PhysicalRecursiveKeyCTE::GetGlobalSinkState(ClientCo
 	return make_uniq<RecursiveKeyCTEState>(context, *this);
 }
 
-void PopulateChunk(DataChunk &group_chunk, DataChunk &input_chunk, vector<idx_t> idx_set, bool reference) {
+void PopulateChunk(DataChunk &group_chunk, DataChunk &input_chunk, const vector<idx_t> &idx_set, bool reference) {
 	idx_t chunk_index = 0;
 	// Populate the group_chunk
 	for (auto &group_idx : idx_set) {

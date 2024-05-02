@@ -570,7 +570,7 @@ void GroupedAggregateHashTable::FetchAll(DataChunk &keys, DataChunk &payload) {
 		if (data_collection->Count() == 0) {
 			continue;
 		}
-		
+
 		// Initialise the scan state with the group indexes as the columns to scan
 		// which excludes the hash column
 		TupleDataScanState scan_state;
@@ -581,11 +581,12 @@ void GroupedAggregateHashTable::FetchAll(DataChunk &keys, DataChunk &payload) {
 		data_collection->InitializeScanChunk(scan_state, scan_chunk);
 
 		DataChunk scan_payload;
-		scan_payload.Initialize(Allocator::DefaultAllocator(), payload.GetTypes());
+		scan_payload.Initialize(Allocator::DefaultAllocator(), payload_types);
 
 		// As long as we can scan new chunks from a data collection,
 		// we will append them to our result.
 		while (data_collection->Scan(scan_state, scan_chunk)) {
+			scan_payload.Reset();
 			// Using the scanned key, we will retrieve our payload.
 			keys.Append(scan_chunk, true);
 			FetchAggregates(scan_chunk, scan_payload);

@@ -6,6 +6,8 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/operator/logical_recursive_cte.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
@@ -81,7 +83,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalRecursiveC
 		return std::move(cte);
 	} else {
 		// If the key variant has been used, a recurring table will be created.
-		auto recurring_table = std::make_shared<ColumnDataCollection>(context, op.types);
+		auto recurring_table = make_shared_ptr<ColumnDataCollection>(context, op.types);
 		recursive_cte_tables[op.recurring_index] = recurring_table;
 
 		auto right = CreatePlan(*op.children[1]);
