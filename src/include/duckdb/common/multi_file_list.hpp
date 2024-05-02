@@ -22,7 +22,7 @@ struct MultiFileListScanData {
 
 class MultiFileListIterationHelper {
 public:
-	DUCKDB_API MultiFileListIterationHelper(MultiFileList &collection);
+	DUCKDB_API explicit MultiFileListIterationHelper(MultiFileList &collection);
 
 private:
 	MultiFileList &file_list;

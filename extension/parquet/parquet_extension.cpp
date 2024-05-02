@@ -86,12 +86,12 @@ enum class ParquetFileState : uint8_t { UNOPENED, OPENING, OPEN, CLOSED };
 
 struct ParquetFileReaderData {
 	// Create data for an unopened file
-	ParquetFileReaderData(const string &file_to_be_opened)
+	explicit ParquetFileReaderData(const string &file_to_be_opened)
 	    : reader(nullptr), file_state(ParquetFileState::UNOPENED), file_mutex(make_uniq<mutex>()),
 	      file_to_be_opened(file_to_be_opened) {
 	}
 	// Create data for an existing reader
-	ParquetFileReaderData(shared_ptr<ParquetReader> reader_p)
+	explicit ParquetFileReaderData(shared_ptr<ParquetReader> reader_p)
 	    : reader(std::move(reader_p)), file_state(ParquetFileState::OPEN), file_mutex(make_uniq<mutex>()) {
 	}
 
@@ -613,7 +613,7 @@ public:
 				throw InternalException("First file from list ('%s') does not match first reader ('%s')",
 				                        bind_data.initial_reader->file_name, bind_data.file_list->GetFirstFile());
 			}
-			result->readers.push_back({std::move(bind_data.initial_reader)});
+			result->readers.emplace_back(std::move(bind_data.initial_reader));
 		}
 
 		// Ensure all readers are initialized and FileListScan is sync with readers list
@@ -737,7 +737,7 @@ public:
 		}
 
 		// Push the file in the reader data, to be opened later
-		parallel_state.readers.push_back({std::move(scanned_file)});
+		parallel_state.readers.emplace_back(scanned_file);
 
 		return true;
 	}
