@@ -300,12 +300,14 @@ void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionD
                               vector<unique_ptr<Expression>> &filters) {
 	auto &data = bind_data_p->Cast<ReadCSVData>();
 	SimpleMultiFileList file_list(data.files);
-	auto reset_reader =
+	auto filtered_list =
 	    MultiFileReader().ComplexFilterPushdown(context, file_list, data.options.file_options, get, filters);
-	if (reset_reader) {
+	if (filtered_list) {
+		data.files = filtered_list->GetAllFiles();
 		MultiFileReader::PruneReaders(data, file_list);
+	} else {
+		data.files = file_list.GetAllFiles();
 	}
-	data.files = file_list.GetAllFiles();
 }
 
 unique_ptr<NodeStatistics> CSVReaderCardinality(ClientContext &context, const FunctionData *bind_data_p) {

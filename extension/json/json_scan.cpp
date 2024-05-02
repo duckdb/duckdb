@@ -980,13 +980,14 @@ void JSONScan::ComplexFilterPushdown(ClientContext &context, LogicalGet &get, Fu
 
 	SimpleMultiFileList file_list(std::move(data.files));
 
-	auto reset_reader =
+	auto filtered_list =
 	    MultiFileReader().ComplexFilterPushdown(context, file_list, data.options.file_options, get, filters);
-	if (reset_reader) {
-		MultiFileReader().PruneReaders(data, file_list);
+	if (filtered_list) {
+		MultiFileReader().PruneReaders(data, *filtered_list);
+		data.files = filtered_list->GetAllFiles();
+	} else {
+		data.files = file_list.GetAllFiles();
 	}
-
-	data.files = file_list.GetAllFiles();
 }
 
 void JSONScan::Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p, const TableFunction &) {

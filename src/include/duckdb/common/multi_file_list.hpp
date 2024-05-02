@@ -76,10 +76,10 @@ public:
 
 	//! Virtual functions for subclasses
 public:
-	virtual bool ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
-	                                   vector<unique_ptr<Expression>> &filters);
+	virtual unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context,
+	                                                        const MultiFileReaderOptions &options, LogicalGet &get,
+	                                                        vector<unique_ptr<Expression>> &filters);
 	virtual vector<string> GetAllFiles() = 0;
-	virtual unique_ptr<MultiFileList> Copy() = 0;
 	virtual FileExpandResult GetExpandResult() = 0;
 	virtual idx_t GetTotalFileCount() = 0;
 
@@ -101,11 +101,10 @@ public:
 	//! Construct a SimpleMultiFileList from a list of already expanded files
 	explicit SimpleMultiFileList(vector<string> paths);
 	//! Copy `paths` to `filtered_files` and apply the filters
-	bool ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
-	                           vector<unique_ptr<Expression>> &filters) override;
+	unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options,
+	                                                LogicalGet &get, vector<unique_ptr<Expression>> &filters) override;
 
 	//! Main MultiFileList API
-	unique_ptr<MultiFileList> Copy() override;
 	vector<string> GetAllFiles() override;
 	FileExpandResult GetExpandResult() override;
 	idx_t GetTotalFileCount() override;
@@ -113,12 +112,6 @@ public:
 protected:
 	//! Main MultiFileList API
 	string GetFile(idx_t i) override;
-
-	//! Depending on whether the list has been filtered, returns the paths vector or filtered_files
-	const vector<string> &CurrentSource();
-
-	vector<string> filtered_files;
-	mutex lock;
 };
 
 //! MultiFileList that takes a list of paths and produces a list of files with all globs expanded
@@ -126,11 +119,10 @@ class GlobMultiFileList : public MultiFileList {
 public:
 	GlobMultiFileList(ClientContext &context, vector<string> paths, FileGlobOptions options);
 	//! Calls ExpandAll, then prunes the expanded_files using the hive/filename filters
-	bool ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
-	                           vector<unique_ptr<Expression>> &filters) override;
+	unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options,
+	                                                LogicalGet &get, vector<unique_ptr<Expression>> &filters) override;
 
 	//! Main MultiFileList API
-	unique_ptr<MultiFileList> Copy() override;
 	vector<string> GetAllFiles() override;
 	FileExpandResult GetExpandResult() override;
 	idx_t GetTotalFileCount() override;

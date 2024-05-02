@@ -29,7 +29,6 @@ struct ParquetMetaDataOperatorData : public GlobalTableFunctionState {
 	ColumnDataCollection collection;
 	ColumnDataScanState scan_state;
 
-	unique_ptr<MultiFileList> file_list;
 	MultiFileListScanData file_list_scan;
 	string current_file;
 
@@ -597,24 +596,23 @@ unique_ptr<GlobalTableFunctionState> ParquetMetaDataInit(ClientContext &context,
 
 	auto result = make_uniq<ParquetMetaDataOperatorData>(context, bind_data.return_types);
 
-	result->file_list = bind_data.file_list->Copy();
-	result->file_list->InitializeScan(result->file_list_scan);
-	result->file_list->Scan(result->file_list_scan, result->current_file);
+	bind_data.file_list->InitializeScan(result->file_list_scan);
+	bind_data.file_list->Scan(result->file_list_scan, result->current_file);
 
-	D_ASSERT(!result->file_list->IsEmpty());
+	D_ASSERT(!bind_data.file_list->IsEmpty());
 
 	switch (TYPE) {
 	case ParquetMetadataOperatorType::SCHEMA:
-		result->LoadSchemaData(context, bind_data.return_types, result->file_list->GetFirstFile());
+		result->LoadSchemaData(context, bind_data.return_types, bind_data.file_list->GetFirstFile());
 		break;
 	case ParquetMetadataOperatorType::META_DATA:
-		result->LoadRowGroupMetadata(context, bind_data.return_types, result->file_list->GetFirstFile());
+		result->LoadRowGroupMetadata(context, bind_data.return_types, bind_data.file_list->GetFirstFile());
 		break;
 	case ParquetMetadataOperatorType::KEY_VALUE_META_DATA:
-		result->LoadKeyValueMetaData(context, bind_data.return_types, result->file_list->GetFirstFile());
+		result->LoadKeyValueMetaData(context, bind_data.return_types, bind_data.file_list->GetFirstFile());
 		break;
 	case ParquetMetadataOperatorType::FILE_META_DATA:
-		result->LoadFileMetaData(context, bind_data.return_types, result->file_list->GetFirstFile());
+		result->LoadFileMetaData(context, bind_data.return_types, bind_data.file_list->GetFirstFile());
 		break;
 	default:
 		throw InternalException("Unsupported ParquetMetadataOperatorType");
@@ -632,7 +630,7 @@ void ParquetMetaDataImplementation(ClientContext &context, TableFunctionInput &d
 		if (!data.collection.Scan(data.scan_state, output)) {
 
 			// Try get next file
-			if (!data.file_list->Scan(data.file_list_scan, data.current_file)) {
+			if (!bind_data.file_list->Scan(data.file_list_scan, data.current_file)) {
 				return;
 			}
 

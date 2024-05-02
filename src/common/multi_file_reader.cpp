@@ -126,9 +126,9 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 	return true;
 }
 
-bool MultiFileReader::ComplexFilterPushdown(ClientContext &context, MultiFileList &files,
-                                            const MultiFileReaderOptions &options, LogicalGet &get,
-                                            vector<unique_ptr<Expression>> &filters) {
+unique_ptr<MultiFileList> MultiFileReader::ComplexFilterPushdown(ClientContext &context, MultiFileList &files,
+                                                                 const MultiFileReaderOptions &options, LogicalGet &get,
+                                                                 vector<unique_ptr<Expression>> &filters) {
 	return files.ComplexFilterPushdown(context, options, get, filters);
 }
 

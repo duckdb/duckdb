@@ -25,7 +25,6 @@ struct GlobFunctionState : public GlobalTableFunctionState {
 	GlobFunctionState() {
 	}
 
-	unique_ptr<MultiFileList> file_list;
 	MultiFileListScanData file_list_scan;
 };
 
@@ -33,19 +32,19 @@ static unique_ptr<GlobalTableFunctionState> GlobFunctionInit(ClientContext &cont
 	auto &bind_data = input.bind_data->Cast<GlobFunctionBindData>();
 	auto res = make_uniq<GlobFunctionState>();
 
-	res->file_list = bind_data.file_list->Copy();
-	res->file_list->InitializeScan(res->file_list_scan);
+	bind_data.file_list->InitializeScan(res->file_list_scan);
 
 	return std::move(res);
 }
 
 static void GlobFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &bind_data = data_p.bind_data->Cast<GlobFunctionBindData>();
 	auto &state = data_p.global_state->Cast<GlobFunctionState>();
 
 	idx_t count = 0;
 	while (count < STANDARD_VECTOR_SIZE) {
 		string file;
-		if (!state.file_list->Scan(state.file_list_scan, file)) {
+		if (!bind_data.file_list->Scan(state.file_list_scan, file)) {
 			break;
 		}
 		output.data[0].SetValue(count++, file);

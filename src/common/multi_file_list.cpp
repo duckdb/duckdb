@@ -14,12 +14,8 @@
 namespace duckdb {
 
 // Helper method to do Filter Pushdown into a MultiFileList
-static bool PushdownInternal(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
-                             vector<unique_ptr<Expression>> &filters, vector<string> &expanded_files) {
-	if (!options.hive_partitioning && !options.filename) {
-		return false;
-	}
-
+bool PushdownInternal(ClientContext &context, const MultiFileReaderOptions &options, LogicalGet &get,
+                      vector<unique_ptr<Expression>> &filters, vector<string> &expanded_files) {
 	unordered_map<string, column_t> column_map;
 	for (idx_t i = 0; i < get.column_ids.size(); i++) {
 		if (!IsRowIdColumnId(get.column_ids[i])) {
@@ -127,10 +123,11 @@ bool MultiFileList::Scan(MultiFileListScanData &iterator, string &result_file) {
 	return true;
 }
 
-bool MultiFileList::ComplexFilterPushdown(ClientContext &context, const MultiFileReaderOptions &options,
-                                          LogicalGet &get, vector<unique_ptr<Expression>> &filters) {
+unique_ptr<MultiFileList> MultiFileList::ComplexFilterPushdown(ClientContext &context,
+                                                               const MultiFileReaderOptions &options, LogicalGet &get,
+                                                               vector<unique_ptr<Expression>> &filters) {
 	// By default the filter pushdown into a multifilelist does nothing
-	return false;
+	return nullptr;
 }
 
 string MultiFileList::GetFirstFile() {
@@ -148,40 +145,33 @@ SimpleMultiFileList::SimpleMultiFileList(vector<string> paths_p)
     : MultiFileList(std::move(paths_p), FileGlobOptions::ALLOW_EMPTY) {
 }
 
-bool SimpleMultiFileList::ComplexFilterPushdown(ClientContext &context_p, const MultiFileReaderOptions &options,
-                                                LogicalGet &get, vector<unique_ptr<Expression>> &filters) {
-	lock_guard<mutex> lck(lock);
-	// When applying filters to a SimpleMultiFileList, we copy them from paths over to filtered_files
-	if (filtered_files.empty()) {
-		filtered_files = paths;
+unique_ptr<MultiFileList> SimpleMultiFileList::ComplexFilterPushdown(ClientContext &context_p,
+                                                                     const MultiFileReaderOptions &options,
+                                                                     LogicalGet &get,
+                                                                     vector<unique_ptr<Expression>> &filters) {
+	if (!options.hive_partitioning && !options.filename) {
+		return nullptr;
 	}
-	// Then apply the filters to the copied list
-	return PushdownInternal(context_p, options, get, filters, filtered_files);
+
+	// FIXME: don't copy list until first file is filtered
+	auto file_copy = paths;
+	auto res = PushdownInternal(context_p, options, get, filters, file_copy);
+
+	if (res) {
+		return make_uniq<SimpleMultiFileList>(file_copy);
+	}
+
+	return nullptr;
 }
 
 vector<string> SimpleMultiFileList::GetAllFiles() {
-	lock_guard<mutex> lck(lock);
-	if (!filtered_files.empty()) {
-		return filtered_files;
-	}
 	return paths;
 }
 
-unique_ptr<MultiFileList> SimpleMultiFileList::Copy() {
-	lock_guard<mutex> lck(lock);
-
-	auto res = make_uniq<SimpleMultiFileList>(paths);
-	res->filtered_files = filtered_files;
-	return std::move(res);
-}
-
 FileExpandResult SimpleMultiFileList::GetExpandResult() {
-	lock_guard<mutex> lck(lock);
-
-	auto &source = CurrentSource();
-	if (source.size() > 1) {
+	if (paths.size() > 1) {
 		return FileExpandResult::MULTIPLE_FILES;
-	} else if (source.size() == 1) {
+	} else if (paths.size() == 1) {
 		return FileExpandResult::SINGLE_FILE;
 	}
 
@@ -189,26 +179,15 @@ FileExpandResult SimpleMultiFileList::GetExpandResult() {
 }
 
 string SimpleMultiFileList::GetFile(idx_t i) {
-	lock_guard<mutex> lck(lock);
-
-	auto &source = CurrentSource();
-	if (!source.empty()) {
-		if (i >= source.size()) {
-			return "";
-		}
-		return source[i];
+	if (paths.empty() || i >= paths.size()) {
+		return "";
 	}
-	return "";
+
+	return paths[i];
 }
 
 idx_t SimpleMultiFileList::GetTotalFileCount() {
-	lock_guard<mutex> lck(lock);
-	auto &source = CurrentSource();
-	return source.size();
-}
-
-const vector<string> &SimpleMultiFileList::CurrentSource() {
-	return filtered_files.empty() ? paths : filtered_files;
+	return paths.size();
 }
 
 //===--------------------------------------------------------------------===//
@@ -218,24 +197,28 @@ GlobMultiFileList::GlobMultiFileList(ClientContext &context_p, vector<string> pa
     : MultiFileList(std::move(paths_p), options), context(context_p), current_path(0) {
 }
 
-// TODO: implement special glob that makes use of hive partition filters to do more efficient globbing
-bool GlobMultiFileList::ComplexFilterPushdown(ClientContext &context_p, const MultiFileReaderOptions &options,
-                                              LogicalGet &get, vector<unique_ptr<Expression>> &filters) {
+unique_ptr<MultiFileList> GlobMultiFileList::ComplexFilterPushdown(ClientContext &context_p,
+                                                                   const MultiFileReaderOptions &options,
+                                                                   LogicalGet &get,
+                                                                   vector<unique_ptr<Expression>> &filters) {
 	lock_guard<mutex> lck(lock);
+
+	// Expand all
+	// FIXME: lazy expansion
+	// FIXME: push down filters into glob
 	while (ExpandPathInternal()) {
 	}
-	return PushdownInternal(context, options, get, filters, expanded_files);
-}
 
-unique_ptr<MultiFileList> GlobMultiFileList::Copy() {
-	lock_guard<mutex> lck(lock);
+	if (!options.hive_partitioning && !options.filename) {
+		return nullptr;
+	}
+	auto res = PushdownInternal(context, options, get, filters, expanded_files);
 
-	auto res = make_uniq<GlobMultiFileList>(context, paths, glob_options);
+	if (res) {
+		return make_uniq<SimpleMultiFileList>(expanded_files);
+	}
 
-	res->current_path = current_path;
-	res->expanded_files = expanded_files;
-
-	return std::move(res);
+	return nullptr;
 }
 
 vector<string> GlobMultiFileList::GetAllFiles() {
