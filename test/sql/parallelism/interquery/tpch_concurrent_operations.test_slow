@@ -7,8 +7,6 @@ require tpch
 statement ok
 CALL dbgen(sf=1);
 
-mode output_result
-
 concurrentloop threadid 0 5
 
 loop i 0 20
