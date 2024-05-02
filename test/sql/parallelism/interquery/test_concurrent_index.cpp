@@ -268,28 +268,41 @@ TEST_CASE("Mix updates and inserts on PRIMARY KEY", "[index][.]") {
 }
 
 static void TransactionalAppendToPK(DuckDB *db, idx_t thread_idx) {
+	duckdb::unique_ptr<QueryResult> result;
 
 	Connection con(*db);
-	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	result = con.Query("BEGIN TRANSACTION");
+	if (result->HasError()) {
+		FAIL(result->GetError());
+	}
 
 	// get the initial count
-	auto result = con.Query("SELECT COUNT(*) FROM integers WHERE i >= 0");
-	REQUIRE_NO_FAIL(*result);
+	result = con.Query("SELECT COUNT(*) FROM integers WHERE i >= 0");
+	if (result->HasError()) {
+		FAIL(result->GetError());
+	}
 
 	auto chunk = result->Fetch();
 	auto initial_count = chunk->GetValue(0, 0).GetValue<int32_t>();
 
 	for (idx_t i = 0; i < 50; i++) {
 
-		auto loop_result = con.Query("INSERT INTO integers VALUES ($1)", (int32_t)(thread_idx * 1000 + i));
-		REQUIRE_NO_FAIL(*result);
+		result = con.Query("INSERT INTO integers VALUES ($1)", (int32_t)(thread_idx * 1000 + i));
+		if (result->HasError()) {
+			FAIL(result->GetError());
+		}
 
 		// check the count
-		loop_result = con.Query("SELECT COUNT(*), COUNT(DISTINCT i) FROM integers WHERE i >= 0");
-		REQUIRE(CHECK_COLUMN(loop_result, 0, {Value::INTEGER(initial_count + i + 1)}));
+		result = con.Query("SELECT COUNT(*), COUNT(DISTINCT i) FROM integers WHERE i >= 0");
+		if (!CHECK_COLUMN(result, 0, {Value::INTEGER(initial_count + i + 1)})) {
+			FAIL("Incorrect result in TransactionalAppendToPK");
+		}
 	}
 
-	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+	result = con.Query("COMMIT");
+	if (result->HasError()) {
+		FAIL(result->GetError());
+	}
 }
 
 TEST_CASE("Parallel transactional appends to indexed table", "[index][.]") {
