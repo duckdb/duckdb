@@ -1,7 +1,5 @@
 #include "duckdb/execution/operator/set/physical_recursive_key_cte.hpp"
-
 #include "duckdb/execution/aggregate_hashtable.hpp"
-#include "iostream"
 
 namespace duckdb {
 
@@ -9,8 +7,8 @@ PhysicalRecursiveKeyCTE::PhysicalRecursiveKeyCTE(string ctename, idx_t table_ind
                                                  bool union_all, vector<idx_t> key_columns,
                                                  unique_ptr<PhysicalOperator> top, unique_ptr<PhysicalOperator> bottom,
                                                  idx_t estimated_cardinality)
-    : PhysicalRecursiveCTE(ctename, table_index, types, union_all, std::move(top), std::move(bottom),
-                           estimated_cardinality),
+    : PhysicalRecursiveCTE(std::move(ctename), table_index, std::move(types), union_all, std::move(top),
+                           std::move(bottom), estimated_cardinality),
       key_columns(std::move(key_columns)) {
 }
 
@@ -105,7 +103,7 @@ SourceResultType PhysicalRecursiveKeyCTE::GetData(ExecutionContext &context, Dat
 			// and fill it up with the new hash table rows for the next iteration.
 			recurring_table->Reset();
 			DataChunk all_rows;
-			all_rows.InitializeEmpty(chunk.GetTypes());
+			all_rows.Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
 			gstate.ht->FetchAll(all_rows);
 			recurring_table->Append(all_rows);
 

@@ -2,6 +2,9 @@
 # description: Recursive CTEs with an error thrown in the pipelines
 # group: [cte]
 
+statement ok
+PRAGMA enable_verification;
+
 query III
 WITH RECURSIVE tbl(a,b,c) USING KEY (a) AS (SELECT * FROM (VALUES (1, 2, 3), (2,2,5)) UNION SELECT a+1, b+1, c FROM tbl WHERE b < 4) SELECT * FROM  tbl;
 ----

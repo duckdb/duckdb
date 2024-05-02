@@ -18,7 +18,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalRecursiveC
 	// Add the ColumnDataCollection to the context of this PhysicalPlanGenerator
 	recursive_cte_tables[op.table_index] = working_table;
 
-	if (op.recursive_keys.size() == 0) {
+	if (op.recursive_keys.empty()) {
 		auto left = CreatePlan(*op.children[0]);
 		auto right = CreatePlan(*op.children[1]);
 

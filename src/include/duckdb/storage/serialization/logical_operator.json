@@ -506,6 +506,16 @@
         "id": 203,
         "name": "column_count",
         "type": "idx_t"
+      },
+      {
+        "id": 204,
+        "name": "recursive_keys",
+        "type": "vector<idx_t>"
+      },
+      {
+        "id": 205,
+        "name": "recurring_index",
+        "type": "idx_t"
       }
     ]
   },

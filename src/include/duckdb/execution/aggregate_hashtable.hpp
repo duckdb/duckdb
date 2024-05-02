@@ -99,9 +99,9 @@ public:
 
 	//! Executes the filter(if any) and update the aggregates
 	void Combine(GroupedAggregateHashTable &other);
-	void Combine(GroupedAggregateHashTable &other, vector<idx_t> column_idx);
+	void Combine(GroupedAggregateHashTable &other, const vector<idx_t> &column_idx);
 	void Combine(TupleDataCollection &other_data, optional_ptr<atomic<double>> progress = nullptr,
-	             vector<idx_t> column_idx = vector<idx_t>());
+	             const vector<idx_t> &column_idx = vector<idx_t>());
 
 	//! Unpins the data blocks
 	void UnpinData();

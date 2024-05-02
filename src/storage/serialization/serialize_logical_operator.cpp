@@ -597,6 +597,8 @@ void LogicalRecursiveCTE::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(201, "ctename", ctename);
 	serializer.WritePropertyWithDefault<idx_t>(202, "table_index", table_index);
 	serializer.WritePropertyWithDefault<idx_t>(203, "column_count", column_count);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(204, "recursive_keys", recursive_keys);
+	serializer.WritePropertyWithDefault<idx_t>(205, "recurring_index", recurring_index);
 }
 
 unique_ptr<LogicalOperator> LogicalRecursiveCTE::Deserialize(Deserializer &deserializer) {
@@ -605,6 +607,8 @@ unique_ptr<LogicalOperator> LogicalRecursiveCTE::Deserialize(Deserializer &deser
 	deserializer.ReadPropertyWithDefault<string>(201, "ctename", result->ctename);
 	deserializer.ReadPropertyWithDefault<idx_t>(202, "table_index", result->table_index);
 	deserializer.ReadPropertyWithDefault<idx_t>(203, "column_count", result->column_count);
+	deserializer.ReadPropertyWithDefault<vector<idx_t>>(204, "recursive_keys", result->recursive_keys);
+	deserializer.ReadPropertyWithDefault<idx_t>(205, "recurring_index", result->recurring_index);
 	return std::move(result);
 }
 

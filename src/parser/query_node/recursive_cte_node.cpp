@@ -6,15 +6,6 @@ namespace duckdb {
 
 string RecursiveCTENode::ToString() const {
 	string result;
-	if (!recursive_keys.empty()) {
-		result += " USING KEY ";
-		for (idx_t i = 0; i < recursive_keys.size(); i++) {
-			result += recursive_keys[i];
-			if (recursive_keys.size() < recursive_keys.size() - 1) {
-				result += ", ";
-			}
-		}
-	}
 	result += "(" + left->ToString() + ")";
 	result += " UNION ";
 	if (union_all) {

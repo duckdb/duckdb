@@ -65,6 +65,7 @@ void RecursiveCTENode::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(202, "left", left);
 	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(203, "right", right);
 	serializer.WritePropertyWithDefault<vector<string>>(204, "aliases", aliases);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(205, "recursive_keys", recursive_keys);
 }
 
 unique_ptr<QueryNode> RecursiveCTENode::Deserialize(Deserializer &deserializer) {
@@ -74,6 +75,7 @@ unique_ptr<QueryNode> RecursiveCTENode::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(202, "left", result->left);
 	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(203, "right", result->right);
 	deserializer.ReadPropertyWithDefault<vector<string>>(204, "aliases", result->aliases);
+	deserializer.ReadPropertyWithDefault<vector<idx_t>>(205, "recursive_keys", result->recursive_keys);
 	return std::move(result);
 }
 

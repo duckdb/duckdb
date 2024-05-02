@@ -20,6 +20,9 @@ CommonTableExpressionMap CommonTableExpressionMap::Copy() const {
 		for (auto &al : kv.second->aliases) {
 			kv_info->aliases.push_back(al);
 		}
+		for (auto &al : kv.second->recursive_keys) {
+			kv_info->recursive_keys.push_back(al);
+		}
 		kv_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(kv.second->query->Copy());
 		kv_info->materialized = kv.second->materialized;
 		res.map[kv.first] = std::move(kv_info);
@@ -59,6 +62,17 @@ string CommonTableExpressionMap::ToString() const {
 					result += ", ";
 				}
 				result += KeywordHelper::WriteOptionallyQuoted(cte.aliases[k]);
+			}
+			result += ")";
+		}
+		if (!cte.recursive_keys.empty()) {
+			result += " USING KEY ";
+			result += "(";
+			for (idx_t i = 0; i < cte.recursive_keys.size(); i++) {
+				if (i > 0) {
+					result += ", ";
+				}
+				result += KeywordHelper::WriteOptionallyQuoted(cte.aliases[cte.recursive_keys[i]]);
 			}
 			result += ")";
 		}
@@ -143,6 +157,9 @@ bool QueryNode::Equals(const QueryNode *other) const {
 		if (entry.second->aliases != other->cte_map.map.at(entry.first)->aliases) {
 			return false;
 		}
+		if (entry.second->recursive_keys != other_entry->second->recursive_keys) {
+			return false;
+		}
 		if (!entry.second->query->Equals(*other->cte_map.map.at(entry.first)->query)) {
 			return false;
 		}
@@ -158,6 +175,9 @@ void QueryNode::CopyProperties(QueryNode &other) const {
 		auto kv_info = make_uniq<CommonTableExpressionInfo>();
 		for (auto &al : kv.second->aliases) {
 			kv_info->aliases.push_back(al);
+		}
+		for (auto &key : kv.second->recursive_keys) {
+			kv_info->recursive_keys.push_back(key);
 		}
 		kv_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(kv.second->query->Copy());
 		kv_info->materialized = kv.second->materialized;
