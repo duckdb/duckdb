@@ -1,3 +1,4 @@
+import platform
 import duckdb
 import pytest
 import threading
@@ -7,12 +8,11 @@ from conftest import NumpyPandas, ArrowPandas
 import os
 from typing import List
 
-try:
-    import pyarrow as pa
 
-    can_run = True
-except ImportError:
-    can_run = False
+pytestmark = pytest.mark.xfail(
+    condition=platform.system() == "Emscripten",
+    reason="Emscripten builds cannot use threads",
+)
 
 
 def connect_duck(duckdb_conn):
@@ -415,15 +415,13 @@ class TestDuckMultithread(object):
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_fetcharrow(self, duckdb_cursor, pandas):
-        if not can_run:
-            return
+        pytest.importorskip('pyarrow')
         duck_threads = DuckDBThreaded(10, fetch_arrow_query, pandas)
         duck_threads.multithread_test()
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_fetch_record_batch(self, duckdb_cursor, pandas):
-        if not can_run:
-            return
+        pytest.importorskip('pyarrow')
         duck_threads = DuckDBThreaded(10, fetch_record_batch_query, pandas)
         duck_threads.multithread_test()
 
@@ -449,8 +447,7 @@ class TestDuckMultithread(object):
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_arrow_register_unregister(self, duckdb_cursor, pandas):
-        if not can_run:
-            return
+        pytest.importorskip('pyarrow')
         duck_threads = DuckDBThreaded(10, arrow_register_unregister, pandas)
         duck_threads.multithread_test()
 
@@ -481,8 +478,7 @@ class TestDuckMultithread(object):
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_from_arrow(self, duckdb_cursor, pandas):
-        if not can_run:
-            return
+        pytest.importorskip('pyarrow')
         duck_threads = DuckDBThreaded(10, from_arrow, pandas)
         duck_threads.multithread_test()
 

@@ -1,5 +1,7 @@
 import duckdb
 import pytest
+import platform
+import sys
 
 
 @pytest.fixture()
@@ -117,11 +119,12 @@ class TestRAPIQuery(object):
 
     def test_replacement_scan_recursion(self, duckdb_cursor):
         depth_limit = 1000
-        import sys
 
-        if sys.platform.startswith('win'):
-            # With the default we reach a stack overflow in the CI
+        if sys.platform.startswith('win') or platform.system() == "Emscripten":
+            # With the default we reach a stack overflow in the CI for windows
+            # and also outside of it for Pyodide
             depth_limit = 250
+
         duckdb_cursor.execute(f"SET max_expression_depth TO {depth_limit}")
         rel = duckdb_cursor.sql('select 42')
         rel = duckdb_cursor.sql('select * from rel')

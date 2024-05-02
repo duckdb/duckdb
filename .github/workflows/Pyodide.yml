@@ -44,8 +44,10 @@ jobs:
         version:
           - python: "3.10"
             pyodide-build: "0.22.1"
+            node: "16"
           - python: "3.11"
             pyodide-build: "0.25.1"
+            node: "18"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -76,22 +78,30 @@ jobs:
           CFLAGS: "-fexceptions"
           LDFLAGS: "-fexceptions"
 
-      - name: smoke test duckdb on pyodide
+      - name: install node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.version.node }}
+
+      - name: create pyodide environment
+        run: pyodide venv .venv-pyodide
+
+      - name: install deps into environment
         run: |
-          pyodide venv .venv-pyodide
+          source .venv-pyodide/bin/activate
+          pip install pytest numpy pandas mypy
+
+      - name: install duckdb wasm wheel into environment
+        run: |
           source .venv-pyodide/bin/activate
           pip install ./tools/pythonpkg/dist/*.whl
 
-          python -V
-
-          python <<EOF
-          import duckdb
-          print(duckdb.__version__)
-          print(duckdb.sql("SELECT 1 AS a"))
-
-          (platform,) = duckdb.execute("PRAGMA platform").fetchone()
-          assert platform == "wasm_eh_pyodide", platform
-          EOF
+      - name: run fast tests pyodide
+        run: |
+          source .venv-pyodide/bin/activate
+          python -m pytest ./tools/pythonpkg/tests
+        env:
+          TZ: UTC
 
       - name: Wheel sizes
         run: |
