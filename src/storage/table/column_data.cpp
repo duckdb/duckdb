@@ -546,7 +546,7 @@ void ColumnData::GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_p
 
 	// iterate over the segments
 	idx_t segment_idx = 0;
-	auto segment = (ColumnSegment *)data.GetRootSegment();
+	auto segment = data.GetRootSegment();
 	while (segment) {
 		ColumnSegmentInfo column_info;
 		column_info.row_group_index = row_group_index;
