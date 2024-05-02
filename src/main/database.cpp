@@ -187,36 +187,64 @@ void DatabaseInstance::CreateMainDatabase() {
 	initial_database->Initialize();
 }
 
-void ThrowExtensionSetUnrecognizedOptions(const unordered_map<string, Value> &unrecognized_options) {
-	auto unrecognized_options_iter = unrecognized_options.begin();
-	string unrecognized_option_keys = unrecognized_options_iter->first;
-	case_insensitive_map_t<vector<string>> extension_options;
-	vector<string> other_options;
-	for (; unrecognized_options_iter != unrecognized_options.end(); unrecognized_options_iter++) {
-		auto name = unrecognized_options_iter->first;
+void DatabaseInstance::LoadExtensionSettings() {
+	if (!config.options.autoload_known_extensions) {
+		// Autoloading not enabled
+		return;
+	}
+	auto &unrecognized_options = config.options.unrecognized_options;
+	if (unrecognized_options.empty()) {
+		// Nothing to do
+		return;
+	}
+
+	auto it = unrecognized_options.begin();
+	vector<string> extension_options;
+	for (; it != unrecognized_options.end(); it++) {
+		auto name = it->first;
 		auto extension_name = ExtensionHelper::FindExtensionInEntries(name, EXTENSION_SETTINGS);
 		if (extension_name.empty()) {
-			other_options.push_back(name);
-		} else {
-			extension_options[extension_name].push_back(name);
+			continue;
 		}
-	}
-	string error_message;
-	if (!extension_options.empty()) {
-		error_message += "The following settings are part of known extensions\n";
-		// FIXME: should we try to autoload these before throwing?
-		error_message += "Under normal circumstances we can autoload/autoinstall these, but that is only possible "
-		                 "after the Database is initialized\n\n";
-		for (auto &kv : extension_options) {
-			auto concatenated = StringUtil::Join(kv.second, ", ");
-			error_message += StringUtil::Format("[%s] : %s\n", kv.first, concatenated);
+		// Attempt to autoload it
+		if (!ExtensionHelper::CanAutoloadExtension(extension_name)) {
+			// FIXME: do we want to throw with a more explicit error message that this is a recognized extension setting
+			// but we couldn't load it?
+			continue;
 		}
+		ExtensionHelper::AutoLoadExtension(*this, extension_name);
+		config.SetOptionByName(name, it->second);
+		extension_options.push_back(name);
 	}
-	if (!other_options.empty()) {
-		auto concatenated = StringUtil::Join(other_options, ", ");
-		error_message += "The following options were not recognized: " + concatenated;
+
+	for (auto &option : extension_options) {
+		unrecognized_options.erase(option);
 	}
-	throw InvalidInputException(error_message);
+
+	// string error_message;
+	// if (!extension_options.empty()) {
+	//	error_message += "The following settings are part of known extensions\n";
+	//	// FIXME: should we try to autoload these before throwing?
+	//	error_message += "Under normal circumstances we can autoload/autoinstall these, but that is only possible "
+	//	                 "after the Database is initialized\n\n";
+	//	for (auto &kv : extension_options) {
+	//		auto concatenated = StringUtil::Join(kv.second, ", ");
+	//		error_message += StringUtil::Format("[%s] : %s\n", kv.first, concatenated);
+	//	}
+	//}
+}
+
+void ThrowExtensionSetUnrecognizedOptions(const unordered_map<string, Value> &unrecognized_options) {
+	if (unrecognized_options.empty()) {
+		return;
+	}
+
+	vector<string> options;
+	for (auto &kv : unrecognized_options) {
+		options.push_back(kv.first);
+	}
+	auto concatenated = StringUtil::Join(options, ", ");
+	throw InvalidInputException("The following options were not recognized: " + concatenated);
 }
 
 void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_config) {
@@ -262,9 +290,8 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		ExtensionHelper::LoadExternalExtension(*this, *config.file_system, config.options.database_type);
 	}
 
-	if (!config.options.unrecognized_options.empty()) {
-		ThrowExtensionSetUnrecognizedOptions(config.options.unrecognized_options);
-	}
+	LoadExtensionSettings();
+	ThrowExtensionSetUnrecognizedOptions(config.options.unrecognized_options);
 
 	if (!db_manager->HasDefaultDatabase()) {
 		CreateMainDatabase();
