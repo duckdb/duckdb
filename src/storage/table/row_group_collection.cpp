@@ -1154,10 +1154,12 @@ void RowGroupCollection::VerifyNewConstraint(DataTable &parent, const BoundConst
 // Statistics
 //===--------------------------------------------------------------------===//
 void RowGroupCollection::CopyStats(TableStatistics &other_stats) {
+	auto stats_lock = stats.GetLock();
 	stats.CopyStats(other_stats);
 }
 
 unique_ptr<BaseStatistics> RowGroupCollection::CopyStats(column_t column_id) {
+	auto stats_lock = stats.GetLock();
 	return stats.CopyStats(column_id);
 }
 

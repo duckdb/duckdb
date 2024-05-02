@@ -183,7 +183,6 @@ private:
 
 private:
 	mutex row_group_lock;
-	mutex stats_lock;
 	vector<MetaBlockPointer> column_pointers;
 	unique_ptr<atomic<bool>[]> is_loaded;
 	vector<MetaBlockPointer> deletes_pointers;
