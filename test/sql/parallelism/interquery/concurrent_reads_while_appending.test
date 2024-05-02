@@ -21,8 +21,11 @@ endloop
 loop i 0 200
 
 skipif threadid=0
-statement ok
-SELECT COUNT(*), SUM(i) FROM integers;
+query II
+SELECT COUNT(*)>=10000 AND COUNT(*)<=12000,
+       SUM(i)>= 49995000 AND SUM(i) <= 50094000 FROM integers;
+----
+true	true
 
 endloop
 

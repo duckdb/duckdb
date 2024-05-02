@@ -1032,17 +1032,15 @@ vector<ColumnSegmentInfo> RowGroupCollection::GetColumnSegmentInfo() {
 // Alter
 //===--------------------------------------------------------------------===//
 shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &context, ColumnDefinition &new_column,
-                                                             Expression &default_value) {
+                                                             ExpressionExecutor &default_executor) {
 	idx_t new_column_idx = types.size();
 	auto new_types = types;
 	new_types.push_back(new_column.GetType());
 	auto result =
 	    make_shared_ptr<RowGroupCollection>(info, block_manager, std::move(new_types), row_start, total_rows.load());
 
-	ExpressionExecutor executor(context);
 	DataChunk dummy_chunk;
 	Vector default_vector(new_column.GetType());
-	executor.AddExpression(default_value);
 
 	result->stats.InitializeAddColumn(stats, new_column.GetType());
 	auto lock = result->stats.GetLock();
@@ -1051,7 +1049,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 	// fill the column with its DEFAULT value, or NULL if none is specified
 	auto new_stats = make_uniq<SegmentStatistics>(new_column.GetType());
 	for (auto &current_row_group : row_groups->Segments()) {
-		auto new_row_group = current_row_group.AddColumn(*result, new_column, executor, default_value, default_vector);
+		auto new_row_group = current_row_group.AddColumn(*result, new_column, default_executor, default_vector);
 		// merge in the statistics
 		new_row_group->MergeIntoStatistics(new_column_idx, new_column_stats.Statistics());
 

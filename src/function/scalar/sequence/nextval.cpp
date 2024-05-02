@@ -39,6 +39,27 @@ SequenceCatalogEntry &BindSequence(ClientContext &context, const string &name) {
 	return BindSequence(context, qname.catalog, qname.schema, qname.name);
 }
 
+struct NextValLocalState : public FunctionLocalState {
+	explicit NextValLocalState(DuckTransaction &transaction, SequenceCatalogEntry &sequence)
+	    : transaction(transaction), sequence(sequence) {
+	}
+
+	DuckTransaction &transaction;
+	SequenceCatalogEntry &sequence;
+};
+
+unique_ptr<FunctionLocalState> NextValLocalFunction(ExpressionState &state, const BoundFunctionExpression &expr,
+                                                    FunctionData *bind_data) {
+	if (!bind_data) {
+		return nullptr;
+	}
+	auto &context = state.GetContext();
+	auto &info = bind_data->Cast<NextvalBindData>();
+	auto &sequence = info.sequence;
+	auto &transaction = DuckTransaction::Get(context, sequence.catalog);
+	return make_uniq<NextValLocalState>(transaction, sequence);
+}
+
 template <class OP>
 static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
@@ -48,17 +69,14 @@ static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &res
 		ConstantVector::SetNull(result, true);
 		return;
 	}
-	auto &info = func_expr.bind_info->Cast<NextvalBindData>();
-	auto &context = state.GetContext();
-	auto &sequence = info.sequence;
-	auto &transaction = DuckTransaction::Get(context, sequence.catalog);
+	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<NextValLocalState>();
 	// sequence to use is hard coded
 	// increment the sequence
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<int64_t>(result);
 	for (idx_t i = 0; i < args.size(); i++) {
 		// get the next value from the sequence
-		result_data[i] = OP::Operation(transaction, sequence);
+		result_data[i] = OP::Operation(lstate.transaction, lstate.sequence);
 	}
 }
 
@@ -118,6 +136,7 @@ void NextvalFun::RegisterFunction(BuiltinFunctions &set) {
 	next_val.serialize = Serialize;
 	next_val.deserialize = Deserialize;
 	next_val.get_modified_databases = NextValModifiedDatabases;
+	next_val.init_local_state = NextValLocalFunction;
 	set.AddFunction(next_val);
 }
 
@@ -127,6 +146,7 @@ void CurrvalFun::RegisterFunction(BuiltinFunctions &set) {
 	curr_val.stability = FunctionStability::VOLATILE;
 	curr_val.serialize = Serialize;
 	curr_val.deserialize = Deserialize;
+	curr_val.init_local_state = NextValLocalFunction;
 	set.AddFunction(curr_val);
 }
 

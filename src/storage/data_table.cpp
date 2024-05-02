@@ -71,13 +71,16 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 
 	auto &local_storage = LocalStorage::Get(context, db);
 
+	ExpressionExecutor default_executor(context);
+	default_executor.AddExpression(default_value);
+
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
 
-	this->row_groups = parent.row_groups->AddColumn(context, new_column, default_value);
+	this->row_groups = parent.row_groups->AddColumn(context, new_column, default_executor);
 
 	// also add this column to client local storage
-	local_storage.AddColumn(parent, *this, new_column, default_value);
+	local_storage.AddColumn(parent, *this, new_column, default_executor);
 
 	// this table replaces the previous table, hence the parent is no longer the root DataTable
 	parent.is_root = false;

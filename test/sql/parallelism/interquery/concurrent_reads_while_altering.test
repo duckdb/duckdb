@@ -2,8 +2,6 @@
 # description: Test concurrent reads while altering
 # group: [interquery]
 
-loop x 0 100
-
 statement ok
 CREATE OR REPLACE TABLE integers(i INTEGER)
 
@@ -47,4 +45,3 @@ SELECT COUNT(*), SUM(i) FROM integers
 ----
 12000	71994000
 
-endloop

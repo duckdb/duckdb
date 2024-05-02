@@ -89,7 +89,7 @@ public:
 	                               ExpressionExecutor &executor, CollectionScanState &scan_state,
 	                               DataChunk &scan_chunk);
 	unique_ptr<RowGroup> AddColumn(RowGroupCollection &collection, ColumnDefinition &new_column,
-	                               ExpressionExecutor &executor, Expression &default_value, Vector &intermediate);
+	                               ExpressionExecutor &executor, Vector &intermediate);
 	unique_ptr<RowGroup> RemoveColumn(RowGroupCollection &collection, idx_t removed_column);
 
 	void CommitDrop();
