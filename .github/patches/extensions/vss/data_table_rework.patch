@@ -1,8 +1,16 @@
 diff --git a/src/hnsw/hnsw_index.cpp b/src/hnsw/hnsw_index.cpp
-index 92d7c67..2693948 100644
+index 92d7c67..7e4bcdc 100644
 --- a/src/hnsw/hnsw_index.cpp
 +++ b/src/hnsw/hnsw_index.cpp
-@@ -480,7 +480,7 @@ IndexStorageInfo HNSWIndex::GetStorageInfo(const bool get_buffers) {
+@@ -3,6 +3,7 @@
+ #include "duckdb/common/serializer/binary_deserializer.hpp"
+ #include "duckdb/common/serializer/binary_serializer.hpp"
+ #include "duckdb/execution/index/fixed_size_allocator.hpp"
++#include "duckdb/storage/partial_block_manager.hpp"
+ #include "duckdb/storage/table/scan_state.hpp"
+ #include "hnsw/hnsw.hpp"
+ 
+@@ -480,7 +481,7 @@ IndexStorageInfo HNSWIndex::GetStorageInfo(const bool get_buffers) {
  	if (!get_buffers) {
  		// use the partial block manager to serialize all allocator data
  		auto &block_manager = table_io_manager.GetIndexBlockManager();
