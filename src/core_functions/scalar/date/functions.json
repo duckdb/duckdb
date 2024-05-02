@@ -384,6 +384,13 @@
         "type": "scalar_function"
     },
     {
+        "name": "to_quarters",
+        "parameters": "integer",
+        "description": "Construct a quarter interval",
+        "example": "to_quarters(5)",
+        "type": "scalar_function"
+    },
+    {
         "name": "to_seconds",
         "parameters": "double",
         "description": "Construct a second interval",
