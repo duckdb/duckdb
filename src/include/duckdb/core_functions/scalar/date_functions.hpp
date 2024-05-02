@@ -525,6 +525,15 @@ struct ToMonthsFun {
 	static ScalarFunction GetFunction();
 };
 
+struct ToQuartersFun {
+	static constexpr const char *Name = "to_quarters";
+	static constexpr const char *Parameters = "integer";
+	static constexpr const char *Description = "Construct a quarter interval";
+	static constexpr const char *Example = "to_quarters(5)";
+
+	static ScalarFunction GetFunction();
+};
+
 struct ToSecondsFun {
 	static constexpr const char *Name = "to_seconds";
 	static constexpr const char *Parameters = "double";

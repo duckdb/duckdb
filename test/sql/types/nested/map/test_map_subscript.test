@@ -205,3 +205,28 @@ from (SELECT a%4 as grp, list(a) as lsta, list(a) as lstb FROM range(7) tbl(a) g
 1	{1=1, 5=5}	[NULL]
 2	{2=2, 6=6}	[]
 3	{3=3}	[]
+
+query I
+select MAP_EXTRACT(MAP([],[]), NULL)
+----
+[]
+
+query I
+select MAP_EXTRACT(MAP(NULL, NULL), NULL)
+----
+[]
+
+query I
+select MAP_EXTRACT(NULL, NULL)
+----
+[]
+
+query I
+select MAP_EXTRACT(NULL::MAP("NULL", "NULL"), NULL)
+----
+[]
+
+query I
+select MAP_EXTRACT(NULL::MAP(INT, BIGINT), NULL)
+----
+[]

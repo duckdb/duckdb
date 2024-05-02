@@ -100,6 +100,7 @@ void SQLLogicTestRunner::Reconnect() {
 	if (original_sqlite_test) {
 		con->Query("SET integer_division=true");
 	}
+	con->Query("SET secret_directory='" + TestCreatePath("test_secret_dir") + "'");
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 	con->Query("SET pivot_filter_threshold=0");
 #endif

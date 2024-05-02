@@ -47,7 +47,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 
 	auto &copy_info = *stmt.info;
 	// bind the select statement
-	auto select_node = Bind(*copy_info.select_statement);
+	auto node_copy = copy_info.select_statement->Copy();
+	auto select_node = Bind(*node_copy);
 
 	if (!copy_function.function.copy_to_bind) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
