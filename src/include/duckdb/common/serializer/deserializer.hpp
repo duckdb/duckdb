@@ -304,7 +304,6 @@ private:
 
 	template <typename T = void>
 	inline typename std::enable_if<is_insertion_preserving_map<T>::value, T>::type Read() {
-		using KEY_TYPE = typename is_insertion_preserving_map<T>::KEY_TYPE;
 		using VALUE_TYPE = typename is_insertion_preserving_map<T>::VALUE_TYPE;
 
 		T map;
