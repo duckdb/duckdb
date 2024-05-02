@@ -609,10 +609,11 @@ public:
 			}
 		} else if (bind_data.initial_reader) {
 			// Ensure the initial reader was actually constructed from the first file
-			if (bind_data.initial_reader->file_name == bind_data.file_list->GetFirstFile()) {
-				result->readers.push_back({std::move(bind_data.initial_reader)});
+			if (bind_data.initial_reader->file_name != bind_data.file_list->GetFirstFile()) {
+				throw InternalException("First file from list ('%s') does not match first reader ('%s')",
+				                        bind_data.initial_reader->file_name, bind_data.file_list->GetFirstFile());
 			}
-			// FIXME: improve reader re-use here as well. If we have an initial reader, we should try to reuse it
+			result->readers.push_back({std::move(bind_data.initial_reader)});
 		}
 
 		// Ensure all readers are initialized and FileListScan is sync with readers list

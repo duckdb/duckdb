@@ -34,7 +34,7 @@ private:
 	public:
 		DUCKDB_API explicit MultiFileListIterator(MultiFileList *file_list);
 
-		MultiFileList *file_list;
+		optional_ptr<MultiFileList> file_list;
 		MultiFileListScanData file_scan_data;
 		string current_file;
 
@@ -64,7 +64,7 @@ public:
 	//! Get Iterator over the files for pretty for loops
 	MultiFileListIterationHelper Files();
 
-	//! Initialize a sequential scan over a filelist
+	//! Initialize a sequential scan over a file list
 	void InitializeScan(MultiFileListScanData &iterator);
 	//! Scan the next file into result_file, returns false when out of files
 	bool Scan(MultiFileListScanData &iterator, string &result_file);
