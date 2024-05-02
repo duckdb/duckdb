@@ -31,9 +31,13 @@ bool StandardColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filte
 			return true;
 		}
 		state.segment_checked = true;
-		auto prune_result = filter.CheckStatistics(state.current->stats.statistics);
-		if (prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-			return true;
+		FilterPropagateResult prune_result;
+		{
+			lock_guard<mutex> l(stats_lock);
+			prune_result = filter.CheckStatistics(state.current->stats.statistics);
+			if (prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+				return true;
+			}
 		}
 		if (updates) {
 			auto update_stats = updates->GetStatistics();
