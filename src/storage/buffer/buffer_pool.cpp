@@ -57,7 +57,7 @@ bool BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 
 	D_ASSERT(handle->readers == 0);
 	auto ts = ++handle->eviction_seq_num;
-	handle->lru_timestamp_msec = GetCoarseMonotonicMillisecondTimestamp();
+	handle->lru_timestamp_msec = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()).time_since_epoch().count();
 
 	BufferEvictionNode evict_node(weak_ptr<BlockHandle>(handle), ts);
 	queue->q.enqueue(evict_node);
@@ -132,7 +132,7 @@ BufferPool::EvictionResult BufferPool::EvictBlocks(MemoryTag tag, idx_t extra_me
 }
 
 idx_t BufferPool::PurgeAgedBlocks(uint32_t max_age_sec) {
-	int64_t now = GetCoarseMonotonicMillisecondTimestamp();
+	int64_t now = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()).time_since_epoch().count();
 	int64_t limit = now - (static_cast<int64_t>(max_age_sec) * 1000);
 	idx_t purged_bytes = 0;
 	IterateUnloadableBlocks([&](BufferEvictionNode &node, const std::shared_ptr<BlockHandle> &handle) {
