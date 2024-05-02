@@ -1,4 +1,4 @@
-# name: test/sql/parallelism/interquery/concurrent_reads_append_list.test
+# name: test/sql/parallelism/interquery/concurrent_reads_append_list.test_slow
 # description: Test concurrent reads while appending
 # group: [interquery]
 
