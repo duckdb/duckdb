@@ -26,6 +26,7 @@ from duckdb.typing import (
     TIMESTAMP_MS,
     TIMESTAMP_NS,
     TIMESTAMP_S,
+    DuckDBPyType,
     TIME,
     TIME_TZ,
     TIMESTAMP_TZ,
@@ -43,7 +44,7 @@ class TestType(object):
         # todo: add tests with invalid type_str
 
     def test_primitive_types(self):
-        assert str(SQLNULL) == 'NULL'
+        assert str(SQLNULL) == '"NULL"'
         assert str(BOOLEAN) == 'BOOLEAN'
         assert str(TINYINT) == 'TINYINT'
         assert str(UTINYINT) == 'UTINYINT'
@@ -227,3 +228,9 @@ class TestType(object):
     def test_optional_310(self):
         type = duckdb.typing.DuckDBPyType(str | None)
         assert type == 'VARCHAR'
+
+    def test_children_attribute(self):
+        assert DuckDBPyType('INTEGER[]').children == [('child', DuckDBPyType('INTEGER'))]
+        assert DuckDBPyType('INTEGER[2]').children == [('child', DuckDBPyType('INTEGER')), ('size', 2)]
+        assert DuckDBPyType('INTEGER[2][3]').children == [('child', DuckDBPyType('INTEGER[2]')), ('size', 3)]
+        assert DuckDBPyType("ENUM('a', 'b', 'c')").children == [('values', ['a', 'b', 'c'])]

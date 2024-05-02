@@ -1,15 +1,17 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
+#include "duckdb/common/types/value.hpp"
+
 #include "utf8proc.hpp"
 
 namespace duckdb {
 
 // Helper function to generate column names
 static string GenerateColumnName(const idx_t total_cols, const idx_t col_number, const string &prefix = "column") {
-	int max_digits = NumericHelper::UnsignedLength(total_cols - 1);
-	int digits = NumericHelper::UnsignedLength(col_number);
-	string leading_zeros = string(max_digits - digits, '0');
+	auto max_digits = NumericHelper::UnsignedLength(total_cols - 1);
+	auto digits = NumericHelper::UnsignedLength(col_number);
+	string leading_zeros = string(NumericCast<idx_t>(max_digits - digits), '0');
 	string value = to_string(col_number);
 	return string(prefix + leading_zeros + value);
 }
@@ -22,21 +24,21 @@ static string TrimWhitespace(const string &col_name) {
 	// Find the first character that is not left trimmed
 	idx_t begin = 0;
 	while (begin < size) {
-		auto bytes = utf8proc_iterate(str + begin, size - begin, &codepoint);
+		auto bytes = utf8proc_iterate(str + begin, NumericCast<utf8proc_ssize_t>(size - begin), &codepoint);
 		D_ASSERT(bytes > 0);
 		if (utf8proc_category(codepoint) != UTF8PROC_CATEGORY_ZS) {
 			break;
 		}
-		begin += bytes;
+		begin += NumericCast<idx_t>(bytes);
 	}
 
 	// Find the last character that is not right trimmed
 	idx_t end;
 	end = begin;
 	for (auto next = begin; next < col_name.size();) {
-		auto bytes = utf8proc_iterate(str + next, size - next, &codepoint);
+		auto bytes = utf8proc_iterate(str + next, NumericCast<utf8proc_ssize_t>(size - next), &codepoint);
 		D_ASSERT(bytes > 0);
-		next += bytes;
+		next += NumericCast<idx_t>(bytes);
 		if (utf8proc_category(codepoint) != UTF8PROC_CATEGORY_ZS) {
 			end = next;
 		}
@@ -48,7 +50,8 @@ static string TrimWhitespace(const string &col_name) {
 
 static string NormalizeColumnName(const string &col_name) {
 	// normalize UTF8 characters to NFKD
-	auto nfkd = utf8proc_NFKD(reinterpret_cast<const utf8proc_uint8_t *>(col_name.c_str()), col_name.size());
+	auto nfkd = utf8proc_NFKD(reinterpret_cast<const utf8proc_uint8_t *>(col_name.c_str()),
+	                          NumericCast<utf8proc_ssize_t>(col_name.size()));
 	const string col_name_nfkd = string(const_char_ptr_cast(nfkd), strlen(const_char_ptr_cast(nfkd)));
 	free(nfkd);
 
@@ -109,7 +112,7 @@ bool CSVSniffer::DetectHeaderWithSetColumn() {
 			if (best_header_row[i].IsNull()) {
 				return false;
 			}
-			if (best_header_row[i] != (*set_columns.names)[i]) {
+			if (best_header_row[i].value.GetString() != (*set_columns.names)[i]) {
 				has_header = false;
 				break;
 			}
@@ -118,12 +121,12 @@ bool CSVSniffer::DetectHeaderWithSetColumn() {
 	if (!has_header) {
 		// We verify if the types are consistent
 		for (idx_t col = 0; col < set_columns.Size(); col++) {
-			auto dummy_val = best_header_row[col];
 			// try cast to sql_type of column
 			const auto &sql_type = (*set_columns.types)[col];
 			if (sql_type != LogicalType::VARCHAR) {
 				all_varchar = false;
-				if (!TryCastValue(options.dialect_options, options.decimal_separator, dummy_val, sql_type)) {
+				if (!CanYouCastIt(best_header_row[col].value, sql_type, options.dialect_options,
+				                  best_header_row[col].IsNull())) {
 					first_row_consistent = false;
 				}
 			}
@@ -167,16 +170,15 @@ void CSVSniffer::DetectHeader() {
 		has_header = DetectHeaderWithSetColumn();
 	} else {
 		for (idx_t col = 0; col < best_header_row.size(); col++) {
-			auto dummy_val = best_header_row[col];
-			if (!dummy_val.IsNull()) {
+			if (!best_header_row[col].IsNull()) {
 				first_row_nulls = false;
 			}
 			// try cast to sql_type of column
 			const auto &sql_type = best_sql_types_candidates_per_column_idx[col].back();
 			if (sql_type != LogicalType::VARCHAR) {
 				all_varchar = false;
-				if (!TryCastValue(sniffer_state_machine.dialect_options,
-				                  sniffer_state_machine.options.decimal_separator, dummy_val, sql_type)) {
+				if (!CanYouCastIt(best_header_row[col].value, sql_type, sniffer_state_machine.dialect_options,
+				                  best_header_row[col].IsNull())) {
 					first_row_consistent = false;
 				}
 			}
@@ -207,11 +209,10 @@ void CSVSniffer::DetectHeader() {
 
 		// get header names from CSV
 		for (idx_t col = 0; col < best_header_row.size(); col++) {
-			const auto &val = best_header_row[col];
-			string col_name = val.ToString();
+			string col_name = best_header_row[col].value.GetString();
 
 			// generate name if field is empty
-			if (col_name.empty() || val.IsNull()) {
+			if (col_name.empty() || best_header_row[col].IsNull()) {
 				col_name = GenerateColumnName(sniffer_state_machine.dialect_options.num_cols, col);
 			}
 

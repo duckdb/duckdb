@@ -10,8 +10,9 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/vector.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/set.hpp"
+#include "duckdb/common/vector.hpp"
 
 #include <cstring>
 
@@ -40,22 +41,22 @@ public:
 
 	static uint8_t GetHexValue(char c) {
 		if (c >= '0' && c <= '9') {
-			return c - '0';
+			return UnsafeNumericCast<uint8_t>(c - '0');
 		}
 		if (c >= 'a' && c <= 'f') {
-			return c - 'a' + 10;
+			return UnsafeNumericCast<uint8_t>(c - 'a' + 10);
 		}
 		if (c >= 'A' && c <= 'F') {
-			return c - 'A' + 10;
+			return UnsafeNumericCast<uint8_t>(c - 'A' + 10);
 		}
-		throw InvalidInputException("Invalid input for hex digit: %s", string(c, 1));
+		throw InvalidInputException("Invalid input for hex digit: %s", string(1, c));
 	}
 
 	static uint8_t GetBinaryValue(char c) {
 		if (c >= '0' && c <= '1') {
-			return c - '0';
+			return UnsafeNumericCast<uint8_t>(c - '0');
 		}
-		throw InvalidInputException("Invalid input for binary digit: %s", string(c, 1));
+		throw InvalidInputException("Invalid input for binary digit: %s", string(1, c));
 	}
 
 	static bool CharacterIsSpace(char c) {

@@ -100,6 +100,7 @@ void SQLLogicTestRunner::Reconnect() {
 	if (original_sqlite_test) {
 		con->Query("SET integer_division=true");
 	}
+	con->Query("SET secret_directory='" + TestCreatePath("test_secret_dir") + "'");
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 	con->Query("SET pivot_filter_threshold=0");
 #endif
@@ -293,7 +294,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 			parser.Fail("require vector_size requires a parameter");
 		}
 		// require a specific vector size
-		auto required_vector_size = std::stoi(params[1]);
+		auto required_vector_size = NumericCast<idx_t>(std::stoi(params[1]));
 		if (STANDARD_VECTOR_SIZE < required_vector_size) {
 			// vector size is too low for this test: skip it
 			return RequireResult::MISSING;
@@ -306,7 +307,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 			parser.Fail("require exact_vector_size requires a parameter");
 		}
 		// require an exact vector size
-		auto required_vector_size = std::stoi(params[1]);
+		auto required_vector_size = NumericCast<idx_t>(std::stoi(params[1]));
 		if (STANDARD_VECTOR_SIZE != required_vector_size) {
 			// vector size does not match the required vector size: skip it
 			return RequireResult::MISSING;
@@ -319,7 +320,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 			parser.Fail("require block_size requires a parameter");
 		}
 		// require a specific block size
-		auto required_block_size = std::stoi(params[1]);
+		auto required_block_size = NumericCast<idx_t>(std::stoi(params[1]));
 		if (Storage::BLOCK_ALLOC_SIZE != required_block_size) {
 			// block size does not match the required block size: skip it
 			return RequireResult::MISSING;

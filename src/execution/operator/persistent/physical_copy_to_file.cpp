@@ -52,53 +52,31 @@ public:
 	atomic<idx_t> rows_copied;
 	atomic<idx_t> last_file_offset;
 	unique_ptr<GlobalFunctionData> global_state;
-	idx_t created_directories = 0;
-
+	//! Created directories
+	unordered_set<string> created_directories;
 	//! shared state for HivePartitionedColumnData
 	shared_ptr<GlobalHivePartitionState> partition_state;
 
-	static void CreateDir(const string &dir_path, FileSystem &fs) {
+	void CreateDir(const string &dir_path, FileSystem &fs) {
+		if (created_directories.find(dir_path) != created_directories.end()) {
+			// already attempted to create this directory
+			return;
+		}
 		if (!fs.DirectoryExists(dir_path)) {
 			fs.CreateDirectory(dir_path);
 		}
+		created_directories.insert(dir_path);
 	}
 
-	static void CreateDirectories(const vector<idx_t> &cols, const vector<string> &names, const vector<Value> &values,
-	                              string path, FileSystem &fs) {
+	string GetOrCreateDirectory(const vector<idx_t> &cols, const vector<string> &names, const vector<Value> &values,
+	                            string path, FileSystem &fs) {
 		CreateDir(path, fs);
-
 		for (idx_t i = 0; i < cols.size(); i++) {
 			const auto &partition_col_name = names[cols[i]];
 			const auto &partition_value = values[i];
 			string p_dir = partition_col_name + "=" + partition_value.ToString();
 			path = fs.JoinPath(path, p_dir);
 			CreateDir(path, fs);
-		}
-	}
-
-	void CreatePartitionDirectories(ClientContext &context, const PhysicalCopyToFile &op) {
-		auto &fs = FileSystem::GetFileSystem(context);
-
-		auto trimmed_path = op.GetTrimmedPath(context);
-
-		auto l = lock.GetExclusiveLock();
-		lock_guard<mutex> global_lock_on_partition_state(partition_state->lock);
-		const auto &global_partitions = partition_state->partitions;
-		// global_partitions have partitions added only at the back, so it's fine to only traverse the last part
-
-		for (idx_t i = created_directories; i < global_partitions.size(); i++) {
-			CreateDirectories(op.partition_columns, op.names, global_partitions[i]->first.values, trimmed_path, fs);
-		}
-		created_directories = global_partitions.size();
-	}
-
-	static string GetDirectory(const vector<idx_t> &cols, const vector<string> &names, const vector<Value> &values,
-	                           string path, FileSystem &fs) {
-		for (idx_t i = 0; i < cols.size(); i++) {
-			const auto &partition_col_name = names[cols[i]];
-			const auto &partition_value = values[i];
-			string p_dir = partition_col_name + "=" + partition_value.ToString();
-			path = fs.JoinPath(path, p_dir);
 		}
 		return path;
 	}
@@ -132,12 +110,8 @@ public:
 		auto &fs = FileSystem::GetFileSystem(context.client);
 		// Create a writer for the current file
 		auto trimmed_path = op.GetTrimmedPath(context.client);
-		string hive_path = GetDirectory(op.partition_columns, op.names, values, trimmed_path, fs);
+		string hive_path = GetOrCreateDirectory(op.partition_columns, op.names, values, trimmed_path, fs);
 		string full_path(op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, 0));
-		if (fs.FileExists(full_path) && !op.overwrite_or_ignore) {
-			throw IOException("failed to create %s, file exists! Enable OVERWRITE_OR_IGNORE option to force writing",
-			                  full_path);
-		}
 		// initialize writes
 		auto info = make_uniq<PartitionWriteInfo>();
 		info->global_state = op.function.copy_to_initialize_global(context.client, *op.bind_data, full_path);
@@ -161,8 +135,7 @@ string PhysicalCopyToFile::GetTrimmedPath(ClientContext &context) const {
 
 class CopyToFunctionLocalState : public LocalSinkState {
 public:
-	explicit CopyToFunctionLocalState(unique_ptr<LocalFunctionData> local_state)
-	    : local_state(std::move(local_state)), writer_offset(0) {
+	explicit CopyToFunctionLocalState(unique_ptr<LocalFunctionData> local_state) : local_state(std::move(local_state)) {
 	}
 	unique_ptr<GlobalFunctionData> global_state;
 	unique_ptr<LocalFunctionData> local_state;
@@ -171,7 +144,6 @@ public:
 	unique_ptr<HivePartitionedColumnData> part_buffer;
 	unique_ptr<PartitionedColumnDataAppendState> part_buffer_append_state;
 
-	idx_t writer_offset;
 	idx_t append_count = 0;
 
 	void InitializeAppendState(ClientContext &context, const PhysicalCopyToFile &op,
@@ -211,12 +183,13 @@ public:
 		auto &partitions = part_buffer->GetPartitions();
 		auto partition_key_map = part_buffer->GetReverseMap();
 
-		// ensure all partition directories are created before we start writing
-		g.CreatePartitionDirectories(context.client, op);
-
 		for (idx_t i = 0; i < partitions.size(); i++) {
+			auto entry = partition_key_map.find(i);
+			if (entry == partition_key_map.end()) {
+				continue;
+			}
 			// get the partition write info for this buffer
-			auto &info = g.GetPartitionWriteInfo(context, op, partition_key_map[i]->values);
+			auto &info = g.GetPartitionWriteInfo(context, op, entry->second->values);
 
 			auto local_copy_state = op.function.copy_to_initialize_local(context, *op.bind_data);
 			// push the chunks into the write state
@@ -237,9 +210,6 @@ unique_ptr<GlobalFunctionData> PhysicalCopyToFile::CreateFileState(ClientContext
 	idx_t this_file_offset = g.last_file_offset++;
 	auto &fs = FileSystem::GetFileSystem(context);
 	string output_path(filename_pattern.CreateFilename(fs, file_path, file_extension, this_file_offset));
-	if (fs.FileExists(output_path) && !overwrite_or_ignore) {
-		throw IOException("%s exists! Enable OVERWRITE_OR_IGNORE option to force writing", output_path);
-	}
 	return function.copy_to_initialize_global(context, *bind_data, output_path);
 }
 
@@ -248,7 +218,6 @@ unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContex
 		auto &g = sink_state->Cast<CopyToFunctionGlobalState>();
 
 		auto state = make_uniq<CopyToFunctionLocalState>(nullptr);
-		state->writer_offset = g.last_file_offset++;
 		state->InitializeAppendState(context.client, *this, g);
 		return std::move(state);
 	}
@@ -259,23 +228,64 @@ unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContex
 	return std::move(res);
 }
 
+void CheckDirectory(FileSystem &fs, const string &file_path, bool overwrite) {
+	if (fs.IsRemoteFile(file_path) && overwrite) {
+		// we only remove files for local file systems
+		// as remote file systems (e.g. S3) do not support RemoveFile
+		return;
+	}
+	vector<string> file_list;
+	vector<string> directory_list;
+	directory_list.push_back(file_path);
+	for (idx_t dir_idx = 0; dir_idx < directory_list.size(); dir_idx++) {
+		auto directory = directory_list[dir_idx];
+		fs.ListFiles(directory, [&](const string &path, bool is_directory) {
+			auto full_path = fs.JoinPath(directory, path);
+			if (is_directory) {
+				directory_list.emplace_back(std::move(full_path));
+			} else {
+				file_list.emplace_back(std::move(full_path));
+			}
+		});
+	}
+	if (file_list.empty()) {
+		return;
+	}
+	if (overwrite) {
+		for (auto &file : file_list) {
+			fs.RemoveFile(file);
+		}
+	} else {
+		throw IOException("Directory \"%s\" is not empty! Enable OVERWRITE_OR_IGNORE option to force writing",
+		                  file_path);
+	}
+}
+
 unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext &context) const {
 
 	if (partition_output || per_thread_output || file_size_bytes.IsValid()) {
 		auto &fs = FileSystem::GetFileSystem(context);
-
-		if (fs.FileExists(file_path) && !overwrite_or_ignore) {
-			throw IOException("%s exists! Enable OVERWRITE_OR_IGNORE option to force writing", file_path);
+		if (fs.FileExists(file_path)) {
+			// the target file exists AND is a file (not a directory)
+			if (fs.IsRemoteFile(file_path)) {
+				// for remote files we cannot do anything - as we cannot delete the file
+				throw IOException("Cannot write to \"%s\" - it exists and is a file, not a directory!", file_path);
+			} else {
+				// for local files we can remove the file if OVERWRITE_OR_IGNORE is enabled
+				if (overwrite_or_ignore) {
+					fs.RemoveFile(file_path);
+				} else {
+					throw IOException("Cannot write to \"%s\" - it exists and is a file, not a directory! Enable "
+					                  "OVERWRITE_OR_IGNORE option to force writing",
+					                  file_path);
+				}
+			}
 		}
+		// what if the target exists and is a directory
 		if (!fs.DirectoryExists(file_path)) {
 			fs.CreateDirectory(file_path);
-		} else if (!overwrite_or_ignore) {
-			idx_t n_files = 0;
-			fs.ListFiles(file_path, [&n_files](const string &path, bool) { n_files++; });
-			if (n_files > 0) {
-				throw IOException("Directory %s is not empty! Enable OVERWRITE_OR_IGNORE option to force writing",
-				                  file_path);
-			}
+		} else {
+			CheckDirectory(fs, file_path, overwrite_or_ignore);
 		}
 
 		auto state = make_uniq<CopyToFunctionGlobalState>(nullptr);
@@ -284,7 +294,7 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 		}
 
 		if (partition_output) {
-			state->partition_state = make_shared<GlobalHivePartitionState>();
+			state->partition_state = make_shared_ptr<GlobalHivePartitionState>();
 		}
 
 		return std::move(state);
@@ -423,7 +433,7 @@ SourceResultType PhysicalCopyToFile::GetData(ExecutionContext &context, DataChun
 	auto &g = sink_state->Cast<CopyToFunctionGlobalState>();
 
 	chunk.SetCardinality(1);
-	chunk.SetValue(0, 0, Value::BIGINT(g.rows_copied));
+	chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
 
 	return SourceResultType::FINISHED;
 }

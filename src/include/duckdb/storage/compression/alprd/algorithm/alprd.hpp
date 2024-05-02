@@ -105,7 +105,8 @@ struct AlpRDCompression {
 		// The left parts bit width after compression is determined by how many elements are in the dictionary
 		uint64_t actual_dictionary_size =
 		    MinValue<uint64_t>(AlpRDConstants::MAX_DICTIONARY_SIZE, left_parts_sorted_repetitions.size());
-		uint8_t left_bit_width = MaxValue<uint8_t>(1, std::ceil(std::log2(actual_dictionary_size)));
+		uint8_t left_bit_width =
+		    MaxValue<uint8_t>(1, NumericCast<uint8_t>(std::ceil(std::log2(actual_dictionary_size))));
 
 		if (PERSIST_DICT) {
 			for (idx_t dict_idx = 0; dict_idx < actual_dictionary_size; dict_idx++) {

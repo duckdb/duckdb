@@ -43,6 +43,7 @@ class ColumnList;
 class ExternalDependency;
 class TableFunction;
 class TableStorageInfo;
+class BoundConstraint;
 
 struct CreateInfo;
 struct BoundCreateTableInfo;
@@ -55,6 +56,7 @@ struct PivotColumnEntry;
 struct UnpivotEntry;
 
 enum class BindingMode : uint8_t { STANDARD_BINDING, EXTRACT_NAMES };
+enum class BinderType : uint8_t { REGULAR_BINDER, VIEW_BINDER };
 
 struct CorrelatedColumnInfo {
 	ColumnBinding binding;
@@ -81,13 +83,13 @@ struct CorrelatedColumnInfo {
   tables and columns in the catalog. In the process, it also resolves types of
   all expressions.
 */
-class Binder : public std::enable_shared_from_this<Binder> {
+class Binder : public enable_shared_from_this<Binder> {
 	friend class ExpressionBinder;
 	friend class RecursiveDependentJoinPlanner;
 
 public:
 	DUCKDB_API static shared_ptr<Binder> CreateBinder(ClientContext &context, optional_ptr<Binder> parent = nullptr,
-	                                                  bool inherit_ctes = true);
+	                                                  BinderType binder_type = BinderType::REGULAR_BINDER);
 
 	//! The client context
 	ClientContext &context;
@@ -119,6 +121,16 @@ public:
 
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info);
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema);
+	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema,
+	                                                     vector<unique_ptr<Expression>> &bound_defaults);
+	static vector<unique_ptr<BoundConstraint>> BindConstraints(ClientContext &context,
+	                                                           const vector<unique_ptr<Constraint>> &constraints,
+	                                                           const string &table_name, const ColumnList &columns);
+	vector<unique_ptr<BoundConstraint>> BindConstraints(const vector<unique_ptr<Constraint>> &constraints,
+	                                                    const string &table_name, const ColumnList &columns);
+	vector<unique_ptr<BoundConstraint>> BindConstraints(const TableCatalogEntry &table);
+	vector<unique_ptr<BoundConstraint>> BindNewConstraints(vector<unique_ptr<Constraint>> &constraints,
+	                                                       const string &table_name, const ColumnList &columns);
 
 	void BindCreateViewInfo(CreateViewInfo &base);
 	SchemaCatalogEntry &BindSchema(CreateInfo &info);
@@ -198,8 +210,8 @@ private:
 	bool has_unplanned_dependent_joins = false;
 	//! Whether or not outside dependent joins have been planned and flattened
 	bool is_outside_flattened = true;
-	//! Whether CTEs should reference the parent binder (if it exists)
-	bool inherit_ctes = true;
+	//! What kind of node we are binding using this binder
+	BinderType binder_type = BinderType::REGULAR_BINDER;
 	//! Whether or not the binder can contain NULLs as the root of expressions
 	bool can_contain_nulls = false;
 	//! The root statement of the query that is currently being parsed
@@ -379,9 +391,9 @@ private:
 	unique_ptr<BoundTableRef> BindSummarize(ShowRef &ref);
 
 public:
-	// This should really be a private constructor, but make_shared does not allow it...
+	// This should really be a private constructor, but make_shared_ptr does not allow it...
 	// If you are thinking about calling this, you should probably call Binder::CreateBinder
-	Binder(bool i_know_what_i_am_doing, ClientContext &context, shared_ptr<Binder> parent, bool inherit_ctes);
+	Binder(bool i_know_what_i_am_doing, ClientContext &context, shared_ptr<Binder> parent, BinderType binder_type);
 };
 
 } // namespace duckdb

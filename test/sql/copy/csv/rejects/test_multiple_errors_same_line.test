@@ -61,8 +61,8 @@ oogie boogie	3	2023-01-02	2023-01-03
 query IIIIIIIII rowsort
 SElECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
 ----
-0	4	110	NULL	3	current_day	CAST	oogie boogie,3, bla_2, bla_1	Error when converting column "current_day". date field value out of range: " bla_2", expected format is (YYYY-MM-DD)
-0	4	110	NULL	4	tomorrow	CAST	oogie boogie,3, bla_2, bla_1	Error when converting column "tomorrow". date field value out of range: " bla_1", expected format is (YYYY-MM-DD)
+0	4	110	125	3	current_day	CAST	oogie boogie,3, bla_2, bla_1	Error when converting column "current_day". Could not convert string " bla_2" to 'DATE'
+0	4	110	132	4	tomorrow	CAST	oogie boogie,3, bla_2, bla_1	Error when converting column "tomorrow". Could not convert string " bla_1" to 'DATE'
 
 statement ok
 DROP TABLE reject_errors;
@@ -82,6 +82,7 @@ oogie boogie	3	2023-01-02	5
 query IIIIIIIII rowsort
 SElECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
 ----
+0	4	89	104	3	current_day	CAST	oogie boogie,3, bla_2, bla_1	Error when converting column "current_day". Could not convert string " bla_2" to 'DATE'
 0	4	89	111	4	barks	CAST	oogie boogie,3, bla_2, bla_1	Error when converting column "barks". Could not convert string " bla_1" to 'INTEGER'
 
 statement ok
@@ -370,10 +371,13 @@ SELECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
 ----
 0	4	89	116	4	barks	CAST	oogie boogie,3, 2023-01-03, bla, 7	Error when converting column "barks". Could not convert string " bla" to 'INTEGER'
 0	4	89	120	5	NULL	TOO MANY COLUMNS	oogie boogie,3, 2023-01-03, bla, 7	Expected Number of Columns: 4 Found: 5
+0	5	124	139	3	current_day	CAST	oogie boogie,3, bla, bla, 7	Error when converting column "current_day". Could not convert string " bla" to 'DATE'
 0	5	124	144	4	barks	CAST	oogie boogie,3, bla, bla, 7	Error when converting column "barks". Could not convert string " bla" to 'INTEGER'
 0	5	124	148	5	NULL	TOO MANY COLUMNS	oogie boogie,3, bla, bla, 7	Expected Number of Columns: 4 Found: 5
 0	6	152	152	1	name	UNQUOTED VALUE	"oogie boogie"bla,3, 2023-01-04	Value with unterminated quote found.
 0	6	152	183	3	barks	MISSING COLUMNS	"oogie boogie"bla,3, 2023-01-04	Expected Number of Columns: 4 Found: 3
+0	7	184	199	3	current_day	CAST	oogie boogie,3, bla	Error when converting column "current_day". Could not convert string " bla" to 'DATE'
 0	7	184	203	3	barks	MISSING COLUMNS	oogie boogie,3, bla	Expected Number of Columns: 4 Found: 3
 0	8	204	204	NULL	NULL	LINE SIZE OVER MAXIMUM	oogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogie,3, bla	Maximum line size of 40 bytes exceeded. Actual Size:92 bytes.
+0	8	204	291	3	current_day	CAST	oogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogie,3, bla	Error when converting column "current_day". Could not convert string " bla" to 'DATE'
 0	8	204	295	3	barks	MISSING COLUMNS	oogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogie,3, bla	Expected Number of Columns: 4 Found: 3

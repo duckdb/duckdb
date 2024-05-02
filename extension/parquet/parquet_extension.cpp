@@ -17,6 +17,7 @@
 #include <string>
 #include <vector>
 #ifndef DUCKDB_AMALGAMATION
+#include "duckdb/common/helper.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/constants.hpp"
@@ -134,6 +135,8 @@ struct ParquetWriteBindData : public TableFunctionData {
 	double dictionary_compression_ratio_threshold = 1.0;
 
 	ChildFieldIDs field_ids;
+	//! The compression level, higher value is more
+	optional_idx compression_level;
 };
 
 struct ParquetWriteGlobalState : public GlobalFunctionData {
@@ -543,7 +546,7 @@ public:
 				result->initial_reader = result->readers[0];
 			} else {
 				result->initial_reader =
-				    make_shared<ParquetReader>(context, bind_data.files[0], bind_data.parquet_options);
+				    make_shared_ptr<ParquetReader>(context, bind_data.files[0], bind_data.parquet_options);
 				result->readers[0] = result->initial_reader;
 			}
 			result->file_states[0] = ParquetFileState::OPEN;
@@ -749,7 +752,7 @@ public:
 
 				shared_ptr<ParquetReader> reader;
 				try {
-					reader = make_shared<ParquetReader>(context, file, pq_options);
+					reader = make_shared_ptr<ParquetReader>(context, file, pq_options);
 					InitializeParquetReader(*reader, bind_data, parallel_state.column_ids, parallel_state.filters,
 					                        context);
 				} catch (...) {
@@ -1004,6 +1007,8 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 				                      "dictionary compression");
 			}
 			bind_data->dictionary_compression_ratio_threshold = val;
+		} else if (loption == "compression_level") {
+			bind_data->compression_level = option.second[0].GetValue<uint64_t>();
 		} else {
 			throw NotImplementedException("Unrecognized option for PARQUET: %s", option.first.c_str());
 		}
@@ -1029,10 +1034,10 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 	auto &parquet_bind = bind_data.Cast<ParquetWriteBindData>();
 
 	auto &fs = FileSystem::GetFileSystem(context);
-	global_state->writer =
-	    make_uniq<ParquetWriter>(fs, file_path, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec,
-	                             parquet_bind.field_ids.Copy(), parquet_bind.kv_metadata,
-	                             parquet_bind.encryption_config, parquet_bind.dictionary_compression_ratio_threshold);
+	global_state->writer = make_uniq<ParquetWriter>(
+	    fs, file_path, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec,
+	    parquet_bind.field_ids.Copy(), parquet_bind.kv_metadata, parquet_bind.encryption_config,
+	    parquet_bind.dictionary_compression_ratio_threshold, parquet_bind.compression_level);
 	return std::move(global_state);
 }
 
@@ -1153,6 +1158,7 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	                                                                         bind_data.encryption_config, nullptr);
 	serializer.WriteProperty(108, "dictionary_compression_ratio_threshold",
 	                         bind_data.dictionary_compression_ratio_threshold);
+	serializer.WritePropertyWithDefault<optional_idx>(109, "compression_level", bind_data.compression_level);
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
@@ -1168,6 +1174,7 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	                                                                          data->encryption_config, nullptr);
 	deserializer.ReadPropertyWithDefault<double>(108, "dictionary_compression_ratio_threshold",
 	                                             data->dictionary_compression_ratio_threshold, 1.0);
+	deserializer.ReadPropertyWithDefault<optional_idx>(109, "compression_level", data->compression_level);
 	return std::move(data);
 }
 // LCOV_EXCL_STOP
