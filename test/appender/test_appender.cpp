@@ -169,6 +169,38 @@ TEST_CASE("Test AppendRow", "[appender]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {Value::TIMESTAMP(1992, 1, 1, 1, 1, 1, 0)}));
 }
 
+TEST_CASE("Test default value appender", "[appender]") {
+	duckdb::unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i iNTEGER, j INTEGER DEFAULT 5)"));
+
+	// append a bunch of values
+	{
+		Appender appender(con, "integers");
+		appender.BeginRow();
+		appender.Append<int32_t>(1);
+		appender.AppendDefault();
+		REQUIRE_NOTHROW(appender.EndRow());
+		REQUIRE_NOTHROW(appender.Close());
+	}
+	result = con.Query("SELECT * FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(1)}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value::INTEGER(5)}));
+
+	con.Query("DELETE from integers");
+
+	{
+		Appender appender(con, "integers");
+		appender.BeginRow();
+		// 'i' does not have a DEFAULT value
+		REQUIRE_THROWS(appender.AppendDefault());
+		REQUIRE_THROWS(appender.EndRow());
+		REQUIRE_NOTHROW(appender.Close());
+	}
+}
+
 TEST_CASE("Test incorrect usage of appender", "[appender]") {
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);

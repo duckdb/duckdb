@@ -12,6 +12,7 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/planner/expression_binder/constant_binder.hpp"
 
 namespace duckdb {
 
@@ -58,6 +59,7 @@ Appender::Appender(Connection &con, const string &schema_name, const string &tab
 	}
 	for (auto &column : description->columns) {
 		types.push_back(column.Type());
+		defaults.push_back(column.HasDefaultValue() ? &column.DefaultValue() : nullptr);
 	}
 	InitializeChunk();
 	collection = make_uniq<ColumnDataCollection>(allocator, types);
@@ -373,6 +375,31 @@ void BaseAppender::Flush() {
 
 void Appender::FlushInternal(ColumnDataCollection &collection) {
 	context->Append(*description, collection);
+}
+
+void Appender::AppendDefault() {
+	if (!defaults[column]) {
+		throw InvalidInputException("Failed to append DEFAULT, this column does not have a DEFAULT value");
+	}
+	auto &default_expr = *defaults[column];
+	if (!default_expr.IsScalar()) {
+		throw InvalidInputException("Only columns with simple DEFAULT values are supported");
+	}
+
+	auto default_copy = default_expr.Copy();
+
+	auto &type = types[column];
+	auto binder = Binder::CreateBinder(*context);
+	ConstantBinder default_binder(*binder, *context, "DEFAULT value");
+	default_binder.target_type = type;
+	auto bound_default = default_binder.Bind(default_copy);
+
+	Value result_value;
+	if (!ExpressionExecutor::TryEvaluateScalar(*context, *bound_default, result_value)) {
+		throw InvalidInputException("Could not execute the DEFAULT expression of this column, please insert manually");
+	}
+
+	Append(result_value);
 }
 
 void InternalAppender::FlushInternal(ColumnDataCollection &collection) {
