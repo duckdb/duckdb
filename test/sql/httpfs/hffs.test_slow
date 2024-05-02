@@ -88,6 +88,12 @@ FROM parquet_scan('hf://datasets/samansmink/duckdb_ci_private/hive_data/**/*.par
 ----
 401
 
+# Ensure spaces work too
+query I
+select size from read_text('hf://spaces/samansmink/duckdb_ci_tests/README.md');
+----
+199
+
 # FIXME: push auth key into CI for this to ensure it is tested in CI properly
 require-env HUGGING_FACE_TOKEN
 

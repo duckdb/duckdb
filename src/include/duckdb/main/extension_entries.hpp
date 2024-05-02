@@ -252,6 +252,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"calendar", "icu"},
     {"enable_server_cert_verification", "httpfs"},
     {"force_download", "httpfs"},
+    {"hf_max_per_page", "httpfs"},
     {"http_keep_alive", "httpfs"},
     {"http_retries", "httpfs"},
     {"http_retry_backoff", "httpfs"},
