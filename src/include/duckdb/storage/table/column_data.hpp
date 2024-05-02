@@ -181,6 +181,8 @@ protected:
 	mutable mutex update_lock;
 	//! The updates for this column segment
 	unique_ptr<UpdateSegment> updates;
+	//! The lock for the stats
+	mutable mutex stats_lock;
 	//! The stats of the root segment
 	unique_ptr<SegmentStatistics> stats;
 	//! Total transient allocation size

@@ -269,6 +269,7 @@ void ColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t append_c
 	if (parent || !stats) {
 		throw InternalException("ColumnData::Append called on a column with a parent or without stats");
 	}
+	lock_guard<mutex> l(stats_lock);
 	Append(stats->statistics, state, vector, append_count);
 }
 
@@ -276,6 +277,7 @@ bool ColumnData::CheckZonemap(TableFilter &filter) {
 	if (!stats) {
 		throw InternalException("ColumnData::CheckZonemap called on a column without stats");
 	}
+	lock_guard<mutex> l(stats_lock);
 	auto propagate_result = filter.CheckStatistics(stats->statistics);
 	if (propagate_result == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
 	    propagate_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
@@ -288,6 +290,7 @@ unique_ptr<BaseStatistics> ColumnData::GetStatistics() {
 	if (!stats) {
 		throw InternalException("ColumnData::GetStatistics called on a column without stats");
 	}
+	lock_guard<mutex> l(stats_lock);
 	return stats->statistics.ToUnique();
 }
 
@@ -295,6 +298,7 @@ void ColumnData::MergeStatistics(const BaseStatistics &other) {
 	if (!stats) {
 		throw InternalException("ColumnData::MergeStatistics called on a column without stats");
 	}
+	lock_guard<mutex> l(stats_lock);
 	return stats->statistics.Merge(other);
 }
 
@@ -302,6 +306,7 @@ void ColumnData::MergeIntoStatistics(BaseStatistics &other) {
 	if (!stats) {
 		throw InternalException("ColumnData::MergeIntoStatistics called on a column without stats");
 	}
+	lock_guard<mutex> l(stats_lock);
 	return other.Merge(stats->statistics);
 }
 
@@ -552,7 +557,10 @@ void ColumnData::GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_p
 		column_info.segment_start = segment->start;
 		column_info.segment_count = segment->count;
 		column_info.compression_type = CompressionTypeToString(segment->function.get().type);
-		column_info.segment_stats = segment->stats.statistics.ToString();
+		{
+			lock_guard<mutex> l(stats_lock);
+			column_info.segment_stats = segment->stats.statistics.ToString();
+		}
 		column_info.has_updates = ColumnData::HasUpdates();
 		// persistent
 		// block_id
