@@ -14,6 +14,7 @@
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 
 namespace duckdb {
 
