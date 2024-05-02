@@ -86,7 +86,7 @@ void TableStatistics::MergeStats(TableStatisticsLock &lock, idx_t i, BaseStatist
 	column_stats[i]->Statistics().Merge(stats);
 }
 
-ColumnStatistics &TableStatistics::GetStats(idx_t i) {
+ColumnStatistics &TableStatistics::GetStats(TableStatisticsLock &lock, idx_t i) {
 	return *column_stats[i];
 }
 
@@ -100,6 +100,11 @@ unique_ptr<BaseStatistics> TableStatistics::CopyStats(idx_t i) {
 }
 
 void TableStatistics::CopyStats(TableStatistics &other) {
+	TableStatisticsLock lock(stats_lock);
+	CopyStats(lock, other);
+}
+
+void TableStatistics::CopyStats(TableStatisticsLock &lock, TableStatistics &other) {
 	for (auto &stats : column_stats) {
 		other.column_stats.push_back(stats->Copy());
 	}

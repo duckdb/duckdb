@@ -867,8 +867,9 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
                                      TableStatistics &global_stats) {
 	RowGroupPointer row_group_pointer;
 
+	auto lock = global_stats.GetLock();
 	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
-		global_stats.GetStats(column_idx).Statistics().Merge(write_data.statistics[column_idx]);
+		global_stats.GetStats(*lock, column_idx).Statistics().Merge(write_data.statistics[column_idx]);
 	}
 
 	// construct the row group pointer and write the column meta data to disk

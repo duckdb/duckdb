@@ -43,8 +43,11 @@ public:
 	void MergeStats(TableStatisticsLock &lock, idx_t i, BaseStatistics &stats);
 
 	void CopyStats(TableStatistics &other);
+	void CopyStats(TableStatisticsLock &lock, TableStatistics &other);
 	unique_ptr<BaseStatistics> CopyStats(idx_t i);
-	ColumnStatistics &GetStats(idx_t i);
+	//! Get a reference to the stats - this requires us to hold the lock.
+	//! The reference can only be safely accessed while the lock is held
+	ColumnStatistics &GetStats(TableStatisticsLock &lock, idx_t i);
 
 	bool Empty();
 
