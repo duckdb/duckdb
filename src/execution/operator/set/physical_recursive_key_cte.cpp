@@ -43,24 +43,14 @@ unique_ptr<GlobalSinkState> PhysicalRecursiveKeyCTE::GetGlobalSinkState(ClientCo
 }
 
 idx_t PhysicalRecursiveKeyCTE::ProbeHT(DataChunk &chunk, RecursiveKeyCTEState &state) const {
-	// btodo: The filtering of the newest rows should only be done once.
 	Vector dummy_addresses(LogicalType::POINTER);
-	auto dummy_goups = SelectionVector(STANDARD_VECTOR_SIZE);
 
 	// Adds incoming rows to the recurring ht
-	auto new_group_count = state.recurring_ht->FindOrCreateGroupsWithKey(chunk, dummy_addresses, state.new_groups, key_columns);
+	auto new_group_count =
+	    state.recurring_ht->FindOrCreateGroupsWithKey(chunk, dummy_addresses, state.new_groups, key_columns);
 
-	// Gets all the old rows from the ht
-	DataChunk old_rows;
-	old_rows.InitializeEmpty(chunk.GetTypes());
-	state.ht->FetchAll(old_rows);
-
-	// Adds old rows to recurring ht and filters the old duplicates
-	state.recurring_ht->FindOrCreateGroupsWithKey(old_rows, dummy_addresses, dummy_goups, key_columns);
-
-	state.ht.swap(state.recurring_ht);
-
-	// Unlike normal recCTE, which only returns unseen rows, we return all new rows
+	// Unlike normal recCTE, which only returns unseen rows,
+	// we return all new computed rows
 	chunk.Slice(state.new_groups, new_group_count);
 	return new_group_count;
 }
@@ -91,9 +81,7 @@ SourceResultType PhysicalRecursiveKeyCTE::GetData(ExecutionContext &context, Dat
 	}
 	while (chunk.size() == 0) {
 		if (!gstate.finished_scan) {
-			// gstate.intermediate_table.Scan(gstate.scan_state, chunk);
 			if (chunk.size() == 0) {
-				// btodo: Set up new recurring
 				gstate.finished_scan = true;
 			} else {
 				break;
@@ -102,19 +90,20 @@ SourceResultType PhysicalRecursiveKeyCTE::GetData(ExecutionContext &context, Dat
 			// we have run out of chunks
 			// now we need to recurse
 			// we set up the working table as the data we gathered in this iteration of the recursion
-			// btodo: So far, we use the ht switch to filter old rows for each chunk. This should only be done once after an iteration.
 
-			// btodo: To get the rows from the hash table, the ht is destroyed and rebuilt <- Not good!
+			// The recurring hash table contains all the rows calculated in this iteration,
+			// we can now add all the old rows.
+			gstate.recurring_ht->Combine(*gstate.ht, key_columns);
+			gstate.ht->Reset();
+			gstate.recurring_ht.swap(gstate.ht);
+
 			// After an iteration, we reset the recurring table
 			// and fill it up with the new hash table rows for the next iteration.
 			recurring_table->Reset();
-			DataChunk hashed_rows;
-			hashed_rows.InitializeEmpty(chunk.GetTypes());
-			gstate.ht->FetchAll(hashed_rows);
-			Vector dummy_addresses(LogicalType::POINTER);
-			auto dummy_goups = SelectionVector(STANDARD_VECTOR_SIZE);
-			gstate.ht->FindOrCreateGroupsWithKey(hashed_rows, dummy_addresses, dummy_goups, key_columns);
-			recurring_table->Append(hashed_rows);
+			DataChunk all_rows;
+			all_rows.InitializeEmpty(chunk.GetTypes());
+			gstate.ht->FetchAll(all_rows);
+			recurring_table->Append(all_rows);
 
 			working_table->Reset();
 			working_table->Combine(gstate.intermediate_table);
@@ -125,7 +114,6 @@ SourceResultType PhysicalRecursiveKeyCTE::GetData(ExecutionContext &context, Dat
 
 			// now we need to re-execute all of the pipelines that depend on the recursion
 			ExecuteRecursivePipelines(context);
-
 
 			// check if we obtained any results
 			// if not, we are done

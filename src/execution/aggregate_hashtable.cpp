@@ -532,7 +532,19 @@ void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other) {
 	}
 }
 
-void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data, optional_ptr<atomic<double>> progress) {
+void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other, vector<idx_t> column_idx) {
+	auto other_data = other.partitioned_data->GetUnpartitioned();
+
+	Combine(*other_data, nullptr, column_idx);
+
+	// Inherit ownership to all stored aggregate allocators
+	stored_allocators.emplace_back(other.aggregate_allocator);
+	for (const auto &stored_allocator : other.stored_allocators) {
+		stored_allocators.emplace_back(stored_allocator);
+	}
+}
+
+void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data, optional_ptr<atomic<double>> progress, vector<idx_t> column_idx) {
 	D_ASSERT(other_data.GetLayout().GetAggrWidth() == layout.GetAggrWidth());
 	D_ASSERT(other_data.GetLayout().GetDataWidth() == layout.GetDataWidth());
 	D_ASSERT(other_data.GetLayout().GetRowWidth() == layout.GetRowWidth());
@@ -547,7 +559,12 @@ void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data, optiona
 	idx_t chunk_idx = 0;
 	const auto chunk_count = other_data.ChunkCount();
 	while (fm_state.Scan()) {
-		FindOrCreateGroups(fm_state.groups, fm_state.hashes, fm_state.group_addresses, fm_state.new_groups_sel);
+		if (!column_idx.empty()) {
+			FindOrCreateGroupsWithKey(fm_state.groups, fm_state.group_addresses, fm_state.new_groups_sel, column_idx);
+		} else {
+			FindOrCreateGroups(fm_state.groups, fm_state.hashes, fm_state.group_addresses, fm_state.new_groups_sel);
+		}
+
 		RowOperations::CombineStates(row_state, layout, fm_state.scan_state.chunk_state.row_locations,
 		                             fm_state.group_addresses, fm_state.groups.size());
 		if (layout.HasDestructor()) {
@@ -563,24 +580,32 @@ void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data, optiona
 	Verify();
 }
 
-void GroupedAggregateHashTable::FetchAll(DataChunk &result, TupleDataCollection &collection_p) {
-	FlushMoveState collection(collection_p);
-	collection.Scan();
-	result.Reference(collection.groups);
-}
 
 void GroupedAggregateHashTable::FetchAll(DataChunk &result) {
-		auto other_data = partitioned_data->GetUnpartitioned();
-	    InitializePartitionedData();
-		ClearPointerTable();
-		ResetCount();
-		UnpinData();
-		FetchAll(result, *other_data);
+	auto dummy_goups = SelectionVector(0, STANDARD_VECTOR_SIZE);
+
+	for (auto &data_collection : partitioned_data->GetPartitions()) {
+		if (data_collection->Count() == 0) {
+			continue;
+		}
+
+		FlushMoveState collection(*data_collection);
+		collection.Scan();
+		result.Slice(collection.groups, dummy_goups, collection.groups.size());
+	}
 }
 
 void GroupedAggregateHashTable::UnpinData() {
 	partitioned_data->FlushAppendState(state.append_state);
 	partitioned_data->Unpin();
+}
+
+void GroupedAggregateHashTable::Reset() {
+	partitioned_data->Reset();
+	InitializePartitionedData();
+	ClearPointerTable();
+	ResetCount();
+	UnpinData();
 }
 
 } // namespace duckdb

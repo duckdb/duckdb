@@ -13,12 +13,11 @@
 
 namespace duckdb {
 
-PhysicalRecursiveCTE::PhysicalRecursiveCTE(string ctename, idx_t table_index, vector<LogicalType> types,
-                                           bool union_all, unique_ptr<PhysicalOperator> top, unique_ptr<PhysicalOperator> bottom,
+PhysicalRecursiveCTE::PhysicalRecursiveCTE(string ctename, idx_t table_index, vector<LogicalType> types, bool union_all,
+                                           unique_ptr<PhysicalOperator> top, unique_ptr<PhysicalOperator> bottom,
                                            idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::RECURSIVE_CTE, std::move(types), estimated_cardinality),
-      				   ctename(std::move(ctename)), table_index(table_index),
-      				   union_all(union_all) {
+      ctename(std::move(ctename)), table_index(table_index), union_all(union_all) {
 	children.push_back(std::move(top));
 	children.push_back(std::move(bottom));
 }
@@ -35,12 +34,9 @@ public:
 	    : intermediate_table(context, op.GetTypes()), new_groups(STANDARD_VECTOR_SIZE) {
 		ht = make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), op.types,
 		                                          vector<LogicalType>(), vector<BoundAggregateExpression *>());
-		recurring_ht = make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), op.types,
-		                                                    vector<LogicalType>(), vector<BoundAggregateExpression *>());
 	}
 
 	unique_ptr<GroupedAggregateHashTable> ht;
-	unique_ptr<GroupedAggregateHashTable> recurring_ht;
 
 	bool intermediate_empty = true;
 	mutex intermediate_table_lock;
@@ -58,26 +54,12 @@ unique_ptr<GlobalSinkState> PhysicalRecursiveCTE::GetGlobalSinkState(ClientConte
 idx_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, RecursiveCTEState &state) const {
 	Vector dummy_addresses(LogicalType::POINTER);
 
-	// Clears the old state of the recurring ht and adds any new incoming rows.
-	state.recurring_ht->InitializePartitionedData();
-	state.recurring_ht->ClearPointerTable();
-	state.recurring_ht->UnpinData();
-	state.recurring_ht->ResetCount();
-	auto new_group_count = state.recurring_ht->FindOrCreateGroups(chunk, dummy_addresses, state.new_groups);
+	// Use the HT to eliminate duplicate rows
+	idx_t new_group_count = state.ht->FindOrCreateGroups(chunk, dummy_addresses, state.new_groups);
 
-	// Gets all the old rows from the ht
-	DataChunk old_rows;
-	old_rows.InitializeEmpty(chunk.GetTypes());
-	old_rows.SetCapacity(state.ht->Count());
-	state.ht->FetchAll(old_rows);
-
-	// Adds old rows to recurring ht and filters the old duplicates
-	auto dummy_goups = SelectionVector(STANDARD_VECTOR_SIZE);
-	state.recurring_ht->FindOrCreateGroups(old_rows, dummy_addresses, dummy_goups);
-	state.ht.swap(state.recurring_ht);
-
-	// Unlike normal recCTE, which only returns unseen rows, we return all new rows
+	// we only return entries we have not seen before (i.e. new groups)
 	chunk.Slice(state.new_groups, new_group_count);
+
 	return new_group_count;
 }
 
@@ -109,6 +91,8 @@ SourceResultType PhysicalRecursiveCTE::GetData(ExecutionContext &context, DataCh
 	}
 	while (chunk.size() == 0) {
 		if (!gstate.finished_scan) {
+			// scan any chunks we have collected so far
+			gstate.intermediate_table.Scan(gstate.scan_state, chunk);
 			if (chunk.size() == 0) {
 				gstate.finished_scan = true;
 			} else {
@@ -125,6 +109,7 @@ SourceResultType PhysicalRecursiveCTE::GetData(ExecutionContext &context, DataCh
 			gstate.intermediate_table.Reset();
 			// now we need to re-execute all of the pipelines that depend on the recursion
 			ExecuteRecursivePipelines(context);
+
 			// check if we obtained any results
 			// if not, we are done
 			if (gstate.intermediate_table.Count() == 0) {
@@ -135,9 +120,7 @@ SourceResultType PhysicalRecursiveCTE::GetData(ExecutionContext &context, DataCh
 			gstate.intermediate_table.InitializeScan(gstate.scan_state);
 		}
 	}
-	if (chunk.size() == 0) {
-		gstate.ht->FetchAll(chunk);
-	}
+
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
