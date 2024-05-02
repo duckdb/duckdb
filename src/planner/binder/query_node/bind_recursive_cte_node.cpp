@@ -41,7 +41,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 		// Retrieves the recursive CTE information in order to add it to the own context for the recurring table.
 		vector<std::reference_wrapper<CommonTableExpressionInfo>> current_cte_info = FindCTE(statement.ctename);
 		string recurring_name = "recurring_" + statement.ctename;
-		if (current_cte_info.size() != 0) {
+		if (!current_cte_info.empty()) {
 			AddCTE(recurring_name, current_cte_info[0]);
 			result->right_binder->bind_context.AddCTEBinding(result->recurring_index, recurring_name, result->names,
 			                                                 result->types);

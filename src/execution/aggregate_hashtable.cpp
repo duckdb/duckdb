@@ -560,46 +560,50 @@ void GroupedAggregateHashTable::UnpinData() {
 
 void GroupedAggregateHashTable::FetchAll(DataChunk &keys, DataChunk &payload) {
 	UnpinData();
+	vector<idx_t> group_indexes(layout.ColumnCount() - 1);
+	for (idx_t i = 0; i < group_indexes.size(); i++) {
+		group_indexes[i] = i;
+	}
 
 	for (auto &data_collection : partitioned_data->GetPartitions()) {
-		// If the data collection is empty, we do not need to scan it
+		// Skip empty partitions
 		if (data_collection->Count() == 0) {
 			continue;
 		}
-		// Initialise chunk we are scanning into,
-		// we cannot scan directly into the result chunk because we do not want the hash column
+		
+		// Initialise the scan state with the group indexes as the columns to scan
+		// which excludes the hash column
+		TupleDataScanState scan_state;
+		data_collection->InitializeScan(scan_state, group_indexes);
+
+		// Initialise chunk we are scanning into
 		DataChunk scan_chunk;
-		data_collection->InitializeChunk(scan_chunk);
+		data_collection->InitializeScanChunk(scan_state, scan_chunk);
+
 		DataChunk scan_payload;
 		scan_payload.Initialize(Allocator::DefaultAllocator(), payload.GetTypes());
-
-		TupleDataScanState scan_state;
-		data_collection->InitializeScan(scan_state);
 
 		// As long as we can scan new chunks from a data collection,
 		// we will append them to our result.
 		while (data_collection->Scan(scan_state, scan_chunk)) {
-			// btodo: is there a way to scan without hashes?
-			// Remove hash column
-			auto hash_column = scan_chunk.data.back();
-			scan_chunk.data.pop_back();
 			// Using the scanned key, we will retrieve our payload.
 			keys.Append(scan_chunk, true);
 			FetchAggregates(scan_chunk, scan_payload);
 			payload.Append(scan_payload, true);
-			scan_chunk.data.push_back(std::move(hash_column));
 		}
 	}
 }
 
 void GroupedAggregateHashTable::Reset() {
-	partitioned_data->Reset();
-	stored_allocators.clear();
-	InitialCapacity();
-	InitializePartitionedData();
-	ClearPointerTable();
-	ResetCount();
 	UnpinData();
+	stored_allocators.clear();
+	// Reset the partitioned data and the pointer table
+	partitioned_data->Reset();
+	InitializePartitionedData();
+	InitialCapacity();
+	ResetCount();
+	ClearPointerTable();
+	// Reset the stored allocators
 	Verify();
 }
 
