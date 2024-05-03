@@ -194,11 +194,14 @@ TEST_CASE("Test default value appender", "[appender]") {
 	{
 		Appender appender(con, "integers");
 		appender.BeginRow();
-		// 'i' does not have a DEFAULT value
-		REQUIRE_THROWS(appender.AppendDefault());
-		REQUIRE_THROWS(appender.EndRow());
+		// 'i' does not have a DEFAULT value, so it gets NULL
+		REQUIRE_NOTHROW(appender.AppendDefault());
+		REQUIRE_NOTHROW(appender.AppendDefault());
+		REQUIRE_NOTHROW(appender.EndRow());
 		REQUIRE_NOTHROW(appender.Close());
 	}
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(LogicalTypeId::INTEGER)}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value::INTEGER(5)}));
 
 	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq"));
 	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE integers(i iNTEGER, j INTEGER DEFAULT nextval('seq'))"));

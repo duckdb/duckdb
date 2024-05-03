@@ -11,6 +11,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/table_description.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 
@@ -117,7 +118,9 @@ class Appender : public BaseAppender {
 	//! The table description (including column names)
 	unique_ptr<TableDescription> description;
 	//! The default expressions
-	vector<optional_ptr<const ParsedExpression>> defaults;
+	vector<unique_ptr<Expression>> bound_defaults;
+	//! The Expression Executor for the (non-optimized) defaults
+	unique_ptr<ExpressionExecutor> expression_executor;
 
 public:
 	DUCKDB_API Appender(Connection &con, const string &schema_name, const string &table_name);

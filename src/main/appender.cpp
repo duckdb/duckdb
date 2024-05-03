@@ -13,6 +13,8 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 
@@ -57,10 +59,41 @@ Appender::Appender(Connection &con, const string &schema_name, const string &tab
 		// table could not be found
 		throw CatalogException(StringUtil::Format("Table \"%s.%s\" could not be found", schema_name, table_name));
 	}
+	vector<optional_ptr<const ParsedExpression>> defaults;
 	for (auto &column : description->columns) {
 		types.push_back(column.Type());
 		defaults.push_back(column.HasDefaultValue() ? &column.DefaultValue() : nullptr);
 	}
+	auto binder = Binder::CreateBinder(*context);
+
+	context->RunFunctionInTransaction([&]() {
+		for (idx_t i = 0; i < types.size(); i++) {
+			auto &type = types[i];
+			auto &expr = defaults[i];
+
+			if (!expr) {
+				// Insert NULL
+				bound_defaults.push_back(make_uniq<BoundConstantExpression>(Value(type)));
+			} else {
+				auto default_copy = expr->Copy();
+				D_ASSERT(!default_copy->HasParameter());
+				ConstantBinder default_binder(*binder, *context, "DEFAULT value");
+				default_binder.target_type = type;
+				auto bound_default = default_binder.Bind(default_copy);
+				Value result_value;
+				if (bound_default->IsFoldable() &&
+				    ExpressionExecutor::TryEvaluateScalar(*context, *bound_default, result_value)) {
+					// Insert the evaluated Value
+					bound_defaults.push_back(make_uniq<BoundConstantExpression>(result_value));
+				} else {
+					// Insert a bound Expression
+					bound_defaults.push_back(std::move(bound_default));
+				}
+			}
+		}
+	});
+
+	expression_executor = make_uniq<ExpressionExecutor>(*context, bound_defaults);
 	InitializeChunk();
 	collection = make_uniq<ColumnDataCollection>(allocator, types);
 }
@@ -378,28 +411,21 @@ void Appender::FlushInternal(ColumnDataCollection &collection) {
 }
 
 void Appender::AppendDefault() {
-	if (!defaults[column]) {
-		throw InvalidInputException("Failed to append DEFAULT, this column does not have a DEFAULT value");
+	auto &default_expr = bound_defaults[column];
+	if (default_expr->type == ExpressionType::VALUE_CONSTANT) {
+		// Fast path, NULL or constant-folded
+		auto &bound_constant = default_expr->Cast<BoundConstantExpression>();
+		Append(bound_constant.value);
+		return;
 	}
-	auto &default_expr = *defaults[column];
-	D_ASSERT(default_expr.IsScalar());
-
-	auto default_copy = default_expr.Copy();
 
 	auto &type = types[column];
-	auto binder = Binder::CreateBinder(*context);
-	ConstantBinder default_binder(*binder, *context, "DEFAULT value");
-	default_binder.target_type = type;
-
-	unique_ptr<Expression> bound_default;
-	context->RunFunctionInTransaction([&]() { bound_default = default_binder.Bind(default_copy); });
-
-	Value result_value;
-	if (!ExpressionExecutor::TryEvaluateScalar(*context, *bound_default, result_value)) {
-		throw InvalidInputException("Could not execute the DEFAULT expression of this column, please insert manually");
-	}
-
-	Append(result_value);
+	Vector result(type, 1);
+	auto &executor = *expression_executor;
+	// The executor is initialized with expressions for every column, even though only some are used
+	// this makes it so that we can just use the 'column' index
+	executor.ExecuteExpression(column, result);
+	Append(result.GetValue(0));
 }
 
 void InternalAppender::FlushInternal(ColumnDataCollection &collection) {
