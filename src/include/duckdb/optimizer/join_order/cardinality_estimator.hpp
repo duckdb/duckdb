@@ -63,8 +63,7 @@ struct Subgraph2Denominator {
 	optional_ptr<JoinRelationSet> numerator_relations;
 	double denom;
 
-	Subgraph2Denominator()
-	    : relations(nullptr), numerator_relations(nullptr), denom(1) {};
+	Subgraph2Denominator() : relations(nullptr), numerator_relations(nullptr), denom(1) {};
 };
 
 class CardinalityHelper {
