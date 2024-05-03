@@ -10,6 +10,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 
 namespace duckdb {
 
@@ -20,7 +21,11 @@ public:
 	}
 	optional_ptr(T *ptr_p) : ptr(ptr_p) { // NOLINT: allow implicit creation from pointer
 	}
+	optional_ptr(T &ref) : ptr(&ref) { // NOLINT: allow implicit creation from reference
+	}
 	optional_ptr(const unique_ptr<T> &ptr_p) : ptr(ptr_p.get()) { // NOLINT: allow implicit creation from unique pointer
+	}
+	optional_ptr(const shared_ptr<T> &ptr_p) : ptr(ptr_p.get()) { // NOLINT: allow implicit creation from shared pointer
 	}
 
 	void CheckValid() const {

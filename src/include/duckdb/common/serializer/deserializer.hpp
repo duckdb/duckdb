@@ -196,6 +196,12 @@ private:
 		return val;
 	}
 
+	// Deserialize a optionally_owned_ptr
+	template <class T, typename ELEMENT_TYPE = typename is_optionally_owned_ptr<T>::ELEMENT_TYPE>
+	inline typename std::enable_if<is_optionally_owned_ptr<T>::value, T>::type Read() {
+		return optionally_owned_ptr<ELEMENT_TYPE>(Read<unique_ptr<ELEMENT_TYPE>>());
+	}
+
 	// Deserialize unique_ptr if the element type has a Deserialize method
 	template <class T, typename ELEMENT_TYPE = typename is_unique_ptr<T>::ELEMENT_TYPE>
 	inline typename std::enable_if<is_unique_ptr<T>::value && has_deserialize<ELEMENT_TYPE>::value, T>::type Read() {
