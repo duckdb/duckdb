@@ -12,10 +12,7 @@ TEST_CASE("Test autoload of extension settings", "[api]") {
 	DBConfig config;
 	config.SetOptionByName("timezone", "America/Los_Angeles");
 
-	// ENABLE_EXTENSION_AUTOLOADING
-	// ENABLE_EXTENSION_AUTOINSTALL
-	// LOCAL_EXTENSION_REPO
-
+	config.options.allow_unsigned_extensions = true;
 	config.options.autoload_known_extensions = true;
 	auto env_var = std::getenv("LOCAL_EXTENSION_REPO");
 	if (!env_var) {
@@ -25,6 +22,10 @@ TEST_CASE("Test autoload of extension settings", "[api]") {
 	REQUIRE(config.options.unrecognized_options.count("timezone"));
 
 	// Create a connection
-	DuckDB db(nullptr, &config);
-	Connection con(db);
+	duckdb::unique_ptr<DuckDB> db;
+	REQUIRE_NOTHROW(db = make_uniq<DuckDB>(nullptr, &config));
+	Connection con(*db);
+
+	auto res = con.Query("select current_setting('timezone')");
+	REQUIRE(CHECK_COLUMN(res, 0, {Value("America/Los_Angeles")}));
 }
