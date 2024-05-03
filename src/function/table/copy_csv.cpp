@@ -405,7 +405,6 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
                                                                const string &file_path) {
 	auto &csv_data = bind_data.Cast<WriteCSVData>();
 	auto &options = csv_data.options;
-	// Verify that file path has the correct compression extension, otherwise fix it.
 	auto global_data =
 	    make_uniq<GlobalWriteCSVData>(FileSystem::GetFileSystem(context), file_path, options.compression);
 
