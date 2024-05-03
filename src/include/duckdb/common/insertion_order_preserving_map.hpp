@@ -64,7 +64,7 @@ public:
 		if (entry == map_idx.end()) {
 			return map.end();
 		}
-		return map.begin() + entry->second;
+		return map.begin() + static_cast<typename VECTOR_TYPE::difference_type>(entry->second);
 	}
 
 	typename VECTOR_TYPE::const_iterator find(const string &key) const {
@@ -72,7 +72,7 @@ public:
 		if (entry == map_idx.end()) {
 			return map.end();
 		}
-		return map.begin() + entry->second;
+		return map.begin() + static_cast<typename VECTOR_TYPE::difference_type>(entry->second);
 	}
 
 	idx_t size() const {
