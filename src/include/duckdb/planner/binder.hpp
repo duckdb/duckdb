@@ -305,6 +305,7 @@ private:
 	unique_ptr<BoundTableRef> Bind(TableFunctionRef &ref);
 	unique_ptr<BoundTableRef> Bind(EmptyTableRef &ref);
 	unique_ptr<BoundTableRef> Bind(ExpressionListRef &ref);
+	unique_ptr<BoundTableRef> Bind(ColumnDataRef &ref);
 	unique_ptr<BoundTableRef> Bind(PivotRef &expr);
 	unique_ptr<BoundTableRef> Bind(ShowRef &ref);
 
@@ -335,6 +336,7 @@ private:
 	unique_ptr<LogicalOperator> CreatePlan(BoundTableFunction &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundEmptyTableRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundExpressionListRef &ref);
+	unique_ptr<LogicalOperator> CreatePlan(BoundColumnDataRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundCTERef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundPivotRef &ref);
 
