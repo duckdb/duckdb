@@ -34,7 +34,7 @@ class CommonTableExpressionMap {
 public:
 	CommonTableExpressionMap();
 
-	InsertionOrderPreservingMap<idx_t, unique_ptr<CommonTableExpressionInfo>> map;
+	InsertionOrderPreservingMap<unique_ptr<CommonTableExpressionInfo>> map;
 
 public:
 	string ToString() const;

@@ -54,7 +54,7 @@
       {
         "id": 100,
         "name": "map",
-        "type": "InsertionOrderPreservingMap<idx_t, CommonTableExpressionInfo*>"
+        "type": "InsertionOrderPreservingMap<CommonTableExpressionInfo*>"
       }
     ],
     "pointer_type": "none"

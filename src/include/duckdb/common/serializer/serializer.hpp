@@ -262,15 +262,14 @@ protected:
 
 	// Map
 	// serialized as a list of pairs
-	template <class K, class V>
-	void WriteValue(const duckdb::InsertionOrderPreservingMap<K, V> &map) {
+	template <class V>
+	void WriteValue(const duckdb::InsertionOrderPreservingMap<V> &map) {
 		auto count = map.size();
-		auto keys = map.Keys();
 		OnListBegin(count);
-		for (idx_t i = 0; i < count; i++) {
+		for (auto &entry : map) {
 			OnObjectBegin();
-			WriteProperty(0, "key", keys[i]);
-			WriteProperty(1, "value", map[i]);
+			WriteProperty(0, "key", entry.first);
+			WriteProperty(1, "value", entry.second);
 			OnObjectEnd();
 		}
 		OnListEnd();

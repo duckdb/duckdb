@@ -15,17 +15,14 @@ CommonTableExpressionMap::CommonTableExpressionMap() {
 
 CommonTableExpressionMap CommonTableExpressionMap::Copy() const {
 	CommonTableExpressionMap res;
-	res.map.resize(this->map.size());
-	for (auto &kv_idx : this->map.map_idx) {
+	for (auto &kv : this->map) {
 		auto kv_info = make_uniq<CommonTableExpressionInfo>();
-		auto &kv = this->map.at(kv_idx.second);
-		for (auto &al : kv->aliases) {
+		for (auto &al : kv.second->aliases) {
 			kv_info->aliases.push_back(al);
 		}
-		kv_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(kv->query->Copy());
-		kv_info->materialized = kv->materialized;
-		res.map[kv_idx.second] = std::move(kv_info);
-		res.map.map_idx[kv_idx.first] = kv_idx.second;
+		kv_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(kv.second->query->Copy());
+		kv_info->materialized = kv.second->materialized;
+		res.map[kv.first] = std::move(kv_info);
 	}
 
 	return res;
@@ -38,7 +35,7 @@ string CommonTableExpressionMap::ToString() const {
 	// check if there are any recursive CTEs
 	bool has_recursive = false;
 	for (auto &kv : map) {
-		if (kv->query->node->type == QueryNodeType::RECURSIVE_CTE_NODE) {
+		if (kv.second->query->node->type == QueryNodeType::RECURSIVE_CTE_NODE) {
 			has_recursive = true;
 			break;
 		}
@@ -49,16 +46,12 @@ string CommonTableExpressionMap::ToString() const {
 	}
 	bool first_cte = true;
 
-	vector<string> names = map.Keys();
-
-	for (idx_t i = 0; i < map.size(); i++) {
-		auto &kv = map[i];
-		auto &name = names[i];
+	for (auto &kv : map) {
 		if (!first_cte) {
 			result += ", ";
 		}
-		auto &cte = *kv;
-		result += KeywordHelper::WriteOptionallyQuoted(name);
+		auto &cte = *kv.second;
+		result += KeywordHelper::WriteOptionallyQuoted(kv.first);
 		if (!cte.aliases.empty()) {
 			result += " (";
 			for (idx_t k = 0; k < cte.aliases.size(); k++) {
@@ -69,9 +62,9 @@ string CommonTableExpressionMap::ToString() const {
 			}
 			result += ")";
 		}
-		if (kv->materialized == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
+		if (kv.second->materialized == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
 			result += " AS MATERIALIZED (";
-		} else if (kv->materialized == CTEMaterialize::CTE_MATERIALIZE_NEVER) {
+		} else if (kv.second->materialized == CTEMaterialize::CTE_MATERIALIZE_NEVER) {
 			result += " AS NOT MATERIALIZED (";
 		} else {
 			result += " AS (";
@@ -141,13 +134,16 @@ bool QueryNode::Equals(const QueryNode *other) const {
 		return false;
 	}
 
-	for (idx_t i = 0; i < cte_map.map.size(); i++) {
-		auto &entry = cte_map.map.at(i);
-		auto &other_entry = other->cte_map.map.at(i);
-		if (entry->aliases != other_entry->aliases) {
+	for (auto &entry : cte_map.map) {
+		auto other_entry = other->cte_map.map.find(entry.first);
+		if (other_entry == other->cte_map.map.end()) {
 			return false;
 		}
-		if (!entry->query->Equals(*other_entry->query)) {
+
+		if (entry.second->aliases != other->cte_map.map.at(entry.first)->aliases) {
+			return false;
+		}
+		if (!entry.second->query->Equals(*other->cte_map.map.at(entry.first)->query)) {
 			return false;
 		}
 	}
@@ -158,17 +154,14 @@ void QueryNode::CopyProperties(QueryNode &other) const {
 	for (auto &modifier : modifiers) {
 		other.modifiers.push_back(modifier->Copy());
 	}
-	other.cte_map.map.resize(cte_map.map.size());
-	for (auto &kv_idx : cte_map.map.map_idx) {
-		auto &kv = cte_map.map[kv_idx.second];
+	for (auto &kv : cte_map.map) {
 		auto kv_info = make_uniq<CommonTableExpressionInfo>();
-		for (auto &al : kv->aliases) {
+		for (auto &al : kv.second->aliases) {
 			kv_info->aliases.push_back(al);
 		}
-		kv_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(kv->query->Copy());
-		kv_info->materialized = kv->materialized;
-		other.cte_map.map[kv_idx.second] = std::move(kv_info);
-		other.cte_map.map.map_idx[kv_idx.first] = kv_idx.second;
+		kv_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(kv.second->query->Copy());
+		kv_info->materialized = kv.second->materialized;
+		other.cte_map.map[kv.first] = std::move(kv_info);
 	}
 }
 

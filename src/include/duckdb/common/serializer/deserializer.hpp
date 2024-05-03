@@ -313,8 +313,7 @@ private:
 			auto key = ReadProperty<string>(0, "key");
 			auto value = ReadProperty<VALUE_TYPE>(1, "value");
 			OnObjectEnd();
-			map.push_back(std::move(value));
-			map.map_idx[key] = i;
+			map[key] = std::move(value);
 		}
 		OnListEnd();
 		return map;
