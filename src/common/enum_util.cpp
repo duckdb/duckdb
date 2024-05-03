@@ -4228,6 +4228,8 @@ const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
 		return "COMMON_AGGREGATE";
 	case OptimizerType::COLUMN_LIFETIME:
 		return "COLUMN_LIFETIME";
+	case OptimizerType::BUILD_SIDE_PROBE_SIDE:
+		return "BUILD_SIDE_PROBE_SIDE";
 	case OptimizerType::LIMIT_PUSHDOWN:
 		return "LIMIT_PUSHDOWN";
 	case OptimizerType::TOP_N:
@@ -4288,6 +4290,9 @@ OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "COLUMN_LIFETIME")) {
 		return OptimizerType::COLUMN_LIFETIME;
+	}
+	if (StringUtil::Equals(value, "BUILD_SIDE_PROBE_SIDE")) {
+		return OptimizerType::BUILD_SIDE_PROBE_SIDE;
 	}
 	if (StringUtil::Equals(value, "LIMIT_PUSHDOWN")) {
 		return OptimizerType::LIMIT_PUSHDOWN;
