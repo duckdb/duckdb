@@ -4,9 +4,13 @@ setuptools_scm>=6.3
 setuptools>=58
 pytest
 pandas
-pyarrow
+pytest-timeout
 mypy
 psutil>=5.9.0
+requests>=2.26
 fsspec
-polars
+pyarrow>=8.0
+torch
+polars<0.20.22
+adbc_driver_manager
 tensorflow
