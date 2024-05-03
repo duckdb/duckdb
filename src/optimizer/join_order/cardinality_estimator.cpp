@@ -371,7 +371,6 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(optional_ptr<JoinRelati
 	// Get the join relation set
 	D_ASSERT(stats.stats_initialized);
 	auto relation_cardinality = stats.cardinality;
-	auto relation_filter = stats.filter_strength;
 
 	auto card_helper = CardinalityHelper((double)relation_cardinality);
 	relation_set_2_cardinality[set->ToString()] = card_helper;
