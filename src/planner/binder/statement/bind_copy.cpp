@@ -67,7 +67,6 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 
 	auto original_options = stmt.info->options;
 	stmt.info->options.clear();
-
 	for (auto &option : original_options) {
 		auto loption = StringUtil::Lower(option.first);
 		if (loption == "use_tmp_file") {
@@ -104,6 +103,16 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 			auto converted = ConvertVectorToValue(std::move(option.second));
 			partition_cols = ParseColumnsOrdered(converted, select_node.names, loption);
 		} else {
+			if (loption == "compression") {
+				auto parameter = StringUtil::Lower(option.second[0].ToString());
+				if (parameter == "gzip" && !StringUtil::EndsWith(bind_input.file_extension, ".gz")) {
+					// We just add .gz
+					bind_input.file_extension += ".gz";
+				} else if (parameter == "zstd" && !StringUtil::EndsWith(bind_input.file_extension, ".zst")) {
+					// We just add .zst
+					bind_input.file_extension += ".zst";
+				}
+			}
 			stmt.info->options[option.first] = option.second;
 		}
 	}
