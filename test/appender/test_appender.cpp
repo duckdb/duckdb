@@ -176,7 +176,7 @@ TEST_CASE("Test default value appender", "[appender]") {
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i iNTEGER, j INTEGER DEFAULT 5)"));
 
-	// append a bunch of values
+	// Insert DEFAULT into default column
 	{
 		Appender appender(con, "integers");
 		appender.BeginRow();
@@ -191,6 +191,7 @@ TEST_CASE("Test default value appender", "[appender]") {
 
 	con.Query("DELETE from integers");
 
+	// Insert DEFAULT into non-default column
 	{
 		Appender appender(con, "integers");
 		appender.BeginRow();
@@ -200,9 +201,11 @@ TEST_CASE("Test default value appender", "[appender]") {
 		REQUIRE_NOTHROW(appender.EndRow());
 		REQUIRE_NOTHROW(appender.Close());
 	}
+	result = con.Query("SELECT * FROM integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(LogicalTypeId::INTEGER)}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value::INTEGER(5)}));
 
+	// DEFAULT nextval('seq')
 	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq"));
 	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE integers(i iNTEGER, j INTEGER DEFAULT nextval('seq'))"));
 	{
@@ -213,8 +216,43 @@ TEST_CASE("Test default value appender", "[appender]") {
 		REQUIRE_NOTHROW(appender.EndRow());
 		REQUIRE_NOTHROW(appender.Close());
 	}
+	result = con.Query("SELECT * FROM integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(1)}));
-	REQUIRE(CHECK_COLUMN(result, 1, {Value::INTEGER(0)}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value::INTEGER(1)}));
+
+	// DEFAULT random()
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE integers(i iNTEGER, j DOUBLE DEFAULT random())"));
+	con.Query("select setseed(0.42)");
+	{
+		Appender appender(con, "integers");
+		appender.BeginRow();
+		appender.Append<int32_t>(1);
+		REQUIRE_NOTHROW(appender.AppendDefault());
+		REQUIRE_NOTHROW(appender.EndRow());
+		REQUIRE_NOTHROW(appender.Close());
+	}
+	result = con.Query("SELECT * FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(1)}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value::DOUBLE(0.4729174713138491)}));
+
+	// DEFAULT now()
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE integers(i iNTEGER, j TIMESTAMPTZ DEFAULT now())"));
+	con.Query("BEGIN TRANSACTION");
+	result = con.Query("select now()");
+	auto &materialized_result = result->Cast<MaterializedQueryResult>();
+	auto current_time = materialized_result.GetValue(0, 0);
+	{
+		Appender appender(con, "integers");
+		appender.BeginRow();
+		appender.Append<int32_t>(1);
+		REQUIRE_NOTHROW(appender.AppendDefault());
+		REQUIRE_NOTHROW(appender.EndRow());
+		REQUIRE_NOTHROW(appender.Close());
+	}
+	result = con.Query("SELECT * FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(1)}));
+	REQUIRE(CHECK_COLUMN(result, 1, {current_time}));
+	con.Query("COMMIT");
 }
 
 TEST_CASE("Test incorrect usage of appender", "[appender]") {

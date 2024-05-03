@@ -424,7 +424,8 @@ void Appender::AppendDefault() {
 	auto &executor = *expression_executor;
 	// The executor is initialized with expressions for every column, even though only some are used
 	// this makes it so that we can just use the 'column' index
-	executor.ExecuteExpression(column, result);
+
+	context->RunFunctionInTransaction([&]() { executor.ExecuteExpression(column, result); });
 	Append(result.GetValue(0));
 }
 
