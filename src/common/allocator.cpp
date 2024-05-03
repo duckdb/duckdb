@@ -203,6 +203,22 @@ Allocator &Allocator::DefaultAllocator() {
 	return *DefaultAllocatorReference();
 }
 
+int64_t Allocator::DecayDelay() {
+#ifdef USE_JEMALLOC
+	return JemallocExtension::DecayDelay();
+#else
+	return DConstants::INVALID_INDEX;
+#endif
+}
+
+bool Allocator::SupportsFlush() {
+#ifdef USE_JEMALLOC
+	return true;
+#else
+	return false;
+#endif
+}
+
 void Allocator::ThreadFlush(idx_t threshold) {
 #ifdef USE_JEMALLOC
 	JemallocExtension::ThreadFlush(threshold);

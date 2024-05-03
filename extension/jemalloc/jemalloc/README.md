@@ -56,25 +56,38 @@ This is not portable, but we can make it portable if we replace all of it with t
 #endif
 ```
 
+Add this to `jemalloc.h`:
+```c++
+// DuckDB uses a 10s decay
+#define DUCKDB_JEMALLOC_DECAY 10
+```
+
 We also supply our own config string in `jemalloc.c`.
 Define this just after the `#include`s.
 ```c++
 #define JE_MALLOC_CONF_BUFFER_SIZE 200;
 char JE_MALLOC_CONF_BUFFER[JE_MALLOC_CONF_BUFFER_SIZE];
 ```
-Then put this before `malloc_init()` in `static void jemalloc_constructor(void)`:
+This is what `jemalloc_constructor` in `jemalloc.c` should look like:
 ```c++
-unsigned long long cpu_count = malloc_ncpus();
-unsigned long long bgt_count = cpu_count / 32;
-if (bgt_count == 0) {
-    bgt_count = 1;
-}
+JEMALLOC_ATTR(constructor)
+static void
+jemalloc_constructor(void) {
+	unsigned long long cpu_count = malloc_ncpus();
+	unsigned long long bgt_count = cpu_count / 32;
+	if (bgt_count == 0) {
+		bgt_count = 1;
+	}
+	// decay is in ms
+	unsigned long long decay = DUCKDB_DECAY_DELAY * 1000;
 #ifdef DEBUG
-	snprintf(JE_MALLOC_CONF_BUFFER, JE_MALLOC_CONF_BUFFER_SIZE, "junk:true,metadata_thp:always,oversize_threshold:0,dirty_decay_ms:10000,muzzy_decay_ms:10000,narenas:%llu,max_background_threads:%llu", cpu_count, bgt_count);
+	snprintf(JE_MALLOC_CONF_BUFFER, JE_MALLOC_CONF_BUFFER_SIZE, "junk:true,metadata_thp:always,oversize_threshold:0,dirty_decay_ms:%llu,muzzy_decay_ms:%llu,narenas:%llu,max_background_threads:%llu", decay, decay, cpu_count, bgt_count);
 #else
-	snprintf(JE_MALLOC_CONF_BUFFER, JE_MALLOC_CONF_BUFFER_SIZE, "metadata_thp:always,oversize_threshold:0,dirty_decay_ms:10000,muzzy_decay_ms:10000,narenas:%llu,max_background_threads:%llu", cpu_count, bgt_count);
+	snprintf(JE_MALLOC_CONF_BUFFER, JE_MALLOC_CONF_BUFFER_SIZE, "metadata_thp:always,oversize_threshold:0,dirty_decay_ms:%llu,muzzy_decay_ms:%llu,narenas:%llu,max_background_threads:%llu", decay, decay, cpu_count, bgt_count);
 #endif
-je_malloc_conf = JE_MALLOC_CONF_BUFFER;
+	je_malloc_conf = JE_MALLOC_CONF_BUFFER;
+	malloc_init();
+}
 ```
 
 Almost no symbols are leaked due to `private_namespace.h`.

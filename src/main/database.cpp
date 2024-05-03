@@ -64,7 +64,9 @@ DatabaseInstance::~DatabaseInstance() {
 	db_manager.reset();
 	buffer_manager.reset();
 	// finally, flush allocations and disable the background thread
-	Allocator::FlushAll();
+	if (Allocator::SupportsFlush()) {
+		Allocator::FlushAll();
+	}
 	Allocator::SetBackgroundThreads(false);
 }
 

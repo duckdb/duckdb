@@ -139,17 +139,20 @@ bool TaskScheduler::GetTaskFromProducer(ProducerToken &token, shared_ptr<Task> &
 
 void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 #ifndef DUCKDB_NO_THREADS
+	static constexpr const int64_t INITIAL_FLUSH_WAIT = 500000; // initial wait time of 0.5s (in mus) before flushing
+
 	shared_ptr<Task> task;
 	// loop until the marker is set to false
 	while (*marker) {
-		if (allocator_background_threads) {
-			// background threads clean up allocations, just start an untimed wait
+		if (!Allocator::SupportsFlush() || allocator_background_threads) {
+			// allocator can't flush, or background threads clean up allocations, just start an untimed wait
 			queue->semaphore.wait();
-		} else if (!queue->semaphore.wait(500000)) {
+		} else if (!queue->semaphore.wait(INITIAL_FLUSH_WAIT)) {
 			// no background threads, flush this threads outstanding allocations after it was idle for 0.5s
 			Allocator::ThreadFlush(allocator_flush_threshold);
-			if (!queue->semaphore.wait(9500000)) {
-				// thread was idle for another 9.5 seconds, mark it as idle and start an untimed wait
+			if (!queue->semaphore.wait(Allocator::DecayDelay() * 1000000 - INITIAL_FLUSH_WAIT)) {
+				// in total, the thread was idle for the entire decay delay (note: seconds converted to mus)
+				// mark it as idle and start an untimed wait
 				Allocator::ThreadIdle();
 				queue->semaphore.wait();
 			}
@@ -172,8 +175,10 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 		}
 	}
 	// this thread will exit, flush all of its outstanding allocations
-	Allocator::ThreadFlush(0);
-	Allocator::ThreadIdle();
+	if (Allocator::SupportsFlush()) {
+		Allocator::ThreadFlush(0);
+		Allocator::ThreadIdle();
+	}
 #else
 	throw NotImplementedException("DuckDB was compiled without threads! Background thread loop is not allowed.");
 #endif
@@ -266,7 +271,9 @@ void TaskScheduler::SetThreads(idx_t total_threads, idx_t external_threads) {
 	}
 #endif
 	requested_thread_count = NumericCast<int32_t>(total_threads - external_threads);
-	Allocator::FlushAll();
+	if (Allocator::SupportsFlush()) {
+		Allocator::FlushAll();
+	}
 }
 
 void TaskScheduler::SetAllocatorFlushTreshold(idx_t threshold) {

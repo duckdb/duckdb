@@ -112,6 +112,8 @@ public:
 	DUCKDB_API static Allocator &DefaultAllocator();
 	DUCKDB_API static shared_ptr<Allocator> &DefaultAllocatorReference();
 
+	static bool SupportsFlush();
+	static int64_t DecayDelay();
 	static void ThreadFlush(idx_t threshold);
 	static void ThreadIdle();
 	static void FlushAll();
