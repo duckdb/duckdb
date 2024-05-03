@@ -25,7 +25,6 @@ query III
 SELECT COUNT(*)>=10000 AND COUNT(*)<=12000,
 		COUNT(i) >= 10000 AND COUNT(i) <= 11000,
        SUM(i)>= 49995000 AND SUM(i) <= 50094000 FROM integers;
-SELECT COUNT(*), SUM(i) FROM integers;
 ----
 true	true	true
 

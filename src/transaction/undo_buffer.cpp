@@ -128,9 +128,18 @@ UndoBufferProperties UndoBuffer::GetProperties() {
 			properties.has_catalog_changes = true;
 
 			auto catalog_entry = Load<CatalogEntry *>(data);
-			if (catalog_entry->Parent().type == CatalogType::INDEX_ENTRY) {
-				auto &index = catalog_entry->Parent().Cast<DuckIndexEntry>();
+			auto &parent = catalog_entry->Parent();
+			switch (parent.type) {
+			case CatalogType::DELETED_ENTRY:
+				properties.has_dropped_entries = true;
+				break;
+			case CatalogType::INDEX_ENTRY: {
+				auto &index = parent.Cast<DuckIndexEntry>();
 				properties.estimated_size += index.initial_index_size;
+				break;
+			}
+			default:
+				break;
 			}
 			break;
 		}

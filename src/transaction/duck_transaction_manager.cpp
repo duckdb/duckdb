@@ -95,8 +95,8 @@ DuckTransactionManager::CanCheckpoint(DuckTransaction &transaction, unique_ptr<S
 		                          "another read transaction relies on data that is not yet committed");
 	}
 	auto checkpoint_type = CheckpointType::FULL_CHECKPOINT;
-	if (undo_properties.has_updates || undo_properties.has_deletes) {
-		// if we have made updates or deletes in this transaction we might need to change our strategy
+	if (undo_properties.has_updates || undo_properties.has_deletes || undo_properties.has_dropped_entries) {
+		// if we have made updates/deletes/catalog changes in this transaction we might need to change our strategy
 		// in the presence of other transactions
 		string other_transactions;
 		for (auto &active_transaction : active_transactions) {
@@ -111,7 +111,12 @@ DuckTransactionManager::CanCheckpoint(DuckTransaction &transaction, unique_ptr<S
 			// there are other transactions!
 			// these active transactions might need data from BEFORE this transaction
 			// we might need to change our strategy here based on what changes THIS transaction has made
-			if (undo_properties.has_updates) {
+			if (undo_properties.has_dropped_entries) {
+				// this transaction has changed the catalog - we cannot checkpoint
+				return CheckpointDecision("Transaction has dropped catalog entries and there are other transactions "
+				                          "active\nActive transactions: " +
+				                          other_transactions);
+			} else if (undo_properties.has_updates) {
 				// this transaction has performed updates - we cannot checkpoint
 				return CheckpointDecision(
 				    "Transaction has performed updates and there are other transactions active\nActive transactions: " +
