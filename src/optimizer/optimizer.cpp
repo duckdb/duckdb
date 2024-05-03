@@ -4,6 +4,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/query_profiler.hpp"
+#include "duckdb/optimizer/build_probe_side_optimizer.hpp"
 #include "duckdb/optimizer/column_lifetime_analyzer.hpp"
 #include "duckdb/optimizer/common_aggregate_optimizer.hpp"
 #include "duckdb/optimizer/cse_optimizer.hpp"
@@ -154,6 +155,13 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	RunOptimizer(OptimizerType::COMMON_SUBEXPRESSIONS, [&]() {
 		CommonSubExpressionOptimizer cse_optimizer(binder);
 		cse_optimizer.VisitOperator(*plan);
+	});
+
+	// Once we know the column lifetime, we have more information regarding
+	// what relations should be the build side/probe side.
+	RunOptimizer(OptimizerType::BUILD_SIDE_PROBE_SIDE, [&]() {
+		BuildProbeSideOptimizer build_probe_side_optimizer(context, *plan);
+		build_probe_side_optimizer.VisitOperator(*plan);
 	});
 
 	// pushes LIMIT below PROJECTION

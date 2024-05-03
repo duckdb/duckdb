@@ -31,6 +31,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 		                          stmt.info->name, stmt.info->if_not_found);
 	}
 
+	auto &properties = GetStatementProperties();
 	if (entry) {
 		D_ASSERT(!entry->deleted);
 		auto &catalog = entry->ParentCatalog();
@@ -47,6 +48,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 }
 
 BoundStatement Binder::Bind(TransactionStatement &stmt) {
+	auto &properties = GetStatementProperties();
 	// transaction statements do not require a valid transaction
 	properties.requires_valid_transaction = stmt.info->type == TransactionType::BEGIN_TRANSACTION;
 

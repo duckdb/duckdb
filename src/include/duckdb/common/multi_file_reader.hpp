@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
 #include "duckdb/common/multi_file_reader_options.hpp"
+#include "duckdb/common/multi_file_list.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/union_by_name.hpp"
@@ -82,61 +83,87 @@ struct MultiFileReaderData {
 	unordered_map<column_t, LogicalType> cast_map;
 };
 
+//! The MultiFileReader class provides a set of helper methods to handle scanning from multiple files
 struct MultiFileReader {
+	virtual ~MultiFileReader();
+
+	//! Create a MultiFileReader for a specific TableFunction, using its function name for errors
+	DUCKDB_API static unique_ptr<MultiFileReader> Create(const TableFunction &table_function);
+	//! Create a default MultiFileReader, function_name is used for errors
+	DUCKDB_API static unique_ptr<MultiFileReader> CreateDefault(const string &function_name = "");
+
 	//! Add the parameters for multi-file readers (e.g. union_by_name, filename) to a table function
 	DUCKDB_API static void AddParameters(TableFunction &table_function);
-	//! Performs any globbing for the multi-file reader and returns a list of files to be read
-	DUCKDB_API static vector<string> GetFileList(ClientContext &context, const Value &input, const string &name,
-	                                             FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY);
-	//! Parse the named parameters of a multi-file reader
-	DUCKDB_API static bool ParseOption(const string &key, const Value &val, MultiFileReaderOptions &options,
-	                                   ClientContext &context);
-	//! Perform complex filter pushdown into the multi-file reader, potentially filtering out files that should be read
-	//! If "true" the first file has been eliminated
-	DUCKDB_API static bool ComplexFilterPushdown(ClientContext &context, vector<string> &files,
-	                                             const MultiFileReaderOptions &options, LogicalGet &get,
-	                                             vector<unique_ptr<Expression>> &filters);
-	//! Bind the options of the multi-file reader, potentially emitting any extra columns that are required
-	DUCKDB_API static MultiFileReaderBindData BindOptions(MultiFileReaderOptions &options, const vector<string> &files,
-	                                                      vector<LogicalType> &return_types, vector<string> &names);
-	//! Finalize the bind phase of the multi-file reader after we know (1) the required (output) columns, and (2) the
-	//! pushed down table filters
-	DUCKDB_API static void FinalizeBind(const MultiFileReaderOptions &file_options,
-	                                    const MultiFileReaderBindData &options, const string &filename,
-	                                    const vector<string> &local_names, const vector<LogicalType> &global_types,
-	                                    const vector<string> &global_names, const vector<column_t> &global_column_ids,
-	                                    MultiFileReaderData &reader_data, ClientContext &context);
-	//! Create all required mappings from the global types/names to the file-local types/names
-	DUCKDB_API static void CreateMapping(const string &file_name, const vector<LogicalType> &local_types,
-	                                     const vector<string> &local_names, const vector<LogicalType> &global_types,
-	                                     const vector<string> &global_names, const vector<column_t> &global_column_ids,
-	                                     optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data,
-	                                     const string &initial_file);
-	//! Populated the filter_map
-	DUCKDB_API static void CreateFilterMap(const vector<LogicalType> &global_types,
-	                                       optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data);
-	//! Finalize the reading of a chunk - applying any constants that are required
-	DUCKDB_API static void FinalizeChunk(const MultiFileReaderBindData &bind_data,
-	                                     const MultiFileReaderData &reader_data, DataChunk &chunk);
 	//! Creates a table function set from a single reader function (including e.g. list parameters, etc)
 	DUCKDB_API static TableFunctionSet CreateFunctionSet(TableFunction table_function);
 
+	//! Parse a Value containing 1 or more paths into a vector of paths. Note: no expansion is performed here
+	DUCKDB_API virtual vector<string> ParsePaths(const Value &input);
+	//! Create a MultiFileList from a vector of paths. Any globs will be expanded using the default filesystem
+	DUCKDB_API virtual unique_ptr<MultiFileList>
+	CreateFileList(ClientContext &context, const vector<string> &paths,
+	               FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY);
+	//! Shorthand for ParsePaths + CreateFileList
+	DUCKDB_API unique_ptr<MultiFileList> CreateFileList(ClientContext &context, const Value &input,
+	                                                    FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY);
+
+	//! Parse the named parameters of a multi-file reader
+	DUCKDB_API virtual bool ParseOption(const string &key, const Value &val, MultiFileReaderOptions &options,
+	                                    ClientContext &context);
+	//! Perform filter pushdown into the MultiFileList. Returns a new MultiFileList if filters were pushed down
+	DUCKDB_API virtual unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, MultiFileList &files,
+	                                                                   const MultiFileReaderOptions &options,
+	                                                                   LogicalGet &get,
+	                                                                   vector<unique_ptr<Expression>> &filters);
+	//! Try to use the MultiFileReader for binding. Returns true if a bind could be made, returns false if the
+	//! MultiFileReader can not perform the bind and binding should be performed on 1 or more files in the MultiFileList
+	//! directly.
+	DUCKDB_API virtual bool Bind(MultiFileReaderOptions &options, MultiFileList &files,
+	                             vector<LogicalType> &return_types, vector<string> &names,
+	                             MultiFileReaderBindData &bind_data);
+	//! Bind the options of the multi-file reader, potentially emitting any extra columns that are required
+	DUCKDB_API virtual void BindOptions(MultiFileReaderOptions &options, MultiFileList &files,
+	                                    vector<LogicalType> &return_types, vector<string> &names,
+	                                    MultiFileReaderBindData &bind_data);
+	//! Finalize the bind phase of the multi-file reader after we know (1) the required (output) columns, and (2) the
+	//! pushed down table filters
+	DUCKDB_API virtual void FinalizeBind(const MultiFileReaderOptions &file_options,
+	                                     const MultiFileReaderBindData &options, const string &filename,
+	                                     const vector<string> &local_names, const vector<LogicalType> &global_types,
+	                                     const vector<string> &global_names, const vector<column_t> &global_column_ids,
+	                                     MultiFileReaderData &reader_data, ClientContext &context);
+	//! Create all required mappings from the global types/names to the file-local types/names
+	DUCKDB_API virtual void CreateMapping(const string &file_name, const vector<LogicalType> &local_types,
+	                                      const vector<string> &local_names, const vector<LogicalType> &global_types,
+	                                      const vector<string> &global_names, const vector<column_t> &global_column_ids,
+	                                      optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data,
+	                                      const string &initial_file);
+	//! Populated the filter_map
+	DUCKDB_API virtual void CreateFilterMap(const vector<LogicalType> &global_types,
+	                                        optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data);
+	//! Finalize the reading of a chunk - applying any constants that are required
+	DUCKDB_API virtual void FinalizeChunk(ClientContext &context, const MultiFileReaderBindData &bind_data,
+	                                      const MultiFileReaderData &reader_data, DataChunk &chunk);
+
 	template <class READER_CLASS, class RESULT_CLASS, class OPTIONS_CLASS>
-	static MultiFileReaderBindData BindUnionReader(ClientContext &context, vector<LogicalType> &return_types,
-	                                               vector<string> &names, RESULT_CLASS &result,
-	                                               OPTIONS_CLASS &options) {
+	MultiFileReaderBindData BindUnionReader(ClientContext &context, vector<LogicalType> &return_types,
+	                                        vector<string> &names, MultiFileList &files, RESULT_CLASS &result,
+	                                        OPTIONS_CLASS &options) {
 		D_ASSERT(options.file_options.union_by_name);
 		vector<string> union_col_names;
 		vector<LogicalType> union_col_types;
+
 		// obtain the set of union column names + types by unifying the types of all of the files
 		// note that this requires opening readers for each file and reading the metadata of each file
-		auto union_readers =
-		    UnionByName::UnionCols<READER_CLASS>(context, result.files, union_col_types, union_col_names, options);
+		// note also that it requires fully expanding the MultiFileList
+		auto materialized_file_list = files.GetAllFiles();
+		auto union_readers = UnionByName::UnionCols<READER_CLASS>(context, materialized_file_list, union_col_types,
+		                                                          union_col_names, options);
 
 		std::move(union_readers.begin(), union_readers.end(), std::back_inserter(result.union_readers));
 		// perform the binding on the obtained set of names + types
-		auto bind_data =
-		    MultiFileReader::BindOptions(options.file_options, result.files, union_col_types, union_col_names);
+		MultiFileReaderBindData bind_data;
+		BindOptions(options.file_options, files, union_col_types, union_col_names, bind_data);
 		names = union_col_names;
 		return_types = union_col_types;
 		result.Initialize(result.union_readers[0]);
@@ -145,26 +172,28 @@ struct MultiFileReader {
 	}
 
 	template <class READER_CLASS, class RESULT_CLASS, class OPTIONS_CLASS>
-	static MultiFileReaderBindData BindReader(ClientContext &context, vector<LogicalType> &return_types,
-	                                          vector<string> &names, RESULT_CLASS &result, OPTIONS_CLASS &options) {
+	MultiFileReaderBindData BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
+	                                   MultiFileList &files, RESULT_CLASS &result, OPTIONS_CLASS &options) {
 		if (options.file_options.union_by_name) {
-			return BindUnionReader<READER_CLASS>(context, return_types, names, result, options);
+			return BindUnionReader<READER_CLASS>(context, return_types, names, files, result, options);
 		} else {
 			shared_ptr<READER_CLASS> reader;
-			reader = make_shared_ptr<READER_CLASS>(context, result.files[0], options);
+			reader = make_shared_ptr<READER_CLASS>(context, files.GetFirstFile(), options);
 			return_types = reader->return_types;
 			names = reader->names;
 			result.Initialize(std::move(reader));
-			return MultiFileReader::BindOptions(options.file_options, result.files, return_types, names);
+			MultiFileReaderBindData bind_data;
+			BindOptions(options.file_options, files, return_types, names, bind_data);
+			return bind_data;
 		}
 	}
 
 	template <class READER_CLASS>
-	static void InitializeReader(READER_CLASS &reader, const MultiFileReaderOptions &options,
-	                             const MultiFileReaderBindData &bind_data, const vector<LogicalType> &global_types,
-	                             const vector<string> &global_names, const vector<column_t> &global_column_ids,
-	                             optional_ptr<TableFilterSet> table_filters, const string &initial_file,
-	                             ClientContext &context) {
+	void InitializeReader(READER_CLASS &reader, const MultiFileReaderOptions &options,
+	                      const MultiFileReaderBindData &bind_data, const vector<LogicalType> &global_types,
+	                      const vector<string> &global_names, const vector<column_t> &global_column_ids,
+	                      optional_ptr<TableFilterSet> table_filters, const string &initial_file,
+	                      ClientContext &context) {
 		FinalizeBind(options, bind_data, reader.GetFileName(), reader.GetNames(), global_types, global_names,
 		             global_column_ids, reader.reader_data, context);
 		CreateMapping(reader.GetFileName(), reader.GetTypes(), reader.GetNames(), global_types, global_names,
@@ -173,9 +202,10 @@ struct MultiFileReader {
 	}
 
 	template <class BIND_DATA>
-	static void PruneReaders(BIND_DATA &data) {
+	static void PruneReaders(BIND_DATA &data, MultiFileList &file_list) {
 		unordered_set<string> file_set;
-		for (auto &file : data.files) {
+
+		for (const auto &file : file_list.Files()) {
 			file_set.insert(file);
 		}
 
@@ -202,11 +232,14 @@ struct MultiFileReader {
 		}
 	}
 
-private:
-	static void CreateNameMapping(const string &file_name, const vector<LogicalType> &local_types,
-	                              const vector<string> &local_names, const vector<LogicalType> &global_types,
-	                              const vector<string> &global_names, const vector<column_t> &global_column_ids,
-	                              MultiFileReaderData &reader_data, const string &initial_file);
+protected:
+	virtual void CreateNameMapping(const string &file_name, const vector<LogicalType> &local_types,
+	                               const vector<string> &local_names, const vector<LogicalType> &global_types,
+	                               const vector<string> &global_names, const vector<column_t> &global_column_ids,
+	                               MultiFileReaderData &reader_data, const string &initial_file);
+
+	//! Used in errors to report which function is using this MultiFileReader
+	string function_name;
 };
 
 } // namespace duckdb

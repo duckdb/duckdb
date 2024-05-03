@@ -131,6 +131,8 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(CustomUserAgentSetting),
     DUCKDB_LOCAL(PartitionedWriteFlushThreshold),
     DUCKDB_GLOBAL(DefaultBlockAllocSize),
+    DUCKDB_LOCAL(EnableHTTPLoggingSetting),
+    DUCKDB_LOCAL(HTTPLoggingOutputSetting),
     FINAL_SETTING};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
