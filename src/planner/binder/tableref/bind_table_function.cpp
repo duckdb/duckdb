@@ -200,23 +200,41 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 			get->column_ids.push_back(i);
 		}
 	}
-	// now add the table function to the bind context so its columns can be bound
-	bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->column_ids,
-	                              get->GetTable().get());
 
 	if (table_function.with_ordinality) {
 		auto window_index = GenerateTableIndex();
 		auto window = make_uniq<duckdb::LogicalWindow>(window_index);
 		auto row_number =
 				make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT, nullptr, nullptr);
-		auto partition_count = 1;
 		row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
 		row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
 		window->expressions.push_back(std::move(row_number));
 		window->children.push_back(std::move(get));
-		return std::move(window);
+
+		vector<string> names = {"ordinality"};
+		vector<LogicalType> types = {LogicalType::BIGINT};
+		bind_context.AddGenericBinding(window_index, "ordinalityspalte", names, types);
+
+		vector<unique_ptr<Expression>> select_list;
+		for (idx_t i = 0; i < return_types.size() ; i++)  {
+			auto expression = make_uniq<BoundColumnRefExpression>(return_types[i], ColumnBinding(bind_index, i));
+			select_list.push_back(std::move(expression));
+		}
+		select_list.push_back(make_uniq<BoundColumnRefExpression>(LogicalType::BIGINT, ColumnBinding(window_index, 0)));
+
+		auto projection_index = GenerateTableIndex();
+		auto projection = make_uniq<LogicalProjection>(projection_index, std::move(select_list));
+
+		projection->children.push_back(std::move(window));
+		return_names.push_back("ordinality");
+		return_types.push_back(LogicalType::BIGINT);
+		bind_context.AddGenericBinding(projection_index, function_name, return_names, return_types);
+		return std::move(projection);
 	}
 
+	// now add the table function to the bind context so its columns can be bound
+	bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->column_ids,
+								  get->GetTable().get());
 	return std::move(get);
 }
 
