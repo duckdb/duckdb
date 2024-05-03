@@ -140,6 +140,8 @@ enum class FileBufferType : uint8_t;
 
 enum class FileCompressionType : uint8_t;
 
+enum class FileExpandResult : uint8_t;
+
 enum class FileGlobOptions : uint8_t;
 
 enum class FileLockType : uint8_t;
@@ -490,6 +492,9 @@ const char* EnumUtil::ToChars<FileBufferType>(FileBufferType value);
 
 template<>
 const char* EnumUtil::ToChars<FileCompressionType>(FileCompressionType value);
+
+template<>
+const char* EnumUtil::ToChars<FileExpandResult>(FileExpandResult value);
 
 template<>
 const char* EnumUtil::ToChars<FileGlobOptions>(FileGlobOptions value);
@@ -935,6 +940,9 @@ FileBufferType EnumUtil::FromString<FileBufferType>(const char *value);
 
 template<>
 FileCompressionType EnumUtil::FromString<FileCompressionType>(const char *value);
+
+template<>
+FileExpandResult EnumUtil::FromString<FileExpandResult>(const char *value);
 
 template<>
 FileGlobOptions EnumUtil::FromString<FileGlobOptions>(const char *value);

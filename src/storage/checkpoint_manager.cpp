@@ -30,13 +30,16 @@
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/unknown_index.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 
 namespace duckdb {
 
 void ReorderTableEntries(catalog_entry_vector_t &tables);
 
-SingleFileCheckpointWriter::SingleFileCheckpointWriter(AttachedDatabase &db, BlockManager &block_manager)
-    : CheckpointWriter(db), partial_block_manager(block_manager, CheckpointType::FULL_CHECKPOINT) {
+SingleFileCheckpointWriter::SingleFileCheckpointWriter(AttachedDatabase &db, BlockManager &block_manager,
+                                                       CheckpointType checkpoint_type)
+    : CheckpointWriter(db), partial_block_manager(block_manager, PartialBlockType::FULL_CHECKPOINT),
+      checkpoint_type(checkpoint_type) {
 }
 
 BlockManager &SingleFileCheckpointWriter::GetBlockManager() {
@@ -176,7 +179,6 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	});
 	serializer.End();
 
-	partial_block_manager.FlushPartialBlocks();
 	metadata_writer->Flush();
 	table_metadata_writer->Flush();
 
@@ -239,6 +241,8 @@ void SingleFileCheckpointReader::LoadFromStorage(optional_ptr<ClientContext> con
 	}
 
 	if (context) {
+		auto &meta_transaction = MetaTransaction::Get(*context);
+		meta_transaction.ModifyDatabase(catalog.GetAttached());
 		// create the MetadataReader to read from the storage
 		MetadataReader reader(metadata_manager, meta_block);
 		//	reader.SetContext(*con.context);
@@ -246,6 +250,8 @@ void SingleFileCheckpointReader::LoadFromStorage(optional_ptr<ClientContext> con
 	} else {
 		Connection con(storage.GetDatabase());
 		con.BeginTransaction();
+		auto &meta_transaction = MetaTransaction::Get(*con.context);
+		meta_transaction.ModifyDatabase(catalog.GetAttached());
 		// create the MetadataReader to read from the storage
 		MetadataReader reader(metadata_manager, meta_block);
 		//	reader.SetContext(*con.context);
@@ -425,7 +431,8 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 
 	// now we can look for the index in the catalog and assign the table info
 	auto &index = catalog.CreateIndex(context, info)->Cast<DuckIndexEntry>();
-	index.info = make_shared_ptr<IndexDataTableInfo>(table.GetStorage().info, info.index_name);
+	auto data_table_info = table.GetStorage().GetDataTableInfo();
+	index.info = make_shared_ptr<IndexDataTableInfo>(data_table_info, info.index_name);
 
 	// insert the parsed expressions into the index so that we can (de)serialize them during consecutive checkpoints
 	for (auto &parsed_expr : info.parsed_expressions) {
@@ -469,7 +476,7 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 
 	} else {
 		// get the matching index storage info
-		for (auto const &elem : data_table.info->index_storage_infos) {
+		for (auto const &elem : data_table.GetDataTableInfo()->GetIndexStorageInfo()) {
 			if (elem.name == info.index_name) {
 				index_storage_info = elem;
 				break;
@@ -482,15 +489,15 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	// This is executed before any extensions can be loaded, which is why we must treat any index type that is not
 	// built-in (ART) as unknown
 	if (info.index_type == ART::TYPE_NAME) {
-		data_table.info->indexes.AddIndex(make_uniq<ART>(info.index_name, info.constraint_type, info.column_ids,
-		                                                 TableIOManager::Get(data_table), unbound_expressions,
-		                                                 data_table.db, nullptr, index_storage_info));
+		data_table.AddIndex(make_uniq<ART>(info.index_name, info.constraint_type, info.column_ids,
+		                                   TableIOManager::Get(data_table), unbound_expressions, data_table.db, nullptr,
+		                                   index_storage_info));
 	} else {
 		auto unknown_index = make_uniq<UnknownIndex>(info.index_name, info.index_type, info.constraint_type,
 		                                             info.column_ids, TableIOManager::Get(data_table),
 		                                             unbound_expressions, data_table.db, info, index_storage_info);
 
-		data_table.info->indexes.AddIndex(std::move(unknown_index));
+		data_table.AddIndex(std::move(unknown_index));
 	}
 }
 
@@ -533,14 +540,18 @@ void CheckpointReader::ReadTableMacro(ClientContext &context, Deserializer &dese
 //===--------------------------------------------------------------------===//
 // Table Metadata
 //===--------------------------------------------------------------------===//
-void CheckpointWriter::WriteTable(TableCatalogEntry &table, Serializer &serializer) {
+void SingleFileCheckpointWriter::WriteTable(TableCatalogEntry &table, Serializer &serializer) {
 	// Write the table metadata
 	serializer.WriteProperty(100, "table", &table);
 
 	// Write the table data
+	auto table_lock = table.GetStorage().GetCheckpointLock();
 	if (auto writer = GetTableDataWriter(table)) {
 		writer->WriteTableData(serializer);
 	}
+	// flush any partial blocks BEFORE releasing the table lock
+	// flushing partial blocks updates where data lives and is not thread-safe
+	partial_block_manager.FlushPartialBlocks();
 }
 
 void CheckpointReader::ReadTable(ClientContext &context, Deserializer &deserializer) {

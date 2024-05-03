@@ -58,6 +58,7 @@
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/file_open_flags.hpp"
+#include "duckdb/common/multi_file_list.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/sort/partition_state.hpp"
 #include "duckdb/common/types.hpp"
@@ -2774,6 +2775,34 @@ FileCompressionType EnumUtil::FromString<FileCompressionType>(const char *value)
 }
 
 template<>
+const char* EnumUtil::ToChars<FileExpandResult>(FileExpandResult value) {
+	switch(value) {
+	case FileExpandResult::NO_FILES:
+		return "NO_FILES";
+	case FileExpandResult::SINGLE_FILE:
+		return "SINGLE_FILE";
+	case FileExpandResult::MULTIPLE_FILES:
+		return "MULTIPLE_FILES";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+FileExpandResult EnumUtil::FromString<FileExpandResult>(const char *value) {
+	if (StringUtil::Equals(value, "NO_FILES")) {
+		return FileExpandResult::NO_FILES;
+	}
+	if (StringUtil::Equals(value, "SINGLE_FILE")) {
+		return FileExpandResult::SINGLE_FILE;
+	}
+	if (StringUtil::Equals(value, "MULTIPLE_FILES")) {
+		return FileExpandResult::MULTIPLE_FILES;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
 const char* EnumUtil::ToChars<FileGlobOptions>(FileGlobOptions value) {
 	switch(value) {
 	case FileGlobOptions::DISALLOW_EMPTY:
@@ -4228,6 +4257,8 @@ const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
 		return "COMMON_AGGREGATE";
 	case OptimizerType::COLUMN_LIFETIME:
 		return "COLUMN_LIFETIME";
+	case OptimizerType::BUILD_SIDE_PROBE_SIDE:
+		return "BUILD_SIDE_PROBE_SIDE";
 	case OptimizerType::LIMIT_PUSHDOWN:
 		return "LIMIT_PUSHDOWN";
 	case OptimizerType::TOP_N:
@@ -4288,6 +4319,9 @@ OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "COLUMN_LIFETIME")) {
 		return OptimizerType::COLUMN_LIFETIME;
+	}
+	if (StringUtil::Equals(value, "BUILD_SIDE_PROBE_SIDE")) {
+		return OptimizerType::BUILD_SIDE_PROBE_SIDE;
 	}
 	if (StringUtil::Equals(value, "LIMIT_PUSHDOWN")) {
 		return OptimizerType::LIMIT_PUSHDOWN;
@@ -6720,6 +6754,8 @@ const char* EnumUtil::ToChars<TableScanType>(TableScanType value) {
 		return "TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES";
 	case TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED:
 		return "TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED";
+	case TableScanType::TABLE_SCAN_LATEST_COMMITTED_ROWS:
+		return "TABLE_SCAN_LATEST_COMMITTED_ROWS";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -6738,6 +6774,9 @@ TableScanType EnumUtil::FromString<TableScanType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED")) {
 		return TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED;
+	}
+	if (StringUtil::Equals(value, "TABLE_SCAN_LATEST_COMMITTED_ROWS")) {
+		return TableScanType::TABLE_SCAN_LATEST_COMMITTED_ROWS;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -6910,6 +6949,8 @@ const char* EnumUtil::ToChars<UndoFlags>(UndoFlags value) {
 		return "DELETE_TUPLE";
 	case UndoFlags::UPDATE_TUPLE:
 		return "UPDATE_TUPLE";
+	case UndoFlags::SEQUENCE_VALUE:
+		return "SEQUENCE_VALUE";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -6931,6 +6972,9 @@ UndoFlags EnumUtil::FromString<UndoFlags>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "UPDATE_TUPLE")) {
 		return UndoFlags::UPDATE_TUPLE;
+	}
+	if (StringUtil::Equals(value, "SEQUENCE_VALUE")) {
+		return UndoFlags::SEQUENCE_VALUE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

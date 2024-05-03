@@ -1,5 +1,5 @@
 #include "duckdb/transaction/duck_transaction.hpp"
-
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
@@ -16,6 +16,7 @@
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/storage/storage_lock.hpp"
 
 namespace duckdb {
 
@@ -26,10 +27,11 @@ TransactionData::TransactionData(transaction_t transaction_id_p, transaction_t s
     : transaction(nullptr), transaction_id(transaction_id_p), start_time(start_time_p) {
 }
 
-DuckTransaction::DuckTransaction(TransactionManager &manager, ClientContext &context_p, transaction_t start_time,
+DuckTransaction::DuckTransaction(DuckTransactionManager &manager, ClientContext &context_p, transaction_t start_time,
                                  transaction_t transaction_id)
     : Transaction(manager, context_p), start_time(start_time), transaction_id(transaction_id), commit_id(0),
-      highest_active_query(0), undo_buffer(context_p), storage(make_uniq<LocalStorage>(context_p, *this)) {
+      highest_active_query(0), transaction_manager(manager), undo_buffer(context_p),
+      storage(make_uniq<LocalStorage>(context_p, *this)) {
 }
 
 DuckTransaction::~DuckTransaction() {
@@ -122,21 +124,58 @@ UpdateInfo *DuckTransaction::CreateUpdateInfo(idx_t type_size, idx_t entries) {
 	return update_info;
 }
 
+void DuckTransaction::PushSequenceUsage(SequenceCatalogEntry &sequence, const SequenceData &data) {
+	lock_guard<mutex> l(sequence_lock);
+	auto entry = sequence_usage.find(sequence);
+	if (entry == sequence_usage.end()) {
+		auto sequence_ptr = undo_buffer.CreateEntry(UndoFlags::SEQUENCE_VALUE, sizeof(SequenceValue));
+		auto sequence_info = reinterpret_cast<SequenceValue *>(sequence_ptr);
+		sequence_info->entry = &sequence;
+		sequence_info->usage_count = data.usage_count;
+		sequence_info->counter = data.counter;
+		sequence_usage.emplace(sequence, *sequence_info);
+	} else {
+		auto &sequence_info = entry->second.get();
+		D_ASSERT(RefersToSameObject(*sequence_info.entry, sequence));
+		sequence_info.usage_count = data.usage_count;
+		sequence_info.counter = data.counter;
+	}
+}
+
 bool DuckTransaction::ChangesMade() {
 	return undo_buffer.ChangesMade() || storage->ChangesMade();
 }
 
-bool DuckTransaction::AutomaticCheckpoint(AttachedDatabase &db) {
-	auto &storage_manager = db.GetStorageManager();
-	return storage_manager.AutomaticCheckpoint(storage->EstimatedSize() + undo_buffer.EstimatedSize());
+UndoBufferProperties DuckTransaction::GetUndoProperties() {
+	return undo_buffer.GetProperties();
 }
 
-ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t commit_id, bool checkpoint) noexcept {
+bool DuckTransaction::AutomaticCheckpoint(AttachedDatabase &db, const UndoBufferProperties &properties) {
+	if (!ChangesMade()) {
+		// read-only transactions cannot trigger an automated checkpoint
+		return false;
+	}
+	if (db.IsReadOnly()) {
+		// when attaching a database in read-only mode we cannot checkpoint
+		// note that attaching a database in read-only mode does NOT mean we never make changes
+		// WAL replay can make changes to the database - but only in the in-memory copy of the
+		return false;
+	}
+	auto &storage_manager = db.GetStorageManager();
+	return storage_manager.AutomaticCheckpoint(storage->EstimatedSize() + properties.estimated_size);
+}
+
+ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t new_commit_id, bool checkpoint) noexcept {
 	// "checkpoint" parameter indicates if the caller will checkpoint. If checkpoint ==
 	//    true: Then this function will NOT write to the WAL or flush/persist.
 	//          This method only makes commit in memory, expecting caller to checkpoint/flush.
 	//    false: Then this function WILL write to the WAL and Flush/Persist it.
-	this->commit_id = commit_id;
+	this->commit_id = new_commit_id;
+	if (!ChangesMade()) {
+		// no need to flush anything if we made no changes
+		return ErrorData();
+	}
+	D_ASSERT(db.IsSystem() || db.IsTemporary() || !IsReadOnly());
 
 	UndoBuffer::IteratorState iterator_state;
 	LocalStorage::CommitState commit_state;
@@ -149,16 +188,9 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t commit_id,
 	} else {
 		log = nullptr;
 	}
-
 	try {
 		storage->Commit(commit_state, *this);
 		undo_buffer.Commit(iterator_state, log, commit_id);
-		if (log) {
-			// commit any sequences that were used to the WAL
-			for (auto &entry : sequence_usage) {
-				log->WriteSequenceValue(*entry.first, entry.second);
-			}
-		}
 		if (storage_commit_state) {
 			storage_commit_state->FlushCommit();
 		}
@@ -176,6 +208,19 @@ void DuckTransaction::Rollback() noexcept {
 
 void DuckTransaction::Cleanup() {
 	undo_buffer.Cleanup();
+}
+
+void DuckTransaction::SetReadWrite() {
+	Transaction::SetReadWrite();
+	// obtain a shared checkpoint lock to prevent concurrent checkpoints while this transaction is running
+	write_lock = transaction_manager.SharedCheckpointLock();
+}
+
+unique_ptr<StorageLockKey> DuckTransaction::TryGetCheckpointLock() {
+	if (!write_lock) {
+		throw InternalException("TryUpgradeCheckpointLock - but thread has no shared lock!?");
+	}
+	return transaction_manager.TryUpgradeCheckpointLock(*write_lock);
 }
 
 } // namespace duckdb

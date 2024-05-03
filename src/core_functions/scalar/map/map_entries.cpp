@@ -12,7 +12,15 @@ namespace duckdb {
 static void MapEntriesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto count = args.size();
 
-	MapUtil::ReinterpretMap(result, args.data[0], count);
+	auto &map = args.data[0];
+	if (map.GetType().id() == LogicalTypeId::SQLNULL) {
+		// Input is a constant NULL
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, true);
+		return;
+	}
+
+	MapUtil::ReinterpretMap(result, map, count);
 
 	if (args.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -20,10 +28,20 @@ static void MapEntriesFunction(DataChunk &args, ExpressionState &state, Vector &
 	result.Verify(count);
 }
 
+static LogicalType CreateReturnType(const LogicalType &map) {
+	auto &key_type = MapType::KeyType(map);
+	auto &value_type = MapType::ValueType(map);
+
+	child_list_t<LogicalType> child_types;
+	child_types.push_back(make_pair("key", key_type));
+	child_types.push_back(make_pair("value", value_type));
+
+	auto row_type = LogicalType::STRUCT(child_types);
+	return LogicalType::LIST(row_type);
+}
+
 static unique_ptr<FunctionData> MapEntriesBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
-	child_list_t<LogicalType> child_types;
-
 	if (arguments.size() != 1) {
 		throw InvalidInputException("Too many arguments provided, only expecting a single map");
 	}
@@ -36,25 +54,24 @@ static unique_ptr<FunctionData> MapEntriesBind(ClientContext &context, ScalarFun
 		return nullptr;
 	}
 
+	if (map.id() == LogicalTypeId::SQLNULL) {
+		// Input is NULL, output is STRUCT(NULL, NULL)[]
+		auto map_type = LogicalType::MAP(LogicalTypeId::SQLNULL, LogicalTypeId::SQLNULL);
+		bound_function.return_type = CreateReturnType(map_type);
+		return make_uniq<VariableReturnBindData>(bound_function.return_type);
+	}
+
 	if (map.id() != LogicalTypeId::MAP) {
 		throw InvalidInputException("The provided argument is not a map");
 	}
-	auto &key_type = MapType::KeyType(map);
-	auto &value_type = MapType::ValueType(map);
-
-	child_types.push_back(make_pair("key", key_type));
-	child_types.push_back(make_pair("value", value_type));
-
-	auto row_type = LogicalType::STRUCT(child_types);
-
-	bound_function.return_type = LogicalType::LIST(row_type);
+	bound_function.return_type = CreateReturnType(map);
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
 ScalarFunction MapEntriesFun::GetFunction() {
 	//! the arguments and return types are actually set in the binder function
 	ScalarFunction fun({}, LogicalTypeId::LIST, MapEntriesFunction, MapEntriesBind);
-	fun.null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING;
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	fun.varargs = LogicalType::ANY;
 	return fun;
 }

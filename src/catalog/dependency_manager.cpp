@@ -469,8 +469,8 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 void DependencyManager::Scan(
     ClientContext &context,
     const std::function<void(CatalogEntry &, CatalogEntry &, const DependencyDependentFlags &)> &callback) {
-	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 	auto transaction = catalog.GetCatalogTransaction(context);
+	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 
 	// All the objects registered in the dependency manager
 	catalog_entry_set_t entries;
