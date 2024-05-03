@@ -176,9 +176,8 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 			CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
 			auto result = sniffer.SniffCSV();
 			file_schema.Initialize(result.names, result.return_types, options.file_path);
-		} else if (file_idx > 0) {
-			CSVSniffer sniffer(options, buffer_manager, state_machine_cache,
-			                   {&bind_data.return_types, &bind_data.return_names});
+		} else if (file_idx > 0 && buffer_manager->file_handle->FileSize() > 0) {
+			CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
 			auto result = sniffer.SniffCSV();
 			if (!options.file_options.union_by_name) {
 				// Union By name has its own mystical rules
