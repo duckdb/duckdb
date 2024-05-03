@@ -193,10 +193,10 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 			result_operator = LogicalCrossProduct::Create(std::move(left.op), std::move(right.op));
 		} else {
 			// we have filters, create a join node
-			auto chosen_filter = node.info->filters.at(0);
-			for (idx_t i = 0; i < node.info->filters.size(); i++) {
-				if (node.info->filters.at(i)->join_type == JoinType::INNER) {
-					chosen_filter = node.info->filters.at(i);
+			auto chosen_filter = node->info->filters.at(0);
+			for (idx_t i = 0; i < node->info->filters.size(); i++) {
+				if (node->info->filters.at(i)->join_type == JoinType::INNER) {
+					chosen_filter = node->info->filters.at(i);
 					break;
 				}
 			}

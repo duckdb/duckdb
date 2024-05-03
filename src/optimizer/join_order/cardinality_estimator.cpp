@@ -317,7 +317,6 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			final_subgraph.numerator_relations =
 			    &set_manager.Union(*final_subgraph.numerator_relations, *merge_with->numerator_relations);
 			final_subgraph.denom *= merge_with->denom;
-			final_subgraph.numerator_filter_strength *= merge_with->numerator_filter_strength;
 		}
 	}
 	// can happen if a table has cardinality 0, a tdom is set to 0, or if a cross product is used.
@@ -325,8 +324,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 		// denominator is 1 and numerators are a cross product of cardinalities.
 		return DenomInfo(set, 1, 1);
 	}
-	return DenomInfo(*subgraphs.at(0).numerator_relations, subgraphs.at(0).numerator_filter_strength,
-	                 subgraphs.at(0).denom);
+	return DenomInfo(*subgraphs.at(0).numerator_relations, 1, subgraphs.at(0).denom);
 }
 
 template <>
