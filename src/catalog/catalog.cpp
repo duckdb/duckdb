@@ -760,19 +760,6 @@ CatalogEntryLookup Catalog::TryLookupEntry(ClientContext &context, CatalogType t
 	return Catalog::TryLookupEntry(context, lookups, type, name, if_not_found, error_context);
 }
 
-CatalogEntry &Catalog::GetEntry(ClientContext &context, const string &schema, const string &name) {
-	vector<CatalogType> entry_types {CatalogType::TABLE_ENTRY, CatalogType::SEQUENCE_ENTRY};
-
-	for (auto entry_type : entry_types) {
-		auto result = GetEntry(context, entry_type, schema, name, OnEntryNotFound::RETURN_NULL);
-		if (result) {
-			return *result;
-		}
-	}
-
-	throw CatalogException("CatalogElement \"%s.%s\" does not exist!", schema, name);
-}
-
 optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, CatalogType type, const string &schema_name,
                                              const string &name, OnEntryNotFound if_not_found,
                                              QueryErrorContext error_context) {

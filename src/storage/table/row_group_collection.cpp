@@ -67,11 +67,11 @@ const vector<LogicalType> &RowGroupCollection::GetTypes() const {
 }
 
 Allocator &RowGroupCollection::GetAllocator() const {
-	return Allocator::Get(info->db);
+	return Allocator::Get(info->GetDB());
 }
 
 AttachedDatabase &RowGroupCollection::GetAttached() {
-	return GetTableInfo().db;
+	return GetTableInfo().GetDB();
 }
 
 MetadataManager &RowGroupCollection::GetMetadataManager() {
@@ -347,7 +347,7 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 			// merge the stats
 			auto stats_lock = stats.GetLock();
 			for (idx_t i = 0; i < types.size(); i++) {
-				current_row_group->MergeIntoStatistics(i, stats.GetStats(i).Statistics());
+				current_row_group->MergeIntoStatistics(i, stats.GetStats(*stats_lock, i).Statistics());
 			}
 		}
 		remaining -= append_count;
@@ -376,7 +376,7 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 	state.current_row += row_t(total_append_count);
 	auto stats_lock = stats.GetLock();
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
-		stats.GetStats(col_idx).UpdateDistinctStatistics(chunk.data[col_idx], chunk.size());
+		stats.GetStats(*stats_lock, col_idx).UpdateDistinctStatistics(chunk.data[col_idx], chunk.size());
 	}
 	return new_row_group;
 }
@@ -591,7 +591,8 @@ void RowGroupCollection::UpdateColumn(TransactionData transaction, Vector &row_i
 	auto row_group = row_groups->GetSegment(UnsafeNumericCast<idx_t>(first_id));
 	row_group->UpdateColumn(transaction, updates, row_ids, column_path);
 
-	row_group->MergeIntoStatistics(primary_column_idx, stats.GetStats(primary_column_idx).Statistics());
+	auto lock = stats.GetLock();
+	row_group->MergeIntoStatistics(primary_column_idx, stats.GetStats(*lock, primary_column_idx).Statistics());
 }
 
 //===--------------------------------------------------------------------===//
@@ -791,7 +792,7 @@ public:
 				scan_chunk.Reset();
 
 				current_row_group.ScanCommitted(scan_state.table_state, scan_chunk,
-				                                TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
+				                                TableScanType::TABLE_SCAN_LATEST_COMMITTED_ROWS);
 				if (scan_chunk.size() == 0) {
 					break;
 				}
@@ -845,8 +846,11 @@ private:
 	idx_t row_start;
 };
 
-void RowGroupCollection::InitializeVacuumState(VacuumState &state, vector<SegmentNode<RowGroup>> &segments) {
-	state.can_vacuum_deletes = info->indexes.Empty();
+void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
+                                               vector<SegmentNode<RowGroup>> &segments) {
+	bool is_full_checkpoint = checkpoint_state.writer.GetCheckpointType() == CheckpointType::FULL_CHECKPOINT;
+	// currently we can only vacuum deletes if we are doing a full checkpoint and there are no indexes
+	state.can_vacuum_deletes = info->GetIndexes().Empty() && is_full_checkpoint;
 	if (!state.can_vacuum_deletes) {
 		return;
 	}
@@ -943,7 +947,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	CollectionCheckpointState checkpoint_state(*this, writer, segments, global_stats);
 
 	VacuumState vacuum_state;
-	InitializeVacuumState(vacuum_state, segments);
+	InitializeVacuumState(checkpoint_state, vacuum_state, segments);
 	// schedule tasks
 	for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
 		auto &entry = segments[segment_idx];
@@ -1028,25 +1032,24 @@ vector<ColumnSegmentInfo> RowGroupCollection::GetColumnSegmentInfo() {
 // Alter
 //===--------------------------------------------------------------------===//
 shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &context, ColumnDefinition &new_column,
-                                                             Expression &default_value) {
+                                                             ExpressionExecutor &default_executor) {
 	idx_t new_column_idx = types.size();
 	auto new_types = types;
 	new_types.push_back(new_column.GetType());
 	auto result =
 	    make_shared_ptr<RowGroupCollection>(info, block_manager, std::move(new_types), row_start, total_rows.load());
 
-	ExpressionExecutor executor(context);
 	DataChunk dummy_chunk;
 	Vector default_vector(new_column.GetType());
-	executor.AddExpression(default_value);
 
 	result->stats.InitializeAddColumn(stats, new_column.GetType());
-	auto &new_column_stats = result->stats.GetStats(new_column_idx);
+	auto lock = result->stats.GetLock();
+	auto &new_column_stats = result->stats.GetStats(*lock, new_column_idx);
 
 	// fill the column with its DEFAULT value, or NULL if none is specified
 	auto new_stats = make_uniq<SegmentStatistics>(new_column.GetType());
 	for (auto &current_row_group : row_groups->Segments()) {
-		auto new_row_group = current_row_group.AddColumn(*result, new_column, executor, default_value, default_vector);
+		auto new_row_group = current_row_group.AddColumn(*result, new_column, default_executor, default_vector);
 		// merge in the statistics
 		new_row_group->MergeIntoStatistics(new_column_idx, new_column_stats.Statistics());
 
@@ -1101,7 +1104,8 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 	scan_state.table_state.max_row = row_start + total_rows;
 
 	// now alter the type of the column within all of the row_groups individually
-	auto &changed_stats = result->stats.GetStats(changed_idx);
+	auto lock = result->stats.GetLock();
+	auto &changed_stats = result->stats.GetStats(*lock, changed_idx);
 	for (auto &current_row_group : row_groups->Segments()) {
 		auto new_row_group = current_row_group.AlterType(*result, target_type, changed_idx, executor,
 		                                                 scan_state.table_state, scan_chunk);
@@ -1141,8 +1145,8 @@ void RowGroupCollection::VerifyNewConstraint(DataTable &parent, const BoundConst
 		}
 		// Check constraint
 		if (VectorOperations::HasNull(scan_chunk.data[0], scan_chunk.size())) {
-			throw ConstraintException("NOT NULL constraint failed: %s.%s", info->table,
-			                          parent.column_definitions[physical_index].GetName());
+			throw ConstraintException("NOT NULL constraint failed: %s.%s", info->GetTableName(),
+			                          parent.Columns()[physical_index].GetName());
 		}
 	}
 }
@@ -1160,8 +1164,8 @@ unique_ptr<BaseStatistics> RowGroupCollection::CopyStats(column_t column_id) {
 
 void RowGroupCollection::SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats) {
 	D_ASSERT(column_id != COLUMN_IDENTIFIER_ROW_ID);
-	auto stats_guard = stats.GetLock();
-	stats.GetStats(column_id).SetDistinct(std::move(distinct_stats));
+	auto stats_lock = stats.GetLock();
+	stats.GetStats(*stats_lock, column_id).SetDistinct(std::move(distinct_stats));
 }
 
 } // namespace duckdb
