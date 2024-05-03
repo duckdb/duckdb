@@ -180,13 +180,13 @@ TEST_CASE("Test default value appender", "[appender]") {
 	{
 		Appender appender(con, "integers");
 		appender.BeginRow();
-		appender.Append<int32_t>(1);
+		appender.Append<int32_t>(2);
 		appender.AppendDefault();
 		REQUIRE_NOTHROW(appender.EndRow());
 		REQUIRE_NOTHROW(appender.Close());
 	}
 	result = con.Query("SELECT * FROM integers");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(1)}));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(2)}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value::INTEGER(5)}));
 
 	con.Query("DELETE from integers");
