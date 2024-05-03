@@ -402,6 +402,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, stmt.catalog, stmt.schema, stmt.table);
 	if (!table.temporary) {
 		// inserting into a non-temporary table: alters underlying database
+		auto &properties = GetStatementProperties();
 		properties.modified_databases.insert(table.catalog.GetName());
 	}
 
@@ -544,6 +545,8 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 	D_ASSERT(result.types.size() == result.names.size());
 	result.plan = std::move(insert);
+
+	auto &properties = GetStatementProperties();
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	return result;

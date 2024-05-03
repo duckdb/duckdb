@@ -24,6 +24,8 @@ BoundStatement Binder::Bind(CallStatement &stmt) {
 	result.types = get.returned_types;
 	result.names = get.names;
 	result.plan = CreatePlan(*bound_func);
+
+	auto &properties = GetStatementProperties();
 	properties.return_type = StatementReturnType::QUERY_RESULT;
 	return result;
 }

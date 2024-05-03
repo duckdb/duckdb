@@ -250,6 +250,8 @@ BoundStatement Binder::Bind(CopyStatement &stmt) {
 		}
 		stmt.info->select_statement = std::move(statement);
 	}
+
+	auto &properties = GetStatementProperties();
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	if (stmt.info->is_from) {
