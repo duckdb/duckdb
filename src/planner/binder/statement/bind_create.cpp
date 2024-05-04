@@ -46,7 +46,7 @@
 
 namespace duckdb {
 
-void Binder::BindSchemaOrCatalog(string &catalog, string &schema) {
+void Binder::BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema) {
 	if (catalog.empty() && !schema.empty()) {
 		// schema is specified - but catalog is not
 		// try searching for the catalog instead
@@ -72,6 +72,10 @@ void Binder::BindSchemaOrCatalog(string &catalog, string &schema) {
 			schema = string();
 		}
 	}
+}
+
+void Binder::BindSchemaOrCatalog(string &catalog, string &schema) {
+	BindSchemaOrCatalog(context, catalog, schema);
 }
 
 const string Binder::BindCatalog(string &catalog) {

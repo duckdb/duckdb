@@ -30,8 +30,7 @@ struct NextSequenceValueOperator {
 SequenceCatalogEntry &BindSequence(ClientContext &context, const string &name) {
 	auto qname = QualifiedName::Parse(name);
 	// fetch the sequence from the catalog
-	auto binder = Binder::CreateBinder(context);
-	binder->BindSchemaOrCatalog(qname.catalog, qname.schema);
+	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
 	return Catalog::GetEntry<SequenceCatalogEntry>(context, qname.catalog, qname.schema, qname.name);
 }
 

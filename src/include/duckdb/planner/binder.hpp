@@ -183,7 +183,7 @@ public:
 
 	void BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> &root);
 
-	void BindSchemaOrCatalog(string &catalog, string &schema);
+	static void BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema);
 	void BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog = nullptr,
 	                     const string &schema = INVALID_SCHEMA);
 
@@ -383,6 +383,8 @@ private:
 	void ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_ptr<ParsedExpression> &replacement);
 	void BindWhereStarExpression(unique_ptr<ParsedExpression> &expr);
 
+	//! If only a schema name is provided (e.g. "a.b") then figure out if "a" is a schema or a catalog name
+	void BindSchemaOrCatalog(string &catalog_name, string &schema_name);
 	const string BindCatalog(string &catalog_name);
 	SchemaCatalogEntry &BindCreateSchema(CreateInfo &info);
 
