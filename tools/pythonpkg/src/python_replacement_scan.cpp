@@ -164,7 +164,7 @@ static unique_ptr<TableRef> ReplaceInternal(ClientContext &context, const string
 	return nullptr;
 }
 unique_ptr<TableRef> PythonReplacementScan::Replace(ClientContext &context, ReplacementScanInput &input,
-                                                    ReplacementScanData *data) {
+                                                    optional_ptr<ReplacementScanData> data) {
 	auto &table_name = input.table_name;
 
 	auto &table_ref = input.ref;

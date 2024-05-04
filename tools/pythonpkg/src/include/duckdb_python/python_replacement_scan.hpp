@@ -9,7 +9,8 @@ namespace duckdb {
 
 struct PythonReplacementScan {
 public:
-	static unique_ptr<TableRef> Replace(ClientContext &context, ReplacementScanInput &input, ReplacementScanData *data);
+	static unique_ptr<TableRef> Replace(ClientContext &context, ReplacementScanInput &input,
+	                                    optional_ptr<ReplacementScanData> data);
 };
 
 } // namespace duckdb

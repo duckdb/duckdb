@@ -374,7 +374,7 @@ void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
 }
 
 unique_ptr<TableRef> ReadCSVReplacement(ClientContext &context, ReplacementScanInput &input,
-                                        ReplacementScanData *data) {
+                                        optional_ptr<ReplacementScanData> data) {
 	auto &table_name = input.table_name;
 	auto lower_name = StringUtil::Lower(table_name);
 	// remove any compression

@@ -22,8 +22,9 @@ index 9bf2945..ae54a4d 100644
  	static unique_ptr<NodeStatistics> Cardinality(ClientContext &context, const FunctionData *data);
  
 -	static unique_ptr<TableRef> ReplacementScan(ClientContext &context, const string &table_name,
+- 	                                            ReplacementScanData *data);
 +	static unique_ptr<TableRef> ReplacementScan(ClientContext &context, ReplacementScanInput &input,
- 	                                            ReplacementScanData *data);
++ 	                                            optional_ptr<ReplacementScanData> data);
  
  public:
 diff --git a/spatial/src/spatial/core/io/osm/st_read_osm.cpp b/spatial/src/spatial/core/io/osm/st_read_osm.cpp
@@ -35,8 +36,9 @@ index 11055c9..eb6323f 100644
  }
  
 -static unique_ptr<TableRef> ReadOsmPBFReplacementScan(ClientContext &context, const string &table_name,
+-                                                       ReplacementScanData *data) {
 +static unique_ptr<TableRef> ReadOsmPBFReplacementScan(ClientContext &context, ReplacementScanInput &input,
-                                                       ReplacementScanData *data) {
++                                                       optional_ptr<ReplacementScanData> data) {
 +	auto &table_name = input.table_name;
  	// Check if the table name ends with .osm.pbf
  	if (!StringUtil::EndsWith(StringUtil::Lower(table_name), ".osm.pbf")) {
@@ -50,8 +52,9 @@ index fcc182e..05d1687 100644
  }
  
 -static unique_ptr<TableRef> GetReplacementScan(ClientContext &context, const string &table_name,
+-                                                ReplacementScanData *data) {
 +static unique_ptr<TableRef> GetReplacementScan(ClientContext &context, ReplacementScanInput &input,
-                                                ReplacementScanData *data) {
++                                                optional_ptr<ReplacementScanData> data) {
 +	auto &table_name = input.table_name;
  	// Check if the table name ends with .shp
  	if (!StringUtil::EndsWith(StringUtil::Lower(table_name), ".shp")) {
