@@ -89,7 +89,6 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/extension_helper.hpp"
-#include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/settings.hpp"
@@ -2549,24 +2548,6 @@ ExtensionLoadResult EnumUtil::FromString<ExtensionLoadResult>(const char *value)
 	}
 	if (StringUtil::Equals(value, "NOT_LOADED")) {
 		return ExtensionLoadResult::NOT_LOADED;
-	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
-}
-
-template<>
-const char* EnumUtil::ToChars<ExternalDependencyItemType>(ExternalDependencyItemType value) {
-	switch(value) {
-	case ExternalDependencyItemType::PYTHON_DEPENDENCY:
-		return "PYTHON_DEPENDENCY";
-	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
-	}
-}
-
-template<>
-ExternalDependencyItemType EnumUtil::FromString<ExternalDependencyItemType>(const char *value) {
-	if (StringUtil::Equals(value, "PYTHON_DEPENDENCY")) {
-		return ExternalDependencyItemType::PYTHON_DEPENDENCY;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
