@@ -73,7 +73,7 @@ int64_t SequenceCatalogEntry::NextValue(DuckTransaction &transaction) {
 	data.last_value = result;
 	data.usage_count++;
 	if (!temporary) {
-		transaction.sequence_usage[this] = SequenceValue(data.usage_count, data.counter);
+		transaction.PushSequenceUsage(*this, data);
 	}
 	return result;
 }

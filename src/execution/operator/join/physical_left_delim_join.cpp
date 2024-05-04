@@ -23,7 +23,7 @@ PhysicalLeftDelimJoin::PhysicalLeftDelimJoin(vector<LogicalType> types, unique_p
 	// we replace it with a PhysicalColumnDataScan, that scans the ColumnDataCollection that we keep cached
 	// the actual chunk collection to scan will be created in the LeftDelimJoinGlobalState
 	auto cached_chunk_scan = make_uniq<PhysicalColumnDataScan>(
-	    children[0]->GetTypes(), PhysicalOperatorType::COLUMN_DATA_SCAN, estimated_cardinality);
+	    children[0]->GetTypes(), PhysicalOperatorType::COLUMN_DATA_SCAN, estimated_cardinality, nullptr);
 	join->children[0] = std::move(cached_chunk_scan);
 }
 

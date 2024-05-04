@@ -202,10 +202,11 @@ void WriteAheadLog::WriteDropSequence(const SequenceCatalogEntry &entry) {
 	serializer.End();
 }
 
-void WriteAheadLog::WriteSequenceValue(const SequenceCatalogEntry &entry, SequenceValue val) {
+void WriteAheadLog::WriteSequenceValue(SequenceValue val) {
+	auto &sequence = *val.entry;
 	WriteAheadLogSerializer serializer(*this, WALType::SEQUENCE_VALUE);
-	serializer.WriteProperty(101, "schema", entry.schema.name);
-	serializer.WriteProperty(102, "name", entry.name);
+	serializer.WriteProperty(101, "schema", sequence.schema.name);
+	serializer.WriteProperty(102, "name", sequence.name);
 	serializer.WriteProperty(103, "usage_count", val.usage_count);
 	serializer.WriteProperty(104, "counter", val.counter);
 	serializer.End();
@@ -267,7 +268,7 @@ void WriteAheadLog::WriteCreateIndex(const IndexCatalogEntry &entry) {
 
 	// now serialize the index data to the persistent storage and write the index metadata
 	auto &duck_index_entry = entry.Cast<DuckIndexEntry>();
-	auto &indexes = duck_index_entry.GetDataTableInfo().indexes.Indexes();
+	auto &indexes = duck_index_entry.GetDataTableInfo().GetIndexes().Indexes();
 
 	// get the matching index and serialize its storage info
 	for (auto const &index : indexes) {
@@ -331,7 +332,7 @@ void WriteAheadLog::WriteDropSchema(const SchemaCatalogEntry &entry) {
 //===--------------------------------------------------------------------===//
 // DATA
 //===--------------------------------------------------------------------===//
-void WriteAheadLog::WriteSetTable(string &schema, string &table) {
+void WriteAheadLog::WriteSetTable(const string &schema, const string &table) {
 	WriteAheadLogSerializer serializer(*this, WALType::USE_TABLE);
 	serializer.WriteProperty(101, "schema", schema);
 	serializer.WriteProperty(102, "table", table);

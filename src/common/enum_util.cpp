@@ -58,6 +58,7 @@
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/file_open_flags.hpp"
+#include "duckdb/common/multi_file_list.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/sort/partition_state.hpp"
 #include "duckdb/common/types.hpp"
@@ -2724,6 +2725,34 @@ FileCompressionType EnumUtil::FromString<FileCompressionType>(const char *value)
 	}
 	if (StringUtil::Equals(value, "ZSTD")) {
 		return FileCompressionType::ZSTD;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<FileExpandResult>(FileExpandResult value) {
+	switch(value) {
+	case FileExpandResult::NO_FILES:
+		return "NO_FILES";
+	case FileExpandResult::SINGLE_FILE:
+		return "SINGLE_FILE";
+	case FileExpandResult::MULTIPLE_FILES:
+		return "MULTIPLE_FILES";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+FileExpandResult EnumUtil::FromString<FileExpandResult>(const char *value) {
+	if (StringUtil::Equals(value, "NO_FILES")) {
+		return FileExpandResult::NO_FILES;
+	}
+	if (StringUtil::Equals(value, "SINGLE_FILE")) {
+		return FileExpandResult::SINGLE_FILE;
+	}
+	if (StringUtil::Equals(value, "MULTIPLE_FILES")) {
+		return FileExpandResult::MULTIPLE_FILES;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -5410,6 +5439,8 @@ const char* EnumUtil::ToChars<RelationType>(RelationType value) {
 		return "INSERT_RELATION";
 	case RelationType::VALUE_LIST_RELATION:
 		return "VALUE_LIST_RELATION";
+	case RelationType::MATERIALIZED_RELATION:
+		return "MATERIALIZED_RELATION";
 	case RelationType::DELETE_RELATION:
 		return "DELETE_RELATION";
 	case RelationType::UPDATE_RELATION:
@@ -5482,6 +5513,9 @@ RelationType EnumUtil::FromString<RelationType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "VALUE_LIST_RELATION")) {
 		return RelationType::VALUE_LIST_RELATION;
+	}
+	if (StringUtil::Equals(value, "MATERIALIZED_RELATION")) {
+		return RelationType::MATERIALIZED_RELATION;
 	}
 	if (StringUtil::Equals(value, "DELETE_RELATION")) {
 		return RelationType::DELETE_RELATION;
@@ -6619,6 +6653,8 @@ const char* EnumUtil::ToChars<TableReferenceType>(TableReferenceType value) {
 		return "PIVOT";
 	case TableReferenceType::SHOW_REF:
 		return "SHOW_REF";
+	case TableReferenceType::COLUMN_DATA:
+		return "COLUMN_DATA";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -6656,6 +6692,9 @@ TableReferenceType EnumUtil::FromString<TableReferenceType>(const char *value) {
 	if (StringUtil::Equals(value, "SHOW_REF")) {
 		return TableReferenceType::SHOW_REF;
 	}
+	if (StringUtil::Equals(value, "COLUMN_DATA")) {
+		return TableReferenceType::COLUMN_DATA;
+	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
 
@@ -6670,6 +6709,8 @@ const char* EnumUtil::ToChars<TableScanType>(TableScanType value) {
 		return "TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES";
 	case TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED:
 		return "TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED";
+	case TableScanType::TABLE_SCAN_LATEST_COMMITTED_ROWS:
+		return "TABLE_SCAN_LATEST_COMMITTED_ROWS";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -6688,6 +6729,9 @@ TableScanType EnumUtil::FromString<TableScanType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED")) {
 		return TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED;
+	}
+	if (StringUtil::Equals(value, "TABLE_SCAN_LATEST_COMMITTED_ROWS")) {
+		return TableScanType::TABLE_SCAN_LATEST_COMMITTED_ROWS;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -6860,6 +6904,8 @@ const char* EnumUtil::ToChars<UndoFlags>(UndoFlags value) {
 		return "DELETE_TUPLE";
 	case UndoFlags::UPDATE_TUPLE:
 		return "UPDATE_TUPLE";
+	case UndoFlags::SEQUENCE_VALUE:
+		return "SEQUENCE_VALUE";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -6881,6 +6927,9 @@ UndoFlags EnumUtil::FromString<UndoFlags>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "UPDATE_TUPLE")) {
 		return UndoFlags::UPDATE_TUPLE;
+	}
+	if (StringUtil::Equals(value, "SEQUENCE_VALUE")) {
+		return UndoFlags::SEQUENCE_VALUE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

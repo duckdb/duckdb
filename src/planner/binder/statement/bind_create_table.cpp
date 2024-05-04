@@ -345,6 +345,8 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		BindLogicalType(column.TypeMutable(), &result->schema.catalog);
 	}
 	result->dependencies.VerifyDependencies(schema.catalog, result->Base().table);
+
+	auto &properties = GetStatementProperties();
 	properties.allow_stream_result = false;
 	return result;
 }

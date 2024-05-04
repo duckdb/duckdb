@@ -8,12 +8,15 @@
 
 #pragma once
 
-#include <string>
 #include "duckdb.hpp"
 #include "duckdb/main/extension_entries.hpp"
 
+#include <string>
+
 namespace duckdb {
+
 class DuckDB;
+class HTTPLogger;
 
 enum class ExtensionLoadResult : uint8_t { LOADED_EXTENSION = 0, EXTENSION_UNKNOWN = 1, NOT_LOADED = 2 };
 
@@ -149,7 +152,8 @@ public:
 
 private:
 	static void InstallExtensionInternal(DBConfig &config, FileSystem &fs, const string &local_path,
-	                                     const string &extension, bool force_install, const string &repository);
+	                                     const string &extension, bool force_install, const string &repository,
+	                                     optional_ptr<HTTPLogger> http_logger = nullptr);
 	static const vector<string> PathComponents();
 	static string DefaultExtensionFolder(FileSystem &fs);
 	static bool AllowAutoInstall(const string &extension);

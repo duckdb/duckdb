@@ -122,8 +122,10 @@ private:
 	MemoryTag tag;
 	//! Pointer to loaded data (if any)
 	unique_ptr<FileBuffer> buffer;
-	//! Internal eviction timestamp
-	atomic<idx_t> eviction_timestamp;
+	//! Internal eviction sequence number
+	atomic<idx_t> eviction_seq_num;
+	//! LRU timestamp (for age-based eviction)
+	atomic<int64_t> lru_timestamp_msec;
 	//! Whether or not the buffer can be destroyed (only used for temporary buffers)
 	bool can_destroy;
 	//! The memory usage of the block (when loaded). If we are pinning/loading

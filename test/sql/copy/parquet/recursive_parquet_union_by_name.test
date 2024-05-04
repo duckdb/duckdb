@@ -1,5 +1,5 @@
 # name: test/sql/copy/parquet/recursive_parquet_union_by_name.test
-# description: Test read CSV function in a recursive CTE with union by name
+# description: Test read parquet function in a recursive CTE with union by name
 # group: [parquet]
 
 require parquet
