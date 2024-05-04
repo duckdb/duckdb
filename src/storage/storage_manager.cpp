@@ -257,22 +257,23 @@ bool SingleFileStorageManager::IsCheckpointClean(MetaBlockPointer checkpoint_id)
 	return block_manager->IsRootBlock(checkpoint_id);
 }
 
-void SingleFileStorageManager::CreateCheckpoint(bool delete_wal, bool force_checkpoint) {
+void SingleFileStorageManager::CreateCheckpoint(CheckpointOptions options) {
 	if (InMemory() || read_only || !wal) {
 		return;
 	}
 	auto &config = DBConfig::Get(db);
-	if (wal->GetWALSize() > 0 || config.options.force_checkpoint || force_checkpoint) {
+	if (wal->GetWALSize() > 0 || config.options.force_checkpoint ||
+	    options.action == CheckpointAction::FORCE_CHECKPOINT) {
 		// we only need to checkpoint if there is anything in the WAL
 		try {
-			SingleFileCheckpointWriter checkpointer(db, *block_manager);
+			SingleFileCheckpointWriter checkpointer(db, *block_manager, options.type);
 			checkpointer.CreateCheckpoint();
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
 			throw FatalException("Failed to create checkpoint because of error: %s", error.RawMessage());
 		}
 	}
-	if (delete_wal) {
+	if (options.wal_action == CheckpointWALAction::DELETE_WAL) {
 		wal->Delete();
 		wal.reset();
 	}

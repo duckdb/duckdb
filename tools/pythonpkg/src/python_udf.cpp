@@ -67,7 +67,10 @@ static void ConvertPyArrowToDataChunk(const py::object &table, Vector &out, Clie
 	vector<string> input_names;
 
 	TableFunctionRef empty;
-	TableFunctionBindInput bind_input(children, named_params, input_types, input_names, nullptr, nullptr, empty);
+	TableFunction dummy_table_function;
+	dummy_table_function.name = "ConvertPyArrowToDataChunk";
+	TableFunctionBindInput bind_input(children, named_params, input_types, input_names, nullptr, nullptr,
+	                                  dummy_table_function, empty);
 	vector<LogicalType> return_types;
 	vector<string> return_names;
 

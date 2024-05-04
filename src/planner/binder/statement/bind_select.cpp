@@ -5,6 +5,7 @@
 namespace duckdb {
 
 BoundStatement Binder::Bind(SelectStatement &stmt) {
+	auto &properties = GetStatementProperties();
 	properties.allow_stream_result = true;
 	properties.return_type = StatementReturnType::QUERY_RESULT;
 	return Bind(*stmt.node);

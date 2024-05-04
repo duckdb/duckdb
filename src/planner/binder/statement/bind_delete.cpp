@@ -29,6 +29,7 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 
 	if (!table.temporary) {
 		// delete from persistent table: not read only!
+		auto &properties = GetStatementProperties();
 		properties.modified_databases.insert(table.catalog.GetName());
 	}
 
@@ -90,6 +91,8 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	result.plan = std::move(del);
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
+
+	auto &properties = GetStatementProperties();
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 
