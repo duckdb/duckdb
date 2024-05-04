@@ -134,6 +134,8 @@ struct DBConfigOptions {
 	//! Whether or not to invoke filesystem trim on free blocks after checkpoint. This will reclaim
 	//! space for sparse files, on platforms that support it.
 	bool trim_free_blocks = false;
+	//! Record timestamps of buffer manager unpin() events. Usable by custom eviction policies.
+	bool buffer_manager_track_eviction_timestamps = false;
 	//! Whether or not to allow printing unredacted secrets
 	bool allow_unredacted_secrets = false;
 	//! The collation type of the database
