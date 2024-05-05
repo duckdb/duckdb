@@ -198,7 +198,7 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Coalesce(const py::args &args
 		auto expr = py_expr->GetExpression().Copy();
 		expressions.push_back(std::move(expr));
 	}
-	if (expressions.size() < 1) {
+	if (expressions.empty()) {
 		throw InvalidInputException("Please provide at least one argument");
 	}
 	auto operator_expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE, std::move(expressions));
