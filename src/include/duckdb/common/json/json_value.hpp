@@ -217,182 +217,131 @@ inline const JsonValue &JsonValue::operator[](idx_t index) const {
 // Is
 //------------------------------------------------------------------------------
 
-template <>
-inline bool JsonValue::Is<bool>() const & {
-	return kind == JsonKind::BOOLEAN;
-}
-
-template <>
-inline bool JsonValue::Is<double>() const & {
-	return kind == JsonKind::NUMBER;
-}
-
-template <>
-inline bool JsonValue::Is<string>() const & {
-	return kind == JsonKind::STRING;
-}
-
-template <>
-inline bool JsonValue::Is<JsonArray>() const & {
-	return kind == JsonKind::ARRAY;
-}
-
-template <>
-inline bool JsonValue::Is<JsonMap>() const & {
-	return kind == JsonKind::OBJECT;
-}
-
 inline bool JsonValue::IsNull() const & {
 	return kind == JsonKind::NULLVALUE;
 }
 
 inline bool JsonValue::IsBool() const & {
-	return Is<bool>();
+	return kind == JsonKind::BOOLEAN;
 }
 
 inline bool JsonValue::IsNumber() const & {
-	return Is<double>();
+	return kind == JsonKind::NUMBER;
 }
 
 inline bool JsonValue::IsString() const & {
-	return Is<string>();
+	return kind == JsonKind::STRING;
 }
 
 inline bool JsonValue::IsArray() const & {
-	return Is<JsonArray>();
+	return kind == JsonKind::ARRAY;
 }
 
 inline bool JsonValue::IsObject() const & {
-	return Is<JsonMap>();
+	return kind == JsonKind::OBJECT;
 }
+
+// clang-format off
+template <> inline bool JsonValue::Is<bool>() const & { return IsBool(); }
+template <> inline bool JsonValue::Is<double>() const & { return IsNumber(); }
+template <> inline bool JsonValue::Is<string>() const & { return IsString(); }
+template <> inline bool JsonValue::Is<JsonArray>() const & { return IsArray(); }
+template <> inline bool JsonValue::Is<JsonMap>() const & { return IsObject(); }
+// clang-format on
 
 //------------------------------------------------------------------------------
 // As Methods
 //------------------------------------------------------------------------------
 
-template <>
-inline double &JsonValue::As() & {
+inline double &JsonValue::AsNumber() & {
 	if (kind != JsonKind::NUMBER) {
-		throw InvalidTypeException("Cannot convert JSON value to DOUBLE!");
+		throw InvalidTypeException("Cannot convert JSON value to NUMBER!");
 	}
 	return num_value;
 }
 
-template <>
-inline bool &JsonValue::As() & {
+inline bool &JsonValue::AsBool() & {
 	if (kind != JsonKind::BOOLEAN) {
 		throw InvalidTypeException("Cannot convert JSON value to BOOLEAN!");
 	}
 	return bool_value;
 }
 
-template <>
-inline string &JsonValue::As() & {
+inline string &JsonValue::AsString() & {
 	if (kind != JsonKind::STRING) {
 		throw InvalidTypeException("Cannot convert JSON value to STRING!");
 	}
 	return *str_value;
 }
 
-template <>
-inline JsonArray &JsonValue::As() & {
+inline JsonArray &JsonValue::AsArray() & {
 	if (kind != JsonKind::ARRAY) {
 		throw InvalidTypeException("Cannot convert JSON value to ARRAY!");
 	}
 	return *array_value;
 }
 
-template <>
-inline JsonMap &JsonValue::As() & {
+inline JsonMap &JsonValue::AsObject() & {
 	if (kind != JsonKind::OBJECT) {
 		throw InvalidTypeException("Cannot convert JSON value to OBJECT!");
 	}
 	return *object_value;
 }
 
-inline double &JsonValue::AsNumber() & {
-	return As<double>();
-}
-
-inline bool &JsonValue::AsBool() & {
-	return As<bool>();
-}
-
-inline string &JsonValue::AsString() & {
-	return As<string>();
-}
-
-inline JsonArray &JsonValue::AsArray() & {
-	return As<JsonArray>();
-}
-
-inline JsonMap &JsonValue::AsObject() & {
-	return As<JsonMap>();
-}
+// clang-format off
+template <> inline double &JsonValue::As() & { return AsNumber(); }
+template <> inline bool &JsonValue::As() & { return AsBool(); }
+template <> inline string &JsonValue::As() & { return AsString();}
+template <> inline JsonArray &JsonValue::As() & { return AsArray();}
+template <> inline JsonMap &JsonValue::As() & { return AsObject(); }
+// clang-format on
 
 //------------------------------------------------------------------------------
 // As (const) Methods
 //------------------------------------------------------------------------------
 
-template <>
-inline const bool &JsonValue::As() const & {
+inline const double &JsonValue::AsNumber() const & {
+	if (kind != JsonKind::NUMBER) {
+		throw InvalidTypeException("Cannot convert JSON value to NUMBER!");
+	}
+	return num_value;
+}
+
+inline const bool &JsonValue::AsBool() const & {
 	if (kind != JsonKind::BOOLEAN) {
 		throw InvalidTypeException("Cannot convert JSON value to BOOLEAN!");
 	}
 	return bool_value;
 }
 
-template <>
-inline const double &JsonValue::As() const & {
-	if (kind != JsonKind::NUMBER) {
-		throw InvalidTypeException("Cannot convert JSON value to DOUBLE!");
-	}
-	return num_value;
-}
-
-template <>
-inline const string &JsonValue::As() const & {
+inline const string &JsonValue::AsString() const & {
 	if (kind != JsonKind::STRING) {
 		throw InvalidTypeException("Cannot convert JSON value to STRING!");
 	}
 	return *str_value;
 }
 
-template <>
-inline const JsonArray &JsonValue::As() const & {
+inline const JsonArray &JsonValue::AsArray() const & {
 	if (kind != JsonKind::ARRAY) {
 		throw InvalidTypeException("Cannot convert JSON value to ARRAY!");
 	}
 	return *array_value;
 }
 
-template <>
-inline const JsonMap &JsonValue::As() const & {
+inline const JsonMap &JsonValue::AsObject() const & {
 	if (kind != JsonKind::OBJECT) {
 		throw InvalidTypeException("Cannot convert JSON value to OBJECT!");
 	}
 	return *object_value;
 }
 
-inline const double &JsonValue::AsNumber() const & {
-	return As<double>();
-}
-
-inline const bool &JsonValue::AsBool() const & {
-	return As<bool>();
-}
-
-inline const string &JsonValue::AsString() const & {
-	return As<string>();
-}
-
-inline const JsonArray &JsonValue::AsArray() const & {
-	return As<JsonArray>();
-}
-
-inline const JsonMap &JsonValue::AsObject() const & {
-	return As<JsonMap>();
-}
+// clang-format off
+template <> inline const bool &JsonValue::As() const & { return AsBool(); }
+template <> inline const double &JsonValue::As() const & { return AsNumber(); }
+template <> inline const string &JsonValue::As() const & { return AsString(); }
+template <> inline const JsonArray &JsonValue::As() const & { return AsArray(); }
+template <> inline const JsonMap &JsonValue::As() const & { return AsObject(); }
+// clang-format on
 
 //------------------------------------------------------------------------------
 // Array and Object Methods
