@@ -4,6 +4,7 @@
 #include "duckdb/common/fstream.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/common/json/json_value.hpp"
+#include "duckdb/common/string_util.hpp"
 #include <vector>
 
 using namespace duckdb;
