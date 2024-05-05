@@ -98,9 +98,9 @@ unique_ptr<BoundConstraint> Binder::BindConstraint(Constraint &constraint, const
 	switch (constraint.type) {
 	case ConstraintType::CHECK: {
 		unique_ptr<BoundConstraint> bound_constraint = make_uniq<BoundCheckConstraint>();
-		auto check_constraint = reinterpret_cast<BoundCheckConstraint *>(bound_constraint.get());
+		auto check_constraint = bound_constraint->Cast<BoundCheckConstraint>();
 		// check constraint: bind the expression
-		CheckBinder check_binder(*this, context, table_name, columns, check_constraint->bound_columns);
+		CheckBinder check_binder(*this, context, table_name, columns, check_constraint.bound_columns);
 		auto &check = constraint.Cast<CheckConstraint>();
 		// create a copy of the unbound expression because the binding destroys the constraint
 		auto unbound_expression = check.expression->Copy();

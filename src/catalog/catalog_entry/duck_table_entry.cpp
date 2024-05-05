@@ -771,9 +771,9 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 
 	switch (info.constraint->type) {
 	case ConstraintType::UNIQUE: {
-		auto unique = reinterpret_cast<UniqueConstraint *>(info.constraint.get());
+		auto unique = info.constraint->Cast<UniqueConstraint>();
 
-		if (unique->is_primary_key) {
+		if (unique.is_primary_key) {
 			EnsureNoPrimaryKey();
 		}
 
@@ -797,8 +797,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 
 void DuckTableEntry::EnsureNoPrimaryKey() {
 	for (auto &constraint : constraints) {
-		if (constraint->type == ConstraintType::UNIQUE &&
-		    reinterpret_cast<UniqueConstraint *>(constraint.get())->is_primary_key) {
+		if (constraint->type == ConstraintType::UNIQUE && constraint->Cast<UniqueConstraint>().is_primary_key) {
 			throw CatalogException("table \"%s\" already has a %s.", name, constraint->ToString());
 		}
 	}
