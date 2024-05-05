@@ -16,14 +16,19 @@ enum class JsonKind : uint8_t {
 	OBJECT,
 };
 
+class JsonValue;
+
+using JsonMap = unordered_map<string, JsonValue>;
+using JsonArray = vector<JsonValue>;
+
 class JsonValue {
 	JsonKind kind;
 	union {
-		vector<JsonValue> *array_value;
 		bool bool_value;
 		double num_value;
-		unordered_map<string, JsonValue> *object_value;
 		string *str_value;
+		JsonArray *array_value;
+		JsonMap *object_value;
 	};
 
 public:
@@ -34,29 +39,19 @@ public:
 	JsonValue(const char *value);
 	JsonValue(double value);
 	JsonValue(bool value);
-	JsonValue(const unordered_map<string, JsonValue> &value);
-	JsonValue(const vector<JsonValue> &value);
+	JsonValue(const JsonMap &value);
+	JsonValue(const JsonArray &value);
 	// NOLINTEND
 
 	// Parses a JSON value from a string
 	static JsonValue Parse(const string &str);
+	// Parses multiple JSON values from a string (e.g. a newline-separated JSON file)
+	static JsonArray ParseMany(const string &str);
 
 	// Returns a string representation of the JSON value, optionally formatted with newlines and tabs
 	string ToString(bool format = false) const;
 
 	JsonKind GetType() const;
-
-	// Throws an exception if the value is not an array
-	vector<JsonValue> &Items();
-
-	// Throws an exception if the value is not an array
-	const vector<JsonValue> &Items() const;
-
-	// Throws an exception if the value is not an object
-	unordered_map<string, JsonValue> &Properties();
-
-	// Throws an exception if the value is not an object
-	const unordered_map<string, JsonValue> &Properties() const;
 
 	// Throws an exception if the value is not an object
 	JsonValue &operator[](const string &key);
@@ -70,22 +65,30 @@ public:
 	// Throws an exception if the index is out of bounds or the value is not an array
 	const JsonValue &operator[](idx_t index) const;
 
-	bool IsNull() const;
-
 	template <class T>
 	bool Is() const & = delete;
+	bool IsNull() const;
+	bool IsBool() const;
+	bool IsNumber() const;
+	bool IsString() const;
+	bool IsArray() const;
+	bool IsObject() const;
 
 	template <class T>
 	T &As() & = delete;
+	bool &AsBool();
+	double &AsNumber();
+	string &AsString();
+	JsonArray &AsArray();
+	JsonMap &AsObject();
 
 	template <class T>
 	const T &As() const & = delete;
-
-	bool GetBool() const;
-	double GetNumber() const;
-	string GetString() const;
-	vector<JsonValue> GetArray() const;
-	unordered_map<string, JsonValue> GetObject() const;
+	const bool &AsBool() const;
+	const double &AsNumber() const;
+	const string &AsString() const;
+	const JsonArray &AsArray() const;
+	const JsonMap &AsObject() const;
 
 	// Throws an exception if the value is not an array
 	JsonValue &Push(const JsonValue &value);
@@ -130,10 +133,10 @@ inline JsonValue::JsonValue(JsonKind kind) : kind(kind) {
 		str_value = new string();
 		break;
 	case JsonKind::ARRAY:
-		array_value = new vector<JsonValue>();
+		array_value = new JsonArray();
 		break;
 	case JsonKind::OBJECT:
-		object_value = new unordered_map<string, JsonValue>();
+		object_value = new JsonMap();
 		break;
 	default:
 		throw InvalidInputException("Unrecognized JSON kind!");
@@ -156,12 +159,12 @@ inline JsonValue::JsonValue(bool value) : kind(JsonKind::BOOLEAN) {
 	bool_value = value;
 }
 
-inline JsonValue::JsonValue(const unordered_map<string, JsonValue> &value) : kind(JsonKind::OBJECT) {
-	object_value = new unordered_map<string, JsonValue>(value);
+inline JsonValue::JsonValue(const JsonMap &value) : kind(JsonKind::OBJECT) {
+	object_value = new JsonMap(value);
 }
 
-inline JsonValue::JsonValue(const vector<JsonValue> &value) : kind(JsonKind::ARRAY) {
-	array_value = new vector<JsonValue>(value);
+inline JsonValue::JsonValue(const JsonArray &value) : kind(JsonKind::ARRAY) {
+	array_value = new JsonArray(value);
 }
 
 //------------------------------------------------------------------------------
@@ -170,34 +173,6 @@ inline JsonValue::JsonValue(const vector<JsonValue> &value) : kind(JsonKind::ARR
 
 inline JsonKind JsonValue::GetType() const {
 	return kind;
-}
-
-inline vector<JsonValue> &JsonValue::Items() {
-	if (kind != JsonKind::ARRAY) {
-		throw InvalidTypeException("Cannot access Items on non-ARRAY JSON value!");
-	}
-	return *array_value;
-}
-
-inline const vector<JsonValue> &JsonValue::Items() const {
-	if (kind != JsonKind::ARRAY) {
-		throw InvalidTypeException("Cannot access Items on non-ARRAY JSON value!");
-	}
-	return *array_value;
-}
-
-inline unordered_map<string, JsonValue> &JsonValue::Properties() {
-	if (kind != JsonKind::OBJECT) {
-		throw InvalidTypeException("Cannot access Properties on non-OBJECT JSON value!");
-	}
-	return *object_value;
-}
-
-inline const unordered_map<string, JsonValue> &JsonValue::Properties() const {
-	if (kind != JsonKind::OBJECT) {
-		throw InvalidTypeException("Cannot access Properties on non-OBJECT JSON value!");
-	}
-	return *object_value;
 }
 
 inline JsonValue &JsonValue::operator[](const string &key) {
@@ -238,9 +213,9 @@ inline const JsonValue &JsonValue::operator[](idx_t index) const {
 	return (*array_value)[index];
 }
 
-inline bool JsonValue::IsNull() const {
-	return kind == JsonKind::NULLVALUE;
-}
+//------------------------------------------------------------------------------
+// Is
+//------------------------------------------------------------------------------
 
 template <>
 inline bool JsonValue::Is<bool>() const & {
@@ -258,15 +233,45 @@ inline bool JsonValue::Is<string>() const & {
 }
 
 template <>
-inline double &JsonValue::As() & {
-	if (kind != JsonKind::NUMBER) {
-		throw InvalidTypeException("Cannot convert JSON value to DOUBLE!");
-	}
-	return num_value;
+inline bool JsonValue::Is<JsonArray>() const & {
+	return kind == JsonKind::ARRAY;
 }
 
 template <>
-inline const double &JsonValue::As() const & {
+inline bool JsonValue::Is<JsonMap>() const & {
+	return kind == JsonKind::OBJECT;
+}
+
+inline bool JsonValue::IsNull() const {
+	return kind == JsonKind::NULLVALUE;
+}
+
+inline bool JsonValue::IsBool() const {
+	return Is<bool>();
+}
+
+inline bool JsonValue::IsNumber() const {
+	return Is<double>();
+}
+
+inline bool JsonValue::IsString() const {
+	return Is<string>();
+}
+
+inline bool JsonValue::IsArray() const {
+	return Is<JsonArray>();
+}
+
+inline bool JsonValue::IsObject() const {
+	return Is<JsonMap>();
+}
+
+//------------------------------------------------------------------------------
+// As Methods
+//------------------------------------------------------------------------------
+
+template <>
+inline double &JsonValue::As() & {
 	if (kind != JsonKind::NUMBER) {
 		throw InvalidTypeException("Cannot convert JSON value to DOUBLE!");
 	}
@@ -282,6 +287,54 @@ inline bool &JsonValue::As() & {
 }
 
 template <>
+inline string &JsonValue::As() & {
+	if (kind != JsonKind::STRING) {
+		throw InvalidTypeException("Cannot convert JSON value to STRING!");
+	}
+	return *str_value;
+}
+
+template <>
+inline JsonArray &JsonValue::As() & {
+	if (kind != JsonKind::ARRAY) {
+		throw InvalidTypeException("Cannot convert JSON value to ARRAY!");
+	}
+	return *array_value;
+}
+
+template <>
+inline JsonMap &JsonValue::As() & {
+	if (kind != JsonKind::OBJECT) {
+		throw InvalidTypeException("Cannot convert JSON value to OBJECT!");
+	}
+	return *object_value;
+}
+
+inline double &JsonValue::AsNumber() {
+	return As<double>();
+}
+
+inline bool &JsonValue::AsBool() {
+	return As<bool>();
+}
+
+inline string &JsonValue::AsString() {
+	return As<string>();
+}
+
+inline JsonArray &JsonValue::AsArray() {
+	return As<JsonArray>();
+}
+
+inline JsonMap &JsonValue::AsObject() {
+	return As<JsonMap>();
+}
+
+//------------------------------------------------------------------------------
+// As (const) Methods
+//------------------------------------------------------------------------------
+
+template <>
 inline const bool &JsonValue::As() const & {
 	if (kind != JsonKind::BOOLEAN) {
 		throw InvalidTypeException("Cannot convert JSON value to BOOLEAN!");
@@ -290,11 +343,11 @@ inline const bool &JsonValue::As() const & {
 }
 
 template <>
-inline string &JsonValue::As() & {
-	if (kind != JsonKind::STRING) {
-		throw InvalidTypeException("Cannot convert JSON value to STRING!");
+inline const double &JsonValue::As() const & {
+	if (kind != JsonKind::NUMBER) {
+		throw InvalidTypeException("Cannot convert JSON value to DOUBLE!");
 	}
-	return *str_value;
+	return num_value;
 }
 
 template <>
@@ -305,39 +358,40 @@ inline const string &JsonValue::As() const & {
 	return *str_value;
 }
 
-inline bool JsonValue::GetBool() const {
-	if (kind != JsonKind::BOOLEAN) {
-		throw InvalidTypeException("Cannot convert JSON value to BOOLEAN!");
-	}
-	return bool_value;
-}
-
-inline double JsonValue::GetNumber() const {
-	if (kind != JsonKind::NUMBER) {
-		throw InvalidTypeException("Cannot convert JSON value to DOUBLE!");
-	}
-	return num_value;
-}
-
-inline string JsonValue::GetString() const {
-	if (kind != JsonKind::STRING) {
-		throw InvalidTypeException("Cannot convert JSON value to STRING!");
-	}
-	return *str_value;
-}
-
-inline vector<JsonValue> JsonValue::GetArray() const {
+template <>
+inline const JsonArray &JsonValue::As() const & {
 	if (kind != JsonKind::ARRAY) {
 		throw InvalidTypeException("Cannot convert JSON value to ARRAY!");
 	}
 	return *array_value;
 }
 
-inline unordered_map<string, JsonValue> JsonValue::GetObject() const {
+template <>
+inline const JsonMap &JsonValue::As() const & {
 	if (kind != JsonKind::OBJECT) {
 		throw InvalidTypeException("Cannot convert JSON value to OBJECT!");
 	}
 	return *object_value;
+}
+
+inline const double &JsonValue::AsNumber() const {
+	return As<double>();
+}
+
+inline const bool &JsonValue::AsBool() const {
+	return As<bool>();
+}
+
+inline const string &JsonValue::AsString() const {
+	return As<string>();
+}
+
+inline const JsonArray &JsonValue::AsArray() const {
+	return As<JsonArray>();
+}
+
+inline const JsonMap &JsonValue::AsObject() const {
+	return As<JsonMap>();
 }
 
 //------------------------------------------------------------------------------
@@ -400,10 +454,10 @@ inline JsonValue::JsonValue(const JsonValue &value) : kind(value.kind) {
 		str_value = new string(*value.str_value);
 		break;
 	case JsonKind::ARRAY:
-		array_value = new vector<JsonValue>(*value.array_value);
+		array_value = new JsonArray(*value.array_value);
 		break;
 	case JsonKind::OBJECT:
-		object_value = new unordered_map<string, JsonValue>(*value.object_value);
+		object_value = new JsonMap(*value.object_value);
 		break;
 	default:
 		break;
@@ -453,10 +507,10 @@ inline JsonValue &JsonValue::operator=(const JsonValue &value) {
 		str_value = new string(*value.str_value);
 		break;
 	case JsonKind::ARRAY:
-		array_value = new vector<JsonValue>(*value.array_value);
+		array_value = new JsonArray(*value.array_value);
 		break;
 	case JsonKind::OBJECT:
-		object_value = new unordered_map<string, JsonValue>(*value.object_value);
+		object_value = new JsonMap(*value.object_value);
 		break;
 	default:
 		break;

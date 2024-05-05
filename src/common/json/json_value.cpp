@@ -19,9 +19,13 @@ private:
 	    : start(str.c_str()), pos(str.c_str()), end(str.c_str() + str.size()), line(1), recursion_depth(0) {
 	}
 
-	[[noreturn]] void Error(const char *msg) {
+	bool IsAtEnd() {
+		return pos >= end;
+	}
+
+	[[noreturn]] void Error(const string &msg) {
 		auto prefix = StringUtil::Format("JsonParser: Error at line %d, (byte position: %d): ", line, pos - start);
-		throw SerializationException(msg);
+		throw SerializationException(prefix + msg);
 	}
 
 	char Next() {
@@ -83,7 +87,7 @@ private:
 	}
 
 	JsonValue ParseValue() {
-		if (recursion_depth > 1000) {
+		if (recursion_depth++ > 1000) {
 			Error("Recursion depth exceeded maximum depth of 1000");
 		}
 
@@ -254,8 +258,11 @@ private:
 			}
 			return JsonValue(std::atof(str.c_str()));
 		}
+		case 0:
+			// Return empty value if we somehow reached the end of the string before parsing anything
+			return JsonValue();
 		default:
-			Error("Unexpected character");
+			Error(StringUtil::Format("Unexpected character: %s (%d)", string(1, c), c));
 		}
 	}
 };
@@ -263,6 +270,15 @@ private:
 JsonValue JsonValue::Parse(const string &str) {
 	JsonParser reader(str);
 	return reader.ParseValue();
+}
+
+vector<JsonValue> JsonValue::ParseMany(const string &str) {
+	JsonParser reader(str);
+	vector<JsonValue> result;
+	while (!reader.IsAtEnd()) {
+		result.emplace_back(reader.ParseValue());
+	}
+	return result;
 }
 
 //------------------------------------------------------
@@ -320,7 +336,7 @@ static string ToStringInternal(const JsonValue &value, bool format, idx_t level)
 			result += "\n";
 		}
 		idx_t count = 0;
-		for (auto &entry : value.Properties()) {
+		for (auto &entry : value.AsObject()) {
 			if (format) {
 				for (idx_t i = 0; i < level + 1; i++) {
 					result += "\t";
@@ -348,7 +364,7 @@ static string ToStringInternal(const JsonValue &value, bool format, idx_t level)
 			result += "\n";
 		}
 		idx_t count = 0;
-		for (auto &entry : value.Items()) {
+		for (auto &entry : value.AsArray()) {
 			if (format) {
 				for (idx_t i = 0; i < level + 1; i++) {
 					result += "\t";

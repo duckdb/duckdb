@@ -30,7 +30,7 @@ ErrorData::ErrorData(const string &message) : initialized(true), type(ExceptionT
 		return;
 	} else {
 		auto info = JsonValue::Parse(message);
-		for (auto &entry : info.Properties()) {
+		for (auto &entry : info.AsObject()) {
 			if (entry.first == "exception_type") {
 				type = Exception::StringToExceptionType(entry.second.As<string>());
 			} else if (entry.first == "exception_message") {
