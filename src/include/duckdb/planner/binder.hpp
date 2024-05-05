@@ -104,8 +104,6 @@ public:
 	vector<CorrelatedColumnInfo> correlated_columns;
 	//! The set of parameter expressions bound by this binder
 	optional_ptr<BoundParameterMap> parameters;
-	//! Statement properties
-	StatementProperties properties;
 	//! The alias for the currently processing subquery, if it exists
 	string alias;
 	//! Macro parameter bindings (if any)
@@ -199,6 +197,8 @@ public:
 	void SetCanContainNulls(bool can_contain_nulls);
 	void SetAlwaysRequireRebind();
 
+	StatementProperties &GetStatementProperties();
+
 private:
 	//! The parent binder (if any)
 	shared_ptr<Binder> parent;
@@ -224,6 +224,8 @@ private:
 	reference_set_t<ViewCatalogEntry> bound_views;
 	//! Unnamed subquery index
 	idx_t unnamed_subquery_index = 1;
+	//! Statement properties
+	StatementProperties prop;
 
 private:
 	//! Get the root binder (binder with no parent)
@@ -303,6 +305,7 @@ private:
 	unique_ptr<BoundTableRef> Bind(TableFunctionRef &ref);
 	unique_ptr<BoundTableRef> Bind(EmptyTableRef &ref);
 	unique_ptr<BoundTableRef> Bind(ExpressionListRef &ref);
+	unique_ptr<BoundTableRef> Bind(ColumnDataRef &ref);
 	unique_ptr<BoundTableRef> Bind(PivotRef &expr);
 	unique_ptr<BoundTableRef> Bind(ShowRef &ref);
 
@@ -333,6 +336,7 @@ private:
 	unique_ptr<LogicalOperator> CreatePlan(BoundTableFunction &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundEmptyTableRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundExpressionListRef &ref);
+	unique_ptr<LogicalOperator> CreatePlan(BoundColumnDataRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundCTERef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundPivotRef &ref);
 

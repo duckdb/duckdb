@@ -52,6 +52,7 @@ class BoundSubqueryRef;
 class BoundTableFunction;
 class BoundEmptyTableRef;
 class BoundExpressionListRef;
+class BoundColumnDataRef;
 class BoundCTERef;
 class BoundPivotRef;
 

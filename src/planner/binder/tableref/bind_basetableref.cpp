@@ -199,6 +199,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		// base table: create the BoundBaseTableRef node
 		auto table_index = GenerateTableIndex();
 		auto &table = table_or_view->Cast<TableCatalogEntry>();
+
+		auto &properties = GetStatementProperties();
 		properties.read_databases.insert(table.ParentCatalog().GetName());
 
 		unique_ptr<FunctionData> bind_data;

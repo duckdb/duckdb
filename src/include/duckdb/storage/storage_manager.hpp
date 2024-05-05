@@ -14,6 +14,7 @@
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/storage/database_size.hpp"
+#include "duckdb/common/enums/checkpoint_type.hpp"
 
 namespace duckdb {
 class BlockManager;
@@ -32,6 +33,17 @@ public:
 
 	// Make the commit persistent
 	virtual void FlushCommit() = 0;
+};
+
+struct CheckpointOptions {
+	CheckpointOptions()
+	    : wal_action(CheckpointWALAction::DONT_DELETE_WAL), action(CheckpointAction::CHECKPOINT_IF_REQUIRED),
+	      type(CheckpointType::FULL_CHECKPOINT) {
+	}
+
+	CheckpointWALAction wal_action;
+	CheckpointAction action;
+	CheckpointType type;
 };
 
 //! StorageManager is responsible for managing the physical storage of the
@@ -67,7 +79,7 @@ public:
 	virtual bool AutomaticCheckpoint(idx_t estimated_wal_bytes) = 0;
 	virtual unique_ptr<StorageCommitState> GenStorageCommitState(Transaction &transaction, bool checkpoint) = 0;
 	virtual bool IsCheckpointClean(MetaBlockPointer checkpoint_id) = 0;
-	virtual void CreateCheckpoint(bool delete_wal = false, bool force_checkpoint = false) = 0;
+	virtual void CreateCheckpoint(CheckpointOptions options = CheckpointOptions()) = 0;
 	virtual DatabaseSize GetDatabaseSize() = 0;
 	virtual vector<MetadataBlockInfo> GetMetadataInfo() = 0;
 	virtual shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) = 0;
@@ -115,7 +127,7 @@ public:
 	bool AutomaticCheckpoint(idx_t estimated_wal_bytes) override;
 	unique_ptr<StorageCommitState> GenStorageCommitState(Transaction &transaction, bool checkpoint) override;
 	bool IsCheckpointClean(MetaBlockPointer checkpoint_id) override;
-	void CreateCheckpoint(bool delete_wal, bool force_checkpoint) override;
+	void CreateCheckpoint(CheckpointOptions options) override;
 	DatabaseSize GetDatabaseSize() override;
 	vector<MetadataBlockInfo> GetMetadataInfo() override;
 	shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) override;

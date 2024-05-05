@@ -188,6 +188,9 @@ public:
 	//! Case insensitive compare
 	DUCKDB_API static bool CILessThan(const string &l1, const string &l2);
 
+	//! Case insensitive find, returns DConstants::INVALID_INDEX if not found
+	DUCKDB_API static idx_t CIFind(vector<string> &vec, const string &str);
+
 	//! Format a string using printf semantics
 	template <typename... ARGS>
 	static string Format(const string fmt_str, ARGS... params) {

@@ -11,6 +11,7 @@
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/optionally_owned_ptr.hpp"
 #include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
@@ -125,6 +126,13 @@ struct is_optional_ptr<optional_ptr<T>> : std::true_type {
 };
 
 template <typename T>
+struct is_optionally_owned_ptr : std::false_type {};
+template <typename T>
+struct is_optionally_owned_ptr<optionally_owned_ptr<T>> : std::true_type {
+	typedef T ELEMENT_TYPE;
+};
+
+template <typename T>
 struct is_pair : std::false_type {};
 template <typename T, typename U>
 struct is_pair<std::pair<T, U>> : std::true_type {
@@ -201,6 +209,16 @@ struct SerializationDefaultValue {
 
 	template <typename T = void>
 	static inline bool IsDefault(const typename std::enable_if<is_optional_ptr<T>::value, T>::type &value) {
+		return !value;
+	}
+
+	template <typename T = void>
+	static inline typename std::enable_if<is_optionally_owned_ptr<T>::value, T>::type GetDefault() {
+		return T();
+	}
+
+	template <typename T = void>
+	static inline bool IsDefault(const typename std::enable_if<is_optionally_owned_ptr<T>::value, T>::type &value) {
 		return !value;
 	}
 
