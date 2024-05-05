@@ -32,10 +32,10 @@ select COLUMNS('[a|c]') from contains_test;
 ----
 123abc234	abc
 
-query II
+statement error
 select *COLUMNS('[a|c]') from contains_test;
 ----
-123abc234	abc
+*COLUMNS not allowed at the root level, use COLUMNS instead
 
 statement ok
 create table sales as from ( values

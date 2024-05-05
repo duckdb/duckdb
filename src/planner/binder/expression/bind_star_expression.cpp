@@ -322,6 +322,9 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 		D_ASSERT(star->columns);
 		ColumnUnpackResult children;
 		ReplaceUnpackedStarExpression(expr, star_list, children);
+		if (children.AnyChildUnpacked()) {
+			throw BinderException("*COLUMNS not allowed at the root level, use COLUMNS instead");
+		}
 		auto unpacked_expressions = children.GetChild();
 		for (auto &unpacked_expr : unpacked_expressions) {
 			new_select_list.push_back(std::move(unpacked_expr));
