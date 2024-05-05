@@ -67,28 +67,28 @@ public:
 
 	template <class T>
 	bool Is() const & = delete;
-	bool IsNull() const;
-	bool IsBool() const;
-	bool IsNumber() const;
-	bool IsString() const;
-	bool IsArray() const;
-	bool IsObject() const;
+	bool IsNull() const &;
+	bool IsBool() const &;
+	bool IsNumber() const &;
+	bool IsString() const &;
+	bool IsArray() const &;
+	bool IsObject() const &;
 
 	template <class T>
 	T &As() & = delete;
-	bool &AsBool();
-	double &AsNumber();
-	string &AsString();
-	JsonArray &AsArray();
-	JsonMap &AsObject();
+	bool &AsBool() &;
+	double &AsNumber() &;
+	string &AsString() &;
+	JsonArray &AsArray() &;
+	JsonMap &AsObject() &;
 
 	template <class T>
 	const T &As() const & = delete;
-	const bool &AsBool() const;
-	const double &AsNumber() const;
-	const string &AsString() const;
-	const JsonArray &AsArray() const;
-	const JsonMap &AsObject() const;
+	const bool &AsBool() const &;
+	const double &AsNumber() const &;
+	const string &AsString() const &;
+	const JsonArray &AsArray() const &;
+	const JsonMap &AsObject() const &;
 
 	// Throws an exception if the value is not an array
 	JsonValue &Push(const JsonValue &value);
@@ -242,27 +242,27 @@ inline bool JsonValue::Is<JsonMap>() const & {
 	return kind == JsonKind::OBJECT;
 }
 
-inline bool JsonValue::IsNull() const {
+inline bool JsonValue::IsNull() const & {
 	return kind == JsonKind::NULLVALUE;
 }
 
-inline bool JsonValue::IsBool() const {
+inline bool JsonValue::IsBool() const & {
 	return Is<bool>();
 }
 
-inline bool JsonValue::IsNumber() const {
+inline bool JsonValue::IsNumber() const & {
 	return Is<double>();
 }
 
-inline bool JsonValue::IsString() const {
+inline bool JsonValue::IsString() const & {
 	return Is<string>();
 }
 
-inline bool JsonValue::IsArray() const {
+inline bool JsonValue::IsArray() const & {
 	return Is<JsonArray>();
 }
 
-inline bool JsonValue::IsObject() const {
+inline bool JsonValue::IsObject() const & {
 	return Is<JsonMap>();
 }
 
@@ -310,23 +310,23 @@ inline JsonMap &JsonValue::As() & {
 	return *object_value;
 }
 
-inline double &JsonValue::AsNumber() {
+inline double &JsonValue::AsNumber() & {
 	return As<double>();
 }
 
-inline bool &JsonValue::AsBool() {
+inline bool &JsonValue::AsBool() & {
 	return As<bool>();
 }
 
-inline string &JsonValue::AsString() {
+inline string &JsonValue::AsString() & {
 	return As<string>();
 }
 
-inline JsonArray &JsonValue::AsArray() {
+inline JsonArray &JsonValue::AsArray() & {
 	return As<JsonArray>();
 }
 
-inline JsonMap &JsonValue::AsObject() {
+inline JsonMap &JsonValue::AsObject() & {
 	return As<JsonMap>();
 }
 
@@ -374,23 +374,23 @@ inline const JsonMap &JsonValue::As() const & {
 	return *object_value;
 }
 
-inline const double &JsonValue::AsNumber() const {
+inline const double &JsonValue::AsNumber() const & {
 	return As<double>();
 }
 
-inline const bool &JsonValue::AsBool() const {
+inline const bool &JsonValue::AsBool() const & {
 	return As<bool>();
 }
 
-inline const string &JsonValue::AsString() const {
+inline const string &JsonValue::AsString() const & {
 	return As<string>();
 }
 
-inline const JsonArray &JsonValue::AsArray() const {
+inline const JsonArray &JsonValue::AsArray() const & {
 	return As<JsonArray>();
 }
 
-inline const JsonMap &JsonValue::AsObject() const {
+inline const JsonMap &JsonValue::AsObject() const & {
 	return As<JsonMap>();
 }
 
