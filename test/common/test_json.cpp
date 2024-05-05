@@ -1,5 +1,10 @@
 #include "catch.hpp"
+#include "duckdb/common/file_buffer.hpp"
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/fstream.hpp"
+#include "duckdb/common/local_file_system.hpp"
 #include "duckdb/common/json/json_value.hpp"
+#include <vector>
 
 using namespace duckdb;
 using namespace std;
