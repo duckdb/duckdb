@@ -138,8 +138,8 @@ Index *TableIndexList::FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys,
 void TableIndexList::VerifyForeignKey(const vector<PhysicalIndex> &fk_keys, DataChunk &chunk,
                                       ConflictManager &conflict_manager) {
 	auto fk_type = conflict_manager.LookupType() == VerifyExistenceType::APPEND_FK
-		               ? ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE
-		               : ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
+	                   ? ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE
+	                   : ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
 
 	// check whether the chunk can be inserted or deleted into the referenced table storage
 	auto index = FindForeignKeyIndex(fk_keys, fk_type);

@@ -150,8 +150,8 @@ unique_ptr<BoundConstraint> Binder::BindConstraint(Constraint &constraint, const
 	case ConstraintType::FOREIGN_KEY: {
 		auto &fk = constraint.Cast<ForeignKeyConstraint>();
 		D_ASSERT((fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE && !fk.info.pk_keys.empty()) ||
-			(fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE && !fk.info.pk_keys.empty()) ||
-			fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE);
+		         (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE && !fk.info.pk_keys.empty()) ||
+		         fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE);
 		physical_index_set_t fk_key_set, pk_key_set;
 		for (auto &pk_key : fk.info.pk_keys) {
 			if (pk_key_set.find(pk_key) != pk_key_set.end()) {
@@ -256,7 +256,7 @@ static void ExtractExpressionDependencies(Expression &expr, LogicalDependencyLis
 		}
 	}
 	ExpressionIterator::EnumerateChildren(
-		expr, [&](Expression &child) { ExtractExpressionDependencies(child, dependencies); });
+	    expr, [&](Expression &child) { ExtractExpressionDependencies(child, dependencies); });
 }
 
 static void ExtractDependencies(BoundCreateTableInfo &info, vector<unique_ptr<Expression>> &defaults,
