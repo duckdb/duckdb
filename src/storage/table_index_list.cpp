@@ -11,11 +11,12 @@
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 
 namespace duckdb {
-Index *TableIndexList::AddIndex(unique_ptr<Index> index) {
+Index &TableIndexList::AddIndex(unique_ptr<Index> index) {
 	D_ASSERT(index);
 	lock_guard<mutex> lock(indexes_lock);
+	auto &result = *index;
 	indexes.push_back(std::move(index));
-	return indexes.at(indexes.size() - 1).get();
+	return result;
 }
 
 void TableIndexList::RemoveIndex(const string &name) {
@@ -137,8 +138,8 @@ Index *TableIndexList::FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys,
 void TableIndexList::VerifyForeignKey(const vector<PhysicalIndex> &fk_keys, DataChunk &chunk,
                                       ConflictManager &conflict_manager) {
 	auto fk_type = conflict_manager.LookupType() == VerifyExistenceType::APPEND_FK
-	                   ? ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE
-	                   : ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
+		               ? ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE
+		               : ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
 
 	// check whether the chunk can be inserted or deleted into the referenced table storage
 	auto index = FindForeignKeyIndex(fk_keys, fk_type);

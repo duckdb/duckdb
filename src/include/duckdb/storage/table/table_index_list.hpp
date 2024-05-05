@@ -12,11 +12,11 @@
 #include "duckdb/storage/index.hpp"
 #include "duckdb/parser/constraint.hpp"
 
-namespace duckdb {
-
-class ConflictManager;
-struct IndexStorageInfo;
-struct DataTableInfo;
+namespace duckdb
+{
+	class ConflictManager;
+	struct IndexStorageInfo;
+	struct DataTableInfo;
 
 class TableIndexList {
 public:
@@ -72,17 +72,18 @@ public:
 	idx_t Count();
 	void Move(TableIndexList &other);
 
-	Index *FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, ForeignKeyType fk_type);
-	void VerifyForeignKey(const vector<PhysicalIndex> &fk_keys, DataChunk &chunk, ConflictManager &conflict_manager);
+		Index* FindForeignKeyIndex(const vector<PhysicalIndex>& fk_keys, ForeignKeyType fk_type);
+		void VerifyForeignKey(const vector<PhysicalIndex>& fk_keys, DataChunk& chunk,
+		                      ConflictManager& conflict_manager);
 
-	//! Serialize all indexes of this table
-	vector<IndexStorageInfo> GetStorageInfos();
+		//! Serialize all indexes of this table
+		vector<IndexStorageInfo> GetStorageInfos();
 
-	vector<column_t> GetRequiredColumns();
+		vector<column_t> GetRequiredColumns();
 
-private:
-	//! Indexes associated with the current table
-	mutex indexes_lock;
-	vector<unique_ptr<Index>> indexes;
-};
+	private:
+		//! Indexes associated with the current table
+		mutex indexes_lock;
+		vector<unique_ptr<Index>> indexes;
+	};
 } // namespace duckdb

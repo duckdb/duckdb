@@ -235,7 +235,8 @@ namespace duckdb
 		void VerifyNewConstraint(LocalStorage& local_storage, DataTable& parent, const BoundConstraint& constraint);
 		void VerifyNewConstraint(ClientContext& context, DataTable& parent, const BoundConstraint& constraint);
 
-		Index* AddConstraintIndex(const vector<const ColumnDefinition*>& columns, IndexConstraintType constraint_type,
+		Index& AddConstraintIndex(const vector<reference<const ColumnDefinition>>& columns,
+		                          IndexConstraintType constraint_type,
 		                          const IndexStorageInfo& index_info = IndexStorageInfo());
 
 	private:
@@ -256,7 +257,7 @@ namespace duckdb
 		                                      DataChunk& chunk);
 
 		// Indexes existing data in the table into the index.
-		void IndexExistingData(ClientContext& context, Index* index);
+		void IndexExistingData(ClientContext& context, Index& index);
 
 	private:
 		//! The table info

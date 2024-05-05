@@ -98,14 +98,14 @@ unique_ptr<BoundConstraint> Binder::BindConstraint(Constraint &constraint, const
 	switch (constraint.type) {
 	case ConstraintType::CHECK: {
 		unique_ptr<BoundConstraint> bound_constraint = make_uniq<BoundCheckConstraint>();
-		auto check_constraint = bound_constraint->Cast<BoundCheckConstraint>();
+		auto &check_constraint = bound_constraint->Cast<BoundCheckConstraint>();
 		// check constraint: bind the expression
 		CheckBinder check_binder(*this, context, table_name, columns, check_constraint.bound_columns);
 		auto &check = constraint.Cast<CheckConstraint>();
 		// create a copy of the unbound expression because the binding destroys the constraint
 		auto unbound_expression = check.expression->Copy();
 		// now bind the constraint and create a new BoundCheckConstraint
-		check_constraint->expression = check_binder.Bind(check.expression);
+		check_constraint.expression = check_binder.Bind(check.expression);
 		// move the unbound constraint back into the original check expression
 		check.expression = std::move(unbound_expression);
 		return bound_constraint;
@@ -150,8 +150,8 @@ unique_ptr<BoundConstraint> Binder::BindConstraint(Constraint &constraint, const
 	case ConstraintType::FOREIGN_KEY: {
 		auto &fk = constraint.Cast<ForeignKeyConstraint>();
 		D_ASSERT((fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE && !fk.info.pk_keys.empty()) ||
-		         (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE && !fk.info.pk_keys.empty()) ||
-		         fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE);
+			(fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE && !fk.info.pk_keys.empty()) ||
+			fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE);
 		physical_index_set_t fk_key_set, pk_key_set;
 		for (auto &pk_key : fk.info.pk_keys) {
 			if (pk_key_set.find(pk_key) != pk_key_set.end()) {
@@ -256,7 +256,7 @@ static void ExtractExpressionDependencies(Expression &expr, LogicalDependencyLis
 		}
 	}
 	ExpressionIterator::EnumerateChildren(
-	    expr, [&](Expression &child) { ExtractExpressionDependencies(child, dependencies); });
+		expr, [&](Expression &child) { ExtractExpressionDependencies(child, dependencies); });
 }
 
 static void ExtractDependencies(BoundCreateTableInfo &info, vector<unique_ptr<Expression>> &defaults,
