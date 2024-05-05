@@ -1,6 +1,9 @@
 # name: test/sql/parser/test_columns_unpacked.test
 # group: [parser]
 
+statement ok
+PRAGMA enable_verification
+
 query I
 select COALESCE(*COLUMNS(*)) from (select NULL, 2, 3) t(a, b, c);
 ----

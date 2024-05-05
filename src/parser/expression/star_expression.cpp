@@ -12,11 +12,16 @@ StarExpression::StarExpression(string relation_name_p)
 }
 
 string StarExpression::ToString() const {
+	string result;
+	if (unpacked) {
+		D_ASSERT(columns);
+		result += "*";
+	}
 	if (expr) {
 		D_ASSERT(columns);
-		return "COLUMNS(" + expr->ToString() + ")";
+		result += "COLUMNS(" + expr->ToString() + ")";
+		return result;
 	}
-	string result;
 	if (columns) {
 		result += "COLUMNS(";
 	}
@@ -90,6 +95,7 @@ unique_ptr<ParsedExpression> StarExpression::Copy() const {
 	copy->columns = columns;
 	copy->expr = expr ? expr->Copy() : nullptr;
 	copy->CopyProperties(*this);
+	copy->unpacked = unpacked;
 	return std::move(copy);
 }
 
