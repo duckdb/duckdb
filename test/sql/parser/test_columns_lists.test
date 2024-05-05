@@ -70,12 +70,12 @@ SELECT COLUMNS([i, j]) FROM integers
 statement error
 SELECT COLUMNS([x for x in COLUMNS(*)]) FROM integers
 ----
-COLUMNS expression is not allowed inside another COLUMNS expression
+(*)COLUMNS expression is not allowed inside another (*)COLUMNS expression
 
 statement error
 SELECT COLUMNS(COLUMNS(*)) FROM integers
 ----
-COLUMNS expression is not allowed inside another COLUMNS expression
+(*)COLUMNS expression is not allowed inside another (*)COLUMNS expression
 
 statement error
 SELECT * + 42 FROM integers

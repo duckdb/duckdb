@@ -93,3 +93,14 @@ select struct_pack(*COLUMNS(*)) from data
 {'id': 2, 'name': Bob}
 {'id': 3, 'name': Alice}
 {'id': 4, 'name': Carol}
+
+# It can not be used inside a COLUMNS expression
+statement error
+SELECT COLUMNS(*COLUMNS(*)) FROM (VALUES ('test'))
+----
+(*)COLUMNS expression is not allowed inside another (*)COLUMNS expression
+
+statement error
+SELECT *COLUMNS(COLUMNS(*)) FROM (VALUES ('test'))
+----
+(*)COLUMNS expression is not allowed inside another (*)COLUMNS expression
