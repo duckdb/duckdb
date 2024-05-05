@@ -4,7 +4,7 @@ _ = pytest.importorskip("duckdb.experimental.spark")
 from duckdb.experimental.spark.sql import functions as F
 
 
-class TestStringFunctions(object):
+class TestSparkFunctionsHash(object):
     def test_md5(self, spark):
         data = [
             ("quack",),

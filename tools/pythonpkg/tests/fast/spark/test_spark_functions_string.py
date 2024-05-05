@@ -1,11 +1,11 @@
 import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
-from duckdb.experimental.spark.sql.types import Row
 from duckdb.experimental.spark.sql import functions as F
+from duckdb.experimental.spark.sql.types import Row
 
 
-class TestStringFunctions(object):
+class TestSparkFunctionsString(object):
     def test_length(self, spark):
         data = [
             ("firstRowFirstColumn",),
