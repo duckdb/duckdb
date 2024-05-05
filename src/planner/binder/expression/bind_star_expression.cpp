@@ -59,8 +59,8 @@ bool Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpressi
 		if (*star) {
 			// we can have multiple
 			if (!(*star)->Equals(current_star)) {
-				throw BinderException(*expr,
-				                      "Multiple different STAR/COLUMNS in the same expression are not supported");
+				throw BinderException(
+				    *expr, "Multiple different STAR/COLUMNS/*COLUMNS in the same expression are not supported");
 			}
 			return true;
 		}

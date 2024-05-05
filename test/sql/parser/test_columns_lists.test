@@ -73,6 +73,11 @@ SELECT COLUMNS([x for x in COLUMNS(*)]) FROM integers
 COLUMNS expression is not allowed inside another COLUMNS expression
 
 statement error
+SELECT COLUMNS(COLUMNS(*)) FROM integers
+----
+COLUMNS expression is not allowed inside another COLUMNS expression
+
+statement error
 SELECT * + 42 FROM integers
 ----
 STAR expression is only allowed as the root element of an expression
@@ -132,7 +137,7 @@ does not support NULL
 statement error
 SELECT COLUMNS(['i']) + COLUMNS(['j']) FROM integers
 ----
-Multiple different STAR/COLUMNS in the same expression are not supported
+Multiple different STAR/COLUMNS/*COLUMNS in the same expression are not supported
 
 # star with replace
 statement error

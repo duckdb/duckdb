@@ -356,10 +356,13 @@ private:
 public:
 	static void SetQueryLocation(ParsedExpression &expr, int query_location);
 	static void SetQueryLocation(TableRef &ref, int query_location);
+	void SetQuery(const string &query);
 
 private:
 	//! Current stack depth
 	idx_t stack_depth;
+	//! The current query (for debugging)
+	string query;
 
 	void InitializeStackCheck();
 	StackChecker<Transformer> StackCheck(idx_t extra_stack = 1);

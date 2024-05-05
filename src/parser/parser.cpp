@@ -176,6 +176,7 @@ void Parser::ParseQuery(const string &query) {
 
 				// if it succeeded, we transform the Postgres parse tree into a list of
 				// SQLStatements
+				transformer.SetQuery(query);
 				transformer.TransformParseTree(parser.parse_tree, statements);
 				parsing_succeed = true;
 			} else {

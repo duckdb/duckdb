@@ -25,6 +25,10 @@ void Transformer::Clear() {
 	pivot_entries.clear();
 }
 
+void Transformer::SetQuery(const string &query) {
+	this->query = query;
+}
+
 bool Transformer::TransformParseTree(duckdb_libpgquery::PGList *tree, vector<unique_ptr<SQLStatement>> &statements) {
 	InitializeStackCheck();
 	for (auto entry = tree->head; entry != nullptr; entry = entry->next) {
