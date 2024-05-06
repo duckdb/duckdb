@@ -13,4 +13,9 @@ bool ValidityColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filte
 	return true;
 }
 
+void ValidityColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata,
+                                    idx_t count) {
+	lock_guard<mutex> l(stats_lock);
+	ColumnData::AppendData(stats, state, vdata, count);
+}
 } // namespace duckdb

@@ -1,5 +1,5 @@
 # name: test/issues/general/test_11391.test
-# description: Issue 1091: Catalog Error with nested CTEs
+# description: Issue 11391: Catalog Error with nested CTEs
 # group: [general]
 
 query I

@@ -5,6 +5,7 @@ import os
 import pandas as pd
 import pytest
 import datetime
+from duckdb import ColumnExpression
 
 from duckdb.typing import BIGINT, VARCHAR, TINYINT, BOOLEAN
 
@@ -357,3 +358,104 @@ class TestRelation(object):
         text1 = str(rel1)
         assert '? rows' in text1
         assert '>9999 rows' in text1
+
+    @pytest.mark.parametrize(
+        'num_rows',
+        [
+            1024,
+            2048,
+            5000,
+            1000000,
+            10000000,
+        ],
+    )
+    def test_materialized_relation(self, duckdb_cursor, num_rows):
+        # Anything that is not a SELECT statement becomes a materialized relation, so we use `CALL`
+        query = f"call repeat_row(42, 'test', 'this is a long string', true, num_rows={num_rows})"
+        rel = duckdb_cursor.sql(query)
+        res = rel.fetchone()
+        assert res != None
+
+        res = rel.fetchmany(num_rows)
+        assert len(res) == num_rows - 1
+
+        res = rel.fetchmany(5)
+        assert len(res) == 0
+        res = rel.fetchmany(5)
+        assert len(res) == 0
+        res = rel.fetchone()
+        assert res == None
+
+        rel.execute()
+        res = rel.fetchone()
+        assert res != None
+
+        res = rel.fetchall()
+        assert len(res) == num_rows - 1
+        res = rel.fetchall()
+        assert len(res) == num_rows
+
+        rel = duckdb_cursor.sql(query)
+        projection = rel.select('column0')
+        assert projection.fetchall() == [(42,) for _ in range(num_rows)]
+
+        filtered = rel.filter("column1 != 'test'")
+        assert filtered.fetchall() == []
+
+        with pytest.raises(
+            duckdb.InvalidInputException,
+            match=r"Invalid Input Error: 'DuckDBPyRelation.insert' can only be used on a table relation",
+        ):
+            rel.insert([1, 2, 3, 4])
+
+        query_rel = rel.query('x', "select 42 from x where column0 != 42")
+        assert query_rel.fetchall() == []
+
+        distinct_rel = rel.distinct()
+        assert distinct_rel.fetchall() == [(42, 'test', 'this is a long string', True)]
+
+        limited_rel = rel.limit(50)
+        assert len(limited_rel.fetchall()) == 50
+
+        materialized_one = duckdb_cursor.sql("call range(10)").project(
+            ColumnExpression('range').cast(str).alias('range')
+        )
+        materialized_two = duckdb_cursor.sql("call repeat('a', 5)")
+        joined_rel = materialized_one.join(materialized_two, 'range != a')
+        res = joined_rel.fetchall()
+        assert len(res) == 50
+
+        relation = duckdb_cursor.sql("select a from materialized_two")
+        assert relation.fetchone() == ('a',)
+
+        described = materialized_one.describe()
+        res = described.fetchall()
+        assert res == [('count', '10'), ('mean', None), ('stddev', None), ('min', '0'), ('max', '9'), ('median', None)]
+
+        unioned_rel = materialized_one.union(materialized_two)
+        res = unioned_rel.fetchall()
+        assert res == [
+            ('0',),
+            ('1',),
+            ('2',),
+            ('3',),
+            ('4',),
+            ('5',),
+            ('6',),
+            ('7',),
+            ('8',),
+            ('9',),
+            ('a',),
+            ('a',),
+            ('a',),
+            ('a',),
+            ('a',),
+        ]
+
+        except_rel = unioned_rel.except_(materialized_one)
+        res = except_rel.fetchall()
+        assert res == [('a',)]
+
+        intersect_rel = unioned_rel.intersect(materialized_one).order('range')
+        res = intersect_rel.fetchall()
+        assert res == [('0',), ('1',), ('2',), ('3',), ('4',), ('5',), ('6',), ('7',), ('8',), ('9',)]

@@ -14,6 +14,7 @@
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -245,10 +246,22 @@ bool CatalogSet::AlterOwnership(CatalogTransaction transaction, ChangeOwnershipI
 	if (!entry) {
 		return false;
 	}
-
-	auto &owner_entry = catalog.GetEntry(transaction.GetContext(), info.owner_schema, info.owner_name);
+	optional_ptr<CatalogEntry> owner_entry;
+	auto schema = catalog.GetSchema(transaction, info.owner_schema, OnEntryNotFound::RETURN_NULL);
+	if (schema) {
+		vector<CatalogType> entry_types {CatalogType::TABLE_ENTRY, CatalogType::SEQUENCE_ENTRY};
+		for (auto entry_type : entry_types) {
+			owner_entry = schema->GetEntry(transaction, entry_type, info.owner_name);
+			if (owner_entry) {
+				break;
+			}
+		}
+	}
+	if (!owner_entry) {
+		throw CatalogException("CatalogElement \"%s.%s\" does not exist!", info.owner_schema, info.owner_name);
+	}
 	write_lock.unlock();
-	catalog.GetDependencyManager().AddOwnership(transaction, owner_entry, *entry);
+	catalog.GetDependencyManager().AddOwnership(transaction, *owner_entry, *entry);
 	return true;
 }
 

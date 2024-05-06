@@ -202,8 +202,9 @@ unique_ptr<NodeStatistics> TableScanCardinality(ClientContext &context, const Fu
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 	auto &local_storage = LocalStorage::Get(context, bind_data.table.catalog);
 	auto &storage = bind_data.table.GetStorage();
-	idx_t estimated_cardinality = storage.info->cardinality + local_storage.AddedRows(bind_data.table.GetStorage());
-	return make_uniq<NodeStatistics>(storage.info->cardinality, estimated_cardinality);
+	idx_t table_rows = storage.GetTotalRows();
+	idx_t estimated_cardinality = table_rows + local_storage.AddedRows(bind_data.table.GetStorage());
+	return make_uniq<NodeStatistics>(table_rows, estimated_cardinality);
 }
 
 //===--------------------------------------------------------------------===//
@@ -307,10 +308,13 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 		return;
 	}
 
-	// bind and scan any ART indexes
-	storage.info->indexes.BindAndScan<ART>(context, *storage.info, [&](ART &art_index) {
-		// first rewrite the index expression so the ColumnBindings align with the column bindings of the current table
+	auto checkpoint_lock = storage.GetSharedCheckpointLock();
+	auto &info = storage.GetDataTableInfo();
+	auto &transaction = Transaction::Get(context, bind_data.table.catalog);
 
+	// bind and scan any ART indexes
+	info->GetIndexes().BindAndScan<ART>(context, *info, [&](ART &art_index) {
+		// first rewrite the index expression so the ColumnBindings align with the column bindings of the current table
 		if (art_index.unbound_expressions.size() > 1) {
 			// NOTE: index scans are not (yet) supported for compound index keys
 			return false;
@@ -325,8 +329,6 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 		}
 
 		// try to find a matching index for any of the filter expressions
-		auto &transaction = Transaction::Get(context, bind_data.table.catalog);
-
 		for (auto &filter : filters) {
 			auto index_state = art_index.TryInitializeScan(transaction, *index_expression, *filter);
 			if (index_state != nullptr) {

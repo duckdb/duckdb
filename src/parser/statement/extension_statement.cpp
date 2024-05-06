@@ -11,4 +11,8 @@ unique_ptr<SQLStatement> ExtensionStatement::Copy() const {
 	return make_uniq<ExtensionStatement>(extension, parse_data->Copy());
 }
 
+string ExtensionStatement::ToString() const {
+	return parse_data->ToString();
+}
+
 } // namespace duckdb

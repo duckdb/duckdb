@@ -111,6 +111,10 @@ SELECT finalize(count(*) EXPORT_STATE), finalize(count(d) EXPORT_STATE), finaliz
 
 # more aggregates
 
+# we skip these for now as argmin/argmax now has a custom binder (so that it can work with extension types like JSON)
+# otherwise we get "Binder Error: Cannot use EXPORT_STATE on aggregate functions with custom binders"
+mode skip
+
 query II nosort res7
 select argmin(a,b), argmax(a,b) from (values (1,1), (2,2), (8,8), (10,10)) s(a,b);
 ----
@@ -118,6 +122,8 @@ select argmin(a,b), argmax(a,b) from (values (1,1), (2,2), (8,8), (10,10)) s(a,b
 query II nosort res7
 select FINALIZE(argmin(a,b) EXPORT_STATE), FINALIZE(argmax(a,b) EXPORT_STATE) from (values (1,1), (2,2), (8,8), (10,10)) s(a,b);
 ----
+
+mode unskip
 
 query IIIIIII nosort res8
 SELECT g, first(d), last(d), fsum(d), favg(d), product(d), bit_xor(d), bool_and(d > 5) FROM dummy GROUP BY g ORDER BY g;

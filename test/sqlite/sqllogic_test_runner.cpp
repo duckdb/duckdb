@@ -102,6 +102,7 @@ void SQLLogicTestRunner::Reconnect() {
 	if (original_sqlite_test) {
 		con->Query("SET integer_division=true");
 	}
+	con->Query("SET secret_directory='" + TestCreatePath("test_secret_dir") + "'");
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 	con->Query("SET pivot_filter_threshold=0");
 #endif
@@ -383,6 +384,61 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 	return RequireResult::PRESENT;
 }
 
+bool TryParseConditions(SQLLogicParser &parser, const string &condition_text, vector<Condition> &conditions,
+                        bool skip_if) {
+	bool is_condition = false;
+	for (auto &c : condition_text) {
+		switch (c) {
+		case '=':
+		case '>':
+		case '<':
+			is_condition = true;
+			break;
+		default:
+			break;
+		}
+	}
+	if (!is_condition) {
+		// not a condition
+		return false;
+	}
+	// split based on &&
+	auto condition_strings = StringUtil::Split(condition_text, "&&");
+	for (auto &condition_str : condition_strings) {
+		vector<pair<string, ExpressionType>> comparators {
+		    {"<>", ExpressionType::COMPARE_NOTEQUAL},   {">=", ExpressionType::COMPARE_GREATERTHANOREQUALTO},
+		    {">", ExpressionType::COMPARE_GREATERTHAN}, {"<=", ExpressionType::COMPARE_LESSTHANOREQUALTO},
+		    {"<", ExpressionType::COMPARE_LESSTHAN},    {"=", ExpressionType::COMPARE_EQUAL}};
+		ExpressionType comparison_type = ExpressionType::INVALID;
+		vector<string> splits;
+		for (auto &comparator : comparators) {
+			if (!StringUtil::Contains(condition_str, comparator.first)) {
+				continue;
+			}
+			splits = StringUtil::Split(condition_str, comparator.first);
+			comparison_type = comparator.second;
+			break;
+		}
+		// loop condition, e.g. skipif threadid=0
+		if (splits.size() != 2) {
+			parser.Fail("skipif/onlyif must be in the form of x=y or x>y, potentially separated by &&");
+		}
+		// strip white space
+		for (auto &split : splits) {
+			StringUtil::Trim(split);
+		}
+
+		// now create the condition
+		Condition condition;
+		condition.keyword = splits[0];
+		condition.value = splits[1];
+		condition.comparison = comparison_type;
+		condition.skip_if = skip_if;
+		conditions.push_back(condition);
+	}
+	return true;
+}
+
 void SQLLogicTestRunner::ExecuteFile(string script) {
 	SQLLogicParser parser;
 	idx_t skip_level = 0;
@@ -420,6 +476,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			parser.Fail("all test statements need to be separated by an empty line");
 		}
 
+		vector<Condition> conditions;
 		bool skip_statement = false;
 		while (token.type == SQLLogicTokenType::SQLLOGIC_SKIP_IF || token.type == SQLLogicTokenType::SQLLOGIC_ONLY_IF) {
 			// skipif/onlyif
@@ -428,16 +485,32 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				parser.Fail("skipif/onlyif requires a single parameter (e.g. skipif duckdb)");
 			}
 			auto system_name = StringUtil::Lower(token.parameters[0]);
-			bool our_system = system_name == "duckdb";
+			// we support two kinds of conditions here
+			// (for original sqllogictests) system comparisons, e.g.:
+			// (1) skipif duckdb
+			// (2) onlyif <other_system>
+			// conditions on loop variables, e.g.:
+			// (1) skipif i=2
+			// (2) onlyif threadid=0
+			// the latter is only supported in our own tests (not in original sqllogic tests)
+			bool is_system_comparison;
 			if (original_sqlite_test) {
-				our_system = our_system || system_name == "postgresql";
+				is_system_comparison = true;
+			} else {
+				is_system_comparison = !TryParseConditions(parser, system_name, conditions, skip_if);
 			}
-			if (our_system == skip_if) {
-				// we skip this command in two situations
-				// (1) skipif duckdb
-				// (2) onlyif <other_system>
-				skip_statement = true;
-				break;
+			if (is_system_comparison) {
+				bool our_system = system_name == "duckdb";
+				if (original_sqlite_test) {
+					our_system = our_system || system_name == "postgresql";
+				}
+				if (our_system == skip_if) {
+					// we skip this command in two situations
+					// (1) skipif duckdb
+					// (2) onlyif <other_system>
+					skip_statement = true;
+					break;
+				}
 			}
 			parser.NextLine();
 			token = parser.Tokenize();
@@ -484,6 +557,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			if (token.parameters.size() >= 2) {
 				command->connection_name = token.parameters[1];
 			}
+			command->conditions = std::move(conditions);
 			ExecuteCommand(std::move(command));
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_QUERY) {
 			if (token.parameters.size() < 1) {
@@ -545,6 +619,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			} else {
 				command->query_has_label = false;
 			}
+			command->conditions = std::move(conditions);
 			ExecuteCommand(std::move(command));
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_HASH_THRESHOLD) {
 			if (token.parameters.size() != 1) {

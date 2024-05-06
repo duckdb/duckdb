@@ -74,9 +74,10 @@ void TableIndexList::InitializeIndexes(ClientContext &context, DataTableInfo &ta
 	}
 
 	// Get the table from the catalog so we can add it to the binder
-	auto &catalog = table_info.db.GetCatalog();
+	auto &catalog = table_info.GetDB().GetCatalog();
 	auto &table =
-	    catalog.GetEntry(context, CatalogType::TABLE_ENTRY, table_info.schema, table_info.table).Cast<DuckTableEntry>();
+	    catalog.GetEntry(context, CatalogType::TABLE_ENTRY, table_info.GetSchemaName(), table_info.GetTableName())
+	        .Cast<DuckTableEntry>();
 	vector<LogicalType> column_types;
 	vector<string> column_names;
 	for (auto &col : table.GetColumns().Logical()) {
@@ -93,8 +94,8 @@ void TableIndexList::InitializeIndexes(ClientContext &context, DataTableInfo &ta
 			// Add the table to the binder
 			// We're not interested in the column_ids here, so just pass a dummy vector
 			vector<column_t> dummy_column_ids;
-			binder->bind_context.AddBaseTable(0, table_info.table, column_names, column_types, dummy_column_ids,
-			                                  &table);
+			binder->bind_context.AddBaseTable(0, table_info.GetTableName(), column_names, column_types,
+			                                  dummy_column_ids, &table);
 
 			// Create an IndexBinder to bind the index
 			IndexBinder idx_binder(*binder, context);

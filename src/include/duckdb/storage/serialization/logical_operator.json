@@ -247,7 +247,7 @@
       {
         "id": 202,
         "name": "collection",
-        "type": "ColumnDataCollection*"
+        "type": "optionally_owned_ptr<ColumnDataCollection>"
       }
     ],
     "constructor": ["table_index", "chunk_types", "collection"]

@@ -75,7 +75,7 @@ endif()
 
 ################# SPATIAL
 duckdb_extension_load(spatial
-    DONT_LINK LOAD_TESTS
+    DONT_LINK LOAD_TESTS APPLY_PATCHES
     GIT_URL https://github.com/duckdb/duckdb_spatial.git
     GIT_TAG 8ac803e986ccda34f32dee82a7faae95b72b3492
     INCLUDE_DIR spatial/include
