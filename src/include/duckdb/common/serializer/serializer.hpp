@@ -16,7 +16,9 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optionally_owned_ptr.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 
 namespace duckdb {
 
@@ -86,6 +88,21 @@ public:
 		OnOptionalPropertyEnd(true);
 	}
 
+	// Specialization for Value (default Value comparison throws when comparing nulls)
+	template <class T>
+	void WritePropertyWithDefault(const field_id_t field_id, const char *tag, const CSVOption<T> &value,
+	                              const T &&default_value) {
+		// If current value is default, don't write it
+		if (!serialize_default_values && (value == default_value)) {
+			OnOptionalPropertyBegin(field_id, tag, false);
+			OnOptionalPropertyEnd(false);
+			return;
+		}
+		OnOptionalPropertyBegin(field_id, tag, true);
+		WriteValue(value.GetValue());
+		OnOptionalPropertyEnd(true);
+	}
+
 	// Special case: data_ptr_T
 	void WriteProperty(const field_id_t field_id, const char *tag, const_data_ptr_t ptr, idx_t count) {
 		OnPropertyBegin(field_id, tag);
@@ -126,6 +143,12 @@ protected:
 			// Use the underlying type
 			WriteValue(static_cast<typename std::underlying_type<T>::type>(value));
 		}
+	}
+
+	// Optionally Owned Pointer Ref
+	template <typename T>
+	void WriteValue(const optionally_owned_ptr<T> &ptr) {
+		WriteValue(ptr.get());
 	}
 
 	// Unique Pointer Ref

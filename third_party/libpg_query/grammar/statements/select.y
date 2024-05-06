@@ -575,9 +575,9 @@ opt_all_clause:
 		;
 
 opt_ignore_nulls:
-			IGNORE_P NULLS_P						{ $$ = true;}
-			| RESPECT_P NULLS_P						{ $$ = false;}
-			| /*EMPTY*/								{ $$ = false; }
+			IGNORE_P NULLS_P						{ $$ = PG_IGNORE_NULLS;}
+			| RESPECT_P NULLS_P						{ $$ = PG_RESPECT_NULLS;}
+			| /*EMPTY*/								{ $$ = PG_DEFAULT_NULLS; }
 		;
 
 opt_sort_clause:
@@ -2040,6 +2040,9 @@ microsecond_keyword:
 week_keyword:
 	WEEK_P | WEEKS_P
 
+quarter_keyword:
+	QUARTER_P | QUARTERS_P
+
 decade_keyword:
 	DECADE_P | DECADES_P
 
@@ -2068,6 +2071,8 @@ opt_interval:
 				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(MICROSECOND), @1)); }
 			| week_keyword
 				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(WEEK), @1)); }
+			| quarter_keyword
+				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(QUARTER), @1)); }
 			| decade_keyword
 				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(DECADE), @1)); }
 			| century_keyword
@@ -2784,9 +2789,8 @@ indirection_expr:
 				}
 			| case_expr
 				{ $$ = $1; }
-			| '[' opt_expr_list_opt_comma ']' {
-				PGFuncCall *n = makeFuncCall(SystemFuncName("list_value"), $2, @2);
-				$$ = (PGNode *) n;
+			 | list_expr {
+                $$ = $1;
 			}
 			| list_comprehension {
 				$$ = $1;
@@ -2820,7 +2824,11 @@ indirection_expr:
 				}
 		;
 
-
+list_expr:  '[' opt_expr_list_opt_comma ']' {
+                PGFuncCall *n = makeFuncCall(SystemFuncName("list_value"), $2, @2);
+                $$ = (PGNode *) n;
+            }
+        ;
 
 struct_expr:		'{' dict_arguments_opt_comma '}'
 				{
@@ -3564,6 +3572,7 @@ extract_arg:
 			| millisecond_keyword							{ $$ = (char*) "millisecond"; }
 			| microsecond_keyword							{ $$ = (char*) "microsecond"; }
 			| week_keyword									{ $$ = (char*) "week"; }
+			| quarter_keyword								{ $$ = (char*) "quarter"; }
 			| decade_keyword								{ $$ = (char*) "decade"; }
 			| century_keyword								{ $$ = (char*) "century"; }
 			| millennium_keyword							{ $$ = (char*) "millennium"; }

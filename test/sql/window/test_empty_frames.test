@@ -53,7 +53,7 @@ endloop
 #
 # All NULLs
 #
-foreach agg any_value arbitrary avg bit_and bit_or bit_xor favg first fsum group_concat histogram kahan_sum kurtosis last listagg mad max mean median min mode product sem skewness stddev stddev_pop stddev_samp sum sum_no_overflow sumkahan var_pop var_samp variance
+foreach agg any_value arbitrary avg bit_and bit_or bit_xor favg first fsum group_concat histogram kahan_sum kurtosis last listagg mad max mean median min mode product sem skewness stddev stddev_pop stddev_samp sum sumkahan var_pop var_samp variance
 
 query II
 SELECT id, ${agg}(id) OVER (PARTITION BY ch ORDER BY id ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING) 

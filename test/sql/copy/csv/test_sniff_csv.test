@@ -37,7 +37,7 @@ Cannot open file "test/sql/copy/csv/data/real/non_ecziste.csv": No such file or 
 query IIIIIIIIIII
 FROM sniff_csv('test/sql/copy/csv/data/error/mismatch/big_bad.csv', sample_size=1);
 ----
-,	\0	\0	\n	0	0	{'column0': 'BIGINT', 'column1': 'VARCHAR'}	NULL	NULL	sample_size=1	FROM read_csv('test/sql/copy/csv/data/error/mismatch/big_bad.csv', auto_detect=false, delim=',', quote='\0', escape='\0', new_line='\n', skip=0, header=false, columns={'column0': 'BIGINT', 'column1': 'VARCHAR'}, sample_size=1);
+,	"	"	\n	0	0	{'column0': 'BIGINT', 'column1': 'VARCHAR'}	NULL	NULL	sample_size=1	FROM read_csv('test/sql/copy/csv/data/error/mismatch/big_bad.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=false, columns={'column0': 'BIGINT', 'column1': 'VARCHAR'}, sample_size=1);
 
 statement error
 FROM read_csv('test/sql/copy/csv/data/error/mismatch/big_bad.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=0, columns={'column0': 'BIGINT', 'column1': 'VARCHAR'}, sample_size=1);
@@ -47,12 +47,12 @@ Conversion Error: CSV Error on Line: 2176
 query IIIIIIIIIII
 FROM sniff_csv('test/sql/copy/csv/data/error/mismatch/big_bad.csv', sample_size=10000);
 ----
-,	\0	\0	\n	0	1	{'1': 'VARCHAR', 'A': 'VARCHAR'}	NULL	NULL	sample_size=10000	FROM read_csv('test/sql/copy/csv/data/error/mismatch/big_bad.csv', auto_detect=false, delim=',', quote='\0', escape='\0', new_line='\n', skip=0, header=true, columns={'1': 'VARCHAR', 'A': 'VARCHAR'}, sample_size=10000);
+,	"	"	\n	0	1	{'1': 'VARCHAR', 'A': 'VARCHAR'}	NULL	NULL	sample_size=10000	FROM read_csv('test/sql/copy/csv/data/error/mismatch/big_bad.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'1': 'VARCHAR', 'A': 'VARCHAR'}, sample_size=10000);
 
 query IIIIIIIIIII
 FROM sniff_csv('test/sql/copy/csv/data/error/mismatch/big_bad.csv', sample_size=-1);
 ----
-,	\0	\0	\n	0	1	{'1': 'VARCHAR', 'A': 'VARCHAR'}	NULL	NULL	sample_size=-1	FROM read_csv('test/sql/copy/csv/data/error/mismatch/big_bad.csv', auto_detect=false, delim=',', quote='\0', escape='\0', new_line='\n', skip=0, header=true, columns={'1': 'VARCHAR', 'A': 'VARCHAR'}, sample_size=-1);
+,	"	"	\n	0	1	{'1': 'VARCHAR', 'A': 'VARCHAR'}	NULL	NULL	sample_size=-1	FROM read_csv('test/sql/copy/csv/data/error/mismatch/big_bad.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'1': 'VARCHAR', 'A': 'VARCHAR'}, sample_size=-1);
 
 # Test with defined time and timestamp
 query IIIIIIIIIII

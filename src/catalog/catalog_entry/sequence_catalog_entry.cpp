@@ -14,7 +14,7 @@
 namespace duckdb {
 
 SequenceData::SequenceData(CreateSequenceInfo &info)
-    : usage_count(info.usage_count), counter(info.start_value), increment(info.increment),
+    : usage_count(info.usage_count), counter(info.start_value), last_value(info.start_value), increment(info.increment),
       start_value(info.start_value), min_value(info.min_value), max_value(info.max_value), cycle(info.cycle) {
 }
 
@@ -73,7 +73,7 @@ int64_t SequenceCatalogEntry::NextValue(DuckTransaction &transaction) {
 	data.last_value = result;
 	data.usage_count++;
 	if (!temporary) {
-		transaction.sequence_usage[this] = SequenceValue(data.usage_count, data.counter);
+		transaction.PushSequenceUsage(*this, data);
 	}
 	return result;
 }

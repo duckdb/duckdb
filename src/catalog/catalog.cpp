@@ -55,7 +55,11 @@ AttachedDatabase &Catalog::GetAttached() {
 	return db;
 }
 
-const string &Catalog::GetName() {
+const AttachedDatabase &Catalog::GetAttached() const {
+	return db;
+}
+
+const string &Catalog::GetName() const {
 	return GetAttached().GetName();
 }
 
@@ -754,19 +758,6 @@ CatalogEntryLookup Catalog::TryLookupEntry(ClientContext &context, CatalogType t
 		lookups.emplace_back(std::move(lookup));
 	}
 	return Catalog::TryLookupEntry(context, lookups, type, name, if_not_found, error_context);
-}
-
-CatalogEntry &Catalog::GetEntry(ClientContext &context, const string &schema, const string &name) {
-	vector<CatalogType> entry_types {CatalogType::TABLE_ENTRY, CatalogType::SEQUENCE_ENTRY};
-
-	for (auto entry_type : entry_types) {
-		auto result = GetEntry(context, entry_type, schema, name, OnEntryNotFound::RETURN_NULL);
-		if (result) {
-			return *result;
-		}
-	}
-
-	throw CatalogException("CatalogElement \"%s.%s\" does not exist!", schema, name);
 }
 
 optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, CatalogType type, const string &schema_name,

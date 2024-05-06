@@ -252,7 +252,7 @@ protected:
 			Initialize();
 			initialized = true;
 		}
-		if (!iterator.done) {
+		if (!iterator.done && cur_buffer_handle) {
 			Process(result);
 		}
 		FinalizeChunkProcess();

@@ -1,6 +1,7 @@
 #include "duckdb/storage/arena_allocator.hpp"
 
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 
 namespace duckdb {
 
@@ -88,10 +89,11 @@ data_ptr_t ArenaAllocator::Reallocate(data_ptr_t pointer, idx_t old_size, idx_t 
 	}
 
 	auto head_ptr = head->data.get() + head->current_position;
-	int64_t diff = size - old_size;
-	if (pointer == head_ptr && (size < old_size || head->current_position + diff <= head->maximum_size)) {
+	int64_t diff = NumericCast<int64_t>(size) - NumericCast<int64_t>(old_size);
+	if (pointer == head_ptr && (size < old_size || NumericCast<int64_t>(head->current_position) + diff <=
+	                                                   NumericCast<int64_t>(head->maximum_size))) {
 		// passed pointer is the head pointer, and the diff fits on the current chunk
-		head->current_position += diff;
+		head->current_position += NumericCast<idx_t>(diff);
 		return pointer;
 	} else {
 		// allocate new memory

@@ -13,6 +13,7 @@
 #include "duckdb/transaction/undo_buffer.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/transaction/transaction_data.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 
 namespace duckdb {
 class SequenceCatalogEntry;
@@ -53,6 +54,8 @@ public:
 
 	//! Whether or not the transaction has made any modifications to the database so far
 	DUCKDB_API bool IsReadOnly();
+	//! Promotes the transaction to a read-write transaction
+	DUCKDB_API virtual void SetReadWrite();
 
 	virtual bool IsDuckTransaction() const {
 		return false;
@@ -66,9 +69,12 @@ public:
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
+
+private:
+	bool is_read_only;
 };
 
 } // namespace duckdb

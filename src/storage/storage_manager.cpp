@@ -45,6 +45,10 @@ BufferManager &BufferManager::GetBufferManager(ClientContext &context) {
 	return BufferManager::GetBufferManager(*context.db);
 }
 
+const BufferManager &BufferManager::GetBufferManager(const ClientContext &context) {
+	return BufferManager::GetBufferManager(*context.db);
+}
+
 ObjectCache &ObjectCache::GetObjectCache(ClientContext &context) {
 	return context.db->GetObjectCache();
 }
@@ -219,7 +223,7 @@ public:
 			wal.skip_writing = false;
 			if (wal.GetTotalWritten() > initial_written) {
 				// remove any entries written into the WAL by truncating it
-				wal.Truncate(initial_wal_size);
+				wal.Truncate(NumericCast<int64_t>(initial_wal_size));
 			}
 		}
 	}
@@ -272,22 +276,23 @@ bool SingleFileStorageManager::IsCheckpointClean(MetaBlockPointer checkpoint_id)
 	return block_manager->IsRootBlock(checkpoint_id);
 }
 
-void SingleFileStorageManager::CreateCheckpoint(bool delete_wal, bool force_checkpoint) {
+void SingleFileStorageManager::CreateCheckpoint(CheckpointOptions options) {
 	if (InMemory() || read_only || !wal) {
 		return;
 	}
 	auto &config = DBConfig::Get(db);
-	if (wal->GetWALSize() > 0 || config.options.force_checkpoint || force_checkpoint) {
+	if (wal->GetWALSize() > 0 || config.options.force_checkpoint ||
+	    options.action == CheckpointAction::FORCE_CHECKPOINT) {
 		// we only need to checkpoint if there is anything in the WAL
 		try {
-			SingleFileCheckpointWriter checkpointer(db, *block_manager);
+			SingleFileCheckpointWriter checkpointer(db, *block_manager, options.type);
 			checkpointer.CreateCheckpoint();
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
 			throw FatalException("Failed to create checkpoint because of error: %s", error.RawMessage());
 		}
 	}
-	if (delete_wal) {
+	if (options.wal_action == CheckpointWALAction::DELETE_WAL) {
 		wal->Delete();
 		wal.reset();
 	}
@@ -303,7 +308,7 @@ DatabaseSize SingleFileStorageManager::GetDatabaseSize() {
 		ds.used_blocks = ds.total_blocks - ds.free_blocks;
 		ds.bytes = (ds.total_blocks * ds.block_size);
 		if (auto wal = GetWriteAheadLog()) {
-			ds.wal_size = wal->GetWALSize();
+			ds.wal_size = NumericCast<idx_t>(wal->GetWALSize());
 		}
 	}
 	return ds;
@@ -321,7 +326,7 @@ bool SingleFileStorageManager::AutomaticCheckpoint(idx_t estimated_wal_bytes) {
 	}
 
 	auto &config = DBConfig::Get(db);
-	auto initial_size = log->GetWALSize();
+	auto initial_size = NumericCast<idx_t>(log->GetWALSize());
 	idx_t expected_wal_size = initial_size + estimated_wal_bytes;
 	return expected_wal_size > config.options.checkpoint_wal_size;
 }

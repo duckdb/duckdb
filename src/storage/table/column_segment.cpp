@@ -54,8 +54,8 @@ unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance
 
 	// Allocate a buffer for the uncompressed segment.
 	auto block = buffer_manager.RegisterTransientMemory(segment_size);
-	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::TRANSIENT, start, 0, *function,
-	                                BaseStatistics::CreateEmpty(type), INVALID_BLOCK, 0, segment_size);
+	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::TRANSIENT, start, 0U, *function,
+	                                BaseStatistics::CreateEmpty(type), INVALID_BLOCK, 0U, segment_size);
 }
 
 //===--------------------------------------------------------------------===//
@@ -129,7 +129,8 @@ void ColumnSegment::ScanPartial(ColumnScanState &state, idx_t scan_count, Vector
 // Fetch
 //===--------------------------------------------------------------------===//
 void ColumnSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
-	function.get().fetch_row(*this, state, row_id - this->start, result, result_idx);
+	function.get().fetch_row(*this, state, UnsafeNumericCast<int64_t>(UnsafeNumericCast<idx_t>(row_id) - this->start),
+	                         result, result_idx);
 }
 
 //===--------------------------------------------------------------------===//

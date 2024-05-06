@@ -114,6 +114,18 @@ public:
 		OnOptionalPropertyEnd(true);
 	}
 
+	template <typename T>
+	inline void ReadPropertyWithDefault(const field_id_t field_id, const char *tag, CSVOption<T> &ret,
+	                                    T &&default_value) {
+		if (!OnOptionalPropertyBegin(field_id, tag)) {
+			ret = std::forward<T>(default_value);
+			OnOptionalPropertyEnd(false);
+			return;
+		}
+		ret = Read<T>();
+		OnOptionalPropertyEnd(true);
+	}
+
 	// Special case:
 	// Read into an existing data_ptr_t
 	inline void ReadProperty(const field_id_t field_id, const char *tag, data_ptr_t ret, idx_t count) {
@@ -182,6 +194,12 @@ private:
 		auto val = T::Deserialize(*this);
 		OnObjectEnd();
 		return val;
+	}
+
+	// Deserialize a optionally_owned_ptr
+	template <class T, typename ELEMENT_TYPE = typename is_optionally_owned_ptr<T>::ELEMENT_TYPE>
+	inline typename std::enable_if<is_optionally_owned_ptr<T>::value, T>::type Read() {
+		return optionally_owned_ptr<ELEMENT_TYPE>(Read<unique_ptr<ELEMENT_TYPE>>());
 	}
 
 	// Deserialize unique_ptr if the element type has a Deserialize method

@@ -13,6 +13,7 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/enums/on_create_conflict.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 
 namespace duckdb {
 struct AlterInfo;
@@ -57,8 +58,8 @@ public:
 	DUCKDB_API virtual unique_ptr<AlterInfo> GetAlterInfo() const;
 
 	virtual string ToString() const {
-		throw InternalException("ToString not supported for this type of CreateInfo: '%s'",
-		                        EnumUtil::ToString(info_type));
+		throw NotImplementedException("ToString not supported for this type of CreateInfo: '%s'",
+		                              EnumUtil::ToString(info_type));
 	}
 };
 
