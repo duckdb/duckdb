@@ -77,9 +77,8 @@ from (VALUES (1, 2, 3), (2, 3, 0), (0, 0, 1)) tbl(a, b, c) where 1 IN (*COLUMNS(
 1	2	3
 0	0	1
 
-# Using struct pack:
-query I
-WITH data AS (
+statement ok
+create table data AS (
 	SELECT * FROM (VALUES
 	(1, 'Alice'),
 	(2, 'Bob'),
@@ -87,6 +86,9 @@ WITH data AS (
 	(4, 'Carol')
 	) AS t(id, name)
 )
+
+# Using struct pack:
+query I
 select struct_pack(*COLUMNS(*)) from data
 ----
 {'id': 1, 'name': Alice}
@@ -104,3 +106,85 @@ statement error
 SELECT *COLUMNS(COLUMNS(*)) FROM (VALUES ('test'))
 ----
 (*)COLUMNS expression is not allowed inside another (*)COLUMNS expression
+
+# COLUMNS and *COLUMNS of different expressions
+query III
+select COLUMNS(*), struct_pack(COLUMNS(['id'])) from data
+----
+1	Alice	{'id': 1}
+2	Bob	{'id': 2}
+3	Alice	{'id': 3}
+4	Carol	{'id': 4}
+
+# (temporary limitation)
+# *COLUMNS with different expressions can not appear in the same expression
+statement error
+select struct_pack(struct_pack(*COLUMNS(['id']), struct_pack(*COLUMNS(['name'])))) from data
+----
+Multiple different STAR/COLUMNS/*COLUMNS in the same expression are not supported
+
+# When they share the same expression, this is allowed:
+query I
+select struct_pack(
+	b := struct_pack(*COLUMNS(['id'])),
+	a := struct_pack(*COLUMNS(['id']))
+) from data
+----
+{'b': {'id': 1}, 'a': {'id': 1}}
+{'b': {'id': 2}, 'a': {'id': 2}}
+{'b': {'id': 3}, 'a': {'id': 3}}
+{'b': {'id': 4}, 'a': {'id': 4}}
+
+# Multiple *COLUMNS in the same statement are allowed
+# Whether they share the same expression or not:
+query II
+select struct_pack(*COLUMNS('id')) a, struct_pack(*COLUMNS('name')) from data
+----
+{'id': 1}	{'name': Alice}
+{'id': 2}	{'name': Bob}
+{'id': 3}	{'name': Alice}
+{'id': 4}	{'name': Carol}
+
+# Varargs function
+query I
+select CONCAT(*COLUMNS(*), *COLUMNS(*)) from data
+----
+1Alice1Alice
+2Bob2Bob
+3Alice3Alice
+4Carol4Carol
+
+# *COLUMNS inside COLUMNS lambda
+statement error
+select COLUMNS(col -> *COLUMNS('id')) from data
+----
+(*)COLUMNS expression is not allowed inside another (*)COLUMNS expression
+
+statement error
+select *COLUMNS(col -> *COLUMNS(*)) from data
+----
+(*)COLUMNS expression is not allowed inside another (*)COLUMNS expression
+
+# *COLUMNS expanding to more than one column in binary op
+statement error
+with integers as (
+	SELECT * FROM (VALUES
+		(42, 31),
+		(85, 76),
+	) as t(a, b)
+)
+select *COLUMNS(*) + 42 from integers
+----
+No function matches the given name and argument types '+(INTEGER, INTEGER, INTEGER_LITERAL)'.
+
+query I
+with integers as (
+	SELECT * FROM (VALUES
+		(42, 31),
+		(85, 76),
+	) as t(a, b)
+)
+select *COLUMNS('a') + 42 from integers
+----
+84
+127
