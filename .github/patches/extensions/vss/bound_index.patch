@@ -1,5 +1,5 @@
 diff --git a/src/hnsw/hnsw_index.cpp b/src/hnsw/hnsw_index.cpp
-index 92d7c67c30..48c8f52bb1 100644
+index a280522b30..687860728c 100644
 --- a/src/hnsw/hnsw_index.cpp
 +++ b/src/hnsw/hnsw_index.cpp
 @@ -122,7 +122,7 @@ HNSWIndex::HNSWIndex(const string &name, IndexConstraintType index_constraint_ty
@@ -11,35 +11,7 @@ index 92d7c67c30..48c8f52bb1 100644
  
  	if (index_constraint_type != IndexConstraintType::NONE) {
  		throw NotImplementedException("HNSW indexes do not support unique or primary key constraints");
-@@ -186,7 +186,7 @@ HNSWIndex::HNSWIndex(const string &name, IndexConstraintType index_constraint_ty
- 		config.connectivity_base = m0_opt->second.GetValue<int32_t>();
- 	}
- 
--	index = unum::usearch::index_dense_t::make(metric, config);
-+	index = unum::usearch::index_dense_gt<row_t>::make(metric, config);
- 
- 	auto lock = rwlock.GetExclusiveLock();
- 	// Is this a new index or an existing index?
-@@ -310,7 +310,7 @@ unique_ptr<IndexScanState> HNSWIndex::InitializeScan(float *query_vector, idx_t
- 	state->total_rows = search_result.size();
- 	state->row_ids = make_uniq_array<row_t>(search_result.size());
- 
--	search_result.dump_to(reinterpret_cast<uint64_t *>(state->row_ids.get()));
-+	search_result.dump_to(state->row_ids.get());
- 	return std::move(state);
- }
- 
-@@ -421,6 +421,9 @@ void HNSWIndex::Delete(IndexLock &lock, DataChunk &input, Vector &rowid_vec) {
- 
- 	for (idx_t i = 0; i < input.size(); i++) {
- 		auto result = index.remove(row_id_data[i]);
-+		if (!result) {
-+			throw InternalException("Failed to remove from the HNSW index: %s", result.error.what());
-+		}
- 	}
- 
- 	index_size = index.size();
-@@ -496,7 +499,7 @@ idx_t HNSWIndex::GetInMemorySize(IndexLock &state) {
+@@ -517,7 +517,7 @@ idx_t HNSWIndex::GetInMemorySize(IndexLock &state) {
  	return index.memory_usage();
  }
  
@@ -48,17 +20,20 @@ index 92d7c67c30..48c8f52bb1 100644
  	throw NotImplementedException("HNSWIndex::MergeIndexes() not implemented");
  }
  
-@@ -519,7 +522,7 @@ void HNSWModule::RegisterIndex(DatabaseInstance &db) {
+@@ -538,9 +538,9 @@ string HNSWIndex::VerifyAndToString(IndexLock &state, const bool only_verify) {
+ void HNSWModule::RegisterIndex(DatabaseInstance &db) {
+ 
  	IndexType index_type;
- 	index_type.name = HNSWIndex::TYPE_NAME;
+-	index_type.name = HNSWIndex::TYPE_NAME;
  
 -	index_type.create_instance = [](CreateIndexInput &input) -> unique_ptr<Index> {
++	index_type.name = HNSWIndex::TYPE_NAME;
 +	index_type.create_instance = [](CreateIndexInput &input) -> unique_ptr<BoundIndex> {
  		auto res = make_uniq<HNSWIndex>(input.name, input.constraint_type, input.column_ids, input.table_io_manager,
  		                                input.unbound_expressions, input.db, input.options, input.storage_info);
  		return std::move(res);
 diff --git a/src/hnsw/hnsw_index_physical_create.cpp b/src/hnsw/hnsw_index_physical_create.cpp
-index 67ba14c2af..d0e24f4dc4 100644
+index 9ab0b87fae..6123ba3e3c 100644
 --- a/src/hnsw/hnsw_index_physical_create.cpp
 +++ b/src/hnsw/hnsw_index_physical_create.cpp
 @@ -33,7 +33,7 @@ PhysicalCreateHNSWIndex::PhysicalCreateHNSWIndex(LogicalOperator &op, TableCatal
@@ -66,49 +41,83 @@ index 67ba14c2af..d0e24f4dc4 100644
  public:
  	//! Global index to be added to the table
 -	unique_ptr<Index> global_index;
-+	unique_ptr<BoundIndex> global_index;
++	unique_ptr<HNSWIndex> global_index;
  	atomic<idx_t> next_thread_id = {0};
  };
  
+@@ -74,7 +74,7 @@ SinkResultType PhysicalCreateHNSWIndex::Sink(ExecutionContext &context, DataChun
+                                              OperatorSinkInput &input) const {
+ 	auto &gstate = input.global_state.Cast<CreateHNSWIndexGlobalState>();
+ 	auto &lstate = input.local_state.Cast<CreateHNSWIndexLocalState>();
+-	auto &index = gstate.global_index->Cast<HNSWIndex>();
++	auto &index = *gstate.global_index;
+ 
+ 	if (lstate.thread_id == idx_t(-1)) {
+ 		lstate.thread_id = gstate.next_thread_id++;
+@@ -119,7 +119,7 @@ SinkFinalizeType PhysicalCreateHNSWIndex::Finalize(Pipeline &pipeline, Event &ev
+ 	// If not in memory, persist the index to disk
+ 	if (!storage.db.GetStorageManager().InMemory()) {
+ 		// Finalize the index
+-		gstate.global_index->Cast<HNSWIndex>().PersistToDisk();
++		gstate.global_index->PersistToDisk();
+ 	}
+ 
+ 	if (!storage.IsRoot()) {
+@@ -138,14 +138,14 @@ SinkFinalizeType PhysicalCreateHNSWIndex::Finalize(Pipeline &pipeline, Event &ev
+ 
+ 	// Get the entry as a DuckIndexEntry
+ 	auto &index = index_entry->Cast<DuckIndexEntry>();
+-	index.initial_index_size = gstate.global_index->GetInMemorySize();
++	index.initial_index_size = gstate.global_index->Cast<BoundIndex>().GetInMemorySize();
+ 	index.info = make_uniq<IndexDataTableInfo>(storage.GetDataTableInfo(), index.name);
+ 	for (auto &parsed_expr : info->parsed_expressions) {
+ 		index.parsed_expressions.push_back(parsed_expr->Copy());
+ 	}
+ 
+ 	// Finally add it to storage
+-	storage.GetDataTableInfo()->GetIndexes().AddIndex(std::move(gstate.global_index));
++	storage.AddIndex(std::move(gstate.global_index));
+ 
+ 	return SinkFinalizeType::READY;
+ }
 diff --git a/src/hnsw/hnsw_index_pragmas.cpp b/src/hnsw/hnsw_index_pragmas.cpp
-index cef1293dae..48fd926376 100644
+index cb9bfd2841..97f831a855 100644
 --- a/src/hnsw/hnsw_index_pragmas.cpp
 +++ b/src/hnsw/hnsw_index_pragmas.cpp
-@@ -100,7 +100,7 @@ static void HNSWIndexInfoExecute(ClientContext &context, TableFunctionInput &dat
+@@ -99,14 +99,14 @@ static void HNSWIndexInfoExecute(ClientContext &context, TableFunctionInput &dat
+ 		HNSWIndex *hnsw_index = nullptr;
  
- 		storage.info->InitializeIndexes(context);
- 		storage.info->indexes.Scan([&](Index &index) {
+ 		auto &table_info = *storage.GetDataTableInfo();
+-		table_info.InitializeIndexes(context);
+-		table_info.GetIndexes().Scan([&](Index &index) {
 -			if (index.name == index_entry.name && index.index_type == HNSWIndex::TYPE_NAME) {
-+			if (index.GetIndexName() == index_entry.name && index.GetIndexType() == HNSWIndex::TYPE_NAME) {
- 				hnsw_index = &index.Cast<HNSWIndex>();
+-				hnsw_index = &index.Cast<HNSWIndex>();
++		table_info.GetIndexes().BindAndScan<HNSWIndex>(context, table_info, [&](HNSWIndex &index) {
++			if (index.name == index_entry.name) {
++				hnsw_index = &index;
  				return true;
  			}
-@@ -172,18 +172,16 @@ static void CompactIndexPragma(ClientContext &context, const FunctionParameters
- 
- 	auto &storage = table_entry.GetStorage();
+ 			return false;
+ 		});
++
+ 		if (!hnsw_index) {
+ 			throw BinderException("Index %s not found", index_entry.name);
+ 		}
+@@ -175,10 +175,8 @@ static void CompactIndexPragma(ClientContext &context, const FunctionParameters
  	bool found_index = false;
--	storage.info->indexes.Scan([&](Index &index_entry) {
--		if (index_entry.name == index_name && index_entry.index_type == HNSWIndex::TYPE_NAME) {
+ 
+ 	auto &table_info = *storage.GetDataTableInfo();
+-	table_info.InitializeIndexes(context);
+-	table_info.GetIndexes().Scan([&](Index &index_entry) {
+-		if (index_entry.name == index_name && index_entry.index_type == HNSWIndex::TYPE_NAME && !index_entry.IsUnknown()) {
 -			auto &hnsw_index = index_entry.Cast<HNSWIndex>();
--			hnsw_index.Compact();
-+	storage.info->indexes.BindAndScan<HNSWIndex>(context, *storage.info, [&](HNSWIndex &index){
-+		if (index.GetIndexName() == index_name) {
-+			index.Compact();
++	table_info.GetIndexes().BindAndScan<HNSWIndex>(context, table_info,  [&](HNSWIndex &hnsw_index) {
++		if (index_entry.name == index_name) {
+ 			hnsw_index.Compact();
  			found_index = true;
  			return true;
- 		}
- 		return false;
--	});
--
-+ 	});
- 	if (!found_index) {
--		throw BinderException("Index %s not found", index_name);
-+		throw InvalidInputException("Index %s not found", index_name);
- 	}
- }
- 
 diff --git a/src/hnsw/hnsw_index_scan.cpp b/src/hnsw/hnsw_index_scan.cpp
-index 954b439f91..7b4d3c3132 100644
+index d09aae9df3..71f657199a 100644
 --- a/src/hnsw/hnsw_index_scan.cpp
 +++ b/src/hnsw/hnsw_index_scan.cpp
 @@ -124,7 +124,7 @@ unique_ptr<NodeStatistics> HNSWIndexScanCardinality(ClientContext &context, cons
@@ -121,37 +130,90 @@ index 954b439f91..7b4d3c3132 100644
  
  //-------------------------------------------------------------------------
 diff --git a/src/hnsw/hnsw_plan_index_scan.cpp b/src/hnsw/hnsw_plan_index_scan.cpp
-index 09a7de9b47..6dce49a456 100644
+index d08a8590b1..3bec53a34b 100644
 --- a/src/hnsw/hnsw_plan_index_scan.cpp
 +++ b/src/hnsw/hnsw_plan_index_scan.cpp
-@@ -136,7 +136,7 @@ public:
+@@ -132,38 +132,32 @@ public:
+ 		auto &duck_table = table.Cast<DuckTableEntry>();
+ 		auto &table_info = *table.GetStorage().GetDataTableInfo();
+ 
+-		// Load the indexes
+-		table_info.InitializeIndexes(context);
+-
  		// Find the index
  		unique_ptr<HNSWIndexScanBindData> bind_data = nullptr;
- 		table_info->indexes.Scan([&](Index &index_entry) {
+-		table_info.GetIndexes().Scan([&](Index &index_entry) {
 -			if (index_entry.index_type == HNSWIndex::TYPE_NAME) {
-+			if (index_entry.GetIndexType() == HNSWIndex::TYPE_NAME) {
- 				auto &hnsw_index = index_entry.Cast<HNSWIndex>();
+-				auto &hnsw_index = index_entry.Cast<HNSWIndex>();
+-
+-				if (hnsw_index.GetVectorSize() != array_size) {
+-					// The vector size of the index does not match the vector size of the query
+-					return false;
+-				}
++		table_info.GetIndexes().BindAndScan<HNSWIndex>(context, table_info, [&](HNSWIndex &index_entry) {
++			auto &hnsw_index = index_entry.Cast<HNSWIndex>();
  
- 				if (hnsw_index.GetVectorSize() != array_size) {
+-				if (!hnsw_index.MatchesDistanceFunction(bound_function.function.name)) {
+-					// The distance function of the index does not match the distance function of the query
+-					return false;
+-				}
++			if (hnsw_index.GetVectorSize() != array_size) {
++				// The vector size of the index does not match the vector size of the query
++				return false;
++			}
+ 
+-				// Create a query vector from the constant value
+-				auto query_vector = make_unsafe_uniq_array<float>(array_size);
+-				auto vector_elements = ArrayValue::GetChildren(target_value);
+-				for (idx_t i = 0; i < array_size; i++) {
+-					query_vector[i] = vector_elements[i].GetValue<float>();
+-				}
++			if (!hnsw_index.MatchesDistanceFunction(bound_function.function.name)) {
++				// The distance function of the index does not match the distance function of the query
++				return false;
++			}
+ 
+-				// Create the bind data for this index
+-				bind_data =
+-				    make_uniq<HNSWIndexScanBindData>(duck_table, index_entry, top_n.limit, std::move(query_vector));
+-				return true;
++			// Create a query vector from the constant value
++			auto query_vector = make_unsafe_uniq_array<float>(array_size);
++			auto vector_elements = ArrayValue::GetChildren(target_value);
++			for (idx_t i = 0; i < array_size; i++) {
++				query_vector[i] = vector_elements[i].GetValue<float>();
+ 			}
+-			return false;
++
++			// Create the bind data for this index
++			bind_data =
++				make_uniq<HNSWIndexScanBindData>(duck_table, index_entry, top_n.limit, std::move(query_vector));
++			return true;
+ 		});
+ 
+ 		if (!bind_data) {
 diff --git a/src/include/hnsw/hnsw_index.hpp b/src/include/hnsw/hnsw_index.hpp
-index 04c2470188..70b3594c6d 100644
+index d26ce3247d..0652a7dcbd 100644
 --- a/src/include/hnsw/hnsw_index.hpp
 +++ b/src/include/hnsw/hnsw_index.hpp
-@@ -1,7 +1,7 @@
+@@ -1,11 +1,12 @@
  #pragma once
  
 -#include "duckdb/storage/index.hpp"
- #include "duckdb/common/array.hpp"
+-#include "duckdb/common/array.hpp"
++
 +#include "duckdb/execution/index/bound_index.hpp"
  #include "duckdb/execution/index/index_pointer.hpp"
  #include "duckdb/execution/index/fixed_size_allocator.hpp"
- #include "duckdb/common/unordered_map.hpp"
-@@ -18,10 +18,10 @@ struct HNSWIndexStats {
- 	idx_t count;
- 	idx_t capacity;
- 	idx_t approx_size;
--	vector<unum::usearch::index_dense_t::stats_t> level_stats;
-+	vector<unum::usearch::index_dense_gt<row_t>::stats_t> level_stats;
+-#include "duckdb/common/unordered_map.hpp"
++#include "duckdb/common/array.hpp"
+ #include "duckdb/common/case_insensitive_map.hpp"
++#include "duckdb/common/unordered_map.hpp"
+ 
+ #include "usearch/duckdb_usearch.hpp"
+ 
+@@ -21,7 +22,7 @@ struct HNSWIndexStats {
+ 	vector<unum::usearch::index_dense_gt<row_t>::stats_t> level_stats;
  };
  
 -class HNSWIndex : public Index {
@@ -159,16 +221,7 @@ index 04c2470188..70b3594c6d 100644
  public:
  	// The type name of the HNSWIndex
  	static constexpr const char *TYPE_NAME = "HNSW";
-@@ -33,7 +33,7 @@ public:
- 	          const IndexStorageInfo &info = IndexStorageInfo(), idx_t estimated_cardinality = 0);
- 
- 	//! The actual usearch index
--	unum::usearch::index_dense_t index;
-+	unum::usearch::index_dense_gt<row_t> index;
- 
- 	//! Block pointer to the root of the index
- 	IndexPointer root_block_ptr;
-@@ -77,7 +77,7 @@ public:
+@@ -77,7 +78,7 @@ public:
  
  	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
  	//! index must also be locked during the merge
@@ -177,19 +230,3 @@ index 04c2470188..70b3594c6d 100644
  
  	//! Traverses an HNSWIndex and vacuums the qualifying nodes. The lock obtained from InitializeLock must be held
  	void Vacuum(IndexLock &state) override;
-diff --git a/test/sql/hnsw/hnsw_insert_wal.test b/test/sql/hnsw/hnsw_insert_wal.test
-index f21eab6396..beb8733788 100644
---- a/test/sql/hnsw/hnsw_insert_wal.test
-+++ b/test/sql/hnsw/hnsw_insert_wal.test
-@@ -9,8 +9,9 @@ require vector_size 2048
- statement ok
- PRAGMA enable_verification;
- 
--statement ok
--PRAGMA disable_checkpoint_on_shutdown;
-+# TODO: We should run with this pragma enabled, but we need to add extension loading to the WAL first
-+#statement ok
-+#PRAGMA disable_checkpoint_on_shutdown;
- 
- statement ok
- CREATE TABLE t1 (vec FLOAT[3]);
