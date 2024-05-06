@@ -76,7 +76,7 @@ public:
 
 	void WriteCreateSequence(const SequenceCatalogEntry &entry);
 	void WriteDropSequence(const SequenceCatalogEntry &entry);
-	void WriteSequenceValue(const SequenceCatalogEntry &entry, SequenceValue val);
+	void WriteSequenceValue(SequenceValue val);
 
 	void WriteCreateMacro(const ScalarMacroCatalogEntry &entry);
 	void WriteDropMacro(const ScalarMacroCatalogEntry &entry);
@@ -90,7 +90,7 @@ public:
 	void WriteCreateType(const TypeCatalogEntry &entry);
 	void WriteDropType(const TypeCatalogEntry &entry);
 	//! Sets the table used for subsequent insert/delete/update commands
-	void WriteSetTable(string &schema, string &table);
+	void WriteSetTable(const string &schema, const string &table);
 
 	void WriteAlter(const AlterInfo &info);
 

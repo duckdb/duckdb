@@ -63,7 +63,7 @@ BasicTimeZone::hasEquivalentTransitions(const BasicTimeZone& tz, UDate start, UD
     } else {
         if (raw1 != raw2 || dst1 != dst2) {
             return FALSE;
-        }            
+        }
     }
     // Check transitions in the range
     UDate time = start;
@@ -159,7 +159,7 @@ BasicTimeZone::getSimpleRulesNear(UDate date, InitialTimeZoneRule*& initial,
         if (((tr.getFrom()->getDSTSavings() == 0 && tr.getTo()->getDSTSavings() != 0)
               || (tr.getFrom()->getDSTSavings() != 0 && tr.getTo()->getDSTSavings() == 0))
             && (date + MILLIS_PER_YEAR > nextTransitionTime)) {
- 
+
             int32_t year, month, dom, dow, doy, mid;
             UDate d;
 
@@ -375,13 +375,13 @@ BasicTimeZone::getTimeZoneRulesAfter(UDate start, InitialTimeZoneRule*& initial,
         UDate updatedTime = tzt.getTime();
         if (updatedTime == time) {
             // Can get here if rules for start & end of daylight time have exactly
-            // the same time.  
+            // the same time.
             // TODO:  fix getNextTransition() to prevent it?
             status = U_INVALID_STATE_ERROR;
             goto error;
         }
         time = updatedTime;
- 
+
         const TimeZoneRule *toRule = tzt.getTo();
         for (i = 0; i < ruleCount; i++) {
             r = (TimeZoneRule*)orgRules->elementAt(i);
@@ -408,7 +408,7 @@ BasicTimeZone::getTimeZoneRulesAfter(UDate start, InitialTimeZoneRule*& initial,
                 if (!avail) {
                     break;
                 }
-                if (*(tzt0.getTo()) == *tar) {
+                if (*tar == *(tzt0.getTo())) {
                     break;
                 }
                 t = tzt0.getTime();

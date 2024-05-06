@@ -1,0 +1,42 @@
+# name: test/optimizer/joins/update_nodes_in_full_path.test_slow
+# description: updating nodes in full path should throw no errors
+# group: [joins]
+
+require tpch
+
+statement ok
+call dbgen(sf=0.01);
+
+statement ok
+SELECT NULL
+FROM main.supplier AS ref_0
+LEFT JOIN main.nation AS ref_1 
+LEFT JOIN main.nation AS ref_2 
+    INNER JOIN main.customer AS ref_3 
+    INNER JOIN main.supplier AS ref_4 ON (ref_3.c_phone = ref_4.s_name) 
+    ON ((SELECT l_linestatus FROM main.lineitem LIMIT 1 OFFSET 2) IS NULL) 
+INNER JOIN main.orders AS ref_5 
+    INNER JOIN main.orders AS ref_6 ON (ref_5.o_clerk ~~~ ref_5.o_comment) 
+    ON (1) 
+ON (ref_3.c_mktsegment ~~~ ref_4.s_phone) 
+ON (ref_0.s_acctbal = ref_5.o_totalprice) 
+INNER JOIN main.lineitem AS ref_7 ON (ref_4.s_suppkey = ref_7.l_orderkey) 
+INNER JOIN main.supplier AS ref_8 
+    INNER JOIN main.partsupp AS ref_9 
+    INNER JOIN main.supplier AS ref_10 
+    INNER JOIN main.supplier AS ref_11 
+    INNER JOIN main.lineitem AS ref_12 
+    INNER JOIN main.customer AS ref_13 ON (ref_12.l_linestatus = ref_13.c_name) 
+    ON ((SELECT ps_comment FROM main.partsupp LIMIT 1 OFFSET 4) ^@ ref_11.s_address) 
+    ON (ref_13.c_phone ~~~ ref_10.s_address) 
+    ON (ref_9.ps_partkey = ref_11.s_suppkey) 
+    ON ((SELECT ps_comment FROM main.partsupp LIMIT 1 OFFSET 6) ~~* ref_12.l_linestatus) 
+    ON ((ref_6.o_orderpriority IS NULL) OR (ref_7.l_linestatus ~~* (SELECT s_name FROM main.supplier LIMIT 1 OFFSET 6))) 
+INNER JOIN (
+    SELECT ref_14.p_container AS c0, ref_14.p_mfgr AS c1, ref_14.p_container AS c2, ref_15.c_custkey AS c3 
+    FROM main.part AS ref_14 
+    INNER JOIN main.customer AS ref_15 ON (ref_14.p_brand ~~* ref_15.c_mktsegment) 
+    WHERE (ref_14.p_comment ~~~ ref_14.p_container) 
+    LIMIT 101
+) AS subq_0 ON (ref_6.o_orderstatus ~~* ref_6.o_comment) 
+WHERE (ref_8.s_address ~~* ref_8.s_address);

@@ -51,7 +51,7 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 		}
 		for (idx_t i = 0; i < csv_file_scan->file_types.size(); i++) {
 			auto &type = csv_file_scan->file_types[i];
-			if (StringValueScanner::CanDirectlyCast(type, state_machine.options.dialect_options.date_format)) {
+			if (StringValueScanner::CanDirectlyCast(type)) {
 				parse_types[i] = {type.id(), true};
 				logical_types.emplace_back(type);
 			} else {
@@ -1190,8 +1190,7 @@ void StringValueScanner::SkipUntilNewLine() {
 	}
 }
 
-bool StringValueScanner::CanDirectlyCast(const LogicalType &type,
-                                         const map<LogicalTypeId, CSVOption<StrpTimeFormat>> &format_options) {
+bool StringValueScanner::CanDirectlyCast(const LogicalType &type) {
 
 	switch (type.id()) {
 	case LogicalTypeId::TINYINT:

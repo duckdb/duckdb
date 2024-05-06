@@ -51,6 +51,9 @@
 #include "duckdb/main/pending_query_result.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/common/shared_ptr.hpp"
+#include "duckdb/main/materialized_query_result.hpp"
+#include "duckdb/main/stream_query_result.hpp"
+#include "duckdb/main/relation/materialized_relation.hpp"
 
 #include <random>
 
@@ -204,6 +207,8 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	m.def("begin", &DuckDBPyConnection::Begin, "Start a new transaction");
 	m.def("commit", &DuckDBPyConnection::Commit, "Commit changes performed within a transaction");
 	m.def("rollback", &DuckDBPyConnection::Rollback, "Roll back changes performed within a transaction");
+	m.def("checkpoint", &DuckDBPyConnection::Checkpoint,
+	      "Synchronizes data in the write-ahead log (WAL) to the database data file (no-op for in-memory connections)");
 	m.def("append", &DuckDBPyConnection::Append, "Append the passed DataFrame to the named table",
 	      py::arg("table_name"), py::arg("df"), py::kw_only(), py::arg("by_name") = false);
 	m.def("register", &DuckDBPyConnection::RegisterPythonObject,
@@ -413,6 +418,7 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 
 	connection_module.def("__enter__", &DuckDBPyConnection::Enter)
 	    .def("__exit__", &DuckDBPyConnection::Exit, py::arg("exc_type"), py::arg("exc"), py::arg("traceback"));
+	connection_module.def("__del__", &DuckDBPyConnection::Close);
 
 	InitializeConnectionMethods(connection_module);
 	connection_module.def_property_readonly("description", &DuckDBPyConnection::GetDescription,
@@ -1042,33 +1048,13 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const py::object &quer
 	if (res->properties.return_type != StatementReturnType::QUERY_RESULT) {
 		return nullptr;
 	}
-	// FIXME: we should add support for a relation object over a column data collection to make this more efficient
-	vector<vector<Value>> values;
-	vector<string> names = res->names;
-	{
-		py::gil_scoped_release release;
-
-		while (true) {
-			auto chunk = res->Fetch();
-			if (res->HasError()) {
-				res->ThrowError();
-			}
-			if (!chunk || chunk->size() == 0) {
-				break;
-			}
-			for (idx_t r = 0; r < chunk->size(); r++) {
-				vector<Value> row;
-				for (idx_t c = 0; c < chunk->ColumnCount(); c++) {
-					row.push_back(chunk->data[c].GetValue(r));
-				}
-				values.push_back(std::move(row));
-			}
-		}
-		if (values.empty()) {
-			return DuckDBPyRelation::EmptyResult(connection->context, res->types, res->names);
-		}
+	if (res->type == QueryResultType::STREAM_RESULT) {
+		auto &stream_result = res->Cast<StreamQueryResult>();
+		res = stream_result.Materialize();
 	}
-	return make_uniq<DuckDBPyRelation>(make_uniq<ValueRelation>(connection->context, values, names, alias));
+	auto &materialized_result = res->Cast<MaterializedQueryResult>();
+	return make_uniq<DuckDBPyRelation>(
+	    make_uniq<MaterializedRelation>(connection->context, materialized_result.TakeCollection(), res->names, alias));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Table(const string &tname) {
@@ -1304,6 +1290,11 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Rollback() {
 	return shared_from_this();
 }
 
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Checkpoint() {
+	ExecuteFromString("CHECKPOINT");
+	return shared_from_this();
+}
+
 Optional<py::list> DuckDBPyConnection::GetDescription() {
 	if (!result) {
 		return py::none();
@@ -1320,6 +1311,7 @@ void DuckDBPyConnection::Close() {
 	connection = nullptr;
 	database = nullptr;
 	temporary_views.clear();
+	// https://peps.python.org/pep-0249/#Connection.close
 	for (auto &cur : cursors) {
 		cur->Close();
 	}
