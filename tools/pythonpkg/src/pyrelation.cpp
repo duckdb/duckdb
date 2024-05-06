@@ -1444,7 +1444,9 @@ string DuckDBPyRelation::Explain(ExplainType type) {
 
 // TODO: RelationType to a python enum
 py::str DuckDBPyRelation::Type() {
-	AssertRelation();
+	if (!rel) {
+		return py::str("QUERY_RESULT");
+	}
 	return py::str(RelationTypeToString(rel->type));
 }
 
