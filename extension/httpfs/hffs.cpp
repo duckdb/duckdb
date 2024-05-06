@@ -55,8 +55,8 @@ static string ParseNextUrlFromLinkHeader(const string &link_header_content) {
 
 HFFileHandle::~HFFileHandle() {};
 
-void HFFileHandle::InitializeClient() {
-	http_client = HTTPFileSystem::GetClient(this->http_params, parsed_url.endpoint.c_str());
+void HFFileHandle::InitializeClient(optional_ptr<ClientContext> client_context) {
+	http_client = HTTPFileSystem::GetClient(this->http_params, parsed_url.endpoint.c_str(), this);
 }
 
 string HuggingFaceFileSystem::ListHFRequest(ParsedHFUrl &url, HTTPParams &http_params, string &next_page_url,
@@ -65,7 +65,7 @@ string HuggingFaceFileSystem::ListHFRequest(ParsedHFUrl &url, HTTPParams &http_p
 	auto headers = initialize_http_headers(header_map);
 	string link_header_result;
 
-	auto client = HTTPFileSystem::GetClient(http_params, url.endpoint.c_str());
+	auto client = HTTPFileSystem::GetClient(http_params, url.endpoint.c_str(), nullptr);
 	std::stringstream response;
 
 	std::function<duckdb_httplib_openssl::Result(void)> request([&]() {

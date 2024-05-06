@@ -62,7 +62,7 @@ public:
 	}
 	~HFFileHandle() override;
 
-	void InitializeClient() override;
+	void InitializeClient(optional_ptr<ClientContext> client_context) override;
 
 protected:
 	ParsedHFUrl parsed_url;
