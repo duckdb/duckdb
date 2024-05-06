@@ -7,6 +7,12 @@
 
 #include "duckdb/common/helper.hpp"
 
+// From ODBC Spec (ODBCVER >= 0x0300 and ODBCVER >= 0x0400)
+// https://github.com/microsoft/ODBC-Specification/blob/master/Windows/inc/sqlext.h
+// Needed for use with Power Query SDK and Power BI
+#define SQL_DTC_TRANSACTION_COST 1750
+#define SQL_RETURN_ESCAPE_CLAUSE 180
+
 using duckdb::OdbcUtils;
 using duckdb::SQLStateType;
 using std::ptrdiff_t;
@@ -1021,6 +1027,14 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 		duckdb::OdbcUtils::WriteString("", (SQLCHAR *)info_value_ptr, buffer_length, string_length_ptr);
 		return SQL_SUCCESS;
 	}
+	case SQL_DTC_TRANSACTION_COST: {
+		duckdb::Store<SQLUINTEGER>(0, (duckdb::data_ptr_t)info_value_ptr);
+		return SQL_SUCCESS;
+	}
+	case SQL_RETURN_ESCAPE_CLAUSE: {
+		duckdb::Store<SQLUINTEGER>(0, (duckdb::data_ptr_t)info_value_ptr);
+		return SQL_SUCCESS;
+	}
 	default:
 		duckdb::OdbcHandleDbc *dbc = nullptr;
 		SQLRETURN ret = ConvertConnection(connection_handle, dbc);
@@ -1029,8 +1043,9 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 		}
 
 		// return SQL_SUCCESS, but with a record message
-		return duckdb::SetDiagnosticRecord(dbc, SQL_SUCCESS, "SQLGetInfo", "Unrecognized attribute.",
-		                                   SQLStateType::ST_HY092, dbc->GetDataSourceName());
+		std::string msg = "Unrecognized attribute: " + std::to_string(info_type);
+		return duckdb::SetDiagnosticRecord(dbc, SQL_SUCCESS, "SQLGetInfo", msg, SQLStateType::ST_HY092,
+		                                   dbc->GetDataSourceName());
 	}
 } // end SQLGetInfo
 

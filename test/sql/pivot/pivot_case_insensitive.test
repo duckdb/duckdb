@@ -1,0 +1,34 @@
+# name: test/sql/pivot/pivot_case_insensitive.test
+# description: Test case insensitivity in pivot names
+# group: [pivot]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE Cities (Name VARCHAR, id INTEGER);
+INSERT INTO Cities VALUES ('Test', 1);
+INSERT INTO Cities VALUES ('test',2);
+
+statement ok
+SET pivot_filter_threshold=1;
+
+query II
+FROM Cities
+PIVOT (
+    array_agg(id)
+    FOR
+        name IN ('test','Test')
+);
+----
+[2]	[1]
+
+query IIII
+FROM Cities
+PIVOT (
+    array_agg(id), sum(id)
+    FOR
+        name IN ('test','Test')
+);
+----
+[2]	2	[1]	1

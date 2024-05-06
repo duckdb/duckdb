@@ -31,7 +31,7 @@ static bool IsTableInTableOutFunction(TableFunctionCatalogEntry &table_function)
 
 bool Binder::BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &expressions,
                                          unique_ptr<BoundSubqueryRef> &subquery, ErrorData &error) {
-	auto binder = Binder::CreateBinder(this->context, this, true);
+	auto binder = Binder::CreateBinder(this->context, this);
 	unique_ptr<QueryNode> subquery_node;
 	if (expressions.size() == 1 && expressions[0]->type == ExpressionType::SUBQUERY) {
 		// general case: argument is a subquery, bind it as part of the node
@@ -91,7 +91,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 				error = ErrorData("Table function can have at most one subquery parameter");
 				return false;
 			}
-			auto binder = Binder::CreateBinder(this->context, this, true);
+			auto binder = Binder::CreateBinder(this->context, this);
 			auto &se = child->Cast<SubqueryExpression>();
 			auto node = binder->BindNode(*se.subquery->node);
 			subquery = make_uniq<BoundSubqueryRef>(std::move(binder), std::move(node));
@@ -140,7 +140,7 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 	vector<string> return_names;
 	if (table_function.bind || table_function.bind_replace) {
 		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names,
-		                                  table_function.function_info.get());
+		                                  table_function.function_info.get(), this);
 		if (table_function.bind_replace) {
 			auto new_plan = table_function.bind_replace(context, bind_input);
 			if (new_plan != nullptr) {

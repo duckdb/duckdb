@@ -25,6 +25,7 @@
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/storage/table/delete_state.hpp"
 
 namespace duckdb {
 
@@ -580,7 +581,7 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	// create the index in the catalog
 	auto &table = catalog.GetEntry<TableCatalogEntry>(context, create_info->schema, info.table).Cast<DuckTableEntry>();
 	auto &index = catalog.CreateIndex(context, info)->Cast<DuckIndexEntry>();
-	index.info = make_shared<IndexDataTableInfo>(table.GetStorage().info, index.name);
+	index.info = make_shared_ptr<IndexDataTableInfo>(table.GetStorage().info, index.name);
 
 	// insert the parsed expressions into the index so that we can (de)serialize them during consecutive checkpoints
 	for (auto &parsed_expr : info.parsed_expressions) {
@@ -659,7 +660,9 @@ void WriteAheadLogDeserializer::ReplayInsert() {
 	}
 
 	// append to the current table
-	state.current_table->GetStorage().LocalAppend(*state.current_table, context, chunk);
+	// we don't do any constraint verification here
+	vector<unique_ptr<BoundConstraint>> bound_constraints;
+	state.current_table->GetStorage().LocalAppend(*state.current_table, context, chunk, bound_constraints);
 }
 
 void WriteAheadLogDeserializer::ReplayDelete() {
@@ -678,9 +681,10 @@ void WriteAheadLogDeserializer::ReplayDelete() {
 
 	auto source_ids = FlatVector::GetData<row_t>(chunk.data[0]);
 	// delete the tuples from the current table
+	TableDeleteState delete_state;
 	for (idx_t i = 0; i < chunk.size(); i++) {
 		row_ids[0] = source_ids[i];
-		state.current_table->GetStorage().Delete(*state.current_table, context, row_identifiers, 1);
+		state.current_table->GetStorage().Delete(delete_state, context, row_identifiers, 1);
 	}
 }
 

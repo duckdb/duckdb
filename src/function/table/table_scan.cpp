@@ -306,9 +306,6 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 		return;
 	}
 
-	// Lazily initialize any unknown indexes that might have been loaded by an extension
-	storage.info->InitializeIndexes(context);
-
 	// behold
 	storage.info->indexes.Scan([&](Index &index) {
 		// first rewrite the index expression so the ColumnBindings align with the column bindings of the current table

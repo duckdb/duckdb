@@ -93,7 +93,7 @@ struct IntegerAverageOperation : public BaseSumOperation<AverageSetOperation, Re
 	}
 };
 
-struct IntegerAverageOperationHugeint : public BaseSumOperation<AverageSetOperation, HugeintAdd> {
+struct IntegerAverageOperationHugeint : public BaseSumOperation<AverageSetOperation, AddToHugeint> {
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (state.count == 0) {
@@ -105,7 +105,7 @@ struct IntegerAverageOperationHugeint : public BaseSumOperation<AverageSetOperat
 	}
 };
 
-struct HugeintAverageOperation : public BaseSumOperation<AverageSetOperation, RegularAdd> {
+struct HugeintAverageOperation : public BaseSumOperation<AverageSetOperation, HugeintAdd> {
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (state.count == 0) {

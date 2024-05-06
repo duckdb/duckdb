@@ -35,13 +35,8 @@ unique_ptr<CreateInfo> IndexCatalogEntry::GetInfo() const {
 }
 
 string IndexCatalogEntry::ToSQL() const {
-	if (sql.empty()) {
-		return sql;
-	}
-	if (sql.back() != ';') {
-		return sql + ";";
-	}
-	return sql;
+	auto info = GetInfo();
+	return info->ToString();
 }
 
 bool IndexCatalogEntry::IsUnique() {

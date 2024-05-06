@@ -34,6 +34,7 @@ class CatalogEntry;
 class SimpleFunction;
 
 struct DummyBinding;
+struct SelectBindState;
 
 struct BoundColumnReferenceInfo {
 	string name;

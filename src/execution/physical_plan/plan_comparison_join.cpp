@@ -109,7 +109,7 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	join_state.build_min = NumericStats::Min(stats_build);
 	join_state.build_max = NumericStats::Max(stats_build);
 	join_state.estimated_cardinality = op.estimated_cardinality;
-	join_state.build_range = build_range;
+	join_state.build_range = NumericCast<idx_t>(build_range);
 	if (join_state.build_range > MAX_BUILD_SIZE) {
 		return;
 	}

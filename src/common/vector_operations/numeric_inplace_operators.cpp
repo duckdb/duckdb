@@ -23,14 +23,14 @@ void VectorOperations::AddInPlace(Vector &input, int64_t right, idx_t count) {
 	case VectorType::CONSTANT_VECTOR: {
 		D_ASSERT(!ConstantVector::IsNull(input));
 		auto data = ConstantVector::GetData<uintptr_t>(input);
-		*data += right;
+		*data += UnsafeNumericCast<uintptr_t>(right);
 		break;
 	}
 	default: {
 		D_ASSERT(input.GetVectorType() == VectorType::FLAT_VECTOR);
 		auto data = FlatVector::GetData<uintptr_t>(input);
 		for (idx_t i = 0; i < count; i++) {
-			data[i] += right;
+			data[i] = UnsafeNumericCast<uintptr_t>(UnsafeNumericCast<int64_t>(data[i]) + right);
 		}
 		break;
 	}
