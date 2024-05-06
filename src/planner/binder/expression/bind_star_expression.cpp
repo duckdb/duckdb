@@ -26,29 +26,36 @@ bool Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpressi
 	if (expr->GetExpressionClass() == ExpressionClass::STAR) {
 		auto &current_star = expr->Cast<StarExpression>();
 		if (!current_star.columns) {
+			// This is a regular (non-COLUMNS) * expression.
 			if (is_root) {
+				D_ASSERT(!in_columns);
+				// At the root level
 				*star = &current_star;
 				return true;
 			}
+
 			if (!in_columns) {
+				// '*' can only appear inside COLUMNS or at the root level
 				throw BinderException(
 				    "STAR expression is only allowed as the root element of an expression. Use COLUMNS(*) instead.");
 			}
-			// star expression inside a COLUMNS - convert to a constant list
+
 			if (!current_star.replace_list.empty()) {
+				// '*' inside COLUMNS can not have a REPLACE list
 				throw BinderException(
 				    "STAR expression with REPLACE list is only allowed as the root element of COLUMNS");
 			}
+
+			// '*' expression inside a COLUMNS - convert to a constant list of strings (column names)
 			vector<unique_ptr<ParsedExpression>> star_list;
 			bind_context.GenerateAllColumnExpressions(current_star, star_list);
 
 			vector<Value> values;
 			values.reserve(star_list.size());
-			for (auto &expr : star_list) {
-				values.emplace_back(GetColumnsStringValue(*expr));
+			for (auto &element : star_list) {
+				values.emplace_back(GetColumnsStringValue(*element));
 			}
 			D_ASSERT(!values.empty());
-
 			expr = make_uniq<ConstantExpression>(Value::LIST(LogicalType::VARCHAR, values));
 			return true;
 		}
@@ -56,6 +63,7 @@ bool Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpressi
 			throw BinderException("(*)COLUMNS expression is not allowed inside another (*)COLUMNS expression");
 		}
 		in_columns = true;
+
 		if (*star) {
 			// we can have multiple
 			if (!(*star)->Equals(current_star)) {
