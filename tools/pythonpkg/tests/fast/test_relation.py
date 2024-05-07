@@ -372,7 +372,7 @@ class TestRelation(object):
                 marks=pytest.mark.xfail(
                     condition=platform.system() == "Emscripten",
                     raises=MemoryError,
-                    reason="Emscripten/Pyodide builds run out of memory at this scale"
+                    reason="Emscripten/Pyodide builds run out of memory at this scale",
                 ),
             ),
         ],
