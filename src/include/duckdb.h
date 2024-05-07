@@ -2622,6 +2622,11 @@ Finish the current row of appends. After end_row is called, the next row can be 
 DUCKDB_API duckdb_state duckdb_appender_end_row(duckdb_appender appender);
 
 /*!
+Append a DEFAULT value (NULL if DEFAULT not available for column) to the appender.
+*/
+DUCKDB_API duckdb_state duckdb_append_default(duckdb_appender appender);
+
+/*!
 Append a bool value to the appender.
 */
 DUCKDB_API duckdb_state duckdb_append_bool(duckdb_appender appender, bool value);
