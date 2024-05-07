@@ -20,6 +20,7 @@ class ClientContext;
 class DuckDB;
 class TableCatalogEntry;
 class Connection;
+struct SelectionVector;
 
 enum class AppenderType : uint8_t {
 	LOGICAL, // Cast input -> LogicalType
@@ -129,6 +130,7 @@ public:
 
 public:
 	void AppendDefault();
+	void AppendDefaultToVector(Vector &result, idx_t column, SelectionVector &sel, idx_t count);
 
 protected:
 	void FlushInternal(ColumnDataCollection &collection) override;

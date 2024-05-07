@@ -15,6 +15,7 @@
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
 
 namespace duckdb {
 
@@ -408,6 +409,31 @@ void BaseAppender::Flush() {
 
 void Appender::FlushInternal(ColumnDataCollection &collection) {
 	context->Append(*description, collection);
+}
+
+void Appender::AppendDefaultToVector(Vector &result, idx_t column, SelectionVector &sel, idx_t count) {
+	// TODO: throw if count is > STANDARD_VECTOR_SIZE
+	if (column >= types.size()) {
+		throw InvalidInputException(
+		    "Could not append DEFAULT value of column %d, out of range index, table only has %d columns", column,
+		    types.size());
+	}
+	auto &type = types[column];
+	if (result.GetType() != type) {
+		throw InvalidInputException("Type mismatch, column has type: %s, while the provided Vector has type %s",
+		                            type.ToString(), result.GetType().ToString());
+	}
+
+	auto &executor = *expression_executor;
+
+	// This is only used to tell the ExpressionExecutor the size of our result
+	DataChunk empty_chunk;
+	empty_chunk.SetCardinality(count);
+	executor.SetChunk(empty_chunk);
+
+	// FIXME: if we are feeding the Vector to the ExecuteExpression method, we have to first make sure
+	// that the validity mask of the Vector is clean
+	context->RunFunctionInTransaction([&]() { executor.ExecuteExpression(column, result, sel); });
 }
 
 void Appender::AppendDefault() {

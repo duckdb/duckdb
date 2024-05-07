@@ -269,6 +269,41 @@ TEST_CASE("Test default value appender", "[appender]") {
 	con.Query("COMMIT");
 }
 
+TEST_CASE("Test append default into Vector", "[appender]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i iNTEGER)"));
+
+	auto result = con.Query("SELECT a::INTEGER FROM RANGE(15) t(a)");
+	auto chunk = result->Fetch();
+	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
+
+	{
+		Appender appender(con, "integers");
+
+		auto &column = chunk->data[0];
+		SelectionVector sel(3);
+
+		sel.set_index(0, 5);
+		sel.set_index(1, 8);
+		sel.set_index(2, 3);
+
+		appender.AppendDefaultToVector(column, 0, sel, 3);
+		REQUIRE(column.GetValue(0) == 0);
+		REQUIRE(column.GetValue(1) == 1);
+
+		REQUIRE(column.GetValue(5).IsNull());
+
+		REQUIRE(column.GetValue(8).IsNull());
+
+		REQUIRE(column.GetValue(3).IsNull());
+
+		REQUIRE(!column.GetValue(14).IsNull());
+		REQUIRE(column.GetValue(14) == 14);
+	}
+}
+
 TEST_CASE("Test incorrect usage of appender", "[appender]") {
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
