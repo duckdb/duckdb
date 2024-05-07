@@ -18,6 +18,7 @@ add_library_unity(
   replacement_scan-c.cpp
   result-c.cpp
   stream-c.cpp
+  table_description-c.cpp
   table_function-c.cpp
   threading-c.cpp
   value-c.cpp)

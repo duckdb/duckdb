@@ -405,6 +405,12 @@ typedef struct _duckdb_appender {
 	void *__appn;
 } * duckdb_appender;
 
+//! The table description allows querying info about the table.
+//! Must be destroyed with `duckdb_table_description_destroy`.
+typedef struct _duckdb_table_description {
+	void *__appn;
+} * duckdb_table_description;
+
 //! Can be used to provide start-up options for the DuckDB instance.
 //! Must be destroyed with `duckdb_destroy_config`.
 typedef struct _duckdb_config {
@@ -2743,6 +2749,53 @@ If the append is successful, DuckDBSuccess is returned.
 * returns: The return state.
 */
 DUCKDB_API duckdb_state duckdb_append_data_chunk(duckdb_appender appender, duckdb_data_chunk chunk);
+
+//===--------------------------------------------------------------------===//
+// TableDescription
+//===--------------------------------------------------------------------===//
+
+/*!
+Creates a table description object.
+
+Note that the object must be destroyed with `duckdb_table_description_destroy`.
+
+* connection: The connection context.
+* schema: The schema of the table, or `nullptr` for the default schema.
+* table: The table name.
+* out: The resulting table description object.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_table_description_create(duckdb_connection connection, const char *schema,
+                                                        const char *table, duckdb_table_description *out);
+
+/*!
+Destroy the TableDescription object.
+
+* table: The table_description to destroy.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_table_description_destroy(duckdb_table_description *table);
+
+/*!
+Returns the error message associated with the given table_description.
+If the table_description has no error message, this returns `nullptr` instead.
+
+The error message should not be freed. It will be de-allocated when `duckdb_table_description_destroy` is called.
+
+* table_description: The table_description to get the error from.
+* returns: The error message, or `nullptr` if there is none.
+*/
+DUCKDB_API const char *duckdb_table_description_error(duckdb_table_description table);
+
+/*!
+Check if the column at 'index' index of the table has a DEFAULT expression.
+
+* table: The table_description to query.
+* index: The index of the column to query.
+* out: The out-parameter used to store the result.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_column_has_default(duckdb_table_description table_description, idx_t index, bool *out);
 
 //===--------------------------------------------------------------------===//
 // Arrow Interface
