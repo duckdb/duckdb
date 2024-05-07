@@ -251,6 +251,7 @@ def df_unregister(duckdb_conn, queue, pandas):
 
 def arrow_register_unregister(duckdb_conn, queue, pandas):
     # Get a new connection
+    pa = pytest.importorskip('pyarrow')
     duckdb_conn = duckdb.connect()
     arrow_tbl = pa.Table.from_pydict({'my_column': pa.array([1, 2, 3, 4, 5], type=pa.int64())})
     try:
@@ -317,6 +318,7 @@ def from_df(duckdb_conn, queue, pandas):
 
 def from_arrow(duckdb_conn, queue, pandas):
     # Get a new connection
+    pa = pytest.importorskip('pyarrow')
     duckdb_conn = duckdb.connect()
     arrow_tbl = pa.Table.from_pydict({'my_column': pa.array([1, 2, 3, 4, 5], type=pa.int64())})
     try:
