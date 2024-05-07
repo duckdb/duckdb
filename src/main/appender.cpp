@@ -74,21 +74,21 @@ Appender::Appender(Connection &con, const string &schema_name, const string &tab
 			if (!expr) {
 				// Insert NULL
 				bound_defaults.push_back(make_uniq<BoundConstantExpression>(Value(type)));
+				continue;
+			}
+			auto default_copy = expr->Copy();
+			D_ASSERT(!default_copy->HasParameter());
+			ConstantBinder default_binder(*binder, *context, "DEFAULT value");
+			default_binder.target_type = type;
+			auto bound_default = default_binder.Bind(default_copy);
+			Value result_value;
+			if (bound_default->IsFoldable() &&
+			    ExpressionExecutor::TryEvaluateScalar(*context, *bound_default, result_value)) {
+				// Insert the evaluated Value
+				bound_defaults.push_back(make_uniq<BoundConstantExpression>(result_value));
 			} else {
-				auto default_copy = expr->Copy();
-				D_ASSERT(!default_copy->HasParameter());
-				ConstantBinder default_binder(*binder, *context, "DEFAULT value");
-				default_binder.target_type = type;
-				auto bound_default = default_binder.Bind(default_copy);
-				Value result_value;
-				if (bound_default->IsFoldable() &&
-				    ExpressionExecutor::TryEvaluateScalar(*context, *bound_default, result_value)) {
-					// Insert the evaluated Value
-					bound_defaults.push_back(make_uniq<BoundConstantExpression>(result_value));
-				} else {
-					// Insert a bound Expression
-					bound_defaults.push_back(std::move(bound_default));
-				}
+				// Insert a bound Expression
+				bound_defaults.push_back(std::move(bound_default));
 			}
 		}
 	});
@@ -413,7 +413,7 @@ void Appender::FlushInternal(ColumnDataCollection &collection) {
 void Appender::AppendDefault() {
 	auto &default_expr = bound_defaults[column];
 	if (default_expr->type == ExpressionType::VALUE_CONSTANT) {
-		// Fast path, NULL or constant-folded
+		// Fast path: NULL or constant-folded
 		auto &bound_constant = default_expr->Cast<BoundConstantExpression>();
 		Append(bound_constant.value);
 		return;
