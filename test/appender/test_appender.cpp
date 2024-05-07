@@ -205,6 +205,20 @@ TEST_CASE("Test default value appender", "[appender]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(LogicalTypeId::INTEGER)}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value::INTEGER(5)}));
 
+	// Insert DEFAULT into column that can't be NULL
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE integers(i integer NOT NULL)"));
+	{
+		Appender appender(con, "integers");
+		appender.BeginRow();
+		REQUIRE_NOTHROW(appender.AppendDefault());
+		REQUIRE_NOTHROW(appender.EndRow());
+		// NOT NULL constraint failed
+		REQUIRE_THROWS(appender.Close());
+	}
+	result = con.Query("SELECT * FROM integers");
+	auto chunk = result->Fetch();
+	REQUIRE(chunk == nullptr);
+
 	// DEFAULT nextval('seq')
 	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq"));
 	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE integers(i iNTEGER, j INTEGER DEFAULT nextval('seq'))"));
