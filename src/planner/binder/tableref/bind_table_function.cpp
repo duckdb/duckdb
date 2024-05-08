@@ -128,11 +128,25 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 	return true;
 }
 
-unique_ptr<LogicalOperator>
-Binder::BindTableFunctionInternal(TableFunction &table_function, const string &function_name, vector<Value> parameters,
-                                  named_parameter_map_t named_parameters, vector<LogicalType> input_table_types,
-                                  vector<string> input_table_names, const vector<string> &column_name_alias,
-                                  unique_ptr<ExternalDependency> external_dependency) {
+static string GetAlias(const TableFunctionRef &ref) {
+	if (!ref.alias.empty()) {
+		return ref.alias;
+	}
+	if (ref.function && ref.function->type == ExpressionType::FUNCTION) {
+		auto &function_expr = ref.function->Cast<FunctionExpression>();
+		return function_expr.function_name;
+	}
+	return string();
+}
+
+unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &table_function,
+                                                              const TableFunctionRef &ref, vector<Value> parameters,
+                                                              named_parameter_map_t named_parameters,
+                                                              vector<LogicalType> input_table_types,
+                                                              vector<string> input_table_names) {
+	auto function_name = GetAlias(ref);
+	auto &column_name_alias = ref.column_name_alias;
+
 	auto bind_index = GenerateTableIndex();
 	// perform the binding
 	unique_ptr<FunctionData> bind_data;
@@ -140,7 +154,7 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 	vector<string> return_names;
 	if (table_function.bind || table_function.bind_replace) {
 		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names,
-		                                  table_function.function_info.get(), this, table_function);
+		                                  table_function.function_info.get(), this, table_function, ref);
 		if (table_function.bind_replace) {
 			auto new_plan = table_function.bind_replace(context, bind_input);
 			if (new_plan != nullptr) {
@@ -151,10 +165,6 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 			}
 		}
 		bind_data = table_function.bind(context, bind_input, return_types, return_names);
-		if (table_function.name == "pandas_scan" || table_function.name == "arrow_scan") {
-			auto &arrow_bind = bind_data->Cast<PyTableFunctionData>();
-			arrow_bind.external_dependency = std::move(external_dependency);
-		}
 	} else {
 		throw InvalidInputException("Cannot call function \"%s\" directly - it has no bind function",
 		                            table_function.name);
@@ -197,10 +207,12 @@ unique_ptr<LogicalOperator> Binder::BindTableFunction(TableFunction &function, v
 	named_parameter_map_t named_parameters;
 	vector<LogicalType> input_table_types;
 	vector<string> input_table_names;
-	vector<string> column_name_aliases;
-	return BindTableFunctionInternal(function, function.name, std::move(parameters), std::move(named_parameters),
-	                                 std::move(input_table_types), std::move(input_table_names), column_name_aliases,
-	                                 nullptr);
+
+	TableFunctionRef ref;
+	ref.alias = function.name;
+	D_ASSERT(!ref.alias.empty());
+	return BindTableFunctionInternal(function, ref, std::move(parameters), std::move(named_parameters),
+	                                 std::move(input_table_types), std::move(input_table_names));
 }
 
 unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
@@ -278,10 +290,8 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		input_table_types = subquery->subquery->types;
 		input_table_names = subquery->subquery->names;
 	}
-	auto get = BindTableFunctionInternal(table_function, ref.alias.empty() ? fexpr.function_name : ref.alias,
-	                                     std::move(parameters), std::move(named_parameters),
-	                                     std::move(input_table_types), std::move(input_table_names),
-	                                     ref.column_name_alias, std::move(ref.external_dependency));
+	auto get = BindTableFunctionInternal(table_function, ref, std::move(parameters), std::move(named_parameters),
+	                                     std::move(input_table_types), std::move(input_table_names));
 	if (subquery) {
 		get->children.push_back(Binder::CreatePlan(*subquery));
 	}

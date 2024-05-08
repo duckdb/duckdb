@@ -46,6 +46,18 @@ bool PandasDataFrame::IsPyArrowBacked(const py::handle &df) {
 	return false;
 }
 
+py::object PandasDataFrame::ToArrowTable(const py::object &df) {
+	D_ASSERT(py::gil_check());
+	try {
+		return py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_pandas")(df);
+	} catch (py::error_already_set &) {
+		// We don't fetch the original Python exception because it can cause a segfault
+		// The cause of this is not known yet, for now we just side-step the issue.
+		throw InvalidInputException(
+		    "The dataframe could not be converted to a pyarrow.lib.Table, because a Python exception occurred.");
+	}
+}
+
 bool PolarsDataFrame::check_(const py::handle &object) { // NOLINT
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	return py::isinstance(object, import_cache.polars.DataFrame());
