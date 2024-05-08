@@ -359,22 +359,24 @@ void MultiFileReader::CreateNameMapping(const string &file_name, const vector<Lo
 		reader_data.column_ids.push_back(local_id);
 	}
 
-    for (const auto &extra_column : global_state->required_column_map) {
-        // This column is in the projection, we can skip it here
-        if (extra_column.second < global_column_ids.size()) {
-            continue;
-        }
+	if (global_state) {
+		for (const auto &extra_column : global_state->required_column_map) {
+			// This column is in the projection, we can skip it here
+			if (extra_column.second < global_column_ids.size()) {
+				continue;
+			}
 
-        // Lookup the required column in the local map
-        auto entry = name_map.find(extra_column.first);
-        if (entry == name_map.end()) {
-            throw InternalException("Failed to find required column '%s'", extra_column.first);
-        }
+			// Lookup the required column in the local map
+			auto entry = name_map.find(extra_column.first);
+			if (entry == name_map.end()) {
+				throw InternalException("Failed to find required column '%s'", extra_column.first);
+			}
 
-        // Register the column to be scanned from this file
-        reader_data.column_ids.push_back(entry->second);
-        reader_data.column_mapping.push_back(extra_column.second);
-    }
+			// Register the column to be scanned from this file
+			reader_data.column_ids.push_back(entry->second);
+			reader_data.column_mapping.push_back(extra_column.second);
+		}
+	}
 
     reader_data.empty_columns = reader_data.column_ids.empty();
 }
@@ -393,11 +395,11 @@ void MultiFileReader::CreateMapping(const string &file_name, const vector<Logica
 void MultiFileReader::CreateFilterMap(const vector<LogicalType> &global_types, optional_ptr<TableFilterSet> filters,
                                       MultiFileReaderData &reader_data, optional_ptr<MultiFileReaderGlobalState> global_state) {
 	if (filters) {
-        idx_t max_index = NumericLimits<idx_t>::Minimum();
-        for (const auto& map_index : reader_data.column_mapping) {
-            max_index = MaxValue(max_index, map_index);
-        }
-		reader_data.filter_map.resize(max_index+=1);
+		auto filter_map_size = global_types.size();
+		if(global_state) {
+			filter_map_size += global_state->extra_columns.size();
+		}
+		reader_data.filter_map.resize(filter_map_size);
 
 		for (idx_t c = 0; c < reader_data.column_mapping.size(); c++) {
 			auto map_index = reader_data.column_mapping[c];
