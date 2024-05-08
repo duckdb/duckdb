@@ -203,7 +203,8 @@ string StringUtil::Upper(const string &str) {
 
 string StringUtil::Lower(const string &str) {
 	string copy(str);
-	transform(copy.begin(), copy.end(), copy.begin(), [](unsigned char c) { return StringUtil::CharacterToLower(c); });
+	transform(copy.begin(), copy.end(), copy.begin(),
+	          [](unsigned char c) { return StringUtil::CharacterToLower(static_cast<char>(c)); });
 	return (copy);
 }
 
@@ -215,7 +216,7 @@ bool StringUtil::IsLower(const string &str) {
 uint64_t StringUtil::CIHash(const string &str) {
 	uint32_t hash = 0;
 	for (auto c : str) {
-		hash += StringUtil::CharacterToLower(c);
+		hash += static_cast<uint32_t>(StringUtil::CharacterToLower(static_cast<char>(c)));
 		hash += hash << 10;
 		hash ^= hash >> 6;
 	}
@@ -253,6 +254,16 @@ bool StringUtil::CILessThan(const string &s1, const string &s2) {
 		}
 	}
 	return (charmap[u1] - charmap[u2]) < 0;
+}
+
+idx_t StringUtil::CIFind(vector<string> &vector, const string &search_string) {
+	for (idx_t i = 0; i < vector.size(); i++) {
+		const auto &string = vector[i];
+		if (CIEquals(string, search_string)) {
+			return i;
+		}
+	}
+	return DConstants::INVALID_INDEX;
 }
 
 vector<string> StringUtil::Split(const string &input, const string &split) {

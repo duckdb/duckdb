@@ -59,7 +59,7 @@ struct PendingQueryParameters {
 
 //! The ClientContext holds information relevant to the current client session
 //! during execution
-class ClientContext : public std::enable_shared_from_this<ClientContext> {
+class ClientContext : public enable_shared_from_this<ClientContext> {
 	friend class PendingQueryResult; // LockContext
 	friend class SimpleBufferedData; // ExecuteTaskInternal
 	friend class StreamQueryResult;  // LockContext
@@ -287,24 +287,6 @@ public:
 
 private:
 	lock_guard<mutex> client_guard;
-};
-
-class ClientContextWrapper {
-public:
-	explicit ClientContextWrapper(const shared_ptr<ClientContext> &context)
-	    : client_context(context) {
-
-	      };
-	shared_ptr<ClientContext> GetContext() {
-		auto actual_context = client_context.lock();
-		if (!actual_context) {
-			throw ConnectionException("Connection has already been closed");
-		}
-		return actual_context;
-	}
-
-private:
-	std::weak_ptr<ClientContext> client_context;
 };
 
 } // namespace duckdb

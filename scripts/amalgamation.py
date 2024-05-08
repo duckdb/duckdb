@@ -376,7 +376,7 @@ def list_include_files_recursive(dname, file_list):
         fpath = os.path.join(dname, fname)
         if os.path.isdir(fpath):
             list_include_files_recursive(fpath, file_list)
-        elif fname.endswith(('.hpp', '.h', '.hh', '.tcc', '.inc')):
+        elif fname.endswith(('.hpp', '.ipp', '.h', '.hh', '.tcc', '.inc')):
             file_list.append(fpath)
 
 

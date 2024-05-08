@@ -516,7 +516,7 @@ struct RoundOperatorPrecision {
 				return input;
 			}
 		}
-		return rounded_value;
+		return UnsafeNumericCast<TR>(rounded_value);
 	}
 };
 
@@ -527,7 +527,7 @@ struct RoundOperator {
 		if (std::isinf(rounded_value) || std::isnan(rounded_value)) {
 			return input;
 		}
-		return rounded_value;
+		return UnsafeNumericCast<TR>(rounded_value);
 	}
 };
 

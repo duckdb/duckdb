@@ -5,6 +5,7 @@
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/config.hpp"
@@ -64,7 +65,7 @@ typedef uint32_t bitpacking_metadata_encoded_t;
 static bitpacking_metadata_encoded_t EncodeMeta(bitpacking_metadata_t metadata) {
 	D_ASSERT(metadata.offset <= 0x00FFFFFF); // max uint24_t
 	bitpacking_metadata_encoded_t encoded_value = metadata.offset;
-	encoded_value |= (uint8_t)metadata.mode << 24;
+	encoded_value |= UnsafeNumericCast<bitpacking_metadata_encoded_t>((uint8_t)metadata.mode << 24);
 	return encoded_value;
 }
 static bitpacking_metadata_t DecodeMeta(bitpacking_metadata_encoded_t *metadata_encoded) {
@@ -471,8 +472,8 @@ public:
 	};
 
 	bool CanStore(idx_t data_bytes, idx_t meta_bytes) {
-		auto required_data_bytes = AlignValue<idx_t>((data_ptr + data_bytes) - data_ptr);
-		auto required_meta_bytes = Storage::BLOCK_SIZE - (metadata_ptr - data_ptr) + meta_bytes;
+		auto required_data_bytes = AlignValue<idx_t>(UnsafeNumericCast<idx_t>((data_ptr + data_bytes) - data_ptr));
+		auto required_meta_bytes = Storage::BLOCK_SIZE - UnsafeNumericCast<idx_t>(metadata_ptr - data_ptr) + meta_bytes;
 
 		return required_data_bytes + required_meta_bytes <=
 		       Storage::BLOCK_SIZE - BitpackingPrimitives::BITPACKING_HEADER_SIZE;
@@ -514,9 +515,10 @@ public:
 		auto base_ptr = handle.Ptr();
 
 		// Compact the segment by moving the metadata next to the data.
-		idx_t unaligned_offset = data_ptr - base_ptr;
+
+		idx_t unaligned_offset = NumericCast<idx_t>(data_ptr - base_ptr);
 		idx_t metadata_offset = AlignValue(unaligned_offset);
-		idx_t metadata_size = base_ptr + Storage::BLOCK_SIZE - metadata_ptr;
+		idx_t metadata_size = NumericCast<idx_t>(base_ptr + Storage::BLOCK_SIZE - metadata_ptr);
 		idx_t total_segment_size = metadata_offset + metadata_size;
 
 		// Asserting things are still sane here
@@ -770,7 +772,7 @@ unique_ptr<SegmentScanState> BitpackingInitScan(ColumnSegment &segment) {
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
-template <class T, class T_S = typename MakeSigned<T>::type>
+template <class T, class T_S = typename MakeSigned<T>::type, class T_U = typename MakeUnsigned<T>::type>
 void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                            idx_t result_offset) {
 	auto &scan_state = state.scan_state->Cast<BitpackingScanState<T>>();
@@ -809,8 +811,10 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 			T *target_ptr = result_data + result_offset + scanned;
 
 			for (idx_t i = 0; i < to_scan; i++) {
-				target_ptr[i] = (static_cast<T>(scan_state.current_group_offset + i) * scan_state.current_constant) +
-				                scan_state.current_frame_of_reference;
+				idx_t multiplier = scan_state.current_group_offset + i;
+				// intended static casts to unsigned and back for defined wrapping of integers
+				target_ptr[i] = static_cast<T>((static_cast<T_U>(scan_state.current_constant) * multiplier) +
+				                               static_cast<T_U>(scan_state.current_frame_of_reference));
 			}
 
 			scanned += to_scan;
@@ -871,7 +875,7 @@ template <class T>
 void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
                         idx_t result_idx) {
 	BitpackingScanState<T> scan_state(segment);
-	scan_state.Skip(segment, row_id);
+	scan_state.Skip(segment, NumericCast<idx_t>(row_id));
 
 	D_ASSERT(scan_state.current_group_offset < BITPACKING_METADATA_GROUP_SIZE);
 
@@ -895,16 +899,18 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 	}
 
 	if (scan_state.current_group.mode == BitpackingMode::CONSTANT_DELTA) {
+		T multiplier;
+		auto cast = TryCast::Operation<idx_t, T>(scan_state.current_group_offset, multiplier);
+		(void)cast;
+		D_ASSERT(cast);
 #ifdef DEBUG
 		// overflow check
 		T result;
-		bool multiply = TryMultiplyOperator::Operation(static_cast<T>(scan_state.current_group_offset),
-		                                               scan_state.current_constant, result);
+		bool multiply = TryMultiplyOperator::Operation(multiplier, scan_state.current_constant, result);
 		bool add = TryAddOperator::Operation(result, scan_state.current_frame_of_reference, result);
 		D_ASSERT(multiply && add);
 #endif
-		*current_result_ptr = (static_cast<T>(scan_state.current_group_offset) * scan_state.current_constant) +
-		                      scan_state.current_frame_of_reference;
+		*current_result_ptr = (multiplier * scan_state.current_constant) + scan_state.current_frame_of_reference;
 		return;
 	}
 

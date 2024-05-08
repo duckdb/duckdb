@@ -30,7 +30,7 @@
 
 namespace duckdb {
 
-static void CheckInsertColumnCountMismatch(int64_t expected_columns, int64_t result_columns, bool columns_provided,
+static void CheckInsertColumnCountMismatch(idx_t expected_columns, idx_t result_columns, bool columns_provided,
                                            const char *tname) {
 	if (result_columns != expected_columns) {
 		string msg = StringUtil::Format(!columns_provided ? "table %s has %lld columns but %lld values were supplied"
@@ -402,6 +402,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, stmt.catalog, stmt.schema, stmt.table);
 	if (!table.temporary) {
 		// inserting into a non-temporary table: alters underlying database
+		auto &properties = GetStatementProperties();
 		properties.modified_databases.insert(table.catalog.GetName());
 	}
 
@@ -472,6 +473,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 	// bind the default values
 	BindDefaultValues(table.GetColumns(), insert->bound_defaults);
+	insert->bound_constraints = BindConstraints(table);
 	if (!stmt.select_statement && !stmt.default_values) {
 		result.plan = std::move(insert);
 		return result;
@@ -543,6 +545,8 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 	D_ASSERT(result.types.size() == result.names.size());
 	result.plan = std::move(insert);
+
+	auto &properties = GetStatementProperties();
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	return result;

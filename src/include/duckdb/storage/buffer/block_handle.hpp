@@ -11,6 +11,7 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
@@ -76,7 +77,7 @@ public:
 		D_ASSERT(buffer);
 		// resize and adjust current memory
 		buffer->Resize(block_size);
-		memory_usage += memory_delta;
+		memory_usage = NumericCast<idx_t>(NumericCast<int64_t>(memory_usage) + memory_delta);
 		D_ASSERT(memory_usage == buffer->AllocSize());
 	}
 
@@ -121,8 +122,10 @@ private:
 	MemoryTag tag;
 	//! Pointer to loaded data (if any)
 	unique_ptr<FileBuffer> buffer;
-	//! Internal eviction timestamp
-	atomic<idx_t> eviction_timestamp;
+	//! Internal eviction sequence number
+	atomic<idx_t> eviction_seq_num;
+	//! LRU timestamp (for age-based eviction)
+	atomic<int64_t> lru_timestamp_msec;
 	//! Whether or not the buffer can be destroyed (only used for temporary buffers)
 	bool can_destroy;
 	//! The memory usage of the block (when loaded). If we are pinning/loading

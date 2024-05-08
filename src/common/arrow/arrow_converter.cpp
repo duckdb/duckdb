@@ -138,9 +138,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	case LogicalTypeId::DATE:
 		child.format = "tdD";
 		break;
-#ifdef DUCKDB_WASM
 	case LogicalTypeId::TIME_TZ:
-#endif
 	case LogicalTypeId::TIME:
 		child.format = "ttu";
 		break;
@@ -206,7 +204,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	case LogicalTypeId::STRUCT: {
 		child.format = "+s";
 		auto &child_types = StructType::GetChildTypes(type);
-		child.n_children = child_types.size();
+		child.n_children = NumericCast<int64_t>(child_types.size());
 		root_holder.nested_children.emplace_back();
 		root_holder.nested_children.back().resize(child_types.size());
 		root_holder.nested_children_ptr.emplace_back();
@@ -251,7 +249,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		std::string format = "+us:";
 
 		auto &child_types = UnionType::CopyMemberTypes(type);
-		child.n_children = child_types.size();
+		child.n_children = NumericCast<int64_t>(child_types.size());
 		root_holder.nested_children.emplace_back();
 		root_holder.nested_children.back().resize(child_types.size());
 		root_holder.nested_children_ptr.emplace_back();
@@ -323,7 +321,7 @@ void ArrowConverter::ToArrowSchema(ArrowSchema *out_schema, const vector<Logical
 		root_holder->children_ptrs[i] = &root_holder->children[i];
 	}
 	out_schema->children = root_holder->children_ptrs.data();
-	out_schema->n_children = column_count;
+	out_schema->n_children = NumericCast<int64_t>(column_count);
 
 	// Store the schema
 	out_schema->format = "+s"; // struct apparently
