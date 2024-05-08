@@ -53,5 +53,7 @@ class TestPolars(object):
 
     def test_empty_polars_dataframe(self, duckdb_cursor):
         polars_empty_df = pl.DataFrame()
-        with pytest.raises(duckdb.InvalidInputException, match='Provided Arrow Table must have at least one column'):
+        with pytest.raises(
+            duckdb.InvalidInputException, match='Provided table/dataframe must have at least one column'
+        ):
             duckdb_cursor.sql("from polars_empty_df")
