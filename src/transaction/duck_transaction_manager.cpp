@@ -236,7 +236,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 
 	// commit successful: remove the transaction id from the list of active transactions
 	// potentially resulting in garbage collection
-	bool store_transaction = undo_properties.has_updates || undo_properties.has_catalog_changes;
+	bool store_transaction = undo_properties.has_updates || undo_properties.has_catalog_changes || error.HasError();
 	RemoveTransaction(transaction, store_transaction);
 	// now perform a checkpoint if (1) we are able to checkpoint, and (2) the WAL has reached sufficient size to
 	// checkpoint
