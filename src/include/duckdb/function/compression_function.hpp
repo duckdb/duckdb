@@ -28,7 +28,19 @@ struct ColumnFetchState;
 struct ColumnScanState;
 struct SegmentScanState;
 
+struct CompressionInfo {
+	explicit CompressionInfo(const idx_t block_size) : block_size(block_size) {};
+
+	//! The size below which the segment is compacted on flushing
+	idx_t GetCompactionFlushLimit() {
+		return block_size / 5 * 4;
+	}
+
+	idx_t block_size;
+};
+
 struct AnalyzeState {
+	explicit AnalyzeState(const CompressionInfo &info) : info(info) {};
 	virtual ~AnalyzeState() {
 	}
 
@@ -42,9 +54,12 @@ struct AnalyzeState {
 		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
+
+	CompressionInfo info;
 };
 
 struct CompressionState {
+	explicit CompressionState(const CompressionInfo &info) : info(info) {};
 	virtual ~CompressionState() {
 	}
 
@@ -58,6 +73,8 @@ struct CompressionState {
 		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
+
+	CompressionInfo info;
 };
 
 struct CompressedSegmentState {

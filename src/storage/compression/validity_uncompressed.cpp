@@ -1,11 +1,10 @@
-#include "duckdb/storage/segment/uncompressed.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/common/types/vector.hpp"
-#include "duckdb/storage/table/append_state.hpp"
-
 #include "duckdb/common/types/null_value.hpp"
-#include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/segment/uncompressed.hpp"
+#include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
@@ -177,14 +176,16 @@ const validity_t ValidityUncompressed::UPPER_MASKS[] = {0x0,
 // Analyze
 //===--------------------------------------------------------------------===//
 struct ValidityAnalyzeState : public AnalyzeState {
-	ValidityAnalyzeState() : count(0) {
+	explicit ValidityAnalyzeState(const CompressionInfo &info) : AnalyzeState(info), count(0) {
 	}
 
 	idx_t count;
 };
 
-unique_ptr<AnalyzeState> ValidityInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	return make_uniq<ValidityAnalyzeState>();
+unique_ptr<AnalyzeState> ValidityInitAnalyze(ColumnData &col_data, PhysicalType) {
+	const auto block_size = col_data.GetBlockManager().GetBlockSize();
+	CompressionInfo info(block_size);
+	return make_uniq<ValidityAnalyzeState>(info);
 }
 
 bool ValidityAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
