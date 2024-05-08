@@ -21,8 +21,8 @@ namespace duckdb {
 template <typename V>
 class InsertionOrderPreservingMap {
 public:
-	typedef vector<pair<string, V>> VECTOR_TYPE;
-	typedef string key_type;
+	typedef vector<pair<string, V>> VECTOR_TYPE; // NOLINT: matching name of std
+	typedef string key_type; // NOLINT: matching name of std
 
 public:
 	InsertionOrderPreservingMap() {
@@ -43,23 +43,23 @@ public:
 		return keys;
 	}
 
-	typename VECTOR_TYPE::iterator begin() {
+	typename VECTOR_TYPE::iterator begin() { // NOLINT: match stl API
 		return map.begin();
 	}
 
-	typename VECTOR_TYPE::iterator end() {
+	typename VECTOR_TYPE::iterator end() { // NOLINT: match stl API
 		return map.end();
 	}
 
-	typename VECTOR_TYPE::const_iterator begin() const {
+	typename VECTOR_TYPE::const_iterator begin() const { // NOLINT: match stl API
 		return map.begin();
 	}
 
-	typename VECTOR_TYPE::const_iterator end() const {
+	typename VECTOR_TYPE::const_iterator end() const { // NOLINT: match stl API
 		return map.end();
 	}
 
-	typename VECTOR_TYPE::iterator find(const string &key) {
+	typename VECTOR_TYPE::iterator find(const string &key) { // NOLINT: match stl API
 		auto entry = map_idx.find(key);
 		if (entry == map_idx.end()) {
 			return map.end();
@@ -67,7 +67,7 @@ public:
 		return map.begin() + static_cast<typename VECTOR_TYPE::difference_type>(entry->second);
 	}
 
-	typename VECTOR_TYPE::const_iterator find(const string &key) const {
+	typename VECTOR_TYPE::const_iterator find(const string &key) const { // NOLINT: match stl API
 		auto entry = map_idx.find(key);
 		if (entry == map_idx.end()) {
 			return map.end();
@@ -75,29 +75,29 @@ public:
 		return map.begin() + static_cast<typename VECTOR_TYPE::difference_type>(entry->second);
 	}
 
-	idx_t size() const {
+	idx_t size() const { // NOLINT: match stl API
 		return map_idx.size();
 	}
 
-	bool empty() const {
+	bool empty() const { // NOLINT: match stl API
 		return map_idx.empty();
 	}
 
-	void resize(idx_t nz) {
+	void resize(idx_t nz) { // NOLINT: match stl API
 		map.resize(nz);
 	}
 
-	void insert(const string &key, V &value) {
+	void insert(const string &key, V &value) { // NOLINT: match stl API
 		map.push_back(make_pair(key, std::move(value)));
 		map_idx[key] = map.size() - 1;
 	}
 
-	void insert(pair<string, V> &&value) {
+	void insert(pair<string, V> &&value) { // NOLINT: match stl API
 		map.push_back(std::move(value));
 		map_idx[value.first] = map.size() - 1;
 	}
 
-	void erase(typename VECTOR_TYPE::iterator it) {
+	void erase(typename VECTOR_TYPE::iterator it) { // NOLINT: match stl API
 		auto key = it->first;
 		auto idx = map_idx[it->first];
 		map.erase(it);
@@ -109,11 +109,11 @@ public:
 		}
 	}
 
-	bool contains(const string &key) const {
+	bool contains(const string &key) const { // NOLINT: match stl API
 		return map_idx.find(key) != map_idx.end();
 	}
 
-	const V &at(const string &key) const {
+	const V &at(const string &key) const { // NOLINT: match stl API
 		return map[map_idx.at(key)].second;
 	}
 
