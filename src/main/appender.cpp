@@ -416,6 +416,7 @@ void Appender::AppendDefaultsToVector(Vector &result, idx_t column, SelectionVec
 	for (idx_t i = 0; i < count; i++) {
 		auto index = sel.get_index(i);
 		if (index > STANDARD_VECTOR_SIZE) {
+			// FIXME: should we require the size of the 'result' Vector as well?
 			throw InternalException("Provided SelectionVector is invalid, index %d points to %d, which is out of range",
 			                        i, index);
 		}
@@ -435,17 +436,21 @@ void Appender::AppendDefaultsToVector(Vector &result, idx_t column, SelectionVec
 		throw InvalidInputException("Type mismatch, column has type: %s, while the provided Vector has type %s",
 		                            type.ToString(), result.GetType().ToString());
 	}
-
 	auto &executor = *expression_executor;
 
-	// This is only used to tell the ExpressionExecutor the size of our result
+	// Create an empty chunk to tell the ExpressionExecutor how many tuples to execute for
 	DataChunk empty_chunk;
 	empty_chunk.SetCardinality(count);
 	executor.SetChunk(empty_chunk);
 
-	// FIXME: if we are feeding the Vector to the ExecuteExpression method, we have to first make sure
-	// that the validity mask of the Vector is clean
-	context->RunFunctionInTransaction([&]() { executor.ExecuteExpression(column, result, sel); });
+	Vector intermediate(type, count);
+	context->RunFunctionInTransaction([&]() { executor.ExecuteExpression(column, intermediate); });
+	for (idx_t i = 0; i < count; i++) {
+		auto temp_idx = i;
+		auto result_idx = sel.get_index(i);
+		auto value = intermediate.GetValue(temp_idx);
+		result.SetValue(result_idx, value);
+	}
 }
 
 void Appender::AppendDefault() {

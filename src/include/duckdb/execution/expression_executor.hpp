@@ -65,8 +65,6 @@ public:
 
 	//! Execute the expression with index `expr_idx` and store the result in the result vector
 	DUCKDB_API void ExecuteExpression(idx_t expr_idx, Vector &result);
-	//! Same as above, only executing the expression for the rows provided by the SelectionVector
-	DUCKDB_API void ExecuteExpression(idx_t expr_idx, Vector &result, SelectionVector &sel);
 	//! Evaluate a scalar expression and fold it into a single value
 	DUCKDB_API static Value EvaluateScalar(ClientContext &context, const Expression &expr,
 	                                       bool allow_unfoldable = false);
