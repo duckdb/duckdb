@@ -411,7 +411,7 @@ void Appender::FlushInternal(ColumnDataCollection &collection) {
 	context->Append(*description, collection);
 }
 
-void Appender::AppendDefaultToVector(Vector &result, idx_t column, SelectionVector &sel, idx_t count) {
+void Appender::AppendDefaultsToVector(Vector &result, idx_t column, SelectionVector &sel, idx_t count) {
 	// TODO: throw if count is > STANDARD_VECTOR_SIZE
 	if (column >= types.size()) {
 		throw InvalidInputException(

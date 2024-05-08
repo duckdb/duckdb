@@ -289,7 +289,7 @@ TEST_CASE("Test append default into Vector", "[appender]") {
 		sel.set_index(1, 8);
 		sel.set_index(2, 3);
 
-		appender.AppendDefaultToVector(column, 0, sel, 3);
+		appender.AppendDefaultsToVector(column, 0, sel, 3);
 		REQUIRE(column.GetValue(0) == 0);
 		REQUIRE(column.GetValue(1) == 1);
 
