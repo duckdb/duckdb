@@ -17,6 +17,8 @@
 
 namespace duckdb {
 
+enum class SampleType : uint8_t { BLOCKING_SAMPLE = 0, RESERVOIR_SAMPLE = 1, RESERVOIR_PERCENTAGE_SAMPLE = 2 };
+
 class BaseReservoirSampling {
 public:
 	explicit BaseReservoirSampling(int64_t seed);
@@ -29,8 +31,6 @@ public:
 	void ReplaceElement(double with_weight = -1);
 	//! The random generator
 	RandomEngine random;
-	//! Priority queue of [random element, index] for each of the elements in the sample
-	std::priority_queue<std::pair<double, idx_t>> reservoir_weights;
 	//! The next element to sample
 	idx_t next_index_to_sample;
 	//! The reservoir threshold of the current min entry
@@ -43,11 +43,26 @@ public:
 	//! when collecting a sample in parallel, we want to know how many values each thread has seen
 	//! so we can collect the samples from the thread local states in a uniform manner
 	idx_t num_entries_seen_total;
+	//! Priority queue of [random element, index] for each of the elements in the sample
+	std::priority_queue<std::pair<double, idx_t>> reservoir_weights;
+
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<BaseReservoirSampling> Deserialize(Deserializer &deserializer);
 };
 
 class BlockingSample {
 public:
-	explicit BlockingSample(int64_t seed) : base_reservoir_sample(seed), random(base_reservoir_sample.random) {
+	static constexpr const SampleType TYPE = SampleType::BLOCKING_SAMPLE;
+
+	unique_ptr<BaseReservoirSampling> base_reservoir_sample;
+	//! The sample type
+	SampleType type;
+	//! has the sample been destroyed due to updates to the referenced table
+	bool destroyed;
+
+public:
+	explicit BlockingSample(int64_t seed) : random(base_reservoir_sample->random) {
+		base_reservoir_sample = make_uniq<BaseReservoirSampling>(seed);
 	}
 	virtual ~BlockingSample() {
 	}
@@ -59,18 +74,47 @@ public:
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
 	virtual unique_ptr<DataChunk> GetChunk() = 0;
-	BaseReservoirSampling base_reservoir_sample;
 
 	virtual void Serialize(Serializer &serializer) const;
 	static unique_ptr<BlockingSample> Deserialize(Deserializer &deserializer);
 
-protected:
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (type != TARGET::TYPE && TARGET::TYPE != SampleType::BLOCKING_SAMPLE) {
+			throw InternalException("Failed to cast sample to type - sample type mismatch");
+		}
+		return reinterpret_cast<TARGET &>(*this);
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (type != TARGET::TYPE && TARGET::TYPE != SampleType::BLOCKING_SAMPLE) {
+			throw InternalException("Failed to cast sample to type - sample type mismatch");
+		}
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 	//! The reservoir sampling
 	RandomEngine &random;
 };
 
+class ReservoirChunk {
+public:
+	ReservoirChunk() {
+	}
+
+	DataChunk chunk;
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<ReservoirChunk> Deserialize(Deserializer &deserializer);
+
+	unique_ptr<ReservoirChunk> Copy();
+};
+
 //! The reservoir sample class maintains a streaming sample of fixed size "sample_count"
 class ReservoirSample : public BlockingSample {
+public:
+	static constexpr const SampleType TYPE = SampleType::RESERVOIR_SAMPLE;
+
 public:
 	ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed);
 
@@ -96,8 +140,9 @@ public:
 	//! when explicit number used, sample_count = number
 	idx_t sample_count;
 	bool reservoir_initialized;
+
 	//! The current reservoir
-	unique_ptr<DataChunk> reservoir_chunk;
+	unique_ptr<ReservoirChunk> reservoir_chunk;
 };
 
 //! The reservoir sample sample_size class maintains a streaming sample of variable size
@@ -105,6 +150,8 @@ class ReservoirSamplePercentage : public BlockingSample {
 	constexpr static idx_t RESERVOIR_THRESHOLD = 100000;
 
 public:
+	static constexpr const SampleType TYPE = SampleType::RESERVOIR_PERCENTAGE_SAMPLE;
+
 	ReservoirSamplePercentage(Allocator &allocator, double percentage, int64_t seed);
 
 	//! Add a chunk of data to the sample
@@ -114,6 +161,9 @@ public:
 	//! sample is completely built.
 	unique_ptr<DataChunk> GetChunk() override;
 	void Finalize() override;
+
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<BlockingSample> Deserialize(Deserializer &deserializer);
 
 private:
 	Allocator &allocator;
