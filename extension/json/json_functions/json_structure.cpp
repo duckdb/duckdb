@@ -396,11 +396,11 @@ static inline void ExtractStructureObject(yyjson_val *obj, JSONStructureNode &no
 	yyjson_obj_foreach(obj, idx, max, key, val) {
 		const string obj_key(unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
 		auto insert_result = obj_keys.insert(obj_key);
-		if (!insert_result.second) { // Exact matches are never OK
+		if (!ignore_errors && !insert_result.second) { // Exact match
 			JSONCommon::ThrowValFormatError("Duplicate key \"" + obj_key + "\" in object %s", obj);
 		}
 		insert_result = ci_obj_keys.insert(obj_key);
-		if (!ignore_errors && !insert_result.second) { // We allow case insensitive matches to be ignored
+		if (!ignore_errors && !insert_result.second) { // Case-insensitive match
 			JSONCommon::ThrowValFormatError("Duplicate key (different case) \"" + obj_key + "\" and \"" +
 			                                    *insert_result.first + "\" in object %s",
 			                                obj);
