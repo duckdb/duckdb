@@ -4,15 +4,22 @@
 
 namespace duckdb {
 
-void BlockingSample::Serialize(Serializer &serializer) const {
+void ReservoirChunk::Serialize(Serializer &serializer) const {
+	chunk.Serialize(serializer);
 }
 
-unique_ptr<BlockingSample> BlockingSample::Deserialize(Deserializer &deserializer) {
-	return nullptr;
+unique_ptr<ReservoirChunk> ReservoirChunk::Deserialize(Deserializer &deserializer) {
+	auto result = make_uniq<ReservoirChunk>();
+	result->chunk.Deserialize(deserializer);
+	return result;
 }
 
 ReservoirSample::ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed)
     : BlockingSample(seed), allocator(allocator), sample_count(sample_count), reservoir_initialized(false) {
+}
+
+ReservoirSample::ReservoirSample(idx_t sample_count, int64_t seed)
+    : ReservoirSample(Allocator::DefaultAllocator(), sample_count, seed) {
 }
 
 void ReservoirSample::AddToReservoir(DataChunk &input) {
@@ -153,6 +160,11 @@ ReservoirSamplePercentage::ReservoirSamplePercentage(Allocator &allocator, doubl
       is_finalized(false) {
 	reservoir_sample_size = idx_t(sample_percentage * RESERVOIR_THRESHOLD);
 	current_sample = make_uniq<ReservoirSample>(allocator, reservoir_sample_size, random.NextRandomInteger());
+}
+
+
+ReservoirSamplePercentage::ReservoirSamplePercentage(double percentage, int64_t seed)
+    : ReservoirSamplePercentage(Allocator::DefaultAllocator(), percentage, seed) {
 }
 
 void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {

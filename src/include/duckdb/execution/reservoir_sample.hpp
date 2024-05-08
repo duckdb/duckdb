@@ -107,8 +107,6 @@ public:
 	DataChunk chunk;
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<ReservoirChunk> Deserialize(Deserializer &deserializer);
-
-	unique_ptr<ReservoirChunk> Copy();
 };
 
 //! The reservoir sample class maintains a streaming sample of fixed size "sample_count"
