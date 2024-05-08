@@ -22,7 +22,7 @@ template <typename V>
 class InsertionOrderPreservingMap {
 public:
 	typedef vector<pair<string, V>> VECTOR_TYPE; // NOLINT: matching name of std
-	typedef string key_type; // NOLINT: matching name of std
+	typedef string key_type;                     // NOLINT: matching name of std
 
 public:
 	InsertionOrderPreservingMap() {
