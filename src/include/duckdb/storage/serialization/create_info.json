@@ -55,8 +55,7 @@
         "name": "dependencies",
         "type": "LogicalDependencyList",
         "default": "LogicalDependencyList()",
-        "deserialize": true,
-        "serialize": false
+        "deserialize_only": true
       }
     ]
   },

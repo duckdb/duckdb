@@ -247,6 +247,8 @@ def generate_return(class_entry):
         return '\treturn std::move(result);'
 
 
+# FIXME: python has __slots__ for this, so it's enforced by Python itself
+# see: https://wiki.python.org/moin/UsingSlots
 supported_member_entries = [
     'id',
     'name',
@@ -257,8 +259,7 @@ supported_member_entries = [
     'base',
     'default',
     'deleted',
-    'serialize',
-    'deserialize',
+    'deserialize_only',
 ]
 
 
@@ -278,18 +279,6 @@ def has_default_by_default(type):
     return False
 
 
-def set_serialize(value):
-    if args.debug_serialization:
-        return True
-    return value
-
-
-def set_deserialize(value):
-    if args.debug_serialization:
-        return True
-    return value
-
-
 class MemberVariable:
     def __init__(self, entry):
         self.id = entry['id']
@@ -307,10 +296,12 @@ class MemberVariable:
         else:
             self.serialize_property = self.name
             self.deserialize_property = self.name
-        if 'serialize' in entry:
-            self.serialize = set_serialize(entry['serialize'])
-        if 'deserialize' in entry:
-            self.deserialize = set_deserialize(entry['deserialize'])
+        if 'deserialize_only' in entry and not args.debug_serialization:
+            # This option allows us to temporarily disable serialization
+            # which allows us to add reading support first, then in a later version introduce writing
+            if entry["deserialie_only"]:
+                self.serialize = False
+                self.deserialize = True
         if 'serialize_property' in entry:
             self.serialize_property = entry['serialize_property']
         if 'deserialize_property' in entry:
