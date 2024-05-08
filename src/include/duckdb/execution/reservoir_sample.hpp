@@ -61,8 +61,8 @@ public:
 	bool destroyed;
 
 public:
-	explicit BlockingSample(int64_t seed) : random(base_reservoir_sample->random) {
-		base_reservoir_sample = make_uniq<BaseReservoirSampling>(seed);
+	explicit BlockingSample(int64_t seed) : old_base_reservoir_sample(seed), random(old_base_reservoir_sample.random){
+		base_reservoir_sample = nullptr;
 	}
 	virtual ~BlockingSample() {
 	}
@@ -74,6 +74,7 @@ public:
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
 	virtual unique_ptr<DataChunk> GetChunk() = 0;
+	BaseReservoirSampling old_base_reservoir_sample;
 
 	virtual void Serialize(Serializer &serializer) const;
 	static unique_ptr<BlockingSample> Deserialize(Deserializer &deserializer);
@@ -116,7 +117,8 @@ public:
 	static constexpr const SampleType TYPE = SampleType::RESERVOIR_SAMPLE;
 
 public:
-	ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed);
+	ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed = 1);
+	ReservoirSample(idx_t sample_count, int64_t seed = 1);
 
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
@@ -125,6 +127,8 @@ public:
 	//! sample is completely built.
 	unique_ptr<DataChunk> GetChunk() override;
 	void Finalize() override;
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<BlockingSample> Deserialize(Deserializer &deserializer);
 
 private:
 	//! Replace a single element of the input
@@ -142,6 +146,7 @@ public:
 	bool reservoir_initialized;
 
 	//! The current reservoir
+	unique_ptr<DataChunk> reservoir_data_chunk;
 	unique_ptr<ReservoirChunk> reservoir_chunk;
 };
 
@@ -152,7 +157,9 @@ class ReservoirSamplePercentage : public BlockingSample {
 public:
 	static constexpr const SampleType TYPE = SampleType::RESERVOIR_PERCENTAGE_SAMPLE;
 
-	ReservoirSamplePercentage(Allocator &allocator, double percentage, int64_t seed);
+public:
+	ReservoirSamplePercentage(Allocator &allocator, double percentage, int64_t seed = -1);
+	ReservoirSamplePercentage(double percentage, int64_t seed = -1);
 
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
