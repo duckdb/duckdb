@@ -412,7 +412,19 @@ void Appender::FlushInternal(ColumnDataCollection &collection) {
 }
 
 void Appender::AppendDefaultsToVector(Vector &result, idx_t column, SelectionVector &sel, idx_t count) {
-	// TODO: throw if count is > STANDARD_VECTOR_SIZE
+#ifdef DEBUG
+	for (idx_t i = 0; i < count; i++) {
+		auto index = sel.get_index(i);
+		if (index > STANDARD_VECTOR_SIZE) {
+			throw InternalException("Provided SelectionVector is invalid, index %d points to %d, which is out of range",
+			                        i, index);
+		}
+	}
+#endif
+	if (count > STANDARD_VECTOR_SIZE) {
+		throw InvalidInputException("Please provide a Vector that is at most STANDARD_VECTOR_SIZE (%d) in size",
+		                            STANDARD_VECTOR_SIZE);
+	}
 	if (column >= types.size()) {
 		throw InvalidInputException(
 		    "Could not append DEFAULT value of column %d, out of range index, table only has %d columns", column,
