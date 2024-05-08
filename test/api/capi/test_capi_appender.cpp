@@ -13,9 +13,8 @@ public:
 		REQUIRE(status == DuckDBSuccess);
 	}
 	~CAPIAppender() {
-		auto status = duckdb_appender_flush(appender);
+		auto status = duckdb_appender_close(appender);
 		REQUIRE(status == DuckDBSuccess);
-		duckdb_appender_close(appender);
 		duckdb_appender_destroy(&appender);
 	}
 	operator duckdb_appender() const {
