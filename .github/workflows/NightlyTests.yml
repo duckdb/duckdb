@@ -501,6 +501,50 @@ jobs:
         shell: bash
         run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest ${{ matrix.test_parameter }} --no-exit
 
+  serialization-verification:
+    name: Deserialize Only Verification
+    runs-on: ubuntu-20.04
+    needs: linux-memory-leaks
+    strategy:
+      fail-fast: false
+
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Regenerate Serialization
+        shell: bash
+        # To allow forwards compatibility, we will add deserialization first, then introduce the serialization part in a later version
+        # this way the older version will already know how to deserialize the new data.
+
+        # Add the 'debug_serialization' flag to force writing the serialize portion
+        # This is used to verify that our deserialization code is in sync with the serialization code we will add later.
+        run: python3 scripts/generate_serialization.py --debug_serialization
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ env.CCACHE_SAVE }}
+
+      - name: Build
+        shell: bash
+        run: make reldebug
+
+      - name: Test
+        shell: bash
+        run: ./build/reldebug/test/unittest --force-reload --force-storage
+
   force-blocking-sink-source:
     name: Forcing async Sinks/Sources
     runs-on: ubuntu-20.04

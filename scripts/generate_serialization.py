@@ -299,7 +299,7 @@ class MemberVariable:
         if 'deserialize_only' in entry and not args.debug_serialization:
             # This option allows us to temporarily disable serialization
             # which allows us to add reading support first, then in a later version introduce writing
-            if entry["deserialie_only"]:
+            if entry["deserialize_only"]:
                 self.serialize = False
                 self.deserialize = True
         if 'serialize_property' in entry:
