@@ -164,13 +164,13 @@ static unique_ptr<TableRef> ReplaceInternal(ClientContext &context, const string
 	return nullptr;
 }
 unique_ptr<TableRef> PythonReplacementScan::Replace(ClientContext &context, ReplacementScanInput &input,
-                                                    ReplacementScanData *data) {
+                                                    optional_ptr<ReplacementScanData> data) {
 	auto &table_name = input.table_name;
 
 	auto &table_ref = input.ref;
 	if (table_ref.external_dependency) {
 		auto dependency_item = table_ref.external_dependency->GetDependency("replacement_cache");
-		if (dependency_item && dependency_item->type == ExternalDependencyItemType::PYTHON_DEPENDENCY) {
+		if (dependency_item) {
 			py::gil_scoped_acquire acquire;
 			auto &python_dependency = dependency_item->Cast<PythonDependencyItem>();
 			auto &registered_object = *python_dependency.object;

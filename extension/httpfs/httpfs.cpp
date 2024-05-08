@@ -7,6 +7,7 @@
 #include "duckdb/common/thread.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
+#include "duckdb/logging/http_logger.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/helper.hpp"
@@ -158,7 +159,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
 	idx_t out_offset = 0;
 
 	std::function<duckdb_httplib_openssl::Result(void)> request([&]() {
-		auto client = GetClient(hfs.http_params, proto_host_port.c_str());
+		auto client = GetClient(hfs.http_params, proto_host_port.c_str(), &hfs);
 
 		if (hfs.state) {
 			hfs.state->post_count++;
@@ -196,7 +197,8 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, stri
 }
 
 unique_ptr<duckdb_httplib_openssl::Client> HTTPFileSystem::GetClient(const HTTPParams &http_params,
-                                                                     const char *proto_host_port) {
+                                                                     const char *proto_host_port,
+                                                                     optional_ptr<HTTPFileHandle> hfs) {
 	auto client = make_uniq<duckdb_httplib_openssl::Client>(proto_host_port);
 	client->set_follow_location(true);
 	client->set_keep_alive(http_params.keep_alive);
@@ -208,6 +210,10 @@ unique_ptr<duckdb_httplib_openssl::Client> HTTPFileSystem::GetClient(const HTTPP
 	client->set_read_timeout(http_params.timeout);
 	client->set_connection_timeout(http_params.timeout);
 	client->set_decompress(false);
+	if (hfs && hfs->http_logger) {
+		client->set_logger(
+		    hfs->http_logger->GetLogger<duckdb_httplib_openssl::Request, duckdb_httplib_openssl::Response>());
+	}
 	return client;
 }
 
@@ -219,7 +225,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PutRequest(FileHandle &handle, strin
 	auto headers = initialize_http_headers(header_map);
 
 	std::function<duckdb_httplib_openssl::Result(void)> request([&]() {
-		auto client = GetClient(hfs.http_params, proto_host_port.c_str());
+		auto client = GetClient(hfs.http_params, proto_host_port.c_str(), &hfs);
 		if (hfs.state) {
 			hfs.state->put_count++;
 			hfs.state->total_bytes_sent += buffer_in_len;
@@ -244,7 +250,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, stri
 	});
 
 	std::function<void(void)> on_retry(
-	    [&]() { hfs.http_client = GetClient(hfs.http_params, proto_host_port.c_str()); });
+	    [&]() { hfs.http_client = GetClient(hfs.http_params, proto_host_port.c_str(), &hfs); });
 
 	return RunRequestWithRetry(request, url, "HEAD", hfs.http_params, on_retry);
 }
@@ -300,7 +306,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, strin
 	});
 
 	std::function<void(void)> on_retry(
-	    [&]() { hfh.http_client = GetClient(hfh.http_params, proto_host_port.c_str()); });
+	    [&]() { hfh.http_client = GetClient(hfh.http_params, proto_host_port.c_str(), &hfh); });
 
 	return RunRequestWithRetry(request, url, "GET", hfh.http_params, on_retry);
 }
@@ -367,7 +373,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 	});
 
 	std::function<void(void)> on_retry(
-	    [&]() { hfs.http_client = GetClient(hfs.http_params, proto_host_port.c_str()); });
+	    [&]() { hfs.http_client = GetClient(hfs.http_params, proto_host_port.c_str(), &hfs); });
 
 	return RunRequestWithRetry(request, url, "GET Range", hfs.http_params, on_retry);
 }
@@ -568,7 +574,7 @@ static optional_ptr<HTTPMetadataCache> TryGetMetadataCache(optional_ptr<FileOpen
 }
 
 void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
-	InitializeClient();
+	InitializeClient(FileOpener::TryGetClientContext(opener));
 	auto &hfs = file_system.Cast<HTTPFileSystem>();
 	state = HTTPState::TryGetState(opener);
 	if (!state) {
@@ -701,10 +707,15 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 	}
 }
 
-void HTTPFileHandle::InitializeClient() {
+void HTTPFileHandle::InitializeClient(optional_ptr<ClientContext> context) {
 	string path_out, proto_host_port;
 	HTTPFileSystem::ParseUrl(path, path_out, proto_host_port);
-	http_client = HTTPFileSystem::GetClient(this->http_params, proto_host_port.c_str());
+	http_client = HTTPFileSystem::GetClient(this->http_params, proto_host_port.c_str(), nullptr);
+	if (context && ClientConfig::GetConfig(*context).enable_http_logging) {
+		http_logger = context->client_data->http_logger.get();
+		http_client->set_logger(
+		    http_logger->GetLogger<duckdb_httplib_openssl::Request, duckdb_httplib_openssl::Response>());
+	}
 }
 
 ResponseWrapper::ResponseWrapper(duckdb_httplib_openssl::Response &res, string &original_url) {

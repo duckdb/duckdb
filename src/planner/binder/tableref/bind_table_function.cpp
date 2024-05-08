@@ -154,7 +154,7 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 	vector<string> return_names;
 	if (table_function.bind || table_function.bind_replace) {
 		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names,
-		                                  table_function.function_info.get(), this, ref);
+		                                  table_function.function_info.get(), this, table_function, ref);
 		if (table_function.bind_replace) {
 			auto new_plan = table_function.bind_replace(context, bind_input);
 			if (new_plan != nullptr) {

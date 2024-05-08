@@ -11,9 +11,6 @@ namespace duckdb {
 
 class PythonDependencyItem : public DependencyItem {
 public:
-	static constexpr const ExternalDependencyItemType TYPE = ExternalDependencyItemType::PYTHON_DEPENDENCY;
-
-public:
 	explicit PythonDependencyItem(unique_ptr<RegisteredObject> &&object);
 	~PythonDependencyItem() override;
 

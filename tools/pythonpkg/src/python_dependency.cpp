@@ -3,8 +3,7 @@
 
 namespace duckdb {
 
-PythonDependencyItem::PythonDependencyItem(unique_ptr<RegisteredObject> &&object)
-    : DependencyItem(ExternalDependencyItemType::PYTHON_DEPENDENCY), object(std::move(object)) {
+PythonDependencyItem::PythonDependencyItem(unique_ptr<RegisteredObject> &&object) : object(std::move(object)) {
 }
 
 PythonDependencyItem::~PythonDependencyItem() { // NOLINT - cannot throw in exception

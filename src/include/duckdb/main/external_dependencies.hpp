@@ -13,34 +13,20 @@
 
 namespace duckdb {
 
-enum class ExternalDependencyItemType : uint8_t { PYTHON_DEPENDENCY };
-
 class DependencyItem {
 public:
 	virtual ~DependencyItem() {};
 
 public:
-	ExternalDependencyItemType type;
-
-public:
 	template <class TARGET>
 	TARGET &Cast() {
-		if (type != TARGET::TYPE) {
-			throw InternalException("Failed to cast DependencyItem to type - DependencyItem type mismatch");
-		}
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
-
 	template <class TARGET>
 	const TARGET &Cast() const {
-		if (type != TARGET::TYPE) {
-			throw InternalException("Failed to cast DependencyItem to type - DependencyItem type mismatch");
-		}
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
-	}
-
-protected:
-	explicit DependencyItem(ExternalDependencyItemType type_p) : type(type_p) {
 	}
 };
 

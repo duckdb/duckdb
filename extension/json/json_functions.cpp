@@ -195,7 +195,7 @@ vector<TableFunctionSet> JSONFunctions::GetTableFunctions() {
 }
 
 unique_ptr<TableRef> JSONFunctions::ReadJSONReplacement(ClientContext &context, ReplacementScanInput &input,
-                                                        ReplacementScanData *data) {
+                                                        optional_ptr<ReplacementScanData> data) {
 	auto &table_name = input.table_name;
 	if (!ReplacementScan::CanReplace(table_name, {"json", "jsonl", "ndjson"})) {
 		return nullptr;

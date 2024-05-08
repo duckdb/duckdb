@@ -71,7 +71,7 @@ public:
 	static vector<PragmaFunctionSet> GetPragmaFunctions();
 	static vector<TableFunctionSet> GetTableFunctions();
 	static unique_ptr<TableRef> ReadJSONReplacement(ClientContext &context, ReplacementScanInput &input,
-	                                                ReplacementScanData *data);
+	                                                optional_ptr<ReplacementScanData> data);
 	static TableFunction GetReadJSONTableFunction(shared_ptr<JSONScanInfo> function_info);
 	static CopyFunction GetJSONCopyFunction();
 	static void RegisterSimpleCastFunctions(CastFunctionSet &casts);

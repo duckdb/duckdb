@@ -13,6 +13,8 @@
 
 namespace duckdb {
 
+enum class CatalogType : uint8_t;
+
 enum class ParseInfoType : uint8_t {
 	ALTER_INFO,
 	ATTACH_INFO,
