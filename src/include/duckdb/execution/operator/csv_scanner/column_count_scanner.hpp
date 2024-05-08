@@ -13,6 +13,7 @@
 #include "duckdb/execution/operator/csv_scanner/scanner_boundary.hpp"
 #include "duckdb/execution/operator/csv_scanner/string_value_scanner.hpp"
 #include "duckdb/execution/operator/csv_scanner/base_scanner.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 
 namespace duckdb {
 

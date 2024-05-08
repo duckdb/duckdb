@@ -1198,6 +1198,24 @@ Value ExportLargeBufferArrow::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// ArrowOutputListView
+//===--------------------------------------------------------------------===//
+void ArrowOutputListView::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto arrow_output_list_view = input.GetValue<bool>();
+
+	config.options.arrow_use_list_view = arrow_output_list_view;
+}
+
+void ArrowOutputListView::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.arrow_use_list_view = DBConfig().options.arrow_use_list_view;
+}
+
+Value ArrowOutputListView::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	bool arrow_output_list_view = config.options.arrow_use_list_view;
+	return Value::BOOLEAN(arrow_output_list_view);
+}
+
 // ProduceArrowStringView
 //===--------------------------------------------------------------------===//
 void ProduceArrowStringView::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -1211,6 +1229,7 @@ void ProduceArrowStringView::ResetGlobal(DatabaseInstance *db, DBConfig &config)
 Value ProduceArrowStringView::GetSetting(const ClientContext &context) {
 	return Value::BOOLEAN(DBConfig::GetConfig(context).options.produce_arrow_string_views);
 }
+
 //===--------------------------------------------------------------------===//
 // Profile Output
 //===--------------------------------------------------------------------===//
@@ -1433,6 +1452,28 @@ Value FlushAllocatorSetting::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Allocator Background Thread
+//===--------------------------------------------------------------------===//
+void AllocatorBackgroundThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.allocator_background_threads = input.GetValue<bool>();
+	if (db) {
+		TaskScheduler::GetScheduler(*db).SetAllocatorBackgroundThreads(config.options.allocator_background_threads);
+	}
+}
+
+void AllocatorBackgroundThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.allocator_background_threads = DBConfig().options.allocator_background_threads;
+	if (db) {
+		TaskScheduler::GetScheduler(*db).SetAllocatorBackgroundThreads(config.options.allocator_background_threads);
+	}
+}
+
+Value AllocatorBackgroundThreadsSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(config.options.allocator_background_threads);
+}
+
+//===--------------------------------------------------------------------===//
 // DuckDBApi Setting
 //===--------------------------------------------------------------------===//
 
@@ -1479,6 +1520,36 @@ void CustomUserAgentSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config)
 Value CustomUserAgentSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value(config.options.custom_user_agent);
+}
+
+//===--------------------------------------------------------------------===//
+// EnableHTTPLogging Setting
+//===--------------------------------------------------------------------===//
+void EnableHTTPLoggingSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).enable_http_logging = ClientConfig().enable_http_logging;
+}
+
+void EnableHTTPLoggingSetting::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).enable_http_logging = input.GetValue<bool>();
+}
+
+Value EnableHTTPLoggingSetting::GetSetting(const ClientContext &context) {
+	return Value(ClientConfig::GetConfig(context).enable_http_logging);
+}
+
+//===--------------------------------------------------------------------===//
+// HTTPLoggingOutput Setting
+//===--------------------------------------------------------------------===//
+void HTTPLoggingOutputSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).http_logging_output = ClientConfig().http_logging_output;
+}
+
+void HTTPLoggingOutputSetting::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).http_logging_output = input.GetValue<string>();
+}
+
+Value HTTPLoggingOutputSetting::GetSetting(const ClientContext &context) {
+	return Value(ClientConfig::GetConfig(context).http_logging_output);
 }
 
 } // namespace duckdb

@@ -69,7 +69,7 @@ public:
 
 	py::str GetAlias();
 
-	static unique_ptr<DuckDBPyRelation> EmptyResult(const std::shared_ptr<ClientContext> &context,
+	static unique_ptr<DuckDBPyRelation> EmptyResult(const shared_ptr<ClientContext> &context,
 	                                                const vector<LogicalType> &types, vector<string> names);
 
 	unique_ptr<DuckDBPyRelation> SetAlias(const string &expr);
@@ -214,7 +214,7 @@ public:
 
 	py::dict FetchNumpyInternal(bool stream = false, idx_t vectors_per_chunk = 1);
 
-	PandasDataFrame FetchDFChunk(idx_t vectors_per_chunk, bool date_as_object);
+	PandasDataFrame FetchDFChunk(const idx_t vectors_per_chunk = 1, bool date_as_object = false);
 
 	duckdb::pyarrow::Table ToArrowTable(idx_t batch_size);
 
@@ -234,7 +234,9 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Join(DuckDBPyRelation *other, const py::object &condition, const string &type);
 
-	void ToParquet(const string &filename, const py::object &compression = py::none());
+	void ToParquet(const string &filename, const py::object &compression = py::none(),
+	               const py::object &field_ids = py::none(), const py::object &row_group_size_bytes = py::none(),
+	               const py::object &row_group_size = py::none());
 
 	void ToCSV(const string &filename, const py::object &sep = py::none(), const py::object &na_rep = py::none(),
 	           const py::object &header = py::none(), const py::object &quotechar = py::none(),

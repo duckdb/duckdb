@@ -15,6 +15,7 @@
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 
@@ -49,11 +50,24 @@ struct hash<duckdb::UniqueKeyInfo> {
 
 namespace duckdb {
 
+struct ConstraintEntry {
+	ConstraintEntry(ClientContext &context, TableCatalogEntry &table) : table(table) {
+		if (!table.IsDuckTable()) {
+			return;
+		}
+		auto binder = Binder::CreateBinder(context);
+		bound_constraints = binder->BindConstraints(table.GetConstraints(), table.name, table.GetColumns());
+	}
+
+	TableCatalogEntry &table;
+	vector<unique_ptr<BoundConstraint>> bound_constraints;
+};
+
 struct DuckDBConstraintsData : public GlobalTableFunctionState {
 	DuckDBConstraintsData() : offset(0), constraint_offset(0), unique_constraint_offset(0) {
 	}
 
-	vector<reference<CatalogEntry>> entries;
+	vector<ConstraintEntry> entries;
 	idx_t offset;
 	idx_t constraint_offset;
 	idx_t unique_constraint_offset;
@@ -118,8 +132,9 @@ unique_ptr<GlobalTableFunctionState> DuckDBConstraintsInit(ClientContext &contex
 		});
 
 		sort(entries.begin(), entries.end(), [&](CatalogEntry &x, CatalogEntry &y) { return (x.name < y.name); });
-
-		result->entries.insert(result->entries.end(), entries.begin(), entries.end());
+		for (auto &entry : entries) {
+			result->entries.emplace_back(context, entry.get().Cast<TableCatalogEntry>());
+		}
 	};
 
 	return std::move(result);
@@ -135,10 +150,9 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
-		auto &entry = data.entries[data.offset].get();
-		D_ASSERT(entry.type == CatalogType::TABLE_ENTRY);
+		auto &entry = data.entries[data.offset];
 
-		auto &table = entry.Cast<TableCatalogEntry>();
+		auto &table = entry.table;
 		auto &constraints = table.GetConstraints();
 		bool is_duck_table = table.IsDuckTable();
 		for (; data.constraint_offset < constraints.size() && count < STANDARD_VECTOR_SIZE; data.constraint_offset++) {
@@ -163,7 +177,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 				if (!is_duck_table) {
 					continue;
 				}
-				auto &bound_constraints = table.GetBoundConstraints();
+				auto &bound_constraints = entry.bound_constraints;
 				auto &bound_foreign_key = bound_constraints[data.constraint_offset]->Cast<BoundForeignKeyConstraint>();
 				if (bound_foreign_key.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE) {
 					// Those are already covered by PRIMARY KEY and UNIQUE entries
@@ -194,7 +208,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			UniqueKeyInfo uk_info;
 
 			if (is_duck_table) {
-				auto &bound_constraint = *table.GetBoundConstraints()[data.constraint_offset];
+				auto &bound_constraint = *entry.bound_constraints[data.constraint_offset];
 				switch (bound_constraint.type) {
 				case ConstraintType::UNIQUE: {
 					auto &bound_unique = bound_constraint.Cast<BoundUniqueConstraint>();
@@ -251,7 +265,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 
 			vector<LogicalIndex> column_index_list;
 			if (is_duck_table) {
-				auto &bound_constraint = *table.GetBoundConstraints()[data.constraint_offset];
+				auto &bound_constraint = *entry.bound_constraints[data.constraint_offset];
 				switch (bound_constraint.type) {
 				case ConstraintType::CHECK: {
 					auto &bound_check = bound_constraint.Cast<BoundCheckConstraint>();

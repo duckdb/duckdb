@@ -46,7 +46,7 @@ CheckOptions:
   - key:             readability-identifier-naming.VariableCase
     value:           lower_case
   - key:             modernize-use-emplace.SmartPointers
-    value:           '::std::shared_ptr;::duckdb::unique_ptr;::std::auto_ptr;::std::weak_ptr'
+    value:           '::duckdb::shared_ptr;::duckdb::unique_ptr;::std::auto_ptr;::duckdb::weak_ptr'
   - key:             cppcoreguidelines-rvalue-reference-param-not-moved.IgnoreUnnamedParams
     value:           true
 

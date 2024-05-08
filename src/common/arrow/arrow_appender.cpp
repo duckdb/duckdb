@@ -138,13 +138,15 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 	case LogicalTypeId::INTEGER:
 		InitializeAppenderForType<ArrowScalarData<int32_t>>(append_data);
 		break;
+	case LogicalTypeId::TIME_TZ:
+		InitializeAppenderForType<ArrowScalarData<int64_t, dtime_tz_t, ArrowTimeTzConverter>>(append_data);
+		break;
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_TZ:
-	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::BIGINT:
 		InitializeAppenderForType<ArrowScalarData<int64_t>>(append_data);
 		break;
@@ -241,10 +243,18 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		InitializeAppenderForType<ArrowFixedSizeListData>(append_data);
 		break;
 	case LogicalTypeId::LIST: {
-		if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
-			InitializeAppenderForType<ArrowListData<int64_t>>(append_data);
+		if (append_data.options.arrow_use_list_view) {
+			if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+				InitializeAppenderForType<ArrowListViewData<int64_t>>(append_data);
+			} else {
+				InitializeAppenderForType<ArrowListViewData<int32_t>>(append_data);
+			}
 		} else {
-			InitializeAppenderForType<ArrowListData<int32_t>>(append_data);
+			if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+				InitializeAppenderForType<ArrowListData<int64_t>>(append_data);
+			} else {
+				InitializeAppenderForType<ArrowListData<int32_t>>(append_data);
+			}
 		}
 		break;
 	}

@@ -13,4 +13,8 @@ unique_ptr<SQLStatement> VacuumStatement::Copy() const {
 	return unique_ptr<VacuumStatement>(new VacuumStatement(*this));
 }
 
+string VacuumStatement::ToString() const {
+	return info->ToString();
+}
+
 } // namespace duckdb

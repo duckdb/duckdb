@@ -1,6 +1,7 @@
 #ifndef JEMALLOC_INTERNAL_PA_H
 #define JEMALLOC_INTERNAL_PA_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/base.h"
 #include "jemalloc/internal/decay.h"
 #include "jemalloc/internal/ecache.h"
@@ -11,8 +12,6 @@
 #include "jemalloc/internal/pac.h"
 #include "jemalloc/internal/pai.h"
 #include "jemalloc/internal/sec.h"
-
-namespace duckdb_jemalloc {
 
 /*
  * The page allocator; responsible for acquiring pages of memory for
@@ -133,7 +132,7 @@ pa_shard_ehooks_get(pa_shard_t *shard) {
 
 /* Returns true on error. */
 bool pa_central_init(pa_central_t *central, base_t *base, bool hpa,
-    hpa_hooks_t *hpa_hooks);
+    const hpa_hooks_t *hpa_hooks);
 
 /* Returns true on error. */
 bool pa_shard_init(tsdn_t *tsdn, pa_shard_t *shard, pa_central_t *central,
@@ -225,6 +224,10 @@ void pa_shard_prefork5(tsdn_t *tsdn, pa_shard_t *shard);
 void pa_shard_postfork_parent(tsdn_t *tsdn, pa_shard_t *shard);
 void pa_shard_postfork_child(tsdn_t *tsdn, pa_shard_t *shard);
 
+size_t pa_shard_nactive(pa_shard_t *shard);
+size_t pa_shard_ndirty(pa_shard_t *shard);
+size_t pa_shard_nmuzzy(pa_shard_t *shard);
+
 void pa_shard_basic_stats_merge(pa_shard_t *shard, size_t *nactive,
     size_t *ndirty, size_t *nmuzzy);
 
@@ -241,7 +244,5 @@ void pa_shard_stats_merge(tsdn_t *tsdn, pa_shard_t *shard,
  */
 void pa_shard_mtx_stats_read(tsdn_t *tsdn, pa_shard_t *shard,
     mutex_prof_data_t mutex_prof_data[mutex_prof_num_arena_mutexes]);
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_PA_H */

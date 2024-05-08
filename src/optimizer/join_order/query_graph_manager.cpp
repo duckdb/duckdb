@@ -2,7 +2,6 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/enums/join_type.hpp"
-#include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/optimizer/join_order/join_relation.hpp"
@@ -22,7 +21,6 @@ static bool Disjoint(const unordered_set<T> &a, const unordered_set<T> &b) {
 }
 
 bool QueryGraphManager::Build(LogicalOperator &op) {
-	vector<reference<LogicalOperator>> filter_operators;
 	// have the relation manager extract the join relations and create a reference list of all the
 	// filter operators.
 	auto can_reorder = relation_manager.ExtractJoinRelations(op, filter_operators);
@@ -123,22 +121,74 @@ static unique_ptr<LogicalOperator> ExtractJoinRelation(unique_ptr<SingleJoinRela
 	throw InternalException("Could not find relation in parent node (?)");
 }
 
-unique_ptr<LogicalOperator> QueryGraphManager::Reconstruct(unique_ptr<LogicalOperator> plan, JoinNode &node) {
-	return RewritePlan(std::move(plan), node);
+unique_ptr<LogicalOperator> QueryGraphManager::Reconstruct(unique_ptr<LogicalOperator> plan) {
+	// now we have to rewrite the plan
+	bool root_is_join = plan->children.size() > 1;
+
+	unordered_set<idx_t> bindings;
+	for (idx_t i = 0; i < relation_manager.NumRelations(); i++) {
+		bindings.insert(i);
+	}
+	auto &total_relation = set_manager.GetJoinRelation(bindings);
+
+	// first we will extract all relations from the main plan
+	vector<unique_ptr<LogicalOperator>> extracted_relations;
+	extracted_relations.reserve(relation_manager.NumRelations());
+	for (auto &relation : relation_manager.GetRelations()) {
+		extracted_relations.push_back(ExtractJoinRelation(relation));
+	}
+
+	// now we generate the actual joins
+	auto join_tree = GenerateJoins(extracted_relations, total_relation);
+
+	// perform the final pushdown of remaining filters
+	for (auto &filter : filters_and_bindings) {
+		// check if the filter has already been extracted
+		if (filter->filter) {
+			// if not we need to push it
+			join_tree.op = PushFilter(std::move(join_tree.op), std::move(filter->filter));
+		}
+	}
+
+	// find the first join in the relation to know where to place this node
+	if (root_is_join) {
+		// first node is the join, return it immediately
+		return std::move(join_tree.op);
+	}
+	D_ASSERT(plan->children.size() == 1);
+	// have to move up through the relations
+	auto op = plan.get();
+	auto parent = plan.get();
+	while (op->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT &&
+	       op->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
+	       op->type != LogicalOperatorType::LOGICAL_ASOF_JOIN) {
+		D_ASSERT(op->children.size() == 1);
+		parent = op;
+		op = op->children[0].get();
+	}
+	// have to replace at this node
+	parent->children[0] = std::move(join_tree.op);
+	return plan;
 }
 
 GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations,
-                                                      JoinNode &node) {
+                                                      JoinRelationSet &set) {
 	optional_ptr<JoinRelationSet> left_node;
 	optional_ptr<JoinRelationSet> right_node;
 	optional_ptr<JoinRelationSet> result_relation;
 	unique_ptr<LogicalOperator> result_operator;
-	if (node.left && node.right && node.info) {
-		// generate the left and right children
-		auto left = GenerateJoins(extracted_relations, *node.left);
-		auto right = GenerateJoins(extracted_relations, *node.right);
 
-		if (node.info->filters.empty()) {
+	auto dp_entry = plans->find(set);
+	if (dp_entry == plans->end()) {
+		throw InternalException("Join Order Optimizer Error: No full plan was created");
+	}
+	auto &node = dp_entry->second;
+	if (!dp_entry->second->is_leaf) {
+
+		// generate the left and right children
+		auto left = GenerateJoins(extracted_relations, node->left_set);
+		auto right = GenerateJoins(extracted_relations, node->right_set);
+		if (dp_entry->second->info->filters.empty()) {
 			// no filters, create a cross product
 			result_operator = LogicalCrossProduct::Create(std::move(left.op), std::move(right.op));
 		} else {
@@ -150,7 +200,7 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 			join->children.push_back(std::move(right.op));
 
 			// set the join conditions from the join node
-			for (auto &filter_ref : node.info->filters) {
+			for (auto &filter_ref : node->info->filters) {
 				auto f = filter_ref.get();
 				// extract the filter from the operator it originally belonged to
 				D_ASSERT(filters_and_bindings[f->filter_index]->filter);
@@ -185,23 +235,23 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 		result_relation = &set_manager.Union(*left.set, *right.set);
 	} else {
 		// base node, get the entry from the list of extracted relations
-		D_ASSERT(node.set.count == 1);
-		D_ASSERT(extracted_relations[node.set.relations[0]]);
-		result_relation = &node.set;
-		result_operator = std::move(extracted_relations[node.set.relations[0]]);
+		D_ASSERT(node->set.count == 1);
+		D_ASSERT(extracted_relations[node->set.relations[0]]);
+		result_relation = &node->set;
+		result_operator = std::move(extracted_relations[result_relation->relations[0]]);
 	}
 	// TODO: this is where estimated properties start coming into play.
 	//  when creating the result operator, we should ask the cost model and cardinality estimator what
 	//  the cost and cardinality are
 	//	result_operator->estimated_props = node.estimated_props->Copy();
-	result_operator->estimated_cardinality = node.cardinality;
+	result_operator->estimated_cardinality = node->cardinality;
 	result_operator->has_estimated_cardinality = true;
 	if (result_operator->type == LogicalOperatorType::LOGICAL_FILTER &&
 	    result_operator->children[0]->type == LogicalOperatorType::LOGICAL_GET) {
 		// FILTER on top of GET, add estimated properties to both
 		// auto &filter_props = *result_operator->estimated_props;
 		auto &child_operator = *result_operator->children[0];
-		child_operator.estimated_cardinality = node.cardinality;
+		child_operator.estimated_cardinality = node->cardinality;
 		child_operator.has_estimated_cardinality = true;
 	}
 	// check if we should do a pushdown on this node
@@ -290,151 +340,6 @@ const QueryGraphEdges &QueryGraphManager::GetQueryGraphEdges() const {
 void QueryGraphManager::CreateQueryGraphCrossProduct(JoinRelationSet &left, JoinRelationSet &right) {
 	query_graph.CreateEdge(left, right, nullptr);
 	query_graph.CreateEdge(right, left, nullptr);
-}
-
-unique_ptr<LogicalOperator> QueryGraphManager::RewritePlan(unique_ptr<LogicalOperator> plan, JoinNode &node) {
-	// now we have to rewrite the plan
-	bool root_is_join = plan->children.size() > 1;
-
-	// first we will extract all relations from the main plan
-	vector<unique_ptr<LogicalOperator>> extracted_relations;
-	extracted_relations.reserve(relation_manager.NumRelations());
-	for (auto &relation : relation_manager.GetRelations()) {
-		extracted_relations.push_back(ExtractJoinRelation(relation));
-	}
-
-	// now we generate the actual joins
-	auto join_tree = GenerateJoins(extracted_relations, node);
-	// perform the final pushdown of remaining filters
-	for (auto &filter : filters_and_bindings) {
-		// check if the filter has already been extracted
-		if (filter->filter) {
-			// if not we need to push it
-			join_tree.op = PushFilter(std::move(join_tree.op), std::move(filter->filter));
-		}
-	}
-
-	// find the first join in the relation to know where to place this node
-	if (root_is_join) {
-		// first node is the join, return it immediately
-		return std::move(join_tree.op);
-	}
-	D_ASSERT(plan->children.size() == 1);
-	// have to move up through the relations
-	auto op = plan.get();
-	auto parent = plan.get();
-	while (op->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT &&
-	       op->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
-	       op->type != LogicalOperatorType::LOGICAL_ASOF_JOIN) {
-		D_ASSERT(op->children.size() == 1);
-		parent = op;
-		op = op->children[0].get();
-	}
-	// have to replace at this node
-	parent->children[0] = std::move(join_tree.op);
-	return plan;
-}
-
-static void FlipChildren(LogicalOperator &op) {
-	std::swap(op.children[0], op.children[1]);
-	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN || op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
-		auto &join = op.Cast<LogicalComparisonJoin>();
-		join.join_type = InverseJoinType(join.join_type);
-		for (auto &cond : join.conditions) {
-			std::swap(cond.left, cond.right);
-			cond.comparison = FlipComparisonExpression(cond.comparison);
-		}
-	}
-	if (op.type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
-		auto &join = op.Cast<LogicalAnyJoin>();
-		join.join_type = InverseJoinType(join.join_type);
-	}
-}
-
-void QueryGraphManager::TryFlipChildren(LogicalOperator &op, idx_t cardinality_ratio) {
-	auto &left_child = op.children[0];
-	auto &right_child = op.children[1];
-	auto lhs_cardinality = left_child->has_estimated_cardinality ? left_child->estimated_cardinality
-	                                                             : left_child->EstimateCardinality(context);
-	auto rhs_cardinality = right_child->has_estimated_cardinality ? right_child->estimated_cardinality
-	                                                              : right_child->EstimateCardinality(context);
-	if (rhs_cardinality < lhs_cardinality * cardinality_ratio) {
-		return;
-	}
-	FlipChildren(op);
-}
-
-unique_ptr<LogicalOperator> QueryGraphManager::LeftRightOptimizations(unique_ptr<LogicalOperator> input_op) {
-	auto op = input_op.get();
-	// pass through single child operators
-	while (!op->children.empty()) {
-		if (op->children.size() == 2) {
-			switch (op->type) {
-			case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-				auto &join = op->Cast<LogicalComparisonJoin>();
-
-				switch (join.join_type) {
-				case JoinType::INNER:
-				case JoinType::OUTER:
-					TryFlipChildren(join);
-					break;
-				case JoinType::LEFT:
-				case JoinType::RIGHT:
-					if (join.right_projection_map.empty()) {
-						TryFlipChildren(join, 2);
-					}
-					break;
-				case JoinType::SEMI:
-				case JoinType::ANTI: {
-					idx_t has_range = 0;
-					if (!PhysicalPlanGenerator::HasEquality(join.conditions, has_range)) {
-						// if the conditions have no equality, do not flip the children.
-						// There is no physical join operator (yet) that can do a right_semi/anti join.
-						break;
-					}
-					TryFlipChildren(join, 2);
-					break;
-				}
-				default:
-					break;
-				}
-				break;
-			}
-			case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
-				// cross product not a comparison join so JoinType::INNER will get ignored
-				TryFlipChildren(*op, 1);
-				break;
-			}
-			case LogicalOperatorType::LOGICAL_ANY_JOIN: {
-				auto &join = op->Cast<LogicalAnyJoin>();
-				if (join.join_type == JoinType::LEFT && join.right_projection_map.empty()) {
-					TryFlipChildren(join, 2);
-				} else if (join.join_type == JoinType::INNER) {
-					TryFlipChildren(join, 1);
-				}
-				break;
-			}
-			case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
-				auto &join = op->Cast<LogicalComparisonJoin>();
-				if (HasInverseJoinType(join.join_type) && join.right_projection_map.empty()) {
-					FlipChildren(join);
-					join.delim_flipped = true;
-				}
-				break;
-			}
-			default:
-				break;
-			}
-			op->children[0] = LeftRightOptimizations(std::move(op->children[0]));
-			op->children[1] = LeftRightOptimizations(std::move(op->children[1]));
-			// break from while loop
-			break;
-		}
-		if (op->children.size() == 1) {
-			op = op->children[0].get();
-		}
-	}
-	return input_op;
 }
 
 } // namespace duckdb

@@ -29,10 +29,17 @@ struct TransactionData;
 struct TableScanOptions;
 
 struct DataTableInfo;
+struct RowGroupWriteInfo;
 
 struct ColumnCheckpointInfo {
-	explicit ColumnCheckpointInfo(CompressionType compression_type_p) : compression_type(compression_type_p) {};
-	CompressionType compression_type;
+	ColumnCheckpointInfo(RowGroupWriteInfo &info, idx_t column_idx) : info(info), column_idx(column_idx) {
+	}
+
+	RowGroupWriteInfo &info;
+	idx_t column_idx;
+
+public:
+	CompressionType GetCompressionType();
 };
 
 class ColumnData {
@@ -46,7 +53,7 @@ public:
 	//! The start row
 	idx_t start;
 	//! The count of the column data
-	idx_t count;
+	atomic<idx_t> count;
 	//! The block manager
 	BlockManager &block_manager;
 	//! Table info for the column
@@ -124,8 +131,7 @@ public:
 
 	virtual unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group,
 	                                                                PartialBlockManager &partial_block_manager);
-	virtual unique_ptr<ColumnCheckpointState>
-	Checkpoint(RowGroup &row_group, PartialBlockManager &partial_block_manager, ColumnCheckpointInfo &checkpoint_info);
+	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &info);
 
 	virtual void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
 	                            Vector &scan_vector);
@@ -175,6 +181,8 @@ protected:
 	mutable mutex update_lock;
 	//! The updates for this column segment
 	unique_ptr<UpdateSegment> updates;
+	//! The lock for the stats
+	mutable mutex stats_lock;
 	//! The stats of the root segment
 	unique_ptr<SegmentStatistics> stats;
 	//! Total transient allocation size

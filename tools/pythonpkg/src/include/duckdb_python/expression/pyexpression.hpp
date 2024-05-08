@@ -22,14 +22,14 @@
 
 namespace duckdb {
 
-struct DuckDBPyExpression : public std::enable_shared_from_this<DuckDBPyExpression> {
+struct DuckDBPyExpression : public enable_shared_from_this<DuckDBPyExpression> {
 public:
 	explicit DuckDBPyExpression(unique_ptr<ParsedExpression> expr, OrderType order_type = OrderType::ORDER_DEFAULT,
 	                            OrderByNullType null_order = OrderByNullType::ORDER_DEFAULT);
 
 public:
-	std::shared_ptr<DuckDBPyExpression> shared_from_this() {
-		return std::enable_shared_from_this<DuckDBPyExpression>::shared_from_this();
+	shared_ptr<DuckDBPyExpression> shared_from_this() {
+		return enable_shared_from_this<DuckDBPyExpression>::shared_from_this();
 	}
 
 public:

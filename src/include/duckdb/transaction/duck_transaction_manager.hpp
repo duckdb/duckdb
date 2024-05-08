@@ -9,6 +9,8 @@
 #pragma once
 
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/storage/storage_lock.hpp"
+#include "duckdb/common/enums/checkpoint_type.hpp"
 
 namespace duckdb {
 class DuckTransaction;
@@ -16,8 +18,6 @@ class DuckTransaction;
 //! The Transaction Manager is responsible for creating and managing
 //! transactions
 class DuckTransactionManager : public TransactionManager {
-	friend struct CheckpointLock;
-
 public:
 	explicit DuckTransactionManager(AttachedDatabase &db);
 	~DuckTransactionManager() override;
@@ -34,27 +34,46 @@ public:
 
 	void Checkpoint(ClientContext &context, bool force = false) override;
 
-	transaction_t LowestActiveId() {
+	transaction_t LowestActiveId() const {
 		return lowest_active_id;
 	}
-	transaction_t LowestActiveStart() {
+	transaction_t LowestActiveStart() const {
 		return lowest_active_start;
+	}
+	transaction_t GetLastCommit() const {
+		return last_commit;
 	}
 
 	bool IsDuckTransactionManager() override {
 		return true;
 	}
 
+	//! Obtains a shared lock to the checkpoint lock
+	unique_ptr<StorageLockKey> SharedCheckpointLock();
+	unique_ptr<StorageLockKey> TryUpgradeCheckpointLock(StorageLockKey &lock);
+
 protected:
 	struct CheckpointDecision {
+		explicit CheckpointDecision(string reason_p);
+		explicit CheckpointDecision(CheckpointType type);
+		~CheckpointDecision();
+
 		bool can_checkpoint;
 		string reason;
+		CheckpointType type;
 	};
 
 private:
-	CheckpointDecision CanCheckpoint(optional_ptr<DuckTransaction> current = nullptr);
+	//! Generates a new commit timestamp
+	transaction_t GetCommitTimestamp();
 	//! Remove the given transaction from the list of active transactions
 	void RemoveTransaction(DuckTransaction &transaction) noexcept;
+	//! Remove the given transaction from the list of active transactions
+	void RemoveTransaction(DuckTransaction &transaction, bool store_transaction) noexcept;
+
+	//! Whether or not we can checkpoint
+	CheckpointDecision CanCheckpoint(DuckTransaction &transaction, unique_ptr<StorageLockKey> &checkpoint_lock,
+	                                 const UndoBufferProperties &properties);
 
 private:
 	//! The current start timestamp used by transactions
@@ -65,6 +84,8 @@ private:
 	atomic<transaction_t> lowest_active_id;
 	//! The lowest active transaction timestamp
 	atomic<transaction_t> lowest_active_start;
+	//! The last commit timestamp
+	atomic<transaction_t> last_commit;
 	//! Set of currently running transactions
 	vector<unique_ptr<DuckTransaction>> active_transactions;
 	//! Set of recently committed transactions
@@ -73,8 +94,8 @@ private:
 	vector<unique_ptr<DuckTransaction>> old_transactions;
 	//! The lock used for transaction operations
 	mutex transaction_lock;
-
-	bool thread_is_checkpointing;
+	//! The checkpoint lock
+	StorageLock checkpoint_lock;
 
 protected:
 	virtual void OnCommitCheckpointDecision(const CheckpointDecision &decision, DuckTransaction &transaction) {
