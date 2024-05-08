@@ -408,7 +408,7 @@ typedef struct _duckdb_appender {
 //! The table description allows querying info about the table.
 //! Must be destroyed with `duckdb_table_description_destroy`.
 typedef struct _duckdb_table_description {
-	void *__appn;
+	void *__tabledesc;
 } * duckdb_table_description;
 
 //! Can be used to provide start-up options for the DuckDB instance.

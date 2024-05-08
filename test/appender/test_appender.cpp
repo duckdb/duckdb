@@ -306,6 +306,32 @@ static duckdb::unique_ptr<DataChunk> AppendDefaultsToVector(duckdb::unique_ptr<Q
 	return chunk;
 }
 
+TEST_CASE("Test append default into Vector errors", "[appender]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	SECTION("count too big") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+		{
+			Appender appender(con, "integers");
+			duckdb::Vector vector(duckdb::LogicalTypeId::INTEGER, STANDARD_VECTOR_SIZE * 2);
+			SelectionVector sel;
+			REQUIRE_THROWS(appender.AppendDefaultsToVector(vector, 0, sel, STANDARD_VECTOR_SIZE * 2));
+		}
+	}
+	SECTION("sel_vec out of range") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+		{
+			Appender appender(con, "integers");
+			duckdb::Vector vector(duckdb::LogicalTypeId::INTEGER, 2);
+			SelectionVector sel(2);
+			sel.set_index(0, 15);
+			sel.set_index(0, STANDARD_VECTOR_SIZE + 1);
+			REQUIRE_THROWS(appender.AppendDefaultsToVector(vector, 0, sel, 2));
+		}
+	}
+}
+
 TEST_CASE("Test append default into Vector", "[appender]") {
 	DuckDB db(nullptr);
 	Connection con(db);
