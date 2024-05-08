@@ -514,8 +514,12 @@ void Binder::AddTableName(string table_name) {
 
 void Binder::AddReplacementScan(const string &table_name, unique_ptr<TableRef> replacement) {
 	auto &root_binder = GetRootBinder();
-	D_ASSERT(!root_binder.replacement_scans.count(table_name));
-	root_binder.replacement_scans[table_name] = std::move(replacement);
+	auto it = root_binder.replacement_scans.find(table_name);
+	if (it == root_binder.replacement_scans.end()) {
+		root_binder.replacement_scans[table_name] = std::move(replacement);
+	} else {
+		// A replacement scan by this name was previously registered, we can just use it
+	}
 }
 
 const unordered_set<string> &Binder::GetTableNames() {

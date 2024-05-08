@@ -134,3 +134,106 @@ class TestReplacementScan(object):
             match=r'Python Object "random_object" of type "str" found on line .* not suitable for replacement scans.',
         ):
             con.execute("select count(*) from random_object").fetchone()
+
+    def test_cte(self, duckdb_cursor):
+        df = pd.DataFrame({'a': [1, 2, 3]})
+        rel = duckdb_cursor.sql("with cte as (select * from df) select * from cte")
+        res = rel.fetchall()
+        assert res == [(1,), (2,), (3,)]
+
+        query = """
+            WITH cte as (select * from df)
+            select * from (
+                WITH cte as (select * from df)
+                select * from (
+                    WITH cte as (select * from df)
+                    select (
+                        select * from cte
+                    ) from cte
+                )
+            )
+        """
+        rel = duckdb_cursor.sql(query)
+        res = rel.fetchall()
+        """
+        select (
+            select * from cte
+        ) from cte
+        This will select the first row from the cte, and do this 3 times since we added 'from cte', and cte has 3 tuples
+        """
+
+        assert res == [(1,), (1,), (1,)]
+
+    def test_cte_with_joins(self, duckdb_cursor):
+        df = pd.DataFrame({'a': [1, 2, 3]})
+        query = """
+            WITH cte1 AS (
+                SELECT * FROM df
+            ),
+            cte2 AS (
+                SELECT * FROM df
+                WHERE a > 1
+            ),
+            cte3 AS (
+                SELECT * FROM df
+                WHERE a < 3
+            )
+            SELECT * FROM (
+                SELECT 
+                    cte1.*, 
+                    cte2.a AS cte2_a,
+                    subquery.a AS cte3_a
+                FROM cte1
+                JOIN cte2 ON cte1.a = cte2.a
+                JOIN (
+                    SELECT 
+                        df.*, 
+                        cte3.a AS cte3_a
+                    FROM df
+                    JOIN cte3 ON df.a = cte3.a
+                ) AS subquery ON cte1.a = subquery.a
+            ) AS main_query
+            WHERE main_query.a = 2
+        """
+        rel = duckdb_cursor.sql(query)
+        res = rel.fetchall()
+        assert res == [(2, 2, 2)]
+
+    def test_cte_at_different_levels(self, duckdb_cursor):
+        df = pd.DataFrame({'a': [1, 2, 3]})
+        query = """
+            SELECT * FROM (
+                WITH cte1 AS (
+                    SELECT * FROM df
+                )
+                SELECT 
+                    cte1.*, 
+                    cte2.a AS cte2_a,
+                    subquery.a AS cte3_a
+                FROM cte1
+                JOIN (
+                    WITH cte2 AS (
+                        SELECT * FROM df
+                        WHERE a > 1
+                    )
+                    SELECT * FROM cte2
+                ) AS cte2 ON cte1.a = cte2.a
+                JOIN (
+                    WITH cte3 AS (
+                        SELECT * FROM df
+                        WHERE a < 3
+                    )
+                    SELECT 
+                        df.*, 
+                        cte3.a AS cte3_a
+                    FROM (
+                        SELECT * FROM df
+                    ) AS df
+                    JOIN cte3 ON df.a = cte3.a
+                ) AS subquery ON cte1.a = subquery.a
+            ) AS main_query
+            WHERE main_query.a = 2
+        """
+        rel = duckdb_cursor.sql(query)
+        res = rel.fetchall()
+        assert res == [(2, 2, 2)]
