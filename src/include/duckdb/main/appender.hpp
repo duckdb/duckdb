@@ -120,10 +120,8 @@ class Appender : public BaseAppender {
 	unique_ptr<TableDescription> description;
 	//! The default expressions
 	vector<unique_ptr<Expression>> bound_defaults;
-	//! The Expression Executor for the complex default expressions
-	//! Most default expressions will be constant folded into BoundConstants
-	//! For the ones that cant be constant folded, we need to use the expression executor (i.e, random(), now(),
-	//! nextval(..))
+	//! The expression executor is used for expressions that cant be constant folded,
+	//! such as: random(), now(), nextval(...)
 	unique_ptr<ExpressionExecutor> expression_executor;
 
 public:
