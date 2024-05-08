@@ -1,4 +1,4 @@
-# name: test/sql/create/create_as_issue_1234.test
+# name: test/sql/create/create_as_issue_11968.test
 # group: [create]
 
 load __TEST_DIR__/temp_create_as.db
