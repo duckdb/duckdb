@@ -319,6 +319,7 @@ TEST_CASE("Test append default into Vector errors", "[appender]") {
 			REQUIRE_THROWS(appender.AppendDefaultsToVector(vector, 0, sel, STANDARD_VECTOR_SIZE * 2));
 		}
 	}
+#ifdef DEBUG
 	SECTION("sel_vec out of range") {
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 		{
@@ -330,6 +331,7 @@ TEST_CASE("Test append default into Vector errors", "[appender]") {
 			REQUIRE_THROWS(appender.AppendDefaultsToVector(vector, 0, sel, 2));
 		}
 	}
+#endif
 }
 
 TEST_CASE("Test append default into Vector", "[appender]") {
