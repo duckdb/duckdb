@@ -14,7 +14,7 @@
 namespace duckdb {
 class TableCatalogEntry;
 
-//! The ALTER binder binds expression in ALTER statements.
+//! The AlterBinder binds expressions in ALTER statements.
 class AlterBinder : public ExpressionBinder {
 public:
 	AlterBinder(Binder &binder, ClientContext &context, TableCatalogEntry &table, vector<LogicalIndex> &bound_columns,
