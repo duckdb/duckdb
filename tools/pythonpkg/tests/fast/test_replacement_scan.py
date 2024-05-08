@@ -154,6 +154,7 @@ class TestReplacementScan(object):
             )
         """
         rel = duckdb_cursor.sql(query)
+        duckdb_cursor.execute("create table df as select * from range(4, 7)")
         res = rel.fetchall()
         """
         select (
@@ -196,6 +197,7 @@ class TestReplacementScan(object):
             WHERE main_query.a = 2
         """
         rel = duckdb_cursor.sql(query)
+        duckdb_cursor.execute("create table df as select * from range(4, 7)")
         res = rel.fetchall()
         assert res == [(2, 2, 2)]
 
@@ -235,5 +237,6 @@ class TestReplacementScan(object):
             WHERE main_query.a = 2
         """
         rel = duckdb_cursor.sql(query)
+        duckdb_cursor.execute("create table df as select * from range(4, 7)")
         res = rel.fetchall()
         assert res == [(2, 2, 2)]
