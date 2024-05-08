@@ -35,13 +35,6 @@ struct HivePartitioningIndex {
 	DUCKDB_API static HivePartitioningIndex Deserialize(Deserializer &deserializer);
 };
 
-// Info on columns marked as required
-struct RequiredColumnInfo {
-	string column_name;
-	LogicalType type;
-	bool present_in_bind;
-};
-
 //! The bind data for the multi-file reader, obtained through MultiFileReader::BindReader
 struct MultiFileReaderBindData {
 	//! The index of the filename column (if any)
@@ -50,8 +43,6 @@ struct MultiFileReaderBindData {
 	vector<HivePartitioningIndex> hive_partitioning_indexes;
 	//! The index of the file_row_number column (if any)
 	idx_t file_row_number_idx = DConstants::INVALID_INDEX;
-	//! Columns that should be included in the scan result regardless of being in the projection
-	vector<RequiredColumnInfo> required_columns;
 
 	//! Allows extensions that override MultiFileReaders to pass extra data
 	case_insensitive_map_t<Value> custom_data;
@@ -62,21 +53,28 @@ struct MultiFileReaderBindData {
 
 //! Global state for MultiFileReads
 struct MultiFileReaderGlobalState {
-	MultiFileReaderGlobalState(case_insensitive_map_t<idx_t> required_column_map_p, vector<LogicalType> extra_columns_p,
-	                           optional_ptr<const MultiFileList> file_list_p)
-	    : required_column_map(std::move(required_column_map_p)), extra_columns(std::move(extra_columns_p)),
-	      file_list(file_list_p) {};
+	MultiFileReaderGlobalState(vector<LogicalType> extra_columns_p, optional_ptr<const MultiFileList> file_list_p)
+	    : extra_columns(std::move(extra_columns_p)), file_list(file_list_p) {};
 
-	//! Maps required column names to column index in the result Chunk
-	const case_insensitive_map_t<idx_t> required_column_map;
 	//! the extra column necessary to store the projected out required columns
 	const vector<LogicalType> extra_columns;
 	// the file list driving the current scan
-	optional_ptr<const MultiFileList> file_list;
+	const optional_ptr<const MultiFileList> file_list;
 
 	//! Indicates that the MultiFileReader has added columns to be scanned that are not in the projection
 	bool RequiresExtraColumns() {
 		return !extra_columns.empty();
+	}
+
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
