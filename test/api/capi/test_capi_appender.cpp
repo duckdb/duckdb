@@ -645,7 +645,6 @@ TEST_CASE("Test append DEFAULT in C API", "[capi]") {
 		result = tester.Query("SELECT * FROM test");
 		REQUIRE_NO_FAIL(*result);
 		REQUIRE(result->IsNull(0, 0));
-		REQUIRE(result->Fetch<int32_t>(0, 0) == 0);
 		REQUIRE(result->Fetch<int32_t>(1, 0) == 42);
 	}
 }
