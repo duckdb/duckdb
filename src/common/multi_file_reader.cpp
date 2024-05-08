@@ -219,12 +219,12 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 		auto column_id = global_column_ids[i];
 		if (IsRowIdColumnId(column_id)) {
 			// row-id
-			reader_data.constant_map.emplace_back(i, column_id, Value::BIGINT(42));
+			reader_data.constant_map.emplace_back(i, Value::BIGINT(42));
 			continue;
 		}
 		if (column_id == options.filename_idx) {
 			// filename
-			reader_data.constant_map.emplace_back(i, column_id, Value(filename));
+			reader_data.constant_map.emplace_back(i, Value(filename));
 			continue;
 		}
 		if (!options.hive_partitioning_indexes.empty()) {
@@ -235,7 +235,7 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 			for (auto &entry : options.hive_partitioning_indexes) {
 				if (column_id == entry.index) {
 					Value value = file_options.GetHivePartitionValue(partitions[entry.value], entry.value, context);
-					reader_data.constant_map.emplace_back(i, column_id, value);
+					reader_data.constant_map.emplace_back(i, value);
 					found_partition = true;
 					break;
 				}
@@ -251,7 +251,7 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 			if (not_present_in_file) {
 				// we need to project a column with name \"global_name\" - but it does not exist in the current file
 				// push a NULL value of the specified type
-				reader_data.constant_map.emplace_back(i, column_id, Value(global_types[column_id]));
+				reader_data.constant_map.emplace_back(i, Value(global_types[column_id]));
 				continue;
 			}
 		}
@@ -283,7 +283,7 @@ void MultiFileReader::CreateNameMapping(const string &file_name, const vector<Lo
 		// check if this is a constant column
 		bool constant = false;
 		for (auto &entry : reader_data.constant_map) {
-			if (entry.result_column_id == i) {
+			if (entry.column_id == i) {
 				constant = true;
 				break;
 			}
@@ -359,7 +359,7 @@ void MultiFileReader::CreateFilterMap(const vector<LogicalType> &global_types, o
 			reader_data.filter_map[map_index].is_constant = false;
 		}
 		for (idx_t c = 0; c < reader_data.constant_map.size(); c++) {
-			auto constant_index = reader_data.constant_map[c].result_column_id;
+			auto constant_index = reader_data.constant_map[c].column_id;
 			reader_data.filter_map[constant_index].index = c;
 			reader_data.filter_map[constant_index].is_constant = true;
 		}
@@ -371,7 +371,7 @@ void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileReade
                                     optional_ptr<MultiFileReaderGlobalState> global_state) {
 	// reference all the constants set up in MultiFileReader::FinalizeBind
 	for (auto &entry : reader_data.constant_map) {
-		chunk.data[entry.result_column_id].Reference(entry.value);
+		chunk.data[entry.column_id].Reference(entry.value);
 	}
 	chunk.Verify();
 }

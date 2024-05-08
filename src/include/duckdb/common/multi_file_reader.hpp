@@ -44,9 +44,6 @@ struct MultiFileReaderBindData {
 	//! The index of the file_row_number column (if any)
 	idx_t file_row_number_idx = DConstants::INVALID_INDEX;
 
-	//! Allows extensions that override MultiFileReaders to pass extra data
-	case_insensitive_map_t<Value> custom_data;
-
 	DUCKDB_API void Serialize(Serializer &serializer) const;
 	DUCKDB_API static MultiFileReaderBindData Deserialize(Deserializer &deserializer);
 };
@@ -84,13 +81,10 @@ struct MultiFileFilterEntry {
 };
 
 struct MultiFileConstantEntry {
-	MultiFileConstantEntry(idx_t result_column_id_p, idx_t local_column_id_p, Value value_p)
-	    : result_column_id(result_column_id_p), local_column_id(local_column_id_p), value(std::move(value_p)) {
+	MultiFileConstantEntry(idx_t column_id, Value value_p) : column_id(column_id), value(std::move(value_p)) {
 	}
 	//! The column id to apply the constant value to
-	idx_t result_column_id;
-	//! The local column id of the constant (position emitted during bind)
-	idx_t local_column_id;
+	idx_t column_id;
 	//! The constant value
 	Value value;
 };

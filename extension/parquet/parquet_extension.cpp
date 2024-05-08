@@ -285,7 +285,7 @@ static void InitializeParquetReader(ParquetReader &reader, const ParquetReadBind
 		// check if this is a constant column
 		bool constant = false;
 		for (auto &entry : reader_data.constant_map) {
-			if (entry.result_column_id == i) {
+			if (entry.column_id == i) {
 				constant = true;
 				break;
 			}
@@ -308,7 +308,7 @@ static void InitializeParquetReader(ParquetReader &reader, const ParquetReadBind
 		auto it = field_id_to_column_index.find(column_definition.field_id);
 		if (it == field_id_to_column_index.end()) {
 			// field id not present in file, use default value
-			reader_data.constant_map.emplace_back(i, global_column_index, column_definition.default_value);
+			reader_data.constant_map.emplace_back(i, column_definition.default_value);
 			continue;
 		}
 
