@@ -53,7 +53,7 @@ struct MultiFileReaderGlobalState {
 	MultiFileReaderGlobalState(vector<LogicalType> extra_columns_p, optional_ptr<const MultiFileList> file_list_p)
 	    : extra_columns(std::move(extra_columns_p)), file_list(file_list_p) {};
 
-	//! the extra column necessary to store the projected out required columns
+	//! extra columns that will be produced during scanning
 	const vector<LogicalType> extra_columns;
 	// the file list driving the current scan
 	const optional_ptr<const MultiFileList> file_list;

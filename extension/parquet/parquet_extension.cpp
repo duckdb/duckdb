@@ -648,7 +648,9 @@ public:
 		result->batch_index = 0;
 		result->max_threads = ParquetScanMaxThreads(context, input.bind_data.get());
 
-		if (input.CanRemoveFilterColumns() || result->multi_file_reader_state->RequiresExtraColumns()) {
+		bool require_extra_columns =
+		    result->multi_file_reader_state && result->multi_file_reader_state->RequiresExtraColumns();
+		if (input.CanRemoveFilterColumns() || require_extra_columns) {
 			result->projection_ids = input.projection_ids;
 			const auto table_types = bind_data.types;
 			for (const auto &col_idx : input.column_ids) {
@@ -660,8 +662,10 @@ public:
 			}
 		}
 
-		for (const auto &column_type : result->multi_file_reader_state->extra_columns) {
-			result->scanned_types.push_back(column_type);
+		if (require_extra_columns) {
+			for (const auto &column_type : result->multi_file_reader_state->extra_columns) {
+				result->scanned_types.push_back(column_type);
+			}
 		}
 
 		return std::move(result);
