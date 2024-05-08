@@ -110,7 +110,7 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 	//! The scan over the file_list
 	MultiFileListScanData file_list_scan;
 
-    unique_ptr<MultiFileReaderGlobalState> multi_file_reader_state;
+	unique_ptr<MultiFileReaderGlobalState> multi_file_reader_state;
 
 	mutex lock;
 
@@ -214,7 +214,7 @@ static MultiFileReaderBindData BindSchema(ClientContext &context, vector<Logical
                                           vector<string> &names, ParquetReadBindData &result, ParquetOptions &options) {
 	D_ASSERT(!options.schema.empty());
 
-    options.file_options.AutoDetectHivePartitioning(*result.file_list, context);
+	options.file_options.AutoDetectHivePartitioning(*result.file_list, context);
 
 	auto &file_options = options.file_options;
 	if (file_options.union_by_name || file_options.hive_partitioning) {
@@ -251,13 +251,13 @@ static void InitializeParquetReader(ParquetReader &reader, const ParquetReadBind
 	auto &parquet_options = bind_data.parquet_options;
 	auto &reader_data = reader.reader_data;
 
-    // Mark the file in the file list we are scanning here
-    reader_data.file_list_idx = file_idx;
+	// Mark the file in the file list we are scanning here
+	reader_data.file_list_idx = file_idx;
 
 	if (bind_data.parquet_options.schema.empty()) {
-		bind_data.multi_file_reader->InitializeReader(reader, parquet_options.file_options, bind_data.reader_bind,
-		                                              bind_data.types, bind_data.names, global_column_ids,
-		                                              table_filters, bind_data.file_list->GetFirstFile(), context, reader_state);
+		bind_data.multi_file_reader->InitializeReader(
+		    reader, parquet_options.file_options, bind_data.reader_bind, bind_data.types, bind_data.names,
+		    global_column_ids, table_filters, bind_data.file_list->GetFirstFile(), context, reader_state);
 		return;
 	}
 
@@ -487,16 +487,16 @@ public:
 		                                    result->names, result->reader_bind)) {
 			result->multi_file_reader->BindOptions(parquet_options.file_options, *result->file_list, result->types,
 			                                       result->names, result->reader_bind);
-            // Enable the parquet file_row_number on the parquet options if the file_row_number_idx was set
-            if (result->reader_bind.file_row_number_idx != DConstants::INVALID_INDEX) {
-                parquet_options.file_row_number = true;
-            }
+			// Enable the parquet file_row_number on the parquet options if the file_row_number_idx was set
+			if (result->reader_bind.file_row_number_idx != DConstants::INVALID_INDEX) {
+				parquet_options.file_row_number = true;
+			}
 			bound_on_first_file = false;
 		} else if (!parquet_options.schema.empty()) {
 			// A schema was supplied: use the schema for binding
 			result->reader_bind = BindSchema(context, result->types, result->names, *result, parquet_options);
 		} else {
-            parquet_options.file_options.AutoDetectHivePartitioning(*result->file_list, context);
+			parquet_options.file_options.AutoDetectHivePartitioning(*result->file_list, context);
 			// Default bind
 			result->reader_bind = result->multi_file_reader->BindReader<ParquetReader>(
 			    context, result->types, result->names, *result->file_list, *result, parquet_options);
@@ -601,9 +601,10 @@ public:
 		auto result = make_uniq<ParquetReadGlobalState>();
 		bind_data.file_list->InitializeScan(result->file_list_scan);
 
-        result->multi_file_reader_state = bind_data.multi_file_reader->InitializeGlobalState(context, bind_data.parquet_options.file_options, bind_data.reader_bind,
-                                                                                             *bind_data.file_list, bind_data.types, bind_data.names, input.column_ids);
-        if (bind_data.file_list->IsEmpty()) {
+		result->multi_file_reader_state = bind_data.multi_file_reader->InitializeGlobalState(
+		    context, bind_data.parquet_options.file_options, bind_data.reader_bind, *bind_data.file_list,
+		    bind_data.types, bind_data.names, input.column_ids);
+		if (bind_data.file_list->IsEmpty()) {
 			result->readers = {};
 		} else if (!bind_data.union_readers.empty()) {
 			// TODO: confirm we are not changing behaviour by modifying the order here?
@@ -631,12 +632,13 @@ public:
 		// Ensure all readers are initialized and FileListScan is sync with readers list
 		for (auto &reader_data : result->readers) {
 			string file_name;
-            idx_t file_idx = result->file_list_scan.current_file_idx;
+			idx_t file_idx = result->file_list_scan.current_file_idx;
 			bind_data.file_list->Scan(result->file_list_scan, file_name);
 			if (file_name != reader_data.reader->file_name) {
 				throw InternalException("Mismatch in filename order and reader order in parquet scan");
 			}
-			InitializeParquetReader(*reader_data.reader, bind_data, input.column_ids, input.filters, context, file_idx, result->multi_file_reader_state);
+			InitializeParquetReader(*reader_data.reader, bind_data, input.column_ids, input.filters, context, file_idx,
+			                        result->multi_file_reader_state);
 		}
 
 		result->column_ids = input.column_ids;
@@ -647,20 +649,20 @@ public:
 		result->max_threads = ParquetScanMaxThreads(context, input.bind_data.get());
 
 		if (input.CanRemoveFilterColumns() || result->multi_file_reader_state->RequiresExtraColumns()) {
-            result->projection_ids = input.projection_ids;
-            const auto table_types = bind_data.types;
-            for (const auto &col_idx: input.column_ids) {
-                if (IsRowIdColumnId(col_idx)) {
-                    result->scanned_types.emplace_back(LogicalType::ROW_TYPE);
-                } else {
-                    result->scanned_types.push_back(table_types[col_idx]);
-                }
-            }
-        }
+			result->projection_ids = input.projection_ids;
+			const auto table_types = bind_data.types;
+			for (const auto &col_idx : input.column_ids) {
+				if (IsRowIdColumnId(col_idx)) {
+					result->scanned_types.emplace_back(LogicalType::ROW_TYPE);
+				} else {
+					result->scanned_types.push_back(table_types[col_idx]);
+				}
+			}
+		}
 
-        for (const auto &column_type : result->multi_file_reader_state->extra_columns) {
-            result->scanned_types.push_back(column_type);
-        }
+		for (const auto &column_type : result->multi_file_reader_state->extra_columns) {
+			result->scanned_types.push_back(column_type);
+		}
 
 		return std::move(result);
 	}
