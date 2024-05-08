@@ -206,7 +206,7 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
                                    const string &filename, const vector<string> &local_names,
                                    const vector<LogicalType> &global_types, const vector<string> &global_names,
                                    const vector<column_t> &global_column_ids, MultiFileReaderData &reader_data,
-                                   ClientContext &context) {
+                                   ClientContext &context, optional_ptr<MultiFileReaderGlobalState> global_state) {
 
 	// create a map of name -> column index
 	case_insensitive_map_t<idx_t> name_map;
@@ -219,12 +219,12 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 		auto column_id = global_column_ids[i];
 		if (IsRowIdColumnId(column_id)) {
 			// row-id
-			reader_data.constant_map.emplace_back(i, Value::BIGINT(42));
+			reader_data.constant_map.emplace_back(i, column_id, Value::BIGINT(42));
 			continue;
 		}
 		if (column_id == options.filename_idx) {
 			// filename
-			reader_data.constant_map.emplace_back(i, Value(filename));
+			reader_data.constant_map.emplace_back(i, column_id, Value(filename));
 			continue;
 		}
 		if (!options.hive_partitioning_indexes.empty()) {
@@ -235,7 +235,7 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 			for (auto &entry : options.hive_partitioning_indexes) {
 				if (column_id == entry.index) {
 					Value value = file_options.GetHivePartitionValue(partitions[entry.value], entry.value, context);
-					reader_data.constant_map.emplace_back(i, value);
+					reader_data.constant_map.emplace_back(i, column_id, value);
 					found_partition = true;
 					break;
 				}
@@ -251,17 +251,57 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 			if (not_present_in_file) {
 				// we need to project a column with name \"global_name\" - but it does not exist in the current file
 				// push a NULL value of the specified type
-				reader_data.constant_map.emplace_back(i, Value(global_types[column_id]));
+				reader_data.constant_map.emplace_back(i, column_id, Value(global_types[column_id]));
 				continue;
 			}
 		}
 	}
 }
 
+unique_ptr<MultiFileReaderGlobalState> MultiFileReader::InitializeGlobalState(ClientContext &context, const MultiFileReaderOptions &file_options, const MultiFileReaderBindData &bind_data, const MultiFileList& file_list, const vector<LogicalType> &global_types, const vector<string> &global_names,const vector<column_t> &global_column_ids) {
+    case_insensitive_map_t<idx_t> required_column_map;
+    vector<LogicalType> extra_columns;
+
+    if (!bind_data.required_columns.empty()) {
+        // Create a map of the columns that are in the projection
+        case_insensitive_map_t<idx_t> selected_columns;
+        for (idx_t i = 0; i < global_column_ids.size(); i++) {
+            auto global_id = global_column_ids[i];
+            auto &global_name = global_names[global_id];
+            selected_columns.insert({global_name, i});
+        }
+
+        idx_t col_offset = 0;
+        for (const auto& required_column : bind_data.required_columns) {
+            // The column is in the projection, no special handling is required; we simply store the index
+            if (required_column.present_in_bind) {
+                auto res = selected_columns.find(required_column.column_name);
+                if(res != selected_columns.end()) {
+                    required_column_map[required_column.column_name] = res->second;
+                    break;
+                }
+            }
+            // The column is NOT in the project: it needs to be added as an extra_column
+
+            // Calculate the index of the added column (extra columns are added after all other columns)
+            idx_t current_col_idx = global_column_ids.size() + col_offset++;
+
+            // Add column to the map, to ensure the MultiFileReader can find it when processing the Chunk
+            required_column_map[required_column.column_name] = current_col_idx;
+
+            // Ensure the result DataChunk has a vector of the correct type to store this column
+            extra_columns.push_back(required_column.type);
+        }
+    }
+
+    return make_uniq<MultiFileReaderGlobalState>(required_column_map, extra_columns, &file_list);
+}
+
 void MultiFileReader::CreateNameMapping(const string &file_name, const vector<LogicalType> &local_types,
                                         const vector<string> &local_names, const vector<LogicalType> &global_types,
                                         const vector<string> &global_names, const vector<column_t> &global_column_ids,
-                                        MultiFileReaderData &reader_data, const string &initial_file) {
+                                        MultiFileReaderData &reader_data, const string &initial_file,
+                                        optional_ptr<MultiFileReaderGlobalState> global_state) {
 	D_ASSERT(global_types.size() == global_names.size());
 	D_ASSERT(local_types.size() == local_names.size());
 	// we have expected types: create a map of name -> column index
@@ -273,7 +313,7 @@ void MultiFileReader::CreateNameMapping(const string &file_name, const vector<Lo
 		// check if this is a constant column
 		bool constant = false;
 		for (auto &entry : reader_data.constant_map) {
-			if (entry.column_id == i) {
+			if (entry.result_column_id == i) {
 				constant = true;
 				break;
 			}
@@ -318,30 +358,54 @@ void MultiFileReader::CreateNameMapping(const string &file_name, const vector<Lo
 		reader_data.column_mapping.push_back(i);
 		reader_data.column_ids.push_back(local_id);
 	}
-	reader_data.empty_columns = reader_data.column_ids.empty();
+
+    for (const auto &extra_column : global_state->required_column_map) {
+        // This column is in the projection, we can skip it here
+        if (extra_column.second < global_column_ids.size()) {
+            continue;
+        }
+
+        // Lookup the required column in the local map
+        auto entry = name_map.find(extra_column.first);
+        if (entry == name_map.end()) {
+            throw InternalException("Failed to find required column '%s'", extra_column.first);
+        }
+
+        // Register the column to be scanned from this file
+        reader_data.column_ids.push_back(entry->second);
+        reader_data.column_mapping.push_back(extra_column.second);
+    }
+
+    reader_data.empty_columns = reader_data.column_ids.empty();
 }
 
 void MultiFileReader::CreateMapping(const string &file_name, const vector<LogicalType> &local_types,
                                     const vector<string> &local_names, const vector<LogicalType> &global_types,
                                     const vector<string> &global_names, const vector<column_t> &global_column_ids,
                                     optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data,
-                                    const string &initial_file) {
+                                    const string &initial_file, const MultiFileReaderBindData &options,
+                                    optional_ptr<MultiFileReaderGlobalState> global_state) {
 	CreateNameMapping(file_name, local_types, local_names, global_types, global_names, global_column_ids, reader_data,
-	                  initial_file);
-	CreateFilterMap(global_types, filters, reader_data);
+	                  initial_file, global_state);
+	CreateFilterMap(global_types, filters, reader_data, global_state);
 }
 
 void MultiFileReader::CreateFilterMap(const vector<LogicalType> &global_types, optional_ptr<TableFilterSet> filters,
-                                      MultiFileReaderData &reader_data) {
+                                      MultiFileReaderData &reader_data, optional_ptr<MultiFileReaderGlobalState> global_state) {
 	if (filters) {
-		reader_data.filter_map.resize(global_types.size());
+        idx_t max_index = NumericLimits<idx_t>::Minimum();
+        for (const auto& map_index : reader_data.column_mapping) {
+            max_index = MaxValue(max_index, map_index);
+        }
+		reader_data.filter_map.resize(max_index+=1);
+
 		for (idx_t c = 0; c < reader_data.column_mapping.size(); c++) {
 			auto map_index = reader_data.column_mapping[c];
 			reader_data.filter_map[map_index].index = c;
 			reader_data.filter_map[map_index].is_constant = false;
 		}
 		for (idx_t c = 0; c < reader_data.constant_map.size(); c++) {
-			auto constant_index = reader_data.constant_map[c].column_id;
+			auto constant_index = reader_data.constant_map[c].result_column_id;
 			reader_data.filter_map[constant_index].index = c;
 			reader_data.filter_map[constant_index].is_constant = true;
 		}
@@ -349,10 +413,11 @@ void MultiFileReader::CreateFilterMap(const vector<LogicalType> &global_types, o
 }
 
 void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileReaderBindData &bind_data,
-                                    const MultiFileReaderData &reader_data, DataChunk &chunk) {
+                                    const MultiFileReaderData &reader_data, DataChunk &chunk,
+                                    optional_ptr<MultiFileReaderGlobalState> global_state) {
 	// reference all the constants set up in MultiFileReader::FinalizeBind
 	for (auto &entry : reader_data.constant_map) {
-		chunk.data[entry.column_id].Reference(entry.value);
+		chunk.data[entry.result_column_id].Reference(entry.value);
 	}
 	chunk.Verify();
 }
