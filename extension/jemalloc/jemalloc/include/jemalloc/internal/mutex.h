@@ -1,12 +1,11 @@
 #ifndef JEMALLOC_INTERNAL_MUTEX_H
 #define JEMALLOC_INTERNAL_MUTEX_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/atomic.h"
 #include "jemalloc/internal/mutex_prof.h"
 #include "jemalloc/internal/tsd.h"
 #include "jemalloc/internal/witness.h"
-
-namespace duckdb_jemalloc {
 
 extern int64_t opt_mutex_max_spin;
 
@@ -33,6 +32,12 @@ struct malloc_mutex_s {
 			 * unlocking thread).
 			 */
 			mutex_prof_data_t	prof_data;
+			/*
+			 * Hint flag to avoid exclusive cache line contention
+			 * during spin waiting.  Placed along with prof_data
+			 * since it's always modified even with no contention.
+			 */
+			atomic_b_t		locked;
 #ifdef _WIN32
 #  if _WIN32_WINNT >= 0x0600
 			SRWLOCK         	lock;
@@ -47,11 +52,6 @@ struct malloc_mutex_s {
 #else
 			pthread_mutex_t		lock;
 #endif
-			/*
-			 * Hint flag to avoid exclusive cache line contention
-			 * during spin waiting
-			 */
-			atomic_b_t		locked;
 		};
 		/*
 		 * We only touch witness when configured w/ debug.  However we
@@ -100,21 +100,21 @@ struct malloc_mutex_s {
 #elif (defined(JEMALLOC_OS_UNFAIR_LOCK))
 #  if defined(JEMALLOC_DEBUG)
 #    define MALLOC_MUTEX_INITIALIZER					\
-  {{{LOCK_PROF_DATA_INITIALIZER, OS_UNFAIR_LOCK_INIT, ATOMIC_INIT(false)}}, \
+  {{{LOCK_PROF_DATA_INITIALIZER, ATOMIC_INIT(false), OS_UNFAIR_LOCK_INIT}}, \
          WITNESS_INITIALIZER("mutex", WITNESS_RANK_OMIT), 0}
 #  else
 #    define MALLOC_MUTEX_INITIALIZER                      \
-  {{{LOCK_PROF_DATA_INITIALIZER, OS_UNFAIR_LOCK_INIT, ATOMIC_INIT(false)}},  \
+  {{{LOCK_PROF_DATA_INITIALIZER, ATOMIC_INIT(false), OS_UNFAIR_LOCK_INIT}},  \
       WITNESS_INITIALIZER("mutex", WITNESS_RANK_OMIT)}
 #  endif
 #elif (defined(JEMALLOC_MUTEX_INIT_CB))
 #  if (defined(JEMALLOC_DEBUG))
 #     define MALLOC_MUTEX_INITIALIZER					\
-      {{{LOCK_PROF_DATA_INITIALIZER, PTHREAD_MUTEX_INITIALIZER, NULL, ATOMIC_INIT(false)}},	\
+      {{{LOCK_PROF_DATA_INITIALIZER, ATOMIC_INIT(false), PTHREAD_MUTEX_INITIALIZER, NULL}},	\
            WITNESS_INITIALIZER("mutex", WITNESS_RANK_OMIT), 0}
 #  else
 #     define MALLOC_MUTEX_INITIALIZER					\
-      {{{LOCK_PROF_DATA_INITIALIZER, PTHREAD_MUTEX_INITIALIZER, NULL, ATOMIC_INIT(false)}},	\
+      {{{LOCK_PROF_DATA_INITIALIZER, ATOMIC_INIT(false), PTHREAD_MUTEX_INITIALIZER, NULL}},	\
            WITNESS_INITIALIZER("mutex", WITNESS_RANK_OMIT)}
 #  endif
 
@@ -122,11 +122,11 @@ struct malloc_mutex_s {
 #    define MALLOC_MUTEX_TYPE PTHREAD_MUTEX_DEFAULT
 #  if defined(JEMALLOC_DEBUG)
 #    define MALLOC_MUTEX_INITIALIZER					\
-     {{{LOCK_PROF_DATA_INITIALIZER, PTHREAD_MUTEX_INITIALIZER, ATOMIC_INIT(false)}}, \
-           WITNESS_INITIALIZER("mutex", WITNESS_RANK_OMIT), (malloc_mutex_lock_order_t)0}
+     {{{LOCK_PROF_DATA_INITIALIZER, ATOMIC_INIT(false), PTHREAD_MUTEX_INITIALIZER}}, \
+           WITNESS_INITIALIZER("mutex", WITNESS_RANK_OMIT), 0}
 #  else
 #    define MALLOC_MUTEX_INITIALIZER                          \
-     {{{LOCK_PROF_DATA_INITIALIZER, PTHREAD_MUTEX_INITIALIZER, ATOMIC_INIT(false)}},	\
+     {{{LOCK_PROF_DATA_INITIALIZER, ATOMIC_INIT(false), PTHREAD_MUTEX_INITIALIZER}},	\
       WITNESS_INITIALIZER("mutex", WITNESS_RANK_OMIT)}
 #  endif
 #endif
@@ -177,7 +177,6 @@ malloc_mutex_trylock(tsdn_t *tsdn, malloc_mutex_t *mutex) {
 	witness_assert_not_owner(tsdn_witness_tsdp_get(tsdn), &mutex->witness);
 	if (isthreaded) {
 		if (malloc_mutex_trylock_final(mutex)) {
-			atomic_store_b(&mutex->locked, true, ATOMIC_RELAXED);
 			return true;
 		}
 		mutex_owner_stats_update(tsdn, mutex);
@@ -317,7 +316,5 @@ malloc_mutex_prof_max_update(tsdn_t *tsdn, mutex_prof_data_t *data,
 	}
 	/* n_wait_thds is not reported. */
 }
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_MUTEX_H */

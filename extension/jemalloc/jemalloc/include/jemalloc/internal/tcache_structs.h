@@ -1,13 +1,12 @@
 #ifndef JEMALLOC_INTERNAL_TCACHE_STRUCTS_H
 #define JEMALLOC_INTERNAL_TCACHE_STRUCTS_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/cache_bin.h"
 #include "jemalloc/internal/ql.h"
 #include "jemalloc/internal/sc.h"
+#include "jemalloc/internal/tcache_types.h"
 #include "jemalloc/internal/ticker.h"
-#include "jemalloc/internal/tsd_types.h"
-
-namespace duckdb_jemalloc {
 
 /*
  * The tcache state is split into the slow and hot path data.  Each has a
@@ -32,6 +31,8 @@ struct tcache_slow_s {
 
 	/* The arena this tcache is associated with. */
 	arena_t		*arena;
+	/* The number of bins activated in the tcache. */
+	unsigned	tcache_nbins;
 	/* Next bin to GC. */
 	szind_t		next_gc_bin;
 	/* For small bins, fill (ncached_max >> lg_fill_div). */
@@ -66,7 +67,5 @@ struct tcaches_s {
 		tcaches_t	*next;
 	};
 };
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_TCACHE_STRUCTS_H */
