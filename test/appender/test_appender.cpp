@@ -421,6 +421,10 @@ TEST_CASE("Test append default into Vector", "[appender]") {
 		REQUIRE(column->GetValue(8) == current_time);
 		REQUIRE(column->GetValue(3) == current_time);
 	}
+	{
+		Appender appender(con, "integers");
+		REQUIRE_NOTHROW(appender.AppendDataChunk(*chunk));
+	}
 }
 
 TEST_CASE("Test incorrect usage of appender", "[appender]") {
