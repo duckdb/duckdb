@@ -54,8 +54,10 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 		this->bound_tables = prepared_planner.binder->bound_tables;
 	}
 	// copy the properties of the prepared statement into the planner
-	this->properties = prepared->properties;
-	this->properties.parameter_count = parameter_count;
+	auto &properties = GetStatementProperties();
+	properties = prepared->properties;
+	properties.parameter_count = parameter_count;
+
 	BoundStatement result;
 	result.names = prepared->names;
 	result.types = prepared->types;

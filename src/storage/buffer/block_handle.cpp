@@ -1,10 +1,11 @@
 #include "duckdb/storage/buffer/block_handle.hpp"
+
+#include "duckdb/common/file_buffer.hpp"
 #include "duckdb/storage/block.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
-#include "duckdb/common/file_buffer.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -34,7 +35,7 @@ BlockHandle::~BlockHandle() { // NOLINT: allow internal exceptions
 	if (buffer && buffer->type != FileBufferType::TINY_BUFFER) {
 		// we kill the latest version in the eviction queue
 		auto &buffer_manager = block_manager.buffer_manager;
-		buffer_manager.GetBufferPool().IncrementDeadNodes();
+		buffer_manager.GetBufferPool().IncrementDeadNodes(buffer->type);
 	}
 
 	// no references remain to this block: erase

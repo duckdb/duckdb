@@ -35,7 +35,7 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &deserializer)
 		result = EnumTypeInfo::Deserialize(deserializer);
 		break;
 	case ExtraTypeInfoType::GENERIC_TYPE_INFO:
-		result = make_shared<ExtraTypeInfo>(type);
+		result = make_shared_ptr<ExtraTypeInfo>(type);
 		break;
 	case ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO:
 		result = IntegerLiteralTypeInfo::Deserialize(deserializer);

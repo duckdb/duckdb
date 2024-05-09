@@ -11,6 +11,8 @@
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/optionally_owned_ptr.hpp"
+#include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
 
@@ -47,6 +49,13 @@ struct has_deserialize<
 template <typename T>
 struct has_deserialize<
     T, typename std::enable_if<std::is_same<decltype(T::Deserialize), shared_ptr<T>(Deserializer &)>::value, T>::type>
+    : std::true_type {};
+
+// Accept `static shared_ptr<T> Deserialize(Deserializer& deserializer)`
+template <typename T>
+struct has_deserialize<
+    T,
+    typename std::enable_if<std::is_same<decltype(T::Deserialize), std::shared_ptr<T>(Deserializer &)>::value, T>::type>
     : std::true_type {};
 
 // Accept `static T Deserialize(Deserializer& deserializer)`
@@ -104,11 +113,22 @@ template <typename T>
 struct is_shared_ptr<shared_ptr<T>> : std::true_type {
 	typedef T ELEMENT_TYPE;
 };
+template <typename T>
+struct is_shared_ptr<std::shared_ptr<T>> : std::true_type {
+	typedef T ELEMENT_TYPE;
+};
 
 template <typename T>
 struct is_optional_ptr : std::false_type {};
 template <typename T>
 struct is_optional_ptr<optional_ptr<T>> : std::true_type {
+	typedef T ELEMENT_TYPE;
+};
+
+template <typename T>
+struct is_optionally_owned_ptr : std::false_type {};
+template <typename T>
+struct is_optionally_owned_ptr<optionally_owned_ptr<T>> : std::true_type {
 	typedef T ELEMENT_TYPE;
 };
 
@@ -193,6 +213,16 @@ struct SerializationDefaultValue {
 	}
 
 	template <typename T = void>
+	static inline typename std::enable_if<is_optionally_owned_ptr<T>::value, T>::type GetDefault() {
+		return T();
+	}
+
+	template <typename T = void>
+	static inline bool IsDefault(const typename std::enable_if<is_optionally_owned_ptr<T>::value, T>::type &value) {
+		return !value;
+	}
+
+	template <typename T = void>
 	static inline typename std::enable_if<is_shared_ptr<T>::value, T>::type GetDefault() {
 		return T();
 	}
@@ -260,6 +290,16 @@ struct SerializationDefaultValue {
 	template <typename T = void>
 	static inline bool IsDefault(const typename std::enable_if<std::is_same<T, string>::value, T>::type &value) {
 		return value.empty();
+	}
+
+	template <typename T = void>
+	static inline typename std::enable_if<std::is_same<T, optional_idx>::value, T>::type GetDefault() {
+		return optional_idx();
+	}
+
+	template <typename T = void>
+	static inline bool IsDefault(const typename std::enable_if<std::is_same<T, optional_idx>::value, T>::type &value) {
+		return !value.IsValid();
 	}
 };
 

@@ -146,6 +146,31 @@ NULL	3
 1	NULL
 3	NULL
 
+# union by name with different types
+query I
+select '0' as c union all select 0 as c;
+----
+0
+0
 
+query I
+select '0' as c union all by name select 0 as c;
+----
+0
+0
 
+query I
+select {'a': '0'} as c union all by name select {'a': 0} as c
+----
+{'a': 0}
+{'a': 0}
 
+statement error
+select {'a': 'hello'} as c union all by name select {'b': 'hello'} as c;
+----
+Type Error
+
+statement error
+select {'a': 'hello'} as c union all by name select {'a': 'hello', 'b': 'world'} as c;
+----
+Type Error

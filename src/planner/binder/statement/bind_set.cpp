@@ -15,9 +15,14 @@ BoundStatement Binder::Bind(SetVariableStatement &stmt) {
 	// evaluate the scalar value
 	ConstantBinder default_binder(*this, context, "SET value");
 	auto bound_value = default_binder.Bind(stmt.value);
+	if (bound_value->HasParameter()) {
+		throw NotImplementedException("SET statements cannot have parameters");
+	}
 	auto value = ExpressionExecutor::EvaluateScalar(context, *bound_value, true);
 
 	result.plan = make_uniq<LogicalSet>(stmt.name, std::move(value), stmt.scope);
+
+	auto &properties = GetStatementProperties();
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }
@@ -28,6 +33,8 @@ BoundStatement Binder::Bind(ResetVariableStatement &stmt) {
 	result.names = {"Success"};
 
 	result.plan = make_uniq<LogicalReset>(stmt.name, stmt.scope);
+
+	auto &properties = GetStatementProperties();
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }

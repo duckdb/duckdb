@@ -1,0 +1,383 @@
+# name: test/sql/copy/csv/rejects/test_multiple_errors_same_line.test
+# description: Tests a mix of multiple errors and validate they get hit
+# group: [rejects]
+
+require skip_reload
+
+# Test will fail on windows because byte_position is slightly different due to \r\n instead of \n
+require notwindows
+
+query IIII
+FROM read_csv('data/csv/rejects/multiple_errors/cast_and_more_col.csv',
+    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
+    store_rejects = true, auto_detect=false, header = 1);
+----
+oogie boogie	3	2023-01-01	2
+oogie boogie	3	2023-01-02	5
+
+query IIIIIIIII rowsort
+SElECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
+----
+0	4	89	116	4	barks	CAST	oogie boogie,3, 2023-01-03, bla, 7	Error when converting column "barks". Could not convert string " bla" to 'INTEGER'
+0	4	89	120	5	NULL	TOO MANY COLUMNS	oogie boogie,3, 2023-01-03, bla, 7	Expected Number of Columns: 4 Found: 5
+0	5	124	151	4	barks	CAST	oogie boogie,3, 2023-01-03, bla, 7, 8	Error when converting column "barks". Could not convert string " bla" to 'INTEGER'
+0	5	124	155	5	NULL	TOO MANY COLUMNS	oogie boogie,3, 2023-01-03, bla, 7, 8	Expected Number of Columns: 4 Found: 5
+0	5	124	158	6	NULL	TOO MANY COLUMNS	oogie boogie,3, 2023-01-03, bla, 7, 8	Expected Number of Columns: 4 Found: 6
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+query IIII
+FROM read_csv('data/csv/rejects/multiple_errors/multiple_cast_implicit.csv',
+    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
+    store_rejects = true, auto_detect=false, header = 1);
+----
+oogie boogie	3	2023-01-01	2
+oogie boogie	3	2023-01-02	5
+
+query IIIIIIIII rowsort
+SElECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
+----
+0	4	89	102	2	age	CAST	oogie boogie,bla_2, 2023-01-02, bla_1	Error when converting column "age". Could not convert string "bla_2" to 'INTEGER'
+0	4	89	120	4	barks	CAST	oogie boogie,bla_2, 2023-01-02, bla_1	Error when converting column "barks". Could not convert string " bla_1" to 'INTEGER'
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+query IIII
+FROM read_csv('data/csv/rejects/multiple_errors/multiple_casts_flush.csv',
+    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'tomorrow': 'DATE'},
+    store_rejects = true, auto_detect=false, header = 1);
+----
+oogie boogie	3	2023-01-01	2023-01-02
+oogie boogie	3	2023-01-02	2023-01-03
+
+query IIIIIIIII rowsort
+SElECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
+----
+0	4	110	125	3	current_day	CAST	oogie boogie,3, bla_2, bla_1	Error when converting column "current_day". Could not convert string " bla_2" to 'DATE'
+0	4	110	132	4	tomorrow	CAST	oogie boogie,3, bla_2, bla_1	Error when converting column "tomorrow". Could not convert string " bla_1" to 'DATE'
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+query IIII
+FROM read_csv('data/csv/rejects/multiple_errors/multiple_casts_mixed.csv',
+    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
+    store_rejects = true, auto_detect=false, header = 1);
+----
+oogie boogie	3	2023-01-01	2
+oogie boogie	3	2023-01-02	5
+
+# FIXME: This will not present the both cast errors :'(, should be alleviated the more types we add to implicit casting
+query IIIIIIIII rowsort
+SElECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
+----
+0	4	89	104	3	current_day	CAST	oogie boogie,3, bla_2, bla_1	Error when converting column "current_day". Could not convert string " bla_2" to 'DATE'
+0	4	89	111	4	barks	CAST	oogie boogie,3, bla_2, bla_1	Error when converting column "barks". Could not convert string " bla_1" to 'INTEGER'
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+query IIII
+FROM read_csv('data/csv/rejects/multiple_errors/cast_and_less_col.csv',
+    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
+    store_rejects = true, auto_detect=false, header = 1);
+----
+oogie boogie	3	2023-01-01	2
+oogie boogie	3	2023-01-02	5
+
+query IIIIIIIII rowsort
+SElECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
+----
+0	4	89	102	2	age	CAST	oogie boogie,bla, 2023-01-03	Error when converting column "age". Could not convert string "bla" to 'INTEGER'
+0	4	89	117	3	barks	MISSING COLUMNS	oogie boogie,bla, 2023-01-03	Expected Number of Columns: 4 Found: 3
+0	5	118	131	2	age	CAST	oogie boogie,bla	Error when converting column "age". Could not convert string "bla" to 'INTEGER'
+0	5	118	134	2	current_day	MISSING COLUMNS	oogie boogie,bla	Expected Number of Columns: 4 Found: 2
+0	5	118	134	3	barks	MISSING COLUMNS	oogie boogie,bla	Expected Number of Columns: 4 Found: 3
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+query IIII
+FROM read_csv('data/csv/rejects/multiple_errors/cast_and_maxline.csv',
+    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
+----
+oogie boogie	3	2023-01-01	2
+oogie boogie	3	2023-01-02	5
+
+query IIIIIIIII rowsort
+SElECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
+----
+0	4	89	138	2	age	CAST	oogie boogieoogie boogieoogie boogieoogie boogie,bla, 2023-01-03, 4	Error when converting column "age". Could not convert string "bla" to 'INTEGER'
+0	4	89	89	NULL	NULL	LINE SIZE OVER MAXIMUM	oogie boogieoogie boogieoogie boogieoogie boogie,bla, 2023-01-03, 4	Maximum line size of 40 bytes exceeded. Actual Size:68 bytes.
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+query IIII
+FROM read_csv('data/csv/rejects/multiple_errors/less_col_and_max_line.csv',
+    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
+----
+oogie boogie	3	2023-01-01	2
+oogie boogie	3	2023-01-02	5
+
+query IIIIIIIII
+SElECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY byte_position;
+----
+0	4	89	89	NULL	NULL	LINE SIZE OVER MAXIMUM	oogie boogieoogie boogieoogie boogieoogie boogie,bla, 2023-01-03	Maximum line size of 40 bytes exceeded. Actual Size:65 bytes.
+0	4	89	138	2	age	CAST	oogie boogieoogie boogieoogie boogieoogie boogie,bla, 2023-01-03	Error when converting column "age". Could not convert string "bla" to 'INTEGER'
+0	4	89	153	3	barks	MISSING COLUMNS	oogie boogieoogie boogieoogie boogieoogie boogie,bla, 2023-01-03	Expected Number of Columns: 4 Found: 3
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+query IIII
+FROM read_csv('data/csv/rejects/multiple_errors/more_col_and_max_line.csv',
+    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
+----
+oogie boogie	3	2023-01-01	2
+oogie boogie	3	2023-01-02	5
+
+query IIIIIIIII rowsort
+SElECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY byte_position;
+----
+0	4	89	138	2	age	CAST	oogie boogieoogie boogieoogie boogieoogie boogie,bla, 2023-01-03,4, bla	Error when converting column "age". Could not convert string "bla" to 'INTEGER'
+0	4	89	155	5	NULL	TOO MANY COLUMNS	oogie boogieoogie boogieoogie boogieoogie boogie,bla, 2023-01-03,4, bla	Expected Number of Columns: 4 Found: 5
+0	4	89	89	NULL	NULL	LINE SIZE OVER MAXIMUM	oogie boogieoogie boogieoogie boogieoogie boogie,bla, 2023-01-03,4, bla	Maximum line size of 40 bytes exceeded. Actual Size:72 bytes.
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+query IIII
+FROM read_csv('data/csv/rejects/multiple_errors/unquoted_cast.csv',
+    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
+----
+oogie boogie	3	2023-01-01	2
+oogie boogie	3	2023-01-02	7
+
+query IIIIIIIII rowsort
+SElECT * EXCLUDE (scan_id)  FROM reject_errors ORDER BY byte_position;
+----
+0	3	59	59	1	name	UNQUOTED VALUE	"oogie boogie"bla,bla, 2023-01-02, 5	Value with unterminated quote found.
+0	3	59	77	2	age	CAST	"oogie boogie"bla,bla, 2023-01-02, 5	Error when converting column "age". Could not convert string "bla" to 'INTEGER'
+
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+query IIII
+FROM read_csv('data/csv/rejects/multiple_errors/unquoted_less.csv',
+    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
+----
+oogie boogie	3	2023-01-01	2
+oogie boogie	3	2023-01-02	7
+
+query IIIIIIIII rowsort
+SElECT * EXCLUDE (scan_id)  FROM reject_errors ORDER BY byte_position;
+----
+0	3	59	59	1	name	UNQUOTED VALUE	"oogie boogie"bla,4, 2023-01-02	Value with unterminated quote found.
+0	3	59	90	3	barks	MISSING COLUMNS	"oogie boogie"bla,4, 2023-01-02	Expected Number of Columns: 4 Found: 3
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+query IIII
+FROM read_csv('data/csv/rejects/multiple_errors/unquoted_maxline.csv',
+    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
+----
+oogie boogie	3	2023-01-01	2
+oogie boogie	3	2023-01-02	7
+
+query IIIIIIIII rowsort
+SElECT * EXCLUDE (scan_id)  FROM reject_errors ORDER BY byte_position;
+----
+0	3	59	59	1	name	UNQUOTED VALUE	"oogie boogieoogie boogieoogie boogieoogie boogie"bla,4, 2023-01-02, 5	Value with unterminated quote found.
+0	3	59	59	NULL	NULL	LINE SIZE OVER MAXIMUM	"oogie boogieoogie boogieoogie boogieoogie boogie"bla,4, 2023-01-02, 5	Maximum line size of 40 bytes exceeded. Actual Size:71 bytes.
+
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+query IIII
+FROM read_csv('data/csv/rejects/multiple_errors/unquoted_more.csv',
+    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
+----
+oogie boogie	3	2023-01-01	2
+oogie boogie	3	2023-01-02	7
+
+query IIIIIIIII rowsort
+SElECT * EXCLUDE (scan_id)  FROM reject_errors ORDER BY byte_position;
+----
+0	3	59	59	1	name	UNQUOTED VALUE	"oogie boogie"bla,4, 2023-01-02, 5, 8	Value with unterminated quote found.
+0	3	59	93	5	NULL	TOO MANY COLUMNS	"oogie boogie"bla,4, 2023-01-02, 5, 8	Expected Number of Columns: 4 Found: 5
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+query IIII
+FROM read_csv('data/csv/rejects/multiple_errors/invalid_utf_cast.csv',
+    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
+----
+oogie boogie	3	2023-01-01	2
+
+query IIIIIIIII rowsort
+SElECT * EXCLUDE (scan_id)  FROM reject_errors ORDER BY byte_position;
+----
+0	3	59	59	1	name	INVALID UNICODE	oogie bo??gie,bla, 2023-01-01, 2	Invalid unicode (byte sequence mismatch) detected.
+0	3	59	73	2	age	CAST	oogie bo??gie,bla, 2023-01-01, 2	Error when converting column "age". Could not convert string "bla" to 'INTEGER'
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+query IIII
+FROM read_csv('data/csv/rejects/multiple_errors/invalid_utf_less.csv',
+    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
+----
+oogie boogie	3	2023-01-01	2
+
+
+query IIIIIIIII rowsort
+SElECT * EXCLUDE (scan_id)  FROM reject_errors ORDER BY byte_position;
+----
+0	3	59	59	1	name	INVALID UNICODE	oogie bo??gie,3, 2023-01-01	Invalid unicode (byte sequence mismatch) detected.
+0	3	59	86	3	barks	MISSING COLUMNS	oogie bo??gie,3, 2023-01-01	Expected Number of Columns: 4 Found: 3
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+query IIII
+FROM read_csv('data/csv/rejects/multiple_errors/invalid_utf_max_line.csv',
+    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
+----
+oogie boogie	3	2023-01-01	2
+
+
+query IIIIIIIII rowsort
+SElECT * EXCLUDE (scan_id)  FROM reject_errors ORDER BY byte_position, error_message;
+----
+0	3	59	125	5	NULL	TOO MANY COLUMNS	oogie bo??gieoogie boogieoogie boogieoogie boogie,3, 2023-01-01, 2, 5	Expected Number of Columns: 4 Found: 5
+0	3	59	59	1	name	INVALID UNICODE	oogie bo??gieoogie boogieoogie boogieoogie boogie,3, 2023-01-01, 2, 5	Invalid unicode (byte sequence mismatch) detected.
+0	3	59	59	NULL	NULL	LINE SIZE OVER MAXIMUM	oogie bo??gieoogie boogieoogie boogieoogie boogie,3, 2023-01-01, 2, 5	Maximum line size of 40 bytes exceeded. Actual Size:70 bytes.
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+query IIII
+FROM read_csv('data/csv/rejects/multiple_errors/invalid_utf_more.csv',
+    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
+----
+oogie boogie	3	2023-01-01	2
+
+
+query IIIIIIIII rowsort
+SElECT * EXCLUDE (scan_id)  FROM reject_errors ORDER BY byte_position;
+----
+0	3	59	59	1	name	INVALID UNICODE	oogie bo??gie,3, 2023-01-01, 2, 5	Invalid unicode (byte sequence mismatch) detected.
+0	3	59	89	5	NULL	TOO MANY COLUMNS	oogie bo??gie,3, 2023-01-01, 2, 5	Expected Number of Columns: 4 Found: 5
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+query IIIII
+FROM read_csv('data/csv/rejects/multiple_errors/invalid_utf_unquoted.csv',
+    columns = {'name': 'VARCHAR', 'last_name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
+----
+oogie	 boogie	3	2023-01-01	2
+
+
+query IIIIIIIII rowsort
+SElECT * EXCLUDE (scan_id)  FROM reject_errors ORDER BY byte_position;
+----
+0	3	71	71	1	name	UNQUOTED VALUE	"oogie"bla, bo??gie,3, 2023-01-01, 2	Value with unterminated quote found.
+0	3	71	82	2	last_name	INVALID UNICODE	"oogie"bla, bo??gie,3, 2023-01-01, 2	Invalid unicode (byte sequence mismatch) detected.
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+query IIII
+FROM read_csv('data/csv/rejects/multiple_errors/multiple_errors.csv',
+    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
+----
+oogie boogie	3	2023-01-01	2
+oogie boogie	3	2023-01-02	5
+
+query IIIIIIIII rowsort
+SELECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
+----
+0	4	89	116	4	barks	CAST	oogie boogie,3, 2023-01-03, bla, 7	Error when converting column "barks". Could not convert string " bla" to 'INTEGER'
+0	4	89	120	5	NULL	TOO MANY COLUMNS	oogie boogie,3, 2023-01-03, bla, 7	Expected Number of Columns: 4 Found: 5
+0	5	124	139	3	current_day	CAST	oogie boogie,3, bla, bla, 7	Error when converting column "current_day". Could not convert string " bla" to 'DATE'
+0	5	124	144	4	barks	CAST	oogie boogie,3, bla, bla, 7	Error when converting column "barks". Could not convert string " bla" to 'INTEGER'
+0	5	124	148	5	NULL	TOO MANY COLUMNS	oogie boogie,3, bla, bla, 7	Expected Number of Columns: 4 Found: 5
+0	6	152	152	1	name	UNQUOTED VALUE	"oogie boogie"bla,3, 2023-01-04	Value with unterminated quote found.
+0	6	152	183	3	barks	MISSING COLUMNS	"oogie boogie"bla,3, 2023-01-04	Expected Number of Columns: 4 Found: 3
+0	7	184	199	3	current_day	CAST	oogie boogie,3, bla	Error when converting column "current_day". Could not convert string " bla" to 'DATE'
+0	7	184	203	3	barks	MISSING COLUMNS	oogie boogie,3, bla	Expected Number of Columns: 4 Found: 3
+0	8	204	204	NULL	NULL	LINE SIZE OVER MAXIMUM	oogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogie,3, bla	Maximum line size of 40 bytes exceeded. Actual Size:92 bytes.
+0	8	204	291	3	current_day	CAST	oogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogie,3, bla	Error when converting column "current_day". Could not convert string " bla" to 'DATE'
+0	8	204	295	3	barks	MISSING COLUMNS	oogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogieoogie boogie,3, bla	Expected Number of Columns: 4 Found: 3

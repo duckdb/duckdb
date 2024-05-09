@@ -137,15 +137,17 @@ public:
 		int32_t data[8]; // year, month, day, hour, min, sec, µs, offset
 		string tz;
 		string error_message;
-		idx_t error_position = DConstants::INVALID_INDEX;
+		optional_idx error_position;
 
 		bool is_special;
 		date_t special;
 
 		date_t ToDate();
+		dtime_t ToTime();
 		timestamp_t ToTimestamp();
 
 		bool TryToDate(date_t &result);
+		bool TryToTime(dtime_t &result);
 		bool TryToTimestamp(timestamp_t &result);
 
 		DUCKDB_API string FormatError(string_t input, const string &format_specifier);
@@ -159,17 +161,20 @@ public:
 
 	DUCKDB_API bool Parse(string_t str, ParseResult &result) const;
 
-	DUCKDB_API bool TryParseDate(string_t str, date_t &result, string &error_message) const;
-	DUCKDB_API bool TryParseTimestamp(string_t str, timestamp_t &result, string &error_message) const;
+	DUCKDB_API bool Parse(const char *data, size_t size, ParseResult &result) const;
 
-	date_t ParseDate(string_t str);
-	timestamp_t ParseTimestamp(string_t str);
+	DUCKDB_API bool TryParseDate(const char *data, size_t size, date_t &result) const;
+	DUCKDB_API bool TryParseTimestamp(const char *data, size_t size, timestamp_t &result) const;
+
+	DUCKDB_API bool TryParseDate(string_t str, date_t &result, string &error_message) const;
+	DUCKDB_API bool TryParseTime(string_t str, dtime_t &result, string &error_message) const;
+	DUCKDB_API bool TryParseTimestamp(string_t str, timestamp_t &result, string &error_message) const;
 
 	void Serialize(Serializer &serializer) const;
 	static StrpTimeFormat Deserialize(Deserializer &deserializer);
 
 protected:
-	static string FormatStrpTimeError(const string &input, idx_t position);
+	static string FormatStrpTimeError(const string &input, optional_idx position);
 	DUCKDB_API void AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) override;
 	int NumericSpecifierWidth(StrTimeSpecifier specifier);
 	int32_t TryParseCollection(const char *data, idx_t &pos, idx_t size, const string_t collection[],

@@ -1,6 +1,7 @@
 add_library_unity(
   test_sql_capi
   OBJECT
+  capi_scalar_functions.cpp
   capi_table_functions.cpp
   test_capi.cpp
   test_starting_database.cpp

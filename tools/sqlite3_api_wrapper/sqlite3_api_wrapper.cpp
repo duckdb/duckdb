@@ -985,21 +985,38 @@ int sqlite3_complete(const char *zSql) {
 			break;
 		}
 		case '$': { /* Dollar-quoted strings */
-			if (zSql[1] >= '0' && zSql[1] <= '9') {
-				// numeric prepared statement parameter
+			// check if this is a dollar-quoted string
+			idx_t next_dollar = 0;
+			for (idx_t idx = 1; zSql[idx]; idx++) {
+				if (zSql[idx] == '$') {
+					// found the next dollar
+					next_dollar = idx;
+					break;
+				}
+				// all characters can be between A-Z, a-z or \200 - \377
+				if (zSql[idx] >= 'A' && zSql[idx] <= 'Z') {
+					continue;
+				}
+				if (zSql[idx] >= 'a' && zSql[idx] <= 'z') {
+					continue;
+				}
+				if (zSql[idx] >= '\200' && zSql[idx] <= '\377') {
+					continue;
+				}
+				// the first character CANNOT be a numeric, only subsequent characters
+				if (idx > 1 && zSql[idx] >= '0' && zSql[idx] <= '9') {
+					continue;
+				}
+				// not a dollar quoted string
+				break;
+			}
+			if (next_dollar == 0) {
+				// not a dollar quoted string
 				next_state = SQLParseState::NORMAL;
 				break;
 			}
-			zSql++;
-			auto start = zSql;
-			// look for the next $ symbol (which is the terminator
-			while (*zSql && *zSql != '$') {
-				zSql++;
-			}
-			if (zSql[0] == 0) {
-				// unterminated dollar string
-				return 0;
-			}
+			auto start = zSql + 1;
+			zSql += next_dollar;
 			const char *delimiterStart = start;
 			idx_t delimiterLength = zSql - start;
 			zSql++;
@@ -1076,8 +1093,29 @@ int sqlite3_get_autocommit(sqlite3 *db) {
 }
 
 int sqlite3_limit(sqlite3 *, int id, int newVal) {
-	fprintf(stderr, "sqlite3_limit: unsupported.\n");
-	return -1;
+	if (newVal >= 0) {
+		// attempting to set limit value
+		return SQLITE_OK;
+	}
+	switch (id) {
+	case SQLITE_LIMIT_LENGTH:
+	case SQLITE_LIMIT_SQL_LENGTH:
+	case SQLITE_LIMIT_COLUMN:
+	case SQLITE_LIMIT_LIKE_PATTERN_LENGTH:
+		return std::numeric_limits<int>::max();
+	case SQLITE_LIMIT_EXPR_DEPTH:
+		return 1000;
+	case SQLITE_LIMIT_FUNCTION_ARG:
+	case SQLITE_LIMIT_VARIABLE_NUMBER:
+		return 256;
+	case SQLITE_LIMIT_ATTACHED:
+		return 1000;
+	case SQLITE_LIMIT_WORKER_THREADS:
+	case SQLITE_LIMIT_TRIGGER_DEPTH:
+		return 0;
+	default:
+		return SQLITE_ERROR;
+	}
 }
 
 int sqlite3_stmt_readonly(sqlite3_stmt *pStmt) {
