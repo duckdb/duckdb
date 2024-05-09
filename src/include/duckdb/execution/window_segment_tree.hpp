@@ -46,12 +46,8 @@ public:
 	virtual ~WindowAggregator();
 
 	//	Access
-	const DataChunk &GetInputs() const {
-		return inputs;
-	}
-	const ValidityMask &GetFilterMask() const {
-		return filter_mask;
-	}
+	const DataChunk &GetInputs() const;
+	const ValidityMask &GetFilterMask() const;
 
 	//	Build
 	virtual void Sink(DataChunk &payload_chunk, SelectionVector *filter_sel, idx_t filtered);
@@ -72,14 +68,8 @@ public:
 	const idx_t state_size;
 
 protected:
-	//! Partition data chunk
-	DataChunk inputs;
-
-	//! The filtered rows in inputs.
-	vector<validity_t> filter_bits;
-	ValidityMask filter_mask;
-	idx_t filter_pos;
 	//! The state used by the aggregator to build.
+	unique_ptr<WindowAggregatorState> gsink;
 	unique_ptr<WindowAggregatorState> gstate;
 
 public:
