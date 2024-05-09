@@ -101,6 +101,9 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager_p, const vector<JoinC
 	data_collection = make_uniq<TupleDataCollection>(buffer_manager, layout);
 	sink_collection =
 	    make_uniq<RadixPartitionedTupleData>(buffer_manager, layout, radix_bits, layout.ColumnCount() - 1);
+
+	dead_end = make_unsafe_uniq_array<data_t>(layout.GetRowWidth());
+	memset(dead_end.get(), 0, layout.GetRowWidth());
 }
 
 JoinHashTable::~JoinHashTable() {
@@ -218,7 +221,6 @@ static inline void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &
 	match_count = 0;
 
 	while (remaining_count > 0) {
-
 		idx_t salt_match_count = 0;
 		idx_t key_no_match_count = 0;
 
@@ -233,9 +235,7 @@ static inline void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &
 			ht_entry_t entry;
 
 			if (USE_SALTS) {
-
 				hash_t row_salt = salts[row_index];
-
 				// increment the ht_offset of the entry as long as next entry is occupied and salt does not match
 				while (true) {
 					entry = entries[ht_offset];
@@ -266,9 +266,7 @@ static inline void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &
 		}
 
 		if (salt_match_count != 0) {
-
 			// Perform row comparisons, after function call salt_match_sel will point to the keys that match
-
 			idx_t key_match_count = ht->row_matcher_build.Match(keys, key_state.vector_data, state.salt_match_sel,
 			                                                    salt_match_count, ht->layout, state.rhs_row_locations,
 			                                                    &state.key_no_match_sel, key_no_match_count);
@@ -453,7 +451,6 @@ static inline data_ptr_t InsertRowToEntry(atomic<ht_entry_t> &entry, data_ptr_t 
                                           const idx_t pointer_offset) {
 
 	if (PARALLEL) {
-
 		// if we expect the entry to be empty, if the operation fails we need to cancel the whole operation as another
 		// key might have been inserted in the meantime that does not match the current key
 		if (EXPECT_EMPTY) {
@@ -474,7 +471,6 @@ static inline data_ptr_t InsertRowToEntry(atomic<ht_entry_t> &entry, data_ptr_t 
 		// if we expect the entry to be full, we know that even if the insert fails the keys still match so we can
 		// just keep trying until we succeed
 		else {
-
 			ht_entry_t expected_current_entry = entry.load(std::memory_order_relaxed);
 			ht_entry_t desired_new_entry = ht_entry_t::GetDesiredEntry(row_ptr_to_insert, salt);
 			D_ASSERT(expected_current_entry.IsOccupied());
@@ -530,7 +526,6 @@ static inline void InsertMatchesAndIncrementMisses(atomic<ht_entry_t> entries[],
                                                    JoinHashTable *ht, data_ptr_t *lhs_row_locations,
                                                    idx_t *ht_offsets_and_salts, const idx_t capacity_mask,
                                                    const idx_t key_match_count, const idx_t key_no_match_count) {
-
 	// Insert the rows that match
 	for (idx_t i = 0; i < key_match_count; i++) {
 		const auto need_compare_idx = state.key_match_sel.get_index(i);
@@ -564,9 +559,7 @@ template <bool PARALLEL>
 static void InsertHashesLoop(atomic<ht_entry_t> entries[], Vector row_locations, Vector &hashes_v, const idx_t &count,
                              JoinHashTable::InsertState &state, unique_ptr<TupleDataCollection> &data_collection,
                              JoinHashTable *ht) {
-
 	D_ASSERT(hashes_v.GetType().id() == LogicalType::HASH);
-
 	ApplyBitmaskAndGetSaltBuild(hashes_v, count, ht->bitmask);
 
 	// the offset for each row to insert
@@ -581,9 +574,7 @@ static void InsertHashesLoop(atomic<ht_entry_t> entries[], Vector row_locations,
 
 	// use the ht bitmask to make the modulo operation faster but keep the salt bits intact
 	idx_t capacity_mask = ht->bitmask | ht_entry_t::SALT_MASK;
-
 	while (remaining_count > 0) {
-
 		idx_t salt_match_count = 0;
 
 		// iterate over each entry to find out whether it belongs to an existing list or will start
@@ -705,7 +696,6 @@ void JoinHashTable::InitializePointerTable() {
 }
 
 void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel) {
-
 	// Pointer table should be allocated
 	D_ASSERT(hash_map.get());
 
@@ -717,9 +707,7 @@ void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool para
 	const auto row_locations = iterator.GetRowLocations();
 
 	InsertState insert_state(this->data_collection, this->equality_predicate_columns);
-
 	do {
-
 		const auto count = iterator.GetCurrentChunkCount();
 		for (idx_t i = 0; i < count; i++) {
 			hash_data[i] = Load<hash_t>(row_locations[i] + pointer_offset);
@@ -737,7 +725,6 @@ unique_ptr<ScanStructure> JoinHashTable::InitializeScanStructure(DataChunk &keys
 
 	// set up the scan structure
 	auto ss = make_uniq<ScanStructure>(*this, key_state);
-
 	if (join_type != JoinType::INNER) {
 		ss->found_match = make_unsafe_uniq_array<bool>(STANDARD_VECTOR_SIZE);
 		memset(ss->found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
@@ -785,8 +772,6 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	switch (ht.join_type) {
 	case JoinType::INNER:
 	case JoinType::RIGHT:
-	case JoinType::RIGHT_ANTI:
-	case JoinType::RIGHT_SEMI:
 		NextInnerJoin(keys, left, result);
 		break;
 	case JoinType::SEMI:
@@ -797,6 +782,10 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 		break;
 	case JoinType::ANTI:
 		NextAntiJoin(keys, left, result);
+		break;
+	case JoinType::RIGHT_ANTI:
+	case JoinType::RIGHT_SEMI:
+		NextRightSemiOrAntiJoin(keys, left, result);
 		break;
 	case JoinType::OUTER:
 	case JoinType::LEFT:
@@ -1008,6 +997,41 @@ void ScanStructure::NextAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &re
 	finished = true;
 }
 
+void ScanStructure::NextRightSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
+	const auto ptrs = FlatVector::GetData<data_ptr_t>(pointers);
+	while (!PointersExhausted()) {
+		// resolve the equality_predicates for this set of keys
+		idx_t result_count = ResolvePredicates(keys, chain_match_sel_vector, nullptr);
+
+		// for each match, fully follow the chain
+		for (idx_t i = 0; i < result_count; i++) {
+			const auto idx = chain_match_sel_vector.get_index(i);
+			auto &ptr = ptrs[idx];
+			if (Load<bool>(ptr + ht.tuple_size)) { // Early out: chain has been fully marked as found before
+				ptr = ht.dead_end.get();
+				continue;
+			}
+
+			// Fully mark chain as found
+			while (true) {
+				// NOTE: threadsan reports this as a data race because this can be set concurrently by separate threads
+				// Technically it is, but it does not matter, since the only value that can be written is "true"
+				Store<bool>(true, ptr + ht.tuple_size);
+				auto next_ptr = Load<data_ptr_t>(ptr + ht.pointer_offset);
+				if (!next_ptr) {
+					break;
+				}
+				ptr = next_ptr;
+			}
+		}
+
+		// check the next set of pointers
+		AdvancePointers();
+	}
+
+	finished = true;
+}
+
 void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &child, DataChunk &result) {
 	// for the initial set of columns we just reference the left side
 	result.SetCardinality(child);
@@ -1165,7 +1189,6 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 	SelectionVector result_sel(STANDARD_VECTOR_SIZE);
 
 	while (this->count > 0) {
-
 		// resolve the equality_predicates for the current set of pointers
 		idx_t match_count = ResolvePredicates(keys, chain_match_sel_vector, &chain_no_match_sel_vector);
 		idx_t no_match_count = this->count - match_count;

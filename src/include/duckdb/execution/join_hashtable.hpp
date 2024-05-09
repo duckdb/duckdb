@@ -96,6 +96,8 @@ public:
 		void NextSemiJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 		//! Next operator for the anti join
 		void NextAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
+		//! Next operator for the RIGHT semi and anti join
+		void NextRightSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 		//! Next operator for the left outer join
 		void NextLeftJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 		//! Next operator for the mark join
@@ -301,6 +303,8 @@ private:
 	ht_entry_t *entries;
 	//! Whether or not NULL values are considered equal in each of the comparisons
 	vector<bool> null_values_are_equal;
+	//! An empty tuple that's a "dead end", can be used to stop chains early
+	unsafe_unique_array<data_t> dead_end;
 
 	//! Copying not allowed
 	JoinHashTable(const JoinHashTable &) = delete;
