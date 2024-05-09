@@ -109,24 +109,7 @@ public:
 	void Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result, idx_t count,
 	              idx_t row_idx) const override;
 
-private:
-	void AggregateInit();
-	void AggegateFinal(Vector &result, idx_t rid);
-
-	//! Partition starts
-	vector<idx_t> partition_offsets;
-	//! Aggregate results
-	unique_ptr<Vector> results;
-	//! The current result partition being built/read
-	idx_t partition;
-	//! The current input row being built/read
-	idx_t row;
-	//! Data pointer that contains a single state, used for intermediate window segment aggregation
-	vector<data_t> state;
-	//! A vector of pointers to "state", used for intermediate window segment aggregation
-	Vector statep;
-	//! Reused result state container for the window functions
-	Vector statef;
+	const ValidityMask &partition_mask;
 };
 
 class WindowCustomAggregator : public WindowAggregator {
