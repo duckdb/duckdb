@@ -20,13 +20,13 @@ WindowAggregatorState::WindowAggregatorState() : allocator(Allocator::DefaultAll
 
 class WindowAggregatorGlobalSinkState : public WindowAggregatorState {
 public:
-	WindowAggregatorGlobalSinkState(idx_t partition_count, DataChunk &payload_chunk, SelectionVector *filter_sel)
+	WindowAggregatorGlobalSinkState(idx_t partition_count, const vector<LogicalType> &types, Expression *filter)
 	    : filter_pos(0) {
 
-		if (payload_chunk.ColumnCount()) {
-			inputs.Initialize(Allocator::DefaultAllocator(), payload_chunk.GetTypes());
+		if (!types.empty()) {
+			inputs.Initialize(Allocator::DefaultAllocator(), types);
 		}
-		if (filter_sel) {
+		if (filter) {
 			// 	Start with all invalid and set the ones that pass
 			filter_bits.resize(ValidityMask::ValidityMaskSize(partition_count), 0);
 			filter_mask.Initialize(filter_bits.data());
@@ -42,13 +42,18 @@ public:
 	idx_t filter_pos;
 };
 
-WindowAggregator::WindowAggregator(AggregateObject aggr_p, const LogicalType &result_type_p,
-                                   const WindowExcludeMode exclude_mode_p, idx_t partition_count_p)
-    : aggr(std::move(aggr_p)), result_type(result_type_p), partition_count(partition_count_p),
+WindowAggregator::WindowAggregator(AggregateObject aggr_p, const vector<LogicalType> &arg_types_p,
+                                   const LogicalType &result_type_p, const WindowExcludeMode exclude_mode_p,
+                                   idx_t partition_count_p)
+    : aggr(std::move(aggr_p)), arg_types(arg_types_p), result_type(result_type_p), partition_count(partition_count_p),
       state_size(aggr.function.state_size()), exclude_mode(exclude_mode_p) {
 }
 
 WindowAggregator::~WindowAggregator() {
+}
+
+unique_ptr<WindowAggregatorState> WindowAggregator::GetGlobalState() const {
+	return make_uniq<WindowAggregatorGlobalSinkState>(partition_count, arg_types, aggr.filter);
 }
 
 const DataChunk &WindowAggregator::GetInputs() const {
@@ -64,7 +69,7 @@ const ValidityMask &WindowAggregator::GetFilterMask() const {
 void WindowAggregator::Sink(DataChunk &payload_chunk, SelectionVector *filter_sel, idx_t filtered) {
 	//	Lazy instantiation
 	if (!gsink) {
-		gsink = make_uniq<WindowAggregatorGlobalSinkState>(partition_count, payload_chunk, filter_sel);
+		gsink = GetGlobalState();
 	}
 	auto &gasink = gsink->Cast<WindowAggregatorGlobalSinkState>();
 	auto &inputs = gasink.inputs;
@@ -87,11 +92,11 @@ void WindowAggregator::Finalize(const FrameStats &stats) {
 //===--------------------------------------------------------------------===//
 // WindowConstantAggregate
 //===--------------------------------------------------------------------===//
-WindowConstantAggregator::WindowConstantAggregator(AggregateObject aggr, const LogicalType &result_type,
-                                                   const ValidityMask &partition_mask,
+WindowConstantAggregator::WindowConstantAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types,
+                                                   const LogicalType &result_type, const ValidityMask &partition_mask,
                                                    const WindowExcludeMode exclude_mode_p, const idx_t count)
-    : WindowAggregator(std::move(aggr), result_type, exclude_mode_p, count), partition(0), row(0), state(state_size),
-      statep(Value::POINTER(CastPointerToValue(state.data()))),
+    : WindowAggregator(std::move(aggr), arg_types, result_type, exclude_mode_p, count), partition(0), row(0),
+      state(state_size), statep(Value::POINTER(CastPointerToValue(state.data()))),
       statef(Value::POINTER(CastPointerToValue(state.data()))) {
 
 	statef.SetVectorType(VectorType::FLAT_VECTOR); // Prevent conversion of results to constants
@@ -146,13 +151,18 @@ void WindowConstantAggregator::AggegateFinal(Vector &result, idx_t rid) {
 	}
 }
 
+unique_ptr<WindowAggregatorState> WindowConstantAggregator::GetGlobalState() const {
+	//	Filtering is handled on Sink
+	return make_uniq<WindowAggregatorGlobalSinkState>(partition_count, arg_types, nullptr);
+}
+
 void WindowConstantAggregator::Sink(DataChunk &payload_chunk, SelectionVector *filter_sel, idx_t filtered) {
 	const auto chunk_begin = row;
 	const auto chunk_end = chunk_begin + payload_chunk.size();
 
 	//	Lazy instantiation
 	if (!gsink) {
-		gsink = make_uniq<WindowAggregatorGlobalSinkState>(partition_count, payload_chunk, nullptr);
+		gsink = GetGlobalState();
 	}
 	auto &gasink = gsink->Cast<WindowAggregatorGlobalSinkState>();
 	auto &inputs = gasink.inputs;
@@ -277,9 +287,10 @@ void WindowConstantAggregator::Evaluate(WindowAggregatorState &lstate, const Dat
 //===--------------------------------------------------------------------===//
 // WindowCustomAggregator
 //===--------------------------------------------------------------------===//
-WindowCustomAggregator::WindowCustomAggregator(AggregateObject aggr, const LogicalType &result_type,
-                                               const WindowExcludeMode exclude_mode_p, idx_t count)
-    : WindowAggregator(std::move(aggr), result_type, exclude_mode_p, count) {
+WindowCustomAggregator::WindowCustomAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types,
+                                               const LogicalType &result_type, const WindowExcludeMode exclude_mode_p,
+                                               idx_t count)
+    : WindowAggregator(std::move(aggr), arg_types, result_type, exclude_mode_p, count) {
 }
 
 WindowCustomAggregator::~WindowCustomAggregator() {
@@ -434,9 +445,10 @@ void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const DataC
 //===--------------------------------------------------------------------===//
 // WindowNaiveAggregator
 //===--------------------------------------------------------------------===//
-WindowNaiveAggregator::WindowNaiveAggregator(AggregateObject aggr, const LogicalType &result_type,
-                                             const WindowExcludeMode exclude_mode_p, idx_t partition_count)
-    : WindowAggregator(std::move(aggr), result_type, exclude_mode_p, partition_count) {
+WindowNaiveAggregator::WindowNaiveAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types,
+                                             const LogicalType &result_type, const WindowExcludeMode exclude_mode_p,
+                                             idx_t partition_count)
+    : WindowAggregator(std::move(aggr), arg_types, result_type, exclude_mode_p, partition_count) {
 }
 
 WindowNaiveAggregator::~WindowNaiveAggregator() {
@@ -637,9 +649,11 @@ void WindowNaiveAggregator::Evaluate(WindowAggregatorState &lstate, const DataCh
 //===--------------------------------------------------------------------===//
 // WindowSegmentTree
 //===--------------------------------------------------------------------===//
-WindowSegmentTree::WindowSegmentTree(AggregateObject aggr, const LogicalType &result_type, WindowAggregationMode mode_p,
+WindowSegmentTree::WindowSegmentTree(AggregateObject aggr, const vector<LogicalType> &arg_types,
+                                     const LogicalType &result_type, WindowAggregationMode mode_p,
                                      const WindowExcludeMode exclude_mode_p, idx_t count)
-    : WindowAggregator(std::move(aggr), result_type, exclude_mode_p, count), internal_nodes(0), mode(mode_p) {
+    : WindowAggregator(std::move(aggr), arg_types, result_type, exclude_mode_p, count), internal_nodes(0),
+      mode(mode_p) {
 }
 
 void WindowSegmentTree::Finalize(const FrameStats &stats) {
@@ -1136,10 +1150,11 @@ void WindowSegmentTreePart::EvaluateLeaves(const WindowSegmentTree &tree, const 
 //===--------------------------------------------------------------------===//
 // WindowDistinctAggregator
 //===--------------------------------------------------------------------===//
-WindowDistinctAggregator::WindowDistinctAggregator(AggregateObject aggr, const LogicalType &result_type,
+WindowDistinctAggregator::WindowDistinctAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types,
+                                                   const LogicalType &result_type,
                                                    const WindowExcludeMode exclude_mode_p, idx_t count,
                                                    ClientContext &context)
-    : WindowAggregator(std::move(aggr), result_type, exclude_mode_p, count), context(context),
+    : WindowAggregator(std::move(aggr), arg_types, result_type, exclude_mode_p, count), context(context),
       allocator(Allocator::DefaultAllocator()) {
 
 	payload_types.emplace_back(LogicalType::UBIGINT);

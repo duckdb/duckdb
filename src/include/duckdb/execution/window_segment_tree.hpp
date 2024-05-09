@@ -41,8 +41,8 @@ public:
 
 class WindowAggregator {
 public:
-	WindowAggregator(AggregateObject aggr, const LogicalType &result_type_p, const WindowExcludeMode exclude_mode_p,
-	                 idx_t partition_count);
+	WindowAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types_p, const LogicalType &result_type_p,
+	                 const WindowExcludeMode exclude_mode_p, idx_t partition_count);
 	virtual ~WindowAggregator();
 
 	//	Access
@@ -50,6 +50,7 @@ public:
 	const ValidityMask &GetFilterMask() const;
 
 	//	Build
+	virtual unique_ptr<WindowAggregatorState> GetGlobalState() const;
 	virtual void Sink(DataChunk &payload_chunk, SelectionVector *filter_sel, idx_t filtered);
 	virtual void Finalize(const FrameStats &stats);
 
@@ -60,6 +61,8 @@ public:
 
 	//! A description of the aggregator
 	const AggregateObject aggr;
+	//! The argument types for the function
+	const vector<LogicalType> arg_types;
 	//! The result type of the window function
 	const LogicalType result_type;
 	//! The cardinality of the partition
@@ -80,8 +83,9 @@ public:
 // Used for validation
 class WindowNaiveAggregator : public WindowAggregator {
 public:
-	WindowNaiveAggregator(AggregateObject aggr, const LogicalType &result_type_p,
-	                      const WindowExcludeMode exclude_mode_p, idx_t partition_count);
+	WindowNaiveAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types_p,
+	                      const LogicalType &result_type_p, const WindowExcludeMode exclude_mode_p,
+	                      idx_t partition_count);
 	~WindowNaiveAggregator() override;
 
 	unique_ptr<WindowAggregatorState> GetLocalState() const override;
@@ -91,11 +95,13 @@ public:
 
 class WindowConstantAggregator : public WindowAggregator {
 public:
-	WindowConstantAggregator(AggregateObject aggr, const LogicalType &result_type_p, const ValidityMask &partition_mask,
+	WindowConstantAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types_p,
+	                         const LogicalType &result_type_p, const ValidityMask &partition_mask,
 	                         WindowExcludeMode exclude_mode_p, const idx_t count);
 	~WindowConstantAggregator() override {
 	}
 
+	unique_ptr<WindowAggregatorState> GetGlobalState() const override;
 	void Sink(DataChunk &payload_chunk, SelectionVector *filter_sel, idx_t filtered) override;
 	void Finalize(const FrameStats &stats) override;
 
@@ -125,8 +131,9 @@ private:
 
 class WindowCustomAggregator : public WindowAggregator {
 public:
-	WindowCustomAggregator(AggregateObject aggr, const LogicalType &result_type_p,
-	                       const WindowExcludeMode exclude_mode_p, idx_t partition_count);
+	WindowCustomAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types_p,
+	                       const LogicalType &result_type_p, const WindowExcludeMode exclude_mode_p,
+	                       idx_t partition_count);
 	~WindowCustomAggregator() override;
 
 	void Finalize(const FrameStats &stats) override;
@@ -145,8 +152,8 @@ public:
 class WindowSegmentTree : public WindowAggregator {
 
 public:
-	WindowSegmentTree(AggregateObject aggr, const LogicalType &result_type, WindowAggregationMode mode_p,
-	                  const WindowExcludeMode exclude_mode_p, idx_t count);
+	WindowSegmentTree(AggregateObject aggr, const vector<LogicalType> &arg_types_p, const LogicalType &result_type_p,
+	                  WindowAggregationMode mode_p, const WindowExcludeMode exclude_mode_p, idx_t count);
 	~WindowSegmentTree() override;
 
 	void Finalize(const FrameStats &stats) override;
@@ -183,8 +190,9 @@ public:
 	using GlobalSortStatePtr = unique_ptr<GlobalSortState>;
 	class DistinctSortTree;
 
-	WindowDistinctAggregator(AggregateObject aggr, const LogicalType &result_type,
-	                         const WindowExcludeMode exclude_mode_p, idx_t count, ClientContext &context);
+	WindowDistinctAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types_p,
+	                         const LogicalType &result_type_p, const WindowExcludeMode exclude_mode_p, idx_t count,
+	                         ClientContext &context);
 	~WindowDistinctAggregator() override;
 
 	//	Build

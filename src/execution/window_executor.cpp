@@ -953,6 +953,8 @@ WindowAggregateExecutorGlobalState::WindowAggregateExecutorGlobalState(const Win
     : WindowExecutorGlobalState(executor, count, partition_mask, order_mask), filter_executor(executor.context) {
 	auto &wexpr = executor.wexpr;
 	auto &context = executor.context;
+	auto return_type = wexpr.return_type;
+	auto arg_types = payload_chunk.GetTypes();
 	const auto &mode = reinterpret_cast<const WindowAggregateExecutor &>(executor).mode;
 
 	// Force naive for SEPARATE mode or for (currently!) unsupported functionality
@@ -960,20 +962,21 @@ WindowAggregateExecutorGlobalState::WindowAggregateExecutorGlobalState(const Win
 	    !ClientConfig::GetConfig(context).enable_optimizer || mode == WindowAggregationMode::SEPARATE;
 	AggregateObject aggr(wexpr);
 	if (force_naive || (wexpr.distinct && wexpr.exclude_clause != WindowExcludeMode::NO_OTHER)) {
-		aggregator = make_uniq<WindowNaiveAggregator>(aggr, wexpr.return_type, wexpr.exclude_clause, count);
+		aggregator = make_uniq<WindowNaiveAggregator>(aggr, arg_types, return_type, wexpr.exclude_clause, count);
 	} else if (IsDistinctAggregate()) {
 		// build a merge sort tree
 		// see https://dl.acm.org/doi/pdf/10.1145/3514221.3526184
-		aggregator = make_uniq<WindowDistinctAggregator>(aggr, wexpr.return_type, wexpr.exclude_clause, count, context);
-	} else if (IsConstantAggregate()) {
 		aggregator =
-		    make_uniq<WindowConstantAggregator>(aggr, wexpr.return_type, partition_mask, wexpr.exclude_clause, count);
+		    make_uniq<WindowDistinctAggregator>(aggr, arg_types, return_type, wexpr.exclude_clause, count, context);
+	} else if (IsConstantAggregate()) {
+		aggregator = make_uniq<WindowConstantAggregator>(aggr, arg_types, return_type, partition_mask,
+		                                                 wexpr.exclude_clause, count);
 	} else if (IsCustomAggregate()) {
-		aggregator = make_uniq<WindowCustomAggregator>(aggr, wexpr.return_type, wexpr.exclude_clause, count);
+		aggregator = make_uniq<WindowCustomAggregator>(aggr, arg_types, return_type, wexpr.exclude_clause, count);
 	} else {
 		// build a segment tree for frame-adhering aggregates
 		// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
-		aggregator = make_uniq<WindowSegmentTree>(aggr, wexpr.return_type, mode, wexpr.exclude_clause, count);
+		aggregator = make_uniq<WindowSegmentTree>(aggr, arg_types, return_type, mode, wexpr.exclude_clause, count);
 	}
 
 	// evaluate the FILTER clause and stuff it into a large mask for compactness and reuse
