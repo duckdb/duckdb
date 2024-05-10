@@ -5,6 +5,7 @@
 #include "cast_column_reader.hpp"
 #include "column_reader.hpp"
 #include "duckdb.hpp"
+#include "expression_column_reader.hpp"
 #include "list_column_reader.hpp"
 #include "parquet_crypto.hpp"
 #include "parquet_file_metadata_cache.hpp"
@@ -20,6 +21,10 @@
 #include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/json/json_value.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -284,8 +289,9 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele) {
 	return DeriveLogicalType(s_ele, parquet_options.binary_as_string);
 }
 
-unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(idx_t depth, idx_t max_define, idx_t max_repeat,
-                                                              idx_t &next_schema_idx, idx_t &next_file_idx) {
+unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &context, idx_t depth, idx_t max_define,
+                                                              idx_t max_repeat, idx_t &next_schema_idx,
+                                                              idx_t &next_file_idx) {
 	auto file_meta_data = GetFileMetadata();
 	D_ASSERT(file_meta_data);
 	D_ASSERT(next_schema_idx < file_meta_data->schema.size());
@@ -302,6 +308,57 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(idx_t depth, idx_t
 	if (repetition_type == FieldRepetitionType::REPEATED) {
 		max_repeat++;
 	}
+
+	// Check for geoparquet spatial types
+	// geoparquet types have to be at the root of the schema, and have to be present in the kv metadata
+	if (depth == 1) {
+		// TODO: Move this to the reader itself so we dont have to reparse the metadata for every column
+		for (auto &kv : GetFileMetadata()->key_value_metadata) {
+			if (kv.key == "geo") {
+				// parse the geoparquet metadata
+				auto geo_metadata = JsonValue::Parse(kv.value);
+				for (auto &col : geo_metadata["columns"].AsObject()) {
+					if (col.first == s_ele.name) {
+						// This is a geoparquet column
+						auto geo_type = col.second["encoding"].AsString();
+						// TODO: Handle other geoparquet types (geoarrow encoding)
+						if (geo_type == "WKB") {
+							auto logical_type = DeriveLogicalType(s_ele);
+							if (logical_type.id() != LogicalTypeId::BLOB) {
+								throw InvalidInputException(
+								    "Geoparquet column '%s' is of type WKB, but the logical type is not BLOB",
+								    s_ele.name);
+							}
+							// Look for a conversion function in the catalog
+							auto &catalog = Catalog::GetSystemCatalog(context);
+							auto &conversion_func_set = catalog
+							                                .GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY,
+							                                          DEFAULT_SCHEMA, "st_geomfromwkb")
+							                                .Cast<ScalarFunctionCatalogEntry>();
+							auto conversion_func =
+							    conversion_func_set.functions.GetFunctionByArguments(context, {LogicalType::BLOB});
+
+							// Create a bound function call expression
+							auto args = vector<unique_ptr<Expression>>();
+							args.push_back(std::move(make_uniq<BoundReferenceExpression>(LogicalType::BLOB, 0)));
+							auto expr = make_uniq<BoundFunctionExpression>(conversion_func.return_type, conversion_func,
+							                                               std::move(args), nullptr);
+
+							// Create a child reader
+							auto child_reader = ColumnReader::CreateReader(*this, logical_type, s_ele, next_file_idx++,
+							                                               max_define, max_repeat);
+
+							// Create an expression reader that applies the conversion function to the child reader
+							auto expression_reader =
+							    make_uniq<ExpressionColumnReader>(context, std::move(child_reader), std::move(expr));
+							return expression_reader;
+						}
+					}
+				}
+			}
+		}
+	}
+
 	if (s_ele.__isset.num_children && s_ele.num_children > 0) { // inner node
 		child_list_t<LogicalType> child_types;
 		vector<unique_ptr<ColumnReader>> child_readers;
@@ -313,7 +370,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(idx_t depth, idx_t
 			auto &child_ele = file_meta_data->schema[next_schema_idx];
 
 			auto child_reader =
-			    CreateReaderRecursive(depth + 1, max_define, max_repeat, next_schema_idx, next_file_idx);
+			    CreateReaderRecursive(context, depth + 1, max_define, max_repeat, next_schema_idx, next_file_idx);
 			child_types.push_back(make_pair(child_ele.name, child_reader->Type()));
 			child_readers.push_back(std::move(child_reader));
 
@@ -387,7 +444,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(idx_t depth, idx_t
 }
 
 // TODO we don't need readers for columns we are not going to read ay
-unique_ptr<ColumnReader> ParquetReader::CreateReader() {
+unique_ptr<ColumnReader> ParquetReader::CreateReader(ClientContext &context) {
 	auto file_meta_data = GetFileMetadata();
 	idx_t next_schema_idx = 0;
 	idx_t next_file_idx = 0;
@@ -398,7 +455,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader() {
 	if (file_meta_data->schema[0].num_children == 0) {
 		throw IOException("Parquet reader: root schema element has no children");
 	}
-	auto ret = CreateReaderRecursive(0, 0, 0, next_schema_idx, next_file_idx);
+	auto ret = CreateReaderRecursive(context, 0, 0, 0, next_schema_idx, next_file_idx);
 	if (ret->Type().id() != LogicalTypeId::STRUCT) {
 		throw InvalidInputException("Root element of Parquet file must be a struct");
 	}
@@ -425,7 +482,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader() {
 	return ret;
 }
 
-void ParquetReader::InitializeSchema() {
+void ParquetReader::InitializeSchema(ClientContext &context) {
 	auto file_meta_data = GetFileMetadata();
 
 	if (file_meta_data->__isset.encryption_algorithm) {
@@ -438,7 +495,7 @@ void ParquetReader::InitializeSchema() {
 	if (file_meta_data->schema.size() < 2) {
 		throw FormatException("Need at least one non-root column in the file");
 	}
-	root_reader = CreateReader();
+	root_reader = CreateReader(context);
 	auto &root_type = root_reader->Type();
 	auto &child_types = StructType::GetChildTypes(root_type);
 	D_ASSERT(root_type.id() == LogicalTypeId::STRUCT);
@@ -507,14 +564,14 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, Parqu
 			ObjectCache::GetObjectCache(context_p).Put(file_name, metadata);
 		}
 	}
-	InitializeSchema();
+	InitializeSchema(context_p);
 }
 
 ParquetReader::ParquetReader(ClientContext &context_p, ParquetOptions parquet_options_p,
                              shared_ptr<ParquetFileMetadataCache> metadata_p)
     : fs(FileSystem::GetFileSystem(context_p)), allocator(BufferAllocator::Get(context_p)),
       metadata(std::move(metadata_p)), parquet_options(std::move(parquet_options_p)) {
-	InitializeSchema();
+	InitializeSchema(context_p);
 }
 
 ParquetReader::~ParquetReader() {
@@ -680,7 +737,8 @@ idx_t ParquetReader::NumRowGroups() {
 	return GetFileMetadata()->row_groups.size();
 }
 
-void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<idx_t> groups_to_read) {
+void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanState &state,
+                                   vector<idx_t> groups_to_read) {
 	state.current_group = -1;
 	state.finished = false;
 	state.group_offset = 0;
@@ -700,7 +758,7 @@ void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<idx_t> 
 	}
 
 	state.thrift_file_proto = CreateThriftFileProtocol(allocator, *state.file_handle, state.prefetch_mode);
-	state.root_reader = CreateReader();
+	state.root_reader = CreateReader(context);
 	state.define_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 }

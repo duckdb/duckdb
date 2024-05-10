@@ -19,6 +19,10 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #endif
 
 #include "lz4.hpp"
@@ -1187,6 +1191,109 @@ public:
 };
 
 //===--------------------------------------------------------------------===//
+// Geometry Column Writer
+//===--------------------------------------------------------------------===//
+template <class WRITER_IMPL>
+class GeometryColumnWriter : public WRITER_IMPL {
+
+	double min_x;
+	double max_x;
+	double min_y;
+	double max_y;
+
+	DataChunk input_chunk;
+	DataChunk output_chunk;
+	ExpressionExecutor executor;
+
+	string column_name;
+
+	unique_ptr<Expression> extent_expr;
+
+public:
+	void Write(ColumnWriterState &state, Vector &vector, idx_t count) override {
+		// Just write normally
+		WRITER_IMPL::Write(state, vector, count);
+
+		input_chunk.Reset();
+		output_chunk.Reset();
+		input_chunk.data[0].Reference(vector);
+		input_chunk.SetCardinality(count);
+		executor.Execute(input_chunk, output_chunk);
+
+		// Also update extent
+		auto &extent_vec = output_chunk.data[0];
+		auto &entries = StructVector::GetEntries(extent_vec);
+		auto min_x_data = FlatVector::GetData<double>(*entries[0]);
+		auto min_y_data = FlatVector::GetData<double>(*entries[1]);
+		auto max_x_data = FlatVector::GetData<double>(*entries[2]);
+		auto max_y_data = FlatVector::GetData<double>(*entries[3]);
+
+		UnifiedVectorFormat format;
+		extent_vec.ToUnifiedFormat(count, format);
+		for (idx_t i = 0; i < count; i++) {
+			auto row_id = format.sel->get_index(i);
+			if (format.validity.RowIsValid(row_id)) {
+				min_x = std::min(min_x, min_x_data[row_id]);
+				max_x = std::max(max_x, max_x_data[row_id]);
+				min_y = std::min(min_y, min_y_data[row_id]);
+				max_y = std::max(max_y, max_y_data[row_id]);
+			}
+		}
+	}
+	void FinalizeWrite(ColumnWriterState &state) override {
+		WRITER_IMPL::FinalizeWrite(state);
+
+		auto &geo_data = this->writer.geo_data;
+		auto &col_data = geo_data.columns[column_name];
+		col_data.bounds.min_x = std::min(col_data.bounds.min_x, min_x);
+		col_data.bounds.max_x = std::max(col_data.bounds.max_x, max_x);
+		col_data.bounds.min_y = std::min(col_data.bounds.min_y, min_y);
+		col_data.bounds.max_y = std::max(col_data.bounds.max_y, max_y);
+	}
+
+public:
+	GeometryColumnWriter(ClientContext &context, ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p,
+	                     idx_t max_repeat, idx_t max_define, bool can_have_nulls, string name)
+	    : WRITER_IMPL(writer, schema_idx, std::move(schema_path_p), max_repeat, max_define, can_have_nulls),
+	      executor(context), column_name(std::move(name)) {
+
+		// Create expression executor
+		auto box_type = LogicalType::STRUCT({{"min_x", LogicalType::DOUBLE},
+		                                     {"min_y", LogicalType::DOUBLE},
+		                                     {"max_x", LogicalType::DOUBLE},
+		                                     {"max_y", LogicalType::DOUBLE}});
+		box_type.SetAlias("BOX_2D");
+
+		auto wkb_type = LogicalType(LogicalTypeId::BLOB);
+		wkb_type.SetAlias("WKB_BLOB");
+
+		auto &catalog = Catalog::GetSystemCatalog(context);
+
+		// Look for a extent function in the catalog
+		auto &extent_func_set =
+		    catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, "st_extent")
+		        .Cast<ScalarFunctionCatalogEntry>();
+		auto extent_func = extent_func_set.functions.GetFunctionByArguments(context, {wkb_type});
+
+		// Create a bound function call expression
+		vector<unique_ptr<Expression>> extent_args;
+		extent_args.push_back(std::move(make_uniq<BoundReferenceExpression>(wkb_type, 0)));
+		extent_expr =
+		    make_uniq<BoundFunctionExpression>(extent_func.return_type, extent_func, std::move(extent_args), nullptr);
+
+		// Add the expression to the executor
+		executor.AddExpression(*extent_expr);
+
+		// Create the input and output chunks
+		input_chunk.InitializeEmpty({wkb_type});
+		output_chunk.Initialize(context, {box_type});
+
+		// Create an entry in the geodata for this column
+		writer.geo_data.columns[column_name] = {};
+	}
+};
+
+//===--------------------------------------------------------------------===//
 // String Column Writer
 //===--------------------------------------------------------------------===//
 class StringStatisticsState : public ColumnWriterStatistics {
@@ -2006,7 +2113,8 @@ void ArrayColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t 
 // Create Column Writer
 //===--------------------------------------------------------------------===//
 
-unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parquet::format::SchemaElement> &schemas,
+unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &context,
+                                                             vector<duckdb_parquet::format::SchemaElement> &schemas,
                                                              ParquetWriter &writer, const LogicalType &type,
                                                              const string &name, vector<string> schema_path,
                                                              optional_ptr<const ChildFieldIDs> field_ids,
@@ -2048,7 +2156,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		vector<unique_ptr<ColumnWriter>> child_writers;
 		child_writers.reserve(child_types.size());
 		for (auto &child_type : child_types) {
-			child_writers.push_back(CreateWriterRecursive(schemas, writer, child_type.second, child_type.first,
+			child_writers.push_back(CreateWriterRecursive(context, schemas, writer, child_type.second, child_type.first,
 			                                              schema_path, child_field_ids, max_repeat, max_define + 1));
 		}
 		return make_uniq<StructColumnWriter>(writer, schema_idx, std::move(schema_path), max_repeat, max_define,
@@ -2087,8 +2195,8 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		schemas.push_back(std::move(repeated_element));
 		schema_path.emplace_back(is_list ? "list" : "array");
 
-		auto child_writer = CreateWriterRecursive(schemas, writer, child_type, "element", schema_path, child_field_ids,
-		                                          max_repeat + 1, max_define + 2);
+		auto child_writer = CreateWriterRecursive(context, schemas, writer, child_type, "element", schema_path,
+		                                          child_field_ids, max_repeat + 1, max_define + 2);
 		if (is_list) {
 			return make_uniq<ListColumnWriter>(writer, schema_idx, std::move(schema_path), max_repeat, max_define,
 			                                   std::move(child_writer), can_have_nulls);
@@ -2142,7 +2250,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		for (idx_t i = 0; i < 2; i++) {
 			// key needs to be marked as REQUIRED
 			bool is_key = i == 0;
-			auto child_writer = CreateWriterRecursive(schemas, writer, kv_types[i], kv_names[i], schema_path,
+			auto child_writer = CreateWriterRecursive(context, schemas, writer, kv_types[i], kv_names[i], schema_path,
 			                                          child_field_ids, max_repeat + 1, max_define + 2, !is_key);
 
 			child_writers.push_back(std::move(child_writer));
@@ -2166,6 +2274,12 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 	ParquetWriter::SetSchemaProperties(type, schema_element);
 	schemas.push_back(std::move(schema_element));
 	schema_path.push_back(name);
+
+	if (type.id() == LogicalTypeId::BLOB && type.GetAlias() == "WKB_BLOB") {
+		writer.geo_data.is_geoparquet = true;
+		return make_uniq<GeometryColumnWriter<StringColumnWriter>>(context, writer, schema_idx, std::move(schema_path),
+		                                                           max_repeat, max_define, can_have_nulls, name);
+	}
 
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:

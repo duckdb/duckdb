@@ -61,8 +61,8 @@ struct FieldID {
 
 class ParquetWriter {
 public:
-	ParquetWriter(FileSystem &fs, string file_name, vector<LogicalType> types, vector<string> names,
-	              duckdb_parquet::format::CompressionCodec::type codec, ChildFieldIDs field_ids,
+	ParquetWriter(ClientContext &context, FileSystem &fs, string file_name, vector<LogicalType> types,
+	              vector<string> names, duckdb_parquet::format::CompressionCodec::type codec, ChildFieldIDs field_ids,
 	              const vector<pair<string, string>> &kv_metadata,
 	              shared_ptr<ParquetEncryptionConfig> encryption_config, double dictionary_compression_ratio_threshold,
 	              optional_idx compression_level);
@@ -103,6 +103,24 @@ public:
 
 	uint32_t Write(const duckdb_apache::thrift::TBase &object);
 	uint32_t WriteData(const const_data_ptr_t buffer, const uint32_t buffer_size);
+
+	struct GeoParquetData {
+		bool is_geoparquet = false;
+
+		struct ColumnData {
+			struct Bounds {
+				double min_x = std::numeric_limits<double>::max();
+				double max_x = std::numeric_limits<double>::lowest();
+				double min_y = std::numeric_limits<double>::max();
+				double max_y = std::numeric_limits<double>::lowest();
+			};
+
+			Bounds bounds;
+			unordered_set<string> geometry_types;
+		};
+
+		unordered_map<string, ColumnData> columns;
+	} geo_data;
 
 private:
 	static CopyTypeSupport DuckDBTypeToParquetTypeInternal(const LogicalType &duckdb_type,

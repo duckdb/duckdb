@@ -8,6 +8,12 @@
 #include "parquet_metadata.hpp"
 #include "parquet_reader.hpp"
 #include "parquet_writer.hpp"
+#include "geo_parquet.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/parser/expression/positional_reference_expression.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
 #include "struct_column_reader.hpp"
 #include "zstd_file_system.hpp"
 
@@ -794,7 +800,7 @@ public:
 					// The current reader has rowgroups left to be scanned
 					scan_data.reader = current_reader_data.reader;
 					vector<idx_t> group_indexes {parallel_state.row_group_index};
-					scan_data.reader->InitializeScan(scan_data.scan_state, group_indexes);
+					scan_data.reader->InitializeScan(context, scan_data.scan_state, group_indexes);
 					scan_data.batch_index = parallel_state.batch_index++;
 					scan_data.file_index = parallel_state.file_index;
 					parallel_state.row_group_index++;
@@ -1170,7 +1176,7 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 
 	auto &fs = FileSystem::GetFileSystem(context);
 	global_state->writer = make_uniq<ParquetWriter>(
-	    fs, file_path, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec,
+	    context, fs, file_path, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec,
 	    parquet_bind.field_ids.Copy(), parquet_bind.kv_metadata, parquet_bind.encryption_config,
 	    parquet_bind.dictionary_compression_ratio_threshold, parquet_bind.compression_level);
 	return std::move(global_state);
@@ -1390,6 +1396,49 @@ unique_ptr<TableRef> ParquetScanReplacement(ClientContext &context, ReplacementS
 	return std::move(table_function);
 }
 
+static BoundStatement WriteGeoParquetPlan(Binder &binder, CopyStatement &stmt) {
+	auto stmt_copy = stmt.Copy();
+	auto &copy = stmt_copy->Cast<CopyStatement>();
+	auto &copied_info = *copy.info;
+
+	auto dummy_binder = Binder::CreateBinder(binder.context, &binder);
+	auto bound_original = dummy_binder->Bind(*stmt.info->select_statement);
+
+	// Create new SelectNode with the original SelectNode as a subquery in the FROM clause
+	// We need to use a subquery here because the original SelectNode might be a star expression, so we can't just
+	// replace the expressions in the original SelectNode. We need to use positional references instead that get
+	// resolved during the second binding.
+
+	auto select_stmt = make_uniq<SelectStatement>();
+	select_stmt->node = std::move(copied_info.select_statement);
+	auto subquery_ref = make_uniq<SubqueryRef>(std::move(select_stmt));
+
+	copied_info.select_statement = make_uniq_base<QueryNode, SelectNode>();
+	auto &select_node = copied_info.select_statement->Cast<SelectNode>();
+	select_node.from_table = std::move(subquery_ref);
+
+	auto &catalog = Catalog::GetSystemCatalog(binder.context);
+	auto geometry_type = LogicalType(LogicalTypeId::BLOB);
+	geometry_type.SetAlias("GEOMETRY");
+
+	for (idx_t col_idx = 0; col_idx < bound_original.types.size(); col_idx++) {
+		auto column = make_uniq_base<ParsedExpression, PositionalReferenceExpression>(col_idx + 1);
+		auto &type = bound_original.types[col_idx];
+		auto &name = bound_original.names[col_idx];
+		if (type == geometry_type) {
+			vector<unique_ptr<ParsedExpression>> args;
+			args.push_back(std::move(column));
+			column = make_uniq<FunctionExpression>(catalog.GetName(), DEFAULT_SCHEMA, "ST_AsWKB", std::move(args));
+		}
+
+		column->alias = name;
+		select_node.select_list.emplace_back(std::move(column));
+	}
+
+	copied_info.format = "parquet";
+	return binder.Bind(*stmt_copy);
+}
+
 void ParquetExtension::Load(DuckDB &db) {
 	auto &db_instance = *db.instance;
 	auto &fs = db.GetFileSystem();
@@ -1437,6 +1486,27 @@ void ParquetExtension::Load(DuckDB &db) {
 
 	function.extension = "parquet";
 	ExtensionUtil::RegisterFunction(db_instance, function);
+
+	CopyFunction geo_function("geoparquet");
+	geo_function.plan = WriteGeoParquetPlan;
+	geo_function.copy_to_bind = ParquetWriteBind;
+	geo_function.copy_to_initialize_global = ParquetWriteInitializeGlobal;
+	geo_function.copy_to_initialize_local = ParquetWriteInitializeLocal;
+	geo_function.copy_to_sink = ParquetWriteSink;
+	geo_function.copy_to_combine = ParquetWriteCombine;
+	geo_function.copy_to_finalize = ParquetWriteFinalize;
+	geo_function.execution_mode = ParquetWriteExecutionMode;
+	geo_function.copy_from_bind = ParquetScanFunction::ParquetReadBind;
+	geo_function.copy_from_function = scan_fun.functions[0];
+	geo_function.prepare_batch = ParquetWritePrepareBatch;
+	geo_function.flush_batch = ParquetWriteFlushBatch;
+	geo_function.desired_batch_size = ParquetWriteDesiredBatchSize;
+	geo_function.file_size_bytes = ParquetWriteFileSize;
+	geo_function.serialize = ParquetCopySerialize;
+	geo_function.deserialize = ParquetCopyDeserialize;
+	geo_function.supports_type = ParquetWriter::TypeIsSupported;
+	geo_function.extension = "parquet";
+	ExtensionUtil::RegisterFunction(db_instance, geo_function);
 
 	// parquet_key
 	auto parquet_key_fun = PragmaFunction::PragmaCall("add_parquet_key", ParquetCrypto::AddKey,

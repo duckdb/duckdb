@@ -17,6 +17,7 @@
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "yyjson.hpp"
 #endif
 
 namespace duckdb {
@@ -349,8 +350,8 @@ void VerifyUniqueNames(const vector<string> &names) {
 #endif
 }
 
-ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, vector<LogicalType> types_p, vector<string> names_p,
-                             CompressionCodec::type codec, ChildFieldIDs field_ids_p,
+ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file_name_p, vector<LogicalType> types_p,
+                             vector<string> names_p, CompressionCodec::type codec, ChildFieldIDs field_ids_p,
                              const vector<pair<string, string>> &kv_metadata,
                              shared_ptr<ParquetEncryptionConfig> encryption_config_p,
                              double dictionary_compression_ratio_threshold_p, optional_idx compression_level_p)
@@ -413,8 +414,8 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, vector<LogicalT
 
 	vector<string> schema_path;
 	for (idx_t i = 0; i < sql_types.size(); i++) {
-		column_writers.push_back(ColumnWriter::CreateWriterRecursive(file_meta_data.schema, *this, sql_types[i],
-		                                                             unique_names[i], schema_path, &field_ids));
+		column_writers.push_back(ColumnWriter::CreateWriterRecursive(
+		    context, file_meta_data.schema, *this, sql_types[i], unique_names[i], schema_path, &field_ids));
 	}
 }
 
@@ -565,6 +566,36 @@ void ParquetWriter::Finalize() {
 		crypto_metadata.__set_encryption_algorithm(alg);
 		crypto_metadata.write(protocol.get());
 	}
+
+	// file_meta_data.key_value_metadata add geoparquet data.
+	if (geo_data.is_geoparquet) {
+		/*
+		JsonValue json;
+		json["version"] = 1.0;
+		// json["primary_column"] = geo_data.columns.begin()->first; // TODO: Keep order
+		auto columns_json = JsonValue(JsonKind::OBJECT);
+		for (auto &column : geo_data.columns) {
+			auto column_json = JsonValue(JsonKind::OBJECT);
+			column_json["encoding"] = "WKB";
+			column_json["geometry_types"] = JsonValue(JsonKind::ARRAY); // TODO: populate
+			column_json["bbox"] = JsonValue(JsonKind::ARRAY);
+			column_json["bbox"].AsArray().resize(4); // min_x, min_y, max_x, max_y
+			column_json["bbox"][0] = column.second.bounds.min_x;
+			column_json["bbox"][1] = column.second.bounds.min_y;
+			column_json["bbox"][2] = column.second.bounds.max_x;
+			column_json["bbox"][3] = column.second.bounds.max_y;
+			columns_json[column.first] = std::move(column_json);
+		}
+		json["columns"] = std::move(columns_json);
+		duckdb_parquet::format::KeyValue kv;
+		kv.__set_key("geo");
+		kv.__set_value(json.ToString(false));
+
+		file_meta_data.key_value_metadata.push_back(kv);
+		file_meta_data.__isset.key_value_metadata = true;
+		*/
+	}
+
 	Write(file_meta_data);
 
 	writer->Write<uint32_t>(writer->GetTotalWritten() - start_offset);
