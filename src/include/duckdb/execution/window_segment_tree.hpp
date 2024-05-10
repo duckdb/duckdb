@@ -73,7 +73,6 @@ public:
 protected:
 	//! The state used by the aggregator to build.
 	unique_ptr<WindowAggregatorState> gsink;
-	unique_ptr<WindowAggregatorState> gstate;
 
 public:
 	//! The window exclusion clause
@@ -137,8 +136,8 @@ class WindowSegmentTree : public WindowAggregator {
 public:
 	WindowSegmentTree(AggregateObject aggr, const vector<LogicalType> &arg_types_p, const LogicalType &result_type_p,
 	                  WindowAggregationMode mode_p, const WindowExcludeMode exclude_mode_p, idx_t count);
-	~WindowSegmentTree() override;
 
+	unique_ptr<WindowAggregatorState> GetGlobalState() const override;
 	void Finalize(const FrameStats &stats) override;
 
 	unique_ptr<WindowAggregatorState> GetLocalState() const override;
@@ -146,26 +145,13 @@ public:
 	              idx_t row_idx) const override;
 
 public:
-	void ConstructTree();
-
 	//! Use the combine API, if available
 	inline bool UseCombineAPI() const {
 		return mode < WindowAggregationMode::SEPARATE;
 	}
 
-	//! The actual window segment tree: an array of aggregate states that represent all the intermediate nodes
-	unsafe_unique_array<data_t> levels_flat_native;
-	//! For each level, the starting location in the levels_flat_native array
-	vector<idx_t> levels_flat_start;
-
-	//! The total number of internal nodes of the tree, stored in levels_flat_native
-	idx_t internal_nodes;
-
 	//! Use the combine API, if available
 	WindowAggregationMode mode;
-
-	// TREE_FANOUT needs to cleanly divide STANDARD_VECTOR_SIZE
-	static constexpr idx_t TREE_FANOUT = 16;
 };
 
 class WindowDistinctAggregator : public WindowAggregator {

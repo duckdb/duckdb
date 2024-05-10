@@ -697,46 +697,67 @@ void WindowNaiveAggregator::Evaluate(WindowAggregatorState &lstate, const DataCh
 //===--------------------------------------------------------------------===//
 // WindowSegmentTree
 //===--------------------------------------------------------------------===//
+class WindowSegmentTreeGlobalState : public WindowAggregatorGlobalState {
+public:
+	explicit WindowSegmentTreeGlobalState(const WindowSegmentTree &tree)
+	    : WindowAggregatorGlobalState(tree.partition_count, tree.arg_types, tree.aggr.filter), tree(tree),
+	      internal_nodes(0) {
+	}
+	~WindowSegmentTreeGlobalState() override;
+
+	void ConstructTree();
+
+	//! The owning accelerator
+	const WindowSegmentTree &tree;
+	//! The actual window segment tree: an array of aggregate states that represent all the intermediate nodes
+	unsafe_unique_array<data_t> levels_flat_native;
+	//! For each level, the starting location in the levels_flat_native array
+	vector<idx_t> levels_flat_start;
+	//! The total number of internal nodes of the tree, stored in levels_flat_native
+	idx_t internal_nodes;
+
+	// TREE_FANOUT needs to cleanly divide STANDARD_VECTOR_SIZE
+	static constexpr idx_t TREE_FANOUT = 16;
+};
+
 WindowSegmentTree::WindowSegmentTree(AggregateObject aggr, const vector<LogicalType> &arg_types,
                                      const LogicalType &result_type, WindowAggregationMode mode_p,
                                      const WindowExcludeMode exclude_mode_p, idx_t count)
-    : WindowAggregator(std::move(aggr), arg_types, result_type, exclude_mode_p, count), internal_nodes(0),
-      mode(mode_p) {
+    : WindowAggregator(std::move(aggr), arg_types, result_type, exclude_mode_p, count), mode(mode_p) {
 }
 
 void WindowSegmentTree::Finalize(const FrameStats &stats) {
-	auto &gasink = gsink->Cast<WindowAggregatorGlobalState>();
+	auto &gasink = gsink->Cast<WindowSegmentTreeGlobalState>();
 	auto &inputs = gasink.inputs;
 
 	WindowAggregator::Finalize(stats);
 
-	gstate = GetLocalState();
 	if (inputs.ColumnCount() > 0) {
 		if (aggr.function.combine && UseCombineAPI()) {
-			ConstructTree();
+			gasink.ConstructTree();
 		}
 	}
 }
 
-WindowSegmentTree::~WindowSegmentTree() {
-	if (!aggr.function.destructor || !gstate) {
+WindowSegmentTreeGlobalState::~WindowSegmentTreeGlobalState() {
+	if (!tree.aggr.function.destructor) {
 		// nothing to destroy
 		return;
 	}
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), gstate->allocator);
+	AggregateInputData aggr_input_data(tree.aggr.GetFunctionData(), allocator);
 	// call the destructor for all the intermediate states
 	data_ptr_t address_data[STANDARD_VECTOR_SIZE];
 	Vector addresses(LogicalType::POINTER, data_ptr_cast(address_data));
 	idx_t count = 0;
 	for (idx_t i = 0; i < internal_nodes; i++) {
-		address_data[count++] = data_ptr_t(levels_flat_native.get() + i * state_size);
+		address_data[count++] = data_ptr_t(levels_flat_native.get() + i * tree.state_size);
 		if (count == STANDARD_VECTOR_SIZE) {
-			aggr.function.destructor(addresses, aggr_input_data, count);
+			tree.aggr.function.destructor(addresses, aggr_input_data, count);
 			count = 0;
 		}
 	}
 	if (count > 0) {
-		aggr.function.destructor(addresses, aggr_input_data, count);
+		tree.aggr.function.destructor(addresses, aggr_input_data, count);
 	}
 }
 
@@ -757,23 +778,23 @@ public:
 
 	void FlushStates(bool combining);
 	void ExtractFrame(idx_t begin, idx_t end, data_ptr_t current_state);
-	void WindowSegmentValue(const WindowSegmentTree &tree, idx_t l_idx, idx_t begin, idx_t end,
+	void WindowSegmentValue(const WindowSegmentTreeGlobalState &tree, idx_t l_idx, idx_t begin, idx_t end,
 	                        data_ptr_t current_state);
 	//! Writes result and calls destructors
 	void Finalize(Vector &result, idx_t count);
 
 	void Combine(WindowSegmentTreePart &other, idx_t count);
 
-	void Evaluate(const WindowSegmentTree &tree, const idx_t *begins, const idx_t *ends, Vector &result, idx_t count,
-	              idx_t row_idx, FramePart frame_part);
+	void Evaluate(const WindowSegmentTreeGlobalState &tree, const idx_t *begins, const idx_t *ends, Vector &result,
+	              idx_t count, idx_t row_idx, FramePart frame_part);
 
 protected:
 	//! Initialises the accumulation state vector (statef)
 	void Initialize(idx_t count);
 	//! Accumulate upper tree levels
-	void EvaluateUpperLevels(const WindowSegmentTree &tree, const idx_t *begins, const idx_t *ends, idx_t count,
-	                         idx_t row_idx, FramePart frame_part);
-	void EvaluateLeaves(const WindowSegmentTree &tree, const idx_t *begins, const idx_t *ends, idx_t count,
+	void EvaluateUpperLevels(const WindowSegmentTreeGlobalState &tree, const idx_t *begins, const idx_t *ends,
+	                         idx_t count, idx_t row_idx, FramePart frame_part);
+	void EvaluateLeaves(const WindowSegmentTreeGlobalState &tree, const idx_t *begins, const idx_t *ends, idx_t count,
 	                    idx_t row_idx, FramePart frame_part, FramePart leaf_part);
 
 public:
@@ -851,6 +872,10 @@ WindowSegmentTreePart::WindowSegmentTreePart(ArenaAllocator &allocator, const Ag
 WindowSegmentTreePart::~WindowSegmentTreePart() {
 }
 
+unique_ptr<WindowAggregatorState> WindowSegmentTree::GetGlobalState() const {
+	return make_uniq<WindowSegmentTreeGlobalState>(*this);
+}
+
 unique_ptr<WindowAggregatorState> WindowSegmentTree::GetLocalState() const {
 	auto &gasink = gsink->Cast<WindowAggregatorGlobalState>();
 	auto &inputs = gasink.inputs;
@@ -908,8 +933,8 @@ void WindowSegmentTreePart::ExtractFrame(idx_t begin, idx_t end, data_ptr_t stat
 	}
 }
 
-void WindowSegmentTreePart::WindowSegmentValue(const WindowSegmentTree &tree, idx_t l_idx, idx_t begin, idx_t end,
-                                               data_ptr_t state_ptr) {
+void WindowSegmentTreePart::WindowSegmentValue(const WindowSegmentTreeGlobalState &tree, idx_t l_idx, idx_t begin,
+                                               idx_t end, data_ptr_t state_ptr) {
 	D_ASSERT(begin <= end);
 	if (begin == end || inputs.ColumnCount() == 0) {
 		return;
@@ -945,14 +970,11 @@ void WindowSegmentTreePart::Finalize(Vector &result, idx_t count) {
 	}
 }
 
-void WindowSegmentTree::ConstructTree() {
-	auto &gasink = gsink->Cast<WindowAggregatorGlobalState>();
-	auto &inputs = gasink.inputs;
-
+void WindowSegmentTreeGlobalState::ConstructTree() {
 	D_ASSERT(inputs.ColumnCount() > 0);
 
-	//	Use a temporary scan state to build the tree
-	auto &gtstate = gstate->Cast<WindowSegmentTreeState>().part;
+	//	Single part for constructing the tree
+	WindowSegmentTreePart gtstate(allocator, tree.aggr, inputs, filter_mask);
 
 	// compute space required to store internal nodes of segment tree
 	internal_nodes = 0;
@@ -961,7 +983,7 @@ void WindowSegmentTree::ConstructTree() {
 		level_nodes = (level_nodes + (TREE_FANOUT - 1)) / TREE_FANOUT;
 		internal_nodes += level_nodes;
 	} while (level_nodes > 1);
-	levels_flat_native = make_unsafe_uniq_array<data_t>(internal_nodes * state_size);
+	levels_flat_native = make_unsafe_uniq_array<data_t>(internal_nodes * tree.state_size);
 	levels_flat_start.push_back(0);
 
 	idx_t levels_flat_offset = 0;
@@ -973,8 +995,8 @@ void WindowSegmentTree::ConstructTree() {
 	            (level_current == 0 ? inputs.size() : levels_flat_offset - levels_flat_start[level_current - 1])) > 1) {
 		for (idx_t pos = 0; pos < level_size; pos += TREE_FANOUT) {
 			// compute the aggregate for this entry in the segment tree
-			data_ptr_t state_ptr = levels_flat_native.get() + (levels_flat_offset * state_size);
-			aggr.function.initialize(state_ptr);
+			data_ptr_t state_ptr = levels_flat_native.get() + (levels_flat_offset * tree.state_size);
+			gtstate.aggr.function.initialize(state_ptr);
 			gtstate.WindowSegmentValue(*this, level_current, pos, MinValue(level_size, pos + TREE_FANOUT), state_ptr);
 			gtstate.FlushStates(level_current > 0);
 
@@ -987,13 +1009,13 @@ void WindowSegmentTree::ConstructTree() {
 
 	// Corner case: single element in the window
 	if (levels_flat_offset == 0) {
-		aggr.function.initialize(levels_flat_native.get());
+		gtstate.aggr.function.initialize(levels_flat_native.get());
 	}
 }
 
 void WindowSegmentTree::Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result, idx_t count,
                                  idx_t row_idx) const {
-
+	const auto &gtstate = gsink->Cast<WindowSegmentTreeGlobalState>();
 	auto &ltstate = lstate.Cast<WindowSegmentTreeState>();
 	auto window_begin = FlatVector::GetData<const idx_t>(bounds.data[WINDOW_BEGIN]);
 	auto window_end = FlatVector::GetData<const idx_t>(bounds.data[WINDOW_END]);
@@ -1003,7 +1025,7 @@ void WindowSegmentTree::Evaluate(WindowAggregatorState &lstate, const DataChunk 
 	auto &part = ltstate.part;
 	if (exclude_mode != WindowExcludeMode::NO_OTHER) {
 		// 1. evaluate the tree left of the excluded part
-		part.Evaluate(*this, window_begin, peer_begin, result, count, row_idx, WindowSegmentTreePart::LEFT);
+		part.Evaluate(gtstate, window_begin, peer_begin, result, count, row_idx, WindowSegmentTreePart::LEFT);
 
 		// 2. set up a second state for the right of the excluded part
 		if (!ltstate.right_part) {
@@ -1012,21 +1034,19 @@ void WindowSegmentTree::Evaluate(WindowAggregatorState &lstate, const DataChunk 
 		auto &right_part = *ltstate.right_part;
 
 		// 3. evaluate the tree right of the excluded part
-		right_part.Evaluate(*this, peer_end, window_end, result, count, row_idx, WindowSegmentTreePart::RIGHT);
+		right_part.Evaluate(gtstate, peer_end, window_end, result, count, row_idx, WindowSegmentTreePart::RIGHT);
 
 		// 4. combine the buffer state into the Segment Tree State
 		part.Combine(right_part, count);
 	} else {
-		part.Evaluate(*this, window_begin, window_end, result, count, row_idx, WindowSegmentTreePart::FULL);
+		part.Evaluate(gtstate, window_begin, window_end, result, count, row_idx, WindowSegmentTreePart::FULL);
 	}
 
 	part.Finalize(result, count);
 }
 
-void WindowSegmentTreePart::Evaluate(const WindowSegmentTree &tree, const idx_t *begins, const idx_t *ends,
+void WindowSegmentTreePart::Evaluate(const WindowSegmentTreeGlobalState &tree, const idx_t *begins, const idx_t *ends,
                                      Vector &result, idx_t count, idx_t row_idx, FramePart frame_part) {
-	D_ASSERT(aggr.function.combine && tree.UseCombineAPI());
-
 	Initialize(count);
 
 	if (order_insensitive) {
@@ -1051,11 +1071,11 @@ void WindowSegmentTreePart::Initialize(idx_t count) {
 	}
 }
 
-void WindowSegmentTreePart::EvaluateUpperLevels(const WindowSegmentTree &tree, const idx_t *begins, const idx_t *ends,
-                                                idx_t count, idx_t row_idx, FramePart frame_part) {
+void WindowSegmentTreePart::EvaluateUpperLevels(const WindowSegmentTreeGlobalState &tree, const idx_t *begins,
+                                                const idx_t *ends, idx_t count, idx_t row_idx, FramePart frame_part) {
 	auto fdata = FlatVector::GetData<data_ptr_t>(statef);
 
-	const auto exclude_mode = tree.exclude_mode;
+	const auto exclude_mode = tree.tree.exclude_mode;
 	const bool begin_on_curr_row = frame_part == FramePart::RIGHT && exclude_mode == WindowExcludeMode::CURRENT_ROW;
 	const bool end_on_curr_row = frame_part == FramePart::LEFT && exclude_mode == WindowExcludeMode::CURRENT_ROW;
 
@@ -1145,8 +1165,9 @@ void WindowSegmentTreePart::EvaluateUpperLevels(const WindowSegmentTree &tree, c
 	FlushStates(true);
 }
 
-void WindowSegmentTreePart::EvaluateLeaves(const WindowSegmentTree &tree, const idx_t *begins, const idx_t *ends,
-                                           idx_t count, idx_t row_idx, FramePart frame_part, FramePart leaf_part) {
+void WindowSegmentTreePart::EvaluateLeaves(const WindowSegmentTreeGlobalState &tree, const idx_t *begins,
+                                           const idx_t *ends, idx_t count, idx_t row_idx, FramePart frame_part,
+                                           FramePart leaf_part) {
 
 	auto fdata = FlatVector::GetData<data_ptr_t>(statef);
 
@@ -1155,7 +1176,7 @@ void WindowSegmentTreePart::EvaluateLeaves(const WindowSegmentTree &tree, const 
 	// The current row is the leftmost value of the right hand side.
 	const bool compute_left = leaf_part != FramePart::RIGHT;
 	const bool compute_right = leaf_part != FramePart::LEFT;
-	const auto exclude_mode = tree.exclude_mode;
+	const auto exclude_mode = tree.tree.exclude_mode;
 	const bool begin_on_curr_row = frame_part == FramePart::RIGHT && exclude_mode == WindowExcludeMode::CURRENT_ROW;
 	const bool end_on_curr_row = frame_part == FramePart::LEFT && exclude_mode == WindowExcludeMode::CURRENT_ROW;
 	// with EXCLUDE TIES, in addition to the frame part right of the peer group's end, we also need to consider the
