@@ -15,6 +15,8 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 #endif
 
 namespace duckdb {
@@ -42,6 +44,18 @@ ChildFieldIDs ChildFieldIDs::Copy() const {
 	for (const auto &id : *ids) {
 		result.ids->emplace(id.first, id.second.Copy());
 	}
+	return result;
+}
+
+void ChildFieldIDs::Serialize(Serializer &serializer) const {
+	D_ASSERT(ids);
+	serializer.WritePropertyWithDefault<case_insensitive_map_t<FieldID>>(100, "ids", ids.operator*());
+}
+
+ChildFieldIDs ChildFieldIDs::Deserialize(Deserializer &deserializer) {
+	ChildFieldIDs result;
+	D_ASSERT(result.ids);
+	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<FieldID>>(100, "ids", result.ids.operator*());
 	return result;
 }
 
