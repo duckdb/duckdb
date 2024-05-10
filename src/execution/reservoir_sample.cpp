@@ -48,8 +48,8 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 	idx_t remaining = input.size();
 	idx_t base_offset = 0;
 	while (true) {
-		idx_t offset =
-		    old_base_reservoir_sample.next_index_to_sample - old_base_reservoir_sample.num_entries_to_skip_b4_next_sample;
+		idx_t offset = old_base_reservoir_sample.next_index_to_sample -
+		               old_base_reservoir_sample.num_entries_to_skip_b4_next_sample;
 		if (offset >= remaining) {
 			// not in this chunk! increment current count and go to the next chunk
 			old_base_reservoir_sample.num_entries_to_skip_b4_next_sample += remaining;
@@ -95,7 +95,7 @@ void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk, dou
 	D_ASSERT(input.ColumnCount() == reservoir_data_chunk->ColumnCount());
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
 		reservoir_data_chunk->SetValue(col_idx, old_base_reservoir_sample.min_weighted_entry_index,
-		                          input.GetValue(col_idx, index_in_chunk));
+		                               input.GetValue(col_idx, index_in_chunk));
 	}
 	old_base_reservoir_sample.ReplaceElement(with_weight);
 }
@@ -161,7 +161,6 @@ ReservoirSamplePercentage::ReservoirSamplePercentage(Allocator &allocator, doubl
 	reservoir_sample_size = idx_t(sample_percentage * RESERVOIR_THRESHOLD);
 	current_sample = make_uniq<ReservoirSample>(allocator, reservoir_sample_size, random.NextRandomInteger());
 }
-
 
 ReservoirSamplePercentage::ReservoirSamplePercentage(double percentage, int64_t seed)
     : ReservoirSamplePercentage(Allocator::DefaultAllocator(), percentage, seed) {

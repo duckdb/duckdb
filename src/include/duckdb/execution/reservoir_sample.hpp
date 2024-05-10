@@ -61,7 +61,7 @@ public:
 	bool destroyed;
 
 public:
-	explicit BlockingSample(int64_t seed) : old_base_reservoir_sample(seed), random(old_base_reservoir_sample.random){
+	explicit BlockingSample(int64_t seed) : old_base_reservoir_sample(seed), random(old_base_reservoir_sample.random) {
 		base_reservoir_sample = nullptr;
 	}
 	virtual ~BlockingSample() {
