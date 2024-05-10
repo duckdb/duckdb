@@ -190,7 +190,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		char a[32] = {0};
 		a[0] = '4';
 		if (strncmp(a, metadata_field[0].data(), 32) != 0) {
-			// metadata do not looks right, add this to the error message
+			// metadata does not look right, add this to the error message
 			metadata_mismatch_error =
 			    "\n" + StringUtil::Format("Extension \"%s\" does not have metadata compatible with the DuckDB "
 			                              "loading it (version %s, platform %s)",
