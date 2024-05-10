@@ -1,8 +1,9 @@
 #include "duckdb/planner/expression_binder/alter_binder.hpp"
 
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/planner/table_binding.hpp"
 
 namespace duckdb {
 
