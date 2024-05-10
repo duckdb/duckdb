@@ -444,6 +444,7 @@ unordered_map<string, string> StringUtil::ParseJSONMap(const string &json) {
 		}
 		result.emplace(yyjson_get_str(key), yyjson_get_str(value));
 	}
+	yyjson_doc_free(doc);
 	return result;
 }
 
