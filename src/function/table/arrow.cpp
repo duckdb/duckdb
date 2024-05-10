@@ -10,6 +10,7 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
@@ -257,12 +258,21 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 	if (input.inputs[0].IsNull() || input.inputs[1].IsNull() || input.inputs[2].IsNull()) {
 		throw BinderException("arrow_scan: pointers cannot be null");
 	}
+	auto &ref = input.ref;
+
+	shared_ptr<DependencyItem> dependency;
+	if (ref.external_dependency) {
+		// This was created during the replacement scan for Python (see python_replacement_scan.cpp)
+		// this object is the owning reference to 'stream_factory_ptr' and has to be kept alive.
+		dependency = ref.external_dependency->GetDependency("replacement_cache");
+		D_ASSERT(dependency);
+	}
 
 	auto stream_factory_ptr = input.inputs[0].GetPointer();
 	auto stream_factory_produce = (stream_factory_produce_t)input.inputs[1].GetPointer();       // NOLINT
 	auto stream_factory_get_schema = (stream_factory_get_schema_t)input.inputs[2].GetPointer(); // NOLINT
 
-	auto res = make_uniq<ArrowScanFunctionData>(stream_factory_produce, stream_factory_ptr);
+	auto res = make_uniq<ArrowScanFunctionData>(stream_factory_produce, stream_factory_ptr, std::move(dependency));
 
 	auto &data = *res;
 	stream_factory_get_schema(reinterpret_cast<ArrowArrayStream *>(stream_factory_ptr), data.schema_root.arrow_schema);
