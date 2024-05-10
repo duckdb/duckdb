@@ -2,8 +2,6 @@
 # description: Test PRAGMA custom_profiling_settings
 # group: [pragma]
 
-require json
-
 statement ok
 PRAGMA enable_verification;
 
