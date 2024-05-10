@@ -472,13 +472,13 @@ unique_ptr<ReadCSVData> ReadCSVData::Deserialize(Deserializer &deserializer) {
 void ReservoirSample::Serialize(Serializer &serializer) const {
 	BlockingSample::Serialize(serializer);
 	serializer.WritePropertyWithDefault<idx_t>(200, "sample_count", sample_count);
-	serializer.WritePropertyWithDefault<unique_ptr<ReservoirChunk>>(201, "reservoir_chunk", reservoir_chunk, nullptr);
+	serializer.WritePropertyWithDefault<unique_ptr<ReservoirChunk>>(201, "reservoir_chunk", reservoir_chunk);
 }
 
 unique_ptr<BlockingSample> ReservoirSample::Deserialize(Deserializer &deserializer) {
 	auto sample_count = deserializer.ReadPropertyWithDefault<idx_t>(200, "sample_count");
 	auto result = duckdb::unique_ptr<ReservoirSample>(new ReservoirSample(sample_count));
-	deserializer.ReadPropertyWithDefault<unique_ptr<ReservoirChunk>>(201, "reservoir_chunk", result->reservoir_chunk, nullptr);
+	deserializer.ReadPropertyWithDefault<unique_ptr<ReservoirChunk>>(201, "reservoir_chunk", result->reservoir_chunk);
 	return std::move(result);
 }
 
