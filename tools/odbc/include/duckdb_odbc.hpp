@@ -3,6 +3,7 @@
 
 // needs to be first because BOOL
 #include "duckdb.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 
 #include "duckdb/common/windows.hpp"
 #include "descriptor.hpp"
@@ -41,7 +42,7 @@ struct OdbcHandleEnv : public OdbcHandle {
 	OdbcHandleEnv() : OdbcHandle(OdbcHandleType::ENV) {
 		duckdb::DBConfig ODBC_CONFIG;
 		ODBC_CONFIG.SetOptionByName("duckdb_api", "odbc");
-		db = make_shared<DuckDB>(nullptr, &ODBC_CONFIG);
+		db = make_shared_ptr<DuckDB>(nullptr, &ODBC_CONFIG);
 	};
 
 	shared_ptr<DuckDB> db;

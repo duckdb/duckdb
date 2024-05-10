@@ -464,15 +464,7 @@ struct FSSTVector {
 	DUCKDB_API static idx_t GetCount(Vector &vector);
 };
 
-enum class MapInvalidReason : uint8_t {
-	VALID,
-	NULL_KEY_LIST,
-	NULL_KEY,
-	DUPLICATE_KEY,
-	NULL_VALUE_LIST,
-	NOT_ALIGNED,
-	INVALID_PARAMS
-};
+enum class MapInvalidReason : uint8_t { VALID, NULL_KEY, DUPLICATE_KEY, NOT_ALIGNED, INVALID_PARAMS };
 
 struct MapVector {
 	DUCKDB_API static const Vector &GetKeys(const Vector &vector);

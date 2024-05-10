@@ -84,10 +84,10 @@ class Prog {
     int out()       { return out_opcode_>>4; }
     int out1()      { DCHECK(opcode() == kInstAlt || opcode() == kInstAltMatch); return out1_; }
     int cap()       { DCHECK_EQ(opcode(), kInstCapture); return cap_; }
-    int lo()        { DCHECK_EQ(opcode(), kInstByteRange); return lo_; }
-    int hi()        { DCHECK_EQ(opcode(), kInstByteRange); return hi_; }
-    int foldcase()  { DCHECK_EQ(opcode(), kInstByteRange); return hint_foldcase_&1; }
-    int hint()      { DCHECK_EQ(opcode(), kInstByteRange); return hint_foldcase_>>1; }
+    int lo()        { DCHECK_EQ(opcode(), kInstByteRange); return byte_range.lo_; }
+    int hi()        { DCHECK_EQ(opcode(), kInstByteRange); return byte_range.hi_; }
+    int foldcase()  { DCHECK_EQ(opcode(), kInstByteRange); return byte_range.hint_foldcase_&1; }
+    int hint()      { DCHECK_EQ(opcode(), kInstByteRange); return byte_range.hint_foldcase_>>1; }
     int match_id()  { DCHECK_EQ(opcode(), kInstMatch); return match_id_; }
     EmptyOp empty() { DCHECK_EQ(opcode(), kInstEmptyWidth); return empty_; }
 
@@ -103,7 +103,7 @@ class Prog {
       DCHECK_EQ(opcode(), kInstByteRange);
       if (foldcase() && 'A' <= c && c <= 'Z')
         c += 'a' - 'A';
-      return lo_ <= c && c <= hi_;
+      return byte_range.lo_ <= c && c <= byte_range.hi_;
     }
 
     // Returns string representation for debugging.
@@ -155,7 +155,7 @@ class Prog {
                            //   means there are no remaining possibilities,
                            //   which is most likely for character classes.
                            //   foldcase: A-Z -> a-z before checking range.
-      };
+      } byte_range;
 
       EmptyOp empty_;       // opcode == kInstEmptyWidth
                             //   empty_ is bitwise OR of kEmpty* flags above.
@@ -227,7 +227,7 @@ class Prog {
     } else if (prefix_size_ != 1) {
       return PrefixAccel_FrontAndBack(data, size);
     } else {
-      return memchr(data, prefix_front_, size);
+      return memchr(data, prefix_front_back.prefix_front_, size);
     }
   }
 
@@ -426,7 +426,7 @@ class Prog {
     struct {
       int prefix_front_;    // first byte of prefix
       int prefix_back_;     // last byte of prefix
-    };
+    } prefix_front_back;
   };
 
   int list_count_;                  // count of lists (see above)

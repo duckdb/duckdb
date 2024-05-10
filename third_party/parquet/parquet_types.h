@@ -61,7 +61,8 @@ struct ConvertedType {
     INT_64 = 18,
     JSON = 19,
     BSON = 20,
-    INTERVAL = 21
+    INTERVAL = 21,
+    NULL_TYPE = 24
   };
 };
 

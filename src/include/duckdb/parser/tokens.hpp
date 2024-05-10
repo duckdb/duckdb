@@ -97,6 +97,7 @@ class SubqueryRef;
 class TableFunctionRef;
 class EmptyTableRef;
 class ExpressionListRef;
+class ColumnDataRef;
 class PivotRef;
 class ShowRef;
 

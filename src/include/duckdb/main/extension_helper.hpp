@@ -14,8 +14,12 @@
 
 #include <string>
 
+#include <string>
+
 namespace duckdb {
+
 class DuckDB;
+class HTTPLogger;
 
 enum class ExtensionLoadResult : uint8_t { LOADED_EXTENSION = 0, EXTENSION_UNKNOWN = 1, NOT_LOADED = 2 };
 
@@ -207,7 +211,8 @@ private:
 	static unique_ptr<ExtensionInstallInfo> InstallExtensionInternal(DBConfig &config, FileSystem &fs,
 	                                                                 const string &local_path, const string &extension,
 	                                                                 bool force_install, const string &repository,
-	                                                                 const string &version);
+	                                                                 const string &version,
+	                                                                 optional_ptr<HTTPLogger> http_logger = nullptr);
 	static const vector<string> PathComponents();
 	static string DefaultExtensionFolder(FileSystem &fs);
 	static bool AllowAutoInstall(const string &extension);

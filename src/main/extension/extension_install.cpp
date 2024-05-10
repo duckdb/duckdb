@@ -2,6 +2,8 @@
 #include "duckdb/common/gzip_file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/logging/http_logger.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/main/extension_install_info.hpp"
@@ -149,10 +151,13 @@ unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtension(ClientContext
 	// Install is currently a no-op
 	return nullptr;
 #endif
-	auto &config = DBConfig::GetConfig(context);
+	auto &db_config = DBConfig::GetConfig(context);
 	auto &fs = FileSystem::GetFileSystem(context);
 	string local_path = ExtensionDirectory(context);
-	return InstallExtensionInternal(config, fs, local_path, extension, force_install, repository, version);
+	optional_ptr<HTTPLogger> http_logger =
+	    ClientConfig::GetConfig(context).enable_http_logging ? context.client_data->http_logger.get() : nullptr;
+	return InstallExtensionInternal(db_config, fs, local_path, extension, force_install, repository, version,
+	                                http_logger);
 }
 
 unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, const string &path, idx_t &file_size) {
@@ -305,7 +310,7 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DBConfig &config,
 static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DBConfig &config, const string &url,
                                                            const string &extension_name, const string &repository_url,
                                                            const string &temp_path, const string &local_extension_path,
-                                                           bool force_install) {
+                                                           bool force_install, optional_ptr<HTTPLogger> http_logger) {
 	string no_http = StringUtil::Replace(url, "http://", "");
 
 	idx_t next = no_http.find('/', 0);
@@ -319,6 +324,9 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DBConfig &config, con
 
 	auto url_base = "http://" + hostname_without_http;
 	duckdb_httplib::Client cli(url_base.c_str());
+	if (http_logger) {
+		cli.set_logger(http_logger->GetLogger<duckdb_httplib::Request, duckdb_httplib::Response>());
+	}
 
 	duckdb_httplib::Headers headers = {
 	    {"User-Agent", StringUtil::Format("%s %s", config.UserAgent(), DuckDB::SourceID())}};

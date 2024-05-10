@@ -405,6 +405,11 @@
         "id": 207,
         "name": "options",
         "type": "case_insensitive_map_t<vector<Value>>"
+      },
+      {
+        "id": 208,
+        "name": "select_statement",
+        "type": "QueryNode*"
       }
     ]
   },

@@ -68,7 +68,7 @@ private:
 	void Initialize(const char *path, DBConfig *config);
 	void CreateMainDatabase();
 
-	void Configure(DBConfig &config);
+	void Configure(DBConfig &config, const char *path);
 
 private:
 	shared_ptr<BufferManager> buffer_manager;

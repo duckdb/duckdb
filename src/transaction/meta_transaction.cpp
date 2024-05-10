@@ -63,7 +63,7 @@ void MetaTransaction::RemoveTransaction(AttachedDatabase &db) {
 	for (idx_t i = 0; i < all_transactions.size(); i++) {
 		auto &db_entry = all_transactions[i];
 		if (RefersToSameObject(db_entry.get(), db)) {
-			all_transactions.erase(all_transactions.begin() + i);
+			all_transactions.erase_at(i);
 			break;
 		}
 	}
@@ -134,6 +134,9 @@ void MetaTransaction::ModifyDatabase(AttachedDatabase &db) {
 	}
 	if (!modified_database) {
 		modified_database = &db;
+
+		auto &transaction = GetTransaction(db);
+		transaction.SetReadWrite();
 		return;
 	}
 	if (&db != modified_database.get()) {

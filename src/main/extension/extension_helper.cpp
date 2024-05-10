@@ -321,7 +321,7 @@ vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(DatabaseInstance
 #endif
 
 	// TODO unstdstringify?
-	for (const auto& extension : db.LoadedExtensions()) {
+	for (const auto &extension : db.LoadedExtensions()) {
 		if (seen_extensions.find(extension) != seen_extensions.end()) {
 			const auto &loaded_extension_data = db.LoadedExtensionsData();
 			const auto &loaded_install_info = loaded_extension_data.find(extension);
@@ -343,8 +343,8 @@ vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(DatabaseInstance
 		}
 	}
 
-//	auto &loaded_extensions = db.LoadedExtensions();
-//	auto &loaded_extensions_data = db.LoadedExtensionsData();
+	//	auto &loaded_extensions = db.LoadedExtensions();
+	//	auto &loaded_extensions_data = db.LoadedExtensionsData();
 
 	return result;
 }
@@ -354,7 +354,8 @@ ExtensionUpdateResult ExtensionHelper::UpdateExtension(ClientContext &context, c
 	return ExtensionHelper::UpdateExtension(DatabaseInstance::GetDatabase(context), *fs, extension_name);
 }
 
-ExtensionUpdateResult ExtensionHelper::UpdateExtension(DatabaseInstance &db, FileSystem &fs, const string &extension_name) {
+ExtensionUpdateResult ExtensionHelper::UpdateExtension(DatabaseInstance &db, FileSystem &fs,
+                                                       const string &extension_name) {
 	auto &config = DBConfig::GetConfig(db);
 	auto ext_directory = ExtensionHelper::ExtensionDirectory(config, fs);
 

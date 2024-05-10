@@ -1,21 +1,15 @@
 import duckdb
 import os
+import pytest
 
-try:
-    import pyarrow
-    import pyarrow.parquet
-    import pyarrow.dataset
-    import numpy as np
-
-    can_run = True
-except:
-    can_run = False
+pyarrow = pytest.importorskip("pyarrow")
+pyarrow.parquet = pytest.importorskip("pyarrow.parquet")
+pyarrow.dataset = pytest.importorskip("pyarrow.dataset")
+np = pytest.importorskip("numpy")
 
 
 class TestArrowRecordBatchReader(object):
     def test_parallel_reader(self, duckdb_cursor):
-        if not can_run:
-            return
 
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("PRAGMA threads=4")
@@ -45,8 +39,6 @@ class TestArrowRecordBatchReader(object):
         )
 
     def test_parallel_reader_replacement_scans(self, duckdb_cursor):
-        if not can_run:
-            return
 
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("PRAGMA threads=4")
@@ -67,20 +59,18 @@ class TestArrowRecordBatchReader(object):
 
         assert (
             duckdb_conn.execute(
-                "select count(*) from reader where first_name=\'Jose\' and salary > 134708.82"
+                "select count(*) r1 from reader where first_name=\'Jose\' and salary > 134708.82"
             ).fetchone()[0]
             == 12
         )
         assert (
             duckdb_conn.execute(
-                "select count(*) from reader where first_name=\'Jose\' and salary > 134708.82"
+                "select count(*) r2 from reader where first_name=\'Jose\' and salary > 134708.82"
             ).fetchone()[0]
             == 0
         )
 
     def test_parallel_reader_register(self, duckdb_cursor):
-        if not can_run:
-            return
 
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("PRAGMA threads=4")
@@ -115,8 +105,6 @@ class TestArrowRecordBatchReader(object):
         )
 
     def test_parallel_reader_default_conn(self, duckdb_cursor):
-        if not can_run:
-            return
 
         parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data', 'userdata1.parquet')
 

@@ -16,6 +16,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include <functional>
@@ -172,6 +173,8 @@ public:
 	DUCKDB_API virtual string ExpandPath(const string &path);
 	//! Returns the system-available memory in bytes. Returns DConstants::INVALID_INDEX if the system function fails.
 	DUCKDB_API static optional_idx GetAvailableMemory();
+	//! Returns the space available on the disk. Returns DConstants::INVALID_INDEX if the information was not available.
+	DUCKDB_API static optional_idx GetAvailableDiskSpace(const string &path);
 	//! Path separator for path
 	DUCKDB_API virtual string PathSeparator(const string &path);
 	//! Checks if path is starts with separator (i.e., '/' on UNIX '\\' on Windows)

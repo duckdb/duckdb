@@ -54,7 +54,8 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 		    make_uniq<FixedSizeAllocator>(sizeof(Node16), block_manager),
 		    make_uniq<FixedSizeAllocator>(sizeof(Node48), block_manager),
 		    make_uniq<FixedSizeAllocator>(sizeof(Node256), block_manager)};
-		allocators = make_shared<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>>(std::move(allocator_array));
+		allocators =
+		    make_shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>>(std::move(allocator_array));
 	}
 
 	// deserialize lazily
@@ -1114,7 +1115,7 @@ void ART::WritePartialBlocks() {
 
 	// use the partial block manager to serialize all allocator data
 	auto &block_manager = table_io_manager.GetIndexBlockManager();
-	PartialBlockManager partial_block_manager(block_manager, CheckpointType::FULL_CHECKPOINT);
+	PartialBlockManager partial_block_manager(block_manager, PartialBlockType::FULL_CHECKPOINT);
 
 	for (auto &allocator : *allocators) {
 		allocator->SerializeBuffers(partial_block_manager);

@@ -78,7 +78,9 @@ benchmark/micro/copy/to_parquet_partition_by_few.benchmark
 benchmark/micro/copy/to_parquet_partition_by_many.benchmark
 benchmark/micro/csv/16_byte_values.benchmark
 benchmark/micro/csv/1_byte_values.benchmark
+benchmark/micro/csv/ignore_errors.benchmark
 benchmark/micro/csv/multiple_read.benchmark
+benchmark/micro/csv/multiple_small_files.benchmark
 benchmark/micro/csv/multiple_small_read_csv.benchmark
 benchmark/micro/csv/null_padding.benchmark
 benchmark/micro/csv/projection_pushdown.benchmark
@@ -86,6 +88,7 @@ benchmark/micro/csv/read.benchmark
 benchmark/micro/csv/small_csv.benchmark
 benchmark/micro/csv/sniffer.benchmark
 benchmark/micro/csv/sniffer_quotes.benchmark
+benchmark/micro/csv/time_type.benchmark
 benchmark/micro/cte/cte.benchmark
 benchmark/micro/cte/materialized_cte.benchmark
 benchmark/micro/date/extract_month.benchmark
@@ -168,6 +171,7 @@ benchmark/micro/nulls/no_nulls_addition.benchmark
 benchmark/micro/nulls/null_addition.benchmark
 benchmark/micro/order/orderby.benchmark
 benchmark/micro/pushdown/or_pushdown.benchmark
+benchmark/micro/result_collection/batched_stream_query.benchmark
 benchmark/micro/simd/auto-vectorization.benchmark
 benchmark/micro/string/bitstring.benchmark
 benchmark/micro/string/concat_long.benchmark
