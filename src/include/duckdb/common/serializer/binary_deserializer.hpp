@@ -89,6 +89,7 @@ private:
 	}
 
 	void ReadData(data_ptr_t buffer, idx_t read_size) {
+		D_ASSERT(!has_buffered_field);
 		stream.ReadData(buffer, read_size);
 	}
 
