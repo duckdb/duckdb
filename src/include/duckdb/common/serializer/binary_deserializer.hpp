@@ -103,7 +103,7 @@ private:
 	template <class T>
 	T VarIntDecode() {
 		// FIXME: maybe we should pass a source to EncodingUtil instead
-		uint8_t buffer[16];
+		uint8_t buffer[16] = {};
 		idx_t varint_size;
 		for (varint_size = 0; varint_size < 16; varint_size++) {
 			ReadData(buffer + varint_size, 1);
