@@ -25,6 +25,8 @@
 
 #include "duckdb/common/fast_mem.hpp"
 
+namespace duckdb_yyjson {
+
 /*==============================================================================
  * Compile-time Options
  *============================================================================*/
@@ -6001,3 +6003,5 @@ yyjson_api_inline yyjson_mut_val *yyjson_mut_doc_get_pointer(
 #endif /* extern "C" end */
 
 #endif /* YYJSON_H */
+
+} // namespace duckdb_yyjson
