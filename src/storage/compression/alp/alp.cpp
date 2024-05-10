@@ -44,8 +44,8 @@ CompressionFunction AlpCompressionFun::GetFunction(PhysicalType type) {
 	}
 }
 
-bool AlpCompressionFun::TypeIsSupported(PhysicalType type) {
-	switch (type) {
+bool AlpCompressionFun::TypeIsSupported(const CompressionInfo &info) {
+	switch (info.GetPhysicalType()) {
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
 		return true;

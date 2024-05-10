@@ -35,8 +35,9 @@ struct AlpRDCompressionState : public CompressionState {
 
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
-	explicit AlpRDCompressionState(ColumnDataCheckpointer &checkpointer, AlpRDAnalyzeState<T> *analyze_state)
-	    : checkpointer(checkpointer),
+
+	AlpRDCompressionState(ColumnDataCheckpointer &checkpointer, AlpRDAnalyzeState<T> *analyze_state)
+	    : CompressionState(analyze_state->info), checkpointer(checkpointer),
 	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_ALPRD)) {
 		//! State variables from the analyze step that are needed for compression
 		state.left_parts_dict_map = std::move(analyze_state->state.left_parts_dict_map);

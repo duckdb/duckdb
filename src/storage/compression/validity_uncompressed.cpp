@@ -182,9 +182,9 @@ struct ValidityAnalyzeState : public AnalyzeState {
 	idx_t count;
 };
 
-unique_ptr<AnalyzeState> ValidityInitAnalyze(ColumnData &col_data, PhysicalType) {
+unique_ptr<AnalyzeState> ValidityInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	const auto block_size = col_data.GetBlockManager().GetBlockSize();
-	CompressionInfo info(block_size);
+	CompressionInfo info(block_size, type);
 	return make_uniq<ValidityAnalyzeState>(info);
 }
 

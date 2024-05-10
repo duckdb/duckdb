@@ -91,9 +91,9 @@ struct FSSTAnalyzeState : public AnalyzeState {
 	idx_t empty_strings;
 };
 
-unique_ptr<AnalyzeState> FSSTStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType) {
+unique_ptr<AnalyzeState> FSSTStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	const auto block_size = col_data.GetBlockManager().GetBlockSize();
-	CompressionInfo info(block_size);
+	CompressionInfo info(block_size, type);
 	return make_uniq<FSSTAnalyzeState>(info);
 }
 
@@ -190,7 +190,7 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	    BitpackingPrimitives::GetRequiredSize(string_count + state.empty_strings, minimum_width);
 
 	auto estimated_base_size = double(bitpacked_offsets_size + compressed_dict_size) * (1 / ANALYSIS_SAMPLE_SIZE);
-	auto num_blocks = estimated_base_size / double(state.info.block_size - sizeof(duckdb_fsst_decoder_t));
+	auto num_blocks = estimated_base_size / double(state.info.GetBlockSize() - sizeof(duckdb_fsst_decoder_t));
 	auto symtable_size = num_blocks * sizeof(duckdb_fsst_decoder_t);
 	auto estimated_size = estimated_base_size + symtable_size;
 
@@ -251,7 +251,7 @@ public:
 		current_dictionary.size += compressed_string_len;
 		auto dict_pos = current_end_ptr - current_dictionary.size;
 		memcpy(dict_pos, compressed_string, compressed_string_len);
-		current_dictionary.Verify(info.block_size);
+		current_dictionary.Verify(info.GetBlockSize());
 
 		// We just push the string length to effectively delta encode the strings
 		index_buffer.push_back(NumericCast<uint32_t>(compressed_string_len));
@@ -301,7 +301,7 @@ public:
 	bool HasEnoughSpace(size_t string_len) {
 		auto required_size = GetRequiredSize(string_len);
 
-		if (required_size <= info.block_size) {
+		if (required_size <= info.GetBlockSize()) {
 			last_fitting_size = required_size;
 			return true;
 		}
@@ -323,7 +323,7 @@ public:
 	idx_t Finalize() {
 		auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
 		auto handle = buffer_manager.Pin(current_segment->block);
-		D_ASSERT(current_dictionary.end == info.block_size);
+		D_ASSERT(current_dictionary.end == info.GetBlockSize());
 
 		// calculate sizes
 		auto compressed_index_buffer_size =
@@ -359,11 +359,11 @@ public:
 
 		if (total_size >= info.GetCompactionFlushLimit()) {
 			// the block is full enough, don't bother moving around the dictionary
-			return info.block_size;
+			return info.GetBlockSize();
 		}
 
 		// the block has space left: figure out how much space we can save
-		auto move_amount = info.block_size - total_size;
+		auto move_amount = info.GetBlockSize() - total_size;
 		// move the dictionary so it lines up exactly with the offsets
 		auto new_dictionary_offset = symbol_table_offset + fsst_serialized_symbol_table_size;
 		memmove(base_ptr + new_dictionary_offset, base_ptr + current_dictionary.end - current_dictionary.size,
@@ -698,8 +698,8 @@ CompressionFunction FSSTFun::GetFunction(PhysicalType data_type) {
 	    FSSTStorage::StringScanPartial<false>, FSSTStorage::StringFetchRow, UncompressedFunctions::EmptySkip);
 }
 
-bool FSSTFun::TypeIsSupported(PhysicalType type) {
-	return type == PhysicalType::VARCHAR;
+bool FSSTFun::TypeIsSupported(const CompressionInfo &info) {
+	return info.GetPhysicalType() == PhysicalType::VARCHAR;
 }
 
 //===--------------------------------------------------------------------===//

@@ -31,9 +31,9 @@ struct StringAnalyzeState : public AnalyzeState {
 	idx_t overflow_strings;
 };
 
-unique_ptr<AnalyzeState> UncompressedStringStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType) {
+unique_ptr<AnalyzeState> UncompressedStringStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	const auto block_size = col_data.GetBlockManager().GetBlockSize();
-	CompressionInfo info(block_size);
+	CompressionInfo info(block_size, type);
 	return make_uniq<StringAnalyzeState>(info);
 }
 
@@ -187,7 +187,7 @@ idx_t UncompressedStringStorage::FinalizeAppend(ColumnSegment &segment, SegmentS
 	auto offset_size = DICTIONARY_HEADER_SIZE + segment.count * sizeof(int32_t);
 	auto total_size = offset_size + dict.size;
 
-	CompressionInfo info(segment.GetBlockManager().GetBlockSize());
+	CompressionInfo info(segment.GetBlockManager().GetBlockSize(), segment.type.InternalType());
 	UncompressedStringStorage uncompressed_str_storage(info);
 	if (total_size >= uncompressed_str_storage.compaction_flush_limit) {
 		// the block is full enough, don't bother moving around the dictionary

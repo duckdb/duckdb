@@ -28,15 +28,28 @@ struct ColumnFetchState;
 struct ColumnScanState;
 struct SegmentScanState;
 
-struct CompressionInfo {
-	explicit CompressionInfo(const idx_t block_size) : block_size(block_size) {};
+class CompressionInfo {
+public:
+	explicit CompressionInfo(const PhysicalType &type) : type(type) {};
+	CompressionInfo(const idx_t block_size, const PhysicalType &type) : block_size(block_size), type(type) {};
 
-	//! The size below which the segment is compacted on flushing
-	idx_t GetCompactionFlushLimit() {
+public:
+	//! The size below which the segment is compacted on flushing.
+	idx_t GetCompactionFlushLimit() const {
 		return block_size / 5 * 4;
 	}
+	//! The block size for blocks using this compression.
+	idx_t GetBlockSize() const {
+		return block_size;
+	}
+	//! The physical type to compress.
+	PhysicalType GetPhysicalType() const {
+		return type;
+	}
 
+private:
 	idx_t block_size;
+	PhysicalType type;
 };
 
 struct AnalyzeState {

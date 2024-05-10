@@ -6,7 +6,7 @@
 namespace duckdb {
 
 typedef CompressionFunction (*get_compression_function_t)(PhysicalType type);
-typedef bool (*compression_supports_type_t)(PhysicalType type);
+typedef bool (*compression_supports_type_t)(const CompressionInfo &info);
 
 struct DefaultCompressionMethod {
 	CompressionType type;
@@ -48,7 +48,7 @@ static optional_ptr<CompressionFunction> LoadCompressionFunction(CompressionFunc
 		const auto &method = internal_compression_methods[index];
 		if (method.type == type) {
 			// found the correct compression type
-			if (!method.supports_type(data_type)) {
+			if (!method.supports_type(CompressionInfo(data_type))) {
 				// but it does not support this data type: bail out
 				return nullptr;
 			}

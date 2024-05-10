@@ -81,7 +81,7 @@ public:
 
 template <class T>
 struct RLEAnalyzeState : public AnalyzeState {
-	RLEAnalyzeState() {
+	explicit RLEAnalyzeState(const CompressionInfo &info) : AnalyzeState(info) {
 	}
 
 	RLEState<T> state;
@@ -89,7 +89,9 @@ struct RLEAnalyzeState : public AnalyzeState {
 
 template <class T>
 unique_ptr<AnalyzeState> RLEInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	return make_uniq<RLEAnalyzeState<T>>();
+	const auto block_size = col_data.GetBlockManager().GetBlockSize();
+	CompressionInfo info(block_size, type);
+	return make_uniq<RLEAnalyzeState<T>>(info);
 }
 
 template <class T>
@@ -129,14 +131,13 @@ struct RLECompressState : public CompressionState {
 		}
 	};
 
-	static idx_t MaxRLECount() {
+	idx_t MaxRLECount() {
 		auto entry_size = sizeof(T) + sizeof(rle_count_t);
-		auto entry_count = (Storage::BLOCK_SIZE - RLEConstants::RLE_HEADER_SIZE) / entry_size;
-		return entry_count;
+		return (info.GetBlockSize() - RLEConstants::RLE_HEADER_SIZE) / entry_size;
 	}
 
-	explicit RLECompressState(ColumnDataCheckpointer &checkpointer_p)
-	    : checkpointer(checkpointer_p),
+	RLECompressState(ColumnDataCheckpointer &checkpointer_p, const CompressionInfo &info)
+	    : CompressionState(info), checkpointer(checkpointer_p),
 	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_RLE)) {
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
 
@@ -222,7 +223,7 @@ struct RLECompressState : public CompressionState {
 
 template <class T, bool WRITE_STATISTICS>
 unique_ptr<CompressionState> RLEInitCompression(ColumnDataCheckpointer &checkpointer, unique_ptr<AnalyzeState> state) {
-	return make_uniq<RLECompressState<T, WRITE_STATISTICS>>(checkpointer);
+	return make_uniq<RLECompressState<T, WRITE_STATISTICS>>(checkpointer, state->info);
 }
 
 template <class T, bool WRITE_STATISTICS>
@@ -251,7 +252,7 @@ struct RLEScanState : public SegmentScanState {
 		entry_pos = 0;
 		position_in_entry = 0;
 		rle_count_offset = UnsafeNumericCast<uint32_t>(Load<uint64_t>(handle.Ptr() + segment.GetBlockOffset()));
-		D_ASSERT(rle_count_offset <= Storage::BLOCK_SIZE);
+		D_ASSERT(rle_count_offset <= segment.GetBlockManager().GetBlockSize());
 	}
 
 	void Skip(ColumnSegment &segment, idx_t skip_count) {
@@ -431,8 +432,8 @@ CompressionFunction RLEFun::GetFunction(PhysicalType type) {
 	}
 }
 
-bool RLEFun::TypeIsSupported(PhysicalType type) {
-	switch (type) {
+bool RLEFun::TypeIsSupported(const CompressionInfo &info) {
+	switch (info.GetPhysicalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:

@@ -101,7 +101,7 @@ public:
 		// Pointer to the start of the compressed data
 		data_ptr = handle.Ptr() + current_segment->GetBlockOffset() + AlpConstants::HEADER_SIZE;
 		// Pointer to the start of the Metadata
-		metadata_ptr = handle.Ptr() + current_segment->GetBlockOffset() + info.block_size;
+		metadata_ptr = handle.Ptr() + current_segment->GetBlockOffset() + info.GetBlockSize();
 
 		next_vector_byte_index_start = AlpConstants::HEADER_SIZE;
 	}
@@ -183,10 +183,10 @@ public:
 		// Verify that the metadata_ptr is not smaller than the space used by the data
 		D_ASSERT(dataptr + metadata_offset <= metadata_ptr);
 
-		auto bytes_used_by_metadata = UnsafeNumericCast<idx_t>(dataptr + info.block_size - metadata_ptr);
+		auto bytes_used_by_metadata = UnsafeNumericCast<idx_t>(dataptr + info.GetBlockSize() - metadata_ptr);
 
 		// Initially the total segment size is the size of the block
-		auto total_segment_size = info.block_size;
+		auto total_segment_size = info.GetBlockSize();
 
 		//! We compact the block if the space used is less than a threshold
 		const auto used_space_percentage =

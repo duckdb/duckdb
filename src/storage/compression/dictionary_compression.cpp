@@ -186,11 +186,12 @@ public:
 	}
 
 	void Verify() override {
-		current_dictionary.Verify(info.block_size);
+		current_dictionary.Verify(info.GetBlockSize());
 		D_ASSERT(current_segment->count == selection_buffer.size());
 		D_ASSERT(DictionaryCompressionStorage::HasEnoughSpace(current_segment->count.load(), index_buffer.size(),
-		                                                      current_dictionary.size, current_width, info.block_size));
-		D_ASSERT(current_dictionary.end == info.block_size);
+		                                                      current_dictionary.size, current_width,
+		                                                      info.GetBlockSize()));
+		D_ASSERT(current_dictionary.end == info.GetBlockSize());
 		D_ASSERT(index_buffer.size() == current_string_map.size() + 1); // +1 is for null value
 	}
 
@@ -211,8 +212,8 @@ public:
 		current_dictionary.size += str.GetSize();
 		auto dict_pos = current_end_ptr - current_dictionary.size;
 		memcpy(dict_pos, str.GetData(), str.GetSize());
-		current_dictionary.Verify(info.block_size);
-		D_ASSERT(current_dictionary.end == info.block_size);
+		current_dictionary.Verify(info.GetBlockSize());
+		D_ASSERT(current_dictionary.end == info.GetBlockSize());
 
 		// Update buffers and map
 		index_buffer.push_back(current_dictionary.size);
@@ -242,12 +243,12 @@ public:
 		if (!new_string) {
 			return DictionaryCompressionStorage::HasEnoughSpace(current_segment->count.load() + 1, index_buffer.size(),
 			                                                    current_dictionary.size, current_width,
-			                                                    info.block_size);
+			                                                    info.GetBlockSize());
 		}
 		next_width = BitpackingPrimitives::MinimumBitWidth(index_buffer.size() - 1 + new_string);
 		return DictionaryCompressionStorage::HasEnoughSpace(current_segment->count.load() + 1, index_buffer.size() + 1,
 		                                                    current_dictionary.size + string_size, next_width,
-		                                                    info.block_size);
+		                                                    info.GetBlockSize());
 	}
 
 	void Flush(bool final = false) override {
@@ -265,7 +266,7 @@ public:
 	idx_t Finalize() {
 		auto &buffer_manager = BufferManager::GetBufferManager(checkpointer.GetDatabase());
 		auto handle = buffer_manager.Pin(current_segment->block);
-		D_ASSERT(current_dictionary.end == info.block_size);
+		D_ASSERT(current_dictionary.end == info.GetBlockSize());
 
 		// calculate sizes
 		auto compressed_selection_buffer_size =
@@ -294,18 +295,18 @@ public:
 		Store<uint32_t>((uint32_t)current_width, data_ptr_cast(&header_ptr->bitpacking_width));
 
 		D_ASSERT(current_width == BitpackingPrimitives::MinimumBitWidth(index_buffer.size() - 1));
-		D_ASSERT(DictionaryCompressionStorage::HasEnoughSpace(current_segment->count, index_buffer.size(),
-		                                                      current_dictionary.size, current_width, info.block_size));
+		D_ASSERT(DictionaryCompressionStorage::HasEnoughSpace(
+		    current_segment->count, index_buffer.size(), current_dictionary.size, current_width, info.GetBlockSize()));
 		D_ASSERT((uint64_t)*max_element(std::begin(selection_buffer), std::end(selection_buffer)) ==
 		         index_buffer.size() - 1);
 
 		// early-out, if the block is sufficiently full
 		if (total_size >= info.GetCompactionFlushLimit()) {
-			return info.block_size;
+			return info.GetBlockSize();
 		}
 
 		// sufficient space: calculate how much space we can save
-		auto move_amount = info.block_size - total_size;
+		auto move_amount = info.GetBlockSize() - total_size;
 
 		// move the dictionary so it lines up exactly with the offsets
 		auto new_dictionary_offset = index_buffer_offset + index_buffer_size;
@@ -364,12 +365,12 @@ struct DictionaryAnalyzeState : public DictionaryCompressionState {
 	bool CalculateSpaceRequirements(bool new_string, idx_t string_size) override {
 		if (!new_string) {
 			return DictionaryCompressionStorage::HasEnoughSpace(current_tuple_count + 1, current_unique_count,
-			                                                    current_dict_size, current_width, info.block_size);
+			                                                    current_dict_size, current_width, info.GetBlockSize());
 		}
 		next_width = BitpackingPrimitives::MinimumBitWidth(current_unique_count + 2); // 1 for null, one for new string
 		return DictionaryCompressionStorage::HasEnoughSpace(current_tuple_count + 1, current_unique_count + 1,
 		                                                    current_dict_size + string_size, next_width,
-		                                                    info.block_size);
+		                                                    info.GetBlockSize());
 	}
 
 	void Flush(bool final = false) override {
@@ -390,9 +391,9 @@ struct DictionaryCompressionAnalyzeState : public AnalyzeState {
 	unique_ptr<DictionaryAnalyzeState> analyze_state;
 };
 
-unique_ptr<AnalyzeState> DictionaryCompressionStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType) {
+unique_ptr<AnalyzeState> DictionaryCompressionStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	const auto block_size = col_data.GetBlockManager().GetBlockSize();
-	CompressionInfo info(block_size);
+	CompressionInfo info(block_size, type);
 	return make_uniq<DictionaryCompressionAnalyzeState>(info);
 }
 
@@ -409,7 +410,7 @@ idx_t DictionaryCompressionStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	auto req_space =
 	    RequiredSpace(state.current_tuple_count, state.current_unique_count, state.current_dict_size, width);
 
-	const auto total_space = state.segment_count * state.info.block_size + req_space;
+	const auto total_space = state.segment_count * state.info.GetBlockSize() + req_space;
 	return NumericCast<idx_t>(MINIMUM_COMPRESSION_RATIO * float(total_space));
 }
 
@@ -656,7 +657,7 @@ CompressionFunction DictionaryCompressionFun::GetFunction(PhysicalType data_type
 	    DictionaryCompressionStorage::StringFetchRow, UncompressedFunctions::EmptySkip);
 }
 
-bool DictionaryCompressionFun::TypeIsSupported(PhysicalType type) {
-	return type == PhysicalType::VARCHAR;
+bool DictionaryCompressionFun::TypeIsSupported(const CompressionInfo &info) {
+	return info.GetPhysicalType() == PhysicalType::VARCHAR;
 }
 } // namespace duckdb

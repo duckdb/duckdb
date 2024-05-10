@@ -36,7 +36,7 @@ struct StringScanState : public SegmentScanState {
 struct UncompressedStringStorage {
 public:
 	explicit UncompressedStringStorage(const CompressionInfo &info)
-	    : compaction_flush_limit(info.block_size / 5 * 4) {};
+	    : compaction_flush_limit(info.GetBlockSize() / 5 * 4) {};
 
 	//! Dictionary header size at the beginning of the string segment (offset + length)
 	static constexpr uint16_t DICTIONARY_HEADER_SIZE = sizeof(uint32_t) + sizeof(uint32_t);

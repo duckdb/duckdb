@@ -63,7 +63,7 @@ public:
 		idx_t bytes_to_be_used = AlignValue(current_bytes_used_in_segment + RequiredSpace());
 		// We have enough space if the already used space + the required space for a new vector
 		// does not exceed the space of the block - the segment header (the pointer to the metadata)
-		return bytes_to_be_used <= (info.block_size - AlpConstants::METADATA_POINTER_SIZE);
+		return bytes_to_be_used <= (info.GetBlockSize() - AlpConstants::METADATA_POINTER_SIZE);
 	}
 
 	idx_t TotalUsedBytes() const {
@@ -72,9 +72,9 @@ public:
 };
 
 template <class T>
-unique_ptr<AnalyzeState> AlpInitAnalyze(ColumnData &col_data, PhysicalType) {
+unique_ptr<AnalyzeState> AlpInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	const auto block_size = col_data.GetBlockManager().GetBlockSize();
-	CompressionInfo info(block_size);
+	CompressionInfo info(block_size, type);
 	return make_uniq<AlpAnalyzeState<T>>(info);
 }
 
