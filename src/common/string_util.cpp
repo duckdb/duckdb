@@ -440,7 +440,7 @@ unordered_map<string, string> StringUtil::ParseJSONMap(const string &json) {
 		value = yyjson_obj_iter_get_val(key);
 		if (yyjson_get_type(value) != YYJSON_TYPE_STR) {
 			yyjson_doc_free(doc);
-			throw ParserException("Failed to parse JSON string: %s", json);
+			throw SerializationException("Failed to parse JSON string: %s", json);
 		}
 		result.emplace(yyjson_get_str(key), yyjson_get_str(value));
 	}
@@ -460,10 +460,12 @@ string StringUtil::ToJSONMap(ExceptionType type, const string &message, const un
 	for (auto &entry : map) {
 		yyjson_mut_obj_add_strcpy(doc, root, entry.first.c_str(), entry.second.c_str());
 	}
-	const char *json = yyjson_mut_write(doc, 0, nullptr);
+
+	yyjson_write_err err;
+	const char *json = yyjson_mut_write_opts(doc, 0, nullptr, nullptr, &err);
 	if (!json) {
 		yyjson_mut_doc_free(doc);
-		throw InternalException("Failed to write JSON string");
+		throw SerializationException("Failed to write JSON string: %s", err.msg);
 	}
 	// Create a string from the JSON
 	string result(json);
