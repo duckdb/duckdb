@@ -3,6 +3,7 @@ import os
 import pytest
 
 pl = pytest.importorskip("polars")
+pd = pytest.importorskip("pandas")
 
 
 def using_table(con, to_scan, object_name):
@@ -101,6 +102,19 @@ class TestReplacementScan(object):
         df2 = con.query('from (values (1, 10)) t(i, k)').df()
         df3 = con.query('from df1 join df2 using(i)')
         assert df3.fetchall() == [(1, 2, 10)]
+
+    def test_replacement_scan_caching(self, duckdb_cursor):
+        def return_rel(conn):
+            df = pd.DataFrame({'a': [1, 2, 3]})
+            rel = conn.sql("select * from df")
+            return rel
+
+        rel = return_rel(duckdb_cursor)
+        # FIXME: this test should fail in the future
+        # The correct answer here is [1,2,3], as that is the 'df' that was visible during creation of the Relation
+        duckdb_cursor.execute("create table df as select * from unnest([4,5,6])")
+        res = rel.fetchall()
+        assert res == [(4,), (5,), (6,)]
 
     def test_replacement_scan_fail(self):
         random_object = "I love salmiak rondos"
