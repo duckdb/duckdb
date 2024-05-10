@@ -424,7 +424,8 @@ unordered_map<string, string> StringUtil::ParseJSONMap(const string &json) {
 	if (json.empty()) {
 		return result;
 	}
-	yyjson_doc *doc = yyjson_read(json.c_str(), json.size(), 0);
+	yyjson_read_flag flags = YYJSON_READ_ALLOW_INVALID_UNICODE;
+	yyjson_doc *doc = yyjson_read(json.c_str(), json.size(), flags);
 	if (!doc) {
 		throw SerializationException("Failed to parse JSON string: %s", json);
 	}
@@ -442,7 +443,11 @@ unordered_map<string, string> StringUtil::ParseJSONMap(const string &json) {
 			yyjson_doc_free(doc);
 			throw SerializationException("Failed to parse JSON string: %s", json);
 		}
-		result.emplace(yyjson_get_str(key), yyjson_get_str(value));
+		auto key_val = yyjson_get_str(key);
+		auto key_len = yyjson_get_len(key);
+		auto value_val = yyjson_get_str(value);
+		auto value_len = yyjson_get_len(value);
+		result.emplace(string(key_val, key_len), string(value_val, value_len));
 	}
 	yyjson_doc_free(doc);
 	return result;
@@ -456,20 +461,25 @@ string StringUtil::ToJSONMap(ExceptionType type, const string &message, const un
 	yyjson_mut_val *root = yyjson_mut_obj(doc);
 	yyjson_mut_doc_set_root(doc, root);
 
-	yyjson_mut_obj_add_strcpy(doc, root, "exception_type", Exception::ExceptionTypeToString(type).c_str());
-	yyjson_mut_obj_add_strcpy(doc, root, "exception_message", message.c_str());
+	auto except_str = Exception::ExceptionTypeToString(type);
+	yyjson_mut_obj_add_strncpy(doc, root, "exception_type", except_str.c_str(), except_str.size());
+	yyjson_mut_obj_add_strncpy(doc, root, "exception_message", message.c_str(), message.size());
 	for (auto &entry : map) {
-		yyjson_mut_obj_add_strcpy(doc, root, entry.first.c_str(), entry.second.c_str());
+		auto key = yyjson_mut_strncpy(doc, entry.first.c_str(), entry.first.size());
+		auto value = yyjson_mut_strncpy(doc, entry.second.c_str(), entry.second.size());
+		yyjson_mut_obj_add(root, key, value);
 	}
 
 	yyjson_write_err err;
-	const char *json = yyjson_mut_write_opts(doc, 0, nullptr, nullptr, &err);
+	size_t len;
+	yyjson_write_flag flags = 0; // YYJSON_WRITE_ALLOW_INVALID_UNICODE;
+	const char *json = yyjson_mut_write_opts(doc, flags, nullptr, &len, &err);
 	if (!json) {
 		yyjson_mut_doc_free(doc);
 		throw SerializationException("Failed to write JSON string: %s", err.msg);
 	}
 	// Create a string from the JSON
-	string result(json);
+	string result(json, len);
 
 	// Free the JSON and the document
 	free((void *)json);
