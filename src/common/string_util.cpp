@@ -455,10 +455,10 @@ string StringUtil::ToJSONMap(ExceptionType type, const string &message, const un
 	yyjson_mut_val *root = yyjson_mut_obj(doc);
 	yyjson_mut_doc_set_root(doc, root);
 
-	yyjson_mut_obj_add_str(doc, root, "exception_type", Exception::ExceptionTypeToString(type).c_str());
-	yyjson_mut_obj_add_str(doc, root, "exception_message", message.c_str());
+	yyjson_mut_obj_add_strcpy(doc, root, "exception_type", Exception::ExceptionTypeToString(type).c_str());
+	yyjson_mut_obj_add_strcpy(doc, root, "exception_message", message.c_str());
 	for (auto &entry : map) {
-		yyjson_mut_obj_add_str(doc, root, entry.first.c_str(), entry.second.c_str());
+		yyjson_mut_obj_add_strcpy(doc, root, entry.first.c_str(), entry.second.c_str());
 	}
 	const char *json = yyjson_mut_write(doc, 0, nullptr);
 	if (!json) {
