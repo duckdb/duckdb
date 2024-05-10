@@ -370,18 +370,20 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpRepository(DBConfig &conf
                                                                   const string &extension_name,
                                                                   const string &repository_url, const string &temp_path,
                                                                   const string &local_extension_path,
-                                                                  const string &version, bool force_install) {
+                                                                  const string &version, bool force_install,
+                                                                  optional_ptr<HTTPLogger> http_logger) {
 	string url_template = ExtensionHelper::ExtensionUrlTemplate(&config, repository_url, version);
 	string generated_url = ExtensionHelper::ExtensionFinalizeUrlTemplate(url_template, extension_name);
 	return InstallFromHttpUrl(config, generated_url, extension_name, repository_url, temp_path, local_extension_path,
-	                          force_install);
+	                          force_install, http_logger);
 }
 
 unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs,
                                                                            const string &local_path,
                                                                            const string &extension, bool force_install,
                                                                            const string &repository,
-                                                                           const string &version) {
+                                                                           const string &version,
+                                                                           optional_ptr<HTTPLogger> http_logger) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Installing external extensions is disabled through a compile time flag");
 #else
@@ -433,11 +435,11 @@ unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtensionInternal(DBCon
 	if (StringUtil::StartsWith(extension, "http://")) {
 		// Extension is a full http:// path
 		return InstallFromHttpUrl(config, extension, extension_name, "", temp_path, local_extension_path,
-		                          force_install);
+		                          force_install, http_logger);
 	} else {
 		// Extension is a regular remote repository
 		return InstallFromHttpRepository(config, extension, extension_name, repository_url, temp_path,
-		                                 local_extension_path, version, force_install);
+		                                 local_extension_path, version, force_install, http_logger);
 	}
 
 #endif
