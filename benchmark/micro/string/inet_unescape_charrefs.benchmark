@@ -1,4 +1,4 @@
-# name: benchmark/micro/string/inet_unescape_function.benchmark
+# name: benchmark/micro/string/inet_unescape_charrefs.benchmark
 # description: inet's extension unescape function benchmark
 # group: [string]
 
