@@ -14,7 +14,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "yyjson.hpp"
 
-using namespace duckdb_yyjson;
+using namespace duckdb_yyjson; // NOLINT
 
 namespace duckdb {
 

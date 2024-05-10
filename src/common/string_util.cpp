@@ -17,7 +17,7 @@
 
 #include "yyjson.hpp"
 
-using namespace duckdb_yyjson;
+using namespace duckdb_yyjson; // NOLINT
 
 namespace duckdb {
 
@@ -426,12 +426,12 @@ unordered_map<string, string> StringUtil::ParseJSONMap(const string &json) {
 	}
 	yyjson_doc *doc = yyjson_read(json.c_str(), json.size(), 0);
 	if (!doc) {
-		throw ParserException("Failed to parse JSON string: %s", json);
+		throw SerializationException("Failed to parse JSON string: %s", json);
 	}
 	yyjson_val *root = yyjson_doc_get_root(doc);
 	if (!root || yyjson_get_type(root) != YYJSON_TYPE_OBJ) {
 		yyjson_doc_free(doc);
-		throw ParserException("Failed to parse JSON string: %s", json);
+		throw SerializationException("Failed to parse JSON string: %s", json);
 	}
 	yyjson_obj_iter iter;
 	yyjson_obj_iter_init(root, &iter);
