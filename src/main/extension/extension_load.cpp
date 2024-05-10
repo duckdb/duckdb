@@ -197,7 +197,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 			                              filename, engine_version, engine_platform);
 		} else if (engine_version != extension_duckdb_version || engine_platform != extension_duckdb_platform) {
 			metadata_mismatch_error = "\n" + StringUtil::Format("Extension \"%s\" (version %s, platfrom %s) does not "
-			                                                    "match DuckDB loading it (version %s, platform %s)",
+			                                                    "match the DuckDB loading it (version %s, platform %s)",
 			                                                    filename, PrettyPrintString(extension_duckdb_version),
 			                                                    PrettyPrintString(extension_duckdb_platform),
 			                                                    engine_version, engine_platform);
