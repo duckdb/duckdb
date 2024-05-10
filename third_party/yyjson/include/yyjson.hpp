@@ -6002,6 +6002,6 @@ yyjson_api_inline yyjson_mut_val *yyjson_mut_doc_get_pointer(
 }
 #endif /* extern "C" end */
 
-#endif /* DUCKDB_YYJSON_H */
-
 } // namespace duckdb_yyjson
+
+#endif /* DUCKDB_YYJSON_H */
