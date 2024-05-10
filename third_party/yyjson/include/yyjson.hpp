@@ -8,8 +8,8 @@
 
 /** @file yyjson.h */
 
-#ifndef YYJSON_H
-#define YYJSON_H
+#ifndef DUCKDB_YYJSON_H
+#define DUCKDB_YYJSON_H
 
 
 
@@ -6002,6 +6002,6 @@ yyjson_api_inline yyjson_mut_val *yyjson_mut_doc_get_pointer(
 }
 #endif /* extern "C" end */
 
-#endif /* YYJSON_H */
+#endif /* DUCKDB_YYJSON_H */
 
 } // namespace duckdb_yyjson

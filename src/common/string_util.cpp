@@ -424,8 +424,7 @@ unordered_map<string, string> StringUtil::ParseJSONMap(const string &json) {
 	if (json.empty()) {
 		return result;
 	}
-	yyjson_read_flag flags = YYJSON_READ_ALLOW_INVALID_UNICODE;
-	yyjson_doc *doc = yyjson_read(json.c_str(), json.size(), flags);
+	yyjson_doc *doc = yyjson_read(json.c_str(), json.size(), 0);
 	if (!doc) {
 		throw SerializationException("Failed to parse JSON string: %s", json);
 	}
@@ -472,8 +471,7 @@ string StringUtil::ToJSONMap(ExceptionType type, const string &message, const un
 
 	yyjson_write_err err;
 	size_t len;
-	yyjson_write_flag flags = 0; // YYJSON_WRITE_ALLOW_INVALID_UNICODE;
-	const char *json = yyjson_mut_write_opts(doc, flags, nullptr, &len, &err);
+	const char *json = yyjson_mut_write_opts(doc, 0, nullptr, &len, &err);
 	if (!json) {
 		yyjson_mut_doc_free(doc);
 		throw SerializationException("Failed to write JSON string: %s", err.msg);
