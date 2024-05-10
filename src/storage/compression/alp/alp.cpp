@@ -1,14 +1,9 @@
-#include "duckdb/storage/compression/alp/alp_compress.hpp"
-#include "duckdb/storage/compression/alp/alp_scan.hpp"
-#include "duckdb/storage/compression/alp/alp_fetch.hpp"
-#include "duckdb/storage/compression/alp/alp_analyze.hpp"
-
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
-#include "duckdb/main/config.hpp"
-
-#include <cmath>
-#include <functional>
+#include "duckdb/storage/compression/alp/alp_analyze.hpp"
+#include "duckdb/storage/compression/alp/alp_compress.hpp"
+#include "duckdb/storage/compression/alp/alp_fetch.hpp"
+#include "duckdb/storage/compression/alp/alp_scan.hpp"
 
 namespace duckdb {
 

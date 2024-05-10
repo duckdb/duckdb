@@ -30,7 +30,8 @@ struct SegmentScanState;
 
 class CompressionInfo {
 public:
-	CompressionInfo(const idx_t block_size, const PhysicalType &type) : block_size(block_size), type(type) {};
+	CompressionInfo(const idx_t block_size, const PhysicalType &physical_type)
+	    : block_size(block_size), physical_type(physical_type) {};
 
 public:
 	//! The size below which the segment is compacted on flushing.
@@ -43,12 +44,12 @@ public:
 	}
 	//! The physical type to compress.
 	PhysicalType GetPhysicalType() const {
-		return type;
+		return physical_type;
 	}
 
 private:
 	idx_t block_size;
-	PhysicalType type;
+	PhysicalType physical_type;
 };
 
 struct AnalyzeState {

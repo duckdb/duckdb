@@ -1,3 +1,11 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/storage/string_uncompressed.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
 #include "duckdb/common/likely.hpp"
@@ -35,9 +43,6 @@ struct StringScanState : public SegmentScanState {
 
 struct UncompressedStringStorage {
 public:
-	explicit UncompressedStringStorage(const CompressionInfo &info)
-	    : compaction_flush_limit(info.GetBlockSize() / 5 * 4) {};
-
 	//! Dictionary header size at the beginning of the string segment (offset + length)
 	static constexpr uint16_t DICTIONARY_HEADER_SIZE = sizeof(uint32_t) + sizeof(uint32_t);
 	//! Marker used in length field to indicate the presence of a big string
@@ -46,9 +51,6 @@ public:
 	static constexpr idx_t BIG_STRING_MARKER_BASE_SIZE = sizeof(block_id_t) + sizeof(int32_t);
 	//! The marker size of the big string
 	static constexpr idx_t BIG_STRING_MARKER_SIZE = BIG_STRING_MARKER_BASE_SIZE;
-
-	//! The size below which the segment is compacted on flushing
-	idx_t compaction_flush_limit;
 
 public:
 	static unique_ptr<AnalyzeState> StringInitAnalyze(ColumnData &col_data, PhysicalType type);

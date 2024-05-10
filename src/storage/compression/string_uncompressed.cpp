@@ -188,8 +188,7 @@ idx_t UncompressedStringStorage::FinalizeAppend(ColumnSegment &segment, SegmentS
 	auto total_size = offset_size + dict.size;
 
 	CompressionInfo info(segment.GetBlockManager().GetBlockSize(), segment.type.InternalType());
-	UncompressedStringStorage uncompressed_str_storage(info);
-	if (total_size >= uncompressed_str_storage.compaction_flush_limit) {
+	if (total_size >= info.GetCompactionFlushLimit()) {
 		// the block is full enough, don't bother moving around the dictionary
 		return segment.SegmentSize();
 	}

@@ -1,11 +1,9 @@
-#include "duckdb/storage/compression/chimp/chimp.hpp"
-#include "duckdb/storage/compression/chimp/chimp_compress.hpp"
-#include "duckdb/storage/compression/chimp/chimp_scan.hpp"
-#include "duckdb/storage/compression/chimp/chimp_fetch.hpp"
-#include "duckdb/storage/compression/chimp/chimp_analyze.hpp"
-
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/storage/compression/chimp/chimp_analyze.hpp"
+#include "duckdb/storage/compression/chimp/chimp_compress.hpp"
+#include "duckdb/storage/compression/chimp/chimp_fetch.hpp"
+#include "duckdb/storage/compression/chimp/chimp_scan.hpp"
 
 namespace duckdb {
 

@@ -1,9 +1,8 @@
-#include "duckdb/function/compression/compression.hpp"
 #include "duckdb/common/types/vector.hpp"
-
-#include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
