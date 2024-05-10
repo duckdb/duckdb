@@ -45,6 +45,7 @@ class OperatorExtension;
 class StorageExtension;
 class ExtensionCallback;
 class SecretManager;
+class CompressionInfo;
 
 struct CompressionFunctionSet;
 struct DBConfig;
@@ -283,10 +284,11 @@ public:
 
 	DUCKDB_API static idx_t ParseMemoryLimit(const string &arg);
 
-	//! Return the list of possible compression functions for the specific physical type
-	DUCKDB_API vector<reference<CompressionFunction>> GetCompressionFunctions(PhysicalType data_type);
-	//! Return the compression function for the specified compression type/physical type combo
-	DUCKDB_API optional_ptr<CompressionFunction> GetCompressionFunction(CompressionType type, PhysicalType data_type);
+	//! Return the list of possible compression functions for the provided compression information.
+	DUCKDB_API vector<reference<CompressionFunction>> GetCompressionFunctions(const CompressionInfo &info);
+	//! Return the compression function matching the compression type and its compression information.
+	DUCKDB_API optional_ptr<CompressionFunction> GetCompressionFunction(CompressionType type,
+	                                                                    const CompressionInfo &info);
 
 	bool operator==(const DBConfig &other);
 	bool operator!=(const DBConfig &other);

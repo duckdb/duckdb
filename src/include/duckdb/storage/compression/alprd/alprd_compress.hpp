@@ -8,23 +8,21 @@
 
 #pragma once
 
-#include "duckdb/storage/compression/patas/patas.hpp"
-#include "duckdb/storage/compression/alprd/algorithm/alprd.hpp"
-#include "duckdb/function/compression_function.hpp"
-#include "duckdb/storage/compression/alprd/alprd_analyze.hpp"
-#include "duckdb/storage/compression/alprd/alprd_constants.hpp"
-#include "duckdb/storage/compression/alp/alp_constants.hpp"
-
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/function/compression/compression.hpp"
+#include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-
+#include "duckdb/storage/compression/alp/alp_constants.hpp"
+#include "duckdb/storage/compression/alprd/algorithm/alprd.hpp"
+#include "duckdb/storage/compression/alprd/alprd_analyze.hpp"
+#include "duckdb/storage/compression/alprd/alprd_constants.hpp"
+#include "duckdb/storage/compression/patas/patas.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/common/operator/subtract.hpp"
 
 #include <functional>
 
@@ -115,7 +113,7 @@ public:
 		data_ptr = handle.Ptr() + current_segment->GetBlockOffset() + AlpRDConstants::HEADER_SIZE +
 		           actual_dictionary_size_bytes;
 		// Pointer to the start of the Metadata
-		metadata_ptr = handle.Ptr() + current_segment->GetBlockOffset() + Storage::BLOCK_SIZE;
+		metadata_ptr = handle.Ptr() + current_segment->GetBlockOffset() + info.GetBlockSize();
 
 		next_vector_byte_index_start = AlpRDConstants::HEADER_SIZE + actual_dictionary_size_bytes;
 	}
@@ -186,10 +184,10 @@ public:
 		// Verify that the metadata_ptr is not smaller than the space used by the data
 		D_ASSERT(dataptr + metadata_offset <= metadata_ptr);
 
-		auto bytes_used_by_metadata = UnsafeNumericCast<idx_t>(dataptr + Storage::BLOCK_SIZE - metadata_ptr);
+		auto bytes_used_by_metadata = UnsafeNumericCast<idx_t>(dataptr + info.GetBlockSize() - metadata_ptr);
 
 		// Initially the total segment size is the size of the block
-		auto total_segment_size = Storage::BLOCK_SIZE;
+		auto total_segment_size = info.GetBlockSize();
 
 		//! We compact the block if the space used is less than a threshold
 		const auto used_space_percentage =

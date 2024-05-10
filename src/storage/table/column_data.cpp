@@ -489,15 +489,18 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Co
 }
 
 void ColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats) {
-	// load the data pointers for the column
+	// Set the stack of the deserializer to load the data pointers.
 	deserializer.Set<DatabaseInstance &>(info.GetDB().GetDatabase());
 	deserializer.Set<LogicalType &>(type);
+	CompressionInfo compression_info(block_manager.GetBlockSize(), type.InternalType());
+	deserializer.Set<const CompressionInfo &>(compression_info);
 
 	vector<DataPointer> data_pointers;
 	deserializer.ReadProperty(100, "data_pointers", data_pointers);
 
 	deserializer.Unset<DatabaseInstance>();
 	deserializer.Unset<LogicalType>();
+	deserializer.Unset<const CompressionInfo>();
 
 	// construct the segments based on the data pointers
 	this->count = 0;

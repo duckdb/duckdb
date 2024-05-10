@@ -32,28 +32,33 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
 	optional_ptr<CompressionFunction> function;
 	shared_ptr<BlockHandle> block;
 
+	const auto block_size = block_manager.GetBlockSize();
+	CompressionInfo info(block_size, type.InternalType());
+
 	if (block_id == INVALID_BLOCK) {
 		// constant segment, no need to allocate an actual block
-		function = config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, type.InternalType());
+		function = config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, info);
 	} else {
-		function = config.GetCompressionFunction(compression_type, type.InternalType());
+		function = config.GetCompressionFunction(compression_type, info);
 		block = block_manager.RegisterBlock(block_id);
 	}
 
-	auto segment_size = block_manager.GetBlockSize();
 	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::PERSISTENT, start, count, *function,
-	                                std::move(statistics), block_id, offset, segment_size, std::move(segment_state));
+	                                std::move(statistics), block_id, offset, block_size, std::move(segment_state));
 }
 
 unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance &db, const LogicalType &type,
                                                                 idx_t start, idx_t segment_size) {
 
-	auto &config = DBConfig::GetConfig(db);
-	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());
-	auto &buffer_manager = BufferManager::GetBufferManager(db);
-
 	// Allocate a buffer for the uncompressed segment.
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto block = buffer_manager.RegisterTransientMemory(segment_size);
+
+	// Get the segment compression function.
+	auto &config = DBConfig::GetConfig(db);
+	CompressionInfo info(block->block_manager.GetBlockSize(), type.InternalType());
+	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, info);
+
 	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::TRANSIENT, start, 0U, *function,
 	                                BaseStatistics::CreateEmpty(type), INVALID_BLOCK, 0U, segment_size);
 }

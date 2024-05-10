@@ -9,12 +9,12 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/function/function.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/map.hpp"
-#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/function/function.hpp"
 #include "duckdb/storage/data_pointer.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
 class DatabaseInstance;
@@ -30,7 +30,6 @@ struct SegmentScanState;
 
 class CompressionInfo {
 public:
-	explicit CompressionInfo(const PhysicalType &type) : type(type) {};
 	CompressionInfo(const idx_t block_size, const PhysicalType &type) : block_size(block_size), type(type) {};
 
 public:
