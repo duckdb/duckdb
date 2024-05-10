@@ -13,16 +13,6 @@
 
 namespace duckdb {
 
-void ChildFieldIDs::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<unique_ptr<case_insensitive_map_t<FieldID>>>(100, "ids", ids);
-}
-
-ChildFieldIDs ChildFieldIDs::Deserialize(Deserializer &deserializer) {
-	ChildFieldIDs result;
-	deserializer.ReadPropertyWithDefault<unique_ptr<case_insensitive_map_t<FieldID>>>(100, "ids", result.ids);
-	return result;
-}
-
 void FieldID::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(100, "set", set);
 	serializer.WritePropertyWithDefault<int32_t>(101, "field_id", field_id);

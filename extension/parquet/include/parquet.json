@@ -112,13 +112,7 @@
     "includes": [
       "parquet_writer.hpp"
     ],
-    "members": [
-      {
-        "id": 100,
-        "name": "ids",
-        "type": "unique_ptr<case_insensitive_map_t<FieldID>>"
-      }
-    ],
+    "custom_implementation": true,
     "pointer_type": "none"
   }
 ]
