@@ -411,7 +411,7 @@ void UncompressedStringStorage::ReadStringMarker(data_ptr_t target, block_id_t &
 
 string_location_t UncompressedStringStorage::FetchStringLocation(StringDictionaryContainer dict, data_ptr_t base_ptr,
                                                                  int32_t dict_offset, const idx_t block_size) {
-	D_ASSERT(idx_t(dict_offset) + block_size >= 0 && idx_t(dict_offset) <= block_size);
+	D_ASSERT(dict_offset + int32_t(block_size) >= 0 && dict_offset <= int32_t(block_size));
 	if (dict_offset >= 0) {
 		return string_location_t(INVALID_BLOCK, dict_offset);
 	}
