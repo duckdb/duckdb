@@ -266,3 +266,9 @@ SELECT reservoir_quantile(r, random()::float)  from quantile
 statement error
 SELECT reservoir_quantile(r, 0.9, random()::float)  from quantile
 ----
+
+# DECIMAL binding
+query I
+SELECT RESERVOIR_QUANTILE(0., 0.9, 1000);
+----
+0
