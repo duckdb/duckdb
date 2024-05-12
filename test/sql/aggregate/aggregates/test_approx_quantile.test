@@ -170,6 +170,11 @@ statement error
 SELECT approx_quantile(r, 0.1, 0.2) FROM quantile
 ----
 
+statement error
+SELECT approx_quantile(42, CAST(NULL AS INT[]));
+----
+APPROXIMATE QUANTILE parameter list cannot be NULL
+
 statement ok
 pragma threads=4
 
