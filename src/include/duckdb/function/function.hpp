@@ -78,11 +78,6 @@ struct TableFunctionData : public FunctionData {
 	DUCKDB_API bool Equals(const FunctionData &other) const override;
 };
 
-struct PyTableFunctionData : public TableFunctionData {
-	//! External dependencies of this table function
-	unique_ptr<ExternalDependency> external_dependency;
-};
-
 struct FunctionParameters {
 	vector<Value> values;
 	named_parameter_map_t named_parameters;

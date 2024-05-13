@@ -134,6 +134,9 @@ void MetaTransaction::ModifyDatabase(AttachedDatabase &db) {
 	}
 	if (!modified_database) {
 		modified_database = &db;
+
+		auto &transaction = GetTransaction(db);
+		transaction.SetReadWrite();
 		return;
 	}
 	if (&db != modified_database.get()) {

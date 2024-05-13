@@ -445,7 +445,7 @@ void CSVReaderOptions::FromNamedParameters(named_parameter_map_t &in, ClientCont
                                            vector<LogicalType> &return_types, vector<string> &names) {
 	map<string, string> ordered_user_defined_parameters;
 	for (auto &kv : in) {
-		if (MultiFileReader::ParseOption(kv.first, kv.second, file_options, context)) {
+		if (MultiFileReader().ParseOption(kv.first, kv.second, file_options, context)) {
 			continue;
 		}
 		auto loption = StringUtil::Lower(kv.first);

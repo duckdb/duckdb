@@ -73,6 +73,17 @@ ColumnDataCollection &MaterializedQueryResult::Collection() {
 	return *collection;
 }
 
+unique_ptr<ColumnDataCollection> MaterializedQueryResult::TakeCollection() {
+	if (HasError()) {
+		throw InvalidInputException("Attempting to get collection from an unsuccessful query result\n: Error %s",
+		                            GetError());
+	}
+	if (!collection) {
+		throw InternalException("Missing collection from materialized query result");
+	}
+	return std::move(collection);
+}
+
 unique_ptr<DataChunk> MaterializedQueryResult::Fetch() {
 	return FetchRaw();
 }
