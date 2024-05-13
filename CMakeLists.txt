@@ -87,6 +87,8 @@ endif()
 option(DISABLE_UNITY "Disable unity builds." FALSE)
 option(USE_WASM_THREADS "Should threads be used" FALSE)
 if (${USE_WASM_THREADS})
+   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pthread")
+   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
    set(WASM_THREAD_FLAGS
        -pthread
        -sSHARED_MEMORY=1
@@ -342,9 +344,9 @@ else()
 endif()
 
 if(EMSCRIPTEN)
-  set(EXTENSION_POSTFIX "duckdb_extension.wasm")
+  set(EXTENSION_POSTFIX ".wasm")
 else()
-  set(EXTENSION_POSTFIX "duckdb_extension")
+  set(EXTENSION_POSTFIX "")
 endif()
 
 message(STATUS "git hash ${GIT_COMMIT_HASH}, version ${DUCKDB_VERSION}, extension folder ${DUCKDB_NORMALIZED_VERSION}")
@@ -740,7 +742,7 @@ if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_TID
     add_custom_target(
           duckdb_local_extension_repo ALL
           COMMAND
-          ${Python3_EXECUTABLE} scripts/create_local_extension_repo.py "${DUCKDB_NORMALIZED_VERSION}" "${CMAKE_CURRENT_BINARY_DIR}/duckdb_platform_out" "${CMAKE_CURRENT_BINARY_DIR}" "${LOCAL_EXTENSION_REPO_DIR}" "${EXTENSION_POSTFIX}"
+          ${Python3_EXECUTABLE} scripts/create_local_extension_repo.py "${DUCKDB_NORMALIZED_VERSION}" "${CMAKE_CURRENT_BINARY_DIR}/duckdb_platform_out" "${CMAKE_CURRENT_BINARY_DIR}" "${LOCAL_EXTENSION_REPO_DIR}" "duckdb_extension${EXTENSION_POSTFIX}"
           WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
           COMMENT Create local extension repository)
     add_dependencies(duckdb_local_extension_repo duckdb_platform)
@@ -762,7 +764,11 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY EXTENSION_VERS
   # parse parameters
   string(FIND "${PARAMETERS}" "-no-warnings" IGNORE_WARNINGS)
 
-  add_library(${TARGET_NAME} SHARED ${FILES})
+  if(EMSCRIPTEN)
+     add_library(${TARGET_NAME} STATIC ${FILES})
+  else()
+     add_library(${TARGET_NAME} SHARED ${FILES})
+  endif()
   # this disables the -Dsome_target_EXPORTS define being added by cmake which otherwise trips clang-tidy (yay)
   set_target_properties(${TARGET_NAME} PROPERTIES DEFINE_SYMBOL "")
   set_target_properties(${TARGET_NAME} PROPERTIES OUTPUT_NAME ${NAME})
@@ -815,10 +821,6 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY EXTENSION_VERS
   set_target_properties(${TARGET_NAME} PROPERTIES SUFFIX
           ".duckdb_extension")
 
-  if(EMSCRIPTEN)
-    set_target_properties(${TARGET_NAME} PROPERTIES SUFFIX ".duckdb_extension.wasm")
-  endif()
-
   if(MSVC)
     set_target_properties(
             ${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG
@@ -829,25 +831,20 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY EXTENSION_VERS
   endif()
 
   if(EMSCRIPTEN)
-    # Copy file.duckdb_extension.wasm to file.duckdb_extension.wasm.lib
-    add_custom_command(
-      TARGET ${TARGET_NAME}
-      POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${TARGET_NAME}> $<TARGET_FILE:${TARGET_NAME}>.lib
-      )
     # Compile the library into the actual wasm file
     string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
+    string(REPLACE ";" " " TO_BE_LINKED "${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LINKED_LIBS}")
     add_custom_command(
       TARGET ${TARGET_NAME}
       POST_BUILD
-      COMMAND emcc $<TARGET_FILE:${TARGET_NAME}>.lib -o $<TARGET_FILE:${TARGET_NAME}> -O3 -sSIDE_MODULE=2 -sEXPORTED_FUNCTIONS="_${NAME}_init" ${WASM_THREAD_FLAGS} ${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LINKED_LIBS}
+      COMMAND emcc $<TARGET_FILE:${TARGET_NAME}> -o $<TARGET_FILE:${TARGET_NAME}>.wasm -O3 -sSIDE_MODULE=2 -sEXPORTED_FUNCTIONS="_${NAME}_init,_${NAME}_version" ${WASM_THREAD_FLAGS} ${TO_BE_LINKED}
       )
   endif()
   add_custom_command(
     TARGET ${TARGET_NAME}
     POST_BUILD
     COMMAND
-    ${CMAKE_COMMAND} -DEXTENSION=$<TARGET_FILE:${TARGET_NAME}> -DPLATFORM_FILE=${DuckDB_BINARY_DIR}/duckdb_platform_out -DDUCKDB_VERSION="${DUCKDB_NORMALIZED_VERSION}" -DEXTENSION_VERSION="${EXTENSION_VERSION}" -DNULL_FILE=${DUCKDB_MODULE_BASE_DIR}/scripts/null.txt -P ${DUCKDB_MODULE_BASE_DIR}/scripts/append_metadata.cmake
+    ${CMAKE_COMMAND} -DEXTENSION=$<TARGET_FILE:${TARGET_NAME}>${EXTENSION_POSTFIX} -DPLATFORM_FILE=${DuckDB_BINARY_DIR}/duckdb_platform_out -DDUCKDB_VERSION="${DUCKDB_NORMALIZED_VERSION}" -DEXTENSION_VERSION="${EXTENSION_VERSION}" -DNULL_FILE=${DUCKDB_MODULE_BASE_DIR}/scripts/null.txt -P ${DUCKDB_MODULE_BASE_DIR}/scripts/append_metadata.cmake
     )
   add_dependencies(${TARGET_NAME} duckdb_platform)
   if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_TIDY)
