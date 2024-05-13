@@ -255,6 +255,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"calendar", "icu"},
     {"enable_server_cert_verification", "httpfs"},
     {"force_download", "httpfs"},
+    {"hf_max_per_page", "httpfs"},
     {"hnsw_ef_search", "vss"},
     {"hnsw_enable_experimental_persistence", "vss"},
     {"http_keep_alive", "httpfs"},
@@ -328,9 +329,9 @@ static constexpr ExtensionEntry EXTENSION_COLLATIONS[] = {
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_FILE_PREFIXES[] = {
-    {"http://", "httpfs"}, {"https://", "httpfs"}, {"s3://", "httpfs"},  {"s3a://", "httpfs"},
-    {"s3n://", "httpfs"},  {"gcs://", "httpfs"},   {"gs://", "httpfs"},  {"r2://", "httpfs"},
-    {"azure://", "azure"}, {"az://", "azure"},     {"abfss://", "azure"}}; // END_OF_EXTENSION_FILE_PREFIXES
+    {"http://", "httpfs"}, {"https://", "httpfs"}, {"s3://", "httpfs"}, {"s3a://", "httpfs"},  {"s3n://", "httpfs"},
+    {"gcs://", "httpfs"},  {"gs://", "httpfs"},    {"r2://", "httpfs"}, {"azure://", "azure"}, {"az://", "azure"},
+    {"abfss://", "azure"}, {"hf://", "httpfs"}}; // END_OF_EXTENSION_FILE_PREFIXES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
@@ -348,14 +349,18 @@ static constexpr ExtensionEntry EXTENSION_FILE_CONTAINS[] = {{".parquet?", "parq
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {
-    {"s3", "httpfs"}, {"r2", "httpfs"}, {"gcs", "httpfs"}, {"azure", "azure"}}; // EXTENSION_SECRET_TYPES
+    {"s3", "httpfs"},   {"r2", "httpfs"},          {"gcs", "httpfs"},
+    {"azure", "azure"}, {"huggingface", "httpfs"}, {"bearer", "httpfs"}}; // EXTENSION_SECRET_TYPES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {
-    {"s3/config", "httpfs"},        {"gcs/config", "httpfs"},           {"r2/config", "httpfs"},
-    {"s3/credential_chain", "aws"}, {"gcs/credential_chain", "aws"},    {"r2/credential_chain", "aws"},
-    {"azure/config", "azure"},      {"azure/credential_chain", "azure"}}; // EXTENSION_SECRET_PROVIDERS
+    {"s3/config", "httpfs"},          {"gcs/config", "httpfs"},
+    {"r2/config", "httpfs"},          {"s3/credential_chain", "aws"},
+    {"gcs/credential_chain", "aws"},  {"r2/credential_chain", "aws"},
+    {"azure/config", "azure"},        {"azure/credential_chain", "azure"},
+    {"huggingface/config", "httfps"}, {"huggingface/cache", "httpfs"},
+    {"bearer/config", "httpfs"}}; // EXTENSION_SECRET_PROVIDERS
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "aws", "azure", "autocomplete", "excel",          "fts",      "httpfs",           "inet",
