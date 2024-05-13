@@ -6,6 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "duckdb/common/types.hpp"
+
 #pragma once
 
 namespace duckdb {

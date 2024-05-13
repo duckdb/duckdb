@@ -8,8 +8,8 @@ LoadStmt:	LOAD file_name
 				{
 					PGLoadStmt *n = makeNode(PGLoadStmt);
 					n->filename = $2;
-					n->repository = "";
-					n->version = "";
+					n->repository = NULL;
+					n->version = NULL;
 					n->load_type = PG_LOAD_TYPE_LOAD;
 					$$ = (PGNode *)n;
 				} |
@@ -38,11 +38,11 @@ repo_path:	Sconst								{ $$ = $1; } |
             ColId                               { $$ = $1; };
 
 opt_from_repo:
-               /* empty */                      { $$ = ""; } |
+               /* empty */                      { $$ = NULL; } |
                 FROM Sconst						{ $$ = $2; } |
                 FROM ColId                      { $$ = $2; };
 
 opt_ext_version:
-               /* empty */                      { $$ = ""; } |
+               /* empty */                      { $$ = NULL; } |
                 VERSION_P Sconst				{ $$ = $2; } |
                 VERSION_P ColId                 { $$ = $2; };

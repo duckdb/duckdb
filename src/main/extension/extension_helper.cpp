@@ -320,7 +320,6 @@ vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(DatabaseInstance
 	});
 #endif
 
-	// TODO unstdstringify?
 	for (const auto &extension : db.LoadedExtensions()) {
 		if (seen_extensions.find(extension) != seen_extensions.end()) {
 			const auto &loaded_extension_data = db.LoadedExtensionsData();

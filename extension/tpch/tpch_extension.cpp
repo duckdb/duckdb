@@ -204,7 +204,11 @@ std::string TpchExtension::Name() {
 }
 
 std::string TpchExtension::Version() const {
+#ifdef EXT_VERSION_TPCH
 	return EXT_VERSION_TPCH;
+#else
+	return "";
+#endif
 }
 
 } // namespace duckdb

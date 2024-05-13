@@ -194,7 +194,11 @@ std::string TpcdsExtension::Name() {
 }
 
 std::string TpcdsExtension::Version() const {
+#ifdef EXT_VERSION_TPCDS
 	return EXT_VERSION_TPCDS;
+#else
+	return "";
+#endif
 }
 
 } // namespace duckdb

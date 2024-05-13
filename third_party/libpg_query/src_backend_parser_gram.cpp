@@ -30319,8 +30319,8 @@ yyreduce:
                                 {
 					PGLoadStmt *n = makeNode(PGLoadStmt);
 					n->filename = (yyvsp[0].str);
-					n->repository = "";
-					n->version = "";
+					n->repository = NULL;
+					n->version = NULL;
 					n->load_type = PG_LOAD_TYPE_LOAD;
 					(yyval.node) = (PGNode *)n;
 				}
@@ -30367,7 +30367,7 @@ yyreduce:
 
   case 1425: /* opt_from_repo: %empty  */
 #line 41 "third_party/libpg_query/grammar/statements/load.y"
-                                                { (yyval.str) = ""; }
+                                                { (yyval.str) = NULL; }
 #line 30372 "third_party/libpg_query/grammar/grammar_out.cpp"
     break;
 
@@ -30385,7 +30385,7 @@ yyreduce:
 
   case 1428: /* opt_ext_version: %empty  */
 #line 46 "third_party/libpg_query/grammar/statements/load.y"
-                                                { (yyval.str) = ""; }
+                                                { (yyval.str) = NULL; }
 #line 30390 "third_party/libpg_query/grammar/grammar_out.cpp"
     break;
 

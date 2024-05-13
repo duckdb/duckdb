@@ -69,7 +69,11 @@ std::string HttpfsExtension::Name() {
 }
 
 std::string HttpfsExtension::Version() const {
+#ifdef EXT_VERSION_HTTPFS
 	return EXT_VERSION_HTTPFS;
+#else
+	return "";
+#endif
 }
 
 } // namespace duckdb

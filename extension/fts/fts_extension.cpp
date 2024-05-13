@@ -77,7 +77,11 @@ std::string FtsExtension::Name() {
 }
 
 std::string FtsExtension::Version() const {
+#ifdef EXT_VERSION_FTS
 	return EXT_VERSION_FTS;
+#else
+	return "";
+#endif
 }
 
 } // namespace duckdb
