@@ -255,6 +255,8 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"calendar", "icu"},
     {"enable_server_cert_verification", "httpfs"},
     {"force_download", "httpfs"},
+    {"hnsw_ef_search", "vss"},
+    {"hnsw_enable_experimental_persistence", "vss"},
     {"http_keep_alive", "httpfs"},
     {"http_retries", "httpfs"},
     {"http_retry_backoff", "httpfs"},
