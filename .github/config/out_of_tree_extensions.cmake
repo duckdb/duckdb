@@ -117,3 +117,14 @@ duckdb_extension_load(vss
         TEST_DIR test/sql
         APPLY_PATCHES
     )
+
+################# MYSQL
+if (NOT MINGW)
+    duckdb_extension_load(mysql_scanner
+            DONT_LINK
+            LOAD_TESTS
+            GIT_URL https://github.com/duckdb/duckdb_mysql
+            GIT_TAG 655a003f7d405e0c8437e24e0bd47dfd63b7fb07
+            APPLY_PATCHES
+            )
+endif()

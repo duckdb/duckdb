@@ -1,10 +1,7 @@
 #include "duckdb/common/dl.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
-#include "duckdb/common/serializer/binary_deserializer.hpp"
-#include "duckdb/common/serializer/buffered_file_reader.hpp"
-#include "duckdb/main/extension_helper.hpp"
-#include "duckdb/main/extension.hpp"
 #include "duckdb/main/error_manager.hpp"
+#include "duckdb/main/extension_helper.hpp"
 #include "mbedtls_wrapper.hpp"
 
 #ifndef DUCKDB_NO_THREADS
