@@ -130,12 +130,10 @@ jobs:
         python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/csv.csv --verbose --threads=2
 
     - name: Regression Test new micro benchmark
-      if: github.event_name == 'pull_request'
+      if: always()
       shell: bash
       run: |
-        target_branch="${{ github.event.pull_request.base.ref }}"
-
-        git diff --name-only $target_branch | (grep "benchmark/micro/*" || true) > .github/regression/updated_micro_benchmarks.csv
+        git diff --name-only $BASE_BRANCH | (grep "benchmark/micro/*" || true) > .github/regression/updated_micro_benchmarks.csv
         if [ $(wc -l < .github/regression/updated_micro_benchmarks.csv) -gt 0 ]; then
           echo "Detected the following modified benchmarks. Running a regression test"
           cat .github/regression/updated_micro_benchmarks.csv
