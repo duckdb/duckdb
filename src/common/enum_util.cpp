@@ -629,6 +629,8 @@ const char* EnumUtil::ToChars<BindingMode>(BindingMode value) {
 		return "STANDARD_BINDING";
 	case BindingMode::EXTRACT_NAMES:
 		return "EXTRACT_NAMES";
+	case BindingMode::EXTRACT_REPLACEMENT_SCANS:
+		return "EXTRACT_REPLACEMENT_SCANS";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -641,6 +643,9 @@ BindingMode EnumUtil::FromString<BindingMode>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "EXTRACT_NAMES")) {
 		return BindingMode::EXTRACT_NAMES;
+	}
+	if (StringUtil::Equals(value, "EXTRACT_REPLACEMENT_SCANS")) {
+		return BindingMode::EXTRACT_REPLACEMENT_SCANS;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
