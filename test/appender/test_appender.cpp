@@ -301,7 +301,7 @@ static duckdb::unique_ptr<DataChunk> AppendDefaultsToVector(duckdb::unique_ptr<Q
 		sel.set_index(1, 8);
 		sel.set_index(2, 3);
 
-		appender.AppendDefaultsToVector(column, 0, sel, 3);
+		appender.AppendDefaultsToVector(column, chunk->size(), 0, sel, 3);
 	}
 	return chunk;
 }
@@ -316,7 +316,8 @@ TEST_CASE("Test append default into Vector errors", "[appender]") {
 			Appender appender(con, "integers");
 			duckdb::Vector vector(duckdb::LogicalTypeId::INTEGER, STANDARD_VECTOR_SIZE * 2);
 			SelectionVector sel;
-			REQUIRE_THROWS(appender.AppendDefaultsToVector(vector, 0, sel, STANDARD_VECTOR_SIZE * 2));
+			REQUIRE_THROWS(
+			    appender.AppendDefaultsToVector(vector, STANDARD_VECTOR_SIZE * 2, 0, sel, STANDARD_VECTOR_SIZE * 2));
 		}
 	}
 #ifdef DEBUG
@@ -328,7 +329,7 @@ TEST_CASE("Test append default into Vector errors", "[appender]") {
 			SelectionVector sel(2);
 			sel.set_index(0, 15);
 			sel.set_index(0, STANDARD_VECTOR_SIZE + 1);
-			REQUIRE_THROWS(appender.AppendDefaultsToVector(vector, 0, sel, 2));
+			REQUIRE_THROWS(appender.AppendDefaultsToVector(vector, 2, 0, sel, 2));
 		}
 	}
 #endif

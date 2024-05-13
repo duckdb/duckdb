@@ -411,18 +411,14 @@ void Appender::FlushInternal(ColumnDataCollection &collection) {
 	context->Append(*description, collection);
 }
 
-void Appender::AppendDefaultsToVector(Vector &result, idx_t column, SelectionVector &sel, idx_t count) {
-#ifdef DEBUG
-	for (idx_t i = 0; i < count; i++) {
-		auto index = sel.get_index(i);
-		if (index > STANDARD_VECTOR_SIZE) {
-			// FIXME: should we require the size of the 'result' Vector as well?
-			throw InternalException("Provided SelectionVector is invalid, index %d points to %d, which is out of range",
-			                        i, index);
-		}
-	}
-#endif
+void Appender::AppendDefaultsToVector(Vector &result, idx_t vector_size, idx_t column, SelectionVector &sel,
+                                      idx_t count) {
+	sel.Verify(count, vector_size);
 	if (count > STANDARD_VECTOR_SIZE) {
+		throw InvalidInputException(
+		    "Please provide a SelectionVector that is at most STANDARD_VECTOR_SIZE (%d) in size", STANDARD_VECTOR_SIZE);
+	}
+	if (vector_size > STANDARD_VECTOR_SIZE) {
 		throw InvalidInputException("Please provide a Vector that is at most STANDARD_VECTOR_SIZE (%d) in size",
 		                            STANDARD_VECTOR_SIZE);
 	}

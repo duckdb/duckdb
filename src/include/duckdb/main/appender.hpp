@@ -131,7 +131,7 @@ public:
 
 public:
 	void AppendDefault();
-	void AppendDefaultsToVector(Vector &result, idx_t column, SelectionVector &sel, idx_t count);
+	void AppendDefaultsToVector(Vector &result, idx_t vector_size, idx_t column, SelectionVector &sel, idx_t count);
 
 protected:
 	void FlushInternal(ColumnDataCollection &collection) override;
