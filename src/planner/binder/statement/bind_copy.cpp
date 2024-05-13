@@ -105,6 +105,11 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 			partition_cols = ParseColumnsOrdered(converted, select_node.names, loption);
 		} else {
 			if (loption == "compression") {
+				if (option.second.empty()) {
+					// This can't be empty
+					throw BinderException("COMPRESSION option, in the file scanner, can't be empty. It should be set "
+					                      "to AUTO, UNCOMPRESSED, GZIP, SNAPPY or ZSTD. Depending on the file format.");
+				}
 				auto parameter = StringUtil::Lower(option.second[0].ToString());
 				if (parameter == "gzip" && !StringUtil::EndsWith(bind_input.file_extension, ".gz")) {
 					// We just add .gz
