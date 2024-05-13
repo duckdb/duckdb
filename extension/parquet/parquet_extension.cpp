@@ -246,8 +246,8 @@ static MultiFileReaderBindData BindSchema(ClientContext &context, vector<Logical
 
 static void InitializeParquetReader(ParquetReader &reader, const ParquetReadBindData &bind_data,
                                     const vector<column_t> &global_column_ids,
-                                    optional_ptr<TableFilterSet> table_filters, ClientContext &context, idx_t file_idx,
-                                    optional_ptr<MultiFileReaderGlobalState> reader_state) {
+                                    optional_ptr<TableFilterSet> table_filters, ClientContext &context,
+                                    optional_idx file_idx, optional_ptr<MultiFileReaderGlobalState> reader_state) {
 	auto &parquet_options = bind_data.parquet_options;
 	auto &reader_data = reader.reader_data;
 

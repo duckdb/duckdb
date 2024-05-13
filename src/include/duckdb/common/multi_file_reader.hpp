@@ -108,7 +108,7 @@ struct MultiFileReaderData {
 	//! for the same column
 	unordered_map<column_t, LogicalType> cast_map;
 	//! (Optionally) The MultiFileReader-generated metadata corresponding to the currently read file
-	idx_t file_list_idx = DConstants::INVALID_INDEX;
+	optional_idx file_list_idx;
 };
 
 //! The MultiFileReader class provides a set of helper methods to handle scanning from multiple files
