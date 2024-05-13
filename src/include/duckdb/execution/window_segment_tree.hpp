@@ -118,17 +118,12 @@ public:
 	                       idx_t partition_count);
 	~WindowCustomAggregator() override;
 
+	unique_ptr<WindowAggregatorState> GetGlobalState() const override;
 	void Finalize(const FrameStats &stats) override;
 
 	unique_ptr<WindowAggregatorState> GetLocalState() const override;
 	void Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result, idx_t count,
 	              idx_t row_idx) const override;
-
-	//! Partition description
-	unique_ptr<WindowPartitionInput> partition_input;
-
-	//! Data pointer that contains a single state, used for global custom window state
-	unique_ptr<WindowAggregatorState> gstate;
 };
 
 class WindowSegmentTree : public WindowAggregator {
