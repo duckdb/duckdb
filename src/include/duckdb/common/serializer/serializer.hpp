@@ -266,6 +266,18 @@ protected:
 		OnListEnd();
 	}
 
+	// priority queue
+	template <typename T>
+	void WriteValue(const std::priority_queue<T> &queue) {
+		vector<T> placeholder;
+		auto queue_copy = std::priority_queue<T>(queue);
+		while (queue_copy.size() > 0) {
+			placeholder.emplace_back(queue_copy.top());
+			queue_copy.pop();
+		}
+		WriteValue(placeholder);
+	}
+
 	// class or struct implementing `Serialize(Serializer& Serializer)`;
 	template <typename T>
 	typename std::enable_if<has_serialize<T>::value>::type WriteValue(const T &value) {
