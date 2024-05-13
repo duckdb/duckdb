@@ -1,6 +1,7 @@
 #include "duckdb/main/relation/query_relation.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/parser/parser.hpp"
