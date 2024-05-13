@@ -38,7 +38,7 @@ query IIII rowsort
 SELECT extension_name, install_mode, installed_from, extension_version FROM duckdb_extensions() where installed and extension_name != 'jemalloc'
 ----
 json	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.1
-parquet	(empty)	(empty)	(empty)
+parquet	STATICALLY_LINKED	(empty)	(empty)
 tpcds	CUSTOM_PATH	./build/extension_metadata_test_data/direct_install/tpcds.duckdb_extension	v0.0.1
 tpch	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.1
 
@@ -55,7 +55,7 @@ query IIII rowsort
 SELECT extension_name, install_mode, installed_from, extension_version FROM duckdb_extensions() where installed and extension_name != 'jemalloc'
 ----
 json	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.1
-parquet	(empty)	(empty)	(empty)
+parquet	STATICALLY_LINKED	(empty)	(empty)
 tpcds	CUSTOM_PATH	./build/extension_metadata_test_data/direct_install/tpcds.duckdb_extension	v0.0.1
 tpch	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.2
 
@@ -81,7 +81,7 @@ query IIII rowsort
 SELECT extension_name, install_mode, installed_from, extension_version FROM duckdb_extensions() where installed and extension_name != 'jemalloc'
 ----
 json	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.1
-parquet	(empty)	(empty)	(empty)
+parquet	STATICALLY_LINKED	(empty)	(empty)
 tpcds	CUSTOM_PATH	./build/extension_metadata_test_data/direct_install/tpcds.duckdb_extension	v0.0.1
 tpch	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.2
 

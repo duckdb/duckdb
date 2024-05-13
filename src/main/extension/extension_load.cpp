@@ -284,12 +284,13 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 
 	auto lowercase_extension_name = StringUtil::Lower(filebase);
 
+	// Initialize the ExtensionInitResult
+	result.filebase = lowercase_extension_name;
+	result.filename = filename;
+	result.lib_hdl = lib_hdl;
+
 	if (!direct_load) {
 		auto info_file_name = filename + ".info";
-
-		result.filebase = lowercase_extension_name;
-		result.filename = filename;
-		result.lib_hdl = lib_hdl;
 
 		// If there's an info file, we parse that for some more metadata
 		if (fs.FileExists(info_file_name)) {
@@ -307,6 +308,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		result.install_info = make_uniq<ExtensionInstallInfo>();
 		result.install_info->mode = ExtensionInstallMode::NOT_INSTALLED;
 		result.install_info->full_path = filename;
+		result.install_info->version = parsed_metadata.extension_version;
 	}
 
 	return true;
