@@ -163,6 +163,7 @@ public:
 	inline bool AddRowInternal();
 	//! Force the throw of a unicode error
 	void HandleUnicodeError(idx_t col_idx, LinePosition &error_position);
+	bool HandleTooManyColumnsError(const char *value_ptr, const idx_t size);
 	//! Certain errors should only be handled when adding the line, to ensure proper error propagation.
 	bool HandleError();
 
