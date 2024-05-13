@@ -208,11 +208,18 @@ void DatabaseInstance::LoadExtensionSettings() {
 		}
 		// Attempt to autoload it
 		if (!ExtensionHelper::CanAutoloadExtension(extension_name)) {
-			// FIXME: do we want to throw with a more explicit error message that this is a recognized extension setting
-			// but we couldn't load it?
-			continue;
+			throw InvalidInputException(
+			    "To set the %s setting, the %s extension needs to be loaded. But it could not be autoloaded.", name,
+			    extension_name);
 		}
-		ExtensionHelper::AutoLoadExtension(*this, extension_name);
+		try {
+			ExtensionHelper::AutoLoadExtension(*this, extension_name);
+		} catch (std::exception &e) {
+			ErrorData error(e);
+			throw InvalidInputException("To set the %s setting, the %s extension needs to be loaded. But autoloading "
+			                            "failed with the following error: ",
+			                            name, extension_name, error.RawMessage());
+		}
 		config.SetOptionByName(name, it->second);
 		extension_options.push_back(name);
 	}
@@ -220,18 +227,6 @@ void DatabaseInstance::LoadExtensionSettings() {
 	for (auto &option : extension_options) {
 		unrecognized_options.erase(option);
 	}
-
-	// string error_message;
-	// if (!extension_options.empty()) {
-	//	error_message += "The following settings are part of known extensions\n";
-	//	// FIXME: should we try to autoload these before throwing?
-	//	error_message += "Under normal circumstances we can autoload/autoinstall these, but that is only possible "
-	//	                 "after the Database is initialized\n\n";
-	//	for (auto &kv : extension_options) {
-	//		auto concatenated = StringUtil::Join(kv.second, ", ");
-	//		error_message += StringUtil::Format("[%s] : %s\n", kv.first, concatenated);
-	//	}
-	//}
 }
 
 void ThrowExtensionSetUnrecognizedOptions(const unordered_map<string, Value> &unrecognized_options) {
