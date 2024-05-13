@@ -50,6 +50,8 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   add_compile_options(-std=c++11)
 endif()
 
+add_definitions(-DRE2_ON_VALGRIND)
+
 if(WIN32)
   add_definitions(-DUNICODE
                   -D_UNICODE
