@@ -38,9 +38,9 @@ void Prog::Inst::InitAlt(uint32_t out, uint32_t out1) {
 void Prog::Inst::InitByteRange(int lo, int hi, int foldcase, uint32_t out) {
   DCHECK_EQ(out_opcode_, 0);
   set_out_opcode(out, kInstByteRange);
-  lo_ = lo & 0xFF;
-  hi_ = hi & 0xFF;
-  hint_foldcase_ = foldcase&1;
+  byte_range.lo_ = lo & 0xFF;
+  byte_range.hi_ = hi & 0xFF;
+  byte_range.hint_foldcase_ = foldcase&1;
 }
 
 void Prog::Inst::InitCapture(int cap, uint32_t out) {
@@ -85,7 +85,7 @@ std::string Prog::Inst::Dump() {
     case kInstByteRange:
       return StringPrintf("byte%s [%02x-%02x] %d -> %d",
                           foldcase() ? "/i" : "",
-                          lo_, hi_, hint(), out());
+		                    byte_range.lo_, byte_range.hi_, hint(), out());
 
     case kInstCapture:
       return StringPrintf("capture %d -> %d", cap_, out());
@@ -921,7 +921,7 @@ void Prog::ComputeHints(std::vector<Inst>* flat, int begin, int end) {
 
     if (first != end) {
       uint16_t hint = static_cast<uint16_t>(std::min(first - id, 32767));
-      ip->hint_foldcase_ |= hint<<1;
+      ip->byte_range.hint_foldcase_ |= hint<<1;
     }
   }
 }
@@ -1022,11 +1022,11 @@ void Prog::ConfigurePrefixAccel(const std::string& prefix,
     prefix_dfa_ = BuildShiftDFA(prefix.substr(0, prefix_size_));
   } else if (prefix_size_ != 1) {
     // Use PrefixAccel_FrontAndBack().
-    prefix_front_ = prefix.front();
-    prefix_back_ = prefix.back();
+    prefix_front_back.prefix_front_ = prefix.front();
+	prefix_front_back.prefix_back_ = prefix.back();
   } else {
     // Use memchr(3).
-    prefix_front_ = prefix.front();
+	prefix_front_back.prefix_front_ = prefix.front();
   }
 }
 
@@ -1166,8 +1166,8 @@ const void* Prog::PrefixAccel_FrontAndBack(const void* data, size_t size) {
   const char* p0 = reinterpret_cast<const char*>(data);
   for (const char* p = p0;; p++) {
     DCHECK_GE(size, static_cast<size_t>(p-p0));
-    p = reinterpret_cast<const char*>(memchr(p, prefix_front_, size - (p-p0)));
-    if (p == NULL || p[prefix_size_-1] == prefix_back_)
+    p = reinterpret_cast<const char*>(memchr(p, prefix_front_back.prefix_front_, size - (p-p0)));
+    if (p == NULL || p[prefix_size_-1] == prefix_front_back.prefix_back_)
       return p;
   }
 }

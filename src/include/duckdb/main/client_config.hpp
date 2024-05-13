@@ -16,9 +16,11 @@
 #include "duckdb/common/progress_bar/progress_bar.hpp"
 
 namespace duckdb {
+
 class ClientContext;
 class PhysicalResultCollector;
 class PreparedStatementData;
+class HTTPLogger;
 
 typedef std::function<unique_ptr<PhysicalResultCollector>(ClientContext &context, PreparedStatementData &data)>
     get_result_collector_t;
@@ -114,6 +116,12 @@ struct ClientConfig {
 	//! Function that is used to create the result collector for a materialized result
 	//! Defaults to PhysicalMaterializedCollector
 	get_result_collector_t result_collector = nullptr;
+
+	//! If HTTP logging is enabled or not.
+	bool enable_http_logging = false;
+	//! The file to save query HTTP logging information to, instead of printing it to the console
+	//! (empty = print to console)
+	string http_logging_output;
 
 public:
 	static ClientConfig &GetConfig(ClientContext &context);

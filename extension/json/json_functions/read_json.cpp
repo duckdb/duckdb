@@ -277,8 +277,10 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 		D_ASSERT(return_types.size() == names.size());
 	}
 
-	bind_data->reader_bind =
-	    MultiFileReader::BindOptions(bind_data->options.file_options, bind_data->files, return_types, names);
+	SimpleMultiFileList file_list(std::move(bind_data->files));
+	MultiFileReader().BindOptions(bind_data->options.file_options, file_list, return_types, names,
+	                              bind_data->reader_bind);
+	bind_data->files = file_list.GetAllFiles();
 
 	auto &transform_options = bind_data->transform_options;
 	transform_options.strict_cast = !bind_data->ignore_errors;
@@ -345,7 +347,7 @@ static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p,
 	}
 
 	if (output.size() != 0) {
-		MultiFileReader::FinalizeChunk(gstate.bind_data.reader_bind, lstate.GetReaderData(), output);
+		MultiFileReader().FinalizeChunk(context, gstate.bind_data.reader_bind, lstate.GetReaderData(), output);
 	}
 }
 

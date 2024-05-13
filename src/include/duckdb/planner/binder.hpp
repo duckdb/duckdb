@@ -104,8 +104,6 @@ public:
 	vector<CorrelatedColumnInfo> correlated_columns;
 	//! The set of parameter expressions bound by this binder
 	optional_ptr<BoundParameterMap> parameters;
-	//! Statement properties
-	StatementProperties properties;
 	//! The alias for the currently processing subquery, if it exists
 	string alias;
 	//! Macro parameter bindings (if any)
@@ -183,7 +181,7 @@ public:
 
 	void BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> &root);
 
-	void BindSchemaOrCatalog(string &catalog, string &schema);
+	static void BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema);
 	void BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog = nullptr,
 	                     const string &schema = INVALID_SCHEMA);
 
@@ -203,6 +201,8 @@ public:
 
 	void SetCanContainNulls(bool can_contain_nulls);
 	void SetAlwaysRequireRebind();
+
+	StatementProperties &GetStatementProperties();
 
 private:
 	//! The parent binder (if any)
@@ -231,6 +231,8 @@ private:
 	CatalogEntryRetriever entry_retriever;
 	//! Unnamed subquery index
 	idx_t unnamed_subquery_index = 1;
+	//! Statement properties
+	StatementProperties prop;
 
 private:
 	//! Get the root binder (binder with no parent)
@@ -310,6 +312,7 @@ private:
 	unique_ptr<BoundTableRef> Bind(TableFunctionRef &ref);
 	unique_ptr<BoundTableRef> Bind(EmptyTableRef &ref);
 	unique_ptr<BoundTableRef> Bind(ExpressionListRef &ref);
+	unique_ptr<BoundTableRef> Bind(ColumnDataRef &ref);
 	unique_ptr<BoundTableRef> Bind(PivotRef &expr);
 	unique_ptr<BoundTableRef> Bind(ShowRef &ref);
 
@@ -328,11 +331,11 @@ private:
 	bool BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &expressions,
 	                                 unique_ptr<BoundSubqueryRef> &subquery, ErrorData &error);
 	unique_ptr<LogicalOperator> BindTableFunction(TableFunction &function, vector<Value> parameters);
-	unique_ptr<LogicalOperator>
-	BindTableFunctionInternal(TableFunction &table_function, const string &function_name, vector<Value> parameters,
-	                          named_parameter_map_t named_parameters, vector<LogicalType> input_table_types,
-	                          vector<string> input_table_names, const vector<string> &column_name_alias,
-	                          unique_ptr<ExternalDependency> external_dependency);
+	unique_ptr<LogicalOperator> BindTableFunctionInternal(TableFunction &table_function, const TableFunctionRef &ref,
+	                                                      vector<Value> parameters,
+	                                                      named_parameter_map_t named_parameters,
+	                                                      vector<LogicalType> input_table_types,
+	                                                      vector<string> input_table_names);
 
 	unique_ptr<LogicalOperator> CreatePlan(BoundBaseTableRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundJoinRef &ref);
@@ -340,6 +343,7 @@ private:
 	unique_ptr<LogicalOperator> CreatePlan(BoundTableFunction &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundEmptyTableRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundExpressionListRef &ref);
+	unique_ptr<LogicalOperator> CreatePlan(BoundColumnDataRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundCTERef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundPivotRef &ref);
 
@@ -383,6 +387,8 @@ private:
 	void ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_ptr<ParsedExpression> &replacement);
 	void BindWhereStarExpression(unique_ptr<ParsedExpression> &expr);
 
+	//! If only a schema name is provided (e.g. "a.b") then figure out if "a" is a schema or a catalog name
+	void BindSchemaOrCatalog(string &catalog_name, string &schema_name);
 	const string BindCatalog(string &catalog_name);
 	SchemaCatalogEntry &BindCreateSchema(CreateInfo &info);
 

@@ -8,10 +8,32 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/common/string_util.hpp"
 
 #include <algorithm>
 
 namespace duckdb {
+
+MultiFileReader::~MultiFileReader() {
+}
+
+unique_ptr<MultiFileReader> MultiFileReader::Create(const TableFunction &table_function) {
+	unique_ptr<MultiFileReader> res;
+	if (table_function.get_multi_file_reader) {
+		res = table_function.get_multi_file_reader();
+		res->function_name = table_function.name;
+	} else {
+		res = make_uniq<MultiFileReader>();
+		res->function_name = table_function.name;
+	}
+	return res;
+}
+
+unique_ptr<MultiFileReader> MultiFileReader::CreateDefault(const string &function_name) {
+	auto res = make_uniq<MultiFileReader>();
+	res->function_name = function_name;
+	return res;
+}
 
 void MultiFileReader::AddParameters(TableFunction &table_function) {
 	table_function.named_parameters["filename"] = LogicalType::BOOLEAN;
@@ -21,44 +43,49 @@ void MultiFileReader::AddParameters(TableFunction &table_function) {
 	table_function.named_parameters["hive_types_autocast"] = LogicalType::BOOLEAN;
 }
 
-vector<string> MultiFileReader::GetFileList(ClientContext &context, const Value &input, const string &name,
-                                            FileGlobOptions options) {
-	auto &config = DBConfig::GetConfig(context);
-	if (!config.options.enable_external_access) {
-		throw PermissionException("Scanning %s files is disabled through configuration", name);
-	}
+vector<string> MultiFileReader::ParsePaths(const Value &input) {
 	if (input.IsNull()) {
-		throw ParserException("%s reader cannot take NULL list as parameter", name);
+		throw ParserException("%s cannot take NULL list as parameter", function_name);
 	}
-	FileSystem &fs = FileSystem::GetFileSystem(context);
-	vector<string> files;
+
 	if (input.type().id() == LogicalTypeId::VARCHAR) {
-		auto file_name = StringValue::Get(input);
-		files = fs.GlobFiles(file_name, context, options);
-
-		// Sort the files to ensure that the order is deterministic
-		std::sort(files.begin(), files.end());
-
+		return {StringValue::Get(input)};
 	} else if (input.type().id() == LogicalTypeId::LIST) {
+		vector<string> paths;
 		for (auto &val : ListValue::GetChildren(input)) {
 			if (val.IsNull()) {
-				throw ParserException("%s reader cannot take NULL input as parameter", name);
+				throw ParserException("%s reader cannot take NULL input as parameter", function_name);
 			}
 			if (val.type().id() != LogicalTypeId::VARCHAR) {
-				throw ParserException("%s reader can only take a list of strings as a parameter", name);
+				throw ParserException("%s reader can only take a list of strings as a parameter", function_name);
 			}
-			auto glob_files = fs.GlobFiles(StringValue::Get(val), context, options);
-			std::sort(glob_files.begin(), glob_files.end());
-			files.insert(files.end(), glob_files.begin(), glob_files.end());
+			paths.push_back(StringValue::Get(val));
 		}
+		return paths;
 	} else {
-		throw InternalException("Unsupported type for MultiFileReader::GetFileList");
+		throw InternalException("Unsupported type for MultiFileReader::ParsePaths called with: '%s'");
 	}
-	if (files.empty() && options == FileGlobOptions::DISALLOW_EMPTY) {
-		throw IOException("%s reader needs at least one file to read", name);
-	}
+}
 
-	return files;
+unique_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const vector<string> &paths,
+                                                          FileGlobOptions options) {
+	auto &config = DBConfig::GetConfig(context);
+	if (!config.options.enable_external_access) {
+		throw PermissionException("Scanning %s files is disabled through configuration", function_name);
+	}
+	vector<string> result_files;
+
+	auto res = make_uniq<GlobMultiFileList>(context, paths, options);
+	if (res->GetExpandResult() == FileExpandResult::NO_FILES && options == FileGlobOptions::DISALLOW_EMPTY) {
+		throw IOException("%s needs at least one file to read", function_name);
+	}
+	return std::move(res);
+}
+
+unique_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const Value &input,
+                                                          FileGlobOptions options) {
+	auto paths = ParsePaths(input);
+	return CreateFileList(context, paths, options);
 }
 
 bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFileReaderOptions &options,
@@ -99,37 +126,21 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 	return true;
 }
 
-bool MultiFileReader::ComplexFilterPushdown(ClientContext &context, vector<string> &files,
-                                            const MultiFileReaderOptions &options, LogicalGet &get,
-                                            vector<unique_ptr<Expression>> &filters) {
-	if (files.empty()) {
-		return false;
-	}
-	if (!options.hive_partitioning && !options.filename) {
-		return false;
-	}
+unique_ptr<MultiFileList> MultiFileReader::ComplexFilterPushdown(ClientContext &context, MultiFileList &files,
+                                                                 const MultiFileReaderOptions &options, LogicalGet &get,
+                                                                 vector<unique_ptr<Expression>> &filters) {
+	return files.ComplexFilterPushdown(context, options, get, filters);
+}
 
-	unordered_map<string, column_t> column_map;
-	for (idx_t i = 0; i < get.column_ids.size(); i++) {
-		if (!IsRowIdColumnId(get.column_ids[i])) {
-			column_map.insert({get.names[get.column_ids[i]], i});
-		}
-	}
-
-	auto start_files = files.size();
-	HivePartitioning::ApplyFiltersToFileList(context, files, filters, column_map, get, options.hive_partitioning,
-	                                         options.filename);
-
-	if (files.size() != start_files) {
-		// we have pruned files
-		return true;
-	}
+bool MultiFileReader::Bind(MultiFileReaderOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
+                           vector<string> &names, MultiFileReaderBindData &bind_data) {
+	// The Default MultiFileReader can not perform any binding as it uses MultiFileLists with no schema information.
 	return false;
 }
 
-MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &options, const vector<string> &files,
-                                                     vector<LogicalType> &return_types, vector<string> &names) {
-	MultiFileReaderBindData bind_data;
+void MultiFileReader::BindOptions(MultiFileReaderOptions &options, MultiFileList &files,
+                                  vector<LogicalType> &return_types, vector<string> &names,
+                                  MultiFileReaderBindData &bind_data) {
 	// Add generated constant column for filename
 	if (options.filename) {
 		if (std::find(names.begin(), names.end(), "filename") != names.end()) {
@@ -142,27 +153,28 @@ MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &opt
 
 	// Add generated constant columns from hive partitioning scheme
 	if (options.hive_partitioning) {
-		D_ASSERT(!files.empty());
-		auto partitions = HivePartitioning::Parse(files[0]);
+		D_ASSERT(files.GetExpandResult() != FileExpandResult::NO_FILES);
+		auto partitions = HivePartitioning::Parse(files.GetFirstFile());
 		// verify that all files have the same hive partitioning scheme
-		for (auto &f : files) {
-			auto file_partitions = HivePartitioning::Parse(f);
+		for (const auto &file : files.Files()) {
+			auto file_partitions = HivePartitioning::Parse(file);
 			for (auto &part_info : partitions) {
 				if (file_partitions.find(part_info.first) == file_partitions.end()) {
 					string error = "Hive partition mismatch between file \"%s\" and \"%s\": key \"%s\" not found";
 					if (options.auto_detect_hive_partitioning == true) {
-						throw InternalException(error + "(hive partitioning was autodetected)", files[0], f,
-						                        part_info.first);
+						throw InternalException(error + "(hive partitioning was autodetected)", files.GetFirstFile(),
+						                        file, part_info.first);
 					}
-					throw BinderException(error.c_str(), files[0], f, part_info.first);
+					throw BinderException(error.c_str(), files.GetFirstFile(), file, part_info.first);
 				}
 			}
 			if (partitions.size() != file_partitions.size()) {
 				string error_msg = "Hive partition mismatch between file \"%s\" and \"%s\"";
 				if (options.auto_detect_hive_partitioning == true) {
-					throw InternalException(error_msg + "(hive partitioning was autodetected)", files[0], f);
+					throw InternalException(error_msg + "(hive partitioning was autodetected)", files.GetFirstFile(),
+					                        file);
 				}
-				throw BinderException(error_msg.c_str(), files[0], f);
+				throw BinderException(error_msg.c_str(), files.GetFirstFile(), file);
 			}
 		}
 
@@ -188,7 +200,6 @@ MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &opt
 			bind_data.hive_partitioning_indexes.emplace_back(part.first, hive_partitioning_index);
 		}
 	}
-	return bind_data;
 }
 
 void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, const MultiFileReaderBindData &options,
@@ -337,8 +348,8 @@ void MultiFileReader::CreateFilterMap(const vector<LogicalType> &global_types, o
 	}
 }
 
-void MultiFileReader::FinalizeChunk(const MultiFileReaderBindData &bind_data, const MultiFileReaderData &reader_data,
-                                    DataChunk &chunk) {
+void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileReaderBindData &bind_data,
+                                    const MultiFileReaderData &reader_data, DataChunk &chunk) {
 	// reference all the constants set up in MultiFileReader::FinalizeBind
 	for (auto &entry : reader_data.constant_map) {
 		chunk.data[entry.column_id].Reference(entry.value);
@@ -387,16 +398,17 @@ void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vecto
 	}
 }
 
-bool MultiFileReaderOptions::AutoDetectHivePartitioningInternal(const vector<string> &files, ClientContext &context) {
+bool MultiFileReaderOptions::AutoDetectHivePartitioningInternal(MultiFileList &files, ClientContext &context) {
 	std::unordered_set<string> partitions;
 	auto &fs = FileSystem::GetFileSystem(context);
 
-	auto splits_first_file = StringUtil::Split(files.front(), fs.PathSeparator(files.front()));
+	auto first_file = files.GetFirstFile();
+	auto splits_first_file = StringUtil::Split(first_file, fs.PathSeparator(first_file));
 	if (splits_first_file.size() < 2) {
 		return false;
 	}
-	for (auto it = splits_first_file.begin(); it != splits_first_file.end(); it++) {
-		auto partition = StringUtil::Split(*it, "=");
+	for (auto &split : splits_first_file) {
+		auto partition = StringUtil::Split(split, "=");
 		if (partition.size() == 2) {
 			partitions.insert(partition.front());
 		}
@@ -404,7 +416,8 @@ bool MultiFileReaderOptions::AutoDetectHivePartitioningInternal(const vector<str
 	if (partitions.empty()) {
 		return false;
 	}
-	for (auto &file : files) {
+
+	for (const auto &file : files.Files()) {
 		auto splits = StringUtil::Split(file, fs.PathSeparator(file));
 		if (splits.size() != splits_first_file.size()) {
 			return false;
@@ -421,13 +434,13 @@ bool MultiFileReaderOptions::AutoDetectHivePartitioningInternal(const vector<str
 	}
 	return true;
 }
-void MultiFileReaderOptions::AutoDetectHiveTypesInternal(const vector<string> &files, ClientContext &context) {
+void MultiFileReaderOptions::AutoDetectHiveTypesInternal(MultiFileList &files, ClientContext &context) {
 	const LogicalType candidates[] = {LogicalType::DATE, LogicalType::TIMESTAMP, LogicalType::BIGINT};
 
 	auto &fs = FileSystem::GetFileSystem(context);
 
 	unordered_map<string, LogicalType> detected_types;
-	for (auto &file : files) {
+	for (const auto &file : files.Files()) {
 		unordered_map<string, string> partitions;
 		auto splits = StringUtil::Split(file, fs.PathSeparator(file));
 		if (splits.size() < 2) {
@@ -475,8 +488,8 @@ void MultiFileReaderOptions::AutoDetectHiveTypesInternal(const vector<string> &f
 		hive_types_schema.insert(make_pair(entry.first, std::move(entry.second)));
 	}
 }
-void MultiFileReaderOptions::AutoDetectHivePartitioning(const vector<string> &files, ClientContext &context) {
-	D_ASSERT(!files.empty());
+void MultiFileReaderOptions::AutoDetectHivePartitioning(MultiFileList &files, ClientContext &context) {
+	D_ASSERT(files.GetExpandResult() != FileExpandResult::NO_FILES);
 	const bool hp_explicitly_disabled = !auto_detect_hive_partitioning && !hive_partitioning;
 	const bool ht_enabled = !hive_types_schema.empty();
 	if (hp_explicitly_disabled && ht_enabled) {
