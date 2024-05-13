@@ -48,6 +48,7 @@ void TableRef::CopyProperties(TableRef &target) const {
 	target.alias = alias;
 	target.query_location = query_location;
 	target.sample = sample ? sample->Copy() : nullptr;
+	target.external_dependency = external_dependency;
 }
 
 void TableRef::Print() {

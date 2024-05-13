@@ -228,7 +228,7 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	handle = fs.OpenFile(path, flags);
 	if (!handle) {
 		// this can only happen in read-only mode - as that is when we set FILE_FLAGS_NULL_IF_NOT_EXISTS
-		throw CatalogException("Cannot open database \"%s\" in read-only mode: database does not exist", path);
+		throw IOException("Cannot open database \"%s\" in read-only mode: database does not exist", path);
 	}
 
 	MainHeader::CheckMagicBytes(*handle);
@@ -266,8 +266,9 @@ void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t locatio
 
 	// verify the checksum
 	if (stored_checksum != computed_checksum) {
-		throw IOException("Corrupt database file: computed checksum %llu does not match stored checksum %llu in block",
-		                  computed_checksum, stored_checksum);
+		throw IOException("Corrupt database file: computed checksum %llu does not match stored checksum %llu in block "
+		                  "at location %llu",
+		                  computed_checksum, stored_checksum, location);
 	}
 }
 

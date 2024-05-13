@@ -1,6 +1,7 @@
 #include "capi_tester.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -274,7 +275,9 @@ TEST_CASE("Logical types with aliases", "[capi]") {
 	CreateTypeInfo info(type_name, id);
 
 	auto &catalog_name = DatabaseManager::GetDefaultDatabase(*connection->context);
+	auto &transaction = MetaTransaction::Get(*connection->context);
 	auto &catalog = Catalog::GetCatalog(*connection->context, catalog_name);
+	transaction.ModifyDatabase(catalog.GetAttached());
 	catalog.CreateType(*connection->context, info);
 
 	connection->Commit();
@@ -291,6 +294,7 @@ TEST_CASE("Logical types with aliases", "[capi]") {
 		REQUIRE(logical_type);
 
 		auto alias = duckdb_logical_type_get_alias(logical_type);
+		REQUIRE(alias);
 		REQUIRE(string(alias) == "test_type");
 		duckdb_free(alias);
 

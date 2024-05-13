@@ -116,13 +116,8 @@ class DFA {
                         // into this state, along with kFlagMatch if this
                         // is a matching state.
 
-// Work around the bug affecting flexible array members in GCC 6.x (for x >= 1).
-// (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=70932)
-#if !defined(__clang__) && defined(__GNUC__) && __GNUC__ == 6 && __GNUC_MINOR__ >= 1
-    std::atomic<State*> next_[0];   // Outgoing arrows from State,
-#else
-    std::atomic<State*> next_[];    // Outgoing arrows from State,
-#endif
+	// fixes from https://github.com/girishji/re2/commit/80b212f289c4ef75408b1510b9fc85e6cb9a447c
+    std::atomic<State*> *next_;    // Outgoing arrows from State,
 
                         // one per input byte class
   };
@@ -751,7 +746,7 @@ DFA::State* DFA::CachedState(int* inst, int ninst, uint32_t flag) {
   // Allocate new state along with room for next_ and inst_.
   char* space = std::allocator<char>().allocate(mem);
   State* s = new (space) State;
-  (void) new (s->next_) std::atomic<State*>[nnext];
+  s->next_ =  new (space + sizeof(State)) std::atomic<State*>[nnext];
   // Work around a unfortunate bug in older versions of libstdc++.
   // (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=64658)
   for (int i = 0; i < nnext; i++)
