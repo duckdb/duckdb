@@ -314,3 +314,9 @@ query T
 execute q1('a')
 ----
 1
+
+# test issue 11997
+query I
+select json_extract_string(json('{"j[so]n_\"key": 67}'), '$."j[so]n_\"key"');
+----
+67
