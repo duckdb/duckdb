@@ -14,7 +14,7 @@ static string PrettyPrintString(const string &s) {
 		    c == '.') {
 			res += c;
 		} else {
-			uint8_t value = c;
+			auto value = UnsafeNumericCast<uint8_t>(c);
 			res += "\\x";
 			uint8_t first = value / 16;
 			if (first < 10) {
