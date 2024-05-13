@@ -1,6 +1,8 @@
 # name: test/sql/catalog/function/test_macro_default_arg.test
 # group: [function]
 
+require no_serialized_dependencies
+
 statement ok
 pragma enable_verification;
 

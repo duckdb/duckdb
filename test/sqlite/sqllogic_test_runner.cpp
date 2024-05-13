@@ -328,6 +328,14 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		return RequireResult::PRESENT;
 	}
 
+	if (param == "no_serialized_dependencies") {
+#ifdef DUCKDB_SERIALIZE_DEPENDENCIES
+		return RequireResult::MISSING;
+#else
+		return RequireResult::PRESENT;
+#endif
+	}
+
 	if (param == "skip_reload") {
 		skip_reload = true;
 		return RequireResult::PRESENT;

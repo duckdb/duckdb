@@ -206,6 +206,10 @@ endif
 ifeq (${RUN_SLOW_VERIFIERS}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DRUN_SLOW_VERIFIERS=1
 endif
+# Temporary option used in CI until dependency serialization is enabled by default
+ifeq (${SERIALIZE_DEPENDENCIES}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DSERIALIZE_DEPENDENCIES=1
+endif
 ifeq (${ALTERNATIVE_VERIFY}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DALTERNATIVE_VERIFY=1
 endif

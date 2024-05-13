@@ -512,6 +512,7 @@ jobs:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
+      SERIALIZE_DEPENDENCIES: 1
 
     steps:
       - uses: actions/checkout@v3
