@@ -181,10 +181,10 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint 
 		info->InitializeIndexes(context);
 	} else {
 		info->InitializeIndexes(context);
-	}
 
-	// Verify the new constraint against current persistent/local data
-	VerifyNewConstraint(local_storage, parent, constraint);
+		// Verify the new constraint against current persistent/local data
+		VerifyNewConstraint(local_storage, parent, constraint);
+	}
 
 	// Get the local data ownership from old dt
 	local_storage.MoveStorage(parent, *this);
