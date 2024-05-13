@@ -2,15 +2,17 @@
 
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
@@ -20,7 +22,6 @@
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
-#include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/checkpoint/table_data_reader.hpp"
@@ -28,8 +29,6 @@
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/execution/index/unknown_index.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 
 namespace duckdb {
@@ -438,36 +437,9 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	for (auto &parsed_expr : info.parsed_expressions) {
 		index.parsed_expressions.push_back(parsed_expr->Copy());
 	}
-
-	// obtain the parsed expressions of the ART from the index metadata
-	vector<unique_ptr<ParsedExpression>> parsed_expressions;
-	for (auto &parsed_expr : info.parsed_expressions) {
-		parsed_expressions.push_back(parsed_expr->Copy());
-	}
-	D_ASSERT(!parsed_expressions.empty());
-
-	// add the table to the bind context to bind the parsed expressions
-	auto binder = Binder::CreateBinder(context);
-	vector<LogicalType> column_types;
-	vector<string> column_names;
-	for (auto &col : table.GetColumns().Logical()) {
-		column_types.push_back(col.Type());
-		column_names.push_back(col.Name());
-	}
-
-	// create a binder to bind the parsed expressions
-	vector<column_t> column_ids;
-	binder->bind_context.AddBaseTable(0, info.table, column_names, column_types, column_ids, &table);
-	IndexBinder idx_binder(*binder, context);
-
-	// bind the parsed expressions to create unbound expressions
-	vector<unique_ptr<Expression>> unbound_expressions;
-	unbound_expressions.reserve(parsed_expressions.size());
-	for (auto &expr : parsed_expressions) {
-		unbound_expressions.push_back(idx_binder.Bind(expr));
-	}
-
+	D_ASSERT(!info.parsed_expressions.empty());
 	auto &data_table = table.GetStorage();
+
 	IndexStorageInfo index_storage_info;
 	if (root_block_pointer.IsValid()) {
 		// this code path is necessary to read older duckdb files
@@ -486,19 +458,11 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 
 	D_ASSERT(index_storage_info.IsValid() && !index_storage_info.name.empty());
 
-	// This is executed before any extensions can be loaded, which is why we must treat any index type that is not
-	// built-in (ART) as unknown
-	if (info.index_type == ART::TYPE_NAME) {
-		data_table.AddIndex(make_uniq<ART>(info.index_name, info.constraint_type, info.column_ids,
-		                                   TableIOManager::Get(data_table), unbound_expressions, data_table.db, nullptr,
-		                                   index_storage_info));
-	} else {
-		auto unknown_index = make_uniq<UnknownIndex>(info.index_name, info.index_type, info.constraint_type,
-		                                             info.column_ids, TableIOManager::Get(data_table),
-		                                             unbound_expressions, data_table.db, info, index_storage_info);
+	// Create an unbound index and add it to the table
+	auto unbound_index = make_uniq<UnboundIndex>(std::move(create_info), index_storage_info,
+	                                             TableIOManager::Get(data_table), data_table.db);
 
-		data_table.AddIndex(std::move(unknown_index));
-	}
+	data_table.GetDataTableInfo()->GetIndexes().AddIndex(std::move(unbound_index));
 }
 
 //===--------------------------------------------------------------------===//
