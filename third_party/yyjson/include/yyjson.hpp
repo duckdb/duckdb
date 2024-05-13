@@ -384,7 +384,7 @@ namespace duckdb_yyjson {
 
 /* extern "C" begin */
 #ifdef __cplusplus
-extern "C" {
+// extern "C" {
 #endif
 
 /* warning suppress begin */
@@ -6012,7 +6012,7 @@ yyjson_api_inline yyjson_mut_val *yyjson_mut_doc_get_pointer(
 #endif /* warning suppress end */
 
 #ifdef __cplusplus
-}
+// }
 #endif /* extern "C" end */
 
 } // namespace duckdb_yyjson
