@@ -116,7 +116,7 @@ public:
 
 public:
 	ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed = 1);
-	ReservoirSample(idx_t sample_count, int64_t seed = 1);
+	explicit ReservoirSample(idx_t sample_count, int64_t seed = 1);
 
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
@@ -157,7 +157,7 @@ public:
 
 public:
 	ReservoirSamplePercentage(Allocator &allocator, double percentage, int64_t seed = -1);
-	ReservoirSamplePercentage(double percentage, int64_t seed = -1);
+	explicit ReservoirSamplePercentage(double percentage, int64_t seed = -1);
 
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
