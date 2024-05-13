@@ -42,7 +42,7 @@ public:
 class WindowAggregator {
 public:
 	WindowAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types_p, const LogicalType &result_type_p,
-	                 const WindowExcludeMode exclude_mode_p, idx_t partition_count);
+	                 const WindowExcludeMode exclude_mode_p, idx_t group_count);
 	virtual ~WindowAggregator();
 
 	//	Access
@@ -65,26 +65,23 @@ public:
 	const vector<LogicalType> arg_types;
 	//! The result type of the window function
 	const LogicalType result_type;
-	//! The cardinality of the partition
-	const idx_t partition_count;
+	//! The cardinality of the hash group
+	const idx_t group_count;
 	//! The size of a single aggregate state
 	const idx_t state_size;
+	//! The window exclusion clause
+	const WindowExcludeMode exclude_mode;
 
 protected:
 	//! The state used by the aggregator to build.
 	unique_ptr<WindowAggregatorState> gsink;
-
-public:
-	//! The window exclusion clause
-	const WindowExcludeMode exclude_mode;
 };
 
 // Used for validation
 class WindowNaiveAggregator : public WindowAggregator {
 public:
 	WindowNaiveAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types_p,
-	                      const LogicalType &result_type_p, const WindowExcludeMode exclude_mode_p,
-	                      idx_t partition_count);
+	                      const LogicalType &result_type_p, const WindowExcludeMode exclude_mode_p, idx_t group_count);
 	~WindowNaiveAggregator() override;
 
 	unique_ptr<WindowAggregatorState> GetLocalState() const override;
@@ -96,7 +93,7 @@ class WindowConstantAggregator : public WindowAggregator {
 public:
 	WindowConstantAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types_p,
 	                         const LogicalType &result_type_p, const ValidityMask &partition_mask,
-	                         WindowExcludeMode exclude_mode_p, const idx_t count);
+	                         WindowExcludeMode exclude_mode_p, const idx_t group_count);
 	~WindowConstantAggregator() override {
 	}
 
@@ -114,8 +111,7 @@ public:
 class WindowCustomAggregator : public WindowAggregator {
 public:
 	WindowCustomAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types_p,
-	                       const LogicalType &result_type_p, const WindowExcludeMode exclude_mode_p,
-	                       idx_t partition_count);
+	                       const LogicalType &result_type_p, const WindowExcludeMode exclude_mode_p, idx_t group_count);
 	~WindowCustomAggregator() override;
 
 	unique_ptr<WindowAggregatorState> GetGlobalState() const override;
@@ -130,7 +126,7 @@ class WindowSegmentTree : public WindowAggregator {
 
 public:
 	WindowSegmentTree(AggregateObject aggr, const vector<LogicalType> &arg_types_p, const LogicalType &result_type_p,
-	                  WindowAggregationMode mode_p, const WindowExcludeMode exclude_mode_p, idx_t count);
+	                  WindowAggregationMode mode_p, const WindowExcludeMode exclude_mode_p, idx_t group_count);
 
 	unique_ptr<WindowAggregatorState> GetGlobalState() const override;
 	void Finalize(const FrameStats &stats) override;
@@ -151,15 +147,12 @@ public:
 
 class WindowDistinctAggregator : public WindowAggregator {
 public:
-	using GlobalSortStatePtr = unique_ptr<GlobalSortState>;
-	class DistinctSortTree;
-
 	WindowDistinctAggregator(AggregateObject aggr, const vector<LogicalType> &arg_types_p,
-	                         const LogicalType &result_type_p, const WindowExcludeMode exclude_mode_p, idx_t count,
-	                         ClientContext &context);
-	~WindowDistinctAggregator() override;
+	                         const LogicalType &result_type_p, const WindowExcludeMode exclude_mode_p,
+	                         idx_t group_count, ClientContext &context);
 
 	//	Build
+	unique_ptr<WindowAggregatorState> GetGlobalState() const override;
 	void Sink(DataChunk &args_chunk, SelectionVector *filter_sel, idx_t filtered) override;
 	void Finalize(const FrameStats &stats) override;
 
@@ -168,29 +161,8 @@ public:
 	void Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result, idx_t count,
 	              idx_t row_idx) const override;
 
+	//! Context for sorting
 	ClientContext &context;
-	ArenaAllocator allocator;
-
-	//	Single threaded sorting for now
-	GlobalSortStatePtr global_sort;
-	LocalSortState local_sort;
-	idx_t payload_pos;
-	idx_t memory_per_thread;
-
-	vector<LogicalType> payload_types;
-	DataChunk sort_chunk;
-	DataChunk payload_chunk;
-
-	//! The merge sort tree for the aggregate.
-	unique_ptr<DistinctSortTree> merge_sort_tree;
-
-	//! The actual window segment tree: an array of aggregate states that represent all the intermediate nodes
-	unsafe_unique_array<data_t> levels_flat_native;
-	//! For each level, the starting location in the levels_flat_native array
-	vector<idx_t> levels_flat_start;
-
-	//! The total number of internal nodes of the tree, stored in levels_flat_native
-	idx_t internal_nodes;
 };
 
 } // namespace duckdb
