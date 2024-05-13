@@ -47,18 +47,6 @@ ChildFieldIDs ChildFieldIDs::Copy() const {
 	return result;
 }
 
-void ChildFieldIDs::Serialize(Serializer &serializer) const {
-	D_ASSERT(ids);
-	serializer.WritePropertyWithDefault<case_insensitive_map_t<FieldID>>(100, "ids", ids.operator*());
-}
-
-ChildFieldIDs ChildFieldIDs::Deserialize(Deserializer &deserializer) {
-	ChildFieldIDs result;
-	D_ASSERT(result.ids);
-	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<FieldID>>(100, "ids", result.ids.operator*());
-	return result;
-}
-
 FieldID::FieldID() : set(false) {
 }
 
