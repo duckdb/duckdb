@@ -279,6 +279,9 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 	PopulateArrowTableType(res->arrow_table, data.schema_root, names, return_types);
 	QueryResult::DeduplicateColumns(names);
 	res->all_types = return_types;
+	if (return_types.empty()) {
+		throw InvalidInputException("Provided table/dataframe must have at least one column");
+	}
 	return std::move(res);
 }
 
