@@ -1504,6 +1504,11 @@ Index &DataTable::AddConstraintIndex(const vector<reference<const ColumnDefiniti
 }
 
 void DataTable::IndexExistingData(ClientContext &context, Index &index) {
+	if (!index.IsBound()) {
+		throw InternalException("Unbound index found in DataTable::IndexExistingData");
+	}
+	auto &bound_index = index.Cast<BoundIndex>();
+
 	vector<column_t> cids;
 	vector<LogicalType> scan_types;
 	for (const auto &col : column_definitions) {
@@ -1529,7 +1534,7 @@ void DataTable::IndexExistingData(ClientContext &context, Index &index) {
 		Vector row_identifiers(LogicalType::ROW_TYPE);
 		VectorOperations::GenerateSequence(row_identifiers, chunk.size(), indexed_rows, 1);
 
-		auto error = index.Append(chunk, row_identifiers);
+		auto error = bound_index.Append(chunk, row_identifiers);
 		if (error.HasError()) {
 			error.Throw();
 		}
