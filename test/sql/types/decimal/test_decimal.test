@@ -114,6 +114,17 @@ select '0.00003'::DECIMAL(38,10)::VARCHAR
 ----
 0.0000300000
 
+# Downcasting should round
+query I
+select CAST(33.846 AS DECIMAL(5,0)) d0;
+----
+34
+
+query I
+select CAST(-33.846 AS DECIMAL(5,0)) d0;
+----
+-34
+
 # various error conditions
 # scale must be bigger than or equal to width
 statement error
