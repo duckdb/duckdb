@@ -99,6 +99,7 @@ public:
 	static shared_ptr<DuckDBPyExpression> CaseExpression(const DuckDBPyExpression &condition,
 	                                                     const DuckDBPyExpression &value);
 	static shared_ptr<DuckDBPyExpression> FunctionExpression(const string &function_name, const py::args &args);
+	static shared_ptr<DuckDBPyExpression> Coalesce(const py::args &args);
 
 public:
 	// Internal functions (not exposed to Python)

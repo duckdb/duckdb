@@ -18,6 +18,15 @@ PythonFileHandle::~PythonFileHandle() {
 	}
 }
 
+PythonFilesystem::~PythonFilesystem() {
+	try {
+		PythonGILWrapper gil;
+		filesystem.dec_ref();
+		filesystem.release();
+	} catch (...) { // NOLINT
+	}
+}
+
 string PythonFilesystem::DecodeFlags(FileOpenFlags flags) {
 	// see https://stackoverflow.com/a/58925279 for truth table of python file modes
 	bool read = flags.OpenForReading();

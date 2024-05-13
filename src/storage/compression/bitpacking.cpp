@@ -772,7 +772,7 @@ unique_ptr<SegmentScanState> BitpackingInitScan(ColumnSegment &segment) {
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
-template <class T, class T_S = typename MakeSigned<T>::type>
+template <class T, class T_S = typename MakeSigned<T>::type, class T_U = typename MakeUnsigned<T>::type>
 void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                            idx_t result_offset) {
 	auto &scan_state = state.scan_state->Cast<BitpackingScanState<T>>();
@@ -811,11 +811,10 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 			T *target_ptr = result_data + result_offset + scanned;
 
 			for (idx_t i = 0; i < to_scan; i++) {
-				T multiplier;
-				auto success = TryCast::Operation<idx_t, T>(scan_state.current_group_offset + i, multiplier);
-				D_ASSERT(success);
-				(void)success;
-				target_ptr[i] = (multiplier * scan_state.current_constant) + scan_state.current_frame_of_reference;
+				idx_t multiplier = scan_state.current_group_offset + i;
+				// intended static casts to unsigned and back for defined wrapping of integers
+				target_ptr[i] = static_cast<T>((static_cast<T_U>(scan_state.current_constant) * multiplier) +
+				                               static_cast<T_U>(scan_state.current_frame_of_reference));
 			}
 
 			scanned += to_scan;

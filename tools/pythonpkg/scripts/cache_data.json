@@ -252,7 +252,8 @@
             "numpy.csingle",
             "numpy.cdouble",
             "numpy.clongdouble"
-        ]
+        ],
+        "required": false
     },
     "numpy.core": {
         "type": "attribute",
