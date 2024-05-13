@@ -141,43 +141,22 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 	if (current.ChangesMade()) {
 		throw TransactionException("Cannot CHECKPOINT: the current transaction has transaction local changes");
 	}
-	// try to get the checkpoint lock
-	auto lock = checkpoint_lock.TryGetExclusiveLock();
-	if (!lock && !force) {
-		throw TransactionException(
-		    "Cannot CHECKPOINT: there are other write transactions active. Use FORCE CHECKPOINT to abort "
-		    "the other transactions and force a checkpoint");
-	}
-	if (!lock && force) {
-		// lock all the clients AND the connection manager now
-		// this ensures no new queries can be started, and no new connections to the database can be made
-		// to avoid deadlock we release the transaction lock while locking the clients
-		auto &connection_manager = ConnectionManager::Get(context);
-		vector<ClientLockWrapper> client_locks;
-		connection_manager.LockClients(client_locks, context);
 
-		for (idx_t i = 0; i < active_transactions.size(); i++) {
-			auto &transaction = active_transactions[i];
-			// rollback the transaction
-			transaction->Rollback();
-			auto transaction_context = transaction->context.lock();
-
-			// remove the transaction id from the list of active transactions
-			// potentially resulting in garbage collection
-			RemoveTransaction(*transaction);
-			if (transaction_context) {
-				// invalidate the active transaction for this connection
-				auto &meta_transaction = MetaTransaction::Get(*transaction_context);
-				meta_transaction.RemoveTransaction(db);
-				ValidChecker::Get(meta_transaction).Invalidate("Invalidated due to FORCE CHECKPOINT");
-			}
-			i--;
-		}
+	unique_ptr<StorageLockKey> lock;
+	if (!force) {
+		// not a force checkpoint
+		// try to get the checkpoint lock
 		lock = checkpoint_lock.TryGetExclusiveLock();
 		if (!lock) {
+			// we could not manage to get the lock - cancel
 			throw TransactionException(
-			    "Cannot FORCE CHECKPOINT: failed to grab checkpoint lock after aborting all other transactions");
+					"Cannot CHECKPOINT: there are other write transactions active. Use FORCE CHECKPOINT to abort "
+					"the other transactions and force a checkpoint");
 		}
+
+	} else {
+		// force checkpoint - wait to get an exclusive lock
+		lock = checkpoint_lock.GetExclusiveLock();
 	}
 	CheckpointOptions options;
 	if (GetLastCommit() > LowestActiveStart()) {
