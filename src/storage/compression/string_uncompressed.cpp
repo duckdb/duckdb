@@ -426,7 +426,7 @@ string_t UncompressedStringStorage::FetchStringFromDict(ColumnSegment &segment, 
                                                         uint32_t string_length) {
 	// fetch base data
 	const auto block_size = segment.GetBlockManager().GetBlockSize();
-	D_ASSERT(idx_t(dict_offset) <= block_size);
+	D_ASSERT(dict_offset <= int32_t(block_size));
 	string_location_t location = FetchStringLocation(dict, base_ptr, dict_offset, block_size);
 	return FetchString(segment, dict, result, base_ptr, location, string_length);
 }
