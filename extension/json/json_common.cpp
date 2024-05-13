@@ -39,7 +39,7 @@ public:
 	}
 
 	static inline JSONKeyReadResult WildCard() {
-		return {DConstants::INVALID_INDEX, string()};
+		return {1, "*"};
 	}
 
 	inline bool IsValid() {
@@ -47,7 +47,7 @@ public:
 	}
 
 	inline bool IsWildCard() {
-		return chars_read == DConstants::INVALID_INDEX;
+		return key == "*";
 	}
 
 public:
@@ -73,19 +73,6 @@ static inline JSONKeyReadResult ReadString(const char *ptr, const char *const en
 				ptr++;
 				continue;
 			}
-			//
-			//			if (backslash) {
-			//				if (*ptr != '"') {
-			//					key[key_len++] = '\\';
-			//				}
-			//				backslash = false;
-			//			} else if (*ptr == '"') {
-			//				break;
-			//			} else if (*ptr == '\\') {
-			//				backslash = true;
-			//				ptr++;
-			//				continue;
-			//			}
 			key[key_len++] = *ptr++;
 		}
 		if (ptr == end || backslash) {
@@ -134,7 +121,6 @@ static inline idx_t ReadInteger(const char *ptr, const char *const end, idx_t &i
 static inline JSONKeyReadResult ReadKey(const char *ptr, const char *const end) {
 	D_ASSERT(ptr != end);
 	if (*ptr == '*') { // Wildcard
-		ptr++;
 		return JSONKeyReadResult::WildCard();
 	}
 	bool escaped = false;
@@ -207,8 +193,7 @@ JSONPathType JSONCommon::ValidatePath(const char *ptr, const idx_t &len, const b
 			auto key = ReadKey(ptr, end);
 			if (!key.IsValid()) {
 				ThrowPathError(ptr, end, binder);
-			}
-			if (key.IsWildCard()) {
+			} else if (key.IsWildCard()) {
 				path_type = JSONPathType::WILDCARD;
 			}
 			ptr += key.chars_read;
