@@ -955,7 +955,7 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TEST
     set(EXTERNAL_EXTENSION_VERSION "${EXTENSION_VERSION}")
   endif()
 
-  message(STATUS "Load extension '${NAME}' from ${URL} @ ${GIT_SHORT_COMMIT}")
+  message(STATUS "Load extension '${NAME}' from ${URL} @ ${EXTERNAL_EXTENSION_VERSION}")
 
   string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
   set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION "${GIT_SHORT_COMMIT}" PARENT_SCOPE)
@@ -974,6 +974,44 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TEST
 
   register_extension(${NAME} ${DONT_LINK} ${DONT_BUILD} ${LOAD_TESTS} ${${NAME}_extension_fc_SOURCE_DIR}/${PATH} "${INCLUDE_FULL_PATH}" "${TEST_FULL_PATH}" "${LINKED_LIBS}" "${GIT_SHORT_COMMIT}" "${EXTERNAL_EXTENSION_VERSION}")
 endmacro()
+
+# This function sets OUTPUT_VAR to the VERSION using DuckDB's standard versioning convention (using CMAKE_CURRENT_LIST_DIR)
+# - for tagged releases, the version equals the tagged release
+# - for all other cases, the short (10 char) git hash is the version
+# - if git wasn't found, an empty string is returned
+function(duckdb_extension_generate_version OUTPUT_VAR)
+  find_package(Git)
+  if(Git_FOUND)
+    execute_process(
+            COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
+            WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
+            RESULT_VARIABLE GIT_RESULT
+            OUTPUT_VARIABLE GIT_COMMIT_HASH
+            OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if (GIT_RESULT)
+      message(FATAL_ERROR "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'log -1 --format=%h'.")
+    endif()
+    execute_process(
+            COMMAND ${GIT_EXECUTABLE} describe --tags --long
+            WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
+            RESULT_VARIABLE GIT_RESULT
+            OUTPUT_VARIABLE GIT_DESCRIBE
+            OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if (GIT_RESULT)
+      string(SUBSTRING "${GIT_COMMIT_HASH}" 0 10 VERSION)
+    elseif (NOT GIT_DESCRIBE MATCHES "^v[0-9]+\.[0-9]+\.[0-9]+$")
+      string(SUBSTRING "${GIT_COMMIT_HASH}" 0 10 VERSION)
+    else()
+      set(VERSION ${GIT_DESCRIBE})
+    endif()
+  else()
+    # No git found, we set empty string
+    set(VERSION "")
+  endif()
+
+  # Propagate the version
+  set(${OUTPUT_VAR} ${VERSION} PARENT_SCOPE)
+endfunction()
 
 function(duckdb_extension_load NAME)
   # Parameter parsing
@@ -1007,8 +1045,15 @@ function(duckdb_extension_load NAME)
       set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION "${duckdb_extension_load_EXTENSION_VERSION}" PARENT_SCOPE)
     endif()
   elseif (NOT "${duckdb_extension_load_SOURCE_DIR}" STREQUAL "")
+    # Version detection
+    if ("${duckdb_extension_load_EXTENSION_VERSION}" STREQUAL "")
+      duckdb_extension_generate_version(EXT_VERSION)
+    else()
+      set(EXT_VERSION ${duckdb_extension_load_EXTENSION_VERSION})
+    endif()
+
     # Local extension, custom path
-    message(STATUS "Load extension '${NAME}' from '${duckdb_extension_load_SOURCE_DIR}'")
+    message(STATUS "Load extension '${NAME}' from '${duckdb_extension_load_SOURCE_DIR}' @ ${EXT_VERSION}")
 
     # If no include path specified, use default
     if ("${duckdb_extension_load_INCLUDE_DIR}" STREQUAL "")
@@ -1024,19 +1069,19 @@ function(duckdb_extension_load NAME)
       set(TEST_PATH_DEFAULT ${duckdb_extension_load_TEST_DIR})
     endif()
 
-    register_extension(${NAME} "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${duckdb_extension_load_SOURCE_DIR}" "${INCLUDE_PATH_DEFAULT}" "${TEST_PATH_DEFAULT}" "${duckdb_extension_load_LINKED_LIBS}" "${duckdb_extension_load_EXTENSION_VERSION}")
+    register_extension(${NAME} "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${duckdb_extension_load_SOURCE_DIR}" "${INCLUDE_PATH_DEFAULT}" "${TEST_PATH_DEFAULT}" "${duckdb_extension_load_LINKED_LIBS}" "${EXT_VERSION}")
   elseif(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/extension_external/${NAME})
     # Local extension, default path
-    message(STATUS "Load extension '${NAME}' from '${CMAKE_CURRENT_SOURCE_DIR}/extension_external'")
+    message(STATUS "Load extension '${NAME}' from '${CMAKE_CURRENT_SOURCE_DIR}/extension_external' @ ${duckdb_extension_load_EXTENSION_VERSION}")
     register_extension(${NAME} ${duckdb_extension_load_DONT_LINK} "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}"  "${CMAKE_CURRENT_SOURCE_DIR}/extension_external/${NAME}" "${CMAKE_CURRENT_SOURCE_DIR}/extension_external/${NAME}/src/include" "${CMAKE_CURRENT_SOURCE_DIR}/extension_external/${NAME}/test/sql" "${duckdb_extension_load_LINKED_LIBS}" "${duckdb_extension_load_EXTENSION_VERSION}")
   else()
-    # Local extension, default path
-    message(STATUS "Load extension '${NAME}' from '${CMAKE_CURRENT_SOURCE_DIR}/extensions'")
-
     # For in-tree extensions of the default path, we set the extension version to GIT_COMMIT_HASH by default
     if ("${duckdb_extension_load_EXTENSION_VERSION}" STREQUAL "")
       set(duckdb_extension_load_EXTENSION_VERSION ${GIT_COMMIT_HASH})
     endif()
+
+    # Local extension, default path
+    message(STATUS "Load extension '${NAME}' from '${CMAKE_CURRENT_SOURCE_DIR}/extensions' @ ${duckdb_extension_load_EXTENSION_VERSION}")
 
     register_extension(${NAME} ${duckdb_extension_load_DONT_LINK} "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${CMAKE_CURRENT_SOURCE_DIR}/extension/${NAME}" "${CMAKE_CURRENT_SOURCE_DIR}/extension/${NAME}/include" "${CMAKE_CURRENT_SOURCE_DIR}/extension/${NAME}/test/sql" "${duckdb_extension_load_LINKED_LIBS}" "${duckdb_extension_load_EXTENSION_VERSION}")
   endif()

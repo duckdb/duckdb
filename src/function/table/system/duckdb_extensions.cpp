@@ -144,7 +144,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 		auto &ext_name = e.first;
 		auto &ext_info = e.second;
 		auto entry = installed_extensions.find(ext_name);
-		if (entry == installed_extensions.end()) {
+		if (entry == installed_extensions.end() || !entry->second.installed) {
 			ExtensionInformation info;
 			info.name = ext_name;
 			info.loaded = true;
