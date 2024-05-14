@@ -17,9 +17,11 @@ namespace duckdb {
 
 class BinarySerializer : public Serializer {
 public:
-	explicit BinarySerializer(WriteStream &stream, bool serialize_default_values_p = false) : stream(stream) {
-		serialize_default_values = serialize_default_values_p;
-		serialize_enum_as_string = false;
+	explicit BinarySerializer(WriteStream &stream, SerializationOptions options_p = SerializationOptions())
+	    : stream(stream) {
+		options = options_p;
+		// Override the value set by the passed in SerializationOptions
+		options.serialize_enum_as_string = false;
 	}
 
 private:
@@ -53,7 +55,9 @@ private:
 public:
 	template <class T>
 	static void Serialize(const T &value, WriteStream &stream, bool serialize_default_values = false) {
-		BinarySerializer serializer(stream, serialize_default_values);
+		SerializationOptions options;
+		options.serialize_default_values = serialize_default_values;
+		BinarySerializer serializer(stream, options);
 		serializer.OnObjectBegin();
 		value.Serialize(serializer);
 		serializer.OnObjectEnd();

@@ -22,10 +22,16 @@
 
 namespace duckdb {
 
-class Serializer {
-protected:
+class SerializationOptions {
+public:
 	bool serialize_enum_as_string = false;
 	bool serialize_default_values = false;
+	optional_idx minimum_storage_version;
+};
+
+class Serializer {
+protected:
+	SerializationOptions options;
 
 public:
 	virtual ~Serializer() {
@@ -65,7 +71,7 @@ public:
 	template <class T>
 	void WritePropertyWithDefault(const field_id_t field_id, const char *tag, const T &value) {
 		// If current value is default, don't write it
-		if (!serialize_default_values && SerializationDefaultValue::IsDefault<T>(value)) {
+		if (!options.serialize_default_values && SerializationDefaultValue::IsDefault<T>(value)) {
 			OnOptionalPropertyBegin(field_id, tag, false);
 			OnOptionalPropertyEnd(false);
 			return;
@@ -78,7 +84,7 @@ public:
 	template <class T>
 	void WritePropertyWithDefault(const field_id_t field_id, const char *tag, const T &value, const T &&default_value) {
 		// If current value is default, don't write it
-		if (!serialize_default_values && (value == default_value)) {
+		if (!options.serialize_default_values && (value == default_value)) {
 			OnOptionalPropertyBegin(field_id, tag, false);
 			OnOptionalPropertyEnd(false);
 			return;
@@ -93,7 +99,7 @@ public:
 	void WritePropertyWithDefault(const field_id_t field_id, const char *tag, const CSVOption<T> &value,
 	                              const T &&default_value) {
 		// If current value is default, don't write it
-		if (!serialize_default_values && (value == default_value)) {
+		if (!options.serialize_default_values && (value == default_value)) {
 			OnOptionalPropertyBegin(field_id, tag, false);
 			OnOptionalPropertyEnd(false);
 			return;
@@ -135,7 +141,7 @@ public:
 protected:
 	template <typename T>
 	typename std::enable_if<std::is_enum<T>::value, void>::type WriteValue(const T value) {
-		if (serialize_enum_as_string) {
+		if (options.serialize_enum_as_string) {
 			// Use the enum serializer to lookup tostring function
 			auto str = EnumUtil::ToChars(value);
 			WriteValue(str);
