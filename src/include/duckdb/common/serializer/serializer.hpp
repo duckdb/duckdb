@@ -267,7 +267,7 @@ protected:
 		OnListEnd();
 	}
 
-	// Map
+	// Insertion Order Preserving Map
 	// serialized as a list of pairs
 	template <class V>
 	void WriteValue(const duckdb::InsertionOrderPreservingMap<V> &map) {
@@ -280,8 +280,9 @@ protected:
 			OnObjectEnd();
 		}
 		OnListEnd();
+	}
 
-  // priority queue
+	// priority queue
 	template <typename T>
 	void WriteValue(const std::priority_queue<T> &queue) {
 		vector<T> placeholder;

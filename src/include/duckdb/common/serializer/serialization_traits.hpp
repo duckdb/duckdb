@@ -106,7 +106,8 @@ template <typename T>
 struct is_insertion_preserving_map : std::false_type {};
 template <typename... Args>
 struct is_insertion_preserving_map<typename duckdb::InsertionOrderPreservingMap<Args...>> : std::true_type {
-typedef typename std::tuple_element<0, std::tuple<Args...>>::type VALUE_TYPE;
+	typedef typename std::tuple_element<0, std::tuple<Args...>>::type VALUE_TYPE;
+};
 
 struct is_queue : std::false_type {};
 template <typename T>
