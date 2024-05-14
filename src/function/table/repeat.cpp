@@ -26,11 +26,11 @@ static unique_ptr<FunctionData> RepeatBind(ClientContext &context, TableFunction
 	if (inputs[1].IsNull()) {
 		throw BinderException("Repeat second parameter cannot be NULL");
 	}
-	auto value = inputs[1].GetValue<int64_t>();
-	if (value < 0) {
-		throw BinderException("Repeat second parameter cannot be negative");
+	auto repeat_count = inputs[1].GetValue<int64_t>();
+	if (repeat_count < 0) {
+		throw BinderException("Repeat second parameter cannot be be less than 0");
 	}
-	return make_uniq<RepeatFunctionData>(inputs[0], NumericCast<idx_t>(value));
+	return make_uniq<RepeatFunctionData>(inputs[0], NumericCast<idx_t>(repeat_count));
 }
 
 static unique_ptr<GlobalTableFunctionState> RepeatInit(ClientContext &context, TableFunctionInitInput &input) {
