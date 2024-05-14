@@ -1,0 +1,34 @@
+# name: test/sql/collate/collate_union.test
+# description: Test collation in Union operator
+# group: [collate]
+
+require icu
+
+query I
+SELECT 'A' COLLATE NOCASE UNION SELECT 'a'
+----
+a
+
+query I
+SELECT 'a' UNION SELECT 'A' COLLATE NOCASE
+----
+a
+
+query II
+SELECT 'a', 'B' UNION SELECT 'A' COLLATE NOCASE, 'B'
+----
+a	B
+
+
+query II
+SELECT 'a', 'b' UNION SELECT 'A' COLLATE NOCASE, 'B' COLLATE NOCASE
+----
+a	b
+
+
+query II
+SELECT 'A' COLLATE NOCASE, 'B' COLLATE NOCASE UNION SELECT 'a', 'b'
+----
+a	b
+
+
