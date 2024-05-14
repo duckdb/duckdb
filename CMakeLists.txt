@@ -1157,8 +1157,11 @@ foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
     message(WARNING "Extension '${EXT_NAME}' has a vcpkg.json, but build was not run with VCPKG. If build fails, check out VCPKG build instructions in 'duckdb/extension/README.md' or try manually installing the dependencies in ${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH}vcpkg.json")
   endif()
 
-  if (DEFINED DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH)
+  if (NOT "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_EXT_VERSION}" STREQUAL "")
     add_definitions(-DEXT_VERSION_${EXT_NAME_UPPERCASE}="${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_EXT_VERSION}")
+  endif()
+
+  if (DEFINED DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH)
     add_subdirectory(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH} extension/${EXT_NAME})
   else()
     message(FATAL_ERROR "No path found for registered extension '${EXT_NAME}'")
