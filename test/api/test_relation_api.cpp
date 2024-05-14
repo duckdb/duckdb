@@ -873,6 +873,17 @@ TEST_CASE("Test CSV reading/writing from relations", "[relation_api]") {
 	REQUIRE_THROWS(con.ReadCSV(csv_file, {"i INTEGER, j INTEGER"}));
 }
 
+TEST_CASE("Test CSV reading from weather.csv", "[relation_api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+	duckdb::unique_ptr<QueryResult> result;
+
+	auto auto_csv_scan = con.ReadCSV("data/csv/weather.csv")->Limit(1);
+	result = auto_csv_scan->Execute();
+	REQUIRE(CHECK_COLUMN(result, 0, {"2016-01-01"}));
+}
+
 TEST_CASE("Test query relation", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);

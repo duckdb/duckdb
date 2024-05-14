@@ -206,7 +206,7 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
                                    const string &filename, const vector<string> &local_names,
                                    const vector<LogicalType> &global_types, const vector<string> &global_names,
                                    const vector<column_t> &global_column_ids, MultiFileReaderData &reader_data,
-                                   ClientContext &context) {
+                                   ClientContext &context, optional_ptr<MultiFileReaderGlobalState> global_state) {
 
 	// create a map of name -> column index
 	case_insensitive_map_t<idx_t> name_map;
@@ -258,10 +258,20 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 	}
 }
 
+unique_ptr<MultiFileReaderGlobalState>
+MultiFileReader::InitializeGlobalState(ClientContext &context, const MultiFileReaderOptions &file_options,
+                                       const MultiFileReaderBindData &bind_data, const MultiFileList &file_list,
+                                       const vector<LogicalType> &global_types, const vector<string> &global_names,
+                                       const vector<column_t> &global_column_ids) {
+	// By default, the multifilereader does not require any global state
+	return nullptr;
+}
+
 void MultiFileReader::CreateNameMapping(const string &file_name, const vector<LogicalType> &local_types,
                                         const vector<string> &local_names, const vector<LogicalType> &global_types,
                                         const vector<string> &global_names, const vector<column_t> &global_column_ids,
-                                        MultiFileReaderData &reader_data, const string &initial_file) {
+                                        MultiFileReaderData &reader_data, const string &initial_file,
+                                        optional_ptr<MultiFileReaderGlobalState> global_state) {
 	D_ASSERT(global_types.size() == global_names.size());
 	D_ASSERT(local_types.size() == local_names.size());
 	// we have expected types: create a map of name -> column index
@@ -318,6 +328,7 @@ void MultiFileReader::CreateNameMapping(const string &file_name, const vector<Lo
 		reader_data.column_mapping.push_back(i);
 		reader_data.column_ids.push_back(local_id);
 	}
+
 	reader_data.empty_columns = reader_data.column_ids.empty();
 }
 
@@ -325,16 +336,23 @@ void MultiFileReader::CreateMapping(const string &file_name, const vector<Logica
                                     const vector<string> &local_names, const vector<LogicalType> &global_types,
                                     const vector<string> &global_names, const vector<column_t> &global_column_ids,
                                     optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data,
-                                    const string &initial_file) {
+                                    const string &initial_file, const MultiFileReaderBindData &options,
+                                    optional_ptr<MultiFileReaderGlobalState> global_state) {
 	CreateNameMapping(file_name, local_types, local_names, global_types, global_names, global_column_ids, reader_data,
-	                  initial_file);
-	CreateFilterMap(global_types, filters, reader_data);
+	                  initial_file, global_state);
+	CreateFilterMap(global_types, filters, reader_data, global_state);
 }
 
 void MultiFileReader::CreateFilterMap(const vector<LogicalType> &global_types, optional_ptr<TableFilterSet> filters,
-                                      MultiFileReaderData &reader_data) {
+                                      MultiFileReaderData &reader_data,
+                                      optional_ptr<MultiFileReaderGlobalState> global_state) {
 	if (filters) {
-		reader_data.filter_map.resize(global_types.size());
+		auto filter_map_size = global_types.size();
+		if (global_state) {
+			filter_map_size += global_state->extra_columns.size();
+		}
+		reader_data.filter_map.resize(filter_map_size);
+
 		for (idx_t c = 0; c < reader_data.column_mapping.size(); c++) {
 			auto map_index = reader_data.column_mapping[c];
 			reader_data.filter_map[map_index].index = c;
@@ -349,7 +367,8 @@ void MultiFileReader::CreateFilterMap(const vector<LogicalType> &global_types, o
 }
 
 void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileReaderBindData &bind_data,
-                                    const MultiFileReaderData &reader_data, DataChunk &chunk) {
+                                    const MultiFileReaderData &reader_data, DataChunk &chunk,
+                                    optional_ptr<MultiFileReaderGlobalState> global_state) {
 	// reference all the constants set up in MultiFileReader::FinalizeBind
 	for (auto &entry : reader_data.constant_map) {
 		chunk.data[entry.column_id].Reference(entry.value);

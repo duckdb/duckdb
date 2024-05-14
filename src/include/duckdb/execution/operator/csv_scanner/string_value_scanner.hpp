@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include <utility>
-
 #include "duckdb/execution/operator/csv_scanner/csv_buffer_manager.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state_machine.hpp"
 #include "duckdb/execution/operator/csv_scanner/scanner_boundary.hpp"
@@ -243,7 +241,7 @@ public:
 	inline bool AddRowInternal();
 	//! Force the throw of a unicode error
 	void HandleUnicodeError(idx_t col_idx, LinePosition &error_position);
-
+	bool HandleTooManyColumnsError(const char *value_ptr, const idx_t size);
 	inline void AddValueToVector(const char *value_ptr, const idx_t size, bool allocate = false);
 
 	DataChunk &ToChunk();

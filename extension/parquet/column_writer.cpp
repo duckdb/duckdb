@@ -590,7 +590,7 @@ void BasicColumnWriter::FlushPage(BasicColumnWriterState &state) {
 	D_ASSERT(hdr.compressed_page_size > 0);
 
 	if (write_info.compressed_buf) {
-		// if the data has been compressed, we no longer need the compressed data
+		// if the data has been compressed, we no longer need the uncompressed data
 		D_ASSERT(write_info.compressed_buf.get() == write_info.compressed_data);
 		write_info.temp_writer.reset();
 	}

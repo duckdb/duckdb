@@ -264,7 +264,8 @@ static void RewriteIndexExpression(Index &index, LogicalGet &get, Expression &ex
 		auto &bound_colref = expr.Cast<BoundColumnRefExpression>();
 		// bound column ref: rewrite to fit in the current set of bound column ids
 		bound_colref.binding.table_index = get.table_index;
-		column_t referenced_column = index.column_ids[bound_colref.binding.column_index];
+		auto &column_ids = index.GetColumnIds();
+		column_t referenced_column = column_ids[bound_colref.binding.column_index];
 		// search for the referenced column in the set of column_ids
 		for (idx_t i = 0; i < get.column_ids.size(); i++) {
 			if (get.column_ids[i] == referenced_column) {
@@ -310,21 +311,10 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 	auto checkpoint_lock = storage.GetSharedCheckpointLock();
 	auto &info = storage.GetDataTableInfo();
 	auto &transaction = Transaction::Get(context, bind_data.table.catalog);
-	info->GetIndexes().Scan([&](Index &index) {
+
+	// bind and scan any ART indexes
+	info->GetIndexes().BindAndScan<ART>(context, *info, [&](ART &art_index) {
 		// first rewrite the index expression so the ColumnBindings align with the column bindings of the current table
-
-		if (index.IsUnknown()) {
-			// unknown index: skip
-			return false;
-		}
-
-		if (index.index_type != ART::TYPE_NAME) {
-			// only ART indexes are supported for now
-			return false;
-		}
-
-		auto &art_index = index.Cast<ART>();
-
 		if (art_index.unbound_expressions.size() > 1) {
 			// NOTE: index scans are not (yet) supported for compound index keys
 			return false;

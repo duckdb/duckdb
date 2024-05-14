@@ -230,10 +230,16 @@ Value Value::MinimumValue(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(Date::FromDate(Timestamp::MIN_YEAR, Timestamp::MIN_MONTH, Timestamp::MIN_DAY),
 		                        dtime_t(0));
-	case LogicalTypeId::TIMESTAMP_SEC:
-		return MinimumValue(LogicalType::TIMESTAMP).DefaultCastAs(LogicalType::TIMESTAMP_S);
-	case LogicalTypeId::TIMESTAMP_MS:
-		return MinimumValue(LogicalType::TIMESTAMP).DefaultCastAs(LogicalType::TIMESTAMP_MS);
+	case LogicalTypeId::TIMESTAMP_SEC: {
+		//	Casting rounds up, which will overflow
+		const auto min_us = MinimumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
+		return Value::TIMESTAMPSEC(timestamp_t(Timestamp::GetEpochSeconds(min_us)));
+	}
+	case LogicalTypeId::TIMESTAMP_MS: {
+		//	Casting rounds up, which will overflow
+		const auto min_us = MinimumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
+		return Value::TIMESTAMPMS(timestamp_t(Timestamp::GetEpochMs(min_us)));
+	}
 	case LogicalTypeId::TIMESTAMP_NS:
 		return Value::TIMESTAMPNS(timestamp_t(NumericLimits<int64_t>::Minimum()));
 	case LogicalTypeId::TIME_TZ:
@@ -303,12 +309,18 @@ Value Value::MaximumValue(const LogicalType &type) {
 		return Value::TIME(dtime_t(Interval::MICROS_PER_DAY));
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(timestamp_t(NumericLimits<int64_t>::Maximum() - 1));
-	case LogicalTypeId::TIMESTAMP_MS:
-		return MaximumValue(LogicalType::TIMESTAMP).DefaultCastAs(LogicalType::TIMESTAMP_MS);
+	case LogicalTypeId::TIMESTAMP_MS: {
+		//	Casting rounds up, which will overflow
+		const auto max_us = MaximumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
+		return Value::TIMESTAMPMS(timestamp_t(Timestamp::GetEpochMs(max_us)));
+	}
 	case LogicalTypeId::TIMESTAMP_NS:
 		return Value::TIMESTAMPNS(timestamp_t(NumericLimits<int64_t>::Maximum() - 1));
-	case LogicalTypeId::TIMESTAMP_SEC:
-		return MaximumValue(LogicalType::TIMESTAMP).DefaultCastAs(LogicalType::TIMESTAMP_S);
+	case LogicalTypeId::TIMESTAMP_SEC: {
+		//	Casting rounds up, which will overflow
+		const auto max_us = MaximumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
+		return Value::TIMESTAMPSEC(timestamp_t(Timestamp::GetEpochSeconds(max_us)));
+	}
 	case LogicalTypeId::TIME_TZ:
 		//	"24:00:00-1559" from the PG docs but actually "24:00:00-15:59:59"
 		return Value::TIMETZ(dtime_tz_t(dtime_t(Interval::MICROS_PER_DAY), dtime_tz_t::MIN_OFFSET));

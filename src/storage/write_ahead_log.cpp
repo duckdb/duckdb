@@ -10,6 +10,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/storage/index.hpp"
+#include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/common/checksum.hpp"
@@ -247,7 +248,9 @@ void WriteAheadLog::WriteDropTableMacro(const TableMacroCatalogEntry &entry) {
 
 void SerializeIndexToWAL(WriteAheadLogSerializer &serializer, const unique_ptr<Index> &index) {
 
-	auto index_storage_info = index->GetStorageInfo(true);
+	// We will never write an index to the WAL that is not bound
+	D_ASSERT(index->IsBound());
+	auto index_storage_info = index->Cast<BoundIndex>().GetStorageInfo(true);
 	serializer.WriteProperty(102, "index_storage_info", index_storage_info);
 
 	serializer.WriteList(103, "index_storage", index_storage_info.buffers.size(), [&](Serializer::List &list, idx_t i) {
@@ -272,7 +275,7 @@ void WriteAheadLog::WriteCreateIndex(const IndexCatalogEntry &entry) {
 
 	// get the matching index and serialize its storage info
 	for (auto const &index : indexes) {
-		if (duck_index_entry.name == index->name) {
+		if (duck_index_entry.name == index->GetIndexName()) {
 			SerializeIndexToWAL(serializer, index);
 			break;
 		}

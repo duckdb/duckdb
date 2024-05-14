@@ -1142,7 +1142,7 @@ timestamp_t CastTimestampUsToMs::Operation(timestamp_t input) {
 	if (!Timestamp::IsFinite(input)) {
 		return input;
 	}
-	timestamp_t cast_timestamp(Timestamp::GetEpochMs(input));
+	timestamp_t cast_timestamp(Timestamp::GetEpochRounded(input, Interval::MICROS_PER_MSEC));
 	return cast_timestamp;
 }
 
@@ -1160,7 +1160,7 @@ timestamp_t CastTimestampUsToSec::Operation(timestamp_t input) {
 	if (!Timestamp::IsFinite(input)) {
 		return input;
 	}
-	timestamp_t cast_timestamp(Timestamp::GetEpochSeconds(input));
+	timestamp_t cast_timestamp(Timestamp::GetEpochRounded(input, Interval::MICROS_PER_SEC));
 	return cast_timestamp;
 }
 
@@ -1279,10 +1279,7 @@ bool TryCastToTimestampMS::Operation(string_t input, timestamp_t &result, bool s
 	if (!TryCast::Operation<string_t, timestamp_t>(input, result, strict)) {
 		return false;
 	}
-	if (!Timestamp::IsFinite(result)) {
-		return true;
-	}
-	result = Timestamp::GetEpochMs(result);
+	result = CastTimestampUsToMs::Operation<timestamp_t, timestamp_t>(result);
 	return true;
 }
 
@@ -1291,10 +1288,7 @@ bool TryCastToTimestampSec::Operation(string_t input, timestamp_t &result, bool 
 	if (!TryCast::Operation<string_t, timestamp_t>(input, result, strict)) {
 		return false;
 	}
-	if (!Timestamp::IsFinite(result)) {
-		return true;
-	}
-	result = Timestamp::GetEpochSeconds(result);
+	result = CastTimestampUsToSec::Operation<timestamp_t, timestamp_t>(result);
 	return true;
 }
 
