@@ -1213,7 +1213,7 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 	validity.Reset();
 	const auto has_validity = deserializer.ReadProperty<bool>(100, "all_valid");
 	if (has_validity) {
-		validity.Initialize(count);
+		validity.Initialize(MaxValue<idx_t>(count, STANDARD_VECTOR_SIZE));
 		deserializer.ReadProperty(101, "validity", data_ptr_cast(validity.GetData()), validity.ValidityMaskSize(count));
 	}
 
