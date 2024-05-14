@@ -141,7 +141,7 @@ bool StringValueResult::HandleTooManyColumnsError(const char *value_ptr, const i
 		}
 		if (error) {
 			// We error pointing to the current value error.
-			current_errors.push_back({CSVErrorType::TOO_MANY_COLUMNS, cur_col_id, last_position});
+			current_errors.Insert(CSVErrorType::TOO_MANY_COLUMNS, cur_col_id,chunk_col_id, last_position);
 			cur_col_id++;
 		}
 		// We had an error
