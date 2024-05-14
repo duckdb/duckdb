@@ -109,6 +109,7 @@ struct is_insertion_preserving_map<typename duckdb::InsertionOrderPreservingMap<
 	typedef typename std::tuple_element<0, std::tuple<Args...>>::type VALUE_TYPE;
 };
 
+template <typename T>
 struct is_queue : std::false_type {};
 template <typename T>
 struct is_queue<typename std::priority_queue<T>> : std::true_type {
