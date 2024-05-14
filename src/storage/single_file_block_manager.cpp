@@ -489,6 +489,7 @@ protected:
 };
 
 void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
+	lock_guard<mutex> lock(block_lock);
 	// set the iteration count
 	header.iteration = ++iteration_count;
 
