@@ -50,7 +50,7 @@ public:
 	vector<idx_t> right_reorder_idx;
 
 	// BoundGroupByNode groups;
-	vector<unique_ptr<Expression>> group_expressions;
+	vector<unique_ptr<Expression>> collation_expressions;
 
 public:
 	idx_t GetRootIndex() override {

@@ -1,3 +1,4 @@
+#include "duckdb/parser/expression/collate_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression_map.hpp"
@@ -11,6 +12,7 @@
 #include "duckdb/planner/query_node/bound_set_operation_node.hpp"
 #include "duckdb/planner/expression_binder/select_bind_state.hpp"
 #include "duckdb/common/enum_util.hpp"
+
 
 namespace duckdb {
 
@@ -182,35 +184,49 @@ static void BuildUnionByNameInfo(ClientContext &context, BoundSetOperationNode &
 	}
 }
 
-void GroupCollation(unique_ptr<BoundSetOperationNode> &bound_set_op, ClientContext &context) {
-	if (bound_set_op->left->type != QueryNodeType::SELECT_NODE) {
+void Binder::BindCollationGroup(unique_ptr<BoundSetOperationNode> &bound_set_op) {
+	if (bound_set_op->left->type != QueryNodeType::SELECT_NODE ||
+		bound_set_op->right->type != QueryNodeType::SELECT_NODE) {
 		return;
 	}
-	auto &bound_sel_node = bound_set_op->left->Cast<BoundSelectNode>();
-	auto &bind_state = bound_sel_node.bind_state;
-	for (idx_t i = 0; i < bound_sel_node.collation_sel_idx.size(); i++) {
-		idx_t collate_idx = bound_sel_node.collation_sel_idx[i];
-		D_ASSERT(bind_state.original_expressions[collate_idx]->GetExpressionClass() == ExpressionClass::COLLATE);
+	auto &left_node = bound_set_op->left->Cast<BoundSelectNode>();
+	auto &left_bind_state = left_node.bind_state;
+	auto &right_node = bound_set_op->right->Cast<BoundSelectNode>();
+	auto &right_bind_state = right_node.bind_state;
 
-		auto bound_expr = bound_sel_node.select_list[collate_idx]->Copy();
-		auto &bound_expr_ref = *bound_expr;
-		bool contains_subquery = bound_expr_ref.HasSubquery();
+	std::set<idx_t> collation_indexes(left_node.collation_sel_idx.begin(), left_node.collation_sel_idx.end());
+	std::copy(right_node.collation_sel_idx.begin(), right_node.collation_sel_idx.end(), std::inserter(collation_indexes, collation_indexes.end()));
 
-		// ExpressionBinder::PushCollation(bound_set_op->left_binder->context, bound_expr, bound_expr->return_type, true);
-		ExpressionBinder::PushCollation(context, bound_expr, bound_expr->return_type, true);
-		// if (!contains_subquery) {
-		// 	auto first_fun = FirstFun::GetFunction(LogicalType::VARCHAR);
+	// verifies collation conflicts
+	for (idx_t collate_idx: collation_indexes) {
+		auto &left_expr = left_bind_state.original_expressions[collate_idx];
+		auto &right_expr = right_bind_state.original_expressions[collate_idx];
+		// at least one expression must have to be a collation
+		D_ASSERT(left_expr->GetExpressionClass() == ExpressionClass::COLLATE || right_expr->GetExpressionClass() == ExpressionClass::COLLATE);
 
-		// 	vector<unique_ptr<Expression>> first_children;
-		// 	first_children.push_back(bound_expr_ref.Copy());
+		unique_ptr<Expression> bound_collation_expr;
+		// collation on both sides
+		if (left_expr->GetExpressionClass() == ExpressionClass::COLLATE && right_expr->GetExpressionClass() == ExpressionClass::COLLATE) {
+			auto &left_collation_expr = left_expr->Cast<CollateExpression>();
+			auto &right_collation_expr = right_expr->Cast<CollateExpression>();
 
-		// 	// FunctionBinder function_binder(bound_set_op->left_binder->context);
-		// 	FunctionBinder function_binder(context);
-		// 	auto function = function_binder.BindAggregateFunction(first_fun, std::move(first_children));
-		// 	bound_set_op->aggregates.push_back(std::move(function));
-		// }
-		bound_set_op->group_expressions.push_back(std::move(bound_expr));
-		// bound_set_op->groups.grouping_sets.push_back({i});
+			auto &left_str_collation = left_collation_expr.collation;
+			auto &right_str_collation = right_collation_expr.collation;
+
+			if (left_str_collation != right_str_collation) {
+				throw BinderException("Different collations in a set operation at column: %lld.", collate_idx+1);
+			}
+			bound_collation_expr = left_node.select_list[collate_idx]->Copy();
+		} else if (left_expr->GetExpressionClass() == ExpressionClass::COLLATE) {
+			// collation on lhf
+			bound_collation_expr = left_node.select_list[collate_idx]->Copy();
+		} else {
+			// collation on lhr
+			bound_collation_expr = right_node.select_list[collate_idx]->Copy();
+		}
+
+		ExpressionBinder::PushCollation(context, bound_collation_expr, bound_collation_expr->return_type, true);
+		bound_set_op->collation_expressions.push_back(std::move(bound_collation_expr));
 	}
 }
 
@@ -229,8 +245,6 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 	result->left_binder = Binder::CreateBinder(context, this);
 	result->left_binder->can_contain_nulls = true;
 	result->left = result->left_binder->BindNode(*statement.left);
-	GroupCollation(result, context);
-
 	result->right_binder = Binder::CreateBinder(context, this);
 	result->right_binder->can_contain_nulls = true;
 	result->right = result->right_binder->BindNode(*statement.right);
@@ -287,6 +301,9 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 
 	// finally bind the types of the ORDER/DISTINCT clause expressions
 	BindModifiers(*result, result->setop_index, result->names, result->types, bind_state);
+
+	BindCollationGroup(result);
+
 	return std::move(result);
 }
 

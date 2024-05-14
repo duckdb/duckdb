@@ -108,14 +108,14 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 	if (!op.setop_all) { // no ALL, use distinct semantics
 		auto &types = result->GetTypes();
 		vector<unique_ptr<Expression>> groups, aggregates /* left empty */;
-		if (op.group_expressions.empty()) {
+		if (op.collation_expressions.empty()) {
 			for (idx_t i = 0; i < types.size(); i++) {
 				groups.push_back(make_uniq<BoundReferenceExpression>(types[i], i));
 			}
 		} else {
 			vector<unique_ptr<Expression>> expressions;
 			vector<LogicalType> types;
-			groups = std::move(op.group_expressions);
+			groups = std::move(op.collation_expressions);
 			for (auto &group : groups) {
 				auto ref = make_uniq<BoundReferenceExpression>(group->return_type, expressions.size());
 				types.push_back(group->return_type);

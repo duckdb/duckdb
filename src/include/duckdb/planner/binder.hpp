@@ -24,6 +24,7 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/planner/query_node/bound_set_operation_node.hpp"
 
 namespace duckdb {
 class BoundResultModifier;
@@ -389,6 +390,8 @@ private:
 	unique_ptr<BoundTableRef> BindShowQuery(ShowRef &ref);
 	unique_ptr<BoundTableRef> BindShowTable(ShowRef &ref);
 	unique_ptr<BoundTableRef> BindSummarize(ShowRef &ref);
+
+	void BindCollationGroup(unique_ptr<BoundSetOperationNode> &bound_set_op);
 
 public:
 	// This should really be a private constructor, but make_shared_ptr does not allow it...
