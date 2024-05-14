@@ -69,9 +69,12 @@ static inline JSONKeyReadResult ReadString(const char *ptr, const char *const en
 				}
 				backslash = false;
 			} else if (*ptr == '\\') {
-				backslash = true;
-				ptr++;
-				continue;
+				if (!backslash) {
+					backslash = true;
+					ptr++;
+					continue;
+				}
+				backslash = false;
 			}
 			key[key_len++] = *ptr++;
 		}
