@@ -62,6 +62,22 @@ struct IcuBindData : public FunctionData {
 		auto &other = other_p.Cast<IcuBindData>();
 		return language == other.language && country == other.country;
 	}
+
+	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	                      const ScalarFunction &function) {
+		auto &bind_data = bind_data_p->Cast<IcuBindData>();
+		serializer.WriteProperty(100, "language", bind_data.language);
+		serializer.WriteProperty(101, "country", bind_data.country);
+	}
+
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, ScalarFunction &function) {
+		string language;
+		string country;
+		deserializer.ReadProperty(100, "language", language);
+		deserializer.ReadProperty(101, "country", country);
+
+		return make_uniq<IcuBindData>(language, country);
+	}
 };
 
 static int32_t ICUGetSortKey(icu::Collator &collator, string_t input, duckdb::unique_ptr<char[]> &buffer,
@@ -137,19 +153,10 @@ static duckdb::unique_ptr<FunctionData> ICUSortKeyBind(ClientContext &context, S
 	}
 }
 
-static void ICUCollateSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
-                                const ScalarFunction &function) {
-	throw NotImplementedException("FIXME: serialize icu-collate");
-}
-
-static duckdb::unique_ptr<FunctionData> ICUCollateDeserialize(Deserializer &deserializer, ScalarFunction &function) {
-	throw NotImplementedException("FIXME: serialize icu-collate");
-}
-
 static ScalarFunction GetICUFunction(const string &collation) {
 	ScalarFunction result(collation, {LogicalType::VARCHAR}, LogicalType::VARCHAR, ICUCollateFunction, ICUCollateBind);
-	result.serialize = ICUCollateSerialize;
-	result.deserialize = ICUCollateDeserialize;
+	result.serialize = IcuBindData::Serialize;
+	result.deserialize = IcuBindData::Deserialize;
 	return result;
 }
 
