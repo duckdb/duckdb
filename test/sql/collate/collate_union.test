@@ -31,4 +31,10 @@ SELECT 'A' COLLATE NOCASE, 'B' COLLATE NOCASE UNION SELECT 'a', 'b'
 ----
 a	b
 
+query II
+SELECT * FROM (SELECT 'A', 'B' UNION SELECT 'a', 'b') ORDER BY 1
+----
+A	B
+a	b
+
 
