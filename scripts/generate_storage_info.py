@@ -31,7 +31,13 @@ def main():
         content = cpp_file.read()
 
     start_index = content.find(START_MARKER)
-    end_index = content.find(END_MARKER) + len(END_MARKER)
+    if start_index == -1:
+        print("storage_info.cpp is corrupted, could not find the START_MARKER")
+        exit(1)
+    end_index = content.find(END_MARKER)
+    if end_index == -1:
+        print("storage_info.cpp is corrupted, could not find the END_MARKER")
+        exit(1)
     updated_content = content[: start_index + len(START_MARKER)] + "\n" + storage_version_info + content[end_index:]
 
     with open(STORAGE_INFO_PATH, "w") as cpp_file:
