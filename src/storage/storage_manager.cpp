@@ -56,7 +56,15 @@ bool ObjectCache::ObjectCacheEnabled(ClientContext &context) {
 	return context.db->config.options.object_cache_enable;
 }
 
-optional_ptr<WriteAheadLog> StorageManager::GetWriteAheadLog() {
+int64_t StorageManager::GetWALSize() {
+	if (!wal) {
+		return 0;
+	}
+	D_ASSERT(wal->HasWriter());
+	return wal->GetWriter().GetFileSize();
+}
+
+optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
 	if (InMemory() || read_only || !load_complete) {
 		return nullptr;
 	}
@@ -215,9 +223,9 @@ public:
 
 SingleFileStorageCommitState::SingleFileStorageCommitState(StorageManager &storage_manager, bool checkpoint)
     : checkpoint(checkpoint) {
-	log = storage_manager.GetWriteAheadLog();
+	log = storage_manager.GetWAL();
 	if (log) {
-		auto initial_size = log->GetWALSize();
+		auto initial_size = storage_manager.GetWALSize();
 		initial_written = log->GetTotalWritten();
 		initial_wal_size = initial_size < 0 ? 0 : idx_t(initial_size);
 
@@ -262,8 +270,7 @@ void SingleFileStorageManager::CreateCheckpoint(CheckpointOptions options) {
 		return;
 	}
 	auto &config = DBConfig::Get(db);
-	if (wal->GetWALSize() > 0 || config.options.force_checkpoint ||
-	    options.action == CheckpointAction::FORCE_CHECKPOINT) {
+	if (GetWALSize() > 0 || config.options.force_checkpoint || options.action == CheckpointAction::FORCE_CHECKPOINT) {
 		// we only need to checkpoint if there is anything in the WAL
 		try {
 			SingleFileCheckpointWriter checkpointer(db, *block_manager, options.type);
@@ -288,9 +295,7 @@ DatabaseSize SingleFileStorageManager::GetDatabaseSize() {
 		ds.free_blocks = block_manager->FreeBlocks();
 		ds.used_blocks = ds.total_blocks - ds.free_blocks;
 		ds.bytes = (ds.total_blocks * ds.block_size);
-		if (auto wal = GetWriteAheadLog()) {
-			ds.wal_size = NumericCast<idx_t>(wal->GetWALSize());
-		}
+		ds.wal_size = NumericCast<idx_t>(GetWALSize());
 	}
 	return ds;
 }
@@ -301,15 +306,9 @@ vector<MetadataBlockInfo> SingleFileStorageManager::GetMetadataInfo() {
 }
 
 bool SingleFileStorageManager::AutomaticCheckpoint(idx_t estimated_wal_bytes) {
-	auto log = GetWriteAheadLog();
-	if (!log) {
-		return false;
-	}
-
-	auto &config = DBConfig::Get(db);
-	auto initial_size = NumericCast<idx_t>(log->GetWALSize());
+	auto initial_size = NumericCast<idx_t>(GetWALSize());
 	idx_t expected_wal_size = initial_size + estimated_wal_bytes;
-	return expected_wal_size > config.options.checkpoint_wal_size;
+	return expected_wal_size > DBConfig::Get(db).options.checkpoint_wal_size;
 }
 
 shared_ptr<TableIOManager> SingleFileStorageManager::GetTableIOManager(BoundCreateTableInfo *info /*info*/) {

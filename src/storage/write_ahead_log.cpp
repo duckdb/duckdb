@@ -30,11 +30,6 @@ WriteAheadLog::WriteAheadLog(AttachedDatabase &database, const string &path) : s
 WriteAheadLog::~WriteAheadLog() {
 }
 
-int64_t WriteAheadLog::GetWALSize() {
-	D_ASSERT(writer);
-	return writer->GetFileSize();
-}
-
 idx_t WriteAheadLog::GetTotalWritten() {
 	D_ASSERT(writer);
 	return writer->GetTotalWritten();

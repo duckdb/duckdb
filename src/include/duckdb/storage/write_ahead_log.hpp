@@ -54,11 +54,12 @@ public:
 	//! Replay the WAL
 	static bool Replay(AttachedDatabase &database, unique_ptr<FileHandle> handle);
 
-	//! Returns the current size of the WAL in bytes
-	int64_t GetWALSize();
 	//! Gets the total bytes written to the WAL since startup
 	idx_t GetTotalWritten();
 
+	bool HasWriter() {
+		return writer != nullptr;
+	}
 	BufferedFileWriter &GetWriter() {
 		return *writer;
 	}

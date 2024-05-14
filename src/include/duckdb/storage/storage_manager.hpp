@@ -65,8 +65,10 @@ public:
 		return db;
 	}
 
-	//! Get the WAL of the StorageManager, returns nullptr if in-memory
-	optional_ptr<WriteAheadLog> GetWriteAheadLog();
+	//! Get the WAL of the StorageManager, or nullptr, if there is no WAL.
+	optional_ptr<WriteAheadLog> GetWAL();
+	//! Get the size of the WAL, or zero, if there is no WAL.
+	int64_t GetWALSize();
 
 	//! Returns the database file path
 	string GetDBPath() {
