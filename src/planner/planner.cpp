@@ -186,8 +186,6 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		switch (error.Type()) {
-		case ExceptionType::SERIALIZATION:   // NOLINT: explicitly allowing these errors (for now)
-			break;                           // pass
 		case ExceptionType::NOT_IMPLEMENTED: // NOLINT: explicitly allowing these errors (for now)
 			break;                           // pass
 		default:

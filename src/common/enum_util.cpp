@@ -77,6 +77,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state.hpp"
 #include "duckdb/execution/operator/csv_scanner/quote_rules.hpp"
+#include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/function/macro_function.hpp"
@@ -5608,6 +5609,34 @@ SampleMethod EnumUtil::FromString<SampleMethod>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "Reservoir")) {
 		return SampleMethod::RESERVOIR_SAMPLE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<SampleType>(SampleType value) {
+	switch(value) {
+	case SampleType::BLOCKING_SAMPLE:
+		return "BLOCKING_SAMPLE";
+	case SampleType::RESERVOIR_SAMPLE:
+		return "RESERVOIR_SAMPLE";
+	case SampleType::RESERVOIR_PERCENTAGE_SAMPLE:
+		return "RESERVOIR_PERCENTAGE_SAMPLE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+SampleType EnumUtil::FromString<SampleType>(const char *value) {
+	if (StringUtil::Equals(value, "BLOCKING_SAMPLE")) {
+		return SampleType::BLOCKING_SAMPLE;
+	}
+	if (StringUtil::Equals(value, "RESERVOIR_SAMPLE")) {
+		return SampleType::RESERVOIR_SAMPLE;
+	}
+	if (StringUtil::Equals(value, "RESERVOIR_PERCENTAGE_SAMPLE")) {
+		return SampleType::RESERVOIR_PERCENTAGE_SAMPLE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
