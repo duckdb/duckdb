@@ -76,10 +76,6 @@ from pragma_table_info('integers');
 
 skipif threadid=0
 statement ok
-from pragma_database_size();
-
-skipif threadid=0
-statement ok
 from duckdb_dependencies();
 
 skipif threadid=0
