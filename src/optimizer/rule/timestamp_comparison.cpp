@@ -24,26 +24,45 @@ TimeStampComparison::TimeStampComparison(ClientContext &context, ExpressionRewri
 	auto left = make_uniq<CastExpressionMatcher>();
 	left->type = make_uniq<TypeMatcherId>(LogicalTypeId::DATE);
 	left->matcher = make_uniq<ExpressionMatcher>();
+	left->matcher->expr_class = ExpressionClass::BOUND_COLUMN_REF;
 	left->matcher->type = make_uniq<TypeMatcherId>(LogicalTypeId::TIMESTAMP);
 	op->matchers.push_back(std::move(left));
 
 	// other side is varchar to date?
-	auto right = make_uniq<ExpressionMatcher>();
+	auto right = make_uniq<CastExpressionMatcher>();
 	right->type = make_uniq<TypeMatcherId>(LogicalTypeId::DATE);
+	right->matcher = make_uniq<ConstantExpressionMatcher>();
+	right->matcher->expr_class = ExpressionClass::BOUND_CONSTANT;
+	right->matcher->type = make_uniq<TypeMatcherId>(LogicalTypeId::VARCHAR);
 	op->matchers.push_back(std::move(right));
 
 	root = std::move(op);
 }
 
+static void ExpressionIsConstant(Expression &expr, bool &is_constant) {
+	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+		is_constant = false;
+		return;
+	}
+	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { ExpressionIsConstant(child, is_constant); });
+}
+
 unique_ptr<Expression> TimeStampComparison::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                   bool &changes_made, bool is_root) {
-	auto len = bindings.size();
-	auto &cast_constant = bindings[len - 1].get();
-	auto &cast_columnref = bindings[len - 2].get();
+	auto cast_constant = bindings[3].get().Copy();
+	auto cast_columnref = bindings[2].get().Copy();
+	auto is_constant = true;
+	ExpressionIsConstant(*cast_constant, is_constant);
+	if (!is_constant) {
+		// means the matchers are flipped, so we need to flip our bindings
+		// for some reason an extra binding is added in this case.
+		cast_constant = bindings[4].get().Copy();
+		cast_columnref = bindings[3].get().Copy();
+	}
 	auto new_expr = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
 
 	Value result;
-	if (ExpressionExecutor::TryEvaluateScalar(context, cast_constant, result)) {
+	if (ExpressionExecutor::TryEvaluateScalar(context, *cast_constant, result)) {
 		D_ASSERT(result.type() == LogicalType::DATE);
 		auto original_val = result.GetValue<duckdb::date_t>();
 		auto no_seconds = dtime_t(0);
@@ -59,8 +78,8 @@ unique_ptr<Expression> TimeStampComparison::Apply(LogicalOperator &op, vector<re
 
 		auto val_for_comparison = make_uniq<BoundConstantExpression>(original_val_plus_on_date_ts);
 
-		auto left_copy = cast_columnref.Copy();
-		auto right_copy = cast_columnref.Copy();
+		auto left_copy = cast_columnref->Copy();
+		auto right_copy = cast_columnref->Copy();
 		auto lt_eq_expr = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHAN, std::move(right_copy),
 		                                                       std::move(val_for_comparison));
 		auto gt_eq_expr = make_uniq<BoundComparisonExpression>(

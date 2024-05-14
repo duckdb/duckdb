@@ -4,11 +4,13 @@
 
 require icu
 
-statement ok
-set TimeZone='UTC';
+foreach timezone UTC ECT
 
 statement ok
-create table t1 (ts timestamp, i int);
+set TimeZone='${timezone}';
+
+statement ok
+create or replace table t1 (ts timestamp, i int);
 
 statement ok
 insert into t1 select '2024-05-01 00:00:00'::timestamp, i from generate_series(1, 122880) g(i);
@@ -40,10 +42,29 @@ query II nosort no_opt_result
 select * from t1 where ts::date == '2024-05-02';
 ----
 
-
 statement ok
 pragma enable_optimizer;
 
 query II nosort no_opt_result
 select * from t1 where ts::date == '2024-05-02';
 ----
+
+# pattern is still recognized in conjunction
+query II
+explain select count(*) from t1 where ts::date == '2024-05-02' and i > 122880/2;
+----
+physical_plan	<!REGEX>:.*FILTER.*SEQ_SCAN:.*
+
+
+
+query I
+select count(*) from t1 where ts::date == '2024-05-02' and i > 122880/2;
+----
+0
+
+query I
+select count(*) from t1 where ts::date == '2024-05-02' and i <= 1000;
+----
+2000
+
+endloop
