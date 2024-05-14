@@ -934,7 +934,8 @@ converted. The result must be freed with `duckdb_free`.
 DUCKDB_API char *duckdb_value_varchar(duckdb_result *result, idx_t col, idx_t row);
 
 /*!
- * returns: The string value at the specified location.
+ * returns: The string value at the specified location. Attempts to cast the result value to string.
+ * No support for nested types, and for other complex types.
  * The resulting field "string.data" must be freed with `duckdb_free.`
  */
 DUCKDB_API duckdb_string duckdb_value_string(duckdb_result *result, idx_t col, idx_t row);
