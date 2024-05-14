@@ -684,7 +684,7 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 			auto source_idx = source_data.sel->get_index(offset + i);
 			if (!source_data.validity.RowIsValid(source_idx)) {
 				for (idx_t j = 0; j < array_size; j++) {
-					child_vector_data.validity.SetInvalid(source_idx * array_size + j);
+					child_vector_data.validity.SetInvalid(i * array_size + j);
 				}
 			}
 		}
