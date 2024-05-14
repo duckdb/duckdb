@@ -395,10 +395,17 @@ void Vector::Resize(idx_t cur_size, idx_t new_size) {
 	}
 	for (auto &data_to_resize : to_resize) {
 		if (!data_to_resize.is_nested) {
-			auto new_data =
-			    make_unsafe_uniq_array<data_t>(new_size * data_to_resize.type_size * data_to_resize.nested_multiplier);
-			memcpy(new_data.get(), data_to_resize.data,
-			       cur_size * data_to_resize.type_size * data_to_resize.nested_multiplier * sizeof(data_t));
+			auto old_size = cur_size * data_to_resize.type_size * data_to_resize.nested_multiplier * sizeof(data_t);
+			auto target_size = new_size * data_to_resize.type_size * data_to_resize.nested_multiplier * sizeof(data_t);
+
+			// We have an upper limit of 4GB for a single vector
+			if (target_size > NumericLimits<uint32_t>::Maximum()) {
+				throw OutOfRangeException("Cannot resize vector to %lld bytes: maximum allowed vector size is 4GB",
+				                          target_size);
+			}
+
+			auto new_data = make_unsafe_uniq_array<data_t>(target_size);
+			memcpy(new_data.get(), data_to_resize.data, old_size);
 			data_to_resize.buffer->SetData(std::move(new_data));
 			data_to_resize.vec.data = data_to_resize.buffer->GetData();
 		}
