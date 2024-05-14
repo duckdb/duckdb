@@ -164,7 +164,9 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 
 	} else {
 		// force checkpoint - wait to get an exclusive lock
-		lock = checkpoint_lock.GetExclusiveLock();
+		while (!lock) {
+			lock = checkpoint_lock.TryGetExclusiveLock();
+		}
 	}
 	CheckpointOptions options;
 	if (GetLastCommit() > LowestActiveStart()) {
