@@ -489,7 +489,6 @@ protected:
 };
 
 void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
-
 	auto free_list_blocks = GetFreeListBlocks();
 
 	// now handle the free list
