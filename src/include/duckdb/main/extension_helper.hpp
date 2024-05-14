@@ -212,7 +212,8 @@ private:
 	                                                                 const string &local_path, const string &extension,
 	                                                                 bool force_install, const string &repository,
 	                                                                 const string &version,
-	                                                                 optional_ptr<HTTPLogger> http_logger = nullptr);
+	                                                                 optional_ptr<HTTPLogger> http_logger = nullptr,
+	                                                                 optional_ptr<ClientContext> context = nullptr);
 	static const vector<string> PathComponents();
 	static string DefaultExtensionFolder(FileSystem &fs);
 	static bool AllowAutoInstall(const string &extension);

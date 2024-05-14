@@ -342,9 +342,6 @@ vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(DatabaseInstance
 		}
 	}
 
-	//	auto &loaded_extensions = db.LoadedExtensions();
-	//	auto &loaded_extensions_data = db.LoadedExtensionsData();
-
 	return result;
 }
 
