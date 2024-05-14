@@ -118,7 +118,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 
 	auto root = make_uniq<LogicalSetOperation>(node.setop_index, node.types.size(), std::move(left_node),
 	                                           std::move(right_node), logical_type, node.setop_all, true,
-											   std::move(node.collation_expressions));
+											   std::move(node.collation_group_info));
 
 	return VisitQueryNode(node, std::move(root));
 }

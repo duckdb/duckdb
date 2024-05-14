@@ -9,16 +9,10 @@
 #pragma once
 
 #include "duckdb/planner/logical_operator.hpp"
-// #include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/planner/query_node/bound_set_operation_node.hpp"
 
 namespace duckdb {
-
-struct CollationGroupInfo {
-	//! collation expression
-	unique_ptr<Expression> collation_expr;
-	//! collation index in the select list
-	idx_t collation_idx;
-};
 
 class LogicalSetOperation : public LogicalOperator {
 	LogicalSetOperation(idx_t table_index, idx_t column_count, LogicalOperatorType type, bool setop_all,
@@ -44,10 +38,10 @@ public:
 
 	LogicalSetOperation(idx_t table_index, idx_t column_count, unique_ptr<LogicalOperator> top,
 					unique_ptr<LogicalOperator> bottom, LogicalOperatorType type, bool setop_all,
-					bool allow_out_of_order, vector<unique_ptr<Expression>> groups)
+					bool allow_out_of_order, vector<CollationGroupInfo> info)
 					: LogicalSetOperation(table_index, column_count, std::move(top), std::move(bottom),
 					type, setop_all, allow_out_of_order) {
-		collation_expressions = std::move(groups);
+		collation_info = std::move(info);
 	}
 
 	idx_t table_index;
@@ -57,7 +51,7 @@ public:
 	bool allow_out_of_order;
 
 	// unique_ptr<CollationGroupInfo> collation_info;
-	vector<unique_ptr<Expression>> collation_expressions;
+	vector<CollationGroupInfo> collation_info;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override {

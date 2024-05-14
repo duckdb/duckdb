@@ -14,6 +14,17 @@
 
 namespace duckdb {
 
+class CollationGroupInfo {
+public:
+	CollationGroupInfo(idx_t coll_idx, unique_ptr<Expression> coll_expr): collation_idx(coll_idx), bound_collation_expr(std::move(coll_expr)) {
+	}
+public:
+	//! collation index in the select list
+	idx_t collation_idx;
+	//! collation expression
+	unique_ptr<Expression> bound_collation_expr;
+};
+
 //! Bound equivalent of SetOperationNode
 class BoundSetOperationNode : public BoundQueryNode {
 public:
@@ -49,8 +60,7 @@ public:
 	vector<idx_t> left_reorder_idx;
 	vector<idx_t> right_reorder_idx;
 
-	// BoundGroupByNode groups;
-	vector<unique_ptr<Expression>> collation_expressions;
+	vector<CollationGroupInfo> collation_group_info;
 
 public:
 	idx_t GetRootIndex() override {

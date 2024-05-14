@@ -194,6 +194,7 @@ void Binder::BindCollationGroup(unique_ptr<BoundSetOperationNode> &bound_set_op)
 	auto &right_node = bound_set_op->right->Cast<BoundSelectNode>();
 	auto &right_bind_state = right_node.bind_state;
 
+	// using set data structure to ensure uniqueness
 	std::set<idx_t> collation_indexes(left_node.collation_sel_idx.begin(), left_node.collation_sel_idx.end());
 	std::copy(right_node.collation_sel_idx.begin(), right_node.collation_sel_idx.end(), std::inserter(collation_indexes, collation_indexes.end()));
 
@@ -226,7 +227,7 @@ void Binder::BindCollationGroup(unique_ptr<BoundSetOperationNode> &bound_set_op)
 		}
 
 		ExpressionBinder::PushCollation(context, bound_collation_expr, bound_collation_expr->return_type, true);
-		bound_set_op->collation_expressions.push_back(std::move(bound_collation_expr));
+		bound_set_op->collation_group_info.push_back({collate_idx, std::move(bound_collation_expr)});
 	}
 }
 

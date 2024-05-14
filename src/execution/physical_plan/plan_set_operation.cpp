@@ -106,21 +106,28 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 
 	// if the ALL specifier is not given, we have to ensure distinct results. Hence, push a GROUP BY ALL
 	if (!op.setop_all) { // no ALL, use distinct semantics
-		auto &types = result->GetTypes();
+		auto &types = result->types;
 		vector<unique_ptr<Expression>> groups, aggregates /* left empty */;
-		if (op.collation_expressions.empty()) {
+		if (op.collation_info.empty()) {
 			for (idx_t i = 0; i < types.size(); i++) {
 				groups.push_back(make_uniq<BoundReferenceExpression>(types[i], i));
 			}
-		} else {
+		} else { // project the collations and ordinary columns
 			vector<unique_ptr<Expression>> expressions;
-			vector<LogicalType> types;
-			groups = std::move(op.collation_expressions);
-			for (auto &group : groups) {
-				auto ref = make_uniq<BoundReferenceExpression>(group->return_type, expressions.size());
-				types.push_back(group->return_type);
-				expressions.push_back(std::move(group));
-				group = std::move(ref);
+			idx_t info_idx = 0;
+			auto &info = op.collation_info;
+			for (idx_t proj_idx=0; proj_idx < types.size(); ++proj_idx) {
+				if (info_idx < info.size() && proj_idx == info[info_idx].collation_idx) {
+					// project collation
+					auto &bound_collation_expr = info[info_idx].bound_collation_expr;
+					types[proj_idx] = bound_collation_expr->return_type;
+					expressions.push_back(std::move(bound_collation_expr));
+					info_idx++;
+				} else {
+					// ordinary columns
+					expressions.push_back(make_uniq<BoundReferenceExpression>(types[proj_idx], proj_idx));
+				}
+				groups.push_back(make_uniq<BoundReferenceExpression>(types[proj_idx], proj_idx));
 			}
 			auto projection = make_uniq<PhysicalProjection>(std::move(types), std::move(expressions), op.estimated_cardinality);
 			projection->children.push_back(std::move(result));
@@ -131,7 +138,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 														result->estimated_cardinality);
 		groupby->children.push_back(std::move(result));
 		result = std::move(groupby);
-
 	}
 
 	D_ASSERT(result);
