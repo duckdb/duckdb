@@ -44,7 +44,7 @@ class WriteAheadLogDeserializer;
 class WriteAheadLog {
 public:
 	//! Initialize the WAL in the specified directory
-	explicit WriteAheadLog(AttachedDatabase &database, const string &path);
+	explicit WriteAheadLog(AttachedDatabase &database, const string &wal_path);
 	virtual ~WriteAheadLog();
 
 	//! Skip writing to the WAL
@@ -57,9 +57,10 @@ public:
 	//! Gets the total bytes written to the WAL since startup
 	idx_t GetTotalWritten();
 
-	bool HasWriter() {
+	bool Initialized() {
 		return writer != nullptr;
 	}
+	BufferedFileWriter &Initialize();
 	BufferedFileWriter &GetWriter() {
 		return *writer;
 	}

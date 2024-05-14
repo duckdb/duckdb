@@ -69,6 +69,10 @@ public:
 	optional_ptr<WriteAheadLog> GetWAL();
 	//! Get the size of the WAL, or zero, if there is no WAL.
 	int64_t GetWALSize();
+	//!
+	void ResetWAL() {
+		wal.reset();
+	}
 
 	//! Returns the database file path
 	string GetDBPath() {

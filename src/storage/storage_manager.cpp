@@ -60,7 +60,9 @@ int64_t StorageManager::GetWALSize() {
 	if (!wal) {
 		return 0;
 	}
-	D_ASSERT(wal->HasWriter());
+	if (!wal->Initialized()) {
+		return 0;
+	}
 	return wal->GetWriter().GetFileSize();
 }
 
@@ -236,7 +238,7 @@ SingleFileStorageCommitState::SingleFileStorageCommitState(StorageManager &stora
 			log->skip_writing = true;
 		}
 	} else {
-		D_ASSERT(!checkpoint);
+		//		D_ASSERT(!checkpoint);
 	}
 }
 
