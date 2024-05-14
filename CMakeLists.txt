@@ -936,21 +936,9 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TEST
   )
   FETCHCONTENT_POPULATE(${NAME}_EXTENSION_FC)
 
-  # Autodetect the version by using GIT. we
+  # Autogenerate version tag if not provided
   if ("${EXTENSION_VERSION}" STREQUAL "")
-    find_package(Git)
-    if(Git_FOUND)
-      execute_process(
-          COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
-          WORKING_DIRECTORY "${${NAME}_extension_fc_SOURCE_DIR}"
-          RESULT_VARIABLE GIT_RESULT
-          OUTPUT_VARIABLE GIT_SHORT_COMMIT
-          OUTPUT_STRIP_TRAILING_WHITESPACE)
-      set(EXTERNAL_EXTENSION_VERSION "${GIT_SHORT_COMMIT}")
-    else()
-      message(WARNING "Git not found, using ${COMMIT} as GIT_SHORT_COMMIT")
-      set(EXTERNAL_EXTENSION_VERSION "${COMMIT}")
-    endif()
+    duckdb_extension_generate_version(EXTERNAL_EXTENSION_VERSION ${${NAME}_extension_fc_SOURCE_DIR})
   else()
     set(EXTERNAL_EXTENSION_VERSION "${EXTENSION_VERSION}")
   endif()
@@ -958,7 +946,7 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TEST
   message(STATUS "Load extension '${NAME}' from ${URL} @ ${EXTERNAL_EXTENSION_VERSION}")
 
   string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
-  set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION "${GIT_SHORT_COMMIT}" PARENT_SCOPE)
+  set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION "${EXTERNAL_EXTENSION_VERSION}" PARENT_SCOPE)
 
   if ("${INCLUDE_PATH}" STREQUAL "")
     set(INCLUDE_FULL_PATH "${${NAME}_extension_fc_SOURCE_DIR}/src/include")
@@ -972,19 +960,17 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TEST
     set(TEST_FULL_PATH "${${NAME}_extension_fc_SOURCE_DIR}/${TEST_PATH}")
   endif()
 
-  register_extension(${NAME} ${DONT_LINK} ${DONT_BUILD} ${LOAD_TESTS} ${${NAME}_extension_fc_SOURCE_DIR}/${PATH} "${INCLUDE_FULL_PATH}" "${TEST_FULL_PATH}" "${LINKED_LIBS}" "${GIT_SHORT_COMMIT}" "${EXTERNAL_EXTENSION_VERSION}")
+  register_extension(${NAME} ${DONT_LINK} ${DONT_BUILD} ${LOAD_TESTS} ${${NAME}_extension_fc_SOURCE_DIR}/${PATH} "${INCLUDE_FULL_PATH}" "${TEST_FULL_PATH}" "${LINKED_LIBS}" "${EXTERNAL_EXTENSION_VERSION}")
 endmacro()
 
-# This function sets OUTPUT_VAR to the VERSION using DuckDB's standard versioning convention (using CMAKE_CURRENT_LIST_DIR)
-# - for tagged releases, the version equals the tagged release
-# - for all other cases, the short (10 char) git hash is the version
-# - if git wasn't found, an empty string is returned
-function(duckdb_extension_generate_version OUTPUT_VAR)
+# This function sets OUTPUT_VAR to the VERSION using DuckDB's standard versioning convention (using WORKING_DIR)
+# TODO: unify this with the base DuckDB logic (note that this is slightly different as it has ReleaseCandidate tag support
+function(duckdb_extension_generate_version OUTPUT_VAR WORKING_DIR)
   find_package(Git)
   if(Git_FOUND)
     execute_process(
             COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
-            WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
+            WORKING_DIRECTORY ${WORKING_DIR}
             RESULT_VARIABLE GIT_RESULT
             OUTPUT_VARIABLE GIT_COMMIT_HASH
             OUTPUT_STRIP_TRAILING_WHITESPACE)
@@ -992,17 +978,18 @@ function(duckdb_extension_generate_version OUTPUT_VAR)
       message(FATAL_ERROR "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'log -1 --format=%h'.")
     endif()
     execute_process(
-            COMMAND ${GIT_EXECUTABLE} describe --tags --long
-            WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
+            COMMAND ${GIT_EXECUTABLE} describe --tags
+            WORKING_DIRECTORY ${WORKING_DIR}
             RESULT_VARIABLE GIT_RESULT
             OUTPUT_VARIABLE GIT_DESCRIBE
             OUTPUT_STRIP_TRAILING_WHITESPACE)
     if (GIT_RESULT)
-      string(SUBSTRING "${GIT_COMMIT_HASH}" 0 10 VERSION)
-    elseif (NOT GIT_DESCRIBE MATCHES "^v[0-9]+\.[0-9]+\.[0-9]+$")
-      string(SUBSTRING "${GIT_COMMIT_HASH}" 0 10 VERSION)
+      set(VERSION "${GIT_COMMIT_HASH}")
+    elseif (GIT_DESCRIBE MATCHES "^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?$")
+      # We are on a valid SemVer version in the format v{MAJOR}.{MINOR}.{PATH}(-{RC})
+      set(VERSION "${GIT_DESCRIBE}")
     else()
-      set(VERSION ${GIT_DESCRIBE})
+      set(VERSION "${GIT_COMMIT_HASH}")
     endif()
   else()
     # No git found, we set empty string
@@ -1040,14 +1027,14 @@ function(duckdb_extension_load NAME)
     if ("${duckdb_extension_load_GIT_TAG}" STREQUAL "")
       error("Git URL specified but no valid GIT_TAG was found for ${NAME} extension")
     endif()
-    register_external_extension(${NAME} "${duckdb_extension_load_GIT_URL}" "${duckdb_extension_load_GIT_TAG}" "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${duckdb_extension_load_SOURCE_DIR}" "${duckdb_extension_load_INCLUDE_DIR}" "${duckdb_extension_load_TEST_DIR}" "${duckdb_extension_load_APPLY_PATCHES}" "${duckdb_extension_load_LINKED_LIBS}" "${duckdb_extension_load_SUBMODULES}")
+    register_external_extension(${NAME} "${duckdb_extension_load_GIT_URL}" "${duckdb_extension_load_GIT_TAG}" "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${duckdb_extension_load_SOURCE_DIR}" "${duckdb_extension_load_INCLUDE_DIR}" "${duckdb_extension_load_TEST_DIR}" "${duckdb_extension_load_APPLY_PATCHES}" "${duckdb_extension_load_LINKED_LIBS}" "${duckdb_extension_load_SUBMODULES}" "${duckdb_extension_load_EXTENSION_VERSION}")
     if (NOT "${duckdb_extension_load_EXTENSION_VERSION}" STREQUAL "")
       set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION "${duckdb_extension_load_EXTENSION_VERSION}" PARENT_SCOPE)
     endif()
   elseif (NOT "${duckdb_extension_load_SOURCE_DIR}" STREQUAL "")
     # Version detection
     if ("${duckdb_extension_load_EXTENSION_VERSION}" STREQUAL "")
-      duckdb_extension_generate_version(EXT_VERSION)
+      duckdb_extension_generate_version(EXT_VERSION ${CMAKE_CURRENT_LIST_DIR})
     else()
       set(EXT_VERSION ${duckdb_extension_load_EXTENSION_VERSION})
     endif()
