@@ -194,7 +194,7 @@ static void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &beg
 
 	// Clamp offsets
 	bool clamp_result = false;
-	if ((step_valid || step == 1)) {
+	if (step_valid || step == 1) {
 		clamp_result = ClampSlice(str, begin, end);
 	}
 
