@@ -14,6 +14,8 @@
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
+#include "duckdb/execution/reservoir_sample.hpp"
+#include "duckdb/common/queue.hpp"
 #include "duckdb/parser/tableref/pivotref.hpp"
 #include "duckdb/planner/tableref/bound_pivotref.hpp"
 #include "duckdb/parser/column_definition.hpp"
@@ -32,6 +34,52 @@
 #include "duckdb/common/types/interval.hpp"
 
 namespace duckdb {
+
+void BlockingSample::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<unique_ptr<BaseReservoirSampling>>(100, "base_reservoir_sample", base_reservoir_sample);
+	serializer.WriteProperty<SampleType>(101, "type", type);
+	serializer.WritePropertyWithDefault<bool>(102, "destroyed", destroyed);
+}
+
+unique_ptr<BlockingSample> BlockingSample::Deserialize(Deserializer &deserializer) {
+	auto base_reservoir_sample = deserializer.ReadPropertyWithDefault<unique_ptr<BaseReservoirSampling>>(100, "base_reservoir_sample");
+	auto type = deserializer.ReadProperty<SampleType>(101, "type");
+	auto destroyed = deserializer.ReadPropertyWithDefault<bool>(102, "destroyed");
+	unique_ptr<BlockingSample> result;
+	switch (type) {
+	case SampleType::RESERVOIR_PERCENTAGE_SAMPLE:
+		result = ReservoirSamplePercentage::Deserialize(deserializer);
+		break;
+	case SampleType::RESERVOIR_SAMPLE:
+		result = ReservoirSample::Deserialize(deserializer);
+		break;
+	default:
+		throw SerializationException("Unsupported type for deserialization of BlockingSample!");
+	}
+	result->base_reservoir_sample = std::move(base_reservoir_sample);
+	result->destroyed = destroyed;
+	return result;
+}
+
+void BaseReservoirSampling::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<idx_t>(100, "next_index_to_sample", next_index_to_sample);
+	serializer.WriteProperty<double>(101, "min_weight_threshold", min_weight_threshold);
+	serializer.WritePropertyWithDefault<idx_t>(102, "min_weighted_entry_index", min_weighted_entry_index);
+	serializer.WritePropertyWithDefault<idx_t>(103, "num_entries_to_skip_b4_next_sample", num_entries_to_skip_b4_next_sample);
+	serializer.WritePropertyWithDefault<idx_t>(104, "num_entries_seen_total", num_entries_seen_total);
+	serializer.WritePropertyWithDefault<std::priority_queue<std::pair<double, idx_t>>>(105, "reservoir_weights", reservoir_weights);
+}
+
+unique_ptr<BaseReservoirSampling> BaseReservoirSampling::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<BaseReservoirSampling>(new BaseReservoirSampling());
+	deserializer.ReadPropertyWithDefault<idx_t>(100, "next_index_to_sample", result->next_index_to_sample);
+	deserializer.ReadProperty<double>(101, "min_weight_threshold", result->min_weight_threshold);
+	deserializer.ReadPropertyWithDefault<idx_t>(102, "min_weighted_entry_index", result->min_weighted_entry_index);
+	deserializer.ReadPropertyWithDefault<idx_t>(103, "num_entries_to_skip_b4_next_sample", result->num_entries_to_skip_b4_next_sample);
+	deserializer.ReadPropertyWithDefault<idx_t>(104, "num_entries_seen_total", result->num_entries_seen_total);
+	deserializer.ReadPropertyWithDefault<std::priority_queue<std::pair<double, idx_t>>>(105, "reservoir_weights", result->reservoir_weights);
+	return result;
+}
 
 void BoundCaseCheck::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(100, "when_expr", when_expr);
@@ -419,6 +467,32 @@ unique_ptr<ReadCSVData> ReadCSVData::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadProperty<MultiFileReaderBindData>(107, "reader_bind", result->reader_bind);
 	deserializer.ReadPropertyWithDefault<vector<ColumnInfo>>(108, "column_info", result->column_info);
 	return result;
+}
+
+void ReservoirSample::Serialize(Serializer &serializer) const {
+	BlockingSample::Serialize(serializer);
+	serializer.WritePropertyWithDefault<idx_t>(200, "sample_count", sample_count);
+	serializer.WritePropertyWithDefault<unique_ptr<ReservoirChunk>>(201, "reservoir_chunk", reservoir_chunk);
+}
+
+unique_ptr<BlockingSample> ReservoirSample::Deserialize(Deserializer &deserializer) {
+	auto sample_count = deserializer.ReadPropertyWithDefault<idx_t>(200, "sample_count");
+	auto result = duckdb::unique_ptr<ReservoirSample>(new ReservoirSample(sample_count));
+	deserializer.ReadPropertyWithDefault<unique_ptr<ReservoirChunk>>(201, "reservoir_chunk", result->reservoir_chunk);
+	return std::move(result);
+}
+
+void ReservoirSamplePercentage::Serialize(Serializer &serializer) const {
+	BlockingSample::Serialize(serializer);
+	serializer.WriteProperty<double>(200, "sample_percentage", sample_percentage);
+	serializer.WritePropertyWithDefault<idx_t>(201, "reservoir_sample_size", reservoir_sample_size);
+}
+
+unique_ptr<BlockingSample> ReservoirSamplePercentage::Deserialize(Deserializer &deserializer) {
+	auto sample_percentage = deserializer.ReadProperty<double>(200, "sample_percentage");
+	auto result = duckdb::unique_ptr<ReservoirSamplePercentage>(new ReservoirSamplePercentage(sample_percentage));
+	deserializer.ReadPropertyWithDefault<idx_t>(201, "reservoir_sample_size", result->reservoir_sample_size);
+	return std::move(result);
 }
 
 void SampleOptions::Serialize(Serializer &serializer) const {

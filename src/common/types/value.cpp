@@ -162,7 +162,7 @@ Value::Value(string val) : type_(LogicalType::VARCHAR), is_null(false) {
 	if (!Value::StringIsValid(val.c_str(), val.size())) {
 		throw ErrorManager::InvalidUnicodeError(val, "value construction");
 	}
-	value_info_ = make_shared<StringValueInfo>(std::move(val));
+	value_info_ = make_shared_ptr<StringValueInfo>(std::move(val));
 }
 
 Value::~Value() {
@@ -230,10 +230,16 @@ Value Value::MinimumValue(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(Date::FromDate(Timestamp::MIN_YEAR, Timestamp::MIN_MONTH, Timestamp::MIN_DAY),
 		                        dtime_t(0));
-	case LogicalTypeId::TIMESTAMP_SEC:
-		return MinimumValue(LogicalType::TIMESTAMP).DefaultCastAs(LogicalType::TIMESTAMP_S);
-	case LogicalTypeId::TIMESTAMP_MS:
-		return MinimumValue(LogicalType::TIMESTAMP).DefaultCastAs(LogicalType::TIMESTAMP_MS);
+	case LogicalTypeId::TIMESTAMP_SEC: {
+		//	Casting rounds up, which will overflow
+		const auto min_us = MinimumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
+		return Value::TIMESTAMPSEC(timestamp_t(Timestamp::GetEpochSeconds(min_us)));
+	}
+	case LogicalTypeId::TIMESTAMP_MS: {
+		//	Casting rounds up, which will overflow
+		const auto min_us = MinimumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
+		return Value::TIMESTAMPMS(timestamp_t(Timestamp::GetEpochMs(min_us)));
+	}
 	case LogicalTypeId::TIMESTAMP_NS:
 		return Value::TIMESTAMPNS(timestamp_t(NumericLimits<int64_t>::Minimum()));
 	case LogicalTypeId::TIME_TZ:
@@ -303,12 +309,18 @@ Value Value::MaximumValue(const LogicalType &type) {
 		return Value::TIME(dtime_t(Interval::MICROS_PER_DAY));
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(timestamp_t(NumericLimits<int64_t>::Maximum() - 1));
-	case LogicalTypeId::TIMESTAMP_MS:
-		return MaximumValue(LogicalType::TIMESTAMP).DefaultCastAs(LogicalType::TIMESTAMP_MS);
+	case LogicalTypeId::TIMESTAMP_MS: {
+		//	Casting rounds up, which will overflow
+		const auto max_us = MaximumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
+		return Value::TIMESTAMPMS(timestamp_t(Timestamp::GetEpochMs(max_us)));
+	}
 	case LogicalTypeId::TIMESTAMP_NS:
 		return Value::TIMESTAMPNS(timestamp_t(NumericLimits<int64_t>::Maximum() - 1));
-	case LogicalTypeId::TIMESTAMP_SEC:
-		return MaximumValue(LogicalType::TIMESTAMP).DefaultCastAs(LogicalType::TIMESTAMP_S);
+	case LogicalTypeId::TIMESTAMP_SEC: {
+		//	Casting rounds up, which will overflow
+		const auto max_us = MaximumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
+		return Value::TIMESTAMPSEC(timestamp_t(Timestamp::GetEpochSeconds(max_us)));
+	}
 	case LogicalTypeId::TIME_TZ:
 		//	"24:00:00-1559" from the PG docs but actually "24:00:00-15:59:59"
 		return Value::TIMETZ(dtime_tz_t(dtime_t(Interval::MICROS_PER_DAY), dtime_tz_t::MIN_OFFSET));
@@ -668,7 +680,7 @@ Value Value::STRUCT(const LogicalType &type, vector<Value> struct_values) {
 	for (size_t i = 0; i < struct_values.size(); i++) {
 		struct_values[i] = struct_values[i].DefaultCastAs(child_types[i].second);
 	}
-	result.value_info_ = make_shared<NestedValueInfo>(std::move(struct_values));
+	result.value_info_ = make_shared_ptr<NestedValueInfo>(std::move(struct_values));
 	result.type_ = type;
 	result.is_null = false;
 	return result;
@@ -711,7 +723,7 @@ Value Value::MAP(const LogicalType &key_type, const LogicalType &value_type, vec
 		new_children.push_back(std::make_pair("value", std::move(values[i])));
 		values[i] = Value::STRUCT(std::move(new_children));
 	}
-	result.value_info_ = make_shared<NestedValueInfo>(std::move(values));
+	result.value_info_ = make_shared_ptr<NestedValueInfo>(std::move(values));
 	return result;
 }
 
@@ -735,7 +747,7 @@ Value Value::UNION(child_list_t<LogicalType> members, uint8_t tag, Value value) 
 		}
 	}
 	union_values[tag + 1] = std::move(value);
-	result.value_info_ = make_shared<NestedValueInfo>(std::move(union_values));
+	result.value_info_ = make_shared_ptr<NestedValueInfo>(std::move(union_values));
 	result.type_ = LogicalType::UNION(std::move(members));
 	return result;
 }
@@ -752,7 +764,7 @@ Value Value::LIST(vector<Value> values) {
 #endif
 	Value result;
 	result.type_ = LogicalType::LIST(values[0].type());
-	result.value_info_ = make_shared<NestedValueInfo>(std::move(values));
+	result.value_info_ = make_shared_ptr<NestedValueInfo>(std::move(values));
 	result.is_null = false;
 	return result;
 }
@@ -770,7 +782,7 @@ Value Value::LIST(const LogicalType &child_type, vector<Value> values) {
 Value Value::EMPTYLIST(const LogicalType &child_type) {
 	Value result;
 	result.type_ = LogicalType::LIST(child_type);
-	result.value_info_ = make_shared<NestedValueInfo>();
+	result.value_info_ = make_shared_ptr<NestedValueInfo>();
 	result.is_null = false;
 	return result;
 }
@@ -787,7 +799,7 @@ Value Value::ARRAY(vector<Value> values) {
 #endif
 	Value result;
 	result.type_ = LogicalType::ARRAY(values[0].type(), values.size());
-	result.value_info_ = make_shared<NestedValueInfo>(std::move(values));
+	result.value_info_ = make_shared_ptr<NestedValueInfo>(std::move(values));
 	result.is_null = false;
 	return result;
 }
@@ -805,7 +817,7 @@ Value Value::ARRAY(const LogicalType &child_type, vector<Value> values) {
 Value Value::EMPTYARRAY(const LogicalType &child_type, uint32_t size) {
 	Value result;
 	result.type_ = LogicalType::ARRAY(child_type, size);
-	result.value_info_ = make_shared<NestedValueInfo>();
+	result.value_info_ = make_shared_ptr<NestedValueInfo>();
 	result.is_null = false;
 	return result;
 }
@@ -813,35 +825,35 @@ Value Value::EMPTYARRAY(const LogicalType &child_type, uint32_t size) {
 Value Value::BLOB(const_data_ptr_t data, idx_t len) {
 	Value result(LogicalType::BLOB);
 	result.is_null = false;
-	result.value_info_ = make_shared<StringValueInfo>(string(const_char_ptr_cast(data), len));
+	result.value_info_ = make_shared_ptr<StringValueInfo>(string(const_char_ptr_cast(data), len));
 	return result;
 }
 
 Value Value::BLOB(const string &data) {
 	Value result(LogicalType::BLOB);
 	result.is_null = false;
-	result.value_info_ = make_shared<StringValueInfo>(Blob::ToBlob(string_t(data)));
+	result.value_info_ = make_shared_ptr<StringValueInfo>(Blob::ToBlob(string_t(data)));
 	return result;
 }
 
 Value Value::AGGREGATE_STATE(const LogicalType &type, const_data_ptr_t data, idx_t len) { // NOLINT
 	Value result(type);
 	result.is_null = false;
-	result.value_info_ = make_shared<StringValueInfo>(string(const_char_ptr_cast(data), len));
+	result.value_info_ = make_shared_ptr<StringValueInfo>(string(const_char_ptr_cast(data), len));
 	return result;
 }
 
 Value Value::BIT(const_data_ptr_t data, idx_t len) {
 	Value result(LogicalType::BIT);
 	result.is_null = false;
-	result.value_info_ = make_shared<StringValueInfo>(string(const_char_ptr_cast(data), len));
+	result.value_info_ = make_shared_ptr<StringValueInfo>(string(const_char_ptr_cast(data), len));
 	return result;
 }
 
 Value Value::BIT(const string &data) {
 	Value result(LogicalType::BIT);
 	result.is_null = false;
-	result.value_info_ = make_shared<StringValueInfo>(Bit::ToBit(string_t(data)));
+	result.value_info_ = make_shared_ptr<StringValueInfo>(Bit::ToBit(string_t(data)));
 	return result;
 }
 
@@ -1936,27 +1948,27 @@ Value Value::Deserialize(Deserializer &deserializer) {
 	case PhysicalType::VARCHAR: {
 		auto str = deserializer.ReadProperty<string>(102, "value");
 		if (type.id() == LogicalTypeId::BLOB) {
-			new_value.value_info_ = make_shared<StringValueInfo>(Blob::ToBlob(str));
+			new_value.value_info_ = make_shared_ptr<StringValueInfo>(Blob::ToBlob(str));
 		} else {
-			new_value.value_info_ = make_shared<StringValueInfo>(str);
+			new_value.value_info_ = make_shared_ptr<StringValueInfo>(str);
 		}
 	} break;
 	case PhysicalType::LIST: {
 		deserializer.ReadObject(102, "value", [&](Deserializer &obj) {
 			auto children = obj.ReadProperty<vector<Value>>(100, "children");
-			new_value.value_info_ = make_shared<NestedValueInfo>(children);
+			new_value.value_info_ = make_shared_ptr<NestedValueInfo>(children);
 		});
 	} break;
 	case PhysicalType::STRUCT: {
 		deserializer.ReadObject(102, "value", [&](Deserializer &obj) {
 			auto children = obj.ReadProperty<vector<Value>>(100, "children");
-			new_value.value_info_ = make_shared<NestedValueInfo>(children);
+			new_value.value_info_ = make_shared_ptr<NestedValueInfo>(children);
 		});
 	} break;
 	case PhysicalType::ARRAY: {
 		deserializer.ReadObject(102, "value", [&](Deserializer &obj) {
 			auto children = obj.ReadProperty<vector<Value>>(100, "children");
-			new_value.value_info_ = make_shared<NestedValueInfo>(children);
+			new_value.value_info_ = make_shared_ptr<NestedValueInfo>(children);
 		});
 	} break;
 	default:

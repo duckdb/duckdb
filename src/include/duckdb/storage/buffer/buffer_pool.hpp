@@ -20,13 +20,10 @@ struct EvictionQueue;
 struct BufferEvictionNode {
 	BufferEvictionNode() {
 	}
-	BufferEvictionNode(weak_ptr<BlockHandle> handle_p, idx_t timestamp_p)
-	    : handle(std::move(handle_p)), timestamp(timestamp_p) {
-		D_ASSERT(!handle.expired());
-	}
+	BufferEvictionNode(weak_ptr<BlockHandle> handle_p, idx_t eviction_seq_num);
 
 	weak_ptr<BlockHandle> handle;
-	idx_t timestamp;
+	idx_t handle_sequence_number;
 
 	bool CanUnload(BlockHandle &handle_p);
 	shared_ptr<BlockHandle> TryGetBlockHandle();
@@ -41,7 +38,7 @@ class BufferPool {
 	friend class StandardBufferManager;
 
 public:
-	explicit BufferPool(idx_t maximum_memory);
+	explicit BufferPool(idx_t maximum_memory, bool track_eviction_timestamps);
 	virtual ~BufferPool();
 
 	//! Set a new memory limit to the buffer pool, throws an exception if the new limit is too low and not enough
@@ -72,6 +69,16 @@ protected:
 	virtual EvictionResult EvictBlocks(MemoryTag tag, idx_t extra_memory, idx_t memory_limit,
 	                                   unique_ptr<FileBuffer> *buffer = nullptr);
 
+	//! Purge all blocks that haven't been pinned within the last N seconds
+	idx_t PurgeAgedBlocks(uint32_t max_age_sec);
+
+	//! Iterate over all purgable blocks and invoke the callback. If the callback returns true
+	//! iteration continues.
+	//! - Callback signature is: bool((BufferEvictionNode &, const std::shared_ptr<BlockHandle> &)
+	//! - Callback is invoked while holding the corresponding BlockHandle mutex.
+	template <typename FN>
+	void IterateUnloadableBlocks(FN fn);
+
 	//! Tries to dequeue an element from the eviction queue, but only after acquiring the purge queue lock.
 	bool TryDequeueWithLock(BufferEvictionNode &node);
 	//! Bulk purge dead nodes from the eviction queue. Then, enqueue those that are still alive.
@@ -98,6 +105,8 @@ protected:
 	atomic<idx_t> current_memory;
 	//! The maximum amount of memory that the buffer manager can keep (in bytes)
 	atomic<idx_t> maximum_memory;
+	//! Record timestamps of buffer manager unpin() events. Usable by custom eviction policies.
+	bool track_eviction_timestamps;
 	//! Eviction queue
 	unique_ptr<EvictionQueue> queue;
 	//! Memory manager for concurrently used temporary memory, e.g., for physical operators

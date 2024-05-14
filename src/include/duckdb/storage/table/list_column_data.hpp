@@ -53,8 +53,7 @@ public:
 
 	unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group,
 	                                                        PartialBlockManager &partial_block_manager) override;
-	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, PartialBlockManager &partial_block_manager,
-	                                             ColumnCheckpointInfo &checkpoint_info) override;
+	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &info) override;
 
 	void DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats) override;
 

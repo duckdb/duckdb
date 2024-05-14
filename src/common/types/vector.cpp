@@ -1213,7 +1213,7 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 	validity.Reset();
 	const auto has_validity = deserializer.ReadProperty<bool>(100, "all_valid");
 	if (has_validity) {
-		validity.Initialize(count);
+		validity.Initialize(MaxValue<idx_t>(count, STANDARD_VECTOR_SIZE));
 		deserializer.ReadProperty(101, "validity", data_ptr_cast(validity.GetData()), validity.ValidityMaskSize(count));
 	}
 
@@ -2089,10 +2089,6 @@ void MapVector::EvalMapInvalidReason(MapInvalidReason reason) {
 		throw InvalidInputException("Map keys must be unique.");
 	case MapInvalidReason::NULL_KEY:
 		throw InvalidInputException("Map keys can not be NULL.");
-	case MapInvalidReason::NULL_KEY_LIST:
-		throw InvalidInputException("The list of map keys must not be NULL.");
-	case MapInvalidReason::NULL_VALUE_LIST:
-		throw InvalidInputException("The list of map values must not be NULL.");
 	case MapInvalidReason::NOT_ALIGNED:
 		throw InvalidInputException("The map key list does not align with the map value list.");
 	case MapInvalidReason::INVALID_PARAMS:

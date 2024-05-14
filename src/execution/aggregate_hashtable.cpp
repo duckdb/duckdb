@@ -40,7 +40,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
                                                      vector<AggregateObject> aggregate_objects_p,
                                                      idx_t initial_capacity, idx_t radix_bits)
     : BaseAggregateHashTable(context, allocator, aggregate_objects_p, std::move(payload_types_p)),
-      radix_bits(radix_bits), count(0), capacity(0), aggregate_allocator(make_shared<ArenaAllocator>(allocator)) {
+      radix_bits(radix_bits), count(0), capacity(0), aggregate_allocator(make_shared_ptr<ArenaAllocator>(allocator)) {
 
 	// Append hash column to the end and initialise the row layout
 	group_types_p.emplace_back(LogicalType::HASH);
@@ -122,7 +122,7 @@ idx_t GroupedAggregateHashTable::InitialCapacity() {
 
 idx_t GroupedAggregateHashTable::GetCapacityForCount(idx_t count) {
 	count = MaxValue<idx_t>(InitialCapacity(), count);
-	return NextPowerOfTwo(count * LOAD_FACTOR);
+	return NextPowerOfTwo(NumericCast<uint64_t>(static_cast<double>(count) * LOAD_FACTOR));
 }
 
 idx_t GroupedAggregateHashTable::Capacity() const {
@@ -130,7 +130,7 @@ idx_t GroupedAggregateHashTable::Capacity() const {
 }
 
 idx_t GroupedAggregateHashTable::ResizeThreshold() const {
-	return Capacity() / LOAD_FACTOR;
+	return NumericCast<idx_t>(static_cast<double>(Capacity()) / LOAD_FACTOR);
 }
 
 idx_t GroupedAggregateHashTable::ApplyBitMask(hash_t hash) const {

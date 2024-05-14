@@ -93,7 +93,7 @@ string ViewCatalogEntry::ToSQL() const {
 	}
 	auto info = GetInfo();
 	auto result = info->ToString();
-	return result + ";\n";
+	return result;
 }
 
 unique_ptr<CatalogEntry> ViewCatalogEntry::Copy(ClientContext &context) const {

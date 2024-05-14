@@ -18,7 +18,7 @@ local_scheme = "no-local-version"
 dependency-versions = "latest"
 environment = "PIP_CONSTRAINT='build-constraints.txt'"
 before-build = 'pip install oldest-supported-numpy'
-before-test = 'pip install --prefer-binary pandas pytest-timeout mypy "psutil>=5.9.0" "requests>=2.26" fsspec   && (pip install --prefer-binary "pyarrow>=8.0" || true) && (pip install --prefer-binary "torch" || true) && (pip install --prefer-binary "polars" || true) && (pip install --prefer-binary "adbc_driver_manager" || true) && (pip install --prefer-binary "tensorflow" || true)'
+before-test = 'python scripts/optional_requirements.py'
 test-requires = 'pytest'
 test-command = 'DUCKDB_PYTHON_TEST_EXTENSION_PATH={project} DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED=1 python -m pytest {project}/tests --verbose'
 
@@ -40,3 +40,7 @@ test-command = "python -m pytest {project}/tests/fast --verbose"
 [tool.cibuildwheel.windows]
 archs = ["AMD64"]
 test-command = "python -m pytest {project}/tests/fast --verbose"
+
+# See https://github.com/duckdblabs/duckdb-internal/issues/1923 for context
+[tool.cibuildwheel.macos]
+before-test = 'python scripts/optional_requirements.py --exclude polars --exclude tensorflow'

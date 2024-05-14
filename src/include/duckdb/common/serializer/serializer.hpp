@@ -16,6 +16,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optionally_owned_ptr.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 #include "duckdb/common/insertion_order_preserving_map.hpp"
@@ -143,6 +144,12 @@ protected:
 			// Use the underlying type
 			WriteValue(static_cast<typename std::underlying_type<T>::type>(value));
 		}
+	}
+
+	// Optionally Owned Pointer Ref
+	template <typename T>
+	void WriteValue(const optionally_owned_ptr<T> &ptr) {
+		WriteValue(ptr.get());
 	}
 
 	// Unique Pointer Ref
@@ -273,6 +280,17 @@ protected:
 			OnObjectEnd();
 		}
 		OnListEnd();
+
+  // priority queue
+	template <typename T>
+	void WriteValue(const std::priority_queue<T> &queue) {
+		vector<T> placeholder;
+		auto queue_copy = std::priority_queue<T>(queue);
+		while (queue_copy.size() > 0) {
+			placeholder.emplace_back(queue_copy.top());
+			queue_copy.pop();
+		}
+		WriteValue(placeholder);
 	}
 
 	// class or struct implementing `Serialize(Serializer& Serializer)`;
