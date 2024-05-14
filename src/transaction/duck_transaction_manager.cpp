@@ -42,6 +42,7 @@ DuckTransactionManager &DuckTransactionManager::Get(AttachedDatabase &db) {
 
 Transaction &DuckTransactionManager::StartTransaction(ClientContext &context) {
 	// obtain the transaction lock during this function
+	lock_guard<mutex> start_lock(start_transaction_lock);
 	lock_guard<mutex> lock(transaction_lock);
 	if (current_start_timestamp >= TRANSACTION_ID_START) { // LCOV_EXCL_START
 		throw InternalException("Cannot start more transactions, ran out of "
@@ -164,6 +165,9 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 
 	} else {
 		// force checkpoint - wait to get an exclusive lock
+		// grab the start_transaction_lock to prevent new transactions from starting
+		lock_guard<mutex> start_lock(start_transaction_lock);
+		// wait until any active transactions are finished
 		while (!lock) {
 			lock = checkpoint_lock.TryGetExclusiveLock();
 		}
