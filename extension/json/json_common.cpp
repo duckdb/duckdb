@@ -63,18 +63,19 @@ static inline JSONKeyReadResult ReadString(const char *ptr, const char *const en
 
 		bool backslash = false;
 		while (ptr != end) {
-			if (*ptr == '"') {
-				if (!backslash) {
-					break;
+			if (backslash) {
+				if (*ptr != '"' && *ptr != '\\') {
+					key[key_len++] = '\\';
 				}
 				backslash = false;
-			} else if (*ptr == '\\') {
-				if (!backslash) {
+			} else {
+				if (*ptr == '"') {
+					break;
+				} else if (*ptr == '\\') {
 					backslash = true;
 					ptr++;
 					continue;
 				}
-				backslash = false;
 			}
 			key[key_len++] = *ptr++;
 		}
