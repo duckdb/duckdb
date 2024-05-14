@@ -299,14 +299,16 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DBConfig &config,
 	}
 
 	// Throw error on failure
-    if (!exists) {
-        if (!fs.IsRemoteFile(file)) {
-            throw IOException("Failed to copy local extension \"%s\" at PATH \"%s\"\n", extension_name, file);
-        }
-        if (StringUtil::StartsWith(file, "https://")) {
-            throw IOException("Failed to copy remote extension \"%s\" at PATH \"%s\"\n Please install the 'httpfs' extension, then try again.", extension_name, file);
-        }
-    }
+	if (!exists) {
+		if (!fs.IsRemoteFile(file)) {
+			throw IOException("Failed to copy local extension \"%s\" at PATH \"%s\"\n", extension_name, file);
+		}
+		if (StringUtil::StartsWith(file, "https://")) {
+			throw IOException("Failed to copy remote extension \"%s\" at PATH \"%s\"\n Please install the 'httpfs' "
+			                  "extension, then try again.",
+			                  extension_name, file);
+		}
+	}
 
 	idx_t file_size;
 	auto in_buffer = ReadExtensionFileFromDisk(fs, file, file_size);
@@ -387,19 +389,20 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DBConfig &config, con
 }
 
 // Install an extension using a hand-rolled http request
-static unique_ptr<ExtensionInstallInfo>
-InstallFromRepository(DBConfig &config, FileSystem &fs, const string &url, const string &extension_name,
-                      const string &repository_url, const string &temp_path, const string &local_extension_path,
-                      const string &version, bool force_install, optional_ptr<HTTPLogger> http_logger,
-                      optional_ptr<ClientContext> context) {
+static unique_ptr<ExtensionInstallInfo> InstallFromRepository(DBConfig &config, FileSystem &fs, const string &url,
+                                                              const string &extension_name,
+                                                              const string &repository_url, const string &temp_path,
+                                                              const string &local_extension_path, const string &version,
+                                                              bool force_install, optional_ptr<HTTPLogger> http_logger,
+                                                              optional_ptr<ClientContext> context) {
 	string url_template = ExtensionHelper::ExtensionUrlTemplate(&config, repository_url, version);
 	string generated_url = ExtensionHelper::ExtensionFinalizeUrlTemplate(url_template, extension_name);
 
 	// Special handling for http repository: avoid using regular filesystem (note: the filesystem is not used here)
 	if (StringUtil::StartsWith(repository_url, "http://")) {
-        return InstallFromHttpUrl(config, generated_url, extension_name, repository_url, temp_path, local_extension_path,
-                                  force_install, http_logger);
-    }
+		return InstallFromHttpUrl(config, generated_url, extension_name, repository_url, temp_path,
+		                          local_extension_path, force_install, http_logger);
+	}
 
 	// Default case, let the FileSystem figure it out
 	return DirectInstallExtension(config, fs, generated_url, temp_path, extension_name, local_extension_path,
@@ -436,7 +439,8 @@ ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs, cons
 	// Install extension from local, direct url
 	if (ExtensionHelper::IsFullPath(extension) && !FileSystem::IsRemoteFile(extension)) {
 
-		return DirectInstallExtension(config, fs, extension, temp_path, extension, local_extension_path, force_install, "", context);
+		return DirectInstallExtension(config, fs, extension, temp_path, extension, local_extension_path, force_install,
+		                              "", context);
 	}
 
 	// Install extension from local url based on a repository (Note that this will install it as a local file)
@@ -457,17 +461,18 @@ ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs, cons
 	if (IsFullPath(extension)) {
 		if (StringUtil::StartsWith(extension, "http://")) {
 			// HTTP takes separate path to avoid dependency on httpfs extension
-			return InstallFromHttpUrl(config, extension, extension_name, "", temp_path, local_extension_path, force_install,
-			                          http_logger);
-        }
+			return InstallFromHttpUrl(config, extension, extension_name, "", temp_path, local_extension_path,
+			                          force_install, http_logger);
+		}
 
 		// direct installation from local or remote path
-		return DirectInstallExtension(config, fs, extension, temp_path, extension, local_extension_path, force_install, "", context);
-    }
+		return DirectInstallExtension(config, fs, extension, temp_path, extension, local_extension_path, force_install,
+		                              "", context);
+	}
 
 	// Repository installation
-	return InstallFromRepository(config, fs, extension, extension_name, repository_url, temp_path,
-	                                 local_extension_path, version, force_install, http_logger, context);
+	return InstallFromRepository(config, fs, extension, extension_name, repository_url, temp_path, local_extension_path,
+	                             version, force_install, http_logger, context);
 #endif
 #endif
 }
