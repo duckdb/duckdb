@@ -75,9 +75,13 @@ optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
 		return wal.get();
 	}
 
-	// lazy WAL creation
 	wal = make_uniq<WriteAheadLog>(db, GetWALPath());
 	return wal.get();
+}
+
+void StorageManager::ResetWAL() {
+	wal->Delete();
+	wal.reset();
 }
 
 string StorageManager::GetWALPath() {
@@ -225,20 +229,20 @@ public:
 
 SingleFileStorageCommitState::SingleFileStorageCommitState(StorageManager &storage_manager, bool checkpoint)
     : checkpoint(checkpoint) {
-	log = storage_manager.GetWAL();
-	if (log) {
-		auto initial_size = storage_manager.GetWALSize();
-		initial_written = log->GetTotalWritten();
-		initial_wal_size = initial_size < 0 ? 0 : idx_t(initial_size);
 
-		if (checkpoint) {
-			// check if we are checkpointing after this commit
-			// if we are checkpointing, we don't need to write anything to the WAL
-			// this saves us a lot of unnecessary writes to disk in the case of large commits
-			log->skip_writing = true;
-		}
-	} else {
-		//		D_ASSERT(!checkpoint);
+	log = storage_manager.GetWAL();
+	if (!log) {
+		return;
+	}
+
+	auto initial_size = storage_manager.GetWALSize();
+	initial_written = log->GetTotalWritten();
+	initial_wal_size = initial_size < 0 ? 0 : idx_t(initial_size);
+
+	if (checkpoint) {
+		// True, if we are checkpointing after the current commit.
+		// If true, we don't need to write to the WAL, saving unnecessary writes to disk.
+		log->skip_writing = true;
 	}
 }
 
@@ -247,7 +251,6 @@ void SingleFileStorageCommitState::FlushCommit() {
 	if (log) {
 		// flush the WAL if any changes were made
 		if (log->GetTotalWritten() > initial_written) {
-			(void)checkpoint;
 			D_ASSERT(!checkpoint);
 			D_ASSERT(!log->skip_writing);
 			log->Flush();
@@ -283,8 +286,7 @@ void SingleFileStorageManager::CreateCheckpoint(CheckpointOptions options) {
 		}
 	}
 	if (options.wal_action == CheckpointWALAction::DELETE_WAL) {
-		wal->Delete();
-		wal.reset();
+		ResetWAL();
 	}
 }
 

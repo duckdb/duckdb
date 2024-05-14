@@ -57,10 +57,13 @@ public:
 	//! Gets the total bytes written to the WAL since startup
 	idx_t GetTotalWritten();
 
+	//! A WAL is initialized, if a writer to a file exists.
 	bool Initialized() {
 		return writer != nullptr;
 	}
+	//! Initializes the file of the WAL by creating the file writer.
 	BufferedFileWriter &Initialize();
+	//! Returns the WAL file writer.
 	BufferedFileWriter &GetWriter() {
 		return *writer;
 	}

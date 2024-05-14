@@ -55,7 +55,6 @@ void WriteAheadLog::Delete() {
 		return;
 	}
 	writer.reset();
-
 	auto &fs = FileSystem::Get(database);
 	fs.RemoveFile(wal_path);
 }
@@ -71,9 +70,6 @@ public:
 	void WriteData(const_data_ptr_t buffer, idx_t write_size) override {
 		if (wal.skip_writing) {
 			return;
-		}
-		if (!stream) {
-			stream = wal.Initialize();
 		}
 		// buffer data into the memory stream
 		memory_stream.WriteData(buffer, write_size);

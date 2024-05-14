@@ -213,8 +213,6 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 
 	// truncate the WAL
 	if (!wal_is_empty) {
-		auto wal = storage_manager.GetWAL();
-		wal->Delete();
 		storage_manager.ResetWAL();
 	}
 }
