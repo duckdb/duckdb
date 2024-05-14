@@ -137,9 +137,17 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 		return;
 	}
 
-	auto &current = DuckTransaction::Get(context, db);
-	if (current.ChangesMade()) {
-		throw TransactionException("Cannot CHECKPOINT: the current transaction has transaction local changes");
+	auto current = Transaction::TryGet(context, db);
+	if (current) {
+		if (force) {
+			throw TransactionException(
+			    "Cannot FORCE CHECKPOINT: the current transaction has been started for this database");
+		} else {
+			auto &duck_transaction = current->Cast<DuckTransaction>();
+			if (duck_transaction.ChangesMade()) {
+				throw TransactionException("Cannot CHECKPOINT: the current transaction has transaction local changes");
+			}
+		}
 	}
 
 	unique_ptr<StorageLockKey> lock;
@@ -150,8 +158,8 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 		if (!lock) {
 			// we could not manage to get the lock - cancel
 			throw TransactionException(
-					"Cannot CHECKPOINT: there are other write transactions active. Use FORCE CHECKPOINT to abort "
-					"the other transactions and force a checkpoint");
+			    "Cannot CHECKPOINT: there are other write transactions active. Use FORCE CHECKPOINT to abort "
+			    "the other transactions and force a checkpoint");
 		}
 
 	} else {

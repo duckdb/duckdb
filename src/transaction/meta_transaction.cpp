@@ -24,6 +24,11 @@ Transaction &Transaction::Get(ClientContext &context, AttachedDatabase &db) {
 	return meta_transaction.GetTransaction(db);
 }
 
+optional_ptr<Transaction> Transaction::TryGet(ClientContext &context, AttachedDatabase &db) {
+	auto &meta_transaction = MetaTransaction::Get(context);
+	return meta_transaction.TryGetTransaction(db);
+}
+
 #ifdef DEBUG
 static void VerifyAllTransactionsUnique(AttachedDatabase &db, vector<reference<AttachedDatabase>> &all_transactions) {
 	for (auto &tx : all_transactions) {
@@ -33,6 +38,16 @@ static void VerifyAllTransactionsUnique(AttachedDatabase &db, vector<reference<A
 	}
 }
 #endif
+
+optional_ptr<Transaction> MetaTransaction::TryGetTransaction(AttachedDatabase &db) {
+	lock_guard<mutex> guard(lock);
+	auto entry = transactions.find(db);
+	if (entry == transactions.end()) {
+		return nullptr;
+	} else {
+		return &entry->second.get();
+	}
+}
 
 Transaction &MetaTransaction::GetTransaction(AttachedDatabase &db) {
 	lock_guard<mutex> guard(lock);
