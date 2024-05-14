@@ -130,8 +130,6 @@ enum class ExpressionType : uint8_t;
 
 enum class ExtensionLoadResult : uint8_t;
 
-enum class ExternalDependenciesType : uint8_t;
-
 enum class ExtraDropInfoType : uint8_t;
 
 enum class ExtraTypeInfoType : uint8_t;
@@ -139,6 +137,8 @@ enum class ExtraTypeInfoType : uint8_t;
 enum class FileBufferType : uint8_t;
 
 enum class FileCompressionType : uint8_t;
+
+enum class FileExpandResult : uint8_t;
 
 enum class FileGlobOptions : uint8_t;
 
@@ -477,9 +477,6 @@ template<>
 const char* EnumUtil::ToChars<ExtensionLoadResult>(ExtensionLoadResult value);
 
 template<>
-const char* EnumUtil::ToChars<ExternalDependenciesType>(ExternalDependenciesType value);
-
-template<>
 const char* EnumUtil::ToChars<ExtraDropInfoType>(ExtraDropInfoType value);
 
 template<>
@@ -490,6 +487,9 @@ const char* EnumUtil::ToChars<FileBufferType>(FileBufferType value);
 
 template<>
 const char* EnumUtil::ToChars<FileCompressionType>(FileCompressionType value);
+
+template<>
+const char* EnumUtil::ToChars<FileExpandResult>(FileExpandResult value);
 
 template<>
 const char* EnumUtil::ToChars<FileGlobOptions>(FileGlobOptions value);
@@ -922,9 +922,6 @@ template<>
 ExtensionLoadResult EnumUtil::FromString<ExtensionLoadResult>(const char *value);
 
 template<>
-ExternalDependenciesType EnumUtil::FromString<ExternalDependenciesType>(const char *value);
-
-template<>
 ExtraDropInfoType EnumUtil::FromString<ExtraDropInfoType>(const char *value);
 
 template<>
@@ -935,6 +932,9 @@ FileBufferType EnumUtil::FromString<FileBufferType>(const char *value);
 
 template<>
 FileCompressionType EnumUtil::FromString<FileCompressionType>(const char *value);
+
+template<>
+FileExpandResult EnumUtil::FromString<FileExpandResult>(const char *value);
 
 template<>
 FileGlobOptions EnumUtil::FromString<FileGlobOptions>(const char *value);
