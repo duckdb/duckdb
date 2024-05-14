@@ -198,8 +198,12 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 		}
 		if (schema_ele.__isset.logicalType && schema_ele.logicalType.__isset.TIME) {
 			// logical type
-			if (schema_ele.logicalType.TIME.unit.__isset.MICROS) {
+			if (schema_ele.logicalType.TIME.unit.__isset.MILLIS) {
+				return Value::TIMETZ(ParquetIntToTimeMsTZ(val));
+			} else if (schema_ele.logicalType.TIME.unit.__isset.MICROS) {
 				return Value::TIMETZ(ParquetIntToTimeTZ(val));
+			} else if (schema_ele.logicalType.TIME.unit.__isset.NANOS) {
+				return Value::TIMETZ(ParquetIntToTimeNsTZ(val));
 			} else {
 				throw InternalException("Time With Time Zone logicalType is set but unit is not defined");
 			}
