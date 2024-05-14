@@ -59,6 +59,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(AllowPersistentSecrets),
     DUCKDB_GLOBAL(CheckpointThresholdSetting),
     DUCKDB_GLOBAL(DebugCheckpointAbort),
+    DUCKDB_GLOBAL(MinimumDuckDBVersion),
     DUCKDB_LOCAL(DebugForceExternal),
     DUCKDB_LOCAL(DebugForceNoCrossProduct),
     DUCKDB_LOCAL(DebugAsOfIEJoin),

@@ -14,7 +14,9 @@
 namespace duckdb {
 
 void ChildFieldIDs::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<unique_ptr<case_insensitive_map_t<FieldID>>>(100, "ids", ids);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unique_ptr<case_insensitive_map_t<FieldID>>>(100, "ids", ids);
+	}
 }
 
 ChildFieldIDs ChildFieldIDs::Deserialize(Deserializer &deserializer) {
@@ -24,9 +26,15 @@ ChildFieldIDs ChildFieldIDs::Deserialize(Deserializer &deserializer) {
 }
 
 void FieldID::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<bool>(100, "set", set);
-	serializer.WritePropertyWithDefault<int32_t>(101, "field_id", field_id);
-	serializer.WriteProperty<ChildFieldIDs>(102, "child_field_ids", child_field_ids);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<bool>(100, "set", set);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<int32_t>(101, "field_id", field_id);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WriteProperty<ChildFieldIDs>(102, "child_field_ids", child_field_ids);
+	}
 }
 
 FieldID FieldID::Deserialize(Deserializer &deserializer) {
@@ -38,10 +46,18 @@ FieldID FieldID::Deserialize(Deserializer &deserializer) {
 }
 
 void ParquetColumnDefinition::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<int32_t>(100, "field_id", field_id);
-	serializer.WritePropertyWithDefault<string>(101, "name", name);
-	serializer.WriteProperty<LogicalType>(103, "type", type);
-	serializer.WriteProperty<Value>(104, "default_value", default_value);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<int32_t>(100, "field_id", field_id);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<string>(101, "name", name);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WriteProperty<LogicalType>(103, "type", type);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WriteProperty<Value>(104, "default_value", default_value);
+	}
 }
 
 ParquetColumnDefinition ParquetColumnDefinition::Deserialize(Deserializer &deserializer) {
@@ -54,8 +70,12 @@ ParquetColumnDefinition ParquetColumnDefinition::Deserialize(Deserializer &deser
 }
 
 void ParquetEncryptionConfig::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<string>(100, "footer_key", footer_key);
-	serializer.WritePropertyWithDefault<unordered_map<string, string>>(101, "column_keys", column_keys);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<string>(100, "footer_key", footer_key);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unordered_map<string, string>>(101, "column_keys", column_keys);
+	}
 }
 
 shared_ptr<ParquetEncryptionConfig> ParquetEncryptionConfig::Deserialize(Deserializer &deserializer) {
@@ -66,11 +86,21 @@ shared_ptr<ParquetEncryptionConfig> ParquetEncryptionConfig::Deserialize(Deseria
 }
 
 void ParquetOptions::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<bool>(100, "binary_as_string", binary_as_string);
-	serializer.WritePropertyWithDefault<bool>(101, "file_row_number", file_row_number);
-	serializer.WriteProperty<MultiFileReaderOptions>(102, "file_options", file_options);
-	serializer.WritePropertyWithDefault<vector<ParquetColumnDefinition>>(103, "schema", schema);
-	serializer.WritePropertyWithDefault<shared_ptr<ParquetEncryptionConfig>>(104, "encryption_config", encryption_config, nullptr);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<bool>(100, "binary_as_string", binary_as_string);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<bool>(101, "file_row_number", file_row_number);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WriteProperty<MultiFileReaderOptions>(102, "file_options", file_options);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<vector<ParquetColumnDefinition>>(103, "schema", schema);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<shared_ptr<ParquetEncryptionConfig>>(104, "encryption_config", encryption_config, nullptr);
+	}
 }
 
 ParquetOptions ParquetOptions::Deserialize(Deserializer &deserializer) {

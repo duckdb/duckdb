@@ -533,6 +533,26 @@ Value EnableObjectCacheSetting::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Minimum DuckDB Version (for serialization)
+//===--------------------------------------------------------------------===//
+void MinimumDuckDBVersion::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.minimum_duckdb_version = input.GetValue<string>();
+}
+
+void MinimumDuckDBVersion::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.minimum_duckdb_version = DBConfig().options.minimum_duckdb_version;
+}
+
+Value MinimumDuckDBVersion::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	// TODO: Map back from storage version to duckdb version
+	auto storage_version = config.options.minimum_duckdb_version.IsValid()
+	                           ? config.options.minimum_duckdb_version.GetIndex()
+	                           : STORAGE_VERSION;
+	return Value::INTEGER(storage_version);
+}
+
+//===--------------------------------------------------------------------===//
 // Enable HTTP Metadata Cache
 //===--------------------------------------------------------------------===//
 void EnableHTTPMetadataCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

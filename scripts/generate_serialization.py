@@ -39,6 +39,17 @@ for target in targets:
             }
         )
 
+scripts_dir = os.path.dirname(os.path.abspath(__file__))
+version_map_file = file = open(scripts_dir + '/../src/storage/version_map.json')
+version_map = json.load(version_map_file)
+
+
+def lookup_storage_version(version: str):
+    if version not in version_map:
+        print(f'Could not map {version} to a storage version number, please check the version_map.json')
+        exit(1)
+    return version_map[version]
+
 
 include_base = '#include "${FILENAME}"\n'
 
@@ -150,7 +161,15 @@ def get_default_argument(default_value):
 
 
 def get_serialize_element(
-    property_name, property_id, property_key, property_type, has_default, default_value, is_deleted, pointer_type
+    property_name,
+    property_id,
+    property_key,
+    property_type,
+    has_default,
+    default_value,
+    is_deleted,
+    pointer_type,
+    version,
 ):
     assignment = '.' if pointer_type == 'none' else '->'
     default_argument = '' if default_value is None else f', {get_default_argument(default_value)}'
@@ -159,7 +178,7 @@ def get_serialize_element(
         template = "\t/* [Deleted] (${PROPERTY_TYPE}) \"${PROPERTY_NAME}\" */\n"
     elif has_default:
         template = template.replace('WriteProperty', 'WritePropertyWithDefault')
-    return (
+    serialization_code = (
         template.replace('${PROPERTY_NAME}', property_name)
         .replace('${PROPERTY_TYPE}', property_type)
         .replace('${PROPERTY_ID}', str(property_id))
@@ -167,6 +186,15 @@ def get_serialize_element(
         .replace('${PROPERTY_DEFAULT}', default_argument)
         .replace('${ASSIGNMENT}', assignment)
     )
+
+    storage_version = lookup_storage_version(version)
+
+    code = []
+    code.append(f'\tif (serializer.ShouldSerialize({storage_version})) {{')
+    code.append('\t' + serialization_code)
+
+    result = '\n'.join(code) + '\t}\n'
+    return result
 
 
 def get_deserialize_element_template(
@@ -259,7 +287,7 @@ supported_member_entries = [
     'base',
     'default',
     'deleted',
-    'deserialize_only',
+    'version',
 ]
 
 
@@ -288,20 +316,15 @@ class MemberVariable:
         self.has_default = False
         self.default = None
         self.deleted = False
-        self.serialize: bool = True
-        self.deserialize: bool = True
+        self.version: str = 'v0.10.0'
         if 'property' in entry:
             self.serialize_property = entry['property']
             self.deserialize_property = entry['property']
         else:
             self.serialize_property = self.name
             self.deserialize_property = self.name
-        if 'deserialize_only' in entry and not args.debug_serialization:
-            # This option allows us to temporarily disable serialization
-            # which allows us to add reading support first, then in a later version introduce writing
-            if entry["deserialize_only"]:
-                self.serialize = False
-                self.deserialize = True
+        if 'version' in entry:
+            self.version = entry['version']
         if 'serialize_property' in entry:
             self.serialize_property = entry['serialize_property']
         if 'deserialize_property' in entry:
@@ -411,29 +434,28 @@ def generate_base_class_code(base_class):
         if entry.serialize_property == base_class.enum_value:
             enum_type = entry.type
         default = entry.default
-        if entry.serialize:
-            base_class_serialize += get_serialize_element(
-                entry.serialize_property,
-                entry.id,
-                entry.name,
-                type_name,
-                entry.has_default,
-                default,
-                entry.deleted,
-                base_class.pointer_type,
-            )
-        if entry.deserialize:
-            base_class_deserialize += get_deserialize_element(
-                entry.deserialize_property,
-                entry.name,
-                entry.id,
-                type_name,
-                entry.has_default,
-                default,
-                entry.deleted,
-                None,
-                base_class.pointer_type,
-            )
+        base_class_serialize += get_serialize_element(
+            entry.serialize_property,
+            entry.id,
+            entry.name,
+            type_name,
+            entry.has_default,
+            default,
+            entry.deleted,
+            base_class.pointer_type,
+            entry.version,
+        )
+        base_class_deserialize += get_deserialize_element(
+            entry.deserialize_property,
+            entry.name,
+            entry.id,
+            type_name,
+            entry.has_default,
+            default,
+            entry.deleted,
+            None,
+            base_class.pointer_type,
+        )
     expressions = [x for x in base_class.children.items()]
     expressions = sorted(expressions, key=lambda x: x[0])
 
@@ -613,6 +635,7 @@ def generate_class_code(class_entry):
             default_value,
             entry.deleted,
             class_entry.pointer_type,
+            entry.version,
         )
         if entry_idx > last_constructor_index:
             class_deserialize += get_deserialize_element_template(

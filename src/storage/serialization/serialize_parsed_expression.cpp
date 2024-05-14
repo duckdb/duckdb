@@ -10,10 +10,18 @@
 namespace duckdb {
 
 void ParsedExpression::Serialize(Serializer &serializer) const {
-	serializer.WriteProperty<ExpressionClass>(100, "class", expression_class);
-	serializer.WriteProperty<ExpressionType>(101, "type", type);
-	serializer.WritePropertyWithDefault<string>(102, "alias", alias);
-	serializer.WritePropertyWithDefault<optional_idx>(103, "query_location", query_location, optional_idx());
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WriteProperty<ExpressionClass>(100, "class", expression_class);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WriteProperty<ExpressionType>(101, "type", type);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<string>(102, "alias", alias);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<optional_idx>(103, "query_location", query_location, optional_idx());
+	}
 }
 
 unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &deserializer) {
@@ -89,9 +97,15 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &deseria
 
 void BetweenExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "input", input);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(201, "lower", lower);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(202, "upper", upper);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "input", input);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(201, "lower", lower);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(202, "upper", upper);
+	}
 }
 
 unique_ptr<ParsedExpression> BetweenExpression::Deserialize(Deserializer &deserializer) {
@@ -104,8 +118,12 @@ unique_ptr<ParsedExpression> BetweenExpression::Deserialize(Deserializer &deseri
 
 void CaseExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<vector<CaseCheck>>(200, "case_checks", case_checks);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(201, "else_expr", else_expr);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<vector<CaseCheck>>(200, "case_checks", case_checks);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(201, "else_expr", else_expr);
+	}
 }
 
 unique_ptr<ParsedExpression> CaseExpression::Deserialize(Deserializer &deserializer) {
@@ -117,9 +135,15 @@ unique_ptr<ParsedExpression> CaseExpression::Deserialize(Deserializer &deseriali
 
 void CastExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "child", child);
-	serializer.WriteProperty<LogicalType>(201, "cast_type", cast_type);
-	serializer.WritePropertyWithDefault<bool>(202, "try_cast", try_cast);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "child", child);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WriteProperty<LogicalType>(201, "cast_type", cast_type);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<bool>(202, "try_cast", try_cast);
+	}
 }
 
 unique_ptr<ParsedExpression> CastExpression::Deserialize(Deserializer &deserializer) {
@@ -132,8 +156,12 @@ unique_ptr<ParsedExpression> CastExpression::Deserialize(Deserializer &deseriali
 
 void CollateExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "child", child);
-	serializer.WritePropertyWithDefault<string>(201, "collation", collation);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "child", child);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<string>(201, "collation", collation);
+	}
 }
 
 unique_ptr<ParsedExpression> CollateExpression::Deserialize(Deserializer &deserializer) {
@@ -145,7 +173,9 @@ unique_ptr<ParsedExpression> CollateExpression::Deserialize(Deserializer &deseri
 
 void ColumnRefExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<vector<string>>(200, "column_names", column_names);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<vector<string>>(200, "column_names", column_names);
+	}
 }
 
 unique_ptr<ParsedExpression> ColumnRefExpression::Deserialize(Deserializer &deserializer) {
@@ -156,8 +186,12 @@ unique_ptr<ParsedExpression> ColumnRefExpression::Deserialize(Deserializer &dese
 
 void ComparisonExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "left", left);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(201, "right", right);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "left", left);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(201, "right", right);
+	}
 }
 
 unique_ptr<ParsedExpression> ComparisonExpression::Deserialize(Deserializer &deserializer) {
@@ -169,7 +203,9 @@ unique_ptr<ParsedExpression> ComparisonExpression::Deserialize(Deserializer &des
 
 void ConjunctionExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(200, "children", children);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(200, "children", children);
+	}
 }
 
 unique_ptr<ParsedExpression> ConjunctionExpression::Deserialize(Deserializer &deserializer) {
@@ -180,7 +216,9 @@ unique_ptr<ParsedExpression> ConjunctionExpression::Deserialize(Deserializer &de
 
 void ConstantExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
-	serializer.WriteProperty<Value>(200, "value", value);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WriteProperty<Value>(200, "value", value);
+	}
 }
 
 unique_ptr<ParsedExpression> ConstantExpression::Deserialize(Deserializer &deserializer) {
@@ -200,15 +238,33 @@ unique_ptr<ParsedExpression> DefaultExpression::Deserialize(Deserializer &deseri
 
 void FunctionExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "function_name", function_name);
-	serializer.WritePropertyWithDefault<string>(201, "schema", schema);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(202, "children", children);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(203, "filter", filter);
-	serializer.WritePropertyWithDefault<unique_ptr<OrderModifier>>(204, "order_bys", order_bys);
-	serializer.WritePropertyWithDefault<bool>(205, "distinct", distinct);
-	serializer.WritePropertyWithDefault<bool>(206, "is_operator", is_operator);
-	serializer.WritePropertyWithDefault<bool>(207, "export_state", export_state);
-	serializer.WritePropertyWithDefault<string>(208, "catalog", catalog);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<string>(200, "function_name", function_name);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<string>(201, "schema", schema);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(202, "children", children);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(203, "filter", filter);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unique_ptr<OrderModifier>>(204, "order_bys", order_bys);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<bool>(205, "distinct", distinct);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<bool>(206, "is_operator", is_operator);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<bool>(207, "export_state", export_state);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<string>(208, "catalog", catalog);
+	}
 }
 
 unique_ptr<ParsedExpression> FunctionExpression::Deserialize(Deserializer &deserializer) {
@@ -228,8 +284,12 @@ unique_ptr<ParsedExpression> FunctionExpression::Deserialize(Deserializer &deser
 
 void LambdaExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "lhs", lhs);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(201, "expr", expr);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "lhs", lhs);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(201, "expr", expr);
+	}
 }
 
 unique_ptr<ParsedExpression> LambdaExpression::Deserialize(Deserializer &deserializer) {
@@ -241,8 +301,12 @@ unique_ptr<ParsedExpression> LambdaExpression::Deserialize(Deserializer &deseria
 
 void LambdaRefExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<idx_t>(200, "lambda_idx", lambda_idx);
-	serializer.WritePropertyWithDefault<string>(201, "column_name", column_name);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<idx_t>(200, "lambda_idx", lambda_idx);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<string>(201, "column_name", column_name);
+	}
 }
 
 unique_ptr<ParsedExpression> LambdaRefExpression::Deserialize(Deserializer &deserializer) {
@@ -254,7 +318,9 @@ unique_ptr<ParsedExpression> LambdaRefExpression::Deserialize(Deserializer &dese
 
 void OperatorExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(200, "children", children);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(200, "children", children);
+	}
 }
 
 unique_ptr<ParsedExpression> OperatorExpression::Deserialize(Deserializer &deserializer) {
@@ -265,7 +331,9 @@ unique_ptr<ParsedExpression> OperatorExpression::Deserialize(Deserializer &deser
 
 void ParameterExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "identifier", identifier);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<string>(200, "identifier", identifier);
+	}
 }
 
 unique_ptr<ParsedExpression> ParameterExpression::Deserialize(Deserializer &deserializer) {
@@ -276,7 +344,9 @@ unique_ptr<ParsedExpression> ParameterExpression::Deserialize(Deserializer &dese
 
 void PositionalReferenceExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<idx_t>(200, "index", index);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<idx_t>(200, "index", index);
+	}
 }
 
 unique_ptr<ParsedExpression> PositionalReferenceExpression::Deserialize(Deserializer &deserializer) {
@@ -287,11 +357,21 @@ unique_ptr<ParsedExpression> PositionalReferenceExpression::Deserialize(Deserial
 
 void StarExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "relation_name", relation_name);
-	serializer.WriteProperty<case_insensitive_set_t>(201, "exclude_list", exclude_list);
-	serializer.WritePropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(202, "replace_list", replace_list);
-	serializer.WritePropertyWithDefault<bool>(203, "columns", columns);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr", expr);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<string>(200, "relation_name", relation_name);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WriteProperty<case_insensitive_set_t>(201, "exclude_list", exclude_list);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(202, "replace_list", replace_list);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<bool>(203, "columns", columns);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr", expr);
+	}
 }
 
 unique_ptr<ParsedExpression> StarExpression::Deserialize(Deserializer &deserializer) {
@@ -306,10 +386,18 @@ unique_ptr<ParsedExpression> StarExpression::Deserialize(Deserializer &deseriali
 
 void SubqueryExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
-	serializer.WriteProperty<SubqueryType>(200, "subquery_type", subquery_type);
-	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(201, "subquery", subquery);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(202, "child", child);
-	serializer.WriteProperty<ExpressionType>(203, "comparison_type", comparison_type);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WriteProperty<SubqueryType>(200, "subquery_type", subquery_type);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(201, "subquery", subquery);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(202, "child", child);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WriteProperty<ExpressionType>(203, "comparison_type", comparison_type);
+	}
 }
 
 unique_ptr<ParsedExpression> SubqueryExpression::Deserialize(Deserializer &deserializer) {
@@ -323,22 +411,54 @@ unique_ptr<ParsedExpression> SubqueryExpression::Deserialize(Deserializer &deser
 
 void WindowExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "function_name", function_name);
-	serializer.WritePropertyWithDefault<string>(201, "schema", schema);
-	serializer.WritePropertyWithDefault<string>(202, "catalog", catalog);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(203, "children", children);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(204, "partitions", partitions);
-	serializer.WritePropertyWithDefault<vector<OrderByNode>>(205, "orders", orders);
-	serializer.WriteProperty<WindowBoundary>(206, "start", start);
-	serializer.WriteProperty<WindowBoundary>(207, "end", end);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(208, "start_expr", start_expr);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(209, "end_expr", end_expr);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(210, "offset_expr", offset_expr);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(211, "default_expr", default_expr);
-	serializer.WritePropertyWithDefault<bool>(212, "ignore_nulls", ignore_nulls);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(213, "filter_expr", filter_expr);
-	serializer.WritePropertyWithDefault<WindowExcludeMode>(214, "exclude_clause", exclude_clause, WindowExcludeMode::NO_OTHER);
-	serializer.WritePropertyWithDefault<bool>(215, "distinct", distinct);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<string>(200, "function_name", function_name);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<string>(201, "schema", schema);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<string>(202, "catalog", catalog);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(203, "children", children);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(204, "partitions", partitions);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<vector<OrderByNode>>(205, "orders", orders);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WriteProperty<WindowBoundary>(206, "start", start);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WriteProperty<WindowBoundary>(207, "end", end);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(208, "start_expr", start_expr);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(209, "end_expr", end_expr);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(210, "offset_expr", offset_expr);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(211, "default_expr", default_expr);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<bool>(212, "ignore_nulls", ignore_nulls);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(213, "filter_expr", filter_expr);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<WindowExcludeMode>(214, "exclude_clause", exclude_clause, WindowExcludeMode::NO_OTHER);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<bool>(215, "distinct", distinct);
+	}
 }
 
 unique_ptr<ParsedExpression> WindowExpression::Deserialize(Deserializer &deserializer) {

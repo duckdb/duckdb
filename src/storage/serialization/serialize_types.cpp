@@ -10,8 +10,12 @@
 namespace duckdb {
 
 void ExtraTypeInfo::Serialize(Serializer &serializer) const {
-	serializer.WriteProperty<ExtraTypeInfoType>(100, "type", type);
-	serializer.WritePropertyWithDefault<string>(101, "alias", alias);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WriteProperty<ExtraTypeInfoType>(100, "type", type);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<string>(101, "alias", alias);
+	}
 }
 
 shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &deserializer) {
@@ -63,9 +67,15 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &deserializer)
 
 void AggregateStateTypeInfo::Serialize(Serializer &serializer) const {
 	ExtraTypeInfo::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "function_name", state_type.function_name);
-	serializer.WriteProperty<LogicalType>(201, "return_type", state_type.return_type);
-	serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "bound_argument_types", state_type.bound_argument_types);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<string>(200, "function_name", state_type.function_name);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WriteProperty<LogicalType>(201, "return_type", state_type.return_type);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "bound_argument_types", state_type.bound_argument_types);
+	}
 }
 
 shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::Deserialize(Deserializer &deserializer) {
@@ -78,8 +88,12 @@ shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::Deserialize(Deserializer &dese
 
 void AnyTypeInfo::Serialize(Serializer &serializer) const {
 	ExtraTypeInfo::Serialize(serializer);
-	serializer.WriteProperty<LogicalType>(200, "target_type", target_type);
-	serializer.WritePropertyWithDefault<idx_t>(201, "cast_score", cast_score);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WriteProperty<LogicalType>(200, "target_type", target_type);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<idx_t>(201, "cast_score", cast_score);
+	}
 }
 
 shared_ptr<ExtraTypeInfo> AnyTypeInfo::Deserialize(Deserializer &deserializer) {
@@ -91,8 +105,12 @@ shared_ptr<ExtraTypeInfo> AnyTypeInfo::Deserialize(Deserializer &deserializer) {
 
 void ArrayTypeInfo::Serialize(Serializer &serializer) const {
 	ExtraTypeInfo::Serialize(serializer);
-	serializer.WriteProperty<LogicalType>(200, "child_type", child_type);
-	serializer.WritePropertyWithDefault<uint32_t>(201, "size", size);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WriteProperty<LogicalType>(200, "child_type", child_type);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<uint32_t>(201, "size", size);
+	}
 }
 
 shared_ptr<ExtraTypeInfo> ArrayTypeInfo::Deserialize(Deserializer &deserializer) {
@@ -104,8 +122,12 @@ shared_ptr<ExtraTypeInfo> ArrayTypeInfo::Deserialize(Deserializer &deserializer)
 
 void DecimalTypeInfo::Serialize(Serializer &serializer) const {
 	ExtraTypeInfo::Serialize(serializer);
-	serializer.WritePropertyWithDefault<uint8_t>(200, "width", width);
-	serializer.WritePropertyWithDefault<uint8_t>(201, "scale", scale);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<uint8_t>(200, "width", width);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<uint8_t>(201, "scale", scale);
+	}
 }
 
 shared_ptr<ExtraTypeInfo> DecimalTypeInfo::Deserialize(Deserializer &deserializer) {
@@ -117,7 +139,9 @@ shared_ptr<ExtraTypeInfo> DecimalTypeInfo::Deserialize(Deserializer &deserialize
 
 void IntegerLiteralTypeInfo::Serialize(Serializer &serializer) const {
 	ExtraTypeInfo::Serialize(serializer);
-	serializer.WriteProperty<Value>(200, "constant_value", constant_value);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WriteProperty<Value>(200, "constant_value", constant_value);
+	}
 }
 
 shared_ptr<ExtraTypeInfo> IntegerLiteralTypeInfo::Deserialize(Deserializer &deserializer) {
@@ -128,7 +152,9 @@ shared_ptr<ExtraTypeInfo> IntegerLiteralTypeInfo::Deserialize(Deserializer &dese
 
 void ListTypeInfo::Serialize(Serializer &serializer) const {
 	ExtraTypeInfo::Serialize(serializer);
-	serializer.WriteProperty<LogicalType>(200, "child_type", child_type);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WriteProperty<LogicalType>(200, "child_type", child_type);
+	}
 }
 
 shared_ptr<ExtraTypeInfo> ListTypeInfo::Deserialize(Deserializer &deserializer) {
@@ -139,7 +165,9 @@ shared_ptr<ExtraTypeInfo> ListTypeInfo::Deserialize(Deserializer &deserializer) 
 
 void StringTypeInfo::Serialize(Serializer &serializer) const {
 	ExtraTypeInfo::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "collation", collation);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<string>(200, "collation", collation);
+	}
 }
 
 shared_ptr<ExtraTypeInfo> StringTypeInfo::Deserialize(Deserializer &deserializer) {
@@ -150,7 +178,9 @@ shared_ptr<ExtraTypeInfo> StringTypeInfo::Deserialize(Deserializer &deserializer
 
 void StructTypeInfo::Serialize(Serializer &serializer) const {
 	ExtraTypeInfo::Serialize(serializer);
-	serializer.WritePropertyWithDefault<child_list_t<LogicalType>>(200, "child_types", child_types);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<child_list_t<LogicalType>>(200, "child_types", child_types);
+	}
 }
 
 shared_ptr<ExtraTypeInfo> StructTypeInfo::Deserialize(Deserializer &deserializer) {
@@ -161,9 +191,15 @@ shared_ptr<ExtraTypeInfo> StructTypeInfo::Deserialize(Deserializer &deserializer
 
 void UserTypeInfo::Serialize(Serializer &serializer) const {
 	ExtraTypeInfo::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "user_type_name", user_type_name);
-	serializer.WritePropertyWithDefault<string>(201, "catalog", catalog, string());
-	serializer.WritePropertyWithDefault<string>(202, "schema", schema, string());
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<string>(200, "user_type_name", user_type_name);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<string>(201, "catalog", catalog, string());
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<string>(202, "schema", schema, string());
+	}
 }
 
 shared_ptr<ExtraTypeInfo> UserTypeInfo::Deserialize(Deserializer &deserializer) {

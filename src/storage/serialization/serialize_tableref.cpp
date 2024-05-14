@@ -10,10 +10,18 @@
 namespace duckdb {
 
 void TableRef::Serialize(Serializer &serializer) const {
-	serializer.WriteProperty<TableReferenceType>(100, "type", type);
-	serializer.WritePropertyWithDefault<string>(101, "alias", alias);
-	serializer.WritePropertyWithDefault<unique_ptr<SampleOptions>>(102, "sample", sample);
-	serializer.WritePropertyWithDefault<optional_idx>(103, "query_location", query_location, optional_idx());
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WriteProperty<TableReferenceType>(100, "type", type);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<string>(101, "alias", alias);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unique_ptr<SampleOptions>>(102, "sample", sample);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<optional_idx>(103, "query_location", query_location, optional_idx());
+	}
 }
 
 unique_ptr<TableRef> TableRef::Deserialize(Deserializer &deserializer) {
@@ -61,10 +69,18 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &deserializer) {
 
 void BaseTableRef::Serialize(Serializer &serializer) const {
 	TableRef::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "schema_name", schema_name);
-	serializer.WritePropertyWithDefault<string>(201, "table_name", table_name);
-	serializer.WritePropertyWithDefault<vector<string>>(202, "column_name_alias", column_name_alias);
-	serializer.WritePropertyWithDefault<string>(203, "catalog_name", catalog_name);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<string>(200, "schema_name", schema_name);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<string>(201, "table_name", table_name);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<vector<string>>(202, "column_name_alias", column_name_alias);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<string>(203, "catalog_name", catalog_name);
+	}
 }
 
 unique_ptr<TableRef> BaseTableRef::Deserialize(Deserializer &deserializer) {
@@ -78,8 +94,12 @@ unique_ptr<TableRef> BaseTableRef::Deserialize(Deserializer &deserializer) {
 
 void ColumnDataRef::Serialize(Serializer &serializer) const {
 	TableRef::Serialize(serializer);
-	serializer.WritePropertyWithDefault<vector<string>>(200, "expected_names", expected_names);
-	serializer.WritePropertyWithDefault<optionally_owned_ptr<ColumnDataCollection>>(202, "collection", collection);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<vector<string>>(200, "expected_names", expected_names);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<optionally_owned_ptr<ColumnDataCollection>>(202, "collection", collection);
+	}
 }
 
 unique_ptr<TableRef> ColumnDataRef::Deserialize(Deserializer &deserializer) {
@@ -100,9 +120,15 @@ unique_ptr<TableRef> EmptyTableRef::Deserialize(Deserializer &deserializer) {
 
 void ExpressionListRef::Serialize(Serializer &serializer) const {
 	TableRef::Serialize(serializer);
-	serializer.WritePropertyWithDefault<vector<string>>(200, "expected_names", expected_names);
-	serializer.WritePropertyWithDefault<vector<LogicalType>>(201, "expected_types", expected_types);
-	serializer.WritePropertyWithDefault<vector<vector<unique_ptr<ParsedExpression>>>>(202, "values", values);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<vector<string>>(200, "expected_names", expected_names);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<vector<LogicalType>>(201, "expected_types", expected_types);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<vector<vector<unique_ptr<ParsedExpression>>>>(202, "values", values);
+	}
 }
 
 unique_ptr<TableRef> ExpressionListRef::Deserialize(Deserializer &deserializer) {
@@ -115,12 +141,24 @@ unique_ptr<TableRef> ExpressionListRef::Deserialize(Deserializer &deserializer) 
 
 void JoinRef::Serialize(Serializer &serializer) const {
 	TableRef::Serialize(serializer);
-	serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(200, "left", left);
-	serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(201, "right", right);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(202, "condition", condition);
-	serializer.WriteProperty<JoinType>(203, "join_type", type);
-	serializer.WriteProperty<JoinRefType>(204, "ref_type", ref_type);
-	serializer.WritePropertyWithDefault<vector<string>>(205, "using_columns", using_columns);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(200, "left", left);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(201, "right", right);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(202, "condition", condition);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WriteProperty<JoinType>(203, "join_type", type);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WriteProperty<JoinRefType>(204, "ref_type", ref_type);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<vector<string>>(205, "using_columns", using_columns);
+	}
 }
 
 unique_ptr<TableRef> JoinRef::Deserialize(Deserializer &deserializer) {
@@ -136,13 +174,27 @@ unique_ptr<TableRef> JoinRef::Deserialize(Deserializer &deserializer) {
 
 void PivotRef::Serialize(Serializer &serializer) const {
 	TableRef::Serialize(serializer);
-	serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(200, "source", source);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(201, "aggregates", aggregates);
-	serializer.WritePropertyWithDefault<vector<string>>(202, "unpivot_names", unpivot_names);
-	serializer.WritePropertyWithDefault<vector<PivotColumn>>(203, "pivots", pivots);
-	serializer.WritePropertyWithDefault<vector<string>>(204, "groups", groups);
-	serializer.WritePropertyWithDefault<vector<string>>(205, "column_name_alias", column_name_alias);
-	serializer.WritePropertyWithDefault<bool>(206, "include_nulls", include_nulls);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(200, "source", source);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(201, "aggregates", aggregates);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<vector<string>>(202, "unpivot_names", unpivot_names);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<vector<PivotColumn>>(203, "pivots", pivots);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<vector<string>>(204, "groups", groups);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<vector<string>>(205, "column_name_alias", column_name_alias);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<bool>(206, "include_nulls", include_nulls);
+	}
 }
 
 unique_ptr<TableRef> PivotRef::Deserialize(Deserializer &deserializer) {
@@ -159,9 +211,15 @@ unique_ptr<TableRef> PivotRef::Deserialize(Deserializer &deserializer) {
 
 void ShowRef::Serialize(Serializer &serializer) const {
 	TableRef::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "table_name", table_name);
-	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(201, "query", query);
-	serializer.WriteProperty<ShowType>(202, "show_type", show_type);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<string>(200, "table_name", table_name);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(201, "query", query);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WriteProperty<ShowType>(202, "show_type", show_type);
+	}
 }
 
 unique_ptr<TableRef> ShowRef::Deserialize(Deserializer &deserializer) {
@@ -174,8 +232,12 @@ unique_ptr<TableRef> ShowRef::Deserialize(Deserializer &deserializer) {
 
 void SubqueryRef::Serialize(Serializer &serializer) const {
 	TableRef::Serialize(serializer);
-	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(200, "subquery", subquery);
-	serializer.WritePropertyWithDefault<vector<string>>(201, "column_name_alias", column_name_alias);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(200, "subquery", subquery);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<vector<string>>(201, "column_name_alias", column_name_alias);
+	}
 }
 
 unique_ptr<TableRef> SubqueryRef::Deserialize(Deserializer &deserializer) {
@@ -187,8 +249,12 @@ unique_ptr<TableRef> SubqueryRef::Deserialize(Deserializer &deserializer) {
 
 void TableFunctionRef::Serialize(Serializer &serializer) const {
 	TableRef::Serialize(serializer);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "function", function);
-	serializer.WritePropertyWithDefault<vector<string>>(201, "column_name_alias", column_name_alias);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "function", function);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<vector<string>>(201, "column_name_alias", column_name_alias);
+	}
 }
 
 unique_ptr<TableRef> TableFunctionRef::Deserialize(Deserializer &deserializer) {

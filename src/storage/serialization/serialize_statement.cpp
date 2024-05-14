@@ -10,7 +10,9 @@
 namespace duckdb {
 
 void SelectStatement::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(100, "node", node);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(100, "node", node);
+	}
 }
 
 unique_ptr<SelectStatement> SelectStatement::Deserialize(Deserializer &deserializer) {

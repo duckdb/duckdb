@@ -171,7 +171,11 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	    }
 	 */
 	auto catalog_entries = GetCatalogEntries(schemas);
-	BinarySerializer serializer(*metadata_writer);
+	SerializationOptions serialization_options;
+
+	serialization_options.minimum_storage_version = config.options.minimum_duckdb_version;
+
+	BinarySerializer serializer(*metadata_writer, serialization_options);
 	serializer.Begin();
 	serializer.WriteList(100, "catalog_entries", catalog_entries.size(), [&](Serializer::List &list, idx_t i) {
 		auto &entry = catalog_entries[i];

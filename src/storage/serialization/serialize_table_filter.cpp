@@ -14,7 +14,9 @@
 namespace duckdb {
 
 void TableFilter::Serialize(Serializer &serializer) const {
-	serializer.WriteProperty<TableFilterType>(100, "filter_type", filter_type);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WriteProperty<TableFilterType>(100, "filter_type", filter_type);
+	}
 }
 
 unique_ptr<TableFilter> TableFilter::Deserialize(Deserializer &deserializer) {
@@ -47,7 +49,9 @@ unique_ptr<TableFilter> TableFilter::Deserialize(Deserializer &deserializer) {
 
 void ConjunctionAndFilter::Serialize(Serializer &serializer) const {
 	TableFilter::Serialize(serializer);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<TableFilter>>>(200, "child_filters", child_filters);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<vector<unique_ptr<TableFilter>>>(200, "child_filters", child_filters);
+	}
 }
 
 unique_ptr<TableFilter> ConjunctionAndFilter::Deserialize(Deserializer &deserializer) {
@@ -58,7 +62,9 @@ unique_ptr<TableFilter> ConjunctionAndFilter::Deserialize(Deserializer &deserial
 
 void ConjunctionOrFilter::Serialize(Serializer &serializer) const {
 	TableFilter::Serialize(serializer);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<TableFilter>>>(200, "child_filters", child_filters);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<vector<unique_ptr<TableFilter>>>(200, "child_filters", child_filters);
+	}
 }
 
 unique_ptr<TableFilter> ConjunctionOrFilter::Deserialize(Deserializer &deserializer) {
@@ -69,8 +75,12 @@ unique_ptr<TableFilter> ConjunctionOrFilter::Deserialize(Deserializer &deseriali
 
 void ConstantFilter::Serialize(Serializer &serializer) const {
 	TableFilter::Serialize(serializer);
-	serializer.WriteProperty<ExpressionType>(200, "comparison_type", comparison_type);
-	serializer.WriteProperty<Value>(201, "constant", constant);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WriteProperty<ExpressionType>(200, "comparison_type", comparison_type);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WriteProperty<Value>(201, "constant", constant);
+	}
 }
 
 unique_ptr<TableFilter> ConstantFilter::Deserialize(Deserializer &deserializer) {
@@ -100,9 +110,15 @@ unique_ptr<TableFilter> IsNullFilter::Deserialize(Deserializer &deserializer) {
 
 void StructFilter::Serialize(Serializer &serializer) const {
 	TableFilter::Serialize(serializer);
-	serializer.WritePropertyWithDefault<idx_t>(200, "child_idx", child_idx);
-	serializer.WritePropertyWithDefault<string>(201, "child_name", child_name);
-	serializer.WritePropertyWithDefault<unique_ptr<TableFilter>>(202, "child_filter", child_filter);
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<idx_t>(200, "child_idx", child_idx);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<string>(201, "child_name", child_name);
+	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unique_ptr<TableFilter>>(202, "child_filter", child_filter);
+	}
 }
 
 unique_ptr<TableFilter> StructFilter::Deserialize(Deserializer &deserializer) {
