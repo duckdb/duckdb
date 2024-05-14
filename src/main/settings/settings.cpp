@@ -536,20 +536,30 @@ Value EnableObjectCacheSetting::GetSetting(const ClientContext &context) {
 // Minimum DuckDB Version (for serialization)
 //===--------------------------------------------------------------------===//
 void MinimumDuckDBVersion::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.minimum_duckdb_version = input.GetValue<string>();
+	auto version_string = input.GetValue<string>();
+	auto storage_version = GetStorageVersion(version_string.c_str());
+	if (!storage_version.IsValid()) {
+		throw InvalidInputException("The provided string '%s' does not map to a valid duckdb version, which follows "
+		                            "the 'v<major>.<minor>.<patch>' format",
+		                            version_string);
+	}
+	config.options.minimum_duckdb_version = version_string;
+	config.options.minimum_storage_version = storage_version;
 }
 
 void MinimumDuckDBVersion::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	config.options.minimum_duckdb_version = DBConfig().options.minimum_duckdb_version;
+	config.options.minimum_storage_version = DBConfig().options.minimum_storage_version;
 }
 
 Value MinimumDuckDBVersion::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	// TODO: Map back from storage version to duckdb version
-	auto storage_version = config.options.minimum_duckdb_version.IsValid()
-	                           ? config.options.minimum_duckdb_version.GetIndex()
-	                           : STORAGE_VERSION;
-	return Value::INTEGER(storage_version);
+
+	auto &version_name = config.options.minimum_duckdb_version;
+	if (version_name.empty()) {
+		return Value("latest");
+	}
+	return Value(version_name);
 }
 
 //===--------------------------------------------------------------------===//

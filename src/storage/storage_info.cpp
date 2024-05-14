@@ -20,13 +20,35 @@ static const StorageVersionInfo storage_version_info[] = {
     {"v0.10.3", 65}, {nullptr, 0}};
 // END OF STORAGE VERSION INFO
 
-const char *GetDuckDBVersion(idx_t version_number) {
+optional_idx GetStorageVersion(const char *version_string) {
 	for (idx_t i = 0; storage_version_info[i].version_name; i++) {
-		if (version_number == storage_version_info[i].storage_version) {
-			return storage_version_info[i].version_name;
+		if (!std::strcmp(storage_version_info[i].version_name, version_string)) {
+			return storage_version_info[i].storage_version;
 		}
 	}
-	return nullptr;
+	return optional_idx();
+}
+
+string GetDuckDBVersion(idx_t version_number) {
+	vector<string> versions;
+	for (idx_t i = 0; storage_version_info[i].version_name; i++) {
+		if (version_number == storage_version_info[i].storage_version) {
+			versions.push_back(string(storage_version_info[i].version_name));
+		}
+	}
+	if (versions.empty()) {
+		return string();
+	}
+	string result;
+	for (idx_t i = 0; i < versions.size(); i++) {
+		string sep = "";
+		if (i) {
+			sep = i + 1 == versions.size() ? " or " : ", ";
+		}
+		result += sep;
+		result += versions[i];
+	}
+	return result;
 }
 
 } // namespace duckdb
