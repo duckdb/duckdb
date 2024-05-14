@@ -8,8 +8,8 @@
 
 /** @file yyjson.h */
 
-#ifndef YYJSON_H
-#define YYJSON_H
+#ifndef DUCKDB_YYJSON_H
+#define DUCKDB_YYJSON_H
 
 
 
@@ -24,6 +24,8 @@
 #include <float.h>
 
 #include "duckdb/common/fast_mem.hpp"
+
+namespace duckdb_yyjson {
 
 /*==============================================================================
  * Compile-time Options
@@ -382,7 +384,7 @@
 
 /* extern "C" begin */
 #ifdef __cplusplus
-extern "C" {
+// extern "C" {
 #endif
 
 /* warning suppress begin */
@@ -561,6 +563,10 @@ typedef struct yyjson_mut_val yyjson_mut_val;
 /*==============================================================================
  * JSON Reader API
  *============================================================================*/
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-const-variable"
+#endif
 
 /** Run-time options for JSON reader. */
 typedef uint32_t yyjson_read_flag;
@@ -670,7 +676,9 @@ typedef struct yyjson_read_err {
     size_t pos;
 } yyjson_read_err;
 
-
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 /**
  Read JSON with options.
@@ -868,6 +876,11 @@ yyjson_api_inline const char *yyjson_mut_read_number(const char *dat,
 /** Run-time options for JSON writer. */
 typedef uint32_t yyjson_write_flag;
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-const-variable"
+#endif
+
 /** Default option:
     - Write JSON minify.
     - Report error on inf or nan number.
@@ -939,7 +952,9 @@ typedef struct yyjson_write_err {
     const char *msg;
 } yyjson_write_err;
 
-
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 /*==============================================================================
  * JSON Document Writer API
@@ -5997,7 +6012,9 @@ yyjson_api_inline yyjson_mut_val *yyjson_mut_doc_get_pointer(
 #endif /* warning suppress end */
 
 #ifdef __cplusplus
-}
+// }
 #endif /* extern "C" end */
 
-#endif /* YYJSON_H */
+} // namespace duckdb_yyjson
+
+#endif /* DUCKDB_YYJSON_H */
