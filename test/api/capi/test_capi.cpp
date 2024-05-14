@@ -724,8 +724,14 @@ TEST_CASE("Test unsupported types in the deprecated C API", "[capi]") {
 	// Passes, but does return invalid data for unsupported types.
 	auto result = tester.Query(query_4);
 	auto &result_c = result->InternalResult();
-	REQUIRE(!string(duckdb_value_string(&result_c, 0, 0).data).compare("410"));
+
+	auto first_bigint_row = duckdb_value_string(&result_c, 0, 0).data;
+	REQUIRE(!string(first_bigint_row).compare("410"));
+	duckdb_free(first_bigint_row);
 	REQUIRE(duckdb_value_string(&result_c, 1, 0).data == nullptr);
-	REQUIRE(!string(duckdb_value_string(&result_c, 0, 1).data).compare("412"));
+
+	auto second_bigint_row = duckdb_value_string(&result_c, 0, 1).data;
+	REQUIRE(!string(second_bigint_row).compare("412"));
+	duckdb_free(second_bigint_row);
 	REQUIRE(duckdb_value_string(&result_c, 1, 1).data == nullptr);
 }
