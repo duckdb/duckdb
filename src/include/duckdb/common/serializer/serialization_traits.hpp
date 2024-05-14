@@ -14,6 +14,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/optionally_owned_ptr.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/insertion_order_preserving_map.hpp"
 
 namespace duckdb {
 
@@ -99,6 +100,13 @@ struct is_map<typename duckdb::map<Args...>> : std::true_type {
 	typedef typename std::tuple_element<1, std::tuple<Args...>>::type VALUE_TYPE;
 	typedef typename std::tuple_element<2, std::tuple<Args...>>::type HASH_TYPE;
 	typedef typename std::tuple_element<3, std::tuple<Args...>>::type EQUAL_TYPE;
+};
+
+template <typename T>
+struct is_insertion_preserving_map : std::false_type {};
+template <typename... Args>
+struct is_insertion_preserving_map<typename duckdb::InsertionOrderPreservingMap<Args...>> : std::true_type {
+	typedef typename std::tuple_element<0, std::tuple<Args...>>::type VALUE_TYPE;
 };
 
 template <typename T>
@@ -297,6 +305,16 @@ struct SerializationDefaultValue {
 
 	template <typename T = void>
 	static inline bool IsDefault(const typename std::enable_if<is_map<T>::value, T>::type &value) {
+		return value.empty();
+	}
+
+	template <typename T = void>
+	static inline typename std::enable_if<is_insertion_preserving_map<T>::value, T>::type GetDefault() {
+		return T();
+	}
+
+	template <typename T = void>
+	static inline bool IsDefault(const typename std::enable_if<is_insertion_preserving_map<T>::value, T>::type &value) {
 		return value.empty();
 	}
 
