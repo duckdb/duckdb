@@ -120,8 +120,6 @@ struct CSVReaderOptions {
 	string suffix;
 	string write_newline;
 
-	//! The date format to use (if any is specified)
-	map<LogicalTypeId, StrpTimeFormat> date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
 	//! The date format to use for writing (if any is specified)
 	map<LogicalTypeId, Value> write_date_format = {{LogicalTypeId::DATE, Value()}, {LogicalTypeId::TIMESTAMP, Value()}};
 	//! Whether or not a type format is specified
