@@ -346,6 +346,19 @@ private:
 		return std::make_pair(first, second);
 	}
 
+	// Deserialize a priority_queue
+	template <typename T = void>
+	inline typename std::enable_if<is_queue<T>::value, T>::type Read() {
+		using ELEMENT_TYPE = typename is_queue<T>::ELEMENT_TYPE;
+		T queue;
+		auto size = OnListBegin();
+		for (idx_t i = 0; i < size; i++) {
+			queue.emplace(Read<ELEMENT_TYPE>());
+		}
+		OnListEnd();
+		return queue;
+	}
+
 	// Primitive types
 	// Deserialize a bool
 	template <typename T = void>

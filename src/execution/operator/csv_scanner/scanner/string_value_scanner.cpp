@@ -120,7 +120,31 @@ inline bool IsValueNull(const char *null_str_ptr, const char *value_ptr, const i
 	return true;
 }
 
+bool StringValueResult::HandleTooManyColumnsError(const char *value_ptr, const idx_t size) {
+	if (cur_col_id >= number_of_columns) {
+		bool error = true;
+		if (cur_col_id == number_of_columns && ((quoted && state_machine.options.allow_quoted_nulls) || !quoted)) {
+			// we make an exception if the first over-value is null
+			bool is_value_null = false;
+			for (idx_t i = 0; i < null_str_count; i++) {
+				is_value_null = is_value_null || IsValueNull(null_str_ptr[i], value_ptr, size);
+			}
+			error = !is_value_null;
+		}
+		if (error) {
+			// We error pointing to the current value error.
+			current_errors.push_back({CSVErrorType::TOO_MANY_COLUMNS, cur_col_id, last_position});
+			cur_col_id++;
+		}
+		// We had an error
+		return true;
+	}
+	return false;
+}
 void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size, bool allocate) {
+	if (HandleTooManyColumnsError(value_ptr, size)) {
+		return;
+	}
 	if (cur_col_id >= number_of_columns) {
 		bool error = true;
 		if (cur_col_id == number_of_columns && ((quoted && state_machine.options.allow_quoted_nulls) || !quoted)) {
@@ -313,12 +337,15 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 				return;
 			}
 		}
-		// If it's an escaped value we have to remove all the escapes, this is not really great
-		auto value = StringValueScanner::RemoveEscape(
-		    result.buffer_ptr + result.quoted_position + 1, buffer_pos - result.quoted_position - 2,
-		    result.state_machine.dialect_options.state_machine_options.escape.GetValue(),
-		    result.parse_chunk.data[result.chunk_col_id]);
-		result.AddValueToVector(value.GetData(), value.GetSize());
+		if (!result.HandleTooManyColumnsError(result.buffer_ptr + result.quoted_position + 1,
+		                                      buffer_pos - result.quoted_position - 2)) {
+			// If it's an escaped value we have to remove all the escapes, this is not really great
+			auto value = StringValueScanner::RemoveEscape(
+			    result.buffer_ptr + result.quoted_position + 1, buffer_pos - result.quoted_position - 2,
+			    result.state_machine.dialect_options.state_machine_options.escape.GetValue(),
+			    result.parse_chunk.data[result.chunk_col_id]);
+			result.AddValueToVector(value.GetData(), value.GetSize());
+		}
 	} else {
 		if (buffer_pos < result.last_position.buffer_pos + 2) {
 			// empty value
