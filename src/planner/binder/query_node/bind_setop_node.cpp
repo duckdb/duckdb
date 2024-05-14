@@ -13,7 +13,6 @@
 #include "duckdb/planner/expression_binder/select_bind_state.hpp"
 #include "duckdb/common/enum_util.hpp"
 
-
 namespace duckdb {
 
 static void GatherAliases(BoundQueryNode &node, SelectBindState &bind_state, const vector<idx_t> &reorder_idx) {
@@ -186,7 +185,7 @@ static void BuildUnionByNameInfo(ClientContext &context, BoundSetOperationNode &
 
 void Binder::BindCollationGroup(unique_ptr<BoundSetOperationNode> &bound_set_op) {
 	if (bound_set_op->left->type != QueryNodeType::SELECT_NODE ||
-		bound_set_op->right->type != QueryNodeType::SELECT_NODE) {
+	    bound_set_op->right->type != QueryNodeType::SELECT_NODE) {
 		return;
 	}
 	auto &left_node = bound_set_op->left->Cast<BoundSelectNode>();
@@ -196,18 +195,21 @@ void Binder::BindCollationGroup(unique_ptr<BoundSetOperationNode> &bound_set_op)
 
 	// using set data structure to ensure uniqueness
 	std::set<idx_t> collation_indexes(left_node.collation_sel_idx.begin(), left_node.collation_sel_idx.end());
-	std::copy(right_node.collation_sel_idx.begin(), right_node.collation_sel_idx.end(), std::inserter(collation_indexes, collation_indexes.end()));
+	std::copy(right_node.collation_sel_idx.begin(), right_node.collation_sel_idx.end(),
+	          std::inserter(collation_indexes, collation_indexes.end()));
 
 	// verifies collation conflicts
-	for (idx_t collate_idx: collation_indexes) {
+	for (idx_t collate_idx : collation_indexes) {
 		auto &left_expr = left_bind_state.original_expressions[collate_idx];
 		auto &right_expr = right_bind_state.original_expressions[collate_idx];
 		// at least one expression must have to be a collation
-		D_ASSERT(left_expr->GetExpressionClass() == ExpressionClass::COLLATE || right_expr->GetExpressionClass() == ExpressionClass::COLLATE);
+		D_ASSERT(left_expr->GetExpressionClass() == ExpressionClass::COLLATE ||
+		         right_expr->GetExpressionClass() == ExpressionClass::COLLATE);
 
 		unique_ptr<Expression> bound_collation_expr;
 		// collation on both sides
-		if (left_expr->GetExpressionClass() == ExpressionClass::COLLATE && right_expr->GetExpressionClass() == ExpressionClass::COLLATE) {
+		if (left_expr->GetExpressionClass() == ExpressionClass::COLLATE &&
+		    right_expr->GetExpressionClass() == ExpressionClass::COLLATE) {
 			auto &left_collation_expr = left_expr->Cast<CollateExpression>();
 			auto &right_collation_expr = right_expr->Cast<CollateExpression>();
 
@@ -215,7 +217,7 @@ void Binder::BindCollationGroup(unique_ptr<BoundSetOperationNode> &bound_set_op)
 			auto &right_str_collation = right_collation_expr.collation;
 
 			if (left_str_collation != right_str_collation) {
-				throw BinderException("Different collations in a set operation at column: %lld.", collate_idx+1);
+				throw BinderException("Different collations in a set operation at column: %lld.", collate_idx + 1);
 			}
 			bound_collation_expr = left_node.select_list[collate_idx]->Copy();
 		} else if (left_expr->GetExpressionClass() == ExpressionClass::COLLATE) {

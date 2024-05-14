@@ -116,7 +116,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 			vector<unique_ptr<Expression>> expressions;
 			idx_t info_idx = 0;
 			auto &info = op.collation_info;
-			for (idx_t proj_idx=0; proj_idx < types.size(); ++proj_idx) {
+			for (idx_t proj_idx = 0; proj_idx < types.size(); ++proj_idx) {
 				if (info_idx < info.size() && proj_idx == info[info_idx].collation_idx) {
 					// project collation
 					auto &bound_collation_expr = info[info_idx].bound_collation_expr;
@@ -129,13 +129,14 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 				}
 				groups.push_back(make_uniq<BoundReferenceExpression>(types[proj_idx], proj_idx));
 			}
-			auto projection = make_uniq<PhysicalProjection>(std::move(types), std::move(expressions), op.estimated_cardinality);
+			auto projection =
+			    make_uniq<PhysicalProjection>(std::move(types), std::move(expressions), op.estimated_cardinality);
 			projection->children.push_back(std::move(result));
 			result = std::move(projection);
 		}
 
 		auto groupby = make_uniq<PhysicalHashAggregate>(context, op.types, std::move(aggregates), std::move(groups),
-														result->estimated_cardinality);
+		                                                result->estimated_cardinality);
 		groupby->children.push_back(std::move(result));
 		result = std::move(groupby);
 	}

@@ -37,10 +37,10 @@ public:
 	}
 
 	LogicalSetOperation(idx_t table_index, idx_t column_count, unique_ptr<LogicalOperator> top,
-					unique_ptr<LogicalOperator> bottom, LogicalOperatorType type, bool setop_all,
-					bool allow_out_of_order, vector<CollationGroupInfo> info)
-					: LogicalSetOperation(table_index, column_count, std::move(top), std::move(bottom),
-					type, setop_all, allow_out_of_order) {
+	                    unique_ptr<LogicalOperator> bottom, LogicalOperatorType type, bool setop_all,
+	                    bool allow_out_of_order, vector<CollationGroupInfo> info)
+	    : LogicalSetOperation(table_index, column_count, std::move(top), std::move(bottom), type, setop_all,
+	                          allow_out_of_order) {
 		collation_info = std::move(info);
 	}
 

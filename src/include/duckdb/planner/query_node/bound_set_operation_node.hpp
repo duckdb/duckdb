@@ -16,8 +16,10 @@ namespace duckdb {
 
 class CollationGroupInfo {
 public:
-	CollationGroupInfo(idx_t coll_idx, unique_ptr<Expression> coll_expr): collation_idx(coll_idx), bound_collation_expr(std::move(coll_expr)) {
+	CollationGroupInfo(idx_t coll_idx, unique_ptr<Expression> coll_expr)
+	    : collation_idx(coll_idx), bound_collation_expr(std::move(coll_expr)) {
 	}
+
 public:
 	//! collation index in the select list
 	idx_t collation_idx;
