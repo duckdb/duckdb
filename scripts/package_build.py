@@ -42,6 +42,7 @@ def third_party_sources():
     sources += [os.path.join('third_party', 'fmt')]
     sources += [os.path.join('third_party', 'fsst')]
     sources += [os.path.join('third_party', 'miniz')]
+    sources += [os.path.join('third_party', 'brotli')]
     sources += [os.path.join('third_party', 're2')]
     sources += [os.path.join('third_party', 'hyperloglog')]
     sources += [os.path.join('third_party', 'skiplist')]
