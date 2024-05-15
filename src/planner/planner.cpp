@@ -176,7 +176,7 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 		MemoryStream stream;
 		auto &config = DBConfig::GetConfig(context);
 		SerializationOptions options;
-		options.minimum_storage_version = config.options.minimum_storage_version;
+		options.serialization_compatibility = config.options.serialization_compatibility;
 		BinarySerializer::Serialize(*op, stream, options);
 		stream.Rewind();
 		bound_parameter_map_t parameters;

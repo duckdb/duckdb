@@ -3,7 +3,7 @@
 # group: [view]
 
 statement ok
-set minimum_duckdb_version='v0.10.3'
+set minimum_duckdb_version='>v0.10.2'
 
 statement ok
 PRAGMA enable_verification

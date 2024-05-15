@@ -45,6 +45,9 @@ version_map = json.load(version_map_file)
 
 
 def lookup_storage_version(version: str):
+    if all([x.isdigit() for x in version]):
+        # Explicitly provide a storage version number
+        return int(version)
     if version not in version_map:
         print(f'Could not map {version} to a storage version number, please check the version_map.json')
         exit(1)

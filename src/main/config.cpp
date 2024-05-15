@@ -480,4 +480,86 @@ const std::string DBConfig::UserAgent() const {
 	return user_agent;
 }
 
+SerializationCompatibility SerializationCompatibility::FromString(const string &input) {
+	if (input.empty()) {
+		throw InvalidInputException("Version string can not be empty");
+	}
+	idx_t index = 0;
+	ComparisonType comparison_type = ComparisonType::EQUALITY;
+	if (input[0] == '>') {
+		index++;
+		comparison_type = ComparisonType::GREATER;
+	} else if (input[0] == '<') {
+		index++;
+		comparison_type = ComparisonType::LESS;
+	}
+
+	if (input.size() == index) {
+		throw InvalidInputException("Version string can not be empty");
+	}
+	if (input[index] != 'v') {
+		throw InvalidInputException(
+		    "Invalid version string, input does not match the format: '[>|<]v<major>.<minor>.<patch>'");
+	}
+
+	idx_t array_size;
+	auto storage_version_info = GetStorageVersionInfo(array_size);
+	optional_idx array_index;
+	for (idx_t i = 0; i < array_size; i++) {
+		auto version_string = input.c_str() + index;
+		if (!std::strcmp(storage_version_info[i].version_name, version_string)) {
+			array_index = i;
+			break;
+		}
+	}
+	if (!array_index.IsValid()) {
+		throw InvalidInputException("The version string '%s' is not a valid DuckDB version", input.substr(index));
+	}
+
+	if (comparison_type == ComparisonType::LESS) {
+		// '<1.1.0' should serialize for the first known DuckDB version
+		// In case new storage versions are added inbetween, these should all be part of the newer version and not get
+		// serialized when '<1.1.0' is used
+		if (array_index.GetIndex() == 0) {
+			throw InvalidInputException(
+			    "The referenced version is already the lowest available version, can't use '<'");
+		}
+		idx_t less_index = array_index.GetIndex() - 1;
+		while (less_index > 0) {
+			auto referenced_version = storage_version_info[array_index.GetIndex()].storage_version;
+			auto other_version = storage_version_info[less_index].storage_version;
+			if (referenced_version != other_version) {
+				break;
+			}
+			less_index--;
+		}
+		array_index = less_index;
+		comparison_type = ComparisonType::EQUALITY;
+	}
+
+	auto storage_version = storage_version_info[array_index.GetIndex()].storage_version;
+	SerializationCompatibility result;
+	result.duckdb_version = input;
+	result.storage_version = storage_version;
+	result.comparison_type = comparison_type;
+	return result;
+}
+
+bool SerializationCompatibility::Compare(idx_t property_version) const {
+	if (!storage_version.IsValid()) {
+		// default: serialize everything
+		return true;
+	}
+	switch (comparison_type) {
+	case ComparisonType::EQUALITY:
+		return property_version == storage_version.GetIndex();
+	case ComparisonType::GREATER:
+		return property_version > storage_version.GetIndex();
+	case ComparisonType::LESS:
+		return property_version < storage_version.GetIndex();
+	default:
+		throw InternalException("Invalid ComparisonType!");
+	}
+}
+
 } // namespace duckdb

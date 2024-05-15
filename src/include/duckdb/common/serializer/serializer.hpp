@@ -19,6 +19,7 @@
 #include "duckdb/common/optionally_owned_ptr.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -26,7 +27,7 @@ class SerializationOptions {
 public:
 	bool serialize_enum_as_string = false;
 	bool serialize_default_values = false;
-	optional_idx minimum_storage_version;
+	SerializationCompatibility serialization_compatibility;
 };
 
 class Serializer {
@@ -38,11 +39,7 @@ public:
 	}
 
 	bool ShouldSerialize(idx_t version_added) {
-		if (!options.minimum_storage_version.IsValid()) {
-			return true;
-		}
-		auto minimum_version = options.minimum_storage_version.GetIndex();
-		return minimum_version >= version_added;
+		return options.serialization_compatibility.Compare(version_added);
 	}
 
 	class List {

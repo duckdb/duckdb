@@ -173,7 +173,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	auto catalog_entries = GetCatalogEntries(schemas);
 	SerializationOptions serialization_options;
 
-	serialization_options.minimum_storage_version = config.options.minimum_storage_version;
+	serialization_options.serialization_compatibility = config.options.serialization_compatibility;
 
 	BinarySerializer serializer(*metadata_writer, serialization_options);
 	serializer.Begin();

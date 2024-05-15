@@ -537,25 +537,18 @@ Value EnableObjectCacheSetting::GetSetting(const ClientContext &context) {
 //===--------------------------------------------------------------------===//
 void MinimumDuckDBVersion::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto version_string = input.GetValue<string>();
-	auto storage_version = GetStorageVersion(version_string.c_str());
-	if (!storage_version.IsValid()) {
-		throw InvalidInputException("The provided string '%s' does not map to a valid duckdb version, which follows "
-		                            "the 'v<major>.<minor>.<patch>' format",
-		                            version_string);
-	}
-	config.options.minimum_duckdb_version = version_string;
-	config.options.minimum_storage_version = storage_version;
+	auto serialization_compatibility = SerializationCompatibility::FromString(version_string);
+	config.options.serialization_compatibility = serialization_compatibility;
 }
 
 void MinimumDuckDBVersion::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.minimum_duckdb_version = DBConfig().options.minimum_duckdb_version;
-	config.options.minimum_storage_version = DBConfig().options.minimum_storage_version;
+	config.options.serialization_compatibility = DBConfig().options.serialization_compatibility;
 }
 
 Value MinimumDuckDBVersion::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 
-	auto &version_name = config.options.minimum_duckdb_version;
+	auto &version_name = config.options.serialization_compatibility.duckdb_version;
 	if (version_name.empty()) {
 		return Value("latest");
 	}
