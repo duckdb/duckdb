@@ -1,6 +1,7 @@
 
 #include "duckdb/optimizer/rule/timestamp_comparison.hpp"
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -80,9 +81,9 @@ unique_ptr<Expression> TimeStampComparison::Apply(LogicalOperator &op, vector<re
 
 		auto left_copy = cast_columnref->Copy();
 		auto right_copy = cast_columnref->Copy();
-		auto lt_eq_expr = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHAN, std::move(right_copy),
+		auto lt_eq_expr = make_uniq_base<Expression, BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHAN, std::move(right_copy),
 		                                                       std::move(val_for_comparison));
-		auto gt_eq_expr = make_uniq<BoundComparisonExpression>(
+		auto gt_eq_expr = make_uniq_base<Expression, BoundComparisonExpression>(
 		    ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(left_copy), std::move(original_val_for_comparison));
 		new_expr->children.push_back(std::move(gt_eq_expr));
 		new_expr->children.push_back(std::move(lt_eq_expr));
