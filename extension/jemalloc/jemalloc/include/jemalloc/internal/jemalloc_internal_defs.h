@@ -310,7 +310,7 @@
  * If defined, explicitly attempt to more uniformly distribute large allocation
  * pointer alignments across all cache indices.
  */
-#define JEMALLOC_CACHE_OBLIVIOUS
+// #define JEMALLOC_CACHE_OBLIVIOUS
 
 /*
  * If defined, enable logging facilities.  We make this a configure option to
@@ -337,8 +337,11 @@
  *                                         /proc/sys/vm.overcommit_memory file.
  * JEMALLOC_SYSCTL_VM_OVERCOMMIT: FreeBSD's vm.overcommit sysctl.
  */
-/* #undef JEMALLOC_SYSCTL_VM_OVERCOMMIT */
-/* #undef JEMALLOC_PROC_SYS_VM_OVERCOMMIT_MEMORY */
+#ifdef __FreeBSD__
+#define JEMALLOC_SYSCTL_VM_OVERCOMMIT
+#else
+#define JEMALLOC_PROC_SYS_VM_OVERCOMMIT_MEMORY
+#endif
 
 /* Defined if madvise(2) is available. */
 #define JEMALLOC_HAVE_MADVISE

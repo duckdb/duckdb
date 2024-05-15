@@ -4,6 +4,7 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 
 #include <cstdint>
 
@@ -207,7 +208,7 @@ int64_t Allocator::DecayDelay() {
 #ifdef USE_JEMALLOC
 	return JemallocExtension::DecayDelay();
 #else
-	return DConstants::INVALID_INDEX;
+	return NumericLimits<int64_t>::Maximum();
 #endif
 }
 
