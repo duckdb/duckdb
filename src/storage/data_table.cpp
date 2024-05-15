@@ -1433,6 +1433,7 @@ void DataTable::CommitDropTable() {
 // GetColumnSegmentInfo
 //===--------------------------------------------------------------------===//
 vector<ColumnSegmentInfo> DataTable::GetColumnSegmentInfo() {
+	auto lock = GetSharedCheckpointLock();
 	return row_groups->GetColumnSegmentInfo();
 }
 
