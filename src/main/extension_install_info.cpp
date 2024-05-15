@@ -1,5 +1,8 @@
 #include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/common/string.hpp"
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/serializer/buffered_file_reader.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
 
 namespace duckdb {
 
@@ -39,6 +42,32 @@ string ExtensionRepository::TryConvertUrlToKnownRepository(const string &url) {
 		return "local_build_release";
 	}
 	return "";
+}
+
+unique_ptr<ExtensionInstallInfo> ExtensionInstallInfo::TryReadInfoFile(FileSystem &fs, const std::string &info_file_path, const std::string &extension_name) {
+	unique_ptr<ExtensionInstallInfo> result;
+
+	string hint = StringUtil::Format("Try reinstalling the extension using 'FORCE INSTALL %s;'", extension_name);
+
+	// Return empty info if the file is missing (TODO: throw error here in the future?)
+	if (!fs.FileExists(info_file_path)) {
+		return make_uniq<ExtensionInstallInfo>();
+	}
+
+    auto file_reader = BufferedFileReader(fs, info_file_path.c_str());
+    if (!file_reader.Finished()) {
+        BinaryDeserializer deserializer(file_reader);
+        deserializer.Begin();
+		try {
+            result = ExtensionInstallInfo::Deserialize(deserializer);
+		} catch (std::exception &ex) {
+			ErrorData error(ex);
+			throw IOException("Failed to read info file for '%s' extension: '%s'.\nA serialization error occured: '%s'\n%s", extension_name, info_file_path, error.RawMessage(), hint);
+		}
+        deserializer.End();
+    }
+
+	return result;
 }
 
 } // namespace duckdb

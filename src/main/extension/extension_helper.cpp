@@ -233,7 +233,7 @@ static ExtensionUpdateResult UpdateExtensionInternal(DatabaseInstance &db, FileS
 	const string info_file_path = full_extension_path + ".info";
 	if (!fs.FileExists(info_file_path)) {
 		result.extension_name = extension_name;
-		result.tag = ExtensionUpdateResultTag::NOT_INSTALLED;
+		result.tag = ExtensionUpdateResultTag::MISSING_INSTALL_INFO;
 		return result;
 	}
 
@@ -250,45 +250,44 @@ static ExtensionUpdateResult UpdateExtensionInternal(DatabaseInstance &db, FileS
 
 	result.prev_version = parsed_metadata.AppearsValid() ? parsed_metadata.extension_version : "";
 
-	// Read metadata file into buffer
-	auto file_reader = BufferedFileReader(fs, info_file_path.c_str());
-	if (!file_reader.Finished()) {
-		BinaryDeserializer deserializer(file_reader);
-		deserializer.Begin();
-		auto extension_install_info = ExtensionInstallInfo::Deserialize(deserializer);
-		deserializer.End();
 
-		if (extension_install_info->mode != ExtensionInstallMode::REPOSITORY) {
-			result.tag = ExtensionUpdateResultTag::NOT_A_REPOSITORY;
-			result.installed_version = result.prev_version;
-			return result;
-		}
+	auto extension_install_info = ExtensionInstallInfo::TryReadInfoFile(fs, info_file_path, extension_name);
 
-		result.repository = ExtensionRepository::GetRepository(extension_install_info->repository_url);
-
-		// We force install the full url found in this file, throwing
-		unique_ptr<ExtensionInstallInfo> install_result;
-		try {
-			install_result = ExtensionHelper::InstallExtension(config, fs, extension_name, true, result.repository);
-		} catch (std::exception &e) {
-			ErrorData error(e);
-			error.Throw("Extension updating failed when trying to install '" + extension_name + "', original error: ");
-		}
-
-		result.installed_version = install_result->version;
-
-		if (result.installed_version.empty()) {
-			result.tag = ExtensionUpdateResultTag::REDOWNLOADED;
-		} else if (result.installed_version != result.prev_version) {
-			result.tag = ExtensionUpdateResultTag::UPDATED;
-		} else {
-			result.tag = ExtensionUpdateResultTag::NO_UPDATE_AVAILABLE;
-		}
-
+	// Early out: no info file found
+	if (extension_install_info->mode == ExtensionInstallMode::UNKNOWN) {
+		result.tag = ExtensionUpdateResultTag::MISSING_INSTALL_INFO;
 		return result;
 	}
 
-	return result;
+	// Early out: we can only update extensions from repositories
+	if (extension_install_info->mode != ExtensionInstallMode::REPOSITORY) {
+		result.tag = ExtensionUpdateResultTag::NOT_A_REPOSITORY;
+		result.installed_version = result.prev_version;
+		return result;
+	}
+
+    result.repository = ExtensionRepository::GetRepository(extension_install_info->repository_url);
+
+    // We force install the full url found in this file, throwing
+    unique_ptr<ExtensionInstallInfo> install_result;
+    try {
+        install_result = ExtensionHelper::InstallExtension(config, fs, extension_name, true, result.repository);
+    } catch (std::exception &e) {
+        ErrorData error(e);
+        error.Throw("Extension updating failed when trying to install '" + extension_name + "', original error: ");
+    }
+
+    result.installed_version = install_result->version;
+
+    if (result.installed_version.empty()) {
+        result.tag = ExtensionUpdateResultTag::REDOWNLOADED;
+    } else if (result.installed_version != result.prev_version) {
+        result.tag = ExtensionUpdateResultTag::UPDATED;
+    } else {
+        result.tag = ExtensionUpdateResultTag::NO_UPDATE_AVAILABLE;
+    }
+
+    return result;
 }
 
 vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(ClientContext &context) {

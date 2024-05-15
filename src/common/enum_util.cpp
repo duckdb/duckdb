@@ -2605,6 +2605,8 @@ const char* EnumUtil::ToChars<ExtensionUpdateResultTag>(ExtensionUpdateResultTag
 		return "NOT_INSTALLED";
 	case ExtensionUpdateResultTag::STATICALLY_LOADED:
 		return "STATICALLY_LOADED";
+	case ExtensionUpdateResultTag::MISSING_INSTALL_INFO:
+		return "MISSING_INSTALL_INFO";
 	case ExtensionUpdateResultTag::REDOWNLOADED:
 		return "REDOWNLOADED";
 	case ExtensionUpdateResultTag::UPDATED:
@@ -2630,6 +2632,9 @@ ExtensionUpdateResultTag EnumUtil::FromString<ExtensionUpdateResultTag>(const ch
 	}
 	if (StringUtil::Equals(value, "STATICALLY_LOADED")) {
 		return ExtensionUpdateResultTag::STATICALLY_LOADED;
+	}
+	if (StringUtil::Equals(value, "MISSING_INSTALL_INFO")) {
+		return ExtensionUpdateResultTag::MISSING_INSTALL_INFO;
 	}
 	if (StringUtil::Equals(value, "REDOWNLOADED")) {
 		return ExtensionUpdateResultTag::REDOWNLOADED;

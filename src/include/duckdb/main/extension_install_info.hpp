@@ -11,9 +11,10 @@
 #pragma once
 
 namespace duckdb {
+class FileSystem;
 
 enum class ExtensionInstallMode : uint8_t {
-	// Fallback for exceptional cases
+	// Fallback for when install info is missing
 	UNKNOWN = 0,
 	//! Extension was installed using a url deduced from a repository base url
 	REPOSITORY = 1,
@@ -37,7 +38,11 @@ public:
 	string version;
 
 	void Serialize(Serializer &serializer) const;
+
+	//! Raw Deserialize function
 	static unique_ptr<ExtensionInstallInfo> Deserialize(Deserializer &deserializer);
+	//! Like Deserialize, but with nice error messages on failure and an ExtensionInstallMode::UNKNOWN result on missing info
+	static unique_ptr<ExtensionInstallInfo> TryReadInfoFile(FileSystem &fs, const string &info_file_path, const string &extension_name);
 };
 
 struct ExtensionRepository {

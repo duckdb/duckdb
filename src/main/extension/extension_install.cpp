@@ -284,8 +284,9 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DBConfig &config,
 	// Try autoloading httpfs for loading extensions over https
 	if (context) {
 		auto &db = DatabaseInstance::GetDatabase(*context);
-		if (StringUtil::StartsWith(path, "https://") && !db.ExtensionIsLoaded("httpfs")) {
-			ExtensionHelper::AutoLoadExtension(db, "httpfs");
+		if (StringUtil::StartsWith(path, "https://") && !db.ExtensionIsLoaded("httpfs") &&
+		    db.config.options.autoload_known_extensions) {
+			ExtensionHelper::AutoLoadExtension(*context, "httpfs");
 		}
 	}
 
@@ -304,9 +305,7 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DBConfig &config,
 			throw IOException("Failed to copy local extension \"%s\" at PATH \"%s\"\n", extension_name, file);
 		}
 		if (StringUtil::StartsWith(file, "https://")) {
-			throw IOException("Failed to copy remote extension \"%s\" at PATH \"%s\"\n Please install the 'httpfs' "
-			                  "extension, then try again.",
-			                  extension_name, file);
+			throw IOException("Failed to install remote extension \"%s\" from url \"%s\"", extension_name, file);
 		}
 	}
 
@@ -317,7 +316,7 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DBConfig &config,
 
 	if (StringUtil::EndsWith(file, ".gz")) {
 		// FIXME this is slow
-		string compressed_body((const char*)in_buffer.get(), file_size);
+		string compressed_body((const char *)in_buffer.get(), file_size);
 		string decompressed = GZipFileSystem::UncompressGZIPString(compressed_body);
 		CheckExtensionMetadataOnInstall(config, (void *)decompressed.data(), decompressed.size(), info, extension_name);
 	} else {

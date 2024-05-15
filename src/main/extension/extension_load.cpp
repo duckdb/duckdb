@@ -294,18 +294,14 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 	if (!direct_load) {
 		auto info_file_name = filename + ".info";
 
-		// If there's an info file, we parse that for some more metadata
-		if (fs.FileExists(info_file_name)) {
-			auto file_reader = BufferedFileReader(fs, info_file_name.c_str());
-			if (!file_reader.Finished()) {
-				BinaryDeserializer deserializer(file_reader);
-				deserializer.Begin();
-				result.install_info = ExtensionInstallInfo::Deserialize(deserializer);
-				deserializer.End();
+		result.install_info = ExtensionInstallInfo::TryReadInfoFile(fs, info_file_name, lowercase_extension_name);
 
-				D_ASSERT(result.install_info->version == parsed_metadata.extension_version);
-			}
+		if (result.install_info->mode == ExtensionInstallMode::UNKNOWN) {
+			// The info file was missing, we just set the version, since we have it from the parsed footer
+			result.install_info->version = parsed_metadata.extension_version;
 		}
+
+		D_ASSERT(result.install_info->version == parsed_metadata.extension_version);
 	} else {
 		result.install_info = make_uniq<ExtensionInstallInfo>();
 		result.install_info->mode = ExtensionInstallMode::NOT_INSTALLED;
@@ -375,6 +371,8 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 		throw InvalidInputException("Initialization function \"%s\" from file \"%s\" threw an exception: \"%s\"",
 		                            init_fun_name, res.filename, error.RawMessage());
 	}
+
+	D_ASSERT(res.install_info);
 
 	db.SetExtensionLoaded(extension, *res.install_info);
 #endif

@@ -105,22 +105,14 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 		// Check the info file for its installation source
 		auto info_file_path = fs.JoinPath(ext_directory, path + ".info");
 
-		if (fs.FileExists(info_file_path)) {
-			auto file_reader = BufferedFileReader(fs, info_file_path.c_str());
-			if (!file_reader.Finished()) {
-				BinaryDeserializer deserializer(file_reader);
-				deserializer.Begin();
-				auto extension_install_info = ExtensionInstallInfo::Deserialize(deserializer);
-				deserializer.End();
-
-				info.install_mode = extension_install_info->mode;
-				info.extension_version = extension_install_info->version;
-				if (extension_install_info->mode == ExtensionInstallMode::REPOSITORY) {
-					info.installed_from = ExtensionRepository::GetRepository(extension_install_info->repository_url);
-				} else {
-					info.installed_from = extension_install_info->full_path;
-				}
-			}
+		// Read the info file
+		auto extension_install_info = ExtensionInstallInfo::TryReadInfoFile(fs, info_file_path, info.name);
+		info.install_mode = extension_install_info->mode;
+		info.extension_version = extension_install_info->version;
+		if (extension_install_info->mode == ExtensionInstallMode::REPOSITORY) {
+			info.installed_from = ExtensionRepository::GetRepository(extension_install_info->repository_url);
+		} else {
+			info.installed_from = extension_install_info->full_path;
 		}
 
 		auto entry = installed_extensions.find(info.name);
