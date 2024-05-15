@@ -37,4 +37,94 @@ SELECT * FROM (SELECT 'A', 'B' UNION SELECT 'a', 'b') ORDER BY 1
 A	B
 a	b
 
+#! multiple collations
+query II
+SELECT NULL::VARCHAR COLLATE NOCASE, 'A' COLLATE NOCASE UNION SELECT 'a', 'b' ORDER BY 1
+----
+a	b
+NULL	a
+
+#! different collations for the same resulting column
+statement error
+SELECT 'A' COLLATE NOCASE UNION SELECT 'a' COLLATE POSIX
+----
+Binder Error: Different collations in a set operation at column: 1.
+
+#! testing NULL
+query II
+SELECT NULL::VARCHAR COLLATE NOCASE, 'A' COLLATE NOCASE UNION SELECT 'a', 'b' ORDER BY 1
+----
+a	b
+NULL	a
+
+statement ok
+CREATE TABLE t1(c1 VARCHAR)
+
+#! UNION with empty column
+query I
+SELECT 'a' UNION SELECT c1 COLLATE NOCASE FROM t1
+----
+a
+
+statement ok
+INSERT INTO t1 VALUES('A')
+
+#! literal and column
+query I
+SELECT 'a' UNION SELECT c1 COLLATE NOCASE FROM t1
+----
+a
+
+statement ok
+INSERT INTO t1 VALUES('b')
+
+query I
+SELECT 'c' UNION SELECT c1 COLLATE NOCASE FROM t1 ORDER BY 1
+----
+a
+b
+c
+
+#! UNION two tables
+query I
+SELECT c1 COLLATE NOCASE FROM t1 UNION SELECT * FROM t1 ORDER BY 1
+----
+a
+b
+
+statement ok
+ALTER TABLE t1 ADD COLUMN c2 VARCHAR
+
+#! UNION two tables
+query II
+SELECT c1 COLLATE NOCASE, c2 FROM t1 UNION SELECT * FROM t1 ORDER BY 1
+----
+a	NULL
+b	NULL
+
+statement ok
+DROP TABLE t1
+
+statement ok
+CREATE TABLE t1(c1 VARCHAR)
+
+statement ok
+INSERT INTO t1 VALUES('a'),('à'),('á'),('A')
+
+#! testing NOACCENT collation
+query I
+SELECT c1 COLLATE NOACCENT FROM T1 UNION SELECT * FROM t1 ORDER BY 1
+----
+A
+a
+
+statement ok
+INSERT INTO t1 VALUES('b'),('B')
+
+#! testing NOACCENT collation
+query I
+SELECT c1 COLLATE NOACCENT.NOCASE FROM T1 UNION SELECT * FROM t1 ORDER BY 1
+----
+a
+b
 
