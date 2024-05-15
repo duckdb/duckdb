@@ -110,6 +110,7 @@ public:
 		switch (yyjson_get_tag(val)) {
 		case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
 			return JSONCommon::TYPE_STRING_NULL;
+		case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
 		case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
 			return JSONCommon::TYPE_STRING_VARCHAR;
 		case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
@@ -138,6 +139,7 @@ public:
 		switch (yyjson_get_tag(val)) {
 		case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
 			return LogicalTypeId::SQLNULL;
+		case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
 		case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
 			return LogicalTypeId::VARCHAR;
 		case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
