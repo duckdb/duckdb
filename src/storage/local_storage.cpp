@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-LocalTableStorage::LocalTableStorage(DataTable &table)
+LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
     : table_ref(table), allocator(Allocator::Get(table.db)), deleted_rows(0), optimistic_writer(table),
       merged_storage(false) {
 	auto types = table.GetTypes();
@@ -23,14 +23,7 @@ LocalTableStorage::LocalTableStorage(DataTable &table)
 	    data_table_info, TableIOManager::Get(table).GetBlockManagerForRowData(), types, MAX_ROW_ID, 0);
 	row_groups->InitializeEmpty();
 
-	data_table_info->GetIndexes().Scan([&](Index &index) {
-		if (index.GetIndexType() != ART::TYPE_NAME) {
-			return false;
-		}
-		D_ASSERT(index.GetIndexType() == ART::TYPE_NAME);
-		D_ASSERT(index.IsBound());
-
-		auto &art = index.Cast<ART>();
+	data_table_info->GetIndexes().BindAndScan<ART>(context, *data_table_info, [&](ART &art) {
 		if (art.GetConstraintType() != IndexConstraintType::NONE) {
 			// unique index: create a local ART index that maintains the same unique constraint
 			vector<unique_ptr<Expression>> unbound_expressions;
@@ -247,11 +240,11 @@ optional_ptr<LocalTableStorage> LocalTableManager::GetStorage(DataTable &table) 
 	return entry == table_storage.end() ? nullptr : entry->second.get();
 }
 
-LocalTableStorage &LocalTableManager::GetOrCreateStorage(DataTable &table) {
+LocalTableStorage &LocalTableManager::GetOrCreateStorage(ClientContext &context, DataTable &table) {
 	lock_guard<mutex> l(table_storage_lock);
 	auto entry = table_storage.find(table);
 	if (entry == table_storage.end()) {
-		auto new_storage = make_shared_ptr<LocalTableStorage>(table);
+		auto new_storage = make_shared_ptr<LocalTableStorage>(context, table);
 		auto storage = new_storage.get();
 		table_storage.insert(make_pair(reference<DataTable>(table), std::move(new_storage)));
 		return *storage;
@@ -356,7 +349,7 @@ bool LocalStorage::NextParallelScan(ClientContext &context, DataTable &table, Pa
 
 void LocalStorage::InitializeAppend(LocalAppendState &state, DataTable &table) {
 	table.InitializeIndexes(context);
-	state.storage = &table_manager.GetOrCreateStorage(table);
+	state.storage = &table_manager.GetOrCreateStorage(context, table);
 	state.storage->row_groups->InitializeAppend(TransactionData(transaction), state.append_state);
 }
 
@@ -383,7 +376,7 @@ void LocalStorage::FinalizeAppend(LocalAppendState &state) {
 }
 
 void LocalStorage::LocalMerge(DataTable &table, RowGroupCollection &collection) {
-	auto &storage = table_manager.GetOrCreateStorage(table);
+	auto &storage = table_manager.GetOrCreateStorage(context, table);
 	if (!storage.indexes.Empty()) {
 		// append data to indexes if required
 		row_t base_id = MAX_ROW_ID + NumericCast<row_t>(storage.row_groups->GetTotalRows());
@@ -397,12 +390,12 @@ void LocalStorage::LocalMerge(DataTable &table, RowGroupCollection &collection) 
 }
 
 OptimisticDataWriter &LocalStorage::CreateOptimisticWriter(DataTable &table) {
-	auto &storage = table_manager.GetOrCreateStorage(table);
+	auto &storage = table_manager.GetOrCreateStorage(context, table);
 	return storage.CreateOptimisticWriter();
 }
 
 void LocalStorage::FinalizeOptimisticWriter(DataTable &table, OptimisticDataWriter &writer) {
-	auto &storage = table_manager.GetOrCreateStorage(table);
+	auto &storage = table_manager.GetOrCreateStorage(context, table);
 	storage.FinalizeOptimisticWriter(writer);
 }
 

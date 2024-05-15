@@ -48,9 +48,6 @@ static unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type,
 Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
                                            const duckdb_parquet::format::SchemaElement &schema_ele,
                                            const std::string &stats) {
-	if (stats.empty()) {
-		return Value();
-	}
 	auto stats_data = const_data_ptr_cast(stats.c_str());
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN: {
@@ -198,8 +195,12 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 		}
 		if (schema_ele.__isset.logicalType && schema_ele.logicalType.__isset.TIME) {
 			// logical type
-			if (schema_ele.logicalType.TIME.unit.__isset.MICROS) {
+			if (schema_ele.logicalType.TIME.unit.__isset.MILLIS) {
+				return Value::TIMETZ(ParquetIntToTimeMsTZ(val));
+			} else if (schema_ele.logicalType.TIME.unit.__isset.MICROS) {
 				return Value::TIMETZ(ParquetIntToTimeTZ(val));
+			} else if (schema_ele.logicalType.TIME.unit.__isset.NANOS) {
+				return Value::TIMETZ(ParquetIntToTimeNsTZ(val));
 			} else {
 				throw InternalException("Time With Time Zone logicalType is set but unit is not defined");
 			}

@@ -20,6 +20,7 @@ void CreateInfo::CopyProperties(CreateInfo &other) const {
 	other.internal = internal;
 	other.sql = sql;
 	other.comment = comment;
+	other.tags = tags;
 }
 
 unique_ptr<AlterInfo> CreateInfo::GetAlterInfo() const {
