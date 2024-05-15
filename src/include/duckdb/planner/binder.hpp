@@ -105,8 +105,6 @@ public:
 	vector<CorrelatedColumnInfo> correlated_columns;
 	//! The set of parameter expressions bound by this binder
 	optional_ptr<BoundParameterMap> parameters;
-	//! Statement properties
-	StatementProperties properties;
 	//! The alias for the currently processing subquery, if it exists
 	string alias;
 	//! Macro parameter bindings (if any)
@@ -200,6 +198,8 @@ public:
 	void SetCanContainNulls(bool can_contain_nulls);
 	void SetAlwaysRequireRebind();
 
+	StatementProperties &GetStatementProperties();
+
 private:
 	//! The parent binder (if any)
 	shared_ptr<Binder> parent;
@@ -225,6 +225,8 @@ private:
 	reference_set_t<ViewCatalogEntry> bound_views;
 	//! Unnamed subquery index
 	idx_t unnamed_subquery_index = 1;
+	//! Statement properties
+	StatementProperties prop;
 
 private:
 	//! Get the root binder (binder with no parent)
@@ -304,6 +306,7 @@ private:
 	unique_ptr<BoundTableRef> Bind(TableFunctionRef &ref);
 	unique_ptr<BoundTableRef> Bind(EmptyTableRef &ref);
 	unique_ptr<BoundTableRef> Bind(ExpressionListRef &ref);
+	unique_ptr<BoundTableRef> Bind(ColumnDataRef &ref);
 	unique_ptr<BoundTableRef> Bind(PivotRef &expr);
 	unique_ptr<BoundTableRef> Bind(ShowRef &ref);
 
@@ -322,11 +325,11 @@ private:
 	bool BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &expressions,
 	                                 unique_ptr<BoundSubqueryRef> &subquery, ErrorData &error);
 	unique_ptr<LogicalOperator> BindTableFunction(TableFunction &function, vector<Value> parameters);
-	unique_ptr<LogicalOperator>
-	BindTableFunctionInternal(TableFunction &table_function, const string &function_name, vector<Value> parameters,
-	                          named_parameter_map_t named_parameters, vector<LogicalType> input_table_types,
-	                          vector<string> input_table_names, const vector<string> &column_name_alias,
-	                          unique_ptr<ExternalDependency> external_dependency);
+	unique_ptr<LogicalOperator> BindTableFunctionInternal(TableFunction &table_function, const TableFunctionRef &ref,
+	                                                      vector<Value> parameters,
+	                                                      named_parameter_map_t named_parameters,
+	                                                      vector<LogicalType> input_table_types,
+	                                                      vector<string> input_table_names);
 
 	unique_ptr<LogicalOperator> CreatePlan(BoundBaseTableRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundJoinRef &ref);
@@ -334,6 +337,7 @@ private:
 	unique_ptr<LogicalOperator> CreatePlan(BoundTableFunction &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundEmptyTableRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundExpressionListRef &ref);
+	unique_ptr<LogicalOperator> CreatePlan(BoundColumnDataRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundCTERef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundPivotRef &ref);
 

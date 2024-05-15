@@ -163,6 +163,7 @@ public:
 	inline bool AddRowInternal();
 	//! Force the throw of a unicode error
 	void HandleUnicodeError(idx_t col_idx, LinePosition &error_position);
+	bool HandleTooManyColumnsError(const char *value_ptr, const idx_t size);
 	//! Certain errors should only be handled when adding the line, to ensure proper error propagation.
 	bool HandleError();
 
@@ -199,8 +200,7 @@ public:
 	static string_t RemoveEscape(const char *str_ptr, idx_t end, char escape, Vector &vector);
 
 	//! If we can directly cast the type when consuming the CSV file, or we have to do it later
-	static bool CanDirectlyCast(const LogicalType &type,
-	                            const map<LogicalTypeId, CSVOption<StrpTimeFormat>> &format_options);
+	static bool CanDirectlyCast(const LogicalType &type);
 
 	const idx_t scanner_idx;
 

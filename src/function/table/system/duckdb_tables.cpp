@@ -44,6 +44,9 @@ static unique_ptr<FunctionData> DuckDBTablesBind(ClientContext &context, TableFu
 	names.emplace_back("comment");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
+	names.emplace_back("tags");
+	return_types.emplace_back(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR));
+
 	names.emplace_back("internal");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
@@ -138,6 +141,8 @@ void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(table.oid)));
 		// comment, LogicalType::VARCHAR
 		output.SetValue(col++, count, Value(table.comment));
+		// tags, LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)
+		output.SetValue(col++, count, Value::MAP(table.tags));
 		// internal, LogicalType::BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(table.internal));
 		// temporary, LogicalType::BOOLEAN

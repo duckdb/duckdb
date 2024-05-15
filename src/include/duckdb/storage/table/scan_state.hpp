@@ -157,6 +157,8 @@ public:
 	CollectionScanState local_state;
 	//! Options for scanning
 	TableScanOptions options;
+	//! Shared lock over the checkpoint to prevent checkpoints while reading
+	unique_ptr<StorageLockKey> checkpoint_lock;
 
 public:
 	void Initialize(vector<storage_t> column_ids, TableFilterSet *table_filters = nullptr);
@@ -192,6 +194,8 @@ struct ParallelTableScanState {
 	ParallelCollectionScanState scan_state;
 	//! Parallel scan state for the transaction-local state
 	ParallelCollectionScanState local_state;
+	//! Shared lock over the checkpoint to prevent checkpoints while reading
+	unique_ptr<StorageLockKey> checkpoint_lock;
 };
 
 class CreateIndexScanState : public TableScanState {

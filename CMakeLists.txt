@@ -264,6 +264,9 @@ if (OVERRIDE_GIT_DESCRIBE)
             OUTPUT_VARIABLE GIT_COMMIT_HASH
             OUTPUT_STRIP_TRAILING_WHITESPACE)
         set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE}-0-g${GIT_COMMIT_HASH}")
+        if (GIT_RESULT)
+          message(FATAL_ERROR "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'log -1 --format=%h'. Consider providing explicit GIT_COMMIT_HASH")
+	endif()
     else()
       set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE}-0-g0123456789")
     endif()
@@ -280,16 +283,28 @@ else()
             RESULT_VARIABLE GIT_RESULT
             OUTPUT_VARIABLE GIT_COMMIT_HASH
             OUTPUT_STRIP_TRAILING_WHITESPACE)
+        if (GIT_RESULT)
+          message(FATAL_ERROR "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'log -1 --format=%h'. Consider providing explicit GIT_COMMIT_HASH or OVERRIDE_GIT_DESCRIBE")
+	endif()
     endif()
     execute_process(
           COMMAND ${GIT_EXECUTABLE} describe --tags --long
           WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+          RESULT_VARIABLE GIT_RESULT
           OUTPUT_VARIABLE GIT_DESCRIBE
           OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if (GIT_RESULT)
+      message("git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'describe --tags --long', likely due to shallow clone. Consider providing explicit OVERRIDE_GIT_DESCRIBE or clone with tags. Continuing with dummy version v0.0.1")
+      set(GIT_DESCRIBE "v0.0.1-0-g${GIT_COMMIT_HASH}")
+    endif()
   else()
     message("Git NOT FOUND and EXTERNAL_GIT_DESCRIBE not provided, continuing with dummy version v0.0.1")
     set(GIT_DESCRIBE "v0.0.1-0-g0123456789")
   endif()
+endif()
+
+if (NOT GIT_DESCRIBE MATCHES "^v[0-9]+\.[0-9]+\.[0-9]+\-[0-9]+\-g[a-f0-9]+$")
+  message(FATAL_ERROR "Computed GIT_DESCRIBE '${GIT_DESCRIBE}' is not in the expected form 'vX.Y.Z-N-gGITHASH123'. Consider providing OVERRIDE_GIT_DESCRIBE explicitly to CMake")
 endif()
 
 string(REGEX REPLACE "v([0-9]+)\.[0-9]+\.[0-9]+\-.*" "\\1" DUCKDB_MAJOR_VERSION "${GIT_DESCRIBE}")
@@ -352,7 +367,6 @@ option(BUILD_CORE_FUNCTIONS_EXTENSION "Build the core functions." TRUE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
 option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
 option(DISABLE_BUILTIN_EXTENSIONS "Disable linking extensions." FALSE)
-option(JDBC_DRIVER "Build the DuckDB JDBC driver" FALSE)
 option(BUILD_ODBC_DRIVER "Build the DuckDB ODBC driver" FALSE)
 option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
 option(USER_SPACE "Build the DuckDB Python in the user space" FALSE)
@@ -567,6 +581,7 @@ include_directories(third_party/pcg)
 include_directories(third_party/tdigest)
 include_directories(third_party/mbedtls/include)
 include_directories(third_party/jaro_winkler)
+include_directories(third_party/yyjson/include)
 
 # todo only regenerate ub file if one of the input files changed hack alert
 function(enable_unity_build UB_SUFFIX SOURCE_VARIABLE_NAME)
@@ -1077,9 +1092,6 @@ endif()
 # Load client specific config
 if(BUILD_PYTHON)
   include(${CMAKE_CURRENT_SOURCE_DIR}/tools/pythonpkg/duckdb_extension_config.cmake)
-endif()
-if (JDBC_DRIVER)
-  include(${CMAKE_CURRENT_SOURCE_DIR}/tools/jdbc/duckdb_extension_config.cmake)
 endif()
 
 # Load base extension config

@@ -5,7 +5,7 @@
 statement error
 LOAD 'README.md';
 ----
-Invalid Input Error: Extension "README.md" do not have metadata compatible with DuckDB loading it
+Invalid Input Error: Extension "README.md" does not have metadata compatible with the DuckDB loading it
 
 statement ok
 SET allow_extensions_metadata_mismatch=true;

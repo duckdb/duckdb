@@ -70,14 +70,20 @@ void FillResult(Vector &map, Vector &offsets, Vector &result, idx_t count) {
 	}
 }
 
+static bool ArgumentIsConstantNull(Vector &argument) {
+	return argument.GetType().id() == LogicalTypeId::SQLNULL;
+}
+
 static void MapExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.data.size() == 2);
-	D_ASSERT(args.data[0].GetType().id() == LogicalTypeId::MAP);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
+
+	auto &map = args.data[0];
+	auto &key = args.data[1];
 
 	idx_t tuple_count = args.size();
 	// Optimization: because keys are not allowed to be NULL, we can early-out
-	if (args.data[1].GetType().id() == LogicalTypeId::SQLNULL) {
+	if (ArgumentIsConstantNull(map) || ArgumentIsConstantNull(key)) {
 		//! We don't need to look through the map if the 'key' to look for is NULL
 		ListVector::SetListSize(result, 0);
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -87,9 +93,7 @@ static void MapExtractFunction(DataChunk &args, ExpressionState &state, Vector &
 		result.Verify(tuple_count);
 		return;
 	}
-
-	auto &map = args.data[0];
-	auto &key = args.data[1];
+	D_ASSERT(map.GetType().id() == LogicalTypeId::MAP);
 
 	UnifiedVectorFormat map_data;
 
@@ -124,18 +128,27 @@ static unique_ptr<FunctionData> MapExtractBind(ClientContext &context, ScalarFun
 	if (arguments.size() != 2) {
 		throw BinderException("MAP_EXTRACT must have exactly two arguments");
 	}
-	if (arguments[0]->return_type.id() != LogicalTypeId::MAP) {
+
+	auto &map_type = arguments[0]->return_type;
+	auto &input_type = arguments[1]->return_type;
+
+	if (map_type.id() == LogicalTypeId::SQLNULL) {
+		bound_function.return_type = LogicalType::LIST(LogicalTypeId::SQLNULL);
+		return make_uniq<VariableReturnBindData>(bound_function.return_type);
+	}
+
+	if (map_type.id() != LogicalTypeId::MAP) {
 		throw BinderException("MAP_EXTRACT can only operate on MAPs");
 	}
-	auto &value_type = MapType::ValueType(arguments[0]->return_type);
+	auto &value_type = MapType::ValueType(map_type);
 
 	//! Here we have to construct the List Type that will be returned
 	bound_function.return_type = LogicalType::LIST(value_type);
-	auto key_type = MapType::KeyType(arguments[0]->return_type);
-	if (key_type.id() != LogicalTypeId::SQLNULL && arguments[1]->return_type.id() != LogicalTypeId::SQLNULL) {
-		bound_function.arguments[1] = MapType::KeyType(arguments[0]->return_type);
+	auto key_type = MapType::KeyType(map_type);
+	if (key_type.id() != LogicalTypeId::SQLNULL && input_type.id() != LogicalTypeId::SQLNULL) {
+		bound_function.arguments[1] = MapType::KeyType(map_type);
 	}
-	return make_uniq<VariableReturnBindData>(value_type);
+	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
 ScalarFunction MapExtractFun::GetFunction() {

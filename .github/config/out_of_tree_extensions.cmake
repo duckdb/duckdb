@@ -58,6 +58,7 @@ if (NOT MINGW)
             ${LOAD_ICEBERG_TESTS}
             GIT_URL https://github.com/duckdb/duckdb_iceberg
             GIT_TAG d89423c2ff90a0b98a093a133c8dfe2a55b9e092
+            APPLY_PATCHES
             )
 endif()
 
@@ -75,10 +76,11 @@ endif()
 
 ################# SPATIAL
 duckdb_extension_load(spatial
-    DONT_LINK LOAD_TESTS
+    DONT_LINK LOAD_TESTS APPLY_PATCHES
     GIT_URL https://github.com/duckdb/duckdb_spatial.git
     GIT_TAG 8ac803e986ccda34f32dee82a7faae95b72b3492
     INCLUDE_DIR spatial/include
+    APPLY_PATCHES
     TEST_DIR test/sql
     )
 
@@ -111,7 +113,20 @@ endif()
 ################# VSS
 duckdb_extension_load(vss
         LOAD_TESTS
+        DONT_LINK
         GIT_URL https://github.com/duckdb/duckdb_vss
-        GIT_TAG 8145f41d97178e82bed3376215eb8d02bcf1eec5
+        GIT_TAG dbf5b74298384a9dc8e78353e628259b020cd4eb
         TEST_DIR test/sql
+        APPLY_PATCHES
     )
+
+################# MYSQL
+if (NOT MINGW)
+    duckdb_extension_load(mysql_scanner
+            DONT_LINK
+            LOAD_TESTS
+            GIT_URL https://github.com/duckdb/duckdb_mysql
+            GIT_TAG 655a003f7d405e0c8437e24e0bd47dfd63b7fb07
+            APPLY_PATCHES
+            )
+endif()

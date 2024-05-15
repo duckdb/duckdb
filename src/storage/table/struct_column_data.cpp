@@ -42,10 +42,16 @@ bool StructColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter)
 			return true;
 		}
 		state.segment_checked = true;
-		auto prune_result = filter.CheckStatistics(state.current->stats.statistics);
-		if (prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-			return true;
+
+		FilterPropagateResult prune_result;
+		{
+			lock_guard<mutex> l(stats_lock);
+			prune_result = filter.CheckStatistics(state.current->stats.statistics);
+			if (prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+				return true;
+			}
 		}
+		lock_guard<mutex> l(update_lock);
 		if (updates) {
 			auto update_stats = updates->GetStatistics();
 			prune_result = filter.CheckStatistics(*update_stats);
@@ -281,13 +287,11 @@ unique_ptr<ColumnCheckpointState> StructColumnData::CreateCheckpointState(RowGro
 }
 
 unique_ptr<ColumnCheckpointState> StructColumnData::Checkpoint(RowGroup &row_group,
-                                                               PartialBlockManager &partial_block_manager,
                                                                ColumnCheckpointInfo &checkpoint_info) {
-	auto checkpoint_state = make_uniq<StructColumnCheckpointState>(row_group, *this, partial_block_manager);
-	checkpoint_state->validity_state = validity.Checkpoint(row_group, partial_block_manager, checkpoint_info);
+	auto checkpoint_state = make_uniq<StructColumnCheckpointState>(row_group, *this, checkpoint_info.info.manager);
+	checkpoint_state->validity_state = validity.Checkpoint(row_group, checkpoint_info);
 	for (auto &sub_column : sub_columns) {
-		checkpoint_state->child_states.push_back(
-		    sub_column->Checkpoint(row_group, partial_block_manager, checkpoint_info));
+		checkpoint_state->child_states.push_back(sub_column->Checkpoint(row_group, checkpoint_info));
 	}
 	return std::move(checkpoint_state);
 }
@@ -301,7 +305,7 @@ void StructColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatist
 		list.ReadObject([&](Deserializer &item) { sub_columns[i]->DeserializeColumn(item, child_stats); });
 	});
 
-	this->count = validity.count;
+	this->count = validity.count.load();
 }
 
 void StructColumnData::GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,

@@ -69,9 +69,9 @@ struct CSVReaderOptions {
 	//! User-defined name list
 	vector<string> name_list;
 	//! Types considered as candidates for auto detection ordered by descending specificity (~ from high to low)
-	vector<LogicalType> auto_type_candidates = {LogicalType::VARCHAR, LogicalType::TIMESTAMP, LogicalType::DATE,
-	                                            LogicalType::TIME,    LogicalType::DOUBLE,    LogicalType::BIGINT,
-	                                            LogicalType::BOOLEAN, LogicalType::SQLNULL};
+	vector<LogicalType> auto_type_candidates = {LogicalType::VARCHAR,   LogicalType::DOUBLE, LogicalType::BIGINT,
+	                                            LogicalType::TIMESTAMP, LogicalType::DATE,   LogicalType::TIME,
+	                                            LogicalType::BOOLEAN,   LogicalType::SQLNULL};
 	//! In case the sniffer found a mismatch error from user defined types or dialect
 	string sniffer_user_mismatch_error;
 	//! In case the sniffer found a mismatch error from user defined types or dialect
@@ -120,8 +120,6 @@ struct CSVReaderOptions {
 	string suffix;
 	string write_newline;
 
-	//! The date format to use (if any is specified)
-	map<LogicalTypeId, StrpTimeFormat> date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
 	//! The date format to use for writing (if any is specified)
 	map<LogicalTypeId, Value> write_date_format = {{LogicalTypeId::DATE, Value()}, {LogicalTypeId::TIMESTAMP, Value()}};
 	//! Whether or not a type format is specified

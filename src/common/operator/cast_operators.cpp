@@ -1142,7 +1142,7 @@ timestamp_t CastTimestampUsToMs::Operation(timestamp_t input) {
 	if (!Timestamp::IsFinite(input)) {
 		return input;
 	}
-	timestamp_t cast_timestamp(Timestamp::GetEpochMs(input));
+	timestamp_t cast_timestamp(Timestamp::GetEpochRounded(input, Interval::MICROS_PER_MSEC));
 	return cast_timestamp;
 }
 
@@ -1160,7 +1160,7 @@ timestamp_t CastTimestampUsToSec::Operation(timestamp_t input) {
 	if (!Timestamp::IsFinite(input)) {
 		return input;
 	}
-	timestamp_t cast_timestamp(Timestamp::GetEpochSeconds(input));
+	timestamp_t cast_timestamp(Timestamp::GetEpochRounded(input, Interval::MICROS_PER_SEC));
 	return cast_timestamp;
 }
 
@@ -1279,10 +1279,7 @@ bool TryCastToTimestampMS::Operation(string_t input, timestamp_t &result, bool s
 	if (!TryCast::Operation<string_t, timestamp_t>(input, result, strict)) {
 		return false;
 	}
-	if (!Timestamp::IsFinite(result)) {
-		return true;
-	}
-	result = Timestamp::GetEpochMs(result);
+	result = CastTimestampUsToMs::Operation<timestamp_t, timestamp_t>(result);
 	return true;
 }
 
@@ -1291,10 +1288,7 @@ bool TryCastToTimestampSec::Operation(string_t input, timestamp_t &result, bool 
 	if (!TryCast::Operation<string_t, timestamp_t>(input, result, strict)) {
 		return false;
 	}
-	if (!Timestamp::IsFinite(result)) {
-		return true;
-	}
-	result = Timestamp::GetEpochSeconds(result);
+	result = CastTimestampUsToSec::Operation<timestamp_t, timestamp_t>(result);
 	return true;
 }
 
@@ -2065,22 +2059,22 @@ bool TryCastToDecimalCommaSeparated::Operation(string_t input, hugeint_t &result
 
 template <>
 string_t StringCastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale, Vector &result) {
-	return DecimalToString::Format<int16_t, uint16_t>(input, width, scale, result);
+	return DecimalToString::Format<int16_t>(input, width, scale, result);
 }
 
 template <>
 string_t StringCastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale, Vector &result) {
-	return DecimalToString::Format<int32_t, uint32_t>(input, width, scale, result);
+	return DecimalToString::Format<int32_t>(input, width, scale, result);
 }
 
 template <>
 string_t StringCastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale, Vector &result) {
-	return DecimalToString::Format<int64_t, uint64_t>(input, width, scale, result);
+	return DecimalToString::Format<int64_t>(input, width, scale, result);
 }
 
 template <>
 string_t StringCastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale, Vector &result) {
-	return HugeintToStringCast::FormatDecimal(input, width, scale, result);
+	return DecimalToString::Format<hugeint_t>(input, width, scale, result);
 }
 
 //===--------------------------------------------------------------------===//

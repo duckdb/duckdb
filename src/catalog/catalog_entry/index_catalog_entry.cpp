@@ -30,6 +30,7 @@ unique_ptr<CreateInfo> IndexCatalogEntry::GetInfo() const {
 	}
 
 	result->comment = comment;
+	result->tags = tags;
 
 	return std::move(result);
 }
