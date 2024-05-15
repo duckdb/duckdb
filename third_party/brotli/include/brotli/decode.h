@@ -16,9 +16,7 @@
 #include <brotli/shared_dictionary.h>
 #include <brotli/types.h>
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+namespace duckdb_brotli {
 
 /**
  * Opaque structure that holds decoder state.
@@ -402,8 +400,6 @@ BROTLI_DEC_API void BrotliDecoderSetMetadataCallbacks(
     brotli_decoder_metadata_start_func start_func,
     brotli_decoder_metadata_chunk_func chunk_func, void* opaque);
 
-#if defined(__cplusplus) || defined(c_plusplus)
-} /* extern "C" */
-#endif
+}
 
 #endif  /* BROTLI_DEC_DECODE_H_ */

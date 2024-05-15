@@ -13,11 +13,9 @@
 #include "../common/dictionary.h"
 #include "huffman.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+using namespace duckdb_brotli;
 
-BROTLI_BOOL BrotliDecoderStateInit(BrotliDecoderState* s,
+BROTLI_BOOL duckdb_brotli::BrotliDecoderStateInit(BrotliDecoderState* s,
     brotli_alloc_func alloc_func, brotli_free_func free_func, void* opaque) {
   if (!alloc_func) {
     s->alloc_func = BrotliDefaultAllocFunc;
@@ -96,7 +94,7 @@ BROTLI_BOOL BrotliDecoderStateInit(BrotliDecoderState* s,
   return BROTLI_TRUE;
 }
 
-void BrotliDecoderStateMetablockBegin(BrotliDecoderState* s) {
+void duckdb_brotli::BrotliDecoderStateMetablockBegin(BrotliDecoderState* s) {
   s->meta_block_remaining_len = 0;
   s->block_length[0] = BROTLI_BLOCK_SIZE_CAP;
   s->block_length[1] = BROTLI_BLOCK_SIZE_CAP;
@@ -126,7 +124,7 @@ void BrotliDecoderStateMetablockBegin(BrotliDecoderState* s) {
   s->distance_hgroup.htrees = NULL;
 }
 
-void BrotliDecoderStateCleanupAfterMetablock(BrotliDecoderState* s) {
+void duckdb_brotli::BrotliDecoderStateCleanupAfterMetablock(BrotliDecoderState* s) {
   BROTLI_DECODER_FREE(s, s->context_modes);
   BROTLI_DECODER_FREE(s, s->context_map);
   BROTLI_DECODER_FREE(s, s->dist_context_map);
@@ -145,7 +143,7 @@ void BrotliDecoderOnFinish(const BrotliDecoderState* s);
 #endif
 #endif
 
-void BrotliDecoderStateCleanup(BrotliDecoderState* s) {
+void duckdb_brotli::BrotliDecoderStateCleanup(BrotliDecoderState* s) {
   BrotliDecoderStateCleanupAfterMetablock(s);
 
   BROTLI_DECODER_ON_FINISH(s);
@@ -157,7 +155,7 @@ void BrotliDecoderStateCleanup(BrotliDecoderState* s) {
   BROTLI_DECODER_FREE(s, s->block_type_trees);
 }
 
-BROTLI_BOOL BrotliDecoderHuffmanTreeGroupInit(BrotliDecoderState* s,
+BROTLI_BOOL duckdb_brotli::BrotliDecoderHuffmanTreeGroupInit(BrotliDecoderState* s,
     HuffmanTreeGroup* group, brotli_reg_t alphabet_size_max,
     brotli_reg_t alphabet_size_limit, brotli_reg_t ntrees) {
   /* 376 = 256 (1-st level table) + 4 + 7 + 15 + 31 + 63 (2-nd level mix-tables)
@@ -178,6 +176,3 @@ BROTLI_BOOL BrotliDecoderHuffmanTreeGroupInit(BrotliDecoderState* s,
   return !!p;
 }
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
