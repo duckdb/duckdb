@@ -48,6 +48,8 @@ public:
 	LogicalDependencyList dependencies;
 	//! User provided comment
 	Value comment;
+	//! Key-value tags with additional metadata
+	unordered_map<string, string> tags;
 
 public:
 	void Serialize(Serializer &serializer) const override;

@@ -412,7 +412,7 @@ bool VectorStringToArray::StringToNestedTypeCastLoop(const string_t *source_data
 
 			// Null the entire array
 			for (idx_t j = 0; j < array_size; j++) {
-				FlatVector::SetNull(varchar_vector, idx * array_size + j, true);
+				FlatVector::SetNull(varchar_vector, i * array_size + j, true);
 			}
 
 			total += array_size;

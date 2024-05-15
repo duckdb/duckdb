@@ -44,6 +44,7 @@ class ColumnWriterStatistics {
 public:
 	virtual ~ColumnWriterStatistics();
 
+	virtual bool HasStats();
 	virtual string GetMin();
 	virtual string GetMax();
 	virtual string GetMinValue();

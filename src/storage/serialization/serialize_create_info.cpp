@@ -41,8 +41,11 @@ void CreateInfo::Serialize(Serializer &serializer) const {
 	if (serializer.ShouldSerialize(64)) {
 		serializer.WritePropertyWithDefault<Value>(107, "comment", comment, Value());
 	}
+	if (serializer.ShouldSerialize(64)) {
+		serializer.WritePropertyWithDefault<unordered_map<string, string>>(108, "tags", tags, unordered_map<string, string>());
+	}
 	if (serializer.ShouldSerialize(65)) {
-		serializer.WritePropertyWithDefault<LogicalDependencyList>(108, "dependencies", dependencies, LogicalDependencyList());
+		serializer.WritePropertyWithDefault<LogicalDependencyList>(109, "dependencies", dependencies, LogicalDependencyList());
 	}
 }
 
@@ -55,7 +58,8 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	auto on_conflict = deserializer.ReadProperty<OnCreateConflict>(105, "on_conflict");
 	auto sql = deserializer.ReadPropertyWithDefault<string>(106, "sql");
 	auto comment = deserializer.ReadPropertyWithDefault<Value>(107, "comment", Value());
-	auto dependencies = deserializer.ReadPropertyWithDefault<LogicalDependencyList>(108, "dependencies", LogicalDependencyList());
+	auto tags = deserializer.ReadPropertyWithDefault<unordered_map<string, string>>(108, "tags", unordered_map<string, string>());
+	auto dependencies = deserializer.ReadPropertyWithDefault<LogicalDependencyList>(109, "dependencies", LogicalDependencyList());
 	deserializer.Set<CatalogType>(type);
 	unique_ptr<CreateInfo> result;
 	switch (type) {
@@ -94,6 +98,7 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	result->on_conflict = on_conflict;
 	result->sql = std::move(sql);
 	result->comment = comment;
+	result->tags = std::move(tags);
 	result->dependencies = dependencies;
 	return result;
 }
