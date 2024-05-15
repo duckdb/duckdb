@@ -78,7 +78,18 @@ struct IcuBindData : public FunctionData {
 
 		return make_uniq<IcuBindData>(language, country);
 	}
+
+	static const string FUNCTION_PREFIX;
+
+	static string EncodeFunctionName(const string &collation) {
+		return FUNCTION_PREFIX + collation;
+	}
+	static string DecodeFunctionName(const string &fname) {
+		return fname.substr(FUNCTION_PREFIX.size());
+	}
 };
+
+const string IcuBindData::FUNCTION_PREFIX = "icu_collate_";
 
 static int32_t ICUGetSortKey(icu::Collator &collator, string_t input, duckdb::unique_ptr<char[]> &buffer,
                              int32_t &buffer_size) {
@@ -124,7 +135,9 @@ static void ICUCollateFunction(DataChunk &args, ExpressionState &state, Vector &
 
 static duckdb::unique_ptr<FunctionData> ICUCollateBind(ClientContext &context, ScalarFunction &bound_function,
                                                        vector<duckdb::unique_ptr<Expression>> &arguments) {
-	auto splits = StringUtil::Split(bound_function.name, "_");
+
+	const auto collation = IcuBindData::DecodeFunctionName(bound_function.name);
+	auto splits = StringUtil::Split(collation, "_");
 	if (splits.size() == 1) {
 		return make_uniq<IcuBindData>(splits[0], "");
 	} else if (splits.size() == 2) {
@@ -153,8 +166,9 @@ static duckdb::unique_ptr<FunctionData> ICUSortKeyBind(ClientContext &context, S
 	}
 }
 
-static ScalarFunction GetICUFunction(const string &collation) {
-	ScalarFunction result(collation, {LogicalType::VARCHAR}, LogicalType::VARCHAR, ICUCollateFunction, ICUCollateBind);
+static ScalarFunction GetICUCollateFunction(const string &collation) {
+	string fname = IcuBindData::EncodeFunctionName(collation);
+	ScalarFunction result(fname, {LogicalType::VARCHAR}, LogicalType::VARCHAR, ICUCollateFunction, ICUCollateBind);
 	result.serialize = IcuBindData::Serialize;
 	result.deserialize = IcuBindData::Deserialize;
 	return result;
@@ -245,7 +259,7 @@ static void LoadInternal(DuckDB &ddb) {
 		}
 		collation = StringUtil::Lower(collation);
 
-		CreateCollationInfo info(collation, GetICUFunction(collation), false, false);
+		CreateCollationInfo info(collation, GetICUCollateFunction(collation), false, false);
 		ExtensionUtil::RegisterCollation(db, info);
 	}
 	ScalarFunction sort_key("icu_sort_key", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
