@@ -944,3 +944,75 @@ def ifnull(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
     +------------+
     """
     return coalesce(col1, col2)
+
+ 
+def md5(col: "ColumnOrName") -> Column:
+    """Calculates the MD5 digest and returns the value as a 32 character hex string.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to compute on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        the column for computed results.
+
+    Examples
+    --------
+    >>> spark.createDataFrame([('ABC',)], ['a']).select(md5('a').alias('hash')).collect()
+    [Row(hash='902fbdd2b1df0c4f70b4a5d23525e932')]
+    """
+    return _invoke_function_over_columns("md5", col)
+
+
+def sha2(col: "ColumnOrName", numBits: int) -> Column:
+    """Returns the hex string result of SHA-2 family of hash functions (SHA-224, SHA-256, SHA-384,
+    and SHA-512). The numBits indicates the desired bit length of the result, which must have a
+    value of 224, 256, 384, 512, or 0 (which is equivalent to 256).
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to compute on.
+    numBits : int
+        the desired bit length of the result, which must have a
+        value of 224, 256, 384, 512, or 0 (which is equivalent to 256).
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        the column for computed results.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([["Alice"], ["Bob"]], ["name"])
+    >>> df.withColumn("sha2", sha2(df.name, 256)).show(truncate=False)
+    +-----+----------------------------------------------------------------+
+    |name |sha2                                                            |
+    +-----+----------------------------------------------------------------+
+    |Alice|3bc51062973c458d5a6f2d8d64a023246354ad7e064b1e4e009ec8a0699a3043|
+    |Bob  |cd9fb1e148ccd8442e5aa74904cc73bf6fb54d1d54d333bd596aa9bb4bb4e961|
+    +-----+----------------------------------------------------------------+
+    """
+
+    if numBits not in {224, 256, 384, 512, 0}:
+        raise ValueError("numBits should be one of {224, 256, 384, 512, 0}")
+
+    if numBits == 256:
+        return _invoke_function_over_columns("sha256", col)
+
+    raise ContributionsAcceptedError(
+        "SHA-224, SHA-384, and SHA-512 are not supported yet."
+    )
