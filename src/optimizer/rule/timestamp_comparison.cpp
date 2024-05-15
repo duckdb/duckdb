@@ -11,6 +11,7 @@
 #include "duckdb/optimizer/matcher/type_matcher_id.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/operator/add.hpp"
 
 namespace duckdb {
 
@@ -33,7 +34,7 @@ TimeStampComparison::TimeStampComparison(ClientContext &context, ExpressionRewri
 	// other side is varchar to date?
 	auto right = make_uniq<CastExpressionMatcher>();
 	right->type = make_uniq<TypeMatcherId>(LogicalTypeId::DATE);
-	right->matcher = make_uniq<ConstantExpressionMatcher>();
+	right->matcher = make_uniq<FoldableConstantMatcher>();
 	right->matcher->expr_class = ExpressionClass::BOUND_CONSTANT;
 	right->matcher->type = make_uniq<TypeMatcherId>(LogicalTypeId::VARCHAR);
 	op->matchers.push_back(std::move(right));
@@ -69,14 +70,24 @@ unique_ptr<Expression> TimeStampComparison::Apply(LogicalOperator &op, vector<re
 		auto original_val = result.GetValue<duckdb::date_t>();
 		auto no_seconds = dtime_t(0);
 
-		// original date with no timestamp info
+		// original date as timestamp with no seconds
 		auto original_val_ts = Value::TIMESTAMP(original_val, no_seconds);
 		auto original_val_for_comparison = make_uniq<BoundConstantExpression>(original_val_ts);
 
-		// add one day
+		// add one day and validate the new date
+		// code is inspired by AddOperator::Operation(date_t left, int32_t right). The function wasn't used directly
+		// since it throws errors that I cannot catch here.
+
 		auto date_t_copy = result.GetValue<duckdb::date_t>();
-		date_t_copy.days += 1;
-		auto original_val_plus_on_date_ts = Value::TIMESTAMP(date_t_copy, dtime_t(0));
+		date_t one_day(1), result(0);
+
+		if (!TryAddOperator::Operation<date_t, date_t, date_t>(date_t_copy, one_day, result)) {
+			// don't rewrite the expression and let the expression executor handle the invalid date
+			return nullptr;
+		}
+
+		auto result_as_val = Value::DATE(result);
+		auto original_val_plus_on_date_ts = Value::TIMESTAMP(result_as_val.GetValue<timestamp_t>());
 
 		auto val_for_comparison = make_uniq<BoundConstantExpression>(original_val_plus_on_date_ts);
 
@@ -90,8 +101,6 @@ unique_ptr<Expression> TimeStampComparison::Apply(LogicalOperator &op, vector<re
 		new_expr->children.push_back(std::move(lt_eq_expr));
 		return new_expr;
 	}
-
-	// ok so here now I need to figure out the other stuff.
 	return nullptr;
 }
 

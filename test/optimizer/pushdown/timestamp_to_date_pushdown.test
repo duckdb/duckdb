@@ -13,16 +13,16 @@ statement ok
 create or replace table t1 (ts timestamp, i int);
 
 statement ok
-insert into t1 select '2024-05-01 00:00:00'::timestamp, i from generate_series(1, 122880) g(i);
+insert into t1 select '2024-05-01 00:00:00'::timestamp, i from generate_series(1, 2000) g(i);
 
 statement ok
-insert into t1 select '2024-05-02 00:00:00'::timestamp, i from generate_series(1, (122880/2)::INT) g(i);
+insert into t1 select '2024-05-02 00:00:00'::timestamp, i from generate_series(1, 1000) g(i);
 
 statement ok
-insert into t1 select '2024-05-02 00:24:00'::timestamp, i from generate_series(1, (122880/2)::INT) g(i);
+insert into t1 select '2024-05-02 00:22:00'::timestamp, i from generate_series(1, 1000) g(i);
 
 statement ok
-insert into t1 select '2024-05-03 00:00:00'::timestamp, i from generate_series(1, 122880) g(i);
+insert into t1 select '2024-05-03 00:00:00'::timestamp, i from generate_series(1, 2000) g(i);
 
 query II
 explain select * from t1 where ts::date == '2024-05-02';
@@ -56,15 +56,24 @@ explain select count(*) from t1 where ts::date == '2024-05-02' and i > 122880/2;
 physical_plan	<!REGEX>:.*FILTER.*SEQ_SCAN:.*
 
 
-
 query I
-select count(*) from t1 where ts::date == '2024-05-02' and i > 122880/2;
+select count(*) from t1 where ts::date == '2024-05-02' and i > 1000;
 ----
 0
 
 query I
-select count(*) from t1 where ts::date == '2024-05-02' and i <= 1000;
+select count(*) from t1 where ts::date == '2024-05-02' and i <= 500;
 ----
-2000
+1000
 
 endloop
+
+query I
+select count(*) from t1 where ts::date == '2024-05-01' and i <= 500;
+----
+500
+
+query I
+select count(*) from t1 where ts::date == '2024-05-03';
+----
+2000

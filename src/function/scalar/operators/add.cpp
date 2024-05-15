@@ -51,6 +51,22 @@ date_t AddOperator::Operation(date_t left, int32_t right) {
 }
 
 template <>
+bool TryAddOperator::Operation(date_t left, date_t right, date_t &result) {
+	if (!Value::IsFinite(left) || !Value::IsFinite(right)) {
+		return false;
+	}
+	int32_t days;
+	if (!TryAddOperator::Operation(left.days, right.days, days)) {
+		return false;
+	}
+	result.days = days;
+	if (!Value::IsFinite(result)) {
+		return false;
+	}
+	return true;
+}
+
+template <>
 date_t AddOperator::Operation(int32_t left, date_t right) {
 	return AddOperator::Operation<date_t, int32_t, date_t>(right, left);
 }
