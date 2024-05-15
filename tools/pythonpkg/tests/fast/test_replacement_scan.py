@@ -2,6 +2,7 @@ import duckdb
 import os
 import pytest
 
+pa = pytest.importorskip("pyarrow")
 pl = pytest.importorskip("polars")
 pd = pytest.importorskip("pandas")
 
@@ -44,6 +45,17 @@ def fetch_arrow_record_batch(rel):
 
 def fetch_relation(rel):
     return rel
+
+
+def from_pandas():
+    df = pd.DataFrame({'a': [1, 2, 3]})
+    return df
+
+
+def from_arrow():
+    schema = pa.schema([('field_1', pa.int64())])
+    df = pa.RecordBatchReader.from_batches(schema, [pa.RecordBatch.from_arrays([pa.array([1, 2, 3])], schema=schema)])
+    return df
 
 
 class TestReplacementScan(object):
@@ -135,12 +147,20 @@ class TestReplacementScan(object):
         ):
             con.execute("select count(*) from random_object").fetchone()
 
-    def test_cte(self, duckdb_cursor):
-        df = pd.DataFrame({'a': [1, 2, 3]})
+    @pytest.mark.parametrize(
+        'df_create',
+        [
+            from_pandas,
+            from_arrow,
+        ],
+    )
+    def test_cte(self, duckdb_cursor, df_create):
+        df = df_create()
         rel = duckdb_cursor.sql("with cte as (select * from df) select * from cte")
         res = rel.fetchall()
         assert res == [(1,), (2,), (3,)]
 
+        df = df_create()
         query = """
             WITH cte as (select * from df)
             select * from (
@@ -163,7 +183,12 @@ class TestReplacementScan(object):
         This will select the first row from the cte, and do this 3 times since we added 'from cte', and cte has 3 tuples
         """
 
-        assert res == [(1,), (1,), (1,)]
+        if df_create == from_arrow:
+            # Because the RecordBatchReader is destructive, it's empty after the first scan
+            # But we reference it multiple times, so the subsequent reads have no data to read
+            assert res == [(None,), (None,), (None,)]
+        else:
+            assert res == [(1,), (1,), (1,)]
 
     def test_cte_with_joins(self, duckdb_cursor):
         df = pd.DataFrame({'a': [1, 2, 3]})
