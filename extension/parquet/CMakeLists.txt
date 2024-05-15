@@ -10,7 +10,8 @@ include_directories(
   ../../third_party/snappy
   ../../third_party/zstd/include
   ../../third_party/mbedtls
-  ../../third_party/mbedtls/include)
+  ../../third_party/mbedtls/include
+        ../../third_party/brotli/include)
 
 set(PARQUET_EXTENSION_FILES
     column_reader.cpp
@@ -60,7 +61,40 @@ if(NOT CLANG_TIDY)
       ../../third_party/zstd/compress/zstd_fast.cpp
       ../../third_party/zstd/compress/zstd_lazy.cpp
       ../../third_party/zstd/compress/zstd_ldm.cpp
-      ../../third_party/zstd/compress/zstd_opt.cpp)
+      ../../third_party/zstd/compress/zstd_opt.cpp
+          ../../third_party/brotli/enc/dictionary_hash.c
+          ../../third_party/brotli/enc/backward_references_hq.c
+          ../../third_party/brotli/enc/histogram.c
+          ../../third_party/brotli/enc/memory.c
+          ../../third_party/brotli/enc/entropy_encode.c
+          ../../third_party/brotli/enc/compound_dictionary.c
+          ../../third_party/brotli/enc/compress_fragment_two_pass.c
+          ../../third_party/brotli/enc/block_splitter.c
+          ../../third_party/brotli/enc/command.c
+          ../../third_party/brotli/enc/encode.c
+          ../../third_party/brotli/enc/encoder_dict.c
+          ../../third_party/brotli/enc/cluster.c
+          ../../third_party/brotli/enc/backward_references.c
+          ../../third_party/brotli/enc/utf8_util.c
+          ../../third_party/brotli/enc/compress_fragment.c
+          ../../third_party/brotli/enc/fast_log.c
+          ../../third_party/brotli/enc/brotli_bit_stream.c
+          ../../third_party/brotli/enc/bit_cost.c
+          ../../third_party/brotli/enc/static_dict.c
+          ../../third_party/brotli/enc/literal_cost.c
+          ../../third_party/brotli/enc/metablock.c
+          ../../third_party/brotli/common/dictionary.c
+          ../../third_party/brotli/common/constants.c
+          ../../third_party/brotli/common/transform.c
+          ../../third_party/brotli/common/platform.c
+          ../../third_party/brotli/common/shared_dictionary.c
+          ../../third_party/brotli/common/context.c
+          ../../third_party/brotli/dec/state.c
+          ../../third_party/brotli/dec/decode.c
+          ../../third_party/brotli/dec/huffman.c
+          ../../third_party/brotli/dec/bit_reader.c
+
+  )
 endif()
 
 build_static_extension(parquet ${PARQUET_EXTENSION_FILES})
