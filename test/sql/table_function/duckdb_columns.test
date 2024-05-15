@@ -2,6 +2,9 @@
 # description: Test duckdb_columns function
 # group: [table_function]
 
+statement ok
+set minimum_duckdb_version='v0.10.0'
+
 require noforcestorage
 
 statement ok
