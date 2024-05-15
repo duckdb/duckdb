@@ -5,7 +5,7 @@ require skip_reload
 
 require noforcestorage
 
-# this test performs a lot of comparisons against the default block size of 256KiB
+# this test performs many comparisons against the default block size of 256KiB
 require block_size 262144
 
 # Set a temp_directory to offload data
