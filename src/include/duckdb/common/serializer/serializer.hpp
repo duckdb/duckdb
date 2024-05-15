@@ -19,6 +19,7 @@
 #include "duckdb/common/optionally_owned_ptr.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
+#include "duckdb/common/insertion_order_preserving_map.hpp"
 
 namespace duckdb {
 
@@ -261,6 +262,21 @@ protected:
 			OnObjectBegin();
 			WriteProperty(0, "key", item.first);
 			WriteProperty(1, "value", item.second);
+			OnObjectEnd();
+		}
+		OnListEnd();
+	}
+
+	// Insertion Order Preserving Map
+	// serialized as a list of pairs
+	template <class V>
+	void WriteValue(const duckdb::InsertionOrderPreservingMap<V> &map) {
+		auto count = map.size();
+		OnListBegin(count);
+		for (auto &entry : map) {
+			OnObjectBegin();
+			WriteProperty(0, "key", entry.first);
+			WriteProperty(1, "value", entry.second);
 			OnObjectEnd();
 		}
 		OnListEnd();
