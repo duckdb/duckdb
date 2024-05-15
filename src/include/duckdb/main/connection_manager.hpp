@@ -25,6 +25,9 @@ public:
 	void RemoveConnection(ClientContext &context);
 
 	vector<shared_ptr<ClientContext>> GetConnectionList();
+	const reference_map_t<ClientContext, weak_ptr<ClientContext>> &GetConnectionListReference() const {
+		return connections;
+	}
 	idx_t GetConnectionCount() const;
 
 	static ConnectionManager &Get(DatabaseInstance &db);

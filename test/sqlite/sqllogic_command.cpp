@@ -69,12 +69,13 @@ void Command::RestartDatabase(ExecuteContext &context, Connection *&connection, 
 	}
 	bool can_restart = true;
 	auto &connection_manager = connection->context->db->GetConnectionManager();
-	auto connection_list = connection_manager.GetConnectionList();
-	for (auto &conn : connection_list) {
-		if (!conn->client_data->prepared_statements.empty()) {
+	auto &connection_list = connection_manager.GetConnectionListReference();
+	for (auto &conn_ref : connection_list) {
+		auto &conn = conn_ref.first.get();
+		if (!conn.client_data->prepared_statements.empty()) {
 			can_restart = false;
 		}
-		if (conn->transaction.HasActiveTransaction()) {
+		if (conn.transaction.HasActiveTransaction()) {
 			can_restart = false;
 		}
 	}
