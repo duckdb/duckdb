@@ -169,7 +169,7 @@ unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, const stri
 	return in_buffer;
 }
 
-void WriteExtensionFileToDisk(FileSystem &fs, const string &path, void *data, idx_t data_size) {
+static void WriteExtensionFileToDisk(FileSystem &fs, const string &path, void *data, idx_t data_size) {
 	auto target_file = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_APPEND |
 	                                         FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
 	target_file->Write(data, data_size);
@@ -177,7 +177,7 @@ void WriteExtensionFileToDisk(FileSystem &fs, const string &path, void *data, id
 	target_file.reset();
 }
 
-void WriteExtensionMetadataFileToDisk(FileSystem &fs, const string &path, ExtensionInstallInfo &metadata) {
+static void WriteExtensionMetadataFileToDisk(FileSystem &fs, const string &path, ExtensionInstallInfo &metadata) {
 	auto file_writer = BufferedFileWriter(fs, path);
 
 	auto serializer = BinarySerializer(file_writer);
@@ -242,7 +242,7 @@ static void CheckExtensionMetadataOnInstall(DBConfig &config, void *in_buffer, i
 	auto metadata_mismatch_error = parsed_metadata.GetInvalidMetadataError();
 
 	if (!metadata_mismatch_error.empty() && !config.options.allow_extensions_metadata_mismatch) {
-		throw IOException("Failed to install '%s', %s", extension_name, metadata_mismatch_error);
+		throw IOException("Failed to install '%s'\n%s", extension_name, metadata_mismatch_error);
 	}
 
 	info.version = parsed_metadata.extension_version;
@@ -314,7 +314,15 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DBConfig &config,
 	auto in_buffer = ReadExtensionFileFromDisk(fs, file, file_size);
 
 	ExtensionInstallInfo info;
-	CheckExtensionMetadataOnInstall(config, (void *)in_buffer.get(), file_size, info, extension_name);
+
+	if (StringUtil::EndsWith(file, ".gz")) {
+		// FIXME this is slow
+		string compressed_body((const char*)in_buffer.get(), file_size);
+		string decompressed = GZipFileSystem::UncompressGZIPString(compressed_body);
+		CheckExtensionMetadataOnInstall(config, (void *)decompressed.data(), decompressed.size(), info, extension_name);
+	} else {
+		CheckExtensionMetadataOnInstall(config, (void *)in_buffer.get(), file_size, info, extension_name);
+	}
 
 	if (repository_url.empty()) {
 		info.mode = ExtensionInstallMode::CUSTOM_PATH;
