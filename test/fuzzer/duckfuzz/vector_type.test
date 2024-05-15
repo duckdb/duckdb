@@ -1,0 +1,34 @@
+# name: test/fuzzer/duckfuzz/vector_type.test
+# description: Properly propogate empty results.
+# group: [duckfuzz]
+
+require noforcestorage
+
+statement ok
+pragma enable_verification
+
+query I
+SELECT vector_type(42::INTEGER)
+----
+CONSTANT_VECTOR
+
+query I
+SELECT vector_type(NULL::INTEGER)
+----
+CONSTANT_VECTOR
+
+statement ok
+CREATE TABLE fuu (i INTEGER, j INTEGER);
+
+statement ok
+INSERT INTO fuu VALUES (42, NULL), (43, NULL);
+
+statement ok
+SELECT vector_type(i), vector_type(j) FROM fuu;
+
+# issue https://github.com/duckdb/duckdb-fuzzer/issues/2683
+statement ok
+create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types();
+
+statement ok
+SELECT vector_type(COLUMNS(*)) FROM all_types
