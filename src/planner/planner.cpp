@@ -174,7 +174,10 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 	// format (de)serialization of this operator
 	try {
 		MemoryStream stream;
-		BinarySerializer::Serialize(*op, stream, true);
+		auto &config = DBConfig::GetConfig(context);
+		SerializationOptions options;
+		options.minimum_storage_version = config.options.minimum_storage_version;
+		BinarySerializer::Serialize(*op, stream, options);
 		stream.Rewind();
 		bound_parameter_map_t parameters;
 		auto new_plan = BinaryDeserializer::Deserialize<LogicalOperator>(stream, context, parameters);

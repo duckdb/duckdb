@@ -377,7 +377,6 @@ option(DISABLE_EXTENSION_LOAD "Disable support for loading and installing extens
 option(DISABLE_STR_INLINE "Debug setting: disable inlining of strings" FALSE)
 option(DISABLE_MEMORY_SAFETY "Debug setting: disable memory access checks at runtime" FALSE)
 option(DISABLE_ASSERTIONS "Debug setting: disable assertions" FALSE)
-option(SERIALIZE_DEPENDENCIES "Debug setting: serialize CatalogEntry dependencies" FALSE)
 option(ALTERNATIVE_VERIFY "Debug setting: use alternative verify mode" FALSE)
 option(RUN_SLOW_VERIFIERS "Debug setting: enable a more extensive set of verifiers" FALSE)
 option(DESTROY_UNPINNED_BLOCKS "Debug setting: destroy unpinned buffer-managed blocks" FALSE)
@@ -450,10 +449,6 @@ endif()
 
 if(RUN_SLOW_VERIFIERS)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_RUN_SLOW_VERIFIERS")
-endif()
-
-if(SERIALIZE_DEPENDENCIES)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_SERIALIZE_DEPENDENCIES")
 endif()
 
 if(ALTERNATIVE_VERIFY)

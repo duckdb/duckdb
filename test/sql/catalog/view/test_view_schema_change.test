@@ -2,7 +2,8 @@
 # description: Test views with changing schema
 # group: [view]
 
-require no_serialized_dependencies
+statement ok
+set minimum_duckdb_version='v0.10.0'
 
 statement ok
 PRAGMA enable_verification

@@ -54,9 +54,7 @@ private:
 
 public:
 	template <class T>
-	static void Serialize(const T &value, WriteStream &stream, bool serialize_default_values = false) {
-		SerializationOptions options;
-		options.serialize_default_values = serialize_default_values;
+	static void Serialize(const T &value, WriteStream &stream, SerializationOptions options = SerializationOptions()) {
 		BinarySerializer serializer(stream, options);
 		serializer.OnObjectBegin();
 		value.Serialize(serializer);
