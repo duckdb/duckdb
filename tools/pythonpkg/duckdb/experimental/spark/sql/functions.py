@@ -2,6 +2,7 @@ from typing import Any, Callable, Union, overload
 
 from duckdb import (
     CaseExpression,
+    CoalesceOperator,
     ColumnExpression,
     ConstantExpression,
     Expression,
@@ -9,8 +10,6 @@ from duckdb import (
 )
 
 from ..exception import ContributionsAcceptedError
-from ._typing import ColumnOrName
-from .column import Column, _get_expr
 from ._typing import ColumnOrName
 from .column import Column, _get_expr
 
@@ -860,6 +859,93 @@ def length(col: "ColumnOrName") -> Column:
     return _invoke_function_over_columns("length", col)
 
 
+def coalesce(*cols: "ColumnOrName") -> Column:
+    """Returns the first column that is not null.
+    .. versionadded:: 1.4.0
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+    Parameters
+    ----------
+    cols : :class:`~pyspark.sql.Column` or str
+        list of columns to work on.
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        value of the first column that is not null.
+    Examples
+    --------
+    >>> cDf = spark.createDataFrame([(None, None), (1, None), (None, 2)], ("a", "b"))
+    >>> cDf.show()
+    +----+----+
+    |   a|   b|
+    +----+----+
+    |NULL|NULL|
+    |   1|NULL|
+    |NULL|   2|
+    +----+----+
+    >>> cDf.select(coalesce(cDf["a"], cDf["b"])).show()
+    +--------------+
+    |coalesce(a, b)|
+    +--------------+
+    |          NULL|
+    |             1|
+    |             2|
+    +--------------+
+    >>> cDf.select('*', coalesce(cDf["a"], lit(0.0))).show()
+    +----+----+----------------+
+    |   a|   b|coalesce(a, 0.0)|
+    +----+----+----------------+
+    |NULL|NULL|             0.0|
+    |   1|NULL|             1.0|
+    |NULL|   2|             0.0|
+    +----+----+----------------+
+    """
+
+    cols = [_to_column(expr) for expr in cols]
+    return Column(CoalesceOperator(*cols))
+
+
+def nvl(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
+    """
+    Returns `col2` if `col1` is null, or `col1` otherwise.
+    .. versionadded:: 3.5.0
+    Parameters
+    ----------
+    col1 : :class:`~pyspark.sql.Column` or str
+    col2 : :class:`~pyspark.sql.Column` or str
+    Examples
+    --------
+    >>> df = spark.createDataFrame([(None, 8,), (1, 9,)], ["a", "b"])
+    >>> df.select(nvl(df.a, df.b).alias('r')).collect()
+    [Row(r=8), Row(r=1)]
+    """
+
+    return coalesce(col1, col2)
+
+
+def ifnull(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
+    """
+    Returns `col2` if `col1` is null, or `col1` otherwise.
+    .. versionadded:: 3.5.0
+    Parameters
+    ----------
+    col1 : :class:`~pyspark.sql.Column` or str
+    col2 : :class:`~pyspark.sql.Column` or str
+    Examples
+    --------
+    >>> import pyspark.sql.functions as sf
+    >>> df = spark.createDataFrame([(None,), (1,)], ["e"])
+    >>> df.select(sf.ifnull(df.e, sf.lit(8))).show()
+    +------------+
+    |ifnull(e, 8)|
+    +------------+
+    |           8|
+    |           1|
+    +------------+
+    """
+    return coalesce(col1, col2)
+
+ 
 def md5(col: "ColumnOrName") -> Column:
     """Calculates the MD5 digest and returns the value as a 32 character hex string.
 
