@@ -33,7 +33,9 @@ class TestsSparkFunctionsDate(object):
         ]
 
         cols = list(expected[0].keys())
-        gen_record = df.select(*[F.date_trunc(fmt, "dt_ref").alias(f"fmt_{fmt}") for fmt in cols]).collect()[0]
+        gen_record = df.select(
+            *[F.date_trunc(fmt, "dt_ref").alias(fmt) for fmt in cols]
+        ).collect()[0]
 
         expected_record = spark.createDataFrame(
             [r.values() for r in expected],
