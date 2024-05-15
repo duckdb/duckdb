@@ -33,7 +33,7 @@
 		"name": "list_filesystems",
 		"function": "ListFilesystems",
 		"docs": "List registered filesystems, including builtin ones",
-		"return": "list"
+		"return": "List[str]"
 	},
 	{
 		"name": "filesystem_is_registered",
@@ -58,7 +58,7 @@
 			},
 			{
 				"name": "function",
-				"type": "function"
+				"type": "FunctionType"
 			},
 			{
 				"name": "parameters",
@@ -302,7 +302,7 @@
 		"name": "fetchone",
 		"function": "FetchOne",
 		"docs": "Fetch a single row from a result following execute",
-		"return": "Optional[tuple]"
+		"return": "Optional[tuple[Any]]"
 	},
 	{
 		"name": "fetchmany",
@@ -327,7 +327,7 @@
 		"name": "fetchnumpy",
 		"function": "FetchNumpy",
 		"docs": "Fetch a result as list of NumPy arrays following execute",
-		"return": "dict"
+		"return": "Dict[str, numpy.ndarray]"
 	},
 	{
 		"name": ["fetchdf", "fetch_df", "df"],
@@ -405,13 +405,13 @@
 		"name": "torch",
 		"function": "FetchPyTorch",
 		"docs": "Fetch a result as dict of PyTorch Tensors following execute()",
-		"return": "dict"
+		"return": "Dict[str, Any]"
 	},
 	{
 		"name": "tf",
 		"function": "FetchTF",
 		"docs": "Fetch a result as dict of TensorFlow Tensors following execute()",
-		"return": "dict"
+		"return": "Dict[str, Any]"
 	},
 	{
 		"name": "begin",
