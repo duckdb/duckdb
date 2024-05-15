@@ -38,9 +38,7 @@
 #include "utf8_util.h"
 #include "write_bits.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+using namespace duckdb_brotli;
 
 #define COPY_ARRAY(dst, src) memcpy(dst, src, sizeof(src));
 
@@ -59,7 +57,7 @@ static size_t RemainingInputBlockSize(BrotliEncoderState* s) {
   return block_size - (size_t)delta;
 }
 
-BROTLI_BOOL BrotliEncoderSetParameter(
+BROTLI_BOOL duckdb_brotli::BrotliEncoderSetParameter(
     BrotliEncoderState* state, BrotliEncoderParameter p, uint32_t value) {
   /* Changing parameters on the fly is not implemented yet. */
   if (state->is_initialized_) return BROTLI_FALSE;
@@ -728,7 +726,7 @@ static void BrotliEncoderInitState(BrotliEncoderState* s) {
   memcpy(s->saved_dist_cache_, s->dist_cache_, sizeof(s->saved_dist_cache_));
 }
 
-BrotliEncoderState* BrotliEncoderCreateInstance(
+BrotliEncoderState* duckdb_brotli::BrotliEncoderCreateInstance(
     brotli_alloc_func alloc_func, brotli_free_func free_func, void* opaque) {
   BrotliEncoderState* state = (BrotliEncoderState*)BrotliBootstrapAlloc(
       sizeof(BrotliEncoderState), alloc_func, free_func, opaque);
@@ -775,7 +773,7 @@ static void BrotliEncoderCleanupState(BrotliEncoderState* s) {
 }
 
 /* Deinitializes and frees BrotliEncoderState instance. */
-void BrotliEncoderDestroyInstance(BrotliEncoderState* state) {
+void duckdb_brotli::BrotliEncoderDestroyInstance(BrotliEncoderState* state) {
   if (!state) {
     return;
   } else {
@@ -1199,7 +1197,7 @@ static size_t WriteMetadataHeader(
   return (storage_ix + 7u) >> 3;
 }
 
-size_t BrotliEncoderMaxCompressedSize(size_t input_size) {
+size_t duckdb_brotli::BrotliEncoderMaxCompressedSize(size_t input_size) {
   /* [window bits / empty metadata] + N * [uncompressed] + [last empty] */
   size_t num_large_blocks = input_size >> 14;
   size_t overhead = 2 + (4 * num_large_blocks) + 3 + 1;
@@ -1244,7 +1242,7 @@ static size_t MakeUncompressedStream(
   return result;
 }
 
-BROTLI_BOOL BrotliEncoderCompress(
+BROTLI_BOOL duckdb_brotli::BrotliEncoderCompress(
     int quality, int lgwin, BrotliEncoderMode mode, size_t input_size,
     const uint8_t input_buffer[BROTLI_ARRAY_PARAM(input_size)],
     size_t* encoded_size,
@@ -1582,7 +1580,7 @@ static void UpdateSizeHint(BrotliEncoderState* s, size_t available_in) {
   }
 }
 
-BROTLI_BOOL BrotliEncoderCompressStream(
+BROTLI_BOOL duckdb_brotli::BrotliEncoderCompressStream(
     BrotliEncoderState* s, BrotliEncoderOperation op, size_t* available_in,
     const uint8_t** next_in, size_t* available_out, uint8_t** next_out,
     size_t* total_out) {
@@ -1672,12 +1670,12 @@ BROTLI_BOOL BrotliEncoderCompressStream(
   return BROTLI_TRUE;
 }
 
-BROTLI_BOOL BrotliEncoderIsFinished(BrotliEncoderState* s) {
+BROTLI_BOOL duckdb_brotli::BrotliEncoderIsFinished(BrotliEncoderState* s) {
   return TO_BROTLI_BOOL(s->stream_state_ == BROTLI_STREAM_FINISHED &&
       !BrotliEncoderHasMoreOutput(s));
 }
 
-BROTLI_BOOL BrotliEncoderHasMoreOutput(BrotliEncoderState* s) {
+BROTLI_BOOL duckdb_brotli::BrotliEncoderHasMoreOutput(BrotliEncoderState* s) {
   return TO_BROTLI_BOOL(s->available_out_ != 0);
 }
 
@@ -1901,7 +1899,7 @@ size_t BrotliEncoderEstimatePeakMemoryUsage(int quality, int lgwin,
             histogram_size);
   }
 }
-size_t BrotliEncoderGetPreparedDictionarySize(
+size_t duckdb_brotli::BrotliEncoderGetPreparedDictionarySize(
     const BrotliEncoderPreparedDictionary* prepared_dictionary) {
   /* First field of dictionary structs */
   const BrotliEncoderPreparedDictionary* prepared = prepared_dictionary;
@@ -1989,8 +1987,4 @@ size_t MakeUncompressedStreamForTest(
     const uint8_t* input, size_t input_size, uint8_t* output) {
   return MakeUncompressedStream(input, input_size, output);
 }
-#endif
-
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
 #endif

@@ -380,7 +380,8 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_p
 		auto src_size_size_t = NumericCast<size_t>(src_size);
 		auto dst_size_size_t = NumericCast<size_t>(dst_size);
 
-		auto res = duckdb_brotli::BrotliDecoderDecompressStream(state, &src_size_size_t, &src, &dst_size_size_t, &dst, &total_out);
+		auto res = duckdb_brotli::BrotliDecoderDecompressStream(state, &src_size_size_t, &src, &dst_size_size_t, &dst,
+		                                                        &total_out);
 		if (res != duckdb_brotli::BROTLI_DECODER_RESULT_SUCCESS) {
 			throw std::runtime_error("Brotli Decompression failure");
 		}

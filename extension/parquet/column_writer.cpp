@@ -241,11 +241,12 @@ void ColumnWriter::CompressPage(MemoryStream &temp_writer, size_t &compressed_si
 	}
 	case CompressionCodec::BROTLI: {
 
-		compressed_size = BrotliEncoderMaxCompressedSize(temp_writer.GetPosition());
+		compressed_size = duckdb_brotli::BrotliEncoderMaxCompressedSize(temp_writer.GetPosition());
 		compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
 
-		BrotliEncoderCompress(BROTLI_DEFAULT_QUALITY, BROTLI_DEFAULT_WINDOW, BROTLI_DEFAULT_MODE,
-		                      temp_writer.GetPosition(), temp_writer.GetData(), &compressed_size, compressed_buf.get());
+		duckdb_brotli::BrotliEncoderCompress(BROTLI_DEFAULT_QUALITY, BROTLI_DEFAULT_WINDOW, BROTLI_DEFAULT_MODE,
+		                                     temp_writer.GetPosition(), temp_writer.GetData(), &compressed_size,
+		                                     compressed_buf.get());
 		compressed_data = compressed_buf.get();
 
 		break;
