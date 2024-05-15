@@ -1,13 +1,13 @@
 
 #include "duckdb/optimizer/rule/timestamp_comparison.hpp"
+#include "duckdb/optimizer/matcher/expression_matcher.hpp"
 #include "duckdb/common/constants.hpp"
-
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/optimizer/matcher/type_matcher_id.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
-#include "duckdb/common/types/interval.hpp"
-#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/common/types.hpp"
 
 namespace duckdb {
@@ -86,7 +86,7 @@ unique_ptr<Expression> TimeStampComparison::Apply(LogicalOperator &op, vector<re
 		    ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(left_copy), std::move(original_val_for_comparison));
 		new_expr->children.push_back(std::move(gt_eq_expr));
 		new_expr->children.push_back(std::move(lt_eq_expr));
-		return std::move(new_expr);
+		return new_expr;
 	}
 
 	// ok so here now I need to figure out the other stuff.
