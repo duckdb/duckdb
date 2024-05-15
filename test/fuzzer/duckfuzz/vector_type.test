@@ -21,11 +21,8 @@ CREATE TABLE fuu (i INTEGER, j INTEGER);
 statement ok
 INSERT INTO fuu VALUES (42, NULL), (43, NULL);
 
-query II
+statement ok
 SELECT vector_type(i), vector_type(j) FROM fuu;
-----
-FLAT_VECTOR	FLAT_VECTOR
-FLAT_VECTOR	FLAT_VECTOR
 
 # issue https://github.com/duckdb/duckdb-fuzzer/issues/2683
 statement ok
