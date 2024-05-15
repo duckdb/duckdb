@@ -23,7 +23,7 @@ public:
 public:
 	//! collation index in the select list
 	idx_t collation_idx;
-	//! collation expression
+	//! bound collation fucntion with a child of type BoundReferenceExpression that references to collation_idx
 	unique_ptr<Expression> bound_collation_expr;
 };
 

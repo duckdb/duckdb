@@ -7,6 +7,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_binder/order_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/query_node/bound_set_operation_node.hpp"
@@ -206,7 +207,7 @@ void Binder::BindCollationGroup(unique_ptr<BoundSetOperationNode> &bound_set_op)
 		D_ASSERT(left_expr->GetExpressionClass() == ExpressionClass::COLLATE ||
 		         right_expr->GetExpressionClass() == ExpressionClass::COLLATE);
 
-		unique_ptr<Expression> bound_collation_expr;
+		LogicalType collation_type;
 		// collation on both sides
 		if (left_expr->GetExpressionClass() == ExpressionClass::COLLATE &&
 		    right_expr->GetExpressionClass() == ExpressionClass::COLLATE) {
@@ -219,15 +220,16 @@ void Binder::BindCollationGroup(unique_ptr<BoundSetOperationNode> &bound_set_op)
 			if (left_str_collation != right_str_collation) {
 				throw BinderException("Different collations in a set operation at column: %lld.", collate_idx + 1);
 			}
-			bound_collation_expr = left_node.select_list[collate_idx]->Copy();
+			collation_type = left_node.select_list[collate_idx]->return_type;
 		} else if (left_expr->GetExpressionClass() == ExpressionClass::COLLATE) {
 			// collation on lhf
-			bound_collation_expr = left_node.select_list[collate_idx]->Copy();
+			collation_type = left_node.select_list[collate_idx]->return_type;
 		} else {
 			// collation on lhr
-			bound_collation_expr = right_node.select_list[collate_idx]->Copy();
+			collation_type = right_node.select_list[collate_idx]->return_type;
 		}
-
+		//! creating a reference to the collated column and pushing the collation function into it
+		unique_ptr<Expression> bound_collation_expr = make_uniq<BoundReferenceExpression>(collation_type, collate_idx);
 		ExpressionBinder::PushCollation(context, bound_collation_expr, bound_collation_expr->return_type, true);
 		bound_set_op->collation_group_info.push_back({collate_idx, std::move(bound_collation_expr)});
 	}
