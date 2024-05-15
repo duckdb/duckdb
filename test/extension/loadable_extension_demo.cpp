@@ -252,74 +252,58 @@ inline void LoadedExtensionsFunction(DataChunk &args, ExpressionState &state, Ve
 // Bounded type
 //===--------------------------------------------------------------------===//
 
-static LogicalType GetBoundedType() {
-	auto type = LogicalType(LogicalTypeId::INTEGER);
-	type.SetAlias("BOUNDED");
+struct BoundedType {
+	static LogicalType Get(int32_t max_val) {
+		auto type = LogicalType(LogicalTypeId::INTEGER);
+		type.SetAlias("BOUNDED");
+		type.SetProperties({Value::INTEGER(max_val)});
+		return type;
+	}
 
-	/*
-	type.SetTypeModifierHandler([](LogicalType &type, const vector<Value> &modifiers) {
-		if (modifiers.size() != 1) {
-			throw ParserException("BOUNDED type must have exactly one modifier");
-		}
-		if (modifiers[0].type().id() != LogicalTypeId::INTEGER) {
-			throw ParserException("BOUNDED type modifier must be a integer");
-		}
-		if (modifiers[0].GetValue<int32_t>() < 0) {
-			throw ParserException("BOUNDED type modifier must be positive");
-		}
+	static LogicalType GetAny() {
+		auto type = LogicalType(LogicalTypeId::INTEGER);
+		type.SetAlias("BOUNDED");
+		type.SetProperties({Value(LogicalType::INTEGER)});
+		return type;
+	}
 
-		type.SetProperty("MAX", modifiers[0]);
-	});
- 	*/
-
-	/*
-	type.SetTypeFormatHandler([](const LogicalType &type) -> string {
-		if (type.HasProperty("MAX")) {
-			auto max_val = type.GetProperty("MAX");
-			return StringUtil::Format("BOUNDED(%s)", max_val.ToString());
-		} else {
-			return "BOUNDED";
-		}
-	});
-	 */
-	return type;
-}
+	static int32_t GetMaxValue(const LogicalType &type) {
+		auto &props = *type.GetProperties();
+		return props[0].GetValue<int32_t>();
+	}
+};
 
 static void MakeBoundedFunc(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto max_val = result.GetType().GetProperty("MAX").GetValue<int32_t>();
+	auto max_val = BoundedType::GetMaxValue(result.GetType());
 	UnaryExecutor::Execute<int32_t, int32_t>(args.data[0], result, args.size(), [&](int32_t input) {
 		if (input > max_val) {
-			throw ConversionException(StringUtil::Format("Value %s exceeds max value of bounded type (%s)", to_string(input),
-			                                             to_string(max_val)));
+			throw ConversionException(StringUtil::Format("Value %s exceeds max value of bounded type (%s)",
+			                                             to_string(input), to_string(max_val)));
 		}
 		return input;
 	});
 }
 static unique_ptr<FunctionData> MakeBoundedBind(ClientContext &context, ScalarFunction &bound_function,
-							vector<unique_ptr<Expression>> &arguments) {
+                                                vector<unique_ptr<Expression>> &arguments) {
 	auto max_val = arguments[1]->Cast<BoundConstantExpression>().value.GetValue<int32_t>();
-	auto return_type = GetBoundedType();
-	return_type.SetProperty("MAX", Value::INTEGER(max_val));
-	bound_function.return_type = return_type;
-
+	bound_function.return_type = BoundedType::Get(max_val);
+	;
 	return nullptr;
 }
 
 static void BoundedMaxFunc(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto max_val = args.data[0].GetType().GetProperty("MAX");
-	result.Reference(max_val);
+	result.Reference(BoundedType::GetMaxValue(args.data[0].GetType()));
 }
 
 static unique_ptr<FunctionData> BoundedMaxBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
-	if (arguments[0]->return_type == GetBoundedType()) {
+	if (arguments[0]->return_type == BoundedType::GetAny()) {
 		bound_function.arguments[0] = arguments[0]->return_type;
 	} else {
 		throw BinderException("bounded_max expects a BOUNDED type");
 	}
 	return nullptr;
 }
-
 
 static void BoundedAddFunc(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &left_vector = args.data[0];
@@ -331,16 +315,14 @@ static void BoundedAddFunc(DataChunk &args, ExpressionState &state, Vector &resu
 
 static unique_ptr<FunctionData> BoundedAddBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
-	if (GetBoundedType() == arguments[0]->return_type && GetBoundedType() == arguments[1]->return_type) {
-		auto left_max_val = arguments[0]->return_type.GetProperty("MAX");
-		auto right_max_val = arguments[1]->return_type.GetProperty("MAX");
+	if (BoundedType::GetAny() == arguments[0]->return_type && BoundedType::GetAny() == arguments[1]->return_type) {
+		auto left_max_val = BoundedType::GetMaxValue(arguments[0]->return_type);
+		auto right_max_val = BoundedType::GetMaxValue(arguments[1]->return_type);
 
-		auto new_max_val = left_max_val.GetValue<int32_t>() + right_max_val.GetValue<int32_t>();
-
+		auto new_max_val = left_max_val + right_max_val;
 		bound_function.arguments[0] = arguments[0]->return_type;
 		bound_function.arguments[1] = arguments[1]->return_type;
-		bound_function.return_type = GetBoundedType();
-		bound_function.return_type.SetProperty("MAX", Value::INTEGER(new_max_val));
+		bound_function.return_type = BoundedType::Get(new_max_val);
 	} else {
 		throw BinderException("bounded_add expects two BOUNDED types");
 	}
@@ -364,14 +346,14 @@ struct BoundedFunctionData : public FunctionData {
 
 static unique_ptr<FunctionData> BoundedInvertBind(ClientContext &context, ScalarFunction &bound_function,
                                                   vector<unique_ptr<Expression>> &arguments) {
-	if (arguments[0]->return_type == GetBoundedType()) {
+	if (arguments[0]->return_type == BoundedType::GetAny()) {
 		bound_function.arguments[0] = arguments[0]->return_type;
 		bound_function.return_type = arguments[0]->return_type;
 	} else {
 		throw BinderException("bounded_invert expects a BOUNDED type");
 	}
 	auto result = make_uniq<BoundedFunctionData>();
-	result->max_val = bound_function.return_type.GetProperty("MAX").GetValue<int32_t>();
+	result->max_val = BoundedType::GetMaxValue(bound_function.return_type);
 	return std::move(result);
 }
 
@@ -380,8 +362,7 @@ static void BoundedInvertFunc(DataChunk &args, ExpressionState &state, Vector &r
 	const auto count = args.size();
 
 	auto result_type = result.GetType();
-	auto output_max = result_type.GetProperty("MAX");
-	auto output_max_val = output_max.GetValue<int32_t>();
+	auto output_max_val = BoundedType::GetMaxValue(result_type);
 
 	UnaryExecutor::Execute<int32_t, int32_t>(source_vector, result, count,
 	                                         [&](int32_t input) { return std::min(-input, output_max_val); });
@@ -408,11 +389,8 @@ static void BoundedToAsciiFunc(DataChunk &args, ExpressionState &state, Vector &
 }
 
 static bool BoundedToBoundedCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	auto input_max = source.GetType().GetProperty("MAX");
-	auto input_max_val = input_max.GetValue<int32_t>();
-
-	auto output_max = result.GetType().GetProperty("MAX");
-	auto output_max_val = output_max.GetValue<int32_t>();
+	auto input_max_val = BoundedType::GetMaxValue(source.GetType());
+	auto output_max_val = BoundedType::GetMaxValue(result.GetType());
 
 	if (input_max_val <= output_max_val) {
 		result.Reinterpret(source);
@@ -423,19 +401,17 @@ static bool BoundedToBoundedCast(Vector &source, Vector &result, idx_t count, Ca
 }
 
 static bool IntToBoundedCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	auto output_max = result.GetType().GetProperty("MAX");
-	auto output_max_val = output_max.GetValue<int32_t>();
-
+	auto &ty = result.GetType();
+	auto output_max_val = BoundedType::GetMaxValue(ty);
 	UnaryExecutor::Execute<int32_t, int32_t>(source, result, count, [&](int32_t input) {
 		if (input > output_max_val) {
-			throw ConversionException(StringUtil::Format("Value %s exceeds max value of bounded type (%s)", to_string(input),
-			                                       output_max.ToString()));
+			throw ConversionException(StringUtil::Format("Value %s exceeds max value of bounded type (%s)",
+			                                             to_string(input), to_string(output_max_val)));
 		}
 		return input;
 	});
 	return true;
 }
-
 
 //===--------------------------------------------------------------------===//
 // Extension load + setup
@@ -495,9 +471,8 @@ DUCKDB_EXTENSION_API void loadable_extension_demo_init(duckdb::DatabaseInstance 
 	config.parser_extensions.push_back(QuackExtension());
 	config.extension_callbacks.push_back(make_uniq<QuackLoadExtension>());
 
-
 	// Bounded type
-	auto bounded_type = GetBoundedType();
+	auto bounded_type = BoundedType::GetAny();
 	ExtensionUtil::RegisterType(db, "BOUNDED", bounded_type);
 
 	ScalarFunction make_bounded("make_bounded", {LogicalType::INTEGER, LogicalType::INTEGER}, bounded_type,
@@ -524,9 +499,7 @@ DUCKDB_EXTENSION_API void loadable_extension_demo_init(duckdb::DatabaseInstance 
 	ExtensionUtil::RegisterFunction(db, bounded_even);
 
 	// Example of function that is specialized over type property
-	auto bounded_specialized_type = GetBoundedType();
-	bounded_specialized_type.SetProperty("MAX", 0xFF);
-
+	auto bounded_specialized_type = BoundedType::Get(0xFF);
 	ScalarFunction bounded_to_ascii("bounded_ascii", {bounded_specialized_type}, LogicalType::VARCHAR,
 	                                BoundedToAsciiFunc);
 	ExtensionUtil::RegisterFunction(db, bounded_to_ascii);

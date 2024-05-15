@@ -12,13 +12,13 @@ namespace duckdb {
 void ExtraTypeInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<ExtraTypeInfoType>(100, "type", type);
 	serializer.WritePropertyWithDefault<string>(101, "alias", alias);
-	serializer.WritePropertyWithDefault<child_list_t<Value>>(102, "properties", properties, child_list_t<Value>());
+	serializer.WritePropertyWithDefault<vector<Value>>(102, "properties", properties, vector<Value>());
 }
 
 shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto type = deserializer.ReadProperty<ExtraTypeInfoType>(100, "type");
 	auto alias = deserializer.ReadPropertyWithDefault<string>(101, "alias");
-	auto properties = deserializer.ReadPropertyWithDefault<child_list_t<Value>>(102, "properties", child_list_t<Value>());
+	auto properties = deserializer.ReadPropertyWithDefault<vector<Value>>(102, "properties", vector<Value>());
 	shared_ptr<ExtraTypeInfo> result;
 	switch (type) {
 	case ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO:
@@ -167,6 +167,7 @@ void UserTypeInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(200, "user_type_name", user_type_name);
 	serializer.WritePropertyWithDefault<string>(201, "catalog", catalog, string());
 	serializer.WritePropertyWithDefault<string>(202, "schema", schema, string());
+	serializer.WritePropertyWithDefault<vector<Value>>(203, "user_type_properties", user_type_properties, vector<Value>());
 }
 
 shared_ptr<ExtraTypeInfo> UserTypeInfo::Deserialize(Deserializer &deserializer) {
@@ -174,6 +175,7 @@ shared_ptr<ExtraTypeInfo> UserTypeInfo::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithDefault<string>(200, "user_type_name", result->user_type_name);
 	deserializer.ReadPropertyWithDefault<string>(201, "catalog", result->catalog, string());
 	deserializer.ReadPropertyWithDefault<string>(202, "schema", result->schema, string());
+	deserializer.ReadPropertyWithDefault<vector<Value>>(203, "user_type_properties", result->user_type_properties, vector<Value>());
 	return std::move(result);
 }
 

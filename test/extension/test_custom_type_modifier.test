@@ -1,0 +1,88 @@
+# name: test/extension/test_custom_type_modifier.test
+# description: Test custom type level metadata.
+# group: [extension]
+
+require skip_reload
+
+require notmingw
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+
+statement ok
+CREATE TABLE t1 (i BOUNDED(200));
+
+statement ok
+INSERT INTO t1 VALUES (97), (98), (99);
+
+# Example of function ignoring the type property (no cast needed)
+query I
+SELECT bounded_even(i) FROM t1 ORDER BY 1;
+----
+false
+false
+true
+
+query II
+EXPLAIN SELECT bounded_even(i) FROM t1 ORDER BY 1;
+----
+physical_plan	<!REGEX>:.*CAST.*
+
+# Example of function inspecting the type property
+query I
+SELECT bounded_max(i) FROM t1;
+----
+200
+200
+200
+
+# Example of function inspecting the type property to return value of the same type
+query II
+SELECT bounded_invert(i) as b, typeof(b) FROM t1 ORDER BY 1;
+----
+-99	BOUNDED(200)
+-98	BOUNDED(200)
+-97	BOUNDED(200)
+
+statement ok
+CREATE TABLE t2 (i BOUNDED(500));
+
+statement ok
+INSERT INTO t2 VALUES (100), (500);
+
+# Example of function inspecting both arguments type property to return a new type
+query II
+SELECT bounded_add(t1.i, t2.i) as s, typeof(s) FROM t1, t2;
+----
+197	BOUNDED(700)
+198	BOUNDED(700)
+199	BOUNDED(700)
+597	BOUNDED(700)
+598	BOUNDED(700)
+599	BOUNDED(700)
+
+# Example of function that is specialized over the type property
+query II
+EXPLAIN SELECT bounded_ascii(i) FROM t1 ORDER BY 1;
+----
+physical_plan	<REGEX>:.*CAST.*
+
+query I
+SELECT bounded_ascii(i) FROM t1 ORDER BY 1;
+----
+a
+b
+c
+
+statement error
+SELECT bounded_ascii(i) FROM t2 ORDER BY 1;
+----
+Conversion Error: Type BOUNDED(500) can't be cast as BOUNDED(255)
+
+query I
+SELECT bounded_ascii(i::INTEGER::BOUNDED(255)) FROM t2 WHERE i < 255;
+----
+d

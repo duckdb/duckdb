@@ -364,11 +364,11 @@ string LogicalType::ToString() const {
 	if (id_ != LogicalTypeId::USER) {
 		auto alias = GetAlias();
 		if (!alias.empty()) {
-			auto props = GetProperties();
+			auto &props = *GetProperties();
 			if (!props.empty()) {
 				alias += "(";
-				for(size_t i = 0; i < props.size(); i++) {
-					alias += props[i].second.ToString();
+				for (size_t i = 0; i < props.size(); i++) {
+					alias += props[i].ToString();
 					if (i < props.size() - 1) {
 						alias += ", ";
 					}
@@ -468,6 +468,7 @@ string LogicalType::ToString() const {
 		auto &catalog = UserType::GetCatalog(*this);
 		auto &schema = UserType::GetSchema(*this);
 		auto &type = UserType::GetTypeName(*this);
+		auto &mods = UserType::GetTypeModifiers(*this);
 
 		if (!catalog.empty()) {
 			result = KeywordHelper::WriteOptionallyQuoted(catalog);
@@ -482,6 +483,18 @@ string LogicalType::ToString() const {
 			result += ".";
 		}
 		result += KeywordHelper::WriteOptionallyQuoted(type);
+
+		if (!mods.empty()) {
+			result += "(";
+			for (size_t i = 0; i < mods.size(); i++) {
+				result += mods[i].ToString();
+				if (i < mods.size() - 1) {
+					result += ", ";
+				}
+			}
+			result += ")";
+		}
+
 		return result;
 	}
 	case LogicalTypeId::AGGREGATE_STATE: {
@@ -1142,6 +1155,13 @@ bool ApproxEqual(double ldecimal, double rdecimal) {
 //===--------------------------------------------------------------------===//
 // Extra Type Info
 //===--------------------------------------------------------------------===//
+
+void LogicalType::MakeTypeInfoUnique() {
+	if (type_info_) {
+		type_info_ = type_info_->Copy();
+	}
+}
+
 void LogicalType::SetAlias(string alias) {
 	if (!type_info_) {
 		type_info_ = make_shared_ptr<ExtraTypeInfo>(ExtraTypeInfoType::GENERIC_TYPE_INFO, std::move(alias));
@@ -1170,43 +1190,25 @@ bool LogicalType::HasAlias() const {
 	return false;
 }
 
-void LogicalType::SetProperties(child_list_t<Value> properties) {
+void LogicalType::SetProperties(vector<Value> properties) {
 	if (!type_info_) {
 		type_info_ = make_shared_ptr<ExtraTypeInfo>(ExtraTypeInfoType::GENERIC_TYPE_INFO);
-		type_info_->properties = std::move(properties);
 	}
+	type_info_->properties = std::move(properties);
 }
 
-const child_list_t<Value> LogicalType::GetProperties() const {
+optional_ptr<const vector<Value>> LogicalType::GetProperties() const {
 	if (type_info_) {
 		return type_info_->properties;
 	}
-	return child_list_t<Value>();
+	return nullptr;
 }
 
-Value LogicalType::GetProperty(const string &key) const {
-	if (!type_info_) {
-		return Value();
+optional_ptr<vector<Value>> LogicalType::GetProperties() {
+	if (type_info_) {
+		return type_info_->properties;
 	}
-	for (auto &prop : type_info_->properties) {
-		if (prop.first == key) {
-			return prop.second;
-		}
-	}
-	return Value();
-}
-
-void LogicalType::SetProperty(const string &key, Value value) {
-	if (!type_info_) {
-		type_info_ = make_shared_ptr<ExtraTypeInfo>(ExtraTypeInfoType::GENERIC_TYPE_INFO);
-	}
-	for (auto &prop : type_info_->properties) {
-		if (prop.first == key) {
-			prop.second = std::move(value);
-			return;
-		}
-	}
-	type_info_->properties.emplace_back(key, std::move(value));
+	return nullptr;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1452,13 +1454,26 @@ const string &UserType::GetTypeName(const LogicalType &type) {
 	return info->Cast<UserTypeInfo>().user_type_name;
 }
 
+const vector<Value> &UserType::GetTypeModifiers(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::USER);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return info->Cast<UserTypeInfo>().user_type_properties;
+}
+
 LogicalType LogicalType::USER(const string &user_type_name) {
 	auto info = make_shared_ptr<UserTypeInfo>(user_type_name);
 	return LogicalType(LogicalTypeId::USER, std::move(info));
 }
 
-LogicalType LogicalType::USER(string catalog, string schema, string name) {
-	auto info = make_shared_ptr<UserTypeInfo>(std::move(catalog), std::move(schema), std::move(name));
+LogicalType LogicalType::USER(const string &user_type_name, const vector<Value> &user_type_props) {
+	auto info = make_shared_ptr<UserTypeInfo>(user_type_name, user_type_props);
+	return LogicalType(LogicalTypeId::USER, std::move(info));
+}
+
+LogicalType LogicalType::USER(string catalog, string schema, string name, vector<Value> user_type_props) {
+	auto info = make_shared_ptr<UserTypeInfo>(std::move(catalog), std::move(schema), std::move(name),
+	                                          std::move(user_type_props));
 	return LogicalType(LogicalTypeId::USER, std::move(info));
 }
 

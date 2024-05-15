@@ -77,7 +77,7 @@ void BoxRenderer::RenderValue(std::ostream &ss, const string &value, idx_t colum
 }
 
 string BoxRenderer::RenderType(const LogicalType &type) {
-	if(type.HasAlias()) {
+	if (type.HasAlias()) {
 		return StringUtil::Lower(type.ToString());
 	}
 	switch (type.id()) {
