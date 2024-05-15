@@ -50,7 +50,7 @@ unique_ptr<BoundTableRef> Binder::BindWithReplacementScan(ClientContext &context
 		return nullptr;
 	}
 	for (auto &scan : config.replacement_scans) {
-		ReplacementScanInput input(ref.Cast<TableRef>(), table_name);
+		ReplacementScanInput input(table_name);
 		auto replacement_function = scan.function(context, input, scan.data.get());
 		if (!replacement_function) {
 			continue;

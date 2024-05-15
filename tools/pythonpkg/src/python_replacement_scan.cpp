@@ -167,36 +167,8 @@ unique_ptr<TableRef> PythonReplacementScan::Replace(ClientContext &context, Repl
                                                     optional_ptr<ReplacementScanData> data) {
 	auto &table_name = input.table_name;
 
-	auto &table_ref = input.ref;
-	if (table_ref.external_dependency) {
-		auto dependency_item = table_ref.external_dependency->GetDependency("replacement_cache");
-		if (dependency_item) {
-			py::gil_scoped_acquire acquire;
-			auto &python_dependency = dependency_item->Cast<PythonDependencyItem>();
-			auto &registered_object = *python_dependency.object;
-			auto &py_object = registered_object.obj;
-			auto client_properties = context.GetClientProperties();
-			auto result = TryReplacementObject(py_object, table_name, client_properties);
-			// This was cached, so it was successful before, it should be successfull now
-			D_ASSERT(result);
-			return std::move(result);
-		}
-	}
-
 	unique_ptr<TableRef> result;
 	result = ReplaceInternal(context, table_name);
-	if (!result) {
-		return nullptr;
-	}
-	if (table_ref.external_dependency) {
-		D_ASSERT(result->external_dependency);
-
-		D_ASSERT(result->external_dependency->GetDependency("replacement_cache") != nullptr);
-		result->external_dependency->ScanDependencies(
-		    [&table_ref](const string &name, shared_ptr<DependencyItem> item) {
-			    table_ref.external_dependency->AddDependency(name, std::move(item));
-		    });
-	}
 	return result;
 }
 
