@@ -22,6 +22,7 @@ def third_party_includes():
     includes += [os.path.join('third_party', 'libpg_query')]
     includes += [os.path.join('third_party', 'libpg_query', 'include')]
     includes += [os.path.join('third_party', 'lz4')]
+    includes += [os.path.join('third_party', 'brotli', 'include')]
     includes += [os.path.join('third_party', 'mbedtls')]
     includes += [os.path.join('third_party', 'mbedtls', 'include')]
     includes += [os.path.join('third_party', 'mbedtls', 'library')]
