@@ -20,27 +20,33 @@ namespace duckdb {
 
 const uint64_t WAL_VERSION_NUMBER = 2;
 
-WriteAheadLog::WriteAheadLog(AttachedDatabase &database, const string &path) : skip_writing(false), database(database) {
-	wal_path = path;
-	writer = make_uniq<BufferedFileWriter>(FileSystem::Get(database), path,
-	                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
-	                                           FileFlags::FILE_FLAGS_APPEND);
+WriteAheadLog::WriteAheadLog(AttachedDatabase &database, const string &wal_path)
+    : skip_writing(false), database(database), wal_path(wal_path) {
 }
 
 WriteAheadLog::~WriteAheadLog() {
 }
 
-int64_t WriteAheadLog::GetWALSize() {
-	D_ASSERT(writer);
-	return writer->GetFileSize();
+BufferedFileWriter &WriteAheadLog::Initialize() {
+	if (!writer) {
+		writer = make_uniq<BufferedFileWriter>(FileSystem::Get(database), wal_path,
+		                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
+		                                           FileFlags::FILE_FLAGS_APPEND);
+	}
+	return GetWriter();
 }
 
 idx_t WriteAheadLog::GetTotalWritten() {
-	D_ASSERT(writer);
+	if (!writer) {
+		return 0;
+	}
 	return writer->GetTotalWritten();
 }
 
 void WriteAheadLog::Truncate(int64_t size) {
+	if (!writer) {
+		return;
+	}
 	writer->Truncate(size);
 }
 
@@ -49,7 +55,6 @@ void WriteAheadLog::Delete() {
 		return;
 	}
 	writer.reset();
-
 	auto &fs = FileSystem::Get(database);
 	fs.RemoveFile(wal_path);
 }
@@ -59,7 +64,7 @@ void WriteAheadLog::Delete() {
 //===--------------------------------------------------------------------===//
 class ChecksumWriter : public WriteStream {
 public:
-	explicit ChecksumWriter(WriteAheadLog &wal) : wal(wal), stream(wal.GetWriter()) {
+	explicit ChecksumWriter(WriteAheadLog &wal) : wal(wal) {
 	}
 
 	void WriteData(const_data_ptr_t buffer, idx_t write_size) override {
@@ -74,22 +79,25 @@ public:
 		if (wal.skip_writing) {
 			return;
 		}
+		if (!stream) {
+			stream = wal.Initialize();
+		}
 		auto data = memory_stream.GetData();
 		auto size = memory_stream.GetPosition();
 		// compute the checksum over the entry
 		auto checksum = Checksum(data, size);
 		// write the checksum and the length of the entry
-		stream.Write<uint64_t>(size);
-		stream.Write<uint64_t>(checksum);
+		stream->Write<uint64_t>(size);
+		stream->Write<uint64_t>(checksum);
 		// write data to the underlying stream
-		stream.WriteData(memory_stream.GetData(), memory_stream.GetPosition());
+		stream->WriteData(memory_stream.GetData(), memory_stream.GetPosition());
 		// rewind the buffer
 		memory_stream.Rewind();
 	}
 
 private:
 	WriteAheadLog &wal;
-	WriteStream &stream;
+	optional_ptr<WriteStream> stream;
 	MemoryStream memory_stream;
 };
 
@@ -99,6 +107,9 @@ public:
 	    : wal(wal), checksum_writer(wal), serializer(checksum_writer) {
 		if (wal.skip_writing) {
 			return;
+		}
+		if (!wal.Initialized()) {
+			wal.Initialize();
 		}
 		// write a version marker if none has been written yet
 		wal.WriteVersion();
@@ -110,6 +121,7 @@ public:
 		if (wal.skip_writing) {
 			return;
 		}
+		D_ASSERT(wal.Initialized());
 		serializer.End();
 		checksum_writer.Flush();
 	}
@@ -119,6 +131,7 @@ public:
 		if (wal.skip_writing) {
 			return;
 		}
+		D_ASSERT(wal.Initialized());
 		serializer.WriteProperty(field_id, tag, value);
 	}
 
@@ -127,6 +140,7 @@ public:
 		if (wal.skip_writing) {
 			return;
 		}
+		D_ASSERT(wal.Initialized());
 		serializer.WriteList(field_id, tag, count, func);
 	}
 
@@ -140,6 +154,7 @@ private:
 // Write Entries
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteVersion() {
+	D_ASSERT(writer);
 	if (writer->GetFileSize() > 0) {
 		// already written - no need to write a version marker
 		return;
@@ -389,6 +404,7 @@ void WriteAheadLog::Flush() {
 	if (skip_writing) {
 		return;
 	}
+	D_ASSERT(writer);
 
 	// write an empty entry
 	WriteAheadLogSerializer serializer(*this, WALType::WAL_FLUSH);

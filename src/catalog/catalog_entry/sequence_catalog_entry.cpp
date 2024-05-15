@@ -22,6 +22,7 @@ SequenceCatalogEntry::SequenceCatalogEntry(Catalog &catalog, SchemaCatalogEntry 
     : StandardEntry(CatalogType::SEQUENCE_ENTRY, schema, catalog, info.name), data(info) {
 	this->temporary = info.temporary;
 	this->comment = info.comment;
+	this->tags = info.tags;
 }
 
 unique_ptr<CatalogEntry> SequenceCatalogEntry::Copy(ClientContext &context) const {
@@ -99,6 +100,7 @@ unique_ptr<CreateInfo> SequenceCatalogEntry::GetInfo() const {
 	result->start_value = seq_data.counter;
 	result->cycle = seq_data.cycle;
 	result->comment = comment;
+	result->tags = tags;
 	return std::move(result);
 }
 
