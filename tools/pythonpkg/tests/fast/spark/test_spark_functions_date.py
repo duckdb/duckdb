@@ -33,14 +33,26 @@ class TestsSparkFunctionsDate(object):
         ]
 
         cols = list(expected[0].keys())
-        gen_records = df.select(*[F.date_trunc(fmt, "dt_ref").alias(f"fmt_{fmt}") for fmt in cols]).collect()
+        gen_record = df.select(*[F.date_trunc(fmt, "dt_ref").alias(f"fmt_{fmt}") for fmt in cols]).collect()[0]
 
-        expected_records = spark.createDataFrame(
+        expected_record = spark.createDataFrame(
             [r.values() for r in expected],
             cols,
-        ).collect()
+        ).collect()[0]
 
-        assert gen_records == expected_records
+        assert gen_record.year == expected_record.year
+        assert gen_record.yyyy == expected_record.yyyy
+        assert gen_record.yy == expected_record.yy
+        assert gen_record.quarter == expected_record.quarter
+        assert gen_record.month == expected_record.month
+        assert gen_record.mon == expected_record.mon
+        assert gen_record.mm == expected_record.mm
+        assert gen_record.week == expected_record.week
+        assert gen_record.day == expected_record.day
+        assert gen_record.dd == expected_record.dd
+        assert gen_record.hour == expected_record.hour
+        assert gen_record.minute == expected_record.minute
+        assert gen_record.second == expected_record.second
 
     def test_date_part(self, spark):
         df = spark.createDataFrame([(datetime(2015, 4, 8, 13, 8, 15),)], ["ts"])
