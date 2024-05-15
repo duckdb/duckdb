@@ -25,6 +25,7 @@
 #include "miniz_wrapper.hpp"
 #include "snappy.h"
 #include "zstd.h"
+#include "brotli/encode.h"
 
 namespace duckdb {
 
@@ -236,6 +237,17 @@ void ColumnWriter::CompressPage(MemoryStream &temp_writer, size_t &compressed_si
 		    duckdb_zstd::ZSTD_compress((void *)compressed_buf.get(), compressed_size,
 		                               (const void *)temp_writer.GetData(), temp_writer.GetPosition(), compress_level);
 		compressed_data = compressed_buf.get();
+		break;
+	}
+	case CompressionCodec::BROTLI: {
+
+		compressed_size = BrotliEncoderMaxCompressedSize(temp_writer.GetPosition());
+		compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
+
+		BrotliEncoderCompress(BROTLI_DEFAULT_QUALITY, BROTLI_DEFAULT_WINDOW, BROTLI_DEFAULT_MODE,
+		                      temp_writer.GetPosition(), temp_writer.GetData(), &compressed_size, compressed_buf.get());
+		compressed_data = compressed_buf.get();
+
 		break;
 	}
 	default:
