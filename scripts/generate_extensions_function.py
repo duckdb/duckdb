@@ -551,10 +551,14 @@ def write_header(data: ExtensionData):
     file.write(INCLUDE_FOOTER)
     file.close()
 
+
 # Extensions that can be autoloaded, but are not buildable by DuckDB CI
-HARDCODED_EXTENSION_FUNCTIONS = ExtensionFunction.create_map([
-    ("delta_scan", "delta", "CatalogType::TABLE_FUNCTION_ENTRY"),
-])
+HARDCODED_EXTENSION_FUNCTIONS = ExtensionFunction.create_map(
+    [
+        ("delta_scan", "delta", "CatalogType::TABLE_FUNCTION_ENTRY"),
+    ]
+)
+
 
 def main():
     check_prerequisites()
