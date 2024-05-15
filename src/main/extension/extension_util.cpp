@@ -101,6 +101,11 @@ void ExtensionUtil::RegisterCollation(DatabaseInstance &db, CreateCollationInfo 
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	system_catalog.CreateCollation(data, info);
+
+	// Also register as a function for serialisation
+	CreateScalarFunctionInfo finfo(info.function);
+	finfo.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+	system_catalog.CreateFunction(data, finfo);
 }
 
 void ExtensionUtil::AddFunctionOverload(DatabaseInstance &db, ScalarFunction function) {
