@@ -2,10 +2,6 @@
 # description: Test concurrent appends and transaction isolation
 # group: [interquery]
 
-# FIXME: this test causes a data race in the statistics code
-# FIXME: reproducible by running this test with THREADSAN=1 make reldebug
-require nothreadsan
-
 statement ok
 CREATE TABLE integers(i INTEGER PRIMARY KEY)
 
