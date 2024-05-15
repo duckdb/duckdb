@@ -515,7 +515,7 @@ void RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 		gstate.count_before_combining = uncombined_data.Count();
 
 		// If true there is no need to combine, it was all done by a single thread in a single HT
-		const auto single_ht = !gstate.external && gstate.active_threads == 1;
+		const auto single_ht = !gstate.external && gstate.active_threads == 1 && gstate.number_of_threads == 1;
 
 		auto &uncombined_partition_data = uncombined_data.GetPartitions();
 		const auto n_partitions = uncombined_partition_data.size();
