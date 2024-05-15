@@ -521,6 +521,7 @@ def write_header(data: ExtensionData):
     "aws",
     "azure",
     "autocomplete",
+    "delta",
     "excel",
     "fts",
     "httpfs",
@@ -550,6 +551,10 @@ def write_header(data: ExtensionData):
     file.write(INCLUDE_FOOTER)
     file.close()
 
+# Extensions that can be autoloaded, but are not buildable by DuckDB CI
+HARDCODED_EXTENSION_FUNCTIONS = ExtensionFunction.create_map([
+    ("delta_scan", "delta", "CatalogType::TABLE_FUNCTION_ENTRY"),
+])
 
 def main():
     check_prerequisites()
@@ -571,6 +576,10 @@ def main():
 
     # Add the entries we initially parsed from the HEADER_PATH
     extension_data.add_entries(parsed_entries)
+
+    # Add hardcoded extension entries (
+    for key, value in HARDCODED_EXTENSION_FUNCTIONS.items():
+        extension_data.function_map[key] = value
 
     if args.validate:
         extension_data.validate()
