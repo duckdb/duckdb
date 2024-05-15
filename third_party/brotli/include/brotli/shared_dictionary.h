@@ -12,9 +12,7 @@
 #include <brotli/port.h>
 #include <brotli/types.h>
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+namespace duckdb_brotli {
 
 #define SHARED_BROTLI_MIN_DICTIONARY_WORD_LENGTH 4
 #define SHARED_BROTLI_MAX_DICTIONARY_WORD_LENGTH 31
@@ -93,8 +91,6 @@ BROTLI_COMMON_API BROTLI_BOOL BrotliSharedDictionaryAttach(
     BrotliSharedDictionary* dict, BrotliSharedDictionaryType type,
     size_t data_size, const uint8_t data[BROTLI_ARRAY_PARAM(data_size)]);
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+}
 
 #endif  /* BROTLI_COMMON_SHARED_DICTIONARY_H_ */

@@ -6,9 +6,7 @@
 
 #include "transform.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+using namespace duckdb_brotli;
 
 /* RFC 7932 transforms string data */
 static const char kPrefixSuffix[217] =
@@ -286,6 +284,4 @@ int BrotliTransformDictionaryWord(uint8_t* dst, const uint8_t* word, int len,
   }
 }
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+

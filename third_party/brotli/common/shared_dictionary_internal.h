@@ -15,9 +15,7 @@
 #include "dictionary.h"
 #include "transform.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+namespace duckdb_brotli {
 
 struct BrotliSharedDictionaryStruct {
   /* LZ77 prefixes (compound dictionary). */
@@ -68,8 +66,6 @@ struct BrotliSharedDictionaryStruct {
 typedef struct BrotliSharedDictionaryStruct BrotliSharedDictionaryInternal;
 #define BrotliSharedDictionary BrotliSharedDictionaryInternal
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+}
 
 #endif  /* BROTLI_COMMON_SHARED_DICTIONARY_INTERNAL_H_ */

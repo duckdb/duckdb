@@ -15,13 +15,11 @@
 #include "../common/constants.h"
 #include "../common/platform.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+using namespace duckdb_brotli;
 
 const size_t kBrotliShellGaps[] = {132, 57, 23, 10, 4, 1};
 
-BROTLI_BOOL BrotliSetDepth(
+BROTLI_BOOL duckdb_brotli::BrotliSetDepth(
     int p0, HuffmanTree* pool, uint8_t* depth, int max_depth) {
   int stack[16];
   int level = 0;
@@ -69,7 +67,7 @@ static BROTLI_INLINE BROTLI_BOOL SortHuffmanTree(
    we are not planning to use this with extremely long blocks.
 
    See http://en.wikipedia.org/wiki/Huffman_coding */
-void BrotliCreateHuffmanTree(const uint32_t* data,
+void duckdb_brotli::BrotliCreateHuffmanTree(const uint32_t* data,
                              const size_t length,
                              const int tree_limit,
                              HuffmanTree* tree,
@@ -242,7 +240,7 @@ static void BrotliWriteHuffmanTreeRepetitionsZeros(
   }
 }
 
-void BrotliOptimizeHuffmanCountsForRle(size_t length, uint32_t* counts,
+void duckdb_brotli::BrotliOptimizeHuffmanCountsForRle(size_t length, uint32_t* counts,
                                        uint8_t* good_for_rle) {
   size_t nonzero_count = 0;
   size_t stride;
@@ -403,7 +401,7 @@ static void DecideOverRleUse(const uint8_t* depth, const size_t length,
   *use_rle_for_zero = TO_BROTLI_BOOL(total_reps_zero > count_reps_zero * 2);
 }
 
-void BrotliWriteHuffmanTree(const uint8_t* depth,
+void duckdb_brotli::BrotliWriteHuffmanTree(const uint8_t* depth,
                             size_t length,
                             size_t* tree_size,
                             uint8_t* tree,
@@ -474,7 +472,7 @@ static uint16_t BrotliReverseBits(size_t num_bits, uint16_t bits) {
 /* 0..15 are values for bits */
 #define MAX_HUFFMAN_BITS 16
 
-void BrotliConvertBitDepthsToSymbols(const uint8_t* depth,
+void duckdb_brotli::BrotliConvertBitDepthsToSymbols(const uint8_t* depth,
                                      size_t len,
                                      uint16_t* bits) {
   /* In Brotli, all bit depths are [1..15]
@@ -499,6 +497,4 @@ void BrotliConvertBitDepthsToSymbols(const uint8_t* depth,
   }
 }
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+

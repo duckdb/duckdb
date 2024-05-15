@@ -19,9 +19,7 @@
 #include "memory.h"
 #include "quality.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+using namespace duckdb_brotli;
 
 static const size_t kMaxLiteralHistograms = 100;
 static const size_t kMaxCommandHistograms = 50;
@@ -212,6 +210,4 @@ void CopyLiteralsToByteArrayForTest(const Command* cmds,
 }
 #endif
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+

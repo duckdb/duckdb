@@ -16,9 +16,7 @@
 #include "memory.h"
 #include "quality.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+namespace duckdb_brotli {
 
 typedef struct BlockSplit {
   size_t num_types;  /* Amount of distinct types */
@@ -45,8 +43,6 @@ BROTLI_INTERNAL void BrotliSplitBlock(MemoryManager* m,
                                       BlockSplit* insert_and_copy_split,
                                       BlockSplit* dist_split);
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+}
 
 #endif  /* BROTLI_ENC_BLOCK_SPLITTER_H_ */

@@ -26,9 +26,7 @@
 #include "quality.h"
 #include "static_dict.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+namespace duckdb_brotli {
 
 typedef struct {
   /**
@@ -721,8 +719,6 @@ static BROTLI_INLINE size_t LookupAllCompoundDictionaryMatches(
   return total_found;
 }
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+}
 
 #endif  /* BROTLI_ENC_HASH_H_ */

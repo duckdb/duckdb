@@ -15,9 +15,7 @@
 
 #include "../common/platform.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+namespace duckdb_brotli {
 
 #if !defined(BROTLI_ENCODER_CLEANUP_ON_OOM) && \
     !defined(BROTLI_ENCODER_EXIT_ON_OOM)
@@ -124,8 +122,6 @@ BROTLI_INTERNAL void* BrotliBootstrapAlloc(size_t size,
     brotli_alloc_func alloc_func, brotli_free_func free_func, void* opaque);
 BROTLI_INTERNAL void BrotliBootstrapFree(void* address, MemoryManager* m);
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+}
 
 #endif  /* BROTLI_ENC_MEMORY_H_ */

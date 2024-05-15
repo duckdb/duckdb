@@ -14,6 +14,8 @@
 #include "../common/constants.h"
 #include "memory.h"
 
+namespace duckdb_brotli {
+
 /* "Fat" prepared dictionary, could be cooked outside of C implementation,
  * e.g. on Java side. LZ77 data is copied inside PreparedDictionary struct. */
 static const uint32_t kPreparedDictionaryMagic = 0xDEBCEDE0;
@@ -27,48 +29,47 @@ static const uint32_t kManagedDictionaryMagic = 0xDEBCEDE2;
  * dictionary is in use. */
 static const uint32_t kLeanPreparedDictionaryMagic = 0xDEBCEDE3;
 
-static const uint64_t kPreparedDictionaryHashMul64Long =
-    BROTLI_MAKE_UINT64_T(0x1FE35A7Bu, 0xD3579BD3u);
+static const uint64_t kPreparedDictionaryHashMul64Long = BROTLI_MAKE_UINT64_T(0x1FE35A7Bu, 0xD3579BD3u);
 
 typedef struct PreparedDictionary {
-  uint32_t magic;
-  uint32_t num_items;
-  uint32_t source_size;
-  uint32_t hash_bits;
-  uint32_t bucket_bits;
-  uint32_t slot_bits;
+	uint32_t magic;
+	uint32_t num_items;
+	uint32_t source_size;
+	uint32_t hash_bits;
+	uint32_t bucket_bits;
+	uint32_t slot_bits;
 
-  /* --- Dynamic size members --- */
+	/* --- Dynamic size members --- */
 
-  /* uint32_t slot_offsets[1 << slot_bits]; */
-  /* uint16_t heads[1 << bucket_bits]; */
-  /* uint32_t items[variable]; */
+	/* uint32_t slot_offsets[1 << slot_bits]; */
+	/* uint16_t heads[1 << bucket_bits]; */
+	/* uint32_t items[variable]; */
 
-  /* [maybe] uint8_t* source_ref, depending on magic. */
-  /* [maybe] uint8_t source[source_size], depending on magic. */
+	/* [maybe] uint8_t* source_ref, depending on magic. */
+	/* [maybe] uint8_t source[source_size], depending on magic. */
 } PreparedDictionary;
 
-BROTLI_INTERNAL PreparedDictionary* CreatePreparedDictionary(MemoryManager* m,
-    const uint8_t* source, size_t source_size);
+BROTLI_INTERNAL PreparedDictionary *CreatePreparedDictionary(duckdb_brotli::MemoryManager *m, const uint8_t *source,
+                                                             size_t source_size);
 
-BROTLI_INTERNAL void DestroyPreparedDictionary(MemoryManager* m,
-    PreparedDictionary* dictionary);
+BROTLI_INTERNAL void DestroyPreparedDictionary(duckdb_brotli::MemoryManager *m, PreparedDictionary *dictionary);
 
 typedef struct CompoundDictionary {
-  /* LZ77 prefix, compound dictionary */
-  size_t num_chunks;
-  size_t total_size;
-  /* Client instances. */
-  const PreparedDictionary* chunks[SHARED_BROTLI_MAX_COMPOUND_DICTS + 1];
-  const uint8_t* chunk_source[SHARED_BROTLI_MAX_COMPOUND_DICTS + 1];
-  size_t chunk_offsets[SHARED_BROTLI_MAX_COMPOUND_DICTS + 1];
+	/* LZ77 prefix, compound dictionary */
+	size_t num_chunks;
+	size_t total_size;
+	/* Client instances. */
+	const PreparedDictionary *chunks[SHARED_BROTLI_MAX_COMPOUND_DICTS + 1];
+	const uint8_t *chunk_source[SHARED_BROTLI_MAX_COMPOUND_DICTS + 1];
+	size_t chunk_offsets[SHARED_BROTLI_MAX_COMPOUND_DICTS + 1];
 
-  size_t num_prepared_instances_;
-  /* Owned instances. */
-  PreparedDictionary* prepared_instances_[SHARED_BROTLI_MAX_COMPOUND_DICTS + 1];
+	size_t num_prepared_instances_;
+	/* Owned instances. */
+	PreparedDictionary *prepared_instances_[SHARED_BROTLI_MAX_COMPOUND_DICTS + 1];
 } CompoundDictionary;
 
-BROTLI_INTERNAL BROTLI_BOOL AttachPreparedDictionary(
-    CompoundDictionary* compound, const PreparedDictionary* dictionary);
+BROTLI_INTERNAL BROTLI_BOOL AttachPreparedDictionary(CompoundDictionary *compound,
+                                                     const PreparedDictionary *dictionary);
 
+}
 #endif /* BROTLI_ENC_PREPARED_DICTIONARY */

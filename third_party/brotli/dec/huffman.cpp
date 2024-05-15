@@ -15,9 +15,7 @@
 #include "../common/constants.h"
 #include "../common/platform.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+using namespace duckdb_brotli;
 
 #define BROTLI_REVERSE_BITS_MAX 8
 
@@ -337,6 +335,4 @@ uint32_t BrotliBuildSimpleHuffmanTable(HuffmanCode* table,
   return goal_size;
 }
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+

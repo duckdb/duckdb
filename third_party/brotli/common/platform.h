@@ -500,42 +500,44 @@ static BROTLI_INLINE uint32_t BrotliBsr32Msvc(uint32_t x) {
 #define BROTLI_BSR32 BrotliBsr32Msvc
 #endif /* __builtin_clz */
 
-/* Default brotli_alloc_func */
-BROTLI_COMMON_API void* BrotliDefaultAllocFunc(void* opaque, size_t size);
+        namespace duckdb_brotli {
 
-/* Default brotli_free_func */
-BROTLI_COMMON_API void BrotliDefaultFreeFunc(void* opaque, void* address);
+	/* Default brotli_alloc_func */
+	BROTLI_COMMON_API void *BrotliDefaultAllocFunc(void *opaque, size_t size);
 
-BROTLI_UNUSED_FUNCTION void BrotliSuppressUnusedFunctions(void) {
-  BROTLI_UNUSED(&BrotliSuppressUnusedFunctions);
-  BROTLI_UNUSED(&BrotliUnalignedRead16);
-  BROTLI_UNUSED(&BrotliUnalignedRead32);
-  BROTLI_UNUSED(&BrotliUnalignedRead64);
-  BROTLI_UNUSED(&BrotliUnalignedWrite64);
-  BROTLI_UNUSED(&BROTLI_UNALIGNED_LOAD16LE);
-  BROTLI_UNUSED(&BROTLI_UNALIGNED_LOAD32LE);
-  BROTLI_UNUSED(&BROTLI_UNALIGNED_LOAD64LE);
-  BROTLI_UNUSED(&BROTLI_UNALIGNED_STORE64LE);
-  BROTLI_UNUSED(&BROTLI_UNALIGNED_LOAD_PTR);
-  BROTLI_UNUSED(&BROTLI_UNALIGNED_STORE_PTR);
-  BROTLI_UNUSED(&BrotliRBit);
-  BROTLI_UNUSED(&brotli_min_double);
-  BROTLI_UNUSED(&brotli_max_double);
-  BROTLI_UNUSED(&brotli_min_float);
-  BROTLI_UNUSED(&brotli_max_float);
-  BROTLI_UNUSED(&brotli_min_int);
-  BROTLI_UNUSED(&brotli_max_int);
-  BROTLI_UNUSED(&brotli_min_size_t);
-  BROTLI_UNUSED(&brotli_max_size_t);
-  BROTLI_UNUSED(&brotli_min_uint32_t);
-  BROTLI_UNUSED(&brotli_max_uint32_t);
-  BROTLI_UNUSED(&brotli_min_uint8_t);
-  BROTLI_UNUSED(&brotli_max_uint8_t);
-  BROTLI_UNUSED(&BrotliDefaultAllocFunc);
-  BROTLI_UNUSED(&BrotliDefaultFreeFunc);
+	/* Default brotli_free_func */
+	BROTLI_COMMON_API void BrotliDefaultFreeFunc(void *opaque, void *address);
+
+	BROTLI_UNUSED_FUNCTION void BrotliSuppressUnusedFunctions(void) {
+		BROTLI_UNUSED(&BrotliSuppressUnusedFunctions);
+		BROTLI_UNUSED(&BrotliUnalignedRead16);
+		BROTLI_UNUSED(&BrotliUnalignedRead32);
+		BROTLI_UNUSED(&BrotliUnalignedRead64);
+		BROTLI_UNUSED(&BrotliUnalignedWrite64);
+		BROTLI_UNUSED(&BROTLI_UNALIGNED_LOAD16LE);
+		BROTLI_UNUSED(&BROTLI_UNALIGNED_LOAD32LE);
+		BROTLI_UNUSED(&BROTLI_UNALIGNED_LOAD64LE);
+		BROTLI_UNUSED(&BROTLI_UNALIGNED_STORE64LE);
+		BROTLI_UNUSED(&BROTLI_UNALIGNED_LOAD_PTR);
+		BROTLI_UNUSED(&BROTLI_UNALIGNED_STORE_PTR);
+		BROTLI_UNUSED(&BrotliRBit);
+		BROTLI_UNUSED(&brotli_min_double);
+		BROTLI_UNUSED(&brotli_max_double);
+		BROTLI_UNUSED(&brotli_min_float);
+		BROTLI_UNUSED(&brotli_max_float);
+		BROTLI_UNUSED(&brotli_min_int);
+		BROTLI_UNUSED(&brotli_max_int);
+		BROTLI_UNUSED(&brotli_min_size_t);
+		BROTLI_UNUSED(&brotli_max_size_t);
+		BROTLI_UNUSED(&brotli_min_uint32_t);
+		BROTLI_UNUSED(&brotli_max_uint32_t);
+		BROTLI_UNUSED(&brotli_min_uint8_t);
+		BROTLI_UNUSED(&brotli_max_uint8_t);
+		BROTLI_UNUSED(&BrotliDefaultAllocFunc);
+		BROTLI_UNUSED(&BrotliDefaultFreeFunc);
 #if BROTLI_ENABLE_DUMP
-  BROTLI_UNUSED(&BrotliDump);
+		BROTLI_UNUSED(&BrotliDump);
 #endif
+	}
 }
-
 #endif  /* BROTLI_COMMON_PLATFORM_H_ */

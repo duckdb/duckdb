@@ -13,9 +13,7 @@
 
 #include "../common/platform.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+namespace duckdb_brotli {
 
 /* This function writes bits into bytes in increasing addresses, and within
    a byte least-significant-bit first.
@@ -81,8 +79,6 @@ static BROTLI_INLINE void BrotliWriteBitsPrepareStorage(
   array[pos >> 3] = 0;
 }
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+}
 
 #endif  /* BROTLI_ENC_WRITE_BITS_H_ */

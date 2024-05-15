@@ -25,9 +25,7 @@
 #include "find_match_length.h"
 #include "write_bits.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+using namespace duckdb_brotli;
 
 #define MAX_DISTANCE (long)BROTLI_MAX_BACKWARD_LIMIT(18)
 
@@ -652,6 +650,4 @@ void BrotliCompressFragmentTwoPass(
 
 #undef FOR_TABLE_BITS_
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+

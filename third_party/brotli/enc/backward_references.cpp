@@ -20,9 +20,7 @@
 #include "memory.h"
 #include "quality.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+using namespace duckdb_brotli;
 
 static BROTLI_INLINE size_t ComputeDistanceCode(size_t distance,
                                                 size_t max_distance,
@@ -202,6 +200,4 @@ void BrotliCreateBackwardReferences(size_t num_bytes,
   }
 }
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+

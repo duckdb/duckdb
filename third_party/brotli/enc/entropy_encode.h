@@ -13,9 +13,7 @@
 
 #include "../common/platform.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+namespace duckdb_brotli {
 
 /* A node of a Huffman tree. */
 typedef struct HuffmanTree {
@@ -116,8 +114,6 @@ static BROTLI_INLINE void SortHuffmanTreeItems(HuffmanTree* items,
   }
 }
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+}
 
 #endif  /* BROTLI_ENC_ENTROPY_ENCODE_H_ */

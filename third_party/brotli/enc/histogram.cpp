@@ -12,9 +12,7 @@
 #include "block_splitter.h"
 #include "command.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+using namespace duckdb_brotli;
 
 typedef struct BlockSplitIterator {
   const BlockSplit* split_;  /* Not owned. */
@@ -95,6 +93,4 @@ void BrotliBuildHistogramsWithContext(
   }
 }
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+

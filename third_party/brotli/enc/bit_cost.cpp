@@ -15,9 +15,7 @@
 #include "fast_log.h"
 #include "histogram.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+using namespace duckdb_brotli;
 
 #define FN(X) X ## Literal
 #include "bit_cost_inc.h"  /* NOLINT(build/include) */
@@ -31,6 +29,4 @@ extern "C" {
 #include "bit_cost_inc.h"  /* NOLINT(build/include) */
 #undef FN
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+

@@ -19,9 +19,7 @@
 #include "../common/platform.h"
 #include "entropy_encode.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+namespace duckdb_brotli {
 
 /* TODO(eustas): turn to macro. */
 static const size_t kCompressFragmentTwoPassBlockSize = 1 << 17;
@@ -65,8 +63,6 @@ BROTLI_INTERNAL void BrotliCompressFragmentTwoPass(BrotliTwoPassArena* s,
                                                    size_t* storage_ix,
                                                    uint8_t* storage);
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+}
 
 #endif  /* BROTLI_ENC_COMPRESS_FRAGMENT_TWO_PASS_H_ */

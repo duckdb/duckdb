@@ -15,9 +15,7 @@
 #include "fast_log.h"
 #include "histogram.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+namespace duckdb_brotli {
 
 static BROTLI_INLINE double ShannonEntropy(
     const uint32_t* population, size_t size, size_t* total) {
@@ -57,8 +55,6 @@ BROTLI_INTERNAL double BrotliPopulationCostLiteral(const HistogramLiteral*);
 BROTLI_INTERNAL double BrotliPopulationCostCommand(const HistogramCommand*);
 BROTLI_INTERNAL double BrotliPopulationCostDistance(const HistogramDistance*);
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+}
 
 #endif  /* BROTLI_ENC_BIT_COST_H_ */

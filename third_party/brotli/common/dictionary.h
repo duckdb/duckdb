@@ -12,9 +12,7 @@
 #include <brotli/port.h>
 #include <brotli/types.h>
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+namespace duckdb_brotli {
 
 typedef struct BrotliDictionary {
   /**
@@ -57,8 +55,6 @@ BROTLI_COMMON_API void BrotliSetDictionaryData(const uint8_t* data);
 #define BROTLI_MIN_DICTIONARY_WORD_LENGTH 4
 #define BROTLI_MAX_DICTIONARY_WORD_LENGTH 24
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+}
 
 #endif  /* BROTLI_COMMON_DICTIONARY_H_ */

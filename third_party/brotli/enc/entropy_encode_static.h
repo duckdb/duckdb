@@ -15,9 +15,7 @@
 #include "../common/platform.h"
 #include "write_bits.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+namespace duckdb_brotli {
 
 static const uint8_t kCodeLengthDepth[18] = {
   4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 0, 4, 4,
@@ -535,8 +533,6 @@ static BROTLI_INLINE void StoreStaticDistanceHuffmanTree(
 }
 /* GENERATED CODE END */
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+}
 
 #endif  /* BROTLI_ENC_ENTROPY_ENCODE_STATIC_H_ */

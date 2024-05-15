@@ -16,9 +16,7 @@
 #include "platform.h"
 #include "shared_dictionary_internal.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+using namespace duckdb_brotli;
 
 #if defined(BROTLI_EXPERIMENTAL)
 
@@ -509,13 +507,11 @@ BrotliSharedDictionary* BrotliSharedDictionaryCreateInstance(
   dict->words[0] = BrotliGetDictionary();
   dict->transforms[0] = BrotliGetTransforms();
 
-  dict->alloc_func = alloc_func ? alloc_func : BrotliDefaultAllocFunc;
-  dict->free_func = free_func ? free_func : BrotliDefaultFreeFunc;
+  dict->alloc_func = alloc_func ? alloc_func :  duckdb_brotli::BrotliDefaultAllocFunc;
+  dict->free_func = free_func ? free_func :  duckdb_brotli::BrotliDefaultFreeFunc;
   dict->memory_manager_opaque = opaque;
 
   return dict;
 }
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+

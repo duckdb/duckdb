@@ -16,9 +16,7 @@
 #include "histogram.h"
 #include "memory.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+using namespace duckdb_brotli;
 
 static BROTLI_INLINE BROTLI_BOOL HistogramPairIsLess(
     const HistogramPair* p1, const HistogramPair* p2) {
@@ -52,6 +50,4 @@ static BROTLI_INLINE double ClusterCostDiff(size_t size_a, size_t size_b) {
 
 #undef CODE
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+

@@ -14,9 +14,7 @@
 
 #include "../common/platform.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+namespace duckdb_brotli {
 
 /* Estimates how many bits the literals in the interval [pos, pos + len) in the
    ring-buffer (data, mask) will take entropy coded and writes these estimates
@@ -25,8 +23,6 @@ BROTLI_INTERNAL void BrotliEstimateBitCostsForLiterals(
     size_t pos, size_t len, size_t mask, const uint8_t* data, size_t* histogram,
     float* cost);
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+}
 
 #endif  /* BROTLI_ENC_LITERAL_COST_H_ */

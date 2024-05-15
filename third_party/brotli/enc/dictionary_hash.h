@@ -11,15 +11,11 @@
 
 #include <brotli/types.h>
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+namespace duckdb_brotli {
 
 extern const uint16_t kStaticDictionaryHashWords[32768];
 extern const uint8_t kStaticDictionaryHashLengths[32768];
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+}
 
 #endif  /* BROTLI_ENC_DICTIONARY_HASH_H_ */

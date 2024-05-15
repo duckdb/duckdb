@@ -15,9 +15,7 @@
 #include "../common/platform.h"
 #include "encoder_dict.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+namespace duckdb_brotli {
 
 #define BROTLI_MAX_STATIC_DICTIONARY_MATCH_LEN 37
 static const uint32_t kInvalidMatch = 0xFFFFFFF;
@@ -34,8 +32,6 @@ BROTLI_INTERNAL BROTLI_BOOL BrotliFindAllStaticDictionaryMatches(
     const uint8_t* data, size_t min_length, size_t max_length,
     uint32_t* matches);
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+}
 
 #endif  /* BROTLI_ENC_STATIC_DICT_H_ */

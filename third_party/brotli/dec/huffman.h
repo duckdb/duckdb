@@ -13,9 +13,7 @@
 
 #include "../common/platform.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+namespace duckdb_brotli {
 
 #define BROTLI_HUFFMAN_MAX_CODE_LENGTH 15
 
@@ -115,8 +113,6 @@ typedef struct {
   uint16_t num_htrees;
 } HuffmanTreeGroup;
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+}
 
 #endif  /* BROTLI_DEC_HUFFMAN_H_ */

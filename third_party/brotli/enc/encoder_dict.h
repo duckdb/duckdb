@@ -16,9 +16,7 @@
 #include "memory.h"
 #include "static_dict_lut.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+namespace duckdb_brotli {
 
 /*
 Dictionary hierarchy for Encoder:
@@ -150,8 +148,6 @@ BROTLI_INTERNAL ManagedDictionary* BrotliCreateManagedDictionary(
 BROTLI_INTERNAL void BrotliDestroyManagedDictionary(
     ManagedDictionary* dictionary);
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+}
 
 #endif  /* BROTLI_ENC_ENCODER_DICT_H_ */

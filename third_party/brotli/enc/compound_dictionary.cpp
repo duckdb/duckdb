@@ -12,6 +12,8 @@
 #include "memory.h"
 #include "quality.h"
 
+using namespace duckdb_brotli;
+
 static PreparedDictionary* CreatePreparedDictionaryWithParams(MemoryManager* m,
     const uint8_t* source, size_t source_size, uint32_t bucket_bits,
     uint32_t slot_bits, uint32_t hash_bits, uint16_t bucket_limit) {
@@ -150,7 +152,7 @@ static PreparedDictionary* CreatePreparedDictionaryWithParams(MemoryManager* m,
   return result;
 }
 
-PreparedDictionary* CreatePreparedDictionary(MemoryManager* m,
+PreparedDictionary* duckdb_brotli::CreatePreparedDictionary(MemoryManager* m,
     const uint8_t* source, size_t source_size) {
   uint32_t bucket_bits = 17;
   uint32_t slot_bits = 7;
@@ -167,13 +169,13 @@ PreparedDictionary* CreatePreparedDictionary(MemoryManager* m,
       source, source_size, bucket_bits, slot_bits, hash_bits, bucket_limit);
 }
 
-void DestroyPreparedDictionary(MemoryManager* m,
+void duckdb_brotli::DestroyPreparedDictionary(MemoryManager* m,
     PreparedDictionary* dictionary) {
   if (!dictionary) return;
   BROTLI_FREE(m, dictionary);
 }
 
-BROTLI_BOOL AttachPreparedDictionary(
+BROTLI_BOOL duckdb_brotli::AttachPreparedDictionary(
     CompoundDictionary* compound, const PreparedDictionary* dictionary) {
   size_t length = 0;
   size_t index = 0;

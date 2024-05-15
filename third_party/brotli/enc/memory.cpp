@@ -16,9 +16,7 @@
 
 #include "../common/platform.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+using namespace duckdb_brotli;
 
 #define MAX_NEW_ALLOCATED (BROTLI_ENCODER_MEMORY_MANAGER_SLOTS >> 2)
 #define MAX_NEW_FREED (BROTLI_ENCODER_MEMORY_MANAGER_SLOTS >> 2)
@@ -32,8 +30,8 @@ void BrotliInitMemoryManager(
     MemoryManager* m, brotli_alloc_func alloc_func, brotli_free_func free_func,
     void* opaque) {
   if (!alloc_func) {
-    m->alloc_func = BrotliDefaultAllocFunc;
-    m->free_func = BrotliDefaultFreeFunc;
+    m->alloc_func = duckdb_brotli::BrotliDefaultAllocFunc;
+    m->free_func =  duckdb_brotli::BrotliDefaultFreeFunc;
     m->opaque = 0;
   } else {
     m->alloc_func = alloc_func;
@@ -189,6 +187,4 @@ void BrotliBootstrapFree(void* address, MemoryManager* m) {
   }
 }
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+

@@ -25,9 +25,7 @@
 #include "prefix.h"
 #include "quality.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+using namespace duckdb_brotli;
 
 /* BrotliCalculateDistanceCodeLimit(BROTLI_MAX_ALLOWED_DISTANCE, 3, 120). */
 #define BROTLI_MAX_EFFECTIVE_DISTANCE_ALPHABET_SIZE 544
@@ -41,7 +39,7 @@ static const int kDistanceCacheOffset[] = {
   0, 0, 0, 0, -1, 1, -2, 2, -3, 3, -1, 1, -2, 2, -3, 3
 };
 
-void BrotliInitZopfliNodes(ZopfliNode* array, size_t length) {
+void duckdb_brotli::BrotliInitZopfliNodes(ZopfliNode* array, size_t length) {
   ZopfliNode stub;
   size_t i;
   stub.length = 1;
@@ -601,7 +599,7 @@ static size_t ComputeShortestPathFromNodes(size_t num_bytes,
 }
 
 /* REQUIRES: nodes != NULL and len(nodes) >= num_bytes + 1 */
-void BrotliZopfliCreateCommands(const size_t num_bytes,
+void duckdb_brotli::BrotliZopfliCreateCommands(const size_t num_bytes,
     const size_t block_start, const ZopfliNode* nodes, int* dist_cache,
     size_t* last_insert_len, const BrotliEncoderParams* params,
     Command* commands, size_t* num_literals) {
@@ -704,7 +702,7 @@ static void MergeMatches(BackwardMatch* dst,
 }
 
 /* REQUIRES: nodes != NULL and len(nodes) >= num_bytes + 1 */
-size_t BrotliZopfliComputeShortestPath(MemoryManager* m, size_t num_bytes,
+size_t duckdb_brotli::BrotliZopfliComputeShortestPath(MemoryManager* m, size_t num_bytes,
     size_t position, const uint8_t* ringbuffer, size_t ringbuffer_mask,
     ContextLut literal_context_lut, const BrotliEncoderParams* params,
     const int* dist_cache, Hasher* hasher, ZopfliNode* nodes) {
@@ -934,6 +932,4 @@ void BrotliCreateHqZopfliBackwardReferences(MemoryManager* m, size_t num_bytes,
   BROTLI_FREE(m, num_matches);
 }
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+

@@ -11,9 +11,7 @@
 
 #include <brotli/types.h>
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+namespace duckdb_brotli {
 
 typedef struct DictWord {
   /* Highest bit is used to indicate end of bucket. */
@@ -5859,8 +5857,6 @@ static const DictWord kStaticDictionaryWords[31705] = {
 };
 /* GENERATED CODE END */
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+}
 
 #endif  /* BROTLI_ENC_STATIC_DICT_LUT_H_ */

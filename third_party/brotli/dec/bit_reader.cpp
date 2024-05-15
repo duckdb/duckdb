@@ -12,9 +12,7 @@
 
 #include "../common/platform.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+using namespace duckdb_brotli;
 
 const brotli_reg_t kBrotliBitMask[33] = {   0x00000000,
     0x00000001, 0x00000003, 0x00000007, 0x0000000F,
@@ -73,6 +71,4 @@ BROTLI_BOOL BrotliSafeReadBits32Slow(BrotliBitReader* const br,
   return BROTLI_TRUE;
 }
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+

@@ -10,9 +10,7 @@
 
 #include <brotli/types.h>
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+using namespace duckdb_brotli;
 
 static size_t BrotliParseAsUTF8(
     int* symbol, const uint8_t* input, size_t size) {
@@ -80,6 +78,4 @@ BROTLI_BOOL BrotliIsMostlyUTF8(
   return TO_BROTLI_BOOL((double)size_utf8 > min_fraction * (double)length);
 }
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+

@@ -15,9 +15,7 @@
 
 #include "../common/platform.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+namespace duckdb_brotli {
 
 static BROTLI_INLINE uint32_t Log2FloorNonZero(size_t n) {
 #if defined(BROTLI_BSR32)
@@ -60,8 +58,6 @@ static BROTLI_INLINE double FastLog2(size_t v) {
 #endif
 }
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+}
 
 #endif  /* BROTLI_ENC_FAST_LOG_H_ */

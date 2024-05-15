@@ -19,9 +19,7 @@
 #include "block_splitter.h"
 #include "command.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+namespace duckdb_brotli {
 
 /* The distance symbols effectively used by "Large Window Brotli" (32-bit). */
 #define BROTLI_NUM_HISTOGRAM_DISTANCE_SYMBOLS 544
@@ -57,8 +55,6 @@ BROTLI_INTERNAL void BrotliBuildHistogramsWithContext(
     HistogramCommand* insert_and_copy_histograms,
     HistogramDistance* copy_dist_histograms);
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+}
 
 #endif  /* BROTLI_ENC_HISTOGRAM_H_ */

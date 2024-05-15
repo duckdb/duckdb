@@ -16,9 +16,7 @@
 #include "../common/platform.h"
 #include "fast_log.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+namespace duckdb_brotli {
 
 /* Here distance_code is an intermediate code, i.e. one of the special codes or
    the actual distance increased by BROTLI_NUM_DISTANCE_SHORT_CODES - 1. */
@@ -47,8 +45,6 @@ static BROTLI_INLINE void PrefixEncodeCopyDistance(size_t distance_code,
   }
 }
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+}
 
 #endif  /* BROTLI_ENC_PREFIX_H_ */

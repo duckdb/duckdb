@@ -18,9 +18,7 @@
 #include "quality.h"
 #include "hash.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+using namespace duckdb_brotli;
 
 #define NUM_HASH_BITS 15u
 #define NUM_HASH_BUCKETS (1u << NUM_HASH_BITS)
@@ -635,6 +633,4 @@ void InitEncoderDictionaryForTest(BrotliEncoderDictionary* d) {
 }
 #endif
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+

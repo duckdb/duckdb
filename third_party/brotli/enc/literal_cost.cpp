@@ -17,9 +17,7 @@
 #include "fast_log.h"
 #include "utf8_util.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+using namespace duckdb_brotli;
 
 static size_t UTF8Position(size_t last, size_t c, size_t clamp) {
   if (c < 128) {
@@ -175,6 +173,4 @@ void BrotliEstimateBitCostsForLiterals(size_t pos, size_t len, size_t mask,
   }
 }
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+

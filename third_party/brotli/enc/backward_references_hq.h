@@ -20,9 +20,7 @@
 #include "memory.h"
 #include "quality.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+namespace duckdb_brotli {
 
 BROTLI_INTERNAL void BrotliCreateZopfliBackwardReferences(MemoryManager* m,
     size_t num_bytes,
@@ -89,8 +87,6 @@ BROTLI_INTERNAL void BrotliZopfliCreateCommands(
     int* dist_cache, size_t* last_insert_len, const BrotliEncoderParams* params,
     Command* commands, size_t* num_literals);
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+}
 
 #endif  /* BROTLI_ENC_BACKWARD_REFERENCES_HQ_H_ */

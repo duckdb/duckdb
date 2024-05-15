@@ -8,9 +8,7 @@
 
 #include <brotli/types.h>
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+using namespace duckdb_brotli;
 
 const uint32_t kBrotliInsBase[BROTLI_NUM_INS_COPY_CODES] = {
     0,  1,  2,  3,  4,   5,   6,   8,   10,   14,   18,   26,
@@ -23,6 +21,4 @@ const uint32_t kBrotliCopyBase[BROTLI_NUM_INS_COPY_CODES] = {
 const uint32_t kBrotliCopyExtra[BROTLI_NUM_INS_COPY_CODES] = {
     0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7, 8, 9, 10, 24};
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+

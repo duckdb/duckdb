@@ -13,9 +13,7 @@
 
 #include "../common/platform.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+namespace duckdb_brotli {
 
 /* Separate implementation for little-endian 64-bit targets, for speed. */
 #if defined(BROTLI_TZCNT64) && BROTLI_64_BITS && BROTLI_LITTLE_ENDIAN
@@ -65,8 +63,6 @@ static BROTLI_INLINE size_t FindMatchLengthWithLimit(const uint8_t* s1,
 }
 #endif
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+}
 
 #endif  /* BROTLI_ENC_FIND_MATCH_LENGTH_H_ */

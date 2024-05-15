@@ -19,9 +19,7 @@
 #include "hash.h"
 #include "quality.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+namespace duckdb_brotli {
 
 /* "commands" points to the next output command to write to, "*num_commands" is
    initially the total amount of commands output by previous
@@ -33,8 +31,6 @@ BROTLI_INTERNAL void BrotliCreateBackwardReferences(size_t num_bytes,
     Hasher* hasher, int* dist_cache, size_t* last_insert_len,
     Command* commands, size_t* num_commands, size_t* num_literals);
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+}
 
 #endif  /* BROTLI_ENC_BACKWARD_REFERENCES_H_ */

@@ -17,9 +17,7 @@
 #include "memory.h"
 #include "quality.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+namespace duckdb_brotli {
 
 /* A RingBuffer(window_bits, tail_bits) contains `1 << window_bits' bytes of
    data in a circular manner: writing a byte writes it to:
@@ -161,8 +159,6 @@ static BROTLI_INLINE void RingBufferWrite(
   }
 }
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+}
 
 #endif  /* BROTLI_ENC_RINGBUFFER_H_ */

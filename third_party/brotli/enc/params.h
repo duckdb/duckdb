@@ -41,7 +41,7 @@ typedef struct BrotliEncoderParams {
   BrotliHasherParams hasher;
   BrotliDistanceParams dist;
   /* TODO(eustas): rename to BrotliShared... */
-  SharedEncoderDictionary dictionary;
+  duckdb_brotli::SharedEncoderDictionary dictionary;
 } BrotliEncoderParams;
 
 #endif  /* BROTLI_ENC_PARAMS_H_ */

@@ -17,9 +17,7 @@
 #include "params.h"
 #include "prefix.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+namespace duckdb_brotli {
 
 BROTLI_INTERNAL extern const uint32_t
     kBrotliInsBase[BROTLI_NUM_INS_COPY_CODES];
@@ -184,8 +182,6 @@ static BROTLI_INLINE uint32_t CommandCopyLenCode(const Command* self) {
   return (uint32_t)((int32_t)(self->copy_len_ & 0x1FFFFFF) + delta);
 }
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+}
 
 #endif  /* BROTLI_ENC_COMMAND_H_ */

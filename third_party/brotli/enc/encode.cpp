@@ -1698,11 +1698,11 @@ const uint8_t* BrotliEncoderTakeOutput(BrotliEncoderState* s, size_t* size) {
   return result;
 }
 
-uint32_t BrotliEncoderVersion(void) {
+uint32_t duckdb_brotli::BrotliEncoderVersion(void) {
   return BROTLI_VERSION;
 }
 
-BrotliEncoderPreparedDictionary* BrotliEncoderPrepareDictionary(
+BrotliEncoderPreparedDictionary*  duckdb_brotli::BrotliEncoderPrepareDictionary(
     BrotliSharedDictionaryType type, size_t size,
     const uint8_t data[BROTLI_ARRAY_PARAM(size)], int quality,
     brotli_alloc_func alloc_func, brotli_free_func free_func, void* opaque) {
@@ -1831,7 +1831,7 @@ BROTLI_BOOL BrotliEncoderAttachPreparedDictionary(BrotliEncoderState* state,
   return BROTLI_TRUE;
 }
 
-size_t BrotliEncoderEstimatePeakMemoryUsage(int quality, int lgwin,
+size_t  duckdb_brotli::BrotliEncoderEstimatePeakMemoryUsage(int quality, int lgwin,
                                             size_t input_size) {
   BrotliEncoderParams params;
   size_t memory_manager_slots = BROTLI_ENCODER_MEMORY_MANAGER_SLOTS;

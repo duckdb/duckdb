@@ -25,9 +25,7 @@
 #include "memory.h"
 #include "metablock.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+namespace duckdb_brotli {
 
 /* All Store functions here will use a storage_ix, which is always the bit
    position for the current storage. */
@@ -82,8 +80,6 @@ BROTLI_INTERNAL void BrotliStoreUncompressedMetaBlock(
 void GetBlockLengthPrefixCodeForTest(uint32_t, size_t*, uint32_t*, uint32_t*);
 #endif
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+}
 
 #endif  /* BROTLI_ENC_BROTLI_BIT_STREAM_H_ */

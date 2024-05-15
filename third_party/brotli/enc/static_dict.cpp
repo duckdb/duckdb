@@ -12,9 +12,7 @@
 #include "encoder_dict.h"
 #include "find_match_length.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+using namespace duckdb_brotli;
 
 static BROTLI_INLINE uint32_t Hash(const uint8_t* data) {
   uint32_t h = BROTLI_UNALIGNED_LOAD32LE(data) * kDictHashMul32;
@@ -537,6 +535,4 @@ BROTLI_BOOL BrotliFindAllStaticDictionaryMatches(
   }
   return has_found_match;
 }
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+

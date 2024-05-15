@@ -22,11 +22,9 @@
 #include "memory.h"
 #include "quality.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+using namespace duckdb_brotli;
 
-void BrotliInitDistanceParams(BrotliDistanceParams* dist_params,
+void duckdb_brotli::BrotliInitDistanceParams(BrotliDistanceParams* dist_params,
     uint32_t npostfix, uint32_t ndirect, BROTLI_BOOL large_window) {
   uint32_t alphabet_size_max;
   uint32_t alphabet_size_limit;
@@ -123,7 +121,7 @@ static BROTLI_BOOL ComputeDistanceCost(const Command* cmds,
   return BROTLI_TRUE;
 }
 
-void BrotliBuildMetaBlock(MemoryManager* m,
+void duckdb_brotli::BrotliBuildMetaBlock(MemoryManager* m,
                           const uint8_t* ringbuffer,
                           const size_t pos,
                           const size_t mask,
@@ -626,7 +624,7 @@ static BROTLI_INLINE void BrotliBuildMetaBlockGreedyInternal(
   }
 }
 
-void BrotliBuildMetaBlockGreedy(MemoryManager* m,
+void duckdb_brotli::BrotliBuildMetaBlockGreedy(MemoryManager* m,
                                 const uint8_t* ringbuffer,
                                 size_t pos,
                                 size_t mask,
@@ -652,7 +650,7 @@ void BrotliBuildMetaBlockGreedy(MemoryManager* m,
   BROTLI_FREE(m, arena);
 }
 
-void BrotliOptimizeHistograms(uint32_t num_distance_codes,
+void duckdb_brotli::BrotliOptimizeHistograms(uint32_t num_distance_codes,
                               MetaBlockSplit* mb) {
   uint8_t good_for_rle[BROTLI_NUM_COMMAND_SYMBOLS];
   size_t i;
@@ -672,6 +670,4 @@ void BrotliOptimizeHistograms(uint32_t num_distance_codes,
   }
 }
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+

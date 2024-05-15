@@ -13,9 +13,7 @@
 
 #include "../common/platform.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+namespace duckdb_brotli {
 
 static const double kMinUTF8Ratio = 0.75;
 
@@ -26,8 +24,6 @@ BROTLI_INTERNAL BROTLI_BOOL BrotliIsMostlyUTF8(
     const uint8_t* data, const size_t pos, const size_t mask,
     const size_t length, const double min_fraction);
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+}
 
 #endif  /* BROTLI_ENC_UTF8_UTIL_H_ */

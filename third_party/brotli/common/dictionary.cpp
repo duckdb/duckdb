@@ -7,9 +7,7 @@
 #include "dictionary.h"
 #include "platform.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+using namespace duckdb_brotli;
 
 #if !defined(BROTLI_EXTERNAL_DICTIONARY_DATA)
 static const uint8_t kBrotliDictionaryData[] =
@@ -5911,6 +5909,4 @@ void BrotliSetDictionaryData(const uint8_t* data) {
 #endif
 }
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+

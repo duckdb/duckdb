@@ -18,9 +18,7 @@
 #include "../common/platform.h"
 #include "entropy_encode.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+namespace duckdb_brotli {
 
 typedef struct BrotliOnePassArena {
   uint8_t lit_depth[256];
@@ -79,8 +77,6 @@ BROTLI_INTERNAL void BrotliCompressFragmentFast(BrotliOnePassArena* s,
                                                 size_t* storage_ix,
                                                 uint8_t* storage);
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+}
 
 #endif  /* BROTLI_ENC_COMPRESS_FRAGMENT_H_ */

@@ -9,9 +9,7 @@
 #include "../common/platform.h"
 #include "dictionary_hash.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+using namespace duckdb_brotli;
 
 /* GENERATED CODE START */
 BROTLI_INTERNAL const uint16_t kStaticDictionaryHashWords[32768] = {
@@ -1843,6 +1841,4 @@ BROTLI_INTERNAL const uint8_t kStaticDictionaryHashLengths[32768] = {
 7,0,0,12,4,0,0,0,0,0,0,12,6,0,6,0,7,0,0,8,5,0,0,0,0};
 /* GENERATED CODE END */
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+

@@ -15,9 +15,7 @@
 #include "histogram.h"
 #include "memory.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+namespace duckdb_brotli {
 
 typedef struct HistogramPair {
   uint32_t idx1;
@@ -42,8 +40,6 @@ typedef struct HistogramPair {
 
 #undef CODE
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+}
 
 #endif  /* BROTLI_ENC_CLUSTER_H_ */

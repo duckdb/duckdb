@@ -24,9 +24,7 @@
 #include "memory.h"
 #include "write_bits.h"
 
-#if defined(__cplusplus) || defined(c_plusplus)
-extern "C" {
-#endif
+using namespace duckdb_brotli;
 
 #define MAX_HUFFMAN_TREE_SIZE (2 * BROTLI_NUM_COMMAND_SYMBOLS + 1)
 /* The maximum size of Huffman dictionary for distances assuming that
@@ -281,7 +279,7 @@ static void StoreSimpleHuffmanTree(const uint8_t* depths,
 
 /* num = alphabet size
    depths = symbol depths */
-void BrotliStoreHuffmanTree(const uint8_t* depths, size_t num,
+void duckdb_brotli::BrotliStoreHuffmanTree(const uint8_t* depths, size_t num,
                             HuffmanTree* tree,
                             size_t* storage_ix, uint8_t* storage) {
   /* Write the Huffman tree into the brotli-representation.
@@ -402,7 +400,7 @@ static BROTLI_INLINE BROTLI_BOOL SortHuffmanTree(
   return TO_BROTLI_BOOL(v0->total_count_ < v1->total_count_);
 }
 
-void BrotliBuildAndStoreHuffmanTreeFast(HuffmanTree* tree,
+void duckdb_brotli::BrotliBuildAndStoreHuffmanTreeFast(HuffmanTree* tree,
                                         const uint32_t* histogram,
                                         const size_t histogram_total,
                                         const size_t max_bits,
@@ -945,7 +943,7 @@ typedef struct StoreMetablockArena {
   EncodeContextMapArena context_map_arena;
 } StoreMetablockArena;
 
-void BrotliStoreMetaBlock(MemoryManager* m,
+void duckdb_brotli::BrotliStoreMetaBlock(MemoryManager* m,
     const uint8_t* input, size_t start_pos, size_t length, size_t mask,
     uint8_t prev_byte, uint8_t prev_byte2, BROTLI_BOOL is_last,
     const BrotliEncoderParams* params, ContextType literal_context_mode,
@@ -1166,7 +1164,7 @@ typedef struct MetablockArena {
   HuffmanTree tree[MAX_HUFFMAN_TREE_SIZE];
 } MetablockArena;
 
-void BrotliStoreMetaBlockTrivial(MemoryManager* m,
+void duckdb_brotli::BrotliStoreMetaBlockTrivial(MemoryManager* m,
     const uint8_t* input, size_t start_pos, size_t length, size_t mask,
     BROTLI_BOOL is_last, const BrotliEncoderParams* params,
     const Command* commands, size_t n_commands,
@@ -1210,7 +1208,7 @@ void BrotliStoreMetaBlockTrivial(MemoryManager* m,
   }
 }
 
-void BrotliStoreMetaBlockFast(MemoryManager* m,
+void duckdb_brotli::BrotliStoreMetaBlockFast(MemoryManager* m,
     const uint8_t* input, size_t start_pos, size_t length, size_t mask,
     BROTLI_BOOL is_last, const BrotliEncoderParams* params,
     const Command* commands, size_t n_commands,
@@ -1291,7 +1289,7 @@ void BrotliStoreMetaBlockFast(MemoryManager* m,
 
 /* This is for storing uncompressed blocks (simple raw storage of
    bytes-as-bytes). */
-void BrotliStoreUncompressedMetaBlock(BROTLI_BOOL is_final_block,
+void duckdb_brotli::BrotliStoreUncompressedMetaBlock(BROTLI_BOOL is_final_block,
                                       const uint8_t* BROTLI_RESTRICT input,
                                       size_t position, size_t mask,
                                       size_t len,
@@ -1331,6 +1329,4 @@ void GetBlockLengthPrefixCodeForTest(uint32_t len, size_t* code,
 }
 #endif
 
-#if defined(__cplusplus) || defined(c_plusplus)
-}  /* extern "C" */
-#endif
+
