@@ -58,7 +58,7 @@ public:
 	string ToSQL() const override;
 
 	//! Creates an index with the given name in the schema
-	virtual optional_ptr<CatalogEntry> CreateIndex(ClientContext &context, CreateIndexInfo &info,
+	virtual optional_ptr<CatalogEntry> CreateIndex(CatalogTransaction transaction, CreateIndexInfo &info,
 	                                               TableCatalogEntry &table) = 0;
 	//! Create a scalar or aggregate function within the given schema
 	virtual optional_ptr<CatalogEntry> CreateFunction(CatalogTransaction transaction, CreateFunctionInfo &info) = 0;
@@ -91,7 +91,7 @@ public:
 	virtual void DropEntry(ClientContext &context, DropInfo &info) = 0;
 
 	//! Alters a catalog entry
-	virtual void Alter(ClientContext &context, AlterInfo &info) = 0;
+	virtual void Alter(CatalogTransaction transaction, AlterInfo &info) = 0;
 
 	CatalogTransaction GetCatalogTransaction(ClientContext &context);
 };
