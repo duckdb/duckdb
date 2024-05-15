@@ -2,6 +2,8 @@
 # description: Properly propogate empty results.
 # group: [duckfuzz]
 
+require noforcestorage
+
 statement ok
 pragma enable_verification
 
