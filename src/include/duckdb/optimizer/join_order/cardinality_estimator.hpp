@@ -70,7 +70,8 @@ class CardinalityHelper {
 public:
 	CardinalityHelper() {
 	}
-	explicit CardinalityHelper(double cardinality_before_filters) : cardinality_before_filters(cardinality_before_filters) {};
+	explicit CardinalityHelper(double cardinality_before_filters)
+	    : cardinality_before_filters(cardinality_before_filters) {};
 
 public:
 	// must be a double. Otherwise we can lose significance between different join orders.
