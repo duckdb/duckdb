@@ -5,7 +5,7 @@
 statement ok
 PRAGMA enable_verification
 
-# single column pk
+# Scenario #1: single column pk
 statement ok
 CREATE TABLE test1 (i INTEGER, j INTEGER)
 
@@ -46,7 +46,7 @@ ALTER TABLE test1 ADD PRIMARY KEY (j)
 ----
 table "test1" already has a PRIMARY KEY(j)
 
-# multiple column pk
+# Scenario #2: multiple column pk
 statement ok
 CREATE TABLE test2 (i INTEGER, j INTEGER, d TEXT)
 
@@ -69,7 +69,7 @@ INSERT INTO test2 VALUES (NULL, 2, 'nada')
 ----
 NOT NULL constraint failed: test2.i
 
-# primary key already exists
+# Scenario #3: primary key already exists
 statement ok
 CREATE TABLE test3 (i INTEGER PRIMARY KEY, j INTEGER)
 
@@ -78,7 +78,7 @@ ALTER TABLE test3 ADD PRIMARY KEY (i, j)
 ----
 table "test3" already has a PRIMARY KEY(i)
 
-# column does not exist
+# Scenario #4: column does not exist
 statement ok
 CREATE TABLE test4 (i INTEGER, j INTEGER)
 
@@ -87,13 +87,13 @@ ALTER TABLE test4 ADD PRIMARY KEY (i_do_not_exist)
 ----
 Table "test4" does not have a column named "i_do_not_exist"
 
-# table does not exist
+# Scenario #5: table does not exist
 statement error
 ALTER TABLE i_do_not_exist ADD PRIMARY KEY (i, j)
 ----
 Table with name i_do_not_exist does not exist!
 
-# add pk to table containing data invalidating the constraint (this should fail)
+# Scenario #6: add pk to table containing data invalidating the constraint (this should fail)
 statement ok
 CREATE TABLE test5 (i INTEGER, j INTEGER)
 
@@ -103,3 +103,4 @@ INSERT INTO test5 VALUES (1, 10), (2, 20), (3, 30), (1, 100), (NULL, 0)
 statement error
 ALTER TABLE test5 ADD PRIMARY KEY (i)
 ----
+PRIMARY KEY or UNIQUE constraint violated: duplicate key "1"

@@ -147,7 +147,21 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 
 // Alter column to add new constraint
 DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint &constraint)
-    : db(parent.db), info(parent.info), row_groups(parent.row_groups), is_root(true) {
+    : db(parent.db), row_groups(parent.row_groups), is_root(true) {
+
+	// Clone data table info and index storage info. If we are adding a
+	// UNIQUE constraint, we would be otherwise modifying the previous instance
+	// persisting changes even when the current transaction is rolled back.
+	info = make_uniq<DataTableInfo>(parent.info->db, parent.info->table_io_manager, parent.info->schema,
+	                                parent.info->table);
+
+	// Also clone vector we are going to modify
+	vector<IndexStorageInfo> cloned_index_storage_infos;
+	for (const auto &index_info : parent.info->index_storage_infos) {
+		cloned_index_storage_infos.push_back(IndexStorageInfo(index_info.name));
+	}
+	info->index_storage_infos = std::move(cloned_index_storage_infos);
+	info->InitializeIndexes(context);
 
 	auto &local_storage = LocalStorage::Get(context, db);
 	lock_guard<mutex> parent_lock(parent.append_lock);
@@ -177,11 +191,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint 
 		if (row_groups->GetTotalRows() > 0) {
 			IndexExistingData(context, index);
 		}
-
-		info->InitializeIndexes(context);
 	} else {
-		info->InitializeIndexes(context);
-
 		// Verify the new constraint against current persistent/local data
 		VerifyNewConstraint(local_storage, parent, constraint);
 	}
