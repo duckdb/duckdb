@@ -86,3 +86,28 @@ query I
 SELECT bounded_ascii(i::INTEGER::BOUNDED(255)) FROM t2 WHERE i < 255;
 ----
 d
+
+# Test that we cant apply too many modifiers
+statement error
+CREATE TABLE t3 (i BOUNDED(200, 300));
+----
+Binder Error: Cannot apply '2' type modifier(s) to type 'BOUNDED' taking at most '1' type modifier(s)
+
+statement ok
+CREATE TYPE user_type AS INTEGER
+
+# We cant apply a modifier to a type without modifiers
+statement error
+CREATE TABLE t4 (i user_type(NULL));
+----
+Binder Error: Type 'user_type' does not take any type modifiers
+
+statement error
+SELECT 1::BOUNDED(NULL)
+----
+Invalid Input Error: BOUNDED type must have a max value
+
+statement error
+SELECT 1::BOUNDED(900000000000000000)
+----
+Binder Error: Cannot apply type modifier '900000000000000000' to type 'BOUNDED', expected value of type 'INTEGER'

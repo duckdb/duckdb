@@ -203,7 +203,7 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 		auto child_type = ListType::GetChildType(type);
 		BindLogicalType(context, child_type, catalog, schema);
 		auto alias = type.GetAlias();
-		auto properties = type.GetProperties();
+		auto modifiers = type.GetModifiers();
 		if (type.id() == LogicalTypeId::LIST) {
 			type = LogicalType::LIST(child_type);
 		} else {
@@ -212,9 +212,7 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 		}
 
 		type.SetAlias(alias);
-		if (properties) {
-			type.SetProperties(*properties);
-		}
+		type.SetModifiers(modifiers);
 	} else if (type.id() == LogicalTypeId::STRUCT) {
 		auto child_types = StructType::GetChildTypes(type);
 		for (auto &child_type : child_types) {
@@ -222,23 +220,19 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 		}
 		// Generate new Struct Type
 		auto alias = type.GetAlias();
-		auto properties = type.GetProperties();
+		auto modifiers = type.GetModifiers();
 		type = LogicalType::STRUCT(child_types);
 		type.SetAlias(alias);
-		if (properties) {
-			type.SetProperties(*properties);
-		}
+		type.SetModifiers(modifiers);
 	} else if (type.id() == LogicalTypeId::ARRAY) {
 		auto child_type = ArrayType::GetChildType(type);
 		auto array_size = ArrayType::GetSize(type);
 		BindLogicalType(context, child_type, catalog, schema);
 		auto alias = type.GetAlias();
-		auto properties = type.GetProperties();
+		auto modifiers = type.GetModifiers();
 		type = LogicalType::ARRAY(child_type, array_size);
 		type.SetAlias(alias);
-		if (properties) {
-			type.SetProperties(*properties);
-		}
+		type.SetModifiers(modifiers);
 	} else if (type.id() == LogicalTypeId::UNION) {
 		auto member_types = UnionType::CopyMemberTypes(type);
 		for (auto &member_type : member_types) {
@@ -246,12 +240,10 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 		}
 		// Generate new Union Type
 		auto alias = type.GetAlias();
-		auto properties = type.GetProperties();
+		auto modifiers = type.GetModifiers();
 		type = LogicalType::UNION(member_types);
 		type.SetAlias(alias);
-		if (properties) {
-			type.SetProperties(*properties);
-		}
+		type.SetModifiers(modifiers);
 	} else if (type.id() == LogicalTypeId::USER) {
 		auto user_type_name = UserType::GetTypeName(type);
 		auto user_type_mods = UserType::GetTypeModifiers(type);
@@ -277,20 +269,20 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 		}
 		BindLogicalType(context, type, catalog, schema);
 
-		// Apply the type modifiers
-		auto type_mods_ptr = type.GetProperties();
-		if (type_mods_ptr) {
-			auto modifier_count = type_mods_ptr->size();
-			if (user_type_mods.size() > modifier_count) {
-				throw BinderException("Cannot apply type modifiers to type '%s' with only %d type modifiers",
-				                      user_type_name, modifier_count);
+		// Apply the type modifiers (if any)
+		if (type.HasModifiers()) {
+			auto type_mods_size = type.GetModifiersUnsafe().size();
+			if (user_type_mods.size() > type_mods_size) {
+				throw BinderException(
+				    "Cannot apply '%d' type modifier(s) to type '%s' taking at most '%d' type modifier(s)",
+				    user_type_mods.size(), user_type_name, type_mods_size);
 			}
 
 			// Instantiate a new copy of the ExtraTypeInfo to replace the type modifiers
 			type.MakeTypeInfoUnique();
 
-			// Fetch the type modifiers from the type again
-			auto &type_mods = *type.GetProperties();
+			// Re-fetch the type modifiers now that we've deduplicated the ExtraTypeInfo
+			auto &type_mods = type.GetModifiersUnsafe();
 
 			// Replace them in order, casting if necessary
 			for (idx_t i = 0; i < MinValue(type_mods.size(), user_type_mods.size()); i++) {
@@ -301,13 +293,13 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 				} else if (user_type_mod.DefaultTryCastAs(type_mod.type())) {
 					type_mod = std::move(user_type_mod);
 				} else {
-					throw BinderException("Cannot apply type modifier '%s' to type '%s'", user_type_mod.ToString(),
-					                      user_type_name);
+					throw BinderException("Cannot apply type modifier '%s' to type '%s', expected value of type '%s'",
+					                      user_type_mod.ToString(), user_type_name, type_mod.type().ToString());
 				}
 			}
 		} else if (!user_type_mods.empty()) {
 			// We're trying to pass type modifiers to a type that doesnt have any
-			throw BinderException("User type modifiers are not supported for type '%s'", user_type_name);
+			throw BinderException("Type '%s' does not take any type modifiers", user_type_name);
 		}
 	}
 }

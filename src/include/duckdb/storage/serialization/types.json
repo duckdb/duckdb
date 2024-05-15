@@ -18,7 +18,7 @@
       },
       {
         "id": 102,
-        "name": "properties",
+        "name": "modifiers",
         "type": "vector<Value>",
         "default": "vector<Value>()"
       }
@@ -145,7 +145,7 @@
       },
       {
         "id": 203,
-        "name": "user_type_properties",
+        "name": "user_type_modifiers",
         "type": "vector<Value>",
         "default": "vector<Value>()"
       }

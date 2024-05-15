@@ -321,9 +321,12 @@ struct LogicalType {
 	DUCKDB_API void SetAlias(string alias);
 	DUCKDB_API bool HasAlias() const;
 	DUCKDB_API string GetAlias() const;
-	DUCKDB_API void SetProperties(vector<Value> properties);
-	DUCKDB_API optional_ptr<vector<Value>> GetProperties();
-	DUCKDB_API optional_ptr<const vector<Value>> GetProperties() const;
+	DUCKDB_API void SetModifiers(vector<Value> modifiers);
+	DUCKDB_API bool HasModifiers() const;
+	DUCKDB_API vector<Value> GetModifiers() const;
+	// ! Try to get the modifiers without copying, throws an exception if the type has no modifiers
+	DUCKDB_API vector<Value> &GetModifiersUnsafe();
+	DUCKDB_API const vector<Value> &GetModifiersUnsafe() const;
 
 	//! Returns the maximum logical type when combining the two types - or throws an exception if combining is not possible
 	DUCKDB_API static LogicalType MaxLogicalType(ClientContext &context, const LogicalType &left, const LogicalType &right);
@@ -410,8 +413,8 @@ public:
 	// DEPRECATED - provided for backwards compatibility
 	DUCKDB_API static LogicalType ENUM(const string &enum_name, Vector &ordered_data, idx_t size); // NOLINT
 	DUCKDB_API static LogicalType USER(const string &user_type_name);                              // NOLINT
-	DUCKDB_API static LogicalType USER(const string &user_type_name, const vector<Value> &user_type_props); // NOLINT
-	DUCKDB_API static LogicalType USER(string catalog, string schema, string name, vector<Value> user_type_props); // NOLINT
+	DUCKDB_API static LogicalType USER(const string &user_type_name, const vector<Value> &user_type_mods); // NOLINT
+	DUCKDB_API static LogicalType USER(string catalog, string schema, string name, vector<Value> user_type_mods); // NOLINT
 	//! A list of all NUMERIC types (integral and floating point types)
 	DUCKDB_API static const vector<LogicalType> Numeric();
 	//! A list of all INTEGRAL types
@@ -447,6 +450,7 @@ struct UserType {
 	DUCKDB_API static const string &GetSchema(const LogicalType &type);
 	DUCKDB_API static const string &GetTypeName(const LogicalType &type);
 	DUCKDB_API static const vector<Value> &GetTypeModifiers(const LogicalType &type);
+	DUCKDB_API static vector<Value> &GetTypeModifiers(LogicalType &type);
 };
 
 struct EnumType {

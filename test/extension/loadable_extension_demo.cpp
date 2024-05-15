@@ -256,19 +256,26 @@ struct BoundedType {
 	static LogicalType Get(int32_t max_val) {
 		auto type = LogicalType(LogicalTypeId::INTEGER);
 		type.SetAlias("BOUNDED");
-		type.SetProperties({Value::INTEGER(max_val)});
+		type.SetModifiers({Value::INTEGER(max_val)});
 		return type;
 	}
 
 	static LogicalType GetAny() {
 		auto type = LogicalType(LogicalTypeId::INTEGER);
 		type.SetAlias("BOUNDED");
-		type.SetProperties({Value(LogicalType::INTEGER)});
+		// By default we set a NULL max value to indicate that it can be any value
+		type.SetModifiers({Value(LogicalType::INTEGER)});
 		return type;
 	}
 
 	static int32_t GetMaxValue(const LogicalType &type) {
-		auto &props = *type.GetProperties();
+		if (!type.HasModifiers()) {
+			throw InvalidInputException("BOUNDED type must have a max value");
+		}
+		auto &props = type.GetModifiersUnsafe();
+		if (props[0].IsNull()) {
+			throw InvalidInputException("BOUNDED type must have a max value");
+		}
 		return props[0].GetValue<int32_t>();
 	}
 };

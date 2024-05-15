@@ -21,7 +21,7 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Copy() const {
 	return make_shared_ptr<ExtraTypeInfo>(*this);
 }
 
-static bool CompareProperties(const vector<Value> &left, const vector<Value> &right) {
+static bool CompareModifiers(const vector<Value> &left, const vector<Value> &right) {
 	// Check if the common prefix of the properties is the same for both types
 	auto common_props = MinValue(left.size(), right.size());
 	for (idx_t i = 0; i < common_props; i++) {
@@ -53,7 +53,7 @@ bool ExtraTypeInfo::Equals(ExtraTypeInfo *other_p) const {
 		if (alias != other_p->alias) {
 			return false;
 		}
-		if (!CompareProperties(properties, other_p->properties)) {
+		if (!CompareModifiers(modifiers, other_p->modifiers)) {
 			return false;
 		}
 		return true;
@@ -67,7 +67,7 @@ bool ExtraTypeInfo::Equals(ExtraTypeInfo *other_p) const {
 	if (alias != other_p->alias) {
 		return false;
 	}
-	if (!CompareProperties(properties, other_p->properties)) {
+	if (!CompareModifiers(modifiers, other_p->modifiers)) {
 		return false;
 	}
 	return EqualsInternal(other_p);
@@ -186,14 +186,14 @@ UserTypeInfo::UserTypeInfo(string name_p)
     : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO), user_type_name(std::move(name_p)) {
 }
 
-UserTypeInfo::UserTypeInfo(string name_p, vector<Value> properties_p)
+UserTypeInfo::UserTypeInfo(string name_p, vector<Value> modifiers_p)
     : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO), user_type_name(std::move(name_p)),
-      user_type_properties(std::move(properties_p)) {
+      user_type_modifiers(std::move(modifiers_p)) {
 }
 
-UserTypeInfo::UserTypeInfo(string catalog_p, string schema_p, string name_p, vector<Value> properties_p)
+UserTypeInfo::UserTypeInfo(string catalog_p, string schema_p, string name_p, vector<Value> modifiers_p)
     : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO), catalog(std::move(catalog_p)), schema(std::move(schema_p)),
-      user_type_name(std::move(name_p)), user_type_properties(std::move(properties_p)) {
+      user_type_name(std::move(name_p)), user_type_modifiers(std::move(modifiers_p)) {
 }
 
 bool UserTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
