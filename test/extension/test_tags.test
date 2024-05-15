@@ -1,0 +1,24 @@
+# name: test/extension/test_tags.test
+# description: Test querying tagged extension items.
+# group: [extension]
+
+require skip_reload
+
+require notmingw
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+
+query II
+SELECT function_name, tags['ext:author'] FROM duckdb_functions() WHERE tags['ext:name'] = ['loadable_extension_demo'] ORDER BY function_name;
+----
+add_point	[DuckDB Labs]
+sub_point	[DuckDB Labs]
+
+query II
+SELECT type_name, tags['ext:author'] FROM duckdb_types() WHERE tags['ext:name'] = ['loadable_extension_demo'] ORDER BY type_name;
+----
+POINT	[DuckDB Labs]

@@ -727,6 +727,18 @@ Value Value::MAP(const LogicalType &key_type, const LogicalType &value_type, vec
 	return result;
 }
 
+Value Value::MAP(const unordered_map<string, string> &kv_pairs) {
+	Value result;
+	result.type_ = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
+	result.is_null = false;
+	vector<Value> pairs;
+	for (auto &kv : kv_pairs) {
+		pairs.push_back(Value::STRUCT({{"key", Value(kv.first)}, {"value", Value(kv.second)}}));
+	}
+	result.value_info_ = make_shared_ptr<NestedValueInfo>(std::move(pairs));
+	return result;
+}
+
 Value Value::UNION(child_list_t<LogicalType> members, uint8_t tag, Value value) {
 	D_ASSERT(!members.empty());
 	D_ASSERT(members.size() <= UnionType::MAX_UNION_MEMBERS);
