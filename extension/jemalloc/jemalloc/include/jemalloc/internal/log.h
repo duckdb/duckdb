@@ -1,11 +1,10 @@
 #ifndef JEMALLOC_INTERNAL_LOG_H
 #define JEMALLOC_INTERNAL_LOG_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/atomic.h"
 #include "jemalloc/internal/malloc_io.h"
 #include "jemalloc/internal/mutex.h"
-
-namespace duckdb_jemalloc {
 
 #ifdef JEMALLOC_LOG
 #  define JEMALLOC_LOG_VAR_BUFSIZE 1000
@@ -28,9 +27,9 @@ namespace duckdb_jemalloc {
  * log("extent.a", "log msg for extent.a"); // 5
  * log("extent.b", "log msg for extent.b"); // 6
  *
- * And your malloc_conf option is "log=arena.a|extent", then lines 2, 4, 5, and
+ * And your malloc_conf option is "log:arena.a|extent", then lines 2, 4, 5, and
  * 6 will print at runtime.  You can enable logging from all log vars by
- * writing "log=.".
+ * writing "log:.".
  *
  * None of this should be regarded as a stable API for right now.  It's intended
  * as a debugging interface, to let us keep around some of our printf-debugging
@@ -98,8 +97,7 @@ log_impl_varargs(const char *name, ...) {
 	dst_offset += malloc_snprintf(buf, JEMALLOC_LOG_BUFSIZE, "%s: ", name);
 	dst_offset += malloc_vsnprintf(buf + dst_offset,
 	    JEMALLOC_LOG_BUFSIZE - dst_offset, format, ap);
-	dst_offset += malloc_snprintf(buf + dst_offset,
-	    JEMALLOC_LOG_BUFSIZE - dst_offset, "\n");
+	malloc_snprintf(buf + dst_offset, JEMALLOC_LOG_BUFSIZE - dst_offset, "\n");
 	va_end(ap);
 
 	malloc_write(buf);
@@ -113,7 +111,5 @@ do {									\
 		log_impl_varargs((log_var).name, __VA_ARGS__);		\
 	log_do_end(log_var)						\
 } while (0)
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_LOG_H */
