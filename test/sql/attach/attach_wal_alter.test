@@ -1,6 +1,6 @@
 # name: test/sql/attach/attach_wal_alter.test
 # description: WAL cannot alter table
-# group: [pedro]
+# group: [attach]
 
 require skip_reload
 

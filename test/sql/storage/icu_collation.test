@@ -1,6 +1,6 @@
 # name: test/sql/storage/icu_collation.test
 # description: ATTACH to a database that uses ICU collations in types
-# group: [attach]
+# group: [storage]
 
 require skip_reload
 
