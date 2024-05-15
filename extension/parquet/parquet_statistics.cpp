@@ -48,9 +48,6 @@ static unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type,
 Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
                                            const duckdb_parquet::format::SchemaElement &schema_ele,
                                            const std::string &stats) {
-	if (stats.empty()) {
-		return Value();
-	}
 	auto stats_data = const_data_ptr_cast(stats.c_str());
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN: {
