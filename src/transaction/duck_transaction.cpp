@@ -183,7 +183,7 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t new_commit
 	optional_ptr<WriteAheadLog> log;
 	if (!db.IsSystem()) {
 		auto &storage_manager = db.GetStorageManager();
-		log = storage_manager.GetWriteAheadLog();
+		log = storage_manager.GetWAL();
 		storage_commit_state = storage_manager.GenStorageCommitState(*this, checkpoint);
 	} else {
 		log = nullptr;
