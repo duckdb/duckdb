@@ -288,7 +288,8 @@ public:
 private:
 	//! Get JSON pointer (/field/index/... syntax)
 	static inline yyjson_val *GetPointer(yyjson_val *val, const char *ptr, const idx_t &len) {
-		return len == 1 ? val : unsafe_yyjson_get_pointer(val, ptr, len);
+		yyjson_ptr_err err;
+		return len == 1 ? val : unsafe_yyjson_ptr_getx(val, ptr, len, &err);
 	}
 	//! Get JSON path ($.field[index]... syntax)
 	static yyjson_val *GetPath(yyjson_val *val, const char *ptr, const idx_t &len);
