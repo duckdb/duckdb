@@ -14,7 +14,7 @@
 
 using namespace duckdb_brotli;
 
-const brotli_reg_t kBrotliBitMask[33] = {   0x00000000,
+const brotli_reg_t duckdb_brotli::kBrotliBitMask[33] = {   0x00000000,
     0x00000001, 0x00000003, 0x00000007, 0x0000000F,
     0x0000001F, 0x0000003F, 0x0000007F, 0x000000FF,
     0x000001FF, 0x000003FF, 0x000007FF, 0x00000FFF,
@@ -25,12 +25,12 @@ const brotli_reg_t kBrotliBitMask[33] = {   0x00000000,
     0x1FFFFFFF, 0x3FFFFFFF, 0x7FFFFFFF, 0xFFFFFFFF
 };
 
-void BrotliInitBitReader(BrotliBitReader* const br) {
+void duckdb_brotli::BrotliInitBitReader(BrotliBitReader* const br) {
   br->val_ = 0;
   br->bit_pos_ = 0;
 }
 
-BROTLI_BOOL BrotliWarmupBitReader(BrotliBitReader* const br) {
+BROTLI_BOOL duckdb_brotli::BrotliWarmupBitReader(BrotliBitReader* const br) {
   size_t aligned_read_mask = (sizeof(br->val_) >> 1) - 1;
   /* Fixing alignment after unaligned BrotliFillWindow would result accumulator
      overflow. If unalignment is caused by BrotliSafeReadBits, then there is
@@ -54,7 +54,7 @@ BROTLI_BOOL BrotliWarmupBitReader(BrotliBitReader* const br) {
   return BROTLI_TRUE;
 }
 
-BROTLI_BOOL BrotliSafeReadBits32Slow(BrotliBitReader* const br,
+BROTLI_BOOL duckdb_brotli::BrotliSafeReadBits32Slow(BrotliBitReader* const br,
     brotli_reg_t n_bits, brotli_reg_t* val) {
   brotli_reg_t low_val;
   brotli_reg_t high_val;

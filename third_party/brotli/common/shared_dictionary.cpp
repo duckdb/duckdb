@@ -444,7 +444,7 @@ static BROTLI_BOOL DecodeSharedDictionary(
 
 #endif  /* BROTLI_EXPERIMENTAL */
 
-void BrotliSharedDictionaryDestroyInstance(
+void duckdb_brotli::BrotliSharedDictionaryDestroyInstance(
     BrotliSharedDictionary* dict) {
   if (!dict) {
     return;
@@ -460,7 +460,7 @@ void BrotliSharedDictionaryDestroyInstance(
   }
 }
 
-BROTLI_BOOL BrotliSharedDictionaryAttach(
+BROTLI_BOOL duckdb_brotli::BrotliSharedDictionaryAttach(
     BrotliSharedDictionary* dict, BrotliSharedDictionaryType type,
     size_t data_size, const uint8_t data[BROTLI_ARRAY_PARAM(data_size)]) {
   if (!dict) {
@@ -483,7 +483,7 @@ BROTLI_BOOL BrotliSharedDictionaryAttach(
   return BROTLI_FALSE;
 }
 
-BrotliSharedDictionary* BrotliSharedDictionaryCreateInstance(
+BrotliSharedDictionary* duckdb_brotli::BrotliSharedDictionaryCreateInstance(
     brotli_alloc_func alloc_func, brotli_free_func free_func, void* opaque) {
   BrotliSharedDictionary* dict = 0;
   if (!alloc_func && !free_func) {

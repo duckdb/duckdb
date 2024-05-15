@@ -168,7 +168,7 @@ static const BrotliTransforms kBrotliTransforms = {
   {0, 12, 27, 23, 42, 63, 56, 48, 59, 64}
 };
 
-const BrotliTransforms* BrotliGetTransforms(void) {
+const BrotliTransforms* duckdb_brotli::BrotliGetTransforms(void) {
   return &kBrotliTransforms;
 }
 
@@ -231,7 +231,7 @@ static int Shift(uint8_t* word, int word_len, uint16_t parameter) {
   return 1;
 }
 
-int BrotliTransformDictionaryWord(uint8_t* dst, const uint8_t* word, int len,
+int duckdb_brotli::BrotliTransformDictionaryWord(uint8_t* dst, const uint8_t* word, int len,
     const BrotliTransforms* transforms, int transform_idx) {
   int idx = 0;
   const uint8_t* prefix = BROTLI_TRANSFORM_PREFIX(transforms, transform_idx);

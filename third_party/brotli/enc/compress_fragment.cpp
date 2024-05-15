@@ -752,7 +752,7 @@ static BROTLI_NOINLINE void BrotliCompressFragmentFastImpl ## B(             \
 FOR_TABLE_BITS_(BAKE_METHOD_PARAM_)
 #undef BAKE_METHOD_PARAM_
 
-void BrotliCompressFragmentFast(
+void duckdb_brotli::BrotliCompressFragmentFast(
     BrotliOnePassArena* s, const uint8_t* input, size_t input_size,
     BROTLI_BOOL is_last, int* table, size_t table_size,
     size_t* storage_ix, uint8_t* storage) {

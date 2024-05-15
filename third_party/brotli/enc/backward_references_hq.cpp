@@ -792,7 +792,7 @@ size_t duckdb_brotli::BrotliZopfliComputeShortestPath(MemoryManager* m, size_t n
   return ComputeShortestPathFromNodes(num_bytes, nodes);
 }
 
-void BrotliCreateZopfliBackwardReferences(MemoryManager* m, size_t num_bytes,
+void duckdb_brotli::BrotliCreateZopfliBackwardReferences(MemoryManager* m, size_t num_bytes,
     size_t position, const uint8_t* ringbuffer, size_t ringbuffer_mask,
     ContextLut literal_context_lut, const BrotliEncoderParams* params,
     Hasher* hasher, int* dist_cache, size_t* last_insert_len,
@@ -809,7 +809,7 @@ void BrotliCreateZopfliBackwardReferences(MemoryManager* m, size_t num_bytes,
   BROTLI_FREE(m, nodes);
 }
 
-void BrotliCreateHqZopfliBackwardReferences(MemoryManager* m, size_t num_bytes,
+void duckdb_brotli::BrotliCreateHqZopfliBackwardReferences(MemoryManager* m, size_t num_bytes,
     size_t position, const uint8_t* ringbuffer, size_t ringbuffer_mask,
     ContextLut literal_context_lut, const BrotliEncoderParams* params,
     Hasher* hasher, int* dist_cache, size_t* last_insert_len,

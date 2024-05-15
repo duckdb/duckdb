@@ -104,7 +104,7 @@ static BROTLI_INLINE double BitCost(size_t count) {
 #undef DataType
 #undef FN
 
-void BrotliInitBlockSplit(BlockSplit* self) {
+void duckdb_brotli::BrotliInitBlockSplit(BlockSplit* self) {
   self->num_types = 0;
   self->num_blocks = 0;
   self->types = 0;
@@ -113,14 +113,14 @@ void BrotliInitBlockSplit(BlockSplit* self) {
   self->lengths_alloc_size = 0;
 }
 
-void BrotliDestroyBlockSplit(MemoryManager* m, BlockSplit* self) {
+void duckdb_brotli::BrotliDestroyBlockSplit(MemoryManager* m, BlockSplit* self) {
   BROTLI_FREE(m, self->types);
   BROTLI_FREE(m, self->lengths);
 }
 
 /* Extracts literals, command distance and prefix codes, then applies
  * SplitByteVector to create partitioning. */
-void BrotliSplitBlock(MemoryManager* m,
+void duckdb_brotli::BrotliSplitBlock(MemoryManager* m,
                       const Command* cmds,
                       const size_t num_commands,
                       const uint8_t* data,

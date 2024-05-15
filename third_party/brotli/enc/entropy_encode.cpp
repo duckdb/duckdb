@@ -17,7 +17,7 @@
 
 using namespace duckdb_brotli;
 
-const size_t kBrotliShellGaps[] = {132, 57, 23, 10, 4, 1};
+const size_t duckdb_brotli::kBrotliShellGaps[] = {132, 57, 23, 10, 4, 1};
 
 BROTLI_BOOL duckdb_brotli::BrotliSetDepth(
     int p0, HuffmanTree* pool, uint8_t* depth, int max_depth) {

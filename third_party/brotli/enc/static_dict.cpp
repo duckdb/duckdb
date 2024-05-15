@@ -498,7 +498,7 @@ static BROTLI_BOOL BrotliFindAllStaticDictionaryMatchesFor(
 
 /* Finds matches for one or more dictionaries, if multiple are present
    in the contextual dictionary */
-BROTLI_BOOL BrotliFindAllStaticDictionaryMatches(
+BROTLI_BOOL duckdb_brotli::BrotliFindAllStaticDictionaryMatches(
     const BrotliEncoderDictionary* dictionary, const uint8_t* data,
     size_t min_length, size_t max_length, uint32_t* matches) {
   BROTLI_BOOL has_found_match =

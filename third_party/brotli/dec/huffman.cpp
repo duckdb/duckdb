@@ -100,7 +100,7 @@ static BROTLI_INLINE int NextTableBitSize(const uint16_t* const count,
   return len - root_bits;
 }
 
-void BrotliBuildCodeLengthsHuffmanTable(HuffmanCode* table,
+void duckdb_brotli::BrotliBuildCodeLengthsHuffmanTable(HuffmanCode* table,
                                         const uint8_t* const code_lengths,
                                         uint16_t* count) {
   HuffmanCode code;       /* current table entry */
@@ -167,7 +167,7 @@ void BrotliBuildCodeLengthsHuffmanTable(HuffmanCode* table,
   } while (++bits <= BROTLI_HUFFMAN_MAX_CODE_LENGTH_CODE_LENGTH);
 }
 
-uint32_t BrotliBuildHuffmanTable(HuffmanCode* root_table,
+uint32_t duckdb_brotli::BrotliBuildHuffmanTable(HuffmanCode* root_table,
                                  int root_bits,
                                  const uint16_t* const symbol_lists,
                                  uint16_t* count) {
@@ -259,7 +259,7 @@ uint32_t BrotliBuildHuffmanTable(HuffmanCode* root_table,
   return (uint32_t)total_size;
 }
 
-uint32_t BrotliBuildSimpleHuffmanTable(HuffmanCode* table,
+uint32_t duckdb_brotli::BrotliBuildSimpleHuffmanTable(HuffmanCode* table,
                                        int root_bits,
                                        uint16_t* val,
                                        uint32_t num_symbols) {

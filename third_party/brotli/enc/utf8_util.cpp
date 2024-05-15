@@ -63,7 +63,7 @@ static size_t BrotliParseAsUTF8(
 }
 
 /* Returns 1 if at least min_fraction of the data is UTF8-encoded.*/
-BROTLI_BOOL BrotliIsMostlyUTF8(
+BROTLI_BOOL duckdb_brotli::BrotliIsMostlyUTF8(
     const uint8_t* data, const size_t pos, const size_t mask,
     const size_t length, const double min_fraction) {
   size_t size_utf8 = 0;

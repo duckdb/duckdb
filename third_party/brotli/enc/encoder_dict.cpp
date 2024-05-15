@@ -482,7 +482,7 @@ static BROTLI_BOOL ComputeDictionary(MemoryManager* m, int quality,
 }
 #endif  /* BROTLI_EXPERIMENTAL */
 
-void BrotliInitSharedEncoderDictionary(SharedEncoderDictionary* dict) {
+void duckdb_brotli::BrotliInitSharedEncoderDictionary(SharedEncoderDictionary* dict) {
   dict->magic = kSharedDictionaryMagic;
 
   dict->compound.num_chunks = 0;
@@ -589,7 +589,7 @@ BROTLI_BOOL BrotliInitCustomSharedEncoderDictionary(
 }
 #endif  /* BROTLI_EXPERIMENTAL */
 
-void BrotliCleanupSharedEncoderDictionary(MemoryManager* m,
+void duckdb_brotli::BrotliCleanupSharedEncoderDictionary(MemoryManager* m,
                                           SharedEncoderDictionary* dict) {
   size_t i;
   for (i = 0; i < dict->compound.num_prepared_instances_; i++) {
@@ -606,7 +606,7 @@ void BrotliCleanupSharedEncoderDictionary(MemoryManager* m,
   }
 }
 
-ManagedDictionary* BrotliCreateManagedDictionary(
+ManagedDictionary* duckdb_brotli::BrotliCreateManagedDictionary(
     brotli_alloc_func alloc_func, brotli_free_func free_func, void* opaque) {
   ManagedDictionary* result = (ManagedDictionary*)BrotliBootstrapAlloc(
       sizeof(ManagedDictionary), alloc_func, free_func, opaque);
@@ -620,7 +620,7 @@ ManagedDictionary* BrotliCreateManagedDictionary(
   return result;
 }
 
-void BrotliDestroyManagedDictionary(ManagedDictionary* dictionary) {
+void duckdb_brotli::BrotliDestroyManagedDictionary(ManagedDictionary* dictionary) {
   if (!dictionary) return;
   BrotliBootstrapFree(dictionary, &dictionary->memory_manager_);
 }

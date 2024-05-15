@@ -5895,11 +5895,11 @@ static BrotliDictionary kBrotliDictionary = {
 #endif
 };
 
-const BrotliDictionary* BrotliGetDictionary(void) {
+const BrotliDictionary* duckdb_brotli::BrotliGetDictionary(void) {
   return &kBrotliDictionary;
 }
 
-void BrotliSetDictionaryData(const uint8_t* data) {
+void duckdb_brotli::BrotliSetDictionaryData(const uint8_t* data) {
 #if defined(BROTLI_EXTERNAL_DICTIONARY_DATA)
   if (!!data && !kBrotliDictionary.data) {
     kBrotliDictionary.data = data;

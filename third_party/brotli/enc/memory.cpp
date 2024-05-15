@@ -26,7 +26,7 @@ using namespace duckdb_brotli;
 #define NEW_ALLOCATED_OFFSET MAX_PERM_ALLOCATED
 #define NEW_FREED_OFFSET (MAX_PERM_ALLOCATED + MAX_NEW_ALLOCATED)
 
-void BrotliInitMemoryManager(
+void duckdb_brotli::BrotliInitMemoryManager(
     MemoryManager* m, brotli_alloc_func alloc_func, brotli_free_func free_func,
     void* opaque) {
   if (!alloc_func) {
@@ -48,17 +48,17 @@ void BrotliInitMemoryManager(
 
 #if defined(BROTLI_ENCODER_EXIT_ON_OOM)
 
-void* BrotliAllocate(MemoryManager* m, size_t n) {
+void* duckdb_brotli::BrotliAllocate(MemoryManager* m, size_t n) {
   void* result = m->alloc_func(m->opaque, n);
   if (!result) exit(EXIT_FAILURE);
   return result;
 }
 
-void BrotliFree(MemoryManager* m, void* p) {
+void duckdb_brotli::BrotliFree(MemoryManager* m, void* p) {
   m->free_func(m->opaque, p);
 }
 
-void BrotliWipeOutMemoryManager(MemoryManager* m) {
+void duckdb_brotli::BrotliWipeOutMemoryManager(MemoryManager* m) {
   BROTLI_UNUSED(m);
 }
 
@@ -165,7 +165,7 @@ void BrotliWipeOutMemoryManager(MemoryManager* m) {
 
 #endif  /* BROTLI_ENCODER_EXIT_ON_OOM */
 
-void* BrotliBootstrapAlloc(size_t size,
+void* duckdb_brotli::BrotliBootstrapAlloc(size_t size,
     brotli_alloc_func alloc_func, brotli_free_func free_func, void* opaque) {
   if (!alloc_func && !free_func) {
     return malloc(size);
@@ -175,7 +175,7 @@ void* BrotliBootstrapAlloc(size_t size,
   return NULL;
 }
 
-void BrotliBootstrapFree(void* address, MemoryManager* m) {
+void duckdb_brotli::BrotliBootstrapFree(void* address, MemoryManager* m) {
   if (!address) {
     /* Should not happen! */
     return;
