@@ -36,6 +36,7 @@ struct ExtraTypeInfo {
 
 	ExtraTypeInfoType type;
 	string alias;
+	child_list_t<Value> properties;
 
 public:
 	bool Equals(ExtraTypeInfo *other_p) const;

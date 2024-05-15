@@ -319,6 +319,10 @@ struct LogicalType {
 	DUCKDB_API void SetAlias(string alias);
 	DUCKDB_API bool HasAlias() const;
 	DUCKDB_API string GetAlias() const;
+	DUCKDB_API void SetProperties(child_list_t<Value> properties);
+	DUCKDB_API const child_list_t<Value> GetProperties() const;
+	DUCKDB_API Value GetProperty(const string &key) const;
+	DUCKDB_API void SetProperty(const string &key, Value value);
 
 	//! Returns the maximum logical type when combining the two types - or throws an exception if combining is not possible
 	DUCKDB_API static LogicalType MaxLogicalType(ClientContext &context, const LogicalType &left, const LogicalType &right);

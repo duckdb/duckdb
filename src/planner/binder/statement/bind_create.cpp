@@ -203,6 +203,7 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 		auto child_type = ListType::GetChildType(type);
 		BindLogicalType(context, child_type, catalog, schema);
 		auto alias = type.GetAlias();
+		auto properties = type.GetProperties();
 		if (type.id() == LogicalTypeId::LIST) {
 			type = LogicalType::LIST(child_type);
 		} else {
@@ -211,6 +212,7 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 		}
 
 		type.SetAlias(alias);
+		type.SetProperties(properties);
 	} else if (type.id() == LogicalTypeId::STRUCT) {
 		auto child_types = StructType::GetChildTypes(type);
 		for (auto &child_type : child_types) {
@@ -218,15 +220,19 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 		}
 		// Generate new Struct Type
 		auto alias = type.GetAlias();
+		auto properties = type.GetProperties();
 		type = LogicalType::STRUCT(child_types);
 		type.SetAlias(alias);
+		type.SetProperties(properties);
 	} else if (type.id() == LogicalTypeId::ARRAY) {
 		auto child_type = ArrayType::GetChildType(type);
 		auto array_size = ArrayType::GetSize(type);
 		BindLogicalType(context, child_type, catalog, schema);
 		auto alias = type.GetAlias();
+		auto properties = type.GetProperties();
 		type = LogicalType::ARRAY(child_type, array_size);
 		type.SetAlias(alias);
+		type.SetProperties(properties);
 	} else if (type.id() == LogicalTypeId::UNION) {
 		auto member_types = UnionType::CopyMemberTypes(type);
 		for (auto &member_type : member_types) {
@@ -234,8 +240,10 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 		}
 		// Generate new Union Type
 		auto alias = type.GetAlias();
+		auto properties = type.GetProperties();
 		type = LogicalType::UNION(member_types);
 		type.SetAlias(alias);
+		type.SetProperties(properties);
 	} else if (type.id() == LogicalTypeId::USER) {
 		auto user_type_name = UserType::GetTypeName(type);
 		if (catalog) {

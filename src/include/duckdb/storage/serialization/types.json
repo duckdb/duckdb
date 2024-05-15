@@ -15,6 +15,12 @@
         "id": 101,
         "name": "alias",
         "type": "string"
+      },
+      {
+        "id": 102,
+        "name": "properties",
+        "type": "child_list_t<Value>",
+        "default": "child_list_t<Value>()"
       }
     ],
     "pointer_type": "shared_ptr"

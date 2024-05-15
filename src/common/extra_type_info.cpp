@@ -18,6 +18,31 @@ ExtraTypeInfo::ExtraTypeInfo(ExtraTypeInfoType type, string alias) : type(type),
 ExtraTypeInfo::~ExtraTypeInfo() {
 }
 
+static bool CompareProperties(const child_list_t<Value> &left, const child_list_t<Value> &right) {
+	// Check if the intersection of the properties is the same for both types
+	auto common_props = MinValue(left.size(), right.size());
+	for (idx_t i = 0; i < common_props; i++) {
+		if (left[i].first != right[i].first) {
+			return false;
+		}
+		auto &lv = left[i].second;
+		auto &rv = right[i].second;
+
+		// Special case for nulls:
+		// NULL == NULL, but NULL != <any other value>
+		if(lv.IsNull() || rv.IsNull()){
+			if(lv.IsNull() && rv.IsNull()) {
+				continue;
+			}
+			return false;
+		}
+		if(lv != rv){
+			return false;
+		}
+	}
+	return true;
+}
+
 bool ExtraTypeInfo::Equals(ExtraTypeInfo *other_p) const {
 	if (type == ExtraTypeInfoType::INVALID_TYPE_INFO || type == ExtraTypeInfoType::STRING_TYPE_INFO ||
 	    type == ExtraTypeInfoType::GENERIC_TYPE_INFO) {
@@ -31,6 +56,9 @@ bool ExtraTypeInfo::Equals(ExtraTypeInfo *other_p) const {
 		if (alias != other_p->alias) {
 			return false;
 		}
+		if(!CompareProperties(properties, other_p->properties)) {
+			return false;
+		}
 		return true;
 	}
 	if (!other_p) {
@@ -39,7 +67,13 @@ bool ExtraTypeInfo::Equals(ExtraTypeInfo *other_p) const {
 	if (type != other_p->type) {
 		return false;
 	}
-	return alias == other_p->alias && EqualsInternal(other_p);
+	if( alias != other_p->alias){
+		return false;
+	}
+	if(!CompareProperties(properties, other_p->properties)) {
+		return false;
+	}
+	return EqualsInternal(other_p);
 }
 
 bool ExtraTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {

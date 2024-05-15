@@ -364,6 +364,17 @@ string LogicalType::ToString() const {
 	if (id_ != LogicalTypeId::USER) {
 		auto alias = GetAlias();
 		if (!alias.empty()) {
+			auto props = GetProperties();
+			if (!props.empty()) {
+				alias += "(";
+				for(size_t i = 0; i < props.size(); i++) {
+					alias += props[i].second.ToString();
+					if (i < props.size() - 1) {
+						alias += ", ";
+					}
+				}
+				alias += ")";
+			}
 			return alias;
 		}
 	}
@@ -1157,6 +1168,45 @@ bool LogicalType::HasAlias() const {
 		return true;
 	}
 	return false;
+}
+
+void LogicalType::SetProperties(child_list_t<Value> properties) {
+	if (!type_info_) {
+		type_info_ = make_shared_ptr<ExtraTypeInfo>(ExtraTypeInfoType::GENERIC_TYPE_INFO);
+		type_info_->properties = std::move(properties);
+	}
+}
+
+const child_list_t<Value> LogicalType::GetProperties() const {
+	if (type_info_) {
+		return type_info_->properties;
+	}
+	return child_list_t<Value>();
+}
+
+Value LogicalType::GetProperty(const string &key) const {
+	if (!type_info_) {
+		return Value();
+	}
+	for (auto &prop : type_info_->properties) {
+		if (prop.first == key) {
+			return prop.second;
+		}
+	}
+	return Value();
+}
+
+void LogicalType::SetProperty(const string &key, Value value) {
+	if (!type_info_) {
+		type_info_ = make_shared_ptr<ExtraTypeInfo>(ExtraTypeInfoType::GENERIC_TYPE_INFO);
+	}
+	for (auto &prop : type_info_->properties) {
+		if (prop.first == key) {
+			prop.second = std::move(value);
+			return;
+		}
+	}
+	type_info_->properties.emplace_back(key, std::move(value));
 }
 
 //===--------------------------------------------------------------------===//
