@@ -149,9 +149,10 @@ TableFunctionCatalogEntry &ExtensionUtil::GetTableFunction(DatabaseInstance &db,
 	return catalog_entry->Cast<TableFunctionCatalogEntry>();
 }
 
-void ExtensionUtil::RegisterType(DatabaseInstance &db, string type_name, LogicalType type) {
+void ExtensionUtil::RegisterType(DatabaseInstance &db, string type_name, LogicalType type,
+                                 bind_type_modifiers_function_t bind_modifiers) {
 	D_ASSERT(!type_name.empty());
-	CreateTypeInfo info(std::move(type_name), std::move(type));
+	CreateTypeInfo info(std::move(type_name), std::move(type), bind_modifiers);
 	info.temporary = true;
 	info.internal = true;
 	auto &system_catalog = Catalog::GetSystemCatalog(db);

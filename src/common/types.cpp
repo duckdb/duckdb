@@ -366,20 +366,14 @@ string LogicalType::ToString() const {
 		if (!alias.empty()) {
 			if (HasModifiers()) {
 				auto &mods = GetModifiersUnsafe();
-				auto null_suffix_start = mods.size();
-				while (null_suffix_start > 0 && mods[null_suffix_start - 1].IsNull()) {
-					null_suffix_start--;
-				}
-				if (null_suffix_start > 0) {
-					alias += "(";
-					for (idx_t i = 0; i < null_suffix_start; i++) {
-						alias += mods[i].ToString();
-						if (i < mods.size() - 1) {
-							alias += ", ";
-						}
+				alias += "(";
+				for (idx_t i = 0; i < mods.size(); i++) {
+					alias += mods[i].ToString();
+					if (i < mods.size() - 1) {
+						alias += ", ";
 					}
-					alias += ")";
 				}
+				alias += ")";
 			}
 			return alias;
 		}

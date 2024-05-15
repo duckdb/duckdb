@@ -260,7 +260,7 @@ struct BoundedType {
 		return type;
 	}
 
-	static LogicalType GetAny() {
+	static LogicalType GetDefault() {
 		auto type = LogicalType(LogicalTypeId::INTEGER);
 		type.SetAlias("BOUNDED");
 		// By default we set a NULL max value to indicate that it can be any value
@@ -280,31 +280,13 @@ struct BoundedType {
 	}
 };
 
-static void MakeBoundedFunc(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto max_val = BoundedType::GetMaxValue(result.GetType());
-	UnaryExecutor::Execute<int32_t, int32_t>(args.data[0], result, args.size(), [&](int32_t input) {
-		if (input > max_val) {
-			throw ConversionException(StringUtil::Format("Value %s exceeds max value of bounded type (%s)",
-			                                             to_string(input), to_string(max_val)));
-		}
-		return input;
-	});
-}
-static unique_ptr<FunctionData> MakeBoundedBind(ClientContext &context, ScalarFunction &bound_function,
-                                                vector<unique_ptr<Expression>> &arguments) {
-	auto max_val = arguments[1]->Cast<BoundConstantExpression>().value.GetValue<int32_t>();
-	bound_function.return_type = BoundedType::Get(max_val);
-	;
-	return nullptr;
-}
-
 static void BoundedMaxFunc(DataChunk &args, ExpressionState &state, Vector &result) {
 	result.Reference(BoundedType::GetMaxValue(args.data[0].GetType()));
 }
 
 static unique_ptr<FunctionData> BoundedMaxBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
-	if (arguments[0]->return_type == BoundedType::GetAny()) {
+	if (arguments[0]->return_type == BoundedType::GetDefault()) {
 		bound_function.arguments[0] = arguments[0]->return_type;
 	} else {
 		throw BinderException("bounded_max expects a BOUNDED type");
@@ -322,7 +304,8 @@ static void BoundedAddFunc(DataChunk &args, ExpressionState &state, Vector &resu
 
 static unique_ptr<FunctionData> BoundedAddBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
-	if (BoundedType::GetAny() == arguments[0]->return_type && BoundedType::GetAny() == arguments[1]->return_type) {
+	if (BoundedType::GetDefault() == arguments[0]->return_type &&
+	    BoundedType::GetDefault() == arguments[1]->return_type) {
 		auto left_max_val = BoundedType::GetMaxValue(arguments[0]->return_type);
 		auto right_max_val = BoundedType::GetMaxValue(arguments[1]->return_type);
 
@@ -353,7 +336,7 @@ struct BoundedFunctionData : public FunctionData {
 
 static unique_ptr<FunctionData> BoundedInvertBind(ClientContext &context, ScalarFunction &bound_function,
                                                   vector<unique_ptr<Expression>> &arguments) {
-	if (arguments[0]->return_type == BoundedType::GetAny()) {
+	if (arguments[0]->return_type == BoundedType::GetDefault()) {
 		bound_function.arguments[0] = arguments[0]->return_type;
 		bound_function.return_type = arguments[0]->return_type;
 	} else {
@@ -421,6 +404,81 @@ static bool IntToBoundedCast(Vector &source, Vector &result, idx_t count, CastPa
 }
 
 //===--------------------------------------------------------------------===//
+//  MINMAX type
+//===--------------------------------------------------------------------===//
+// This is like the BOUNDED type, except it has a custom bind_modifiers function
+// to verify that the range is valid
+
+struct MinMaxType {
+	static void Bind(ClientContext &ctx, LogicalType &type, const vector<Value> &modifiers) {
+		if (modifiers.size() != 2) {
+			throw BinderException("MINMAX type must have two modifiers");
+		}
+		if (modifiers[0].type() != LogicalType::INTEGER || modifiers[1].type() != LogicalType::INTEGER) {
+			throw BinderException("MINMAX type modifiers must be integers");
+		}
+		if (modifiers[0].IsNull() || modifiers[1].IsNull()) {
+			throw BinderException("MINMAX type modifiers cannot be NULL");
+		}
+
+		auto min_val = modifiers[0].GetValue<int32_t>();
+		auto max_val = modifiers[1].GetValue<int32_t>();
+		if (min_val >= max_val) {
+			throw BinderException("MINMAX type min value must be less than max value");
+		}
+		type = LogicalType::INTEGER;
+		type.SetAlias("MINMAX");
+		type.SetModifiers({Value::INTEGER(min_val), Value::INTEGER(max_val)});
+	}
+
+	static int32_t GetMinValue(const LogicalType &type) {
+		D_ASSERT(type.HasModifiers());
+		auto &props = type.GetModifiersUnsafe();
+		return props[0].GetValue<int32_t>();
+	}
+
+	static int32_t GetMaxValue(const LogicalType &type) {
+		D_ASSERT(type.HasModifiers());
+		auto &props = type.GetModifiersUnsafe();
+		return props[1].GetValue<int32_t>();
+	}
+
+	static LogicalType Get(int32_t min_val, int32_t max_val) {
+		auto type = LogicalType(LogicalTypeId::INTEGER);
+		type.SetAlias("MINMAX");
+		type.SetModifiers({Value::INTEGER(min_val), Value::INTEGER(max_val)});
+		return type;
+	}
+
+	static LogicalType GetDefault() {
+		auto type = LogicalType(LogicalTypeId::INTEGER);
+		type.SetAlias("MINMAX");
+		return type;
+	}
+};
+
+static bool IntToMinMaxCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	auto &ty = result.GetType();
+	auto min_val = MinMaxType::GetMinValue(ty);
+	auto max_val = MinMaxType::GetMaxValue(ty);
+	UnaryExecutor::Execute<int32_t, int32_t>(source, result, count, [&](int32_t input) {
+		if (input < min_val || input > max_val) {
+			throw ConversionException(StringUtil::Format("Value %s is outside of range [%s,%s]", to_string(input),
+			                                             to_string(min_val), to_string(max_val)));
+		}
+		return input;
+	});
+	return true;
+}
+
+static void MinMaxRangeFunc(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &ty = args.data[0].GetType();
+	auto min_val = MinMaxType::GetMinValue(ty);
+	auto max_val = MinMaxType::GetMaxValue(ty);
+	result.Reference(Value::INTEGER(max_val - min_val));
+}
+
+//===--------------------------------------------------------------------===//
 // Extension load + setup
 //===--------------------------------------------------------------------===//
 extern "C" {
@@ -479,12 +537,8 @@ DUCKDB_EXTENSION_API void loadable_extension_demo_init(duckdb::DatabaseInstance 
 	config.extension_callbacks.push_back(make_uniq<QuackLoadExtension>());
 
 	// Bounded type
-	auto bounded_type = BoundedType::GetAny();
+	auto bounded_type = BoundedType::GetDefault();
 	ExtensionUtil::RegisterType(db, "BOUNDED", bounded_type);
-
-	ScalarFunction make_bounded("make_bounded", {LogicalType::INTEGER, LogicalType::INTEGER}, bounded_type,
-	                            MakeBoundedFunc, MakeBoundedBind);
-	ExtensionUtil::RegisterFunction(db, make_bounded);
 
 	// Example of function inspecting the type property
 	ScalarFunction bounded_max("bounded_max", {bounded_type}, LogicalType::INTEGER, BoundedMaxFunc, BoundedMaxBind);
@@ -516,6 +570,13 @@ DUCKDB_EXTENSION_API void loadable_extension_demo_init(duckdb::DatabaseInstance 
 	                                    0);
 	// Casts
 	ExtensionUtil::RegisterCastFunction(db, LogicalType::INTEGER, bounded_type, BoundCastInfo(IntToBoundedCast), 0);
+
+	// MinMax Type
+	auto minmax_type = MinMaxType::GetDefault();
+	ExtensionUtil::RegisterType(db, "MINMAX", minmax_type, MinMaxType::Bind);
+	ExtensionUtil::RegisterCastFunction(db, LogicalType::INTEGER, minmax_type, BoundCastInfo(IntToMinMaxCast), 0);
+	ExtensionUtil::RegisterFunction(
+	    db, ScalarFunction("minmax_range", {minmax_type}, LogicalType::INTEGER, MinMaxRangeFunc));
 }
 
 DUCKDB_EXTENSION_API const char *loadable_extension_demo_version() {

@@ -247,31 +247,51 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 	} else if (type.id() == LogicalTypeId::USER) {
 		auto user_type_name = UserType::GetTypeName(type);
 		auto user_type_mods = UserType::GetTypeModifiers(type);
+
+		bind_type_modifiers_function_t user_bind_modifiers_func = nullptr;
+
 		if (catalog) {
 			// The search order is:
 			// 1) In the same schema as the table
 			// 2) In the same catalog
 			// 3) System catalog
-			type = catalog->GetType(context, schema, user_type_name, OnEntryNotFound::RETURN_NULL);
-
-			if (type.id() == LogicalTypeId::INVALID) {
-				type = catalog->GetType(context, INVALID_SCHEMA, user_type_name, OnEntryNotFound::RETURN_NULL);
+			auto entry =
+			    catalog->GetEntry<TypeCatalogEntry>(context, schema, user_type_name, OnEntryNotFound::RETURN_NULL);
+			if (!entry || entry->user_type.id() == LogicalTypeId::INVALID) {
+				entry = catalog->GetEntry<TypeCatalogEntry>(context, INVALID_SCHEMA, user_type_name,
+				                                            OnEntryNotFound::RETURN_NULL);
+				if (!entry || entry->user_type.id() == LogicalTypeId::INVALID) {
+					entry = Catalog::GetEntry<TypeCatalogEntry>(context, INVALID_CATALOG, INVALID_SCHEMA,
+					                                            user_type_name, OnEntryNotFound::THROW_EXCEPTION);
+				}
 			}
-
-			if (type.id() == LogicalTypeId::INVALID) {
-				type = Catalog::GetType(context, INVALID_CATALOG, INVALID_SCHEMA, user_type_name);
-			}
+			type = entry->user_type;
+			user_bind_modifiers_func = entry->bind_modifiers;
 		} else {
 			string type_catalog = UserType::GetCatalog(type);
 			string type_schema = UserType::GetSchema(type);
 			BindSchemaOrCatalog(context, type_catalog, type_schema);
-			type = Catalog::GetType(context, type_catalog, type_schema, user_type_name);
+			auto entry = Catalog::GetEntry<TypeCatalogEntry>(context, type_catalog, type_schema, user_type_name,
+			                                                 OnEntryNotFound::THROW_EXCEPTION);
+			type = entry->user_type;
+			user_bind_modifiers_func = entry->bind_modifiers;
 		}
+
 		BindLogicalType(context, type, catalog, schema);
 
 		// Apply the type modifiers (if any)
-		if (type.HasModifiers()) {
+		if (user_bind_modifiers_func) {
+			// If an explicit bind_modifiers function was provided, use that to set the type modifier
+			type.MakeTypeInfoUnique();
+			user_bind_modifiers_func(context, type, user_type_mods);
+
+		} else if (type.HasModifiers()) {
+			// If the type already has modifiers, try to replace them with the user-provided ones if they are compatible
+			// This enables registering custom types with "default" type modifiers that can be overridden, without
+			// having to provide a custom bind_modifiers function
 			auto type_mods_size = type.GetModifiersUnsafe().size();
+
+			// Are we trying to pass more type modifiers than the type has?
 			if (user_type_mods.size() > type_mods_size) {
 				throw BinderException(
 				    "Cannot apply '%d' type modifier(s) to type '%s' taking at most '%d' type modifier(s)",

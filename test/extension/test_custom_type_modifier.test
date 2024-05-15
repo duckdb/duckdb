@@ -111,3 +111,89 @@ statement error
 SELECT 1::BOUNDED(900000000000000000)
 ----
 Binder Error: Cannot apply type modifier '900000000000000000' to type 'BOUNDED', expected value of type 'INTEGER'
+
+
+# MinMax Type
+# This is similar to bounded, except it uses a custom bind function to enforce the min/max values at construction time
+statement ok
+CREATE TABLE t5 (i MINMAX(200, 300));
+
+statement ok
+INSERT INTO t5 VALUES (200), (300);
+
+statement error
+INSERT INTO t5 VALUES (199);
+----
+Conversion Error: Value 199 is outside of range [200,300]
+
+statement error
+INSERT INTO t5 VALUES (301);
+----
+Conversion Error: Value 301 is outside of range [200,300]
+
+statement error
+SELECT 10::MINMAX(0, 1);
+----
+Conversion Error: Value 10 is outside of range [0,1]
+
+statement error
+SELECT 10::MINMAX(1337);
+----
+Binder Error: MINMAX type must have two modifiers
+
+statement error
+SELECT 10::MINMAX('foob', 10);
+----
+Binder Error: MINMAX type modifiers must be integers
+
+statement error
+SELECT 10::MINMAX(10, NULL::INTEGER);
+----
+Parser Error: Expected a constant as type modifier
+
+statement error
+SELECT 10::MINMAX(15, 10);
+----
+Binder Error: MINMAX type min value must be less than max value
+
+
+
+# Test with creating an index
+statement ok
+CREATE TABLE minmax_table (i MINMAX(0, 100));
+
+statement ok
+INSERT INTO minmax_table VALUES (0), (10), (20), (30), (40), (50), (60), (70), (80), (90), (100);
+
+statement ok
+CREATE INDEX minmax_index ON minmax_table(i);
+
+query I
+SELECT * FROM minmax_table WHERE i = 50;
+----
+50
+
+statement ok
+PRAGMA explain_output='optimized_only'
+
+query II
+EXPLAIN SELECT * FROM minmax_table WHERE i = 50;
+----
+logical_opt	<REGEX>:.*INDEX_SCAN.*
+
+# Check the typename in the catalog
+query I
+SELECT parameter_types from duckdb_functions() where function_name = 'minmax_range';
+----
+[MINMAX]
+
+query I
+SELECT parameter_types from duckdb_functions() where function_name = 'bounded_ascii';
+----
+[BOUNDED(255)]
+
+# BOUNDED's default type modifier values is NULL, but it could theorietically be set to something else
+query I
+SELECT parameter_types from duckdb_functions() where function_name = 'bounded_add';
+----
+[BOUNDED(NULL), BOUNDED(NULL)]
