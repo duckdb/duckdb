@@ -10,6 +10,7 @@ unique_ptr<LoadStatement> Transformer::TransformLoad(duckdb_libpgquery::PGLoadSt
 	auto load_info = make_uniq<LoadInfo>();
 	load_info->filename = stmt.filename ? string(stmt.filename) : "";
 	load_info->repository = stmt.repository ? string(stmt.repository) : "";
+	load_info->repo_is_alias = stmt.repo_is_alias;
 	load_info->version = stmt.version ? string(stmt.version) : "";
 	switch (stmt.load_type) {
 	case duckdb_libpgquery::PG_LOAD_TYPE_LOAD:

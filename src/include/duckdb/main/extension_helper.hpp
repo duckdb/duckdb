@@ -86,10 +86,12 @@ public:
 
 	//! Install an extension
 	static unique_ptr<ExtensionInstallInfo> InstallExtension(ClientContext &context, const string &extension,
-	                                                         bool force_install, const string &repository = "",
+	                                                         bool force_install,
+	                                                         optional_ptr<ExtensionRepository> repository = nullptr,
 	                                                         const string &version = "");
 	static unique_ptr<ExtensionInstallInfo> InstallExtension(DBConfig &config, FileSystem &fs, const string &extension,
-	                                                         bool force_install, const string &respository = "",
+	                                                         bool force_install,
+	                                                         optional_ptr<ExtensionRepository> repository = nullptr,
 	                                                         const string &version = "");
 	//! Load an extension
 	static void LoadExternalExtension(ClientContext &context, const string &extension);
@@ -118,7 +120,7 @@ public:
 	static ParsedExtensionMetaData ParseExtensionMetaData(FileHandle &handle);
 
 	//! Get the extension url template, containing placeholders for version, platform and extension name
-	static string ExtensionUrlTemplate(optional_ptr<const DBConfig> config, const string &repository,
+	static string ExtensionUrlTemplate(optional_ptr<const DBConfig> config, const ExtensionRepository &repository,
 	                                   const string &version);
 	//! Return the extension url template with the variables replaced
 	static string ExtensionFinalizeUrlTemplate(const string &url, const string &name);
@@ -212,8 +214,8 @@ public:
 private:
 	static unique_ptr<ExtensionInstallInfo> InstallExtensionInternal(DBConfig &config, FileSystem &fs,
 	                                                                 const string &local_path, const string &extension,
-	                                                                 bool force_install, const string &repository,
-	                                                                 const string &version,
+	                                                                 bool force_install, const string &version,
+	                                                                 optional_ptr<ExtensionRepository> repository,
 	                                                                 optional_ptr<HTTPLogger> http_logger = nullptr,
 	                                                                 optional_ptr<ClientContext> context = nullptr);
 	static const vector<string> PathComponents();

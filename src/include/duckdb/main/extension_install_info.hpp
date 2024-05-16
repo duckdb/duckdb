@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "duckdb/common/types.hpp"
+#include "duckdb/main/config.hpp"
 
 #pragma once
 
@@ -40,7 +41,8 @@ public:
 	void Serialize(Serializer &serializer) const;
 
 	//! Try to read install info. returns ExtensionInstallMode::UNKNOWN on missing file, and throws on corrupt file
-	static unique_ptr<ExtensionInstallInfo> TryReadInfoFile(FileSystem &fs, const string &info_file_path, const string &extension_name);
+	static unique_ptr<ExtensionInstallInfo> TryReadInfoFile(FileSystem &fs, const string &info_file_path,
+	                                                        const string &extension_name);
 
 protected:
 	static unique_ptr<ExtensionInstallInfo> Deserialize(Deserializer &deserializer);
@@ -65,6 +67,24 @@ struct ExtensionRepository {
 	static string TryGetRepositoryUrl(const string &repository);
 	//! Try to convert a url to a known repository name, will return empty string if the repository is unknown
 	static string TryConvertUrlToKnownRepository(const string &url);
+
+	//! Get the default repository, optionally passing a config to allow
+	static ExtensionRepository GetDefaultRepository(optional_ptr<DBConfig> config);
+	static ExtensionRepository GetDefaultRepository(ClientContext &context);
+
+	static ExtensionRepository GetCoreRepository();
+	static ExtensionRepository GetRepositoryByUrl(const string &url);
+
+	ExtensionRepository();
+	ExtensionRepository(const string &name, const string &url);
+
+	//! Print the name if it has one, or the full path if not
+	string ToReadableString();
+
+	//! Repository name
+	string name;
+	//! Repository path/url
+	string path;
 };
 
 } // namespace duckdb

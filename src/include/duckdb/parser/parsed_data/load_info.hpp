@@ -24,6 +24,7 @@ public:
 
 	string filename;
 	string repository;
+	bool repo_is_alias;
 	string version;
 	LoadType load_type;
 

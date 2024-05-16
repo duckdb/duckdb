@@ -44,7 +44,46 @@ string ExtensionRepository::TryConvertUrlToKnownRepository(const string &url) {
 	return "";
 }
 
-unique_ptr<ExtensionInstallInfo> ExtensionInstallInfo::TryReadInfoFile(FileSystem &fs, const std::string &info_file_path, const std::string &extension_name) {
+ExtensionRepository ExtensionRepository::GetDefaultRepository(optional_ptr<DBConfig> config) {
+	if (config && !config->options.custom_extension_repo.empty()) {
+		return ExtensionRepository("", config->options.custom_extension_repo);
+	}
+
+	return GetCoreRepository();
+}
+ExtensionRepository ExtensionRepository::GetDefaultRepository(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return GetDefaultRepository(config);
+}
+
+ExtensionRepository ExtensionRepository::GetCoreRepository() {
+	return {"core", CORE_REPOSITORY_URL};
+}
+
+ExtensionRepository ExtensionRepository::GetRepositoryByUrl(const string &url) {
+	if (url.empty()) {
+		return GetCoreRepository();
+	}
+
+	auto repo_name = TryConvertUrlToKnownRepository(url);
+	return {repo_name, url};
+}
+
+ExtensionRepository::ExtensionRepository() : name("core"), path(CORE_REPOSITORY_URL) {
+}
+ExtensionRepository::ExtensionRepository(const string &name_p, const string &path_p) : name(name_p), path(path_p) {
+}
+
+string ExtensionRepository::ToReadableString() {
+	if (!name.empty()) {
+		return name;
+	}
+	return path;
+}
+
+unique_ptr<ExtensionInstallInfo> ExtensionInstallInfo::TryReadInfoFile(FileSystem &fs,
+                                                                       const std::string &info_file_path,
+                                                                       const std::string &extension_name) {
 	unique_ptr<ExtensionInstallInfo> result;
 
 	string hint = StringUtil::Format("Try reinstalling the extension using 'FORCE INSTALL %s;'", extension_name);
@@ -54,18 +93,20 @@ unique_ptr<ExtensionInstallInfo> ExtensionInstallInfo::TryReadInfoFile(FileSyste
 		return make_uniq<ExtensionInstallInfo>();
 	}
 
-    auto file_reader = BufferedFileReader(fs, info_file_path.c_str());
-    if (!file_reader.Finished()) {
-        BinaryDeserializer deserializer(file_reader);
-        deserializer.Begin();
+	auto file_reader = BufferedFileReader(fs, info_file_path.c_str());
+	if (!file_reader.Finished()) {
+		BinaryDeserializer deserializer(file_reader);
+		deserializer.Begin();
 		try {
-            result = ExtensionInstallInfo::Deserialize(deserializer);
+			result = ExtensionInstallInfo::Deserialize(deserializer);
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
-			throw IOException("Failed to read info file for '%s' extension: '%s'.\nA serialization error occured: '%s'\n%s", extension_name, info_file_path, error.RawMessage(), hint);
+			throw IOException(
+			    "Failed to read info file for '%s' extension: '%s'.\nA serialization error occured: '%s'\n%s",
+			    extension_name, info_file_path, error.RawMessage(), hint);
 		}
-        deserializer.End();
-    }
+		deserializer.End();
+	}
 
 	return result;
 }

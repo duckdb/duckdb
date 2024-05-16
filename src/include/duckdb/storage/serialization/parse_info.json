@@ -510,6 +510,11 @@
         "id": 203,
         "name": "version",
         "type": "string"
+      },
+      {
+        "id": 204,
+        "name": "repo_is_alias",
+        "type": "bool"
       }
     ]
   },

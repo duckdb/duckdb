@@ -212,8 +212,8 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 	try {
 		if (dbconfig.options.autoinstall_known_extensions) {
 			auto &config = DBConfig::GetConfig(context);
-			ExtensionHelper::InstallExtension(context, extension_name, false,
-			                                  config.options.autoinstall_extension_repo);
+			auto autoinstall_repo = ExtensionRepository::GetRepositoryByUrl(config.options.autoinstall_extension_repo);
+			ExtensionHelper::InstallExtension(context, extension_name, false, autoinstall_repo);
 		}
 		ExtensionHelper::LoadExternalExtension(context, extension_name);
 		return true;
@@ -250,7 +250,6 @@ static ExtensionUpdateResult UpdateExtensionInternal(DatabaseInstance &db, FileS
 
 	result.prev_version = parsed_metadata.AppearsValid() ? parsed_metadata.extension_version : "";
 
-
 	auto extension_install_info = ExtensionInstallInfo::TryReadInfoFile(fs, info_file_path, extension_name);
 
 	// Early out: no info file found
@@ -266,28 +265,29 @@ static ExtensionUpdateResult UpdateExtensionInternal(DatabaseInstance &db, FileS
 		return result;
 	}
 
-    result.repository = ExtensionRepository::GetRepository(extension_install_info->repository_url);
+	auto repository_from_info = ExtensionRepository::GetRepositoryByUrl(extension_install_info->repository_url);
+	result.repository = repository_from_info.ToReadableString();
 
-    // We force install the full url found in this file, throwing
-    unique_ptr<ExtensionInstallInfo> install_result;
-    try {
-        install_result = ExtensionHelper::InstallExtension(config, fs, extension_name, true, result.repository);
-    } catch (std::exception &e) {
-        ErrorData error(e);
-        error.Throw("Extension updating failed when trying to install '" + extension_name + "', original error: ");
-    }
+	// We force install the full url found in this file, throwing
+	unique_ptr<ExtensionInstallInfo> install_result;
+	try {
+		install_result = ExtensionHelper::InstallExtension(config, fs, extension_name, true, repository_from_info);
+	} catch (std::exception &e) {
+		ErrorData error(e);
+		error.Throw("Extension updating failed when trying to install '" + extension_name + "', original error: ");
+	}
 
-    result.installed_version = install_result->version;
+	result.installed_version = install_result->version;
 
-    if (result.installed_version.empty()) {
-        result.tag = ExtensionUpdateResultTag::REDOWNLOADED;
-    } else if (result.installed_version != result.prev_version) {
-        result.tag = ExtensionUpdateResultTag::UPDATED;
-    } else {
-        result.tag = ExtensionUpdateResultTag::NO_UPDATE_AVAILABLE;
-    }
+	if (result.installed_version.empty()) {
+		result.tag = ExtensionUpdateResultTag::REDOWNLOADED;
+	} else if (result.installed_version != result.prev_version) {
+		result.tag = ExtensionUpdateResultTag::UPDATED;
+	} else {
+		result.tag = ExtensionUpdateResultTag::NO_UPDATE_AVAILABLE;
+	}
 
-    return result;
+	return result;
 }
 
 vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(ClientContext &context) {
@@ -381,8 +381,9 @@ void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &exte
 		auto fs = FileSystem::CreateLocal();
 #ifndef DUCKDB_WASM
 		if (dbconfig.options.autoinstall_known_extensions) {
-			ExtensionHelper::InstallExtension(db.config, *fs, extension_name, false,
-			                                  dbconfig.options.autoinstall_extension_repo);
+			//! Get the autoloading repository
+			auto repository = ExtensionRepository::GetRepositoryByUrl(dbconfig.options.autoinstall_extension_repo);
+			ExtensionHelper::InstallExtension(db.config, *fs, extension_name, false, repository);
 		}
 #endif
 		ExtensionHelper::LoadExternalExtension(db, *fs, extension_name);
