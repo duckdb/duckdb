@@ -136,7 +136,7 @@ jobs:
         target_branch="${{ github.event.pull_request.base.ref }}"
 
         git remote add base ${{ github.event.pull_request.base.repo.html_url }}
-        git fetch base/$target_branch
+        git fetch base
 
         git diff --name-only base/$target_branch | (grep "benchmark/micro/*" || true) > .github/regression/updated_micro_benchmarks.csv
         if [ $(wc -l < .github/regression/updated_micro_benchmarks.csv) -gt 0 ]; then
