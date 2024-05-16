@@ -88,6 +88,7 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"immediate_transaction_mode", {true}},
 	    {"max_expression_depth", {50}},
 	    {"max_memory", {"4.0 GiB"}},
+	    {"max_temp_directory_size", {"10.0 GiB"}},
 	    {"memory_limit", {"4.0 GiB"}},
 	    {"ordered_aggregate_threshold", {Value::UBIGINT(idx_t(1) << 12)}},
 	    {"null_order", {"nulls_first"}},
@@ -107,7 +108,10 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"enable_http_metadata_cache", {true}},
 	    {"force_bitpacking_mode", {"constant"}},
 	    {"allocator_flush_threshold", {"4.0 GiB"}},
-	    {"arrow_large_buffer_size", {true}}};
+	    {"arrow_large_buffer_size", {true}},
+	    {"enable_http_logging", {true}},
+	    {"http_logging_output", {"my_cool_outputfile"}},
+	};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
 		REQUIRE(name == "MISSING_FROM_MAP");

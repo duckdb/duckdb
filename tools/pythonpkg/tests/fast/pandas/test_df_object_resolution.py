@@ -324,7 +324,7 @@ class TestResolveObjectColumns(object):
         with pytest.raises(
             duckdb.InvalidInputException, match="Dict->Map conversion failed because 'key' list contains duplicates"
         ):
-            converted_col = duckdb_cursor.sql("select * from x").df()
+            duckdb_cursor.sql("select * from x").show()
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_map_nullkey(self, pandas, duckdb_cursor):
@@ -337,9 +337,8 @@ class TestResolveObjectColumns(object):
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_map_nullkeylist(self, pandas, duckdb_cursor):
         x = pandas.DataFrame([[{'key': None, 'value': None}]])
-        # Isn't actually converted to MAP because isinstance(None, list) != True
         converted_col = duckdb_cursor.sql("select * from x").df()
-        duckdb_col = duckdb_cursor.sql("SELECT {key: NULL, value: NULL} as '0'").df()
+        duckdb_col = duckdb_cursor.sql("SELECT MAP(NULL, NULL) as '0'").df()
         pandas.testing.assert_frame_equal(duckdb_col, converted_col)
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])

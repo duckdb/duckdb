@@ -139,6 +139,16 @@ static void parallel_query(Connection *conn, bool *correct, size_t threadnr) {
 	}
 }
 
+TEST_CASE("Test temp_directory defaults", "[api][.]") {
+	const char *db_paths[] = {nullptr, "", ":memory:"};
+	for (auto &path : db_paths) {
+		auto db = make_uniq<DuckDB>(path);
+		auto conn = make_uniq<Connection>(*db);
+
+		REQUIRE(db->instance->config.options.temporary_directory == ".tmp");
+	}
+}
+
 TEST_CASE("Test parallel usage of single client", "[api][.]") {
 	auto db = make_uniq<DuckDB>(nullptr);
 	auto conn = make_uniq<Connection>(*db);
@@ -543,13 +553,13 @@ TEST_CASE("Test large number of connections to a single database", "[api]") {
 		connections.push_back(std::move(conn));
 	}
 
-	REQUIRE(connection_manager.connections.size() == createdConnections);
+	REQUIRE(connection_manager.GetConnectionCount() == createdConnections);
 
 	for (size_t i = 0; i < toRemove; i++) {
 		connections.erase(connections.begin());
 	}
 
-	REQUIRE(connection_manager.connections.size() == remainingConnections);
+	REQUIRE(connection_manager.GetConnectionCount() == remainingConnections);
 }
 
 TEST_CASE("Issue #4583: Catch Insert/Update/Delete errors", "[api]") {

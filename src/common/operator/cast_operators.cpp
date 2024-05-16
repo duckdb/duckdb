@@ -1142,7 +1142,7 @@ timestamp_t CastTimestampUsToMs::Operation(timestamp_t input) {
 	if (!Timestamp::IsFinite(input)) {
 		return input;
 	}
-	timestamp_t cast_timestamp(Timestamp::GetEpochMs(input));
+	timestamp_t cast_timestamp(Timestamp::GetEpochRounded(input, Interval::MICROS_PER_MSEC));
 	return cast_timestamp;
 }
 
@@ -1160,7 +1160,7 @@ timestamp_t CastTimestampUsToSec::Operation(timestamp_t input) {
 	if (!Timestamp::IsFinite(input)) {
 		return input;
 	}
-	timestamp_t cast_timestamp(Timestamp::GetEpochSeconds(input));
+	timestamp_t cast_timestamp(Timestamp::GetEpochRounded(input, Interval::MICROS_PER_SEC));
 	return cast_timestamp;
 }
 
@@ -1279,10 +1279,7 @@ bool TryCastToTimestampMS::Operation(string_t input, timestamp_t &result, bool s
 	if (!TryCast::Operation<string_t, timestamp_t>(input, result, strict)) {
 		return false;
 	}
-	if (!Timestamp::IsFinite(result)) {
-		return true;
-	}
-	result = Timestamp::GetEpochMs(result);
+	result = CastTimestampUsToMs::Operation<timestamp_t, timestamp_t>(result);
 	return true;
 }
 
@@ -1291,10 +1288,7 @@ bool TryCastToTimestampSec::Operation(string_t input, timestamp_t &result, bool 
 	if (!TryCast::Operation<string_t, timestamp_t>(input, result, strict)) {
 		return false;
 	}
-	if (!Timestamp::IsFinite(result)) {
-		return true;
-	}
-	result = Timestamp::GetEpochSeconds(result);
+	result = CastTimestampUsToSec::Operation<timestamp_t, timestamp_t>(result);
 	return true;
 }
 
@@ -1588,17 +1582,18 @@ bool TryCastErrorMessage::Operation(string_t input, interval_t &result, CastPara
 // when that value is full, we perform a HUGEINT multiplication to flush it into the hugeint
 // this takes the number of HUGEINT multiplications down from [0-38] to [0-2]
 
-template <typename T, typename OP>
+template <typename T, typename OP, typename INTERMEDIATE_T>
 struct HugeIntCastData {
 	using ResultType = T;
+	using IntermediateType = INTERMEDIATE_T;
 	using Operation = OP;
 	ResultType result;
-	int64_t intermediate;
+	IntermediateType intermediate;
 	uint8_t digits;
 
 	ResultType decimal;
 	uint16_t decimal_total_digits;
-	int64_t decimal_intermediate;
+	ResultType decimal_intermediate;
 	uint16_t decimal_intermediate_digits;
 
 	bool Flush() {
@@ -1647,7 +1642,8 @@ struct HugeIntegerCastOperation {
 	template <class T, bool NEGATIVE>
 	static bool HandleDigit(T &state, uint8_t digit) {
 		if (NEGATIVE) {
-			if (DUCKDB_UNLIKELY(state.intermediate < (NumericLimits<int64_t>::Minimum() + digit) / 10)) {
+			if (DUCKDB_UNLIKELY(state.intermediate <
+			                    (NumericLimits<typename T::IntermediateType>::Minimum() + digit) / 10)) {
 				// intermediate is full: need to flush it
 				if (!state.Flush()) {
 					return false;
@@ -1655,7 +1651,8 @@ struct HugeIntegerCastOperation {
 			}
 			state.intermediate = state.intermediate * 10 - digit;
 		} else {
-			if (DUCKDB_UNLIKELY(state.intermediate > (NumericLimits<int64_t>::Maximum() - digit) / 10)) {
+			if (DUCKDB_UNLIKELY(state.intermediate >
+			                    (NumericLimits<typename T::IntermediateType>::Maximum() - digit) / 10)) {
 				if (!state.Flush()) {
 					return false;
 				}
@@ -1694,10 +1691,14 @@ struct HugeIntegerCastOperation {
 		if (e < 0) {
 			state.result = T::Operation::DivMod(state.result, T::Operation::POWERS_OF_TEN[-e], remainder);
 			if (remainder < 0) {
-				remainder *= -1;
+				result_t negate_result;
+				if (!T::Operation::TryNegate(remainder, negate_result)) {
+					return false;
+				}
+				remainder = negate_result;
 			}
 			state.decimal = remainder;
-			state.decimal_total_digits = UnsafeNumericCast<uint16_t>(-e);
+			state.decimal_total_digits = static_cast<uint16_t>(-e);
 			state.decimal_intermediate = 0;
 			state.decimal_intermediate_digits = 0;
 			return Finalize<T, NEGATIVE>(state);
@@ -1785,8 +1786,8 @@ struct HugeIntegerCastOperation {
 
 template <>
 bool TryCast::Operation(string_t input, hugeint_t &result, bool strict) {
-	HugeIntCastData<hugeint_t, Hugeint> state {};
-	if (!TryIntegerCast<HugeIntCastData<hugeint_t, Hugeint>, true, true, HugeIntegerCastOperation>(
+	HugeIntCastData<hugeint_t, Hugeint, int64_t> state {};
+	if (!TryIntegerCast<HugeIntCastData<hugeint_t, Hugeint, int64_t>, true, true, HugeIntegerCastOperation>(
 	        input.GetData(), input.GetSize(), state, strict)) {
 		return false;
 	}
@@ -1796,8 +1797,8 @@ bool TryCast::Operation(string_t input, hugeint_t &result, bool strict) {
 
 template <>
 bool TryCast::Operation(string_t input, uhugeint_t &result, bool strict) {
-	HugeIntCastData<uhugeint_t, Uhugeint> state {};
-	if (!TryIntegerCast<HugeIntCastData<uhugeint_t, Uhugeint>, false, true, HugeIntegerCastOperation>(
+	HugeIntCastData<uhugeint_t, Uhugeint, uint64_t> state {};
+	if (!TryIntegerCast<HugeIntCastData<uhugeint_t, Uhugeint, uint64_t>, false, true, HugeIntegerCastOperation>(
 	        input.GetData(), input.GetSize(), state, strict)) {
 		return false;
 	}
@@ -1952,7 +1953,7 @@ struct DecimalCastOperation {
 		for (idx_t i = 0; i < state.excessive_decimals; i++) {
 			auto mod = state.result % 10;
 			round_up = NEGATIVE ? mod <= -5 : mod >= 5;
-			state.result /= 10.0;
+			state.result /= static_cast<typename T::StoreType>(10.0);
 		}
 		//! Only round up when exponents are involved
 		if (state.exponent_type == T::ExponentType::POSITIVE && round_up) {
@@ -2058,22 +2059,22 @@ bool TryCastToDecimalCommaSeparated::Operation(string_t input, hugeint_t &result
 
 template <>
 string_t StringCastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale, Vector &result) {
-	return DecimalToString::Format<int16_t, uint16_t>(input, width, scale, result);
+	return DecimalToString::Format<int16_t>(input, width, scale, result);
 }
 
 template <>
 string_t StringCastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale, Vector &result) {
-	return DecimalToString::Format<int32_t, uint32_t>(input, width, scale, result);
+	return DecimalToString::Format<int32_t>(input, width, scale, result);
 }
 
 template <>
 string_t StringCastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale, Vector &result) {
-	return DecimalToString::Format<int64_t, uint64_t>(input, width, scale, result);
+	return DecimalToString::Format<int64_t>(input, width, scale, result);
 }
 
 template <>
 string_t StringCastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale, Vector &result) {
-	return HugeintToStringCast::FormatDecimal(input, width, scale, result);
+	return DecimalToString::Format<hugeint_t>(input, width, scale, result);
 }
 
 //===--------------------------------------------------------------------===//
@@ -2481,7 +2482,7 @@ bool DoubleToDecimalCast(SRC input, DST &result, CastParameters &parameters, uin
 		HandleCastError::AssignError(error, parameters);
 		return false;
 	}
-	result = Cast::Operation<SRC, DST>(value);
+	result = Cast::Operation<SRC, DST>(static_cast<SRC>(value));
 	return true;
 }
 

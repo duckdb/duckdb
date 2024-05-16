@@ -24,7 +24,7 @@ if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR "${CMAKE_CXX_COMPILER_ID}"
                                                   STREQUAL "AppleClang")
   set(EXIT_TIME_DESTRUCTORS_WARNING TRUE)
   set(CMAKE_CXX_FLAGS_DEBUG
-      "${CMAKE_CXX_FLAGS_DEBUG} -Wexit-time-destructors -Wimplicit-int-conversion -Wshorten-64-to-32 -Wnarrowing"
+      "${CMAKE_CXX_FLAGS_DEBUG} -Wexit-time-destructors -Wimplicit-int-conversion -Wshorten-64-to-32 -Wnarrowing -Wsign-conversion -Wsign-compare -Wconversion"
   )
 endif()
 
@@ -91,7 +91,8 @@ else()
       duckdb_hyperloglog
       duckdb_fastpforlib
       duckdb_skiplistlib
-      duckdb_mbedtls)
+      duckdb_mbedtls
+      duckdb_yyjson)
 
   add_library(duckdb SHARED ${ALL_OBJECT_FILES})
   target_link_libraries(duckdb ${DUCKDB_LINK_LIBS})

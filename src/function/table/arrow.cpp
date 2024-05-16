@@ -10,6 +10,7 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
@@ -117,7 +118,7 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 		return list_type;
 	} else if (format[0] == '+' && format[1] == 'w') {
 		std::string parameters = format.substr(format.find(':') + 1);
-		idx_t fixed_size = std::stoi(parameters);
+		auto fixed_size = NumericCast<idx_t>(std::stoi(parameters));
 		auto child_type = ArrowTableFunction::GetArrowLogicalType(*schema.children[0]);
 		auto list_type = make_uniq<ArrowType>(LogicalType::ARRAY(child_type->GetDuckType(), fixed_size), fixed_size);
 		list_type->AddChild(std::move(child_type));
@@ -204,7 +205,7 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 		return make_uniq<ArrowType>(LogicalType::BLOB, ArrowVariableSizeType::SUPER_SIZE);
 	} else if (format[0] == 'w') {
 		std::string parameters = format.substr(format.find(':') + 1);
-		idx_t fixed_size = std::stoi(parameters);
+		auto fixed_size = NumericCast<idx_t>(std::stoi(parameters));
 		return make_uniq<ArrowType>(LogicalType::BLOB, fixed_size);
 	} else if (format[0] == 't' && format[1] == 's') {
 		// Timestamp with Timezone
@@ -257,18 +258,30 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 	if (input.inputs[0].IsNull() || input.inputs[1].IsNull() || input.inputs[2].IsNull()) {
 		throw BinderException("arrow_scan: pointers cannot be null");
 	}
+	auto &ref = input.ref;
+
+	shared_ptr<DependencyItem> dependency;
+	if (ref.external_dependency) {
+		// This was created during the replacement scan for Python (see python_replacement_scan.cpp)
+		// this object is the owning reference to 'stream_factory_ptr' and has to be kept alive.
+		dependency = ref.external_dependency->GetDependency("replacement_cache");
+		D_ASSERT(dependency);
+	}
 
 	auto stream_factory_ptr = input.inputs[0].GetPointer();
 	auto stream_factory_produce = (stream_factory_produce_t)input.inputs[1].GetPointer();       // NOLINT
 	auto stream_factory_get_schema = (stream_factory_get_schema_t)input.inputs[2].GetPointer(); // NOLINT
 
-	auto res = make_uniq<ArrowScanFunctionData>(stream_factory_produce, stream_factory_ptr);
+	auto res = make_uniq<ArrowScanFunctionData>(stream_factory_produce, stream_factory_ptr, std::move(dependency));
 
 	auto &data = *res;
 	stream_factory_get_schema(reinterpret_cast<ArrowArrayStream *>(stream_factory_ptr), data.schema_root.arrow_schema);
 	PopulateArrowTableType(res->arrow_table, data.schema_root, names, return_types);
 	QueryResult::DeduplicateColumns(names);
 	res->all_types = return_types;
+	if (return_types.empty()) {
+		throw InvalidInputException("Provided table/dataframe must have at least one column");
+	}
 	return std::move(res);
 }
 
@@ -373,7 +386,8 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, TableFunction
 			return;
 		}
 	}
-	int64_t output_size = MinValue<int64_t>(STANDARD_VECTOR_SIZE, state.chunk->arrow_array.length - state.chunk_offset);
+	auto output_size =
+	    MinValue<idx_t>(STANDARD_VECTOR_SIZE, NumericCast<idx_t>(state.chunk->arrow_array.length) - state.chunk_offset);
 	data.lines_read += output_size;
 	if (global_state.CanRemoveFilterColumns()) {
 		state.all_columns.Reset();

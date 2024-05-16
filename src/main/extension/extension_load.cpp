@@ -1,7 +1,7 @@
 #include "duckdb/common/dl.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
-#include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/error_manager.hpp"
+#include "duckdb/main/extension_helper.hpp"
 #include "mbedtls_wrapper.hpp"
 
 #ifndef DUCKDB_NO_THREADS
@@ -71,7 +71,7 @@ static string PrettyPrintString(const string &s) {
 		    c == '.') {
 			res += c;
 		} else {
-			uint8_t value = c;
+			auto value = UnsafeNumericCast<uint8_t>(c);
 			res += "\\x";
 			uint8_t first = value / 16;
 			if (first < 10) {
@@ -165,7 +165,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 
 	if (file_size < 1024) {
 		throw InvalidInputException(
-		    "Extension \"%s\" do not have metadata compatible with DuckDB loading it "
+		    "Extension \"%s\" does not have metadata compatible with the DuckDB loading it "
 		    "(version %s, platform %s). File size in particular is lower than minimum threshold of 1024",
 		    filename, engine_version, engine_platform);
 	}
@@ -190,14 +190,14 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		char a[32] = {0};
 		a[0] = '4';
 		if (strncmp(a, metadata_field[0].data(), 32) != 0) {
-			// metadata do not looks right, add this to the error message
+			// metadata does not look right, add this to the error message
 			metadata_mismatch_error =
-			    "\n" + StringUtil::Format("Extension \"%s\" do not have metadata compatible with DuckDB "
+			    "\n" + StringUtil::Format("Extension \"%s\" does not have metadata compatible with the DuckDB "
 			                              "loading it (version %s, platform %s)",
 			                              filename, engine_version, engine_platform);
 		} else if (engine_version != extension_duckdb_version || engine_platform != extension_duckdb_platform) {
 			metadata_mismatch_error = "\n" + StringUtil::Format("Extension \"%s\" (version %s, platfrom %s) does not "
-			                                                    "match DuckDB loading it (version %s, platform %s)",
+			                                                    "match the DuckDB loading it (version %s, platform %s)",
 			                                                    filename, PrettyPrintString(extension_duckdb_version),
 			                                                    PrettyPrintString(extension_duckdb_platform),
 			                                                    engine_version, engine_platform);
@@ -276,7 +276,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		}
 	}
 
-	auto number_metadata_fields = 3;
+	idx_t number_metadata_fields = 3;
 	D_ASSERT(number_metadata_fields == 3); // Currently hardcoded value
 	metadata_field.resize(number_metadata_fields + 1);
 

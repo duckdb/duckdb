@@ -848,7 +848,7 @@ TEST_CASE("Test ADBC ConnectionGetTableSchema", "[adbc]") {
 	// Test successful schema return
 	REQUIRE(SUCCESS(
 	    AdbcConnectionGetTableSchema(&adbc_connection, nullptr, "main", "duckdb_indexes", &arrow_schema, &adbc_error)));
-	REQUIRE(arrow_schema.n_children == 13);
+	REQUIRE(arrow_schema.n_children == 14);
 	arrow_schema.release(&arrow_schema);
 
 	// Test Catalog Name
@@ -859,13 +859,13 @@ TEST_CASE("Test ADBC ConnectionGetTableSchema", "[adbc]") {
 
 	REQUIRE(SUCCESS(AdbcConnectionGetTableSchema(&adbc_connection, "memory", "main", "duckdb_indexes", &arrow_schema,
 	                                             &adbc_error)));
-	REQUIRE(arrow_schema.n_children == 13);
+	REQUIRE(arrow_schema.n_children == 14);
 	arrow_schema.release(&arrow_schema);
 
 	// Empty schema should be fine
 	REQUIRE(SUCCESS(
 	    AdbcConnectionGetTableSchema(&adbc_connection, nullptr, "", "duckdb_indexes", &arrow_schema, &adbc_error)));
-	REQUIRE(arrow_schema.n_children == 13);
+	REQUIRE(arrow_schema.n_children == 14);
 	arrow_schema.release(&arrow_schema);
 
 	// Test null and empty table name

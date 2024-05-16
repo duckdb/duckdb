@@ -14,6 +14,7 @@ SchemaCatalogEntry::SchemaCatalogEntry(Catalog &catalog, CreateSchemaInfo &info)
     : InCatalogEntry(CatalogType::SCHEMA_ENTRY, catalog, info.schema) {
 	this->internal = info.internal;
 	this->comment = info.comment;
+	this->tags = info.tags;
 }
 
 CatalogTransaction SchemaCatalogEntry::GetCatalogTransaction(ClientContext &context) {
@@ -37,6 +38,7 @@ unique_ptr<CreateInfo> SchemaCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateSchemaInfo>();
 	result->schema = name;
 	result->comment = comment;
+	result->tags = tags;
 	return std::move(result);
 }
 

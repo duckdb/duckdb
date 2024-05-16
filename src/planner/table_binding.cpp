@@ -171,7 +171,7 @@ ColumnBinding TableBinding::GetColumnBinding(column_t column_index) {
 	auto it = std::find_if(column_ids.begin(), column_ids.end(),
 	                       [&](const column_t &id) -> bool { return id == column_index; });
 	// Get the index of it
-	binding.column_index = std::distance(column_ids.begin(), it);
+	binding.column_index = NumericCast<idx_t>(std::distance(column_ids.begin(), it));
 	// If it wasn't found, add it
 	if (it == column_ids.end()) {
 		column_ids.push_back(column_index);

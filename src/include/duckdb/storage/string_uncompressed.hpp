@@ -149,8 +149,9 @@ public:
 
 				// place the dictionary offset into the set of vectors
 				// note: for overflow strings we write negative value
+
 				D_ASSERT(*dictionary_size <= int32_t(Storage::BLOCK_SIZE));
-				result_data[target_idx] = -(*dictionary_size);
+				result_data[target_idx] = -NumericCast<int32_t>((*dictionary_size));
 			} else {
 				// string fits in block, append to dictionary and increment dictionary position
 				D_ASSERT(string_length < NumericLimits<uint16_t>::Maximum());
@@ -162,7 +163,7 @@ public:
 
 				// place the dictionary offset into the set of vectors
 				D_ASSERT(*dictionary_size <= int32_t(Storage::BLOCK_SIZE));
-				result_data[target_idx] = *dictionary_size;
+				result_data[target_idx] = NumericCast<int32_t>(*dictionary_size);
 			}
 			D_ASSERT(RemainingSpace(segment, handle) <= Storage::BLOCK_SIZE);
 #ifdef DEBUG
