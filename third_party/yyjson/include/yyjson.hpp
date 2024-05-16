@@ -506,12 +506,14 @@ namespace duckdb_yyjson {
 /* warning suppress begin */
 #if defined(__clang__)
 #   pragma clang diagnostic push
+#   pragma clang diagnostic ignored "-Wunused-const-variable"
 #   pragma clang diagnostic ignored "-Wunused-function"
 #   pragma clang diagnostic ignored "-Wunused-parameter"
 #elif defined(__GNUC__)
 #   if (__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6)
 #   pragma GCC diagnostic push
 #   endif
+#   pragma GCC diagnostic ignored "-Wunused-const-variable"
 #   pragma GCC diagnostic ignored "-Wunused-function"
 #   pragma GCC diagnostic ignored "-Wunused-parameter"
 #elif defined(_MSC_VER)
