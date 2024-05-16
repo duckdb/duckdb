@@ -387,6 +387,21 @@ int64_t Timestamp::GetEpochNanoSeconds(timestamp_t timestamp) {
 	return result;
 }
 
+int64_t Timestamp::GetEpochRounded(timestamp_t input, int64_t power_of_ten) {
+	D_ASSERT(Timestamp::IsFinite(input));
+	//	Round away from the epoch.
+	//	Scale first so we don't overflow.
+	const auto scaling = power_of_ten / 2;
+	input.value /= scaling;
+	if (input.value < 0) {
+		--input.value;
+	} else {
+		++input.value;
+	}
+	input.value /= 2;
+	return input.value;
+}
+
 double Timestamp::GetJulianDay(timestamp_t timestamp) {
 	double result = double(Timestamp::GetTime(timestamp).micros);
 	result /= Interval::MICROS_PER_DAY;

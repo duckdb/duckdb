@@ -20,7 +20,7 @@ insert into ${dbname}.${dbname} select sum(i) from range(1000000) t(i)
 statement maybe
 checkpoint ${dbname}
 ----
-there are other transactions
+there are other write transactions
 
 statement ok
 select

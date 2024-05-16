@@ -489,15 +489,17 @@ protected:
 };
 
 void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
-	// set the iteration count
-	header.iteration = ++iteration_count;
-
 	auto free_list_blocks = GetFreeListBlocks();
 
 	// now handle the free list
 	auto &metadata_manager = GetMetadataManager();
 	// add all modified blocks to the free list: they can now be written to again
 	metadata_manager.MarkBlocksAsModified();
+
+	lock_guard<mutex> lock(block_lock);
+	// set the iteration count
+	header.iteration = ++iteration_count;
+
 	for (auto &block : modified_blocks) {
 		free_list.insert(block);
 		newly_freed_list.insert(block);

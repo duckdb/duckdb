@@ -225,6 +225,7 @@ unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgque
 unique_ptr<QueryNode> Transformer::TransformMaterializedCTE(unique_ptr<QueryNode> root) {
 	// Extract materialized CTEs from cte_map
 	vector<unique_ptr<CTENode>> materialized_ctes;
+
 	for (auto &cte : root->cte_map.map) {
 		auto &cte_entry = cte.second;
 		if (cte_entry->materialized == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {

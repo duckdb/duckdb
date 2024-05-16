@@ -13,6 +13,7 @@ MacroCatalogEntry::MacroCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schem
 	this->internal = info.internal;
 	this->dependencies = info.dependencies;
 	this->comment = info.comment;
+	this->tags = info.tags;
 }
 
 ScalarMacroCatalogEntry::ScalarMacroCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateMacroInfo &info)
@@ -45,6 +46,7 @@ unique_ptr<CreateInfo> MacroCatalogEntry::GetInfo() const {
 	info->function = function->Copy();
 	info->dependencies = dependencies;
 	info->comment = comment;
+	info->tags = tags;
 	return std::move(info);
 }
 

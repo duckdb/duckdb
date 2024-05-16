@@ -25,6 +25,7 @@ TableCatalogEntry::TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schem
 	this->temporary = info.temporary;
 	this->dependencies = info.dependencies;
 	this->comment = info.comment;
+	this->tags = info.tags;
 }
 
 bool TableCatalogEntry::HasGeneratedColumns() const {
@@ -69,6 +70,7 @@ unique_ptr<CreateInfo> TableCatalogEntry::GetInfo() const {
 	std::for_each(constraints.begin(), constraints.end(),
 	              [&result](const unique_ptr<Constraint> &c) { result->constraints.emplace_back(c->Copy()); });
 	result->comment = comment;
+	result->tags = tags;
 	return std::move(result);
 }
 
