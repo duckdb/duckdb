@@ -9,6 +9,7 @@ unique_ptr<LoadInfo> LoadInfo::Copy() const {
 	result->filename = filename;
 	result->repository = repository;
 	result->load_type = load_type;
+	result->repo_is_alias = repo_is_alias;
 	return result;
 }
 
@@ -30,8 +31,15 @@ string LoadInfo::ToString() const {
 	result += LoadInfoToString(load_type);
 	result += StringUtil::Format(" '%s'", filename);
 	if (!repository.empty()) {
-		result += " FROM " + StringUtil::Format("'%s'", repository);
+		if (repo_is_alias) {
+			// With quotes
+			result += " FROM " + StringUtil::Format("%s", repository);
+		} else {
+			// Without quotes
+			result += " FROM " + StringUtil::Format("'%s'", repository);
+		}
 	}
+
 	result += ";";
 	return result;
 }

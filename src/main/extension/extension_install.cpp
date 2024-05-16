@@ -304,14 +304,22 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DBConfig &config,
 
 	ExtensionInstallInfo info;
 
+	string decompressed_data;
+	void *extension_decompressed;
+	idx_t extension_decompressed_size;
+
 	if (StringUtil::EndsWith(file, ".gz")) {
-		// FIXME this is slow
+		// FIXME this can do 1 less copy
 		string compressed_body((const char *)in_buffer.get(), file_size);
-		string decompressed = GZipFileSystem::UncompressGZIPString(compressed_body);
-		CheckExtensionMetadataOnInstall(config, (void *)decompressed.data(), decompressed.size(), info, extension_name);
+		decompressed_data = GZipFileSystem::UncompressGZIPString(compressed_body);
+		extension_decompressed = (void *)decompressed_data.data();
+		extension_decompressed_size = decompressed_data.size();
 	} else {
-		CheckExtensionMetadataOnInstall(config, (void *)in_buffer.get(), file_size, info, extension_name);
+		extension_decompressed = (void *)in_buffer.get();
+		extension_decompressed_size = file_size;
 	}
+
+	CheckExtensionMetadataOnInstall(config, extension_decompressed, extension_decompressed_size, info, extension_name);
 
 	if (!repository) {
 		info.mode = ExtensionInstallMode::CUSTOM_PATH;
@@ -322,7 +330,7 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DBConfig &config,
 		info.repository_url = repository->path;
 	}
 
-	WriteExtensionFiles(fs, temp_path, local_extension_path, (void *)in_buffer.get(), file_size, info);
+	WriteExtensionFiles(fs, temp_path, local_extension_path, extension_decompressed, extension_decompressed_size, info);
 
 	return make_uniq<ExtensionInstallInfo>(info);
 }
@@ -449,7 +457,7 @@ ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs, cons
 	}
 
 	// Install extension from local url based on a repository (Note that this will install it as a local file)
-	if (!FileSystem::IsRemoteFile(repository->path)) {
+	if (repository && !FileSystem::IsRemoteFile(repository->path)) {
 		return InstallFromRepository(config, fs, extension, extension_name, *repository, temp_path,
 		                             local_extension_path, version, force_install, http_logger, context);
 	}
