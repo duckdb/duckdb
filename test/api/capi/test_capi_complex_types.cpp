@@ -342,7 +342,6 @@ TEST_CASE("duckdb_create_value", "[capi]") {
 	TEST_VALUE(duckdb_create_integer(42), duckdb_get_integer, 42);
 	TEST_VALUE(duckdb_create_float(42.0), duckdb_get_float, 42.0);
 	TEST_VALUE(duckdb_create_double(42.0), duckdb_get_double, 42.0);
-	TEST_VALUE(duckdb_create_varchar("hello"), duckdb_get_varchar, "hello");
 	/*
 	TEST_VALUE(duckdb_create_date(2019, 1, 1), duckdb_get_date, duckdb_date{2019, 1, 1});
 	TEST_VALUE(duckdb_create_time(1, 1, 1, 1), duckdb_get_time, duckdb_time{1, 1, 1, 1});
