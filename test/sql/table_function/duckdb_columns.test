@@ -3,7 +3,7 @@
 # group: [table_function]
 
 statement ok
-set minimum_duckdb_version='v0.10.2'
+set storage_compatibility_version='v0.10.2'
 
 require noforcestorage
 

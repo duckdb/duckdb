@@ -2,7 +2,7 @@
 # group: [function]
 
 statement ok
-set minimum_duckdb_version='v0.10.3'
+set storage_compatibility_version='v0.10.3'
 
 statement ok
 pragma enable_verification;

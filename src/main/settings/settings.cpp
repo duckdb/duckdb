@@ -533,19 +533,19 @@ Value EnableObjectCacheSetting::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
-// Minimum DuckDB Version (for serialization)
+// Storage Compatibility Version (for serialization)
 //===--------------------------------------------------------------------===//
-void MinimumDuckDBVersion::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void StorageCompatibilityVersion::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto version_string = input.GetValue<string>();
 	auto serialization_compatibility = SerializationCompatibility::FromString(version_string);
 	config.options.serialization_compatibility = serialization_compatibility;
 }
 
-void MinimumDuckDBVersion::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+void StorageCompatibilityVersion::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	config.options.serialization_compatibility = DBConfig().options.serialization_compatibility;
 }
 
-Value MinimumDuckDBVersion::GetSetting(const ClientContext &context) {
+Value StorageCompatibilityVersion::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 
 	auto &version_name = config.options.serialization_compatibility.duckdb_version;
