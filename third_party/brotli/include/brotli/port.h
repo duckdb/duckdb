@@ -224,82 +224,15 @@
 #define BROTLI_HAS_FEATURE(feature) (0)
 #endif
 
-#if defined(_WIN32) || defined(__CYGWIN__)
-#define BROTLI_PUBLIC
-#elif BROTLI_GNUC_VERSION_CHECK(3, 3, 0) ||                         \
-    BROTLI_TI_VERSION_CHECK(8, 0, 0) ||                             \
-    BROTLI_INTEL_VERSION_CHECK(16, 0, 0) ||                         \
-    BROTLI_ARM_VERSION_CHECK(4, 1, 0) ||                            \
-    BROTLI_IBM_VERSION_CHECK(13, 1, 0) ||                           \
-    BROTLI_SUNPRO_VERSION_CHECK(5, 11, 0) ||                        \
-    (BROTLI_TI_VERSION_CHECK(7, 3, 0) &&                            \
-     defined(__TI_GNU_ATTRIBUTE_SUPPORT__) && defined(__TI_EABI__))
-#define BROTLI_PUBLIC __attribute__ ((visibility ("default")))
-#else
-#define BROTLI_PUBLIC
-#endif
 
-/* BROTLI_INTERNAL could be defined to override visibility, e.g. for tests. */
-#if !defined(BROTLI_INTERNAL)
-#if defined(_WIN32) || defined(__CYGWIN__)
-#define BROTLI_INTERNAL
-#elif BROTLI_GNUC_VERSION_CHECK(3, 3, 0) ||                         \
-    BROTLI_TI_VERSION_CHECK(8, 0, 0) ||                             \
-    BROTLI_INTEL_VERSION_CHECK(16, 0, 0) ||                         \
-    BROTLI_ARM_VERSION_CHECK(4, 1, 0) ||                            \
-    BROTLI_IBM_VERSION_CHECK(13, 1, 0) ||                           \
-    BROTLI_SUNPRO_VERSION_CHECK(5, 11, 0) ||                        \
-    (BROTLI_TI_VERSION_CHECK(7, 3, 0) &&                            \
-     defined(__TI_GNU_ATTRIBUTE_SUPPORT__) && defined(__TI_EABI__))
-#define BROTLI_INTERNAL __attribute__ ((visibility ("hidden")))
-#else
-#define BROTLI_INTERNAL
-#endif
-#endif
 
-#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L) &&   \
-    !defined(__STDC_NO_VLA__) && !defined(__cplusplus) &&           \
-    !defined(__PGI) && !defined(__PGIC__) && !defined(__TINYC__) && \
-    !defined(__clang__)
-#define BROTLI_ARRAY_PARAM(name) (name)
-#else
+#define BROTLI_PUBLIC
+#define BROTLI_INTERNAL
 #define BROTLI_ARRAY_PARAM(name)
-#endif
-
-/* <<< <<< <<< end of hedley macros. */
-
-#if defined(BROTLI_SHARED_COMPILATION)
-#if defined(_WIN32)
-#if defined(BROTLICOMMON_SHARED_COMPILATION)
-#define BROTLI_COMMON_API __declspec(dllexport)
-#else
-#define BROTLI_COMMON_API __declspec(dllimport)
-#endif  /* BROTLICOMMON_SHARED_COMPILATION */
-#if defined(BROTLIDEC_SHARED_COMPILATION)
-#define BROTLI_DEC_API __declspec(dllexport)
-#else
-#define BROTLI_DEC_API __declspec(dllimport)
-#endif  /* BROTLIDEC_SHARED_COMPILATION */
-#if defined(BROTLIENC_SHARED_COMPILATION)
-#define BROTLI_ENC_API __declspec(dllexport)
-#else
-#define BROTLI_ENC_API __declspec(dllimport)
-#endif  /* BROTLIENC_SHARED_COMPILATION */
-#else  /* _WIN32 */
-#define BROTLI_COMMON_API BROTLI_PUBLIC
-#define BROTLI_DEC_API BROTLI_PUBLIC
-#define BROTLI_ENC_API BROTLI_PUBLIC
-#endif  /* _WIN32 */
-#else  /* BROTLI_SHARED_COMPILATION */
 #define BROTLI_COMMON_API
 #define BROTLI_DEC_API
 #define BROTLI_ENC_API
-#endif
-
-#if defined(BROTLI_BUILD_ENC_EXTRA_API)
-#define BROTLI_ENC_EXTRA_API BROTLI_ENC_API
-#else
 #define BROTLI_ENC_EXTRA_API BROTLI_INTERNAL
-#endif
+
 
 #endif  /* BROTLI_COMMON_PORT_H_ */

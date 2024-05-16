@@ -50,127 +50,14 @@
 #include <stdio.h>
 #endif
 
-/* The following macros were borrowed from https://github.com/nemequ/hedley
- * with permission of original author - Evan Nemerson <evan@nemerson.com> */
-
-/* >>> >>> >>> hedley macros */
-
-/* Define "BROTLI_PREDICT_TRUE" and "BROTLI_PREDICT_FALSE" macros for capable
-   compilers.
-
-To apply compiler hint, enclose the branching condition into macros, like this:
-
-  if (BROTLI_PREDICT_TRUE(zero == 0)) {
-    // main execution path
-  } else {
-    // compiler should place this code outside of main execution path
-  }
-
-OR:
-
-  if (BROTLI_PREDICT_FALSE(something_rare_or_unexpected_happens)) {
-    // compiler should place this code outside of main execution path
-  }
-
-*/
-#if BROTLI_GNUC_HAS_BUILTIN(__builtin_expect, 3, 0, 0) || \
-    BROTLI_INTEL_VERSION_CHECK(16, 0, 0) ||               \
-    BROTLI_SUNPRO_VERSION_CHECK(5, 15, 0) ||              \
-    BROTLI_ARM_VERSION_CHECK(4, 1, 0) ||                  \
-    BROTLI_IBM_VERSION_CHECK(10, 1, 0) ||                 \
-    BROTLI_TI_VERSION_CHECK(7, 3, 0) ||                   \
-    BROTLI_TINYC_VERSION_CHECK(0, 9, 27)
-#define BROTLI_PREDICT_TRUE(x) (__builtin_expect(!!(x), 1))
-#define BROTLI_PREDICT_FALSE(x) (__builtin_expect(x, 0))
-#else
 #define BROTLI_PREDICT_FALSE(x) (x)
 #define BROTLI_PREDICT_TRUE(x) (x)
-#endif
-
-#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L) && \
-    !defined(__cplusplus)
-#define BROTLI_RESTRICT restrict
-#elif BROTLI_GNUC_VERSION_CHECK(3, 1, 0) ||                         \
-    BROTLI_MSVC_VERSION_CHECK(14, 0, 0) ||                          \
-    BROTLI_INTEL_VERSION_CHECK(16, 0, 0) ||                         \
-    BROTLI_ARM_VERSION_CHECK(4, 1, 0) ||                            \
-    BROTLI_IBM_VERSION_CHECK(10, 1, 0) ||                           \
-    BROTLI_PGI_VERSION_CHECK(17, 10, 0) ||                          \
-    BROTLI_TI_VERSION_CHECK(8, 0, 0) ||                             \
-    BROTLI_IAR_VERSION_CHECK(8, 0, 0) ||                            \
-    (BROTLI_SUNPRO_VERSION_CHECK(5, 14, 0) && defined(__cplusplus))
-#define BROTLI_RESTRICT __restrict
-#elif BROTLI_SUNPRO_VERSION_CHECK(5, 3, 0) && !defined(__cplusplus)
-#define BROTLI_RESTRICT _Restrict
-#else
 #define BROTLI_RESTRICT
-#endif
-
-#if (defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L)) || \
-    (defined(__cplusplus) && (__cplusplus >= 199711L))
-#define BROTLI_MAYBE_INLINE inline
-#elif defined(__GNUC_STDC_INLINE__) || defined(__GNUC_GNU_INLINE__) || \
-    BROTLI_ARM_VERSION_CHECK(6, 2, 0)
-#define BROTLI_MAYBE_INLINE __inline__
-#elif BROTLI_MSVC_VERSION_CHECK(12, 0, 0) || \
-    BROTLI_ARM_VERSION_CHECK(4, 1, 0) || BROTLI_TI_VERSION_CHECK(8, 0, 0)
-#define BROTLI_MAYBE_INLINE __inline
-#else
 #define BROTLI_MAYBE_INLINE
-#endif
-
-#if BROTLI_GNUC_HAS_ATTRIBUTE(always_inline, 4, 0, 0) ||                       \
-    BROTLI_INTEL_VERSION_CHECK(16, 0, 0) ||                                    \
-    BROTLI_SUNPRO_VERSION_CHECK(5, 11, 0) ||                                   \
-    BROTLI_ARM_VERSION_CHECK(4, 1, 0) ||                                       \
-    BROTLI_IBM_VERSION_CHECK(10, 1, 0) ||                                      \
-    BROTLI_TI_VERSION_CHECK(8, 0, 0) ||                                        \
-    (BROTLI_TI_VERSION_CHECK(7, 3, 0) && defined(__TI_GNU_ATTRIBUTE_SUPPORT__))
-#define BROTLI_INLINE BROTLI_MAYBE_INLINE __attribute__((__always_inline__))
-#elif BROTLI_MSVC_VERSION_CHECK(12, 0, 0)
-#define BROTLI_INLINE BROTLI_MAYBE_INLINE __forceinline
-#elif BROTLI_TI_VERSION_CHECK(7, 0, 0) && defined(__cplusplus)
-#define BROTLI_INLINE BROTLI_MAYBE_INLINE _Pragma("FUNC_ALWAYS_INLINE;")
-#elif BROTLI_IAR_VERSION_CHECK(8, 0, 0)
-#define BROTLI_INLINE BROTLI_MAYBE_INLINE _Pragma("inline=forced")
-#else
-#define BROTLI_INLINE BROTLI_MAYBE_INLINE
-#endif
-
-#if BROTLI_GNUC_HAS_ATTRIBUTE(noinline, 4, 0, 0) ||                            \
-    BROTLI_INTEL_VERSION_CHECK(16, 0, 0) ||                                    \
-    BROTLI_SUNPRO_VERSION_CHECK(5, 11, 0) ||                                   \
-    BROTLI_ARM_VERSION_CHECK(4, 1, 0) ||                                       \
-    BROTLI_IBM_VERSION_CHECK(10, 1, 0) ||                                      \
-    BROTLI_TI_VERSION_CHECK(8, 0, 0) ||                                        \
-    (BROTLI_TI_VERSION_CHECK(7, 3, 0) && defined(__TI_GNU_ATTRIBUTE_SUPPORT__))
-#define BROTLI_NOINLINE __attribute__((__noinline__))
-#elif BROTLI_MSVC_VERSION_CHECK(13, 10, 0)
-#define BROTLI_NOINLINE __declspec(noinline)
-#elif BROTLI_PGI_VERSION_CHECK(10, 2, 0)
-#define BROTLI_NOINLINE _Pragma("noinline")
-#elif BROTLI_TI_VERSION_CHECK(6, 0, 0) && defined(__cplusplus)
-#define BROTLI_NOINLINE _Pragma("FUNC_CANNOT_INLINE;")
-#elif BROTLI_IAR_VERSION_CHECK(8, 0, 0)
-#define BROTLI_NOINLINE _Pragma("inline=never")
-#else
+#define BROTLI_INLINE
 #define BROTLI_NOINLINE
-#endif
-
-/* <<< <<< <<< end of hedley macros. */
-
-#if BROTLI_GNUC_HAS_ATTRIBUTE(unused, 2, 7, 0) || \
-    BROTLI_INTEL_VERSION_CHECK(16, 0, 0)
-#define BROTLI_UNUSED_FUNCTION static BROTLI_INLINE __attribute__ ((unused))
-#else
 #define BROTLI_UNUSED_FUNCTION static BROTLI_INLINE
-#endif
-
-#if BROTLI_GNUC_HAS_ATTRIBUTE(aligned, 2, 7, 0)
-#define BROTLI_ALIGNED(N) __attribute__((aligned(N)))
-#else
 #define BROTLI_ALIGNED(N)
-#endif
 
 #if (defined(__ARM_ARCH) && (__ARM_ARCH == 7)) || \
     (defined(M_ARM) && (M_ARM == 7))
