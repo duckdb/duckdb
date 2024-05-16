@@ -28,6 +28,9 @@ require-env LOCAL_EXTENSION_DIR
 # This dir holds some directly installable, incorrectly matched extensions, but also a correctly installable
 require-env DIRECT_INSTALL_DIR
 
+# This extension dir is expected to contain tpch and tpcds, but with a corrupted tpcds metadata file 
+require-env LOCAL_EXTENSION_DIR_MALFORMED_INFO
+
 # Parquet is statically loaded for this test
 require parquet
 
@@ -40,6 +43,7 @@ set extension_directory='${LOCAL_EXTENSION_DIR}'
 query IIII rowsort
 SELECT extension_name, install_mode, installed_from, extension_version FROM duckdb_extensions() where installed and extension_name != 'jemalloc' and extension_name != 'parquet'
 ----
+inet	UNKNOWN	(empty)	(empty)
 json	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.1
 tpcds	CUSTOM_PATH	./build/extension_metadata_test_data/direct_install/tpcds.duckdb_extension	v0.0.1
 tpch	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.1
@@ -63,6 +67,7 @@ select source_id from pragma_version();
 query IIIII rowsort
 UPDATE EXTENSIONS;
 ----
+inet	(empty)	MISSING_INSTALL_INFO	(empty)	(empty)
 json	<REGEX>:.*	NO_UPDATE_AVAILABLE	v0.0.1	v0.0.1
 tpcds	<REGEX>:.*	NOT_A_REPOSITORY	v0.0.1	v0.0.1
 tpch	<REGEX>:.*	UPDATED	v0.0.1	v0.0.2
@@ -71,14 +76,20 @@ tpch	<REGEX>:.*	UPDATED	v0.0.1	v0.0.2
 query IIII rowsort
 SELECT extension_name, install_mode, installed_from, extension_version FROM duckdb_extensions() where installed and extension_name != 'jemalloc' and extension_name != 'parquet'
 ----
+inet	UNKNOWN	(empty)	(empty)
 json	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.1
 tpcds	CUSTOM_PATH	./build/extension_metadata_test_data/direct_install/tpcds.duckdb_extension	v0.0.1
 tpch	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.2
 
-# Rerunning update will now show everything being up-to-date
+# Now lets restored the corrupt inet extension (it has a missing info file)
+statement ok
+FORCE INSTALL inet;
+
+# Rerunning update will now show everything being up-to-date (inet extension was force installed and is now v0.0.2)
 query IIIII rowsort
 UPDATE EXTENSIONS;
 ----
+inet	<REGEX>:.*	NO_UPDATE_AVAILABLE	v0.0.2	v0.0.2
 json	<REGEX>:.*	NO_UPDATE_AVAILABLE	v0.0.1	v0.0.1
 tpcds	<REGEX>:.*	NOT_A_REPOSITORY	v0.0.1	v0.0.1
 tpch	<REGEX>:.*	NO_UPDATE_AVAILABLE	v0.0.2	v0.0.2
@@ -92,10 +103,14 @@ load tpch;
 statement ok
 load tpcds;
 
+statement ok
+load inet;
+
 # Ensure the result is still fine after loading; this will ensure Version() call matches the encoded footer value
 query IIII rowsort
 SELECT extension_name, install_mode, installed_from, extension_version FROM duckdb_extensions() where installed and extension_name != 'jemalloc' and extension_name != 'parquet'
 ----
+inet	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.2
 json	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.1
 tpcds	CUSTOM_PATH	./build/extension_metadata_test_data/direct_install/tpcds.duckdb_extension	v0.0.1
 tpch	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.2
@@ -185,3 +200,36 @@ statement error
 LOAD json;
 ----
  Also, the file was built for the platform 'test_platform', but we can only load extensions built for platform
+
+restart
+
+statement ok
+set extension_directory='${LOCAL_EXTENSION_DIR_MALFORMED_INFO}'
+
+# this will now throw IOError
+statement error
+FROM duckdb_extensions() where installed and extension_name != 'jemalloc' and extension_name != 'parquet'
+----
+IO Error: Failed to read info file for 'tpcds' extension
+
+# this will now throw IOError
+statement error
+UPDATE EXTENSIONS
+----
+IO Error: Failed to read info file for 'tpcds' extension
+
+# lets restore by reinstalling tpcds
+statement ok
+FORCE INSTALL '${DIRECT_INSTALL_DIR}/tpcds.duckdb_extension';
+
+# Things are back to normal
+query IIII
+SELECT extension_name, install_mode, installed_from, extension_version FROM duckdb_extensions() where installed and extension_name != 'jemalloc' and extension_name != 'parquet'
+----
+tpcds	CUSTOM_PATH	./build/extension_metadata_test_data/direct_install/tpcds.duckdb_extension	v0.0.1
+
+# Same here
+query IIIII
+UPDATE EXTENSIONS
+----
+tpcds	(empty)	NOT_A_REPOSITORY	v0.0.1	v0.0.1

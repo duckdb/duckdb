@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Generates a bunch of directories to be used for testing extension updating related behaviour used in `test/extension/update_extensions_ci.test`
+
 # Please consider your energy footprint by only running this script with ccache.
 # note that subsequent runs used cached artifacts, use `make clean` or rm -rf build/debug to clean
 
@@ -25,6 +27,9 @@ export LOCAL_EXTENSION_REPO_VERSION_AND_PLATFORM_INCORRECT="$TEST_DIR/repository
 # Directory containing the extensions for direct installing
 export DIRECT_INSTALL_DIR="$TEST_DIR/direct_install"
 
+# Extension dir with a malformed info file for an extension
+export LOCAL_EXTENSION_DIR_MALFORMED_INFO="$TEST_DIR/extension_dir_malformed_info"
+
 if [ -d "$TEST_DIR_COPY" ]; then
   # REUSE PREVIOUSLY GENERATED DATA
   rm -r $TEST_DIR
@@ -46,6 +51,7 @@ else
   duckdb_extension_load(json DONT_LINK EXTENSION_VERSION v0.0.1)
   duckdb_extension_load(tpch DONT_LINK EXTENSION_VERSION v0.0.1)
   duckdb_extension_load(tpcds DONT_LINK EXTENSION_VERSION v0.0.1)
+  duckdb_extension_load(inet DONT_LINK EXTENSION_VERSION v0.0.1)
 EOL
 
   # Build the extensions using the first config
@@ -58,10 +64,16 @@ EOL
   cp $DUCKDB_BUILD_DIR/extension/tpcds/tpcds.duckdb_extension $DIRECT_INSTALL_DIR/tpcds.duckdb_extension
   $DUCKDB_BUILD_DIR/duckdb -unsigned -c "set extension_directory='$LOCAL_EXTENSION_DIR'; install '$DIRECT_INSTALL_DIR/tpcds.duckdb_extension';"
 
-  # Set updated extension config where we update the tpch extension but not the json extension
+  # Delete the info file from the inet extension
+  DUCKDB_VERSION=`$DUCKDB_BUILD_DIR/duckdb -csv -noheader  -c 'select source_id from pragma_version()'`
+  DUCKDB_PLATFORM=`cat $DUCKDB_BUILD_DIR/duckdb_platform_out`
+  rm $LOCAL_EXTENSION_DIR_MISSING_INFO/$DUCKDB_VERSION/$DUCKDB_PLATFORM/inet.duckdb_extension.info
+
+  # Set updated extension config where we update the tpch and inet extension but not the json extension
   cat > $TEST_DIR/extension_config_after.cmake <<EOL
   duckdb_extension_load(json DONT_LINK EXTENSION_VERSION v0.0.1)
   duckdb_extension_load(tpch DONT_LINK EXTENSION_VERSION v0.0.2)
+  duckdb_extension_load(inet DONT_LINK EXTENSION_VERSION v0.0.2)
 EOL
 
   # Build the extensions using the second config
@@ -114,7 +126,7 @@ EOL
   cp $DUCKDB_BUILD_DIR/extension/json/json.duckdb_extension $DIRECT_INSTALL_DIR/json.duckdb_extension
 
   ###########################
-  ### Prepare malformed repos
+  ### Prepare malformed repos/dirs
   ###########################
   # Build clean duckdb
   rm -rf $DUCKDB_BUILD_DIR
@@ -124,6 +136,12 @@ EOL
   $DUCKDB_BUILD_DIR/duckdb -unsigned -c "set allow_extensions_metadata_mismatch=true; set extension_directory='$LOCAL_EXTENSION_REPO_INCORRECT_PLATFORM'; install '$DIRECT_INSTALL_DIR/json_incorrect_platform.duckdb_extension'"
   $DUCKDB_BUILD_DIR/duckdb -unsigned -c "set allow_extensions_metadata_mismatch=true; set extension_directory='$LOCAL_EXTENSION_REPO_INCORRECT_DUCKDB_VERSION'; install '$DIRECT_INSTALL_DIR/json_incorrect_version.duckdb_extension'"
   $DUCKDB_BUILD_DIR/duckdb -unsigned -c "set allow_extensions_metadata_mismatch=true; set extension_directory='$LOCAL_EXTENSION_REPO_VERSION_AND_PLATFORM_INCORRECT'; install '$DIRECT_INSTALL_DIR/json_incorrect_version_and_platform.duckdb_extension'"
+
+  # Create dir with malformed info file
+  DUCKDB_VERSION=`$DUCKDB_BUILD_DIR/duckdb -csv -noheader  -c 'select source_id from pragma_version()'`
+  DUCKDB_PLATFORM=`cat $DUCKDB_BUILD_DIR/duckdb_platform_out`
+  $DUCKDB_BUILD_DIR/duckdb -unsigned -c "set extension_directory='$LOCAL_EXTENSION_DIR_MALFORMED_INFO'; install '$DIRECT_INSTALL_DIR/tpcds.duckdb_extension';"
+  echo blablablab > $LOCAL_EXTENSION_DIR_MALFORMED_INFO/$DUCKDB_VERSION/$DUCKDB_PLATFORM/tpcds.duckdb_extension.info
 
   ###################################################################
   ### Allow using copy instead of regenerating test data on every run

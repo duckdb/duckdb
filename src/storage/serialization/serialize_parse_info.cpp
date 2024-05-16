@@ -332,6 +332,7 @@ void LoadInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<LoadType>(201, "load_type", load_type);
 	serializer.WritePropertyWithDefault<string>(202, "repository", repository);
 	serializer.WritePropertyWithDefault<string>(203, "version", version);
+	serializer.WritePropertyWithDefault<bool>(204, "repo_is_alias", repo_is_alias);
 }
 
 unique_ptr<ParseInfo> LoadInfo::Deserialize(Deserializer &deserializer) {
@@ -340,6 +341,7 @@ unique_ptr<ParseInfo> LoadInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadProperty<LoadType>(201, "load_type", result->load_type);
 	deserializer.ReadPropertyWithDefault<string>(202, "repository", result->repository);
 	deserializer.ReadPropertyWithDefault<string>(203, "version", result->version);
+	deserializer.ReadPropertyWithDefault<bool>(204, "repo_is_alias", result->repo_is_alias);
 	return std::move(result);
 }
 
