@@ -554,7 +554,8 @@ bool SerializationCompatibility::Compare(idx_t property_version) const {
 	case ComparisonType::EQUALITY:
 		return property_version == storage_version.GetIndex();
 	case ComparisonType::GREATER:
-		return property_version > storage_version.GetIndex();
+		// This is used to indicate pre-release/latest
+		return true;
 	case ComparisonType::LESS:
 		return property_version < storage_version.GetIndex();
 	default:
