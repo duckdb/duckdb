@@ -24,6 +24,7 @@ OperatorResultType VerifyEmitConstantVectors(const DataChunk &input, DataChunk &
 
 	// Ensure that we don't alter the input data while another thread is still using it.
 	DataChunk copied_input;
+	copied_input.Initialize(Allocator::DefaultAllocator(), input.GetTypes());
 	input.Copy(copied_input);
 
 	// emit constant vectors at the current index
