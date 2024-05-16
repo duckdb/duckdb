@@ -204,6 +204,9 @@ static void UnnestVector(UnifiedVectorFormat &child_vector_data, Vector &child_v
 		}
 		break;
 	}
+	case PhysicalType::ARRAY: {
+		throw NotImplementedException("ARRAY type not supported for UNNEST.");
+	}
 	default:
 		throw InternalException("Unimplemented type for UNNEST.");
 	}

@@ -445,7 +445,7 @@ void CSVReaderOptions::FromNamedParameters(named_parameter_map_t &in, ClientCont
                                            vector<LogicalType> &return_types, vector<string> &names) {
 	map<string, string> ordered_user_defined_parameters;
 	for (auto &kv : in) {
-		if (MultiFileReader::ParseOption(kv.first, kv.second, file_options, context)) {
+		if (MultiFileReader().ParseOption(kv.first, kv.second, file_options, context)) {
 			continue;
 		}
 		auto loption = StringUtil::Lower(kv.first);
@@ -592,11 +592,13 @@ void CSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) {
 	}
 	named_params["null_padding"] = Value::BOOLEAN(null_padding);
 	named_params["parallel"] = Value::BOOLEAN(parallel);
-	if (!date_format.at(LogicalType::DATE).format_specifier.empty()) {
-		named_params["dateformat"] = Value(date_format.at(LogicalType::DATE).format_specifier);
+	if (!dialect_options.date_format.at(LogicalType::DATE).GetValue().format_specifier.empty()) {
+		named_params["dateformat"] =
+		    Value(dialect_options.date_format.at(LogicalType::DATE).GetValue().format_specifier);
 	}
-	if (!date_format.at(LogicalType::TIMESTAMP).format_specifier.empty()) {
-		named_params["timestampformat"] = Value(date_format.at(LogicalType::TIMESTAMP).format_specifier);
+	if (!dialect_options.date_format.at(LogicalType::TIMESTAMP).GetValue().format_specifier.empty()) {
+		named_params["timestampformat"] =
+		    Value(dialect_options.date_format.at(LogicalType::TIMESTAMP).GetValue().format_specifier);
 	}
 
 	named_params["normalize_names"] = Value::BOOLEAN(normalize_names);
