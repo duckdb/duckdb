@@ -389,11 +389,11 @@ def test_call_and_select_statements():
 
 
 def main():
-    # test_tpch()
-    # test_arrow_dictionaries_scan()
-    # test_loading_pandas_df_many_times()
+    test_tpch()
+    test_arrow_dictionaries_scan()
+    test_loading_pandas_df_many_times()
     test_pandas_analyze()
-    # test_call_and_select_statements()
+    test_call_and_select_statements()
 
     close_result()
 
