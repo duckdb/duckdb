@@ -1745,7 +1745,7 @@ Creates a value from a blob
  * length: The length of the blob data
  * returns: The value. This must be destroyed with `duckdb_destroy_value`.
  */
-DUCKDB_API duckdb_value duckdb_create_blob(const char *data, idx_t length);
+DUCKDB_API duckdb_value duckdb_create_blob(const uint8_t *data, idx_t length);
 
 /*!
 Returns the boolean value of the given value.

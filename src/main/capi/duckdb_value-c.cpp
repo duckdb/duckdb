@@ -123,7 +123,7 @@ duckdb_hugeint duckdb_get_hugeint(duckdb_value val) {
 	auto res = UnwrapValue(val).GetValue<duckdb::hugeint_t>();
 	return {res.lower, res.upper};
 }
-duckdb_value duckdb_create_blob(const char *data, idx_t length) {
+duckdb_value duckdb_create_blob(const uint8_t *data, idx_t length) {
 	return WrapValue(new duckdb::Value(duckdb::Value::BLOB((const uint8_t *)data, length)));
 }
 duckdb_blob duckdb_get_blob(duckdb_value val) {
