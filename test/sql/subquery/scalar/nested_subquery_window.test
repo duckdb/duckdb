@@ -1,0 +1,8 @@
+# name: test/sql/subquery/scalar/nested_subquery_window.test
+# description: Fuzzer issue - nested subquery inside a window function
+# group: [scalar]
+
+statement error
+SELECT (SELECT max((SELECT subq_0.c0 AS c1)) OVER () AS c6) FROM (SELECT NULL AS c0) AS subq_0;
+----
+correlated columns in window functions not supported

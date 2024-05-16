@@ -148,9 +148,6 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	if (inside_window) {
 		throw BinderException(error_context, "window function calls cannot be nested");
 	}
-	if (depth > 0) {
-		throw BinderException(error_context, "correlated columns in window functions not supported");
-	}
 
 	// If we have range expressions, then only one order by clause is allowed.
 	const auto is_range =
