@@ -36,7 +36,7 @@ public:
 
 struct ReplacementScanInput {
 public:
-	ReplacementScanInput(const string &table_name) : table_name(table_name) {
+	explicit ReplacementScanInput(const string &table_name) : table_name(table_name) {
 	}
 
 public:
