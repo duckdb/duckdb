@@ -125,7 +125,7 @@ runs:
       run: |
         mkdir overlay_triplets
         cp $OVERLAY_TRIPLET_SRC $OVERLAY_TRIPLET_DST
-        echo "set(VCPKG_PLATFORM_TOOLSET_VERSION "14.38")" >> $OVERLAY_TRIPLET_DST
+        echo "set(VCPKG_PLATFORM_TOOLSET_VERSION "14.39")" >> $OVERLAY_TRIPLET_DST
 
     - name: Set Openssl dir
       if: inputs.openssl_path != ''
