@@ -11,7 +11,7 @@
 namespace duckdb {
 
 void ResultModifier::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<ResultModifierType>(100, "type", type);
 	}
 }
@@ -39,7 +39,7 @@ unique_ptr<ResultModifier> ResultModifier::Deserialize(Deserializer &deserialize
 }
 
 void BoundOrderModifier::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<BoundOrderByNode>>(100, "orders", orders);
 	}
 }
@@ -52,7 +52,7 @@ unique_ptr<BoundOrderModifier> BoundOrderModifier::Deserialize(Deserializer &des
 
 void DistinctModifier::Serialize(Serializer &serializer) const {
 	ResultModifier::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(200, "distinct_on_targets", distinct_on_targets);
 	}
 }
@@ -65,10 +65,10 @@ unique_ptr<ResultModifier> DistinctModifier::Deserialize(Deserializer &deseriali
 
 void LimitModifier::Serialize(Serializer &serializer) const {
 	ResultModifier::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "limit", limit);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(201, "offset", offset);
 	}
 }
@@ -82,10 +82,10 @@ unique_ptr<ResultModifier> LimitModifier::Deserialize(Deserializer &deserializer
 
 void LimitPercentModifier::Serialize(Serializer &serializer) const {
 	ResultModifier::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "limit", limit);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(201, "offset", offset);
 	}
 }
@@ -99,7 +99,7 @@ unique_ptr<ResultModifier> LimitPercentModifier::Deserialize(Deserializer &deser
 
 void OrderModifier::Serialize(Serializer &serializer) const {
 	ResultModifier::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<OrderByNode>>(200, "orders", orders);
 	}
 }

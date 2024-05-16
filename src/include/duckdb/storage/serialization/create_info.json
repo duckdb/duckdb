@@ -61,7 +61,7 @@
         "name": "dependencies",
         "type": "LogicalDependencyList",
         "default": "LogicalDependencyList()",
-        "version": "65"
+        "version": "v0.10.3"
 	  }
     ]
   },

@@ -102,7 +102,7 @@ public:
 	//! The user provided version
 	string duckdb_version = "v0.10.2";
 	//! The max version that should be serialized
-	idx_t storage_version = 64;
+	idx_t serialization_version = 1;
 };
 
 struct DBConfigOptions {

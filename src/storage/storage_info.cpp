@@ -9,6 +9,11 @@ struct StorageVersionInfo {
 	idx_t storage_version;
 };
 
+struct SerializationVersionInfo {
+	const char *version_name;
+	idx_t serialization_version;
+};
+
 // START OF STORAGE VERSION INFO
 static const StorageVersionInfo storage_version_info[] = {
     {"v0.0.4", 1},  {"v0.1.0", 1},  {"v0.1.1", 1},  {"v0.1.2", 1},  {"v0.1.3", 1},   {"v0.1.4", 1},   {"v0.1.5", 1},
@@ -20,10 +25,23 @@ static const StorageVersionInfo storage_version_info[] = {
     {nullptr, 0}};
 // END OF STORAGE VERSION INFO
 
+// START OF SERIALIZATION VERSION INFO
+static const SerializationVersionInfo serialization_version_info[] = {{"v0.10.2", 1}, {"v0.10.3", 2}, {nullptr, 0}};
+// END OF SERIALIZATION VERSION INFO
+
 optional_idx GetStorageVersion(const char *version_string) {
 	for (idx_t i = 0; storage_version_info[i].version_name; i++) {
 		if (!std::strcmp(storage_version_info[i].version_name, version_string)) {
 			return storage_version_info[i].storage_version;
+		}
+	}
+	return optional_idx();
+}
+
+optional_idx GetSerializationVersion(const char *version_string) {
+	for (idx_t i = 0; serialization_version_info[i].version_name; i++) {
+		if (!std::strcmp(serialization_version_info[i].version_name, version_string)) {
+			return serialization_version_info[i].serialization_version;
 		}
 	}
 	return optional_idx();

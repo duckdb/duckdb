@@ -17,34 +17,34 @@
 namespace duckdb {
 
 void CreateInfo::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<CatalogType>(100, "type", type);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<string>(101, "catalog", catalog);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<string>(102, "schema", schema);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<bool>(103, "temporary", temporary);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<bool>(104, "internal", internal);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<OnCreateConflict>(105, "on_conflict", on_conflict);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<string>(106, "sql", sql);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<Value>(107, "comment", comment, Value());
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unordered_map<string, string>>(108, "tags", tags, unordered_map<string, string>());
 	}
-	if (serializer.ShouldSerialize(65)) {
+	if (serializer.ShouldSerialize(2)) {
 		serializer.WritePropertyWithDefault<LogicalDependencyList>(109, "dependencies", dependencies, LogicalDependencyList());
 	}
 }
@@ -105,34 +105,34 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 
 void CreateIndexInfo::Serialize(Serializer &serializer) const {
 	CreateInfo::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<string>(200, "name", index_name);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<string>(201, "table", table);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		/* [Deleted] (DeprecatedIndexType) "index_type" */
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<IndexConstraintType>(203, "constraint_type", constraint_type);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(204, "parsed_expressions", parsed_expressions);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<LogicalType>>(205, "scan_types", scan_types);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<string>>(206, "names", names);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<column_t>>(207, "column_ids", column_ids);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<case_insensitive_map_t<Value>>(208, "options", options);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<string>(209, "index_type_name", index_type);
 	}
 }
@@ -154,10 +154,10 @@ unique_ptr<CreateInfo> CreateIndexInfo::Deserialize(Deserializer &deserializer) 
 
 void CreateMacroInfo::Serialize(Serializer &serializer) const {
 	CreateInfo::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<string>(200, "name", name);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<MacroFunction>>(201, "function", function);
 	}
 }
@@ -180,25 +180,25 @@ unique_ptr<CreateInfo> CreateSchemaInfo::Deserialize(Deserializer &deserializer)
 
 void CreateSequenceInfo::Serialize(Serializer &serializer) const {
 	CreateInfo::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<string>(200, "name", name);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<uint64_t>(201, "usage_count", usage_count);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<int64_t>(202, "increment", increment);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<int64_t>(203, "min_value", min_value);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<int64_t>(204, "max_value", max_value);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<int64_t>(205, "start_value", start_value);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<bool>(206, "cycle", cycle);
 	}
 }
@@ -217,16 +217,16 @@ unique_ptr<CreateInfo> CreateSequenceInfo::Deserialize(Deserializer &deserialize
 
 void CreateTableInfo::Serialize(Serializer &serializer) const {
 	CreateInfo::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<string>(200, "table", table);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<ColumnList>(201, "columns", columns);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<unique_ptr<Constraint>>>(202, "constraints", constraints);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(203, "query", query);
 	}
 }
@@ -242,10 +242,10 @@ unique_ptr<CreateInfo> CreateTableInfo::Deserialize(Deserializer &deserializer) 
 
 void CreateTypeInfo::Serialize(Serializer &serializer) const {
 	CreateInfo::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<string>(200, "name", name);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<LogicalType>(201, "logical_type", type);
 	}
 }
@@ -259,22 +259,22 @@ unique_ptr<CreateInfo> CreateTypeInfo::Deserialize(Deserializer &deserializer) {
 
 void CreateViewInfo::Serialize(Serializer &serializer) const {
 	CreateInfo::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<string>(200, "view_name", view_name);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<string>>(201, "aliases", aliases);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "types", types);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(203, "query", query);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<string>>(204, "names", names);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<Value>>(205, "column_comments", column_comments, vector<Value>());
 	}
 }

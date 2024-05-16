@@ -36,13 +36,13 @@
 namespace duckdb {
 
 void BlockingSample::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<BaseReservoirSampling>>(100, "base_reservoir_sample", base_reservoir_sample);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<SampleType>(101, "type", type);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<bool>(102, "destroyed", destroyed);
 	}
 }
@@ -68,22 +68,22 @@ unique_ptr<BlockingSample> BlockingSample::Deserialize(Deserializer &deserialize
 }
 
 void BaseReservoirSampling::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<idx_t>(100, "next_index_to_sample", next_index_to_sample);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<double>(101, "min_weight_threshold", min_weight_threshold);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<idx_t>(102, "min_weighted_entry_index", min_weighted_entry_index);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<idx_t>(103, "num_entries_to_skip_b4_next_sample", num_entries_to_skip_b4_next_sample);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<idx_t>(104, "num_entries_seen_total", num_entries_seen_total);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<std::priority_queue<std::pair<double, idx_t>>>(105, "reservoir_weights", reservoir_weights);
 	}
 }
@@ -100,10 +100,10 @@ unique_ptr<BaseReservoirSampling> BaseReservoirSampling::Deserialize(Deserialize
 }
 
 void BoundCaseCheck::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<Expression>>(100, "when_expr", when_expr);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<Expression>>(101, "then_expr", then_expr);
 	}
 }
@@ -116,16 +116,16 @@ BoundCaseCheck BoundCaseCheck::Deserialize(Deserializer &deserializer) {
 }
 
 void BoundLimitNode::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<LimitNodeType>(100, "type", type);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<idx_t>(101, "constant_integer", constant_integer);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<double>(102, "constant_percentage", constant_percentage);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<Expression>>(103, "expression", expression);
 	}
 }
@@ -140,13 +140,13 @@ BoundLimitNode BoundLimitNode::Deserialize(Deserializer &deserializer) {
 }
 
 void BoundOrderByNode::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<OrderType>(100, "type", type);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<OrderByNullType>(101, "null_order", null_order);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<Expression>>(102, "expression", expression);
 	}
 }
@@ -160,10 +160,10 @@ BoundOrderByNode BoundOrderByNode::Deserialize(Deserializer &deserializer) {
 }
 
 void BoundParameterData::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<Value>(100, "value", value);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<LogicalType>(101, "return_type", return_type);
 	}
 }
@@ -176,16 +176,16 @@ shared_ptr<BoundParameterData> BoundParameterData::Deserialize(Deserializer &des
 }
 
 void BoundPivotInfo::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<idx_t>(100, "group_count", group_count);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<LogicalType>>(101, "types", types);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<string>>(102, "pivot_values", pivot_values);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(103, "aggregates", aggregates);
 	}
 }
@@ -201,10 +201,10 @@ BoundPivotInfo BoundPivotInfo::Deserialize(Deserializer &deserializer) {
 
 template <typename T>
 void CSVOption<T>::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<bool>(100, "set_by_user", set_by_user);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<T>(101, "value", value);
 	}
 }
@@ -218,103 +218,103 @@ CSVOption<T> CSVOption<T>::Deserialize(Deserializer &deserializer) {
 }
 
 void CSVReaderOptions::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<bool>(100, "ignore_errors", ignore_errors, false);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<idx_t>(101, "buffer_sample_size", buffer_sample_size);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<string>>(102, "null_str", null_str);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<FileCompressionType>(103, "compression", compression);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<bool>(104, "allow_quoted_nulls", allow_quoted_nulls);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<idx_t>(105, "maximum_line_size", maximum_line_size);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<bool>(106, "normalize_names", normalize_names);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<bool>>(107, "force_not_null", force_not_null);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<bool>(108, "all_varchar", all_varchar);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<idx_t>(109, "sample_size_chunks", sample_size_chunks);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<bool>(110, "auto_detect", auto_detect);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<string>(111, "file_path", file_path);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<string>(112, "decimal_separator", decimal_separator);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<bool>(113, "null_padding", null_padding);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<idx_t>(114, "buffer_size", buffer_size);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<MultiFileReaderOptions>(115, "file_options", file_options);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<bool>>(116, "force_quote", force_quote);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<string>(117, "rejects_table_name", rejects_table_name, "reject_errors");
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<idx_t>(118, "rejects_limit", rejects_limit);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		/* [Deleted] (vector<string>) "rejects_recovery_columns" */
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		/* [Deleted] (vector<idx_t>) "rejects_recovery_column_ids" */
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<CSVOption<char>>(121, "dialect_options.state_machine_options.delimiter", dialect_options.state_machine_options.delimiter);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<CSVOption<char>>(122, "dialect_options.state_machine_options.quote", dialect_options.state_machine_options.quote);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<CSVOption<char>>(123, "dialect_options.state_machine_options.escape", dialect_options.state_machine_options.escape);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<CSVOption<bool>>(124, "dialect_options.header", dialect_options.header);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<idx_t>(125, "dialect_options.num_cols", dialect_options.num_cols);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<CSVOption<NewLineIdentifier>>(126, "dialect_options.state_machine_options.new_line", dialect_options.state_machine_options.new_line);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<CSVOption<idx_t>>(127, "dialect_options.skip_rows", dialect_options.skip_rows);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<map<LogicalTypeId, CSVOption<StrpTimeFormat>>>(128, "dialect_options.date_format", dialect_options.date_format);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<string>(129, "sniffer_user_mismatch_error", sniffer_user_mismatch_error);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<bool>(130, "parallel", parallel);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<bool>>(131, "was_type_manually_set", was_type_manually_set);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<CSVOption<string>>(132, "rejects_scan_name", rejects_scan_name, {"reject_scans"});
 	}
 }
@@ -358,10 +358,10 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 }
 
 void CaseCheck::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(100, "when_expr", when_expr);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(101, "then_expr", then_expr);
 	}
 }
@@ -374,10 +374,10 @@ CaseCheck CaseCheck::Deserialize(Deserializer &deserializer) {
 }
 
 void ColumnBinding::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<idx_t>(100, "table_index", table_index);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<idx_t>(101, "column_index", column_index);
 	}
 }
@@ -390,25 +390,25 @@ ColumnBinding ColumnBinding::Deserialize(Deserializer &deserializer) {
 }
 
 void ColumnDefinition::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<string>(100, "name", name);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<LogicalType>(101, "type", type);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(102, "expression", expression);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<TableColumnType>(103, "category", category);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<duckdb::CompressionType>(104, "compression_type", compression_type);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<Value>(105, "comment", comment, Value());
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unordered_map<string, string>>(106, "tags", tags, unordered_map<string, string>());
 	}
 }
@@ -426,10 +426,10 @@ ColumnDefinition ColumnDefinition::Deserialize(Deserializer &deserializer) {
 }
 
 void ColumnInfo::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<string>>(100, "names", names);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<LogicalType>>(101, "types", types);
 	}
 }
@@ -442,7 +442,7 @@ ColumnInfo ColumnInfo::Deserialize(Deserializer &deserializer) {
 }
 
 void ColumnList::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<ColumnDefinition>>(100, "columns", columns);
 	}
 }
@@ -454,13 +454,13 @@ ColumnList ColumnList::Deserialize(Deserializer &deserializer) {
 }
 
 void CommonTableExpressionInfo::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<string>>(100, "aliases", aliases);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(101, "query", query);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<CTEMaterialize>(102, "materialized", materialized);
 	}
 }
@@ -474,7 +474,7 @@ unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::Deserialize(Des
 }
 
 void CommonTableExpressionMap::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<InsertionOrderPreservingMap<unique_ptr<CommonTableExpressionInfo>>>(100, "map", map);
 	}
 }
@@ -486,10 +486,10 @@ CommonTableExpressionMap CommonTableExpressionMap::Deserialize(Deserializer &des
 }
 
 void HivePartitioningIndex::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<string>(100, "value", value);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<idx_t>(101, "index", index);
 	}
 }
@@ -502,13 +502,13 @@ HivePartitioningIndex HivePartitioningIndex::Deserialize(Deserializer &deseriali
 }
 
 void JoinCondition::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<Expression>>(100, "left", left);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<Expression>>(101, "right", right);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<ExpressionType>(102, "comparison", comparison);
 	}
 }
@@ -522,10 +522,10 @@ JoinCondition JoinCondition::Deserialize(Deserializer &deserializer) {
 }
 
 void LogicalType::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<LogicalTypeId>(100, "id", id_);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<shared_ptr<ExtraTypeInfo>>(101, "type_info", type_info_);
 	}
 }
@@ -538,10 +538,10 @@ LogicalType LogicalType::Deserialize(Deserializer &deserializer) {
 }
 
 void MultiFileReaderBindData::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<idx_t>(100, "filename_idx", filename_idx);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<HivePartitioningIndex>>(101, "hive_partitioning_indexes", hive_partitioning_indexes);
 	}
 }
@@ -554,22 +554,22 @@ MultiFileReaderBindData MultiFileReaderBindData::Deserialize(Deserializer &deser
 }
 
 void MultiFileReaderOptions::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<bool>(100, "filename", filename);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<bool>(101, "hive_partitioning", hive_partitioning);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<bool>(102, "auto_detect_hive_partitioning", auto_detect_hive_partitioning);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<bool>(103, "union_by_name", union_by_name);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<bool>(104, "hive_types_autocast", hive_types_autocast);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<case_insensitive_map_t<LogicalType>>(105, "hive_types_schema", hive_types_schema);
 	}
 }
@@ -586,13 +586,13 @@ MultiFileReaderOptions MultiFileReaderOptions::Deserialize(Deserializer &deseria
 }
 
 void OrderByNode::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<OrderType>(100, "type", type);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<OrderByNullType>(101, "null_order", null_order);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(102, "expression", expression);
 	}
 }
@@ -606,16 +606,16 @@ OrderByNode OrderByNode::Deserialize(Deserializer &deserializer) {
 }
 
 void PivotColumn::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(100, "pivot_expressions", pivot_expressions);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<string>>(101, "unpivot_names", unpivot_names);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<PivotColumnEntry>>(102, "entries", entries);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<string>(103, "pivot_enum", pivot_enum);
 	}
 }
@@ -630,13 +630,13 @@ PivotColumn PivotColumn::Deserialize(Deserializer &deserializer) {
 }
 
 void PivotColumnEntry::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<Value>>(100, "values", values);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(101, "star_expr", expr);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<string>(102, "alias", alias);
 	}
 }
@@ -650,31 +650,31 @@ PivotColumnEntry PivotColumnEntry::Deserialize(Deserializer &deserializer) {
 }
 
 void ReadCSVData::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<string>>(100, "files", files);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<LogicalType>>(101, "csv_types", csv_types);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<string>>(102, "csv_names", csv_names);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<LogicalType>>(103, "return_types", return_types);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<string>>(104, "return_names", return_names);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<idx_t>(105, "filename_col_idx", filename_col_idx);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<CSVReaderOptions>(106, "options", options);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<MultiFileReaderBindData>(107, "reader_bind", reader_bind);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<ColumnInfo>>(108, "column_info", column_info);
 	}
 }
@@ -695,10 +695,10 @@ unique_ptr<ReadCSVData> ReadCSVData::Deserialize(Deserializer &deserializer) {
 
 void ReservoirSample::Serialize(Serializer &serializer) const {
 	BlockingSample::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<idx_t>(200, "sample_count", sample_count);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<ReservoirChunk>>(201, "reservoir_chunk", reservoir_chunk);
 	}
 }
@@ -712,10 +712,10 @@ unique_ptr<BlockingSample> ReservoirSample::Deserialize(Deserializer &deserializ
 
 void ReservoirSamplePercentage::Serialize(Serializer &serializer) const {
 	BlockingSample::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<double>(200, "sample_percentage", sample_percentage);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<idx_t>(201, "reservoir_sample_size", reservoir_sample_size);
 	}
 }
@@ -728,16 +728,16 @@ unique_ptr<BlockingSample> ReservoirSamplePercentage::Deserialize(Deserializer &
 }
 
 void SampleOptions::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<Value>(100, "sample_size", sample_size);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<bool>(101, "is_percentage", is_percentage);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<SampleMethod>(102, "method", method);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<int64_t>(103, "seed", seed);
 	}
 }
@@ -752,7 +752,7 @@ unique_ptr<SampleOptions> SampleOptions::Deserialize(Deserializer &deserializer)
 }
 
 void StrpTimeFormat::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<string>(100, "format_specifier", format_specifier);
 	}
 }
@@ -764,7 +764,7 @@ StrpTimeFormat StrpTimeFormat::Deserialize(Deserializer &deserializer) {
 }
 
 void TableFilterSet::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unordered_map<idx_t, unique_ptr<TableFilter>>>(100, "filters", filters);
 	}
 }
@@ -776,10 +776,10 @@ TableFilterSet TableFilterSet::Deserialize(Deserializer &deserializer) {
 }
 
 void VacuumOptions::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<bool>(100, "vacuum", vacuum);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<bool>(101, "analyze", analyze);
 	}
 }
@@ -792,13 +792,13 @@ VacuumOptions VacuumOptions::Deserialize(Deserializer &deserializer) {
 }
 
 void interval_t::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<int32_t>(1, "months", months);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<int32_t>(2, "days", days);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<int64_t>(3, "micros", micros);
 	}
 }

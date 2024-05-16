@@ -10,13 +10,13 @@
 namespace duckdb {
 
 void QueryNode::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<QueryNodeType>(100, "type", type);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<unique_ptr<ResultModifier>>>(101, "modifiers", modifiers);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<CommonTableExpressionMap>(102, "cte_map", cte_map);
 	}
 }
@@ -49,16 +49,16 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &deserializer) {
 
 void CTENode::Serialize(Serializer &serializer) const {
 	QueryNode::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<string>(200, "cte_name", ctename);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(201, "query", query);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(202, "child", child);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<string>>(203, "aliases", aliases);
 	}
 }
@@ -74,19 +74,19 @@ unique_ptr<QueryNode> CTENode::Deserialize(Deserializer &deserializer) {
 
 void RecursiveCTENode::Serialize(Serializer &serializer) const {
 	QueryNode::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<string>(200, "cte_name", ctename);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<bool>(201, "union_all", union_all, false);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(202, "left", left);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(203, "right", right);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<string>>(204, "aliases", aliases);
 	}
 }
@@ -103,31 +103,31 @@ unique_ptr<QueryNode> RecursiveCTENode::Deserialize(Deserializer &deserializer) 
 
 void SelectNode::Serialize(Serializer &serializer) const {
 	QueryNode::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(200, "select_list", select_list);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(201, "from_table", from_table);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(202, "where_clause", where_clause);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(203, "group_expressions", groups.group_expressions);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<GroupingSet>>(204, "group_sets", groups.grouping_sets);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<AggregateHandling>(205, "aggregate_handling", aggregate_handling);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(206, "having", having);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<SampleOptions>>(207, "sample", sample);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(208, "qualify", qualify);
 	}
 }
@@ -148,16 +148,16 @@ unique_ptr<QueryNode> SelectNode::Deserialize(Deserializer &deserializer) {
 
 void SetOperationNode::Serialize(Serializer &serializer) const {
 	QueryNode::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<SetOperationType>(200, "setop_type", setop_type);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(201, "left", left);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(202, "right", right);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<bool>(203, "setop_all", setop_all, true);
 	}
 }

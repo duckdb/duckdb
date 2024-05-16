@@ -10,16 +10,16 @@
 namespace duckdb {
 
 void Expression::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<ExpressionClass>(100, "expression_class", expression_class);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<ExpressionType>(101, "type", type);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<string>(102, "alias", alias);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<optional_idx>(103, "query_location", query_location, optional_idx());
 	}
 }
@@ -94,19 +94,19 @@ unique_ptr<Expression> Expression::Deserialize(Deserializer &deserializer) {
 
 void BoundBetweenExpression::Serialize(Serializer &serializer) const {
 	Expression::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<Expression>>(200, "input", input);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<Expression>>(201, "lower", lower);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<Expression>>(202, "upper", upper);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<bool>(203, "lower_inclusive", lower_inclusive);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<bool>(204, "upper_inclusive", upper_inclusive);
 	}
 }
@@ -123,13 +123,13 @@ unique_ptr<Expression> BoundBetweenExpression::Deserialize(Deserializer &deseria
 
 void BoundCaseExpression::Serialize(Serializer &serializer) const {
 	Expression::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<LogicalType>(200, "return_type", return_type);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<BoundCaseCheck>>(201, "case_checks", case_checks);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<Expression>>(202, "else_expr", else_expr);
 	}
 }
@@ -144,13 +144,13 @@ unique_ptr<Expression> BoundCaseExpression::Deserialize(Deserializer &deserializ
 
 void BoundCastExpression::Serialize(Serializer &serializer) const {
 	Expression::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<Expression>>(200, "child", child);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<LogicalType>(201, "return_type", return_type);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<bool>(202, "try_cast", try_cast);
 	}
 }
@@ -165,13 +165,13 @@ unique_ptr<Expression> BoundCastExpression::Deserialize(Deserializer &deserializ
 
 void BoundColumnRefExpression::Serialize(Serializer &serializer) const {
 	Expression::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<LogicalType>(200, "return_type", return_type);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<ColumnBinding>(201, "binding", binding);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<idx_t>(202, "depth", depth);
 	}
 }
@@ -186,10 +186,10 @@ unique_ptr<Expression> BoundColumnRefExpression::Deserialize(Deserializer &deser
 
 void BoundComparisonExpression::Serialize(Serializer &serializer) const {
 	Expression::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<Expression>>(200, "left", left);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<Expression>>(201, "right", right);
 	}
 }
@@ -203,7 +203,7 @@ unique_ptr<Expression> BoundComparisonExpression::Deserialize(Deserializer &dese
 
 void BoundConjunctionExpression::Serialize(Serializer &serializer) const {
 	Expression::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(200, "children", children);
 	}
 }
@@ -216,7 +216,7 @@ unique_ptr<Expression> BoundConjunctionExpression::Deserialize(Deserializer &des
 
 void BoundConstantExpression::Serialize(Serializer &serializer) const {
 	Expression::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<Value>(200, "value", value);
 	}
 }
@@ -229,7 +229,7 @@ unique_ptr<Expression> BoundConstantExpression::Deserialize(Deserializer &deseri
 
 void BoundDefaultExpression::Serialize(Serializer &serializer) const {
 	Expression::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<LogicalType>(200, "return_type", return_type);
 	}
 }
@@ -242,16 +242,16 @@ unique_ptr<Expression> BoundDefaultExpression::Deserialize(Deserializer &deseria
 
 void BoundLambdaExpression::Serialize(Serializer &serializer) const {
 	Expression::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<LogicalType>(200, "return_type", return_type);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<Expression>>(201, "lambda_expr", lambda_expr);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(202, "captures", captures);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<idx_t>(203, "parameter_count", parameter_count);
 	}
 }
@@ -268,16 +268,16 @@ unique_ptr<Expression> BoundLambdaExpression::Deserialize(Deserializer &deserial
 
 void BoundLambdaRefExpression::Serialize(Serializer &serializer) const {
 	Expression::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<LogicalType>(200, "return_type", return_type);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<ColumnBinding>(201, "binding", binding);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<idx_t>(202, "lambda_index", lambda_idx);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<idx_t>(203, "depth", depth);
 	}
 }
@@ -293,10 +293,10 @@ unique_ptr<Expression> BoundLambdaRefExpression::Deserialize(Deserializer &deser
 
 void BoundOperatorExpression::Serialize(Serializer &serializer) const {
 	Expression::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<LogicalType>(200, "return_type", return_type);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(201, "children", children);
 	}
 }
@@ -310,13 +310,13 @@ unique_ptr<Expression> BoundOperatorExpression::Deserialize(Deserializer &deseri
 
 void BoundParameterExpression::Serialize(Serializer &serializer) const {
 	Expression::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<string>(200, "identifier", identifier);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<LogicalType>(201, "return_type", return_type);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<shared_ptr<BoundParameterData>>(202, "parameter_data", parameter_data);
 	}
 }
@@ -331,10 +331,10 @@ unique_ptr<Expression> BoundParameterExpression::Deserialize(Deserializer &deser
 
 void BoundReferenceExpression::Serialize(Serializer &serializer) const {
 	Expression::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<LogicalType>(200, "return_type", return_type);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<idx_t>(201, "index", index);
 	}
 }
@@ -348,10 +348,10 @@ unique_ptr<Expression> BoundReferenceExpression::Deserialize(Deserializer &deser
 
 void BoundUnnestExpression::Serialize(Serializer &serializer) const {
 	Expression::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<LogicalType>(200, "return_type", return_type);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<Expression>>(201, "child", child);
 	}
 }

@@ -44,14 +44,12 @@ version_map_file = file = open(scripts_dir + '/../src/storage/version_map.json')
 version_map = json.load(version_map_file)
 
 
-def lookup_storage_version(version: str):
-    if all([x.isdigit() for x in version]):
-        # Explicitly provide a storage version number
-        return int(version)
-    if version not in version_map:
-        print(f'Could not map {version} to a storage version number, please check the version_map.json')
+def lookup_serialization_version(version: str):
+    versions = version_map['serialization']
+    if version not in versions:
+        print(f'Could not map {version} to a serialization version number, please check the version_map.json')
         exit(1)
-    return version_map[version]
+    return versions[version]
 
 
 include_base = '#include "${FILENAME}"\n'
@@ -190,7 +188,7 @@ def get_serialize_element(
         .replace('${ASSIGNMENT}', assignment)
     )
 
-    storage_version = lookup_storage_version(version)
+    storage_version = lookup_serialization_version(version)
 
     code = []
     code.append(f'\tif (serializer.ShouldSerialize({storage_version})) {{')
@@ -319,7 +317,7 @@ class MemberVariable:
         self.has_default = False
         self.default = None
         self.deleted = False
-        self.version: str = 'v0.10.0'
+        self.version: str = 'v0.10.2'
         if 'property' in entry:
             self.serialize_property = entry['property']
             self.deserialize_property = entry['property']

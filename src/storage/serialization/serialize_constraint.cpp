@@ -10,7 +10,7 @@
 namespace duckdb {
 
 void Constraint::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<ConstraintType>(100, "type", type);
 	}
 }
@@ -39,7 +39,7 @@ unique_ptr<Constraint> Constraint::Deserialize(Deserializer &deserializer) {
 
 void CheckConstraint::Serialize(Serializer &serializer) const {
 	Constraint::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "expression", expression);
 	}
 }
@@ -52,25 +52,25 @@ unique_ptr<Constraint> CheckConstraint::Deserialize(Deserializer &deserializer) 
 
 void ForeignKeyConstraint::Serialize(Serializer &serializer) const {
 	Constraint::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<string>>(200, "pk_columns", pk_columns);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<string>>(201, "fk_columns", fk_columns);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<ForeignKeyType>(202, "fk_type", info.type);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<string>(203, "schema", info.schema);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<string>(204, "table", info.table);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<PhysicalIndex>>(205, "pk_keys", info.pk_keys);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<PhysicalIndex>>(206, "fk_keys", info.fk_keys);
 	}
 }
@@ -89,7 +89,7 @@ unique_ptr<Constraint> ForeignKeyConstraint::Deserialize(Deserializer &deseriali
 
 void NotNullConstraint::Serialize(Serializer &serializer) const {
 	Constraint::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<LogicalIndex>(200, "index", index);
 	}
 }
@@ -102,13 +102,13 @@ unique_ptr<Constraint> NotNullConstraint::Deserialize(Deserializer &deserializer
 
 void UniqueConstraint::Serialize(Serializer &serializer) const {
 	Constraint::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<bool>(200, "is_primary_key", is_primary_key);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<LogicalIndex>(201, "index", index);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<string>>(202, "columns", columns);
 	}
 }

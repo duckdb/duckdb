@@ -12,13 +12,13 @@
 namespace duckdb {
 
 void MacroFunction::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WriteProperty<MacroType>(100, "type", type);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(101, "parameters", parameters);
 	}
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(102, "default_parameters", default_parameters);
 	}
 }
@@ -45,7 +45,7 @@ unique_ptr<MacroFunction> MacroFunction::Deserialize(Deserializer &deserializer)
 
 void ScalarMacroFunction::Serialize(Serializer &serializer) const {
 	MacroFunction::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "expression", expression);
 	}
 }
@@ -58,7 +58,7 @@ unique_ptr<MacroFunction> ScalarMacroFunction::Deserialize(Deserializer &deseria
 
 void TableMacroFunction::Serialize(Serializer &serializer) const {
 	MacroFunction::Serialize(serializer);
-	if (serializer.ShouldSerialize(64)) {
+	if (serializer.ShouldSerialize(1)) {
 		serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(200, "query_node", query_node);
 	}
 }

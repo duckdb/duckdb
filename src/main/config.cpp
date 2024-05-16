@@ -484,30 +484,24 @@ SerializationCompatibility SerializationCompatibility::FromString(const string &
 	if (input.empty()) {
 		throw InvalidInputException("Version string can not be empty");
 	}
-	if (StringUtil::CIEquals(input, "pre-release")) {
-		SerializationCompatibility result;
-		result.duckdb_version = input;
-		result.storage_version = DConstants::INVALID_INDEX;
-		return result;
-	}
 
 	if (input[0] != 'v') {
-		throw InvalidInputException("Invalid version string, input should either be a string that matches the format "
-		                            "'[>|<]v<major>.<minor>.<patch>' or 'pre-release'");
+		throw InvalidInputException("Invalid version string, input should be a string that matches the format "
+		                            "'[>|<]v<major>.<minor>.<patch>'");
 	}
 
-	auto storage_version = GetStorageVersion(input.c_str());
-	if (!storage_version.IsValid()) {
+	auto serialization_version = GetSerializationVersion(input.c_str());
+	if (!serialization_version.IsValid()) {
 		throw InvalidInputException("The version string '%s' is not a valid DuckDB version", input);
 	}
 	SerializationCompatibility result;
 	result.duckdb_version = input;
-	result.storage_version = storage_version.GetIndex();
+	result.serialization_version = serialization_version.GetIndex();
 	return result;
 }
 
 bool SerializationCompatibility::Compare(idx_t property_version) const {
-	return property_version <= storage_version;
+	return property_version <= serialization_version;
 }
 
 } // namespace duckdb
