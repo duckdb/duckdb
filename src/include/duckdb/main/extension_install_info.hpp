@@ -39,10 +39,11 @@ public:
 
 	void Serialize(Serializer &serializer) const;
 
-	//! Raw Deserialize function
-	static unique_ptr<ExtensionInstallInfo> Deserialize(Deserializer &deserializer);
-	//! Like Deserialize, but with nice error messages on failure and an ExtensionInstallMode::UNKNOWN result on missing info
+	//! Try to read install info. returns ExtensionInstallMode::UNKNOWN on missing file, and throws on corrupt file
 	static unique_ptr<ExtensionInstallInfo> TryReadInfoFile(FileSystem &fs, const string &info_file_path, const string &extension_name);
+
+protected:
+	static unique_ptr<ExtensionInstallInfo> Deserialize(Deserializer &deserializer);
 };
 
 struct ExtensionRepository {

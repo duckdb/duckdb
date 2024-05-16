@@ -248,27 +248,30 @@ static void CheckExtensionMetadataOnInstall(DBConfig &config, void *in_buffer, i
 	info.version = parsed_metadata.extension_version;
 }
 
+// Note: since this method is not atomic, this can fail in different ways, that should all be handled properly by DuckDB:
+//   1. Crash after extension removal: extension is now uninstalled, metadata file still present
+//   2. Crash after metadata removal: extension is now uninstalled, extension dir is clean
+//   3. Crash after extension move: extension is written, but has no metadata file
 static void WriteExtensionFiles(FileSystem &fs, const string &temp_path, const string &local_extension_path,
-                                void *in_buffer, idx_t file_size, bool force_install, ExtensionInstallInfo &info) {
-	// Write files
+                                void *in_buffer, idx_t file_size, ExtensionInstallInfo &info) {
+	// Write extension to tmp file
 	WriteExtensionFileToDisk(fs, temp_path, in_buffer, file_size);
 
-	if (fs.FileExists(local_extension_path) && force_install) {
+	// Write metadata to tmp file
+	auto metadata_tmp_path = temp_path + ".info";
+	auto metadata_file_path = local_extension_path + ".info";
+	WriteExtensionMetadataFileToDisk(fs, metadata_tmp_path, info);
+
+	// First remove the local extension we are about to replace
+	if (fs.FileExists(local_extension_path)) {
 		fs.RemoveFile(local_extension_path);
 	}
 
-	// Write metadata
-	auto metadata_tmp_path = temp_path + ".info";
-	auto metadata_file_path = local_extension_path + ".info";
-
-	// Metadata is written as a very simple file containing the origin of the installed file
-	WriteExtensionMetadataFileToDisk(fs, metadata_tmp_path, info);
-
-	if (fs.FileExists(metadata_file_path) && force_install) {
+	// Then remove the old metadata file
+	if (fs.FileExists(metadata_file_path)) {
 		fs.RemoveFile(metadata_file_path);
 	}
 
-	// TODO: test this
 	fs.MoveFile(temp_path, local_extension_path);
 	fs.MoveFile(metadata_tmp_path, metadata_file_path);
 }
@@ -332,7 +335,7 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DBConfig &config,
 		info.repository_url = repository_url;
 	}
 
-	WriteExtensionFiles(fs, temp_path, local_extension_path, (void *)in_buffer.get(), file_size, force_install, info);
+	WriteExtensionFiles(fs, temp_path, local_extension_path, (void *)in_buffer.get(), file_size, info);
 
 	return make_uniq<ExtensionInstallInfo>(info);
 }
@@ -390,7 +393,7 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DBConfig &config, con
 
 	auto fs = FileSystem::CreateLocal();
 	WriteExtensionFiles(*fs, temp_path, local_extension_path, (void *)decompressed_body.data(),
-	                    decompressed_body.size(), force_install, info);
+	                    decompressed_body.size(), info);
 
 	return make_uniq<ExtensionInstallInfo>(info);
 }
