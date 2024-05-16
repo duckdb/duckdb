@@ -843,6 +843,8 @@ public:
 
 	// aggregate computation algorithm
 	unique_ptr<WindowAggregator> aggregator;
+	// aggregate global state
+	unique_ptr<WindowAggregatorState> gsink;
 };
 
 bool WindowAggregateExecutorGlobalState::IsConstantAggregate() {
@@ -947,10 +949,10 @@ WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, C
 }
 
 WindowAggregateExecutorGlobalState::WindowAggregateExecutorGlobalState(const WindowAggregateExecutor &executor,
-                                                                       const idx_t count,
+                                                                       const idx_t group_count,
                                                                        const ValidityMask &partition_mask,
                                                                        const ValidityMask &order_mask)
-    : WindowExecutorGlobalState(executor, count, partition_mask, order_mask), filter_executor(executor.context) {
+    : WindowExecutorGlobalState(executor, group_count, partition_mask, order_mask), filter_executor(executor.context) {
 	auto &wexpr = executor.wexpr;
 	auto &context = executor.context;
 	auto return_type = wexpr.return_type;
@@ -962,22 +964,22 @@ WindowAggregateExecutorGlobalState::WindowAggregateExecutorGlobalState(const Win
 	    !ClientConfig::GetConfig(context).enable_optimizer || mode == WindowAggregationMode::SEPARATE;
 	AggregateObject aggr(wexpr);
 	if (force_naive || (wexpr.distinct && wexpr.exclude_clause != WindowExcludeMode::NO_OTHER)) {
-		aggregator = make_uniq<WindowNaiveAggregator>(aggr, arg_types, return_type, wexpr.exclude_clause, count);
+		aggregator = make_uniq<WindowNaiveAggregator>(aggr, arg_types, return_type, wexpr.exclude_clause);
 	} else if (IsDistinctAggregate()) {
 		// build a merge sort tree
 		// see https://dl.acm.org/doi/pdf/10.1145/3514221.3526184
-		aggregator =
-		    make_uniq<WindowDistinctAggregator>(aggr, arg_types, return_type, wexpr.exclude_clause, count, context);
+		aggregator = make_uniq<WindowDistinctAggregator>(aggr, arg_types, return_type, wexpr.exclude_clause, context);
 	} else if (IsConstantAggregate()) {
-		aggregator = make_uniq<WindowConstantAggregator>(aggr, arg_types, return_type, partition_mask,
-		                                                 wexpr.exclude_clause, count);
+		aggregator = make_uniq<WindowConstantAggregator>(aggr, arg_types, return_type, wexpr.exclude_clause);
 	} else if (IsCustomAggregate()) {
-		aggregator = make_uniq<WindowCustomAggregator>(aggr, arg_types, return_type, wexpr.exclude_clause, count);
+		aggregator = make_uniq<WindowCustomAggregator>(aggr, arg_types, return_type, wexpr.exclude_clause);
 	} else {
 		// build a segment tree for frame-adhering aggregates
 		// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
-		aggregator = make_uniq<WindowSegmentTree>(aggr, arg_types, return_type, mode, wexpr.exclude_clause, count);
+		aggregator = make_uniq<WindowSegmentTree>(aggr, arg_types, return_type, mode, wexpr.exclude_clause);
 	}
+
+	gsink = aggregator->GetGlobalState(group_count, partition_mask);
 
 	// evaluate the FILTER clause and stuff it into a large mask for compactness and reuse
 	if (wexpr.filter_expr) {
@@ -1000,6 +1002,7 @@ void WindowAggregateExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx
 	auto &payload_executor = gastate.payload_executor;
 	auto &payload_chunk = gastate.payload_chunk;
 	auto &aggregator = gastate.aggregator;
+	auto &gsink = gastate.gsink;
 
 	// TODO we could evaluate those expressions in parallel
 	idx_t filtered = 0;
@@ -1019,7 +1022,7 @@ void WindowAggregateExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx
 	}
 
 	D_ASSERT(aggregator);
-	aggregator->Sink(payload_chunk, filtering, filtered);
+	aggregator->Sink(*gsink, payload_chunk, filtering, filtered);
 
 	WindowExecutor::Sink(input_chunk, input_idx, total_count, gstate);
 }
@@ -1085,12 +1088,13 @@ static void ApplyWindowStats(const WindowBoundary &boundary, FrameDelta &delta, 
 void WindowAggregateExecutor::Finalize(WindowExecutorGlobalState &gstate) const {
 	auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
 	auto &aggregator = gastate.aggregator;
+	auto &gsink = gastate.gsink;
 	D_ASSERT(aggregator);
 
 	//	Estimate the frame statistics
 	//	Default to the entire partition if we don't know anything
 	FrameStats stats;
-	const auto count = NumericCast<int64_t>(aggregator->GetInputs().size());
+	const auto count = NumericCast<int64_t>(gastate.payload_count);
 
 	//	First entry is the frame start
 	stats[0] = FrameDelta(-count, count);
@@ -1102,7 +1106,7 @@ void WindowAggregateExecutor::Finalize(WindowExecutorGlobalState &gstate) const 
 	base = wexpr.expr_stats.empty() ? nullptr : wexpr.expr_stats[1].get();
 	ApplyWindowStats(wexpr.end, stats[1], base, false);
 
-	aggregator->Finalize(stats);
+	aggregator->Finalize(*gsink, stats);
 }
 
 class WindowAggregateExecutorLocalState : public WindowExecutorBoundsState {
@@ -1129,11 +1133,13 @@ void WindowAggregateExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate
                                                Vector &result, idx_t count, idx_t row_idx) const {
 	auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
 	auto &lastate = lstate.Cast<WindowAggregateExecutorLocalState>();
-	D_ASSERT(gastate.aggregator);
+	auto &aggregator = gastate.aggregator;
+	auto &gsink = gastate.gsink;
+	D_ASSERT(aggregator);
 
 	auto &agg_state = *lastate.aggregator_state;
 
-	gastate.aggregator->Evaluate(agg_state, lastate.bounds, result, count, row_idx);
+	aggregator->Evaluate(*gsink, agg_state, lastate.bounds, result, count, row_idx);
 }
 
 //===--------------------------------------------------------------------===//
