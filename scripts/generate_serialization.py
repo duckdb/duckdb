@@ -7,8 +7,6 @@ parser = argparse.ArgumentParser(description='Generate serialization code')
 parser.add_argument('--source', type=str, help='Source directory')
 parser.add_argument('--target', type=str, help='Target directory')
 
-# This option will override 'serialize' and 'deserialize' settings if set
-parser.add_argument('--debug_serialization', action='store_true', help='Flag to enable debugging of serialization')
 args = parser.parse_args()
 
 if args.source is None:
