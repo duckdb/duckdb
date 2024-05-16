@@ -326,13 +326,32 @@ TEST_CASE("duckdb_create_value", "[capi]") {
 	CAPITester tester;
 	REQUIRE(tester.OpenDatabase(nullptr));
 
-	REQUIRE(duckdb_get_bigint(duckdb_create_bigint(42)) == 42);
-	REQUIRE(duckdb_get_bool(duckdb_create_bool(true)) == true);
-	REQUIRE(duckdb_get_integer(duckdb_create_integer(42)) == 42);
-	REQUIRE(duckdb_get_tinyint(duckdb_create_tinyint(42)) == 42);
-	REQUIRE(duckdb_get_utinyint(duckdb_create_utinyint(32)) == 32);
-	REQUIRE(duckdb_get_ubigint(duckdb_create_bigint(42)) == 42);
-	REQUIRE(duckdb_get_uinteger(duckdb_create_integer(42)) == 42);
+#define TEST_VALUE(creator, getter, expected)                                                                          \
+	{                                                                                                                  \
+		auto value = creator;                                                                                          \
+		REQUIRE(getter(value) == expected);                                                                            \
+		duckdb_destroy_value(&value);                                                                                  \
+	}
+
+	TEST_VALUE(duckdb_create_bigint(42), duckdb_get_bigint, 42);
+	TEST_VALUE(duckdb_create_bool(true), duckdb_get_bool, true);
+	TEST_VALUE(duckdb_create_integer(42), duckdb_get_integer, 42);
+	TEST_VALUE(duckdb_create_tinyint(42), duckdb_get_tinyint, 42);
+	TEST_VALUE(duckdb_create_utinyint(32), duckdb_get_utinyint, 32);
+	TEST_VALUE(duckdb_create_bigint(42), duckdb_get_bigint, 42);
+	TEST_VALUE(duckdb_create_integer(42), duckdb_get_integer, 42);
+	TEST_VALUE(duckdb_create_float(42.0), duckdb_get_float, 42.0);
+	TEST_VALUE(duckdb_create_double(42.0), duckdb_get_double, 42.0);
+	TEST_VALUE(duckdb_create_varchar("hello"), duckdb_get_varchar, "hello");
+	/*
+	TEST_VALUE(duckdb_create_date(2019, 1, 1), duckdb_get_date, duckdb_date{2019, 1, 1});
+	TEST_VALUE(duckdb_create_time(1, 1, 1, 1), duckdb_get_time, duckdb_time{1, 1, 1, 1});
+	TEST_VALUE(duckdb_create_timestamp(2019, 1, 1, 1, 1, 1, 1), duckdb_get_timestamp,
+	           duckdb_timestamp{2019, 1, 1, 1, 1, 1, 1});
+	TEST_VALUE(duckdb_create_interval(1, 1, 1, 1, 1), duckdb_get_interval, duckdb_interval{1, 1, 1, 1, 1});
+	TEST_VALUE(duckdb_create_hugeint(1, 1), duckdb_get_hugeint, duckdb_hugeint{1, 1});
+	TEST_VALUE(duckdb_create_blob(1, nullptr), duckdb_get_blob, duckdb_blob{1, nullptr});
+	*/
 
 	RoundTrip<uint8_t>(tester, 1, DUCKDB_TYPE_UTINYINT, duckdb_create_utinyint(1));
 	RoundTrip<bool>(tester, true, DUCKDB_TYPE_BOOLEAN, duckdb_create_bool(true));

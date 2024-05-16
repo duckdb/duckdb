@@ -1634,6 +1634,22 @@ Creates a value from a uint8_t (a utinyint)
 DUCKDB_API duckdb_value duckdb_create_utinyint(uint8_t input);
 
 /*!
+Creates a value from a int16_t (a smallint)
+
+ * value: The smallint value
+ * returns: The value. This must be destroyed with `duckdb_destroy_value`.
+ */
+DUCKDB_API duckdb_value duckdb_create_smallint(int16_t input);
+
+/*!
+Creates a value from a uint16_t (a usmallint)
+
+ * value: The usmallint value
+ * returns: The value. This must be destroyed with `duckdb_destroy_value`.
+ */
+DUCKDB_API duckdb_value duckdb_create_usmallint(uint16_t input);
+
+/*!
 Creates a value from a int32_t (an integer)
 
  * value: The integer value
@@ -1756,6 +1772,22 @@ Returns the uint8_t value of the given value.
 DUCKDB_API uint8_t duckdb_get_utinyint(duckdb_value val);
 
 /*!
+Returns the int16_t value of the given value.
+
+ * val: A duckdb_value containing a smallint
+ * returns: A int16_t
+ */
+DUCKDB_API int16_t duckdb_get_smallint(duckdb_value val);
+
+/*!
+Returns the uint16_t value of the given value.
+
+ * val: A duckdb_value containing a usmallint
+ * returns: A uint16_t
+ */
+DUCKDB_API uint16_t duckdb_get_usmallint(duckdb_value val);
+
+/*!
 Returns the int32_t value of the given value.
 
  * val: A duckdb_value containing a integer
@@ -1842,6 +1874,14 @@ Returns the hugeint value of the given value.
  * returns: A duckdb_hugeint
  */
 DUCKDB_API duckdb_hugeint duckdb_get_hugeint(duckdb_value val);
+
+/*!
+Returns the uhugeint value of the given value.
+
+ * val: A duckdb_value containing a uhugeint
+ * returns: A duckdb_uhugeint
+ */
+DUCKDB_API duckdb_uhugeint duckdb_get_uhugeint(duckdb_value val);
 
 /*!
 Returns the type of the given value.
