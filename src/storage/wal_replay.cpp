@@ -232,7 +232,7 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, unique_ptr<FileHandle> ha
 		}
 	} catch (std::exception &ex) { // LCOV_EXCL_START
 		// exception thrown in WAL replay: rollback
-		con.Rollback();
+		con.Query("ROLLBACK");
 		ErrorData error(ex);
 		// serialization failure means a truncated WAL
 		// these failures are ignored unless abort_on_wal_failure is true
@@ -242,7 +242,7 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, unique_ptr<FileHandle> ha
 		}
 	} catch (...) {
 		// exception thrown in WAL replay: rollback
-		con.Rollback();
+		con.Query("ROLLBACK");
 		throw;
 	} // LCOV_EXCL_STOP
 	return false;
