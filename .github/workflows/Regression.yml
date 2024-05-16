@@ -16,7 +16,7 @@ on:
       - '!.github/workflows/Regression.yml'
 
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, synchronize]
     paths-ignore:
       - '**.md'
       - 'tools/**'
