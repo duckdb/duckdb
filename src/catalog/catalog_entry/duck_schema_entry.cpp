@@ -146,7 +146,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTable(CatalogTransaction trans
 	for (idx_t i = 0; i < fk_arrays.size(); i++) {
 		// alter primary key table
 		auto &fk_info = *fk_arrays[i];
-		catalog.Alter(transaction.GetContext(), fk_info);
+		Alter(transaction, fk_info);
 
 		// make a dependency between this table and referenced table
 		auto &set = GetCatalogSet(CatalogType::TABLE_ENTRY);
@@ -169,7 +169,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateFunction(CatalogTransaction tr
 		if (current_entry) {
 			// the current entry exists - alter it instead
 			auto alter_info = info.GetAlterInfo();
-			Alter(transaction.GetContext(), *alter_info);
+			Alter(transaction, *alter_info);
 			return nullptr;
 		}
 	}
@@ -226,7 +226,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateView(CatalogTransaction transa
 	return AddEntry(transaction, std::move(view), info.on_conflict);
 }
 
-optional_ptr<CatalogEntry> DuckSchemaEntry::CreateIndex(ClientContext &context, CreateIndexInfo &info,
+optional_ptr<CatalogEntry> DuckSchemaEntry::CreateIndex(CatalogTransaction transaction, CreateIndexInfo &info,
                                                         TableCatalogEntry &table) {
 	LogicalDependencyList dependencies;
 	dependencies.AddDependency(table);
@@ -239,7 +239,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateIndex(ClientContext &context, 
 	}
 
 	auto index = make_uniq<DuckIndexEntry>(catalog, *this, info);
-	return AddEntryInternal(GetCatalogTransaction(context), std::move(index), info.on_conflict, dependencies);
+	return AddEntryInternal(transaction, std::move(index), info.on_conflict, dependencies);
 }
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateCollation(CatalogTransaction transaction, CreateCollationInfo &info) {
@@ -269,11 +269,10 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreatePragmaFunction(CatalogTransact
 	return AddEntry(transaction, std::move(pragma_function), info.on_conflict);
 }
 
-void DuckSchemaEntry::Alter(ClientContext &context, AlterInfo &info) {
+void DuckSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info) {
 	CatalogType type = info.GetCatalogType();
 
 	auto &set = GetCatalogSet(type);
-	auto transaction = GetCatalogTransaction(context);
 	if (info.type == AlterType::CHANGE_OWNERSHIP) {
 		if (!set.AlterOwnership(transaction, info.Cast<ChangeOwnershipInfo>())) {
 			throw CatalogException("Couldn't change ownership!");
@@ -328,7 +327,7 @@ void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
 	// remove the foreign key constraint in main key table if main key table's name is valid
 	for (idx_t i = 0; i < fk_arrays.size(); i++) {
 		// alter primary key table
-		catalog.Alter(context, *fk_arrays[i]);
+		Alter(transaction, *fk_arrays[i]);
 	}
 }
 

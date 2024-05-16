@@ -58,6 +58,28 @@ index e20a803..4fe45f6 100644
  
  namespace duckdb {
  struct DropInfo;
+diff --git a/src/include/storage/postgres_schema_entry.hpp b/src/include/storage/postgres_schema_entry.hpp
+index e9963ef..0615c9d 100644
+--- a/src/include/storage/postgres_schema_entry.hpp
++++ b/src/include/storage/postgres_schema_entry.hpp
+@@ -26,7 +26,7 @@ public:
+ public:
+ 	optional_ptr<CatalogEntry> CreateTable(CatalogTransaction transaction, BoundCreateTableInfo &info) override;
+ 	optional_ptr<CatalogEntry> CreateFunction(CatalogTransaction transaction, CreateFunctionInfo &info) override;
+-	optional_ptr<CatalogEntry> CreateIndex(ClientContext &context, CreateIndexInfo &info,
++	optional_ptr<CatalogEntry> CreateIndex(CatalogTransaction transaction, CreateIndexInfo &info,
+ 	                                       TableCatalogEntry &table) override;
+ 	optional_ptr<CatalogEntry> CreateView(CatalogTransaction transaction, CreateViewInfo &info) override;
+ 	optional_ptr<CatalogEntry> CreateSequence(CatalogTransaction transaction, CreateSequenceInfo &info) override;
+@@ -38,7 +38,7 @@ public:
+ 	                                                CreatePragmaFunctionInfo &info) override;
+ 	optional_ptr<CatalogEntry> CreateCollation(CatalogTransaction transaction, CreateCollationInfo &info) override;
+ 	optional_ptr<CatalogEntry> CreateType(CatalogTransaction transaction, CreateTypeInfo &info) override;
+-	void Alter(ClientContext &context, AlterInfo &info) override;
++	void Alter(CatalogTransaction transaction, AlterInfo &info) override;
+ 	void Scan(ClientContext &context, CatalogType type, const std::function<void(CatalogEntry &)> &callback) override;
+ 	void Scan(CatalogType type, const std::function<void(CatalogEntry &)> &callback) override;
+ 	void DropEntry(ClientContext &context, DropInfo &info) override;
 diff --git a/src/include/storage/postgres_table_entry.hpp b/src/include/storage/postgres_table_entry.hpp
 index d96dfad..529c234 100644
 --- a/src/include/storage/postgres_table_entry.hpp
@@ -213,6 +235,61 @@ index 449df0b..75c029f 100644
  #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
  #include "postgres_filter_pushdown.hpp"
  #include "postgres_scanner.hpp"
+diff --git a/src/storage/postgres_index.cpp b/src/storage/postgres_index.cpp
+index b5e454b..bfbab3f 100644
+--- a/src/storage/postgres_index.cpp
++++ b/src/storage/postgres_index.cpp
+@@ -18,8 +18,8 @@ SourceResultType PostgresCreateIndex::GetData(ExecutionContext &context, DataChu
+                                               OperatorSourceInput &input) const {
+ 	auto &catalog = table.catalog;
+ 	auto &schema = table.schema;
+-	auto existing =
+-	    schema.GetEntry(catalog.GetCatalogTransaction(context.client), CatalogType::INDEX_ENTRY, info->index_name);
++	auto transaction = catalog.GetCatalogTransaction(context.client);
++	auto existing = schema.GetEntry(transaction, CatalogType::INDEX_ENTRY, info->index_name);
+ 	if (existing) {
+ 		switch (info->on_conflict) {
+ 		case OnCreateConflict::IGNORE_ON_CONFLICT:
+@@ -39,7 +39,7 @@ SourceResultType PostgresCreateIndex::GetData(ExecutionContext &context, DataChu
+ 			throw InternalException("Unsupported on create conflict");
+ 		}
+ 	}
+-	schema.CreateIndex(context.client, *info, table);
++	schema.CreateIndex(transaction, *info, table);
+ 
+ 	return SourceResultType::FINISHED;
+ }
+diff --git a/src/storage/postgres_schema_entry.cpp b/src/storage/postgres_schema_entry.cpp
+index 3946f42..e954f85 100644
+--- a/src/storage/postgres_schema_entry.cpp
++++ b/src/storage/postgres_schema_entry.cpp
+@@ -65,9 +65,9 @@ optional_ptr<CatalogEntry> PostgresSchemaEntry::CreateFunction(CatalogTransactio
+ 	throw BinderException("Postgres databases do not support creating functions");
+ }
+ 
+-optional_ptr<CatalogEntry> PostgresSchemaEntry::CreateIndex(ClientContext &context, CreateIndexInfo &info,
++optional_ptr<CatalogEntry> PostgresSchemaEntry::CreateIndex(CatalogTransaction transaction, CreateIndexInfo &info,
+                                                             TableCatalogEntry &table) {
+-	return indexes.CreateIndex(context, info, table);
++	return indexes.CreateIndex(transaction.GetContext(), info, table);
+ }
+ 
+ string PGGetCreateViewSQL(PostgresSchemaEntry &schema, CreateViewInfo &info) {
+@@ -147,12 +147,12 @@ optional_ptr<CatalogEntry> PostgresSchemaEntry::CreateCollation(CatalogTransacti
+ 	throw BinderException("Postgres databases do not support creating collations");
+ }
+ 
+-void PostgresSchemaEntry::Alter(ClientContext &context, AlterInfo &info) {
++void PostgresSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info) {
+ 	if (info.type != AlterType::ALTER_TABLE) {
+ 		throw BinderException("Only altering tables is supported for now");
+ 	}
+ 	auto &alter = info.Cast<AlterTableInfo>();
+-	tables.AlterTable(context, alter);
++	tables.AlterTable(transaction.GetContext(), alter);
+ }
+ 
+ bool CatalogTypeIsSupported(CatalogType type) {
 diff --git a/src/storage/postgres_schema_set.cpp b/src/storage/postgres_schema_set.cpp
 index 93c3f28..cd3b46f 100644
 --- a/src/storage/postgres_schema_set.cpp
