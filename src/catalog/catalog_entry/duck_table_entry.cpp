@@ -168,6 +168,23 @@ unique_ptr<BaseStatistics> DuckTableEntry::GetStatistics(ClientContext &context,
 	return storage->GetStatistics(context, column.StorageOid());
 }
 
+unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(CatalogTransaction transaction, AlterInfo &info) {
+	if (transaction.context) {
+		return AlterEntry(*transaction.context, info);
+	}
+	if (info.type == AlterType::ALTER_TABLE) {
+		auto &table_info = info.Cast<AlterTableInfo>();
+		if (table_info.alter_table_type == AlterTableType::FOREIGN_KEY_CONSTRAINT) {
+			auto &foreign_key_constraint_info = table_info.Cast<AlterForeignKeyInfo>();
+			if (foreign_key_constraint_info.type == AlterForeignKeyType::AFT_ADD) {
+				// for checkpoint loading we support adding foreign key constraints without a client context
+				return AddForeignKeyConstraint(nullptr, foreign_key_constraint_info);
+			}
+		}
+	}
+	return CatalogEntry::AlterEntry(transaction, info);
+}
+
 unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, AlterInfo &info) {
 	D_ASSERT(!internal);
 
@@ -713,7 +730,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetColumnComment(ClientContext &context
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
 }
 
-unique_ptr<CatalogEntry> DuckTableEntry::AddForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info) {
+unique_ptr<CatalogEntry> DuckTableEntry::AddForeignKeyConstraint(optional_ptr<ClientContext> context,
+                                                                 AlterForeignKeyInfo &info) {
 	D_ASSERT(info.type == AlterForeignKeyType::AFT_ADD);
 	auto create_info = make_uniq<CreateTableInfo>(schema, name);
 	create_info->temporary = temporary;
@@ -733,8 +751,13 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddForeignKeyConstraint(ClientContext &
 	create_info->constraints.push_back(
 	    make_uniq<ForeignKeyConstraint>(info.pk_columns, info.fk_columns, std::move(fk_info)));
 
-	auto binder = Binder::CreateBinder(context);
-	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema);
+	unique_ptr<BoundCreateTableInfo> bound_create_info;
+	if (context) {
+		auto binder = Binder::CreateBinder(*context);
+		bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema);
+	} else {
+		bound_create_info = Binder::BindCreateTableCheckpoint(std::move(create_info), schema);
+	}
 
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
 }
