@@ -67,9 +67,6 @@ idx_t BaseSelectBinder::TryBindGroup(ParsedExpression &expr) {
 }
 
 BindResult BaseSelectBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
-	if (depth > 0 && inside_window) {
-		throw BinderException(*expr_ptr, "correlated columns in window functions not supported");
-	}
 	return ExpressionBinder::BindExpression(expr_ptr, depth);
 }
 
