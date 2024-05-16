@@ -433,10 +433,16 @@ jobs:
           key: ${{ github.job }}
           save: ${{ env.CCACHE_SAVE }}
 
+      - name: Build
+        shell: bash
+        run: make
+
+      # TODO clean up
       - name: Start Minio
         shell: bash
         run: |
           sudo ./scripts/install_s3_test_server.sh
+          ./scripts/generate_presigned_url.sh
           source ./scripts/run_s3_test_server.sh
           source ./scripts/set_s3_test_server_variables.sh
           sleep 60
