@@ -246,7 +246,6 @@ static bool UpgradeType(LogicalType &left, const LogicalType &right) {
 		return true;
 	}
 	}
-	return true;
 }
 
 LogicalType PandasAnalyzer::GetListType(py::object &ele, bool &can_convert) {
@@ -446,7 +445,7 @@ LogicalType PandasAnalyzer::GetItemType(py::object ele, bool &can_convert) {
 		LogicalType ltype;
 		ltype = NumpyToLogicalType(extended_type);
 		if (extended_type.type == NumpyNullableType::OBJECT) {
-			LogicalType converted_type = InnerAnalyze(ele, can_convert, false, 1);
+			LogicalType converted_type = InnerAnalyze(ele, can_convert, 1);
 			if (can_convert) {
 				ltype = converted_type;
 			}
@@ -473,17 +472,7 @@ uint64_t PandasAnalyzer::GetSampleIncrement(idx_t rows) {
 	return rows / sample;
 }
 
-static py::object FindFirstNonNull(const py::handle &row, idx_t offset, idx_t range) {
-	for (idx_t i = 0; i < range; i++) {
-		auto obj = row(offset + i);
-		if (!obj.is_none()) {
-			return obj;
-		}
-	}
-	return py::none();
-}
-
-LogicalType PandasAnalyzer::InnerAnalyze(py::object column, bool &can_convert, bool sample, idx_t increment) {
+LogicalType PandasAnalyzer::InnerAnalyze(py::object column, bool &can_convert, idx_t increment) {
 	idx_t rows = py::len(column);
 
 	if (rows == 0) {
@@ -500,14 +489,10 @@ LogicalType PandasAnalyzer::InnerAnalyze(py::object column, bool &can_convert, b
 	}
 	auto row = column.attr("__getitem__");
 
-	if (sample) {
-		increment = GetSampleIncrement(rows);
-	}
 	LogicalType item_type = LogicalType::SQLNULL;
 	vector<LogicalType> types;
 	for (idx_t i = 0; i < rows; i += increment) {
-		auto range = MinValue(increment, rows - i);
-		auto obj = FindFirstNonNull(row, i, range);
+		auto obj = row(i);
 		auto next_item_type = GetItemType(obj, can_convert);
 		types.push_back(next_item_type);
 
@@ -530,7 +515,14 @@ bool PandasAnalyzer::Analyze(py::object column) {
 		return false;
 	}
 	bool can_convert = true;
-	LogicalType type = InnerAnalyze(std::move(column), can_convert);
+	idx_t increment = GetSampleIncrement(py::len(column));
+	LogicalType type = InnerAnalyze(std::move(column), can_convert, increment);
+
+	if (type == LogicalType::SQLNULL && increment > 1) {
+		// We did not see the whole dataset, hence we are not sure if nulls are really nulls
+		// promote null types to varchar
+		type = LogicalType::VARCHAR;
+	}
 	if (can_convert) {
 		analyzed_type = type;
 	}
