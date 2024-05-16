@@ -280,14 +280,13 @@ optional_ptr<CatalogEntry> Catalog::CreateCollation(CatalogTransaction transacti
 // Index
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> Catalog::CreateIndex(CatalogTransaction transaction, CreateIndexInfo &info) {
-	auto &context = transaction.GetContext();
-	return CreateIndex(context, info);
+	auto &schema = GetSchema(transaction, info.schema);
+	auto &table = schema.GetEntry(transaction, CatalogType::TABLE_ENTRY, info.table)->Cast<TableCatalogEntry>();
+	return schema.CreateIndex(transaction, info, table);
 }
 
 optional_ptr<CatalogEntry> Catalog::CreateIndex(ClientContext &context, CreateIndexInfo &info) {
-	auto &schema = GetSchema(context, info.schema);
-	auto &table = GetEntry<TableCatalogEntry>(context, schema.name, info.table);
-	return schema.CreateIndex(context, info, table);
+	return CreateIndex(GetCatalogTransaction(context), info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -899,15 +898,24 @@ vector<reference<SchemaCatalogEntry>> Catalog::GetAllSchemas(ClientContext &cont
 	return result;
 }
 
-void Catalog::Alter(ClientContext &context, AlterInfo &info) {
+void Catalog::Alter(CatalogTransaction transaction, AlterInfo &info) {
 	ModifyCatalog();
 
-	auto lookup = LookupEntry(context, info.GetCatalogType(), info.schema, info.name, info.if_not_found);
-
-	if (!lookup.Found()) {
-		return;
+	if (transaction.HasContext()) {
+		auto lookup =
+		    LookupEntry(transaction.GetContext(), info.GetCatalogType(), info.schema, info.name, info.if_not_found);
+		if (!lookup.Found()) {
+			return;
+		}
+		return lookup.schema->Alter(transaction, info);
 	}
-	return lookup.schema->Alter(context, info);
+	D_ASSERT(info.if_not_found == OnEntryNotFound::THROW_EXCEPTION);
+	auto &schema = GetSchema(transaction, info.schema);
+	return schema.Alter(transaction, info);
+}
+
+void Catalog::Alter(ClientContext &context, AlterInfo &info) {
+	Alter(GetCatalogTransaction(context), info);
 }
 
 vector<MetadataBlockInfo> Catalog::GetMetadataInfo(ClientContext &context) {

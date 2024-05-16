@@ -101,14 +101,14 @@ bool StorageManager::InMemory() {
 	return path == IN_MEMORY_PATH;
 }
 
-void StorageManager::Initialize(optional_ptr<ClientContext> context) {
+void StorageManager::Initialize() {
 	bool in_memory = InMemory();
 	if (in_memory && read_only) {
 		throw CatalogException("Cannot launch in-memory database in read-only mode!");
 	}
 
 	// create or load the database from disk, if not in-memory mode
-	LoadDatabase(context);
+	LoadDatabase();
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -135,7 +135,7 @@ SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string 
     : StorageManager(db, std::move(path), read_only) {
 }
 
-void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context) {
+void SingleFileStorageManager::LoadDatabase() {
 	if (InMemory()) {
 		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db));
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager);
@@ -185,7 +185,7 @@ void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context)
 
 		// load the db from storage
 		auto checkpoint_reader = SingleFileCheckpointReader(*this);
-		checkpoint_reader.LoadFromStorage(context);
+		checkpoint_reader.LoadFromStorage();
 
 		// check if the WAL file exists
 		auto wal_path = GetWALPath();
@@ -251,6 +251,7 @@ void SingleFileStorageCommitState::FlushCommit() {
 	if (log) {
 		// flush the WAL if any changes were made
 		if (log->GetTotalWritten() > initial_written) {
+			(void)checkpoint;
 			D_ASSERT(!checkpoint);
 			D_ASSERT(!log->skip_writing);
 			log->Flush();
