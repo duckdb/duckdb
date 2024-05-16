@@ -92,31 +92,36 @@ duckdb_value duckdb_create_date(duckdb_date input) {
 	return WrapValue(new duckdb::Value(duckdb::Value::DATE(duckdb::date_t(input.days))));
 }
 duckdb_date duckdb_get_date(duckdb_value val) {
-	return UnwrapValue(val).GetValue<duckdb_date>();
+	D_ASSERT(0);
+	//	return UnwrapValue(val).GetValue<duckdb_date>();
 }
 duckdb_value duckdb_create_time(duckdb_time input) {
 	return WrapValue(new duckdb::Value(duckdb::Value::TIME(duckdb::dtime_t(input.micros))));
 }
 duckdb_time duckdb_get_time(duckdb_value val) {
-	return UnwrapValue(val).GetValue<duckdb_time>();
+	auto dtime = UnwrapValue(val).GetValue<duckdb::dtime_t>();
+	return {dtime.micros};
 }
 duckdb_value duckdb_create_timestamp(duckdb_timestamp input) {
 	return WrapValue(new duckdb::Value(duckdb::Value::TIMESTAMP(duckdb::timestamp_t(input.micros))));
 }
 duckdb_timestamp duckdb_get_timestamp(duckdb_value val) {
-	return UnwrapValue(val).GetValue<duckdb_timestamp>();
+	const timestamp_t &timestamp = UnwrapValue(val).GetValue<duckdb::timestamp_t>();
+	return {timestamp.value};
 }
 duckdb_value duckdb_create_interval(duckdb_interval input) {
 	return WrapValue(new duckdb::Value(duckdb::Value::INTERVAL(input.months, input.days, input.micros)));
 }
 duckdb_interval duckdb_get_interval(duckdb_value val) {
-	return UnwrapValue(val).GetValue<duckdb_interval>();
+	const interval_t &interval = UnwrapValue(val).GetValue<duckdb::interval_t>();
+	return {interval.months, interval.days, interval.micros};
 }
 duckdb_value duckdb_create_hugeint(duckdb_hugeint input) {
 	return WrapValue(new duckdb::Value(duckdb::Value::HUGEINT(duckdb::hugeint_t(input.upper, input.lower))));
 }
 duckdb_hugeint duckdb_get_hugeint(duckdb_value val) {
-	return UnwrapValue(val).GetValue<duckdb_hugeint>();
+	D_ASSERT(0);
+	// return UnwrapValue(val).GetValue<duckdb_hugeint>();
 }
 duckdb_value duckdb_create_blob(const char *data, idx_t length) {
 	return WrapValue(new duckdb::Value(duckdb::Value::BLOB((const uint8_t *)data, length)));
