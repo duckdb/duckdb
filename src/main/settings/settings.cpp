@@ -549,9 +549,6 @@ Value MinimumDuckDBVersion::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 
 	auto &version_name = config.options.serialization_compatibility.duckdb_version;
-	if (version_name.empty()) {
-		return Value("latest");
-	}
 	return Value(version_name);
 }
 

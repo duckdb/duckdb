@@ -27,11 +27,6 @@ struct FileHandle;
 
 using block_id_t = int64_t;
 
-struct StorageVersionInfo {
-	const char *version_name;
-	idx_t storage_version;
-};
-
 struct Storage {
 	//! The size of a hard disk sector, only really needed for Direct IO
 	constexpr static idx_t SECTOR_SIZE = 4096U;
@@ -54,7 +49,6 @@ struct Storage {
 //! The version number of the database storage format
 extern const uint64_t VERSION_NUMBER;
 string GetDuckDBVersion(idx_t version_number);
-const StorageVersionInfo *GetStorageVersionInfo(idx_t &array_size);
 optional_idx GetStorageVersion(const char *version_string);
 
 //! The MainHeader is the first header in the storage file. The MainHeader is typically written only once for a database

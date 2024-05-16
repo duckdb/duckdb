@@ -90,10 +90,14 @@ struct ExtensionOption {
 };
 
 class SerializationCompatibility {
+	using compare_func_t = std::function<bool(const SerializationCompatibility &, idx_t)>;
+
 public:
 	SerializationCompatibility() {
 	}
 	static SerializationCompatibility FromString(const string &input);
+	static bool PreRelease(const SerializationCompatibility &self, idx_t property_version);
+	static bool VersionCompare(const SerializationCompatibility &self, idx_t property_version);
 
 public:
 	bool Compare(idx_t property_version) const;
@@ -103,11 +107,11 @@ public:
 
 public:
 	//! The user provided version
-	string duckdb_version;
+	string duckdb_version = "v0.10.2";
 	//! The mapped storage version from the provided version
-	optional_idx storage_version;
-	//! The comparison type (=, >, <)
-	ComparisonType comparison_type;
+	optional_idx storage_version = 64;
+	//! The function used to determine whether a property should be serialized
+	compare_func_t comparison = VersionCompare;
 };
 
 struct DBConfigOptions {

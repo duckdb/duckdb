@@ -4,6 +4,11 @@ namespace duckdb {
 
 const uint64_t VERSION_NUMBER = 64;
 
+struct StorageVersionInfo {
+	const char *version_name;
+	idx_t storage_version;
+};
+
 // START OF STORAGE VERSION INFO
 static const StorageVersionInfo storage_version_info[] = {
     {"v0.0.4", 1},  {"v0.1.0", 1},  {"v0.1.1", 1},  {"v0.1.2", 1},  {"v0.1.3", 1},   {"v0.1.4", 1},   {"v0.1.5", 1},
@@ -14,11 +19,6 @@ static const StorageVersionInfo storage_version_info[] = {
     {"v0.8.1", 51}, {"v0.9.0", 64}, {"v0.9.1", 64}, {"v0.9.2", 64}, {"v0.10.0", 64}, {"v0.10.1", 64}, {"v0.10.2", 64},
     {nullptr, 0}};
 // END OF STORAGE VERSION INFO
-
-const StorageVersionInfo *GetStorageVersionInfo(idx_t &array_size) {
-	array_size = (sizeof(storage_version_info) / sizeof(StorageVersionInfo));
-	return storage_version_info;
-}
 
 optional_idx GetStorageVersion(const char *version_string) {
 	for (idx_t i = 0; storage_version_info[i].version_name; i++) {
