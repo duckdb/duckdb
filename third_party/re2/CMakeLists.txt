@@ -1,7 +1,7 @@
 # Copyright 2015 The RE2 Authors.  All Rights Reserved. Use of this source code
 # is governed by a BSD-style license that can be found in the LICENSE file.
 
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.5...3.29)
 
 if(POLICY CMP0048)
   cmake_policy(SET CMP0048 NEW)
