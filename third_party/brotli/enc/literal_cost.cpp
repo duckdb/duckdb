@@ -126,7 +126,7 @@ static void EstimateBitCostsForLiteralsUTF8(size_t pos, size_t len, size_t mask,
   }
 }
 
-void BrotliEstimateBitCostsForLiterals(size_t pos, size_t len, size_t mask,
+void duckdb_brotli::BrotliEstimateBitCostsForLiterals(size_t pos, size_t len, size_t mask,
                                        const uint8_t* data,
                                        size_t* histogram, float* cost) {
   if (BrotliIsMostlyUTF8(data, pos, mask, len, kMinUTF8Ratio)) {

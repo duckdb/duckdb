@@ -44,8 +44,8 @@ BROTLI_INTERNAL void FN(BrotliCompareAndPushToQueue)(
         BROTLI_MAX(double, 0.0, pairs[0].cost_diff);
     double cost_combo;
     *tmp = out[idx1];
-    FN(duckdb_brotli::HistogramAddHistogram)(tmp, &out[idx2]);
-    cost_combo = FN(duckdb_brotli::BrotliPopulationCost)(tmp);
+    FN(HistogramAddHistogram)(tmp, &out[idx2]);
+    cost_combo = FN(BrotliPopulationCost)(tmp);
     if (cost_combo < threshold - p.cost_diff) {
       p.cost_combo = cost_combo;
       is_good_pair = BROTLI_TRUE;
@@ -88,7 +88,7 @@ BROTLI_INTERNAL size_t FN(BrotliHistogramCombine)(HistogramType* out,
     for (idx1 = 0; idx1 < num_clusters; ++idx1) {
       size_t idx2;
       for (idx2 = idx1 + 1; idx2 < num_clusters; ++idx2) {
-        FN(duckdb_brotli::BrotliCompareAndPushToQueue)(out, tmp, cluster_size, clusters[idx1],
+        FN(BrotliCompareAndPushToQueue)(out, tmp, cluster_size, clusters[idx1],
             clusters[idx2], max_num_pairs, &pairs[0], &num_pairs);
       }
     }
@@ -106,7 +106,7 @@ BROTLI_INTERNAL size_t FN(BrotliHistogramCombine)(HistogramType* out,
     /* Take the best pair from the top of heap. */
     best_idx1 = pairs[0].idx1;
     best_idx2 = pairs[0].idx2;
-    FN(duckdb_brotli::HistogramAddHistogram)(&out[best_idx1], &out[best_idx2]);
+    FN(HistogramAddHistogram)(&out[best_idx1], &out[best_idx2]);
     out[best_idx1].bit_cost_ = pairs[0].cost_combo;
     cluster_size[best_idx1] += cluster_size[best_idx2];
     for (i = 0; i < symbols_size; ++i) {
@@ -147,7 +147,7 @@ BROTLI_INTERNAL size_t FN(BrotliHistogramCombine)(HistogramType* out,
 
     /* Push new pairs formed with the combined histogram to the heap. */
     for (i = 0; i < num_clusters; ++i) {
-      FN(duckdb_brotli::BrotliCompareAndPushToQueue)(out, tmp, cluster_size, best_idx1,
+      FN(BrotliCompareAndPushToQueue)(out, tmp, cluster_size, best_idx1,
           clusters[i], max_num_pairs, &pairs[0], &num_pairs);
     }
   }
@@ -162,8 +162,8 @@ BROTLI_INTERNAL double FN(BrotliHistogramBitCostDistance)(
     return 0.0;
   } else {
     *tmp = *histogram;
-    FN(duckdb_brotli::HistogramAddHistogram)(tmp, candidate);
-    return FN(duckdb_brotli::BrotliPopulationCost)(tmp) - candidate->bit_cost_;
+    FN(HistogramAddHistogram)(tmp, candidate);
+    return FN(BrotliPopulationCost)(tmp) - candidate->bit_cost_;
   }
 })
 
@@ -178,11 +178,11 @@ BROTLI_INTERNAL void FN(BrotliHistogramRemap)(const HistogramType* in,
   for (i = 0; i < in_size; ++i) {
     uint32_t best_out = i == 0 ? symbols[0] : symbols[i - 1];
     double best_bits =
-        FN(duckdb_brotli::BrotliHistogramBitCostDistance)(&in[i], &out[best_out], tmp);
+        FN(BrotliHistogramBitCostDistance)(&in[i], &out[best_out], tmp);
     size_t j;
     for (j = 0; j < num_clusters; ++j) {
       const double cur_bits =
-          FN(duckdb_brotli::BrotliHistogramBitCostDistance)(&in[i], &out[clusters[j]], tmp);
+          FN(BrotliHistogramBitCostDistance)(&in[i], &out[clusters[j]], tmp);
       if (cur_bits < best_bits) {
         best_bits = cur_bits;
         best_out = clusters[j];
@@ -193,10 +193,10 @@ BROTLI_INTERNAL void FN(BrotliHistogramRemap)(const HistogramType* in,
 
   /* Recompute each out based on raw and symbols. */
   for (i = 0; i < num_clusters; ++i) {
-    FN(duckdb_brotli::HistogramClear)(&out[clusters[i]]);
+    FN(HistogramClear)(&out[clusters[i]]);
   }
   for (i = 0; i < in_size; ++i) {
-    FN(duckdb_brotli::HistogramAddHistogram)(&out[symbols[i]], &in[i]);
+    FN(HistogramAddHistogram)(&out[symbols[i]], &in[i]);
   }
 })
 
@@ -274,7 +274,7 @@ BROTLI_INTERNAL void FN(BrotliClusterHistograms)(
 
   for (i = 0; i < in_size; ++i) {
     out[i] = in[i];
-    out[i].bit_cost_ = FN(duckdb_brotli::BrotliPopulationCost)(&in[i]);
+    out[i].bit_cost_ = FN(BrotliPopulationCost)(&in[i]);
     histogram_symbols[i] = (uint32_t)i;
   }
 
@@ -287,7 +287,7 @@ BROTLI_INTERNAL void FN(BrotliClusterHistograms)(
       clusters[num_clusters + j] = (uint32_t)(i + j);
     }
     num_new_clusters =
-        FN(duckdb_brotli::BrotliHistogramCombine)(out, tmp, cluster_size,
+        FN(BrotliHistogramCombine)(out, tmp, cluster_size,
                                    &histogram_symbols[i],
                                    &clusters[num_clusters], pairs,
                                    num_to_combine, num_to_combine,
@@ -305,7 +305,7 @@ BROTLI_INTERNAL void FN(BrotliClusterHistograms)(
     if (BROTLI_IS_OOM(m)) return;
 
     /* Collapse similar histograms. */
-    num_clusters = FN(duckdb_brotli::BrotliHistogramCombine)(out, tmp, cluster_size,
+    num_clusters = FN(BrotliHistogramCombine)(out, tmp, cluster_size,
                                               histogram_symbols, clusters,
                                               pairs, num_clusters, in_size,
                                               max_histograms, max_num_pairs);
@@ -313,12 +313,12 @@ BROTLI_INTERNAL void FN(BrotliClusterHistograms)(
   BROTLI_FREE(m, pairs);
   BROTLI_FREE(m, cluster_size);
   /* Find the optimal map from original histograms to the final ones. */
-  FN(duckdb_brotli::BrotliHistogramRemap)(in, in_size, clusters, num_clusters,
+  FN(BrotliHistogramRemap)(in, in_size, clusters, num_clusters,
                            out, tmp, histogram_symbols);
   BROTLI_FREE(m, tmp);
   BROTLI_FREE(m, clusters);
   /* Convert the context map to a canonical form. */
-  *out_size = FN(duckdb_brotli::BrotliHistogramReindex)(m, out, histogram_symbols, in_size);
+  *out_size = FN(BrotliHistogramReindex)(m, out, histogram_symbols, in_size);
   if (BROTLI_IS_OOM(m)) return;
 })
 

@@ -36,15 +36,15 @@ static BROTLI_INLINE double ClusterCostDiff(size_t size_a, size_t size_b) {
 
 #define CODE(X) X
 
-#define FN(X) X ## Literal
+#define FN(X) duckdb_brotli:: X ## Literal
 #include "cluster_inc.h"  /* NOLINT(build/include) */
 #undef FN
 
-#define FN(X) X ## Command
+#define FN(X) duckdb_brotli:: X ## Command
 #include "cluster_inc.h"  /* NOLINT(build/include) */
 #undef FN
 
-#define FN(X) X ## Distance
+#define FN(X) duckdb_brotli:: X ## Distance
 #include "cluster_inc.h"  /* NOLINT(build/include) */
 #undef FN
 

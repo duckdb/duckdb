@@ -17,15 +17,15 @@
 
 using namespace duckdb_brotli;
 
-#define FN(X) X ## Literal
+#define FN(X) duckdb_brotli:: X ## Literal
 #include "bit_cost_inc.h"  /* NOLINT(build/include) */
 #undef FN
 
-#define FN(X) X ## Command
+#define FN(X) duckdb_brotli:: X ## Command
 #include "bit_cost_inc.h"  /* NOLINT(build/include) */
 #undef FN
 
-#define FN(X) X ## Distance
+#define FN(X) duckdb_brotli:: X ## Distance
 #include "bit_cost_inc.h"  /* NOLINT(build/include) */
 #undef FN
 

@@ -38,7 +38,7 @@ static void BlockSplitIteratorNext(BlockSplitIterator* self) {
   --self->length_;
 }
 
-void BrotliBuildHistogramsWithContext(
+void duckdb_brotli::BrotliBuildHistogramsWithContext(
     const Command* cmds, const size_t num_commands,
     const BlockSplit* literal_split, const BlockSplit* insert_and_copy_split,
     const BlockSplit* dist_split, const uint8_t* ringbuffer, size_t start_pos,

@@ -17,6 +17,8 @@
 
 #include "platform.h"
 
+namespace  duckdb_brotli {
+
 /* Specification: 7.3. Encoding of the context map */
 #define BROTLI_CONTEXT_MAP_MAX_RLE 16
 
@@ -198,4 +200,5 @@ typedef struct {
 BROTLI_COMMON_API extern const BrotliPrefixCodeRange
     _kBrotliPrefixCodeRanges[BROTLI_NUM_BLOCK_LEN_SYMBOLS];
 
+}
 #endif  /* BROTLI_COMMON_CONSTANTS_H_ */

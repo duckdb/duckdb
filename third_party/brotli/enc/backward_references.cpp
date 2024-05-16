@@ -156,7 +156,7 @@ static BROTLI_INLINE size_t ComputeDistanceCode(size_t distance,
 #undef CAT
 #undef EXPAND_CAT
 
-void BrotliCreateBackwardReferences(size_t num_bytes,
+void duckdb_brotli::BrotliCreateBackwardReferences(size_t num_bytes,
     size_t position, const uint8_t* ringbuffer, size_t ringbuffer_mask,
     ContextLut literal_context_lut, const BrotliEncoderParams* params,
     Hasher* hasher, int* dist_cache, size_t* last_insert_len,

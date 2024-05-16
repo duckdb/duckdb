@@ -91,23 +91,20 @@
 #include <brotli/port.h>
 #include <brotli/types.h>
 
-typedef enum ContextType {
-  CONTEXT_LSB6 = 0,
-  CONTEXT_MSB6 = 1,
-  CONTEXT_UTF8 = 2,
-  CONTEXT_SIGNED = 3
-} ContextType;
+namespace duckdb_brotli {
+
+typedef enum ContextType { CONTEXT_LSB6 = 0, CONTEXT_MSB6 = 1, CONTEXT_UTF8 = 2, CONTEXT_SIGNED = 3 } ContextType;
 
 /* "Soft-private", it is exported, but not "advertised" as API. */
 /* Common context lookup table for all context modes. */
 BROTLI_COMMON_API extern const uint8_t _kBrotliContextLookupTable[2048];
 
-typedef const uint8_t* ContextLut;
+typedef const uint8_t *ContextLut;
 
 /* typeof(MODE) == ContextType; returns ContextLut */
 #define BROTLI_CONTEXT_LUT(MODE) (&_kBrotliContextLookupTable[(MODE) << 9])
 
 /* typeof(LUT) == ContextLut */
 #define BROTLI_CONTEXT(P1, P2, LUT) ((LUT)[P1] | ((LUT) + 256)[P2])
-
+}
 #endif  /* BROTLI_COMMON_CONTEXT_H_ */
