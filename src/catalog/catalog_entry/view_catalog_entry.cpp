@@ -21,6 +21,7 @@ void ViewCatalogEntry::Initialize(CreateViewInfo &info) {
 	this->sql = info.sql;
 	this->internal = info.internal;
 	this->comment = info.comment;
+	this->tags = info.tags;
 	this->column_comments = info.column_comments;
 }
 
@@ -40,6 +41,7 @@ unique_ptr<CreateInfo> ViewCatalogEntry::GetInfo() const {
 	result->types = types;
 	result->temporary = temporary;
 	result->comment = comment;
+	result->tags = tags;
 	result->column_comments = column_comments;
 	return std::move(result);
 }

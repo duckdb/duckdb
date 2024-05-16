@@ -186,9 +186,9 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	// WAL we write an entry CHECKPOINT "meta_block_id" into the WAL upon loading, if we see there is an entry
 	// CHECKPOINT "meta_block_id", and the id MATCHES the head idin the file we know that the database was successfully
 	// checkpointed, so we know that we should avoid replaying the WAL to avoid duplicating data
-	auto wal = storage_manager.GetWriteAheadLog();
-	bool wal_is_empty = wal->GetWALSize() == 0;
+	bool wal_is_empty = storage_manager.GetWALSize() == 0;
 	if (!wal_is_empty) {
+		auto wal = storage_manager.GetWAL();
 		wal->WriteCheckpoint(meta_block);
 		wal->Flush();
 	}
@@ -213,7 +213,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 
 	// truncate the WAL
 	if (!wal_is_empty) {
-		wal->Truncate(0);
+		storage_manager.ResetWAL();
 	}
 }
 
