@@ -1,4 +1,5 @@
 #include "duckdb/storage/storage_info.hpp"
+#include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
 
@@ -32,7 +33,7 @@ static const SerializationVersionInfo serialization_version_info[] = {
 
 optional_idx GetStorageVersion(const char *version_string) {
 	for (idx_t i = 0; storage_version_info[i].version_name; i++) {
-		if (!std::strcmp(storage_version_info[i].version_name, version_string)) {
+		if (!strcmp(storage_version_info[i].version_name, version_string)) {
 			return storage_version_info[i].storage_version;
 		}
 	}
@@ -41,7 +42,7 @@ optional_idx GetStorageVersion(const char *version_string) {
 
 optional_idx GetSerializationVersion(const char *version_string) {
 	for (idx_t i = 0; serialization_version_info[i].version_name; i++) {
-		if (!std::strcmp(serialization_version_info[i].version_name, version_string)) {
+		if (!strcmp(serialization_version_info[i].version_name, version_string)) {
 			return serialization_version_info[i].serialization_version;
 		}
 	}

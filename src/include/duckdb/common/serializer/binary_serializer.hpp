@@ -19,7 +19,7 @@ class BinarySerializer : public Serializer {
 public:
 	explicit BinarySerializer(WriteStream &stream, SerializationOptions options_p = SerializationOptions())
 	    : stream(stream) {
-		options = options_p;
+		options = std::move(options_p);
 		// Override the value set by the passed in SerializationOptions
 		options.serialize_enum_as_string = false;
 	}
@@ -55,7 +55,7 @@ private:
 public:
 	template <class T>
 	static void Serialize(const T &value, WriteStream &stream, SerializationOptions options = SerializationOptions()) {
-		BinarySerializer serializer(stream, options);
+		BinarySerializer serializer(stream, std::move(options));
 		serializer.OnObjectBegin();
 		value.Serialize(serializer);
 		serializer.OnObjectEnd();
