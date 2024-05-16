@@ -333,13 +333,16 @@ TEST_CASE("duckdb_create_value", "[capi]") {
 		duckdb_destroy_value(&value);                                                                                  \
 	}
 
-	TEST_VALUE(duckdb_create_bigint(42), duckdb_get_bigint, 42);
 	TEST_VALUE(duckdb_create_bool(true), duckdb_get_bool, true);
-	TEST_VALUE(duckdb_create_integer(42), duckdb_get_integer, 42);
+
 	TEST_VALUE(duckdb_create_tinyint(42), duckdb_get_tinyint, 42);
 	TEST_VALUE(duckdb_create_utinyint(32), duckdb_get_utinyint, 32);
-	TEST_VALUE(duckdb_create_bigint(42), duckdb_get_bigint, 42);
+	TEST_VALUE(duckdb_create_smallint(42), duckdb_get_smallint, 42);
+	TEST_VALUE(duckdb_create_usmallint(42), duckdb_get_usmallint, 42);
 	TEST_VALUE(duckdb_create_integer(42), duckdb_get_integer, 42);
+	TEST_VALUE(duckdb_create_uinteger(42), duckdb_get_uinteger, 42);
+	TEST_VALUE(duckdb_create_bigint(42), duckdb_get_bigint, 42);
+	TEST_VALUE(duckdb_create_ubigint(42), duckdb_get_ubigint, 42);
 	TEST_VALUE(duckdb_create_float(42.0), duckdb_get_float, 42.0);
 	TEST_VALUE(duckdb_create_double(42.0), duckdb_get_double, 42.0);
 	/*

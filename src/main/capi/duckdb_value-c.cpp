@@ -52,6 +52,18 @@ duckdb_value duckdb_create_utinyint(uint8_t input) {
 uint8_t duckdb_get_utinyint(duckdb_value val) {
 	return UnwrapValue(val).GetValue<uint8_t>();
 }
+duckdb_value duckdb_create_smallint(int16_t input) {
+	return WrapValue(new duckdb::Value(duckdb::Value::SMALLINT(input)));
+}
+int16_t duckdb_get_smallint(duckdb_value val) {
+	return UnwrapValue(val).GetValue<int16_t>();
+}
+duckdb_value duckdb_create_usmallint(uint16_t input) {
+	return WrapValue(new duckdb::Value(duckdb::Value::USMALLINT(input)));
+}
+uint16_t duckdb_get_usmallint(duckdb_value val) {
+	return UnwrapValue(val).GetValue<uint16_t>();
+}
 duckdb_value duckdb_create_integer(int32_t input) {
 	return WrapValue(new duckdb::Value(duckdb::Value::INTEGER(input)));
 }
