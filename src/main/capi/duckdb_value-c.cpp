@@ -92,8 +92,8 @@ duckdb_value duckdb_create_date(duckdb_date input) {
 	return WrapValue(new duckdb::Value(duckdb::Value::DATE(duckdb::date_t(input.days))));
 }
 duckdb_date duckdb_get_date(duckdb_value val) {
-	D_ASSERT(0);
-	//	return UnwrapValue(val).GetValue<duckdb_date>();
+	auto res = UnwrapValue(val).GetValue<duckdb::date_t>();
+	return {res.days};
 }
 duckdb_value duckdb_create_time(duckdb_time input) {
 	return WrapValue(new duckdb::Value(duckdb::Value::TIME(duckdb::dtime_t(input.micros))));
@@ -120,8 +120,8 @@ duckdb_value duckdb_create_hugeint(duckdb_hugeint input) {
 	return WrapValue(new duckdb::Value(duckdb::Value::HUGEINT(duckdb::hugeint_t(input.upper, input.lower))));
 }
 duckdb_hugeint duckdb_get_hugeint(duckdb_value val) {
-	D_ASSERT(0);
-	// return UnwrapValue(val).GetValue<duckdb_hugeint>();
+	auto res = UnwrapValue(val).GetValue<duckdb::hugeint_t>();
+	return {res.lower, res.upper};
 }
 duckdb_value duckdb_create_blob(const char *data, idx_t length) {
 	return WrapValue(new duckdb::Value(duckdb::Value::BLOB((const uint8_t *)data, length)));
