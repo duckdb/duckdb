@@ -23,6 +23,28 @@ index b5a2713..dc69b08 100644
  public:
  	std::string Name() override {
  		return "mysql_scanner";
+diff --git a/src/include/storage/mysql_schema_entry.hpp b/src/include/storage/mysql_schema_entry.hpp
+index 1227840..9d6b709 100644
+--- a/src/include/storage/mysql_schema_entry.hpp
++++ b/src/include/storage/mysql_schema_entry.hpp
+@@ -22,7 +22,7 @@ public:
+ public:
+ 	optional_ptr<CatalogEntry> CreateTable(CatalogTransaction transaction, BoundCreateTableInfo &info) override;
+ 	optional_ptr<CatalogEntry> CreateFunction(CatalogTransaction transaction, CreateFunctionInfo &info) override;
+-	optional_ptr<CatalogEntry> CreateIndex(ClientContext &context, CreateIndexInfo &info,
++	optional_ptr<CatalogEntry> CreateIndex(CatalogTransaction transaction, CreateIndexInfo &info,
+ 	                                       TableCatalogEntry &table) override;
+ 	optional_ptr<CatalogEntry> CreateView(CatalogTransaction transaction, CreateViewInfo &info) override;
+ 	optional_ptr<CatalogEntry> CreateSequence(CatalogTransaction transaction, CreateSequenceInfo &info) override;
+@@ -34,7 +34,7 @@ public:
+ 	                                                CreatePragmaFunctionInfo &info) override;
+ 	optional_ptr<CatalogEntry> CreateCollation(CatalogTransaction transaction, CreateCollationInfo &info) override;
+ 	optional_ptr<CatalogEntry> CreateType(CatalogTransaction transaction, CreateTypeInfo &info) override;
+-	void Alter(ClientContext &context, AlterInfo &info) override;
++	void Alter(CatalogTransaction transaction, AlterInfo &info) override;
+ 	void Scan(ClientContext &context, CatalogType type, const std::function<void(CatalogEntry &)> &callback) override;
+ 	void Scan(CatalogType type, const std::function<void(CatalogEntry &)> &callback) override;
+ 	void DropEntry(ClientContext &context, DropInfo &info) override;
 diff --git a/src/include/storage/mysql_table_entry.hpp b/src/include/storage/mysql_table_entry.hpp
 index dbbed8a..6a34aaa 100644
 --- a/src/include/storage/mysql_table_entry.hpp
@@ -50,10 +72,10 @@ index 267e9f5..0c72f36 100644
  	result.Execute("SET character_set_results = 'utf8mb4';");
  	return result;
 diff --git a/src/mysql_extension.cpp b/src/mysql_extension.cpp
-index 47d90fc..c955b14 100644
+index 7f78543..b1736c1 100644
 --- a/src/mysql_extension.cpp
 +++ b/src/mysql_extension.cpp
-@@ -48,7 +48,7 @@ static void LoadInternal(DatabaseInstance &db) {
+@@ -97,7 +97,7 @@ static void LoadInternal(DatabaseInstance &db) {
  	config.optimizer_extensions.push_back(std::move(mysql_optimizer));
  }
  
@@ -62,6 +84,37 @@ index 47d90fc..c955b14 100644
  	LoadInternal(*db.instance);
  }
  
+diff --git a/src/storage/mysql_schema_entry.cpp b/src/storage/mysql_schema_entry.cpp
+index d413a11..052d384 100644
+--- a/src/storage/mysql_schema_entry.cpp
++++ b/src/storage/mysql_schema_entry.cpp
+@@ -86,9 +86,9 @@ string GetMySQLCreateIndex(CreateIndexInfo &info, TableCatalogEntry &tbl) {
+ 	return sql;
+ }
+ 
+-optional_ptr<CatalogEntry> MySQLSchemaEntry::CreateIndex(ClientContext &context, CreateIndexInfo &info,
++optional_ptr<CatalogEntry> MySQLSchemaEntry::CreateIndex(CatalogTransaction transaction, CreateIndexInfo &info,
+                                                          TableCatalogEntry &table) {
+-	auto &mysql_transaction = MySQLTransaction::Get(context, table.catalog);
++	auto &mysql_transaction = MySQLTransaction::Get(transaction.GetContext(), table.catalog);
+ 	mysql_transaction.Query(GetMySQLCreateIndex(info, table));
+ 	return nullptr;
+ }
+@@ -163,12 +163,12 @@ optional_ptr<CatalogEntry> MySQLSchemaEntry::CreateCollation(CatalogTransaction
+ 	throw BinderException("MySQL databases do not support creating collations");
+ }
+ 
+-void MySQLSchemaEntry::Alter(ClientContext &context, AlterInfo &info) {
++void MySQLSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info) {
+ 	if (info.type != AlterType::ALTER_TABLE) {
+ 		throw BinderException("Only altering tables is supported for now");
+ 	}
+ 	auto &alter = info.Cast<AlterTableInfo>();
+-	tables.AlterTable(context, alter);
++	tables.AlterTable(transaction.GetContext(), alter);
+ }
+ 
+ bool CatalogTypeIsSupported(CatalogType type) {
 diff --git a/src/storage/mysql_table_entry.cpp b/src/storage/mysql_table_entry.cpp
 index 9c62c21..0a9112d 100644
 --- a/src/storage/mysql_table_entry.cpp

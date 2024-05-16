@@ -96,14 +96,14 @@ string AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &f
 	return name;
 }
 
-void AttachedDatabase::Initialize(optional_ptr<ClientContext> context) {
+void AttachedDatabase::Initialize() {
 	if (IsSystem()) {
 		catalog->Initialize(true);
 	} else {
 		catalog->Initialize(false);
 	}
 	if (storage) {
-		storage->Initialize(context);
+		storage->Initialize();
 	}
 }
 
