@@ -404,7 +404,7 @@ jobs:
   extension-updating:
     name: Extension updating test
     runs-on: ubuntu-20.04
-    needs: linux-memory-leaks
+#    needs: linux-memory-leaks TODO revert
     env:
       CC: gcc-10
       CXX: g++-10
@@ -419,11 +419,27 @@ jobs:
         shell: bash
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install
+        shell: bash
+        run: pip install awscli
+
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
           save: ${{ env.CCACHE_SAVE }}
+
+      - name: Start Minio
+        shell: bash
+        run: |
+          sudo ./scripts/install_s3_test_server.sh
+          source ./scripts/run_s3_test_server.sh
+          source ./scripts/set_s3_test_server_variables.sh
+          sleep 60
 
       - name: Build
         shell: bash

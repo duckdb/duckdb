@@ -31,6 +31,9 @@ require-env DIRECT_INSTALL_DIR
 # This extension dir is expected to contain tpch and tpcds, but with a corrupted tpcds metadata file 
 require-env LOCAL_EXTENSION_DIR_MALFORMED_INFO
 
+# Address on a minio server that has the LOCAL_EXTENSION_REPO_UPDATED copied to it
+require-env REMOTE_EXTENSION_REPO_UPDATED
+
 # Parquet is statically loaded for this test
 require parquet
 
@@ -233,3 +236,30 @@ query IIIII
 UPDATE EXTENSIONS
 ----
 tpcds	(empty)	NOT_A_REPOSITORY	v0.0.1	v0.0.1
+
+restart
+
+# Set extension dir to a fresh one
+statement ok
+set extension_directory='__TEST_DIR__/update_extensions_ci_fresh'
+
+# Nothing installed beforehand
+query IIII
+SELECT extension_name, install_mode, installed_from, extension_version FROM duckdb_extensions() where installed and extension_name != 'jemalloc' and extension_name != 'parquet'
+----
+
+# Install from the remote repo
+statement ok
+force install inet from '${REMOTE_EXTENSION_REPO_UPDATED}'
+
+# Installed from the minio repo now
+query IIII
+SELECT extension_name, install_mode, installed_from, extension_version FROM duckdb_extensions() where installed and extension_name != 'jemalloc' and extension_name != 'parquet'
+----
+inet	REPOSITORY	http://duckdb-minio.com:9000/test-bucket-public/ci-test-repo	v0.0.2
+
+# Installed from the minio repo now
+query IIIII
+UPDATE EXTENSIONS
+----
+inet	http://duckdb-minio.com:9000/test-bucket-public/ci-test-repo	NO_UPDATE_AVAILABLE	v0.0.2	v0.0.2
