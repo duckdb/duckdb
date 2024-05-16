@@ -1634,6 +1634,7 @@ DUCKDB_API duckdb_timestamp duckdb_get_timestamp(duckdb_value val);
 DUCKDB_API duckdb_interval duckdb_get_interval(duckdb_value val);
 DUCKDB_API duckdb_hugeint duckdb_get_hugeint(duckdb_value val);
 DUCKDB_API duckdb_logical_type duckdb_get_value_type(duckdb_value val);
+DUCKDB_API duckdb_blob duckdb_get_blob(duckdb_value val);
 
 /*!
 Creates a value from an int64
