@@ -43,3 +43,27 @@ class TestUnion(object):
             (12, 13, 14, 15, 16),
             (13, 14, 15, 16, 17),
         ]
+
+        df_1 = connection.execute("FROM tbl1").df()
+        df_2 = connection.execute("FROM tbl2").df()
+
+        query = """
+			select
+				*
+			from
+				(
+					select A, B, C, D, 0 as E from df_1
+				)
+			union all (
+				select * from df_2
+			) order by all
+		"""
+        res = connection.sql(query).fetchall()
+        assert res == [
+            (1, 2, 3, 4, 0),
+            (2, 3, 4, 5, 0),
+            (3, 4, 5, 6, 0),
+            (11, 12, 13, 14, 15),
+            (12, 13, 14, 15, 16),
+            (13, 14, 15, 16, 17),
+        ]
