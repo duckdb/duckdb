@@ -53,15 +53,21 @@ unique_ptr<TableRef> QueryRelation::GetTableRef() {
 BoundStatement QueryRelation::Bind(Binder &binder) {
 	auto saved_binding_mode = binder.GetBindingMode();
 	binder.SetBindingMode(BindingMode::EXTRACT_REPLACEMENT_SCANS);
-	bool replacements_should_be_empty = !columns.empty();
+	bool first_bind = columns.empty();
 	auto result = Relation::Bind(binder);
 	auto &replacements = binder.GetReplacementScans();
-	if (!replacements_should_be_empty) {
+	if (first_bind) {
 		auto &query_node = *select_stmt->node;
 		auto &cte_map = query_node.cte_map;
 		for (auto &kv : replacements) {
 			auto &name = kv.first;
 			auto &tableref = kv.second;
+
+			if (!tableref.external_dependency) {
+				// Only push a CTE for objects that are out of our control (i.e Python)
+				// This makes sure replacement scans for files (parquet/csv/json etc) are not transformed into a CTE
+				continue;
+			}
 
 			auto select = make_uniq<SelectStatement>();
 			auto select_node = make_uniq<SelectNode>();
@@ -74,11 +80,6 @@ BoundStatement QueryRelation::Bind(Binder &binder) {
 
 			cte_map.map[name] = std::move(cte_info);
 		}
-	} else if (!replacements.empty()) {
-		// This Bind is called with the goal to execute the Relation, that means the Relation was bound before, during
-		// creation. For every replacement scan that was possible at creation, a CTE was pushed that makes sure no
-		// replacement scan will take place
-		throw BinderException("Tables or Views were removed inbetween creation and execution of this relation!");
 	}
 	replacements.clear();
 	binder.SetBindingMode(saved_binding_mode);
