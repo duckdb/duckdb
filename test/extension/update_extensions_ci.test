@@ -239,6 +239,9 @@ tpcds	(empty)	NOT_A_REPOSITORY	v0.0.1	v0.0.1
 
 restart
 
+# override the default behaviour of skipping HTTP errors and connection failures: this test fails on connection issues
+set ignore_error_messages
+
 # Set extension dir to a fresh one
 statement ok
 set extension_directory='__TEST_DIR__/update_extensions_ci_fresh'

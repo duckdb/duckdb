@@ -291,8 +291,8 @@ static ExtensionUpdateResult UpdateExtensionInternal(DatabaseInstance &db, FileS
 }
 
 vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(ClientContext &context) {
-	auto fs = FileSystem::CreateLocal();
-	return ExtensionHelper::UpdateExtensions(DatabaseInstance::GetDatabase(context), *fs);
+	auto &fs = FileSystem::GetFileSystem(context);
+	return ExtensionHelper::UpdateExtensions(DatabaseInstance::GetDatabase(context), fs);
 }
 
 vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(DatabaseInstance &db, FileSystem &fs) {
@@ -345,8 +345,8 @@ vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(DatabaseInstance
 }
 
 ExtensionUpdateResult ExtensionHelper::UpdateExtension(ClientContext &context, const string &extension_name) {
-	auto fs = FileSystem::CreateLocal();
-	return ExtensionHelper::UpdateExtension(DatabaseInstance::GetDatabase(context), *fs, extension_name);
+	auto &fs = FileSystem::GetFileSystem(context);
+	return ExtensionHelper::UpdateExtension(DatabaseInstance::GetDatabase(context), fs, extension_name);
 }
 
 ExtensionUpdateResult ExtensionHelper::UpdateExtension(DatabaseInstance &db, FileSystem &fs,
