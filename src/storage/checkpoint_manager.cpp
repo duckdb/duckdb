@@ -217,11 +217,11 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	}
 }
 
-void CheckpointReader::LoadCheckpoint(ClientContext &context, MetadataReader &reader) {
+void CheckpointReader::LoadCheckpoint(CatalogTransaction transaction, MetadataReader &reader) {
 	BinaryDeserializer deserializer(reader);
 	deserializer.Begin();
 	deserializer.ReadList(100, "catalog_entries", [&](Deserializer::List &list, idx_t i) {
-		return list.ReadObject([&](Deserializer &obj) { ReadEntry(context, obj); });
+		return list.ReadObject([&](Deserializer &obj) { ReadEntry(transaction, obj); });
 	});
 	deserializer.End();
 }
@@ -230,7 +230,7 @@ MetadataManager &SingleFileCheckpointReader::GetMetadataManager() {
 	return storage.block_manager->GetMetadataManager();
 }
 
-void SingleFileCheckpointReader::LoadFromStorage(optional_ptr<ClientContext> context) {
+void SingleFileCheckpointReader::LoadFromStorage() {
 	auto &block_manager = *storage.block_manager;
 	auto &metadata_manager = GetMetadataManager();
 	MetaBlockPointer meta_block(block_manager.GetMetaBlock(), 0);
@@ -239,24 +239,10 @@ void SingleFileCheckpointReader::LoadFromStorage(optional_ptr<ClientContext> con
 		return;
 	}
 
-	if (context) {
-		auto &meta_transaction = MetaTransaction::Get(*context);
-		meta_transaction.ModifyDatabase(catalog.GetAttached());
-		// create the MetadataReader to read from the storage
-		MetadataReader reader(metadata_manager, meta_block);
-		//	reader.SetContext(*con.context);
-		LoadCheckpoint(*context, reader);
-	} else {
-		Connection con(storage.GetDatabase());
-		con.BeginTransaction();
-		auto &meta_transaction = MetaTransaction::Get(*con.context);
-		meta_transaction.ModifyDatabase(catalog.GetAttached());
-		// create the MetadataReader to read from the storage
-		MetadataReader reader(metadata_manager, meta_block);
-		//	reader.SetContext(*con.context);
-		LoadCheckpoint(*con.context, reader);
-		con.Commit();
-	}
+	// create the MetadataReader to read from the storage
+	MetadataReader reader(metadata_manager, meta_block);
+	auto transaction = CatalogTransaction::GetSystemTransaction(catalog.GetDatabase());
+	LoadCheckpoint(transaction, reader);
 }
 
 void CheckpointWriter::WriteEntry(CatalogEntry &entry, Serializer &serializer) {
@@ -316,40 +302,40 @@ void CheckpointWriter::WriteSchema(SchemaCatalogEntry &schema, Serializer &seria
 	serializer.WriteProperty(100, "schema", &schema);
 }
 
-void CheckpointReader::ReadEntry(ClientContext &context, Deserializer &deserializer) {
+void CheckpointReader::ReadEntry(CatalogTransaction transaction, Deserializer &deserializer) {
 	auto type = deserializer.ReadProperty<CatalogType>(99, "type");
 
 	switch (type) {
 	case CatalogType::SCHEMA_ENTRY: {
-		ReadSchema(context, deserializer);
+		ReadSchema(transaction, deserializer);
 		break;
 	}
 	case CatalogType::TYPE_ENTRY: {
-		ReadType(context, deserializer);
+		ReadType(transaction, deserializer);
 		break;
 	}
 	case CatalogType::SEQUENCE_ENTRY: {
-		ReadSequence(context, deserializer);
+		ReadSequence(transaction, deserializer);
 		break;
 	}
 	case CatalogType::TABLE_ENTRY: {
-		ReadTable(context, deserializer);
+		ReadTable(transaction, deserializer);
 		break;
 	}
 	case CatalogType::VIEW_ENTRY: {
-		ReadView(context, deserializer);
+		ReadView(transaction, deserializer);
 		break;
 	}
 	case CatalogType::MACRO_ENTRY: {
-		ReadMacro(context, deserializer);
+		ReadMacro(transaction, deserializer);
 		break;
 	}
 	case CatalogType::TABLE_MACRO_ENTRY: {
-		ReadTableMacro(context, deserializer);
+		ReadTableMacro(transaction, deserializer);
 		break;
 	}
 	case CatalogType::INDEX_ENTRY: {
-		ReadIndex(context, deserializer);
+		ReadIndex(transaction, deserializer);
 		break;
 	}
 	default:
@@ -357,14 +343,14 @@ void CheckpointReader::ReadEntry(ClientContext &context, Deserializer &deseriali
 	}
 }
 
-void CheckpointReader::ReadSchema(ClientContext &context, Deserializer &deserializer) {
+void CheckpointReader::ReadSchema(CatalogTransaction transaction, Deserializer &deserializer) {
 	// Read the schema and create it in the catalog
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "schema");
 	auto &schema_info = info->Cast<CreateSchemaInfo>();
 
 	// we set create conflict to IGNORE_ON_CONFLICT, so that we can ignore a failure when recreating the main schema
 	schema_info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
-	catalog.CreateSchema(context, schema_info);
+	catalog.CreateSchema(transaction, schema_info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -374,10 +360,10 @@ void CheckpointWriter::WriteView(ViewCatalogEntry &view, Serializer &serializer)
 	serializer.WriteProperty(100, "view", &view);
 }
 
-void CheckpointReader::ReadView(ClientContext &context, Deserializer &deserializer) {
+void CheckpointReader::ReadView(CatalogTransaction transaction, Deserializer &deserializer) {
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "view");
 	auto &view_info = info->Cast<CreateViewInfo>();
-	catalog.CreateView(context, view_info);
+	catalog.CreateView(transaction, view_info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -387,10 +373,10 @@ void CheckpointWriter::WriteSequence(SequenceCatalogEntry &seq, Serializer &seri
 	serializer.WriteProperty(100, "sequence", &seq);
 }
 
-void CheckpointReader::ReadSequence(ClientContext &context, Deserializer &deserializer) {
+void CheckpointReader::ReadSequence(CatalogTransaction transaction, Deserializer &deserializer) {
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "sequence");
 	auto &sequence_info = info->Cast<CreateSequenceInfo>();
-	catalog.CreateSequence(context, sequence_info);
+	catalog.CreateSequence(transaction, sequence_info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -404,7 +390,7 @@ void CheckpointWriter::WriteIndex(IndexCatalogEntry &index_catalog_entry, Serial
 	serializer.WriteProperty(100, "index", &index_catalog_entry);
 }
 
-void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deserializer) {
+void CheckpointReader::ReadIndex(CatalogTransaction transaction, Deserializer &deserializer) {
 
 	// we need to keep the tag "index", even though it is slightly misleading.
 	auto create_info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "index");
@@ -418,8 +404,8 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	// create the index in the catalog
 
 	// look for the table in the catalog
-	auto &table =
-	    catalog.GetEntry(context, CatalogType::TABLE_ENTRY, create_info->schema, info.table).Cast<DuckTableEntry>();
+	auto &schema = catalog.GetSchema(transaction, create_info->schema);
+	auto &table = schema.GetEntry(transaction, CatalogType::TABLE_ENTRY, info.table)->Cast<DuckTableEntry>();
 
 	// we also need to make sure the index type is loaded
 	// backwards compatability:
@@ -429,7 +415,7 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	}
 
 	// now we can look for the index in the catalog and assign the table info
-	auto &index = catalog.CreateIndex(context, info)->Cast<DuckIndexEntry>();
+	auto &index = catalog.CreateIndex(transaction, info)->Cast<DuckIndexEntry>();
 	auto data_table_info = table.GetStorage().GetDataTableInfo();
 	index.info = make_shared_ptr<IndexDataTableInfo>(data_table_info, info.index_name);
 
@@ -472,10 +458,10 @@ void CheckpointWriter::WriteType(TypeCatalogEntry &type, Serializer &serializer)
 	serializer.WriteProperty(100, "type", &type);
 }
 
-void CheckpointReader::ReadType(ClientContext &context, Deserializer &deserializer) {
+void CheckpointReader::ReadType(CatalogTransaction transaction, Deserializer &deserializer) {
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "type");
 	auto &type_info = info->Cast<CreateTypeInfo>();
-	catalog.CreateType(context, type_info);
+	catalog.CreateType(transaction, type_info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -485,20 +471,20 @@ void CheckpointWriter::WriteMacro(ScalarMacroCatalogEntry &macro, Serializer &se
 	serializer.WriteProperty(100, "macro", &macro);
 }
 
-void CheckpointReader::ReadMacro(ClientContext &context, Deserializer &deserializer) {
+void CheckpointReader::ReadMacro(CatalogTransaction transaction, Deserializer &deserializer) {
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "macro");
 	auto &macro_info = info->Cast<CreateMacroInfo>();
-	catalog.CreateFunction(context, macro_info);
+	catalog.CreateFunction(transaction, macro_info);
 }
 
 void CheckpointWriter::WriteTableMacro(TableMacroCatalogEntry &macro, Serializer &serializer) {
 	serializer.WriteProperty(100, "table_macro", &macro);
 }
 
-void CheckpointReader::ReadTableMacro(ClientContext &context, Deserializer &deserializer) {
+void CheckpointReader::ReadTableMacro(CatalogTransaction transaction, Deserializer &deserializer) {
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "table_macro");
 	auto &macro_info = info->Cast<CreateMacroInfo>();
-	catalog.CreateFunction(context, macro_info);
+	catalog.CreateFunction(transaction, macro_info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -518,21 +504,20 @@ void SingleFileCheckpointWriter::WriteTable(TableCatalogEntry &table, Serializer
 	partial_block_manager.FlushPartialBlocks();
 }
 
-void CheckpointReader::ReadTable(ClientContext &context, Deserializer &deserializer) {
+void CheckpointReader::ReadTable(CatalogTransaction transaction, Deserializer &deserializer) {
 	// deserialize the table meta data
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "table");
-	auto binder = Binder::CreateBinder(context);
-	auto &schema = catalog.GetSchema(context, info->schema);
-	auto bound_info = binder->BindCreateTableInfo(std::move(info), schema);
+	auto &schema = catalog.GetSchema(transaction, info->schema);
+	auto bound_info = Binder::BindCreateTableCheckpoint(std::move(info), schema);
 
 	// now read the actual table data and place it into the CreateTableInfo
-	ReadTableData(context, deserializer, *bound_info);
+	ReadTableData(transaction, deserializer, *bound_info);
 
 	// finally create the table in the catalog
-	catalog.CreateTable(context, *bound_info);
+	catalog.CreateTable(transaction, *bound_info);
 }
 
-void CheckpointReader::ReadTableData(ClientContext &context, Deserializer &deserializer,
+void CheckpointReader::ReadTableData(CatalogTransaction transaction, Deserializer &deserializer,
                                      BoundCreateTableInfo &bound_info) {
 
 	// written in "SingleFileTableDataWriter::FinalizeTable"

@@ -27,6 +27,7 @@ class Serializer;
 class Deserializer;
 class Value;
 
+struct CatalogTransaction;
 struct CreateInfo;
 
 //! Abstract base class of an entry in the catalog
@@ -65,6 +66,7 @@ private:
 
 public:
 	virtual unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo &info);
+	virtual unique_ptr<CatalogEntry> AlterEntry(CatalogTransaction transaction, AlterInfo &info);
 	virtual void UndoAlter(ClientContext &context, AlterInfo &info);
 
 	virtual unique_ptr<CatalogEntry> Copy(ClientContext &context) const;
