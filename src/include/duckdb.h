@@ -1601,7 +1601,6 @@ Creates a value from a string
 */
 DUCKDB_API duckdb_value duckdb_create_varchar_length(const char *text, idx_t length);
 
-DUCKDB_API duckdb_value duckdb_create_varchar(const char *text);
 DUCKDB_API duckdb_value duckdb_create_int64(int64_t input);
 DUCKDB_API duckdb_value duckdb_create_bool(bool input);
 DUCKDB_API duckdb_value duckdb_create_tinyint(int8_t input);
