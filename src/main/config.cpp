@@ -485,14 +485,11 @@ SerializationCompatibility SerializationCompatibility::FromString(const string &
 		throw InvalidInputException("Version string can not be empty");
 	}
 
-	if (input[0] != 'v') {
-		throw InvalidInputException("Invalid version string, input should be a string that matches the format "
-		                            "'[>|<]v<major>.<minor>.<patch>'");
-	}
-
 	auto serialization_version = GetSerializationVersion(input.c_str());
 	if (!serialization_version.IsValid()) {
-		throw InvalidInputException("The version string '%s' is not a valid DuckDB version", input);
+		auto candidates = GetSerializationCandidates();
+		throw InvalidInputException("The version string '%s' is not a valid DuckDB version, valid options are: %s",
+		                            input, StringUtil::Join(candidates, ", "));
 	}
 	SerializationCompatibility result;
 	result.duckdb_version = input;

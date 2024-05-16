@@ -26,7 +26,8 @@ static const StorageVersionInfo storage_version_info[] = {
 // END OF STORAGE VERSION INFO
 
 // START OF SERIALIZATION VERSION INFO
-static const SerializationVersionInfo serialization_version_info[] = {{"v0.10.2", 1}, {"v0.10.3", 2}, {nullptr, 0}};
+static const SerializationVersionInfo serialization_version_info[] = {
+    {"v0.10.0", 1}, {"v0.10.1", 1}, {"v0.10.2", 1}, {"latest", 2}, {nullptr, 0}};
 // END OF SERIALIZATION VERSION INFO
 
 optional_idx GetStorageVersion(const char *version_string) {
@@ -45,6 +46,14 @@ optional_idx GetSerializationVersion(const char *version_string) {
 		}
 	}
 	return optional_idx();
+}
+
+vector<string> GetSerializationCandidates() {
+	vector<string> candidates;
+	for (idx_t i = 0; serialization_version_info[i].version_name; i++) {
+		candidates.push_back(serialization_version_info[i].version_name);
+	}
+	return candidates;
 }
 
 string GetDuckDBVersion(idx_t version_number) {

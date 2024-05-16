@@ -51,6 +51,7 @@ extern const uint64_t VERSION_NUMBER;
 string GetDuckDBVersion(idx_t version_number);
 optional_idx GetStorageVersion(const char *version_string);
 optional_idx GetSerializationVersion(const char *version_string);
+vector<string> GetSerializationCandidates();
 
 //! The MainHeader is the first header in the storage file. The MainHeader is typically written only once for a database
 //! file.
