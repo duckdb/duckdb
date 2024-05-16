@@ -37,9 +37,10 @@ public:
 	bool escaped = false;
 	idx_t quoted_position = 0;
 
+	CSVStateMachine &state_machine;
+
 protected:
 	CSVStates &states;
-	CSVStateMachine &state_machine;
 };
 
 //! This is the base of our CSV scanners.
