@@ -486,8 +486,8 @@ SerializationCompatibility SerializationCompatibility::FromString(const string &
 	}
 	if (StringUtil::CIEquals(input, "pre-release")) {
 		SerializationCompatibility result;
-		result.comparison = SerializationCompatibility::PreRelease;
 		result.duckdb_version = input;
+		result.storage_version = DConstants::INVALID_INDEX;
 		return result;
 	}
 
@@ -502,21 +502,12 @@ SerializationCompatibility SerializationCompatibility::FromString(const string &
 	}
 	SerializationCompatibility result;
 	result.duckdb_version = input;
-	result.storage_version = storage_version;
-	result.comparison = SerializationCompatibility::VersionCompare;
+	result.storage_version = storage_version.GetIndex();
 	return result;
 }
 
 bool SerializationCompatibility::Compare(idx_t property_version) const {
-	return comparison(*this, property_version);
-}
-
-bool SerializationCompatibility::PreRelease(const SerializationCompatibility &self, idx_t property_version) {
-	return true;
-}
-
-bool SerializationCompatibility::VersionCompare(const SerializationCompatibility &self, idx_t property_version) {
-	return property_version <= self.storage_version.GetIndex();
+	return property_version <= storage_version;
 }
 
 } // namespace duckdb
