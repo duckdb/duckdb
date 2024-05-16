@@ -80,7 +80,9 @@ optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
 }
 
 void StorageManager::ResetWAL() {
-	wal->Delete();
+	if (wal) {
+		wal->Delete();
+	}
 	wal.reset();
 }
 
