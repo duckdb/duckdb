@@ -435,9 +435,8 @@ jobs:
 
       - name: Build
         shell: bash
-        run: make
+        run: BUILD_JSON=1 make
 
-      # TODO clean up
       - name: Start Minio
         shell: bash
         run: |
