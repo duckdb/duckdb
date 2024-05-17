@@ -62,10 +62,6 @@
 #include "icu_extension.hpp"
 #endif
 
-#if DUCKDB_EXTENSION_EXCEL_LINKED
-#include "excel_extension.hpp"
-#endif
-
 #if DUCKDB_EXTENSION_PARQUET_LINKED
 #include "parquet_extension.hpp"
 #endif
