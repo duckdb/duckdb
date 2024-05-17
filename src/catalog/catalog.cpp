@@ -826,21 +826,6 @@ optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(ClientContext &context, cons
 	return nullptr;
 }
 
-LogicalType Catalog::GetType(ClientContext &context, const string &schema, const string &name,
-                             OnEntryNotFound if_not_found) {
-	auto type_entry = GetEntry<TypeCatalogEntry>(context, schema, name, if_not_found);
-	if (!type_entry) {
-		return LogicalType::INVALID;
-	}
-	return type_entry->user_type;
-}
-
-LogicalType Catalog::GetType(ClientContext &context, const string &catalog_name, const string &schema,
-                             const string &name) {
-	auto &type_entry = Catalog::GetEntry<TypeCatalogEntry>(context, catalog_name, schema, name);
-	return type_entry.user_type;
-}
-
 vector<reference<SchemaCatalogEntry>> Catalog::GetSchemas(ClientContext &context) {
 	vector<reference<SchemaCatalogEntry>> schemas;
 	ScanSchemas(context, [&](SchemaCatalogEntry &entry) { schemas.push_back(entry); });
