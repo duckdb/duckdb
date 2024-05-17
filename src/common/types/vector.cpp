@@ -321,60 +321,70 @@ struct DataArrays {
 };
 
 void FindChildren(vector<DataArrays> &to_resize, VectorBuffer &auxiliary, idx_t current_multiplier) {
-	if (auxiliary.GetBufferType() == VectorBufferType::LIST_BUFFER) {
+	switch (auxiliary.GetBufferType()) {
+	case VectorBufferType::LIST_BUFFER: {
 		auto &buffer = auxiliary.Cast<VectorListBuffer>();
 		auto &child = buffer.GetChild();
 		auto data = child.GetData();
 		if (!data) {
-			//! Nested type
 			DataArrays arrays(child, data, child.GetBuffer().get(), GetTypeIdSize(child.GetType().InternalType()),
 			                  true);
 			to_resize.emplace_back(arrays);
 			FindChildren(to_resize, *child.GetAuxiliary(), current_multiplier);
-		} else {
-			DataArrays arrays(child, data, child.GetBuffer().get(), GetTypeIdSize(child.GetType().InternalType()),
-			                  false);
-			to_resize.emplace_back(arrays);
+			return;
 		}
-	} else if (auxiliary.GetBufferType() == VectorBufferType::STRUCT_BUFFER) {
+
+		DataArrays arrays(child, data, child.GetBuffer().get(), GetTypeIdSize(child.GetType().InternalType()), false);
+		to_resize.emplace_back(arrays);
+		return;
+	}
+	case VectorBufferType::STRUCT_BUFFER: {
 		auto &buffer = auxiliary.Cast<VectorStructBuffer>();
 		auto &children = buffer.GetChildren();
 		for (auto &child : children) {
 			auto data = child->GetData();
 			if (!data) {
-				//! Nested type
 				DataArrays arrays(*child, data, child->GetBuffer().get(),
 				                  GetTypeIdSize(child->GetType().InternalType()), true);
 				to_resize.emplace_back(arrays);
 				FindChildren(to_resize, *child->GetAuxiliary(), current_multiplier);
-			} else {
-				DataArrays arrays(*child, data, child->GetBuffer().get(),
-				                  GetTypeIdSize(child->GetType().InternalType()), false);
-				to_resize.emplace_back(arrays);
+				continue;
 			}
+
+			DataArrays arrays(*child, data, child->GetBuffer().get(), GetTypeIdSize(child->GetType().InternalType()),
+			                  false);
+			to_resize.emplace_back(arrays);
 		}
-	} else if (auxiliary.GetBufferType() == VectorBufferType::ARRAY_BUFFER) {
+		return;
+	}
+	case VectorBufferType::ARRAY_BUFFER: {
 		auto &buffer = auxiliary.Cast<VectorArrayBuffer>();
 		auto array_size = buffer.GetArraySize();
 		auto &child = buffer.GetChild();
 		auto data = child.GetData();
+
+		// The child vectors of type ARRAY are always (child_count * array_size), so we need to multiply the
+		// multiplier by the array size.
+		auto new_multiplier = current_multiplier * array_size;
 		if (!data) {
 			//! Nested type
 			DataArrays arrays(child, data, child.GetBuffer().get(), GetTypeIdSize(child.GetType().InternalType()), true,
 			                  current_multiplier);
 			to_resize.emplace_back(arrays);
-
-			// The child vectors of ArrayTypes always have to be (size * array_size), so we need to multiply the
-			// multiplier by the array size
-			auto new_multiplier = current_multiplier * array_size;
 			FindChildren(to_resize, *child.GetAuxiliary(), new_multiplier);
-		} else {
-			DataArrays arrays(child, data, child.GetBuffer().get(), GetTypeIdSize(child.GetType().InternalType()),
-			                  false, current_multiplier);
-			to_resize.emplace_back(arrays);
+			return;
 		}
+
+		DataArrays arrays(child, data, child.GetBuffer().get(), GetTypeIdSize(child.GetType().InternalType()), false,
+		                  new_multiplier);
+		to_resize.emplace_back(arrays);
+		return;
+	}
+	default:
+		return;
 	}
 }
+
 void Vector::Resize(idx_t cur_size, idx_t new_size) {
 	vector<DataArrays> to_resize;
 	if (!buffer) {
