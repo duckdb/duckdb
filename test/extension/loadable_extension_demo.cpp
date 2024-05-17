@@ -269,14 +269,15 @@ struct BoundedType {
 	}
 
 	static int32_t GetMaxValue(const LogicalType &type) {
-		if (!type.HasModifiers()) {
+		auto mods_ptr = type.GetModifiers();
+		if (!mods_ptr) {
 			throw InvalidInputException("BOUNDED type must have a max value");
 		}
-		auto &props = type.GetModifiersUnsafe();
-		if (props[0].IsNull()) {
+		auto &mods = *mods_ptr;
+		if (mods[0].IsNull()) {
 			throw InvalidInputException("BOUNDED type must have a max value");
 		}
-		return props[0].GetValue<int32_t>();
+		return mods[0].GetValue<int32_t>();
 	}
 };
 
@@ -410,7 +411,9 @@ static bool IntToBoundedCast(Vector &source, Vector &result, idx_t count, CastPa
 // to verify that the range is valid
 
 struct MinMaxType {
-	static void Bind(ClientContext &ctx, LogicalType &type, const vector<Value> &modifiers) {
+	static LogicalType Bind(BindTypeModifiersInput &input) {
+		auto &modifiers = input.modifiers;
+
 		if (modifiers.size() != 2) {
 			throw BinderException("MINMAX type must have two modifiers");
 		}
@@ -426,21 +429,23 @@ struct MinMaxType {
 		if (min_val >= max_val) {
 			throw BinderException("MINMAX type min value must be less than max value");
 		}
-		type = LogicalType::INTEGER;
+
+		auto type = LogicalType(LogicalTypeId::INTEGER);
 		type.SetAlias("MINMAX");
 		type.SetModifiers({Value::INTEGER(min_val), Value::INTEGER(max_val)});
+		return type;
 	}
 
 	static int32_t GetMinValue(const LogicalType &type) {
 		D_ASSERT(type.HasModifiers());
-		auto &props = type.GetModifiersUnsafe();
-		return props[0].GetValue<int32_t>();
+		auto &mods = *type.GetModifiers();
+		return mods[0].GetValue<int32_t>();
 	}
 
 	static int32_t GetMaxValue(const LogicalType &type) {
 		D_ASSERT(type.HasModifiers());
-		auto &props = type.GetModifiersUnsafe();
-		return props[1].GetValue<int32_t>();
+		auto &mods = *type.GetModifiers();
+		return mods[1].GetValue<int32_t>();
 	}
 
 	static LogicalType Get(int32_t min_val, int32_t max_val) {

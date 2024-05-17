@@ -15,9 +15,14 @@
 
 namespace duckdb {
 
+struct BindTypeModifiersInput {
+	ClientContext &context;
+	const LogicalType &type;
+	const vector<Value> &modifiers;
+};
+
 //! The type to bind type modifiers to a type
-typedef void (*bind_type_modifiers_function_t)(ClientContext &context, LogicalType &type,
-                                               const vector<Value> &modifiers);
+typedef LogicalType (*bind_type_modifiers_function_t)(BindTypeModifiersInput &input);
 
 struct CreateTypeInfo : public CreateInfo {
 	CreateTypeInfo();

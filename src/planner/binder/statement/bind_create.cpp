@@ -203,7 +203,7 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 		auto child_type = ListType::GetChildType(type);
 		BindLogicalType(context, child_type, catalog, schema);
 		auto alias = type.GetAlias();
-		auto modifiers = type.GetModifiers();
+		auto modifiers = type.GetModifiersCopy();
 		if (type.id() == LogicalTypeId::LIST) {
 			type = LogicalType::LIST(child_type);
 		} else {
@@ -220,7 +220,7 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 		}
 		// Generate new Struct Type
 		auto alias = type.GetAlias();
-		auto modifiers = type.GetModifiers();
+		auto modifiers = type.GetModifiersCopy();
 		type = LogicalType::STRUCT(child_types);
 		type.SetAlias(alias);
 		type.SetModifiers(modifiers);
@@ -229,7 +229,7 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 		auto array_size = ArrayType::GetSize(type);
 		BindLogicalType(context, child_type, catalog, schema);
 		auto alias = type.GetAlias();
-		auto modifiers = type.GetModifiers();
+		auto modifiers = type.GetModifiersCopy();
 		type = LogicalType::ARRAY(child_type, array_size);
 		type.SetAlias(alias);
 		type.SetModifiers(modifiers);
@@ -240,7 +240,7 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 		}
 		// Generate new Union Type
 		auto alias = type.GetAlias();
-		auto modifiers = type.GetModifiers();
+		auto modifiers = type.GetModifiersCopy();
 		type = LogicalType::UNION(member_types);
 		type.SetAlias(alias);
 		type.SetModifiers(modifiers);
@@ -282,14 +282,13 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 		// Apply the type modifiers (if any)
 		if (user_bind_modifiers_func) {
 			// If an explicit bind_modifiers function was provided, use that to set the type modifier
-			type.MakeTypeInfoUnique();
-			user_bind_modifiers_func(context, type, user_type_mods);
-
+			BindTypeModifiersInput input {context, type, user_type_mods};
+			type = user_bind_modifiers_func(input);
 		} else if (type.HasModifiers()) {
 			// If the type already has modifiers, try to replace them with the user-provided ones if they are compatible
 			// This enables registering custom types with "default" type modifiers that can be overridden, without
 			// having to provide a custom bind_modifiers function
-			auto type_mods_size = type.GetModifiersUnsafe().size();
+			auto type_mods_size = type.GetModifiers()->size();
 
 			// Are we trying to pass more type modifiers than the type has?
 			if (user_type_mods.size() > type_mods_size) {
@@ -298,11 +297,11 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 				    user_type_mods.size(), user_type_name, type_mods_size);
 			}
 
-			// Instantiate a new copy of the ExtraTypeInfo to replace the type modifiers
-			type.MakeTypeInfoUnique();
+			// Deep copy the type so that we can replace the type modifiers
+			type = type.DeepCopy();
 
 			// Re-fetch the type modifiers now that we've deduplicated the ExtraTypeInfo
-			auto &type_mods = type.GetModifiersUnsafe();
+			auto &type_mods = *type.GetModifiers();
 
 			// Replace them in order, casting if necessary
 			for (idx_t i = 0; i < MinValue(type_mods.size(), user_type_mods.size()); i++) {
@@ -704,8 +703,9 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			// 2: create a type alias with a custom type.
 			// eg. CREATE TYPE a AS INT; CREATE TYPE b AS a;
 			// We set b to be an alias for the underlying type of a
-			create_type_info.type = Catalog::GetType(context, schema.catalog.GetName(), schema.name,
-			                                         UserType::GetTypeName(create_type_info.type));
+			auto &type_entry = Catalog::GetEntry<TypeCatalogEntry>(context, schema.catalog.GetName(), schema.name,
+			                                                       UserType::GetTypeName(create_type_info.type));
+			create_type_info.type = type_entry.user_type;
 		} else {
 			auto preserved_type = create_type_info.type;
 			BindLogicalType(context, create_type_info.type);

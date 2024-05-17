@@ -364,8 +364,9 @@ string LogicalType::ToString() const {
 	if (id_ != LogicalTypeId::USER) {
 		auto alias = GetAlias();
 		if (!alias.empty()) {
-			if (HasModifiers()) {
-				auto &mods = GetModifiersUnsafe();
+			auto mods_ptr = GetModifiers();
+			if (mods_ptr && !mods_ptr->empty()) {
+				auto &mods = *mods_ptr;
 				alias += "(";
 				for (idx_t i = 0; i < mods.size(); i++) {
 					alias += mods[i].ToString();
@@ -528,7 +529,9 @@ LogicalType TransformStringToLogicalType(const string &str) {
 
 LogicalType GetUserTypeRecursive(const LogicalType &type, ClientContext &context) {
 	if (type.id() == LogicalTypeId::USER && type.HasAlias()) {
-		return Catalog::GetType(context, INVALID_CATALOG, INVALID_SCHEMA, type.GetAlias());
+		auto &type_entry =
+		    Catalog::GetEntry<TypeCatalogEntry>(context, INVALID_CATALOG, INVALID_SCHEMA, type.GetAlias());
+		return type_entry.user_type;
 	}
 	// Look for LogicalTypeId::USER in nested types
 	if (type.id() == LogicalTypeId::STRUCT) {
@@ -1156,10 +1159,12 @@ bool ApproxEqual(double ldecimal, double rdecimal) {
 // Extra Type Info
 //===--------------------------------------------------------------------===//
 
-void LogicalType::MakeTypeInfoUnique() {
+LogicalType LogicalType::DeepCopy() const {
+	LogicalType copy = *this;
 	if (type_info_) {
-		type_info_ = type_info_->Copy();
+		copy.type_info_ = type_info_->Copy();
 	}
+	return copy;
 }
 
 void LogicalType::SetAlias(string alias) {
@@ -1207,7 +1212,7 @@ bool LogicalType::HasModifiers() const {
 	return false;
 }
 
-vector<Value> LogicalType::GetModifiers() const {
+vector<Value> LogicalType::GetModifiersCopy() const {
 	if (id() == LogicalTypeId::USER) {
 		return UserType::GetTypeModifiers(*this);
 	}
@@ -1217,24 +1222,24 @@ vector<Value> LogicalType::GetModifiers() const {
 	return {};
 }
 
-vector<Value> &LogicalType::GetModifiersUnsafe() {
+optional_ptr<vector<Value>> LogicalType::GetModifiers() {
 	if (id() == LogicalTypeId::USER) {
 		return UserType::GetTypeModifiers(*this);
 	}
 	if (type_info_) {
 		return type_info_->modifiers;
 	}
-	throw InternalException("Type has no modifiers");
+	return nullptr;
 }
 
-const vector<Value> &LogicalType::GetModifiersUnsafe() const {
+optional_ptr<const vector<Value>> LogicalType::GetModifiers() const {
 	if (id() == LogicalTypeId::USER) {
 		return UserType::GetTypeModifiers(*this);
 	}
 	if (type_info_) {
 		return type_info_->modifiers;
 	}
-	throw InternalException("Type has no modifiers");
+	return nullptr;
 }
 
 //===--------------------------------------------------------------------===//

@@ -273,7 +273,8 @@ struct LogicalType {
 		return type_info_;
 	}
 
-	void MakeTypeInfoUnique();
+	//! DeepCopy() will make a unique copy of any ExtraTypeInfo as well
+	LogicalType DeepCopy() const;
 
 	inline void CopyAuxInfo(const LogicalType &other) {
 		type_info_ = other.type_info_;
@@ -323,10 +324,9 @@ struct LogicalType {
 	DUCKDB_API string GetAlias() const;
 	DUCKDB_API void SetModifiers(vector<Value> modifiers);
 	DUCKDB_API bool HasModifiers() const;
-	DUCKDB_API vector<Value> GetModifiers() const;
-	// ! Try to get the modifiers without copying, throws an exception if the type has no modifiers
-	DUCKDB_API vector<Value> &GetModifiersUnsafe();
-	DUCKDB_API const vector<Value> &GetModifiersUnsafe() const;
+	DUCKDB_API vector<Value> GetModifiersCopy() const;
+	DUCKDB_API optional_ptr<vector<Value>> GetModifiers();
+	DUCKDB_API optional_ptr<const vector<Value>> GetModifiers() const;
 
 	//! Returns the maximum logical type when combining the two types - or throws an exception if combining is not possible
 	DUCKDB_API static LogicalType MaxLogicalType(ClientContext &context, const LogicalType &left, const LogicalType &right);
