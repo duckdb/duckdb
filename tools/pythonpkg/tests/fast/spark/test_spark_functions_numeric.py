@@ -1,11 +1,11 @@
 import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
-from duckdb.experimental.spark.sql.types import Row
 from duckdb.experimental.spark.sql import functions as F
+from duckdb.experimental.spark.sql.types import Row
 
 
-class TestNumericFunctions(object):
+class TestSparkFunctionsNumeric(object):
     def test_greatest(self, spark):
         data = [
             (1, 2),

@@ -1152,8 +1152,7 @@ void ART::Deserialize(const BlockPointer &pointer) {
 //===--------------------------------------------------------------------===//
 
 void ART::InitializeVacuum(ARTFlags &flags) {
-
-	flags.vacuum_flags.reserve(allocators->size());
+	flags.vacuum_flags.reserve(flags.vacuum_flags.size() + allocators->size());
 	for (auto &allocator : *allocators) {
 		flags.vacuum_flags.push_back(allocator->InitializeVacuum());
 	}

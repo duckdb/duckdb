@@ -166,7 +166,7 @@ private:
 	                                   string_t &dummy_val);
 	//! If a string_t value can be cast to a type
 	bool CanYouCastIt(const string_t value, const LogicalType &type, const DialectOptions &dialect_options,
-	                  const bool is_null);
+	                  const bool is_null, const char decimal_separator);
 
 	//! Variables for Type Detection
 	//! Format Candidates for Date and Timestamp Types

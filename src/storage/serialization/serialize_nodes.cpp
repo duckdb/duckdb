@@ -270,6 +270,7 @@ void ColumnDefinition::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<TableColumnType>(103, "category", category);
 	serializer.WriteProperty<duckdb::CompressionType>(104, "compression_type", compression_type);
 	serializer.WritePropertyWithDefault<Value>(105, "comment", comment, Value());
+	serializer.WritePropertyWithDefault<unordered_map<string, string>>(106, "tags", tags, unordered_map<string, string>());
 }
 
 ColumnDefinition ColumnDefinition::Deserialize(Deserializer &deserializer) {
@@ -280,6 +281,7 @@ ColumnDefinition ColumnDefinition::Deserialize(Deserializer &deserializer) {
 	ColumnDefinition result(std::move(name), std::move(type), std::move(expression), category);
 	deserializer.ReadProperty<duckdb::CompressionType>(104, "compression_type", result.compression_type);
 	deserializer.ReadPropertyWithDefault<Value>(105, "comment", result.comment, Value());
+	deserializer.ReadPropertyWithDefault<unordered_map<string, string>>(106, "tags", result.tags, unordered_map<string, string>());
 	return result;
 }
 
@@ -320,12 +322,12 @@ unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::Deserialize(Des
 }
 
 void CommonTableExpressionMap::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<case_insensitive_map_t<unique_ptr<CommonTableExpressionInfo>>>(100, "map", map);
+	serializer.WritePropertyWithDefault<InsertionOrderPreservingMap<unique_ptr<CommonTableExpressionInfo>>>(100, "map", map);
 }
 
 CommonTableExpressionMap CommonTableExpressionMap::Deserialize(Deserializer &deserializer) {
 	CommonTableExpressionMap result;
-	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<unique_ptr<CommonTableExpressionInfo>>>(100, "map", result.map);
+	deserializer.ReadPropertyWithDefault<InsertionOrderPreservingMap<unique_ptr<CommonTableExpressionInfo>>>(100, "map", result.map);
 	return result;
 }
 
