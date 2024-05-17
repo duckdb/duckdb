@@ -199,6 +199,10 @@ void CSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(130, "parallel", parallel);
 	serializer.WritePropertyWithDefault<vector<bool>>(131, "was_type_manually_set", was_type_manually_set);
 	serializer.WritePropertyWithDefault<CSVOption<string>>(132, "rejects_scan_name", rejects_scan_name, {"reject_scans"});
+	serializer.WritePropertyWithDefault<vector<string>>(133, "name_list", name_list);
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(134, "sql_type_list", sql_type_list);
+	serializer.WritePropertyWithDefault<case_insensitive_map_t<idx_t>>(135, "sql_types_per_column", sql_types_per_column);
+	serializer.WritePropertyWithDefault<bool>(136, "columns_set", columns_set, false);
 }
 
 CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
@@ -236,6 +240,10 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<bool>(130, "parallel", result.parallel);
 	deserializer.ReadPropertyWithDefault<vector<bool>>(131, "was_type_manually_set", result.was_type_manually_set);
 	deserializer.ReadPropertyWithDefault<CSVOption<string>>(132, "rejects_scan_name", result.rejects_scan_name, {"reject_scans"});
+	deserializer.ReadPropertyWithDefault<vector<string>>(133, "name_list", result.name_list);
+	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(134, "sql_type_list", result.sql_type_list);
+	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<idx_t>>(135, "sql_types_per_column", result.sql_types_per_column);
+	deserializer.ReadPropertyWithDefault<bool>(136, "columns_set", result.columns_set, false);
 	return result;
 }
 

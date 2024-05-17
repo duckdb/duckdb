@@ -453,6 +453,7 @@ void CSVReaderOptions::FromNamedParameters(named_parameter_map_t &in, ClientCont
 			ordered_user_defined_parameters[loption] = kv.second.ToSQLString();
 		}
 		if (loption == "columns") {
+			columns_set = true;
 			auto &child_type = kv.second.type();
 			if (child_type.id() != LogicalTypeId::STRUCT) {
 				throw BinderException("read_csv columns requires a struct as input");

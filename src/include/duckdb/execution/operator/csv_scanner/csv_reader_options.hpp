@@ -68,6 +68,8 @@ struct CSVReaderOptions {
 	vector<LogicalType> sql_type_list;
 	//! User-defined name list
 	vector<string> name_list;
+	//! If the names and types were set by the columns parameter
+	bool columns_set = false;
 	//! Types considered as candidates for auto detection ordered by descending specificity (~ from high to low)
 	vector<LogicalType> auto_type_candidates = {LogicalType::VARCHAR,   LogicalType::DOUBLE, LogicalType::BIGINT,
 	                                            LogicalType::TIMESTAMP, LogicalType::DATE,   LogicalType::TIME,

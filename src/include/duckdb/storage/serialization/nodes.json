@@ -787,6 +787,11 @@
       {"id": 135,
         "name": "sql_types_per_column",
         "type": "case_insensitive_map_t<idx_t>"
+      },
+      {"id": 136,
+        "name": "columns_set",
+        "type": "bool",
+        "default": "false"
       }
     ],
     "pointer_type": "none"

@@ -82,10 +82,15 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 
 	options.file_options.AutoDetectHivePartitioning(*multi_file_list, context);
 
-	if (!options.auto_detect && return_types.empty()) {
-		throw BinderException("read_csv requires columns to be specified through the 'columns' option. Use "
-		                      "read_csv_auto or set read_csv(..., "
-		                      "AUTO_DETECT=TRUE) to automatically guess columns.");
+	if (!options.auto_detect) {
+		if (!options.columns_set) {
+			throw BinderException("read_csv requires columns to be specified through the 'columns' option. Use "
+			                      "read_csv_auto or set read_csv(..., "
+			                      "AUTO_DETECT=TRUE) to automatically guess columns.");
+		} else {
+			names = options.name_list;
+			return_types = options.sql_type_list;
+		}
 	}
 	if (options.auto_detect && !options.file_options.union_by_name) {
 		options.file_path = multi_file_list->GetFirstFile();
