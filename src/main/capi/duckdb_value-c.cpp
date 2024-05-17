@@ -148,7 +148,7 @@ duckdb_blob duckdb_get_blob(duckdb_value val) {
 }
 duckdb_logical_type duckdb_get_value_type(duckdb_value val) {
 	auto &type = UnwrapValue(val).type();
-	return WrapType(new LogicalType(type));
+	return duckdb::WrapType(new duckdb::LogicalType(type));
 }
 
 char *duckdb_get_varchar(duckdb_value value) {
