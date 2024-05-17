@@ -102,8 +102,8 @@ CSVFileScan::CSVFileScan(ClientContext &context, shared_ptr<CSVBufferManager> bu
 		InitializeFileNamesTypes();
 		return;
 	}
-	names = bind_data.return_names;
-	types = bind_data.return_types;
+	names = bind_data.csv_names;
+	types = bind_data.csv_types;
 	file_schema.Initialize(names, types, file_path);
 	multi_file_reader->InitializeReader(*this, options.file_options, bind_data.reader_bind, bind_data.return_types,
 	                                    bind_data.return_names, column_ids, nullptr, file_path, context, nullptr);
