@@ -87,7 +87,7 @@ public:
 
 class CardinalityEstimator {
 public:
-	static constexpr double DEFAULT_SEMI_ANTI_SELECTIVITY = 0.2;
+	static constexpr double DEFAULT_SEMI_ANTI_SELECTIVITY = 5;
 	explicit CardinalityEstimator() {};
 
 private:
