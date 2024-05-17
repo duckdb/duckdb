@@ -181,13 +181,8 @@ static void WriteExtensionFileToDisk(FileSystem &fs, const string &path, void *d
 
 static void WriteExtensionMetadataFileToDisk(FileSystem &fs, const string &path, ExtensionInstallInfo &metadata) {
 	auto file_writer = BufferedFileWriter(fs, path);
-
-	auto serializer = BinarySerializer(file_writer);
-	serializer.Begin();
-	metadata.Serialize(serializer);
-	serializer.End();
-
-	file_writer.Flush();
+	BinarySerializer::Serialize(metadata, file_writer);
+	file_writer.Sync();
 }
 
 string ExtensionHelper::ExtensionUrlTemplate(optional_ptr<const DBConfig> db_config,
@@ -238,7 +233,7 @@ static void CheckExtensionMetadataOnInstall(DBConfig &config, void *in_buffer, i
 // DuckDB:
 //   1. Crash after extension removal: extension is now uninstalled, metadata file still present
 //   2. Crash after metadata removal: extension is now uninstalled, extension dir is clean
-//   3. Crash after extension move: extension is written, but has no metadata file
+//   3. Crash after extension move: extension is now uninstalled, new metadata file present
 static void WriteExtensionFiles(FileSystem &fs, const string &temp_path, const string &local_extension_path,
                                 void *in_buffer, idx_t file_size, ExtensionInstallInfo &info) {
 	// Write extension to tmp file
@@ -259,8 +254,8 @@ static void WriteExtensionFiles(FileSystem &fs, const string &temp_path, const s
 		fs.RemoveFile(metadata_file_path);
 	}
 
-	fs.MoveFile(temp_path, local_extension_path);
 	fs.MoveFile(metadata_tmp_path, metadata_file_path);
+	fs.MoveFile(temp_path, local_extension_path);
 }
 
 // Install an extension using a filesystem
@@ -308,7 +303,7 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DBConfig &config,
 	void *extension_decompressed;
 	idx_t extension_decompressed_size;
 
-	if (StringUtil::EndsWith(file, ".gz")) {
+	if (GZipFileSystem::CheckIsZip(const_char_ptr_cast(in_buffer.get()), file_size)) {
 		decompressed_data = GZipFileSystem::UncompressGZIPString(const_char_ptr_cast(in_buffer.get()), file_size);
 		extension_decompressed = (void *)decompressed_data.data();
 		extension_decompressed_size = decompressed_data.size();
@@ -413,6 +408,10 @@ static unique_ptr<ExtensionInstallInfo> InstallFromRepository(DBConfig &config, 
 	                              force_install, repository, context);
 }
 
+static bool IsHTTP(const string &path) {
+	return StringUtil::StartsWith(path, "http://") || !StringUtil::StartsWith(path, "https://");
+}
+
 unique_ptr<ExtensionInstallInfo>
 ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs, const string &local_path,
                                           const string &extension, bool force_install, const string &version,
@@ -449,13 +448,15 @@ ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs, cons
 	}
 
 	// Install extension from local, direct url
-	if (ExtensionHelper::IsFullPath(extension) && !FileSystem::IsRemoteFile(extension)) {
-		return DirectInstallExtension(config, fs, extension, temp_path, extension, local_extension_path, force_install,
-		                              nullptr, context);
+	if (ExtensionHelper::IsFullPath(extension) && !IsHTTP(extension)) {
+		LocalFileSystem local_fs;
+		return DirectInstallExtension(config, local_fs, extension, temp_path, extension, local_extension_path,
+		                              force_install, nullptr, context);
 	}
 
 	// Install extension from local url based on a repository (Note that this will install it as a local file)
-	if (repository && !FileSystem::IsRemoteFile(repository->path)) {
+	if (repository && !IsHTTP(repository->path)) {
+		LocalFileSystem local_fs;
 		return InstallFromRepository(config, fs, extension, extension_name, *repository, temp_path,
 		                             local_extension_path, version, force_install, http_logger, context);
 	}

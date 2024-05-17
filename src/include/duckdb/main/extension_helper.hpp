@@ -46,7 +46,7 @@ struct ExtensionInitResult {
 
 // Tags describe what happened during the updating process
 enum class ExtensionUpdateResultTag : uint8_t {
-	// Fallback, should not be used
+	// Fallback for when installation information is missing
 	UNKNOWN = 0,
 
 	// Either a fresh file was downloaded and versions are identical

@@ -31,11 +31,73 @@ require-env DIRECT_INSTALL_DIR
 # This extension dir is expected to contain tpch and tpcds, but with a corrupted tpcds metadata file 
 require-env LOCAL_EXTENSION_DIR_MALFORMED_INFO
 
+# This extension dir is expected to contain tpch and tpcds, but with a corrupted tpcds metadata file 
+require-env LOCAL_EXTENSION_DIR_INFO_INCORRECT_VERSION
+
 # Address on a minio server that has the LOCAL_EXTENSION_REPO_UPDATED copied to it
 require-env REMOTE_EXTENSION_REPO_UPDATED
 
 # Parquet is statically loaded for this test
 require parquet
+
+# We start by testing some malformed dirs
+statement ok
+set extension_directory='${LOCAL_EXTENSION_DIR_MALFORMED_INFO}'
+
+# this will now throw IOError
+statement error
+FROM duckdb_extensions() where installed and extension_name != 'jemalloc' and extension_name != 'parquet'
+----
+IO Error: Failed to read info file for 'tpcds' extension
+
+# this will now throw IOError
+statement error
+UPDATE EXTENSIONS
+----
+IO Error: Failed to read info file for 'tpcds' extension
+
+# lets restore by reinstalling tpcds
+statement ok
+FORCE INSTALL '${DIRECT_INSTALL_DIR}/tpcds.duckdb_extension';
+
+# Things are back to normal
+query IIII
+SELECT extension_name, install_mode, installed_from, extension_version FROM duckdb_extensions() where installed and extension_name != 'jemalloc' and extension_name != 'parquet'
+----
+tpcds	CUSTOM_PATH	./build/extension_metadata_test_data/direct_install/tpcds.duckdb_extension	v0.0.1
+
+# Same here
+query IIIII
+UPDATE EXTENSIONS
+----
+tpcds	(empty)	NOT_A_REPOSITORY	v0.0.1	v0.0.1
+
+restart
+
+# Here the metadata mismatches the actually installed extension
+statement ok
+set extension_directory='${LOCAL_EXTENSION_DIR_INFO_INCORRECT_VERSION}'
+
+# duckdb_extensions() only reads the metadata. No extension files are opened
+query IIII
+SELECT extension_name, install_mode, installed_from, extension_version FROM duckdb_extensions() where installed and extension_name != 'jemalloc' and extension_name != 'parquet'
+----
+tpch	REPOSITORY	./build/extension_metadata_test_data/repository	v0.0.1
+
+# However when trying to load, we detect the mismatch
+statement error
+load tpch
+----
+Metadata mismatch detected when loading extension
+
+# Recovery is done by force installing
+statement ok
+FORCE INSTALL tpch FROM '${LOCAL_EXTENSION_REPO_UPDATED}'
+
+statement ok
+load tpch;
+
+restart
 
 statement ok
 set custom_extension_repository='${LOCAL_EXTENSION_REPO_UPDATED}'
@@ -66,7 +128,6 @@ query I rowsort parquet_version
 select source_id from pragma_version();
 ----
 
-# The loadable_extension_demo is loaded as a direct URL, these are not considered for updating
 query IIIII rowsort
 UPDATE EXTENSIONS;
 ----
@@ -203,39 +264,6 @@ statement error
 LOAD json;
 ----
  Also, the file was built for the platform 'test_platform', but we can only load extensions built for platform
-
-restart
-
-statement ok
-set extension_directory='${LOCAL_EXTENSION_DIR_MALFORMED_INFO}'
-
-# this will now throw IOError
-statement error
-FROM duckdb_extensions() where installed and extension_name != 'jemalloc' and extension_name != 'parquet'
-----
-IO Error: Failed to read info file for 'tpcds' extension
-
-# this will now throw IOError
-statement error
-UPDATE EXTENSIONS
-----
-IO Error: Failed to read info file for 'tpcds' extension
-
-# lets restore by reinstalling tpcds
-statement ok
-FORCE INSTALL '${DIRECT_INSTALL_DIR}/tpcds.duckdb_extension';
-
-# Things are back to normal
-query IIII
-SELECT extension_name, install_mode, installed_from, extension_version FROM duckdb_extensions() where installed and extension_name != 'jemalloc' and extension_name != 'parquet'
-----
-tpcds	CUSTOM_PATH	./build/extension_metadata_test_data/direct_install/tpcds.duckdb_extension	v0.0.1
-
-# Same here
-query IIIII
-UPDATE EXTENSIONS
-----
-tpcds	(empty)	NOT_A_REPOSITORY	v0.0.1	v0.0.1
 
 restart
 

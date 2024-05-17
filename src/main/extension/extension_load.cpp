@@ -249,7 +249,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		}
 	} else if (!config.options.allow_extensions_metadata_mismatch) {
 		if (!metadata_mismatch_error.empty()) {
-			// Unsigned extensions AND configuration allowing metadata_mismatch_error, loading allowed, mainly for
+			// Unsigned extensions AND configuration allowing n, loading allowed, mainly for
 			// debugging purposes
 			throw InvalidInputException(metadata_mismatch_error);
 		}
@@ -301,7 +301,11 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 			result.install_info->version = parsed_metadata.extension_version;
 		}
 
-		D_ASSERT(result.install_info->version == parsed_metadata.extension_version);
+		if (result.install_info->version != parsed_metadata.extension_version) {
+			throw IOException("Metadata mismatch detected when loading extension '%s'\nPlease try reinstalling the "
+			                  "extension using `FORCE INSTALL '%s'`",
+			                  filename, extension);
+		}
 	} else {
 		result.install_info = make_uniq<ExtensionInstallInfo>();
 		result.install_info->mode = ExtensionInstallMode::NOT_INSTALLED;

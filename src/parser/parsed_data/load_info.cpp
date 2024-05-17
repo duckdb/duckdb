@@ -1,6 +1,7 @@
 #include "duckdb/parser/parsed_data/load_info.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {
 
@@ -32,11 +33,9 @@ string LoadInfo::ToString() const {
 	result += StringUtil::Format(" '%s'", filename);
 	if (!repository.empty()) {
 		if (repo_is_alias) {
-			// With quotes
-			result += " FROM " + StringUtil::Format("%s", repository);
+			result += " FROM " + KeywordHelper::WriteOptionallyQuoted(repository);
 		} else {
-			// Without quotes
-			result += " FROM " + StringUtil::Format("'%s'", repository);
+			result += " FROM " + KeywordHelper::WriteQuoted(repository);
 		}
 	}
 

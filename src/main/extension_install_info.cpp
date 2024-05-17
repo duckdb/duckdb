@@ -93,19 +93,21 @@ unique_ptr<ExtensionInstallInfo> ExtensionInstallInfo::TryReadInfoFile(FileSyste
 		return make_uniq<ExtensionInstallInfo>();
 	}
 
-	auto file_reader = BufferedFileReader(fs, info_file_path.c_str());
+	BufferedFileReader file_reader(fs, info_file_path.c_str());
 	if (!file_reader.Finished()) {
-		BinaryDeserializer deserializer(file_reader);
-		deserializer.Begin();
 		try {
-			result = ExtensionInstallInfo::Deserialize(deserializer);
+			result = BinaryDeserializer::Deserialize<ExtensionInstallInfo>(file_reader);
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
 			throw IOException(
 			    "Failed to read info file for '%s' extension: '%s'.\nA serialization error occured: '%s'\n%s",
 			    extension_name, info_file_path, error.RawMessage(), hint);
 		}
-		deserializer.End();
+	}
+
+	if (!result) {
+		throw IOException("Failed to read info file for '%s' extension: '%s'.\nThe file appears to be empty!\n%s",
+		                  extension_name, info_file_path, hint);
 	}
 
 	return result;

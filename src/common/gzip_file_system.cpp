@@ -320,6 +320,23 @@ void GZipFileSystem::VerifyGZIPHeader(uint8_t gzip_hdr[], idx_t read_count) {
 	}
 }
 
+bool GZipFileSystem::CheckIsZip(const char *data, duckdb::idx_t size) {
+	if (size < GZIP_HEADER_MINSIZE) {
+		return false;
+	}
+
+	auto data_ptr = reinterpret_cast<const uint8_t *>(data);
+	if (data_ptr[0] != 0x1F || data_ptr[1] != 0x8B) {
+		return false;
+	}
+
+	if (data_ptr[2] != GZIP_COMPRESSION_DEFLATE) {
+		return false;
+	}
+
+	return true;
+}
+
 string GZipFileSystem::UncompressGZIPString(const string &in) {
 	return UncompressGZIPString(in.data(), in.size());
 }

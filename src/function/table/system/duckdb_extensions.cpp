@@ -18,6 +18,7 @@ struct ExtensionInformation {
 	string name;
 	bool loaded = false;
 	bool installed = false;
+	string file_path;
 	ExtensionInstallMode install_mode;
 	string installed_from;
 	string description;
@@ -43,6 +44,9 @@ static unique_ptr<FunctionData> DuckDBExtensionsBind(ClientContext &context, Tab
 
 	names.emplace_back("installed");
 	return_types.emplace_back(LogicalType::BOOLEAN);
+
+	names.emplace_back("install_path");
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("description");
 	return_types.emplace_back(LogicalType::VARCHAR);
@@ -78,6 +82,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 		info.name = extension.name;
 		info.installed = extension.statically_loaded;
 		info.loaded = false;
+		info.file_path = extension.statically_loaded ? "(BUILT-IN)" : string();
 		info.install_mode =
 		    extension.statically_loaded ? ExtensionInstallMode::STATICALLY_LINKED : ExtensionInstallMode::UNKNOWN;
 		info.description = extension.description;
@@ -101,6 +106,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 		info.name = fs.ExtractBaseName(path);
 		info.installed = true;
 		info.loaded = false;
+		info.file_path = fs.JoinPath(ext_directory, path);
 
 		// Check the info file for its installation source
 		auto info_file_path = fs.JoinPath(ext_directory, path + ".info");
@@ -120,6 +126,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 			installed_extensions[info.name] = std::move(info);
 		} else {
 			if (!entry->second.loaded) {
+				entry->second.file_path = info.file_path;
 				entry->second.install_mode = info.install_mode;
 				entry->second.installed_from = info.installed_from;
 				entry->second.install_mode = info.install_mode;
@@ -176,16 +183,18 @@ void DuckDBExtensionsFunction(ClientContext &context, TableFunctionInput &data_p
 		output.SetValue(1, count, Value::BOOLEAN(entry.loaded));
 		// installed LogicalType::BOOLEAN
 		output.SetValue(2, count, Value::BOOLEAN(entry.installed));
+		// install_path LogicalType::VARCHAR
+		output.SetValue(3, count, Value(entry.file_path));
 		// description LogicalType::VARCHAR
-		output.SetValue(3, count, Value(entry.description));
+		output.SetValue(4, count, Value(entry.description));
 		// aliases     LogicalType::LIST(LogicalType::VARCHAR)
-		output.SetValue(4, count, Value::LIST(LogicalType::VARCHAR, entry.aliases));
+		output.SetValue(5, count, Value::LIST(LogicalType::VARCHAR, entry.aliases));
 		// extension version     LogicalType::LIST(LogicalType::VARCHAR)
-		output.SetValue(5, count, Value(entry.extension_version));
+		output.SetValue(6, count, Value(entry.extension_version));
 		// installed_mode LogicalType::VARCHAR
-		output.SetValue(6, count, entry.installed ? Value(EnumUtil::ToString(entry.install_mode)) : Value());
+		output.SetValue(7, count, entry.installed ? Value(EnumUtil::ToString(entry.install_mode)) : Value());
 		// installed_source LogicalType::VARCHAR
-		output.SetValue(7, count, Value(entry.installed_from));
+		output.SetValue(8, count, Value(entry.installed_from));
 
 		data.offset++;
 		count++;

@@ -44,7 +44,6 @@ public:
 	static unique_ptr<ExtensionInstallInfo> TryReadInfoFile(FileSystem &fs, const string &info_file_path,
 	                                                        const string &extension_name);
 
-protected:
 	static unique_ptr<ExtensionInstallInfo> Deserialize(Deserializer &deserializer);
 };
 

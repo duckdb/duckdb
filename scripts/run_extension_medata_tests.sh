@@ -29,6 +29,8 @@ export DIRECT_INSTALL_DIR="$TEST_DIR/direct_install"
 
 # Extension dir with a malformed info file for an extension
 export LOCAL_EXTENSION_DIR_MALFORMED_INFO="$TEST_DIR/extension_dir_malformed_info"
+# Extension dir with a metadata install version that mismatches the files metadata
+export LOCAL_EXTENSION_DIR_INFO_INCORRECT_VERSION="$TEST_DIR/extension_dir_malformed_info_incorrect_version"
 
 if [ -d "$TEST_DIR_COPY" ]; then
   # REUSE PREVIOUSLY GENERATED DATA
@@ -145,6 +147,12 @@ EOL
   DUCKDB_PLATFORM=`cat $DUCKDB_BUILD_DIR/duckdb_platform_out`
   $DUCKDB_BUILD_DIR/duckdb -unsigned -c "set extension_directory='$LOCAL_EXTENSION_DIR_MALFORMED_INFO'; install '$DIRECT_INSTALL_DIR/tpcds.duckdb_extension';"
   echo blablablab > $LOCAL_EXTENSION_DIR_MALFORMED_INFO/$DUCKDB_VERSION/$DUCKDB_PLATFORM/tpcds.duckdb_extension.info
+
+  # Create dir with malformed info file: we install a new version from LOCAL_EXTENSION_REPO_UPDATED but preserve the old info file
+  DUCKDB_VERSION=`$DUCKDB_BUILD_DIR/duckdb -csv -noheader  -c 'select source_id from pragma_version()'`
+  DUCKDB_PLATFORM=`cat $DUCKDB_BUILD_DIR/duckdb_platform_out`
+  $DUCKDB_BUILD_DIR/duckdb -unsigned -c "set extension_directory='$LOCAL_EXTENSION_DIR_INFO_INCORRECT_VERSION'; install 'tpch' from '$LOCAL_EXTENSION_REPO_UPDATED'"
+  cp $LOCAL_EXTENSION_DIR/$DUCKDB_VERSION/$DUCKDB_PLATFORM/tpch.duckdb_extension.info $LOCAL_EXTENSION_DIR_INFO_INCORRECT_VERSION/$DUCKDB_VERSION/$DUCKDB_PLATFORM/tpch.duckdb_extension.info
 
   ###################################################################
   ### Allow using copy instead of regenerating test data on every run
