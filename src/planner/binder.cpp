@@ -17,6 +17,7 @@
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/parser/query_node/list.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/enum_util.hpp"
 
 #include <algorithm>
 
@@ -110,22 +111,22 @@ BoundStatement Binder::BindWithCTE(T &statement) {
 	BoundStatement bound_statement;
 	auto bound_cte = BindMaterializedCTE(statement.template Cast<T>().cte_map);
 	if (bound_cte) {
-		BoundCTENode *tail = bound_cte.get();
+		reference<BoundCTENode> tail_ref = *bound_cte;
 
-		while (tail->child && tail->child->type == QueryNodeType::CTE_NODE) {
-			tail = &tail->child->Cast<BoundCTENode>();
+		while (tail_ref.get().child && tail_ref.get().child->type == QueryNodeType::CTE_NODE) {
+			tail_ref = tail_ref.get().child->Cast<BoundCTENode>();
 		}
 
-		bound_statement = tail->child_binder->Bind(statement.template Cast<T>());
+		auto &tail = tail_ref.get();
+		bound_statement = tail.child_binder->Bind(statement.template Cast<T>());
 
-		tail->types = bound_statement.types;
-		tail->names = bound_statement.names;
+		tail.types = bound_statement.types;
+		tail.names = bound_statement.names;
 
-		for (auto &c : tail->query_binder->correlated_columns) {
-			tail->child_binder->AddCorrelatedColumn(c);
+		for (auto &c : tail.query_binder->correlated_columns) {
+			tail.child_binder->AddCorrelatedColumn(c);
 		}
-
-		MoveCorrelatedExpressions(*tail->child_binder);
+		MoveCorrelatedExpressions(*tail.child_binder);
 
 		// extract operator below root operation
 		auto plan = std::move(bound_statement.plan->children[0]);
@@ -271,6 +272,9 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 	case TableReferenceType::EXPRESSION_LIST:
 		result = Bind(ref.Cast<ExpressionListRef>());
 		break;
+	case TableReferenceType::COLUMN_DATA:
+		result = Bind(ref.Cast<ColumnDataRef>());
+		break;
 	case TableReferenceType::PIVOT:
 		result = Bind(ref.Cast<PivotRef>());
 		break;
@@ -280,7 +284,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 	case TableReferenceType::CTE:
 	case TableReferenceType::INVALID:
 	default:
-		throw InternalException("Unknown table ref type");
+		throw InternalException("Unknown table ref type (%s)", EnumUtil::ToString(ref.type));
 	}
 	result->sample = std::move(ref.sample);
 	return result;
@@ -307,6 +311,9 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 	case TableReferenceType::EXPRESSION_LIST:
 		root = CreatePlan(ref.Cast<BoundExpressionListRef>());
 		break;
+	case TableReferenceType::COLUMN_DATA:
+		root = CreatePlan(ref.Cast<BoundColumnDataRef>());
+		break;
 	case TableReferenceType::CTE:
 		root = CreatePlan(ref.Cast<BoundCTERef>());
 		break;
@@ -315,7 +322,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 		break;
 	case TableReferenceType::INVALID:
 	default:
-		throw InternalException("Unsupported bound table ref type");
+		throw InternalException("Unsupported bound table ref type (%s)", EnumUtil::ToString(ref.type));
 	}
 	// plan the sample clause
 	if (ref.sample) {
@@ -373,6 +380,11 @@ void Binder::AddBoundView(ViewCatalogEntry &view) {
 idx_t Binder::GenerateTableIndex() {
 	auto &root_binder = GetRootBinder();
 	return root_binder.bound_tables++;
+}
+
+StatementProperties &Binder::GetStatementProperties() {
+	auto &root_binder = GetRootBinder();
+	return root_binder.prop;
 }
 
 void Binder::PushExpressionBinder(ExpressionBinder &binder) {
@@ -491,15 +503,8 @@ void Binder::SetCanContainNulls(bool can_contain_nulls_p) {
 }
 
 void Binder::SetAlwaysRequireRebind() {
-	reference<Binder> current_binder = *this;
-	while (true) {
-		auto &current = current_binder.get();
-		current.properties.always_require_rebind = true;
-		if (!current.parent) {
-			break;
-		}
-		current_binder = *current.parent;
-	}
+	auto &properties = GetStatementProperties();
+	properties.always_require_rebind = true;
 }
 
 void Binder::AddTableName(string table_name) {
@@ -575,6 +580,7 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 	// where the data modification doesn't take place until the streamed result is exhausted. Once a row is
 	// returned, it should be guaranteed that the row has been inserted.
 	// see https://github.com/duckdb/duckdb/issues/8310
+	auto &properties = GetStatementProperties();
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::QUERY_RESULT;
 	return result;

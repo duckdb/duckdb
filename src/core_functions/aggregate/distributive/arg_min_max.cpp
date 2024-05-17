@@ -376,6 +376,13 @@ static unique_ptr<FunctionData> BindDecimalArgMinMax(ClientContext &context, Agg
 	idx_t best_target = DConstants::INVALID_INDEX;
 	int64_t lowest_cost = NumericLimits<int64_t>::Maximum();
 	for (idx_t i = 0; i < by_types.size(); ++i) {
+		// Before falling back to casting, check for a physical type match for the by_type
+		if (by_types[i].InternalType() == by_type.InternalType()) {
+			lowest_cost = 0;
+			best_target = DConstants::INVALID_INDEX;
+			break;
+		}
+
 		auto cast_cost = CastFunctionSet::Get(context).ImplicitCastCost(by_type, by_types[i]);
 		if (cast_cost < 0) {
 			continue;

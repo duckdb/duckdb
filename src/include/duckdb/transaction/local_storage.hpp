@@ -12,9 +12,11 @@
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/storage/optimistic_data_writer.hpp"
+#include "duckdb/common/reference_map.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
+class Catalog;
 class DataTable;
 class Transaction;
 class WriteAheadLog;
@@ -32,7 +34,7 @@ public:
 	LocalTableStorage(DataTable &table, LocalTableStorage &parent, idx_t drop_idx);
 	// Create a LocalTableStorage from an ADD COLUMN
 	LocalTableStorage(ClientContext &context, DataTable &table, LocalTableStorage &parent, ColumnDefinition &new_column,
-	                  Expression &default_value);
+	                  ExpressionExecutor &default_executor);
 	~LocalTableStorage();
 
 	reference<DataTable> table_ref;
@@ -143,7 +145,8 @@ public:
 
 	idx_t AddedRows(DataTable &table);
 
-	void AddColumn(DataTable &old_dt, DataTable &new_dt, ColumnDefinition &new_column, Expression &default_value);
+	void AddColumn(DataTable &old_dt, DataTable &new_dt, ColumnDefinition &new_column,
+	               ExpressionExecutor &default_executor);
 	void DropColumn(DataTable &old_dt, DataTable &new_dt, idx_t removed_column);
 	void ChangeType(DataTable &old_dt, DataTable &new_dt, idx_t changed_idx, const LogicalType &target_type,
 	                const vector<column_t> &bound_columns, Expression &cast_expr);

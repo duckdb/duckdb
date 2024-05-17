@@ -2,14 +2,31 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/planner/bound_statement.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
 
 namespace duckdb {
+
+static void InitializeTableRefDependency(TableRef &ref) {
+	if (ref.type == TableReferenceType::JOIN) {
+		auto &join_ref = ref.Cast<JoinRef>();
+		InitializeTableRefDependency(*join_ref.right);
+		InitializeTableRefDependency(*join_ref.left);
+	} else {
+		ref.external_dependency = make_shared_ptr<ExternalDependency>();
+	}
+}
 
 QueryRelation::QueryRelation(const shared_ptr<ClientContext> &context, unique_ptr<SelectStatement> select_stmt_p,
                              string alias_p)
     : Relation(context, RelationType::QUERY_RELATION), select_stmt(std::move(select_stmt_p)),
       alias(std::move(alias_p)) {
+	auto &ref = *select_stmt->node->Cast<SelectNode>().from_table;
+	InitializeTableRefDependency(ref);
 	context->TryBindRelation(*this, this->columns);
 }
 

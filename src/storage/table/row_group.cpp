@@ -106,7 +106,7 @@ ColumnData &RowGroup::GetColumn(storage_t c) {
 	if (this->columns[c]->count != this->count) {
 		throw InternalException("Corrupted database - loaded column with index %llu at row start %llu, count %llu did "
 		                        "not match count of row group %llu",
-		                        c, start, this->columns[c]->count, this->count.load());
+		                        c, start, this->columns[c]->count.load(), this->count.load());
 	}
 	return *columns[c];
 }
@@ -284,7 +284,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 }
 
 unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, ColumnDefinition &new_column,
-                                         ExpressionExecutor &executor, Expression &default_value, Vector &result) {
+                                         ExpressionExecutor &executor, Vector &result) {
 	Verify();
 
 	// construct a new column data for the new column
@@ -418,6 +418,9 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 		if (!read_segment) {
 
 			idx_t target_row = GetFilterScanCount(state.column_scans[column_idx], *entry.second);
+			if (target_row >= state.max_row) {
+				target_row = state.max_row;
+			}
 
 			D_ASSERT(target_row >= this->start);
 			D_ASSERT(target_row <= this->start + this->count);
@@ -587,9 +590,16 @@ void RowGroup::Scan(TransactionData transaction, CollectionScanState &state, Dat
 void RowGroup::ScanCommitted(CollectionScanState &state, DataChunk &result, TableScanType type) {
 	auto &transaction_manager = DuckTransactionManager::Get(GetCollection().GetAttached());
 
-	auto lowest_active_start = transaction_manager.LowestActiveStart();
-	auto lowest_active_id = transaction_manager.LowestActiveId();
-	TransactionData data(lowest_active_id, lowest_active_start);
+	transaction_t start_ts;
+	transaction_t transaction_id;
+	if (type == TableScanType::TABLE_SCAN_LATEST_COMMITTED_ROWS) {
+		start_ts = transaction_manager.GetLastCommit() + 1;
+		transaction_id = MAX_TRANSACTION_ID;
+	} else {
+		start_ts = transaction_manager.LowestActiveStart();
+		transaction_id = transaction_manager.LowestActiveId();
+	}
+	TransactionData data(transaction_id, start_ts);
 	switch (type) {
 	case TableScanType::TABLE_SCAN_COMMITTED_ROWS:
 		TemplatedScan<TableScanType::TABLE_SCAN_COMMITTED_ROWS>(data, state, result);
@@ -598,6 +608,7 @@ void RowGroup::ScanCommitted(CollectionScanState &state, DataChunk &result, Tabl
 		TemplatedScan<TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES>(data, state, result);
 		break;
 	case TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED:
+	case TableScanType::TABLE_SCAN_LATEST_COMMITTED_ROWS:
 		TemplatedScan<TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED>(data, state, result);
 		break;
 	default:
@@ -772,24 +783,24 @@ void RowGroup::UpdateColumn(TransactionData transaction, DataChunk &updates, Vec
 
 unique_ptr<BaseStatistics> RowGroup::GetStatistics(idx_t column_idx) {
 	auto &col_data = GetColumn(column_idx);
-	lock_guard<mutex> slock(stats_lock);
 	return col_data.GetStatistics();
 }
 
 void RowGroup::MergeStatistics(idx_t column_idx, const BaseStatistics &other) {
 	auto &col_data = GetColumn(column_idx);
-	lock_guard<mutex> slock(stats_lock);
 	col_data.MergeStatistics(other);
 }
 
 void RowGroup::MergeIntoStatistics(idx_t column_idx, BaseStatistics &other) {
 	auto &col_data = GetColumn(column_idx);
-	lock_guard<mutex> slock(stats_lock);
 	col_data.MergeIntoStatistics(other);
 }
 
-RowGroupWriteData RowGroup::WriteToDisk(PartialBlockManager &manager,
-                                        const vector<CompressionType> &compression_types) {
+CompressionType ColumnCheckpointInfo::GetCompressionType() {
+	return info.compression_types[column_idx];
+}
+
+RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriteInfo &info) {
 	RowGroupWriteData result;
 	result.states.reserve(columns.size());
 	result.statistics.reserve(columns.size());
@@ -804,8 +815,8 @@ RowGroupWriteData RowGroup::WriteToDisk(PartialBlockManager &manager,
 	// pointers all end up densely packed, and thus more cache-friendly.
 	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
 		auto &column = GetColumn(column_idx);
-		ColumnCheckpointInfo checkpoint_info {compression_types[column_idx]};
-		auto checkpoint_state = column.Checkpoint(*this, manager, checkpoint_info);
+		ColumnCheckpointInfo checkpoint_info(info, column_idx);
+		auto checkpoint_state = column.Checkpoint(*this, checkpoint_info);
 		D_ASSERT(checkpoint_state);
 
 		auto stats = checkpoint_state->GetStatistics();
@@ -843,20 +854,22 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 		if (column.count != this->count) {
 			throw InternalException("Corrupted in-memory column - column with index %llu has misaligned count (row "
 			                        "group has %llu rows, column has %llu)",
-			                        column_idx, this->count.load(), column.count);
+			                        column_idx, this->count.load(), column.count.load());
 		}
 		compression_types.push_back(writer.GetColumnCompressionType(column_idx));
 	}
 
-	return WriteToDisk(writer.GetPartialBlockManager(), compression_types);
+	RowGroupWriteInfo info(writer.GetPartialBlockManager(), compression_types, writer.GetCheckpointType());
+	return WriteToDisk(info);
 }
 
 RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWriter &writer,
                                      TableStatistics &global_stats) {
 	RowGroupPointer row_group_pointer;
 
+	auto lock = global_stats.GetLock();
 	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
-		global_stats.GetStats(column_idx).Statistics().Merge(write_data.statistics[column_idx]);
+		global_stats.GetStats(*lock, column_idx).Statistics().Merge(write_data.statistics[column_idx]);
 	}
 
 	// construct the row group pointer and write the column meta data to disk

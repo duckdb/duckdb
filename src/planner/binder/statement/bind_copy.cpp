@@ -47,7 +47,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 
 	auto &copy_info = *stmt.info;
 	// bind the select statement
-	auto select_node = Bind(*copy_info.select_statement);
+	auto node_copy = copy_info.select_statement->Copy();
+	auto select_node = Bind(*node_copy);
 
 	if (!copy_function.function.copy_to_bind) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
@@ -249,6 +250,8 @@ BoundStatement Binder::Bind(CopyStatement &stmt) {
 		}
 		stmt.info->select_statement = std::move(statement);
 	}
+
+	auto &properties = GetStatementProperties();
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	if (stmt.info->is_from) {

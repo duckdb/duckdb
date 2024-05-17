@@ -1523,7 +1523,7 @@ LogicalType ArrayType::ConvertToList(const LogicalType &type) {
 
 LogicalType LogicalType::ARRAY(const LogicalType &child, idx_t size) {
 	D_ASSERT(size > 0);
-	D_ASSERT(size < ArrayType::MAX_ARRAY_SIZE);
+	D_ASSERT(size <= ArrayType::MAX_ARRAY_SIZE);
 	auto info = make_shared_ptr<ArrayTypeInfo>(child, size);
 	return LogicalType(LogicalTypeId::ARRAY, std::move(info));
 }

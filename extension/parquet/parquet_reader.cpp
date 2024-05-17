@@ -449,7 +449,7 @@ void ParquetReader::InitializeSchema() {
 
 	// Add generated constant column for row number
 	if (parquet_options.file_row_number) {
-		if (std::find(names.begin(), names.end(), "file_row_number") != names.end()) {
+		if (StringUtil::CIFind(names, "file_row_number") != DConstants::INVALID_INDEX) {
 			throw BinderException(
 			    "Using file_row_number option on file with column named file_row_number is not supported");
 		}

@@ -40,7 +40,7 @@ public:
 protected:
 	virtual void WriteEntry(CatalogEntry &entry, Serializer &serializer);
 	virtual void WriteSchema(SchemaCatalogEntry &schema, Serializer &serializer);
-	virtual void WriteTable(TableCatalogEntry &table, Serializer &serializer);
+	virtual void WriteTable(TableCatalogEntry &table, Serializer &serializer) = 0;
 	virtual void WriteView(ViewCatalogEntry &table, Serializer &serializer);
 	virtual void WriteSequence(SequenceCatalogEntry &table, Serializer &serializer);
 	virtual void WriteMacro(ScalarMacroCatalogEntry &table, Serializer &serializer);
@@ -96,7 +96,7 @@ class SingleFileCheckpointWriter final : public CheckpointWriter {
 	friend class SingleFileTableDataWriter;
 
 public:
-	SingleFileCheckpointWriter(AttachedDatabase &db, BlockManager &block_manager);
+	SingleFileCheckpointWriter(AttachedDatabase &db, BlockManager &block_manager, CheckpointType checkpoint_type);
 
 	//! Checkpoint the current state of the WAL and flush it to the main storage. This should be called BEFORE any
 	//! connection is available because right now the checkpointing cannot be done online. (TODO)
@@ -107,6 +107,12 @@ public:
 	unique_ptr<TableDataWriter> GetTableDataWriter(TableCatalogEntry &table) override;
 
 	BlockManager &GetBlockManager();
+	CheckpointType GetCheckpointType() const {
+		return checkpoint_type;
+	}
+
+public:
+	void WriteTable(TableCatalogEntry &table, Serializer &serializer) override;
 
 private:
 	//! The metadata writer is responsible for writing schema information
@@ -116,6 +122,8 @@ private:
 	//! Because this is single-file storage, we can share partial blocks across
 	//! an entire checkpoint.
 	PartialBlockManager partial_block_manager;
+	//! Checkpoint type
+	CheckpointType checkpoint_type;
 };
 
 } // namespace duckdb
