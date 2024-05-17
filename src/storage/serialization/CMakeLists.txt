@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   serialize_constraint.cpp
   serialize_create_info.cpp
+  serialize_dependency.cpp
   serialize_expression.cpp
   serialize_extra_drop_info.cpp
   serialize_logical_operator.cpp
