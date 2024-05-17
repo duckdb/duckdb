@@ -35,6 +35,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"current_localtime", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"current_localtimestamp", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"dbgen", "tpch", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"delta_scan", "delta", CatalogType::TABLE_FUNCTION_ENTRY},
     {"drop_fts_index", "fts", CatalogType::PRAGMA_FUNCTION_ENTRY},
     {"dsdgen", "tpcds", CatalogType::TABLE_FUNCTION_ENTRY},
     {"excel_text", "excel", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -82,6 +83,9 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"json_valid", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"load_aws_credentials", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
     {"make_timestamptz", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"mysql_clear_cache", "mysql_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"mysql_execute", "mysql_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"mysql_query", "mysql_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
     {"parquet_file_metadata", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
     {"parquet_kv_metadata", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
     {"parquet_metadata", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -252,11 +256,18 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"calendar", "icu"},
     {"enable_server_cert_verification", "httpfs"},
     {"force_download", "httpfs"},
+    {"hf_max_per_page", "httpfs"},
+    {"hnsw_ef_search", "vss"},
+    {"hnsw_enable_experimental_persistence", "vss"},
     {"http_keep_alive", "httpfs"},
     {"http_retries", "httpfs"},
     {"http_retry_backoff", "httpfs"},
     {"http_retry_wait_ms", "httpfs"},
     {"http_timeout", "httpfs"},
+    {"mysql_bit1_as_boolean", "mysql_scanner"},
+    {"mysql_debug_show_queries", "mysql_scanner"},
+    {"mysql_experimental_filter_pushdown", "mysql_scanner"},
+    {"mysql_tinyint1_as_boolean", "mysql_scanner"},
     {"pg_array_as_varchar", "postgres_scanner"},
     {"pg_connection_cache", "postgres_scanner"},
     {"pg_connection_limit", "postgres_scanner"},
@@ -319,9 +330,9 @@ static constexpr ExtensionEntry EXTENSION_COLLATIONS[] = {
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_FILE_PREFIXES[] = {
-    {"http://", "httpfs"}, {"https://", "httpfs"}, {"s3://", "httpfs"},  {"s3a://", "httpfs"},
-    {"s3n://", "httpfs"},  {"gcs://", "httpfs"},   {"gs://", "httpfs"},  {"r2://", "httpfs"},
-    {"azure://", "azure"}, {"az://", "azure"},     {"abfss://", "azure"}}; // END_OF_EXTENSION_FILE_PREFIXES
+    {"http://", "httpfs"}, {"https://", "httpfs"}, {"s3://", "httpfs"}, {"s3a://", "httpfs"},  {"s3n://", "httpfs"},
+    {"gcs://", "httpfs"},  {"gs://", "httpfs"},    {"r2://", "httpfs"}, {"azure://", "azure"}, {"az://", "azure"},
+    {"abfss://", "azure"}, {"hf://", "httpfs"}}; // END_OF_EXTENSION_FILE_PREFIXES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
@@ -339,18 +350,22 @@ static constexpr ExtensionEntry EXTENSION_FILE_CONTAINS[] = {{".parquet?", "parq
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {
-    {"s3", "httpfs"}, {"r2", "httpfs"}, {"gcs", "httpfs"}, {"azure", "azure"}}; // EXTENSION_SECRET_TYPES
+    {"s3", "httpfs"},   {"r2", "httpfs"},          {"gcs", "httpfs"},
+    {"azure", "azure"}, {"huggingface", "httpfs"}, {"bearer", "httpfs"}}; // EXTENSION_SECRET_TYPES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {
-    {"s3/config", "httpfs"},        {"gcs/config", "httpfs"},           {"r2/config", "httpfs"},
-    {"s3/credential_chain", "aws"}, {"gcs/credential_chain", "aws"},    {"r2/credential_chain", "aws"},
-    {"azure/config", "azure"},      {"azure/credential_chain", "azure"}}; // EXTENSION_SECRET_PROVIDERS
+    {"s3/config", "httpfs"},          {"gcs/config", "httpfs"},
+    {"r2/config", "httpfs"},          {"s3/credential_chain", "aws"},
+    {"gcs/credential_chain", "aws"},  {"r2/credential_chain", "aws"},
+    {"azure/config", "azure"},        {"azure/credential_chain", "azure"},
+    {"huggingface/config", "httfps"}, {"huggingface/cache", "httpfs"},
+    {"bearer/config", "httpfs"}}; // EXTENSION_SECRET_PROVIDERS
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
-    "aws", "azure", "autocomplete", "excel",          "fts",      "httpfs",           "inet",
-    "icu", "json",  "parquet",      "sqlite_scanner", "sqlsmith", "postgres_scanner", "tpcds",
-    "tpch"}; // END_OF_AUTOLOADABLE_EXTENSIONS
+    "aws",   "azure", "autocomplete", "delta",   "excel",          "fts",      "httpfs",
+    "inet",  "icu",   "json",         "parquet", "sqlite_scanner", "sqlsmith", "postgres_scanner",
+    "tpcds", "tpch"}; // END_OF_AUTOLOADABLE_EXTENSIONS
 
 } // namespace duckdb
