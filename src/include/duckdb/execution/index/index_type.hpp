@@ -17,7 +17,7 @@
 
 namespace duckdb {
 
-class Index;
+class BoundIndex;
 enum class IndexConstraintType : uint8_t;
 class Expression;
 class TableIOManager;
@@ -43,7 +43,7 @@ struct CreateIndexInput {
 	      options(options) {};
 };
 
-typedef unique_ptr<Index> (*index_create_function_t)(CreateIndexInput &input);
+typedef unique_ptr<BoundIndex> (*index_create_function_t)(CreateIndexInput &input);
 //! A index "type"
 class IndexType {
 public:

@@ -30,14 +30,14 @@ unique_ptr<CreateInfo> IndexCatalogEntry::GetInfo() const {
 	}
 
 	result->comment = comment;
+	result->tags = tags;
 
 	return std::move(result);
 }
 
 string IndexCatalogEntry::ToSQL() const {
 	auto info = GetInfo();
-	auto result = info->ToString();
-	return result + ";\n";
+	return info->ToString();
 }
 
 bool IndexCatalogEntry::IsUnique() {

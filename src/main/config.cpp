@@ -10,8 +10,8 @@
 #include "duckdb/common/thread.hpp"
 #endif
 
-#include <cstdio>
 #include <cinttypes>
+#include <cstdio>
 
 namespace duckdb {
 
@@ -127,6 +127,8 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(DuckDBApiSetting),
     DUCKDB_GLOBAL(CustomUserAgentSetting),
     DUCKDB_LOCAL(PartitionedWriteFlushThreshold),
+    DUCKDB_LOCAL(EnableHTTPLoggingSetting),
+    DUCKDB_LOCAL(HTTPLoggingOutputSetting),
     FINAL_SETTING};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
@@ -423,7 +425,7 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 		throw ParserException("Unknown unit for memory_limit: %s (expected: KB, MB, GB, TB for 1000^i units or KiB, "
 		                      "MiB, GiB, TiB for 1024^i unites)");
 	}
-	return (idx_t)multiplier * limit;
+	return NumericCast<idx_t>(multiplier * limit);
 }
 
 // Right now we only really care about access mode when comparing DBConfigs

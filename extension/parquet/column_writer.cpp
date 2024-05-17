@@ -69,6 +69,10 @@ static uint8_t GetVarintSize(uint32_t val) {
 ColumnWriterStatistics::~ColumnWriterStatistics() {
 }
 
+bool ColumnWriterStatistics::HasStats() {
+	return false;
+}
+
 string ColumnWriterStatistics::GetMin() {
 	return string();
 }
@@ -221,11 +225,16 @@ void ColumnWriter::CompressPage(MemoryStream &temp_writer, size_t &compressed_si
 		break;
 	}
 	case CompressionCodec::ZSTD: {
+		auto configured_compression = writer.CompressionLevel();
+		int compress_level = ZSTD_CLEVEL_DEFAULT;
+		if (configured_compression.IsValid()) {
+			compress_level = static_cast<int>(configured_compression.GetIndex());
+		}
 		compressed_size = duckdb_zstd::ZSTD_compressBound(temp_writer.GetPosition());
 		compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
-		compressed_size = duckdb_zstd::ZSTD_compress((void *)compressed_buf.get(), compressed_size,
-		                                             (const void *)temp_writer.GetData(), temp_writer.GetPosition(),
-		                                             ZSTD_CLEVEL_DEFAULT);
+		compressed_size =
+		    duckdb_zstd::ZSTD_compress((void *)compressed_buf.get(), compressed_size,
+		                               (const void *)temp_writer.GetData(), temp_writer.GetPosition(), compress_level);
 		compressed_data = compressed_buf.get();
 		break;
 	}
@@ -585,7 +594,7 @@ void BasicColumnWriter::FlushPage(BasicColumnWriterState &state) {
 	D_ASSERT(hdr.compressed_page_size > 0);
 
 	if (write_info.compressed_buf) {
-		// if the data has been compressed, we no longer need the compressed data
+		// if the data has been compressed, we no longer need the uncompressed data
 		D_ASSERT(write_info.compressed_buf.get() == write_info.compressed_data);
 		write_info.temp_writer.reset();
 	}
@@ -646,15 +655,12 @@ void BasicColumnWriter::SetParquetStatistics(BasicColumnWriterState &state,
 		column_chunk.meta_data.statistics.__isset.max = true;
 		column_chunk.meta_data.__isset.statistics = true;
 	}
-	auto min_value = state.stats_state->GetMinValue();
-	if (!min_value.empty()) {
-		column_chunk.meta_data.statistics.min_value = std::move(min_value);
+	if (state.stats_state->HasStats()) {
+		column_chunk.meta_data.statistics.min_value = state.stats_state->GetMinValue();
 		column_chunk.meta_data.statistics.__isset.min_value = true;
 		column_chunk.meta_data.__isset.statistics = true;
-	}
-	auto max_value = state.stats_state->GetMaxValue();
-	if (!max_value.empty()) {
-		column_chunk.meta_data.statistics.max_value = std::move(max_value);
+
+		column_chunk.meta_data.statistics.max_value = state.stats_state->GetMaxValue();
 		column_chunk.meta_data.statistics.__isset.max_value = true;
 		column_chunk.meta_data.__isset.statistics = true;
 	}
@@ -756,7 +762,7 @@ public:
 	T max;
 
 public:
-	bool HasStats() {
+	bool HasStats() override {
 		return min <= max;
 	}
 
@@ -902,7 +908,7 @@ public:
 	bool max;
 
 public:
-	bool HasStats() {
+	bool HasStats() override {
 		return !(min && !max);
 	}
 
@@ -1024,7 +1030,7 @@ public:
 		return string(const_char_ptr_cast(buffer), 16);
 	}
 
-	bool HasStats() {
+	bool HasStats() override {
 		return min <= max;
 	}
 
@@ -1190,7 +1196,7 @@ public:
 	string max;
 
 public:
-	bool HasStats() {
+	bool HasStats() override {
 		return has_stats;
 	}
 
@@ -1205,6 +1211,7 @@ public:
 			// ideally we avoid placing several mega or giga-byte long strings there
 			// we put a threshold of 10KB, if we see strings that exceed this threshold we avoid gathering stats
 			values_too_big = true;
+			has_stats = false;
 			min = string();
 			max = string();
 			return;

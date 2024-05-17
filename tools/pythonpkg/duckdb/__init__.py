@@ -23,6 +23,7 @@ from .duckdb import (
     Expression,
     ConstantExpression,
     ColumnExpression,
+    CoalesceOperator,
     StarExpression,
     FunctionExpression,
     CaseExpression,
@@ -35,6 +36,7 @@ _exported_symbols.extend([
     "Expression",
     "ConstantExpression",
     "ColumnExpression",
+    "CoalesceOperator",
     "StarExpression",
     "FunctionExpression",
     "CaseExpression",
@@ -366,6 +368,14 @@ def rollback(**kwargs):
         conn = duckdb.connect(":default:")
     return conn.rollback(**kwargs)
 _exported_symbols.append('rollback')
+
+def checkpoint(**kwargs):
+    if 'connection' in kwargs:
+        conn = kwargs.pop('connection')
+    else:
+        conn = duckdb.connect(":default:")
+    return conn.checkpoint(**kwargs)
+_exported_symbols.append('checkpoint')
 
 def append(table_name, df, **kwargs):
     if 'connection' in kwargs:

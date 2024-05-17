@@ -325,3 +325,8 @@ FROM all_types AS t43(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c1
 	all_types AS t86(c44, c45, c46, c47, c48, c49, c50, c51, c52, c53, c54, c55, c56, c57, c58, c59, c60, c61, c62, c63, c64, c65, c66, c67, c68, c69, c70, c71, c72, c73, c74, c75, c76, c77, c78, c79, c80, c81, c82, c83, c84, c85);
 ----
 Conversion Error
+
+query I
+SELECT LIST_SELECT(ARRAY_VALUE('1', NULL), [1, 2, 3]);
+----
+[1, NULL, NULL]

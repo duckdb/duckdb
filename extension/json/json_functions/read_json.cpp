@@ -3,6 +3,7 @@
 #include "json_scan.hpp"
 #include "json_structure.hpp"
 #include "json_transform.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 
@@ -276,8 +277,10 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 		D_ASSERT(return_types.size() == names.size());
 	}
 
-	bind_data->reader_bind =
-	    MultiFileReader::BindOptions(bind_data->options.file_options, bind_data->files, return_types, names);
+	SimpleMultiFileList file_list(std::move(bind_data->files));
+	MultiFileReader().BindOptions(bind_data->options.file_options, file_list, return_types, names,
+	                              bind_data->reader_bind);
+	bind_data->files = file_list.GetAllFiles();
 
 	auto &transform_options = bind_data->transform_options;
 	transform_options.strict_cast = !bind_data->ignore_errors;
@@ -344,7 +347,7 @@ static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p,
 	}
 
 	if (output.size() != 0) {
-		MultiFileReader::FinalizeChunk(gstate.bind_data.reader_bind, lstate.GetReaderData(), output);
+		MultiFileReader().FinalizeChunk(context, gstate.bind_data.reader_bind, lstate.GetReaderData(), output, nullptr);
 	}
 }
 
@@ -381,26 +384,26 @@ TableFunctionSet CreateJSONFunctionInfo(string name, shared_ptr<JSONScanInfo> in
 }
 
 TableFunctionSet JSONFunctions::GetReadJSONFunction() {
-	auto info =
-	    make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT, JSONRecordType::AUTO_DETECT, true);
+	auto info = make_shared_ptr<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT,
+	                                          JSONRecordType::AUTO_DETECT, true);
 	return CreateJSONFunctionInfo("read_json", std::move(info));
 }
 
 TableFunctionSet JSONFunctions::GetReadNDJSONFunction() {
-	auto info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED,
-	                                      JSONRecordType::AUTO_DETECT, true);
+	auto info = make_shared_ptr<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED,
+	                                          JSONRecordType::AUTO_DETECT, true);
 	return CreateJSONFunctionInfo("read_ndjson", std::move(info));
 }
 
 TableFunctionSet JSONFunctions::GetReadJSONAutoFunction() {
-	auto info =
-	    make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT, JSONRecordType::AUTO_DETECT, true);
+	auto info = make_shared_ptr<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT,
+	                                          JSONRecordType::AUTO_DETECT, true);
 	return CreateJSONFunctionInfo("read_json_auto", std::move(info));
 }
 
 TableFunctionSet JSONFunctions::GetReadNDJSONAutoFunction() {
-	auto info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED,
-	                                      JSONRecordType::AUTO_DETECT, true);
+	auto info = make_shared_ptr<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED,
+	                                          JSONRecordType::AUTO_DETECT, true);
 	return CreateJSONFunctionInfo("read_ndjson_auto", std::move(info));
 }
 

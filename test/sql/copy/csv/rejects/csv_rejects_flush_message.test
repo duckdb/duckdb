@@ -1,0 +1,26 @@
+# name: test/sql/copy/csv/rejects/csv_rejects_flush_message.test
+# description: Test that Flush Cast gives reasonable messages
+# group: [rejects]
+
+require skip_reload
+
+# Test will fail on windows because byte_position is slightly different due to \r\n instead of \n
+require notwindows
+
+query I
+SELECT * FROM read_csv(
+    'data/csv/rejects/flush.csv',
+    columns = {'a': 'DECIMAL'},
+    store_rejects = true);
+----
+1521000.000
+33.439
+-21060000.000
+
+query IIIIIIIII
+SELECT * EXCLUDE (scan_id) FROM reject_errors order by all;
+----
+0	2	10	10	1	a	CAST	"not-a-number"	Error when converting column "a". Could not convert string "not-a-number" to 'DECIMAL'
+0	3	25	25	1	a	CAST	"-26,9568"	Error when converting column "a". Could not convert string "-26,9568" to 'DECIMAL'
+0	5	44	44	1	a	CAST	"33,4386"	Error when converting column "a". Could not convert string "33,4386" to 'DECIMAL'
+0	6	54	54	1	a	CAST	"33.4386,00"	Error when converting column "a". Could not convert string "33.4386,00" to 'DECIMAL'

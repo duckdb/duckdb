@@ -20,7 +20,7 @@ INSERT INTO db.integers FROM range(1000000);
 statement maybe
 CHECKPOINT db
 ----
-there are other transactions
+other write transactions active
 
 endloop
 

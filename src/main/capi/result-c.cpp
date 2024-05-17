@@ -146,7 +146,18 @@ duckdb_state deprecated_duckdb_translate_column(MaterializedQueryResult &result,
 	auto &collection = result.Collection();
 	idx_t row_count = collection.Count();
 	column->__deprecated_nullmask = (bool *)duckdb_malloc(sizeof(bool) * collection.Count());
-	column->__deprecated_data = duckdb_malloc(GetCTypeSize(column->__deprecated_type) * row_count);
+
+	auto type_size = GetCTypeSize(column->__deprecated_type);
+	if (type_size == 0) {
+		for (idx_t row_id = 0; row_id < row_count; row_id++) {
+			column->__deprecated_nullmask[row_id] = false;
+		}
+		// Unsupported type, e.g., a LIST. By returning DuckDBSuccess here,
+		// we allow filling other columns, and return NULL for all unsupported types.
+		return DuckDBSuccess;
+	}
+
+	column->__deprecated_data = duckdb_malloc(type_size * row_count);
 	if (!column->__deprecated_nullmask || !column->__deprecated_data) { // LCOV_EXCL_START
 		// malloc failure
 		return DuckDBError;
@@ -295,7 +306,7 @@ duckdb_state DuckDBTranslateResult(unique_ptr<QueryResult> result_p, duckdb_resu
 		return DuckDBError;
 	}
 	// copy the data
-	// first write the meta data
+	// first write the metadata
 	out->__deprecated_column_count = result.ColumnCount();
 	out->__deprecated_rows_changed = 0;
 	return DuckDBSuccess;
@@ -329,6 +340,7 @@ bool DeprecatedMaterializeResult(duckdb_result *result) {
 		// malloc failure
 		return DuckDBError;
 	} // LCOV_EXCL_STOP
+
 	if (result_data->result->type == QueryResultType::STREAM_RESULT) {
 		// if we are dealing with a stream result, convert it to a materialized result first
 		auto &stream_result = (StreamQueryResult &)*result_data->result;
@@ -344,6 +356,7 @@ bool DeprecatedMaterializeResult(duckdb_result *result) {
 		result->__deprecated_columns[i].__deprecated_type = ConvertCPPTypeToC(result_data->result->types[i]);
 		result->__deprecated_columns[i].__deprecated_name = (char *)result_data->result->names[i].c_str(); // NOLINT
 	}
+
 	result->__deprecated_row_count = materialized.RowCount();
 	if (result->__deprecated_row_count > 0 &&
 	    materialized.properties.return_type == StatementReturnType::CHANGED_ROWS) {
@@ -353,7 +366,8 @@ bool DeprecatedMaterializeResult(duckdb_result *result) {
 			result->__deprecated_rows_changed = NumericCast<idx_t>(row_changes.GetValue<int64_t>());
 		}
 	}
-	// now write the data
+
+	// Now write the data and skip any unsupported columns.
 	for (idx_t col = 0; col < column_count; col++) {
 		auto state = deprecated_duckdb_translate_column(materialized, &result->__deprecated_columns[col], col);
 		if (state != DuckDBSuccess) {

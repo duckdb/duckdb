@@ -37,6 +37,8 @@ string RelationTypeToString(RelationType type) {
 		return "INSERT_RELATION";
 	case RelationType::VALUE_LIST_RELATION:
 		return "VALUE_LIST_RELATION";
+	case RelationType::MATERIALIZED_RELATION:
+		return "MATERIALIZED_RELATION";
 	case RelationType::DELETE_RELATION:
 		return "DELETE_RELATION";
 	case RelationType::UPDATE_RELATION:

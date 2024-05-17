@@ -308,7 +308,7 @@ SinkFinalizeType PhysicalBatchCopyToFile::Finalize(Pipeline &pipeline, Event &ev
 		FinalFlush(context, input.global_state);
 	} else {
 		// we have multiple tasks remaining - launch an event to execute the tasks in parallel
-		auto new_event = make_shared<ProcessRemainingBatchesEvent>(*this, gstate, pipeline, context);
+		auto new_event = make_shared_ptr<ProcessRemainingBatchesEvent>(*this, gstate, pipeline, context);
 		event.InsertEvent(std::move(new_event));
 	}
 	return SinkFinalizeType::READY;

@@ -96,14 +96,14 @@ string AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &f
 	return name;
 }
 
-void AttachedDatabase::Initialize(optional_ptr<ClientContext> context) {
+void AttachedDatabase::Initialize() {
 	if (IsSystem()) {
 		catalog->Initialize(true);
 	} else {
 		catalog->Initialize(false);
 	}
 	if (storage) {
-		storage->Initialize(context);
+		storage->Initialize();
 	}
 }
 
@@ -168,7 +168,9 @@ void AttachedDatabase::Close() {
 			if (!config.options.checkpoint_on_shutdown) {
 				return;
 			}
-			storage->CreateCheckpoint(true);
+			CheckpointOptions options;
+			options.wal_action = CheckpointWALAction::DELETE_WAL;
+			storage->CreateCheckpoint(options);
 		}
 	} catch (...) { // NOLINT
 	}

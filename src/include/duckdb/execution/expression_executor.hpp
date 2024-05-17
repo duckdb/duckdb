@@ -20,7 +20,7 @@ class ExecutionContext;
 
 //! ExpressionExecutor is responsible for executing a set of expressions and storing the result in a data chunk
 class ExpressionExecutor {
-	friend class Index;
+	friend class BoundIndex;
 	friend class CreateIndexLocalSinkState;
 
 public:

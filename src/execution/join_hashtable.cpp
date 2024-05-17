@@ -940,7 +940,8 @@ void JoinHashTable::SetRepartitionRadixBits(vector<unique_ptr<JoinHashTable>> &l
 
 		auto new_estimated_size = double(max_partition_size) / partition_multiplier;
 		auto new_estimated_count = double(max_partition_count) / partition_multiplier;
-		auto new_estimated_ht_size = new_estimated_size + PointerTableSize(new_estimated_count);
+		auto new_estimated_ht_size =
+		    new_estimated_size + static_cast<double>(PointerTableSize(NumericCast<idx_t>(new_estimated_count)));
 
 		if (new_estimated_ht_size <= double(max_ht_size) / 4) {
 			// Aim for an estimated partition size of max_ht_size / 4
