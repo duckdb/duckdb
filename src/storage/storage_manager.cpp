@@ -79,9 +79,7 @@ optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
 	wal = make_uniq<WriteAheadLog>(db, wal_path);
 
 	// If the WAL file exists, then we initialize it.
-	auto &fs = FileSystem::Get(db);
-	auto handle = fs.OpenFile(GetWALPath(), FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
-	if (handle) {
+	if (FileSystem::Get(db).FileExists(wal_path)) {
 		wal->Initialize();
 	}
 	return wal.get();
