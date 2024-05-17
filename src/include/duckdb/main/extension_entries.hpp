@@ -490,7 +490,7 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {
     {"r2/config", "httpfs"},          {"s3/credential_chain", "aws"},
     {"gcs/credential_chain", "aws"},  {"r2/credential_chain", "aws"},
     {"azure/config", "azure"},        {"azure/credential_chain", "azure"},
-    {"huggingface/config", "httfps"}, {"huggingface/cache", "httpfs"},
+    {"huggingface/config", "httfps"}, {"huggingface/credential_chain", "httpfs"},
     {"bearer/config", "httpfs"}}; // EXTENSION_SECRET_PROVIDERS
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
