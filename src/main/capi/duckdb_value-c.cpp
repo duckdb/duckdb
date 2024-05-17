@@ -118,14 +118,14 @@ duckdb_value duckdb_create_timestamp(duckdb_timestamp input) {
 	return WrapValue(new duckdb::Value(duckdb::Value::TIMESTAMP(duckdb::timestamp_t(input.micros))));
 }
 duckdb_timestamp duckdb_get_timestamp(duckdb_value val) {
-	const timestamp_t &timestamp = UnwrapValue(val).GetValue<duckdb::timestamp_t>();
+	auto timestamp = UnwrapValue(val).GetValue<duckdb::timestamp_t>();
 	return {timestamp.value};
 }
 duckdb_value duckdb_create_interval(duckdb_interval input) {
 	return WrapValue(new duckdb::Value(duckdb::Value::INTERVAL(input.months, input.days, input.micros)));
 }
 duckdb_interval duckdb_get_interval(duckdb_value val) {
-	const interval_t &interval = UnwrapValue(val).GetValue<duckdb::interval_t>();
+	auto interval = UnwrapValue(val).GetValue<duckdb::interval_t>();
 	return {interval.months, interval.days, interval.micros};
 }
 duckdb_value duckdb_create_hugeint(duckdb_hugeint input) {
