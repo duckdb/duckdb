@@ -616,7 +616,7 @@ bool LocalFileSystem::ListFiles(const string &directory, const std::function<voi
 	}
 
 	// RAII wrapper around DIR to automatically free on exceptions in callback
-	std::unique_ptr<DIR,std::function<void(DIR*)>> dir_unique_ptr (dir, [](DIR* d) {closedir(d);});
+	std::unique_ptr<DIR, std::function<void(DIR *)>> dir_unique_ptr(dir, [](DIR *d) { closedir(d); });
 
 	struct dirent *ent;
 	// loop over all files in the directory
