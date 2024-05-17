@@ -16,7 +16,7 @@ on:
       - '!.github/workflows/Regression.yml'
 
   pull_request:
-    types: [opened, reopened, ready_for_review, synchronize]
+    types: [opened, reopened, ready_for_review]
     paths-ignore:
       - '**.md'
       - 'tools/**'
@@ -138,7 +138,7 @@ jobs:
         git remote add base ${{ github.event.pull_request.base.repo.html_url }}
         git fetch base
 
-        git diff --name-only base/$target_branch | (grep "benchmark/micro/*" || true) > .github/regression/updated_micro_benchmarks.csv
+        git diff --name-only "base/$target_branch" | (grep "benchmark/micro/*" || true) > .github/regression/updated_micro_benchmarks.csv
         if [ $(wc -l < .github/regression/updated_micro_benchmarks.csv) -gt 0 ]; then
           echo "Detected the following modified benchmarks. Running a regression test"
           cat .github/regression/updated_micro_benchmarks.csv
