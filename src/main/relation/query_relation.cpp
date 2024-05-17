@@ -25,8 +25,10 @@ QueryRelation::QueryRelation(const shared_ptr<ClientContext> &context, unique_pt
                              string alias_p)
     : Relation(context, RelationType::QUERY_RELATION), select_stmt(std::move(select_stmt_p)),
       alias(std::move(alias_p)) {
-	auto &ref = *select_stmt->node->Cast<SelectNode>().from_table;
-	InitializeTableRefDependency(ref);
+	if (select_stmt->node->type == QueryNodeType::SELECT_NODE) {
+		auto &ref = *select_stmt->node->Cast<SelectNode>().from_table;
+		InitializeTableRefDependency(ref);
+	}
 	context->TryBindRelation(*this, this->columns);
 }
 
