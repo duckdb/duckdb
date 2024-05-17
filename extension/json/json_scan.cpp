@@ -29,7 +29,7 @@ void JSONScanData::Bind(ClientContext &context, TableFunctionBindInput &input) {
 	auto_detect = info.auto_detect;
 
 	for (auto &kv : input.named_parameters) {
-		if (MultiFileReader::ParseOption(kv.first, kv.second, options.file_options, context)) {
+		if (MultiFileReader().ParseOption(kv.first, kv.second, options.file_options, context)) {
 			continue;
 		}
 		auto loption = StringUtil::Lower(kv.first);
@@ -60,8 +60,12 @@ void JSONScanData::Bind(ClientContext &context, TableFunctionBindInput &input) {
 		}
 	}
 
-	files = MultiFileReader::GetFileList(context, input.inputs[0], "JSON");
-	options.file_options.AutoDetectHivePartitioning(files, context);
+	auto multi_file_reader = MultiFileReader::Create(input.table_function);
+	auto file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
+	options.file_options.AutoDetectHivePartitioning(*file_list, context);
+
+	// TODO: store the MultiFilelist instead
+	files = file_list->GetAllFiles();
 
 	InitializeReaders(context);
 }
@@ -201,9 +205,9 @@ unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientCo
 
 	vector<LogicalType> dummy_types(input.column_ids.size(), LogicalType::ANY);
 	for (auto &reader : gstate.json_readers) {
-		MultiFileReader::FinalizeBind(reader->GetOptions().file_options, gstate.bind_data.reader_bind,
-		                              reader->GetFileName(), gstate.names, dummy_types, bind_data.names,
-		                              input.column_ids, reader->reader_data, context);
+		MultiFileReader().FinalizeBind(reader->GetOptions().file_options, gstate.bind_data.reader_bind,
+		                               reader->GetFileName(), gstate.names, dummy_types, bind_data.names,
+		                               input.column_ids, reader->reader_data, context);
 	}
 
 	return std::move(result);
@@ -973,10 +977,16 @@ unique_ptr<NodeStatistics> JSONScan::Cardinality(ClientContext &, const Function
 void JSONScan::ComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
                                      vector<unique_ptr<Expression>> &filters) {
 	auto &data = bind_data_p->Cast<JSONScanData>();
-	auto reset_reader =
-	    MultiFileReader::ComplexFilterPushdown(context, data.files, data.options.file_options, get, filters);
-	if (reset_reader) {
-		MultiFileReader::PruneReaders(data);
+
+	SimpleMultiFileList file_list(std::move(data.files));
+
+	auto filtered_list =
+	    MultiFileReader().ComplexFilterPushdown(context, file_list, data.options.file_options, get, filters);
+	if (filtered_list) {
+		MultiFileReader().PruneReaders(data, *filtered_list);
+		data.files = filtered_list->GetAllFiles();
+	} else {
+		data.files = file_list.GetAllFiles();
 	}
 }
 
@@ -995,7 +1005,7 @@ unique_ptr<FunctionData> JSONScan::Deserialize(Deserializer &deserializer, Table
 }
 
 void JSONScan::TableFunctionDefaults(TableFunction &table_function) {
-	MultiFileReader::AddParameters(table_function);
+	MultiFileReader().AddParameters(table_function);
 
 	table_function.named_parameters["maximum_object_size"] = LogicalType::UINTEGER;
 	table_function.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;

@@ -69,9 +69,9 @@ struct CSVReaderOptions {
 	//! User-defined name list
 	vector<string> name_list;
 	//! Types considered as candidates for auto detection ordered by descending specificity (~ from high to low)
-	vector<LogicalType> auto_type_candidates = {LogicalType::VARCHAR, LogicalType::TIMESTAMP, LogicalType::DATE,
-	                                            LogicalType::TIME,    LogicalType::DOUBLE,    LogicalType::BIGINT,
-	                                            LogicalType::BOOLEAN, LogicalType::SQLNULL};
+	vector<LogicalType> auto_type_candidates = {LogicalType::VARCHAR,   LogicalType::DOUBLE, LogicalType::BIGINT,
+	                                            LogicalType::TIMESTAMP, LogicalType::DATE,   LogicalType::TIME,
+	                                            LogicalType::BOOLEAN,   LogicalType::SQLNULL};
 	//! In case the sniffer found a mismatch error from user defined types or dialect
 	string sniffer_user_mismatch_error;
 	//! In case the sniffer found a mismatch error from user defined types or dialect
@@ -145,6 +145,9 @@ struct CSVReaderOptions {
 	void SetQuote(const string &quote);
 	void SetDelimiter(const string &delimiter);
 	string GetDelimiter() const;
+
+	//! If we can safely ignore errors (i.e., they are being ignored and not being stored in a rejects table)
+	bool IgnoreErrors() const;
 
 	NewLineIdentifier GetNewline() const;
 	void SetNewline(const string &input);

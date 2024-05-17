@@ -60,7 +60,11 @@ enum class ArrowDateTimeType : uint8_t;
 
 enum class ArrowOffsetSize : uint8_t;
 
+enum class ArrowTypeInfoType : uint8_t;
+
 enum class ArrowVariableSizeType : uint8_t;
+
+enum class BinderType : uint8_t;
 
 enum class BindingMode : uint8_t;
 
@@ -135,6 +139,8 @@ enum class ExtraTypeInfoType : uint8_t;
 enum class FileBufferType : uint8_t;
 
 enum class FileCompressionType : uint8_t;
+
+enum class FileExpandResult : uint8_t;
 
 enum class FileGlobOptions : uint8_t;
 
@@ -370,7 +376,13 @@ template<>
 const char* EnumUtil::ToChars<ArrowOffsetSize>(ArrowOffsetSize value);
 
 template<>
+const char* EnumUtil::ToChars<ArrowTypeInfoType>(ArrowTypeInfoType value);
+
+template<>
 const char* EnumUtil::ToChars<ArrowVariableSizeType>(ArrowVariableSizeType value);
+
+template<>
+const char* EnumUtil::ToChars<BinderType>(BinderType value);
 
 template<>
 const char* EnumUtil::ToChars<BindingMode>(BindingMode value);
@@ -482,6 +494,9 @@ const char* EnumUtil::ToChars<FileBufferType>(FileBufferType value);
 
 template<>
 const char* EnumUtil::ToChars<FileCompressionType>(FileCompressionType value);
+
+template<>
+const char* EnumUtil::ToChars<FileExpandResult>(FileExpandResult value);
 
 template<>
 const char* EnumUtil::ToChars<FileGlobOptions>(FileGlobOptions value);
@@ -812,7 +827,13 @@ template<>
 ArrowOffsetSize EnumUtil::FromString<ArrowOffsetSize>(const char *value);
 
 template<>
+ArrowTypeInfoType EnumUtil::FromString<ArrowTypeInfoType>(const char *value);
+
+template<>
 ArrowVariableSizeType EnumUtil::FromString<ArrowVariableSizeType>(const char *value);
+
+template<>
+BinderType EnumUtil::FromString<BinderType>(const char *value);
 
 template<>
 BindingMode EnumUtil::FromString<BindingMode>(const char *value);
@@ -924,6 +945,9 @@ FileBufferType EnumUtil::FromString<FileBufferType>(const char *value);
 
 template<>
 FileCompressionType EnumUtil::FromString<FileCompressionType>(const char *value);
+
+template<>
+FileExpandResult EnumUtil::FromString<FileExpandResult>(const char *value);
 
 template<>
 FileGlobOptions EnumUtil::FromString<FileGlobOptions>(const char *value);

@@ -40,6 +40,7 @@ public:
 	optional_idx GetBlockAllocSize() const;
 	//! Copies this AttachInfo and returns an unique pointer to the new AttachInfo.
 	unique_ptr<AttachInfo> Copy() const;
+	string ToString() const;
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);

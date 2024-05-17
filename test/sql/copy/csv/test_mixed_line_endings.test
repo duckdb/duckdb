@@ -20,6 +20,13 @@ SELECT LENGTH(b) FROM test ORDER BY a;
 5
 4
 
+query III
+select * from test;
+----
+10	hello	20
+20	world	30
+30	test	30
+
 query RR
 SELECT SUM(a), SUM(c) FROM test;
 ----

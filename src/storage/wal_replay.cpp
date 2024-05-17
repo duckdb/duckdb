@@ -26,6 +26,7 @@
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/storage/table/delete_state.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 
 namespace duckdb {
 
@@ -168,6 +169,7 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, unique_ptr<FileHandle> ha
 	}
 
 	con.BeginTransaction();
+	MetaTransaction::Get(*con.context).ModifyDatabase(database);
 
 	// first deserialize the WAL to look for a checkpoint flag
 	// if there is a checkpoint flag, we might have already flushed the contents of the WAL to disk
@@ -229,6 +231,7 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, unique_ptr<FileHandle> ha
 					break;
 				}
 				con.BeginTransaction();
+				MetaTransaction::Get(*con.context).ModifyDatabase(database);
 			}
 		}
 	} catch (std::exception &ex) { // LCOV_EXCL_START
@@ -238,11 +241,11 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, unique_ptr<FileHandle> ha
 			Printer::PrintF("Exception in WAL playback: %s\n", error.RawMessage());
 			// exception thrown in WAL replay: rollback
 		}
-		con.Rollback();
+		con.Query("ROLLBACK");
 	} catch (...) {
 		Printer::Print("Unknown Exception in WAL playback: %s\n");
 		// exception thrown in WAL replay: rollback
-		con.Rollback();
+		con.Query("ROLLBACK");
 	} // LCOV_EXCL_STOP
 	return false;
 }
@@ -581,7 +584,7 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	// create the index in the catalog
 	auto &table = catalog.GetEntry<TableCatalogEntry>(context, create_info->schema, info.table).Cast<DuckTableEntry>();
 	auto &index = catalog.CreateIndex(context, info)->Cast<DuckIndexEntry>();
-	index.info = make_shared_ptr<IndexDataTableInfo>(table.GetStorage().info, index.name);
+	index.info = make_shared_ptr<IndexDataTableInfo>(table.GetStorage().GetDataTableInfo(), index.name);
 
 	// insert the parsed expressions into the index so that we can (de)serialize them during consecutive checkpoints
 	for (auto &parsed_expr : info.parsed_expressions) {
@@ -622,7 +625,7 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	                       info.column_ids, unbound_expressions, index_info, info.options);
 
 	auto index_instance = index_type->create_instance(input);
-	data_table.info->indexes.AddIndex(std::move(index_instance));
+	data_table.AddIndex(std::move(index_instance));
 }
 
 void WriteAheadLogDeserializer::ReplayDropIndex() {

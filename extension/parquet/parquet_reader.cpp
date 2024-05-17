@@ -243,12 +243,14 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 			return LogicalType::INTERVAL;
 		case ConvertedType::JSON:
 			return LogicalType::VARCHAR;
+		case ConvertedType::NULL_TYPE:
+			return LogicalTypeId::SQLNULL;
 		case ConvertedType::MAP:
 		case ConvertedType::MAP_KEY_VALUE:
 		case ConvertedType::LIST:
 		case ConvertedType::BSON:
 		default:
-			throw IOException("Unsupported converted type");
+			throw IOException("Unsupported converted type (%d)", (int32_t)s_ele.converted_type);
 		}
 	} else {
 		// no converted type set
@@ -447,7 +449,7 @@ void ParquetReader::InitializeSchema() {
 
 	// Add generated constant column for row number
 	if (parquet_options.file_row_number) {
-		if (std::find(names.begin(), names.end(), "file_row_number") != names.end()) {
+		if (StringUtil::CIFind(names, "file_row_number") != DConstants::INVALID_INDEX) {
 			throw BinderException(
 			    "Using file_row_number option on file with column named file_row_number is not supported");
 		}

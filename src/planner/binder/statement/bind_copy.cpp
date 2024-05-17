@@ -45,8 +45,10 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 		return copy_function.function.plan(*this, stmt);
 	}
 
+	auto &copy_info = *stmt.info;
 	// bind the select statement
-	auto select_node = Bind(*stmt.select_statement);
+	auto node_copy = copy_info.select_statement->Copy();
+	auto select_node = Bind(*node_copy);
 
 	if (!copy_function.function.copy_to_bind) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
@@ -91,7 +93,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 			if (option.second.empty()) {
 				throw BinderException("FILE_SIZE_BYTES cannot be empty");
 			}
-			if (!copy_function.function.file_size_bytes) {
+			if (!copy_function.function.rotate_files) {
 				throw NotImplementedException("FILE_SIZE_BYTES not implemented for FORMAT \"%s\"", stmt.info->format);
 			}
 			if (option.second[0].GetTypeMutable().id() == LogicalTypeId::VARCHAR) {
@@ -140,6 +142,22 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	auto function_data =
 	    copy_function.function.copy_to_bind(context, bind_input, unique_column_names, select_node.types);
 
+	const auto rotate =
+	    copy_function.function.rotate_files && copy_function.function.rotate_files(*function_data, file_size_bytes);
+	if (rotate) {
+		if (!copy_function.function.rotate_next_file) {
+			throw InternalException("rotate_next_file not implemented for \"%s\"", copy_function.function.extension);
+		}
+		if (user_set_use_tmp_file) {
+			throw NotImplementedException(
+			    "Can't combine USE_TMP_FILE and file rotation (e.g., ROW_GROUPS_PER_FILE) for COPY");
+		}
+		if (!partition_cols.empty()) {
+			throw NotImplementedException(
+			    "Can't combine file rotation (e.g., ROW_GROUPS_PER_FILE) and PARTITION_BY for COPY");
+		}
+	}
+
 	// now create the copy information
 	auto copy = make_uniq<LogicalCopyToFile>(copy_function.function, std::move(function_data), std::move(stmt.info));
 	copy->file_path = file_path;
@@ -151,6 +169,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	if (file_size_bytes.IsValid()) {
 		copy->file_size_bytes = file_size_bytes;
 	}
+	copy->rotate = rotate;
 	copy->partition_output = !partition_cols.empty();
 	copy->partition_columns = std::move(partition_cols);
 
@@ -229,7 +248,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 }
 
 BoundStatement Binder::Bind(CopyStatement &stmt) {
-	if (!stmt.info->is_from && !stmt.select_statement) {
+	if (!stmt.info->is_from && !stmt.info->select_statement) {
 		// copy table into file without a query
 		// generate SELECT * FROM table;
 		auto ref = make_uniq<BaseTableRef>();
@@ -246,8 +265,10 @@ BoundStatement Binder::Bind(CopyStatement &stmt) {
 		} else {
 			statement->select_list.push_back(make_uniq<StarExpression>());
 		}
-		stmt.select_statement = std::move(statement);
+		stmt.info->select_statement = std::move(statement);
 	}
+
+	auto &properties = GetStatementProperties();
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	if (stmt.info->is_from) {

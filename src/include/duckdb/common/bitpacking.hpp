@@ -133,7 +133,7 @@ private:
 			}
 		}
 
-		return FindMinimumBitWidth<T, round_to_next_byte>(min_value, max_value);
+		return FindMinimumBitWidth<T, is_signed, round_to_next_byte>(min_value, max_value);
 	}
 
 	template <class T, bool is_signed, bool round_to_next_byte = false>

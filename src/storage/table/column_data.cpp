@@ -43,7 +43,7 @@ void ColumnData::SetStart(idx_t new_start) {
 }
 
 DatabaseInstance &ColumnData::GetDatabase() const {
-	return info.db.GetDatabase();
+	return info.GetDB().GetDatabase();
 }
 
 DataTableInfo &ColumnData::GetTableInfo() const {
@@ -119,8 +119,8 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 					                        result_offset + i);
 				}
 			} else {
-				state.current->Scan(state, scan_count, result, result_offset,
-				                    !has_updates && scan_count == initial_remaining);
+				bool entire_vector = !has_updates && scan_count == initial_remaining;
+				state.current->Scan(state, scan_count, result, result_offset, entire_vector);
 			}
 
 			state.row_index += scan_count;
@@ -269,6 +269,7 @@ void ColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t append_c
 	if (parent || !stats) {
 		throw InternalException("ColumnData::Append called on a column with a parent or without stats");
 	}
+	lock_guard<mutex> l(stats_lock);
 	Append(stats->statistics, state, vector, append_count);
 }
 
@@ -276,6 +277,7 @@ bool ColumnData::CheckZonemap(TableFilter &filter) {
 	if (!stats) {
 		throw InternalException("ColumnData::CheckZonemap called on a column without stats");
 	}
+	lock_guard<mutex> l(stats_lock);
 	auto propagate_result = filter.CheckStatistics(stats->statistics);
 	if (propagate_result == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
 	    propagate_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
@@ -288,6 +290,7 @@ unique_ptr<BaseStatistics> ColumnData::GetStatistics() {
 	if (!stats) {
 		throw InternalException("ColumnData::GetStatistics called on a column without stats");
 	}
+	lock_guard<mutex> l(stats_lock);
 	return stats->statistics.ToUnique();
 }
 
@@ -295,6 +298,7 @@ void ColumnData::MergeStatistics(const BaseStatistics &other) {
 	if (!stats) {
 		throw InternalException("ColumnData::MergeStatistics called on a column without stats");
 	}
+	lock_guard<mutex> l(stats_lock);
 	return stats->statistics.Merge(other);
 }
 
@@ -302,6 +306,7 @@ void ColumnData::MergeIntoStatistics(BaseStatistics &other) {
 	if (!stats) {
 		throw InternalException("ColumnData::MergeIntoStatistics called on a column without stats");
 	}
+	lock_guard<mutex> l(stats_lock);
 	return other.Merge(stats->statistics);
 }
 
@@ -460,12 +465,10 @@ void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, 
 	}
 }
 
-unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group,
-                                                         PartialBlockManager &partial_block_manager,
-                                                         ColumnCheckpointInfo &checkpoint_info) {
+unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &checkpoint_info) {
 	// scan the segments of the column data
 	// set up the checkpoint state
-	auto checkpoint_state = CreateCheckpointState(row_group, partial_block_manager);
+	auto checkpoint_state = CreateCheckpointState(row_group, checkpoint_info.info.manager);
 	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
 
 	auto l = data.Lock();
@@ -487,7 +490,7 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group,
 
 void ColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats) {
 	// load the data pointers for the column
-	deserializer.Set<DatabaseInstance &>(info.db.GetDatabase());
+	deserializer.Set<DatabaseInstance &>(info.GetDB().GetDatabase());
 	deserializer.Set<LogicalType &>(type);
 
 	vector<DataPointer> data_pointers;
@@ -543,7 +546,7 @@ void ColumnData::GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_p
 
 	// iterate over the segments
 	idx_t segment_idx = 0;
-	auto segment = (ColumnSegment *)data.GetRootSegment();
+	auto segment = data.GetRootSegment();
 	while (segment) {
 		ColumnSegmentInfo column_info;
 		column_info.row_group_index = row_group_index;
@@ -554,7 +557,10 @@ void ColumnData::GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_p
 		column_info.segment_start = segment->start;
 		column_info.segment_count = segment->count;
 		column_info.compression_type = CompressionTypeToString(segment->function.get().type);
-		column_info.segment_stats = segment->stats.statistics.ToString();
+		{
+			lock_guard<mutex> l(stats_lock);
+			column_info.segment_stats = segment->stats.statistics.ToString();
+		}
 		column_info.has_updates = ColumnData::HasUpdates();
 		// persistent
 		// block_id
