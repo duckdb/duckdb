@@ -701,7 +701,7 @@ void BasicColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	for (auto &write_info : state.write_info) {
 		// set the data page offset whenever we see the *first* data page
 		if (column_chunk.meta_data.data_page_offset == 0 && (write_info.page_header.type == PageType::DATA_PAGE ||
-		                                                     write_info.page_header.type == PageType::DATA_PAGE)) {
+		                                                     write_info.page_header.type == PageType::DATA_PAGE_V2)) {
 			column_chunk.meta_data.data_page_offset = column_writer.GetTotalWritten();
 			;
 		}
