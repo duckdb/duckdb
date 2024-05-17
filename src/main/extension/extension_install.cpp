@@ -309,9 +309,7 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DBConfig &config,
 	idx_t extension_decompressed_size;
 
 	if (StringUtil::EndsWith(file, ".gz")) {
-		// FIXME this can do 1 less copy
-		string compressed_body((const char *)in_buffer.get(), file_size);
-		decompressed_data = GZipFileSystem::UncompressGZIPString(compressed_body);
+		decompressed_data = GZipFileSystem::UncompressGZIPString(const_char_ptr_cast(in_buffer.get()), file_size);
 		extension_decompressed = (void *)decompressed_data.data();
 		extension_decompressed_size = decompressed_data.size();
 	} else {

@@ -435,7 +435,7 @@ jobs:
 
       - name: Build
         shell: bash
-        run: BUILD_JSON=1 make
+        run: BUILD_TPCH=1 make
 
       - name: Start Minio
         shell: bash

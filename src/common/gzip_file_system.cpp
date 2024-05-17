@@ -321,8 +321,12 @@ void GZipFileSystem::VerifyGZIPHeader(uint8_t gzip_hdr[], idx_t read_count) {
 }
 
 string GZipFileSystem::UncompressGZIPString(const string &in) {
+	return UncompressGZIPString(in.data(), in.size());
+}
+
+string GZipFileSystem::UncompressGZIPString(const char* data, idx_t size) {
 	// decompress file
-	auto body_ptr = in.data();
+	auto body_ptr = data;
 
 	auto mz_stream_ptr = make_uniq<duckdb_miniz::mz_stream>();
 	memset(mz_stream_ptr.get(), 0, sizeof(duckdb_miniz::mz_stream));
@@ -332,7 +336,7 @@ string GZipFileSystem::UncompressGZIPString(const string &in) {
 	// check for incorrectly formatted files
 
 	// TODO this is mostly the same as gzip_file_system.cpp
-	if (in.size() < GZIP_HEADER_MINSIZE) {
+	if (size < GZIP_HEADER_MINSIZE) {
 		throw IOException("Input is not a GZIP stream");
 	}
 	memcpy(gzip_hdr, body_ptr, GZIP_HEADER_MINSIZE);
@@ -348,7 +352,7 @@ string GZipFileSystem::UncompressGZIPString(const string &in) {
 		do {
 			c = *body_ptr;
 			body_ptr++;
-		} while (c != '\0' && (idx_t)(body_ptr - in.data()) < in.size());
+		} while (c != '\0' && (idx_t)(body_ptr - data) < size);
 	}
 
 	// stream is now set to beginning of payload data
@@ -357,7 +361,7 @@ string GZipFileSystem::UncompressGZIPString(const string &in) {
 		throw InternalException("Failed to initialize miniz");
 	}
 
-	auto bytes_remaining = in.size() - NumericCast<idx_t>(body_ptr - in.data());
+	auto bytes_remaining = size - NumericCast<idx_t>(body_ptr - data);
 	mz_stream_ptr->next_in = const_uchar_ptr_cast(body_ptr);
 	mz_stream_ptr->avail_in = NumericCast<unsigned int>(bytes_remaining);
 
