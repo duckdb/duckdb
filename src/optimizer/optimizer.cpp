@@ -94,6 +94,15 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	// this does not change the logical plan structure, but only simplifies the expression trees
 	RunOptimizer(OptimizerType::EXPRESSION_REWRITER, [&]() { rewriter.VisitOperator(*plan); });
 
+	for (auto &optimizer_extension : DBConfig::GetConfig(context).optimizer_extensions) {
+		RunOptimizer(OptimizerType::EXTENSION, [&]() {
+			if (optimizer_extension.RunBefore()) {
+				OptimizerExtensionInput input {GetContext(), *this, optimizer_extension.optimizer_info.get()};
+				optimizer_extension.optimize_function(input, plan);
+			}
+		});
+	}
+
 	// perform filter pullup
 	RunOptimizer(OptimizerType::FILTER_PULLUP, [&]() {
 		FilterPullup filter_pullup;
@@ -193,8 +202,10 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 
 	for (auto &optimizer_extension : DBConfig::GetConfig(context).optimizer_extensions) {
 		RunOptimizer(OptimizerType::EXTENSION, [&]() {
-			OptimizerExtensionInput input {GetContext(), *this, optimizer_extension.optimizer_info.get()};
-			optimizer_extension.optimize_function(input, plan);
+			if (optimizer_extension.RunAfter()) {
+				OptimizerExtensionInput input {GetContext(), *this, optimizer_extension.optimizer_info.get()};
+				optimizer_extension.optimize_function(input, plan);
+			}
 		});
 	}
 

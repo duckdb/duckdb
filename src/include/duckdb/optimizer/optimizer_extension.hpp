@@ -38,6 +38,16 @@ public:
 
 	//! Additional parser info passed to the parse function
 	shared_ptr<OptimizerExtensionInfo> optimizer_info;
+
+	//! Invoke this optimizer before DuckDBs built-in optimizers
+	virtual bool RunBefore() const {
+		return false;
+	};
+
+	//! Invoke this optimizer after DuckDBs built-in optimizers
+	virtual bool RunAfter() const {
+		return true;
+	};
 };
 
 } // namespace duckdb
