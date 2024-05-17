@@ -229,10 +229,14 @@ static ExtensionUpdateResult UpdateExtensionInternal(DatabaseInstance &db, FileS
 
 	auto &config = DBConfig::GetConfig(db);
 
+	if (!fs.FileExists(full_extension_path)) {
+		result.tag = ExtensionUpdateResultTag::NOT_INSTALLED;
+		return result;
+	}
+
 	// Extension exists, check for .info file
 	const string info_file_path = full_extension_path + ".info";
 	if (!fs.FileExists(info_file_path)) {
-		result.extension_name = extension_name;
 		result.tag = ExtensionUpdateResultTag::MISSING_INSTALL_INFO;
 		return result;
 	}

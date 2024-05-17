@@ -14,14 +14,14 @@ string UpdateExtensionsStatement::ToString() const {
 	result += "UPDATE EXTENSIONS";
 
 	if (!info->extensions_to_update.empty()) {
-		result + "(";
+		result += "(";
 		for (idx_t i = 0; i < info->extensions_to_update.size(); i++) {
 			if (i > 0) {
 				result += ", ";
 			}
 			result += info->extensions_to_update[i];
 		}
-		result + ")";
+		result += ")";
 	}
 
 	return result;
