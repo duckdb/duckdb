@@ -51,7 +51,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	auto multi_file_reader = MultiFileReader::Create(input.table_function);
 	auto multi_file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
 
-	options.FromNamedParameters(input.named_parameters, context, return_types, names);
+	options.FromNamedParameters(input.named_parameters, context);
 	if (options.rejects_table_name.IsSetByUser() && !options.store_rejects.GetValue() &&
 	    options.store_rejects.IsSetByUser()) {
 		throw BinderException("REJECTS_TABLE option is only supported when store_rejects is not manually set to false");
