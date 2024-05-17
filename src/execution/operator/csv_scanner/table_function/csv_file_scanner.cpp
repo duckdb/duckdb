@@ -205,7 +205,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 
 	multi_file_reader->InitializeReader(*this, options.file_options, bind_data.reader_bind, bind_data.return_types,
 	                                    bind_data.return_names, column_ids, nullptr, file_path, context, nullptr);
-	if (!projection_order.empty()) {
+	if (!projection_order.empty() && reader_data.column_mapping.empty() ) {
 		reader_data.column_mapping = projection_order;
 	}
 	InitializeFileNamesTypes();
