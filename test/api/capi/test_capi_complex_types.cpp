@@ -343,6 +343,22 @@ TEST_CASE("duckdb_create_value", "[capi]") {
 	TEST_VALUE(duckdb_create_uinteger(42), duckdb_get_uinteger, 42);
 	TEST_VALUE(duckdb_create_bigint(42), duckdb_get_bigint, 42);
 	TEST_VALUE(duckdb_create_ubigint(42), duckdb_get_ubigint, 42);
+
+	{
+		auto val = duckdb_create_hugeint({42, 42});
+		auto result = duckdb_get_hugeint(val);
+		REQUIRE(result.lower == 42);
+		REQUIRE(result.upper == 42);
+		duckdb_destroy_value(&val);
+	}
+	{
+		auto val = duckdb_create_uhugeint({42, 42});
+		auto result = duckdb_get_uhugeint(val);
+		REQUIRE(result.lower == 42);
+		REQUIRE(result.upper == 42);
+		duckdb_destroy_value(&val);
+	}
+
 	TEST_VALUE(duckdb_create_float(42.0), duckdb_get_float, 42.0);
 	TEST_VALUE(duckdb_create_double(42.0), duckdb_get_double, 42.0);
 	/*

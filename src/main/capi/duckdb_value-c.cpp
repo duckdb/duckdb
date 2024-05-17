@@ -135,6 +135,13 @@ duckdb_hugeint duckdb_get_hugeint(duckdb_value val) {
 	auto res = UnwrapValue(val).GetValue<duckdb::hugeint_t>();
 	return {res.lower, res.upper};
 }
+duckdb_value duckdb_create_uhugeint(duckdb_uhugeint input) {
+	return WrapValue(new duckdb::Value(duckdb::Value::UHUGEINT(duckdb::uhugeint_t(input.upper, input.lower))));
+}
+duckdb_uhugeint duckdb_get_uhugeint(duckdb_value val) {
+	auto res = UnwrapValue(val).GetValue<duckdb::uhugeint_t>();
+	return {res.lower, res.upper};
+}
 duckdb_value duckdb_create_blob(const uint8_t *data, idx_t length) {
 	return WrapValue(new duckdb::Value(duckdb::Value::BLOB((const uint8_t *)data, length)));
 }

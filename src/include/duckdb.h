@@ -1739,6 +1739,14 @@ Creates a value from a hugeint
 DUCKDB_API duckdb_value duckdb_create_hugeint(duckdb_hugeint input);
 
 /*!
+Creates a value from a uhugeint
+
+ * value: The uhugeint value
+ * returns: The value. This must be destroyed with `duckdb_destroy_value`.
+ */
+DUCKDB_API duckdb_value duckdb_create_uhugeint(duckdb_uhugeint input);
+
+/*!
 Creates a value from a blob
 
  * data: The blob data
