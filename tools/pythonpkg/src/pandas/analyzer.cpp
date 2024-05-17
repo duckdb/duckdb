@@ -463,11 +463,13 @@ LogicalType PandasAnalyzer::GetItemType(py::object ele, bool &can_convert) {
 
 //! Get the increment for the given sample size
 uint64_t PandasAnalyzer::GetSampleIncrement(idx_t rows) {
-	D_ASSERT(sample_size != 0);
 	//! Apply the maximum
 	auto sample = sample_size;
 	if (sample > rows) {
 		sample = rows;
+	}
+	if (sample == 0) {
+		return rows;
 	}
 	return rows / sample;
 }
