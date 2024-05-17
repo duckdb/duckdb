@@ -13,12 +13,8 @@
 namespace duckdb {
 
 void BlockPointer::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WriteProperty<block_id_t>(100, "block_id", block_id);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<uint32_t>(101, "offset", offset);
-	}
+	serializer.WriteProperty<block_id_t>(100, "block_id", block_id);
+	serializer.WritePropertyWithDefault<uint32_t>(101, "offset", offset);
 }
 
 BlockPointer BlockPointer::Deserialize(Deserializer &deserializer) {
@@ -29,24 +25,12 @@ BlockPointer BlockPointer::Deserialize(Deserializer &deserializer) {
 }
 
 void DataPointer::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<uint64_t>(100, "row_start", row_start);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<uint64_t>(101, "tuple_count", tuple_count);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WriteProperty<BlockPointer>(102, "block_pointer", block_pointer);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WriteProperty<CompressionType>(103, "compression_type", compression_type);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WriteProperty<BaseStatistics>(104, "statistics", statistics);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<unique_ptr<ColumnSegmentState>>(105, "segment_state", segment_state);
-	}
+	serializer.WritePropertyWithDefault<uint64_t>(100, "row_start", row_start);
+	serializer.WritePropertyWithDefault<uint64_t>(101, "tuple_count", tuple_count);
+	serializer.WriteProperty<BlockPointer>(102, "block_pointer", block_pointer);
+	serializer.WriteProperty<CompressionType>(103, "compression_type", compression_type);
+	serializer.WriteProperty<BaseStatistics>(104, "statistics", statistics);
+	serializer.WritePropertyWithDefault<unique_ptr<ColumnSegmentState>>(105, "segment_state", segment_state);
 }
 
 DataPointer DataPointer::Deserialize(Deserializer &deserializer) {
@@ -67,15 +51,9 @@ DataPointer DataPointer::Deserialize(Deserializer &deserializer) {
 }
 
 void DistinctStatistics::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(100, "sample_count", sample_count);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(101, "total_count", total_count);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<unique_ptr<HyperLogLog>>(102, "log", log);
-	}
+	serializer.WritePropertyWithDefault<idx_t>(100, "sample_count", sample_count);
+	serializer.WritePropertyWithDefault<idx_t>(101, "total_count", total_count);
+	serializer.WritePropertyWithDefault<unique_ptr<HyperLogLog>>(102, "log", log);
 }
 
 unique_ptr<DistinctStatistics> DistinctStatistics::Deserialize(Deserializer &deserializer) {
@@ -87,24 +65,12 @@ unique_ptr<DistinctStatistics> DistinctStatistics::Deserialize(Deserializer &des
 }
 
 void FixedSizeAllocatorInfo::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(100, "segment_size", segment_size);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<idx_t>>(101, "buffer_ids", buffer_ids);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<BlockPointer>>(102, "block_pointers", block_pointers);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<idx_t>>(103, "segment_counts", segment_counts);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<idx_t>>(104, "allocation_sizes", allocation_sizes);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<idx_t>>(105, "buffers_with_free_space", buffers_with_free_space);
-	}
+	serializer.WritePropertyWithDefault<idx_t>(100, "segment_size", segment_size);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(101, "buffer_ids", buffer_ids);
+	serializer.WritePropertyWithDefault<vector<BlockPointer>>(102, "block_pointers", block_pointers);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(103, "segment_counts", segment_counts);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(104, "allocation_sizes", allocation_sizes);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(105, "buffers_with_free_space", buffers_with_free_space);
 }
 
 FixedSizeAllocatorInfo FixedSizeAllocatorInfo::Deserialize(Deserializer &deserializer) {
@@ -119,15 +85,9 @@ FixedSizeAllocatorInfo FixedSizeAllocatorInfo::Deserialize(Deserializer &deseria
 }
 
 void IndexStorageInfo::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<string>(100, "name", name);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(101, "root", root);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<FixedSizeAllocatorInfo>>(102, "allocator_infos", allocator_infos);
-	}
+	serializer.WritePropertyWithDefault<string>(100, "name", name);
+	serializer.WritePropertyWithDefault<idx_t>(101, "root", root);
+	serializer.WritePropertyWithDefault<vector<FixedSizeAllocatorInfo>>(102, "allocator_infos", allocator_infos);
 }
 
 IndexStorageInfo IndexStorageInfo::Deserialize(Deserializer &deserializer) {
@@ -139,12 +99,8 @@ IndexStorageInfo IndexStorageInfo::Deserialize(Deserializer &deserializer) {
 }
 
 void MetaBlockPointer::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(100, "block_pointer", block_pointer);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<uint32_t>(101, "offset", offset);
-	}
+	serializer.WritePropertyWithDefault<idx_t>(100, "block_pointer", block_pointer);
+	serializer.WritePropertyWithDefault<uint32_t>(101, "offset", offset);
 }
 
 MetaBlockPointer MetaBlockPointer::Deserialize(Deserializer &deserializer) {

@@ -12,18 +12,10 @@
 namespace duckdb {
 
 void BufferedJSONReaderOptions::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WriteProperty<JSONFormat>(100, "format", format);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WriteProperty<JSONRecordType>(101, "record_type", record_type);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WriteProperty<FileCompressionType>(102, "compression", compression);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WriteProperty<MultiFileReaderOptions>(103, "file_options", file_options);
-	}
+	serializer.WriteProperty<JSONFormat>(100, "format", format);
+	serializer.WriteProperty<JSONRecordType>(101, "record_type", record_type);
+	serializer.WriteProperty<FileCompressionType>(102, "compression", compression);
+	serializer.WriteProperty<MultiFileReaderOptions>(103, "file_options", file_options);
 }
 
 BufferedJSONReaderOptions BufferedJSONReaderOptions::Deserialize(Deserializer &deserializer) {
@@ -36,54 +28,22 @@ BufferedJSONReaderOptions BufferedJSONReaderOptions::Deserialize(Deserializer &d
 }
 
 void JSONScanData::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WriteProperty<JSONScanType>(100, "json_type", type);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WriteProperty<BufferedJSONReaderOptions>(101, "options", options);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WriteProperty<MultiFileReaderBindData>(102, "reader_bind", reader_bind);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<string>>(103, "files", files);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<bool>(104, "ignore_errors", ignore_errors);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(105, "maximum_object_size", maximum_object_size);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<bool>(106, "auto_detect", auto_detect);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(107, "sample_size", sample_size);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(108, "max_depth", max_depth);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WriteProperty<JSONTransformOptions>(109, "transform_options", transform_options);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<string>>(110, "names", names);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<string>(111, "date_format", GetDateFormat());
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<string>(112, "timestamp_format", GetTimestampFormat());
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<double>(113, "field_appearance_threshold", field_appearance_threshold, 0.1);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(114, "maximum_sample_files", maximum_sample_files, 32);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<bool>(115, "convert_strings_to_integers", convert_strings_to_integers, false);
-	}
+	serializer.WriteProperty<JSONScanType>(100, "json_type", type);
+	serializer.WriteProperty<BufferedJSONReaderOptions>(101, "options", options);
+	serializer.WriteProperty<MultiFileReaderBindData>(102, "reader_bind", reader_bind);
+	serializer.WritePropertyWithDefault<vector<string>>(103, "files", files);
+	serializer.WritePropertyWithDefault<bool>(104, "ignore_errors", ignore_errors);
+	serializer.WritePropertyWithDefault<idx_t>(105, "maximum_object_size", maximum_object_size);
+	serializer.WritePropertyWithDefault<bool>(106, "auto_detect", auto_detect);
+	serializer.WritePropertyWithDefault<idx_t>(107, "sample_size", sample_size);
+	serializer.WritePropertyWithDefault<idx_t>(108, "max_depth", max_depth);
+	serializer.WriteProperty<JSONTransformOptions>(109, "transform_options", transform_options);
+	serializer.WritePropertyWithDefault<vector<string>>(110, "names", names);
+	serializer.WritePropertyWithDefault<string>(111, "date_format", GetDateFormat());
+	serializer.WritePropertyWithDefault<string>(112, "timestamp_format", GetTimestampFormat());
+	serializer.WritePropertyWithDefault<double>(113, "field_appearance_threshold", field_appearance_threshold, 0.1);
+	serializer.WritePropertyWithDefault<idx_t>(114, "maximum_sample_files", maximum_sample_files, 32);
+	serializer.WritePropertyWithDefault<bool>(115, "convert_strings_to_integers", convert_strings_to_integers, false);
 }
 
 unique_ptr<JSONScanData> JSONScanData::Deserialize(Deserializer &deserializer) {
@@ -118,21 +78,11 @@ unique_ptr<JSONScanData> JSONScanData::Deserialize(Deserializer &deserializer) {
 }
 
 void JSONTransformOptions::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<bool>(100, "strict_cast", strict_cast);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<bool>(101, "error_duplicate_key", error_duplicate_key);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<bool>(102, "error_missing_key", error_missing_key);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<bool>(103, "error_unknown_key", error_unknown_key);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<bool>(104, "delay_error", delay_error);
-	}
+	serializer.WritePropertyWithDefault<bool>(100, "strict_cast", strict_cast);
+	serializer.WritePropertyWithDefault<bool>(101, "error_duplicate_key", error_duplicate_key);
+	serializer.WritePropertyWithDefault<bool>(102, "error_missing_key", error_missing_key);
+	serializer.WritePropertyWithDefault<bool>(103, "error_unknown_key", error_unknown_key);
+	serializer.WritePropertyWithDefault<bool>(104, "delay_error", delay_error);
 }
 
 JSONTransformOptions JSONTransformOptions::Deserialize(Deserializer &deserializer) {

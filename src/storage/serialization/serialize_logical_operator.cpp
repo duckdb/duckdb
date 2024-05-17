@@ -12,12 +12,8 @@
 namespace duckdb {
 
 void LogicalOperator::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WriteProperty<LogicalOperatorType>(100, "type", type);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<unique_ptr<LogicalOperator>>>(101, "children", children);
-	}
+	serializer.WriteProperty<LogicalOperatorType>(100, "type", type);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<LogicalOperator>>>(101, "children", children);
 }
 
 unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deserializer) {
@@ -191,15 +187,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 }
 
 void FilenamePattern::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<string>(200, "base", base);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(201, "pos", pos);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<bool>(202, "uuid", uuid);
-	}
+	serializer.WritePropertyWithDefault<string>(200, "base", base);
+	serializer.WritePropertyWithDefault<idx_t>(201, "pos", pos);
+	serializer.WritePropertyWithDefault<bool>(202, "uuid", uuid);
 }
 
 FilenamePattern FilenamePattern::Deserialize(Deserializer &deserializer) {
@@ -212,27 +202,13 @@ FilenamePattern FilenamePattern::Deserialize(Deserializer &deserializer) {
 
 void LogicalAggregate::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(200, "expressions", expressions);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(201, "group_index", group_index);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(202, "aggregate_index", aggregate_index);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(203, "groupings_index", groupings_index);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(204, "groups", groups);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<GroupingSet>>(205, "grouping_sets", grouping_sets);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<unsafe_vector<idx_t>>>(206, "grouping_functions", grouping_functions);
-	}
+	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(200, "expressions", expressions);
+	serializer.WritePropertyWithDefault<idx_t>(201, "group_index", group_index);
+	serializer.WritePropertyWithDefault<idx_t>(202, "aggregate_index", aggregate_index);
+	serializer.WritePropertyWithDefault<idx_t>(203, "groupings_index", groupings_index);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(204, "groups", groups);
+	serializer.WritePropertyWithDefault<vector<GroupingSet>>(205, "grouping_sets", grouping_sets);
+	serializer.WritePropertyWithDefault<vector<unsafe_vector<idx_t>>>(206, "grouping_functions", grouping_functions);
 }
 
 unique_ptr<LogicalOperator> LogicalAggregate::Deserialize(Deserializer &deserializer) {
@@ -249,21 +225,11 @@ unique_ptr<LogicalOperator> LogicalAggregate::Deserialize(Deserializer &deserial
 
 void LogicalAnyJoin::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WriteProperty<JoinType>(200, "join_type", join_type);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(201, "mark_index", mark_index);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<idx_t>>(202, "left_projection_map", left_projection_map);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<idx_t>>(203, "right_projection_map", right_projection_map);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<unique_ptr<Expression>>(204, "condition", condition);
-	}
+	serializer.WriteProperty<JoinType>(200, "join_type", join_type);
+	serializer.WritePropertyWithDefault<idx_t>(201, "mark_index", mark_index);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(202, "left_projection_map", left_projection_map);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(203, "right_projection_map", right_projection_map);
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(204, "condition", condition);
 }
 
 unique_ptr<LogicalOperator> LogicalAnyJoin::Deserialize(Deserializer &deserializer) {
@@ -278,21 +244,11 @@ unique_ptr<LogicalOperator> LogicalAnyJoin::Deserialize(Deserializer &deserializ
 
 void LogicalCTERef::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(200, "table_index", table_index);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(201, "cte_index", cte_index);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "chunk_types", chunk_types);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<string>>(203, "bound_columns", bound_columns);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WriteProperty<CTEMaterialize>(204, "materialized_cte", materialized_cte);
-	}
+	serializer.WritePropertyWithDefault<idx_t>(200, "table_index", table_index);
+	serializer.WritePropertyWithDefault<idx_t>(201, "cte_index", cte_index);
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "chunk_types", chunk_types);
+	serializer.WritePropertyWithDefault<vector<string>>(203, "bound_columns", bound_columns);
+	serializer.WriteProperty<CTEMaterialize>(204, "materialized_cte", materialized_cte);
 }
 
 unique_ptr<LogicalOperator> LogicalCTERef::Deserialize(Deserializer &deserializer) {
@@ -307,15 +263,9 @@ unique_ptr<LogicalOperator> LogicalCTERef::Deserialize(Deserializer &deserialize
 
 void LogicalColumnDataGet::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(200, "table_index", table_index);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<LogicalType>>(201, "chunk_types", chunk_types);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<optionally_owned_ptr<ColumnDataCollection>>(202, "collection", collection);
-	}
+	serializer.WritePropertyWithDefault<idx_t>(200, "table_index", table_index);
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(201, "chunk_types", chunk_types);
+	serializer.WritePropertyWithDefault<optionally_owned_ptr<ColumnDataCollection>>(202, "collection", collection);
 }
 
 unique_ptr<LogicalOperator> LogicalColumnDataGet::Deserialize(Deserializer &deserializer) {
@@ -328,30 +278,14 @@ unique_ptr<LogicalOperator> LogicalColumnDataGet::Deserialize(Deserializer &dese
 
 void LogicalComparisonJoin::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WriteProperty<JoinType>(200, "join_type", join_type);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(201, "mark_index", mark_index);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<idx_t>>(202, "left_projection_map", left_projection_map);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<idx_t>>(203, "right_projection_map", right_projection_map);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<JoinCondition>>(204, "conditions", conditions);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<LogicalType>>(205, "mark_types", mark_types);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(206, "duplicate_eliminated_columns", duplicate_eliminated_columns);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<bool>(207, "delim_flipped", delim_flipped, false);
-	}
+	serializer.WriteProperty<JoinType>(200, "join_type", join_type);
+	serializer.WritePropertyWithDefault<idx_t>(201, "mark_index", mark_index);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(202, "left_projection_map", left_projection_map);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(203, "right_projection_map", right_projection_map);
+	serializer.WritePropertyWithDefault<vector<JoinCondition>>(204, "conditions", conditions);
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(205, "mark_types", mark_types);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(206, "duplicate_eliminated_columns", duplicate_eliminated_columns);
+	serializer.WritePropertyWithDefault<bool>(207, "delim_flipped", delim_flipped, false);
 }
 
 unique_ptr<LogicalOperator> LogicalComparisonJoin::Deserialize(Deserializer &deserializer) {
@@ -369,9 +303,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::Deserialize(Deserializer &des
 
 void LogicalCopyDatabase::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<unique_ptr<CopyDatabaseInfo>>(200, "info", info);
-	}
+	serializer.WritePropertyWithDefault<unique_ptr<CopyDatabaseInfo>>(200, "info", info);
 }
 
 unique_ptr<LogicalOperator> LogicalCopyDatabase::Deserialize(Deserializer &deserializer) {
@@ -382,9 +314,7 @@ unique_ptr<LogicalOperator> LogicalCopyDatabase::Deserialize(Deserializer &deser
 
 void LogicalCreate::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<unique_ptr<CreateInfo>>(200, "info", info);
-	}
+	serializer.WritePropertyWithDefault<unique_ptr<CreateInfo>>(200, "info", info);
 }
 
 unique_ptr<LogicalOperator> LogicalCreate::Deserialize(Deserializer &deserializer) {
@@ -395,12 +325,8 @@ unique_ptr<LogicalOperator> LogicalCreate::Deserialize(Deserializer &deserialize
 
 void LogicalCreateIndex::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<unique_ptr<CreateIndexInfo>>(200, "info", info);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(201, "unbound_expressions", unbound_expressions);
-	}
+	serializer.WritePropertyWithDefault<unique_ptr<CreateIndexInfo>>(200, "info", info);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(201, "unbound_expressions", unbound_expressions);
 }
 
 unique_ptr<LogicalOperator> LogicalCreateIndex::Deserialize(Deserializer &deserializer) {
@@ -412,9 +338,7 @@ unique_ptr<LogicalOperator> LogicalCreateIndex::Deserialize(Deserializer &deseri
 
 void LogicalCreateTable::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<unique_ptr<CreateInfo>>(200, "info", info->base);
-	}
+	serializer.WritePropertyWithDefault<unique_ptr<CreateInfo>>(200, "info", info->base);
 }
 
 unique_ptr<LogicalOperator> LogicalCreateTable::Deserialize(Deserializer &deserializer) {
@@ -434,18 +358,10 @@ unique_ptr<LogicalOperator> LogicalCrossProduct::Deserialize(Deserializer &deser
 
 void LogicalDelete::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<unique_ptr<CreateInfo>>(200, "table_info", table.GetInfo());
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(201, "table_index", table_index);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<bool>(202, "return_chunk", return_chunk);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(203, "expressions", expressions);
-	}
+	serializer.WritePropertyWithDefault<unique_ptr<CreateInfo>>(200, "table_info", table.GetInfo());
+	serializer.WritePropertyWithDefault<idx_t>(201, "table_index", table_index);
+	serializer.WritePropertyWithDefault<bool>(202, "return_chunk", return_chunk);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(203, "expressions", expressions);
 }
 
 unique_ptr<LogicalOperator> LogicalDelete::Deserialize(Deserializer &deserializer) {
@@ -459,12 +375,8 @@ unique_ptr<LogicalOperator> LogicalDelete::Deserialize(Deserializer &deserialize
 
 void LogicalDelimGet::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(200, "table_index", table_index);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<LogicalType>>(201, "chunk_types", chunk_types);
-	}
+	serializer.WritePropertyWithDefault<idx_t>(200, "table_index", table_index);
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(201, "chunk_types", chunk_types);
 }
 
 unique_ptr<LogicalOperator> LogicalDelimGet::Deserialize(Deserializer &deserializer) {
@@ -476,15 +388,9 @@ unique_ptr<LogicalOperator> LogicalDelimGet::Deserialize(Deserializer &deseriali
 
 void LogicalDistinct::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WriteProperty<DistinctType>(200, "distinct_type", distinct_type);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(201, "distinct_targets", distinct_targets);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<unique_ptr<BoundOrderModifier>>(202, "order_by", order_by);
-	}
+	serializer.WriteProperty<DistinctType>(200, "distinct_type", distinct_type);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(201, "distinct_targets", distinct_targets);
+	serializer.WritePropertyWithDefault<unique_ptr<BoundOrderModifier>>(202, "order_by", order_by);
 }
 
 unique_ptr<LogicalOperator> LogicalDistinct::Deserialize(Deserializer &deserializer) {
@@ -497,9 +403,7 @@ unique_ptr<LogicalOperator> LogicalDistinct::Deserialize(Deserializer &deseriali
 
 void LogicalDummyScan::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(200, "table_index", table_index);
-	}
+	serializer.WritePropertyWithDefault<idx_t>(200, "table_index", table_index);
 }
 
 unique_ptr<LogicalOperator> LogicalDummyScan::Deserialize(Deserializer &deserializer) {
@@ -510,12 +414,8 @@ unique_ptr<LogicalOperator> LogicalDummyScan::Deserialize(Deserializer &deserial
 
 void LogicalEmptyResult::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<LogicalType>>(200, "return_types", return_types);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<ColumnBinding>>(201, "bindings", bindings);
-	}
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(200, "return_types", return_types);
+	serializer.WritePropertyWithDefault<vector<ColumnBinding>>(201, "bindings", bindings);
 }
 
 unique_ptr<LogicalOperator> LogicalEmptyResult::Deserialize(Deserializer &deserializer) {
@@ -527,18 +427,10 @@ unique_ptr<LogicalOperator> LogicalEmptyResult::Deserialize(Deserializer &deseri
 
 void LogicalExplain::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WriteProperty<ExplainType>(200, "explain_type", explain_type);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<string>(201, "physical_plan", physical_plan);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<string>(202, "logical_plan_unopt", logical_plan_unopt);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<string>(203, "logical_plan_opt", logical_plan_opt);
-	}
+	serializer.WriteProperty<ExplainType>(200, "explain_type", explain_type);
+	serializer.WritePropertyWithDefault<string>(201, "physical_plan", physical_plan);
+	serializer.WritePropertyWithDefault<string>(202, "logical_plan_unopt", logical_plan_unopt);
+	serializer.WritePropertyWithDefault<string>(203, "logical_plan_opt", logical_plan_opt);
 }
 
 unique_ptr<LogicalOperator> LogicalExplain::Deserialize(Deserializer &deserializer) {
@@ -552,15 +444,9 @@ unique_ptr<LogicalOperator> LogicalExplain::Deserialize(Deserializer &deserializ
 
 void LogicalExpressionGet::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(200, "table_index", table_index);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<LogicalType>>(201, "expr_types", expr_types);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<vector<unique_ptr<Expression>>>>(202, "expressions", expressions);
-	}
+	serializer.WritePropertyWithDefault<idx_t>(200, "table_index", table_index);
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(201, "expr_types", expr_types);
+	serializer.WritePropertyWithDefault<vector<vector<unique_ptr<Expression>>>>(202, "expressions", expressions);
 }
 
 unique_ptr<LogicalOperator> LogicalExpressionGet::Deserialize(Deserializer &deserializer) {
@@ -573,12 +459,8 @@ unique_ptr<LogicalOperator> LogicalExpressionGet::Deserialize(Deserializer &dese
 
 void LogicalFilter::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(200, "expressions", expressions);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<idx_t>>(201, "projection_map", projection_map);
-	}
+	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(200, "expressions", expressions);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(201, "projection_map", projection_map);
 }
 
 unique_ptr<LogicalOperator> LogicalFilter::Deserialize(Deserializer &deserializer) {
@@ -590,60 +472,24 @@ unique_ptr<LogicalOperator> LogicalFilter::Deserialize(Deserializer &deserialize
 
 void LogicalInsert::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<unique_ptr<CreateInfo>>(200, "table_info", table.GetInfo());
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<vector<unique_ptr<Expression>>>>(201, "insert_values", insert_values);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WriteProperty<IndexVector<idx_t, PhysicalIndex>>(202, "column_index_map", column_index_map);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<LogicalType>>(203, "expected_types", expected_types);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(204, "table_index", table_index);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<bool>(205, "return_chunk", return_chunk);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(206, "bound_defaults", bound_defaults);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WriteProperty<OnConflictAction>(207, "action_type", action_type);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<LogicalType>>(208, "expected_set_types", expected_set_types);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<unordered_set<idx_t>>(209, "on_conflict_filter", on_conflict_filter);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<unique_ptr<Expression>>(210, "on_conflict_condition", on_conflict_condition);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<unique_ptr<Expression>>(211, "do_update_condition", do_update_condition);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<PhysicalIndex>>(212, "set_columns", set_columns);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<LogicalType>>(213, "set_types", set_types);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(214, "excluded_table_index", excluded_table_index);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<column_t>>(215, "columns_to_fetch", columns_to_fetch);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<column_t>>(216, "source_columns", source_columns);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(217, "expressions", expressions);
-	}
+	serializer.WritePropertyWithDefault<unique_ptr<CreateInfo>>(200, "table_info", table.GetInfo());
+	serializer.WritePropertyWithDefault<vector<vector<unique_ptr<Expression>>>>(201, "insert_values", insert_values);
+	serializer.WriteProperty<IndexVector<idx_t, PhysicalIndex>>(202, "column_index_map", column_index_map);
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(203, "expected_types", expected_types);
+	serializer.WritePropertyWithDefault<idx_t>(204, "table_index", table_index);
+	serializer.WritePropertyWithDefault<bool>(205, "return_chunk", return_chunk);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(206, "bound_defaults", bound_defaults);
+	serializer.WriteProperty<OnConflictAction>(207, "action_type", action_type);
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(208, "expected_set_types", expected_set_types);
+	serializer.WritePropertyWithDefault<unordered_set<idx_t>>(209, "on_conflict_filter", on_conflict_filter);
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(210, "on_conflict_condition", on_conflict_condition);
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(211, "do_update_condition", do_update_condition);
+	serializer.WritePropertyWithDefault<vector<PhysicalIndex>>(212, "set_columns", set_columns);
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(213, "set_types", set_types);
+	serializer.WritePropertyWithDefault<idx_t>(214, "excluded_table_index", excluded_table_index);
+	serializer.WritePropertyWithDefault<vector<column_t>>(215, "columns_to_fetch", columns_to_fetch);
+	serializer.WritePropertyWithDefault<vector<column_t>>(216, "source_columns", source_columns);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(217, "expressions", expressions);
 }
 
 unique_ptr<LogicalOperator> LogicalInsert::Deserialize(Deserializer &deserializer) {
@@ -671,12 +517,8 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(Deserializer &deserialize
 
 void LogicalLimit::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WriteProperty<BoundLimitNode>(200, "limit_val", limit_val);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WriteProperty<BoundLimitNode>(201, "offset_val", offset_val);
-	}
+	serializer.WriteProperty<BoundLimitNode>(200, "limit_val", limit_val);
+	serializer.WriteProperty<BoundLimitNode>(201, "offset_val", offset_val);
 }
 
 unique_ptr<LogicalOperator> LogicalLimit::Deserialize(Deserializer &deserializer) {
@@ -688,15 +530,9 @@ unique_ptr<LogicalOperator> LogicalLimit::Deserialize(Deserializer &deserializer
 
 void LogicalMaterializedCTE::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(200, "table_index", table_index);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(201, "column_count", column_count);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<string>(202, "ctename", ctename);
-	}
+	serializer.WritePropertyWithDefault<idx_t>(200, "table_index", table_index);
+	serializer.WritePropertyWithDefault<idx_t>(201, "column_count", column_count);
+	serializer.WritePropertyWithDefault<string>(202, "ctename", ctename);
 }
 
 unique_ptr<LogicalOperator> LogicalMaterializedCTE::Deserialize(Deserializer &deserializer) {
@@ -709,12 +545,8 @@ unique_ptr<LogicalOperator> LogicalMaterializedCTE::Deserialize(Deserializer &de
 
 void LogicalOrder::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<BoundOrderByNode>>(200, "orders", orders);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<idx_t>>(201, "projections", projections);
-	}
+	serializer.WritePropertyWithDefault<vector<BoundOrderByNode>>(200, "orders", orders);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(201, "projections", projections);
 }
 
 unique_ptr<LogicalOperator> LogicalOrder::Deserialize(Deserializer &deserializer) {
@@ -726,12 +558,8 @@ unique_ptr<LogicalOperator> LogicalOrder::Deserialize(Deserializer &deserializer
 
 void LogicalPivot::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(200, "pivot_index", pivot_index);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WriteProperty<BoundPivotInfo>(201, "bound_pivot", bound_pivot);
-	}
+	serializer.WritePropertyWithDefault<idx_t>(200, "pivot_index", pivot_index);
+	serializer.WriteProperty<BoundPivotInfo>(201, "bound_pivot", bound_pivot);
 }
 
 unique_ptr<LogicalOperator> LogicalPivot::Deserialize(Deserializer &deserializer) {
@@ -752,12 +580,8 @@ unique_ptr<LogicalOperator> LogicalPositionalJoin::Deserialize(Deserializer &des
 
 void LogicalProjection::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(200, "table_index", table_index);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(201, "expressions", expressions);
-	}
+	serializer.WritePropertyWithDefault<idx_t>(200, "table_index", table_index);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(201, "expressions", expressions);
 }
 
 unique_ptr<LogicalOperator> LogicalProjection::Deserialize(Deserializer &deserializer) {
@@ -769,18 +593,10 @@ unique_ptr<LogicalOperator> LogicalProjection::Deserialize(Deserializer &deseria
 
 void LogicalRecursiveCTE::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<bool>(200, "union_all", union_all);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<string>(201, "ctename", ctename);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(202, "table_index", table_index);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(203, "column_count", column_count);
-	}
+	serializer.WritePropertyWithDefault<bool>(200, "union_all", union_all);
+	serializer.WritePropertyWithDefault<string>(201, "ctename", ctename);
+	serializer.WritePropertyWithDefault<idx_t>(202, "table_index", table_index);
+	serializer.WritePropertyWithDefault<idx_t>(203, "column_count", column_count);
 }
 
 unique_ptr<LogicalOperator> LogicalRecursiveCTE::Deserialize(Deserializer &deserializer) {
@@ -794,12 +610,8 @@ unique_ptr<LogicalOperator> LogicalRecursiveCTE::Deserialize(Deserializer &deser
 
 void LogicalReset::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<string>(200, "name", name);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WriteProperty<SetScope>(201, "scope", scope);
-	}
+	serializer.WritePropertyWithDefault<string>(200, "name", name);
+	serializer.WriteProperty<SetScope>(201, "scope", scope);
 }
 
 unique_ptr<LogicalOperator> LogicalReset::Deserialize(Deserializer &deserializer) {
@@ -811,9 +623,7 @@ unique_ptr<LogicalOperator> LogicalReset::Deserialize(Deserializer &deserializer
 
 void LogicalSample::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<unique_ptr<SampleOptions>>(200, "sample_options", sample_options);
-	}
+	serializer.WritePropertyWithDefault<unique_ptr<SampleOptions>>(200, "sample_options", sample_options);
 }
 
 unique_ptr<LogicalOperator> LogicalSample::Deserialize(Deserializer &deserializer) {
@@ -824,15 +634,9 @@ unique_ptr<LogicalOperator> LogicalSample::Deserialize(Deserializer &deserialize
 
 void LogicalSet::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<string>(200, "name", name);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WriteProperty<Value>(201, "value", value);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WriteProperty<SetScope>(202, "scope", scope);
-	}
+	serializer.WritePropertyWithDefault<string>(200, "name", name);
+	serializer.WriteProperty<Value>(201, "value", value);
+	serializer.WriteProperty<SetScope>(202, "scope", scope);
 }
 
 unique_ptr<LogicalOperator> LogicalSet::Deserialize(Deserializer &deserializer) {
@@ -845,18 +649,10 @@ unique_ptr<LogicalOperator> LogicalSet::Deserialize(Deserializer &deserializer) 
 
 void LogicalSetOperation::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(200, "table_index", table_index);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(201, "column_count", column_count);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<bool>(202, "setop_all", setop_all, true);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<bool>(203, "allow_out_of_order", allow_out_of_order, true);
-	}
+	serializer.WritePropertyWithDefault<idx_t>(200, "table_index", table_index);
+	serializer.WritePropertyWithDefault<idx_t>(201, "column_count", column_count);
+	serializer.WritePropertyWithDefault<bool>(202, "setop_all", setop_all, true);
+	serializer.WritePropertyWithDefault<bool>(203, "allow_out_of_order", allow_out_of_order, true);
 }
 
 unique_ptr<LogicalOperator> LogicalSetOperation::Deserialize(Deserializer &deserializer) {
@@ -870,9 +666,7 @@ unique_ptr<LogicalOperator> LogicalSetOperation::Deserialize(Deserializer &deser
 
 void LogicalSimple::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<unique_ptr<ParseInfo>>(200, "info", info);
-	}
+	serializer.WritePropertyWithDefault<unique_ptr<ParseInfo>>(200, "info", info);
 }
 
 unique_ptr<LogicalOperator> LogicalSimple::Deserialize(Deserializer &deserializer) {
@@ -883,15 +677,9 @@ unique_ptr<LogicalOperator> LogicalSimple::Deserialize(Deserializer &deserialize
 
 void LogicalTopN::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<BoundOrderByNode>>(200, "orders", orders);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(201, "limit", limit);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(202, "offset", offset);
-	}
+	serializer.WritePropertyWithDefault<vector<BoundOrderByNode>>(200, "orders", orders);
+	serializer.WritePropertyWithDefault<idx_t>(201, "limit", limit);
+	serializer.WritePropertyWithDefault<idx_t>(202, "offset", offset);
 }
 
 unique_ptr<LogicalOperator> LogicalTopN::Deserialize(Deserializer &deserializer) {
@@ -904,12 +692,8 @@ unique_ptr<LogicalOperator> LogicalTopN::Deserialize(Deserializer &deserializer)
 
 void LogicalUnnest::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(200, "unnest_index", unnest_index);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(201, "expressions", expressions);
-	}
+	serializer.WritePropertyWithDefault<idx_t>(200, "unnest_index", unnest_index);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(201, "expressions", expressions);
 }
 
 unique_ptr<LogicalOperator> LogicalUnnest::Deserialize(Deserializer &deserializer) {
@@ -921,27 +705,13 @@ unique_ptr<LogicalOperator> LogicalUnnest::Deserialize(Deserializer &deserialize
 
 void LogicalUpdate::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<unique_ptr<CreateInfo>>(200, "table_info", table.GetInfo());
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(201, "table_index", table_index);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<bool>(202, "return_chunk", return_chunk);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(203, "expressions", expressions);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<PhysicalIndex>>(204, "columns", columns);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(205, "bound_defaults", bound_defaults);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<bool>(206, "update_is_del_and_insert", update_is_del_and_insert);
-	}
+	serializer.WritePropertyWithDefault<unique_ptr<CreateInfo>>(200, "table_info", table.GetInfo());
+	serializer.WritePropertyWithDefault<idx_t>(201, "table_index", table_index);
+	serializer.WritePropertyWithDefault<bool>(202, "return_chunk", return_chunk);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(203, "expressions", expressions);
+	serializer.WritePropertyWithDefault<vector<PhysicalIndex>>(204, "columns", columns);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(205, "bound_defaults", bound_defaults);
+	serializer.WritePropertyWithDefault<bool>(206, "update_is_del_and_insert", update_is_del_and_insert);
 }
 
 unique_ptr<LogicalOperator> LogicalUpdate::Deserialize(Deserializer &deserializer) {
@@ -958,12 +728,8 @@ unique_ptr<LogicalOperator> LogicalUpdate::Deserialize(Deserializer &deserialize
 
 void LogicalWindow::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<idx_t>(200, "window_index", window_index);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(201, "expressions", expressions);
-	}
+	serializer.WritePropertyWithDefault<idx_t>(200, "window_index", window_index);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(201, "expressions", expressions);
 }
 
 unique_ptr<LogicalOperator> LogicalWindow::Deserialize(Deserializer &deserializer) {

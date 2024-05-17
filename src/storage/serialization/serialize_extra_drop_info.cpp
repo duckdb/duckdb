@@ -10,9 +10,7 @@
 namespace duckdb {
 
 void ExtraDropInfo::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WriteProperty<ExtraDropInfoType>(100, "info_type", info_type);
-	}
+	serializer.WriteProperty<ExtraDropInfoType>(100, "info_type", info_type);
 }
 
 unique_ptr<ExtraDropInfo> ExtraDropInfo::Deserialize(Deserializer &deserializer) {
@@ -30,12 +28,8 @@ unique_ptr<ExtraDropInfo> ExtraDropInfo::Deserialize(Deserializer &deserializer)
 
 void ExtraDropSecretInfo::Serialize(Serializer &serializer) const {
 	ExtraDropInfo::Serialize(serializer);
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WriteProperty<SecretPersistType>(200, "persist_mode", persist_mode);
-	}
-	if (serializer.ShouldSerialize(1)) {
-		serializer.WritePropertyWithDefault<string>(201, "secret_storage", secret_storage);
-	}
+	serializer.WriteProperty<SecretPersistType>(200, "persist_mode", persist_mode);
+	serializer.WritePropertyWithDefault<string>(201, "secret_storage", secret_storage);
 }
 
 unique_ptr<ExtraDropInfo> ExtraDropSecretInfo::Deserialize(Deserializer &deserializer) {

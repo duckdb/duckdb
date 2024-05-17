@@ -187,13 +187,14 @@ def get_serialize_element(
     )
 
     storage_version = lookup_serialization_version(version)
+    if storage_version != 1:
+        code = []
+        code.append(f'\tif (serializer.ShouldSerialize({storage_version})) {{')
+        code.append('\t' + serialization_code)
 
-    code = []
-    code.append(f'\tif (serializer.ShouldSerialize({storage_version})) {{')
-    code.append('\t' + serialization_code)
-
-    result = '\n'.join(code) + '\t}\n'
-    return result
+        result = '\n'.join(code) + '\t}\n'
+        return result
+    return serialization_code
 
 
 def get_deserialize_element_template(
