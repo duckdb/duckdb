@@ -28,7 +28,7 @@ class SerializationOptions {
 public:
 	bool serialize_enum_as_string = false;
 	bool serialize_default_values = false;
-	SerializationCompatibility serialization_compatibility;
+	SerializationCompatibility serialization_compatibility = SerializationCompatibility::Default();
 };
 
 class Serializer {

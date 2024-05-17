@@ -497,6 +497,14 @@ SerializationCompatibility SerializationCompatibility::FromString(const string &
 	return result;
 }
 
+SerializationCompatibility SerializationCompatibility::Default() {
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
+	return FromString("latest");
+#else
+	return FromString("v0.10.2");
+#endif
+}
+
 bool SerializationCompatibility::Compare(idx_t property_version) const {
 	return property_version <= serialization_version;
 }

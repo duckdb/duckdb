@@ -91,18 +91,20 @@ struct ExtensionOption {
 
 class SerializationCompatibility {
 public:
-	SerializationCompatibility() {
-	}
 	static SerializationCompatibility FromString(const string &input);
+	static SerializationCompatibility Default();
 
 public:
 	bool Compare(idx_t property_version) const;
 
 public:
 	//! The user provided version
-	string duckdb_version = "v0.10.2";
+	string duckdb_version;
 	//! The max version that should be serialized
-	idx_t serialization_version = 1;
+	idx_t serialization_version;
+
+protected:
+	SerializationCompatibility() = default;
 };
 
 struct DBConfigOptions {
@@ -171,7 +173,7 @@ struct DBConfigOptions {
 	//! Run a checkpoint on successful shutdown and delete the WAL, to leave only a single database file behind
 	bool checkpoint_on_shutdown = true;
 	//! Serialize the metadata on checkpoint with compatibility for a given DuckDB version.
-	SerializationCompatibility serialization_compatibility = SerializationCompatibility();
+	SerializationCompatibility serialization_compatibility = SerializationCompatibility::Default();
 	//! Debug flag that decides when a checkpoing should be aborted. Only used for testing purposes.
 	CheckpointAbort checkpoint_abort = CheckpointAbort::NO_ABORT;
 	//! Initialize the database with the standard set of DuckDB functions
