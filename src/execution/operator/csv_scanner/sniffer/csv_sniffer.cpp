@@ -3,9 +3,8 @@
 namespace duckdb {
 
 CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager> buffer_manager_p,
-                       CSVStateMachineCache &state_machine_cache_p, SetColumns set_columns_p)
-    : state_machine_cache(state_machine_cache_p), options(options_p), buffer_manager(std::move(buffer_manager_p)),
-      set_columns(set_columns_p) {
+                       CSVStateMachineCache &state_machine_cache_p)
+    : state_machine_cache(state_machine_cache_p), options(options_p), buffer_manager(std::move(buffer_manager_p)) {
 	// Initialize Format Candidates
 	for (const auto &format_template : format_template_candidates) {
 		auto &logical_type = format_template.first;
@@ -15,6 +14,9 @@ CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager>
 	max_columns_found = set_columns.Size();
 	error_handler = make_shared_ptr<CSVErrorHandler>(options.ignore_errors.GetValue());
 	detection_error_handler = make_shared_ptr<CSVErrorHandler>(true);
+	if (options.columns_set) {
+		set_columns = SetColumns(&options.sql_type_list, &options.name_list);
+	}
 }
 
 bool SetColumns::IsSet() {
@@ -163,6 +165,9 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 		throw InvalidInputException(error);
 	}
 	options.was_type_manually_set = manually_set;
+	if (set_columns.IsSet()) {
+		return SnifferResult(*set_columns.types, *set_columns.names);
+	}
 	return SnifferResult(detected_types, names);
 }
 

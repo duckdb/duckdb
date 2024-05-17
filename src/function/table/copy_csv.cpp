@@ -231,8 +231,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 
 	if (options.auto_detect) {
 		auto buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, bind_data->files[0], 0);
-		CSVSniffer sniffer(options, buffer_manager, CSVStateMachineCache::Get(context),
-		                   {&expected_types, &expected_names});
+		CSVSniffer sniffer(options, buffer_manager, CSVStateMachineCache::Get(context));
 		sniffer.SniffCSV();
 	}
 	bind_data->FinalizeRead(context);

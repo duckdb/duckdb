@@ -147,8 +147,10 @@ void CSVSniffer::DetectHeader() {
 			names.push_back(GenerateColumnName(sniffer_state_machine.dialect_options.num_cols, col));
 		}
 		// If the user provided names, we must replace our header with the user provided names
-		for (idx_t i = 0; i < MinValue<idx_t>(names.size(), sniffer_state_machine.options.name_list.size()); i++) {
-			names[i] = sniffer_state_machine.options.name_list[i];
+		if (!sniffer_state_machine.options.columns_set) {
+			for (idx_t i = 0; i < MinValue<idx_t>(names.size(), sniffer_state_machine.options.name_list.size()); i++) {
+				names[i] = sniffer_state_machine.options.name_list[i];
+			}
 		}
 		return;
 	}
@@ -247,8 +249,10 @@ void CSVSniffer::DetectHeader() {
 	}
 
 	// If the user provided names, we must replace our header with the user provided names
-	for (idx_t i = 0; i < MinValue<idx_t>(names.size(), sniffer_state_machine.options.name_list.size()); i++) {
-		names[i] = sniffer_state_machine.options.name_list[i];
+	if (!sniffer_state_machine.options.columns_set) {
+		for (idx_t i = 0; i < MinValue<idx_t>(names.size(), sniffer_state_machine.options.name_list.size()); i++) {
+			names[i] = sniffer_state_machine.options.name_list[i];
+		}
 	}
 }
 } // namespace duckdb

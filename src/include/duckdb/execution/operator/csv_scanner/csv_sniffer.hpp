@@ -92,7 +92,7 @@ struct HeaderValue {
 class CSVSniffer {
 public:
 	explicit CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager> buffer_manager_p,
-	                    CSVStateMachineCache &state_machine_cache, SetColumns set_columns = {});
+	                    CSVStateMachineCache &state_machine_cache);
 
 	//! Main method that sniffs the CSV file, returns the types, names and options as a result
 	//! CSV Sniffing consists of five steps:
