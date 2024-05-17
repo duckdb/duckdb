@@ -126,7 +126,6 @@ if (NOT MINGW)
             DONT_LINK
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_mysql
-            GIT_TAG 655a003f7d405e0c8437e24e0bd47dfd63b7fb07
-            APPLY_PATCHES
+            GIT_TAG 4dd5963cc5f7f04f81a0ea308b104e65791d9975
             )
 endif()
