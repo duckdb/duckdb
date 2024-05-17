@@ -38,15 +38,55 @@ for target in targets:
         )
 
 scripts_dir = os.path.dirname(os.path.abspath(__file__))
-version_map_file = file = open(scripts_dir + '/../src/storage/version_map.json')
+version_map_path = scripts_dir + '/../src/storage/version_map.json'
+version_map_file = file = open(version_map_path)
 version_map = json.load(version_map_file)
 
 
+def verify_serialization_versions(version_map):
+    serialization = version_map['serialization']
+    if list(serialization.keys())[-1] != 'latest':
+        print(f"The version map ({version_map_path}) for serialization versions must end in 'latest'!")
+        exit(1)
+
+
+verify_serialization_versions(version_map)
+
+
 def lookup_serialization_version(version: str):
+    if version.lower() == "latest":
+        print(
+            f"'latest' is not an allowed 'version' to use in serialization JSON files, please provide a duckdb version"
+        )
+
     versions = version_map['serialization']
     if version not in versions:
-        print(f'Could not map {version} to a serialization version number, please check the version_map.json')
-        exit(1)
+        from packaging.version import Version
+
+        current_version = Version(version)
+
+        # This version does not exist in the version map
+        # Which is allowed for unreleased versions, they will get mapped to 'latest' instead
+
+        last_registered_version = Version(list(versions.keys())[-2])
+        if current_version < last_registered_version:
+            # The version was lower than the last defined version, which is not allowed
+            print(
+                f"Specified version ({current_version}) could not be found in the version_map.json, and it is lower than the last defined version ({last_registered_version})!"
+            )
+            exit(1)
+
+        if hasattr(lookup_serialization_version, 'latest_version'):
+            # We have already mapped a version to 'latest', check that the versions match
+            latest_version = getattr(lookup_serialization_version, 'latest_version')
+            if current_version != latest_version:
+                print(
+                    f"Found more than one version that is not present in the version_map.json!: {current_version}, {latest_version}"
+                )
+                exit(1)
+        else:
+            setattr(lookup_serialization_version, 'latest_version', current_version)
+        return versions['latest']
     return versions[version]
 
 
