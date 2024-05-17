@@ -25,6 +25,7 @@
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/storage/table/delete_state.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 
@@ -162,6 +163,7 @@ private:
 //===--------------------------------------------------------------------===//
 bool WriteAheadLog::Replay(AttachedDatabase &database, unique_ptr<FileHandle> handle) {
 	Connection con(database.GetDatabase());
+	auto wal_path = handle->GetPath();
 	BufferedFileReader reader(FileSystem::Get(database), std::move(handle));
 	if (reader.Finished()) {
 		// WAL is empty
@@ -171,6 +173,7 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, unique_ptr<FileHandle> ha
 	con.BeginTransaction();
 	MetaTransaction::Get(*con.context).ModifyDatabase(database);
 
+	auto &config = DBConfig::GetConfig(database.GetDatabase());
 	// first deserialize the WAL to look for a checkpoint flag
 	// if there is a checkpoint flag, we might have already flushed the contents of the WAL to disk
 	ReplayState checkpoint_state(database, *con.context);
@@ -188,16 +191,10 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, unique_ptr<FileHandle> ha
 		}
 	} catch (std::exception &ex) { // LCOV_EXCL_START
 		ErrorData error(ex);
-		if (error.Type() == ExceptionType::SERIALIZATION) {
-			// serialization exception - torn WAL
-			// continue reading
-		} else {
-			Printer::PrintF("Exception in WAL playback during initial read: %s\n", error.RawMessage());
-			return false;
+		// ignore serialization exceptions - they signal a torn WAL
+		if (error.Type() != ExceptionType::SERIALIZATION) {
+			error.Throw("Failure while replaying WAL file \"" + wal_path + "\": ");
 		}
-	} catch (...) {
-		Printer::Print("Unknown Exception in WAL playback during initial read");
-		return false;
 	} // LCOV_EXCL_STOP
 	if (checkpoint_state.checkpoint_id.IsValid()) {
 		// there is a checkpoint flag: check if we need to deserialize the WAL
@@ -218,7 +215,6 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, unique_ptr<FileHandle> ha
 	// replay the WAL
 	// note that everything is wrapped inside a try/catch block here
 	// there can be errors in WAL replay because of a corrupt WAL file
-	// in this case we should throw a warning but startup anyway
 	try {
 		while (true) {
 			// read the current entry
@@ -235,17 +231,19 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, unique_ptr<FileHandle> ha
 			}
 		}
 	} catch (std::exception &ex) { // LCOV_EXCL_START
-		ErrorData error(ex);
-		if (error.Type() != ExceptionType::SERIALIZATION) {
-			// FIXME: this should report a proper warning in the connection
-			Printer::PrintF("Exception in WAL playback: %s\n", error.RawMessage());
-			// exception thrown in WAL replay: rollback
-		}
-		con.Query("ROLLBACK");
-	} catch (...) {
-		Printer::Print("Unknown Exception in WAL playback: %s\n");
 		// exception thrown in WAL replay: rollback
 		con.Query("ROLLBACK");
+		ErrorData error(ex);
+		// serialization failure means a truncated WAL
+		// these failures are ignored unless abort_on_wal_failure is true
+		// other failures always result in an error
+		if (config.options.abort_on_wal_failure || error.Type() != ExceptionType::SERIALIZATION) {
+			error.Throw("Failure while replaying WAL file \"" + wal_path + "\": ");
+		}
+	} catch (...) {
+		// exception thrown in WAL replay: rollback
+		con.Query("ROLLBACK");
+		throw;
 	} // LCOV_EXCL_STOP
 	return false;
 }
