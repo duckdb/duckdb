@@ -1,13 +1,13 @@
 #include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/gzip_file_system.hpp"
+#include "duckdb/common/local_file_system.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/logging/http_logger.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/extension_helper.hpp"
-#include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/main/extension_install_info.hpp"
-#include "duckdb/common/local_file_system.hpp"
 
 #ifndef DISABLE_DUCKDB_REMOTE_INSTALL
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
@@ -429,6 +429,22 @@ ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs, cons
 	string temp_path = local_extension_path + ".tmp-" + UUID::ToString(UUID::GenerateRandomUUID());
 
 	if (fs.FileExists(local_extension_path) && !force_install) {
+		// The file exists but the origin is different, throw an error to indicate to the user that weird things are
+		// happening
+		if (fs.FileExists(local_extension_path + ".info")) {
+			auto install_info =
+			    ExtensionInstallInfo::TryReadInfoFile(fs, local_extension_path + ".info", extension_name);
+			if (install_info) {
+				if (install_info->repository_url != repository->path) {
+					throw InvalidInputException("Installing extension '%s' failed. The extension is already installed "
+					                            "but the repositories are different.\n"
+					                            "Currently installed extension is from '%s', while the extension to be "
+					                            "installed is from '%s'.\n"
+					                            "To solve this rerun this command with `FORCE INSTALL`",
+					                            extension_name, install_info->repository_url, repository->path);
+				}
+			}
+		}
 		return nullptr;
 	}
 
