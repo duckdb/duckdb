@@ -193,7 +193,8 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 
 	for (auto &optimizer_extension : DBConfig::GetConfig(context).optimizer_extensions) {
 		RunOptimizer(OptimizerType::EXTENSION, [&]() {
-			optimizer_extension.optimize_function(context, optimizer_extension.optimizer_info.get(), plan);
+			OptimizerExtensionInput input {GetContext(), *this, optimizer_extension.optimizer_info.get()};
+			optimizer_extension.optimize_function(input, plan);
 		});
 	}
 
