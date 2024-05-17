@@ -14,6 +14,7 @@ TypeCatalogEntry::TypeCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema,
 	this->temporary = info.temporary;
 	this->internal = info.internal;
 	this->comment = info.comment;
+	this->tags = info.tags;
 }
 
 unique_ptr<CatalogEntry> TypeCatalogEntry::Copy(ClientContext &context) const {
@@ -30,6 +31,7 @@ unique_ptr<CreateInfo> TypeCatalogEntry::GetInfo() const {
 	result->name = name;
 	result->type = user_type;
 	result->comment = comment;
+	result->tags = tags;
 	return std::move(result);
 }
 

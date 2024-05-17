@@ -148,6 +148,11 @@ SELECT INTERVAL '90' YEAR;
 90 years
 
 query T
+SELECT INTERVAL '90' QUARTER;
+----
+22 years 6 months
+
+query T
 SELECT INTERVAL '90' MONTH;
 ----
 7 years 6 months

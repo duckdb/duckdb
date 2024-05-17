@@ -180,9 +180,9 @@ idx_t GetCTypeSize(duckdb_type type) {
 	case DUCKDB_TYPE_DECIMAL:
 		return sizeof(duckdb_hugeint);
 	default: // LCOV_EXCL_START
-		// unsupported type
-		D_ASSERT(0);
-		return sizeof(const char *);
+		// Unsupported nested or complex type. Internally, we set the null mask to NULL.
+		// This is a deprecated code path. Use the Vector Interface for nested and complex types.
+		return 0;
 	} // LCOV_EXCL_STOP
 }
 

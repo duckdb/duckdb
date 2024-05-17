@@ -477,8 +477,8 @@ void BoxRenderer::RenderHeader(const vector<string> &names, const vector<Logical
 	ss << config.LMIDDLE;
 	column_index = 0;
 	for (idx_t k = 0; k < total_length - 2; k++) {
-		if (has_results && column_index + 1 < column_count && k == boundaries[column_index]) {
-			ss << config.MIDDLE;
+		if (column_index + 1 < column_count && k == boundaries[column_index]) {
+			ss << (has_results ? config.MIDDLE : config.DMIDDLE);
 			column_index++;
 		} else {
 			ss << config.HORIZONTAL;

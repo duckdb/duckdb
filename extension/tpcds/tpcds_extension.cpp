@@ -45,7 +45,8 @@ static duckdb::unique_ptr<FunctionData> DsdgenBind(ClientContext &context, Table
 	}
 	if (input.binder) {
 		auto &catalog = Catalog::GetCatalog(context, result->catalog);
-		input.binder->properties.modified_databases.insert(catalog.GetName());
+		auto &properties = input.binder->GetStatementProperties();
+		properties.modified_databases.insert(catalog.GetName());
 	}
 	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");
