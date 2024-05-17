@@ -57,8 +57,7 @@ if (NOT MINGW)
     duckdb_extension_load(iceberg
             ${LOAD_ICEBERG_TESTS}
             GIT_URL https://github.com/duckdb/duckdb_iceberg
-            GIT_TAG 02171d52aac6c904d4409f4d4db8e52006c8c225
-            APPLY_PATCHES
+            GIT_TAG fe0471671924ce57308924c79f72efd18103e66b
             )
 endif()
 
