@@ -58,7 +58,7 @@ public:
 	static StorageManager &Get(Catalog &catalog);
 
 	//! Initialize a database or load an existing database from the given path
-	void Initialize(optional_ptr<ClientContext> context);
+	void Initialize();
 
 	DatabaseInstance &GetDatabase();
 	AttachedDatabase &GetAttached() {
@@ -89,7 +89,7 @@ public:
 	virtual shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) = 0;
 
 protected:
-	virtual void LoadDatabase(optional_ptr<ClientContext> context = nullptr) = 0;
+	virtual void LoadDatabase() = 0;
 
 protected:
 	//! The database this storage manager belongs to
@@ -137,6 +137,6 @@ public:
 	shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) override;
 
 protected:
-	void LoadDatabase(optional_ptr<ClientContext> context = nullptr) override;
+	void LoadDatabase() override;
 };
 } // namespace duckdb

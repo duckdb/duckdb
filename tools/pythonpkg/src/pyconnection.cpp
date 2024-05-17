@@ -1033,8 +1033,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const py::object &quer
 
 	auto statements = GetStatements(query);
 	if (statements.size() == 1 && statements[0]->type == StatementType::SELECT_STATEMENT && py::none().is(params)) {
-		return make_uniq<DuckDBPyRelation>(connection->RelationFromQuery(
-		    unique_ptr_cast<SQLStatement, SelectStatement>(std::move(statements[0])), alias));
+		auto select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(statements[0]));
+		return make_uniq<DuckDBPyRelation>(connection->RelationFromQuery(std::move(select_statement), alias));
 	}
 
 	auto res = ExecuteInternal(std::move(statements), params);
