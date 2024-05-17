@@ -310,6 +310,18 @@ void Timestamp::Convert(timestamp_t timestamp, date_t &out_date, dtime_t &out_ti
 	D_ASSERT(timestamp == Timestamp::FromDatetime(out_date, out_time));
 }
 
+bool Timestamp::TryConvert(timestamp_t timestamp, date_t &out_date, dtime_t &out_time) {
+	out_date = GetDate(timestamp);
+	int64_t days_micros;
+	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(out_date.days, Interval::MICROS_PER_DAY,
+	                                                               days_micros)) {
+		return false;
+	}
+	out_time = dtime_t(timestamp.value - days_micros);
+	D_ASSERT(timestamp == Timestamp::FromDatetime(out_date, out_time));
+	return true;
+}
+
 timestamp_t Timestamp::GetCurrentTimestamp() {
 	auto now = system_clock::now();
 	auto epoch_ms = duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();

@@ -155,22 +155,6 @@ bool TryAddOperator::Operation(uint64_t left, uint64_t right, uint64_t &result) 
 }
 
 template <>
-bool TryAddOperator::Operation(date_t left, date_t right, date_t &result) {
-	if (!Value::IsFinite(left) || !Value::IsFinite(right)) {
-		return false;
-	}
-	int32_t days;
-	if (!TryAddOperator::Operation(left.days, right.days, days)) {
-		return false;
-	}
-	result.days = days;
-	if (!Value::IsFinite(result)) {
-		return false;
-	}
-	return true;
-}
-
-template <>
 bool TryAddOperator::Operation(int8_t left, int8_t right, int8_t &result) {
 	return OverflowCheckedAddition::Operation<int8_t, int16_t>(left, right, result);
 }
@@ -183,6 +167,30 @@ bool TryAddOperator::Operation(int16_t left, int16_t right, int16_t &result) {
 template <>
 bool TryAddOperator::Operation(int32_t left, int32_t right, int32_t &result) {
 	return OverflowCheckedAddition::Operation<int32_t, int64_t>(left, right, result);
+}
+
+template <>
+bool TryAddOperator::Operation(date_t left, interval_t right, timestamp_t &result) {
+	if (!Value::IsFinite(left) || !Value::IsFinite(right)) {
+		return false;
+	}
+	// make sure left can be converted
+	timestamp_t timesamp_result;
+	dtime_t zero(0);
+	if (!Timestamp::TryFromDatetime(left, zero, timesamp_result)) {
+		return false;
+	}
+	if (left == date_t::infinity()) {
+		result = timestamp_t::infinity();
+		return true;
+	} else if (left == date_t::ninfinity()) {
+		result = timestamp_t::ninfinity();
+		return true;
+	} else {
+		// right and left are both valid timestamps and
+		result = Interval::Add(Timestamp::FromDatetime(left, dtime_t(0)), right);
+	}
+	return true;
 }
 
 template <>

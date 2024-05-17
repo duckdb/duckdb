@@ -500,6 +500,47 @@ date_t Interval::Add(date_t left, interval_t right) {
 	return result;
 }
 
+bool Interval::TryAdd(date_t left, interval_t right, date_t &result) {
+	if (!Date::IsFinite(left)) {
+		return false;
+	}
+	if (right.months != 0) {
+		int32_t year, month, day;
+		Date::Convert(left, year, month, day);
+		int32_t year_diff = right.months / Interval::MONTHS_PER_YEAR;
+		year += year_diff;
+		month += right.months - year_diff * Interval::MONTHS_PER_YEAR;
+		if (month > Interval::MONTHS_PER_YEAR) {
+			year++;
+			month -= Interval::MONTHS_PER_YEAR;
+		} else if (month <= 0) {
+			year--;
+			month += Interval::MONTHS_PER_YEAR;
+		}
+		day = MinValue<int32_t>(day, Date::MonthDays(year, month));
+		date_t result;
+		if (!Date::TryFromDate(year, month, day, result)) {
+			return false;
+		}
+	} else {
+		result = left;
+	}
+	if (right.days != 0) {
+		if (!TryAddOperator::Operation(result.days, right.days, result.days)) {
+			return false;
+		}
+	}
+	if (right.micros != 0) {
+		if (!TryAddOperator::Operation(result.days, int32_t(right.micros / Interval::MICROS_PER_DAY), result.days)) {
+			return false;
+		}
+	}
+	if (!Date::IsFinite(result)) {
+		return false;
+	}
+	return true;
+}
+
 dtime_t Interval::Add(dtime_t left, interval_t right, date_t &date) {
 	int64_t diff = right.micros - ((right.micros / Interval::MICROS_PER_DAY) * Interval::MICROS_PER_DAY);
 	left += diff;
@@ -527,6 +568,27 @@ timestamp_t Interval::Add(timestamp_t left, interval_t right) {
 	auto new_date = Interval::Add(date, right);
 	auto new_time = Interval::Add(time, right, new_date);
 	return Timestamp::FromDatetime(new_date, new_time);
+}
+
+bool Interval::TryAdd(timestamp_t left, interval_t right, timestamp_t &result) {
+	if (!Timestamp::IsFinite(left)) {
+		return false;
+	}
+	date_t date;
+	dtime_t time;
+	if (!Timestamp::TryConvert(left, date, time)) {
+		return false;
+	}
+	date_t new_date;
+	if (!Interval::TryAdd(date, right, new_date)) {
+		return false;
+	}
+	// doesn't throw
+	auto new_time = Interval::Add(time, right, new_date);
+	if (!Timestamp::TryFromDatetime(new_date, new_time, result)) {
+		return false;
+	}
+	return true;
 }
 
 } // namespace duckdb
