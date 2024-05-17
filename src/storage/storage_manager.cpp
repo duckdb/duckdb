@@ -57,7 +57,7 @@ bool ObjectCache::ObjectCacheEnabled(ClientContext &context) {
 }
 
 int64_t StorageManager::GetWALSize() {
-	if (!wal) {
+	if (!wal && !GetWAL()) {
 		return 0;
 	}
 	if (!wal->Initialized()) {
@@ -75,7 +75,15 @@ optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
 		return wal.get();
 	}
 
-	wal = make_uniq<WriteAheadLog>(db, GetWALPath());
+	auto wal_path = GetWALPath();
+	wal = make_uniq<WriteAheadLog>(db, wal_path);
+
+	// If the WAL file exists, then we initialize it.
+	auto &fs = FileSystem::Get(db);
+	auto handle = fs.OpenFile(GetWALPath(), FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
+	if (handle) {
+		wal->Initialize();
+	}
 	return wal.get();
 }
 
