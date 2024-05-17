@@ -324,7 +324,7 @@ string GZipFileSystem::UncompressGZIPString(const string &in) {
 	return UncompressGZIPString(in.data(), in.size());
 }
 
-string GZipFileSystem::UncompressGZIPString(const char* data, idx_t size) {
+string GZipFileSystem::UncompressGZIPString(const char *data, idx_t size) {
 	// decompress file
 	auto body_ptr = data;
 

@@ -27,7 +27,7 @@ public:
 	static void VerifyGZIPHeader(uint8_t gzip_hdr[], idx_t read_count);
 	//! Consumes a byte stream as a gzip string, returning the decompressed string
 	static string UncompressGZIPString(const string &in);
-	static string UncompressGZIPString(const char* length, idx_t size);
+	static string UncompressGZIPString(const char *length, idx_t size);
 
 	unique_ptr<StreamWrapper> CreateStream() override;
 	idx_t InBufferSize() override;

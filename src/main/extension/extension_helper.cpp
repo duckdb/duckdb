@@ -331,13 +331,11 @@ vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(DatabaseInstance
 			ExtensionUpdateResult statically_loaded_ext_result;
 
 			if (loaded_install_info == loaded_extension_data.end()) {
-				// TODO: throw error instead?
 				statically_loaded_ext_result.tag = ExtensionUpdateResultTag::UNKNOWN;
 			} else if (loaded_install_info->second.mode == ExtensionInstallMode::STATICALLY_LINKED) {
 				statically_loaded_ext_result.tag = ExtensionUpdateResultTag::STATICALLY_LOADED;
 				statically_loaded_ext_result.installed_version = loaded_install_info->second.version;
 			} else {
-				// TODO: help user recover from this
 				statically_loaded_ext_result.tag = ExtensionUpdateResultTag::UNKNOWN;
 			}
 
