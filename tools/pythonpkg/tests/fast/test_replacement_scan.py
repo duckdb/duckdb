@@ -46,60 +46,12 @@ def fetch_relation(rel):
     return rel
 
 
-global_polars_df = pl.DataFrame(
-    {
-        "A": [1],
-        "fruits": ["banana"],
-        "B": [5],
-        "cars": ["beetle"],
-    }
-)
-
-
 class TestReplacementScan(object):
     def test_csv_replacement(self):
         con = duckdb.connect()
         filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data', 'integers.csv')
         res = con.execute("select count(*) from '%s'" % (filename))
         assert res.fetchone()[0] == 2
-
-    def test_scan_global(self, duckdb_cursor):
-        duckdb_cursor.execute("set global_scan_frames=0")
-        with pytest.raises(duckdb.CatalogException, match='Table with name global_polars_df does not exist'):
-            # We set the depth to look for global variables to 0 so it's never found
-            duckdb_cursor.sql("select * from global_polars_df")
-        duckdb_cursor.execute("set global_scan_frames=1")
-        # Now the depth is 1, which is enough to locate the variable
-        rel = duckdb_cursor.sql("select * from global_polars_df")
-        res = rel.fetchone()
-        assert res == (1, 'banana', 5, 'beetle')
-
-    def test_scan_local(self, duckdb_cursor):
-        df = pd.DataFrame({'a': [1, 2, 3]})
-
-        def inner_func(duckdb_cursor):
-            duckdb_cursor.execute("set local_scan_frames=0")
-            with pytest.raises(duckdb.CatalogException, match='Table with name df does not exist'):
-                # We set the depth to look for local variables to 0 so it's never found
-                duckdb_cursor.sql("select * from df")
-            duckdb_cursor.execute("set local_scan_frames=1")
-            with pytest.raises(duckdb.CatalogException, match='Table with name df does not exist'):
-                # We set the depth to look for local variables to 1 so it's still not found because it wasn't defined in this function
-                duckdb_cursor.sql("select * from df")
-            duckdb_cursor.execute("set local_scan_frames=2")
-            # Only now is it found
-            rel = duckdb_cursor.sql("select * from df")
-            res = rel.fetchall()
-            assert res == [(1,), (2,), (3,)]
-
-            df = pd.DataFrame({'a': [4, 5, 6]})
-            duckdb_cursor.execute("set local_scan_frames=1")
-            # We can find the newly defined 'df' with depth 1
-            rel = duckdb_cursor.sql("select * from df")
-            res = rel.fetchall()
-            assert res == [(4,), (5,), (6,)]
-
-        inner_func(duckdb_cursor)
 
     def test_parquet_replacement(self):
         con = duckdb.connect()
@@ -150,6 +102,19 @@ class TestReplacementScan(object):
         df2 = con.query('from (values (1, 10)) t(i, k)').df()
         df3 = con.query('from df1 join df2 using(i)')
         assert df3.fetchall() == [(1, 2, 10)]
+
+    def test_replacement_scan_caching(self, duckdb_cursor):
+        def return_rel(conn):
+            df = pd.DataFrame({'a': [1, 2, 3]})
+            rel = conn.sql("select * from df")
+            return rel
+
+        rel = return_rel(duckdb_cursor)
+        # FIXME: this test should fail in the future
+        # The correct answer here is [1,2,3], as that is the 'df' that was visible during creation of the Relation
+        duckdb_cursor.execute("create table df as select * from unnest([4,5,6])")
+        res = rel.fetchall()
+        assert res == [(4,), (5,), (6,)]
 
     def test_replacement_scan_fail(self):
         random_object = "I love salmiak rondos"
