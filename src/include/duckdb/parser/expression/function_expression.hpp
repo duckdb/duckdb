@@ -61,6 +61,9 @@ public:
 
 	void Verify() const override;
 
+	//! Returns true, if the function has a lambda expression as a child.
+	bool IsLambdaFunction() const;
+
 public:
 	template <class T, class BASE, class ORDER_MODIFIER = OrderModifier>
 	static string ToString(const T &entry, const string &catalog, const string &schema, const string &function_name,
