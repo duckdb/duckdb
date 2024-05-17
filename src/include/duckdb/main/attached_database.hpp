@@ -43,7 +43,7 @@ public:
 	                 const AttachInfo &info, AccessMode access_mode);
 	~AttachedDatabase() override;
 
-	void Initialize(optional_ptr<ClientContext> context = nullptr);
+	void Initialize();
 	void Close();
 
 	Catalog &ParentCatalog() override;

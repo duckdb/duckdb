@@ -35,6 +35,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"current_localtime", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"current_localtimestamp", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"dbgen", "tpch", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"delta_scan", "delta", CatalogType::TABLE_FUNCTION_ENTRY},
     {"drop_fts_index", "fts", CatalogType::PRAGMA_FUNCTION_ENTRY},
     {"dsdgen", "tpcds", CatalogType::TABLE_FUNCTION_ENTRY},
     {"excel_text", "excel", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -363,8 +364,8 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {
     {"bearer/config", "httpfs"}}; // EXTENSION_SECRET_PROVIDERS
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
-    "aws", "azure", "autocomplete", "excel",          "fts",      "httpfs",           "inet",
-    "icu", "json",  "parquet",      "sqlite_scanner", "sqlsmith", "postgres_scanner", "tpcds",
-    "tpch"}; // END_OF_AUTOLOADABLE_EXTENSIONS
+    "aws",   "azure", "autocomplete", "delta",   "excel",          "fts",      "httpfs",
+    "inet",  "icu",   "json",         "parquet", "sqlite_scanner", "sqlsmith", "postgres_scanner",
+    "tpcds", "tpch"}; // END_OF_AUTOLOADABLE_EXTENSIONS
 
 } // namespace duckdb

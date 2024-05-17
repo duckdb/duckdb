@@ -292,6 +292,13 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	return BindCreateTableInfo(std::move(info), schema, bound_defaults);
 }
 
+unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableCheckpoint(unique_ptr<CreateInfo> info,
+                                                                   SchemaCatalogEntry &schema) {
+	auto result = make_uniq<BoundCreateTableInfo>(schema, std::move(info));
+	CreateColumnDependencyManager(*result);
+	return result;
+}
+
 unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema,
                                                              vector<unique_ptr<Expression>> &bound_defaults) {
 	auto &base = info->Cast<CreateTableInfo>();

@@ -169,7 +169,7 @@ SinkFinalizeType PhysicalCreateARTIndex::Finalize(Pipeline &pipeline, Event &eve
 
 	auto &schema = table.schema;
 	info->column_ids = storage_ids;
-	auto index_entry = schema.CreateIndex(context, *info, table).get();
+	auto index_entry = schema.CreateIndex(schema.GetCatalogTransaction(context), *info, table).get();
 	if (!index_entry) {
 		D_ASSERT(info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT);
 		// index already exists, but error ignored because of IF NOT EXISTS
