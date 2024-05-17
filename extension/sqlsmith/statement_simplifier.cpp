@@ -445,6 +445,9 @@ void StatementSimplifier::Simplify(SQLStatement &stmt) {
 	case StatementType::DELETE_STATEMENT:
 		Simplify(stmt.Cast<DeleteStatement>());
 		break;
+	case StatementType::ATTACH_STATEMENT:
+	case StatementType::DETACH_STATEMENT:
+		break;
 	default:
 		throw InvalidInputException("Expected a single SELECT, INSERT or UPDATE statement");
 	}
