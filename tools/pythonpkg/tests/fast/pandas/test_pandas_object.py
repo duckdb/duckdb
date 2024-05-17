@@ -11,18 +11,11 @@ class TestPandasObject(object):
         data = [None] + [1] + [None] * 10000  # Last element is 1, others are None
         pandas_df = pd.DataFrame(data, columns=['c'], dtype=object)
         con = duckdb.connect()
-        assert con.execute('FROM pandas_df where c is not null').fetchall() == [('1.0',)]
+        assert con.execute('FROM pandas_df where c is not null').fetchall() == [(1.0,)]
 
         # Test all nulls, should return varchar
         data = [None] * 10000  # Last element is 1, others are None
         pandas_df_2 = pd.DataFrame(data, columns=['c'], dtype=object)
-        assert con.execute('FROM pandas_df_2 limit 1').fetchall() == [(None,)]
-        assert con.execute('select typeof(c) FROM pandas_df_2 limit 1').fetchall() == [('VARCHAR',)]
-
-        # Test full sniffing
-        con.execute("SET GLOBAL pandas_analyze_sample=11000")
-
-        assert con.execute('FROM pandas_df where c is not null').fetchall() == [(1.0,)]
         assert con.execute('FROM pandas_df_2 limit 1').fetchall() == [(None,)]
         assert con.execute('select typeof(c) FROM pandas_df_2 limit 1').fetchall() == [('"NULL"',)]
 

@@ -516,12 +516,18 @@ bool PandasAnalyzer::Analyze(py::object column) {
 	}
 	bool can_convert = true;
 	idx_t increment = GetSampleIncrement(py::len(column));
-	LogicalType type = InnerAnalyze(std::move(column), can_convert, increment);
+	LogicalType type = InnerAnalyze(column, can_convert, increment);
 
 	if (type == LogicalType::SQLNULL && increment > 1) {
 		// We did not see the whole dataset, hence we are not sure if nulls are really nulls
-		// promote null types to varchar
-		type = LogicalType::VARCHAR;
+		// as a fallback we try to identify this specific type
+		auto first_valid_index = column.attr("first_valid_index")();
+		if (GetPythonObjectType(first_valid_index) != PythonObjectType::None) {
+			// This means we do have a value that is not null, figure out its type
+			auto row = column.attr("__getitem__");
+			auto obj = row(first_valid_index);
+			type = GetItemType(obj, can_convert);
+		}
 	}
 	if (can_convert) {
 		analyzed_type = type;
