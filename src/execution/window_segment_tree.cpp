@@ -1120,6 +1120,8 @@ WindowDistinctAggregator::~WindowDistinctAggregator() {
 }
 
 void WindowDistinctAggregator::Sink(DataChunk &arg_chunk, SelectionVector *filter_sel, idx_t filtered) {
+	payload_chunk.Reset();
+
 	WindowAggregator::Sink(arg_chunk, filter_sel, filtered);
 
 	//	We sort the arguments and use the partition index as a tie-breaker.
@@ -1152,6 +1154,8 @@ void WindowDistinctAggregator::Sink(DataChunk &arg_chunk, SelectionVector *filte
 		sort_chunk.data.back().Reference(payload_chunk.data[0]);
 		payload_pos = 0;
 		memory_per_thread = PhysicalOperator::GetMaxThreadMemory(context);
+	} else {
+		sort_chunk.Reset();
 	}
 
 	//	3: 	for i ← 0 to in.size do
