@@ -375,7 +375,7 @@ static void BoundedToAsciiFunc(DataChunk &args, ExpressionState &state, Vector &
 		}
 		string s;
 		s.push_back(static_cast<char>(input));
-		return string_t(s);
+		return StringVector::AddString(result, s);
 	});
 }
 
