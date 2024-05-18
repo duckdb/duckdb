@@ -86,6 +86,9 @@ DuckTransactionManager::CanCheckpoint(DuckTransaction &transaction, unique_ptr<S
 	if (storage_manager.InMemory()) {
 		return CheckpointDecision("in memory db");
 	}
+	if (!storage_manager.IsLoaded()) {
+		return CheckpointDecision("cannot checkpoint while loading");
+	}
 	if (!transaction.AutomaticCheckpoint(db, undo_properties)) {
 		return CheckpointDecision("no reason to automatically checkpoint");
 	}

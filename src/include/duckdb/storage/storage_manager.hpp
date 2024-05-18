@@ -73,8 +73,11 @@ public:
 	void ResetWAL();
 
 	//! Returns the database file path
-	string GetDBPath() {
+	string GetDBPath() const {
 		return path;
+	}
+	bool IsLoaded() const {
+		return load_complete;
 	}
 	//! The path to the WAL, derived from the database file path
 	string GetWALPath();
