@@ -280,7 +280,7 @@ bool SingleFileStorageManager::IsCheckpointClean(MetaBlockPointer checkpoint_id)
 }
 
 void SingleFileStorageManager::CreateCheckpoint(CheckpointOptions options) {
-	if (InMemory() || read_only) {
+	if (InMemory() || read_only || !load_complete) {
 		return;
 	}
 	auto &config = DBConfig::Get(db);
