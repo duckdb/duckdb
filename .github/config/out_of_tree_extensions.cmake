@@ -98,8 +98,7 @@ if (NOT WIN32)
     duckdb_extension_load(substrait
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/substrait
-            GIT_TAG 1116fb580edd3e26e675436dbdbdf4a0aa5e456e
-            APPLY_PATCHES
+            GIT_TAG 237931391ebc7e6aee7aa81052fa1411f6c4128e
             )
 endif()
 
