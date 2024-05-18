@@ -91,7 +91,23 @@ void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx)
 	state.last_offset = 0;
 }
 
-idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, bool has_updates) {
+ScanVectorType ColumnData::GetVectorScanType(ColumnScanState &state, idx_t scan_count) {
+	if (HasUpdates()) {
+		// if we have updates we need to merge in the updates
+		// always need to scan flat vectors
+		return ScanVectorType::SCAN_FLAT_VECTOR;
+	}
+	// check if the current segment has enough data remaining
+	idx_t remaining_in_segment = state.current->start + state.current->count - state.row_index;
+	if (remaining_in_segment < scan_count) {
+		// there is not enough data remaining in the current segment so we need to scan across segments
+		// we need flat vectors here
+		return ScanVectorType::SCAN_FLAT_VECTOR;
+	}
+	return ScanVectorType::SCAN_ENTIRE_VECTOR;
+}
+
+idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType scan_type) {
 	state.previous_states.clear();
 	if (!state.initialized) {
 		D_ASSERT(state.current);
@@ -119,8 +135,7 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 					                        result_offset + i);
 				}
 			} else {
-				bool entire_vector = !has_updates && scan_count == initial_remaining;
-				state.current->Scan(state, scan_count, result, result_offset, entire_vector);
+				state.current->Scan(state, scan_count, result, result_offset, scan_type);
 			}
 
 			state.row_index += scan_count;
@@ -188,7 +203,7 @@ idx_t ColumnData::ScanVector(TransactionData transaction, idx_t vector_index, Co
 	idx_t current_row = vector_index * STANDARD_VECTOR_SIZE;
 	auto vector_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - current_row);
 
-	auto scan_count = ScanVector(state, result, vector_count, HasUpdates());
+	auto scan_count = ScanVector(state, result, vector_count, GetVectorScanType(state, vector_count));
 	FetchUpdates(transaction, vector_index, result, scan_count, ALLOW_UPDATES, SCAN_COMMITTED);
 	return scan_count;
 }
@@ -218,8 +233,9 @@ void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_g
 	ColumnScanState child_state;
 	InitializeScanWithOffset(child_state, row_group_start + offset_in_row_group);
 	bool has_updates = HasUpdates();
-	auto scan_count = ScanVector(child_state, result, s_count, has_updates);
+	auto scan_count = ScanVector(child_state, result, s_count, ScanVectorType::SCAN_FLAT_VECTOR);
 	if (has_updates) {
+		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 		result.Flatten(scan_count);
 		updates->FetchCommittedRange(offset_in_row_group, s_count, result);
 	}
@@ -231,7 +247,7 @@ idx_t ColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t scan_c
 	}
 	// ScanCount can only be used if there are no updates
 	D_ASSERT(!HasUpdates());
-	return ScanVector(state, result, scan_count, false);
+	return ScanVector(state, result, scan_count, ScanVectorType::SCAN_FLAT_VECTOR);
 }
 
 void ColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
@@ -387,7 +403,7 @@ idx_t ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	    start + ((UnsafeNumericCast<idx_t>(row_id) - start) / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE);
 	state.current = data.GetSegment(state.row_index);
 	state.internal_index = state.current->start;
-	return ScanVector(state, result, STANDARD_VECTOR_SIZE, false);
+	return ScanVector(state, result, STANDARD_VECTOR_SIZE, ScanVectorType::SCAN_FLAT_VECTOR);
 }
 
 void ColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
@@ -456,7 +472,7 @@ void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, 
 			segment.FetchRow(fetch_state, UnsafeNumericCast<row_t>(state.row_index + i), scan_vector, i);
 		}
 	} else {
-		segment.Scan(state, count, scan_vector, 0, !HasUpdates());
+		segment.Scan(state, count, scan_vector, 0, ScanVectorType::SCAN_FLAT_VECTOR);
 	}
 
 	if (updates) {
