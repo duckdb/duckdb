@@ -6,6 +6,8 @@
 # -> this should be the case for our autoloading tests where we have the local_extension_repo variable set
 require-env LOCAL_EXTENSION_REPO
 
+require no_extension_autoloading
+
 statement ok
 PRAGMA enable_verification
 
