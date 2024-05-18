@@ -55,7 +55,7 @@ INSERT INTO t2 VALUES (100), (500);
 
 # Example of function inspecting both arguments type property to return a new type
 query II
-SELECT bounded_add(t1.i, t2.i) as s, typeof(s) FROM t1, t2;
+SELECT bounded_add(t1.i, t2.i) as s, typeof(s) FROM t1, t2 ORDER BY 1;
 ----
 197	BOUNDED(700)
 198	BOUNDED(700)
