@@ -16,6 +16,7 @@
 #include "duckdb/storage/table/segment_tree.hpp"
 #include "duckdb/storage/table/column_segment_tree.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/enums/scan_vector_type.hpp"
 
 namespace duckdb {
 class ColumnData;
@@ -83,7 +84,9 @@ public:
 	//! The root type of the column
 	const LogicalType &RootType() const;
 	//! Whether or not the column has any updates
-	virtual bool HasUpdates() const;
+	bool HasUpdates() const;
+	//! Whether or not we can scan an entire vector
+	virtual ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count);
 
 	//! Initialize a scan of the column
 	virtual void InitializeScan(ColumnScanState &state);
@@ -161,7 +164,7 @@ protected:
 	void AppendTransientSegment(SegmentLock &l, idx_t start_row);
 
 	//! Scans a base vector from the column
-	idx_t ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, bool has_updates);
+	idx_t ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType scan_type);
 	//! Scans a vector from the column merged with any potential updates
 	//! If ALLOW_UPDATES is set to false, the function will instead throw an exception if any updates are found
 	template <bool SCAN_COMMITTED, bool ALLOW_UPDATES>

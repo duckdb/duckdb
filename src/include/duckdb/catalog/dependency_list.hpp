@@ -42,7 +42,7 @@ struct LogicalDependencyEquality {
 	bool operator()(const LogicalDependency &a, const LogicalDependency &b) const;
 };
 
-//! The DependencyList containing LogicalDependency objects, not looked up in the catalog yet
+//! The LogicalDependencyList containing LogicalDependency objects, not looked up in the catalog yet
 class LogicalDependencyList {
 	using create_info_set_t =
 	    unordered_set<LogicalDependency, LogicalDependencyHashFunction, LogicalDependencyEquality>;
