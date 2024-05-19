@@ -415,6 +415,14 @@ TEST_CASE("duckdb_create_value", "[capi]") {
 
 	// TODO: test duckdb_get_time_tz
 
+	{
+		auto val = duckdb_create_bool(true);
+		auto result = duckdb_get_value_type(val);
+		REQUIRE(duckdb_get_type_id(result) == DUCKDB_TYPE_BOOLEAN);
+		duckdb_destroy_logical_type(&result);
+		duckdb_destroy_value(&val);
+	}
+
 	RoundTrip<uint8_t>(tester, 1, DUCKDB_TYPE_UTINYINT, duckdb_create_utinyint(1));
 	RoundTrip<bool>(tester, true, DUCKDB_TYPE_BOOLEAN, duckdb_create_bool(true));
 	/*
