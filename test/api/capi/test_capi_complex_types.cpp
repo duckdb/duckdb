@@ -413,6 +413,8 @@ TEST_CASE("duckdb_create_value", "[capi]") {
 		duckdb_destroy_value(&val);
 	}
 
+	// TODO: test duckdb_get_time_tz
+
 	RoundTrip<uint8_t>(tester, 1, DUCKDB_TYPE_UTINYINT, duckdb_create_utinyint(1));
 	RoundTrip<bool>(tester, true, DUCKDB_TYPE_BOOLEAN, duckdb_create_bool(true));
 	/*

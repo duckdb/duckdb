@@ -1166,6 +1166,10 @@ template <>
 timestamp_t Value::GetValue() const {
 	return GetValueInternal<timestamp_t>();
 }
+template <>
+dtime_tz_t Value::GetValue() const {
+	return GetValueInternal<dtime_tz_t>();
+}
 
 template <>
 DUCKDB_API interval_t Value::GetValue() const {

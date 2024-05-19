@@ -520,6 +520,8 @@ DUCKDB_API date_t Value::GetValue() const;
 template <>
 DUCKDB_API dtime_t Value::GetValue() const;
 template <>
+DUCKDB_API dtime_tz_t Value::GetValue() const;
+template <>
 DUCKDB_API timestamp_t Value::GetValue() const;
 template <>
 DUCKDB_API interval_t Value::GetValue() const;

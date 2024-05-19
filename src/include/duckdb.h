@@ -1860,6 +1860,14 @@ Returns the time value of the given value.
 DUCKDB_API duckdb_time duckdb_get_time(duckdb_value val);
 
 /*!
+Returns the time_tz value of the given value.
+
+ * val: A duckdb_value containing a time_tz
+ * returns: A duckdb_time_tz
+ */
+DUCKDB_API duckdb_time_tz duckdb_get_time_tz(duckdb_value val);
+
+/*!
 Returns the timestamp value of the given value.
 
  * val: A duckdb_value containing a timestamp
