@@ -1044,6 +1044,7 @@ DUCKDB_API duckdb_time_struct duckdb_from_time(duckdb_time time);
 
 /*!
 Create a `duckdb_time_tz` object from micros and a timezone offset.
+Not to be confused with `duckdb_create_time_tz_value`, which creates a duckdb_value.
 
 * micros: The microsecond component of the time.
 * offset: The timezone offset component of the time.
@@ -1712,6 +1713,15 @@ Creates a value from a time
  * returns: The value. This must be destroyed with `duckdb_destroy_value`.
  */
 DUCKDB_API duckdb_value duckdb_create_time(duckdb_time input);
+
+/*!
+Creates a value from a time_tz.
+Not to be confused with `duckdb_create_time_tz`, which creates a duckdb_time_tz_t.
+
+ * value: The time_tz value
+ * returns: The value. This must be destroyed with `duckdb_destroy_value`.
+ */
+DUCKDB_API duckdb_value duckdb_create_time_tz_value(duckdb_time_tz value);
 
 /*!
 Creates a value from a timestamp

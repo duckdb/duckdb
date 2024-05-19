@@ -413,7 +413,12 @@ TEST_CASE("duckdb_create_value", "[capi]") {
 		duckdb_destroy_value(&val);
 	}
 
-	// TODO: test duckdb_get_time_tz
+	{
+		auto val = duckdb_create_time_tz_value({1});
+		auto result = duckdb_get_time_tz(val);
+		REQUIRE(result.bits == 1);
+		duckdb_destroy_value(&val);
+	}
 
 	{
 		auto val = duckdb_create_bool(true);

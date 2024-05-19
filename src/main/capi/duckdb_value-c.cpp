@@ -114,6 +114,9 @@ duckdb_time duckdb_get_time(duckdb_value val) {
 	auto dtime = UnwrapValue(val).GetValue<duckdb::dtime_t>();
 	return {dtime.micros};
 }
+duckdb_value duckdb_create_time_tz_value(duckdb_time_tz value) {
+	return WrapValue(new duckdb::Value(duckdb::Value::TIMETZ(duckdb::dtime_tz_t(value.bits))));
+}
 duckdb_time_tz duckdb_get_time_tz(duckdb_value val) {
 	auto time_tz = UnwrapValue(val).GetValue<duckdb::dtime_tz_t>();
 	return {time_tz.bits};
