@@ -361,15 +361,57 @@ TEST_CASE("duckdb_create_value", "[capi]") {
 
 	TEST_VALUE(duckdb_create_float(42.0), duckdb_get_float, 42.0);
 	TEST_VALUE(duckdb_create_double(42.0), duckdb_get_double, 42.0);
+
+	{
+		auto val = duckdb_create_date({1});
+		auto result = duckdb_get_date(val);
+		REQUIRE(result.days == 1);
+		duckdb_destroy_value(&val);
+	}
+
+	{
+		auto val = duckdb_create_time({1});
+		auto result = duckdb_get_time(val);
+		REQUIRE(result.micros == 1);
+		duckdb_destroy_value(&val);
+	}
+
 	/*
-	TEST_VALUE(duckdb_create_date(2019, 1, 1), duckdb_get_date, duckdb_date{2019, 1, 1});
-	TEST_VALUE(duckdb_create_time(1, 1, 1, 1), duckdb_get_time, duckdb_time{1, 1, 1, 1});
-	TEST_VALUE(duckdb_create_timestamp(2019, 1, 1, 1, 1, 1, 1), duckdb_get_timestamp,
-	           duckdb_timestamp{2019, 1, 1, 1, 1, 1, 1});
-	TEST_VALUE(duckdb_create_interval(1, 1, 1, 1, 1), duckdb_get_interval, duckdb_interval{1, 1, 1, 1, 1});
-	TEST_VALUE(duckdb_create_hugeint(1, 1), duckdb_get_hugeint, duckdb_hugeint{1, 1});
-	TEST_VALUE(duckdb_create_blob(1, nullptr), duckdb_get_blob, duckdb_blob{1, nullptr});
+	{
+	    auto val = duckdb_create_time_tz(1, 1);
+	    auto result = duckdb_get_time_tz(val);
+	    REQUIRE(result.hour == 1);
+	    REQUIRE(result.min == 1);
+	    REQUIRE(result.sec == 1);
+	    REQUIRE(result.micros == 1);
+	    REQUIRE(result.tz_offset == 1);
+	    duckdb_destroy_value(&val);
+	}
 	*/
+
+	{
+		auto val = duckdb_create_timestamp({1});
+		auto result = duckdb_get_timestamp(val);
+		REQUIRE(result.micros == 1);
+		duckdb_destroy_value(&val);
+	}
+
+	{
+		auto val = duckdb_create_interval({1, 1, 1});
+		auto result = duckdb_get_interval(val);
+		REQUIRE(result.months == 1);
+		REQUIRE(result.days == 1);
+		REQUIRE(result.micros == 1);
+		REQUIRE(result.days == 1);
+		duckdb_destroy_value(&val);
+	}
+	{
+		auto val = duckdb_create_blob((const uint8_t *)"hello", 5);
+		auto result = duckdb_get_blob(val);
+		REQUIRE(result.size == 5);
+		REQUIRE(memcmp(result.data, "hello", 5) == 0);
+		duckdb_destroy_value(&val);
+	}
 
 	RoundTrip<uint8_t>(tester, 1, DUCKDB_TYPE_UTINYINT, duckdb_create_utinyint(1));
 	RoundTrip<bool>(tester, true, DUCKDB_TYPE_BOOLEAN, duckdb_create_bool(true));
