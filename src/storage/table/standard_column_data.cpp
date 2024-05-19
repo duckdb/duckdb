@@ -21,8 +21,16 @@ void StandardColumnData::SetStart(idx_t new_start) {
 	validity.SetStart(new_start);
 }
 
-bool StandardColumnData::HasUpdates() const {
-	return ColumnData::HasUpdates() || validity.HasUpdates();
+ScanVectorType StandardColumnData::GetVectorScanType(ColumnScanState &state, idx_t scan_count) {
+	// if either the current column data, or the validity column data requires flat vectors, we scan flat vectors
+	auto scan_type = ColumnData::GetVectorScanType(state, scan_count);
+	if (scan_type == ScanVectorType::SCAN_FLAT_VECTOR) {
+		return ScanVectorType::SCAN_FLAT_VECTOR;
+	}
+	if (state.child_states.empty()) {
+		return scan_type;
+	}
+	return validity.GetVectorScanType(state.child_states[0], scan_count);
 }
 
 bool StandardColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {

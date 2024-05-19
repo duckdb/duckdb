@@ -154,6 +154,15 @@ DROP TABLE mixed_batches_v3
 statement ok
 DROP TABLE mixed_batches_v4
 
+statement ok
+drop view if exists v2;
+
+statement ok
+drop view if exists v3;
+
+statement ok
+drop view if exists v4;
+
 # create views that read the batches using unions
 statement ok
 CREATE OR REPLACE VIEW v1 AS FROM '__TEST_DIR__/mix_batches_small.parquet' UNION ALL FROM '__TEST_DIR__/mix_batches_large.parquet' UNION ALL FROM '__TEST_DIR__/mix_batches_odd.parquet' UNION ALL FROM '__TEST_DIR__/mix_batches_odd_again.parquet'
