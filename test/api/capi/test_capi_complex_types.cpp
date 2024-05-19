@@ -410,6 +410,7 @@ TEST_CASE("duckdb_create_value", "[capi]") {
 		auto result = duckdb_get_blob(val);
 		REQUIRE(result.size == 5);
 		REQUIRE(memcmp(result.data, "hello", 5) == 0);
+		duckdb_free(result.data);
 		duckdb_destroy_value(&val);
 	}
 
