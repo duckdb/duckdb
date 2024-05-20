@@ -75,6 +75,7 @@ void TestGetTypeInfo(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_map) {
 	    SQL_DOUBLE,
 	    SQL_VARCHAR,
 	    SQL_VARBINARY,
+		SQL_UNKNOWN_TYPE,
 	    SQL_INTERVAL_YEAR,
 	    SQL_INTERVAL_MONTH,
 	    SQL_INTERVAL_DAY,
