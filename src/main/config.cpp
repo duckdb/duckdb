@@ -72,6 +72,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(EnableExternalAccessSetting),
     DUCKDB_GLOBAL(EnableFSSTVectors),
     DUCKDB_GLOBAL(AllowUnsignedExtensionsSetting),
+    DUCKDB_GLOBAL(AllowCommunityExtensionsSetting),
     DUCKDB_GLOBAL(AllowExtensionsMetadataMismatchSetting),
     DUCKDB_GLOBAL(AllowUnredactedSecretsSetting),
     DUCKDB_GLOBAL(CustomExtensionRepository),

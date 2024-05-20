@@ -179,6 +179,8 @@ struct DBConfigOptions {
 	string extension_directory;
 	//! Whether unsigned extensions should be loaded
 	bool allow_unsigned_extensions = false;
+	//! Whether community extensions should be loaded
+	bool allow_community_extensions = true;
 	//! Whether extensions with missing metadata should be loaded
 	bool allow_extensions_metadata_mismatch = false;
 	//! Enable emitting FSST Vectors
