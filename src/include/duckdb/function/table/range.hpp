@@ -45,6 +45,10 @@ struct ReadBlobFunction {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct ReadMetadataFunction {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct ReadTextFunction {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

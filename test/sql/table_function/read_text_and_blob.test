@@ -12,6 +12,11 @@ SELECT COUNT(*) FROM read_blob('test/sql/table_function/files/*');
 ----
 4
 
+query I
+SELECT COUNT(*) FROM read_metadata('test/sql/table_function/files/*');
+----
+4
+
 query IIII
 SELECT * FROM read_text('test/sql/table_function/files/nonexistentfile.txt') ORDER BY ALL;
 ----
@@ -25,6 +30,16 @@ SELECT parse_path(filename) FROM read_text(['test/sql/table_function/files/one.t
 ----
 [test, sql, table_function, files, one.txt]
 [test, sql, table_function, files, two.txt]
+
+statement error
+SELECT parse_path(filename), size, content FROM read_metadata('test/sql/table_function/files/four.blob');
+----
+Binder Error: Referenced column "content" not found in FROM clause
+
+query II
+SELECT parse_path(filename), size FROM read_metadata('test/sql/table_function/files/four.blob');
+----
+[test, sql, table_function, files, four.blob]	178
 
 query III
 SELECT parse_path(filename), size, content FROM read_blob('test/sql/table_function/files/four.blob');

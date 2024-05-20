@@ -281,6 +281,7 @@ void BuiltinFunctions::RegisterTableFunctions() {
 	RepeatRowTableFunction::RegisterFunction(*this);
 	CSVSnifferFunction::RegisterFunction(*this);
 	ReadBlobFunction::RegisterFunction(*this);
+	ReadMetadataFunction::RegisterFunction(*this);
 	ReadTextFunction::RegisterFunction(*this);
 }
 
