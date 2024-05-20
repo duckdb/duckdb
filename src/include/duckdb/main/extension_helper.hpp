@@ -135,7 +135,7 @@ public:
 	static ExtensionAlias GetExtensionAlias(idx_t index);
 
 	//! Get public signing keys for extension signing
-	static const vector<string> GetPublicKeys();
+	static const vector<string> GetPublicKeys(bool allow_community_extension = false);
 
 	// Returns extension name, or empty string if not a replacement open path
 	static string ExtractExtensionPrefixFromPath(const string &path);
