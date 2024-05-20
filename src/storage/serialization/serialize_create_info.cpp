@@ -25,6 +25,7 @@ void CreateInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<OnCreateConflict>(105, "on_conflict", on_conflict);
 	serializer.WritePropertyWithDefault<string>(106, "sql", sql);
 	serializer.WritePropertyWithDefault<Value>(107, "comment", comment, Value());
+	serializer.WritePropertyWithDefault<unordered_map<string, string>>(108, "tags", tags, unordered_map<string, string>());
 }
 
 unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
@@ -36,6 +37,7 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	auto on_conflict = deserializer.ReadProperty<OnCreateConflict>(105, "on_conflict");
 	auto sql = deserializer.ReadPropertyWithDefault<string>(106, "sql");
 	auto comment = deserializer.ReadPropertyWithDefault<Value>(107, "comment", Value());
+	auto tags = deserializer.ReadPropertyWithDefault<unordered_map<string, string>>(108, "tags", unordered_map<string, string>());
 	deserializer.Set<CatalogType>(type);
 	unique_ptr<CreateInfo> result;
 	switch (type) {
@@ -74,6 +76,7 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	result->on_conflict = on_conflict;
 	result->sql = std::move(sql);
 	result->comment = comment;
+	result->tags = std::move(tags);
 	return result;
 }
 

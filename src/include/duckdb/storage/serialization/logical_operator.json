@@ -885,6 +885,12 @@
     "custom_implementation": true
   },
   {
+    "class": "LogicalVacuum",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_VACUUM",
+    "custom_implementation": true
+  },
+  {
     "class": "FilenamePattern",
     "pointer_type": "none",
     "members": [

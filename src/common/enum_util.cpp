@@ -59,6 +59,7 @@
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/multi_file_list.hpp"
+#include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/sort/partition_state.hpp"
 #include "duckdb/common/types.hpp"
@@ -77,6 +78,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state.hpp"
 #include "duckdb/execution/operator/csv_scanner/quote_rules.hpp"
+#include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/function/macro_function.hpp"
@@ -1950,6 +1952,34 @@ ExplainType EnumUtil::FromString<ExplainType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "EXPLAIN_ANALYZE")) {
 		return ExplainType::EXPLAIN_ANALYZE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<ExponentType>(ExponentType value) {
+	switch(value) {
+	case ExponentType::NONE:
+		return "NONE";
+	case ExponentType::POSITIVE:
+		return "POSITIVE";
+	case ExponentType::NEGATIVE:
+		return "NEGATIVE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+ExponentType EnumUtil::FromString<ExponentType>(const char *value) {
+	if (StringUtil::Equals(value, "NONE")) {
+		return ExponentType::NONE;
+	}
+	if (StringUtil::Equals(value, "POSITIVE")) {
+		return ExponentType::POSITIVE;
+	}
+	if (StringUtil::Equals(value, "NEGATIVE")) {
+		return ExponentType::NEGATIVE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -5608,6 +5638,34 @@ SampleMethod EnumUtil::FromString<SampleMethod>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "Reservoir")) {
 		return SampleMethod::RESERVOIR_SAMPLE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<SampleType>(SampleType value) {
+	switch(value) {
+	case SampleType::BLOCKING_SAMPLE:
+		return "BLOCKING_SAMPLE";
+	case SampleType::RESERVOIR_SAMPLE:
+		return "RESERVOIR_SAMPLE";
+	case SampleType::RESERVOIR_PERCENTAGE_SAMPLE:
+		return "RESERVOIR_PERCENTAGE_SAMPLE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+SampleType EnumUtil::FromString<SampleType>(const char *value) {
+	if (StringUtil::Equals(value, "BLOCKING_SAMPLE")) {
+		return SampleType::BLOCKING_SAMPLE;
+	}
+	if (StringUtil::Equals(value, "RESERVOIR_SAMPLE")) {
+		return SampleType::RESERVOIR_SAMPLE;
+	}
+	if (StringUtil::Equals(value, "RESERVOIR_PERCENTAGE_SAMPLE")) {
+		return SampleType::RESERVOIR_PERCENTAGE_SAMPLE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

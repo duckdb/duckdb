@@ -47,7 +47,7 @@ static void ReadJSONObjectsFunction(ClientContext &context, TableFunctionInput &
 	output.SetCardinality(count);
 
 	if (output.size() != 0) {
-		MultiFileReader().FinalizeChunk(context, gstate.bind_data.reader_bind, lstate.GetReaderData(), output);
+		MultiFileReader().FinalizeChunk(context, gstate.bind_data.reader_bind, lstate.GetReaderData(), output, nullptr);
 	}
 }
 
