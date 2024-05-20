@@ -130,7 +130,7 @@ bool ExtensionHelper::CheckExtensionSignature(FileHandle &handle, ParsedExtensio
 	}
 #else
 	for (idx_t i = 0; i < numChunks; i++) {
-		ComputeSHA256FileSegment(handle.get(), splits[i], splits[i + 1], &hash_chunks[i]);
+		ComputeSHA256FileSegment(&handle, splits[i], splits[i + 1], &hash_chunks[i]);
 	}
 #endif // DUCKDB_NO_THREADS
 
