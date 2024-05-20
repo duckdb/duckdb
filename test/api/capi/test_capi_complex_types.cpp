@@ -431,8 +431,9 @@ TEST_CASE("duckdb_create_value", "[capi]") {
 
 	{
 		auto val = duckdb_create_varchar("hello");
-		auto result = string(duckdb_get_varchar(val));
-		REQUIRE(result == "hello");
+		auto result = duckdb_get_varchar(val);
+		REQUIRE(string(result) == "hello");
+		duckdb_free(result);
 		duckdb_destroy_value(&val);
 	}
 
