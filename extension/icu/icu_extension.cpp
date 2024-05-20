@@ -26,10 +26,12 @@
 #include "include/icu_extension.hpp"
 #include "unicode/calendar.h"
 #include "unicode/coll.h"
+#include "unicode/errorcode.h"
 #include "unicode/sortkey.h"
 #include "unicode/stringpiece.h"
 #include "unicode/timezone.h"
 #include "unicode/ucol.h"
+
 
 #include <cassert>
 
@@ -39,6 +41,9 @@ struct IcuBindData : public FunctionData {
 	duckdb::unique_ptr<icu::Collator> collator;
 	string language;
 	string country;
+
+	IcuBindData(duckdb::unique_ptr<icu::Collator> collator_p): collator(std::move(collator_p)) {
+	}
 
 	IcuBindData(string language_p, string country_p) : language(std::move(language_p)), country(std::move(country_p)) {
 		UErrorCode status = U_ZERO_ERROR;
@@ -146,8 +151,8 @@ static duckdb::unique_ptr<FunctionData> ICUCollateDeserialize(Deserializer &dese
 	throw NotImplementedException("FIXME: serialize icu-collate");
 }
 
-static ScalarFunction GetICUFunction(const string &collation) {
-	ScalarFunction result(collation, {LogicalType::VARCHAR}, LogicalType::VARCHAR, ICUCollateFunction, ICUCollateBind);
+static ScalarFunction GetICUFunction(const string &collation, bind_scalar_function_t bind_func = ICUCollateBind) {
+	ScalarFunction result(collation, {LogicalType::VARCHAR}, LogicalType::VARCHAR, ICUCollateFunction, bind_func);
 	result.serialize = ICUCollateSerialize;
 	result.deserialize = ICUCollateDeserialize;
 	return result;
@@ -221,6 +226,58 @@ static void SetICUCalendar(ClientContext &context, SetScope scope, Value &parame
 	}
 }
 
+static duckdb::unique_ptr<FunctionData> ICUNoAccentCollateBind(ClientContext &context, ScalarFunction &bound_function,
+                                                       vector<duckdb::unique_ptr<Expression>> &arguments) {
+	/**
+	 * This collation function is inpired on the Postgres "ignore_accents":
+	 * See: https://www.postgresql.org/docs/current/collation.html
+	 * CREATE COLLATION ignore_accents (provider = icu, locale = 'und-u-ks-level1-kc-true', deterministic = false);
+	 *
+	 * Also, according with the source file: postgres/src/backend/utils/adt/pg_locale.c.
+	 * "und-u-kc-ks-level1" is converted to the equivalent ICU format locale ID,
+	 * e.g. "und@colcaselevel=yes;colstrength=primary"
+	 *
+	*/
+	UErrorCode status = U_ZERO_ERROR;
+	unique_ptr<icu::Collator> collator(icu::Collator::createInstance(status));
+	// icu::Collator *collator(icu::Collator::createInstance(status));
+	// UCollator *collator = ucol_open("und-u-ks-level1-kc-true", &status);
+	if (U_FAILURE(status)) {
+		auto error_name = u_errorName(status);
+		throw InvalidInputException("Failed to create ICU noaccent collator: %s", error_name);
+	}
+	collator->setStrength(icu::Collator::PRIMARY);
+	collator->setAttribute(UColAttribute::UCOL_CASE_LEVEL, UColAttributeValue::UCOL_ON, status);
+	if (U_FAILURE(status)) {
+		auto error_name = u_errorName(status);
+		throw InvalidInputException("Failed to set ICU collator attribute %s: %s", UColAttribute::UCOL_CASE_LEVEL, error_name);
+	}
+
+	// UColAttribute uattr;
+    // UColAttributeValue uvalue;
+
+	// uattr = UColAttribute::UCOL_STRENGTH;
+	// uvalue = UColAttributeValue::UCOL_PRIMARY;
+	// // ucol_setAttribute(collator->toUCollator(), uattr, uvalue, &status);
+	// ucol_setAttribute(collator, uattr, uvalue, &status);
+	// if (U_FAILURE(status)) {
+	// 	auto error_name = u_errorName(status);
+	// 	throw InvalidInputException("Failed to set ICU collator attribute %s: %s", UColAttribute::UCOL_STRENGTH, error_name);
+	// }
+
+	// uattr = UColAttribute::UCOL_CASE_LEVEL;
+	// uvalue = UColAttributeValue::UCOL_ON;
+	// // ucol_setAttribute(collator->toUCollator(), uattr, uvalue, &status);
+	// ucol_setAttribute(collator, uattr, uvalue, &status);
+	// if (U_FAILURE(status)) {
+	// 	auto error_name = u_errorName(status);
+	// 	throw InvalidInputException("Failed to set ICU collator attribute %s: %s", UColAttribute::UCOL_CASE_LEVEL, error_name);
+	// }
+
+	return make_uniq<IcuBindData>(std::move(collator));
+	// return make_uniq<IcuBindData>(std::move(unique_ptr<icu::Collator>(icu::Collator::fromUCollator(collator))));
+}
+
 static void LoadInternal(DuckDB &ddb) {
 	auto &db = *ddb.instance;
 
@@ -241,6 +298,10 @@ static void LoadInternal(DuckDB &ddb) {
 		CreateCollationInfo info(collation, GetICUFunction(collation), false, false);
 		ExtensionUtil::RegisterCollation(db, info);
 	}
+
+	CreateCollationInfo info("icu_noaccent", GetICUFunction("icu_noaccent", ICUNoAccentCollateBind), false, false);
+	ExtensionUtil::RegisterCollation(db, info);
+
 	ScalarFunction sort_key("icu_sort_key", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                        ICUCollateFunction, ICUSortKeyBind);
 	ExtensionUtil::RegisterFunction(db, sort_key);
