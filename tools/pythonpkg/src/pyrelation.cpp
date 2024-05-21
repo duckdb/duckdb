@@ -35,12 +35,23 @@ DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel_p) : rel(std::move(r
 }
 
 bool DuckDBPyRelation::CanBeRegisteredBy(Connection &con) {
-	if (!rel) {
+	return CanBeRegisteredBy(con.context);
+}
+
+bool DuckDBPyRelation::CanBeRegisteredBy(ClientContext &context) {
+	if (!rel || !rel->context) {
 		// PyRelation without an internal relation can not be registered
 		return false;
 	}
-	auto context = rel->context.GetContext();
-	return context == con.context;
+	auto this_context = rel->context.GetContext();
+	return &context == this_context.get();
+}
+
+bool DuckDBPyRelation::CanBeRegisteredBy(shared_ptr<ClientContext> &con) {
+	if (!con) {
+		return false;
+	}
+	return CanBeRegisteredBy(*con);
 }
 
 DuckDBPyRelation::~DuckDBPyRelation() {
