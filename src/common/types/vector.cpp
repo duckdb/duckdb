@@ -306,68 +306,42 @@ void Vector::Initialize(bool zero_data, idx_t capacity) {
 	}
 }
 
-//! This is a helper data structure. It contains all fields necessary to resize a vector.
-struct ResizeInfo {
-	ResizeInfo(Vector &vec, data_ptr_t data, optional_ptr<VectorBuffer> buffer, const bool is_nested,
-	           const idx_t multiplier)
-	    : vec(vec), data(data), buffer(buffer), is_nested(is_nested), multiplier(multiplier) {
+void Vector::FindResizeInfos(vector<ResizeInfo> &resize_infos, const idx_t multiplier) {
+
+	ResizeInfo resize_info(*this, data, buffer.get(), multiplier);
+	resize_infos.emplace_back(resize_info);
+
+	// Base case.
+	if (!auxiliary) {
+		return;
 	}
 
-	Vector &vec;
-	data_ptr_t data;
-	optional_ptr<VectorBuffer> buffer;
-	bool is_nested;
-	idx_t multiplier;
-};
-
-void FindChildren(vector<ResizeInfo> &resize_infos, VectorBuffer &auxiliary) {
-	switch (auxiliary.GetBufferType()) {
+	switch (GetAuxiliary()->GetBufferType()) {
 	case VectorBufferType::LIST_BUFFER: {
-		auto &buffer = auxiliary.Cast<VectorListBuffer>();
-		auto &child = buffer.GetChild();
-
-		bool is_nested = !child.GetData();
-		ResizeInfo resize_info(child, child.GetData(), child.GetBuffer().get(), is_nested, 1);
-		resize_infos.emplace_back(resize_info);
-
-		if (is_nested) {
-			FindChildren(resize_infos, *child.GetAuxiliary());
-		}
-		return;
+		auto &vector_list_buffer = auxiliary->Cast<VectorListBuffer>();
+		auto &child = vector_list_buffer.GetChild();
+		child.FindResizeInfos(resize_infos, multiplier);
+		break;
 	}
 	case VectorBufferType::STRUCT_BUFFER: {
-		auto &buffer = auxiliary.Cast<VectorStructBuffer>();
-		auto &children = buffer.GetChildren();
-
+		auto &vector_struct_buffer = auxiliary->Cast<VectorStructBuffer>();
+		auto &children = vector_struct_buffer.GetChildren();
 		for (auto &child : children) {
-			auto is_nested = !child->GetData();
-			ResizeInfo resize_info(*child, child->GetData(), child->GetBuffer().get(), is_nested, 1);
-			resize_infos.emplace_back(resize_info);
-
-			if (is_nested) {
-				FindChildren(resize_infos, *child->GetAuxiliary());
-			}
+			child->FindResizeInfos(resize_infos, multiplier);
 		}
-		return;
+		break;
 	}
 	case VectorBufferType::ARRAY_BUFFER: {
-		// The child vectors of type ARRAY are always (child_count * array_size), so we need to multiply the
-		// multiplier by the array size.
-		auto &buffer = auxiliary.Cast<VectorArrayBuffer>();
-		auto array_size = buffer.GetArraySize();
-
-		auto &child = buffer.GetChild();
-		auto is_nested = !child.GetData();
-		ResizeInfo resize_info(child, child.GetData(), child.GetBuffer().get(), is_nested, array_size);
-		resize_infos.emplace_back(resize_info);
-
-		if (is_nested) {
-			FindChildren(resize_infos, *child.GetAuxiliary());
-		}
-		return;
+		// We need to multiply the multiplier by the array size because
+		// the child vectors of ARRAY types are always child_count * array_size.
+		auto &vector_array_buffer = auxiliary->Cast<VectorArrayBuffer>();
+		auto new_multiplier = vector_array_buffer.GetArraySize() * multiplier;
+		auto &child = vector_array_buffer.GetChild();
+		child.FindResizeInfos(resize_infos, new_multiplier);
+		break;
 	}
 	default:
-		return;
+		break;
 	}
 }
 
@@ -379,20 +353,11 @@ void Vector::Resize(idx_t current_size, idx_t new_size) {
 
 	// Obtain the resize information for each (nested) vector.
 	vector<ResizeInfo> resize_infos;
-	bool is_nested = !data;
-
-	ResizeInfo resize_info(*this, data, buffer.get(), is_nested, 1);
-	resize_infos.emplace_back(resize_info);
-
-	if (is_nested) {
-		// The child vectors of ARRAY types are always size * array_size, so we need to multiply the
-		// resize amount by the array size recursively for every nested array.
-		FindChildren(resize_infos, *auxiliary);
-	}
+	FindResizeInfos(resize_infos, 1);
 
 	for (auto &resize_info_entry : resize_infos) {
 		// For nested data types, we only need to resize the validity mask.
-		if (resize_info_entry.is_nested) {
+		if (!resize_info_entry.data) {
 			resize_info_entry.vec.validity.Resize(current_size, new_size * resize_info_entry.multiplier);
 			continue;
 		}

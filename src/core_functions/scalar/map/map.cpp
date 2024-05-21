@@ -40,6 +40,10 @@ static bool MapIsNull(DataChunk &chunk) {
 
 static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 
+	//	DataChunk args;
+	//	args.Initialize(Allocator::DefaultAllocator(), input.GetTypes());
+	//	input.Copy(args);
+
 	// internal MAP representation
 	// - LIST-vector that contains STRUCTs as child entries
 	// - STRUCTs have exactly two fields, a key-field, and a value-field

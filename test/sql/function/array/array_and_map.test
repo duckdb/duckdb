@@ -1,5 +1,5 @@
 # name: test/sql/function/array/array_and_map.test
-# description: Test flattening ARRAY types inside the MAP function
+# description: Test flattening ARRAY types inside the MAP function.
 # group: [array]
 
 statement ok
