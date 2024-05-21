@@ -23,7 +23,9 @@ parser.add_argument('--profile', action='store_true', help='Enable profiling')
 parser.add_argument('--no-assertions', action='store_false', help='Disable assertions')
 parser.add_argument('--time_execution', action='store_true', help='Measure and print the execution time of each test')
 parser.add_argument('--list', action='store_true', help='Print the list of tests to run')
-parser.add_argument('--print-interval', action='store', help='Prints "Still running..." every N seconds', default=300.0, type=float)
+parser.add_argument(
+    '--print-interval', action='store', help='Prints "Still running..." every N seconds', default=300.0, type=float
+)
 parser.add_argument(
     '--timeout',
     action='store',
@@ -102,6 +104,7 @@ def parse_assertions(stdout):
 
 is_active = False
 
+
 def print_interval_background(interval):
     global is_active
     current_ticker = 0.0
@@ -111,6 +114,7 @@ def print_interval_background(interval):
         if current_ticker >= interval:
             print("Still running...")
             current_ticker = 0
+
 
 for test_number, test_case in enumerate(test_cases):
     if not profile:
