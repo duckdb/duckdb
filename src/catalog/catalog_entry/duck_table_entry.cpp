@@ -362,14 +362,14 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 	for (auto &constraint : constraints) {
 		create_info->constraints.push_back(constraint->Copy());
 	}
-	Binder::BindLogicalType(context, info.new_column.TypeMutable(), &catalog, schema.name);
+	auto binder = Binder::CreateBinder(context);
+	binder->BindLogicalType(info.new_column.TypeMutable(), &catalog, schema.name);
 	info.new_column.SetOid(columns.LogicalColumnCount());
 	info.new_column.SetStorageOid(columns.PhysicalColumnCount());
 	auto col = info.new_column.Copy();
 
 	create_info->columns.AddColumn(std::move(col));
 
-	auto binder = Binder::CreateBinder(context);
 	vector<unique_ptr<Expression>> bound_defaults;
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, bound_defaults);
 	auto new_storage = make_shared_ptr<DataTable>(context, *storage, info.new_column, *bound_defaults.back());
@@ -612,14 +612,14 @@ unique_ptr<CatalogEntry> DuckTableEntry::DropNotNull(ClientContext &context, Dro
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info) {
-	Binder::BindLogicalType(context, info.target_type, &catalog, schema.name);
+	auto binder = Binder::CreateBinder(context);
+	binder->BindLogicalType(info.target_type, &catalog, schema.name);
 	auto change_idx = GetColumnIndex(info.column_name);
 	auto create_info = make_uniq<CreateTableInfo>(schema, name);
 	create_info->temporary = temporary;
 	create_info->comment = comment;
 	create_info->tags = tags;
 
-	auto binder = Binder::CreateBinder(context);
 	auto bound_constraints = binder->BindConstraints(constraints, name, columns);
 	for (auto &col : columns.Logical()) {
 		auto copy = col.Copy();

@@ -99,6 +99,7 @@ unique_ptr<CreateInfo> SequenceCatalogEntry::GetInfo() const {
 	result->max_value = seq_data.max_value;
 	result->start_value = seq_data.counter;
 	result->cycle = seq_data.cycle;
+	result->dependencies = dependencies;
 	result->comment = comment;
 	result->tags = tags;
 	return std::move(result);

@@ -57,10 +57,11 @@ bool ObjectCache::ObjectCacheEnabled(ClientContext &context) {
 }
 
 int64_t StorageManager::GetWALSize() {
-	if (!wal) {
+	if (!wal && !GetWAL()) {
 		return 0;
 	}
 	if (!wal->Initialized()) {
+		D_ASSERT(!FileSystem::Get(db).FileExists(GetWALPath()));
 		return 0;
 	}
 	return wal->GetWriter().GetFileSize();
@@ -71,16 +72,23 @@ optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
 		return nullptr;
 	}
 
-	if (wal) {
-		return wal.get();
-	}
+	if (!wal) {
+		auto wal_path = GetWALPath();
+		wal = make_uniq<WriteAheadLog>(db, wal_path);
 
-	wal = make_uniq<WriteAheadLog>(db, GetWALPath());
+		// If the WAL file exists, then we initialize it.
+		if (FileSystem::Get(db).FileExists(wal_path)) {
+			wal->Initialize();
+		}
+	}
 	return wal.get();
 }
 
 void StorageManager::ResetWAL() {
-	wal->Delete();
+	auto wal_ptr = GetWAL();
+	if (wal_ptr) {
+		wal_ptr->Delete();
+	}
 	wal.reset();
 }
 
@@ -272,7 +280,7 @@ bool SingleFileStorageManager::IsCheckpointClean(MetaBlockPointer checkpoint_id)
 }
 
 void SingleFileStorageManager::CreateCheckpoint(CheckpointOptions options) {
-	if (InMemory() || read_only || !wal) {
+	if (InMemory() || read_only || !load_complete) {
 		return;
 	}
 	auto &config = DBConfig::Get(db);
