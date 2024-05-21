@@ -401,10 +401,11 @@ void Vector::Resize(idx_t current_size, idx_t new_size) {
 		auto old_size = current_size * type_size * resize_info_entry.multiplier * sizeof(data_t);
 		auto target_size = new_size * type_size * resize_info_entry.multiplier * sizeof(data_t);
 
-		// We have an upper limit of 4GB for a single vector
-		if (target_size > NumericLimits<uint32_t>::Maximum()) {
-			throw OutOfRangeException("Cannot resize vector to %lld bytes: maximum allowed vector size is 4GB",
-			                          target_size);
+		// We have an upper limit of 128GB for a single vector.
+		if (target_size > DConstants::MAX_VECTOR_SIZE) {
+			throw OutOfRangeException("Cannot resize vector to %s: maximum allowed vector size is %s",
+			                          StringUtil::BytesToHumanReadableString(target_size),
+			                          StringUtil::BytesToHumanReadableString(DConstants::MAX_VECTOR_SIZE));
 		}
 
 		// Copy the data buffer to a resized buffer.

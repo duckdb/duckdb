@@ -92,6 +92,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/settings.hpp"
@@ -2556,6 +2557,44 @@ ExpressionType EnumUtil::FromString<ExpressionType>(const char *value) {
 }
 
 template<>
+const char* EnumUtil::ToChars<ExtensionInstallMode>(ExtensionInstallMode value) {
+	switch(value) {
+	case ExtensionInstallMode::UNKNOWN:
+		return "UNKNOWN";
+	case ExtensionInstallMode::REPOSITORY:
+		return "REPOSITORY";
+	case ExtensionInstallMode::CUSTOM_PATH:
+		return "CUSTOM_PATH";
+	case ExtensionInstallMode::STATICALLY_LINKED:
+		return "STATICALLY_LINKED";
+	case ExtensionInstallMode::NOT_INSTALLED:
+		return "NOT_INSTALLED";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+ExtensionInstallMode EnumUtil::FromString<ExtensionInstallMode>(const char *value) {
+	if (StringUtil::Equals(value, "UNKNOWN")) {
+		return ExtensionInstallMode::UNKNOWN;
+	}
+	if (StringUtil::Equals(value, "REPOSITORY")) {
+		return ExtensionInstallMode::REPOSITORY;
+	}
+	if (StringUtil::Equals(value, "CUSTOM_PATH")) {
+		return ExtensionInstallMode::CUSTOM_PATH;
+	}
+	if (StringUtil::Equals(value, "STATICALLY_LINKED")) {
+		return ExtensionInstallMode::STATICALLY_LINKED;
+	}
+	if (StringUtil::Equals(value, "NOT_INSTALLED")) {
+		return ExtensionInstallMode::NOT_INSTALLED;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
 const char* EnumUtil::ToChars<ExtensionLoadResult>(ExtensionLoadResult value) {
 	switch(value) {
 	case ExtensionLoadResult::LOADED_EXTENSION:
@@ -2579,6 +2618,59 @@ ExtensionLoadResult EnumUtil::FromString<ExtensionLoadResult>(const char *value)
 	}
 	if (StringUtil::Equals(value, "NOT_LOADED")) {
 		return ExtensionLoadResult::NOT_LOADED;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<ExtensionUpdateResultTag>(ExtensionUpdateResultTag value) {
+	switch(value) {
+	case ExtensionUpdateResultTag::UNKNOWN:
+		return "UNKNOWN";
+	case ExtensionUpdateResultTag::NO_UPDATE_AVAILABLE:
+		return "NO_UPDATE_AVAILABLE";
+	case ExtensionUpdateResultTag::NOT_A_REPOSITORY:
+		return "NOT_A_REPOSITORY";
+	case ExtensionUpdateResultTag::NOT_INSTALLED:
+		return "NOT_INSTALLED";
+	case ExtensionUpdateResultTag::STATICALLY_LOADED:
+		return "STATICALLY_LOADED";
+	case ExtensionUpdateResultTag::MISSING_INSTALL_INFO:
+		return "MISSING_INSTALL_INFO";
+	case ExtensionUpdateResultTag::REDOWNLOADED:
+		return "REDOWNLOADED";
+	case ExtensionUpdateResultTag::UPDATED:
+		return "UPDATED";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+ExtensionUpdateResultTag EnumUtil::FromString<ExtensionUpdateResultTag>(const char *value) {
+	if (StringUtil::Equals(value, "UNKNOWN")) {
+		return ExtensionUpdateResultTag::UNKNOWN;
+	}
+	if (StringUtil::Equals(value, "NO_UPDATE_AVAILABLE")) {
+		return ExtensionUpdateResultTag::NO_UPDATE_AVAILABLE;
+	}
+	if (StringUtil::Equals(value, "NOT_A_REPOSITORY")) {
+		return ExtensionUpdateResultTag::NOT_A_REPOSITORY;
+	}
+	if (StringUtil::Equals(value, "NOT_INSTALLED")) {
+		return ExtensionUpdateResultTag::NOT_INSTALLED;
+	}
+	if (StringUtil::Equals(value, "STATICALLY_LOADED")) {
+		return ExtensionUpdateResultTag::STATICALLY_LOADED;
+	}
+	if (StringUtil::Equals(value, "MISSING_INSTALL_INFO")) {
+		return ExtensionUpdateResultTag::MISSING_INSTALL_INFO;
+	}
+	if (StringUtil::Equals(value, "REDOWNLOADED")) {
+		return ExtensionUpdateResultTag::REDOWNLOADED;
+	}
+	if (StringUtil::Equals(value, "UPDATED")) {
+		return ExtensionUpdateResultTag::UPDATED;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -3367,6 +3459,8 @@ const char* EnumUtil::ToChars<LogicalOperatorType>(LogicalOperatorType value) {
 		return "LOGICAL_LOAD";
 	case LogicalOperatorType::LOGICAL_RESET:
 		return "LOGICAL_RESET";
+	case LogicalOperatorType::LOGICAL_UPDATE_EXTENSIONS:
+		return "LOGICAL_UPDATE_EXTENSIONS";
 	case LogicalOperatorType::LOGICAL_CREATE_SECRET:
 		return "LOGICAL_CREATE_SECRET";
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
@@ -3551,6 +3645,9 @@ LogicalOperatorType EnumUtil::FromString<LogicalOperatorType>(const char *value)
 	}
 	if (StringUtil::Equals(value, "LOGICAL_RESET")) {
 		return LogicalOperatorType::LOGICAL_RESET;
+	}
+	if (StringUtil::Equals(value, "LOGICAL_UPDATE_EXTENSIONS")) {
+		return LogicalOperatorType::LOGICAL_UPDATE_EXTENSIONS;
 	}
 	if (StringUtil::Equals(value, "LOGICAL_CREATE_SECRET")) {
 		return LogicalOperatorType::LOGICAL_CREATE_SECRET;
@@ -4452,6 +4549,8 @@ const char* EnumUtil::ToChars<ParseInfoType>(ParseInfoType value) {
 		return "COMMENT_ON_COLUMN_INFO";
 	case ParseInfoType::COPY_DATABASE_INFO:
 		return "COPY_DATABASE_INFO";
+	case ParseInfoType::UPDATE_EXTENSIONS_INFO:
+		return "UPDATE_EXTENSIONS_INFO";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -4506,6 +4605,9 @@ ParseInfoType EnumUtil::FromString<ParseInfoType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "COPY_DATABASE_INFO")) {
 		return ParseInfoType::COPY_DATABASE_INFO;
+	}
+	if (StringUtil::Equals(value, "UPDATE_EXTENSIONS_INFO")) {
+		return ParseInfoType::UPDATE_EXTENSIONS_INFO;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -4818,6 +4920,8 @@ const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value) 
 		return "EXTENSION";
 	case PhysicalOperatorType::VERIFY_VECTOR:
 		return "VERIFY_VECTOR";
+	case PhysicalOperatorType::UPDATE_EXTENSIONS:
+		return "UPDATE_EXTENSIONS";
 	case PhysicalOperatorType::CREATE_SECRET:
 		return "CREATE_SECRET";
 	default:
@@ -5051,6 +5155,9 @@ PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *valu
 	}
 	if (StringUtil::Equals(value, "VERIFY_VECTOR")) {
 		return PhysicalOperatorType::VERIFY_VECTOR;
+	}
+	if (StringUtil::Equals(value, "UPDATE_EXTENSIONS")) {
+		return PhysicalOperatorType::UPDATE_EXTENSIONS;
 	}
 	if (StringUtil::Equals(value, "CREATE_SECRET")) {
 		return PhysicalOperatorType::CREATE_SECRET;
@@ -6194,6 +6301,8 @@ const char* EnumUtil::ToChars<StatementType>(StatementType value) {
 		return "MULTI_STATEMENT";
 	case StatementType::COPY_DATABASE_STATEMENT:
 		return "COPY_DATABASE_STATEMENT";
+	case StatementType::UPDATE_EXTENSIONS_STATEMENT:
+		return "UPDATE_EXTENSIONS_STATEMENT";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -6287,6 +6396,9 @@ StatementType EnumUtil::FromString<StatementType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "COPY_DATABASE_STATEMENT")) {
 		return StatementType::COPY_DATABASE_STATEMENT;
+	}
+	if (StringUtil::Equals(value, "UPDATE_EXTENSIONS_STATEMENT")) {
+		return StatementType::UPDATE_EXTENSIONS_STATEMENT;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

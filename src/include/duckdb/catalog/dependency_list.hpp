@@ -32,6 +32,10 @@ public:
 	explicit LogicalDependency(CatalogEntry &entry);
 	LogicalDependency();
 	bool operator==(const LogicalDependency &other) const;
+
+public:
+	void Serialize(Serializer &serializer) const;
+	static LogicalDependency Deserialize(Deserializer &deserializer);
 };
 
 struct LogicalDependencyHashFunction {
@@ -54,6 +58,8 @@ public:
 
 public:
 	DUCKDB_API void VerifyDependencies(Catalog &catalog, const string &name);
+	void Serialize(Serializer &serializer) const;
+	static LogicalDependencyList Deserialize(Deserializer &deserializer);
 	bool operator==(const LogicalDependencyList &other) const;
 	const create_info_set_t &Set() const;
 

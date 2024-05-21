@@ -139,6 +139,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::ATTACH_STATEMENT:
 	case StatementType::DETACH_STATEMENT:
 	case StatementType::COPY_DATABASE_STATEMENT:
+	case StatementType::UPDATE_EXTENSIONS_STATEMENT:
 		CreatePlan(*statement);
 		break;
 	default:
@@ -174,7 +175,10 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 	// format (de)serialization of this operator
 	try {
 		MemoryStream stream;
-		BinarySerializer::Serialize(*op, stream, true);
+		auto &config = DBConfig::GetConfig(context);
+		SerializationOptions options;
+		options.serialization_compatibility = config.options.serialization_compatibility;
+		BinarySerializer::Serialize(*op, stream, options);
 		stream.Rewind();
 		bound_parameter_map_t parameters;
 		auto new_plan = BinaryDeserializer::Deserialize<LogicalOperator>(stream, context, parameters);
