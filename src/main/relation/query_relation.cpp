@@ -63,7 +63,7 @@ BoundStatement QueryRelation::Bind(Binder &binder) {
 			auto &name = kv.first;
 			auto &tableref = kv.second;
 
-			if (!tableref.external_dependency) {
+			if (!tableref->external_dependency) {
 				// Only push a CTE for objects that are out of our control (i.e Python)
 				// This makes sure replacement scans for files (parquet/csv/json etc) are not transformed into a CTE
 				continue;
