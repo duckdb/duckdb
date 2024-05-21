@@ -2,7 +2,6 @@
 # description: Verify semi anti joins are pushed down
 # group: [joins]
 
-
 statement ok
 create table tbl1 as select range a from range(10000);
 
