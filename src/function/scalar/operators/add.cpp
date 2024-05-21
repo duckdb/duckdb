@@ -149,8 +149,9 @@ bool TryAddOperator::Operation(uint64_t left, uint64_t right, uint64_t &result) 
 
 template <>
 bool TryAddOperator::Operation(date_t left, int32_t right, date_t &result) {
-	if (!Value::IsFinite(left) || !Value::IsFinite(right)) {
-		return false;
+	if (left == date_t::infinity() || left == date_t::ninfinity()) {
+		result = date_t(left);
+		return true;
 	}
 	int32_t days;
 	if (!TryAddOperator::Operation(left.days, right, days)) {
