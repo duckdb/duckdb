@@ -162,8 +162,6 @@ def main():
 
     start_offset = args.start_offset
 
-    file_paths = ['test/sql/attach/attach_wal_alter.test', 'test/fuzzer/pedro/pushdown_error.test']
-
     total_tests = len(file_paths)
     for i, file_path in enumerate(file_paths):
         if file_path in executor.SKIPPED_TESTS:
