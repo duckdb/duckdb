@@ -44,6 +44,15 @@ SELECT j, SUM(j) FILTER(WHERE i = 2) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND C
 ----
 physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
 
+# DISTINCT is not supported for  streaming windows
+query TT
+EXPLAIN
+SELECT
+   LIST(DISTINCT col0) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS result
+FROM (VALUES ({'key': 'A'}), ({'key': 'B'}), ({'key': 'A'}))
+----
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+
 # Test each of the streaming window functions
 query TT
 explain select row_number() over (), i, j from integers
