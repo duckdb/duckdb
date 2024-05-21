@@ -94,7 +94,7 @@ int64_t CSVReaderOptions::GetSkipRows() const {
 }
 
 void CSVReaderOptions::SetSkipRows(int64_t skip_rows) {
-	if (skip_rows < 0){
+	if (skip_rows < 0) {
 		throw InvalidInputException("skip_rows option from read_csv scanner, must be equal or higher than 0");
 	}
 	dialect_options.skip_rows.Set(NumericCast<idx_t>(skip_rows));
