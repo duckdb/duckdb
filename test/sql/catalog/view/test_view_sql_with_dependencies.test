@@ -1,9 +1,9 @@
-# name: test/sql/catalog/view/test_view_sql.test
+# name: test/sql/catalog/view/test_view_sql_with_dependencies.test
 # description: Test behavior of 'sql' on various different views
 # group: [view]
 
 statement ok
-set storage_compatibility_version='v0.10.2'
+set storage_compatibility_version='latest'
 
 statement ok
 PRAGMA enable_verification
@@ -51,8 +51,21 @@ select trim(sql, chr(10)) from duckdb_views() where internal = false;
 ----
 CREATE VIEW vw AS SELECT * FROM tbl;
 
+statement error
+alter table tbl rename column b to x;
+----
+Dependency Error: Cannot alter entry "tbl" because there are entries that depend on it.
+
+# The VIEW has to be dropped before the table can be altered
+statement ok
+drop view vw;
+
 statement ok
 alter table tbl rename column b to x;
+
+# Recreate the view
+statement ok
+CREATE VIEW vw AS SELECT * FROM tbl;
 
 # sql is not affected by the column names of the table
 query I

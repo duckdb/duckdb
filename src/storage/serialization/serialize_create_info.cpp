@@ -26,6 +26,9 @@ void CreateInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(106, "sql", sql);
 	serializer.WritePropertyWithDefault<Value>(107, "comment", comment, Value());
 	serializer.WritePropertyWithDefault<unordered_map<string, string>>(108, "tags", tags, unordered_map<string, string>());
+	if (serializer.ShouldSerialize(2)) {
+		serializer.WritePropertyWithDefault<LogicalDependencyList>(109, "dependencies", dependencies, LogicalDependencyList());
+	}
 }
 
 unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
@@ -38,6 +41,7 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	auto sql = deserializer.ReadPropertyWithDefault<string>(106, "sql");
 	auto comment = deserializer.ReadPropertyWithDefault<Value>(107, "comment", Value());
 	auto tags = deserializer.ReadPropertyWithDefault<unordered_map<string, string>>(108, "tags", unordered_map<string, string>());
+	auto dependencies = deserializer.ReadPropertyWithDefault<LogicalDependencyList>(109, "dependencies", LogicalDependencyList());
 	deserializer.Set<CatalogType>(type);
 	unique_ptr<CreateInfo> result;
 	switch (type) {
@@ -77,6 +81,7 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	result->sql = std::move(sql);
 	result->comment = comment;
 	result->tags = std::move(tags);
+	result->dependencies = dependencies;
 	return result;
 }
 

@@ -291,6 +291,15 @@ struct EnableObjectCacheSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct StorageCompatibilityVersion {
+	static constexpr const char *Name = "storage_compatibility_version";
+	static constexpr const char *Description = "Serialize on checkpoint with compatibility for a given duckdb version";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct EnableHTTPMetadataCacheSetting {
 	static constexpr const char *Name = "enable_http_metadata_cache";
 	static constexpr const char *Description = "Whether or not the global http metadata is used to cache HTTP metadata";
