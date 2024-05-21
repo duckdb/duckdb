@@ -1,10 +1,14 @@
 #include "duckdb/main/extension_helper.hpp"
 
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/windows.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/extension.hpp"
+#include "duckdb/main/extension_install_info.hpp"
 
 // Note that c++ preprocessor doesn't have a nice way to clean this up so we need to set the defines we use to false
 // explicitly when they are undefined
@@ -208,14 +212,161 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 	try {
 		if (dbconfig.options.autoinstall_known_extensions) {
 			auto &config = DBConfig::GetConfig(context);
-			ExtensionHelper::InstallExtension(context, extension_name, false,
-			                                  config.options.autoinstall_extension_repo);
+			auto autoinstall_repo = ExtensionRepository::GetRepositoryByUrl(config.options.autoinstall_extension_repo);
+			ExtensionHelper::InstallExtension(context, extension_name, false, autoinstall_repo);
 		}
 		ExtensionHelper::LoadExternalExtension(context, extension_name);
 		return true;
 	} catch (...) {
 		return false;
 	}
+}
+
+static ExtensionUpdateResult UpdateExtensionInternal(DatabaseInstance &db, FileSystem &fs,
+                                                     const string &full_extension_path, const string &extension_name) {
+	ExtensionUpdateResult result;
+	result.extension_name = extension_name;
+
+	auto &config = DBConfig::GetConfig(db);
+
+	if (!fs.FileExists(full_extension_path)) {
+		result.tag = ExtensionUpdateResultTag::NOT_INSTALLED;
+		return result;
+	}
+
+	// Extension exists, check for .info file
+	const string info_file_path = full_extension_path + ".info";
+	if (!fs.FileExists(info_file_path)) {
+		result.tag = ExtensionUpdateResultTag::MISSING_INSTALL_INFO;
+		return result;
+	}
+
+	// Parse the version of the extension before updating
+	auto ext_binary_handle = fs.OpenFile(full_extension_path, FileOpenFlags::FILE_FLAGS_READ);
+	auto parsed_metadata = ExtensionHelper::ParseExtensionMetaData(*ext_binary_handle);
+	if (!parsed_metadata.AppearsValid() && !config.options.allow_extensions_metadata_mismatch) {
+		throw IOException(
+		    "Failed to update extension: '%s', the metadata of the extension appears invalid! To resolve this, either "
+		    "reinstall the extension using 'FORCE INSTALL %s', manually remove the file '%s', or enable '"
+		    "SET allow_extensions_metadata_mismatch=true'",
+		    extension_name, extension_name, full_extension_path);
+	}
+
+	result.prev_version = parsed_metadata.AppearsValid() ? parsed_metadata.extension_version : "";
+
+	auto extension_install_info = ExtensionInstallInfo::TryReadInfoFile(fs, info_file_path, extension_name);
+
+	// Early out: no info file found
+	if (extension_install_info->mode == ExtensionInstallMode::UNKNOWN) {
+		result.tag = ExtensionUpdateResultTag::MISSING_INSTALL_INFO;
+		return result;
+	}
+
+	// Early out: we can only update extensions from repositories
+	if (extension_install_info->mode != ExtensionInstallMode::REPOSITORY) {
+		result.tag = ExtensionUpdateResultTag::NOT_A_REPOSITORY;
+		result.installed_version = result.prev_version;
+		return result;
+	}
+
+	auto repository_from_info = ExtensionRepository::GetRepositoryByUrl(extension_install_info->repository_url);
+	result.repository = repository_from_info.ToReadableString();
+
+	// We force install the full url found in this file, throwing
+	unique_ptr<ExtensionInstallInfo> install_result;
+	try {
+		install_result = ExtensionHelper::InstallExtension(config, fs, extension_name, true, repository_from_info);
+	} catch (std::exception &e) {
+		ErrorData error(e);
+		error.Throw("Extension updating failed when trying to install '" + extension_name + "', original error: ");
+	}
+
+	result.installed_version = install_result->version;
+
+	if (result.installed_version.empty()) {
+		result.tag = ExtensionUpdateResultTag::REDOWNLOADED;
+	} else if (result.installed_version != result.prev_version) {
+		result.tag = ExtensionUpdateResultTag::UPDATED;
+	} else {
+		result.tag = ExtensionUpdateResultTag::NO_UPDATE_AVAILABLE;
+	}
+
+	return result;
+}
+
+vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(ClientContext &context) {
+	auto &fs = FileSystem::GetFileSystem(context);
+	return ExtensionHelper::UpdateExtensions(DatabaseInstance::GetDatabase(context), fs);
+}
+
+vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(DatabaseInstance &db, FileSystem &fs) {
+	vector<ExtensionUpdateResult> result;
+
+	auto &config = DBConfig::GetConfig(db);
+
+#ifndef WASM_LOADABLE_EXTENSIONS
+	case_insensitive_set_t seen_extensions;
+
+	// scan the install directory for installed extensions
+	auto ext_directory = ExtensionHelper::ExtensionDirectory(config, fs);
+	fs.ListFiles(ext_directory, [&](const string &path, bool is_directory) {
+		if (!StringUtil::EndsWith(path, ".duckdb_extension")) {
+			return;
+		}
+
+		auto extension_file_name = StringUtil::GetFileName(path);
+		auto extension_name = StringUtil::Split(extension_file_name, ".")[0];
+
+		seen_extensions.insert(extension_name);
+
+		result.push_back(UpdateExtensionInternal(db, fs, fs.JoinPath(ext_directory, path), extension_name));
+	});
+#endif
+
+	for (const auto &extension : db.LoadedExtensions()) {
+		if (seen_extensions.find(extension) != seen_extensions.end()) {
+			const auto &loaded_extension_data = db.LoadedExtensionsData();
+			const auto &loaded_install_info = loaded_extension_data.find(extension);
+
+			ExtensionUpdateResult statically_loaded_ext_result;
+
+			if (loaded_install_info == loaded_extension_data.end()) {
+				statically_loaded_ext_result.tag = ExtensionUpdateResultTag::UNKNOWN;
+			} else if (loaded_install_info->second.mode == ExtensionInstallMode::STATICALLY_LINKED) {
+				statically_loaded_ext_result.tag = ExtensionUpdateResultTag::STATICALLY_LOADED;
+				statically_loaded_ext_result.installed_version = loaded_install_info->second.version;
+			} else {
+				statically_loaded_ext_result.tag = ExtensionUpdateResultTag::UNKNOWN;
+			}
+
+			result.push_back(std::move(statically_loaded_ext_result));
+		}
+	}
+
+	return result;
+}
+
+ExtensionUpdateResult ExtensionHelper::UpdateExtension(ClientContext &context, const string &extension_name) {
+	auto &fs = FileSystem::GetFileSystem(context);
+	return ExtensionHelper::UpdateExtension(DatabaseInstance::GetDatabase(context), fs, extension_name);
+}
+
+ExtensionUpdateResult ExtensionHelper::UpdateExtension(DatabaseInstance &db, FileSystem &fs,
+                                                       const string &extension_name) {
+	auto &config = DBConfig::GetConfig(db);
+	auto ext_directory = ExtensionHelper::ExtensionDirectory(config, fs);
+
+	auto full_extension_path = fs.JoinPath(ext_directory, extension_name + ".duckdb_extension");
+
+	auto update_result = UpdateExtensionInternal(db, fs, full_extension_path, extension_name);
+
+	if (update_result.tag == ExtensionUpdateResultTag::NOT_INSTALLED) {
+		throw InvalidInputException("Failed to update the extension '%s', the extension is not installed!",
+		                            extension_name);
+	} else if (update_result.tag == ExtensionUpdateResultTag::UNKNOWN) {
+		throw InternalException("Failed to update extension '%s', an unknown error ocurred", extension_name);
+	}
+	return update_result;
 }
 
 void ExtensionHelper::AutoLoadExtension(ClientContext &context, const string &extension_name) {
@@ -232,8 +383,9 @@ void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &exte
 		auto fs = FileSystem::CreateLocal();
 #ifndef DUCKDB_WASM
 		if (dbconfig.options.autoinstall_known_extensions) {
-			ExtensionHelper::InstallExtension(db.config, *fs, extension_name, false,
-			                                  dbconfig.options.autoinstall_extension_repo);
+			//! Get the autoloading repository
+			auto repository = ExtensionRepository::GetRepositoryByUrl(dbconfig.options.autoinstall_extension_repo);
+			ExtensionHelper::InstallExtension(db.config, *fs, extension_name, false, repository);
 		}
 #endif
 		ExtensionHelper::LoadExternalExtension(db, *fs, extension_name);
@@ -313,83 +465,83 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 	// TODO: rewrite package_build.py to allow also loading out-of-tree extensions in non-cmake builds
 	if (extension == "parquet") {
 #if DUCKDB_EXTENSION_PARQUET_LINKED
-		db.LoadExtension<ParquetExtension>();
+		db.LoadStaticExtension<ParquetExtension>();
 #else
 		// parquet extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "icu") {
 #if DUCKDB_EXTENSION_ICU_LINKED
-		db.LoadExtension<IcuExtension>();
+		db.LoadStaticExtension<IcuExtension>();
 #else
 		// icu extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "tpch") {
 #if DUCKDB_EXTENSION_TPCH_LINKED
-		db.LoadExtension<TpchExtension>();
+		db.LoadStaticExtension<TpchExtension>();
 #else
 		// icu extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "tpcds") {
 #if DUCKDB_EXTENSION_TPCDS_LINKED
-		db.LoadExtension<TpcdsExtension>();
+		db.LoadStaticExtension<TpcdsExtension>();
 #else
 		// icu extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "fts") {
 #if DUCKDB_EXTENSION_FTS_LINKED
-//		db.LoadExtension<FtsExtension>();
+//		db.LoadStaticExtension<FtsExtension>();
 #else
 		// fts extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "httpfs") {
 #if DUCKDB_EXTENSION_HTTPFS_LINKED
-		db.LoadExtension<HttpfsExtension>();
+		db.LoadStaticExtension<HttpfsExtension>();
 #else
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "json") {
 #if DUCKDB_EXTENSION_JSON_LINKED
-		db.LoadExtension<JsonExtension>();
+		db.LoadStaticExtension<JsonExtension>();
 #else
 		// json extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "excel") {
 #if DUCKDB_EXTENSION_EXCEL_LINKED
-		db.LoadExtension<ExcelExtension>();
+		db.LoadStaticExtension<ExcelExtension>();
 #else
 		// excel extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "sqlsmith") {
 #if DUCKDB_EXTENSION_SQLSMITH_LINKED
-		db.LoadExtension<SqlsmithExtension>();
+		db.LoadStaticExtension<SqlsmithExtension>();
 #else
 		// excel extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "jemalloc") {
 #if DUCKDB_EXTENSION_JEMALLOC_LINKED
-		db.LoadExtension<JemallocExtension>();
+		db.LoadStaticExtension<JemallocExtension>();
 #else
 		// jemalloc extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "autocomplete") {
 #if DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED
-		db.LoadExtension<AutocompleteExtension>();
+		db.LoadStaticExtension<AutocompleteExtension>();
 #else
 		// autocomplete extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "inet") {
 #if DUCKDB_EXTENSION_INET_LINKED
-		db.LoadExtension<InetExtension>();
+		db.LoadStaticExtension<InetExtension>();
 #else
 		// inet extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
@@ -621,10 +773,237 @@ EMS5gLv50CzQqJXK9mNzPuYXNUIc4Pw4ssVWe0OfN3Od90gl5uFUwk/G9lWSYnBN
 -----END PUBLIC KEY-----
 )", nullptr};
 
-const vector<string> ExtensionHelper::GetPublicKeys() {
+static const char *const community_public_keys[] = {
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA6aZuHUa1cLR9YDDYaEfi
+UDbWY8m2t7b71S+k1ZkXfHqu+5drAxm+dIDzdOHOKZSIdwnJbT3sSqwFoG6PlXF3
+g3dsJjax5qESIhbVvf98nyipwNINxoyHCkcCIPkX17QP2xpnT7V59+CqcfDJXLqB
+ymjqoFSlaH8dUCHybM4OXlWnAtVHW/nmw0khF8CetcWn4LxaTUHptByaBz8CasSs
+gWpXgSfaHc3R9eArsYhtsVFGyL/DEWgkEHWolxY3Llenhgm/zOf3s7PsAMe7EJX4
+qlSgiXE6OVBXnqd85z4k20lCw/LAOe5hoTMmRWXIj74MudWe2U91J6GrrGEZa7zT
+7QIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAq8Gg1S/LI6ApMAYsFc9m
+PrkFIY+nc0LXSpxm77twU8D5M0Xkz/Av4f88DQmj1OE3164bEtR7sl7xDPZojFHj
+YYyucJxEI97l5OU1d3Pc1BdKXL4+mnW5FlUGj218u8qD+G1hrkySXQkrUzIjPPNw
+o6knF3G/xqQF+KI+tc7ajnTni8CAlnUSxfnstycqbVS86m238PLASVPK9/SmIRgO
+XCEV+ZNMlerq8EwsW4cJPHH0oNVMcaG+QT4z79roW1rbJghn9ubAVdQU6VLUAikI
+b8keUyY+D0XdY9DpDBeiorb1qPYt8BPLOAQrIUAw1CgpMM9KFp9TNvW47KcG4bcB
+dQIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyYATA9KOQ0Azf97QAPfY
+Jc/WeZyE4E1qlRgKWKqNtYSXZqk5At0V7w2ntAWtYSpczFrVepCJ0oPMDpZTigEr
+NgOgfo5LEhPx5XmtCf62xY/xL3kgtfz9Mm5TBkuQy4KwY4z1npGr4NYYDXtF7kkf
+LQE+FnD8Yr4E0wHBib7ey7aeeKWmwqvUjzDqG+TzaqwzO/RCUsSctqSS0t1oo2hv
+4q1ofanUXsV8MXk/ujtgxu7WkVvfiSpK1zRazgeZjcrQFO9qL/pla0vBUxa1U8He
+GMLnL0oRfcMg7yKrbIMrvlEl2ZmiR9im44dXJWfY42quObwr1PuEkEoCMcMisSWl
+jwIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4RvbWx3zLblDHH/lGUF5
+Q512MT+v3YPriuibROMllv8WiCLAMeJ0QXbVaIzBOeHDeLx8yvoZZN+TENKxtT6u
+IfMMneUzxHBqy0AQNfIsSsOnG5nqoeE/AwbS6VqCdH1aLfoCoPffacHYa0XvTcsi
+aVlZfr+UzJS+ty8pRmFVi1UKSOADDdK8XfIovJl/zMP2TxYX2Y3fnjeLtl8Sqs2e
+P+eHDoy7Wi4EPTyY7tNTCfxwKNHn1HQ5yrv5dgvMxFWIWXGz24yikFvtwLGHe8uJ
+Wi+fBX+0PF0diZ6pIthZ149VU8qCqYAXjgpxZ0EZdrsiF6Ewz0cfg20SYApFcmW4
+pwIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyhd5AfwrUohG3O4DE0K9
+O3FmgB7zE4aDnkL8UUfGCh5kdP8q7ewMjekY+c6LwWOmpdJpSwqhfV1q5ZU1l6rk
+3hlt03LO3sgs28kcfOVH15hqfxts6Sg5KcRjxStE50ORmXGwXDcS9vqkJ60J1EHA
+lcZqbCRSO73ZPLhdepfd0/C6tM0L7Ge6cAE62/MTmYNGv8fDzwQr/kYIJMdoS8Zp
+thRpctFZJtPs3b0fffZA/TCLVKMvEVgTWs48751qKid7N/Lm/iEGx/tOf4o23Nec
+Pz1IQaGLP+UOLVQbqQBHJWNOqigm7kWhDgs3N4YagWgxPEQ0WVLtFji/ZjlKZc7h
+dwIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnFDg3LhyV6BVE2Z3zQvN
+6urrKvPhygTa5+wIPGwYTzJ8DfGALqlsX3VOXMvcJTca6SbuwwkoXHuSU5wQxfcs
+bt4jTXD3NIoRwQPl+D9IbgIMuX0ACl27rJmr/f9zkY7qui4k1X82pQkxBe+/qJ4r
+TBwVNONVx1fekTMnSCEhwg5yU3TNbkObu0qlQeJfuMWLDQbW/8v/qfr/Nz0JqHDN
+yYKfKvFMlORxyJYiOyeOsbzNGEhkGQGOmKhRUhS35kD+oA0jqwPwMCM9O4kFg/L8
+iZbpBBX2By1K3msejWMRAewTOyPas6YMQOYq9BMmWQqzVtG5xcaSJwN/YnMpJyqb
+sQIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1z0RU8vGrfEkrscEoZKA
+GiOcGh2EMcKwjQpl4nKuR9H4o/dg+CZregVSHg7MP2f8mhLZZyoFev49oWOV4Rmi
+qs99UNxm7DyKW1fF1ovowsUW5lsDoKYLvpuzHo0s4laiV4AnIYP7tHGLdzsnK2Os
+Cp5dSuMwKHPZ9N25hXxFB/dRrAdIiXHvbSqr4N29XzfQloQpL3bGHLKY6guFHluH
+X5dJ9eirVakWWou7BR2rnD0k9vER6oRdVnJ6YKb5uhWEOQ3NmV961oyr+uiDTcep
+qqtGHWuFhENixtiWGjFJJcACwqxEAW3bz9lyrfnPDsHSW/rlQVDIAkik+fOp+R7L
+kQIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxwO27e1vnbNcpiDg7Wwx
+K/w5aEGukXotu3529ieq+O39H0+Bak4vIbzGhDUh3/ElmxaFMAs4PYrWe/hc2WFD
+H4JCOoFIn4y9gQeE855DGGFgeIVd1BnSs5S+5wUEMxLNyHdHSmINN6FsoZ535iUg
+KdYjRh1iZevezg7ln8o/O36uthu925ehFBXSy6jLJgQlwmq0KxZJE0OAZhuDBM60
+MtIunNa/e5y+Gw3GknFwtRLmn/nEckZx1nEtepYvvUa7UGy+8KuGuhOerCZTutbG
+k8liCVgGenRve8unA2LrBbpL+AUf3CrZU/uAxxTqWmw6Z/S6TeW5ozeeyOCh8ii6
+TwIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsGIFOfIQ4RI5qu4klOxf
+ge6eXwBMAkuTXyhyIIJDtE8CurnwQvUXVlt+Kf0SfuIFW6MY5ErcWE/vMFbc81IR
+9wByOAAV2CTyiLGZT63uE8pN6FSHd6yGYCLjXd3P3cnP3Qj5pBncpLuAUDfHG4wP
+bs9jIADw3HysD+eCNja8p7ZC7CzWxTcO7HsEu9deAAU19YywdpagXvQ0pJ9zV5qU
+jrHxBygl31t6TmmX+3d+azjGu9Hu36E+5wcSOOhuwAFXDejb40Ixv53ItJ3fZzzH
+PF2nj9sQvQ8c5ptjyOvQCBRdqkEWXIVHClxqWb+o59pDIh1G0UGcmiDN7K9Gz5HA
+ZQIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9uUnlW/CoUXT68yaZh9
+SeXHzGRCPNEI98Tara+dgYxDX1z7nfOh8o15liT0QsAzx34EewZOxcKCNiV/dZX5
+z4clCkD8uUbZut6IVx8Eu+7Qcd5jZthRc6hQrN9Ltv7ZQEh7KGXOHa53kT2K01ws
+4jbVmd/7Nx7y0Yyqhja01pIu/CUaTkODfQxBXwriLdIzp7y/iJeF/TLqCwZWHKQx
+QOZnsPEveB1F00Va9MeAtTlXFUJ/TQXquqTjeLj4HuIRtbyuNgWoc0JyF+mcafAl
+bnrNEBIfxZhAT81aUCIAzRJp6AqfdeZxnZ/WwohtZQZLXAxFQPTWCcP+Z9M7OIQL
+WwIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA56NhfACkeCyZM07l2wmd
+iTp24E2tLLKU3iByKlIRWRAvXsOejRMJTHTNHWa3cQ7uLP++Tf2St7ksNsyPMNZy
+9QRTLNCYr9rN9loLwdb2sMWxFBwwzCaAOTahGI7GJQy30UB7FEND0X/5U2rZvQij
+Q6K+O4aa+K9M5qyOHNMmXywmTnAgWKNaNxQHPRtD2+dSj60T6zXdtIuCrPfcNGg5
+gj07qWGEXX83V/L7nSqCiIVYg/wqds1x52Yjk1nhXYNBTqlnhmOd8LynGxz/sXC7
+h2Q9XsHjXIChW4FHyLIOl6b4zPMBSxzCigYm3QZJWfAkZv5PBRtnq7vhYOLHzLQj
+CwIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmfPLe0IWGYC0MZC6YiM3
+QGfhT6zSKB0I2DW44nlBlWUcF+32jW2bFJtgE76qGGKFeU4kJBWYr99ufHoAodNg
+M1Ehl/JfQ5KmbC1WIqnFTrgbmqJde79jeCvCpbFLuqnzidwO1PbXDbfRFQcgWaXT
+mDVLNNVmLxA0GkCv+kydE2gtcOD9BDceg7F/56TDvclyI5QqAnjE2XIRMPZlXQP4
+oF2kgz4Cn7LxLHYmkU2sS9NYLzHoyUqFplWlxkQjA4eQ0neutV1Ydmc1IX8W7R38
+A7nFtaT8iI8w6Vkv7ijYN6xf5cVBPKZ3Dv7AdwPet86JD5mf5v+r7iwg5xl3r77Z
+iwIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAoB1kWsX8YmCcFOD9ilBY
+xK076HmUAN026uJ8JpmU9Hz+QT1FNXOsnj1h2G6U6btYVIdHUTHy/BvAumrDKqRz
+qcEAzCuhxUjPjss54a/Zqu6nQcoIPHuG/Er39oZHIVkPR1WCvWj8wmyYv6T//dPH
+unO6tW29sXXxS+J1Gah6vpbtJw1pI/liah1DZzb13KWPDI6ZzviTNnW4S05r6js/
+30He+Yud6aywrdaP/7G90qcrteEFcjFy4Xf+5vG960oKoGoDplwX5poay1oCP9tb
+g8AC8VSRAGi3oviTeSWZcrLXS8AtJhGvF48cXQj2q+8YeVKVDpH6fPQxJ9Sh9aeU
+awIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4NTMAIYIlCMID00ufy/I
+AZXc8pocDx9N1Q5x5/cL3aIpLmx02AKo9BvTJaJuHiTjlwYhPtlhIrHV4HUVTkOX
+sISp8B8v9i2I1RIvCTAcvy3gcH6rdRWZ0cdTUiMEqnnxBX9zdzl8oMzZcyauv19D
+BeqJvzflIT96b8g8K3mvgJHs9a1j9f0gN8FuTA0c52DouKnrh8UwH7mlrumYerJw
+6goJGQuK1HEOt6bcQuvogkbgJWOoEYwjNrPwQvIcP4wyrgSnOHg1yXOFE84oVynJ
+czQEOz9ke42I3h8wrnQxilEYBVo2uX8MenqTyfGnE32lPRt3Wv1iEVQls8Cxiuy2
+CQIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3bUtfp66OtRyvIF/oucn
+id8mo7gvbNEH04QMLO3Ok43dlWgWI3hekJAqOYc0mvoI5anqr98h8FI7aCYZm/bY
+vpz0I1aXBaEPh3aWh8f/w9HME7ykBvmhMe3J+VFGWWL4eswfRl//GCtnSMBzDFhM
+SaQOTvADWHkC0njeI5yXjf/lNm6fMACP1cnhuvCtnx7VP/DAtvUk9usDKG56MJnZ
+UoVM3HHjbJeRwxCdlSWe12ilCdwMRKSDY92Hk38/zBLenH04C3HRQLjBGewACUmx
+uvNInehZ4kSYFGa+7UxBxFtzJhlKzGR73qUjpWzZivCe1K0WfRVP5IWsKNCCESJ/
+nQIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyV2dE/CRUAUE8ybq/DoS
+Lc7QlYXh04K+McbhN724TbHahLTuDk5mR5TAunA8Nea4euRzknKdMFAz1eh9gyy3
+5x4UfXQW1fIZqNo6WNrGxYJgWAXU+pov+OvxsMQWzqS4jrTHDHbblCCLKp1akwJk
+aFNyqgjAL373PcqXC+XAn8vHx4xHFoFP5lq4lLcJCOW5ee9v9El3w0USLwS+t1cF
+RY3kuV6Njlr4zsRH9iM6/zaSuCALYWJ/JrPEurSJXzFZnWsvn6aQdeNeAn08+z0F
+k2NwaauEo0xmLqzqTRGzjHqKKmeefN3/+M/FN2FrApDlxWQfhD2Y3USdAiN547Nj
+1wIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvm2+kTrEQWZXuxhWzBdl
+PCbQGqbrukbeS6JKSlQLJDC8ayZIxFxatqg1Q8UPyv89MVRsHOGlG1OqFaOEtPjQ
+Oo6j/moFwB4GPyJhJHOGpCKa4CLB5clhfDCLJw6ty7PcDU3T6yW4X4Qc5k4LRRWy
+yzC8lVHfBdarN+1iEe0ALMOGoeiJjVn6i/AFxktRwgd8njqv/oWQyfjJZXkNMsb6
+7ZDxNVAUrp/WXpE4Kq694bB9xa/pWsqv7FjQJUgTnEzvbN+qXnVPtA7dHcOYYJ8Z
+SbrJUfHrf8TS5B54AiopFpWG+hIbjqqdigqabBqFpmjiRDZgDy4zJJj52xJZMnrp
+rwIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwEAcVmY3589O02pLA22f
+MlarLyJUgy0BeJDG5AUsi17ct8sHZzRiv9zKQVCBk1CtZY//jyqnrM7iCBLWsyby
+TiTOtGYHHApaLnNjjtaHdQ6zplhbc3g2XLy+4ab8GNKG3zc8iXpsQM6r+JO5n9pm
+V9vollz9dkFxS9l+1P17lZdIgCh9O3EIFJv5QCd5c9l2ezHAan2OhkWhiDtldnH/
+MfRXbz7X5sqlwWLa/jhPtvY45x7dZaCHGqNzbupQZs0vHnAVdDu3vAWDmT/3sXHG
+vmGxswKA9tPU0prSvQWLz4LUCnGi/cC5R+fiu+fovFM/BwvaGtqBFIF/1oWVq7bZ
+4wIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA25qGwNO1+qHygC8mjm8L
+3I66mV/IzslgBDHC91mE8YcI5Fq0sdrtsbUhK3z89wIN/zOhbHX0NEiXm2GxUnsI
+vb5tDZXAh7AbTnXTMVbxO/e/8sPLUiObGjDvjVzyzrxOeG87yK/oIiilwk9wTsIb
+wMn2Grj4ht9gVKx3oGHYV7STNdWBlzSaJj4Ou7+5M1InjPDRFZG1K31D2d3IHByX
+lmcRPZtPFTa5C1uVJw00fI4F4uEFlPclZQlR5yA0G9v+0uDgLcjIUB4eqwMthUWc
+dHhlmrPp04LI19eksWHCtG30RzmUaxDiIC7J2Ut0zHDqUe7aXn8tOVI7dE9tTKQD
+KQIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA7EC2bx7aRnf3TcRg5gmw
+QOKNCUheCelK8hoXLMsKSJqmufyJ+IHUejpXGOpvyYRbACiJ5GiNcww20MVpTBU7
+YESWB2QSU2eEJJXMq84qsZSO8WGmAuKpUckI+hNHKQYJBEDOougV6/vVVEm5c5bc
+SLWQo0+/ciQ21Zwz5SwimX8ep1YpqYirO04gcyGZzAfGboXRvdUwA+1bZvuUXdKC
+4zsCw2QALlcVpzPwjB5mqA/3a+SPgdLAiLOwWXFDRMnQw44UjsnPJFoXgEZiUpZm
+EMS5gLv50CzQqJXK9mNzPuYXNUIc4Pw4ssVWe0OfN3Od90gl5uFUwk/G9lWSYnBN
+3wIDAQAB
+-----END PUBLIC KEY-----
+)", nullptr};
+
+const vector<string> ExtensionHelper::GetPublicKeys(bool allow_community_extensions) {
 	vector<string> keys;
 	for (idx_t i = 0; public_keys[i]; i++) {
 		keys.emplace_back(public_keys[i]);
+	}
+	if (allow_community_extensions) {
+		for (idx_t i = 0; community_public_keys[i]; i++) {
+			keys.emplace_back(community_public_keys[i]);
+		}
 	}
 	return keys;
 }

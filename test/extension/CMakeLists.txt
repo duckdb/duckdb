@@ -1,4 +1,5 @@
 set(PARAMETERS "-warnings")
+
 build_loadable_extension_directory(
   loadable_extension_demo test/extension "default-version" ${PARAMETERS}
   loadable_extension_demo.cpp)

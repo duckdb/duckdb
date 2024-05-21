@@ -2,6 +2,8 @@
 #include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/common/serializer/buffered_file_reader.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "mbedtls_wrapper.hpp"
 
 #ifndef DUCKDB_NO_THREADS
@@ -31,18 +33,18 @@ static T LoadFunctionFromDLL(void *dll, const string &function_name, const strin
 	return (T)function;
 }
 
-static void ComputeSHA256String(const std::string &to_hash, std::string *res) {
+static void ComputeSHA256String(const string &to_hash, string *res) {
 	// Invoke MbedTls function to actually compute sha256
 	*res = duckdb_mbedtls::MbedTlsWrapper::ComputeSha256Hash(to_hash);
 }
 
-static void ComputeSHA256FileSegment(FileHandle *handle, const idx_t start, const idx_t end, std::string *res) {
+static void ComputeSHA256FileSegment(FileHandle *handle, const idx_t start, const idx_t end, string *res) {
 	idx_t iter = start;
 	const idx_t segment_size = 1024ULL * 8ULL;
 
 	duckdb_mbedtls::MbedTlsWrapper::SHA256State state;
 
-	std::string to_hash;
+	string to_hash;
 	while (iter < end) {
 		idx_t len = std::min(end - iter, segment_size);
 		to_hash.resize(len);
@@ -64,30 +66,96 @@ static string FilterZeroAtEnd(string s) {
 	return s;
 }
 
-static string PrettyPrintString(const string &s) {
-	string res = "";
-	for (auto c : s) {
-		if (StringUtil::CharacterIsAlpha(c) || StringUtil::CharacterIsDigit(c) || c == '_' || c == '-' || c == ' ' ||
-		    c == '.') {
-			res += c;
-		} else {
-			auto value = UnsafeNumericCast<uint8_t>(c);
-			res += "\\x";
-			uint8_t first = value / 16;
-			if (first < 10) {
-				res.push_back((char)('0' + first));
-			} else {
-				res.push_back((char)('a' + first - 10));
-			}
-			uint8_t second = value % 16;
-			if (second < 10) {
-				res.push_back((char)('0' + second));
-			} else {
-				res.push_back((char)('a' + second - 10));
-			}
+ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(const char *metadata) {
+	ParsedExtensionMetaData result;
+
+	vector<string> metadata_field;
+	for (idx_t i = 0; i < 8; i++) {
+		string field = string(metadata + i * 32, 32);
+		metadata_field.emplace_back(field);
+	}
+
+	std::reverse(metadata_field.begin(), metadata_field.end());
+
+	result.magic_value = FilterZeroAtEnd(metadata_field[0]);
+	result.platform = FilterZeroAtEnd(metadata_field[1]);
+	result.duckdb_version = FilterZeroAtEnd(metadata_field[2]);
+	result.extension_version = FilterZeroAtEnd(metadata_field[3]);
+
+	result.signature = string(metadata, ParsedExtensionMetaData::FOOTER_SIZE - ParsedExtensionMetaData::SIGNATURE_SIZE);
+	return result;
+}
+
+ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(FileHandle &handle) {
+	const string engine_version = string(ExtensionHelper::GetVersionDirectoryName());
+	const string engine_platform = string(DuckDB::Platform());
+
+	string metadata_segment;
+	metadata_segment.resize(ParsedExtensionMetaData::FOOTER_SIZE);
+
+	if (handle.GetFileSize() < ParsedExtensionMetaData::FOOTER_SIZE) {
+		throw InvalidInputException(
+		    "File '%s' is not a DuckDB extension. Valid DuckDB extensions must be at least %llu bytes", handle.path,
+		    ParsedExtensionMetaData::FOOTER_SIZE);
+	}
+
+	handle.Read((void *)metadata_segment.data(), metadata_segment.size(),
+	            handle.GetFileSize() - ParsedExtensionMetaData::FOOTER_SIZE);
+
+	return ParseExtensionMetaData(metadata_segment.data());
+}
+
+bool ExtensionHelper::CheckExtensionSignature(FileHandle &handle, ParsedExtensionMetaData &parsed_metadata,
+                                              const bool allow_community_extensions) {
+	auto signature_offset = handle.GetFileSize() - ParsedExtensionMetaData::SIGNATURE_SIZE;
+
+	const idx_t maxLenChunks = 1024ULL * 1024ULL;
+	const idx_t numChunks = (signature_offset + maxLenChunks - 1) / maxLenChunks;
+	vector<string> hash_chunks(numChunks);
+	vector<idx_t> splits(numChunks + 1);
+
+	for (idx_t i = 0; i < numChunks; i++) {
+		splits[i] = maxLenChunks * i;
+	}
+	splits.back() = signature_offset;
+
+#ifndef DUCKDB_NO_THREADS
+	vector<std::thread> threads;
+	threads.reserve(numChunks);
+	for (idx_t i = 0; i < numChunks; i++) {
+		threads.emplace_back(ComputeSHA256FileSegment, &handle, splits[i], splits[i + 1], &hash_chunks[i]);
+	}
+
+	for (auto &thread : threads) {
+		thread.join();
+	}
+#else
+	for (idx_t i = 0; i < numChunks; i++) {
+		ComputeSHA256FileSegment(&handle, splits[i], splits[i + 1], &hash_chunks[i]);
+	}
+#endif // DUCKDB_NO_THREADS
+
+	string hash_concatenation;
+	hash_concatenation.reserve(32 * numChunks); // 256 bits -> 32 bytes per chunk
+
+	for (auto &hash_chunk : hash_chunks) {
+		hash_concatenation += hash_chunk;
+	}
+
+	string two_level_hash;
+	ComputeSHA256String(hash_concatenation, &two_level_hash);
+
+	// TODO maybe we should do a stream read / hash update here
+	handle.Read((void *)parsed_metadata.signature.data(), parsed_metadata.signature.size(), signature_offset);
+
+	for (auto &key : ExtensionHelper::GetPublicKeys(allow_community_extensions)) {
+		if (duckdb_mbedtls::MbedTlsWrapper::IsValidSha256Signature(key, parsed_metadata.signature, two_level_hash)) {
+			return true;
+			break;
 		}
 	}
-	return res;
+
+	return false;
 }
 
 bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const string &extension,
@@ -100,8 +168,11 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 	}
 	auto filename = fs.ConvertSeparators(extension);
 
+	bool direct_load;
+
 	// shorthand case
 	if (!ExtensionHelper::IsFullPath(extension)) {
+		direct_load = false;
 		string extension_name = ApplyExtensionAlias(extension);
 #ifdef WASM_LOADABLE_EXTENSIONS
 		string url_template = ExtensionUrlTemplate(&config, "");
@@ -121,7 +192,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 			    return stringOnWasmHeap;
 		    },
 		    filename.c_str(), url.c_str());
-		std::string address(str);
+		string address(str);
 		free(str);
 
 		filename = address;
@@ -141,6 +212,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		filename = fs.JoinPath(local_path, extension_name + ".duckdb_extension");
 #endif
 	} else {
+		direct_load = true;
 		filename = fs.ExpandPath(filename);
 	}
 	if (!fs.FileExists(filename)) {
@@ -153,132 +225,37 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		return false;
 	}
 
-	string metadata_segment;
-	metadata_segment.resize(512);
-
-	const std::string engine_version = std::string(GetVersionDirectoryName());
-	const std::string engine_platform = std::string(DuckDB::Platform());
-
 	auto handle = fs.OpenFile(filename, FileFlags::FILE_FLAGS_READ);
 
-	idx_t file_size = handle->GetFileSize();
+	// Parse the extension metadata from the extension binary
+	auto parsed_metadata = ParseExtensionMetaData(*handle);
 
-	if (file_size < 1024) {
-		throw InvalidInputException(
-		    "Extension \"%s\" does not have metadata compatible with the DuckDB loading it "
-		    "(version %s, platform %s). File size in particular is lower than minimum threshold of 1024",
-		    filename, engine_version, engine_platform);
-	}
+	auto metadata_mismatch_error = parsed_metadata.GetInvalidMetadataError();
 
-	auto metadata_offset = file_size - metadata_segment.size();
-
-	handle->Read((void *)metadata_segment.data(), metadata_segment.size(), metadata_offset);
-
-	std::vector<std::string> metadata_field;
-	for (idx_t i = 0; i < 8; i++) {
-		metadata_field.emplace_back(metadata_segment, i * 32, 32);
-	}
-
-	std::reverse(metadata_field.begin(), metadata_field.end());
-
-	std::string extension_duckdb_platform = FilterZeroAtEnd(metadata_field[1]);
-	std::string extension_duckdb_version = FilterZeroAtEnd(metadata_field[2]);
-	std::string extension_version = FilterZeroAtEnd(metadata_field[3]);
-
-	string metadata_mismatch_error = "";
-	{
-		char a[32] = {0};
-		a[0] = '4';
-		if (strncmp(a, metadata_field[0].data(), 32) != 0) {
-			// metadata does not look right, add this to the error message
-			metadata_mismatch_error =
-			    "\n" + StringUtil::Format("Extension \"%s\" does not have metadata compatible with the DuckDB "
-			                              "loading it (version %s, platform %s)",
-			                              filename, engine_version, engine_platform);
-		} else if (engine_version != extension_duckdb_version || engine_platform != extension_duckdb_platform) {
-			metadata_mismatch_error = "\n" + StringUtil::Format("Extension \"%s\" (version %s, platfrom %s) does not "
-			                                                    "match the DuckDB loading it (version %s, platform %s)",
-			                                                    filename, PrettyPrintString(extension_duckdb_version),
-			                                                    PrettyPrintString(extension_duckdb_platform),
-			                                                    engine_version, engine_platform);
-
-		} else {
-			// All looks good
-		}
+	if (!metadata_mismatch_error.empty()) {
+		metadata_mismatch_error = StringUtil::Format("Failed to load '%s', %s", extension, metadata_mismatch_error);
 	}
 
 	if (!config.options.allow_unsigned_extensions) {
-		// signature is the last 256 bytes of the file
-		string signature(metadata_segment, metadata_segment.size() - 256);
+		bool signature_valid =
+		    CheckExtensionSignature(*handle, parsed_metadata, config.options.allow_community_extensions);
 
-		auto signature_offset = metadata_offset + metadata_segment.size() - signature.size();
-
-		const idx_t maxLenChunks = 1024ULL * 1024ULL;
-		const idx_t numChunks = (signature_offset + maxLenChunks - 1) / maxLenChunks;
-		std::vector<std::string> hash_chunks(numChunks);
-		std::vector<idx_t> splits(numChunks + 1);
-
-		for (idx_t i = 0; i < numChunks; i++) {
-			splits[i] = maxLenChunks * i;
-		}
-		splits.back() = signature_offset;
-
-#ifndef DUCKDB_NO_THREADS
-		std::vector<std::thread> threads;
-		threads.reserve(numChunks);
-		for (idx_t i = 0; i < numChunks; i++) {
-			threads.emplace_back(ComputeSHA256FileSegment, handle.get(), splits[i], splits[i + 1], &hash_chunks[i]);
-		}
-
-		for (auto &thread : threads) {
-			thread.join();
-		}
-#else
-		for (idx_t i = 0; i < numChunks; i++) {
-			ComputeSHA256FileSegment(handle.get(), splits[i], splits[i + 1], &hash_chunks[i]);
-		}
-#endif // DUCKDB_NO_THREADS
-
-		string hash_concatenation;
-		hash_concatenation.reserve(32 * numChunks); // 256 bits -> 32 bytes per chunk
-
-		for (auto &hash_chunk : hash_chunks) {
-			hash_concatenation += hash_chunk;
-		}
-
-		string two_level_hash;
-		ComputeSHA256String(hash_concatenation, &two_level_hash);
-
-		// TODO maybe we should do a stream read / hash update here
-		handle->Read((void *)signature.data(), signature.size(), signature_offset);
-
-		bool any_valid = false;
-		for (auto &key : ExtensionHelper::GetPublicKeys()) {
-			if (duckdb_mbedtls::MbedTlsWrapper::IsValidSha256Signature(key, signature, two_level_hash)) {
-				any_valid = true;
-				break;
-			}
-		}
-		if (!any_valid) {
+		if (!signature_valid) {
 			throw IOException(config.error_manager->FormatException(ErrorType::UNSIGNED_EXTENSION, filename) +
 			                  metadata_mismatch_error);
 		}
 
 		if (!metadata_mismatch_error.empty()) {
 			// Signed extensions perform the full check
-			throw InvalidInputException(metadata_mismatch_error.substr(1));
+			throw InvalidInputException(metadata_mismatch_error);
 		}
 	} else if (!config.options.allow_extensions_metadata_mismatch) {
 		if (!metadata_mismatch_error.empty()) {
-			// Unsigned extensions AND configuration allowing metadata_mismatch_error, loading allowed, mainly for
+			// Unsigned extensions AND configuration allowing n, loading allowed, mainly for
 			// debugging purposes
-			throw InvalidInputException(metadata_mismatch_error.substr(1));
+			throw InvalidInputException(metadata_mismatch_error);
 		}
 	}
-
-	idx_t number_metadata_fields = 3;
-	D_ASSERT(number_metadata_fields == 3); // Currently hardcoded value
-	metadata_field.resize(number_metadata_fields + 1);
 
 	auto filebase = fs.ExtractBaseName(filename);
 
@@ -311,10 +288,33 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 
 	auto lowercase_extension_name = StringUtil::Lower(filebase);
 
+	// Initialize the ExtensionInitResult
 	result.filebase = lowercase_extension_name;
-	result.extension_version = extension_version;
 	result.filename = filename;
 	result.lib_hdl = lib_hdl;
+
+	if (!direct_load) {
+		auto info_file_name = filename + ".info";
+
+		result.install_info = ExtensionInstallInfo::TryReadInfoFile(fs, info_file_name, lowercase_extension_name);
+
+		if (result.install_info->mode == ExtensionInstallMode::UNKNOWN) {
+			// The info file was missing, we just set the version, since we have it from the parsed footer
+			result.install_info->version = parsed_metadata.extension_version;
+		}
+
+		if (result.install_info->version != parsed_metadata.extension_version) {
+			throw IOException("Metadata mismatch detected when loading extension '%s'\nPlease try reinstalling the "
+			                  "extension using `FORCE INSTALL '%s'`",
+			                  filename, extension);
+		}
+	} else {
+		result.install_info = make_uniq<ExtensionInstallInfo>();
+		result.install_info->mode = ExtensionInstallMode::NOT_INSTALLED;
+		result.install_info->full_path = filename;
+		result.install_info->version = parsed_metadata.extension_version;
+	}
+
 	return true;
 #endif
 }
@@ -378,7 +378,9 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 		                            init_fun_name, res.filename, error.RawMessage());
 	}
 
-	db.SetExtensionLoaded(extension, res.extension_version);
+	D_ASSERT(res.install_info);
+
+	db.SetExtensionLoaded(extension, *res.install_info);
 #endif
 }
 

@@ -67,12 +67,14 @@ void ArrayColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row
 	}
 }
 
-idx_t ArrayColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
-	return ScanCount(state, result, STANDARD_VECTOR_SIZE);
+idx_t ArrayColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+                            idx_t scan_count) {
+	return ScanCount(state, result, scan_count);
 }
 
-idx_t ArrayColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) {
-	return ScanCount(state, result, STANDARD_VECTOR_SIZE);
+idx_t ArrayColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
+                                     idx_t scan_count) {
+	return ScanCount(state, result, scan_count);
 }
 
 idx_t ArrayColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {

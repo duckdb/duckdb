@@ -19,7 +19,7 @@ namespace duckdb {
 
 class PandasAnalyzer {
 public:
-	PandasAnalyzer(const ClientContext &context) {
+	explicit PandasAnalyzer(const ClientContext &context) {
 		analyzed_type = LogicalType::SQLNULL;
 
 		Value result;
@@ -39,7 +39,7 @@ public:
 	}
 
 private:
-	LogicalType InnerAnalyze(py::object column, bool &can_convert, bool sample = true, idx_t increment = 1);
+	LogicalType InnerAnalyze(py::object column, bool &can_convert, idx_t increment);
 	uint64_t GetSampleIncrement(idx_t rows);
 
 private:
