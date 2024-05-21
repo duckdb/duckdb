@@ -52,10 +52,7 @@ void CleanupState::CleanupUpdate(UpdateInfo &info) {
 
 void CleanupState::CleanupDelete(DeleteInfo &info) {
 	auto version_table = info.table;
-	D_ASSERT(version_table->info->cardinality >= info.count);
-	version_table->info->cardinality -= info.count;
-
-	if (version_table->info->indexes.Empty()) {
+	if (!version_table->HasIndexes()) {
 		// this table has no indexes: no cleanup to be done
 		return;
 	}
@@ -67,7 +64,7 @@ void CleanupState::CleanupDelete(DeleteInfo &info) {
 	}
 
 	// possibly vacuum any indexes in this table later
-	indexed_tables[current_table->info->table] = current_table;
+	indexed_tables[current_table->GetTableName()] = current_table;
 
 	count = 0;
 	if (info.is_consecutive) {

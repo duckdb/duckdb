@@ -13,6 +13,7 @@
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
@@ -76,7 +77,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 			throw;
 		}
 	}
-	this->properties = binder->properties;
+	this->properties = binder->GetStatementProperties();
 	this->properties.parameter_count = parameter_count;
 	properties.bound_all_parameters = !bound_parameters.rebind && parameters_resolved;
 
@@ -138,6 +139,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::ATTACH_STATEMENT:
 	case StatementType::DETACH_STATEMENT:
 	case StatementType::COPY_DATABASE_STATEMENT:
+	case StatementType::UPDATE_EXTENSIONS_STATEMENT:
 		CreatePlan(*statement);
 		break;
 	default:
@@ -173,7 +175,10 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 	// format (de)serialization of this operator
 	try {
 		MemoryStream stream;
-		BinarySerializer::Serialize(*op, stream, true);
+		auto &config = DBConfig::GetConfig(context);
+		SerializationOptions options;
+		options.serialization_compatibility = config.options.serialization_compatibility;
+		BinarySerializer::Serialize(*op, stream, options);
 		stream.Rewind();
 		bound_parameter_map_t parameters;
 		auto new_plan = BinaryDeserializer::Deserialize<LogicalOperator>(stream, context, parameters);
@@ -182,10 +187,14 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 			*map = std::move(parameters);
 		}
 		op = std::move(new_plan);
-	} catch (SerializationException &ex) {  // NOLINT: explicitly allowing these errors (for now)
-		                                    // pass
-	} catch (NotImplementedException &ex) { // NOLINT: explicitly allowing these errors (for now)
-		                                    // pass
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		switch (error.Type()) {
+		case ExceptionType::NOT_IMPLEMENTED: // NOLINT: explicitly allowing these errors (for now)
+			break;                           // pass
+		default:
+			throw;
+		}
 	}
 }
 

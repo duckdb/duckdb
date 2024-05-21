@@ -46,7 +46,7 @@
 
 namespace duckdb {
 
-void Binder::BindSchemaOrCatalog(string &catalog, string &schema) {
+void Binder::BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema) {
 	if (catalog.empty() && !schema.empty()) {
 		// schema is specified - but catalog is not
 		// try searching for the catalog instead
@@ -72,6 +72,10 @@ void Binder::BindSchemaOrCatalog(string &catalog, string &schema) {
 			schema = string();
 		}
 	}
+}
+
+void Binder::BindSchemaOrCatalog(string &catalog, string &schema) {
+	BindSchemaOrCatalog(context, catalog, schema);
 }
 
 const string Binder::BindCatalog(string &catalog) {
@@ -117,6 +121,7 @@ SchemaCatalogEntry &Binder::BindSchema(CreateInfo &info) {
 	D_ASSERT(schema_obj.type == CatalogType::SCHEMA_ENTRY);
 	info.schema = schema_obj.name;
 	if (!info.temporary) {
+		auto &properties = GetStatementProperties();
 		properties.modified_databases.insert(schema_obj.catalog.GetName());
 	}
 	return schema_obj;
@@ -220,6 +225,7 @@ void Binder::BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog, c
 		auto child_type = ListType::GetChildType(type);
 		BindLogicalType(child_type, catalog, schema);
 		auto alias = type.GetAlias();
+		auto modifiers = type.GetModifiersCopy();
 		if (type.id() == LogicalTypeId::LIST) {
 			type = LogicalType::LIST(child_type);
 		} else {
@@ -228,6 +234,7 @@ void Binder::BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog, c
 		}
 
 		type.SetAlias(alias);
+		type.SetModifiers(modifiers);
 	} else if (type.id() == LogicalTypeId::STRUCT) {
 		auto child_types = StructType::GetChildTypes(type);
 		for (auto &child_type : child_types) {
@@ -235,15 +242,19 @@ void Binder::BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog, c
 		}
 		// Generate new Struct Type
 		auto alias = type.GetAlias();
+		auto modifiers = type.GetModifiersCopy();
 		type = LogicalType::STRUCT(child_types);
 		type.SetAlias(alias);
+		type.SetModifiers(modifiers);
 	} else if (type.id() == LogicalTypeId::ARRAY) {
 		auto child_type = ArrayType::GetChildType(type);
 		auto array_size = ArrayType::GetSize(type);
 		BindLogicalType(child_type, catalog, schema);
 		auto alias = type.GetAlias();
+		auto modifiers = type.GetModifiersCopy();
 		type = LogicalType::ARRAY(child_type, array_size);
 		type.SetAlias(alias);
+		type.SetModifiers(modifiers);
 	} else if (type.id() == LogicalTypeId::UNION) {
 		auto member_types = UnionType::CopyMemberTypes(type);
 		for (auto &member_type : member_types) {
@@ -251,10 +262,16 @@ void Binder::BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog, c
 		}
 		// Generate new Union Type
 		auto alias = type.GetAlias();
+		auto modifiers = type.GetModifiersCopy();
 		type = LogicalType::UNION(member_types);
 		type.SetAlias(alias);
+		type.SetModifiers(modifiers);
 	} else if (type.id() == LogicalTypeId::USER) {
 		auto user_type_name = UserType::GetTypeName(type);
+		auto user_type_mods = UserType::GetTypeModifiers(type);
+
+		bind_type_modifiers_function_t user_bind_modifiers_func = nullptr;
+
 		if (catalog) {
 			// The search order is:
 			// 1) In the same schema as the table
@@ -262,39 +279,71 @@ void Binder::BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog, c
 			// 3) System catalog
 			auto entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, *catalog, schema, user_type_name,
 			                                      OnEntryNotFound::RETURN_NULL);
-			if (!entry) {
-				type = LogicalType::INVALID;
-			} else {
-				auto &type_entry = entry->Cast<TypeCatalogEntry>();
-				type = type_entry.user_type;
-			}
-
-			if (type.id() == LogicalTypeId::INVALID) {
+			if (!entry || entry->Cast<TypeCatalogEntry>().user_type.id() == LogicalTypeId::INVALID) {
 				entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, *catalog, INVALID_SCHEMA, user_type_name,
 				                                 OnEntryNotFound::RETURN_NULL);
-				if (!entry) {
-					type = LogicalType::INVALID;
-				} else {
-					auto &type_entry = entry->Cast<TypeCatalogEntry>();
-					type = type_entry.user_type;
+				if (!entry || entry->Cast<TypeCatalogEntry>().user_type.id() == LogicalTypeId::INVALID) {
+					entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, INVALID_CATALOG, INVALID_SCHEMA,
+					                                 user_type_name, OnEntryNotFound::THROW_EXCEPTION);
 				}
 			}
-
-			if (type.id() == LogicalTypeId::INVALID) {
-				auto entry =
-				    entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, INVALID_CATALOG, INVALID_SCHEMA, user_type_name);
-				auto &type_entry = entry->Cast<TypeCatalogEntry>();
-				type = type_entry.user_type;
-			}
+			auto &type_entry = entry->Cast<TypeCatalogEntry>();
+			type = type_entry.user_type;
+			user_bind_modifiers_func = type_entry.bind_modifiers;
 		} else {
 			string type_catalog = UserType::GetCatalog(type);
 			string type_schema = UserType::GetSchema(type);
-			BindSchemaOrCatalog(type_catalog, type_schema);
+
+			BindSchemaOrCatalog(context, type_catalog, type_schema);
 			auto entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, type_catalog, type_schema, user_type_name);
 			auto &type_entry = entry->Cast<TypeCatalogEntry>();
 			type = type_entry.user_type;
+			user_bind_modifiers_func = type_entry.bind_modifiers;
 		}
+
 		BindLogicalType(type, catalog, schema);
+
+		// Apply the type modifiers (if any)
+		if (user_bind_modifiers_func) {
+			// If an explicit bind_modifiers function was provided, use that to set the type modifier
+			BindTypeModifiersInput input {context, type, user_type_mods};
+			type = user_bind_modifiers_func(input);
+		} else if (type.HasModifiers()) {
+			// If the type already has modifiers, try to replace them with the user-provided ones if they are compatible
+			// This enables registering custom types with "default" type modifiers that can be overridden, without
+			// having to provide a custom bind_modifiers function
+			auto type_mods_size = type.GetModifiers()->size();
+
+			// Are we trying to pass more type modifiers than the type has?
+			if (user_type_mods.size() > type_mods_size) {
+				throw BinderException(
+				    "Cannot apply '%d' type modifier(s) to type '%s' taking at most '%d' type modifier(s)",
+				    user_type_mods.size(), user_type_name, type_mods_size);
+			}
+
+			// Deep copy the type so that we can replace the type modifiers
+			type = type.DeepCopy();
+
+			// Re-fetch the type modifiers now that we've deduplicated the ExtraTypeInfo
+			auto &type_mods = *type.GetModifiers();
+
+			// Replace them in order, casting if necessary
+			for (idx_t i = 0; i < MinValue(type_mods.size(), user_type_mods.size()); i++) {
+				auto &type_mod = type_mods[i];
+				auto user_type_mod = user_type_mods[i];
+				if (type_mod.type() == user_type_mod.type()) {
+					type_mod = std::move(user_type_mod);
+				} else if (user_type_mod.DefaultTryCastAs(type_mod.type())) {
+					type_mod = std::move(user_type_mod);
+				} else {
+					throw BinderException("Cannot apply type modifier '%s' to type '%s', expected value of type '%s'",
+					                      user_type_mod.ToString(), user_type_name, type_mod.type().ToString());
+				}
+			}
+		} else if (!user_type_mods.empty()) {
+			// We're trying to pass type modifiers to a type that doesnt have any
+			throw BinderException("Type '%s' does not take any type modifiers", user_type_name);
+		}
 	}
 }
 
@@ -525,6 +574,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	result.types = {LogicalType::BIGINT};
 
 	auto catalog_type = stmt.info->type;
+	auto &properties = GetStatementProperties();
 	switch (catalog_type) {
 	case CatalogType::SCHEMA_ENTRY: {
 		auto &base = stmt.info->Cast<CreateInfo>();
@@ -621,9 +671,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				FindForeignKeyIndexes(pk_table_entry_ptr.GetColumns(), fk.pk_columns, fk.info.pk_keys);
 				CheckForeignKeyTypes(pk_table_entry_ptr.GetColumns(), create_info.columns, fk);
 				auto &storage = pk_table_entry_ptr.GetStorage();
-				auto index = storage.info->indexes.FindForeignKeyIndex(fk.info.pk_keys,
-				                                                       ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE);
-				if (!index) {
+
+				if (!storage.HasForeignKeyIndex(fk.info.pk_keys, ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE)) {
 					auto fk_column_names = StringUtil::Join(fk.pk_columns, ",");
 					throw BinderException("Failed to create foreign key on %s(%s): no UNIQUE or PRIMARY KEY constraint "
 					                      "present on these columns",
@@ -704,9 +753,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			                                             UserType::GetTypeName(create_type_info.type));
 			D_ASSERT(type_entry_p);
 			auto &type_entry = type_entry_p->Cast<TypeCatalogEntry>();
-
-			auto inner_type = type_entry.user_type;
-			create_type_info.type = inner_type;
+			create_type_info.type = type_entry.user_type;
 		} else {
 			SetCatalogLookupCallback(dependency_callback);
 			// This is done so that if the type contains a USER type,

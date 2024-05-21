@@ -533,6 +533,26 @@ Value EnableObjectCacheSetting::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Storage Compatibility Version (for serialization)
+//===--------------------------------------------------------------------===//
+void StorageCompatibilityVersion::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto version_string = input.GetValue<string>();
+	auto serialization_compatibility = SerializationCompatibility::FromString(version_string);
+	config.options.serialization_compatibility = serialization_compatibility;
+}
+
+void StorageCompatibilityVersion::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.serialization_compatibility = DBConfig().options.serialization_compatibility;
+}
+
+Value StorageCompatibilityVersion::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+
+	auto &version_name = config.options.serialization_compatibility.duckdb_version;
+	return Value(version_name);
+}
+
+//===--------------------------------------------------------------------===//
 // Enable HTTP Metadata Cache
 //===--------------------------------------------------------------------===//
 void EnableHTTPMetadataCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -1447,6 +1467,36 @@ void CustomUserAgentSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config)
 Value CustomUserAgentSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value(config.options.custom_user_agent);
+}
+
+//===--------------------------------------------------------------------===//
+// EnableHTTPLogging Setting
+//===--------------------------------------------------------------------===//
+void EnableHTTPLoggingSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).enable_http_logging = ClientConfig().enable_http_logging;
+}
+
+void EnableHTTPLoggingSetting::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).enable_http_logging = input.GetValue<bool>();
+}
+
+Value EnableHTTPLoggingSetting::GetSetting(const ClientContext &context) {
+	return Value(ClientConfig::GetConfig(context).enable_http_logging);
+}
+
+//===--------------------------------------------------------------------===//
+// HTTPLoggingOutput Setting
+//===--------------------------------------------------------------------===//
+void HTTPLoggingOutputSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).http_logging_output = ClientConfig().http_logging_output;
+}
+
+void HTTPLoggingOutputSetting::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).http_logging_output = input.GetValue<string>();
+}
+
+Value HTTPLoggingOutputSetting::GetSetting(const ClientContext &context) {
+	return Value(ClientConfig::GetConfig(context).http_logging_output);
 }
 
 } // namespace duckdb

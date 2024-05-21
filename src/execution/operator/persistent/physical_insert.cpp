@@ -453,15 +453,22 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 		gstate.insert_count += lstate.insert_chunk.size();
 		gstate.insert_count += updated_tuples;
 		storage.LocalAppend(gstate.append_state, table, context.client, lstate.insert_chunk, true);
+
+		// We finalize the local append to write the segment node count.
+		if (action_type != OnConflictAction::THROW) {
+			storage.FinalizeLocalAppend(gstate.append_state);
+			gstate.initialized = false;
+		}
+
 	} else {
 		D_ASSERT(!return_chunk);
 		// parallel append
 		if (!lstate.local_collection) {
 			lock_guard<mutex> l(gstate.lock);
-			auto &table_info = storage.info;
+			auto table_info = storage.GetDataTableInfo();
 			auto &block_manager = TableIOManager::Get(storage).GetBlockManagerForRowData();
-			lstate.local_collection =
-			    make_uniq<RowGroupCollection>(table_info, block_manager, insert_types, NumericCast<idx_t>(MAX_ROW_ID));
+			lstate.local_collection = make_uniq<RowGroupCollection>(std::move(table_info), block_manager, insert_types,
+			                                                        NumericCast<idx_t>(MAX_ROW_ID));
 			lstate.local_collection->InitializeEmpty();
 			lstate.local_collection->InitializeAppend(lstate.local_append_state);
 			lstate.writer = &gstate.table.GetStorage().CreateOptimisticWriter(context.client);
