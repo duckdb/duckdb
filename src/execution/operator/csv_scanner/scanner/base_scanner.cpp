@@ -47,13 +47,15 @@ void BaseScanner::SkipCSVRows(idx_t rows_to_skip) {
 	}
 	SkipScanner row_skipper(buffer_manager, state_machine, error_handler, rows_to_skip);
 	row_skipper.ParseChunk();
-	iterator.pos.buffer_pos = row_skipper.GetIteratorPosition();
+	iterator.pos = row_skipper.GetIteratorPosition();
 	if (row_skipper.state_machine->options.dialect_options.state_machine_options.new_line ==
 	        NewLineIdentifier::CARRY_ON &&
 	    row_skipper.states.states[1] == CSVState::CARRIAGE_RETURN) {
 		iterator.pos.buffer_pos++;
 	}
 	lines_read += row_skipper.GetLinesRead();
+
+
 }
 
 CSVIterator &BaseScanner::GetIterator() {

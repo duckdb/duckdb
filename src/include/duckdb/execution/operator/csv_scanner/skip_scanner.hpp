@@ -46,6 +46,7 @@ public:
 
 	SkipResult &GetResult() override;
 
+
 private:
 	void Initialize() override;
 

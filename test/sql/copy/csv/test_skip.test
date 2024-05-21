@@ -6,7 +6,15 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-copy (from range(10000)) to '__TEST_DIR__/skip.csv' (HEADER 0);
+set threads = 1
+
+#statement ok
+#copy (from range(10000)) to '__TEST_DIR__/skip.csv' (HEADER 0);
+
+query I
+select count(*) from read_csv('skip.csv', skip=3000, buffer_size=5, auto_detect = false, columns = {'i': 'INTEGER'});
+----
+7000
 
 foreach auto_detect true false
 

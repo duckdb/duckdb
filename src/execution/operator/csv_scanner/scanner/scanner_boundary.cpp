@@ -102,6 +102,13 @@ void CSVIterator::SetCurrentPositionToBoundary() {
 	pos.buffer_pos = boundary.buffer_pos;
 }
 
+void CSVIterator::SetCurrentBoundaryToPosition() {
+	boundary.file_idx = pos.file_idx ;
+	boundary.buffer_idx = pos.buffer_idx ;
+	boundary.buffer_pos  = pos.buffer_pos;
+	is_set = true;
+}
+
 void CSVIterator::SetStart(idx_t start) {
 	boundary.buffer_pos = start;
 }

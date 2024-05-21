@@ -74,6 +74,8 @@ public:
 
 	void SetCurrentPositionToBoundary();
 
+	void SetCurrentBoundaryToPosition();
+
 	void SetStart(idx_t pos);
 
 	//! 8 MB TODO: Should benchmarks other values
@@ -82,6 +84,8 @@ public:
 	CSVPosition pos;
 
 	bool done = false;
+
+	bool first_one = false;
 
 private:
 	//! The original setting

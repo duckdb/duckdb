@@ -74,9 +74,10 @@ public:
 		return lines_read;
 	}
 
-	idx_t GetIteratorPosition() {
-		return iterator.pos.buffer_pos;
+	CSVPosition GetIteratorPosition() {
+		return iterator.pos;
 	}
+
 
 	CSVStateMachine &GetStateMachine();
 

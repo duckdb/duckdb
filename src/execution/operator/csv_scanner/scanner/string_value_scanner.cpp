@@ -1286,18 +1286,9 @@ bool StringValueScanner::CanDirectlyCast(const LogicalType &type) {
 }
 
 void StringValueScanner::SetStart() {
-	if (iterator.pos.buffer_idx == 0 && iterator.pos.buffer_pos == 0) {
-		// This means this is the very first buffer
-		// This CSV is not from auto-detect, so we don't know where exactly it starts
-		// Hence we potentially have to skip empty lines and headers.
-		SkipBOM();
-		SkipCSVRows(state_machine->dialect_options.skip_rows.GetValue() +
-		            state_machine->dialect_options.header.GetValue());
-		if (result.store_line_size) {
-			result.error_handler.NewMaxLineSize(iterator.pos.buffer_pos);
-		}
-		return;
-	}
+if (iterator.first_one) {
+	return;
+}
 	// We have to look for a new line that fits our schema
 	// 1. We walk until the next new line
 	bool line_found;
