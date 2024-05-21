@@ -60,10 +60,6 @@ struct ResizeInfo {
 	    : vec(vec), data(data), buffer(buffer), multiplier(multiplier) {
 	}
 
-	bool IsNested() {
-		return !data;
-	}
-
 	Vector &vec;
 	data_ptr_t data;
 	optional_ptr<VectorBuffer> buffer;
@@ -200,8 +196,9 @@ public:
 		data = other.data;
 	}
 
-	//! This functions resizes the vector.
+	//! Resizes the vector.
 	DUCKDB_API void Resize(idx_t cur_size, idx_t new_size);
+	//! Returns a vector of ResizeInfo containing each (nested) vector to resize.
 	DUCKDB_API void FindResizeInfos(vector<ResizeInfo> &resize_infos, const idx_t multiplier);
 
 	DUCKDB_API void Serialize(Serializer &serializer, idx_t count);
