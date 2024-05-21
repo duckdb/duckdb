@@ -41,9 +41,7 @@ bool BaseScanner::FinishedFile() {
 	return iterator.pos.buffer_pos + 1 == cur_buffer_handle->actual_size;
 }
 
-void BaseScanner::SkipCSVRows() {
-	idx_t rows_to_skip =
-	    state_machine->dialect_options.skip_rows.GetValue() + state_machine->dialect_options.header.GetValue();
+void BaseScanner::SkipCSVRows(idx_t rows_to_skip) {
 	if (rows_to_skip == 0) {
 		return;
 	}
@@ -65,6 +63,10 @@ void BaseScanner::Reset() {
 
 CSVIterator &BaseScanner::GetIterator() {
 	return iterator;
+}
+
+void BaseScanner::SetIterator(const CSVIterator &it){
+	iterator = it;
 }
 
 ScannerResult &BaseScanner::ParseChunk() {

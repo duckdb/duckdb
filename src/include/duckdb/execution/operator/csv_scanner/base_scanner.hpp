@@ -64,6 +64,8 @@ public:
 
 	CSVIterator &GetIterator();
 
+	void SetIterator(const CSVIterator &it);
+
 	idx_t GetBoundaryIndex() {
 		return iterator.GetBoundaryIdx();
 	}
@@ -93,6 +95,11 @@ public:
 
 	bool ever_quoted = false;
 
+	//! Skips Notes and/or parts of the data, starting from the top.
+	//! notes are dirty lines on top of the file, before the actual data
+	void SkipCSVRows(idx_t rows_to_skip);
+
+
 protected:
 	//! Boundaries of this scanner
 	CSVIterator iterator;
@@ -115,9 +122,6 @@ protected:
 	//! Internal Functions used to perform the parsing
 	//! Initializes the scanner
 	virtual void Initialize();
-
-	//! Skips Notes, notes are dirty lines on top of the file, before the actual data
-	void SkipCSVRows();
 
 	inline bool ContainsZeroByte(uint64_t v) {
 		return (v - UINT64_C(0x0101010101010101)) & ~(v)&UINT64_C(0x8080808080808080);
