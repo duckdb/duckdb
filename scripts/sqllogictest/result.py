@@ -1115,7 +1115,10 @@ class SQLLogicContext:
                     context.remove_keyword(key)
 
             loop_context = SQLLogicContext(self.pool, self.runner, statements, self.keywords.copy(), update_value)
-            loop_context.execute()
+            try:
+                loop_context.execute()
+            except TestException:
+                self.error = loop_context.error
         else:
             contexts: Dict[Tuple[str, int], Any] = {}
             for val in range(loop.start, loop.end):
@@ -1247,6 +1250,8 @@ class SQLLogicContext:
                     if self.runner.skip_active() and statement.__class__ != Unskip:
                         # Keep skipping until Unskip is found
                         continue
+                    if statement.get_decorators() != []:
+                        self.skiptest("Decorators are not supported yet")
                     method = self.STATEMENTS.get(statement.__class__)
                     if not method:
                         self.skiptest("Not supported by the runner")

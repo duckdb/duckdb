@@ -62,7 +62,7 @@ MainHeader MainHeader::Read(ReadStream &source) {
 	if (header.version_number != VERSION_NUMBER) {
 		auto version = GetDuckDBVersion(header.version_number);
 		string version_text;
-		if (version) {
+		if (!version.empty()) {
 			// known version
 			version_text = "DuckDB version " + string(version);
 		} else {
