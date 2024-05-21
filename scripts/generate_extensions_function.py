@@ -520,7 +520,7 @@ def write_header(data: ExtensionData):
                                                                     {"azure/config", "azure"},
                                                                     {"azure/credential_chain", "azure"}, 
                                                                     {"huggingface/config", "httfps"},
-                                                                    {"huggingface/cache", "httpfs"}, 
+                                                                    {"huggingface/credential_chain", "httpfs"}, 
                                                                     {"bearer/config", "httpfs"}
 }; // EXTENSION_SECRET_PROVIDERS
 
