@@ -67,7 +67,6 @@ jobs:
     name: Release Assertions
     runs-on: ubuntu-20.04
     needs: linux-memory-leaks
-    timeout-minutes: 120
     env:
       CC: gcc-10
       CXX: g++-10
