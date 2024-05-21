@@ -67,7 +67,6 @@ unique_ptr<Expression> TimeStampComparison::Apply(LogicalOperator &op, vector<re
 	Value result;
 	if (ExpressionExecutor::TryEvaluateScalar(context, *cast_constant, result)) {
 		D_ASSERT(result.type() == LogicalType::DATE);
-		// loose information beyond the date. (i.e hours, minutes seconds)
 		auto original_val = result.GetValue<duckdb::date_t>();
 		auto no_seconds = dtime_t(0);
 
@@ -75,16 +74,19 @@ unique_ptr<Expression> TimeStampComparison::Apply(LogicalOperator &op, vector<re
 		auto original_val_ts = Value::TIMESTAMP(original_val, no_seconds);
 		auto original_val_for_comparison = make_uniq<BoundConstantExpression>(original_val_ts);
 
-		interval_t one_day;
-		one_day.days = 1;
-		one_day.micros = 0;
-		one_day.months = 0;
-		timestamp_t result_plus_one_day;
-		if (!Interval::TryAdd(result.GetValue<timestamp_t>(), one_day, result_plus_one_day)) {
+		// add one day and validate the new date
+		// code is inspired by AddOperator::Operation(date_t left, int32_t right). The function wasn't used directly
+		// since it throws errors that I cannot catch here.
+
+		auto date_t_copy = result.GetValue<duckdb::date_t>();
+		date_t one_day(1), result(0);
+
+		if (!TryAddOperator::Operation<date_t, date_t, date_t>(date_t_copy, one_day, result)) {
 			// don't rewrite the expression and let the expression executor handle the invalid date
 			return nullptr;
 		}
-		auto result_as_val = Value::TIMESTAMP(result_plus_one_day);
+
+		auto result_as_val = Value::DATE(result);
 		auto original_val_plus_on_date_ts = Value::TIMESTAMP(result_as_val.GetValue<timestamp_t>());
 
 		auto val_for_comparison = make_uniq<BoundConstantExpression>(original_val_plus_on_date_ts);
