@@ -26,7 +26,7 @@ struct TableAppendState;
 class LocalTableStorage : public enable_shared_from_this<LocalTableStorage> {
 public:
 	// Create a new LocalTableStorage
-	explicit LocalTableStorage(DataTable &table);
+	explicit LocalTableStorage(ClientContext &context, DataTable &table);
 	// Create a LocalTableStorage from an ALTER TYPE
 	LocalTableStorage(ClientContext &context, DataTable &table, LocalTableStorage &parent, idx_t changed_idx,
 	                  const LogicalType &target_type, const vector<column_t> &bound_columns, Expression &cast_expr);
@@ -76,7 +76,7 @@ public:
 	shared_ptr<LocalTableStorage> MoveEntry(DataTable &table);
 	reference_map_t<DataTable, shared_ptr<LocalTableStorage>> MoveEntries();
 	optional_ptr<LocalTableStorage> GetStorage(DataTable &table);
-	LocalTableStorage &GetOrCreateStorage(DataTable &table);
+	LocalTableStorage &GetOrCreateStorage(ClientContext &context, DataTable &table);
 	idx_t EstimatedSize();
 	bool IsEmpty();
 	void InsertEntry(DataTable &table, shared_ptr<LocalTableStorage> entry);
