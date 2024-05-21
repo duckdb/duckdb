@@ -79,14 +79,14 @@ unique_ptr<Expression> TimeStampComparison::Apply(LogicalOperator &op, vector<re
 		// since it throws errors that I cannot catch here.
 
 		auto date_t_copy = result.GetValue<duckdb::date_t>();
-		date_t one_day(1), result(0);
-
-		if (!TryAddOperator::Operation<date_t, date_t, date_t>(date_t_copy, one_day, result)) {
+		date_t date_t_result;
+		// attempt to add 1 day
+		if (!TryAddOperator::Operation<date_t, int32_t, date_t>(date_t_copy, 1, date_t_result)) {
 			// don't rewrite the expression and let the expression executor handle the invalid date
 			return nullptr;
 		}
 
-		auto result_as_val = Value::DATE(result);
+		auto result_as_val = Value::DATE(date_t_result);
 		auto original_val_plus_on_date_ts = Value::TIMESTAMP(result_as_val.GetValue<timestamp_t>());
 
 		auto val_for_comparison = make_uniq<BoundConstantExpression>(original_val_plus_on_date_ts);
