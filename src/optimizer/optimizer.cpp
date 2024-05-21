@@ -43,6 +43,7 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_uniq<RegexOptimizationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<EmptyNeedleRemovalRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<EnumComparisonRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<TimeStampComparison>(context, rewriter));
 
 #ifdef DEBUG
 	for (auto &rule : rewriter.rules) {
