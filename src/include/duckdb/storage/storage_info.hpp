@@ -25,7 +25,6 @@ struct FileHandle;
 //! The default block size
 #define DEFAULT_BLOCK_ALLOC_SIZE 262144
 
-//! The vector size used in the execution engine
 #ifndef DUCKDB_BLOCK_ALLOC_SIZE
 #define DUCKDB_BLOCK_ALLOC_SIZE DEFAULT_BLOCK_ALLOC_SIZE
 #endif
