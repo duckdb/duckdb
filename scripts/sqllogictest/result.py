@@ -779,6 +779,7 @@ class SQLLogicContext:
                 self.runner.delete_database(dbpath)
         else:
             dbpath = ""
+        self.runner.loaded_databases.add(dbpath)
 
         # set up the config file
         additional_config = {}

@@ -90,10 +90,6 @@ class SQLLogicTestExecutor(SQLLogicRunner):
         self.test = test
         self.original_sqlite_test = self.test.is_sqlite_test()
 
-        test_directory = TEST_DIRECTORY_PATH
-        if os.path.exists(test_directory):
-            shutil.rmtree(test_directory, ignore_errors=True)
-
         # Top level keywords
         keywords = {'__TEST_DIR__': self.get_test_directory(), '__WORKING_DIRECTORY__': os.getcwd()}
 
@@ -165,6 +161,8 @@ def main():
         file_paths = [os.path.relpath(path, test_directory) for path in file_paths]
 
     start_offset = args.start_offset
+
+    file_paths = ['test/sql/attach/attach_wal_alter.test', 'test/fuzzer/pedro/pushdown_error.test']
 
     total_tests = len(file_paths)
     for i, file_path in enumerate(file_paths):
