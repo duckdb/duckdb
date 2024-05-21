@@ -1,6 +1,4 @@
 import os
-import re
-from python_helpers import open_utf8
 
 
 def execute_system_command(cmd):
