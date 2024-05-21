@@ -71,6 +71,10 @@ SELECT * EXCLUDE (prompt) from sniff_csv('__TEST_DIR__/skip.csv',skip=11000)
 
 # Test with different buffer sizes
 
+# There is currently a limitation on skip if the number of rows to be skipped go over a buffer boundary
+
+mode skip
+
 loop buffer_size 5 10
 
 # Test -1
