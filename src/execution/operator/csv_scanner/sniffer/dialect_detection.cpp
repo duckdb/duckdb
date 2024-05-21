@@ -186,14 +186,14 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 		best_consistent_rows = consistent_rows;
 		max_columns_found = num_cols;
 		prev_padding_count = padding_count;
-		if (options.dialect_options.skip_rows.IsSetByUser()){
+		if (options.dialect_options.skip_rows.IsSetByUser()) {
 			// If skip rows is set by user, and we found dirty notes, we only accept it if either null_padding or
 			// ignore_errors is set
 			if (dirty_notes != 0 && !options.null_padding && !options.ignore_errors.GetValue()) {
 				return;
 			}
 			sniffing_state_machine.dialect_options.skip_rows = options.dialect_options.skip_rows.GetValue();
-		} else {
+		} else if (!options.null_padding && !options.ignore_errors.GetValue()) {
 			sniffing_state_machine.dialect_options.skip_rows = dirty_notes;
 		}
 
@@ -217,16 +217,16 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 			}
 		}
 		if (!same_quote_is_candidate) {
-			if (options.dialect_options.skip_rows.IsSetByUser()){
-			// If skip rows is set by user, and we found dirty notes, we only accept it if either null_padding or
-			// ignore_errors is set
-			if (dirty_notes != 0 && !options.null_padding && !options.ignore_errors.GetValue()) {
-				return;
+			if (options.dialect_options.skip_rows.IsSetByUser()) {
+				// If skip rows is set by user, and we found dirty notes, we only accept it if either null_padding or
+				// ignore_errors is set
+				if (dirty_notes != 0 && !options.null_padding && !options.ignore_errors.GetValue()) {
+					return;
+				}
+				sniffing_state_machine.dialect_options.skip_rows = options.dialect_options.skip_rows.GetValue();
+			} else if (!options.null_padding && !options.ignore_errors.GetValue()) {
+				sniffing_state_machine.dialect_options.skip_rows = dirty_notes;
 			}
-			sniffing_state_machine.dialect_options.skip_rows = options.dialect_options.skip_rows.GetValue();
-		} else {
-			sniffing_state_machine.dialect_options.skip_rows = dirty_notes;
-		}
 
 			sniffing_state_machine.dialect_options.num_cols = num_cols;
 			candidates.emplace_back(std::move(scanner));
@@ -319,20 +319,20 @@ NewLineIdentifier CSVSniffer::DetectNewLineDelimiter(CSVBufferManager &buffer_ma
 	return NewLineIdentifier::SINGLE;
 }
 
-void CSVSniffer::SkipLines(vector<unique_ptr<ColumnCountScanner>> &csv_state_machines){
-	if(csv_state_machines.empty()){
+void CSVSniffer::SkipLines(vector<unique_ptr<ColumnCountScanner>> &csv_state_machines) {
+	if (csv_state_machines.empty()) {
 		return;
 	}
 	auto &first_scanner = *csv_state_machines[0];
 	// We figure out the iterator position for the first scanner
-	if (options.dialect_options.skip_rows.IsSetByUser()){
+	if (options.dialect_options.skip_rows.IsSetByUser()) {
 		first_scanner.SkipCSVRows(options.dialect_options.skip_rows.GetValue());
 	}
 	// The iterator position is the same regardless of the scanner configuration, hence we apply the same iterator
 	// To the remaining scanners
 	const auto first_iterator = first_scanner.GetIterator();
-	for (idx_t i = 1; i < csv_state_machines.size(); i++){
-		auto& cur_scanner = *csv_state_machines[i];
+	for (idx_t i = 1; i < csv_state_machines.size(); i++) {
+		auto &cur_scanner = *csv_state_machines[i];
 		cur_scanner.SetIterator(first_iterator);
 	}
 }

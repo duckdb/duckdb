@@ -99,7 +99,6 @@ public:
 	//! notes are dirty lines on top of the file, before the actual data
 	void SkipCSVRows(idx_t rows_to_skip);
 
-
 protected:
 	//! Boundaries of this scanner
 	CSVIterator iterator;

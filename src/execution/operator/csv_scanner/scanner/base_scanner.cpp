@@ -60,7 +60,7 @@ CSVIterator &BaseScanner::GetIterator() {
 	return iterator;
 }
 
-void BaseScanner::SetIterator(const CSVIterator &it){
+void BaseScanner::SetIterator(const CSVIterator &it) {
 	iterator = it;
 }
 

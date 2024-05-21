@@ -6,14 +6,14 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-copy (from range(10000)) to 'skip.csv';
+copy (from range(10000)) to '__TEST_DIR__/skip.csv' (HEADER 0);
 
 query I
-select count(*) from read_csv('skip.csv', skip=3000);
+select count(*) from read_csv('__TEST_DIR__/skip.csv', skip=3000);
 ----
 7000
 
 query I
-select * from read_csv('skip.csv', skip=3000) order by all limit 1;
+select * from read_csv('__TEST_DIR__/skip.csv', skip=3000) order by all limit 1;
 ----
 3000
