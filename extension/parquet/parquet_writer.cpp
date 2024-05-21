@@ -497,19 +497,19 @@ static void ValidateColumnOffsets(const string &filename, idx_t file_length, con
 	for (idx_t i = 0; i < row_group.columns.size(); ++i) {
 		const auto &col_chunk = row_group.columns[i];
 		ValidateOffsetInFile(filename, i, file_length, col_chunk.meta_data.data_page_offset, "data page offset");
-		auto col_start = col_chunk.meta_data.data_page_offset;
+		auto col_start = NumericCast<idx_t>(col_chunk.meta_data.data_page_offset);
 		// The file format requires that if a dictionary page exists, it be before data pages.
 		if (col_chunk.meta_data.__isset.dictionary_page_offset) {
 			ValidateOffsetInFile(filename, i, file_length, col_chunk.meta_data.dictionary_page_offset,
 			                     "dictionary page offset");
-			if (col_chunk.meta_data.dictionary_page_offset >= col_start) {
+			if (NumericCast<idx_t>(col_chunk.meta_data.dictionary_page_offset) >= col_start) {
 				throw IOException("Parquet file '%s': metadata is corrupt. Dictionary "
 				                  "page (offset=%llu) must come before any data pages (offset=%llu).",
 				                  filename, col_chunk.meta_data.dictionary_page_offset, col_start);
 			}
 			col_start = col_chunk.meta_data.dictionary_page_offset;
 		}
-		auto col_len = col_chunk.meta_data.total_compressed_size;
+		auto col_len = NumericCast<idx_t>(col_chunk.meta_data.total_compressed_size);
 		auto col_end = col_start + col_len;
 		if (col_end <= 0 || col_end > file_length) {
 			throw IOException("Parquet file '%s': metadata is corrupt. Column %llu has "
