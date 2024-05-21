@@ -307,6 +307,12 @@ NewLineIdentifier CSVSniffer::DetectNewLineDelimiter(CSVBufferManager &buffer_ma
 	return NewLineIdentifier::SINGLE;
 }
 
+void CSVSniffer::SkipLines(ColumnCountScanner &first_scanner){
+	if (options.dialect_options.skip_rows.IsSetByUser()){
+		return;
+	}
+}
+
 // Dialect Detection consists of five steps:
 // 1. Generate a search space of all possible dialects
 // 2. Generate a state machine for each dialect
@@ -342,7 +348,8 @@ void CSVSniffer::DetectDialect() {
 	                                escape_candidates_map);
 	// Step 3: Analyze all candidates on the first chunk
 	for (auto &state_machine : csv_state_machines) {
-		state_machine->Reset();
+//		state_machine->RefineCandidateNextChunkeset();
+
 		AnalyzeDialectCandidate(std::move(state_machine), rows_read, best_consistent_rows, prev_padding_count);
 	}
 	// Step 4: Loop over candidates and find if they can still produce good results for the remaining chunks

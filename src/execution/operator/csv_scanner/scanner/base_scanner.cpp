@@ -1,5 +1,7 @@
-#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
 #include "duckdb/execution/operator/csv_scanner/base_scanner.hpp"
+
+#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/skip_scanner.hpp"
 
 namespace duckdb {
 
@@ -37,6 +39,23 @@ bool BaseScanner::FinishedFile() {
 	}
 	// If yes, are we in the last position?
 	return iterator.pos.buffer_pos + 1 == cur_buffer_handle->actual_size;
+}
+
+void BaseScanner::SkipCSVRows() {
+	idx_t rows_to_skip =
+	    state_machine->dialect_options.skip_rows.GetValue() + state_machine->dialect_options.header.GetValue();
+	if (rows_to_skip == 0) {
+		return;
+	}
+	SkipScanner row_skipper(buffer_manager, state_machine, error_handler, rows_to_skip);
+	row_skipper.ParseChunk();
+	iterator.pos.buffer_pos = row_skipper.GetIteratorPosition();
+	if (row_skipper.state_machine->options.dialect_options.state_machine_options.new_line ==
+	        NewLineIdentifier::CARRY_ON &&
+	    row_skipper.states.states[1] == CSVState::CARRIAGE_RETURN) {
+		iterator.pos.buffer_pos++;
+	}
+	lines_read += row_skipper.GetLinesRead();
 }
 
 void BaseScanner::Reset() {
