@@ -52,10 +52,10 @@ public:
 	                     shared_ptr<CSVFileScan> csv_file_scan = nullptr, CSVIterator iterator = {});
 
 	virtual ~BaseScanner() = default;
+
 	//! Returns true if the scanner is finished
 	bool FinishedFile();
-	//! Resets the scanner
-	void Reset();
+
 	//! Parses data into a output_chunk
 	virtual ScannerResult &ParseChunk();
 

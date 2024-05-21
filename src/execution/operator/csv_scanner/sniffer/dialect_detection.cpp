@@ -186,15 +186,17 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 		best_consistent_rows = consistent_rows;
 		max_columns_found = num_cols;
 		prev_padding_count = padding_count;
-		if (dirty_notes != 0 && options.dialect_options.skip_rows.IsSetByUser()){
-			// If skip rows is set by user and we found dirty notes, this is not a suitable candidate
-			return;
-		}
-		if (!options.null_padding && !options.ignore_errors.GetValue()) {
-			sniffing_state_machine.dialect_options.skip_rows = dirty_notes;
-		} else {
+		if (options.dialect_options.skip_rows.IsSetByUser()){
+			// If skip rows is set by user, and we found dirty notes, we only accept it if either null_padding or
+			// ignore_errors is set
+			if (dirty_notes != 0 && !options.null_padding && !options.ignore_errors.GetValue()) {
+				return;
+			}
 			sniffing_state_machine.dialect_options.skip_rows = options.dialect_options.skip_rows.GetValue();
+		} else {
+			sniffing_state_machine.dialect_options.skip_rows = dirty_notes;
 		}
+
 		candidates.clear();
 		sniffing_state_machine.dialect_options.num_cols = num_cols;
 		candidates.emplace_back(std::move(scanner));
@@ -215,11 +217,17 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 			}
 		}
 		if (!same_quote_is_candidate) {
-			if (!options.null_padding && !options.ignore_errors.GetValue()) {
-				sniffing_state_machine.dialect_options.skip_rows = dirty_notes;
-			} else {
-				sniffing_state_machine.dialect_options.skip_rows = options.dialect_options.skip_rows.GetValue();
+			if (options.dialect_options.skip_rows.IsSetByUser()){
+			// If skip rows is set by user, and we found dirty notes, we only accept it if either null_padding or
+			// ignore_errors is set
+			if (dirty_notes != 0 && !options.null_padding && !options.ignore_errors.GetValue()) {
+				return;
 			}
+			sniffing_state_machine.dialect_options.skip_rows = options.dialect_options.skip_rows.GetValue();
+		} else {
+			sniffing_state_machine.dialect_options.skip_rows = dirty_notes;
+		}
+
 			sniffing_state_machine.dialect_options.num_cols = num_cols;
 			candidates.emplace_back(std::move(scanner));
 		}
