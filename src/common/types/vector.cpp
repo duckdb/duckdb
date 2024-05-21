@@ -312,10 +312,11 @@ void Vector::FindResizeInfos(vector<ResizeInfo> &resize_infos, const idx_t multi
 	resize_infos.emplace_back(resize_info);
 
 	// Base case.
-	if (!auxiliary) {
+	if (data) {
 		return;
 	}
 
+	D_ASSERT(auxiliary);
 	switch (GetAuxiliary()->GetBufferType()) {
 	case VectorBufferType::LIST_BUFFER: {
 		auto &vector_list_buffer = auxiliary->Cast<VectorListBuffer>();
@@ -356,9 +357,12 @@ void Vector::Resize(idx_t current_size, idx_t new_size) {
 	FindResizeInfos(resize_infos, 1);
 
 	for (auto &resize_info_entry : resize_infos) {
+		// Resize the validity mask.
+		auto new_validity_size = new_size * resize_info_entry.multiplier;
+		resize_info_entry.vec.validity.Resize(current_size, new_validity_size);
+
 		// For nested data types, we only need to resize the validity mask.
 		if (!resize_info_entry.data) {
-			resize_info_entry.vec.validity.Resize(current_size, new_size * resize_info_entry.multiplier);
 			continue;
 		}
 
@@ -378,9 +382,6 @@ void Vector::Resize(idx_t current_size, idx_t new_size) {
 		memcpy(new_data.get(), resize_info_entry.data, old_size);
 		resize_info_entry.buffer->SetData(std::move(new_data));
 		resize_info_entry.vec.data = resize_info_entry.buffer->GetData();
-
-		// Resize the validity mask.
-		resize_info_entry.vec.validity.Resize(current_size, new_size * resize_info_entry.multiplier);
 	}
 }
 
