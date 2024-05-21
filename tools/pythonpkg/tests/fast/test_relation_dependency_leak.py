@@ -1,6 +1,5 @@
-import duckdb
 import numpy as np
-import os, psutil
+import os
 import pytest
 
 try:
@@ -10,6 +9,9 @@ try:
 except ImportError:
     can_run = False
 from conftest import NumpyPandas, ArrowPandas
+
+
+psutil = pytest.importorskip("psutil")
 
 
 def check_memory(function_to_check, pandas, duckdb_cursor):
