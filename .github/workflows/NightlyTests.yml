@@ -838,3 +838,7 @@ jobs:
           name: coverage
           path: coverage.zip
           if-no-files-found: error
+
+  pyodide:
+    uses: ./.github/workflows/Pyodide.yml
+    secrets: inherit
