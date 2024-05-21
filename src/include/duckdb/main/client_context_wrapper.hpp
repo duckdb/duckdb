@@ -18,9 +18,7 @@ class ClientContextWrapper {
 public:
 	explicit ClientContextWrapper(const shared_ptr<ClientContext> &context);
 	shared_ptr<ClientContext> GetContext();
-	operator bool() const {
-		return !client_context.expired();
-	}
+	shared_ptr<ClientContext> TryGetContext();
 
 private:
 	weak_ptr<ClientContext> client_context;
