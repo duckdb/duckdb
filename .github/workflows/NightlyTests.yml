@@ -401,6 +401,56 @@ jobs:
        shell: bash
        run: python3 scripts/test_zero_initialize.py
 
+  extension-updating:
+    name: Extension updating test
+    runs-on: ubuntu-20.04
+#    needs: linux-memory-leaks TODO revert
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install
+        shell: bash
+        run: pip install awscli
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ env.CCACHE_SAVE }}
+
+      - name: Build
+        shell: bash
+        run: BUILD_TPCH=1 make
+
+      - name: Start Minio
+        shell: bash
+        run: |
+          sudo ./scripts/install_s3_test_server.sh
+          ./scripts/generate_presigned_url.sh
+          source ./scripts/run_s3_test_server.sh
+          source ./scripts/set_s3_test_server_variables.sh
+          sleep 60
+
+      - name: Build
+        shell: bash
+        run: |
+          ./scripts/run_extension_medata_tests.sh
+
   no-string-inline:
     name: No String Inline / Destroy Unpinned Blocks
     runs-on: ubuntu-20.04
