@@ -16,10 +16,10 @@ end
         full_table_name = "$(schema_name).$(table_name)"
         DBInterface.execute(db, "CREATE SCHEMA $(schema_name)")
     else
-        schema_name = nothing 
+        schema_name = nothing
         full_table_name = table_name
     end
-        
+
     DBInterface.execute(db, "CREATE TABLE $(full_table_name)(i INTEGER)")
 
     appender = DuckDB.Appender(db, table_name, schema_name)

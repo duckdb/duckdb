@@ -40,7 +40,7 @@ DuckDB.close(appender)
 mutable struct Appender
     handle::duckdb_appender
 
-    function Appender(con::Connection, table::AbstractString, schema::Union{AbstractString, Nothing}=nothing)
+    function Appender(con::Connection, table::AbstractString, schema::Union{AbstractString, Nothing} = nothing)
         handle = Ref{duckdb_appender}()
         if duckdb_appender_create(con.handle, something(schema, C_NULL), table, handle) != DuckDBSuccess
             error_ptr = duckdb_appender_error(handle)
@@ -56,7 +56,7 @@ mutable struct Appender
         finalizer(_close_appender, con)
         return con
     end
-    function Appender(db::DB, table::AbstractString, schema::Union{AbstractString, Nothing}=nothing)
+    function Appender(db::DB, table::AbstractString, schema::Union{AbstractString, Nothing} = nothing)
         return Appender(db.main_connection, table, schema)
     end
 end
