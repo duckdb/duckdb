@@ -295,3 +295,13 @@ EXECUTE sw1(2);
 ----
 10	1
 11	2
+
+# Struct Slicing
+query I
+from (values ({'key': 'A'}), ({'key': 'B'}), ({'key': 'C'}))
+select
+   list(col0) over (rows between unbounded preceding and current row) as result
+----
+[{'key': A}]
+[{'key': A}, {'key': B}]
+[{'key': A}, {'key': B}, {'key': C}]
