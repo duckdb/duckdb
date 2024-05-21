@@ -167,13 +167,23 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 			sel_t s = 0;
 			SelectionVector sel(&s);
 			row.Slice(sel, 1);
-			for (size_t col_idx = 0; col_idx < payload.ColumnCount(); ++col_idx) {
-				DictionaryVector::Child(row.data[col_idx]).Reference(payload.data[col_idx]);
+			// This doesn't work for STRUCTs because the SV
+			// is not copied to the children when you slice
+			vector<column_t> structs;
+			for (column_t col_idx = 0; col_idx < payload.ColumnCount(); ++col_idx) {
+				auto &col_vec = row.data[col_idx];
+				DictionaryVector::Child(col_vec).Reference(payload.data[col_idx]);
+				if (col_vec.GetType().InternalType() == PhysicalType::STRUCT) {
+					structs.emplace_back(col_idx);
+				}
 			}
 
 			// Update the state and finalize it one row at a time.
 			for (idx_t i = 0; i < input.size(); ++i) {
 				sel.set_index(0, i);
+				for (const auto struct_idx : structs) {
+					row.data[struct_idx].Slice(payload.data[struct_idx], sel, 1);
+				}
 				aggregate.update(row.data.data(), aggr_input_data, row.ColumnCount(), statev, 1);
 				aggregate.finalize(statev, aggr_input_data, result, 1, i);
 			}
