@@ -51,6 +51,8 @@ public:
 public:
 	DUCKDB_API static Transaction &Get(ClientContext &context, AttachedDatabase &db);
 	DUCKDB_API static Transaction &Get(ClientContext &context, Catalog &catalog);
+	//! Returns the transaction for the given context if it has already been started
+	DUCKDB_API static optional_ptr<Transaction> TryGet(ClientContext &context, AttachedDatabase &db);
 
 	//! Whether or not the transaction has made any modifications to the database so far
 	DUCKDB_API bool IsReadOnly();

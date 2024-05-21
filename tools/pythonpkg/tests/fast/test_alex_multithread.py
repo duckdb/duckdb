@@ -1,8 +1,14 @@
+import platform
 import duckdb
 from threading import Thread, current_thread
-import pandas as pd
-import os
 import pytest
+
+
+pytestmark = pytest.mark.xfail(
+    condition=platform.system() == "Emscripten",
+    reason="Emscripten builds cannot use threads",
+    raises=RuntimeError,
+)
 
 
 @pytest.fixture(scope="session")
