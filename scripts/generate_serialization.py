@@ -716,8 +716,6 @@ for entry in file_list:
             check_children_for_duplicate_members(base_class, [], set(), set())
 
     with open(target_path, 'w+') as f:
-        # Deduplicate the list
-        include_list = set(include_list)
         include_list = ''.join([INCLUDE_FORMAT.format(filename=x) for x in include_list])
         header = HEADER.format(include_list=include_list)
         f.write(header)

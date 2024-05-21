@@ -4,8 +4,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/parser/tableref/list.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/parser/tableref/list.hpp"
 
 namespace duckdb {
 

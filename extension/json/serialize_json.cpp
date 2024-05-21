@@ -5,9 +5,9 @@
 
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
-#include "json_scan.hpp"
 #include "buffered_json_reader.hpp"
 #include "json_transform.hpp"
+#include "json_scan.hpp"
 
 namespace duckdb {
 

@@ -4,8 +4,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 
 namespace duckdb {
