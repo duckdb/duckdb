@@ -115,7 +115,8 @@ public:
 	static string ExtensionDirectory(ClientContext &context);
 	static string ExtensionDirectory(DBConfig &config, FileSystem &fs);
 
-	static bool CheckExtensionSignature(FileHandle &handle, ParsedExtensionMetaData &parsed_metadata);
+	static bool CheckExtensionSignature(FileHandle &handle, ParsedExtensionMetaData &parsed_metadata,
+	                                    const bool allow_community_extensions);
 	static ParsedExtensionMetaData ParseExtensionMetaData(const char *metadata);
 	static ParsedExtensionMetaData ParseExtensionMetaData(FileHandle &handle);
 
