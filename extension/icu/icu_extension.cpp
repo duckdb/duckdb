@@ -90,8 +90,8 @@ struct IcuBindData : public FunctionData {
 	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
 	                      const ScalarFunction &function) {
 		auto &bind_data = bind_data_p->Cast<IcuBindData>();
-		serializer.WritePropertyWithDefault<string>(100, "language", bind_data.language);
-		serializer.WritePropertyWithDefault<string>(101, "country", bind_data.country);
+		serializer.WriteProperty(100, "language", bind_data.language);
+		serializer.WriteProperty(101, "country", bind_data.country);
 		serializer.WritePropertyWithDefault<string>(102, "tag", bind_data.tag);
 	}
 
@@ -99,8 +99,8 @@ struct IcuBindData : public FunctionData {
 		string language;
 		string country;
 		string tag;
-		deserializer.ReadPropertyWithDefault<string>(100, "language", language);
-		deserializer.ReadPropertyWithDefault<string>(101, "country", country);
+		deserializer.ReadProperty(100, "language", language);
+		deserializer.ReadProperty(101, "country", country);
 		deserializer.ReadPropertyWithDefault<string>(102, "tag", tag);
 		return CreateInstance(language, country, tag);
 	}
