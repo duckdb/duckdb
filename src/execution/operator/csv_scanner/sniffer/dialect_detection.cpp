@@ -327,13 +327,13 @@ void CSVSniffer::SkipLines(vector<unique_ptr<ColumnCountScanner>> &csv_state_mac
 	// We figure out the iterator position for the first scanner
 	if (options.dialect_options.skip_rows.IsSetByUser()) {
 		first_scanner.SkipCSVRows(options.dialect_options.skip_rows.GetValue());
-	}
-	// The iterator position is the same regardless of the scanner configuration, hence we apply the same iterator
-	// To the remaining scanners
-	const auto first_iterator = first_scanner.GetIterator();
-	for (idx_t i = 1; i < csv_state_machines.size(); i++) {
-		auto &cur_scanner = *csv_state_machines[i];
-		cur_scanner.SetIterator(first_iterator);
+		// The iterator position is the same regardless of the scanner configuration, hence we apply the same iterator
+		// To the remaining scanners
+		const auto first_iterator = first_scanner.GetIterator();
+		for (idx_t i = 1; i < csv_state_machines.size(); i++) {
+			auto &cur_scanner = *csv_state_machines[i];
+			cur_scanner.SetIterator(first_iterator);
+		}
 	}
 }
 

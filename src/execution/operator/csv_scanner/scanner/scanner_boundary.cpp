@@ -16,15 +16,16 @@ CSVBoundary::CSVBoundary(idx_t file_idx_p, idx_t buffer_idx_p, idx_t buffer_pos_
 CSVBoundary::CSVBoundary()
     : file_idx(0), buffer_idx(0), buffer_pos(0), boundary_idx(0), end_pos(NumericLimits<idx_t>::Maximum()) {
 }
-CSVIterator::CSVIterator(idx_t file_idx, idx_t buffer_idx, idx_t buffer_pos, idx_t boundary_idx, idx_t buffer_size)
-    : pos(file_idx, buffer_idx, buffer_pos), is_set(true) {
-	// The end of our boundary will be the buffer size itself it that's smaller than where we want to go
-	if (buffer_size < buffer_pos + BYTES_PER_THREAD) {
-		boundary = {file_idx, buffer_idx, buffer_pos, boundary_idx, buffer_size};
-	} else {
-		boundary = {file_idx, buffer_idx, buffer_pos, boundary_idx, buffer_pos + BYTES_PER_THREAD};
-	}
-}
+
+// CSVIterator::CSVIterator(idx_t file_idx, idx_t buffer_idx, idx_t buffer_pos, idx_t boundary_idx, idx_t buffer_size)
+//    : pos(file_idx, buffer_idx, buffer_pos), is_set(true) {
+//	// The end of our boundary will be the buffer size itself it that's smaller than where we want to go
+//	if (buffer_size < buffer_pos + BYTES_PER_THREAD) {
+//		boundary = {file_idx, buffer_idx, buffer_pos, boundary_idx, buffer_size};
+//	} else {
+//		boundary = {file_idx, buffer_idx, buffer_pos, boundary_idx, buffer_pos + BYTES_PER_THREAD};
+//	}
+//}
 
 CSVIterator::CSVIterator() : is_set(false) {
 }

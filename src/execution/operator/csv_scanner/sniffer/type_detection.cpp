@@ -365,7 +365,7 @@ void CSVSniffer::DetectTypes() {
 				// try cast from string to sql_type
 				while (col_type_candidates.size() > 1) {
 					const auto &sql_type = col_type_candidates.back();
-					// try formatting for date types if the user did not specify one and it starts with numeric
+					// try formatting for date types if the user did not specify one, and it starts with numeric
 					// values.
 					string separator;
 					// If Value is not Null, Has a numeric date format, and the current investigated candidate is

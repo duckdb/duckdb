@@ -45,16 +45,16 @@ CSVFileScan::CSVFileScan(ClientContext &context, shared_ptr<CSVBufferManager> bu
 }
 
 void CSVFileScan::SetStart() {
-	int64_t rows_to_skip = options.GetSkipRows() + state_machine->dialect_options.header.GetValue();
+	idx_t rows_to_skip = options.GetSkipRows() + state_machine->dialect_options.header.GetValue();
 	if (rows_to_skip == 0) {
 		start_iterator.first_one = true;
 		return;
 	}
-	SkipScanner skip_scanner(buffer_manager, state_machine, error_handler, static_cast<idx_t>(rows_to_skip));
+	SkipScanner skip_scanner(buffer_manager, state_machine, error_handler, rows_to_skip);
 	skip_scanner.ParseChunk();
 	start_iterator = skip_scanner.GetIterator();
-	start_iterator.first_one = true;
 }
+
 CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, const CSVReaderOptions &options_p,
                          const idx_t file_idx_p, const ReadCSVData &bind_data, const vector<column_t> &column_ids,
                          const vector<LogicalType> &file_schema)

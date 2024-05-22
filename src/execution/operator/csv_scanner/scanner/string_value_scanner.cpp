@@ -107,6 +107,11 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 	date_format = state_machine.options.dialect_options.date_format.at(LogicalTypeId::DATE).GetValue();
 	timestamp_format = state_machine.options.dialect_options.date_format.at(LogicalTypeId::TIMESTAMP).GetValue();
 	decimal_separator = state_machine.options.decimal_separator[0];
+
+	if (iterator.first_one) {
+		lines_read +=
+		    state_machine.dialect_options.skip_rows.GetValue() + state_machine.dialect_options.header.GetValue();
+	}
 }
 
 StringValueResult::~StringValueResult() {

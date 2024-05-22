@@ -55,7 +55,7 @@ struct CSVPosition {
 };
 struct CSVIterator {
 public:
-	CSVIterator(idx_t file_idx, idx_t buffer_idx, idx_t buffer_pos, idx_t boundary_idx, idx_t buffer_size);
+	//	CSVIterator(idx_t file_idx, idx_t buffer_idx, idx_t buffer_pos, idx_t boundary_idx, idx_t buffer_size);
 
 	CSVIterator();
 
@@ -85,7 +85,7 @@ public:
 
 	bool done = false;
 
-	bool first_one = false;
+	bool first_one = true;
 
 private:
 	//! The original setting
