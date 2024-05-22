@@ -381,7 +381,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 		config.buffer_pool = std::move(new_config.buffer_pool);
 	} else {
 		config.buffer_pool = make_shared_ptr<BufferPool>(config.options.maximum_memory,
-														 config.options.buffer_manager_track_eviction_timestamps);
+		                                                 config.options.buffer_manager_track_eviction_timestamps);
 	}
 }
 

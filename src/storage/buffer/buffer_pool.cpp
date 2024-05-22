@@ -8,7 +8,7 @@
 namespace duckdb {
 
 BufferEvictionNode::BufferEvictionNode(weak_ptr<BlockHandle> handle_p, idx_t eviction_seq_num)
-: handle(std::move(handle_p)), handle_sequence_number(eviction_seq_num) {
+    : handle(std::move(handle_p)), handle_sequence_number(eviction_seq_num) {
 	D_ASSERT(!handle.expired());
 }
 
@@ -193,7 +193,7 @@ void EvictionQueue::PurgeIteration(const idx_t purge_size) {
 
 BufferPool::BufferPool(idx_t maximum_memory, bool track_eviction_timestamps)
     : current_memory(0), maximum_memory(maximum_memory), track_eviction_timestamps(track_eviction_timestamps),
-	  temporary_memory_manager(make_uniq<TemporaryMemoryManager>()) {
+      temporary_memory_manager(make_uniq<TemporaryMemoryManager>()) {
 	queues.reserve(FILE_BUFFER_TYPE_COUNT);
 	for (idx_t i = 0; i < FILE_BUFFER_TYPE_COUNT; i++) {
 		queues.push_back(make_uniq<EvictionQueue>());
@@ -214,9 +214,9 @@ bool BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 	auto ts = ++handle->eviction_seq_num;
 	if (track_eviction_timestamps) {
 		handle->lru_timestamp_msec =
-				std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now())
-						.time_since_epoch()
-						.count();
+		    std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now())
+		        .time_since_epoch()
+		        .count();
 	}
 
 	if (ts != 1) {
@@ -322,11 +322,11 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue,
 
 idx_t BufferPool::PurgeAgedBlocks(uint32_t max_age_sec) {
 	int64_t now = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now())
-			.time_since_epoch()
-			.count();
+	                  .time_since_epoch()
+	                  .count();
 	int64_t limit = now - (static_cast<int64_t>(max_age_sec) * 1000);
 	idx_t purged_bytes = 0;
-	for(auto &queue : queues) {
+	for (auto &queue : queues) {
 		purged_bytes += PurgeAgedBlocksInternal(*queue, max_age_sec, now, limit);
 	}
 	return purged_bytes;
