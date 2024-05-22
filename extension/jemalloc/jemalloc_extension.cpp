@@ -104,8 +104,9 @@ void JemallocExtension::FlushAll() {
 
 void JemallocExtension::SetBackgroundThreads(bool enable) {
 	SetJemallocCTL("background_thread", enable);
+}
 
-	std::string JemallocExtension::Version() const {
+std::string JemallocExtension::Version() const {
 #ifdef EXT_VERSION_JEMALLOC
 		return EXT_VERSION_JEMALLOC;
 #else
