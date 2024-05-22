@@ -17,6 +17,7 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
+#include "duckdb/planner/operator/logical_distinct.hpp"
 
 namespace duckdb {
 
@@ -297,9 +298,14 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_DISTINCT: {
 		// distinct, all projected columns are used for the DISTINCT computation
 		// mark all columns as used and continue to the children
-		// FIXME: DISTINCT with expression list does not implicitly reference everything
-		everything_referenced = true;
-		break;
+        auto &distinct_op = op.Cast<LogicalDistinct>();
+		if(distinct_op.distinct_targets.empty()) {
+            everything_referenced = true;
+        } else {
+            // DISTINCT with expression list does not implicitly reference everything
+            // pass through existing everything_referenced state
+        }
+        break;
 	}
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
 		everything_referenced = true;
