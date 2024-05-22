@@ -42,7 +42,7 @@ public:
 	static const char *GetColorOption(const char *option);
 	static void SetHighlightingColor(HighlightingType type, const char *color);
 
-	static vector<highlightToken> Tokenize(char *buf, size_t len, searchMatch *match = nullptr);
+	static vector<highlightToken> Tokenize(char *buf, size_t len, bool is_dot_command, searchMatch *match);
 	static string HighlightText(char *buf, size_t len, size_t start_pos, size_t end_pos,
 	                            const vector<highlightToken> &tokens);
 };
