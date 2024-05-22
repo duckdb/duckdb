@@ -264,10 +264,10 @@
  */
 // ----- DuckDB comment -----
 // This makes it feasible to run the larger page size (https://github.com/duckdb/duckdb/discussions/11455),
-// but it is problematic on 32-bit systems, so we'll disable it there
-#if INTPTR_MAX == INT64_MAX
-#define JEMALLOC_RETAIN
-#endif
+// but it causes DuckDB to retain RSS even after closing the connection, so we have to disable it
+// #if INTPTR_MAX == INT64_MAX
+// #define JEMALLOC_RETAIN
+// #endif
 
 /* TLS is used to map arenas and magazine caches to threads. */
 #define JEMALLOC_TLS
