@@ -2,11 +2,8 @@
 #include "jemalloc_extension.hpp"
 
 #include "duckdb/common/allocator.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "jemalloc/jemalloc.h"
-
-#ifndef DUCKDB_NO_THREADS
-#include "duckdb/common/thread.hpp"
-#endif
 
 namespace duckdb {
 
@@ -90,13 +87,37 @@ void JemallocExtension::ThreadIdle() {
 	SetJemallocCTL("thread.peak.reset");
 }
 
+void SetDecayDelay(idx_t decay_delay) {
+	auto narenas = GetJemallocCTL<unsigned>("opt.narenas");
+	ssize_t decay_delay_ms = decay_delay * 1000;
+	for (unsigned i = 0; i < narenas; i++) {
+		auto dirty_decay = StringUtil::Format("arena.%u.dirty_decay_ms", i);
+		SetJemallocCTL(dirty_decay.c_str(), decay_delay);
+		auto muzzy_decay = StringUtil::Format("arena.%u.muzzy_decay_ms", i);
+		SetJemallocCTL(dirty_decay.c_str(), muzzy_decay);
+	}
+}
+
 void JemallocExtension::FlushAll() {
+	static mutex FLUSH_LOCK;
+	//	SetJemallocCTL<ssize_t>(StringUtil::Format())
+
 	// Flush thread-local cache
 	SetJemallocCTL("thread.tcache.flush");
 
-	// Flush all arenas
-	const auto purge_arena = PurgeArenaString(MALLCTL_ARENAS_ALL);
-	SetJemallocCTL(purge_arena.c_str());
+	// Flush all arenas within lock
+	{
+		lock_guard<mutex> guard(FLUSH_LOCK);
+		// First, we set the decay delay to 0
+		SetDecayDelay(0);
+
+		// Now we purge all arenas
+		const auto purge_arena = PurgeArenaString(MALLCTL_ARENAS_ALL);
+		SetJemallocCTL(purge_arena.c_str());
+
+		// Reset decay delay to original value
+		SetDecayDelay(DecayDelay());
+	}
 
 	// Reset the peak after resetting
 	SetJemallocCTL("thread.peak.reset");

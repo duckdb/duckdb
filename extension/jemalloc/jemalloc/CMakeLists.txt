@@ -70,10 +70,6 @@ set(JEMALLOC_C_FILES
 # should be resolvable, with some effort
 # src/jemalloc_cpp.cpp
 
-if (OS_NAME STREQUAL "osx")
-  list(APPEND JEMALLOC_C_FILES src/zone.c)
-endif()
-
 add_library(jemalloc OBJECT ${JEMALLOC_C_FILES})
 
 set(JEMALLOC_OBJECT_FILES

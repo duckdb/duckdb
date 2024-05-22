@@ -149,6 +149,9 @@ ClientContext::~ClientContext() {
 	// destroy the client context and rollback if there is an active transaction
 	// but only if we are not destroying this client context as part of an exception stack unwind
 	Destroy();
+	if (Allocator::SupportsFlush()) {
+		Allocator::FlushAll();
+	}
 }
 
 unique_ptr<ClientContextLock> ClientContext::LockContext() {

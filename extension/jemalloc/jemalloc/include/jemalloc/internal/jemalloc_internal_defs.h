@@ -327,9 +327,9 @@
 /*
  * Darwin (OS X) uses zones to work around Mach-O symbol override shortcomings.
  */
-#if defined(__APPLE__)
-#define JEMALLOC_ZONE
-#endif
+// #if defined(__APPLE__)
+// #define JEMALLOC_ZONE
+// #endif
 
 /*
  * Methods for determining whether the OS overcommits.
@@ -365,8 +365,8 @@
  *                                 MADV_FREE, though typically with higher
  *                                 system overhead.
  */
-// #define JEMALLOC_PURGE_MADVISE_FREE
-#define JEMALLOC_PURGE_MADVISE_DONTNEED
+#define JEMALLOC_PURGE_MADVISE_FREE
+// #define JEMALLOC_PURGE_MADVISE_DONTNEED
 /* #undef JEMALLOC_PURGE_MADVISE_DONTNEED_ZEROS */
 
 /* Defined if madvise(2) is available but MADV_FREE is not (x86 Linux only). */
@@ -497,9 +497,9 @@
 /* #undef JEMALLOC_UAF_DETECTION */
 
 /* Darwin VM_MAKE_TAG support */
-#if defined(__APPLE__)
-#define JEMALLOC_HAVE_VM_MAKE_TAG
-#endif
+// #if defined(__APPLE__)
+// #define JEMALLOC_HAVE_VM_MAKE_TAG
+// #endif
 
 /* If defined, realloc(ptr, 0) defaults to "free" instead of "alloc". */
 /* #undef JEMALLOC_ZERO_REALLOC_DEFAULT_FREE */
