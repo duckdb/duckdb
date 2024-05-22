@@ -36,6 +36,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile
 		copy->file_path = op.file_path;
 		copy->use_tmp_file = op.use_tmp_file;
 		copy->children.push_back(std::move(plan));
+		copy->return_files = op.return_files;
 		return std::move(copy);
 	}
 	// COPY from select statement to file
@@ -50,6 +51,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile
 		copy->file_size_bytes = op.file_size_bytes;
 	}
 	copy->rotate = op.rotate;
+	copy->return_files = op.return_files;
 	copy->partition_output = op.partition_output;
 	copy->partition_columns = op.partition_columns;
 	copy->names = op.names;

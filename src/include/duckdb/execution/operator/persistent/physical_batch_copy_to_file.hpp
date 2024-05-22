@@ -29,6 +29,7 @@ public:
 	unique_ptr<FunctionData> bind_data;
 	string file_path;
 	bool use_tmp_file;
+	bool return_files;
 
 public:
 	// Source interface

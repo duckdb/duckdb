@@ -61,6 +61,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	bool per_thread_output = false;
 	optional_idx file_size_bytes;
 	vector<idx_t> partition_cols;
+	bool return_files = false;
 
 	CopyFunctionBindInput bind_input(*stmt.info);
 
@@ -104,6 +105,12 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 		} else if (loption == "partition_by") {
 			auto converted = ConvertVectorToValue(std::move(option.second));
 			partition_cols = ParseColumnsOrdered(converted, select_node.names, loption);
+		} else if (loption == "return_files") {
+			return_files = GetBooleanArg(context, option.second);
+			if (return_files) {
+				result.types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
+				result.names.emplace_back("Files");
+			}
 		} else {
 			stmt.info->options[option.first] = option.second;
 		}
@@ -172,6 +179,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	copy->rotate = rotate;
 	copy->partition_output = !partition_cols.empty();
 	copy->partition_columns = std::move(partition_cols);
+	copy->return_files = return_files;
 
 	copy->names = unique_column_names;
 	copy->expected_types = select_node.types;

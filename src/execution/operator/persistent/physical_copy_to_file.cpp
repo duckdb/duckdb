@@ -57,6 +57,8 @@ public:
 	unordered_set<string> created_directories;
 	//! shared state for HivePartitionedColumnData
 	shared_ptr<GlobalHivePartitionState> partition_state;
+	//! File names
+	vector<Value> file_names;
 
 	void CreateDir(const string &dir_path, FileSystem &fs) {
 		if (created_directories.find(dir_path) != created_directories.end()) {
@@ -113,6 +115,9 @@ public:
 		auto trimmed_path = op.GetTrimmedPath(context.client);
 		string hive_path = GetOrCreateDirectory(op.partition_columns, op.names, values, trimmed_path, fs);
 		string full_path(op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, 0));
+		if (op.return_files) {
+			file_names.emplace_back(full_path);
+		}
 		// initialize writes
 		auto info = make_uniq<PartitionWriteInfo>();
 		info->global_state = op.function.copy_to_initialize_global(context.client, *op.bind_data, full_path);
@@ -211,6 +216,10 @@ unique_ptr<GlobalFunctionData> PhysicalCopyToFile::CreateFileState(ClientContext
 	idx_t this_file_offset = g.last_file_offset++;
 	auto &fs = FileSystem::GetFileSystem(context);
 	string output_path(filename_pattern.CreateFilename(fs, file_path, file_extension, this_file_offset));
+	if (return_files) {
+		auto l = g.lock.GetExclusiveLock();
+		g.file_names.emplace_back(output_path);
+	}
 	return function.copy_to_initialize_global(context, *bind_data, output_path);
 }
 
@@ -297,13 +306,29 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 		return std::move(state);
 	}
 
-	return make_uniq<CopyToFunctionGlobalState>(function.copy_to_initialize_global(context, *bind_data, file_path));
+	auto result =
+	    make_uniq<CopyToFunctionGlobalState>(function.copy_to_initialize_global(context, *bind_data, file_path));
+	if (use_tmp_file) {
+		result->file_names.emplace_back(GetNonTmpFile(context, file_path));
+	} else {
+		result->file_names.emplace_back(file_path);
+	}
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
 void PhysicalCopyToFile::MoveTmpFile(ClientContext &context, const string &tmp_file_path) {
+	auto &fs = FileSystem::GetFileSystem(context);
+	auto file_path = GetNonTmpFile(context, tmp_file_path);
+	if (fs.FileExists(file_path)) {
+		fs.RemoveFile(file_path);
+	}
+	fs.MoveFile(tmp_file_path, file_path);
+}
+
+string PhysicalCopyToFile::GetNonTmpFile(ClientContext &context, const string &tmp_file_path) {
 	auto &fs = FileSystem::GetFileSystem(context);
 
 	auto path = StringUtil::GetFilePath(tmp_file_path);
@@ -314,11 +339,7 @@ void PhysicalCopyToFile::MoveTmpFile(ClientContext &context, const string &tmp_f
 		base = base.substr(4);
 	}
 
-	auto file_path = fs.JoinPath(path, base);
-	if (fs.FileExists(file_path)) {
-		fs.RemoveFile(file_path);
-	}
-	fs.MoveFile(tmp_file_path, file_path);
+	return fs.JoinPath(path, base);
 }
 
 PhysicalCopyToFile::PhysicalCopyToFile(vector<LogicalType> types, CopyFunction function_p,
@@ -436,6 +457,10 @@ SourceResultType PhysicalCopyToFile::GetData(ExecutionContext &context, DataChun
 
 	chunk.SetCardinality(1);
 	chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
+
+	if (return_files) {
+		chunk.SetValue(1, 0, Value::LIST(LogicalType::VARCHAR, g.file_names));
+	}
 
 	return SourceResultType::FINISHED;
 }

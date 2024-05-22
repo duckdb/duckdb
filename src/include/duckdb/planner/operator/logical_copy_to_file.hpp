@@ -37,6 +37,7 @@ public:
 	bool per_thread_output;
 	optional_idx file_size_bytes;
 	bool rotate;
+	bool return_files;
 
 	bool partition_output;
 	vector<idx_t> partition_columns;
@@ -44,6 +45,7 @@ public:
 	vector<LogicalType> expected_types;
 
 public:
+	vector<ColumnBinding> GetColumnBindings() override;
 	idx_t EstimateCardinality(ClientContext &context) override;
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
@@ -51,6 +53,9 @@ public:
 protected:
 	void ResolveTypes() override {
 		types.emplace_back(LogicalType::BIGINT);
+		if (return_files) {
+			types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
+		}
 	}
 };
 } // namespace duckdb
