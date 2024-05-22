@@ -1,4 +1,4 @@
-# name: test/sql/copy/parquet/parquet_list_ordinality.test
+# name: test/sql/ordinality/parquet_list_ordinality.test
 # description: Test list syntax for reading multiple files
 # group: [ordinality]
 

@@ -1,4 +1,4 @@
-# name: test/sql/table_function/unnest_ordinality_slow.test_slow
+# name: test/sql/ordinality/unnest_ordinality_slow.test_slow
 # description: Table functions
 # group: [ordinality]
 

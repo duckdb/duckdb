@@ -1,4 +1,4 @@
-# name: test/sql/copy/csv/csv_projection_pushdown_ordinality.test
+# name: test/sql/ordinality/csv_projection_pushdown_ordinality.test
 # description: CSV reader projection pushdown
 # group: [ordinality]
 

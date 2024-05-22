@@ -1,4 +1,4 @@
-# name: test/sql/table_function/test_repeat_function_ordinality.test
+# name: test/sql/ordinality/test_repeat_function_ordinality.test
 # description: Test repeat functions with "with_ordinality" keyword
 # group: [ordinality]
 

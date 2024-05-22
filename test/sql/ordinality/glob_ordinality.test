@@ -1,4 +1,4 @@
-# name: test/sql/copy/csv/glob/glob_ordinality.test
+# name: test/sql/ordinality/glob_ordinality.test
 # description: Test glob with "with ordinality"
 # group: [ordinality]
 

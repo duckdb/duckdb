@@ -1,4 +1,4 @@
-# name: test/sql/copy/csv/csv_null_byte_ordinality.test
+# name: test/sql/ordinality/csv_null_byte_ordinality.test
 # description: Read a CSV with a null byte
 # group: [ordinality]
 

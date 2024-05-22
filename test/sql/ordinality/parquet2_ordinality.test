@@ -1,4 +1,4 @@
-# name: test/sql/copy/parquet/parquet2_ordinality.test
+# name: test/sql/ordinality/parquet2_ordinality.test
 # description: Issue #2261: TPC-H Q6 fails on Parquet input
 # group: [ordinality]
 

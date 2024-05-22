@@ -1,4 +1,4 @@
-# name: test/sql/copy/parquet/parquet_blob_ordinality.test
+# name: test/sql/ordinality/parquet_blob_ordinality.test
 # description: Test parquet file with blob content
 # group: [ordinality]
 

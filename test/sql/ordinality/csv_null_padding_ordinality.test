@@ -1,4 +1,4 @@
-# name: test/sql/copy/csv/csv_null_padding_ordinality.test
+# name: test/sql/ordinality/csv_null_padding_ordinality.test
 # description: Test nullpadding setting
 # group: [ordinality]
 

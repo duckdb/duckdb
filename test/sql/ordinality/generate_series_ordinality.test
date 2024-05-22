@@ -1,4 +1,4 @@
-# name: test/sql/table_function/generate_series_ordinality.test
+# name: test/sql/ordinality/generate_series_ordinality.test
 # description: Test generate_series/range function with "with ordinality"
 # group: [ordinality]
 

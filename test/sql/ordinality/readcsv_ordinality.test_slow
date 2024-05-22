@@ -1,4 +1,4 @@
-# name: test/sql/table_function/readcsv_ordinality.test
+# name: test/sql/ordinality/readcsv_ordinality.test_slow
 # description: Table functions
 # group: [ordinality]
 
@@ -6,7 +6,7 @@ statement ok
 CREATE TABLE my_tbl (a int, b int, c varchar);
 
 statement ok
-INSERT INTO my_tbl SELECT range, 10 - range, 'string' FROM range(10);
+INSERT INTO my_tbl SELECT range, 5000 - range, 'string' FROM range(5000);
 
 statement ok
 COPY my_tbl TO '__TEST_DIR__/output.csv' (HEADER, DELIMITER ',');
@@ -14,13 +14,4 @@ COPY my_tbl TO '__TEST_DIR__/output.csv' (HEADER, DELIMITER ',');
 query IIII
 select * from read_csv_auto('__TEST_DIR__/output.csv', header=true) with ordinality AS _(X,Y,Z);
 ----
-0	10	string	1
-1	9	string	2
-2	8	string	3
-3	7	string	4
-4	6	string	5
-5	5	string	6
-6	4	string	7
-7	3	string	8
-8	2	string	9
-9	1	string	10
+20000 values hashing to b07d74a9e7a1e0b84554c6ffad129fd7

@@ -23,7 +23,6 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
-
 namespace duckdb {
 
 static bool IsTableInTableOutFunction(TableFunctionCatalogEntry &table_function) {
@@ -205,7 +204,7 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 		auto window_index = GenerateTableIndex();
 		auto window = make_uniq<duckdb::LogicalWindow>(window_index);
 		auto row_number =
-				make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT, nullptr, nullptr);
+		    make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT, nullptr, nullptr);
 		row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
 		row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
 		if (return_names.size() < column_name_alias.size()) {
@@ -217,7 +216,7 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 		window->children.push_back(std::move(get));
 
 		vector<unique_ptr<Expression>> select_list;
-		for (idx_t i = 0; i < return_types.size() ; i++)  {
+		for (idx_t i = 0; i < return_types.size(); i++) {
 			auto expression = make_uniq<BoundColumnRefExpression>(return_types[i], ColumnBinding(bind_index, i));
 			select_list.push_back(std::move(expression));
 		}
@@ -228,10 +227,10 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 
 		projection->children.push_back(std::move(window));
 		if (return_names.size() < column_name_alias.size()) {
-            return_names.push_back(column_name_alias[return_names.size()]);
-        } else {
-            return_names.push_back("ordinality");
-        }
+			return_names.push_back(column_name_alias[return_names.size()]);
+		} else {
+			return_names.push_back("ordinality");
+		}
 
 		return_types.push_back(LogicalType::BIGINT);
 		bind_context.AddGenericBinding(projection_index, function_name, return_names, return_types);
@@ -240,7 +239,7 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 
 	// now add the table function to the bind context so its columns can be bound
 	bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->column_ids,
-								  get->GetTable().get());
+	                              get->GetTable().get());
 	return std::move(get);
 }
 
