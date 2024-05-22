@@ -8,7 +8,7 @@ class RuntimeConfig:
         self._connection = connection
 
     def set(self, key: str, value: str) -> None:
-        raise NotImplementedError
+        self._connection.execute(f"SET {key} to '{value}'")
 
     def isModifiable(self, key: str) -> bool:
         raise NotImplementedError
@@ -17,7 +17,8 @@ class RuntimeConfig:
         raise NotImplementedError
 
     def get(self, key: str, default: Union[Optional[str], _NoValueType] = _NoValue) -> str:
-        raise NotImplementedError
+        record = self._connection.execute("SELECT value FROM duckdb_settings() WHERE name = ?", [key]).fetchone()
+        return record[0] if record else default
 
 
 __all__ = ["RuntimeConfig"]
