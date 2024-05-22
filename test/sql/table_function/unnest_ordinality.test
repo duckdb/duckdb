@@ -1,0 +1,122 @@
+# name: test/sql/table_function/unnest_ordinality.test
+# description: Table functions
+# group: [ordinality]
+
+statement ok
+PRAGMA enable_verification
+
+# lateral join with unnest
+query III
+SELECT * FROM (SELECT ARRAY[1, 2, 3]) t(l), UNNEST(l) with ordinality t2(k) ORDER BY k;
+----
+[1, 2, 3]	1	1
+[1, 2, 3]	2	2
+[1, 2, 3]	3	3
+
+
+query II
+SELECT * FROM UNNEST(ARRAY[1, 2, 3]) with ordinality;
+----
+1	1
+2	2
+3	3
+
+
+query II
+SELECT * FROM UNNEST([1, 2, 3]::INT ARRAY) with ordinality;
+----
+1	1
+2	2
+3	3
+
+query II
+SELECT i, ordinality FROM UNNEST(ARRAY[1, 2, 3]) with ordinality AS tbl(i);
+----
+1	1
+2	2
+3	3
+
+# string
+query II
+SELECT i, ordinality FROM UNNEST(ARRAY[NULL, 'hello', 'world', 'bleorkbaejkoreijgaiorjgare']) with ordinality AS tbl(i);
+----
+NULL	1
+hello	2
+world	3
+bleorkbaejkoreijgaiorjgare	4
+
+# list
+query II
+SELECT i, ordinality FROM UNNEST([[1, 2], [3, 4], NULL, [4, 5, 6, 7]]) with ordinality AS tbl(i);
+----
+[1, 2]	1
+[3, 4]	2
+NULL	3
+[4, 5, 6, 7]	4
+
+# nested nested
+query II
+SELECT i, ordinality FROM UNNEST([{'a': [1, 2, 3], 'b': [4, 5, 6]}, {'a': [4, 5], 'b': [7, 8, 9, 10]}]) with ordinality AS tbl(i);
+----
+{'a': [1, 2, 3], 'b': [4, 5, 6]}	1
+{'a': [4, 5], 'b': [7, 8, 9, 10]}	2
+
+# bigger than vector size
+
+query II
+SELECT COUNT(*), COUNT(ordinality) FROM UNNEST((SELECT LIST(range) FROM range(4000))) with ordinality AS tbl(i);
+----
+4000	4000
+
+# null
+query II
+SELECT i, ordinality FROM UNNEST(NULL::INT[]) with ordinality AS tbl(i);
+----
+
+# empty list
+query II
+SELECT i, ordinality FROM UNNEST([]::INT[]) with ordinality AS tbl(i);
+----
+
+# unnest from a subquery
+query II
+SELECT * FROM UNNEST((SELECT [1,2,3] UNION ALL SELECT [4,5])) with ordinality;
+----
+1	1
+2	2
+3	3
+4	1
+5	2
+
+statement ok
+CREATE TABLE lists AS SELECT [1,2,3] l UNION ALL SELECT [4,5] UNION ALL SELECT [] UNION ALL SELECT [NULL] UNION ALL SELECT [7, 8];
+
+query II
+SELECT * FROM UNNEST((SELECT l FROM lists)) with ordinality;
+----
+1	1
+2	2
+3	3
+4	4
+5	5
+NULL	6
+7	7
+8	8
+
+# unnest with a prepared statement parameter
+statement ok
+PREPARE v1 AS SELECT * FROM UNNEST(?::INT[]) with ordinality;
+
+query II
+EXECUTE v1([1,2,3,4,5]);
+----
+1	1
+2	2
+3	3
+4	4
+5	5
+
+statement error
+SELECT UNNEST([1,2,3]) with ordinality
+----
+Parser Error: syntax error at or near "with"

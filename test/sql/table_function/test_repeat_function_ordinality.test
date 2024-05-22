@@ -1,0 +1,62 @@
+# name: test/sql/table_function/test_repeat_function_ordinality.test
+# description: Test repeat functions with "with_ordinality" keyword
+# group: [ordinality]
+
+statement ok
+PRAGMA enable_verification
+
+# test basic repeat usage
+query II
+SELECT * FROM repeat(0, 3) with ordinality
+----
+0	1
+0	2
+0	3
+
+# NULL
+query II
+SELECT * FROM repeat(NULL, 2) with ordinality
+----
+NULL	1
+NULL	2
+
+# varchar
+query II
+SELECT * FROM repeat('hello', 2) with ordinality
+----
+hello	1
+hello	2
+
+# long varchar
+query II
+SELECT * FROM repeat('thisisalongstring', 2) with ordinality
+----
+thisisalongstring	1
+thisisalongstring	2
+
+# blob
+query II
+SELECT * FROM repeat(blob '\x00\x00hello', 2) with ordinality
+----
+\x00\x00hello	1
+\x00\x00hello	2
+
+# many values, make sure that the count keeps increasing after new data chunk is reached
+query II
+SELECT * FROM repeat(1, 10000) with ordinality
+----
+20000 values hashing to 1b3aea7f442ebe14eefecd1dbc1dbc16
+
+# date
+query II
+SELECT * FROM repeat(DATE '1992-01-01', 2) with ordinality
+----
+1992-01-01	1
+1992-01-01	2
+
+# interval
+query II
+SELECT * FROM repeat(INTERVAL '30 days', 2) with ordinality
+----
+30 days	1
+30 days	2

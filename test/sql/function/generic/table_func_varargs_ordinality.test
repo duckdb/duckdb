@@ -1,0 +1,13 @@
+# name: test/sql/function/generic/table_func_varargs_ordinality.test
+# description: VarArgs with a Table Function
+# group: [ordinality]
+
+statement ok
+PRAGMA enable_verification
+
+query IIII
+SELECT * FROM repeat_row(1, 2, 'foo', num_rows=3) with ordinality
+----
+1	2	foo	1
+1	2	foo	2
+1	2	foo	3

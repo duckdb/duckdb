@@ -1,0 +1,17 @@
+# name: test/sql/table_function/readcsv_ordinality.test_slow
+# description: Table functions
+# group: [ordinality]
+
+statement ok
+CREATE TABLE my_tbl (a int, b int, c varchar);
+
+statement ok
+INSERT INTO my_tbl SELECT range, 5000 - range, 'string' FROM range(5000);
+
+statement ok
+COPY my_tbl TO '__TEST_DIR__/output.csv' (HEADER, DELIMITER ',');
+
+query IIII
+select * from read_csv_auto('__TEST_DIR__/output.csv', header=true) with ordinality AS _(X,Y,Z);
+----
+20000 values hashing to b07d74a9e7a1e0b84554c6ffad129fd7

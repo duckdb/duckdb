@@ -1,0 +1,35 @@
+# name: test/sql/copy/csv/csv_null_byte_ordinality.test
+# description: Read a CSV with a null byte
+# group: [ordinality]
+
+statement ok
+PRAGMA enable_verification
+
+query IIII
+select * from read_csv('data/csv/nullbyte.csv') with ordinality;
+----
+col1	col2	col3	1
+val1	val\02	val3	2
+
+query IIII
+select * from read_csv('data/csv/nullbyte.csv', columns={'col1': 'VARCHAR', 'col2': 'VARCHAR', 'col3': 'VARCHAR'}, delim='|') with ordinality;
+----
+col1	col2	col3	1
+val1	val\02	val3	2
+
+query III
+select * from read_csv('data/csv/nullbyte_header.csv') with ordinality;
+----
+col1	col\02	1
+val1	val2	2
+
+query III
+select * from read_csv('data/csv/nullbyte_header.csv', columns={'col1': 'VARCHAR', 'col2': 'VARCHAR'}, delim='|', header=False) with ordinality;
+----
+col1	col\02	1
+val1	val2	2
+
+query III
+select * from read_csv('data/csv/nullbyte_header.csv', columns={'col1': 'VARCHAR', 'col2': 'VARCHAR'}, delim='|', header=True) with ordinality;
+----
+val1	val2	1

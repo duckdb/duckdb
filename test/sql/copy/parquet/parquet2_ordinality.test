@@ -1,0 +1,74 @@
+# name: test/sql/copy/parquet/parquet2_ordinality.test
+# description: Issue #2261: TPC-H Q6 fails on Parquet input
+# group: [ordinality]
+
+# Here's how we generate this
+# from pyspark.sql import SparkSession
+# from pyspark.sql.types import *
+#
+# spark = SparkSession.builder.master("local").config("spark.hadoop.parquet.writer.version", "v2").getOrCreate()
+# sc = spark.sparkContext
+#
+# ref = spark.range(42, 10000, 2).toDF("id").orderBy(rand())
+# ref.show(10)
+#
+# ref.write.parquet("p2.parquet")
+
+require parquet
+
+
+query II
+SELECT id, ordinality FROM read_parquet('data/parquet-testing/p2.parquet') with ordinality offset 4968;
+----
+1436	4969
+2596	4970
+4774	4971
+4402	4972
+5378	4973
+5372	4974
+8658	4975
+808	4976
+5876	4977
+7214	4978
+9816	4979
+
+
+query II
+SELECT id,ordinality FROM read_parquet('data/parquet-testing/p2.parquet') with ordinality limit 10;
+----
+2644	1
+8534	2
+3276	3
+5264	4
+5766	5
+6018	6
+2080	7
+576	8
+1350	9
+9312	10
+
+
+
+
+
+query II
+SELECT id_with_null, ordinality FROM read_parquet('data/parquet-testing/p2.parquet') with ordinality limit 10;
+----
+2644	1
+8534	2
+3276	3
+5264	4
+5766	5
+6018	6
+NULL	7
+576	8
+NULL	9
+9312	10
+
+
+query IIIIIIIII
+select min(id), max(id), sum(id), count(id), min(id_with_null), max(id_with_null), sum(id_with_null), count(id_with_null), count(ordinality) from read_parquet('data/parquet-testing/p2.parquet') with ordinality
+----
+42	9998	24994580	4979	42	9998	19999680	3984	4979
+
+

@@ -1,0 +1,15 @@
+# name: test/sql/table_function/unnest_ordinality_slow.test_slow
+# description: Table functions
+# group: [ordinality]
+
+# test if the following behaviour is correctly implemented:
+#	- keep increasing the ordinality count if new data chunk is reached
+#	- reset ordinality count when reading from new table (like in PSQL)
+
+statement ok
+PRAGMA enable_verification
+
+query II
+SELECT * FROM (SELECT range(1,2050) UNION SELECT range(2050,6147)) AS _(l), unnest(l) with ordinality AS __(u) order by l,u;
+----
+18438 values hashing to 8744a2b2b272fe67ec092319f9f2989d
