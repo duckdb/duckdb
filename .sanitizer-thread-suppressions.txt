@@ -1,6 +1,4 @@
-deadlock:LockClients
-deadlock:RollbackTransaction
-deadlock:Checkpoint
+deadlock:InitializeIndexes
 race:NextInnerJoin
 race:duckdb_moodycamel
 race:duckdb_jemalloc

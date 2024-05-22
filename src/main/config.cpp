@@ -59,6 +59,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(AllowPersistentSecrets),
     DUCKDB_GLOBAL(CheckpointThresholdSetting),
     DUCKDB_GLOBAL(DebugCheckpointAbort),
+    DUCKDB_GLOBAL(StorageCompatibilityVersion),
     DUCKDB_LOCAL(DebugForceExternal),
     DUCKDB_LOCAL(DebugForceNoCrossProduct),
     DUCKDB_LOCAL(DebugAsOfIEJoin),
@@ -72,6 +73,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(EnableExternalAccessSetting),
     DUCKDB_GLOBAL(EnableFSSTVectors),
     DUCKDB_GLOBAL(AllowUnsignedExtensionsSetting),
+    DUCKDB_GLOBAL(AllowCommunityExtensionsSetting),
     DUCKDB_GLOBAL(AllowExtensionsMetadataMismatchSetting),
     DUCKDB_GLOBAL(AllowUnredactedSecretsSetting),
     DUCKDB_GLOBAL(CustomExtensionRepository),
@@ -126,6 +128,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL_ALIAS("wal_autocheckpoint", CheckpointThresholdSetting),
     DUCKDB_GLOBAL_ALIAS("worker_threads", ThreadsSetting),
     DUCKDB_GLOBAL(FlushAllocatorSetting),
+    DUCKDB_GLOBAL(AllocatorBackgroundThreadsSetting),
     DUCKDB_GLOBAL(DuckDBApiSetting),
     DUCKDB_GLOBAL(CustomUserAgentSetting),
     DUCKDB_LOCAL(PartitionedWriteFlushThreshold),
@@ -480,6 +483,46 @@ const std::string DBConfig::UserAgent() const {
 		user_agent += " " + options.custom_user_agent;
 	}
 	return user_agent;
+}
+
+SerializationCompatibility SerializationCompatibility::FromString(const string &input) {
+	if (input.empty()) {
+		throw InvalidInputException("Version string can not be empty");
+	}
+
+	auto serialization_version = GetSerializationVersion(input.c_str());
+	if (!serialization_version.IsValid()) {
+		auto candidates = GetSerializationCandidates();
+		throw InvalidInputException("The version string '%s' is not a valid DuckDB version, valid options are: %s",
+		                            input, StringUtil::Join(candidates, ", "));
+	}
+	SerializationCompatibility result;
+	result.duckdb_version = input;
+	result.serialization_version = serialization_version.GetIndex();
+	result.manually_set = true;
+	return result;
+}
+
+SerializationCompatibility SerializationCompatibility::Default() {
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
+	auto res = FromString("latest");
+	res.manually_set = false;
+	return res;
+#else
+	auto res = FromString("v0.10.2");
+	res.manually_set = false;
+	return res;
+#endif
+}
+
+SerializationCompatibility SerializationCompatibility::Latest() {
+	auto res = FromString("latest");
+	res.manually_set = false;
+	return res;
+}
+
+bool SerializationCompatibility::Compare(idx_t property_version) const {
+	return property_version <= serialization_version;
 }
 
 } // namespace duckdb

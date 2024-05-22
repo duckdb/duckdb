@@ -25,6 +25,13 @@ ErrorData::ErrorData(const string &message) : initialized(true), type(ExceptionT
 	// parse the constructed JSON
 	if (message.empty() || message[0] != '{') {
 		// not JSON! Use the message as a raw Exception message and leave type as uninitialized
+
+		if (message == std::bad_alloc().what()) {
+			type = ExceptionType::OUT_OF_MEMORY;
+			raw_message = "Allocation failure";
+			return;
+		}
+
 		raw_message = message;
 		return;
 	} else {

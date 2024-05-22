@@ -37,9 +37,10 @@ public:
 	bool escaped = false;
 	idx_t quoted_position = 0;
 
+	CSVStateMachine &state_machine;
+
 protected:
 	CSVStates &states;
-	CSVStateMachine &state_machine;
 };
 
 //! This is the base of our CSV scanners.
@@ -51,10 +52,10 @@ public:
 	                     shared_ptr<CSVFileScan> csv_file_scan = nullptr, CSVIterator iterator = {});
 
 	virtual ~BaseScanner() = default;
+
 	//! Returns true if the scanner is finished
 	bool FinishedFile();
-	//! Resets the scanner
-	void Reset();
+
 	//! Parses data into a output_chunk
 	virtual ScannerResult &ParseChunk();
 
@@ -62,6 +63,8 @@ public:
 	virtual ScannerResult &GetResult();
 
 	CSVIterator &GetIterator();
+
+	void SetIterator(const CSVIterator &it);
 
 	idx_t GetBoundaryIndex() {
 		return iterator.GetBoundaryIdx();
@@ -91,6 +94,10 @@ public:
 	CSVStates states;
 
 	bool ever_quoted = false;
+
+	//! Skips Notes and/or parts of the data, starting from the top.
+	//! notes are dirty lines on top of the file, before the actual data
+	void SkipCSVRows(idx_t rows_to_skip);
 
 protected:
 	//! Boundaries of this scanner
