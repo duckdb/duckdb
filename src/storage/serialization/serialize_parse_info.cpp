@@ -15,6 +15,7 @@
 #include "duckdb/parser/parsed_data/detach_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/parser/parsed_data/load_info.hpp"
+#include "duckdb/parser/parsed_data/update_extensions_info.hpp"
 #include "duckdb/parser/parsed_data/pragma_info.hpp"
 #include "duckdb/parser/parsed_data/transaction_info.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
@@ -55,6 +56,9 @@ unique_ptr<ParseInfo> ParseInfo::Deserialize(Deserializer &deserializer) {
 		break;
 	case ParseInfoType::TRANSACTION_INFO:
 		result = TransactionInfo::Deserialize(deserializer);
+		break;
+	case ParseInfoType::UPDATE_EXTENSIONS_INFO:
+		result = UpdateExtensionsInfo::Deserialize(deserializer);
 		break;
 	case ParseInfoType::VACUUM_INFO:
 		result = VacuumInfo::Deserialize(deserializer);
@@ -327,6 +331,8 @@ void LoadInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(200, "filename", filename);
 	serializer.WriteProperty<LoadType>(201, "load_type", load_type);
 	serializer.WritePropertyWithDefault<string>(202, "repository", repository);
+	serializer.WritePropertyWithDefault<string>(203, "version", version);
+	serializer.WritePropertyWithDefault<bool>(204, "repo_is_alias", repo_is_alias);
 }
 
 unique_ptr<ParseInfo> LoadInfo::Deserialize(Deserializer &deserializer) {
@@ -334,6 +340,8 @@ unique_ptr<ParseInfo> LoadInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<string>(200, "filename", result->filename);
 	deserializer.ReadProperty<LoadType>(201, "load_type", result->load_type);
 	deserializer.ReadPropertyWithDefault<string>(202, "repository", result->repository);
+	deserializer.ReadPropertyWithDefault<string>(203, "version", result->version);
+	deserializer.ReadPropertyWithDefault<bool>(204, "repo_is_alias", result->repo_is_alias);
 	return std::move(result);
 }
 
@@ -462,6 +470,17 @@ void TransactionInfo::Serialize(Serializer &serializer) const {
 unique_ptr<ParseInfo> TransactionInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<TransactionInfo>(new TransactionInfo());
 	deserializer.ReadProperty<TransactionType>(200, "type", result->type);
+	return std::move(result);
+}
+
+void UpdateExtensionsInfo::Serialize(Serializer &serializer) const {
+	ParseInfo::Serialize(serializer);
+	serializer.WritePropertyWithDefault<vector<string>>(200, "extensions_to_update", extensions_to_update);
+}
+
+unique_ptr<ParseInfo> UpdateExtensionsInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<UpdateExtensionsInfo>(new UpdateExtensionsInfo());
+	deserializer.ReadPropertyWithDefault<vector<string>>(200, "extensions_to_update", result->extensions_to_update);
 	return std::move(result);
 }
 

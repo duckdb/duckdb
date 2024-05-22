@@ -69,6 +69,10 @@ static uint8_t GetVarintSize(uint32_t val) {
 ColumnWriterStatistics::~ColumnWriterStatistics() {
 }
 
+bool ColumnWriterStatistics::HasStats() {
+	return false;
+}
+
 string ColumnWriterStatistics::GetMin() {
 	return string();
 }
@@ -590,7 +594,7 @@ void BasicColumnWriter::FlushPage(BasicColumnWriterState &state) {
 	D_ASSERT(hdr.compressed_page_size > 0);
 
 	if (write_info.compressed_buf) {
-		// if the data has been compressed, we no longer need the compressed data
+		// if the data has been compressed, we no longer need the uncompressed data
 		D_ASSERT(write_info.compressed_buf.get() == write_info.compressed_data);
 		write_info.temp_writer.reset();
 	}
@@ -651,15 +655,12 @@ void BasicColumnWriter::SetParquetStatistics(BasicColumnWriterState &state,
 		column_chunk.meta_data.statistics.__isset.max = true;
 		column_chunk.meta_data.__isset.statistics = true;
 	}
-	auto min_value = state.stats_state->GetMinValue();
-	if (!min_value.empty()) {
-		column_chunk.meta_data.statistics.min_value = std::move(min_value);
+	if (state.stats_state->HasStats()) {
+		column_chunk.meta_data.statistics.min_value = state.stats_state->GetMinValue();
 		column_chunk.meta_data.statistics.__isset.min_value = true;
 		column_chunk.meta_data.__isset.statistics = true;
-	}
-	auto max_value = state.stats_state->GetMaxValue();
-	if (!max_value.empty()) {
-		column_chunk.meta_data.statistics.max_value = std::move(max_value);
+
+		column_chunk.meta_data.statistics.max_value = state.stats_state->GetMaxValue();
 		column_chunk.meta_data.statistics.__isset.max_value = true;
 		column_chunk.meta_data.__isset.statistics = true;
 	}
@@ -686,18 +687,24 @@ void BasicColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	if (HasDictionary(state)) {
 		column_chunk.meta_data.statistics.distinct_count = DictionarySize(state);
 		column_chunk.meta_data.statistics.__isset.distinct_count = true;
-		column_chunk.meta_data.dictionary_page_offset = start_offset;
+		column_chunk.meta_data.dictionary_page_offset = column_writer.GetTotalWritten();
 		column_chunk.meta_data.__isset.dictionary_page_offset = true;
 		FlushDictionary(state, state.stats_state.get());
 	}
 
 	// record the start position of the pages for this column
-	column_chunk.meta_data.data_page_offset = column_writer.GetTotalWritten();
+	column_chunk.meta_data.data_page_offset = 0;
 	SetParquetStatistics(state, column_chunk);
 
 	// write the individual pages to disk
 	idx_t total_uncompressed_size = 0;
 	for (auto &write_info : state.write_info) {
+		// set the data page offset whenever we see the *first* data page
+		if (column_chunk.meta_data.data_page_offset == 0 && (write_info.page_header.type == PageType::DATA_PAGE ||
+		                                                     write_info.page_header.type == PageType::DATA_PAGE_V2)) {
+			column_chunk.meta_data.data_page_offset = column_writer.GetTotalWritten();
+			;
+		}
 		D_ASSERT(write_info.page_header.uncompressed_page_size > 0);
 		auto header_start_offset = column_writer.GetTotalWritten();
 		writer.Write(write_info.page_header);
@@ -761,7 +768,7 @@ public:
 	T max;
 
 public:
-	bool HasStats() {
+	bool HasStats() override {
 		return min <= max;
 	}
 
@@ -907,7 +914,7 @@ public:
 	bool max;
 
 public:
-	bool HasStats() {
+	bool HasStats() override {
 		return !(min && !max);
 	}
 
@@ -1029,7 +1036,7 @@ public:
 		return string(const_char_ptr_cast(buffer), 16);
 	}
 
-	bool HasStats() {
+	bool HasStats() override {
 		return min <= max;
 	}
 
@@ -1195,7 +1202,7 @@ public:
 	string max;
 
 public:
-	bool HasStats() {
+	bool HasStats() override {
 		return has_stats;
 	}
 
@@ -1210,6 +1217,7 @@ public:
 			// ideally we avoid placing several mega or giga-byte long strings there
 			// we put a threshold of 10KB, if we see strings that exceed this threshold we avoid gathering stats
 			values_too_big = true;
+			has_stats = false;
 			min = string();
 			max = string();
 			return;

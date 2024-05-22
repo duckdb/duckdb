@@ -477,6 +477,36 @@ Value AllowUnsignedExtensionsSetting::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Allow Community Extensions
+//===--------------------------------------------------------------------===//
+void AllowCommunityExtensionsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (db && !config.options.allow_community_extensions) {
+		auto new_value = input.GetValue<bool>();
+		if (new_value) {
+			throw InvalidInputException("Cannot upgrade allow_community_extensions setting while database is running");
+		}
+		return;
+	}
+	auto new_value = input.GetValue<bool>();
+	config.options.allow_community_extensions = new_value;
+}
+
+void AllowCommunityExtensionsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (db && !config.options.allow_community_extensions) {
+		if (DBConfig().options.allow_community_extensions) {
+			throw InvalidInputException("Cannot upgrade allow_community_extensions setting while database is running");
+		}
+		return;
+	}
+	config.options.allow_community_extensions = DBConfig().options.allow_community_extensions;
+}
+
+Value AllowCommunityExtensionsSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.allow_community_extensions);
+}
+
+//===--------------------------------------------------------------------===//
 // Allow Extensions Metadata Mismatch
 //===--------------------------------------------------------------------===//
 void AllowExtensionsMetadataMismatchSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -530,6 +560,26 @@ void EnableObjectCacheSetting::ResetGlobal(DatabaseInstance *db, DBConfig &confi
 Value EnableObjectCacheSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::BOOLEAN(config.options.object_cache_enable);
+}
+
+//===--------------------------------------------------------------------===//
+// Storage Compatibility Version (for serialization)
+//===--------------------------------------------------------------------===//
+void StorageCompatibilityVersion::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto version_string = input.GetValue<string>();
+	auto serialization_compatibility = SerializationCompatibility::FromString(version_string);
+	config.options.serialization_compatibility = serialization_compatibility;
+}
+
+void StorageCompatibilityVersion::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.serialization_compatibility = DBConfig().options.serialization_compatibility;
+}
+
+Value StorageCompatibilityVersion::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+
+	auto &version_name = config.options.serialization_compatibility.duckdb_version;
+	return Value(version_name);
 }
 
 //===--------------------------------------------------------------------===//

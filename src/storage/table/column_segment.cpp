@@ -104,8 +104,8 @@ void ColumnSegment::InitializeScan(ColumnScanState &state) {
 }
 
 void ColumnSegment::Scan(ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset,
-                         bool entire_vector) {
-	if (entire_vector) {
+                         ScanVectorType scan_type) {
+	if (scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR) {
 		D_ASSERT(result_offset == 0);
 		Scan(state, scan_count, result);
 	} else {

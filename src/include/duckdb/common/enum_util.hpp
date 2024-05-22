@@ -124,13 +124,17 @@ enum class ExplainOutputType : uint8_t;
 
 enum class ExplainType : uint8_t;
 
+enum class ExponentType : uint8_t;
+
 enum class ExpressionClass : uint8_t;
 
 enum class ExpressionType : uint8_t;
 
+enum class ExtensionInstallMode : uint8_t;
+
 enum class ExtensionLoadResult : uint8_t;
 
-enum class ExternalDependenciesType : uint8_t;
+enum class ExtensionUpdateResultTag : uint8_t;
 
 enum class ExtraDropInfoType : uint8_t;
 
@@ -249,6 +253,8 @@ enum class RenderMode : uint8_t;
 enum class ResultModifierType : uint8_t;
 
 enum class SampleMethod : uint8_t;
+
+enum class SampleType : uint8_t;
 
 enum class ScanType : uint8_t;
 
@@ -472,16 +478,22 @@ template<>
 const char* EnumUtil::ToChars<ExplainType>(ExplainType value);
 
 template<>
+const char* EnumUtil::ToChars<ExponentType>(ExponentType value);
+
+template<>
 const char* EnumUtil::ToChars<ExpressionClass>(ExpressionClass value);
 
 template<>
 const char* EnumUtil::ToChars<ExpressionType>(ExpressionType value);
 
 template<>
+const char* EnumUtil::ToChars<ExtensionInstallMode>(ExtensionInstallMode value);
+
+template<>
 const char* EnumUtil::ToChars<ExtensionLoadResult>(ExtensionLoadResult value);
 
 template<>
-const char* EnumUtil::ToChars<ExternalDependenciesType>(ExternalDependenciesType value);
+const char* EnumUtil::ToChars<ExtensionUpdateResultTag>(ExtensionUpdateResultTag value);
 
 template<>
 const char* EnumUtil::ToChars<ExtraDropInfoType>(ExtraDropInfoType value);
@@ -659,6 +671,9 @@ const char* EnumUtil::ToChars<ResultModifierType>(ResultModifierType value);
 
 template<>
 const char* EnumUtil::ToChars<SampleMethod>(SampleMethod value);
+
+template<>
+const char* EnumUtil::ToChars<SampleType>(SampleType value);
 
 template<>
 const char* EnumUtil::ToChars<ScanType>(ScanType value);
@@ -923,16 +938,22 @@ template<>
 ExplainType EnumUtil::FromString<ExplainType>(const char *value);
 
 template<>
+ExponentType EnumUtil::FromString<ExponentType>(const char *value);
+
+template<>
 ExpressionClass EnumUtil::FromString<ExpressionClass>(const char *value);
 
 template<>
 ExpressionType EnumUtil::FromString<ExpressionType>(const char *value);
 
 template<>
+ExtensionInstallMode EnumUtil::FromString<ExtensionInstallMode>(const char *value);
+
+template<>
 ExtensionLoadResult EnumUtil::FromString<ExtensionLoadResult>(const char *value);
 
 template<>
-ExternalDependenciesType EnumUtil::FromString<ExternalDependenciesType>(const char *value);
+ExtensionUpdateResultTag EnumUtil::FromString<ExtensionUpdateResultTag>(const char *value);
 
 template<>
 ExtraDropInfoType EnumUtil::FromString<ExtraDropInfoType>(const char *value);
@@ -1110,6 +1131,9 @@ ResultModifierType EnumUtil::FromString<ResultModifierType>(const char *value);
 
 template<>
 SampleMethod EnumUtil::FromString<SampleMethod>(const char *value);
+
+template<>
+SampleType EnumUtil::FromString<SampleType>(const char *value);
 
 template<>
 ScanType EnumUtil::FromString<ScanType>(const char *value);
