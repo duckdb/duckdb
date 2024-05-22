@@ -167,7 +167,7 @@ DUCKDB_PLATFORM=`cat $DUCKDB_BUILD_DIR/duckdb_platform_out`
 ###########################
 ### Populate the minio repositories
 ###########################
-AWS_DEFAULT_REGION=eu-west-1 AWS_ACCESS_KEY_ID=minio_duckdb_user AWS_SECRET_ACCESS_KEY=minio_duckdb_user_password aws --endpoint-url http://duckdb-minio.com:9000 s3 sync $LOCAL_EXTENSION_REPO_UPDATED s3://test-bucket-public/ci-test-repo
+#AWS_DEFAULT_REGION=eu-west-1 AWS_ACCESS_KEY_ID=minio_duckdb_user AWS_SECRET_ACCESS_KEY=minio_duckdb_user_password aws --endpoint-url http://duckdb-minio.com:9000 s3 sync $LOCAL_EXTENSION_REPO_UPDATED s3://test-bucket-public/ci-test-repo
 export REMOTE_EXTENSION_REPO_UPDATED=http://duckdb-minio.com:9000/test-bucket-public/ci-test-repo
 export REMOTE_EXTENSION_REPO_DIRECT_PATH=http://duckdb-minio.com:9000/test-bucket-public/ci-test-repo/$DUCKDB_VERSION/$DUCKDB_PLATFORM
 

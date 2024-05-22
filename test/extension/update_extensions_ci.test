@@ -325,6 +325,37 @@ SELECT extension_name, install_mode, parse_filename(installed_from), extension_v
 ----
 inet	CUSTOM_PATH	inet.duckdb_extension.gz	v0.0.2
 
+statement ok
+set allow_extensions_metadata_mismatch=false;
+
+### Now we test autoloading: it should be unaffected by error messages 
+statement ok
+set autoload_known_extensions=true
+
+statement ok
+set autoinstall_known_extensions=true
+
+# Set a non-existent autoinstall repo
+statement ok
+set autoinstall_extension_repository='hocus_pocus_this_is_bogus'
+
+statement ok
+set custom_extension_repository='hocus_pocus_this_is_bogus'
+
+statement ok
+FORCE INSTALL tpcds FROM '${LOCAL_EXTENSION_REPO_UPDATED}';
+
+# Note: this would trigger the origin check normally, but now 
+statement ok
+from tpcds_queries();
+
+# The file should be from the custom path, NOT the autoinstall repo
+query IIII
+SELECT extension_name, install_mode, parse_filename(installed_from), extension_version FROM duckdb_extensions() where installed and extension_name != 'jemalloc' and extension_name != 'parquet'
+----
+inet	CUSTOM_PATH	inet.duckdb_extension.gz	v0.0.2
+tpcds	REPOSITORY	repository	v0.0.1
+
 ### Tests with allow_unsigned extensions = false
 restart
 
