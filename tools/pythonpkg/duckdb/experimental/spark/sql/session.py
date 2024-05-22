@@ -241,7 +241,7 @@ class SparkSession:
 
     @property
     def udf(self) -> UDFRegistration:
-        return UDFRegistration()
+        return UDFRegistration(self)
 
     @property
     def version(self) -> str:
