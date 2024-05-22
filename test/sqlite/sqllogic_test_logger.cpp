@@ -235,7 +235,8 @@ void SQLLogicTestLogger::SplitMismatch(idx_t row_number, idx_t expected_column_c
 	PrintLineSep();
 }
 
-void SQLLogicTestLogger::WrongResultHash(QueryResult *expected_result, MaterializedQueryResult &result, const string &hashval, const string expected_hash) {
+void SQLLogicTestLogger::WrongResultHash(QueryResult *expected_result, MaterializedQueryResult &result,
+                                         const string &hashval, const string expected_hash) {
 	if (expected_result) {
 		expected_result->Print();
 	} else {

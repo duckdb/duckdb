@@ -228,7 +228,7 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 				hash_compare_error = entry->second != hash_value;
 			}
 		}
-		string expected_hash ="";
+		string expected_hash = "";
 		if (result_is_hash) {
 			D_ASSERT(values.size() == 1);
 			hash_compare_error = values[0] != hash_value;
