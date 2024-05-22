@@ -111,6 +111,9 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 	if (iterator.first_one) {
 		lines_read +=
 		    state_machine.dialect_options.skip_rows.GetValue() + state_machine.dialect_options.header.GetValue();
+		if (lines_read == 0){
+			SkipBOM();
+		}
 	}
 }
 
@@ -1229,9 +1232,9 @@ bool StringValueScanner::MoveToNextBuffer() {
 	return false;
 }
 
-void StringValueScanner::SkipBOM() {
-	if (cur_buffer_handle->actual_size >= 3 && result.buffer_ptr[0] == '\xEF' && result.buffer_ptr[1] == '\xBB' &&
-	    result.buffer_ptr[2] == '\xBF') {
+void StringValueResult::SkipBOM() {
+	if (buffer_size >= 3 && buffer_ptr[0] == '\xEF' && buffer_ptr[1] == '\xBB' &&
+	    buffer_ptr[2] == '\xBF' && iterator.pos.buffer_pos == 0) {
 		iterator.pos.buffer_pos = 3;
 	}
 }

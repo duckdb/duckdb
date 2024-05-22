@@ -68,6 +68,11 @@ void SkipScanner::FinalizeChunkProcess() {
 			Process(result);
 		}
 	}
+	// Skip Carriage Return
+	if (state_machine->options.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON &&
+	    states.states[1] == CSVState::CARRIAGE_RETURN) {
+		iterator.pos.buffer_pos++;
+	}
 	iterator.done = FinishedFile();
 }
 } // namespace duckdb
