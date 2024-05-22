@@ -12,7 +12,7 @@ def execute_system_command(cmd):
     retcode = os.system(cmd)
     print(retcode)
     if retcode != 0:
-        raise Exception
+        raise Exception(f"Failed to run command {cmd} - exit code {retcode}")
 
 
 def replace_in_file(fname, regex, replace):

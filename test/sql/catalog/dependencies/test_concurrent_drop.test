@@ -20,7 +20,7 @@ create table tbl${i} (
 statement error
 drop sequence seq;
 ----
-Cannot drop entry "seq" because there are entries that depend on it
+Cannot drop entry "seq" because there are entries that depend on it.
 
 # Use the sequence
 statement ok

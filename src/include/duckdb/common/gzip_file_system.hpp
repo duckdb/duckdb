@@ -25,8 +25,11 @@ public:
 
 	//! Verifies that a buffer contains a valid GZIP header
 	static void VerifyGZIPHeader(uint8_t gzip_hdr[], idx_t read_count);
+	static bool CheckIsZip(const char *length, idx_t size);
+
 	//! Consumes a byte stream as a gzip string, returning the decompressed string
 	static string UncompressGZIPString(const string &in);
+	static string UncompressGZIPString(const char *length, idx_t size);
 
 	unique_ptr<StreamWrapper> CreateStream() override;
 	idx_t InBufferSize() override;

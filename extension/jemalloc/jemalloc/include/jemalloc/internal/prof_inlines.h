@@ -1,14 +1,17 @@
 #ifndef JEMALLOC_INTERNAL_PROF_INLINES_H
 #define JEMALLOC_INTERNAL_PROF_INLINES_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
+#include "jemalloc/internal/arena_inlines_b.h"
+#include "jemalloc/internal/jemalloc_internal_inlines_c.h"
+#include "jemalloc/internal/prof_externs.h"
+#include "jemalloc/internal/prof_structs.h"
 #include "jemalloc/internal/safety_check.h"
 #include "jemalloc/internal/sz.h"
 #include "jemalloc/internal/thread_event.h"
 
-namespace duckdb_jemalloc {
-
 JEMALLOC_ALWAYS_INLINE void
-prof_active_assert() {
+prof_active_assert(void) {
 	cassert(config_prof);
 	/*
 	 * If opt_prof is off, then prof_active must always be off, regardless
@@ -39,6 +42,22 @@ prof_gdump_get_unlocked(void) {
 	return prof_gdump_val;
 }
 
+JEMALLOC_ALWAYS_INLINE void
+prof_thread_name_assert(prof_tdata_t *tdata) {
+	if (!config_debug) {
+		return;
+	}
+	prof_active_assert();
+
+	bool terminated = false;
+	for (unsigned i = 0; i < PROF_THREAD_NAME_MAX_LEN; i++) {
+		if (tdata->thread_name[i] == '\0') {
+			terminated = true;
+		}
+	}
+	assert(terminated);
+}
+
 JEMALLOC_ALWAYS_INLINE prof_tdata_t *
 prof_tdata_get(tsd_t *tsd, bool create) {
 	prof_tdata_t *tdata;
@@ -58,6 +77,10 @@ prof_tdata_get(tsd_t *tsd, bool create) {
 			tsd_prof_tdata_set(tsd, tdata);
 		}
 		assert(tdata == NULL || tdata->attached);
+	}
+
+	if (tdata != NULL) {
+		prof_thread_name_assert(tdata);
 	}
 
 	return tdata;
@@ -83,6 +106,11 @@ prof_info_get_and_reset_recent(tsd_t *tsd, const void *ptr,
 	arena_prof_info_get(tsd, ptr, alloc_ctx, prof_info, true);
 }
 
+JEMALLOC_ALWAYS_INLINE bool
+prof_tctx_is_valid(const prof_tctx_t *tctx) {
+	return tctx != NULL && tctx != PROF_TCTX_SENTINEL;
+}
+
 JEMALLOC_ALWAYS_INLINE void
 prof_tctx_reset(tsd_t *tsd, const void *ptr, emap_alloc_ctx_t *alloc_ctx) {
 	cassert(config_prof);
@@ -103,7 +131,7 @@ JEMALLOC_ALWAYS_INLINE void
 prof_info_set(tsd_t *tsd, edata_t *edata, prof_tctx_t *tctx, size_t size) {
 	cassert(config_prof);
 	assert(edata != NULL);
-	assert((uintptr_t)tctx > (uintptr_t)1U);
+	assert(prof_tctx_is_valid(tctx));
 
 	arena_prof_info_set(tsd, edata, tctx, size);
 }
@@ -138,7 +166,7 @@ prof_alloc_prep(tsd_t *tsd, bool prof_active, bool sample_event) {
 
 	if (!prof_active ||
 	    likely(prof_sample_should_skip(tsd, sample_event))) {
-		ret = (prof_tctx_t *)(uintptr_t)1U;
+		ret = PROF_TCTX_SENTINEL;
 	} else {
 		ret = prof_tctx_create(tsd);
 	}
@@ -153,7 +181,7 @@ prof_malloc(tsd_t *tsd, const void *ptr, size_t size, size_t usize,
 	assert(ptr != NULL);
 	assert(usize == isalloc(tsd_tsdn(tsd), ptr));
 
-	if (unlikely((uintptr_t)tctx > (uintptr_t)1U)) {
+	if (unlikely(prof_tctx_is_valid(tctx))) {
 		prof_malloc_sample_object(tsd, ptr, size, usize, tctx);
 	} else {
 		prof_tctx_reset(tsd, ptr, alloc_ctx);
@@ -167,7 +195,7 @@ prof_realloc(tsd_t *tsd, const void *ptr, size_t size, size_t usize,
 	bool sampled, old_sampled, moved;
 
 	cassert(config_prof);
-	assert(ptr != NULL || (uintptr_t)tctx <= (uintptr_t)1U);
+	assert(ptr != NULL || !prof_tctx_is_valid(tctx));
 
 	if (prof_active && ptr != NULL) {
 		assert(usize == isalloc(tsd_tsdn(tsd), ptr));
@@ -180,12 +208,12 @@ prof_realloc(tsd_t *tsd, const void *ptr, size_t size, size_t usize,
 			 * sample threshold.
 			 */
 			prof_alloc_rollback(tsd, tctx);
-			tctx = (prof_tctx_t *)(uintptr_t)1U;
+			tctx = PROF_TCTX_SENTINEL;
 		}
 	}
 
-	sampled = ((uintptr_t)tctx > (uintptr_t)1U);
-	old_sampled = ((uintptr_t)old_prof_info->alloc_tctx > (uintptr_t)1U);
+	sampled = prof_tctx_is_valid(tctx);
+	old_sampled = prof_tctx_is_valid(old_prof_info->alloc_tctx);
 	moved = (ptr != old_ptr);
 
 	if (unlikely(sampled)) {
@@ -203,7 +231,7 @@ prof_realloc(tsd_t *tsd, const void *ptr, size_t size, size_t usize,
 	} else {
 		prof_info_t prof_info;
 		prof_info_get(tsd, ptr, NULL, &prof_info);
-		assert((uintptr_t)prof_info.alloc_tctx == (uintptr_t)1U);
+		assert(prof_info.alloc_tctx == PROF_TCTX_SENTINEL);
 	}
 
 	/*
@@ -214,31 +242,28 @@ prof_realloc(tsd_t *tsd, const void *ptr, size_t size, size_t usize,
 	 * counters.
 	 */
 	if (unlikely(old_sampled)) {
-		prof_free_sampled_object(tsd, old_usize, old_prof_info);
+		prof_free_sampled_object(tsd, old_ptr, old_usize,
+		    old_prof_info);
 	}
 }
 
 JEMALLOC_ALWAYS_INLINE size_t
-prof_sample_align(size_t orig_align) {
+prof_sample_align(size_t usize, size_t orig_align) {
 	/*
-	 * Enforce page alignment, so that sampled allocations can be identified
+	 * Enforce alignment, so that sampled allocations can be identified
 	 * w/o metadata lookup.
 	 */
 	assert(opt_prof);
-	return (opt_cache_oblivious && orig_align < PAGE) ? PAGE :
-	    orig_align;
-}
-
-JEMALLOC_ALWAYS_INLINE bool
-prof_sample_aligned(const void *ptr) {
-	return ((uintptr_t)ptr & PAGE_MASK) == 0;
+	return (orig_align < PROF_SAMPLE_ALIGNMENT &&
+	       (sz_can_use_slab(usize) || opt_cache_oblivious)) ?
+	           PROF_SAMPLE_ALIGNMENT : orig_align;
 }
 
 JEMALLOC_ALWAYS_INLINE bool
 prof_sampled(tsd_t *tsd, const void *ptr) {
 	prof_info_t prof_info;
 	prof_info_get(tsd, ptr, NULL, &prof_info);
-	bool sampled = (uintptr_t)prof_info.alloc_tctx > (uintptr_t)1U;
+	bool sampled = prof_tctx_is_valid(prof_info.alloc_tctx);
 	if (sampled) {
 		assert(prof_sample_aligned(ptr));
 	}
@@ -254,12 +279,24 @@ prof_free(tsd_t *tsd, const void *ptr, size_t usize,
 	cassert(config_prof);
 	assert(usize == isalloc(tsd_tsdn(tsd), ptr));
 
-	if (unlikely((uintptr_t)prof_info.alloc_tctx > (uintptr_t)1U)) {
+	if (unlikely(prof_tctx_is_valid(prof_info.alloc_tctx))) {
 		assert(prof_sample_aligned(ptr));
-		prof_free_sampled_object(tsd, usize, &prof_info);
+		prof_free_sampled_object(tsd, ptr, usize, &prof_info);
 	}
 }
 
-} // namespace duckdb_jemalloc
+JEMALLOC_ALWAYS_INLINE bool
+prof_thread_name_empty(prof_tdata_t *tdata) {
+	prof_active_assert();
+
+	return (tdata->thread_name[0] == '\0');
+}
+
+JEMALLOC_ALWAYS_INLINE void
+prof_thread_name_clear(prof_tdata_t *tdata) {
+	prof_active_assert();
+
+	tdata->thread_name[0] = '\0';
+}
 
 #endif /* JEMALLOC_INTERNAL_PROF_INLINES_H */

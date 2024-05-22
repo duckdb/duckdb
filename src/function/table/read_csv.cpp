@@ -224,7 +224,7 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 	do {
 		if (output.size() != 0) {
 			MultiFileReader().FinalizeChunk(context, bind_data.reader_bind,
-			                                csv_local_state.csv_reader->csv_file_scan->reader_data, output);
+			                                csv_local_state.csv_reader->csv_file_scan->reader_data, output, nullptr);
 			break;
 		}
 		if (csv_local_state.csv_reader->FinishedIterator()) {
@@ -373,7 +373,9 @@ void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(MultiFileReader::CreateFunctionSet(ReadCSVTableFunction::GetAutoFunction()));
 }
 
-unique_ptr<TableRef> ReadCSVReplacement(ClientContext &context, const string &table_name, ReplacementScanData *data) {
+unique_ptr<TableRef> ReadCSVReplacement(ClientContext &context, ReplacementScanInput &input,
+                                        optional_ptr<ReplacementScanData> data) {
+	auto &table_name = input.table_name;
 	auto lower_name = StringUtil::Lower(table_name);
 	// remove any compression
 	if (StringUtil::EndsWith(lower_name, ".gz")) {

@@ -1,8 +1,9 @@
 import gc
-import duckdb
 import pytest
-import os, psutil
+import os
 import pandas as pd
+
+psutil = pytest.importorskip("psutil")
 
 
 @pytest.fixture

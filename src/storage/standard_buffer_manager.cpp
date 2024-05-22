@@ -282,6 +282,9 @@ void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 
 void StandardBufferManager::SetMemoryLimit(idx_t limit) {
 	buffer_pool.SetLimit(limit, InMemoryWarning());
+	if (Allocator::SupportsFlush()) {
+		Allocator::FlushAll();
+	}
 }
 
 void StandardBufferManager::SetSwapLimit(optional_idx limit) {
