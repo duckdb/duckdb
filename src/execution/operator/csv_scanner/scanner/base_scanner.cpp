@@ -54,8 +54,6 @@ void BaseScanner::SkipCSVRows(idx_t rows_to_skip) {
 		iterator.pos.buffer_pos++;
 	}
 	lines_read += row_skipper.GetLinesRead();
-
-
 }
 
 CSVIterator &BaseScanner::GetIterator() {

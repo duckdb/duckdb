@@ -78,7 +78,6 @@ public:
 		return iterator.pos;
 	}
 
-
 	CSVStateMachine &GetStateMachine();
 
 	shared_ptr<CSVFileScan> csv_file_scan;

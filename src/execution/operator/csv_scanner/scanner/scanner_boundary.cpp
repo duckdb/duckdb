@@ -51,6 +51,8 @@ bool CSVIterator::Next(CSVBufferManager &buffer_manager) {
 	if (!is_set) {
 		return false;
 	}
+	// If we are calling next this is not the first one anymore
+	first_one = false;
 	boundary.boundary_idx++;
 	// This is our start buffer
 	auto buffer = buffer_manager.GetBuffer(boundary.buffer_idx);
@@ -103,9 +105,9 @@ void CSVIterator::SetCurrentPositionToBoundary() {
 }
 
 void CSVIterator::SetCurrentBoundaryToPosition() {
-	boundary.file_idx = pos.file_idx ;
-	boundary.buffer_idx = pos.buffer_idx ;
-	boundary.buffer_pos  = pos.buffer_pos;
+	boundary.file_idx = pos.file_idx;
+	boundary.buffer_idx = pos.buffer_idx;
+	boundary.buffer_pos = pos.buffer_pos;
 	is_set = true;
 }
 

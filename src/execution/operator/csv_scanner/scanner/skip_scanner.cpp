@@ -62,9 +62,9 @@ void SkipScanner::FinalizeChunkProcess() {
 	// We continue skipping until we skipped enough rows, or we have nothing else to read.
 	while (!FinishedFile() && result.row_count < result.rows_to_skip) {
 		cur_buffer_handle = buffer_manager->GetBuffer(++iterator.pos.buffer_idx);
-		iterator.pos.buffer_pos = 0;
-
 		if (cur_buffer_handle) {
+			iterator.pos.buffer_pos = 0;
+			buffer_handle_ptr = cur_buffer_handle->Ptr();
 			Process(result);
 		}
 	}
