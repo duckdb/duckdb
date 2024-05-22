@@ -178,8 +178,10 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			}
 		}
 		for (auto &child : op.children) {
-			RemoveUnusedColumns remove(binder, context, true);
-			remove.VisitOperator(*child);
+			RemoveUnusedColumns remove(binder, context);
+            remove.VisitOperatorExpressions(op);
+			remove.column_references.insert(column_references.begin(), column_references.end()); // add parent references
+            remove.VisitOperator(*child);
 		}
 		return;
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
