@@ -69,6 +69,9 @@ SELECT extension_name, install_mode, installed_from, extension_version FROM duck
 ----
 tpcds	CUSTOM_PATH	./build/extension_metadata_test_data/direct_install/tpcds.duckdb_extension	v0.0.1
 
+statement ok
+load tpcds
+
 # Same here
 query IIIII
 UPDATE EXTENSIONS

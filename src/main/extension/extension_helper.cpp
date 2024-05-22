@@ -323,26 +323,6 @@ vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(DatabaseInstance
 	});
 #endif
 
-	for (const auto &extension : db.LoadedExtensions()) {
-		if (seen_extensions.find(extension) != seen_extensions.end()) {
-			const auto &loaded_extension_data = db.LoadedExtensionsData();
-			const auto &loaded_install_info = loaded_extension_data.find(extension);
-
-			ExtensionUpdateResult statically_loaded_ext_result;
-
-			if (loaded_install_info == loaded_extension_data.end()) {
-				statically_loaded_ext_result.tag = ExtensionUpdateResultTag::UNKNOWN;
-			} else if (loaded_install_info->second.mode == ExtensionInstallMode::STATICALLY_LINKED) {
-				statically_loaded_ext_result.tag = ExtensionUpdateResultTag::STATICALLY_LOADED;
-				statically_loaded_ext_result.installed_version = loaded_install_info->second.version;
-			} else {
-				statically_loaded_ext_result.tag = ExtensionUpdateResultTag::UNKNOWN;
-			}
-
-			result.push_back(std::move(statically_loaded_ext_result));
-		}
-	}
-
 	return result;
 }
 
