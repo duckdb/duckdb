@@ -93,6 +93,7 @@ class SerializationCompatibility {
 public:
 	static SerializationCompatibility FromString(const string &input);
 	static SerializationCompatibility Default();
+	static SerializationCompatibility Latest();
 
 public:
 	bool Compare(idx_t property_version) const;
@@ -102,6 +103,8 @@ public:
 	string duckdb_version;
 	//! The max version that should be serialized
 	idx_t serialization_version;
+	//! Whether this was set by a manual SET/PRAGMA or default
+	bool manually_set;
 
 protected:
 	SerializationCompatibility() = default;
@@ -199,6 +202,8 @@ struct DBConfigOptions {
 	string extension_directory;
 	//! Whether unsigned extensions should be loaded
 	bool allow_unsigned_extensions = false;
+	//! Whether community extensions should be loaded
+	bool allow_community_extensions = true;
 	//! Whether extensions with missing metadata should be loaded
 	bool allow_extensions_metadata_mismatch = false;
 	//! Enable emitting FSST Vectors

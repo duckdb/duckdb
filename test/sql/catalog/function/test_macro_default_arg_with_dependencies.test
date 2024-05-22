@@ -67,7 +67,7 @@ select my_macro2(can_not_be_empty)
 statement error
 drop table integers;
 ----
-Dependency Error: Cannot drop entry "integers" because there are entries that depend on it. Use DROP...CASCADE to drop all dependents.
+macro function "my_macro2" depends on table "integers".
 
 statement ok
 drop table integers cascade;
