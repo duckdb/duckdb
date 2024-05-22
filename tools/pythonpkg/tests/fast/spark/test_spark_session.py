@@ -75,4 +75,3 @@ class TestSparkSession(object):
     def test_udf(self, spark):
         with pytest.raises(NotImplementedError):
             udf_registration = spark.udf
-
