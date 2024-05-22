@@ -35,12 +35,26 @@ DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel_p) : rel(std::move(r
 }
 
 bool DuckDBPyRelation::CanBeRegisteredBy(Connection &con) {
+	return CanBeRegisteredBy(con.context);
+}
+
+bool DuckDBPyRelation::CanBeRegisteredBy(ClientContext &context) {
 	if (!rel) {
 		// PyRelation without an internal relation can not be registered
 		return false;
 	}
-	auto context = rel->context.GetContext();
-	return context == con.context;
+	auto this_context = rel->context.TryGetContext();
+	if (!this_context) {
+		return false;
+	}
+	return &context == this_context.get();
+}
+
+bool DuckDBPyRelation::CanBeRegisteredBy(shared_ptr<ClientContext> &con) {
+	if (!con) {
+		return false;
+	}
+	return CanBeRegisteredBy(*con);
 }
 
 DuckDBPyRelation::~DuckDBPyRelation() {
@@ -62,7 +76,9 @@ DuckDBPyRelation::DuckDBPyRelation(unique_ptr<DuckDBPyResult> result_p) : rel(nu
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectFromExpression(const string &expression) {
 	auto projected_relation = make_uniq<DuckDBPyRelation>(rel->Project(expression));
-	projected_relation->rel->extra_dependencies = this->rel->extra_dependencies;
+	for (auto &dep : this->rel->external_dependencies) {
+		projected_relation->rel->AddExternalDependency(dep);
+	}
 	return projected_relation;
 }
 
@@ -1356,10 +1372,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Map(py::function fun, Optional<py
 	params.emplace_back(Value::POINTER(CastPointerToValue(fun.ptr())));
 	params.emplace_back(Value::POINTER(CastPointerToValue(schema.ptr())));
 	auto relation = make_uniq<DuckDBPyRelation>(rel->TableFunction("python_map_function", params));
-	auto rel_dependency = make_uniq<PythonDependencies>();
-	rel_dependency->map_function = std::move(fun);
-	rel_dependency->py_object_list.push_back(make_uniq<RegisteredObject>(std::move(schema)));
-	relation->rel->extra_dependencies = std::move(rel_dependency);
+	auto rel_dependency = make_uniq<ExternalDependency>();
+	rel_dependency->AddDependency("map", PythonDependencyItem::Create(std::move(fun)));
+	rel_dependency->AddDependency("schema", PythonDependencyItem::Create(std::move(schema)));
+	relation->rel->AddExternalDependency(std::move(rel_dependency));
 	return relation;
 }
 

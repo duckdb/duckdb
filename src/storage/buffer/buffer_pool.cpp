@@ -7,7 +7,7 @@
 namespace duckdb {
 
 bool BufferEvictionNode::CanUnload(BlockHandle &handle_p) {
-	if (timestamp != handle_p.eviction_timestamp) {
+	if (timestamp != handle_p.eviction_seq_num) {
 		// handle was used in between
 		return false;
 	}
@@ -202,7 +202,7 @@ bool BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 	// The block handle is locked during this operation (Unpin),
 	// or the block handle is still a local variable (ConvertToPersistent)
 	D_ASSERT(handle->readers == 0);
-	auto ts = ++handle->eviction_timestamp;
+	auto ts = ++handle->eviction_seq_num;
 
 	if (ts != 1) {
 		// we add a newer version, i.e., we kill exactly one previous version

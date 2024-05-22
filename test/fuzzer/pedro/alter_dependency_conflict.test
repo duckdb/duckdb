@@ -14,6 +14,7 @@ CREATE INDEX i2 ON t4 (c3);
 statement error
 ALTER TABLE t4 ADD c1 BLOB;
 ----
+Cannot alter entry "t4" because there are entries that depend on it.
 
 # the table should still be in a usable state after the alter
 statement ok

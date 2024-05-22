@@ -21,4 +21,5 @@
 #include "duckdb/parser/statement/set_statement.hpp"
 #include "duckdb/parser/statement/transaction_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/statement/update_extensions_statement.hpp"
 #include "duckdb/parser/statement/vacuum_statement.hpp"
