@@ -228,16 +228,18 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 				hash_compare_error = entry->second != hash_value;
 			}
 		}
+		string expected_hash ="";
 		if (result_is_hash) {
 			D_ASSERT(values.size() == 1);
 			hash_compare_error = values[0] != hash_value;
+			expected_hash = values[0];
 		}
 		if (hash_compare_error) {
 			QueryResult *expected_result = nullptr;
 			if (runner.result_label_map.find(query_label) != runner.result_label_map.end()) {
 				expected_result = runner.result_label_map[query_label].get();
 			}
-			logger.WrongResultHash(expected_result, result);
+			logger.WrongResultHash(expected_result, result, hash_value, expected_hash);
 			return false;
 		}
 		REQUIRE(!hash_compare_error);
