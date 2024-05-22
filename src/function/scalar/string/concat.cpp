@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-static void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+static void StringConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	// iterate over the vectors to count how large the final string will be
 	idx_t constant_lengths = 0;
@@ -231,7 +231,7 @@ static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &re
 	}
 }
 
-static unique_ptr<FunctionData> BindConcatFunction(ClientContext &context, ScalarFunction &bound_function,
+static unique_ptr<FunctionData> BindStringConcatFunction(ClientContext &context, ScalarFunction &bound_function,
                                                    vector<unique_ptr<Expression>> &arguments) {
 	for (auto &arg : bound_function.arguments) {
 		arg = LogicalType::VARCHAR;
@@ -257,14 +257,14 @@ void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
 	// concat_ws(',', NULL, NULL) = ""
 	// concat_ws(',', '', '') = ","
 	ScalarFunction concat =
-	    ScalarFunction("concat", {LogicalType::ANY}, LogicalType::VARCHAR, ConcatFunction, BindConcatFunction);
+	    ScalarFunction("concat", {LogicalType::ANY}, LogicalType::VARCHAR, StringConcatFunction, BindStringConcatFunction);
 	concat.varargs = LogicalType::ANY;
 	concat.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction(concat);
 
 	ScalarFunctionSet concat_op("||");
 	concat_op.AddFunction(
-	    ScalarFunction({LogicalType::ANY, LogicalType::ANY}, LogicalType::VARCHAR, ConcatOperator, BindConcatFunction));
+	    ScalarFunction({LogicalType::ANY, LogicalType::ANY}, LogicalType::VARCHAR, ConcatOperator, BindStringConcatFunction));
 	concat_op.AddFunction(ScalarFunction({LogicalType::BLOB, LogicalType::BLOB}, LogicalType::BLOB, ConcatOperator));
 	concat_op.AddFunction(ListConcatFun::GetFunction());
 	for (auto &fun : concat_op.functions) {
@@ -273,7 +273,7 @@ void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(concat_op);
 
 	ScalarFunction concat_ws = ScalarFunction("concat_ws", {LogicalType::VARCHAR, LogicalType::ANY},
-	                                          LogicalType::VARCHAR, ConcatWSFunction, BindConcatFunction);
+	                                          LogicalType::VARCHAR, ConcatWSFunction, BindStringConcatFunction);
 	concat_ws.varargs = LogicalType::ANY;
 	concat_ws.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction(concat_ws);
