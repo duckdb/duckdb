@@ -122,9 +122,9 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 		    "(e.g. duckdb -unsigned).");
 		pDb->db = make_uniq<DuckDB>(filename, &config);
 #ifdef SHELL_INLINE_AUTOCOMPLETE
-		pDb->db->LoadExtension<AutocompleteExtension>();
+		pDb->db->LoadStaticExtension<AutocompleteExtension>();
 #endif
-		pDb->db->LoadExtension<ShellExtension>();
+		pDb->db->LoadStaticExtension<ShellExtension>();
 		pDb->con = make_uniq<Connection>(*pDb->db);
 	} catch (const Exception &ex) {
 		if (pDb) {
@@ -985,21 +985,38 @@ int sqlite3_complete(const char *zSql) {
 			break;
 		}
 		case '$': { /* Dollar-quoted strings */
-			if (zSql[1] >= '0' && zSql[1] <= '9') {
-				// numeric prepared statement parameter
+			// check if this is a dollar-quoted string
+			idx_t next_dollar = 0;
+			for (idx_t idx = 1; zSql[idx]; idx++) {
+				if (zSql[idx] == '$') {
+					// found the next dollar
+					next_dollar = idx;
+					break;
+				}
+				// all characters can be between A-Z, a-z or \200 - \377
+				if (zSql[idx] >= 'A' && zSql[idx] <= 'Z') {
+					continue;
+				}
+				if (zSql[idx] >= 'a' && zSql[idx] <= 'z') {
+					continue;
+				}
+				if (zSql[idx] >= '\200' && zSql[idx] <= '\377') {
+					continue;
+				}
+				// the first character CANNOT be a numeric, only subsequent characters
+				if (idx > 1 && zSql[idx] >= '0' && zSql[idx] <= '9') {
+					continue;
+				}
+				// not a dollar quoted string
+				break;
+			}
+			if (next_dollar == 0) {
+				// not a dollar quoted string
 				next_state = SQLParseState::NORMAL;
 				break;
 			}
-			zSql++;
-			auto start = zSql;
-			// look for the next $ symbol (which is the terminator
-			while (*zSql && *zSql != '$') {
-				zSql++;
-			}
-			if (zSql[0] == 0) {
-				// unterminated dollar string
-				return 0;
-			}
+			auto start = zSql + 1;
+			zSql += next_dollar;
 			const char *delimiterStart = start;
 			idx_t delimiterLength = zSql - start;
 			zSql++;

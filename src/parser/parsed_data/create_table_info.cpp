@@ -32,12 +32,20 @@ unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
 string CreateTableInfo::ToString() const {
 	string ret = "";
 
-	string table_name = KeywordHelper::WriteOptionallyQuoted(table);
-	if (schema != DEFAULT_SCHEMA) {
-		table_name = KeywordHelper::WriteOptionallyQuoted(schema) + "." + table_name;
+	ret += "CREATE";
+	if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+		ret += " OR REPLACE";
 	}
+	if (temporary) {
+		ret += " TEMP";
+	}
+	ret += " TABLE ";
 
-	ret += "CREATE TABLE " + table_name;
+	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+		ret += " IF NOT EXISTS ";
+	}
+	ret += QualifierToString(temporary ? "" : catalog, schema, table);
+
 	if (query != nullptr) {
 		ret += " AS " + query->ToString();
 	} else {

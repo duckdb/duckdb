@@ -15,6 +15,8 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 #endif
 
 namespace duckdb {
@@ -351,7 +353,7 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, vector<LogicalT
                              CompressionCodec::type codec, ChildFieldIDs field_ids_p,
                              const vector<pair<string, string>> &kv_metadata,
                              shared_ptr<ParquetEncryptionConfig> encryption_config_p,
-                             double dictionary_compression_ratio_threshold_p)
+                             double dictionary_compression_ratio_threshold_p, optional_idx compression_level_p)
     : file_name(std::move(file_name_p)), sql_types(std::move(types_p)), column_names(std::move(names_p)), codec(codec),
       field_ids(std::move(field_ids_p)), encryption_config(std::move(encryption_config_p)),
       dictionary_compression_ratio_threshold(dictionary_compression_ratio_threshold_p) {
@@ -368,7 +370,7 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, vector<LogicalT
 		writer->WriteData(const_data_ptr_cast("PAR1"), 4);
 	}
 	TCompactProtocolFactoryT<MyTransport> tproto_factory;
-	protocol = tproto_factory.getProtocol(make_shared<MyTransport>(*writer));
+	protocol = tproto_factory.getProtocol(std::make_shared<MyTransport>(*writer));
 
 	file_meta_data.num_rows = 0;
 	file_meta_data.version = 1;
@@ -384,6 +386,19 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, vector<LogicalT
 		kv.__set_value(kv_pair.second);
 		file_meta_data.key_value_metadata.push_back(kv);
 		file_meta_data.__isset.key_value_metadata = true;
+	}
+	if (compression_level_p.IsValid()) {
+		idx_t level = compression_level_p.GetIndex();
+		switch (codec) {
+		case CompressionCodec::ZSTD:
+			if (level < 1 || level > 22) {
+				throw BinderException("Compression level for ZSTD must be between 1 and 22");
+			}
+			break;
+		default:
+			throw NotImplementedException("Compression level is only supported for the ZSTD compression codec");
+		}
+		compression_level = level;
 	}
 
 	// populate root schema object
@@ -468,6 +483,42 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 	result.heaps = buffer.GetHeapReferences();
 }
 
+// Validation code adapted from Impala
+static void ValidateOffsetInFile(const string &filename, idx_t col_idx, idx_t file_length, idx_t offset,
+                                 const string &offset_name) {
+	if (offset < 0 || offset >= file_length) {
+		throw IOException("File '%s': metadata is corrupt. Column %d has invalid "
+		                  "%s (offset=%llu file_size=%llu).",
+		                  filename, col_idx, offset_name, offset, file_length);
+	}
+}
+
+static void ValidateColumnOffsets(const string &filename, idx_t file_length, const ParquetRowGroup &row_group) {
+	for (idx_t i = 0; i < row_group.columns.size(); ++i) {
+		const auto &col_chunk = row_group.columns[i];
+		ValidateOffsetInFile(filename, i, file_length, col_chunk.meta_data.data_page_offset, "data page offset");
+		auto col_start = NumericCast<idx_t>(col_chunk.meta_data.data_page_offset);
+		// The file format requires that if a dictionary page exists, it be before data pages.
+		if (col_chunk.meta_data.__isset.dictionary_page_offset) {
+			ValidateOffsetInFile(filename, i, file_length, col_chunk.meta_data.dictionary_page_offset,
+			                     "dictionary page offset");
+			if (NumericCast<idx_t>(col_chunk.meta_data.dictionary_page_offset) >= col_start) {
+				throw IOException("Parquet file '%s': metadata is corrupt. Dictionary "
+				                  "page (offset=%llu) must come before any data pages (offset=%llu).",
+				                  filename, col_chunk.meta_data.dictionary_page_offset, col_start);
+			}
+			col_start = col_chunk.meta_data.dictionary_page_offset;
+		}
+		auto col_len = NumericCast<idx_t>(col_chunk.meta_data.total_compressed_size);
+		auto col_end = col_start + col_len;
+		if (col_end <= 0 || col_end > file_length) {
+			throw IOException("Parquet file '%s': metadata is corrupt. Column %llu has "
+			                  "invalid column offsets (offset=%llu, size=%llu, file_size=%llu).",
+			                  filename, i, col_start, col_len, file_length);
+		}
+	}
+}
+
 void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {
 	lock_guard<mutex> glock(lock);
 	auto &row_group = prepared.row_group;
@@ -481,6 +532,8 @@ void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {
 		auto write_state = std::move(states[col_idx]);
 		col_writer->FinalizeWrite(*write_state);
 	}
+	// let's make sure all offsets are ay-okay
+	ValidateColumnOffsets(file_name, writer->GetTotalWritten(), row_group);
 
 	// append the row group to the file meta data
 	file_meta_data.row_groups.push_back(row_group);

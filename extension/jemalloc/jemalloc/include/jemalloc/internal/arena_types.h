@@ -1,16 +1,16 @@
 #ifndef JEMALLOC_INTERNAL_ARENA_TYPES_H
 #define JEMALLOC_INTERNAL_ARENA_TYPES_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/sc.h"
-#include "jemalloc/jemalloc_typedefs.h"
 
 /* Default decay times in milliseconds. */
 #define DIRTY_DECAY_MS_DEFAULT	ZD(10 * 1000)
 #define MUZZY_DECAY_MS_DEFAULT	(0)
 /* Number of event ticks between time checks. */
 #define ARENA_DECAY_NTICKS_PER_UPDATE	1000
-
-namespace duckdb_jemalloc {
+/* Maximum length of the arena name. */
+#define ARENA_NAME_LEN 32
 
 typedef struct arena_decay_s arena_decay_t;
 typedef struct arena_s arena_t;
@@ -57,7 +57,5 @@ struct arena_config_s {
 typedef struct arena_config_s arena_config_t;
 
 extern const arena_config_t arena_config_default;
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_ARENA_TYPES_H */

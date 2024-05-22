@@ -4,6 +4,7 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 
 #include <cstdint>
 
@@ -173,7 +174,11 @@ data_ptr_t Allocator::DefaultAllocate(PrivateAllocatorData *private_data, idx_t 
 #ifdef USE_JEMALLOC
 	return JemallocExtension::Allocate(private_data, size);
 #else
-	return data_ptr_cast(malloc(size));
+	auto default_allocate_result = malloc(size);
+	if (!default_allocate_result) {
+		throw std::bad_alloc();
+	}
+	return data_ptr_cast(default_allocate_result);
 #endif
 }
 
@@ -195,12 +200,28 @@ data_ptr_t Allocator::DefaultReallocate(PrivateAllocatorData *private_data, data
 }
 
 shared_ptr<Allocator> &Allocator::DefaultAllocatorReference() {
-	static shared_ptr<Allocator> DEFAULT_ALLOCATOR = make_shared<Allocator>();
+	static shared_ptr<Allocator> DEFAULT_ALLOCATOR = make_shared_ptr<Allocator>();
 	return DEFAULT_ALLOCATOR;
 }
 
 Allocator &Allocator::DefaultAllocator() {
 	return *DefaultAllocatorReference();
+}
+
+int64_t Allocator::DecayDelay() {
+#ifdef USE_JEMALLOC
+	return JemallocExtension::DecayDelay();
+#else
+	return NumericLimits<int64_t>::Maximum();
+#endif
+}
+
+bool Allocator::SupportsFlush() {
+#ifdef USE_JEMALLOC
+	return true;
+#else
+	return false;
+#endif
 }
 
 void Allocator::ThreadFlush(idx_t threshold) {
@@ -209,9 +230,21 @@ void Allocator::ThreadFlush(idx_t threshold) {
 #endif
 }
 
+void Allocator::ThreadIdle() {
+#ifdef USE_JEMALLOC
+	JemallocExtension::ThreadIdle();
+#endif
+}
+
 void Allocator::FlushAll() {
 #ifdef USE_JEMALLOC
 	JemallocExtension::FlushAll();
+#endif
+}
+
+void Allocator::SetBackgroundThreads(bool enable) {
+#ifdef USE_JEMALLOC
+	JemallocExtension::SetBackgroundThreads(enable);
 #endif
 }
 

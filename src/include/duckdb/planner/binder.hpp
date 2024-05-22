@@ -43,6 +43,7 @@ class ColumnList;
 class ExternalDependency;
 class TableFunction;
 class TableStorageInfo;
+class BoundConstraint;
 
 struct CreateInfo;
 struct BoundCreateTableInfo;
@@ -55,6 +56,7 @@ struct PivotColumnEntry;
 struct UnpivotEntry;
 
 enum class BindingMode : uint8_t { STANDARD_BINDING, EXTRACT_NAMES };
+enum class BinderType : uint8_t { REGULAR_BINDER, VIEW_BINDER };
 
 struct CorrelatedColumnInfo {
 	ColumnBinding binding;
@@ -114,13 +116,13 @@ private:
   tables and columns in the catalog. In the process, it also resolves types of
   all expressions.
 */
-class Binder : public std::enable_shared_from_this<Binder> {
+class Binder : public enable_shared_from_this<Binder> {
 	friend class ExpressionBinder;
 	friend class RecursiveDependentJoinPlanner;
 
 public:
 	DUCKDB_API static shared_ptr<Binder> CreateBinder(ClientContext &context, optional_ptr<Binder> parent = nullptr,
-	                                                  bool inherit_ctes = true);
+	                                                  BinderType binder_type = BinderType::REGULAR_BINDER);
 
 	//! The client context
 	ClientContext &context;
@@ -135,8 +137,6 @@ public:
 	vector<CorrelatedColumnInfo> correlated_columns;
 	//! The set of parameter expressions bound by this binder
 	optional_ptr<BoundParameterMap> parameters;
-	//! Statement properties
-	StatementProperties properties;
 	//! The alias for the currently processing subquery, if it exists
 	string alias;
 	//! Macro parameter bindings (if any)
@@ -152,7 +152,20 @@ public:
 
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info);
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema);
+	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema,
+	                                                     vector<unique_ptr<Expression>> &bound_defaults);
+	static unique_ptr<BoundCreateTableInfo> BindCreateTableCheckpoint(unique_ptr<CreateInfo> info,
+	                                                                  SchemaCatalogEntry &schema);
+	static vector<unique_ptr<BoundConstraint>> BindConstraints(ClientContext &context,
+	                                                           const vector<unique_ptr<Constraint>> &constraints,
+	                                                           const string &table_name, const ColumnList &columns);
+	vector<unique_ptr<BoundConstraint>> BindConstraints(const vector<unique_ptr<Constraint>> &constraints,
+	                                                    const string &table_name, const ColumnList &columns);
+	vector<unique_ptr<BoundConstraint>> BindConstraints(const TableCatalogEntry &table);
+	vector<unique_ptr<BoundConstraint>> BindNewConstraints(vector<unique_ptr<Constraint>> &constraints,
+	                                                       const string &table_name, const ColumnList &columns);
 
+	void SetCatalogLookupCallback(catalog_entry_callback_t callback);
 	void BindCreateViewInfo(CreateViewInfo &base);
 	SchemaCatalogEntry &BindSchema(CreateInfo &info);
 	SchemaCatalogEntry &BindCreateFunctionInfo(CreateInfo &info);
@@ -167,6 +180,10 @@ public:
 
 	//! Generates an unused index for a table
 	idx_t GenerateTableIndex();
+
+	optional_ptr<CatalogEntry> GetCatalogEntry(CatalogType type, const string &catalog, const string &schema,
+	                                           const string &name, OnEntryNotFound on_entry_not_found,
+	                                           QueryErrorContext &error_context);
 
 	//! Add a common table expression to the binder
 	void AddCTE(const string &name, CommonTableExpressionInfo &cte);
@@ -200,8 +217,8 @@ public:
 	void BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> &root);
 
 	static void BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema);
-	static void BindLogicalType(ClientContext &context, LogicalType &type, optional_ptr<Catalog> catalog = nullptr,
-	                            const string &schema = INVALID_SCHEMA);
+	void BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog = nullptr,
+	                     const string &schema = INVALID_SCHEMA);
 
 	bool HasMatchingBinding(const string &table_name, const string &column_name, ErrorData &error);
 	bool HasMatchingBinding(const string &schema_name, const string &table_name, const string &column_name,
@@ -220,6 +237,8 @@ public:
 	void SetCanContainNulls(bool can_contain_nulls);
 	void SetAlwaysRequireRebind();
 
+	StatementProperties &GetStatementProperties();
+
 private:
 	//! The parent binder (if any)
 	shared_ptr<Binder> parent;
@@ -231,8 +250,8 @@ private:
 	bool has_unplanned_dependent_joins = false;
 	//! Whether or not outside dependent joins have been planned and flattened
 	bool is_outside_flattened = true;
-	//! Whether CTEs should reference the parent binder (if it exists)
-	bool inherit_ctes = true;
+	//! What kind of node we are binding using this binder
+	BinderType binder_type = BinderType::REGULAR_BINDER;
 	//! Whether or not the binder can contain NULLs as the root of expressions
 	bool can_contain_nulls = false;
 	//! The root statement of the query that is currently being parsed
@@ -243,8 +262,12 @@ private:
 	unordered_set<string> table_names;
 	//! The set of bound views
 	reference_set_t<ViewCatalogEntry> bound_views;
+	//! Used to retrieve CatalogEntry's
+	CatalogEntryRetriever entry_retriever;
 	//! Unnamed subquery index
 	idx_t unnamed_subquery_index = 1;
+	//! Statement properties
+	StatementProperties prop;
 
 private:
 	//! Get the root binder (binder with no parent)
@@ -294,6 +317,7 @@ private:
 	BoundStatement Bind(AttachStatement &stmt);
 	BoundStatement Bind(DetachStatement &stmt);
 	BoundStatement Bind(CopyDatabaseStatement &stmt);
+	BoundStatement Bind(UpdateExtensionsStatement &stmt);
 
 	BoundStatement BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry &table,
 	                             const string &alias, idx_t update_table_index,
@@ -324,6 +348,7 @@ private:
 	unique_ptr<BoundTableRef> Bind(TableFunctionRef &ref);
 	unique_ptr<BoundTableRef> Bind(EmptyTableRef &ref);
 	unique_ptr<BoundTableRef> Bind(ExpressionListRef &ref);
+	unique_ptr<BoundTableRef> Bind(ColumnDataRef &ref);
 	unique_ptr<BoundTableRef> Bind(PivotRef &expr);
 	unique_ptr<BoundTableRef> Bind(ShowRef &ref);
 
@@ -342,11 +367,11 @@ private:
 	bool BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &expressions,
 	                                 unique_ptr<BoundSubqueryRef> &subquery, ErrorData &error);
 	unique_ptr<LogicalOperator> BindTableFunction(TableFunction &function, vector<Value> parameters);
-	unique_ptr<LogicalOperator>
-	BindTableFunctionInternal(TableFunction &table_function, const string &function_name, vector<Value> parameters,
-	                          named_parameter_map_t named_parameters, vector<LogicalType> input_table_types,
-	                          vector<string> input_table_names, const vector<string> &column_name_alias,
-	                          unique_ptr<ExternalDependency> external_dependency);
+	unique_ptr<LogicalOperator> BindTableFunctionInternal(TableFunction &table_function, const TableFunctionRef &ref,
+	                                                      vector<Value> parameters,
+	                                                      named_parameter_map_t named_parameters,
+	                                                      vector<LogicalType> input_table_types,
+	                                                      vector<string> input_table_names);
 
 	unique_ptr<LogicalOperator> CreatePlan(BoundBaseTableRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundJoinRef &ref);
@@ -354,6 +379,7 @@ private:
 	unique_ptr<LogicalOperator> CreatePlan(BoundTableFunction &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundEmptyTableRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundExpressionListRef &ref);
+	unique_ptr<LogicalOperator> CreatePlan(BoundColumnDataRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundCTERef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundPivotRef &ref);
 
@@ -414,9 +440,9 @@ private:
 	unique_ptr<BoundTableRef> BindSummarize(ShowRef &ref);
 
 public:
-	// This should really be a private constructor, but make_shared does not allow it...
+	// This should really be a private constructor, but make_shared_ptr does not allow it...
 	// If you are thinking about calling this, you should probably call Binder::CreateBinder
-	Binder(bool i_know_what_i_am_doing, ClientContext &context, shared_ptr<Binder> parent, bool inherit_ctes);
+	Binder(bool i_know_what_i_am_doing, ClientContext &context, shared_ptr<Binder> parent, BinderType binder_type);
 };
 
 } // namespace duckdb

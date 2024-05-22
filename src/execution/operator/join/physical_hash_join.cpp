@@ -359,7 +359,7 @@ void HashJoinGlobalSinkState::ScheduleFinalize(Pipeline &pipeline, Event &event)
 		return;
 	}
 	hash_table->InitializePointerTable();
-	auto new_event = make_shared<HashJoinFinalizeEvent>(pipeline, *this);
+	auto new_event = make_shared_ptr<HashJoinFinalizeEvent>(pipeline, *this);
 	event.InsertEvent(std::move(new_event));
 }
 
@@ -409,7 +409,7 @@ public:
 			total_size += sink_collection.SizeInBytes();
 			total_count += sink_collection.Count();
 		}
-		auto total_blocks = (double(total_size) + Storage::BLOCK_SIZE - 1) / Storage::BLOCK_SIZE;
+		auto total_blocks = NumericCast<idx_t>((double(total_size) + Storage::BLOCK_SIZE - 1) / Storage::BLOCK_SIZE);
 		auto count_per_block = total_count / total_blocks;
 		auto blocks_per_vector = MaxValue<idx_t>(STANDARD_VECTOR_SIZE / count_per_block, 2);
 
@@ -474,7 +474,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 			// We have to repartition
 			ht.SetRepartitionRadixBits(sink.local_hash_tables, sink.temporary_memory_state->GetReservation(),
 			                           max_partition_size, max_partition_count);
-			auto new_event = make_shared<HashJoinRepartitionEvent>(pipeline, sink, sink.local_hash_tables);
+			auto new_event = make_shared_ptr<HashJoinRepartitionEvent>(pipeline, sink, sink.local_hash_tables);
 			event.InsertEvent(std::move(new_event));
 		} else {
 			// No repartitioning!

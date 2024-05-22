@@ -458,3 +458,74 @@ TEST_CASE("Test DataChunk populate ArrayVector in C API", "[capi]") {
 	duckdb_destroy_logical_type(&array_type);
 	duckdb_destroy_logical_type(&elem_type);
 }
+
+TEST_CASE("Test PK violation in the C API appender", "[capi]") {
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+	REQUIRE(duckdb_vector_size() == STANDARD_VECTOR_SIZE);
+
+	// Create column types.
+	const idx_t COLUMN_COUNT = 1;
+	duckdb_logical_type types[COLUMN_COUNT];
+	types[0] = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
+
+	// Create data chunk.
+	auto data_chunk = duckdb_create_data_chunk(types, COLUMN_COUNT);
+	auto bigint_vector = duckdb_data_chunk_get_vector(data_chunk, 0);
+	auto int64_ptr = reinterpret_cast<int64_t *>(duckdb_vector_get_data(bigint_vector));
+	int64_ptr[0] = 42;
+	int64_ptr[1] = 42;
+	duckdb_data_chunk_set_size(data_chunk, 2);
+
+	// Use the appender to append the data chunk.
+	tester.Query("CREATE TABLE test(i BIGINT PRIMARY KEY)");
+	duckdb_appender appender;
+	REQUIRE(duckdb_appender_create(tester.connection, nullptr, "test", &appender) == DuckDBSuccess);
+
+	// We only flush when destroying the appender. Thus, we expect this to succeed, as we only
+	// detect constraint violations when flushing the results.
+	REQUIRE(duckdb_append_data_chunk(appender, data_chunk) == DuckDBSuccess);
+
+	// duckdb_appender_close attempts to flush the data and fails.
+	auto state = duckdb_appender_close(appender);
+	REQUIRE(state == DuckDBError);
+	auto error = duckdb_appender_error(appender);
+	REQUIRE(duckdb::StringUtil::Contains(error, "PRIMARY KEY or UNIQUE constraint violated"));
+
+	// Destroy the appender despite the error to avoid leaks.
+	state = duckdb_appender_destroy(&appender);
+	REQUIRE(state == DuckDBError);
+
+	// Clean-up.
+	duckdb_destroy_data_chunk(&data_chunk);
+	for (idx_t i = 0; i < COLUMN_COUNT; i++) {
+		duckdb_destroy_logical_type(&types[i]);
+	}
+
+	// Ensure that no rows were appended.
+	result = tester.Query("SELECT * FROM test;");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->row_count() == 0);
+
+	// Try again by appending rows and flushing.
+	REQUIRE(duckdb_appender_create(tester.connection, nullptr, "test", &appender) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_begin_row(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_append_int64(appender, 42) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_end_row(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_begin_row(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_append_int64(appender, 42) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_end_row(appender) == DuckDBSuccess);
+
+	state = duckdb_appender_flush(appender);
+	REQUIRE(state == DuckDBError);
+	error = duckdb_appender_error(appender);
+	REQUIRE(duckdb::StringUtil::Contains(error, "PRIMARY KEY or UNIQUE constraint violated"));
+	REQUIRE(duckdb_appender_destroy(&appender) == DuckDBError);
+
+	// Ensure that only the last row was appended.
+	result = tester.Query("SELECT * FROM test;");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->row_count() == 0);
+}

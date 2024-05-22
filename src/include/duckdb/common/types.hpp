@@ -12,6 +12,7 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/helper.hpp"
 
 #include <limits>
 
@@ -34,7 +35,7 @@ using buffer_ptr = shared_ptr<T>;
 
 template <class T, typename... ARGS>
 buffer_ptr<T> make_buffer(ARGS &&...args) { // NOLINT: mimic std casing
-	return make_shared<T>(std::forward<ARGS>(args)...);
+	return make_shared_ptr<T>(std::forward<ARGS>(args)...);
 }
 
 struct list_entry_t { // NOLINT: mimic std casing
@@ -272,6 +273,9 @@ struct LogicalType {
 		return type_info_;
 	}
 
+	//! DeepCopy() will make a unique copy of any ExtraTypeInfo as well
+	LogicalType DeepCopy() const;
+
 	inline void CopyAuxInfo(const LogicalType &other) {
 		type_info_ = other.type_info_;
 	}
@@ -318,6 +322,11 @@ struct LogicalType {
 	DUCKDB_API void SetAlias(string alias);
 	DUCKDB_API bool HasAlias() const;
 	DUCKDB_API string GetAlias() const;
+	DUCKDB_API void SetModifiers(vector<Value> modifiers);
+	DUCKDB_API bool HasModifiers() const;
+	DUCKDB_API vector<Value> GetModifiersCopy() const;
+	DUCKDB_API optional_ptr<vector<Value>> GetModifiers();
+	DUCKDB_API optional_ptr<const vector<Value>> GetModifiers() const;
 
 	//! Returns the maximum logical type when combining the two types - or throws an exception if combining is not possible
 	DUCKDB_API static LogicalType MaxLogicalType(ClientContext &context, const LogicalType &left, const LogicalType &right);
@@ -393,9 +402,7 @@ public:
 	DUCKDB_API static LogicalType MAP(const LogicalType &child);                 // NOLINT
 	DUCKDB_API static LogicalType MAP(LogicalType key, LogicalType value);       // NOLINT
 	DUCKDB_API static LogicalType UNION(child_list_t<LogicalType> members);      // NOLINT
-	DUCKDB_API static LogicalType ARRAY(const LogicalType &child, idx_t size);   // NOLINT
-	// an array of unknown size (only used for binding)
-	DUCKDB_API static LogicalType ARRAY(const LogicalType &child);        // NOLINT
+	DUCKDB_API static LogicalType ARRAY(const LogicalType &child, optional_idx index);   // NOLINT
 	DUCKDB_API static LogicalType ENUM(Vector &ordered_data, idx_t size); // NOLINT
 	// ANY but with special rules (default is LogicalType::ANY, 5)
 	DUCKDB_API static LogicalType ANY_PARAMS(LogicalType target, idx_t cast_score = 5); // NOLINT
@@ -404,7 +411,8 @@ public:
 	// DEPRECATED - provided for backwards compatibility
 	DUCKDB_API static LogicalType ENUM(const string &enum_name, Vector &ordered_data, idx_t size); // NOLINT
 	DUCKDB_API static LogicalType USER(const string &user_type_name);                              // NOLINT
-	DUCKDB_API static LogicalType USER(string catalog, string schema, string name);                // NOLINT
+	DUCKDB_API static LogicalType USER(const string &user_type_name, const vector<Value> &user_type_mods); // NOLINT
+	DUCKDB_API static LogicalType USER(string catalog, string schema, string name, vector<Value> user_type_mods); // NOLINT
 	//! A list of all NUMERIC types (integral and floating point types)
 	DUCKDB_API static const vector<LogicalType> Numeric();
 	//! A list of all INTEGRAL types
@@ -439,6 +447,8 @@ struct UserType {
 	DUCKDB_API static const string &GetCatalog(const LogicalType &type);
 	DUCKDB_API static const string &GetSchema(const LogicalType &type);
 	DUCKDB_API static const string &GetTypeName(const LogicalType &type);
+	DUCKDB_API static const vector<Value> &GetTypeModifiers(const LogicalType &type);
+	DUCKDB_API static vector<Value> &GetTypeModifiers(LogicalType &type);
 };
 
 struct EnumType {

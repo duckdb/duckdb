@@ -46,31 +46,33 @@ static bool TryLoadExtensionForReplacementScan(ClientContext &context, const str
 unique_ptr<BoundTableRef> Binder::BindWithReplacementScan(ClientContext &context, const string &table_name,
                                                           BaseTableRef &ref) {
 	auto &config = DBConfig::GetConfig(context);
-	if (context.config.use_replacement_scans) {
-		for (auto &scan : config.replacement_scans) {
-			auto replacement_function = scan.function(context, table_name, scan.data.get());
-			if (replacement_function) {
-				if (!ref.alias.empty()) {
-					// user-provided alias overrides the default alias
-					replacement_function->alias = ref.alias;
-				} else if (replacement_function->alias.empty()) {
-					// if the replacement scan itself did not provide an alias we use the table name
-					replacement_function->alias = ref.table_name;
-				}
-				if (replacement_function->type == TableReferenceType::TABLE_FUNCTION) {
-					auto &table_function = replacement_function->Cast<TableFunctionRef>();
-					table_function.column_name_alias = ref.column_name_alias;
-				} else if (replacement_function->type == TableReferenceType::SUBQUERY) {
-					auto &subquery = replacement_function->Cast<SubqueryRef>();
-					subquery.column_name_alias = ref.column_name_alias;
-				} else {
-					throw InternalException("Replacement scan should return either a table function or a subquery");
-				}
-				return Bind(*replacement_function);
-			}
-		}
+	if (!context.config.use_replacement_scans) {
+		return nullptr;
 	}
-
+	for (auto &scan : config.replacement_scans) {
+		ReplacementScanInput input(ref.Cast<TableRef>(), table_name);
+		auto replacement_function = scan.function(context, input, scan.data.get());
+		if (!replacement_function) {
+			continue;
+		}
+		if (!ref.alias.empty()) {
+			// user-provided alias overrides the default alias
+			replacement_function->alias = ref.alias;
+		} else if (replacement_function->alias.empty()) {
+			// if the replacement scan itself did not provide an alias we use the table name
+			replacement_function->alias = ref.table_name;
+		}
+		if (replacement_function->type == TableReferenceType::TABLE_FUNCTION) {
+			auto &table_function = replacement_function->Cast<TableFunctionRef>();
+			table_function.column_name_alias = ref.column_name_alias;
+		} else if (replacement_function->type == TableReferenceType::SUBQUERY) {
+			auto &subquery = replacement_function->Cast<SubqueryRef>();
+			subquery.column_name_alias = ref.column_name_alias;
+		} else {
+			throw InternalException("Replacement scan should return either a table function or a subquery");
+		}
+		return Bind(*replacement_function);
+	}
 	return nullptr;
 }
 
@@ -149,8 +151,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	// not a CTE
 	// extract a table or view from the catalog
 	BindSchemaOrCatalog(ref.catalog_name, ref.schema_name);
-	auto table_or_view = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, ref.catalog_name, ref.schema_name,
-	                                       ref.table_name, OnEntryNotFound::RETURN_NULL, error_context);
+	auto table_or_view = entry_retriever.GetEntry(CatalogType::TABLE_ENTRY, ref.catalog_name, ref.schema_name,
+	                                              ref.table_name, OnEntryNotFound::RETURN_NULL, error_context);
 	// we still didn't find the table
 	if (GetBindingMode() == BindingMode::EXTRACT_NAMES) {
 		if (!table_or_view || table_or_view->type == CatalogType::TABLE_ENTRY) {
@@ -189,8 +191,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		}
 
 		// could not find an alternative: bind again to get the error
-		Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, ref.catalog_name, ref.schema_name, ref.table_name,
-		                  OnEntryNotFound::THROW_EXCEPTION, error_context);
+		(void)entry_retriever.GetEntry(CatalogType::TABLE_ENTRY, ref.catalog_name, ref.schema_name, ref.table_name,
+		                               OnEntryNotFound::THROW_EXCEPTION, error_context);
 		throw InternalException("Catalog::GetEntry should have thrown an exception above");
 	}
 
@@ -199,6 +201,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		// base table: create the BoundBaseTableRef node
 		auto table_index = GenerateTableIndex();
 		auto &table = table_or_view->Cast<TableCatalogEntry>();
+
+		auto &properties = GetStatementProperties();
 		properties.read_databases.insert(table.ParentCatalog().GetName());
 
 		unique_ptr<FunctionData> bind_data;
@@ -231,8 +235,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		// We need to use a new binder for the view that doesn't reference any CTEs
 		// defined for this binder so there are no collisions between the CTEs defined
 		// for the view and for the current query
-		bool inherit_ctes = false;
-		auto view_binder = Binder::CreateBinder(context, this, inherit_ctes);
+		auto view_binder = Binder::CreateBinder(context, this, BinderType::VIEW_BINDER);
 		view_binder->can_contain_nulls = true;
 		SubqueryRef subquery(unique_ptr_cast<SQLStatement, SelectStatement>(view_catalog_entry.query->Copy()));
 		subquery.alias = ref.alias.empty() ? ref.table_name : ref.alias;

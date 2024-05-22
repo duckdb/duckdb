@@ -69,6 +69,17 @@ BUILTIN_EXTENSIONS = [
     'icu',
 ]
 
+from duckdb import DuckDBPyConnection
+
+# def patch_execute(method):
+#    def patched_execute(self, *args, **kwargs):
+#        print(*args)
+#        return method(self, *args, **kwargs)
+#    return patched_execute
+
+# patched_execute = patch_execute(getattr(DuckDBPyConnection, "execute"))
+# setattr(DuckDBPyConnection, "execute", patched_execute)
+
 
 class SQLLogicStatementData:
     # Context information about a statement
@@ -768,14 +779,14 @@ class SQLLogicContext:
                 self.runner.delete_database(dbpath)
         else:
             dbpath = ""
+        self.runner.loaded_databases.add(dbpath)
 
         # set up the config file
         additional_config = {}
         if readonly:
-            additional_config['temp_directory'] = False
+            additional_config['temp_directory'] = ""
             additional_config['access_mode'] = 'read_only'
         else:
-            additional_config['temp_directory'] = True
             additional_config['access_mode'] = 'automatic'
 
         self.pool = None
@@ -1105,7 +1116,10 @@ class SQLLogicContext:
                     context.remove_keyword(key)
 
             loop_context = SQLLogicContext(self.pool, self.runner, statements, self.keywords.copy(), update_value)
-            loop_context.execute()
+            try:
+                loop_context.execute()
+            except TestException:
+                self.error = loop_context.error
         else:
             contexts: Dict[Tuple[str, int], Any] = {}
             for val in range(loop.start, loop.end):
@@ -1237,6 +1251,8 @@ class SQLLogicContext:
                     if self.runner.skip_active() and statement.__class__ != Unskip:
                         # Keep skipping until Unskip is found
                         continue
+                    if statement.get_decorators() != []:
+                        self.skiptest("Decorators are not supported yet")
                     method = self.STATEMENTS.get(statement.__class__)
                     if not method:
                         self.skiptest("Not supported by the runner")

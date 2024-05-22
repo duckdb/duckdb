@@ -25,6 +25,7 @@ TEST_CASE("Test torn WAL writes", "[storage][.]") {
 	LocalFileSystem lfs;
 	config->options.checkpoint_wal_size = idx_t(-1);
 	config->options.checkpoint_on_shutdown = false;
+	config->options.abort_on_wal_failure = false;
 	idx_t wal_size_one_table;
 	idx_t wal_size_two_table;
 	// obtain the size of the WAL when writing one table, and then when writing two tables
@@ -79,6 +80,7 @@ TEST_CASE("Test WAL checksums", "[storage][.]") {
 	LocalFileSystem lfs;
 	config->options.checkpoint_wal_size = idx_t(-1);
 	config->options.checkpoint_on_shutdown = false;
+	config->options.abort_on_wal_failure = false;
 	idx_t wal_size_one_table;
 	idx_t wal_size_two_table;
 	// obtain the size of the WAL when writing one table, and then when writing two tables

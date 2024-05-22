@@ -44,8 +44,12 @@ public:
 	bool internal;
 	//! The SQL string of the CREATE statement
 	string sql;
+	//! The inherent dependencies of the created entry
+	LogicalDependencyList dependencies;
 	//! User provided comment
 	Value comment;
+	//! Key-value tags with additional metadata
+	unordered_map<string, string> tags;
 
 public:
 	void Serialize(Serializer &serializer) const override;
@@ -58,8 +62,8 @@ public:
 	DUCKDB_API virtual unique_ptr<AlterInfo> GetAlterInfo() const;
 
 	virtual string ToString() const {
-		throw InternalException("ToString not supported for this type of CreateInfo: '%s'",
-		                        EnumUtil::ToString(info_type));
+		throw NotImplementedException("ToString not supported for this type of CreateInfo: '%s'",
+		                              EnumUtil::ToString(info_type));
 	}
 };
 

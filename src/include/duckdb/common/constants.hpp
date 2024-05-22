@@ -57,6 +57,8 @@ extern const double PI;
 struct DConstants {
 	//! The value used to signify an invalid index entry
 	static constexpr const idx_t INVALID_INDEX = idx_t(-1);
+	//! The total maximum vector size (128GB)
+	static constexpr const idx_t MAX_VECTOR_SIZE = 1ULL << 37ULL;
 };
 
 struct LogicalIndex {

@@ -1,7 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_INSPECT_H
 #define JEMALLOC_INTERNAL_INSPECT_H
 
-namespace duckdb_jemalloc {
+#include "jemalloc/internal/jemalloc_preamble.h"
+#include "jemalloc/internal/tsd_types.h"
 
 /*
  * This module contains the heap introspection capabilities.  For now they are
@@ -38,7 +39,5 @@ void inspect_extent_util_stats_get(tsdn_t *tsdn, const void *ptr,
 void inspect_extent_util_stats_verbose_get(tsdn_t *tsdn, const void *ptr,
     size_t *nfree, size_t *nregs, size_t *size,
     size_t *bin_nfree, size_t *bin_nregs, void **slabcur_addr);
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_INSPECT_H */

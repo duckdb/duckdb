@@ -1,0 +1,56 @@
+[
+	{
+		"class": "CatalogEntryInfo",
+		"includes": [
+			"duckdb/catalog/dependency.hpp"
+		],
+		"members": [
+			{
+				"id": 100,
+				"name": "type",
+				"type": "CatalogType"
+			},
+			{
+				"id": 101,
+				"name": "schema",
+				"type": "string"
+			},
+			{
+				"id": 102,
+				"name": "name",
+				"type": "string"
+			}
+		],
+		"pointer_type": "none"
+	},
+	{
+		"class": "LogicalDependency",
+		"includes": [
+			"duckdb/catalog/dependency_list.hpp"
+		],
+		"members": [
+			{
+				"id": 100,
+				"name": "entry",
+				"type": "CatalogEntryInfo"
+			},
+			{
+				"id": 101,
+				"name": "catalog",
+				"type": "string"
+			}
+		],
+		"pointer_type": "none"
+	},
+	{
+		"class": "LogicalDependencyList",
+		"members": [
+			{
+				"id": 100,
+				"name": "set",
+				"type": "create_info_set_t"
+			}
+		],
+		"pointer_type": "none"
+	}
+]
