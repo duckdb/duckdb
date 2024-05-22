@@ -225,6 +225,15 @@ struct AllowUnsignedExtensionsSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct AllowCommunityExtensionsSetting {
+	static constexpr const char *Name = "allow_community_extensions";
+	static constexpr const char *Description = "Allow to load community built extensions";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct AllowExtensionsMetadataMismatchSetting {
 	static constexpr const char *Name = "allow_extensions_metadata_mismatch";
 	static constexpr const char *Description = "Allow to load extensions with not compatible metadata";
@@ -286,6 +295,15 @@ struct EnableObjectCacheSetting {
 	static constexpr const char *Name = "enable_object_cache";
 	static constexpr const char *Description = "Whether or not object cache is used to cache e.g. Parquet metadata";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct StorageCompatibilityVersion {
+	static constexpr const char *Name = "storage_compatibility_version";
+	static constexpr const char *Description = "Serialize on checkpoint with compatibility for a given duckdb version";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -500,6 +518,16 @@ struct PartitionedWriteFlushThreshold {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct DefaultBlockAllocSize {
+	static constexpr const char *Name = "default_block_size";
+	static constexpr const char *Description =
+	    "The default block size for new duckdb database files (new as-in, they do not yet exist).";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct PasswordSetting {
 	static constexpr const char *Name = "password";
 	static constexpr const char *Description = "The password to use. Ignored for legacy compatibility.";
@@ -552,6 +580,26 @@ struct PreserveInsertionOrder {
 	static constexpr const char *Description =
 	    "Whether or not to preserve insertion order. If set to false the system is allowed to re-order any results "
 	    "that do not contain ORDER BY clauses.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct ArrowOutputListView {
+	static constexpr const char *Name = "arrow_output_list_view";
+	static constexpr const char *Description =
+	    "If export to arrow format should use ListView as the physical layout for LIST columns";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct ProduceArrowStringView {
+	static constexpr const char *Name = "produce_arrow_string_view";
+	static constexpr const char *Description =
+	    "If strings should be produced by DuckDB in Utf8View format instead of Utf8";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
@@ -648,6 +696,15 @@ struct FlushAllocatorSetting {
 	static constexpr const char *Description =
 	    "Peak allocation threshold at which to flush the allocator after completing a task.";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct AllocatorBackgroundThreadsSetting {
+	static constexpr const char *Name = "allocator_background_threads";
+	static constexpr const char *Description = "Whether to enable the allocator background thread.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);

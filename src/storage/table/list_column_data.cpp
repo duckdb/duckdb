@@ -70,12 +70,14 @@ void ListColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_
 	state.last_offset = child_offset;
 }
 
-idx_t ListColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
-	return ScanCount(state, result, STANDARD_VECTOR_SIZE);
+idx_t ListColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+                           idx_t scan_count) {
+	return ScanCount(state, result, scan_count);
 }
 
-idx_t ListColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) {
-	return ScanCount(state, result, STANDARD_VECTOR_SIZE);
+idx_t ListColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
+                                    idx_t scan_count) {
+	return ScanCount(state, result, scan_count);
 }
 
 idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
@@ -86,7 +88,7 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 	D_ASSERT(!updates);
 
 	Vector offset_vector(LogicalType::UBIGINT, count);
-	idx_t scan_count = ScanVector(state, offset_vector, count, false);
+	idx_t scan_count = ScanVector(state, offset_vector, count, ScanVectorType::SCAN_FLAT_VECTOR);
 	D_ASSERT(scan_count > 0);
 	validity.ScanCount(state.child_states[0], result, count);
 
@@ -133,7 +135,7 @@ void ListColumnData::Skip(ColumnScanState &state, idx_t count) {
 	// note that we only need to read the first and last entry
 	// however, let's just read all "count" entries for now
 	Vector offset_vector(LogicalType::UBIGINT, count);
-	idx_t scan_count = ScanVector(state, offset_vector, count, false);
+	idx_t scan_count = ScanVector(state, offset_vector, count, ScanVectorType::SCAN_FLAT_VECTOR);
 	D_ASSERT(scan_count > 0);
 
 	UnifiedVectorFormat offsets;

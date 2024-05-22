@@ -126,7 +126,7 @@ bool CSVSniffer::DetectHeaderWithSetColumn() {
 			if (sql_type != LogicalType::VARCHAR) {
 				all_varchar = false;
 				if (!CanYouCastIt(best_header_row[col].value, sql_type, options.dialect_options,
-				                  best_header_row[col].IsNull())) {
+				                  best_header_row[col].IsNull(), options.decimal_separator[0])) {
 					first_row_consistent = false;
 				}
 			}
@@ -178,7 +178,7 @@ void CSVSniffer::DetectHeader() {
 			if (sql_type != LogicalType::VARCHAR) {
 				all_varchar = false;
 				if (!CanYouCastIt(best_header_row[col].value, sql_type, sniffer_state_machine.dialect_options,
-				                  best_header_row[col].IsNull())) {
+				                  best_header_row[col].IsNull(), options.decimal_separator[0])) {
 					first_row_consistent = false;
 				}
 			}

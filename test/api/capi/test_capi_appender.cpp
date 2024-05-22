@@ -30,6 +30,12 @@ public:
 
 } // namespace
 
+void TestAppenderError(duckdb_appender &appender, const string &expected) {
+	auto error = duckdb_appender_error(appender);
+	REQUIRE(error != nullptr);
+	REQUIRE(duckdb::StringUtil::Contains(error, expected));
+}
+
 void AssertDecimalValueMatches(duckdb::unique_ptr<CAPIResult> &result, duckdb_decimal expected) {
 	duckdb_decimal actual;
 
@@ -193,64 +199,56 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	duckdb::unique_ptr<CAPIResult> result;
 	duckdb_state status;
 
-	// open the database in in-memory mode
 	REQUIRE(tester.OpenDatabase(nullptr));
-
 	tester.Query("CREATE TABLE test (i INTEGER, d double, s string)");
 	duckdb_appender appender;
 
-	status = duckdb_appender_create(tester.connection, nullptr, "nonexistant-table", &appender);
-	REQUIRE(status == DuckDBError);
+	// Creating the table with an unknown table fails, but creates an appender object.
+	REQUIRE(duckdb_appender_create(tester.connection, nullptr, "unknown_table", &appender) == DuckDBError);
 	REQUIRE(appender != nullptr);
-	REQUIRE(duckdb_appender_error(appender) != nullptr);
-	REQUIRE(duckdb_appender_destroy(&appender) == DuckDBSuccess);
+	TestAppenderError(appender, "could not be found");
+
+	// Flushing, closing, or destroying the appender also fails due to its invalid table.
+	REQUIRE(duckdb_appender_close(appender) == DuckDBError);
+	TestAppenderError(appender, "could not be found");
+
+	// Any data is still destroyed, so there are no leaks, even if duckdb_appender_destroy returns DuckDBError.
+	REQUIRE(duckdb_appender_destroy(&appender) == DuckDBError);
 	REQUIRE(duckdb_appender_destroy(nullptr) == DuckDBError);
 
-	status = duckdb_appender_create(tester.connection, nullptr, "test", nullptr);
-	REQUIRE(status == DuckDBError);
+	// Appender creation also fails if not providing an appender object.
+	REQUIRE(duckdb_appender_create(tester.connection, nullptr, "test", nullptr) == DuckDBError);
 
-	status = duckdb_appender_create(tester.connection, nullptr, "test", &appender);
-	REQUIRE(status == DuckDBSuccess);
+	// Now, create a valid appender.
+	REQUIRE(duckdb_appender_create(tester.connection, nullptr, "test", &appender) == DuckDBSuccess);
 	REQUIRE(duckdb_appender_error(appender) == nullptr);
 
-	status = duckdb_appender_begin_row(appender);
-	REQUIRE(status == DuckDBSuccess);
+	// Start appending rows.
+	REQUIRE(duckdb_appender_begin_row(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_append_int32(appender, 42) == DuckDBSuccess);
+	REQUIRE(duckdb_append_double(appender, 4.2) == DuckDBSuccess);
+	REQUIRE(duckdb_append_varchar(appender, "Hello, World") == DuckDBSuccess);
 
-	status = duckdb_append_int32(appender, 42);
-	REQUIRE(status == DuckDBSuccess);
+	// Exceed the column count.
+	REQUIRE(duckdb_append_int32(appender, 42) == DuckDBError);
+	TestAppenderError(appender, "Too many appends for chunk");
 
-	status = duckdb_append_double(appender, 4.2);
-	REQUIRE(status == DuckDBSuccess);
+	// Finish and flush the row.
+	REQUIRE(duckdb_appender_end_row(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_flush(appender) == DuckDBSuccess);
 
-	status = duckdb_append_varchar(appender, "Hello, World");
-	REQUIRE(status == DuckDBSuccess);
+	// Next row.
+	REQUIRE(duckdb_appender_begin_row(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_append_int32(appender, 42) == DuckDBSuccess);
+	REQUIRE(duckdb_append_double(appender, 4.2) == DuckDBSuccess);
 
-	// out of cols here
-	status = duckdb_append_int32(appender, 42);
-	REQUIRE(status == DuckDBError);
-
-	status = duckdb_appender_end_row(appender);
-	REQUIRE(status == DuckDBSuccess);
-
-	status = duckdb_appender_flush(appender);
-	REQUIRE(status == DuckDBSuccess);
-
-	status = duckdb_appender_begin_row(appender);
-	REQUIRE(status == DuckDBSuccess);
-
-	status = duckdb_append_int32(appender, 42);
-	REQUIRE(status == DuckDBSuccess);
-
-	status = duckdb_append_double(appender, 4.2);
-	REQUIRE(status == DuckDBSuccess);
-
-	// not enough cols here
-	status = duckdb_appender_end_row(appender);
-	REQUIRE(status == DuckDBError);
+	// Missing column.
+	REQUIRE(duckdb_appender_end_row(appender) == DuckDBError);
 	REQUIRE(duckdb_appender_error(appender) != nullptr);
+	TestAppenderError(appender, "Call to EndRow before all rows have been appended to");
 
-	status = duckdb_append_varchar(appender, "Hello, World");
-	REQUIRE(status == DuckDBSuccess);
+	// Append the missing column.
+	REQUIRE(duckdb_append_varchar(appender, "Hello, World") == DuckDBSuccess);
 
 	// out of cols here
 	status = duckdb_append_int32(appender, 42);

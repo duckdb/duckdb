@@ -1,9 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_HPA_OPTS_H
 #define JEMALLOC_INTERNAL_HPA_OPTS_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/fxp.h"
-
-namespace duckdb_jemalloc {
 
 /*
  * This file is morally part of hpa.h, but is split out for header-ordering
@@ -72,7 +71,5 @@ struct hpa_shard_opts_s {
 	/* min_purge_interval_ms */					\
 	5 * 1000							\
 }
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_HPA_OPTS_H */

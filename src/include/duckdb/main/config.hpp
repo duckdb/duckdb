@@ -89,6 +89,27 @@ struct ExtensionOption {
 	Value default_value;
 };
 
+class SerializationCompatibility {
+public:
+	static SerializationCompatibility FromString(const string &input);
+	static SerializationCompatibility Default();
+	static SerializationCompatibility Latest();
+
+public:
+	bool Compare(idx_t property_version) const;
+
+public:
+	//! The user provided version
+	string duckdb_version;
+	//! The max version that should be serialized
+	idx_t serialization_version;
+	//! Whether this was set by a manual SET/PRAGMA or default
+	bool manually_set;
+
+protected:
+	SerializationCompatibility() = default;
+};
+
 struct DBConfigOptions {
 	//! Database file path. May be empty for in-memory mode
 	string database_path;
@@ -154,6 +175,8 @@ struct DBConfigOptions {
 	bool force_checkpoint = false;
 	//! Run a checkpoint on successful shutdown and delete the WAL, to leave only a single database file behind
 	bool checkpoint_on_shutdown = true;
+	//! Serialize the metadata on checkpoint with compatibility for a given DuckDB version.
+	SerializationCompatibility serialization_compatibility = SerializationCompatibility::Default();
 	//! Debug flag that decides when a checkpoing should be aborted. Only used for testing purposes.
 	CheckpointAbort checkpoint_abort = CheckpointAbort::NO_ABORT;
 	//! Initialize the database with the standard set of DuckDB functions
@@ -171,6 +194,10 @@ struct DBConfigOptions {
 	bool preserve_insertion_order = true;
 	//! Whether Arrow Arrays use Large or Regular buffers
 	ArrowOffsetSize arrow_offset_size = ArrowOffsetSize::REGULAR;
+	//! Whether LISTs should produce Arrow ListViews
+	bool arrow_use_list_view = false;
+	//! Whether when producing arrow objects we produce string_views or regular strings
+	bool produce_arrow_string_views = false;
 	//! Database configuration variables as controlled by SET
 	case_insensitive_map_t<Value> set_variables;
 	//! Database configuration variable default values;
@@ -179,6 +206,8 @@ struct DBConfigOptions {
 	string extension_directory;
 	//! Whether unsigned extensions should be loaded
 	bool allow_unsigned_extensions = false;
+	//! Whether community extensions should be loaded
+	bool allow_community_extensions = true;
 	//! Whether extensions with missing metadata should be loaded
 	bool allow_extensions_metadata_mismatch = false;
 	//! Enable emitting FSST Vectors
@@ -195,12 +224,19 @@ struct DBConfigOptions {
 	static bool debug_print_bindings; // NOLINT: debug setting
 	//! The peak allocation threshold at which to flush the allocator after completing a task (1 << 27, ~128MB)
 	idx_t allocator_flush_threshold = 134217728;
+	//! Whether the allocator background thread is enabled
+	bool allocator_background_threads = false;
 	//! DuckDB API surface
 	string duckdb_api;
 	//! Metadata from DuckDB callers
 	string custom_user_agent;
 	//! Use old implicit casting style (i.e. allow everything to be implicitly casted to VARCHAR)
 	bool old_implicit_casting = false;
+	//! The default block allocation size for new duckdb database files (new as-in, they do not yet exist).
+	//! NOTE: this becomes the DEFAULT_BLOCK_ALLOC_SIZE once we support different block sizes.
+	idx_t default_block_alloc_size = Storage::BLOCK_ALLOC_SIZE;
+	//!  Whether or not to abort if a serialization exception is thrown during WAL playback (when reading truncated WAL)
+	bool abort_on_wal_failure = false;
 
 	bool operator==(const DBConfigOptions &other) const;
 };

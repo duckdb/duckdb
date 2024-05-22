@@ -17,12 +17,12 @@
 #include <string>
 #include <vector>
 #ifndef DUCKDB_AMALGAMATION
-#include "duckdb/common/helper.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -78,7 +78,7 @@ struct ParquetReadLocalState : public LocalTableFunctionState {
 	bool is_parallel;
 	idx_t batch_index;
 	idx_t file_index;
-	//! The DataChunk containing all read columns (even filter columns that are immediately removed)
+	//! The DataChunk containing all read columns (even columns that are immediately removed)
 	DataChunk all_columns;
 };
 
@@ -110,6 +110,8 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 	//! The scan over the file_list
 	MultiFileListScanData file_list_scan;
 
+	unique_ptr<MultiFileReaderGlobalState> multi_file_reader_state;
+
 	mutex lock;
 
 	//! The current set of parquet readers
@@ -135,7 +137,7 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 		return max_threads;
 	}
 
-	bool CanRemoveFilterColumns() const {
+	bool CanRemoveColumns() const {
 		return !projection_ids.empty();
 	}
 };
@@ -156,6 +158,9 @@ struct ParquetWriteBindData : public TableFunctionData {
 
 	//! Dictionary compression is applied only if the compression ratio exceeds this threshold
 	double dictionary_compression_ratio_threshold = 1.0;
+
+	//! After how many row groups to rotate to a new file
+	optional_idx row_groups_per_file;
 
 	ChildFieldIDs field_ids;
 	//! The compression level, higher value is more
@@ -211,6 +216,9 @@ static void ParseFileRowNumberOption(MultiFileReaderBindData &bind_data, Parquet
 static MultiFileReaderBindData BindSchema(ClientContext &context, vector<LogicalType> &return_types,
                                           vector<string> &names, ParquetReadBindData &result, ParquetOptions &options) {
 	D_ASSERT(!options.schema.empty());
+
+	options.file_options.AutoDetectHivePartitioning(*result.file_list, context);
+
 	auto &file_options = options.file_options;
 	if (file_options.union_by_name || file_options.hive_partitioning) {
 		throw BinderException("Parquet schema cannot be combined with union_by_name=true or hive_partitioning=true");
@@ -241,13 +249,18 @@ static MultiFileReaderBindData BindSchema(ClientContext &context, vector<Logical
 
 static void InitializeParquetReader(ParquetReader &reader, const ParquetReadBindData &bind_data,
                                     const vector<column_t> &global_column_ids,
-                                    optional_ptr<TableFilterSet> table_filters, ClientContext &context) {
+                                    optional_ptr<TableFilterSet> table_filters, ClientContext &context,
+                                    optional_idx file_idx, optional_ptr<MultiFileReaderGlobalState> reader_state) {
 	auto &parquet_options = bind_data.parquet_options;
 	auto &reader_data = reader.reader_data;
+
+	// Mark the file in the file list we are scanning here
+	reader_data.file_list_idx = file_idx;
+
 	if (bind_data.parquet_options.schema.empty()) {
-		bind_data.multi_file_reader->InitializeReader(reader, parquet_options.file_options, bind_data.reader_bind,
-		                                              bind_data.types, bind_data.names, global_column_ids,
-		                                              table_filters, bind_data.file_list->GetFirstFile(), context);
+		bind_data.multi_file_reader->InitializeReader(
+		    reader, parquet_options.file_options, bind_data.reader_bind, bind_data.types, bind_data.names,
+		    global_column_ids, table_filters, bind_data.file_list->GetFirstFile(), context, reader_state);
 		return;
 	}
 
@@ -256,7 +269,7 @@ static void InitializeParquetReader(ParquetReader &reader, const ParquetReadBind
 	// this deals with hive partitioning and filename=true
 	bind_data.multi_file_reader->FinalizeBind(parquet_options.file_options, bind_data.reader_bind, reader.GetFileName(),
 	                                          reader.GetNames(), bind_data.types, bind_data.names, global_column_ids,
-	                                          reader_data, context);
+	                                          reader_data, context, reader_state);
 
 	// create a mapping from field id to column index in file
 	unordered_map<uint32_t, idx_t> field_id_to_column_index;
@@ -315,7 +328,7 @@ static void InitializeParquetReader(ParquetReader &reader, const ParquetReadBind
 	reader_data.empty_columns = reader_data.column_ids.empty();
 
 	// Finally, initialize the filters
-	bind_data.multi_file_reader->CreateFilterMap(bind_data.types, table_filters, reader_data);
+	bind_data.multi_file_reader->CreateFilterMap(bind_data.types, table_filters, reader_data, reader_state);
 	reader_data.filters = table_filters;
 }
 
@@ -475,15 +488,18 @@ public:
 		bool bound_on_first_file = true;
 		if (result->multi_file_reader->Bind(parquet_options.file_options, *result->file_list, result->types,
 		                                    result->names, result->reader_bind)) {
-			// The MultiFileReader has performed a full bind
-			ParseFileRowNumberOption(result->reader_bind, parquet_options, result->types, result->names);
 			result->multi_file_reader->BindOptions(parquet_options.file_options, *result->file_list, result->types,
 			                                       result->names, result->reader_bind);
+			// Enable the parquet file_row_number on the parquet options if the file_row_number_idx was set
+			if (result->reader_bind.file_row_number_idx != DConstants::INVALID_INDEX) {
+				parquet_options.file_row_number = true;
+			}
 			bound_on_first_file = false;
 		} else if (!parquet_options.schema.empty()) {
-			// A schema was suppliedParquetProgress
+			// A schema was supplied: use the schema for binding
 			result->reader_bind = BindSchema(context, result->types, result->names, *result, parquet_options);
 		} else {
+			parquet_options.file_options.AutoDetectHivePartitioning(*result->file_list, context);
 			// Default bind
 			result->reader_bind = result->multi_file_reader->BindReader<ParquetReader>(
 			    context, result->types, result->names, *result->file_list, *result, parquet_options);
@@ -543,8 +559,6 @@ public:
 		}
 
 		auto file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
-		parquet_options.file_options.AutoDetectHivePartitioning(*file_list, context);
-
 		return ParquetScanBindInternal(context, std::move(multi_file_reader), std::move(file_list), return_types, names,
 		                               parquet_options);
 	}
@@ -575,8 +589,7 @@ public:
 		result->is_parallel = true;
 		result->batch_index = 0;
 
-		// TODO: needs lock?
-		if (input.CanRemoveFilterColumns()) {
+		if (gstate.CanRemoveColumns()) {
 			result->all_columns.Initialize(context.client, gstate.scanned_types);
 		}
 		if (!ParquetParallelStateNext(context.client, bind_data, *result, gstate)) {
@@ -591,6 +604,9 @@ public:
 		auto result = make_uniq<ParquetReadGlobalState>();
 		bind_data.file_list->InitializeScan(result->file_list_scan);
 
+		result->multi_file_reader_state = bind_data.multi_file_reader->InitializeGlobalState(
+		    context, bind_data.parquet_options.file_options, bind_data.reader_bind, *bind_data.file_list,
+		    bind_data.types, bind_data.names, input.column_ids);
 		if (bind_data.file_list->IsEmpty()) {
 			result->readers = {};
 		} else if (!bind_data.union_readers.empty()) {
@@ -619,11 +635,13 @@ public:
 		// Ensure all readers are initialized and FileListScan is sync with readers list
 		for (auto &reader_data : result->readers) {
 			string file_name;
+			idx_t file_idx = result->file_list_scan.current_file_idx;
 			bind_data.file_list->Scan(result->file_list_scan, file_name);
 			if (file_name != reader_data.reader->file_name) {
 				throw InternalException("Mismatch in filename order and reader order in parquet scan");
 			}
-			InitializeParquetReader(*reader_data.reader, bind_data, input.column_ids, input.filters, context);
+			InitializeParquetReader(*reader_data.reader, bind_data, input.column_ids, input.filters, context, file_idx,
+			                        result->multi_file_reader_state);
 		}
 
 		result->column_ids = input.column_ids;
@@ -632,7 +650,10 @@ public:
 		result->file_index = 0;
 		result->batch_index = 0;
 		result->max_threads = ParquetScanMaxThreads(context, input.bind_data.get());
-		if (input.CanRemoveFilterColumns()) {
+
+		bool require_extra_columns =
+		    result->multi_file_reader_state && result->multi_file_reader_state->RequiresExtraColumns();
+		if (input.CanRemoveFilterColumns() || require_extra_columns) {
 			result->projection_ids = input.projection_ids;
 			const auto table_types = bind_data.types;
 			for (const auto &col_idx : input.column_ids) {
@@ -643,6 +664,13 @@ public:
 				}
 			}
 		}
+
+		if (require_extra_columns) {
+			for (const auto &column_type : result->multi_file_reader_state->extra_columns) {
+				result->scanned_types.push_back(column_type);
+			}
+		}
+
 		return std::move(result);
 	}
 
@@ -691,16 +719,16 @@ public:
 		auto &bind_data = data_p.bind_data->CastNoConst<ParquetReadBindData>();
 
 		do {
-			if (gstate.CanRemoveFilterColumns()) {
+			if (gstate.CanRemoveColumns()) {
 				data.all_columns.Reset();
 				data.reader->Scan(data.scan_state, data.all_columns);
 				bind_data.multi_file_reader->FinalizeChunk(context, bind_data.reader_bind, data.reader->reader_data,
-				                                           data.all_columns);
+				                                           data.all_columns, gstate.multi_file_reader_state);
 				output.ReferenceColumns(data.all_columns, gstate.projection_ids);
 			} else {
 				data.reader->Scan(data.scan_state, output);
 				bind_data.multi_file_reader->FinalizeChunk(context, bind_data.reader_bind, data.reader->reader_data,
-				                                           output);
+				                                           output, gstate.multi_file_reader_state);
 			}
 
 			bind_data.chunk_count++;
@@ -858,7 +886,7 @@ public:
 				try {
 					reader = make_shared_ptr<ParquetReader>(context, current_reader_data.file_to_be_opened, pq_options);
 					InitializeParquetReader(*reader, bind_data, parallel_state.column_ids, parallel_state.filters,
-					                        context);
+					                        context, i, parallel_state.multi_file_reader_state);
 				} catch (...) {
 					parallel_lock.lock();
 					parallel_state.error_opening_file = true;
@@ -1047,6 +1075,8 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 				bind_data->row_group_size_bytes = option.second[0].GetValue<uint64_t>();
 			}
 			row_group_size_bytes_set = true;
+		} else if (loption == "row_groups_per_file") {
+			bind_data->row_groups_per_file = option.second[0].GetValue<uint64_t>();
 		} else if (loption == "compression" || loption == "codec") {
 			const auto roption = StringUtil::Lower(option.second[0].ToString());
 			if (roption == "uncompressed") {
@@ -1154,8 +1184,8 @@ void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_p, Glob
 	// append data to the local (buffered) chunk collection
 	local_state.buffer.Append(local_state.append_state, input);
 
-	if (local_state.buffer.Count() > bind_data.row_group_size ||
-	    local_state.buffer.SizeInBytes() > bind_data.row_group_size_bytes) {
+	if (local_state.buffer.Count() >= bind_data.row_group_size ||
+	    local_state.buffer.SizeInBytes() >= bind_data.row_group_size_bytes) {
 		// if the chunk collection exceeds a certain size (rows/bytes) we flush it to the parquet file
 		local_state.append_state.current_chunk_state.handles.clear();
 		global_state.writer->Flush(local_state.buffer);
@@ -1263,6 +1293,7 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	serializer.WriteProperty(108, "dictionary_compression_ratio_threshold",
 	                         bind_data.dictionary_compression_ratio_threshold);
 	serializer.WritePropertyWithDefault<optional_idx>(109, "compression_level", bind_data.compression_level);
+	serializer.WriteProperty(110, "row_groups_per_file", bind_data.row_groups_per_file);
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
@@ -1279,6 +1310,8 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	deserializer.ReadPropertyWithDefault<double>(108, "dictionary_compression_ratio_threshold",
 	                                             data->dictionary_compression_ratio_threshold, 1.0);
 	deserializer.ReadPropertyWithDefault<optional_idx>(109, "compression_level", data->compression_level);
+	data->row_groups_per_file =
+	    deserializer.ReadPropertyWithDefault<optional_idx>(110, "row_groups_per_file", optional_idx::Invalid());
 	return std::move(data);
 }
 // LCOV_EXCL_STOP
@@ -1330,11 +1363,25 @@ idx_t ParquetWriteDesiredBatchSize(ClientContext &context, FunctionData &bind_da
 }
 
 //===--------------------------------------------------------------------===//
-// Current File Size
+// File rotation
 //===--------------------------------------------------------------------===//
-idx_t ParquetWriteFileSize(GlobalFunctionData &gstate) {
+bool ParquetWriteRotateFiles(FunctionData &bind_data_p, const optional_idx &file_size_bytes) {
+	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
+	return file_size_bytes.IsValid() || bind_data.row_groups_per_file.IsValid();
+}
+
+bool ParquetWriteRotateNextFile(GlobalFunctionData &gstate, FunctionData &bind_data_p,
+                                const optional_idx &file_size_bytes) {
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
-	return global_state.writer->FileSize();
+	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
+	if (file_size_bytes.IsValid() && global_state.writer->FileSize() > file_size_bytes.GetIndex()) {
+		return true;
+	}
+	if (bind_data.row_groups_per_file.IsValid() &&
+	    global_state.writer->NumberOfRowGroups() >= bind_data.row_groups_per_file.GetIndex()) {
+		return true;
+	}
+	return false;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1399,7 +1446,8 @@ void ParquetExtension::Load(DuckDB &db) {
 	function.prepare_batch = ParquetWritePrepareBatch;
 	function.flush_batch = ParquetWriteFlushBatch;
 	function.desired_batch_size = ParquetWriteDesiredBatchSize;
-	function.file_size_bytes = ParquetWriteFileSize;
+	function.rotate_files = ParquetWriteRotateFiles;
+	function.rotate_next_file = ParquetWriteRotateNextFile;
 	function.serialize = ParquetCopySerialize;
 	function.deserialize = ParquetCopyDeserialize;
 	function.supports_type = ParquetWriter::TypeIsSupported;
@@ -1420,6 +1468,14 @@ void ParquetExtension::Load(DuckDB &db) {
 
 std::string ParquetExtension::Name() {
 	return "parquet";
+}
+
+std::string ParquetExtension::Version() const {
+#ifdef EXT_VERSION_PARQUET
+	return EXT_VERSION_PARQUET;
+#else
+	return "";
+#endif
 }
 
 } // namespace duckdb

@@ -15,6 +15,10 @@
 #include <string.h>
 #include <random>
 
+#include "yyjson.hpp"
+
+using namespace duckdb_yyjson; // NOLINT
+
 namespace duckdb {
 
 string StringUtil::GenerateRandomName(idx_t length) {
@@ -415,181 +419,73 @@ string StringUtil::CandidatesErrorMessage(const vector<string> &strings, const s
 	return StringUtil::CandidatesMessage(closest_strings, message_prefix);
 }
 
-static void SkipSpaces(const string &message, idx_t &pos) {
-	for (; pos < message.size() && StringUtil::CharacterIsSpace(message[pos]); pos++) {
-	}
-}
-
-static bool MatchCharacter(const string &message, idx_t &pos, char c) {
-	if (pos >= message.size()) {
-		return false;
-	}
-	return message[pos] == c;
-}
-
-static string ParseJSONValue(const string &message, idx_t &pos) {
-	string result;
-	if (!MatchCharacter(message, pos, '"')) {
-		// values need to start with a quote
-		D_ASSERT(0);
-		return result;
-	}
-	pos++;
-	for (; pos < message.size(); pos++) {
-		if (message[pos] == '\\') {
-			// escape
-			pos++;
-			if (pos >= message.size()) {
-				// escape at end of string!?
-				D_ASSERT(0);
-				return result;
-			}
-			switch (message[pos]) {
-			case 'r':
-				result += '\r';
-				break;
-			case 'n':
-				result += '\n';
-				break;
-			case 't':
-				result += '\t';
-				break;
-			case 'b':
-				result += '\b';
-				break;
-			case 'f':
-				result += '\f';
-				break;
-			case '0':
-				result += '\0';
-				break;
-			case '\\':
-			case '"':
-			case '/':
-				result += message[pos];
-				break;
-			default:
-				// unsupported escape character
-				// NOTE: we do not support unicode escape sequences here
-				D_ASSERT(0);
-				result += message[pos];
-				break;
-			}
-		} else if (message[pos] == '"') {
-			// end of message
-			pos++;
-			return result;
-		} else {
-			result += message[pos];
-		}
-	}
-	// no end-of-value found
-	D_ASSERT(0);
-	return result;
-}
-
 unordered_map<string, string> StringUtil::ParseJSONMap(const string &json) {
 	unordered_map<string, string> result;
 	if (json.empty()) {
 		return result;
 	}
-	idx_t pos = 0;
-	SkipSpaces(json, pos);
-	if (!MatchCharacter(json, pos, '{')) {
-		D_ASSERT(0);
-		return result;
+	yyjson_read_flag flags = YYJSON_READ_ALLOW_INVALID_UNICODE;
+	yyjson_doc *doc = yyjson_read(json.c_str(), json.size(), flags);
+	if (!doc) {
+		throw SerializationException("Failed to parse JSON string: %s", json);
 	}
-	pos++;
-	while (true) {
-		SkipSpaces(json, pos);
-		if (MatchCharacter(json, pos, '}')) {
-			// end of object
-			break;
-		}
-		if (!result.empty()) {
-			// objects are comma separated
-			if (!MatchCharacter(json, pos, ',')) {
-				D_ASSERT(0);
-				return result;
-			}
-			pos++;
-		}
-		string key = ParseJSONValue(json, pos);
-		SkipSpaces(json, pos);
-		if (!MatchCharacter(json, pos, ':')) {
-			D_ASSERT(0);
-			return result;
-		}
-		pos++;
-		string value = ParseJSONValue(json, pos);
-		auto entry = result.find(key);
-		if (entry != result.end()) {
-			// entry already exists
-			D_ASSERT(0);
-			continue;
-		}
-		result.insert(make_pair(std::move(key), std::move(value)));
+	yyjson_val *root = yyjson_doc_get_root(doc);
+	if (!root || yyjson_get_type(root) != YYJSON_TYPE_OBJ) {
+		yyjson_doc_free(doc);
+		throw SerializationException("Failed to parse JSON string: %s", json);
 	}
+	yyjson_obj_iter iter;
+	yyjson_obj_iter_init(root, &iter);
+	yyjson_val *key, *value;
+	while ((key = yyjson_obj_iter_next(&iter))) {
+		value = yyjson_obj_iter_get_val(key);
+		if (yyjson_get_type(value) != YYJSON_TYPE_STR) {
+			yyjson_doc_free(doc);
+			throw SerializationException("Failed to parse JSON string: %s", json);
+		}
+		auto key_val = yyjson_get_str(key);
+		auto key_len = yyjson_get_len(key);
+		auto value_val = yyjson_get_str(value);
+		auto value_len = yyjson_get_len(value);
+		result.emplace(string(key_val, key_len), string(value_val, value_len));
+	}
+	yyjson_doc_free(doc);
 	return result;
-}
-
-static void WriteJSONValue(const string &value, string &result) {
-	result += '"';
-	for (auto c : value) {
-		// check for characters we need to escape
-		switch (c) {
-		case '\0':
-			result += "\\0";
-			break;
-		case '\\':
-			result += "\\\\";
-			break;
-		case '\b':
-			result += "\\b";
-			break;
-		case '\f':
-			result += "\\f";
-			break;
-		case '\t':
-			result += "\\t";
-			break;
-		case '\r':
-			result += "\\r";
-			break;
-		case '\n':
-			result += "\\n";
-			break;
-		case '"':
-			result += "\\\"";
-			break;
-		default:
-			result += c;
-			break;
-		}
-	}
-	result += '"';
-}
-
-static void WriteJSONPair(const string &key, const string &value, string &result) {
-	WriteJSONValue(key, result);
-	result += ":";
-	WriteJSONValue(value, result);
 }
 
 string StringUtil::ToJSONMap(ExceptionType type, const string &message, const unordered_map<string, string> &map) {
 	D_ASSERT(map.find("exception_type") == map.end());
 	D_ASSERT(map.find("exception_message") == map.end());
-	string result;
-	result += "{";
-	// we always write exception type/message
-	WriteJSONPair("exception_type", Exception::ExceptionTypeToString(type), result);
-	result += ",";
-	WriteJSONPair("exception_message", message, result);
+
+	yyjson_mut_doc *doc = yyjson_mut_doc_new(nullptr);
+	yyjson_mut_val *root = yyjson_mut_obj(doc);
+	yyjson_mut_doc_set_root(doc, root);
+
+	auto except_str = Exception::ExceptionTypeToString(type);
+	yyjson_mut_obj_add_strncpy(doc, root, "exception_type", except_str.c_str(), except_str.size());
+	yyjson_mut_obj_add_strncpy(doc, root, "exception_message", message.c_str(), message.size());
 	for (auto &entry : map) {
-		result += ",";
-		WriteJSONPair(entry.first, entry.second, result);
+		auto key = yyjson_mut_strncpy(doc, entry.first.c_str(), entry.first.size());
+		auto value = yyjson_mut_strncpy(doc, entry.second.c_str(), entry.second.size());
+		yyjson_mut_obj_add(root, key, value);
 	}
-	result += "}";
+
+	yyjson_write_err err;
+	size_t len;
+	yyjson_write_flag flags = YYJSON_WRITE_ALLOW_INVALID_UNICODE;
+	const char *json = yyjson_mut_write_opts(doc, flags, nullptr, &len, &err);
+	if (!json) {
+		yyjson_mut_doc_free(doc);
+		throw SerializationException("Failed to write JSON string: %s", err.msg);
+	}
+	// Create a string from the JSON
+	string result(json, len);
+
+	// Free the JSON and the document
+	free((void *)json);
+	yyjson_mut_doc_free(doc);
+
+	// Return the result
 	return result;
 }
 
