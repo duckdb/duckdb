@@ -69,37 +69,40 @@ struct IcuBindData : public FunctionData {
 		collator = unique_ptr<icu::Collator>(icu::Collator::fromUCollator(ucollator));
 	}
 
-	duckdb::unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<IcuBindData>(language, country);
-	}
-
-	bool Equals(const FunctionData &other_p) const override {
-		auto &other = other_p.Cast<IcuBindData>();
-		return language == other.language && country == other.country;
-	}
-
-	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                      const ScalarFunction &function) {
-		auto &bind_data = bind_data_p->Cast<IcuBindData>();
-		serializer.WriteProperty(100, "language", bind_data.language);
-		serializer.WriteProperty(101, "country", bind_data.country);
-		serializer.WriteProperty(102, "tag", bind_data.tag);
-	}
-
-	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, ScalarFunction &function) {
-		string language;
-		string country;
-		string tag;
-		deserializer.ReadProperty(100, "language", language);
-		deserializer.ReadProperty(101, "country", country);
-		deserializer.ReadProperty(102, "tag", tag);
-
+	static duckdb::unique_ptr<FunctionData> CreateInstance(string language, string country, string tag) {
 		//! give priority to tagged collation
 		if (!tag.empty()) {
 			return make_uniq<IcuBindData>(tag);
 		} else {
 			return make_uniq<IcuBindData>(language, country);
 		}
+	}
+
+	duckdb::unique_ptr<FunctionData> Copy() const override {
+		return CreateInstance(language, country, tag);
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = other_p.Cast<IcuBindData>();
+		return language == other.language && country == other.country && tag == other.tag;
+	}
+
+	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	                      const ScalarFunction &function) {
+		auto &bind_data = bind_data_p->Cast<IcuBindData>();
+		serializer.WritePropertyWithDefault<string>(100, "language", bind_data.language);
+		serializer.WritePropertyWithDefault<string>(101, "country", bind_data.country);
+		serializer.WritePropertyWithDefault<string>(102, "tag", bind_data.tag);
+	}
+
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, ScalarFunction &function) {
+		string language;
+		string country;
+		string tag;
+		deserializer.ReadPropertyWithDefault<string>(100, "language", language);
+		deserializer.ReadPropertyWithDefault<string>(101, "country", country);
+		deserializer.ReadPropertyWithDefault<string>(102, "tag", tag);
+		return CreateInstance(language, country, tag);
 	}
 
 	static const string FUNCTION_PREFIX;
