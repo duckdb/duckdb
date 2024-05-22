@@ -13,6 +13,7 @@ fuzzer = None
 db = None
 shell = None
 perform_checks = True
+dry = False
 for param in sys.argv:
     if param == '--sqlsmith':
         fuzzer = 'sqlsmith'
@@ -32,6 +33,8 @@ for param in sys.argv:
         shell = param.replace('--shell=', '')
     elif param.startswith('--seed='):
         seed = int(param.replace('--seed=', ''))
+    elif param.startswith('--dry'):
+        dry = True
 
 if fuzzer is None:
     print("Unrecognized fuzzer to run, expected e.g. --sqlsmith or --duckfuzz")
@@ -49,7 +52,6 @@ if seed < 0:
     seed = random.randint(0, 2**30)
 
 git_hash = os.getenv('DUCKDB_HASH')
-
 
 def create_db_script(db):
     if db == 'alltypes':
@@ -94,9 +96,13 @@ def run_shell_command(cmd):
 
 
 # first get a list of all github issues, and check if we can still reproduce them
-current_errors = fuzzer_helper.extract_github_issues(shell, perform_checks)
 
-max_queries = 2000
+if dry:
+    current_errors = []
+else:
+    current_errors = fuzzer_helper.extract_github_issues(shell, perform_checks)
+
+max_queries = 10
 last_query_log_file = 'sqlsmith.log'
 complete_log_file = 'sqlsmith.complete.log'
 
@@ -137,9 +143,11 @@ print(stderr)
 print("==========================================")
 
 print(returncode)
-if returncode == 0:
-    print("==============  SUCCESS  ================")
-    exit(0)
+import pdb
+pdb.set_trace()
+# if returncode == 0:
+#     print("==============  SUCCESS  ================")
+#     exit(0)
 
 print("==============  FAILURE  ================")
 print("Attempting to reproduce and file issue...")
@@ -148,11 +156,20 @@ print("Attempting to reproduce and file issue...")
 with open(last_query_log_file, 'r') as f:
     last_query = f.read()
 
-cmd = load_script + '\n' + last_query
+with open(complete_log_file, 'r') as f:
+    all_queries = f.read()
 
-(stdout, stderr, returncode) = run_shell_command(cmd)
+
+all_queries = load_script + '\n' + all_queries
+reduced_multi_statements = reduce_sql.reduce_multi_statement(all_queries)
+
+
+pdb.set_trace()
+# cmd = load_script + '\n' + last_query
+
+(stdout, stderr, returncode) = run_shell_command(reduced_multi_statements)
 if returncode == 0:
-    print("Failed to reproduce the issue with a single command...")
+    print("Failed to reproduce the issue with reduced mutli statement command...")
     exit(0)
 
 print("==============  STDOUT  ================")
