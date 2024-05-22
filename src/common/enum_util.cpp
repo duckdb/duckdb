@@ -4115,6 +4115,39 @@ MemoryTag EnumUtil::FromString<MemoryTag>(const char *value) {
 }
 
 template<>
+const char* EnumUtil::ToChars<MetricsType>(MetricsType value) {
+	switch(value) {
+	case MetricsType::CPU_TIME:
+		return "CPU_TIME";
+	case MetricsType::EXTRA_INFO:
+		return "EXTRA_INFO";
+	case MetricsType::OPERATOR_CARDINALITY:
+		return "OPERATOR_CARDINALITY";
+	case MetricsType::OPERATOR_TIMING:
+		return "OPERATOR_TIMING";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
+	if (StringUtil::Equals(value, "CPU_TIME")) {
+		return MetricsType::CPU_TIME;
+	}
+	if (StringUtil::Equals(value, "EXTRA_INFO")) {
+		return MetricsType::EXTRA_INFO;
+	}
+	if (StringUtil::Equals(value, "OPERATOR_CARDINALITY")) {
+		return MetricsType::OPERATOR_CARDINALITY;
+	}
+	if (StringUtil::Equals(value, "OPERATOR_TIMING")) {
+		return MetricsType::OPERATOR_TIMING;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
 const char* EnumUtil::ToChars<NType>(NType value) {
 	switch(value) {
 	case NType::PREFIX:
