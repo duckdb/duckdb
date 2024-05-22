@@ -3,11 +3,17 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/parallel/concurrentqueue.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
+#include "duckdb/common/chrono.hpp"
 
 namespace duckdb {
 
+BufferEvictionNode::BufferEvictionNode(weak_ptr<BlockHandle> handle_p, idx_t eviction_seq_num)
+: handle(std::move(handle_p)), handle_sequence_number(eviction_seq_num) {
+	D_ASSERT(!handle.expired());
+}
+
 bool BufferEvictionNode::CanUnload(BlockHandle &handle_p) {
-	if (timestamp != handle_p.eviction_seq_num) {
+	if (handle_sequence_number != handle_p.eviction_seq_num) {
 		// handle was used in between
 		return false;
 	}
@@ -43,6 +49,8 @@ public:
 	bool TryDequeueWithLock(BufferEvictionNode &node);
 	//! Garbage collect dead nodes in the eviction queue.
 	void Purge();
+	template <typename FN>
+	void IterateUnloadableBlocks(FN fn);
 
 	//! Increment the dead node counter in the purge queue.
 	inline void IncrementDeadNodes() {
@@ -183,8 +191,9 @@ void EvictionQueue::PurgeIteration(const idx_t purge_size) {
 	total_dead_nodes -= actually_dequeued - alive_nodes;
 }
 
-BufferPool::BufferPool(idx_t maximum_memory)
-    : current_memory(0), maximum_memory(maximum_memory), temporary_memory_manager(make_uniq<TemporaryMemoryManager>()) {
+BufferPool::BufferPool(idx_t maximum_memory, bool track_eviction_timestamps)
+    : current_memory(0), maximum_memory(maximum_memory), track_eviction_timestamps(track_eviction_timestamps),
+	  temporary_memory_manager(make_uniq<TemporaryMemoryManager>()) {
 	queues.reserve(FILE_BUFFER_TYPE_COUNT);
 	for (idx_t i = 0; i < FILE_BUFFER_TYPE_COUNT; i++) {
 		queues.push_back(make_uniq<EvictionQueue>());
@@ -203,6 +212,12 @@ bool BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 	// or the block handle is still a local variable (ConvertToPersistent)
 	D_ASSERT(handle->readers == 0);
 	auto ts = ++handle->eviction_seq_num;
+	if (track_eviction_timestamps) {
+		handle->lru_timestamp_msec =
+				std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now())
+						.time_since_epoch()
+						.count();
+	}
 
 	if (ts != 1) {
 		// we add a newer version, i.e., we kill exactly one previous version
@@ -270,25 +285,83 @@ BufferPool::EvictionResult BufferPool::EvictBlocks(MemoryTag tag, idx_t extra_me
 
 BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue, MemoryTag tag, idx_t extra_memory,
                                                            idx_t memory_limit, unique_ptr<FileBuffer> *buffer) {
-	BufferEvictionNode node;
 	TempBufferPoolReservation r(tag, *this, extra_memory);
+	bool found = false;
 
-	while (current_memory > memory_limit) {
+	if (current_memory <= memory_limit) {
+		return {true, std::move(r)};
+	}
+
+	queue.IterateUnloadableBlocks([&](BufferEvictionNode &, const shared_ptr<BlockHandle> &handle) {
+		// hooray, we can unload the block
+		if (buffer && handle->buffer->AllocSize() == extra_memory) {
+			// we can re-use the memory directly
+			*buffer = handle->UnloadAndTakeBlock();
+			found = true;
+			return false;
+		}
+
+		// release the memory and mark the block as unloaded
+		handle->Unload();
+
+		if (current_memory <= memory_limit) {
+			found = true;
+			return false;
+		}
+
+		// Continue iteration
+		return true;
+	});
+
+	if (!found) {
+		r.Resize(0);
+	}
+
+	return {found, std::move(r)};
+}
+
+idx_t BufferPool::PurgeAgedBlocks(uint32_t max_age_sec) {
+	int64_t now = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now())
+			.time_since_epoch()
+			.count();
+	int64_t limit = now - (static_cast<int64_t>(max_age_sec) * 1000);
+	idx_t purged_bytes = 0;
+	for(auto &queue : queues) {
+		purged_bytes += PurgeAgedBlocksInternal(*queue, max_age_sec, now, limit);
+	}
+	return purged_bytes;
+}
+
+idx_t BufferPool::PurgeAgedBlocksInternal(EvictionQueue &queue, uint32_t max_age_sec, int64_t now, int64_t limit) {
+	idx_t purged_bytes = 0;
+	queue.IterateUnloadableBlocks([&](BufferEvictionNode &node, const shared_ptr<BlockHandle> &handle) {
+		// We will unload this block regardless. But stop the iteration immediately afterward if this
+		// block is younger than the age threshold.
+		bool is_fresh = handle->lru_timestamp_msec >= limit && handle->lru_timestamp_msec <= now;
+		purged_bytes += handle->GetMemoryUsage();
+		handle->Unload();
+		return is_fresh;
+	});
+	return purged_bytes;
+}
+
+template <typename FN>
+void EvictionQueue::IterateUnloadableBlocks(FN fn) {
+	for (;;) {
 		// get a block to unpin from the queue
-		if (!queue.q.try_dequeue(node)) {
+		BufferEvictionNode node;
+		if (!q.try_dequeue(node)) {
 			// we could not dequeue any eviction node, so we try one more time,
 			// but more aggressively
-			if (!queue.TryDequeueWithLock(node)) {
-				// still no success, we return
-				r.Resize(0);
-				return {false, std::move(r)};
+			if (!TryDequeueWithLock(node)) {
+				return;
 			}
 		}
 
 		// get a reference to the underlying block pointer
 		auto handle = node.TryGetBlockHandle();
 		if (!handle) {
-			queue.DecrementDeadNodes();
+			DecrementDeadNodes();
 			continue;
 		}
 
@@ -296,21 +369,14 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue,
 		lock_guard<mutex> lock(handle->lock);
 		if (!node.CanUnload(*handle)) {
 			// something changed in the mean-time, bail out
-			queue.DecrementDeadNodes();
+			DecrementDeadNodes();
 			continue;
 		}
 
-		// hooray, we can unload the block
-		if (buffer && handle->buffer->AllocSize() == extra_memory) {
-			// we can re-use the memory directly
-			*buffer = handle->UnloadAndTakeBlock();
-			return {true, std::move(r)};
+		if (!fn(node, handle)) {
+			break;
 		}
-
-		// release the memory and mark the block as unloaded
-		handle->Unload();
 	}
-	return {true, std::move(r)};
 }
 
 void BufferPool::PurgeQueue(FileBufferType type) {
