@@ -325,6 +325,7 @@ unique_ptr<FunctionData> BindReservoirQuantile(ClientContext &context, Aggregate
 	}
 
 	if (arguments.size() == 2) {
+		// remove the quantile argument so we can use the unary aggregate
 		if (function.arguments.size() == 2) {
 			Function::EraseArgument(function, arguments, arguments.size() - 1);
 		} else {
@@ -345,9 +346,14 @@ unique_ptr<FunctionData> BindReservoirQuantile(ClientContext &context, Aggregate
 		throw BinderException("Size of the RESERVOIR_QUANTILE sample must be bigger than 0");
 	}
 
-	// remove the quantile argument so we can use the unary aggregate
-	Function::EraseArgument(function, arguments, arguments.size() - 1);
-	Function::EraseArgument(function, arguments, arguments.size() - 1);
+	// remove the quantile arguments so we can use the unary aggregate
+	if (function.arguments.size() == arguments.size()) {
+		Function::EraseArgument(function, arguments, arguments.size() - 1);
+		Function::EraseArgument(function, arguments, arguments.size() - 1);
+	} else {
+		arguments.pop_back();
+		arguments.pop_back();
+	}
 	return make_uniq<ReservoirQuantileBindData>(quantiles, NumericCast<idx_t>(sample_size));
 }
 
