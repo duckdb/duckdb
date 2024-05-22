@@ -194,7 +194,7 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 	get->named_parameters = named_parameters;
 	get->input_table_types = input_table_types;
 	get->input_table_names = input_table_names;
-	if (table_function.in_out_function && !table_function.projection_pushdown) {
+	if (table_function.in_out_function && !table_function.projection_pushdown || table_function.with_ordinality) {
 		get->column_ids.reserve(return_types.size());
 		for (idx_t i = 0; i < return_types.size(); i++) {
 			get->column_ids.push_back(i);
@@ -208,12 +208,13 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 				make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT, nullptr, nullptr);
 		row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
 		row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
+		if (return_names.size() < column_name_alias.size()) {
+			row_number->alias = column_name_alias[return_names.size()];
+		} else {
+			row_number->alias = "ordinality";
+		}
 		window->expressions.push_back(std::move(row_number));
 		window->children.push_back(std::move(get));
-
-		vector<string> names = {"ordinality"};
-		vector<LogicalType> types = {LogicalType::BIGINT};
-		bind_context.AddGenericBinding(window_index, "ordinalityspalte", names, types);
 
 		vector<unique_ptr<Expression>> select_list;
 		for (idx_t i = 0; i < return_types.size() ; i++)  {
@@ -226,7 +227,12 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 		auto projection = make_uniq<LogicalProjection>(projection_index, std::move(select_list));
 
 		projection->children.push_back(std::move(window));
-		return_names.push_back("ordinality");
+		if (return_names.size() < column_name_alias.size()) {
+            return_names.push_back(column_name_alias[return_names.size()]);
+        } else {
+            return_names.push_back("ordinality");
+        }
+
 		return_types.push_back(LogicalType::BIGINT);
 		bind_context.AddGenericBinding(projection_index, function_name, return_names, return_types);
 		return std::move(projection);
