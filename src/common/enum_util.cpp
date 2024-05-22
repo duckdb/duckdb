@@ -6972,6 +6972,34 @@ TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value)
 }
 
 template<>
+const char* EnumUtil::ToChars<TransactionModifierType>(TransactionModifierType value) {
+	switch(value) {
+	case TransactionModifierType::TRANSACTION_DEFAULT_MODIFIER:
+		return "TRANSACTION_DEFAULT_MODIFIER";
+	case TransactionModifierType::TRANSACTION_READ_ONLY:
+		return "TRANSACTION_READ_ONLY";
+	case TransactionModifierType::TRANSACTION_READ_WRITE:
+		return "TRANSACTION_READ_WRITE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+TransactionModifierType EnumUtil::FromString<TransactionModifierType>(const char *value) {
+	if (StringUtil::Equals(value, "TRANSACTION_DEFAULT_MODIFIER")) {
+		return TransactionModifierType::TRANSACTION_DEFAULT_MODIFIER;
+	}
+	if (StringUtil::Equals(value, "TRANSACTION_READ_ONLY")) {
+		return TransactionModifierType::TRANSACTION_READ_ONLY;
+	}
+	if (StringUtil::Equals(value, "TRANSACTION_READ_WRITE")) {
+		return TransactionModifierType::TRANSACTION_READ_WRITE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
 const char* EnumUtil::ToChars<TransactionType>(TransactionType value) {
 	switch(value) {
 	case TransactionType::INVALID:

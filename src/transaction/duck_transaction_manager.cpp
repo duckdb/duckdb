@@ -42,7 +42,11 @@ DuckTransactionManager &DuckTransactionManager::Get(AttachedDatabase &db) {
 
 Transaction &DuckTransactionManager::StartTransaction(ClientContext &context) {
 	// obtain the transaction lock during this function
-	lock_guard<mutex> start_lock(start_transaction_lock);
+	auto &meta_transaction = MetaTransaction::Get(context);
+	unique_ptr<lock_guard<mutex>> start_lock;
+	if (!meta_transaction.IsReadOnly()) {
+		start_lock = make_uniq<lock_guard<mutex>>(start_transaction_lock);
+	}
 	lock_guard<mutex> lock(transaction_lock);
 	if (current_start_timestamp >= TRANSACTION_ID_START) { // LCOV_EXCL_START
 		throw InternalException("Cannot start more transactions, ran out of "

@@ -47,6 +47,8 @@ public:
 		return auto_commit;
 	}
 
+	void SetReadOnly();
+
 	idx_t GetActiveQuery();
 	void ResetActiveQuery();
 	void SetActiveQuery(transaction_t query_number);
