@@ -17,7 +17,7 @@ unique_ptr<ParsedExpression> Transformer::TransformArrayAccess(duckdb_libpgquery
 	// node can contain multiple indices.
 	idx_t list_size = 0;
 	for (auto node = indirection_node.indirection->head; node != nullptr; node = node->next) {
-		optional_ptr<duckdb_libpgquery::PGNode> target = PGPointerCast<duckdb_libpgquery::PGNode>(node->data.ptr_value);
+		auto target = PGPointerCast<duckdb_libpgquery::PGNode>(node->data.ptr_value);
 
 		switch (target->type) {
 		case duckdb_libpgquery::T_PGAIndices: {
