@@ -216,6 +216,9 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	unique_ptr<StorageLockKey> lock;
 	auto undo_properties = transaction.GetUndoProperties();
 	auto checkpoint_decision = CanCheckpoint(transaction, lock, undo_properties);
+	ErrorData error;
+	unique_ptr<lock_guard<mutex>> held_wal_lock;
+	unique_ptr<StorageCommitState> commit_state;
 	if (!checkpoint_decision.can_checkpoint && transaction.ShouldWriteToWAL(db)) {
 		// if we are committing changes and we are not checkpointing, we need to write to the WAL
 		// since WAL writes can take a long time - we grab the WAL lock here and unlock the transaction lock
@@ -228,15 +231,21 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			// this should never happen
 			throw InternalException("Transaction writing to WAL does not have the write lock");
 		}
+		// unlock the transaction lock while we write to the WAL
 		tlock.unlock();
-		lock_guard<mutex> wal(wal_lock);
-		transaction.WriteToWAL(db);
+		// grab the WAL lock and hold it until the entire commit is finished
+		held_wal_lock = make_uniq<lock_guard<mutex>>(wal_lock);
+		error = transaction.WriteToWAL(db, commit_state);
+
+		// after we finish writing to the WAL we grab the transaction lock again
 		tlock.lock();
 	}
 	// obtain a commit id for the transaction
 	transaction_t commit_id = GetCommitTimestamp();
 	// commit the UndoBuffer of the transaction
-	auto error = transaction.Commit(db, commit_id, checkpoint_decision.can_checkpoint);
+	if (!error.HasError()) {
+		error = transaction.Commit(db, commit_id, std::move(commit_state));
+	}
 	if (error.HasError()) {
 		// commit unsuccessful: rollback the transaction instead
 		checkpoint_decision = CheckpointDecision(error.Message());

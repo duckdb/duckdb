@@ -180,26 +180,26 @@ bool DuckTransaction::ShouldWriteToWAL(AttachedDatabase &db) {
 	return true;
 }
 
-ErrorData DuckTransaction::WriteToWAL(AttachedDatabase &db) noexcept {
-	unique_ptr<StorageCommitState> storage_commit_state;
+ErrorData DuckTransaction::WriteToWAL(AttachedDatabase &db, unique_ptr<StorageCommitState> &commit_state) noexcept {
 	try {
 		D_ASSERT(ShouldWriteToWAL(db));
 		auto &storage_manager = db.GetStorageManager();
 		auto log = storage_manager.GetWAL();
 		storage->Commit();
-		storage_commit_state = storage_manager.GenStorageCommitState(*log);
+		commit_state = storage_manager.GenStorageCommitState(*log);
 		undo_buffer.WriteToWAL(*log);
-		storage_commit_state->FlushCommit();
 	} catch (std::exception &ex) {
-		if (storage_commit_state) {
-			storage_commit_state->RevertCommit();
+		if (commit_state) {
+			commit_state->RevertCommit();
+			commit_state.reset();
 		}
 		return ErrorData(ex);
 	}
 	return ErrorData();
 }
 
-ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t new_commit_id, bool checkpoint) noexcept {
+ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t new_commit_id,
+                                  unique_ptr<StorageCommitState> commit_state) noexcept {
 	// "checkpoint" parameter indicates if the caller will checkpoint. If checkpoint ==
 	//    true: Then this function will NOT write to the WAL or flush/persist.
 	//          This method only makes commit in memory, expecting caller to checkpoint/flush.
@@ -215,9 +215,17 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t new_commit
 	try {
 		storage->Commit();
 		undo_buffer.Commit(iterator_state, commit_id);
+		if (commit_state) {
+			// if we have written to the WAL - flush after the commit has been successful
+			commit_state->FlushCommit();
+		}
 		return ErrorData();
 	} catch (std::exception &ex) {
 		undo_buffer.RevertCommit(iterator_state, this->transaction_id);
+		if (commit_state) {
+			// if we have written to the WAL - truncate the WAL on failure
+			commit_state->RevertCommit();
+		}
 		return ErrorData(ex);
 	}
 }
