@@ -82,7 +82,7 @@ bool AttachedDatabase::IsReadOnly() const {
 }
 
 bool AttachedDatabase::NameIsReserved(const string &name) {
-	return name == DEFAULT_SCHEMA || name == TEMP_CATALOG;
+	return name == DEFAULT_SCHEMA || name == TEMP_CATALOG || name == SYSTEM_CATALOG;
 }
 
 string AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &fs) {
