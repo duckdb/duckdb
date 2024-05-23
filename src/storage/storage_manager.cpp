@@ -219,7 +219,7 @@ enum class WALCommitState {
 
 class SingleFileStorageCommitState : public StorageCommitState {
 public:
-	SingleFileStorageCommitState(WriteAheadLog &log);
+	SingleFileStorageCommitState(StorageManager &storage, WriteAheadLog &log);
 	~SingleFileStorageCommitState() override;
 
 	//! Revert the commit
@@ -234,9 +234,9 @@ private:
 	WALCommitState state;
 };
 
-SingleFileStorageCommitState::SingleFileStorageCommitState(WriteAheadLog &wal)
+SingleFileStorageCommitState::SingleFileStorageCommitState(StorageManager &storage, WriteAheadLog &wal)
     : wal(wal), state(WALCommitState::IN_PROGRESS) {
-	auto initial_size = wal.GetWriter().GetFileSize();
+	auto initial_size = storage.GetWALSize();
 	initial_written = wal.GetTotalWritten();
 	initial_wal_size = initial_size < 0 ? 0 : idx_t(initial_size);
 }
@@ -272,7 +272,7 @@ void SingleFileStorageCommitState::FlushCommit() {
 }
 
 unique_ptr<StorageCommitState> SingleFileStorageManager::GenStorageCommitState(WriteAheadLog &wal) {
-	return make_uniq<SingleFileStorageCommitState>(wal);
+	return make_uniq<SingleFileStorageCommitState>(*this, wal);
 }
 
 bool SingleFileStorageManager::IsCheckpointClean(MetaBlockPointer checkpoint_id) {

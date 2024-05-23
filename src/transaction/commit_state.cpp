@@ -107,6 +107,7 @@ void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr) {
 			index_entry.CommitDrop();
 			break;
 		}
+		case CatalogType::DATABASE_ENTRY:
 		case CatalogType::SCHEMA_ENTRY:
 		case CatalogType::VIEW_ENTRY:
 		case CatalogType::SEQUENCE_ENTRY:
@@ -122,6 +123,7 @@ void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr) {
 			throw InternalException("Don't know how to drop this type!");
 		}
 		break;
+	case CatalogType::DATABASE_ENTRY:
 	case CatalogType::PREPARED_STATEMENT:
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
 	case CatalogType::SCALAR_FUNCTION_ENTRY:

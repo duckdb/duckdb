@@ -216,7 +216,6 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	unique_ptr<StorageLockKey> lock;
 	auto undo_properties = transaction.GetUndoProperties();
 	auto checkpoint_decision = CanCheckpoint(transaction, lock, undo_properties);
-	auto &storage_manager = db.GetStorageManager();
 	if (transaction.ChangesMade()) {
 		// if we are committing changes and we are not checkpointing, we need to write to the WAL
 		// since WAL writes can take a long time - we grab the WAL lock here and unlock the transaction lock
@@ -260,6 +259,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		CheckpointOptions options;
 		options.action = CheckpointAction::FORCE_CHECKPOINT;
 		options.type = checkpoint_decision.type;
+		auto &storage_manager = db.GetStorageManager();
 		storage_manager.CreateCheckpoint(options);
 	}
 	return error;
