@@ -177,12 +177,18 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 					order.projections.push_back(col_idx);
 				}
 			}
-		}
-		for (auto &child : op.children) {
-			RemoveUnusedColumns remove(binder, context);
-            remove.VisitOperatorExpressions(op);
-			remove.column_references.insert(column_references.begin(), column_references.end()); // add parent references
-            remove.VisitOperator(*child);
+
+			for (auto &child : op.children) {
+				RemoveUnusedColumns remove(binder, context);
+				remove.VisitOperatorExpressions(op);
+				remove.column_references.insert(column_references.begin(), column_references.end()); // add parent references
+				remove.VisitOperator(*child);
+			}
+		} else {
+			for (auto &child : op.children) {
+				RemoveUnusedColumns remove(binder, context, true);
+				remove.VisitOperator(*child);
+			}
 		}
 		return;
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
