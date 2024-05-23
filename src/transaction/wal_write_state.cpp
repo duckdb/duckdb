@@ -140,6 +140,9 @@ void WALWriteState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 		case CatalogType::PREPARED_STATEMENT:
 		case CatalogType::SCALAR_FUNCTION_ENTRY:
 		case CatalogType::DEPENDENCY_ENTRY:
+		case CatalogType::SECRET_ENTRY:
+		case CatalogType::SECRET_TYPE_ENTRY:
+		case CatalogType::SECRET_FUNCTION_ENTRY:
 			// do nothing, prepared statements and scalar functions aren't persisted to disk
 			break;
 		default:

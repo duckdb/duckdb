@@ -117,6 +117,9 @@ void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr) {
 		case CatalogType::PREPARED_STATEMENT:
 		case CatalogType::SCALAR_FUNCTION_ENTRY:
 		case CatalogType::DEPENDENCY_ENTRY:
+		case CatalogType::SECRET_ENTRY:
+		case CatalogType::SECRET_TYPE_ENTRY:
+		case CatalogType::SECRET_FUNCTION_ENTRY:
 			break;
 		default:
 			throw InternalException("Don't know how to drop this type!");
