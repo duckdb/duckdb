@@ -172,7 +172,7 @@ def generate():
             names = [method['name']]
         if 'kwargs' not in method:
             method['kwargs'] = []
-        method['kwargs'].append({'name': 'conn', 'type': 'Optional[DuckDBPyConnection]', 'default': 'None'})
+        method['kwargs'].append({'name': 'connection', 'type': 'Optional[DuckDBPyConnection]', 'default': 'None'})
         for name in names:
             function_name = method['function']
             cpp_definition = cpp_connection_defs[function_name]
@@ -187,7 +187,7 @@ def generate():
             names = [method['name']]
         if 'kwargs' not in method:
             method['kwargs'] = []
-        method['kwargs'].append({'name': 'conn', 'type': 'Optional[DuckDBPyConnection]', 'default': 'None'})
+        method['kwargs'].append({'name': 'connection', 'type': 'Optional[DuckDBPyConnection]', 'default': 'None'})
         for name in names:
             function_name = method['function']
             if name in SPECIAL_METHOD_NAMES:
