@@ -613,9 +613,6 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	case CatalogType::INDEX_ENTRY: {
 		auto &base = stmt.info->Cast<CreateIndexInfo>();
 
-		auto catalog = BindCatalog(base.catalog);
-		properties.modified_databases.insert(catalog);
-
 		// visit the table reference
 		auto table_ref = make_uniq<BaseTableRef>();
 		table_ref->catalog_name = base.catalog;
@@ -631,6 +628,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		if (table.temporary) {
 			stmt.info->temporary = true;
 		}
+		properties.modified_databases.insert(table.catalog.GetName());
+
 		// create a plan over the bound table
 		auto plan = CreatePlan(*bound_table);
 		if (plan->type != LogicalOperatorType::LOGICAL_GET) {
