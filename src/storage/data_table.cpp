@@ -941,9 +941,6 @@ void DataTable::MergeStorage(RowGroupCollection &data, TableIndexList &indexes) 
 }
 
 void DataTable::WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count) {
-	if (log.skip_writing) {
-		return;
-	}
 	log.WriteSetTable(info->schema, info->table);
 	ScanTableSegment(row_start, count, [&](DataChunk &chunk) { log.WriteInsert(chunk); });
 }

@@ -11,6 +11,7 @@
 #include "duckdb/transaction/commit_state.hpp"
 #include "duckdb/transaction/rollback_state.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
+#include "duckdb/transaction/wal_write_state.hpp"
 
 namespace duckdb {
 constexpr uint32_t UNDO_ENTRY_HEADER_SIZE = sizeof(UndoFlags) + sizeof(uint32_t);
@@ -170,20 +171,19 @@ void UndoBuffer::Cleanup() {
 	}
 }
 
-void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, optional_ptr<WriteAheadLog> log,
-                        transaction_t commit_id) {
-	CommitState state(commit_id, log);
-	if (log) {
-		// commit WITH write ahead log
-		IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry<true>(type, data); });
-	} else {
-		// commit WITHOUT write ahead log
-		IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry<false>(type, data); });
-	}
+void UndoBuffer::WriteToWAL(WriteAheadLog &wal) {
+	WALWriteState state(wal);
+	UndoBuffer::IteratorState iterator_state;
+	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry(type, data); });
+}
+
+void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, transaction_t commit_id) {
+	CommitState state(commit_id);
+	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry(type, data); });
 }
 
 void UndoBuffer::RevertCommit(UndoBuffer::IteratorState &end_state, transaction_t transaction_id) {
-	CommitState state(transaction_id, nullptr);
+	CommitState state(transaction_id);
 	UndoBuffer::IteratorState start_state;
 	IterateEntries(start_state, end_state, [&](UndoFlags type, data_ptr_t data) { state.RevertCommit(type, data); });
 }

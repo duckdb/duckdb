@@ -48,7 +48,9 @@ public:
 	//! Cleanup the undo buffer
 	void Cleanup();
 	//! Commit the changes made in the UndoBuffer: should be called on commit
-	void Commit(UndoBuffer::IteratorState &iterator_state, optional_ptr<WriteAheadLog> log, transaction_t commit_id);
+	void WriteToWAL(WriteAheadLog &wal);
+	//! Commit the changes made in the UndoBuffer: should be called on commit
+	void Commit(UndoBuffer::IteratorState &iterator_state, transaction_t commit_id);
 	//! Revert committed changes made in the UndoBuffer up until the currently committed state
 	void RevertCommit(UndoBuffer::IteratorState &iterator_state, transaction_t transaction_id);
 	//! Rollback the changes made in this UndoBuffer: should be called on

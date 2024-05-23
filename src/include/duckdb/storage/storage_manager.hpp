@@ -31,6 +31,8 @@ public:
 	virtual ~StorageCommitState() {
 	}
 
+	//! Revert the commit
+	virtual void RevertCommit() = 0;
 	// Make the commit persistent
 	virtual void FlushCommit() = 0;
 };
@@ -84,7 +86,7 @@ public:
 	bool InMemory();
 
 	virtual bool AutomaticCheckpoint(idx_t estimated_wal_bytes) = 0;
-	virtual unique_ptr<StorageCommitState> GenStorageCommitState(Transaction &transaction, bool checkpoint) = 0;
+	virtual unique_ptr<StorageCommitState> GenStorageCommitState(WriteAheadLog &wal) = 0;
 	virtual bool IsCheckpointClean(MetaBlockPointer checkpoint_id) = 0;
 	virtual void CreateCheckpoint(CheckpointOptions options = CheckpointOptions()) = 0;
 	virtual DatabaseSize GetDatabaseSize() = 0;
@@ -132,7 +134,7 @@ public:
 
 public:
 	bool AutomaticCheckpoint(idx_t estimated_wal_bytes) override;
-	unique_ptr<StorageCommitState> GenStorageCommitState(Transaction &transaction, bool checkpoint) override;
+	unique_ptr<StorageCommitState> GenStorageCommitState(WriteAheadLog &wal) override;
 	bool IsCheckpointClean(MetaBlockPointer checkpoint_id) override;
 	void CreateCheckpoint(CheckpointOptions options) override;
 	DatabaseSize GetDatabaseSize() override;

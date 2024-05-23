@@ -211,68 +211,68 @@ void SingleFileStorageManager::LoadDatabase() {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-class SingleFileStorageCommitState : public StorageCommitState {
-	idx_t initial_wal_size = 0;
-	idx_t initial_written = 0;
-	optional_ptr<WriteAheadLog> log;
-	bool checkpoint;
-
-public:
-	SingleFileStorageCommitState(StorageManager &storage_manager, bool checkpoint);
-	~SingleFileStorageCommitState() override {
-		// If log is non-null, then commit threw an exception before flushing.
-		if (log) {
-			auto &wal = *log.get();
-			wal.skip_writing = false;
-			if (wal.GetTotalWritten() > initial_written) {
-				// remove any entries written into the WAL by truncating it
-				wal.Truncate(NumericCast<int64_t>(initial_wal_size));
-			}
-		}
-	}
-
-	// Make the commit persistent
-	void FlushCommit() override;
+enum class WALCommitState {
+	IN_PROGRESS,
+	FLUSHED,
+	TRUNCATED
 };
 
-SingleFileStorageCommitState::SingleFileStorageCommitState(StorageManager &storage_manager, bool checkpoint)
-    : checkpoint(checkpoint) {
+class SingleFileStorageCommitState : public StorageCommitState {
+public:
+	SingleFileStorageCommitState(WriteAheadLog &log);
+	~SingleFileStorageCommitState() override;
 
-	log = storage_manager.GetWAL();
-	if (!log) {
+	//! Revert the commit
+	void RevertCommit() override;
+	// Make the commit persistent
+	void FlushCommit() override;
+
+private:
+	idx_t initial_wal_size = 0;
+	idx_t initial_written = 0;
+	WriteAheadLog &wal;
+	WALCommitState state;
+};
+
+SingleFileStorageCommitState::SingleFileStorageCommitState(WriteAheadLog &wal)
+    : wal(wal), state(WALCommitState::IN_PROGRESS) {
+	auto initial_size = wal.GetWriter().GetFileSize();
+	initial_written = wal.GetTotalWritten();
+	initial_wal_size = initial_size < 0 ? 0 : idx_t(initial_size);
+}
+
+SingleFileStorageCommitState::~SingleFileStorageCommitState() {
+	if (state != WALCommitState::IN_PROGRESS) {
 		return;
 	}
-
-	auto initial_size = storage_manager.GetWALSize();
-	initial_written = log->GetTotalWritten();
-	initial_wal_size = initial_size < 0 ? 0 : idx_t(initial_size);
-
-	if (checkpoint) {
-		// True, if we are checkpointing after the current commit.
-		// If true, we don't need to write to the WAL, saving unnecessary writes to disk.
-		log->skip_writing = true;
+	try {
+		// truncate the WAL in case of a destructor
+		RevertCommit();
+	} catch(...) { // NOLINT
 	}
 }
 
-// Make the commit persistent
+void SingleFileStorageCommitState::RevertCommit() {
+	if (state != WALCommitState::IN_PROGRESS) {
+		return;
+	}
+	if (wal.GetTotalWritten() > initial_written) {
+		// remove any entries written into the WAL by truncating it
+		wal.Truncate(NumericCast<int64_t>(initial_wal_size));
+	}
+	state = WALCommitState::TRUNCATED;
+}
+
 void SingleFileStorageCommitState::FlushCommit() {
-	if (log) {
-		// flush the WAL if any changes were made
-		if (log->GetTotalWritten() > initial_written) {
-			(void)checkpoint;
-			D_ASSERT(!checkpoint);
-			D_ASSERT(!log->skip_writing);
-			log->Flush();
-		}
-		log->skip_writing = false;
+	if (state != WALCommitState::IN_PROGRESS) {
+		return;
 	}
-	// Null so that the destructor will not truncate the log.
-	log = nullptr;
+	wal.Flush();
+	state = WALCommitState::FLUSHED;
 }
 
-unique_ptr<StorageCommitState> SingleFileStorageManager::GenStorageCommitState(Transaction &transaction,
-                                                                               bool checkpoint) {
-	return make_uniq<SingleFileStorageCommitState>(*this, checkpoint);
+unique_ptr<StorageCommitState> SingleFileStorageManager::GenStorageCommitState(WriteAheadLog &wal) {
+	return make_uniq<SingleFileStorageCommitState>(wal);
 }
 
 bool SingleFileStorageManager::IsCheckpointClean(MetaBlockPointer checkpoint_id) {

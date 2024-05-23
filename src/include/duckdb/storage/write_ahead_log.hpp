@@ -47,9 +47,6 @@ public:
 	explicit WriteAheadLog(AttachedDatabase &database, const string &wal_path);
 	virtual ~WriteAheadLog();
 
-	//! Skip writing to the WAL
-	bool skip_writing;
-
 public:
 	//! Replay the WAL
 	static bool Replay(AttachedDatabase &database, unique_ptr<FileHandle> handle);

@@ -165,6 +165,31 @@ bool DuckTransaction::AutomaticCheckpoint(AttachedDatabase &db, const UndoBuffer
 	return storage_manager.AutomaticCheckpoint(storage->EstimatedSize() + properties.estimated_size);
 }
 
+ErrorData DuckTransaction::WriteToWAL(AttachedDatabase &db) noexcept {
+	unique_ptr<StorageCommitState> storage_commit_state;
+	try {
+		if (!ChangesMade() || db.IsSystem()) {
+			// no need to write to WAL
+			return ErrorData();
+		}
+		auto &storage_manager = db.GetStorageManager();
+		auto log = storage_manager.GetWAL();
+		if (!log) {
+			// no WAL
+			return ErrorData();
+		}
+		storage_commit_state = storage_manager.GenStorageCommitState(*log);
+		undo_buffer.WriteToWAL(*log);
+		storage_commit_state->FlushCommit();
+	} catch (std::exception &ex) {
+		if (storage_commit_state) {
+			storage_commit_state->RevertCommit();
+		}
+		return ErrorData(ex);
+	}
+	return ErrorData();
+}
+
 ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t new_commit_id, bool checkpoint) noexcept {
 	// "checkpoint" parameter indicates if the caller will checkpoint. If checkpoint ==
 	//    true: Then this function will NOT write to the WAL or flush/persist.
@@ -179,21 +204,9 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t new_commit
 
 	UndoBuffer::IteratorState iterator_state;
 	LocalStorage::CommitState commit_state;
-	unique_ptr<StorageCommitState> storage_commit_state;
-	optional_ptr<WriteAheadLog> log;
-	if (!db.IsSystem()) {
-		auto &storage_manager = db.GetStorageManager();
-		log = storage_manager.GetWAL();
-		storage_commit_state = storage_manager.GenStorageCommitState(*this, checkpoint);
-	} else {
-		log = nullptr;
-	}
 	try {
 		storage->Commit(commit_state, *this);
-		undo_buffer.Commit(iterator_state, log, commit_id);
-		if (storage_commit_state) {
-			storage_commit_state->FlushCommit();
-		}
+		undo_buffer.Commit(iterator_state, commit_id);
 		return ErrorData();
 	} catch (std::exception &ex) {
 		undo_buffer.RevertCommit(iterator_state, this->transaction_id);

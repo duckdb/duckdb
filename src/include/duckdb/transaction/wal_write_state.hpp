@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/transaction/commit_state.hpp
+// duckdb/transaction/wal_write_state.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -21,19 +21,27 @@ struct DataTableInfo;
 struct DeleteInfo;
 struct UpdateInfo;
 
-class CommitState {
+class WALWriteState {
 public:
-	explicit CommitState(transaction_t commit_id);
+	explicit WALWriteState(WriteAheadLog &log);
 
 public:
 	void CommitEntry(UndoFlags type, data_ptr_t data);
-	void RevertCommit(UndoFlags type, data_ptr_t data);
 
 private:
-	void CommitEntryDrop(CatalogEntry &entry, data_ptr_t extra_data);
+	void SwitchTable(DataTableInfo *table, UndoFlags new_op);
+
+	void WriteCatalogEntry(CatalogEntry &entry, data_ptr_t extra_data);
+	void WriteDelete(DeleteInfo &info);
+	void WriteUpdate(UpdateInfo &info);
 
 private:
-	transaction_t commit_id;
+	WriteAheadLog &log;
+
+	optional_ptr<DataTableInfo> current_table_info;
+
+	unique_ptr<DataChunk> delete_chunk;
+	unique_ptr<DataChunk> update_chunk;
 };
 
 } // namespace duckdb

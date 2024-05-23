@@ -21,7 +21,7 @@ namespace duckdb {
 const uint64_t WAL_VERSION_NUMBER = 2;
 
 WriteAheadLog::WriteAheadLog(AttachedDatabase &database, const string &wal_path)
-    : skip_writing(false), database(database), wal_path(wal_path) {
+    : database(database), wal_path(wal_path) {
 }
 
 WriteAheadLog::~WriteAheadLog() {
@@ -68,17 +68,11 @@ public:
 	}
 
 	void WriteData(const_data_ptr_t buffer, idx_t write_size) override {
-		if (wal.skip_writing) {
-			return;
-		}
 		// buffer data into the memory stream
 		memory_stream.WriteData(buffer, write_size);
 	}
 
 	void Flush() {
-		if (wal.skip_writing) {
-			return;
-		}
 		if (!stream) {
 			stream = wal.Initialize();
 		}
@@ -105,9 +99,6 @@ class WriteAheadLogSerializer {
 public:
 	WriteAheadLogSerializer(WriteAheadLog &wal, WALType wal_type)
 	    : wal(wal), checksum_writer(wal), serializer(checksum_writer) {
-		if (wal.skip_writing) {
-			return;
-		}
 		if (!wal.Initialized()) {
 			wal.Initialize();
 		}
@@ -118,9 +109,6 @@ public:
 	}
 
 	void End() {
-		if (wal.skip_writing) {
-			return;
-		}
 		D_ASSERT(wal.Initialized());
 		serializer.End();
 		checksum_writer.Flush();
@@ -128,18 +116,12 @@ public:
 
 	template <class T>
 	void WriteProperty(const field_id_t field_id, const char *tag, const T &value) {
-		if (wal.skip_writing) {
-			return;
-		}
 		D_ASSERT(wal.Initialized());
 		serializer.WriteProperty(field_id, tag, value);
 	}
 
 	template <class FUNC>
 	void WriteList(const field_id_t field_id, const char *tag, idx_t count, FUNC func) {
-		if (wal.skip_writing) {
-			return;
-		}
 		D_ASSERT(wal.Initialized());
 		serializer.WriteList(field_id, tag, count, func);
 	}
@@ -277,10 +259,6 @@ void SerializeIndexToWAL(WriteAheadLogSerializer &serializer, const unique_ptr<I
 }
 
 void WriteAheadLog::WriteCreateIndex(const IndexCatalogEntry &entry) {
-	if (skip_writing) {
-		return;
-	}
-
 	WriteAheadLogSerializer serializer(*this, WALType::CREATE_INDEX);
 	serializer.WriteProperty(101, "index_catalog_entry", &entry);
 
@@ -401,9 +379,6 @@ void WriteAheadLog::WriteAlter(const AlterInfo &info) {
 // FLUSH
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::Flush() {
-	if (skip_writing) {
-		return;
-	}
 	D_ASSERT(writer);
 
 	// write an empty entry
