@@ -53,8 +53,8 @@ StandardBufferManager::StandardBufferManager(DatabaseInstance &db, string tmp)
     : BufferManager(), db(db), buffer_pool(db.GetBufferPool()), temporary_id(MAXIMUM_BLOCK),
       buffer_allocator(BufferAllocatorAllocate, BufferAllocatorFree, BufferAllocatorRealloc,
                        make_uniq<BufferAllocatorData>(*this)) {
+	temp_block_manager = make_uniq<InMemoryBlockManager>(*this, DEFAULT_BLOCK_ALLOC_SIZE);
 	temporary_directory.path = std::move(tmp);
-	temp_block_manager = make_uniq<InMemoryBlockManager>(*this);
 	for (idx_t i = 0; i < MEMORY_TAG_COUNT; i++) {
 		evicted_data_per_tag[i] = 0;
 	}
@@ -227,8 +227,8 @@ BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	return buf;
 }
 
-void StandardBufferManager::PurgeQueue() {
-	buffer_pool.PurgeQueue();
+void StandardBufferManager::PurgeQueue(FileBufferType type) {
+	buffer_pool.PurgeQueue(type);
 }
 
 void StandardBufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
@@ -262,12 +262,15 @@ void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 
 	// We do not have to keep the handle locked while purging.
 	if (purge) {
-		PurgeQueue();
+		PurgeQueue(handle->buffer->type);
 	}
 }
 
 void StandardBufferManager::SetMemoryLimit(idx_t limit) {
 	buffer_pool.SetLimit(limit, InMemoryWarning());
+	if (Allocator::SupportsFlush()) {
+		Allocator::FlushAll();
+	}
 }
 
 void StandardBufferManager::SetSwapLimit(optional_idx limit) {

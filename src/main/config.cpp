@@ -73,6 +73,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(EnableExternalAccessSetting),
     DUCKDB_GLOBAL(EnableFSSTVectors),
     DUCKDB_GLOBAL(AllowUnsignedExtensionsSetting),
+    DUCKDB_GLOBAL(AllowCommunityExtensionsSetting),
     DUCKDB_GLOBAL(AllowExtensionsMetadataMismatchSetting),
     DUCKDB_GLOBAL(AllowUnredactedSecretsSetting),
     DUCKDB_GLOBAL(CustomExtensionRepository),
@@ -112,6 +113,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(ProfileOutputSetting),
     DUCKDB_LOCAL(ProfilingModeSetting),
     DUCKDB_LOCAL_ALIAS("profiling_output", ProfileOutputSetting),
+    DUCKDB_LOCAL(CustomProfilingSettings),
     DUCKDB_LOCAL(ProgressBarTimeSetting),
     DUCKDB_LOCAL(SchemaSetting),
     DUCKDB_LOCAL(SearchPathSetting),
@@ -121,13 +123,17 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(ThreadsSetting),
     DUCKDB_GLOBAL(UsernameSetting),
     DUCKDB_GLOBAL(ExportLargeBufferArrow),
+    DUCKDB_GLOBAL(ArrowOutputListView),
+    DUCKDB_GLOBAL(ProduceArrowStringView),
     DUCKDB_GLOBAL_ALIAS("user", UsernameSetting),
     DUCKDB_GLOBAL_ALIAS("wal_autocheckpoint", CheckpointThresholdSetting),
     DUCKDB_GLOBAL_ALIAS("worker_threads", ThreadsSetting),
     DUCKDB_GLOBAL(FlushAllocatorSetting),
+    DUCKDB_GLOBAL(AllocatorBackgroundThreadsSetting),
     DUCKDB_GLOBAL(DuckDBApiSetting),
     DUCKDB_GLOBAL(CustomUserAgentSetting),
     DUCKDB_LOCAL(PartitionedWriteFlushThreshold),
+    DUCKDB_GLOBAL(DefaultBlockAllocSize),
     DUCKDB_LOCAL(EnableHTTPLoggingSetting),
     DUCKDB_LOCAL(HTTPLoggingOutputSetting),
     FINAL_SETTING};
@@ -494,15 +500,26 @@ SerializationCompatibility SerializationCompatibility::FromString(const string &
 	SerializationCompatibility result;
 	result.duckdb_version = input;
 	result.serialization_version = serialization_version.GetIndex();
+	result.manually_set = true;
 	return result;
 }
 
 SerializationCompatibility SerializationCompatibility::Default() {
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
-	return FromString("latest");
+	auto res = FromString("latest");
+	res.manually_set = false;
+	return res;
 #else
-	return FromString("v0.10.2");
+	auto res = FromString("v0.10.2");
+	res.manually_set = false;
+	return res;
 #endif
+}
+
+SerializationCompatibility SerializationCompatibility::Latest() {
+	auto res = FromString("latest");
+	res.manually_set = false;
+	return res;
 }
 
 bool SerializationCompatibility::Compare(idx_t property_version) const {

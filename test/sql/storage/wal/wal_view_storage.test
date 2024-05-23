@@ -32,7 +32,7 @@ PRAGMA table_info('test.v')
 statement error
 drop table test.t;
 ----
-Cannot drop entry "t" because there are entries that depend on it
+view "v" depends on table "t".
 
 # Now with CASCADE
 statement ok
@@ -90,7 +90,7 @@ PRAGMA table_info('test.v')
 statement error
 drop table test.t;
 ----
-Cannot drop entry "t" because there are entries that depend on it
+view "v" depends on table "t".
 
 # Now with CASCADE
 statement ok

@@ -124,3 +124,25 @@ class TestReplacementScan(object):
             match=r'Python Object "random_object" of type "str" found on line .* not suitable for replacement scans.',
         ):
             con.execute("select count(*) from random_object").fetchone()
+
+    def test_replacement_of_cross_connection_relation(self):
+        con1 = duckdb.connect(':memory:')
+        con2 = duckdb.connect(':memory:')
+        con1.query('create table integers(i int)')
+        con2.query('create table integers(v varchar)')
+        con1.query('insert into integers values (42)')
+        con2.query('insert into integers values (\'xxx\')')
+        rel1 = con1.query('select * from integers')
+        with pytest.raises(
+            duckdb.InvalidInputException,
+            match=r'The object was created by another Connection and can therefore not be used by this Connection.',
+        ):
+            con2.query('from rel1')
+
+        del con1
+
+        with pytest.raises(
+            duckdb.InvalidInputException,
+            match=r'The object was created by another Connection and can therefore not be used by this Connection.',
+        ):
+            con2.query('from rel1')
