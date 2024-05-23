@@ -97,8 +97,7 @@ private:
 
 class WriteAheadLogSerializer {
 public:
-	WriteAheadLogSerializer(WriteAheadLog &wal, WALType wal_type)
-	    : checksum_writer(wal), serializer(checksum_writer) {
+	WriteAheadLogSerializer(WriteAheadLog &wal, WALType wal_type) : checksum_writer(wal), serializer(checksum_writer) {
 		if (!wal.Initialized()) {
 			wal.Initialize();
 		}
