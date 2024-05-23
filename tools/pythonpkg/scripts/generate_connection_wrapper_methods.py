@@ -1,6 +1,7 @@
 import os
 import json
 from get_cpp_connection_methods import get_methods, FunctionParam, ConnectionMethod
+from typing import List, Tuple
 
 os.chdir(os.path.dirname(__file__))
 
@@ -18,20 +19,32 @@ LAMBDA_FORMAT = """
 		    {opt_return}conn->{function_name}({parameter_names});
 	    }}"""
 
+PY_INIT_FORMAT = """
+from .duckdb import (
+{item_list}
+)
 
-def generate():
-    # Read the DUCKDB_PYTHON_SOURCE file
-    with open(DUCKDB_PYTHON_SOURCE, 'r') as source_file:
-        source_code = source_file.readlines()
+_exported_symbols.extend([
+{str_item_list}
+])
+"""
 
+WRAPPER_JSON_PATH = os.path.join("connection_wrapper_methods.json")
+
+DUCKDB_INIT_FILE = os.path.join("..", "duckdb", "__init__.py")
+INIT_PY_START = "# START OF CONNECTION WRAPPER"
+INIT_PY_END = "# END OF CONNECTION WRAPPER"
+
+
+def remove_section(content, start_marker, end_marker) -> Tuple[List[str], List[str]]:
     start_index = -1
     end_index = -1
-    for i, line in enumerate(source_code):
-        if line.startswith(START_MARKER):
+    for i, line in enumerate(content):
+        if line.startswith(start_marker):
             if start_index != -1:
                 raise ValueError("Encountered the START_MARKER a second time, quitting!")
             start_index = i
-        elif line.startswith(END_MARKER):
+        elif line.startswith(end_marker):
             if end_index != -1:
                 raise ValueError("Encountered the END_MARKER a second time, quitting!")
             end_index = i
@@ -39,8 +52,22 @@ def generate():
     if start_index == -1 or end_index == -1:
         raise ValueError("Couldn't find start or end marker in source file")
 
-    start_section = source_code[: start_index + 1]
-    end_section = source_code[end_index:]
+    start_section = content[: start_index + 1]
+    end_section = content[end_index:]
+    return (start_section, end_section)
+
+
+def generate():
+    # Read the DUCKDB_PYTHON_SOURCE file
+    with open(DUCKDB_PYTHON_SOURCE, 'r') as source_file:
+        source_code = source_file.readlines()
+    start_section, end_section = remove_section(source_code, START_MARKER, END_MARKER)
+
+    # Read the DUCKDB_INIT_FILE file
+    with open(DUCKDB_INIT_FILE, 'r') as source_file:
+        source_code = source_file.readlines()
+    py_start, py_end = remove_section(source_code, INIT_PY_START, INIT_PY_END)
+
     # ---- Generate the definition code from the json ----
 
     # Read the JSON file
@@ -114,6 +141,7 @@ def generate():
         return definition
 
     body = []
+    all_names = []
     for method in connection_methods:
         if isinstance(method['name'], list):
             names = method['name']
@@ -127,16 +155,26 @@ def generate():
             lambda_def = get_lambda_definition(method_definitions[function_name])
             body.append(create_definition(name, method, lambda_def))
 
+            all_names.append(name)
+
     # ---- End of generation code ----
 
     with_newlines = ['\t' + x + '\n' for x in body]
     # Recreate the file content by concatenating all the pieces together
-
     new_content = start_section + with_newlines + end_section
-
     # Write out the modified DUCKDB_PYTHON_SOURCE file
     with open(DUCKDB_PYTHON_SOURCE, 'w') as source_file:
         source_file.write("".join(new_content))
+
+    item_list = '\n'.join([f'\t{name},' for name in all_names])
+    str_item_list = '\n'.join([f"\t'{name}'," for name in all_names])
+    imports = PY_INIT_FORMAT.format(item_list=item_list, str_item_list=str_item_list).split('\n')
+    imports = [x + '\n' for x in imports]
+
+    init_py_content = py_start + imports + py_end
+    # Write out the modified DUCKDB_INIT_FILE file
+    with open(DUCKDB_INIT_FILE, 'w') as source_file:
+        source_file.write("".join(init_py_content))
 
 
 if __name__ == '__main__':
