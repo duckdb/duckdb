@@ -211,11 +211,7 @@ void SingleFileStorageManager::LoadDatabase() {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-enum class WALCommitState {
-	IN_PROGRESS,
-	FLUSHED,
-	TRUNCATED
-};
+enum class WALCommitState { IN_PROGRESS, FLUSHED, TRUNCATED };
 
 class SingleFileStorageCommitState : public StorageCommitState {
 public:
@@ -248,7 +244,7 @@ SingleFileStorageCommitState::~SingleFileStorageCommitState() {
 	try {
 		// truncate the WAL in case of a destructor
 		RevertCommit();
-	} catch(...) { // NOLINT
+	} catch (...) { // NOLINT
 	}
 }
 

@@ -165,19 +165,28 @@ bool DuckTransaction::AutomaticCheckpoint(AttachedDatabase &db, const UndoBuffer
 	return storage_manager.AutomaticCheckpoint(storage->EstimatedSize() + properties.estimated_size);
 }
 
+bool DuckTransaction::ShouldWriteToWAL(AttachedDatabase &db) {
+	if (!ChangesMade()) {
+		return false;
+	}
+	if (db.IsSystem()) {
+		return false;
+	}
+	auto &storage_manager = db.GetStorageManager();
+	auto log = storage_manager.GetWAL();
+	if (!log) {
+		return false;
+	}
+	return true;
+}
+
 ErrorData DuckTransaction::WriteToWAL(AttachedDatabase &db) noexcept {
 	unique_ptr<StorageCommitState> storage_commit_state;
 	try {
-		if (!ChangesMade() || db.IsSystem()) {
-			// no need to write to WAL
-			return ErrorData();
-		}
+		D_ASSERT(ShouldWriteToWAL(db));
 		auto &storage_manager = db.GetStorageManager();
 		auto log = storage_manager.GetWAL();
-		if (!log) {
-			// no WAL
-			return ErrorData();
-		}
+		storage->Commit();
 		storage_commit_state = storage_manager.GenStorageCommitState(*log);
 		undo_buffer.WriteToWAL(*log);
 		storage_commit_state->FlushCommit();
@@ -203,9 +212,8 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t new_commit
 	D_ASSERT(db.IsSystem() || db.IsTemporary() || !IsReadOnly());
 
 	UndoBuffer::IteratorState iterator_state;
-	LocalStorage::CommitState commit_state;
 	try {
-		storage->Commit(commit_state, *this);
+		storage->Commit();
 		undo_buffer.Commit(iterator_state, commit_id);
 		return ErrorData();
 	} catch (std::exception &ex) {

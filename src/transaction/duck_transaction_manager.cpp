@@ -216,17 +216,22 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	unique_ptr<StorageLockKey> lock;
 	auto undo_properties = transaction.GetUndoProperties();
 	auto checkpoint_decision = CanCheckpoint(transaction, lock, undo_properties);
-	if (transaction.ChangesMade()) {
+	if (!checkpoint_decision.can_checkpoint && transaction.ShouldWriteToWAL(db)) {
 		// if we are committing changes and we are not checkpointing, we need to write to the WAL
 		// since WAL writes can take a long time - we grab the WAL lock here and unlock the transaction lock
 		// read-only transactions can bypass this branch and start/commit while the WAL write is happening
-		// write transactions will always grab the WAL lock and be blocked here as WAL writes are done sequentially
-		lock_guard<mutex> wal(wal_lock);
-		if (!checkpoint_decision.can_checkpoint) {
-			tlock.unlock();
-			transaction.WriteToWAL(db);
-			tlock.lock();
+		if (!transaction.HasWriteLock()) {
+			// sanity check - this transaction should have a write lock
+			// the write lock prevents other transactions from checkpointing until this transaction is fully finished
+			// if we do not hold the write lock here, other transactions can bypass this branch by auto-checkpoint
+			// this would lead to a checkpoint WHILE this thread is writing to the WAL
+			// this should never happen
+			throw InternalException("Transaction writing to WAL does not have the write lock");
 		}
+		tlock.unlock();
+		lock_guard<mutex> wal(wal_lock);
+		transaction.WriteToWAL(db);
+		tlock.lock();
 	}
 	// obtain a commit id for the transaction
 	transaction_t commit_id = GetCommitTimestamp();

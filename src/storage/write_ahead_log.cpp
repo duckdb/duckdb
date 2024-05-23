@@ -379,7 +379,9 @@ void WriteAheadLog::WriteAlter(const AlterInfo &info) {
 // FLUSH
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::Flush() {
-	D_ASSERT(writer);
+	if (!writer) {
+		return;
+	}
 
 	// write an empty entry
 	WriteAheadLogSerializer serializer(*this, WALType::WAL_FLUSH);

@@ -41,8 +41,9 @@ public:
 
 	void SetReadWrite() override;
 
+	bool ShouldWriteToWAL(AttachedDatabase &db);
 	ErrorData WriteToWAL(AttachedDatabase &db) noexcept;
-		//! Commit the current transaction with the given commit identifier. Returns an error message if the transaction
+	//! Commit the current transaction with the given commit identifier. Returns an error message if the transaction
 	//! commit failed, or an empty string if the commit was sucessful
 	ErrorData Commit(AttachedDatabase &db, transaction_t commit_id, bool checkpoint) noexcept;
 	//! Returns whether or not a commit of this transaction should trigger an automatic checkpoint
@@ -67,6 +68,9 @@ public:
 	}
 
 	unique_ptr<StorageLockKey> TryGetCheckpointLock();
+	bool HasWriteLock() const {
+		return write_lock.get();
+	}
 
 private:
 	DuckTransactionManager &transaction_manager;

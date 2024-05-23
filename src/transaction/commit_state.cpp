@@ -19,8 +19,7 @@
 
 namespace duckdb {
 
-CommitState::CommitState(transaction_t commit_id)
-    : commit_id(commit_id) {
+CommitState::CommitState(transaction_t commit_id) : commit_id(commit_id) {
 }
 
 void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr) {
