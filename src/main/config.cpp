@@ -113,6 +113,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(ProfileOutputSetting),
     DUCKDB_LOCAL(ProfilingModeSetting),
     DUCKDB_LOCAL_ALIAS("profiling_output", ProfileOutputSetting),
+    DUCKDB_LOCAL(CustomProfilingSettings),
     DUCKDB_LOCAL(ProgressBarTimeSetting),
     DUCKDB_LOCAL(SchemaSetting),
     DUCKDB_LOCAL(SearchPathSetting),

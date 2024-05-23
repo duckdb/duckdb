@@ -644,6 +644,71 @@ Value EnableProfilingSetting::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Custom Profiling Settings
+//===--------------------------------------------------------------------===//
+
+static profiler_settings_t FillTreeNodeSettings(unordered_map<string, string> &json) {
+	profiler_settings_t metrics;
+
+	string invalid_settings;
+	for (auto &entry : json) {
+		MetricsType setting;
+		try {
+			setting = EnumUtil::FromString<MetricsType>(StringUtil::Upper(entry.first));
+		} catch (std::exception &ex) {
+			if (!invalid_settings.empty()) {
+				invalid_settings += ", ";
+			}
+			invalid_settings += entry.first;
+			continue;
+		}
+		if (StringUtil::Lower(entry.second) == "true") {
+			metrics.insert(setting);
+		}
+	}
+
+	if (!invalid_settings.empty()) {
+		throw IOException("Invalid custom profiler settings: \"%s\"", invalid_settings);
+	}
+	return metrics;
+}
+
+void CustomProfilingSettings::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+
+	// parse the file content
+	unordered_map<string, string> json;
+	try {
+		json = StringUtil::ParseJSONMap(input.ToString());
+	} catch (std::exception &ex) {
+		throw IOException("Could not parse the custom profiler settings file due to incorrect JSON: \"%s\".  Make sure "
+		                  "all the keys and values start with a quote. ",
+		                  input.ToString());
+	}
+
+	config.profiler_settings = FillTreeNodeSettings(json);
+}
+
+void CustomProfilingSettings::ResetLocal(ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.profiler_settings = ProfilingInfo::DefaultSettings();
+}
+
+Value CustomProfilingSettings::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+
+	string profiling_settings_str;
+	for (auto &entry : config.profiler_settings) {
+		if (!profiling_settings_str.empty()) {
+			profiling_settings_str += ", ";
+		}
+		profiling_settings_str += EnumUtil::ToString(entry);
+	}
+
+	return Value(profiling_settings_str);
+}
+
+//===--------------------------------------------------------------------===//
 // Custom Extension Repository
 //===--------------------------------------------------------------------===//
 void CustomExtensionRepository::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
