@@ -18,9 +18,9 @@ bool PhysicalStreamingWindow::IsStreamingFunction(unique_ptr<Expression> &expr) 
 	// TODO: add more expression types here?
 	case ExpressionType::WINDOW_AGGREGATE:
 		// We can stream aggregates if they are "running totals"
-		// TODO: Support FILTER and DISTINCT
+		// TODO: Support DISTINCT
 		return wexpr.start == WindowBoundary::UNBOUNDED_PRECEDING && wexpr.end == WindowBoundary::CURRENT_ROW_ROWS &&
-		       !wexpr.filter_expr && !wexpr.distinct;
+		       !wexpr.distinct;
 	case ExpressionType::WINDOW_FIRST_VALUE:
 	case ExpressionType::WINDOW_PERCENT_RANK:
 	case ExpressionType::WINDOW_RANK:
@@ -165,7 +165,7 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 				D_ASSERT(GetTypeIdSize(result.GetType().InternalType()) == sizeof(int64_t));
 				auto data = FlatVector::GetData<int64_t>(result);
 				int64_t start_row = gstate.row_number;
-				for (idx_t i = 0; i < input.size(); ++i) {
+				for (idx_t i = 0; i < count; ++i) {
 					data[i] = NumericCast<int64_t>(start_row + NumericCast<int64_t>(i));
 				}
 				break;
@@ -183,6 +183,23 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 			DataChunk payload;
 			payload.Initialize(allocator, payload_types);
 			executor.Execute(input, payload);
+
+			// Compute the FILTER mask (if any)
+			vector<validity_t> filter_bits;
+			ValidityMask filter_mask;
+			if (wexpr.filter_expr) {
+				ExpressionExecutor filter_executor(context.client);
+				filter_executor.AddExpression(*wexpr.filter_expr);
+				SelectionVector filter_sel(count);
+				const auto filtered = filter_executor.SelectExpression(input, filter_sel);
+				if (filtered < count) {
+					filter_bits.resize(ValidityMask::ValidityMaskSize(count), 0);
+					filter_mask.Initialize(filter_bits.data());
+					for (idx_t f = 0; f < filtered; ++f) {
+						filter_mask.SetValid(filter_sel.get_index(f));
+					}
+				}
+			}
 
 			// Iterate through them using a single SV
 			payload.Flatten();
@@ -203,13 +220,14 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 			}
 
 			// Update the state and finalize it one row at a time.
-			for (idx_t i = 0; i < input.size(); ++i) {
+			for (idx_t i = 0; i < count; ++i) {
 				sel.set_index(0, i);
 				for (const auto struct_idx : structs) {
 					row.data[struct_idx].Slice(payload.data[struct_idx], sel, 1);
 				}
-				// TODO: FILTER and DISTINCT would just skip this.
-				aggregate.update(row.data.data(), aggr_input_data, row.ColumnCount(), statev, 1);
+				if (filter_mask.RowIsValid(i)) {
+					aggregate.update(row.data.data(), aggr_input_data, row.ColumnCount(), statev, 1);
+				}
 				aggregate.finalize(statev, aggr_input_data, result, 1, i);
 			}
 			break;

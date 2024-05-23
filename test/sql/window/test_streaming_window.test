@@ -36,13 +36,13 @@ query TT
 EXPLAIN
 SELECT j, COUNT(j) FILTER(WHERE i = 2) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM integers;
 ----
-physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
 
 query TT
 EXPLAIN
 SELECT j, SUM(j) FILTER(WHERE i = 2) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM integers;
 ----
-physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
 
 # DISTINCT is not supported for  streaming windows
 query TT
