@@ -370,7 +370,7 @@
 /* #undef JEMALLOC_PURGE_MADVISE_DONTNEED_ZEROS */
 
 /* Defined if madvise(2) is available but MADV_FREE is not (x86 Linux only). */
-#undef JEMALLOC_DEFINE_MADVISE_FREE
+#define JEMALLOC_DEFINE_MADVISE_FREE
 
 /*
  * Defined if MADV_DO[NT]DUMP is supported as an argument to madvise.
