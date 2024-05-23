@@ -145,13 +145,19 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	auto view_binder = Binder::CreateBinder(context);
 	auto &dependencies = base.dependencies;
 	auto &catalog = Catalog::GetCatalog(context, base.catalog);
-	view_binder->SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
-		if (&catalog != &entry.ParentCatalog()) {
-			// Don't register dependencies between catalogs
-			return;
-		}
-		dependencies.AddDependency(entry);
-	});
+
+	auto &db_config = DBConfig::GetConfig(context);
+	auto should_create_dependencies = db_config.options.enable_view_dependencies;
+
+	if (should_create_dependencies) {
+		view_binder->SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
+			if (&catalog != &entry.ParentCatalog()) {
+				// Don't register dependencies between catalogs
+				return;
+			}
+			dependencies.AddDependency(entry);
+		});
+	}
 	view_binder->can_contain_nulls = true;
 
 	auto copy = base.query->Copy();
