@@ -87,7 +87,9 @@ void CSVIterator::SetCurrentPositionToBoundary() {
 
 void CSVIterator::SetCurrentBoundaryToPosition() {
 	boundary.buffer_idx = pos.buffer_idx;
-	boundary.buffer_pos = pos.buffer_pos;
+	boundary.end_pos = ((pos.buffer_pos + CSVIterator::BYTES_PER_THREAD - 1) / CSVIterator::BYTES_PER_THREAD) *
+	                   CSVIterator::BYTES_PER_THREAD;
+	boundary.buffer_pos = boundary.end_pos - CSVIterator::BYTES_PER_THREAD;
 	is_set = true;
 }
 

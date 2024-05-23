@@ -256,3 +256,29 @@ from read_csv(['__TEST_DIR__/skip_2.csv','__TEST_DIR__/skip_2.csv','__TEST_DIR__
 1	2	3
 1	2	3
 1	2	3
+
+require tpch
+
+statement ok
+CALL dbgen(sf=0.1);
+
+# Lineitem has about 75 mb
+statement ok
+COPY lineitem TO '__TEST_DIR__/lineitem.csv' (DELIMITER '|', HEADER);
+
+# Lets check skipping ~ 15 mb
+query I
+select count(*) from read_csv('__TEST_DIR__/lineitem.csv')
+----
+600572
+
+query I
+select count(*) from read_csv('__TEST_DIR__/lineitem.csv', skip=158310)
+----
+442263
+
+# Lets check skipping ~ 40 mb
+query I
+select count(*) from read_csv('__TEST_DIR__/lineitem.csv', skip=474930)
+----
+125643
