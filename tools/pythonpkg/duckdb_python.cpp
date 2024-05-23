@@ -815,15 +815,15 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    "Load an installed extension", py::arg("extension"), py::kw_only(), py::arg("conn") = py::none());
 	m.def(
 	    "project",
-	    [](const PandasDataFrame &df, const py::args &args, const py::kwargs &kwargs,
+	    [](const PandasDataFrame &df, const py::args &args, const string &groups,
 	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
-		    return conn->FromDF(df)->Project(args, kwargs);
+		    return conn->FromDF(df)->Project(args, groups);
 	    },
-	    "Project the relation object by the projection in project_expr", py::arg("df"), py::arg("project_expr"),
-	    py::kw_only(), py::arg("conn") = py::none());
+	    "Project the relation object by the projection in project_expr", py::arg("df"), py::kw_only(),
+	    py::arg("groups") = "", py::arg("conn") = py::none());
 	m.def(
 	    "distinct",
 	    [](const PandasDataFrame &df, shared_ptr<DuckDBPyConnection> conn = nullptr) {
@@ -848,8 +848,13 @@ static void InitializeConnectionMethods(py::module_ &m) {
 		                            quoting, encoding, compression, overwrite, per_thread_output, use_tmp_file,
 		                            partition_by);
 	    },
-	    "Write the relation object to a CSV file in 'file_name'", py::arg("df"), py::arg("*args"), py::kw_only(),
-	    py::arg("conn") = py::none());
+	    "Write the relation object to a CSV file in 'file_name'", py::arg("df"), py::arg("filename"), py::kw_only(),
+	    py::arg("sep") = py::none(), py::arg("na_rep") = py::none(), py::arg("header") = py::none(),
+	    py::arg("quotechar") = py::none(), py::arg("escapechar") = py::none(), py::arg("date_format") = py::none(),
+	    py::arg("timestamp_format") = py::none(), py::arg("quoting") = py::none(), py::arg("encoding") = py::none(),
+	    py::arg("compression") = py::none(), py::arg("overwrite") = py::none(),
+	    py::arg("per_thread_output") = py::none(), py::arg("use_tmp_file") = py::none(),
+	    py::arg("partition_by") = py::none(), py::arg("conn") = py::none());
 	m.def(
 	    "aggregate",
 	    [](const PandasDataFrame &df, const string &expr, const string &groups,

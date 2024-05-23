@@ -4,8 +4,15 @@
         "function": "Project",
         "args": [
             {
-                "name": "project_expr",
+                "name": "*args",
                 "type": "str"
+            }
+        ],
+        "kwargs": [
+            {
+                "name": "groups",
+                "type": "str",
+                "default": "\"\""
             }
         ],
         "docs": "Project the relation object by the projection in project_expr",
@@ -22,8 +29,80 @@
         "function": "ToCSV",
         "args": [
             {
-                "name": "*args",
-                "type": "Any"
+                "name": "filename",
+                "type": "str"
+            }
+        ],
+        "kwargs": [
+            {
+                "name": "sep",
+                "type": "Optional[str]",
+                "default": "None"
+            },
+            {
+                "name": "na_rep",
+                "type": "Optional[str]",
+                "default": "None"
+            },
+            {
+                "name": "header",
+                "type": "Optional[bool]",
+                "default": "None"
+            },
+            {
+                "name": "quotechar",
+                "type": "Optional[str]",
+                "default": "None"
+            },
+            {
+                "name": "escapechar",
+                "type": "Optional[str]",
+                "default": "None"
+            },
+            {
+                "name": "date_format",
+                "type": "Optional[str]",
+                "default": "None"
+            },
+            {
+                "name": "timestamp_format",
+                "type": "Optional[str]",
+                "default": "None"
+            },
+            {
+                "name": "quoting",
+                "type": "Optional[str | int]",
+                "default": "None"
+            },
+            {
+                "name": "encoding",
+                "type": "Optional[str]",
+                "default": "None"
+            },
+            {
+                "name": "compression",
+                "type": "Optional[str]",
+                "default": "None"
+            },
+            {
+                "name": "overwrite",
+                "type": "Optional[bool]",
+                "default": "None"
+            },
+            {
+                "name": "per_thread_output",
+                "type": "Optional[bool]",
+                "default": "None"
+            },
+            {
+                "name": "use_tmp_file",
+                "type": "Optional[bool]",
+                "default": "None"
+            },
+            {
+                "name": "partition_by",
+                "type": "Optional[List[str]]",
+                "default": "None"
             }
         ],
         "docs": "Write the relation object to a CSV file in 'file_name'",

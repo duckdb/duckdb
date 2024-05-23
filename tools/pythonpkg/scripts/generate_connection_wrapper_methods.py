@@ -108,6 +108,9 @@ def generate():
     def create_arguments(arguments) -> list:
         result = []
         for arg in arguments:
+            if arg['name'] == '*args':
+                # py::args() should not have a corresponding py::arg(<name>)
+                continue
             argument = f"py::arg(\"{arg['name']}\")"
             if 'allow_none' in arg:
                 value = str(arg['allow_none']).lower()
