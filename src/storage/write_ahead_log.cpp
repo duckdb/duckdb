@@ -98,7 +98,7 @@ private:
 class WriteAheadLogSerializer {
 public:
 	WriteAheadLogSerializer(WriteAheadLog &wal, WALType wal_type)
-	    : wal(wal), checksum_writer(wal), serializer(checksum_writer) {
+	    : checksum_writer(wal), serializer(checksum_writer) {
 		if (!wal.Initialized()) {
 			wal.Initialize();
 		}
@@ -109,25 +109,21 @@ public:
 	}
 
 	void End() {
-		D_ASSERT(wal.Initialized());
 		serializer.End();
 		checksum_writer.Flush();
 	}
 
 	template <class T>
 	void WriteProperty(const field_id_t field_id, const char *tag, const T &value) {
-		D_ASSERT(wal.Initialized());
 		serializer.WriteProperty(field_id, tag, value);
 	}
 
 	template <class FUNC>
 	void WriteList(const field_id_t field_id, const char *tag, idx_t count, FUNC func) {
-		D_ASSERT(wal.Initialized());
 		serializer.WriteList(field_id, tag, count, func);
 	}
 
 private:
-	WriteAheadLog &wal;
 	ChecksumWriter checksum_writer;
 	BinarySerializer serializer;
 };
