@@ -71,7 +71,8 @@ static py::list PyTokenize(const string &query) {
 }
 
 static void InitializeConnectionMethods(py::module_ &m) {
-	// We define these "wrapper" methods manually because they are overloaded
+
+	// START OF CONNECTION WRAPPER
 	m.def(
 	    "sql",
 	    [](const py::object &query, string alias = "", const py::object &params = py::none(),
@@ -83,6 +84,9 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    },
 	    py::arg("query"), py::arg("alias") = "", py::arg("params") = py::none(), py::kw_only(),
 	    py::arg("conn") = py::none());
+	// END OF CONNECTION WRAPPER
+
+	// We define these "wrapper" methods manually because they are overloaded
 	m.def(
 	    "arrow",
 	    [](idx_t rows_per_batch, shared_ptr<DuckDBPyConnection> conn) -> duckdb::pyarrow::Table {
