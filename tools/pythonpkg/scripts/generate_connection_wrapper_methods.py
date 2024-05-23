@@ -119,12 +119,12 @@ def generate():
             names = method['name']
         else:
             names = [method['name']]
+        if 'kwargs' not in method:
+            method['kwargs'] = []
+        method['kwargs'].append({'name': 'conn', 'type': 'Optional[DuckDBPyConnection]', 'default': 'None'})
         for name in names:
             function_name = method['function']
             lambda_def = get_lambda_definition(method_definitions[function_name])
-            if 'kwargs' not in method:
-                method['kwargs'] = []
-            method['kwargs'].append({'name': 'conn', 'type': 'Optional[DuckDBPyConnection]', 'default': 'None'})
             body.append(create_definition(name, method, lambda_def))
 
     # ---- End of generation code ----

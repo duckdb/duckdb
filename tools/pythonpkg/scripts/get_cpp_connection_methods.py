@@ -16,7 +16,11 @@ def get_string(input: clang.cindex.SourceRange) -> str:
 
 
 class FunctionParam:
-    def __init__(self, name, proto):
+    def __init__(self, name: str, proto: str):
+        if proto.endswith('='):
+            # We currently can't retrieve the default value, the definition of the arg just ends in '='
+            # Instead we remove this and rely on the py::arg(...) = ... to set a default value
+            proto = proto[:-2]
         self.proto = proto
         self.name = name
 
@@ -39,6 +43,8 @@ def traverse(node, methods_dict):
         return_type = node.type.get_result().spelling
         is_void = return_type == "void"
         params = [FunctionParam(x.spelling, get_string(x.extent)) for x in node.get_arguments()]
+
+        arguments = list(node.get_arguments())
 
         methods_dict[name] = ConnectionMethod(name, params, is_void)
     else:

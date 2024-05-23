@@ -121,9 +121,9 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("conn") = py::none());
 	m.def(
 	    "create_function",
-	    [](const string &name, const py::function &udf, const py::object &arguments =,
-	       const shared_ptr<DuckDBPyType> &return_type =, PythonUDFType type =, FunctionNullHandling null_handling =,
-	       PythonExceptionHandling exception_handling =, bool side_effects = false,
+	    [](const string &name, const py::function &udf, const py::object &arguments,
+	       const shared_ptr<DuckDBPyType> &return_type, PythonUDFType type, FunctionNullHandling null_handling,
+	       PythonExceptionHandling exception_handling, bool side_effects = false,
 	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
@@ -164,7 +164,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 		    return conn->Type(type_str);
 	    },
 	    "Create a type object by parsing the 'type_str' string", py::arg("type_str"), py::kw_only(),
-	    py::arg("conn") = py::none(), py::arg("conn") = py::none());
+	    py::arg("conn") = py::none());
 	m.def(
 	    "type",
 	    [](const string &type_str, shared_ptr<DuckDBPyConnection> conn = nullptr) {
@@ -174,7 +174,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 		    return conn->Type(type_str);
 	    },
 	    "Create a type object by parsing the 'type_str' string", py::arg("type_str"), py::kw_only(),
-	    py::arg("conn") = py::none(), py::arg("conn") = py::none(), py::arg("conn") = py::none());
+	    py::arg("conn") = py::none());
 	m.def(
 	    "array_type",
 	    [](const shared_ptr<DuckDBPyType> &type, idx_t size, shared_ptr<DuckDBPyConnection> conn = nullptr) {
@@ -253,8 +253,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 		    }
 		    return conn->StructType(fields);
 	    },
-	    "Create a struct type object from 'fields'", py::arg("fields"), py::kw_only(), py::arg("conn") = py::none(),
-	    py::arg("conn") = py::none());
+	    "Create a struct type object from 'fields'", py::arg("fields"), py::kw_only(), py::arg("conn") = py::none());
 	m.def(
 	    "map_type",
 	    [](const shared_ptr<DuckDBPyType> &key_type, const shared_ptr<DuckDBPyType> &value_type,
@@ -277,7 +276,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    "Create a duplicate of the current connection", py::kw_only(), py::arg("conn") = py::none());
 	m.def(
 	    "execute",
-	    [](const py::object &query, py::object params =, bool many = false,
+	    [](const py::object &query, py::object params, bool many = false,
 	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
@@ -289,7 +288,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("conn") = py::none());
 	m.def(
 	    "executemany",
-	    [](const py::object &query, py::object params =, shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	    [](const py::object &query, py::object params, shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
@@ -371,7 +370,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 		    return conn->FetchDF(date_as_object);
 	    },
 	    "Fetch a result as DataFrame following execute()", py::kw_only(), py::arg("date_as_object") = false,
-	    py::arg("conn") = py::none(), py::arg("conn") = py::none());
+	    py::arg("conn") = py::none());
 	m.def(
 	    "df",
 	    [](bool date_as_object, shared_ptr<DuckDBPyConnection> conn = nullptr) {
@@ -381,7 +380,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 		    return conn->FetchDF(date_as_object);
 	    },
 	    "Fetch a result as DataFrame following execute()", py::kw_only(), py::arg("date_as_object") = false,
-	    py::arg("conn") = py::none(), py::arg("conn") = py::none(), py::arg("conn") = py::none());
+	    py::arg("conn") = py::none());
 	m.def(
 	    "fetch_df_chunk",
 	    [](const idx_t vectors_per_chunk = 1, bool date_as_object = false,
@@ -422,7 +421,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 		    return conn->FetchArrow(rows_per_batch);
 	    },
 	    "Fetch a result as Arrow table following execute()", py::arg("rows_per_batch") = 1000000, py::kw_only(),
-	    py::arg("conn") = py::none(), py::arg("conn") = py::none());
+	    py::arg("conn") = py::none());
 	m.def(
 	    "fetch_record_batch",
 	    [](const idx_t rows_per_batch, shared_ptr<DuckDBPyConnection> conn = nullptr) {
@@ -541,7 +540,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("conn") = py::none());
 	m.def(
 	    "values",
-	    [](py::object params =, shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	    [](py::object params, shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
@@ -551,7 +550,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("conn") = py::none());
 	m.def(
 	    "table_function",
-	    [](const string &fname, py::object params =, shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	    [](const string &fname, py::object params, shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
@@ -561,9 +560,9 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("parameters") = py::none(), py::kw_only(), py::arg("conn") = py::none());
 	m.def(
 	    "read_json",
-	    [](const string &filename, const Optional<py::object> &columns =, const Optional<py::object> &sample_size =,
-	       const Optional<py::object> &maximum_depth =, const Optional<py::str> &records =,
-	       const Optional<py::str> &format =, shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	    [](const string &filename, const Optional<py::object> &columns, const Optional<py::object> &sample_size,
+	       const Optional<py::object> &maximum_depth, const Optional<py::str> &records, const Optional<py::str> &format,
+	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
@@ -584,7 +583,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("conn") = py::none());
 	m.def(
 	    "sql",
-	    [](const py::object &query, string alias =, const py::object &params =,
+	    [](const py::object &query, string alias, const py::object &params,
 	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
@@ -597,7 +596,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("conn") = py::none());
 	m.def(
 	    "query",
-	    [](const py::object &query, string alias =, const py::object &params =,
+	    [](const py::object &query, string alias, const py::object &params,
 	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
@@ -607,10 +606,10 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, otherwise "
 	    "run the query as-is.",
 	    py::arg("query"), py::kw_only(), py::arg("alias") = "", py::arg("params") = py::none(),
-	    py::arg("conn") = py::none(), py::arg("conn") = py::none());
+	    py::arg("conn") = py::none());
 	m.def(
 	    "from_query",
-	    [](const py::object &query, string alias =, const py::object &params =,
+	    [](const py::object &query, string alias, const py::object &params,
 	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
@@ -620,16 +619,16 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, otherwise "
 	    "run the query as-is.",
 	    py::arg("query"), py::kw_only(), py::arg("alias") = "", py::arg("params") = py::none(),
-	    py::arg("conn") = py::none(), py::arg("conn") = py::none(), py::arg("conn") = py::none());
+	    py::arg("conn") = py::none());
 	m.def(
 	    "read_csv",
-	    [](const py::object &name, const py::object &header =, const py::object &compression =, const py::object &sep =,
-	       const py::object &delimiter =, const py::object &dtype =, const py::object &na_values =,
-	       const py::object &skiprows =, const py::object &quotechar =, const py::object &escapechar =,
-	       const py::object &encoding =, const py::object &parallel =, const py::object &date_format =,
-	       const py::object &timestamp_format =, const py::object &sample_size =, const py::object &all_varchar =,
-	       const py::object &normalize_names =, const py::object &filename =, const py::object &null_padding =,
-	       const py::object &names =, shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	    [](const py::object &name, const py::object &header, const py::object &compression, const py::object &sep,
+	       const py::object &delimiter, const py::object &dtype, const py::object &na_values,
+	       const py::object &skiprows, const py::object &quotechar, const py::object &escapechar,
+	       const py::object &encoding, const py::object &parallel, const py::object &date_format,
+	       const py::object &timestamp_format, const py::object &sample_size, const py::object &all_varchar,
+	       const py::object &normalize_names, const py::object &filename, const py::object &null_padding,
+	       const py::object &names, shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
@@ -647,13 +646,13 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("null_padding") = py::none(), py::arg("names") = py::none(), py::arg("conn") = py::none());
 	m.def(
 	    "from_csv_auto",
-	    [](const py::object &name, const py::object &header =, const py::object &compression =, const py::object &sep =,
-	       const py::object &delimiter =, const py::object &dtype =, const py::object &na_values =,
-	       const py::object &skiprows =, const py::object &quotechar =, const py::object &escapechar =,
-	       const py::object &encoding =, const py::object &parallel =, const py::object &date_format =,
-	       const py::object &timestamp_format =, const py::object &sample_size =, const py::object &all_varchar =,
-	       const py::object &normalize_names =, const py::object &filename =, const py::object &null_padding =,
-	       const py::object &names =, shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	    [](const py::object &name, const py::object &header, const py::object &compression, const py::object &sep,
+	       const py::object &delimiter, const py::object &dtype, const py::object &na_values,
+	       const py::object &skiprows, const py::object &quotechar, const py::object &escapechar,
+	       const py::object &encoding, const py::object &parallel, const py::object &date_format,
+	       const py::object &timestamp_format, const py::object &sample_size, const py::object &all_varchar,
+	       const py::object &normalize_names, const py::object &filename, const py::object &null_padding,
+	       const py::object &names, shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
@@ -668,8 +667,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("encoding") = py::none(), py::arg("parallel") = py::none(), py::arg("date_format") = py::none(),
 	    py::arg("timestamp_format") = py::none(), py::arg("sample_size") = py::none(),
 	    py::arg("all_varchar") = py::none(), py::arg("normalize_names") = py::none(), py::arg("filename") = py::none(),
-	    py::arg("null_padding") = py::none(), py::arg("names") = py::none(), py::arg("conn") = py::none(),
-	    py::arg("conn") = py::none());
+	    py::arg("null_padding") = py::none(), py::arg("names") = py::none(), py::arg("conn") = py::none());
 	m.def(
 	    "from_df",
 	    [](const PandasDataFrame &value, shared_ptr<DuckDBPyConnection> conn = nullptr) {
@@ -693,7 +691,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	m.def(
 	    "from_parquet",
 	    [](const string &file_glob, bool binary_as_string, bool file_row_number, bool filename, bool hive_partitioning,
-	       bool union_by_name, const py::object &compression =, shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	       bool union_by_name, const py::object &compression, shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
@@ -707,7 +705,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	m.def(
 	    "read_parquet",
 	    [](const string &file_glob, bool binary_as_string, bool file_row_number, bool filename, bool hive_partitioning,
-	       bool union_by_name, const py::object &compression =, shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	       bool union_by_name, const py::object &compression, shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
@@ -717,11 +715,11 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    "Create a relation object from the Parquet files in file_glob", py::arg("file_glob"),
 	    py::arg("binary_as_string") = false, py::kw_only(), py::arg("file_row_number") = false,
 	    py::arg("filename") = false, py::arg("hive_partitioning") = false, py::arg("union_by_name") = false,
-	    py::arg("compression") = py::none(), py::arg("conn") = py::none(), py::arg("conn") = py::none());
+	    py::arg("compression") = py::none(), py::arg("conn") = py::none());
 	m.def(
 	    "from_parquet",
 	    [](const vector<string> &file_globs, bool binary_as_string, bool file_row_number, bool filename,
-	       bool hive_partitioning, bool union_by_name, const py::object &compression =,
+	       bool hive_partitioning, bool union_by_name, const py::object &compression,
 	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
@@ -736,7 +734,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	m.def(
 	    "read_parquet",
 	    [](const vector<string> &file_globs, bool binary_as_string, bool file_row_number, bool filename,
-	       bool hive_partitioning, bool union_by_name, const py::object &compression =,
+	       bool hive_partitioning, bool union_by_name, const py::object &compression,
 	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
@@ -747,7 +745,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    "Create a relation object from the Parquet files in file_globs", py::arg("file_globs"),
 	    py::arg("binary_as_string") = false, py::kw_only(), py::arg("file_row_number") = false,
 	    py::arg("filename") = false, py::arg("hive_partitioning") = false, py::arg("union_by_name") = false,
-	    py::arg("compression") = py::none(), py::arg("conn") = py::none(), py::arg("conn") = py::none());
+	    py::arg("compression") = py::none(), py::arg("conn") = py::none());
 	m.def(
 	    "from_substrait",
 	    [](py::bytes &proto, shared_ptr<DuckDBPyConnection> conn = nullptr) {
