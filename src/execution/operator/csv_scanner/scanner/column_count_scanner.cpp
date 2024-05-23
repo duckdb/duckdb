@@ -50,9 +50,11 @@ ColumnCountScanner::ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manag
 }
 
 unique_ptr<StringValueScanner> ColumnCountScanner::UpgradeToStringValueScanner() {
-	auto scanner = make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, error_handler, nullptr, true);
-	scanner->SkipCSVRows(scanner->state_machine->dialect_options.skip_rows.GetValue());
-	return scanner;
+	auto iterator = SkipCSVRows(buffer_manager, state_machine, state_machine->dialect_options.skip_rows.GetValue());
+	if (iterator.done) {
+		return make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, error_handler, nullptr, true);
+	}
+	return make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, error_handler, nullptr, true, iterator);
 }
 
 ColumnCountResult &ColumnCountScanner::ParseChunk() {

@@ -111,7 +111,7 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 	if (iterator.first_one) {
 		lines_read +=
 		    state_machine.dialect_options.skip_rows.GetValue() + state_machine.dialect_options.header.GetValue();
-		if (lines_read == 0){
+		if (lines_read == 0) {
 			SkipBOM();
 		}
 	}
@@ -948,7 +948,6 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 
 void StringValueScanner::Initialize() {
 	states.Initialize();
-
 	if (result.result_size != 1 && !(sniffing && state_machine->options.null_padding &&
 	                                 !state_machine->options.dialect_options.skip_rows.IsSetByUser())) {
 		SetStart();
@@ -1233,8 +1232,8 @@ bool StringValueScanner::MoveToNextBuffer() {
 }
 
 void StringValueResult::SkipBOM() {
-	if (buffer_size >= 3 && buffer_ptr[0] == '\xEF' && buffer_ptr[1] == '\xBB' &&
-	    buffer_ptr[2] == '\xBF' && iterator.pos.buffer_pos == 0) {
+	if (buffer_size >= 3 && buffer_ptr[0] == '\xEF' && buffer_ptr[1] == '\xBB' && buffer_ptr[2] == '\xBF' &&
+	    iterator.pos.buffer_pos == 0) {
 		iterator.pos.buffer_pos = 3;
 	}
 }
