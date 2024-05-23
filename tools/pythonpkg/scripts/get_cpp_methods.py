@@ -4,11 +4,14 @@ import os
 from typing import List, Dict
 
 scripts_folder = os.path.dirname(os.path.abspath(__file__))
-SOURCE_PATH = os.path.join(scripts_folder, '..', 'src', 'include', 'duckdb_python', 'pyconnection', 'pyconnection.hpp')
-assert os.path.isfile(SOURCE_PATH)
 
-with open(SOURCE_PATH, 'r') as file:
-    file_contents = file.read()
+file_contents: str = ''
+
+
+def load_content(path):
+    global file_contents
+    with open(path, 'r') as file:
+        file_contents = file.read()
 
 
 def get_string(input: clang.cindex.SourceRange) -> str:
@@ -32,33 +35,40 @@ class ConnectionMethod:
         self.is_void = is_void
 
 
-def traverse(node, methods_dict):
+def traverse(class_name, node, methods_dict):
     if node.kind == clang.cindex.CursorKind.STRUCT_DECL or node.kind == clang.cindex.CursorKind.CLASS_DECL:
-        if node.spelling != "DuckDBPyConnection":
+        if node.spelling != class_name:
             return
         for child in node.get_children():
-            traverse(child, methods_dict)
+            traverse(class_name, child, methods_dict)
     elif node.kind == clang.cindex.CursorKind.CXX_METHOD:
         name = node.spelling
         return_type = node.type.get_result().spelling
         is_void = return_type == "void"
         params = [FunctionParam(x.spelling, get_string(x.extent)) for x in node.get_arguments()]
 
-        arguments = list(node.get_arguments())
-
         methods_dict[name] = ConnectionMethod(name, params, is_void)
     else:
         for child in node.get_children():
-            traverse(child, methods_dict)
+            traverse(class_name, child, methods_dict)
 
 
-def get_methods() -> Dict[str, ConnectionMethod]:
+def get_methods(class_name: str) -> Dict[str, ConnectionMethod]:
+    CLASSES = {
+        'DuckDBPyConnection': os.path.join(
+            scripts_folder, '..', 'src', 'include', 'duckdb_python', 'pyconnection', 'pyconnection.hpp'
+        ),
+        'DuckDBPyRelation': os.path.join(scripts_folder, '..', 'src', 'include', 'duckdb_python', 'pyrelation.hpp'),
+    }
     # Create a dictionary to store method names and prototypes
     methods_dict = {}
 
+    path = CLASSES[class_name]
+    load_content(path)
+
     index = clang.cindex.Index.create()
-    tu = index.parse(SOURCE_PATH, args=['-std=c++11'])
-    traverse(tu.cursor, methods_dict)
+    tu = index.parse(path, args=['-std=c++11'])
+    traverse(class_name, tu.cursor, methods_dict)
 
     return methods_dict
 

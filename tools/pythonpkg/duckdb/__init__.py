@@ -127,6 +127,17 @@ from .duckdb import (
 	get_table_names,
 	install_extension,
 	load_extension,
+	project,
+	distinct,
+	write_csv,
+	aggregate,
+	alias,
+	filter,
+	limit,
+	order,
+	query_df,
+	description,
+	rowcount,
 )
 
 _exported_symbols.extend([
@@ -199,6 +210,17 @@ _exported_symbols.extend([
 	'get_table_names',
 	'install_extension',
 	'load_extension',
+	'project',
+	'distinct',
+	'write_csv',
+	'aggregate',
+	'alias',
+	'filter',
+	'limit',
+	'order',
+	'query_df',
+	'description',
+	'rowcount',
 ])
 
 # END OF CONNECTION WRAPPER

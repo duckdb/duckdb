@@ -813,6 +813,124 @@ static void InitializeConnectionMethods(py::module_ &m) {
 		    conn->LoadExtension(extension);
 	    },
 	    "Load an installed extension", py::arg("extension"), py::kw_only(), py::arg("conn") = py::none());
+	m.def(
+	    "project",
+	    [](const PandasDataFrame &df, const py::args &args, const py::kwargs &kwargs,
+	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
+		    if (!conn) {
+			    conn = DuckDBPyConnection::DefaultConnection();
+		    }
+		    return conn->FromDF(df)->Project(args, kwargs);
+	    },
+	    "Project the relation object by the projection in project_expr", py::arg("df"), py::arg("project_expr"),
+	    py::kw_only(), py::arg("conn") = py::none());
+	m.def(
+	    "distinct",
+	    [](const PandasDataFrame &df, shared_ptr<DuckDBPyConnection> conn = nullptr) {
+		    if (!conn) {
+			    conn = DuckDBPyConnection::DefaultConnection();
+		    }
+		    return conn->FromDF(df)->Distinct();
+	    },
+	    "Retrieve distinct rows from this relation object", py::arg("df"), py::kw_only(), py::arg("conn") = py::none());
+	m.def(
+	    "write_csv",
+	    [](const PandasDataFrame &df, const string &filename, const py::object &sep, const py::object &na_rep,
+	       const py::object &header, const py::object &quotechar, const py::object &escapechar,
+	       const py::object &date_format, const py::object &timestamp_format, const py::object &quoting,
+	       const py::object &encoding, const py::object &compression, const py::object &overwrite,
+	       const py::object &per_thread_output, const py::object &use_tmp_file, const py::object &partition_by,
+	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
+		    if (!conn) {
+			    conn = DuckDBPyConnection::DefaultConnection();
+		    }
+		    conn->FromDF(df)->ToCSV(filename, sep, na_rep, header, quotechar, escapechar, date_format, timestamp_format,
+		                            quoting, encoding, compression, overwrite, per_thread_output, use_tmp_file,
+		                            partition_by);
+	    },
+	    "Write the relation object to a CSV file in 'file_name'", py::arg("df"), py::arg("*args"), py::kw_only(),
+	    py::arg("conn") = py::none());
+	m.def(
+	    "aggregate",
+	    [](const PandasDataFrame &df, const string &expr, const string &groups,
+	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
+		    if (!conn) {
+			    conn = DuckDBPyConnection::DefaultConnection();
+		    }
+		    return conn->FromDF(df)->Aggregate(expr, groups);
+	    },
+	    "Compute the aggregate aggr_expr by the optional groups group_expr on the relation", py::arg("df"),
+	    py::arg("aggr_expr"), py::arg("group_expr") = "", py::kw_only(), py::arg("conn") = py::none());
+	m.def(
+	    "alias",
+	    [](const PandasDataFrame &df, const string &expr, shared_ptr<DuckDBPyConnection> conn = nullptr) {
+		    if (!conn) {
+			    conn = DuckDBPyConnection::DefaultConnection();
+		    }
+		    return conn->FromDF(df)->SetAlias(expr);
+	    },
+	    "Rename the relation object to new alias", py::arg("df"), py::arg("alias"), py::kw_only(),
+	    py::arg("conn") = py::none());
+	m.def(
+	    "filter",
+	    [](const PandasDataFrame &df, const py::object &expr, shared_ptr<DuckDBPyConnection> conn = nullptr) {
+		    if (!conn) {
+			    conn = DuckDBPyConnection::DefaultConnection();
+		    }
+		    return conn->FromDF(df)->Filter(expr);
+	    },
+	    "Filter the relation object by the filter in filter_expr", py::arg("df"), py::arg("filter_expr"), py::kw_only(),
+	    py::arg("conn") = py::none());
+	m.def(
+	    "limit",
+	    [](const PandasDataFrame &df, int64_t n, int64_t offset = 0, shared_ptr<DuckDBPyConnection> conn = nullptr) {
+		    if (!conn) {
+			    conn = DuckDBPyConnection::DefaultConnection();
+		    }
+		    return conn->FromDF(df)->Limit(n, offset);
+	    },
+	    "Only retrieve the first n rows from this relation object, starting at offset", py::arg("df"), py::arg("n"),
+	    py::arg("offset") = 0, py::kw_only(), py::arg("conn") = py::none());
+	m.def(
+	    "order",
+	    [](const PandasDataFrame &df, const string &expr, shared_ptr<DuckDBPyConnection> conn = nullptr) {
+		    if (!conn) {
+			    conn = DuckDBPyConnection::DefaultConnection();
+		    }
+		    return conn->FromDF(df)->Order(expr);
+	    },
+	    "Reorder the relation object by order_expr", py::arg("df"), py::arg("order_expr"), py::kw_only(),
+	    py::arg("conn") = py::none());
+	m.def(
+	    "query_df",
+	    [](const PandasDataFrame &df, const string &view_name, const string &sql_query,
+	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
+		    if (!conn) {
+			    conn = DuckDBPyConnection::DefaultConnection();
+		    }
+		    return conn->FromDF(df)->Query(view_name, sql_query);
+	    },
+	    "Run the given SQL query in sql_query on the view named virtual_table_name that refers to the relation object",
+	    py::arg("df"), py::arg("virtual_table_name"), py::arg("sql_query"), py::kw_only(),
+	    py::arg("conn") = py::none());
+	m.def(
+	    "description",
+	    [](shared_ptr<DuckDBPyConnection> conn = nullptr) {
+		    if (!conn) {
+			    conn = DuckDBPyConnection::DefaultConnection();
+		    }
+		    return conn->GetDescription();
+	    },
+	    "Get result set attributes, mainly column names", py::kw_only(), py::arg("conn") = py::none());
+	m.def(
+	    "rowcount",
+	    [](shared_ptr<DuckDBPyConnection> conn = nullptr) {
+		    if (!conn) {
+			    conn = DuckDBPyConnection::DefaultConnection();
+		    }
+		    return conn->GetRowcount();
+	    },
+	    "Get result set row count", py::kw_only(), py::arg("conn") = py::none());
 	// END_OF_CONNECTION_METHODS
 
 	// We define these "wrapper" methods manually because they are overloaded

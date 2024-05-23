@@ -1,6 +1,6 @@
 import os
 import json
-from get_cpp_connection_methods import get_methods, FunctionParam, ConnectionMethod
+from get_cpp_methods import get_methods, FunctionParam, ConnectionMethod
 from typing import List, Tuple
 
 os.chdir(os.path.dirname(__file__))
@@ -12,12 +12,12 @@ START_MARKER = "\t// START_OF_CONNECTION_METHODS"
 END_MARKER = "\t// END_OF_CONNECTION_METHODS"
 
 LAMBDA_FORMAT = """
-	    []({param_definitions}) {{
-		    if (!conn) {{
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }}
-		    {opt_return}conn->{function_name}({parameter_names});
-	    }}"""
+        []({param_definitions}) {{
+            if (!conn) {{
+                conn = DuckDBPyConnection::DefaultConnection();
+            }}
+            {opt_return}conn->{function_name}({parameter_names});
+        }}"""
 
 PY_INIT_FORMAT = """
 from .duckdb import (
@@ -88,7 +88,8 @@ def generate():
 
     # Collect the definitions from the pyconnection.hpp header
 
-    method_definitions = get_methods()
+    cpp_connection_defs = get_methods('DuckDBPyConnection')
+    cpp_relation_defs = get_methods('DuckDBPyRelation')
 
     DEFAULT_ARGUMENT_MAP = {
         'True': 'true',
@@ -119,17 +120,24 @@ def generate():
         return result
 
     def get_lambda_definition(name, definition: ConnectionMethod) -> str:
-        param_definitions = [x.proto for x in definition.params]
+        param_definitions = []
+        if name in SPECIAL_METHOD_NAMES:
+            param_definitions.append('const PandasDataFrame &df')
+        param_definitions.extend([x.proto for x in definition.params])
         param_definitions.append('shared_ptr<DuckDBPyConnection> conn = nullptr')
         param_definitions = ", ".join(param_definitions)
 
         param_names = [x.name for x in definition.params]
         param_names = ", ".join(param_names)
 
+        function_name = definition.name
+        if name in SPECIAL_METHOD_NAMES:
+            function_name = 'FromDF(df)->' + function_name
+
         format_dict = {
             'param_definitions': param_definitions,
             'opt_return': '' if definition.is_void else 'return ',
-            'function_name': definition.name,
+            'function_name': function_name,
             'parameter_names': param_names,
         }
         return LAMBDA_FORMAT.format_map(format_dict)
@@ -164,9 +172,30 @@ def generate():
         method['kwargs'].append({'name': 'conn', 'type': 'Optional[DuckDBPyConnection]', 'default': 'None'})
         for name in names:
             function_name = method['function']
-            lambda_def = get_lambda_definition(name, method_definitions[function_name])
+            cpp_definition = cpp_connection_defs[function_name]
+            lambda_def = get_lambda_definition(name, cpp_definition)
             body.append(create_definition(name, method, lambda_def))
+            all_names.append(name)
 
+    for method in wrapper_methods:
+        if isinstance(method['name'], list):
+            names = method['name']
+        else:
+            names = [method['name']]
+        if 'kwargs' not in method:
+            method['kwargs'] = []
+        method['kwargs'].append({'name': 'conn', 'type': 'Optional[DuckDBPyConnection]', 'default': 'None'})
+        for name in names:
+            function_name = method['function']
+            if name in SPECIAL_METHOD_NAMES:
+                cpp_definition = cpp_relation_defs[function_name]
+                if 'args' not in method:
+                    method['args'] = []
+                method['args'].insert(0, {'name': 'df', 'type': 'DataFrame'})
+            else:
+                cpp_definition = cpp_connection_defs[function_name]
+            lambda_def = get_lambda_definition(name, cpp_definition)
+            body.append(create_definition(name, method, lambda_def))
             all_names.append(name)
 
     # ---- End of generation code ----

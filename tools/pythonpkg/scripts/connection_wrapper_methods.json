@@ -8,22 +8,25 @@
                 "type": "str"
             }
         ],
+        "docs": "Project the relation object by the projection in project_expr",
         "return": "DuckDBPyRelation"
     },
     {
         "name": "distinct",
         "function": "Distinct",
+        "docs": "Retrieve distinct rows from this relation object",
         "return": "DuckDBPyRelation"
     },
     {
         "name": "write_csv",
-        "function": "WriteCSV",
+        "function": "ToCSV",
         "args": [
             {
                 "name": "*args",
                 "type": "Any"
             }
         ],
+        "docs": "Write the relation object to a CSV file in 'file_name'",
         "return": "None"
     },
     {
@@ -40,6 +43,7 @@
                 "default": "\"\""
             }
         ],
+        "docs": "Compute the aggregate aggr_expr by the optional groups group_expr on the relation",
         "return": "DuckDBPyRelation"
     },
     {
@@ -51,6 +55,7 @@
                 "type": "str"
             }
         ],
+        "docs": "Rename the relation object to new alias",
         "return": "DuckDBPyRelation"
     },
     {
@@ -62,6 +67,7 @@
                 "type": "str"
             }
         ],
+        "docs": "Filter the relation object by the filter in filter_expr",
         "return": "DuckDBPyRelation"
     },
     {
@@ -78,6 +84,7 @@
                 "default": "0"
             }
         ],
+        "docs": "Only retrieve the first n rows from this relation object, starting at offset",
         "return": "DuckDBPyRelation"
     },
     {
@@ -89,6 +96,7 @@
                 "type": "str"
             }
         ],
+        "docs": "Reorder the relation object by order_expr",
         "return": "DuckDBPyRelation"
     },
     {
@@ -104,16 +112,19 @@
                 "type": "str"
             }
         ],
+        "docs": "Run the given SQL query in sql_query on the view named virtual_table_name that refers to the relation object",
         "return": "DuckDBPyRelation"
     },
     {
         "name": "description",
         "function": "GetDescription",
+        "docs": "Get result set attributes, mainly column names",
         "return": "Optional[List[Any]]"
     },
     {
         "name": "rowcount",
         "function": "GetRowcount",
+        "docs": "Get result set row count",
         "return": "int"
     }
 ]
