@@ -17,40 +17,40 @@ unique_ptr<ParsedExpression> Transformer::TransformArrayAccess(duckdb_libpgquery
 	// node can contain multiple indices.
 	idx_t list_size = 0;
 	for (auto node = indirection_node.indirection->head; node != nullptr; node = node->next) {
-		optional_ptr<duckdb_libpgquery::PGNode> t2 = PGPointerCast<duckdb_libpgquery::PGNode>(node->data.ptr_value);
+		optional_ptr<duckdb_libpgquery::PGNode> target = PGPointerCast<duckdb_libpgquery::PGNode>(node->data.ptr_value);
 
-		switch (t2->type) {
+		switch (target->type) {
 		case duckdb_libpgquery::T_PGAIndices: {
 			// Index access.
-			auto i2 = PGCast<duckdb_libpgquery::PGAIndices>(*t2.get());
+			auto indices = PGCast<duckdb_libpgquery::PGAIndices>(*target.get());
 			vector<unique_ptr<ParsedExpression>> children;
 			children.push_back(std::move(result));
 
-			if (i2.is_slice) {
+			if (indices.is_slice) {
 				// If either the lower or upper bound is not specified, we use an empty constant LIST,
 				// which we handle in the execution.
 				auto constant_list = make_uniq<ConstantExpression>(Value::LIST(LogicalType::INTEGER, vector<Value>()));
 
-				auto lower = i2.lidx ? TransformExpression(i2.lidx) : constant_list->Copy();
+				auto lower = indices.lidx ? TransformExpression(indices.lidx) : constant_list->Copy();
 				children.push_back(std::move(lower));
-				auto upper = i2.uidx ? TransformExpression(i2.uidx) : constant_list->Copy();
+				auto upper = indices.uidx ? TransformExpression(indices.uidx) : constant_list->Copy();
 				children.push_back(std::move(upper));
 
-				if (i2.step) {
-					children.push_back(TransformExpression(i2.step));
+				if (indices.step) {
+					children.push_back(TransformExpression(indices.step));
 				}
 				result = make_uniq<OperatorExpression>(ExpressionType::ARRAY_SLICE, std::move(children));
 				break;
 			}
 
 			// Array access.
-			D_ASSERT(!i2.lidx && i2.uidx);
-			children.push_back(TransformExpression(i2.uidx));
+			D_ASSERT(!indices.lidx && indices.uidx);
+			children.push_back(TransformExpression(indices.uidx));
 			result = make_uniq<OperatorExpression>(ExpressionType::ARRAY_EXTRACT, std::move(children));
 			break;
 		}
 		case duckdb_libpgquery::T_PGString: {
-			auto value = PGCast<duckdb_libpgquery::PGValue>(*t2.get());
+			auto value = PGCast<duckdb_libpgquery::PGValue>(*target.get());
 			vector<unique_ptr<ParsedExpression>> children;
 			children.push_back(std::move(result));
 			children.push_back(TransformValue(value));
@@ -58,7 +58,7 @@ unique_ptr<ParsedExpression> Transformer::TransformArrayAccess(duckdb_libpgquery
 			break;
 		}
 		case duckdb_libpgquery::T_PGFuncCall: {
-			auto func = PGCast<duckdb_libpgquery::PGFuncCall>(*t2.get());
+			auto func = PGCast<duckdb_libpgquery::PGFuncCall>(*target.get());
 			auto function = TransformFuncCall(func);
 			if (function->type != ExpressionType::FUNCTION) {
 				throw ParserException("%s.%s() call must be a function", result->ToString(), function->ToString());
