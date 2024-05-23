@@ -438,6 +438,22 @@ Value EnableExternalAccessSetting::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Enable View Dependencies
+//===--------------------------------------------------------------------===//
+void EnableViewDependencies::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.enable_view_dependencies = input.GetValue<bool>();
+}
+
+void EnableViewDependencies::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.enable_view_dependencies = DBConfig().options.enable_view_dependencies;
+}
+
+Value EnableViewDependencies::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.enable_view_dependencies);
+}
+
+//===--------------------------------------------------------------------===//
 // Enable FSST Vectors
 //===--------------------------------------------------------------------===//
 void EnableFSSTVectors::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
