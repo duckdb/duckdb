@@ -35,6 +35,18 @@ DUCKDB_INIT_FILE = os.path.join("..", "duckdb", "__init__.py")
 INIT_PY_START = "# START OF CONNECTION WRAPPER"
 INIT_PY_END = "# END OF CONNECTION WRAPPER"
 
+# Read the JSON file
+with open(WRAPPER_JSON_PATH, 'r') as json_file:
+    wrapper_methods = json.load(json_file)
+
+# On DuckDBPyConnection these are read_only_properties, they're basically functions without requiring () to invoke
+# that's not possible on 'duckdb' so it becomes a function call with no arguments (i.e duckdb.description())
+READONLY_PROPERTY_NAMES = ['description', 'rowcount']
+
+# These methods are not directly DuckDBPyConnection methods,
+# they first call 'FromDF' and then call a method on the created DuckDBPyRelation
+SPECIAL_METHOD_NAMES = [x['name'] for x in wrapper_methods if x['name'] not in READONLY_PROPERTY_NAMES]
+
 
 def remove_section(content, start_marker, end_marker) -> Tuple[List[str], List[str]]:
     start_index = -1
@@ -106,7 +118,7 @@ def generate():
             result.append(argument)
         return result
 
-    def get_lambda_definition(definition: ConnectionMethod) -> str:
+    def get_lambda_definition(name, definition: ConnectionMethod) -> str:
         param_definitions = [x.proto for x in definition.params]
         param_definitions.append('shared_ptr<DuckDBPyConnection> conn = nullptr')
         param_definitions = ", ".join(param_definitions)
@@ -152,7 +164,7 @@ def generate():
         method['kwargs'].append({'name': 'conn', 'type': 'Optional[DuckDBPyConnection]', 'default': 'None'})
         for name in names:
             function_name = method['function']
-            lambda_def = get_lambda_definition(method_definitions[function_name])
+            lambda_def = get_lambda_definition(name, method_definitions[function_name])
             body.append(create_definition(name, method, lambda_def))
 
             all_names.append(name)

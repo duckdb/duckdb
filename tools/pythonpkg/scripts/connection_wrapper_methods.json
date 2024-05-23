@@ -1,6 +1,7 @@
 [
     {
         "name": "project",
+        "function": "Project",
         "args": [
             {
                 "name": "project_expr",
@@ -11,10 +12,12 @@
     },
     {
         "name": "distinct",
+        "function": "Distinct",
         "return": "DuckDBPyRelation"
     },
     {
         "name": "write_csv",
+        "function": "WriteCSV",
         "args": [
             {
                 "name": "*args",
@@ -25,6 +28,7 @@
     },
     {
         "name": "aggregate",
+        "function": "Aggregate",
         "args": [
             {
                 "name": "aggr_expr",
@@ -33,13 +37,14 @@
             {
                 "name": "group_expr",
                 "type" : "str",
-				"default": "\"\""
+                "default": "\"\""
             }
         ],
         "return": "DuckDBPyRelation"
     },
     {
         "name": "alias",
+        "function": "SetAlias",
         "args": [
             {
                 "name": "alias",
@@ -50,6 +55,7 @@
     },
     {
         "name": "filter",
+        "function": "Filter",
         "args": [
             {
                 "name": "filter_expr",
@@ -60,6 +66,7 @@
     },
     {
         "name": "limit",
+        "function": "Limit",
         "args": [
             {
                 "name": "n",
@@ -75,6 +82,7 @@
     },
     {
         "name": "order",
+        "function": "Order",
         "args": [
             {
                 "name": "order_expr",
@@ -85,6 +93,7 @@
     },
     {
         "name": "query_df",
+        "function": "Query",
         "args": [
             {
                 "name": "virtual_table_name",
@@ -99,10 +108,12 @@
     },
     {
         "name": "description",
+        "function": "GetDescription",
         "return": "Optional[List[Any]]"
     },
     {
         "name": "rowcount",
+        "function": "GetRowcount",
         "return": "int"
     }
 ]
