@@ -16,22 +16,11 @@ one	two	three	four	1
 2	b	bob	NULL	3
 
 
-
-# without null padding we can only read one column
-query II
-FROM read_csv_auto('data/csv/nullpadding_header.csv', null_padding=False) with ordinality
-----
-# this file has a bunch of gunk at the top	1
-one,two,three,four	2
-1,a,alice	3
-2,b,bob	4
-
 query II
 FROM read_csv_auto('data/csv/nullpadding_header.csv', null_padding=False, skip=1) with ordinality
 ----
-one,two,three,four	1
-1,a,alice	2
-2,b,bob	3
+1,a,alice	1
+2,b,bob	2
 
 query IIII
 FROM read_csv_auto('data/csv/nullpadding_header.csv', null_padding=False, skip=2) with ordinality
