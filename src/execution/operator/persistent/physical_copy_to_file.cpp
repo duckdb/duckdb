@@ -306,14 +306,14 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 		return std::move(state);
 	}
 
-	auto result =
+	auto state =
 	    make_uniq<CopyToFunctionGlobalState>(function.copy_to_initialize_global(context, *bind_data, file_path));
 	if (use_tmp_file) {
-		result->file_names.emplace_back(GetNonTmpFile(context, file_path));
+		state->file_names.emplace_back(GetNonTmpFile(context, file_path));
 	} else {
-		result->file_names.emplace_back(file_path);
+		state->file_names.emplace_back(file_path);
 	}
-	return result;
+	return std::move(state);
 }
 
 //===--------------------------------------------------------------------===//

@@ -34,10 +34,7 @@ class TestReturnFiles(object):
 
         res = con.execute(f"COPY integers TO '{filedir}' (RETURN_FILES TRUE, PER_THREAD_OUTPUT TRUE);").fetchall()[0]
         assert res[0] == 200000
-        assert res[1] == [
-            os.path.join(filedir, 'data_0.csv'),
-            os.path.join(filedir, 'data_1.csv')
-        ]
+        assert res[1] == [os.path.join(filedir, 'data_0.csv'), os.path.join(filedir, 'data_1.csv')]
 
     def test_partition_by(self, duckdb_cursor):
         con = duckdb.connect()
@@ -50,5 +47,5 @@ class TestReturnFiles(object):
             os.path.join(filedir, 'j=0/data_0.csv'),
             os.path.join(filedir, 'j=1/data_0.csv'),
             os.path.join(filedir, 'j=2/data_0.csv'),
-            os.path.join(filedir, 'j=3/data_0.csv')
+            os.path.join(filedir, 'j=3/data_0.csv'),
         ]
