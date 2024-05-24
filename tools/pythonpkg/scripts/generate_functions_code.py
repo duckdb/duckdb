@@ -4,7 +4,7 @@ import keyword
 import textwrap
 from collections import Counter
 from pathlib import Path
-from typing import Any
+from typing import Any, List, Dict, Tuple
 
 os.chdir(os.path.dirname(__file__))
 
@@ -18,7 +18,7 @@ def generate() -> None:
 
     content = ["from .duckdb import FunctionExpression"]
     for f in functions_metadata:
-        function_def: list[str] = []
+        function_def: List[str] = []
 
         name = f["name"]
         if not name.isidentifier() or "lambda" in f["parameters_raw"]:
@@ -53,14 +53,14 @@ def generate() -> None:
         f.write("\n\n".join(content))
 
 
-_FunctionsMetadata = list[dict[str, str]]
+_FunctionsMetadata = List[Dict[str, str]]
 
 
 def parse_json_files(json_folder: Path) -> _FunctionsMetadata:
     """Parses the json files in core_functions. Code is based on
     https://github.com/duckdb/duckdb-web/blob/main/scripts/generate_function_json.py
     """
-    json_files = list(JSON_FOLDER.glob("**/*.json"))
+    json_files = list(json_folder.glob("**/*.json"))
     assert len(json_files) > 10
 
     functions_metadata: _FunctionsMetadata = []
@@ -106,7 +106,7 @@ def prepare_description(description: str, category: str) -> str:
     return description
 
 
-def prepare_parameters(parameters_raw: str) -> tuple[list[str], str | None]:
+def prepare_parameters(parameters_raw: str) -> Tuple[List[str], str | None]:
     parameters_raw = parameters_raw.strip()
     if not parameters_raw:
         return [], None
@@ -115,7 +115,7 @@ def prepare_parameters(parameters_raw: str) -> tuple[list[str], str | None]:
     # for list_slice and it only is for one argument. We raise below if there
     # would ever be a function with multiple optional arguments -> Would need to
     # adapt this code.
-    parameters: list[str]
+    parameters: List[str]
     optional_parameter: str | None = None
     if parameters_raw.endswith("]"):
         assert (
@@ -140,7 +140,7 @@ def prepare_parameters(parameters_raw: str) -> tuple[list[str], str | None]:
         p: 1 for p, count in Counter(parameters).items() if count > 1
     }
 
-    deduplicated_parameters: list[str] = []
+    deduplicated_parameters: List[str] = []
     for p in parameters:
         if p in duplicated_parameter_number:
             deduplicated_parameters.append(f"{p}{duplicated_parameter_number[p]}")
@@ -161,7 +161,7 @@ def prepare_parameters(parameters_raw: str) -> tuple[list[str], str | None]:
     # If there is such a variable number of parameters, we need to add a "/" before
     # them to make the previous one positional-only. Else, "/" is to be placed at
     # the end.
-    prepared_parameters: list[str] = []
+    prepared_parameters: List[str] = []
     has_variable_args = False
     for idx, p in enumerate(deduplicated_parameters):
         if p == "...":
