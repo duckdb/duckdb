@@ -45,7 +45,10 @@ public:
 		if (lock.GetType() != StorageLockType::SHARED) {
 			throw InternalException("StorageLock::TryUpgradeLock called on an exclusive lock");
 		}
-		exclusive_lock.lock();
+		if (!exclusive_lock.try_lock()) {
+			// could not lock mutex
+			return nullptr;
+		}
 		if (read_count != 1) {
 			// other shared locks are active: failed to upgrade
 			D_ASSERT(read_count != 0);

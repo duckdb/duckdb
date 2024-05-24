@@ -70,6 +70,18 @@ skipif threadid=0
 statement ok
 FROM pragma_storage_info('integers');
 
+skipif threadid=0
+statement ok
+from pragma_table_info('integers');
+
+skipif threadid=0
+statement ok
+from duckdb_dependencies();
+
+skipif threadid=0
+statement ok
+from duckdb_temporary_files();
+
 endloop
 
 endloop
