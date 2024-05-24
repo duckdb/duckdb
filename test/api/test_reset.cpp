@@ -60,6 +60,7 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"prefer_range_joins", {Value(true)}},
 	    {"allow_persistent_secrets", {Value(false)}},
 	    {"secret_directory", {"/tmp/some/path"}},
+	    {"enable_view_dependencies", {Value(true)}},
 	    {"default_secret_storage", {"custom_storage"}},
 	    {"custom_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
 	    {"autoinstall_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},

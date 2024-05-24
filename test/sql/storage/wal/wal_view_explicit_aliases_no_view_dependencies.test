@@ -1,15 +1,18 @@
-# name: test/sql/storage/catalog/test_view_explicit_aliases.test
+# name: test/sql/storage/wal/wal_view_explicit_aliases_no_view_dependencies.test
 # description: Test views with explicit column aliases
-# group: [catalog]
+# group: [wal]
 
-# FIXME: for this to work we need to serialize/deserialize dependencies
 require skip_reload
+
 
 # load the DB from disk
 load __TEST_DIR__/view_explicit_aliases_storage.db
 
 statement ok
-set enable_view_dependencies=true
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
 
 # create a database and insert the table/view
 statement ok
@@ -23,19 +26,18 @@ statement ok
 CREATE VIEW test.v (b,c) AS SELECT * FROM test.t;
 
 # check the view info
-query IIIIII
+query II nosort view_info
 PRAGMA table_info('test.v')
 ----
-0	b	INTEGER	false	NULL	false
-1	c	INTEGER	false	NULL	false
 
 statement ok
 SELECT * FROM test.v
 
 statement ok
-DROP TABLE test.t CASCADE;
+DROP TABLE test.t
 
-statement error
+# we can still query this after the table is gone
+query II nosort view_info
 PRAGMA table_info('test.v')
 ----
 
@@ -44,7 +46,11 @@ loop i 0 2
 # now reload
 restart
 
-statement error
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+# can check info, but not query the view
+query II nosort view_info
 PRAGMA table_info('test.v')
 ----
 
@@ -59,14 +65,10 @@ CREATE TABLE test.t (a INTEGER, b INTEGER);
 statement ok
 SELECT * FROM test.t
 
-statement error
+statement ok
 SELECT b,c FROM test.v
-----
 
 statement ok
-CREATE VIEW test.v (b,c) AS SELECT * FROM test.t;
-
-statement ok
-DROP TABLE test.t CASCADE;
+DROP TABLE test.t
 
 endloop
