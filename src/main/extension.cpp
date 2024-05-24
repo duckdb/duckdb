@@ -42,7 +42,7 @@ string ParsedExtensionMetaData::GetInvalidMetadataError() {
 	}
 
 	string result;
-	if (extension_version.size() >= 1 && extension_version[0] == '-') {
+	if (!extension_version.empty() && extension_version[0] == '-') {
 		result += StringUtil::Format("The file is not a valid DuckDB extension, with self-reported error code: '%s'.",
 		                             PrettyPrintString(extension_version.substr(1)));
 	}
