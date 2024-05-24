@@ -145,13 +145,19 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	auto view_binder = Binder::CreateBinder(context);
 	auto &dependencies = base.dependencies;
 	auto &catalog = Catalog::GetCatalog(context, base.catalog);
-	view_binder->SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
-		if (&catalog != &entry.ParentCatalog()) {
-			// Don't register dependencies between catalogs
-			return;
-		}
-		dependencies.AddDependency(entry);
-	});
+
+	auto &db_config = DBConfig::GetConfig(context);
+	auto should_create_dependencies = db_config.options.enable_view_dependencies;
+
+	if (should_create_dependencies) {
+		view_binder->SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
+			if (&catalog != &entry.ParentCatalog()) {
+				// Don't register dependencies between catalogs
+				return;
+			}
+			dependencies.AddDependency(entry);
+		});
+	}
 	view_binder->can_contain_nulls = true;
 
 	auto copy = base.query->Copy();
@@ -613,9 +619,6 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	case CatalogType::INDEX_ENTRY: {
 		auto &base = stmt.info->Cast<CreateIndexInfo>();
 
-		auto catalog = BindCatalog(base.catalog);
-		properties.modified_databases.insert(catalog);
-
 		// visit the table reference
 		auto table_ref = make_uniq<BaseTableRef>();
 		table_ref->catalog_name = base.catalog;
@@ -631,6 +634,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		if (table.temporary) {
 			stmt.info->temporary = true;
 		}
+		properties.modified_databases.insert(table.catalog.GetName());
+
 		// create a plan over the bound table
 		auto plan = CreatePlan(*bound_table);
 		if (plan->type != LogicalOperatorType::LOGICAL_GET) {

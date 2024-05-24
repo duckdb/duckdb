@@ -36,6 +36,7 @@ public:
 	bool overwrite_or_ignore;
 	bool per_thread_output;
 	optional_idx file_size_bytes;
+	bool rotate;
 
 	bool partition_output;
 	vector<idx_t> partition_columns;
