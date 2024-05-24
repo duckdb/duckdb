@@ -216,6 +216,11 @@ CopyTypeSupport ParquetWriter::TypeIsSupported(const LogicalType &type) {
 
 void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
                                         duckdb_parquet::format::SchemaElement &schema_ele) {
+	if (duckdb_type.IsJSONType()) {
+		schema_ele.converted_type = ConvertedType::JSON;
+		schema_ele.__isset.converted_type = true;
+		return;
+	}
 	switch (duckdb_type.id()) {
 	case LogicalTypeId::TINYINT:
 		schema_ele.converted_type = ConvertedType::INT_8;

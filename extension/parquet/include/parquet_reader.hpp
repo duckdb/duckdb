@@ -104,6 +104,7 @@ public:
 	              shared_ptr<ParquetFileMetadataCache> metadata);
 	~ParquetReader();
 
+	ClientContext &context;
 	FileSystem &fs;
 	Allocator &allocator;
 	string file_name;
@@ -133,7 +134,8 @@ public:
 	                  const uint32_t buffer_size);
 
 	unique_ptr<BaseStatistics> ReadStatistics(const string &name);
-	static LogicalType DeriveLogicalType(const SchemaElement &s_ele, bool binary_as_string);
+	static LogicalType DeriveLogicalType(const SchemaElement &s_ele, bool binary_as_string,
+	                                     optional_ptr<ClientContext> context_ptr = nullptr);
 
 	FileHandle &GetHandle() {
 		return *file_handle;
