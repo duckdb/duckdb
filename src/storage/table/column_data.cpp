@@ -394,9 +394,9 @@ void ColumnData::RevertAppend(row_t start_row) {
 	auto l = data.Lock();
 	// check if this row is in the segment tree at all
 	auto last_segment = data.GetLastSegment(l);
-	if (idx_t(start_row) >= last_segment->start + last_segment->count) {
+	if (NumericCast<idx_t>(start_row) >= last_segment->start + last_segment->count) {
 		// the start row is equal to the final portion of the column data: nothing was ever appended here
-		D_ASSERT(idx_t(start_row) == last_segment->start + last_segment->count);
+		D_ASSERT(NumericCast<idx_t>(start_row) == last_segment->start + last_segment->count);
 		return;
 	}
 	// find the segment index that the current row belongs to
@@ -415,7 +415,7 @@ void ColumnData::RevertAppend(row_t start_row) {
 
 idx_t ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	D_ASSERT(row_id >= 0);
-	D_ASSERT(idx_t(row_id) >= start);
+	D_ASSERT(NumericCast<idx_t>(row_id) >= start);
 	// perform the fetch within the segment
 	state.row_index =
 	    start + ((UnsafeNumericCast<idx_t>(row_id) - start) / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE);
@@ -456,7 +456,7 @@ void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
 
 	const auto block_size = block_manager.GetBlockSize();
 	idx_t vector_segment_size = block_size;
-	if (start_row == idx_t(MAX_ROW_ID)) {
+	if (start_row == NumericCast<idx_t>(MAX_ROW_ID)) {
 #if STANDARD_VECTOR_SIZE < 1024
 		vector_segment_size = 1024 * GetTypeIdSize(type.InternalType());
 #else

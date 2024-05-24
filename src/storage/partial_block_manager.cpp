@@ -76,7 +76,7 @@ void PartialBlockManager::AllocateBlock(PartialBlockState &state, uint32_t segme
 	} else {
 		state.block_id = INVALID_BLOCK;
 	}
-	state.block_size = uint32_t(block_manager.GetBlockSize());
+	state.block_size = NumericCast<uint32_t>(block_manager.GetBlockSize());
 	state.offset = 0;
 	state.block_use_count = 1;
 }

@@ -329,7 +329,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
                                                        int32_t offset) {
 	const idx_t block_size = segment.GetBlockManager().GetBlockSize();
 	D_ASSERT(block != INVALID_BLOCK);
-	D_ASSERT(offset < int32_t(block_size));
+	D_ASSERT(offset < NumericCast<int32_t>(block_size));
 
 	auto &block_manager = segment.GetBlockManager();
 	auto &buffer_manager = block_manager.buffer_manager;
@@ -346,7 +346,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 		offset += sizeof(uint32_t);
 
 		// allocate a buffer to store the string
-		auto alloc_size = MaxValue<idx_t>(block_size, length);N
+		auto alloc_size = MaxValue<idx_t>(block_size, length);
 		// allocate a buffer to store the compressed string
 		// TODO: profile this to check if we need to reuse buffer
 		auto target_handle = buffer_manager.Allocate(MemoryTag::OVERFLOW_STRINGS, alloc_size);
@@ -411,13 +411,13 @@ void UncompressedStringStorage::ReadStringMarker(data_ptr_t target, block_id_t &
 
 string_location_t UncompressedStringStorage::FetchStringLocation(StringDictionaryContainer dict, data_ptr_t base_ptr,
                                                                  int32_t dict_offset, const idx_t block_size) {
-	D_ASSERT(dict_offset + int32_t(block_size) >= 0 && dict_offset <= int32_t(block_size));
+	D_ASSERT(dict_offset + NumericCast<int32_t>(block_size) >= 0 && dict_offset <= NumericCast<int32_t>(block_size));
 	if (dict_offset >= 0) {
 		return string_location_t(INVALID_BLOCK, dict_offset);
 	}
 
 	string_location_t result;
-	ReadStringMarker(base_ptr + dict.end - idx_t(-1 * dict_offset), result.block_id, result.offset);
+	ReadStringMarker(base_ptr + dict.end - NumericCast<idx_t>(-1 * dict_offset), result.block_id, result.offset);
 	return result;
 }
 
@@ -426,7 +426,7 @@ string_t UncompressedStringStorage::FetchStringFromDict(ColumnSegment &segment, 
                                                         uint32_t string_length) {
 	// fetch base data
 	const auto block_size = segment.GetBlockManager().GetBlockSize();
-	D_ASSERT(dict_offset <= int32_t(block_size));
+	D_ASSERT(dict_offset <= NumericCast<int32_t>(block_size));
 	string_location_t location = FetchStringLocation(dict, base_ptr, dict_offset, block_size);
 	return FetchString(segment, dict, result, base_ptr, location, string_length);
 }

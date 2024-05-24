@@ -156,7 +156,8 @@ public:
 				// place the dictionary offset into the set of vectors
 				// note: for overflow strings we write negative value
 
-				D_ASSERT(idx_t(*dictionary_size) <= segment.GetBlockManager().GetBlockSize());
+				// dictionary_size is an uint32_t value, so we can cast up.
+				D_ASSERT(NumericCast<idx_t>(*dictionary_size) <= segment.GetBlockManager().GetBlockSize());
 				result_data[target_idx] = -NumericCast<int32_t>((*dictionary_size));
 			} else {
 				// string fits in block, append to dictionary and increment dictionary position
@@ -167,8 +168,9 @@ public:
 				// now write the actual string data into the dictionary
 				memcpy(dict_pos, source_data[source_idx].GetData(), string_length);
 
-				// place the dictionary offset into the set of vectors
-				D_ASSERT(idx_t(*dictionary_size) <= segment.GetBlockManager().GetBlockSize());
+				// dictionary_size is an uint32_t value, so we can cast up.
+				D_ASSERT(NumericCast<idx_t>(*dictionary_size) <= segment.GetBlockManager().GetBlockSize());
+				// Place the dictionary offset into the set of vectors.
 				result_data[target_idx] = NumericCast<int32_t>(*dictionary_size);
 			}
 			D_ASSERT(RemainingSpace(segment, handle) <= segment.GetBlockManager().GetBlockSize());

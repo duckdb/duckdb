@@ -623,7 +623,7 @@ string_t DictionaryCompressionStorage::FetchStringFromDict(ColumnSegment &segmen
                                                            data_ptr_t baseptr, int32_t dict_offset,
                                                            uint16_t string_len) {
 
-	D_ASSERT(dict_offset >= 0 && idx_t(dict_offset) <= segment.GetBlockManager().GetBlockSize());
+	D_ASSERT(dict_offset >= 0 && dict_offset <= NumericCast<int32_t>(segment.GetBlockManager().GetBlockSize()));
 	if (dict_offset == 0) {
 		return string_t(nullptr, 0);
 	}
