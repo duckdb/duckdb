@@ -60,6 +60,7 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"prefer_range_joins", {Value(true)}},
 	    {"allow_persistent_secrets", {Value(false)}},
 	    {"secret_directory", {"/tmp/some/path"}},
+	    {"enable_view_dependencies", {Value(true)}},
 	    {"default_secret_storage", {"custom_storage"}},
 	    {"custom_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
 	    {"autoinstall_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
@@ -142,6 +143,8 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "external_threads", // tested in test_threads.cpp
 	    "profiling_output", // just an alias
 	    "duckdb_api",
+	    "custom_user_agent",
+	    "custom_profiling_settings",
 	    "custom_user_agent",
 	    "default_block_size"};
 	return excluded_options.count(name) == 1;
