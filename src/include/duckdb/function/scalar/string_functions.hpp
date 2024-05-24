@@ -46,6 +46,10 @@ struct ConcatFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct ConcatWSFun {
+    static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct LengthFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 	static inline bool IsCharacter(char c) {
