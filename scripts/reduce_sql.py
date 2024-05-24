@@ -224,7 +224,7 @@ def reduce_query_log_query(start, shell, queries, query_index, max_time_seconds)
     return sql_query
 
 
-def reduce_multi_statement(sql_statements):
+def reduce_multi_statement(sql_statements, shell, data_load):
     multi_statement_reducer = MultiStatementReducer(sql_statements)
     reduced_sql = ""
     while not multi_statement_reducer.done():
@@ -305,7 +305,7 @@ if __name__ == "__main__":
     print("===================================================")
 
     if MultiStatementReducer.is_multi_statement(sql_query):
-        sql_query = reduce_multi_statement(sql_query)
+        sql_query = reduce_multi_statement(sql_query, shell, data_load)
 
     fake_load_statements = ""
     # if it is still a multi statement, move the previous statements

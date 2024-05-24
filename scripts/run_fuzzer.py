@@ -7,7 +7,7 @@ import reduce_sql
 import fuzzer_helper
 import random
 
-seed = -1
+seed = 809241547
 
 fuzzer = None
 db = None
@@ -143,11 +143,9 @@ print(stderr)
 print("==========================================")
 
 print(returncode)
-import pdb
-pdb.set_trace()
-# if returncode == 0:
-#     print("==============  SUCCESS  ================")
-#     exit(0)
+if returncode == 0:
+    print("==============  SUCCESS  ================")
+    exit(0)
 
 print("==============  FAILURE  ================")
 print("Attempting to reproduce and file issue...")
@@ -160,14 +158,9 @@ with open(complete_log_file, 'r') as f:
     all_queries = f.read()
 
 
-all_queries = load_script + '\n' + all_queries
-reduced_multi_statements = reduce_sql.reduce_multi_statement(all_queries)
+last_query = reduce_sql.reduce_multi_statement(all_queries, shell, load_script)
 
-
-pdb.set_trace()
-# cmd = load_script + '\n' + last_query
-
-(stdout, stderr, returncode) = run_shell_command(reduced_multi_statements)
+(stdout, stderr, returncode) = run_shell_command(last_query)
 if returncode == 0:
     print("Failed to reproduce the issue with reduced mutli statement command...")
     exit(0)
