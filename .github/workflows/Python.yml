@@ -285,6 +285,7 @@ jobs:
         CIBW_BUILD: ${{ matrix.python_build}}
         CIBW_ARCHS: 'x86_64 universal2 arm64'
         CIBW_TEST_COMMAND: 'python -m pytest {project}/tests/fast  --verbose'
+        CIBW_ENVIRONMENT: 'MACOSX_DEPLOYMENT_TARGET=12.0'
         DUCKDB_BUILD_UNITY: 1
 
       steps:
