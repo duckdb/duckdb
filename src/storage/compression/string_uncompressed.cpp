@@ -329,7 +329,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
                                                        int32_t offset) {
 	const idx_t block_size = segment.GetBlockManager().GetBlockSize();
 	D_ASSERT(block != INVALID_BLOCK);
-	D_ASSERT(idx_t(offset) < block_size);
+	D_ASSERT(offset < int32_t(block_size));
 
 	auto &block_manager = segment.GetBlockManager();
 	auto &buffer_manager = block_manager.buffer_manager;
@@ -346,7 +346,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 		offset += sizeof(uint32_t);
 
 		// allocate a buffer to store the string
-		auto alloc_size = MaxValue<idx_t>(block_size, length);
+		auto alloc_size = MaxValue<idx_t>(block_size, length);N
 		// allocate a buffer to store the compressed string
 		// TODO: profile this to check if we need to reuse buffer
 		auto target_handle = buffer_manager.Allocate(MemoryTag::OVERFLOW_STRINGS, alloc_size);

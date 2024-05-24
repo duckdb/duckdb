@@ -27,7 +27,7 @@ namespace duckdb {
 struct StringDictionaryContainer {
 	//! The size of the dictionary
 	uint32_t size;
-	//! The end of the dictionary, which default to the block size
+	//! The end of the dictionary, which defaults to the block size.
 	uint32_t end;
 
 	void Verify(const idx_t block_size) {

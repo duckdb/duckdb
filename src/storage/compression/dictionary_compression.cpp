@@ -11,7 +11,7 @@
 
 namespace duckdb {
 
-//! Abstract class managing the compression state for size analysis or compression
+//! Abstract class managing the compression state for size analysis or compression.
 class DictionaryCompressionState : public CompressionState {
 public:
 	explicit DictionaryCompressionState(const CompressionInfo &info) : CompressionState(info) {};
