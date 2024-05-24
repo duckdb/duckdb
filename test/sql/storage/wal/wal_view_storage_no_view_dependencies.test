@@ -1,26 +1,27 @@
-# name: test/sql/storage/wal/wal_view_storage.test
+# name: test/sql/storage/wal/wal_view_storage_no_view_dependencies.test
 # description: Create and drop a view over different runs
 # group: [wal]
 
 require skip_reload
 
+
 # load the DB from disk
 load __TEST_DIR__/view_storage.db
 
 statement ok
-set enable_view_dependencies=true
-
-statement ok
 PRAGMA disable_checkpoint_on_shutdown
 
-# Make sure the WAL doesn't get flushed by a checkpoint
 statement ok
 PRAGMA wal_autocheckpoint='1TB';
 
-# Create a schema containing a table and a view
+# create a schema and view
 statement ok
 CREATE SCHEMA test;
+
+statement ok
 CREATE TABLE test.t (a INTEGER, b INTEGER);
+
+statement ok
 CREATE VIEW test.v AS SELECT * FROM test.t;
 
 # read the info from the view
@@ -30,20 +31,21 @@ PRAGMA table_info('test.v')
 0	a	INTEGER	0	NULL	0
 1	b	INTEGER	0	NULL	0
 
-# Try to drop the table
-statement error
-drop table test.t;
-----
-view "v" depends on table "t".
-
-# Now with CASCADE
+# drop the table the view is based on
 statement ok
-drop table test.t cascade;
+DROP TABLE test.t
 
-statement error
+# we can still query the types and column names
+query IIIIII
 PRAGMA table_info('test.v')
 ----
-Catalog Error: Table with name v does not exist!
+0	a	INTEGER	0	NULL	0
+1	b	INTEGER	0	NULL	0
+
+# but querying the view fails
+statement error
+SELECT * FROM test.v
+----
 
 statement ok
 CREATE VIEW test.v2 AS SELECT 42
@@ -53,14 +55,16 @@ DROP VIEW test.v2
 
 loop i 0 2
 
-# restart the system, causing the database to restore from the WAL
+# restart the system
 restart
 
-# the view no longer exists
-statement error
+# the view still exists, but the table does not
+# we can check the types, but not query it
+query IIIIII
 PRAGMA table_info('test.v')
 ----
-Catalog Error: Table with name v does not exist!
+0	a	INTEGER	0	NULL	0
+1	b	INTEGER	0	NULL	0
 
 statement error
 SELECT * FROM test.v
@@ -73,14 +77,8 @@ CREATE TABLE test.t (a INTEGER, b INTEGER);
 statement ok
 SELECT * FROM test.t
 
-# We created the table, but the view still doesn't exist
-statement error
-SELECT * FROM test.v
-----
-Catalog Error: Table with name v does not exist!
-
 statement ok
-CREATE VIEW test.v AS SELECT * FROM test.t;
+SELECT * FROM test.v
 
 query IIIIII
 PRAGMA table_info('test.v')
@@ -88,15 +86,9 @@ PRAGMA table_info('test.v')
 0	a	INTEGER	0	NULL	0
 1	b	INTEGER	0	NULL	0
 
-# Try to drop the table
-statement error
-drop table test.t;
-----
-view "v" depends on table "t".
-
-# Now with CASCADE
+# drop the table again
 statement ok
-drop table test.t cascade;
+DROP TABLE test.t
 
 statement error
 SELECT * FROM test.v2
