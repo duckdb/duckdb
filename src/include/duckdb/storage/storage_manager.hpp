@@ -68,7 +68,7 @@ public:
 	}
 
 	//! Gets the size of the WAL, or zero, if there is no WAL.
-	int64_t GetWALSize();
+	idx_t GetWALSize();
 	//! Gets the WAL of the StorageManager, or nullptr, if there is no WAL.
 	optional_ptr<WriteAheadLog> GetWAL();
 	//! Deletes the WAL file, and resets the unique pointer.

@@ -56,15 +56,12 @@ bool ObjectCache::ObjectCacheEnabled(ClientContext &context) {
 	return context.db->config.options.object_cache_enable;
 }
 
-int64_t StorageManager::GetWALSize() {
-	if (!wal && !GetWAL()) {
+idx_t StorageManager::GetWALSize() {
+	auto wal_ptr = GetWAL();
+	if (!wal_ptr) {
 		return 0;
 	}
-	if (!wal->Initialized()) {
-		D_ASSERT(!FileSystem::Get(db).FileExists(GetWALPath()));
-		return 0;
-	}
-	return wal->GetWriter().GetFileSize();
+	return wal_ptr->GetWALSize();
 }
 
 optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
@@ -75,11 +72,6 @@ optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
 	if (!wal) {
 		auto wal_path = GetWALPath();
 		wal = make_uniq<WriteAheadLog>(db, wal_path);
-
-		// If the WAL file exists, then we initialize it.
-		if (FileSystem::Get(db).FileExists(wal_path)) {
-			wal->Initialize();
-		}
 	}
 	return wal.get();
 }
@@ -234,7 +226,7 @@ SingleFileStorageCommitState::SingleFileStorageCommitState(StorageManager &stora
     : wal(wal), state(WALCommitState::IN_PROGRESS) {
 	auto initial_size = storage.GetWALSize();
 	initial_written = wal.GetTotalWritten();
-	initial_wal_size = initial_size < 0 ? 0 : idx_t(initial_size);
+	initial_wal_size = initial_size;
 }
 
 SingleFileStorageCommitState::~SingleFileStorageCommitState() {
@@ -254,7 +246,7 @@ void SingleFileStorageCommitState::RevertCommit() {
 	}
 	if (wal.GetTotalWritten() > initial_written) {
 		// remove any entries written into the WAL by truncating it
-		wal.Truncate(NumericCast<int64_t>(initial_wal_size));
+		wal.Truncate(initial_wal_size);
 	}
 	state = WALCommitState::TRUNCATED;
 }

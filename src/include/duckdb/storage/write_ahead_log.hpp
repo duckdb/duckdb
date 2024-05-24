@@ -52,6 +52,8 @@ public:
 	static bool Replay(AttachedDatabase &database, unique_ptr<FileHandle> handle);
 
 	//! Gets the total bytes written to the WAL since startup
+	idx_t GetWALSize();
+	//! Gets the total bytes written to the WAL since startup
 	idx_t GetTotalWritten();
 
 	//! A WAL is initialized, if a writer to a file exists.
@@ -60,10 +62,6 @@ public:
 	}
 	//! Initializes the file of the WAL by creating the file writer.
 	BufferedFileWriter &Initialize();
-	//! Returns the WAL file writer.
-	BufferedFileWriter &GetWriter() {
-		return *writer;
-	}
 
 	void WriteVersion();
 
@@ -109,7 +107,7 @@ public:
 	void WriteUpdate(DataChunk &chunk, const vector<column_t> &column_path);
 
 	//! Truncate the WAL to a previous size, and clear anything currently set in the writer
-	void Truncate(int64_t size);
+	void Truncate(idx_t size);
 	//! Delete the WAL file on disk. The WAL should not be used after this point.
 	void Delete();
 	void Flush();
@@ -120,6 +118,7 @@ protected:
 	AttachedDatabase &database;
 	unique_ptr<BufferedFileWriter> writer;
 	string wal_path;
+	atomic<idx_t> wal_size;
 };
 
 } // namespace duckdb

@@ -21,7 +21,7 @@ namespace duckdb {
 const uint64_t WAL_VERSION_NUMBER = 2;
 
 WriteAheadLog::WriteAheadLog(AttachedDatabase &database, const string &wal_path)
-    : database(database), wal_path(wal_path) {
+    : database(database), wal_path(wal_path), wal_size(0) {
 }
 
 WriteAheadLog::~WriteAheadLog() {
@@ -32,8 +32,21 @@ BufferedFileWriter &WriteAheadLog::Initialize() {
 		writer = make_uniq<BufferedFileWriter>(FileSystem::Get(database), wal_path,
 		                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
 		                                           FileFlags::FILE_FLAGS_APPEND);
+		wal_size = writer->GetFileSize();
 	}
-	return GetWriter();
+	return *writer;
+}
+
+//! Gets the total bytes written to the WAL since startup
+idx_t WriteAheadLog::GetWALSize() {
+	if (!Initialized()) {
+		auto &fs = FileSystem::Get(database);
+		if (!fs.FileExists(wal_path)) {
+			return 0;
+		}
+		Initialize();
+	}
+	return wal_size;
 }
 
 idx_t WriteAheadLog::GetTotalWritten() {
@@ -43,11 +56,12 @@ idx_t WriteAheadLog::GetTotalWritten() {
 	return writer->GetTotalWritten();
 }
 
-void WriteAheadLog::Truncate(int64_t size) {
+void WriteAheadLog::Truncate(idx_t size) {
 	if (!writer) {
 		return;
 	}
 	writer->Truncate(size);
+	wal_size = writer->GetFileSize();
 }
 
 void WriteAheadLog::Delete() {
@@ -57,6 +71,7 @@ void WriteAheadLog::Delete() {
 	writer.reset();
 	auto &fs = FileSystem::Get(database);
 	fs.RemoveFile(wal_path);
+	wal_size = 0;
 }
 
 //===--------------------------------------------------------------------===//
@@ -384,6 +399,7 @@ void WriteAheadLog::Flush() {
 
 	// flushes all changes made to the WAL to disk
 	writer->Sync();
+	wal_size = writer->GetFileSize();
 }
 
 } // namespace duckdb
