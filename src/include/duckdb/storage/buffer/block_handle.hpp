@@ -59,6 +59,7 @@ class BlockHandle {
 	friend class BufferManager;
 	friend class StandardBufferManager;
 	friend class BufferPool;
+	friend struct EvictionQueue;
 
 public:
 	BlockHandle(BlockManager &block_manager, block_id_t block_id, MemoryTag tag);

@@ -41,6 +41,10 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 	D_ASSERT(arithmetic.return_type.IsIntegral());
 	D_ASSERT(arithmetic.children[0]->return_type.IsIntegral());
 	if (inner_constant.value.IsNull() || outer_constant.value.IsNull()) {
+		if (comparison.type == ExpressionType::COMPARE_DISTINCT_FROM ||
+		    comparison.type == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+			return nullptr;
+		}
 		return make_uniq<BoundConstantExpression>(Value(comparison.return_type));
 	}
 	auto &constant_type = outer_constant.return_type;
