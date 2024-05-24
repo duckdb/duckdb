@@ -96,7 +96,7 @@ def generate():
         # Artificially add 'connection' keyword argument
         if 'kwargs' not in method:
             method['kwargs'] = []
-        method['kwargs'].append({'name': 'connection', 'type': 'DuckDBPyConnection'})
+        method['kwargs'].append({'name': 'connection', 'type': 'DuckDBPyConnection', 'default': '...'})
 
         for name in names:
             if name in written_methods:

@@ -20,13 +20,15 @@ public:
 
 public:
 	TypesCacheItem()
-	    : PythonImportCacheItem("types"), UnionType("UnionType", this), GenericAlias("GenericAlias", this) {
+	    : PythonImportCacheItem("types"), UnionType("UnionType", this), GenericAlias("GenericAlias", this),
+	      BuiltinFunctionType("BuiltinFunctionType", this) {
 	}
 	~TypesCacheItem() override {
 	}
 
 	PythonImportCacheItem UnionType;
 	PythonImportCacheItem GenericAlias;
+	PythonImportCacheItem BuiltinFunctionType;
 };
 
 } // namespace duckdb
