@@ -106,7 +106,6 @@ struct IcuBindData : public FunctionData {
 	}
 
 	static const string FUNCTION_PREFIX;
-	static const string NON_TAGGED_COLLATION;
 
 	static string EncodeFunctionName(const string &collation) {
 		return FUNCTION_PREFIX + collation;
@@ -117,7 +116,6 @@ struct IcuBindData : public FunctionData {
 };
 
 const string IcuBindData::FUNCTION_PREFIX = "icu_collate_";
-const string IcuBindData::NON_TAGGED_COLLATION = "NON-TAGGED";
 
 static int32_t ICUGetSortKey(icu::Collator &collator, string_t input, duckdb::unique_ptr<char[]> &buffer,
                              int32_t &buffer_size) {
@@ -203,13 +201,11 @@ static duckdb::unique_ptr<FunctionData> ICUSortKeyBind(ClientContext &context, S
 }
 
 static ScalarFunction GetICUCollateFunction(const string &collation,
-                                            const string &tag = IcuBindData::NON_TAGGED_COLLATION) {
+                                            const string &tag) {
 	string fname = IcuBindData::EncodeFunctionName(collation);
 	ScalarFunction result(fname, {LogicalType::VARCHAR}, LogicalType::VARCHAR, ICUCollateFunction, ICUCollateBind);
 	//! collation tag is added into the Function extra info
-	if (tag != IcuBindData::NON_TAGGED_COLLATION) {
-		result.extra_info = std::move(tag);
-	}
+	result.extra_info = std::move(tag);
 	result.serialize = IcuBindData::Serialize;
 	result.deserialize = IcuBindData::Deserialize;
 	return result;
@@ -300,7 +296,7 @@ static void LoadInternal(DuckDB &ddb) {
 		}
 		collation = StringUtil::Lower(collation);
 
-		CreateCollationInfo info(collation, GetICUCollateFunction(collation), false, false);
+		CreateCollationInfo info(collation, GetICUCollateFunction(collation, ""), false, false);
 		ExtensionUtil::RegisterCollation(db, info);
 	}
 
