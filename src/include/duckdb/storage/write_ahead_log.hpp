@@ -58,7 +58,7 @@ public:
 
 	//! A WAL is initialized, if a writer to a file exists.
 	bool Initialized() {
-		return writer != nullptr;
+		return initialized;
 	}
 	//! Initializes the file of the WAL by creating the file writer.
 	BufferedFileWriter &Initialize();
@@ -119,6 +119,7 @@ protected:
 	unique_ptr<BufferedFileWriter> writer;
 	string wal_path;
 	atomic<idx_t> wal_size;
+	atomic<bool> initialized;
 };
 
 } // namespace duckdb

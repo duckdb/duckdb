@@ -21,18 +21,22 @@ namespace duckdb {
 const uint64_t WAL_VERSION_NUMBER = 2;
 
 WriteAheadLog::WriteAheadLog(AttachedDatabase &database, const string &wal_path)
-    : database(database), wal_path(wal_path), wal_size(0) {
+    : database(database), wal_path(wal_path), wal_size(0), initialized(false) {
 }
 
 WriteAheadLog::~WriteAheadLog() {
 }
 
 BufferedFileWriter &WriteAheadLog::Initialize() {
+	if (initialized) {
+		return *writer;
+	}
 	if (!writer) {
 		writer = make_uniq<BufferedFileWriter>(FileSystem::Get(database), wal_path,
 		                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
 		                                           FileFlags::FILE_FLAGS_APPEND);
 		wal_size = writer->GetFileSize();
+		initialized = true;
 	}
 	return *writer;
 }
