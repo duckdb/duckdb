@@ -178,7 +178,7 @@ void SingleFileStorageManager::LoadDatabase() {
 
 		// initialize the block manager while creating a new db file
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
-		sf_block_manager->CreateNewDatabase();
+		sf_block_manager->CreateNewDatabase(Catalog::GetCatalog(db).Cast<DuckCatalog>().GetExtensionName());
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager);
 	} else {

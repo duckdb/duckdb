@@ -171,7 +171,7 @@ FileOpenFlags SingleFileBlockManager::GetFileFlags(bool create_new) const {
 	return result;
 }
 
-void SingleFileBlockManager::CreateNewDatabase() {
+void SingleFileBlockManager::CreateNewDatabase(const string &extension_name) {
 	auto flags = GetFileFlags(true);
 
 	// open the RDBMS handle
@@ -186,6 +186,10 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	main_header.version_number = VERSION_NUMBER;
 	memset(main_header.flags, 0, sizeof(uint64_t) * 4);
 
+	memset(main_header.optional_extension_name, 0, 32);
+	for (idx_t i = 0; i < extension_name.size(); i++) {
+		main_header.optional_extension_name[i] = static_cast<data_t>(extension_name[i]);
+	}
 	SerializeHeaderStructure<MainHeader>(main_header, header_buffer.buffer);
 	// now write the header to the file
 	ChecksumAndWrite(header_buffer, 0);

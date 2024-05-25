@@ -37,7 +37,7 @@ public:
 	SingleFileBlockManager(AttachedDatabase &db, string path, StorageManagerOptions options);
 
 	FileOpenFlags GetFileFlags(bool create_new) const;
-	void CreateNewDatabase();
+	void CreateNewDatabase(const string &extension_type = "");
 	void LoadExistingDatabase();
 	static string GetDBExtensionType(FileHandle &handle);
 
