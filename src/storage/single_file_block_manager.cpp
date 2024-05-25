@@ -62,7 +62,7 @@ MainHeader MainHeader::Read(ReadStream &source) {
 	if (header.version_number != VERSION_NUMBER) {
 		auto version = GetDuckDBVersion(header.version_number);
 		string version_text;
-		if (version) {
+		if (!version.empty()) {
 			// known version
 			version_text = "DuckDB version " + string(version);
 		} else {
@@ -228,7 +228,7 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	handle = fs.OpenFile(path, flags);
 	if (!handle) {
 		// this can only happen in read-only mode - as that is when we set FILE_FLAGS_NULL_IF_NOT_EXISTS
-		throw CatalogException("Cannot open database \"%s\" in read-only mode: database does not exist", path);
+		throw IOException("Cannot open database \"%s\" in read-only mode: database does not exist", path);
 	}
 
 	MainHeader::CheckMagicBytes(*handle);
@@ -268,8 +268,9 @@ void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t locatio
 
 	// verify the checksum
 	if (stored_checksum != computed_checksum) {
-		throw IOException("Corrupt database file: computed checksum %llu does not match stored checksum %llu in block",
-		                  computed_checksum, stored_checksum);
+		throw IOException("Corrupt database file: computed checksum %llu does not match stored checksum %llu in block "
+		                  "at location %llu",
+		                  computed_checksum, stored_checksum, location);
 	}
 }
 
@@ -504,15 +505,17 @@ protected:
 };
 
 void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
-	// set the iteration count
-	header.iteration = ++iteration_count;
-
 	auto free_list_blocks = GetFreeListBlocks();
 
 	// now handle the free list
 	auto &metadata_manager = GetMetadataManager();
 	// add all modified blocks to the free list: they can now be written to again
 	metadata_manager.MarkBlocksAsModified();
+
+	lock_guard<mutex> lock(block_lock);
+	// set the iteration count
+	header.iteration = ++iteration_count;
+
 	for (auto &block : modified_blocks) {
 		free_list.insert(block);
 		newly_freed_list.insert(block);

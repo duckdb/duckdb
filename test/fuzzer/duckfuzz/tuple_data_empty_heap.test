@@ -1,0 +1,14 @@
+# name: test/fuzzer/duckfuzz/tuple_data_empty_heap.test
+# description: Check if we handle empty heaps correctly (duckdb-fuzzer issue 2690)
+# group: [duckfuzz]
+
+require tpch
+
+statement ok
+set threads=4;
+
+statement ok
+create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types();
+
+statement ok
+SELECT DISTINCT c1, #1, c3, c1, c3, c1, c2 FROM tpch_answers() AS t4(c1, c2, c3) GROUP BY ALL;

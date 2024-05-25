@@ -32,6 +32,7 @@ add_library_unity(
   db_instance_cache.cpp
   error_manager.cpp
   extension.cpp
+  extension_install_info.cpp
   materialized_query_result.cpp
   pending_query_result.cpp
   prepared_statement.cpp
@@ -40,6 +41,7 @@ add_library_unity(
   query_profiler.cpp
   query_result.cpp
   stream_query_result.cpp
+  profiling_info.cpp
   valid_checker.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_main>

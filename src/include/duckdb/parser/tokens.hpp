@@ -28,6 +28,7 @@ class InsertStatement;
 class SelectStatement;
 class TransactionStatement;
 class UpdateStatement;
+class UpdateExtensionsStatement;
 class PrepareStatement;
 class ExecuteStatement;
 class PragmaStatement;

@@ -23,6 +23,7 @@ ColumnDefinition ColumnDefinition::Copy() const {
 	copy.compression_type = compression_type;
 	copy.category = category;
 	copy.comment = comment;
+	copy.tags = tags;
 	return copy;
 }
 
