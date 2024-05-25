@@ -513,6 +513,9 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 				disallow_alter = false;
 				break;
 			}
+			case AlterTableType::ADD_COLUMN: {
+				disallow_alter = false;
+			}
 			default:
 				break;
 			}
