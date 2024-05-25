@@ -1100,6 +1100,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::TableFunction(const string &fna
 	if (params.is_none()) {
 		params = py::list();
 	}
+	if (!py::isinstance<py::list>(params)) {
+		throw InvalidInputException("'params' has to be a list of parameters");
+	}
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
