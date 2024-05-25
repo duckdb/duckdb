@@ -6,7 +6,6 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
@@ -16,7 +15,6 @@
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
-#include "duckdb/planner/expression_binder/lateral_binder.hpp"
 #include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
 
 namespace duckdb {
@@ -419,8 +417,8 @@ unique_ptr<LogicalOperator> Binder::PlanLateralJoin(unique_ptr<LogicalOperator> 
 	vector<unique_ptr<Expression>> arbitrary_expressions;
 	if (condition) {
 		// extract join conditions, if there are any
-		LogicalComparisonJoin::ExtractJoinConditions(context, join_type, left, right, std::move(condition), conditions,
-		                                             arbitrary_expressions);
+		LogicalComparisonJoin::ExtractJoinConditions(context, join_type, JoinRefType::REGULAR, left, right,
+		                                             std::move(condition), conditions, arbitrary_expressions);
 	}
 
 	auto perform_delim = PerformDuplicateElimination(*this, correlated);

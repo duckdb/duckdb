@@ -1,0 +1,20 @@
+# name: benchmark/micro/pushdown/window_partition_pushdown.benchmark
+# description: measure performance improvement of pushing down filters on window paritions
+# group: [pushdown]
+
+name Window_parition
+group micro
+subgroup pushdown
+
+require tpch
+
+cache tpch_partition_lineitem.duckdb
+
+load
+CALL dbgen(sf=1);
+COPY lineitem to '${BENCHMARK_DIR}/lineitem_partitioned' (FORMAT PARQUET, PARTITION_BY l_shipmode);
+
+run
+select * from (select l_shipmode, l_quantity, sum(l_quantity) OVER (PARTITION BY l_shipmode)
+from read_parquet('${BENCHMARK_DIR}/lineitem_partitioned/*/*.parquet', hive_partitioning = true))
+where l_shipmode = 'SHIP';

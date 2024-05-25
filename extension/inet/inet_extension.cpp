@@ -55,6 +55,14 @@ std::string InetExtension::Name() {
 	return "inet";
 }
 
+std::string InetExtension::Version() const {
+#ifdef EXT_VERSION_INET
+	return EXT_VERSION_INET;
+#else
+	return "";
+#endif
+}
+
 } // namespace duckdb
 
 extern "C" {

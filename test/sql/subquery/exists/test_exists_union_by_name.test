@@ -1,0 +1,24 @@
+# name: test/sql/subquery/exists/test_exists_union_by_name.test
+# description: Test exists subquery with union by name
+# group: [exists]
+
+statement ok
+create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types() limit 0;
+
+statement ok
+SELECT (
+      EXISTS(
+          (
+              SELECT
+                  DISTINCT outer_alltypes."BIGINT", outer_alltypes."INT"
+              FROM all_types inner_alltypes_1
+              WHERE inner_alltypes_1."BIGINT" GROUP BY NULL
+          )
+          UNION BY NAME
+          (
+              SELECT inner2."FLOAT" from all_types inner2
+          )
+      ) IS DISTINCT FROM outer_alltypes."struct"
+  )
+FROM all_types outer_alltypes GROUP BY ALL;
+

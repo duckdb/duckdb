@@ -1,6 +1,5 @@
 /usr*
 */cl.hpp
-*/tools/jdbc/*
 */tools/odbc/*
 */tools/shell/*
 */tools/sqlite3_api_wrapper/*

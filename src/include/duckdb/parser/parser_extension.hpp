@@ -33,6 +33,7 @@ struct ParserExtensionParseData {
 	}
 
 	virtual unique_ptr<ParserExtensionParseData> Copy() const = 0;
+	virtual string ToString() const = 0;
 };
 
 struct ParserExtensionParseResult {

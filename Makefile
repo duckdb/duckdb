@@ -121,12 +121,6 @@ endif
 ifeq (${BUILD_JEMALLOC}, 1)
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};jemalloc
 endif
-ifeq (${BUILD_EXCEL}, 1)
-	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};excel
-endif
-ifeq (${BUILD_INET}, 1)
-	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};inet
-endif
 ifeq (${BUILD_ALL_EXT}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS=".github/config/in_tree_extensions.cmake;.github/config/out_of_tree_extensions.cmake"
 else ifeq (${BUILD_ALL_IT_EXT}, 1)
@@ -142,12 +136,6 @@ ifeq (${BUILD_SQLSMITH}, 1)
 endif
 ifeq (${BUILD_TPCE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_TPCE=1
-endif
-ifeq (${BUILD_JDBC}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DJDBC_DRIVER=1
-endif
-ifneq ($(OVERRIDE_JDBC_OS_ARCH),)
-	CMAKE_VARS:=${CMAKE_VARS} -DOVERRIDE_JDBC_OS_ARCH=$(OVERRIDE_JDBC_OS_ARCH)
 endif
 ifeq (${BUILD_ODBC}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_ODBC_DRIVER=1

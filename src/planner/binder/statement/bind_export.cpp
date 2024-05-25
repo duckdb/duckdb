@@ -330,7 +330,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		// generate the copy statement and bind it
 		CopyStatement copy_stmt;
 		copy_stmt.info = std::move(info);
-		copy_stmt.select_statement =
+		copy_stmt.info->select_statement =
 		    CreateSelectStatement(copy_stmt, select_list, copy_function.function.supports_type);
 
 		auto copy_binder = Binder::CreateBinder(context, this);
@@ -353,6 +353,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		fs.CreateDirectory(stmt.info->file_path);
 	}
 
+	stmt.info->catalog = catalog;
 	// create the export node
 	auto export_node = make_uniq<LogicalExport>(copy_function.function, std::move(stmt.info), exported_tables);
 
@@ -361,6 +362,8 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	}
 
 	result.plan = std::move(export_node);
+
+	auto &properties = GetStatementProperties();
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;

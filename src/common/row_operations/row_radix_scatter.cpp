@@ -125,7 +125,7 @@ void RadixScatterListVector(Vector &v, UnifiedVectorFormat &vdata, const Selecti
 					key_locations[i][0] = 1;
 					key_locations[i]++;
 					RowOperations::RadixScatter(child_vector, list_size, *FlatVector::IncrementalSelectionVector(), 1,
-					                            key_locations + i, false, true, false, prefix_len, width - 1,
+					                            key_locations + i, false, true, false, prefix_len, width - 2,
 					                            list_entry.offset);
 				} else {
 					// denote that the list is empty with a 0

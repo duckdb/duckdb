@@ -49,7 +49,7 @@ private:
 class PythonFilesystem : public FileSystem {
 private:
 	const vector<string> protocols;
-	const AbstractFileSystem filesystem;
+	AbstractFileSystem filesystem;
 	std::string DecodeFlags(FileOpenFlags flags);
 	bool Exists(const string &filename, const char *func_name) const;
 
@@ -57,6 +57,7 @@ public:
 	explicit PythonFilesystem(vector<string> protocols, AbstractFileSystem filesystem)
 	    : protocols(std::move(protocols)), filesystem(std::move(filesystem)) {
 	}
+	~PythonFilesystem() override;
 
 protected:
 	string GetName() const override {

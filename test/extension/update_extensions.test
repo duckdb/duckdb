@@ -1,0 +1,67 @@
+# name: test/extension/update_extensions.test
+# description: Tests for the update extensions statement
+# group: [extension]
+
+# This test assumes icu and json to be available in the LOCAL_EXTENSION_REPO and NOT linked into duckdb statically
+# -> this should be the case for our autoloading tests where we have the local_extension_repo variable set
+require-env LOCAL_EXTENSION_REPO
+
+require no_extension_autoloading
+
+statement ok
+PRAGMA enable_verification
+
+# Set the repository to the correct one
+statement ok
+set custom_extension_repository='${LOCAL_EXTENSION_REPO}'
+
+# Ensure we have a clean extension directory without any preinstalled extensions
+statement ok
+set extension_directory='__TEST_DIR__/update_extensions'
+
+statement error
+with cte as (select 42 AS a) UPDATE EXTENSIONS
+----
+Providing a with clause with an UPDATE EXTENSIONS statement is not allowed
+
+# No extensions installed -> update returns empty list
+query IIIII
+UPDATE EXTENSIONS;
+----
+
+statement ok
+INSTALL json
+
+query IIIII
+UPDATE EXTENSIONS;
+----
+json	<REGEX>:.*	NO_UPDATE_AVAILABLE	<REGEX>:.*	<REGEX>:.*
+
+query IIIII
+UPDATE EXTENSIONS (json);
+----
+json	<REGEX>:.*	NO_UPDATE_AVAILABLE	<REGEX>:.*	<REGEX>:.*
+
+statement error
+UPDATE EXTENSIONS (foobar);
+----
+Failed to update the extension 'foobar', the extension is not installed!
+
+statement ok
+INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+
+# The loadable_extension_demo is loaded as a direct URL, these are not considered for updating
+query IIIII rowsort
+UPDATE EXTENSIONS;
+----
+json	<REGEX>:.*	NO_UPDATE_AVAILABLE	<REGEX>:.*	<REGEX>:.*
+loadable_extension_demo	(empty)	NOT_A_REPOSITORY	default-version	default-version
+
+# Doublecheck duckdb_extensions()
+query IIII rowsort
+SELECT extension_name, extension_version, install_mode, installed_from from duckdb_extensions() where installed
+----
+json	<REGEX>:.*	REPOSITORY	<REGEX>:.*
+loadable_extension_demo	default-version	CUSTOM_PATH	<REGEX>:.*loadable\_extension\_demo\.duckdb_extension
+parquet	<REGEX>:.*	STATICALLY_LINKED	<REGEX>:.*
+

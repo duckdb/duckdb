@@ -202,8 +202,9 @@ unique_ptr<NodeStatistics> TableScanCardinality(ClientContext &context, const Fu
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 	auto &local_storage = LocalStorage::Get(context, bind_data.table.catalog);
 	auto &storage = bind_data.table.GetStorage();
-	idx_t estimated_cardinality = storage.info->cardinality + local_storage.AddedRows(bind_data.table.GetStorage());
-	return make_uniq<NodeStatistics>(storage.info->cardinality, estimated_cardinality);
+	idx_t table_rows = storage.GetTotalRows();
+	idx_t estimated_cardinality = table_rows + local_storage.AddedRows(bind_data.table.GetStorage());
+	return make_uniq<NodeStatistics>(table_rows, estimated_cardinality);
 }
 
 //===--------------------------------------------------------------------===//
@@ -263,7 +264,8 @@ static void RewriteIndexExpression(Index &index, LogicalGet &get, Expression &ex
 		auto &bound_colref = expr.Cast<BoundColumnRefExpression>();
 		// bound column ref: rewrite to fit in the current set of bound column ids
 		bound_colref.binding.table_index = get.table_index;
-		column_t referenced_column = index.column_ids[bound_colref.binding.column_index];
+		auto &column_ids = index.GetColumnIds();
+		column_t referenced_column = column_ids[bound_colref.binding.column_index];
 		// search for the referenced column in the set of column_ids
 		for (idx_t i = 0; i < get.column_ids.size(); i++) {
 			if (get.column_ids[i] == referenced_column) {
@@ -306,22 +308,13 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 		return;
 	}
 
-	// behold
-	storage.info->indexes.Scan([&](Index &index) {
+	auto checkpoint_lock = storage.GetSharedCheckpointLock();
+	auto &info = storage.GetDataTableInfo();
+	auto &transaction = Transaction::Get(context, bind_data.table.catalog);
+
+	// bind and scan any ART indexes
+	info->GetIndexes().BindAndScan<ART>(context, *info, [&](ART &art_index) {
 		// first rewrite the index expression so the ColumnBindings align with the column bindings of the current table
-
-		if (index.IsUnknown()) {
-			// unknown index: skip
-			return false;
-		}
-
-		if (index.index_type != ART::TYPE_NAME) {
-			// only ART indexes are supported for now
-			return false;
-		}
-
-		auto &art_index = index.Cast<ART>();
-
 		if (art_index.unbound_expressions.size() > 1) {
 			// NOTE: index scans are not (yet) supported for compound index keys
 			return false;
@@ -336,8 +329,6 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 		}
 
 		// try to find a matching index for any of the filter expressions
-		auto &transaction = Transaction::Get(context, bind_data.table.catalog);
-
 		for (auto &filter : filters) {
 			auto index_state = art_index.TryInitializeScan(transaction, *index_expression, *filter);
 			if (index_state != nullptr) {

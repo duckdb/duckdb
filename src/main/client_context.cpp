@@ -127,7 +127,7 @@ struct DebugClientContextState : public ClientContextState {
 		}
 		return RebindQueryInfo::DO_NOT_REBIND;
 	}
-	RebindQueryInfo OnExecutePrepared(ClientContext &context, PreparedStatementData &prepared_statement,
+	RebindQueryInfo OnExecutePrepared(ClientContext &context, PreparedStatementCallbackInfo &info,
 	                                  RebindQueryInfo current_rebind) override {
 		return RebindQueryInfo::ATTEMPT_TO_REBIND;
 	}
@@ -520,7 +520,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 		rebind = RebindQueryInfo::ATTEMPT_TO_REBIND;
 	}
 	for (auto const &s : registered_state) {
-		auto new_rebind = s.second->OnExecutePrepared(*this, *prepared, rebind);
+		PreparedStatementCallbackInfo info(*prepared, parameters);
+		auto new_rebind = s.second->OnExecutePrepared(*this, info, rebind);
 		if (new_rebind == RebindQueryInfo::ATTEMPT_TO_REBIND) {
 			rebind = RebindQueryInfo::ATTEMPT_TO_REBIND;
 		}
@@ -797,9 +798,12 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			bool reparse_statement = false;
 #endif
 			statement = std::move(copied_statement);
+			if (statement->type == StatementType::RELATION_STATEMENT) {
+				reparse_statement = false;
+			}
 			if (reparse_statement) {
 				try {
-					Parser parser;
+					Parser parser(GetParserOptions());
 					ErrorData error;
 					parser.ParseQuery(statement->ToString());
 					statement = std::move(parser.statements[0]);
@@ -1124,6 +1128,7 @@ void ClientContext::Append(TableDescription &description, ColumnDataCollection &
 		}
 		auto binder = Binder::CreateBinder(*this);
 		auto bound_constraints = binder->BindConstraints(table_entry);
+		MetaTransaction::Get(*this).ModifyDatabase(table_entry.ParentCatalog().GetAttached());
 		table_entry.GetStorage().LocalAppend(table_entry, *this, collection, bound_constraints);
 	});
 }
@@ -1278,7 +1283,8 @@ ClientProperties ClientContext::GetClientProperties() const {
 	if (TryGetCurrentSetting("TimeZone", result)) {
 		timezone = result.ToString();
 	}
-	return {timezone, db->config.options.arrow_offset_size};
+	return {timezone, db->config.options.arrow_offset_size, db->config.options.arrow_use_list_view,
+	        db->config.options.produce_arrow_string_views};
 }
 
 bool ClientContext::ExecutionIsFinished() {

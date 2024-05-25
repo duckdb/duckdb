@@ -43,6 +43,9 @@ public:
 	static unique_ptr<FileBuffer> ReadTemporaryBufferInternal(BufferManager &buffer_manager, FileHandle &handle,
 	                                                          idx_t position, idx_t size,
 	                                                          unique_ptr<FileBuffer> reusable_buffer);
+
+	//! Registers a transient memory buffer.
+	shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size) final;
 	//! Registers an in-memory buffer that cannot be unloaded until it is destroyed
 	//! This buffer can be small (smaller than BLOCK_SIZE)
 	//! Unpin and pin are nops on this block of memory
@@ -109,7 +112,7 @@ protected:
 	shared_ptr<BlockHandle> RegisterMemory(MemoryTag tag, idx_t block_size, bool can_destroy);
 
 	//! Garbage collect eviction queue
-	void PurgeQueue() final;
+	void PurgeQueue(FileBufferType type) final;
 
 	BufferPool &GetBufferPool() const final;
 	TemporaryMemoryManager &GetTemporaryMemoryManager() final;
