@@ -16,11 +16,12 @@ void DBPathAndType::ExtractExtensionPrefix(string &path, string &db_type) {
 
 void DBPathAndType::CheckMagicBytes(FileSystem &fs, string &path, string &db_type) {
 	// if there isn't - check the magic bytes of the file (if any)
-	auto file_type = MagicBytes::CheckMagicBytes(fs, path);
+	string extension = "";
+	auto file_type = MagicBytes::CheckMagicBytes(fs, path, extension);
 	if (file_type == DataFileType::SQLITE_FILE) {
 		db_type = "sqlite";
 	} else {
-		db_type = "";
+		db_type = extension;
 	}
 }
 

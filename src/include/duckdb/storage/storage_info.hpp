@@ -74,9 +74,14 @@ struct MainHeader {
 	string LibraryGitHash() {
 		return string(char_ptr_cast(library_git_hash), 0, MAX_VERSION_SIZE);
 	}
+	string OptionalExtensionName() {
+		return string(char_ptr_cast(optional_extension_name), 0, MAX_VERSION_SIZE);
+	}
 
 	void Write(WriteStream &ser);
 	static MainHeader Read(ReadStream &source);
+
+	data_t optional_extension_name[MAX_VERSION_SIZE];
 
 private:
 	data_t library_git_desc[MAX_VERSION_SIZE];

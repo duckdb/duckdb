@@ -39,6 +39,7 @@ public:
 	FileOpenFlags GetFileFlags(bool create_new) const;
 	void CreateNewDatabase();
 	void LoadExistingDatabase();
+	static string GetDBExtensionType(FileHandle &handle);
 
 	//! Creates a new Block using the specified block_id and returns a pointer
 	unique_ptr<Block> ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) override;

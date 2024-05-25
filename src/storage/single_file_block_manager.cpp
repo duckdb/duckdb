@@ -37,6 +37,7 @@ void MainHeader::Write(WriteStream &ser) {
 	}
 	SerializeVersionNumber(ser, DuckDB::LibraryVersion());
 	SerializeVersionNumber(ser, DuckDB::SourceID());
+	SerializeVersionNumber(ser, OptionalExtensionName());
 }
 
 void MainHeader::CheckMagicBytes(FileHandle &handle) {
@@ -87,6 +88,7 @@ MainHeader MainHeader::Read(ReadStream &source) {
 	}
 	DeserializeVersionNumber(source, header.library_git_desc);
 	DeserializeVersionNumber(source, header.library_git_hash);
+	DeserializeVersionNumber(source, header.optional_extension_name);
 	return header;
 }
 
@@ -218,6 +220,13 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	iteration_count = 0;
 	active_header = 1;
 	max_block = 0;
+}
+
+string SingleFileBlockManager::GetDBExtensionType(FileHandle &handle) {
+	data_t main_header_bytes[128];
+	handle.Read(main_header_bytes, 128, 8);
+	auto t = DeserializeHeaderStructure<MainHeader>(main_header_bytes);
+	return t.OptionalExtensionName();
 }
 
 void SingleFileBlockManager::LoadExistingDatabase() {

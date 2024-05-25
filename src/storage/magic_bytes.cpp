@@ -1,10 +1,10 @@
 #include "duckdb/storage/magic_bytes.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/storage/storage_info.hpp"
-
+#include "duckdb/storage/single_file_block_manager.hpp"
 namespace duckdb {
 
-DataFileType MagicBytes::CheckMagicBytes(FileSystem &fs, const string &path) {
+DataFileType MagicBytes::CheckMagicBytes(FileSystem &fs, const string &path, string &extension) {
 	if (path.empty() || path == IN_MEMORY_PATH) {
 		return DataFileType::DUCKDB_FILE;
 	}
@@ -24,6 +24,7 @@ DataFileType MagicBytes::CheckMagicBytes(FileSystem &fs, const string &path) {
 		return DataFileType::PARQUET_FILE;
 	}
 	if (memcmp(buffer + MainHeader::MAGIC_BYTE_OFFSET, MainHeader::MAGIC_BYTES, MainHeader::MAGIC_BYTE_SIZE) == 0) {
+		extension = SingleFileBlockManager::GetDBExtensionType(*handle);
 		return DataFileType::DUCKDB_FILE;
 	}
 	return DataFileType::FILE_DOES_NOT_EXIST;
