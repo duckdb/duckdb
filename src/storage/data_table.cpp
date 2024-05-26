@@ -1525,7 +1525,7 @@ void DataTable::AddIndexStorage(ClientContext &context, Index &index) {
 		const auto &col = column_definitions[i];
 		column_ids.push_back(col.StorageOid());
 		scan_types.push_back(col.GetType());
-		column_map.push_back(i+1);
+		column_map.push_back(i + 1);
 	}
 	rest.Initialize(context, scan_types);
 
