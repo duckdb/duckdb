@@ -34,7 +34,7 @@ static unique_ptr<FunctionData> DuckDBSchemasBind(ClientContext &context, TableF
 	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("tags");
-	return_types.emplace_back(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR));
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("internal");
 	return_types.emplace_back(LogicalType::BOOLEAN);
@@ -78,8 +78,8 @@ void DuckDBSchemasFunction(ClientContext &context, TableFunctionInput &data_p, D
 		output.SetValue(col++, count, Value(entry.name));
 		// "comment", PhysicalType::VARCHAR
 		output.SetValue(col++, count, Value(entry.comment));
-		// "tags", MAP(VARCHAR, VARCHAR)
-		output.SetValue(col++, count, Value::MAP(entry.tags));
+		// "tags", VARCHAR
+		output.SetValue(col++, count, Value(Value::MAP(entry.tags).ToString()));
 		// "internal", PhysicalType::BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(entry.internal));
 		// "sql", PhysicalType::VARCHAR

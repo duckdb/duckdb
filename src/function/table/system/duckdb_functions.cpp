@@ -50,7 +50,7 @@ static unique_ptr<FunctionData> DuckDBFunctionsBind(ClientContext &context, Tabl
 	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("tags");
-	return_types.emplace_back(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR));
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("return_type");
 	return_types.emplace_back(LogicalType::VARCHAR);
@@ -473,8 +473,8 @@ bool ExtractFunctionData(FunctionEntry &entry, idx_t function_idx, DataChunk &ou
 	// comment, LogicalType::VARCHAR
 	output.SetValue(col++, output_offset, entry.comment);
 
-	// tags, LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)
-	output.SetValue(col++, output_offset, Value::MAP(entry.tags));
+	// tags, VARCHAR
+	output.SetValue(col++, output_offset, Value(Value::MAP(entry.tags).ToString()));
 
 	// return_type, LogicalType::VARCHAR
 	output.SetValue(col++, output_offset, OP::GetReturnType(function, function_idx));

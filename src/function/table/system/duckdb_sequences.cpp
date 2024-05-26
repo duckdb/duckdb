@@ -42,7 +42,7 @@ static unique_ptr<FunctionData> DuckDBSequencesBind(ClientContext &context, Tabl
 	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("tags");
-	return_types.emplace_back(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR));
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("temporary");
 	return_types.emplace_back(LogicalType::BOOLEAN);
@@ -112,8 +112,8 @@ void DuckDBSequencesFunction(ClientContext &context, TableFunctionInput &data_p,
 		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(seq.oid)));
 		// comment, VARCHAR
 		output.SetValue(col++, count, Value(seq.comment));
-		// tags, MAP(VARCHAR, VARCHAR)
-		output.SetValue(col++, count, Value::MAP(seq.tags));
+		// tags, VARCHAR
+		output.SetValue(col++, count, Value(Value::MAP(seq.tags).ToString()));
 		// temporary, BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(seq.temporary));
 		// start_value, BIGINT
