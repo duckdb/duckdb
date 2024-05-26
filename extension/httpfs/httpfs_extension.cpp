@@ -67,7 +67,7 @@ static void LoadInternal(DatabaseInstance &instance) {
 
 	CreateS3SecretFunctions::Register(instance);
 	CreateBearerTokenFunctions::Register(instance);
-  HTTPFunctions::Register(instance);
+	HTTPFunctions::Register(instance);
 }
 
 void HttpfsExtension::Load(DuckDB &db) {
