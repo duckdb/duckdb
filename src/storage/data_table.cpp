@@ -156,11 +156,11 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint 
 	                                parent.info->table);
 
 	// Also clone vector we are going to modify
-	vector<IndexStorageInfo> cloned_index_storage_infos;
+	vector<IndexStorageInfo> local_index_storage_infos;
 	for (const auto &index_info : parent.info->index_storage_infos) {
-		cloned_index_storage_infos.push_back(IndexStorageInfo(index_info.name));
+		local_index_storage_infos.push_back(IndexStorageInfo(index_info.name));
 	}
-	info->index_storage_infos = std::move(cloned_index_storage_infos);
+	info->index_storage_infos = std::move(local_index_storage_infos);
 	info->InitializeIndexes(context);
 
 	auto &local_storage = LocalStorage::Get(context, db);
@@ -188,9 +188,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint 
 
 		// If there is already data in the table, index it before continuing
 		// otherwise uniqueness checks will fail.
-		if (row_groups->GetTotalRows() > 0) {
-			IndexExistingData(context, index);
-		}
+		AddIndexStorage(context, index);
 	} else {
 		// Verify the new constraint against current persistent/local data
 		VerifyNewConstraint(local_storage, parent, constraint);
@@ -1490,18 +1488,13 @@ Index &DataTable::AddConstraintIndex(const vector<reference<const ColumnDefiniti
 	// fetch types and create expressions for the index from the columns
 	vector<column_t> column_ids;
 	vector<unique_ptr<Expression>> unbound_expressions;
-	vector<unique_ptr<Expression>> bound_expressions;
-	idx_t key_nr = 0;
 	column_ids.reserve(columns.size());
 	unbound_expressions.reserve(columns.size());
-	bound_expressions.reserve(columns.size());
 	for (const auto &column_p : columns) {
 		auto &column = column_p.get();
 		D_ASSERT(!column.Generated());
 		unbound_expressions.push_back(
 		    make_uniq<BoundColumnRefExpression>(column.Name(), column.Type(), ColumnBinding(0, column_ids.size())));
-
-		bound_expressions.push_back(make_uniq<BoundReferenceExpression>(column.Type(), key_nr++));
 		column_ids.push_back(column.StorageOid());
 	}
 	// create an adaptive radix tree around the expressions
@@ -1513,26 +1506,36 @@ Index &DataTable::AddConstraintIndex(const vector<reference<const ColumnDefiniti
 	return info->indexes.AddIndex(std::move(art));
 }
 
-void DataTable::IndexExistingData(ClientContext &context, Index &index) {
+void DataTable::AddIndexStorage(ClientContext &context, Index &index) {
+	// If the table is empty, there's nothing to do
+	if (row_groups->GetTotalRows() == 0 || column_definitions.size() == 0) {
+		return;
+	}
+
 	if (!index.IsBound()) {
 		throw InternalException("Unbound index found in DataTable::IndexExistingData");
 	}
 	auto &bound_index = index.Cast<BoundIndex>();
 
-	vector<column_t> cids;
+	DataChunk chunk, rest;
+	vector<column_t> column_ids;
 	vector<LogicalType> scan_types;
-	for (const auto &col : column_definitions) {
-		cids.push_back(col.StorageOid());
+	vector<column_t> column_map;
+	for (column_t i = 0; i < column_definitions.size(); i++) {
+		const auto &col = column_definitions[i];
+		column_ids.push_back(col.StorageOid());
 		scan_types.push_back(col.GetType());
+		column_map.push_back(i+1);
 	}
+	rest.Initialize(context, scan_types);
+
+	column_ids.insert(column_ids.begin(), COLUMN_IDENTIFIER_ROW_ID);
+	scan_types.insert(scan_types.begin(), LogicalType::ROW_TYPE);
+	chunk.Initialize(context, scan_types);
 
 	auto &transaction = DuckTransaction::Get(context, db);
 	TableScanState state;
-	InitializeScan(state, cids, nullptr);
-
-	DataChunk chunk;
-	chunk.Initialize(context, scan_types);
-	int64_t indexed_rows = 0;
+	InitializeScan(state, column_ids, nullptr);
 	while (true) {
 		chunk.Reset();
 		Scan(transaction, chunk, state);
@@ -1541,15 +1544,12 @@ void DataTable::IndexExistingData(ClientContext &context, Index &index) {
 			break;
 		}
 
-		Vector row_identifiers(LogicalType::ROW_TYPE);
-		VectorOperations::GenerateSequence(row_identifiers, chunk.size(), indexed_rows, 1);
-
-		auto error = bound_index.Append(chunk, row_identifiers);
+		auto &row_ids = chunk.data[0];
+		rest.ReferenceColumns(chunk, column_map);
+		auto error = bound_index.Append(rest, row_ids);
 		if (error.HasError()) {
 			error.Throw();
 		}
-
-		indexed_rows += chunk.size();
 	}
 }
 

@@ -252,7 +252,7 @@ private:
 	                                      DataChunk &chunk);
 
 	// Indexes existing data in the table into the index.
-	void IndexExistingData(ClientContext &context, Index &index);
+	void AddIndexStorage(ClientContext &context, Index &index);
 
 private:
 	//! The table info

@@ -61,11 +61,14 @@ vector<unique_ptr<BoundConstraint>> Binder::BindNewConstraints(vector<unique_ptr
 	physical_index_set_t not_null_columns;
 	vector<PhysicalIndex> primary_keys;
 	for (const auto &bound_constr : bound_constraints) {
-		if (bound_constr->type == ConstraintType::NOT_NULL) {
+		switch (bound_constr->type) {
+		case ConstraintType::NOT_NULL: {
 			auto &not_null = bound_constr->Cast<BoundNotNullConstraint>();
 			not_null_columns.insert(not_null.index);
-		} else if (bound_constr->type == ConstraintType::UNIQUE) {
-			auto &unique = bound_constr->Cast<BoundUniqueConstraint>();
+			break;
+		}
+		case ConstraintType::UNIQUE: {
+			const auto &unique = bound_constr->Cast<BoundUniqueConstraint>();
 			if (unique.is_primary_key) {
 				// we can only have one primary key per table
 				if (has_primary_key) {
@@ -74,6 +77,10 @@ vector<unique_ptr<BoundConstraint>> Binder::BindNewConstraints(vector<unique_ptr
 				has_primary_key = true;
 				primary_keys = unique.keys;
 			}
+			break;
+		}
+		default:
+			break;
 		}
 	}
 
@@ -127,23 +134,24 @@ unique_ptr<BoundConstraint> Binder::BindConstraint(Constraint &constraint, const
 			unique.SetColumnName(col.Name());
 			keys.push_back(col.Physical());
 			key_set.insert(col.Physical());
-		} else {
-			// unique constraint is given by list of names
-			// have to resolve names
-			for (auto &keyname : unique.GetColumnNames()) {
-				if (!columns.ColumnExists(keyname)) {
-					throw ParserException("Table \"%s\" does not have a column named \"%s\"", table_name, keyname);
-				}
-				auto &column = columns.GetColumn(keyname);
-				auto column_index = column.Physical();
-				if (key_set.find(column_index) != key_set.end()) {
-					throw ParserException("column \"%s\" appears twice in "
-					                      "primary key constraint",
-					                      keyname);
-				}
-				keys.push_back(column_index);
-				key_set.insert(column_index);
+			return make_uniq<BoundUniqueConstraint>(std::move(keys), std::move(key_set), unique.IsPrimaryKey());
+		}
+
+		// unique constraint is given by list of names
+		// have to resolve names
+		for (auto &keyname : unique.GetColumnNames()) {
+			if (!columns.ColumnExists(keyname)) {
+				throw ParserException("Table \"%s\" does not have a column named \"%s\"", table_name, keyname);
 			}
+			auto &column = columns.GetColumn(keyname);
+			auto column_index = column.Physical();
+			if (key_set.find(column_index) != key_set.end()) {
+				throw ParserException("column \"%s\" appears twice in "
+				                      "primary key constraint",
+				                      keyname);
+			}
+			keys.push_back(column_index);
+			key_set.insert(column_index);
 		}
 		return make_uniq<BoundUniqueConstraint>(std::move(keys), std::move(key_set), unique.IsPrimaryKey());
 	}

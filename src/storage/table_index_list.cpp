@@ -14,9 +14,8 @@ namespace duckdb {
 Index &TableIndexList::AddIndex(unique_ptr<Index> index) {
 	D_ASSERT(index);
 	lock_guard<mutex> lock(indexes_lock);
-	auto &result = *index;
 	indexes.push_back(std::move(index));
-	return result;
+	return *indexes.back();
 }
 
 void TableIndexList::RemoveIndex(const string &name) {
