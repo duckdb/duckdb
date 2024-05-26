@@ -358,6 +358,7 @@ static const StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION(ToMillisecondsFun),
 	DUCKDB_SCALAR_FUNCTION(ToMinutesFun),
 	DUCKDB_SCALAR_FUNCTION(ToMonthsFun),
+	DUCKDB_SCALAR_FUNCTION(ToQuartersFun),
 	DUCKDB_SCALAR_FUNCTION(ToSecondsFun),
 	DUCKDB_SCALAR_FUNCTION(ToTimestampFun),
 	DUCKDB_SCALAR_FUNCTION(ToWeeksFun),

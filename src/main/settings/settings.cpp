@@ -438,6 +438,22 @@ Value EnableExternalAccessSetting::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Enable View Dependencies
+//===--------------------------------------------------------------------===//
+void EnableViewDependencies::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.enable_view_dependencies = input.GetValue<bool>();
+}
+
+void EnableViewDependencies::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.enable_view_dependencies = DBConfig().options.enable_view_dependencies;
+}
+
+Value EnableViewDependencies::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.enable_view_dependencies);
+}
+
+//===--------------------------------------------------------------------===//
 // Enable FSST Vectors
 //===--------------------------------------------------------------------===//
 void EnableFSSTVectors::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -474,6 +490,36 @@ void AllowUnsignedExtensionsSetting::ResetGlobal(DatabaseInstance *db, DBConfig 
 Value AllowUnsignedExtensionsSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::BOOLEAN(config.options.allow_unsigned_extensions);
+}
+
+//===--------------------------------------------------------------------===//
+// Allow Community Extensions
+//===--------------------------------------------------------------------===//
+void AllowCommunityExtensionsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (db && !config.options.allow_community_extensions) {
+		auto new_value = input.GetValue<bool>();
+		if (new_value) {
+			throw InvalidInputException("Cannot upgrade allow_community_extensions setting while database is running");
+		}
+		return;
+	}
+	auto new_value = input.GetValue<bool>();
+	config.options.allow_community_extensions = new_value;
+}
+
+void AllowCommunityExtensionsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (db && !config.options.allow_community_extensions) {
+		if (DBConfig().options.allow_community_extensions) {
+			throw InvalidInputException("Cannot upgrade allow_community_extensions setting while database is running");
+		}
+		return;
+	}
+	config.options.allow_community_extensions = DBConfig().options.allow_community_extensions;
+}
+
+Value AllowCommunityExtensionsSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.allow_community_extensions);
 }
 
 //===--------------------------------------------------------------------===//
@@ -530,6 +576,26 @@ void EnableObjectCacheSetting::ResetGlobal(DatabaseInstance *db, DBConfig &confi
 Value EnableObjectCacheSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::BOOLEAN(config.options.object_cache_enable);
+}
+
+//===--------------------------------------------------------------------===//
+// Storage Compatibility Version (for serialization)
+//===--------------------------------------------------------------------===//
+void StorageCompatibilityVersion::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto version_string = input.GetValue<string>();
+	auto serialization_compatibility = SerializationCompatibility::FromString(version_string);
+	config.options.serialization_compatibility = serialization_compatibility;
+}
+
+void StorageCompatibilityVersion::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.serialization_compatibility = DBConfig().options.serialization_compatibility;
+}
+
+Value StorageCompatibilityVersion::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+
+	auto &version_name = config.options.serialization_compatibility.duckdb_version;
+	return Value(version_name);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1447,6 +1513,36 @@ void CustomUserAgentSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config)
 Value CustomUserAgentSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value(config.options.custom_user_agent);
+}
+
+//===--------------------------------------------------------------------===//
+// EnableHTTPLogging Setting
+//===--------------------------------------------------------------------===//
+void EnableHTTPLoggingSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).enable_http_logging = ClientConfig().enable_http_logging;
+}
+
+void EnableHTTPLoggingSetting::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).enable_http_logging = input.GetValue<bool>();
+}
+
+Value EnableHTTPLoggingSetting::GetSetting(const ClientContext &context) {
+	return Value(ClientConfig::GetConfig(context).enable_http_logging);
+}
+
+//===--------------------------------------------------------------------===//
+// HTTPLoggingOutput Setting
+//===--------------------------------------------------------------------===//
+void HTTPLoggingOutputSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).http_logging_output = ClientConfig().http_logging_output;
+}
+
+void HTTPLoggingOutputSetting::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).http_logging_output = input.GetValue<string>();
+}
+
+Value HTTPLoggingOutputSetting::GetSetting(const ClientContext &context) {
+	return Value(ClientConfig::GetConfig(context).http_logging_output);
 }
 
 } // namespace duckdb

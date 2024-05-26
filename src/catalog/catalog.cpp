@@ -280,14 +280,13 @@ optional_ptr<CatalogEntry> Catalog::CreateCollation(CatalogTransaction transacti
 // Index
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> Catalog::CreateIndex(CatalogTransaction transaction, CreateIndexInfo &info) {
-	auto &context = transaction.GetContext();
-	return CreateIndex(context, info);
+	auto &schema = GetSchema(transaction, info.schema);
+	auto &table = schema.GetEntry(transaction, CatalogType::TABLE_ENTRY, info.table)->Cast<TableCatalogEntry>();
+	return schema.CreateIndex(transaction, info, table);
 }
 
 optional_ptr<CatalogEntry> Catalog::CreateIndex(ClientContext &context, CreateIndexInfo &info) {
-	auto &schema = GetSchema(context, info.schema);
-	auto &table = GetEntry<TableCatalogEntry>(context, schema.name, info.table);
-	return schema.CreateIndex(context, info, table);
+	return CreateIndex(GetCatalogTransaction(context), info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -760,19 +759,6 @@ CatalogEntryLookup Catalog::TryLookupEntry(ClientContext &context, CatalogType t
 	return Catalog::TryLookupEntry(context, lookups, type, name, if_not_found, error_context);
 }
 
-CatalogEntry &Catalog::GetEntry(ClientContext &context, const string &schema, const string &name) {
-	vector<CatalogType> entry_types {CatalogType::TABLE_ENTRY, CatalogType::SEQUENCE_ENTRY};
-
-	for (auto entry_type : entry_types) {
-		auto result = GetEntry(context, entry_type, schema, name, OnEntryNotFound::RETURN_NULL);
-		if (result) {
-			return *result;
-		}
-	}
-
-	throw CatalogException("CatalogElement \"%s.%s\" does not exist!", schema, name);
-}
-
 optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, CatalogType type, const string &schema_name,
                                              const string &name, OnEntryNotFound if_not_found,
                                              QueryErrorContext error_context) {
@@ -840,21 +826,6 @@ optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(ClientContext &context, cons
 	return nullptr;
 }
 
-LogicalType Catalog::GetType(ClientContext &context, const string &schema, const string &name,
-                             OnEntryNotFound if_not_found) {
-	auto type_entry = GetEntry<TypeCatalogEntry>(context, schema, name, if_not_found);
-	if (!type_entry) {
-		return LogicalType::INVALID;
-	}
-	return type_entry->user_type;
-}
-
-LogicalType Catalog::GetType(ClientContext &context, const string &catalog_name, const string &schema,
-                             const string &name) {
-	auto &type_entry = Catalog::GetEntry<TypeCatalogEntry>(context, catalog_name, schema, name);
-	return type_entry.user_type;
-}
-
 vector<reference<SchemaCatalogEntry>> Catalog::GetSchemas(ClientContext &context) {
 	vector<reference<SchemaCatalogEntry>> schemas;
 	ScanSchemas(context, [&](SchemaCatalogEntry &entry) { schemas.push_back(entry); });
@@ -912,15 +883,24 @@ vector<reference<SchemaCatalogEntry>> Catalog::GetAllSchemas(ClientContext &cont
 	return result;
 }
 
-void Catalog::Alter(ClientContext &context, AlterInfo &info) {
+void Catalog::Alter(CatalogTransaction transaction, AlterInfo &info) {
 	ModifyCatalog();
 
-	auto lookup = LookupEntry(context, info.GetCatalogType(), info.schema, info.name, info.if_not_found);
-
-	if (!lookup.Found()) {
-		return;
+	if (transaction.HasContext()) {
+		auto lookup =
+		    LookupEntry(transaction.GetContext(), info.GetCatalogType(), info.schema, info.name, info.if_not_found);
+		if (!lookup.Found()) {
+			return;
+		}
+		return lookup.schema->Alter(transaction, info);
 	}
-	return lookup.schema->Alter(context, info);
+	D_ASSERT(info.if_not_found == OnEntryNotFound::THROW_EXCEPTION);
+	auto &schema = GetSchema(transaction, info.schema);
+	return schema.Alter(transaction, info);
+}
+
+void Catalog::Alter(ClientContext &context, AlterInfo &info) {
+	Alter(GetCatalogTransaction(context), info);
 }
 
 vector<MetadataBlockInfo> Catalog::GetMetadataInfo(ClientContext &context) {

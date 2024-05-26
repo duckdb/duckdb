@@ -127,7 +127,7 @@ struct DebugClientContextState : public ClientContextState {
 		}
 		return RebindQueryInfo::DO_NOT_REBIND;
 	}
-	RebindQueryInfo OnExecutePrepared(ClientContext &context, PreparedStatementData &prepared_statement,
+	RebindQueryInfo OnExecutePrepared(ClientContext &context, PreparedStatementCallbackInfo &info,
 	                                  RebindQueryInfo current_rebind) override {
 		return RebindQueryInfo::ATTEMPT_TO_REBIND;
 	}
@@ -520,7 +520,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 		rebind = RebindQueryInfo::ATTEMPT_TO_REBIND;
 	}
 	for (auto const &s : registered_state) {
-		auto new_rebind = s.second->OnExecutePrepared(*this, *prepared, rebind);
+		PreparedStatementCallbackInfo info(*prepared, parameters);
+		auto new_rebind = s.second->OnExecutePrepared(*this, info, rebind);
 		if (new_rebind == RebindQueryInfo::ATTEMPT_TO_REBIND) {
 			rebind = RebindQueryInfo::ATTEMPT_TO_REBIND;
 		}
@@ -1127,6 +1128,7 @@ void ClientContext::Append(TableDescription &description, ColumnDataCollection &
 		}
 		auto binder = Binder::CreateBinder(*this);
 		auto bound_constraints = binder->BindConstraints(table_entry);
+		MetaTransaction::Get(*this).ModifyDatabase(table_entry.ParentCatalog().GetAttached());
 		table_entry.GetStorage().LocalAppend(table_entry, *this, collection, bound_constraints);
 	});
 }

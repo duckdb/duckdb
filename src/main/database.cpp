@@ -375,7 +375,8 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (new_config.buffer_pool) {
 		config.buffer_pool = std::move(new_config.buffer_pool);
 	} else {
-		config.buffer_pool = make_shared_ptr<BufferPool>(config.options.maximum_memory);
+		config.buffer_pool = make_shared_ptr<BufferPool>(config.options.maximum_memory,
+		                                                 config.options.buffer_manager_track_eviction_timestamps);
 	}
 }
 
@@ -395,7 +396,7 @@ const unordered_set<std::string> &DatabaseInstance::LoadedExtensions() {
 	return loaded_extensions;
 }
 
-const unordered_map<std::string, ExtensionInfo> &DatabaseInstance::LoadedExtensionsData() {
+const unordered_map<std::string, ExtensionInstallInfo> &DatabaseInstance::LoadedExtensionsData() {
 	return loaded_extensions_data;
 }
 
@@ -412,10 +413,10 @@ bool DuckDB::ExtensionIsLoaded(const std::string &name) {
 	return instance->ExtensionIsLoaded(name);
 }
 
-void DatabaseInstance::SetExtensionLoaded(const std::string &name, const std::string &extension_version) {
+void DatabaseInstance::SetExtensionLoaded(const string &name, ExtensionInstallInfo &install_info) {
 	auto extension_name = ExtensionHelper::GetExtensionName(name);
 	loaded_extensions.insert(extension_name);
-	loaded_extensions_data.insert({extension_name, ExtensionInfo(extension_version)});
+	loaded_extensions_data.insert({extension_name, install_info});
 
 	auto &callbacks = DBConfig::GetConfig(*this).extension_callbacks;
 	for (auto &callback : callbacks) {

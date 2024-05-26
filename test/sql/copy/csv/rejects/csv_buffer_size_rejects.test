@@ -7,7 +7,8 @@ require skip_reload
 # Test will fail on windows because byte_position is slightly different due to \r\n instead of \n
 require notwindows
 
-loop buffer_size 5 8
+
+loop buffer_size 5 10
 
 # Ensure that we can get the schema if we reduce the sample size and ignore errors
 query IIIII

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.12)
+cmake_minimum_required(VERSION 2.8.12...3.29)
 
 project(HTTPFsExtension)
 
@@ -8,6 +8,7 @@ include_directories(include ../../third_party/httplib ../parquet/include)
 
 build_static_extension(
   httpfs
+  hffs.cpp
   s3fs.cpp
   httpfs.cpp
   crypto.cpp
@@ -18,6 +19,7 @@ set(PARAMETERS "-warnings")
 build_loadable_extension(
   httpfs
   ${PARAMETERS}
+  hffs.cpp
   s3fs.cpp
   httpfs.cpp
   crypto.cpp

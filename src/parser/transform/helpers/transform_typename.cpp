@@ -5,8 +5,71 @@
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 
 namespace duckdb {
+
+struct SizeModifiers {
+	int64_t width = 0;
+	int64_t scale = 0;
+	// How many modifiers were found
+	idx_t count = 0;
+};
+
+static SizeModifiers GetSizeModifiers(duckdb_libpgquery::PGTypeName &type_name, LogicalTypeId base_type) {
+
+	SizeModifiers result;
+
+	if (base_type == LogicalTypeId::DECIMAL) {
+		// Defaults for DECIMAL
+		result.width = 18;
+		result.scale = 3;
+	}
+
+	if (type_name.typmods) {
+		for (auto node = type_name.typmods->head; node; node = node->next) {
+			auto &const_val = *Transformer::PGPointerCast<duckdb_libpgquery::PGAConst>(node->data.ptr_value);
+			if (const_val.type != duckdb_libpgquery::T_PGAConst ||
+			    const_val.val.type != duckdb_libpgquery::T_PGInteger) {
+				throw ParserException("Expected an integer constant as type modifier");
+			}
+			if (const_val.val.val.ival < 0) {
+				throw ParserException("Negative modifier not supported");
+			}
+			if (result.count == 0) {
+				result.width = const_val.val.val.ival;
+				if (base_type == LogicalTypeId::BIT && const_val.location != -1) {
+					result.width = 0;
+				}
+			} else if (result.count == 1) {
+				result.scale = const_val.val.val.ival;
+			} else {
+				throw ParserException("A maximum of two modifiers is supported");
+			}
+			result.count++;
+		}
+	}
+	return result;
+}
+
+vector<Value> Transformer::TransformTypeModifiers(duckdb_libpgquery::PGTypeName &type_name) {
+	vector<Value> type_mods;
+	if (type_name.typmods) {
+		for (auto node = type_name.typmods->head; node; node = node->next) {
+			if (type_mods.size() > 9) {
+				auto name = PGPointerCast<duckdb_libpgquery::PGValue>(type_name.names->tail->data.ptr_value)->val.str;
+				throw ParserException("'%s': a maximum of 9 type modifiers is allowed", name);
+			}
+			auto &const_val = *PGPointerCast<duckdb_libpgquery::PGAConst>(node->data.ptr_value);
+			if (const_val.type != duckdb_libpgquery::T_PGAConst) {
+				throw ParserException("Expected a constant as type modifier");
+			}
+			auto const_expr = TransformValue(const_val.val);
+			type_mods.push_back(std::move(const_expr->value));
+		}
+	}
+	return type_mods;
+}
 
 LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_name) {
 	if (type_name.type != duckdb_libpgquery::T_PGTypeName) {
@@ -20,11 +83,13 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_n
 		for (auto cell = type_name.names->head; cell; cell = cell->next) {
 			names.push_back(PGPointerCast<duckdb_libpgquery::PGValue>(cell->data.ptr_value)->val.str);
 		}
+		vector<Value> type_mods = TransformTypeModifiers(type_name);
 		switch (type_name.names->length) {
 		case 2:
-			return LogicalType::USER(INVALID_CATALOG, std::move(names[0]), std::move(names[1]));
+			return LogicalType::USER(INVALID_CATALOG, std::move(names[0]), std::move(names[1]), std::move(type_mods));
 		case 3:
-			return LogicalType::USER(std::move(names[0]), std::move(names[1]), std::move(names[2]));
+			return LogicalType::USER(std::move(names[0]), std::move(names[1]), std::move(names[2]),
+			                         std::move(type_mods));
 		default:
 			throw ParserException(
 			    "Too many qualifications for type name - expected [catalog.schema.name] or [schema.name]");
@@ -131,97 +196,66 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_n
 		}
 		D_ASSERT(!children.empty());
 		result_type = LogicalType::UNION(std::move(children));
+	} else if (base_type == LogicalTypeId::USER) {
+		string user_type_name {name};
+		vector<Value> type_mods = TransformTypeModifiers(type_name);
+		result_type = LogicalType::USER(user_type_name, type_mods);
 	} else {
-		idx_t width, scale;
-		if (base_type == LogicalTypeId::DECIMAL) {
-			// default decimal width/scale
-			width = 18;
-			scale = 3;
-		} else {
-			width = 0;
-			scale = 0;
-		}
-		// check any modifiers
-		int modifier_idx = 0;
-		if (type_name.typmods) {
-			for (auto node = type_name.typmods->head; node; node = node->next) {
-				auto &const_val = *PGPointerCast<duckdb_libpgquery::PGAConst>(node->data.ptr_value);
-				if (const_val.type != duckdb_libpgquery::T_PGAConst ||
-				    const_val.val.type != duckdb_libpgquery::T_PGInteger) {
-					throw ParserException("Expected an integer constant as type modifier");
-				}
-				if (const_val.val.val.ival < 0) {
-					throw ParserException("Negative modifier not supported");
-				}
-				if (modifier_idx == 0) {
-					width = NumericCast<idx_t>(const_val.val.val.ival);
-					if (base_type == LogicalTypeId::BIT && const_val.location != -1) {
-						width = 0;
-					}
-				} else if (modifier_idx == 1) {
-					scale = NumericCast<idx_t>(const_val.val.val.ival);
-				} else {
-					throw ParserException("A maximum of two modifiers is supported");
-				}
-				modifier_idx++;
-			}
-		}
+		SizeModifiers modifiers = GetSizeModifiers(type_name, base_type);
 		switch (base_type) {
 		case LogicalTypeId::VARCHAR:
-			if (modifier_idx > 1) {
+			if (modifiers.count > 1) {
 				throw ParserException("VARCHAR only supports a single modifier");
 			}
 			// FIXME: create CHECK constraint based on varchar width
-			width = 0;
+			modifiers.width = 0;
 			result_type = LogicalType::VARCHAR;
 			break;
 		case LogicalTypeId::DECIMAL:
-			if (modifier_idx == 1) {
-				// only width is provided: set scale to 0
-				scale = 0;
+			if (modifiers.count > 2) {
+				throw ParserException("DECIMAL only supports a maximum of two modifiers");
 			}
-			if (width <= 0 || width > Decimal::MAX_WIDTH_DECIMAL) {
+			if (modifiers.count == 1) {
+				// only width is provided: set scale to 0
+				modifiers.scale = 0;
+			}
+			if (modifiers.width <= 0 || modifiers.width > Decimal::MAX_WIDTH_DECIMAL) {
 				throw ParserException("Width must be between 1 and %d!", (int)Decimal::MAX_WIDTH_DECIMAL);
 			}
-			if (scale > width) {
+			if (modifiers.scale > modifiers.width) {
 				throw ParserException("Scale cannot be bigger than width");
 			}
-			result_type = LogicalType::DECIMAL(NumericCast<uint8_t>(width), NumericCast<uint8_t>(scale));
+			result_type =
+			    LogicalType::DECIMAL(NumericCast<uint8_t>(modifiers.width), NumericCast<uint8_t>(modifiers.scale));
 			break;
 		case LogicalTypeId::INTERVAL:
-			if (modifier_idx > 1) {
+			if (modifiers.count > 1) {
 				throw ParserException("INTERVAL only supports a single modifier");
 			}
-			width = 0;
+			modifiers.width = 0;
 			result_type = LogicalType::INTERVAL;
 			break;
-		case LogicalTypeId::USER: {
-			string user_type_name {name};
-			result_type = LogicalType::USER(user_type_name);
-			break;
-		}
-		case LogicalTypeId::BIT: {
-			if (!width && type_name.typmods) {
+		case LogicalTypeId::BIT:
+			if (!modifiers.width && type_name.typmods) {
 				throw ParserException("Type %s does not support any modifiers!", LogicalType(base_type).ToString());
 			}
 			result_type = LogicalType(base_type);
 			break;
-		}
 		case LogicalTypeId::TIMESTAMP:
-			if (modifier_idx == 0) {
+			if (modifiers.count == 0) {
 				result_type = LogicalType::TIMESTAMP;
 			} else {
-				if (modifier_idx > 1) {
+				if (modifiers.count > 1) {
 					throw ParserException("TIMESTAMP only supports a single modifier");
 				}
-				if (width > 10) {
+				if (modifiers.width > 10) {
 					throw ParserException("TIMESTAMP only supports until nano-second precision (9)");
 				}
-				if (width == 0) {
+				if (modifiers.width == 0) {
 					result_type = LogicalType::TIMESTAMP_S;
-				} else if (width <= 3) {
+				} else if (modifiers.width <= 3) {
 					result_type = LogicalType::TIMESTAMP_MS;
-				} else if (width <= 6) {
+				} else if (modifiers.width <= 6) {
 					result_type = LogicalType::TIMESTAMP;
 				} else {
 					result_type = LogicalType::TIMESTAMP_NS;
@@ -229,7 +263,7 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_n
 			}
 			break;
 		default:
-			if (modifier_idx > 0) {
+			if (modifiers.count > 0) {
 				throw ParserException("Type %s does not support any modifiers!", LogicalType(base_type).ToString());
 			}
 			result_type = LogicalType(base_type);

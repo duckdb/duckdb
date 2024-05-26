@@ -184,6 +184,27 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::In(const py::args &args) {
 	return make_shared_ptr<DuckDBPyExpression>(std::move(operator_expr));
 }
 
+// COALESCE
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Coalesce(const py::args &args) {
+	vector<unique_ptr<ParsedExpression>> expressions;
+	expressions.reserve(args.size());
+
+	for (auto arg : args) {
+		shared_ptr<DuckDBPyExpression> py_expr;
+		if (!py::try_cast<shared_ptr<DuckDBPyExpression>>(arg, py_expr)) {
+			throw InvalidInputException("Please provide arguments of type Expression!");
+		}
+		auto expr = py_expr->GetExpression().Copy();
+		expressions.push_back(std::move(expr));
+	}
+	if (expressions.empty()) {
+		throw InvalidInputException("Please provide at least one argument");
+	}
+	auto operator_expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE, std::move(expressions));
+	return make_shared_ptr<DuckDBPyExpression>(std::move(operator_expr));
+}
+
 shared_ptr<DuckDBPyExpression> DuckDBPyExpression::NotIn(const py::args &args) {
 	auto in_expr = In(args);
 	return in_expr->Not();

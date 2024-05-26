@@ -21,8 +21,16 @@ void StandardColumnData::SetStart(idx_t new_start) {
 	validity.SetStart(new_start);
 }
 
-bool StandardColumnData::HasUpdates() const {
-	return ColumnData::HasUpdates() || validity.HasUpdates();
+ScanVectorType StandardColumnData::GetVectorScanType(ColumnScanState &state, idx_t scan_count) {
+	// if either the current column data, or the validity column data requires flat vectors, we scan flat vectors
+	auto scan_type = ColumnData::GetVectorScanType(state, scan_count);
+	if (scan_type == ScanVectorType::SCAN_FLAT_VECTOR) {
+		return ScanVectorType::SCAN_FLAT_VECTOR;
+	}
+	if (state.child_states.empty()) {
+		return scan_type;
+	}
+	return validity.GetVectorScanType(state.child_states[0], scan_count);
 }
 
 bool StandardColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
@@ -31,10 +39,15 @@ bool StandardColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filte
 			return true;
 		}
 		state.segment_checked = true;
-		auto prune_result = filter.CheckStatistics(state.current->stats.statistics);
-		if (prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-			return true;
+		FilterPropagateResult prune_result;
+		{
+			lock_guard<mutex> l(stats_lock);
+			prune_result = filter.CheckStatistics(state.current->stats.statistics);
+			if (prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+				return true;
+			}
 		}
+		lock_guard<mutex> l(update_lock);
 		if (updates) {
 			auto update_stats = updates->GetStatistics();
 			prune_result = filter.CheckStatistics(*update_stats);
@@ -63,19 +76,19 @@ void StandardColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t 
 	validity.InitializeScanWithOffset(state.child_states[0], row_idx);
 }
 
-idx_t StandardColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state,
-                               Vector &result) {
+idx_t StandardColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+                               idx_t target_count) {
 	D_ASSERT(state.row_index == state.child_states[0].row_index);
-	auto scan_count = ColumnData::Scan(transaction, vector_index, state, result);
-	validity.Scan(transaction, vector_index, state.child_states[0], result);
+	auto scan_count = ColumnData::Scan(transaction, vector_index, state, result, target_count);
+	validity.Scan(transaction, vector_index, state.child_states[0], result, target_count);
 	return scan_count;
 }
 
-idx_t StandardColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result,
-                                        bool allow_updates) {
+idx_t StandardColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
+                                        idx_t target_count) {
 	D_ASSERT(state.row_index == state.child_states[0].row_index);
-	auto scan_count = ColumnData::ScanCommitted(vector_index, state, result, allow_updates);
-	validity.ScanCommitted(vector_index, state.child_states[0], result, allow_updates);
+	auto scan_count = ColumnData::ScanCommitted(vector_index, state, result, allow_updates, target_count);
+	validity.ScanCommitted(vector_index, state.child_states[0], result, allow_updates, target_count);
 	return scan_count;
 }
 
@@ -192,15 +205,14 @@ StandardColumnData::CreateCheckpointState(RowGroup &row_group, PartialBlockManag
 }
 
 unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_group,
-                                                                 PartialBlockManager &partial_block_manager,
                                                                  ColumnCheckpointInfo &checkpoint_info) {
 	// we need to checkpoint the main column data first
 	// that is because the checkpointing of the main column data ALSO scans the validity data
 	// to prevent reading the validity data immediately after it is checkpointed we first checkpoint the main column
 	// this is necessary for concurrent checkpointing as due to the partial block manager checkpointed data might be
 	// flushed to disk by a different thread than the one that wrote it, causing a data race
-	auto base_state = ColumnData::Checkpoint(row_group, partial_block_manager, checkpoint_info);
-	auto validity_state = validity.Checkpoint(row_group, partial_block_manager, checkpoint_info);
+	auto base_state = ColumnData::Checkpoint(row_group, checkpoint_info);
+	auto validity_state = validity.Checkpoint(row_group, checkpoint_info);
 	auto &checkpoint_state = base_state->Cast<StandardColumnCheckpointState>();
 	checkpoint_state.validity_state = std::move(validity_state);
 	return base_state;

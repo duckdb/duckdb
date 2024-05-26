@@ -7,6 +7,13 @@ namespace duckdb {
 TupleDataChunkPart::TupleDataChunkPart(mutex &lock_p) : lock(lock_p) {
 }
 
+void TupleDataChunkPart::SetHeapEmpty() {
+	heap_block_index = INVALID_INDEX;
+	heap_block_offset = INVALID_INDEX;
+	total_heap_size = 0;
+	base_heap_ptr = nullptr;
+}
+
 void SwapTupleDataChunkPart(TupleDataChunkPart &a, TupleDataChunkPart &b) {
 	std::swap(a.row_block_index, b.row_block_index);
 	std::swap(a.row_block_offset, b.row_block_offset);

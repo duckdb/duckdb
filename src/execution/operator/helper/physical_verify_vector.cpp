@@ -18,25 +18,30 @@ public:
 	idx_t const_idx;
 };
 
-OperatorResultType VerifyEmitConstantVectors(DataChunk &input, DataChunk &chunk, OperatorState &state_p) {
+OperatorResultType VerifyEmitConstantVectors(const DataChunk &input, DataChunk &chunk, OperatorState &state_p) {
 	auto &state = state_p.Cast<VerifyVectorState>();
 	D_ASSERT(state.const_idx < input.size());
 
+	// Ensure that we don't alter the input data while another thread is still using it.
+	DataChunk copied_input;
+	copied_input.Initialize(Allocator::DefaultAllocator(), input.GetTypes());
+	input.Copy(copied_input);
+
 	// emit constant vectors at the current index
 	for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
-		ConstantVector::Reference(chunk.data[c], input.data[c], state.const_idx, 1);
+		ConstantVector::Reference(chunk.data[c], copied_input.data[c], state.const_idx, 1);
 	}
 	chunk.SetCardinality(1);
 	state.const_idx++;
-	if (state.const_idx >= input.size()) {
+	if (state.const_idx >= copied_input.size()) {
 		state.const_idx = 0;
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
 	return OperatorResultType::HAVE_MORE_OUTPUT;
 }
 
-OperatorResultType VerifyEmitDictionaryVectors(DataChunk &input, DataChunk &chunk, OperatorState &state) {
-	chunk.Reference(input);
+OperatorResultType VerifyEmitDictionaryVectors(const DataChunk &input, DataChunk &chunk, OperatorState &state) {
+	input.Copy(chunk);
 	for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
 		Vector::DebugTransformToDictionary(chunk.data[c], chunk.size());
 	}
@@ -48,7 +53,7 @@ struct ConstantOrSequenceInfo {
 	bool is_constant = true;
 };
 
-OperatorResultType VerifyEmitSequenceVector(DataChunk &input, DataChunk &chunk, OperatorState &state_p) {
+OperatorResultType VerifyEmitSequenceVector(const DataChunk &input, DataChunk &chunk, OperatorState &state_p) {
 	auto &state = state_p.Cast<VerifyVectorState>();
 	D_ASSERT(state.const_idx < input.size());
 
@@ -189,8 +194,8 @@ OperatorResultType VerifyEmitSequenceVector(DataChunk &input, DataChunk &chunk, 
 	return OperatorResultType::HAVE_MORE_OUTPUT;
 }
 
-OperatorResultType VerifyEmitNestedShuffleVector(DataChunk &input, DataChunk &chunk, OperatorState &state) {
-	chunk.Reference(input);
+OperatorResultType VerifyEmitNestedShuffleVector(const DataChunk &input, DataChunk &chunk, OperatorState &state) {
+	input.Copy(chunk);
 	for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
 		Vector::DebugShuffleNestedVector(chunk.data[c], chunk.size());
 	}
