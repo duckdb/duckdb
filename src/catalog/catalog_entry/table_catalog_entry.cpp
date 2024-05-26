@@ -316,4 +316,16 @@ void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
 	}
 }
 
+bool TableCatalogEntry::HasPrimaryKey() const {
+	for (const auto &constraint : GetConstraints()) {
+		if (constraint->type == ConstraintType::UNIQUE) {
+			auto &unique = constraint->Cast<UniqueConstraint>();
+			if (unique.IsPrimaryKey()) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
 } // namespace duckdb

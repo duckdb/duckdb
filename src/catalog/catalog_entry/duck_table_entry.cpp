@@ -763,16 +763,16 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 
 	// Copy all columns and constraint to the modified table
 	create_info->columns = columns.Copy();
-	for (auto &constraint : constraints) {
+	for (const auto &constraint : constraints) {
 		create_info->constraints.push_back(constraint->Copy());
 	}
 
 	switch (info.constraint->type) {
 	case ConstraintType::UNIQUE: {
-		auto unique = info.constraint->Cast<UniqueConstraint>();
+		const auto unique = info.constraint->Cast<UniqueConstraint>();
 
-		if (unique.is_primary_key) {
-			EnsureNoPrimaryKey();
+		if (unique.is_primary_key && HasPrimaryKey()) {
+			throw CatalogException("table \"%s\" already has a %s.", name, unique.ToString());
 		}
 
 		create_info->constraints.push_back(info.constraint->Copy());
@@ -782,23 +782,15 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 		throw InternalException("Unsupported constraint type in ALTER TABLE statement!");
 	}
 
-	auto binder = Binder::CreateBinder(context);
+	const auto binder = Binder::CreateBinder(context);
 	// We need to create a new physical table with a new constraint and possibly a new
 	// unique index. This procedure is also responsible for checking that the existing
 	// data satisfies the new constraint.
-	auto bound_constraint = binder->BindConstraint(*info.constraint, create_info->table, create_info->columns);
-	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema);
+	const auto bound_constraint = binder->BindConstraint(*info.constraint, create_info->table, create_info->columns);
+	const auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema);
 
 	auto new_storage = make_shared_ptr<DataTable>(context, *storage, *bound_constraint);
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
-}
-
-void DuckTableEntry::EnsureNoPrimaryKey() {
-	for (const auto &constraint : constraints) {
-		if (constraint->type == ConstraintType::UNIQUE && constraint->Cast<UniqueConstraint>().is_primary_key) {
-			throw CatalogException("table \"%s\" already has a %s.", name, constraint->ToString());
-		}
-	}
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::Copy(ClientContext &context) const {

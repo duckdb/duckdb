@@ -108,6 +108,8 @@ public:
 	virtual void BindUpdateConstraints(Binder &binder, LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,
 	                                   ClientContext &context);
 
+	bool HasPrimaryKey() const;
+
 protected:
 	//! A list of columns that are part of this table
 	ColumnList columns;
