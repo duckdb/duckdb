@@ -48,10 +48,8 @@ public:
 
 class StreamingWindowState : public OperatorState {
 public:
-	using StateBuffer = vector<data_t>;
-
 	struct AggregateState {
-		explicit AggregateState(BoundWindowExpression &wexpr)
+		explicit AggregateState(BoundWindowExpression &wexpr, Allocator &allocator)
 		    : arena_allocator(Allocator::DefaultAllocator()), statev(LogicalType::POINTER, data_ptr_cast(&state_ptr)) {
 			D_ASSERT(wexpr.GetExpressionType() == ExpressionType::WINDOW_AGGREGATE);
 			auto &aggregate = *wexpr.aggregate;
@@ -63,6 +61,8 @@ public:
 			for (auto &child : wexpr.children) {
 				arg_types.push_back(child->return_type);
 			}
+			arg_chunk.Initialize(allocator, arg_types);
+			arg_cursor.Initialize(allocator, arg_types);
 			if (wexpr.filter_expr) {
 				filter_sel.Initialize();
 			}
@@ -76,15 +76,28 @@ public:
 			}
 		}
 
+		//! The allocator to use for aggregate data structures
 		ArenaAllocator arena_allocator;
-		StateBuffer state;
+		//! The single aggregate state we update row-by-row
+		vector<data_t> state;
+		//! The pointer to the state stored in the state vector
 		data_ptr_t state_ptr = nullptr;
+		//! The state vector for the single state
 		Vector statev;
+		//! The aggregate binding data (if any)
 		FunctionData *bind_data = nullptr;
+		//! The aggregate state destructor (if any)
 		aggregate_destructor_t dtor = nullptr;
+		//! The inputs rows that pass the FILTER
 		SelectionVector filter_sel;
+		//! The number of unfiltered rows so far for COUNT(*)
 		int64_t unfiltered = 0;
+		//! Argument types
 		vector<LogicalType> arg_types;
+		//! Argument value buffer
+		DataChunk arg_chunk;
+		//! Argument cursor (a one element slice of arg_chunk)
+		DataChunk arg_cursor;
 	};
 
 	explicit StreamingWindowState(ClientContext &client) : initialized(false), allocator(Allocator::Get(client)) {
@@ -102,7 +115,7 @@ public:
 			auto &wexpr = expr.Cast<BoundWindowExpression>();
 			switch (expr.GetExpressionType()) {
 			case ExpressionType::WINDOW_AGGREGATE:
-				aggregate_states[expr_idx] = make_uniq<AggregateState>(wexpr);
+				aggregate_states[expr_idx] = make_uniq<AggregateState>(wexpr, allocator);
 				break;
 			case ExpressionType::WINDOW_FIRST_VALUE: {
 				// Just execute the expression once
@@ -173,7 +186,6 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 			auto &aggregate = *wexpr.aggregate;
 			auto &aggr_state = *state.aggregate_states[expr_idx];
 			auto &statev = aggr_state.statev;
-			AggregateInputData aggr_input_data(wexpr.bind_info.get(), aggr_state.arena_allocator);
 
 			// Compute the FILTER mask (if any)
 			ValidityMask filter_mask;
@@ -207,23 +219,21 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 			for (auto &child : wexpr.children) {
 				executor.AddExpression(*child);
 			}
-
-			DataChunk arg_chunk;
-			arg_chunk.Initialize(state.allocator, aggr_state.arg_types);
+			auto &arg_chunk = aggr_state.arg_chunk;
 			executor.Execute(input, arg_chunk);
 
 			// Iterate through them using a single SV
 			arg_chunk.Flatten();
 			sel_t s = 0;
 			SelectionVector sel(&s);
-			DataChunk row;
-			row.Initialize(state.allocator, aggr_state.arg_types);
-			row.Slice(sel, 1);
+			auto &arg_cursor = aggr_state.arg_cursor;
+			arg_cursor.Reset();
+			arg_cursor.Slice(sel, 1);
 			// This doesn't work for STRUCTs because the SV
 			// is not copied to the children when you slice
 			vector<column_t> structs;
 			for (column_t col_idx = 0; col_idx < arg_chunk.ColumnCount(); ++col_idx) {
-				auto &col_vec = row.data[col_idx];
+				auto &col_vec = arg_cursor.data[col_idx];
 				DictionaryVector::Child(col_vec).Reference(arg_chunk.data[col_idx]);
 				if (col_vec.GetType().InternalType() == PhysicalType::STRUCT) {
 					structs.emplace_back(col_idx);
@@ -231,13 +241,14 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 			}
 
 			// Update the state and finalize it one row at a time.
+			AggregateInputData aggr_input_data(wexpr.bind_info.get(), aggr_state.arena_allocator);
 			for (idx_t i = 0; i < count; ++i) {
 				sel.set_index(0, i);
 				for (const auto struct_idx : structs) {
-					row.data[struct_idx].Slice(arg_chunk.data[struct_idx], sel, 1);
+					arg_cursor.data[struct_idx].Slice(arg_chunk.data[struct_idx], sel, 1);
 				}
 				if (filter_mask.RowIsValid(i)) {
-					aggregate.update(row.data.data(), aggr_input_data, row.ColumnCount(), statev, 1);
+					aggregate.update(arg_cursor.data.data(), aggr_input_data, arg_cursor.ColumnCount(), statev, 1);
 				}
 				aggregate.finalize(statev, aggr_input_data, result, 1, i);
 			}
