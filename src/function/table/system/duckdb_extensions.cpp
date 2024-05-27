@@ -125,7 +125,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 		if (entry == installed_extensions.end()) {
 			installed_extensions[info.name] = std::move(info);
 		} else {
-			if (!entry->second.loaded) {
+			if (entry->second.install_mode != ExtensionInstallMode::STATICALLY_LINKED) {
 				entry->second.file_path = info.file_path;
 				entry->second.install_mode = info.install_mode;
 				entry->second.installed_from = info.installed_from;
