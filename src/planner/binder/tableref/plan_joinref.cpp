@@ -332,7 +332,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	}
 
 	if (ref.type == JoinType::MARK) {
-		join->Cast<LogicalComparisonJoin>().mark_index = ref.mark_index;
+		join->Cast<LogicalJoin>().mark_index = ref.mark_index;
 	}
 	for (auto &child : join->children) {
 		if (child->type == LogicalOperatorType::LOGICAL_FILTER) {
