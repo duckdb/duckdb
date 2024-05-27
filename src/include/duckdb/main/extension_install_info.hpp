@@ -37,6 +37,8 @@ public:
 	string repository_url;
 	//! (optional) Version of the extension
 	string version;
+	//! (optional) ETag of last fetched resource
+	string etag;
 
 	void Serialize(Serializer &serializer) const;
 
