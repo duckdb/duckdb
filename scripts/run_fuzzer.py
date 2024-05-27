@@ -158,6 +158,8 @@ with open(last_query_log_file, 'r') as f:
 with open(complete_log_file, 'r') as f:
     all_queries = f.read()
 
+# reduce_multi_statement checks just the last statement first as a heuristic to see if
+# only the last statement causes the error.
 required_queries = reduce_sql.reduce_multi_statement(all_queries, shell, load_script)
 
 (stdout, stderr, returncode) = run_shell_command(load_script + required_queries)

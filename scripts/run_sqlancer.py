@@ -120,7 +120,7 @@ print("Starting reduction process")
 print('----------------------------------------------')
 
 # clean up queries from the query log by trying to remove queries one by one
-queries = reduce_sql.reduce_query_log(queries, shell)
+queries = reduce_sql.reduce_query_log(queries, shell, [])
 
 reduced_test_case = ';\n'.join(queries)
 print('----------------------------------------------')
