@@ -8,6 +8,9 @@ require skip_reload
 # load the DB from disk
 load __TEST_DIR__/view_storage.db
 
+statement ok
+set enable_view_dependencies=true
+
 # create a schema and view
 statement ok
 CREATE SCHEMA test;

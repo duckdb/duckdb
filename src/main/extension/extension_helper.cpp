@@ -62,10 +62,6 @@
 #include "icu_extension.hpp"
 #endif
 
-#if DUCKDB_EXTENSION_EXCEL_LINKED
-#include "excel_extension.hpp"
-#endif
-
 #if DUCKDB_EXTENSION_PARQUET_LINKED
 #include "parquet_extension.hpp"
 #endif
@@ -213,7 +209,7 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 		if (dbconfig.options.autoinstall_known_extensions) {
 			auto &config = DBConfig::GetConfig(context);
 			auto autoinstall_repo = ExtensionRepository::GetRepositoryByUrl(config.options.autoinstall_extension_repo);
-			ExtensionHelper::InstallExtension(context, extension_name, false, autoinstall_repo);
+			ExtensionHelper::InstallExtension(context, extension_name, false, autoinstall_repo, false);
 		}
 		ExtensionHelper::LoadExternalExtension(context, extension_name);
 		return true;
@@ -322,26 +318,6 @@ vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(DatabaseInstance
 		result.push_back(UpdateExtensionInternal(db, fs, fs.JoinPath(ext_directory, path), extension_name));
 	});
 #endif
-
-	for (const auto &extension : db.LoadedExtensions()) {
-		if (seen_extensions.find(extension) != seen_extensions.end()) {
-			const auto &loaded_extension_data = db.LoadedExtensionsData();
-			const auto &loaded_install_info = loaded_extension_data.find(extension);
-
-			ExtensionUpdateResult statically_loaded_ext_result;
-
-			if (loaded_install_info == loaded_extension_data.end()) {
-				statically_loaded_ext_result.tag = ExtensionUpdateResultTag::UNKNOWN;
-			} else if (loaded_install_info->second.mode == ExtensionInstallMode::STATICALLY_LINKED) {
-				statically_loaded_ext_result.tag = ExtensionUpdateResultTag::STATICALLY_LOADED;
-				statically_loaded_ext_result.installed_version = loaded_install_info->second.version;
-			} else {
-				statically_loaded_ext_result.tag = ExtensionUpdateResultTag::UNKNOWN;
-			}
-
-			result.push_back(std::move(statically_loaded_ext_result));
-		}
-	}
 
 	return result;
 }
@@ -773,10 +749,237 @@ EMS5gLv50CzQqJXK9mNzPuYXNUIc4Pw4ssVWe0OfN3Od90gl5uFUwk/G9lWSYnBN
 -----END PUBLIC KEY-----
 )", nullptr};
 
-const vector<string> ExtensionHelper::GetPublicKeys() {
+static const char *const community_public_keys[] = {
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAv+Jki3aiZt0eOzShgD2g
+BYPjPpkhHowOwPzUKtTVPob7vxyzd2wPyWDF/Zn6sN8QzravAdlXFE3SNF7ayO86
+IPHhMxO6P2YlxbipyKzPOUJsasXBiwYw2aSvb0RtwnYwD5lJs8Tz2ET1RQCFgXGc
+LW7bDjKRbHSME0Me5rLRWVztOqULeoMeY1oCOmKKeAYxjFOASJJfQF9oQxkuu3j1
+qpcXnfHldlPGzFM77OFlWFtlc9QW4WNoxkO3HwskFW6ZRaQipM8vgSzkIfPFESGL
+TtDRw+RcUPqmS6NVW8nhaiptBIMXy+9cP/l1LGmGwrZRhWP0YBlk6V9MUMzjyo+R
+JQIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtXl28loGwAH3ZGQXXgJQ
+3omhIEiUb3z9Petjl+jmdtEQnMNUFEZiXkfJB02UFWBL1OoKKnjiGhcr5oGiIZKR
+CoaL6SfmWe//7o8STM44stE0exzZcv8W4tWwjrzSWQnwh2JgSnHN64xoDQjdvG3X
+9uQ1xXMXghWOKqEpgArpJQkHoPW3CD5sCS2NLFrBG6KgX0W+GTV5HaKhTMr2754F
+l260drcBJZhLFCeesze2DXtQC+R9D25Zwn2ehHHd2Fd1M10ZL/iKN8NeerB4Jnph
+w6E3orA0DusDLDLtpJUHhmpLoU/1eYQFQOpGw2ce5I88Tkx7SKnCRy1UiE7BA82W
+YQIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvTgQ+mJs8vG/TQTJ6sV+
+tACTZTbmp8NkgTuwEyHZSNhX6W8FYwAqPzbePo7wudsUdBWV8j+kUYaBiqeiPUp0
+7neO/3oTUQkMJLq9FeIXfoYkS3+/5CIuvsfas6PJP9U2ge6MV1Ndgbd7a12cmX8V
+4eNwQRDv/H4zgL7YI2ZZSG1loxgMffZrpflNB87t/f0QYdmnwphMC5RqxiCkDZPA
+a5/5KbmD6kjLh8RRRw3lAZbPQe5r7o2Xqqwg9gc6rQ/WFBB1Oj+Q5Bggqznl6dCB
+JcLOA7rhYatv/mvt1h6ogQwQ9FGRM3PifV9boZxOQGBAkMD6ngpd5kVoOxdygC7v
+twIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA7KvnA+Ixj4ZCLR+aXSFz
+ICGbQdVrZ/hhjImDQcWgWY+z/bEbybslDvy5KEPrxTNxKZ0VfFFAVEUj2cw8B5KI
+naK8U2VIpdD6LpEJvkOuWKg3bym4COhyAcRNqKKu/GPzS90wICJ2aaayF1mVoCIL
+dsp2ZShSIVRJa55gVvfRN1ZEkqBnZryKNt/h3DNqqq2Sn3n3HIZ8H9oEO+L+2Efe
+kyET7o9OHy6QZXhf4SJ8QlQAwxxe/L4bln8CBlBHKrUNNqxpjhC37EnY2jpuu3a9
+EZcNFj8R4qIJx7hcltntZyKrEIXqc6I6x4oZ4qhZj3RQ5Lr+pJ++idoc1LmBS3k5
+yQIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA7SF+5RZ9jXyruBkhxhk2
+BSWPbohevxxv++7Uw0HXC/3Xw4jzii0tYaJ6O8QWXyggEAkvmONblAN1rfiz+h5M
+oJUQwHjTTZ8BmKUmWrNayVokUXLu4IpCAHk4uSXfx4U/AINnNfWW7z8mUJf6nGsM
+XePuKPBRUsw+JmTWOXEIVrkc/66B+gpgi+DwRFLUPh96D8XRAhp7QbHE9UMD3HpA
+mPMX7ICVsVS+NGdCHNsdWfH4noaESjgmMdApKekgeeo8Zu1pvQ3y8iew1xOQVBoR
+V+PCGWAJYB7ulqBBkRz+NhPLWw7wRA4yLNcZVlZuDFxH9EoavWdfIyYYUn4efSz9
+tQIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAszmZ6Slv/oJvFpOLtSMx
+58AKMia9y+qcVfw77/Alb3b+Qi5L2uy6nHfJElT7RIeeXhJ8mFglZ70MecTfj0jl
+5WhW+yMg6jmPCJL2JMt/oeC4iY4Cf/3C9RHU4IO13VN4dnVQ5S+SEEmSbXnno9Pe
+06yyVgZeJ0REJMV1JZj9gOPc/wbeLHsx4UC5qsu32Ammy6J7tS+k7JvRc9CPOEpe
+IhWoZmpONydcI6IRfyH2xl4uLY3hWDrRei0I2zGH45G2hPNeTtRh27t+SzXO7h9j
+y072CgHytRgQBiH711i8fe4bHMmtVPhPjFrbuzbJSgE7SyikrWIHMDsnPz443bdR
+cQIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAleywAb7xZKYTFE08gGA9
+ffTeYPRcECl/J060fUziIiFu0NHTOZO+a4BH2X+E1WjjNNQkbn00g+op4nqg3/U+
+UaKuXNjWY2Rvd8s91fUD0YOdRpPmsTm2QqhgmYYzO8Oh3YXBNRpXaqALbjL9Nahw
+YEAsI3o5yenZGUIEk3JaZFHsAZPL5wGgDVpZgmVUHJ0EO8N5LQh01aHxnP5+ey2z
+L5h6IdWLubb07wEBk5bnmIvdhd6dIBzUql27BAqvxKJbW0/okjrhIgcIANDCavfV
+L8UP7MCGnfozK7VIl5DG85gCQVAD8+lGUDzOuhzZjl7XKpkFAIWaS8pl4AJbJuG8
+nwIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxiKgcR7Kb1CGTNczbuX+
+S7OFpnVLDD5XGVKvYWxL+2By2QRFPWtMs8c24omLIgZ/CWBFPraMiNKS4+V9ar2C
+wJhToJnAOKyayA0Gw2wNZx1mgHAZ/5mT+ImfkmZu2HPwtzJmJDQlESD4p40BWBNa
+ZpWFGPMKn4GqvOOSGevC/r9inXm6NaPkM+B/piVDEgiJ7g/kpoqImmNb/c2/3XG5
+3kbDIHdbd2m3A3jWCjNGSANKsR5C0/rZtvsA8tjDlNWIuKmkU3C2nfj3UduU4dNP
+Cisod/pDY8ov0U9sdkM9XZsTXjtbAIGLzMshmOv4ajRFUueGnsZW0GRqp9DSnKmj
+2QIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuh334hUmJcdDJUSmeXqE
+GUfGnASD2QrnuoS+gsXgW5BQW8YMDFASvADQhoDUdcwZMlAF+p+CxKCX/gBp40nC
+5eyPXv1e0K6PFcCdHtJq8MhGYAr1sy+7cOpzv0r9whobYUykGoHjdwZeu3VbA3uz
+go80oYQlwY+v4zZFafCz3cXw8u7n/9PlddgeqHuIPsNZLocICuBUxwg5rHTzycg2
+Pa68CRselONGN12V0/wlOg+NZpKCym58CM9SS/0v4YZ6LnmINo8gdRYnGE2zhvey
+pHR8IJ8WSJXbl8NwyIY1AmtT/Z0dbAclfD8Wt/w5KA/sttnQzrB7fPsLRyLP1Alq
+iQIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvWuRMEbez/Ud2o/0KA04
+K9u3HePWud9rEqMsPv2HlclH3k+cezoUJzVre0lopv3R4aG3LDoFETrgGgUVrfPG
+z3Zh7vyk0kb4IGkv+kLQu/cWQXyNzigxV+WQnpIWQ28vrP45y5f+GhwwgzFaDAQR
+u1o1HH1FEnP7SSzHVvisNTecY95+F5AOvtOOUg4VlegXdUeGZHEza/0D9V8gODPL
+DzbOJDDiqX8ahhRnIZyGEg6y7QqftZFz7j0siCHTXXYJBOcPjD4TqTUNpGvBox44
+wgLlLcDsZ/n2Ck4doLXxVz9F80VKOriHSk+qIwseykKVzWQDQTOMOsjCmQsDvram
+RwIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyJmGd1GuBv/WD80IcVyr
+dZcmuYe/7azLuV1wsgtH4gsUx+ifUwLZUhLFGOTAPFitbFYPPdhQKncO+BcbvOIo
+9FGKj9jGVpMU6C+0JQfi+koESevtO1tYzG8c2dMOGNUO0Hlj2Hezm3tZY4nAbo1J
+DYqQSY7qvOYZPFvOS/zL+q2vMx93w9jDHJK4iU02ovAqK9xCWfTp4W7rtbDeTgiX
+W/75rMG8DWI1ZHA2JXAOFPsiOHa0/yyvCvUIWvRuNHqTTN5NFiJRIcbTCKKbNwNM
+xcNkBQCx4xwOqD9TkDbHpBOC/pfW7j3ygJdYRjFFqm10+KwPACYo/f0n4n4DI8Zz
+twIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnmxbunsK+2pL8Cva9F8E
+9o/dQ35TuIqcgpl9/oIc++x+6G5/8UT5mgGCQTITJRIAPnHsZ9XEnMxTAuSCDkYG
+CA3JMl1MT7Zxu8TQJBPiXxOaAE1UmA13JuQ2Uu0v7T6TucQxR9KMvcdCxOZ5cBU4
+uyJObnZVy/WjM2vWcWDUaYGfMss3eYxcDpavspBANdtSZfv11+8/VC+gEGBOe+oW
+zDR+BlQx//MAzwSP5HVQcmLHsT073IvkoUWJUxSCCwlLe60ylpY16BLT6dB0RU8B
+sxFcIwmYg0kq19EEPPvZLvRKjG/TJRm1MFzOE5LP2VxLGdMltWYEVsBZHTcWU7HR
+8wIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlo7eDZOpCptanajUtDK3
+q8Q/ykxmDDw6lVSiLBm54zwMxaqfM+tV/xqalvIVv3BrucRkCs6H+R0bpd7XhbE5
+a7ZFSrWCBf1V6y/NZrEn4qcRbk/WsG4UFqu7CG4r+EgQ4nmoIH/A5+e8FUcur3Y8
+2ie9Foi1CUpZojWYZJeHKbb2yYn4MFHszEb5w9HVxY+i9jR1B8Rvn6OEK3OYDrtA
+KnPXp4OiDx6CviYEmipX815PPj7Sv8KKL96JqGWjC4kYw6ALgV/GxiX++tv6rh2O
+paW9MBv1y+5oZ8ls5S2T/LXbxDpjUEKC9guSSWmsPHRMxOumXsw0H43grC3Ce8Ui
+CwIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0ACgf0kJeQgDh+vHj2aj
+K/6FQ794MknLxlwTARGlktoVwZgW/qc6vMZsILRUP1gb/gPXdpSTqqad/GLG4f5R
+1Ji1It6BniJOPWu1YyTz0C/BXzTGWbwPnIaawbpQE8n4A+tjGGvAoauPtzr0bWfV
+XOXPfIW9XB51dcaVTZgHN55Y8Yd/Pcu9/lqXqXyE23tDLXR/QgGpwK9VxTSbRmuC
+WspwqWY6L3MIw+3HIXERTM1uNhc9oHxMOCRbJmUghG0wCWB0ed3Xhbnl9mHlX+l1
+rfCJAP4lVWKFjkKBNUejaf+WHxASMjrQubgHLZ2fpf3Ra8TfI3rgPABsAqEIFw3T
+QwIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt635/P50bMbEDTapjAQz
+ARTb3y8jMHxVruX0tJU1tycmkX3J8tBALmc6TkSHNTJcQmR8L8Sj3h76l/vuL373
+HFSGZ4xghBQqR1lUd2kVomoh+rzEte+0rHWm0JMhjmTQBx+AkDCOw4z3vi5AxWx0
+4EbYpQm2akVGKXQrQPyds0UirmdLACCH6WM6exgAXr75DB4PUpG85oI9Q+5ee1Km
++4atVJ4FNa6ZnjWccrlMYT0W7a0Y7feJPAPvfizrs2MG9/ijyBX34eCWA5dtUSIm
+2uqI6DxITZlLTvXVDSKQGlq5TEGMvRULWTatqWy4g+tOZ8rSbRuj32pcBnXlwuVu
+7QIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwqO3yWSLKqz1uQ54iFd/
+VcQzgT6chLVuhktt7EFvi3tKaQqz2h2KPkDR+MssRV/BZ/41GNlR6r6p5CaPVDDe
+Cuj5IcxrIFZIOBMBi1YZ/bknF9edJacINxNfGK/lXBNEAdUvxcOxX8WeP69uvl2l
+SKyO3yAdx6HOyL9if95bYQD19HYPZzbfccPX1aD4pjnej6uMfd7yZErH7i8y0oj4
+eSKSe1CisjFlR9NzRGO42jU9rtqnAFH9sK5wU9xKQ7bQwlz7yKBF2RuuQweMpXb6
+lSObI7ZqYN+7jkf9F5hKRx4kX3+MMBeYmFOy1aYZ08u6sdJ2ua/hFNSDRg7e/UCe
+AwIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAkJihnfMECaa6YCg6avam
+cb8Sy1GshJ7c7+EW6C4vnspSSvEi04AEBB29pnEF9+VO6VSUHLxunVCpbmKFaLH+
+5fDLnc/wCkjPQww49da9MEScCmVGjROlmog65cxQbv4lfxyw55sFV3s/5CPcGlVc
+1gojHRABrx4YocpeYies04mEVoOYg1DBG4Uf+aFd5+hm3ZtBa4mqTK2iQa4ILkHa
+a0/Us1drRuDjjI4zSbgRzy9x0JVDvqDdLubHyaEf7d7SdrKzodhydG84qpsPFxIj
+LK7Bu5v7P4ZTJmxMG3PBM2kB//hlYVR4vO4VEu66mQIM6km+vT9cwxz77qIJhLn3
+ywIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA9NbP7ijUxZh4j0NVF6yO
+IZ0rzROwl4pP4HGeN+Woyi9+qpdE874WlVoquGEpsshF4Ojzbu2BtXuihb783awa
+GLx66MYPeID1FjTKmuCJ2aluOP+DkVo6K1EoqVJXyeIxZzVSqhSIuAdb/vmPlgLz
+Fzdk3FgNNOERuGV363DRGz1YxZVnJeSs76g+/9ddhMk8cqIRup5S4YgTOSr0vKem
+1E6lyE8IbLoq9J7w5Ur8VjzE2cI+eLKGFqr46Q8pf0pJq72gd+Z3mH5D2LmvEtAR
+9jAQXVlLfHauQR2M0K6mqDy9GxL19OU4tGO+GY86VvDTU+wZppAZRz9AKoL1fwfI
+BQIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAjrI16GdC2zJriLbyzcre
+AqvckBSTMd4bdGaodUBNBTBVbITsOw/k7D62y2hSZHt2nHOyEVkJINJHADrpNZuY
+ybS4ssEXxD8+NnjATqQxDMuSz8lUj/Jnf49uzLh84fep3DTksDcQX6Nvio5q8Xbh
+HRgvl5I+tPfLtme0oW9cVuVja2i5lHB3SzYCW9Kk/V4/d2WiceYf91a1Nae6m7QV
+5bmbYoHmsxT8refTQq+5lAhzVXYU9QRgiKdbE8sSmkV+YiZEtGijefUXgmOxx3I9
+B3y03796WBS/RHpSzdMNJw/xPWJcSEMqaUdSYr0DuPCnrn7ojFeF/EFC47CBq5DU
+swIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAjS1+My6OhQCCD1DgrzKu
+db4Fvc3aqqEhQyjqMLnalp0uoGFpSLoPsZiPGloTE8FSs1ZBFKQ8h2SsGwSdhRKF
+xIqoOnS0B/ORjGJxTj7Q2YWjzkCZUD4Ul2AxIbv3TmZM2LeyHJL3A71tSuck8EQY
+PE2aj1tLzXsSfRaByy5xwXiU6UpnwCY1xb8tK8QxavRCo5T9Si9tNsolStoNVXV0
+k9EbTcRNnxCvab/oqjvgyRuSmIES00v8jZOGQZQUpw02RN6yCBeX2i8GPsGjj/T9
+6Gu1Z3G4zUjLlJxl8vjo8KIDaQ8NVWT0j7gx9Knvb5tWnAORI1aJA8AHQvaoOT1W
+1wIDAQAB
+-----END PUBLIC KEY-----
+)", nullptr};
+
+const vector<string> ExtensionHelper::GetPublicKeys(bool allow_community_extensions) {
 	vector<string> keys;
 	for (idx_t i = 0; public_keys[i]; i++) {
 		keys.emplace_back(public_keys[i]);
+	}
+	if (allow_community_extensions) {
+		for (idx_t i = 0; community_public_keys[i]; i++) {
+			keys.emplace_back(community_public_keys[i]);
+		}
 	}
 	return keys;
 }

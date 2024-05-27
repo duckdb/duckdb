@@ -19,6 +19,11 @@
 
 namespace duckdb {
 
+class VectorCache;
+class VectorStructBuffer;
+class VectorListBuffer;
+struct SelCache;
+
 struct UnifiedVectorFormat {
 	DUCKDB_API UnifiedVectorFormat();
 	// disable copy constructors
@@ -49,11 +54,17 @@ struct RecursiveUnifiedVectorFormat {
 	LogicalType logical_type;
 };
 
-class VectorCache;
-class VectorStructBuffer;
-class VectorListBuffer;
+//! This is a helper data structure. It contains all fields necessary to resize a vector.
+struct ResizeInfo {
+	ResizeInfo(Vector &vec, data_ptr_t data, optional_ptr<VectorBuffer> buffer, const idx_t multiplier)
+	    : vec(vec), data(data), buffer(buffer), multiplier(multiplier) {
+	}
 
-struct SelCache;
+	Vector &vec;
+	data_ptr_t data;
+	optional_ptr<VectorBuffer> buffer;
+	idx_t multiplier;
+};
 
 struct ConsecutiveChildListInfo {
 	ConsecutiveChildListInfo() : is_constant(true), needs_slicing(false), child_list_info(list_entry_t(0, 0)) {
@@ -63,7 +74,7 @@ struct ConsecutiveChildListInfo {
 	list_entry_t child_list_info;
 };
 
-//!  Vector of values of a specified PhysicalType.
+//! Vector of values of a specified PhysicalType.
 class Vector {
 	friend struct ConstantVector;
 	friend struct DictionaryVector;
@@ -185,8 +196,10 @@ public:
 		data = other.data;
 	}
 
-	//! This functions resizes the vector
+	//! Resizes the vector.
 	DUCKDB_API void Resize(idx_t cur_size, idx_t new_size);
+	//! Returns a vector of ResizeInfo containing each (nested) vector to resize.
+	DUCKDB_API void FindResizeInfos(vector<ResizeInfo> &resize_infos, const idx_t multiplier);
 
 	DUCKDB_API void Serialize(Serializer &serializer, idx_t count);
 	DUCKDB_API void Deserialize(Deserializer &deserializer, idx_t count);

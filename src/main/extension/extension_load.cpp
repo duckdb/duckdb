@@ -105,7 +105,8 @@ ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(FileHandle &hand
 	return ParseExtensionMetaData(metadata_segment.data());
 }
 
-bool ExtensionHelper::CheckExtensionSignature(FileHandle &handle, ParsedExtensionMetaData &parsed_metadata) {
+bool ExtensionHelper::CheckExtensionSignature(FileHandle &handle, ParsedExtensionMetaData &parsed_metadata,
+                                              const bool allow_community_extensions) {
 	auto signature_offset = handle.GetFileSize() - ParsedExtensionMetaData::SIGNATURE_SIZE;
 
 	const idx_t maxLenChunks = 1024ULL * 1024ULL;
@@ -147,7 +148,7 @@ bool ExtensionHelper::CheckExtensionSignature(FileHandle &handle, ParsedExtensio
 	// TODO maybe we should do a stream read / hash update here
 	handle.Read((void *)parsed_metadata.signature.data(), parsed_metadata.signature.size(), signature_offset);
 
-	for (auto &key : ExtensionHelper::GetPublicKeys()) {
+	for (auto &key : ExtensionHelper::GetPublicKeys(allow_community_extensions)) {
 		if (duckdb_mbedtls::MbedTlsWrapper::IsValidSha256Signature(key, parsed_metadata.signature, two_level_hash)) {
 			return true;
 			break;
@@ -236,7 +237,8 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 	}
 
 	if (!config.options.allow_unsigned_extensions) {
-		bool signature_valid = CheckExtensionSignature(*handle, parsed_metadata);
+		bool signature_valid =
+		    CheckExtensionSignature(*handle, parsed_metadata, config.options.allow_community_extensions);
 
 		if (!signature_valid) {
 			throw IOException(config.error_manager->FormatException(ErrorType::UNSIGNED_EXTENSION, filename) +

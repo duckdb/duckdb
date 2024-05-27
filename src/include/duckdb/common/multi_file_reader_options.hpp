@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include "duckdb/common/types.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/hive_partitioning.hpp"
+#include "duckdb/common/types.hpp"
 #include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
@@ -25,6 +25,9 @@ struct MultiFileReaderOptions {
 	bool hive_types_autocast = true;
 	case_insensitive_map_t<LogicalType> hive_types_schema;
 
+	// Default/configurable name of the column containing the file names
+	static constexpr const char *DEFAULT_FILENAME_COLUMN = "filename";
+	string filename_column = DEFAULT_FILENAME_COLUMN;
 	// These are used to pass options through custom multifilereaders
 	case_insensitive_map_t<Value> custom_options;
 
