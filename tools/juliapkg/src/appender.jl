@@ -1,6 +1,8 @@
 using Dates
 
 """
+    Appender(db_connection, table, [schema])
+    
 An appender object that can be used to append rows to an existing table.
 
 * DateTime objects in Julia are stored in milliseconds since the Unix epoch but are converted to microseconds when stored in duckdb.
@@ -38,9 +40,9 @@ DuckDB.close(appender)
 mutable struct Appender
     handle::duckdb_appender
 
-    function Appender(con::Connection, table::AbstractString)
+    function Appender(con::Connection, table::AbstractString, schema::Union{AbstractString, Nothing} = nothing)
         handle = Ref{duckdb_appender}()
-        if duckdb_appender_create(con.handle, C_NULL, table, handle) != DuckDBSuccess
+        if duckdb_appender_create(con.handle, something(schema, C_NULL), table, handle) != DuckDBSuccess
             error_ptr = duckdb_appender_error(handle)
             if error_ptr == C_NULL
                 error_message = string("Opening of Appender for table \"", table, "\" failed: unknown error")
@@ -54,8 +56,8 @@ mutable struct Appender
         finalizer(_close_appender, con)
         return con
     end
-    function Appender(db::DB, table::AbstractString)
-        return Appender(db.main_connection, table)
+    function Appender(db::DB, table::AbstractString, schema::Union{AbstractString, Nothing} = nothing)
+        return Appender(db.main_connection, table, schema)
     end
 end
 

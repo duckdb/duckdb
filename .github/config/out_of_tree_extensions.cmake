@@ -42,6 +42,14 @@ if (NOT MINGW)
             )
 endif()
 
+################# EXCEL
+duckdb_extension_load(excel
+    LOAD_TESTS
+    GIT_URL https://github.com/duckdb/duckdb_excel
+    GIT_TAG 391b36dfdcc1c8c187529376efb4f7ddc9f57261
+    INCLUDE_DIR extension/excel/include
+    )
+
 ################# ICEBERG
 # Windows tests for iceberg currently not working
 if (NOT WIN32)
