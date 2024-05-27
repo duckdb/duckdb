@@ -262,7 +262,7 @@ public:
 
 	StringValueScanner(const shared_ptr<CSVBufferManager> &buffer_manager,
 	                   const shared_ptr<CSVStateMachine> &state_machine,
-	                   const shared_ptr<CSVErrorHandler> &error_handler);
+	                   const shared_ptr<CSVErrorHandler> &error_handler, CSVIterator boundary);
 
 	StringValueResult &ParseChunk() override;
 
