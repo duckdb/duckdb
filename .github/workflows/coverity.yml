@@ -50,7 +50,6 @@ jobs:
         BUILD_HTTPFS: 1
         BUILD_JSON: 1
         BUILD_INET: 1
-        BUILD_SQLSMITH: 1
 
     - name: Upload the result
       run: |

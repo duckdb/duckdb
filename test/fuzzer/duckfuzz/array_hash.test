@@ -1,6 +1,12 @@
 # name: test/fuzzer/duckfuzz/array_hash.test
 # group: [duckfuzz]
 
+require sqlsmith
+
+statement ok
+call fuzzyduck(max_queries=2000, seed=0, verbose_output=1, log='whatever.log', complete_log='whatever_c.log');
+
+
 statement ok
 PRAGMA threads = 1
 
