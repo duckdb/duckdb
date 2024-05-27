@@ -51,7 +51,8 @@ SourceResultType PhysicalCopyDatabase::GetData(ExecutionContext &context, DataCh
 		}
 		case CatalogType::INDEX_ENTRY:
 		default:
-			throw NotImplementedException("Entry type %s not supported in PhysicalCopyDatabase", CatalogTypeToString(create_info->type));
+			throw NotImplementedException("Entry type %s not supported in PhysicalCopyDatabase",
+			                              CatalogTypeToString(create_info->type));
 		}
 	}
 	return SourceResultType::FINISHED;
