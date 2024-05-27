@@ -378,6 +378,9 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DBConfig &config, con
 	ExtensionInstallInfo info;
 	CheckExtensionMetadataOnInstall(config, (void *)decompressed_body.data(), decompressed_body.size(), info,
 	                                extension_name);
+	if (res->has_header("ETag")) {
+		info.etag = res->get_header_value("ETag");
+	}
 
 	if (repository) {
 		info.mode = ExtensionInstallMode::REPOSITORY;
