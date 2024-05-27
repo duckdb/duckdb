@@ -198,6 +198,10 @@ def is_internal_error(error):
         return True
     if 'INTERNAL' in error:
         return True
+    if 'EXECUTION ERROR' in error:
+        return True
+    if 'Binder Error' in error:
+        return True
     if 'signed integer overflow' in error:
         return True
     if 'Sanitizer' in error or 'sanitizer' in error:
