@@ -1,10 +1,10 @@
-import os
 import json
 import keyword
+import os
 import textwrap
 from collections import Counter
 from pathlib import Path
-from typing import Any, List, Dict, Tuple
+from typing import Dict, List, Tuple
 
 os.chdir(os.path.dirname(__file__))
 
