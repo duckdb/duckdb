@@ -21,8 +21,13 @@ SELECT * FROM reduce_sql_statement('${QUERY}');
 
 class MultiStatementReducer:
     delimiter = '\n'
+
     def __init__(self, multi_statement):
-        self.statements = multi_statement.split(MultiStatementReducer.delimiter)
+        statements = list(map(lambda x: x.strip(), multi_statement.split(MultiStatementReducer.delimiter)))
+        self.statements = []
+        for stmt in statements:
+            if len(stmt) > 0:
+                self.statements.append(stmt)
         self.statements_start = 0
         self.required = []
         self.test_omit = ""
@@ -34,11 +39,14 @@ class MultiStatementReducer:
 
     def combine_statements(self):
         new_multi_statement = MultiStatementReducer.delimiter.join(self.required)
-        new_multi_statement += MultiStatementReducer.delimiter.join(self.statements[self.statements_start:])
+        new_multi_statement += MultiStatementReducer.delimiter.join(self.statements[self.statements_start :])
         return new_multi_statement
 
     def done(self):
         return self.statements_start >= len(self.statements)
+
+    def get_last_statement(self):
+        return self.statements[-1]
 
     def generate_next(self):
         if self.done():
@@ -224,19 +232,30 @@ def reduce_query_log_query(start, shell, queries, query_index, max_time_seconds)
     return sql_query
 
 
+def statement_error(shell, statements) -> bool:
+    (stdout, stderr, returncode) = run_shell_command(shell, statements)
+    expected_error = sanitize_error(stderr).strip()
+    return len(expected_error) != 0
+
+
+# reduces collection of many sql statements to just the sql statements that produce the
+# error. A heuristic is also applied to check if only the last statement produces the error
 def reduce_multi_statement(sql_statements, shell, data_load):
     multi_statement_reducer = MultiStatementReducer(sql_statements)
     reduced_sql = ""
+    last_statement = multi_statement_reducer.get_last_statement()
+    print(f"testing if {last_statement} creates the error")
+    if statement_error(shell, data_load + last_statement):
+        return last_statement
     while not multi_statement_reducer.done():
         reduced_sql = multi_statement_reducer.generate_next()
         print(f"testing if {reduced_sql} creates the error")
-        (stdout, stderr, returncode) = run_shell_command(shell, data_load + reduced_sql)
-        expected_error = sanitize_error(stderr).strip()
-        # if there is no error, tell teh multi statement reducer to include the
-        # omitted line
-        if len(expected_error) == 0:
+        # if there is no error, it means the omitted line is necessary
+        # to cause the error, so we add it to our required statements
+        if not statement_error(shell, data_load + reduced_sql):
             multi_statement_reducer.set_omitted_required()
     return reduced_sql
+
 
 def reduce_query_log(queries, shell, max_time_seconds=300):
     start = time.time()
@@ -319,7 +338,8 @@ if __name__ == "__main__":
         sql_query = queries[-1].strip()
 
     final_query = reduce(sql_query, data_load, shell, expected_error, int(args.max_time))
-    final_query = fake_load_statements + ";\n" + final_query
+    if len(fake_load_statements) > 0:
+        final_query = fake_load_statements + ";\n" + final_query
     print("Found final reduced query")
     print("===================================================")
     print(final_query)

@@ -53,6 +53,7 @@ if seed < 0:
 
 git_hash = os.getenv('DUCKDB_HASH')
 
+
 def create_db_script(db):
     if db == 'alltypes':
         return 'create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types();'
