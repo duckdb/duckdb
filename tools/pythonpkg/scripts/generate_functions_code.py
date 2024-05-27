@@ -31,14 +31,10 @@ def generate() -> None:
             # no way to pass a lambda function as an argument to FunctionExpression
             continue
 
-        description = prepare_description(
-            description=f["description"], category=f["category"]
-        )
+        description = prepare_description(description=f["description"], category=f["category"])
         def_parameters, optional_parameter = prepare_parameters(f["parameters_raw"])
 
-        def_parameters_str = ", ".join(
-            [p if p != optional_parameter else p + "=None" for p in def_parameters]
-        )
+        def_parameters_str = ", ".join([p if p != optional_parameter else p + "=None" for p in def_parameters])
         function_def.append(f"def {name}({def_parameters_str}) -> FunctionExpression:")
         function_def.append(f'{indent}"""{description}"""')
 
@@ -48,9 +44,7 @@ def generate() -> None:
             function_def.append(
                 f'{indent * 2}return FunctionExpression("{name}", {", ".join([p for p in expression_parameters if p != optional_parameter])})'
             )
-        function_def.append(
-            f'{indent}return FunctionExpression("{name}", {", ".join(expression_parameters)})'
-        )
+        function_def.append(f'{indent}return FunctionExpression("{name}", {", ".join(expression_parameters)})')
 
         content.append("\n".join(function_def))
 
@@ -86,9 +80,7 @@ def parse_json_files(json_folder: Path) -> _FunctionsMetadata:
                         {
                             **f_info,
                             "name": clean_function_name(alias),
-                            "description": (
-                                f_info["description"] + f"\nAlias for {f_info['name']}"
-                            ).strip(),
+                            "description": (f_info["description"] + f"\nAlias for {f_info['name']}").strip(),
                         }
                     )
 
@@ -103,11 +95,7 @@ def prepare_description(description: str, category: str) -> str:
     if description:
         description = description.removesuffix(".") + ". "
     description += "Function category: " + category.title()
-    description = "\n".join(
-        textwrap.wrap(
-            description, width=80, initial_indent="", subsequent_indent=" " * 4
-        )
-    )
+    description = "\n".join(textwrap.wrap(description, width=80, initial_indent="", subsequent_indent=" " * 4))
     return description
 
 
@@ -141,9 +129,7 @@ def prepare_parameters(parameters_raw: str) -> Tuple[List[str], str | None]:
     # We need to enumerate them so they are unique. We start enumerating with 1
     # as this is also used for other functions where parameters are already
     # deduplicated such as for array_cosine_similarity.
-    duplicated_parameter_number = {
-        p: 1 for p, count in Counter(parameters).items() if count > 1
-    }
+    duplicated_parameter_number = {p: 1 for p, count in Counter(parameters).items() if count > 1}
 
     deduplicated_parameters: List[str] = []
     for p in parameters:

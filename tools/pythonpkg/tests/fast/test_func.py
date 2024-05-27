@@ -16,9 +16,7 @@ def test_func():
             and func.__module__ == "duckdb.func"
         ):
             functions_to_test.append((name, func))
-    assert (
-        len(functions_to_test) > 20
-    ), "Something seems wrong with the discovery of the functions."
+    assert len(functions_to_test) > 20, "Something seems wrong with the discovery of the functions."
 
     for name, func in functions_to_test:
         parameters = inspect.signature(func).parameters
