@@ -7,20 +7,30 @@
     @test_throws DuckDB.QueryException DuckDB.Appender(con, "t")
 end
 
-@testset "Appender Usage" begin
+@testset "Appender Usage - Schema $(schema_provided ? "Provided" : "Not Provided")" for schema_provided in (false, true)
     db = DBInterface.connect(DuckDB.DB)
 
-    DBInterface.execute(db, "CREATE TABLE integers(i INTEGER)")
+    table_name = "integers"
+    if schema_provided
+        schema_name = "test"
+        full_table_name = "$(schema_name).$(table_name)"
+        DBInterface.execute(db, "CREATE SCHEMA $(schema_name)")
+    else
+        schema_name = nothing
+        full_table_name = table_name
+    end
 
-    appender = DuckDB.Appender(db, "integers")
+    DBInterface.execute(db, "CREATE TABLE $(full_table_name)(i INTEGER)")
+
+    appender = DuckDB.Appender(db, table_name, schema_name)
     DuckDB.close(appender)
     DuckDB.close(appender)
 
     # close!
-    appender = DuckDB.Appender(db, "integers")
+    appender = DuckDB.Appender(db, table_name, schema_name)
     DBInterface.close!(appender)
 
-    appender = DuckDB.Appender(db, "integers")
+    appender = DuckDB.Appender(db, table_name, schema_name)
     for i in 0:9
         DuckDB.append(appender, i)
         DuckDB.end_row(appender)
@@ -28,7 +38,7 @@ end
     DuckDB.flush(appender)
     DuckDB.close(appender)
 
-    results = DBInterface.execute(db, "SELECT * FROM integers")
+    results = DBInterface.execute(db, "SELECT * FROM $(full_table_name)")
     df = DataFrame(results)
     @test names(df) == ["i"]
     @test size(df, 1) == 10
