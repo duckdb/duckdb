@@ -243,14 +243,12 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 			}
 		case ConvertedType::INTERVAL:
 			return LogicalType::INTERVAL;
-		case ConvertedType::JSON: {
-			if (context_ptr && Catalog::GetEntry<TypeCatalogEntry>(*context_ptr, INVALID_CATALOG, INVALID_SCHEMA,
-			                                                       "JSON", OnEntryNotFound::RETURN_NULL)) {
-				return LogicalType::JSON();
-			} else {
-				return LogicalType::VARCHAR;
+		case ConvertedType::JSON:
+			if (context_ptr) {
+				Catalog::GetEntry<TypeCatalogEntry>(*context_ptr, INVALID_CATALOG, INVALID_SCHEMA, "JSON",
+				                                    OnEntryNotFound::THROW_EXCEPTION);
 			}
-		}
+			return LogicalType::JSON();
 		case ConvertedType::NULL_TYPE:
 			return LogicalTypeId::SQLNULL;
 		case ConvertedType::MAP:

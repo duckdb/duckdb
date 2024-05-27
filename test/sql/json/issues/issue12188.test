@@ -4,7 +4,17 @@
 
 require parquet
 
+statement error
+SELECT typeof(field1), typeof(field2) FROM 'data/parquet-testing/parquet_with_json.parquet' LIMIT 1
+----
+Catalog Error
+
 require json
+
+query II
+SELECT typeof(field1), typeof(field2) FROM 'data/parquet-testing/parquet_with_json.parquet' LIMIT 1
+----
+JSON	JSON
 
 statement ok
 COPY (SELECT * FROM read_ndjson('data/json/12188.ndjson', maximum_depth=1)) TO '__TEST_DIR__/my.parquet';
