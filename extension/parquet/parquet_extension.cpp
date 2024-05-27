@@ -1447,6 +1447,14 @@ std::string ParquetExtension::Name() {
 	return "parquet";
 }
 
+std::string ParquetExtension::Version() const {
+#ifdef EXT_VERSION_PARQUET
+	return EXT_VERSION_PARQUET;
+#else
+	return "";
+#endif
+}
+
 } // namespace duckdb
 
 #ifdef DUCKDB_BUILD_LOADABLE_EXTENSION

@@ -46,8 +46,8 @@ jobs:
       git_ref: ${{ inputs.git_ref }}
       skip_tests: ${{ inputs.skip_tests }}
 
-  java:
-    uses: ./.github/workflows/Java.yml
+  pyodide:
+    uses: ./.github/workflows/Pyodide.yml
     secrets: inherit
     with:
       override_git_describe: ${{ inputs.override_git_describe }}

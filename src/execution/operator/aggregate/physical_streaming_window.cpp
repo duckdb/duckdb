@@ -8,6 +8,30 @@
 
 namespace duckdb {
 
+bool PhysicalStreamingWindow::IsStreamingFunction(unique_ptr<Expression> &expr) {
+	auto &wexpr = expr->Cast<BoundWindowExpression>();
+	if (!wexpr.partitions.empty() || !wexpr.orders.empty() || wexpr.ignore_nulls ||
+	    wexpr.exclude_clause != WindowExcludeMode::NO_OTHER) {
+		return false;
+	}
+	switch (wexpr.type) {
+	// TODO: add more expression types here?
+	case ExpressionType::WINDOW_AGGREGATE:
+		// We can stream aggregates if they are "running totals"
+		// TODO: Support FILTER and DISTINCT
+		return wexpr.start == WindowBoundary::UNBOUNDED_PRECEDING && wexpr.end == WindowBoundary::CURRENT_ROW_ROWS &&
+		       !wexpr.filter_expr && !wexpr.distinct;
+	case ExpressionType::WINDOW_FIRST_VALUE:
+	case ExpressionType::WINDOW_PERCENT_RANK:
+	case ExpressionType::WINDOW_RANK:
+	case ExpressionType::WINDOW_RANK_DENSE:
+	case ExpressionType::WINDOW_ROW_NUMBER:
+		return true;
+	default:
+		return false;
+	}
+}
+
 PhysicalStreamingWindow::PhysicalStreamingWindow(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
                                                  idx_t estimated_cardinality, PhysicalOperatorType type)
     : PhysicalOperator(type, std::move(types), estimated_cardinality), select_list(std::move(select_list)) {
@@ -167,13 +191,24 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 			sel_t s = 0;
 			SelectionVector sel(&s);
 			row.Slice(sel, 1);
-			for (size_t col_idx = 0; col_idx < payload.ColumnCount(); ++col_idx) {
-				DictionaryVector::Child(row.data[col_idx]).Reference(payload.data[col_idx]);
+			// This doesn't work for STRUCTs because the SV
+			// is not copied to the children when you slice
+			vector<column_t> structs;
+			for (column_t col_idx = 0; col_idx < payload.ColumnCount(); ++col_idx) {
+				auto &col_vec = row.data[col_idx];
+				DictionaryVector::Child(col_vec).Reference(payload.data[col_idx]);
+				if (col_vec.GetType().InternalType() == PhysicalType::STRUCT) {
+					structs.emplace_back(col_idx);
+				}
 			}
 
 			// Update the state and finalize it one row at a time.
 			for (idx_t i = 0; i < input.size(); ++i) {
 				sel.set_index(0, i);
+				for (const auto struct_idx : structs) {
+					row.data[struct_idx].Slice(payload.data[struct_idx], sel, 1);
+				}
+				// TODO: FILTER and DISTINCT would just skip this.
 				aggregate.update(row.data.data(), aggr_input_data, row.ColumnCount(), statev, 1);
 				aggregate.finalize(statev, aggr_input_data, result, 1, i);
 			}

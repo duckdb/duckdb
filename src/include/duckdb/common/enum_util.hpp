@@ -98,6 +98,8 @@ enum class ConflictManagerMode : uint8_t;
 
 enum class ConstraintType : uint8_t;
 
+enum class CopyOverwriteMode : uint8_t;
+
 enum class DataFileType : uint8_t;
 
 enum class DatePartSpecifier : uint8_t;
@@ -128,7 +130,11 @@ enum class ExpressionClass : uint8_t;
 
 enum class ExpressionType : uint8_t;
 
+enum class ExtensionInstallMode : uint8_t;
+
 enum class ExtensionLoadResult : uint8_t;
+
+enum class ExtensionUpdateResultTag : uint8_t;
 
 enum class ExtraDropInfoType : uint8_t;
 
@@ -431,6 +437,9 @@ template<>
 const char* EnumUtil::ToChars<ConstraintType>(ConstraintType value);
 
 template<>
+const char* EnumUtil::ToChars<CopyOverwriteMode>(CopyOverwriteMode value);
+
+template<>
 const char* EnumUtil::ToChars<DataFileType>(DataFileType value);
 
 template<>
@@ -476,7 +485,13 @@ template<>
 const char* EnumUtil::ToChars<ExpressionType>(ExpressionType value);
 
 template<>
+const char* EnumUtil::ToChars<ExtensionInstallMode>(ExtensionInstallMode value);
+
+template<>
 const char* EnumUtil::ToChars<ExtensionLoadResult>(ExtensionLoadResult value);
+
+template<>
+const char* EnumUtil::ToChars<ExtensionUpdateResultTag>(ExtensionUpdateResultTag value);
 
 template<>
 const char* EnumUtil::ToChars<ExtraDropInfoType>(ExtraDropInfoType value);
@@ -879,6 +894,9 @@ template<>
 ConstraintType EnumUtil::FromString<ConstraintType>(const char *value);
 
 template<>
+CopyOverwriteMode EnumUtil::FromString<CopyOverwriteMode>(const char *value);
+
+template<>
 DataFileType EnumUtil::FromString<DataFileType>(const char *value);
 
 template<>
@@ -924,7 +942,13 @@ template<>
 ExpressionType EnumUtil::FromString<ExpressionType>(const char *value);
 
 template<>
+ExtensionInstallMode EnumUtil::FromString<ExtensionInstallMode>(const char *value);
+
+template<>
 ExtensionLoadResult EnumUtil::FromString<ExtensionLoadResult>(const char *value);
+
+template<>
+ExtensionUpdateResultTag EnumUtil::FromString<ExtensionUpdateResultTag>(const char *value);
 
 template<>
 ExtraDropInfoType EnumUtil::FromString<ExtraDropInfoType>(const char *value);

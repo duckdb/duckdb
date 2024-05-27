@@ -13,7 +13,7 @@ void LogicalCopyToFile::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(200, "file_path", file_path);
 	serializer.WriteProperty(201, "use_tmp_file", use_tmp_file);
 	serializer.WriteProperty(202, "filename_pattern", filename_pattern);
-	serializer.WriteProperty(203, "overwrite_or_ignore", overwrite_or_ignore);
+	serializer.WriteProperty(203, "overwrite_or_ignore", overwrite_mode);
 	serializer.WriteProperty(204, "per_thread_output", per_thread_output);
 	serializer.WriteProperty(205, "partition_output", partition_output);
 	serializer.WriteProperty(206, "partition_columns", partition_columns);
@@ -39,7 +39,7 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	auto file_path = deserializer.ReadProperty<string>(200, "file_path");
 	auto use_tmp_file = deserializer.ReadProperty<bool>(201, "use_tmp_file");
 	auto filename_pattern = deserializer.ReadProperty<FilenamePattern>(202, "filename_pattern");
-	auto overwrite_or_ignore = deserializer.ReadProperty<bool>(203, "overwrite_or_ignore");
+	auto overwrite_mode = deserializer.ReadProperty<CopyOverwriteMode>(203, "overwrite_mode");
 	auto per_thread_output = deserializer.ReadProperty<bool>(204, "per_thread_output");
 	auto partition_output = deserializer.ReadProperty<bool>(205, "partition_output");
 	auto partition_columns = deserializer.ReadProperty<vector<idx_t>>(206, "partition_columns");
@@ -86,7 +86,7 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	result->use_tmp_file = use_tmp_file;
 	result->filename_pattern = filename_pattern;
 	result->file_extension = file_extension;
-	result->overwrite_or_ignore = overwrite_or_ignore;
+	result->overwrite_mode = overwrite_mode;
 	result->per_thread_output = per_thread_output;
 	result->partition_output = partition_output;
 	result->partition_columns = partition_columns;

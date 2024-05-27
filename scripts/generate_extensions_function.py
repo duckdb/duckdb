@@ -26,7 +26,7 @@ parser.add_argument(
 
 args = parser.parse_args()
 
-EXTENSIONS_PATH = os.path.join("..", "build", "extension_configuration", "extensions.txt")
+EXTENSIONS_PATH = os.path.join("..", "build", "extension_configuration", "extensions.csv")
 DUCKDB_PATH = os.path.join("..", 'build', 'release', 'duckdb')
 HEADER_PATH = os.path.join("..", "src", "include", "duckdb", "main", "extension_entries.hpp")
 
@@ -194,8 +194,10 @@ def check_prerequisites():
 def get_extension_names() -> List[str]:
     extension_names = []
     with open(EXTENSIONS_PATH) as f:
+        # Skip the csv header
+        next(f)
         for line in f:
-            extension_name = line.rstrip()
+            extension_name = line.split(',')[0].rstrip()
             if "jemalloc" in extension_name:
                 # We skip jemalloc as it doesn't produce a loadable extension but is in the config
                 continue
@@ -520,7 +522,7 @@ def write_header(data: ExtensionData):
                                                                     {"azure/config", "azure"},
                                                                     {"azure/credential_chain", "azure"}, 
                                                                     {"huggingface/config", "httfps"},
-                                                                    {"huggingface/cache", "httpfs"}, 
+                                                                    {"huggingface/credential_chain", "httpfs"}, 
                                                                     {"bearer/config", "httpfs"}
 }; // EXTENSION_SECRET_PROVIDERS
 

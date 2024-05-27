@@ -170,7 +170,11 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	    }
 	 */
 	auto catalog_entries = GetCatalogEntries(schemas);
-	BinarySerializer serializer(*metadata_writer);
+	SerializationOptions serialization_options;
+
+	serialization_options.serialization_compatibility = config.options.serialization_compatibility;
+
+	BinarySerializer serializer(*metadata_writer, serialization_options);
 	serializer.Begin();
 	serializer.WriteList(100, "catalog_entries", catalog_entries.size(), [&](Serializer::List &list, idx_t i) {
 		auto &entry = catalog_entries[i];

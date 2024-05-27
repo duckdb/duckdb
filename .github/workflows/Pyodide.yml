@@ -16,7 +16,6 @@ on:
         type: string
       skip_tests:
         type: string
-  repository_dispatch:
   push:
     branches:
       - "**"
@@ -54,6 +53,21 @@ jobs:
           # fetch everything so that the version on the built wheel path is
           # correct
           fetch-depth: 0
+          ref: ${{ inputs.git_ref }}
+
+      - name: Check/Act on inputs.override_git_describe
+        shell: bash
+        run: |
+          if [[ "${{ inputs.override_git_describe }}" == *-* ]]; then
+            echo "override_git_describe ${{ inputs.override_git_describe }}: provide either vX.Y.Z or empty string"
+            exit 1
+          elif [[ -z "${{ inputs.override_git_describe }}" ]]; then
+            echo "No override_git_describe provided"
+          else
+            echo "UPLOAD_ASSETS_TO_STAGING_TARGET=$(git log -1 --format=%h)" >> "$GITHUB_ENV"
+            echo "override_git_describe ${{ inputs.override_git_describe }}: add tag"
+            git tag ${{ inputs.override_git_describe }}
+          fi
 
       - uses: actions/setup-python@v5
         with:
@@ -97,6 +111,7 @@ jobs:
           pip install ./tools/pythonpkg/dist/*.whl
 
       - name: run tests using pyodide
+        if: ${{ inputs.skip_tests != 'true' }}
         run: |
           source .venv-pyodide/bin/activate
           python -m pytest ./tools/pythonpkg/tests
