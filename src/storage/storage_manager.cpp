@@ -14,7 +14,7 @@
 #include "duckdb/storage/single_file_block_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 
-#include <duckdb/storage/storage_extension.hpp>
+#include "duckdb/storage/storage_extension.hpp"
 
 namespace duckdb {
 
