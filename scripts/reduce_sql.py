@@ -214,15 +214,16 @@ def reduce_query_log_query(start, shell, queries, query_index, max_time_seconds)
     return sql_query
 
 
-def reduce_multi_statement(sql_queries, shell, data_load):
+def reduce_multi_statement(sql_queries, local_shell, local_data_load):
     reducer = MultiStatementManager(sql_queries)
     last_statement = reducer.get_last_statement()
     print(f"testing if just last statement of multi statement creates the error")
-    (stdout, stderr, returncode) = run_shell_command(shell, data_load + last_statement)
+    (stdout, stderr, returncode) = run_shell_command(local_shell, local_data_load + last_statement)
     expected_error = sanitize_error(stderr).strip()
-    if len(expected_error) != 0:
-        reduce(last_statement, data_load, shell, expected_error, int(args.max_time))
-    queries = reduce_query_log(reducer.statements, shell, [data_load])
+    if len(expected_error) > 0:
+        # reduce just the last statement
+        return reduce(last_statement, local_data_load, local_shell, expected_error, int(args.max_time))
+    queries = reduce_query_log(reducer.statements, local_shell, [local_data_load])
     return "\n".join(queries)
 
 
