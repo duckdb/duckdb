@@ -4,7 +4,7 @@ import os
 import textwrap
 from collections import Counter
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 
 os.chdir(os.path.dirname(__file__))
 
@@ -99,7 +99,7 @@ def prepare_description(description: str, category: str) -> str:
     return description
 
 
-def prepare_parameters(parameters_raw: str) -> Tuple[List[str], str | None]:
+def prepare_parameters(parameters_raw: str) -> Tuple[List[str], Optional[str]]:
     parameters_raw = parameters_raw.strip()
     if not parameters_raw:
         return [], None
@@ -109,7 +109,7 @@ def prepare_parameters(parameters_raw: str) -> Tuple[List[str], str | None]:
     # would ever be a function with multiple optional arguments -> Would need to
     # adapt this code.
     parameters: List[str]
-    optional_parameter: str | None = None
+    optional_parameter: Optional[str] = None
     if parameters_raw.endswith("]"):
         assert (
             parameters_raw.count("[") == 1 and parameters_raw.count("]") == 1
