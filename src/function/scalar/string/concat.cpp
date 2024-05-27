@@ -247,13 +247,14 @@ static unique_ptr<FunctionData> GeneralConcatBind(ClientContext &context, Scalar
 
 		auto &second_arg = arguments[1]->return_type;
 
+
+
 		if (first_arg.id() == LogicalTypeId::UNKNOWN || second_arg.id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();
 		} else if (first_arg.id() == LogicalTypeId::SQLNULL || second_arg.id() == LogicalTypeId::SQLNULL) {
 			// we mimic postgres behaviour: list_concat(NULL, my_list) = my_list
 			auto return_type = second_arg.id() == LogicalTypeId::SQLNULL ? first_arg : second_arg;
-			bound_function.arguments[0] = return_type;
-			bound_function.arguments[1] = return_type;
+			bound_function.varargs = return_type;
 			bound_function.return_type = return_type;
 		} else {
 			if (first_arg.id() != LogicalTypeId::LIST || second_arg.id() != LogicalTypeId::LIST) {
@@ -271,8 +272,7 @@ static unique_ptr<FunctionData> GeneralConcatBind(ClientContext &context, Scalar
 			}
 			auto list_type = LogicalType::LIST(child_type);
 
-			bound_function.arguments[0] = list_type;
-			bound_function.arguments[1] = list_type;
+			bound_function.varargs = list_type;
 			bound_function.return_type = list_type;
 		}
 		return make_uniq<ConcatBindData>(bound_function.return_type, is_operator);
