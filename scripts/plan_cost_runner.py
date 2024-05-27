@@ -89,7 +89,7 @@ class PlanCost:
 
 def op_inspect(op) -> PlanCost:
     cost = PlanCost()
-    if op['Query']:
+    if op['name'] == "Query":
         cost.time = op['operator_timing']
     if op['name'] == 'HASH_JOIN' and not op['extra_info'].startswith('MARK'):
         cost.total = op['operator_cardinality']

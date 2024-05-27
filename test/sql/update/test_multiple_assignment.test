@@ -48,14 +48,14 @@ SELECT * FROM tbl;
 statement error
 UPDATE tbl SET (key, fruit, cost) = (1, 2);
 ----
-Parser Error: Could not perform multiple assignment, target expects 3 values, only 2 were provided
+expected 3 values, got 2
 
 #                  too many values
 # ---------------------------------------------------
 statement error
 UPDATE tbl SET (key, fruit, cost) = (1, 2, 3, 4);
 ----
-Parser Error: Could not perform multiple assignment, target only expects 3 values, 4 were provided
+expected 3 values, got 4
 
 #            functions should still work
 # ---------------------------------------------------

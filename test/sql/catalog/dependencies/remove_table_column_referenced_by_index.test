@@ -1,0 +1,16 @@
+# name: test/sql/catalog/dependencies/remove_table_column_referenced_by_index.test
+# group: [dependencies]
+
+statement ok
+pragma enable_verification;
+
+statement ok
+create table tbl(a varchar, b integer);
+
+statement ok
+create index idx on tbl(a);
+
+statement error
+alter table tbl drop column a;
+----
+Catalog Error: Cannot drop this column: an index depends on it!
