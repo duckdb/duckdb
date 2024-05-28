@@ -33,8 +33,9 @@ struct TypeIdxPair {
 // We only really care about types that can be set in the sniffer_auto, or are sniffed by default
 // If the user manually sets them, we should never get a cast issue from the sniffer!
 bool CanWeCastIt(LogicalTypeId source, LogicalTypeId destination) {
-	if (destination == LogicalTypeId::VARCHAR) {
+	if (destination == LogicalTypeId::VARCHAR || source == destination) {
 		// We can always cast to varchar
+		// And obviously don't have to do anything if they are equal.
 		return true;
 	}
 	switch (source) {
