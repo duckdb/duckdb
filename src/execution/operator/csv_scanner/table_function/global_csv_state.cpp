@@ -66,9 +66,10 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 		if (cur_idx == 0) {
 			current_file = file_scans.back();
 		} else {
+			auto file_scan = make_shared_ptr<CSVFileScan>(context, bind_data.files[cur_idx], bind_data.options,
+			                                                     cur_idx, bind_data, column_ids, file_schema);
 			lock_guard<mutex> parallel_lock(main_mutex);
-			file_scans.emplace_back(make_shared_ptr<CSVFileScan>(context, bind_data.files[cur_idx], bind_data.options,
-			                                                     cur_idx, bind_data, column_ids, file_schema));
+			file_scans.emplace_back(std::move(file_scan));
 			current_file = file_scans.back();
 		}
 		if (previous_scanner) {
