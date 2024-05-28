@@ -209,7 +209,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 		} else if (file_idx > 0 && buffer_manager->file_handle->FileSize() > 0) {
 			CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
 			auto result = sniffer.SniffCSV();
-			if (!options.file_options.union_by_name) {
+			if (!options.file_options.AnySet()) {
 				// Union By name has its own mystical rules
 				string error;
 				if (!file_schema.SchemasMatch(error, result.names, result.return_types, file_path, projection_order)) {
@@ -234,7 +234,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 
 	multi_file_reader->InitializeReader(*this, options.file_options, bind_data.reader_bind, bind_data.return_types,
 	                                    bind_data.return_names, column_ids, nullptr, file_path, context, nullptr);
-	if (!projection_order.empty() && reader_data.column_mapping.empty()) {
+	if (!projection_order.empty()) {
 		reader_data.column_mapping = projection_order;
 	}
 	InitializeFileNamesTypes();
