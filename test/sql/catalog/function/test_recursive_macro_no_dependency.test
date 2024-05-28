@@ -1,9 +1,6 @@
-# name: test/sql/catalog/function/test_recursive_macro.test
+# name: test/sql/catalog/function/test_recursive_macro_no_dependency.test
 # description: Test recursive macros
 # group: [function]
-
-statement ok
-set enable_macro_dependencies=true
 
 statement ok
 CREATE MACRO "sum"(x) AS (CASE WHEN sum(x) IS NULL THEN 0 ELSE sum(x) END);
@@ -42,10 +39,8 @@ create macro m1(a) as a+1;
 statement ok
 create macro m2(a) as m1(a)+1;
 
-statement error
+statement ok
 create or replace macro m1(a) as m2(a)+1;
-----
-Catalog Error: CREATE OR REPLACE is not allowed to depend on itself
 
 # also table macros
 statement ok
@@ -54,7 +49,5 @@ create macro m3(a) as a+1;
 statement ok
 create macro m4(a) as table select m3(a);
 
-statement error
+statement ok
 create or replace macro m3(a) as (from m4(42));
-----
-Catalog Error: CREATE OR REPLACE is not allowed to depend on itself
