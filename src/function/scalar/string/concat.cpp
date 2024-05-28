@@ -337,8 +337,7 @@ static unique_ptr<BaseStatistics> ConcatStats(ClientContext &context, FunctionSt
 
 ScalarFunction ConcatFun::GetFunction() {
 	ScalarFunction concat =
-	    ScalarFunction({LogicalType::ANY}, LogicalType::ANY, ConcatFunction, BindConcatFunction, nullptr, ConcatStats);
-	concat.varargs = LogicalType::ANY;
+	    ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::LIST(LogicalType::ANY)}, LogicalType::LIST(LogicalType::ANY), ConcatFunction, BindConcatFunction, nullptr, ConcatStats);
 	concat.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return concat;
 }
@@ -353,7 +352,10 @@ void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
 	// the concat function, however, treats NULL values as an empty string
 	// i.e. concat(NULL, 'hello') = 'hello'
 
-	ScalarFunction concat = GetFunction();
+	ScalarFunction concat =
+	    ScalarFunction({LogicalType::ANY}, LogicalType::ANY, ConcatFunction, BindConcatFunction, nullptr, ConcatStats);
+	concat.varargs = LogicalType::ANY;
+	concat.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction({"concat", "list_concat", "list_cat", "array_concat", "array_cat"}, concat);
 
 	ScalarFunction concat_op = ScalarFunction("||", {LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY,
