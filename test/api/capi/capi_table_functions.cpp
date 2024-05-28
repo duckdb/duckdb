@@ -79,6 +79,7 @@ static duckdb_state capi_register_table_function(duckdb_connection connection, c
 	// register and cleanup
 	status = duckdb_register_table_function(connection, function);
 	if (status == DuckDBError) {
+		duckdb_destroy_table_function(&function);
 		return status;
 	}
 
