@@ -122,7 +122,7 @@ static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &re
 }
 
 static unique_ptr<FunctionData> BindConcatWSFunction(ClientContext &context, ScalarFunction &bound_function,
-                                                   vector<unique_ptr<Expression>> &arguments) {
+                                                     vector<unique_ptr<Expression>> &arguments) {
 	for (auto &arg : bound_function.arguments) {
 		arg = LogicalType::VARCHAR;
 	}
@@ -147,4 +147,3 @@ void ConcatWSFun::RegisterFunction(BuiltinFunctions &set) {
 }
 
 } // namespace duckdb
-

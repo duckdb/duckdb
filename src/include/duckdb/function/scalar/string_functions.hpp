@@ -47,7 +47,7 @@ struct ConcatFun {
 };
 
 struct ConcatWSFun {
-    static void RegisterFunction(BuiltinFunctions &set);
+	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 struct LengthFun {

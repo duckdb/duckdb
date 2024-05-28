@@ -29,12 +29,12 @@ ConcatBindData::~ConcatBindData() {
 }
 
 bool ConcatBindData::Equals(const FunctionData &other_p) const {
-    auto &other= other_p.Cast<ConcatBindData>();
-    return return_type == other.return_type && use_operator == other.use_operator;
+	auto &other = other_p.Cast<ConcatBindData>();
+	return return_type == other.return_type && use_operator == other.use_operator;
 }
 
 unique_ptr<FunctionData> ConcatBindData::Copy() const {
-    return make_uniq<ConcatBindData>(return_type, use_operator);
+	return make_uniq<ConcatBindData>(return_type, use_operator);
 }
 
 static void StringConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -213,32 +213,78 @@ static void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	auto &info = func_expr.bind_info->Cast<ConcatBindData>();
 	if (info.return_type.id() == LogicalTypeId::LIST) {
 		ListConcatFunction(args, state, result);
-    } else if (info.use_operator) {
+	} else if (info.use_operator) {
 		ConcatOperator(args, state, result);
-    } else {
-        StringConcatFunction(args, state, result);
+	} else {
+		StringConcatFunction(args, state, result);
 	}
 }
 
-static unique_ptr<FunctionData> GeneralConcatBind(ClientContext &context, ScalarFunction &bound_function,
-                              vector<unique_ptr<Expression>> &arguments, bool is_operator) {
-//	D_ASSERT(arguments.size() > 1);
+static void HandleArrayBinding(ClientContext &context, vector<unique_ptr<Expression>> &arguments) {
+	if (arguments[1]->return_type.id() != LogicalTypeId::ARRAY) {
+		throw BinderException("Cannot concatenate types %s and %s", arguments[0]->return_type.ToString(),
+		                      arguments[1]->return_type.ToString());
+	}
+	// if either argument is an array, we cast it to a list
+	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
+	arguments[1] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[1]));
+}
 
+static unique_ptr<FunctionData> HandleListBinding( ) {
+    // Now we can assume that the input is a list, and therefor only accepts two arguments
+    D_ASSERT(arguments.size() == 2);
+
+    auto &second_arg = arguments[1]->return_type;
+
+    if (first_arg.id() == LogicalTypeId::UNKNOWN || second_arg.id() == LogicalTypeId::UNKNOWN) {
+        throw ParameterNotResolvedException();
+    } else if (first_arg.id() == LogicalTypeId::SQLNULL || second_arg.id() == LogicalTypeId::SQLNULL) {
+        // we mimic postgres behaviour: list_concat(NULL, my_list) = my_list
+        auto return_type = second_arg.id() == LogicalTypeId::SQLNULL ? first_arg : second_arg;
+        bound_function.varargs = return_type;
+        bound_function.return_type = return_type;
+    } else {
+        if (first_arg.id() != LogicalTypeId::LIST || second_arg.id() != LogicalTypeId::LIST) {
+            throw BinderException("Cannot concatenate types %s and %s", first_arg.ToString(),
+                                  second_arg.ToString());
+        }
+
+        // Resolve list type
+        LogicalType child_type = LogicalType::SQLNULL;
+        for (const auto &argument : arguments) {
+            auto &next_type = ListType::GetChildType(argument->return_type);
+            if (!LogicalType::TryGetMaxLogicalType(context, child_type, next_type, child_type)) {
+                throw BinderException(
+                    "Cannot concatenate lists of types %s[] and %s[] - an explicit cast is required",
+                    child_type.ToString(), next_type.ToString());
+            }
+        }
+        auto list_type = LogicalType::LIST(child_type);
+
+        bound_function.varargs = list_type;
+        bound_function.return_type = list_type;
+    }
+    return make_uniq<ConcatBindData>(bound_function.return_type, is_operator);
+}
+
+static unique_ptr<FunctionData> GeneralConcatBind(ClientContext &context, ScalarFunction &bound_function,
+                                                  vector<unique_ptr<Expression>> &arguments, bool is_operator) {
 	auto &first_arg = arguments[0]->return_type;
 
-	if (arguments.size() > 2 && (
-	                                first_arg.id() == LogicalTypeId::ARRAY
-	                                || first_arg.id() == LogicalTypeId::LIST)) {
+
+}
+
+static unique_ptr<FunctionData> BindConcatFunction(ClientContext &context, ScalarFunction &bound_function,
+                                                   vector<unique_ptr<Expression>> &arguments) {
+	auto &first_arg = arguments[0]->return_type;
+
+	if (arguments.size() > 2 &&
+	    (first_arg.id() == LogicalTypeId::ARRAY || first_arg.id() == LogicalTypeId::LIST)) {
 		throw BinderException("list_concat only accepts two arguments");
 	}
 
 	if (first_arg.id() == LogicalTypeId::ARRAY) {
-		if (arguments[1]->return_type.id() != LogicalTypeId::ARRAY) {
-			throw BinderException("Cannot concatenate types %s and %s", first_arg.ToString(), arguments[1]->return_type.ToString());
-		}
-		// if either argument is an array, we cast it to a list
-		arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
-		arguments[1] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[1]));
+		HandleArrayBinding(context, arguments);
 	}
 
 	if (first_arg.id() == LogicalTypeId::LIST) {
@@ -246,8 +292,6 @@ static unique_ptr<FunctionData> GeneralConcatBind(ClientContext &context, Scalar
 		D_ASSERT(arguments.size() == 2);
 
 		auto &second_arg = arguments[1]->return_type;
-
-
 
 		if (first_arg.id() == LogicalTypeId::UNKNOWN || second_arg.id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();
@@ -258,7 +302,8 @@ static unique_ptr<FunctionData> GeneralConcatBind(ClientContext &context, Scalar
 			bound_function.return_type = return_type;
 		} else {
 			if (first_arg.id() != LogicalTypeId::LIST || second_arg.id() != LogicalTypeId::LIST) {
-				throw BinderException("Cannot concatenate types %s and %s", first_arg.ToString(), second_arg.ToString());
+				throw BinderException("Cannot concatenate types %s and %s", first_arg.ToString(),
+				                      second_arg.ToString());
 			}
 
 			// Resolve list type
@@ -266,8 +311,9 @@ static unique_ptr<FunctionData> GeneralConcatBind(ClientContext &context, Scalar
 			for (const auto &argument : arguments) {
 				auto &next_type = ListType::GetChildType(argument->return_type);
 				if (!LogicalType::TryGetMaxLogicalType(context, child_type, next_type, child_type)) {
-					throw BinderException("Cannot concatenate lists of types %s[] and %s[] - an explicit cast is required",
-					                      child_type.ToString(), next_type.ToString());
+					throw BinderException(
+					    "Cannot concatenate lists of types %s[] and %s[] - an explicit cast is required",
+					    child_type.ToString(), next_type.ToString());
 				}
 			}
 			auto list_type = LogicalType::LIST(child_type);
@@ -275,7 +321,7 @@ static unique_ptr<FunctionData> GeneralConcatBind(ClientContext &context, Scalar
 			bound_function.varargs = list_type;
 			bound_function.return_type = list_type;
 		}
-		return make_uniq<ConcatBindData>(bound_function.return_type, is_operator);
+		return make_uniq<ConcatBindData>(bound_function.return_type, false);
 	}
 
 	// we can now assume that the input is a string or castable to a string
@@ -284,17 +330,64 @@ static unique_ptr<FunctionData> GeneralConcatBind(ClientContext &context, Scalar
 	}
 	bound_function.varargs = LogicalType::VARCHAR;
 	bound_function.return_type = LogicalType::VARCHAR;
-	return make_uniq<ConcatBindData>(bound_function.return_type, is_operator);
-}
-
-static unique_ptr<FunctionData> BindConcatFunction(ClientContext &context, ScalarFunction &bound_function,
-                                                   vector<unique_ptr<Expression>> &arguments) {
-    return GeneralConcatBind(context, bound_function, arguments, false);
+	return make_uniq<ConcatBindData>(bound_function.return_type, false);
 }
 
 static unique_ptr<FunctionData> BindConcatOperator(ClientContext &context, ScalarFunction &bound_function,
                                                    vector<unique_ptr<Expression>> &arguments) {
-	return GeneralConcatBind(context, bound_function, arguments, true);
+	D_ASSERT(arguments.size() == 2);
+
+	auto &first_arg = arguments[0]->return_type;
+
+	if (first_arg.id() == LogicalTypeId::ARRAY) {
+		HandleArrayBinding(context, arguments);
+	}
+
+	if (first_arg.id() == LogicalTypeId::LIST) {
+		// Now we can assume that the input is a list, and therefor only accepts two arguments
+		D_ASSERT(arguments.size() == 2);
+
+		auto &second_arg = arguments[1]->return_type;
+
+		if (first_arg.id() == LogicalTypeId::UNKNOWN || second_arg.id() == LogicalTypeId::UNKNOWN) {
+			throw ParameterNotResolvedException();
+		} else if (first_arg.id() == LogicalTypeId::SQLNULL || second_arg.id() == LogicalTypeId::SQLNULL) {
+			// we mimic postgres behaviour: list_concat(NULL, my_list) = my_list
+			auto return_type = second_arg.id() == LogicalTypeId::SQLNULL ? first_arg : second_arg;
+			bound_function.arguments[0] = return_type;
+			bound_function.arguments[1] = return_type;
+			bound_function.return_type = return_type;
+		} else {
+			if (first_arg.id() != LogicalTypeId::LIST || second_arg.id() != LogicalTypeId::LIST) {
+				throw BinderException("Cannot concatenate types %s and %s", first_arg.ToString(),
+				                      second_arg.ToString());
+			}
+
+			// Resolve list type
+			LogicalType child_type = LogicalType::SQLNULL;
+			for (const auto &argument : arguments) {
+				auto &next_type = ListType::GetChildType(argument->return_type);
+				if (!LogicalType::TryGetMaxLogicalType(context, child_type, next_type, child_type)) {
+					throw BinderException(
+					    "Cannot concatenate lists of types %s[] and %s[] - an explicit cast is required",
+					    child_type.ToString(), next_type.ToString());
+				}
+			}
+			auto list_type = LogicalType::LIST(child_type);
+
+			bound_function.arguments[0] = list_type;
+			bound_function.arguments[1] = list_type;
+			bound_function.return_type = list_type;
+		}
+		return make_uniq<ConcatBindData>(bound_function.return_type, true);
+	}
+
+	// we can now assume that the input is a string or castable to a string
+	for (auto &arg : bound_function.arguments) {
+		arg = LogicalType::VARCHAR;
+	}
+	bound_function.return_type = LogicalType::VARCHAR;
+	return make_uniq<ConcatBindData>(bound_function.return_type, true);
 }
 
 static unique_ptr<BaseStatistics> ConcatStats(ClientContext &context, FunctionStatisticsInput &input) {
@@ -326,8 +419,8 @@ void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
 	concat.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction({"concat", "list_concat", "list_cat", "array_concat", "array_cat"}, concat);
 
-	ScalarFunction concat_op =
-	    ScalarFunction("||", {LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, ConcatFunction, BindConcatOperator);
+	ScalarFunction concat_op = ScalarFunction("||", {LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY,
+	                                          ConcatFunction, BindConcatOperator);
 	concat.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction(concat_op);
 }

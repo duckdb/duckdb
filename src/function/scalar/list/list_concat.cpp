@@ -5,8 +5,4 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 
-namespace duckdb {
-
-
-
-} // namespace duckdb
+namespace duckdb {} // namespace duckdb

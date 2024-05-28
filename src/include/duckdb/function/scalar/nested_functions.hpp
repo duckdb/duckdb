@@ -87,7 +87,7 @@ struct ListExtractFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-//struct ListConcatFun {
+// struct ListConcatFun {
 //	static ScalarFunction GetFunction();
 ////	static void RegisterFunction(BuiltinFunctions &set);
 //};
