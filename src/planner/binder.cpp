@@ -253,8 +253,8 @@ bool Binder::OptimizeCTEs(QueryNode &node) {
 	// determine for each CTE whether it should be materialized
 	bool result = false;
 	for (auto &cte : cte_map) {
-		if (cte.second->materialized == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
-			continue; // already a materialized CTE
+		if (cte.second->materialized != CTEMaterialize::CTE_MATERIALIZE_DEFAULT) {
+			continue; // only triggers when nothing is specified
 		}
 		auto cte_ref_counts_it = cte_ref_counts.find(cte.first);
 		D_ASSERT(cte_ref_counts_it != cte_ref_counts.end());
