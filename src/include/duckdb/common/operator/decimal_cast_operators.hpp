@@ -464,6 +464,21 @@ string_t StringCastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_
 //===--------------------------------------------------------------------===//
 enum class ExponentType : uint8_t { NONE, POSITIVE, NEGATIVE };
 
+template <typename T>
+struct DecimalCastTraits {
+	using POWERS_OF_TEN_CLASS = NumericHelper;
+};
+
+template <>
+struct DecimalCastTraits<hugeint_t> {
+	using POWERS_OF_TEN_CLASS = Hugeint;
+};
+
+template <>
+struct DecimalCastTraits<uhugeint_t> {
+	using POWERS_OF_TEN_CLASS = Uhugeint;
+};
+
 template <class T>
 struct DecimalCastData {
 	using StoreType = T;
@@ -479,6 +494,7 @@ struct DecimalCastData {
 	//! Only set when ALLOW_EXPONENT is enabled
 	uint8_t excessive_decimals;
 	ExponentType exponent_type;
+	StoreType limit;
 };
 
 struct DecimalCastOperation {
@@ -635,7 +651,11 @@ struct DecimalCastOperation {
 		for (uint8_t i = state.decimal_count; i < state.scale; i++) {
 			state.result *= 10;
 		}
-		return true;
+		if (NEGATIVE) {
+			return state.result > -state.limit;
+		} else {
+			return state.result < state.limit;
+		}
 	}
 };
 
@@ -658,6 +678,7 @@ bool TryDecimalStringCast(const char *string_ptr, idx_t string_size, T &result, 
 	state.exponent_type = ExponentType::NONE;
 	state.round_set = false;
 	state.should_round = false;
+	state.limit = UnsafeNumericCast<T>(DecimalCastTraits<T>::POWERS_OF_TEN_CLASS::POWERS_OF_TEN[width]);
 	if (!TryIntegerCast<DecimalCastData<T>, true, true, DecimalCastOperation, false, decimal_separator>(
 	        string_ptr, string_size, state, false)) {
 		string_t value(string_ptr, (uint32_t)string_size);
@@ -682,6 +703,7 @@ bool TryDecimalStringCast(const char *string_ptr, idx_t string_size, T &result, 
 	state.exponent_type = ExponentType::NONE;
 	state.round_set = false;
 	state.should_round = false;
+	state.limit = UnsafeNumericCast<T>(DecimalCastTraits<T>::POWERS_OF_TEN_CLASS::POWERS_OF_TEN[width]);
 	if (!TryIntegerCast<DecimalCastData<T>, true, true, DecimalCastOperation, false, decimal_separator>(
 	        string_ptr, string_size, state, false)) {
 		return false;
