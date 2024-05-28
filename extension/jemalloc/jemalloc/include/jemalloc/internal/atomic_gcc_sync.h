@@ -1,7 +1,9 @@
 #ifndef JEMALLOC_INTERNAL_ATOMIC_GCC_SYNC_H
 #define JEMALLOC_INTERNAL_ATOMIC_GCC_SYNC_H
 
-namespace duckdb_jemalloc {
+#include "jemalloc/internal/jemalloc_preamble.h"
+
+#define ATOMIC_INLINE JEMALLOC_ALWAYS_INLINE
 
 #define ATOMIC_INIT(...) {__VA_ARGS__}
 
@@ -194,6 +196,6 @@ atomic_fetch_xor_##short_type(atomic_##short_type##_t *a, type val,	\
 	return __sync_fetch_and_xor(&a->repr, val);			\
 }
 
-} // namespace duckdb_jemalloc
+#undef ATOMIC_INLINE
 
 #endif /* JEMALLOC_INTERNAL_ATOMIC_GCC_SYNC_H */

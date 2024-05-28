@@ -1,9 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_DIV_H
 #define JEMALLOC_INTERNAL_DIV_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/assert.h"
-
-namespace duckdb_jemalloc {
 
 /*
  * This module does the division that computes the index of a region in a slab,
@@ -39,7 +38,5 @@ div_compute(div_info_t *div_info, size_t n) {
 #endif
 	return i;
 }
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_DIV_H */

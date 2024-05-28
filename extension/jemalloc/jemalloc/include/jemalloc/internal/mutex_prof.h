@@ -1,11 +1,10 @@
 #ifndef JEMALLOC_INTERNAL_MUTEX_PROF_H
 #define JEMALLOC_INTERNAL_MUTEX_PROF_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/atomic.h"
 #include "jemalloc/internal/nstime.h"
 #include "jemalloc/internal/tsd_types.h"
-
-namespace duckdb_jemalloc {
 
 #define MUTEX_PROF_GLOBAL_MUTEXES					\
     OP(background_thread)						\
@@ -115,7 +114,5 @@ typedef struct {
 	/* # of lock() operations in total. */
 	uint64_t		n_lock_ops;
 } mutex_prof_data_t;
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_MUTEX_PROF_H */

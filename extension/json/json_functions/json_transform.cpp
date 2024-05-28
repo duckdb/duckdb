@@ -59,6 +59,7 @@ static LogicalType StructureStringToType(yyjson_val *val, ClientContext &context
 		return StructureStringToTypeArray(val, context);
 	case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
 		return StructureToTypeObject(val, context);
+	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
 		return TransformStringToLogicalType(unsafe_yyjson_get_str(val), context);
 	default:
@@ -99,6 +100,7 @@ static inline bool GetValueNumerical(yyjson_val *val, T &result, JSONTransformOp
 	D_ASSERT(unsafe_yyjson_get_tag(val) != (YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE));
 	bool success;
 	switch (unsafe_yyjson_get_tag(val)) {
+	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
 		success = OP::template Operation<string_t, T>(GetString(val), result, options.strict_cast);
 		break;
@@ -134,6 +136,7 @@ static inline bool GetValueDecimal(yyjson_val *val, T &result, uint8_t w, uint8_
 	D_ASSERT(unsafe_yyjson_get_tag(val) != (YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE));
 	bool success;
 	switch (unsafe_yyjson_get_tag(val)) {
+	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
 		success = OP::template Operation<string_t, T>(GetString(val), result, options.parameters, w, s);
 		break;
@@ -167,6 +170,7 @@ static inline bool GetValueDecimal(yyjson_val *val, T &result, uint8_t w, uint8_
 static inline bool GetValueString(yyjson_val *val, yyjson_alc *alc, string_t &result, Vector &vector) {
 	D_ASSERT(unsafe_yyjson_get_tag(val) != (YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE));
 	switch (unsafe_yyjson_get_tag(val)) {
+	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
 		result = string_t(unsafe_yyjson_get_str(val), unsafe_yyjson_get_len(val));
 		return true;
@@ -1008,7 +1012,7 @@ void JSONFunctions::RegisterJSONTransformCastFunctions(CastFunctionSet &casts) {
 			target_type = LogicalType::UNION({{"any", LogicalType::ANY}});
 			break;
 		case LogicalTypeId::ARRAY:
-			target_type = LogicalType::ARRAY(LogicalType::ANY);
+			target_type = LogicalType::ARRAY(LogicalType::ANY, optional_idx());
 			break;
 		case LogicalTypeId::VARCHAR:
 			// We skip this one here as it's handled in json_functions.cpp

@@ -1,0 +1,115 @@
+# name: test/sql/catalog/view/test_view_schema_change_with_dependencies.test
+# description: Test views with changing schema
+# group: [view]
+
+statement ok
+set storage_compatibility_version='latest'
+
+statement ok
+set enable_view_dependencies=true
+
+statement ok
+PRAGMA enable_verification
+
+# create a table
+statement ok
+CREATE TABLE t1(i INTEGER)
+
+statement ok
+INSERT INTO t1 VALUES (41), (42), (43)
+
+# create a view that queries that table
+statement ok
+CREATE VIEW v1 AS SELECT * FROM t1
+
+query I
+SELECT * FROM v1
+----
+41
+42
+43
+
+# now drop the table and create a table that has a different schema
+statement error
+DROP TABLE t1
+----
+view "v1" depends on table "t1".
+
+statement ok
+DROP TABLE t1 CASCADE
+
+statement ok
+CREATE TABLE t1(i DATE)
+
+# querying the view fails because the column types don't match the expected types
+statement error
+SELECT * FROM v1
+----
+
+# now drop the table and create one that has extra columns
+statement ok
+DROP TABLE t1
+
+statement ok
+CREATE TABLE t1(i INTEGER, j INTEGER)
+
+# again querying the view fails: there are extra columns present
+statement error
+SELECT * FROM v1
+----
+
+# now drop the table and create one that has differently named columns
+statement ok
+DROP TABLE t1
+
+statement ok
+CREATE TABLE t1(k INTEGER)
+
+# Was dropped by the CASCADE from earlier
+statement error
+SELECT * FROM v1
+----
+Catalog Error: Table with name v1 does not exist!
+
+statement ok
+DROP TABLE t1
+
+statement ok
+CREATE TABLE t1(i INTEGER)
+
+statement error
+SELECT * FROM v1
+----
+Table with name v1 does not exist!
+
+# Recreate the VIEW
+statement ok
+CREATE VIEW v1 AS SELECT * FROM t1
+
+# Changing the types of the table can't be done because we have dependencies
+statement error
+ALTER TABLE t1 ALTER i TYPE VARCHAR;
+----
+Dependency Error: Cannot alter entry "t1" because there are entries that depend on it.
+
+statement ok
+drop view v1;
+
+statement ok
+ALTER TABLE t1 ALTER i TYPE VARCHAR;
+
+# Recreate the VIEW
+statement ok
+CREATE VIEW v1 AS SELECT * FROM t1
+
+# Changing the column names is also not possible while V1 is alive
+statement error
+ALTER TABLE t1 RENAME i TO j
+----
+Dependency Error: Cannot alter entry "t1" because there are entries that depend on it.
+
+statement ok
+drop view v1;
+
+statement ok
+ALTER TABLE t1 RENAME i TO j

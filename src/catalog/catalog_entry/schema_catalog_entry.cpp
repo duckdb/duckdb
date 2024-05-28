@@ -21,6 +21,11 @@ CatalogTransaction SchemaCatalogEntry::GetCatalogTransaction(ClientContext &cont
 	return CatalogTransaction(catalog, context);
 }
 
+optional_ptr<CatalogEntry> SchemaCatalogEntry::CreateIndex(ClientContext &context, CreateIndexInfo &info,
+                                                           TableCatalogEntry &table) {
+	return CreateIndex(GetCatalogTransaction(context), info, table);
+}
+
 SimilarCatalogEntry SchemaCatalogEntry::GetSimilarEntry(CatalogTransaction transaction, CatalogType type,
                                                         const string &name) {
 	SimilarCatalogEntry result;

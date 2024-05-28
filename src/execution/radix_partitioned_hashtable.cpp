@@ -165,7 +165,9 @@ public:
 	bool finalized;
 	//! Whether we are doing an external aggregation
 	atomic<bool> external;
-	//! Whether the aggregation is single-threaded
+	//! Threads that have called Sink
+	atomic<idx_t> active_threads;
+	//! Number of threads (from TaskScheduler)
 	const idx_t number_of_threads;
 	//! If any thread has called combine
 	atomic<bool> any_combined;
@@ -192,7 +194,7 @@ public:
 
 RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context_p, const RadixPartitionedHashTable &radix_ht_p)
     : context(context_p), temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)),
-      radix_ht(radix_ht_p), config(context, *this), finalized(false), external(false),
+      radix_ht(radix_ht_p), config(context, *this), finalized(false), external(false), active_threads(0),
       number_of_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads())),
       any_combined(false), finalize_done(0), scan_pin_properties(TupleDataPinProperties::DESTROY_AFTER_DONE),
       count_before_combining(0), max_partition_size(0) {
@@ -438,6 +440,7 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 	auto &lstate = input.local_state.Cast<RadixHTLocalSinkState>();
 	if (!lstate.ht) {
 		lstate.ht = CreateHT(context.client, gstate.config.sink_capacity, gstate.config.GetRadixBits());
+		gstate.active_threads++;
 	}
 
 	auto &group_chunk = lstate.group_chunk;
@@ -512,7 +515,7 @@ void RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 		gstate.count_before_combining = uncombined_data.Count();
 
 		// If true there is no need to combine, it was all done by a single thread in a single HT
-		const auto single_ht = !gstate.external && gstate.number_of_threads == 1;
+		const auto single_ht = !gstate.external && gstate.active_threads == 1 && gstate.number_of_threads == 1;
 
 		auto &uncombined_partition_data = uncombined_data.GetPartitions();
 		const auto n_partitions = uncombined_partition_data.size();

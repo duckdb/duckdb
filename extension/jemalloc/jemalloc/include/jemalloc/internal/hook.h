@@ -1,9 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_HOOK_H
 #define JEMALLOC_INTERNAL_HOOK_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/tsd.h"
-
-namespace duckdb_jemalloc {
 
 /*
  * This API is *extremely* experimental, and may get ripped out, changed in API-
@@ -57,6 +56,7 @@ enum hook_alloc_e {
 	hook_alloc_calloc,
 	hook_alloc_memalign,
 	hook_alloc_valloc,
+	hook_alloc_pvalloc,
 	hook_alloc_mallocx,
 
 	/* The reallocating functions have both alloc and dalloc variants */
@@ -145,9 +145,9 @@ struct hook_ralloc_args_s {
  * Returns an opaque handle to be used when removing the hook.  NULL means that
  * we couldn't install the hook.
  */
-bool hook_boot();
+bool hook_boot(void);
 
-void *hook_install(tsdn_t *tsdn, hooks_t *hooks);
+void *hook_install(tsdn_t *tsdn, hooks_t *to_install);
 /* Uninstalls the hook with the handle previously returned from hook_install. */
 void hook_remove(tsdn_t *tsdn, void *opaque);
 
@@ -161,7 +161,5 @@ void hook_invoke_dalloc(hook_dalloc_t type, void *address,
 
 void hook_invoke_expand(hook_expand_t type, void *address, size_t old_usize,
     size_t new_usize, uintptr_t result_raw, uintptr_t args_raw[4]);
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_HOOK_H */

@@ -208,6 +208,11 @@ static unique_ptr<FunctionData> ArrayGenericBinaryBind(ClientContext &context, S
 	auto &left_type = arguments[0]->return_type;
 	auto &right_type = arguments[1]->return_type;
 
+	// mystery to me how anything non-array could ever end up here but it happened
+	if (left_type.id() != LogicalTypeId::ARRAY || right_type.id() != LogicalTypeId::ARRAY) {
+		throw InvalidInputException(StringUtil::Format("%s: Arguments must be arrays of FLOAT or DOUBLE", OP::NAME));
+	}
+
 	auto left_size = ArrayType::GetSize(left_type);
 	auto right_size = ArrayType::GetSize(right_type);
 	if (left_size != right_size) {
@@ -249,9 +254,9 @@ ScalarFunctionSet ArrayInnerProductFun::GetFunctions() {
 	ScalarFunctionSet set("array_inner_product");
 	// Generic array inner product function
 	for (auto &type : LogicalType::Real()) {
-		set.AddFunction(ScalarFunction({LogicalType::ARRAY(type), LogicalType::ARRAY(type)}, type,
-		                               ArrayGenericBinaryFunction<InnerProductOp>,
-		                               ArrayGenericBinaryBind<InnerProductOp>));
+		set.AddFunction(
+		    ScalarFunction({LogicalType::ARRAY(type, optional_idx()), LogicalType::ARRAY(type, optional_idx())}, type,
+		                   ArrayGenericBinaryFunction<InnerProductOp>, ArrayGenericBinaryBind<InnerProductOp>));
 	}
 	return set;
 }
@@ -260,8 +265,9 @@ ScalarFunctionSet ArrayDistanceFun::GetFunctions() {
 	ScalarFunctionSet set("array_distance");
 	// Generic array distance function
 	for (auto &type : LogicalType::Real()) {
-		set.AddFunction(ScalarFunction({LogicalType::ARRAY(type), LogicalType::ARRAY(type)}, type,
-		                               ArrayGenericBinaryFunction<DistanceOp>, ArrayGenericBinaryBind<DistanceOp>));
+		set.AddFunction(
+		    ScalarFunction({LogicalType::ARRAY(type, optional_idx()), LogicalType::ARRAY(type, optional_idx())}, type,
+		                   ArrayGenericBinaryFunction<DistanceOp>, ArrayGenericBinaryBind<DistanceOp>));
 	}
 	return set;
 }
@@ -270,9 +276,9 @@ ScalarFunctionSet ArrayCosineSimilarityFun::GetFunctions() {
 	ScalarFunctionSet set("array_cosine_similarity");
 	// Generic array cosine similarity function
 	for (auto &type : LogicalType::Real()) {
-		set.AddFunction(ScalarFunction({LogicalType::ARRAY(type), LogicalType::ARRAY(type)}, type,
-		                               ArrayGenericBinaryFunction<CosineSimilarityOp>,
-		                               ArrayGenericBinaryBind<CosineSimilarityOp>));
+		set.AddFunction(
+		    ScalarFunction({LogicalType::ARRAY(type, optional_idx()), LogicalType::ARRAY(type, optional_idx())}, type,
+		                   ArrayGenericBinaryFunction<CosineSimilarityOp>, ArrayGenericBinaryBind<CosineSimilarityOp>));
 	}
 	return set;
 }
