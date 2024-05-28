@@ -1,12 +1,13 @@
 #include "duckdb/optimizer/join_order/relation_manager.hpp"
-#include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
-#include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
+
+#include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
+#include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
 #include "duckdb/parser/expression_map.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/list.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
 #include <cmath>
@@ -119,7 +120,7 @@ static bool HasNonReorderableChild(LogicalOperator &op) {
 	return tmp->children.empty();
 }
 
-bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
+bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, LogicalOperator &input_op,
                                            vector<reference<LogicalOperator>> &filter_operators,
                                            optional_ptr<LogicalOperator> parent) {
 	LogicalOperator *op = &input_op;
@@ -160,8 +161,8 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		vector<RelationStats> children_stats;
 		for (auto &child : op->children) {
 			auto stats = RelationStats();
-			JoinOrderOptimizer optimizer(context);
-			child = optimizer.Optimize(std::move(child), &stats);
+			JoinOrderOptimizer child_optimizer(optimizer);
+			child = child_optimizer.Optimize(std::move(child), &stats);
 			children_stats.push_back(stats);
 		}
 
@@ -178,8 +179,8 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		// optimize children
 		RelationStats child_stats;
-		JoinOrderOptimizer optimizer(context);
-		op->children[0] = optimizer.Optimize(std::move(op->children[0]), &child_stats);
+		JoinOrderOptimizer child_optimizer(optimizer);
+		op->children[0] = child_optimizer.Optimize(std::move(op->children[0]), &child_stats);
 		auto &aggr = op->Cast<LogicalAggregate>();
 		auto operator_stats = RelationStatisticsHelper::ExtractAggregationStats(aggr, child_stats);
 		if (!datasource_filters.empty()) {
@@ -192,8 +193,8 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 	case LogicalOperatorType::LOGICAL_WINDOW: {
 		// optimize children
 		RelationStats child_stats;
-		JoinOrderOptimizer optimizer(context);
-		op->children[0] = optimizer.Optimize(std::move(op->children[0]), &child_stats);
+		JoinOrderOptimizer child_optimizer(optimizer);
+		op->children[0] = child_optimizer.Optimize(std::move(op->children[0]), &child_stats);
 		auto &window = op->Cast<LogicalWindow>();
 		auto operator_stats = RelationStatisticsHelper::ExtractWindowStats(window, child_stats);
 		if (!datasource_filters.empty()) {
@@ -206,8 +207,8 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
 		// Adding relations to the current join order optimizer
-		bool can_reorder_left = ExtractJoinRelations(*op->children[0], filter_operators, op);
-		bool can_reorder_right = ExtractJoinRelations(*op->children[1], filter_operators, op);
+		bool can_reorder_left = ExtractJoinRelations(optimizer, *op->children[0], filter_operators, op);
+		bool can_reorder_right = ExtractJoinRelations(optimizer, *op->children[1], filter_operators, op);
 		return can_reorder_left && can_reorder_right;
 	}
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN: {
@@ -247,8 +248,8 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		auto child_stats = RelationStats();
 		// optimize the child and copy the stats
-		JoinOrderOptimizer optimizer(context);
-		op->children[0] = optimizer.Optimize(std::move(op->children[0]), &child_stats);
+		JoinOrderOptimizer child_optimizer(optimizer);
+		op->children[0] = child_optimizer.Optimize(std::move(op->children[0]), &child_stats);
 		auto &proj = op->Cast<LogicalProjection>();
 		// Projection can create columns so we need to add them here
 		auto proj_stats = RelationStatisticsHelper::ExtractProjectionStats(proj, child_stats);
@@ -263,7 +264,32 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		AddRelation(input_op, parent, stats);
 		return true;
 	}
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
+		auto lhs_stats = RelationStats();
+		// optimize the lhs child and copy the stats
+		JoinOrderOptimizer lhs_optimizer(optimizer);
+		op->children[0] = lhs_optimizer.Optimize(std::move(op->children[0]), &lhs_stats);
+		// optimize the rhs child
+		auto &materialized_cte = op->Cast<LogicalMaterializedCTE>();
+		JoinOrderOptimizer rhs_optimizer(optimizer);
+		rhs_optimizer.AddMaterializedCTEStats(materialized_cte.table_index, std::move(lhs_stats));
+		op->children[1] = rhs_optimizer.Optimize(std::move(op->children[1]));
+		return false;
+	}
+	case LogicalOperatorType::LOGICAL_CTE_REF: {
+		auto &cte_ref = op->Cast<LogicalCTERef>();
+		if (cte_ref.materialized_cte != CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
+			return false;
+		}
+		AddRelation(input_op, parent, optimizer.GetMaterializedCTEStats(cte_ref.cte_index));
+		return true;
+	}
 	default:
+		// non-reorderable operator, just recurse into children
+		for (auto &child : op->children) {
+			JoinOrderOptimizer child_optimizer(optimizer);
+			child = child_optimizer.Optimize(std::move(child));
+		}
 		return false;
 	}
 }

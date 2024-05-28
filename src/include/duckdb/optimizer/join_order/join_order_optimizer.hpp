@@ -25,11 +25,15 @@ namespace duckdb {
 
 class JoinOrderOptimizer {
 public:
-	explicit JoinOrderOptimizer(ClientContext &context) : context(context), query_graph_manager(context) {
-	}
+	explicit JoinOrderOptimizer(ClientContext &context);
+	explicit JoinOrderOptimizer(JoinOrderOptimizer &parent);
 
+public:
 	//! Perform join reordering inside a plan
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan, optional_ptr<RelationStats> stats = nullptr);
+	//! Adds/gets materialized CTE stats
+	void AddMaterializedCTEStats(idx_t index, RelationStats &&stats);
+	RelationStats GetMaterializedCTEStats(idx_t index);
 
 private:
 	ClientContext &context;
@@ -48,6 +52,9 @@ private:
 	CardinalityEstimator cardinality_estimator;
 
 	unordered_set<std::string> join_nodes_in_full_plan;
+
+	//! Mapping from materialized CTE index to stats
+	unordered_map<idx_t, RelationStats> materialized_cte_stats;
 };
 
 } // namespace duckdb
