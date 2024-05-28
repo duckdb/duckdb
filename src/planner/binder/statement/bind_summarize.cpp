@@ -112,12 +112,15 @@ unique_ptr<BoundTableRef> Binder::BindSummarize(ShowRef &ref) {
 		if (plan.types[i].IsNumeric()) {
 			avg_children.push_back(SummarizeCreateAggregate("avg", plan.names[i]));
 			std_children.push_back(SummarizeCreateAggregate("stddev", plan.names[i]));
+		} else {
+			avg_children.push_back(make_uniq<ConstantExpression>(Value()));
+			std_children.push_back(make_uniq<ConstantExpression>(Value()));
+		}
+		if (plan.types[i].IsNumeric() || plan.types[i].IsTemporal()) {
 			q25_children.push_back(SummarizeCreateAggregate("approx_quantile", plan.names[i], Value::FLOAT(0.25)));
 			q50_children.push_back(SummarizeCreateAggregate("approx_quantile", plan.names[i], Value::FLOAT(0.50)));
 			q75_children.push_back(SummarizeCreateAggregate("approx_quantile", plan.names[i], Value::FLOAT(0.75)));
 		} else {
-			avg_children.push_back(make_uniq<ConstantExpression>(Value()));
-			std_children.push_back(make_uniq<ConstantExpression>(Value()));
 			q25_children.push_back(make_uniq<ConstantExpression>(Value()));
 			q50_children.push_back(make_uniq<ConstantExpression>(Value()));
 			q75_children.push_back(make_uniq<ConstantExpression>(Value()));
