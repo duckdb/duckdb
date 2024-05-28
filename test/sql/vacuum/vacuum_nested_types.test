@@ -3,7 +3,7 @@
 # group: [vacuum]
 
 statement ok
-CREATE TABLE test (x INT[], y AS (x || 100));
+CREATE TABLE test (x INT[], y AS (x || [100]));
 
 statement ok
 ANALYZE test(y, x);

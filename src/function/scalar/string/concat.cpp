@@ -239,6 +239,7 @@ static void HandleArrayBinding(ClientContext &context, vector<unique_ptr<Express
 		throw BinderException("Cannot concatenate types %s and %s", arguments[0]->return_type.ToString(),
 		                      arguments[1]->return_type.ToString());
 	}
+
 	// if either argument is an array, we cast it to a list
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 	arguments[1] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[1]));
@@ -279,20 +280,30 @@ static unique_ptr<FunctionData> HandleListBinding(ClientContext &context, Scalar
 	return make_uniq<ConcatBindData>(bound_function.return_type, is_operator);
 }
 
+static void FindFirstTwoArguments(vector<unique_ptr<Expression>> &arguments, LogicalTypeId &first_arg, LogicalTypeId &second_arg) {
+	first_arg = arguments[0]->return_type.id();
+	second_arg = first_arg;
+	if (arguments.size() > 1) {
+		second_arg = arguments[1]->return_type.id();
+	}
+}
+
 static unique_ptr<FunctionData> BindConcatFunction(ClientContext &context, ScalarFunction &bound_function,
                                                    vector<unique_ptr<Expression>> &arguments) {
-	auto &first_arg = arguments[0]->return_type;
-	auto &second_arg = arguments[1]->return_type;
+	LogicalTypeId first_arg;
+	LogicalTypeId second_arg;
+	FindFirstTwoArguments(arguments, first_arg, second_arg);
 
-	if (arguments.size() > 2 && (first_arg.id() == LogicalTypeId::ARRAY || first_arg.id() == LogicalTypeId::LIST)) {
+	if (arguments.size() > 2 && (first_arg == LogicalTypeId::ARRAY || first_arg == LogicalTypeId::LIST)) {
 		throw BinderException("list_concat only accepts two arguments");
 	}
 
-	if (first_arg.id() == LogicalTypeId::ARRAY || second_arg.id() == LogicalTypeId::ARRAY) {
+	if (first_arg == LogicalTypeId::ARRAY || second_arg == LogicalTypeId::ARRAY) {
 		HandleArrayBinding(context, arguments);
+		FindFirstTwoArguments(arguments, first_arg, second_arg);
 	}
 
-	if (first_arg.id() == LogicalTypeId::LIST || second_arg.id() == LogicalTypeId::LIST) {
+	if (first_arg == LogicalTypeId::LIST || second_arg == LogicalTypeId::LIST) {
 		return HandleListBinding(context, bound_function, arguments, false);
 	}
 
@@ -305,14 +316,16 @@ static unique_ptr<FunctionData> BindConcatOperator(ClientContext &context, Scala
                                                    vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(arguments.size() == 2);
 
-	auto &first_arg = arguments[0]->return_type;
-	auto &second_arg = arguments[1]->return_type;
+	LogicalTypeId lhs;
+	LogicalTypeId rhs;
+	FindFirstTwoArguments(arguments, lhs, rhs);
 
-	if (first_arg.id() == LogicalTypeId::ARRAY || second_arg.id() == LogicalTypeId::ARRAY) {
+	if (lhs == LogicalTypeId::ARRAY || rhs == LogicalTypeId::ARRAY) {
 		HandleArrayBinding(context, arguments);
+		FindFirstTwoArguments(arguments, lhs, rhs);
 	}
 
-	if (first_arg.id() == LogicalTypeId::LIST || second_arg.id() == LogicalTypeId::LIST) {
+	if (lhs == LogicalTypeId::LIST || rhs == LogicalTypeId::LIST) {
 		return HandleListBinding(context, bound_function, arguments, true);
 	}
 
@@ -323,8 +336,10 @@ static unique_ptr<FunctionData> BindConcatOperator(ClientContext &context, Scala
 
 static unique_ptr<BaseStatistics> ConcatStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
-	if (child_stats.front().GetType().id() == LogicalTypeId::VARCHAR) {
-		return nullptr;
+	for (auto &child : child_stats) {
+		if (child.GetType().id() == LogicalTypeId::VARCHAR) {
+            return nullptr;
+        }
 	}
 	D_ASSERT(child_stats.size() == 2);
 
