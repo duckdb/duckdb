@@ -1,0 +1,17 @@
+# name: test/sql/catalog/dependencies/temp_to_main_catalog_dependency.test
+# group: [dependencies]
+
+statement ok
+CREATE MACRO m1() AS (SELECT 1 AS x);
+
+statement ok
+CREATE OR REPLACE TEMP MACRO m2() AS (SELECT m1() AS y);
+
+statement ok
+drop macro m1;
+
+statement ok
+create temp macro m1() as (select 2 as y);
+
+statement ok
+CREATE OR REPLACE TEMP MACRO m2() AS (SELECT m1() AS y);

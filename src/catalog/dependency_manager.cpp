@@ -263,19 +263,9 @@ void DependencyManager::CreateDependencies(CatalogTransaction transaction, const
 	}
 
 	const auto object_info = GetLookupProperties(object);
-	// check for each object in the sources if they were not deleted yet
-	for (auto &dependency : dependencies.Set()) {
-		if (dependency.catalog != object.ParentCatalog().GetName()) {
-			throw DependencyException(
-			    "Error adding dependency for object \"%s\" - dependency \"%s\" is in catalog "
-			    "\"%s\", which does not match the catalog \"%s\".\nCross catalog dependencies are not supported.",
-			    object.name, dependency.entry.name, dependency.catalog, object.ParentCatalog().GetName());
-		}
-	}
-
 	// add the object to the dependents_map of each object that it depends on
 	for (auto &dependency : dependencies.Set()) {
-		DependencyInfo info {/*dependent = */ DependencyDependent {GetLookupProperties(object), dependency_flags},
+		DependencyInfo info {/*dependent = */ DependencyDependent {object_info, dependency_flags},
 		                     /*subject = */ DependencySubject {dependency.entry, DependencySubjectFlags()}};
 		CreateDependency(transaction, info);
 	}
