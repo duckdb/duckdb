@@ -57,7 +57,6 @@ public:
 	DUCKDB_API bool Contains(CatalogEntry &entry);
 
 public:
-	DUCKDB_API void VerifyDependencies(Catalog &catalog, const string &name);
 	void Serialize(Serializer &serializer) const;
 	static LogicalDependencyList Deserialize(Deserializer &deserializer);
 	bool operator==(const LogicalDependencyList &other) const;

@@ -255,7 +255,7 @@ void DependencyManager::CreateDependency(CatalogTransaction transaction, Depende
 }
 
 void DependencyManager::CreateDependencies(CatalogTransaction transaction, const CatalogEntry &object,
-                                           const LogicalDependencyList &dependencies) {
+                                           const LogicalDependencyList &unfiltered_dependencies) {
 	DependencyDependentFlags dependency_flags;
 	if (object.type != CatalogType::INDEX_ENTRY) {
 		// indexes do not require CASCADE to be dropped, they are simply always dropped along with the table
@@ -263,9 +263,18 @@ void DependencyManager::CreateDependencies(CatalogTransaction transaction, const
 	}
 
 	const auto object_info = GetLookupProperties(object);
+	LogicalDependencyList dependencies;
+	// check for each object in the sources if they were not deleted yet
+	for (auto &dependency : unfiltered_dependencies.Set()) {
+		if (dependency.catalog != object.ParentCatalog().GetName()) {
+			continue;
+		}
+		dependencies.AddDependency(dependency);
+	}
+
 	// add the object to the dependents_map of each object that it depends on
 	for (auto &dependency : dependencies.Set()) {
-		DependencyInfo info {/*dependent = */ DependencyDependent {object_info, dependency_flags},
+		DependencyInfo info {/*dependent = */ DependencyDependent {GetLookupProperties(object), dependency_flags},
 		                     /*subject = */ DependencySubject {dependency.entry, DependencySubjectFlags()}};
 		CreateDependency(transaction, info);
 	}

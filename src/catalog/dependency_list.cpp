@@ -79,17 +79,6 @@ bool LogicalDependencyList::Contains(CatalogEntry &entry_p) {
 	return set.count(logical_entry);
 }
 
-void LogicalDependencyList::VerifyDependencies(Catalog &catalog, const string &name) {
-	for (auto &dep : set) {
-		if (dep.catalog != catalog.GetName()) {
-			throw DependencyException(
-			    "Error adding dependency for object \"%s\" - dependency \"%s\" is in catalog "
-			    "\"%s\", which does not match the catalog \"%s\".\nCross catalog dependencies are not supported.",
-			    name, dep.entry.name, dep.catalog, catalog.GetName());
-		}
-	}
-}
-
 const LogicalDependencyList::create_info_set_t &LogicalDependencyList::Set() const {
 	return set;
 }

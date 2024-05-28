@@ -322,13 +322,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 			base.columns.AddColumn(ColumnDefinition(names[i], sql_types[i]));
 		}
 	} else {
-		SetCatalogLookupCallback([&dependencies, &schema](CatalogEntry &entry) {
-			if (&schema.ParentCatalog() != &entry.ParentCatalog()) {
-				// Don't register dependencies between catalogs
-				return;
-			}
-			dependencies.AddDependency(entry);
-		});
+		SetCatalogLookupCallback([&dependencies](CatalogEntry &entry) { dependencies.AddDependency(entry); });
 		CreateColumnDependencyManager(*result);
 		// bind the generated column expressions
 		BindGeneratedColumns(*result);
@@ -351,7 +345,6 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		}
 		BindLogicalType(column.TypeMutable(), &result->schema.catalog);
 	}
-	result->dependencies.VerifyDependencies(schema.catalog, result->Base().table);
 
 	auto &properties = GetStatementProperties();
 	properties.allow_stream_result = false;

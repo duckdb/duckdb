@@ -150,13 +150,8 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	auto should_create_dependencies = db_config.options.enable_view_dependencies;
 
 	if (should_create_dependencies) {
-		view_binder->SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
-			if (&catalog != &entry.ParentCatalog()) {
-				// Don't register dependencies between catalogs
-				return;
-			}
-			dependencies.AddDependency(entry);
-		});
+		view_binder->SetCatalogLookupCallback(
+		    [&dependencies](CatalogEntry &entry) { dependencies.AddDependency(entry); });
 	}
 	view_binder->can_contain_nulls = true;
 
@@ -210,11 +205,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	SelectBinder binder(*this, context, sel_node, group_info);
 	auto &dependencies = base.dependencies;
 	auto &catalog = Catalog::GetCatalog(context, info.catalog);
-	binder.SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
-		if (&catalog != &entry.ParentCatalog()) {
-			// Don't register any cross-catalog dependencies
-			return;
-		}
+	binder.SetCatalogLookupCallback([&dependencies](CatalogEntry &entry) {
 		// Register any catalog entry required to bind the macro function
 		dependencies.AddDependency(entry);
 	});
@@ -541,13 +532,7 @@ unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateS
 	IndexBinder index_binder(binder, binder.context);
 	auto &dependencies = base.dependencies;
 	auto &catalog = Catalog::GetCatalog(binder.context, base.catalog);
-	index_binder.SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
-		if (&catalog != &entry.ParentCatalog()) {
-			// Don't register any cross-catalog dependencies
-			return;
-		}
-		dependencies.AddDependency(entry);
-	});
+	index_binder.SetCatalogLookupCallback([&dependencies](CatalogEntry &entry) { dependencies.AddDependency(entry); });
 	vector<unique_ptr<Expression>> expressions;
 	expressions.reserve(base.expressions.size());
 	for (auto &expr : base.expressions) {
@@ -717,11 +702,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 
 		auto &catalog = Catalog::GetCatalog(context, create_type_info.catalog);
 		auto &dependencies = create_type_info.dependencies;
-		auto dependency_callback = [&dependencies, &catalog](CatalogEntry &entry) {
-			if (&catalog != &entry.ParentCatalog()) {
-				// Don't register any cross-catalog dependencies
-				return;
-			}
+		auto dependency_callback = [&dependencies](CatalogEntry &entry) {
 			dependencies.AddDependency(entry);
 		};
 		if (create_type_info.query) {
