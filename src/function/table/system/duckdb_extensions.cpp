@@ -156,6 +156,15 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 		}
 	}
 
+	for (auto &p : db.LoadedExtensionsExtraData()) {
+		auto &ext_name = p.first;
+		auto &ext_info = p.second;
+		auto entry = installed_extensions.find(ext_name);
+		if (entry != installed_extensions.end()) {
+			entry->second.description = ext_info.description;
+		}
+	}
+
 	result->entries.reserve(installed_extensions.size());
 	for (auto &kv : installed_extensions) {
 		result->entries.push_back(std::move(kv.second));

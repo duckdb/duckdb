@@ -27,6 +27,10 @@ enum class ExtensionInstallMode : uint8_t {
 	NOT_INSTALLED = 4
 };
 
+struct ExtensionLoadedInfo {
+	string description;
+};
+
 class ExtensionInstallInfo {
 public:
 	//! How the extension was installed

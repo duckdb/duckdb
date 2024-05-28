@@ -28,6 +28,8 @@ unique_ptr<FunctionData> GetEnvBind(ClientContext &context, ScalarFunction &boun
 }
 
 void ShellExtension::Load(DuckDB &db) {
+	ExtensionUtil::RegisterExtension(*db.instance, "shell", {"Adds CLI-specific support and functionalities"});
+
 	ExtensionUtil::RegisterFunction(*db.instance, ScalarFunction("getenv", {LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                                                             GetEnvFunction, GetEnvBind));
 }

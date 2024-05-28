@@ -13,6 +13,7 @@
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
+#include "duckdb/main/extension_install_info.hpp"
 
 namespace duckdb {
 struct CreateMacroInfo;
@@ -22,6 +23,8 @@ class DatabaseInstance;
 //! The ExtensionUtil class contains methods that are useful for extensions
 class ExtensionUtil {
 public:
+	//! Register a new DuckDB extension
+	DUCKDB_API static void RegisterExtension(DatabaseInstance &db, const string &name, const ExtensionLoadedInfo &info);
 	//! Register a new scalar function - throw an exception if the function already exists
 	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, ScalarFunction function);
 	//! Register a new scalar function set - throw an exception if the function already exists

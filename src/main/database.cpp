@@ -396,6 +396,10 @@ const unordered_set<std::string> &DatabaseInstance::LoadedExtensions() {
 	return loaded_extensions;
 }
 
+void DatabaseInstance::AddExtensionInfo(const string &name, const ExtensionLoadedInfo &info) {
+	loaded_extensions_extra_data[name] = info;
+}
+
 const unordered_map<std::string, ExtensionInstallInfo> &DatabaseInstance::LoadedExtensionsData() {
 	return loaded_extensions_data;
 }

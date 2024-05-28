@@ -57,13 +57,16 @@ public:
 
 	DUCKDB_API const unordered_set<string> &LoadedExtensions();
 	DUCKDB_API const unordered_map<string, ExtensionInstallInfo> &LoadedExtensionsData();
+	DUCKDB_API const unordered_map<string, ExtensionLoadedInfo> &LoadedExtensionsExtraData() {
+		return loaded_extensions_extra_data;
+	}
 	DUCKDB_API bool ExtensionIsLoaded(const string &name);
 
 	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) const;
 
 	unique_ptr<AttachedDatabase> CreateAttachedDatabase(ClientContext &context, const AttachInfo &info,
 	                                                    const string &type, AccessMode access_mode);
-
+	void AddExtensionInfo(const string &name, const ExtensionLoadedInfo &info);
 private:
 	void Initialize(const char *path, DBConfig *config);
 	void CreateMainDatabase();
@@ -78,6 +81,7 @@ private:
 	unique_ptr<ConnectionManager> connection_manager;
 	unordered_set<string> loaded_extensions;
 	unordered_map<string, ExtensionInstallInfo> loaded_extensions_data;
+	unordered_map<string, ExtensionLoadedInfo> loaded_extensions_extra_data;
 	ValidChecker db_validity;
 	unique_ptr<DatabaseFileSystem> db_file_system;
 };
