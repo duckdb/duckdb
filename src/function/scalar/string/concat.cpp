@@ -282,16 +282,17 @@ static unique_ptr<FunctionData> HandleListBinding(ClientContext &context, Scalar
 static unique_ptr<FunctionData> BindConcatFunction(ClientContext &context, ScalarFunction &bound_function,
                                                    vector<unique_ptr<Expression>> &arguments) {
 	auto &first_arg = arguments[0]->return_type;
+	auto &second_arg = arguments[1]->return_type;
 
 	if (arguments.size() > 2 && (first_arg.id() == LogicalTypeId::ARRAY || first_arg.id() == LogicalTypeId::LIST)) {
 		throw BinderException("list_concat only accepts two arguments");
 	}
 
-	if (first_arg.id() == LogicalTypeId::ARRAY) {
+	if (first_arg.id() == LogicalTypeId::ARRAY || second_arg.id() == LogicalTypeId::ARRAY) {
 		HandleArrayBinding(context, arguments);
 	}
 
-	if (first_arg.id() == LogicalTypeId::LIST) {
+	if (first_arg.id() == LogicalTypeId::LIST || second_arg.id() == LogicalTypeId::LIST) {
 		return HandleListBinding(context, bound_function, arguments, false);
 	}
 
@@ -305,12 +306,13 @@ static unique_ptr<FunctionData> BindConcatOperator(ClientContext &context, Scala
 	D_ASSERT(arguments.size() == 2);
 
 	auto &first_arg = arguments[0]->return_type;
+	auto &second_arg = arguments[1]->return_type;
 
-	if (first_arg.id() == LogicalTypeId::ARRAY) {
+	if (first_arg.id() == LogicalTypeId::ARRAY || second_arg.id() == LogicalTypeId::ARRAY) {
 		HandleArrayBinding(context, arguments);
 	}
 
-	if (first_arg.id() == LogicalTypeId::LIST) {
+	if (first_arg.id() == LogicalTypeId::LIST || second_arg.id() == LogicalTypeId::LIST) {
 		return HandleListBinding(context, bound_function, arguments, true);
 	}
 
