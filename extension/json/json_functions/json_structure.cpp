@@ -508,7 +508,7 @@ ScalarFunctionSet JSONFunctions::GetStructureFunction() {
 	return set;
 }
 
-static LogicalType StructureToTypeArray(ClientContext &context, const JSONStructureNode &node, const idx_t max_dept
+static LogicalType StructureToTypeArray(ClientContext &context, const JSONStructureNode &node, const idx_t max_depth,
                                         const double field_appearance_threshold, const idx_t map_inference_threshold,
                                         idx_t depth, const idx_t sample_count, const LogicalType &null_type) {
 	D_ASSERT(node.descriptions.size() == 1 && node.descriptions[0].type == LogicalTypeId::LIST);
