@@ -13,8 +13,10 @@ namespace duckdb {
 JoinOrderOptimizer::JoinOrderOptimizer(ClientContext &context) : context(context), query_graph_manager(context) {
 }
 
-JoinOrderOptimizer::JoinOrderOptimizer(JoinOrderOptimizer &parent) : JoinOrderOptimizer(parent.context) {
-	materialized_cte_stats = parent.materialized_cte_stats;
+JoinOrderOptimizer JoinOrderOptimizer::CreateChildOptimizer() {
+	JoinOrderOptimizer child_optimizer(context);
+	child_optimizer.materialized_cte_stats = materialized_cte_stats;
+	return child_optimizer;
 }
 
 unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOperator> plan,

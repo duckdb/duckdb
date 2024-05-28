@@ -161,7 +161,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		vector<RelationStats> children_stats;
 		for (auto &child : op->children) {
 			auto stats = RelationStats();
-			JoinOrderOptimizer child_optimizer(optimizer);
+			auto child_optimizer = optimizer.CreateChildOptimizer();
 			child = child_optimizer.Optimize(std::move(child), &stats);
 			children_stats.push_back(stats);
 		}
@@ -179,7 +179,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		// optimize children
 		RelationStats child_stats;
-		JoinOrderOptimizer child_optimizer(optimizer);
+		auto child_optimizer = optimizer.CreateChildOptimizer();
 		op->children[0] = child_optimizer.Optimize(std::move(op->children[0]), &child_stats);
 		auto &aggr = op->Cast<LogicalAggregate>();
 		auto operator_stats = RelationStatisticsHelper::ExtractAggregationStats(aggr, child_stats);
@@ -193,7 +193,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 	case LogicalOperatorType::LOGICAL_WINDOW: {
 		// optimize children
 		RelationStats child_stats;
-		JoinOrderOptimizer child_optimizer(optimizer);
+		auto child_optimizer = optimizer.CreateChildOptimizer();
 		op->children[0] = child_optimizer.Optimize(std::move(op->children[0]), &child_stats);
 		auto &window = op->Cast<LogicalWindow>();
 		auto operator_stats = RelationStatisticsHelper::ExtractWindowStats(window, child_stats);
@@ -248,7 +248,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		auto child_stats = RelationStats();
 		// optimize the child and copy the stats
-		JoinOrderOptimizer child_optimizer(optimizer);
+		auto child_optimizer = optimizer.CreateChildOptimizer();
 		op->children[0] = child_optimizer.Optimize(std::move(op->children[0]), &child_stats);
 		auto &proj = op->Cast<LogicalProjection>();
 		// Projection can create columns so we need to add them here
@@ -267,11 +267,11 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
 		auto lhs_stats = RelationStats();
 		// optimize the lhs child and copy the stats
-		JoinOrderOptimizer lhs_optimizer(optimizer);
+		auto lhs_optimizer = optimizer.CreateChildOptimizer();
 		op->children[0] = lhs_optimizer.Optimize(std::move(op->children[0]), &lhs_stats);
 		// optimize the rhs child
 		auto &materialized_cte = op->Cast<LogicalMaterializedCTE>();
-		JoinOrderOptimizer rhs_optimizer(optimizer);
+		auto rhs_optimizer = optimizer.CreateChildOptimizer();
 		rhs_optimizer.AddMaterializedCTEStats(materialized_cte.table_index, std::move(lhs_stats));
 		op->children[1] = rhs_optimizer.Optimize(std::move(op->children[1]));
 		return false;
@@ -287,7 +287,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 	default:
 		// non-reorderable operator, just recurse into children
 		for (auto &child : op->children) {
-			JoinOrderOptimizer child_optimizer(optimizer);
+			auto child_optimizer = optimizer.CreateChildOptimizer();
 			child = child_optimizer.Optimize(std::move(child));
 		}
 		return false;
