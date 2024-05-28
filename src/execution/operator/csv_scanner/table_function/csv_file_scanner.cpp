@@ -30,6 +30,35 @@ struct TypeIdxPair {
 	idx_t idx;
 };
 
+// We only really care about types that can be set in the sniffer_auto, or are sniffed by default
+// If the user manually sets them, we should never get a cast issue from the sniffer!
+bool CanWeCastIt(LogicalTypeId source, LogicalTypeId destination) {
+	if (destination == LogicalTypeId::VARCHAR) {
+		// We can always cast to varchar
+		return true;
+	}
+	switch (source) {
+	case LogicalTypeId::TINYINT:
+		return destination == LogicalTypeId::SMALLINT || destination == LogicalTypeId::INTEGER ||
+		       destination == LogicalTypeId::BIGINT || destination == LogicalTypeId::DECIMAL ||
+		       destination == LogicalTypeId::FLOAT || destination == LogicalTypeId::DOUBLE;
+	case LogicalTypeId::SMALLINT:
+		return destination == LogicalTypeId::INTEGER || destination == LogicalTypeId::BIGINT ||
+		       destination == LogicalTypeId::DECIMAL || destination == LogicalTypeId::FLOAT ||
+		       destination == LogicalTypeId::DOUBLE;
+	case LogicalTypeId::INTEGER:
+		return destination == LogicalTypeId::BIGINT || destination == LogicalTypeId::DECIMAL ||
+		       destination == LogicalTypeId::FLOAT || destination == LogicalTypeId::DOUBLE;
+	case LogicalTypeId::BIGINT:
+		return destination == LogicalTypeId::DECIMAL || destination == LogicalTypeId::FLOAT ||
+		       destination == LogicalTypeId::DOUBLE;
+	case LogicalTypeId::FLOAT:
+		return destination == LogicalTypeId::DOUBLE;
+	default:
+		return false;
+	}
+}
+
 bool CSVColumnSchema::SchemasMatch(string &error_message, vector<string> &names, vector<LogicalType> &types,
                                    const string &cur_file_path, vector<idx_t> &projection_order) {
 	D_ASSERT(names.size() == types.size() && !names.empty());
@@ -55,8 +84,7 @@ bool CSVColumnSchema::SchemasMatch(string &error_message, vector<string> &names,
 			      << "\n";
 			match = false;
 		} else {
-			if (current_schema[column.name].type.id() != column.type.id()) {
-				// FIXME: Should we check if they have an implicit cast?
+			if (!CanWeCastIt(current_schema[column.name].type.id(), column.type.id())) {
 				error << "Column with name: \"" << column.name
 				      << "\" is expected to have type: " << column.type.ToString();
 				error << " But has type: " << current_schema[column.name].type.ToString() << "\n";
