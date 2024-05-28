@@ -181,16 +181,25 @@ unique_ptr<FunctionData> BindApproxQuantile(ClientContext &context, AggregateFun
 		throw BinderException("APPROXIMATE QUANTILE can only take constant quantile parameters");
 	}
 	Value quantile_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
+	if (quantile_val.IsNull()) {
+		throw BinderException("APPROXIMATE QUANTILE parameter list cannot be NULL");
+	}
 
 	vector<float> quantiles;
-	if (quantile_val.type().id() != LogicalTypeId::LIST) {
-		quantiles.push_back(CheckApproxQuantile(quantile_val));
-	} else if (quantile_val.IsNull()) {
-		throw BinderException("APPROXIMATE QUANTILE parameter list cannot be NULL");
-	} else {
+	switch (quantile_val.type().id()) {
+	case LogicalTypeId::LIST:
 		for (const auto &element_val : ListValue::GetChildren(quantile_val)) {
 			quantiles.push_back(CheckApproxQuantile(element_val));
 		}
+		break;
+	case LogicalTypeId::ARRAY:
+		for (const auto &element_val : ArrayValue::GetChildren(quantile_val)) {
+			quantiles.push_back(CheckApproxQuantile(element_val));
+		}
+		break;
+	default:
+		quantiles.push_back(CheckApproxQuantile(quantile_val));
+		break;
 	}
 
 	// remove the quantile argument so we can use the unary aggregate
