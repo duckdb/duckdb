@@ -1,4 +1,4 @@
-# name: test/sql/cte/materialized/automatic_cte_materialization.test
+# name: test/sql/cte/materialized/automatic_cte_materialization.test_slow
 # description: Test that CTEs are automatically materialized
 # group: [materialized]
 
@@ -11,7 +11,7 @@ statement ok
 PRAGMA explain_output='OPTIMIZED_ONLY'
 
 statement ok
-CALL dbgen(sf=0)
+CALL dbgen(sf=0.01)
 
 query II
 EXPLAIN WITH revenue AS (
@@ -53,7 +53,7 @@ DROP TABLE customer
 require tpcds
 
 statement ok
-call dsdgen(sf=0)
+call dsdgen(sf=0.01)
 
 query II
 EXPLAIN WITH frequent_ss_items AS

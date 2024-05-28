@@ -264,15 +264,18 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		AddRelation(input_op, parent, stats);
 		return true;
 	}
-	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
 		auto lhs_stats = RelationStats();
 		// optimize the lhs child and copy the stats
 		auto lhs_optimizer = optimizer.CreateChildOptimizer();
 		op->children[0] = lhs_optimizer.Optimize(std::move(op->children[0]), &lhs_stats);
 		// optimize the rhs child
-		auto &materialized_cte = op->Cast<LogicalMaterializedCTE>();
 		auto rhs_optimizer = optimizer.CreateChildOptimizer();
-		rhs_optimizer.AddMaterializedCTEStats(materialized_cte.table_index, std::move(lhs_stats));
+		auto table_index = op->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE
+		                       ? op->Cast<LogicalMaterializedCTE>().table_index
+		                       : op->Cast<LogicalRecursiveCTE>().table_index;
+		rhs_optimizer.AddMaterializedCTEStats(table_index, std::move(lhs_stats));
 		op->children[1] = rhs_optimizer.Optimize(std::move(op->children[1]));
 		return false;
 	}
