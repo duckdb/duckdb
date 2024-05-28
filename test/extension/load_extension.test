@@ -12,11 +12,14 @@ PRAGMA enable_verification
 statement error
 LOAD 'asdf';
 ----
+IO Error
 
 statement error
 LOAD 'Makefile';
 ----
+IO Error
 
+# should not expect anything
 statement error
 LOAD NULL;
 ----
@@ -50,10 +53,12 @@ QUACK
 statement error
 QUAC
 ----
+Parser Error
 
 statement error
 QUACK NOT QUACK
 ----
+Parser Error
 
 query I
 SELECT contains(loaded_extensions(), 'loadable_extension_demo')
