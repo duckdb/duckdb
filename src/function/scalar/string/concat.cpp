@@ -220,6 +220,20 @@ static void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	}
 }
 
+static void SetArgumentType(ScalarFunction &bound_function, LogicalType type, bool is_operator) {
+	if (is_operator) {
+		bound_function.arguments[0] = type;
+		bound_function.arguments[1] = type;
+		bound_function.return_type = type;
+	} else {
+		for (auto &arg : bound_function.arguments) {
+			arg = type;
+		}
+		bound_function.varargs = type;
+		bound_function.return_type = type;
+	}
+}
+
 static void HandleArrayBinding(ClientContext &context, vector<unique_ptr<Expression>> &arguments) {
 	if (arguments[1]->return_type.id() != LogicalTypeId::ARRAY) {
 		throw BinderException("Cannot concatenate types %s and %s", arguments[0]->return_type.ToString(),
@@ -230,56 +244,46 @@ static void HandleArrayBinding(ClientContext &context, vector<unique_ptr<Express
 	arguments[1] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[1]));
 }
 
-static unique_ptr<FunctionData> HandleListBinding( ) {
-    // Now we can assume that the input is a list, and therefor only accepts two arguments
-    D_ASSERT(arguments.size() == 2);
-
-    auto &second_arg = arguments[1]->return_type;
-
-    if (first_arg.id() == LogicalTypeId::UNKNOWN || second_arg.id() == LogicalTypeId::UNKNOWN) {
-        throw ParameterNotResolvedException();
-    } else if (first_arg.id() == LogicalTypeId::SQLNULL || second_arg.id() == LogicalTypeId::SQLNULL) {
-        // we mimic postgres behaviour: list_concat(NULL, my_list) = my_list
-        auto return_type = second_arg.id() == LogicalTypeId::SQLNULL ? first_arg : second_arg;
-        bound_function.varargs = return_type;
-        bound_function.return_type = return_type;
-    } else {
-        if (first_arg.id() != LogicalTypeId::LIST || second_arg.id() != LogicalTypeId::LIST) {
-            throw BinderException("Cannot concatenate types %s and %s", first_arg.ToString(),
-                                  second_arg.ToString());
-        }
-
-        // Resolve list type
-        LogicalType child_type = LogicalType::SQLNULL;
-        for (const auto &argument : arguments) {
-            auto &next_type = ListType::GetChildType(argument->return_type);
-            if (!LogicalType::TryGetMaxLogicalType(context, child_type, next_type, child_type)) {
-                throw BinderException(
-                    "Cannot concatenate lists of types %s[] and %s[] - an explicit cast is required",
-                    child_type.ToString(), next_type.ToString());
-            }
-        }
-        auto list_type = LogicalType::LIST(child_type);
-
-        bound_function.varargs = list_type;
-        bound_function.return_type = list_type;
-    }
-    return make_uniq<ConcatBindData>(bound_function.return_type, is_operator);
-}
-
-static unique_ptr<FunctionData> GeneralConcatBind(ClientContext &context, ScalarFunction &bound_function,
+static unique_ptr<FunctionData> HandleListBinding(ClientContext &context, ScalarFunction &bound_function,
                                                   vector<unique_ptr<Expression>> &arguments, bool is_operator) {
-	auto &first_arg = arguments[0]->return_type;
+	// list_concat only accepts two arguments
+	D_ASSERT(arguments.size() == 2);
 
+	auto &lhs = arguments[0]->return_type;
+	auto &rhs = arguments[1]->return_type;
 
+	if (lhs.id() == LogicalTypeId::UNKNOWN || rhs.id() == LogicalTypeId::UNKNOWN) {
+		throw ParameterNotResolvedException();
+	} else if (lhs.id() == LogicalTypeId::SQLNULL || rhs.id() == LogicalTypeId::SQLNULL) {
+		// we mimic postgres behaviour: list_concat(NULL, my_list) = my_list
+		auto return_type = rhs.id() == LogicalTypeId::SQLNULL ? lhs : rhs;
+		SetArgumentType(bound_function, return_type, is_operator);
+	} else {
+		if (lhs.id() != LogicalTypeId::LIST || rhs.id() != LogicalTypeId::LIST) {
+			throw BinderException("Cannot concatenate types %s and %s", lhs.ToString(), rhs.ToString());
+		}
+
+		// Resolve list type
+		LogicalType child_type = LogicalType::SQLNULL;
+		for (const auto &argument : arguments) {
+			auto &next_type = ListType::GetChildType(argument->return_type);
+			if (!LogicalType::TryGetMaxLogicalType(context, child_type, next_type, child_type)) {
+				throw BinderException("Cannot concatenate lists of types %s[] and %s[] - an explicit cast is required",
+				                      child_type.ToString(), next_type.ToString());
+			}
+		}
+		auto list_type = LogicalType::LIST(child_type);
+
+		SetArgumentType(bound_function, list_type, is_operator);
+	}
+	return make_uniq<ConcatBindData>(bound_function.return_type, is_operator);
 }
 
 static unique_ptr<FunctionData> BindConcatFunction(ClientContext &context, ScalarFunction &bound_function,
                                                    vector<unique_ptr<Expression>> &arguments) {
 	auto &first_arg = arguments[0]->return_type;
 
-	if (arguments.size() > 2 &&
-	    (first_arg.id() == LogicalTypeId::ARRAY || first_arg.id() == LogicalTypeId::LIST)) {
+	if (arguments.size() > 2 && (first_arg.id() == LogicalTypeId::ARRAY || first_arg.id() == LogicalTypeId::LIST)) {
 		throw BinderException("list_concat only accepts two arguments");
 	}
 
@@ -288,48 +292,11 @@ static unique_ptr<FunctionData> BindConcatFunction(ClientContext &context, Scala
 	}
 
 	if (first_arg.id() == LogicalTypeId::LIST) {
-		// Now we can assume that the input is a list, and therefor only accepts two arguments
-		D_ASSERT(arguments.size() == 2);
-
-		auto &second_arg = arguments[1]->return_type;
-
-		if (first_arg.id() == LogicalTypeId::UNKNOWN || second_arg.id() == LogicalTypeId::UNKNOWN) {
-			throw ParameterNotResolvedException();
-		} else if (first_arg.id() == LogicalTypeId::SQLNULL || second_arg.id() == LogicalTypeId::SQLNULL) {
-			// we mimic postgres behaviour: list_concat(NULL, my_list) = my_list
-			auto return_type = second_arg.id() == LogicalTypeId::SQLNULL ? first_arg : second_arg;
-			bound_function.varargs = return_type;
-			bound_function.return_type = return_type;
-		} else {
-			if (first_arg.id() != LogicalTypeId::LIST || second_arg.id() != LogicalTypeId::LIST) {
-				throw BinderException("Cannot concatenate types %s and %s", first_arg.ToString(),
-				                      second_arg.ToString());
-			}
-
-			// Resolve list type
-			LogicalType child_type = LogicalType::SQLNULL;
-			for (const auto &argument : arguments) {
-				auto &next_type = ListType::GetChildType(argument->return_type);
-				if (!LogicalType::TryGetMaxLogicalType(context, child_type, next_type, child_type)) {
-					throw BinderException(
-					    "Cannot concatenate lists of types %s[] and %s[] - an explicit cast is required",
-					    child_type.ToString(), next_type.ToString());
-				}
-			}
-			auto list_type = LogicalType::LIST(child_type);
-
-			bound_function.varargs = list_type;
-			bound_function.return_type = list_type;
-		}
-		return make_uniq<ConcatBindData>(bound_function.return_type, false);
+		return HandleListBinding(context, bound_function, arguments, false);
 	}
 
 	// we can now assume that the input is a string or castable to a string
-	for (auto &arg : bound_function.arguments) {
-		arg = LogicalType::VARCHAR;
-	}
-	bound_function.varargs = LogicalType::VARCHAR;
-	bound_function.return_type = LogicalType::VARCHAR;
+	SetArgumentType(bound_function, LogicalType::VARCHAR, false);
 	return make_uniq<ConcatBindData>(bound_function.return_type, false);
 }
 
@@ -344,54 +311,19 @@ static unique_ptr<FunctionData> BindConcatOperator(ClientContext &context, Scala
 	}
 
 	if (first_arg.id() == LogicalTypeId::LIST) {
-		// Now we can assume that the input is a list, and therefor only accepts two arguments
-		D_ASSERT(arguments.size() == 2);
-
-		auto &second_arg = arguments[1]->return_type;
-
-		if (first_arg.id() == LogicalTypeId::UNKNOWN || second_arg.id() == LogicalTypeId::UNKNOWN) {
-			throw ParameterNotResolvedException();
-		} else if (first_arg.id() == LogicalTypeId::SQLNULL || second_arg.id() == LogicalTypeId::SQLNULL) {
-			// we mimic postgres behaviour: list_concat(NULL, my_list) = my_list
-			auto return_type = second_arg.id() == LogicalTypeId::SQLNULL ? first_arg : second_arg;
-			bound_function.arguments[0] = return_type;
-			bound_function.arguments[1] = return_type;
-			bound_function.return_type = return_type;
-		} else {
-			if (first_arg.id() != LogicalTypeId::LIST || second_arg.id() != LogicalTypeId::LIST) {
-				throw BinderException("Cannot concatenate types %s and %s", first_arg.ToString(),
-				                      second_arg.ToString());
-			}
-
-			// Resolve list type
-			LogicalType child_type = LogicalType::SQLNULL;
-			for (const auto &argument : arguments) {
-				auto &next_type = ListType::GetChildType(argument->return_type);
-				if (!LogicalType::TryGetMaxLogicalType(context, child_type, next_type, child_type)) {
-					throw BinderException(
-					    "Cannot concatenate lists of types %s[] and %s[] - an explicit cast is required",
-					    child_type.ToString(), next_type.ToString());
-				}
-			}
-			auto list_type = LogicalType::LIST(child_type);
-
-			bound_function.arguments[0] = list_type;
-			bound_function.arguments[1] = list_type;
-			bound_function.return_type = list_type;
-		}
-		return make_uniq<ConcatBindData>(bound_function.return_type, true);
+		return HandleListBinding(context, bound_function, arguments, true);
 	}
 
 	// we can now assume that the input is a string or castable to a string
-	for (auto &arg : bound_function.arguments) {
-		arg = LogicalType::VARCHAR;
-	}
-	bound_function.return_type = LogicalType::VARCHAR;
+	SetArgumentType(bound_function, LogicalType::VARCHAR, true);
 	return make_uniq<ConcatBindData>(bound_function.return_type, true);
 }
 
 static unique_ptr<BaseStatistics> ConcatStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
+	if (child_stats.front().GetType().id() == LogicalTypeId::VARCHAR) {
+		return nullptr;
+	}
 	D_ASSERT(child_stats.size() == 2);
 
 	auto &left_stats = child_stats[0];
@@ -401,6 +333,14 @@ static unique_ptr<BaseStatistics> ConcatStats(ClientContext &context, FunctionSt
 	stats->Merge(right_stats);
 
 	return stats;
+}
+
+ScalarFunction ConcatFun::GetFunction() {
+	ScalarFunction concat =
+	    ScalarFunction({LogicalType::ANY}, LogicalType::ANY, ConcatFunction, BindConcatFunction, nullptr, ConcatStats);
+	concat.varargs = LogicalType::ANY;
+	concat.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	return concat;
 }
 
 void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
@@ -413,10 +353,7 @@ void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
 	// the concat function, however, treats NULL values as an empty string
 	// i.e. concat(NULL, 'hello') = 'hello'
 
-	ScalarFunction concat =
-	    ScalarFunction({LogicalType::ANY}, LogicalType::ANY, ConcatFunction, BindConcatFunction, nullptr, ConcatStats);
-	concat.varargs = LogicalType::ANY;
-	concat.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	ScalarFunction concat = GetFunction();
 	set.AddFunction({"concat", "list_concat", "list_cat", "array_concat", "array_cat"}, concat);
 
 	ScalarFunction concat_op = ScalarFunction("||", {LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY,
