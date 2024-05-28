@@ -102,6 +102,7 @@ bool CSVSniffer::DetectHeaderWithSetColumn() {
 	bool has_header = true;
 	bool all_varchar = true;
 	bool first_row_consistent = true;
+	std::ostringstream error;
 	// User set the names, we must check if they match the first row
 	// We do a +1 to check for situations where the csv file has an extra all null column
 	if (set_columns.Size() != best_header_row.size() && set_columns.Size() + 1 != best_header_row.size()) {
@@ -113,6 +114,10 @@ bool CSVSniffer::DetectHeaderWithSetColumn() {
 				return false;
 			}
 			if (best_header_row[i].value.GetString() != (*set_columns.names)[i]) {
+				error << "Header Mismatch at position:" << i << "\n";
+				error << "Expected Name: \"" << (*set_columns.names)[i] << "\".";
+				error << "Actual Name: \"" << best_header_row[i].value.GetString() << "\"."
+				      << "\n";
 				has_header = false;
 				break;
 			}
@@ -131,9 +136,11 @@ bool CSVSniffer::DetectHeaderWithSetColumn() {
 				}
 			}
 		}
+		if (!first_row_consistent) {
+			options.sniffer_user_mismatch_error += error.str();
+		}
 		if (all_varchar) {
-			// Can't be the header
-			return false;
+			return true;
 		}
 		return !first_row_consistent;
 	}
