@@ -26,6 +26,13 @@ unique_ptr<CatalogEntry> CatalogEntry::AlterEntry(ClientContext &context, AlterI
 	throw InternalException("Unsupported alter type for catalog entry!");
 }
 
+unique_ptr<CatalogEntry> CatalogEntry::AlterEntry(CatalogTransaction transaction, AlterInfo &info) {
+	if (!transaction.context) {
+		throw InternalException("Cannot AlterEntry without client context");
+	}
+	return AlterEntry(*transaction.context, info);
+}
+
 void CatalogEntry::UndoAlter(ClientContext &context, AlterInfo &info) {
 }
 
@@ -74,7 +81,15 @@ Catalog &CatalogEntry::ParentCatalog() {
 	throw InternalException("CatalogEntry::ParentCatalog called on catalog entry without catalog");
 }
 
+const Catalog &CatalogEntry::ParentCatalog() const {
+	throw InternalException("CatalogEntry::ParentCatalog called on catalog entry without catalog");
+}
+
 SchemaCatalogEntry &CatalogEntry::ParentSchema() {
+	throw InternalException("CatalogEntry::ParentSchema called on catalog entry without schema");
+}
+
+const SchemaCatalogEntry &CatalogEntry::ParentSchema() const {
 	throw InternalException("CatalogEntry::ParentSchema called on catalog entry without schema");
 }
 // LCOV_EXCL_STOP

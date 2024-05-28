@@ -165,7 +165,7 @@ protected:
 	atomic<bool> uploader_has_error {false};
 	std::exception_ptr upload_exception;
 
-	void InitializeClient() override;
+	void InitializeClient(optional_ptr<ClientContext> client_context) override;
 
 	//! Rethrow IO Exception originating from an upload thread
 	void RethrowIOError() {
@@ -229,7 +229,7 @@ public:
 	BufferHandle Allocate(idx_t part_size, uint16_t max_threads);
 
 	//! S3 is object storage so directories effectively always exist
-	bool DirectoryExists(const string &directory) override {
+	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener = nullptr) override {
 		return true;
 	}
 

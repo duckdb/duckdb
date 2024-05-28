@@ -16,6 +16,7 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception/catalog_exception.hpp"
 #include "duckdb/common/enums/catalog_lookup_behavior.hpp"
 #include <functional>
@@ -90,6 +91,7 @@ public:
 	DUCKDB_API static Catalog &GetCatalog(AttachedDatabase &db);
 
 	DUCKDB_API AttachedDatabase &GetAttached();
+	DUCKDB_API const AttachedDatabase &GetAttached() const;
 	DUCKDB_API DatabaseInstance &GetDatabase();
 
 	virtual bool IsDuckCatalog() {
@@ -106,7 +108,7 @@ public:
 	DUCKDB_API idx_t ModifyCatalog();
 
 	//! Returns the catalog name - based on how the catalog was attached
-	DUCKDB_API const string &GetName();
+	DUCKDB_API const string &GetName() const;
 	DUCKDB_API idx_t GetOid();
 	DUCKDB_API virtual string GetCatalogType() = 0;
 
@@ -210,6 +212,7 @@ public:
 	                                                             QueryErrorContext error_context = QueryErrorContext());
 	//! Scans all the schemas in the system one-by-one, invoking the callback for each entry
 	DUCKDB_API virtual void ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) = 0;
+
 	//! Gets the "schema.name" entry of the specified type, if entry does not exist behavior depends on OnEntryNotFound
 	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(ClientContext &context, CatalogType type, const string &schema,
 	                                               const string &name, OnEntryNotFound if_not_found,
@@ -225,16 +228,6 @@ public:
 	DUCKDB_API static CatalogEntry &GetEntry(ClientContext &context, CatalogType type, const string &catalog,
 	                                         const string &schema, const string &name,
 	                                         QueryErrorContext error_context = QueryErrorContext());
-
-	//! Gets the "schema.name" entry without a specified type, if entry does not exist an exception is thrown
-	DUCKDB_API CatalogEntry &GetEntry(ClientContext &context, const string &schema, const string &name);
-
-	//! Fetches a logical type from the catalog
-	DUCKDB_API LogicalType GetType(ClientContext &context, const string &schema, const string &names,
-	                               OnEntryNotFound if_not_found);
-
-	DUCKDB_API static LogicalType GetType(ClientContext &context, const string &catalog_name, const string &schema,
-	                                      const string &name);
 
 	template <class T>
 	optional_ptr<T> GetEntry(ClientContext &context, const string &schema_name, const string &name,
@@ -259,6 +252,7 @@ public:
 	DUCKDB_API optional_ptr<CatalogEntry> AddFunction(ClientContext &context, CreateFunctionInfo &info);
 
 	//! Alter an existing entry in the catalog.
+	DUCKDB_API void Alter(CatalogTransaction transaction, AlterInfo &info);
 	DUCKDB_API void Alter(ClientContext &context, AlterInfo &info);
 
 	virtual unique_ptr<PhysicalOperator> PlanCreateTableAs(ClientContext &context, LogicalCreateTable &op,
@@ -324,6 +318,7 @@ protected:
 	//! Reference to the database
 	AttachedDatabase &db;
 
+public:
 private:
 	//! Lookup an entry in the schema, returning a lookup with the entry and schema if they exist
 	CatalogEntryLookup TryLookupEntryInternal(CatalogTransaction transaction, CatalogType type, const string &schema,
@@ -364,7 +359,7 @@ public:
 
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };

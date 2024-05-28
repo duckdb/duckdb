@@ -8,7 +8,7 @@ using Filter = FilterPushdown::Filter;
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->children.size() > 1);
-	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
+	FilterPushdown left_pushdown(optimizer, convert_mark_joins), right_pushdown(optimizer, convert_mark_joins);
 	vector<unique_ptr<Expression>> join_expressions;
 	auto join_ref_type = JoinRefType::REGULAR;
 	switch (op->type) {
@@ -52,9 +52,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<Logi
 		vector<JoinCondition> conditions;
 		vector<unique_ptr<Expression>> arbitrary_expressions;
 		const auto join_type = JoinType::INNER;
-		LogicalComparisonJoin::ExtractJoinConditions(GetContext(), join_type, op->children[0], op->children[1],
-		                                             left_bindings, right_bindings, join_expressions, conditions,
-		                                             arbitrary_expressions);
+		LogicalComparisonJoin::ExtractJoinConditions(GetContext(), join_type, join_ref_type, op->children[0],
+		                                             op->children[1], left_bindings, right_bindings, join_expressions,
+		                                             conditions, arbitrary_expressions);
 		// create the join from the join conditions
 		return LogicalComparisonJoin::CreateJoin(GetContext(), join_type, join_ref_type, std::move(op->children[0]),
 		                                         std::move(op->children[1]), std::move(conditions),

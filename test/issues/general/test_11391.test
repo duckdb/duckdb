@@ -1,0 +1,8 @@
+# name: test/issues/general/test_11391.test
+# description: Issue 11391: Catalog Error with nested CTEs
+# group: [general]
+
+query I
+with foo as (with foo as (select 1) select * from foo) select * from foo;
+----
+1

@@ -120,13 +120,13 @@ static idx_t SelectComparison(Vector &, Vector &, const SelectionVector &, idx_t
 template <>
 idx_t SelectComparison<Equals>(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
                                SelectionVector *true_sel, SelectionVector *false_sel) {
-	return VectorOperations::NestedEquals(left, right, sel, count, true_sel, false_sel);
+	return VectorOperations::NestedEquals(left, right, &sel, count, true_sel, false_sel);
 }
 
 template <>
 idx_t SelectComparison<NotEquals>(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
                                   SelectionVector *true_sel, SelectionVector *false_sel) {
-	return VectorOperations::NestedNotEquals(left, right, sel, count, true_sel, false_sel);
+	return VectorOperations::NestedNotEquals(left, right, &sel, count, true_sel, false_sel);
 }
 
 template <>

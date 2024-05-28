@@ -38,10 +38,10 @@ struct UsingColumnSet {
 //! encountered during the binding process.
 class BindContext {
 public:
-	BindContext(Binder &binder);
+	explicit BindContext(Binder &binder);
 
 	//! Keep track of recursive CTE references
-	case_insensitive_map_t<std::shared_ptr<idx_t>> cte_references;
+	case_insensitive_map_t<shared_ptr<idx_t>> cte_references;
 
 public:
 	//! Given a column name, find the matching table it belongs to. Throws an
@@ -129,11 +129,11 @@ public:
 	//! (e.g. "column_name" might return "COLUMN_NAME")
 	string GetActualColumnName(const string &binding, const string &column_name);
 
-	case_insensitive_map_t<std::shared_ptr<Binding>> GetCTEBindings() {
+	case_insensitive_map_t<shared_ptr<Binding>> GetCTEBindings() {
 		return cte_bindings;
 	}
-	void SetCTEBindings(case_insensitive_map_t<std::shared_ptr<Binding>> bindings) {
-		cte_bindings = bindings;
+	void SetCTEBindings(case_insensitive_map_t<shared_ptr<Binding>> bindings) {
+		cte_bindings = std::move(bindings);
 	}
 
 	//! Alias a set of column names for the specified table, using the original names if there are not enough aliases
@@ -165,6 +165,6 @@ private:
 	vector<unique_ptr<UsingColumnSet>> using_column_sets;
 
 	//! The set of CTE bindings
-	case_insensitive_map_t<std::shared_ptr<Binding>> cte_bindings;
+	case_insensitive_map_t<shared_ptr<Binding>> cte_bindings;
 };
 } // namespace duckdb

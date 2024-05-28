@@ -42,6 +42,21 @@ struct ArrowIntervalConverter {
 	}
 };
 
+struct ArrowTimeTzConverter {
+	template <class TGT, class SRC>
+	static TGT Operation(SRC input) {
+		return input.time().micros;
+	}
+
+	static bool SkipNulls() {
+		return true;
+	}
+
+	template <class TGT>
+	static void SetNull(TGT &value) {
+	}
+};
+
 template <class TGT, class SRC = TGT, class OP = ArrowScalarConverter>
 struct ArrowScalarBaseData {
 	static void Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {

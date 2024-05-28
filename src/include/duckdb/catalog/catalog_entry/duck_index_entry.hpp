@@ -14,7 +14,7 @@ namespace duckdb {
 
 //! Wrapper class to allow copying a DuckIndexEntry (for altering the DuckIndexEntry metadata such as comments)
 struct IndexDataTableInfo {
-	IndexDataTableInfo(shared_ptr<DataTableInfo> &info_p, const string &index_name_p);
+	IndexDataTableInfo(shared_ptr<DataTableInfo> info_p, const string &index_name_p);
 	~IndexDataTableInfo();
 
 	//! Pointer to the DataTableInfo
@@ -29,7 +29,7 @@ public:
 	//! Create a DuckIndexEntry
 	DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info);
 
-	virtual unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
+	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
 
 	//! The indexed table information
 	shared_ptr<IndexDataTableInfo> info;

@@ -150,7 +150,7 @@ public:
 			result = result << 8 | InnerReadByte(i);
 		}
 		result = result << remainder | InnerRead(remainder, bytes);
-		index += (bytes << 3) + remainder;
+		index += static_cast<uint32_t>(bytes << 3) + remainder;
 		return result;
 	}
 

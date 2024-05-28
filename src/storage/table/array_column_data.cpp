@@ -67,12 +67,14 @@ void ArrayColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row
 	}
 }
 
-idx_t ArrayColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
-	return ScanCount(state, result, STANDARD_VECTOR_SIZE);
+idx_t ArrayColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+                            idx_t scan_count) {
+	return ScanCount(state, result, scan_count);
 }
 
-idx_t ArrayColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) {
-	return ScanCount(state, result, STANDARD_VECTOR_SIZE);
+idx_t ArrayColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
+                                     idx_t scan_count) {
+	return ScanCount(state, result, scan_count);
 }
 
 idx_t ArrayColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
@@ -120,9 +122,9 @@ void ArrayColumnData::RevertAppend(row_t start_row) {
 	validity.RevertAppend(start_row);
 	// Revert child column
 	auto array_size = ArrayType::GetSize(type);
-	child_column->RevertAppend(start_row * array_size);
+	child_column->RevertAppend(start_row * UnsafeNumericCast<row_t>(array_size));
 
-	this->count = start_row - this->start;
+	this->count = UnsafeNumericCast<idx_t>(start_row) - this->start;
 }
 
 idx_t ArrayColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
@@ -162,7 +164,7 @@ void ArrayColumnData::FetchRow(TransactionData transaction, ColumnFetchState &st
 	// We need to fetch between [row_id * array_size, (row_id + 1) * array_size)
 	auto child_state = make_uniq<ColumnScanState>();
 	child_state->Initialize(child_type, nullptr);
-	child_column->InitializeScanWithOffset(*child_state, row_id * array_size);
+	child_column->InitializeScanWithOffset(*child_state, UnsafeNumericCast<idx_t>(row_id) * array_size);
 	Vector child_scan(child_type, array_size);
 	child_column->ScanCount(*child_state, child_scan, array_size);
 	VectorOperations::Copy(child_scan, child_vec, array_size, 0, result_idx * array_size);
@@ -203,12 +205,11 @@ unique_ptr<ColumnCheckpointState> ArrayColumnData::CreateCheckpointState(RowGrou
 }
 
 unique_ptr<ColumnCheckpointState> ArrayColumnData::Checkpoint(RowGroup &row_group,
-                                                              PartialBlockManager &partial_block_manager,
                                                               ColumnCheckpointInfo &checkpoint_info) {
 
-	auto checkpoint_state = make_uniq<ArrayColumnCheckpointState>(row_group, *this, partial_block_manager);
-	checkpoint_state->validity_state = validity.Checkpoint(row_group, partial_block_manager, checkpoint_info);
-	checkpoint_state->child_state = child_column->Checkpoint(row_group, partial_block_manager, checkpoint_info);
+	auto checkpoint_state = make_uniq<ArrayColumnCheckpointState>(row_group, *this, checkpoint_info.info.manager);
+	checkpoint_state->validity_state = validity.Checkpoint(row_group, checkpoint_info);
+	checkpoint_state->child_state = child_column->Checkpoint(row_group, checkpoint_info);
 	return std::move(checkpoint_state);
 }
 
@@ -219,7 +220,7 @@ void ArrayColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatisti
 	auto &child_stats = ArrayStats::GetChildStats(target_stats);
 	deserializer.ReadObject(102, "child_column",
 	                        [&](Deserializer &source) { child_column->DeserializeColumn(source, child_stats); });
-	this->count = validity.count;
+	this->count = validity.count.load();
 }
 
 void ArrayColumnData::GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_path,

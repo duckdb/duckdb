@@ -1,17 +1,23 @@
 #ifndef JEMALLOC_INTERNAL_ARENA_INLINES_B_H
 #define JEMALLOC_INTERNAL_ARENA_INLINES_B_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
+#include "jemalloc/internal/arena_externs.h"
+#include "jemalloc/internal/arena_structs.h"
 #include "jemalloc/internal/div.h"
 #include "jemalloc/internal/emap.h"
+#include "jemalloc/internal/jemalloc_internal_inlines_b.h"
 #include "jemalloc/internal/jemalloc_internal_types.h"
+#include "jemalloc/internal/large_externs.h"
 #include "jemalloc/internal/mutex.h"
+#include "jemalloc/internal/prof_externs.h"
+#include "jemalloc/internal/prof_structs.h"
 #include "jemalloc/internal/rtree.h"
 #include "jemalloc/internal/safety_check.h"
 #include "jemalloc/internal/sc.h"
 #include "jemalloc/internal/sz.h"
+#include "jemalloc/internal/tcache_inlines.h"
 #include "jemalloc/internal/ticker.h"
-
-namespace duckdb_jemalloc {
 
 static inline arena_t *
 arena_get_from_edata(edata_t *edata) {
@@ -30,14 +36,46 @@ arena_choose_maybe_huge(tsd_t *tsd, arena_t *arena, size_t size) {
 	 * 1) is using auto arena selection (i.e. arena == NULL), and 2) the
 	 * thread is not assigned to a manual arena.
 	 */
-	if (unlikely(size >= oversize_threshold)) {
-		arena_t *tsd_arena = tsd_arena_get(tsd);
-		if (tsd_arena == NULL || arena_is_auto(tsd_arena)) {
-			return arena_choose_huge(tsd);
-		}
+	arena_t *tsd_arena = tsd_arena_get(tsd);
+	if (tsd_arena == NULL) {
+		tsd_arena = arena_choose(tsd, NULL);
 	}
 
-	return arena_choose(tsd, NULL);
+	size_t threshold = atomic_load_zu(
+	    &tsd_arena->pa_shard.pac.oversize_threshold, ATOMIC_RELAXED);
+	if (unlikely(size >= threshold) && arena_is_auto(tsd_arena)) {
+		return arena_choose_huge(tsd);
+	}
+
+	return tsd_arena;
+}
+
+JEMALLOC_ALWAYS_INLINE bool
+large_dalloc_safety_checks(edata_t *edata, const void *ptr, szind_t szind) {
+	if (!config_opt_safety_checks) {
+		return false;
+	}
+
+	/*
+	 * Eagerly detect double free and sized dealloc bugs for large sizes.
+	 * The cost is low enough (as edata will be accessed anyway) to be
+	 * enabled all the time.
+	 */
+	if (unlikely(edata == NULL ||
+	    edata_state_get(edata) != extent_state_active)) {
+		safety_check_fail("Invalid deallocation detected: "
+		    "pages being freed (%p) not currently active, "
+		    "possibly caused by double free bugs.", ptr);
+		return true;
+	}
+	size_t input_size = sz_index2size(szind);
+	if (unlikely(input_size != edata_usize_get(edata))) {
+		safety_check_fail_sized_dealloc(/* current_dealloc */ true, ptr,
+		    /* true_size */ edata_usize_get(edata), input_size);
+		return true;
+	}
+
+	return false;
 }
 
 JEMALLOC_ALWAYS_INLINE void
@@ -63,12 +101,18 @@ arena_prof_info_get(tsd_t *tsd, const void *ptr, emap_alloc_ctx_t *alloc_ctx,
 	if (unlikely(!is_slab)) {
 		/* edata must have been initialized at this point. */
 		assert(edata != NULL);
+		if (reset_recent &&
+		    large_dalloc_safety_checks(edata, ptr,
+		    edata_szind_get(edata))) {
+			prof_info->alloc_tctx = PROF_TCTX_SENTINEL;
+			return;
+		}
 		large_prof_info_get(tsd, edata, prof_info, reset_recent);
 	} else {
-		prof_info->alloc_tctx = (prof_tctx_t *)(uintptr_t)1U;
+		prof_info->alloc_tctx = PROF_TCTX_SENTINEL;
 		/*
 		 * No need to set other fields in prof_info; they will never be
-		 * accessed if (uintptr_t)alloc_tctx == (uintptr_t)1U.
+		 * accessed if alloc_tctx == PROF_TCTX_SENTINEL.
 		 */
 	}
 }
@@ -133,7 +177,8 @@ arena_decay_ticks(tsdn_t *tsdn, arena_t *arena, unsigned nticks) {
 	 */
 	ticker_geom_t *decay_ticker = tsd_arena_decay_tickerp_get(tsd);
 	uint64_t *prng_state = tsd_prng_statep_get(tsd);
-	if (unlikely(ticker_geom_ticks(decay_ticker, prng_state, nticks))) {
+	if (unlikely(ticker_geom_ticks(decay_ticker, prng_state, nticks,
+	    tsd_reentrancy_level_get(tsd) > 0))) {
 		arena_decay(tsdn, arena, false, false);
 	}
 }
@@ -145,23 +190,25 @@ arena_decay_tick(tsdn_t *tsdn, arena_t *arena) {
 
 JEMALLOC_ALWAYS_INLINE void *
 arena_malloc(tsdn_t *tsdn, arena_t *arena, size_t size, szind_t ind, bool zero,
-    tcache_t *tcache, bool slow_path) {
+    bool slab, tcache_t *tcache, bool slow_path) {
 	assert(!tsdn_null(tsdn) || tcache == NULL);
 
 	if (likely(tcache != NULL)) {
-		if (likely(size <= SC_SMALL_MAXCLASS)) {
+		if (likely(slab)) {
+			assert(sz_can_use_slab(size));
 			return tcache_alloc_small(tsdn_tsd(tsdn), arena,
 			    tcache, size, ind, zero, slow_path);
-		}
-		if (likely(size <= tcache_maxclass)) {
+		} else if (likely(
+		    ind < tcache_nbins_get(tcache->tcache_slow) &&
+		    !tcache_bin_disabled(ind, &tcache->bins[ind],
+		    tcache->tcache_slow))) {
 			return tcache_alloc_large(tsdn_tsd(tsdn), arena,
 			    tcache, size, ind, zero, slow_path);
 		}
-		/* (size > tcache_maxclass) case falls through. */
-		assert(size > tcache_maxclass);
+		/* (size > tcache_max) case falls through. */
 	}
 
-	return arena_malloc_hard(tsdn, arena, size, ind, zero);
+	return arena_malloc_hard(tsdn, arena, size, ind, zero, slab);
 }
 
 JEMALLOC_ALWAYS_INLINE arena_t *
@@ -212,35 +259,6 @@ arena_vsalloc(tsdn_t *tsdn, const void *ptr) {
 	return sz_index2size(full_alloc_ctx.szind);
 }
 
-JEMALLOC_ALWAYS_INLINE bool
-large_dalloc_safety_checks(edata_t *edata, void *ptr, szind_t szind) {
-	if (!config_opt_safety_checks) {
-		return false;
-	}
-
-	/*
-	 * Eagerly detect double free and sized dealloc bugs for large sizes.
-	 * The cost is low enough (as edata will be accessed anyway) to be
-	 * enabled all the time.
-	 */
-	if (unlikely(edata == NULL ||
-	    edata_state_get(edata) != extent_state_active)) {
-		safety_check_fail("Invalid deallocation detected: "
-		    "pages being freed (%p) not currently active, "
-		    "possibly caused by double free bugs.",
-		    (uintptr_t)edata_addr_get(edata));
-		return true;
-	}
-	size_t input_size = sz_index2size(szind);
-	if (unlikely(input_size != edata_usize_get(edata))) {
-		safety_check_fail_sized_dealloc(/* current_dealloc */ true, ptr,
-		    /* true_size */ edata_usize_get(edata), input_size);
-		return true;
-	}
-
-	return false;
-}
-
 static inline void
 arena_dalloc_large_no_tcache(tsdn_t *tsdn, void *ptr, szind_t szind) {
 	if (config_prof && unlikely(szind < SC_NBINS)) {
@@ -282,22 +300,74 @@ arena_dalloc_no_tcache(tsdn_t *tsdn, void *ptr) {
 JEMALLOC_ALWAYS_INLINE void
 arena_dalloc_large(tsdn_t *tsdn, void *ptr, tcache_t *tcache, szind_t szind,
     bool slow_path) {
-	if (szind < nhbins) {
-		if (config_prof && unlikely(szind < SC_NBINS)) {
-			arena_dalloc_promoted(tsdn, ptr, tcache, slow_path);
-		} else {
+	assert (!tsdn_null(tsdn) && tcache != NULL);
+	bool is_sample_promoted = config_prof && szind < SC_NBINS;
+	if (unlikely(is_sample_promoted)) {
+		arena_dalloc_promoted(tsdn, ptr, tcache, slow_path);
+	} else {
+		if (szind < tcache_nbins_get(tcache->tcache_slow) &&
+		    !tcache_bin_disabled(szind, &tcache->bins[szind],
+		    tcache->tcache_slow)) {
 			tcache_dalloc_large(tsdn_tsd(tsdn), tcache, ptr, szind,
 			    slow_path);
+		} else {
+			edata_t *edata = emap_edata_lookup(tsdn,
+			    &arena_emap_global, ptr);
+			if (large_dalloc_safety_checks(edata, ptr, szind)) {
+				/* See the comment in isfree. */
+				return;
+			}
+			large_dalloc(tsdn, edata);
 		}
-	} else {
-		edata_t *edata = emap_edata_lookup(tsdn, &arena_emap_global,
-		    ptr);
-		if (large_dalloc_safety_checks(edata, ptr, szind)) {
-			/* See the comment in isfree. */
-			return;
-		}
-		large_dalloc(tsdn, edata);
 	}
+}
+
+/* Find the region index of a pointer. */
+JEMALLOC_ALWAYS_INLINE size_t
+arena_slab_regind_impl(div_info_t* div_info, szind_t binind,
+    edata_t *slab, const void *ptr) {
+	size_t diff, regind;
+
+	/* Freeing a pointer outside the slab can cause assertion failure. */
+	assert((uintptr_t)ptr >= (uintptr_t)edata_addr_get(slab));
+	assert((uintptr_t)ptr < (uintptr_t)edata_past_get(slab));
+	/* Freeing an interior pointer can cause assertion failure. */
+	assert(((uintptr_t)ptr - (uintptr_t)edata_addr_get(slab)) %
+	    (uintptr_t)bin_infos[binind].reg_size == 0);
+
+	diff = (size_t)((uintptr_t)ptr - (uintptr_t)edata_addr_get(slab));
+
+	/* Avoid doing division with a variable divisor. */
+	regind = div_compute(div_info, diff);
+	assert(regind < bin_infos[binind].nregs);
+	return regind;
+}
+
+/* Checks whether ptr is currently active in the arena. */
+JEMALLOC_ALWAYS_INLINE bool
+arena_tcache_dalloc_small_safety_check(tsdn_t *tsdn, void *ptr) {
+	if (!config_debug) {
+		return false;
+	}
+	edata_t *edata = emap_edata_lookup(tsdn, &arena_emap_global, ptr);
+	szind_t binind = edata_szind_get(edata);
+	div_info_t div_info = arena_binind_div_info[binind];
+	/*
+	 * Calls the internal function arena_slab_regind_impl because the
+	 * safety check does not require a lock.
+	 */
+	size_t regind = arena_slab_regind_impl(&div_info, binind, edata, ptr);
+	slab_data_t *slab_data = edata_slab_data_get(edata);
+	const bin_info_t *bin_info = &bin_infos[binind];
+	assert(edata_nfree_get(edata) < bin_info->nregs);
+	if (unlikely(!bitmap_get(slab_data->bitmap, &bin_info->bitmap_info,
+	    regind))) {
+		safety_check_fail(
+		    "Invalid deallocation detected: the pointer being freed (%p) not "
+		    "currently active, possibly caused by double free bugs.\n", ptr);
+		return true;
+	}
+	return false;
 }
 
 JEMALLOC_ALWAYS_INLINE void
@@ -315,7 +385,7 @@ arena_dalloc(tsdn_t *tsdn, void *ptr, tcache_t *tcache,
 	if (caller_alloc_ctx != NULL) {
 		alloc_ctx = *caller_alloc_ctx;
 	} else {
-		util_assume(!tsdn_null(tsdn));
+		util_assume(tsdn != NULL);
 		emap_alloc_ctx_lookup(tsdn, &arena_emap_global, ptr,
 		    &alloc_ctx);
 	}
@@ -330,6 +400,9 @@ arena_dalloc(tsdn_t *tsdn, void *ptr, tcache_t *tcache,
 
 	if (likely(alloc_ctx.slab)) {
 		/* Small allocation. */
+		if (arena_tcache_dalloc_small_safety_check(tsdn, ptr)) {
+			return;
+		}
 		tcache_dalloc_small(tsdn_tsd(tsdn), tcache, ptr,
 		    alloc_ctx.szind, slow_path);
 	} else {
@@ -417,6 +490,9 @@ arena_sdalloc(tsdn_t *tsdn, void *ptr, size_t size, tcache_t *tcache,
 
 	if (likely(alloc_ctx.slab)) {
 		/* Small allocation. */
+		if (arena_tcache_dalloc_small_safety_check(tsdn, ptr)) {
+			return;
+		}
 		tcache_dalloc_small(tsdn_tsd(tsdn), tcache, ptr,
 		    alloc_ctx.szind, slow_path);
 	} else {
@@ -444,7 +520,7 @@ arena_cache_oblivious_randomize(tsdn_t *tsdn, arena_t *arena, edata_t *edata,
 		}
 		uintptr_t random_offset = ((uintptr_t)r) << (LG_PAGE -
 		    lg_range);
-		edata->e_addr = (void *)((uintptr_t)edata->e_addr +
+		edata->e_addr = (void *)((byte_t *)edata->e_addr +
 		    random_offset);
 		assert(ALIGNMENT_ADDR2BASE(edata->e_addr, alignment) ==
 		    edata->e_addr);
@@ -467,22 +543,7 @@ struct arena_dalloc_bin_locked_info_s {
 JEMALLOC_ALWAYS_INLINE size_t
 arena_slab_regind(arena_dalloc_bin_locked_info_t *info, szind_t binind,
     edata_t *slab, const void *ptr) {
-	size_t diff, regind;
-
-	/* Freeing a pointer outside the slab can cause assertion failure. */
-	assert((uintptr_t)ptr >= (uintptr_t)edata_addr_get(slab));
-	assert((uintptr_t)ptr < (uintptr_t)edata_past_get(slab));
-	/* Freeing an interior pointer can cause assertion failure. */
-	assert(((uintptr_t)ptr - (uintptr_t)edata_addr_get(slab)) %
-	    (uintptr_t)bin_infos[binind].reg_size == 0);
-
-	diff = (size_t)((uintptr_t)ptr - (uintptr_t)edata_addr_get(slab));
-
-	/* Avoid doing division with a variable divisor. */
-	regind = div_compute(&info->div_info, diff);
-
-	assert(regind < bin_infos[binind].nregs);
-
+	size_t regind = arena_slab_regind_impl(&info->div_info, binind, slab, ptr);
 	return regind;
 }
 
@@ -545,10 +606,8 @@ arena_dalloc_bin_locked_finish(tsdn_t *tsdn, arena_t *arena, bin_t *bin,
 
 static inline bin_t *
 arena_get_bin(arena_t *arena, szind_t binind, unsigned binshard) {
-	bin_t *shard0 = (bin_t *)((uintptr_t)arena + arena_bin_offsets[binind]);
+	bin_t *shard0 = (bin_t *)((byte_t *)arena + arena_bin_offsets[binind]);
 	return shard0 + binshard;
 }
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_ARENA_INLINES_B_H */

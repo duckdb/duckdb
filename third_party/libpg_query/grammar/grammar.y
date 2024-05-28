@@ -51,12 +51,14 @@
 	PGOverridingKind       override;
 	PGSortByDir            sortorder;
 	PGSortByNulls          nullorder;
+	PGIgnoreNulls          ignorenulls;
 	PGConstrType           constr;
 	PGLockClauseStrength lockstrength;
 	PGLockWaitPolicy lockwaitpolicy;
 	PGSubLinkType subquerytype;
 	PGViewCheckOption viewcheckoption;
 	PGInsertColumnOrder bynameorposition;
+	PGLoadInstallType loadinstalltype;
 }
 
 %type <node> stmt

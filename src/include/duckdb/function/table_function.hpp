@@ -21,10 +21,11 @@
 namespace duckdb {
 
 class BaseStatistics;
-class DependencyList;
+class LogicalDependencyList;
 class LogicalGet;
 class TableFilterSet;
 class TableCatalogEntry;
+struct MultiFileReader;
 
 struct TableFunctionInfo {
 	DUCKDB_API virtual ~TableFunctionInfo();
@@ -36,7 +37,7 @@ struct TableFunctionInfo {
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -60,7 +61,7 @@ public:
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -75,7 +76,7 @@ struct LocalTableFunctionState {
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -83,9 +84,10 @@ struct LocalTableFunctionState {
 struct TableFunctionBindInput {
 	TableFunctionBindInput(vector<Value> &inputs, named_parameter_map_t &named_parameters,
 	                       vector<LogicalType> &input_table_types, vector<string> &input_table_names,
-	                       optional_ptr<TableFunctionInfo> info)
+	                       optional_ptr<TableFunctionInfo> info, optional_ptr<Binder> binder,
+	                       const TableFunction &table_function, const TableFunctionRef &ref)
 	    : inputs(inputs), named_parameters(named_parameters), input_table_types(input_table_types),
-	      input_table_names(input_table_names), info(info) {
+	      input_table_names(input_table_names), info(info), binder(binder), table_function(table_function), ref(ref) {
 	}
 
 	vector<Value> &inputs;
@@ -93,6 +95,9 @@ struct TableFunctionBindInput {
 	vector<LogicalType> &input_table_types;
 	vector<string> &input_table_names;
 	optional_ptr<TableFunctionInfo> info;
+	optional_ptr<Binder> binder;
+	const TableFunction &table_function;
+	const TableFunctionRef &ref;
 };
 
 struct TableFunctionInitInput {
@@ -134,7 +139,7 @@ public:
 	optional_ptr<GlobalTableFunctionState> global_state;
 };
 
-enum ScanType { TABLE, PARQUET };
+enum class ScanType : uint8_t { TABLE, PARQUET };
 
 struct BindInfo {
 public:
@@ -145,11 +150,11 @@ public:
 	ScanType type;
 	optional_ptr<TableCatalogEntry> table;
 
-	void InsertOption(const string &name, Value value) {
+	void InsertOption(const string &name, Value value) { // NOLINT: work-around bug in clang-tidy
 		if (options.find(name) != options.end()) {
 			throw InternalException("This option already exists");
 		}
-		options[name] = std::move(value);
+		options.emplace(name, std::move(value));
 	}
 	template <class T>
 	T GetOption(const string &name) {
@@ -197,9 +202,11 @@ typedef idx_t (*table_function_get_batch_index_t)(ClientContext &context, const 
 
 typedef BindInfo (*table_function_get_bind_info_t)(const optional_ptr<FunctionData> bind_data);
 
+typedef unique_ptr<MultiFileReader> (*table_function_get_multi_file_reader_t)();
+
 typedef double (*table_function_progress_t)(ClientContext &context, const FunctionData *bind_data,
                                             const GlobalTableFunctionState *global_state);
-typedef void (*table_function_dependency_t)(DependencyList &dependencies, const FunctionData *bind_data);
+typedef void (*table_function_dependency_t)(LogicalDependencyList &dependencies, const FunctionData *bind_data);
 typedef unique_ptr<NodeStatistics> (*table_function_cardinality_t)(ClientContext &context,
                                                                    const FunctionData *bind_data);
 typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context, LogicalGet &get,
@@ -211,7 +218,10 @@ typedef void (*table_function_serialize_t)(Serializer &serializer, const optiona
                                            const TableFunction &function);
 typedef unique_ptr<FunctionData> (*table_function_deserialize_t)(Deserializer &deserializer, TableFunction &function);
 
-class TableFunction : public SimpleNamedParameterFunction {
+typedef void (*table_function_type_pushdown_t)(ClientContext &context, optional_ptr<FunctionData> bind_data,
+                                               const unordered_map<idx_t, LogicalType> &new_column_types);
+
+class TableFunction : public SimpleNamedParameterFunction { // NOLINT: work-around bug in clang-tidy
 public:
 	DUCKDB_API
 	TableFunction(string name, vector<LogicalType> arguments, table_function_t function,
@@ -266,6 +276,10 @@ public:
 	table_function_get_batch_index_t get_batch_index;
 	//! (Optional) returns extra bind info
 	table_function_get_bind_info_t get_bind_info;
+	//! (Optional) pushes down type information to scanner, returns true if pushdown was successful
+	table_function_type_pushdown_t type_pushdown;
+	//! (Optional) allows injecting a custom MultiFileReader implementation
+	table_function_get_multi_file_reader_t get_multi_file_reader;
 
 	table_function_serialize_t serialize;
 	table_function_deserialize_t deserialize;

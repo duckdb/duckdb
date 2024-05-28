@@ -114,6 +114,18 @@ public:
 		OnOptionalPropertyEnd(true);
 	}
 
+	template <typename T>
+	inline void ReadPropertyWithDefault(const field_id_t field_id, const char *tag, CSVOption<T> &ret,
+	                                    T &&default_value) {
+		if (!OnOptionalPropertyBegin(field_id, tag)) {
+			ret = std::forward<T>(default_value);
+			OnOptionalPropertyEnd(false);
+			return;
+		}
+		ret = Read<T>();
+		OnOptionalPropertyEnd(true);
+	}
+
 	// Special case:
 	// Read into an existing data_ptr_t
 	inline void ReadProperty(const field_id_t field_id, const char *tag, data_ptr_t ret, idx_t count) {
@@ -182,6 +194,12 @@ private:
 		auto val = T::Deserialize(*this);
 		OnObjectEnd();
 		return val;
+	}
+
+	// Deserialize a optionally_owned_ptr
+	template <class T, typename ELEMENT_TYPE = typename is_optionally_owned_ptr<T>::ELEMENT_TYPE>
+	inline typename std::enable_if<is_optionally_owned_ptr<T>::value, T>::type Read() {
+		return optionally_owned_ptr<ELEMENT_TYPE>(Read<unique_ptr<ELEMENT_TYPE>>());
 	}
 
 	// Deserialize unique_ptr if the element type has a Deserialize method
@@ -290,6 +308,23 @@ private:
 		return map;
 	}
 
+	template <typename T = void>
+	inline typename std::enable_if<is_insertion_preserving_map<T>::value, T>::type Read() {
+		using VALUE_TYPE = typename is_insertion_preserving_map<T>::VALUE_TYPE;
+
+		T map;
+		auto size = OnListBegin();
+		for (idx_t i = 0; i < size; i++) {
+			OnObjectBegin();
+			auto key = ReadProperty<string>(0, "key");
+			auto value = ReadProperty<VALUE_TYPE>(1, "value");
+			OnObjectEnd();
+			map[key] = std::move(value);
+		}
+		OnListEnd();
+		return map;
+	}
+
 	// Deserialize an unordered set
 	template <typename T = void>
 	inline typename std::enable_if<is_unordered_set<T>::value, T>::type Read() {
@@ -326,6 +361,19 @@ private:
 		auto second = ReadProperty<SECOND_TYPE>(1, "second");
 		OnObjectEnd();
 		return std::make_pair(first, second);
+	}
+
+	// Deserialize a priority_queue
+	template <typename T = void>
+	inline typename std::enable_if<is_queue<T>::value, T>::type Read() {
+		using ELEMENT_TYPE = typename is_queue<T>::ELEMENT_TYPE;
+		T queue;
+		auto size = OnListBegin();
+		for (idx_t i = 0; i < size; i++) {
+			queue.emplace(Read<ELEMENT_TYPE>());
+		}
+		OnListEnd();
+		return queue;
 	}
 
 	// Primitive types

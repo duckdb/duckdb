@@ -116,7 +116,9 @@
       {
         "id": 100,
         "name": "ids",
-        "type": "unique_ptr<case_insensitive_map_t<FieldID>>"
+        "type": "case_insensitive_map_t<FieldID>",
+        "serialize_property": "ids.operator*()",
+        "deserialize_property": "ids.operator*()"
       }
     ],
     "pointer_type": "none"

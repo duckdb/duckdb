@@ -1,0 +1,39 @@
+# name: test/extension/install_extension.test
+# description: Test various ways of installing extensions
+# group: [extension]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+set extension_directory='__TEST_DIR__/install_extension'
+
+# Check defaults are correct
+statement error
+INSTALL will_never_exist;
+----
+Failed to download extension "will_never_exist" at URL "http://extensions.duckdb.org
+
+# Explicitly install from core
+statement error
+INSTALL will_never_exist FROM core;
+----
+Failed to download extension "will_never_exist" at URL "http://extensions.duckdb.org
+
+# Explicitly install from nightly
+statement error
+INSTALL will_never_exist FROM core_nightly;
+----
+Failed to download extension "will_never_exist" at URL "http://nightly-extensions.duckdb.org
+
+# Explicitly install from community
+statement error
+INSTALL will_never_exist FROM community;
+----
+Failed to download extension "will_never_exist" at URL "http://community-extensions.duckdb.org
+
+# Alias can not quoted: string literals are interpreted as paths
+statement error
+INSTALL will_never_exist FROM 'core';
+----
+IO Error: Failed to copy local extension "will_never_exist" at PATH 

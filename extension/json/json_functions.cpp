@@ -15,6 +15,9 @@ namespace duckdb {
 using JSONPathType = JSONCommon::JSONPathType;
 
 static JSONPathType CheckPath(const Value &path_val, string &path, size_t &len) {
+	if (path_val.IsNull()) {
+		throw BinderException("JSON path cannot be NULL");
+	}
 	const auto path_str_val = path_val.DefaultCastAs(LogicalType::VARCHAR);
 	auto path_str = path_str_val.GetValueUnsafe<string_t>();
 	len = path_str.GetSize();
@@ -58,9 +61,11 @@ unique_ptr<FunctionData> JSONReadFunctionData::Bind(ClientContext &context, Scal
 	size_t len = 0;
 	JSONPathType path_type = JSONPathType::REGULAR;
 	if (arguments[1]->IsFoldable()) {
-		constant = true;
 		const auto path_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
-		path_type = CheckPath(path_val, path, len);
+		if (!path_val.IsNull()) {
+			constant = true;
+			path_type = CheckPath(path_val, path, len);
+		}
 	}
 	bound_function.arguments[1] = LogicalType::VARCHAR;
 	if (path_type == JSONCommon::JSONPathType::WILDCARD) {
@@ -189,8 +194,9 @@ vector<TableFunctionSet> JSONFunctions::GetTableFunctions() {
 	return functions;
 }
 
-unique_ptr<TableRef> JSONFunctions::ReadJSONReplacement(ClientContext &context, const string &table_name,
-                                                        ReplacementScanData *data) {
+unique_ptr<TableRef> JSONFunctions::ReadJSONReplacement(ClientContext &context, ReplacementScanInput &input,
+                                                        optional_ptr<ReplacementScanData> data) {
+	auto &table_name = input.table_name;
 	if (!ReplacementScan::CanReplace(table_name, {"json", "jsonl", "ndjson"})) {
 		return nullptr;
 	}

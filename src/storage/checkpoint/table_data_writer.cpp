@@ -25,9 +25,8 @@ CompressionType TableDataWriter::GetColumnCompressionType(idx_t i) {
 	return table.GetColumn(LogicalIndex(i)).CompressionType();
 }
 
-void TableDataWriter::AddRowGroup(RowGroupPointer &&row_group_pointer, unique_ptr<RowGroupWriter> &&writer) {
+void TableDataWriter::AddRowGroup(RowGroupPointer &&row_group_pointer, unique_ptr<RowGroupWriter> writer) {
 	row_group_pointers.push_back(std::move(row_group_pointer));
-	writer.reset();
 }
 
 TaskScheduler &TableDataWriter::GetScheduler() {
@@ -40,10 +39,15 @@ SingleFileTableDataWriter::SingleFileTableDataWriter(SingleFileCheckpointWriter 
 }
 
 unique_ptr<RowGroupWriter> SingleFileTableDataWriter::GetRowGroupWriter(RowGroup &row_group) {
-	return make_uniq<SingleFileRowGroupWriter>(table, checkpoint_manager.partial_block_manager, table_data_writer);
+	return make_uniq<SingleFileRowGroupWriter>(table, checkpoint_manager.partial_block_manager, *this,
+	                                           table_data_writer);
 }
 
-void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, DataTableInfo *info,
+CheckpointType SingleFileTableDataWriter::GetCheckpointType() const {
+	return checkpoint_manager.GetCheckpointType();
+}
+
+void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo *info,
                                               Serializer &serializer) {
 	// store the current position in the metadata writer
 	// this is where the row groups for this table start
@@ -76,7 +80,7 @@ void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, Da
 	serializer.WriteProperty(101, "table_pointer", pointer);
 	serializer.WriteProperty(102, "total_rows", total_rows);
 
-	auto index_storage_infos = info->indexes.GetStorageInfos();
+	auto index_storage_infos = info->GetIndexes().GetStorageInfos();
 	// write empty block pointers for forwards compatibility
 	vector<BlockPointer> compat_block_pointers;
 	serializer.WriteProperty(103, "index_pointers", compat_block_pointers);

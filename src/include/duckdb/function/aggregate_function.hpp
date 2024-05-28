@@ -79,7 +79,7 @@ typedef void (*aggregate_serialize_t)(Serializer &serializer, const optional_ptr
                                       const AggregateFunction &function);
 typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(Deserializer &deserializer, AggregateFunction &function);
 
-class AggregateFunction : public BaseScalarFunction {
+class AggregateFunction : public BaseScalarFunction { // NOLINT: work-around bug in clang-tidy
 public:
 	AggregateFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
 	                  aggregate_size_t state_size, aggregate_initialize_t initialize, aggregate_update_t update,

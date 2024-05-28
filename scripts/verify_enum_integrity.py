@@ -27,10 +27,7 @@ def visit_enum(cursor):
     print(f"Succesfully verified the integrity of enum {enum_name} ({len(enum_constants)} entries)")
 
 
-def parse_enum(file_path, clang_path: Optional[str] = None):
-    if clang_path:
-        clang.cindex.Config.set_library_path(clang_path)
-
+def parse_enum(file_path):
     # Create index
     index = clang.cindex.Index.create()
 
@@ -54,7 +51,6 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Parse a C header file and check enum integrity.")
     parser.add_argument("file_path", type=str, help="Path to the C header file")
-    parser.add_argument("--library_path", type=str, help="Path to the clang library", default=None)
 
     args = parser.parse_args()
     file_path = args.file_path
@@ -62,4 +58,4 @@ if __name__ == "__main__":
     if not os.path.exists(file_path):
         raise Exception(f"Error: file '{file_path}' does not exist")
 
-    enum_dict = parse_enum(file_path, args.library_path)
+    enum_dict = parse_enum(file_path)

@@ -159,6 +159,20 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 		duckdb_destroy_prepare(&stmt);
 	}
 
+	SECTION("test unsupported type") {
+		auto state = duckdb_query_arrow(tester.connection, "SELECT 0::UHUGEINT", &arrow_result);
+		REQUIRE(state == DuckDBSuccess);
+
+		ArrowSchema arrow_schema;
+		arrow_schema.Init();
+		auto arrow_schema_ptr = &arrow_schema;
+
+		state = duckdb_query_arrow_schema(arrow_result, reinterpret_cast<duckdb_arrow_schema *>(&arrow_schema_ptr));
+		REQUIRE(state == DuckDBError);
+
+		duckdb_destroy_arrow(&arrow_result);
+	}
+
 	SECTION("test scan") {
 
 		const auto logical_types = duckdb::vector<LogicalType> {LogicalType(LogicalTypeId::INTEGER)};
@@ -223,7 +237,7 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 				auto data_chunk = &data_chunks[i];
 				data_chunk->Initialize(allocator, logical_types, STANDARD_VECTOR_SIZE);
 				data_chunk->SetCardinality(STANDARD_VECTOR_SIZE);
-				for (int row = 0; row < STANDARD_VECTOR_SIZE; row++) {
+				for (idx_t row = 0; row < STANDARD_VECTOR_SIZE; row++) {
 					data_chunk->SetValue(0, row, duckdb::Value(i));
 				}
 				appender.Append(*data_chunk, 0, data_chunk->size(), data_chunk->size());

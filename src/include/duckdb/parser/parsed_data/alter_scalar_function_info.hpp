@@ -21,7 +21,7 @@ enum class AlterScalarFunctionType : uint8_t { INVALID = 0, ADD_FUNCTION_OVERLOA
 
 struct AlterScalarFunctionInfo : public AlterInfo {
 	AlterScalarFunctionInfo(AlterScalarFunctionType type, AlterEntryData data);
-	virtual ~AlterScalarFunctionInfo() override;
+	~AlterScalarFunctionInfo() override;
 
 	AlterScalarFunctionType alter_scalar_function_type;
 
@@ -40,6 +40,7 @@ struct AddScalarFunctionOverloadInfo : public AlterScalarFunctionInfo {
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;
+	string ToString() const override;
 };
 
 } // namespace duckdb

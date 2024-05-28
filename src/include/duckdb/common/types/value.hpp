@@ -17,6 +17,7 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/datetime.hpp"
 #include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 
 namespace duckdb {
 
@@ -176,6 +177,9 @@ public:
 	//! Create a map value with the given entries
 	DUCKDB_API static Value MAP(const LogicalType &key_type, const LogicalType &value_type, vector<Value> keys,
 	                            vector<Value> values);
+	//! Create a map value from a set of key-value pairs
+	DUCKDB_API static Value MAP(const unordered_map<string, string> &kv_pairs);
+
 	//! Create a union value from a selected value and a tag from a set of alternatives.
 	DUCKDB_API static Value UNION(child_list_t<LogicalType> members, uint8_t tag, Value value);
 
@@ -191,13 +195,13 @@ public:
 	DUCKDB_API static Value BIT(const string &data);
 
 	//! Creates an aggregate state
-	DUCKDB_API static Value AGGREGATE_STATE(const LogicalType &type, const_data_ptr_t data, idx_t len);
+	DUCKDB_API static Value AGGREGATE_STATE(const LogicalType &type, const_data_ptr_t data, idx_t len); // NOLINT
 
 	template <class T>
 	T GetValue() const;
 	template <class T>
 	static Value CreateValue(T value) {
-		static_assert(AlwaysFalse<T>::value, "No specialization exists for this type");
+		static_assert(AlwaysFalse<T>::VALUE, "No specialization exists for this type");
 		return Value(nullptr);
 	}
 	// Returns the internal value. Unlike GetValue(), this method does not perform casting, and assumes T matches the

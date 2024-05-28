@@ -390,22 +390,28 @@ static inline void ExtractStructureObject(yyjson_val *obj, JSONStructureNode &no
 	auto &description = node.GetOrCreateDescription(LogicalTypeId::STRUCT);
 
 	// Keep track of keys so we can detect duplicates
-	case_insensitive_set_t obj_keys;
+	unordered_set<string> obj_keys;
+	case_insensitive_set_t ci_obj_keys;
 
 	size_t idx, max;
 	yyjson_val *key, *val;
 	yyjson_obj_foreach(obj, idx, max, key, val) {
-		auto key_ptr = unsafe_yyjson_get_str(key);
-		auto key_len = unsafe_yyjson_get_len(key);
-		auto insert_result = obj_keys.insert(string(key_ptr, key_len));
-		if (!ignore_errors && !insert_result.second) {
-			JSONCommon::ThrowValFormatError("Duplicate key \"" + string(key_ptr, key_len) + "\" in object %s", obj);
+		const string obj_key(unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
+		auto insert_result = obj_keys.insert(obj_key);
+		if (!ignore_errors && !insert_result.second) { // Exact match
+			JSONCommon::ThrowValFormatError("Duplicate key \"" + obj_key + "\" in object %s", obj);
+		}
+		insert_result = ci_obj_keys.insert(obj_key);
+		if (!ignore_errors && !insert_result.second) { // Case-insensitive match
+			JSONCommon::ThrowValFormatError("Duplicate key (different case) \"" + obj_key + "\" and \"" +
+			                                    *insert_result.first + "\" in object %s",
+			                                obj);
 		}
 		description.GetOrCreateChild(key, val, ignore_errors);
 	}
 }
 
-static inline void ExtractStructureVal(yyjson_val *val, JSONStructureNode &node, const bool ignore_errors) {
+static inline void ExtractStructureVal(yyjson_val *val, JSONStructureNode &node) {
 	D_ASSERT(!yyjson_is_arr(val) && !yyjson_is_obj(val));
 	node.GetOrCreateDescription(JSONCommon::ValTypeToLogicalTypeId(val));
 }
@@ -422,7 +428,7 @@ void JSONStructure::ExtractStructure(yyjson_val *val, JSONStructureNode &node, c
 	case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
 		return ExtractStructureObject(val, node, ignore_errors);
 	default:
-		return ExtractStructureVal(val, node, ignore_errors);
+		return ExtractStructureVal(val, node);
 	}
 }
 
@@ -481,9 +487,9 @@ static inline yyjson_mut_val *ConvertStructure(const JSONStructureNode &node, yy
 	}
 }
 
-static inline string_t JSONStructureFunction(yyjson_val *val, yyjson_alc *alc, Vector &result) {
+static inline string_t JSONStructureFunction(yyjson_val *val, yyjson_alc *alc, Vector &) {
 	return JSONCommon::WriteVal<yyjson_mut_val>(
-	    ConvertStructure(ExtractStructureInternal(val, false), yyjson_mut_doc_new(alc)), alc);
+	    ConvertStructure(ExtractStructureInternal(val, true), yyjson_mut_doc_new(alc)), alc);
 }
 
 static void StructureFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -502,7 +508,7 @@ ScalarFunctionSet JSONFunctions::GetStructureFunction() {
 	return set;
 }
 
-static LogicalType StructureToTypeArray(ClientContext &context, const JSONStructureNode &node, const idx_t max_depth,
+static LogicalType StructureToTypeArray(ClientContext &context, const JSONStructureNode &node, const idx_t max_dept
                                         const double field_appearance_threshold, const idx_t map_inference_threshold,
                                         idx_t depth, const idx_t sample_count, const LogicalType &null_type) {
 	D_ASSERT(node.descriptions.size() == 1 && node.descriptions[0].type == LogicalTypeId::LIST);

@@ -44,7 +44,7 @@ struct SegmentScanState {
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -60,7 +60,7 @@ struct IndexScanState {
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -111,7 +111,7 @@ struct ColumnFetchState {
 
 class CollectionScanState {
 public:
-	CollectionScanState(TableScanState &parent_p);
+	explicit CollectionScanState(TableScanState &parent_p);
 
 	//! The current row_group we are scanning
 	RowGroup *row_group;
@@ -157,6 +157,8 @@ public:
 	CollectionScanState local_state;
 	//! Options for scanning
 	TableScanOptions options;
+	//! Shared lock over the checkpoint to prevent checkpoints while reading
+	unique_ptr<StorageLockKey> checkpoint_lock;
 
 public:
 	void Initialize(vector<storage_t> column_ids, TableFilterSet *table_filters = nullptr);
@@ -192,6 +194,8 @@ struct ParallelTableScanState {
 	ParallelCollectionScanState scan_state;
 	//! Parallel scan state for the transaction-local state
 	ParallelCollectionScanState local_state;
+	//! Shared lock over the checkpoint to prevent checkpoints while reading
+	unique_ptr<StorageLockKey> checkpoint_lock;
 };
 
 class CreateIndexScanState : public TableScanState {

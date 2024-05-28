@@ -79,6 +79,7 @@ ExplainableStmt:
 			| SelectStmt
 			| TransactionStmt
 			| UpdateStmt
+			| UpdateExtensionsStmt
 			| VacuumStmt
 			| VariableResetStmt
 			| VariableSetStmt

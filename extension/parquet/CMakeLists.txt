@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.5...3.29)
 
 project(ParquetExtension)
 
@@ -66,6 +66,7 @@ endif()
 build_static_extension(parquet ${PARQUET_EXTENSION_FILES})
 set(PARAMETERS "-warnings")
 build_loadable_extension(parquet ${PARAMETERS} ${PARQUET_EXTENSION_FILES})
+target_link_libraries(parquet_loadable_extension duckdb_mbedtls)
 
 install(
   TARGETS parquet_extension

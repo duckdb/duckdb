@@ -98,3 +98,7 @@ EXPLAIN select a from read_csv_auto('s3://test-bucket/hive-partitioning/filter-t
 ----
 physical_plan	<REGEX>:.*FILTER.*(a < 4).*READ_CSV_AUTO.*File Filters: \(CAST\(c AS.*INTEGER\) = 500\).*
 
+statement error
+COPY (SELECT * FROM t1) TO 's3://test-bucket/hive-partitioning/filter-test-parquet' (FORMAT PARQUET, PARTITION_BY c, OVERWRITE);
+----
+OVERWRITE is not supported for remote file systems

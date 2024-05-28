@@ -128,11 +128,11 @@ SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv5/*.csv')
 ----
 100000
 
-# 4 threads, 4 files
+# should yield multiple files, can be less than 4 because we create files lazily
 query I
-SELECT count(*) FROM glob('__TEST_DIR__/file_size_bytes_csv5/*.csv')
+SELECT count(*) > 2 FROM glob('__TEST_DIR__/file_size_bytes_csv5/*.csv')
 ----
-4
+true
 
 # each thread sees ~240kb if it's balanced, what about a 190kb limit
 # even in the case of extreme thread imbalance, this always yield around 8 files

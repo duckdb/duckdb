@@ -36,7 +36,7 @@ struct PrivateAllocatorData {
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -58,10 +58,10 @@ public:
 	DUCKDB_API AllocatedData(AllocatedData &&other) noexcept;
 	DUCKDB_API AllocatedData &operator=(AllocatedData &&) noexcept;
 
-	data_ptr_t get() {
+	data_ptr_t get() { // NOLINT: matching std style
 		return pointer;
 	}
-	const_data_ptr_t get() const {
+	const_data_ptr_t get() const { // NOLINT: matching std style
 		return pointer;
 	}
 	idx_t GetSize() const {
@@ -112,8 +112,12 @@ public:
 	DUCKDB_API static Allocator &DefaultAllocator();
 	DUCKDB_API static shared_ptr<Allocator> &DefaultAllocatorReference();
 
+	static bool SupportsFlush();
+	static int64_t DecayDelay();
 	static void ThreadFlush(idx_t threshold);
+	static void ThreadIdle();
 	static void FlushAll();
+	static void SetBackgroundThreads(bool enable);
 
 private:
 	allocate_function_ptr_t allocate_function;

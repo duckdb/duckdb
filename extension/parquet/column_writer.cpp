@@ -15,16 +15,16 @@
 #include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/hugeint.hpp"
-#include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 #endif
 
+#include "lz4.hpp"
 #include "miniz_wrapper.hpp"
 #include "snappy.h"
 #include "zstd.h"
-#include "lz4.hpp"
 
 namespace duckdb {
 
@@ -67,6 +67,10 @@ static uint8_t GetVarintSize(uint32_t val) {
 // ColumnWriterStatistics
 //===--------------------------------------------------------------------===//
 ColumnWriterStatistics::~ColumnWriterStatistics() {
+}
+
+bool ColumnWriterStatistics::HasStats() {
+	return false;
 }
 
 string ColumnWriterStatistics::GetMin() {
@@ -221,11 +225,16 @@ void ColumnWriter::CompressPage(MemoryStream &temp_writer, size_t &compressed_si
 		break;
 	}
 	case CompressionCodec::ZSTD: {
+		auto configured_compression = writer.CompressionLevel();
+		int compress_level = ZSTD_CLEVEL_DEFAULT;
+		if (configured_compression.IsValid()) {
+			compress_level = static_cast<int>(configured_compression.GetIndex());
+		}
 		compressed_size = duckdb_zstd::ZSTD_compressBound(temp_writer.GetPosition());
 		compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
-		compressed_size = duckdb_zstd::ZSTD_compress((void *)compressed_buf.get(), compressed_size,
-		                                             (const void *)temp_writer.GetData(), temp_writer.GetPosition(),
-		                                             ZSTD_CLEVEL_DEFAULT);
+		compressed_size =
+		    duckdb_zstd::ZSTD_compress((void *)compressed_buf.get(), compressed_size,
+		                               (const void *)temp_writer.GetData(), temp_writer.GetPosition(), compress_level);
 		compressed_data = compressed_buf.get();
 		break;
 	}
@@ -355,15 +364,18 @@ public:
 	~BasicColumnWriter() override = default;
 
 	//! We limit the uncompressed page size to 100MB
-	// The max size in Parquet is 2GB, but we choose a more conservative limit
+	//! The max size in Parquet is 2GB, but we choose a more conservative limit
 	static constexpr const idx_t MAX_UNCOMPRESSED_PAGE_SIZE = 100000000;
 	//! Dictionary pages must be below 2GB. Unlike data pages, there's only one dictionary page.
-	//  For this reason we go with a much higher, but still a conservative upper bound of 1GB;
+	//! For this reason we go with a much higher, but still a conservative upper bound of 1GB;
 	static constexpr const idx_t MAX_UNCOMPRESSED_DICT_PAGE_SIZE = 1e9;
+	//! If the dictionary has this many entries, but the compression ratio is still below 1,
+	//! we stop creating the dictionary
+	static constexpr const idx_t DICTIONARY_ANALYZE_THRESHOLD = 1e4;
 
-	// the maximum size a key entry in an RLE page takes
+	//! The maximum size a key entry in an RLE page takes
 	static constexpr const idx_t MAX_DICTIONARY_KEY_SIZE = sizeof(uint32_t);
-	// the size of encoding the string length
+	//! The size of encoding the string length
 	static constexpr const idx_t STRING_LENGTH_SIZE = sizeof(uint32_t);
 
 public:
@@ -477,7 +489,7 @@ void BasicColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 		auto &page_info = state.page_info[page_idx];
 		if (page_info.row_count == 0) {
 			D_ASSERT(page_idx + 1 == state.page_info.size());
-			state.page_info.erase(state.page_info.begin() + page_idx);
+			state.page_info.erase_at(page_idx);
 			break;
 		}
 		PageWriteInformation write_info;
@@ -582,7 +594,7 @@ void BasicColumnWriter::FlushPage(BasicColumnWriterState &state) {
 	D_ASSERT(hdr.compressed_page_size > 0);
 
 	if (write_info.compressed_buf) {
-		// if the data has been compressed, we no longer need the compressed data
+		// if the data has been compressed, we no longer need the uncompressed data
 		D_ASSERT(write_info.compressed_buf.get() == write_info.compressed_data);
 		write_info.temp_writer.reset();
 	}
@@ -643,15 +655,12 @@ void BasicColumnWriter::SetParquetStatistics(BasicColumnWriterState &state,
 		column_chunk.meta_data.statistics.__isset.max = true;
 		column_chunk.meta_data.__isset.statistics = true;
 	}
-	auto min_value = state.stats_state->GetMinValue();
-	if (!min_value.empty()) {
-		column_chunk.meta_data.statistics.min_value = std::move(min_value);
+	if (state.stats_state->HasStats()) {
+		column_chunk.meta_data.statistics.min_value = state.stats_state->GetMinValue();
 		column_chunk.meta_data.statistics.__isset.min_value = true;
 		column_chunk.meta_data.__isset.statistics = true;
-	}
-	auto max_value = state.stats_state->GetMaxValue();
-	if (!max_value.empty()) {
-		column_chunk.meta_data.statistics.max_value = std::move(max_value);
+
+		column_chunk.meta_data.statistics.max_value = state.stats_state->GetMaxValue();
 		column_chunk.meta_data.statistics.__isset.max_value = true;
 		column_chunk.meta_data.__isset.statistics = true;
 	}
@@ -678,18 +687,24 @@ void BasicColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	if (HasDictionary(state)) {
 		column_chunk.meta_data.statistics.distinct_count = DictionarySize(state);
 		column_chunk.meta_data.statistics.__isset.distinct_count = true;
-		column_chunk.meta_data.dictionary_page_offset = start_offset;
+		column_chunk.meta_data.dictionary_page_offset = column_writer.GetTotalWritten();
 		column_chunk.meta_data.__isset.dictionary_page_offset = true;
 		FlushDictionary(state, state.stats_state.get());
 	}
 
 	// record the start position of the pages for this column
-	column_chunk.meta_data.data_page_offset = column_writer.GetTotalWritten();
+	column_chunk.meta_data.data_page_offset = 0;
 	SetParquetStatistics(state, column_chunk);
 
 	// write the individual pages to disk
 	idx_t total_uncompressed_size = 0;
 	for (auto &write_info : state.write_info) {
+		// set the data page offset whenever we see the *first* data page
+		if (column_chunk.meta_data.data_page_offset == 0 && (write_info.page_header.type == PageType::DATA_PAGE ||
+		                                                     write_info.page_header.type == PageType::DATA_PAGE_V2)) {
+			column_chunk.meta_data.data_page_offset = column_writer.GetTotalWritten();
+			;
+		}
 		D_ASSERT(write_info.page_header.uncompressed_page_size > 0);
 		auto header_start_offset = column_writer.GetTotalWritten();
 		writer.Write(write_info.page_header);
@@ -753,7 +768,7 @@ public:
 	T max;
 
 public:
-	bool HasStats() {
+	bool HasStats() override {
 		return min <= max;
 	}
 
@@ -899,7 +914,7 @@ public:
 	bool max;
 
 public:
-	bool HasStats() {
+	bool HasStats() override {
 		return !(min && !max);
 	}
 
@@ -1021,7 +1036,7 @@ public:
 		return string(const_char_ptr_cast(buffer), 16);
 	}
 
-	bool HasStats() {
+	bool HasStats() override {
 		return min <= max;
 	}
 
@@ -1187,7 +1202,7 @@ public:
 	string max;
 
 public:
-	bool HasStats() {
+	bool HasStats() override {
 		return has_stats;
 	}
 
@@ -1202,6 +1217,7 @@ public:
 			// ideally we avoid placing several mega or giga-byte long strings there
 			// we put a threshold of 10KB, if we see strings that exceed this threshold we avoid gathering stats
 			values_too_big = true;
+			has_stats = false;
 			min = string();
 			max = string();
 			return;
@@ -1293,6 +1309,12 @@ public:
 
 	void Analyze(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) override {
 		auto &state = state_p.Cast<StringColumnWriterState>();
+		if (writer.DictionaryCompressionRatioThreshold() == NumericLimits<double>::Maximum() ||
+		    (state.dictionary.size() > DICTIONARY_ANALYZE_THRESHOLD && WontUseDictionary(state))) {
+			// Early out: compression ratio is less than the specified parameter
+			// after seeing more entries than the threshold
+			return;
+		}
 
 		idx_t vcount = parent ? parent->definition_levels.size() - state.definition_levels.size() : count;
 		idx_t parent_index = state.definition_levels.size();
@@ -1319,6 +1341,7 @@ public:
 					new_value_index++;
 					state.estimated_dict_page_size += value.GetSize() + MAX_DICTIONARY_KEY_SIZE;
 				}
+
 				// if the value changed, we will encode it in the page
 				if (last_value_index != found.first->second) {
 					// we will add the value index size later, when we know the total number of keys
@@ -1340,8 +1363,7 @@ public:
 
 		// check if a dictionary will require more space than a plain write, or if the dictionary page is going to
 		// be too large
-		if (state.estimated_dict_page_size > MAX_UNCOMPRESSED_DICT_PAGE_SIZE ||
-		    state.estimated_rle_pages_size + state.estimated_dict_page_size > state.estimated_plain_size) {
+		if (WontUseDictionary(state)) {
 			// clearing the dictionary signals a plain write
 			state.dictionary.clear();
 			state.key_bit_width = 0;
@@ -1456,6 +1478,23 @@ public:
 			auto strings = FlatVector::GetData<string_t>(vector);
 			return strings[index].GetSize();
 		}
+	}
+
+private:
+	bool WontUseDictionary(StringColumnWriterState &state) const {
+		return state.estimated_dict_page_size > MAX_UNCOMPRESSED_DICT_PAGE_SIZE ||
+		       DictionaryCompressionRatio(state) < writer.DictionaryCompressionRatioThreshold();
+	}
+
+	static double DictionaryCompressionRatio(StringColumnWriterState &state) {
+		// If any are 0, we just return a compression ratio of 1
+		if (state.estimated_plain_size == 0 || state.estimated_rle_pages_size == 0 ||
+		    state.estimated_dict_page_size == 0) {
+			return 1;
+		}
+		// Otherwise, plain size divided by compressed size
+		return double(state.estimated_plain_size) /
+		       double(state.estimated_rle_pages_size + state.estimated_dict_page_size);
 	}
 };
 

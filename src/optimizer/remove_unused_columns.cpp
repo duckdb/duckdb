@@ -11,6 +11,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_distinct.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
@@ -38,7 +39,7 @@ void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, idx_t table_id
 		auto entry = column_references.find(current_binding);
 		if (entry == column_references.end()) {
 			// this entry is not referred to, erase it from the set of expressions
-			list.erase(list.begin() + col_idx);
+			list.erase_at(col_idx);
 			offset++;
 			col_idx--;
 		} else if (offset > 0 && replace) {
@@ -158,30 +159,14 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_EXCEPT:
-	case LogicalOperatorType::LOGICAL_INTERSECT:
+	case LogicalOperatorType::LOGICAL_INTERSECT: {
 		// for INTERSECT/EXCEPT operations we can't remove anything, just recursively visit the children
 		for (auto &child : op.children) {
 			RemoveUnusedColumns remove(binder, context, true);
 			remove.VisitOperator(*child);
 		}
 		return;
-	case LogicalOperatorType::LOGICAL_ORDER_BY:
-		if (!everything_referenced) {
-			auto &order = op.Cast<LogicalOrder>();
-			D_ASSERT(order.projections.empty()); // should not yet be set
-			const auto all_bindings = order.GetColumnBindings();
-
-			for (idx_t col_idx = 0; col_idx < all_bindings.size(); col_idx++) {
-				if (column_references.find(all_bindings[col_idx]) != column_references.end()) {
-					order.projections.push_back(col_idx);
-				}
-			}
-		}
-		for (auto &child : op.children) {
-			RemoveUnusedColumns remove(binder, context, true);
-			remove.VisitOperator(*child);
-		}
-		return;
+	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		if (!everything_referenced) {
 			auto &proj = op.Cast<LogicalProjection>();
@@ -234,17 +219,17 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			// for every table filter, push a column binding into the column references map to prevent the column from
 			// being projected out
 			for (auto &filter : get.table_filters.filters) {
-				idx_t index = DConstants::INVALID_INDEX;
+				optional_idx index;
 				for (idx_t i = 0; i < get.column_ids.size(); i++) {
 					if (get.column_ids[i] == filter.first) {
 						index = i;
 						break;
 					}
 				}
-				if (index == DConstants::INVALID_INDEX) {
+				if (!index.IsValid()) {
 					throw InternalException("Could not find column index for table filter");
 				}
-				ColumnBinding filter_binding(get.table_index, index);
+				ColumnBinding filter_binding(get.table_index, index.GetIndex());
 				if (column_references.find(filter_binding) == column_references.end()) {
 					column_references.insert(make_pair(filter_binding, vector<BoundColumnRefExpression *>()));
 				}
@@ -293,6 +278,12 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_DISTINCT: {
+		auto &distinct = op.Cast<LogicalDistinct>();
+		if (distinct.distinct_type == DistinctType::DISTINCT_ON) {
+			// distinct type references columns that need to be distinct on, so no
+			// need to implicity reference everything.
+			break;
+		}
 		// distinct, all projected columns are used for the DISTINCT computation
 		// mark all columns as used and continue to the children
 		// FIXME: DISTINCT with expression list does not implicitly reference everything

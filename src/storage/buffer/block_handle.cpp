@@ -1,17 +1,18 @@
 #include "duckdb/storage/buffer/block_handle.hpp"
+
+#include "duckdb/common/file_buffer.hpp"
 #include "duckdb/storage/block.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
-#include "duckdb/common/file_buffer.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
 BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, MemoryTag tag)
-    : block_manager(block_manager), readers(0), block_id(block_id_p), tag(tag), buffer(nullptr), eviction_timestamp(0),
+    : block_manager(block_manager), readers(0), block_id(block_id_p), tag(tag), buffer(nullptr), eviction_seq_num(0),
       can_destroy(false), memory_charge(tag, block_manager.buffer_manager.GetBufferPool()), unswizzled(nullptr) {
-	eviction_timestamp = 0;
+	eviction_seq_num = 0;
 	state = BlockState::BLOCK_UNLOADED;
 	memory_usage = Storage::BLOCK_ALLOC_SIZE;
 }
@@ -19,7 +20,7 @@ BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, Mem
 BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, MemoryTag tag,
                          unique_ptr<FileBuffer> buffer_p, bool can_destroy_p, idx_t block_size,
                          BufferPoolReservation &&reservation)
-    : block_manager(block_manager), readers(0), block_id(block_id_p), tag(tag), eviction_timestamp(0),
+    : block_manager(block_manager), readers(0), block_id(block_id_p), tag(tag), eviction_seq_num(0),
       can_destroy(can_destroy_p), memory_charge(tag, block_manager.buffer_manager.GetBufferPool()),
       unswizzled(nullptr) {
 	buffer = std::move(buffer_p);
@@ -34,7 +35,7 @@ BlockHandle::~BlockHandle() { // NOLINT: allow internal exceptions
 	if (buffer && buffer->type != FileBufferType::TINY_BUFFER) {
 		// we kill the latest version in the eviction queue
 		auto &buffer_manager = block_manager.buffer_manager;
-		buffer_manager.GetBufferPool().IncrementDeadNodes();
+		buffer_manager.GetBufferPool().IncrementDeadNodes(buffer->type);
 	}
 
 	// no references remain to this block: erase

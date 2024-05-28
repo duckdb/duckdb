@@ -3,16 +3,17 @@
 #include "crypto.hpp"
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
+#include "duckdb/common/exception/http_exception.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/http_state.hpp"
 #include "duckdb/common/thread.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
-#include "duckdb/common/exception/http_exception.hpp"
 #endif
 
 #include <duckdb/function/scalar/string_functions.hpp>
-#include <duckdb/storage/buffer_manager.hpp>
 #include <duckdb/main/secret/secret_manager.hpp>
+#include <duckdb/storage/buffer_manager.hpp>
 #include <iostream>
 #include <thread>
 
@@ -156,25 +157,25 @@ void AWSEnvironmentCredentialsProvider::SetExtensionOptionValue(string key, cons
 }
 
 void AWSEnvironmentCredentialsProvider::SetAll() {
-	this->SetExtensionOptionValue("s3_region", this->DEFAULT_REGION_ENV_VAR);
-	this->SetExtensionOptionValue("s3_region", this->REGION_ENV_VAR);
-	this->SetExtensionOptionValue("s3_access_key_id", this->ACCESS_KEY_ENV_VAR);
-	this->SetExtensionOptionValue("s3_secret_access_key", this->SECRET_KEY_ENV_VAR);
-	this->SetExtensionOptionValue("s3_session_token", this->SESSION_TOKEN_ENV_VAR);
-	this->SetExtensionOptionValue("s3_endpoint", this->DUCKDB_ENDPOINT_ENV_VAR);
-	this->SetExtensionOptionValue("s3_use_ssl", this->DUCKDB_USE_SSL_ENV_VAR);
+	this->SetExtensionOptionValue("s3_region", DEFAULT_REGION_ENV_VAR);
+	this->SetExtensionOptionValue("s3_region", REGION_ENV_VAR);
+	this->SetExtensionOptionValue("s3_access_key_id", ACCESS_KEY_ENV_VAR);
+	this->SetExtensionOptionValue("s3_secret_access_key", SECRET_KEY_ENV_VAR);
+	this->SetExtensionOptionValue("s3_session_token", SESSION_TOKEN_ENV_VAR);
+	this->SetExtensionOptionValue("s3_endpoint", DUCKDB_ENDPOINT_ENV_VAR);
+	this->SetExtensionOptionValue("s3_use_ssl", DUCKDB_USE_SSL_ENV_VAR);
 }
 
 S3AuthParams AWSEnvironmentCredentialsProvider::CreateParams() {
 	S3AuthParams params;
 
-	params.region = this->DEFAULT_REGION_ENV_VAR;
-	params.region = this->REGION_ENV_VAR;
-	params.access_key_id = this->ACCESS_KEY_ENV_VAR;
-	params.secret_access_key = this->SECRET_KEY_ENV_VAR;
-	params.session_token = this->SESSION_TOKEN_ENV_VAR;
-	params.endpoint = this->DUCKDB_ENDPOINT_ENV_VAR;
-	params.use_ssl = this->DUCKDB_USE_SSL_ENV_VAR;
+	params.region = DEFAULT_REGION_ENV_VAR;
+	params.region = REGION_ENV_VAR;
+	params.access_key_id = ACCESS_KEY_ENV_VAR;
+	params.secret_access_key = SECRET_KEY_ENV_VAR;
+	params.session_token = SESSION_TOKEN_ENV_VAR;
+	params.endpoint = DUCKDB_ENDPOINT_ENV_VAR;
+	params.use_ssl = DUCKDB_USE_SSL_ENV_VAR;
 
 	return params;
 }
@@ -183,12 +184,14 @@ unique_ptr<S3AuthParams> S3AuthParams::ReadFromStoredCredentials(optional_ptr<Fi
 	if (!opener) {
 		return nullptr;
 	}
-	auto context = opener->TryGetClientContext();
-	if (!context) {
+	auto db = opener->TryGetDatabase();
+	if (!db) {
 		return nullptr;
 	}
-	auto &secret_manager = context->db->GetSecretManager();
-	auto transaction = CatalogTransaction::GetSystemCatalogTransaction(*context);
+	auto &secret_manager = db->GetSecretManager();
+	auto context = opener->TryGetClientContext();
+	auto transaction = context ? CatalogTransaction::GetSystemCatalogTransaction(*context)
+	                           : CatalogTransaction::GetSystemTransaction(*db);
 
 	auto secret_match = secret_manager.LookupSecret(transaction, path, "s3");
 	if (!secret_match.HasMatch()) {
@@ -318,7 +321,15 @@ S3AuthParams S3SecretHelper::GetParams(const KeyValueSecret &secret) {
 }
 
 S3FileHandle::~S3FileHandle() {
-	Close();
+	if (Exception::UncaughtException()) {
+		// We are in an exception, don't do anything
+		return;
+	}
+
+	try {
+		Close();
+	} catch (...) { // NOLINT
+	}
 }
 
 S3ConfigParams S3ConfigParams::ReadFrom(optional_ptr<FileOpener> opener) {
@@ -358,11 +369,11 @@ void S3FileHandle::Close() {
 	}
 }
 
-void S3FileHandle::InitializeClient() {
+void S3FileHandle::InitializeClient(optional_ptr<ClientContext> client_context) {
 	auto parsed_url = S3FileSystem::S3UrlParse(path, this->auth_params);
 
 	string proto_host_port = parsed_url.http_proto + parsed_url.host;
-	http_client = HTTPFileSystem::GetClient(this->http_params, proto_host_port.c_str());
+	http_client = HTTPFileSystem::GetClient(this->http_params, proto_host_port.c_str(), this);
 }
 
 // Opens the multipart upload and returns the ID
@@ -565,7 +576,7 @@ shared_ptr<S3WriteBuffer> S3FileHandle::GetBuffer(uint16_t write_buffer_idx) {
 
 	auto buffer_handle = s3fs.Allocate(part_size, config_params.max_upload_threads);
 	auto new_write_buffer =
-	    make_shared<S3WriteBuffer>(write_buffer_idx * part_size, part_size, std::move(buffer_handle));
+	    make_shared_ptr<S3WriteBuffer>(write_buffer_idx * part_size, part_size, std::move(buffer_handle));
 	{
 		unique_lock<mutex> lck(write_buffers_lock);
 		auto lookup_result = write_buffers.find(write_buffer_idx);
@@ -1116,8 +1127,8 @@ string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthPar
 	    create_s3_header(req_path, req_params, parsed_url.host, "s3", "GET", s3_auth_params, "", "", "", "");
 	auto headers = initialize_http_headers(header_map);
 
-	auto client = S3FileSystem::GetClient(
-	    http_params, (parsed_url.http_proto + parsed_url.host).c_str()); // Get requests use fresh connection
+	auto client = S3FileSystem::GetClient(http_params, (parsed_url.http_proto + parsed_url.host).c_str(),
+	                                      nullptr); // Get requests use fresh connection
 	std::stringstream response;
 	auto res = client->Get(
 	    listobjectv2_url.c_str(), *headers,

@@ -15,6 +15,7 @@
 #include "duckdb_python/numpy/numpy_scan.hpp"
 #include "duckdb_python/arrow/arrow_export_utils.hpp"
 #include "duckdb/common/types/arrow_aux_data.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 
 namespace duckdb {
 
@@ -65,7 +66,11 @@ static void ConvertPyArrowToDataChunk(const py::object &table, Vector &out, Clie
 	vector<LogicalType> input_types;
 	vector<string> input_names;
 
-	auto bind_input = TableFunctionBindInput(children, named_params, input_types, input_names, nullptr);
+	TableFunctionRef empty;
+	TableFunction dummy_table_function;
+	dummy_table_function.name = "ConvertPyArrowToDataChunk";
+	TableFunctionBindInput bind_input(children, named_params, input_types, input_names, nullptr, nullptr,
+	                                  dummy_table_function, empty);
 	vector<LogicalType> return_types;
 	vector<string> return_names;
 
@@ -162,7 +167,7 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
                                               const ClientProperties &client_properties) {
 	// Through the capture of the lambda, we have access to the function pointer
 	// We just need to make sure that it doesn't get garbage collected
-	scalar_function_t func = [=](DataChunk &input, ExpressionState &state, Vector &result) -> void {
+	scalar_function_t func = [=](DataChunk &input, ExpressionState &state, Vector &result) -> void { // NOLINT
 		py::gil_scoped_acquire gil;
 
 		// owning references

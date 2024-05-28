@@ -28,7 +28,7 @@ void ListResizeFunction(DataChunk &args, ExpressionState &state, Vector &result)
 
 	UnifiedVectorFormat new_size_data;
 	new_sizes.ToUnifiedFormat(count, new_size_data);
-	auto new_size_entries = UnifiedVectorFormat::GetData<int64_t>(new_size_data);
+	auto new_size_entries = UnifiedVectorFormat::GetData<uint64_t>(new_size_data);
 
 	UnifiedVectorFormat child_data;
 	child.ToUnifiedFormat(count, child_data);

@@ -14,7 +14,7 @@
 namespace duckdb {
 
 SequenceData::SequenceData(CreateSequenceInfo &info)
-    : usage_count(info.usage_count), counter(info.start_value), increment(info.increment),
+    : usage_count(info.usage_count), counter(info.start_value), last_value(info.start_value), increment(info.increment),
       start_value(info.start_value), min_value(info.min_value), max_value(info.max_value), cycle(info.cycle) {
 }
 
@@ -22,6 +22,7 @@ SequenceCatalogEntry::SequenceCatalogEntry(Catalog &catalog, SchemaCatalogEntry 
     : StandardEntry(CatalogType::SEQUENCE_ENTRY, schema, catalog, info.name), data(info) {
 	this->temporary = info.temporary;
 	this->comment = info.comment;
+	this->tags = info.tags;
 }
 
 unique_ptr<CatalogEntry> SequenceCatalogEntry::Copy(ClientContext &context) const {
@@ -73,7 +74,7 @@ int64_t SequenceCatalogEntry::NextValue(DuckTransaction &transaction) {
 	data.last_value = result;
 	data.usage_count++;
 	if (!temporary) {
-		transaction.sequence_usage[this] = SequenceValue(data.usage_count, data.counter);
+		transaction.PushSequenceUsage(*this, data);
 	}
 	return result;
 }
@@ -98,7 +99,9 @@ unique_ptr<CreateInfo> SequenceCatalogEntry::GetInfo() const {
 	result->max_value = seq_data.max_value;
 	result->start_value = seq_data.counter;
 	result->cycle = seq_data.cycle;
+	result->dependencies = dependencies;
 	result->comment = comment;
+	result->tags = tags;
 	return std::move(result);
 }
 

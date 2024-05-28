@@ -84,6 +84,13 @@ class TestDuckDBConnection(object):
         with pytest.raises(duckdb.CatalogException):
             dup_conn.table("tbl").fetchall()
 
+    def test_readonly_properties(self):
+        duckdb.execute("select 42")
+        description = duckdb.description()
+        rowcount = duckdb.rowcount()
+        assert description == [('42', 'NUMBER', None, None, None, None, None)]
+        assert rowcount == -1
+
     def test_execute(self):
         assert [([4, 2],)] == duckdb.execute("select [4,2]").fetchall()
 
@@ -312,6 +319,14 @@ class TestDuckDBConnection(object):
 
     def test_interrupt(self):
         assert None != duckdb.interrupt
+
+    def test_wrap_shadowing(self):
+        pd = NumpyPandas()
+        import duckdb
+
+        df = pd.DataFrame({"a": [1, 2, 3]})
+        res = duckdb.sql("from df").fetchall()
+        assert res == [(1,), (2,), (3,)]
 
     def test_wrap_coverage(self):
         con = duckdb.default_connection

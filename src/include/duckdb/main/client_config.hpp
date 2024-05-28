@@ -12,13 +12,16 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
-#include "duckdb/common/types/value.hpp"
 #include "duckdb/common/progress_bar/progress_bar.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/main/profiling_info.hpp"
 
 namespace duckdb {
+
 class ClientContext;
 class PhysicalResultCollector;
 class PreparedStatementData;
+class HTTPLogger;
 
 typedef std::function<unique_ptr<PhysicalResultCollector>(ClientContext &context, PreparedStatementData &data)>
     get_result_collector_t;
@@ -35,6 +38,9 @@ struct ClientConfig {
 	//! The file to save query profiling information to, instead of printing it to the console
 	//! (empty = print to console)
 	string profiler_save_location;
+	//! The custom settings for the profiler
+	//! (empty = use the default settings)
+	profiler_settings_t profiler_settings = ProfilingInfo::DefaultSettings();
 
 	//! Allows suppressing profiler output, even if enabled. We turn on the profiler on all test runs but don't want
 	//! to output anything
@@ -114,6 +120,12 @@ struct ClientConfig {
 	//! Function that is used to create the result collector for a materialized result
 	//! Defaults to PhysicalMaterializedCollector
 	get_result_collector_t result_collector = nullptr;
+
+	//! If HTTP logging is enabled or not.
+	bool enable_http_logging = false;
+	//! The file to save query HTTP logging information to, instead of printing it to the console
+	//! (empty = print to console)
+	string http_logging_output;
 
 public:
 	static ClientConfig &GetConfig(ClientContext &context);

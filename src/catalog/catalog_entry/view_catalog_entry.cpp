@@ -20,7 +20,9 @@ void ViewCatalogEntry::Initialize(CreateViewInfo &info) {
 	this->temporary = info.temporary;
 	this->sql = info.sql;
 	this->internal = info.internal;
+	this->dependencies = info.dependencies;
 	this->comment = info.comment;
+	this->tags = info.tags;
 	this->column_comments = info.column_comments;
 }
 
@@ -39,7 +41,9 @@ unique_ptr<CreateInfo> ViewCatalogEntry::GetInfo() const {
 	result->names = names;
 	result->types = types;
 	result->temporary = temporary;
+	result->dependencies = dependencies;
 	result->comment = comment;
+	result->tags = tags;
 	result->column_comments = column_comments;
 	return std::move(result);
 }
@@ -93,7 +97,7 @@ string ViewCatalogEntry::ToSQL() const {
 	}
 	auto info = GetInfo();
 	auto result = info->ToString();
-	return result + ";\n";
+	return result;
 }
 
 unique_ptr<CatalogEntry> ViewCatalogEntry::Copy(ClientContext &context) const {

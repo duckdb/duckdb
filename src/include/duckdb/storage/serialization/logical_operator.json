@@ -247,7 +247,7 @@
       {
         "id": 202,
         "name": "collection",
-        "type": "ColumnDataCollection*"
+        "type": "optionally_owned_ptr<ColumnDataCollection>"
       }
     ],
     "constructor": ["table_index", "chunk_types", "collection"]
@@ -329,7 +329,7 @@
     "enum": "LOGICAL_CTE_REF",
     "members": [
       {
-        "id": 200,  
+        "id": 200,
         "name": "table_index",
         "type": "idx_t"
       },
@@ -806,7 +806,7 @@
   {
     "class": "LogicalSimple",
     "base": "LogicalOperator",
-    "enum": ["LOGICAL_ALTER", "LOGICAL_VACUUM", "LOGICAL_LOAD", "LOGICAL_ATTACH", "LOGICAL_TRANSACTION", "LOGICAL_DROP", "LOGICAL_DETACH"],
+    "enum": ["LOGICAL_ALTER", "LOGICAL_LOAD", "LOGICAL_ATTACH", "LOGICAL_TRANSACTION", "LOGICAL_DROP", "LOGICAL_DETACH"],
     "members": [
       {
         "id": 200,
@@ -840,6 +840,20 @@
     "custom_implementation": true
   },
   {
+    "class": "LogicalCopyDatabase",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_COPY_DATABASE",
+    "members": [
+      {
+        "id": 200,
+        "name": "info",
+        "type": "CopyDatabaseInfo*",
+        "base": "ParseInfo"
+      }
+    ],
+    "constructor": ["info"]
+  },
+  {
     "class": "LogicalCopyToFile",
     "base": "LogicalOperator",
     "enum": "LOGICAL_COPY_TO_FILE",
@@ -871,29 +885,29 @@
     "custom_implementation": true
   },
   {
+    "class": "LogicalVacuum",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_VACUUM",
+    "custom_implementation": true
+  },
+  {
     "class": "FilenamePattern",
     "pointer_type": "none",
     "members": [
       {
         "id": 200,
         "name": "base",
-        "type": "string",
-        "serialize_property": "_base",
-        "deserialize_property": "_base"
+        "type": "string"
       },
       {
         "id": 201,
         "name": "pos",
-        "type": "idx_t",
-        "serialize_property": "_pos",
-        "deserialize_property": "_pos"
+        "type": "idx_t"
       },
       {
         "id": 202,
         "name": "uuid",
-        "type": "bool",
-        "serialize_property": "_uuid",
-        "deserialize_property": "_uuid"
+        "type": "bool"
       }
     ]
   }

@@ -31,13 +31,14 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 	idx_t result_size = 0;
 	vector<idx_t> lengths;
 	for (idx_t j = 0; j < count; j++) {
-
 		// Is flag for current row set
 		bool truncate_to_shortest = false;
 		if (truncate_flags_set) {
-			idx_t flag_idx = input_lists.back().sel->get_index(j);
-			auto flag_data = UnifiedVectorFormat::GetData<bool>(input_lists.back());
-			truncate_to_shortest = flag_data[flag_idx];
+			auto &flag_vec = input_lists.back();
+			idx_t flag_idx = flag_vec.sel->get_index(j);
+			if (flag_vec.validity.RowIsValid(flag_idx)) {
+				truncate_to_shortest = UnifiedVectorFormat::GetData<bool>(flag_vec)[flag_idx];
+			}
 		}
 
 		// Calculation of the outgoing list size
@@ -142,8 +143,10 @@ static unique_ptr<FunctionData> ListZipBind(ClientContext &context, ScalarFuncti
 		case LogicalTypeId::SQLNULL:
 			struct_children.push_back(make_pair(string(), LogicalTypeId::SQLNULL));
 			break;
-		default:
+		case LogicalTypeId::UNKNOWN:
 			throw ParameterNotResolvedException();
+		default:
+			throw BinderException("Parameter type needs to be List");
 		}
 	}
 	bound_function.return_type = LogicalType::LIST(LogicalType::STRUCT(struct_children));

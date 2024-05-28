@@ -18,9 +18,9 @@
 
 namespace duckdb {
 
-struct date_t;
-struct dtime_t;
-struct dtime_tz_t;
+struct date_t;     // NOLINT
+struct dtime_t;    // NOLINT
+struct dtime_tz_t; // NOLINT
 
 //! Type used to represent timestamps (seconds,microseconds,milliseconds or nanoseconds since 1970-01-01)
 struct timestamp_t { // NOLINT
@@ -158,6 +158,8 @@ public:
 	DUCKDB_API static int64_t GetEpochMicroSeconds(timestamp_t timestamp);
 	//! Convert a timestamp to epoch (in nanoseconds)
 	DUCKDB_API static int64_t GetEpochNanoSeconds(timestamp_t timestamp);
+	//! Convert a timestamp to a rounded epoch at a given resolution.
+	DUCKDB_API static int64_t GetEpochRounded(timestamp_t timestamp, const int64_t power_of_ten);
 	//! Convert a timestamp to a Julian Day
 	DUCKDB_API static double GetJulianDay(timestamp_t timestamp);
 

@@ -59,16 +59,16 @@
 
 #include "util/util.h"
 #include "util/logging.h"
-#include "util/pod_array.h"
-#include "util/sparse_set.h"
 #include "util/strutil.h"
 #include "util/utf.h"
+#include "re2/pod_array.h"
 #include "re2/prog.h"
+#include "re2/sparse_set.h"
 #include "re2/stringpiece.h"
 
 // Silence "zero-sized array in struct/union" warning for OneState::action.
 #ifdef _MSC_VER
-//#pragma warning(disable: 4200)
+#pragma warning(disable: 4200)
 #endif
 
 namespace duckdb_re2 {
@@ -143,7 +143,7 @@ namespace duckdb_re2 {
 // the memory footprint.)
 struct OneState {
   uint32_t matchcond;   // conditions to match right now.
-  uint32_t action[1];
+  uint32_t action[256];
 };
 
 // The uint32_t conditions in the action are a combination of
@@ -233,22 +233,23 @@ bool Prog::SearchOnePass(const StringPiece& text,
     matchcap[i] = NULL;
 
   StringPiece context = const_context;
-  if (context.begin() == NULL)
+  if (context.data() == NULL)
     context = text;
-  if (anchor_start() && context.begin() != text.begin())
+  if (anchor_start() && BeginPtr(context) != BeginPtr(text))
     return false;
-  if (anchor_end() && context.end() != text.end())
+  if (anchor_end() && EndPtr(context) != EndPtr(text))
     return false;
   if (anchor_end())
     kind = kFullMatch;
 
   uint8_t* nodes = onepass_nodes_.data();
-  int statesize = sizeof(OneState) + bytemap_range()*sizeof(uint32_t);
+  int statesize = sizeof(uint32_t) + bytemap_range()*sizeof(uint32_t);
+
   // start() is always mapped to the zeroth OneState.
   OneState* state = IndexToNode(nodes, statesize, 0);
   uint8_t* bytemap = bytemap_;
-  const char* bp = text.begin();
-  const char* ep = text.end();
+  const char* bp = text.data();
+  const char* ep = text.data() + text.size();
   const char* p;
   bool matched = false;
   matchcap[0] = bp;
@@ -392,7 +393,7 @@ bool Prog::IsOnePass() {
   // Limit max node count to 65000 as a conservative estimate to
   // avoid overflowing 16-bit node index in encoding.
   int maxnodes = 2 + inst_count(kInstByteRange);
-  int statesize = sizeof(OneState) + bytemap_range()*sizeof(uint32_t);
+  int statesize = sizeof(uint32_t) + bytemap_range()*sizeof(uint32_t);
   if (maxnodes >= 65000 || dfa_mem_ / 4 / statesize < maxnodes)
     return false;
 
@@ -563,6 +564,7 @@ bool Prog::IsOnePass() {
       }
     }
   }
+
   dfa_mem_ -= nalloc*statesize;
   onepass_nodes_ = PODArray<uint8_t>(nalloc*statesize);
   memmove(onepass_nodes_.data(), nodes.data(), nalloc*statesize);
@@ -572,4 +574,4 @@ fail:
   return false;
 }
 
-}  // namespace duckdb_re2
+}  // namespace re2

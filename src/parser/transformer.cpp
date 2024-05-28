@@ -134,8 +134,8 @@ unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgque
 		auto &raw_stmt = PGCast<duckdb_libpgquery::PGRawStmt>(stmt);
 		auto result = TransformStatement(*raw_stmt.stmt);
 		if (result) {
-			result->stmt_location = raw_stmt.stmt_location;
-			result->stmt_length = raw_stmt.stmt_len;
+			result->stmt_location = NumericCast<idx_t>(raw_stmt.stmt_location);
+			result->stmt_length = NumericCast<idx_t>(raw_stmt.stmt_len);
 		}
 		return result;
 	}
@@ -163,6 +163,8 @@ unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgque
 		return TransformDelete(PGCast<duckdb_libpgquery::PGDeleteStmt>(stmt));
 	case duckdb_libpgquery::T_PGUpdateStmt:
 		return TransformUpdate(PGCast<duckdb_libpgquery::PGUpdateStmt>(stmt));
+	case duckdb_libpgquery::T_PGUpdateExtensionsStmt:
+		return TransformUpdateExtensions(PGCast<duckdb_libpgquery::PGUpdateExtensionsStmt>(stmt));
 	case duckdb_libpgquery::T_PGIndexStmt:
 		return TransformCreateIndex(PGCast<duckdb_libpgquery::PGIndexStmt>(stmt));
 	case duckdb_libpgquery::T_PGAlterTableStmt:
@@ -225,6 +227,7 @@ unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgque
 unique_ptr<QueryNode> Transformer::TransformMaterializedCTE(unique_ptr<QueryNode> root) {
 	// Extract materialized CTEs from cte_map
 	vector<unique_ptr<CTENode>> materialized_ctes;
+
 	for (auto &cte : root->cte_map.map) {
 		auto &cte_entry = cte.second;
 		if (cte_entry->materialized == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {

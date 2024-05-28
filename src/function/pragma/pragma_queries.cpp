@@ -3,9 +3,10 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/pragma/pragma_functions.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database_manager.hpp"
-#include "duckdb/main/client_data.hpp"
+#include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
@@ -141,9 +142,9 @@ string PragmaImportDatabase(ClientContext &context, const FunctionParameters &pa
 		auto file_path = fs.JoinPath(parameters.values[0].ToString(), file);
 		auto handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_READ);
 		auto fsize = fs.GetFileSize(*handle);
-		auto buffer = make_unsafe_uniq_array<char>(fsize);
+		auto buffer = make_unsafe_uniq_array<char>(UnsafeNumericCast<size_t>(fsize));
 		fs.Read(*handle, buffer.get(), fsize);
-		auto query = string(buffer.get(), fsize);
+		auto query = string(buffer.get(), UnsafeNumericCast<uint32_t>(fsize));
 		// Replace the placeholder with the path provided to IMPORT
 		if (file == "load.sql") {
 			Parser parser;
