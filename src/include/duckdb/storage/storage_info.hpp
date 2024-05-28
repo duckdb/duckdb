@@ -36,7 +36,7 @@ struct Storage {
 	constexpr static idx_t BLOCK_HEADER_SIZE = sizeof(uint64_t);
 	//! Size of a memory slot managed by the StorageManager and the BlockManager.
 	//! Defaults to DEFAULT_BLOCK_ALLOC_SIZE.
-	constexpr static idx_t BLOCK_ALLOC_SIZE = 16384;
+	constexpr static idx_t BLOCK_ALLOC_SIZE = DEFAULT_BLOCK_ALLOC_SIZE;
 	//! The actual memory space that is available within a block.
 	constexpr static idx_t BLOCK_SIZE = BLOCK_ALLOC_SIZE - BLOCK_HEADER_SIZE;
 	//! The size of the headers. This should be small and written more or less atomically by the hard disk. We default
