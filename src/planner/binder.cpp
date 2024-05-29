@@ -1,10 +1,12 @@
 #include "duckdb/planner/binder.hpp"
 
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/query_node/list.hpp"
@@ -232,6 +234,20 @@ static void GetTableRefCountsNode(case_insensitive_map_t<idx_t> &cte_ref_counts,
 	    });
 }
 
+static bool ParsedExpressionIsAggregate(ClientContext &context, const ParsedExpression &expr) {
+	if (expr.type == ExpressionType::FUNCTION) {
+		auto &function = expr.Cast<FunctionExpression>();
+		if (Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, function.catalog, function.schema,
+		                                                     function.function_name, OnEntryNotFound::RETURN_NULL)) {
+			return true;
+		}
+	}
+	bool is_aggregate = false;
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](const ParsedExpression &child) { is_aggregate |= ParsedExpressionIsAggregate(context, child); });
+	return is_aggregate;
+}
+
 bool Binder::OptimizeCTEs(QueryNode &node) {
 	D_ASSERT(context.config.enable_optimizer);
 
@@ -273,10 +289,10 @@ bool Binder::OptimizeCTEs(QueryNode &node) {
 		auto &cte_node = cte.second->query->node->Cast<SelectNode>();
 		bool materialize = !cte_node.groups.group_expressions.empty() || !cte_node.groups.grouping_sets.empty();
 		for (auto &sel : cte_node.select_list) {
-			materialize = materialize || sel->IsAggregate();
 			if (materialize) {
 				break;
 			}
+			materialize |= ParsedExpressionIsAggregate(context, *sel);
 		}
 
 		if (materialize) {
