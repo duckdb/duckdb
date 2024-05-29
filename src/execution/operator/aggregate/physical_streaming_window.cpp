@@ -61,8 +61,10 @@ public:
 			for (auto &child : wexpr.children) {
 				arg_types.push_back(child->return_type);
 			}
-			arg_chunk.Initialize(allocator, arg_types);
-			arg_cursor.Initialize(allocator, arg_types);
+			if (!arg_types.empty()) {
+				arg_chunk.Initialize(allocator, arg_types);
+				arg_cursor.Initialize(allocator, arg_types);
+			}
 			if (wexpr.filter_expr) {
 				filter_sel.Initialize();
 			}
