@@ -14,6 +14,9 @@
 
 namespace duckdb {
 
+MultiFileReaderGlobalState::~MultiFileReaderGlobalState() {
+}
+
 MultiFileReader::~MultiFileReader() {
 }
 
