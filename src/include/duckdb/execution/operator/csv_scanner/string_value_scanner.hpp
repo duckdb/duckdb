@@ -158,7 +158,7 @@ class StringValueResult : public ScannerResult {
 public:
 	StringValueResult(CSVStates &states, CSVStateMachine &state_machine,
 	                  const shared_ptr<CSVBufferHandle> &buffer_handle, Allocator &buffer_allocator,
-	                  bool figure_out_new_line, idx_t buffer_position, CSVErrorHandler &error_handler,
+	                  idx_t result_size_p, idx_t buffer_position, CSVErrorHandler &error_handler,
 	                  CSVIterator &iterator, bool store_line_size, shared_ptr<CSVFileScan> csv_file_scan,
 	                  idx_t &lines_read, bool sniffing);
 
@@ -255,11 +255,11 @@ public:
 	StringValueScanner(idx_t scanner_idx, const shared_ptr<CSVBufferManager> &buffer_manager,
 	                   const shared_ptr<CSVStateMachine> &state_machine,
 	                   const shared_ptr<CSVErrorHandler> &error_handler, const shared_ptr<CSVFileScan> &csv_file_scan,
-	                   bool sniffing = false, CSVIterator boundary = {}, bool figure_out_nl = false);
+	                   bool sniffing = false, CSVIterator boundary = {}, idx_t result_size = STANDARD_VECTOR_SIZE);
 
 	StringValueScanner(const shared_ptr<CSVBufferManager> &buffer_manager,
 	                   const shared_ptr<CSVStateMachine> &state_machine,
-	                   const shared_ptr<CSVErrorHandler> &error_handler);
+	                   const shared_ptr<CSVErrorHandler> &error_handler ,idx_t result_size = STANDARD_VECTOR_SIZE);
 
 	StringValueResult &ParseChunk() override;
 

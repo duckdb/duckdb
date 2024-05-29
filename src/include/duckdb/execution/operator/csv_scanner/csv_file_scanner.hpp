@@ -28,7 +28,7 @@ struct CSVColumnSchema {
 	void Initialize(vector<string> &names, vector<LogicalType> &types, const string &file_path);
 	bool Empty() const;
 	bool SchemasMatch(string &error_message, vector<string> &names, vector<LogicalType> &types, const string &file_path,
-	                  vector<idx_t> &projection_order);
+	                  vector<idx_t> &projection_order) const;
 	vector<CSVColumnInfo> columns;
 	unordered_map<string, idx_t> name_idx_map;
 	string file_path;
@@ -47,9 +47,9 @@ public:
 	CSVFileScan(ClientContext &context, const string &file_path, const CSVReaderOptions &options, const idx_t file_idx,
 	            const ReadCSVData &bind_data, const vector<column_t> &column_ids, CSVColumnSchema &file_schema);
 
-	CSVFileScan(ClientContext &context, const string &file_name, CSVReaderOptions &options);
+	CSVFileScan(ClientContext &context, const string &file_name, const CSVReaderOptions &options);
 
-	const string &GetFileName();
+	const string &GetFileName() const;
 	const vector<string> &GetNames();
 	const vector<LogicalType> &GetTypes();
 	void InitializeProjection();

@@ -27,7 +27,7 @@ struct TypeIdxPair {
 	TypeIdxPair() {
 	}
 	LogicalType type;
-	idx_t idx;
+	idx_t idx{};
 };
 
 // We only really care about types that can be set in the sniffer_auto, or are sniffed by default
@@ -61,7 +61,7 @@ bool CanWeCastIt(LogicalTypeId source, LogicalTypeId destination) {
 }
 
 bool CSVColumnSchema::SchemasMatch(string &error_message, vector<string> &names, vector<LogicalType> &types,
-                                   const string &cur_file_path, vector<idx_t> &projection_order) {
+                                   const string &cur_file_path, vector<idx_t> &projection_order) const {
 	D_ASSERT(names.size() == types.size() && !names.empty());
 	bool match = true;
 	unordered_map<string, TypeIdxPair> current_schema;
@@ -240,7 +240,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 	InitializeFileNamesTypes();
 }
 
-CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, CSVReaderOptions &options_p)
+CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, const CSVReaderOptions &options_p)
     : file_path(file_name), file_idx(0),
       error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())), options(options_p) {
 	buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, file_path, file_idx);
@@ -304,7 +304,7 @@ void CSVFileScan::InitializeFileNamesTypes() {
 	file_types = sorted_types;
 }
 
-const string &CSVFileScan::GetFileName() {
+const string &CSVFileScan::GetFileName() const {
 	return file_path;
 }
 const vector<string> &CSVFileScan::GetNames() {

@@ -50,7 +50,7 @@ struct SetColumns {
 	//! How many columns
 	idx_t Size();
 	//! Helper function that checks if candidate is acceptable based on the number of columns it produces
-	inline bool IsCandidateUnacceptable(idx_t num_cols, bool null_padding, bool ignore_errors,
+	inline bool IsCandidateUnacceptable(const idx_t num_cols, bool null_padding, bool ignore_errors,
 	                                    bool last_value_always_empty) {
 		if (!IsSet() || ignore_errors) {
 			// We can't say its unacceptable if it's not set or if we ignore errors
@@ -78,7 +78,7 @@ struct SetColumns {
 struct HeaderValue {
 	HeaderValue() : is_null(true) {
 	}
-	explicit HeaderValue(string_t value_p) {
+	explicit HeaderValue(const string_t value_p) {
 		value = value_p;
 	}
 	bool IsNull() {
@@ -102,6 +102,9 @@ public:
 	//! 4. Header Detection: Figures out if  the CSV file has a header and produces the names of the columns
 	//! 5. Type Replacement: Replaces the types of the columns if the user specified them
 	SnifferResult SniffCSV(bool force_match = false);
+
+	//! Function that only sniffs the first two rows, to verify if a header exists and what are the data types
+	SnifferResult SniffMinimalCSV();
 
 	static NewLineIdentifier DetectNewLineDelimiter(CSVBufferManager &buffer_manager);
 
@@ -171,6 +174,9 @@ private:
 	//! If a string_t value can be cast to a type
 	bool CanYouCastIt(const string_t value, const LogicalType &type, const DialectOptions &dialect_options,
 	                  const bool is_null, const char decimal_separator);
+	//! Sniffs the types from a data chunk
+	void SniffTypes(DataChunk & data_chunk,CSVStateMachine & state_machine, unordered_map<idx_t, vector<LogicalType>> &info_sql_types_candidates,  idx_t start_idx_detection);
+
 
 	//! Variables for Type Detection
 	//! Format Candidates for Date and Timestamp Types

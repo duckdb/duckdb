@@ -84,6 +84,22 @@ void CSVSniffer::SetResultOptions() {
 	options.dialect_options.num_cols = best_candidate->GetStateMachine().dialect_options.num_cols;
 }
 
+SnifferResult CSVSniffer::SniffMinimalCSV() {
+	buffer_manager->sniffing = true;
+	SnifferResult result({}, {});
+	idx_t result_size = 2;
+	// auto state_machine =
+	// 	make_shared_ptr<CSVStateMachine>(options, options.dialect_options, state_machine_cache, result_size);
+	// ColumnCountScanner count_scanner(buffer_manager,state_machine,error_handler);
+	// auto scanner = count_scanner.UpgradeToStringValueScanner();
+	// // Parse chunk and read csv with info candidate
+	// auto &data_chunk = scanner->ParseChunk().ToChunk();
+
+	return result;
+	// shared_ptr<CSVBufferManager> buffer_manager, const shared_ptr<CSVStateMachine> &state_machine,
+	//                    shared_ptr<CSVErrorHandler> error_handler
+
+}
 SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 	buffer_manager->sniffing = true;
 	// 1. Dialect Detection

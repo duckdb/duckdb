@@ -317,6 +317,59 @@ void CSVSniffer::DetectDateAndTimeStampFormats(CSVStateMachine &candidate, const
 	}
 }
 
+void CSVSniffer::SniffTypes(DataChunk & data_chunk,CSVStateMachine & state_machine, unordered_map<idx_t, vector<LogicalType>> &info_sql_types_candidates,  idx_t start_idx_detection) {
+	const idx_t chunk_size = data_chunk.size();
+	for (idx_t col_idx = 0; col_idx < data_chunk.ColumnCount(); col_idx++) {
+			auto &cur_vector = data_chunk.data[col_idx];
+			D_ASSERT(cur_vector.GetVectorType() == VectorType::FLAT_VECTOR);
+			D_ASSERT(cur_vector.GetType() == LogicalType::VARCHAR);
+			auto vector_data = FlatVector::GetData<string_t>(cur_vector);
+			auto null_mask = FlatVector::Validity(cur_vector);
+			auto &col_type_candidates = info_sql_types_candidates[col_idx];
+			for (idx_t row_idx = start_idx_detection; row_idx < chunk_size; row_idx++) {
+				// col_type_candidates can't be empty since anything in a CSV file should at least be a string
+				// and we validate utf-8 compatibility when creating the type
+				D_ASSERT(!col_type_candidates.empty());
+				auto cur_top_candidate = col_type_candidates.back();
+				// try cast from string to sql_type
+				while (col_type_candidates.size() > 1) {
+					const auto &sql_type = col_type_candidates.back();
+					// try formatting for date types if the user did not specify one and it starts with numeric
+					// values.
+					string separator;
+					// If Value is not Null, Has a numeric date format, and the current investigated candidate is
+					// either a timestamp or a date
+					if (null_mask.RowIsValid(row_idx) && StartsWithNumericDate(separator, vector_data[row_idx]) &&
+					    (col_type_candidates.back().id() == LogicalTypeId::TIMESTAMP ||
+					     col_type_candidates.back().id() == LogicalTypeId::DATE)) {
+						DetectDateAndTimeStampFormats(state_machine, sql_type, separator,
+						                              vector_data[row_idx]);
+					}
+					// try cast from string to sql_type
+					if (sql_type == LogicalType::VARCHAR) {
+						// Nothing to convert it to
+						continue;
+					}
+					if (CanYouCastIt(vector_data[row_idx], sql_type, state_machine.dialect_options,
+					                 !null_mask.RowIsValid(row_idx),
+					                 state_machine.options.decimal_separator[0])) {
+						break;
+					}
+
+					if (row_idx != start_idx_detection && cur_top_candidate == LogicalType::BOOLEAN) {
+						// If we thought this was a boolean value (i.e., T,F, True, False) and it is not, we
+						// immediately pop to varchar.
+						while (col_type_candidates.back() != LogicalType::VARCHAR) {
+							col_type_candidates.pop_back();
+						}
+						break;
+					}
+					col_type_candidates.pop_back();
+				}
+			}
+		}
+}
+
 void CSVSniffer::DetectTypes() {
 	idx_t min_varchar_cols = max_columns_found + 1;
 	idx_t min_errors = NumericLimits<idx_t>::Maximum();
@@ -339,69 +392,19 @@ void CSVSniffer::DetectTypes() {
 
 		// Parse chunk and read csv with info candidate
 		auto &data_chunk = candidate->ParseChunk().ToChunk();
-		idx_t row_idx = 0;
+		idx_t start_idx_detection = 0;
 		idx_t chunk_size = data_chunk.size();
 		if (chunk_size > 1 &&
 		    (!options.dialect_options.header.IsSetByUser() ||
 		     (options.dialect_options.header.IsSetByUser() && options.dialect_options.header.GetValue()))) {
 			// This means we have more than one row, hence we can use the first row to detect if we have a header
-			row_idx = 1;
+			start_idx_detection = 1;
 		}
 		// First line where we start our type detection
-		const idx_t start_idx_detection = row_idx;
+		SniffTypes(data_chunk, sniffing_state_machine, info_sql_types_candidates, start_idx_detection);
 
-		for (idx_t col_idx = 0; col_idx < data_chunk.ColumnCount(); col_idx++) {
-			auto &cur_vector = data_chunk.data[col_idx];
-			D_ASSERT(cur_vector.GetVectorType() == VectorType::FLAT_VECTOR);
-			D_ASSERT(cur_vector.GetType() == LogicalType::VARCHAR);
-			auto vector_data = FlatVector::GetData<string_t>(cur_vector);
-			auto null_mask = FlatVector::Validity(cur_vector);
-			auto &col_type_candidates = info_sql_types_candidates[col_idx];
-			for (row_idx = start_idx_detection; row_idx < chunk_size; row_idx++) {
-				// col_type_candidates can't be empty since anything in a CSV file should at least be a string
-				// and we validate utf-8 compatibility when creating the type
-				D_ASSERT(!col_type_candidates.empty());
-				auto cur_top_candidate = col_type_candidates.back();
-				// try cast from string to sql_type
-				while (col_type_candidates.size() > 1) {
-					const auto &sql_type = col_type_candidates.back();
-					// try formatting for date types if the user did not specify one and it starts with numeric
-					// values.
-					string separator;
-					// If Value is not Null, Has a numeric date format, and the current investigated candidate is
-					// either a timestamp or a date
-					if (null_mask.RowIsValid(row_idx) && StartsWithNumericDate(separator, vector_data[row_idx]) &&
-					    (col_type_candidates.back().id() == LogicalTypeId::TIMESTAMP ||
-					     col_type_candidates.back().id() == LogicalTypeId::DATE)) {
-						DetectDateAndTimeStampFormats(candidate->GetStateMachine(), sql_type, separator,
-						                              vector_data[row_idx]);
-					}
-					// try cast from string to sql_type
-					if (sql_type == LogicalType::VARCHAR) {
-						// Nothing to convert it to
-						continue;
-					}
-					if (CanYouCastIt(vector_data[row_idx], sql_type, sniffing_state_machine.dialect_options,
-					                 !null_mask.RowIsValid(row_idx),
-					                 sniffing_state_machine.options.decimal_separator[0])) {
-						break;
-					} else {
-						if (row_idx != start_idx_detection && cur_top_candidate == LogicalType::BOOLEAN) {
-							// If we thought this was a boolean value (i.e., T,F, True, False) and it is not, we
-							// immediately pop to varchar.
-							while (col_type_candidates.back() != LogicalType::VARCHAR) {
-								col_type_candidates.pop_back();
-							}
-							break;
-						}
-						col_type_candidates.pop_back();
-					}
-				}
-			}
-		}
-
+		// Count the number of varchar columns
 		idx_t varchar_cols = 0;
-
 		for (idx_t col = 0; col < info_sql_types_candidates.size(); col++) {
 			auto &col_type_candidates = info_sql_types_candidates[col];
 			// check number of varchar columns
