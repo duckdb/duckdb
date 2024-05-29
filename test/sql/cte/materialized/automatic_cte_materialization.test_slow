@@ -11,9 +11,7 @@ statement ok
 PRAGMA explain_output='OPTIMIZED_ONLY'
 
 statement ok
-CALL dbgen(sf=0.00); --TODO should be 0.01
-
-mode skip
+CALL dbgen(sf=0.01);
 
 query II
 EXPLAIN WITH revenue AS (
@@ -48,8 +46,6 @@ ORDER BY
 ----
 logical_opt	<REGEX>:.*CTE_SCAN.*
 
-mode unskip
-
 query II
 EXPLAIN WITH revenue AS NOT MATERIALIZED (
     SELECT
@@ -82,8 +78,6 @@ ORDER BY
     s_suppkey;
 ----
 logical_opt	<!REGEX>:.*CTE_SCAN.*
-
-mode skip
 
 # duplicate table name
 statement ok

@@ -288,11 +288,6 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		return true;
 	}
 	default:
-		// non-reorderable operator, just recurse into children
-		for (auto &child : op->children) {
-			auto child_optimizer = optimizer.CreateChildOptimizer();
-			child = child_optimizer.Optimize(std::move(child));
-		}
 		return false;
 	}
 }
