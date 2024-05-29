@@ -95,8 +95,8 @@ void CSVSniffer::SetDateFormat(CSVStateMachine &candidate, const string &format_
 	candidate.dialect_options.date_format[sql_type].Set(strpformat, false);
 }
 
-bool CSVSniffer::CanYouCastIt(const string_t value, const LogicalType &type, const DialectOptions &dialect_options,
-                              const bool is_null, const char decimal_separator) {
+bool CSVSniffer::CanYouCastIt(ClientContext &context, const string_t value, const LogicalType &type,
+                              const DialectOptions &dialect_options, const bool is_null, const char decimal_separator) {
 	if (is_null) {
 		return true;
 	}
@@ -137,11 +137,11 @@ bool CSVSniffer::CanYouCastIt(const string_t value, const LogicalType &type, con
 	}
 	case LogicalTypeId::DOUBLE: {
 		double dummy_value;
-		return TryDoubleCast<double>(value_ptr, value_size, dummy_value, true, options.decimal_separator[0]);
+		return TryDoubleCast<double>(value_ptr, value_size, dummy_value, true, decimal_separator);
 	}
 	case LogicalTypeId::FLOAT: {
 		float dummy_value;
-		return TryDoubleCast<float>(value_ptr, value_size, dummy_value, true, options.decimal_separator[0]);
+		return TryDoubleCast<float>(value_ptr, value_size, dummy_value, true, decimal_separator);
 	}
 	case LogicalTypeId::DATE: {
 		if (!dialect_options.date_format.find(LogicalTypeId::DATE)->second.GetValue().Empty()) {
@@ -150,12 +150,11 @@ bool CSVSniffer::CanYouCastIt(const string_t value, const LogicalType &type, con
 			return dialect_options.date_format.find(LogicalTypeId::DATE)
 			    ->second.GetValue()
 			    .TryParseDate(value, result, error_message);
-		} else {
-			idx_t pos;
-			bool special;
-			date_t dummy_value;
-			return Date::TryConvertDate(value_ptr, value_size, pos, dummy_value, special, true);
 		}
+		idx_t pos;
+		bool special;
+		date_t dummy_value;
+		return Date::TryConvertDate(value_ptr, value_size, pos, dummy_value, special, true);
 	}
 	case LogicalTypeId::TIMESTAMP: {
 		timestamp_t dummy_value;
@@ -164,9 +163,8 @@ bool CSVSniffer::CanYouCastIt(const string_t value, const LogicalType &type, con
 			return dialect_options.date_format.find(LogicalTypeId::TIMESTAMP)
 			    ->second.GetValue()
 			    .TryParseTimestamp(value, dummy_value, error_message);
-		} else {
-			return Timestamp::TryConvertTimestamp(value_ptr, value_size, dummy_value) == TimestampCastResult::SUCCESS;
 		}
+		return Timestamp::TryConvertTimestamp(value_ptr, value_size, dummy_value) == TimestampCastResult::SUCCESS;
 	}
 	case LogicalTypeId::TIME: {
 		idx_t pos;
@@ -229,9 +227,8 @@ bool CSVSniffer::CanYouCastIt(const string_t value, const LogicalType &type, con
 				throw InternalException("Invalid Physical Type for Decimal Value. Physical Type: " +
 				                        TypeIdToString(type.InternalType()));
 			}
-		} else {
-			throw InvalidInputException("Decimals can only have ',' and '.' as decimal separators");
 		}
+		throw InvalidInputException("Decimals can only have ',' and '.' as decimal separators");
 	}
 	case LogicalTypeId::VARCHAR:
 		return true;
@@ -240,7 +237,7 @@ bool CSVSniffer::CanYouCastIt(const string_t value, const LogicalType &type, con
 		Value new_value;
 		string error_message;
 		Value str_value(value);
-		return str_value.TryCastAs(buffer_manager->context, type, new_value, &error_message, true);
+		return str_value.TryCastAs(context, type, new_value, &error_message, true);
 	}
 	}
 }

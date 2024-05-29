@@ -85,6 +85,11 @@ void CSVSniffer::SetResultOptions() {
 }
 
 SnifferResult CSVSniffer::SniffMinimalCSV() {
+	// Return Types detected
+	vector<LogicalType> return_types;
+	// Column Names detected
+	vector<string> names;
+
 	buffer_manager->sniffing = true;
 	SnifferResult result({}, {});
 	const idx_t result_size = 2;
@@ -103,6 +108,23 @@ SnifferResult CSVSniffer::SniffMinimalCSV() {
 	auto scanner = count_scanner.UpgradeToStringValueScanner();
 	// Parse chunk and read csv with info candidate
 	auto &data_chunk = scanner->ParseChunk().ToChunk();
+	idx_t start_row = 0;
+	if (sniffed_column_counts.result_position == 2) {
+		// If equal to two, we will only use the second row for type checking
+		start_row = 1;
+	}
+	// Possibly Gather Header
+	if (start_row == 0) {
+
+	} else {
+	}
+	// Gather Types
+	unordered_map<idx_t, vector<LogicalType>> info_sql_types_candidates;
+	for (idx_t i = 0; i < state_machine->dialect_options.num_cols; i++) {
+		info_sql_types_candidates[i] = state_machine->options.auto_type_candidates;
+	}
+	SniffTypes(data_chunk, *state_machine, info_sql_types_candidates, start_row);
+
 	data_chunk.data;
 
 	return result;

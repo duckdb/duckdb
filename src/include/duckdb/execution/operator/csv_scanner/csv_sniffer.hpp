@@ -172,8 +172,8 @@ private:
 	void DetectDateAndTimeStampFormats(CSVStateMachine &candidate, const LogicalType &sql_type, const string &separator,
 	                                   string_t &dummy_val);
 	//! If a string_t value can be cast to a type
-	bool CanYouCastIt(const string_t value, const LogicalType &type, const DialectOptions &dialect_options,
-	                  const bool is_null, const char decimal_separator);
+	static bool CanYouCastIt(ClientContext &context, const string_t value, const LogicalType &type,
+	                         const DialectOptions &dialect_options, const bool is_null, const char decimal_separator);
 	//! Sniffs the types from a data chunk
 	void SniffTypes(DataChunk &data_chunk, CSVStateMachine &state_machine,
 	                unordered_map<idx_t, vector<LogicalType>> &info_sql_types_candidates, idx_t start_idx_detection);

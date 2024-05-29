@@ -20,7 +20,7 @@ bool ColumnCountResult::AddRow(ColumnCountResult &result, const idx_t buffer_pos
 	if (!result.states.EmptyLastValue()) {
 		result.last_value_always_empty = false;
 	}
-	if (result.result_position >= STANDARD_VECTOR_SIZE) {
+	if (result.result_position >= result.result_size) {
 		// We sniffed enough rows
 		return true;
 	}
@@ -45,7 +45,7 @@ ColumnCountScanner::ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manag
                                        const shared_ptr<CSVStateMachine> &state_machine,
                                        shared_ptr<CSVErrorHandler> error_handler, idx_t result_size_p)
     : BaseScanner(std::move(buffer_manager), state_machine, std::move(error_handler)),
-      result(states, *state_machine, result_size_p), result_size(result_size_p), column_count(1) {
+      result(states, *state_machine, result_size_p), column_count(1), result_size(result_size_p) {
 	sniffing = true;
 }
 
@@ -72,12 +72,12 @@ void ColumnCountScanner::Initialize() {
 }
 
 void ColumnCountScanner::FinalizeChunkProcess() {
-	if (result.result_position == STANDARD_VECTOR_SIZE || result.error) {
+	if (result.result_position == result.result_size || result.error) {
 		// We are done
 		return;
 	}
 	// We run until we have a full chunk, or we are done scanning
-	while (!FinishedFile() && result.result_position < STANDARD_VECTOR_SIZE && !result.error) {
+	while (!FinishedFile() && result.result_position < result.result_size && !result.error) {
 		if (iterator.pos.buffer_pos == cur_buffer_handle->actual_size) {
 			// Move to next buffer
 			cur_buffer_handle = buffer_manager->GetBuffer(++iterator.pos.buffer_idx);
