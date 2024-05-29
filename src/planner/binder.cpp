@@ -234,17 +234,19 @@ static void GetTableRefCountsNode(case_insensitive_map_t<idx_t> &cte_ref_counts,
 	    });
 }
 
-static bool ParsedExpressionIsAggregate(ClientContext &context, const ParsedExpression &expr) {
-	if (expr.type == ExpressionType::FUNCTION) {
+static bool ParsedExpressionIsAggregate(Binder &binder, const ParsedExpression &expr) {
+	if (expr.GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto &function = expr.Cast<FunctionExpression>();
-		if (Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, function.catalog, function.schema,
-		                                                     function.function_name, OnEntryNotFound::RETURN_NULL)) {
+		QueryErrorContext error_context;
+		auto entry = binder.GetCatalogEntry(CatalogType::SCALAR_FUNCTION_ENTRY, function.catalog, function.schema,
+		                                    function.function_name, OnEntryNotFound::RETURN_NULL, error_context);
+		if (entry && entry->type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 			return true;
 		}
 	}
 	bool is_aggregate = false;
 	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](const ParsedExpression &child) { is_aggregate |= ParsedExpressionIsAggregate(context, child); });
+	    expr, [&](const ParsedExpression &child) { is_aggregate |= ParsedExpressionIsAggregate(binder, child); });
 	return is_aggregate;
 }
 
@@ -296,7 +298,7 @@ bool Binder::OptimizeCTEs(QueryNode &node) {
 			if (materialize) {
 				break;
 			}
-			materialize |= ParsedExpressionIsAggregate(context, *sel);
+			materialize |= ParsedExpressionIsAggregate(*this, *sel);
 		}
 
 		if (materialize) {
