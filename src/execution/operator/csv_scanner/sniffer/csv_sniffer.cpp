@@ -87,18 +87,25 @@ void CSVSniffer::SetResultOptions() {
 SnifferResult CSVSniffer::SniffMinimalCSV() {
 	buffer_manager->sniffing = true;
 	SnifferResult result({}, {});
-	idx_t result_size = 2;
-	// auto state_machine =
-	// 	make_shared_ptr<CSVStateMachine>(options, options.dialect_options, state_machine_cache, result_size);
-	// ColumnCountScanner count_scanner(buffer_manager,state_machine,error_handler);
-	// auto scanner = count_scanner.UpgradeToStringValueScanner();
-	// // Parse chunk and read csv with info candidate
-	// auto &data_chunk = scanner->ParseChunk().ToChunk();
+	const idx_t result_size = 2;
+
+	auto state_machine =
+	    make_shared_ptr<CSVStateMachine>(options, options.dialect_options.state_machine_options, state_machine_cache);
+	ColumnCountScanner count_scanner(buffer_manager, state_machine, error_handler, result_size);
+	auto &sniffed_column_counts = count_scanner.ParseChunk();
+	if (sniffed_column_counts.result_position == 0) {
+		return result;
+	}
+
+	state_machine->dialect_options.num_cols = sniffed_column_counts[0];
+
+	// First figure out the number of columns on this configuration
+	auto scanner = count_scanner.UpgradeToStringValueScanner();
+	// Parse chunk and read csv with info candidate
+	auto &data_chunk = scanner->ParseChunk().ToChunk();
+	data_chunk.data;
 
 	return result;
-	// shared_ptr<CSVBufferManager> buffer_manager, const shared_ptr<CSVStateMachine> &state_machine,
-	//                    shared_ptr<CSVErrorHandler> error_handler
-
 }
 SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 	buffer_manager->sniffing = true;

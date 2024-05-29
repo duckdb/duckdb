@@ -2,8 +2,8 @@
 
 namespace duckdb {
 
-ColumnCountResult::ColumnCountResult(CSVStates &states, CSVStateMachine &state_machine)
-    : ScannerResult(states, state_machine) {
+ColumnCountResult::ColumnCountResult(CSVStates &states, CSVStateMachine &state_machine, idx_t result_size)
+    : ScannerResult(states, state_machine, result_size) {
 }
 
 void ColumnCountResult::AddValue(ColumnCountResult &result, const idx_t buffer_pos) {
@@ -43,14 +43,16 @@ void ColumnCountResult::QuotedNewLine(ColumnCountResult &result) {
 
 ColumnCountScanner::ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manager,
                                        const shared_ptr<CSVStateMachine> &state_machine,
-                                       shared_ptr<CSVErrorHandler> error_handler)
-    : BaseScanner(std::move(buffer_manager), state_machine, std::move(error_handler)), result(states, *state_machine),
-      column_count(1) {
+                                       shared_ptr<CSVErrorHandler> error_handler, idx_t result_size_p)
+    : BaseScanner(std::move(buffer_manager), state_machine, std::move(error_handler)),
+      result(states, *state_machine, result_size_p), result_size(result_size_p), column_count(1) {
 	sniffing = true;
 }
 
 unique_ptr<StringValueScanner> ColumnCountScanner::UpgradeToStringValueScanner() {
-	auto scanner = make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, error_handler, nullptr, true);
+	CSVIterator iterator;
+	auto scanner = make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, error_handler, nullptr, true,
+	                                             iterator, result_size);
 	return scanner;
 }
 

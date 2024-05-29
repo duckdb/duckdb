@@ -4,7 +4,7 @@
 namespace duckdb {
 
 SkipResult::SkipResult(CSVStates &states, CSVStateMachine &state_machine, idx_t rows_to_skip_p)
-    : ScannerResult(states, state_machine), rows_to_skip(rows_to_skip_p) {
+    : ScannerResult(states, state_machine, STANDARD_VECTOR_SIZE), rows_to_skip(rows_to_skip_p) {
 }
 
 void SkipResult::AddValue(SkipResult &result, const idx_t buffer_pos) {

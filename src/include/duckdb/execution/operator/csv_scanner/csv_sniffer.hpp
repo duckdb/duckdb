@@ -175,8 +175,8 @@ private:
 	bool CanYouCastIt(const string_t value, const LogicalType &type, const DialectOptions &dialect_options,
 	                  const bool is_null, const char decimal_separator);
 	//! Sniffs the types from a data chunk
-	void SniffTypes(DataChunk & data_chunk,CSVStateMachine & state_machine, unordered_map<idx_t, vector<LogicalType>> &info_sql_types_candidates,  idx_t start_idx_detection);
-
+	void SniffTypes(DataChunk &data_chunk, CSVStateMachine &state_machine,
+	                unordered_map<idx_t, vector<LogicalType>> &info_sql_types_candidates, idx_t start_idx_detection);
 
 	//! Variables for Type Detection
 	//! Format Candidates for Date and Timestamp Types

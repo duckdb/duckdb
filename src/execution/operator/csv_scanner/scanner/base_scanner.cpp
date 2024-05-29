@@ -5,8 +5,8 @@
 
 namespace duckdb {
 
-ScannerResult::ScannerResult(CSVStates &states_p, CSVStateMachine &state_machine_p)
-    : state_machine(state_machine_p), states(states_p) {
+ScannerResult::ScannerResult(CSVStates &states_p, CSVStateMachine &state_machine_p, idx_t result_size_p)
+    : result_size(result_size_p), state_machine(state_machine_p), states(states_p) {
 }
 
 BaseScanner::BaseScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p,

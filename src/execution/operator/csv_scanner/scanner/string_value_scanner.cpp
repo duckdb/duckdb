@@ -20,11 +20,11 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
                                      idx_t result_size_p, idx_t buffer_position, CSVErrorHandler &error_hander_p,
                                      CSVIterator &iterator_p, bool store_line_size_p,
                                      shared_ptr<CSVFileScan> csv_file_scan_p, idx_t &lines_read_p, bool sniffing_p)
-    : ScannerResult(states, state_machine),
+    : ScannerResult(states, state_machine, result_size_p),
       number_of_columns(NumericCast<uint32_t>(state_machine.dialect_options.num_cols)),
       null_padding(state_machine.options.null_padding), ignore_errors(state_machine.options.ignore_errors.GetValue()),
-      result_size(result_size_p), error_handler(error_hander_p), iterator(iterator_p),
-      store_line_size(store_line_size_p), csv_file_scan(std::move(csv_file_scan_p)), lines_read(lines_read_p),
+      error_handler(error_hander_p), iterator(iterator_p), store_line_size(store_line_size_p),
+      csv_file_scan(std::move(csv_file_scan_p)), lines_read(lines_read_p),
       current_errors(state_machine.options.IgnoreErrors()), sniffing(sniffing_p) {
 	// Vector information
 	D_ASSERT(number_of_columns > 0);
@@ -781,11 +781,11 @@ StringValueScanner::StringValueScanner(idx_t scanner_idx_p, const shared_ptr<CSV
 
 StringValueScanner::StringValueScanner(const shared_ptr<CSVBufferManager> &buffer_manager,
                                        const shared_ptr<CSVStateMachine> &state_machine,
-                                       const shared_ptr<CSVErrorHandler> &error_handler ,idx_t result_size)
+                                       const shared_ptr<CSVErrorHandler> &error_handler, idx_t result_size)
     : BaseScanner(buffer_manager, state_machine, error_handler, false, nullptr, {}), scanner_idx(0),
-      result(states, *state_machine, cur_buffer_handle, Allocator::DefaultAllocator(), result_size, iterator.pos.buffer_pos,
-             *error_handler, iterator, buffer_manager->context.client_data->debug_set_max_line_length, csv_file_scan,
-             lines_read, sniffing) {
+      result(states, *state_machine, cur_buffer_handle, Allocator::DefaultAllocator(), result_size,
+             iterator.pos.buffer_pos, *error_handler, iterator,
+             buffer_manager->context.client_data->debug_set_max_line_length, csv_file_scan, lines_read, sniffing) {
 }
 
 unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options) {

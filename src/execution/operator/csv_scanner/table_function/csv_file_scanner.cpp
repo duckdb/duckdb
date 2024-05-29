@@ -27,7 +27,7 @@ struct TypeIdxPair {
 	TypeIdxPair() {
 	}
 	LogicalType type;
-	idx_t idx{};
+	idx_t idx {};
 };
 
 // We only really care about types that can be set in the sniffer_auto, or are sniffed by default
@@ -208,7 +208,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 			file_schema.Initialize(result.names, result.return_types, options.file_path);
 		} else if (file_idx > 0 && buffer_manager->file_handle->FileSize() > 0) {
 			CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
-			auto result = sniffer.SniffCSV();
+			auto result = sniffer.SniffMinimalCSV();
 			if (!options.file_options.AnySet()) {
 				// Union By name has its own mystical rules
 				string error;
