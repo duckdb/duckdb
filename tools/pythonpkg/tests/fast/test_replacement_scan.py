@@ -125,6 +125,38 @@ class TestReplacementScan(object):
         ):
             con.execute("select count(*) from random_object").fetchone()
 
+    def test_replacement_disabled(self):
+        df = pd.DataFrame({'a': [1, 2, 3]})
+        # Create regular connection, not disabled
+        con = duckdb.connect()
+        res = con.sql("select * from df").fetchall()
+        assert res == [(1,), (2,), (3,)]
+
+        ## disable external access
+        con.execute("set enable_external_access=false")
+        with pytest.raises(duckdb.CatalogException, match='Table with name df does not exist!'):
+            res = con.sql("select * from df").fetchall()
+        with pytest.raises(
+            duckdb.InvalidInputException, match='Cannot change enable_external_access setting while database is running'
+        ):
+            con.execute("set enable_external_access=true")
+
+        # Create connection with external access disabled
+        con = duckdb.connect(config={'enable_external_access': False})
+        with pytest.raises(duckdb.CatalogException, match='Table with name df does not exist!'):
+            res = con.sql("select * from df").fetchall()
+
+        # Create regular connection, disable inbetween creation and execution
+        con = duckdb.connect()
+        rel = con.sql("select * from df")
+
+        con.execute("set enable_external_access=false")
+
+        with pytest.raises(
+            duckdb.InvalidInputException, match='Attempting to execute an unsuccessful or closed pending query result'
+        ):
+            res = rel.fetchall()
+
     def test_replacement_of_cross_connection_relation(self):
         con1 = duckdb.connect(':memory:')
         con2 = duckdb.connect(':memory:')

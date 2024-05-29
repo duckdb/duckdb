@@ -182,6 +182,11 @@ unique_ptr<TableRef> PythonReplacementScan::Replace(ClientContext &context, Repl
                                                     optional_ptr<ReplacementScanData> data) {
 	auto &table_name = input.table_name;
 
+	auto &config = DBConfig::GetConfig(context);
+	if (!config.options.enable_external_access) {
+		return nullptr;
+	}
+
 	auto &table_ref = input.ref;
 	if (table_ref.external_dependency) {
 		auto dependency_item = table_ref.external_dependency->GetDependency("replacement_cache");
