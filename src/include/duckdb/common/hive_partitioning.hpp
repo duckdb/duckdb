@@ -20,7 +20,7 @@
 
 namespace duckdb_re2 {
 class RE2;
-};
+} // namespace duckdb_re2
 
 namespace duckdb {
 
