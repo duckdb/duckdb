@@ -44,8 +44,8 @@ class TestReturnFiles(object):
 
         res = con.execute(f"COPY integers TO '{filedir}' (RETURN_FILES TRUE, PARTITION_BY j);").fetchall()[0]
         assert sorted(res[1]) == [
-            os.path.join(filedir, 'j=0/data_0.csv'),
-            os.path.join(filedir, 'j=1/data_0.csv'),
-            os.path.join(filedir, 'j=2/data_0.csv'),
-            os.path.join(filedir, 'j=3/data_0.csv'),
+            os.path.join(filedir, 'j=0', 'data_0.csv'),
+            os.path.join(filedir, 'j=1', 'data_0.csv'),
+            os.path.join(filedir, 'j=2', 'data_0.csv'),
+            os.path.join(filedir, 'j=3', 'data_0.csv'),
         ]
