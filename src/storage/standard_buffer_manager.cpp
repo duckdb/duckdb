@@ -107,6 +107,20 @@ TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(MemoryTag ta
 	return std::move(r.reservation);
 }
 
+shared_ptr<BlockHandle> StandardBufferManager::RegisterTransientMemory(idx_t size) {
+
+	const idx_t block_size = temp_block_manager->GetBlockSize();
+	D_ASSERT(size <= block_size);
+
+	if (size < block_size) {
+		return RegisterSmallMemory(size);
+	}
+
+	shared_ptr<BlockHandle> block;
+	Allocate(MemoryTag::IN_MEMORY_TABLE, size, false, &block);
+	return block;
+}
+
 shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(idx_t block_size) {
 	D_ASSERT(block_size < Storage::BLOCK_SIZE);
 	auto reservation =

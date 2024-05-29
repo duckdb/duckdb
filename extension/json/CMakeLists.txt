@@ -1,10 +1,8 @@
-cmake_minimum_required(VERSION 2.8.12)
+cmake_minimum_required(VERSION 2.8.12...3.29)
 
 project(JSONExtension)
 
-include_directories(yyjson/include)
 include_directories(include)
-add_subdirectory(yyjson)
 add_subdirectory(json_functions)
 
 set(JSON_EXTENSION_FILES
@@ -31,8 +29,7 @@ set(JSON_EXTENSION_FILES
     json_functions/json_serialize_sql.cpp
     json_functions/json_serialize_plan.cpp
     json_functions/read_json.cpp
-    json_functions/read_json_objects.cpp
-    ${YYJSON_OBJECT_FILES})
+    json_functions/read_json_objects.cpp)
 
 build_static_extension(json ${JSON_EXTENSION_FILES})
 set(PARAMETERS "-warnings")
