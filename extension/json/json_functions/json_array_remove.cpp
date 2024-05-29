@@ -84,8 +84,8 @@ static void GetArrayRemoveElementFunctionInternal(ScalarFunctionSet &set, const 
 
 static void GetArrayRemoveRangeFunctionInternal(ScalarFunctionSet &set, const LogicalType &fst, const LogicalType &snd,
                                                 const LogicalType &thrd) {
-	set.AddFunction(ScalarFunction("json_array_remove", {fst, snd, thrd}, LogicalType::JSON(),
-	                               ArrayRemoveRangeFunction, nullptr, nullptr, nullptr, JSONFunctionLocalState::Init));
+	set.AddFunction(ScalarFunction("json_array_remove", {fst, snd, thrd}, LogicalType::JSON(), ArrayRemoveRangeFunction,
+	                               nullptr, nullptr, nullptr, JSONFunctionLocalState::Init));
 }
 
 ScalarFunctionSet JSONFunctions::GetArrayRemoveFunction() {

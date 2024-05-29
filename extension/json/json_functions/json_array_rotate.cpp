@@ -49,8 +49,8 @@ static void ArrayRotateFunction(DataChunk &args, ExpressionState &state, Vector 
 }
 
 static void GetArrayRotateFunctionInternal(ScalarFunctionSet &set, const LogicalType &fst, const LogicalType &snd) {
-	set.AddFunction(ScalarFunction("json_array_rotate", {fst, snd}, LogicalType::JSON(), ArrayRotateFunction,
-	                               nullptr, nullptr, nullptr, JSONFunctionLocalState::Init));
+	set.AddFunction(ScalarFunction("json_array_rotate", {fst, snd}, LogicalType::JSON(), ArrayRotateFunction, nullptr,
+	                               nullptr, nullptr, JSONFunctionLocalState::Init));
 }
 
 ScalarFunctionSet JSONFunctions::GetArrayRotateFunction() {
