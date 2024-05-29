@@ -1,6 +1,7 @@
 #include "capi_tester.hpp"
 #include "duckdb/common/arrow/arrow_appender.hpp"
 #include "duckdb/common/arrow/arrow_converter.hpp"
+#include "duckdb/main/capi/capi_internal.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -160,8 +161,12 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 	}
 
 	SECTION("test unsupported type") {
-		auto state = duckdb_query_arrow(tester.connection, "SELECT 0::UHUGEINT", &arrow_result);
+		auto state = duckdb_query_arrow(tester.connection, "SELECT 1", &arrow_result);
 		REQUIRE(state == DuckDBSuccess);
+
+		// artificially inject an invalid type into the result
+		auto wrapper = reinterpret_cast<ArrowResultWrapper *>(arrow_result);
+		wrapper->result->types[0] = LogicalType(LogicalTypeId::INVALID);
 
 		ArrowSchema arrow_schema;
 		arrow_schema.Init();
