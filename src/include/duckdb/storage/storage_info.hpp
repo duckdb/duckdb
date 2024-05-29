@@ -125,8 +125,17 @@ struct DatabaseHeader {
 #if (DEFAULT_BLOCK_ALLOC_SIZE & (DEFAULT_BLOCK_ALLOC_SIZE - 1) != 0)
 #error The default block allocation size must be a power of two
 #endif
+#if (DUCKDB_BLOCK_ALLOC_SIZE & (DUCKDB_BLOCK_ALLOC_SIZE - 1) != 0)
+#error The duckdb block allocation size must be a power of two
+#endif
 #if (MIN_BLOCK_ALLOC_SIZE & (MIN_BLOCK_ALLOC_SIZE - 1) != 0)
 #error The minimum block allocation size must be a power of two
+#endif
+#if (DUCKDB_BLOCK_ALLOC_SIZE > 2147483647)
+#error The duckdb block allocation size must not exceed the maximum value of a 32-bit signed integer
+#endif
+#if (DUCKDB_BLOCK_ALLOC_SIZE < MIN_BLOCK_ALLOC_SIZE)
+#error The duckdb block allocation size must be greater or equal than the minimum block allocation size
 #endif
 
 static_assert(Storage::BLOCK_ALLOC_SIZE % Storage::SECTOR_SIZE == 0,
