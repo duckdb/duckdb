@@ -235,7 +235,8 @@ static void SetArgumentType(ScalarFunction &bound_function, LogicalType type, bo
 }
 
 static void HandleArrayBinding(ClientContext &context, vector<unique_ptr<Expression>> &arguments) {
-	if (arguments[1]->return_type.id() != LogicalTypeId::ARRAY) {
+	if (arguments[1]->return_type.id() != LogicalTypeId::ARRAY &&
+	    arguments[1]->return_type.id() != LogicalTypeId::SQLNULL) {
 		throw BinderException("Cannot concatenate types %s and %s", arguments[0]->return_type.ToString(),
 		                      arguments[1]->return_type.ToString());
 	}
@@ -280,7 +281,8 @@ static unique_ptr<FunctionData> HandleListBinding(ClientContext &context, Scalar
 	return make_uniq<ConcatBindData>(bound_function.return_type, is_operator);
 }
 
-static void FindFirstTwoArguments(vector<unique_ptr<Expression>> &arguments, LogicalTypeId &first_arg, LogicalTypeId &second_arg) {
+static void FindFirstTwoArguments(vector<unique_ptr<Expression>> &arguments, LogicalTypeId &first_arg,
+                                  LogicalTypeId &second_arg) {
 	first_arg = arguments[0]->return_type.id();
 	second_arg = first_arg;
 	if (arguments.size() > 1) {
@@ -338,8 +340,8 @@ static unique_ptr<BaseStatistics> ConcatStats(ClientContext &context, FunctionSt
 	auto &child_stats = input.child_stats;
 	for (auto &child : child_stats) {
 		if (child.GetType().id() == LogicalTypeId::VARCHAR) {
-            return nullptr;
-        }
+			return nullptr;
+		}
 	}
 	D_ASSERT(child_stats.size() == 2);
 
@@ -352,9 +354,11 @@ static unique_ptr<BaseStatistics> ConcatStats(ClientContext &context, FunctionSt
 	return stats;
 }
 
+// This is now a special list_concat function only called from AddFun::RegisterFunction in arithmetic.cpp
 ScalarFunction ConcatFun::GetFunction() {
 	ScalarFunction concat =
-	    ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::LIST(LogicalType::ANY)}, LogicalType::LIST(LogicalType::ANY), ConcatFunction, BindConcatFunction, nullptr, ConcatStats);
+	    ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::LIST(LogicalType::ANY)},
+	                   LogicalType::LIST(LogicalType::ANY), ConcatFunction, BindConcatFunction, nullptr, ConcatStats);
 	concat.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return concat;
 }
