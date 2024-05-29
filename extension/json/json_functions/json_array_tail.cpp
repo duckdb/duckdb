@@ -20,14 +20,14 @@ static void ArrayTailFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 static void GetArrayTailFunctionInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
-	set.AddFunction(ScalarFunction("json_array_tail", {input_type}, JSONCommon::JSONType(), ArrayTailFunction, nullptr,
+	set.AddFunction(ScalarFunction("json_array_tail", {input_type}, LogicalType::JSON(), ArrayTailFunction, nullptr,
 	                               nullptr, nullptr, JSONFunctionLocalState::Init));
 }
 
 ScalarFunctionSet JSONFunctions::GetArrayTailFunction() {
 	ScalarFunctionSet set("json_array_tail");
 	GetArrayTailFunctionInternal(set, LogicalType::VARCHAR);
-	GetArrayTailFunctionInternal(set, JSONCommon::JSONType());
+	GetArrayTailFunctionInternal(set, LogicalType::JSON());
 	return set;
 }
 

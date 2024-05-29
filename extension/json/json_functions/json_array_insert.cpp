@@ -47,7 +47,7 @@ ArrayInsert(std::function<yyjson_mut_val *(yyjson_mut_doc *, ELEMENT_TYPE)> fcon
 //! Insert function wrapper
 static void ArrayInsertFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto json_type = args.data[0].GetType();
-	D_ASSERT(json_type == LogicalType::VARCHAR || json_type == JSONCommon::JSONType());
+	D_ASSERT(json_type == LogicalType::VARCHAR || json_type == LogicalType::JSON());
 	auto idx_type = args.data[2].GetType();
 	D_ASSERT(idx_type == LogicalType::BIGINT);
 
@@ -78,7 +78,7 @@ static void ArrayInsertFunction(DataChunk &args, ExpressionState &state, Vector 
 
 static void GetArrayInsertFunctionInternal(ScalarFunctionSet &set, const LogicalType &fst, const LogicalType &snd,
                                            const LogicalType &thrd) {
-	set.AddFunction(ScalarFunction("json_array_insert", {fst, snd, thrd}, JSONCommon::JSONType(), ArrayInsertFunction,
+	set.AddFunction(ScalarFunction("json_array_insert", {fst, snd, thrd}, LogicalType::JSON(), ArrayInsertFunction,
 	                               nullptr, nullptr, nullptr, JSONFunctionLocalState::Init));
 }
 
@@ -87,25 +87,25 @@ ScalarFunctionSet JSONFunctions::GetArrayInsertFunction() {
 
 	// Use different executor for these
 	// Allows booleans directly
-	GetArrayInsertFunctionInternal(set, JSONCommon::JSONType(), LogicalType::BOOLEAN, LogicalType::BIGINT);
+	// GetArrayInsertFunctionInternal(set, LogicalType::JSON(), LogicalType::BOOLEAN, LogicalType::BIGINT);
 
 	// Allows for Integer types
 	// TINYINT, SMALLINT, INTEGER, UTINYINT, USMALLINT, UINTEGER are captured by UBIGINT and BIGINT	respecively
 	// relies on consistant casting strategy upfront
 
 	// unsigned
-	GetArrayInsertFunctionInternal(set, JSONCommon::JSONType(), LogicalType::UBIGINT, LogicalType::BIGINT);
+	// GetArrayInsertFunctionInternal(set, LogicalType::JSON(), LogicalType::UBIGINT, LogicalType::BIGINT);
 
 	// signed
-	GetArrayInsertFunctionInternal(set, JSONCommon::JSONType(), LogicalType::BIGINT, LogicalType::BIGINT);
+	// GetArrayInsertFunctionInternal(set, LogicalType::JSON(), LogicalType::BIGINT, LogicalType::BIGINT);
 
 	// Allows for floating types
 	// FLOAT is covered by automatic upfront casting to double
-	GetArrayInsertFunctionInternal(set, JSONCommon::JSONType(), LogicalType::DOUBLE, LogicalType::BIGINT);
+	// GetArrayInsertFunctionInternal(set, LogicalType::JSON(), LogicalType::DOUBLE, LogicalType::BIGINT);
 
 	// Allows for json and string values
-	GetArrayInsertFunctionInternal(set, JSONCommon::JSONType(), JSONCommon::JSONType(), LogicalType::BIGINT);
-	GetArrayInsertFunctionInternal(set, JSONCommon::JSONType(), LogicalType::VARCHAR, LogicalType::BIGINT);
+	GetArrayInsertFunctionInternal(set, LogicalType::JSON(), LogicalType::JSON(), LogicalType::BIGINT);
+	GetArrayInsertFunctionInternal(set, LogicalType::JSON(), LogicalType::VARCHAR, LogicalType::BIGINT);
 
 	return set;
 }

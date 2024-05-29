@@ -59,7 +59,7 @@ yyjson_mut_val *ArrayTakeRange(yyjson_mut_val *arr, yyjson_mut_doc *doc, int64_t
 
 static void ArrayTakeElementFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto json_type = args.data[0].GetType();
-	D_ASSERT(json_type == LogicalType::VARCHAR || json_type == JSONCommon::JSONType());
+	D_ASSERT(json_type == LogicalType::VARCHAR || json_type == LogicalType::JSON());
 	auto idx_type = args.data[1].GetType();
 	D_ASSERT(idx_type == LogicalType::BIGINT);
 
@@ -68,7 +68,7 @@ static void ArrayTakeElementFunction(DataChunk &args, ExpressionState &state, Ve
 
 static void ArrayTakeRangeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto json_type = args.data[0].GetType();
-	D_ASSERT(json_type == LogicalType::VARCHAR || json_type == JSONCommon::JSONType());
+	D_ASSERT(json_type == LogicalType::VARCHAR || json_type == LogicalType::JSON());
 	auto idx_type = args.data[1].GetType();
 	D_ASSERT(idx_type == LogicalType::BIGINT);
 	auto length_type = args.data[2].GetType();
@@ -79,22 +79,22 @@ static void ArrayTakeRangeFunction(DataChunk &args, ExpressionState &state, Vect
 
 static void GetArrayTakeElementFunctionInternal(ScalarFunctionSet &set, const LogicalType &fst,
                                                 const LogicalType &snd) {
-	set.AddFunction(ScalarFunction("json_array_take", {fst, snd}, JSONCommon::JSONType(), ArrayTakeElementFunction,
+	set.AddFunction(ScalarFunction("json_array_take", {fst, snd}, LogicalType::JSON(), ArrayTakeElementFunction,
 	                               nullptr, nullptr, nullptr, JSONFunctionLocalState::Init));
 }
 
 static void GetArrayTakeRangeFunctionInternal(ScalarFunctionSet &set, const LogicalType &fst, const LogicalType &snd,
                                               const LogicalType &thrd) {
-	set.AddFunction(ScalarFunction("json_array_take", {fst, snd, thrd}, JSONCommon::JSONType(), ArrayTakeRangeFunction,
+	set.AddFunction(ScalarFunction("json_array_take", {fst, snd, thrd}, LogicalType::JSON(), ArrayTakeRangeFunction,
 	                               nullptr, nullptr, nullptr, JSONFunctionLocalState::Init));
 }
 
 ScalarFunctionSet JSONFunctions::GetArrayTakeFunction() {
 	ScalarFunctionSet set("json_array_take");
 
-	GetArrayTakeElementFunctionInternal(set, JSONCommon::JSONType(), LogicalType::BIGINT);
-	// GetArrayTakeRangeFunctionInternal(set, JSONCommon::JSONType(), LogicalType::RANGE); // TODO: Check Range option
-	GetArrayTakeRangeFunctionInternal(set, JSONCommon::JSONType(), LogicalType::BIGINT, LogicalType::BIGINT);
+	GetArrayTakeElementFunctionInternal(set, LogicalType::JSON(), LogicalType::BIGINT);
+	// GetArrayTakeRangeFunctionInternal(set, LogicalType::JSON(), LogicalType::RANGE); // TODO: Check Range option
+	GetArrayTakeRangeFunctionInternal(set, LogicalType::JSON(), LogicalType::BIGINT, LogicalType::BIGINT);
 
 	return set;
 }

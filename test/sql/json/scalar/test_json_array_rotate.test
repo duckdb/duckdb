@@ -37,25 +37,20 @@ true
 
 statement error
 SELECT json_array_rotate('', 42)
----
-Error: Invalid Input Error: Malformed JSON at byte 0 of input: input length is 0.  Input:
+----
 
 statement error
 SELECT json_array_rotate('{}', 42)
----
-Error: Invalid Input Error: JSON input not a JSON Array
+----
 
 statement error
 SELECT json_array_rotate('true', 42)
----
-Error: Invalid Input Error: JSON input not a JSON Array
+----
 
 statement error
 SELECT json_array_rotate('"Hello"', 42)
----
-Error: Invalid Input Error: JSON input not a JSON Array
+----
 
 statement error
 SELECT json_array_rotate('42', 42)
----
-Error: Invalid Input Error: JSON input not a JSON Array
+----

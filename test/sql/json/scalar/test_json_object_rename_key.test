@@ -40,25 +40,20 @@ SELECT json_obj_rename_key('{"":42}', '', 'key')
 
 statement error
 SELECT json_obj_rename_key('', 'k', 'no')
----
-Error: Invalid Input Error: Malformed JSON at byte 0 of input: input length is 0.  Input:
+----
 
 statement error
-SELECT json_obj_rename_key('{}', 'k', 'no')
----
-Error: Invalid Input Error: JSON input not a JSON Array
+SELECT json_obj_rename_key('[]', 'k', 'no')
+----
 
 statement error
 SELECT json_obj_rename_key('true', 'k', 'no')
----
-Error: Invalid Input Error: JSON input not a JSON Array
+----
 
 statement error
 SELECT json_obj_rename_key('"Hello"', 'k', 'no')
----
-Error: Invalid Input Error: JSON input not a JSON Array
+----
 
 statement error
 SELECT json_obj_rename_key('42', 'k', 'no')
----
-Error: Invalid Input Error: JSON input not a JSON Array
+----

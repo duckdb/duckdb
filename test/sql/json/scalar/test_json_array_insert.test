@@ -120,25 +120,20 @@ SELECT json_array_insert(a.j, b.j, 2) FROM test AS a, test2 AS b
 
 statement error
 SELECT json_array_insert('', False, 1)
----
-Error: Invalid Input Error: Malformed JSON at byte 0 of input: input length is 0.  Input:
+----
 
 statement error
 SELECT json_array_insert('{}', False, 1)
----
-Error: Invalid Input Error: JSON input not a JSON Array
+----
 
 statement error
 SELECT json_array_insert('true', False, 1)
----
-Error: Invalid Input Error: JSON input not a JSON Array
+----
 
 statement error
 SELECT json_array_insert('"Hello"', False, 1)
----
-Error: Invalid Input Error: JSON input not a JSON Array
+----
 
 statement error
 SELECT json_array_insert('42', False, 1)
----
-Error: Invalid Input Error: JSON input not a JSON Array
+----

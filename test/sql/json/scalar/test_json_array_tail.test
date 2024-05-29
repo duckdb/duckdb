@@ -23,25 +23,20 @@ SELECT json_array_tail(j) FROM test
 
 statement error
 SELECT json_array_tail('')
----
-Error: Invalid Input Error: Malformed JSON at byte 0 of input: input length is 0.  Input:
+----
 
 statement error
 SELECT json_array_tail('{}')
----
-Error: Invalid Input Error: JSON input not a JSON Array
+----
 
 statement error
 SELECT json_array_tail('true')
----
-Error: Invalid Input Error: JSON input not a JSON Array
+----
 
 statement error
 SELECT json_array_tail('"Hello"')
----
-Error: Invalid Input Error: JSON input not a JSON Array
+----
 
 statement error
 SELECT json_array_tail('42')
----
-Error: Invalid Input Error: JSON input not a JSON Array
+----

@@ -24,7 +24,7 @@ yyjson_mut_val *ObjectRenameKey(yyjson_mut_val *obj, yyjson_mut_doc *doc, string
 //! Rename keys in object
 static void ObjectRenameKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto obj_type = args.data[0].GetType();
-	D_ASSERT(obj_type == LogicalType::VARCHAR || obj_type == JSONCommon::JSONType());
+	D_ASSERT(obj_type == LogicalType::VARCHAR || obj_type == LogicalType::JSON());
 	auto first_type = args.data[1].GetType();
 	D_ASSERT(first_type == LogicalType::VARCHAR);
 	auto second_type = args.data[2].GetType();
@@ -35,14 +35,14 @@ static void ObjectRenameKeyFunction(DataChunk &args, ExpressionState &state, Vec
 
 static void GetObjectRenameKeyFunctionInternal(ScalarFunctionSet &set, const LogicalType &obj, const LogicalType &first,
                                                const LogicalType &second) {
-	set.AddFunction(ScalarFunction("json_obj_rename_key", {obj, first, second}, JSONCommon::JSONType(),
+	set.AddFunction(ScalarFunction("json_obj_rename_key", {obj, first, second}, LogicalType::JSON(),
 	                               ObjectRenameKeyFunction, nullptr, nullptr, nullptr, JSONFunctionLocalState::Init));
 }
 
 ScalarFunctionSet JSONFunctions::GetObjectRenameKeyFunction() {
 	ScalarFunctionSet set("json_obj_rename_key");
 
-	GetObjectRenameKeyFunctionInternal(set, JSONCommon::JSONType(), LogicalType::VARCHAR, LogicalType::VARCHAR);
+	GetObjectRenameKeyFunctionInternal(set, LogicalType::JSON(), LogicalType::VARCHAR, LogicalType::VARCHAR);
 
 	return set;
 }

@@ -43,7 +43,7 @@ ObjectReplace(std::function<yyjson_mut_val *(yyjson_mut_doc *, ELEMENT_TYPE)> fc
 //! Replace key-value pairs to a json object
 static void ObjectReplaceFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto obj_type = args.data[0].GetType();
-	D_ASSERT(obj_type == LogicalType::VARCHAR || obj_type == JSONCommon::JSONType());
+	D_ASSERT(obj_type == LogicalType::VARCHAR || obj_type == LogicalType::JSON());
 	auto first_type = args.data[1].GetType();
 	D_ASSERT(first_type == LogicalType::VARCHAR);
 
@@ -75,7 +75,7 @@ static void ObjectReplaceFunction(DataChunk &args, ExpressionState &state, Vecto
 
 static void GetObjectReplaceFunctionInternal(ScalarFunctionSet &set, const LogicalType &obj, const LogicalType &first,
                                              const LogicalType &second) {
-	set.AddFunction(ScalarFunction("json_obj_replace", {obj, first, second}, JSONCommon::JSONType(),
+	set.AddFunction(ScalarFunction("json_obj_replace", {obj, first, second}, LogicalType::JSON(),
 	                               ObjectReplaceFunction, nullptr, nullptr, nullptr, JSONFunctionLocalState::Init));
 }
 
@@ -85,22 +85,22 @@ ScalarFunctionSet JSONFunctions::GetObjectReplaceFunction() {
 	// Use different executor for these
 
 	// Boolean
-	GetObjectReplaceFunctionInternal(set, JSONCommon::JSONType(), LogicalType::VARCHAR, LogicalType::BOOLEAN);
+	// GetObjectReplaceFunctionInternal(set, LogicalType::JSON(), LogicalType::VARCHAR, LogicalType::BOOLEAN);
 
 	// Integer Types
 
 	// unsigned
-	GetObjectReplaceFunctionInternal(set, JSONCommon::JSONType(), LogicalType::VARCHAR, LogicalType::UBIGINT);
+	// GetObjectReplaceFunctionInternal(set, LogicalType::JSON(), LogicalType::VARCHAR, LogicalType::UBIGINT);
 
 	// signed
-	GetObjectReplaceFunctionInternal(set, JSONCommon::JSONType(), LogicalType::VARCHAR, LogicalType::BIGINT);
+	// GetObjectReplaceFunctionInternal(set, LogicalType::JSON(), LogicalType::VARCHAR, LogicalType::BIGINT);
 
 	// Floating Types
-	GetObjectReplaceFunctionInternal(set, JSONCommon::JSONType(), LogicalType::VARCHAR, LogicalType::DOUBLE);
+	// GetObjectReplaceFunctionInternal(set, LogicalType::JSON(), LogicalType::VARCHAR, LogicalType::DOUBLE);
 
 	// JSON values
-	GetObjectReplaceFunctionInternal(set, JSONCommon::JSONType(), LogicalType::VARCHAR, JSONCommon::JSONType());
-	GetObjectReplaceFunctionInternal(set, JSONCommon::JSONType(), LogicalType::VARCHAR, LogicalType::VARCHAR);
+	GetObjectReplaceFunctionInternal(set, LogicalType::JSON(), LogicalType::VARCHAR, LogicalType::JSON());
+	// GetObjectReplaceFunctionInternal(set, LogicalType::JSON(), LogicalType::VARCHAR, LogicalType::VARCHAR);
 
 	return set;
 }

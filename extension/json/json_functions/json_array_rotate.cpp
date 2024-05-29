@@ -31,7 +31,7 @@ yyjson_mut_val *ArrayRotate(yyjson_mut_val *arr, yyjson_mut_doc *doc, AMOUNT_TYP
 //! Rotate function wrapper
 static void ArrayRotateFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto json_type = args.data[0].GetType();
-	D_ASSERT(json_type == LogicalType::VARCHAR || json_type == JSONCommon::JSONType());
+	D_ASSERT(json_type == LogicalType::VARCHAR || json_type == LogicalType::JSON());
 	auto argument_type = args.data[1].GetType();
 	D_ASSERT(argument_type == LogicalType::BIGINT || argument_type == LogicalType::UBIGINT);
 
@@ -49,15 +49,15 @@ static void ArrayRotateFunction(DataChunk &args, ExpressionState &state, Vector 
 }
 
 static void GetArrayRotateFunctionInternal(ScalarFunctionSet &set, const LogicalType &fst, const LogicalType &snd) {
-	set.AddFunction(ScalarFunction("json_array_rotate", {fst, snd}, JSONCommon::JSONType(), ArrayRotateFunction,
+	set.AddFunction(ScalarFunction("json_array_rotate", {fst, snd}, LogicalType::JSON(), ArrayRotateFunction,
 	                               nullptr, nullptr, nullptr, JSONFunctionLocalState::Init));
 }
 
 ScalarFunctionSet JSONFunctions::GetArrayRotateFunction() {
 	ScalarFunctionSet set("json_array_rotate");
 
-	GetArrayRotateFunctionInternal(set, JSONCommon::JSONType(), LogicalType::BIGINT);
-	GetArrayRotateFunctionInternal(set, JSONCommon::JSONType(), LogicalType::UBIGINT);
+	GetArrayRotateFunctionInternal(set, LogicalType::JSON(), LogicalType::BIGINT);
+	GetArrayRotateFunctionInternal(set, LogicalType::JSON(), LogicalType::UBIGINT);
 
 	return set;
 }

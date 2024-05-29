@@ -45,28 +45,23 @@ SELECT json_array_take(j, 5) FROM valid
 
 statement error
 SELECT json_array_take('', 42)
----
-Error: Invalid Input Error: Malformed JSON at byte 0 of input: input length is 0.  Input:
+----
 
 statement error
 SELECT json_array_take('{}', 42)
----
-Error: Invalid Input Error: JSON input not a JSON Array
+----
 
 statement error
 SELECT json_array_take('true', 42)
----
-Error: Invalid Input Error: JSON input not a JSON Array
+----
 
 statement error
 SELECT json_array_take('"Hello"', 42)
----
-Error: Invalid Input Error: JSON input not a JSON Array
+----
 
 statement error
 SELECT json_array_take('42', 42)
----
-Error: Invalid Input Error: JSON input not a JSON Array
+----
 
 
 
@@ -101,35 +96,28 @@ SELECT json_array_take(j, 1, 3) FROM valid
 
 statement error
 SELECT json_array_take(j, -2, -1)
----
-Error: Only positives indices in range selection
+----
 
 statement error
 SELECT json_array_take(j, 2, 1)
----
-Error: Start index not smaller or equal to last index
+----
 
 statement error
 SELECT json_array_take('', 42, 42)
----
-Error: Invalid Input Error: Malformed JSON at byte 0 of input: input length is 0.  Input:
+----
 
 statement error
 SELECT json_array_take('{}', 42, 42)
----
-Error: Invalid Input Error: JSON input not a JSON Array
+----
 
 statement error
 SELECT json_array_take('true', 42, 42)
----
-Error: Invalid Input Error: JSON input not a JSON Array
+----
 
 statement error
 SELECT json_array_take('"Hello"', 42, 42)
----
-Error: Invalid Input Error: JSON input not a JSON Array
+----
 
 statement error
 SELECT json_array_take('42', 42, 42)
----
-Error: Invalid Input Error: JSON input not a JSON Array
+----

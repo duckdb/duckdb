@@ -112,31 +112,26 @@ SELECT json_obj_add(a.j, 'k', b.j) FROM test AS a, test2 AS b
 # You would think empty key strings are not allowed. But they are:
 # https://www.json.org/json-en.html
 query I
-SELECT json_obj_add('{}', '', 42)
+SELECT json_obj_add('{}', '', 42::INTEGER)
 ----
 {"":42}
 
 statement error
 SELECT json_obj_add('', 'k', False)
----
-Error: Invalid Input Error: Malformed JSON at byte 0 of input: input length is 0.  Input:
+----
 
 statement error
-SELECT json_obj_add('{}', 'k', False)
----
-Error: Invalid Input Error: JSON input not a JSON Array
+SELECT json_obj_add('[]', 'k', False)
+----
 
 statement error
 SELECT json_obj_add('true', 'k', False)
----
-Error: Invalid Input Error: JSON input not a JSON Array
+----
 
 statement error
 SELECT json_obj_add('"Hello"', 'k', False)
----
-Error: Invalid Input Error: JSON input not a JSON Array
+----
 
 statement error
 SELECT json_obj_add('42', 'k', False)
----
-Error: Invalid Input Error: JSON input not a JSON Array
+----

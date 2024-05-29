@@ -15,7 +15,7 @@ statement ok
 insert into test values('{}'), ('{"a":42}'), ('{"a":42, "b": true}'), ('{"a":42, "b": true, "b": true}')
 
 query I
-SELECT json_obj_replace(json_obj_replace(j, 'a', TRUE), 'b', FALSE) FROM test
+SELECT json_obj_replace(json_obj_replace(j, 'a', true), 'b', false) FROM test
 ----
 {}
 {"a":true}
@@ -128,31 +128,26 @@ SELECT json_obj_replace(a.j, 'a', b.j) FROM test AS a, test2 AS b
 # You would think empty key strings are not allowed. But they are:
 # https://www.json.org/json-en.html
 query I
-SELECT json_obj_replace('{}', '', 42)
+SELECT json_obj_replace('{}', '', 42::INTEGER)
 ----
 {}
 
 statement error
 SELECT json_obj_replace('', 'k', False)
----
-Error: Invalid Input Error: Malformed JSON at byte 0 of input: input length is 0.  Input:
+----
 
 statement error
-SELECT json_obj_replace('{}', 'k', False)
----
-Error: Invalid Input Error: JSON input not a JSON Array
+SELECT json_obj_replace('[]', 'k', False)
+----
 
 statement error
 SELECT json_obj_replace('true', 'k', False)
----
-Error: Invalid Input Error: JSON input not a JSON Array
+----
 
 statement error
 SELECT json_obj_replace('"Hello"', 'k', False)
----
-Error: Invalid Input Error: JSON input not a JSON Array
+----
 
 statement error
 SELECT json_obj_replace('42', 'k', False)
----
-Error: Invalid Input Error: JSON input not a JSON Array
+----

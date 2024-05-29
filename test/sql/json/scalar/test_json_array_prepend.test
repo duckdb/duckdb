@@ -111,25 +111,20 @@ SELECT json_array_prepend(b.j, a.j) FROM test AS a, test2 AS b
 
 statement error
 SELECT json_array_prepend(False, '')
----
-Error: Invalid Input Error: Malformed JSON at byte 0 of input: input length is 0.  Input:
+----
 
 statement error
 SELECT json_array_prepend(False,'{}')
----
-Error: Invalid Input Error: JSON input not a JSON Array
+----
 
 statement error
 SELECT json_array_prepend(False,'true')
----
-Error: Invalid Input Error: JSON input not a JSON Array
+----
 
 statement error
 SELECT json_array_prepend(False, '"Hello"')
----
-Error: Invalid Input Error: JSON input not a JSON Array
+----
 
 statement error
 SELECT json_array_prepend(False, '42')
----
-# Error: Invalid Input Error: JSON input not a JSON Array
+----

@@ -58,7 +58,7 @@ yyjson_mut_val *ArrayRemoveRange(yyjson_mut_val *arr, yyjson_mut_doc *doc, int64
 
 static void ArrayRemoveElementFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto json_type = args.data[0].GetType();
-	D_ASSERT(json_type == LogicalType::VARCHAR || json_type == JSONCommon::JSONType());
+	D_ASSERT(json_type == LogicalType::VARCHAR || json_type == LogicalType::JSON());
 	auto idx_type = args.data[1].GetType();
 	D_ASSERT(idx_type == LogicalType::BIGINT);
 
@@ -67,7 +67,7 @@ static void ArrayRemoveElementFunction(DataChunk &args, ExpressionState &state, 
 
 static void ArrayRemoveRangeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto json_type = args.data[0].GetType();
-	D_ASSERT(json_type == LogicalType::VARCHAR || json_type == JSONCommon::JSONType());
+	D_ASSERT(json_type == LogicalType::VARCHAR || json_type == LogicalType::JSON());
 	auto idx_type = args.data[1].GetType();
 	D_ASSERT(idx_type == LogicalType::BIGINT);
 	auto length_type = args.data[2].GetType();
@@ -78,22 +78,22 @@ static void ArrayRemoveRangeFunction(DataChunk &args, ExpressionState &state, Ve
 
 static void GetArrayRemoveElementFunctionInternal(ScalarFunctionSet &set, const LogicalType &fst,
                                                   const LogicalType &snd) {
-	set.AddFunction(ScalarFunction("json_array_remove", {fst, snd}, JSONCommon::JSONType(), ArrayRemoveElementFunction,
+	set.AddFunction(ScalarFunction("json_array_remove", {fst, snd}, LogicalType::JSON(), ArrayRemoveElementFunction,
 	                               nullptr, nullptr, nullptr, JSONFunctionLocalState::Init));
 }
 
 static void GetArrayRemoveRangeFunctionInternal(ScalarFunctionSet &set, const LogicalType &fst, const LogicalType &snd,
                                                 const LogicalType &thrd) {
-	set.AddFunction(ScalarFunction("json_array_remove", {fst, snd, thrd}, JSONCommon::JSONType(),
+	set.AddFunction(ScalarFunction("json_array_remove", {fst, snd, thrd}, LogicalType::JSON(),
 	                               ArrayRemoveRangeFunction, nullptr, nullptr, nullptr, JSONFunctionLocalState::Init));
 }
 
 ScalarFunctionSet JSONFunctions::GetArrayRemoveFunction() {
 	ScalarFunctionSet set("json_array_remove");
 
-	GetArrayRemoveElementFunctionInternal(set, JSONCommon::JSONType(), LogicalType::BIGINT);
-	// GetArrayRemoveRangeFunctionInternal(set, JSONCommon::JSONType(), LogicalType::RANGE); // TODO: Check Range option
-	GetArrayRemoveRangeFunctionInternal(set, JSONCommon::JSONType(), LogicalType::BIGINT, LogicalType::BIGINT);
+	GetArrayRemoveElementFunctionInternal(set, LogicalType::JSON(), LogicalType::BIGINT);
+	// GetArrayRemoveRangeFunctionInternal(set, LogicalType::JSON(), LogicalType::RANGE); // TODO: Check Range option
+	GetArrayRemoveRangeFunctionInternal(set, LogicalType::JSON(), LogicalType::BIGINT, LogicalType::BIGINT);
 
 	return set;
 }

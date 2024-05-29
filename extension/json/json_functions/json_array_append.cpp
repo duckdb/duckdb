@@ -63,7 +63,7 @@ yyjson_mut_val *ArrayAppendFloating(yyjson_mut_val *arr, yyjson_mut_doc *doc, do
 //! Append function wrapper
 static void ArrayAppendFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto left_type = args.data[0].GetType();
-	D_ASSERT(left_type == LogicalType::VARCHAR || left_type == JSONCommon::JSONType());
+	D_ASSERT(left_type == LogicalType::VARCHAR || left_type == LogicalType::JSON());
 
 	auto right_type = args.data[1].GetType();
 
@@ -90,7 +90,7 @@ static void ArrayAppendFunction(DataChunk &args, ExpressionState &state, Vector 
 }
 
 static void GetArrayAppendFunctionInternal(ScalarFunctionSet &set, const LogicalType &lhs, const LogicalType &rhs) {
-	set.AddFunction(ScalarFunction("json_array_append", {lhs, rhs}, JSONCommon::JSONType(), ArrayAppendFunction,
+	set.AddFunction(ScalarFunction("json_array_append", {lhs, rhs}, LogicalType::JSON(), ArrayAppendFunction,
 	                               nullptr, nullptr, nullptr, JSONFunctionLocalState::Init));
 }
 
@@ -99,25 +99,25 @@ ScalarFunctionSet JSONFunctions::GetArrayAppendFunction() {
 
 	// Use different executor for these
 	// Allows booleans directly
-	GetArrayAppendFunctionInternal(set, JSONCommon::JSONType(), LogicalType::BOOLEAN);
+	// GetArrayAppendFunctionInternal(set, LogicalType::JSON(), LogicalType::BOOLEAN);
 
 	// Allows for Integer types
 	// TINYINT, SMALLINT, INTEGER, UTINYINT, USMALLINT, UINTEGER are captured by UBIGINT and BIGINT	respecively
 	// relies on consistant casting strategy upfront
 
 	// unsigned
-	GetArrayAppendFunctionInternal(set, JSONCommon::JSONType(), LogicalType::UBIGINT);
+	// GetArrayAppendFunctionInternal(set, LogicalType::JSON(), LogicalType::UBIGINT);
 
 	// signed
-	GetArrayAppendFunctionInternal(set, JSONCommon::JSONType(), LogicalType::BIGINT);
+	// GetArrayAppendFunctionInternal(set, LogicalType::JSON(), LogicalType::BIGINT);
 
 	// Allows for floating types
 	// FLOAT is covered by automatic upfront casting to double
-	GetArrayAppendFunctionInternal(set, JSONCommon::JSONType(), LogicalType::DOUBLE);
+	// GetArrayAppendFunctionInternal(set, LogicalType::JSON(), LogicalType::DOUBLE);
 
 	// Allows for json and string values
-	GetArrayAppendFunctionInternal(set, JSONCommon::JSONType(), JSONCommon::JSONType());
-	GetArrayAppendFunctionInternal(set, JSONCommon::JSONType(), LogicalType::VARCHAR);
+	GetArrayAppendFunctionInternal(set, LogicalType::JSON(), LogicalType::JSON());
+	GetArrayAppendFunctionInternal(set, LogicalType::JSON(), LogicalType::VARCHAR);
 
 	return set;
 }

@@ -67,7 +67,7 @@ yyjson_mut_val *ArrayPrependFloating(yyjson_mut_val *arr, yyjson_mut_doc *doc, d
 //! Prepend function wrapper
 static void ArrayPrependFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto right_type = args.data[1].GetType();
-	D_ASSERT(right_type == LogicalType::VARCHAR || right_type == JSONCommon::JSONType());
+	D_ASSERT(right_type == LogicalType::VARCHAR || right_type == LogicalType::JSON());
 
 	auto left_type = args.data[0].GetType();
 
@@ -94,7 +94,7 @@ static void ArrayPrependFunction(DataChunk &args, ExpressionState &state, Vector
 }
 
 static void GetArrayPrependFunctionInternal(ScalarFunctionSet &set, const LogicalType &lhs, const LogicalType &rhs) {
-	set.AddFunction(ScalarFunction("json_array_prepend", {lhs, rhs}, JSONCommon::JSONType(), ArrayPrependFunction,
+	set.AddFunction(ScalarFunction("json_array_prepend", {lhs, rhs}, LogicalType::JSON(), ArrayPrependFunction,
 	                               nullptr, nullptr, nullptr, JSONFunctionLocalState::Init));
 }
 
@@ -103,25 +103,25 @@ ScalarFunctionSet JSONFunctions::GetArrayPrependFunction() {
 
 	// Use different executor for these
 	// Allows booleans directly
-	GetArrayPrependFunctionInternal(set, LogicalType::BOOLEAN, JSONCommon::JSONType());
+	// GetArrayPrependFunctionInternal(set, LogicalType::BOOLEAN, LogicalType::JSON());
 
 	// Allows for Integer types
 	// TINYINT, SMALLINT, INTEGER, UTINYINT, USMALLINT, UINTEGER are captured by UBIGINT and BIGINT	respecively
 	// relies on consistant casting strategy upfront
 
 	// unsigned
-	GetArrayPrependFunctionInternal(set, LogicalType::UBIGINT, JSONCommon::JSONType());
+	// GetArrayPrependFunctionInternal(set, LogicalType::UBIGINT, LogicalType::JSON());
 
 	// signed
-	GetArrayPrependFunctionInternal(set, LogicalType::BIGINT, JSONCommon::JSONType());
+	// GetArrayPrependFunctionInternal(set, LogicalType::BIGINT, LogicalType::JSON());
 
 	// Allows for floating types
 	// FLOAT is covered by automatic upfront casting to double
-	GetArrayPrependFunctionInternal(set, LogicalType::DOUBLE, JSONCommon::JSONType());
+	// GetArrayPrependFunctionInternal(set, LogicalType::DOUBLE, LogicalType::JSON());
 
 	// Allows for json and string values
-	GetArrayPrependFunctionInternal(set, JSONCommon::JSONType(), JSONCommon::JSONType());
-	GetArrayPrependFunctionInternal(set, LogicalType::VARCHAR, JSONCommon::JSONType());
+	GetArrayPrependFunctionInternal(set, LogicalType::JSON(), LogicalType::JSON());
+	GetArrayPrependFunctionInternal(set, LogicalType::VARCHAR, LogicalType::JSON());
 
 	return set;
 }

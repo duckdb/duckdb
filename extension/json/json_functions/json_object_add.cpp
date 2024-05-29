@@ -42,7 +42,7 @@ ObjectAdd(std::function<yyjson_mut_val *(yyjson_mut_doc *, ELEMENT_TYPE)> fconve
 //! Add key-value pairs to a json object
 static void ObjectAddFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto obj_type = args.data[0].GetType();
-	D_ASSERT(obj_type == LogicalType::VARCHAR || obj_type == JSONCommon::JSONType());
+	D_ASSERT(obj_type == LogicalType::VARCHAR || obj_type == LogicalType::JSON());
 	auto first_type = args.data[1].GetType();
 	D_ASSERT(first_type == LogicalType::VARCHAR);
 
@@ -73,7 +73,7 @@ static void ObjectAddFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 static void GetObjectAddFunctionInternal(ScalarFunctionSet &set, const LogicalType &obj, const LogicalType &first,
                                          const LogicalType &second) {
-	set.AddFunction(ScalarFunction("json_obj_add", {obj, first, second}, JSONCommon::JSONType(), ObjectAddFunction,
+	set.AddFunction(ScalarFunction("json_obj_add", {obj, first, second}, LogicalType::JSON(), ObjectAddFunction,
 	                               nullptr, nullptr, nullptr, JSONFunctionLocalState::Init));
 }
 
@@ -83,22 +83,22 @@ ScalarFunctionSet JSONFunctions::GetObjectAddFunction() {
 	// Use different executor for these
 
 	// Boolean
-	GetObjectAddFunctionInternal(set, JSONCommon::JSONType(), LogicalType::VARCHAR, LogicalType::BOOLEAN);
+	// GetObjectAddFunctionInternal(set, LogicalType::JSON(), LogicalType::VARCHAR, LogicalType::BOOLEAN);
 
 	// Integer Types
 
 	// unsigned
-	GetObjectAddFunctionInternal(set, JSONCommon::JSONType(), LogicalType::VARCHAR, LogicalType::UBIGINT);
+	// GetObjectAddFunctionInternal(set, LogicalType::JSON(), LogicalType::VARCHAR, LogicalType::UBIGINT);
 
 	// signed
-	GetObjectAddFunctionInternal(set, JSONCommon::JSONType(), LogicalType::VARCHAR, LogicalType::BIGINT);
+	// GetObjectAddFunctionInternal(set, LogicalType::JSON(), LogicalType::VARCHAR, LogicalType::BIGINT);
 
 	// Floating Types
-	GetObjectAddFunctionInternal(set, JSONCommon::JSONType(), LogicalType::VARCHAR, LogicalType::DOUBLE);
+	// GetObjectAddFunctionInternal(set, LogicalType::JSON(), LogicalType::VARCHAR, LogicalType::DOUBLE);
 
 	// JSON values
-	GetObjectAddFunctionInternal(set, JSONCommon::JSONType(), LogicalType::VARCHAR, JSONCommon::JSONType());
-	GetObjectAddFunctionInternal(set, JSONCommon::JSONType(), LogicalType::VARCHAR, LogicalType::VARCHAR);
+	GetObjectAddFunctionInternal(set, LogicalType::JSON(), LogicalType::VARCHAR, LogicalType::JSON());
+	// GetObjectAddFunctionInternal(set, LogicalType::JSON(), LogicalType::VARCHAR, LogicalType::VARCHAR);
 
 	return set;
 }
