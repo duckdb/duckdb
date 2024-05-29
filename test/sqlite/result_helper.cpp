@@ -280,29 +280,15 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 		}
 		if (result.HasError() && !statement.expected_error.empty()) {
 			if (!StringUtil::Contains(result.GetError(), statement.expected_error)) {
-				bool want_match = StringUtil::StartsWith(statement.expected_error, "<REGEX>:");
-				string regex_str = StringUtil::Replace(StringUtil::Replace(statement.expected_error, "<REGEX>:", ""), "!<REGEX>:", "");
-				RE2::Options options;
-				options.set_dot_nl(true);
-				RE2 re(regex_str, options);
-				if (!re.ok()) {
-					logger.PrintErrorHeader("Test error!");
-					logger.PrintLineSep();
-					std::cerr << termcolor::red << termcolor::bold << "Failed to parse regex: " << re.error()
-					          << termcolor::reset << std::endl;
-					logger.PrintLineSep();
+				bool success = CompareValues(logger, result, statement.expected_error);
+				if (!success) {
+					logger.ExpectedErrorMismatch(statement.expected_error, result);
 					return false;
 				}
-				auto resString = result.ToString();
-				bool regex_matches = RE2::FullMatch(result.ToString(), re);
-				if (regex_matches == want_match) {
-					string success_log = StringUtil::Format("CheckStatementResult: %s:%d", statement.file_name, statement.query_line);
-					REQUIRE(success_log.c_str());
-					return true;
-				}
-
-				logger.ExpectedErrorMismatch(statement.expected_error, result);
-				return false;
+				string success_log =
+				    StringUtil::Format("CheckStatementResult: %s:%d", statement.file_name, statement.query_line);
+				REQUIRE(success_log.c_str());
+				return true;
 			}
 		}
 	}
@@ -543,6 +529,28 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 		return false;
 	}
 	return true;
+}
+
+bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQueryResult &result, string rvalue_str) {
+	bool want_match = StringUtil::StartsWith(rvalue_str, "<REGEX>:");
+	string regex_str = StringUtil::Replace(StringUtil::Replace(rvalue_str, "<REGEX>:", ""), "!<REGEX>:", "");
+	RE2::Options options;
+	options.set_dot_nl(true);
+	RE2 re(regex_str, options);
+	if (!re.ok()) {
+		logger.PrintErrorHeader("Test error!");
+		logger.PrintLineSep();
+		std::cerr << termcolor::red << termcolor::bold << "Failed to parse regex: " << re.error() << termcolor::reset
+		          << std::endl;
+		logger.PrintLineSep();
+		return false;
+	}
+	auto resString = result.ToString();
+	bool regex_matches = RE2::FullMatch(result.ToString(), re);
+	if (regex_matches == want_match) {
+		return true;
+	}
+	return false;
 }
 
 } // namespace duckdb
