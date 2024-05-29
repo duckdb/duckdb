@@ -312,6 +312,9 @@ py::object TransformFilterRecursive(TableFilter *filter, vector<string> &column_
 		case ExpressionType::COMPARE_EQUAL: {
 			return constant_field.attr("__eq__")(constant_value);
 		}
+		case ExpressionType::COMPARE_NOTEQUAL: {
+			return constant_field.attr("__ne__")(constant_value);
+		}
 		case ExpressionType::COMPARE_LESSTHAN: {
 			return constant_field.attr("__lt__")(constant_value);
 		}

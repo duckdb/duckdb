@@ -105,6 +105,11 @@ EXPLAIN SELECT i FROM tablinho where i <= 'bla'
 ----
 logical_opt	<!REGEX>:.*FILTER.*
 
+query II
+EXPLAIN SELECT i FROM tablinho where i != 'bla'
+----
+logical_opt	<!REGEX>:.*FILTER.*
+
 # more complex filters cannot be pushed down
 query II
 EXPLAIN SELECT i FROM tablinho where i like 'bla%'

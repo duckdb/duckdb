@@ -855,6 +855,9 @@ static void ApplyFilter(Vector &v, TableFilter &filter, parquet_filter_t &filter
 		case ExpressionType::COMPARE_EQUAL:
 			FilterOperationSwitch<Equals>(v, constant_filter.constant, filter_mask, count);
 			break;
+		case ExpressionType::COMPARE_NOTEQUAL:
+			FilterOperationSwitch<NotEquals>(v, constant_filter.constant, filter_mask, count);
+			break;
 		case ExpressionType::COMPARE_LESSTHAN:
 			FilterOperationSwitch<LessThan>(v, constant_filter.constant, filter_mask, count);
 			break;
