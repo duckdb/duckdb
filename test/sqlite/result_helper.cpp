@@ -296,6 +296,8 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 				auto resString = result.ToString();
 				bool regex_matches = RE2::FullMatch(result.ToString(), re);
 				if (regex_matches == want_match) {
+					string success_log = StringUtil::Format("CheckStatementResult: %s:%d", statement.file_name, statement.query_line);
+					REQUIRE(success_log.c_str());
 					return true;
 				}
 
