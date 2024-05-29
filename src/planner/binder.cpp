@@ -272,6 +272,10 @@ bool Binder::OptimizeCTEs(QueryNode &node) {
 		if (cte.second->materialized != CTEMaterialize::CTE_MATERIALIZE_DEFAULT) {
 			continue; // only triggers when nothing is specified
 		}
+		if (bind_context.GetCTEBinding(cte.first)) {
+			continue; // there's a CTE in the bind context with an overlapping name, we can't also materialize this
+		}
+
 		auto cte_ref_counts_it = cte_ref_counts.find(cte.first);
 		D_ASSERT(cte_ref_counts_it != cte_ref_counts.end());
 
