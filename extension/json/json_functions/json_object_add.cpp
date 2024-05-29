@@ -19,64 +19,24 @@ yyjson_mut_val *ObjectAddStringOrJSON(yyjson_mut_val *obj, yyjson_mut_doc *doc, 
 	return obj;
 }
 
-//! Add a boolean to an object
-yyjson_mut_val *ObjectAddBoolean(yyjson_mut_val *obj, yyjson_mut_doc *doc, string_t key, bool value, yyjson_alc *alc,
-                                 Vector &result) {
-	if (!yyjson_mut_is_obj(obj)) {
-		throw InvalidInputException("JSON input not an JSON Object");
-	}
+//! Add any yyjson_mut_ELEMENT_TYPE type and function
+template <class ELEMENT_TYPE>
+std::function<yyjson_mut_val *(yyjson_mut_val *, yyjson_mut_doc *, string_t, ELEMENT_TYPE, yyjson_alc *, Vector &)>
+ObjectAdd(std::function<yyjson_mut_val *(yyjson_mut_doc *, ELEMENT_TYPE)> fconvert) {
+	return [&](yyjson_mut_val *obj, yyjson_mut_doc *doc, string_t key, ELEMENT_TYPE element, yyjson_alc *alc,
+	           Vector &result) {
+		if (!yyjson_mut_is_obj(obj)) {
+			throw InvalidInputException("JSON input not an JSON Object");
+		}
 
-	const char *_key = key.GetDataWriteable();
-	auto mut_key = yyjson_mut_strcpy(doc, _key);
-	auto k = yyjson_mut_get_str(mut_key);
+		const char *_key = key.GetDataWriteable();
+		auto mut_key = yyjson_mut_strcpy(doc, _key);
+		auto k = yyjson_mut_get_str(mut_key);
 
-	yyjson_mut_obj_add_bool(doc, obj, k, value);
-	return obj;
-}
-
-//! Add an unsigned integer to an object
-yyjson_mut_val *ObjectAddUnsignedInteger(yyjson_mut_val *obj, yyjson_mut_doc *doc, string_t key, uint64_t value,
-                                         yyjson_alc *alc, Vector &result) {
-	if (!yyjson_mut_is_obj(obj)) {
-		throw InvalidInputException("JSON input not an JSON Object");
-	}
-
-	const char *_key = key.GetDataWriteable();
-	auto mut_key = yyjson_mut_strcpy(doc, _key);
-	auto k = yyjson_mut_get_str(mut_key);
-
-	yyjson_mut_obj_add_uint(doc, obj, k, value);
-	return obj;
-}
-
-//! Add an signed integer to an object
-yyjson_mut_val *ObjectAddSignedInteger(yyjson_mut_val *obj, yyjson_mut_doc *doc, string_t key, int64_t value,
-                                       yyjson_alc *alc, Vector &result) {
-	if (!yyjson_mut_is_obj(obj)) {
-		throw InvalidInputException("JSON input not an JSON Object");
-	}
-
-	const char *_key = key.GetDataWriteable();
-	auto mut_key = yyjson_mut_strcpy(doc, _key);
-	auto k = yyjson_mut_get_str(mut_key);
-
-	yyjson_mut_obj_add_int(doc, obj, k, value);
-	return obj;
-}
-
-//! Add a real value to an object
-yyjson_mut_val *ObjectAddFloating(yyjson_mut_val *obj, yyjson_mut_doc *doc, string_t key, double value, yyjson_alc *alc,
-                                  Vector &result) {
-	if (!yyjson_mut_is_obj(obj)) {
-		throw InvalidInputException("JSON input not an JSON Object");
-	}
-
-	const char *_key = key.GetDataWriteable();
-	auto mut_key = yyjson_mut_strcpy(doc, _key);
-	auto k = yyjson_mut_get_str(mut_key);
-
-	yyjson_mut_obj_add_real(doc, obj, k, value);
-	return obj;
+		auto mut_value = fconvert(doc, element);
+		yyjson_mut_obj_add_val(doc, obj, k, mut_value);
+		return obj;
+	};
 }
 
 //! Add key-value pairs to a json object
@@ -93,16 +53,17 @@ static void ObjectAddFunction(DataChunk &args, ExpressionState &state, Vector &r
 		JSONExecutors::TernaryMutExecute<string_t, string_t>(args, state, result, ObjectAddStringOrJSON);
 		break;
 	case LogicalType::BOOLEAN:
-		JSONExecutors::TernaryMutExecute<string_t, bool>(args, state, result, ObjectAddBoolean);
+		JSONExecutors::TernaryMutExecute<string_t, bool>(args, state, result, ObjectAdd<bool>(yyjson_mut_bool));
 		break;
 	case LogicalType::UBIGINT:
-		JSONExecutors::TernaryMutExecute<string_t, uint64_t>(args, state, result, ObjectAddUnsignedInteger);
+		JSONExecutors::TernaryMutExecute<string_t, uint64_t>(args, state, result,
+															ObjectAdd<uint64_t>(yyjson_mut_uint));
 		break;
 	case LogicalType::BIGINT:
-		JSONExecutors::TernaryMutExecute<string_t, int64_t>(args, state, result, ObjectAddSignedInteger);
+		JSONExecutors::TernaryMutExecute<string_t, int64_t>(args, state, result, ObjectAdd<int64_t>(yyjson_mut_sint));
 		break;
 	case LogicalType::DOUBLE:
-		JSONExecutors::TernaryMutExecute<string_t, double>(args, state, result, ObjectAddFloating);
+		JSONExecutors::TernaryMutExecute<string_t, double>(args, state, result, ObjectAdd<double>(yyjson_mut_real));
 		break;
 	default:
 		// Shouldn't be thrown except implicit casting changes
