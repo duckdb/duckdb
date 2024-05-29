@@ -42,15 +42,15 @@ const unordered_map<uint32_t, const char *> ReturnInvalidCharrefs() {
 	};
 }
 
+// list of non-printable code points
 const unordered_set<uint32_t> ReturnInvalidCodepoints() {
 	return {// 0x0001 to 0x0008 - control characters
 	        0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8,
 	        // 0x000E to 0x001F - control characters
 	        0xe, 0xf, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
-	        // 0x007F to 0x009F
-	        0x7f, 0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89, 0x8a, 0x8b, 0x8c, 0x8d, 0x8e, 0x8f, 0x90,
-	        0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9a, 0x9b, 0x9c, 0x9d, 0x9e, 0x9f,
-	        // 0xFDD0 to 0xFDEF - Unicode non-character code points which are reserved for internal use
+	        // 0x7f - the 'delete' control character
+	        0x7f,
+	        // 0xFDD0 to 0xFDEF - code points reserved for internal use
 	        0xfdd0, 0xfdd1, 0xfdd2, 0xfdd3, 0xfdd4, 0xfdd5, 0xfdd6, 0xfdd7, 0xfdd8, 0xfdd9, 0xfdda, 0xfddb, 0xfddc,
 	        0xfddd, 0xfdde, 0xfddf, 0xfde0, 0xfde1, 0xfde2, 0xfde3, 0xfde4, 0xfde5, 0xfde6, 0xfde7, 0xfde8, 0xfde9,
 	        0xfdea, 0xfdeb, 0xfdec, 0xfded, 0xfdee, 0xfdef,
@@ -69,2237 +69,2239 @@ struct HTML5NameCharrefs {
 
 private:
 	static vector<string> initialize_vector() {
-		return {"AElig",
-		        "AElig;",
-		        "AMP",
-		        "AMP;",
-		        "Aacute",
-		        "Aacute;",
-		        "Abreve;",
-		        "Acirc",
-		        "Acirc;",
-		        "Acy;",
-		        "Afr;",
-		        "Agrave",
-		        "Agrave;",
-		        "Alpha;",
-		        "Amacr;",
-		        "And;",
-		        "Aogon;",
-		        "Aopf;",
-		        "ApplyFunction;",
-		        "Aring",
-		        "Aring;",
-		        "Ascr;",
-		        "Assign;",
-		        "Atilde",
-		        "Atilde;",
-		        "Auml",
-		        "Auml;",
-		        "Backslash;",
-		        "Barv;",
-		        "Barwed;",
-		        "Bcy;",
-		        "Because;",
-		        "Bernoullis;",
-		        "Beta;",
-		        "Bfr;",
-		        "Bopf;",
-		        "Breve;",
-		        "Bscr;",
-		        "Bumpeq;",
-		        "CHcy;",
-		        "COPY",
-		        "COPY;",
-		        "Cacute;",
-		        "Cap;",
-		        "CapitalDifferentialD;",
-		        "Cayleys;",
-		        "Ccaron;",
-		        "Ccedil",
-		        "Ccedil;",
-		        "Ccirc;",
-		        "Cconint;",
-		        "Cdot;",
-		        "Cedilla;",
-		        "CenterDot;",
-		        "Cfr;",
-		        "Chi;",
-		        "CircleDot;",
-		        "CircleMinus;",
-		        "CirclePlus;",
-		        "CircleTimes;",
-		        "ClockwiseContourIntegral;",
-		        "CloseCurlyDoubleQuote;",
-		        "CloseCurlyQuote;",
-		        "Colon;",
-		        "Colone;",
-		        "Congruent;",
-		        "Conint;",
-		        "ContourIntegral;",
-		        "Copf;",
-		        "Coproduct;",
-		        "CounterClockwiseContourIntegral;",
-		        "Cross;",
-		        "Cscr;",
-		        "Cup;",
-		        "CupCap;",
-		        "DD;",
-		        "DDotrahd;",
-		        "DJcy;",
-		        "DScy;",
-		        "DZcy;",
-		        "Dagger;",
-		        "Darr;",
-		        "Dashv;",
-		        "Dcaron;",
-		        "Dcy;",
-		        "Del;",
-		        "Delta;",
-		        "Dfr;",
-		        "DiacriticalAcute;",
-		        "DiacriticalDot;",
-		        "DiacriticalDoubleAcute;",
-		        "DiacriticalGrave;",
-		        "DiacriticalTilde;",
-		        "Diamond;",
-		        "DifferentialD;",
-		        "Dopf;",
-		        "Dot;",
-		        "DotDot;",
-		        "DotEqual;",
-		        "DoubleContourIntegral;",
-		        "DoubleDot;",
-		        "DoubleDownArrow;",
-		        "DoubleLeftArrow;",
-		        "DoubleLeftRightArrow;",
-		        "DoubleLeftTee;",
-		        "DoubleLongLeftArrow;",
-		        "DoubleLongLeftRightArrow;",
-		        "DoubleLongRightArrow;",
-		        "DoubleRightArrow;",
-		        "DoubleRightTee;",
-		        "DoubleUpArrow;",
-		        "DoubleUpDownArrow;",
-		        "DoubleVerticalBar;",
-		        "DownArrow;",
-		        "DownArrowBar;",
-		        "DownArrowUpArrow;",
-		        "DownBreve;",
-		        "DownLeftRightVector;",
-		        "DownLeftTeeVector;",
-		        "DownLeftVector;",
-		        "DownLeftVectorBar;",
-		        "DownRightTeeVector;",
-		        "DownRightVector;",
-		        "DownRightVectorBar;",
-		        "DownTee;",
-		        "DownTeeArrow;",
-		        "Downarrow;",
-		        "Dscr;",
-		        "Dstrok;",
-		        "ENG;",
-		        "ETH",
-		        "ETH;",
-		        "Eacute",
-		        "Eacute;",
-		        "Ecaron;",
-		        "Ecirc",
-		        "Ecirc;",
-		        "Ecy;",
-		        "Edot;",
-		        "Efr;",
-		        "Egrave",
-		        "Egrave;",
-		        "Element;",
-		        "Emacr;",
-		        "EmptySmallSquare;",
-		        "EmptyVerySmallSquare;",
-		        "Eogon;",
-		        "Eopf;",
-		        "Epsilon;",
-		        "Equal;",
-		        "EqualTilde;",
-		        "Equilibrium;",
-		        "Escr;",
-		        "Esim;",
-		        "Eta;",
-		        "Euml",
-		        "Euml;",
-		        "Exists;",
-		        "ExponentialE;",
-		        "Fcy;",
-		        "Ffr;",
-		        "FilledSmallSquare;",
-		        "FilledVerySmallSquare;",
-		        "Fopf;",
-		        "ForAll;",
-		        "Fouriertrf;",
-		        "Fscr;",
-		        "GJcy;",
-		        "GT",
-		        "GT;",
-		        "Gamma;",
-		        "Gammad;",
-		        "Gbreve;",
-		        "Gcedil;",
-		        "Gcirc;",
-		        "Gcy;",
-		        "Gdot;",
-		        "Gfr;",
-		        "Gg;",
-		        "Gopf;",
-		        "GreaterEqual;",
-		        "GreaterEqualLess;",
-		        "GreaterFullEqual;",
-		        "GreaterGreater;",
-		        "GreaterLess;",
-		        "GreaterSlantEqual;",
-		        "GreaterTilde;",
-		        "Gscr;",
-		        "Gt;",
-		        "HARDcy;",
-		        "Hacek;",
-		        "Hat;",
-		        "Hcirc;",
-		        "Hfr;",
-		        "HilbertSpace;",
-		        "Hopf;",
-		        "HorizontalLine;",
-		        "Hscr;",
-		        "Hstrok;",
-		        "HumpDownHump;",
-		        "HumpEqual;",
-		        "IEcy;",
-		        "IJlig;",
-		        "IOcy;",
-		        "Iacute",
-		        "Iacute;",
-		        "Icirc",
-		        "Icirc;",
-		        "Icy;",
-		        "Idot;",
-		        "Ifr;",
-		        "Igrave",
-		        "Igrave;",
-		        "Im;",
-		        "Imacr;",
-		        "ImaginaryI;",
-		        "Implies;",
-		        "Int;",
-		        "Integral;",
-		        "Intersection;",
-		        "InvisibleComma;",
-		        "InvisibleTimes;",
-		        "Iogon;",
-		        "Iopf;",
-		        "Iota;",
-		        "Iscr;",
-		        "Itilde;",
-		        "Iukcy;",
-		        "Iuml",
-		        "Iuml;",
-		        "Jcirc;",
-		        "Jcy;",
-		        "Jfr;",
-		        "Jopf;",
-		        "Jscr;",
-		        "Jsercy;",
-		        "Jukcy;",
-		        "KHcy;",
-		        "KJcy;",
-		        "Kappa;",
-		        "Kcedil;",
-		        "Kcy;",
-		        "Kfr;",
-		        "Kopf;",
-		        "Kscr;",
-		        "LJcy;",
-		        "LT",
-		        "LT;",
-		        "Lacute;",
-		        "Lambda;",
-		        "Lang;",
-		        "Laplacetrf;",
-		        "Larr;",
-		        "Lcaron;",
-		        "Lcedil;",
-		        "Lcy;",
-		        "LeftAngleBracket;",
-		        "LeftArrow;",
-		        "LeftArrowBar;",
-		        "LeftArrowRightArrow;",
-		        "LeftCeiling;",
-		        "LeftDoubleBracket;",
-		        "LeftDownTeeVector;",
-		        "LeftDownVector;",
-		        "LeftDownVectorBar;",
-		        "LeftFloor;",
-		        "LeftRightArrow;",
-		        "LeftRightVector;",
-		        "LeftTee;",
-		        "LeftTeeArrow;",
-		        "LeftTeeVector;",
-		        "LeftTriangle;",
-		        "LeftTriangleBar;",
-		        "LeftTriangleEqual;",
-		        "LeftUpDownVector;",
-		        "LeftUpTeeVector;",
-		        "LeftUpVector;",
-		        "LeftUpVectorBar;",
-		        "LeftVector;",
-		        "LeftVectorBar;",
-		        "Leftarrow;",
-		        "Leftrightarrow;",
-		        "LessEqualGreater;",
-		        "LessFullEqual;",
-		        "LessGreater;",
-		        "LessLess;",
-		        "LessSlantEqual;",
-		        "LessTilde;",
-		        "Lfr;",
-		        "Ll;",
-		        "Lleftarrow;",
-		        "Lmidot;",
-		        "LongLeftArrow;",
-		        "LongLeftRightArrow;",
-		        "LongRightArrow;",
-		        "Longleftarrow;",
-		        "Longleftrightarrow;",
-		        "Longrightarrow;",
-		        "Lopf;",
-		        "LowerLeftArrow;",
-		        "LowerRightArrow;",
-		        "Lscr;",
-		        "Lsh;",
-		        "Lstrok;",
-		        "Lt;",
-		        "Map;",
-		        "Mcy;",
-		        "MediumSpace;",
-		        "Mellintrf;",
-		        "Mfr;",
-		        "MinusPlus;",
-		        "Mopf;",
-		        "Mscr;",
-		        "Mu;",
-		        "NJcy;",
-		        "Nacute;",
-		        "Ncaron;",
-		        "Ncedil;",
-		        "Ncy;",
-		        "NegativeMediumSpace;",
-		        "NegativeThickSpace;",
-		        "NegativeThinSpace;",
-		        "NegativeVeryThinSpace;",
-		        "NestedGreaterGreater;",
-		        "NestedLessLess;",
-		        "NewLine;",
-		        "Nfr;",
-		        "NoBreak;",
-		        "NonBreakingSpace;",
-		        "Nopf;",
-		        "Not;",
-		        "NotCongruent;",
-		        "NotCupCap;",
-		        "NotDoubleVerticalBar;",
-		        "NotElement;",
-		        "NotEqual;",
-		        "NotEqualTilde;",
-		        "NotExists;",
-		        "NotGreater;",
-		        "NotGreaterEqual;",
-		        "NotGreaterFullEqual;",
-		        "NotGreaterGreater;",
-		        "NotGreaterLess;",
-		        "NotGreaterSlantEqual;",
-		        "NotGreaterTilde;",
-		        "NotHumpDownHump;",
-		        "NotHumpEqual;",
-		        "NotLeftTriangle;",
-		        "NotLeftTriangleBar;",
-		        "NotLeftTriangleEqual;",
-		        "NotLess;",
-		        "NotLessEqual;",
-		        "NotLessGreater;",
-		        "NotLessLess;",
-		        "NotLessSlantEqual;",
-		        "NotLessTilde;",
-		        "NotNestedGreaterGreater;",
-		        "NotNestedLessLess;",
-		        "NotPrecedes;",
-		        "NotPrecedesEqual;",
-		        "NotPrecedesSlantEqual;",
-		        "NotReverseElement;",
-		        "NotRightTriangle;",
-		        "NotRightTriangleBar;",
-		        "NotRightTriangleEqual;",
-		        "NotSquareSubset;",
-		        "NotSquareSubsetEqual;",
-		        "NotSquareSuperset;",
-		        "NotSquareSupersetEqual;",
-		        "NotSubset;",
-		        "NotSubsetEqual;",
-		        "NotSucceeds;",
-		        "NotSucceedsEqual;",
-		        "NotSucceedsSlantEqual;",
-		        "NotSucceedsTilde;",
-		        "NotSuperset;",
-		        "NotSupersetEqual;",
-		        "NotTilde;",
-		        "NotTildeEqual;",
-		        "NotTildeFullEqual;",
-		        "NotTildeTilde;",
-		        "NotVerticalBar;",
-		        "Nscr;",
-		        "Ntilde",
-		        "Ntilde;",
-		        "Nu;",
-		        "OElig;",
-		        "Oacute",
-		        "Oacute;",
-		        "Ocirc",
-		        "Ocirc;",
-		        "Ocy;",
-		        "Odblac;",
-		        "Ofr;",
-		        "Ograve",
-		        "Ograve;",
-		        "Omacr;",
-		        "Omega;",
-		        "Omicron;",
-		        "Oopf;",
-		        "OpenCurlyDoubleQuote;",
-		        "OpenCurlyQuote;",
-		        "Or;",
-		        "Oscr;",
-		        "Oslash",
-		        "Oslash;",
-		        "Otilde",
-		        "Otilde;",
-		        "Otimes;",
-		        "Ouml",
-		        "Ouml;",
-		        "OverBar;",
-		        "OverBrace;",
-		        "OverBracket;",
-		        "OverParenthesis;",
-		        "PartialD;",
-		        "Pcy;",
-		        "Pfr;",
-		        "Phi;",
-		        "Pi;",
-		        "PlusMinus;",
-		        "Poincareplane;",
-		        "Popf;",
-		        "Pr;",
-		        "Precedes;",
-		        "PrecedesEqual;",
-		        "PrecedesSlantEqual;",
-		        "PrecedesTilde;",
-		        "Prime;",
-		        "Product;",
-		        "Proportion;",
-		        "Proportional;",
-		        "Pscr;",
-		        "Psi;",
-		        "QUOT",
-		        "QUOT;",
-		        "Qfr;",
-		        "Qopf;",
-		        "Qscr;",
-		        "RBarr;",
-		        "REG",
-		        "REG;",
-		        "Racute;",
-		        "Rang;",
-		        "Rarr;",
-		        "Rarrtl;",
-		        "Rcaron;",
-		        "Rcedil;",
-		        "Rcy;",
-		        "Re;",
-		        "ReverseElement;",
-		        "ReverseEquilibrium;",
-		        "ReverseUpEquilibrium;",
-		        "Rfr;",
-		        "Rho;",
-		        "RightAngleBracket;",
-		        "RightArrow;",
-		        "RightArrowBar;",
-		        "RightArrowLeftArrow;",
-		        "RightCeiling;",
-		        "RightDoubleBracket;",
-		        "RightDownTeeVector;",
-		        "RightDownVector;",
-		        "RightDownVectorBar;",
-		        "RightFloor;",
-		        "RightTee;",
-		        "RightTeeArrow;",
-		        "RightTeeVector;",
-		        "RightTriangle;",
-		        "RightTriangleBar;",
-		        "RightTriangleEqual;",
-		        "RightUpDownVector;",
-		        "RightUpTeeVector;",
-		        "RightUpVector;",
-		        "RightUpVectorBar;",
-		        "RightVector;",
-		        "RightVectorBar;",
-		        "Rightarrow;",
-		        "Ropf;",
-		        "RoundImplies;",
-		        "Rrightarrow;",
-		        "Rscr;",
-		        "Rsh;",
-		        "RuleDelayed;",
-		        "SHCHcy;",
-		        "SHcy;",
-		        "SOFTcy;",
-		        "Sacute;",
-		        "Sc;",
-		        "Scaron;",
-		        "Scedil;",
-		        "Scirc;",
-		        "Scy;",
-		        "Sfr;",
-		        "ShortDownArrow;",
-		        "ShortLeftArrow;",
-		        "ShortRightArrow;",
-		        "ShortUpArrow;",
-		        "Sigma;",
-		        "SmallCircle;",
-		        "Sopf;",
-		        "Sqrt;",
-		        "Square;",
-		        "SquareIntersection;",
-		        "SquareSubset;",
-		        "SquareSubsetEqual;",
-		        "SquareSuperset;",
-		        "SquareSupersetEqual;",
-		        "SquareUnion;",
-		        "Sscr;",
-		        "Star;",
-		        "Sub;",
-		        "Subset;",
-		        "SubsetEqual;",
-		        "Succeeds;",
-		        "SucceedsEqual;",
-		        "SucceedsSlantEqual;",
-		        "SucceedsTilde;",
-		        "SuchThat;",
-		        "Sum;",
-		        "Sup;",
-		        "Superset;",
-		        "SupersetEqual;",
-		        "Supset;",
-		        "THORN",
-		        "THORN;",
-		        "TRADE;",
-		        "TSHcy;",
-		        "TScy;",
-		        "Tab;",
-		        "Tau;",
-		        "Tcaron;",
-		        "Tcedil;",
-		        "Tcy;",
-		        "Tfr;",
-		        "Therefore;",
-		        "Theta;",
-		        "ThickSpace;",
-		        "ThinSpace;",
-		        "Tilde;",
-		        "TildeEqual;",
-		        "TildeFullEqual;",
-		        "TildeTilde;",
-		        "Topf;",
-		        "TripleDot;",
-		        "Tscr;",
-		        "Tstrok;",
-		        "Uacute",
-		        "Uacute;",
-		        "Uarr;",
-		        "Uarrocir;",
-		        "Ubrcy;",
-		        "Ubreve;",
-		        "Ucirc",
-		        "Ucirc;",
-		        "Ucy;",
-		        "Udblac;",
-		        "Ufr;",
-		        "Ugrave",
-		        "Ugrave;",
-		        "Umacr;",
-		        "UnderBar;",
-		        "UnderBrace;",
-		        "UnderBracket;",
-		        "UnderParenthesis;",
-		        "Union;",
-		        "UnionPlus;",
-		        "Uogon;",
-		        "Uopf;",
-		        "UpArrow;",
-		        "UpArrowBar;",
-		        "UpArrowDownArrow;",
-		        "UpDownArrow;",
-		        "UpEquilibrium;",
-		        "UpTee;",
-		        "UpTeeArrow;",
-		        "Uparrow;",
-		        "Updownarrow;",
-		        "UpperLeftArrow;",
-		        "UpperRightArrow;",
-		        "Upsi;",
-		        "Upsilon;",
-		        "Uring;",
-		        "Uscr;",
-		        "Utilde;",
-		        "Uuml",
-		        "Uuml;",
-		        "VDash;",
-		        "Vbar;",
-		        "Vcy;",
-		        "Vdash;",
-		        "Vdashl;",
-		        "Vee;",
-		        "Verbar;",
-		        "Vert;",
-		        "VerticalBar;",
-		        "VerticalLine;",
-		        "VerticalSeparator;",
-		        "VerticalTilde;",
-		        "VeryThinSpace;",
-		        "Vfr;",
-		        "Vopf;",
-		        "Vscr;",
-		        "Vvdash;",
-		        "Wcirc;",
-		        "Wedge;",
-		        "Wfr;",
-		        "Wopf;",
-		        "Wscr;",
-		        "Xfr;",
-		        "Xi;",
-		        "Xopf;",
-		        "Xscr;",
-		        "YAcy;",
-		        "YIcy;",
-		        "YUcy;",
-		        "Yacute",
-		        "Yacute;",
-		        "Ycirc;",
-		        "Ycy;",
-		        "Yfr;",
-		        "Yopf;",
-		        "Yscr;",
-		        "Yuml;",
-		        "ZHcy;",
-		        "Zacute;",
-		        "Zcaron;",
-		        "Zcy;",
-		        "Zdot;",
-		        "ZeroWidthSpace;",
-		        "Zeta;",
-		        "Zfr;",
-		        "Zopf;",
-		        "Zscr;",
-		        "aacute",
-		        "aacute;",
-		        "abreve;",
-		        "ac;",
-		        "acE;",
-		        "acd;",
-		        "acirc",
-		        "acirc;",
-		        "acute",
-		        "acute;",
-		        "acy;",
-		        "aelig",
-		        "aelig;",
-		        "af;",
-		        "afr;",
-		        "agrave",
-		        "agrave;",
-		        "alefsym;",
-		        "aleph;",
-		        "alpha;",
-		        "amacr;",
-		        "amalg;",
-		        "amp",
-		        "amp;",
-		        "and;",
-		        "andand;",
-		        "andd;",
-		        "andslope;",
-		        "andv;",
-		        "ang;",
-		        "ange;",
-		        "angle;",
-		        "angmsd;",
-		        "angmsdaa;",
-		        "angmsdab;",
-		        "angmsdac;",
-		        "angmsdad;",
-		        "angmsdae;",
-		        "angmsdaf;",
-		        "angmsdag;",
-		        "angmsdah;",
-		        "angrt;",
-		        "angrtvb;",
-		        "angrtvbd;",
-		        "angsph;",
-		        "angst;",
-		        "angzarr;",
-		        "aogon;",
-		        "aopf;",
-		        "ap;",
-		        "apE;",
-		        "apacir;",
-		        "ape;",
-		        "apid;",
-		        "apos;",
-		        "approx;",
-		        "approxeq;",
-		        "aring",
-		        "aring;",
-		        "ascr;",
-		        "ast;",
-		        "asymp;",
-		        "asympeq;",
-		        "atilde",
-		        "atilde;",
-		        "auml",
-		        "auml;",
-		        "awconint;",
-		        "awint;",
-		        "bNot;",
-		        "backcong;",
-		        "backepsilon;",
-		        "backprime;",
-		        "backsim;",
-		        "backsimeq;",
-		        "barvee;",
-		        "barwed;",
-		        "barwedge;",
-		        "bbrk;",
-		        "bbrktbrk;",
-		        "bcong;",
-		        "bcy;",
-		        "bdquo;",
-		        "becaus;",
-		        "because;",
-		        "bemptyv;",
-		        "bepsi;",
-		        "bernou;",
-		        "beta;",
-		        "beth;",
-		        "between;",
-		        "bfr;",
-		        "bigcap;",
-		        "bigcirc;",
-		        "bigcup;",
-		        "bigodot;",
-		        "bigoplus;",
-		        "bigotimes;",
-		        "bigsqcup;",
-		        "bigstar;",
-		        "bigtriangledown;",
-		        "bigtriangleup;",
-		        "biguplus;",
-		        "bigvee;",
-		        "bigwedge;",
-		        "bkarow;",
-		        "blacklozenge;",
-		        "blacksquare;",
-		        "blacktriangle;",
-		        "blacktriangledown;",
-		        "blacktriangleleft;",
-		        "blacktriangleright;",
-		        "blank;",
-		        "blk12;",
-		        "blk14;",
-		        "blk34;",
-		        "block;",
-		        "bne;",
-		        "bnequiv;",
-		        "bnot;",
-		        "bopf;",
-		        "bot;",
-		        "bottom;",
-		        "bowtie;",
-		        "boxDL;",
-		        "boxDR;",
-		        "boxDl;",
-		        "boxDr;",
-		        "boxH;",
-		        "boxHD;",
-		        "boxHU;",
-		        "boxHd;",
-		        "boxHu;",
-		        "boxUL;",
-		        "boxUR;",
-		        "boxUl;",
-		        "boxUr;",
-		        "boxV;",
-		        "boxVH;",
-		        "boxVL;",
-		        "boxVR;",
-		        "boxVh;",
-		        "boxVl;",
-		        "boxVr;",
-		        "boxbox;",
-		        "boxdL;",
-		        "boxdR;",
-		        "boxdl;",
-		        "boxdr;",
-		        "boxh;",
-		        "boxhD;",
-		        "boxhU;",
-		        "boxhd;",
-		        "boxhu;",
-		        "boxminus;",
-		        "boxplus;",
-		        "boxtimes;",
-		        "boxuL;",
-		        "boxuR;",
-		        "boxul;",
-		        "boxur;",
-		        "boxv;",
-		        "boxvH;",
-		        "boxvL;",
-		        "boxvR;",
-		        "boxvh;",
-		        "boxvl;",
-		        "boxvr;",
-		        "bprime;",
-		        "breve;",
-		        "brvbar",
-		        "brvbar;",
-		        "bscr;",
-		        "bsemi;",
-		        "bsim;",
-		        "bsime;",
-		        "bsol;",
-		        "bsolb;",
-		        "bsolhsub;",
-		        "bull;",
-		        "bullet;",
-		        "bump;",
-		        "bumpE;",
-		        "bumpe;",
-		        "bumpeq;",
-		        "cacute;",
-		        "cap;",
-		        "capand;",
-		        "capbrcup;",
-		        "capcap;",
-		        "capcup;",
-		        "capdot;",
-		        "caps;",
-		        "caret;",
-		        "caron;",
-		        "ccaps;",
-		        "ccaron;",
-		        "ccedil",
-		        "ccedil;",
-		        "ccirc;",
-		        "ccups;",
-		        "ccupssm;",
-		        "cdot;",
-		        "cedil",
-		        "cedil;",
-		        "cemptyv;",
-		        "cent",
-		        "cent;",
-		        "centerdot;",
-		        "cfr;",
-		        "chcy;",
-		        "check;",
-		        "checkmark;",
-		        "chi;",
-		        "cir;",
-		        "cirE;",
-		        "circ;",
-		        "circeq;",
-		        "circlearrowleft;",
-		        "circlearrowright;",
-		        "circledR;",
-		        "circledS;",
-		        "circledast;",
-		        "circledcirc;",
-		        "circleddash;",
-		        "cire;",
-		        "cirfnint;",
-		        "cirmid;",
-		        "cirscir;",
-		        "clubs;",
-		        "clubsuit;",
-		        "colon;",
-		        "colone;",
-		        "coloneq;",
-		        "comma;",
-		        "commat;",
-		        "comp;",
-		        "compfn;",
-		        "complement;",
-		        "complexes;",
-		        "cong;",
-		        "congdot;",
-		        "conint;",
-		        "copf;",
-		        "coprod;",
-		        "copy",
-		        "copy;",
-		        "copysr;",
-		        "crarr;",
-		        "cross;",
-		        "cscr;",
-		        "csub;",
-		        "csube;",
-		        "csup;",
-		        "csupe;",
-		        "ctdot;",
-		        "cudarrl;",
-		        "cudarrr;",
-		        "cuepr;",
-		        "cuesc;",
-		        "cularr;",
-		        "cularrp;",
-		        "cup;",
-		        "cupbrcap;",
-		        "cupcap;",
-		        "cupcup;",
-		        "cupdot;",
-		        "cupor;",
-		        "cups;",
-		        "curarr;",
-		        "curarrm;",
-		        "curlyeqprec;",
-		        "curlyeqsucc;",
-		        "curlyvee;",
-		        "curlywedge;",
-		        "curren",
-		        "curren;",
-		        "curvearrowleft;",
-		        "curvearrowright;",
-		        "cuvee;",
-		        "cuwed;",
-		        "cwconint;",
-		        "cwint;",
-		        "cylcty;",
-		        "dArr;",
-		        "dHar;",
-		        "dagger;",
-		        "daleth;",
-		        "darr;",
-		        "dash;",
-		        "dashv;",
-		        "dbkarow;",
-		        "dblac;",
-		        "dcaron;",
-		        "dcy;",
-		        "dd;",
-		        "ddagger;",
-		        "ddarr;",
-		        "ddotseq;",
-		        "deg",
-		        "deg;",
-		        "delta;",
-		        "demptyv;",
-		        "dfisht;",
-		        "dfr;",
-		        "dharl;",
-		        "dharr;",
-		        "diam;",
-		        "diamond;",
-		        "diamondsuit;",
-		        "diams;",
-		        "die;",
-		        "digamma;",
-		        "disin;",
-		        "div;",
-		        "divide",
-		        "divide;",
-		        "divideontimes;",
-		        "divonx;",
-		        "djcy;",
-		        "dlcorn;",
-		        "dlcrop;",
-		        "dollar;",
-		        "dopf;",
-		        "dot;",
-		        "doteq;",
-		        "doteqdot;",
-		        "dotminus;",
-		        "dotplus;",
-		        "dotsquare;",
-		        "doublebarwedge;",
-		        "downarrow;",
-		        "downdownarrows;",
-		        "downharpoonleft;",
-		        "downharpoonright;",
-		        "drbkarow;",
-		        "drcorn;",
-		        "drcrop;",
-		        "dscr;",
-		        "dscy;",
-		        "dsol;",
-		        "dstrok;",
-		        "dtdot;",
-		        "dtri;",
-		        "dtrif;",
-		        "duarr;",
-		        "duhar;",
-		        "dwangle;",
-		        "dzcy;",
-		        "dzigrarr;",
-		        "eDDot;",
-		        "eDot;",
-		        "eacute",
-		        "eacute;",
-		        "easter;",
-		        "ecaron;",
-		        "ecir;",
-		        "ecirc",
-		        "ecirc;",
-		        "ecolon;",
-		        "ecy;",
-		        "edot;",
-		        "ee;",
-		        "efDot;",
-		        "efr;",
-		        "eg;",
-		        "egrave",
-		        "egrave;",
-		        "egs;",
-		        "egsdot;",
-		        "el;",
-		        "elinters;",
-		        "ell;",
-		        "els;",
-		        "elsdot;",
-		        "emacr;",
-		        "empty;",
-		        "emptyset;",
-		        "emptyv;",
-		        "emsp13;",
-		        "emsp14;",
-		        "emsp;",
-		        "eng;",
-		        "ensp;",
-		        "eogon;",
-		        "eopf;",
-		        "epar;",
-		        "eparsl;",
-		        "eplus;",
-		        "epsi;",
-		        "epsilon;",
-		        "epsiv;",
-		        "eqcirc;",
-		        "eqcolon;",
-		        "eqsim;",
-		        "eqslantgtr;",
-		        "eqslantless;",
-		        "equals;",
-		        "equest;",
-		        "equiv;",
-		        "equivDD;",
-		        "eqvparsl;",
-		        "erDot;",
-		        "erarr;",
-		        "escr;",
-		        "esdot;",
-		        "esim;",
-		        "eta;",
-		        "eth",
-		        "eth;",
-		        "euml",
-		        "euml;",
-		        "euro;",
-		        "excl;",
-		        "exist;",
-		        "expectation;",
-		        "exponentiale;",
-		        "fallingdotseq;",
-		        "fcy;",
-		        "female;",
-		        "ffilig;",
-		        "fflig;",
-		        "ffllig;",
-		        "ffr;",
-		        "filig;",
-		        "fjlig;",
-		        "flat;",
-		        "fllig;",
-		        "fltns;",
-		        "fnof;",
-		        "fopf;",
-		        "forall;",
-		        "fork;",
-		        "forkv;",
-		        "fpartint;",
-		        "frac12",
-		        "frac12;",
-		        "frac13;",
-		        "frac14",
-		        "frac14;",
-		        "frac15;",
-		        "frac16;",
-		        "frac18;",
-		        "frac23;",
-		        "frac25;",
-		        "frac34",
-		        "frac34;",
-		        "frac35;",
-		        "frac38;",
-		        "frac45;",
-		        "frac56;",
-		        "frac58;",
-		        "frac78;",
-		        "frasl;",
-		        "frown;",
-		        "fscr;",
-		        "gE;",
-		        "gEl;",
-		        "gacute;",
-		        "gamma;",
-		        "gammad;",
-		        "gap;",
-		        "gbreve;",
-		        "gcirc;",
-		        "gcy;",
-		        "gdot;",
-		        "ge;",
-		        "gel;",
-		        "geq;",
-		        "geqq;",
-		        "geqslant;",
-		        "ges;",
-		        "gescc;",
-		        "gesdot;",
-		        "gesdoto;",
-		        "gesdotol;",
-		        "gesl;",
-		        "gesles;",
-		        "gfr;",
-		        "gg;",
-		        "ggg;",
-		        "gimel;",
-		        "gjcy;",
-		        "gl;",
-		        "glE;",
-		        "gla;",
-		        "glj;",
-		        "gnE;",
-		        "gnap;",
-		        "gnapprox;",
-		        "gne;",
-		        "gneq;",
-		        "gneqq;",
-		        "gnsim;",
-		        "gopf;",
-		        "grave;",
-		        "gscr;",
-		        "gsim;",
-		        "gsime;",
-		        "gsiml;",
-		        "gt",
-		        "gt;",
-		        "gtcc;",
-		        "gtcir;",
-		        "gtdot;",
-		        "gtlPar;",
-		        "gtquest;",
-		        "gtrapprox;",
-		        "gtrarr;",
-		        "gtrdot;",
-		        "gtreqless;",
-		        "gtreqqless;",
-		        "gtrless;",
-		        "gtrsim;",
-		        "gvertneqq;",
-		        "gvnE;",
-		        "hArr;",
-		        "hairsp;",
-		        "half;",
-		        "hamilt;",
-		        "hardcy;",
-		        "harr;",
-		        "harrcir;",
-		        "harrw;",
-		        "hbar;",
-		        "hcirc;",
-		        "hearts;",
-		        "heartsuit;",
-		        "hellip;",
-		        "hercon;",
-		        "hfr;",
-		        "hksearow;",
-		        "hkswarow;",
-		        "hoarr;",
-		        "homtht;",
-		        "hookleftarrow;",
-		        "hookrightarrow;",
-		        "hopf;",
-		        "horbar;",
-		        "hscr;",
-		        "hslash;",
-		        "hstrok;",
-		        "hybull;",
-		        "hyphen;",
-		        "iacute",
-		        "iacute;",
-		        "ic;",
-		        "icirc",
-		        "icirc;",
-		        "icy;",
-		        "iecy;",
-		        "iexcl",
-		        "iexcl;",
-		        "iff;",
-		        "ifr;",
-		        "igrave",
-		        "igrave;",
-		        "ii;",
-		        "iiiint;",
-		        "iiint;",
-		        "iinfin;",
-		        "iiota;",
-		        "ijlig;",
-		        "imacr;",
-		        "image;",
-		        "imagline;",
-		        "imagpart;",
-		        "imath;",
-		        "imof;",
-		        "imped;",
-		        "in;",
-		        "incare;",
-		        "infin;",
-		        "infintie;",
-		        "inodot;",
-		        "int;",
-		        "intcal;",
-		        "integers;",
-		        "intercal;",
-		        "intlarhk;",
-		        "intprod;",
-		        "iocy;",
-		        "iogon;",
-		        "iopf;",
-		        "iota;",
-		        "iprod;",
-		        "iquest",
-		        "iquest;",
-		        "iscr;",
-		        "isin;",
-		        "isinE;",
-		        "isindot;",
-		        "isins;",
-		        "isinsv;",
-		        "isinv;",
-		        "it;",
-		        "itilde;",
-		        "iukcy;",
-		        "iuml",
-		        "iuml;",
-		        "jcirc;",
-		        "jcy;",
-		        "jfr;",
-		        "jmath;",
-		        "jopf;",
-		        "jscr;",
-		        "jsercy;",
-		        "jukcy;",
-		        "kappa;",
-		        "kappav;",
-		        "kcedil;",
-		        "kcy;",
-		        "kfr;",
-		        "kgreen;",
-		        "khcy;",
-		        "kjcy;",
-		        "kopf;",
-		        "kscr;",
-		        "lAarr;",
-		        "lArr;",
-		        "lAtail;",
-		        "lBarr;",
-		        "lE;",
-		        "lEg;",
-		        "lHar;",
-		        "lacute;",
-		        "laemptyv;",
-		        "lagran;",
-		        "lambda;",
-		        "lang;",
-		        "langd;",
-		        "langle;",
-		        "lap;",
-		        "laquo",
-		        "laquo;",
-		        "larr;",
-		        "larrb;",
-		        "larrbfs;",
-		        "larrfs;",
-		        "larrhk;",
-		        "larrlp;",
-		        "larrpl;",
-		        "larrsim;",
-		        "larrtl;",
-		        "lat;",
-		        "latail;",
-		        "late;",
-		        "lates;",
-		        "lbarr;",
-		        "lbbrk;",
-		        "lbrace;",
-		        "lbrack;",
-		        "lbrke;",
-		        "lbrksld;",
-		        "lbrkslu;",
-		        "lcaron;",
-		        "lcedil;",
-		        "lceil;",
-		        "lcub;",
-		        "lcy;",
-		        "ldca;",
-		        "ldquo;",
-		        "ldquor;",
-		        "ldrdhar;",
-		        "ldrushar;",
-		        "ldsh;",
-		        "le;",
-		        "leftarrow;",
-		        "leftarrowtail;",
-		        "leftharpoondown;",
-		        "leftharpoonup;",
-		        "leftleftarrows;",
-		        "leftrightarrow;",
-		        "leftrightarrows;",
-		        "leftrightharpoons;",
-		        "leftrightsquigarrow;",
-		        "leftthreetimes;",
-		        "leg;",
-		        "leq;",
-		        "leqq;",
-		        "leqslant;",
-		        "les;",
-		        "lescc;",
-		        "lesdot;",
-		        "lesdoto;",
-		        "lesdotor;",
-		        "lesg;",
-		        "lesges;",
-		        "lessapprox;",
-		        "lessdot;",
-		        "lesseqgtr;",
-		        "lesseqqgtr;",
-		        "lessgtr;",
-		        "lesssim;",
-		        "lfisht;",
-		        "lfloor;",
-		        "lfr;",
-		        "lg;",
-		        "lgE;",
-		        "lhard;",
-		        "lharu;",
-		        "lharul;",
-		        "lhblk;",
-		        "ljcy;",
-		        "ll;",
-		        "llarr;",
-		        "llcorner;",
-		        "llhard;",
-		        "lltri;",
-		        "lmidot;",
-		        "lmoust;",
-		        "lmoustache;",
-		        "lnE;",
-		        "lnap;",
-		        "lnapprox;",
-		        "lne;",
-		        "lneq;",
-		        "lneqq;",
-		        "lnsim;",
-		        "loang;",
-		        "loarr;",
-		        "lobrk;",
-		        "longleftarrow;",
-		        "longleftrightarrow;",
-		        "longmapsto;",
-		        "longrightarrow;",
-		        "looparrowleft;",
-		        "looparrowright;",
-		        "lopar;",
-		        "lopf;",
-		        "loplus;",
-		        "lotimes;",
-		        "lowast;",
-		        "lowbar;",
-		        "loz;",
-		        "lozenge;",
-		        "lozf;",
-		        "lpar;",
-		        "lparlt;",
-		        "lrarr;",
-		        "lrcorner;",
-		        "lrhar;",
-		        "lrhard;",
-		        "lrm;",
-		        "lrtri;",
-		        "lsaquo;",
-		        "lscr;",
-		        "lsh;",
-		        "lsim;",
-		        "lsime;",
-		        "lsimg;",
-		        "lsqb;",
-		        "lsquo;",
-		        "lsquor;",
-		        "lstrok;",
-		        "lt",
-		        "lt;",
-		        "ltcc;",
-		        "ltcir;",
-		        "ltdot;",
-		        "lthree;",
-		        "ltimes;",
-		        "ltlarr;",
-		        "ltquest;",
-		        "ltrPar;",
-		        "ltri;",
-		        "ltrie;",
-		        "ltrif;",
-		        "lurdshar;",
-		        "luruhar;",
-		        "lvertneqq;",
-		        "lvnE;",
-		        "mDDot;",
-		        "macr",
-		        "macr;",
-		        "male;",
-		        "malt;",
-		        "maltese;",
-		        "map;",
-		        "mapsto;",
-		        "mapstodown;",
-		        "mapstoleft;",
-		        "mapstoup;",
-		        "marker;",
-		        "mcomma;",
-		        "mcy;",
-		        "mdash;",
-		        "measuredangle;",
-		        "mfr;",
-		        "mho;",
-		        "micro",
-		        "micro;",
-		        "mid;",
-		        "midast;",
-		        "midcir;",
-		        "middot",
-		        "middot;",
-		        "minus;",
-		        "minusb;",
-		        "minusd;",
-		        "minusdu;",
-		        "mlcp;",
-		        "mldr;",
-		        "mnplus;",
-		        "models;",
-		        "mopf;",
-		        "mp;",
-		        "mscr;",
-		        "mstpos;",
-		        "mu;",
-		        "multimap;",
-		        "mumap;",
-		        "nGg;",
-		        "nGt;",
-		        "nGtv;",
-		        "nLeftarrow;",
-		        "nLeftrightarrow;",
-		        "nLl;",
-		        "nLt;",
-		        "nLtv;",
-		        "nRightarrow;",
-		        "nVDash;",
-		        "nVdash;",
-		        "nabla;",
-		        "nacute;",
-		        "nang;",
-		        "nap;",
-		        "napE;",
-		        "napid;",
-		        "napos;",
-		        "napprox;",
-		        "natur;",
-		        "natural;",
-		        "naturals;",
-		        "nbsp",
-		        "nbsp;",
-		        "nbump;",
-		        "nbumpe;",
-		        "ncap;",
-		        "ncaron;",
-		        "ncedil;",
-		        "ncong;",
-		        "ncongdot;",
-		        "ncup;",
-		        "ncy;",
-		        "ndash;",
-		        "ne;",
-		        "neArr;",
-		        "nearhk;",
-		        "nearr;",
-		        "nearrow;",
-		        "nedot;",
-		        "nequiv;",
-		        "nesear;",
-		        "nesim;",
-		        "nexist;",
-		        "nexists;",
-		        "nfr;",
-		        "ngE;",
-		        "nge;",
-		        "ngeq;",
-		        "ngeqq;",
-		        "ngeqslant;",
-		        "nges;",
-		        "ngsim;",
-		        "ngt;",
-		        "ngtr;",
-		        "nhArr;",
-		        "nharr;",
-		        "nhpar;",
-		        "ni;",
-		        "nis;",
-		        "nisd;",
-		        "niv;",
-		        "njcy;",
-		        "nlArr;",
-		        "nlE;",
-		        "nlarr;",
-		        "nldr;",
-		        "nle;",
-		        "nleftarrow;",
-		        "nleftrightarrow;",
-		        "nleq;",
-		        "nleqq;",
-		        "nleqslant;",
-		        "nles;",
-		        "nless;",
-		        "nlsim;",
-		        "nlt;",
-		        "nltri;",
-		        "nltrie;",
-		        "nmid;",
-		        "nopf;",
-		        "not",
-		        "not;",
-		        "notin;",
-		        "notinE;",
-		        "notindot;",
-		        "notinva;",
-		        "notinvb;",
-		        "notinvc;",
-		        "notni;",
-		        "notniva;",
-		        "notnivb;",
-		        "notnivc;",
-		        "npar;",
-		        "nparallel;",
-		        "nparsl;",
-		        "npart;",
-		        "npolint;",
-		        "npr;",
-		        "nprcue;",
-		        "npre;",
-		        "nprec;",
-		        "npreceq;",
-		        "nrArr;",
-		        "nrarr;",
-		        "nrarrc;",
-		        "nrarrw;",
-		        "nrightarrow;",
-		        "nrtri;",
-		        "nrtrie;",
-		        "nsc;",
-		        "nsccue;",
-		        "nsce;",
-		        "nscr;",
-		        "nshortmid;",
-		        "nshortparallel;",
-		        "nsim;",
-		        "nsime;",
-		        "nsimeq;",
-		        "nsmid;",
-		        "nspar;",
-		        "nsqsube;",
-		        "nsqsupe;",
-		        "nsub;",
-		        "nsubE;",
-		        "nsube;",
-		        "nsubset;",
-		        "nsubseteq;",
-		        "nsubseteqq;",
-		        "nsucc;",
-		        "nsucceq;",
-		        "nsup;",
-		        "nsupE;",
-		        "nsupe;",
-		        "nsupset;",
-		        "nsupseteq;",
-		        "nsupseteqq;",
-		        "ntgl;",
-		        "ntilde",
-		        "ntilde;",
-		        "ntlg;",
-		        "ntriangleleft;",
-		        "ntrianglelefteq;",
-		        "ntriangleright;",
-		        "ntrianglerighteq;",
-		        "nu;",
-		        "num;",
-		        "numero;",
-		        "numsp;",
-		        "nvDash;",
-		        "nvHarr;",
-		        "nvap;",
-		        "nvdash;",
-		        "nvge;",
-		        "nvgt;",
-		        "nvinfin;",
-		        "nvlArr;",
-		        "nvle;",
-		        "nvlt;",
-		        "nvltrie;",
-		        "nvrArr;",
-		        "nvrtrie;",
-		        "nvsim;",
-		        "nwArr;",
-		        "nwarhk;",
-		        "nwarr;",
-		        "nwarrow;",
-		        "nwnear;",
-		        "oS;",
-		        "oacute",
-		        "oacute;",
-		        "oast;",
-		        "ocir;",
-		        "ocirc",
-		        "ocirc;",
-		        "ocy;",
-		        "odash;",
-		        "odblac;",
-		        "odiv;",
-		        "odot;",
-		        "odsold;",
-		        "oelig;",
-		        "ofcir;",
-		        "ofr;",
-		        "ogon;",
-		        "ograve",
-		        "ograve;",
-		        "ogt;",
-		        "ohbar;",
-		        "ohm;",
-		        "oint;",
-		        "olarr;",
-		        "olcir;",
-		        "olcross;",
-		        "oline;",
-		        "olt;",
-		        "omacr;",
-		        "omega;",
-		        "omicron;",
-		        "omid;",
-		        "ominus;",
-		        "oopf;",
-		        "opar;",
-		        "operp;",
-		        "oplus;",
-		        "or;",
-		        "orarr;",
-		        "ord;",
-		        "order;",
-		        "orderof;",
-		        "ordf",
-		        "ordf;",
-		        "ordm",
-		        "ordm;",
-		        "origof;",
-		        "oror;",
-		        "orslope;",
-		        "orv;",
-		        "oscr;",
-		        "oslash",
-		        "oslash;",
-		        "osol;",
-		        "otilde",
-		        "otilde;",
-		        "otimes;",
-		        "otimesas;",
-		        "ouml",
-		        "ouml;",
-		        "ovbar;",
-		        "par;",
-		        "para",
-		        "para;",
-		        "parallel;",
-		        "parsim;",
-		        "parsl;",
-		        "part;",
-		        "pcy;",
-		        "percnt;",
-		        "period;",
-		        "permil;",
-		        "perp;",
-		        "pertenk;",
-		        "pfr;",
-		        "phi;",
-		        "phiv;",
-		        "phmmat;",
-		        "phone;",
-		        "pi;",
-		        "pitchfork;",
-		        "piv;",
-		        "planck;",
-		        "planckh;",
-		        "plankv;",
-		        "plus;",
-		        "plusacir;",
-		        "plusb;",
-		        "pluscir;",
-		        "plusdo;",
-		        "plusdu;",
-		        "pluse;",
-		        "plusmn",
-		        "plusmn;",
-		        "plussim;",
-		        "plustwo;",
-		        "pm;",
-		        "pointint;",
-		        "popf;",
-		        "pound",
-		        "pound;",
-		        "pr;",
-		        "prE;",
-		        "prap;",
-		        "prcue;",
-		        "pre;",
-		        "prec;",
-		        "precapprox;",
-		        "preccurlyeq;",
-		        "preceq;",
-		        "precnapprox;",
-		        "precneqq;",
-		        "precnsim;",
-		        "precsim;",
-		        "prime;",
-		        "primes;",
-		        "prnE;",
-		        "prnap;",
-		        "prnsim;",
-		        "prod;",
-		        "profalar;",
-		        "profline;",
-		        "profsurf;",
-		        "prop;",
-		        "propto;",
-		        "prsim;",
-		        "prurel;",
-		        "pscr;",
-		        "psi;",
-		        "puncsp;",
-		        "qfr;",
-		        "qint;",
-		        "qopf;",
-		        "qprime;",
-		        "qscr;",
-		        "quaternions;",
-		        "quatint;",
-		        "quest;",
-		        "questeq;",
-		        "quot",
-		        "quot;",
-		        "rAarr;",
-		        "rArr;",
-		        "rAtail;",
-		        "rBarr;",
-		        "rHar;",
-		        "race;",
-		        "racute;",
-		        "radic;",
-		        "raemptyv;",
-		        "rang;",
-		        "rangd;",
-		        "range;",
-		        "rangle;",
-		        "raquo",
-		        "raquo;",
-		        "rarr;",
-		        "rarrap;",
-		        "rarrb;",
-		        "rarrbfs;",
-		        "rarrc;",
-		        "rarrfs;",
-		        "rarrhk;",
-		        "rarrlp;",
-		        "rarrpl;",
-		        "rarrsim;",
-		        "rarrtl;",
-		        "rarrw;",
-		        "ratail;",
-		        "ratio;",
-		        "rationals;",
-		        "rbarr;",
-		        "rbbrk;",
-		        "rbrace;",
-		        "rbrack;",
-		        "rbrke;",
-		        "rbrksld;",
-		        "rbrkslu;",
-		        "rcaron;",
-		        "rcedil;",
-		        "rceil;",
-		        "rcub;",
-		        "rcy;",
-		        "rdca;",
-		        "rdldhar;",
-		        "rdquo;",
-		        "rdquor;",
-		        "rdsh;",
-		        "real;",
-		        "realine;",
-		        "realpart;",
-		        "reals;",
-		        "rect;",
-		        "reg",
-		        "reg;",
-		        "rfisht;",
-		        "rfloor;",
-		        "rfr;",
-		        "rhard;",
-		        "rharu;",
-		        "rharul;",
-		        "rho;",
-		        "rhov;",
-		        "rightarrow;",
-		        "rightarrowtail;",
-		        "rightharpoondown;",
-		        "rightharpoonup;",
-		        "rightleftarrows;",
-		        "rightleftharpoons;",
-		        "rightrightarrows;",
-		        "rightsquigarrow;",
-		        "rightthreetimes;",
-		        "ring;",
-		        "risingdotseq;",
-		        "rlarr;",
-		        "rlhar;",
-		        "rlm;",
-		        "rmoust;",
-		        "rmoustache;",
-		        "rnmid;",
-		        "roang;",
-		        "roarr;",
-		        "robrk;",
-		        "ropar;",
-		        "ropf;",
-		        "roplus;",
-		        "rotimes;",
-		        "rpar;",
-		        "rpargt;",
-		        "rppolint;",
-		        "rrarr;",
-		        "rsaquo;",
-		        "rscr;",
-		        "rsh;",
-		        "rsqb;",
-		        "rsquo;",
-		        "rsquor;",
-		        "rthree;",
-		        "rtimes;",
-		        "rtri;",
-		        "rtrie;",
-		        "rtrif;",
-		        "rtriltri;",
-		        "ruluhar;",
-		        "rx;",
-		        "sacute;",
-		        "sbquo;",
-		        "sc;",
-		        "scE;",
-		        "scap;",
-		        "scaron;",
-		        "sccue;",
-		        "sce;",
-		        "scedil;",
-		        "scirc;",
-		        "scnE;",
-		        "scnap;",
-		        "scnsim;",
-		        "scpolint;",
-		        "scsim;",
-		        "scy;",
-		        "sdot;",
-		        "sdotb;",
-		        "sdote;",
-		        "seArr;",
-		        "searhk;",
-		        "searr;",
-		        "searrow;",
-		        "sect",
-		        "sect;",
-		        "semi;",
-		        "seswar;",
-		        "setminus;",
-		        "setmn;",
-		        "sext;",
-		        "sfr;",
-		        "sfrown;",
-		        "sharp;",
-		        "shchcy;",
-		        "shcy;",
-		        "shortmid;",
-		        "shortparallel;",
-		        "shy",
-		        "shy;",
-		        "sigma;",
-		        "sigmaf;",
-		        "sigmav;",
-		        "sim;",
-		        "simdot;",
-		        "sime;",
-		        "simeq;",
-		        "simg;",
-		        "simgE;",
-		        "siml;",
-		        "simlE;",
-		        "simne;",
-		        "simplus;",
-		        "simrarr;",
-		        "slarr;",
-		        "smallsetminus;",
-		        "smashp;",
-		        "smeparsl;",
-		        "smid;",
-		        "smile;",
-		        "smt;",
-		        "smte;",
-		        "smtes;",
-		        "softcy;",
-		        "sol;",
-		        "solb;",
-		        "solbar;",
-		        "sopf;",
-		        "spades;",
-		        "spadesuit;",
-		        "spar;",
-		        "sqcap;",
-		        "sqcaps;",
-		        "sqcup;",
-		        "sqcups;",
-		        "sqsub;",
-		        "sqsube;",
-		        "sqsubset;",
-		        "sqsubseteq;",
-		        "sqsup;",
-		        "sqsupe;",
-		        "sqsupset;",
-		        "sqsupseteq;",
-		        "squ;",
-		        "square;",
-		        "squarf;",
-		        "squf;",
-		        "srarr;",
-		        "sscr;",
-		        "ssetmn;",
-		        "ssmile;",
-		        "sstarf;",
-		        "star;",
-		        "starf;",
-		        "straightepsilon;",
-		        "straightphi;",
-		        "strns;",
-		        "sub;",
-		        "subE;",
-		        "subdot;",
-		        "sube;",
-		        "subedot;",
-		        "submult;",
-		        "subnE;",
-		        "subne;",
-		        "subplus;",
-		        "subrarr;",
-		        "subset;",
-		        "subseteq;",
-		        "subseteqq;",
-		        "subsetneq;",
-		        "subsetneqq;",
-		        "subsim;",
-		        "subsub;",
-		        "subsup;",
-		        "succ;",
-		        "succapprox;",
-		        "succcurlyeq;",
-		        "succeq;",
-		        "succnapprox;",
-		        "succneqq;",
-		        "succnsim;",
-		        "succsim;",
-		        "sum;",
-		        "sung;",
-		        "sup1",
-		        "sup1;",
-		        "sup2",
-		        "sup2;",
-		        "sup3",
-		        "sup3;",
-		        "sup;",
-		        "supE;",
-		        "supdot;",
-		        "supdsub;",
-		        "supe;",
-		        "supedot;",
-		        "suphsol;",
-		        "suphsub;",
-		        "suplarr;",
-		        "supmult;",
-		        "supnE;",
-		        "supne;",
-		        "supplus;",
-		        "supset;",
-		        "supseteq;",
-		        "supseteqq;",
-		        "supsetneq;",
-		        "supsetneqq;",
-		        "supsim;",
-		        "supsub;",
-		        "supsup;",
-		        "swArr;",
-		        "swarhk;",
-		        "swarr;",
-		        "swarrow;",
-		        "swnwar;",
-		        "szlig",
-		        "szlig;",
-		        "target;",
-		        "tau;",
-		        "tbrk;",
-		        "tcaron;",
-		        "tcedil;",
-		        "tcy;",
-		        "tdot;",
-		        "telrec;",
-		        "tfr;",
-		        "there4;",
-		        "therefore;",
-		        "theta;",
-		        "thetasym;",
-		        "thetav;",
-		        "thickapprox;",
-		        "thicksim;",
-		        "thinsp;",
-		        "thkap;",
-		        "thksim;",
-		        "thorn",
-		        "thorn;",
-		        "tilde;",
-		        "times",
-		        "times;",
-		        "timesb;",
-		        "timesbar;",
-		        "timesd;",
-		        "tint;",
-		        "toea;",
-		        "top;",
-		        "topbot;",
-		        "topcir;",
-		        "topf;",
-		        "topfork;",
-		        "tosa;",
-		        "tprime;",
-		        "trade;",
-		        "triangle;",
-		        "triangledown;",
-		        "triangleleft;",
-		        "trianglelefteq;",
-		        "triangleq;",
-		        "triangleright;",
-		        "trianglerighteq;",
-		        "tridot;",
-		        "trie;",
-		        "triminus;",
-		        "triplus;",
-		        "trisb;",
-		        "tritime;",
-		        "trpezium;",
-		        "tscr;",
-		        "tscy;",
-		        "tshcy;",
-		        "tstrok;",
-		        "twixt;",
-		        "twoheadleftarrow;",
-		        "twoheadrightarrow;",
-		        "uArr;",
-		        "uHar;",
-		        "uacute",
-		        "uacute;",
-		        "uarr;",
-		        "ubrcy;",
-		        "ubreve;",
-		        "ucirc",
-		        "ucirc;",
-		        "ucy;",
-		        "udarr;",
-		        "udblac;",
-		        "udhar;",
-		        "ufisht;",
-		        "ufr;",
-		        "ugrave",
-		        "ugrave;",
-		        "uharl;",
-		        "uharr;",
-		        "uhblk;",
-		        "ulcorn;",
-		        "ulcorner;",
-		        "ulcrop;",
-		        "ultri;",
-		        "umacr;",
-		        "uml",
-		        "uml;",
-		        "uogon;",
-		        "uopf;",
-		        "uparrow;",
-		        "updownarrow;",
-		        "upharpoonleft;",
-		        "upharpoonright;",
-		        "uplus;",
-		        "upsi;",
-		        "upsih;",
-		        "upsilon;",
-		        "upuparrows;",
-		        "urcorn;",
-		        "urcorner;",
-		        "urcrop;",
-		        "uring;",
-		        "urtri;",
-		        "uscr;",
-		        "utdot;",
-		        "utilde;",
-		        "utri;",
-		        "utrif;",
-		        "uuarr;",
-		        "uuml",
-		        "uuml;",
-		        "uwangle;",
-		        "vArr;",
-		        "vBar;",
-		        "vBarv;",
-		        "vDash;",
-		        "vangrt;",
-		        "varepsilon;",
-		        "varkappa;",
-		        "varnothing;",
-		        "varphi;",
-		        "varpi;",
-		        "varpropto;",
-		        "varr;",
-		        "varrho;",
-		        "varsigma;",
-		        "varsubsetneq;",
-		        "varsubsetneqq;",
-		        "varsupsetneq;",
-		        "varsupsetneqq;",
-		        "vartheta;",
-		        "vartriangleleft;",
-		        "vartriangleright;",
-		        "vcy;",
-		        "vdash;",
-		        "vee;",
-		        "veebar;",
-		        "veeeq;",
-		        "vellip;",
-		        "verbar;",
-		        "vert;",
-		        "vfr;",
-		        "vltri;",
-		        "vnsub;",
-		        "vnsup;",
-		        "vopf;",
-		        "vprop;",
-		        "vrtri;",
-		        "vscr;",
-		        "vsubnE;",
-		        "vsubne;",
-		        "vsupnE;",
-		        "vsupne;",
-		        "vzigzag;",
-		        "wcirc;",
-		        "wedbar;",
-		        "wedge;",
-		        "wedgeq;",
-		        "weierp;",
-		        "wfr;",
-		        "wopf;",
-		        "wp;",
-		        "wr;",
-		        "wreath;",
-		        "wscr;",
-		        "xcap;",
-		        "xcirc;",
-		        "xcup;",
-		        "xdtri;",
-		        "xfr;",
-		        "xhArr;",
-		        "xharr;",
-		        "xi;",
-		        "xlArr;",
-		        "xlarr;",
-		        "xmap;",
-		        "xnis;",
-		        "xodot;",
-		        "xopf;",
-		        "xoplus;",
-		        "xotime;",
-		        "xrArr;",
-		        "xrarr;",
-		        "xscr;",
-		        "xsqcup;",
-		        "xuplus;",
-		        "xutri;",
-		        "xvee;",
-		        "xwedge;",
-		        "yacute",
-		        "yacute;",
-		        "yacy;",
-		        "ycirc;",
-		        "ycy;",
-		        "yen",
-		        "yen;",
-		        "yfr;",
-		        "yicy;",
-		        "yopf;",
-		        "yscr;",
-		        "yucy;",
-		        "yuml",
-		        "yuml;",
-		        "zacute;",
-		        "zcaron;",
-		        "zcy;",
-		        "zdot;",
-		        "zeetrf;",
-		        "zeta;",
-		        "zfr;",
-		        "zhcy;",
-		        "zigrarr;",
-		        "zopf;",
-		        "zscr;",
-		        "zwj;",
-		        "zwnj;"};
+		return {
+		    "AElig",                            // 0
+		    "AElig;",                           // 1
+		    "AMP",                              // 2
+		    "AMP;",                             // 3
+		    "Aacute",                           // 4
+		    "Aacute;",                          // 5
+		    "Abreve;",                          // 6
+		    "Acirc",                            // 7
+		    "Acirc;",                           // 8
+		    "Acy;",                             // 9
+		    "Afr;",                             // 10
+		    "Agrave",                           // 11
+		    "Agrave;",                          // 12
+		    "Alpha;",                           // 13
+		    "Amacr;",                           // 14
+		    "And;",                             // 15
+		    "Aogon;",                           // 16
+		    "Aopf;",                            // 17
+		    "ApplyFunction;",                   // 18
+		    "Aring",                            // 19
+		    "Aring;",                           // 20
+		    "Ascr;",                            // 21
+		    "Assign;",                          // 22
+		    "Atilde",                           // 23
+		    "Atilde;",                          // 24
+		    "Auml",                             // 25
+		    "Auml;",                            // 26
+		    "Backslash;",                       // 27
+		    "Barv;",                            // 28
+		    "Barwed;",                          // 29
+		    "Bcy;",                             // 30
+		    "Because;",                         // 31
+		    "Bernoullis;",                      // 32
+		    "Beta;",                            // 33
+		    "Bfr;",                             // 34
+		    "Bopf;",                            // 35
+		    "Breve;",                           // 36
+		    "Bscr;",                            // 37
+		    "Bumpeq;",                          // 38
+		    "CHcy;",                            // 39
+		    "COPY",                             // 40
+		    "COPY;",                            // 41
+		    "Cacute;",                          // 42
+		    "Cap;",                             // 43
+		    "CapitalDifferentialD;",            // 44
+		    "Cayleys;",                         // 45
+		    "Ccaron;",                          // 46
+		    "Ccedil",                           // 47
+		    "Ccedil;",                          // 48
+		    "Ccirc;",                           // 49
+		    "Cconint;",                         // 50
+		    "Cdot;",                            // 51
+		    "Cedilla;",                         // 52
+		    "CenterDot;",                       // 53
+		    "Cfr;",                             // 54
+		    "Chi;",                             // 55
+		    "CircleDot;",                       // 56
+		    "CircleMinus;",                     // 57
+		    "CirclePlus;",                      // 58
+		    "CircleTimes;",                     // 59
+		    "ClockwiseContourIntegral;",        // 60
+		    "CloseCurlyDoubleQuote;",           // 61
+		    "CloseCurlyQuote;",                 // 62
+		    "Colon;",                           // 63
+		    "Colone;",                          // 64
+		    "Congruent;",                       // 65
+		    "Conint;",                          // 66
+		    "ContourIntegral;",                 // 67
+		    "Copf;",                            // 68
+		    "Coproduct;",                       // 69
+		    "CounterClockwiseContourIntegral;", // 70
+		    "Cross;",                           // 71
+		    "Cscr;",                            // 72
+		    "Cup;",                             // 73
+		    "CupCap;",                          // 74
+		    "DD;",                              // 75
+		    "DDotrahd;",                        // 76
+		    "DJcy;",                            // 77
+		    "DScy;",                            // 78
+		    "DZcy;",                            // 79
+		    "Dagger;",                          // 80
+		    "Darr;",                            // 81
+		    "Dashv;",                           // 82
+		    "Dcaron;",                          // 83
+		    "Dcy;",                             // 84
+		    "Del;",                             // 85
+		    "Delta;",                           // 86
+		    "Dfr;",                             // 87
+		    "DiacriticalAcute;",                // 88
+		    "DiacriticalDot;",                  // 89
+		    "DiacriticalDoubleAcute;",          // 90
+		    "DiacriticalGrave;",                // 91
+		    "DiacriticalTilde;",                // 92
+		    "Diamond;",                         // 93
+		    "DifferentialD;",                   // 94
+		    "Dopf;",                            // 95
+		    "Dot;",                             // 96
+		    "DotDot;",                          // 97
+		    "DotEqual;",                        // 98
+		    "DoubleContourIntegral;",           // 99
+		    "DoubleDot;",                       // 100
+		    "DoubleDownArrow;",                 // 101
+		    "DoubleLeftArrow;",                 // 102
+		    "DoubleLeftRightArrow;",            // 103
+		    "DoubleLeftTee;",                   // 104
+		    "DoubleLongLeftArrow;",             // 105
+		    "DoubleLongLeftRightArrow;",        // 106
+		    "DoubleLongRightArrow;",            // 107
+		    "DoubleRightArrow;",                // 108
+		    "DoubleRightTee;",                  // 109
+		    "DoubleUpArrow;",                   // 110
+		    "DoubleUpDownArrow;",               // 111
+		    "DoubleVerticalBar;",               // 112
+		    "DownArrow;",                       // 113
+		    "DownArrowBar;",                    // 114
+		    "DownArrowUpArrow;",                // 115
+		    "DownBreve;",                       // 116
+		    "DownLeftRightVector;",             // 117
+		    "DownLeftTeeVector;",               // 118
+		    "DownLeftVector;",                  // 119
+		    "DownLeftVectorBar;",               // 120
+		    "DownRightTeeVector;",              // 121
+		    "DownRightVector;",                 // 122
+		    "DownRightVectorBar;",              // 123
+		    "DownTee;",                         // 124
+		    "DownTeeArrow;",                    // 125
+		    "Downarrow;",                       // 126
+		    "Dscr;",                            // 127
+		    "Dstrok;",                          // 128
+		    "ENG;",                             // 129
+		    "ETH",                              // 130
+		    "ETH;",                             // 131
+		    "Eacute",                           // 132
+		    "Eacute;",                          // 133
+		    "Ecaron;",                          // 134
+		    "Ecirc",                            // 135
+		    "Ecirc;",                           // 136
+		    "Ecy;",                             // 137
+		    "Edot;",                            // 138
+		    "Efr;",                             // 139
+		    "Egrave",                           // 140
+		    "Egrave;",                          // 141
+		    "Element;",                         // 142
+		    "Emacr;",                           // 143
+		    "EmptySmallSquare;",                // 144
+		    "EmptyVerySmallSquare;",            // 145
+		    "Eogon;",                           // 146
+		    "Eopf;",                            // 147
+		    "Epsilon;",                         // 148
+		    "Equal;",                           // 149
+		    "EqualTilde;",                      // 150
+		    "Equilibrium;",                     // 151
+		    "Escr;",                            // 152
+		    "Esim;",                            // 153
+		    "Eta;",                             // 154
+		    "Euml",                             // 155
+		    "Euml;",                            // 156
+		    "Exists;",                          // 157
+		    "ExponentialE;",                    // 158
+		    "Fcy;",                             // 159
+		    "Ffr;",                             // 160
+		    "FilledSmallSquare;",               // 161
+		    "FilledVerySmallSquare;",           // 162
+		    "Fopf;",                            // 163
+		    "ForAll;",                          // 164
+		    "Fouriertrf;",                      // 165
+		    "Fscr;",                            // 166
+		    "GJcy;",                            // 167
+		    "GT",                               // 168
+		    "GT;",                              // 169
+		    "Gamma;",                           // 170
+		    "Gammad;",                          // 171
+		    "Gbreve;",                          // 172
+		    "Gcedil;",                          // 173
+		    "Gcirc;",                           // 174
+		    "Gcy;",                             // 175
+		    "Gdot;",                            // 176
+		    "Gfr;",                             // 177
+		    "Gg;",                              // 178
+		    "Gopf;",                            // 179
+		    "GreaterEqual;",                    // 180
+		    "GreaterEqualLess;",                // 181
+		    "GreaterFullEqual;",                // 182
+		    "GreaterGreater;",                  // 183
+		    "GreaterLess;",                     // 184
+		    "GreaterSlantEqual;",               // 185
+		    "GreaterTilde;",                    // 186
+		    "Gscr;",                            // 187
+		    "Gt;",                              // 188
+		    "HARDcy;",                          // 189
+		    "Hacek;",                           // 190
+		    "Hat;",                             // 191
+		    "Hcirc;",                           // 192
+		    "Hfr;",                             // 193
+		    "HilbertSpace;",                    // 194
+		    "Hopf;",                            // 195
+		    "HorizontalLine;",                  // 196
+		    "Hscr;",                            // 197
+		    "Hstrok;",                          // 198
+		    "HumpDownHump;",                    // 199
+		    "HumpEqual;",                       // 200
+		    "IEcy;",                            // 201
+		    "IJlig;",                           // 202
+		    "IOcy;",                            // 203
+		    "Iacute",                           // 204
+		    "Iacute;",                          // 205
+		    "Icirc",                            // 206
+		    "Icirc;",                           // 207
+		    "Icy;",                             // 208
+		    "Idot;",                            // 209
+		    "Ifr;",                             // 210
+		    "Igrave",                           // 211
+		    "Igrave;",                          // 212
+		    "Im;",                              // 213
+		    "Imacr;",                           // 214
+		    "ImaginaryI;",                      // 215
+		    "Implies;",                         // 216
+		    "Int;",                             // 217
+		    "Integral;",                        // 218
+		    "Intersection;",                    // 219
+		    "InvisibleComma;",                  // 220
+		    "InvisibleTimes;",                  // 221
+		    "Iogon;",                           // 222
+		    "Iopf;",                            // 223
+		    "Iota;",                            // 224
+		    "Iscr;",                            // 225
+		    "Itilde;",                          // 226
+		    "Iukcy;",                           // 227
+		    "Iuml",                             // 228
+		    "Iuml;",                            // 229
+		    "Jcirc;",                           // 230
+		    "Jcy;",                             // 231
+		    "Jfr;",                             // 232
+		    "Jopf;",                            // 233
+		    "Jscr;",                            // 234
+		    "Jsercy;",                          // 235
+		    "Jukcy;",                           // 236
+		    "KHcy;",                            // 237
+		    "KJcy;",                            // 238
+		    "Kappa;",                           // 239
+		    "Kcedil;",                          // 240
+		    "Kcy;",                             // 241
+		    "Kfr;",                             // 242
+		    "Kopf;",                            // 243
+		    "Kscr;",                            // 244
+		    "LJcy;",                            // 245
+		    "LT",                               // 246
+		    "LT;",                              // 247
+		    "Lacute;",                          // 248
+		    "Lambda;",                          // 249
+		    "Lang;",                            // 250
+		    "Laplacetrf;",                      // 251
+		    "Larr;",                            // 252
+		    "Lcaron;",                          // 253
+		    "Lcedil;",                          // 254
+		    "Lcy;",                             // 255
+		    "LeftAngleBracket;",                // 256
+		    "LeftArrow;",                       // 257
+		    "LeftArrowBar;",                    // 258
+		    "LeftArrowRightArrow;",             // 259
+		    "LeftCeiling;",                     // 260
+		    "LeftDoubleBracket;",               // 261
+		    "LeftDownTeeVector;",               // 262
+		    "LeftDownVector;",                  // 263
+		    "LeftDownVectorBar;",               // 264
+		    "LeftFloor;",                       // 265
+		    "LeftRightArrow;",                  // 266
+		    "LeftRightVector;",                 // 267
+		    "LeftTee;",                         // 268
+		    "LeftTeeArrow;",                    // 269
+		    "LeftTeeVector;",                   // 270
+		    "LeftTriangle;",                    // 271
+		    "LeftTriangleBar;",                 // 272
+		    "LeftTriangleEqual;",               // 273
+		    "LeftUpDownVector;",                // 274
+		    "LeftUpTeeVector;",                 // 275
+		    "LeftUpVector;",                    // 276
+		    "LeftUpVectorBar;",                 // 277
+		    "LeftVector;",                      // 278
+		    "LeftVectorBar;",                   // 279
+		    "Leftarrow;",                       // 280
+		    "Leftrightarrow;",                  // 281
+		    "LessEqualGreater;",                // 282
+		    "LessFullEqual;",                   // 283
+		    "LessGreater;",                     // 284
+		    "LessLess;",                        // 285
+		    "LessSlantEqual;",                  // 286
+		    "LessTilde;",                       // 287
+		    "Lfr;",                             // 288
+		    "Ll;",                              // 289
+		    "Lleftarrow;",                      // 290
+		    "Lmidot;",                          // 291
+		    "LongLeftArrow;",                   // 292
+		    "LongLeftRightArrow;",              // 293
+		    "LongRightArrow;",                  // 294
+		    "Longleftarrow;",                   // 295
+		    "Longleftrightarrow;",              // 296
+		    "Longrightarrow;",                  // 297
+		    "Lopf;",                            // 298
+		    "LowerLeftArrow;",                  // 299
+		    "LowerRightArrow;",                 // 300
+		    "Lscr;",                            // 301
+		    "Lsh;",                             // 302
+		    "Lstrok;",                          // 303
+		    "Lt;",                              // 304
+		    "Map;",                             // 305
+		    "Mcy;",                             // 306
+		    "MediumSpace;",                     // 307
+		    "Mellintrf;",                       // 308
+		    "Mfr;",                             // 309
+		    "MinusPlus;",                       // 310
+		    "Mopf;",                            // 311
+		    "Mscr;",                            // 312
+		    "Mu;",                              // 313
+		    "NJcy;",                            // 314
+		    "Nacute;",                          // 315
+		    "Ncaron;",                          // 316
+		    "Ncedil;",                          // 317
+		    "Ncy;",                             // 318
+		    "NegativeMediumSpace;",             // 319
+		    "NegativeThickSpace;",              // 320
+		    "NegativeThinSpace;",               // 321
+		    "NegativeVeryThinSpace;",           // 322
+		    "NestedGreaterGreater;",            // 323
+		    "NestedLessLess;",                  // 324
+		    "NewLine;",                         // 325
+		    "Nfr;",                             // 326
+		    "NoBreak;",                         // 327
+		    "NonBreakingSpace;",                // 328
+		    "Nopf;",                            // 329
+		    "Not;",                             // 330
+		    "NotCongruent;",                    // 331
+		    "NotCupCap;",                       // 332
+		    "NotDoubleVerticalBar;",            // 333
+		    "NotElement;",                      // 334
+		    "NotEqual;",                        // 335
+		    "NotEqualTilde;",                   // 336
+		    "NotExists;",                       // 337
+		    "NotGreater;",                      // 338
+		    "NotGreaterEqual;",                 // 339
+		    "NotGreaterFullEqual;",             // 340
+		    "NotGreaterGreater;",               // 341
+		    "NotGreaterLess;",                  // 342
+		    "NotGreaterSlantEqual;",            // 343
+		    "NotGreaterTilde;",                 // 344
+		    "NotHumpDownHump;",                 // 345
+		    "NotHumpEqual;",                    // 346
+		    "NotLeftTriangle;",                 // 347
+		    "NotLeftTriangleBar;",              // 348
+		    "NotLeftTriangleEqual;",            // 349
+		    "NotLess;",                         // 350
+		    "NotLessEqual;",                    // 351
+		    "NotLessGreater;",                  // 352
+		    "NotLessLess;",                     // 353
+		    "NotLessSlantEqual;",               // 354
+		    "NotLessTilde;",                    // 355
+		    "NotNestedGreaterGreater;",         // 356
+		    "NotNestedLessLess;",               // 357
+		    "NotPrecedes;",                     // 358
+		    "NotPrecedesEqual;",                // 359
+		    "NotPrecedesSlantEqual;",           // 360
+		    "NotReverseElement;",               // 361
+		    "NotRightTriangle;",                // 362
+		    "NotRightTriangleBar;",             // 363
+		    "NotRightTriangleEqual;",           // 364
+		    "NotSquareSubset;",                 // 365
+		    "NotSquareSubsetEqual;",            // 366
+		    "NotSquareSuperset;",               // 367
+		    "NotSquareSupersetEqual;",          // 368
+		    "NotSubset;",                       // 369
+		    "NotSubsetEqual;",                  // 370
+		    "NotSucceeds;",                     // 371
+		    "NotSucceedsEqual;",                // 372
+		    "NotSucceedsSlantEqual;",           // 373
+		    "NotSucceedsTilde;",                // 374
+		    "NotSuperset;",                     // 375
+		    "NotSupersetEqual;",                // 376
+		    "NotTilde;",                        // 377
+		    "NotTildeEqual;",                   // 378
+		    "NotTildeFullEqual;",               // 379
+		    "NotTildeTilde;",                   // 380
+		    "NotVerticalBar;",                  // 381
+		    "Nscr;",                            // 382
+		    "Ntilde",                           // 383
+		    "Ntilde;",                          // 384
+		    "Nu;",                              // 385
+		    "OElig;",                           // 386
+		    "Oacute",                           // 387
+		    "Oacute;",                          // 388
+		    "Ocirc",                            // 389
+		    "Ocirc;",                           // 390
+		    "Ocy;",                             // 391
+		    "Odblac;",                          // 392
+		    "Ofr;",                             // 393
+		    "Ograve",                           // 394
+		    "Ograve;",                          // 395
+		    "Omacr;",                           // 396
+		    "Omega;",                           // 397
+		    "Omicron;",                         // 398
+		    "Oopf;",                            // 399
+		    "OpenCurlyDoubleQuote;",            // 400
+		    "OpenCurlyQuote;",                  // 401
+		    "Or;",                              // 402
+		    "Oscr;",                            // 403
+		    "Oslash",                           // 404
+		    "Oslash;",                          // 405
+		    "Otilde",                           // 406
+		    "Otilde;",                          // 407
+		    "Otimes;",                          // 408
+		    "Ouml",                             // 409
+		    "Ouml;",                            // 410
+		    "OverBar;",                         // 411
+		    "OverBrace;",                       // 412
+		    "OverBracket;",                     // 413
+		    "OverParenthesis;",                 // 414
+		    "PartialD;",                        // 415
+		    "Pcy;",                             // 416
+		    "Pfr;",                             // 417
+		    "Phi;",                             // 418
+		    "Pi;",                              // 419
+		    "PlusMinus;",                       // 420
+		    "Poincareplane;",                   // 421
+		    "Popf;",                            // 422
+		    "Pr;",                              // 423
+		    "Precedes;",                        // 424
+		    "PrecedesEqual;",                   // 425
+		    "PrecedesSlantEqual;",              // 426
+		    "PrecedesTilde;",                   // 427
+		    "Prime;",                           // 428
+		    "Product;",                         // 429
+		    "Proportion;",                      // 430
+		    "Proportional;",                    // 431
+		    "Pscr;",                            // 432
+		    "Psi;",                             // 433
+		    "QUOT",                             // 434
+		    "QUOT;",                            // 435
+		    "Qfr;",                             // 436
+		    "Qopf;",                            // 437
+		    "Qscr;",                            // 438
+		    "RBarr;",                           // 439
+		    "REG",                              // 440
+		    "REG;",                             // 441
+		    "Racute;",                          // 442
+		    "Rang;",                            // 443
+		    "Rarr;",                            // 444
+		    "Rarrtl;",                          // 445
+		    "Rcaron;",                          // 446
+		    "Rcedil;",                          // 447
+		    "Rcy;",                             // 448
+		    "Re;",                              // 449
+		    "ReverseElement;",                  // 450
+		    "ReverseEquilibrium;",              // 451
+		    "ReverseUpEquilibrium;",            // 452
+		    "Rfr;",                             // 453
+		    "Rho;",                             // 454
+		    "RightAngleBracket;",               // 455
+		    "RightArrow;",                      // 456
+		    "RightArrowBar;",                   // 457
+		    "RightArrowLeftArrow;",             // 458
+		    "RightCeiling;",                    // 459
+		    "RightDoubleBracket;",              // 460
+		    "RightDownTeeVector;",              // 461
+		    "RightDownVector;",                 // 462
+		    "RightDownVectorBar;",              // 463
+		    "RightFloor;",                      // 464
+		    "RightTee;",                        // 465
+		    "RightTeeArrow;",                   // 466
+		    "RightTeeVector;",                  // 467
+		    "RightTriangle;",                   // 468
+		    "RightTriangleBar;",                // 469
+		    "RightTriangleEqual;",              // 470
+		    "RightUpDownVector;",               // 471
+		    "RightUpTeeVector;",                // 472
+		    "RightUpVector;",                   // 473
+		    "RightUpVectorBar;",                // 474
+		    "RightVector;",                     // 475
+		    "RightVectorBar;",                  // 476
+		    "Rightarrow;",                      // 477
+		    "Ropf;",                            // 478
+		    "RoundImplies;",                    // 479
+		    "Rrightarrow;",                     // 480
+		    "Rscr;",                            // 481
+		    "Rsh;",                             // 482
+		    "RuleDelayed;",                     // 483
+		    "SHCHcy;",                          // 484
+		    "SHcy;",                            // 485
+		    "SOFTcy;",                          // 486
+		    "Sacute;",                          // 487
+		    "Sc;",                              // 488
+		    "Scaron;",                          // 489
+		    "Scedil;",                          // 490
+		    "Scirc;",                           // 491
+		    "Scy;",                             // 492
+		    "Sfr;",                             // 493
+		    "ShortDownArrow;",                  // 494
+		    "ShortLeftArrow;",                  // 495
+		    "ShortRightArrow;",                 // 496
+		    "ShortUpArrow;",                    // 497
+		    "Sigma;",                           // 498
+		    "SmallCircle;",                     // 499
+		    "Sopf;",                            // 500
+		    "Sqrt;",                            // 501
+		    "Square;",                          // 502
+		    "SquareIntersection;",              // 503
+		    "SquareSubset;",                    // 504
+		    "SquareSubsetEqual;",               // 505
+		    "SquareSuperset;",                  // 506
+		    "SquareSupersetEqual;",             // 507
+		    "SquareUnion;",                     // 508
+		    "Sscr;",                            // 509
+		    "Star;",                            // 510
+		    "Sub;",                             // 511
+		    "Subset;",                          // 512
+		    "SubsetEqual;",                     // 513
+		    "Succeeds;",                        // 514
+		    "SucceedsEqual;",                   // 515
+		    "SucceedsSlantEqual;",              // 516
+		    "SucceedsTilde;",                   // 517
+		    "SuchThat;",                        // 518
+		    "Sum;",                             // 519
+		    "Sup;",                             // 520
+		    "Superset;",                        // 521
+		    "SupersetEqual;",                   // 522
+		    "Supset;",                          // 523
+		    "THORN",                            // 524
+		    "THORN;",                           // 525
+		    "TRADE;",                           // 526
+		    "TSHcy;",                           // 527
+		    "TScy;",                            // 528
+		    "Tab;",                             // 529
+		    "Tau;",                             // 530
+		    "Tcaron;",                          // 531
+		    "Tcedil;",                          // 532
+		    "Tcy;",                             // 533
+		    "Tfr;",                             // 534
+		    "Therefore;",                       // 535
+		    "Theta;",                           // 536
+		    "ThickSpace;",                      // 537
+		    "ThinSpace;",                       // 538
+		    "Tilde;",                           // 539
+		    "TildeEqual;",                      // 540
+		    "TildeFullEqual;",                  // 541
+		    "TildeTilde;",                      // 542
+		    "Topf;",                            // 543
+		    "TripleDot;",                       // 544
+		    "Tscr;",                            // 545
+		    "Tstrok;",                          // 546
+		    "Uacute",                           // 547
+		    "Uacute;",                          // 548
+		    "Uarr;",                            // 549
+		    "Uarrocir;",                        // 550
+		    "Ubrcy;",                           // 551
+		    "Ubreve;",                          // 552
+		    "Ucirc",                            // 553
+		    "Ucirc;",                           // 554
+		    "Ucy;",                             // 555
+		    "Udblac;",                          // 556
+		    "Ufr;",                             // 557
+		    "Ugrave",                           // 558
+		    "Ugrave;",                          // 559
+		    "Umacr;",                           // 560
+		    "UnderBar;",                        // 561
+		    "UnderBrace;",                      // 562
+		    "UnderBracket;",                    // 563
+		    "UnderParenthesis;",                // 564
+		    "Union;",                           // 565
+		    "UnionPlus;",                       // 566
+		    "Uogon;",                           // 567
+		    "Uopf;",                            // 568
+		    "UpArrow;",                         // 569
+		    "UpArrowBar;",                      // 570
+		    "UpArrowDownArrow;",                // 571
+		    "UpDownArrow;",                     // 572
+		    "UpEquilibrium;",                   // 573
+		    "UpTee;",                           // 574
+		    "UpTeeArrow;",                      // 575
+		    "Uparrow;",                         // 576
+		    "Updownarrow;",                     // 577
+		    "UpperLeftArrow;",                  // 578
+		    "UpperRightArrow;",                 // 579
+		    "Upsi;",                            // 580
+		    "Upsilon;",                         // 581
+		    "Uring;",                           // 582
+		    "Uscr;",                            // 583
+		    "Utilde;",                          // 584
+		    "Uuml",                             // 585
+		    "Uuml;",                            // 586
+		    "VDash;",                           // 587
+		    "Vbar;",                            // 588
+		    "Vcy;",                             // 589
+		    "Vdash;",                           // 590
+		    "Vdashl;",                          // 591
+		    "Vee;",                             // 592
+		    "Verbar;",                          // 593
+		    "Vert;",                            // 594
+		    "VerticalBar;",                     // 595
+		    "VerticalLine;",                    // 596
+		    "VerticalSeparator;",               // 597
+		    "VerticalTilde;",                   // 598
+		    "VeryThinSpace;",                   // 599
+		    "Vfr;",                             // 600
+		    "Vopf;",                            // 601
+		    "Vscr;",                            // 602
+		    "Vvdash;",                          // 603
+		    "Wcirc;",                           // 604
+		    "Wedge;",                           // 605
+		    "Wfr;",                             // 606
+		    "Wopf;",                            // 607
+		    "Wscr;",                            // 608
+		    "Xfr;",                             // 609
+		    "Xi;",                              // 610
+		    "Xopf;",                            // 611
+		    "Xscr;",                            // 612
+		    "YAcy;",                            // 613
+		    "YIcy;",                            // 614
+		    "YUcy;",                            // 615
+		    "Yacute",                           // 616
+		    "Yacute;",                          // 617
+		    "Ycirc;",                           // 618
+		    "Ycy;",                             // 619
+		    "Yfr;",                             // 620
+		    "Yopf;",                            // 621
+		    "Yscr;",                            // 622
+		    "Yuml;",                            // 623
+		    "ZHcy;",                            // 624
+		    "Zacute;",                          // 625
+		    "Zcaron;",                          // 626
+		    "Zcy;",                             // 627
+		    "Zdot;",                            // 628
+		    "ZeroWidthSpace;",                  // 629
+		    "Zeta;",                            // 630
+		    "Zfr;",                             // 631
+		    "Zopf;",                            // 632
+		    "Zscr;",                            // 633
+		    "aacute",                           // 634
+		    "aacute;",                          // 635
+		    "abreve;",                          // 636
+		    "ac;",                              // 637
+		    "acE;",                             // 638
+		    "acd;",                             // 639
+		    "acirc",                            // 640
+		    "acirc;",                           // 641
+		    "acute",                            // 642
+		    "acute;",                           // 643
+		    "acy;",                             // 644
+		    "aelig",                            // 645
+		    "aelig;",                           // 646
+		    "af;",                              // 647
+		    "afr;",                             // 648
+		    "agrave",                           // 649
+		    "agrave;",                          // 650
+		    "alefsym;",                         // 651
+		    "aleph;",                           // 652
+		    "alpha;",                           // 653
+		    "amacr;",                           // 654
+		    "amalg;",                           // 655
+		    "amp",                              // 656
+		    "amp;",                             // 657
+		    "and;",                             // 658
+		    "andand;",                          // 659
+		    "andd;",                            // 660
+		    "andslope;",                        // 661
+		    "andv;",                            // 662
+		    "ang;",                             // 663
+		    "ange;",                            // 664
+		    "angle;",                           // 665
+		    "angmsd;",                          // 666
+		    "angmsdaa;",                        // 667
+		    "angmsdab;",                        // 668
+		    "angmsdac;",                        // 669
+		    "angmsdad;",                        // 670
+		    "angmsdae;",                        // 671
+		    "angmsdaf;",                        // 672
+		    "angmsdag;",                        // 673
+		    "angmsdah;",                        // 674
+		    "angrt;",                           // 675
+		    "angrtvb;",                         // 676
+		    "angrtvbd;",                        // 677
+		    "angsph;",                          // 678
+		    "angst;",                           // 679
+		    "angzarr;",                         // 680
+		    "aogon;",                           // 681
+		    "aopf;",                            // 682
+		    "ap;",                              // 683
+		    "apE;",                             // 684
+		    "apacir;",                          // 685
+		    "ape;",                             // 686
+		    "apid;",                            // 687
+		    "apos;",                            // 688
+		    "approx;",                          // 689
+		    "approxeq;",                        // 690
+		    "aring",                            // 691
+		    "aring;",                           // 692
+		    "ascr;",                            // 693
+		    "ast;",                             // 694
+		    "asymp;",                           // 695
+		    "asympeq;",                         // 696
+		    "atilde",                           // 697
+		    "atilde;",                          // 698
+		    "auml",                             // 699
+		    "auml;",                            // 700
+		    "awconint;",                        // 701
+		    "awint;",                           // 702
+		    "bNot;",                            // 703
+		    "backcong;",                        // 704
+		    "backepsilon;",                     // 705
+		    "backprime;",                       // 706
+		    "backsim;",                         // 707
+		    "backsimeq;",                       // 708
+		    "barvee;",                          // 709
+		    "barwed;",                          // 710
+		    "barwedge;",                        // 711
+		    "bbrk;",                            // 712
+		    "bbrktbrk;",                        // 713
+		    "bcong;",                           // 714
+		    "bcy;",                             // 715
+		    "bdquo;",                           // 716
+		    "becaus;",                          // 717
+		    "because;",                         // 718
+		    "bemptyv;",                         // 719
+		    "bepsi;",                           // 720
+		    "bernou;",                          // 721
+		    "beta;",                            // 722
+		    "beth;",                            // 723
+		    "between;",                         // 724
+		    "bfr;",                             // 725
+		    "bigcap;",                          // 726
+		    "bigcirc;",                         // 727
+		    "bigcup;",                          // 728
+		    "bigodot;",                         // 729
+		    "bigoplus;",                        // 730
+		    "bigotimes;",                       // 731
+		    "bigsqcup;",                        // 732
+		    "bigstar;",                         // 733
+		    "bigtriangledown;",                 // 734
+		    "bigtriangleup;",                   // 735
+		    "biguplus;",                        // 736
+		    "bigvee;",                          // 737
+		    "bigwedge;",                        // 738
+		    "bkarow;",                          // 739
+		    "blacklozenge;",                    // 740
+		    "blacksquare;",                     // 741
+		    "blacktriangle;",                   // 742
+		    "blacktriangledown;",               // 743
+		    "blacktriangleleft;",               // 744
+		    "blacktriangleright;",              // 745
+		    "blank;",                           // 746
+		    "blk12;",                           // 747
+		    "blk14;",                           // 748
+		    "blk34;",                           // 749
+		    "block;",                           // 750
+		    "bne;",                             // 751
+		    "bnequiv;",                         // 752
+		    "bnot;",                            // 753
+		    "bopf;",                            // 754
+		    "bot;",                             // 755
+		    "bottom;",                          // 756
+		    "bowtie;",                          // 757
+		    "boxDL;",                           // 758
+		    "boxDR;",                           // 759
+		    "boxDl;",                           // 760
+		    "boxDr;",                           // 761
+		    "boxH;",                            // 762
+		    "boxHD;",                           // 763
+		    "boxHU;",                           // 764
+		    "boxHd;",                           // 765
+		    "boxHu;",                           // 766
+		    "boxUL;",                           // 767
+		    "boxUR;",                           // 768
+		    "boxUl;",                           // 769
+		    "boxUr;",                           // 770
+		    "boxV;",                            // 771
+		    "boxVH;",                           // 772
+		    "boxVL;",                           // 773
+		    "boxVR;",                           // 774
+		    "boxVh;",                           // 775
+		    "boxVl;",                           // 776
+		    "boxVr;",                           // 777
+		    "boxbox;",                          // 778
+		    "boxdL;",                           // 779
+		    "boxdR;",                           // 780
+		    "boxdl;",                           // 781
+		    "boxdr;",                           // 782
+		    "boxh;",                            // 783
+		    "boxhD;",                           // 784
+		    "boxhU;",                           // 785
+		    "boxhd;",                           // 786
+		    "boxhu;",                           // 787
+		    "boxminus;",                        // 788
+		    "boxplus;",                         // 789
+		    "boxtimes;",                        // 790
+		    "boxuL;",                           // 791
+		    "boxuR;",                           // 792
+		    "boxul;",                           // 793
+		    "boxur;",                           // 794
+		    "boxv;",                            // 795
+		    "boxvH;",                           // 796
+		    "boxvL;",                           // 797
+		    "boxvR;",                           // 798
+		    "boxvh;",                           // 799
+		    "boxvl;",                           // 800
+		    "boxvr;",                           // 801
+		    "bprime;",                          // 802
+		    "breve;",                           // 803
+		    "brvbar",                           // 804
+		    "brvbar;",                          // 805
+		    "bscr;",                            // 806
+		    "bsemi;",                           // 807
+		    "bsim;",                            // 808
+		    "bsime;",                           // 809
+		    "bsol;",                            // 810
+		    "bsolb;",                           // 811
+		    "bsolhsub;",                        // 812
+		    "bull;",                            // 813
+		    "bullet;",                          // 814
+		    "bump;",                            // 815
+		    "bumpE;",                           // 816
+		    "bumpe;",                           // 817
+		    "bumpeq;",                          // 818
+		    "cacute;",                          // 819
+		    "cap;",                             // 820
+		    "capand;",                          // 821
+		    "capbrcup;",                        // 822
+		    "capcap;",                          // 823
+		    "capcup;",                          // 824
+		    "capdot;",                          // 825
+		    "caps;",                            // 826
+		    "caret;",                           // 827
+		    "caron;",                           // 828
+		    "ccaps;",                           // 829
+		    "ccaron;",                          // 830
+		    "ccedil",                           // 831
+		    "ccedil;",                          // 832
+		    "ccirc;",                           // 833
+		    "ccups;",                           // 834
+		    "ccupssm;",                         // 835
+		    "cdot;",                            // 836
+		    "cedil",                            // 837
+		    "cedil;",                           // 838
+		    "cemptyv;",                         // 839
+		    "cent",                             // 840
+		    "cent;",                            // 841
+		    "centerdot;",                       // 842
+		    "cfr;",                             // 843
+		    "chcy;",                            // 844
+		    "check;",                           // 845
+		    "checkmark;",                       // 846
+		    "chi;",                             // 847
+		    "cir;",                             // 848
+		    "cirE;",                            // 849
+		    "circ;",                            // 850
+		    "circeq;",                          // 851
+		    "circlearrowleft;",                 // 852
+		    "circlearrowright;",                // 853
+		    "circledR;",                        // 854
+		    "circledS;",                        // 855
+		    "circledast;",                      // 856
+		    "circledcirc;",                     // 857
+		    "circleddash;",                     // 858
+		    "cire;",                            // 859
+		    "cirfnint;",                        // 860
+		    "cirmid;",                          // 861
+		    "cirscir;",                         // 862
+		    "clubs;",                           // 863
+		    "clubsuit;",                        // 864
+		    "colon;",                           // 865
+		    "colone;",                          // 866
+		    "coloneq;",                         // 867
+		    "comma;",                           // 868
+		    "commat;",                          // 869
+		    "comp;",                            // 870
+		    "compfn;",                          // 871
+		    "complement;",                      // 872
+		    "complexes;",                       // 873
+		    "cong;",                            // 874
+		    "congdot;",                         // 875
+		    "conint;",                          // 876
+		    "copf;",                            // 877
+		    "coprod;",                          // 878
+		    "copy",                             // 879
+		    "copy;",                            // 880
+		    "copysr;",                          // 881
+		    "crarr;",                           // 882
+		    "cross;",                           // 883
+		    "cscr;",                            // 884
+		    "csub;",                            // 885
+		    "csube;",                           // 886
+		    "csup;",                            // 887
+		    "csupe;",                           // 888
+		    "ctdot;",                           // 889
+		    "cudarrl;",                         // 890
+		    "cudarrr;",                         // 891
+		    "cuepr;",                           // 892
+		    "cuesc;",                           // 893
+		    "cularr;",                          // 894
+		    "cularrp;",                         // 895
+		    "cup;",                             // 896
+		    "cupbrcap;",                        // 897
+		    "cupcap;",                          // 898
+		    "cupcup;",                          // 899
+		    "cupdot;",                          // 900
+		    "cupor;",                           // 901
+		    "cups;",                            // 902
+		    "curarr;",                          // 903
+		    "curarrm;",                         // 904
+		    "curlyeqprec;",                     // 905
+		    "curlyeqsucc;",                     // 906
+		    "curlyvee;",                        // 907
+		    "curlywedge;",                      // 908
+		    "curren",                           // 909
+		    "curren;",                          // 910
+		    "curvearrowleft;",                  // 911
+		    "curvearrowright;",                 // 912
+		    "cuvee;",                           // 913
+		    "cuwed;",                           // 914
+		    "cwconint;",                        // 915
+		    "cwint;",                           // 916
+		    "cylcty;",                          // 917
+		    "dArr;",                            // 918
+		    "dHar;",                            // 919
+		    "dagger;",                          // 920
+		    "daleth;",                          // 921
+		    "darr;",                            // 922
+		    "dash;",                            // 923
+		    "dashv;",                           // 924
+		    "dbkarow;",                         // 925
+		    "dblac;",                           // 926
+		    "dcaron;",                          // 927
+		    "dcy;",                             // 928
+		    "dd;",                              // 929
+		    "ddagger;",                         // 930
+		    "ddarr;",                           // 931
+		    "ddotseq;",                         // 932
+		    "deg",                              // 933
+		    "deg;",                             // 934
+		    "delta;",                           // 935
+		    "demptyv;",                         // 936
+		    "dfisht;",                          // 937
+		    "dfr;",                             // 938
+		    "dharl;",                           // 939
+		    "dharr;",                           // 940
+		    "diam;",                            // 941
+		    "diamond;",                         // 942
+		    "diamondsuit;",                     // 943
+		    "diams;",                           // 944
+		    "die;",                             // 945
+		    "digamma;",                         // 946
+		    "disin;",                           // 947
+		    "div;",                             // 948
+		    "divide",                           // 949
+		    "divide;",                          // 950
+		    "divideontimes;",                   // 951
+		    "divonx;",                          // 952
+		    "djcy;",                            // 953
+		    "dlcorn;",                          // 954
+		    "dlcrop;",                          // 955
+		    "dollar;",                          // 956
+		    "dopf;",                            // 957
+		    "dot;",                             // 958
+		    "doteq;",                           // 959
+		    "doteqdot;",                        // 960
+		    "dotminus;",                        // 961
+		    "dotplus;",                         // 962
+		    "dotsquare;",                       // 963
+		    "doublebarwedge;",                  // 964
+		    "downarrow;",                       // 965
+		    "downdownarrows;",                  // 966
+		    "downharpoonleft;",                 // 967
+		    "downharpoonright;",                // 968
+		    "drbkarow;",                        // 969
+		    "drcorn;",                          // 970
+		    "drcrop;",                          // 971
+		    "dscr;",                            // 972
+		    "dscy;",                            // 973
+		    "dsol;",                            // 974
+		    "dstrok;",                          // 975
+		    "dtdot;",                           // 976
+		    "dtri;",                            // 977
+		    "dtrif;",                           // 978
+		    "duarr;",                           // 979
+		    "duhar;",                           // 980
+		    "dwangle;",                         // 981
+		    "dzcy;",                            // 982
+		    "dzigrarr;",                        // 983
+		    "eDDot;",                           // 984
+		    "eDot;",                            // 985
+		    "eacute",                           // 986
+		    "eacute;",                          // 987
+		    "easter;",                          // 988
+		    "ecaron;",                          // 989
+		    "ecir;",                            // 990
+		    "ecirc",                            // 991
+		    "ecirc;",                           // 992
+		    "ecolon;",                          // 993
+		    "ecy;",                             // 994
+		    "edot;",                            // 995
+		    "ee;",                              // 996
+		    "efDot;",                           // 997
+		    "efr;",                             // 998
+		    "eg;",                              // 999
+		    "egrave",                           // 1000
+		    "egrave;",                          // 1001
+		    "egs;",                             // 1002
+		    "egsdot;",                          // 1003
+		    "el;",                              // 1004
+		    "elinters;",                        // 1005
+		    "ell;",                             // 1006
+		    "els;",                             // 1007
+		    "elsdot;",                          // 1008
+		    "emacr;",                           // 1009
+		    "empty;",                           // 1010
+		    "emptyset;",                        // 1011
+		    "emptyv;",                          // 1012
+		    "emsp13;",                          // 1013
+		    "emsp14;",                          // 1014
+		    "emsp;",                            // 1015
+		    "eng;",                             // 1016
+		    "ensp;",                            // 1017
+		    "eogon;",                           // 1018
+		    "eopf;",                            // 1019
+		    "epar;",                            // 1020
+		    "eparsl;",                          // 1021
+		    "eplus;",                           // 1022
+		    "epsi;",                            // 1023
+		    "epsilon;",                         // 1024
+		    "epsiv;",                           // 1025
+		    "eqcirc;",                          // 1026
+		    "eqcolon;",                         // 1027
+		    "eqsim;",                           // 1028
+		    "eqslantgtr;",                      // 1029
+		    "eqslantless;",                     // 1030
+		    "equals;",                          // 1031
+		    "equest;",                          // 1032
+		    "equiv;",                           // 1033
+		    "equivDD;",                         // 1034
+		    "eqvparsl;",                        // 1035
+		    "erDot;",                           // 1036
+		    "erarr;",                           // 1037
+		    "escr;",                            // 1038
+		    "esdot;",                           // 1039
+		    "esim;",                            // 1040
+		    "eta;",                             // 1041
+		    "eth",                              // 1042
+		    "eth;",                             // 1043
+		    "euml",                             // 1044
+		    "euml;",                            // 1045
+		    "euro;",                            // 1046
+		    "excl;",                            // 1047
+		    "exist;",                           // 1048
+		    "expectation;",                     // 1049
+		    "exponentiale;",                    // 1050
+		    "fallingdotseq;",                   // 1051
+		    "fcy;",                             // 1052
+		    "female;",                          // 1053
+		    "ffilig;",                          // 1054
+		    "fflig;",                           // 1055
+		    "ffllig;",                          // 1056
+		    "ffr;",                             // 1057
+		    "filig;",                           // 1058
+		    "fjlig;",                           // 1059
+		    "flat;",                            // 1060
+		    "fllig;",                           // 1061
+		    "fltns;",                           // 1062
+		    "fnof;",                            // 1063
+		    "fopf;",                            // 1064
+		    "forall;",                          // 1065
+		    "fork;",                            // 1066
+		    "forkv;",                           // 1067
+		    "fpartint;",                        // 1068
+		    "frac12",                           // 1069
+		    "frac12;",                          // 1070
+		    "frac13;",                          // 1071
+		    "frac14",                           // 1072
+		    "frac14;",                          // 1073
+		    "frac15;",                          // 1074
+		    "frac16;",                          // 1075
+		    "frac18;",                          // 1076
+		    "frac23;",                          // 1077
+		    "frac25;",                          // 1078
+		    "frac34",                           // 1079
+		    "frac34;",                          // 1080
+		    "frac35;",                          // 1081
+		    "frac38;",                          // 1082
+		    "frac45;",                          // 1083
+		    "frac56;",                          // 1084
+		    "frac58;",                          // 1085
+		    "frac78;",                          // 1086
+		    "frasl;",                           // 1087
+		    "frown;",                           // 1088
+		    "fscr;",                            // 1089
+		    "gE;",                              // 1090
+		    "gEl;",                             // 1091
+		    "gacute;",                          // 1092
+		    "gamma;",                           // 1093
+		    "gammad;",                          // 1094
+		    "gap;",                             // 1095
+		    "gbreve;",                          // 1096
+		    "gcirc;",                           // 1097
+		    "gcy;",                             // 1098
+		    "gdot;",                            // 1099
+		    "ge;",                              // 1100
+		    "gel;",                             // 1101
+		    "geq;",                             // 1102
+		    "geqq;",                            // 1103
+		    "geqslant;",                        // 1104
+		    "ges;",                             // 1105
+		    "gescc;",                           // 1106
+		    "gesdot;",                          // 1107
+		    "gesdoto;",                         // 1108
+		    "gesdotol;",                        // 1109
+		    "gesl;",                            // 1110
+		    "gesles;",                          // 1111
+		    "gfr;",                             // 1112
+		    "gg;",                              // 1113
+		    "ggg;",                             // 1114
+		    "gimel;",                           // 1115
+		    "gjcy;",                            // 1116
+		    "gl;",                              // 1117
+		    "glE;",                             // 1118
+		    "gla;",                             // 1119
+		    "glj;",                             // 1120
+		    "gnE;",                             // 1121
+		    "gnap;",                            // 1122
+		    "gnapprox;",                        // 1123
+		    "gne;",                             // 1124
+		    "gneq;",                            // 1125
+		    "gneqq;",                           // 1126
+		    "gnsim;",                           // 1127
+		    "gopf;",                            // 1128
+		    "grave;",                           // 1129
+		    "gscr;",                            // 1130
+		    "gsim;",                            // 1131
+		    "gsime;",                           // 1132
+		    "gsiml;",                           // 1133
+		    "gt",                               // 1134
+		    "gt;",                              // 1135
+		    "gtcc;",                            // 1136
+		    "gtcir;",                           // 1137
+		    "gtdot;",                           // 1138
+		    "gtlPar;",                          // 1139
+		    "gtquest;",                         // 1140
+		    "gtrapprox;",                       // 1141
+		    "gtrarr;",                          // 1142
+		    "gtrdot;",                          // 1143
+		    "gtreqless;",                       // 1144
+		    "gtreqqless;",                      // 1145
+		    "gtrless;",                         // 1146
+		    "gtrsim;",                          // 1147
+		    "gvertneqq;",                       // 1148
+		    "gvnE;",                            // 1149
+		    "hArr;",                            // 1150
+		    "hairsp;",                          // 1151
+		    "half;",                            // 1152
+		    "hamilt;",                          // 1153
+		    "hardcy;",                          // 1154
+		    "harr;",                            // 1155
+		    "harrcir;",                         // 1156
+		    "harrw;",                           // 1157
+		    "hbar;",                            // 1158
+		    "hcirc;",                           // 1159
+		    "hearts;",                          // 1160
+		    "heartsuit;",                       // 1161
+		    "hellip;",                          // 1162
+		    "hercon;",                          // 1163
+		    "hfr;",                             // 1164
+		    "hksearow;",                        // 1165
+		    "hkswarow;",                        // 1166
+		    "hoarr;",                           // 1167
+		    "homtht;",                          // 1168
+		    "hookleftarrow;",                   // 1169
+		    "hookrightarrow;",                  // 1170
+		    "hopf;",                            // 1171
+		    "horbar;",                          // 1172
+		    "hscr;",                            // 1173
+		    "hslash;",                          // 1174
+		    "hstrok;",                          // 1175
+		    "hybull;",                          // 1176
+		    "hyphen;",                          // 1177
+		    "iacute",                           // 1178
+		    "iacute;",                          // 1179
+		    "ic;",                              // 1180
+		    "icirc",                            // 1181
+		    "icirc;",                           // 1182
+		    "icy;",                             // 1183
+		    "iecy;",                            // 1184
+		    "iexcl",                            // 1185
+		    "iexcl;",                           // 1186
+		    "iff;",                             // 1187
+		    "ifr;",                             // 1188
+		    "igrave",                           // 1189
+		    "igrave;",                          // 1190
+		    "ii;",                              // 1191
+		    "iiiint;",                          // 1192
+		    "iiint;",                           // 1193
+		    "iinfin;",                          // 1194
+		    "iiota;",                           // 1195
+		    "ijlig;",                           // 1196
+		    "imacr;",                           // 1197
+		    "image;",                           // 1198
+		    "imagline;",                        // 1199
+		    "imagpart;",                        // 1200
+		    "imath;",                           // 1201
+		    "imof;",                            // 1202
+		    "imped;",                           // 1203
+		    "in;",                              // 1204
+		    "incare;",                          // 1205
+		    "infin;",                           // 1206
+		    "infintie;",                        // 1207
+		    "inodot;",                          // 1208
+		    "int;",                             // 1209
+		    "intcal;",                          // 1210
+		    "integers;",                        // 1211
+		    "intercal;",                        // 1212
+		    "intlarhk;",                        // 1213
+		    "intprod;",                         // 1214
+		    "iocy;",                            // 1215
+		    "iogon;",                           // 1216
+		    "iopf;",                            // 1217
+		    "iota;",                            // 1218
+		    "iprod;",                           // 1219
+		    "iquest",                           // 1220
+		    "iquest;",                          // 1221
+		    "iscr;",                            // 1222
+		    "isin;",                            // 1223
+		    "isinE;",                           // 1224
+		    "isindot;",                         // 1225
+		    "isins;",                           // 1226
+		    "isinsv;",                          // 1227
+		    "isinv;",                           // 1228
+		    "it;",                              // 1229
+		    "itilde;",                          // 1230
+		    "iukcy;",                           // 1231
+		    "iuml",                             // 1232
+		    "iuml;",                            // 1233
+		    "jcirc;",                           // 1234
+		    "jcy;",                             // 1235
+		    "jfr;",                             // 1236
+		    "jmath;",                           // 1237
+		    "jopf;",                            // 1238
+		    "jscr;",                            // 1239
+		    "jsercy;",                          // 1240
+		    "jukcy;",                           // 1241
+		    "kappa;",                           // 1242
+		    "kappav;",                          // 1243
+		    "kcedil;",                          // 1244
+		    "kcy;",                             // 1245
+		    "kfr;",                             // 1246
+		    "kgreen;",                          // 1247
+		    "khcy;",                            // 1248
+		    "kjcy;",                            // 1249
+		    "kopf;",                            // 1250
+		    "kscr;",                            // 1251
+		    "lAarr;",                           // 1252
+		    "lArr;",                            // 1253
+		    "lAtail;",                          // 1254
+		    "lBarr;",                           // 1255
+		    "lE;",                              // 1256
+		    "lEg;",                             // 1257
+		    "lHar;",                            // 1258
+		    "lacute;",                          // 1259
+		    "laemptyv;",                        // 1260
+		    "lagran;",                          // 1261
+		    "lambda;",                          // 1262
+		    "lang;",                            // 1263
+		    "langd;",                           // 1264
+		    "langle;",                          // 1265
+		    "lap;",                             // 1266
+		    "laquo",                            // 1267
+		    "laquo;",                           // 1268
+		    "larr;",                            // 1269
+		    "larrb;",                           // 1270
+		    "larrbfs;",                         // 1271
+		    "larrfs;",                          // 1272
+		    "larrhk;",                          // 1273
+		    "larrlp;",                          // 1274
+		    "larrpl;",                          // 1275
+		    "larrsim;",                         // 1276
+		    "larrtl;",                          // 1277
+		    "lat;",                             // 1278
+		    "latail;",                          // 1279
+		    "late;",                            // 1280
+		    "lates;",                           // 1281
+		    "lbarr;",                           // 1282
+		    "lbbrk;",                           // 1283
+		    "lbrace;",                          // 1284
+		    "lbrack;",                          // 1285
+		    "lbrke;",                           // 1286
+		    "lbrksld;",                         // 1287
+		    "lbrkslu;",                         // 1288
+		    "lcaron;",                          // 1289
+		    "lcedil;",                          // 1290
+		    "lceil;",                           // 1291
+		    "lcub;",                            // 1292
+		    "lcy;",                             // 1293
+		    "ldca;",                            // 1294
+		    "ldquo;",                           // 1295
+		    "ldquor;",                          // 1296
+		    "ldrdhar;",                         // 1297
+		    "ldrushar;",                        // 1298
+		    "ldsh;",                            // 1299
+		    "le;",                              // 1300
+		    "leftarrow;",                       // 1301
+		    "leftarrowtail;",                   // 1302
+		    "leftharpoondown;",                 // 1303
+		    "leftharpoonup;",                   // 1304
+		    "leftleftarrows;",                  // 1305
+		    "leftrightarrow;",                  // 1306
+		    "leftrightarrows;",                 // 1307
+		    "leftrightharpoons;",               // 1308
+		    "leftrightsquigarrow;",             // 1309
+		    "leftthreetimes;",                  // 1310
+		    "leg;",                             // 1311
+		    "leq;",                             // 1312
+		    "leqq;",                            // 1313
+		    "leqslant;",                        // 1314
+		    "les;",                             // 1315
+		    "lescc;",                           // 1316
+		    "lesdot;",                          // 1317
+		    "lesdoto;",                         // 1318
+		    "lesdotor;",                        // 1319
+		    "lesg;",                            // 1320
+		    "lesges;",                          // 1321
+		    "lessapprox;",                      // 1322
+		    "lessdot;",                         // 1323
+		    "lesseqgtr;",                       // 1324
+		    "lesseqqgtr;",                      // 1325
+		    "lessgtr;",                         // 1326
+		    "lesssim;",                         // 1327
+		    "lfisht;",                          // 1328
+		    "lfloor;",                          // 1329
+		    "lfr;",                             // 1330
+		    "lg;",                              // 1331
+		    "lgE;",                             // 1332
+		    "lhard;",                           // 1333
+		    "lharu;",                           // 1334
+		    "lharul;",                          // 1335
+		    "lhblk;",                           // 1336
+		    "ljcy;",                            // 1337
+		    "ll;",                              // 1338
+		    "llarr;",                           // 1339
+		    "llcorner;",                        // 1340
+		    "llhard;",                          // 1341
+		    "lltri;",                           // 1342
+		    "lmidot;",                          // 1343
+		    "lmoust;",                          // 1344
+		    "lmoustache;",                      // 1345
+		    "lnE;",                             // 1346
+		    "lnap;",                            // 1347
+		    "lnapprox;",                        // 1348
+		    "lne;",                             // 1349
+		    "lneq;",                            // 1350
+		    "lneqq;",                           // 1351
+		    "lnsim;",                           // 1352
+		    "loang;",                           // 1353
+		    "loarr;",                           // 1354
+		    "lobrk;",                           // 1355
+		    "longleftarrow;",                   // 1356
+		    "longleftrightarrow;",              // 1357
+		    "longmapsto;",                      // 1358
+		    "longrightarrow;",                  // 1359
+		    "looparrowleft;",                   // 1360
+		    "looparrowright;",                  // 1361
+		    "lopar;",                           // 1362
+		    "lopf;",                            // 1363
+		    "loplus;",                          // 1364
+		    "lotimes;",                         // 1365
+		    "lowast;",                          // 1366
+		    "lowbar;",                          // 1367
+		    "loz;",                             // 1368
+		    "lozenge;",                         // 1369
+		    "lozf;",                            // 1370
+		    "lpar;",                            // 1371
+		    "lparlt;",                          // 1372
+		    "lrarr;",                           // 1373
+		    "lrcorner;",                        // 1374
+		    "lrhar;",                           // 1375
+		    "lrhard;",                          // 1376
+		    "lrm;",                             // 1377
+		    "lrtri;",                           // 1378
+		    "lsaquo;",                          // 1379
+		    "lscr;",                            // 1380
+		    "lsh;",                             // 1381
+		    "lsim;",                            // 1382
+		    "lsime;",                           // 1383
+		    "lsimg;",                           // 1384
+		    "lsqb;",                            // 1385
+		    "lsquo;",                           // 1386
+		    "lsquor;",                          // 1387
+		    "lstrok;",                          // 1388
+		    "lt",                               // 1389
+		    "lt;",                              // 1390
+		    "ltcc;",                            // 1391
+		    "ltcir;",                           // 1392
+		    "ltdot;",                           // 1393
+		    "lthree;",                          // 1394
+		    "ltimes;",                          // 1395
+		    "ltlarr;",                          // 1396
+		    "ltquest;",                         // 1397
+		    "ltrPar;",                          // 1398
+		    "ltri;",                            // 1399
+		    "ltrie;",                           // 1400
+		    "ltrif;",                           // 1401
+		    "lurdshar;",                        // 1402
+		    "luruhar;",                         // 1403
+		    "lvertneqq;",                       // 1404
+		    "lvnE;",                            // 1405
+		    "mDDot;",                           // 1406
+		    "macr",                             // 1407
+		    "macr;",                            // 1408
+		    "male;",                            // 1409
+		    "malt;",                            // 1410
+		    "maltese;",                         // 1411
+		    "map;",                             // 1412
+		    "mapsto;",                          // 1413
+		    "mapstodown;",                      // 1414
+		    "mapstoleft;",                      // 1415
+		    "mapstoup;",                        // 1416
+		    "marker;",                          // 1417
+		    "mcomma;",                          // 1418
+		    "mcy;",                             // 1419
+		    "mdash;",                           // 1420
+		    "measuredangle;",                   // 1421
+		    "mfr;",                             // 1422
+		    "mho;",                             // 1423
+		    "micro",                            // 1424
+		    "micro;",                           // 1425
+		    "mid;",                             // 1426
+		    "midast;",                          // 1427
+		    "midcir;",                          // 1428
+		    "middot",                           // 1429
+		    "middot;",                          // 1430
+		    "minus;",                           // 1431
+		    "minusb;",                          // 1432
+		    "minusd;",                          // 1433
+		    "minusdu;",                         // 1434
+		    "mlcp;",                            // 1435
+		    "mldr;",                            // 1436
+		    "mnplus;",                          // 1437
+		    "models;",                          // 1438
+		    "mopf;",                            // 1439
+		    "mp;",                              // 1440
+		    "mscr;",                            // 1441
+		    "mstpos;",                          // 1442
+		    "mu;",                              // 1443
+		    "multimap;",                        // 1444
+		    "mumap;",                           // 1445
+		    "nGg;",                             // 1446
+		    "nGt;",                             // 1447
+		    "nGtv;",                            // 1448
+		    "nLeftarrow;",                      // 1449
+		    "nLeftrightarrow;",                 // 1450
+		    "nLl;",                             // 1451
+		    "nLt;",                             // 1452
+		    "nLtv;",                            // 1453
+		    "nRightarrow;",                     // 1454
+		    "nVDash;",                          // 1455
+		    "nVdash;",                          // 1456
+		    "nabla;",                           // 1457
+		    "nacute;",                          // 1458
+		    "nang;",                            // 1459
+		    "nap;",                             // 1460
+		    "napE;",                            // 1461
+		    "napid;",                           // 1462
+		    "napos;",                           // 1463
+		    "napprox;",                         // 1464
+		    "natur;",                           // 1465
+		    "natural;",                         // 1466
+		    "naturals;",                        // 1467
+		    "nbsp",                             // 1468
+		    "nbsp;",                            // 1469
+		    "nbump;",                           // 1470
+		    "nbumpe;",                          // 1471
+		    "ncap;",                            // 1472
+		    "ncaron;",                          // 1473
+		    "ncedil;",                          // 1474
+		    "ncong;",                           // 1475
+		    "ncongdot;",                        // 1476
+		    "ncup;",                            // 1477
+		    "ncy;",                             // 1478
+		    "ndash;",                           // 1479
+		    "ne;",                              // 1480
+		    "neArr;",                           // 1481
+		    "nearhk;",                          // 1482
+		    "nearr;",                           // 1483
+		    "nearrow;",                         // 1484
+		    "nedot;",                           // 1485
+		    "nequiv;",                          // 1486
+		    "nesear;",                          // 1487
+		    "nesim;",                           // 1488
+		    "nexist;",                          // 1489
+		    "nexists;",                         // 1490
+		    "nfr;",                             // 1491
+		    "ngE;",                             // 1492
+		    "nge;",                             // 1493
+		    "ngeq;",                            // 1494
+		    "ngeqq;",                           // 1495
+		    "ngeqslant;",                       // 1496
+		    "nges;",                            // 1497
+		    "ngsim;",                           // 1498
+		    "ngt;",                             // 1499
+		    "ngtr;",                            // 1500
+		    "nhArr;",                           // 1501
+		    "nharr;",                           // 1502
+		    "nhpar;",                           // 1503
+		    "ni;",                              // 1504
+		    "nis;",                             // 1505
+		    "nisd;",                            // 1506
+		    "niv;",                             // 1507
+		    "njcy;",                            // 1508
+		    "nlArr;",                           // 1509
+		    "nlE;",                             // 1510
+		    "nlarr;",                           // 1511
+		    "nldr;",                            // 1512
+		    "nle;",                             // 1513
+		    "nleftarrow;",                      // 1514
+		    "nleftrightarrow;",                 // 1515
+		    "nleq;",                            // 1516
+		    "nleqq;",                           // 1517
+		    "nleqslant;",                       // 1518
+		    "nles;",                            // 1519
+		    "nless;",                           // 1520
+		    "nlsim;",                           // 1521
+		    "nlt;",                             // 1522
+		    "nltri;",                           // 1523
+		    "nltrie;",                          // 1524
+		    "nmid;",                            // 1525
+		    "nopf;",                            // 1526
+		    "not",                              // 1527
+		    "not;",                             // 1528
+		    "notin;",                           // 1529
+		    "notinE;",                          // 1530
+		    "notindot;",                        // 1531
+		    "notinva;",                         // 1532
+		    "notinvb;",                         // 1533
+		    "notinvc;",                         // 1534
+		    "notni;",                           // 1535
+		    "notniva;",                         // 1536
+		    "notnivb;",                         // 1537
+		    "notnivc;",                         // 1538
+		    "npar;",                            // 1539
+		    "nparallel;",                       // 1540
+		    "nparsl;",                          // 1541
+		    "npart;",                           // 1542
+		    "npolint;",                         // 1543
+		    "npr;",                             // 1544
+		    "nprcue;",                          // 1545
+		    "npre;",                            // 1546
+		    "nprec;",                           // 1547
+		    "npreceq;",                         // 1548
+		    "nrArr;",                           // 1549
+		    "nrarr;",                           // 1550
+		    "nrarrc;",                          // 1551
+		    "nrarrw;",                          // 1552
+		    "nrightarrow;",                     // 1553
+		    "nrtri;",                           // 1554
+		    "nrtrie;",                          // 1555
+		    "nsc;",                             // 1556
+		    "nsccue;",                          // 1557
+		    "nsce;",                            // 1558
+		    "nscr;",                            // 1559
+		    "nshortmid;",                       // 1560
+		    "nshortparallel;",                  // 1561
+		    "nsim;",                            // 1562
+		    "nsime;",                           // 1563
+		    "nsimeq;",                          // 1564
+		    "nsmid;",                           // 1565
+		    "nspar;",                           // 1566
+		    "nsqsube;",                         // 1567
+		    "nsqsupe;",                         // 1568
+		    "nsub;",                            // 1569
+		    "nsubE;",                           // 1570
+		    "nsube;",                           // 1571
+		    "nsubset;",                         // 1572
+		    "nsubseteq;",                       // 1573
+		    "nsubseteqq;",                      // 1574
+		    "nsucc;",                           // 1575
+		    "nsucceq;",                         // 1576
+		    "nsup;",                            // 1577
+		    "nsupE;",                           // 1578
+		    "nsupe;",                           // 1579
+		    "nsupset;",                         // 1580
+		    "nsupseteq;",                       // 1581
+		    "nsupseteqq;",                      // 1582
+		    "ntgl;",                            // 1583
+		    "ntilde",                           // 1584
+		    "ntilde;",                          // 1585
+		    "ntlg;",                            // 1586
+		    "ntriangleleft;",                   // 1587
+		    "ntrianglelefteq;",                 // 1588
+		    "ntriangleright;",                  // 1589
+		    "ntrianglerighteq;",                // 1590
+		    "nu;",                              // 1591
+		    "num;",                             // 1592
+		    "numero;",                          // 1593
+		    "numsp;",                           // 1594
+		    "nvDash;",                          // 1595
+		    "nvHarr;",                          // 1596
+		    "nvap;",                            // 1597
+		    "nvdash;",                          // 1598
+		    "nvge;",                            // 1599
+		    "nvgt;",                            // 1600
+		    "nvinfin;",                         // 1601
+		    "nvlArr;",                          // 1602
+		    "nvle;",                            // 1603
+		    "nvlt;",                            // 1604
+		    "nvltrie;",                         // 1605
+		    "nvrArr;",                          // 1606
+		    "nvrtrie;",                         // 1607
+		    "nvsim;",                           // 1608
+		    "nwArr;",                           // 1609
+		    "nwarhk;",                          // 1610
+		    "nwarr;",                           // 1611
+		    "nwarrow;",                         // 1612
+		    "nwnear;",                          // 1613
+		    "oS;",                              // 1614
+		    "oacute",                           // 1615
+		    "oacute;",                          // 1616
+		    "oast;",                            // 1617
+		    "ocir;",                            // 1618
+		    "ocirc",                            // 1619
+		    "ocirc;",                           // 1620
+		    "ocy;",                             // 1621
+		    "odash;",                           // 1622
+		    "odblac;",                          // 1623
+		    "odiv;",                            // 1624
+		    "odot;",                            // 1625
+		    "odsold;",                          // 1626
+		    "oelig;",                           // 1627
+		    "ofcir;",                           // 1628
+		    "ofr;",                             // 1629
+		    "ogon;",                            // 1630
+		    "ograve",                           // 1631
+		    "ograve;",                          // 1632
+		    "ogt;",                             // 1633
+		    "ohbar;",                           // 1634
+		    "ohm;",                             // 1635
+		    "oint;",                            // 1636
+		    "olarr;",                           // 1637
+		    "olcir;",                           // 1638
+		    "olcross;",                         // 1639
+		    "oline;",                           // 1640
+		    "olt;",                             // 1641
+		    "omacr;",                           // 1642
+		    "omega;",                           // 1643
+		    "omicron;",                         // 1644
+		    "omid;",                            // 1645
+		    "ominus;",                          // 1646
+		    "oopf;",                            // 1647
+		    "opar;",                            // 1648
+		    "operp;",                           // 1649
+		    "oplus;",                           // 1650
+		    "or;",                              // 1651
+		    "orarr;",                           // 1652
+		    "ord;",                             // 1653
+		    "order;",                           // 1654
+		    "orderof;",                         // 1655
+		    "ordf",                             // 1656
+		    "ordf;",                            // 1657
+		    "ordm",                             // 1658
+		    "ordm;",                            // 1659
+		    "origof;",                          // 1660
+		    "oror;",                            // 1661
+		    "orslope;",                         // 1662
+		    "orv;",                             // 1663
+		    "oscr;",                            // 1664
+		    "oslash",                           // 1665
+		    "oslash;",                          // 1666
+		    "osol;",                            // 1667
+		    "otilde",                           // 1668
+		    "otilde;",                          // 1669
+		    "otimes;",                          // 1670
+		    "otimesas;",                        // 1671
+		    "ouml",                             // 1672
+		    "ouml;",                            // 1673
+		    "ovbar;",                           // 1674
+		    "par;",                             // 1675
+		    "para",                             // 1676
+		    "para;",                            // 1677
+		    "parallel;",                        // 1678
+		    "parsim;",                          // 1679
+		    "parsl;",                           // 1680
+		    "part;",                            // 1681
+		    "pcy;",                             // 1682
+		    "percnt;",                          // 1683
+		    "period;",                          // 1684
+		    "permil;",                          // 1685
+		    "perp;",                            // 1686
+		    "pertenk;",                         // 1687
+		    "pfr;",                             // 1688
+		    "phi;",                             // 1689
+		    "phiv;",                            // 1690
+		    "phmmat;",                          // 1691
+		    "phone;",                           // 1692
+		    "pi;",                              // 1693
+		    "pitchfork;",                       // 1694
+		    "piv;",                             // 1695
+		    "planck;",                          // 1696
+		    "planckh;",                         // 1697
+		    "plankv;",                          // 1698
+		    "plus;",                            // 1699
+		    "plusacir;",                        // 1700
+		    "plusb;",                           // 1701
+		    "pluscir;",                         // 1702
+		    "plusdo;",                          // 1703
+		    "plusdu;",                          // 1704
+		    "pluse;",                           // 1705
+		    "plusmn",                           // 1706
+		    "plusmn;",                          // 1707
+		    "plussim;",                         // 1708
+		    "plustwo;",                         // 1709
+		    "pm;",                              // 1710
+		    "pointint;",                        // 1711
+		    "popf;",                            // 1712
+		    "pound",                            // 1713
+		    "pound;",                           // 1714
+		    "pr;",                              // 1715
+		    "prE;",                             // 1716
+		    "prap;",                            // 1717
+		    "prcue;",                           // 1718
+		    "pre;",                             // 1719
+		    "prec;",                            // 1720
+		    "precapprox;",                      // 1721
+		    "preccurlyeq;",                     // 1722
+		    "preceq;",                          // 1723
+		    "precnapprox;",                     // 1724
+		    "precneqq;",                        // 1725
+		    "precnsim;",                        // 1726
+		    "precsim;",                         // 1727
+		    "prime;",                           // 1728
+		    "primes;",                          // 1729
+		    "prnE;",                            // 1730
+		    "prnap;",                           // 1731
+		    "prnsim;",                          // 1732
+		    "prod;",                            // 1733
+		    "profalar;",                        // 1734
+		    "profline;",                        // 1735
+		    "profsurf;",                        // 1736
+		    "prop;",                            // 1737
+		    "propto;",                          // 1738
+		    "prsim;",                           // 1739
+		    "prurel;",                          // 1740
+		    "pscr;",                            // 1741
+		    "psi;",                             // 1742
+		    "puncsp;",                          // 1743
+		    "qfr;",                             // 1744
+		    "qint;",                            // 1745
+		    "qopf;",                            // 1746
+		    "qprime;",                          // 1747
+		    "qscr;",                            // 1748
+		    "quaternions;",                     // 1749
+		    "quatint;",                         // 1750
+		    "quest;",                           // 1751
+		    "questeq;",                         // 1752
+		    "quot",                             // 1753
+		    "quot;",                            // 1754
+		    "rAarr;",                           // 1755
+		    "rArr;",                            // 1756
+		    "rAtail;",                          // 1757
+		    "rBarr;",                           // 1758
+		    "rHar;",                            // 1759
+		    "race;",                            // 1760
+		    "racute;",                          // 1761
+		    "radic;",                           // 1762
+		    "raemptyv;",                        // 1763
+		    "rang;",                            // 1764
+		    "rangd;",                           // 1765
+		    "range;",                           // 1766
+		    "rangle;",                          // 1767
+		    "raquo",                            // 1768
+		    "raquo;",                           // 1769
+		    "rarr;",                            // 1770
+		    "rarrap;",                          // 1771
+		    "rarrb;",                           // 1772
+		    "rarrbfs;",                         // 1773
+		    "rarrc;",                           // 1774
+		    "rarrfs;",                          // 1775
+		    "rarrhk;",                          // 1776
+		    "rarrlp;",                          // 1777
+		    "rarrpl;",                          // 1778
+		    "rarrsim;",                         // 1779
+		    "rarrtl;",                          // 1780
+		    "rarrw;",                           // 1781
+		    "ratail;",                          // 1782
+		    "ratio;",                           // 1783
+		    "rationals;",                       // 1784
+		    "rbarr;",                           // 1785
+		    "rbbrk;",                           // 1786
+		    "rbrace;",                          // 1787
+		    "rbrack;",                          // 1788
+		    "rbrke;",                           // 1789
+		    "rbrksld;",                         // 1790
+		    "rbrkslu;",                         // 1791
+		    "rcaron;",                          // 1792
+		    "rcedil;",                          // 1793
+		    "rceil;",                           // 1794
+		    "rcub;",                            // 1795
+		    "rcy;",                             // 1796
+		    "rdca;",                            // 1797
+		    "rdldhar;",                         // 1798
+		    "rdquo;",                           // 1799
+		    "rdquor;",                          // 1800
+		    "rdsh;",                            // 1801
+		    "real;",                            // 1802
+		    "realine;",                         // 1803
+		    "realpart;",                        // 1804
+		    "reals;",                           // 1805
+		    "rect;",                            // 1806
+		    "reg",                              // 1807
+		    "reg;",                             // 1808
+		    "rfisht;",                          // 1809
+		    "rfloor;",                          // 1810
+		    "rfr;",                             // 1811
+		    "rhard;",                           // 1812
+		    "rharu;",                           // 1813
+		    "rharul;",                          // 1814
+		    "rho;",                             // 1815
+		    "rhov;",                            // 1816
+		    "rightarrow;",                      // 1817
+		    "rightarrowtail;",                  // 1818
+		    "rightharpoondown;",                // 1819
+		    "rightharpoonup;",                  // 1820
+		    "rightleftarrows;",                 // 1821
+		    "rightleftharpoons;",               // 1822
+		    "rightrightarrows;",                // 1823
+		    "rightsquigarrow;",                 // 1824
+		    "rightthreetimes;",                 // 1825
+		    "ring;",                            // 1826
+		    "risingdotseq;",                    // 1827
+		    "rlarr;",                           // 1828
+		    "rlhar;",                           // 1829
+		    "rlm;",                             // 1830
+		    "rmoust;",                          // 1831
+		    "rmoustache;",                      // 1832
+		    "rnmid;",                           // 1833
+		    "roang;",                           // 1834
+		    "roarr;",                           // 1835
+		    "robrk;",                           // 1836
+		    "ropar;",                           // 1837
+		    "ropf;",                            // 1838
+		    "roplus;",                          // 1839
+		    "rotimes;",                         // 1840
+		    "rpar;",                            // 1841
+		    "rpargt;",                          // 1842
+		    "rppolint;",                        // 1843
+		    "rrarr;",                           // 1844
+		    "rsaquo;",                          // 1845
+		    "rscr;",                            // 1846
+		    "rsh;",                             // 1847
+		    "rsqb;",                            // 1848
+		    "rsquo;",                           // 1849
+		    "rsquor;",                          // 1850
+		    "rthree;",                          // 1851
+		    "rtimes;",                          // 1852
+		    "rtri;",                            // 1853
+		    "rtrie;",                           // 1854
+		    "rtrif;",                           // 1855
+		    "rtriltri;",                        // 1856
+		    "ruluhar;",                         // 1857
+		    "rx;",                              // 1858
+		    "sacute;",                          // 1859
+		    "sbquo;",                           // 1860
+		    "sc;",                              // 1861
+		    "scE;",                             // 1862
+		    "scap;",                            // 1863
+		    "scaron;",                          // 1864
+		    "sccue;",                           // 1865
+		    "sce;",                             // 1866
+		    "scedil;",                          // 1867
+		    "scirc;",                           // 1868
+		    "scnE;",                            // 1869
+		    "scnap;",                           // 1870
+		    "scnsim;",                          // 1871
+		    "scpolint;",                        // 1872
+		    "scsim;",                           // 1873
+		    "scy;",                             // 1874
+		    "sdot;",                            // 1875
+		    "sdotb;",                           // 1876
+		    "sdote;",                           // 1877
+		    "seArr;",                           // 1878
+		    "searhk;",                          // 1879
+		    "searr;",                           // 1880
+		    "searrow;",                         // 1881
+		    "sect",                             // 1882
+		    "sect;",                            // 1883
+		    "semi;",                            // 1884
+		    "seswar;",                          // 1885
+		    "setminus;",                        // 1886
+		    "setmn;",                           // 1887
+		    "sext;",                            // 1888
+		    "sfr;",                             // 1889
+		    "sfrown;",                          // 1890
+		    "sharp;",                           // 1891
+		    "shchcy;",                          // 1892
+		    "shcy;",                            // 1893
+		    "shortmid;",                        // 1894
+		    "shortparallel;",                   // 1895
+		    "shy",                              // 1896
+		    "shy;",                             // 1897
+		    "sigma;",                           // 1898
+		    "sigmaf;",                          // 1899
+		    "sigmav;",                          // 1900
+		    "sim;",                             // 1901
+		    "simdot;",                          // 1902
+		    "sime;",                            // 1903
+		    "simeq;",                           // 1904
+		    "simg;",                            // 1905
+		    "simgE;",                           // 1906
+		    "siml;",                            // 1907
+		    "simlE;",                           // 1908
+		    "simne;",                           // 1909
+		    "simplus;",                         // 1910
+		    "simrarr;",                         // 1911
+		    "slarr;",                           // 1912
+		    "smallsetminus;",                   // 1913
+		    "smashp;",                          // 1914
+		    "smeparsl;",                        // 1915
+		    "smid;",                            // 1916
+		    "smile;",                           // 1917
+		    "smt;",                             // 1918
+		    "smte;",                            // 1919
+		    "smtes;",                           // 1920
+		    "softcy;",                          // 1921
+		    "sol;",                             // 1922
+		    "solb;",                            // 1923
+		    "solbar;",                          // 1924
+		    "sopf;",                            // 1925
+		    "spades;",                          // 1926
+		    "spadesuit;",                       // 1927
+		    "spar;",                            // 1928
+		    "sqcap;",                           // 1929
+		    "sqcaps;",                          // 1930
+		    "sqcup;",                           // 1931
+		    "sqcups;",                          // 1932
+		    "sqsub;",                           // 1933
+		    "sqsube;",                          // 1934
+		    "sqsubset;",                        // 1935
+		    "sqsubseteq;",                      // 1936
+		    "sqsup;",                           // 1937
+		    "sqsupe;",                          // 1938
+		    "sqsupset;",                        // 1939
+		    "sqsupseteq;",                      // 1940
+		    "squ;",                             // 1941
+		    "square;",                          // 1942
+		    "squarf;",                          // 1943
+		    "squf;",                            // 1944
+		    "srarr;",                           // 1945
+		    "sscr;",                            // 1946
+		    "ssetmn;",                          // 1947
+		    "ssmile;",                          // 1948
+		    "sstarf;",                          // 1949
+		    "star;",                            // 1950
+		    "starf;",                           // 1951
+		    "straightepsilon;",                 // 1952
+		    "straightphi;",                     // 1953
+		    "strns;",                           // 1954
+		    "sub;",                             // 1955
+		    "subE;",                            // 1956
+		    "subdot;",                          // 1957
+		    "sube;",                            // 1958
+		    "subedot;",                         // 1959
+		    "submult;",                         // 1960
+		    "subnE;",                           // 1961
+		    "subne;",                           // 1962
+		    "subplus;",                         // 1963
+		    "subrarr;",                         // 1964
+		    "subset;",                          // 1965
+		    "subseteq;",                        // 1966
+		    "subseteqq;",                       // 1967
+		    "subsetneq;",                       // 1968
+		    "subsetneqq;",                      // 1969
+		    "subsim;",                          // 1970
+		    "subsub;",                          // 1971
+		    "subsup;",                          // 1972
+		    "succ;",                            // 1973
+		    "succapprox;",                      // 1974
+		    "succcurlyeq;",                     // 1975
+		    "succeq;",                          // 1976
+		    "succnapprox;",                     // 1977
+		    "succneqq;",                        // 1978
+		    "succnsim;",                        // 1979
+		    "succsim;",                         // 1980
+		    "sum;",                             // 1981
+		    "sung;",                            // 1982
+		    "sup1",                             // 1983
+		    "sup1;",                            // 1984
+		    "sup2",                             // 1985
+		    "sup2;",                            // 1986
+		    "sup3",                             // 1987
+		    "sup3;",                            // 1988
+		    "sup;",                             // 1989
+		    "supE;",                            // 1990
+		    "supdot;",                          // 1991
+		    "supdsub;",                         // 1992
+		    "supe;",                            // 1993
+		    "supedot;",                         // 1994
+		    "suphsol;",                         // 1995
+		    "suphsub;",                         // 1996
+		    "suplarr;",                         // 1997
+		    "supmult;",                         // 1998
+		    "supnE;",                           // 1999
+		    "supne;",                           // 2000
+		    "supplus;",                         // 2001
+		    "supset;",                          // 2002
+		    "supseteq;",                        // 2003
+		    "supseteqq;",                       // 2004
+		    "supsetneq;",                       // 2005
+		    "supsetneqq;",                      // 2006
+		    "supsim;",                          // 2007
+		    "supsub;",                          // 2008
+		    "supsup;",                          // 2009
+		    "swArr;",                           // 2010
+		    "swarhk;",                          // 2011
+		    "swarr;",                           // 2012
+		    "swarrow;",                         // 2013
+		    "swnwar;",                          // 2014
+		    "szlig",                            // 2015
+		    "szlig;",                           // 2016
+		    "target;",                          // 2017
+		    "tau;",                             // 2018
+		    "tbrk;",                            // 2019
+		    "tcaron;",                          // 2020
+		    "tcedil;",                          // 2021
+		    "tcy;",                             // 2022
+		    "tdot;",                            // 2023
+		    "telrec;",                          // 2024
+		    "tfr;",                             // 2025
+		    "there4;",                          // 2026
+		    "therefore;",                       // 2027
+		    "theta;",                           // 2028
+		    "thetasym;",                        // 2029
+		    "thetav;",                          // 2030
+		    "thickapprox;",                     // 2031
+		    "thicksim;",                        // 2032
+		    "thinsp;",                          // 2033
+		    "thkap;",                           // 2034
+		    "thksim;",                          // 2035
+		    "thorn",                            // 2036
+		    "thorn;",                           // 2037
+		    "tilde;",                           // 2038
+		    "times",                            // 2039
+		    "times;",                           // 2040
+		    "timesb;",                          // 2041
+		    "timesbar;",                        // 2042
+		    "timesd;",                          // 2043
+		    "tint;",                            // 2044
+		    "toea;",                            // 2045
+		    "top;",                             // 2046
+		    "topbot;",                          // 2047
+		    "topcir;",                          // 2048
+		    "topf;",                            // 2049
+		    "topfork;",                         // 2050
+		    "tosa;",                            // 2051
+		    "tprime;",                          // 2052
+		    "trade;",                           // 2053
+		    "triangle;",                        // 2054
+		    "triangledown;",                    // 2055
+		    "triangleleft;",                    // 2056
+		    "trianglelefteq;",                  // 2057
+		    "triangleq;",                       // 2058
+		    "triangleright;",                   // 2059
+		    "trianglerighteq;",                 // 2060
+		    "tridot;",                          // 2061
+		    "trie;",                            // 2062
+		    "triminus;",                        // 2063
+		    "triplus;",                         // 2064
+		    "trisb;",                           // 2065
+		    "tritime;",                         // 2066
+		    "trpezium;",                        // 2067
+		    "tscr;",                            // 2068
+		    "tscy;",                            // 2069
+		    "tshcy;",                           // 2070
+		    "tstrok;",                          // 2071
+		    "twixt;",                           // 2072
+		    "twoheadleftarrow;",                // 2073
+		    "twoheadrightarrow;",               // 2074
+		    "uArr;",                            // 2075
+		    "uHar;",                            // 2076
+		    "uacute",                           // 2077
+		    "uacute;",                          // 2078
+		    "uarr;",                            // 2079
+		    "ubrcy;",                           // 2080
+		    "ubreve;",                          // 2081
+		    "ucirc",                            // 2082
+		    "ucirc;",                           // 2083
+		    "ucy;",                             // 2084
+		    "udarr;",                           // 2085
+		    "udblac;",                          // 2086
+		    "udhar;",                           // 2087
+		    "ufisht;",                          // 2088
+		    "ufr;",                             // 2089
+		    "ugrave",                           // 2090
+		    "ugrave;",                          // 2091
+		    "uharl;",                           // 2092
+		    "uharr;",                           // 2093
+		    "uhblk;",                           // 2094
+		    "ulcorn;",                          // 2095
+		    "ulcorner;",                        // 2096
+		    "ulcrop;",                          // 2097
+		    "ultri;",                           // 2098
+		    "umacr;",                           // 2099
+		    "uml",                              // 2100
+		    "uml;",                             // 2101
+		    "uogon;",                           // 2102
+		    "uopf;",                            // 2103
+		    "uparrow;",                         // 2104
+		    "updownarrow;",                     // 2105
+		    "upharpoonleft;",                   // 2106
+		    "upharpoonright;",                  // 2107
+		    "uplus;",                           // 2108
+		    "upsi;",                            // 2109
+		    "upsih;",                           // 2110
+		    "upsilon;",                         // 2111
+		    "upuparrows;",                      // 2112
+		    "urcorn;",                          // 2113
+		    "urcorner;",                        // 2114
+		    "urcrop;",                          // 2115
+		    "uring;",                           // 2116
+		    "urtri;",                           // 2117
+		    "uscr;",                            // 2118
+		    "utdot;",                           // 2119
+		    "utilde;",                          // 2120
+		    "utri;",                            // 2121
+		    "utrif;",                           // 2122
+		    "uuarr;",                           // 2123
+		    "uuml",                             // 2124
+		    "uuml;",                            // 2125
+		    "uwangle;",                         // 2126
+		    "vArr;",                            // 2127
+		    "vBar;",                            // 2128
+		    "vBarv;",                           // 2129
+		    "vDash;",                           // 2130
+		    "vangrt;",                          // 2131
+		    "varepsilon;",                      // 2132
+		    "varkappa;",                        // 2133
+		    "varnothing;",                      // 2134
+		    "varphi;",                          // 2135
+		    "varpi;",                           // 2136
+		    "varpropto;",                       // 2137
+		    "varr;",                            // 2138
+		    "varrho;",                          // 2139
+		    "varsigma;",                        // 2140
+		    "varsubsetneq;",                    // 2141
+		    "varsubsetneqq;",                   // 2142
+		    "varsupsetneq;",                    // 2143
+		    "varsupsetneqq;",                   // 2144
+		    "vartheta;",                        // 2145
+		    "vartriangleleft;",                 // 2146
+		    "vartriangleright;",                // 2147
+		    "vcy;",                             // 2148
+		    "vdash;",                           // 2149
+		    "vee;",                             // 2150
+		    "veebar;",                          // 2151
+		    "veeeq;",                           // 2152
+		    "vellip;",                          // 2153
+		    "verbar;",                          // 2154
+		    "vert;",                            // 2155
+		    "vfr;",                             // 2156
+		    "vltri;",                           // 2157
+		    "vnsub;",                           // 2158
+		    "vnsup;",                           // 2159
+		    "vopf;",                            // 2160
+		    "vprop;",                           // 2161
+		    "vrtri;",                           // 2162
+		    "vscr;",                            // 2163
+		    "vsubnE;",                          // 2164
+		    "vsubne;",                          // 2165
+		    "vsupnE;",                          // 2166
+		    "vsupne;",                          // 2167
+		    "vzigzag;",                         // 2168
+		    "wcirc;",                           // 2169
+		    "wedbar;",                          // 2170
+		    "wedge;",                           // 2171
+		    "wedgeq;",                          // 2172
+		    "weierp;",                          // 2173
+		    "wfr;",                             // 2174
+		    "wopf;",                            // 2175
+		    "wp;",                              // 2176
+		    "wr;",                              // 2177
+		    "wreath;",                          // 2178
+		    "wscr;",                            // 2179
+		    "xcap;",                            // 2180
+		    "xcirc;",                           // 2181
+		    "xcup;",                            // 2182
+		    "xdtri;",                           // 2183
+		    "xfr;",                             // 2184
+		    "xhArr;",                           // 2185
+		    "xharr;",                           // 2186
+		    "xi;",                              // 2187
+		    "xlArr;",                           // 2188
+		    "xlarr;",                           // 2189
+		    "xmap;",                            // 2190
+		    "xnis;",                            // 2191
+		    "xodot;",                           // 2192
+		    "xopf;",                            // 2193
+		    "xoplus;",                          // 2194
+		    "xotime;",                          // 2195
+		    "xrArr;",                           // 2196
+		    "xrarr;",                           // 2197
+		    "xscr;",                            // 2198
+		    "xsqcup;",                          // 2199
+		    "xuplus;",                          // 2200
+		    "xutri;",                           // 2201
+		    "xvee;",                            // 2202
+		    "xwedge;",                          // 2203
+		    "yacute",                           // 2204
+		    "yacute;",                          // 2205
+		    "yacy;",                            // 2206
+		    "ycirc;",                           // 2207
+		    "ycy;",                             // 2208
+		    "yen",                              // 2209
+		    "yen;",                             // 2210
+		    "yfr;",                             // 2211
+		    "yicy;",                            // 2212
+		    "yopf;",                            // 2213
+		    "yscr;",                            // 2214
+		    "yucy;",                            // 2215
+		    "yuml",                             // 2216
+		    "yuml;",                            // 2217
+		    "zacute;",                          // 2218
+		    "zcaron;",                          // 2219
+		    "zcy;",                             // 2220
+		    "zdot;",                            // 2221
+		    "zeetrf;",                          // 2222
+		    "zeta;",                            // 2223
+		    "zfr;",                             // 2224
+		    "zhcy;",                            // 2225
+		    "zigrarr;",                         // 2226
+		    "zopf;",                            // 2227
+		    "zscr;",                            // 2228
+		    "zwj;",                             // 2229
+		    "zwnj;"                             // 2230
+		};
 	}
 
 	static string_map_t<uint32_t> initialize_map() {
@@ -2493,7 +2495,7 @@ private:
 		mapped_strings[string_t(owned_strings[185])] = 1087;
 		mapped_strings[string_t(owned_strings[186])] = 8819;
 		mapped_strings[string_t(owned_strings[187])] = 119970;
-		mapped_strings[string_t(owned_strings[188])] = 881;
+		mapped_strings[string_t(owned_strings[188])] = 8811;
 		mapped_strings[string_t(owned_strings[189])] = 1066;
 		mapped_strings[string_t(owned_strings[190])] = 711;
 		mapped_strings[string_t(owned_strings[191])] = 9;
