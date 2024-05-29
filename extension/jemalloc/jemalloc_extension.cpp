@@ -4,10 +4,6 @@
 #include "duckdb/common/allocator.hpp"
 #include "jemalloc/jemalloc.h"
 
-#ifndef DUCKDB_NO_THREADS
-#include "duckdb/common/thread.hpp"
-#endif
-
 namespace duckdb {
 
 void JemallocExtension::Load(DuckDB &db) {
