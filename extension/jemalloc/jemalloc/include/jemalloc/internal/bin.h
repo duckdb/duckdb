@@ -1,13 +1,12 @@
 #ifndef JEMALLOC_INTERNAL_BIN_H
 #define JEMALLOC_INTERNAL_BIN_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/bin_stats.h"
 #include "jemalloc/internal/bin_types.h"
 #include "jemalloc/internal/edata.h"
 #include "jemalloc/internal/mutex.h"
 #include "jemalloc/internal/sc.h"
-
-namespace duckdb_jemalloc {
 
 /*
  * A bin contains a set of extents that are currently being used for slab
@@ -50,7 +49,7 @@ struct bins_s {
 	bin_t *bin_shards;
 };
 
-void bin_shard_sizes_boot(unsigned bin_shards[SC_NBINS]);
+void bin_shard_sizes_boot(unsigned bin_shard_sizes[SC_NBINS]);
 bool bin_update_shard_size(unsigned bin_shards[SC_NBINS], size_t start_size,
     size_t end_size, size_t nshards);
 
@@ -80,7 +79,5 @@ bin_stats_merge(tsdn_t *tsdn, bin_stats_data_t *dst_bin_stats, bin_t *bin) {
 	stats->nonfull_slabs += bin->stats.nonfull_slabs;
 	malloc_mutex_unlock(tsdn, &bin->lock);
 }
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_BIN_H */

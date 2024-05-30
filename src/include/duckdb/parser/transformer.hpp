@@ -158,6 +158,8 @@ private:
 	unique_ptr<DeleteStatement> TransformDelete(duckdb_libpgquery::PGDeleteStmt &stmt);
 	//! Transform a Postgres duckdb_libpgquery::T_PGUpdateStmt node into a UpdateStatement
 	unique_ptr<UpdateStatement> TransformUpdate(duckdb_libpgquery::PGUpdateStmt &stmt);
+	//! Transform a Postgres duckdb_libpgquery::T_PGUpdateExtensionsStmt node into a UpdateExtensionsStatement
+	unique_ptr<UpdateExtensionsStatement> TransformUpdateExtensions(duckdb_libpgquery::PGUpdateExtensionsStmt &stmt);
 	//! Transform a Postgres duckdb_libpgquery::T_PGPragmaStmt node into a PragmaStatement
 	unique_ptr<SQLStatement> TransformPragma(duckdb_libpgquery::PGPragmaStmt &stmt);
 	//! Transform a Postgres duckdb_libpgquery::T_PGExportStmt node into a ExportStatement
@@ -320,6 +322,9 @@ private:
 
 	//! Transform a Postgres TypeName string into a LogicalType
 	LogicalType TransformTypeName(duckdb_libpgquery::PGTypeName &name);
+
+	//! Transform a list of type modifiers into a list of values
+	vector<Value> TransformTypeModifiers(duckdb_libpgquery::PGTypeName &name);
 
 	//! Transform a Postgres GROUP BY expression into a list of Expression
 	bool TransformGroupBy(optional_ptr<duckdb_libpgquery::PGList> group, SelectNode &result);

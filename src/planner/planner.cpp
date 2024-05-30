@@ -139,6 +139,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::ATTACH_STATEMENT:
 	case StatementType::DETACH_STATEMENT:
 	case StatementType::COPY_DATABASE_STATEMENT:
+	case StatementType::UPDATE_EXTENSIONS_STATEMENT:
 		CreatePlan(*statement);
 		break;
 	default:
@@ -157,9 +158,20 @@ static bool OperatorSupportsSerialization(LogicalOperator &op) {
 
 void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op,
                          optional_ptr<bound_parameter_map_t> map) {
+	auto &config = DBConfig::GetConfig(context);
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
-	// if alternate verification is enabled we run the original operator
-	return;
+	{
+		auto &serialize_comp = config.options.serialization_compatibility;
+		auto latest_version = SerializationCompatibility::Latest();
+		if (serialize_comp.manually_set &&
+		    serialize_comp.serialization_version != latest_version.serialization_version) {
+			// Serialization should not be skipped, this test relies on the serialization to remove certain fields for
+			// compatibility with older versions. This might change behavior, not doing this might make this test fail.
+		} else {
+			// if alternate verification is enabled we run the original operator
+			return;
+		}
+	}
 #endif
 	if (!op || !ClientConfig::GetConfig(context).verify_serializer) {
 		return;
@@ -174,7 +186,16 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 	// format (de)serialization of this operator
 	try {
 		MemoryStream stream;
-		BinarySerializer::Serialize(*op, stream, true);
+
+		SerializationOptions options;
+		if (config.options.serialization_compatibility.manually_set) {
+			// Override the default of 'latest' if this was manually set (for testing, mostly)
+			options.serialization_compatibility = config.options.serialization_compatibility;
+		} else {
+			options.serialization_compatibility = SerializationCompatibility::Latest();
+		}
+
+		BinarySerializer::Serialize(*op, stream, options);
 		stream.Rewind();
 		bound_parameter_map_t parameters;
 		auto new_plan = BinaryDeserializer::Deserialize<LogicalOperator>(stream, context, parameters);

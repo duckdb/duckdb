@@ -1231,26 +1231,6 @@ void StringValueScanner::SkipBOM() {
 	}
 }
 
-void StringValueScanner::SkipCSVRows() {
-	idx_t rows_to_skip =
-	    state_machine->dialect_options.skip_rows.GetValue() + state_machine->dialect_options.header.GetValue();
-	if (rows_to_skip == 0) {
-		return;
-	}
-	SkipScanner row_skipper(buffer_manager, state_machine, error_handler, rows_to_skip);
-	row_skipper.ParseChunk();
-	iterator.pos.buffer_pos = row_skipper.GetIteratorPosition();
-	if (row_skipper.state_machine->options.dialect_options.state_machine_options.new_line ==
-	        NewLineIdentifier::CARRY_ON &&
-	    row_skipper.states.states[1] == CSVState::CARRIAGE_RETURN) {
-		iterator.pos.buffer_pos++;
-	}
-	if (result.store_line_size) {
-		result.error_handler.NewMaxLineSize(iterator.pos.buffer_pos);
-	}
-	lines_read += row_skipper.GetLinesRead();
-}
-
 void StringValueScanner::SkipUntilNewLine() {
 	// Now skip until next newline
 	if (state_machine->options.dialect_options.state_machine_options.new_line.GetValue() ==
@@ -1311,7 +1291,11 @@ void StringValueScanner::SetStart() {
 		// This CSV is not from auto-detect, so we don't know where exactly it starts
 		// Hence we potentially have to skip empty lines and headers.
 		SkipBOM();
-		SkipCSVRows();
+		SkipCSVRows(state_machine->dialect_options.skip_rows.GetValue() +
+		            state_machine->dialect_options.header.GetValue());
+		if (result.store_line_size) {
+			result.error_handler.NewMaxLineSize(iterator.pos.buffer_pos);
+		}
 		return;
 	}
 	// We have to look for a new line that fits our schema

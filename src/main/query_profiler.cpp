@@ -116,14 +116,25 @@ bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
 void QueryProfiler::Finalize(TreeNode &node) {
 	for (auto &child : node.children) {
 		Finalize(*child);
-		if (node.type == PhysicalOperatorType::UNION) {
-			node.info.elements += child->info.elements;
+		if (node.type == PhysicalOperatorType::UNION &&
+		    node.profiling_info.Enabled(MetricsType::OPERATOR_CARDINALITY)) {
+			node.profiling_info.metrics.operator_cardinality += child->profiling_info.metrics.operator_cardinality;
 		}
 	}
 }
 
 void QueryProfiler::StartExplainAnalyze() {
 	this->is_explain_analyze = true;
+}
+
+static void GetTotalCPUTime(QueryProfiler::TreeNode &node) {
+	node.profiling_info.metrics.cpu_time = node.profiling_info.metrics.operator_timing;
+	if (!node.children.empty()) {
+		for (const auto &i : node.children) {
+			GetTotalCPUTime(*i);
+			node.profiling_info.metrics.cpu_time += i->profiling_info.metrics.cpu_time;
+		}
+	}
 }
 
 void QueryProfiler::EndQuery() {
@@ -133,26 +144,41 @@ void QueryProfiler::EndQuery() {
 	}
 
 	main_query.End();
-	if (root) {
+	if (root && root->profiling_info.Enabled(MetricsType::OPERATOR_CARDINALITY)) {
 		Finalize(*root);
 	}
 	this->running = false;
 	// print or output the query profiling after termination
 	// EXPLAIN ANALYSE should not be outputted by the profiler
 	if (IsEnabled() && !is_explain_analyze) {
-		string query_info = ToString();
+		// initialize the query info
+		if (root) {
+			query_info->query = query;
+			query_info->settings = ProfilingInfo(ClientConfig::GetConfig(context).profiler_settings);
+			if (query_info->settings.Enabled(MetricsType::OPERATOR_TIMING)) {
+				query_info->settings.metrics.operator_timing = main_query.Elapsed();
+			}
+			if (query_info->settings.Enabled(MetricsType::CPU_TIME)) {
+				GetTotalCPUTime(*root);
+				query_info->settings.metrics.cpu_time = root->profiling_info.metrics.cpu_time;
+			}
+		}
+
+		string tree = ToString();
 		auto save_location = GetSaveLocation();
+
 		if (!ClientConfig::GetConfig(context).emit_profiler_output) {
 			// disable output
 		} else if (save_location.empty()) {
-			Printer::Print(query_info);
+			Printer::Print(tree);
 			Printer::Print("\n");
 		} else {
-			WriteToFile(save_location.c_str(), query_info);
+			WriteToFile(save_location.c_str(), tree);
 		}
 	}
 	this->is_explain_analyze = false;
 }
+
 string QueryProfiler::ToString() const {
 	const auto format = GetPrintFormat();
 	switch (format) {
@@ -215,7 +241,9 @@ void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
 		return;
 	}
 	this->query_requires_profiling = false;
-	this->root = CreateTree(root_op);
+	ClientConfig &config = ClientConfig::GetConfig(context);
+	this->root = CreateTree(root_op, config.profiler_settings, 0);
+	this->query_info = make_uniq<QueryProfiler::QueryInfo>();
 	if (!query_requires_profiling) {
 		// query does not require profiling: disable profiling for this query
 		this->running = false;
@@ -226,7 +254,9 @@ void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
 	}
 }
 
-OperatorProfiler::OperatorProfiler(bool enabled_p) : enabled(enabled_p), active_operator(nullptr) {
+OperatorProfiler::OperatorProfiler(ClientContext &context) {
+	enabled = QueryProfiler::Get(context).IsEnabled();
+	settings = ClientConfig::GetConfig(context).profiler_settings;
 }
 
 void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_op) {
@@ -241,7 +271,9 @@ void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_o
 	active_operator = phys_op;
 
 	// start timing for current element
-	op.Start();
+	if (SettingEnabled(MetricsType::OPERATOR_TIMING)) {
+		op.Start();
+	}
 }
 
 void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
@@ -253,30 +285,35 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 		throw InternalException("OperatorProfiler: Attempting to call EndOperator while another operator is active");
 	}
 
-	// finish timing for the current element
-	op.End();
+	bool timing_enabled = SettingEnabled(MetricsType::OPERATOR_TIMING);
+	bool cardinality_enabled = SettingEnabled(MetricsType::OPERATOR_CARDINALITY);
+	if (timing_enabled || cardinality_enabled) {
+		// get the operator info for the current element
+		auto &curr_operator_info = GetOperatorInfo(*active_operator);
 
-	AddTiming(*active_operator, op.Elapsed(), chunk ? chunk->size() : 0);
+		// finish timing for the current element
+		if (timing_enabled) {
+			op.End();
+			curr_operator_info.AddTime(op.Elapsed());
+		}
+		if (cardinality_enabled && chunk) {
+			curr_operator_info.AddElements(chunk->size());
+		}
+	}
 	active_operator = nullptr;
 }
 
-void OperatorProfiler::AddTiming(const PhysicalOperator &op, double time, idx_t elements) {
-	if (!enabled) {
-		return;
-	}
-	if (!Value::DoubleIsFinite(time)) {
-		return;
-	}
-	auto entry = timings.find(op);
-	if (entry == timings.end()) {
-		// add new entry
-		timings[op] = OperatorInformation(time, elements);
+OperatorInformation &OperatorProfiler::GetOperatorInfo(const PhysicalOperator &phys_op) {
+	auto entry = timings.find(phys_op);
+	if (entry != timings.end()) {
+		return entry->second;
 	} else {
-		// add to existing entry
-		entry->second.time += time;
-		entry->second.elements += elements;
+		// add new entry
+		timings[phys_op] = OperatorInformation();
+		return timings[phys_op];
 	}
 }
+
 void OperatorProfiler::Flush(const PhysicalOperator &phys_op, ExpressionExecutor &expression_executor,
                              const string &name, int id) {
 	auto entry = timings.find(phys_op);
@@ -298,10 +335,11 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 		D_ASSERT(entry != tree_map.end());
 		auto &tree_node = entry->second.get();
 
-		tree_node.info.time += node.second.time;
-		tree_node.info.elements += node.second.elements;
-		if (!IsDetailedEnabled()) {
-			continue;
+		if (profiler.SettingEnabled(MetricsType::OPERATOR_TIMING)) {
+			tree_node.profiling_info.metrics.operator_timing += node.second.time;
+		}
+		if (profiler.SettingEnabled(MetricsType::OPERATOR_CARDINALITY)) {
+			tree_node.profiling_info.metrics.operator_cardinality += node.second.elements;
 		}
 	}
 	profiler.timings.clear();
@@ -436,11 +474,11 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 	}
 }
 
-static string JSONSanitize(const string &text) {
+string QueryProfiler::JSONSanitize(const std::string &text) {
 	string result;
 	result.reserve(text.size());
-	for (idx_t i = 0; i < text.size(); i++) {
-		switch (text[i]) {
+	for (char i : text) {
+		switch (i) {
 		case '\b':
 			result += "\\b";
 			break;
@@ -463,7 +501,7 @@ static string JSONSanitize(const string &text) {
 			result += "\\\\";
 			break;
 		default:
-			result += text[i];
+			result += i;
 			break;
 		}
 	}
@@ -472,10 +510,13 @@ static string JSONSanitize(const string &text) {
 
 static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, idx_t depth = 1) {
 	ss << string(depth * 3, ' ') << " {\n";
-	ss << string(depth * 3, ' ') << "   \"name\": \"" + JSONSanitize(node.name) + "\",\n";
-	ss << string(depth * 3, ' ') << "   \"timing\":" + to_string(node.info.time) + ",\n";
-	ss << string(depth * 3, ' ') << "   \"cardinality\":" + to_string(node.info.elements) + ",\n";
-	ss << string(depth * 3, ' ') << "   \"extra_info\": \"" + JSONSanitize(node.extra_info) + "\",\n";
+	ss << string(depth * 3, ' ') << "   \"name\": \"" + QueryProfiler::JSONSanitize(node.name) + "\",\n";
+	ss << string(depth * 3, ' ')
+	   << "   \"operator_timing\":" + to_string(node.profiling_info.metrics.operator_timing) + ",\n";
+	ss << string(depth * 3, ' ')
+	   << "   \"operator_cardinality\":" + to_string(node.profiling_info.metrics.operator_cardinality) + ",\n";
+	ss << string(depth * 3, ' ')
+	   << "   \"extra_info\": \"" + QueryProfiler::JSONSanitize(node.profiling_info.metrics.extra_info) + "\",\n";
 	ss << string(depth * 3, ' ') << "   \"children\": [\n";
 	if (node.children.empty()) {
 		ss << string(depth * 3, ' ') << "   ]\n";
@@ -501,32 +542,33 @@ string QueryProfiler::ToJSON() const {
 	if (!root) {
 		return "{ \"result\": \"error\" }\n";
 	}
+
+	auto &settings = query_info->settings;
+
 	std::stringstream ss;
 	ss << "{\n";
-	ss << "   \"name\":  \"Query\", \n";
-	ss << "   \"result\": " + to_string(main_query.Elapsed()) + ",\n";
-	ss << "   \"timing\": " + to_string(main_query.Elapsed()) + ",\n";
-	ss << "   \"cardinality\": " + to_string(root->info.elements) + ",\n";
+	ss << "   \"Query\": \"" + JSONSanitize(query_info->query) + "\",\n";
+
+	settings.PrintAllMetricsToSS(ss, "");
 	// JSON cannot have literal control characters in string literals
-	string extra_info = JSONSanitize(query);
-	ss << "   \"extra-info\": \"" + extra_info + "\", \n";
-	// print the phase timings
-	ss << "   \"timings\": [\n";
-	const auto &ordered_phase_timings = GetOrderedPhaseTimings();
-	for (idx_t i = 0; i < ordered_phase_timings.size(); i++) {
-		if (i > 0) {
-			ss << ",\n";
+	if (settings.Enabled(MetricsType::EXTRA_INFO)) {
+		ss << "   \"timings\": [\n";
+		const auto &ordered_phase_timings = GetOrderedPhaseTimings();
+		for (idx_t i = 0; i < ordered_phase_timings.size(); i++) {
+			if (i > 0) {
+				ss << ",\n";
+			}
+			ss << "   {\n";
+			ss << "   \"annotation\": \"" + ordered_phase_timings[i].first + "\", \n";
+			ss << "   \"timing\": " + to_string(ordered_phase_timings[i].second) + "\n";
+			ss << "   }";
 		}
-		ss << "   {\n";
-		ss << "   \"annotation\": \"" + ordered_phase_timings[i].first + "\", \n";
-		ss << "   \"timing\": " + to_string(ordered_phase_timings[i].second) + "\n";
-		ss << "   }";
+		ss << "\n";
+		ss << "   ],\n";
 	}
-	ss << "\n";
-	ss << "   ],\n";
 	// recursively print the physical operator tree
 	ss << "   \"children\": [\n";
-	ToJSONRecursive(*root, ss);
+	ToJSONRecursive(*root->children[0], ss);
 	ss << "   ]\n";
 	ss << "}";
 	return ss.str();
@@ -542,19 +584,23 @@ void QueryProfiler::WriteToFile(const char *path, string &info) const {
 	}
 }
 
-unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(const PhysicalOperator &root, idx_t depth) {
+unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(const PhysicalOperator &root,
+                                                              profiler_settings_t settings, idx_t depth) {
 	if (OperatorRequiresProfiling(root.type)) {
 		this->query_requires_profiling = true;
 	}
 	auto node = make_uniq<QueryProfiler::TreeNode>();
 	node->type = root.type;
 	node->name = root.GetName();
-	node->extra_info = root.ParamsToString();
 	node->depth = depth;
+	node->profiling_info = ProfilingInfo(settings);
+	if (node->profiling_info.Enabled(MetricsType::EXTRA_INFO)) {
+		node->profiling_info.metrics.extra_info = root.ParamsToString();
+	}
 	tree_map.insert(make_pair(reference<const PhysicalOperator>(root), reference<QueryProfiler::TreeNode>(*node)));
 	auto children = root.GetChildren();
 	for (auto &child : children) {
-		auto child_node = CreateTree(child.get(), depth + 1);
+		auto child_node = CreateTree(child.get(), settings, depth + 1);
 		node->children.push_back(std::move(child_node));
 	}
 	return node;

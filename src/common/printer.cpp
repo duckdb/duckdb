@@ -62,7 +62,7 @@ idx_t Printer::TerminalWidth() {
 #ifndef DUCKDB_DISABLE_PRINT
 #ifdef DUCKDB_WINDOWS
 	CONSOLE_SCREEN_BUFFER_INFO csbi;
-	int columns, rows;
+	int rows;
 
 	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
 	rows = csbi.srWindow.Right - csbi.srWindow.Left + 1;
