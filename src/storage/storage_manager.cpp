@@ -331,6 +331,7 @@ DatabaseSize SingleFileStorageManager::GetDatabaseSize() {
 	DatabaseSize ds;
 	if (!InMemory()) {
 		ds.total_blocks = block_manager->TotalBlocks();
+		// NOTE: default block alloc size?
 		ds.block_size = Storage::BLOCK_ALLOC_SIZE;
 		ds.free_blocks = block_manager->FreeBlocks();
 		ds.used_blocks = ds.total_blocks - ds.free_blocks;
