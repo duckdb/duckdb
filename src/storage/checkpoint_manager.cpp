@@ -170,7 +170,11 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	    }
 	 */
 	auto catalog_entries = GetCatalogEntries(schemas);
-	BinarySerializer serializer(*metadata_writer);
+	SerializationOptions serialization_options;
+
+	serialization_options.serialization_compatibility = config.options.serialization_compatibility;
+
+	BinarySerializer serializer(*metadata_writer, serialization_options);
 	serializer.Begin();
 	serializer.WriteList(100, "catalog_entries", catalog_entries.size(), [&](Serializer::List &list, idx_t i) {
 		auto &entry = catalog_entries[i];
@@ -200,7 +204,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	// finally write the updated header
 	DatabaseHeader header;
 	header.meta_block = meta_block.block_pointer;
-	header.block_size = Storage::BLOCK_ALLOC_SIZE;
+	header.block_alloc_size = block_manager.GetBlockAllocSize();
 	header.vector_size = STANDARD_VECTOR_SIZE;
 	block_manager.WriteHeader(header);
 

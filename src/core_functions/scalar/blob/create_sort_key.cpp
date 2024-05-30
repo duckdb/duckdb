@@ -186,10 +186,10 @@ struct SortKeyVarcharOperator {
 	}
 
 	static idx_t Encode(data_ptr_t result, TYPE input) {
-		auto input_data = input.GetDataUnsafe();
+		auto input_data = const_data_ptr_cast(input.GetDataUnsafe());
 		auto input_size = input.GetSize();
 		for (idx_t r = 0; r < input_size; r++) {
-			result[r] = UnsafeNumericCast<data_t>(input_data[r] + 1);
+			result[r] = input_data[r] + 1;
 		}
 		result[input_size] = SortKeyVectorData::STRING_DELIMITER; // null-byte delimiter
 		return input_size + 1;

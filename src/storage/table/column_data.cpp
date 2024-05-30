@@ -108,6 +108,9 @@ ScanVectorType ColumnData::GetVectorScanType(ColumnScanState &state, idx_t scan_
 }
 
 idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType scan_type) {
+	if (scan_type == ScanVectorType::SCAN_FLAT_VECTOR && result.GetVectorType() != VectorType::FLAT_VECTOR) {
+		throw InternalException("ScanVector called with SCAN_FLAT_VECTOR but result is not a flat vector");
+	}
 	state.previous_states.clear();
 	if (!state.initialized) {
 		D_ASSERT(state.current);
@@ -199,34 +202,49 @@ void ColumnData::UpdateInternal(TransactionData transaction, idx_t column_index,
 }
 
 template <bool SCAN_COMMITTED, bool ALLOW_UPDATES>
-idx_t ColumnData::ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
-	idx_t current_row = vector_index * STANDARD_VECTOR_SIZE;
-	auto vector_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - current_row);
-
-	auto scan_count = ScanVector(state, result, vector_count, GetVectorScanType(state, vector_count));
+idx_t ColumnData::ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+                             idx_t target_scan) {
+	auto scan_count = ScanVector(state, result, target_scan, GetVectorScanType(state, target_scan));
 	FetchUpdates(transaction, vector_index, result, scan_count, ALLOW_UPDATES, SCAN_COMMITTED);
 	return scan_count;
 }
 
 template idx_t ColumnData::ScanVector<false, false>(TransactionData transaction, idx_t vector_index,
-                                                    ColumnScanState &state, Vector &result);
+                                                    ColumnScanState &state, Vector &result, idx_t target_scan);
 template idx_t ColumnData::ScanVector<true, false>(TransactionData transaction, idx_t vector_index,
-                                                   ColumnScanState &state, Vector &result);
+                                                   ColumnScanState &state, Vector &result, idx_t target_scan);
 template idx_t ColumnData::ScanVector<false, true>(TransactionData transaction, idx_t vector_index,
-                                                   ColumnScanState &state, Vector &result);
+                                                   ColumnScanState &state, Vector &result, idx_t target_scan);
 template idx_t ColumnData::ScanVector<true, true>(TransactionData transaction, idx_t vector_index,
-                                                  ColumnScanState &state, Vector &result);
+                                                  ColumnScanState &state, Vector &result, idx_t target_scan);
 
 idx_t ColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
-	return ScanVector<false, true>(transaction, vector_index, state, result);
+	auto target_count = GetVectorCount(vector_index);
+	return Scan(transaction, vector_index, state, result, target_count);
 }
 
 idx_t ColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) {
+	auto target_count = GetVectorCount(vector_index);
+	return ScanCommitted(vector_index, state, result, allow_updates, target_count);
+}
+
+idx_t ColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+                       idx_t scan_count) {
+	return ScanVector<false, true>(transaction, vector_index, state, result, scan_count);
+}
+
+idx_t ColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
+                                idx_t scan_count) {
 	if (allow_updates) {
-		return ScanVector<true, true>(TransactionData(0, 0), vector_index, state, result);
+		return ScanVector<true, true>(TransactionData(0, 0), vector_index, state, result, scan_count);
 	} else {
-		return ScanVector<true, false>(TransactionData(0, 0), vector_index, state, result);
+		return ScanVector<true, false>(TransactionData(0, 0), vector_index, state, result, scan_count);
 	}
+}
+
+idx_t ColumnData::GetVectorCount(idx_t vector_index) const {
+	idx_t current_row = vector_index * STANDARD_VECTOR_SIZE;
+	return MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - current_row);
 }
 
 void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t s_count, Vector &result) {

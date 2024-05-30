@@ -55,12 +55,13 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	}
 
 	bool use_tmp_file = true;
-	bool overwrite_or_ignore = false;
+	CopyOverwriteMode overwrite_mode = CopyOverwriteMode::COPY_ERROR_ON_CONFLICT;
 	FilenamePattern filename_pattern;
 	bool user_set_use_tmp_file = false;
 	bool per_thread_output = false;
 	optional_idx file_size_bytes;
 	vector<idx_t> partition_cols;
+	bool seen_overwrite_mode = false;
 
 	CopyFunctionBindInput bind_input(*stmt.info);
 
@@ -68,14 +69,25 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 
 	auto original_options = stmt.info->options;
 	stmt.info->options.clear();
-
 	for (auto &option : original_options) {
 		auto loption = StringUtil::Lower(option.first);
 		if (loption == "use_tmp_file") {
 			use_tmp_file = GetBooleanArg(context, option.second);
 			user_set_use_tmp_file = true;
-		} else if (loption == "overwrite_or_ignore") {
-			overwrite_or_ignore = GetBooleanArg(context, option.second);
+		} else if (loption == "overwrite_or_ignore" || loption == "overwrite") {
+			if (seen_overwrite_mode) {
+				throw BinderException("Can only set one of OVERWRITE_OR_IGNORE or OVERWRITE");
+			}
+			seen_overwrite_mode = true;
+
+			auto boolean = GetBooleanArg(context, option.second);
+			if (boolean) {
+				if (loption == "overwrite_or_ignore") {
+					overwrite_mode = CopyOverwriteMode::COPY_OVERWRITE_OR_IGNORE;
+				} else if (loption == "overwrite") {
+					overwrite_mode = CopyOverwriteMode::COPY_OVERWRITE;
+				}
+			}
 		} else if (loption == "filename_pattern") {
 			if (option.second.empty()) {
 				throw IOException("FILENAME_PATTERN cannot be empty");
@@ -93,7 +105,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 			if (option.second.empty()) {
 				throw BinderException("FILE_SIZE_BYTES cannot be empty");
 			}
-			if (!copy_function.function.file_size_bytes) {
+			if (!copy_function.function.rotate_files) {
 				throw NotImplementedException("FILE_SIZE_BYTES not implemented for FORMAT \"%s\"", stmt.info->format);
 			}
 			if (option.second[0].GetTypeMutable().id() == LogicalTypeId::VARCHAR) {
@@ -105,6 +117,21 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 			auto converted = ConvertVectorToValue(std::move(option.second));
 			partition_cols = ParseColumnsOrdered(converted, select_node.names, loption);
 		} else {
+			if (loption == "compression") {
+				if (option.second.empty()) {
+					// This can't be empty
+					throw BinderException("COMPRESSION option, in the file scanner, can't be empty. It should be set "
+					                      "to AUTO, UNCOMPRESSED, GZIP, SNAPPY or ZSTD. Depending on the file format.");
+				}
+				auto parameter = StringUtil::Lower(option.second[0].ToString());
+				if (parameter == "gzip" && !StringUtil::EndsWith(bind_input.file_extension, ".gz")) {
+					// We just add .gz
+					bind_input.file_extension += ".gz";
+				} else if (parameter == "zstd" && !StringUtil::EndsWith(bind_input.file_extension, ".zst")) {
+					// We just add .zst
+					bind_input.file_extension += ".zst";
+				}
+			}
 			stmt.info->options[option.first] = option.second;
 		}
 	}
@@ -142,17 +169,34 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	auto function_data =
 	    copy_function.function.copy_to_bind(context, bind_input, unique_column_names, select_node.types);
 
+	const auto rotate =
+	    copy_function.function.rotate_files && copy_function.function.rotate_files(*function_data, file_size_bytes);
+	if (rotate) {
+		if (!copy_function.function.rotate_next_file) {
+			throw InternalException("rotate_next_file not implemented for \"%s\"", copy_function.function.extension);
+		}
+		if (user_set_use_tmp_file) {
+			throw NotImplementedException(
+			    "Can't combine USE_TMP_FILE and file rotation (e.g., ROW_GROUPS_PER_FILE) for COPY");
+		}
+		if (!partition_cols.empty()) {
+			throw NotImplementedException(
+			    "Can't combine file rotation (e.g., ROW_GROUPS_PER_FILE) and PARTITION_BY for COPY");
+		}
+	}
+
 	// now create the copy information
 	auto copy = make_uniq<LogicalCopyToFile>(copy_function.function, std::move(function_data), std::move(stmt.info));
 	copy->file_path = file_path;
 	copy->use_tmp_file = use_tmp_file;
-	copy->overwrite_or_ignore = overwrite_or_ignore;
+	copy->overwrite_mode = overwrite_mode;
 	copy->filename_pattern = filename_pattern;
 	copy->file_extension = bind_input.file_extension;
 	copy->per_thread_output = per_thread_output;
 	if (file_size_bytes.IsValid()) {
 		copy->file_size_bytes = file_size_bytes;
 	}
+	copy->rotate = rotate;
 	copy->partition_output = !partition_cols.empty();
 	copy->partition_columns = std::move(partition_cols);
 

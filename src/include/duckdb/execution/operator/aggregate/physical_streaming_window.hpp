@@ -18,6 +18,8 @@ class PhysicalStreamingWindow : public PhysicalOperator {
 public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::STREAMING_WINDOW;
 
+	static bool IsStreamingFunction(unique_ptr<Expression> &expr);
+
 public:
 	PhysicalStreamingWindow(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
 	                        idx_t estimated_cardinality,

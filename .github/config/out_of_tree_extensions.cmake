@@ -20,8 +20,7 @@ if (NOT MINGW)
     duckdb_extension_load(arrow
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/arrow
-            GIT_TAG 9e10240da11f61ea7fbfe3fc9988ffe672ccd40f
-            APPLY_PATCHES
+            GIT_TAG fa40ec56236953aa5978cf1b4c65ed521424ce69
             )
 endif()
 
@@ -42,6 +41,14 @@ if (NOT MINGW)
             GIT_TAG 49b63dc8cd166952a0a34dfd54e6cfe5b823e05e
             )
 endif()
+
+################# EXCEL
+duckdb_extension_load(excel
+    LOAD_TESTS
+    GIT_URL https://github.com/duckdb/duckdb_excel
+    GIT_TAG 391b36dfdcc1c8c187529376efb4f7ddc9f57261
+    INCLUDE_DIR extension/excel/include
+    )
 
 ################# ICEBERG
 # Windows tests for iceberg currently not working
@@ -72,11 +79,10 @@ endif()
 
 ################# SPATIAL
 duckdb_extension_load(spatial
-    DONT_LINK LOAD_TESTS APPLY_PATCHES
+    DONT_LINK LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb_spatial.git
-    GIT_TAG 8ac803e986ccda34f32dee82a7faae95b72b3492
+    GIT_TAG 6826755ec32aea77777b136cc81683fa9be4df7b
     INCLUDE_DIR spatial/include
-    APPLY_PATCHES
     TEST_DIR test/sql
     )
 
@@ -99,8 +105,7 @@ if (NOT WIN32)
     duckdb_extension_load(substrait
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/substrait
-            GIT_TAG 1116fb580edd3e26e675436dbdbdf4a0aa5e456e
-            APPLY_PATCHES
+            GIT_TAG 237931391ebc7e6aee7aa81052fa1411f6c4128e
             )
 endif()
 
@@ -110,9 +115,8 @@ duckdb_extension_load(vss
         LOAD_TESTS
         DONT_LINK
         GIT_URL https://github.com/duckdb/duckdb_vss
-        GIT_TAG dbf5b74298384a9dc8e78353e628259b020cd4eb
+        GIT_TAG 690bfc56c82b54f4580dabbc2769e2925db61499
         TEST_DIR test/sql
-        APPLY_PATCHES
     )
 
 ################# MYSQL

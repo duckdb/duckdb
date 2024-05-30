@@ -127,6 +127,7 @@ public:
 	static bool IsNewline(char c);
 	static bool IsWordBoundary(char c);
 	static bool AllWhitespace(const char *z);
+	static bool IsSpace(char c);
 
 	TabCompletion TabComplete() const;
 

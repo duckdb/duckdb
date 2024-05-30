@@ -36,11 +36,34 @@ query TT
 EXPLAIN
 SELECT j, COUNT(j) FILTER(WHERE i = 2) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM integers;
 ----
-physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query TT
+EXPLAIN
+SELECT j, COUNT(*) FILTER(WHERE i = 2) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM integers;
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
 
 query TT
 EXPLAIN
 SELECT j, SUM(j) FILTER(WHERE i = 2) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM integers;
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+# DISTINCT is not supported for streaming windows
+query TT
+EXPLAIN
+SELECT
+   LIST(DISTINCT col0) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS result
+FROM (VALUES ({'key': 'A'}), ({'key': 'B'}), ({'key': 'A'}))
+----
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+
+query TT
+EXPLAIN
+SELECT
+   LIST(DISTINCT col0) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS result
+FROM (VALUES ({'key': 'A'}), ({'key': 'B'}), ({'key': 'A'}))
 ----
 physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
 
@@ -111,6 +134,20 @@ SELECT i, COUNT(*) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM i
 2	2
 1	3
 1	4
+
+query TT
+EXPLAIN
+SELECT i, COUNT(*) FILTER(WHERE i = 2) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM integers;
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query II
+SELECT i, COUNT(*) FILTER(WHERE i = 2) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM integers;
+----
+2	1
+2	2
+1	2
+1	2
 
 query TT
 EXPLAIN
@@ -295,3 +332,13 @@ EXECUTE sw1(2);
 ----
 10	1
 11	2
+
+# Struct Slicing
+query I
+from (values ({'key': 'A'}), ({'key': 'B'}), ({'key': 'C'}))
+select
+   list(col0) over (rows between unbounded preceding and current row) as result
+----
+[{'key': A}]
+[{'key': A}, {'key': B}]
+[{'key': A}, {'key': B}, {'key': C}]
