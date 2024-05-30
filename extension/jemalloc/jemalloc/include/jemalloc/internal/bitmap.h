@@ -1,10 +1,9 @@
 #ifndef JEMALLOC_INTERNAL_BITMAP_H
 #define JEMALLOC_INTERNAL_BITMAP_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/bit_util.h"
 #include "jemalloc/internal/sc.h"
-
-namespace duckdb_jemalloc {
 
 typedef unsigned long bitmap_t;
 #define LG_SIZEOF_BITMAP	LG_SIZEOF_LONG
@@ -112,7 +111,7 @@ typedef unsigned long bitmap_t;
 	/* nbits. */							\
 	nbits,								\
 	/* nlevels. */							\
-	(uint32_t)(BITMAP_GROUPS_L0(nbits) > BITMAP_GROUPS_L1(nbits)) +		\
+	(BITMAP_GROUPS_L0(nbits) > BITMAP_GROUPS_L1(nbits)) +		\
 	    (BITMAP_GROUPS_L1(nbits) > BITMAP_GROUPS_L2(nbits)) +	\
 	    (BITMAP_GROUPS_L2(nbits) > BITMAP_GROUPS_L3(nbits)) +	\
 	    (BITMAP_GROUPS_L3(nbits) > BITMAP_GROUPS_L4(nbits)) + 1,	\
@@ -366,7 +365,5 @@ bitmap_unset(bitmap_t *bitmap, const bitmap_info_t *binfo, size_t bit) {
 	}
 #endif /* BITMAP_USE_TREE */
 }
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_BITMAP_H */

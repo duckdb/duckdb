@@ -5,9 +5,10 @@
 #include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/storage_lock.hpp"
-#include "duckdb/common/value_operations/value_operations.hpp"
+
 #include <algorithm>
 
 namespace duckdb {
@@ -222,9 +223,6 @@ unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContex
 		return std::move(state);
 	}
 	auto res = make_uniq<CopyToFunctionLocalState>(function.copy_to_initialize_local(context, *bind_data));
-	if (per_thread_output) {
-		res->global_state = CreateFileState(context.client, *sink_state);
-	}
 	return std::move(res);
 }
 
@@ -265,8 +263,7 @@ void CheckDirectory(FileSystem &fs, const string &file_path, CopyOverwriteMode o
 }
 
 unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext &context) const {
-
-	if (partition_output || per_thread_output || file_size_bytes.IsValid()) {
+	if (partition_output || per_thread_output || rotate) {
 		auto &fs = FileSystem::GetFileSystem(context);
 		if (fs.FileExists(file_path)) {
 			// the target file exists AND is a file (not a directory)
@@ -292,7 +289,7 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 		}
 
 		auto state = make_uniq<CopyToFunctionGlobalState>(nullptr);
-		if (!per_thread_output && file_size_bytes.IsValid()) {
+		if (!per_thread_output && rotate) {
 			state->global_state = CreateFileState(context, *state);
 		}
 
@@ -346,24 +343,26 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &ch
 
 	if (per_thread_output) {
 		auto &gstate = l.global_state;
-		function.copy_to_sink(context, *bind_data, *gstate, *l.local_state, chunk);
-
-		if (file_size_bytes.IsValid() && function.file_size_bytes(*gstate) > file_size_bytes.GetIndex()) {
+		if (!gstate) {
+			// Lazily create file state here to prevent creating empty files
+			gstate = CreateFileState(context.client, *sink_state);
+		} else if (rotate && function.rotate_next_file(*gstate, *bind_data, file_size_bytes)) {
 			function.copy_to_finalize(context.client, *bind_data, *gstate);
 			gstate = CreateFileState(context.client, *sink_state);
 		}
+		function.copy_to_sink(context, *bind_data, *gstate, *l.local_state, chunk);
 		return SinkResultType::NEED_MORE_INPUT;
 	}
 
-	if (!file_size_bytes.IsValid()) {
+	if (!file_size_bytes.IsValid() && !rotate) {
 		function.copy_to_sink(context, *bind_data, *g.global_state, *l.local_state, chunk);
 		return SinkResultType::NEED_MORE_INPUT;
 	}
 
-	// FILE_SIZE_BYTES is set, but threads write to the same file, synchronize using lock
+	// FILE_SIZE_BYTES/rotate is set, but threads write to the same file, synchronize using lock
 	auto &gstate = g.global_state;
 	auto lock = g.lock.GetExclusiveLock();
-	if (function.file_size_bytes(*gstate) > file_size_bytes.GetIndex()) {
+	if (rotate && function.rotate_next_file(*gstate, *bind_data, file_size_bytes)) {
 		auto owned_gstate = std::move(gstate);
 		gstate = CreateFileState(context.client, *sink_state);
 		lock.reset();
@@ -387,11 +386,13 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 		l.FlushPartitions(context, *this, g);
 	} else if (function.copy_to_combine) {
 		if (per_thread_output) {
-			// For PER_THREAD_OUTPUT, we can combine/finalize immediately
-			function.copy_to_combine(context, *bind_data, *l.global_state, *l.local_state);
-			function.copy_to_finalize(context.client, *bind_data, *l.global_state);
-		} else if (file_size_bytes.IsValid()) {
-			// File in global state may change with FILE_SIZE_BYTES, need to grab lock
+			// For PER_THREAD_OUTPUT, we can combine/finalize immediately (if there is a gstate)
+			if (l.global_state) {
+				function.copy_to_combine(context, *bind_data, *l.global_state, *l.local_state);
+				function.copy_to_finalize(context.client, *bind_data, *l.global_state);
+			}
+		} else if (rotate) {
+			// File in global state may change with FILE_SIZE_BYTES/rotate, need to grab lock
 			auto lock = g.lock.GetSharedLock();
 			function.copy_to_combine(context, *bind_data, *g.global_state, *l.local_state);
 		} else {
@@ -421,6 +422,7 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 			D_ASSERT(!per_thread_output);
 			D_ASSERT(!partition_output);
 			D_ASSERT(!file_size_bytes.IsValid());
+			D_ASSERT(!rotate);
 			MoveTmpFile(context, file_path);
 		}
 	}

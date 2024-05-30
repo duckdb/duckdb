@@ -1,19 +1,19 @@
 #ifndef JEMALLOC_INTERNAL_EDATA_H
 #define JEMALLOC_INTERNAL_EDATA_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/atomic.h"
 #include "jemalloc/internal/bin_info.h"
 #include "jemalloc/internal/bit_util.h"
 #include "jemalloc/internal/hpdata.h"
 #include "jemalloc/internal/nstime.h"
 #include "jemalloc/internal/ph.h"
+#include "jemalloc/internal/prof_types.h"
 #include "jemalloc/internal/ql.h"
 #include "jemalloc/internal/sc.h"
 #include "jemalloc/internal/slab_data.h"
 #include "jemalloc/internal/sz.h"
 #include "jemalloc/internal/typed_list.h"
-
-namespace duckdb_jemalloc {
 
 /*
  * sizeof(edata_t) is 128 bytes on 64-bit architectures.  Ensure the alignment
@@ -377,18 +377,18 @@ edata_ps_get(const edata_t *edata) {
 
 static inline void *
 edata_before_get(const edata_t *edata) {
-	return (void *)((uintptr_t)edata_base_get(edata) - PAGE);
+	return (void *)((byte_t *)edata_base_get(edata) - PAGE);
 }
 
 static inline void *
 edata_last_get(const edata_t *edata) {
-	return (void *)((uintptr_t)edata_base_get(edata) +
+	return (void *)((byte_t *)edata_base_get(edata) +
 	    edata_size_get(edata) - PAGE);
 }
 
 static inline void *
 edata_past_get(const edata_t *edata) {
-	return (void *)((uintptr_t)edata_base_get(edata) +
+	return (void *)((byte_t *)edata_base_get(edata) +
 	    edata_size_get(edata));
 }
 
@@ -621,7 +621,8 @@ edata_init(edata_t *edata, unsigned arena_ind, void *addr, size_t size,
 }
 
 static inline void
-edata_binit(edata_t *edata, void *addr, size_t bsize, uint64_t sn) {
+edata_binit(edata_t *edata, void *addr, size_t bsize, uint64_t sn,
+    bool reused) {
 	edata_arena_ind_set(edata, (1U << MALLOCX_ARENA_BITS) - 1);
 	edata_addr_set(edata, addr);
 	edata_bsize_set(edata, bsize);
@@ -629,7 +630,8 @@ edata_binit(edata_t *edata, void *addr, size_t bsize, uint64_t sn) {
 	edata_szind_set(edata, SC_NSIZES);
 	edata_sn_set(edata, sn);
 	edata_state_set(edata, extent_state_active);
-	edata_guarded_set(edata, false);
+	/* See comments in base_edata_is_reused. */
+	edata_guarded_set(edata, reused);
 	edata_zeroed_set(edata, true);
 	edata_committed_set(edata, true);
 	/*
@@ -658,19 +660,28 @@ edata_ead_comp(const edata_t *a, const edata_t *b) {
 
 static inline edata_cmp_summary_t
 edata_cmp_summary_get(const edata_t *edata) {
-	return edata_cmp_summary_t{edata_sn_get(edata),
-		(uintptr_t)edata_addr_get(edata)};
+	edata_cmp_summary_t result;
+	result.sn = edata_sn_get(edata);
+	result.addr = (uintptr_t)edata_addr_get(edata);
+	return result;
 }
 
 static inline int
 edata_cmp_summary_comp(edata_cmp_summary_t a, edata_cmp_summary_t b) {
-	int ret;
-	ret = (a.sn > b.sn) - (a.sn < b.sn);
-	if (ret != 0) {
-		return ret;
-	}
-	ret = (a.addr > b.addr) - (a.addr < b.addr);
-	return ret;
+	/*
+	 * Logically, what we're doing here is comparing based on `.sn`, and
+	 * falling back to comparing on `.addr` in the case that `a.sn == b.sn`.
+	 * We accomplish this by multiplying the result of the `.sn` comparison
+	 * by 2, so that so long as it is not 0, it will dominate the `.addr`
+	 * comparison in determining the sign of the returned result value.
+	 * The justification for doing things this way is that this is
+	 * branchless - all of the branches that would be present in a
+	 * straightforward implementation are common cases, and thus the branch
+	 * prediction accuracy is not great. As a result, this implementation
+	 * is measurably faster (by around 30%).
+	 */
+	return (2 * ((a.sn > b.sn) - (a.sn < b.sn))) +
+	       ((a.addr > b.addr) - (a.addr < b.addr));
 }
 
 static inline int
@@ -683,20 +694,14 @@ edata_snad_comp(const edata_t *a, const edata_t *b) {
 
 static inline int
 edata_esnead_comp(const edata_t *a, const edata_t *b) {
-	int ret;
-
-	ret = edata_esn_comp(a, b);
-	if (ret != 0) {
-		return ret;
-	}
-
-	ret = edata_ead_comp(a, b);
-	return ret;
+	/*
+	 * Similar to `edata_cmp_summary_comp`, we've opted for a
+	 * branchless implementation for the sake of performance.
+	 */
+	return (2 * edata_esn_comp(a, b)) + edata_ead_comp(a, b);
 }
 
 ph_proto(, edata_avail, edata_t)
 ph_proto(, edata_heap, edata_t)
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_EDATA_H */

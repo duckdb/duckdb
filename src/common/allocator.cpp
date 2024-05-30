@@ -4,6 +4,7 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 
 #include <cstdint>
 
@@ -207,15 +208,43 @@ Allocator &Allocator::DefaultAllocator() {
 	return *DefaultAllocatorReference();
 }
 
+int64_t Allocator::DecayDelay() {
+#ifdef USE_JEMALLOC
+	return JemallocExtension::DecayDelay();
+#else
+	return NumericLimits<int64_t>::Maximum();
+#endif
+}
+
+bool Allocator::SupportsFlush() {
+#ifdef USE_JEMALLOC
+	return true;
+#else
+	return false;
+#endif
+}
+
 void Allocator::ThreadFlush(idx_t threshold) {
 #ifdef USE_JEMALLOC
 	JemallocExtension::ThreadFlush(threshold);
 #endif
 }
 
+void Allocator::ThreadIdle() {
+#ifdef USE_JEMALLOC
+	JemallocExtension::ThreadIdle();
+#endif
+}
+
 void Allocator::FlushAll() {
 #ifdef USE_JEMALLOC
 	JemallocExtension::FlushAll();
+#endif
+}
+
+void Allocator::SetBackgroundThreads(bool enable) {
+#ifdef USE_JEMALLOC
+	JemallocExtension::SetBackgroundThreads(enable);
 #endif
 }
 

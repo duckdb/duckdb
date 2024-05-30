@@ -659,7 +659,7 @@ void Linenoise::EditBackspace() {
 	}
 }
 
-static bool IsSpace(char c) {
+bool Linenoise::IsSpace(char c) {
 	switch (c) {
 	case ' ':
 	case '\r':

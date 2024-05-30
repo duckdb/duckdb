@@ -1283,7 +1283,8 @@ ClientProperties ClientContext::GetClientProperties() const {
 	if (TryGetCurrentSetting("TimeZone", result)) {
 		timezone = result.ToString();
 	}
-	return {timezone, db->config.options.arrow_offset_size};
+	return {timezone, db->config.options.arrow_offset_size, db->config.options.arrow_use_list_view,
+	        db->config.options.produce_arrow_string_views};
 }
 
 bool ClientContext::ExecutionIsFinished() {

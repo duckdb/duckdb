@@ -23,10 +23,6 @@ struct SchedulerThread {
 	explicit SchedulerThread(unique_ptr<thread> thread_p) : internal_thread(std::move(thread_p)) {
 	}
 
-	~SchedulerThread() {
-		Allocator::ThreadFlush(0);
-	}
-
 	unique_ptr<thread> internal_thread;
 #endif
 };
@@ -103,8 +99,10 @@ ProducerToken::~ProducerToken() {
 
 TaskScheduler::TaskScheduler(DatabaseInstance &db)
     : db(db), queue(make_uniq<ConcurrentQueue>()),
-      allocator_flush_threshold(db.config.options.allocator_flush_threshold), requested_thread_count(0),
+      allocator_flush_threshold(db.config.options.allocator_flush_threshold),
+      allocator_background_threads(db.config.options.allocator_background_threads), requested_thread_count(0),
       current_thread_count(1) {
+	SetAllocatorBackgroundThreads(db.config.options.allocator_background_threads);
 }
 
 TaskScheduler::~TaskScheduler() {
@@ -141,11 +139,24 @@ bool TaskScheduler::GetTaskFromProducer(ProducerToken &token, shared_ptr<Task> &
 
 void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 #ifndef DUCKDB_NO_THREADS
+	static constexpr const int64_t INITIAL_FLUSH_WAIT = 500000; // initial wait time of 0.5s (in mus) before flushing
+
 	shared_ptr<Task> task;
 	// loop until the marker is set to false
 	while (*marker) {
-		// wait for a signal with a timeout
-		queue->semaphore.wait();
+		if (!Allocator::SupportsFlush() || allocator_background_threads) {
+			// allocator can't flush, or background threads clean up allocations, just start an untimed wait
+			queue->semaphore.wait();
+		} else if (!queue->semaphore.wait(INITIAL_FLUSH_WAIT)) {
+			// no background threads, flush this threads outstanding allocations after it was idle for 0.5s
+			Allocator::ThreadFlush(allocator_flush_threshold);
+			if (!queue->semaphore.wait(Allocator::DecayDelay() * 1000000 - INITIAL_FLUSH_WAIT)) {
+				// in total, the thread was idle for the entire decay delay (note: seconds converted to mus)
+				// mark it as idle and start an untimed wait
+				Allocator::ThreadIdle();
+				queue->semaphore.wait();
+			}
+		}
 		if (queue->q.try_dequeue(task)) {
 			auto execute_result = task->Execute(TaskExecutionMode::PROCESS_ALL);
 
@@ -161,10 +172,12 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 				task.reset();
 				break;
 			}
-
-			// Flushes the outstanding allocator's outstanding allocations
-			Allocator::ThreadFlush(allocator_flush_threshold);
 		}
+	}
+	// this thread will exit, flush all of its outstanding allocations
+	if (Allocator::SupportsFlush()) {
+		Allocator::ThreadFlush(0);
+		Allocator::ThreadIdle();
 	}
 #else
 	throw NotImplementedException("DuckDB was compiled without threads! Background thread loop is not allowed.");
@@ -258,9 +271,18 @@ void TaskScheduler::SetThreads(idx_t total_threads, idx_t external_threads) {
 	}
 #endif
 	requested_thread_count = NumericCast<int32_t>(total_threads - external_threads);
+	if (Allocator::SupportsFlush()) {
+		Allocator::FlushAll();
+	}
 }
 
 void TaskScheduler::SetAllocatorFlushTreshold(idx_t threshold) {
+	allocator_flush_threshold = threshold;
+}
+
+void TaskScheduler::SetAllocatorBackgroundThreads(bool enable) {
+	allocator_background_threads = enable;
+	Allocator::SetBackgroundThreads(enable);
 }
 
 void TaskScheduler::Signal(idx_t n) {
