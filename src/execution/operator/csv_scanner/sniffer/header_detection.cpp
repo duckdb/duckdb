@@ -98,7 +98,7 @@ static string NormalizeColumnName(const string &col_name) {
 }
 
 // If our columns were set by the user, we verify if their names match with the first row
-bool DetectHeaderWithSetColumn(vector<HeaderValue> &best_header_row, SetColumns &set_columns,
+bool DetectHeaderWithSetColumn(ClientContext &context, vector<HeaderValue> &best_header_row, SetColumns &set_columns,
                                CSVReaderOptions &options) {
 	bool has_header = true;
 	bool all_varchar = true;
@@ -132,8 +132,8 @@ bool DetectHeaderWithSetColumn(vector<HeaderValue> &best_header_row, SetColumns 
 			const auto &sql_type = (*set_columns.types)[col];
 			if (sql_type != LogicalType::VARCHAR) {
 				all_varchar = false;
-				if (!CanYouCastIt(best_header_row[col].value, sql_type, options.dialect_options,
-				                  best_header_row[col].IsNull(), options.decimal_separator[0])) {
+				if (!CSVSniffer::CanYouCastIt(context, best_header_row[col].value, sql_type, options.dialect_options,
+				                              best_header_row[col].IsNull(), options.decimal_separator[0])) {
 					first_row_consistent = false;
 				}
 			}
@@ -149,11 +149,11 @@ bool DetectHeaderWithSetColumn(vector<HeaderValue> &best_header_row, SetColumns 
 	return has_header;
 }
 
-vector<string>
-DetectHeaderInternal(vector<HeaderValue> &best_header_row, CSVStateMachine &state_machine, SetColumns &set_columns,
-                     unordered_map<idx_t, vector<LogicalType>> &best_sql_types_candidates_per_column_idx) {
+vector<string> DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &best_header_row,
+                                    CSVStateMachine &state_machine, SetColumns &set_columns,
+                                    unordered_map<idx_t, vector<LogicalType>> &best_sql_types_candidates_per_column_idx,
+                                    CSVReaderOptions &options, CSVErrorHandler &error_handler) {
 	vector<string> detected_names;
-	auto &options = state_machine.options;
 	auto &dialect_options = state_machine.dialect_options;
 	if (best_header_row.empty()) {
 		dialect_options.header = false;
@@ -176,13 +176,13 @@ DetectHeaderInternal(vector<HeaderValue> &best_header_row, CSVStateMachine &stat
 	// We can't detect the dialect/type options properly
 	if (!options.null_padding && best_sql_types_candidates_per_column_idx.size() != best_header_row.size()) {
 		auto error = CSVError::SniffingError(options.file_path);
-		error_handler->Error(error);
+		error_handler.Error(error);
 	}
 	bool all_varchar = true;
 	bool has_header;
 
 	if (set_columns.IsSet()) {
-		has_header = DetectHeaderWithSetColumn();
+		has_header = DetectHeaderWithSetColumn(context, best_header_row, set_columns, options);
 	} else {
 		for (idx_t col = 0; col < best_header_row.size(); col++) {
 			if (!best_header_row[col].IsNull()) {
@@ -192,8 +192,8 @@ DetectHeaderInternal(vector<HeaderValue> &best_header_row, CSVStateMachine &stat
 			const auto &sql_type = best_sql_types_candidates_per_column_idx[col].back();
 			if (sql_type != LogicalType::VARCHAR) {
 				all_varchar = false;
-				if (!CanYouCastIt(best_header_row[col].value, sql_type, dialect_options, best_header_row[col].IsNull(),
-				                  options.decimal_separator[0])) {
+				if (!CSVSniffer::CanYouCastIt(context, best_header_row[col].value, sql_type, dialect_options,
+				                              best_header_row[col].IsNull(), options.decimal_separator[0])) {
 					first_row_consistent = false;
 				}
 			}
@@ -265,8 +265,11 @@ DetectHeaderInternal(vector<HeaderValue> &best_header_row, CSVStateMachine &stat
 			detected_names[i] = options.name_list[i];
 		}
 	}
+	return detected_names;
 }
 void CSVSniffer::DetectHeader() {
 	auto &sniffer_state_machine = best_candidate->GetStateMachine();
+	names = DetectHeaderInternal(buffer_manager->context, best_header_row, sniffer_state_machine, set_columns,
+	                             best_sql_types_candidates_per_column_idx, options, *error_handler);
 }
 } // namespace duckdb

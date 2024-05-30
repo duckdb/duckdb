@@ -348,7 +348,7 @@ void CSVSniffer::SniffTypes(DataChunk &data_chunk, CSVStateMachine &state_machin
 					// Nothing to convert it to
 					continue;
 				}
-				if (CanYouCastIt(vector_data[row_idx], sql_type, state_machine.dialect_options,
+				if (CanYouCastIt(buffer_manager->context, vector_data[row_idx], sql_type, state_machine.dialect_options,
 				                 !null_mask.RowIsValid(row_idx), state_machine.options.decimal_separator[0])) {
 					break;
 				}

@@ -108,6 +108,10 @@ public:
 
 	static NewLineIdentifier DetectNewLineDelimiter(CSVBufferManager &buffer_manager);
 
+	//! If a string_t value can be cast to a type
+	static bool CanYouCastIt(ClientContext &context, const string_t value, const LogicalType &type,
+	                         const DialectOptions &dialect_options, const bool is_null, const char decimal_separator);
+
 private:
 	//! CSV State Machine Cache
 	CSVStateMachineCache &state_machine_cache;
@@ -171,9 +175,6 @@ private:
 	//! Functions that performs detection for date and timestamp formats
 	void DetectDateAndTimeStampFormats(CSVStateMachine &candidate, const LogicalType &sql_type, const string &separator,
 	                                   string_t &dummy_val);
-	//! If a string_t value can be cast to a type
-	static bool CanYouCastIt(ClientContext &context, const string_t value, const LogicalType &type,
-	                         const DialectOptions &dialect_options, const bool is_null, const char decimal_separator);
 	//! Sniffs the types from a data chunk
 	void SniffTypes(DataChunk &data_chunk, CSVStateMachine &state_machine,
 	                unordered_map<idx_t, vector<LogicalType>> &info_sql_types_candidates, idx_t start_idx_detection);
