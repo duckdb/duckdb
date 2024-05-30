@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 
@@ -91,7 +92,6 @@ SnifferResult CSVSniffer::SniffMinimalCSV() {
 	vector<string> names;
 
 	buffer_manager->sniffing = true;
-	SnifferResult result({}, {});
 	const idx_t result_size = 2;
 
 	auto state_machine =
@@ -99,7 +99,7 @@ SnifferResult CSVSniffer::SniffMinimalCSV() {
 	ColumnCountScanner count_scanner(buffer_manager, state_machine, error_handler, result_size);
 	auto &sniffed_column_counts = count_scanner.ParseChunk();
 	if (sniffed_column_counts.result_position == 0) {
-		return result;
+		return {{}, {}};
 	}
 
 	state_machine->dialect_options.num_cols = sniffed_column_counts[0];
@@ -113,21 +113,35 @@ SnifferResult CSVSniffer::SniffMinimalCSV() {
 		// If equal to two, we will only use the second row for type checking
 		start_row = 1;
 	}
-	// Possibly Gather Header
-	if (start_row == 0) {
 
-	} else {
-	}
 	// Gather Types
-	unordered_map<idx_t, vector<LogicalType>> info_sql_types_candidates;
 	for (idx_t i = 0; i < state_machine->dialect_options.num_cols; i++) {
-		info_sql_types_candidates[i] = state_machine->options.auto_type_candidates;
+		best_sql_types_candidates_per_column_idx[i] = state_machine->options.auto_type_candidates;
 	}
-	SniffTypes(data_chunk, *state_machine, info_sql_types_candidates, start_row);
+	SniffTypes(data_chunk, *state_machine, best_sql_types_candidates_per_column_idx, start_row);
 
-	data_chunk.data;
+	// Possibly Gather Header
+	vector<HeaderValue> potential_header;
+	if (start_row != 0) {
+		for (idx_t col_idx = 0; col_idx < data_chunk.ColumnCount(); col_idx++) {
+			auto &cur_vector = data_chunk.data[col_idx];
+			auto vector_data = FlatVector::GetData<string_t>(cur_vector);
+			HeaderValue val(vector_data[0]);
+			potential_header.emplace_back(val);
+		}
+	}
+	names = DetectHeaderInternal(buffer_manager->context, potential_header, *state_machine, set_columns,
+	                             best_sql_types_candidates_per_column_idx, options, *error_handler);
 
-	return result;
+	for (idx_t column_idx = 0; column_idx < best_sql_types_candidates_per_column_idx.size(); column_idx++) {
+		LogicalType d_type = best_sql_types_candidates_per_column_idx[column_idx].back();
+		if (best_sql_types_candidates_per_column_idx[column_idx].size() == options.auto_type_candidates.size()) {
+			d_type = LogicalType::VARCHAR;
+		}
+		detected_types.push_back(d_type);
+	}
+
+	return {detected_types, names};
 }
 SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 	buffer_manager->sniffing = true;

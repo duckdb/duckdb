@@ -98,8 +98,8 @@ static string NormalizeColumnName(const string &col_name) {
 }
 
 // If our columns were set by the user, we verify if their names match with the first row
-bool DetectHeaderWithSetColumn(ClientContext &context, vector<HeaderValue> &best_header_row, SetColumns &set_columns,
-                               CSVReaderOptions &options) {
+bool CSVSniffer::DetectHeaderWithSetColumn(ClientContext &context, vector<HeaderValue> &best_header_row,
+                                           SetColumns &set_columns, CSVReaderOptions &options) {
 	bool has_header = true;
 	bool all_varchar = true;
 	bool first_row_consistent = true;
@@ -149,10 +149,11 @@ bool DetectHeaderWithSetColumn(ClientContext &context, vector<HeaderValue> &best
 	return has_header;
 }
 
-vector<string> DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &best_header_row,
-                                    CSVStateMachine &state_machine, SetColumns &set_columns,
-                                    unordered_map<idx_t, vector<LogicalType>> &best_sql_types_candidates_per_column_idx,
-                                    CSVReaderOptions &options, CSVErrorHandler &error_handler) {
+vector<string>
+CSVSniffer::DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &best_header_row,
+                                 CSVStateMachine &state_machine, SetColumns &set_columns,
+                                 unordered_map<idx_t, vector<LogicalType>> &best_sql_types_candidates_per_column_idx,
+                                 CSVReaderOptions &options, CSVErrorHandler &error_handler) {
 	vector<string> detected_names;
 	auto &dialect_options = state_machine.dialect_options;
 	if (best_header_row.empty()) {
@@ -192,8 +193,8 @@ vector<string> DetectHeaderInternal(ClientContext &context, vector<HeaderValue> 
 			const auto &sql_type = best_sql_types_candidates_per_column_idx[col].back();
 			if (sql_type != LogicalType::VARCHAR) {
 				all_varchar = false;
-				if (!CSVSniffer::CanYouCastIt(context, best_header_row[col].value, sql_type, dialect_options,
-				                              best_header_row[col].IsNull(), options.decimal_separator[0])) {
+				if (!CanYouCastIt(context, best_header_row[col].value, sql_type, dialect_options,
+				                  best_header_row[col].IsNull(), options.decimal_separator[0])) {
 					first_row_consistent = false;
 				}
 			}

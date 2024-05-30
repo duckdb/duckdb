@@ -205,7 +205,13 @@ private:
 	//! ------------------ Header Detection ----------------- //
 	//! ------------------------------------------------------//
 	void DetectHeader();
-	bool DetectHeaderWithSetColumn();
+	static bool DetectHeaderWithSetColumn(ClientContext &context, vector<HeaderValue> &best_header_row,
+	                                      SetColumns &set_columns, CSVReaderOptions &options);
+	static vector<string>
+	DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &best_header_row, CSVStateMachine &state_machine,
+	                     SetColumns &set_columns,
+	                     unordered_map<idx_t, vector<LogicalType>> &best_sql_types_candidates_per_column_idx,
+	                     CSVReaderOptions &options, CSVErrorHandler &error_handler);
 	vector<string> names;
 
 	//! ------------------------------------------------------//
