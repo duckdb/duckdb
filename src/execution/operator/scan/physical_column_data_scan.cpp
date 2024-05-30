@@ -19,32 +19,42 @@ PhysicalColumnDataScan::PhysicalColumnDataScan(vector<LogicalType> types, Physic
     : PhysicalOperator(op_type, std::move(types), estimated_cardinality), collection(nullptr), cte_index(cte_index) {
 }
 
-class PhysicalColumnDataScanState : public GlobalSourceState {
+class PhysicalColumnGlobalDataScanState : public GlobalSourceState {
 public:
-	explicit PhysicalColumnDataScanState() : initialized(false) {
+	PhysicalColumnGlobalDataScanState(const ClientContext &context, const ColumnDataCollection &collection)
+	    : max_threads(MaxValue<idx_t>(
+	          context.config.verify_parallelism ? collection.ChunkCount() : collection.ChunkCount() / 60, 1)) {
+		collection.InitializeScan(global_scan_state);
 	}
 
-	//! The current position in the scan
-	ColumnDataScanState scan_state;
-	bool initialized;
+	idx_t MaxThreads() override {
+		return max_threads;
+	}
+
+public:
+	ColumnDataParallelScanState global_scan_state;
+	const idx_t max_threads;
+};
+
+class PhysicalColumnLocalDataScanState : public LocalSourceState {
+public:
+	ColumnDataLocalScanState local_scan_state;
 };
 
 unique_ptr<GlobalSourceState> PhysicalColumnDataScan::GetGlobalSourceState(ClientContext &context) const {
-	return make_uniq<PhysicalColumnDataScanState>();
+	return make_uniq<PhysicalColumnGlobalDataScanState>(context, *collection);
+}
+
+unique_ptr<LocalSourceState> PhysicalColumnDataScan::GetLocalSourceState(ExecutionContext &,
+                                                                         GlobalSourceState &) const {
+	return make_uniq<PhysicalColumnLocalDataScanState>();
 }
 
 SourceResultType PhysicalColumnDataScan::GetData(ExecutionContext &context, DataChunk &chunk,
                                                  OperatorSourceInput &input) const {
-	auto &state = input.global_state.Cast<PhysicalColumnDataScanState>();
-	if (collection->Count() == 0) {
-		return SourceResultType::FINISHED;
-	}
-	if (!state.initialized) {
-		collection->InitializeScan(state.scan_state);
-		state.initialized = true;
-	}
-	collection->Scan(state.scan_state, chunk);
-
+	auto &gstate = input.global_state.Cast<PhysicalColumnGlobalDataScanState>();
+	auto &lstate = input.local_state.Cast<PhysicalColumnLocalDataScanState>();
+	collection->Scan(gstate.global_scan_state, lstate.local_scan_state, chunk);
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
