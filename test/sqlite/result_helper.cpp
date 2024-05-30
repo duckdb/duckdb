@@ -280,7 +280,7 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 		}
 		if (result.HasError() && !statement.expected_error.empty()) {
 			if (!StringUtil::Contains(result.GetError(), statement.expected_error)) {
-				bool success = CompareValues(logger, result, statement.expected_error);
+				bool success = MatchesRegex(logger, result, statement.expected_error);
 				if (!success) {
 					logger.ExpectedErrorMismatch(statement.expected_error, result);
 					return false;
@@ -446,23 +446,7 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 		return true;
 	}
 	if (StringUtil::StartsWith(rvalue_str, "<REGEX>:") || StringUtil::StartsWith(rvalue_str, "<!REGEX>:")) {
-		bool want_match = StringUtil::StartsWith(rvalue_str, "<REGEX>:");
-		string regex_str = StringUtil::Replace(StringUtil::Replace(rvalue_str, "<REGEX>:", ""), "<!REGEX>:", "");
-		RE2::Options options;
-		options.set_dot_nl(true);
-		RE2 re(regex_str, options);
-		if (!re.ok()) {
-			logger.PrintErrorHeader("Test error!");
-			logger.PrintLineSep();
-			std::cerr << termcolor::red << termcolor::bold << "Failed to parse regex: " << re.error()
-			          << termcolor::reset << std::endl;
-			logger.PrintLineSep();
-			return false;
-		}
-		bool regex_matches = RE2::FullMatch(lvalue_str, re);
-		if (regex_matches == want_match) {
-			return true;
-		}
+		return MatchesRegex(logger, result, rvalue_str);
 	}
 	// some times require more checking (specifically floating point numbers because of inaccuracies)
 	// if not equivalent we need to cast to the SQL type to verify
@@ -531,7 +515,7 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 	return true;
 }
 
-bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQueryResult &result, string rvalue_str) {
+bool TestResultHelper::MatchesRegex(SQLLogicTestLogger &logger, MaterializedQueryResult &result, string rvalue_str) {
 	bool want_match = StringUtil::StartsWith(rvalue_str, "<REGEX>:");
 	string regex_str = StringUtil::Replace(rvalue_str, "<REGEX>:", "");
 	RE2::Options options;
@@ -547,7 +531,7 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 	}
 	auto resString = result.ToString();
 	bool regex_matches = RE2::FullMatch(result.ToString(), re);
-	if (regex_matches && regex_matches == want_match) {
+	if (regex_matches == want_match) {
 		return true;
 	}
 	return false;
