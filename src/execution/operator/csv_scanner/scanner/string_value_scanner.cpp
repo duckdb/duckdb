@@ -1297,6 +1297,9 @@ bool StringValueScanner::CanDirectlyCast(const LogicalType &type) {
 
 void StringValueScanner::SetStart() {
 	if (iterator.first_one) {
+		if (result.store_line_size) {
+			result.error_handler.NewMaxLineSize(iterator.pos.buffer_pos);
+		}
 		return;
 	}
 	// We have to look for a new line that fits our schema

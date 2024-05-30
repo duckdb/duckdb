@@ -34,7 +34,9 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
 	running_threads = MaxThreads();
 	current_boundary = file_scans.back()->start_iterator;
 	current_boundary.SetCurrentBoundaryToPosition();
-
+	if (current_boundary.done && context.client_data->debug_set_max_line_length) {
+		context.client_data->debug_max_line_length = current_boundary.pos.buffer_pos;
+	}
 	current_buffer_in_use =
 	    make_shared_ptr<CSVBufferUsage>(*file_scans.back()->buffer_manager, current_boundary.GetBufferIdx());
 }
