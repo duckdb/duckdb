@@ -304,10 +304,9 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		return false;
 	}
 	case LogicalOperatorType::LOGICAL_DELIM_GET: {
-		//      Removed until we can extract better stats from delim gets. See #596
-		//		auto &delim_get = op->Cast<LogicalDelimGet>();
-		//		auto stats = RelationStatisticsHelper::ExtractDelimGetStats(delim_get, context);
-		//		AddRelation(input_op, parent, stats);
+		// Used to not be possible to reorder these. We added reordering (without stats) before,
+		// but ran into terrible join orders (see internal issue #596), so we removed it again
+		// We now have proper statistics for DelimGets, and get an even better query plan for #596
 		AddAggregateOrWindowRelation(input_op, parent, optimizer.GetDelimScanStats(), op->type);
 		return true;
 	}
