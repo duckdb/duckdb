@@ -86,6 +86,10 @@ void CSVSniffer::SetResultOptions() {
 }
 
 SnifferResult CSVSniffer::SniffMinimalCSV() {
+	if (set_columns.IsSet()) {
+		// Nothing to see here
+		return SnifferResult(*set_columns.types, *set_columns.names);
+	}
 	// Return Types detected
 	vector<LogicalType> return_types;
 	// Column Names detected
@@ -103,6 +107,7 @@ SnifferResult CSVSniffer::SniffMinimalCSV() {
 	}
 
 	state_machine->dialect_options.num_cols = sniffed_column_counts[0];
+	options.dialect_options.num_cols = sniffed_column_counts[0];
 
 	// First figure out the number of columns on this configuration
 	auto scanner = count_scanner.UpgradeToStringValueScanner();
