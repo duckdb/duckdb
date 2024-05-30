@@ -42,6 +42,8 @@ void RelationManager::AddAggregateOrWindowRelation(LogicalOperator &op, optional
 		}
 	}
 	relations.push_back(std::move(relation));
+	op.estimated_cardinality = stats.cardinality;
+	op.has_estimated_cardinality = true;
 }
 
 void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent,
