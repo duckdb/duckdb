@@ -1448,6 +1448,12 @@ DUCKDB_API duckdb_state duckdb_bind_timestamp(duckdb_prepared_statement prepared
                                               duckdb_timestamp val);
 
 /*!
+Binds a duckdb_timestamp value to the prepared statement at the specified index.
+*/
+DUCKDB_API duckdb_state duckdb_bind_timestamp_tz(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+                                                 duckdb_timestamp val);
+
+/*!
 Binds a duckdb_interval value to the prepared statement at the specified index.
 */
 DUCKDB_API duckdb_state duckdb_bind_interval(duckdb_prepared_statement prepared_statement, idx_t param_idx,
