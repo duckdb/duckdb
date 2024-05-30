@@ -4,10 +4,17 @@
 
 require parquet
 
+# We'd love to test that this gives an error, and it does if the JSON extension is not loaded
+# However, in a few of our CI runs, the JSON extension is compiled in, and this unexpectedly succeeds
+# So, we skip for now
+mode skip
+
 statement error
 SELECT typeof(field1), typeof(field2) FROM 'data/parquet-testing/parquet_with_json.parquet' LIMIT 1
 ----
 Catalog Error
+
+mode unskip
 
 require json
 
