@@ -106,23 +106,9 @@ void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr) {
 			index_entry.CommitDrop();
 			break;
 		}
-		case CatalogType::DATABASE_ENTRY:
-		case CatalogType::SCHEMA_ENTRY:
-		case CatalogType::VIEW_ENTRY:
-		case CatalogType::SEQUENCE_ENTRY:
-		case CatalogType::MACRO_ENTRY:
-		case CatalogType::TABLE_MACRO_ENTRY:
-		case CatalogType::TYPE_ENTRY:
-		case CatalogType::RENAMED_ENTRY:
-		case CatalogType::PREPARED_STATEMENT:
-		case CatalogType::SCALAR_FUNCTION_ENTRY:
-		case CatalogType::DEPENDENCY_ENTRY:
-		case CatalogType::SECRET_ENTRY:
-		case CatalogType::SECRET_TYPE_ENTRY:
-		case CatalogType::SECRET_FUNCTION_ENTRY:
-			break;
 		default:
-			throw InternalException("Don't know how to drop this type!");
+			// no action required
+			break;
 		}
 		break;
 	case CatalogType::DATABASE_ENTRY:
