@@ -455,19 +455,21 @@ void ColumnData::UpdateColumn(TransactionData transaction, const vector<column_t
 void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
 
 	const auto block_size = block_manager.GetBlockSize();
-	idx_t vector_segment_size = block_size;
+	auto vector_segment_size = block_size;
+	const auto type_size = GetTypeIdSize(type.InternalType());
+
 	if (start_row == NumericCast<idx_t>(MAX_ROW_ID)) {
 #if STANDARD_VECTOR_SIZE < 1024
-		vector_segment_size = 1024 * GetTypeIdSize(type.InternalType());
+		vector_segment_size = 1024 * type_size;
 #else
-		vector_segment_size = STANDARD_VECTOR_SIZE * GetTypeIdSize(type.InternalType());
+		vector_segment_size = STANDARD_VECTOR_SIZE * type_size;
 #endif
 	}
 
 	// The segment size is bound by the block size, but can be smaller.
-	idx_t segment_size = block_size < vector_segment_size ? block_size : vector_segment_size;
+	const idx_t segment_size = block_size < vector_segment_size ? block_size : vector_segment_size;
 	allocation_size += segment_size;
-	auto new_segment = ColumnSegment::CreateTransientSegment(GetDatabase(), type, start_row, segment_size);
+	auto new_segment = ColumnSegment::CreateTransientSegment(GetDatabase(), type, start_row, segment_size, block_size);
 	data.AppendSegment(l, std::move(new_segment));
 }
 

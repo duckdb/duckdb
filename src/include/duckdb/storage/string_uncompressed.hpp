@@ -117,7 +117,7 @@ public:
 			auto end = handle.Ptr() + *dictionary_end;
 
 #ifdef DEBUG
-			GetDictionary(segment, handle).Verify(segment.GetBlockManager().GetBlockSize());
+			GetDictionary(segment, handle).Verify(segment.GetBlockSize());
 #endif
 			// Unknown string, continue
 			// non-null value, check if we can fit it within the block
@@ -157,7 +157,7 @@ public:
 				// note: for overflow strings we write negative value
 
 				// dictionary_size is an uint32_t value, so we can cast up.
-				D_ASSERT(NumericCast<idx_t>(*dictionary_size) <= segment.GetBlockManager().GetBlockSize());
+				D_ASSERT(NumericCast<idx_t>(*dictionary_size) <= segment.GetBlockSize());
 				result_data[target_idx] = -NumericCast<int32_t>((*dictionary_size));
 			} else {
 				// string fits in block, append to dictionary and increment dictionary position
@@ -169,13 +169,13 @@ public:
 				memcpy(dict_pos, source_data[source_idx].GetData(), string_length);
 
 				// dictionary_size is an uint32_t value, so we can cast up.
-				D_ASSERT(NumericCast<idx_t>(*dictionary_size) <= segment.GetBlockManager().GetBlockSize());
+				D_ASSERT(NumericCast<idx_t>(*dictionary_size) <= segment.GetBlockSize());
 				// Place the dictionary offset into the set of vectors.
 				result_data[target_idx] = NumericCast<int32_t>(*dictionary_size);
 			}
-			D_ASSERT(RemainingSpace(segment, handle) <= segment.GetBlockManager().GetBlockSize());
+			D_ASSERT(RemainingSpace(segment, handle) <= segment.GetBlockSize());
 #ifdef DEBUG
-			GetDictionary(segment, handle).Verify(segment.GetBlockManager().GetBlockSize());
+			GetDictionary(segment, handle).Verify(segment.GetBlockSize());
 #endif
 		}
 		segment.count += count;

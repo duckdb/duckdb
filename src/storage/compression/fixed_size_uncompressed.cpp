@@ -62,7 +62,8 @@ UncompressedCompressState::UncompressedCompressState(ColumnDataCheckpointer &che
 void UncompressedCompressState::CreateEmptySegment(idx_t row_start) {
 	auto &db = checkpointer.GetDatabase();
 	auto &type = checkpointer.GetType();
-	auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
+	auto compressed_segment =
+	    ColumnSegment::CreateTransientSegment(db, type, row_start, info.GetBlockSize(), info.GetBlockSize());
 	if (type.InternalType() == PhysicalType::VARCHAR) {
 		auto &state = compressed_segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
 		state.overflow_writer = make_uniq<WriteOverflowStringsToDisk>(checkpointer.GetRowGroup().GetBlockManager());

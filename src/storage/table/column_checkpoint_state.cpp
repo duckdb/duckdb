@@ -113,7 +113,7 @@ void PartialBlockForCheckpoint::Clear() {
 }
 
 void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_t segment_size) {
-	const auto block_size = segment->GetBlockManager().GetBlockSize();
+	const auto block_size = segment->GetBlockSize();
 	D_ASSERT(segment_size <= block_size);
 
 	auto tuple_count = segment->count.load();

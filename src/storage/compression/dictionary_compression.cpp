@@ -164,7 +164,8 @@ public:
 	void CreateEmptySegment(idx_t row_start) {
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
+		auto compressed_segment =
+		    ColumnSegment::CreateTransientSegment(db, type, row_start, info.GetBlockSize(), info.GetBlockSize());
 		current_segment = std::move(compressed_segment);
 
 		current_segment->function = function;
@@ -623,7 +624,7 @@ string_t DictionaryCompressionStorage::FetchStringFromDict(ColumnSegment &segmen
                                                            data_ptr_t baseptr, int32_t dict_offset,
                                                            uint16_t string_len) {
 
-	D_ASSERT(dict_offset >= 0 && dict_offset <= NumericCast<int32_t>(segment.GetBlockManager().GetBlockSize()));
+	D_ASSERT(dict_offset >= 0 && dict_offset <= NumericCast<int32_t>(segment.GetBlockSize()));
 	if (dict_offset == 0) {
 		return string_t(nullptr, 0);
 	}

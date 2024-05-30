@@ -485,7 +485,8 @@ public:
 	void CreateEmptySegment(idx_t row_start) {
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
+		auto compressed_segment =
+		    ColumnSegment::CreateTransientSegment(db, type, row_start, info.GetBlockSize(), info.GetBlockSize());
 		compressed_segment->function = function;
 		current_segment = std::move(compressed_segment);
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
@@ -649,7 +650,7 @@ public:
 	//! value) depending on the bitpacking mode for that group
 	void LoadNextGroup() {
 		D_ASSERT(bitpacking_metadata_ptr > handle.Ptr() &&
-		         bitpacking_metadata_ptr < handle.Ptr() + current_segment.GetBlockManager().GetBlockSize());
+		         bitpacking_metadata_ptr < handle.Ptr() + current_segment.GetBlockSize());
 		current_group_offset = 0;
 		current_group = DecodeMeta(reinterpret_cast<bitpacking_metadata_encoded_t *>(bitpacking_metadata_ptr));
 

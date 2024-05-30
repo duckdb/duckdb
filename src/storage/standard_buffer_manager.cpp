@@ -107,16 +107,10 @@ TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(MemoryTag ta
 	return std::move(r.reservation);
 }
 
-shared_ptr<BlockHandle> StandardBufferManager::RegisterTransientMemory(idx_t size) {
-
-	// FIXME: Some transient segments are converted to persistent segments. So, if available,
-	// we need to pass the block size to this function instead of using the global constant,
-	// if we want to support configurable block sizes.
-	const idx_t block_size = Storage::BLOCK_SIZE;
+shared_ptr<BlockHandle> StandardBufferManager::RegisterTransientMemory(const idx_t size, const idx_t block_size) {
 	D_ASSERT(size <= block_size);
-
 	if (size < block_size) {
-		return RegisterSmallMemory(size);
+		return RegisterSmallMemory(size, block_size);
 	}
 
 	shared_ptr<BlockHandle> block;
@@ -124,17 +118,16 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterTransientMemory(idx_t siz
 	return block;
 }
 
-shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(idx_t block_size) {
-	D_ASSERT(block_size < Storage::BLOCK_SIZE);
-	auto reservation =
-	    EvictBlocksOrThrow(MemoryTag::BASE_TABLE, block_size, nullptr, "could not allocate block of size %s%s",
-	                       StringUtil::BytesToHumanReadableString(block_size));
+shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(const idx_t size, const idx_t block_size) {
+	D_ASSERT(size < block_size);
+	auto reservation = EvictBlocksOrThrow(MemoryTag::BASE_TABLE, size, nullptr, "could not allocate block of size %s%s",
+	                                      StringUtil::BytesToHumanReadableString(size));
 
-	auto buffer = ConstructManagedBuffer(block_size, nullptr, FileBufferType::TINY_BUFFER);
+	auto buffer = ConstructManagedBuffer(size, nullptr, FileBufferType::TINY_BUFFER);
 
 	// create a new block pointer for this block
 	auto result = make_shared_ptr<BlockHandle>(*temp_block_manager, ++temporary_id, MemoryTag::BASE_TABLE,
-	                                           std::move(buffer), false, block_size, std::move(reservation));
+	                                           std::move(buffer), false, size, std::move(reservation));
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 	// Initialize the memory with garbage data
 	WriteGarbageIntoBuffer(*result->buffer);

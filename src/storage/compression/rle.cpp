@@ -147,7 +147,8 @@ struct RLECompressState : public CompressionState {
 	void CreateEmptySegment(idx_t row_start) {
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
-		auto column_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
+		auto column_segment =
+		    ColumnSegment::CreateTransientSegment(db, type, row_start, info.GetBlockSize(), info.GetBlockSize());
 		column_segment->function = function;
 		current_segment = std::move(column_segment);
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
@@ -251,7 +252,7 @@ struct RLEScanState : public SegmentScanState {
 		entry_pos = 0;
 		position_in_entry = 0;
 		rle_count_offset = UnsafeNumericCast<uint32_t>(Load<uint64_t>(handle.Ptr() + segment.GetBlockOffset()));
-		D_ASSERT(rle_count_offset <= segment.GetBlockManager().GetBlockSize());
+		D_ASSERT(rle_count_offset <= segment.GetBlockSize());
 	}
 
 	void Skip(ColumnSegment &segment, idx_t skip_count) {
