@@ -1,0 +1,16 @@
+# name: test/sql/catalog/function/test_cross_catalog_macros.test
+# description: Test cross-catalog dependencies in macros
+# group: [function]
+
+require skip_reload
+
+statement ok
+CREATE MACRO my_first_macro() AS (84)
+
+statement ok
+CREATE TEMPORARY MACRO my_second_macro() AS my_first_macro() + 42;
+
+query I
+SELECT my_second_macro()
+----
+126

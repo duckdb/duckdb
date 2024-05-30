@@ -109,7 +109,10 @@ TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(MemoryTag ta
 
 shared_ptr<BlockHandle> StandardBufferManager::RegisterTransientMemory(idx_t size) {
 
-	const idx_t block_size = temp_block_manager->GetBlockSize();
+	// FIXME: Some transient segments are converted to persistent segments. So, if available,
+	// we need to pass the block size to this function instead of using the global constant,
+	// if we want to support configurable block sizes.
+	const idx_t block_size = Storage::BLOCK_SIZE;
 	D_ASSERT(size <= block_size);
 
 	if (size < block_size) {
