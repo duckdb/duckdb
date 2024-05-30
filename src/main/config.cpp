@@ -94,6 +94,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(ForceBitpackingModeSetting),
     DUCKDB_LOCAL(HomeDirectorySetting),
     DUCKDB_LOCAL(LogQueryPathSetting),
+    DUCKDB_GLOBAL(EnableViewDependencies),
     DUCKDB_GLOBAL(LockConfigurationSetting),
     DUCKDB_GLOBAL(ImmediateTransactionModeSetting),
     DUCKDB_LOCAL(IntegerDivisionSetting),

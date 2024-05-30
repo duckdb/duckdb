@@ -117,6 +117,11 @@ static unique_ptr<TableRef> TryReplacementObject(const py::object &entry, const 
 	return std::move(table_function);
 }
 
+static bool IsBuiltinFunction(const py::object &object) {
+	auto &import_cache_py = *DuckDBPyConnection::ImportCache();
+	return py::isinstance(object, import_cache_py.types.BuiltinFunctionType());
+}
+
 static unique_ptr<TableRef> TryReplacement(py::dict &dict, const string &name, ClientContext &context,
                                            py::object &current_frame) {
 	auto table_name = py::str(name);
@@ -125,6 +130,11 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, const string &name, C
 		return nullptr;
 	}
 	const py::object &entry = dict[table_name];
+
+	if (IsBuiltinFunction(entry)) {
+		return nullptr;
+	}
+
 	auto result = TryReplacementObject(entry, name, context);
 	if (!result) {
 		std::string location = py::cast<py::str>(current_frame.attr("f_code").attr("co_filename"));
@@ -171,6 +181,11 @@ static unique_ptr<TableRef> ReplaceInternal(ClientContext &context, const string
 unique_ptr<TableRef> PythonReplacementScan::Replace(ClientContext &context, ReplacementScanInput &input,
                                                     optional_ptr<ReplacementScanData> data) {
 	auto &table_name = input.table_name;
+
+	auto &config = DBConfig::GetConfig(context);
+	if (!config.options.enable_external_access) {
+		return nullptr;
+	}
 
 	auto &table_ref = input.ref;
 	if (table_ref.external_dependency) {
