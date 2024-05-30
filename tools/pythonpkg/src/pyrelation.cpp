@@ -35,12 +35,26 @@ DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel_p) : rel(std::move(r
 }
 
 bool DuckDBPyRelation::CanBeRegisteredBy(Connection &con) {
+	return CanBeRegisteredBy(con.context);
+}
+
+bool DuckDBPyRelation::CanBeRegisteredBy(ClientContext &context) {
 	if (!rel) {
 		// PyRelation without an internal relation can not be registered
 		return false;
 	}
-	auto context = rel->context.GetContext();
-	return context == con.context;
+	auto this_context = rel->context.TryGetContext();
+	if (!this_context) {
+		return false;
+	}
+	return &context == this_context.get();
+}
+
+bool DuckDBPyRelation::CanBeRegisteredBy(shared_ptr<ClientContext> &con) {
+	if (!con) {
+		return false;
+	}
+	return CanBeRegisteredBy(*con);
 }
 
 DuckDBPyRelation::~DuckDBPyRelation() {
@@ -68,7 +82,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectFromExpression(const strin
 	return projected_relation;
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const py::args &args, const py::kwargs &kwargs) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const py::args &args, const string &groups) {
 	if (!rel) {
 		return nullptr;
 	}
@@ -91,7 +105,6 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const py::args &args, con
 			expressions.push_back(std::move(expr));
 		}
 		vector<string> empty_aliases;
-		auto groups = kwargs.contains("groups") ? std::string(py::cast<py::str>(kwargs["groups"])) : "";
 		if (groups.empty()) {
 			// No groups provided
 			return make_uniq<DuckDBPyRelation>(rel->Project(std::move(expressions), empty_aliases));

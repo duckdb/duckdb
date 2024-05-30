@@ -297,9 +297,6 @@ private:
 	//! BOM skipping (https://en.wikipedia.org/wiki/Byte_order_mark)
 	void SkipBOM();
 
-	//! Skips Notes, notes are dirty lines on top of the file, before the actual data
-	void SkipCSVRows();
-
 	void SkipUntilNewLine();
 
 	void SetStart();

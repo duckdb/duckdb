@@ -50,8 +50,11 @@ public:
 	//! Returns the maximum swap space that can be used
 	virtual optional_idx GetMaxSwap() const = 0;
 
-	//! Returns a new block of memory that is smaller than Storage::BLOCK_SIZE
+	//! Returns a new block of memory that is transient.
+	virtual shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size);
+	//! Returns a new block of memory that is smaller than the block size setting.
 	virtual shared_ptr<BlockHandle> RegisterSmallMemory(idx_t block_size);
+
 	virtual DUCKDB_API Allocator &GetBufferAllocator();
 	virtual DUCKDB_API void ReserveMemory(idx_t size);
 	virtual DUCKDB_API void FreeReservedMemory(idx_t size);
@@ -90,7 +93,7 @@ public:
 	virtual TemporaryMemoryManager &GetTemporaryMemoryManager();
 
 protected:
-	virtual void PurgeQueue() = 0;
+	virtual void PurgeQueue(FileBufferType type) = 0;
 	virtual void AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
 	virtual void WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer);
 	virtual unique_ptr<FileBuffer> ReadTemporaryBuffer(MemoryTag tag, block_id_t id, unique_ptr<FileBuffer> buffer);

@@ -93,6 +93,7 @@ class SerializationCompatibility {
 public:
 	static SerializationCompatibility FromString(const string &input);
 	static SerializationCompatibility Default();
+	static SerializationCompatibility Latest();
 
 public:
 	bool Compare(idx_t property_version) const;
@@ -102,6 +103,8 @@ public:
 	string duckdb_version;
 	//! The max version that should be serialized
 	idx_t serialization_version;
+	//! Whether this was set by a manual SET/PRAGMA or default
+	bool manually_set;
 
 protected:
 	SerializationCompatibility() = default;
@@ -191,6 +194,10 @@ struct DBConfigOptions {
 	bool preserve_insertion_order = true;
 	//! Whether Arrow Arrays use Large or Regular buffers
 	ArrowOffsetSize arrow_offset_size = ArrowOffsetSize::REGULAR;
+	//! Whether LISTs should produce Arrow ListViews
+	bool arrow_use_list_view = false;
+	//! Whether when producing arrow objects we produce string_views or regular strings
+	bool produce_arrow_string_views = false;
 	//! Database configuration variables as controlled by SET
 	case_insensitive_map_t<Value> set_variables;
 	//! Database configuration variable default values;
@@ -205,6 +212,10 @@ struct DBConfigOptions {
 	bool allow_extensions_metadata_mismatch = false;
 	//! Enable emitting FSST Vectors
 	bool enable_fsst_vectors = false;
+	//! Enable VIEWs to create dependencies
+	bool enable_view_dependencies = false;
+	//! Enable macros to create dependencies
+	bool enable_macro_dependencies = false;
 	//! Start transactions immediately in all attached databases - instead of lazily when a database is referenced
 	bool immediate_transaction_mode = false;
 	//! Debug setting - how to initialize  blocks in the storage layer when allocating
@@ -217,12 +228,17 @@ struct DBConfigOptions {
 	static bool debug_print_bindings; // NOLINT: debug setting
 	//! The peak allocation threshold at which to flush the allocator after completing a task (1 << 27, ~128MB)
 	idx_t allocator_flush_threshold = 134217728;
+	//! Whether the allocator background thread is enabled
+	bool allocator_background_threads = false;
 	//! DuckDB API surface
 	string duckdb_api;
 	//! Metadata from DuckDB callers
 	string custom_user_agent;
 	//! Use old implicit casting style (i.e. allow everything to be implicitly casted to VARCHAR)
 	bool old_implicit_casting = false;
+	//! The default block allocation size for new duckdb database files (new as-in, they do not yet exist).
+	//! NOTE: this becomes the DEFAULT_BLOCK_ALLOC_SIZE once we support different block sizes.
+	idx_t default_block_alloc_size = Storage::BLOCK_ALLOC_SIZE;
 	//!  Whether or not to abort if a serialization exception is thrown during WAL playback (when reading truncated WAL)
 	bool abort_on_wal_failure = false;
 
