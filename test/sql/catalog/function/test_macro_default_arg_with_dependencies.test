@@ -5,6 +5,9 @@ statement ok
 set storage_compatibility_version='latest'
 
 statement ok
+set enable_macro_dependencies=true
+
+statement ok
 pragma enable_verification;
 
 statement ok
