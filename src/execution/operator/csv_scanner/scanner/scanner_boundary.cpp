@@ -89,7 +89,7 @@ idx_t CSVIterator::GetFileIdx() const {
 }
 
 idx_t CSVIterator::GetBufferIdx() const {
-	return boundary.buffer_idx;
+	return pos.buffer_idx;
 }
 
 idx_t CSVIterator::GetBoundaryIdx() const {
