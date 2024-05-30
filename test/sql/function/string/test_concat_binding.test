@@ -60,7 +60,7 @@ NULL
 statement error
 select list_concat([1], [2], [3]);
 ----
-Binder Error: list_concat only accepts two arguments
+Binder Error: No function matches the given name and argument types 'list_concat(INTEGER[], INTEGER[], INTEGER[])'.
 
 query I
 select [1] || [2] || [3];

@@ -433,7 +433,7 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	functions.AddFunction(GetFunction(LogicalType::DATE, LogicalType::TIME_TZ));
 
 	// we can add lists together
-	functions.AddFunction(ConcatFun::GetFunction());
+	functions.AddFunction(ListConcatFun::GetFunction());
 
 	set.AddFunction(functions);
 
