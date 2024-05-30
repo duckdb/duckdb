@@ -210,14 +210,19 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	SelectBinder binder(*this, context, sel_node, group_info);
 	auto &dependencies = base.dependencies;
 	auto &catalog = Catalog::GetCatalog(context, info.catalog);
-	binder.SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
-		if (&catalog != &entry.ParentCatalog()) {
-			// Don't register any cross-catalog dependencies
-			return;
-		}
-		// Register any catalog entry required to bind the macro function
-		dependencies.AddDependency(entry);
-	});
+	auto &db_config = DBConfig::GetConfig(context);
+	auto should_create_dependencies = db_config.options.enable_macro_dependencies;
+
+	if (should_create_dependencies) {
+		binder.SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
+			if (&catalog != &entry.ParentCatalog()) {
+				// Don't register any cross-catalog dependencies
+				return;
+			}
+			// Register any catalog entry required to bind the macro function
+			dependencies.AddDependency(entry);
+		});
+	}
 	error = binder.Bind(expression, 0, false);
 	if (error.HasError()) {
 		error.Throw();
