@@ -102,10 +102,11 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 	internal = true;
 }
 
-AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, StorageExtension &storage_extension,
+AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, StorageExtension &storage_extension_p,
                                    ClientContext &context, string name_p, const AttachInfo &info,
                                    const AttachOptions &options)
-    : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), parent_catalog(&catalog_p) {
+    : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), parent_catalog(&catalog_p),
+      storage_extension(&storage_extension_p) {
 
 	if (options.access_mode == AccessMode::READ_ONLY) {
 		type = AttachedDatabaseType::READ_ONLY_DATABASE;
@@ -113,9 +114,8 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 		type = AttachedDatabaseType::READ_WRITE_DATABASE;
 	}
 
-	StorageExtensionInfo *storage_info = storage_extension.storage_info.get();
-	catalog = storage_extension.attach(storage_info, context, *this, name, *info.Copy(), options.access_mode);
-
+	StorageExtensionInfo *storage_info = storage_extension->storage_info.get();
+	catalog = storage_extension->attach(storage_info, context, *this, name, *info.Copy(), options.access_mode);
 	if (!catalog) {
 		throw InternalException("AttachedDatabase - attach function did not return a catalog");
 	}
@@ -124,8 +124,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 		auto read_only = options.access_mode == AccessMode::READ_ONLY;
 		storage = make_uniq<SingleFileStorageManager>(*this, info.path, read_only);
 	}
-
-	transaction_manager = storage_extension.create_transaction_manager(storage_info, *this, *catalog);
+	transaction_manager = storage_extension->create_transaction_manager(storage_info, *this, *catalog);
 	if (!transaction_manager) {
 		throw InternalException(
 		    "AttachedDatabase - create_transaction_manager function did not return a transaction manager");
