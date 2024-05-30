@@ -16,6 +16,7 @@ JoinOrderOptimizer::JoinOrderOptimizer(ClientContext &context) : context(context
 JoinOrderOptimizer JoinOrderOptimizer::CreateChildOptimizer() {
 	JoinOrderOptimizer child_optimizer(context);
 	child_optimizer.materialized_cte_stats = materialized_cte_stats;
+	child_optimizer.delim_scan_stats = delim_scan_stats;
 	return child_optimizer;
 }
 
@@ -78,6 +79,17 @@ RelationStats JoinOrderOptimizer::GetMaterializedCTEStats(idx_t index) {
 		throw InternalException("Unable to find materialized CTE stats with index %llu", index);
 	}
 	return it->second;
+}
+
+void JoinOrderOptimizer::AddDelimScanStats(RelationStats &stats) {
+	delim_scan_stats = &stats;
+}
+
+RelationStats JoinOrderOptimizer::GetDelimScanStats() {
+	if (!delim_scan_stats) {
+		throw InternalException("Unable to find delim scan stats!");
+	}
+	return *delim_scan_stats;
 }
 
 } // namespace duckdb

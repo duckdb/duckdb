@@ -34,6 +34,9 @@ public:
 	//! Adds/gets materialized CTE stats
 	void AddMaterializedCTEStats(idx_t index, RelationStats &&stats);
 	RelationStats GetMaterializedCTEStats(idx_t index);
+	//! Adds/gets delim scan stats
+	void AddDelimScanStats(RelationStats &stats);
+	RelationStats GetDelimScanStats();
 
 private:
 	ClientContext &context;
@@ -55,6 +58,8 @@ private:
 
 	//! Mapping from materialized CTE index to stats
 	unordered_map<idx_t, RelationStats> materialized_cte_stats;
+	//! Stats of Delim Scans of the Delim Join that is currently being optimized
+	optional_ptr<RelationStats> delim_scan_stats;
 };
 
 } // namespace duckdb

@@ -94,7 +94,6 @@ static bool OperatorIsNonReorderable(LogicalOperatorType op_type) {
 	case LogicalOperatorType::LOGICAL_UNION:
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
-	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 		return true;
@@ -238,15 +237,8 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		AddRelation(input_op, parent, stats);
 		return true;
 	}
-	case LogicalOperatorType::LOGICAL_DELIM_GET: {
-		//      Removed until we can extract better stats from delim gets. See #596
-		//		auto &delim_get = op->Cast<LogicalDelimGet>();
-		//		auto stats = RelationStatisticsHelper::ExtractDelimGetStats(delim_get, context);
-		//		AddRelation(input_op, parent, stats);
-		return false;
-	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
-		auto child_stats = RelationStats();
+		RelationStats child_stats;
 		// optimize the child and copy the stats
 		auto child_optimizer = optimizer.CreateChildOptimizer();
 		op->children[0] = child_optimizer.Optimize(std::move(op->children[0]), &child_stats);
@@ -266,7 +258,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 	}
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
-		auto lhs_stats = RelationStats();
+		RelationStats lhs_stats;
 		// optimize the lhs child and copy the stats
 		auto lhs_optimizer = optimizer.CreateChildOptimizer();
 		op->children[0] = lhs_optimizer.Optimize(std::move(op->children[0]), &lhs_stats);
@@ -285,6 +277,38 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 			return false;
 		}
 		AddRelation(input_op, parent, optimizer.GetMaterializedCTEStats(cte_ref.cte_index));
+		return true;
+	}
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
+		auto &delim_join = op->Cast<LogicalComparisonJoin>();
+
+		// optimize LHS (duplicate-eliminated) child
+		RelationStats lhs_stats;
+		auto lhs_optimizer = optimizer.CreateChildOptimizer();
+		op->children[0] = lhs_optimizer.Optimize(std::move(op->children[0]), &lhs_stats);
+
+		// create dummy aggregation for the duplicate elimination
+		auto dummy_aggr = make_uniq<LogicalAggregate>(DConstants::INVALID_INDEX - 1, DConstants::INVALID_INDEX,
+		                                              vector<unique_ptr<Expression>>());
+		for (auto &delim_col : delim_join.duplicate_eliminated_columns) {
+			dummy_aggr->groups.push_back(delim_col->Copy());
+		}
+		auto lhs_delim_stats = RelationStatisticsHelper::ExtractAggregationStats(*dummy_aggr, lhs_stats);
+
+		// optimize the other child, which will now have access to the stats
+		RelationStats rhs_stats;
+		auto rhs_optimizer = optimizer.CreateChildOptimizer();
+		rhs_optimizer.AddDelimScanStats(lhs_delim_stats);
+		op->children[1] = rhs_optimizer.Optimize(std::move(op->children[1]), rhs_stats);
+
+		return false;
+	}
+	case LogicalOperatorType::LOGICAL_DELIM_GET: {
+		//      Removed until we can extract better stats from delim gets. See #596
+		//		auto &delim_get = op->Cast<LogicalDelimGet>();
+		//		auto stats = RelationStatisticsHelper::ExtractDelimGetStats(delim_get, context);
+		//		AddRelation(input_op, parent, stats);
+		AddAggregateOrWindowRelation(input_op, parent, optimizer.GetDelimScanStats(), op->type);
 		return true;
 	}
 	default:
