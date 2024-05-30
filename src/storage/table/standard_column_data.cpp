@@ -99,10 +99,7 @@ idx_t StandardColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_
 }
 
 void StandardColumnData::InitializeAppend(ColumnAppendState &state) {
-
-	D_ASSERT(block_manager.GetBlockSize() != 0);
 	ColumnData::InitializeAppend(state);
-
 	ColumnAppendState child_append;
 	validity.InitializeAppend(child_append);
 	state.child_appends.push_back(std::move(child_append));

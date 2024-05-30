@@ -50,7 +50,7 @@ public:
 	//! Returns the maximum swap space that can be used
 	virtual optional_idx GetMaxSwap() const = 0;
 
-	//! Returns a new block of memory that is transient.
+	//! Returns a new block of transient memory.
 	virtual shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size, const idx_t block_size);
 	//! Returns a new block of memory that is smaller than the block size setting of the temporary block manager.
 	virtual shared_ptr<BlockHandle> RegisterSmallMemory(const idx_t size, const idx_t block_size);

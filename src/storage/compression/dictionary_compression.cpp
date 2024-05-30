@@ -164,22 +164,24 @@ public:
 	void CreateEmptySegment(idx_t row_start) {
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
-		auto compressed_segment =
-		    ColumnSegment::CreateTransientSegment(db, type, row_start, info.GetBlockSize(), info.GetBlockSize());
-		current_segment = std::move(compressed_segment);
+		auto block_size = info.GetBlockSize();
 
+		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start, block_size, block_size);
+		current_segment = std::move(compressed_segment);
 		current_segment->function = function;
 
-		// Reset the buffers and string map
+		// Reset the buffers and the string map.
 		current_string_map.clear();
 		index_buffer.clear();
-		index_buffer.push_back(0); // Reserve index 0 for null strings
+
+		// Reserve index 0 for null strings.
+		index_buffer.push_back(0);
 		selection_buffer.clear();
 
 		current_width = 0;
 		next_width = 0;
 
-		// Reset the pointers into the current segment
+		// Reset the pointers into the current segment.
 		auto &buffer_manager = BufferManager::GetBufferManager(checkpointer.GetDatabase());
 		current_handle = buffer_manager.Pin(current_segment->block);
 		current_dictionary = DictionaryCompressionStorage::GetDictionary(*current_segment, current_handle);
@@ -301,21 +303,22 @@ public:
 		D_ASSERT((uint64_t)*max_element(std::begin(selection_buffer), std::end(selection_buffer)) ==
 		         index_buffer.size() - 1);
 
-		// early-out, if the block is sufficiently full
+		// Early-out, if the block is sufficiently full.
 		if (total_size >= info.GetCompactionFlushLimit()) {
 			return info.GetBlockSize();
 		}
 
-		// sufficient space: calculate how much space we can save
+		// Sufficient space: calculate how much space we can save.
 		auto move_amount = info.GetBlockSize() - total_size;
 
-		// move the dictionary so it lines up exactly with the offsets
+		// Move the dictionary to align it with the offsets.
 		auto new_dictionary_offset = index_buffer_offset + index_buffer_size;
 		memmove(base_ptr + new_dictionary_offset, base_ptr + current_dictionary.end - current_dictionary.size,
 		        current_dictionary.size);
 		current_dictionary.end -= move_amount;
 		D_ASSERT(current_dictionary.end == total_size);
-		// write the new dictionary (with the updated "end")
+
+		// Write the new dictionary with the updated "end".
 		DictionaryCompressionStorage::SetDictionary(*current_segment, handle, current_dictionary);
 		return total_size;
 	}

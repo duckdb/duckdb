@@ -239,7 +239,7 @@ void ColumnSegment::CommitDropSegment() {
 		return;
 	}
 	if (block_id != INVALID_BLOCK) {
-		GetBlockManagerr().MarkBlockAsModified(block_id);
+		GetBlockManager().MarkBlockAsModified(block_id);
 	}
 	if (function.get().cleanup_state) {
 		function.get().cleanup_state(*this);

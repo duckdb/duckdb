@@ -225,7 +225,7 @@ unique_ptr<ColumnSegmentState> UncompressedStringStorage::DeserializeState(Deser
 
 void UncompressedStringStorage::CleanupState(ColumnSegment &segment) {
 	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
-	auto &block_manager = segment.GetBlockManagerr();
+	auto &block_manager = segment.GetBlockManager();
 	for (auto &block_id : state.on_disk_blocks) {
 		block_manager.MarkBlockAsModified(block_id);
 	}
@@ -331,12 +331,12 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 	D_ASSERT(block != INVALID_BLOCK);
 	D_ASSERT(offset < NumericCast<int32_t>(block_size));
 
-	auto &buffer_manager = segment.GetBlockManagerr().buffer_manager;
+	auto &buffer_manager = segment.GetBlockManager().buffer_manager;
 	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
 	if (block < MAXIMUM_BLOCK) {
 		// read the overflow string from disk
 		// pin the initial handle and read the length
-		auto block_handle = state.GetHandle(segment.GetBlockManagerr(), block);
+		auto block_handle = state.GetHandle(segment.GetBlockManager(), block);
 		auto handle = buffer_manager.Pin(block_handle);
 
 		// read header
@@ -362,7 +362,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 			if (remaining > 0) {
 				// read the next block
 				block_id_t next_block = Load<block_id_t>(handle.Ptr() + offset);
-				block_handle = state.GetHandle(segment.GetBlockManagerr(), next_block);
+				block_handle = state.GetHandle(segment.GetBlockManager(), next_block);
 				handle = buffer_manager.Pin(block_handle);
 				offset = 0;
 			}

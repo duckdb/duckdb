@@ -92,18 +92,19 @@ public:
 	void CreateEmptySegment(idx_t row_start) {
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
-		auto compressed_segment =
-		    ColumnSegment::CreateTransientSegment(db, type, row_start, info.GetBlockSize(), info.GetBlockSize());
+		auto block_size = info.GetBlockSize();
+
+		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start, block_size, block_size);
 		current_segment = std::move(compressed_segment);
 		current_segment->function = function;
+
 		auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
 		handle = buffer_manager.Pin(current_segment->block);
 
-		// Pointer to the start of the compressed data
+		// The pointer to the start of the compressed data.
 		data_ptr = handle.Ptr() + current_segment->GetBlockOffset() + AlpConstants::HEADER_SIZE;
-		// Pointer to the start of the Metadata
+		// The pointer to the start of the metadata.
 		metadata_ptr = handle.Ptr() + current_segment->GetBlockOffset() + info.GetBlockSize();
-
 		next_vector_byte_index_start = AlpConstants::HEADER_SIZE;
 	}
 

@@ -104,13 +104,15 @@ public:
 		return block_id;
 	}
 
+	//! Returns the block size of the block manger handling the ColumnData, of which this segment is a part.
 	idx_t GetBlockSize() const {
 		return block_size;
 	}
 
-	BlockManager &GetBlockManagerr() const {
-		// NOTE: this might be the temporary block manager instead of the block manager handling this segment when
-		// converting it to persistent storage.
+	//! Returns the block manager handling this segment. For transient segments, this might be the temporary block
+	//! manager. Later, we possibly convert this (transient) segment to a persistent segment. In that case, there
+	//! exists another block manager handling the ColumnData, of which this segment is a part.
+	BlockManager &GetBlockManager() const {
 		return block->block_manager;
 	}
 
@@ -153,9 +155,9 @@ private:
 	idx_t offset;
 	//! The allocated segment size, which is bounded by Storage::BLOCK_SIZE
 	idx_t segment_size;
-	//! The block size of the storage in which this segment lives, or will live.
-	//! This can differ from the block size of its block's BlockManager, which might be
-	//! the temporary block manager with a DEFAULT_BLOCK_ALLOC_SIZE.
+	//! The block size of the storage in which this segment lives, or will live. This can differ from the block size
+	//! of the block manager of this segment, which might be the temporary block manager with a
+	//! DEFAULT_BLOCK_ALLOC_SIZE.
 	idx_t block_size;
 	//! Storage associated with the compressed segment
 	unique_ptr<CompressedSegmentState> segment_state;
