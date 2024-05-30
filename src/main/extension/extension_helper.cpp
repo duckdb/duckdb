@@ -122,6 +122,8 @@ static const DefaultExtension internal_extensions[] = {
     {"arrow", "A zero-copy data integration between Apache Arrow and DuckDB", false},
     {"azure", "Adds a filesystem abstraction for Azure blob storage to DuckDB", false},
     {"iceberg", "Adds support for Apache Iceberg", false},
+    {"vss", "Adds indexing support to accelerate Vector Similarity Search", false},
+    {"delta", "Adds support for Delta Lake", false},
     {nullptr, nullptr, false}};
 
 idx_t ExtensionHelper::DefaultExtensionCount() {
