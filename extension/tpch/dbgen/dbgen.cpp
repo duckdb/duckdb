@@ -11,6 +11,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/thread.hpp"
 #endif
 
 #define DECLARER /* EXTERN references get defined here */
@@ -21,7 +22,6 @@
 #include <cassert>
 #include <cmath>
 #include <mutex>
-#include <thread>
 
 using namespace duckdb;
 
@@ -629,8 +629,8 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 		appender.AppendData(children, current_step);
 		appender.Flush();
 	} else {
-		// we split into 10 children per scale factor by default
-		static constexpr idx_t CHILDREN_PER_SCALE_FACTOR = 10;
+		// we split into 20 children per scale factor by default
+		static constexpr idx_t CHILDREN_PER_SCALE_FACTOR = 20;
 		idx_t child_count;
 		if (flt_scale < 1) {
 			child_count = 1;
@@ -638,29 +638,37 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 			child_count = MinValue<idx_t>(static_cast<idx_t>(CHILDREN_PER_SCALE_FACTOR * flt_scale), MAX_CHILDREN);
 		}
 		idx_t step = 0;
+		vector<TPCHDataAppender> finished_appenders;
 		while(step < child_count) {
 			// launch N threads
-			vector<TPCHDataAppender> appenders;
+			vector<TPCHDataAppender> new_appenders;
 			vector<std::thread> threads;
 			idx_t launched_step = step;
 			// initialize the appenders for each thread
 			// note we prevent the threads themselves from flushing the appenders by specifying a very high flush count here
 			for(idx_t thr_idx = 0; thr_idx < thread_count && launched_step < child_count; thr_idx++, launched_step++) {
-				appenders.emplace_back(context, parameters, base_context, NumericLimits<int64_t>::Maximum());
+				new_appenders.emplace_back(context, parameters, base_context, NumericLimits<int64_t>::Maximum());
 			}
 			// launch the threads
-			for(idx_t thr_idx = 0; thr_idx < appenders.size(); thr_idx++) {
-				threads.emplace_back(ParallelTPCHAppend, &appenders[thr_idx], child_count, step);
+			for(idx_t thr_idx = 0; thr_idx < new_appenders.size(); thr_idx++) {
+				threads.emplace_back(ParallelTPCHAppend, &new_appenders[thr_idx], child_count, step);
 				step++;
 			}
+			// flush the previous batch of appenders while waiting (if any are there)
+			// now flush the appenders in-order
+			for(auto &appender : finished_appenders) {
+				appender.Flush();
+			}
+			finished_appenders.clear();
 			// wait for all threads to finish
 			for(auto &thread : threads) {
 				thread.join();
 			}
-			// now flush the appenders in-order
-			for(auto &appender : appenders) {
-				appender.Flush();
-			}
+			finished_appenders = std::move(new_appenders);
+		}
+		// flush the final batch of appenders
+		for(auto &appender : finished_appenders) {
+			appender.Flush();
 		}
 	}
 	cleanup_dists();
