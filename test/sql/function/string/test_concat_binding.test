@@ -1,4 +1,5 @@
 # name: test/sql/function/string/test_concat_binding.test
+# description: Test the binding of the concat function
 # group: [string]
 
 statement ok

@@ -213,26 +213,26 @@ static void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.bind_info->Cast<ConcatFunctionData>();
 	if (info.return_type.id() == LogicalTypeId::LIST) {
-		ListConcatFunction(args, state, result);
+		return ListConcatFunction(args, state, result);
 	} else if (info.is_operator) {
-		ConcatOperator(args, state, result);
-	} else {
-		StringConcatFunction(args, state, result);
+		return ConcatOperator(args, state, result);
 	}
+	return StringConcatFunction(args, state, result);
 }
 
-static void SetArgumentType(ScalarFunction &bound_function, LogicalType type, bool is_operator) {
+static void SetArgumentType(ScalarFunction &bound_function, const LogicalType &type, bool is_operator) {
 	if (is_operator) {
 		bound_function.arguments[0] = type;
 		bound_function.arguments[1] = type;
 		bound_function.return_type = type;
-	} else {
-		for (auto &arg : bound_function.arguments) {
-			arg = type;
-		}
-		bound_function.varargs = type;
-		bound_function.return_type = type;
+		return;
 	}
+
+	for (auto &arg : bound_function.arguments) {
+		arg = type;
+	}
+	bound_function.varargs = type;
+	bound_function.return_type = type;
 }
 
 static void HandleArrayBinding(ClientContext &context, vector<unique_ptr<Expression>> &arguments) {
@@ -261,24 +261,24 @@ static unique_ptr<FunctionData> HandleListBinding(ClientContext &context, Scalar
 		// we mimic postgres behaviour: list_concat(NULL, my_list) = my_list
 		auto return_type = rhs.id() == LogicalTypeId::SQLNULL ? lhs : rhs;
 		SetArgumentType(bound_function, return_type, is_operator);
-	} else {
-		if (lhs.id() != LogicalTypeId::LIST || rhs.id() != LogicalTypeId::LIST) {
-			throw BinderException("Cannot concatenate types %s and %s", lhs.ToString(), rhs.ToString());
-		}
-
-		// Resolve list type
-		LogicalType child_type = LogicalType::SQLNULL;
-		for (const auto &argument : arguments) {
-			auto &next_type = ListType::GetChildType(argument->return_type);
-			if (!LogicalType::TryGetMaxLogicalType(context, child_type, next_type, child_type)) {
-				throw BinderException("Cannot concatenate lists of types %s[] and %s[] - an explicit cast is required",
-				                      child_type.ToString(), next_type.ToString());
-			}
-		}
-		auto list_type = LogicalType::LIST(child_type);
-
-		SetArgumentType(bound_function, list_type, is_operator);
+		return make_uniq<ConcatFunctionData>(bound_function.return_type, is_operator);
 	}
+	if (lhs.id() != LogicalTypeId::LIST || rhs.id() != LogicalTypeId::LIST) {
+		throw BinderException("Cannot concatenate types %s and %s", lhs.ToString(), rhs.ToString());
+	}
+
+	// Resolve list type
+	LogicalType child_type = LogicalType::SQLNULL;
+	for (const auto &argument : arguments) {
+		auto &next_type = ListType::GetChildType(argument->return_type);
+		if (!LogicalType::TryGetMaxLogicalType(context, child_type, next_type, child_type)) {
+			throw BinderException("Cannot concatenate lists of types %s[] and %s[] - an explicit cast is required",
+			                      child_type.ToString(), next_type.ToString());
+		}
+	}
+	auto list_type = LogicalType::LIST(child_type);
+
+	SetArgumentType(bound_function, list_type, is_operator);
 	return make_uniq<ConcatFunctionData>(bound_function.return_type, is_operator);
 }
 
