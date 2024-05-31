@@ -10,6 +10,7 @@ void FilenamePattern::SetFilenamePattern(const string &pattern) {
 	base = pattern;
 
 	pos = base.find(id_format);
+	uuid = false;
 	if (pos != string::npos) {
 		base = StringUtil::Replace(base, id_format, "");
 		uuid = false;

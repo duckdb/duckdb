@@ -115,6 +115,16 @@ public:
 		auto trimmed_path = op.GetTrimmedPath(context.client);
 		string hive_path = GetOrCreateDirectory(op.partition_columns, op.names, values, trimmed_path, fs);
 		string full_path(op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, 0));
+		if (op.overwrite_mode == CopyOverwriteMode::COPY_APPEND) {
+			// when appending, we first check if the file exists
+			while (fs.FileExists(full_path)) {
+				// file already exists - re-generate name
+				if (!op.filename_pattern.HasUUID()) {
+					throw InternalException("CopyOverwriteMode::COPY_APPEND without {uuid} - and file exists");
+				}
+				full_path = op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, 0);
+			}
+		}
 		if (op.return_files) {
 			file_names.emplace_back(full_path);
 		}
@@ -236,7 +246,8 @@ unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContex
 }
 
 void CheckDirectory(FileSystem &fs, const string &file_path, CopyOverwriteMode overwrite_mode) {
-	if (overwrite_mode == CopyOverwriteMode::COPY_OVERWRITE_OR_IGNORE) {
+	if (overwrite_mode == CopyOverwriteMode::COPY_OVERWRITE_OR_IGNORE ||
+	    overwrite_mode == CopyOverwriteMode::COPY_APPEND) {
 		// with overwrite or ignore we fully ignore the presence of any files instead of erasing them
 		return;
 	}
