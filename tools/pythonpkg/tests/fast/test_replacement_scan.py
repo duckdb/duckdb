@@ -58,6 +58,11 @@ def from_arrow():
     return df
 
 
+def create_relation(conn, query: str) -> duckdb.DuckDBPyRelation:
+    df = pd.DataFrame({'a': [1, 2, 3]})
+    return conn.sql(query)
+
+
 class TestReplacementScan(object):
     def test_csv_replacement(self):
         con = duckdb.connect()
@@ -189,8 +194,18 @@ class TestReplacementScan(object):
         else:
             assert res == [(1,), (1,), (1,)]
 
+    def test_cte_with_scalar_subquery(self, duckdb_cursor):
+        query = """
+            WITH cte1 AS (
+                select (select * from df)
+            )
+            select * from cte1;
+        """
+        rel = create_relation(duckdb_cursor, query)
+        res = rel.fetchall()
+        assert res == [(1,)]
+
     def test_cte_with_joins(self, duckdb_cursor):
-        df = pd.DataFrame({'a': [1, 2, 3]})
         query = """
             WITH cte1 AS (
                 SELECT * FROM df
@@ -220,13 +235,49 @@ class TestReplacementScan(object):
             ) AS main_query
             WHERE main_query.a = 2
         """
-        rel = duckdb_cursor.sql(query)
+        rel = create_relation(duckdb_cursor, query)
         duckdb_cursor.execute("create table df as select * from range(4, 7)")
         res = rel.fetchall()
         assert res == [(2, 2, 2)]
 
+    def test_recursive_cte(self, duckdb_cursor):
+        # FIXME: `(select Number from df offset 2 limit 1)` is quite weird and unexpected behavior
+        # I'm not entirely sure how this should be fixed, aliases are stored in the TableRef, which is the thing we cache
+        query = """
+            WITH RECURSIVE
+            RecursiveCTE AS (
+            SELECT Number from df t(Number)
+            UNION ALL
+            SELECT Number + (select Number from df offset 2 limit 1) + 1 as new
+            FROM RecursiveCTE
+            WHERE new < 10
+            )
+            select * from RecursiveCTE;
+        """
+        rel = create_relation(duckdb_cursor, query)
+        res = rel.fetchall()
+        assert res == [(1,), (2,), (3,), (5,), (6,), (7,), (9,)]
+
+        # RecursiveCTE references another CTE which references the 'df'
+        query = """
+            WITH RECURSIVE
+            other_cte as (
+                select * from df t(c)
+            ),
+            RecursiveCTE AS (
+            SELECT Number from other_cte t(Number)
+            UNION ALL
+            SELECT Number + (select c from other_cte offset 2 limit 1) + 1 as new
+            FROM RecursiveCTE
+            WHERE new < 10
+            )
+            select * from RecursiveCTE;
+        """
+        rel = create_relation(duckdb_cursor, query)
+        res = rel.fetchall()
+        assert res == [(1,), (2,), (3,), (5,), (6,), (7,), (9,)]
+
     def test_cte_at_different_levels(self, duckdb_cursor):
-        df = pd.DataFrame({'a': [1, 2, 3]})
         query = """
             SELECT * FROM (
                 WITH cte1 AS (
@@ -260,22 +311,23 @@ class TestReplacementScan(object):
             ) AS main_query
             WHERE main_query.a = 2
         """
-        rel = duckdb_cursor.sql(query)
+        rel = create_relation(duckdb_cursor, query)
         duckdb_cursor.execute("create table df as select * from range(4, 7)")
         res = rel.fetchall()
         assert res == [(2, 2, 2)]
 
     def test_replacement_disabled(self):
-        df = pd.DataFrame({'a': [1, 2, 3]})
         # Create regular connection, not disabled
         con = duckdb.connect()
-        res = con.sql("select * from df").fetchall()
+        rel = create_relation(con, "select * from df")
+        res = rel.fetchall()
         assert res == [(1,), (2,), (3,)]
 
         ## disable external access
         con.execute("set enable_external_access=false")
         with pytest.raises(duckdb.CatalogException, match='Table with name df does not exist!'):
-            res = con.sql("select * from df").fetchall()
+            rel = create_relation(con, "select * from df")
+            res = rel.fetchall()
         with pytest.raises(
             duckdb.InvalidInputException, match='Cannot change enable_external_access setting while database is running'
         ):
@@ -284,11 +336,12 @@ class TestReplacementScan(object):
         # Create connection with external access disabled
         con = duckdb.connect(config={'enable_external_access': False})
         with pytest.raises(duckdb.CatalogException, match='Table with name df does not exist!'):
-            res = con.sql("select * from df").fetchall()
+            rel = create_relation(con, "select * from df")
+            res = rel.fetchall()
 
         # Create regular connection, disable inbetween creation and execution
         con = duckdb.connect()
-        rel = con.sql("select * from df")
+        rel = create_relation(con, "select * from df")
 
         con.execute("set enable_external_access=false")
 
