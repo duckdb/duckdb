@@ -240,6 +240,27 @@ class TestReplacementScan(object):
         res = rel.fetchall()
         assert res == [(2, 2, 2)]
 
+    def test_same_name_cte(self, duckdb_cursor):
+        query = """
+            WITH df AS (
+                SELECT a+1 FROM df
+            )
+            SELECT * FROM df;
+        """
+        rel = create_relation(duckdb_cursor, query)
+        res = rel.fetchall()
+        assert res == [(1,), (2,), (3,)]
+
+        query = """
+            WITH RECURSIVE df AS (
+                SELECT a+1 FROM df
+            )
+            SELECT * FROM df;
+        """
+        rel = create_relation(duckdb_cursor, query)
+        res = rel.fetchall()
+        assert res == [(1,), (2,), (3,)]
+
     def test_recursive_cte(self, duckdb_cursor):
         # FIXME: `(select Number from df offset 2 limit 1)` is quite weird and unexpected behavior
         # I'm not entirely sure how this should be fixed, aliases are stored in the TableRef, which is the thing we cache
