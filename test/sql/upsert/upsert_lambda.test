@@ -1,0 +1,91 @@
+# name: test/sql/upsert/upsert_lambda.test
+# group: [upsert]
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+CREATE OR REPLACE TABLE foo (
+	pk_col INT PRIMARY KEY,
+	str VARCHAR,
+	str_list VARCHAR[],
+	payload_col INT
+);
+
+statement ok
+INSERT INTO foo
+SELECT 1, 'hello', ['x', 'y', 'z'], 40
+ON CONFLICT DO UPDATE SET
+	str = list_reduce(EXCLUDED.str_list, (x, y) -> x || '||' || y);
+
+query IIII
+FROM foo;
+----
+1	hello	[x, y, z]	40
+
+# Use the new (excluded) list as input.
+
+statement ok
+INSERT INTO foo
+SELECT 1, 'world', ['a', 'b', 'c'], 41
+ON CONFLICT DO UPDATE SET
+	str = list_reduce(EXCLUDED.str_list, (x, y) -> x || '||' || y);
+
+query IIII
+FROM foo;
+----
+1	a||b||c	[x, y, z]	40
+
+# Additionally update the payload.
+
+statement ok
+INSERT INTO foo
+SELECT 1, '', ['1', '2'], 42
+ON CONFLICT DO UPDATE SET
+  str = list_reduce(EXCLUDED.str_list, (x, y) -> x || '||' || y), 
+  payload_col = EXCLUDED.payload_col;
+
+query IIII
+FROM foo;
+----
+1	1||2	[x, y, z]	42
+
+# Use the existing list as input.
+
+statement ok
+INSERT INTO foo
+SELECT 1, '', ['l', 'm', 'n'], 43
+ON CONFLICT DO UPDATE SET
+  str = list_reduce(str_list, (x, y) -> x || '||' || y);
+
+query IIII
+FROM foo;
+----
+1	x||y||z	[x, y, z]	42
+
+# Reference the existing and the new (excluded) str column without qualification.
+
+statement ok
+INSERT INTO foo
+SELECT 1, 'world', ['s', 't'], 42
+ON CONFLICT DO UPDATE SET
+  str = list_reduce(EXCLUDED.str_list, (x, y) -> x || str || y || EXCLUDED.str);
+
+query IIII
+FROM foo;
+----
+1	sx||y||ztworld	[x, y, z]	42
+
+# Lambda function in the WHERE clause.
+
+statement ok
+INSERT INTO foo
+SELECT 1, 'motorcycle', ['brrr', 'brrrrrr'], 1042
+ON CONFLICT DO UPDATE SET
+  str = 'black-bellied whistling duck'
+  WHERE list_reduce(EXCLUDED.str_list, (x, y) -> x || str || y || EXCLUDED.str) = 'brrrsx||y||ztworldbrrrrrrmotorcycle';
+
+query IIII
+FROM foo;
+----
+1	black-bellied whistling duck	[x, y, z]	42
