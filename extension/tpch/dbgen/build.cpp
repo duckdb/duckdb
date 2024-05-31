@@ -225,7 +225,7 @@ long mk_part(DSS_HUGE index, part_t *p, DBGenContext *ctx) {
 		snprintf(szBrandFormat, sizeof(szBrandFormat), P_BRND_FMT, 2, &HUGE_FORMAT[1]);
 	});
 	p->partkey = index;
-	agg_str(&colors, (long)P_NAME_SCL, &ctx->Seed[P_NAME_SD], p->name);
+	agg_str(&colors, (long)P_NAME_SCL, &ctx->Seed[P_NAME_SD], p->name, ctx);
 	RANDOM(temp, P_MFG_MIN, P_MFG_MAX, &ctx->Seed[P_MFG_SD]);
 	snprintf(p->mfgr, sizeof(p->mfgr), szFormat, P_MFG_TAG, temp);
 	RANDOM(brnd, P_BRND_MIN, P_BRND_MAX, &ctx->Seed[P_BRND_SD]);
