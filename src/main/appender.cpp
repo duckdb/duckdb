@@ -19,9 +19,9 @@ BaseAppender::BaseAppender(Allocator &allocator, AppenderType type_p)
     : allocator(allocator), column(0), appender_type(type_p) {
 }
 
-BaseAppender::BaseAppender(Allocator &allocator_p, vector<LogicalType> types_p, AppenderType type_p)
+BaseAppender::BaseAppender(Allocator &allocator_p, vector<LogicalType> types_p, AppenderType type_p, idx_t flush_count_p)
     : allocator(allocator_p), types(std::move(types_p)), collection(make_uniq<ColumnDataCollection>(allocator, types)),
-      column(0), appender_type(type_p) {
+      column(0), appender_type(type_p), flush_count(flush_count_p) {
 	InitializeChunk();
 }
 
@@ -40,8 +40,8 @@ void BaseAppender::Destructor() {
 	}
 }
 
-InternalAppender::InternalAppender(ClientContext &context_p, TableCatalogEntry &table_p)
-    : BaseAppender(Allocator::DefaultAllocator(), table_p.GetTypes(), AppenderType::PHYSICAL), context(context_p),
+InternalAppender::InternalAppender(ClientContext &context_p, TableCatalogEntry &table_p, idx_t flush_count_p)
+    : BaseAppender(Allocator::DefaultAllocator(), table_p.GetTypes(), AppenderType::PHYSICAL, flush_count_p), context(context_p),
       table(table_p) {
 }
 
@@ -339,7 +339,7 @@ void BaseAppender::AppendDataChunk(DataChunk &chunk) {
 		}
 	}
 	collection->Append(chunk);
-	if (collection->Count() >= FLUSH_COUNT) {
+	if (collection->Count() >= flush_count) {
 		Flush();
 	}
 }
@@ -350,7 +350,7 @@ void BaseAppender::FlushChunk() {
 	}
 	collection->Append(chunk);
 	chunk.Reset();
-	if (collection->Count() >= FLUSH_COUNT) {
+	if (collection->Count() >= flush_count) {
 		Flush();
 	}
 }

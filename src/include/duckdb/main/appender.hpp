@@ -27,10 +27,10 @@ enum class AppenderType : uint8_t {
 
 //! The Appender class can be used to append elements to a table.
 class BaseAppender {
-protected:
+public:
 	//! The amount of tuples that will be gathered in the column data collection before flushing
-	static constexpr const idx_t FLUSH_COUNT = STANDARD_VECTOR_SIZE * 100ULL;
-
+	static constexpr const idx_t DEFAULT_FLUSH_COUNT = STANDARD_VECTOR_SIZE * 100ULL;
+protected:
 	Allocator &allocator;
 	//! The append types
 	vector<LogicalType> types;
@@ -42,10 +42,12 @@ protected:
 	idx_t column = 0;
 	//! The type of the appender
 	AppenderType appender_type;
+	//! The amount of rows after which we flush the appender automatically
+	idx_t flush_count;
 
 protected:
 	DUCKDB_API BaseAppender(Allocator &allocator, AppenderType type);
-	DUCKDB_API BaseAppender(Allocator &allocator, vector<LogicalType> types, AppenderType type);
+	DUCKDB_API BaseAppender(Allocator &allocator, vector<LogicalType> types, AppenderType type, idx_t flush_count = DEFAULT_FLUSH_COUNT);
 
 public:
 	DUCKDB_API virtual ~BaseAppender();
@@ -131,7 +133,7 @@ class InternalAppender : public BaseAppender {
 	TableCatalogEntry &table;
 
 public:
-	DUCKDB_API InternalAppender(ClientContext &context, TableCatalogEntry &table);
+	DUCKDB_API InternalAppender(ClientContext &context, TableCatalogEntry &table, idx_t flush_count = DEFAULT_FLUSH_COUNT);
 	DUCKDB_API ~InternalAppender() override;
 
 protected:
