@@ -269,7 +269,7 @@ if (OVERRIDE_GIT_DESCRIBE)
         if (GIT_RESULT)
           message(WARNING "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'log -1 --format=%h'. Consider providing explicit GIT_COMMIT_HASH")
           set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE}-0-g0123456789")
-	endif()
+    endif()
     else()
       set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE}-0-g0123456789")
     endif()
@@ -289,7 +289,7 @@ else()
         if (GIT_RESULT)
           message(WARNING "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'log -1 --format=%h'. Consider providing explicit GIT_COMMIT_HASH or OVERRIDE_GIT_DESCRIBE")
           set(GIT_COMMIT_HASH "0123456789")
-	endif()
+    endif()
     endif()
     execute_process(
           COMMAND ${GIT_EXECUTABLE} describe --tags --long
@@ -497,6 +497,37 @@ else()
       message(FATAL_ERROR "unsupported option for VERIFY_VECTOR ${VERIFY_VECTOR}")
     endif()
   endif()
+endif()
+
+function(is_number input_string return_var)
+    if("${input_string}" MATCHES "^[0-9]+$")
+        set(${return_var} TRUE PARENT_SCOPE)
+    else()
+        set(${return_var} FALSE PARENT_SCOPE)
+    endif()
+endfunction()
+
+set(STANDARD_VECTOR_SIZE "" CACHE STRING "Set a custom STANDARD_VECTOR_SIZE at compile time")
+set(BLOCK_ALLOC_SIZE "" CACHE STRING "Set a custom BLOCK_ALLOC_SIZE at compile time")
+
+if(DEFINED STANDARD_VECTOR_SIZE AND NOT STANDARD_VECTOR_SIZE STREQUAL "")
+    is_number(${STANDARD_VECTOR_SIZE} is_number_result)
+    if(is_number_result)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSTANDARD_VECTOR_SIZE=${STANDARD_VECTOR_SIZE}")
+        message(STATUS "STANDARD_VECTOR_SIZE is set to ${STANDARD_VECTOR_SIZE}")
+    else()
+        message(FATAL_ERROR "STANDARD_VECTOR_SIZE must be a number, not ${STANDARD_VECTOR_SIZE}")
+    endif()
+endif()
+
+if(DEFINED BLOCK_ALLOC_SIZE AND NOT BLOCK_ALLOC_SIZE STREQUAL "")
+    is_number(${BLOCK_ALLOC_SIZE} is_number_result)
+    if(is_number_result)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_BLOCK_ALLOC_SIZE=${BLOCK_ALLOC_SIZE}")
+        message(STATUS "BLOCK_ALLOC_SIZE is set to ${BLOCK_ALLOC_SIZE}")
+    else()
+        message(FATAL_ERROR "BLOCK_ALLOC_SIZE must be a number, not ${BLOCK_ALLOC_SIZE}")
+    endif()
 endif()
 
 if(CUSTOM_LINKER)
@@ -978,7 +1009,7 @@ function(duckdb_extension_generate_version OUTPUT_VAR WORKING_DIR)
       message(FATAL_ERROR "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'log -1 --format=%h'.")
     endif()
     execute_process(
-            COMMAND ${GIT_EXECUTABLE} describe --tags
+            COMMAND ${GIT_EXECUTABLE} describe --tags --always
             WORKING_DIRECTORY ${WORKING_DIR}
             RESULT_VARIABLE GIT_RESULT
             OUTPUT_VARIABLE GIT_DESCRIBE
@@ -1260,7 +1291,7 @@ if(BUILD_PYTHON)
       DUCKDB_BINARY_DIR=${PROJECT_BINARY_DIR}
       DUCKDB_COMPILE_FLAGS=${ALL_COMPILE_FLAGS}
       DUCKDB_LIBS="${duckdb_libs}"
-	)
+    )
 
   if(PYTHON_EDITABLE_BUILD)
     set(PIP_COMMAND ${PIP_COMMAND} python3 -m pip install --editable .)

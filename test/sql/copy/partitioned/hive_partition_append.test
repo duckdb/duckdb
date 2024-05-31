@@ -1,0 +1,63 @@
+# name: test/sql/copy/partitioned/hive_partition_append.test
+# description: test APPEND mode for hive partitioned write
+# group: [partitioned]
+
+require parquet
+
+statement ok
+CREATE TABLE sensor_data(ts TIMESTAMP, value INT);
+
+statement ok
+INSERT INTO sensor_data VALUES
+   (TIMESTAMP '2000-01-01 01:02:03', 42),
+   (TIMESTAMP '2000-02-01 01:02:03', 100),
+   (TIMESTAMP '2000-03-01 12:11:10', 1000)
+;
+
+statement ok
+COPY (SELECT YEAR(ts) AS year, MONTH(ts) AS month, * FROM sensor_data)
+TO '__TEST_DIR__/partitioned_append' (FORMAT PARQUET, PARTITION_BY (year, month), APPEND);
+
+query III
+SELECT year, month, SUM(value) FROM '__TEST_DIR__/partitioned_append/**/*.parquet' GROUP BY ALL ORDER BY ALL
+----
+2000	1	42
+2000	2	100
+2000	3	1000
+
+statement ok
+DELETE FROM sensor_data;
+
+statement ok
+INSERT INTO sensor_data VALUES
+   (TIMESTAMP '2000-01-01 02:02:03', 62),
+   (TIMESTAMP '2000-03-01 13:11:10', 50)
+;
+
+statement ok
+COPY (SELECT YEAR(ts) AS year, MONTH(ts) AS month, * FROM sensor_data)
+TO '__TEST_DIR__/partitioned_append' (FORMAT PARQUET, PARTITION_BY (year, month), APPEND, FILENAME_PATTERN 'my_pattern_{uuid}');
+
+query III
+SELECT year, month, SUM(value) FROM '__TEST_DIR__/partitioned_append/**/*.parquet' GROUP BY ALL ORDER BY ALL
+----
+2000	1	104
+2000	2	100
+2000	3	1050
+
+statement ok
+COPY (SELECT YEAR(ts) AS year, MONTH(ts) AS month, * FROM sensor_data)
+TO '__TEST_DIR__/partitioned_append' (FORMAT PARQUET, PARTITION_BY (year, month), FILENAME_PATTERN 'my_pattern_{uuid}', APPEND);
+
+query III
+SELECT year, month, SUM(value) FROM '__TEST_DIR__/partitioned_append/**/*.parquet' GROUP BY ALL ORDER BY ALL
+----
+2000	1	166
+2000	2	100
+2000	3	1100
+
+statement error
+COPY (SELECT YEAR(ts) AS year, MONTH(ts) AS month, * FROM sensor_data)
+TO '__TEST_DIR__/partitioned_append' (FORMAT PARQUET, PARTITION_BY (year, month), APPEND, FILENAME_PATTERN 'my_pattern_without_uuid');
+----
+APPEND mode requires a {uuid} label in filename_pattern
