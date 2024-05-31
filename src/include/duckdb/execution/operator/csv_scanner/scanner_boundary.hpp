@@ -67,7 +67,7 @@ public:
 
 	void SetCurrentPositionToBoundary();
 
-	void SetCurrentBoundaryToPosition();
+	void SetCurrentBoundaryToPosition(bool single_threaded);
 
 	void SetStart(idx_t pos);
 

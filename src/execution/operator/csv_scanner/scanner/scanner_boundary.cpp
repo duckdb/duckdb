@@ -85,7 +85,11 @@ void CSVIterator::SetCurrentPositionToBoundary() {
 	pos.buffer_pos = boundary.buffer_pos;
 }
 
-void CSVIterator::SetCurrentBoundaryToPosition() {
+void CSVIterator::SetCurrentBoundaryToPosition(bool single_threaded) {
+	if (single_threaded) {
+		is_set = false;
+		return;
+	}
 	boundary.buffer_idx = pos.buffer_idx;
 	if (pos.buffer_pos == 0) {
 		boundary.end_pos = CSVIterator::BYTES_PER_THREAD;
