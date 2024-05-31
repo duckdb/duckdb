@@ -69,7 +69,7 @@ long mk_cust(DSS_HUGE n_cust, customer_t *c, DBGenContext *ctx) {
 	static std::once_flag bInit;
 	static char szFormat[100];
 
-	std::call_once (bInit, []{
+	std::call_once (bInit, [&](){
 		snprintf(szFormat, sizeof(szFormat), C_NAME_FMT, 9, &HUGE_FORMAT[1]);
 	});
 	c->custkey = n_cust;
@@ -121,7 +121,7 @@ long mk_order(DSS_HUGE index, order_t *o, DBGenContext *ctx, long upd_num) {
 	static std::once_flag bInit;
 	static char szFormat[100];
 
-	std::call_once (bInit, []{
+	std::call_once (bInit, [&](){
 		snprintf(szFormat, sizeof(szFormat), O_CLRK_FMT, 9, &HUGE_FORMAT[1]);
 		asc_date = mk_ascdate();
 	});
@@ -220,7 +220,7 @@ long mk_part(DSS_HUGE index, part_t *p, DBGenContext *ctx) {
 	static char szBrandFormat[100];
 
 
-	std::call_once (bInit, []{
+	std::call_once (bInit, [&](){
 		snprintf(szFormat, sizeof(szFormat), P_MFG_FMT, 1, &HUGE_FORMAT[1]);
 		snprintf(szBrandFormat, sizeof(szBrandFormat), P_BRND_FMT, 2, &HUGE_FORMAT[1]);
 	});
@@ -254,7 +254,7 @@ long mk_supp(DSS_HUGE index, supplier_t *s, DBGenContext *ctx) {
 	static std::once_flag bInit;
 	static char szFormat[100];
 
-	std::call_once (bInit, []{
+	std::call_once (bInit, [&](){
 		snprintf(szFormat, sizeof(szFormat), S_NAME_FMT, 9, &HUGE_FORMAT[1]);
 	});
 	s->suppkey = index;
