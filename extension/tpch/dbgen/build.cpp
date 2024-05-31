@@ -10,6 +10,7 @@
  */
 #include <stdio.h>
 #include <string.h>
+#include <mutex>
 #ifndef VMS
 #include <sys/types.h>
 #endif
@@ -20,7 +21,6 @@
 #include "dbgen/dsstypes.h"
 
 #include <math.h>
-#include <mutex>
 
 #include "dbgen/rng64.h"
 
