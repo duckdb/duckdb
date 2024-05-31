@@ -28,8 +28,8 @@ char *eol[2] = {" ", "},"};
 
 void permute(long *a, int c, seed_t *seed) {
 	int i;
-	static DSS_HUGE source;
-	static long temp;
+	DSS_HUGE source;
+	long temp;
 
 	if (a != (long *)NULL) {
 		for (i = 0; i < c; i++) {
