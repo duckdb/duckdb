@@ -17,6 +17,12 @@ void TableFunctionRelation::AddNamedParameter(const string &name, Value argument
 	named_parameters[name] = std::move(argument);
 }
 
+void TableFunctionRelation::RemoveNamedParameterIfExists(const string &name) {
+	if (named_parameters.find(name) != named_parameters.end()) {
+		named_parameters.erase(name);
+	}
+}
+
 void TableFunctionRelation::SetNamedParameters(named_parameter_map_t &&options) {
 	D_ASSERT(named_parameters.empty());
 	named_parameters = std::move(options);
