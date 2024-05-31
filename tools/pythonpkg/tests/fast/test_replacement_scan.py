@@ -261,6 +261,26 @@ class TestReplacementScan(object):
         res = rel.fetchall()
         assert res == [(1,), (2,), (3,)]
 
+    def test_use_with_view(self, duckdb_cursor):
+        rel = create_relation(duckdb_cursor, "select * from df")
+        rel.create_view('v1')
+
+        del rel
+        rel = duckdb_cursor.sql("select * from v1")
+        res = rel.fetchall()
+        assert res == [(1,), (2,), (3,)]
+        duckdb_cursor.execute("drop view v1")
+
+        def create_view_in_func(con):
+            df = pd.DataFrame({"a": [1, 2, 3]})
+            con.execute('CREATE VIEW v1 AS SELECT * FROM df')
+
+        create_view_in_func(duckdb_cursor)
+
+        # FIXME: this should be fixed in the future, likely by unifying the behavior of .sql and .execute
+        with pytest.raises(duckdb.CatalogException, match='Table with name df does not exist'):
+            rel = duckdb_cursor.sql("select * from v1")
+
     def test_recursive_cte(self, duckdb_cursor):
         # FIXME: `(select Number from df offset 2 limit 1)` is quite weird and unexpected behavior
         # I'm not entirely sure how this should be fixed, aliases are stored in the TableRef, which is the thing we cache
