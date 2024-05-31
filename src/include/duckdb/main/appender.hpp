@@ -11,7 +11,6 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/table_description.hpp"
-#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 
@@ -20,7 +19,6 @@ class ClientContext;
 class DuckDB;
 class TableCatalogEntry;
 class Connection;
-struct SelectionVector;
 
 enum class AppenderType : uint8_t {
 	LOGICAL, // Cast input -> LogicalType

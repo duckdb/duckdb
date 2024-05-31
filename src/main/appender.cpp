@@ -14,6 +14,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 
