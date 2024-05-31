@@ -1,4 +1,6 @@
 #include "duckdb/storage/storage_info.hpp"
+
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
