@@ -8,12 +8,12 @@
 
 #pragma once
 
+#include "duckdb/common/enums/copy_overwrite_mode.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/filename_pattern.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
-#include "duckdb/common/enums/copy_overwrite_mode.hpp"
 
 namespace duckdb {
 
@@ -79,6 +79,7 @@ public:
 	string GetTrimmedPath(ClientContext &context) const;
 
 private:
-	unique_ptr<GlobalFunctionData> CreateFileState(ClientContext &context, GlobalSinkState &sink) const;
+	unique_ptr<GlobalFunctionData> CreateFileState(ClientContext &context, GlobalSinkState &sink,
+	                                               StorageLockKey &global_lock) const;
 };
 } // namespace duckdb

@@ -108,7 +108,7 @@ public:
 
 	PartitionWriteInfo &GetPartitionWriteInfo(ExecutionContext &context, const PhysicalCopyToFile &op,
 	                                          const vector<Value> &values) {
-		auto l = lock.GetExclusiveLock();
+		auto global_lock = lock.GetExclusiveLock();
 		// check if we have already started writing this partition
 		auto entry = active_partitioned_writes.find(values);
 		if (entry != active_partitioned_writes.end()) {
@@ -131,7 +131,7 @@ public:
 			}
 		}
 		if (op.return_type == CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST) {
-			AddFileName(*l, full_path);
+			AddFileName(*global_lock, full_path);
 		}
 		// initialize writes
 		auto info = make_uniq<PartitionWriteInfo>();
@@ -225,18 +225,14 @@ public:
 	}
 };
 
-unique_ptr<GlobalFunctionData> PhysicalCopyToFile::CreateFileState(ClientContext &context,
-                                                                   GlobalSinkState &sink) const {
+unique_ptr<GlobalFunctionData> PhysicalCopyToFile::CreateFileState(ClientContext &context, GlobalSinkState &sink,
+                                                                   StorageLockKey &global_lock) const {
 	auto &g = sink.Cast<CopyToFunctionGlobalState>();
-	string output_path;
-	{
-		auto l = g.lock.GetExclusiveLock();
-		idx_t this_file_offset = g.last_file_offset++;
-		auto &fs = FileSystem::GetFileSystem(context);
-		output_path = filename_pattern.CreateFilename(fs, file_path, file_extension, this_file_offset);
-		if (return_type == CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST) {
-			g.AddFileName(*l, output_path);
-		}
+	idx_t this_file_offset = g.last_file_offset++;
+	auto &fs = FileSystem::GetFileSystem(context);
+	string output_path(filename_pattern.CreateFilename(fs, file_path, file_extension, this_file_offset));
+	if (return_type == CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST) {
+		g.AddFileName(global_lock, output_path);
 	}
 	return function.copy_to_initialize_global(context, *bind_data, output_path);
 }
@@ -318,7 +314,8 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 
 		auto state = make_uniq<CopyToFunctionGlobalState>(nullptr);
 		if (!per_thread_output && rotate) {
-			state->global_state = CreateFileState(context, *state);
+			auto global_lock = state->lock.GetExclusiveLock();
+			state->global_state = CreateFileState(context, *state, *global_lock);
 		}
 
 		if (partition_output) {
@@ -331,8 +328,8 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 	auto state =
 	    make_uniq<CopyToFunctionGlobalState>(function.copy_to_initialize_global(context, *bind_data, file_path));
 	if (use_tmp_file) {
-		auto l = state->lock.GetExclusiveLock();
-		state->AddFileName(*l, file_path);
+		auto global_lock = state->lock.GetExclusiveLock();
+		state->AddFileName(*global_lock, file_path);
 	} else {
 		state->file_names.emplace_back(file_path);
 	}
@@ -386,10 +383,12 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &ch
 		auto &gstate = l.global_state;
 		if (!gstate) {
 			// Lazily create file state here to prevent creating empty files
-			gstate = CreateFileState(context.client, *sink_state);
+			auto global_lock = g.lock.GetExclusiveLock();
+			gstate = CreateFileState(context.client, *sink_state, *global_lock);
 		} else if (rotate && function.rotate_next_file(*gstate, *bind_data, file_size_bytes)) {
 			function.copy_to_finalize(context.client, *bind_data, *gstate);
-			gstate = CreateFileState(context.client, *sink_state);
+			auto global_lock = g.lock.GetExclusiveLock();
+			gstate = CreateFileState(context.client, *sink_state, *global_lock);
 		}
 		function.copy_to_sink(context, *bind_data, *gstate, *l.local_state, chunk);
 		return SinkResultType::NEED_MORE_INPUT;
@@ -402,17 +401,17 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &ch
 
 	// FILE_SIZE_BYTES/rotate is set, but threads write to the same file, synchronize using lock
 	auto &gstate = g.global_state;
-	auto lock = g.lock.GetExclusiveLock();
+	auto global_lock = g.lock.GetExclusiveLock();
 	if (rotate && function.rotate_next_file(*gstate, *bind_data, file_size_bytes)) {
 		auto owned_gstate = std::move(gstate);
-		gstate = CreateFileState(context.client, *sink_state);
-		lock.reset();
+		gstate = CreateFileState(context.client, *sink_state, *global_lock);
+		global_lock.reset();
 		function.copy_to_finalize(context.client, *bind_data, *owned_gstate);
 	} else {
-		lock.reset();
+		global_lock.reset();
 	}
 
-	lock = g.lock.GetSharedLock();
+	global_lock = g.lock.GetSharedLock();
 	function.copy_to_sink(context, *bind_data, *gstate, *l.local_state, chunk);
 
 	return SinkResultType::NEED_MORE_INPUT;

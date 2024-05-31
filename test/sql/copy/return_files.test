@@ -23,6 +23,9 @@ COPY integers TO '__TEST_DIR__/test_batch_copy_to_file.parquet' (RETURN_FILES TR
 ----
 200000	<REGEX>:.*test_batch_copy_to_file.parquet.*
 
+statement ok
+SET threads=2;
+
 query II
 COPY integers TO '__TEST_DIR__/test_per_thread_output' (RETURN_FILES, PER_THREAD_OUTPUT);
 ----
