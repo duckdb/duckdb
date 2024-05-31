@@ -20,6 +20,7 @@ add_library_unity(
   scalar_function-c.cpp
   stream-c.cpp
   table_function-c.cpp
+  table_description-c.cpp
   threading-c.cpp
   value-c.cpp)
 
