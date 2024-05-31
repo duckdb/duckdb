@@ -44,7 +44,7 @@ protected:
 	//! The type of the appender
 	AppenderType appender_type;
 	//! The amount of rows after which we flush the appender automatically
-	idx_t flush_count;
+	idx_t flush_count = DEFAULT_FLUSH_COUNT;
 
 protected:
 	DUCKDB_API BaseAppender(Allocator &allocator, AppenderType type);
