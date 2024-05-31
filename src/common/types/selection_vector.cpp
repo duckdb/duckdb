@@ -47,11 +47,12 @@ void SelectionVector::Verify(idx_t count, idx_t vector_size) const {
 #ifdef DEBUG
 	D_ASSERT(vector_size >= 1);
 	for (idx_t i = 0; i < count; i++) {
-		auto index = sel.get_index(i);
+		auto index = get_index(i);
 		if (index >= vector_size) {
-			throw InternalException("Provided SelectionVector is invalid, index %d points to %d, which is out of range "
-			                        "the valid range (0-%d)",
-			                        i, index, vector_size - 1);
+			throw InternalException(
+			    "Provided SelectionVector is invalid, index %d points to %d, which is out of range. "
+			    "the valid range (0-%d)",
+			    i, index, vector_size - 1);
 		}
 	}
 #endif
