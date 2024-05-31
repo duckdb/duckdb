@@ -286,16 +286,4 @@ bool ExpressionBinder::IsUnnestFunction(const string &function_name) {
 	return function_name == "unnest" || function_name == "unlist";
 }
 
-bool ExpressionBinder::IsLambdaFunction(const FunctionExpression &function) {
-	// check for lambda parameters, ignore ->> operator (JSON extension)
-	if (function.function_name != "->>") {
-		for (auto &child : function.children) {
-			if (child->expression_class == ExpressionClass::LAMBDA) {
-				return true;
-			}
-		}
-	}
-	return false;
-}
-
 } // namespace duckdb

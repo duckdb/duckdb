@@ -14,7 +14,7 @@ class TestResolveObjectColumns(object):
     def test_sample_low_correct(self, duckdb_cursor, pandas):
         print(pandas.backend)
         duckdb_conn = duckdb.connect()
-        duckdb_conn.execute("SET GLOBAL pandas_analyze_sample=3")
+        duckdb_conn.execute("SET pandas_analyze_sample=3")
         data = [1000008, 6, 9, 4, 1, 6]
         df = create_generic_dataframe(data, pandas)
         roundtripped_df = duckdb.query_df(df, "x", "select * from x", connection=duckdb_conn).df()
@@ -24,7 +24,7 @@ class TestResolveObjectColumns(object):
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_sample_low_incorrect_detected(self, duckdb_cursor, pandas):
         duckdb_conn = duckdb.connect()
-        duckdb_conn.execute("SET GLOBAL pandas_analyze_sample=2")
+        duckdb_conn.execute("SET pandas_analyze_sample=2")
         # size of list (6) divided by 'pandas_analyze_sample' (2) is the increment used
         # in this case index 0 (1000008) and index 3 ([4]) are checked, which dont match
         data = [1000008, 6, 9, [4], 1, 6]
@@ -37,7 +37,7 @@ class TestResolveObjectColumns(object):
     def test_sample_zero(self, duckdb_cursor, pandas):
         duckdb_conn = duckdb.connect()
         # Disable dataframe analyze
-        duckdb_conn.execute("SET GLOBAL pandas_analyze_sample=0")
+        duckdb_conn.execute("SET pandas_analyze_sample=0")
         data = [1000008, 6, 9, 3, 1, 6]
         df = create_generic_dataframe(data, pandas)
         roundtripped_df = duckdb.query_df(df, "x", "select * from x", connection=duckdb_conn).df()
@@ -50,12 +50,20 @@ class TestResolveObjectColumns(object):
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_sample_low_incorrect_undetected(self, duckdb_cursor, pandas):
         duckdb_conn = duckdb.connect()
-        duckdb_conn.execute("SET GLOBAL pandas_analyze_sample=1")
+        duckdb_conn.execute("SET pandas_analyze_sample=1")
         data = [1000008, 6, 9, [4], [1], 6]
         df = create_generic_dataframe(data, pandas)
         # Sample size is too low to detect the mismatch, exception is raised when trying to convert
         with pytest.raises(duckdb.InvalidInputException, match="Failed to cast value: Unimplemented type for cast"):
             roundtripped_df = duckdb.query_df(df, "x", "select * from x", connection=duckdb_conn).df()
+
+    def test_reset_analyze_sample_setting(self, duckdb_cursor):
+        duckdb_cursor.execute("SET pandas_analyze_sample=5")
+        res = duckdb_cursor.execute("select current_setting('pandas_analyze_sample')").fetchall()
+        assert res == [(5,)]
+        duckdb_cursor.execute("reset pandas_analyze_sample")
+        res = duckdb_cursor.execute("select current_setting('pandas_analyze_sample')").fetchall()
+        assert res == [(1000,)]
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_10750(self, duckdb_cursor, pandas):

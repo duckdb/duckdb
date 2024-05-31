@@ -1,5 +1,4 @@
-import os, sys, re
-from python_helpers import open_utf8
+import os
 
 vector_sizes = [2]
 
@@ -15,21 +14,8 @@ def execute_system_command(cmd):
         raise Exception(f"Failed to run command {cmd} - exit code {retcode}")
 
 
-def replace_in_file(fname, regex, replace):
-    with open_utf8(fname, 'r') as f:
-        contents = f.read()
-    contents = re.sub(regex, replace, contents)
-    with open_utf8(fname, 'w+') as f:
-        f.write(contents)
-
-
 for vector_size in vector_sizes:
     print("TESTING STANDARD_VECTOR_SIZE=%d" % (vector_size,))
-    replace_in_file(
-        'src/include/duckdb/common/vector_size.hpp',
-        r'#define STANDARD_VECTOR_SIZE \w+',
-        '#define STANDARD_VECTOR_SIZE %d' % (vector_size,),
-    )
     execute_system_command('rm -rf build')
-    execute_system_command('make relassert')
+    execute_system_command(f'STANDARD_VECTOR_SIZE={vector_size} make relassert')
     execute_system_command('python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest --no-exit')

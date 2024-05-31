@@ -155,10 +155,9 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr,
 		break;
 	}
 	case ExpressionType::FUNCTION: {
-		// special-handling for lambdas, which are inside function expressions,
+		// Special-handling for lambdas, which are inside function expressions.
 		auto &function = expr->Cast<FunctionExpression>();
-		if (IsLambdaFunction(function)) {
-			// special case
+		if (function.IsLambdaFunction()) {
 			return QualifyColumnNamesInLambda(function, lambda_params);
 		}
 
