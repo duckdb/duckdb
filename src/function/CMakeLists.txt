@@ -10,6 +10,7 @@ add_library_unity(
   built_in_functions.cpp
   cast_rules.cpp
   compression_config.cpp
+  copy_function.cpp
   function.cpp
   function_binder.cpp
   function_set.cpp

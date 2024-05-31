@@ -37,7 +37,7 @@ public:
 	bool per_thread_output;
 	optional_idx file_size_bytes;
 	bool rotate;
-	bool return_files;
+	CopyFunctionReturnType return_type;
 
 	bool partition_output;
 	vector<idx_t> partition_columns;

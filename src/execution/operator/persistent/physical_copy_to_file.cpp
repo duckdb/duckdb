@@ -84,6 +84,11 @@ public:
 		return path;
 	}
 
+	void AddFileName(const StorageLockKey &l, const string &file_name) {
+		D_ASSERT(l.GetType() == StorageLockType::EXCLUSIVE);
+		file_names.emplace_back(file_name);
+	}
+
 	void FinalizePartition(ClientContext &context, const PhysicalCopyToFile &op, PartitionWriteInfo &info) {
 		if (!info.global_state) {
 			// already finalized
@@ -125,8 +130,8 @@ public:
 				full_path = op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, 0);
 			}
 		}
-		if (op.return_files) {
-			file_names.emplace_back(full_path);
+		if (op.return_type == CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST) {
+			AddFileName(*l, full_path);
 		}
 		// initialize writes
 		auto info = make_uniq<PartitionWriteInfo>();
@@ -223,12 +228,15 @@ public:
 unique_ptr<GlobalFunctionData> PhysicalCopyToFile::CreateFileState(ClientContext &context,
                                                                    GlobalSinkState &sink) const {
 	auto &g = sink.Cast<CopyToFunctionGlobalState>();
-	idx_t this_file_offset = g.last_file_offset++;
-	auto &fs = FileSystem::GetFileSystem(context);
-	string output_path(filename_pattern.CreateFilename(fs, file_path, file_extension, this_file_offset));
-	if (return_files) {
+	string output_path;
+	{
 		auto l = g.lock.GetExclusiveLock();
-		g.file_names.emplace_back(output_path);
+		idx_t this_file_offset = g.last_file_offset++;
+		auto &fs = FileSystem::GetFileSystem(context);
+		output_path = filename_pattern.CreateFilename(fs, file_path, file_extension, this_file_offset);
+		if (return_type == CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST) {
+			g.AddFileName(*l, output_path);
+		}
 	}
 	return function.copy_to_initialize_global(context, *bind_data, output_path);
 }
@@ -323,7 +331,8 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 	auto state =
 	    make_uniq<CopyToFunctionGlobalState>(function.copy_to_initialize_global(context, *bind_data, file_path));
 	if (use_tmp_file) {
-		state->file_names.emplace_back(GetNonTmpFile(context, file_path));
+		auto l = state->lock.GetExclusiveLock();
+		state->AddFileName(*l, file_path);
 	} else {
 		state->file_names.emplace_back(file_path);
 	}
@@ -366,12 +375,12 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &ch
 	auto &g = input.global_state.Cast<CopyToFunctionGlobalState>();
 	auto &l = input.local_state.Cast<CopyToFunctionLocalState>();
 
+	g.rows_copied += chunk.size();
+
 	if (partition_output) {
 		l.AppendToPartition(context, *this, g, chunk);
 		return SinkResultType::NEED_MORE_INPUT;
 	}
-
-	g.rows_copied += chunk.size();
 
 	if (per_thread_output) {
 		auto &gstate = l.global_state;
@@ -470,10 +479,16 @@ SourceResultType PhysicalCopyToFile::GetData(ExecutionContext &context, DataChun
 	auto &g = sink_state->Cast<CopyToFunctionGlobalState>();
 
 	chunk.SetCardinality(1);
-	chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
-
-	if (return_files) {
+	switch (return_type) {
+	case CopyFunctionReturnType::CHANGED_ROWS:
+		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
+		break;
+	case CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST:
+		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
 		chunk.SetValue(1, 0, Value::LIST(LogicalType::VARCHAR, g.file_names));
+		break;
+	default:
+		throw NotImplementedException("Unknown CopyFunctionReturnType");
 	}
 
 	return SourceResultType::FINISHED;

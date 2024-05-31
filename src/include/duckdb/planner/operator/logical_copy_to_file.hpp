@@ -8,12 +8,12 @@
 
 #pragma once
 
+#include "duckdb/common/enums/copy_overwrite_mode.hpp"
 #include "duckdb/common/filename_pattern.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/common/enums/copy_overwrite_mode.hpp"
 
 namespace duckdb {
 
@@ -38,7 +38,7 @@ public:
 	bool per_thread_output;
 	optional_idx file_size_bytes;
 	bool rotate;
-	bool return_files;
+	CopyFunctionReturnType return_type;
 
 	bool partition_output;
 	vector<idx_t> partition_columns;
@@ -53,10 +53,7 @@ public:
 
 protected:
 	void ResolveTypes() override {
-		types.emplace_back(LogicalType::BIGINT);
-		if (return_files) {
-			types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
-		}
+		types = GetCopyFunctionReturnLogicalTypes(return_type);
 	}
 };
 } // namespace duckdb

@@ -33,9 +33,6 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	if (!config.options.enable_external_access) {
 		throw PermissionException("COPY TO is disabled by configuration");
 	}
-	BoundStatement result;
-	result.types = {LogicalType::BIGINT};
-	result.names = {"Count"};
 
 	// lookup the format in the catalog
 	auto &copy_function =
@@ -63,7 +60,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	vector<idx_t> partition_cols;
 	bool seen_overwrite_mode = false;
 	bool seen_filepattern = false;
-	bool return_files = false;
+	CopyFunctionReturnType return_type = CopyFunctionReturnType::CHANGED_ROWS;
 
 	CopyFunctionBindInput bind_input(*stmt.info);
 
@@ -125,10 +122,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 			auto converted = ConvertVectorToValue(std::move(option.second));
 			partition_cols = ParseColumnsOrdered(converted, select_node.names, loption);
 		} else if (loption == "return_files") {
-			return_files = GetBooleanArg(context, option.second);
-			if (return_files) {
-				result.types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
-				result.names.emplace_back("Files");
+			if (GetBooleanArg(context, option.second)) {
+				return_type = CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST;
 			}
 		} else {
 			if (loption == "compression") {
@@ -216,13 +211,28 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	copy->rotate = rotate;
 	copy->partition_output = !partition_cols.empty();
 	copy->partition_columns = std::move(partition_cols);
-	copy->return_files = return_files;
+	copy->return_type = return_type;
 
 	copy->names = unique_column_names;
 	copy->expected_types = select_node.types;
 
 	copy->AddChild(std::move(select_node.plan));
 
+	auto &properties = GetStatementProperties();
+	switch (copy->return_type) {
+	case CopyFunctionReturnType::CHANGED_ROWS:
+		properties.return_type = StatementReturnType::CHANGED_ROWS;
+		break;
+	case CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST:
+		properties.return_type = StatementReturnType::QUERY_RESULT;
+		break;
+	default:
+		throw NotImplementedException("Unknown CopyFunctionReturnType");
+	}
+
+	BoundStatement result;
+	result.names = GetCopyFunctionReturnNames(copy->return_type);
+	result.types = GetCopyFunctionReturnLogicalTypes(copy->return_type);
 	result.plan = std::move(copy);
 
 	return result;

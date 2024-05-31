@@ -607,11 +607,20 @@ SourceResultType PhysicalBatchCopyToFile::GetData(ExecutionContext &context, Dat
 	auto &g = sink_state->Cast<FixedBatchCopyGlobalState>();
 
 	chunk.SetCardinality(1);
-	chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
-	if (return_files) {
+	switch (return_type) {
+	case CopyFunctionReturnType::CHANGED_ROWS:
+		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
+		break;
+	case CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST: {
+		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
 		auto fp = use_tmp_file ? PhysicalCopyToFile::GetNonTmpFile(context.client, file_path) : file_path;
 		chunk.SetValue(1, 0, Value::LIST(LogicalType::VARCHAR, {fp}));
+		break;
 	}
+	default:
+		throw NotImplementedException("Unknown CopyFunctionReturnType");
+	}
+
 	return SourceResultType::FINISHED;
 }
 

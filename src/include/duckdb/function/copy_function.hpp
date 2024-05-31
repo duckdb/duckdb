@@ -114,6 +114,10 @@ enum class CopyTypeSupport { SUPPORTED, LOSSY, UNSUPPORTED };
 
 typedef CopyTypeSupport (*copy_supports_type_t)(const LogicalType &type);
 
+enum class CopyFunctionReturnType : uint8_t { CHANGED_ROWS = 0, CHANGED_ROWS_AND_FILE_LIST = 1 };
+vector<string> GetCopyFunctionReturnNames(CopyFunctionReturnType return_type);
+vector<LogicalType> GetCopyFunctionReturnLogicalTypes(CopyFunctionReturnType return_type);
+
 class CopyFunction : public Function { // NOLINT: work-around bug in clang-tidy
 public:
 	explicit CopyFunction(const string &name)
