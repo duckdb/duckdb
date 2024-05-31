@@ -16,11 +16,10 @@
 #include "templated_column_reader.hpp"
 #include "thrift_tools.hpp"
 #ifndef DUCKDB_AMALGAMATION
-#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/helper.hpp"
 #include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -117,8 +116,7 @@ LoadMetadata(Allocator &allocator, FileHandle &file_handle,
 	return make_shared_ptr<ParquetFileMetadataCache>(std::move(metadata), current_time);
 }
 
-LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool binary_as_string,
-                                             optional_ptr<ClientContext> context_ptr) {
+LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool binary_as_string) {
 	// inner node
 	if (s_ele.type == Type::FIXED_LEN_BYTE_ARRAY && !s_ele.__isset.type_length) {
 		throw IOException("FIXED_LEN_BYTE_ARRAY requires length to be set");
@@ -244,10 +242,6 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 		case ConvertedType::INTERVAL:
 			return LogicalType::INTERVAL;
 		case ConvertedType::JSON:
-			if (context_ptr) {
-				Catalog::GetEntry<TypeCatalogEntry>(*context_ptr, INVALID_CATALOG, INVALID_SCHEMA, "JSON",
-				                                    OnEntryNotFound::THROW_EXCEPTION);
-			}
 			return LogicalType::JSON();
 		case ConvertedType::NULL_TYPE:
 			return LogicalTypeId::SQLNULL;
@@ -287,7 +281,7 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 }
 
 LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele) {
-	return DeriveLogicalType(s_ele, parquet_options.binary_as_string, &context);
+	return DeriveLogicalType(s_ele, parquet_options.binary_as_string);
 }
 
 unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(idx_t depth, idx_t max_define, idx_t max_repeat,
@@ -491,7 +485,7 @@ ParquetColumnDefinition ParquetColumnDefinition::FromSchemaValue(ClientContext &
 }
 
 ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, ParquetOptions parquet_options_p)
-    : context(context_p), fs(FileSystem::GetFileSystem(context_p)), allocator(BufferAllocator::Get(context_p)),
+    : fs(FileSystem::GetFileSystem(context_p)), allocator(BufferAllocator::Get(context_p)),
       parquet_options(std::move(parquet_options_p)) {
 	file_name = std::move(file_name_p);
 	file_handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
@@ -518,7 +512,7 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, Parqu
 
 ParquetReader::ParquetReader(ClientContext &context_p, ParquetOptions parquet_options_p,
                              shared_ptr<ParquetFileMetadataCache> metadata_p)
-    : context(context_p), fs(FileSystem::GetFileSystem(context_p)), allocator(BufferAllocator::Get(context_p)),
+    : fs(FileSystem::GetFileSystem(context_p)), allocator(BufferAllocator::Get(context_p)),
       metadata(std::move(metadata_p)), parquet_options(std::move(parquet_options_p)) {
 	InitializeSchema();
 }
