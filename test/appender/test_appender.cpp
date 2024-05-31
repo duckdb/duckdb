@@ -227,13 +227,15 @@ TEST_CASE("Test default value appender", "[appender]") {
 			Appender appender(con, "integers");
 			appender.BeginRow();
 			appender.Append<int32_t>(1);
-			REQUIRE_NOTHROW(appender.AppendDefault());
-			REQUIRE_NOTHROW(appender.EndRow());
+
+			// NOT_IMPLEMENTED: Non-foldable default values are not supported currently
+			REQUIRE_THROWS(appender.AppendDefault());
+			REQUIRE_THROWS(appender.EndRow());
 			REQUIRE_NOTHROW(appender.Close());
 		}
-		result = con.Query("SELECT * FROM integers");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(1)}));
-		REQUIRE(CHECK_COLUMN(result, 1, {Value::INTEGER(1)}));
+		// result = con.Query("SELECT * FROM integers");
+		// REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(1)}));
+		// REQUIRE(CHECK_COLUMN(result, 1, {Value::INTEGER(1)}));
 	}
 
 	SECTION("DEFAULT random()") {
@@ -243,13 +245,14 @@ TEST_CASE("Test default value appender", "[appender]") {
 			Appender appender(con, "integers");
 			appender.BeginRow();
 			appender.Append<int32_t>(1);
-			REQUIRE_NOTHROW(appender.AppendDefault());
-			REQUIRE_NOTHROW(appender.EndRow());
+			// NOT_IMPLEMENTED: Non-foldable default values are not supported currently
+			REQUIRE_THROWS(appender.AppendDefault());
+			REQUIRE_THROWS(appender.EndRow());
 			REQUIRE_NOTHROW(appender.Close());
 		}
-		result = con.Query("SELECT * FROM integers");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(1)}));
-		REQUIRE(CHECK_COLUMN(result, 1, {Value::DOUBLE(0.4729174713138491)}));
+		// result = con.Query("SELECT * FROM integers");
+		// REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(1)}));
+		// REQUIRE(CHECK_COLUMN(result, 1, {Value::DOUBLE(0.4729174713138491)}));
 	}
 
 	SECTION("DEFAULT now()") {
@@ -270,161 +273,6 @@ TEST_CASE("Test default value appender", "[appender]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(1)}));
 		REQUIRE(CHECK_COLUMN(result, 1, {current_time}));
 		con.Query("COMMIT");
-	}
-}
-
-static void CheckIntegers(Vector &column) {
-	REQUIRE(column.GetValue(0) == 0);
-	REQUIRE(column.GetValue(1) == 1);
-	REQUIRE(!column.GetValue(14).IsNull());
-	REQUIRE(column.GetValue(14) == 14);
-}
-
-static void CheckDoubles(Vector &column) {
-	REQUIRE(column.GetValue(0) == 0.0);
-	REQUIRE(column.GetValue(1) == 1.0);
-	REQUIRE(!column.GetValue(14).IsNull());
-	REQUIRE(column.GetValue(14) == 14.0);
-}
-
-static duckdb::unique_ptr<DataChunk> AppendDefaultsToVector(duckdb::unique_ptr<QueryResult> result, Connection &con) {
-	auto chunk = result->Fetch();
-	REQUIRE(chunk != nullptr);
-	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
-	{
-		Appender appender(con, "integers");
-
-		auto &column = chunk->data[0];
-		SelectionVector sel(3);
-
-		sel.set_index(0, 5);
-		sel.set_index(1, 8);
-		sel.set_index(2, 3);
-
-		appender.AppendDefaultsToVector(column, chunk->size(), 0, sel, 3);
-	}
-	return chunk;
-}
-
-TEST_CASE("Test append default into Vector errors", "[appender]") {
-	DuckDB db(nullptr);
-	Connection con(db);
-
-	SECTION("count too big") {
-		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
-		{
-			Appender appender(con, "integers");
-			duckdb::Vector vector(duckdb::LogicalTypeId::INTEGER, STANDARD_VECTOR_SIZE * 2);
-			SelectionVector sel;
-			REQUIRE_THROWS(
-			    appender.AppendDefaultsToVector(vector, STANDARD_VECTOR_SIZE * 2, 0, sel, STANDARD_VECTOR_SIZE * 2));
-		}
-	}
-#ifdef DEBUG
-	SECTION("sel_vec out of range") {
-		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
-		{
-			Appender appender(con, "integers");
-			duckdb::Vector vector(duckdb::LogicalTypeId::INTEGER, 2);
-			SelectionVector sel(2);
-			sel.set_index(0, 15);
-			sel.set_index(0, STANDARD_VECTOR_SIZE + 1);
-			REQUIRE_THROWS(appender.AppendDefaultsToVector(vector, 2, 0, sel, 2));
-		}
-	}
-#endif
-}
-
-TEST_CASE("Test append default into Vector", "[appender]") {
-	DuckDB db(nullptr);
-	Connection con(db);
-
-	duckdb::unique_ptr<DataChunk> chunk;
-	optional_ptr<Vector> column;
-
-	SECTION("NO DEFAULT") {
-		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
-		auto result = con.Query("SELECT a::INTEGER FROM RANGE(15) t(a)");
-
-		chunk = AppendDefaultsToVector(std::move(result), con);
-		column = &chunk->data[0];
-		REQUIRE(column->GetValue(5).IsNull());
-		REQUIRE(column->GetValue(8).IsNull());
-		REQUIRE(column->GetValue(3).IsNull());
-		CheckIntegers(*column);
-	}
-	SECTION("DEFAULT 5") {
-		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER DEFAULT 5)"));
-		auto result = con.Query("SELECT a::INTEGER FROM RANGE(15) t(a)");
-
-		chunk = AppendDefaultsToVector(std::move(result), con);
-		column = &chunk->data[0];
-		REQUIRE(!column->GetValue(5).IsNull());
-		REQUIRE(!column->GetValue(8).IsNull());
-		REQUIRE(!column->GetValue(3).IsNull());
-
-		REQUIRE(column->GetValue(5) == 5);
-		REQUIRE(column->GetValue(8) == 5);
-		REQUIRE(column->GetValue(3) == 5);
-		CheckIntegers(*column);
-	}
-	SECTION("DEFAULT nextval('seq')") {
-		REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq"));
-
-		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER DEFAULT nextval('seq'))"));
-		auto result = con.Query("SELECT a::INTEGER FROM RANGE(15) t(a)");
-
-		chunk = AppendDefaultsToVector(std::move(result), con);
-		column = &chunk->data[0];
-		REQUIRE(!column->GetValue(5).IsNull());
-		REQUIRE(!column->GetValue(8).IsNull());
-		REQUIRE(!column->GetValue(3).IsNull());
-
-		REQUIRE(column->GetValue(5) == 1);
-		REQUIRE(column->GetValue(8) == 2);
-		REQUIRE(column->GetValue(3) == 3);
-		CheckIntegers(*column);
-	}
-	SECTION("DEFAULT random()") {
-		con.Query("select setseed(0.42)");
-
-		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i DOUBLE DEFAULT random())"));
-		auto result = con.Query("SELECT a::DOUBLE FROM RANGE(15) t(a)");
-
-		chunk = AppendDefaultsToVector(std::move(result), con);
-		column = &chunk->data[0];
-		REQUIRE(!column->GetValue(5).IsNull());
-		REQUIRE(!column->GetValue(8).IsNull());
-		REQUIRE(!column->GetValue(3).IsNull());
-
-		REQUIRE(column->GetValue(5) == Value::DOUBLE(0.4729174713138491));
-		REQUIRE(column->GetValue(8) == Value::DOUBLE(0.4941385390702635));
-		REQUIRE(column->GetValue(3) == Value::DOUBLE(0.6213898570276797));
-		CheckDoubles(*column);
-	}
-	SECTION("DEFAULT now()") {
-		con.Query("BEGIN TRANSACTION");
-
-		auto current_time_result = con.Query("select now()");
-		auto &materialized_result = current_time_result->Cast<MaterializedQueryResult>();
-		auto current_time = materialized_result.GetValue(0, 0);
-
-		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i TIMESTAMPTZ DEFAULT now())"));
-		auto result = con.Query("SELECT epoch_ms(a)::TIMESTAMPTZ FROM RANGE(15) t(a)");
-
-		chunk = AppendDefaultsToVector(std::move(result), con);
-		column = &chunk->data[0];
-		REQUIRE(!column->GetValue(5).IsNull());
-		REQUIRE(!column->GetValue(8).IsNull());
-		REQUIRE(!column->GetValue(3).IsNull());
-
-		REQUIRE(column->GetValue(5) == current_time);
-		REQUIRE(column->GetValue(8) == current_time);
-		REQUIRE(column->GetValue(3) == current_time);
-	}
-	{
-		Appender appender(con, "integers");
-		REQUIRE_NOTHROW(appender.AppendDataChunk(*chunk));
 	}
 }
 

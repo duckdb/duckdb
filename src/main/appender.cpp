@@ -14,8 +14,6 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/common/types/selection_vector.hpp"
 
 namespace duckdb {
 
@@ -74,7 +72,7 @@ Appender::Appender(Connection &con, const string &schema_name, const string &tab
 
 			if (!expr) {
 				// Insert NULL
-				bound_defaults.push_back(make_uniq<BoundConstantExpression>(Value(type)));
+				default_values[i] = Value(type);
 				continue;
 			}
 			auto default_copy = expr->Copy();
@@ -86,15 +84,13 @@ Appender::Appender(Connection &con, const string &schema_name, const string &tab
 			if (bound_default->IsFoldable() &&
 			    ExpressionExecutor::TryEvaluateScalar(*context, *bound_default, result_value)) {
 				// Insert the evaluated Value
-				bound_defaults.push_back(make_uniq<BoundConstantExpression>(result_value));
+				default_values[i] = result_value;
 			} else {
-				// Insert a bound Expression
-				bound_defaults.push_back(std::move(bound_default));
+				// These are not supported currently, we don't add them to the 'default_values' map
 			}
 		}
 	});
 
-	expression_executor = make_uniq<ExpressionExecutor>(*context, bound_defaults);
 	InitializeChunk();
 	collection = make_uniq<ColumnDataCollection>(allocator, types);
 }
@@ -411,63 +407,16 @@ void Appender::FlushInternal(ColumnDataCollection &collection) {
 	context->Append(*description, collection);
 }
 
-void Appender::AppendDefaultsToVector(Vector &result, idx_t vector_size, idx_t column, SelectionVector &sel,
-                                      idx_t count) {
-	sel.Verify(count, vector_size);
-	if (count > STANDARD_VECTOR_SIZE) {
-		throw InvalidInputException(
-		    "Please provide a SelectionVector that is at most STANDARD_VECTOR_SIZE (%d) in size", STANDARD_VECTOR_SIZE);
-	}
-	if (vector_size > STANDARD_VECTOR_SIZE) {
-		throw InvalidInputException("Please provide a Vector that is at most STANDARD_VECTOR_SIZE (%d) in size",
-		                            STANDARD_VECTOR_SIZE);
-	}
-	if (column >= types.size()) {
-		throw InvalidInputException(
-		    "Could not append DEFAULT value of column %d, out of range index, table only has %d columns", column,
-		    types.size());
-	}
-	auto &type = types[column];
-	if (result.GetType() != type) {
-		throw InvalidInputException("Type mismatch, column has type: %s, while the provided Vector has type %s",
-		                            type.ToString(), result.GetType().ToString());
-	}
-	auto &executor = *expression_executor;
-
-	// Create an empty chunk to tell the ExpressionExecutor how many tuples to execute for
-	DataChunk empty_chunk;
-	empty_chunk.SetCardinality(count);
-	executor.SetChunk(empty_chunk);
-
-	Vector intermediate(type, count);
-	context->RunFunctionInTransaction([&]() { executor.ExecuteExpression(column, intermediate); });
-	for (idx_t i = 0; i < count; i++) {
-		auto temp_idx = i;
-		auto result_idx = sel.get_index(i);
-		auto value = intermediate.GetValue(temp_idx);
-		result.SetValue(result_idx, value);
-	}
-}
-
 void Appender::AppendDefault() {
-	auto &default_expr = bound_defaults[column];
-	if (default_expr->type == ExpressionType::VALUE_CONSTANT) {
-		// Fast path: NULL or constant-folded
-		auto &bound_constant = default_expr->Cast<BoundConstantExpression>();
-		Append(bound_constant.value);
-		return;
+	auto it = default_values.find(column);
+	auto &column_def = description->columns[column];
+	if (it == default_values.end()) {
+		throw NotImplementedException(
+		    "AppendDefault is currently not supported for column \"%s\" because default expression is not foldable.",
+		    column_def.Name());
 	}
-
-	auto &type = types[column];
-	Vector result(type, 1);
-	auto &executor = *expression_executor;
-	// The executor is initialized with expressions for every column, even though only some are used
-	// this makes it so that we can just use the 'column' index
-
-	// FIXME: we could optimize this further by delaying this until Flush is called, then doing it for the entire chunk
-	// once
-	context->RunFunctionInTransaction([&]() { executor.ExecuteExpression(column, result); });
-	Append(result.GetValue(0));
+	auto &default_value = it->second;
+	Append(default_value);
 }
 
 void InternalAppender::FlushInternal(ColumnDataCollection &collection) {

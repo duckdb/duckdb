@@ -117,10 +117,7 @@ class Appender : public BaseAppender {
 	//! The table description (including column names)
 	unique_ptr<TableDescription> description;
 	//! The default expressions
-	vector<unique_ptr<Expression>> bound_defaults;
-	//! The expression executor is used for expressions that cant be constant folded,
-	//! such as: random(), now(), nextval(...)
-	unique_ptr<ExpressionExecutor> expression_executor;
+	unordered_map<idx_t, Value> default_values;
 
 public:
 	DUCKDB_API Appender(Connection &con, const string &schema_name, const string &table_name);
@@ -129,7 +126,6 @@ public:
 
 public:
 	void AppendDefault();
-	void AppendDefaultsToVector(Vector &result, idx_t vector_size, idx_t column, SelectionVector &sel, idx_t count);
 
 protected:
 	void FlushInternal(ColumnDataCollection &collection) override;
