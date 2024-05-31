@@ -26,7 +26,7 @@ void PartialBlock::FlushInternal(const idx_t free_space_left) {
 			memset(buffer_handle.Ptr() + uninitialized.start, 0, uninitialized.end - uninitialized.start);
 		}
 		// memset any free space at the end of the block to 0 prior to writing to disk
-		memset(buffer_handle.Ptr() + Storage::BLOCK_SIZE - free_space_left, 0, free_space_left);
+		memset(buffer_handle.Ptr() + block_manager.GetBlockSize() - free_space_left, 0, free_space_left);
 	}
 }
 
@@ -70,13 +70,13 @@ bool PartialBlockManager::HasBlockAllocation(uint32_t segment_size) {
 }
 
 void PartialBlockManager::AllocateBlock(PartialBlockState &state, uint32_t segment_size) {
-	D_ASSERT(segment_size <= Storage::BLOCK_SIZE);
+	D_ASSERT(segment_size <= block_manager.GetBlockSize());
 	if (partial_block_type == PartialBlockType::FULL_CHECKPOINT) {
 		state.block_id = block_manager.GetFreeBlockId();
 	} else {
 		state.block_id = INVALID_BLOCK;
 	}
-	state.block_size = Storage::BLOCK_SIZE;
+	state.block_size = NumericCast<uint32_t>(block_manager.GetBlockSize());
 	state.offset = 0;
 	state.block_use_count = 1;
 }
@@ -108,7 +108,7 @@ void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation allocation
 		state.offset = new_size;
 		auto new_space_left = state.block_size - new_size;
 		// check if the block is STILL partially filled after adding the segment_size
-		if (new_space_left >= Storage::BLOCK_SIZE - max_partial_block_size) {
+		if (new_space_left >= block_manager.GetBlockSize() - max_partial_block_size) {
 			// the block is still partially filled: add it to the partially_filled_blocks list
 			partially_filled_blocks.insert(make_pair(new_space_left, std::move(allocation.partial_block)));
 		}
@@ -139,7 +139,7 @@ void PartialBlockManager::Merge(PartialBlockManager &other) {
 		if (!e.second) {
 			throw InternalException("Empty partially filled block found");
 		}
-		auto used_space = NumericCast<uint32_t>(Storage::BLOCK_SIZE - e.first);
+		auto used_space = NumericCast<uint32_t>(block_manager.GetBlockSize() - e.first);
 		if (HasBlockAllocation(used_space)) {
 			// we can merge this block into an existing block - merge them
 			// merge blocks

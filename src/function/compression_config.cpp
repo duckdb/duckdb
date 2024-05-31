@@ -1,12 +1,12 @@
-#include "duckdb/main/config.hpp"
-#include "duckdb/function/compression_function.hpp"
-#include "duckdb/function/compression/compression.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/function/compression/compression.hpp"
+#include "duckdb/function/compression_function.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
 typedef CompressionFunction (*get_compression_function_t)(PhysicalType type);
-typedef bool (*compression_supports_type_t)(PhysicalType type);
+typedef bool (*compression_supports_type_t)(const CompressionInfo &info);
 
 struct DefaultCompressionMethod {
 	CompressionType type;
@@ -29,12 +29,12 @@ static const DefaultCompressionMethod internal_compression_methods[] = {
     {CompressionType::COMPRESSION_AUTO, nullptr, nullptr}};
 
 static optional_ptr<CompressionFunction> FindCompressionFunction(CompressionFunctionSet &set, CompressionType type,
-                                                                 PhysicalType data_type) {
+                                                                 const CompressionInfo &info) {
 	auto &functions = set.functions;
 	auto comp_entry = functions.find(type);
 	if (comp_entry != functions.end()) {
 		auto &type_functions = comp_entry->second;
-		auto type_entry = type_functions.find(data_type);
+		auto type_entry = type_functions.find(info.GetPhysicalType());
 		if (type_entry != type_functions.end()) {
 			return &type_entry->second;
 		}
@@ -43,56 +43,56 @@ static optional_ptr<CompressionFunction> FindCompressionFunction(CompressionFunc
 }
 
 static optional_ptr<CompressionFunction> LoadCompressionFunction(CompressionFunctionSet &set, CompressionType type,
-                                                                 PhysicalType data_type) {
+                                                                 const CompressionInfo &info) {
 	for (idx_t index = 0; internal_compression_methods[index].get_function; index++) {
 		const auto &method = internal_compression_methods[index];
 		if (method.type == type) {
 			// found the correct compression type
-			if (!method.supports_type(data_type)) {
+			if (!method.supports_type(info)) {
 				// but it does not support this data type: bail out
 				return nullptr;
 			}
 			// the type is supported: create the function and insert it into the set
-			auto function = method.get_function(data_type);
-			set.functions[type].insert(make_pair(data_type, function));
-			return FindCompressionFunction(set, type, data_type);
+			auto function = method.get_function(info.GetPhysicalType());
+			set.functions[type].insert(make_pair(info.GetPhysicalType(), function));
+			return FindCompressionFunction(set, type, info);
 		}
 	}
 	throw InternalException("Unsupported compression function type");
 }
 
 static void TryLoadCompression(DBConfig &config, vector<reference<CompressionFunction>> &result, CompressionType type,
-                               PhysicalType data_type) {
-	auto function = config.GetCompressionFunction(type, data_type);
+                               const CompressionInfo &info) {
+	auto function = config.GetCompressionFunction(type, info);
 	if (!function) {
 		return;
 	}
 	result.push_back(*function);
 }
 
-vector<reference<CompressionFunction>> DBConfig::GetCompressionFunctions(PhysicalType data_type) {
+vector<reference<CompressionFunction>> DBConfig::GetCompressionFunctions(const CompressionInfo &info) {
 	vector<reference<CompressionFunction>> result;
-	TryLoadCompression(*this, result, CompressionType::COMPRESSION_UNCOMPRESSED, data_type);
-	TryLoadCompression(*this, result, CompressionType::COMPRESSION_RLE, data_type);
-	TryLoadCompression(*this, result, CompressionType::COMPRESSION_BITPACKING, data_type);
-	TryLoadCompression(*this, result, CompressionType::COMPRESSION_DICTIONARY, data_type);
-	TryLoadCompression(*this, result, CompressionType::COMPRESSION_CHIMP, data_type);
-	TryLoadCompression(*this, result, CompressionType::COMPRESSION_PATAS, data_type);
-	TryLoadCompression(*this, result, CompressionType::COMPRESSION_ALP, data_type);
-	TryLoadCompression(*this, result, CompressionType::COMPRESSION_ALPRD, data_type);
-	TryLoadCompression(*this, result, CompressionType::COMPRESSION_FSST, data_type);
+	TryLoadCompression(*this, result, CompressionType::COMPRESSION_UNCOMPRESSED, info);
+	TryLoadCompression(*this, result, CompressionType::COMPRESSION_RLE, info);
+	TryLoadCompression(*this, result, CompressionType::COMPRESSION_BITPACKING, info);
+	TryLoadCompression(*this, result, CompressionType::COMPRESSION_DICTIONARY, info);
+	TryLoadCompression(*this, result, CompressionType::COMPRESSION_CHIMP, info);
+	TryLoadCompression(*this, result, CompressionType::COMPRESSION_PATAS, info);
+	TryLoadCompression(*this, result, CompressionType::COMPRESSION_ALP, info);
+	TryLoadCompression(*this, result, CompressionType::COMPRESSION_ALPRD, info);
+	TryLoadCompression(*this, result, CompressionType::COMPRESSION_FSST, info);
 	return result;
 }
 
-optional_ptr<CompressionFunction> DBConfig::GetCompressionFunction(CompressionType type, PhysicalType data_type) {
+optional_ptr<CompressionFunction> DBConfig::GetCompressionFunction(CompressionType type, const CompressionInfo &info) {
 	lock_guard<mutex> l(compression_functions->lock);
 	// check if the function is already loaded
-	auto function = FindCompressionFunction(*compression_functions, type, data_type);
+	auto function = FindCompressionFunction(*compression_functions, type, info);
 	if (function) {
 		return function;
 	}
 	// else load the function
-	return LoadCompressionFunction(*compression_functions, type, data_type);
+	return LoadCompressionFunction(*compression_functions, type, info);
 }
 
 } // namespace duckdb

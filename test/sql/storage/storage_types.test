@@ -2,7 +2,6 @@
 # description: Test storage of columns with various types
 # group: [storage]
 
-# load the DB from disk
 load __TEST_DIR__/storage_types.db
 
 foreach type <numeric>
@@ -16,13 +15,12 @@ SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_${type}
 0	99	100	100
 
 query IIII
-SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_${type} WHERE i=1
+SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_${type} WHERE i = 1
 ----
 1	1	1	1
 
 endloop
 
-# interval
 statement ok
 CREATE TABLE a_interval AS SELECT interval (range) year i FROM range(1,1001)
 
@@ -32,13 +30,12 @@ SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_interval
 1 year	1000 years	1000	1000
 
 query IIII
-SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_interval WHERE i=interval 1 year
+SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_interval WHERE i = interval 1 year
 ----
 1 year	1 year	1	1
 
-# bool
 statement ok
-CREATE TABLE a_bool AS SELECT range%2=0 i FROM range(1000)
+CREATE TABLE a_bool AS SELECT range % 2 = 0 AS i FROM range(1000)
 
 query IIII
 SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_bool
@@ -46,13 +43,13 @@ SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_bool
 false	true	1000	1000
 
 query IIII
-SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_bool WHERE not i
+SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_bool WHERE NOT i
 ----
 false	false	500	500
 
 restart
 
-# restart and check all types again
+# Restart and check all types.
 
 foreach type <numeric>
 
@@ -62,7 +59,7 @@ SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_${type}
 0	99	100	100
 
 query IIII
-SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_${type} WHERE i=1
+SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_${type} WHERE i = 1
 ----
 1	1	1	1
 
@@ -74,7 +71,7 @@ SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_interval
 1 year	1000 years	1000	1000
 
 query IIII
-SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_interval WHERE i=interval 1 year
+SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_interval WHERE i = interval 1 year
 ----
 1 year	1 year	1	1
 
@@ -84,6 +81,6 @@ SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_bool
 false	true	1000	1000
 
 query IIII
-SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_bool WHERE not i
+SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_bool WHERE NOT i
 ----
 false	false	500	500
