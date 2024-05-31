@@ -107,10 +107,11 @@ TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(MemoryTag ta
 	return std::move(r.reservation);
 }
 
-shared_ptr<BlockHandle> StandardBufferManager::RegisterTransientMemory(const idx_t size, const idx_t block_size) {
+shared_ptr<BlockHandle> StandardBufferManager::RegisterTransientMemory(const idx_t size) {
+	const idx_t block_size = Storage::BLOCK_SIZE;
 	D_ASSERT(size <= block_size);
 	if (size < block_size) {
-		return RegisterSmallMemory(size, block_size);
+		return RegisterSmallMemory(size);
 	}
 
 	shared_ptr<BlockHandle> block;
@@ -118,14 +119,14 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterTransientMemory(const idx
 	return block;
 }
 
-shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(const idx_t size, const idx_t block_size) {
-	D_ASSERT(size < block_size);
+shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(const idx_t size) {
+	D_ASSERT(size < Storage::BLOCK_SIZE);
 	auto reservation = EvictBlocksOrThrow(MemoryTag::BASE_TABLE, size, nullptr, "could not allocate block of size %s%s",
 	                                      StringUtil::BytesToHumanReadableString(size));
 
 	auto buffer = ConstructManagedBuffer(size, nullptr, FileBufferType::TINY_BUFFER);
 
-	// create a new block pointer for this block
+	// Create a new block pointer for this block.
 	auto result = make_shared_ptr<BlockHandle>(*temp_block_manager, ++temporary_id, MemoryTag::BASE_TABLE,
 	                                           std::move(buffer), false, size, std::move(reservation));
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
@@ -136,7 +137,6 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(const idx_t s
 }
 
 shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx_t block_size, bool can_destroy) {
-	// FIXME: DEFAULT_BLOCK_SIZE or not?
 	D_ASSERT(block_size >= Storage::BLOCK_SIZE);
 	auto alloc_size = GetAllocSize(block_size);
 
@@ -164,7 +164,6 @@ BufferHandle StandardBufferManager::Allocate(MemoryTag tag, idx_t block_size, bo
 }
 
 void StandardBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) {
-	// FIXME: DEFAULT_BLOCK_SIZE or not?
 	D_ASSERT(block_size >= Storage::BLOCK_SIZE);
 	unique_lock<mutex> lock(handle->lock);
 	D_ASSERT(handle->state == BlockState::BLOCK_LOADED);
@@ -335,18 +334,18 @@ void StandardBufferManager::RequireTemporaryDirectory() {
 }
 
 void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer) {
+
 	RequireTemporaryDirectory();
-	auto block_size = temp_block_manager->GetBlockSize();
 
 	// Append to a few grouped files.
-	if (buffer.size == block_size) {
-		evicted_data_per_tag[uint8_t(tag)] += block_size;
+	if (buffer.size == Storage::BLOCK_SIZE) {
+		evicted_data_per_tag[uint8_t(tag)] += Storage::BLOCK_SIZE;
 		temporary_directory.handle->GetTempFile().WriteTemporaryBuffer(block_id, buffer);
 		return;
 	}
 
 	// Get the path to write to.
-	D_ASSERT(buffer.size > block_size);
+	D_ASSERT(buffer.size > Storage::BLOCK_SIZE);
 	auto path = GetTemporaryPath(block_id);
 	evicted_data_per_tag[uint8_t(tag)] += buffer.size;
 
@@ -362,7 +361,7 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(MemoryTag tag,
 	D_ASSERT(!temporary_directory.path.empty());
 	D_ASSERT(temporary_directory.handle.get());
 	if (temporary_directory.handle->GetTempFile().HasTemporaryBuffer(id)) {
-		evicted_data_per_tag[uint8_t(tag)] -= temp_block_manager->GetBlockSize();
+		evicted_data_per_tag[uint8_t(tag)] -= Storage::BLOCK_SIZE;
 		return temporary_directory.handle->GetTempFile().ReadTemporaryBuffer(id, std::move(reusable_buffer));
 	}
 

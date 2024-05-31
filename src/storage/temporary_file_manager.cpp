@@ -118,7 +118,6 @@ TemporaryFileIndex TemporaryFileHandle::TryGetBlockIndex() {
 }
 
 void TemporaryFileHandle::WriteTemporaryFile(FileBuffer &buffer, TemporaryFileIndex index) {
-	// FIXME: pass to down here?
 	D_ASSERT(buffer.size == Storage::BLOCK_SIZE);
 	buffer.Write(*handle, GetPositionInFile(index.block_index));
 }
@@ -181,7 +180,6 @@ void TemporaryFileHandle::RemoveTempBlockIndex(TemporaryFileLock &, idx_t index)
 }
 
 idx_t TemporaryFileHandle::GetPositionInFile(idx_t index) {
-	// FIXME: pass to down here?
 	return index * Storage::BLOCK_ALLOC_SIZE;
 }
 

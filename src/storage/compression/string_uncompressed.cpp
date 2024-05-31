@@ -32,8 +32,7 @@ struct StringAnalyzeState : public AnalyzeState {
 };
 
 unique_ptr<AnalyzeState> UncompressedStringStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	const auto block_size = col_data.GetBlockManager().GetBlockSize();
-	CompressionInfo info(block_size, type);
+	CompressionInfo info(Storage::BLOCK_SIZE, type);
 	return make_uniq<StringAnalyzeState>(info);
 }
 
@@ -187,7 +186,7 @@ idx_t UncompressedStringStorage::FinalizeAppend(ColumnSegment &segment, SegmentS
 	auto offset_size = DICTIONARY_HEADER_SIZE + segment.count * sizeof(int32_t);
 	auto total_size = offset_size + dict.size;
 
-	CompressionInfo info(segment.GetBlockSize(), segment.type.InternalType());
+	CompressionInfo info(Storage::BLOCK_SIZE, segment.type.InternalType());
 	if (total_size >= info.GetCompactionFlushLimit()) {
 		// the block is full enough, don't bother moving around the dictionary
 		return segment.SegmentSize();
@@ -299,7 +298,7 @@ void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string
 	if (!state.head || state.head->offset + total_length >= state.head->size) {
 		// string does not fit, allocate space for it
 		// create a new string block
-		idx_t alloc_size = MaxValue<idx_t>(total_length, segment.GetBlockSize());
+		idx_t alloc_size = MaxValue<idx_t>(total_length, Storage::BLOCK_SIZE);
 		auto new_block = make_uniq<StringBlock>();
 		new_block->offset = 0;
 		new_block->size = alloc_size;
@@ -327,16 +326,17 @@ void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string
 
 string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, Vector &result, block_id_t block,
                                                        int32_t offset) {
-	const idx_t block_size = segment.GetBlockSize();
 	D_ASSERT(block != INVALID_BLOCK);
-	D_ASSERT(offset < NumericCast<int32_t>(block_size));
+	D_ASSERT(offset < NumericCast<int32_t>(Storage::BLOCK_SIZE));
 
-	auto &buffer_manager = segment.GetBlockManager().buffer_manager;
+	auto &block_manager = segment.GetBlockManager();
+	auto &buffer_manager = block_manager.buffer_manager;
 	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
+
 	if (block < MAXIMUM_BLOCK) {
 		// read the overflow string from disk
 		// pin the initial handle and read the length
-		auto block_handle = state.GetHandle(segment.GetBlockManager(), block);
+		auto block_handle = state.GetHandle(block_manager, block);
 		auto handle = buffer_manager.Pin(block_handle);
 
 		// read header
@@ -345,7 +345,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 		offset += sizeof(uint32_t);
 
 		// allocate a buffer to store the string
-		auto alloc_size = MaxValue<idx_t>(block_size, length);
+		auto alloc_size = MaxValue<idx_t>(Storage::BLOCK_SIZE, length);
 		// allocate a buffer to store the compressed string
 		// TODO: profile this to check if we need to reuse buffer
 		auto target_handle = buffer_manager.Allocate(MemoryTag::OVERFLOW_STRINGS, alloc_size);
@@ -354,7 +354,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 		// now append the string to the single buffer
 		while (remaining > 0) {
 			idx_t to_write =
-			    MinValue<idx_t>(remaining, block_size - sizeof(block_id_t) - UnsafeNumericCast<idx_t>(offset));
+			    MinValue<idx_t>(remaining, Storage::BLOCK_SIZE - sizeof(block_id_t) - UnsafeNumericCast<idx_t>(offset));
 			memcpy(target_ptr, handle.Ptr() + offset, to_write);
 			remaining -= to_write;
 			offset += to_write;
@@ -362,7 +362,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 			if (remaining > 0) {
 				// read the next block
 				block_id_t next_block = Load<block_id_t>(handle.Ptr() + offset);
-				block_handle = state.GetHandle(segment.GetBlockManager(), next_block);
+				block_handle = state.GetHandle(block_manager, next_block);
 				handle = buffer_manager.Pin(block_handle);
 				offset = 0;
 			}
@@ -423,10 +423,9 @@ string_location_t UncompressedStringStorage::FetchStringLocation(StringDictionar
 string_t UncompressedStringStorage::FetchStringFromDict(ColumnSegment &segment, StringDictionaryContainer dict,
                                                         Vector &result, data_ptr_t base_ptr, int32_t dict_offset,
                                                         uint32_t string_length) {
-	// fetch base data
-	const auto block_size = segment.GetBlockSize();
-	D_ASSERT(dict_offset <= NumericCast<int32_t>(block_size));
-	string_location_t location = FetchStringLocation(dict, base_ptr, dict_offset, block_size);
+	// Fetch the base data.
+	D_ASSERT(dict_offset <= NumericCast<int32_t>(Storage::BLOCK_SIZE));
+	string_location_t location = FetchStringLocation(dict, base_ptr, dict_offset, Storage::BLOCK_SIZE);
 	return FetchString(segment, dict, result, base_ptr, location, string_length);
 }
 

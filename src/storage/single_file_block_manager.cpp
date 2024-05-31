@@ -421,7 +421,7 @@ idx_t SingleFileBlockManager::FreeBlocks() {
 }
 
 unique_ptr<Block> SingleFileBlockManager::ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) {
-	D_ASSERT(source_buffer.AllocSize() == GetBlockAllocSize());
+	D_ASSERT(source_buffer.AllocSize() == Storage::BLOCK_ALLOC_SIZE);
 	return make_uniq<Block>(source_buffer, block_id);
 }
 
@@ -430,7 +430,7 @@ unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileB
 	if (source_buffer) {
 		result = ConvertBlock(block_id, *source_buffer);
 	} else {
-		result = make_uniq<Block>(Allocator::Get(db), block_id, GetBlockSize());
+		result = make_uniq<Block>(Allocator::Get(db), block_id);
 	}
 	result->Initialize(options.debug_initialize);
 	return result;
@@ -439,12 +439,12 @@ unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileB
 void SingleFileBlockManager::Read(Block &block) {
 	D_ASSERT(block.id >= 0);
 	D_ASSERT(std::find(free_list.begin(), free_list.end(), block.id) == free_list.end());
-	ReadAndChecksum(block, BLOCK_START + NumericCast<idx_t>(block.id) * GetBlockAllocSize());
+	ReadAndChecksum(block, BLOCK_START + NumericCast<idx_t>(block.id) * Storage::BLOCK_ALLOC_SIZE);
 }
 
 void SingleFileBlockManager::Write(FileBuffer &buffer, block_id_t block_id) {
 	D_ASSERT(block_id >= 0);
-	ChecksumAndWrite(buffer, BLOCK_START + NumericCast<idx_t>(block_id) * GetBlockAllocSize());
+	ChecksumAndWrite(buffer, BLOCK_START + NumericCast<idx_t>(block_id) * Storage::BLOCK_ALLOC_SIZE);
 }
 
 void SingleFileBlockManager::Truncate() {
@@ -466,7 +466,7 @@ void SingleFileBlockManager::Truncate() {
 	// truncate the file
 	free_list.erase(free_list.lower_bound(max_block), free_list.end());
 	newly_freed_list.erase(newly_freed_list.lower_bound(max_block), newly_freed_list.end());
-	handle->Truncate(NumericCast<int64_t>(BLOCK_START + NumericCast<idx_t>(max_block) * GetBlockAllocSize()));
+	handle->Truncate(NumericCast<int64_t>(BLOCK_START + NumericCast<idx_t>(max_block) * Storage::BLOCK_ALLOC_SIZE));
 }
 
 vector<MetadataHandle> SingleFileBlockManager::GetFreeListBlocks() {
@@ -597,7 +597,8 @@ void SingleFileBlockManager::TrimFreeBlocks() {
 			// We are now one too far.
 			--itr;
 			// Trim the range.
-			handle->Trim(BLOCK_START + (NumericCast<idx_t>(first) * GetBlockAllocSize()), NumericCast<idx_t>(last + 1 - first) * GetBlockAllocSize());
+			handle->Trim(BLOCK_START + (NumericCast<idx_t>(first) * Storage::BLOCK_ALLOC_SIZE),
+			             NumericCast<idx_t>(last + 1 - first) * Storage::BLOCK_ALLOC_SIZE);
 		}
 	}
 	newly_freed_list.clear();

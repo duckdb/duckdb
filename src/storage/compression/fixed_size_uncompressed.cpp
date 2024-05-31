@@ -22,8 +22,7 @@ struct FixedSizeAnalyzeState : public AnalyzeState {
 };
 
 unique_ptr<AnalyzeState> FixedSizeInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	const auto block_size = col_data.GetBlockManager().GetBlockSize();
-	CompressionInfo info(block_size, type);
+	CompressionInfo info(Storage::BLOCK_SIZE, type);
 	return make_uniq<FixedSizeAnalyzeState>(info);
 }
 
@@ -62,9 +61,8 @@ UncompressedCompressState::UncompressedCompressState(ColumnDataCheckpointer &che
 void UncompressedCompressState::CreateEmptySegment(idx_t row_start) {
 	auto &db = checkpointer.GetDatabase();
 	auto &type = checkpointer.GetType();
-	auto block_size = info.GetBlockSize();
 
-	auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start, block_size, block_size);
+	auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
 	if (type.InternalType() == PhysicalType::VARCHAR) {
 		auto &state = compressed_segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
 		state.overflow_writer = make_uniq<WriteOverflowStringsToDisk>(checkpointer.GetRowGroup().GetBlockManager());

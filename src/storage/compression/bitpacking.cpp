@@ -325,8 +325,7 @@ template <class T>
 unique_ptr<AnalyzeState> BitpackingInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	auto &config = DBConfig::GetConfig(col_data.GetDatabase());
 
-	const auto block_size = col_data.GetBlockManager().GetBlockSize();
-	CompressionInfo info(block_size, type);
+	CompressionInfo info(Storage::BLOCK_SIZE, type);
 	auto state = make_uniq<BitpackingAnalyzeState<T>>(info);
 	state->state.mode = config.options.force_bitpacking_mode;
 
@@ -485,9 +484,8 @@ public:
 	void CreateEmptySegment(idx_t row_start) {
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
-		auto block_size = info.GetBlockSize();
 
-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start, block_size, block_size);
+		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
 		compressed_segment->function = function;
 		current_segment = std::move(compressed_segment);
 
@@ -652,7 +650,7 @@ public:
 	//! value) depending on the bitpacking mode for that group
 	void LoadNextGroup() {
 		D_ASSERT(bitpacking_metadata_ptr > handle.Ptr() &&
-		         bitpacking_metadata_ptr < handle.Ptr() + current_segment.GetBlockSize());
+		         bitpacking_metadata_ptr < handle.Ptr() + Storage::BLOCK_SIZE);
 		current_group_offset = 0;
 		current_group = DecodeMeta(reinterpret_cast<bitpacking_metadata_encoded_t *>(bitpacking_metadata_ptr));
 

@@ -9,9 +9,9 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/limits.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/vector_size.hpp"
-#include "duckdb/common/limits.hpp"
 
 namespace duckdb {
 struct FileHandle;
@@ -24,8 +24,6 @@ struct FileHandle;
 #define MAXIMUM_BLOCK 4611686018427388000LL
 //! The default block allocation size.
 #define DEFAULT_BLOCK_ALLOC_SIZE 262144ULL
-//! FIXME: let's test this?
-#define DEFAULT_BLOCK_SIZE DEFAULT_BLOCK_ALLOC_SIZE - 8
 //! The minimum block allocation size. This is the minimum size we test in our nightly tests.
 #define MIN_BLOCK_ALLOC_SIZE 16384ULL
 
@@ -38,7 +36,7 @@ struct Storage {
 	constexpr static idx_t BLOCK_HEADER_SIZE = sizeof(uint64_t);
 	//! Size of a memory slot managed by the StorageManager and the BlockManager.
 	//! Defaults to DEFAULT_BLOCK_ALLOC_SIZE.
-	constexpr static idx_t BLOCK_ALLOC_SIZE = 16384;
+	constexpr static idx_t BLOCK_ALLOC_SIZE = 16384ULL;
 	//! The actual memory space that is available within a block.
 	constexpr static idx_t BLOCK_SIZE = BLOCK_ALLOC_SIZE - BLOCK_HEADER_SIZE;
 	//! The size of the headers. This should be small and written more or less atomically by the hard disk. We default
@@ -123,6 +121,9 @@ struct DatabaseHeader {
 #endif
 #if (DEFAULT_BLOCK_ALLOC_SIZE & (DEFAULT_BLOCK_ALLOC_SIZE - 1) != 0)
 #error The default block allocation size must be a power of two
+#endif
+#if (DEFAULT_BLOCK_ALLOC_SIZE > 2147483647)
+#error The default block allocation size must not exceed the maximum value of a 32-bit signed integer
 #endif
 #if (MIN_BLOCK_ALLOC_SIZE & (MIN_BLOCK_ALLOC_SIZE - 1) != 0)
 #error The minimum block allocation size must be a power of two

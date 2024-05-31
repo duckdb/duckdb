@@ -113,8 +113,7 @@ void PartialBlockForCheckpoint::Clear() {
 }
 
 void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_t segment_size) {
-	const auto block_size = segment->GetBlockSize();
-	D_ASSERT(segment_size <= block_size);
+	D_ASSERT(segment_size <= Storage::BLOCK_SIZE);
 
 	auto tuple_count = segment->count.load();
 	if (tuple_count == 0) { // LCOV_EXCL_START
@@ -153,11 +152,11 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 			pstate.AddSegmentToTail(column_data, *segment, offset_in_block);
 		} else {
 			// Create a new block for future reuse.
-			if (segment->SegmentSize() != block_size) {
+			if (segment->SegmentSize() != Storage::BLOCK_SIZE) {
 				// the segment is smaller than the block size
 				// allocate a new block and copy the data over
-				D_ASSERT(segment->SegmentSize() < block_size);
-				segment->Resize(block_size);
+				D_ASSERT(segment->SegmentSize() < Storage::BLOCK_SIZE);
+				segment->Resize(Storage::BLOCK_SIZE);
 			}
 			D_ASSERT(offset_in_block == 0);
 			allocation.partial_block = make_uniq<PartialBlockForCheckpoint>(column_data, *segment, allocation.state,
@@ -169,7 +168,7 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 		// constant block: no need to write anything to disk besides the stats
 		// set up the compression function to constant
 		auto &config = DBConfig::GetConfig(db);
-		CompressionInfo compression_info(block_size, segment->type.InternalType());
+		CompressionInfo compression_info(Storage::BLOCK_SIZE, segment->type.InternalType());
 		segment->function = *config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, compression_info);
 		segment->ConvertToPersistent(nullptr, INVALID_BLOCK);
 	}

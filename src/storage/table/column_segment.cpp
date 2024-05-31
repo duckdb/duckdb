@@ -32,8 +32,7 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
 	optional_ptr<CompressionFunction> function;
 	shared_ptr<BlockHandle> block;
 
-	const auto block_size = block_manager.GetBlockSize();
-	CompressionInfo info(block_size, type.InternalType());
+	CompressionInfo info(Storage::BLOCK_SIZE, type.InternalType());
 
 	if (block_id == INVALID_BLOCK) {
 		// constant segment, no need to allocate an actual block
@@ -43,27 +42,25 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
 		block = block_manager.RegisterBlock(block_id);
 	}
 
-	const auto segment_size = block_size;
+	auto segment_size = block_manager.GetBlockSize();
 	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::PERSISTENT, start, count, *function,
-	                                std::move(statistics), block_id, offset, segment_size, block_size,
-	                                std::move(segment_state));
+	                                std::move(statistics), block_id, offset, segment_size, std::move(segment_state));
 }
 
 unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance &db, const LogicalType &type,
-                                                                const idx_t start, const idx_t segment_size,
-                                                                const idx_t block_size) {
+                                                                const idx_t start, const idx_t segment_size) {
 
 	// Allocate a buffer for the uncompressed segment.
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
-	auto block = buffer_manager.RegisterTransientMemory(segment_size, block_size);
+	auto block = buffer_manager.RegisterTransientMemory(segment_size);
 
 	// Get the segment compression function.
 	auto &config = DBConfig::GetConfig(db);
-	CompressionInfo info(block->block_manager.GetBlockSize(), type.InternalType());
+	CompressionInfo info(Storage::BLOCK_SIZE, type.InternalType());
 	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, info);
 
 	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::TRANSIENT, start, 0U, *function,
-	                                BaseStatistics::CreateEmpty(type), INVALID_BLOCK, 0U, segment_size, block_size);
+	                                BaseStatistics::CreateEmpty(type), INVALID_BLOCK, 0U, segment_size);
 }
 
 //===--------------------------------------------------------------------===//
@@ -72,19 +69,19 @@ unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance
 ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block_p, const LogicalType &type,
                              const ColumnSegmentType segment_type, const idx_t start, const idx_t count,
                              CompressionFunction &function_p, BaseStatistics statistics, const block_id_t block_id_p,
-                             const idx_t offset, const idx_t segment_size_p, const idx_t block_size,
+                             const idx_t offset, const idx_t segment_size_p,
                              const unique_ptr<ColumnSegmentState> segment_state_p)
 
     : SegmentBase<ColumnSegment>(start, count), db(db), type(type), type_size(GetTypeIdSize(type.InternalType())),
       segment_type(segment_type), function(function_p), stats(std::move(statistics)), block(std::move(block_p)),
-      block_id(block_id_p), offset(offset), segment_size(segment_size_p), block_size(block_size) {
+      block_id(block_id_p), offset(offset), segment_size(segment_size_p) {
 
 	if (function.get().init_segment) {
 		segment_state = function.get().init_segment(*this, block_id, segment_state_p.get());
 	}
 
 	// For constant segments (CompressionType::COMPRESSION_CONSTANT) the block is a nullptr.
-	D_ASSERT(!block || segment_size <= block_size);
+	D_ASSERT(!block || segment_size <= GetBlockManager().GetBlockSize());
 }
 
 ColumnSegment::ColumnSegment(ColumnSegment &other, const idx_t start)
@@ -92,10 +89,10 @@ ColumnSegment::ColumnSegment(ColumnSegment &other, const idx_t start)
     : SegmentBase<ColumnSegment>(start, other.count.load()), db(other.db), type(std::move(other.type)),
       type_size(other.type_size), segment_type(other.segment_type), function(other.function),
       stats(std::move(other.stats)), block(std::move(other.block)), block_id(other.block_id), offset(other.offset),
-      segment_size(other.segment_size), block_size(other.block_size), segment_state(std::move(other.segment_state)) {
+      segment_size(other.segment_size), segment_state(std::move(other.segment_state)) {
 
 	// For constant segments (CompressionType::COMPRESSION_CONSTANT) the block is a nullptr.
-	D_ASSERT(!block || segment_size <= block_size);
+	D_ASSERT(!block || segment_size <= GetBlockManager().GetBlockSize());
 }
 
 ColumnSegment::~ColumnSegment() {
@@ -151,7 +148,7 @@ idx_t ColumnSegment::SegmentSize() const {
 void ColumnSegment::Resize(idx_t new_size) {
 	D_ASSERT(new_size > segment_size);
 	D_ASSERT(offset == 0);
-	D_ASSERT(block && new_size <= GetBlockSize());
+	D_ASSERT(block && new_size <= GetBlockManager().GetBlockSize());
 
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto old_handle = buffer_manager.Pin(block);

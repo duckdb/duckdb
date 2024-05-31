@@ -88,8 +88,7 @@ struct RLEAnalyzeState : public AnalyzeState {
 
 template <class T>
 unique_ptr<AnalyzeState> RLEInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	const auto block_size = col_data.GetBlockManager().GetBlockSize();
-	CompressionInfo info(block_size, type);
+	CompressionInfo info(Storage::BLOCK_SIZE, type);
 	return make_uniq<RLEAnalyzeState<T>>(info);
 }
 
@@ -147,9 +146,8 @@ struct RLECompressState : public CompressionState {
 	void CreateEmptySegment(idx_t row_start) {
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
-		auto block_size = info.GetBlockSize();
 
-		auto column_segment = ColumnSegment::CreateTransientSegment(db, type, row_start, block_size, block_size);
+		auto column_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
 		column_segment->function = function;
 		current_segment = std::move(column_segment);
 
@@ -254,7 +252,7 @@ struct RLEScanState : public SegmentScanState {
 		entry_pos = 0;
 		position_in_entry = 0;
 		rle_count_offset = UnsafeNumericCast<uint32_t>(Load<uint64_t>(handle.Ptr() + segment.GetBlockOffset()));
-		D_ASSERT(rle_count_offset <= segment.GetBlockSize());
+		D_ASSERT(rle_count_offset <= Storage::BLOCK_SIZE);
 	}
 
 	void Skip(ColumnSegment &segment, idx_t skip_count) {

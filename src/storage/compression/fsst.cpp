@@ -92,8 +92,7 @@ struct FSSTAnalyzeState : public AnalyzeState {
 };
 
 unique_ptr<AnalyzeState> FSSTStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	const auto block_size = col_data.GetBlockManager().GetBlockSize();
-	CompressionInfo info(block_size, type);
+	CompressionInfo info(Storage::BLOCK_SIZE, type);
 	return make_uniq<FSSTAnalyzeState>(info);
 }
 
@@ -231,9 +230,8 @@ public:
 	void CreateEmptySegment(idx_t row_start) {
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
-		auto block_size = info.GetBlockSize();
 
-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start, block_size, block_size);
+		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
 		current_segment = std::move(compressed_segment);
 		current_segment->function = function;
 		Reset();
@@ -253,7 +251,7 @@ public:
 		current_dictionary.size += compressed_string_len;
 		auto dict_pos = current_end_ptr - current_dictionary.size;
 		memcpy(dict_pos, compressed_string, compressed_string_len);
-		current_dictionary.Verify(info.GetBlockSize());
+		current_dictionary.Verify();
 
 		// We just push the string length to effectively delta encode the strings
 		index_buffer.push_back(NumericCast<uint32_t>(compressed_string_len));

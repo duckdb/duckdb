@@ -8,16 +8,16 @@
 
 #pragma once
 
-#include "duckdb/storage/block.hpp"
+#include "duckdb/common/enums/scan_vector_type.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/function/compression_function.hpp"
+#include "duckdb/storage/block.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
 #include "duckdb/storage/storage_lock.hpp"
-#include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/table/segment_base.hpp"
-#include "duckdb/storage/buffer/block_handle.hpp"
-#include "duckdb/common/enums/scan_vector_type.hpp"
 
 namespace duckdb {
 class ColumnSegment;
@@ -60,8 +60,8 @@ public:
 	                                                         BaseStatistics statistics,
 	                                                         unique_ptr<ColumnSegmentState> segment_state);
 	static unique_ptr<ColumnSegment> CreateTransientSegment(DatabaseInstance &db, const LogicalType &type,
-	                                                        const idx_t start, const idx_t segment_size,
-	                                                        const idx_t block_size);
+	                                                        const idx_t start,
+	                                                        const idx_t segment_size = Storage::BLOCK_SIZE);
 
 public:
 	void InitializeScan(ColumnScanState &state);
@@ -104,11 +104,6 @@ public:
 		return block_id;
 	}
 
-	//! Returns the block size of the block manger handling the ColumnData, of which this segment is a part.
-	idx_t GetBlockSize() const {
-		return block_size;
-	}
-
 	//! Returns the block manager handling this segment. For transient segments, this might be the temporary block
 	//! manager. Later, we possibly convert this (transient) segment to a persistent segment. In that case, there
 	//! exists another block manager handling the ColumnData, of which this segment is a part.
@@ -138,7 +133,7 @@ public:
 	ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, const LogicalType &type,
 	              const ColumnSegmentType segment_type, const idx_t start, const idx_t count,
 	              CompressionFunction &function_p, BaseStatistics statistics, const block_id_t block_id_p,
-	              const idx_t offset, const idx_t segment_size_p, const idx_t block_size,
+	              const idx_t offset, const idx_t segment_size_p,
 	              unique_ptr<ColumnSegmentState> segment_state_p = nullptr);
 	//! Construct a column segment from another column segment.
 	//! The other column segment becomes invalid (std::move).
@@ -155,10 +150,6 @@ private:
 	idx_t offset;
 	//! The allocated segment size, which is bounded by Storage::BLOCK_SIZE
 	idx_t segment_size;
-	//! The block size of the storage in which this segment lives, or will live. This can differ from the block size
-	//! of the block manager of this segment, which might be the temporary block manager with a
-	//! DEFAULT_BLOCK_ALLOC_SIZE.
-	idx_t block_size;
 	//! Storage associated with the compressed segment
 	unique_ptr<CompressedSegmentState> segment_state;
 };
