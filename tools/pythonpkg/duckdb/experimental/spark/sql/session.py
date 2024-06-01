@@ -169,7 +169,7 @@ class SparkSession:
 
             if isinstance(data[0], dict):
                 if not names:
-                    keys = [key for row in data[:10] for key in row.keys()]
+                    keys = [key for row in data for key in row.keys()]
                     seen = set()
                     names = [
                         name for name in keys if not (name in seen or seen.add(name))
