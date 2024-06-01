@@ -28,8 +28,6 @@ public:
 	string schema_name;
 	//! Table name
 	string table_name;
-	//! Aliases for the column names
-	vector<string> column_name_alias;
 
 public:
 	string ToString() const override;

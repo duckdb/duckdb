@@ -35,6 +35,8 @@ public:
 	optional_idx query_location;
 	// External dependencies of this table function
 	shared_ptr<ExternalDependency> external_dependency;
+	//! Aliases for the column names
+	vector<string> column_name_alias;
 
 public:
 	//! Convert the object to a string

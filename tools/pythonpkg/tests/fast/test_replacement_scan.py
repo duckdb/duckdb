@@ -282,14 +282,12 @@ class TestReplacementScan(object):
             rel = duckdb_cursor.sql("select * from v1")
 
     def test_recursive_cte(self, duckdb_cursor):
-        # FIXME: `(select Number from df offset 2 limit 1)` is quite weird and unexpected behavior
-        # I'm not entirely sure how this should be fixed, aliases are stored in the TableRef, which is the thing we cache
         query = """
             WITH RECURSIVE
             RecursiveCTE AS (
             SELECT Number from df t(Number)
             UNION ALL
-            SELECT Number + (select Number from df offset 2 limit 1) + 1 as new
+            SELECT Number + (select a from df offset 2 limit 1) + 1 as new
             FROM RecursiveCTE
             WHERE new < 10
             )

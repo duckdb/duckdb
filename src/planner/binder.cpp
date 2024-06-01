@@ -519,6 +519,7 @@ void Binder::AddTableName(string table_name) {
 void Binder::AddReplacementScan(const string &table_name, unique_ptr<TableRef> replacement) {
 	auto &root_binder = GetRootBinder();
 	auto it = root_binder.replacement_scans.find(table_name);
+	replacement->column_name_alias.clear();
 	if (it == root_binder.replacement_scans.end()) {
 		root_binder.replacement_scans[table_name] = std::move(replacement);
 	} else {
