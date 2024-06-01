@@ -1,4 +1,5 @@
 from typing import Optional, List, Any, Union, Iterable, TYPE_CHECKING
+from contextlib import suppress
 import uuid
 
 if TYPE_CHECKING:
@@ -6,7 +7,6 @@ if TYPE_CHECKING:
     from pandas.core.frame import DataFrame as PandasDataFrame
 
 from ..exception import ContributionsAcceptedError
- 
 from .types import StructType, AtomicType, DataType
 from ..conf import SparkConf
 from .dataframe import DataFrame
@@ -51,16 +51,16 @@ class SparkSession:
         self._context = context
         self._conf = RuntimeConfig(self.conn)
 
-    def _create_dataframe(self, data: Union[Iterable[Any], "PandasDataFrame"]) -> DataFrame:
-        try:
+    def _create_dataframe(
+        self, data: Union[Iterable[Any], "PandasDataFrame"]
+    ) -> DataFrame:
+        with suppress(ImportError):
             import pandas
-            has_pandas = True
-        except ImportError:
-            has_pandas = False
-        if has_pandas and isinstance(data, pandas.DataFrame):
-            unique_name = f'pyspark_pandas_df_{uuid.uuid1()}'
-            self.conn.register(unique_name, data)
-            return DataFrame(self.conn.sql(f'select * from "{unique_name}"'), self)
+
+            if isinstance(data, pandas.DataFrame):
+                unique_name = f"pyspark_pandas_df_{uuid.uuid1()}"
+                self.conn.register(unique_name, data)
+                return DataFrame(self.conn.sql(f'select * from "{unique_name}"'), self)
 
         def verify_tuple_integrity(tuples):
             if len(tuples) <= 1:
@@ -76,7 +76,7 @@ class SparkSession:
                         "arg1": f"data{i}",
                         "arg2": f"data{i+1}",
                         "arg1_length": str(expected_length),
-                        "arg2_length": str(actual_length)
+                        "arg2_length": str(actual_length),
                     },
                 )
 
@@ -87,8 +87,8 @@ class SparkSession:
         def construct_query(tuples) -> str:
             def construct_values_list(row, start_param_idx):
                 parameter_count = len(row)
-                parameters = [f'${x+start_param_idx}' for x in range(parameter_count)]
-                parameters = '(' + ', '.join(parameters) + ')'
+                parameters = [f"${x+start_param_idx}" for x in range(parameter_count)]
+                parameters = f"({', '.join(parameters)})"
                 return parameters
 
             row_size = len(tuples[0])
@@ -150,16 +150,11 @@ class SparkSession:
             else:
                 names = schema
 
-        try:
+        with suppress(ImportError):
             import pandas
 
-            has_pandas = True
-        except ImportError:
-            has_pandas = False
-        # Falsey check on pandas dataframe is not defined, so first check if it's not a pandas dataframe
-        # Then check if 'data' is None or []
-        if has_pandas and isinstance(data, pandas.DataFrame):
-            return self._createDataFrameFromPandas(data, types, names)
+            if isinstance(data, pandas.DataFrame):
+                return self._createDataFrameFromPandas(data, types, names)
 
         # Finally check if a schema was provided
         is_empty = False
@@ -167,6 +162,20 @@ class SparkSession:
             # Create NULLs for every type in our dataframe
             is_empty = True
             data = [tuple(None for _ in names)]
+
+        if not is_empty:
+            if not isinstance(data, list):
+                data = list(data)
+
+            if isinstance(data[0], dict):
+                if not names:
+                    keys = [key for row in data[:10] for key in row.keys()]
+                    seen = set()
+                    names = [
+                        name for name in keys if not (name in seen or seen.add(name))
+                    ]
+
+                data = [[row.get(name) for name in names] for row in data]
 
         if schema and isinstance(schema, StructType):
             # Transform the data into Values to combine the data+schema
