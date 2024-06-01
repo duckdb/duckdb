@@ -10,6 +10,7 @@
  */
 #include <stdio.h>
 #include <string.h>
+#include <mutex>
 #ifndef VMS
 #include <sys/types.h>
 #endif
@@ -20,6 +21,7 @@
 #include "dbgen/dsstypes.h"
 
 #include <math.h>
+
 #include "dbgen/rng64.h"
 
 #define LEAP_ADJ(yr, mnth) ((LEAP(yr) && (mnth) >= 2) ? 1 : 0)
@@ -64,13 +66,12 @@ static void gen_phone(DSS_HUGE ind, char *target, seed_t *seed) {
 
 long mk_cust(DSS_HUGE n_cust, customer_t *c, DBGenContext *ctx) {
 	DSS_HUGE i;
-	static int bInit = 0;
+	static std::once_flag bInit;
 	static char szFormat[100];
 
-	if (!bInit) {
+	std::call_once (bInit, [&](){
 		snprintf(szFormat, sizeof(szFormat), C_NAME_FMT, 9, &HUGE_FORMAT[1]);
-		bInit = 1;
-	}
+	});
 	c->custkey = n_cust;
 	snprintf(c->name, sizeof(c->name), szFormat, C_NAME_TAG, n_cust);
 	V_STR(C_ADDR_LEN, &ctx->Seed[C_ADDR_SD], c->address);
@@ -117,15 +118,13 @@ long mk_order(DSS_HUGE index, order_t *o, DBGenContext *ctx, long upd_num) {
 	char tmp_str[2];
 	char **mk_ascdate PROTO((void));
 	int delta = 1;
-	static int bInit = 0;
+	static std::once_flag bInit;
 	static char szFormat[100];
 
-	if (!bInit) {
+	std::call_once (bInit, [&](){
 		snprintf(szFormat, sizeof(szFormat), O_CLRK_FMT, 9, &HUGE_FORMAT[1]);
-		bInit = 1;
-	}
-	if (asc_date == NULL)
 		asc_date = mk_ascdate();
+	});
 	mk_sparse(index, &o->okey, (upd_num == 0) ? 0 : 1 + upd_num / (10000 / UPD_PCT));
 	if (ctx->scale_factor >= 30000)
 		RANDOM64(o->custkey, O_CKEY_MIN, O_CKEY_MAX, &ctx->Seed[O_CKEY_SD]);
@@ -216,17 +215,17 @@ long mk_part(DSS_HUGE index, part_t *p, DBGenContext *ctx) {
 	DSS_HUGE temp;
 	long snum;
 	DSS_HUGE brnd;
-	static int bInit = 0;
+	static std::once_flag bInit;
 	static char szFormat[100];
 	static char szBrandFormat[100];
 
-	if (!bInit) {
+
+	std::call_once (bInit, [&](){
 		snprintf(szFormat, sizeof(szFormat), P_MFG_FMT, 1, &HUGE_FORMAT[1]);
 		snprintf(szBrandFormat, sizeof(szBrandFormat), P_BRND_FMT, 2, &HUGE_FORMAT[1]);
-		bInit = 1;
-	}
+	});
 	p->partkey = index;
-	agg_str(&colors, (long)P_NAME_SCL, &ctx->Seed[P_NAME_SD], p->name);
+	agg_str(&colors, (long)P_NAME_SCL, &ctx->Seed[P_NAME_SD], p->name, ctx);
 	RANDOM(temp, P_MFG_MIN, P_MFG_MAX, &ctx->Seed[P_MFG_SD]);
 	snprintf(p->mfgr, sizeof(p->mfgr), szFormat, P_MFG_TAG, temp);
 	RANDOM(brnd, P_BRND_MIN, P_BRND_MAX, &ctx->Seed[P_BRND_SD]);
@@ -252,13 +251,12 @@ long mk_part(DSS_HUGE index, part_t *p, DBGenContext *ctx) {
 
 long mk_supp(DSS_HUGE index, supplier_t *s, DBGenContext *ctx) {
 	DSS_HUGE i, bad_press, noise, offset, type;
-	static int bInit = 0;
+	static std::once_flag bInit;
 	static char szFormat[100];
 
-	if (!bInit) {
+	std::call_once (bInit, [&](){
 		snprintf(szFormat, sizeof(szFormat), S_NAME_FMT, 9, &HUGE_FORMAT[1]);
-		bInit = 1;
-	}
+	});
 	s->suppkey = index;
 	snprintf(s->name, sizeof(s->name), szFormat, S_NAME_TAG, index);
 	V_STR(S_ADDR_LEN, &ctx->Seed[S_ADDR_SD], s->address);
