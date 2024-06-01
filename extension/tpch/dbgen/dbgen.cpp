@@ -11,7 +11,9 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
+#endif
 #endif
 
 #define DECLARER /* EXTERN references get defined here */
@@ -620,14 +622,17 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 	auto &catalog = Catalog::GetCatalog(context, catalog_name);
 
 	TPCHDBgenParameters parameters(context, catalog, schema, suffix);
+#ifndef DUCKDB_NO_THREADS
 	bool explicit_partial_generation = children > 1 && current_step != -1;
 	auto thread_count = TaskScheduler::GetScheduler(context).NumberOfThreads();
 	if (explicit_partial_generation || thread_count <= 1) {
+#endif
 		// if we are doing explicit partial generation the parallelism is managed outside of dbgen
 		// only generate the chunk we are interested in
 		TPCHDataAppender appender(context, parameters, base_context, BaseAppender::DEFAULT_FLUSH_COUNT);
 		appender.AppendData(children, current_step);
 		appender.Flush();
+#ifndef DUCKDB_NO_THREADS
 	} else {
 		// we split into 20 children per scale factor by default
 		static constexpr idx_t CHILDREN_PER_SCALE_FACTOR = 20;
@@ -671,6 +676,7 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 			appender.Flush();
 		}
 	}
+#endif
 	cleanup_dists();
 }
 
