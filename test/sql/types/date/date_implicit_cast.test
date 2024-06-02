@@ -1,0 +1,54 @@
+# name: test/sql/types/date/date_implicit_cast.test
+# description: Test date implicit casts
+# group: [date]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE timestamps(ts TIMESTAMP)
+
+statement ok
+INSERT INTO timestamps VALUES ('1993-08-14 00:00:00'), ('1993-08-15 01:01:02'), ('1993-08-16 00:00:00')
+
+query I
+SELECT * FROM  timestamps WHERE ts >= date '1993-08-15'
+----
+1993-08-15 01:01:02
+1993-08-16 00:00:00
+
+statement ok
+CREATE TABLE timestamps_ms(ts TIMESTAMP_MS)
+
+statement ok
+INSERT INTO timestamps_ms VALUES ('1993-08-14 00:00:00'), ('1993-08-15 01:01:02'), ('1993-08-16 00:00:00')
+
+query I
+SELECT * FROM  timestamps_ms WHERE ts >= date '1993-08-15'
+----
+1993-08-15 01:01:02
+1993-08-16 00:00:00
+
+statement ok
+CREATE TABLE timestamps_ns(ts TIMESTAMP_NS)
+
+statement ok
+INSERT INTO timestamps_ns VALUES ('1993-08-14 00:00:00'), ('1993-08-15 01:01:02'), ('1993-08-16 00:00:00')
+
+query I
+SELECT * FROM  timestamps_ns WHERE ts >= date '1993-08-15'
+----
+1993-08-15 01:01:02
+1993-08-16 00:00:00
+
+statement ok
+CREATE TABLE timestamps_sec(ts TIMESTAMP_S)
+
+statement ok
+INSERT INTO timestamps_sec VALUES ('1993-08-14 00:00:00'), ('1993-08-15 01:01:02'), ('1993-08-16 00:00:00')
+
+query I
+SELECT * FROM  timestamps_sec WHERE ts >= date '1993-08-15'
+----
+1993-08-15 01:01:02
+1993-08-16 00:00:00
