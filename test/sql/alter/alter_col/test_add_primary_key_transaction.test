@@ -94,7 +94,7 @@ ALTER TABLE test4 ADD PRIMARY KEY (j)
 statement error
 ALTER TABLE test4 ADD PRIMARY KEY (i)
 ----
-Catalog Error: table "test4" already has a PRIMARY KEY(j).
+Catalog Error: table "test4" can have only one primary key, and already has PRIMARY KEY(j).
 
 statement ok
 COMMIT
@@ -121,3 +121,20 @@ DELETE FROM test5 WHERE i = 2
 statement ok
 COMMIT
 
+# Scenario #6: Multiple transaction try to add primary key
+statement ok
+CREATE TABLE test6 (i INTEGER, j INTEGER)
+
+statement ok tran1
+BEGIN TRANSACTION
+
+statement ok tran1
+ALTER TABLE test6 ADD PRIMARY KEY (j)
+
+statement ok tran2
+BEGIN TRANSACTION
+
+statement error tran2
+ALTER TABLE test6 ADD PRIMARY KEY (j)
+----
+TransactionContext Error: Catalog write-write conflict on alter with "test6"

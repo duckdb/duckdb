@@ -108,6 +108,7 @@ public:
 	virtual void BindUpdateConstraints(Binder &binder, LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,
 	                                   ClientContext &context);
 
+	Constraint *GetPrimaryKey() const;
 	bool HasPrimaryKey() const;
 
 protected:

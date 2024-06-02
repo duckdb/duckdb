@@ -93,7 +93,7 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGCon
 		return make_uniq<CheckConstraint>(TransformExpression(constraint->raw_expr));
 	}
 	case duckdb_libpgquery::PG_CONSTR_FOREIGN:
-		return TransformForeignKeyConstraint(*constraint.get());
+		return TransformForeignKeyConstraint(*constraint);
 	default:
 		throw NotImplementedException("Constraint type not handled yet!");
 	}
@@ -135,7 +135,7 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGCon
 		}
 		return nullptr;
 	case duckdb_libpgquery::PG_CONSTR_FOREIGN:
-		return TransformForeignKeyConstraint(*constraint.get(), &column.Name());
+		return TransformForeignKeyConstraint(*constraint, &column.Name());
 	default:
 		throw NotImplementedException("Constraint not implemented!");
 	}
