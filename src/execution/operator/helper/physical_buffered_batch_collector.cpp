@@ -73,7 +73,7 @@ SinkNextBatchType PhysicalBufferedBatchCollector::NextBatch(ExecutionContext &co
 	auto min_batch_index = lstate.partition_info.min_batch_index.GetIndex();
 	auto new_index = lstate.partition_info.batch_index.GetIndex();
 
-	auto &buffered_data = dynamic_cast<BatchedBufferedData &>(*gstate.buffered_data);
+	auto &buffered_data = gstate.buffered_data->Cast<BatchedBufferedData>();
 	buffered_data.CompleteBatch(batch);
 	lstate.current_batch = new_index;
 	// FIXME: this can move from 'other' chunks to 'current' chunks, increasing the 'current_batch_tuple_count'
@@ -91,7 +91,7 @@ SinkCombineResultType PhysicalBufferedBatchCollector::Combine(ExecutionContext &
 	lock_guard<mutex> l(gstate.glock);
 
 	auto min_batch_index = lstate.partition_info.min_batch_index.GetIndex();
-	auto &buffered_data = dynamic_cast<BatchedBufferedData &>(*gstate.buffered_data);
+	auto &buffered_data = gstate.buffered_data->Cast<BatchedBufferedData>();
 
 	// FIXME: this can move from 'other' chunks to 'current' chunks, increasing the 'current_batch_tuple_count'
 	// We might want to block here if 'current_batch_tuple_count' has already reached the threshold
