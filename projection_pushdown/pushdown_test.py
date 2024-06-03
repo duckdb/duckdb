@@ -1,3 +1,6 @@
+# Example demonstrating slow performance from https://github.com/duckdb/duckdb/issues/10214
+# Projection pushdown on DISTINCT ON doesn't work
+
 import pandas as pd
 import numpy as np
 import duckdb
@@ -28,4 +31,4 @@ for columns in ['col0', '*',]:
     for row in range(2):
         print(expl.iloc[row, 0])
         print(expl.iloc[row, 1])
-# print(f"The results are equal: {results['*'].equals(results['col0'])}")
+print(f"The results are equal: {results['*'].equals(results['col0'])}")
