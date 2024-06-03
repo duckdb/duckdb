@@ -1,0 +1,241 @@
+# name: test/sql/collate/collate_like.test
+# description: Test collations in the LIKE clause
+# group: [collate]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT 'a' LIKE 'A'
+----
+false
+
+query I
+SELECT 'a' LIKE 'A' COLLATE NOCASE
+----
+true
+
+query I
+SELECT 'A' LIKE 'a'
+----
+false
+
+query I
+SELECT 'A' COLLATE NOCASE LIKE 'a'
+----
+true
+
+#### Testing LIKE optimization rules
+
+# prefix replacement
+query I
+SELECT 'a' LIKE 'A%' COLLATE NOCASE
+----
+true
+
+query I
+SELECT 'A' COLLATE NOCASE LIKE 'A%' COLLATE NOCASE
+----
+true
+
+
+# sufix replacement
+query I
+SELECT 'a' LIKE '%A' COLLATE NOCASE
+----
+true
+
+query I
+SELECT 'A' COLLATE NOCASE LIKE '%A' COLLATE NOCASE
+----
+true
+
+
+# contains replacement
+query I
+SELECT 'a' LIKE '%A%' COLLATE NOCASE
+----
+true
+
+query I
+SELECT 'A' COLLATE NOCASE LIKE '%A%' COLLATE NOCASE
+----
+true
+
+
+#### Testing LIKE with collated columns
+
+statement ok
+CREATE TABLE t1 (c1 VARCHAR)
+
+statement ok
+INSERT INTO t1 VALUES('A'),('a'),('AAAA'),('aaaa')
+
+query I
+SELECT * FROM t1 WHERE c1 LIKE 'A'
+----
+A
+
+query I
+SELECT * FROM t1 WHERE c1 LIKE 'A' COLLATE NOCASE
+----
+a
+
+query I
+SELECT * FROM t1 WHERE c1 COLLATE NOCASE LIKE 'A' COLLATE NOCASE
+----
+A
+a
+
+query I
+SELECT * FROM t1 WHERE c1 LIKE 'a'
+----
+a
+
+query I
+SELECT * FROM t1 WHERE c1 LIKE 'a' COLLATE NOCASE
+----
+a
+
+query I
+SELECT * FROM t1 WHERE c1 COLLATE NOCASE LIKE 'a' COLLATE NOCASE
+----
+A
+a
+
+query I
+SELECT * FROM t1 WHERE c1 LIKE 'AAAA'
+----
+AAAA
+
+query I
+SELECT * FROM t1 WHERE c1 LIKE 'AAAA' COLLATE NOCASE
+----
+aaaa
+
+query I
+SELECT * FROM t1 WHERE c1 COLLATE NOCASE LIKE 'AAAA' COLLATE NOCASE
+----
+AAAA
+aaaa
+
+
+#### Testing LikeMatcher with collated segments
+query I
+SELECT * FROM t1 WHERE c1 LIKE '%A_A' COLLATE NOCASE
+----
+aaaa
+
+query I
+SELECT * FROM t1 WHERE c1 COLLATE NOCASE LIKE '%A_A' COLLATE NOCASE
+----
+AAAA
+aaaa
+
+query I
+SELECT * FROM t1 WHERE c1 COLLATE NOCASE LIKE '%A_A'
+----
+
+query I
+SELECT * FROM t1 WHERE c1 COLLATE NOCASE LIKE '%a_a'
+----
+AAAA
+aaaa
+
+
+query I
+SELECT * FROM t1 WHERE c1 LIKE '%A%A' COLLATE NOCASE
+----
+aaaa
+
+query I
+SELECT * FROM t1 WHERE c1 COLLATE NOCASE LIKE '%A%A' COLLATE NOCASE
+----
+AAAA
+aaaa
+
+query I
+SELECT * FROM t1 WHERE c1 COLLATE NOCASE LIKE '%A%A'
+----
+
+query I
+SELECT * FROM t1 WHERE c1 COLLATE NOCASE LIKE '%a%a'
+----
+AAAA
+aaaa
+
+query I
+SELECT * FROM t1 WHERE c1 LIKE '%A_A_' COLLATE NOCASE
+----
+aaaa
+
+query I
+SELECT * FROM t1 WHERE c1 COLLATE NOCASE LIKE '%A_A_' COLLATE NOCASE
+----
+AAAA
+aaaa
+
+query I
+SELECT * FROM t1 WHERE c1 COLLATE NOCASE LIKE '%A_A_'
+----
+
+query I
+SELECT * FROM t1 WHERE c1 COLLATE NOCASE LIKE '%a_a_'
+----
+AAAA
+aaaa
+
+query I
+SELECT * FROM t1 WHERE c1 LIKE '%A%A%A%A' COLLATE NOCASE
+----
+aaaa
+
+query I
+SELECT * FROM t1 WHERE c1 COLLATE NOCASE LIKE '%A%A%A%A' COLLATE NOCASE
+----
+AAAA
+aaaa
+
+query I
+SELECT * FROM t1 WHERE c1 COLLATE NOCASE LIKE '%A%A%A%A'
+----
+
+query I
+SELECT * FROM t1 WHERE c1 COLLATE NOCASE LIKE '%a%a%a%a'
+----
+AAAA
+aaaa
+
+
+######### !!! test like_escape
+
+query I
+SELECT like_escape('a%ö', 'a$%ö', '$')
+----
+true
+
+query I
+SELECT like_escape('a%ö' COLLATE NOACCENT, 'a$%ö', '$')
+----
+false
+
+query I
+SELECT like_escape('a%ö', 'a$%ö' COLLATE NOACCENT, '$')
+----
+false
+
+query I
+SELECT like_escape('a%ö' COLLATE NOACCENT, 'a$%ö' COLLATE NOACCENT, '$')
+----
+true
+
+query I
+SELECT like_escape('a%ö' COLLATE NOACCENT, 'a$%o', '$')
+----
+true
+
+query I
+SELECT like_escape('a%o', 'a$%ö' COLLATE NOACCENT, '$')
+----
+true
+
