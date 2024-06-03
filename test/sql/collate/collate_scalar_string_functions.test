@@ -721,12 +721,12 @@ hello world
 ######### !!! test parse_dirname
 
 query I
-SELECT parse_dirname('öop/to/file.csv', 'system')
+SELECT parse_dirname('öop/to/file.csv', 'forward_slash')
 ----
 öop
 
 query I
-SELECT parse_dirname('öop/to/file.csv' COLLATE NOACCENT, 'system')
+SELECT parse_dirname('öop/to/file.csv' COLLATE NOACCENT, 'forward_slash')
 ----
 oop
 
@@ -747,12 +747,12 @@ SELECT parse_dirpath('/öop/to/file.csv' COLLATE NOACCENT, 'forward_slash')
 ######### !!! test parse_filename
 
 query I
-SELECT parse_filename('/path/to/öop.csv', true, 'system')
+SELECT parse_filename('/path/to/öop.csv', true, 'forward_slash')
 ----
 öop
 
 query I
-SELECT parse_filename('/path/to/öop.csv' COLLATE NOACCENT, true, 'system')
+SELECT parse_filename('/path/to/öop.csv' COLLATE NOACCENT, true, 'forward_slash')
 ----
 oop
 
