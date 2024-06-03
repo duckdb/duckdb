@@ -373,9 +373,8 @@ idx_t DuckTransactionManager::GetCatalogVersion(Transaction &transaction_p) {
 	return transaction.catalog_version;
 }
 
-void DuckTransactionManager::PushCatalogEntry(Transaction &transaction_p,
-                                              duckdb::CatalogEntry &entry, duckdb::data_ptr_t extra_data,
-                                              duckdb::idx_t extra_data_size) {
+void DuckTransactionManager::PushCatalogEntry(Transaction &transaction_p, duckdb::CatalogEntry &entry,
+                                              duckdb::data_ptr_t extra_data, duckdb::idx_t extra_data_size) {
 	auto &transaction = transaction_p.Cast<DuckTransaction>();
 	transaction.catalog_version = ++last_uncommitted_catalog_version;
 	transaction.PushCatalogEntry(entry, extra_data, extra_data_size);

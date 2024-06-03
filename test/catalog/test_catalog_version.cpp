@@ -57,4 +57,3 @@ TEST_CASE("Test catalog versioning", "[catalog]") {
 		REQUIRE(catalog.GetCatalogVersion(*con1.context) == 0);
 	});
 }
-
