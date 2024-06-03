@@ -43,6 +43,13 @@ void explain_query(duckdb::Connection &con, const string &qry_str) {
     }
 }
 
+/*
+
+Example demonstrating slow performance from https://github.com/duckdb/duckdb/issues/10214
+Projection pushdown on DISTINCT ON doesn't work
+
+*/
+
 void test1(void) {
     DuckDB db(nullptr);
     Connection con(db);
