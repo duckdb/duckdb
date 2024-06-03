@@ -241,11 +241,10 @@ bool CSVSniffer::RefineCandidateNextChunk(ColumnCountScanner &candidate) {
 			return !set_columns.IsCandidateUnacceptable(sniffed_column_counts[i], options.null_padding,
 			                                            options.ignore_errors.GetValue(),
 			                                            sniffed_column_counts.last_value_always_empty);
-		} else {
-			if (max_columns_found != sniffed_column_counts[i] &&
-			    (!options.null_padding && !options.ignore_errors.GetValue())) {
-				return false;
-			}
+		}
+		if (max_columns_found != sniffed_column_counts[i] &&
+		    (!options.null_padding && !options.ignore_errors.GetValue())) {
+			return false;
 		}
 	}
 	return true;
@@ -292,9 +291,7 @@ void CSVSniffer::RefineCandidates() {
 			}
 			candidates.push_back(std::move(cc_best_candidate));
 		}
-		return;
 	}
-	return;
 }
 
 NewLineIdentifier CSVSniffer::DetectNewLineDelimiter(CSVBufferManager &buffer_manager) {

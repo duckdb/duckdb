@@ -12,6 +12,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/execution/operator/csv_scanner/quote_rules.hpp"
 #include "duckdb/execution/operator/csv_scanner/column_count_scanner.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_schema.hpp"
 
 namespace duckdb {
 struct DateTimestampSniffing {
@@ -104,7 +105,7 @@ public:
 	SnifferResult SniffCSV(bool force_match = false);
 
 	//! Function that only sniffs the first two rows, to verify if a header exists and what are the data types
-	SnifferResult SniffMinimalCSV();
+	SnifferResult SniffMinimalCSV(CSVSchema &file_schema);
 
 	static NewLineIdentifier DetectNewLineDelimiter(CSVBufferManager &buffer_manager);
 

@@ -85,7 +85,7 @@ void CSVSniffer::SetResultOptions() {
 	options.dialect_options.num_cols = best_candidate->GetStateMachine().dialect_options.num_cols;
 }
 
-SnifferResult CSVSniffer::SniffMinimalCSV() {
+SnifferResult CSVSniffer::SniffMinimalCSV(CSVSchema &file_schema) {
 	if (set_columns.IsSet()) {
 		// Nothing to see here
 		return SnifferResult(*set_columns.types, *set_columns.names);
