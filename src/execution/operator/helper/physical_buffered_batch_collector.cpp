@@ -35,10 +35,12 @@ SinkResultType PhysicalBufferedBatchCollector::Sink(ExecutionContext &context, D
 	auto batch = lstate.partition_info.batch_index.GetIndex();
 	auto min_batch_index = lstate.partition_info.min_batch_index.GetIndex();
 
-	unique_lock<mutex> l(gstate.glock);
-
 	auto &buffered_data = gstate.buffered_data->Cast<BatchedBufferedData>();
-	buffered_data.UpdateMinBatchIndex(min_batch_index);
+	bool is_minimum_batch = buffered_data.IsMinimumBatchIndex(batch);
+
+	if (!is_minimum_batch) {
+		buffered_data.UpdateMinBatchIndex(min_batch_index);
+	}
 
 	if (!lstate.blocked || buffered_data.ShouldBlockBatch(batch)) {
 		lstate.blocked = true;
@@ -50,11 +52,9 @@ SinkResultType PhysicalBufferedBatchCollector::Sink(ExecutionContext &context, D
 	// FIXME: if we want to make this more accurate, we should grab a reservation on the buffer space
 	// while we're unlocked some other thread could also append, causing us to potentially cross our buffer size
 
-	l.unlock();
 	auto to_append = make_uniq<DataChunk>();
 	to_append->Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
 	chunk.Copy(*to_append, 0);
-	l.lock();
 	buffered_data.Append(std::move(to_append), batch);
 
 	return SinkResultType::NEED_MORE_INPUT;

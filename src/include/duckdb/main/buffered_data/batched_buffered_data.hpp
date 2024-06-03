@@ -47,10 +47,10 @@ public:
 	PendingExecutionResult ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) override;
 	unique_ptr<DataChunk> Scan() override;
 	void UpdateMinBatchIndex(idx_t min_batch_index);
+	bool IsMinimumBatchIndex(idx_t batch);
 	void CompleteBatch(idx_t batch);
 
 private:
-	bool IsMinBatch(lock_guard<mutex> &guard, idx_t batch);
 	void ResetReplenishState();
 	void UnblockSinks();
 
@@ -66,7 +66,7 @@ private:
 	//! The amount of tuples buffered for the current batch
 	atomic<idx_t> current_batch_tuple_count;
 
-	idx_t min_batch;
+	atomic<idx_t> min_batch;
 };
 
 } // namespace duckdb

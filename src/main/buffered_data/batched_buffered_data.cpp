@@ -20,8 +20,7 @@ BatchedBufferedData::BatchedBufferedData(weak_ptr<ClientContext> context)
 }
 
 bool BatchedBufferedData::ShouldBlockBatch(idx_t batch) {
-	lock_guard<mutex> lock(glock);
-	bool is_minimum = IsMinBatch(lock, batch);
+	bool is_minimum = IsMinimumBatchIndex(batch);
 	if (is_minimum) {
 		return current_batch_tuple_count >= CURRENT_BATCH_BUFFER_SIZE;
 	}
@@ -33,7 +32,7 @@ bool BatchedBufferedData::BufferIsEmpty() {
 	return batches.empty();
 }
 
-bool BatchedBufferedData::IsMinBatch(lock_guard<mutex> &guard, idx_t batch) {
+bool BatchedBufferedData::IsMinimumBatchIndex(idx_t batch) {
 	return min_batch == batch;
 }
 
@@ -43,7 +42,7 @@ void BatchedBufferedData::UnblockSinks() {
 	for (auto it = blocked_sinks.begin(); it != blocked_sinks.end(); it++) {
 		auto batch = it->first;
 		auto &blocked_sink = it->second;
-		const bool is_minimum = IsMinBatch(lock, batch);
+		const bool is_minimum = IsMinimumBatchIndex(batch);
 		if (is_minimum) {
 			if (current_batch_tuple_count >= CURRENT_BATCH_BUFFER_SIZE) {
 				continue;
@@ -65,17 +64,19 @@ void BatchedBufferedData::UnblockSinks() {
 
 void BatchedBufferedData::UpdateMinBatchIndex(idx_t min_batch_index) {
 	lock_guard<mutex> lock(glock);
-	min_batch = MaxValue(min_batch, min_batch_index);
+
+	auto new_min_batch = MaxValue(min_batch.load(), min_batch_index);
+	if (new_min_batch == min_batch) {
+		// No change, early out
+		return;
+	}
+	min_batch = new_min_batch;
 	stack<idx_t> to_remove;
 	for (auto &it : in_progress_batches) {
 		auto batch = it.first;
 		auto &buffered_chunks = it.second;
 		if (batch > min_batch) {
 			// This batch is still in progress, can not be fetched from yet
-			break;
-		}
-		if (batch != min_batch && !buffered_chunks.completed) {
-			// We haven't completed this batch yet
 			break;
 		}
 		D_ASSERT(buffered_chunks.completed || batch == min_batch);
