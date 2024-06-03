@@ -49,6 +49,7 @@ public:
 
 	CSVFileScan(ClientContext &context, const string &file_name, CSVReaderOptions &options);
 
+	void SetStart();
 	const string &GetFileName();
 	const vector<string> &GetNames();
 	const vector<LogicalType> &GetTypes();
@@ -85,5 +86,7 @@ public:
 
 	//! Options for this CSV Reader
 	CSVReaderOptions options;
+
+	CSVIterator start_iterator;
 };
 } // namespace duckdb
