@@ -43,7 +43,7 @@ void explain_query(duckdb::Connection &con, const string &qry_str) {
     }
 }
 
-int main(void) {
+void test1(void) {
     DuckDB db(nullptr);
     Connection con(db);
 
@@ -81,7 +81,7 @@ int main(void) {
     // cout << "Example Table:" << endl;
     // print_query(con, "SELECT * FROM push_d");
 
-    /*
+
     string query_template =
             "SELECT col0\n"
             "FROM \n"
@@ -92,42 +92,70 @@ int main(void) {
             "    FROM push_d\n"
             "    ORDER by col0 DESC\n"
             ")";
-    */
 
-    string query_template =
-            "SELECT col0\n"
-            "FROM \n"
-            "(\n"
-            "    SELECT \n"
-            "    DISTINCT ON (floor(col0)) \n"
-            "    {columns}\n"
-            "    FROM push_d\n"
-            "    ORDER by col1 DESC\n)";
-            // ") ORDER by col1 DESC ";
 
     string param = "{columns}";
     string qry_col0 = string(query_template).replace(query_template.find(param),param.length(),"col0");
-    string qry_col_star = string(query_template).replace(query_template.find(param),param.length(),"col0, col1, col2");
+    string qry_col_star = string(query_template).replace(query_template.find(param),param.length(),"*");
 
     // cout << "Query:\n" << qry_col_star << endl;
 
     print_query(con, qry_col_star);
 
 
-    //cout << "Explain col0:" << endl;
-    //explain_query(con, qry_col0);
-    //cout << "\n";
+    cout << "Explain col0:" << endl;
+    explain_query(con, qry_col0);
+    cout << "\n";
     cout << "Explain *:" << endl;
     explain_query(con, qry_col_star);
 
 
-    //cout << "Time col0:" << endl;
-    //time_query(con, qry_col0);
+    cout << "Time col0:" << endl;
+    time_query(con, qry_col0);
     cout << "\n";
     cout << "Time using *:" << endl;
     time_query(con, qry_col_star);
-    return 0;
 }
 
+/* test_10087.test
+ *
+ * statement ok
+CREATE TABLE t0(c1 INT);
+
+statement ok
+INSERT INTO t0(c1) VALUES (1);
+
+statement ok
+CREATE VIEW v0(c0, c1, c2) AS SELECT '1', true, t0.c1 FROM t0 ORDER BY -1-2 LIMIT 2;
+
+statement ok
+SELECT v0.c2 FROM v0 WHERE (NOT (v0.c1 IS NOT NULL));
+ */
+
+// Based on test_10087.test
+void test2(void) {
+    DuckDB db(nullptr);
+    Connection con(db);
+
+    string qry1 = "CREATE TABLE t0(c1 INT);";
+    con.Query(qry1);
+
+    string qry2 = "INSERT INTO t0(c1) VALUES (1);";
+    con.Query(qry2);
+
+    string qry3 = "CREATE VIEW v0(c0, c1, c2) AS SELECT '1', true, t0.c1 FROM t0 ORDER BY -1-2 LIMIT 2;";
+    con.Query(qry3);
+
+    string qry4 = "SELECT v0.c2 FROM v0 WHERE (NOT (v0.c1 IS NOT NULL));";
+    explain_query(con, qry4);
+    print_query(con, qry4);
+}
+
+
+int main(void) {
+    test1();
+    // test2();
+    return 0;
+}
 
 
