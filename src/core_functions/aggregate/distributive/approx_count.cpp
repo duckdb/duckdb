@@ -7,6 +7,8 @@
 
 #include "hyperloglog.hpp"
 
+#include <math.h>
+
 namespace duckdb {
 
 // Algorithms from
