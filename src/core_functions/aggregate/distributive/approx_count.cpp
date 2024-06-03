@@ -180,33 +180,8 @@ AggregateFunction GetApproxCountDistinctFunction(const LogicalType &input_type) 
 	return fun;
 }
 
-AggregateFunctionSet ApproxCountDistinctFun::GetFunctions() {
-	AggregateFunctionSet approx_count("approx_count_distinct");
-	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::UTINYINT));
-	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::USMALLINT));
-	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::UINTEGER));
-	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::UBIGINT));
-	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::UHUGEINT));
-
-	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::TINYINT));
-	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::SMALLINT));
-	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::INTEGER));
-	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::BIGINT));
-	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::HUGEINT));
-
-	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::FLOAT));
-	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::DOUBLE));
-
-	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::DATE));
-	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::TIME));
-	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::TIME_TZ));
-	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::TIMESTAMP));
-	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::TIMESTAMP_TZ));
-	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::INTERVAL));
-
-	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::BLOB));
-	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::ANY_PARAMS(LogicalType::VARCHAR, 150)));
-	return approx_count;
+AggregateFunction ApproxCountDistinctFun::GetFunction() {
+	return GetApproxCountDistinctFunction(LogicalType::ANY);
 }
 
 } // namespace duckdb
