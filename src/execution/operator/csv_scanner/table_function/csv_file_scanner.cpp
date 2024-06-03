@@ -108,14 +108,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 			file_schema.Initialize(result.names, result.return_types, options.file_path);
 		} else if (file_idx > 0 && buffer_manager->file_handle->FileSize() > 0) {
 			CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
-			auto result = sniffer.SniffMinimalCSV(file_schema);
-			if (!options.file_options.AnySet()) {
-				// Union By name has its own mystical rules
-				string error;
-				if (!file_schema.SchemasMatch(error, result.names, result.return_types, file_path, projection_order)) {
-					throw InvalidInputException(error);
-				}
-			}
+			auto result = sniffer.AdaptiveSniff(file_schema);
 		}
 	}
 	if (options.dialect_options.num_cols == 0) {

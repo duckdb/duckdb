@@ -104,8 +104,14 @@ public:
 	//! 5. Type Replacement: Replaces the types of the columns if the user specified them
 	SnifferResult SniffCSV(bool force_match = false);
 
+	//! I call it adaptive, since that's a sexier term.
+	//! In practice this Function that only sniffs the first two rows, to verify if a header exists and what are the
+	//! data types It does this considering a priorly set CSV schema. If there is a mismatch of the schema it runs the
+	//! full on blazing all guns sniffer, if that still fails it tells the user to union_by_name.
+	void AdaptiveSniff(CSVSchema &file_schema);
+
 	//! Function that only sniffs the first two rows, to verify if a header exists and what are the data types
-	SnifferResult SniffMinimalCSV(CSVSchema &file_schema);
+	SnifferResult MinimalSniff();
 
 	static NewLineIdentifier DetectNewLineDelimiter(CSVBufferManager &buffer_manager);
 

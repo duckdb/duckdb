@@ -85,7 +85,7 @@ void CSVSniffer::SetResultOptions() {
 	options.dialect_options.num_cols = best_candidate->GetStateMachine().dialect_options.num_cols;
 }
 
-SnifferResult CSVSniffer::SniffMinimalCSV(CSVSchema &file_schema) {
+SnifferResult CSVSniffer::MinimalSniff() {
 	if (set_columns.IsSet()) {
 		// Nothing to see here
 		return SnifferResult(*set_columns.types, *set_columns.names);
@@ -147,6 +147,22 @@ SnifferResult CSVSniffer::SniffMinimalCSV(CSVSchema &file_schema) {
 	}
 
 	return {detected_types, names};
+}
+
+void CSVSniffer::AdaptiveSniff(CSVSchema &file_schema) {
+	if (set_columns.IsSet()) {
+		// Nothing to see here
+		return;
+	}
+	auto min_sniff_res = MinimalSniff();
+
+	if (!options.file_options.AnySet()) {
+		// Union By name has its own mystical rules
+		string error;
+		if (!file_schema.SchemasMatch(error, result.names, result.return_types, file_path, projection_order)) {
+			throw InvalidInputException(error);
+		}
+	}
 }
 SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 	buffer_manager->sniffing = true;
