@@ -17,14 +17,14 @@ static void InstallFromRepository(ClientContext &context, const LoadInfo &info) 
 	}
 
 	ExtensionHelper::InstallExtension(context, info.filename, info.load_type == LoadType::FORCE_INSTALL, repository,
-	                                  info.version);
+	                                  true, info.version);
 }
 
 SourceResultType PhysicalLoad::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
 	if (info->load_type == LoadType::INSTALL || info->load_type == LoadType::FORCE_INSTALL) {
 		if (info->repository.empty()) {
 			ExtensionHelper::InstallExtension(context.client, info->filename,
-			                                  info->load_type == LoadType::FORCE_INSTALL, nullptr, info->version);
+			                                  info->load_type == LoadType::FORCE_INSTALL, nullptr, true, info->version);
 		} else {
 			InstallFromRepository(context.client, *info);
 		}

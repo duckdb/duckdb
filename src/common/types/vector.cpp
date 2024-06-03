@@ -860,7 +860,10 @@ void Vector::Flatten(idx_t count) {
 			// constant NULL, set nullmask
 			validity.EnsureWritable();
 			validity.SetAllInvalid(count);
-			return;
+			if (GetType().InternalType() != PhysicalType::STRUCT) {
+				// for structs we still need to flatten the child vectors as well
+				return;
+			}
 		}
 		// non-null constant: have to repeat the constant
 		switch (GetType().InternalType()) {

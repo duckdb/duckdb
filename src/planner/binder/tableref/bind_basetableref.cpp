@@ -1,20 +1,20 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/main/extension_helper.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
-#include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/tableref/bound_basetableref.hpp"
-#include "duckdb/planner/tableref/bound_subqueryref.hpp"
-#include "duckdb/planner/tableref/bound_cteref.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/parser/statement/select_statement.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
-#include "duckdb/main/config.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/tableref/bound_basetableref.hpp"
+#include "duckdb/planner/tableref/bound_cteref.hpp"
 #include "duckdb/planner/tableref/bound_dummytableref.hpp"
-#include "duckdb/main/client_context.hpp"
+#include "duckdb/planner/tableref/bound_subqueryref.hpp"
 
 namespace duckdb {
 
@@ -93,26 +93,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		for (auto found_cte : found_ctes) {
 			auto &cte = found_cte.get();
 			auto ctebinding = bind_context.GetCTEBinding(ref.table_name);
-			if (!ctebinding) {
-				if (CTEIsAlreadyBound(cte)) {
-					// remember error state
-					circular_cte = true;
-					// retry with next candidate CTE
-					continue;
-				}
-				// Move CTE to subquery and bind recursively
-				SubqueryRef subquery(unique_ptr_cast<SQLStatement, SelectStatement>(cte.query->Copy()));
-				subquery.alias = ref.alias.empty() ? ref.table_name : ref.alias;
-				subquery.column_name_alias = cte.aliases;
-				for (idx_t i = 0; i < ref.column_name_alias.size(); i++) {
-					if (i < subquery.column_name_alias.size()) {
-						subquery.column_name_alias[i] = ref.column_name_alias[i];
-					} else {
-						subquery.column_name_alias.push_back(ref.column_name_alias[i]);
-					}
-				}
-				return Bind(subquery, &found_cte.get());
-			} else {
+			if (ctebinding && (cte.query->node->type == QueryNodeType::RECURSIVE_CTE_NODE ||
+			                   cte.materialized == CTEMaterialize::CTE_MATERIALIZE_ALWAYS)) {
 				// There is a CTE binding in the BindContext.
 				// This can only be the case if there is a recursive CTE,
 				// or a materialized CTE present.
@@ -137,6 +119,25 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 				result->types = ctebinding->types;
 				result->bound_columns = std::move(names);
 				return std::move(result);
+			} else {
+				if (CTEIsAlreadyBound(cte)) {
+					// remember error state
+					circular_cte = true;
+					// retry with next candidate CTE
+					continue;
+				}
+				// Move CTE to subquery and bind recursively
+				SubqueryRef subquery(unique_ptr_cast<SQLStatement, SelectStatement>(cte.query->Copy()));
+				subquery.alias = ref.alias.empty() ? ref.table_name : ref.alias;
+				subquery.column_name_alias = cte.aliases;
+				for (idx_t i = 0; i < ref.column_name_alias.size(); i++) {
+					if (i < subquery.column_name_alias.size()) {
+						subquery.column_name_alias[i] = ref.column_name_alias[i];
+					} else {
+						subquery.column_name_alias.push_back(ref.column_name_alias[i]);
+					}
+				}
+				return Bind(subquery, &found_cte.get());
 			}
 		}
 		if (circular_cte) {

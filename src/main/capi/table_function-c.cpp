@@ -284,13 +284,17 @@ duckdb_state duckdb_register_table_function(duckdb_connection connection, duckdb
 	if (tf->name.empty() || !info->bind || !info->init || !info->function) {
 		return DuckDBError;
 	}
-	con->context->RunFunctionInTransaction([&]() {
-		auto &catalog = duckdb::Catalog::GetSystemCatalog(*con->context);
-		duckdb::CreateTableFunctionInfo tf_info(*tf);
+	try {
+		con->context->RunFunctionInTransaction([&]() {
+			auto &catalog = duckdb::Catalog::GetSystemCatalog(*con->context);
+			duckdb::CreateTableFunctionInfo tf_info(*tf);
 
-		// create the function in the catalog
-		catalog.CreateTableFunction(*con->context, tf_info);
-	});
+			// create the function in the catalog
+			catalog.CreateTableFunction(*con->context, tf_info);
+		});
+	} catch (...) { // LCOV_EXCL_START
+		return DuckDBError;
+	} // LCOV_EXCL_STOP
 	return DuckDBSuccess;
 }
 

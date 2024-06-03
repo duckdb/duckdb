@@ -88,10 +88,12 @@ public:
 	static unique_ptr<ExtensionInstallInfo> InstallExtension(ClientContext &context, const string &extension,
 	                                                         bool force_install,
 	                                                         optional_ptr<ExtensionRepository> repository = nullptr,
+	                                                         bool throw_on_origin_mismatch = false,
 	                                                         const string &version = "");
 	static unique_ptr<ExtensionInstallInfo> InstallExtension(DBConfig &config, FileSystem &fs, const string &extension,
 	                                                         bool force_install,
 	                                                         optional_ptr<ExtensionRepository> repository = nullptr,
+	                                                         bool throw_on_origin_mismatch = false,
 	                                                         const string &version = "");
 	//! Load an extension
 	static void LoadExternalExtension(ClientContext &context, const string &extension);
@@ -213,12 +215,10 @@ public:
 	static bool CreateSuggestions(const string &extension_name, string &message);
 
 private:
-	static unique_ptr<ExtensionInstallInfo> InstallExtensionInternal(DBConfig &config, FileSystem &fs,
-	                                                                 const string &local_path, const string &extension,
-	                                                                 bool force_install, const string &version,
-	                                                                 optional_ptr<ExtensionRepository> repository,
-	                                                                 optional_ptr<HTTPLogger> http_logger = nullptr,
-	                                                                 optional_ptr<ClientContext> context = nullptr);
+	static unique_ptr<ExtensionInstallInfo> InstallExtensionInternal(
+	    DBConfig &config, FileSystem &fs, const string &local_path, const string &extension, bool force_install,
+	    bool throw_on_origin_mismatch, const string &version, optional_ptr<ExtensionRepository> repository,
+	    optional_ptr<HTTPLogger> http_logger = nullptr, optional_ptr<ClientContext> context = nullptr);
 	static const vector<string> PathComponents();
 	static string DefaultExtensionFolder(FileSystem &fs);
 	static bool AllowAutoInstall(const string &extension);
