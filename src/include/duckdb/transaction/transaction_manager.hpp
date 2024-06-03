@@ -50,8 +50,6 @@ public:
 		return db;
 	}
 
-	idx_t UNCOMMITTED_CATALOG_VERSION_START = 4611686018427388000ULL; // similar approach to TRANSACTION_ID_START
-
 	virtual idx_t GetCatalogVersion(Transaction &transaction) {
 		throw duckdb::NotImplementedException("catalog version not supported for this TX manager");
 	}
