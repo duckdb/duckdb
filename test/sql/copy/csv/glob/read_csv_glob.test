@@ -5,6 +5,11 @@
 statement ok
 PRAGMA enable_verification
 
+# Globbing with different dialects
+query III
+FROM 'data/csv/glob_dif_dialect/f_*.csv'
+----
+
 # simple globbing
 query I
 SELECT * FROM read_csv('test/sql/copy/csv/data/glob/a?/*.csv') ORDER BY 1

@@ -1,0 +1,13 @@
+# name: test/sql/copy/csv/test_many_columns_internal_exception.test
+# description: Test read CSV function with many columns
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+#query I
+#FROM read_csv('/Users/holanda/Desktop/duckdb_internalError.sam', names = ['QNAME', 'FLAG', 'RNAME', 'POS', 'MAPQ', 'CIGAR', 'RNEXT', 'PNEXT', 'TLEN', 'SEQ', 'QUAL', 'TAG_1', 'TAG_2', 'TAG_3', 'TAG_4', 'TAG_5', 'TAG_6', 'TAG_7', 'TAG_8', 'TAG_9', 'TAG_10', 'TAG_11', 'TAG_12', 'TAG_13', 'TAG_14', 'TAG_15'], types= {'QNAME': 'VARCHAR', 'FLAG': 'USMALLINT', 'RNAME': 'VARCHAR', 'POS': 'UINTEGER', 'MAPQ': 'USMALLINT', 'CIGAR': 'VARCHAR', 'RNEXT': 'VARCHAR', 'PNEXT': 'UINTEGER', 'TLEN': 'USMALLINT', 'SEQ': 'VARCHAR', 'QUAL': 'VARCHAR', 'TAG_1': 'VARCHAR', 'TAG_2': 'VARCHAR', 'TAG_3': 'VARCHAR', 'TAG_4': 'VARCHAR', 'TAG_5': 'VARCHAR', 'TAG_6': 'VARCHAR', 'TAG_7': 'VARCHAR', 'TAG_8': 'VARCHAR', 'TAG_9': 'VARCHAR', 'TAG_10': 'VARCHAR', 'TAG_11': 'VARCHAR', 'TAG_12': 'VARCHAR', 'TAG_13': 'VARCHAR', 'TAG_14': 'VARCHAR', 'TAG_15': 'VARCHAR'}, sample_size=-1,null_padding=True)
+#----
+#1
+
+#
