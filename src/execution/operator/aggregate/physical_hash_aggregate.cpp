@@ -915,6 +915,8 @@ string PhysicalHashAggregate::ParamsToString() const {
 			result += " Filter: " + aggregate.filter->GetName();
 		}
 	}
+	result += "\n[INFOSEPARATOR]\n";
+	result += StringUtil::Format("EC: %llu\n", estimated_cardinality);
 	return result;
 }
 

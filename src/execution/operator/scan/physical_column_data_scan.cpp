@@ -121,7 +121,8 @@ string PhysicalColumnDataScan::ParamsToString() const {
 	default:
 		break;
 	}
-
+	result += "\n[INFOSEPARATOR]\n";
+	result += StringUtil::Format("EC: %llu\n", estimated_cardinality);
 	return result;
 }
 

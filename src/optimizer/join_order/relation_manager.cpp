@@ -75,6 +75,8 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 		relation_mapping[table_index] = relation_id;
 	}
 	relations.push_back(std::move(relation));
+	op.estimated_cardinality = stats.cardinality;
+	op.has_estimated_cardinality = true;
 }
 
 static bool OperatorNeedsRelation(LogicalOperatorType op_type) {
