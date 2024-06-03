@@ -28,9 +28,8 @@ void TransactionContext::BeginTransaction() {
 		throw TransactionException("cannot start a transaction within a transaction");
 	}
 	auto start_timestamp = Timestamp::GetCurrentTimestamp();
-	// TODO: No longer necessary? Or use Oid here
-	auto catalog_version = context.db->GetDatabaseManager().CurrentOid();
-	current_transaction = make_uniq<MetaTransaction>(context, start_timestamp, catalog_version);
+	auto start_global_oid = context.db->GetDatabaseManager().CurrentOid();
+	current_transaction = make_uniq<MetaTransaction>(context, start_timestamp, start_global_oid);
 
 	// Notify any registered state of transaction begin
 	for (auto const &s : context.registered_state) {

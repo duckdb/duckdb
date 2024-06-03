@@ -39,5 +39,22 @@ TEST_CASE("Test catalog versioning", "[catalog]") {
 		auto &catalog = Catalog::GetCatalog(*con1.context, "");
 		REQUIRE(catalog.GetCatalogVersion(*con1.context) == 2);
 	});
+
+	// check catalog version of system catalog
+	con1.context->RunFunctionInTransaction([&]() {
+		auto &catalog = Catalog::GetCatalog(*con1.context, "system");
+		REQUIRE(catalog.GetCatalogVersion(*con1.context) == 1);
+	});
+	REQUIRE_NO_FAIL(con1.Query("ATTACH ':memory:' as foo"));
+	con1.context->RunFunctionInTransaction([&]() {
+		auto &catalog = Catalog::GetCatalog(*con1.context, "system");
+		REQUIRE(catalog.GetCatalogVersion(*con1.context) == 2);
+	});
+
+	// check new version of attached DB starts at 0
+	con1.context->RunFunctionInTransaction([&]() {
+		auto &catalog = Catalog::GetCatalog(*con1.context, "foo");
+		REQUIRE(catalog.GetCatalogVersion(*con1.context) == 0);
+	});
 }
 

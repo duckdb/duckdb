@@ -25,13 +25,13 @@ class Transaction;
 //! The MetaTransaction manages multiple transactions for different attached databases
 class MetaTransaction {
 public:
-	DUCKDB_API MetaTransaction(ClientContext &context, timestamp_t start_timestamp, idx_t catalog_version);
+	DUCKDB_API MetaTransaction(ClientContext &context, timestamp_t start_timestamp, idx_t start_catalog_oid);
 
 	ClientContext &context;
 	//! The timestamp when the transaction started
 	timestamp_t start_timestamp;
-	//! The catalog version when the transaction was started
-	idx_t catalog_version;
+	//! The global db manager oid when the transaction was started
+	idx_t start_global_oid;
 	//! The validity checker of the transaction
 	ValidChecker transaction_validity;
 	//! Whether or not any transaction have made modifications

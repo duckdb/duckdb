@@ -49,8 +49,6 @@ optional_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &co
 
 	const auto name = attached_db->GetName();
 	attached_db->oid = NextOid();
-	// We have to mark system catalog as changed
-	// TODO: do we need to do sth here? system->GetCatalog().NextOid(); //ModifyCatalog(system->GetCatalog().GetCatalogTransaction(context).transaction_id);
 	LogicalDependencyList dependencies;
 	if (default_database.empty()) {
 		default_database = name;

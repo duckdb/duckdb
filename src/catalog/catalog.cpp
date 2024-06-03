@@ -911,15 +911,10 @@ vector<MetadataBlockInfo> Catalog::GetMetadataInfo(ClientContext &context) {
 void Catalog::Verify() {
 }
 
-//===--------------------------------------------------------------------===//
-// Catalog Version
-//===--------------------------------------------------------------------===//
 idx_t Catalog::GetCatalogVersion(ClientContext &context) {
 	auto transaction = GetCatalogTransaction(context);
-	if (transaction.transaction) {
-		return GetAttached().GetTransactionManager().GetCatalogVersion(*transaction.transaction);
-	}
-	return 0;
+	D_ASSERT(transaction.transaction);
+	return db.GetTransactionManager().GetCatalogVersion(*transaction.transaction);
 }
 
 idx_t Catalog::NextOid() {

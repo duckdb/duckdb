@@ -103,7 +103,9 @@ public:
 	bool IsSystemCatalog() const;
 	bool IsTemporaryCatalog() const;
 
-	//! Returns the current version of the catalog (incremented whenever anything changes, not stored between restarts)
+	//! Returns a version number that uniquely characterizes the current catalog snapshot.
+	//! If there are transaction-local changes, the version returned is >= TRANSACTION_START, o.w. it is a simple number
+	//! starting at 0 that is incremented at each commit that has had catalog changes.
 	DUCKDB_API idx_t GetCatalogVersion(ClientContext &context);
 
 	DUCKDB_API idx_t NextOid();

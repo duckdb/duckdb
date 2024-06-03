@@ -335,7 +335,7 @@ ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock, const st
 	result->names = planner.names;
 	result->types = planner.types;
 	result->value_map = std::move(planner.value_map);
-	result->catalog_version = MetaTransaction::Get(*this).catalog_version;
+	result->start_bind_global_oid = MetaTransaction::Get(*this).start_global_oid;
 	if (!planner.properties.bound_all_parameters) {
 		return result;
 	}
