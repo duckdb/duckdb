@@ -22,16 +22,6 @@ namespace duckdb {
 class StreamQueryResult;
 class ClientContextLock;
 
-struct BlockedSink {
-public:
-	BlockedSink(InterruptState state) : state(std::move(state)) {
-	}
-
-public:
-	//! The handle to reschedule the blocked sink
-	InterruptState state;
-};
-
 class BufferedData {
 protected:
 	enum class Type { SIMPLE, BATCHED };
