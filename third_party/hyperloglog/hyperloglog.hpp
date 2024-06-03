@@ -40,6 +40,10 @@ robj *hll_merge(robj **hlls, size_t hll_count);
 //! Get size (in bytes) of the HLL
 uint64_t get_size();
 
+//! Helper Functions
+double hllSigma(double x);
+double hllTau(double x);
+
 uint64_t MurmurHash64A(const void *key, int len, unsigned int seed);
 
 // NOLINTEND
