@@ -160,6 +160,55 @@ duckdb::string_t StringCast::Operation(timestamp_t input, Vector &vector) {
 }
 
 template <>
+duckdb::string_t StringCast::Operation(timestamp_ns_t input, Vector &vector) {
+	if (input == timestamp_t::infinity()) {
+		return StringVector::AddString(vector, Date::PINF);
+	} else if (input == timestamp_t::ninfinity()) {
+		return StringVector::AddString(vector, Date::NINF);
+	}
+	timestamp_t ms(input.value / Interval::NANOS_PER_MICRO);
+	date_t date_entry;
+	dtime_t time_entry;
+	Timestamp::Convert(ms, date_entry, time_entry);
+
+	int32_t date[3], time[5];
+	Date::Convert(date_entry, date[0], date[1], date[2]);
+	Time::Convert(time_entry, time[0], time[1], time[2], time[3]);
+	// Use picoseconds so we have 6 digits
+	int64_t nanos = input.value - (int64_t(date_entry.days) * int64_t(Interval::NANOS_PER_DAY));
+	time[4] = (nanos % Interval::NANOS_PER_MICRO) * 1000;
+
+	// format for timestamp is DATE TIME (separated by space)
+	idx_t year_length;
+	bool add_bc;
+	char micro_buffer[6];
+	char nano_buffer[6];
+	idx_t date_length = DateToStringCast::Length(date, year_length, add_bc);
+	idx_t time_length = TimeToStringCast::Length(time, micro_buffer);
+	idx_t nano_length = 0;
+	if (time[4]) {
+		//	If there are ps, we need all the µs
+		time_length = 15;
+		nano_length = 6;
+		nano_length -= NumericCast<idx_t>(TimeToStringCast::FormatMicros(time[4], nano_buffer));
+	}
+	idx_t length = date_length + time_length + nano_length + 1;
+
+	string_t result = StringVector::EmptyString(vector, length);
+	auto data = result.GetDataWriteable();
+
+	DateToStringCast::Format(data, date, year_length, add_bc);
+	data += date_length;
+	*data++ = ' ';
+	TimeToStringCast::Format(data, time_length, time, micro_buffer);
+	data += time_length;
+	memcpy(data, nano_buffer, nano_length);
+
+	result.Finalize();
+	return result;
+}
+
+template <>
 duckdb::string_t StringCast::Operation(duckdb::string_t input, Vector &result) {
 	return StringVector::AddStringOrBlob(result, input);
 }

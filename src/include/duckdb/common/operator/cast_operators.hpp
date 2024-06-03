@@ -799,7 +799,7 @@ template <>
 duckdb::timestamp_t CastTimestampSecToNs::Operation(duckdb::timestamp_t input);
 
 template <>
-duckdb::string_t CastFromTimestampNS::Operation(duckdb::timestamp_t input, Vector &result);
+duckdb::string_t CastFromTimestampNS::Operation(duckdb::timestamp_ns_t input, Vector &result);
 template <>
 duckdb::string_t CastFromTimestampMS::Operation(duckdb::timestamp_t input, Vector &result);
 template <>

@@ -113,7 +113,7 @@ BoundCastInfo DefaultCasts::TimestampNsCastSwitch(BindCastInput &input, const Lo
 	switch (target.id()) {
 	case LogicalTypeId::VARCHAR:
 		// timestamp (ns) to varchar
-		return BoundCastInfo(&VectorCastHelpers::StringCast<timestamp_t, duckdb::CastFromTimestampNS>);
+		return BoundCastInfo(&VectorCastHelpers::StringCast<timestamp_ns_t, duckdb::StringCast>);
 	case LogicalTypeId::DATE:
 		// timestamp (ns) to date
 		return BoundCastInfo(&VectorCastHelpers::TemplatedCastLoop<timestamp_t, date_t, duckdb::CastTimestampNsToDate>);
