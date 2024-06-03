@@ -316,6 +316,31 @@ class TestReplacementScan(object):
         res = rel.fetchall()
         assert res == [(1,), (2,), (3,), (5,), (6,), (7,), (9,)]
 
+    def test_multiple_replacements(self, duckdb_cursor):
+        # Sample data for Employees table
+        employees_data = [
+            {"EmployeeID": 1, "EmployeeName": "Alice", "ManagerID": None},
+            {"EmployeeID": 2, "EmployeeName": "Bob", "ManagerID": 1},
+            {"EmployeeID": 3, "EmployeeName": "Charlie", "ManagerID": 1},
+            {"EmployeeID": 4, "EmployeeName": "David", "ManagerID": 2},
+            {"EmployeeID": 5, "EmployeeName": "Eve", "ManagerID": 2},
+        ]
+
+        # Convert list of dictionaries to pandas DataFrame
+        employees_df = pd.DataFrame(employees_data)
+        # First mention of `employees_df` has an alias, second doesn't
+        query = """
+            SELECT
+                e1.EmployeeID,
+                e1.EmployeeName,
+                employees_df.ManagerID
+            FROM employees_df e1
+            JOIN employees_df ON e1.ManagerID = employees_df.EmployeeID;
+        """
+        rel = duckdb_cursor.sql(query)
+        res = rel.fetchall()
+        assert res == [(3, 'Charlie', None), (5, 'Eve', 1.0), (2, 'Bob', None), (4, 'David', 1.0)]
+
     def test_cte_at_different_levels(self, duckdb_cursor):
         query = """
             SELECT * FROM (
