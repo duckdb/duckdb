@@ -1286,6 +1286,10 @@ string StringType::GetCollation(const LogicalType &type) {
 	return info->Cast<StringTypeInfo>().collation;
 }
 
+bool StringType::IsCollated(const LogicalType &type) {
+	return !StringType::GetCollation(type).empty();
+}
+
 LogicalType LogicalType::VARCHAR_COLLATION(string collation) { // NOLINT
 	auto string_info = make_shared_ptr<StringTypeInfo>(std::move(collation));
 	return LogicalType(LogicalTypeId::VARCHAR, std::move(string_info));
