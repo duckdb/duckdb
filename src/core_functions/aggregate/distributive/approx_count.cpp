@@ -115,8 +115,7 @@ static void ApproxCountDistinctSimpleUpdateFunction(Vector inputs[], AggregateIn
 	if (count > STANDARD_VECTOR_SIZE) {
 		throw InternalException("ApproxCountDistinct - count must be at most vector size");
 	}
-	hash_t hash_array[STANDARD_VECTOR_SIZE];
-	Vector hash_vec(LogicalType::HASH, reinterpret_cast<data_ptr_t>(&hash_array));
+	Vector hash_vec(LogicalType::HASH, count);
 	VectorOperations::Hash(input, hash_vec, count);
 
 	UnifiedVectorFormat hdata;
@@ -148,8 +147,7 @@ static void ApproxCountDistinctUpdateFunction(Vector inputs[], AggregateInputDat
 	if (count > STANDARD_VECTOR_SIZE) {
 		throw InternalException("ApproxCountDistinct - count must be at most vector size");
 	}
-	hash_t hash_array[STANDARD_VECTOR_SIZE];
-	Vector hash_vec(LogicalType::HASH, reinterpret_cast<data_ptr_t>(&hash_array));
+	Vector hash_vec(LogicalType::HASH, count);
 	VectorOperations::Hash(input, hash_vec, count);
 
 	UnifiedVectorFormat sdata;
