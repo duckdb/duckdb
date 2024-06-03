@@ -45,6 +45,12 @@ struct SetSelectionVectorWhere {
 		if (!input_validity.RowIsValid(input_offset + child_idx)) {
 			validity_mask.SetInvalid(target_offset);
 		}
+
+		if (child_idx >= target_length) {
+			selection_vector.set_index(target_offset, 0);
+			validity_mask.SetInvalid(target_offset);
+		}
+
 		target_offset++;
 	}
 

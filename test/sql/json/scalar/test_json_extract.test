@@ -314,3 +314,41 @@ query T
 execute q1('a')
 ----
 1
+
+# test issue 11997
+query I
+select json_extract_string(json('{"j[so]n_\"key": 67}'), '$."j[so]n_\"key"');
+----
+67
+
+query I
+select '{"\"duck\"": 42}'->'$."\"duck\""';
+----
+42
+
+query I
+select '{"\"du\\ck\"": 42}'->'$."\"du\\ck\""';
+----
+42
+
+query I
+select '{"\"du\\ck\"": 42}'->'$."\"du\ck\""';
+----
+42
+
+query I
+select '{"du\\ck": 42}'->'$.du\ck';
+----
+42
+
+# characters other than \\ or \" get ignored (for now)
+query I
+select '{"\"du\nck\"": 42}'->'$."\"du\nck\""';
+----
+NULL
+
+# need to use chr(10) for \n
+query I
+select '{"\"du\nck\"": 42}'->('$."\"du' || chr(10) || 'ck\""');
+----
+42

@@ -13,6 +13,8 @@
 
 namespace duckdb {
 
+enum class CatalogType : uint8_t;
+
 enum class ParseInfoType : uint8_t {
 	ALTER_INFO,
 	ATTACH_INFO,
@@ -29,7 +31,8 @@ enum class ParseInfoType : uint8_t {
 	VACUUM_INFO,
 	COMMENT_ON_INFO,
 	COMMENT_ON_COLUMN_INFO,
-	COPY_DATABASE_INFO
+	COPY_DATABASE_INFO,
+	UPDATE_EXTENSIONS_INFO
 };
 
 struct ParseInfo {

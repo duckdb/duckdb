@@ -25,33 +25,6 @@
 
 namespace duckdb {
 
-struct DuckDBPyConnection;
-
-class PythonDependencies : public ExternalDependency {
-public:
-	explicit PythonDependencies() : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY) {
-	}
-	~PythonDependencies() override {
-		py::gil_scoped_acquire gil;
-		py_object_list.clear();
-	}
-
-	explicit PythonDependencies(py::function map_function)
-	    : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY), map_function(std::move(map_function)) {};
-	explicit PythonDependencies(unique_ptr<RegisteredObject> py_object)
-	    : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY) {
-		py_object_list.push_back(std::move(py_object));
-	};
-	explicit PythonDependencies(unique_ptr<RegisteredObject> py_object_original,
-	                            unique_ptr<RegisteredObject> py_object_copy)
-	    : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY) {
-		py_object_list.push_back(std::move(py_object_original));
-		py_object_list.push_back(std::move(py_object_copy));
-	};
-	py::function map_function;
-	vector<unique_ptr<RegisteredObject>> py_object_list;
-};
-
 struct DuckDBPyRelation {
 public:
 	explicit DuckDBPyRelation(shared_ptr<Relation> rel);
@@ -214,7 +187,7 @@ public:
 
 	py::dict FetchNumpyInternal(bool stream = false, idx_t vectors_per_chunk = 1);
 
-	PandasDataFrame FetchDFChunk(idx_t vectors_per_chunk, bool date_as_object);
+	PandasDataFrame FetchDFChunk(const idx_t vectors_per_chunk = 1, bool date_as_object = false);
 
 	duckdb::pyarrow::Table ToArrowTable(idx_t batch_size);
 
@@ -274,6 +247,8 @@ public:
 	static bool IsRelation(const py::object &object);
 
 	bool CanBeRegisteredBy(Connection &con);
+	bool CanBeRegisteredBy(ClientContext &context);
+	bool CanBeRegisteredBy(shared_ptr<ClientContext> &context);
 
 	Relation &GetRel();
 

@@ -17,8 +17,18 @@ class ErrorData;
 class MetaTransaction;
 class PreparedStatementData;
 class SQLStatement;
+struct PendingQueryParameters;
 
 enum class RebindQueryInfo { DO_NOT_REBIND, ATTEMPT_TO_REBIND };
+
+struct PreparedStatementCallbackInfo {
+	PreparedStatementCallbackInfo(PreparedStatementData &prepared_statement, const PendingQueryParameters &parameters)
+	    : prepared_statement(prepared_statement), parameters(parameters) {
+	}
+
+	PreparedStatementData &prepared_statement;
+	const PendingQueryParameters &parameters;
+};
 
 //! ClientContextState is virtual base class for ClientContext-local (or Query-Local, using QueryEnd callback) state
 //! e.g. caches that need to live as long as a ClientContext or Query.
@@ -48,7 +58,7 @@ public:
 	                                          PreparedStatementMode mode) {
 		return RebindQueryInfo::DO_NOT_REBIND;
 	}
-	virtual RebindQueryInfo OnExecutePrepared(ClientContext &context, PreparedStatementData &prepared_statement,
+	virtual RebindQueryInfo OnExecutePrepared(ClientContext &context, PreparedStatementCallbackInfo &info,
 	                                          RebindQueryInfo current_rebind) {
 		return RebindQueryInfo::DO_NOT_REBIND;
 	}

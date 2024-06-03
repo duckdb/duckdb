@@ -23,6 +23,7 @@ add_library_unity(
   table_function_relation.cpp
   table_relation.cpp
   value_relation.cpp
+  materialized_relation.cpp
   view_relation.cpp
   write_parquet_relation.cpp
   write_csv_relation.cpp)

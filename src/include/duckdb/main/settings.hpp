@@ -206,6 +206,26 @@ struct EnableExternalAccessSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct EnableMacrosDependencies {
+	static constexpr const char *Name = "enable_macro_dependencies";
+	static constexpr const char *Description =
+	    "Enable created MACROs to create dependencies on the referenced objects (such as tables)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct EnableViewDependencies {
+	static constexpr const char *Name = "enable_view_dependencies";
+	static constexpr const char *Description =
+	    "Enable created VIEWs to create dependencies on the referenced objects (such as tables)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct EnableFSSTVectors {
 	static constexpr const char *Name = "enable_fsst_vectors";
 	static constexpr const char *Description =
@@ -219,6 +239,15 @@ struct EnableFSSTVectors {
 struct AllowUnsignedExtensionsSetting {
 	static constexpr const char *Name = "allow_unsigned_extensions";
 	static constexpr const char *Description = "Allow to load extensions with invalid or missing signatures";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct AllowCommunityExtensionsSetting {
+	static constexpr const char *Name = "allow_community_extensions";
+	static constexpr const char *Description = "Allow to load community built extensions";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
@@ -286,6 +315,15 @@ struct EnableObjectCacheSetting {
 	static constexpr const char *Name = "enable_object_cache";
 	static constexpr const char *Description = "Whether or not object cache is used to cache e.g. Parquet metadata";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct StorageCompatibilityVersion {
+	static constexpr const char *Name = "storage_compatibility_version";
+	static constexpr const char *Description = "Serialize on checkpoint with compatibility for a given duckdb version";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -668,6 +706,25 @@ struct CustomUserAgentSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct EnableHTTPLoggingSetting {
+	static constexpr const char *Name = "enable_http_logging";
+	static constexpr const char *Description = "Enables HTTP logging";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct HTTPLoggingOutputSetting {
+	static constexpr const char *Name = "http_logging_output";
+	static constexpr const char *Description =
+	    "The file to which HTTP logging output should be saved, or empty to print to the terminal";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
 };
 

@@ -45,20 +45,23 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 		return copy_function.function.plan(*this, stmt);
 	}
 
+	auto &copy_info = *stmt.info;
 	// bind the select statement
-	auto select_node = Bind(*stmt.select_statement);
+	auto node_copy = copy_info.select_statement->Copy();
+	auto select_node = Bind(*node_copy);
 
 	if (!copy_function.function.copy_to_bind) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
 
 	bool use_tmp_file = true;
-	bool overwrite_or_ignore = false;
+	CopyOverwriteMode overwrite_mode = CopyOverwriteMode::COPY_ERROR_ON_CONFLICT;
 	FilenamePattern filename_pattern;
 	bool user_set_use_tmp_file = false;
 	bool per_thread_output = false;
 	optional_idx file_size_bytes;
 	vector<idx_t> partition_cols;
+	bool seen_overwrite_mode = false;
 
 	CopyFunctionBindInput bind_input(*stmt.info);
 
@@ -72,8 +75,20 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 		if (loption == "use_tmp_file") {
 			use_tmp_file = GetBooleanArg(context, option.second);
 			user_set_use_tmp_file = true;
-		} else if (loption == "overwrite_or_ignore") {
-			overwrite_or_ignore = GetBooleanArg(context, option.second);
+		} else if (loption == "overwrite_or_ignore" || loption == "overwrite") {
+			if (seen_overwrite_mode) {
+				throw BinderException("Can only set one of OVERWRITE_OR_IGNORE or OVERWRITE");
+			}
+			seen_overwrite_mode = true;
+
+			auto boolean = GetBooleanArg(context, option.second);
+			if (boolean) {
+				if (loption == "overwrite_or_ignore") {
+					overwrite_mode = CopyOverwriteMode::COPY_OVERWRITE_OR_IGNORE;
+				} else if (loption == "overwrite") {
+					overwrite_mode = CopyOverwriteMode::COPY_OVERWRITE;
+				}
+			}
 		} else if (loption == "filename_pattern") {
 			if (option.second.empty()) {
 				throw IOException("FILENAME_PATTERN cannot be empty");
@@ -144,7 +159,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	auto copy = make_uniq<LogicalCopyToFile>(copy_function.function, std::move(function_data), std::move(stmt.info));
 	copy->file_path = file_path;
 	copy->use_tmp_file = use_tmp_file;
-	copy->overwrite_or_ignore = overwrite_or_ignore;
+	copy->overwrite_mode = overwrite_mode;
 	copy->filename_pattern = filename_pattern;
 	copy->file_extension = bind_input.file_extension;
 	copy->per_thread_output = per_thread_output;
@@ -229,7 +244,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 }
 
 BoundStatement Binder::Bind(CopyStatement &stmt) {
-	if (!stmt.info->is_from && !stmt.select_statement) {
+	if (!stmt.info->is_from && !stmt.info->select_statement) {
 		// copy table into file without a query
 		// generate SELECT * FROM table;
 		auto ref = make_uniq<BaseTableRef>();
@@ -246,8 +261,10 @@ BoundStatement Binder::Bind(CopyStatement &stmt) {
 		} else {
 			statement->select_list.push_back(make_uniq<StarExpression>());
 		}
-		stmt.select_statement = std::move(statement);
+		stmt.info->select_statement = std::move(statement);
 	}
+
+	auto &properties = GetStatementProperties();
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	if (stmt.info->is_from) {

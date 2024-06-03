@@ -100,7 +100,7 @@ private:
 	bool IsSystemEntry(CatalogEntry &entry) const;
 	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, const LogicalDependency &dependency);
 	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, CatalogEntry &dependency);
-
+	string CollectDependents(CatalogTransaction transaction, catalog_entry_set_t &entries, CatalogEntryInfo &info);
 	void CleanupDependencies(CatalogTransaction transaction, CatalogEntry &entry);
 
 public:
@@ -112,7 +112,7 @@ public:
 private:
 	void AddObject(CatalogTransaction transaction, CatalogEntry &object, const LogicalDependencyList &dependencies);
 	void DropObject(CatalogTransaction transaction, CatalogEntry &object, bool cascade);
-	void AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj);
+	void AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj, AlterInfo &info);
 
 private:
 	void RemoveDependency(CatalogTransaction transaction, const DependencyInfo &info);
