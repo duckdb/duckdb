@@ -336,7 +336,6 @@ void CSVSniffer::DetectTypes() {
 
 		// Reset candidate for parsing
 		auto candidate = candidate_cc->UpgradeToStringValueScanner();
-
 		// Parse chunk and read csv with info candidate
 		auto &data_chunk = candidate->ParseChunk().ToChunk();
 		idx_t row_idx = 0;
@@ -365,7 +364,7 @@ void CSVSniffer::DetectTypes() {
 				// try cast from string to sql_type
 				while (col_type_candidates.size() > 1) {
 					const auto &sql_type = col_type_candidates.back();
-					// try formatting for date types if the user did not specify one and it starts with numeric
+					// try formatting for date types if the user did not specify one, and it starts with numeric
 					// values.
 					string separator;
 					// If Value is not Null, Has a numeric date format, and the current investigated candidate is

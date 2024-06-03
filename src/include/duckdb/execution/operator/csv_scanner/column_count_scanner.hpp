@@ -47,7 +47,7 @@ public:
 class ColumnCountScanner : public BaseScanner {
 public:
 	ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manager, const shared_ptr<CSVStateMachine> &state_machine,
-	                   shared_ptr<CSVErrorHandler> error_handler);
+	                   shared_ptr<CSVErrorHandler> error_handler, CSVIterator iterator = {});
 
 	ColumnCountResult &ParseChunk() override;
 

@@ -25,11 +25,9 @@ namespace duckdb {
 
 //! Information stored in the buffer
 struct CSVBoundary {
-	CSVBoundary(idx_t file_idx, idx_t buffer_idx, idx_t buffer_pos, idx_t boundary_idx, idx_t end_pos);
+	CSVBoundary(idx_t buffer_idx, idx_t buffer_pos, idx_t boundary_idx, idx_t end_pos);
 	CSVBoundary();
 	void Print();
-	//! File index where we start scanning [0-idx], a scanner can never go over one file.
-	idx_t file_idx = 0;
 	//! Start Buffer index of the file where we start scanning
 	idx_t buffer_idx = 0;
 	//! Start Buffer position of the buffer of the file where we start scanning
@@ -43,10 +41,8 @@ struct CSVBoundary {
 };
 
 struct CSVPosition {
-	CSVPosition(idx_t file_idx, idx_t buffer_idx, idx_t buffer_pos);
+	CSVPosition(idx_t buffer_idx, idx_t buffer_pos);
 	CSVPosition();
-	//! File index where we start scanning [0-idx], a scanner can never go over one file.
-	idx_t file_idx = 0;
 	//! Start Buffer index of the file where we start scanning
 	idx_t buffer_idx = 0;
 	//! Start Buffer position of the buffer of the file where we start scanning
@@ -55,8 +51,6 @@ struct CSVPosition {
 };
 struct CSVIterator {
 public:
-	CSVIterator(idx_t file_idx, idx_t buffer_idx, idx_t buffer_pos, idx_t boundary_idx, idx_t buffer_size);
-
 	CSVIterator();
 
 	void Print();
@@ -68,11 +62,12 @@ public:
 
 	//! Getters
 	idx_t GetEndPos() const;
-	idx_t GetFileIdx() const;
 	idx_t GetBufferIdx() const;
 	idx_t GetBoundaryIdx() const;
 
 	void SetCurrentPositionToBoundary();
+
+	void SetCurrentBoundaryToPosition(bool single_threaded);
 
 	void SetStart(idx_t pos);
 
@@ -82,6 +77,8 @@ public:
 	CSVPosition pos;
 
 	bool done = false;
+
+	bool first_one = true;
 
 private:
 	//! The original setting

@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/aggregate/physical_streaming_window.hpp"
 
+#include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/parallel/thread_context.hpp"
@@ -18,9 +19,7 @@ bool PhysicalStreamingWindow::IsStreamingFunction(unique_ptr<Expression> &expr) 
 	// TODO: add more expression types here?
 	case ExpressionType::WINDOW_AGGREGATE:
 		// We can stream aggregates if they are "running totals"
-		// TODO: Support DISTINCT
-		return wexpr.start == WindowBoundary::UNBOUNDED_PRECEDING && wexpr.end == WindowBoundary::CURRENT_ROW_ROWS &&
-		       !wexpr.distinct;
+		return wexpr.start == WindowBoundary::UNBOUNDED_PRECEDING && wexpr.end == WindowBoundary::CURRENT_ROW_ROWS;
 	case ExpressionType::WINDOW_FIRST_VALUE:
 	case ExpressionType::WINDOW_PERCENT_RANK:
 	case ExpressionType::WINDOW_RANK:
@@ -49,8 +48,9 @@ public:
 class StreamingWindowState : public OperatorState {
 public:
 	struct AggregateState {
-		explicit AggregateState(BoundWindowExpression &wexpr, Allocator &allocator)
-		    : arena_allocator(Allocator::DefaultAllocator()), statev(LogicalType::POINTER, data_ptr_cast(&state_ptr)) {
+		AggregateState(ClientContext &client, BoundWindowExpression &wexpr, Allocator &allocator)
+		    : arena_allocator(Allocator::DefaultAllocator()), statev(LogicalType::POINTER, data_ptr_cast(&state_ptr)),
+		      hashes(LogicalType::HASH), addresses(LogicalType::POINTER) {
 			D_ASSERT(wexpr.GetExpressionType() == ExpressionType::WINDOW_AGGREGATE);
 			auto &aggregate = *wexpr.aggregate;
 			bind_data = wexpr.bind_info.get();
@@ -67,6 +67,11 @@ public:
 			}
 			if (wexpr.filter_expr) {
 				filter_sel.Initialize();
+			}
+			if (wexpr.distinct) {
+				distinct = make_uniq<GroupedAggregateHashTable>(client, allocator, arg_types);
+				distinct_args.Initialize(allocator, arg_types);
+				distinct_sel.Initialize();
 			}
 		}
 
@@ -100,6 +105,17 @@ public:
 		DataChunk arg_chunk;
 		//! Argument cursor (a one element slice of arg_chunk)
 		DataChunk arg_cursor;
+
+		//! Hash table for accumulating the distinct values
+		unique_ptr<GroupedAggregateHashTable> distinct;
+		//! Filtered arguments for checking distinctness
+		DataChunk distinct_args;
+		//! Reusable hash vector
+		Vector hashes;
+		//! Rows that produced new distinct values
+		SelectionVector distinct_sel;
+		//! Pointers to groups in the hash table.
+		Vector addresses;
 	};
 
 	explicit StreamingWindowState(ClientContext &client) : initialized(false), allocator(Allocator::Get(client)) {
@@ -117,7 +133,7 @@ public:
 			auto &wexpr = expr.Cast<BoundWindowExpression>();
 			switch (expr.GetExpressionType()) {
 			case ExpressionType::WINDOW_AGGREGATE:
-				aggregate_states[expr_idx] = make_uniq<AggregateState>(wexpr, allocator);
+				aggregate_states[expr_idx] = make_uniq<AggregateState>(context, wexpr, allocator);
 				break;
 			case ExpressionType::WINDOW_FIRST_VALUE: {
 				// Just execute the expression once
@@ -191,10 +207,11 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 
 			// Compute the FILTER mask (if any)
 			ValidityMask filter_mask;
+			auto filtered = count;
+			auto &filter_sel = aggr_state.filter_sel;
 			if (wexpr.filter_expr) {
-				auto &filter_sel = aggr_state.filter_sel;
 				ExpressionExecutor filter_executor(context.client, *wexpr.filter_expr);
-				const auto filtered = filter_executor.SelectExpression(input, filter_sel);
+				filtered = filter_executor.SelectExpression(input, filter_sel);
 				if (filtered < count) {
 					filter_mask.Initialize(count);
 					filter_mask.SetAllInvalid(count);
@@ -223,9 +240,41 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 			}
 			auto &arg_chunk = aggr_state.arg_chunk;
 			executor.Execute(input, arg_chunk);
+			arg_chunk.Flatten();
+
+			// Update the distinct hash table
+			ValidityMask distinct_mask;
+			if (aggr_state.distinct) {
+				auto &distinct_args = aggr_state.distinct_args;
+				distinct_args.Reference(arg_chunk);
+				if (wexpr.filter_expr) {
+					distinct_args.Slice(filter_sel, filtered);
+				}
+				idx_t distinct = 0;
+				auto &distinct_sel = aggr_state.distinct_sel;
+				if (filtered) {
+					// FindOrCreateGroups assumes non-empty input
+					auto &hashes = aggr_state.hashes;
+					distinct_args.Hash(hashes);
+
+					auto &addresses = aggr_state.addresses;
+					distinct = aggr_state.distinct->FindOrCreateGroups(distinct_args, hashes, addresses, distinct_sel);
+				}
+
+				//	Translate the distinct selection from filtered row numbers
+				//	back to input row numbers. We need to produce output for all input rows,
+				//	so we filter out
+				if (distinct < filtered) {
+					distinct_mask.Initialize(count);
+					distinct_mask.SetAllInvalid(count);
+					for (idx_t d = 0; d < distinct; ++d) {
+						const auto f = distinct_sel.get_index(d);
+						distinct_mask.SetValid(filter_sel.get_index(f));
+					}
+				}
+			}
 
 			// Iterate through them using a single SV
-			arg_chunk.Flatten();
 			sel_t s = 0;
 			SelectionVector sel(&s);
 			auto &arg_cursor = aggr_state.arg_cursor;
@@ -249,7 +298,7 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 				for (const auto struct_idx : structs) {
 					arg_cursor.data[struct_idx].Slice(arg_chunk.data[struct_idx], sel, 1);
 				}
-				if (filter_mask.RowIsValid(i)) {
+				if (filter_mask.RowIsValid(i) && distinct_mask.RowIsValid(i)) {
 					aggregate.update(arg_cursor.data.data(), aggr_input_data, arg_cursor.ColumnCount(), statev, 1);
 				}
 				aggregate.finalize(statev, aggr_input_data, result, 1, i);
