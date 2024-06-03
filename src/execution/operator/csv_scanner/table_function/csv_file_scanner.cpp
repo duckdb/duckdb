@@ -1,6 +1,8 @@
 #include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
-#include "duckdb/function/table/read_csv.hpp"
+
 #include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/skip_scanner.hpp"
+#include "duckdb/function/table/read_csv.hpp"
 
 namespace duckdb {
 
@@ -39,6 +41,18 @@ CSVFileScan::CSVFileScan(ClientContext &context, shared_ptr<CSVBufferManager> bu
 	                                    bind_data.return_names, column_ids, nullptr, file_path, context, nullptr);
 
 	InitializeFileNamesTypes();
+	SetStart();
+}
+
+void CSVFileScan::SetStart() {
+	idx_t rows_to_skip = options.GetSkipRows() + state_machine->dialect_options.header.GetValue();
+	if (rows_to_skip == 0) {
+		start_iterator.first_one = true;
+		return;
+	}
+	SkipScanner skip_scanner(buffer_manager, state_machine, error_handler, rows_to_skip);
+	skip_scanner.ParseChunk();
+	start_iterator = skip_scanner.GetIterator();
 }
 
 CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, const CSVReaderOptions &options_p,
@@ -71,6 +85,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 			                                    file_path, context, nullptr);
 
 			InitializeFileNamesTypes();
+			SetStart();
 			return;
 		}
 	}
@@ -98,6 +113,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 		multi_file_reader->InitializeReader(*this, options.file_options, bind_data.reader_bind, bind_data.return_types,
 		                                    bind_data.return_names, column_ids, nullptr, file_path, context, nullptr);
 		InitializeFileNamesTypes();
+		SetStart();
 		return;
 	}
 	// Sniff it (We only really care about dialect detection, if types or number of columns are different this will
@@ -129,6 +145,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 	multi_file_reader->InitializeReader(*this, options.file_options, bind_data.reader_bind, bind_data.return_types,
 	                                    bind_data.return_names, column_ids, nullptr, file_path, context, nullptr);
 	InitializeFileNamesTypes();
+	SetStart();
 }
 
 CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, CSVReaderOptions &options_p)
@@ -156,6 +173,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, CSVRea
 	// Initialize State Machine
 	state_machine = make_shared_ptr<CSVStateMachine>(
 	    state_machine_cache.Get(options.dialect_options.state_machine_options), options);
+	SetStart();
 }
 
 void CSVFileScan::InitializeFileNamesTypes() {

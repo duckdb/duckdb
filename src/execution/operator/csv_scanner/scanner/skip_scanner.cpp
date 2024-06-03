@@ -38,6 +38,7 @@ bool SkipResult::EmptyLine(SkipResult &result, const idx_t buffer_pos) {
 	}
 	return false;
 }
+
 SkipScanner::SkipScanner(shared_ptr<CSVBufferManager> buffer_manager, const shared_ptr<CSVStateMachine> &state_machine,
                          shared_ptr<CSVErrorHandler> error_handler, idx_t rows_to_skip)
     : BaseScanner(std::move(buffer_manager), state_machine, std::move(error_handler)),
@@ -58,6 +59,20 @@ void SkipScanner::Initialize() {
 }
 
 void SkipScanner::FinalizeChunkProcess() {
-	// nop
+	// We continue skipping until we skipped enough rows, or we have nothing else to read.
+	while (!FinishedFile() && result.row_count < result.rows_to_skip) {
+		cur_buffer_handle = buffer_manager->GetBuffer(++iterator.pos.buffer_idx);
+		if (cur_buffer_handle) {
+			iterator.pos.buffer_pos = 0;
+			buffer_handle_ptr = cur_buffer_handle->Ptr();
+			Process(result);
+		}
+	}
+	// Skip Carriage Return
+	if (state_machine->options.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON &&
+	    states.states[1] == CSVState::CARRIAGE_RETURN) {
+		iterator.pos.buffer_pos++;
+	}
+	iterator.done = FinishedFile();
 }
 } // namespace duckdb
