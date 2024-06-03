@@ -1,6 +1,6 @@
 # name: test/sql/collate/collate_scalar_string_functions.test
 # description: Issue 1091: Functions don't check or pass collation.
-# group: [general]
+# group: [collate]
 
 statement ok
 create table tbl (a varchar, b varchar);
