@@ -130,8 +130,8 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		if (StringType::IsCollated(child_ret_type)) {
 			auto collation = StringType::GetCollation(child_ret_type);
 			if (!last_collation.empty() && last_collation != collation) {
-				throw BinderException(function,
-						"Function \"%s\" has multiple collations: %s and %s", function.function_name, last_collation, collation);
+				throw BinderException(function, "Function \"%s\" has multiple collations: %s and %s",
+				                      function.function_name, last_collation, collation);
 			}
 			ExpressionBinder::PushCollation(context, children[i], child_ret_type, false);
 			last_collation = collation;
@@ -149,7 +149,8 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		if (bound_function.function.stability == FunctionStability::CONSISTENT_WITHIN_QUERY) {
 			binder.SetAlwaysRequireRebind();
 		}
-		if (bound_function.return_type.id() == LogicalTypeId::VARCHAR && StringType::IsCollated(bound_function.return_type)) {
+		if (bound_function.return_type.id() == LogicalTypeId::VARCHAR &&
+		    StringType::IsCollated(bound_function.return_type)) {
 			ExpressionBinder::PushCollation(context, result, result->return_type, false);
 		}
 	}

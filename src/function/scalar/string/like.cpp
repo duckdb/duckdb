@@ -77,7 +77,8 @@ bool TemplatedLikeOperator(const char *sdata, idx_t slen, const char *pdata, idx
 }
 
 struct LikeSegment {
-	explicit LikeSegment(string pattern_p, idx_t start_p, idx_t end_p) : pattern(std::move(pattern_p)), start(start_p), end(end_p) {
+	explicit LikeSegment(string pattern_p, idx_t start_p, idx_t end_p)
+	    : pattern(std::move(pattern_p)), start(start_p), end(end_p) {
 	}
 
 	string pattern;
@@ -150,7 +151,7 @@ struct LikeMatcher : public FunctionData {
 		}
 	}
 
-	template<bool STOPPLE>
+	template <bool STOPPLE>
 	static unique_ptr<LikeMatcher> CreateLikeMatcher(string like_pattern, char escape = '\0') {
 		vector<LikeSegment> segments;
 		idx_t last_non_pattern = 0;
@@ -203,7 +204,7 @@ struct LikeMatcher : public FunctionData {
 	}
 
 	void PushCollation(ClientContext &context, LogicalType &collation) {
-		for (auto &segment: segments) {
+		for (auto &segment : segments) {
 			unique_ptr<Expression> const_expr = make_uniq<BoundConstantExpression>(Value(segment.pattern));
 			ExpressionBinder::PushCollation(context, const_expr, collation, false);
 			Value collated_pattern = ExpressionExecutor::EvaluateScalar(context, *const_expr);
@@ -212,21 +213,21 @@ struct LikeMatcher : public FunctionData {
 	}
 
 	string RebuildStringPattern() {
-		for (auto &segment: segments) {
+		for (auto &segment : segments) {
 			like_pattern.replace(segment.start, segment.start - segment.end + 1, segment.pattern);
 		}
 		return like_pattern;
 	}
 
 private:
-
 	string like_pattern;
 	vector<LikeSegment> segments;
 	bool has_start_percentage;
 	bool has_end_percentage;
 };
 
-static bool GetCollationLikePattern(unique_ptr<Expression> &lhs, unique_ptr<Expression> &rhs, LogicalType &result_type) {
+static bool GetCollationLikePattern(unique_ptr<Expression> &lhs, unique_ptr<Expression> &rhs,
+                                    LogicalType &result_type) {
 	auto coll_left = StringType::GetCollation(lhs->return_type);
 	auto coll_right = StringType::GetCollation(rhs->return_type);
 	if (coll_left.empty() && coll_right.empty()) {
@@ -252,7 +253,7 @@ static unique_ptr<FunctionData> LikeBindFunction(ClientContext &context, ScalarF
 	D_ASSERT(arguments.size() == 2 || arguments.size() == 3);
 	if (arguments[1]->IsFoldable()) {
 		Value pattern_str = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
-		
+
 		LogicalType result_type;
 		if (GetCollationLikePattern(arguments[0], arguments[1], result_type)) {
 
@@ -262,7 +263,8 @@ static unique_ptr<FunctionData> LikeBindFunction(ClientContext &context, ScalarF
 			if (like_matcher) {
 				like_matcher->PushCollation(context, result_type);
 			} else {
-				// try CreateLikeMatcher again to get the segments, but now it cannot stop, i.e. it reads until the pattern ending
+				// try CreateLikeMatcher again to get the segments, but now it cannot stop, i.e. it reads until the
+				// pattern ending
 				like_matcher = LikeMatcher::CreateLikeMatcher<false>(pattern_str.ToString());
 				like_matcher->PushCollation(context, result_type);
 				string collated_pattern = like_matcher->RebuildStringPattern();

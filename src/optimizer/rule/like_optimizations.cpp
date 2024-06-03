@@ -113,7 +113,7 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<r
 	if (!constant_expr.IsFoldable()) {
 		return nullptr;
 	}
-	//TODO constant_expr.return_type get collation and push it
+	// TODO constant_expr.return_type get collation and push it
 	auto constant_value = ExpressionExecutor::EvaluateScalar(GetContext(), constant_expr);
 	D_ASSERT(constant_value.type() == constant_expr.return_type);
 	auto &patt_str = StringValue::Get(constant_value);
@@ -124,8 +124,8 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<r
 		ExpressionBinder::PushCollation(GetContext(), root.children[1], root.children[1]->return_type, false);
 		// Pattern is constant
 		return make_uniq<BoundComparisonExpression>(is_not_like ? ExpressionType::COMPARE_NOTEQUAL
-																: ExpressionType::COMPARE_EQUAL,
-													std::move(root.children[0]), std::move(root.children[1]));
+		                                                        : ExpressionType::COMPARE_EQUAL,
+		                                            std::move(root.children[0]), std::move(root.children[1]));
 	} else if (PatternIsPrefix(patt_str)) {
 		// Prefix LIKE pattern : [^%_]*[%]+, ignoring underscore
 		return ApplyRule(root, PrefixFun::GetFunction(), patt_str, is_not_like);
@@ -146,7 +146,8 @@ unique_ptr<Expression> LikeOptimizationRule::ApplyRule(BoundFunctionExpression &
 	auto new_function =
 	    make_uniq<BoundFunctionExpression>(expr.return_type, std::move(function), std::move(expr.children), nullptr);
 
-	ExpressionBinder::PushCollation(GetContext(), new_function->children[0], new_function->children[0]->return_type, false);
+	ExpressionBinder::PushCollation(GetContext(), new_function->children[0], new_function->children[0]->return_type,
+	                                false);
 
 	// removing "%" from the pattern
 	pattern.erase(std::remove(pattern.begin(), pattern.end(), '%'), pattern.end());
