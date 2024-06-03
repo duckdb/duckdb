@@ -24,14 +24,12 @@ class ClientContextLock;
 
 struct BlockedSink {
 public:
-	BlockedSink(InterruptState state, idx_t chunk_size) : state(std::move(state)), chunk_size(chunk_size) {
+	BlockedSink(InterruptState state) : state(std::move(state)) {
 	}
 
 public:
 	//! The handle to reschedule the blocked sink
 	InterruptState state;
-	//! The amount of tuples this sink would add
-	idx_t chunk_size;
 };
 
 class BufferedData {

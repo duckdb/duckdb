@@ -35,8 +35,7 @@ SinkResultType PhysicalBufferedCollector::Sink(ExecutionContext &context, DataCh
 	if (!lstate.blocked || buffered_data.BufferIsFull()) {
 		lstate.blocked = true;
 		auto callback_state = input.interrupt_state;
-		auto blocked_sink = BlockedSink(callback_state, chunk.size());
-		buffered_data.BlockSink(blocked_sink);
+		buffered_data.BlockSink(callback_state);
 		return SinkResultType::BLOCKED;
 	}
 

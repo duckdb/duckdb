@@ -43,8 +43,7 @@ SinkResultType PhysicalBufferedBatchCollector::Sink(ExecutionContext &context, D
 	if (!lstate.blocked || buffered_data.ShouldBlockBatch(batch)) {
 		lstate.blocked = true;
 		auto callback_state = input.interrupt_state;
-		auto blocked_sink = BlockedSink(callback_state, chunk.size());
-		buffered_data.BlockSink(blocked_sink, batch);
+		buffered_data.BlockSink(callback_state, batch);
 		return SinkResultType::BLOCKED;
 	}
 

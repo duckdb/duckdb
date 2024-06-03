@@ -8,7 +8,7 @@
 
 namespace duckdb {
 
-void BatchedBufferedData::BlockSink(const BlockedSink &blocked_sink, idx_t batch) {
+void BatchedBufferedData::BlockSink(const InterruptState &blocked_sink, idx_t batch) {
 	lock_guard<mutex> lock(glock);
 	D_ASSERT(!blocked_sinks.count(batch));
 	blocked_sinks.emplace(std::make_pair(batch, blocked_sink));
@@ -53,7 +53,7 @@ void BatchedBufferedData::UnblockSinks() {
 				continue;
 			}
 		}
-		blocked_sink.state.Callback();
+		blocked_sink.Callback();
 		to_remove.push(batch);
 	}
 	while (!to_remove.empty()) {

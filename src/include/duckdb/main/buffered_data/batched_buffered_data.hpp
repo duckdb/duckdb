@@ -40,7 +40,7 @@ public:
 
 public:
 	void Append(unique_ptr<DataChunk> chunk, idx_t batch);
-	void BlockSink(const BlockedSink &blocked_sink, idx_t batch);
+	void BlockSink(const InterruptState &blocked_sink, idx_t batch);
 
 	bool BufferIsEmpty();
 	bool ShouldBlockBatch(idx_t batch);
@@ -55,7 +55,7 @@ private:
 	void UnblockSinks();
 
 private:
-	map<idx_t, BlockedSink> blocked_sinks;
+	map<idx_t, InterruptState> blocked_sinks;
 
 	//! The queue of chunks
 	deque<unique_ptr<DataChunk>> batches;

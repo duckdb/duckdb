@@ -14,7 +14,7 @@ SimpleBufferedData::SimpleBufferedData(weak_ptr<ClientContext> context)
 SimpleBufferedData::~SimpleBufferedData() {
 }
 
-void SimpleBufferedData::BlockSink(const BlockedSink &blocked_sink) {
+void SimpleBufferedData::BlockSink(const InterruptState &blocked_sink) {
 	lock_guard<mutex> lock(glock);
 	blocked_sinks.push(blocked_sink);
 }
@@ -38,7 +38,7 @@ void SimpleBufferedData::UnblockSinks() {
 			// We have unblocked enough sinks already
 			break;
 		}
-		blocked_sink.state.Callback();
+		blocked_sink.Callback();
 		blocked_sinks.pop();
 	}
 }

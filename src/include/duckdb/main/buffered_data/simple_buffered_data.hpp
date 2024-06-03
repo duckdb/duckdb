@@ -33,7 +33,7 @@ public:
 
 public:
 	void Append(unique_ptr<DataChunk> chunk);
-	void BlockSink(const BlockedSink &blocked_sink);
+	void BlockSink(const InterruptState &blocked_sink);
 	bool BufferIsFull();
 	PendingExecutionResult ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) override;
 	unique_ptr<DataChunk> Scan() override;
@@ -43,7 +43,7 @@ private:
 
 private:
 	//! Our handles to reschedule the blocked sink tasks
-	queue<BlockedSink> blocked_sinks;
+	queue<InterruptState> blocked_sinks;
 	//! The queue of chunks
 	queue<unique_ptr<DataChunk>> buffered_chunks;
 	//! The current capacity of the buffer (tuples)
