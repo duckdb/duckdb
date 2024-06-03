@@ -1,7 +1,8 @@
 #include "duckdb/common/enums/optimizer_type.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/common/exception/parser_exception.hpp"
+
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
@@ -14,6 +15,7 @@ static const DefaultOptimizerType internal_optimizer_types[] = {
     {"expression_rewriter", OptimizerType::EXPRESSION_REWRITER},
     {"filter_pullup", OptimizerType::FILTER_PULLUP},
     {"filter_pushdown", OptimizerType::FILTER_PUSHDOWN},
+    {"cte_filter_pusher", OptimizerType::CTE_FILTER_PUSHER},
     {"regex_range", OptimizerType::REGEX_RANGE},
     {"in_clause", OptimizerType::IN_CLAUSE},
     {"join_order", OptimizerType::JOIN_ORDER},
