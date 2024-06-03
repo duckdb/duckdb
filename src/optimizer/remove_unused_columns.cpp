@@ -179,7 +179,9 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			}
 
 			// This seems to break when we have columns that are constant expressions like '1' or true.
-			// I think we want to add 'all_bindings' to the child column_references but I am not sure.
+			// I'm not sure what the solution is.
+			// Maybe add all_bindings here (somehow).
+			// Or, need to update lower code so that unused expressions can be omitted.
 			for (auto &child : op.children) {
 				RemoveUnusedColumns remove(binder, context);
 				remove.VisitOperatorExpressions(op);
