@@ -191,7 +191,7 @@ static string IndexingScript(ClientContext &context, QualifiedName &qname, const
                        term_tf.termid,
                        tf,
                        df,
-                       (log(((SELECT num_docs FROM %fts_schema%.stats) - df + 0.5) / (df + 0.5))* ((tf * (k + 1)/(tf + k * (1 - b + b * (len / (SELECT avgdl FROM %fts_schema%.stats))))))) AS subscore
+                       (log(((SELECT num_docs FROM %fts_schema%.stats) - df + 0.5) / (df + 0.5) + 1) * ((tf * (k + 1)/(tf + k * (1 - b + b * (len / (SELECT avgdl FROM %fts_schema%.stats))))))) AS subscore
                 FROM term_tf,
 					 cdocs,
 					 %fts_schema%.docs AS docs,
