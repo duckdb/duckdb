@@ -225,6 +225,8 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		checkpoint_decision = CheckpointDecision(error.Message());
 		transaction.commit_id = 0;
 		transaction.Rollback();
+	} else {
+		CommitCatalogChanges(transaction.transaction_id, transaction.commit_id);
 	}
 	OnCommitCheckpointDecision(checkpoint_decision, transaction);
 
@@ -260,6 +262,7 @@ void DuckTransactionManager::RollbackTransaction(Transaction &transaction_p) {
 
 	// rollback the transaction
 	transaction.Rollback();
+	CleanupCatalogChanges(transaction.transaction_id);
 
 	// remove the transaction id from the list of active transactions
 	// potentially resulting in garbage collection
@@ -308,6 +311,7 @@ void DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction, boo
 		}
 	} else if (transaction.ChangesMade()) {
 		transaction.Cleanup();
+		CleanupCatalogChanges(transaction.transaction_id);
 	}
 	// remove the transaction from the set of currently active transactions
 	active_transactions.unsafe_erase_at(t_index);
@@ -330,6 +334,7 @@ void DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction, boo
 			// currently active queries have finished running! (actually,
 			// when all the currently active scans have finished running...)
 			recently_committed_transactions[i]->Cleanup();
+			CleanupCatalogChanges(recently_committed_transactions[i]->transaction_id);
 			// store the current highest active query
 			recently_committed_transactions[i]->highest_active_query = current_query;
 			// move it to the list of transactions awaiting GC
@@ -361,6 +366,57 @@ void DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction, boo
 		// we garbage collected transactions: remove them from the list
 		old_transactions.erase(old_transactions.begin(), old_transactions.begin() + static_cast<int64_t>(i));
 	}
+}
+
+idx_t DuckTransactionManager::GetCatalogVersion(Transaction &transaction_p) {
+	auto &transaction = transaction_p.Cast<DuckTransaction>();
+	lock_guard<mutex> lock(version_mutex);
+	// first check if there were catalog modifications by the current transaction
+	auto it = version_by_transaction.find(transaction.transaction_id);
+	if (it != version_by_transaction.end()) {
+		return it->second;
+	}
+	// next, iterate through the map to find the highest valid version
+	idx_t version = 0;
+	for (auto &version_entry : version_by_transaction) {
+		auto transaction_id = version_entry.first;
+		// Only look at committed versions here (when there were no local modifications)
+		if (transaction_id < transaction.start_time) {
+			version = version_entry.second;
+		} else {
+			break;
+		}
+	}
+	return version;
+}
+
+void DuckTransactionManager::ModifyCatalog(transaction_t transaction_id) {
+	lock_guard<mutex> lock(version_mutex);
+	last_uncommitted_catalog_version++;
+	version_by_transaction[transaction_id] = last_uncommitted_catalog_version;
+}
+
+void DuckTransactionManager::CommitCatalogChanges(duckdb::transaction_t transaction_id, duckdb::transaction_t commit_id) {
+	lock_guard<mutex> lock(version_mutex);
+	auto it = version_by_transaction.find(transaction_id);
+	if (it != version_by_transaction.end()) {
+		last_committed_version++;
+		version_by_transaction[commit_id] = last_committed_version;
+		version_by_transaction[transaction_id] = last_committed_version;
+	}
+}
+
+void DuckTransactionManager::CleanupCatalogChanges(duckdb::transaction_t transaction_id) {
+	lock_guard<mutex> lock(version_mutex);
+	version_by_transaction.erase(transaction_id);
+}
+
+void DuckTransactionManager::PushCatalogEntry(Transaction &transaction_p,
+                                              duckdb::CatalogEntry &entry, duckdb::data_ptr_t extra_data,
+                                              duckdb::idx_t extra_data_size) {
+	auto &transaction = transaction_p.Cast<DuckTransaction>();
+	ModifyCatalog(transaction.transaction_id);
+	transaction.PushCatalogEntry(entry, extra_data, extra_data_size);
 }
 
 } // namespace duckdb

@@ -28,7 +28,7 @@ TEST_CASE("Test catalog versioning", "[catalog]") {
 		REQUIRE_NO_FAIL(con1.Query("CREATE TABLE foo2 as SELECT 42"));
 		auto &catalog = Catalog::GetCatalog(*con1.context, "");
 		auto catalog_version_1 = catalog.GetCatalogVersion(*con1.context);
-		REQUIRE(catalog_version_1 > catalog.UNCOMMITTED_CATALOG_VERSION_START);
+		REQUIRE(catalog_version_1 > TRANSACTION_ID_START);
 		REQUIRE_NO_FAIL(con1.Query("CREATE TABLE foo3 as SELECT 42"));
 		auto catalog_version_2 = catalog.GetCatalogVersion(*con1.context);
 		REQUIRE(catalog_version_2 > catalog_version_1);

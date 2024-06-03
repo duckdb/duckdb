@@ -52,6 +52,19 @@ public:
 	unique_ptr<StorageLockKey> SharedCheckpointLock();
 	unique_ptr<StorageLockKey> TryUpgradeCheckpointLock(StorageLockKey &lock);
 
+	//! Returns the current version of the catalog (incremented whenever anything changes, not stored between restarts)
+	DUCKDB_API idx_t GetCatalogVersion(Transaction &transaction) override;
+
+	//! Trigger a modification in the catalog, increasing the catalog version for the given transaction_id
+	DUCKDB_API void ModifyCatalog(transaction_t transaction_id);
+
+	DUCKDB_API void CommitCatalogChanges(transaction_t transaction_id, transaction_t commit_id);
+
+	DUCKDB_API void CleanupCatalogChanges(transaction_t transaction_id);
+
+	void PushCatalogEntry(Transaction &transaction_p, CatalogEntry &entry, data_ptr_t extra_data = nullptr,
+	                      idx_t extra_data_size = 0);
+
 protected:
 	struct CheckpointDecision {
 		explicit CheckpointDecision(string reason_p);
@@ -98,6 +111,11 @@ private:
 	StorageLock checkpoint_lock;
 	//! Lock necessary to start transactions only - used by FORCE CHECKPOINT to prevent new transactions from starting
 	mutex start_transaction_lock;
+
+	mutex version_mutex;
+	map<transaction_t, idx_t> version_by_transaction;
+	idx_t last_uncommitted_catalog_version = UNCOMMITTED_CATALOG_VERSION_START;
+	idx_t last_committed_version = 0;
 
 protected:
 	virtual void OnCommitCheckpointDecision(const CheckpointDecision &decision, DuckTransaction &transaction) {

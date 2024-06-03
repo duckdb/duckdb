@@ -37,7 +37,7 @@ public:
 	static DuckTransaction &Get(ClientContext &context, Catalog &catalog);
 	LocalStorage &GetLocalStorage();
 
-	void PushCatalogEntry(CatalogEntry &entry, data_ptr_t extra_data = nullptr, idx_t extra_data_size = 0);
+	void PushCatalogEntry(CatalogEntry &entry, data_ptr_t extra_data, idx_t extra_data_size);
 
 	void SetReadWrite() override;
 
