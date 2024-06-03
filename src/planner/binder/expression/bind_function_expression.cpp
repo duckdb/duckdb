@@ -106,7 +106,6 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFunctionCatalogEntry &func, idx_t depth) {
 	// bind the children of the function expression
 	ErrorData error;
-
 	// bind of each child
 	for (idx_t i = 0; i < function.children.size(); i++) {
 		BindChild(function.children[i], depth, error);
@@ -121,10 +120,22 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 
 	// all children bound successfully
 	// extract the children and types
+	string last_collation;
 	vector<unique_ptr<Expression>> children;
 	for (idx_t i = 0; i < function.children.size(); i++) {
 		auto &child = BoundExpression::GetExpression(*function.children[i]);
 		children.push_back(std::move(child));
+
+		auto child_ret_type = children[i]->return_type;
+		if (StringType::IsCollated(child_ret_type)) {
+			auto collation = StringType::GetCollation(child_ret_type);
+			if (!last_collation.empty() && last_collation != collation) {
+				throw BinderException(function,
+						"Function \"%s\" has multiple collations: %s and %s", function.function_name, last_collation, collation);
+			}
+			ExpressionBinder::PushCollation(context, children[i], child_ret_type, false);
+			last_collation = collation;
+		}
 	}
 
 	FunctionBinder function_binder(context);
@@ -137,6 +148,9 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		auto &bound_function = result->Cast<BoundFunctionExpression>();
 		if (bound_function.function.stability == FunctionStability::CONSISTENT_WITHIN_QUERY) {
 			binder.SetAlwaysRequireRebind();
+		}
+		if (bound_function.return_type.id() == LogicalTypeId::VARCHAR && StringType::IsCollated(bound_function.return_type)) {
+			ExpressionBinder::PushCollation(context, result, result->return_type, false);
 		}
 	}
 	return BindResult(std::move(result));
