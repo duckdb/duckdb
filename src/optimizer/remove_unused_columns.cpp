@@ -185,7 +185,8 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			for (auto &child : op.children) {
 				RemoveUnusedColumns remove(binder, context);
 				remove.VisitOperatorExpressions(op);
-				remove.column_references.insert(column_references.begin(), column_references.end()); // add parent references
+				remove.column_references.insert(column_references.begin(),
+				                                column_references.end()); // add parent references
 				remove.VisitOperator(*child);
 			}
 		} else {
@@ -308,14 +309,14 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_DISTINCT: {
 		// distinct, all projected columns are used for the DISTINCT computation
 		// mark all columns as used and continue to the children
-        auto &distinct_op = op.Cast<LogicalDistinct>();
-		if(distinct_op.distinct_targets.empty()) {
-            everything_referenced = true;
-        } else {
-            // DISTINCT with expression list does not implicitly reference everything
-            // pass through existing everything_referenced state
-        }
-        break;
+		auto &distinct_op = op.Cast<LogicalDistinct>();
+		if (distinct_op.distinct_targets.empty()) {
+			everything_referenced = true;
+		} else {
+			// DISTINCT with expression list does not implicitly reference everything
+			// pass through existing everything_referenced state
+		}
+		break;
 	}
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
 		everything_referenced = true;
