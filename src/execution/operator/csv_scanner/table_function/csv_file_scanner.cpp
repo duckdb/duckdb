@@ -107,6 +107,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 			auto result = sniffer.SniffCSV();
 			file_schema.Initialize(result.names, result.return_types, options.file_path);
 		} else if (file_idx > 0 && buffer_manager->file_handle->FileSize() > 0) {
+			options.file_path = file_path;
 			CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
 			projection_order = sniffer.AdaptiveSniff(file_schema);
 		}

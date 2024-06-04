@@ -185,7 +185,7 @@ public:
 	DataChunk parse_chunk;
 	idx_t number_of_rows = 0;
 	idx_t cur_col_id = 0;
-	bool figure_out_new_line;
+	bool figure_out_new_line = false;
 	//! Information to properly handle errors
 	CSVErrorHandler &error_handler;
 	CSVIterator &iterator;
