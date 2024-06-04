@@ -1,0 +1,71 @@
+diff --git a/duckdb b/duckdb
+index 197b79bfaf..3f039bce53 160000
+--- a/duckdb
++++ b/duckdb
+@@ -1 +1 @@
+-Subproject commit 197b79bfafe6519b0704209c2a3b2eea6b632baf
++Subproject commit 3f039bce538772a144c5118bc6c7df9c7c1e3aa2
+diff --git a/duckdb-r b/duckdb-r
+index 3e6b47da6c..3ede6f1117 160000
+--- a/duckdb-r
++++ b/duckdb-r
+@@ -1 +1 @@
+-Subproject commit 3e6b47da6c96128616e446833ff6991ed22aa810
++Subproject commit 3ede6f11178e2e6c6ae0e531735ab1ead650cc61
+diff --git a/src/to_substrait.cpp b/src/to_substrait.cpp
+index 90f7a679fc..1d95cb09a5 100644
+--- a/src/to_substrait.cpp
++++ b/src/to_substrait.cpp
+@@ -864,7 +864,11 @@ substrait::Rel *DuckDBToSubstrait::TransformComparisonJoin(LogicalOperator &dop)
+ 	auto left_col_count = dop.children[0]->types.size();
+ 	if (dop.children[0]->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+ 		auto child_join = (LogicalComparisonJoin *)dop.children[0].get();
+-		left_col_count = child_join->left_projection_map.size() + child_join->right_projection_map.size();
++		if (child_join->join_type != JoinType::SEMI && child_join->join_type != JoinType::ANTI) {
++			left_col_count = child_join->left_projection_map.size() + child_join->right_projection_map.size();
++		} else {
++			left_col_count = child_join->left_projection_map.size();
++		}
+ 	}
+ 	sjoin->set_allocated_expression(
+ 	    CreateConjunction(djoin.conditions, [&](JoinCondition &in) { return TransformJoinCond(in, left_col_count); }));
+@@ -909,7 +913,6 @@ substrait::Rel *DuckDBToSubstrait::TransformComparisonJoin(LogicalOperator &dop)
+ 			CreateFieldRef(projection->add_expressions(), right_idx + left_col_count);
+ 		}
+ 	}
+-
+ 	projection->set_allocated_input(res);
+ 	return proj_rel;
+ }
+diff --git a/substrait b/substrait
+index 1a51b3d49b..fcf0f762a3 160000
+--- a/substrait
++++ b/substrait
+@@ -1 +1 @@
+-Subproject commit 1a51b3d49ba8323134314ef94acf49c910ff520d
++Subproject commit fcf0f762a3d39eabadf2f2b507ff803aadcb123e
+diff --git a/test/sql/test_substrait_tpch.test b/test/sql/test_substrait_tpch.test
+index 0b01b6975d..2bfbc735bf 100644
+--- a/test/sql/test_substrait_tpch.test
++++ b/test/sql/test_substrait_tpch.test
+@@ -2,12 +2,6 @@
+ # description: Test get_substrait with TPC-H queries
+ # group: [sql]
+
+-# test skipped since PR https://github.com/duckdb/duckdb/pull/9993
+-# the PR re-introduces DelimJoins in TPC-H again for performance reasons
+-# if there is a selection in the duplicate-eliminated side, we keep the DelimJoin
+-# this is checked in Deliminator::HasSelection
+-# if this function returns false, all DelimJoins are removed from TPC-H
+-
+ require substrait
+
+ require tpch
+@@ -86,7 +80,7 @@ CALL get_substrait('SELECT s_suppkey, s_name, s_address, s_phone, total_revenue
+ #statement ok
+ #CALL get_substrait('SELECT sum(l_extendedprice) / 7.0 AS avg_yearly FROM lineitem, part WHERE p_partkey = l_partkey AND p_brand = ''Brand#23'' AND p_container = ''MED BOX'' AND l_quantity < ( SELECT 0.2 * avg(l_quantity) FROM lineitem WHERE l_partkey = p_partkey);')
+
+-#Q 18 Skipping this test for now beucase it is part of the big posref refactoring
++#Q 18
+ statement ok
+ CALL get_substrait('SELECT c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice, sum(l_quantity) FROM customer, orders, lineitem WHERE o_orderkey IN ( SELECT l_orderkey FROM lineitem GROUP BY l_orderkey HAVING sum(l_quantity) > 300) AND c_custkey = o_custkey AND o_orderkey = l_orderkey GROUP BY c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice ORDER BY o_totalprice DESC, o_orderdate LIMIT 100;')
