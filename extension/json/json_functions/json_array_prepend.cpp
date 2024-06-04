@@ -3,17 +3,16 @@
 namespace duckdb {
 
 //! Prepend String or JSON value to an array
-yyjson_mut_val *ArrayPrependJSON(yyjson_mut_val *arr, yyjson_mut_doc *doc, string_t element, yyjson_alc *alc,
-                                 Vector &result) {
-	if (!yyjson_mut_is_arr(arr)) {
+yyjson_mut_val *ArrayPrependJSON(yyjson_mut_val *element, string_t arr, yyjson_alc *alc, Vector &result) {
+	auto arrdoc = JSONCommon::ReadDocument(arr, JSONCommon::READ_FLAG, alc);
+	auto mut_arr = yyjson_doc_mut_copy(arrdoc, alc)->root;
+
+	if (!yyjson_mut_is_arr(mut_arr)) {
 		throw InvalidInputException("JSON input not an JSON Array");
 	}
 
-	auto edoc = JSONCommon::ReadDocument(element, JSONCommon::READ_FLAG, alc);
-	auto mut_edoc = yyjson_doc_mut_copy(edoc, alc);
-
-	yyjson_mut_arr_prepend(arr, mut_edoc->root);
-	return arr;
+	yyjson_mut_arr_prepend(mut_arr, element);
+	return mut_arr;
 }
 
 //! Prepend function wrapper
@@ -23,7 +22,7 @@ static void ArrayPrependFunction(DataChunk &args, ExpressionState &state, Vector
 	auto right_type = args.data[1].GetType();
 	D_ASSERT(right_type == LogicalType::VARCHAR || right_type == LogicalType::JSON());
 
-	JSONExecutors::BinaryMutExecuteFlip<string_t>(args, state, result, ArrayPrependJSON);
+	JSONExecutors::BinaryMutExecute<string_t>(args, state, result, ArrayPrependJSON);
 }
 
 static void GetArrayPrependFunctionInternal(ScalarFunctionSet &set, const LogicalType &lhs, const LogicalType &rhs) {
