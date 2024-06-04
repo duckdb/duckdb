@@ -200,8 +200,7 @@ static duckdb::unique_ptr<FunctionData> ICUSortKeyBind(ClientContext &context, S
 	}
 }
 
-static ScalarFunction GetICUCollateFunction(const string &collation,
-                                            const string &tag) {
+static ScalarFunction GetICUCollateFunction(const string &collation, const string &tag) {
 	string fname = IcuBindData::EncodeFunctionName(collation);
 	ScalarFunction result(fname, {LogicalType::VARCHAR}, LogicalType::VARCHAR, ICUCollateFunction, ICUCollateBind);
 	//! collation tag is added into the Function extra info
