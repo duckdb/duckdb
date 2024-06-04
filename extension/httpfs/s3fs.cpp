@@ -46,6 +46,9 @@ static HeaderMap create_s3_header(string url, string query, string host, string 
 	if (auth_params.session_token.length() > 0) {
 		res["x-amz-security-token"] = auth_params.session_token;
 	}
+	if (auth_params.requester_pays == true) {
+		res["x-amz-request-payer"] = "requester";
+	}
 
 	string signed_headers = "";
 	hash_bytes canonical_request_hash;
@@ -164,6 +167,7 @@ void AWSEnvironmentCredentialsProvider::SetAll() {
 	this->SetExtensionOptionValue("s3_session_token", SESSION_TOKEN_ENV_VAR);
 	this->SetExtensionOptionValue("s3_endpoint", DUCKDB_ENDPOINT_ENV_VAR);
 	this->SetExtensionOptionValue("s3_use_ssl", DUCKDB_USE_SSL_ENV_VAR);
+	this->SetExtensionOptionValue("s3_requester_pays", DUCKDB_REQUESTER_PAYS_ENV_VAR);
 }
 
 S3AuthParams AWSEnvironmentCredentialsProvider::CreateParams() {
@@ -176,6 +180,7 @@ S3AuthParams AWSEnvironmentCredentialsProvider::CreateParams() {
 	params.session_token = SESSION_TOKEN_ENV_VAR;
 	params.endpoint = DUCKDB_ENDPOINT_ENV_VAR;
 	params.use_ssl = DUCKDB_USE_SSL_ENV_VAR;
+	params.requester_pays = DUCKDB_REQUESTER_PAYS_ENV_VAR;
 
 	return params;
 }
@@ -262,6 +267,12 @@ S3AuthParams S3AuthParams::ReadFrom(optional_ptr<FileOpener> opener, FileOpenerI
 		result.use_ssl = true;
 	}
 
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_requester_pays", value, info)) {
+		result.requester_pays = value.GetValue<bool>();
+	} else {
+		result.requester_pays = false;
+	}
+
 	if (FileOpener::TryGetCurrentSetting(opener, "s3_url_compatibility_mode", value, info)) {
 		result.s3_url_compatibility_mode = value.GetValue<bool>();
 	} else {
@@ -283,6 +294,7 @@ unique_ptr<KeyValueSecret> S3SecretHelper::CreateSecret(vector<string> &prefix_p
 	return_value->secret_map["endpoint"] = params.endpoint;
 	return_value->secret_map["url_style"] = params.url_style;
 	return_value->secret_map["use_ssl"] = params.use_ssl;
+	return_value->secret_map["requester_pays"] = params.requester_pays;
 	return_value->secret_map["s3_url_compatibility_mode"] = params.s3_url_compatibility_mode;
 
 	//! Set redact keys
@@ -313,6 +325,9 @@ S3AuthParams S3SecretHelper::GetParams(const KeyValueSecret &secret) {
 	}
 	if (!secret.TryGetValue("use_ssl").IsNull()) {
 		params.use_ssl = secret.TryGetValue("use_ssl").GetValue<bool>();
+	}
+	if (!secret.TryGetValue("requester_pays").IsNull()) {
+		params.requester_pays = secret.TryGetValue("requester_pays").GetValue<bool>();
 	}
 	if (!secret.TryGetValue("s3_url_compatibility_mode").IsNull()) {
 		params.s3_url_compatibility_mode = secret.TryGetValue("s3_url_compatibility_mode").GetValue<bool>();

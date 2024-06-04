@@ -29,6 +29,7 @@ struct S3AuthParams {
 	string endpoint;
 	string url_style;
 	bool use_ssl = true;
+	bool requester_pays = false;
 	bool s3_url_compatibility_mode = false;
 
 	static S3AuthParams ReadFrom(optional_ptr<FileOpener> opener, FileOpenerInfo &info);
@@ -43,6 +44,7 @@ struct AWSEnvironmentCredentialsProvider {
 	static constexpr const char *SESSION_TOKEN_ENV_VAR = "AWS_SESSION_TOKEN";
 	static constexpr const char *DUCKDB_ENDPOINT_ENV_VAR = "DUCKDB_S3_ENDPOINT";
 	static constexpr const char *DUCKDB_USE_SSL_ENV_VAR = "DUCKDB_S3_USE_SSL";
+	static constexpr const char *DUCKDB_REQUESTER_PAYS_ENV_VAR = "DUCKDB_S3_REQUESTER_PAYS";
 
 	explicit AWSEnvironmentCredentialsProvider(DBConfig &config) : config(config) {};
 
