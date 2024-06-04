@@ -346,8 +346,10 @@ Value Value::MaximumValue(const LogicalType &type) {
 			throw InternalException("Unknown decimal type");
 		}
 	}
-	case LogicalTypeId::ENUM:
+	case LogicalTypeId::ENUM: {
+		D_ASSERT(EnumType::GetSize(type) > 0);
 		return Value::ENUM(EnumType::GetSize(type) - 1, type);
+	}
 	default:
 		throw InvalidTypeException(type, "MaximumValue requires numeric type");
 	}

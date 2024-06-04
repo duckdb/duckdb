@@ -104,6 +104,11 @@ class TestCategory(object):
             category.append(str(i))
         check_create_table(category)
 
+    def test_empty_categorical(self, duckdb_cursor):
+        empty_categoric_df = pd.DataFrame({'category': pd.Series(dtype='category')})
+        with pytest.raises(duckdb.InvalidInputException, match='Could not create an ENUM from an empty Categorical'):
+            duckdb_cursor.execute("CREATE TABLE test AS SELECT * FROM empty_categoric_df")
+
     def test_category_fetch_df_chunk(self, duckdb_cursor):
         con = duckdb.connect()
         categories = ['foo', 'bla', None, 'zoo', 'foo', 'foo', None, 'bla']

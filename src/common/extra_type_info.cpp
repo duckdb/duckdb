@@ -267,6 +267,7 @@ private:
 EnumTypeInfo::EnumTypeInfo(Vector &values_insert_order_p, idx_t dict_size_p)
     : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), values_insert_order(values_insert_order_p),
       dict_type(EnumDictType::VECTOR_DICT), dict_size(dict_size_p) {
+	D_ASSERT(dict_size_p > 0);
 }
 
 const EnumDictType &EnumTypeInfo::GetEnumDictType() const {
