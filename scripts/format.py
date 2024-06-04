@@ -266,7 +266,11 @@ base_dir = os.path.join(os.getcwd(), 'src/include')
 def get_formatted_text(f, full_path, directory, ext):
     if not can_format_file(full_path):
         if not force:
-            print("File " + full_path + " is not normally formatted - but attempted to format anyway. Use --force if formatting is desirable")
+            print(
+                "File "
+                + full_path
+                + " is not normally formatted - but attempted to format anyway. Use --force if formatting is desirable"
+            )
             exit(1)
     if f == 'list.hpp':
         # fill in list file
