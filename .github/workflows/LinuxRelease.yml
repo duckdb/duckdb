@@ -166,6 +166,7 @@ jobs:
        with:
         ccache: 1
         aarch64_cross_compile: 1
+        git_ref: ${{ inputs.git_ref }}
 
      - name: Checkout (again)
        shell: bash
@@ -224,6 +225,7 @@ jobs:
         vcpkg: 1
         openssl: 1
         ccache: 1
+        git_ref: ${{ inputs.git_ref }}
 
     - name: Checkout (again)
       shell: bash
@@ -268,6 +270,7 @@ jobs:
           openssl: 1
           aarch64_cross_compile: 1
           ccache: 1
+          git_ref: ${{ inputs.git_ref }}
 
       - name: Checkout (again)
         shell: bash
