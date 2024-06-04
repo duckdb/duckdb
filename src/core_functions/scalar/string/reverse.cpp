@@ -23,7 +23,7 @@ static bool StrReverseASCII(const char *input, idx_t n, char *output) {
 
 //! Unicode string reverse using grapheme breakers
 static void StrReverseUnicode(const char *input, idx_t n, char *output) {
-	for(auto cluster : Utf8Proc::GraphemeClusters(input, n)) {
+	for (auto cluster : Utf8Proc::GraphemeClusters(input, n)) {
 		memcpy(output + n - cluster.end, input + cluster.start, cluster.end - cluster.start);
 	}
 }

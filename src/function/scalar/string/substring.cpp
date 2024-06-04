@@ -232,7 +232,7 @@ string_t SubstringFun::SubstringGrapheme(Vector &result, string_t input, int64_t
 	// now scan the graphemes of the string to find the positions of the start and end characters
 	int64_t current_character = 0;
 	idx_t start_pos = DConstants::INVALID_INDEX, end_pos = input_size;
-	for(auto cluster : Utf8Proc::GraphemeClusters(input_data, input_size)) {
+	for (auto cluster : Utf8Proc::GraphemeClusters(input_data, input_size)) {
 		if (current_character == start) {
 			start_pos = cluster.start;
 		} else if (current_character == end) {
