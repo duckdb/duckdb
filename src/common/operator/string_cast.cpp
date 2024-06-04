@@ -166,17 +166,17 @@ duckdb::string_t StringCast::Operation(timestamp_ns_t input, Vector &vector) {
 	} else if (input == timestamp_t::ninfinity()) {
 		return StringVector::AddString(vector, Date::NINF);
 	}
-	timestamp_t ms(input.value / Interval::NANOS_PER_MICRO);
+
 	date_t date_entry;
 	dtime_t time_entry;
-	Timestamp::Convert(ms, date_entry, time_entry);
+	int32_t nanos;
+	Timestamp::Convert(input, date_entry, time_entry, nanos);
 
 	int32_t date[3], time[5];
 	Date::Convert(date_entry, date[0], date[1], date[2]);
 	Time::Convert(time_entry, time[0], time[1], time[2], time[3]);
 	// Use picoseconds so we have 6 digits
-	int64_t nanos = input.value - (int64_t(date_entry.days) * int64_t(Interval::NANOS_PER_DAY));
-	time[4] = (nanos % Interval::NANOS_PER_MICRO) * 1000;
+	time[4] = nanos * 1000;
 
 	// format for timestamp is DATE TIME (separated by space)
 	idx_t year_length;

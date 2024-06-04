@@ -310,6 +310,19 @@ void Timestamp::Convert(timestamp_t timestamp, date_t &out_date, dtime_t &out_ti
 	D_ASSERT(timestamp == Timestamp::FromDatetime(out_date, out_time));
 }
 
+void Timestamp::Convert(timestamp_ns_t input, date_t &out_date, dtime_t &out_time, int32_t &out_nanos) {
+	timestamp_t ms(input.value / Interval::NANOS_PER_MICRO);
+	out_date = Timestamp::GetDate(ms);
+	int64_t days_nanos;
+	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(out_date.days, Interval::NANOS_PER_DAY,
+	                                                               days_nanos)) {
+		throw ConversionException("Date out of range in timestamp_ns conversion");
+	}
+
+	out_time = dtime_t((input.value - days_nanos) / Interval::NANOS_PER_MICRO);
+	out_nanos = (input.value - days_nanos) % Interval::NANOS_PER_MICRO;
+}
+
 timestamp_t Timestamp::GetCurrentTimestamp() {
 	auto now = system_clock::now();
 	auto epoch_ms = duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();

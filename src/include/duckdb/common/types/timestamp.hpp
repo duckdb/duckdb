@@ -133,6 +133,8 @@ public:
 
 	//! Extract the date and time from a given timestamp object
 	DUCKDB_API static void Convert(timestamp_t date, date_t &out_date, dtime_t &out_time);
+	//! Extract the date and time from a given timestamp object
+	DUCKDB_API static void Convert(timestamp_ns_t date, date_t &out_date, dtime_t &out_time, int32_t &out_nanos);
 	//! Returns current timestamp
 	DUCKDB_API static timestamp_t GetCurrentTimestamp();
 
