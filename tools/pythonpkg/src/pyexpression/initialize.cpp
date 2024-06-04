@@ -30,6 +30,10 @@ void InitializeStaticMethods(py::module_ &m) {
 	// Function Expression
 	docs = "";
 	m.def("FunctionExpression", &DuckDBPyExpression::FunctionExpression, py::arg("function_name"), docs);
+
+	// Coalesce Operator
+	docs = "";
+	m.def("CoalesceOperator", &DuckDBPyExpression::Coalesce, docs);
 }
 
 static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<DuckDBPyExpression>> &m) {

@@ -68,17 +68,20 @@ void Command::RestartDatabase(ExecuteContext &context, Connection *&connection, 
 		query_fail = true;
 	}
 	bool can_restart = true;
-	for (auto &conn : connection->context->db->GetConnectionManager().connections) {
-		if (!conn.first->client_data->prepared_statements.empty()) {
+	auto &connection_manager = connection->context->db->GetConnectionManager();
+	auto &connection_list = connection_manager.GetConnectionListReference();
+	for (auto &conn_ref : connection_list) {
+		auto &conn = conn_ref.first.get();
+		if (!conn.client_data->prepared_statements.empty()) {
 			can_restart = false;
 		}
-		if (conn.first->transaction.HasActiveTransaction()) {
+		if (conn.transaction.HasActiveTransaction()) {
 			can_restart = false;
 		}
 	}
 	if (!query_fail && can_restart && !runner.skip_reload) {
 		// We basically restart the database if no transaction is active and if the query is valid
-		auto command = make_uniq<RestartCommand>(runner);
+		auto command = make_uniq<RestartCommand>(runner, true);
 		runner.ExecuteCommand(std::move(command));
 		connection = CommandConnection(context);
 	}
@@ -205,7 +208,8 @@ Statement::Statement(SQLLogicTestRunner &runner) : Command(runner) {
 Query::Query(SQLLogicTestRunner &runner) : Command(runner) {
 }
 
-RestartCommand::RestartCommand(SQLLogicTestRunner &runner) : Command(runner) {
+RestartCommand::RestartCommand(SQLLogicTestRunner &runner, bool load_extensions_p)
+    : Command(runner), load_extensions(load_extensions_p) {
 }
 
 ReconnectCommand::ReconnectCommand(SQLLogicTestRunner &runner) : Command(runner) {
@@ -370,7 +374,7 @@ void RestartCommand::ExecuteInternal(ExecuteContext &context) const {
 		low_query_writer_path = runner.con->context->client_data->log_query_writer->path;
 	}
 
-	runner.LoadDatabase(runner.dbpath);
+	runner.LoadDatabase(runner.dbpath, load_extensions);
 
 	runner.con->context->config = client_config;
 

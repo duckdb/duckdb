@@ -177,6 +177,9 @@ public:
 	//! Create a map value with the given entries
 	DUCKDB_API static Value MAP(const LogicalType &key_type, const LogicalType &value_type, vector<Value> keys,
 	                            vector<Value> values);
+	//! Create a map value from a set of key-value pairs
+	DUCKDB_API static Value MAP(const unordered_map<string, string> &kv_pairs);
+
 	//! Create a union value from a selected value and a tag from a set of alternatives.
 	DUCKDB_API static Value UNION(child_list_t<LogicalType> members, uint8_t tag, Value value);
 

@@ -107,6 +107,23 @@ TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(MemoryTag ta
 	return std::move(r.reservation);
 }
 
+shared_ptr<BlockHandle> StandardBufferManager::RegisterTransientMemory(idx_t size) {
+
+	// FIXME: Some transient segments are converted to persistent segments. So, if available,
+	// we need to pass the block size to this function instead of using the global constant,
+	// if we want to support configurable block sizes.
+	const idx_t block_size = Storage::BLOCK_SIZE;
+	D_ASSERT(size <= block_size);
+
+	if (size < block_size) {
+		return RegisterSmallMemory(size);
+	}
+
+	shared_ptr<BlockHandle> block;
+	Allocate(MemoryTag::IN_MEMORY_TABLE, size, false, &block);
+	return block;
+}
+
 shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(idx_t block_size) {
 	D_ASSERT(block_size < Storage::BLOCK_SIZE);
 	auto reservation =
@@ -411,9 +428,15 @@ vector<TemporaryFileInformation> StandardBufferManager::GetTemporaryFiles() {
 		if (!StringUtil::EndsWith(name, ".block")) {
 			return;
 		}
+
+		// Another process or thread can delete the file before we can get its file size.
+		auto handle = fs.OpenFile(name, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
+		if (!handle) {
+			return;
+		}
+
 		TemporaryFileInformation info;
 		info.path = name;
-		auto handle = fs.OpenFile(name, FileFlags::FILE_FLAGS_READ);
 		info.size = NumericCast<idx_t>(fs.GetFileSize(*handle));
 		handle.reset();
 		result.push_back(info);

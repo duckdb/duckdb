@@ -28,6 +28,13 @@ public:
 	unique_ptr<CopyInfo> copy_info;
 	BoundExportData exported_tables;
 
+	void Serialize(Serializer &serializer) const override {
+		throw NotImplementedException("FIXME: Serialize LogicalExport statement");
+	}
+	unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer) {
+		throw NotImplementedException("FIXME: Deserialize LogicalExport statement");
+	}
+
 public:
 protected:
 	void ResolveTypes() override {

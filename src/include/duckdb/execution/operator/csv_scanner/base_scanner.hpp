@@ -37,9 +37,10 @@ public:
 	bool escaped = false;
 	idx_t quoted_position = 0;
 
+	CSVStateMachine &state_machine;
+
 protected:
 	CSVStates &states;
-	CSVStateMachine &state_machine;
 };
 
 //! This is the base of our CSV scanners.
@@ -51,10 +52,10 @@ public:
 	                     shared_ptr<CSVFileScan> csv_file_scan = nullptr, CSVIterator iterator = {});
 
 	virtual ~BaseScanner() = default;
+
 	//! Returns true if the scanner is finished
 	bool FinishedFile();
-	//! Resets the scanner
-	void Reset();
+
 	//! Parses data into a output_chunk
 	virtual ScannerResult &ParseChunk();
 
@@ -62,6 +63,8 @@ public:
 	virtual ScannerResult &GetResult();
 
 	CSVIterator &GetIterator();
+
+	void SetIterator(const CSVIterator &it);
 
 	idx_t GetBoundaryIndex() {
 		return iterator.GetBoundaryIdx();
@@ -71,8 +74,8 @@ public:
 		return lines_read;
 	}
 
-	idx_t GetIteratorPosition() {
-		return iterator.pos.buffer_pos;
+	CSVPosition GetIteratorPosition() {
+		return iterator.pos;
 	}
 
 	CSVStateMachine &GetStateMachine();
@@ -92,6 +95,14 @@ public:
 
 	bool ever_quoted = false;
 
+	//! Shared pointer to the buffer_manager, this is shared across multiple scanners
+	shared_ptr<CSVBufferManager> buffer_manager;
+
+	//! Skips Notes and/or parts of the data, starting from the top.
+	//! notes are dirty lines on top of the file, before the actual data
+	static CSVIterator SkipCSVRows(shared_ptr<CSVBufferManager> buffer_manager,
+	                               const shared_ptr<CSVStateMachine> &state_machine, idx_t rows_to_skip);
+
 protected:
 	//! Boundaries of this scanner
 	CSVIterator iterator;
@@ -102,9 +113,6 @@ protected:
 
 	//! Hold the current buffer ptr
 	char *buffer_handle_ptr = nullptr;
-
-	//! Shared pointer to the buffer_manager, this is shared across multiple scanners
-	shared_ptr<CSVBufferManager> buffer_manager;
 
 	//! If this scanner has been initialized
 	bool initialized = false;

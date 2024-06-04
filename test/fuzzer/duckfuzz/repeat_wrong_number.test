@@ -1,0 +1,38 @@
+# name: test/fuzzer/duckfuzz/repeat_wrong_number.test
+# description: Repeat row with NULL argument
+# group: [duckfuzz]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+FROM repeat(42, 1)
+----
+42
+
+query I
+FROM repeat(42, 0)
+----
+
+statement error
+FROM repeat(42, -1)
+----
+Repeat second parameter cannot be be less than 0
+
+# original issue https://github.com/duckdb/duckdb-fuzzer/issues/2688
+statement error
+SELECT NULL FROM repeat('7fb6658b-4f42-44ce-bbd0-b22ba2faf7ad', -32768)
+----
+Repeat second parameter cannot be be less than 0
+
+# original issue https://github.com/duckdb/duckdb-fuzzer/issues/2685
+statement error
+SELECT NULL FROM repeat(NULL, -9223372036854775808)
+----
+Repeat second parameter cannot be be less than 0
+
+# original issue https://github.com/duckdb/duckdb-fuzzer/issues/2686
+statement error
+SELECT NULL FROM repeat(1050, -128)
+----
+Repeat second parameter cannot be be less than 0

@@ -690,8 +690,16 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 		}
 	}
 
-	child_function.function(child_meta_data, child_vector_data, child_vector, offset * array_size,
-	                        array_size * copy_count);
+	auto is_constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
+	// If the array is constant, we need to copy the child vector n times
+	if (is_constant) {
+		for (idx_t i = 0; i < copy_count; i++) {
+			child_function.function(child_meta_data, child_vector_data, child_vector, 0, array_size);
+		}
+	} else {
+		child_function.function(child_meta_data, child_vector_data, child_vector, offset * array_size,
+		                        copy_count * array_size);
+	}
 }
 
 ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &type) {

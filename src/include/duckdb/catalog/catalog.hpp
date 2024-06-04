@@ -229,13 +229,6 @@ public:
 	                                         const string &schema, const string &name,
 	                                         QueryErrorContext error_context = QueryErrorContext());
 
-	//! Fetches a logical type from the catalog
-	DUCKDB_API LogicalType GetType(ClientContext &context, const string &schema, const string &names,
-	                               OnEntryNotFound if_not_found);
-
-	DUCKDB_API static LogicalType GetType(ClientContext &context, const string &catalog_name, const string &schema,
-	                                      const string &name);
-
 	template <class T>
 	optional_ptr<T> GetEntry(ClientContext &context, const string &schema_name, const string &name,
 	                         OnEntryNotFound if_not_found, QueryErrorContext error_context = QueryErrorContext()) {
@@ -259,6 +252,7 @@ public:
 	DUCKDB_API optional_ptr<CatalogEntry> AddFunction(ClientContext &context, CreateFunctionInfo &info);
 
 	//! Alter an existing entry in the catalog.
+	DUCKDB_API void Alter(CatalogTransaction transaction, AlterInfo &info);
 	DUCKDB_API void Alter(ClientContext &context, AlterInfo &info);
 
 	virtual unique_ptr<PhysicalOperator> PlanCreateTableAs(ClientContext &context, LogicalCreateTable &op,

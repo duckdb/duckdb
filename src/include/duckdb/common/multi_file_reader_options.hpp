@@ -28,6 +28,8 @@ struct MultiFileReaderOptions {
 	// Default/configurable name of the column containing the file names
 	static constexpr const char *DEFAULT_FILENAME_COLUMN = "filename";
 	string filename_column = DEFAULT_FILENAME_COLUMN;
+	// These are used to pass options through custom multifilereaders
+	case_insensitive_map_t<Value> custom_options;
 
 	DUCKDB_API void Serialize(Serializer &serializer) const;
 	DUCKDB_API static MultiFileReaderOptions Deserialize(Deserializer &source);

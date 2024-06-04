@@ -2,9 +2,6 @@
 # description: Test join with nested types for the keys
 # group: [join]
 
-# FIXME bug in nested shuffle vector handling
-require no_vector_verification
-
 statement ok
 SET default_null_order='nulls_first';
 

@@ -1,0 +1,71 @@
+# name: benchmark/micro/cte/stacked_materialized_cte.benchmark
+# description: Benchmark of stacked materialized CTEs
+# group: [cte]
+
+name Stacked Materialized CTE
+group micro
+subgroup cte
+
+load
+create table t1 as select range id from range(1000000);
+
+run
+with
+mat_t1 as materialized (select * from t1),
+mat_t2 as materialized (select * from mat_t1),
+mat_t3 as materialized (select * from mat_t2 where id not in (
+                        select id % 20 from mat_t2
+                        )),
+mat_t4 as materialized (select * from mat_t1 where id not in (
+						select (id % 20) + 20 from mat_t2
+						UNION ALL
+						select (id % 20) + 40 from mat_t3
+						)),
+mat_t5 as materialized (select * from mat_t1 where id not in (
+						select (id % 20) + 20 from mat_t2
+						UNION ALL
+						select (id % 20) + 40 from mat_t3
+						UNION ALL
+						select (id % 20) + 60 from mat_t4
+						)),
+mat_t6 as materialized (select * from mat_t1 where id not in (
+						select (id % 20) + 20 from mat_t2
+						UNION ALL
+						select (id % 20) + 40 from mat_t3
+						UNION ALL
+						select (id % 20) + 60 from mat_t4
+						UNION ALL
+						select (id % 20) + 80 from mat_t5
+						)),
+mat_t7 as materialized (select * from mat_t1 where id not in (
+						select (id % 20) + 20 from mat_t2
+						UNION ALL
+						select (id % 20) + 40 from mat_t3
+						UNION ALL
+						select (id % 20) + 60 from mat_t4
+						UNION ALL
+						select (id % 20) + 80 from mat_t5
+						UNION ALL
+						select (id % 20) + 80 from mat_t6
+						)),
+mat_t8 as materialized (select * from mat_t1 where id not in (
+						select (id % 20) + 20 from mat_t2
+						UNION ALL
+						select (id % 20) + 40 from mat_t3
+						UNION ALL
+						select (id % 20) + 60 from mat_t4
+						UNION ALL
+						select (id % 20) + 80 from mat_t5
+						UNION ALL
+						select (id % 20) + 80 from mat_t6
+						UNION ALL
+						select (id % 20) + 80 from mat_t7
+						))
+Select * from mat_t1 UNION ALL
+select * from mat_t2 UNION ALL
+select * from mat_t3 UNION ALL
+select * from mat_t4 UNION ALL
+select * from mat_t5 UNION ALL
+select * from mat_t6 UNION ALL
+select * from mat_t7 UNION ALL
+select * from mat_t8;

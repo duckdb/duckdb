@@ -22,15 +22,6 @@ CHECKPOINT
 ----
 Cannot CHECKPOINT: there are other write transactions
 
-statement ok con2
-FORCE CHECKPOINT
-
-# force checkpoint rolled back the transaction of con1
-statement error con1
-SELECT MIN(i), MAX(i), COUNT(*) FROM test;
-----
-transaction is aborted
-
 statement ok con1
 ROLLBACK
 
@@ -88,9 +79,6 @@ CHECKPOINT
 ----
 Cannot CHECKPOINT: there are other write transactions
 
-statement ok
-FORCE CHECKPOINT
-
 query III
 SELECT MIN(i), MAX(i), COUNT(*) FROM test;
 ----
@@ -101,11 +89,6 @@ SELECT MIN(i), MAX(i), COUNT(*) FROM test;
 ----
 0	999999	1000000
 
-statement error con2
-SELECT MIN(i), MAX(i), COUNT(*) FROM test;
-----
-transaction is aborted
-
 statement ok con2
 ROLLBACK
 
@@ -113,11 +96,6 @@ query III con2
 SELECT MIN(i), MAX(i), COUNT(*) FROM test;
 ----
 0	999999	1000000
-
-statement error con3
-SELECT MIN(i), MAX(i), COUNT(*) FROM test;
-----
-transaction is aborted
 
 statement ok con3
 ROLLBACK
@@ -127,11 +105,6 @@ SELECT MIN(i), MAX(i), COUNT(*) FROM test;
 ----
 0	999999	1000000
 
-statement error con4
-SELECT MIN(i), MAX(i), COUNT(*) FROM test;
-----
-transaction is aborted
-
 statement ok con4
 ROLLBACK
 
@@ -139,11 +112,6 @@ query III con4
 SELECT MIN(i), MAX(i), COUNT(*) FROM test;
 ----
 0	999999	1000000
-
-statement error con5
-SELECT MIN(i), MAX(i), COUNT(*) FROM test;
-----
-transaction is aborted
 
 statement ok con5
 ROLLBACK

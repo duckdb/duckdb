@@ -1,0 +1,22 @@
+# name: test/optimizer/issue_12181.test
+# description: Test move constants optimization involving DISTINCT FROM comparison
+# group: [optimizer]
+
+statement ok
+CREATE TABLE t0(c0 INT)
+
+statement ok
+CREATE TABLE t1(c0 INT, c1 INT)
+
+statement ok
+INSERT INTO t1(c0, c1) VALUES (0, 1)
+
+query I
+SELECT NULL IS DISTINCT FROM (1 + t1.c1) FROM t1 NATURAL LEFT JOIN t0
+----
+true
+
+query II
+SELECT * FROM t0 NATURAL RIGHT JOIN t1 WHERE (CASE t0.c0 WHEN t0.c0 THEN 1 ELSE NULL END) IS DISTINCT FROM (1 + (CASE t1.c1 WHEN t1.c1 THEN 2 ELSE NULL END))
+----
+0	1

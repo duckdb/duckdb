@@ -360,7 +360,8 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 
 	idx_t new_group_count = 0;
 	idx_t remaining_entries = groups.size();
-	while (remaining_entries > 0) {
+	idx_t iteration_count;
+	for (iteration_count = 0; remaining_entries > 0 && iteration_count < capacity; iteration_count++) {
 		idx_t new_entry_count = 0;
 		idx_t need_compare_count = 0;
 		idx_t no_match_count = 0;
@@ -370,7 +371,9 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 			const auto index = sel_vector->get_index(i);
 			const auto &salt = hash_salts[index];
 			auto &ht_offset = ht_offsets[index];
-			while (true) {
+
+			idx_t inner_iteration_count;
+			for (inner_iteration_count = 0; inner_iteration_count < capacity; inner_iteration_count++) {
 				auto &entry = entries[ht_offset];
 				if (entry.IsOccupied()) { // Cell is occupied: Compare salts
 					if (entry.GetSalt() == salt) {
@@ -392,6 +395,9 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 					new_groups_out.set_index(new_group_count++, index);
 					break;
 				}
+			}
+			if (inner_iteration_count == capacity) {
+				throw InternalException("Maximum inner iteration count reached in GroupedAggregateHashTable");
 			}
 		}
 
@@ -439,6 +445,9 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		}
 		sel_vector = &state.no_match_vector;
 		remaining_entries = no_match_count;
+	}
+	if (iteration_count == capacity) {
+		throw InternalException("Maximum outer iteration count reached in GroupedAggregateHashTable");
 	}
 
 	count += new_group_count;

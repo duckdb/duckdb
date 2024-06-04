@@ -91,6 +91,7 @@ benchmark/micro/csv/sniffer_quotes.benchmark
 benchmark/micro/csv/time_type.benchmark
 benchmark/micro/cte/cte.benchmark
 benchmark/micro/cte/materialized_cte.benchmark
+benchmark/micro/cte/stacked_materialized_cte.benchmark
 benchmark/micro/date/extract_month.benchmark
 benchmark/micro/date/extract_multiple.benchmark
 benchmark/micro/date/extract_multiple_icu.benchmark

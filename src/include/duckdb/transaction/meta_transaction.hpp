@@ -46,6 +46,7 @@ public:
 	}
 
 	Transaction &GetTransaction(AttachedDatabase &db);
+	optional_ptr<Transaction> TryGetTransaction(AttachedDatabase &db);
 	void RemoveTransaction(AttachedDatabase &db);
 
 	ErrorData Commit();

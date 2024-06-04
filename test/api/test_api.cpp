@@ -553,13 +553,13 @@ TEST_CASE("Test large number of connections to a single database", "[api]") {
 		connections.push_back(std::move(conn));
 	}
 
-	REQUIRE(connection_manager.connections.size() == createdConnections);
+	REQUIRE(connection_manager.GetConnectionCount() == createdConnections);
 
 	for (size_t i = 0; i < toRemove; i++) {
 		connections.erase(connections.begin());
 	}
 
-	REQUIRE(connection_manager.connections.size() == remainingConnections);
+	REQUIRE(connection_manager.GetConnectionCount() == remainingConnections);
 }
 
 TEST_CASE("Issue #4583: Catch Insert/Update/Delete errors", "[api]") {

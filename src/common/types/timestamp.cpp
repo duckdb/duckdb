@@ -79,7 +79,14 @@ bool Timestamp::TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &r
 		pos++;
 	}
 	idx_t time_pos = 0;
-	if (!Time::TryConvertTime(str + pos, len - pos, time_pos, time)) {
+	// TryConvertTime may recursively call us, so we opt for a stricter
+	// operation. Note that we can't pass strict== true here because we
+	// want to process any suffix.
+	if (!Time::TryConvertInterval(str + pos, len - pos, time_pos, time)) {
+		return false;
+	}
+	//	We parsed an interval, so make sure it is in range.
+	if (time.micros > Interval::MICROS_PER_DAY) {
 		return false;
 	}
 	pos += time_pos;
@@ -378,6 +385,21 @@ int64_t Timestamp::GetEpochNanoSeconds(timestamp_t timestamp) {
 		throw ConversionException("Could not convert Timestamp(US) to Timestamp(NS)");
 	}
 	return result;
+}
+
+int64_t Timestamp::GetEpochRounded(timestamp_t input, int64_t power_of_ten) {
+	D_ASSERT(Timestamp::IsFinite(input));
+	//	Round away from the epoch.
+	//	Scale first so we don't overflow.
+	const auto scaling = power_of_ten / 2;
+	input.value /= scaling;
+	if (input.value < 0) {
+		--input.value;
+	} else {
+		++input.value;
+	}
+	input.value /= 2;
+	return input.value;
 }
 
 double Timestamp::GetJulianDay(timestamp_t timestamp) {

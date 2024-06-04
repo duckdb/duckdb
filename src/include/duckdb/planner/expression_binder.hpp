@@ -18,6 +18,7 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/tokens.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/catalog/catalog_entry_retriever.hpp"
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
 #include "duckdb/function/scalar_function.hpp"
 
@@ -90,6 +91,7 @@ public:
 		return bound_columns;
 	}
 
+	void SetCatalogLookupCallback(catalog_entry_callback_t callback);
 	ErrorData Bind(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression = false);
 
 	//! Returns the STRUCT_EXTRACT operator expression
@@ -135,10 +137,19 @@ public:
 	virtual BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
 	                                  bool root_expression = false);
 
-	//! Recursively replaces macro parameters with the provided input parameters
+	//! FIXME: Generalise this for extensibility.
+	//! Recursively replaces macro parameters with the provided input parameters.
 	void ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr, vector<unordered_set<string>> &lambda_params);
-	//! Enables special-handling of lambda parameters by tracking them in the lambda_params vector
+	//! Enables special-handling of lambda parameters during macro replacement by tracking them in the lambda_params
+	//! vector.
 	void ReplaceMacroParametersInLambda(FunctionExpression &function, vector<unordered_set<string>> &lambda_params);
+	//! Recursively qualifies column references in ON CONFLICT DO UPDATE SET expressions.
+	void DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, const string &table_name,
+	                        vector<unordered_set<string>> &lambda_params);
+	//! Enables special-handling of lambda parameters during ON CONFLICT TO UPDATE SET qualification by tracking them in
+	//! the lambda_params vector.
+	void DoUpdateSetQualifyInLambda(FunctionExpression &function, const string &table_name,
+	                                vector<unordered_set<string>> &lambda_params);
 
 	static LogicalType GetExpressionReturnType(const Expression &expr);
 
@@ -194,6 +205,9 @@ protected:
 
 	virtual string UnsupportedAggregateMessage();
 	virtual string UnsupportedUnnestMessage();
+	optional_ptr<CatalogEntry> GetCatalogEntry(CatalogType type, const string &catalog, const string &schema,
+	                                           const string &name, OnEntryNotFound on_entry_not_found,
+	                                           QueryErrorContext &error_context);
 
 	Binder &binder;
 	ClientContext &context;
@@ -202,9 +216,6 @@ protected:
 
 	//! Returns true if the function name is an alias for the UNNEST function
 	static bool IsUnnestFunction(const string &function_name);
-	//! Returns true, if the function contains a lambda expression and is not the '->>' operator
-	static bool IsLambdaFunction(const FunctionExpression &function);
-	//! Returns the bind result of binding a lambda or JSON function
 	BindResult TryBindLambdaOrJson(FunctionExpression &function, idx_t depth, CatalogEntry &func);
 };
 

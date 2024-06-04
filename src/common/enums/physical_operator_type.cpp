@@ -155,6 +155,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "COPY_DATABASE";
 	case PhysicalOperatorType::VERIFY_VECTOR:
 		return "VERIFY_VECTOR";
+	case PhysicalOperatorType::UPDATE_EXTENSIONS:
+		return "UPDATE_EXTENSIONS";
 	case PhysicalOperatorType::INVALID:
 		break;
 	}

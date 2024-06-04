@@ -61,7 +61,7 @@ public:
 	~AttachedDatabase() override;
 
 	//! Initializes the catalog and storage of the attached database.
-	void Initialize(const optional_idx block_alloc_size, optional_ptr<ClientContext> context = nullptr);
+	void Initialize(const optional_idx block_alloc_size);
 	void Close();
 
 	Catalog &ParentCatalog() override;
@@ -72,6 +72,11 @@ public:
 	DatabaseInstance &GetDatabase() {
 		return db;
 	}
+
+	optional_ptr<StorageExtension> GetStorageExtension() {
+		return storage_extension;
+	}
+
 	const string &GetName() const {
 		return name;
 	}
@@ -92,6 +97,7 @@ private:
 	unique_ptr<TransactionManager> transaction_manager;
 	AttachedDatabaseType type;
 	optional_ptr<Catalog> parent_catalog;
+	optional_ptr<StorageExtension> storage_extension;
 	bool is_initial_database = false;
 	bool is_closed = false;
 };

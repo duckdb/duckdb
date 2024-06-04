@@ -1,6 +1,5 @@
 #include "duckdb/core_functions/scalar/debug_functions.hpp"
 
-#include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/enum_util.hpp"
@@ -14,10 +13,12 @@ static void VectorTypeFunction(DataChunk &input, ExpressionState &state, Vector 
 }
 
 ScalarFunction VectorTypeFun::GetFunction() {
-	return ScalarFunction("vector_type",        // name of the function
-	                      {LogicalType::ANY},   // argument list
-	                      LogicalType::VARCHAR, // return type
-	                      VectorTypeFunction);
+	auto vector_type_fun = ScalarFunction("vector_type",        // name of the function
+	                                      {LogicalType::ANY},   // argument list
+	                                      LogicalType::VARCHAR, // return type
+	                                      VectorTypeFunction);
+	vector_type_fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	return vector_type_fun;
 }
 
 } // namespace duckdb

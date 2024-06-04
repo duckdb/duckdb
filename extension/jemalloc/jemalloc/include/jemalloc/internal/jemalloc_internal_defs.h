@@ -264,10 +264,10 @@
  */
 // ----- DuckDB comment -----
 // This makes it feasible to run the larger page size (https://github.com/duckdb/duckdb/discussions/11455),
-// but it is problematic on 32-bit systems, so we'll disable it there
-#if INTPTR_MAX == INT64_MAX
-#define JEMALLOC_RETAIN
-#endif
+// but it causes DuckDB to retain RSS even after closing the connection, so we have to disable it
+// #if INTPTR_MAX == INT64_MAX
+// #define JEMALLOC_RETAIN
+// #endif
 
 /* TLS is used to map arenas and magazine caches to threads. */
 #define JEMALLOC_TLS
@@ -310,7 +310,7 @@
  * If defined, explicitly attempt to more uniformly distribute large allocation
  * pointer alignments across all cache indices.
  */
-#define JEMALLOC_CACHE_OBLIVIOUS
+// #define JEMALLOC_CACHE_OBLIVIOUS
 
 /*
  * If defined, enable logging facilities.  We make this a configure option to
@@ -327,9 +327,9 @@
 /*
  * Darwin (OS X) uses zones to work around Mach-O symbol override shortcomings.
  */
-#if defined(__APPLE__)
-#define JEMALLOC_ZONE
-#endif
+// #if defined(__APPLE__)
+// #define JEMALLOC_ZONE
+// #endif
 
 /*
  * Methods for determining whether the OS overcommits.
@@ -337,8 +337,11 @@
  *                                         /proc/sys/vm.overcommit_memory file.
  * JEMALLOC_SYSCTL_VM_OVERCOMMIT: FreeBSD's vm.overcommit sysctl.
  */
-/* #undef JEMALLOC_SYSCTL_VM_OVERCOMMIT */
-/* #undef JEMALLOC_PROC_SYS_VM_OVERCOMMIT_MEMORY */
+#ifdef __FreeBSD__
+#define JEMALLOC_SYSCTL_VM_OVERCOMMIT
+#else
+#define JEMALLOC_PROC_SYS_VM_OVERCOMMIT_MEMORY
+#endif
 
 /* Defined if madvise(2) is available. */
 #define JEMALLOC_HAVE_MADVISE
@@ -362,12 +365,12 @@
  *                                 MADV_FREE, though typically with higher
  *                                 system overhead.
  */
-// #define JEMALLOC_PURGE_MADVISE_FREE
-#define JEMALLOC_PURGE_MADVISE_DONTNEED
+#define JEMALLOC_PURGE_MADVISE_FREE
+// #define JEMALLOC_PURGE_MADVISE_DONTNEED
 /* #undef JEMALLOC_PURGE_MADVISE_DONTNEED_ZEROS */
 
 /* Defined if madvise(2) is available but MADV_FREE is not (x86 Linux only). */
-#undef JEMALLOC_DEFINE_MADVISE_FREE
+#define JEMALLOC_DEFINE_MADVISE_FREE
 
 /*
  * Defined if MADV_DO[NT]DUMP is supported as an argument to madvise.
@@ -494,9 +497,9 @@
 /* #undef JEMALLOC_UAF_DETECTION */
 
 /* Darwin VM_MAKE_TAG support */
-#if defined(__APPLE__)
-#define JEMALLOC_HAVE_VM_MAKE_TAG
-#endif
+// #if defined(__APPLE__)
+// #define JEMALLOC_HAVE_VM_MAKE_TAG
+// #endif
 
 /* If defined, realloc(ptr, 0) defaults to "free" instead of "alloc". */
 /* #undef JEMALLOC_ZERO_REALLOC_DEFAULT_FREE */

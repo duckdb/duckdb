@@ -17,6 +17,7 @@ SELECT * FROM s1.integers
 statement error con1
 DROP SCHEMA s1
 ----
+table "integers" depends on schema "s1".
 
 query I con1
 SELECT * FROM s1.integers
@@ -30,6 +31,7 @@ DROP SCHEMA s1 CASCADE
 statement error con1
 SELECT * FROM s1.integers
 ----
+Table with name integers does not exist
 
 # schemas and dependencies
 # create a schema and a table inside the schema
@@ -53,6 +55,7 @@ DROP TABLE s1.integers
 statement error con2
 DROP SCHEMA s1
 ----
+table "integers" depends on schema "s1".
 
 # now rollback the table drop
 statement ok con1
@@ -97,4 +100,4 @@ ROLLBACK
 statement error con2
 CREATE TABLE s1.dummy(i INTEGER)
 ----
-
+Schema with name s1 does not exist

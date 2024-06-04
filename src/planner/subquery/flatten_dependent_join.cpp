@@ -575,6 +575,11 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		// push into children
 		plan->children[0] =
 		    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
+
+		// we replace any correlated expressions with the corresponding entry in the correlated_map
+		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, lateral_depth);
+		rewriter.VisitOperator(*plan);
+
 		// add the correlated columns to the PARTITION BY clauses in the Window
 		for (auto &expr : window.expressions) {
 			D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);

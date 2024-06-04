@@ -313,20 +313,18 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	if (!alter_info.allow_internal && entry->internal) {
 		throw CatalogException("Cannot alter entry \"%s\" because it is an internal system entry", entry->name);
 	}
-	if (!transaction.context) {
-		throw InternalException("Cannot AlterEntry without client context");
-	}
-
-	auto &context = *transaction.context;
 
 	unique_ptr<CatalogEntry> value;
 	if (alter_info.type == AlterType::SET_COMMENT) {
 		// Copy the existing entry; we are only changing metadata here
-		value = entry->Copy(context);
+		if (!transaction.context) {
+			throw InternalException("Cannot AlterEntry::SET_COMMENT without client context");
+		}
+		value = entry->Copy(*transaction.context);
 		value->comment = alter_info.Cast<SetCommentInfo>().comment_value;
 	} else {
 		// Use the existing entry to create the altered entry
-		value = entry->AlterEntry(context, alter_info);
+		value = entry->AlterEntry(transaction, alter_info);
 		if (!value) {
 			// alter failed, but did not result in an error
 			return true;

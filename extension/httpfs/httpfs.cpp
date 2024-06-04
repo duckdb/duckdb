@@ -11,6 +11,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
 
 #include <chrono>
 #include <string>
@@ -40,6 +41,7 @@ HTTPParams HTTPParams::ReadFrom(optional_ptr<FileOpener> opener) {
 	bool keep_alive = DEFAULT_KEEP_ALIVE;
 	bool enable_server_cert_verification = DEFAULT_ENABLE_SERVER_CERT_VERIFICATION;
 	std::string ca_cert_file;
+	uint64_t hf_max_per_page = DEFAULT_HF_MAX_PER_PAGE;
 
 	Value value;
 	if (FileOpener::TryGetCurrentSetting(opener, "http_timeout", value)) {
@@ -66,10 +68,20 @@ HTTPParams HTTPParams::ReadFrom(optional_ptr<FileOpener> opener) {
 	if (FileOpener::TryGetCurrentSetting(opener, "ca_cert_file", value)) {
 		ca_cert_file = value.ToString();
 	}
+	if (FileOpener::TryGetCurrentSetting(opener, "hf_max_per_page", value)) {
+		hf_max_per_page = value.GetValue<uint64_t>();
+	}
 
-	return {
-	    timeout,     retries, retry_wait_ms, retry_backoff, force_download, keep_alive, enable_server_cert_verification,
-	    ca_cert_file};
+	return {timeout,
+	        retries,
+	        retry_wait_ms,
+	        retry_backoff,
+	        force_download,
+	        keep_alive,
+	        enable_server_cert_verification,
+	        ca_cert_file,
+	        "",
+	        hf_max_per_page};
 }
 
 void HTTPFileSystem::ParseUrl(string &url, string &path_out, string &proto_host_port_out) {
@@ -91,9 +103,10 @@ void HTTPFileSystem::ParseUrl(string &url, string &path_out, string &proto_host_
 
 // Retry the request performed by fun using the exponential backoff strategy defined in params. Before retry, the
 // retry callback is called
-static duckdb::unique_ptr<ResponseWrapper>
-RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &request, string &url, string method,
-                    const HTTPParams &params, const std::function<void(void)> &retry_cb = {}) {
+duckdb::unique_ptr<ResponseWrapper>
+HTTPFileSystem::RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &request, string &url,
+                                    string method, const HTTPParams &params,
+                                    const std::function<void(void)> &retry_cb) {
 	idx_t tries = 0;
 	while (true) {
 		std::exception_ptr caught_e = nullptr;
@@ -213,6 +226,9 @@ unique_ptr<duckdb_httplib_openssl::Client> HTTPFileSystem::GetClient(const HTTPP
 	if (hfs && hfs->http_logger) {
 		client->set_logger(
 		    hfs->http_logger->GetLogger<duckdb_httplib_openssl::Request, duckdb_httplib_openssl::Response>());
+	}
+	if (!http_params.bearer_token.empty()) {
+		client->set_bearer_token_auth(http_params.bearer_token.c_str());
 	}
 	return client;
 }
@@ -386,7 +402,21 @@ HTTPFileHandle::HTTPFileHandle(FileSystem &fs, const string &path, FileOpenFlags
 unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const string &path, FileOpenFlags flags,
                                                         optional_ptr<FileOpener> opener) {
 	D_ASSERT(flags.Compression() == FileCompressionType::UNCOMPRESSED);
-	return duckdb::make_uniq<HTTPFileHandle>(*this, path, flags, HTTPParams::ReadFrom(opener));
+
+	auto params = HTTPParams::ReadFrom(opener);
+
+	auto secret_manager = FileOpener::TryGetSecretManager(opener);
+	auto transaction = FileOpener::TryGetCatalogTransaction(opener);
+	if (secret_manager && transaction) {
+		auto secret_match = secret_manager->LookupSecret(*transaction, path, "bearer");
+
+		if (secret_match.HasMatch()) {
+			const auto &kv_secret = dynamic_cast<const KeyValueSecret &>(*secret_match.secret_entry->secret);
+			params.bearer_token = kv_secret.TryGetValue("token", true).ToString();
+		}
+	}
+
+	return duckdb::make_uniq<HTTPFileHandle>(*this, path, flags, params);
 }
 
 unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, FileOpenFlags flags,
@@ -710,7 +740,7 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 void HTTPFileHandle::InitializeClient(optional_ptr<ClientContext> context) {
 	string path_out, proto_host_port;
 	HTTPFileSystem::ParseUrl(path, path_out, proto_host_port);
-	http_client = HTTPFileSystem::GetClient(this->http_params, proto_host_port.c_str(), nullptr);
+	http_client = HTTPFileSystem::GetClient(this->http_params, proto_host_port.c_str(), this);
 	if (context && ClientConfig::GetConfig(*context).enable_http_logging) {
 		http_logger = context->client_data->http_logger.get();
 		http_client->set_logger(

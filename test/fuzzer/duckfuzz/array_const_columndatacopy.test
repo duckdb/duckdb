@@ -1,0 +1,19 @@
+# name: test/fuzzer/duckfuzz/array_const_columndatacopy.test
+# group: [duckfuzz]
+
+# Fuzzyduck issue #2392
+# Caused by not copying over enough child vector data when adding a const array vector to a column data collection
+statement ok
+CREATE TABLE uuids(uuid UUID);
+
+statement ok
+INSERT INTO uuids VALUES('00000000-0000-0000-0000-000000000000');
+
+statement ok
+INSERT INTO uuids VALUES('ffffffff-ffff-ffff-ffff-ffffffffffff');
+
+query I
+SELECT TRY_CAST(uuid AS STRUCT(b VARCHAR[3])) FROM uuids;
+----
+NULL
+NULL

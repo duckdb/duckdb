@@ -321,7 +321,15 @@ S3AuthParams S3SecretHelper::GetParams(const KeyValueSecret &secret) {
 }
 
 S3FileHandle::~S3FileHandle() {
-	Close();
+	if (Exception::UncaughtException()) {
+		// We are in an exception, don't do anything
+		return;
+	}
+
+	try {
+		Close();
+	} catch (...) { // NOLINT
+	}
 }
 
 S3ConfigParams S3ConfigParams::ReadFrom(optional_ptr<FileOpener> opener) {

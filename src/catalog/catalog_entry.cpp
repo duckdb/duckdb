@@ -26,6 +26,13 @@ unique_ptr<CatalogEntry> CatalogEntry::AlterEntry(ClientContext &context, AlterI
 	throw InternalException("Unsupported alter type for catalog entry!");
 }
 
+unique_ptr<CatalogEntry> CatalogEntry::AlterEntry(CatalogTransaction transaction, AlterInfo &info) {
+	if (!transaction.context) {
+		throw InternalException("Cannot AlterEntry without client context");
+	}
+	return AlterEntry(*transaction.context, info);
+}
+
 void CatalogEntry::UndoAlter(ClientContext &context, AlterInfo &info) {
 }
 

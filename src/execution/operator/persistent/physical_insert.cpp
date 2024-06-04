@@ -453,6 +453,13 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 		gstate.insert_count += lstate.insert_chunk.size();
 		gstate.insert_count += updated_tuples;
 		storage.LocalAppend(gstate.append_state, table, context.client, lstate.insert_chunk, true);
+
+		// We finalize the local append to write the segment node count.
+		if (action_type != OnConflictAction::THROW) {
+			storage.FinalizeLocalAppend(gstate.append_state);
+			gstate.initialized = false;
+		}
+
 	} else {
 		D_ASSERT(!return_chunk);
 		// parallel append

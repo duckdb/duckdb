@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/storage/index.hpp"
+#include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/common/array.hpp"
 
@@ -31,7 +31,7 @@ struct ARTFlags {
 	vector<idx_t> merge_buffer_counts;
 };
 
-class ART : public Index {
+class ART : public BoundIndex {
 public:
 	// Index type name for the ART
 	static constexpr const char *TYPE_NAME = "ART";
@@ -64,7 +64,7 @@ public:
 
 public:
 	//! Create a index instance of this type
-	static unique_ptr<Index> Create(CreateIndexInput &input) {
+	static unique_ptr<BoundIndex> Create(CreateIndexInput &input) {
 		auto art = make_uniq<ART>(input.name, input.constraint_type, input.column_ids, input.table_io_manager,
 		                          input.unbound_expressions, input.db, nullptr, input.storage_info);
 		return std::move(art);
@@ -96,7 +96,7 @@ public:
 
 	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
 	//! index must also be locked during the merge
-	bool MergeIndexes(IndexLock &state, Index &other_index) override;
+	bool MergeIndexes(IndexLock &state, BoundIndex &other_index) override;
 
 	//! Traverses an ART and vacuums the qualifying nodes. The lock obtained from InitializeLock must be held
 	void Vacuum(IndexLock &state) override;

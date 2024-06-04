@@ -113,6 +113,17 @@ public:
 		auto trimmed_path = op.GetTrimmedPath(context.client);
 		string hive_path = GetOrCreateDirectory(op.partition_columns, op.names, values, trimmed_path, fs);
 		string full_path(op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, 0));
+		if (op.overwrite_mode == CopyOverwriteMode::COPY_APPEND) {
+			// when appending, we first check if the file exists
+			while (fs.FileExists(full_path)) {
+				// file already exists - re-generate name
+				if (!op.filename_pattern.HasUUID()) {
+					throw InternalException("CopyOverwriteMode::COPY_APPEND without {uuid} - and file exists");
+				}
+				full_path = op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, 0);
+			}
+		}
+
 		// initialize writes
 		auto info = make_uniq<PartitionWriteInfo>();
 		info->global_state = op.function.copy_to_initialize_global(context.client, *op.bind_data, full_path);
@@ -226,11 +237,16 @@ unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContex
 	return std::move(res);
 }
 
-void CheckDirectory(FileSystem &fs, const string &file_path, bool overwrite) {
-	if (fs.IsRemoteFile(file_path) && overwrite) {
-		// we only remove files for local file systems
-		// as remote file systems (e.g. S3) do not support RemoveFile
+void CheckDirectory(FileSystem &fs, const string &file_path, CopyOverwriteMode overwrite_mode) {
+	if (overwrite_mode == CopyOverwriteMode::COPY_OVERWRITE_OR_IGNORE ||
+	    overwrite_mode == CopyOverwriteMode::COPY_APPEND) {
+		// with overwrite or ignore we fully ignore the presence of any files instead of erasing them
 		return;
+	}
+	if (fs.IsRemoteFile(file_path) && overwrite_mode == CopyOverwriteMode::COPY_OVERWRITE) {
+		// we can only remove files for local file systems currently
+		// as remote file systems (e.g. S3) do not support RemoveFile
+		throw NotImplementedException("OVERWRITE is not supported for remote file systems");
 	}
 	vector<string> file_list;
 	vector<string> directory_list;
@@ -249,13 +265,12 @@ void CheckDirectory(FileSystem &fs, const string &file_path, bool overwrite) {
 	if (file_list.empty()) {
 		return;
 	}
-	if (overwrite) {
+	if (overwrite_mode == CopyOverwriteMode::COPY_OVERWRITE) {
 		for (auto &file : file_list) {
 			fs.RemoveFile(file);
 		}
 	} else {
-		throw IOException("Directory \"%s\" is not empty! Enable OVERWRITE_OR_IGNORE option to force writing",
-		                  file_path);
+		throw IOException("Directory \"%s\" is not empty! Enable OVERWRITE option to overwrite files", file_path);
 	}
 }
 
@@ -269,11 +284,11 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 				throw IOException("Cannot write to \"%s\" - it exists and is a file, not a directory!", file_path);
 			} else {
 				// for local files we can remove the file if OVERWRITE_OR_IGNORE is enabled
-				if (overwrite_or_ignore) {
+				if (overwrite_mode == CopyOverwriteMode::COPY_OVERWRITE) {
 					fs.RemoveFile(file_path);
 				} else {
 					throw IOException("Cannot write to \"%s\" - it exists and is a file, not a directory! Enable "
-					                  "OVERWRITE_OR_IGNORE option to force writing",
+					                  "OVERWRITE option to overwrite the file",
 					                  file_path);
 				}
 			}
@@ -282,7 +297,7 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 		if (!fs.DirectoryExists(file_path)) {
 			fs.CreateDirectory(file_path);
 		} else {
-			CheckDirectory(fs, file_path, overwrite_or_ignore);
+			CheckDirectory(fs, file_path, overwrite_mode);
 		}
 
 		auto state = make_uniq<CopyToFunctionGlobalState>(nullptr);
