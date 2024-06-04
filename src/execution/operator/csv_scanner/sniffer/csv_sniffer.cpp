@@ -149,20 +149,31 @@ SnifferResult CSVSniffer::MinimalSniff() {
 	return {detected_types, names};
 }
 
-void CSVSniffer::AdaptiveSniff(CSVSchema &file_schema) {
-	if (set_columns.IsSet()) {
-		// Nothing to see here
-		return;
+vector<idx_t> CSVSniffer::AdaptiveSniff(CSVSchema &file_schema) {
+	vector<idx_t> projection_order;
+	if (set_columns.IsSet() || !options.file_options.AnySet()) {
+		// If columns are fully set or this is a union_by_name we have nothing to see here.
+		return projection_order;
 	}
 	auto min_sniff_res = MinimalSniff();
-
-	if (!options.file_options.AnySet()) {
-		// Union By name has its own mystical rules
+	bool run_full = error_handler->AnyErrors() || detection_error_handler->AnyErrors();
+	// Check if we are happy with the result or if we need to do more sniffing
+	if (!error_handler->AnyErrors() && !detection_error_handler->AnyErrors()) {
+		// If we got no errors, we also run full if schemas do not match.
 		string error;
-		if (!file_schema.SchemasMatch(error, result.names, result.return_types, file_path, projection_order)) {
+		run_full = !file_schema.SchemasMatch(error, min_sniff_res.names, min_sniff_res.return_types, options.file_path,
+		                                     projection_order);
+	}
+	if (run_full) {
+		// We run full sniffer
+		string error;
+		projection_order.clear();
+		if (!file_schema.SchemasMatch(error, min_sniff_res.names, min_sniff_res.return_types, options.file_path,
+		                              projection_order)) {
 			throw InvalidInputException(error);
 		}
 	}
+	return projection_order;
 }
 SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 	buffer_manager->sniffing = true;

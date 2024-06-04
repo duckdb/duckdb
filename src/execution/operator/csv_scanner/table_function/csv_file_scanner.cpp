@@ -108,7 +108,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 			file_schema.Initialize(result.names, result.return_types, options.file_path);
 		} else if (file_idx > 0 && buffer_manager->file_handle->FileSize() > 0) {
 			CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
-			auto result = sniffer.AdaptiveSniff(file_schema);
+			projection_order = sniffer.AdaptiveSniff(file_schema);
 		}
 	}
 	if (options.dialect_options.num_cols == 0) {
