@@ -1,6 +1,8 @@
 #include "utf8proc_wrapper.hpp"
 #include "utf8proc.hpp"
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
+
 using namespace std;
 
 namespace duckdb {
