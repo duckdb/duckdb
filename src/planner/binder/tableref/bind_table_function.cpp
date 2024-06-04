@@ -334,8 +334,11 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	auto get = BindTableFunctionInternal(table_function, ref, std::move(parameters), std::move(named_parameters),
 	                                     std::move(input_table_types), std::move(input_table_names));
 	if (subquery) {
-		get->children[0]->children[0]->children.push_back(Binder::CreatePlan(*subquery));
-		//get->children.push_back(Binder::CreatePlan(*subquery));
+		if (table_function.with_ordinality) {
+			get->children[0]->children[0]->children.push_back(Binder::CreatePlan(*subquery));
+		} else {
+			get->children.push_back(Binder::CreatePlan(*subquery));
+		}
 	}
 
 	return make_uniq_base<BoundTableRef, BoundTableFunction>(std::move(get));
