@@ -57,6 +57,9 @@ void CTEFilterPusher::FindCandidates(LogicalOperator &op) {
 
 void CTEFilterPusher::PushFilterIntoCTE(MaterializedCTEInfo &info) {
 	D_ASSERT(info.materialized_cte.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE);
+	if (info.filters.empty()) {
+		return;
+	}
 
 	// Create an OR expression with all the filters on all references of the CTE
 	unique_ptr<Expression> outer_expr;
