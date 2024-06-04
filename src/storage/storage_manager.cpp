@@ -1,18 +1,20 @@
 #include "duckdb/storage/storage_manager.hpp"
-#include "duckdb/storage/checkpoint_manager.hpp"
-#include "duckdb/storage/in_memory_block_manager.hpp"
-#include "duckdb/storage/single_file_block_manager.hpp"
-#include "duckdb/storage/object_cache.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/main/database.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/function/function.hpp"
-#include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
+#include "duckdb/function/function.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/storage/checkpoint_manager.hpp"
+#include "duckdb/storage/in_memory_block_manager.hpp"
+#include "duckdb/storage/object_cache.hpp"
+#include "duckdb/storage/single_file_block_manager.hpp"
+#include "duckdb/transaction/transaction_manager.hpp"
+
+#include "duckdb/storage/storage_extension.hpp"
 
 namespace duckdb {
 
@@ -283,6 +285,9 @@ void SingleFileStorageManager::CreateCheckpoint(CheckpointOptions options) {
 	if (InMemory() || read_only || !load_complete) {
 		return;
 	}
+	if (db.GetStorageExtension()) {
+		db.GetStorageExtension()->OnCheckpointStart(db, options);
+	}
 	auto &config = DBConfig::Get(db);
 	if (GetWALSize() > 0 || config.options.force_checkpoint || options.action == CheckpointAction::FORCE_CHECKPOINT) {
 		// we only need to checkpoint if there is anything in the WAL
@@ -296,6 +301,10 @@ void SingleFileStorageManager::CreateCheckpoint(CheckpointOptions options) {
 	}
 	if (options.wal_action == CheckpointWALAction::DELETE_WAL) {
 		ResetWAL();
+	}
+
+	if (db.GetStorageExtension()) {
+		db.GetStorageExtension()->OnCheckpointEnd(db, options);
 	}
 }
 

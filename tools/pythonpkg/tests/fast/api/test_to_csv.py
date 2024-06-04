@@ -218,7 +218,7 @@ class TestToCSV(object):
         )
         rel = duckdb.from_df(df)
         rel.to_csv(temp_file_name, header=True, partition_by=["c_category_1"])
-        with pytest.raises(duckdb.IOException, match="Enable OVERWRITE_OR_IGNORE option to force writing"):
+        with pytest.raises(duckdb.IOException, match="OVERWRITE"):
             rel.to_csv(temp_file_name, header=True, partition_by=["c_category_1"])
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])

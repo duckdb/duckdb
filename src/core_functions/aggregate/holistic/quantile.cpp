@@ -1509,12 +1509,20 @@ unique_ptr<FunctionData> BindQuantile(ClientContext &context, AggregateFunction 
 		throw BinderException("QUANTILE argument must not be NULL");
 	}
 	vector<Value> quantiles;
-	if (quantile_val.type().id() != LogicalTypeId::LIST) {
-		quantiles.push_back(CheckQuantile(quantile_val));
-	} else {
+	switch (quantile_val.type().id()) {
+	case LogicalTypeId::LIST:
 		for (const auto &element_val : ListValue::GetChildren(quantile_val)) {
 			quantiles.push_back(CheckQuantile(element_val));
 		}
+		break;
+	case LogicalTypeId::ARRAY:
+		for (const auto &element_val : ArrayValue::GetChildren(quantile_val)) {
+			quantiles.push_back(CheckQuantile(element_val));
+		}
+		break;
+	default:
+		quantiles.push_back(CheckQuantile(quantile_val));
+		break;
 	}
 
 	Function::EraseArgument(function, arguments, arguments.size() - 1);

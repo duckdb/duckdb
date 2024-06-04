@@ -32,6 +32,7 @@ add_library_unity(
   db_instance_cache.cpp
   error_manager.cpp
   extension.cpp
+  extension_install_info.cpp
   materialized_query_result.cpp
   pending_query_result.cpp
   prepared_statement.cpp

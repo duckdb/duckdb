@@ -6,7 +6,6 @@
 #
 
 duckdb_extension_load(autocomplete)
-duckdb_extension_load(excel)
 duckdb_extension_load(fts)
 duckdb_extension_load(httpfs)
 duckdb_extension_load(inet)

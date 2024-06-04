@@ -41,14 +41,15 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 	internal = true;
 }
 
-AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, StorageExtension &storage_extension,
+AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, StorageExtension &storage_extension_p,
                                    ClientContext &context, string name_p, const AttachInfo &info,
                                    AccessMode access_mode)
-    : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), parent_catalog(&catalog_p) {
+    : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), parent_catalog(&catalog_p),
+      storage_extension(&storage_extension_p) {
 	type = access_mode == AccessMode::READ_ONLY ? AttachedDatabaseType::READ_ONLY_DATABASE
 	                                            : AttachedDatabaseType::READ_WRITE_DATABASE;
-	catalog =
-	    storage_extension.attach(storage_extension.storage_info.get(), context, *this, name, *info.Copy(), access_mode);
+	catalog = storage_extension->attach(storage_extension->storage_info.get(), context, *this, name, *info.Copy(),
+	                                    access_mode);
 	if (!catalog) {
 		throw InternalException("AttachedDatabase - attach function did not return a catalog");
 	}
@@ -57,7 +58,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 		storage = make_uniq<SingleFileStorageManager>(*this, info.path, access_mode == AccessMode::READ_ONLY);
 	}
 	transaction_manager =
-	    storage_extension.create_transaction_manager(storage_extension.storage_info.get(), *this, *catalog);
+	    storage_extension->create_transaction_manager(storage_extension->storage_info.get(), *this, *catalog);
 	if (!transaction_manager) {
 		throw InternalException(
 		    "AttachedDatabase - create_transaction_manager function did not return a transaction manager");
@@ -82,7 +83,7 @@ bool AttachedDatabase::IsReadOnly() const {
 }
 
 bool AttachedDatabase::NameIsReserved(const string &name) {
-	return name == DEFAULT_SCHEMA || name == TEMP_CATALOG;
+	return name == DEFAULT_SCHEMA || name == TEMP_CATALOG || name == SYSTEM_CATALOG;
 }
 
 string AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &fs) {

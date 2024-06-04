@@ -153,6 +153,8 @@ static void HeapGatherArrayVector(Vector &v, const idx_t vcount, const Selection
 		data_ptr_t array_validitymask_location = key_locations[i];
 		key_locations[i] += array_validitymask_size;
 
+		NestedValidity parent_validity(array_validitymask_location);
+
 		// The size of each variable size entry is stored after the validity mask
 		// (if the child type is variable size)
 		data_ptr_t var_entry_size_ptr = nullptr;
@@ -164,8 +166,8 @@ static void HeapGatherArrayVector(Vector &v, const idx_t vcount, const Selection
 		// row idx
 		const auto row_idx = sel.get_index(i);
 
-		auto array_start = row_idx * array_size;
-		auto elem_remaining = array_size;
+		idx_t array_start = row_idx * array_size;
+		idx_t elem_remaining = array_size;
 
 		while (elem_remaining > 0) {
 			auto chunk_size = MinValue(static_cast<idx_t>(STANDARD_VECTOR_SIZE), elem_remaining);
@@ -190,11 +192,11 @@ static void HeapGatherArrayVector(Vector &v, const idx_t vcount, const Selection
 			}
 
 			// Pass on this array's validity mask to the child vector
-			NestedValidity parent_validity(array_validitymask_location);
 			RowOperations::HeapGather(child_vector, chunk_size, array_sel, array_entry_locations, &parent_validity);
 
 			elem_remaining -= chunk_size;
 			array_start += chunk_size;
+			parent_validity.OffsetListBy(chunk_size);
 		}
 	}
 }
