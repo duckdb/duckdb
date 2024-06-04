@@ -48,7 +48,7 @@ static void ToBaseFunction(DataChunk &args, ExpressionState &state, Vector &resu
 			    length++;
 		    }
 
-		    return StringVector::AddString(result, ptr, end - ptr);
+		    return StringVector::AddString(result, ptr, UnsafeNumericCast<idx_t>(end - ptr));
 	    });
 }
 

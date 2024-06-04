@@ -209,15 +209,15 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 		// database_name, VARCHAR
 		output.SetValue(col++, index, entry.catalog.GetName());
 		// database_oid, BIGINT
-		output.SetValue(col++, index, Value::BIGINT(entry.catalog.GetOid()));
+		output.SetValue(col++, index, Value::BIGINT(NumericCast<int64_t>(entry.catalog.GetOid())));
 		// schema_name, VARCHAR
 		output.SetValue(col++, index, entry.schema.name);
 		// schema_oid, BIGINT
-		output.SetValue(col++, index, Value::BIGINT(entry.schema.oid));
+		output.SetValue(col++, index, Value::BIGINT(NumericCast<int64_t>(entry.schema.oid)));
 		// table_name, VARCHAR
 		output.SetValue(col++, index, entry.name);
 		// table_oid, BIGINT
-		output.SetValue(col++, index, Value::BIGINT(entry.oid));
+		output.SetValue(col++, index, Value::BIGINT(NumericCast<int64_t>(entry.oid)));
 		// column_name, VARCHAR
 		output.SetValue(col++, index, Value(ColumnName(i)));
 		// column_index, INTEGER

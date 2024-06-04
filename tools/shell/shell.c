@@ -2283,6 +2283,10 @@ static int makeDirectory(
     rc = SQLITE_NOMEM;
   }else{
     int nCopy = (int)strlen(zCopy);
+	if(nCopy == 0) {
+	  sqlite3_free(zCopy);
+	  return SQLITE_ERROR;
+	}
     int i = 1;
 
     while( rc==SQLITE_OK ){

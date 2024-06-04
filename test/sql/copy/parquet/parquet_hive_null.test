@@ -8,10 +8,7 @@ statement ok
 create table test as select i%5 as a, i%2 as b from range(0,10) tbl(i);
 
 statement ok
-copy test to '__TEST_DIR__/null-parquet' (FORMAT 'parquet', PARTITION_BY (a,b));
-
-statement ok
-copy (select 'NULL' as a, 'NULL' as b) to '__TEST_DIR__/null-parquet' (PARTITION_BY (a,b), OVERWRITE_OR_IGNORE, FORMAT 'parquet');
+copy (FROM test UNION ALL select 'NULL' as a, 'NULL' as b) to '__TEST_DIR__/null-parquet' (PARTITION_BY (a,b), FORMAT 'parquet');
 
 query II
 select * 

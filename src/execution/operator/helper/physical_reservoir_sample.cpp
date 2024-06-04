@@ -17,7 +17,7 @@ public:
 			}
 			sample = make_uniq<ReservoirSamplePercentage>(allocator, percentage, options.seed);
 		} else {
-			auto size = options.sample_size.GetValue<int64_t>();
+			auto size = NumericCast<idx_t>(options.sample_size.GetValue<int64_t>());
 			if (size == 0) {
 				return;
 			}

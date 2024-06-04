@@ -181,7 +181,7 @@ void Parser::ParseQuery(const string &query) {
 			} else {
 				parser_error = parser.error_message;
 				if (parser.error_location > 0) {
-					parser_error_location = parser.error_location - 1;
+					parser_error_location = NumericCast<idx_t>(parser.error_location - 1);
 				}
 			}
 		}
@@ -196,7 +196,7 @@ void Parser::ParseQuery(const string &query) {
 		} else {
 			// split sql string into statements and re-parse using extension
 			auto query_statements = SplitQueryStringIntoStatements(query);
-			auto stmt_loc = 0;
+			idx_t stmt_loc = 0;
 			for (auto const &query_statement : query_statements) {
 				ErrorData another_parser_error;
 				// Creating a new scope to allow extensions to use PostgresParser, which is not reentrant
@@ -219,7 +219,8 @@ void Parser::ParseQuery(const string &query) {
 					} else {
 						another_parser_error = ErrorData(another_parser.error_message);
 						if (another_parser.error_location > 0) {
-							another_parser_error.AddQueryLocation(another_parser.error_location - 1);
+							another_parser_error.AddQueryLocation(
+							    NumericCast<idx_t>(another_parser.error_location - 1));
 						}
 					}
 				} // LCOV_EXCL_STOP
@@ -292,7 +293,7 @@ vector<SimplifiedToken> Parser::Tokenize(const string &query) {
 		default:
 			throw InternalException("Unrecognized token category");
 		} // LCOV_EXCL_STOP
-		token.start = pg_token.start;
+		token.start = NumericCast<idx_t>(pg_token.start);
 		result.push_back(token);
 	}
 	return result;

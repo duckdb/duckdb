@@ -211,6 +211,7 @@ static int64_t ImplicitCastUhugeint(const LogicalType &to) {
 static int64_t ImplicitCastDate(const LogicalType &to) {
 	switch (to.id()) {
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
 		return TargetTypeCost(to);
 	default:
 		return -1;

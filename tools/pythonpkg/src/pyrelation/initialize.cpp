@@ -32,7 +32,8 @@ static void InitializeConsumers(py::class_<DuckDBPyRelation> &m) {
 
 	DefineMethod({"to_parquet", "write_parquet"}, m, &DuckDBPyRelation::ToParquet,
 	             "Write the relation object to a Parquet file in 'file_name'", py::arg("file_name"), py::kw_only(),
-	             py::arg("compression") = py::none());
+	             py::arg("compression") = py::none(), py::arg("field_ids") = py::none(),
+	             py::arg("row_group_size_bytes") = py::none(), py::arg("row_group_size") = py::none());
 
 	DefineMethod({"to_csv", "write_csv"}, m, &DuckDBPyRelation::ToCSV,
 	             "Write the relation object to a CSV file in 'file_name'", py::arg("file_name"), py::kw_only(),
@@ -55,8 +56,8 @@ static void InitializeConsumers(py::class_<DuckDBPyRelation> &m) {
 	         py::arg("date_as_object") = false)
 	    .def("to_df", &DuckDBPyRelation::FetchDF, "Execute and fetch all rows as a pandas DataFrame", py::kw_only(),
 	         py::arg("date_as_object") = false)
-	    .def("fetch_df_chunk", &DuckDBPyRelation::FetchDFChunk, "Execute and fetch a chunk of the rows", py::kw_only(),
-	         py::arg("vectors_per_chunk"), py::arg("date_as_object"))
+	    .def("fetch_df_chunk", &DuckDBPyRelation::FetchDFChunk, "Execute and fetch a chunk of the rows",
+	         py::arg("vectors_per_chunk") = 1, py::kw_only(), py::arg("date_as_object") = false)
 	    .def("arrow", &DuckDBPyRelation::ToArrowTable, "Execute and fetch all rows as an Arrow Table",
 	         py::arg("batch_size") = 1000000)
 	    .def("fetch_arrow_table", &DuckDBPyRelation::ToArrowTable, "Execute and fetch all rows as an Arrow Table",

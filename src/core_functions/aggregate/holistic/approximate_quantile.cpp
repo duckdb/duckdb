@@ -185,6 +185,8 @@ unique_ptr<FunctionData> BindApproxQuantile(ClientContext &context, AggregateFun
 	vector<float> quantiles;
 	if (quantile_val.type().id() != LogicalTypeId::LIST) {
 		quantiles.push_back(CheckApproxQuantile(quantile_val));
+	} else if (quantile_val.IsNull()) {
+		throw BinderException("APPROXIMATE QUANTILE parameter list cannot be NULL");
 	} else {
 		for (const auto &element_val : ListValue::GetChildren(quantile_val)) {
 			quantiles.push_back(CheckApproxQuantile(element_val));

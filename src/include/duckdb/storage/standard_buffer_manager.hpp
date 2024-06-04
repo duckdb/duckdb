@@ -50,6 +50,8 @@ public:
 
 	idx_t GetUsedMemory() const final;
 	idx_t GetMaxMemory() const final;
+	idx_t GetUsedSwap() final;
+	optional_idx GetMaxSwap() const final;
 
 	//! Allocate an in-memory buffer with a single pin.
 	//! The allocated memory is released when the buffer handle is destroyed.
@@ -64,7 +66,8 @@ public:
 
 	//! Set a new memory limit to the buffer manager, throws an exception if the new limit is too low and not enough
 	//! blocks can be evicted
-	void SetLimit(idx_t limit = (idx_t)-1) final;
+	void SetMemoryLimit(idx_t limit = (idx_t)-1) final;
+	void SetSwapLimit(optional_idx limit = optional_idx()) final;
 
 	//! Returns informaton about memory usage
 	vector<MemoryInformation> GetMemoryUsageInfo() const override;
@@ -73,14 +76,14 @@ public:
 	vector<TemporaryFileInformation> GetTemporaryFiles() final;
 
 	const string &GetTemporaryDirectory() const final {
-		return temp_directory;
+		return temporary_directory.path;
 	}
 
 	void SetTemporaryDirectory(const string &new_dir) final;
 
 	DUCKDB_API Allocator &GetBufferAllocator() final;
 
-	DatabaseInstance &GetDatabase() {
+	DatabaseInstance &GetDatabase() override {
 		return db;
 	}
 
@@ -137,16 +140,26 @@ protected:
 	void VerifyZeroReaders(shared_ptr<BlockHandle> &handle);
 
 protected:
+	// These are stored here because temp_directory creation is lazy
+	// so we need to store information related to the temporary directory before it's created
+	struct TemporaryFileData {
+		//! The directory name where temporary files are stored
+		string path;
+		//! Lock for creating the temp handle (marked mutable so 'GetMaxSwap' can be const)
+		mutable mutex lock;
+		//! Handle for the temporary directory
+		unique_ptr<TemporaryDirectoryHandle> handle;
+		//! The maximum swap space that can be used
+		optional_idx maximum_swap_space = optional_idx();
+	};
+
+protected:
 	//! The database instance
 	DatabaseInstance &db;
 	//! The buffer pool
 	BufferPool &buffer_pool;
-	//! The directory name where temporary files are stored
-	string temp_directory;
-	//! Lock for creating the temp handle
-	mutex temp_handle_lock;
-	//! Handle for the temporary directory
-	unique_ptr<TemporaryDirectoryHandle> temp_directory_handle;
+	//! The variables related to temporary file management
+	TemporaryFileData temporary_directory;
 	//! The temporary id used for managed buffers
 	atomic<block_id_t> temporary_id;
 	//! Allocator associated with the buffer manager, that passes all allocations through this buffer manager

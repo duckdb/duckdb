@@ -184,7 +184,7 @@ duckdb_fsst_decompress(
          code = strIn[posIn++]; FSST_UNALIGNED_STORE(strOut+posOut, symbol[code]); posOut += len[code]; 
          code = strIn[posIn++]; FSST_UNALIGNED_STORE(strOut+posOut, symbol[code]); posOut += len[code]; 
      } else { 
-         unsigned long firstEscapePos=__builtin_ctzl((unsigned long long) escapeMask)>>3;
+         unsigned long firstEscapePos=static_cast<unsigned long>(__builtin_ctzl((unsigned long long) escapeMask)>>3);
          switch(firstEscapePos) { /* Duff's device */
          case 3: code = strIn[posIn++]; FSST_UNALIGNED_STORE(strOut+posOut, symbol[code]); posOut += len[code];
 			 DUCKDB_FSST_EXPLICIT_FALLTHROUGH;

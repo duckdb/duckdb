@@ -28,7 +28,7 @@ void AlpFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, 
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
 	AlpScanState<T> scan_state(segment);
-	scan_state.Skip(segment, row_id);
+	scan_state.Skip(segment, UnsafeNumericCast<idx_t>(row_id));
 	auto result_data = FlatVector::GetData<EXACT_TYPE>(result);
 	result_data[result_idx] = (EXACT_TYPE)0;
 

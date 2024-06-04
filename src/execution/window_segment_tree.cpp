@@ -1157,13 +1157,16 @@ void WindowDistinctAggregator::Sink(DataChunk &arg_chunk, SelectionVector *filte
 	//	3: 	for i ← 0 to in.size do
 	//	4: 		sorted[i] ← (in[i], i)
 	const auto count = arg_chunk.size();
-	auto payload_data = FlatVector::GetData<idx_t>(payload_chunk.data[0]);
-	std::iota(payload_data, payload_data + count, payload_pos);
+	payload_chunk.Reset();
+	auto &sorted_vec = payload_chunk.data[0];
+	auto sorted = FlatVector::GetData<idx_t>(sorted_vec);
+	std::iota(sorted, sorted + count, payload_pos);
 	payload_pos += count;
 
 	for (column_t c = 0; c < arg_chunk.ColumnCount(); ++c) {
 		sort_chunk.data[c].Reference(arg_chunk.data[c]);
 	}
+	sort_chunk.data.back().Reference(sorted_vec);
 	sort_chunk.SetCardinality(arg_chunk);
 	payload_chunk.SetCardinality(sort_chunk);
 

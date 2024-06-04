@@ -78,7 +78,7 @@ INSERT INTO string_structs VALUES ({'a': 'foo', 'b': 'bar'}), ({'a': 'baz', 'b':
 query II
 EXPLAIN SELECT * FROM string_structs WHERE s.a = 'foo';
 ----
-physical_plan	<REGEX>:.*Filters: s\.a=foo AND s\.a IS.*NOT NULL.*
+physical_plan	<REGEX>:.*Filters: s\.a='foo' AND s\.a.*IS NOT NULL.*
 
 query I
 SELECT * FROM string_structs WHERE s.a = 'foo';
@@ -148,7 +148,7 @@ SELECT * FROM nested_structs WHERE s.a.c = true AND s.d.e = 5;
 query II
 EXPLAIN SELECT * FROM nested_structs WHERE s.d.f = 'bar';
 ----
-physical_plan	<REGEX>:.*Filters: s\.d\.f=bar AND s\.d.*\.f IS NOT NULL.*
+physical_plan	<REGEX>:.*Filters: s\.d\.f='bar' AND s.*\.d\.f IS NOT NULL.*
 
 query I
 SELECT * FROM nested_structs WHERE s.d.f = 'bar';
@@ -192,7 +192,7 @@ COPY (FROM string_structs) TO '__TEST_DIR__/string_structs.parquet' (FORMAT PARQ
 query II
 EXPLAIN SELECT * FROM read_parquet('__TEST_DIR__/string_structs.parquet') WHERE s.a = 'foo';
 ----
-physical_plan	<REGEX>:.*Filters: s\.a=foo AND s\.a IS.*NOT NULL.*
+physical_plan	<REGEX>:.*Filters: s\.a='foo' AND s\.a.*IS NOT NULL.*
 
 query I
 SELECT * FROM read_parquet('__TEST_DIR__/string_structs.parquet') WHERE s.a = 'foo';

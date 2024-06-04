@@ -67,7 +67,7 @@ FilterResult FilterCombiner::AddConstantComparison(vector<ExpressionValueInforma
 		switch (comparison) {
 		case ValueComparisonResult::PRUNE_LEFT:
 			// prune the entry from the info list
-			info_list.erase(info_list.begin() + i);
+			info_list.erase_at(i);
 			i--;
 			break;
 		case ValueComparisonResult::PRUNE_RIGHT:
@@ -607,7 +607,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			table_filters.PushFilter(column_index, std::move(upper_bound));
 			table_filters.PushFilter(column_index, make_uniq<IsNotNullFilter>());
 
-			remaining_filters.erase(remaining_filters.begin() + rem_fil_idx);
+			remaining_filters.erase_at(rem_fil_idx);
 		}
 	}
 
@@ -971,7 +971,7 @@ unique_ptr<Expression> FilterCombiner::FindTransitiveFilter(Expression &expr) {
 			auto &comparison = remaining_filters[i]->Cast<BoundComparisonExpression>();
 			if (expr.Equals(*comparison.right) && comparison.type != ExpressionType::COMPARE_NOTEQUAL) {
 				auto filter = std::move(remaining_filters[i]);
-				remaining_filters.erase(remaining_filters.begin() + i);
+				remaining_filters.erase_at(i);
 				return filter;
 			}
 		}

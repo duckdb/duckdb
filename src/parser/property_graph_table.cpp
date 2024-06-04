@@ -41,60 +41,62 @@ PropertyGraphTable::PropertyGraphTable(string table_name_p, string table_name_al
 string PropertyGraphTable::ToString() const {
 	string result = table_name + " " + (table_name_alias.empty() ? "" : "AS " + table_name_alias);
 	if (!is_vertex_table) {
-		result += "SOURCE KEY (";
+		result += " SOURCE KEY (";
 		for (idx_t i = 0; i < source_fk.size(); i++) {
 			if (i != source_fk.size() - 1) {
 				result += source_fk[i] + ", ";
 			} else {
 				// Last element should be without a trailing , instead )
-				result = source_fk[i] + ") ";
+				result += source_fk[i] + ") ";
 			}
 		}
-		result += "REFERENCES " + source_reference + " (";
+		result += " REFERENCES " + source_reference + " (";
 		for (idx_t i = 0; i < source_pk.size(); i++) {
 			if (i != source_pk.size() - 1) {
 				result += source_pk[i] + ", ";
 			} else {
-				result = source_pk[i] + ") ";
+				result += source_pk[i] + ") ";
 			}
 		}
 		result += "\n";
-		result += "DESTINATION KEY (";
+		result += " DESTINATION KEY (";
 		for (idx_t i = 0; i < destination_fk.size(); i++) {
 			if (i != destination_fk.size() - 1) {
 				result += destination_fk[i] + ", ";
 			} else {
 				// Last element should be without a trailing , instead )
-				result = destination_fk[i] + ") ";
+				result += destination_fk[i] + ") ";
 			}
 		}
-		result += "REFERENCES " + destination_reference + " (";
+		result += " REFERENCES " + destination_reference + " (";
 		for (idx_t i = 0; i < destination_pk.size(); i++) {
 			if (i != destination_pk.size() - 1) {
 				result += destination_pk[i] + ", ";
 			} else {
-				result = destination_pk[i] + ") ";
+				result += destination_pk[i] + ") ";
 			}
 		}
 	}
-	result += "\n";
-	result += "PROPERTIES (";
-	for (idx_t i = 0; i < column_names.size(); i++) {
-		if (i != column_names.size() - 1) {
-			result += column_names[i] + (column_aliases[i].empty() ? "" : "AS " + column_aliases[i]) + ", ";
-		} else {
-			result = column_names[i] + (column_aliases[i].empty() ? "" : "AS " + column_aliases[i]) + ") ";
+
+	if (!column_names.empty()) {
+		result += " PROPERTIES ( ";
+
+		for (idx_t i = 0; i < column_names.size(); i++) {
+			if (i != column_names.size() - 1) {
+				result += column_names[i] + ", "; // + (column_aliases[i].empty() ? "" : "AS " + column_aliases[i]) + ", ";
+			} else {
+				result += column_names[i] + ") ";  // + (column_aliases[i].empty() ? "" : "AS " + column_aliases[i]) + ") ";
+			}
 		}
 	}
-
-	result += "LABEL " + main_label;
+	result += " LABEL " + main_label;
 	if (!sub_labels.empty()) {
 		result += " IN " + discriminator + "( ";
 		for (idx_t i = 0; i < sub_labels.size(); i++) {
 			if (i != sub_labels.size() - 1) {
 				result += sub_labels[i] + ", ";
 			} else {
-				result = sub_labels[i] + ") ";
+				result += sub_labels[i] + ") ";
 			}
 		}
 	}
@@ -207,7 +209,7 @@ bool PropertyGraphTable::Equals(const PropertyGraphTable *other_p) const {
 
 void PropertyGraphTable::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "table_name", table_name);
-	serializer.WriteProperty(101, "table_name", table_name);
+	serializer.WriteProperty(101, "table_name", table_name); // alias (not used for now)
 	serializer.WriteProperty(102, "column_names", column_names);
 	serializer.WriteProperty(103, "column_aliases", column_aliases);
 	serializer.WriteProperty(104, "except_columns", except_columns);
@@ -230,7 +232,7 @@ void PropertyGraphTable::Serialize(Serializer &serializer) const {
 }
 
 shared_ptr<PropertyGraphTable> PropertyGraphTable::Deserialize(Deserializer &deserializer) {
-	auto pg_table = make_shared<PropertyGraphTable>();
+	auto pg_table = make_shared_ptr<PropertyGraphTable>();
 	deserializer.ReadProperty(100, "table_name", pg_table->table_name);
 	deserializer.ReadProperty(101, "table_name", pg_table->table_name_alias);
 	deserializer.ReadProperty(102, "column_names", pg_table->column_names);
@@ -256,7 +258,7 @@ shared_ptr<PropertyGraphTable> PropertyGraphTable::Deserialize(Deserializer &des
 }
 
 shared_ptr<PropertyGraphTable> PropertyGraphTable::Copy() const {
-	auto result = make_shared<PropertyGraphTable>();
+	auto result = make_shared_ptr<PropertyGraphTable>();
 
 	result->table_name = table_name;
 	result->table_name_alias = table_name_alias;

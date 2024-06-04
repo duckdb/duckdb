@@ -565,7 +565,7 @@ private:
 
 void HashAggregateDistinctFinalizeEvent::Schedule() {
 	auto n_tasks = CreateGlobalSources();
-	n_tasks = MinValue<idx_t>(n_tasks, TaskScheduler::GetScheduler(context).NumberOfThreads());
+	n_tasks = MinValue<idx_t>(n_tasks, NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads()));
 	vector<shared_ptr<Task>> tasks;
 	for (idx_t i = 0; i < n_tasks; i++) {
 		tasks.push_back(make_uniq<HashAggregateDistinctFinalizeTask>(*pipeline, shared_from_this(), op, gstate));
@@ -608,7 +608,7 @@ idx_t HashAggregateDistinctFinalizeEvent::CreateGlobalSources() {
 
 void HashAggregateDistinctFinalizeEvent::FinishEvent() {
 	// Now that everything is added to the main ht, we can actually finalize
-	auto new_event = make_shared<HashAggregateFinalizeEvent>(context, pipeline.get(), op, gstate);
+	auto new_event = make_shared_ptr<HashAggregateFinalizeEvent>(context, pipeline.get(), op, gstate);
 	this->InsertEvent(std::move(new_event));
 }
 
@@ -755,7 +755,7 @@ SinkFinalizeType PhysicalHashAggregate::FinalizeDistinct(Pipeline &pipeline, Eve
 			radix_table->Finalize(context, radix_state);
 		}
 	}
-	auto new_event = make_shared<HashAggregateDistinctFinalizeEvent>(context, pipeline, *this, gstate);
+	auto new_event = make_shared_ptr<HashAggregateDistinctFinalizeEvent>(context, pipeline, *this, gstate);
 	event.InsertEvent(std::move(new_event));
 	return SinkFinalizeType::READY;
 }

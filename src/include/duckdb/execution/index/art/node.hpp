@@ -117,7 +117,7 @@ public:
 	}
 	//! Set the row ID (8th to 63rd bit)
 	inline void SetRowId(const row_t row_id) {
-		Set((Get() & AND_METADATA) | row_id);
+		Set((Get() & AND_METADATA) | UnsafeNumericCast<idx_t>(row_id));
 	}
 
 	//! Returns the type of the node, which is held in the metadata

@@ -25,6 +25,13 @@ ErrorData::ErrorData(const string &message) : initialized(true), type(ExceptionT
 	// parse the constructed JSON
 	if (message.empty() || message[0] != '{') {
 		// not JSON! Use the message as a raw Exception message and leave type as uninitialized
+
+		if (message == std::bad_alloc().what()) {
+			type = ExceptionType::OUT_OF_MEMORY;
+			raw_message = "Allocation failure";
+			return;
+		}
+
 		raw_message = message;
 		return;
 	} else {
@@ -44,6 +51,11 @@ ErrorData::ErrorData(const string &message) : initialized(true), type(ExceptionT
 const string &ErrorData::Message() {
 	if (final_message.empty()) {
 		final_message = Exception::ExceptionTypeToString(type) + " Error: " + raw_message;
+		if (type == ExceptionType::INTERNAL) {
+			final_message += "\nThis error signals an assertion failure within DuckDB. This usually occurs due to "
+			                 "unexpected conditions or errors in the program's logic.\nFor more information, see "
+			                 "https://duckdb.org/docs/dev/internal_errors";
+		}
 	}
 	return final_message;
 }

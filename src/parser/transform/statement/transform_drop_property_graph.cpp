@@ -1,14 +1,14 @@
-#include "duckdb/parser/statement/drop_statement.hpp"
+#include "duckdb/parser/parsed_data/drop_property_graph_info.hpp"
 #include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
 unique_ptr<SQLStatement> Transformer::TransformDropPropertyGraph(duckdb_libpgquery::PGDropPropertyGraphStmt &stmt) {
-	auto result = make_uniq<DropStatement>();
-	auto &info = *result->info.get();
+	auto drop_pg_info = make_uniq<DropPropertyGraphInfo>();
 	auto pg_tableref = TransformQualifiedName(*stmt.name);
 
-	info.name = pg_tableref.name;
-	info.type = CatalogType::TABLE_ENTRY;
+	drop_pg_info->property_graph_name = pg_tableref.name;
+	auto result = make_uniq<DropStatement>();
+	result->info = std::move(drop_pg_info);
 	return std::move(result);
 }
 

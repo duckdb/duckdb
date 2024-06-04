@@ -1,0 +1,21 @@
+# name: test/sql/order/issue_11936.test
+# description: Test order nested list
+# group: [order]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test(col1 INT, col2 INT2[][][][][][]);
+
+statement ok
+INSERT INTO test VALUES(1000000000, null), (1000000001, [[[[[[]]]]]]), (null, [[[[[[]]]]]]), (null, [[[[[[]]]]]]), (1, [[[[[[]]]]]]);
+
+query II
+SELECT col1, col2 FROM test ORDER BY col1 NULLS LAST, col2;
+----
+1	[[[[[[]]]]]]
+1000000000	NULL
+1000000001	[[[[[[]]]]]]
+NULL	[[[[[[]]]]]]
+NULL	[[[[[[]]]]]]

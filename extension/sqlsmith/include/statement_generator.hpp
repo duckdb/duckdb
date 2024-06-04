@@ -125,7 +125,7 @@ private:
 	vector<string> current_relation_names;
 	vector<string> current_column_names;
 
-	shared_ptr<GeneratorContext> generator_context;
+	std::shared_ptr<GeneratorContext> generator_context;
 	idx_t index = 0;
 	idx_t depth = 0;
 	idx_t expression_depth = 0;
@@ -133,7 +133,7 @@ private:
 	bool in_window = false;
 	bool in_aggregate = false;
 
-	shared_ptr<GeneratorContext> GetDatabaseState(ClientContext &context);
+	std::shared_ptr<GeneratorContext> GetDatabaseState(ClientContext &context);
 	vector<unique_ptr<ParsedExpression>> GenerateChildren(idx_t min, idx_t max);
 
 	template <class T>

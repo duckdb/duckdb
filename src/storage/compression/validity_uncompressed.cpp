@@ -384,7 +384,7 @@ void ValidityFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row
 	auto dataptr = handle.Ptr() + segment.GetBlockOffset();
 	ValidityMask mask(reinterpret_cast<validity_t *>(dataptr));
 	auto &result_mask = FlatVector::Validity(result);
-	if (!mask.RowIsValidUnsafe(row_id)) {
+	if (!mask.RowIsValidUnsafe(NumericCast<idx_t>(row_id))) {
 		result_mask.SetInvalid(result_idx);
 	}
 }

@@ -4,15 +4,15 @@
 
 namespace duckdb {
 
-IndexDataTableInfo::IndexDataTableInfo(shared_ptr<DataTableInfo> &info_p, const string &index_name_p)
-    : info(info_p), index_name(index_name_p) {
+IndexDataTableInfo::IndexDataTableInfo(shared_ptr<DataTableInfo> info_p, const string &index_name_p)
+    : info(std::move(info_p)), index_name(index_name_p) {
 }
 
 IndexDataTableInfo::~IndexDataTableInfo() {
 	if (!info) {
 		return;
 	}
-	info->indexes.RemoveIndex(index_name);
+	info->GetIndexes().RemoveIndex(index_name);
 }
 
 DuckIndexEntry::DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info)
@@ -38,11 +38,11 @@ unique_ptr<CatalogEntry> DuckIndexEntry::Copy(ClientContext &context) const {
 }
 
 string DuckIndexEntry::GetSchemaName() const {
-	return GetDataTableInfo().schema;
+	return GetDataTableInfo().GetSchemaName();
 }
 
 string DuckIndexEntry::GetTableName() const {
-	return GetDataTableInfo().table;
+	return GetDataTableInfo().GetTableName();
 }
 
 DataTableInfo &DuckIndexEntry::GetDataTableInfo() const {
@@ -51,7 +51,7 @@ DataTableInfo &DuckIndexEntry::GetDataTableInfo() const {
 
 void DuckIndexEntry::CommitDrop() {
 	D_ASSERT(info);
-	GetDataTableInfo().indexes.CommitDrop(name);
+	GetDataTableInfo().GetIndexes().CommitDrop(name);
 }
 
 } // namespace duckdb

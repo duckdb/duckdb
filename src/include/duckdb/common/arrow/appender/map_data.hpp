@@ -75,7 +75,7 @@ public:
 		struct_result->children = struct_data.child_pointers.data();
 		struct_result->n_buffers = 1;
 		struct_result->n_children = struct_child_count;
-		struct_result->length = struct_data.child_data[0]->row_count;
+		struct_result->length = NumericCast<int64_t>(struct_data.child_data[0]->row_count);
 
 		append_data.child_arrays[0] = *struct_result;
 

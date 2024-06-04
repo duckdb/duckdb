@@ -74,36 +74,22 @@ class GlobalHivePartitionState {
 public:
 	mutex lock;
 	hive_partition_map_t partition_map;
-	//! Used for incremental updating local copies of the partition map;
-	vector<hive_partition_map_t::const_iterator> partitions;
 };
 
 class HivePartitionedColumnData : public PartitionedColumnData {
 public:
 	HivePartitionedColumnData(ClientContext &context, vector<LogicalType> types, vector<idx_t> partition_by_cols,
-	                          shared_ptr<GlobalHivePartitionState> global_state = nullptr)
-	    : PartitionedColumnData(PartitionedColumnDataType::HIVE, context, std::move(types)),
-	      global_state(std::move(global_state)), group_by_columns(std::move(partition_by_cols)),
-	      hashes_v(LogicalType::HASH) {
-		InitializeKeys();
-	}
-	HivePartitionedColumnData(const HivePartitionedColumnData &other);
+	                          shared_ptr<GlobalHivePartitionState> global_state = nullptr);
 	void ComputePartitionIndices(PartitionedColumnDataAppendState &state, DataChunk &input) override;
 
 	//! Reverse lookup map to reconstruct keys from a partition id
 	std::map<idx_t, const HivePartitionKey *> GetReverseMap();
 
 protected:
-	//! Create allocators for all currently registered partitions
-	void GrowAllocators();
-	//! Create append states for all currently registered partitions
-	void GrowAppendState(PartitionedColumnDataAppendState &state);
-	//! Create and initialize partitions for all currently registered partitions
-	void GrowPartitions(PartitionedColumnDataAppendState &state);
 	//! Register a newly discovered partition
 	idx_t RegisterNewPartition(HivePartitionKey key, PartitionedColumnDataAppendState &state);
-	//! Copy the newly added entries in the global_state.map to the local_partition_map (requires lock!)
-	void SynchronizeLocalMap();
+	//! Add a new partition with the given partition id
+	void AddNewPartition(HivePartitionKey key, idx_t partition_id, PartitionedColumnDataAppendState &state);
 
 private:
 	void InitializeKeys();

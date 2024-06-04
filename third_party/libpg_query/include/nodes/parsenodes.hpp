@@ -1892,8 +1892,20 @@ typedef struct PGLoadStmt {
 	PGNodeTag type;
 	const char *filename; /* file to load */
 	const char *repository; /* optionally, the repository to load from */
+	bool repo_is_alias; /* whether the repository was passed as an alias or a raw path */
+	const char *version; /* optionally, the version of the extension to be loaded */
 	PGLoadInstallType load_type;
 } PGLoadStmt;
+
+/* ----------------------
+ *		Update Extensions Statement
+ * ----------------------
+ */
+
+typedef struct PGUpdateExtensionsStmt {
+	PGNodeTag type;
+	PGList * extensions;
+} PGUpdateExtensionsStmt;
 
 /* ----------------------
  *		Vacuum and Analyze Statements

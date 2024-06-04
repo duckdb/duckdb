@@ -12,19 +12,21 @@
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/storage/optimistic_data_writer.hpp"
+#include "duckdb/common/reference_map.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
+class Catalog;
 class DataTable;
 class Transaction;
 class WriteAheadLog;
 struct LocalAppendState;
 struct TableAppendState;
 
-class LocalTableStorage : public std::enable_shared_from_this<LocalTableStorage> {
+class LocalTableStorage : public enable_shared_from_this<LocalTableStorage> {
 public:
 	// Create a new LocalTableStorage
-	explicit LocalTableStorage(DataTable &table);
+	explicit LocalTableStorage(ClientContext &context, DataTable &table);
 	// Create a LocalTableStorage from an ALTER TYPE
 	LocalTableStorage(ClientContext &context, DataTable &table, LocalTableStorage &parent, idx_t changed_idx,
 	                  const LogicalType &target_type, const vector<column_t> &bound_columns, Expression &cast_expr);
@@ -32,7 +34,7 @@ public:
 	LocalTableStorage(DataTable &table, LocalTableStorage &parent, idx_t drop_idx);
 	// Create a LocalTableStorage from an ADD COLUMN
 	LocalTableStorage(ClientContext &context, DataTable &table, LocalTableStorage &parent, ColumnDefinition &new_column,
-	                  Expression &default_value);
+	                  ExpressionExecutor &default_executor);
 	~LocalTableStorage();
 
 	reference<DataTable> table_ref;
@@ -74,7 +76,7 @@ public:
 	shared_ptr<LocalTableStorage> MoveEntry(DataTable &table);
 	reference_map_t<DataTable, shared_ptr<LocalTableStorage>> MoveEntries();
 	optional_ptr<LocalTableStorage> GetStorage(DataTable &table);
-	LocalTableStorage &GetOrCreateStorage(DataTable &table);
+	LocalTableStorage &GetOrCreateStorage(ClientContext &context, DataTable &table);
 	idx_t EstimatedSize();
 	bool IsEmpty();
 	void InsertEntry(DataTable &table, shared_ptr<LocalTableStorage> entry);
@@ -143,7 +145,8 @@ public:
 
 	idx_t AddedRows(DataTable &table);
 
-	void AddColumn(DataTable &old_dt, DataTable &new_dt, ColumnDefinition &new_column, Expression &default_value);
+	void AddColumn(DataTable &old_dt, DataTable &new_dt, ColumnDefinition &new_column,
+	               ExpressionExecutor &default_executor);
 	void DropColumn(DataTable &old_dt, DataTable &new_dt, idx_t removed_column);
 	void ChangeType(DataTable &old_dt, DataTable &new_dt, idx_t changed_idx, const LogicalType &target_type,
 	                const vector<column_t> &bound_columns, Expression &cast_expr);

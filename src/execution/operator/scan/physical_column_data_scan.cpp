@@ -10,9 +10,8 @@ namespace duckdb {
 
 PhysicalColumnDataScan::PhysicalColumnDataScan(vector<LogicalType> types, PhysicalOperatorType op_type,
                                                idx_t estimated_cardinality,
-                                               unique_ptr<ColumnDataCollection> owned_collection_p)
-    : PhysicalOperator(op_type, std::move(types), estimated_cardinality), collection(owned_collection_p.get()),
-      owned_collection(std::move(owned_collection_p)) {
+                                               optionally_owned_ptr<ColumnDataCollection> collection_p)
+    : PhysicalOperator(op_type, std::move(types), estimated_cardinality), collection(std::move(collection_p)) {
 }
 
 PhysicalColumnDataScan::PhysicalColumnDataScan(vector<LogicalType> types, PhysicalOperatorType op_type,

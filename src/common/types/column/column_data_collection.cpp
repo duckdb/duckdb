@@ -51,17 +51,17 @@ ColumnDataCollection::ColumnDataCollection(Allocator &allocator_p) {
 	types.clear();
 	count = 0;
 	this->finished_append = false;
-	allocator = make_shared<ColumnDataAllocator>(allocator_p);
+	allocator = make_shared_ptr<ColumnDataAllocator>(allocator_p);
 }
 
 ColumnDataCollection::ColumnDataCollection(Allocator &allocator_p, vector<LogicalType> types_p) {
 	Initialize(std::move(types_p));
-	allocator = make_shared<ColumnDataAllocator>(allocator_p);
+	allocator = make_shared_ptr<ColumnDataAllocator>(allocator_p);
 }
 
 ColumnDataCollection::ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types_p) {
 	Initialize(std::move(types_p));
-	allocator = make_shared<ColumnDataAllocator>(buffer_manager);
+	allocator = make_shared_ptr<ColumnDataAllocator>(buffer_manager);
 }
 
 ColumnDataCollection::ColumnDataCollection(shared_ptr<ColumnDataAllocator> allocator_p, vector<LogicalType> types_p) {
@@ -71,7 +71,7 @@ ColumnDataCollection::ColumnDataCollection(shared_ptr<ColumnDataAllocator> alloc
 
 ColumnDataCollection::ColumnDataCollection(ClientContext &context, vector<LogicalType> types_p,
                                            ColumnDataAllocatorType type)
-    : ColumnDataCollection(make_shared<ColumnDataAllocator>(context, type), std::move(types_p)) {
+    : ColumnDataCollection(make_shared_ptr<ColumnDataAllocator>(context, type), std::move(types_p)) {
 	D_ASSERT(!types.empty());
 }
 
@@ -199,7 +199,7 @@ ColumnDataChunkIterationHelper::ColumnDataChunkIterationHelper(const ColumnDataC
 
 ColumnDataChunkIterationHelper::ColumnDataChunkIterator::ColumnDataChunkIterator(
     const ColumnDataCollection *collection_p, vector<column_t> column_ids_p)
-    : collection(collection_p), scan_chunk(make_shared<DataChunk>()), row_index(0) {
+    : collection(collection_p), scan_chunk(make_shared_ptr<DataChunk>()), row_index(0) {
 	if (!collection) {
 		return;
 	}
@@ -246,7 +246,7 @@ ColumnDataRowIterationHelper::ColumnDataRowIterationHelper(const ColumnDataColle
 }
 
 ColumnDataRowIterationHelper::ColumnDataRowIterator::ColumnDataRowIterator(const ColumnDataCollection *collection_p)
-    : collection(collection_p), scan_chunk(make_shared<DataChunk>()), current_row(*scan_chunk, 0, 0) {
+    : collection(collection_p), scan_chunk(make_shared_ptr<DataChunk>()), current_row(*scan_chunk, 0, 0) {
 	if (!collection) {
 		return;
 	}
@@ -690,8 +690,16 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 		}
 	}
 
-	child_function.function(child_meta_data, child_vector_data, child_vector, offset * array_size,
-	                        array_size * copy_count);
+	auto is_constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
+	// If the array is constant, we need to copy the child vector n times
+	if (is_constant) {
+		for (idx_t i = 0; i < copy_count; i++) {
+			child_function.function(child_meta_data, child_vector_data, child_vector, 0, array_size);
+		}
+	} else {
+		child_function.function(child_meta_data, child_vector_data, child_vector, offset * array_size,
+		                        copy_count * array_size);
+	}
 }
 
 ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &type) {
@@ -1041,7 +1049,7 @@ void ColumnDataCollection::Reset() {
 	segments.clear();
 
 	// Refreshes the ColumnDataAllocator to prevent holding on to allocated data unnecessarily
-	allocator = make_shared<ColumnDataAllocator>(*allocator);
+	allocator = make_shared_ptr<ColumnDataAllocator>(*allocator);
 }
 
 struct ValueResultEquals {

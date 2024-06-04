@@ -50,7 +50,7 @@ ColumnCountScanner::ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manag
 }
 
 unique_ptr<StringValueScanner> ColumnCountScanner::UpgradeToStringValueScanner() {
-	auto scanner = make_uniq<StringValueScanner>(0, buffer_manager, state_machine, error_handler, nullptr, true);
+	auto scanner = make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, error_handler, nullptr, true);
 	return scanner;
 }
 

@@ -24,6 +24,11 @@ Transaction &Transaction::Get(ClientContext &context, AttachedDatabase &db) {
 	return meta_transaction.GetTransaction(db);
 }
 
+optional_ptr<Transaction> Transaction::TryGet(ClientContext &context, AttachedDatabase &db) {
+	auto &meta_transaction = MetaTransaction::Get(context);
+	return meta_transaction.TryGetTransaction(db);
+}
+
 #ifdef DEBUG
 static void VerifyAllTransactionsUnique(AttachedDatabase &db, vector<reference<AttachedDatabase>> &all_transactions) {
 	for (auto &tx : all_transactions) {
@@ -33,6 +38,16 @@ static void VerifyAllTransactionsUnique(AttachedDatabase &db, vector<reference<A
 	}
 }
 #endif
+
+optional_ptr<Transaction> MetaTransaction::TryGetTransaction(AttachedDatabase &db) {
+	lock_guard<mutex> guard(lock);
+	auto entry = transactions.find(db);
+	if (entry == transactions.end()) {
+		return nullptr;
+	} else {
+		return &entry->second.get();
+	}
+}
 
 Transaction &MetaTransaction::GetTransaction(AttachedDatabase &db) {
 	lock_guard<mutex> guard(lock);
@@ -63,7 +78,7 @@ void MetaTransaction::RemoveTransaction(AttachedDatabase &db) {
 	for (idx_t i = 0; i < all_transactions.size(); i++) {
 		auto &db_entry = all_transactions[i];
 		if (RefersToSameObject(db_entry.get(), db)) {
-			all_transactions.erase(all_transactions.begin() + i);
+			all_transactions.erase_at(i);
 			break;
 		}
 	}
@@ -134,6 +149,9 @@ void MetaTransaction::ModifyDatabase(AttachedDatabase &db) {
 	}
 	if (!modified_database) {
 		modified_database = &db;
+
+		auto &transaction = GetTransaction(db);
+		transaction.SetReadWrite();
 		return;
 	}
 	if (&db != modified_database.get()) {

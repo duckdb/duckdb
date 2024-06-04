@@ -39,7 +39,7 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
          TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
          AttachedDatabase &db, const shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr,
          const IndexStorageInfo &info)
-    : Index(name, ART::TYPE_NAME, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db),
+    : BoundIndex(name, ART::TYPE_NAME, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db),
       allocators(allocators_ptr), owns_data(false) {
 
 	// initialize all allocators
@@ -54,7 +54,8 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 		    make_uniq<FixedSizeAllocator>(sizeof(Node16), block_manager),
 		    make_uniq<FixedSizeAllocator>(sizeof(Node48), block_manager),
 		    make_uniq<FixedSizeAllocator>(sizeof(Node256), block_manager)};
-		allocators = make_shared<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>>(std::move(allocator_array));
+		allocators =
+		    make_shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>>(std::move(allocator_array));
 	}
 
 	// deserialize lazily
@@ -1114,7 +1115,7 @@ void ART::WritePartialBlocks() {
 
 	// use the partial block manager to serialize all allocator data
 	auto &block_manager = table_io_manager.GetIndexBlockManager();
-	PartialBlockManager partial_block_manager(block_manager, CheckpointType::FULL_CHECKPOINT);
+	PartialBlockManager partial_block_manager(block_manager, PartialBlockType::FULL_CHECKPOINT);
 
 	for (auto &allocator : *allocators) {
 		allocator->SerializeBuffers(partial_block_manager);
@@ -1151,8 +1152,7 @@ void ART::Deserialize(const BlockPointer &pointer) {
 //===--------------------------------------------------------------------===//
 
 void ART::InitializeVacuum(ARTFlags &flags) {
-
-	flags.vacuum_flags.reserve(allocators->size());
+	flags.vacuum_flags.reserve(flags.vacuum_flags.size() + allocators->size());
 	for (auto &allocator : *allocators) {
 		flags.vacuum_flags.push_back(allocator->InitializeVacuum());
 	}
@@ -1230,7 +1230,7 @@ void ART::InitializeMerge(ARTFlags &flags) {
 	}
 }
 
-bool ART::MergeIndexes(IndexLock &state, Index &other_index) {
+bool ART::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
 
 	auto &other_art = other_index.Cast<ART>();
 	if (!other_art.tree.HasMetadata()) {

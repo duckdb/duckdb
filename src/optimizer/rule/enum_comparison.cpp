@@ -1,3 +1,4 @@
+
 #include "duckdb/optimizer/rule/enum_comparison.hpp"
 
 #include "duckdb/execution/expression_executor.hpp"

@@ -29,7 +29,7 @@ CommitState::CommitState(transaction_t commit_id, optional_ptr<WriteAheadLog> lo
 void CommitState::SwitchTable(DataTableInfo *table_info, UndoFlags new_op) {
 	if (current_table_info != table_info) {
 		// write the current table to the log
-		log->WriteSetTable(table_info->schema, table_info->table);
+		log->WriteSetTable(table_info->GetSchemaName(), table_info->GetTableName());
 		current_table_info = table_info;
 	}
 }
@@ -196,7 +196,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 void CommitState::WriteDelete(DeleteInfo &info) {
 	D_ASSERT(log);
 	// switch to the current table, if necessary
-	SwitchTable(info.table->info.get(), UndoFlags::DELETE_TUPLE);
+	SwitchTable(info.table->GetDataTableInfo().get(), UndoFlags::DELETE_TUPLE);
 
 	if (!delete_chunk) {
 		delete_chunk = make_uniq<DataChunk>();
@@ -206,12 +206,12 @@ void CommitState::WriteDelete(DeleteInfo &info) {
 	auto rows = FlatVector::GetData<row_t>(delete_chunk->data[0]);
 	if (info.is_consecutive) {
 		for (idx_t i = 0; i < info.count; i++) {
-			rows[i] = info.base_row + i;
+			rows[i] = UnsafeNumericCast<int64_t>(info.base_row + i);
 		}
 	} else {
 		auto delete_rows = info.GetRows();
 		for (idx_t i = 0; i < info.count; i++) {
-			rows[i] = info.base_row + delete_rows[i];
+			rows[i] = UnsafeNumericCast<int64_t>(info.base_row) + delete_rows[i];
 		}
 	}
 	delete_chunk->SetCardinality(info.count);
@@ -245,7 +245,7 @@ void CommitState::WriteUpdate(UpdateInfo &info) {
 	auto row_ids = FlatVector::GetData<row_t>(update_chunk->data[1]);
 	idx_t start = column_data.start + info.vector_index * STANDARD_VECTOR_SIZE;
 	for (idx_t i = 0; i < info.N; i++) {
-		row_ids[info.tuples[i]] = start + info.tuples[i];
+		row_ids[info.tuples[i]] = UnsafeNumericCast<int64_t>(start + info.tuples[i]);
 	}
 	if (column_data.type.id() == LogicalTypeId::VALIDITY) {
 		// zero-initialize the booleans
@@ -303,7 +303,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::INSERT_TUPLE: {
 		// append:
 		auto info = reinterpret_cast<AppendInfo *>(data);
-		if (HAS_LOG && !info->table->info->IsTemporary()) {
+		if (HAS_LOG && !info->table->IsTemporary()) {
 			info->table->WriteToLog(*log, info->start_row, info->count);
 		}
 		// mark the tuples as committed
@@ -313,7 +313,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::DELETE_TUPLE: {
 		// deletion:
 		auto info = reinterpret_cast<DeleteInfo *>(data);
-		if (HAS_LOG && !info->table->info->IsTemporary()) {
+		if (HAS_LOG && !info->table->IsTemporary()) {
 			WriteDelete(*info);
 		}
 		// mark the tuples as committed
@@ -327,6 +327,13 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 			WriteUpdate(*info);
 		}
 		info->version_number = commit_id;
+		break;
+	}
+	case UndoFlags::SEQUENCE_VALUE: {
+		auto info = reinterpret_cast<SequenceValue *>(data);
+		if (HAS_LOG) {
+			log->WriteSequenceValue(*info);
+		}
 		break;
 	}
 	default:
@@ -356,7 +363,6 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::DELETE_TUPLE: {
 		// deletion:
 		auto info = reinterpret_cast<DeleteInfo *>(data);
-		info->table->info->cardinality += info->count;
 		// revert the commit by writing the (uncommitted) transaction_id back into the version info
 		info->version_info->CommitDelete(info->vector_idx, transaction_id, *info);
 		break;
@@ -365,6 +371,9 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 		// update:
 		auto info = reinterpret_cast<UpdateInfo *>(data);
 		info->version_number = transaction_id;
+		break;
+	}
+	case UndoFlags::SEQUENCE_VALUE: {
 		break;
 	}
 	default:

@@ -62,7 +62,7 @@ MainHeader MainHeader::Read(ReadStream &source) {
 	if (header.version_number != VERSION_NUMBER) {
 		auto version = GetDuckDBVersion(header.version_number);
 		string version_text;
-		if (version) {
+		if (!version.empty()) {
 			// known version
 			version_text = "DuckDB version " + string(version);
 		} else {
@@ -195,8 +195,8 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	DatabaseHeader h1;
 	// header 1
 	h1.iteration = 0;
-	h1.meta_block = INVALID_BLOCK;
-	h1.free_list = INVALID_BLOCK;
+	h1.meta_block = idx_t(INVALID_BLOCK);
+	h1.free_list = idx_t(INVALID_BLOCK);
 	h1.block_count = 0;
 	h1.block_size = Storage::BLOCK_ALLOC_SIZE;
 	h1.vector_size = STANDARD_VECTOR_SIZE;
@@ -205,8 +205,8 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	// header 2
 	DatabaseHeader h2;
 	h2.iteration = 0;
-	h2.meta_block = INVALID_BLOCK;
-	h2.free_list = INVALID_BLOCK;
+	h2.meta_block = idx_t(INVALID_BLOCK);
+	h2.free_list = idx_t(INVALID_BLOCK);
 	h2.block_count = 0;
 	h2.block_size = Storage::BLOCK_ALLOC_SIZE;
 	h2.vector_size = STANDARD_VECTOR_SIZE;
@@ -228,7 +228,7 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	handle = fs.OpenFile(path, flags);
 	if (!handle) {
 		// this can only happen in read-only mode - as that is when we set FILE_FLAGS_NULL_IF_NOT_EXISTS
-		throw CatalogException("Cannot open database \"%s\" in read-only mode: database does not exist", path);
+		throw IOException("Cannot open database \"%s\" in read-only mode: database does not exist", path);
 	}
 
 	MainHeader::CheckMagicBytes(*handle);
@@ -266,8 +266,9 @@ void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t locatio
 
 	// verify the checksum
 	if (stored_checksum != computed_checksum) {
-		throw IOException("Corrupt database file: computed checksum %llu does not match stored checksum %llu in block",
-		                  computed_checksum, stored_checksum);
+		throw IOException("Corrupt database file: computed checksum %llu does not match stored checksum %llu in block "
+		                  "at location %llu",
+		                  computed_checksum, stored_checksum, location);
 	}
 }
 
@@ -283,7 +284,7 @@ void SingleFileBlockManager::Initialize(DatabaseHeader &header) {
 	free_list_id = header.free_list;
 	meta_block = header.meta_block;
 	iteration_count = header.iteration;
-	max_block = header.block_count;
+	max_block = NumericCast<block_id_t>(header.block_count);
 }
 
 void SingleFileBlockManager::LoadFreeList() {
@@ -386,7 +387,7 @@ idx_t SingleFileBlockManager::GetMetaBlock() {
 
 idx_t SingleFileBlockManager::TotalBlocks() {
 	lock_guard<mutex> lock(block_lock);
-	return max_block;
+	return NumericCast<idx_t>(max_block);
 }
 
 idx_t SingleFileBlockManager::FreeBlocks() {
@@ -413,12 +414,12 @@ unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileB
 void SingleFileBlockManager::Read(Block &block) {
 	D_ASSERT(block.id >= 0);
 	D_ASSERT(std::find(free_list.begin(), free_list.end(), block.id) == free_list.end());
-	ReadAndChecksum(block, BLOCK_START + block.id * Storage::BLOCK_ALLOC_SIZE);
+	ReadAndChecksum(block, BLOCK_START + NumericCast<idx_t>(block.id) * Storage::BLOCK_ALLOC_SIZE);
 }
 
 void SingleFileBlockManager::Write(FileBuffer &buffer, block_id_t block_id) {
 	D_ASSERT(block_id >= 0);
-	ChecksumAndWrite(buffer, BLOCK_START + block_id * Storage::BLOCK_ALLOC_SIZE);
+	ChecksumAndWrite(buffer, BLOCK_START + NumericCast<idx_t>(block_id) * Storage::BLOCK_ALLOC_SIZE);
 }
 
 void SingleFileBlockManager::Truncate() {
@@ -440,7 +441,7 @@ void SingleFileBlockManager::Truncate() {
 	// truncate the file
 	free_list.erase(free_list.lower_bound(max_block), free_list.end());
 	newly_freed_list.erase(newly_freed_list.lower_bound(max_block), newly_freed_list.end());
-	handle->Truncate(BLOCK_START + max_block * Storage::BLOCK_ALLOC_SIZE);
+	handle->Truncate(NumericCast<int64_t>(BLOCK_START + NumericCast<idx_t>(max_block) * Storage::BLOCK_ALLOC_SIZE));
 }
 
 vector<MetadataHandle> SingleFileBlockManager::GetFreeListBlocks() {
@@ -488,15 +489,17 @@ protected:
 };
 
 void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
-	// set the iteration count
-	header.iteration = ++iteration_count;
-
 	auto free_list_blocks = GetFreeListBlocks();
 
 	// now handle the free list
 	auto &metadata_manager = GetMetadataManager();
 	// add all modified blocks to the free list: they can now be written to again
 	metadata_manager.MarkBlocksAsModified();
+
+	lock_guard<mutex> lock(block_lock);
+	// set the iteration count
+	header.iteration = ++iteration_count;
+
 	for (auto &block : modified_blocks) {
 		free_list.insert(block);
 		newly_freed_list.insert(block);
@@ -529,7 +532,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 		header.free_list = DConstants::INVALID_INDEX;
 	}
 	metadata_manager.Flush();
-	header.block_count = max_block;
+	header.block_count = NumericCast<idx_t>(max_block);
 
 	auto &config = DBConfig::Get(db);
 	if (config.options.checkpoint_abort == CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE) {
@@ -569,8 +572,8 @@ void SingleFileBlockManager::TrimFreeBlocks() {
 			// We are now one too far.
 			--itr;
 			// Trim the range.
-			handle->Trim(BLOCK_START + (first * Storage::BLOCK_ALLOC_SIZE),
-			             (last + 1 - first) * Storage::BLOCK_ALLOC_SIZE);
+			handle->Trim(BLOCK_START + (NumericCast<idx_t>(first) * Storage::BLOCK_ALLOC_SIZE),
+			             NumericCast<idx_t>(last + 1 - first) * Storage::BLOCK_ALLOC_SIZE);
 		}
 	}
 	newly_freed_list.clear();

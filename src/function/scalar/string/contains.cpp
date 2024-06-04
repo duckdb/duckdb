@@ -22,7 +22,7 @@ static idx_t ContainsUnaligned(const unsigned char *haystack, idx_t haystack_siz
 	UNSIGNED haystack_entry = 0;
 	const UNSIGNED start = (sizeof(UNSIGNED) * 8) - 8;
 	const UNSIGNED shift = (sizeof(UNSIGNED) - NEEDLE_SIZE) * 8;
-	for (int i = 0; i < NEEDLE_SIZE; i++) {
+	for (idx_t i = 0; i < NEEDLE_SIZE; i++) {
 		needle_entry |= UNSIGNED(needle[i]) << UNSIGNED(start - i * 8);
 		haystack_entry |= UNSIGNED(haystack[i]) << UNSIGNED(start - i * 8);
 	}
@@ -106,7 +106,7 @@ idx_t ContainsFun::Find(const unsigned char *haystack, idx_t haystack_size, cons
 	if (location == nullptr) {
 		return DConstants::INVALID_INDEX;
 	}
-	idx_t base_offset = const_uchar_ptr_cast(location) - haystack;
+	idx_t base_offset = UnsafeNumericCast<idx_t>(const_uchar_ptr_cast(location) - haystack);
 	haystack_size -= base_offset;
 	haystack = const_uchar_ptr_cast(location);
 	// switch algorithm depending on needle size

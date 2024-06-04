@@ -40,6 +40,9 @@ static unique_ptr<FunctionData> DuckDBViewsBind(ClientContext &context, TableFun
 	names.emplace_back("comment");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
+	names.emplace_back("tags");
+	return_types.emplace_back(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR));
+
 	names.emplace_back("internal");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
@@ -89,23 +92,25 @@ void DuckDBViewsFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 		// database_name, VARCHAR
 		output.SetValue(col++, count, view.catalog.GetName());
 		// database_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(view.catalog.GetOid()));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(view.catalog.GetOid())));
 		// schema_name, LogicalType::VARCHAR
 		output.SetValue(col++, count, Value(view.schema.name));
 		// schema_oid, LogicalType::BIGINT
-		output.SetValue(col++, count, Value::BIGINT(view.schema.oid));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(view.schema.oid)));
 		// view_name, LogicalType::VARCHAR
 		output.SetValue(col++, count, Value(view.name));
 		// view_oid, LogicalType::BIGINT
-		output.SetValue(col++, count, Value::BIGINT(view.oid));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(view.oid)));
 		// comment, LogicalType::VARCHARs
 		output.SetValue(col++, count, Value(view.comment));
+		// tags, LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)
+		output.SetValue(col++, count, Value::MAP(view.tags));
 		// internal, LogicalType::BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(view.internal));
 		// temporary, LogicalType::BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(view.temporary));
 		// column_count, LogicalType::BIGINT
-		output.SetValue(col++, count, Value::BIGINT(view.types.size()));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(view.types.size())));
 		// sql, LogicalType::VARCHAR
 		output.SetValue(col++, count, Value(view.ToSQL()));
 

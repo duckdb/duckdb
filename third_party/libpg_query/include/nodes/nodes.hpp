@@ -312,6 +312,7 @@ typedef enum PGNodeTag {
 	T_PGInsertStmt,
 	T_PGDeleteStmt,
 	T_PGUpdateStmt,
+	T_PGUpdateExtensionsStmt,
 	T_PGSelectStmt,
 	T_PGAlterTableStmt,
 	T_PGAlterTableCmd,

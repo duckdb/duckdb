@@ -35,7 +35,7 @@ unique_ptr<Expression> DistributivityRule::ExtractExpression(BoundConjunctionExp
 		for (idx_t i = 0; i < and_expr.children.size(); i++) {
 			if (and_expr.children[i]->Equals(expr)) {
 				result = std::move(and_expr.children[i]);
-				and_expr.children.erase(and_expr.children.begin() + i);
+				and_expr.children.erase_at(i);
 				break;
 			}
 		}

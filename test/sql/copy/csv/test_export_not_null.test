@@ -1,0 +1,62 @@
+# name: test/sql/copy/csv/test_export_not_null.test
+# description: Test Export function that is not null
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+begin transaction;
+
+statement ok
+create table tbl(a VARCHAR NOT NULL)
+
+statement ok
+insert into tbl values ('');
+
+statement ok
+EXPORT DATABASE '__TEST_DIR__/broken_empty_string';
+
+statement ok
+abort;
+
+statement ok
+begin transaction;
+
+# Very that the table can be imported
+statement ok
+IMPORT DATABASE '__TEST_DIR__/broken_empty_string';
+
+# Force not null can't be used explicitly
+statement error
+EXPORT DATABASE '__TEST_DIR__/broken_empty_string_2' (FORCE_NOT_NULL ['A']);
+----
+Unrecognized option
+
+statement ok
+abort;
+
+# Try Table with multiple null constraints
+
+statement ok
+begin transaction;
+
+statement ok
+create table tbl_2(a VARCHAR NOT NULL, b VARCHAR NOT NULL, c VARCHAR NOT NULL, d VARCHAR)
+
+statement ok
+insert into tbl_2 values ('','','','');
+
+statement ok
+EXPORT DATABASE '__TEST_DIR__/multiple';
+
+statement ok
+abort;
+
+statement ok
+IMPORT DATABASE '__TEST_DIR__/multiple';
+
+query IIII
+select * from tbl_2
+----
+(empty)	(empty)	(empty)	NULL

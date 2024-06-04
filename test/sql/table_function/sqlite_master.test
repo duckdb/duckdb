@@ -36,7 +36,7 @@ create table tconstraint1(i integer primary key default(3), j blob not null);
 query IIIII
 SELECT * FROM sqlite_master WHERE name='tconstraint1';
 ----
-table	tconstraint1	tconstraint1	0	CREATE TABLE tconstraint1(i INTEGER PRIMARY KEY DEFAULT(3), j BLOB NOT NULL);
+table	tconstraint1	tconstraint1	0	CREATE TABLE tconstraint1(i INTEGER DEFAULT(3) PRIMARY KEY, j BLOB NOT NULL);
 
 statement ok
 create table tconstraint2(i integer, j integer, k integer, l integer unique, primary key(i, j, k));

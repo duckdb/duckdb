@@ -74,6 +74,14 @@ std::string ExcelExtension::Name() {
 	return "excel";
 }
 
+std::string ExcelExtension::Version() const {
+#ifdef EXT_VERSION_EXCEL
+	return EXT_VERSION_EXCEL;
+#else
+	return "";
+#endif
+}
+
 } // namespace duckdb
 
 extern "C" {

@@ -14,7 +14,7 @@ namespace duckdb {
 
 //! Wrapper class to allow copying a DuckIndexEntry (for altering the DuckIndexEntry metadata such as comments)
 struct IndexDataTableInfo {
-	IndexDataTableInfo(shared_ptr<DataTableInfo> &info_p, const string &index_name_p);
+	IndexDataTableInfo(shared_ptr<DataTableInfo> info_p, const string &index_name_p);
 	~IndexDataTableInfo();
 
 	//! Pointer to the DataTableInfo

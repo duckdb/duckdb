@@ -1,9 +1,17 @@
-from .column import Column, _get_expr
-from typing import Any, Callable, overload, Union
+from typing import Any, Callable, Union, overload
 
-from duckdb import CaseExpression, ConstantExpression, ColumnExpression, FunctionExpression, Expression
-from ._typing import ColumnOrName
+from duckdb import (
+    CaseExpression,
+    CoalesceOperator,
+    ColumnExpression,
+    ConstantExpression,
+    Expression,
+    FunctionExpression,
+)
+
 from ..exception import ContributionsAcceptedError
+from ._typing import ColumnOrName
+from .column import Column, _get_expr
 
 
 def _invoke_function_over_columns(name: str, *cols: "ColumnOrName") -> Column:
@@ -66,7 +74,9 @@ def _inner_expr_or_val(val):
 
 
 def struct(*cols: Column) -> Column:
-    return Column(FunctionExpression('struct_pack', *[_inner_expr_or_val(x) for x in cols]))
+    return Column(
+        FunctionExpression("struct_pack", *[_inner_expr_or_val(x) for x in cols])
+    )
 
 
 def lit(col: Any) -> Column:
@@ -93,7 +103,11 @@ def regexp_replace(str: "ColumnOrName", pattern: str, replacement: str) -> Colum
     [Row(d='-----')]
     """
     return _invoke_function(
-        "regexp_replace", _to_column(str), ConstantExpression(pattern), ConstantExpression(replacement), ConstantExpression('g')
+        "regexp_replace",
+        _to_column(str),
+        ConstantExpression(pattern),
+        ConstantExpression(replacement),
+        ConstantExpression("g"),
     )
 
 
@@ -322,13 +336,11 @@ def count(col: "ColumnOrName") -> Column:
 
 
 @overload
-def transform(col: "ColumnOrName", f: Callable[[Column], Column]) -> Column:
-    ...
+def transform(col: "ColumnOrName", f: Callable[[Column], Column]) -> Column: ...
 
 
 @overload
-def transform(col: "ColumnOrName", f: Callable[[Column, Column], Column]) -> Column:
-    ...
+def transform(col: "ColumnOrName", f: Callable[[Column, Column], Column]) -> Column: ...
 
 
 def transform(
@@ -417,9 +429,7 @@ def concat_ws(sep: str, *cols: "ColumnOrName") -> "Column":
     [Row(s='abcd-123')]
     """
     cols = [_to_column(expr) for expr in cols]
-    return _invoke_function(
-        "concat_ws", ConstantExpression(sep), *cols
-    )
+    return _invoke_function("concat_ws", ConstantExpression(sep), *cols)
 
 
 def lower(col: "ColumnOrName") -> Column:
@@ -847,3 +857,162 @@ def length(col: "ColumnOrName") -> Column:
     [Row(length=4)]
     """
     return _invoke_function_over_columns("length", col)
+
+
+def coalesce(*cols: "ColumnOrName") -> Column:
+    """Returns the first column that is not null.
+    .. versionadded:: 1.4.0
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+    Parameters
+    ----------
+    cols : :class:`~pyspark.sql.Column` or str
+        list of columns to work on.
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        value of the first column that is not null.
+    Examples
+    --------
+    >>> cDf = spark.createDataFrame([(None, None), (1, None), (None, 2)], ("a", "b"))
+    >>> cDf.show()
+    +----+----+
+    |   a|   b|
+    +----+----+
+    |NULL|NULL|
+    |   1|NULL|
+    |NULL|   2|
+    +----+----+
+    >>> cDf.select(coalesce(cDf["a"], cDf["b"])).show()
+    +--------------+
+    |coalesce(a, b)|
+    +--------------+
+    |          NULL|
+    |             1|
+    |             2|
+    +--------------+
+    >>> cDf.select('*', coalesce(cDf["a"], lit(0.0))).show()
+    +----+----+----------------+
+    |   a|   b|coalesce(a, 0.0)|
+    +----+----+----------------+
+    |NULL|NULL|             0.0|
+    |   1|NULL|             1.0|
+    |NULL|   2|             0.0|
+    +----+----+----------------+
+    """
+
+    cols = [_to_column(expr) for expr in cols]
+    return Column(CoalesceOperator(*cols))
+
+
+def nvl(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
+    """
+    Returns `col2` if `col1` is null, or `col1` otherwise.
+    .. versionadded:: 3.5.0
+    Parameters
+    ----------
+    col1 : :class:`~pyspark.sql.Column` or str
+    col2 : :class:`~pyspark.sql.Column` or str
+    Examples
+    --------
+    >>> df = spark.createDataFrame([(None, 8,), (1, 9,)], ["a", "b"])
+    >>> df.select(nvl(df.a, df.b).alias('r')).collect()
+    [Row(r=8), Row(r=1)]
+    """
+
+    return coalesce(col1, col2)
+
+
+def ifnull(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
+    """
+    Returns `col2` if `col1` is null, or `col1` otherwise.
+    .. versionadded:: 3.5.0
+    Parameters
+    ----------
+    col1 : :class:`~pyspark.sql.Column` or str
+    col2 : :class:`~pyspark.sql.Column` or str
+    Examples
+    --------
+    >>> import pyspark.sql.functions as sf
+    >>> df = spark.createDataFrame([(None,), (1,)], ["e"])
+    >>> df.select(sf.ifnull(df.e, sf.lit(8))).show()
+    +------------+
+    |ifnull(e, 8)|
+    +------------+
+    |           8|
+    |           1|
+    +------------+
+    """
+    return coalesce(col1, col2)
+
+ 
+def md5(col: "ColumnOrName") -> Column:
+    """Calculates the MD5 digest and returns the value as a 32 character hex string.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to compute on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        the column for computed results.
+
+    Examples
+    --------
+    >>> spark.createDataFrame([('ABC',)], ['a']).select(md5('a').alias('hash')).collect()
+    [Row(hash='902fbdd2b1df0c4f70b4a5d23525e932')]
+    """
+    return _invoke_function_over_columns("md5", col)
+
+
+def sha2(col: "ColumnOrName", numBits: int) -> Column:
+    """Returns the hex string result of SHA-2 family of hash functions (SHA-224, SHA-256, SHA-384,
+    and SHA-512). The numBits indicates the desired bit length of the result, which must have a
+    value of 224, 256, 384, 512, or 0 (which is equivalent to 256).
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to compute on.
+    numBits : int
+        the desired bit length of the result, which must have a
+        value of 224, 256, 384, 512, or 0 (which is equivalent to 256).
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        the column for computed results.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([["Alice"], ["Bob"]], ["name"])
+    >>> df.withColumn("sha2", sha2(df.name, 256)).show(truncate=False)
+    +-----+----------------------------------------------------------------+
+    |name |sha2                                                            |
+    +-----+----------------------------------------------------------------+
+    |Alice|3bc51062973c458d5a6f2d8d64a023246354ad7e064b1e4e009ec8a0699a3043|
+    |Bob  |cd9fb1e148ccd8442e5aa74904cc73bf6fb54d1d54d333bd596aa9bb4bb4e961|
+    +-----+----------------------------------------------------------------+
+    """
+
+    if numBits not in {224, 256, 384, 512, 0}:
+        raise ValueError("numBits should be one of {224, 256, 384, 512, 0}")
+
+    if numBits == 256:
+        return _invoke_function_over_columns("sha256", col)
+
+    raise ContributionsAcceptedError(
+        "SHA-224, SHA-384, and SHA-512 are not supported yet."
+    )

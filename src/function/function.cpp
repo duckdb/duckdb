@@ -158,8 +158,8 @@ void Function::EraseArgument(SimpleFunction &bound_function, vector<unique_ptr<E
 	}
 	D_ASSERT(arguments.size() == bound_function.arguments.size());
 	D_ASSERT(argument_index < arguments.size());
-	arguments.erase(arguments.begin() + argument_index);
-	bound_function.arguments.erase(bound_function.arguments.begin() + argument_index);
+	arguments.erase_at(argument_index);
+	bound_function.arguments.erase_at(argument_index);
 }
 
 } // namespace duckdb

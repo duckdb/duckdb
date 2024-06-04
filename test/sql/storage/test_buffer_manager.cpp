@@ -79,6 +79,7 @@ TEST_CASE("Modifying the buffer manager limit at runtime for an in-memory databa
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("PRAGMA threads=1"));
 	REQUIRE_NO_FAIL(con.Query("PRAGMA force_compression='uncompressed'"));
+	REQUIRE_NO_FAIL(con.Query("PRAGMA temp_directory=''"));
 
 	// initialize an in-memory database of size 10MB
 	uint64_t table_size = (1000 * 1000) / sizeof(int);
@@ -152,7 +153,7 @@ TEST_CASE("Test buffer reallocation", "[storage][.]") {
 	CHECK(buffer_manager.GetUsedMemory() == 0);
 
 	idx_t requested_size = Storage::BLOCK_SIZE;
-	shared_ptr<BlockHandle> block;
+	duckdb::shared_ptr<BlockHandle> block;
 	auto handle = buffer_manager.Allocate(MemoryTag::EXTENSION, requested_size, false, &block);
 	CHECK(buffer_manager.GetUsedMemory() == BufferManager::GetAllocSize(requested_size));
 	for (; requested_size < limit; requested_size *= 2) {
@@ -196,7 +197,7 @@ TEST_CASE("Test buffer manager variable size allocations", "[storage][.]") {
 	CHECK(buffer_manager.GetUsedMemory() == 0);
 
 	idx_t requested_size = 424242;
-	shared_ptr<BlockHandle> block;
+	duckdb::shared_ptr<BlockHandle> block;
 	auto pin = buffer_manager.Allocate(MemoryTag::EXTENSION, requested_size, false, &block);
 	CHECK(buffer_manager.GetUsedMemory() >= requested_size + Storage::BLOCK_HEADER_SIZE);
 
@@ -224,7 +225,7 @@ TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
 	// Create 40 blocks, but don't hold the pin
 	// They will be added to the eviction queue and the buffers will be re-used
 	idx_t block_count = 40;
-	duckdb::vector<shared_ptr<BlockHandle>> blocks;
+	duckdb::vector<duckdb::shared_ptr<BlockHandle>> blocks;
 	blocks.reserve(block_count);
 	for (idx_t i = 0; i < block_count; i++) {
 		blocks.emplace_back();

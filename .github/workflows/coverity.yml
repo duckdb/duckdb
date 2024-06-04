@@ -41,7 +41,6 @@ jobs:
       env:
         PYTHON_USER_SPACE: 1
         BUILD_PYTHON: 1
-        BUILD_JDBC: 1
         BUILD_ODBC: 1
         BUILD_AUTOCOMPLETE: 1
         BUILD_ICU: 1

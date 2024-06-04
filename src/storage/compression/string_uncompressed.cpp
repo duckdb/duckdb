@@ -87,7 +87,7 @@ void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, Column
 
 	for (idx_t i = 0; i < scan_count; i++) {
 		// std::abs used since offsets can be negative to indicate big strings
-		uint32_t string_length = std::abs(base_data[start + i]) - std::abs(previous_offset);
+		auto string_length = UnsafeNumericCast<uint32_t>(std::abs(base_data[start + i]) - std::abs(previous_offset));
 		result_data[result_offset + i] =
 		    FetchStringFromDict(segment, dict, result, baseptr, base_data[start + i], string_length);
 		previous_offset = base_data[start + i];
@@ -133,9 +133,9 @@ void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFet
 	uint32_t string_length;
 	if ((idx_t)row_id == 0) {
 		// edge case where this is the first string in the dict
-		string_length = std::abs(dict_offset);
+		string_length = NumericCast<uint32_t>(std::abs(dict_offset));
 	} else {
-		string_length = std::abs(dict_offset) - std::abs(base_data[row_id - 1]);
+		string_length = NumericCast<uint32_t>(std::abs(dict_offset) - std::abs(base_data[row_id - 1]));
 	}
 	result_data[result_idx] = FetchStringFromDict(segment, dict, result, baseptr, dict_offset, string_length);
 }
@@ -347,7 +347,8 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 
 		// now append the string to the single buffer
 		while (remaining > 0) {
-			idx_t to_write = MinValue<idx_t>(remaining, Storage::BLOCK_SIZE - sizeof(block_id_t) - offset);
+			idx_t to_write =
+			    MinValue<idx_t>(remaining, Storage::BLOCK_SIZE - sizeof(block_id_t) - UnsafeNumericCast<idx_t>(offset));
 			memcpy(target_ptr, handle.Ptr() + offset, to_write);
 			remaining -= to_write;
 			offset += to_write;

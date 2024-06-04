@@ -60,8 +60,8 @@ unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance
 	} else {
 		buffer_manager.Allocate(MemoryTag::IN_MEMORY_TABLE, segment_size, false, &block);
 	}
-	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::TRANSIENT, start, 0, *function,
-	                                BaseStatistics::CreateEmpty(type), INVALID_BLOCK, 0, segment_size);
+	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::TRANSIENT, start, 0U, *function,
+	                                BaseStatistics::CreateEmpty(type), INVALID_BLOCK, 0U, segment_size);
 }
 
 //===--------------------------------------------------------------------===//
@@ -104,8 +104,8 @@ void ColumnSegment::InitializeScan(ColumnScanState &state) {
 }
 
 void ColumnSegment::Scan(ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset,
-                         bool entire_vector) {
-	if (entire_vector) {
+                         ScanVectorType scan_type) {
+	if (scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR) {
 		D_ASSERT(result_offset == 0);
 		Scan(state, scan_count, result);
 	} else {
@@ -132,7 +132,8 @@ void ColumnSegment::ScanPartial(ColumnScanState &state, idx_t scan_count, Vector
 // Fetch
 //===--------------------------------------------------------------------===//
 void ColumnSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
-	function.get().fetch_row(*this, state, row_id - this->start, result, result_idx);
+	function.get().fetch_row(*this, state, UnsafeNumericCast<int64_t>(UnsafeNumericCast<idx_t>(row_id) - this->start),
+	                         result, result_idx);
 }
 
 //===--------------------------------------------------------------------===//

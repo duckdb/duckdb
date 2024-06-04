@@ -9,6 +9,10 @@
 
 namespace duckdb {
 
+void ExpressionBinder::SetCatalogLookupCallback(catalog_entry_callback_t callback) {
+	binder.SetCatalogLookupCallback(std::move(callback));
+}
+
 ExpressionBinder::ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder)
     : binder(binder), context(context) {
 	InitializeStackCheck();

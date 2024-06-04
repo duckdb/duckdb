@@ -41,6 +41,7 @@ except Exception as e:
 
 extensions = [
     '.cpp',
+    '.ipp',
     '.c',
     '.hpp',
     '.h',
@@ -106,7 +107,6 @@ ignored_directories = [
     os.path.join('tools', 'rpkg', 'inst', 'include', 'cpp11'),
     os.path.join('extension', 'tpcds', 'dsdgen'),
     os.path.join('extension', 'jemalloc', 'jemalloc'),
-    os.path.join('extension', 'json', 'yyjson'),
     os.path.join('extension', 'icu', 'third_party'),
     os.path.join('src', 'include', 'duckdb', 'core_functions', 'aggregate'),
     os.path.join('src', 'include', 'duckdb', 'core_functions', 'scalar'),
@@ -240,6 +240,7 @@ if confirm and not check_only:
 
 format_commands = {
     '.cpp': cpp_format_command,
+    '.ipp': cpp_format_command,
     '.c': cpp_format_command,
     '.hpp': cpp_format_command,
     '.h': cpp_format_command,

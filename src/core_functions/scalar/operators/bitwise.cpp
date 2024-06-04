@@ -251,7 +251,7 @@ static void BitwiseShiftLeftOperation(DataChunk &args, ExpressionState &state, V
 			    Bit::SetEmptyBitString(target, input);
 			    return target;
 		    }
-		    Bit::LeftShift(input, shift, target);
+		    Bit::LeftShift(input, UnsafeNumericCast<idx_t>(shift), target);
 		    return target;
 	    });
 }
@@ -294,7 +294,7 @@ static void BitwiseShiftRightOperation(DataChunk &args, ExpressionState &state, 
 			    Bit::SetEmptyBitString(target, input);
 			    return target;
 		    }
-		    Bit::RightShift(input, shift, target);
+		    Bit::RightShift(input, UnsafeNumericCast<idx_t>(shift), target);
 		    return target;
 	    });
 }

@@ -43,7 +43,7 @@ struct ApproxCountDistinctFunction {
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (state.log) {
-			target = state.log->Count();
+			target = UnsafeNumericCast<T>(state.log->Count());
 		} else {
 			target = 0;
 		}

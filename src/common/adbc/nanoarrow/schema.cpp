@@ -318,7 +318,7 @@ ArrowErrorCode ArrowSchemaSetFormat(struct ArrowSchema *schema, const char *form
 
 	if (format != NULL) {
 		size_t format_size = strlen(format) + 1;
-		schema->format = (const char *)ArrowMalloc(format_size);
+		schema->format = (const char *)ArrowMalloc(int64_t(format_size));
 		if (schema->format == NULL) {
 			return ENOMEM;
 		}
@@ -338,7 +338,7 @@ ArrowErrorCode ArrowSchemaSetName(struct ArrowSchema *schema, const char *name) 
 
 	if (name != NULL) {
 		size_t name_size = strlen(name) + 1;
-		schema->name = (const char *)ArrowMalloc(name_size);
+		schema->name = (const char *)ArrowMalloc(int64_t(name_size));
 		if (schema->name == NULL) {
 			return ENOMEM;
 		}
@@ -357,13 +357,13 @@ ArrowErrorCode ArrowSchemaSetMetadata(struct ArrowSchema *schema, const char *me
 	}
 
 	if (metadata != NULL) {
-		size_t metadata_size = ArrowMetadataSizeOf(metadata);
+		auto metadata_size = ArrowMetadataSizeOf(metadata);
 		schema->metadata = (const char *)ArrowMalloc(metadata_size);
 		if (schema->metadata == NULL) {
 			return ENOMEM;
 		}
 
-		memcpy((void *)schema->metadata, metadata, metadata_size);
+		memcpy((void *)schema->metadata, metadata, size_t(metadata_size));
 	} else {
 		schema->metadata = NULL;
 	}
@@ -377,7 +377,8 @@ ArrowErrorCode ArrowSchemaAllocateChildren(struct ArrowSchema *schema, int64_t n
 	}
 
 	if (n_children > 0) {
-		schema->children = (struct ArrowSchema **)ArrowMalloc(n_children * sizeof(struct ArrowSchema *));
+		schema->children =
+		    (struct ArrowSchema **)ArrowMalloc(int64_t(uint64_t(n_children) * sizeof(struct ArrowSchema *)));
 
 		if (schema->children == NULL) {
 			return ENOMEM;
@@ -385,7 +386,7 @@ ArrowErrorCode ArrowSchemaAllocateChildren(struct ArrowSchema *schema, int64_t n
 
 		schema->n_children = n_children;
 
-		memset(schema->children, 0, n_children * sizeof(struct ArrowSchema *));
+		memset(schema->children, 0, uint64_t(n_children) * sizeof(struct ArrowSchema *));
 
 		for (int64_t i = 0; i < n_children; i++) {
 			schema->children[i] = (struct ArrowSchema *)ArrowMalloc(sizeof(struct ArrowSchema));

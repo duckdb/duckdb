@@ -117,25 +117,33 @@ inline void Radix::EncodeData(data_ptr_t dataptr, bool value) {
 
 template <>
 inline void Radix::EncodeData(data_ptr_t dataptr, int8_t value) {
-	Store<uint8_t>(value, dataptr);
+	uint8_t bytes; // dance around signedness conversion check
+	Store<int8_t>(value, data_ptr_cast(&bytes));
+	Store<uint8_t>(bytes, dataptr);
 	dataptr[0] = FlipSign(dataptr[0]);
 }
 
 template <>
 inline void Radix::EncodeData(data_ptr_t dataptr, int16_t value) {
-	Store<uint16_t>(BSwap<uint16_t>(value), dataptr);
+	uint16_t bytes;
+	Store<int16_t>(value, data_ptr_cast(&bytes));
+	Store<uint16_t>(BSwap<uint16_t>(bytes), dataptr);
 	dataptr[0] = FlipSign(dataptr[0]);
 }
 
 template <>
 inline void Radix::EncodeData(data_ptr_t dataptr, int32_t value) {
-	Store<uint32_t>(BSwap<uint32_t>(value), dataptr);
+	uint32_t bytes;
+	Store<int32_t>(value, data_ptr_cast(&bytes));
+	Store<uint32_t>(BSwap<uint32_t>(bytes), dataptr);
 	dataptr[0] = FlipSign(dataptr[0]);
 }
 
 template <>
 inline void Radix::EncodeData(data_ptr_t dataptr, int64_t value) {
-	Store<uint64_t>(BSwap<uint64_t>(value), dataptr);
+	uint64_t bytes;
+	Store<int64_t>(value, data_ptr_cast(&bytes));
+	Store<uint64_t>(BSwap<uint64_t>(bytes), dataptr);
 	dataptr[0] = FlipSign(dataptr[0]);
 }
 

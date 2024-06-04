@@ -232,3 +232,56 @@ TEST_CASE("Test user_agent - named database, custom useragent", "[odbc][useragen
 
 	DISCONNECT_FROM_DATABASE(env, dbc);
 }
+
+// Creates a table, inserts a row, selects the row, fetches the result and checks it, then disconnects and reconnects to
+// make sure the data is still there
+TEST_CASE("Connect with named file, disconnect and reconnect", "[odbc]") {
+	SQLHANDLE env;
+	SQLHANDLE dbc;
+	SQLHANDLE hstmt = SQL_NULL_HSTMT;
+
+	// Connect to the database using SQLConnect
+	DRIVER_CONNECT_TO_DATABASE(env, dbc, "Database=test_odbc_named.db");
+
+	EXECUTE_AND_CHECK("SQLAllocHandle (HSTMT)", SQLAllocHandle, SQL_HANDLE_STMT, dbc, &hstmt);
+
+	// create a table
+	EXECUTE_AND_CHECK("SQLExecDirect (create table)", SQLExecDirect, hstmt,
+	                  ConvertToSQLCHAR("CREATE OR REPLACE TABLE test_table (a INTEGER)"), SQL_NTS);
+
+	// insert a row
+	EXECUTE_AND_CHECK("SQLExecDirect (insert row)", SQLExecDirect, hstmt,
+	                  ConvertToSQLCHAR("INSERT INTO test_table VALUES (1)"), SQL_NTS);
+
+	// select the row
+	EXECUTE_AND_CHECK("SQLExecDirect (select row)", SQLExecDirect, hstmt, ConvertToSQLCHAR("SELECT * FROM test_table"),
+	                  SQL_NTS);
+
+	// Fetch the result
+	EXECUTE_AND_CHECK("SQLFetch (select row)", SQLFetch, hstmt);
+
+	// Check the result
+	DATA_CHECK(hstmt, 1, "1");
+
+	// Disconnect from the database
+	DISCONNECT_FROM_DATABASE(env, dbc);
+
+	// Reconnect to the database using SQLConnect
+	DRIVER_CONNECT_TO_DATABASE(env, dbc, "Database=test_odbc_named.db");
+
+	hstmt = SQL_NULL_HSTMT;
+	EXECUTE_AND_CHECK("SQLAllocHandle (HSTMT)", SQLAllocHandle, SQL_HANDLE_STMT, dbc, &hstmt);
+
+	// select the row
+	EXECUTE_AND_CHECK("SQLExecDirect (select row)", SQLExecDirect, hstmt, ConvertToSQLCHAR("SELECT * FROM test_table"),
+	                  SQL_NTS);
+
+	// Fetch the result
+	EXECUTE_AND_CHECK("SQLFetch (select row)", SQLFetch, hstmt);
+
+	// Check the result
+	DATA_CHECK(hstmt, 1, "1");
+
+	// Disconnect from the database
+	DISCONNECT_FROM_DATABASE(env, dbc);
+}

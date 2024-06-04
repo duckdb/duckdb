@@ -26,6 +26,9 @@ static unique_ptr<FunctionData> DuckDBDatabasesBind(ClientContext &context, Tabl
 	names.emplace_back("comment");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
+	names.emplace_back("tags");
+	return_types.emplace_back(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR));
+
 	names.emplace_back("internal");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
@@ -66,7 +69,7 @@ void DuckDBDatabasesFunction(ClientContext &context, TableFunctionInput &data_p,
 		// database_name, VARCHAR
 		output.SetValue(col++, count, attached.GetName());
 		// database_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(attached.oid));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(attached.oid)));
 		bool is_internal = attached.IsSystem() || attached.IsTemporary();
 		bool is_readonly = attached.IsReadOnly();
 		// path, VARCHAR
@@ -80,6 +83,8 @@ void DuckDBDatabasesFunction(ClientContext &context, TableFunctionInput &data_p,
 		output.SetValue(col++, count, db_path);
 		// comment, VARCHAR
 		output.SetValue(col++, count, Value(attached.comment));
+		// tags, MAP
+		output.SetValue(col++, count, Value::MAP(attached.tags));
 		// internal, BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(is_internal));
 		// type, VARCHAR

@@ -45,8 +45,8 @@ StatementGenerator::StatementGenerator(StatementGenerator &parent_p)
 StatementGenerator::~StatementGenerator() {
 }
 
-shared_ptr<GeneratorContext> StatementGenerator::GetDatabaseState(ClientContext &context) {
-	auto result = make_shared<GeneratorContext>();
+std::shared_ptr<GeneratorContext> StatementGenerator::GetDatabaseState(ClientContext &context) {
+	auto result = std::make_shared<GeneratorContext>();
 	result->test_types = TestAllTypesFun::GetTestTypes();
 
 	auto schemas = Catalog::GetAllSchemas(context);
@@ -175,7 +175,7 @@ void StatementGenerator::GenerateCTEs(QueryNode &node) {
 		for (idx_t i = 0; i < 1 + RandomValue(10); i++) {
 			cte->aliases.push_back(GenerateIdentifier());
 		}
-		node.cte_map.map.insert(make_pair(GenerateTableIdentifier(), std::move(cte)));
+		node.cte_map.map[GenerateTableIdentifier()] = std::move(cte);
 	}
 }
 unique_ptr<QueryNode> StatementGenerator::GenerateQueryNode() {

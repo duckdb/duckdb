@@ -7,6 +7,7 @@
 #include "duckdb/planner/query_node/bound_recursive_cte_node.hpp"
 #include "duckdb/planner/query_node/bound_cte_node.hpp"
 #include "duckdb/planner/tableref/list.hpp"
+#include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {
 
@@ -269,7 +270,8 @@ void BoundNodeVisitor::VisitBoundTableRef(BoundTableRef &ref) {
 	case TableReferenceType::CTE:
 		break;
 	default:
-		throw NotImplementedException("Unimplemented table reference type in ExpressionIterator");
+		throw NotImplementedException("Unimplemented table reference type (%s) in ExpressionIterator",
+		                              EnumUtil::ToString(ref.type));
 	}
 }
 

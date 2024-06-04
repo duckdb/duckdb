@@ -16,6 +16,7 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/constraints/not_null_constraint.hpp"
 
 #include <algorithm>
 
@@ -303,7 +304,14 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 		// We can not export generated columns
 		child_list_t<LogicalType> select_list;
-
+		// Let's verify if any on these columns have not null constraints
+		vector<string> not_null_columns;
+		for (auto &constaint : table.GetConstraints()) {
+			if (constaint->type == ConstraintType::NOT_NULL) {
+				auto &not_null_constraint = constaint->Cast<NotNullConstraint>();
+				not_null_columns.push_back(table.GetColumn(not_null_constraint.index).GetName());
+			}
+		}
 		for (auto &col : table.GetColumns().Physical()) {
 			select_list.push_back(std::make_pair(col.Name(), col.Type()));
 		}
@@ -315,14 +323,14 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 		exported_data.file_path = info->file_path;
 
-		ExportedTableInfo table_info(table, std::move(exported_data));
+		ExportedTableInfo table_info(table, std::move(exported_data), not_null_columns);
 		exported_tables.data.push_back(table_info);
 		id++;
 
 		// generate the copy statement and bind it
 		CopyStatement copy_stmt;
 		copy_stmt.info = std::move(info);
-		copy_stmt.select_statement =
+		copy_stmt.info->select_statement =
 		    CreateSelectStatement(copy_stmt, select_list, copy_function.function.supports_type);
 
 		auto copy_binder = Binder::CreateBinder(context, this);
@@ -331,7 +339,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 		if (child_operator) {
 			// use UNION ALL to combine the individual copy statements into a single node
-			auto copy_union = make_uniq<LogicalSetOperation>(GenerateTableIndex(), 1, std::move(child_operator),
+			auto copy_union = make_uniq<LogicalSetOperation>(GenerateTableIndex(), 1U, std::move(child_operator),
 			                                                 std::move(plan), LogicalOperatorType::LOGICAL_UNION, true);
 			child_operator = std::move(copy_union);
 		} else {
@@ -345,6 +353,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		fs.CreateDirectory(stmt.info->file_path);
 	}
 
+	stmt.info->catalog = catalog;
 	// create the export node
 	auto export_node = make_uniq<LogicalExport>(copy_function.function, std::move(stmt.info), exported_tables);
 
@@ -353,6 +362,8 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	}
 
 	result.plan = std::move(export_node);
+
+	auto &properties = GetStatementProperties();
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;

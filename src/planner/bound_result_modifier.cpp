@@ -126,7 +126,7 @@ BoundLimitNode::BoundLimitNode() : type(LimitNodeType::UNSET) {
 }
 
 BoundLimitNode::BoundLimitNode(int64_t constant_value)
-    : type(LimitNodeType::CONSTANT_VALUE), constant_integer(constant_value) {
+    : type(LimitNodeType::CONSTANT_VALUE), constant_integer(NumericCast<idx_t>(constant_value)) {
 }
 
 BoundLimitNode::BoundLimitNode(double percentage_value)

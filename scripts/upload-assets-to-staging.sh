@@ -45,7 +45,7 @@ if [ -z "$AWS_ACCESS_KEY_ID" ]; then
 fi
 
 
-TARGET=$(git describe --tags --long)
+TARGET=$(git log -1 --format=%h)
 
 if [ "$UPLOAD_ASSETS_TO_STAGING_TARGET" ]; then
   TARGET="$UPLOAD_ASSETS_TO_STAGING_TARGET"

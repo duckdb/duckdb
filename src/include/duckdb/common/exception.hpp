@@ -10,7 +10,6 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception_format_value.hpp"
-#include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/typedefs.hpp"
 

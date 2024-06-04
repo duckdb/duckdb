@@ -126,7 +126,7 @@ public:
 
 		// Schedule tasks equal to the number of threads, which will each merge multiple partitions
 		auto &ts = TaskScheduler::GetScheduler(context);
-		idx_t num_threads = ts.NumberOfThreads();
+		auto num_threads = NumericCast<idx_t>(ts.NumberOfThreads());
 
 		vector<shared_ptr<Task>> iejoin_tasks;
 		for (idx_t tnum = 0; tnum < num_threads; tnum++) {
@@ -149,7 +149,7 @@ public:
 void PhysicalRangeJoin::GlobalSortedTable::ScheduleMergeTasks(Pipeline &pipeline, Event &event) {
 	// Initialize global sort state for a round of merging
 	global_sort_state.InitializeMergeRound();
-	auto new_event = make_shared<RangeJoinMergeEvent>(*this, pipeline);
+	auto new_event = make_shared_ptr<RangeJoinMergeEvent>(*this, pipeline);
 	event.InsertEvent(std::move(new_event));
 }
 

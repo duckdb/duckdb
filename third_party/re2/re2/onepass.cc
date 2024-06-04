@@ -143,7 +143,7 @@ namespace duckdb_re2 {
 // the memory footprint.)
 struct OneState {
   uint32_t matchcond;   // conditions to match right now.
-  uint32_t action[];
+  uint32_t action[256];
 };
 
 // The uint32_t conditions in the action are a combination of
@@ -243,7 +243,8 @@ bool Prog::SearchOnePass(const StringPiece& text,
     kind = kFullMatch;
 
   uint8_t* nodes = onepass_nodes_.data();
-  int statesize = sizeof(OneState) + bytemap_range()*sizeof(uint32_t);
+  int statesize = sizeof(uint32_t) + bytemap_range()*sizeof(uint32_t);
+
   // start() is always mapped to the zeroth OneState.
   OneState* state = IndexToNode(nodes, statesize, 0);
   uint8_t* bytemap = bytemap_;
@@ -392,7 +393,7 @@ bool Prog::IsOnePass() {
   // Limit max node count to 65000 as a conservative estimate to
   // avoid overflowing 16-bit node index in encoding.
   int maxnodes = 2 + inst_count(kInstByteRange);
-  int statesize = sizeof(OneState) + bytemap_range()*sizeof(uint32_t);
+  int statesize = sizeof(uint32_t) + bytemap_range()*sizeof(uint32_t);
   if (maxnodes >= 65000 || dfa_mem_ / 4 / statesize < maxnodes)
     return false;
 

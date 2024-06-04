@@ -376,7 +376,9 @@ void Appender::FlushInternal(ColumnDataCollection &collection) {
 }
 
 void InternalAppender::FlushInternal(ColumnDataCollection &collection) {
-	table.GetStorage().LocalAppend(table, context, collection);
+	auto binder = Binder::CreateBinder(context);
+	auto bound_constraints = binder->BindConstraints(table);
+	table.GetStorage().LocalAppend(table, context, collection, bound_constraints);
 }
 
 void BaseAppender::Close() {

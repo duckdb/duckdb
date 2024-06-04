@@ -37,6 +37,7 @@ struct SetColumnCommentInfo;
 class TableFunction;
 struct FunctionData;
 
+class Binder;
 class TableColumnInfo;
 struct ColumnSegmentInfo;
 class TableStorageInfo;
@@ -74,11 +75,9 @@ public:
 	DUCKDB_API const ColumnList &GetColumns() const;
 	//! Returns the underlying storage of the table
 	virtual DataTable &GetStorage();
-	//! Returns a list of the bound constraints of the table
-	virtual const vector<unique_ptr<BoundConstraint>> &GetBoundConstraints();
 
 	//! Returns a list of the constraints of the table
-	DUCKDB_API const vector<unique_ptr<Constraint>> &GetConstraints();
+	DUCKDB_API const vector<unique_ptr<Constraint>> &GetConstraints() const;
 	DUCKDB_API string ToSQL() const override;
 
 	//! Get statistics of a column (physical or virtual) within the table
@@ -105,7 +104,7 @@ public:
 	//! Returns the storage info of this table
 	virtual TableStorageInfo GetStorageInfo(ClientContext &context) = 0;
 
-	virtual void BindUpdateConstraints(LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,
+	virtual void BindUpdateConstraints(Binder &binder, LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,
 	                                   ClientContext &context);
 
 protected:

@@ -48,7 +48,7 @@ void MetadataWriter::NextBlock() {
 	current_pointer = block.pointer;
 	offset = sizeof(idx_t);
 	capacity = MetadataManager::METADATA_BLOCK_SIZE;
-	Store<idx_t>(-1, BasePtr());
+	Store<idx_t>(static_cast<idx_t>(-1), BasePtr());
 	if (written_pointers) {
 		written_pointers->push_back(manager.GetDiskPointer(current_pointer));
 	}

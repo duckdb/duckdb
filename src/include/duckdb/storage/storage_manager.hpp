@@ -14,6 +14,7 @@
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/storage/database_size.hpp"
+#include "duckdb/common/enums/checkpoint_type.hpp"
 
 namespace duckdb {
 class BlockManager;
@@ -34,6 +35,17 @@ public:
 	virtual void FlushCommit() = 0;
 };
 
+struct CheckpointOptions {
+	CheckpointOptions()
+	    : wal_action(CheckpointWALAction::DONT_DELETE_WAL), action(CheckpointAction::CHECKPOINT_IF_REQUIRED),
+	      type(CheckpointType::FULL_CHECKPOINT) {
+	}
+
+	CheckpointWALAction wal_action;
+	CheckpointAction action;
+	CheckpointType type;
+};
+
 //! StorageManager is responsible for managing the physical storage of the
 //! database on disk
 class StorageManager {
@@ -46,19 +58,26 @@ public:
 	static StorageManager &Get(Catalog &catalog);
 
 	//! Initialize a database or load an existing database from the given path
-	void Initialize(optional_ptr<ClientContext> context);
+	void Initialize();
 
 	DatabaseInstance &GetDatabase();
 	AttachedDatabase &GetAttached() {
 		return db;
 	}
 
-	//! Get the WAL of the StorageManager, returns nullptr if in-memory
-	optional_ptr<WriteAheadLog> GetWriteAheadLog();
+	//! Gets the size of the WAL, or zero, if there is no WAL.
+	int64_t GetWALSize();
+	//! Gets the WAL of the StorageManager, or nullptr, if there is no WAL.
+	optional_ptr<WriteAheadLog> GetWAL();
+	//! Deletes the WAL file, and resets the unique pointer.
+	void ResetWAL();
 
 	//! Returns the database file path
-	string GetDBPath() {
+	string GetDBPath() const {
 		return path;
+	}
+	bool IsLoaded() const {
+		return load_complete;
 	}
 	//! The path to the WAL, derived from the database file path
 	string GetWALPath();
@@ -67,13 +86,13 @@ public:
 	virtual bool AutomaticCheckpoint(idx_t estimated_wal_bytes) = 0;
 	virtual unique_ptr<StorageCommitState> GenStorageCommitState(Transaction &transaction, bool checkpoint) = 0;
 	virtual bool IsCheckpointClean(MetaBlockPointer checkpoint_id) = 0;
-	virtual void CreateCheckpoint(bool delete_wal = false, bool force_checkpoint = false) = 0;
+	virtual void CreateCheckpoint(CheckpointOptions options = CheckpointOptions()) = 0;
 	virtual DatabaseSize GetDatabaseSize() = 0;
 	virtual vector<MetadataBlockInfo> GetMetadataInfo() = 0;
 	virtual shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) = 0;
 
 protected:
-	virtual void LoadDatabase(optional_ptr<ClientContext> context = nullptr) = 0;
+	virtual void LoadDatabase() = 0;
 
 protected:
 	//! The database this storage manager belongs to
@@ -115,12 +134,12 @@ public:
 	bool AutomaticCheckpoint(idx_t estimated_wal_bytes) override;
 	unique_ptr<StorageCommitState> GenStorageCommitState(Transaction &transaction, bool checkpoint) override;
 	bool IsCheckpointClean(MetaBlockPointer checkpoint_id) override;
-	void CreateCheckpoint(bool delete_wal, bool force_checkpoint) override;
+	void CreateCheckpoint(CheckpointOptions options) override;
 	DatabaseSize GetDatabaseSize() override;
 	vector<MetadataBlockInfo> GetMetadataInfo() override;
 	shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) override;
 
 protected:
-	void LoadDatabase(optional_ptr<ClientContext> context = nullptr) override;
+	void LoadDatabase() override;
 };
 } // namespace duckdb

@@ -83,7 +83,7 @@ int32_t run_sqlsmith(duckdb::DatabaseInstance &database, SQLSmithOptions opt) {
 
 	try {
 		shared_ptr<schema> schema;
-		schema = make_shared<schema_duckdb>(database, opt.exclude_catalog, opt.verbose_output);
+		schema = std::make_shared<schema_duckdb>(database, opt.exclude_catalog, opt.verbose_output);
 
 		scope scope;
 		long queries_generated = 0;
@@ -97,20 +97,20 @@ int32_t run_sqlsmith(duckdb::DatabaseInstance &database, SQLSmithOptions opt) {
 
 		duckdb::vector<shared_ptr<logger>> loggers;
 
-		loggers.push_back(make_shared<impedance_feedback>());
+		loggers.push_back(std::make_shared<impedance_feedback>());
 
 		if (opt.verbose_output) {
-			auto l = make_shared<cerr_logger>();
+			auto l = std::make_shared<cerr_logger>();
 			global_cerr_logger = &*l;
 			loggers.push_back(l);
 			signal(SIGINT, cerr_log_handler);
 		}
 
 		if (opt.dump_all_graphs)
-			loggers.push_back(make_shared<ast_logger>());
+			loggers.push_back(std::make_shared<ast_logger>());
 
 		if (opt.dump_all_queries)
-			loggers.push_back(make_shared<query_dumper>());
+			loggers.push_back(std::make_shared<query_dumper>());
 
 		//		if (options.count("dry-run")) {
 		//			while (1) {
@@ -128,7 +128,7 @@ int32_t run_sqlsmith(duckdb::DatabaseInstance &database, SQLSmithOptions opt) {
 
 		shared_ptr<dut_base> dut;
 
-		dut = make_shared<dut_duckdb>(database);
+		dut = std::make_shared<dut_duckdb>(database);
 
 		if (opt.verbose_output)
 			cerr << "Running queries..." << endl;

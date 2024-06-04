@@ -96,7 +96,7 @@ void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, int32_
 			// Every group is a substring of the original, we can find out the offset using the pointer
 			// the 'match_group' address is guaranteed to be bigger than that of the source
 			D_ASSERT(const_char_ptr_cast(match_group.begin()) >= string.GetData());
-			idx_t offset = match_group.begin() - string.GetData();
+			auto offset = UnsafeNumericCast<idx_t>(match_group.begin() - string.GetData());
 			list_content[child_idx] =
 			    string_t(string.GetData() + offset, UnsafeNumericCast<uint32_t>(match_group.size()));
 		}
@@ -199,7 +199,7 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 				if (group_count_p == -1) {
 					throw InvalidInputException("Pattern failed to parse, error: '%s'", stored_re->error());
 				}
-				non_const_args->SetSize(group_count_p);
+				non_const_args->SetSize(UnsafeNumericCast<idx_t>(group_count_p));
 			}
 		}
 

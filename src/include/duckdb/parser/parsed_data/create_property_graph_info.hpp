@@ -37,6 +37,27 @@ struct CreatePropertyGraphInfo : public CreateInfo {
 public:
 	unique_ptr<CreateInfo> Copy() const override;
 
+	string ToString() const override {
+		string result = "-CREATE PROPERTY GRAPH " + property_graph_name + " ";
+		result += "VERTEX TABLES ( ";
+		for (idx_t i = 0; i < vertex_tables.size(); i++) {
+			result += vertex_tables[i]->ToString();
+			if (i != vertex_tables.size() - 1) {
+				result += ", ";
+			}
+		}
+		result += " ) ";
+		result += "EDGE TABLES ( ";
+		for (idx_t i = 0; i < edge_tables.size(); i++) {
+			result += edge_tables[i]->ToString();
+			if (i != edge_tables.size() - 1) {
+				result += ", ";
+			}
+		}
+		result += " ) ";
+		return result;
+	};
+
 	//! Serializes a blob into a CreatePropertyGraphInfo
 	void Serialize(Serializer &serializer) const override;
 	//! Deserializes a blob back into a CreatePropertyGraphInfo

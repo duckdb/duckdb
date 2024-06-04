@@ -28,4 +28,21 @@ ScalarFunction ToTimestampFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::TIMESTAMP_TZ, EpochSecFunction);
 }
 
+struct TimeTZSortKeyOperator {
+	template <typename INPUT_TYPE, typename RESULT_TYPE>
+	static RESULT_TYPE Operation(INPUT_TYPE input) {
+		return input.sort_key();
+	}
+};
+
+static void TimeTZSortKeyFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+	D_ASSERT(input.ColumnCount() == 1);
+
+	UnaryExecutor::Execute<dtime_tz_t, uint64_t, TimeTZSortKeyOperator>(input.data[0], result, input.size());
+}
+
+ScalarFunction TimeTZSortKeyFun::GetFunction() {
+	return ScalarFunction({LogicalType::TIME_TZ}, LogicalType::UBIGINT, TimeTZSortKeyFunction);
+}
+
 } // namespace duckdb

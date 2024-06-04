@@ -77,8 +77,9 @@ struct ArrowVarcharData {
 			auto string_length = OP::GetLength(data[source_idx]);
 
 			// append the offset data
-			auto current_offset = last_offset + string_length;
-			if (!LARGE_STRING && (int64_t)last_offset + string_length > NumericLimits<int32_t>::Maximum()) {
+			auto current_offset = UnsafeNumericCast<idx_t>(last_offset) + string_length;
+			if (!LARGE_STRING &&
+			    UnsafeNumericCast<idx_t>(last_offset) + string_length > NumericLimits<int32_t>::Maximum()) {
 				D_ASSERT(append_data.options.arrow_offset_size == ArrowOffsetSize::REGULAR);
 				throw InvalidInputException(
 				    "Arrow Appender: The maximum total string size for regular string buffers is "

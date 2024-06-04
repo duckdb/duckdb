@@ -313,8 +313,10 @@ static void CreateValuesMap(const StructNames &names, yyjson_mut_doc *doc, yyjso
 	// Create nested keys
 	auto &map_key_v = MapVector::GetKeys(value_v);
 	auto map_key_count = ListVector::GetListSize(value_v);
+	Vector map_keys_string(LogicalType::VARCHAR, map_key_count);
+	VectorOperations::DefaultCast(map_key_v, map_keys_string, map_key_count);
 	auto nested_keys = JSONCommon::AllocateArray<yyjson_mut_val *>(doc, map_key_count);
-	TemplatedCreateValues<string_t, string_t>(doc, nested_keys, map_key_v, map_key_count);
+	TemplatedCreateValues<string_t, string_t>(doc, nested_keys, map_keys_string, map_key_count);
 	// Create nested values
 	auto &map_val_v = MapVector::GetValues(value_v);
 	auto map_val_count = ListVector::GetListSize(value_v);

@@ -1,0 +1,20 @@
+# name: test/sql/json/issues/issue11804.test
+# description: Test issue 11804 - json_type(...) with path does not return "NULL"
+# group: [issues]
+
+require json
+
+query I
+select json_type(JSON 'null') = 'NULL';
+----
+true
+
+query I
+select json_type(JSON '{"a": null}', '/a') = 'NULL';
+----
+true
+
+query I
+select json_type(JSON '{"a": null}', '$.a') = 'NULL';
+----
+true

@@ -27,6 +27,9 @@ public:
 	unique_ptr<SQLStatement> Copy() const override {
 		throw NotImplementedException("PLAN_STATEMENT");
 	}
+	string ToString() const override {
+		throw NotImplementedException("PLAN STATEMENT");
+	}
 };
 
 } // namespace duckdb

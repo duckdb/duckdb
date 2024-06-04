@@ -44,8 +44,8 @@ static string_t ASCIICaseConvert(Vector &result, const char *input_data, idx_t i
 	auto result_str = StringVector::EmptyString(result, output_length);
 	auto result_data = result_str.GetDataWriteable();
 	for (idx_t i = 0; i < input_length; i++) {
-		result_data[i] = IS_UPPER ? UpperFun::ASCII_TO_UPPER_MAP[uint8_t(input_data[i])]
-		                          : LowerFun::ASCII_TO_LOWER_MAP[uint8_t(input_data[i])];
+		result_data[i] = UnsafeNumericCast<char>(IS_UPPER ? UpperFun::ASCII_TO_UPPER_MAP[uint8_t(input_data[i])]
+		                                                  : LowerFun::ASCII_TO_LOWER_MAP[uint8_t(input_data[i])]);
 	}
 	result_str.Finalize();
 	return result_str;
@@ -58,12 +58,12 @@ static idx_t GetResultLength(const char *input_data, idx_t input_length) {
 		if (input_data[i] & 0x80) {
 			// unicode
 			int sz = 0;
-			int codepoint = utf8proc_codepoint(input_data + i, sz);
-			int converted_codepoint = IS_UPPER ? utf8proc_toupper(codepoint) : utf8proc_tolower(codepoint);
-			int new_sz = utf8proc_codepoint_length(converted_codepoint);
+			auto codepoint = utf8proc_codepoint(input_data + i, sz);
+			auto converted_codepoint = IS_UPPER ? utf8proc_toupper(codepoint) : utf8proc_tolower(codepoint);
+			auto new_sz = utf8proc_codepoint_length(converted_codepoint);
 			D_ASSERT(new_sz >= 0);
-			output_length += new_sz;
-			i += sz;
+			output_length += UnsafeNumericCast<idx_t>(new_sz);
+			i += UnsafeNumericCast<idx_t>(sz);
 		} else {
 			// ascii
 			output_length++;
@@ -79,17 +79,17 @@ static void CaseConvert(const char *input_data, idx_t input_length, char *result
 		if (input_data[i] & 0x80) {
 			// non-ascii character
 			int sz = 0, new_sz = 0;
-			int codepoint = utf8proc_codepoint(input_data + i, sz);
-			int converted_codepoint = IS_UPPER ? utf8proc_toupper(codepoint) : utf8proc_tolower(codepoint);
+			auto codepoint = utf8proc_codepoint(input_data + i, sz);
+			auto converted_codepoint = IS_UPPER ? utf8proc_toupper(codepoint) : utf8proc_tolower(codepoint);
 			auto success = utf8proc_codepoint_to_utf8(converted_codepoint, new_sz, result_data);
 			D_ASSERT(success);
 			(void)success;
 			result_data += new_sz;
-			i += sz;
+			i += UnsafeNumericCast<idx_t>(sz);
 		} else {
 			// ascii
-			*result_data = IS_UPPER ? UpperFun::ASCII_TO_UPPER_MAP[uint8_t(input_data[i])]
-			                        : LowerFun::ASCII_TO_LOWER_MAP[uint8_t(input_data[i])];
+			*result_data = UnsafeNumericCast<char>(IS_UPPER ? UpperFun::ASCII_TO_UPPER_MAP[uint8_t(input_data[i])]
+			                                                : LowerFun::ASCII_TO_LOWER_MAP[uint8_t(input_data[i])]);
 			result_data++;
 			i++;
 		}

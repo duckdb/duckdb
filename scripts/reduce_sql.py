@@ -258,7 +258,7 @@ if __name__ == "__main__":
     print(expected_error)
     print("===================================================")
 
-    final_query = reduce(sql_query, data_load, shell, expected_error, args.max_time)
+    final_query = reduce(sql_query, data_load, shell, expected_error, int(args.max_time))
     print("Found final reduced query")
     print("===================================================")
     print(final_query)

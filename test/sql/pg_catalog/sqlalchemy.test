@@ -82,21 +82,25 @@ n.nspname='main' and relname='f'
 ----
 
 # has_type
-statement ok
+query I
 SELECT EXISTS (
 	SELECT * FROM pg_catalog.pg_type t, pg_catalog.pg_namespace n
 	WHERE t.typnamespace = n.oid
-	AND t.typname = 'INTEGER'
+	AND t.typname = 'integer'
 	AND n.nspname = 'main'
 	)
+----
+false
 
-statement ok
+query I
 SELECT EXISTS (
 	SELECT * FROM pg_catalog.pg_type t, pg_catalog.pg_namespace n
 	WHERE t.typnamespace = n.oid
-	AND t.typname = 'INTEGER'
+	AND t.typname = 'int4'
 	AND n.nspname = 'main'
 	)
+----
+true
 
 # get_table_oid
 query I
@@ -178,20 +182,20 @@ WHERE a.attrelid = (SELECT MIN(oid) FROM pg_class WHERE relname='integral_values
 AND a.attnum > 0 AND NOT a.attisdropped
 ORDER BY a.attnum;
 ----
-j	smallint	NULL	false
-k	integer	NULL	false
-l	bigint	NULL	false
-i	real	NULL	false
-z	double precision	NULL	false
+j	int2	NULL	false
+k	int4	NULL	false
+l	int8	NULL	false
+i	float4	NULL	false
+z	float8	NULL	false
 m	numeric(4,1)	NULL	false
 n	numeric(9,2)	NULL	false
 o	numeric(18,4)	NULL	false
 p	numeric(37,2)	NULL	false
-q	character varying	NULL	false
+q	varchar	NULL	false
 r	bytea	NULL	false
 s	date	NULL	false
-t	time without time zone	NULL	false
-u	timestamp without time zone	NULL	false
+t	time	NULL	false
+u	timestamp	NULL	false
 v	list	NULL	false
 w	enum	NULL	false
 
@@ -353,7 +357,7 @@ SELECT t.typname as "name",
 FROM pg_catalog.pg_type t
 		LEFT JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace
 		LEFT JOIN pg_catalog.pg_enum e ON t.oid = e.enumtypid
-WHERE t.typtype = 'e'
+WHERE t.typtype = 'e' AND e.enumlabel IS NOT NULL
 ORDER BY e.enumsortorder
 ----
 greeting	true	main	hi

@@ -85,7 +85,7 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 				}
 				if (join.conditions.size() > 1) {
 					// there are multiple conditions: erase this condition
-					join.conditions.erase(join.conditions.begin() + i);
+					join.conditions.erase_at(i);
 					// remove the corresponding statistics
 					join.join_stats.clear();
 					i--;
@@ -187,7 +187,8 @@ void StatisticsPropagator::MultiplyCardinalities(unique_ptr<NodeStatistics> &sta
 		return;
 	}
 	stats->estimated_cardinality = MaxValue<idx_t>(stats->estimated_cardinality, new_stats.estimated_cardinality);
-	auto new_max = Hugeint::Multiply(stats->max_cardinality, new_stats.max_cardinality);
+	auto new_max = Hugeint::Multiply(NumericCast<int64_t>(stats->max_cardinality),
+	                                 NumericCast<int64_t>(new_stats.max_cardinality));
 	if (new_max < NumericLimits<int64_t>::Maximum()) {
 		int64_t result;
 		if (!Hugeint::TryCast<int64_t>(new_max, result)) {
@@ -357,7 +358,9 @@ void StatisticsPropagator::CreateFilterFromJoinStats(unique_ptr<LogicalOperator>
 		child->expressions.emplace_back(std::move(filter_expr));
 	}
 
-	FilterPushdown filter_pushdown(optimizer);
+	// not allowed to let filter pushdowwn change mark joins to semi joins.
+	// semi joins are potentially slower AND the conversion can ruin column binding information
+	FilterPushdown filter_pushdown(optimizer, false);
 	child = filter_pushdown.Rewrite(std::move(child));
 	PropagateExpression(expr);
 }

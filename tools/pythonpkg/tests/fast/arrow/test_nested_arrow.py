@@ -183,6 +183,15 @@ class TestArrowNested(object):
         ):
             rel = duckdb.from_arrow(arrow_table).fetchall()
 
+    def test_null_map_arrow_to_duckdb(self, duckdb_cursor):
+        if not can_run:
+            return
+        map_type = pa.map_(pa.int32(), pa.int32())
+        values = [None, [(5, 42)]]
+        arrow_table = pa.table({'detail': pa.array(values, map_type)})
+        res = duckdb_cursor.sql("select * from arrow_table").fetchall()
+        assert res == [(None,), ({'key': [5], 'value': [42]},)]
+
     def test_map_arrow_to_pandas(self, duckdb_cursor):
         if not can_run:
             return

@@ -37,7 +37,8 @@ void RowOperations::SwizzleColumns(const RowLayout &layout, const data_ptr_t bas
 				for (idx_t i = 0; i < next; i++) {
 					if (Load<uint32_t>(col_ptr) > string_t::INLINE_LENGTH) {
 						// Overwrite the string pointer with the within-row offset (if not inlined)
-						Store<idx_t>(Load<data_ptr_t>(string_ptr) - heap_row_ptrs[i], string_ptr);
+						Store<idx_t>(UnsafeNumericCast<idx_t>(Load<data_ptr_t>(string_ptr) - heap_row_ptrs[i]),
+						             string_ptr);
 					}
 					col_ptr += row_width;
 					string_ptr += row_width;
@@ -46,7 +47,7 @@ void RowOperations::SwizzleColumns(const RowLayout &layout, const data_ptr_t bas
 				// Non-varchar blob columns
 				for (idx_t i = 0; i < next; i++) {
 					// Overwrite the column data pointer with the within-row offset
-					Store<idx_t>(Load<data_ptr_t>(col_ptr) - heap_row_ptrs[i], col_ptr);
+					Store<idx_t>(UnsafeNumericCast<idx_t>(Load<data_ptr_t>(col_ptr) - heap_row_ptrs[i]), col_ptr);
 					col_ptr += row_width;
 				}
 			}
@@ -79,7 +80,7 @@ void RowOperations::CopyHeapAndSwizzle(const RowLayout &layout, data_ptr_t row_p
 
 		// Copy and swizzle
 		memcpy(heap_ptr, source_heap_ptr, size);
-		Store<idx_t>(heap_ptr - heap_base_ptr, row_ptr + heap_offset);
+		Store<idx_t>(UnsafeNumericCast<idx_t>(heap_ptr - heap_base_ptr), row_ptr + heap_offset);
 
 		// Increment for next iteration
 		row_ptr += row_width;

@@ -89,6 +89,8 @@ BoundStatement Binder::Bind(VacuumStatement &stmt) {
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
 	result.plan = std::move(vacuum);
+
+	auto &properties = GetStatementProperties();
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }

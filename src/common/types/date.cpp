@@ -307,7 +307,7 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 	// in strict mode, check remaining string for non-space characters
 	if (strict) {
 		// skip trailing spaces
-		while (pos < len && StringUtil::CharacterIsSpace((unsigned char)buf[pos])) {
+		while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
 			pos++;
 		}
 		// check position. if end was not reached, non-space chars remaining
@@ -316,7 +316,7 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 		}
 	} else {
 		// in non-strict mode, check for any direct trailing digits
-		if (pos < len && StringUtil::CharacterIsDigit((unsigned char)buf[pos])) {
+		if (pos < len && StringUtil::CharacterIsDigit(buf[pos])) {
 			return false;
 		}
 	}

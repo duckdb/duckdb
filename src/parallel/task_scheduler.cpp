@@ -2,6 +2,7 @@
 
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 
@@ -108,7 +109,11 @@ TaskScheduler::TaskScheduler(DatabaseInstance &db)
 
 TaskScheduler::~TaskScheduler() {
 #ifndef DUCKDB_NO_THREADS
-	RelaunchThreadsInternal(0);
+	try {
+		RelaunchThreadsInternal(0);
+	} catch (...) {
+		// nothing we can do in the destructor if this fails
+	}
 #endif
 }
 
@@ -260,7 +265,8 @@ void TaskScheduler::SetAllocatorFlushTreshold(idx_t threshold) {
 
 void TaskScheduler::Signal(idx_t n) {
 #ifndef DUCKDB_NO_THREADS
-	queue->semaphore.signal(n);
+	typedef std::make_signed<std::size_t>::type ssize_t;
+	queue->semaphore.signal(NumericCast<ssize_t>(n));
 #endif
 }
 
@@ -279,7 +285,7 @@ void TaskScheduler::RelaunchThreads() {
 void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 #ifndef DUCKDB_NO_THREADS
 	auto &config = DBConfig::GetConfig(db);
-	idx_t new_thread_count = n;
+	auto new_thread_count = NumericCast<idx_t>(n);
 	if (threads.size() == new_thread_count) {
 		current_thread_count = NumericCast<int32_t>(threads.size() + config.options.external_threads);
 		return;

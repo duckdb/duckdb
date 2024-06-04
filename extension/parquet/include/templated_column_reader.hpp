@@ -9,6 +9,7 @@
 #pragma once
 
 #include "column_reader.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 
@@ -43,7 +44,7 @@ public:
 public:
 	void AllocateDict(idx_t size) {
 		if (!dict) {
-			dict = make_shared<ResizeableBuffer>(GetAllocator(), size);
+			dict = make_shared_ptr<ResizeableBuffer>(GetAllocator(), size);
 		} else {
 			dict->resize(GetAllocator(), size);
 		}
@@ -55,6 +56,10 @@ public:
 
 	void Offsets(uint32_t *offsets, uint8_t *defines, uint64_t num_values, parquet_filter_t &filter,
 	             idx_t result_offset, Vector &result) override {
+		if (!dict) {
+			throw IOException(
+			    "Parquet file is likely corrupted, cannot have dictionary offsets without seeing a dictionary first.");
+		}
 		auto result_ptr = FlatVector::GetData<VALUE_TYPE>(result);
 		auto &result_mask = FlatVector::Validity(result);
 

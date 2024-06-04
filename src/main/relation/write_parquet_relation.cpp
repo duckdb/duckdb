@@ -15,8 +15,8 @@ WriteParquetRelation::WriteParquetRelation(shared_ptr<Relation> child_p, string 
 
 BoundStatement WriteParquetRelation::Bind(Binder &binder) {
 	CopyStatement copy;
-	copy.select_statement = child->GetQueryNode();
 	auto info = make_uniq<CopyInfo>();
+	info->select_statement = child->GetQueryNode();
 	info->is_from = false;
 	info->file_path = parquet_file;
 	info->format = "parquet";

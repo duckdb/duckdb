@@ -47,7 +47,7 @@ void CommonAggregateOptimizer::ExtractCommonAggregates(LogicalAggregate &aggr) {
 		} else {
 			// aggregate already exists! we can remove this entry
 			total_erased++;
-			aggr.expressions.erase(aggr.expressions.begin() + i);
+			aggr.expressions.erase_at(i);
 			i--;
 			// we need to remap any references to this aggregate so they point to the other aggregate
 			ColumnBinding original_binding(aggr.aggregate_index, original_index);

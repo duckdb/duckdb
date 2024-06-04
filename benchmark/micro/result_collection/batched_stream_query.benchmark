@@ -1,0 +1,16 @@
+# name: benchmark/micro/result_collection/batched_stream_query.benchmark
+# description: Show the performance of the Batched StreamQueryResult
+# group: [result_collection]
+
+name batched_stream_query
+group micro
+subgroup result_collection
+
+resultmode streaming
+
+load
+create table tbl (a varchar);
+insert into tbl select 'this is a long string' from range(100000000)
+
+run
+select * from tbl;

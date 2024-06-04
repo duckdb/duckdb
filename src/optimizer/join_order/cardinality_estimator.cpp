@@ -50,7 +50,7 @@ bool CardinalityEstimator::SingleRelationFilter(FilterInfo &filter_info) {
 
 vector<idx_t> CardinalityEstimator::DetermineMatchingEquivalentSets(FilterInfo *filter_info) {
 	vector<idx_t> matching_equivalent_sets;
-	auto equivalent_relation_index = 0;
+	idx_t equivalent_relation_index = 0;
 
 	for (const RelationsToTDom &r2tdom : relations_to_tdoms) {
 		auto &i_set = r2tdom.equivalent_relations;
@@ -246,7 +246,7 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set
 		denom *= match.denom;
 	}
 	// can happen if a table has cardinality 0, or a tdom is set to 0
-	if (denom == 0) {
+	if (denom <= 1) {
 		denom = 1;
 	}
 	auto result = numerator / denom;
@@ -259,7 +259,7 @@ template <>
 idx_t CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set) {
 	auto cardinality_as_double = EstimateCardinalityWithSet<double>(new_set);
 	auto max = NumericLimits<idx_t>::Maximum();
-	if (cardinality_as_double > max) {
+	if (cardinality_as_double >= max) {
 		return max;
 	}
 	return (idx_t)cardinality_as_double;

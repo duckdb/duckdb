@@ -9,7 +9,8 @@ namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
 
-FilterPushdown::FilterPushdown(Optimizer &optimizer) : optimizer(optimizer), combiner(optimizer.context) {
+FilterPushdown::FilterPushdown(Optimizer &optimizer, bool convert_mark_joins)
+    : optimizer(optimizer), combiner(optimizer.context), convert_mark_joins(convert_mark_joins) {
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> op) {
@@ -144,7 +145,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushFinalFilters(unique_ptr<LogicalO
 unique_ptr<LogicalOperator> FilterPushdown::FinishPushdown(unique_ptr<LogicalOperator> op) {
 	// unhandled type, first perform filter pushdown in its children
 	for (auto &child : op->children) {
-		FilterPushdown pushdown(optimizer);
+		FilterPushdown pushdown(optimizer, convert_mark_joins);
 		child = pushdown.Rewrite(std::move(child));
 	}
 	// now push any existing filters

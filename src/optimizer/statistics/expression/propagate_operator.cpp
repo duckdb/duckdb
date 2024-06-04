@@ -28,8 +28,8 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundOperat
 				// this child is always NULL, we can remove it from the coalesce
 				// UNLESS there is only one node remaining
 				if (expr.children.size() > 1) {
-					expr.children.erase(expr.children.begin() + i);
-					child_stats.erase(child_stats.begin() + i);
+					expr.children.erase_at(i);
+					child_stats.erase_at(i);
 					i--;
 				}
 			} else if (!child_stats[i]->CanHaveNull()) {
@@ -37,8 +37,8 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundOperat
 				// this is the last coalesce node that influences the result
 				// we can erase any children after this node
 				if (i + 1 < expr.children.size()) {
-					expr.children.erase(expr.children.begin() + i + 1, expr.children.end());
-					child_stats.erase(child_stats.begin() + i + 1, child_stats.end());
+					expr.children.erase(expr.children.begin() + NumericCast<int64_t>(i + 1), expr.children.end());
+					child_stats.erase(child_stats.begin() + NumericCast<int64_t>(i + 1), child_stats.end());
 				}
 				break;
 			}

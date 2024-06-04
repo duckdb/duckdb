@@ -37,6 +37,8 @@ public:
 	bool return_chunk;
 	//! The default statements used by the table
 	vector<unique_ptr<Expression>> bound_defaults;
+	//! The constraints used by the table
+	vector<unique_ptr<BoundConstraint>> bound_constraints;
 
 	//! Which action to take on conflict
 	OnConflictAction action_type;

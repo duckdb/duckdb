@@ -17,6 +17,7 @@
 #include <memory>
 
 PYBIND11_DECLARE_HOLDER_TYPE(T, duckdb::unique_ptr<T>)
+PYBIND11_DECLARE_HOLDER_TYPE(T, duckdb::shared_ptr<T>)
 
 namespace pybind11 {
 

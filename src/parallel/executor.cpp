@@ -73,10 +73,11 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 
 	// create events/stack for the base pipeline
 	auto base_pipeline = meta_pipeline->GetBasePipeline();
-	auto base_initialize_event = make_shared<PipelineInitializeEvent>(base_pipeline);
-	auto base_event = make_shared<PipelineEvent>(base_pipeline);
-	auto base_finish_event = make_shared<PipelineFinishEvent>(base_pipeline);
-	auto base_complete_event = make_shared<PipelineCompleteEvent>(base_pipeline->executor, event_data.initial_schedule);
+	auto base_initialize_event = make_shared_ptr<PipelineInitializeEvent>(base_pipeline);
+	auto base_event = make_shared_ptr<PipelineEvent>(base_pipeline);
+	auto base_finish_event = make_shared_ptr<PipelineFinishEvent>(base_pipeline);
+	auto base_complete_event =
+	    make_shared_ptr<PipelineCompleteEvent>(base_pipeline->executor, event_data.initial_schedule);
 	PipelineEventStack base_stack(*base_initialize_event, *base_event, *base_finish_event, *base_complete_event);
 	events.push_back(std::move(base_initialize_event));
 	events.push_back(std::move(base_event));
@@ -96,7 +97,7 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 		D_ASSERT(pipeline);
 
 		// create events/stack for this pipeline
-		auto pipeline_event = make_shared<PipelineEvent>(pipeline);
+		auto pipeline_event = make_shared_ptr<PipelineEvent>(pipeline);
 
 		auto finish_group = meta_pipeline->GetFinishGroup(*pipeline);
 		if (finish_group) {
@@ -115,7 +116,7 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 			event_map.insert(make_pair(reference<Pipeline>(*pipeline), pipeline_stack));
 		} else if (meta_pipeline->HasFinishEvent(*pipeline)) {
 			// this pipeline has its own finish event (despite going into the same sink - Finalize twice!)
-			auto pipeline_finish_event = make_shared<PipelineFinishEvent>(pipeline);
+			auto pipeline_finish_event = make_shared_ptr<PipelineFinishEvent>(pipeline);
 			PipelineEventStack pipeline_stack(base_stack.pipeline_initialize_event, *pipeline_event,
 			                                  *pipeline_finish_event, base_stack.pipeline_complete_event);
 			events.push_back(std::move(pipeline_finish_event));
@@ -359,7 +360,7 @@ void Executor::InitializeInternal(PhysicalOperator &plan) {
 
 		// build and ready the pipelines
 		PipelineBuildState state;
-		auto root_pipeline = make_shared<MetaPipeline>(*this, state, nullptr);
+		auto root_pipeline = make_shared_ptr<MetaPipeline>(*this, state, nullptr);
 		root_pipeline->Build(*physical_plan);
 		root_pipeline->Ready();
 
@@ -570,7 +571,7 @@ shared_ptr<Pipeline> Executor::CreateChildPipeline(Pipeline &current, PhysicalOp
 	D_ASSERT(op.IsSource());
 	// found another operator that is a source, schedule a child pipeline
 	// 'op' is the source, and the sink is the same
-	auto child_pipeline = make_shared<Pipeline>(*this);
+	auto child_pipeline = make_shared_ptr<Pipeline>(*this);
 	child_pipeline->sink = current.sink;
 	child_pipeline->source = &op;
 
@@ -639,7 +640,9 @@ bool Executor::GetPipelinesProgress(double &current_progress, uint64_t &current_
 
 	for (size_t i = 0; i < progress.size(); i++) {
 		progress[i] = MaxValue(0.0, MinValue(100.0, progress[i]));
-		current_cardinality += double(progress[i]) * double(cardinality[i]) / double(100);
+		current_cardinality = NumericCast<idx_t>(static_cast<double>(
+		    current_cardinality +
+		    static_cast<double>(progress[i]) * static_cast<double>(cardinality[i]) / static_cast<double>(100)));
 		current_progress += progress[i] * double(cardinality[i]) / double(total_cardinality);
 		D_ASSERT(current_cardinality <= total_cardinality);
 	}

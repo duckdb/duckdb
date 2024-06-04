@@ -59,3 +59,7 @@ build/debug/test/unittest test/sql/copy/s3/s3_hive_partition.test
 ```
 
 > minio uses port 9000. Clickhouse also uses port 9000. If the tests are not working and you have a running Clickhouse service - try killing it first, e.g. using `killall -9 clickhouse`
+
+#### Test Data
+
+The configuration for minio is stored in `scripts/minio_s3.yml`. Data is stored in `/tmp/minio_test_data`.

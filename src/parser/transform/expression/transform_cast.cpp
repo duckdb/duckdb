@@ -18,7 +18,7 @@ unique_ptr<ParsedExpression> Transformer::TransformTypeCast(duckdb_libpgquery::P
 		if (c->val.type == duckdb_libpgquery::T_PGString) {
 			CastParameters parameters;
 			if (root.location >= 0) {
-				parameters.query_location = root.location;
+				parameters.query_location = NumericCast<idx_t>(root.location);
 			}
 			auto blob_data = Blob::ToBlob(string(c->val.val.str), parameters);
 			return make_uniq<ConstantExpression>(Value::BLOB_RAW(blob_data));

@@ -32,7 +32,7 @@ FilterPropagateResult ConstantFilter::CheckStatistics(BaseStatistics &stats) {
 }
 
 string ConstantFilter::ToString(const string &column_name) {
-	return column_name + ExpressionTypeToOperator(comparison_type) + constant.ToString();
+	return column_name + ExpressionTypeToOperator(comparison_type) + constant.ToSQLString();
 }
 
 bool ConstantFilter::Equals(const TableFilter &other_p) const {

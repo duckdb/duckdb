@@ -37,7 +37,7 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         run: |
-          TARGET=$(git describe --tags --long)
+          TARGET=$(git log -1 --format=%h)
           # decide target for staging
           if [ "$OVERRIDE_GIT_DESCRIBE" ]; then
             TARGET="$TARGET/$OVERRIDE_GIT_DESCRIBE"

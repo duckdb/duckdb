@@ -30,7 +30,7 @@ void SortedData::CreateBlock() {
 	data_blocks.push_back(make_uniq<RowDataBlock>(MemoryTag::ORDER_BY, buffer_manager, capacity, layout.GetRowWidth()));
 	if (!layout.AllConstant() && state.external) {
 		heap_blocks.push_back(
-		    make_uniq<RowDataBlock>(MemoryTag::ORDER_BY, buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1));
+		    make_uniq<RowDataBlock>(MemoryTag::ORDER_BY, buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1U));
 		D_ASSERT(data_blocks.size() == heap_blocks.size());
 	}
 }
@@ -291,10 +291,10 @@ PayloadScanner::PayloadScanner(SortedData &sorted_data, GlobalSortState &global_
 	auto &layout = sorted_data.layout;
 
 	// Create collections to put the data into so we can use RowDataCollectionScanner
-	rows = make_uniq<RowDataCollection>(global_sort_state.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1);
+	rows = make_uniq<RowDataCollection>(global_sort_state.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1U);
 	rows->count = count;
 
-	heap = make_uniq<RowDataCollection>(global_sort_state.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1);
+	heap = make_uniq<RowDataCollection>(global_sort_state.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1U);
 	if (!sorted_data.layout.AllConstant()) {
 		heap->count = count;
 	}
@@ -330,7 +330,7 @@ PayloadScanner::PayloadScanner(GlobalSortState &global_sort_state, idx_t block_i
 	auto &layout = sorted_data.layout;
 
 	// Create collections to put the data into so we can use RowDataCollectionScanner
-	rows = make_uniq<RowDataCollection>(global_sort_state.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1);
+	rows = make_uniq<RowDataCollection>(global_sort_state.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1U);
 	if (flush_p) {
 		rows->blocks.emplace_back(std::move(sorted_data.data_blocks[block_idx]));
 	} else {
@@ -338,7 +338,7 @@ PayloadScanner::PayloadScanner(GlobalSortState &global_sort_state, idx_t block_i
 	}
 	rows->count = count;
 
-	heap = make_uniq<RowDataCollection>(global_sort_state.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1);
+	heap = make_uniq<RowDataCollection>(global_sort_state.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1U);
 	if (!sorted_data.layout.AllConstant() && sorted_data.swizzled) {
 		if (flush_p) {
 			heap->blocks.emplace_back(std::move(sorted_data.heap_blocks[block_idx]));

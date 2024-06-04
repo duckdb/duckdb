@@ -1,11 +1,9 @@
 from multiprocessing.sharedctypes import Value
-import numpy
 import datetime
-import pandas
 import pytest
+import platform
 import duckdb
 from io import StringIO, BytesIO
-from duckdb.typing import BIGINT, VARCHAR, INTEGER
 
 
 def TestFile(name):
@@ -280,7 +278,8 @@ class TestReadCSV(object):
         assert res == (1, 'Action', datetime.datetime(2006, 2, 15, 4, 46, 27))
 
     def test_read_filelike(self, duckdb_cursor):
-        _ = pytest.importorskip("fsspec")
+        pytest.importorskip("fsspec")
+
         string = StringIO("c1,c2,c3\na,b,c")
         res = duckdb_cursor.read_csv(string).fetchall()
         assert res == [('a', 'b', 'c')]
@@ -441,6 +440,7 @@ class TestReadCSV(object):
         res = con.sql("select * from rel order by all").fetchall()
         assert res == [(1,), (2,), (3,), (4,), (5,), (6,)]
 
+    @pytest.mark.xfail(condition=platform.system() == "Emscripten", reason="time zones not working")
     def test_read_csv_combined(self, duckdb_cursor):
         CSV_FILE = TestFile('stress_test.csv')
         COLUMNS = {
@@ -469,10 +469,12 @@ class TestReadCSV(object):
         assert rel.columns == rel2.columns
         assert rel.types == rel2.types
 
-    def test_read_csv_names(self):
+    def test_read_csv_names(self, tmp_path):
+        file = tmp_path / "file.csv"
+        file.write_text('one,two,three,four\n1,2,3,4\n1,2,3,4\n1,2,3,4')
+
         con = duckdb.connect()
-        file = StringIO('one,two,three,four\n1,2,3,4\n1,2,3,4\n1,2,3,4')
-        rel = con.read_csv(file, names=['a', 'b', 'c'])
+        rel = con.read_csv(str(file), names=['a', 'b', 'c'])
         assert rel.columns == ['a', 'b', 'c', 'four']
 
         with pytest.raises(duckdb.InvalidInputException, match="read_csv only accepts 'names' as a list of strings"):
@@ -487,9 +489,11 @@ class TestReadCSV(object):
             rel = con.read_csv(file, names=['a', 'b', 'a', 'b'])
             assert rel.columns == ['a', 'b', 'a', 'b']
 
-    def test_read_csv_names_mixed_with_dtypes(self):
+    def test_read_csv_names_mixed_with_dtypes(self, tmp_path):
+        file = tmp_path / "file.csv"
+        file.write_text('one,two,three,four\n1,2,3,4\n1,2,3,4\n1,2,3,4')
+
         con = duckdb.connect()
-        file = StringIO('one,two,three,four\n1,2,3,4\n1,2,3,4\n1,2,3,4')
         rel = con.read_csv(
             file,
             names=['a', 'b', 'c'],
@@ -517,12 +521,18 @@ class TestReadCSV(object):
                 },
             )
 
-    def test_read_csv_multi_file(self):
+    def test_read_csv_multi_file(self, tmp_path):
+        file1 = tmp_path / "file1.csv"
+        file1.write_text('one,two,three,four\n1,2,3,4\n1,2,3,4\n1,2,3,4')
+
+        file2 = tmp_path / "file2.csv"
+        file2.write_text('one,two,three,four\n5,6,7,8\n5,6,7,8\n5,6,7,8')
+
+        file3 = tmp_path / "file3.csv"
+        file3.write_text('one,two,three,four\n9,10,11,12\n9,10,11,12\n9,10,11,12')
+
         con = duckdb.connect()
-        file1 = StringIO('one,two,three,four\n1,2,3,4\n1,2,3,4\n1,2,3,4')
-        file2 = StringIO('one,two,three,four\n5,6,7,8\n5,6,7,8\n5,6,7,8')
-        file3 = StringIO('one,two,three,four\n9,10,11,12\n9,10,11,12\n9,10,11,12')
-        files = [file1, file2, file3]
+        files = [str(file1), str(file2), str(file3)]
         rel = con.read_csv(files)
         res = rel.fetchall()
         assert res == [
@@ -546,13 +556,16 @@ class TestReadCSV(object):
             rel = con.read_csv(files)
             res = rel.fetchall()
 
-    def test_read_csv_list_invalid_path(self):
+    def test_read_csv_list_invalid_path(self, tmp_path):
         con = duckdb.connect()
-        files = [
-            StringIO('one,two,three,four\n1,2,3,4\n1,2,3,4\n1,2,3,4'),
-            'not_valid_path',
-            StringIO('one,two,three,four\n9,10,11,12\n9,10,11,12\n9,10,11,12'),
-        ]
+
+        file1 = tmp_path / "file1.csv"
+        file1.write_text('one,two,three,four\n1,2,3,4\n1,2,3,4\n1,2,3,4')
+
+        file3 = tmp_path / "file3.csv"
+        file3.write_text('one,two,three,four\n9,10,11,12\n9,10,11,12\n9,10,11,12')
+
+        files = [str(file1), 'not_valid_path', str(file3)]
         with pytest.raises(duckdb.IOException, match='No files found that match the pattern "not_valid_path"'):
             rel = con.read_csv(files)
             res = rel.fetchall()

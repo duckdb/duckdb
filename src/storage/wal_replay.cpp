@@ -25,6 +25,9 @@
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/storage/table/delete_state.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 
 namespace duckdb {
 
@@ -160,6 +163,7 @@ private:
 //===--------------------------------------------------------------------===//
 bool WriteAheadLog::Replay(AttachedDatabase &database, unique_ptr<FileHandle> handle) {
 	Connection con(database.GetDatabase());
+	auto wal_path = handle->GetPath();
 	BufferedFileReader reader(FileSystem::Get(database), std::move(handle));
 	if (reader.Finished()) {
 		// WAL is empty
@@ -167,7 +171,9 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, unique_ptr<FileHandle> ha
 	}
 
 	con.BeginTransaction();
+	MetaTransaction::Get(*con.context).ModifyDatabase(database);
 
+	auto &config = DBConfig::GetConfig(database.GetDatabase());
 	// first deserialize the WAL to look for a checkpoint flag
 	// if there is a checkpoint flag, we might have already flushed the contents of the WAL to disk
 	ReplayState checkpoint_state(database, *con.context);
@@ -185,16 +191,10 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, unique_ptr<FileHandle> ha
 		}
 	} catch (std::exception &ex) { // LCOV_EXCL_START
 		ErrorData error(ex);
-		if (error.Type() == ExceptionType::SERIALIZATION) {
-			// serialization exception - torn WAL
-			// continue reading
-		} else {
-			Printer::PrintF("Exception in WAL playback during initial read: %s\n", error.RawMessage());
-			return false;
+		// ignore serialization exceptions - they signal a torn WAL
+		if (error.Type() != ExceptionType::SERIALIZATION) {
+			error.Throw("Failure while replaying WAL file \"" + wal_path + "\": ");
 		}
-	} catch (...) {
-		Printer::Print("Unknown Exception in WAL playback during initial read");
-		return false;
 	} // LCOV_EXCL_STOP
 	if (checkpoint_state.checkpoint_id.IsValid()) {
 		// there is a checkpoint flag: check if we need to deserialize the WAL
@@ -215,7 +215,6 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, unique_ptr<FileHandle> ha
 	// replay the WAL
 	// note that everything is wrapped inside a try/catch block here
 	// there can be errors in WAL replay because of a corrupt WAL file
-	// in this case we should throw a warning but startup anyway
 	try {
 		while (true) {
 			// read the current entry
@@ -228,20 +227,23 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, unique_ptr<FileHandle> ha
 					break;
 				}
 				con.BeginTransaction();
+				MetaTransaction::Get(*con.context).ModifyDatabase(database);
 			}
 		}
 	} catch (std::exception &ex) { // LCOV_EXCL_START
-		ErrorData error(ex);
-		if (error.Type() != ExceptionType::SERIALIZATION) {
-			// FIXME: this should report a proper warning in the connection
-			Printer::PrintF("Exception in WAL playback: %s\n", error.RawMessage());
-			// exception thrown in WAL replay: rollback
-		}
-		con.Rollback();
-	} catch (...) {
-		Printer::Print("Unknown Exception in WAL playback: %s\n");
 		// exception thrown in WAL replay: rollback
-		con.Rollback();
+		con.Query("ROLLBACK");
+		ErrorData error(ex);
+		// serialization failure means a truncated WAL
+		// these failures are ignored unless abort_on_wal_failure is true
+		// other failures always result in an error
+		if (config.options.abort_on_wal_failure || error.Type() != ExceptionType::SERIALIZATION) {
+			error.Throw("Failure while replaying WAL file \"" + wal_path + "\": ");
+		}
+	} catch (...) {
+		// exception thrown in WAL replay: rollback
+		con.Query("ROLLBACK");
+		throw;
 	} // LCOV_EXCL_STOP
 	return false;
 }
@@ -346,7 +348,7 @@ void WriteAheadLogDeserializer::ReplayCreateTable() {
 	// bind the constraints to the table again
 	auto binder = Binder::CreateBinder(context);
 	auto &schema = catalog.GetSchema(context, info->schema);
-	auto bound_info = binder->BindCreateTableInfo(std::move(info), schema);
+	auto bound_info = Binder::BindCreateTableCheckpoint(std::move(info), schema);
 
 	catalog.CreateTable(context, *bound_info);
 }
@@ -580,7 +582,7 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	// create the index in the catalog
 	auto &table = catalog.GetEntry<TableCatalogEntry>(context, create_info->schema, info.table).Cast<DuckTableEntry>();
 	auto &index = catalog.CreateIndex(context, info)->Cast<DuckIndexEntry>();
-	index.info = make_shared<IndexDataTableInfo>(table.GetStorage().info, index.name);
+	index.info = make_shared_ptr<IndexDataTableInfo>(table.GetStorage().GetDataTableInfo(), index.name);
 
 	// insert the parsed expressions into the index so that we can (de)serialize them during consecutive checkpoints
 	for (auto &parsed_expr : info.parsed_expressions) {
@@ -621,7 +623,7 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	                       info.column_ids, unbound_expressions, index_info, info.options);
 
 	auto index_instance = index_type->create_instance(input);
-	data_table.info->indexes.AddIndex(std::move(index_instance));
+	data_table.AddIndex(std::move(index_instance));
 }
 
 void WriteAheadLogDeserializer::ReplayDropIndex() {
@@ -659,7 +661,9 @@ void WriteAheadLogDeserializer::ReplayInsert() {
 	}
 
 	// append to the current table
-	state.current_table->GetStorage().LocalAppend(*state.current_table, context, chunk);
+	// we don't do any constraint verification here
+	vector<unique_ptr<BoundConstraint>> bound_constraints;
+	state.current_table->GetStorage().LocalAppend(*state.current_table, context, chunk, bound_constraints);
 }
 
 void WriteAheadLogDeserializer::ReplayDelete() {
@@ -678,9 +682,10 @@ void WriteAheadLogDeserializer::ReplayDelete() {
 
 	auto source_ids = FlatVector::GetData<row_t>(chunk.data[0]);
 	// delete the tuples from the current table
+	TableDeleteState delete_state;
 	for (idx_t i = 0; i < chunk.size(); i++) {
 		row_ids[0] = source_ids[i];
-		state.current_table->GetStorage().Delete(*state.current_table, context, row_identifiers, 1);
+		state.current_table->GetStorage().Delete(delete_state, context, row_identifiers, 1);
 	}
 }
 

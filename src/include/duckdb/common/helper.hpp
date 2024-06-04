@@ -67,6 +67,14 @@ make_uniq(ARGS&&... args) // NOLINT: mimic std style
 
 template<class DATA_TYPE, class... ARGS>
 inline 
+shared_ptr<DATA_TYPE>
+make_shared_ptr(ARGS&&... args) // NOLINT: mimic std style
+{
+	return shared_ptr<DATA_TYPE>(std::make_shared<DATA_TYPE>(std::forward<ARGS>(args)...));
+}
+
+template<class DATA_TYPE, class... ARGS>
+inline 
 typename TemplatedUniqueIf<DATA_TYPE, false>::templated_unique_single_t
 make_unsafe_uniq(ARGS&&... args) // NOLINT: mimic std style
 {
@@ -109,10 +117,15 @@ unique_ptr<S> unique_ptr_cast(unique_ptr<T> src) { // NOLINT: mimic std style
 	return unique_ptr<S>(static_cast<S *>(src.release()));
 }
 
+template <typename T, typename S>
+shared_ptr<S> shared_ptr_cast(shared_ptr<T> src) { // NOLINT: mimic std style
+	return shared_ptr<S>(std::static_pointer_cast<S, T>(src.internal));
+}
+
 struct SharedConstructor {
 	template <class T, typename... ARGS>
 	static shared_ptr<T> Create(ARGS &&...args) {
-		return make_shared<T>(std::forward<ARGS>(args)...);
+		return make_shared_ptr<T>(std::forward<ARGS>(args)...);
 	}
 };
 
@@ -137,6 +150,14 @@ static duckdb::unique_ptr<T> make_unique(ARGS&&... __args) { // NOLINT: mimic st
 	static_assert(sizeof(T) == 0, "Use make_uniq instead of make_unique!");
 #endif // DUCKDB_ENABLE_DEPRECATED_API
 	return unique_ptr<T>(new T(std::forward<ARGS>(__args)...));
+}
+
+template <class T, class... ARGS>
+static duckdb::shared_ptr<T> make_shared(ARGS&&... __args) { // NOLINT: mimic std style
+#ifndef DUCKDB_ENABLE_DEPRECATED_API
+	static_assert(sizeof(T) == 0, "Use make_shared_ptr instead of make_shared!");
+#endif // DUCKDB_ENABLE_DEPRECATED_API
+	return shared_ptr<T>(new T(std::forward<ARGS>(__args)...));
 }
 
 template <typename T>

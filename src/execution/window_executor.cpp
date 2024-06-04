@@ -139,11 +139,11 @@ struct WindowColumnIterator {
 
 	//	Random Access
 	inline iterator &operator+=(difference_type n) {
-		pos += n;
+		pos += UnsafeNumericCast<pointer>(n);
 		return *this;
 	}
 	inline iterator &operator-=(difference_type n) {
-		pos -= n;
+		pos -= UnsafeNumericCast<pointer>(n);
 		return *this;
 	}
 
@@ -232,7 +232,7 @@ static idx_t FindTypedRangeBound(const WindowInputColumn &over, const idx_t orde
 			const auto first = over.GetCell<T>(prev.start);
 			if (!comp(val, first)) {
 				//	prev.first <= val, so we can start further forward
-				begin += (prev.start - order_begin);
+				begin += UnsafeNumericCast<int64_t>(prev.start - order_begin);
 			}
 		}
 		if (order_begin < prev.end && prev.end < order_end) {
@@ -240,7 +240,7 @@ static idx_t FindTypedRangeBound(const WindowInputColumn &over, const idx_t orde
 			if (!comp(second, val)) {
 				//	val <= prev.second, so we can end further back
 				// (prev.second is the largest peer)
-				end -= (order_end - prev.end - 1);
+				end -= UnsafeNumericCast<int64_t>(order_end - prev.end - 1);
 			}
 		}
 	}
@@ -452,13 +452,13 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 
 	switch (start_boundary) {
 	case WindowBoundary::UNBOUNDED_PRECEDING:
-		window_start = partition_start;
+		window_start = NumericCast<int64_t>(partition_start);
 		break;
 	case WindowBoundary::CURRENT_ROW_ROWS:
-		window_start = row_idx;
+		window_start = NumericCast<int64_t>(row_idx);
 		break;
 	case WindowBoundary::CURRENT_ROW_RANGE:
-		window_start = peer_start;
+		window_start = NumericCast<int64_t>(peer_start);
 		break;
 	case WindowBoundary::EXPR_PRECEDING_ROWS: {
 		if (!TrySubtractOperator::Operation(int64_t(row_idx), boundary_start.GetCell<int64_t>(chunk_idx),
@@ -475,21 +475,21 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 	}
 	case WindowBoundary::EXPR_PRECEDING_RANGE: {
 		if (boundary_start.CellIsNull(chunk_idx)) {
-			window_start = peer_start;
+			window_start = NumericCast<int64_t>(peer_start);
 		} else {
 			prev.start = FindOrderedRangeBound<true>(range_collection, range_sense, valid_start, row_idx,
 			                                         start_boundary, boundary_start, chunk_idx, prev);
-			window_start = prev.start;
+			window_start = NumericCast<int64_t>(prev.start);
 		}
 		break;
 	}
 	case WindowBoundary::EXPR_FOLLOWING_RANGE: {
 		if (boundary_start.CellIsNull(chunk_idx)) {
-			window_start = peer_start;
+			window_start = NumericCast<int64_t>(peer_start);
 		} else {
 			prev.start = FindOrderedRangeBound<true>(range_collection, range_sense, row_idx, valid_end, start_boundary,
 			                                         boundary_start, chunk_idx, prev);
-			window_start = prev.start;
+			window_start = NumericCast<int64_t>(prev.start);
 		}
 		break;
 	}
@@ -499,13 +499,13 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 
 	switch (end_boundary) {
 	case WindowBoundary::CURRENT_ROW_ROWS:
-		window_end = row_idx + 1;
+		window_end = NumericCast<int64_t>(row_idx + 1);
 		break;
 	case WindowBoundary::CURRENT_ROW_RANGE:
-		window_end = peer_end;
+		window_end = NumericCast<int64_t>(peer_end);
 		break;
 	case WindowBoundary::UNBOUNDED_FOLLOWING:
-		window_end = partition_end;
+		window_end = NumericCast<int64_t>(partition_end);
 		break;
 	case WindowBoundary::EXPR_PRECEDING_ROWS:
 		if (!TrySubtractOperator::Operation(int64_t(row_idx + 1), boundary_end.GetCell<int64_t>(chunk_idx),
@@ -520,21 +520,21 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 		break;
 	case WindowBoundary::EXPR_PRECEDING_RANGE: {
 		if (boundary_end.CellIsNull(chunk_idx)) {
-			window_end = peer_end;
+			window_end = NumericCast<int64_t>(peer_end);
 		} else {
 			prev.end = FindOrderedRangeBound<false>(range_collection, range_sense, valid_start, row_idx, end_boundary,
 			                                        boundary_end, chunk_idx, prev);
-			window_end = prev.end;
+			window_end = NumericCast<int64_t>(prev.end);
 		}
 		break;
 	}
 	case WindowBoundary::EXPR_FOLLOWING_RANGE: {
 		if (boundary_end.CellIsNull(chunk_idx)) {
-			window_end = peer_end;
+			window_end = NumericCast<int64_t>(peer_end);
 		} else {
 			prev.end = FindOrderedRangeBound<false>(range_collection, range_sense, row_idx, valid_end, end_boundary,
 			                                        boundary_end, chunk_idx, prev);
-			window_end = prev.end;
+			window_end = NumericCast<int64_t>(prev.end);
 		}
 		break;
 	}
@@ -543,17 +543,17 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 	}
 
 	// clamp windows to partitions if they should exceed
-	if (window_start < (int64_t)partition_start) {
-		window_start = partition_start;
+	if (window_start < NumericCast<int64_t>(partition_start)) {
+		window_start = NumericCast<int64_t>(partition_start);
 	}
-	if (window_start > (int64_t)partition_end) {
-		window_start = partition_end;
+	if (window_start > NumericCast<int64_t>(partition_end)) {
+		window_start = NumericCast<int64_t>(partition_end);
 	}
-	if (window_end < (int64_t)partition_start) {
-		window_end = partition_start;
+	if (window_end < NumericCast<int64_t>(partition_start)) {
+		window_end = NumericCast<int64_t>(partition_start);
 	}
-	if (window_end > (int64_t)partition_end) {
-		window_end = partition_end;
+	if (window_end > NumericCast<int64_t>(partition_end)) {
+		window_end = NumericCast<int64_t>(partition_end);
 	}
 
 	if (window_start < 0 || window_end < 0) {
@@ -1029,7 +1029,7 @@ void WindowAggregateExecutor::Finalize() {
 	//	Estimate the frame statistics
 	//	Default to the entire partition if we don't know anything
 	FrameStats stats;
-	const int64_t count = aggregator->GetInputs().size();
+	const auto count = NumericCast<int64_t>(aggregator->GetInputs().size());
 
 	//	First entry is the frame start
 	stats[0] = FrameDelta(-count, count);
@@ -1090,7 +1090,7 @@ void WindowRowNumberExecutor::EvaluateInternal(WindowExecutorState &lstate, Vect
 	auto partition_begin = FlatVector::GetData<const idx_t>(lbstate.bounds.data[PARTITION_BEGIN]);
 	auto rdata = FlatVector::GetData<int64_t>(result);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
-		rdata[i] = row_idx - partition_begin[i] + 1;
+		rdata[i] = NumericCast<int64_t>(row_idx - partition_begin[i] + 1);
 	}
 }
 
@@ -1147,7 +1147,7 @@ void WindowRankExecutor::EvaluateInternal(WindowExecutorState &lstate, Vector &r
 
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		lpeer.NextRank(partition_begin[i], peer_begin[i], row_idx);
-		rdata[i] = lpeer.rank;
+		rdata[i] = NumericCast<int64_t>(lpeer.rank);
 	}
 }
 
@@ -1209,7 +1209,7 @@ void WindowDenseRankExecutor::EvaluateInternal(WindowExecutorState &lstate, Vect
 
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		lpeer.NextRank(partition_begin[i], peer_begin[i], row_idx);
-		rdata[i] = lpeer.dense_rank;
+		rdata[i] = NumericCast<int64_t>(lpeer.dense_rank);
 	}
 }
 
@@ -1237,7 +1237,7 @@ void WindowPercentRankExecutor::EvaluateInternal(WindowExecutorState &lstate, Ve
 
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		lpeer.NextRank(partition_begin[i], peer_begin[i], row_idx);
-		int64_t denom = partition_end[i] - partition_begin[i] - 1;
+		auto denom = NumericCast<int64_t>(partition_end[i] - partition_begin[i] - 1);
 		double percent_rank = denom > 0 ? ((double)lpeer.rank - 1) / denom : 0;
 		rdata[i] = percent_rank;
 	}
@@ -1260,7 +1260,7 @@ void WindowCumeDistExecutor::EvaluateInternal(WindowExecutorState &lstate, Vecto
 	auto peer_end = FlatVector::GetData<const idx_t>(lbstate.bounds.data[PEER_END]);
 	auto rdata = FlatVector::GetData<double>(result);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
-		int64_t denom = partition_end[i] - partition_begin[i];
+		auto denom = NumericCast<int64_t>(partition_end[i] - partition_begin[i]);
 		double cume_dist = denom > 0 ? ((double)(peer_end[i] - partition_begin[i])) / denom : 0;
 		rdata[i] = cume_dist;
 	}
@@ -1365,7 +1365,7 @@ void WindowNtileExecutor::EvaluateInternal(WindowExecutorState &lstate, Vector &
 				throw InvalidInputException("Argument for ntile must be greater than zero");
 			}
 			// With thanks from SQLite's ntileValueFunc()
-			int64_t n_total = partition_end[i] - partition_begin[i];
+			auto n_total = NumericCast<int64_t>(partition_end[i] - partition_begin[i]);
 			if (n_param > n_total) {
 				// more groups allowed than we have values
 				// map every entry to a unique group
@@ -1374,7 +1374,7 @@ void WindowNtileExecutor::EvaluateInternal(WindowExecutorState &lstate, Vector &
 			int64_t n_size = (n_total / n_param);
 			// find the row idx within the group
 			D_ASSERT(row_idx >= partition_begin[i]);
-			int64_t adjusted_row_idx = row_idx - partition_begin[i];
+			auto adjusted_row_idx = NumericCast<int64_t>(row_idx - partition_begin[i]);
 			// now compute the ntile
 			int64_t n_large = n_total - n_param * n_size;
 			int64_t i_small = n_large * (n_size + 1);
@@ -1452,16 +1452,16 @@ void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorState &lstate, Vector
 		idx_t delta = 0;
 		if (val_idx < (int64_t)row_idx) {
 			// Count backwards
-			delta = idx_t(row_idx - val_idx);
-			val_idx = FindPrevStart(ignore_nulls, partition_begin[i], row_idx, delta);
+			delta = idx_t(row_idx - idx_t(val_idx));
+			val_idx = int64_t(FindPrevStart(ignore_nulls, partition_begin[i], row_idx, delta));
 		} else if (val_idx > (int64_t)row_idx) {
-			delta = idx_t(val_idx - row_idx);
-			val_idx = FindNextStart(ignore_nulls, row_idx + 1, partition_end[i], delta);
+			delta = idx_t(idx_t(val_idx) - row_idx);
+			val_idx = int64_t(FindNextStart(ignore_nulls, row_idx + 1, partition_end[i], delta));
 		}
 		// else offset is zero, so don't move.
 
 		if (!delta) {
-			CopyCell(payload_collection, 0, val_idx, result, i);
+			CopyCell(payload_collection, 0, NumericCast<idx_t>(val_idx), result, i);
 		} else if (wexpr.default_expr) {
 			llstate.leadlag_default.CopyCell(result, i);
 		} else {

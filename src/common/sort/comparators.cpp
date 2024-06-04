@@ -501,7 +501,7 @@ void Comparators::SwizzleSingleValue(data_ptr_t data_ptr, const data_ptr_t &heap
 	if (type.InternalType() == PhysicalType::VARCHAR) {
 		data_ptr += string_t::HEADER_SIZE;
 	}
-	Store<idx_t>(Load<data_ptr_t>(data_ptr) - heap_ptr, data_ptr);
+	Store<idx_t>(UnsafeNumericCast<idx_t>(Load<data_ptr_t>(data_ptr) - heap_ptr), data_ptr);
 }
 
 } // namespace duckdb

@@ -26,11 +26,14 @@ struct ExportedTableData {
 
 	//! Path to be exported
 	string file_path;
+	//! Not Null columns, if any
+	vector<string> not_null_columns;
 };
 
 struct ExportedTableInfo {
-	ExportedTableInfo(TableCatalogEntry &entry, ExportedTableData table_data)
-	    : entry(entry), table_data(std::move(table_data)) {
+	ExportedTableInfo(TableCatalogEntry &entry, ExportedTableData table_data_p, vector<string> &not_null_columns_p)
+	    : entry(entry), table_data(std::move(table_data_p)) {
+		table_data.not_null_columns = not_null_columns_p;
 	}
 
 	TableCatalogEntry &entry;

@@ -45,7 +45,7 @@ unique_ptr<Expression> Binder::BindOrderExpression(OrderBinder &order_binder, un
 
 BoundLimitNode Binder::BindLimitValue(OrderBinder &order_binder, unique_ptr<ParsedExpression> limit_val,
                                       bool is_percentage, bool is_offset) {
-	auto new_binder = Binder::CreateBinder(context, this, true);
+	auto new_binder = Binder::CreateBinder(context, this);
 	ExpressionBinder expr_binder(*new_binder, context);
 	auto target_type = is_percentage ? LogicalType::DOUBLE : LogicalType::BIGINT;
 	expr_binder.target_type = target_type;

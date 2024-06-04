@@ -35,6 +35,7 @@ RenameStmt
 SelectStmt
 TransactionStmt
 UpdateStmt
+UpdateExtensionsStmt
 UseStmt
 VacuumStmt
 VariableResetStmt

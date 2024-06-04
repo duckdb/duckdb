@@ -128,6 +128,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "CUSTOM_OP";
 	case LogicalOperatorType::LOGICAL_PIVOT:
 		return "PIVOT";
+	case LogicalOperatorType::LOGICAL_UPDATE_EXTENSIONS:
+		return "UPDATE_EXTENSIONS";
 	}
 	return "INVALID";
 }

@@ -43,6 +43,7 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_uniq<RegexOptimizationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<EmptyNeedleRemovalRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<EnumComparisonRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<TimeStampComparison>(context, rewriter));
 
 #ifdef DEBUG
 	for (auto &rule : rewriter.rules) {
@@ -193,7 +194,8 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 
 	for (auto &optimizer_extension : DBConfig::GetConfig(context).optimizer_extensions) {
 		RunOptimizer(OptimizerType::EXTENSION, [&]() {
-			optimizer_extension.optimize_function(context, optimizer_extension.optimizer_info.get(), plan);
+			OptimizerExtensionInput input {GetContext(), *this, optimizer_extension.optimizer_info.get()};
+			optimizer_extension.optimize_function(input, plan);
 		});
 	}
 

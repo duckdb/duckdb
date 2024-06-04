@@ -55,6 +55,8 @@ BoundStatement Binder::Bind(PragmaStatement &stmt) {
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
 	result.plan = make_uniq<LogicalPragma>(std::move(bound_info));
+
+	auto &properties = GetStatementProperties();
 	properties.return_type = StatementReturnType::QUERY_RESULT;
 	return result;
 }

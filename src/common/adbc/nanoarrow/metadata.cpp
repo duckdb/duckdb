@@ -78,7 +78,7 @@ int64_t ArrowMetadataSizeOf(const char *metadata) {
 
 	int64_t size = sizeof(int32_t);
 	while (ArrowMetadataReaderRead(&reader, &key, &value) == NANOARROW_OK) {
-		size += sizeof(int32_t) + key.n_bytes + sizeof(int32_t) + value.n_bytes;
+		size += sizeof(int32_t) + uint64_t(key.n_bytes) + sizeof(int32_t) + uint64_t(value.n_bytes);
 	}
 
 	return size;
@@ -89,7 +89,7 @@ ArrowErrorCode ArrowMetadataGetValue(const char *metadata, const char *key, cons
 	struct ArrowStringView target_key_view = {key, static_cast<int64_t>(strlen(key))};
 	value_out->data = default_value;
 	if (default_value != NULL) {
-		value_out->n_bytes = strlen(default_value);
+		value_out->n_bytes = int64_t(strlen(default_value));
 	} else {
 		value_out->n_bytes = 0;
 	}
@@ -101,7 +101,7 @@ ArrowErrorCode ArrowMetadataGetValue(const char *metadata, const char *key, cons
 
 	while (ArrowMetadataReaderRead(&reader, &key_view, &value) == NANOARROW_OK) {
 		int key_equal = target_key_view.n_bytes == key_view.n_bytes &&
-		                strncmp(target_key_view.data, key_view.data, key_view.n_bytes) == 0;
+		                strncmp(target_key_view.data, key_view.data, size_t(key_view.n_bytes)) == 0;
 		if (key_equal) {
 			value_out->data = value.data;
 			value_out->n_bytes = value.n_bytes;

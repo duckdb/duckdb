@@ -14,4 +14,8 @@ unique_ptr<SQLStatement> TransactionStatement::Copy() const {
 	return unique_ptr<TransactionStatement>(new TransactionStatement(*this));
 }
 
+string TransactionStatement::ToString() const {
+	return info->ToString();
+}
+
 } // namespace duckdb

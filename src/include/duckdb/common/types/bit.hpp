@@ -104,7 +104,7 @@ void Bit::NumericToBit(T numeric, string_t &output_str) {
 	*output = 0; // set padding to 0
 	++output;
 	for (idx_t idx = 0; idx < sizeof(T); ++idx) {
-		output[idx] = data[sizeof(T) - idx - 1];
+		output[idx] = static_cast<char>(data[sizeof(T) - idx - 1]);
 	}
 	Bit::Finalize(output_str);
 }

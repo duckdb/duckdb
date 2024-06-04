@@ -66,7 +66,7 @@ shared_ptr<DuckDB> DBInstanceCache::CreateInstanceInternal(const string &databas
 	if (abs_database_path.rfind(IN_MEMORY_PATH, 0) == 0) {
 		instance_path = IN_MEMORY_PATH;
 	}
-	auto db_instance = make_shared<DuckDB>(instance_path, &config);
+	auto db_instance = make_shared_ptr<DuckDB>(instance_path, &config);
 	if (cache_instance) {
 		db_instances[abs_database_path] = db_instance;
 	}

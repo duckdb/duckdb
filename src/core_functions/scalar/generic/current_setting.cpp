@@ -43,12 +43,11 @@ unique_ptr<FunctionData> CurrentSettingBind(ClientContext &context, ScalarFuncti
 	}
 	Value key_val = ExpressionExecutor::EvaluateScalar(context, *key_child);
 	D_ASSERT(key_val.type().id() == LogicalTypeId::VARCHAR);
-	auto &key_str = StringValue::Get(key_val);
-	if (key_val.IsNull() || key_str.empty()) {
+	if (key_val.IsNull() || StringValue::Get(key_val).empty()) {
 		throw ParserException("Key name for current_setting needs to be neither NULL nor empty");
 	}
 
-	auto key = StringUtil::Lower(key_str);
+	auto key = StringUtil::Lower(StringValue::Get(key_val));
 	Value val;
 	if (!context.TryGetCurrentSetting(key, val)) {
 		Catalog::AutoloadExtensionByConfigName(context, key);

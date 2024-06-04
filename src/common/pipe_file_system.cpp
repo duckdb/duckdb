@@ -2,6 +2,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 
 namespace duckdb {
 class PipeFile : public FileHandle {
@@ -22,10 +23,10 @@ public:
 };
 
 int64_t PipeFile::ReadChunk(void *buffer, int64_t nr_bytes) {
-	return child_handle->Read(buffer, nr_bytes);
+	return child_handle->Read(buffer, UnsafeNumericCast<idx_t>(nr_bytes));
 }
 int64_t PipeFile::WriteChunk(void *buffer, int64_t nr_bytes) {
-	return child_handle->Write(buffer, nr_bytes);
+	return child_handle->Write(buffer, UnsafeNumericCast<idx_t>(nr_bytes));
 }
 
 void PipeFileSystem::Reset(FileHandle &handle) {

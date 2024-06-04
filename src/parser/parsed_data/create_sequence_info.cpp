@@ -24,4 +24,26 @@ unique_ptr<CreateInfo> CreateSequenceInfo::Copy() const {
 	return std::move(result);
 }
 
+string CreateSequenceInfo::ToString() const {
+	std::stringstream ss;
+	ss << "CREATE";
+	if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+		ss << " OR REPLACE";
+	}
+	if (temporary) {
+		ss << " TEMPORARY";
+	}
+	ss << " SEQUENCE ";
+	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+		ss << " IF NOT EXISTS ";
+	}
+	ss << QualifierToString(temporary ? "" : catalog, schema, name);
+	ss << " INCREMENT BY " << increment;
+	ss << " MINVALUE " << min_value;
+	ss << " MAXVALUE " << max_value;
+	ss << " START " << start_value;
+	ss << " " << (cycle ? "CYCLE" : "NO CYCLE") << ";";
+	return ss.str();
+}
+
 } // namespace duckdb

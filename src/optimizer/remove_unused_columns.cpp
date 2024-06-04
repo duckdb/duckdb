@@ -38,7 +38,7 @@ void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, idx_t table_id
 		auto entry = column_references.find(current_binding);
 		if (entry == column_references.end()) {
 			// this entry is not referred to, erase it from the set of expressions
-			list.erase(list.begin() + col_idx);
+			list.erase_at(col_idx);
 			offset++;
 			col_idx--;
 		} else if (offset > 0 && replace) {

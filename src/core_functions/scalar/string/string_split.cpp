@@ -51,7 +51,7 @@ struct ConstantRegexpStringSplit {
 			return DConstants::INVALID_INDEX;
 		}
 		match_size = match.size();
-		return match.data() - input_data;
+		return UnsafeNumericCast<idx_t>(match.data() - input_data);
 	}
 };
 

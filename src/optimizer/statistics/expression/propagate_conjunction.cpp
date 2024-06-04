@@ -46,7 +46,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundConjun
 			}
 		}
 		if (prune_child) {
-			expr.children.erase(expr.children.begin() + expr_idx);
+			expr.children.erase_at(expr_idx);
 			expr_idx--;
 			continue;
 		}

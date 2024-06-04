@@ -33,6 +33,9 @@ static unique_ptr<FunctionData> DuckDBSchemasBind(ClientContext &context, TableF
 	names.emplace_back("comment");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
+	names.emplace_back("tags");
+	return_types.emplace_back(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR));
+
 	names.emplace_back("internal");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
@@ -66,15 +69,17 @@ void DuckDBSchemasFunction(ClientContext &context, TableFunctionInput &data_p, D
 		// return values:
 		idx_t col = 0;
 		// "oid", PhysicalType::BIGINT
-		output.SetValue(col++, count, Value::BIGINT(entry.oid));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(entry.oid)));
 		// database_name, VARCHAR
 		output.SetValue(col++, count, entry.catalog.GetName());
 		// database_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(entry.catalog.GetOid()));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(entry.catalog.GetOid())));
 		// "schema_name", PhysicalType::VARCHAR
 		output.SetValue(col++, count, Value(entry.name));
 		// "comment", PhysicalType::VARCHAR
 		output.SetValue(col++, count, Value(entry.comment));
+		// "tags", MAP(VARCHAR, VARCHAR)
+		output.SetValue(col++, count, Value::MAP(entry.tags));
 		// "internal", PhysicalType::BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(entry.internal));
 		// "sql", PhysicalType::VARCHAR

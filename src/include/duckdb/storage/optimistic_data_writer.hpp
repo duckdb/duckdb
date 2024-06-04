@@ -26,7 +26,7 @@ public:
 	//! Final flush of the optimistic writer - fully flushes the partial block manager
 	void FinalFlush();
 	//! Flushes a specific row group to disk
-	void FlushToDisk(RowGroup *row_group);
+	void FlushToDisk(RowGroup &row_group);
 	//! Merge the partially written blocks from one optimistic writer into another
 	void Merge(OptimisticDataWriter &other);
 	//! Rollback

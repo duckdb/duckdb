@@ -84,6 +84,13 @@ class TestDuckDBConnection(object):
         with pytest.raises(duckdb.CatalogException):
             dup_conn.table("tbl").fetchall()
 
+    def test_readonly_properties(self):
+        duckdb.execute("select 42")
+        description = duckdb.description()
+        rowcount = duckdb.rowcount()
+        assert description == [('42', 'NUMBER', None, None, None, None, None)]
+        assert rowcount == -1
+
     def test_execute(self):
         assert [([4, 2],)] == duckdb.execute("select [4,2]").fetchall()
 

@@ -153,8 +153,6 @@ static void VerifyMapConstraints(Vector &vec, idx_t count) {
 		return;
 	case MapInvalidReason::DUPLICATE_KEY:
 		throw InvalidInputException("Dict->Map conversion failed because 'key' list contains duplicates");
-	case MapInvalidReason::NULL_KEY_LIST:
-		throw InvalidInputException("Dict->Map conversion failed because 'key' list is None");
 	case MapInvalidReason::NULL_KEY:
 		throw InvalidInputException("Dict->Map conversion failed because 'key' list contains None");
 	default:
