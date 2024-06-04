@@ -68,9 +68,6 @@ static LogicalType BindColumn(PandasBindColumn &column_p, PandasColumnBindData &
 			bind_data.numpy_type.type = NumpyNullableType::CATEGORY;
 			vector<string> enum_entries = py::cast<vector<string>>(categories);
 			idx_t size = enum_entries.size();
-			if (enum_entries.empty()) {
-				throw InvalidInputException("Could not create an ENUM from an empty Categorical");
-			}
 			Vector enum_entries_vec(LogicalType::VARCHAR, size);
 			auto enum_entries_ptr = FlatVector::GetData<string_t>(enum_entries_vec);
 			for (idx_t i = 0; i < size; i++) {
