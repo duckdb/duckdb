@@ -29,6 +29,9 @@ public:
 	block_id_t GetFreeBlockId() override {
 		throw InternalException("Cannot perform IO in in-memory database - GetFreeBlockId!");
 	}
+	block_id_t PeekFreeBlockId() override {
+		throw InternalException("Cannot perform IO in in-memory database - PeekFreeBlockId!");
+	}
 	bool IsRootBlock(MetaBlockPointer root) override {
 		throw InternalException("Cannot perform IO in in-memory database - IsRootBlock!");
 	}

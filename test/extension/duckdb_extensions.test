@@ -1,0 +1,47 @@
+# name: test/extension/duckdb_extensions.test
+# description: Tests for the duckdb_extensions() table function
+# group: [extension]
+
+# This test assumes icu and json to be available in the LOCAL_EXTENSION_REPO and NOT linked into duckdb statically
+# -> this should be the case for our autoloading tests where we have the local_extension_repo variable set
+require-env LOCAL_EXTENSION_REPO
+
+require no_extension_autoloading
+
+statement ok
+PRAGMA enable_verification
+
+# Set the repository to the correct one
+statement ok
+set custom_extension_repository='${LOCAL_EXTENSION_REPO}'
+
+# Ensure we have a clean extension directory without any preinstalled extensions
+statement ok
+set extension_directory='__TEST_DIR__/duckdb_extensions'
+
+require json
+
+# json is statically linked
+query II
+SELECT extension_name, install_mode from duckdb_extensions() where extension_name='json'
+----
+json	STATICALLY_LINKED
+
+# now we install json (happens when users install extensions that are also statically loaded)
+statement ok
+install json
+
+# json still shown as statically linked
+query II
+SELECT extension_name, install_mode from duckdb_extensions() where extension_name='json'
+----
+json	STATICALLY_LINKED
+
+statement ok
+load json
+
+# json still shown as statically linked
+query II
+SELECT extension_name, install_mode from duckdb_extensions() where extension_name='json'
+----
+json	STATICALLY_LINKED

@@ -72,6 +72,11 @@ public:
 	DatabaseInstance &GetDatabase() {
 		return db;
 	}
+
+	optional_ptr<StorageExtension> GetStorageExtension() {
+		return storage_extension;
+	}
+
 	const string &GetName() const {
 		return name;
 	}
@@ -92,6 +97,7 @@ private:
 	unique_ptr<TransactionManager> transaction_manager;
 	AttachedDatabaseType type;
 	optional_ptr<Catalog> parent_catalog;
+	optional_ptr<StorageExtension> storage_extension;
 	bool is_initial_database = false;
 	bool is_closed = false;
 };
