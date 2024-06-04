@@ -336,20 +336,19 @@ void JSONCommon::GetWildcardPath(yyjson_val *val, const char *ptr, const idx_t &
 
 //! Determine Array index (>=0 from start, <0 from end)
 size_t DetermineArrayIndex(yyjson_mut_val *arr, int64_t idx) {
-	// Determine index
-	auto array_size = yyjson_mut_arr_size(arr);
-	size_t index = static_cast<size_t>(idx);
+	size_t array_size = yyjson_mut_arr_size(arr);
 
 	// negative indexes address from the rear
 	if (idx < 0) {
-		index = static_cast<size_t>(static_cast<int64_t>(array_size) + idx);
-	}
-	// In case of |idx| > array_size clamp to 0
-	if (static_cast<int64_t>(index) < 0) {
-		index = 0;
+		idx += array_size;
 	}
 
-	return index;
+	// clamp to minimum 0
+	if (idx < 0) {
+		idx = 0;
+	}
+
+	return static_cast<size_t>(idx);
 }
 
 } // namespace duckdb

@@ -3,56 +3,45 @@
 namespace duckdb {
 
 //! Remove element by its index (allows for negative indeces from the back)
-yyjson_mut_val *ArrayRemoveElement(yyjson_mut_val *arr, yyjson_mut_doc *doc, int64_t idx, yyjson_alc *alc,
-                                   Vector &result) {
+yyjson_mut_val *ArrayRemoveElement(yyjson_mut_val *arr, int64_t idx, yyjson_alc *alc, Vector &result) {
 	if (!yyjson_mut_is_arr(arr)) {
-		throw InvalidInputException("JSON input not an JSON Array");
+		throw InvalidInputException("JSON input not a JSON Array");
 	}
 
 	size_t index = DetermineArrayIndex(arr, idx);
+	size_t arr_size = yyjson_mut_arr_size(arr);
 
-	if (index == 0) {
-		yyjson_mut_arr_remove_first(arr);
-		return arr;
+	if (index < arr_size) {
+		if (index == 0) {
+			yyjson_mut_arr_remove_first(arr);
+		} else {
+			yyjson_mut_arr_remove(arr, index);
+		}
 	}
 
-	if (index >= yyjson_mut_arr_size(arr)) {
-		return arr;
-	}
-
-	yyjson_mut_arr_remove(arr, index);
 	return arr;
 }
 
 //! Delete entry range from json array
-yyjson_mut_val *ArrayRemoveRange(yyjson_mut_val *arr, yyjson_mut_doc *doc, int64_t start, int64_t end, yyjson_alc *alc,
-                                 Vector &result) {
+yyjson_mut_val *ArrayRemoveRange(yyjson_mut_val *arr, int64_t start, int64_t end, yyjson_alc *alc, Vector &result) {
 	if (!yyjson_mut_is_arr(arr)) {
 		throw InvalidInputException("JSON input not an JSON Array");
 	}
 
-	if (start < 0 || end < 0) {
-		// TODO: Maybe introduce negative indices similar to list slicing
-		throw InvalidInputException("Only positives indices in range deletion");
-	}
-
-	if (start > end) {
-		throw InvalidInputException("Start index not smaller or equal to last index");
+	if (start < 0 || end < 0 || start > end) {
+		throw InvalidInputException("Invalid range indices");
 	}
 
 	size_t array_length = yyjson_mut_arr_size(arr);
 	size_t index = static_cast<size_t>(start);
 	size_t length = static_cast<size_t>(end - start + 1);
 
-	if (index > array_length) {
-		return arr;
+	if (index < array_length) {
+		if (index + length > array_length) {
+			length = array_length - index;
+		}
+		yyjson_mut_arr_remove_range(arr, index, length);
 	}
-
-	if ((index + length) > array_length) {
-		length = array_length - index;
-	}
-
-	yyjson_mut_arr_remove_range(arr, index, length);
 	return arr;
 }
 

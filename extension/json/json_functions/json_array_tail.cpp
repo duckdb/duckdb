@@ -2,12 +2,14 @@
 
 namespace duckdb {
 
-yyjson_mut_val *JSONArrayTail(yyjson_mut_val *arr, yyjson_mut_doc *doc, yyjson_alc *alc, Vector &result) {
+// yyjson_mut_val *JSONArrayTail(yyjson_mut_val *arr, yyjson_mut_doc *doc, yyjson_alc *alc, Vector &result) {
+yyjson_mut_val *JSONArrayTail(yyjson_mut_val *arr, yyjson_alc *alc, Vector &result) {
 	if (!yyjson_mut_is_arr(arr)) {
 		throw InvalidInputException("JSON input not an JSON Array");
 	}
 
 	if (yyjson_mut_arr_size(arr) == 0) {
+		auto doc = JSONCommon::CreateDocument(alc);
 		return yyjson_mut_arr(doc);
 	}
 

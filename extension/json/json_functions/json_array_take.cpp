@@ -3,13 +3,14 @@
 namespace duckdb {
 
 //! Take n elements.
-yyjson_mut_val *ArrayTakeElement(yyjson_mut_val *arr, yyjson_mut_doc *doc, int64_t n, yyjson_alc *alc, Vector &result) {
+yyjson_mut_val *ArrayTakeElement(yyjson_mut_val *arr, int64_t n, yyjson_alc *alc, Vector &result) {
 	if (!yyjson_mut_is_arr(arr)) {
 		throw InvalidInputException("JSON input not an JSON Array");
 	}
 
 	if (n <= 0) {
 		// TODO: Maybe introduce negative space to take from the end?
+		auto doc = JSONCommon::CreateDocument(alc);
 		return yyjson_mut_arr(doc);
 	}
 
@@ -25,19 +26,13 @@ yyjson_mut_val *ArrayTakeElement(yyjson_mut_val *arr, yyjson_mut_doc *doc, int64
 }
 
 //! Take entry range from array
-yyjson_mut_val *ArrayTakeRange(yyjson_mut_val *arr, yyjson_mut_doc *doc, int64_t start, int64_t end, yyjson_alc *alc,
-                               Vector &result) {
+yyjson_mut_val *ArrayTakeRange(yyjson_mut_val *arr, int64_t start, int64_t end, yyjson_alc *alc, Vector &result) {
 	if (!yyjson_mut_is_arr(arr)) {
 		throw InvalidInputException("JSON input not an JSON Array");
 	}
 
-	if (start < 0 || end < 0) {
-		// TODO: Maybe introduce negative indices similar to list slicing
-		throw InvalidInputException("Only positives indices in range selection");
-	}
-
-	if (start > end) {
-		throw InvalidInputException("Start index not smaller or equal to last index");
+	if (start < 0 || end < 0 || start > end) {
+		throw InvalidInputException("Invalid range indices");
 	}
 
 	size_t array_length = yyjson_mut_arr_size(arr);
@@ -45,6 +40,7 @@ yyjson_mut_val *ArrayTakeRange(yyjson_mut_val *arr, yyjson_mut_doc *doc, int64_t
 	size_t last_index = static_cast<size_t>(end + 1);
 
 	if (first_index > array_length) {
+		auto doc = JSONCommon::CreateDocument(alc);
 		return yyjson_mut_arr(doc);
 	}
 

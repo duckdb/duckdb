@@ -3,8 +3,7 @@
 namespace duckdb {
 
 //! Append String or JSON value to an array
-yyjson_mut_val *ArrayAppendJSON(yyjson_mut_val *arr, yyjson_mut_doc *doc, string_t element, yyjson_alc *alc,
-                                Vector &result) {
+yyjson_mut_val *ArrayAppendJSON(yyjson_mut_val *arr, string_t element, yyjson_alc *alc, Vector &result) {
 	if (!yyjson_mut_is_arr(arr)) {
 		throw InvalidInputException("JSON input not an JSON Array");
 	}

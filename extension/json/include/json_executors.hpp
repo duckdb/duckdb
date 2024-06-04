@@ -30,9 +30,8 @@ public:
 	}
 
 	//! Single-argument JSON functions that (partially) exposes yyjson functionality
-	static void
-	UnaryMutExecute(DataChunk &args, ExpressionState &state, Vector &result,
-	                std::function<yyjson_mut_val *(yyjson_mut_val *, yyjson_mut_doc *, yyjson_alc *, Vector &)> fun) {
+	static void UnaryMutExecute(DataChunk &args, ExpressionState &state, Vector &result,
+	                            std::function<yyjson_mut_val *(yyjson_mut_val *, yyjson_alc *, Vector &)> fun) {
 		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 		auto alc = lstate.json_allocator.GetYYAlc();
 
@@ -45,7 +44,7 @@ public:
 			auto mut_doc = yyjson_doc_mut_copy(doc, alc);
 
 			// compute mutable result
-			auto new_val = fun(mut_doc->root, mut_doc, alc, result);
+			auto new_val = fun(mut_doc->root, alc, result);
 
 			// Convert mutable value back to immutable document
 			doc = yyjson_mut_val_imut_copy(new_val, alc);
@@ -165,9 +164,9 @@ public:
 
 	//! Three-argument JSON manipulation function
 	template <class T1, class T2>
-	static void TernaryMutExecute(
-	    DataChunk &args, ExpressionState &state, Vector &result,
-	    std::function<yyjson_mut_val *(yyjson_mut_val *, yyjson_mut_doc *, T1, T2, yyjson_alc *, Vector &)> fun) {
+	static void
+	TernaryMutExecute(DataChunk &args, ExpressionState &state, Vector &result,
+	                  std::function<yyjson_mut_val *(yyjson_mut_val *, T1, T2, yyjson_alc *, Vector &)> fun) {
 		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 		auto alc = lstate.json_allocator.GetYYAlc();
 
@@ -184,7 +183,7 @@ public:
 			    auto mut_doc = yyjson_doc_mut_copy(doc, alc);
 
 			    // Compute mutable value
-			    auto new_val = fun(mut_doc->root, mut_doc, first, second, alc, result);
+			    auto new_val = fun(mut_doc->root, first, second, alc, result);
 
 			    // mutable value back to immutable document
 			    doc = yyjson_mut_val_imut_copy(new_val, alc);

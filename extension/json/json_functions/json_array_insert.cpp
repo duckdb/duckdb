@@ -3,8 +3,7 @@
 namespace duckdb {
 
 //! Insert String or JSON value to an array
-yyjson_mut_val *ArrayInsertJSON(yyjson_mut_val *arr, yyjson_mut_doc *doc, string_t element, int64_t idx,
-                                yyjson_alc *alc, Vector &result) {
+yyjson_mut_val *ArrayInsertJSON(yyjson_mut_val *arr, string_t element, int64_t idx, yyjson_alc *alc, Vector &result) {
 	if (!yyjson_mut_is_arr(arr)) {
 		throw InvalidInputException("JSON input not an JSON Array");
 	}
@@ -12,6 +11,7 @@ yyjson_mut_val *ArrayInsertJSON(yyjson_mut_val *arr, yyjson_mut_doc *doc, string
 	size_t index = DetermineArrayIndex(arr, idx);
 
 	// Fill remaining indeces with null until element index
+	auto doc = JSONCommon::CreateDocument(alc);
 	for (size_t entries = yyjson_mut_arr_size(arr); entries < index; ++entries) {
 		yyjson_mut_arr_add_null(doc, arr);
 	}

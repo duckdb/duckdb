@@ -3,11 +3,12 @@
 namespace duckdb {
 
 //! Rename all existing matching key into the new given key
-yyjson_mut_val *ObjectRenameKey(yyjson_mut_val *obj, yyjson_mut_doc *doc, string_t key, string_t new_key,
-                                yyjson_alc *alc, Vector &result) {
+yyjson_mut_val *ObjectRenameKey(yyjson_mut_val *obj, string_t key, string_t new_key, yyjson_alc *alc, Vector &result) {
 	if (!yyjson_mut_is_obj(obj)) {
 		throw InvalidInputException("JSON input not an JSON Object");
 	}
+
+	auto doc = JSONCommon::CreateDocument(alc);
 
 	const char *_key = key.GetDataWriteable();
 	auto mut_key = yyjson_mut_strcpy(doc, _key);

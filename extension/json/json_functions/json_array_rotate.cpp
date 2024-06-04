@@ -4,8 +4,7 @@ namespace duckdb {
 
 //! Rotate String or JSON value to an array
 template <class AMOUNT_TYPE>
-yyjson_mut_val *ArrayRotate(yyjson_mut_val *arr, yyjson_mut_doc *doc, AMOUNT_TYPE amount, yyjson_alc *alc,
-                            Vector &result) {
+yyjson_mut_val *ArrayRotate(yyjson_mut_val *arr, AMOUNT_TYPE amount, yyjson_alc *alc, Vector &result) {
 	if (!yyjson_mut_is_arr(arr)) {
 		throw InvalidInputException("JSON input not an JSON Array");
 	}
