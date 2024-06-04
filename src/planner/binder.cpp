@@ -294,6 +294,15 @@ bool Binder::OptimizeCTEs(QueryNode &node) {
 		// we materialize if the CTE ends in an aggregation
 		auto &cte_node = cte.second->query->node->Cast<SelectNode>();
 		bool materialize = !cte_node.groups.group_expressions.empty() || !cte_node.groups.grouping_sets.empty();
+		// or has a distinct modifier
+		for (auto &modifier : cte_node.modifiers) {
+			if (materialize) {
+				break;
+			}
+			if (modifier->type == ResultModifierType::DISTINCT_MODIFIER) {
+				materialize = true;
+			}
+		}
 		for (auto &sel : cte_node.select_list) {
 			if (materialize) {
 				break;

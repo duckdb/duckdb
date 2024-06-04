@@ -59,7 +59,7 @@ void CTEFilterPusher::PushFilterIntoCTE(MaterializedCTEInfo &info) {
 	D_ASSERT(info.materialized_cte.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE);
 
 	// Create an OR expression with all the filters on all references of the CTE
-	auto or_expr = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
+	unique_ptr<Expression> outer_expr;
 	for (auto &filter : info.filters) {
 		D_ASSERT(filter.get().type == LogicalOperatorType::LOGICAL_FILTER);
 
@@ -74,17 +74,28 @@ void CTEFilterPusher::PushFilterIntoCTE(MaterializedCTEInfo &info) {
 		}
 
 		// We copy the filters and replace the CTE reference bindings with the bindings in the CTE definition
-		auto and_expr = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
+		unique_ptr<Expression> inner_expr;
 		for (auto &filter_expr : filter.get().expressions) {
 			auto filter_expr_copy = filter_expr->Copy();
 			replacer.VisitExpression(&filter_expr_copy);
-			and_expr->children.push_back(std::move(filter_expr_copy));
+			if (inner_expr) {
+				inner_expr = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
+				                                                   std::move(inner_expr), std::move(filter_expr_copy));
+			} else {
+				inner_expr = std::move(filter_expr_copy);
+			}
 		}
-		or_expr->children.push_back(std::move(and_expr));
+
+		if (outer_expr) {
+			outer_expr = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR, std::move(outer_expr),
+			                                                   std::move(inner_expr));
+		} else {
+			outer_expr = std::move(inner_expr);
+		}
 	}
 
 	// Add the filter on top of the CTE definition and push it down
-	auto new_cte = make_uniq_base<LogicalOperator, LogicalFilter>(std::move(or_expr));
+	auto new_cte = make_uniq_base<LogicalOperator, LogicalFilter>(std::move(outer_expr));
 	new_cte->children.push_back(std::move(info.materialized_cte.children[0]));
 	FilterPushdown pushdown(optimizer);
 	new_cte = pushdown.Rewrite(std::move(new_cte));
