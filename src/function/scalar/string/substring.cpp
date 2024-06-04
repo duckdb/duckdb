@@ -237,6 +237,7 @@ string_t SubstringFun::SubstringGrapheme(Vector &result, string_t input, int64_t
 			start_pos = cluster.start;
 		} else if (current_character == end) {
 			end_pos = cluster.start;
+			break;
 		}
 		current_character++;
 	}
