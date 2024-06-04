@@ -1,4 +1,4 @@
-# name: benchmark/micro/csv/projection_pushdown.benchmark
+# name: benchmark/csv/projection_pushdown.benchmark
 # description: Runs the CSV Scanner with Projection Pushdown
 # group: [csv]
 

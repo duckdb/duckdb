@@ -1,4 +1,4 @@
-# name: benchmark/micro/csv/sniffer_quotes.benchmark
+# name: benchmark/csv/sniffer_quotes.benchmark
 # description: Run sniffer on quoted lineitem
 # group: [csv]
 

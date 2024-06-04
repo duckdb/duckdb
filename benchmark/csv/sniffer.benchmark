@@ -1,4 +1,4 @@
-# name: benchmark/micro/csv/sniffer.benchmark
+# name: benchmark/csv/sniffer.benchmark
 # description: Run CSV auto-detection on the lineitem CSV, with a Describe to benchmark the sniffer
 # group: [csv]
 
