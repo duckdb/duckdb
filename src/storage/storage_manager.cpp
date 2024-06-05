@@ -172,10 +172,21 @@ void SingleFileStorageManager::LoadDatabase() {
 
 		// check if a WAL file already exists
 		auto wal_path = GetWALPath();
-		if (fs.FileExists(wal_path)) {
-			// WAL file exists but database file does not
-			// remove the WAL
-			fs.RemoveFile(wal_path);
+		if (config.options.kafka_redo_log) {
+			wal_path = "kafka://";
+			wal_path += config.options.kafka_bootstrap_server_and_port;
+			wal_path += "/";
+			wal_path += config.options.kafka_topic_name;
+			wal_path += "/";
+			wal_path += config.options.kafka_writer ? "writer" : "reader";
+		}
+		// check if the WAL exists - JO/MV - Revisit
+		if (!config.options.kafka_redo_log) {
+			if (fs.FileExists(wal_path)) {
+				// WAL file exists but database file does not
+				// remove the WAL
+				fs.RemoveFile(wal_path);
+			}
 		}
 
 		// initialize the block manager while creating a new db file

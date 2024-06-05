@@ -10,6 +10,12 @@ inputs:
   vcpkg:
     description: 'Setup vcpkg (installs to $GITHUB_WORKSPACE/vcpkg)'
     default: 0
+  librdkafka:
+    description: 'Setup librdkafka (requires vcpkg to also be installed)'
+    default: 0
+  aarch64_cross_compile:
+    description: 'Install dependencies for aarch64 cross-compiling'
+    default: 0
   openssl:
     description: 'Setup OpenSSL (requires vcpkg to also be installed)'
     default: 0
@@ -102,6 +108,12 @@ runs:
       if: ${{ inputs.openssl == 1 }}
       shell: bash
       run: scripts/setup_manylinux2014.sh openssl
+
+    - name: Install librdkafka
+      if: ${{ inputs.librdkafka == 1 }}
+      shell: bash
+      run: |
+        cd $VCPKG_ROOT && ./vcpkg install librdkafka --triplet=${{ inputs.aarch64_cross_compile == 1 && 'arm64-linux' || 'x64-linux' }}      
 
     - name: Setup Ccache
       if: ${{ inputs.ccache == 1 }}

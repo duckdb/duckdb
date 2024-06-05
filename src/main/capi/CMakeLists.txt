@@ -20,6 +20,7 @@ add_library_unity(
   stream-c.cpp
   table_function-c.cpp
   threading-c.cpp
+  anybase-c.cpp
   value-c.cpp)
 
 set(ALL_OBJECT_FILES
