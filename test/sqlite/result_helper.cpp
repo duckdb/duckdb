@@ -446,7 +446,9 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 		return true;
 	}
 	if (StringUtil::StartsWith(rvalue_str, "<REGEX>:") || StringUtil::StartsWith(rvalue_str, "<!REGEX>:")) {
-		return MatchesRegex(logger, result, rvalue_str);
+		if (MatchesRegex(logger, result, rvalue_str)) {
+			return true;
+		}
 	}
 	// some times require more checking (specifically floating point numbers because of inaccuracies)
 	// if not equivalent we need to cast to the SQL type to verify
@@ -517,7 +519,20 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 
 bool TestResultHelper::MatchesRegex(SQLLogicTestLogger &logger, MaterializedQueryResult &result, string rvalue_str) {
 	bool want_match = StringUtil::StartsWith(rvalue_str, "<REGEX>:");
-	string regex_str = StringUtil::Replace(rvalue_str, "<REGEX>:", "");
+	bool want_no_match =  StringUtil::StartsWith(rvalue_str, "<!REGEX>:");
+	string regex_str;
+	if (want_match) {
+		regex_str = StringUtil::Replace(rvalue_str, "<REGEX>:", "");
+	}
+	if (want_no_match) {
+		regex_str = StringUtil::Replace(rvalue_str, "<!REGEX>:", "");
+	}
+
+	if (!want_match && !want_no_match) {
+		// There is no regex in the rvalue_str, so regex doesn't match
+		return false;
+	}
+
 	RE2::Options options;
 	options.set_dot_nl(true);
 	RE2 re(regex_str, options);
@@ -531,7 +546,7 @@ bool TestResultHelper::MatchesRegex(SQLLogicTestLogger &logger, MaterializedQuer
 	}
 	auto resString = result.ToString();
 	bool regex_matches = RE2::FullMatch(result.ToString(), re);
-	if (regex_matches && regex_matches == want_match) {
+	if ((want_match && regex_matches) || (want_no_match && !regex_matches)) {
 		return true;
 	}
 	return false;
