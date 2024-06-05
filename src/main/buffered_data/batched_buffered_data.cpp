@@ -80,8 +80,13 @@ void BatchedBufferedData::UpdateMinBatchIndex(idx_t min_batch_index) {
 			break;
 		}
 		D_ASSERT(buffered_chunks.completed || batch == min_batch);
-
-		// We have already materialized chunks, have to move them to `batches` so they can be scanned
+		// min_batch - took longer than others
+		// min_batch+1 - completed before min_batch
+		// min_batch+2 - completed before min_batch
+		// new min_batch
+		//
+		// To preserve the order, the completed batches have to be processed before we can start scanning the "new
+		// min_batch"
 		auto &chunks = buffered_chunks.chunks;
 
 		idx_t tuple_count = 0;
