@@ -285,9 +285,11 @@ IndexTypeSet &DBConfig::GetIndexTypes() {
 
 void DBConfig::SetDefaultMaxMemory() {
 	auto memory = FileSystem::GetAvailableMemory();
-	if (memory.IsValid()) {
-		options.maximum_memory = memory.GetIndex() * 8 / 10;
+	if (!memory.IsValid()) {
+		options.maximum_memory = DBConfigOptions().maximum_memory;
+		return;
 	}
+	options.maximum_memory = memory.GetIndex() * 8 / 10;
 }
 
 void DBConfig::SetDefaultTempDirectory() {

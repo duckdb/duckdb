@@ -27,10 +27,8 @@ protected:
 	enum class Type { SIMPLE, BATCHED };
 
 public:
-	BufferedData(Type type, weak_ptr<ClientContext> context) : type(type), context(std::move(context)) {
-	}
-	virtual ~BufferedData() {
-	}
+	BufferedData(Type type, weak_ptr<ClientContext> context_p);
+	virtual ~BufferedData();
 
 public:
 	virtual PendingExecutionResult ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) = 0;
@@ -48,6 +46,7 @@ public:
 	void Close() {
 		context.reset();
 	}
+	idx_t TrackedAllocator(std::function<void(Allocator &)> func);
 
 public:
 	template <class TARGET>
@@ -70,6 +69,8 @@ protected:
 	Type type;
 	//! This is weak to avoid a cyclical reference
 	weak_ptr<ClientContext> context;
+	//! The maximum amount of memory we should keep buffered
+	idx_t total_buffer_size;
 	//! Protect against populate/fetch race condition
 	mutex glock;
 };

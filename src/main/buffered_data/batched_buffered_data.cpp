@@ -17,14 +17,16 @@ void BatchedBufferedData::BlockSink(const InterruptState &blocked_sink, idx_t ba
 BatchedBufferedData::BatchedBufferedData(weak_ptr<ClientContext> context)
     : BufferedData(BufferedData::Type::BATCHED, std::move(context)), other_batches_tuple_count(0),
       current_batch_tuple_count(0), min_batch(0) {
+	read_queue_capacity = (idx_t)(total_buffer_size * 0.6);
+	in_progress_queue_capacity = (idx_t)(total_buffer_size * 0.4);
 }
 
 bool BatchedBufferedData::ShouldBlockBatch(idx_t batch) {
 	bool is_minimum = IsMinimumBatchIndex(batch);
 	if (is_minimum) {
-		return current_batch_tuple_count >= CURRENT_BATCH_BUFFER_SIZE;
+		return current_batch_tuple_count >= ReadQueueCapacity();
 	}
-	return other_batches_tuple_count >= OTHER_BATCHES_BUFFER_SIZE;
+	return other_batches_tuple_count >= InProgressQueueCapacity();
 }
 
 bool BatchedBufferedData::BufferIsEmpty() {
@@ -44,11 +46,11 @@ void BatchedBufferedData::UnblockSinks() {
 		auto &blocked_sink = it->second;
 		const bool is_minimum = IsMinimumBatchIndex(batch);
 		if (is_minimum) {
-			if (current_batch_tuple_count >= CURRENT_BATCH_BUFFER_SIZE) {
+			if (current_batch_tuple_count >= ReadQueueCapacity()) {
 				continue;
 			}
 		} else {
-			if (other_batches_tuple_count >= OTHER_BATCHES_BUFFER_SIZE) {
+			if (other_batches_tuple_count >= InProgressQueueCapacity()) {
 				continue;
 			}
 		}
@@ -157,19 +159,27 @@ unique_ptr<DataChunk> BatchedBufferedData::Scan() {
 	return chunk;
 }
 
-void BatchedBufferedData::Append(unique_ptr<DataChunk> chunk, idx_t batch) {
+void BatchedBufferedData::Append(const DataChunk &to_append, idx_t batch) {
 	// We should never find any chunks with a smaller batch index than the minimum
 	D_ASSERT(batch >= min_batch);
+
+	bool is_minimum = batch == min_batch;
+	auto chunk = make_uniq<DataChunk>();
+	idx_t allocated_bytes = TrackedAllocator([&](Allocator &allocator) {
+		chunk->Initialize(allocator, to_append.GetTypes());
+		to_append.Copy(*chunk, 0);
+	});
+
 	lock_guard<mutex> lock(glock);
-	if (batch == min_batch) {
-		current_batch_tuple_count += chunk->size();
+	if (is_minimum) {
+		current_batch_tuple_count += allocated_bytes;
 		batches.push_back(std::move(chunk));
 	} else {
 		auto &buffered_chunks = in_progress_batches[batch];
 		auto &chunks = buffered_chunks.chunks;
 		buffered_chunks.completed = false;
 
-		other_batches_tuple_count += chunk->size();
+		other_batches_tuple_count += allocated_bytes;
 		chunks.push_back(std::move(chunk));
 	}
 }

@@ -29,17 +29,11 @@ class BatchedBufferedData : public BufferedData {
 public:
 	static constexpr const BufferedData::Type TYPE = BufferedData::Type::BATCHED;
 
-private:
-	//! (roughly) The max amount of tuples we'll keep buffered at a time
-	static constexpr idx_t BUFFER_SIZE = 100000;
-	static constexpr idx_t CURRENT_BATCH_BUFFER_SIZE = BUFFER_SIZE * 0.6;
-	static constexpr idx_t OTHER_BATCHES_BUFFER_SIZE = BUFFER_SIZE * 0.4;
-
 public:
 	explicit BatchedBufferedData(weak_ptr<ClientContext> context);
 
 public:
-	void Append(unique_ptr<DataChunk> chunk, idx_t batch);
+	void Append(const DataChunk &chunk, idx_t batch);
 	void BlockSink(const InterruptState &blocked_sink, idx_t batch);
 
 	bool BufferIsEmpty();
@@ -50,13 +44,22 @@ public:
 	bool IsMinimumBatchIndex(idx_t batch);
 	void CompleteBatch(idx_t batch);
 
+	inline idx_t ReadQueueCapacity() const {
+		return read_queue_capacity;
+	}
+	inline idx_t InProgressQueueCapacity() const {
+		return in_progress_queue_capacity;
+	}
+
 private:
 	void ResetReplenishState();
 	void UnblockSinks();
 
 private:
-	map<idx_t, InterruptState> blocked_sinks;
+	idx_t read_queue_capacity;
+	idx_t in_progress_queue_capacity;
 
+	map<idx_t, InterruptState> blocked_sinks;
 	//! The queue of chunks
 	deque<unique_ptr<DataChunk>> batches;
 	map<idx_t, BufferedChunks> in_progress_batches;
@@ -65,7 +68,6 @@ private:
 	atomic<idx_t> other_batches_tuple_count;
 	//! The amount of tuples buffered for the current batch
 	atomic<idx_t> current_batch_tuple_count;
-
 	atomic<idx_t> min_batch;
 };
 

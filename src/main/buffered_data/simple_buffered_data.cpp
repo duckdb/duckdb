@@ -9,6 +9,7 @@ namespace duckdb {
 SimpleBufferedData::SimpleBufferedData(weak_ptr<ClientContext> context)
     : BufferedData(BufferedData::Type::SIMPLE, std::move(context)) {
 	buffered_count = 0;
+	buffer_size = total_buffer_size;
 }
 
 SimpleBufferedData::~SimpleBufferedData() {
@@ -20,21 +21,21 @@ void SimpleBufferedData::BlockSink(const InterruptState &blocked_sink) {
 }
 
 bool SimpleBufferedData::BufferIsFull() {
-	return buffered_count >= BUFFER_SIZE;
+	return buffered_count >= BufferSize();
 }
 
 void SimpleBufferedData::UnblockSinks() {
 	if (Closed()) {
 		return;
 	}
-	if (buffered_count >= BUFFER_SIZE) {
+	if (buffered_count >= BufferSize()) {
 		return;
 	}
 	// Reschedule enough blocked sinks to populate the buffer
 	lock_guard<mutex> lock(glock);
 	while (!blocked_sinks.empty()) {
 		auto &blocked_sink = blocked_sinks.front();
-		if (buffered_count >= BUFFER_SIZE) {
+		if (buffered_count >= BufferSize()) {
 			// We have unblocked enough sinks already
 			break;
 		}
@@ -56,7 +57,7 @@ PendingExecutionResult SimpleBufferedData::ReplenishBuffer(StreamQueryResult &re
 	// Let the executor run until the buffer is no longer empty
 	auto res = cc->ExecuteTaskInternal(context_lock, result);
 	while (!PendingQueryResult::IsFinished(res)) {
-		if (buffered_count >= BUFFER_SIZE) {
+		if (buffered_count >= BufferSize()) {
 			break;
 		}
 		// Check if we need to unblock more sinks to reach the buffer size
@@ -87,9 +88,15 @@ unique_ptr<DataChunk> SimpleBufferedData::Scan() {
 	return chunk;
 }
 
-void SimpleBufferedData::Append(unique_ptr<DataChunk> chunk) {
+void SimpleBufferedData::Append(const DataChunk &to_append) {
+	auto chunk = make_uniq<DataChunk>();
+	idx_t allocated_bytes = TrackedAllocator([&](Allocator &allocator) {
+		chunk->Initialize(allocator, to_append.GetTypes());
+		to_append.Copy(*chunk, 0);
+	});
+
 	unique_lock<mutex> lock(glock);
-	buffered_count += chunk->size();
+	buffered_count += allocated_bytes;
 	buffered_chunks.push(std::move(chunk));
 }
 

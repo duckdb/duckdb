@@ -42,8 +42,7 @@ SinkResultType PhysicalBufferedBatchCollector::Sink(ExecutionContext &context, D
 		buffered_data.UpdateMinBatchIndex(min_batch_index);
 	}
 
-	if (!lstate.blocked || buffered_data.ShouldBlockBatch(batch)) {
-		lstate.blocked = true;
+	if (buffered_data.ShouldBlockBatch(batch)) {
 		auto callback_state = input.interrupt_state;
 		buffered_data.BlockSink(callback_state, batch);
 		return SinkResultType::BLOCKED;
@@ -52,10 +51,7 @@ SinkResultType PhysicalBufferedBatchCollector::Sink(ExecutionContext &context, D
 	// FIXME: if we want to make this more accurate, we should grab a reservation on the buffer space
 	// while we're unlocked some other thread could also append, causing us to potentially cross our buffer size
 
-	auto to_append = make_uniq<DataChunk>();
-	to_append->Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
-	chunk.Copy(*to_append, 0);
-	buffered_data.Append(std::move(to_append), batch);
+	buffered_data.Append(chunk, batch);
 
 	return SinkResultType::NEED_MORE_INPUT;
 }
