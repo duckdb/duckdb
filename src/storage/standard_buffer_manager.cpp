@@ -211,7 +211,7 @@ void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, 
 	}
 
 	// allocate a buffer to hold the data of all of the blocks
-	auto intermediate_buffer = Allocate(MemoryTag::BASE_TABLE, block_count * Storage::BLOCK_ALLOC_SIZE);
+	auto intermediate_buffer = Allocate(MemoryTag::BASE_TABLE, block_count * Storage::BLOCK_SIZE);
 	// perform a batch read of the blocks into the buffer
 	block_manager.ReadBlocks(intermediate_buffer.GetFileBuffer(), first_block, block_count);
 
@@ -229,14 +229,19 @@ void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, 
 		    EvictBlocksOrThrow(handle->tag, required_memory, &reusable_buffer, "failed to pin block of size %s%s",
 		                       StringUtil::BytesToHumanReadableString(required_memory));
 		// now load the block from the buffer
-		lock_guard<mutex> lock(handle->lock);
-		if (handle->state == BlockState::BLOCK_LOADED) {
-			// the block is loaded already by another thread - free up the reservation and continue
-			reservation.Resize(0);
-			continue;
+		BufferHandle buf;
+		{
+			lock_guard<mutex> lock(handle->lock);
+			if (handle->state == BlockState::BLOCK_LOADED) {
+				// the block is loaded already by another thread - free up the reservation and continue
+				reservation.Resize(0);
+				continue;
+			}
+			auto block_ptr = intermediate_buffer.GetFileBuffer().InternalBuffer() + block_idx * Storage::BLOCK_ALLOC_SIZE;
+			buf = BlockHandle::LoadFromBuffer(handle, block_ptr, std::move(reusable_buffer));
+			handle->readers = 1;
+			handle->memory_charge = std::move(reservation);
 		}
-		auto block_ptr = intermediate_buffer.GetFileBuffer().InternalBuffer() + block_idx * Storage::BLOCK_ALLOC_SIZE;
-		handle->LoadFromBuffer(block_ptr, std::move(reusable_buffer));
 	}
 }
 

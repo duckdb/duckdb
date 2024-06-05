@@ -107,7 +107,7 @@ public:
 
 private:
 	static BufferHandle Load(shared_ptr<BlockHandle> &handle, unique_ptr<FileBuffer> buffer = nullptr);
-	void LoadFromBuffer(data_ptr_t data, unique_ptr<FileBuffer> reusable_buffer);
+	static BufferHandle LoadFromBuffer(shared_ptr<BlockHandle> &handle, data_ptr_t data, unique_ptr<FileBuffer> reusable_buffer);
 	unique_ptr<FileBuffer> UnloadAndTakeBlock();
 	void Unload();
 	bool CanUnload();
