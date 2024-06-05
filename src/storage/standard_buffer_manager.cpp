@@ -205,11 +205,14 @@ void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, 
                                       block_id_t first_block, block_id_t last_block) {
 	auto &block_manager = handles[0]->block_manager;
 	idx_t block_count = NumericCast<idx_t>(last_block - first_block + 1);
-	if (block_count == 1) {
-		// prefetching with block_count == 1 has no effect since we can't batch reads
-		// skip the prefetch in this case
-		return;
-	}
+#ifndef DUCKDB_ALTERNATIVE_VERIFY
+	// if (block_count == 1) {
+	// 	// prefetching with block_count == 1 has no effect since we can't batch reads
+	// 	// skip the prefetch in this case
+	//  // we do it anyway if alternative_verify is on for extra testing
+	// 	return;
+	// }
+#endif
 
 	// allocate a buffer to hold the data of all of the blocks
 	auto intermediate_buffer = Allocate(MemoryTag::BASE_TABLE, block_count * Storage::BLOCK_SIZE);

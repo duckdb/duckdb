@@ -72,6 +72,9 @@ public:
 	//! Truncate the underlying database file after a checkpoint
 	void Truncate() override;
 
+	bool InMemory() override {
+		return false;
+	}
 	//! Returns the number of total blocks
 	idx_t TotalBlocks() override;
 	//! Returns the number of free blocks

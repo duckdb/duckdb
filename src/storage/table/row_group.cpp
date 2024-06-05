@@ -485,11 +485,13 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 		} else {
 			count = max_count;
 		}
-#ifndef DUCKDB_ALTERNATIVE_VERIFY
 		auto &block_manager = GetBlockManager();
-		// in regular operation we only prefetch from remote file systems
-		// when alternative verify is set, we always prefetch for testing purposes
+#ifndef DUCKDB_ALTERNATIVE_VERIFY
+		// // in regular operation we only prefetch from remote file systems
+		// // when alternative verify is set, we always prefetch for testing purposes
 		if (block_manager.IsRemote())
+#else
+		if (!block_manager.InMemory())
 #endif
 		{
 			PrefetchState prefetch_state;

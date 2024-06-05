@@ -73,6 +73,8 @@ public:
 	virtual bool IsRemote() {
 		return false;
 	}
+	//! Whether or not the attached database is in-memory
+	virtual bool InMemory() = 0;
 
 	//! Truncate the underlying database file after a checkpoint
 	virtual void Truncate();

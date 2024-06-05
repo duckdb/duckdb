@@ -59,6 +59,9 @@ public:
 	void WriteHeader(DatabaseHeader header) override {
 		throw InternalException("Cannot perform IO in in-memory database - WriteHeader!");
 	}
+	bool InMemory() override {
+		return true;
+	}
 	idx_t TotalBlocks() override {
 		throw InternalException("Cannot perform IO in in-memory database - TotalBlocks!");
 	}
