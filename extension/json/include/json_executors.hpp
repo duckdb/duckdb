@@ -46,11 +46,7 @@ public:
 			// compute mutable result
 			auto new_val = fun(mut_doc->root, alc, result);
 
-			// Convert mutable value back to immutable document
-			doc = yyjson_mut_val_imut_copy(new_val, alc);
-
-			// Convert immutable yyjson document back into string
-			return JSONCommon::WriteVal<yyjson_val>(doc->root, alc);
+			return JSONCommon::WriteVal<yyjson_mut_val>(new_val, alc);
 		});
 	}
 
@@ -154,11 +150,7 @@ public:
 			    // Compute mutable value
 			    auto new_val = fun(mut_ldoc->root, right, alc, result);
 
-			    // Convert mutable value back to immutable document
-			    ldoc = yyjson_mut_val_imut_copy(new_val, alc);
-
-			    // Convert immutable yyjson document back into string
-			    return JSONCommon::WriteVal<yyjson_val>(ldoc->root, alc);
+			    return JSONCommon::WriteVal<yyjson_mut_val>(new_val, alc);
 		    });
 	}
 
@@ -185,11 +177,7 @@ public:
 			    // Compute mutable value
 			    auto new_val = fun(mut_doc->root, first, second, alc, result);
 
-			    // mutable value back to immutable document
-			    doc = yyjson_mut_val_imut_copy(new_val, alc);
-
-			    // immutable document back to string
-			    return JSONCommon::WriteVal<yyjson_val>(doc->root, alc);
+			    return JSONCommon::WriteVal<yyjson_mut_val>(new_val, alc);
 		    });
 	}
 
