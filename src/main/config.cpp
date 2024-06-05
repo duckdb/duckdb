@@ -100,6 +100,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(ImmediateTransactionModeSetting),
     DUCKDB_LOCAL(IntegerDivisionSetting),
     DUCKDB_LOCAL(MaximumExpressionDepthSetting),
+    DUCKDB_LOCAL(StreamingBufferSize),
     DUCKDB_GLOBAL(MaximumMemorySetting),
     DUCKDB_GLOBAL(MaximumTempDirectorySize),
     DUCKDB_GLOBAL(OldImplicitCasting),

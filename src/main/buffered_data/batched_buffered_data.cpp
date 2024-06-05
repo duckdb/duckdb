@@ -91,14 +91,15 @@ void BatchedBufferedData::UpdateMinBatchIndex(idx_t min_batch_index) {
 		// min_batch"
 		auto &chunks = buffered_chunks.chunks;
 
-		idx_t tuple_count = 0;
+		idx_t batch_allocation_size = 0;
 		for (auto it = chunks.begin(); it != chunks.end(); it++) {
 			auto chunk = std::move(*it);
-			tuple_count += chunk->size();
+			auto allocation_size = chunk->GetAllocationSize();
+			batch_allocation_size += allocation_size;
 			batches.push_back(std::move(chunk));
 		}
-		other_batches_tuple_count -= tuple_count;
-		current_batch_tuple_count += tuple_count;
+		other_batches_tuple_count -= batch_allocation_size;
+		current_batch_tuple_count += batch_allocation_size;
 		to_remove.push(batch);
 	}
 	while (!to_remove.empty()) {
@@ -149,7 +150,8 @@ unique_ptr<DataChunk> BatchedBufferedData::Scan() {
 	if (!batches.empty()) {
 		chunk = std::move(batches.front());
 		batches.pop_front();
-		current_batch_tuple_count -= chunk->size();
+		auto allocation_size = chunk->GetAllocationSize();
+		current_batch_tuple_count -= allocation_size;
 	} else {
 		context.reset();
 		D_ASSERT(blocked_sinks.empty());
@@ -165,21 +167,20 @@ void BatchedBufferedData::Append(const DataChunk &to_append, idx_t batch) {
 
 	bool is_minimum = batch == min_batch;
 	auto chunk = make_uniq<DataChunk>();
-	idx_t allocated_bytes = TrackedAllocator([&](Allocator &allocator) {
-		chunk->Initialize(allocator, to_append.GetTypes());
-		to_append.Copy(*chunk, 0);
-	});
+	chunk->Initialize(Allocator::DefaultAllocator(), to_append.GetTypes());
+	to_append.Copy(*chunk, 0);
+	auto allocation_size = chunk->GetAllocationSize();
 
 	lock_guard<mutex> lock(glock);
 	if (is_minimum) {
-		current_batch_tuple_count += allocated_bytes;
+		current_batch_tuple_count += allocation_size;
 		batches.push_back(std::move(chunk));
 	} else {
 		auto &buffered_chunks = in_progress_batches[batch];
 		auto &chunks = buffered_chunks.chunks;
 		buffered_chunks.completed = false;
 
-		other_batches_tuple_count += allocated_bytes;
+		other_batches_tuple_count += allocation_size;
 		chunks.push_back(std::move(chunk));
 	}
 }

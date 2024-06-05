@@ -46,7 +46,6 @@ public:
 	void Close() {
 		context.reset();
 	}
-	idx_t TrackedAllocator(std::function<void(Allocator &)> func);
 
 public:
 	template <class TARGET>

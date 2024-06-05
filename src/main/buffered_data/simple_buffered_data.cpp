@@ -83,20 +83,20 @@ unique_ptr<DataChunk> SimpleBufferedData::Scan() {
 	buffered_chunks.pop();
 
 	if (chunk) {
-		buffered_count -= chunk->size();
+		auto allocation_size = chunk->GetAllocationSize();
+		buffered_count -= allocation_size;
 	}
 	return chunk;
 }
 
 void SimpleBufferedData::Append(const DataChunk &to_append) {
 	auto chunk = make_uniq<DataChunk>();
-	idx_t allocated_bytes = TrackedAllocator([&](Allocator &allocator) {
-		chunk->Initialize(allocator, to_append.GetTypes());
-		to_append.Copy(*chunk, 0);
-	});
+	chunk->Initialize(Allocator::DefaultAllocator(), to_append.GetTypes());
+	to_append.Copy(*chunk, 0);
+	auto allocation_size = chunk->GetAllocationSize();
 
 	unique_lock<mutex> lock(glock);
-	buffered_count += allocated_bytes;
+	buffered_count += allocation_size;
 	buffered_chunks.push(std::move(chunk));
 }
 
