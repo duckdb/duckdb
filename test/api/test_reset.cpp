@@ -140,6 +140,10 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "external_threads", // tested in test_threads.cpp
 	    "profiling_output", // just an alias
 	    "duckdb_api",
+	    "kafka_redo_log",
+	    "kafka_topic_name",
+	    "kafka_bootstrap_server_and_port",
+	    "log_extension",
 	    "custom_user_agent"};
 	return excluded_options.count(name) == 1;
 }

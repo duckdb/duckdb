@@ -47,7 +47,7 @@ install_deps() {
     export VCPKG_ROOT=$VCPKG_TARGET_DIR/vcpkg
 
   elif [ "$1" = "openssl" ]; then
-    yum install -y perl-IPC-Cmd
+    yum install -y openssl
 
   elif [ "$1" = "ccache" ]; then
     yum -y install ccache

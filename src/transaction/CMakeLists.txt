@@ -8,6 +8,7 @@ add_library_unity(
   transaction_context.cpp
   transaction.cpp
   transaction_manager.cpp
+  timestamp_manager.cpp
   commit_state.cpp
   rollback_state.cpp
   cleanup_state.cpp)

@@ -14,12 +14,13 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/transaction/timestamp_manager.hpp"
 
 namespace duckdb {
 
 DuckTransactionManager::DuckTransactionManager(AttachedDatabase &db) : TransactionManager(db) {
 	// start timestamp starts at two
-	current_start_timestamp = 2;
+	current_start_timestamp = TimestampManager::GetHLCTimestamp();
 	// transaction ID starts very high:
 	// it should be much higher than the current start timestamp
 	// if transaction_id < start_timestamp for any set of active transactions
@@ -50,7 +51,7 @@ Transaction &DuckTransactionManager::StartTransaction(ClientContext &context) {
 	} // LCOV_EXCL_STOP
 
 	// obtain the start time and transaction ID of this transaction
-	transaction_t start_time = current_start_timestamp++;
+	transaction_t start_time = TimestampManager::GetHLCTimestamp();
 	transaction_t transaction_id = current_transaction_id++;
 	if (active_transactions.empty()) {
 		lowest_active_start = start_time;
@@ -212,7 +213,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		}
 	}
 	// obtain a commit id for the transaction
-	transaction_t commit_id = GetCommitTimestamp();
+	transaction_t commit_id = TimestampManager::GetHLCTimestamp();
 
 	// check if we can checkpoint
 	unique_ptr<StorageLockKey> lock;
