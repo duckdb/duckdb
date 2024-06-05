@@ -229,6 +229,8 @@ void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, 
 		    EvictBlocksOrThrow(handle->tag, required_memory, &reusable_buffer, "failed to pin block of size %s%s",
 		                       StringUtil::BytesToHumanReadableString(required_memory));
 		// now load the block from the buffer
+		// note that we discard the buffer handle - we do not keep it around
+		// the prefetching relies on the block handle being pinned again during the actual read before it is evicted
 		BufferHandle buf;
 		{
 			lock_guard<mutex> lock(handle->lock);
@@ -246,11 +248,7 @@ void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, 
 }
 
 void StandardBufferManager::Prefetch(vector<shared_ptr<BlockHandle>> &handles) {
-	// ignore any blocks that are loaded
-	// bulk
-	// initialize blocks with read data
-	// should we keep locks on all handles while we read?
-	// -> as long as we lock in increasing order this should always work (right?)
+	// figure out which set of blocks we should load
 	map<block_id_t, idx_t> to_be_loaded;
 	for(idx_t block_idx = 0; block_idx < handles.size(); block_idx++) {
 		auto &handle = handles[block_idx];
