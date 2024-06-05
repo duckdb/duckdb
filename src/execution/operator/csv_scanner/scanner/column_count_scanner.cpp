@@ -43,7 +43,8 @@ void ColumnCountResult::QuotedNewLine(ColumnCountResult &result) {
 
 ColumnCountScanner::ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manager,
                                        const shared_ptr<CSVStateMachine> &state_machine,
-                                       shared_ptr<CSVErrorHandler> error_handler, idx_t result_size_p, CSVIterator iterator)
+                                       shared_ptr<CSVErrorHandler> error_handler, idx_t result_size_p,
+                                       CSVIterator iterator)
     : BaseScanner(std::move(buffer_manager), state_machine, std::move(error_handler), true, nullptr, iterator),
       result(states, *state_machine, result_size_p), column_count(1), result_size(result_size_p) {
 	sniffing = true;
@@ -54,7 +55,8 @@ unique_ptr<StringValueScanner> ColumnCountScanner::UpgradeToStringValueScanner()
 	if (iterator.done) {
 		return make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, error_handler, nullptr, true);
 	}
-	return make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, error_handler, nullptr, true, iterator, result_size);
+	return make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, error_handler, nullptr, true, iterator,
+	                                     result_size);
 }
 
 ColumnCountResult &ColumnCountScanner::ParseChunk() {

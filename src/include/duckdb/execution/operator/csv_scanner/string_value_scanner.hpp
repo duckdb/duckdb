@@ -260,7 +260,8 @@ public:
 
 	StringValueScanner(const shared_ptr<CSVBufferManager> &buffer_manager,
 	                   const shared_ptr<CSVStateMachine> &state_machine,
-	                   const shared_ptr<CSVErrorHandler> &error_handler, idx_t result_size = STANDARD_VECTOR_SIZE, CSVIterator boundary = {});
+	                   const shared_ptr<CSVErrorHandler> &error_handler, idx_t result_size = STANDARD_VECTOR_SIZE,
+	                   CSVIterator boundary = {});
 
 	StringValueResult &ParseChunk() override;
 
