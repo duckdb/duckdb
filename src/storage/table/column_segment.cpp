@@ -96,6 +96,12 @@ ColumnSegment::~ColumnSegment() {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
+void ColumnSegment::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &) {
+	if (function.get().init_prefetch) {
+		function.get().init_prefetch(*this, prefetch_state);
+	}
+}
+
 void ColumnSegment::InitializeScan(ColumnScanState &state) {
 	state.scan_state = function.get().init_scan(*this);
 }

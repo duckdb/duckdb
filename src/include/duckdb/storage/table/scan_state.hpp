@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/map.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
@@ -196,6 +197,14 @@ struct ParallelTableScanState {
 	ParallelCollectionScanState local_state;
 	//! Shared lock over the checkpoint to prevent checkpoints while reading
 	unique_ptr<StorageLockKey> checkpoint_lock;
+};
+
+struct PrefetchState {
+	~PrefetchState();
+
+	void AddBlock(shared_ptr<BlockHandle> block);
+
+	map<block_id_t, shared_ptr<BlockHandle>> blocks;
 };
 
 class CreateIndexScanState : public TableScanState {

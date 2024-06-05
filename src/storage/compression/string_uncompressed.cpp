@@ -62,6 +62,19 @@ idx_t UncompressedStringStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
+void UncompressedStringInitPrefetch(ColumnSegment &segment, PrefetchState &prefetch_state) {
+	prefetch_state.AddBlock(segment.block);
+	auto segment_state = segment.GetSegmentState();
+	if (segment_state) {
+		auto &state = segment_state->Cast<UncompressedStringSegmentState>();
+		auto &block_manager = segment.GetBlockManager();
+		for(auto &block_id : state.on_disk_blocks) {
+			auto block_handle = state.GetHandle(block_manager, block_id);
+			prefetch_state.AddBlock(block_handle);
+		}
+	}
+}
+
 unique_ptr<SegmentScanState> UncompressedStringStorage::StringInitScan(ColumnSegment &segment) {
 	auto result = make_uniq<StringScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
@@ -240,7 +253,7 @@ CompressionFunction StringUncompressed::GetFunction(PhysicalType data_type) {
 	                           UncompressedStringStorage::StringInitAppend, UncompressedStringStorage::StringAppend,
 	                           UncompressedStringStorage::FinalizeAppend, nullptr,
 	                           UncompressedStringStorage::SerializeState, UncompressedStringStorage::DeserializeState,
-	                           UncompressedStringStorage::CleanupState);
+	                           UncompressedStringStorage::CleanupState, UncompressedStringInitPrefetch);
 }
 
 //===--------------------------------------------------------------------===//
