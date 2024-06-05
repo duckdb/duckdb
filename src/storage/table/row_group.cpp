@@ -473,7 +473,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 				// nothing to scan for this vector, skip the entire vector
 				NextVector(state);
 				continue;
-				}
+			}
 		} else if (TYPE == TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED) {
 			count = state.row_group->GetCommittedSelVector(transaction.start_time, transaction.transaction_id,
 			                                               state.vector_index, valid_sel, max_count);
@@ -485,7 +485,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 		} else {
 			count = max_count;
 		}
-		// FIXME - if we are scanning a remote file only
+		// FIXME - if we are scanning an on-disk OR remote file only (remote file only most likely)
 		PrefetchState prefetch_state;
 		for (idx_t i = 0; i < column_ids.size(); i++) {
 			const auto &column = column_ids[i];
@@ -493,6 +493,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 				GetColumn(column).InitializePrefetch(prefetch_state, state.column_scans[i], max_count);
 			}
 		}
+		auto &block_manager = GetBlockManager();
 		auto &buffer_manager = block_manager.buffer_manager;
 		buffer_manager.Prefetch(prefetch_state.blocks);
 
