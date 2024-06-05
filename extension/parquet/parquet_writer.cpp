@@ -578,7 +578,7 @@ void ParquetWriter::Finalize() {
 	}
 
 	// flush to disk
-	writer->Sync();
+	writer->Close();
 	writer.reset();
 }
 

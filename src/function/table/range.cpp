@@ -157,44 +157,54 @@ static unique_ptr<FunctionData> RangeDateTimeBind(ClientContext &context, TableF
 	auto result = make_uniq<RangeDateTimeBindData>();
 	auto &inputs = input.inputs;
 	D_ASSERT(inputs.size() == 3);
+	bool input_is_null = false;
 	for (idx_t i = 0; i < inputs.size(); ++i) {
 		if (inputs[i].IsNull()) {
-			throw BinderException("RANGE with NULL argument is not supported");
+			input_is_null = true;
+			break;
 		}
 	}
-	result->start = inputs[0].GetValue<timestamp_t>();
-	result->end = inputs[1].GetValue<timestamp_t>();
-	result->increment = inputs[2].GetValue<interval_t>();
-
-	// Infinities either cause errors or infinite loops, so just ban them
-	if (!Timestamp::IsFinite(result->start) || !Timestamp::IsFinite(result->end)) {
-		throw BinderException("RANGE with infinite bounds is not supported");
-	}
-
-	if (result->increment.months == 0 && result->increment.days == 0 && result->increment.micros == 0) {
-		throw BinderException("interval cannot be 0!");
-	}
-	// all elements should point in the same direction
-	if (result->increment.months > 0 || result->increment.days > 0 || result->increment.micros > 0) {
-		if (result->increment.months < 0 || result->increment.days < 0 || result->increment.micros < 0) {
-			throw BinderException("RANGE with composite interval that has mixed signs is not supported");
-		}
-		result->greater_than_check = true;
-		if (result->start > result->end) {
-			throw BinderException(
-			    "start is bigger than end, but increment is positive: cannot generate infinite series");
-		}
+	if (input_is_null) {
+		// if any inputs are NULL we return the empty set
+		result->start = 0;
+		result->end = 0;
+		result->increment = interval_t();
+		result->inclusive_bound = false;
 	} else {
-		result->greater_than_check = false;
-		if (result->start < result->end) {
-			throw BinderException(
-			    "start is smaller than end, but increment is negative: cannot generate infinite series");
+		result->start = inputs[0].GetValue<timestamp_t>();
+		result->end = inputs[1].GetValue<timestamp_t>();
+		result->increment = inputs[2].GetValue<interval_t>();
+
+		// Infinities either cause errors or infinite loops, so just ban them
+		if (!Timestamp::IsFinite(result->start) || !Timestamp::IsFinite(result->end)) {
+			throw BinderException("RANGE with infinite bounds is not supported");
+		}
+
+		if (result->increment.months == 0 && result->increment.days == 0 && result->increment.micros == 0) {
+			throw BinderException("interval cannot be 0!");
+		}
+		// all elements should point in the same direction
+		if (result->increment.months > 0 || result->increment.days > 0 || result->increment.micros > 0) {
+			if (result->increment.months < 0 || result->increment.days < 0 || result->increment.micros < 0) {
+				throw BinderException("RANGE with composite interval that has mixed signs is not supported");
+			}
+			result->greater_than_check = true;
+			if (result->start > result->end) {
+				throw BinderException(
+				    "start is bigger than end, but increment is positive: cannot generate infinite series");
+			}
+		} else {
+			result->greater_than_check = false;
+			if (result->start < result->end) {
+				throw BinderException(
+				    "start is smaller than end, but increment is negative: cannot generate infinite series");
+			}
 		}
 	}
 	return_types.push_back(inputs[0].type());
 	if (GENERATE_SERIES) {
 		// generate_series has inclusive bounds on the RHS
-		result->inclusive_bound = true;
+		result->inclusive_bound = !input_is_null;
 		names.emplace_back("generate_series");
 	} else {
 		result->inclusive_bound = false;
