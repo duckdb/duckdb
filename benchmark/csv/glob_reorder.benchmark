@@ -1,8 +1,8 @@
-# name: benchmark/micro/csv/glob_reorder_union.benchmark
-# description: Run CSV scan on glob with union by name
+# name: benchmark/csv/glob_reorder.benchmark
+# description: Run CSV scan on glob
 # group: [csv]
 
-name CSV Read with glob reorder union
+name CSV Read with glob reorder
 group csv
 
 load
@@ -115,5 +115,6 @@ COPY t4 TO '${BENCHMARK_DIR}/tx98.csv' (FORMAT CSV, HEADER 0,delim ';');
 COPY t4 TO '${BENCHMARK_DIR}/tx99.csv' (FORMAT CSV, HEADER 0,delim ';');
 COPY t4 TO '${BENCHMARK_DIR}/tx100.csv' (FORMAT CSV, HEADER 0,delim ';');
 
+
 run
-SELECT * from read_csv('${BENCHMARK_DIR}/tx*.csv',delim= ',', union_by_name = true, parallel = false)
+SELECT * from read_csv('${BENCHMARK_DIR}/tx*.csv',delim= ',', parallel = false)

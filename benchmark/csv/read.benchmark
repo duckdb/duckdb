@@ -1,4 +1,4 @@
-# name: benchmark/micro/csv/read.benchmark
+# name: benchmark/csv/read.benchmark
 # description: Run CSV auto-detection on the lineitem CSV
 # group: [csv]
 

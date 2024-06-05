@@ -86,6 +86,9 @@ ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const
 	}
 
 	AddNamedParameter("columns", Value::STRUCT(std::move(column_names)));
+	RemoveNamedParameterIfExists("names");
+	RemoveNamedParameterIfExists("types");
+	RemoveNamedParameterIfExists("dtypes");
 }
 
 string ReadCSVRelation::GetAlias() {

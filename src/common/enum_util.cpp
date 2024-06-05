@@ -1362,6 +1362,8 @@ const char* EnumUtil::ToChars<CopyOverwriteMode>(CopyOverwriteMode value) {
 		return "COPY_OVERWRITE";
 	case CopyOverwriteMode::COPY_OVERWRITE_OR_IGNORE:
 		return "COPY_OVERWRITE_OR_IGNORE";
+	case CopyOverwriteMode::COPY_APPEND:
+		return "COPY_APPEND";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -1377,6 +1379,9 @@ CopyOverwriteMode EnumUtil::FromString<CopyOverwriteMode>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "COPY_OVERWRITE_OR_IGNORE")) {
 		return CopyOverwriteMode::COPY_OVERWRITE_OR_IGNORE;
+	}
+	if (StringUtil::Equals(value, "COPY_APPEND")) {
+		return CopyOverwriteMode::COPY_APPEND;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

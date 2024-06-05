@@ -1,4 +1,4 @@
-# name: benchmark/micro/csv/null_padding.benchmark
+# name: benchmark/csv/null_padding.benchmark
 # description: Run CSV scan on file that needs null_padding
 # group: [csv]
 

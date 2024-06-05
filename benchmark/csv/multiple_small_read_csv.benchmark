@@ -1,4 +1,4 @@
-# name: benchmark/micro/csv/multiple_small_read_csv.benchmark
+# name: benchmark/csv/multiple_small_read_csv.benchmark
 # description: Run CSV reader on multiple small files
 # group: [csv]
 
