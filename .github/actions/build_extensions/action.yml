@@ -116,16 +116,22 @@ runs:
         ls -al
         pwd
 
-    - name: Fix for MSVC issue (see e.g. https://github.com/TileDB-Inc/TileDB/pull/4759)
+    - uses: ilammy/msvc-dev-cmd@v1.4.1
+      if: inputs.deploy_as == 'windows_amd64'
+
+    - name: Fix for MSVC issue, via detection of current installed toolchain
       shell: bash
       if: inputs.deploy_as == 'windows_amd64'
       env:
         OVERLAY_TRIPLET_SRC: ${{ github.workspace }}/vcpkg/triplets/community/x64-windows-static-md.cmake
         OVERLAY_TRIPLET_DST: ${{ github.workspace }}/overlay_triplets/x64-windows-static-md.cmake
       run: |
+        echo "int main() { return 0; }" > program.cpp
+        cl program.cpp > output
+        VERSION=$(grep Linker output | awk '{ print $6 }' | awk -F'.' '{ printf("%s.%s", $1, $2) }')
         mkdir overlay_triplets
         cp $OVERLAY_TRIPLET_SRC $OVERLAY_TRIPLET_DST
-        echo "set(VCPKG_PLATFORM_TOOLSET_VERSION "14.39")" >> $OVERLAY_TRIPLET_DST
+        echo "set(VCPKG_PLATFORM_TOOLSET_VERSION "$VERSION")" >> $OVERLAY_TRIPLET_DST
 
     - name: Set Openssl dir
       if: inputs.openssl_path != ''
