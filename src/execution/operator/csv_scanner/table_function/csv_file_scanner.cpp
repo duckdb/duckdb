@@ -26,7 +26,7 @@ bool CSVColumnSchema::Empty() const {
 struct TypeIdxPair {
 	TypeIdxPair(LogicalType type_p, idx_t idx_p) : type(std::move(type_p)), idx(idx_p) {
 	}
-	TypeIdxPair() {
+	TypeIdxPair() : idx {} {
 	}
 	LogicalType type;
 	idx_t idx;
@@ -98,6 +98,7 @@ bool CSVColumnSchema::SchemasMatch(string &error_message, vector<string> &names,
 			}
 		}
 	}
+
 	// Lets suggest some potential fixes
 	error << "Potential Fix: Since your schema has a mismatch, consider setting union_by_name=true.";
 	if (!match) {
@@ -216,6 +217,8 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 		return;
 	}
 	// Sniff it!
+	names = bind_data.csv_names;
+	types = bind_data.csv_types;
 	vector<idx_t> projection_order;
 	if (options.auto_detect && bind_data.files.size() > 1) {
 		if (file_schema.Empty()) {
@@ -231,6 +234,8 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 				if (!file_schema.SchemasMatch(error, result.names, result.return_types, file_path, projection_order)) {
 					throw InvalidInputException(error);
 				}
+				names = result.names;
+				types = result.return_types;
 			}
 		}
 	}
@@ -243,16 +248,16 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 		options.dialect_options.state_machine_options.new_line = CSVSniffer::DetectNewLineDelimiter(*buffer_manager);
 	}
 
-	names = bind_data.csv_names;
-	types = bind_data.csv_types;
 	state_machine = make_shared_ptr<CSVStateMachine>(
 	    state_machine_cache.Get(options.dialect_options.state_machine_options), options);
-
-	multi_file_reader->InitializeReader(*this, options.file_options, bind_data.reader_bind, bind_data.return_types,
-	                                    bind_data.return_names, column_ids, nullptr, file_path, context, nullptr);
-	if (!projection_order.empty()) {
-		reader_data.column_mapping = projection_order;
-	}
+	// if (projection_order.empty()) {
+	// 	projection_order = column_ids;
+	// }
+	multi_file_reader->InitializeReader(*this, options.file_options, bind_data.reader_bind, types, bind_data.csv_names,
+	                                    column_ids, nullptr, file_path, context, nullptr);
+	// if (!projection_order.empty()) {
+	// 	reader_data.column_mapping = projection_order;
+	// }
 	InitializeFileNamesTypes();
 	SetStart();
 }
@@ -307,19 +312,25 @@ void CSVFileScan::InitializeFileNamesTypes() {
 	}
 
 	// We need to be sure that our types are also following the cast_map
-	for (idx_t i = 0; i < reader_data.column_ids.size(); i++) {
-		if (reader_data.cast_map.find(reader_data.column_ids[i]) != reader_data.cast_map.end()) {
-			file_types[i] = reader_data.cast_map[reader_data.column_ids[i]];
+	if (!reader_data.cast_map.empty()) {
+		for (idx_t i = 0; i < reader_data.column_ids.size(); i++) {
+			if (reader_data.cast_map.find(reader_data.column_ids[i]) != reader_data.cast_map.end()) {
+				file_types[i] = reader_data.cast_map[reader_data.column_ids[i]];
+			}
 		}
 	}
 
 	// We sort the types on the order of the parsed chunk
 	std::sort(projection_ids.begin(), projection_ids.end());
-	vector<LogicalType> sorted_types;
-	for (idx_t i = 0; i < projection_ids.size(); ++i) {
-		sorted_types.push_back(file_types[projection_ids[i].second]);
+
+	// If we are doing a union by name we need to replace the file type
+	if (options.file_options.AnySet()) {
+		vector<LogicalType> sorted_types;
+		for (idx_t i = 0; i < projection_ids.size(); ++i) {
+			sorted_types.push_back(file_types[projection_ids[i].second]);
+		}
+		file_types = sorted_types;
 	}
-	file_types = sorted_types;
 }
 
 const string &CSVFileScan::GetFileName() {
