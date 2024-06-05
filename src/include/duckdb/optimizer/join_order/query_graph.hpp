@@ -23,7 +23,7 @@
 
 namespace duckdb {
 
-struct FilterInfo;
+class FilterInfo;
 
 struct NeighborInfo {
 	explicit NeighborInfo(optional_ptr<JoinRelationSet> neighbor) : neighbor(neighbor) {

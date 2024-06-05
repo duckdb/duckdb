@@ -42,8 +42,8 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 		auto &cte = *PGPointerCast<duckdb_libpgquery::PGCommonTableExpr>(cte_ele->data.ptr_value);
 		if (cte.aliascolnames) {
 			for (auto node = cte.aliascolnames->head; node != nullptr; node = node->next) {
-				info->aliases.emplace_back(
-				    reinterpret_cast<duckdb_libpgquery::PGValue *>(node->data.ptr_value)->val.str);
+				auto value = PGPointerCast<duckdb_libpgquery::PGValue>(node->data.ptr_value);
+				info->aliases.emplace_back(value->val.str);
 			}
 		}
 		// lets throw some errors on unsupported features early

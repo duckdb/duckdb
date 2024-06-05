@@ -48300,4 +48300,3 @@ SELECT c6*856, x5
    AND c5 in (820,44,696,824,668,723,598)
 ----
 28 values hashing to 8ceb8232c1e6c7b7f5d87ea5c54e08d0
-

@@ -62,6 +62,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	optional_idx file_size_bytes;
 	vector<idx_t> partition_cols;
 	bool seen_overwrite_mode = false;
+	bool seen_filepattern = false;
 
 	CopyFunctionBindInput bind_input(*stmt.info);
 
@@ -74,9 +75,9 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 		if (loption == "use_tmp_file") {
 			use_tmp_file = GetBooleanArg(context, option.second);
 			user_set_use_tmp_file = true;
-		} else if (loption == "overwrite_or_ignore" || loption == "overwrite") {
+		} else if (loption == "overwrite_or_ignore" || loption == "overwrite" || loption == "append") {
 			if (seen_overwrite_mode) {
-				throw BinderException("Can only set one of OVERWRITE_OR_IGNORE or OVERWRITE");
+				throw BinderException("Can only set one of OVERWRITE_OR_IGNORE, OVERWRITE or APPEND");
 			}
 			seen_overwrite_mode = true;
 
@@ -86,6 +87,11 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 					overwrite_mode = CopyOverwriteMode::COPY_OVERWRITE_OR_IGNORE;
 				} else if (loption == "overwrite") {
 					overwrite_mode = CopyOverwriteMode::COPY_OVERWRITE;
+				} else if (loption == "append") {
+					if (!seen_filepattern) {
+						filename_pattern.SetFilenamePattern("{uuid}");
+					}
+					overwrite_mode = CopyOverwriteMode::COPY_APPEND;
 				}
 			}
 		} else if (loption == "filename_pattern") {
@@ -94,6 +100,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 			}
 			filename_pattern.SetFilenamePattern(
 			    option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>());
+			seen_filepattern = true;
 		} else if (loption == "file_extension") {
 			if (option.second.empty()) {
 				throw IOException("FILE_EXTENSION cannot be empty");
@@ -134,6 +141,9 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 			}
 			stmt.info->options[option.first] = option.second;
 		}
+	}
+	if (overwrite_mode == CopyOverwriteMode::COPY_APPEND && !filename_pattern.HasUUID()) {
+		throw BinderException("APPEND mode requires a {uuid} label in filename_pattern");
 	}
 	if (user_set_use_tmp_file && per_thread_output) {
 		throw NotImplementedException("Can't combine USE_TMP_FILE and PER_THREAD_OUTPUT for COPY");

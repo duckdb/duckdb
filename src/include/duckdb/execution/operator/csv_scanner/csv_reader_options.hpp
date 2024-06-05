@@ -136,7 +136,8 @@ struct CSVReaderOptions {
 	string GetEscape() const;
 	void SetEscape(const string &escape);
 
-	int64_t GetSkipRows() const;
+	idx_t GetSkipRows() const;
+
 	void SetSkipRows(int64_t rows);
 
 	string GetQuote() const;
