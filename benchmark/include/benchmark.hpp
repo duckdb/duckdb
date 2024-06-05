@@ -29,8 +29,6 @@ struct BenchmarkState {
 //! new benchmarks
 class Benchmark {
 	constexpr static size_t DEFAULT_NRUNS = 5;
-	constexpr static size_t DEFAULT_TIMEOUT = 30;
-
 	Benchmark(Benchmark &) = delete;
 
 public:
@@ -87,8 +85,8 @@ public:
 		return DEFAULT_NRUNS;
 	}
 	//! The timeout for this benchmark (in seconds)
-	virtual size_t Timeout() {
-		return DEFAULT_TIMEOUT;
+	virtual optional_idx Timeout(const BenchmarkConfiguration &config) {
+		return config.timeout_duration;
 	}
 };
 
