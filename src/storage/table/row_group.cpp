@@ -463,6 +463,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 		if (!CheckZonemapSegments(state)) {
 			continue;
 		}
+
 		// second, scan the version chunk manager to figure out which tuples to load for this transaction
 		idx_t count;
 		SelectionVector valid_sel(STANDARD_VECTOR_SIZE);
@@ -472,7 +473,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 				// nothing to scan for this vector, skip the entire vector
 				NextVector(state);
 				continue;
-			}
+				}
 		} else if (TYPE == TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED) {
 			count = state.row_group->GetCommittedSelVector(transaction.start_time, transaction.transaction_id,
 			                                               state.vector_index, valid_sel, max_count);
@@ -484,8 +485,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 		} else {
 			count = max_count;
 		}
-		// FIXME - if we are scanning an on-disk OR remote file only (remote file only most likely)
-#ifdef DUCKDB_ALTERNATIVE_VERIFY
+		// FIXME - if we are scanning a remote file only
 		PrefetchState prefetch_state;
 		for (idx_t i = 0; i < column_ids.size(); i++) {
 			const auto &column = column_ids[i];
@@ -493,7 +493,9 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 				GetColumn(column).InitializePrefetch(prefetch_state, state.column_scans[i], max_count);
 			}
 		}
-#endif
+		auto &buffer_manager = block_manager.buffer_manager;
+		buffer_manager.Prefetch(prefetch_state.blocks);
+
 		if (count == max_count && !table_filters) {
 			// scan all vectors completely: full scan without deletions or table filters
 			for (idx_t i = 0; i < column_ids.size(); i++) {

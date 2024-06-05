@@ -141,8 +141,7 @@ bool CollectionScanState::ScanCommitted(DataChunk &result, TableScanType type) {
 PrefetchState::~PrefetchState() {}
 
 void PrefetchState::AddBlock(shared_ptr<BlockHandle> block) {
-	auto block_id = block->BlockId();
-	blocks.insert(make_pair(block_id, std::move(block)));
+	blocks.push_back(std::move(block));
 }
 
 } // namespace duckdb

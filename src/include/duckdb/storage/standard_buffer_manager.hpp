@@ -65,6 +65,7 @@ public:
 	void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) final;
 
 	BufferHandle Pin(shared_ptr<BlockHandle> &handle) final;
+	void Prefetch(vector<shared_ptr<BlockHandle>> &handles) final;
 	void Unpin(shared_ptr<BlockHandle> &handle) final;
 
 	//! Set a new memory limit to the buffer manager, throws an exception if the new limit is too low and not enough
@@ -142,6 +143,7 @@ protected:
 	//! overwrites the data within with garbage. Any readers that do not hold the pin will notice
 	void VerifyZeroReaders(shared_ptr<BlockHandle> &handle);
 
+	void BatchRead(vector<shared_ptr<BlockHandle>> &handles, const map<block_id_t, idx_t> &load_map, block_id_t first_block, block_id_t last_block);
 protected:
 	// These are stored here because temp_directory creation is lazy
 	// so we need to store information related to the temporary directory before it's created

@@ -204,7 +204,7 @@ struct PrefetchState {
 
 	void AddBlock(shared_ptr<BlockHandle> block);
 
-	map<block_id_t, shared_ptr<BlockHandle>> blocks;
+	vector<shared_ptr<BlockHandle>> blocks;
 };
 
 class CreateIndexScanState : public TableScanState {

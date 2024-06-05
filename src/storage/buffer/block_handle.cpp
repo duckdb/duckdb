@@ -70,6 +70,15 @@ unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuff
 	}
 }
 
+void BlockHandle::LoadFromBuffer(data_ptr_t data, unique_ptr<FileBuffer> reusable_buffer) {
+	D_ASSERT(state != BlockState::BLOCK_LOADED);
+	// copy over the data into the block from the file buffer
+	auto block = AllocateBlock(block_manager, std::move(reusable_buffer), block_id);
+	memcpy(block->InternalBuffer(), data, block->AllocSize());
+	buffer = std::move(block);
+	state = BlockState::BLOCK_LOADED;
+}
+
 BufferHandle BlockHandle::Load(shared_ptr<BlockHandle> &handle, unique_ptr<FileBuffer> reusable_buffer) {
 	if (handle->state == BlockState::BLOCK_LOADED) {
 		// already loaded

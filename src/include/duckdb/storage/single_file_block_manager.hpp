@@ -63,6 +63,8 @@ public:
 	idx_t GetMetaBlock() override;
 	//! Read the content of the block from disk
 	void Read(Block &block) override;
+	//! Read the content of a range of blocks into a buffer
+	void ReadBlocks(FileBuffer &buffer, block_id_t start_block, idx_t block_count) override;
 	//! Write the given block to disk
 	void Write(FileBuffer &block, block_id_t block_id) override;
 	//! Write the header to disk, this is the final step of the checkpointing process
@@ -84,6 +86,8 @@ private:
 
 	void ReadAndChecksum(FileBuffer &handle, uint64_t location) const;
 	void ChecksumAndWrite(FileBuffer &handle, uint64_t location) const;
+
+	idx_t GetBlockLocation(block_id_t block_id);
 
 	//! Return the blocks to which we will write the free list and modified blocks
 	vector<MetadataHandle> GetFreeListBlocks();
