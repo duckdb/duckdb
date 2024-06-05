@@ -231,7 +231,7 @@ BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 			    NumericCast<int64_t>(handle->buffer->AllocSize()) - NumericCast<int64_t>(handle->memory_usage);
 			if (delta) {
 				D_ASSERT(delta < 0);
-				handle->memory_usage += NumericCast<idx_t>(delta);
+				handle->memory_usage += static_cast<idx_t>(delta);
 				handle->memory_charge.Resize(handle->memory_usage);
 			}
 			D_ASSERT(handle->memory_usage == handle->buffer->AllocSize());
