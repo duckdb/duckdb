@@ -1,14 +1,16 @@
 #include "duckdb/execution/operator/persistent/physical_batch_copy_to_file.hpp"
-#include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
-#include "duckdb/parallel/base_pipeline_event.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/types/batched_data_collection.hpp"
+
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/queue.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/common/types/batched_data_collection.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/operator/persistent/batch_memory_manager.hpp"
 #include "duckdb/execution/operator/persistent/batch_task_manager.hpp"
+#include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
+#include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/executor_task.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+
 #include <algorithm>
 
 namespace duckdb {
@@ -605,7 +607,20 @@ SourceResultType PhysicalBatchCopyToFile::GetData(ExecutionContext &context, Dat
 	auto &g = sink_state->Cast<FixedBatchCopyGlobalState>();
 
 	chunk.SetCardinality(1);
-	chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
+	switch (return_type) {
+	case CopyFunctionReturnType::CHANGED_ROWS:
+		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
+		break;
+	case CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST: {
+		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
+		auto fp = use_tmp_file ? PhysicalCopyToFile::GetNonTmpFile(context.client, file_path) : file_path;
+		chunk.SetValue(1, 0, Value::LIST(LogicalType::VARCHAR, {fp}));
+		break;
+	}
+	default:
+		throw NotImplementedException("Unknown CopyFunctionReturnType");
+	}
+
 	return SourceResultType::FINISHED;
 }
 
