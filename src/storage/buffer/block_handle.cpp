@@ -70,7 +70,8 @@ unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuff
 	}
 }
 
-BufferHandle BlockHandle::LoadFromBuffer(shared_ptr<BlockHandle> &handle, data_ptr_t data, unique_ptr<FileBuffer> reusable_buffer) {
+BufferHandle BlockHandle::LoadFromBuffer(shared_ptr<BlockHandle> &handle, data_ptr_t data,
+                                         unique_ptr<FileBuffer> reusable_buffer) {
 	D_ASSERT(handle->state != BlockState::BLOCK_LOADED);
 	// copy over the data into the block from the file buffer
 	auto block = AllocateBlock(handle->block_manager, std::move(reusable_buffer), handle->block_id);

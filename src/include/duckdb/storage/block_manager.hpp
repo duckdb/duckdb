@@ -69,6 +69,10 @@ public:
 	virtual idx_t TotalBlocks() = 0;
 	//! Returns the number of free blocks
 	virtual idx_t FreeBlocks() = 0;
+	//! Whether or not the attached database is a remote file (e.g. attached over s3/https)
+	virtual bool IsRemote() {
+		return false;
+	}
 
 	//! Truncate the underlying database file after a checkpoint
 	virtual void Truncate();

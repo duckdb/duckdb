@@ -76,6 +76,8 @@ public:
 	idx_t TotalBlocks() override;
 	//! Returns the number of free blocks
 	idx_t FreeBlocks() override;
+	//! Whether or not the attached database is a remote file
+	bool IsRemote() override;
 
 private:
 	//! Loads the free list of the file.

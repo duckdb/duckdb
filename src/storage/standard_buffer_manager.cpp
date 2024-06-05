@@ -201,7 +201,8 @@ void StandardBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t bl
 	handle->ResizeBuffer(block_size, memory_delta);
 }
 
-void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, const map<block_id_t, idx_t> &load_map, block_id_t first_block, block_id_t last_block) {
+void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, const map<block_id_t, idx_t> &load_map,
+                                      block_id_t first_block, block_id_t last_block) {
 	auto &block_manager = handles[0]->block_manager;
 	idx_t block_count = NumericCast<idx_t>(last_block - first_block + 1);
 	if (block_count == 1) {
@@ -216,7 +217,7 @@ void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, 
 	block_manager.ReadBlocks(intermediate_buffer.GetFileBuffer(), first_block, block_count);
 
 	// the blocks are read - now we need to assign them to the individual blocks
-	for(idx_t block_idx = 0; block_idx < block_count; block_idx++) {
+	for (idx_t block_idx = 0; block_idx < block_count; block_idx++) {
 		block_id_t block_id = first_block + NumericCast<block_id_t>(block_idx);
 		auto entry = load_map.find(block_id);
 		D_ASSERT(entry != load_map.end()); // if we allow gaps we might not return true here
@@ -239,7 +240,8 @@ void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, 
 				reservation.Resize(0);
 				continue;
 			}
-			auto block_ptr = intermediate_buffer.GetFileBuffer().InternalBuffer() + block_idx * Storage::BLOCK_ALLOC_SIZE;
+			auto block_ptr =
+			    intermediate_buffer.GetFileBuffer().InternalBuffer() + block_idx * Storage::BLOCK_ALLOC_SIZE;
 			buf = BlockHandle::LoadFromBuffer(handle, block_ptr, std::move(reusable_buffer));
 			handle->readers = 1;
 			handle->memory_charge = std::move(reservation);
@@ -250,7 +252,7 @@ void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, 
 void StandardBufferManager::Prefetch(vector<shared_ptr<BlockHandle>> &handles) {
 	// figure out which set of blocks we should load
 	map<block_id_t, idx_t> to_be_loaded;
-	for(idx_t block_idx = 0; block_idx < handles.size(); block_idx++) {
+	for (idx_t block_idx = 0; block_idx < handles.size(); block_idx++) {
 		auto &handle = handles[block_idx];
 		lock_guard<mutex> lock(handle->lock);
 		if (handle->state != BlockState::BLOCK_LOADED) {
@@ -265,7 +267,7 @@ void StandardBufferManager::Prefetch(vector<shared_ptr<BlockHandle>> &handles) {
 	// iterate over the blocks and perform bulk reads
 	block_id_t first_block = -1;
 	block_id_t previous_block_id = -1;
-	for(auto &entry : to_be_loaded) {
+	for (auto &entry : to_be_loaded) {
 		if (previous_block_id < 0) {
 			// this the first block we are seeing
 			first_block = entry.first;

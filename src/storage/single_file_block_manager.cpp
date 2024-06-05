@@ -420,6 +420,10 @@ idx_t SingleFileBlockManager::FreeBlocks() {
 	return free_list.size();
 }
 
+bool SingleFileBlockManager::IsRemote() {
+	return !handle->OnDiskFile();
+}
+
 unique_ptr<Block> SingleFileBlockManager::ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) {
 	D_ASSERT(source_buffer.AllocSize() == Storage::BLOCK_ALLOC_SIZE);
 	return make_uniq<Block>(source_buffer, block_id);
@@ -456,16 +460,17 @@ void SingleFileBlockManager::ReadBlocks(FileBuffer &buffer, block_id_t start_blo
 
 	// for each of the blocks - verify the checksum
 	auto ptr = buffer.InternalBuffer();
-	for(idx_t i = 0; i < block_count; i++) {
-	// compute the checksum
+	for (idx_t i = 0; i < block_count; i++) {
+		// compute the checksum
 		auto start_ptr = ptr + i * Storage::BLOCK_ALLOC_SIZE;
 		auto stored_checksum = Load<uint64_t>(start_ptr);
 		uint64_t computed_checksum = Checksum(start_ptr + Storage::BLOCK_HEADER_SIZE, Storage::BLOCK_SIZE);
 		// verify the checksum
 		if (stored_checksum != computed_checksum) {
-			throw IOException("Corrupt database file: computed checksum %llu does not match stored checksum %llu in block "
-			                  "at location %llu",
-			                  computed_checksum, stored_checksum, location + i * Storage::BLOCK_ALLOC_SIZE);
+			throw IOException(
+			    "Corrupt database file: computed checksum %llu does not match stored checksum %llu in block "
+			    "at location %llu",
+			    computed_checksum, stored_checksum, location + i * Storage::BLOCK_ALLOC_SIZE);
 		}
 	}
 }

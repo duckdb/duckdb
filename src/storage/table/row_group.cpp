@@ -485,17 +485,23 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 		} else {
 			count = max_count;
 		}
-		// FIXME - if we are scanning an on-disk OR remote file only (remote file only most likely)
-		PrefetchState prefetch_state;
-		for (idx_t i = 0; i < column_ids.size(); i++) {
-			const auto &column = column_ids[i];
-			if (column != COLUMN_IDENTIFIER_ROW_ID) {
-				GetColumn(column).InitializePrefetch(prefetch_state, state.column_scans[i], max_count);
-			}
-		}
+#ifndef DUCKDB_ALTERNATIVE_VERIFY
 		auto &block_manager = GetBlockManager();
-		auto &buffer_manager = block_manager.buffer_manager;
-		buffer_manager.Prefetch(prefetch_state.blocks);
+		// in regular operation we only prefetch from remote file systems
+		// when alternative verify is set, we always prefetch for testing purposes
+		if (block_manager.IsRemote())
+#endif
+		{
+			PrefetchState prefetch_state;
+			for (idx_t i = 0; i < column_ids.size(); i++) {
+				const auto &column = column_ids[i];
+				if (column != COLUMN_IDENTIFIER_ROW_ID) {
+					GetColumn(column).InitializePrefetch(prefetch_state, state.column_scans[i], max_count);
+				}
+			}
+			auto &buffer_manager = block_manager.buffer_manager;
+			buffer_manager.Prefetch(prefetch_state.blocks);
+		}
 
 		if (count == max_count && !table_filters) {
 			// scan all vectors completely: full scan without deletions or table filters

@@ -68,7 +68,7 @@ void UncompressedStringInitPrefetch(ColumnSegment &segment, PrefetchState &prefe
 	if (segment_state) {
 		auto &state = segment_state->Cast<UncompressedStringSegmentState>();
 		auto &block_manager = segment.GetBlockManager();
-		for(auto &block_id : state.on_disk_blocks) {
+		for (auto &block_id : state.on_disk_blocks) {
 			auto block_handle = state.GetHandle(block_manager, block_id);
 			prefetch_state.AddBlock(block_handle);
 		}

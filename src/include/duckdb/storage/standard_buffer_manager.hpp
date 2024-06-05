@@ -143,7 +143,9 @@ protected:
 	//! overwrites the data within with garbage. Any readers that do not hold the pin will notice
 	void VerifyZeroReaders(shared_ptr<BlockHandle> &handle);
 
-	void BatchRead(vector<shared_ptr<BlockHandle>> &handles, const map<block_id_t, idx_t> &load_map, block_id_t first_block, block_id_t last_block);
+	void BatchRead(vector<shared_ptr<BlockHandle>> &handles, const map<block_id_t, idx_t> &load_map,
+	               block_id_t first_block, block_id_t last_block);
+
 protected:
 	// These are stored here because temp_directory creation is lazy
 	// so we need to store information related to the temporary directory before it's created
