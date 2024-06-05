@@ -616,6 +616,22 @@ void S3FileSystem::GetQueryParam(const string &key, string &param, duckdb_httpli
 	}
 }
 
+void S3FileSystem::GetBoolQueryParam(const string &key, bool &param, duckdb_httplib_openssl::Params &query_params) {
+	auto found_param = query_params.find(key);
+	if (found_param != query_params.end()) {
+		if (found_param->second == "true") {
+			param = true;
+		} else if (found_param->second == "false") {
+			param = false;
+		} else {
+			std::string errorMessage = std::string("Incorrect setting found for ") + key +
+			                           std::string(", allowed values are: 'true' or 'false'");
+			throw IOException(errorMessage);
+		}
+		query_params.erase(found_param);
+	}
+}
+
 void S3FileSystem::ReadQueryParams(const string &url_query_param, S3AuthParams &params) {
 	if (url_query_param.empty()) {
 		return;
@@ -630,20 +646,12 @@ void S3FileSystem::ReadQueryParams(const string &url_query_param, S3AuthParams &
 	GetQueryParam("s3_session_token", params.session_token, query_params);
 	GetQueryParam("s3_endpoint", params.endpoint, query_params);
 	GetQueryParam("s3_url_style", params.url_style, query_params);
-	auto found_param = query_params.find("s3_use_ssl");
-	if (found_param != query_params.end()) {
-		if (found_param->second == "true") {
-			params.use_ssl = true;
-		} else if (found_param->second == "false") {
-			params.use_ssl = false;
-		} else {
-			throw IOException("Incorrect setting found for s3_use_ssl, allowed values are: 'true' or 'false'");
-		}
-		query_params.erase(found_param);
-	}
+	GetBoolQueryParam("s3_use_ssl", params.use_ssl, query_params);
+	GetBoolQueryParam("requester_pays", params.requester_pays, query_params);
 	if (!query_params.empty()) {
 		throw IOException("Invalid query parameters found. Supported parameters are:\n's3_region', 's3_access_key_id', "
-		                  "'s3_secret_access_key', 's3_session_token',\n's3_endpoint', 's3_url_style', 's3_use_ssl'");
+		                  "'s3_secret_access_key', 's3_session_token',\n's3_endpoint', 's3_url_style', 's3_use_ssl', "
+		                  "'requester_pays'");
 	}
 }
 

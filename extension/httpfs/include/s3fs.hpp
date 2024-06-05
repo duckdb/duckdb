@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/mutex.hpp"
@@ -9,7 +10,6 @@
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/common/case_insensitive_map.hpp"
 #include "httpfs.hpp"
 
 #define CPPHTTPLIB_OPENSSL_SUPPORT
@@ -245,6 +245,7 @@ protected:
 
 	// helper for ReadQueryParams
 	void GetQueryParam(const string &key, string &param, CPPHTTPLIB_NAMESPACE::Params &query_params);
+	void GetBoolQueryParam(const string &key, bool &param, CPPHTTPLIB_NAMESPACE::Params &query_params);
 };
 
 // Helper class to do s3 ListObjectV2 api call https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
