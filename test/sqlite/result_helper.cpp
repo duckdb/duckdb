@@ -531,7 +531,7 @@ bool TestResultHelper::MatchesRegex(SQLLogicTestLogger &logger, MaterializedQuer
 	}
 	auto resString = result.ToString();
 	bool regex_matches = RE2::FullMatch(result.ToString(), re);
-	if (regex_matches == want_match) {
+	if (regex_matches && regex_matches == want_match) {
 		return true;
 	}
 	return false;
