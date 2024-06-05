@@ -19,7 +19,6 @@ LOAD 'Makefile';
 ----
 <REGEX>:IO Error: Extension.*not found.*
 
-# should not expect anything
 statement error
 LOAD NULL;
 ----
@@ -54,12 +53,12 @@ QUACK
 statement error
 QUAC
 ----
-<REGEX>:Parser Error: Did you.*
+<REGEX>:Parser Error: Did you mean.*
 
 statement error
 QUACK NOT QUACK
 ----
-<REGEX>:Parser Error: This is not.*
+<REGEX>:Parser Error: This is not a quack.*
 
 query I
 SELECT contains(loaded_extensions(), 'loadable_extension_demo')
