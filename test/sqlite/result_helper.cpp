@@ -280,7 +280,11 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 		}
 		if (result.HasError() && !statement.expected_error.empty()) {
 			if (!StringUtil::Contains(result.GetError(), statement.expected_error)) {
-				bool success = MatchesRegex(logger, result, statement.expected_error);
+				bool success = false;
+				if (StringUtil::StartsWith(statement.expected_error, "<REGEX>:") ||
+				    StringUtil::StartsWith(statement.expected_error, "<!REGEX>:")) {
+					success = MatchesRegex(logger, result, statement.expected_error);
+				}
 				if (!success) {
 					logger.ExpectedErrorMismatch(statement.expected_error, result);
 					return false;
@@ -519,19 +523,7 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 
 bool TestResultHelper::MatchesRegex(SQLLogicTestLogger &logger, MaterializedQueryResult &result, string rvalue_str) {
 	bool want_match = StringUtil::StartsWith(rvalue_str, "<REGEX>:");
-	bool want_no_match =  StringUtil::StartsWith(rvalue_str, "<!REGEX>:");
-	string regex_str;
-	if (want_match) {
-		regex_str = StringUtil::Replace(rvalue_str, "<REGEX>:", "");
-	}
-	if (want_no_match) {
-		regex_str = StringUtil::Replace(rvalue_str, "<!REGEX>:", "");
-	}
-
-	if (!want_match && !want_no_match) {
-		// There is no regex in the rvalue_str, so regex doesn't match
-		return false;
-	}
+	string regex_str = StringUtil::Replace(StringUtil::Replace(rvalue_str, "<REGEX>:", ""), "<!REGEX>:", "");
 
 	RE2::Options options;
 	options.set_dot_nl(true);
@@ -546,7 +538,7 @@ bool TestResultHelper::MatchesRegex(SQLLogicTestLogger &logger, MaterializedQuer
 	}
 	auto resString = result.ToString();
 	bool regex_matches = RE2::FullMatch(result.ToString(), re);
-	if ((want_match && regex_matches) || (want_no_match && !regex_matches)) {
+	if ((want_match && regex_matches) || (!want_match && !regex_matches)) {
 		return true;
 	}
 	return false;
