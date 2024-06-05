@@ -63,7 +63,7 @@ bool CanWeCastIt(LogicalTypeId source, LogicalTypeId destination) {
 }
 
 bool CSVColumnSchema::SchemasMatch(string &error_message, vector<string> &names, vector<LogicalType> &types,
-                                   const string &cur_file_path, vector<idx_t> &projection_order) {
+                                   const string &cur_file_path) {
 	D_ASSERT(names.size() == types.size() && !names.empty());
 	bool match = true;
 	unordered_map<string, TypeIdxPair> current_schema;
@@ -92,9 +92,6 @@ bool CSVColumnSchema::SchemasMatch(string &error_message, vector<string> &names,
 				      << "\" is expected to have type: " << column.type.ToString();
 				error << " But has type: " << current_schema[column.name].type.ToString() << "\n";
 				match = false;
-			} else {
-				// We have a good match
-				projection_order.push_back(current_schema[column.name].idx);
 			}
 		}
 	}
@@ -219,7 +216,6 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 	// Sniff it!
 	names = bind_data.csv_names;
 	types = bind_data.csv_types;
-	vector<idx_t> projection_order;
 	if (options.auto_detect && bind_data.files.size() > 1) {
 		if (file_schema.Empty()) {
 			CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
@@ -231,7 +227,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 			if (!options.file_options.AnySet()) {
 				// Union By name has its own mystical rules
 				string error;
-				if (!file_schema.SchemasMatch(error, result.names, result.return_types, file_path, projection_order)) {
+				if (!file_schema.SchemasMatch(error, result.names, result.return_types, file_path)) {
 					throw InvalidInputException(error);
 				}
 				names = result.names;
@@ -243,21 +239,13 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 		// We need to define the number of columns, if the sniffer is not running this must be in the sql_type_list
 		options.dialect_options.num_cols = options.sql_type_list.size();
 	}
-
 	if (options.dialect_options.state_machine_options.new_line == NewLineIdentifier::NOT_SET) {
 		options.dialect_options.state_machine_options.new_line = CSVSniffer::DetectNewLineDelimiter(*buffer_manager);
 	}
-
 	state_machine = make_shared_ptr<CSVStateMachine>(
 	    state_machine_cache.Get(options.dialect_options.state_machine_options), options);
-	// if (projection_order.empty()) {
-	// 	projection_order = column_ids;
-	// }
-	multi_file_reader->InitializeReader(*this, options.file_options, bind_data.reader_bind, types, bind_data.csv_names,
-	                                    column_ids, nullptr, file_path, context, nullptr);
-	// if (!projection_order.empty()) {
-	// 	reader_data.column_mapping = projection_order;
-	// }
+	multi_file_reader->InitializeReader(*this, options.file_options, bind_data.reader_bind, bind_data.return_types,
+	                                    bind_data.return_names, column_ids, nullptr, file_path, context, nullptr);
 	InitializeFileNamesTypes();
 	SetStart();
 }
@@ -322,15 +310,11 @@ void CSVFileScan::InitializeFileNamesTypes() {
 
 	// We sort the types on the order of the parsed chunk
 	std::sort(projection_ids.begin(), projection_ids.end());
-
-	// If we are doing a union by name we need to replace the file type
-	if (options.file_options.AnySet()) {
-		vector<LogicalType> sorted_types;
-		for (idx_t i = 0; i < projection_ids.size(); ++i) {
-			sorted_types.push_back(file_types[projection_ids[i].second]);
-		}
-		file_types = sorted_types;
+	vector<LogicalType> sorted_types;
+	for (idx_t i = 0; i < projection_ids.size(); ++i) {
+		sorted_types.push_back(file_types[projection_ids[i].second]);
 	}
+	file_types = sorted_types;
 }
 
 const string &CSVFileScan::GetFileName() {
