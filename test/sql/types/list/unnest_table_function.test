@@ -70,14 +70,13 @@ SELECT i FROM UNNEST([]::INT[]) AS tbl(i);
 ----
 
 # unnest from a subquery
+# postgres returns an error here
 query I
-SELECT * FROM UNNEST((SELECT [1,2,3] UNION ALL SELECT [4,5]));
+SELECT * FROM UNNEST((SELECT ARRAY[1,2,3] UNION ALL SELECT ARRAY[1,2,3]));
 ----
 1
 2
 3
-4
-5
 
 statement ok
 CREATE TABLE lists AS SELECT [1,2,3] l UNION ALL SELECT [4,5] UNION ALL SELECT [] UNION ALL SELECT [NULL] UNION ALL SELECT [7, 8];
