@@ -8,6 +8,8 @@
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -15,8 +17,6 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
 #endif
 
 namespace duckdb {
@@ -216,6 +216,11 @@ CopyTypeSupport ParquetWriter::TypeIsSupported(const LogicalType &type) {
 
 void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
                                         duckdb_parquet::format::SchemaElement &schema_ele) {
+	if (duckdb_type.IsJSONType()) {
+		schema_ele.converted_type = ConvertedType::JSON;
+		schema_ele.__isset.converted_type = true;
+		return;
+	}
 	switch (duckdb_type.id()) {
 	case LogicalTypeId::TINYINT:
 		schema_ele.converted_type = ConvertedType::INT_8;

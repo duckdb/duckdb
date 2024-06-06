@@ -81,6 +81,7 @@
 #include "duckdb/execution/operator/csv_scanner/quote_rules.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/function/aggregate_state.hpp"
+#include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/function/macro_function.hpp"
 #include "duckdb/function/scalar/compressed_materialization_functions.hpp"
@@ -1349,6 +1350,29 @@ ConstraintType EnumUtil::FromString<ConstraintType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "FOREIGN_KEY")) {
 		return ConstraintType::FOREIGN_KEY;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<CopyFunctionReturnType>(CopyFunctionReturnType value) {
+	switch(value) {
+	case CopyFunctionReturnType::CHANGED_ROWS:
+		return "CHANGED_ROWS";
+	case CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST:
+		return "CHANGED_ROWS_AND_FILE_LIST";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+CopyFunctionReturnType EnumUtil::FromString<CopyFunctionReturnType>(const char *value) {
+	if (StringUtil::Equals(value, "CHANGED_ROWS")) {
+		return CopyFunctionReturnType::CHANGED_ROWS;
+	}
+	if (StringUtil::Equals(value, "CHANGED_ROWS_AND_FILE_LIST")) {
+		return CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
