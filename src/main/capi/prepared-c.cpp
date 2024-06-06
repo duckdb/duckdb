@@ -338,7 +338,11 @@ duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statemen
 		return DuckDBError;
 	}
 
-	auto result = wrapper->statement->Execute(wrapper->values, false);
+	try {
+		auto result = wrapper->statement->Execute(wrapper->values, false);
+	} catch (...) {
+		return DuckDBError;
+	}
 	return DuckDBTranslateResult(std::move(result), out_result);
 }
 
