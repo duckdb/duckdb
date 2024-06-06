@@ -65,25 +65,13 @@ void BatchedBufferedData::UnblockSinks() {
 	}
 }
 
-void BatchedBufferedData::UpdateMinBatchIndex(idx_t min_batch_index) {
-	lock_guard<mutex> lock(glock);
-
-	auto old_min_batch = min_batch.load();
-	auto new_min_batch = MaxValue(old_min_batch, min_batch_index);
-	if (new_min_batch == min_batch) {
-		// No change, early out
-		return;
-	}
-	min_batch = new_min_batch;
+void BatchedBufferedData::MoveCompletedBatches() {
 
 	stack<idx_t> to_remove;
 	for (auto &it : buffer) {
 		auto batch_index = it.first;
 		auto &in_progress_batch = it.second;
 		if (batch_index > min_batch) {
-			break;
-		}
-		if (!in_progress_batch.completed) {
 			break;
 		}
 		D_ASSERT(in_progress_batch.completed || batch_index == min_batch.load());
@@ -105,13 +93,13 @@ void BatchedBufferedData::UpdateMinBatchIndex(idx_t min_batch_index) {
 		}
 		// Verification to make sure we're not breaking the order by moving batches before the previous ones have
 		// finished
-		if (lowest_moved_batch >= batch_index) {
+		if (lowest_moved_batch > batch_index) {
 			throw InternalException("Lowest moved batch is %d, attempted to move %d afterwards\nAttempted to move %d "
-			                        "chunks, of %d bytes in total\nmin_batch is %d, old min_batch was %d",
+			                        "chunks, of %d bytes in total\nmin_batch is %d",
 			                        lowest_moved_batch, batch_index, chunks.size(), batch_allocation_size,
-			                        min_batch.load(), old_min_batch);
+			                        min_batch.load());
 		}
-		D_ASSERT(lowest_moved_batch < batch_index);
+		D_ASSERT(lowest_moved_batch <= batch_index);
 		lowest_moved_batch = batch_index;
 
 		buffer_byte_count -= batch_allocation_size;
@@ -123,6 +111,19 @@ void BatchedBufferedData::UpdateMinBatchIndex(idx_t min_batch_index) {
 		to_remove.pop();
 		buffer.erase(batch_index);
 	}
+}
+
+void BatchedBufferedData::UpdateMinBatchIndex(idx_t min_batch_index) {
+	lock_guard<mutex> lock(glock);
+
+	auto old_min_batch = min_batch.load();
+	auto new_min_batch = MaxValue(old_min_batch, min_batch_index);
+	if (new_min_batch == min_batch) {
+		// No change, early out
+		return;
+	}
+	min_batch = new_min_batch;
+	MoveCompletedBatches();
 }
 
 PendingExecutionResult BatchedBufferedData::ReplenishBuffer(StreamQueryResult &result,
@@ -189,11 +190,17 @@ void BatchedBufferedData::Append(const DataChunk &to_append, idx_t batch) {
 	auto allocation_size = chunk->GetAllocationSize();
 
 	lock_guard<mutex> lock(glock);
-	auto &in_progress_batch = buffer[batch];
-	auto &chunks = in_progress_batch.chunks;
-	in_progress_batch.completed = false;
-	buffer_byte_count += allocation_size;
-	chunks.push_back(std::move(chunk));
+	if (is_minimum) {
+		MoveCompletedBatches();
+		read_queue.push_back(std::move(chunk));
+		read_queue_byte_count += allocation_size;
+	} else {
+		auto &in_progress_batch = buffer[batch];
+		auto &chunks = in_progress_batch.chunks;
+		in_progress_batch.completed = false;
+		buffer_byte_count += allocation_size;
+		chunks.push_back(std::move(chunk));
+	}
 }
 
 } // namespace duckdb

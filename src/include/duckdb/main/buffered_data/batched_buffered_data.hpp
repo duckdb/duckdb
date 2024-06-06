@@ -56,6 +56,7 @@ public:
 private:
 	void ResetReplenishState();
 	void UnblockSinks();
+	void MoveCompletedBatches();
 
 private:
 	//! The buffer where chunks are written before they are ready to be read.
