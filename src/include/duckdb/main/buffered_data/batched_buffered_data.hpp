@@ -43,6 +43,7 @@ public:
 	void UpdateMinBatchIndex(idx_t min_batch_index);
 	bool IsMinimumBatchIndex(idx_t batch);
 	void CompleteBatch(idx_t batch);
+	void EnsureBatchExists(idx_t batch);
 
 	inline idx_t ReadQueueCapacity() const {
 		return read_queue_capacity;
@@ -69,6 +70,7 @@ private:
 	//! The amount of tuples buffered for the current batch
 	atomic<idx_t> current_batch_tuple_count;
 	atomic<idx_t> min_batch;
+	idx_t lowest_moved_batch = 0;
 };
 
 } // namespace duckdb

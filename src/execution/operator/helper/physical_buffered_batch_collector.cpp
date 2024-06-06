@@ -18,7 +18,6 @@ PhysicalBufferedBatchCollector::PhysicalBufferedBatchCollector(PreparedStatement
 //===--------------------------------------------------------------------===//
 class BufferedBatchCollectorGlobalState : public GlobalSinkState {
 public:
-	mutex glock;
 	weak_ptr<ClientContext> context;
 	shared_ptr<BufferedData> buffered_data;
 };
@@ -38,9 +37,8 @@ SinkResultType PhysicalBufferedBatchCollector::Sink(ExecutionContext &context, D
 	auto &buffered_data = gstate.buffered_data->Cast<BatchedBufferedData>();
 	bool is_minimum_batch = buffered_data.IsMinimumBatchIndex(batch);
 
-	if (!is_minimum_batch) {
-		buffered_data.UpdateMinBatchIndex(min_batch_index);
-	}
+	buffered_data.EnsureBatchExists(batch);
+	buffered_data.UpdateMinBatchIndex(min_batch_index);
 
 	if (buffered_data.ShouldBlockBatch(batch)) {
 		auto callback_state = input.interrupt_state;
@@ -62,8 +60,6 @@ SinkNextBatchType PhysicalBufferedBatchCollector::NextBatch(ExecutionContext &co
 	auto &gstate = input.global_state.Cast<BufferedBatchCollectorGlobalState>();
 	auto &lstate = input.local_state.Cast<BufferedBatchCollectorLocalState>();
 
-	lock_guard<mutex> l(gstate.glock);
-
 	auto batch = lstate.current_batch;
 	auto min_batch_index = lstate.partition_info.min_batch_index.GetIndex();
 	auto new_index = lstate.partition_info.batch_index.GetIndex();
@@ -82,8 +78,6 @@ SinkCombineResultType PhysicalBufferedBatchCollector::Combine(ExecutionContext &
                                                               OperatorSinkCombineInput &input) const {
 	auto &gstate = input.global_state.Cast<BufferedBatchCollectorGlobalState>();
 	auto &lstate = input.local_state.Cast<BufferedBatchCollectorLocalState>();
-
-	lock_guard<mutex> l(gstate.glock);
 
 	auto min_batch_index = lstate.partition_info.min_batch_index.GetIndex();
 	auto &buffered_data = gstate.buffered_data->Cast<BatchedBufferedData>();
@@ -109,7 +103,6 @@ unique_ptr<GlobalSinkState> PhysicalBufferedBatchCollector::GetGlobalSinkState(C
 
 unique_ptr<QueryResult> PhysicalBufferedBatchCollector::GetResult(GlobalSinkState &state) {
 	auto &gstate = state.Cast<BufferedBatchCollectorGlobalState>();
-	lock_guard<mutex> l(gstate.glock);
 	auto cc = gstate.context.lock();
 	auto result = make_uniq<StreamQueryResult>(statement_type, properties, types, names, cc->GetClientProperties(),
 	                                           gstate.buffered_data);
