@@ -1,3 +1,5 @@
+#include "duckdb/execution/operator/scan/physical_expression_scan.hpp"
+#include "duckdb/execution/operator/scan/physical_dummy_scan.hpp"
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/execution/operator/projection/physical_tableinout_function.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
@@ -31,10 +33,33 @@ unique_ptr<TableFilterSet> CreateTableFilterSet(TableFilterSet &table_filters, v
 }
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
+	unique_ptr<PhysicalOperator> child_node;
 	if (!op.children.empty()) {
+		child_node = CreatePlan(std::move(op.children[0]));
+	} else if (op.function.in_out_function) {
+		// this is an in-out function, but it was bound as a regular table function
+		// this happens if we are serializing older plans with functions that used to be regular functions but were turned into in-out fnuctions
+		// push a dummy scan and a projection
+		vector<LogicalType> return_types;
+		vector<vector<unique_ptr<Expression>>> expressions;
+		vector<unique_ptr<Expression>> expression_list;
+		for(idx_t i = 0; i < op.parameters.size(); i++) {
+			auto &parameter = op.parameters[i];
+			op.input_table_types.push_back(parameter.type());
+			op.input_table_names.push_back("parameter" + to_string(i + 1));
+			return_types.push_back(parameter.type());
+			expression_list.push_back(make_uniq<BoundConstantExpression>(parameter));
+		}
+		vector<LogicalType> dummy_types { LogicalType::INTEGER };
+		auto dummy_scan = make_uniq<PhysicalDummyScan>(std::move(dummy_types), 1ULL);
+		expressions.push_back(std::move(expression_list));
+		auto expr_scan = make_uniq<PhysicalExpressionScan>(std::move(return_types), std::move(expressions),
+		                                          1ULL);
+		expr_scan->children.push_back(std::move(dummy_scan));
+		child_node = std::move(expr_scan);
+	}
+	if (child_node) {
 		// this is for table producing functions that consume subquery results
-		D_ASSERT(op.children.size() == 1);
-		auto child_node = CreatePlan(std::move(op.children[0]));
 		// push a projection node with casts if required
 		if (child_node->types.size() < op.input_table_types.size()) {
 			throw InternalException(
