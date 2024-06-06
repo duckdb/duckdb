@@ -978,7 +978,7 @@ function(duckdb_extension_generate_version OUTPUT_VAR WORKING_DIR)
       message(FATAL_ERROR "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'log -1 --format=%h'.")
     endif()
     execute_process(
-            COMMAND ${GIT_EXECUTABLE} describe --tags
+            COMMAND ${GIT_EXECUTABLE} describe --tags --always
             WORKING_DIRECTORY ${WORKING_DIR}
             RESULT_VARIABLE GIT_RESULT
             OUTPUT_VARIABLE GIT_DESCRIBE

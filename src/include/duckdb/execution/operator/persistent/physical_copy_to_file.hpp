@@ -13,6 +13,7 @@
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
+#include "duckdb/common/enums/copy_overwrite_mode.hpp"
 
 namespace duckdb {
 
@@ -31,7 +32,7 @@ public:
 	bool use_tmp_file;
 	FilenamePattern filename_pattern;
 	string file_extension;
-	bool overwrite_or_ignore;
+	CopyOverwriteMode overwrite_mode;
 	bool parallel;
 	bool per_thread_output;
 	optional_idx file_size_bytes;

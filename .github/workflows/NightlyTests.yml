@@ -72,14 +72,12 @@ jobs:
       CXX: g++-10
       GEN: ninja
       BUILD_ICU: 1
-      BUILD_INET: 1
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
       BUILD_FTS: 1
-      BUILD_EXCEL: 1
-      BUILD_VISUALIZER: 1
       BUILD_JSON: 1
       BUILD_JEMALLOC: 1
+      BUILD_EXTENSIONS: "inet"
       DISABLE_SANITIZER: 1
       CRASH_ON_ASSERT: 1
       RUN_SLOW_VERIFIERS: 1
@@ -200,7 +198,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p build/release
-          (cd build/release && cmake -G "Ninja" -DSTATIC_LIBCPP=1 -DBUILD_EXTENSIONS='icu;parquet;fts;json;excel' -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+          (cd build/release && cmake -G "Ninja" -DSTATIC_LIBCPP=1 -DBUILD_EXTENSIONS='icu;parquet;fts;json' -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
 
       - name: Test
         shell: bash
@@ -459,14 +457,12 @@ jobs:
       CXX: g++-10
       GEN: ninja
       BUILD_ICU: 1
-      BUILD_INET: 1
       BUILD_PARQUET: 1
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
       BUILD_FTS: 1
-      BUILD_VISUALIZER: 1
       BUILD_JSON: 1
-      BUILD_EXCEL: 1
+      BUILD_EXTENSIONS: "inet"
       DISABLE_STRING_INLINE: 1
       DESTROY_UNPINNED_BLOCKS: 1
       ALTERNATIVE_VERIFY: 1
@@ -517,14 +513,12 @@ jobs:
       CXX: g++-10
       GEN: ninja
       BUILD_ICU: 1
-      BUILD_INET: 1
       BUILD_PARQUET: 1
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
       BUILD_FTS: 1
-      BUILD_VISUALIZER: 1
       BUILD_JSON: 1
-      BUILD_EXCEL: 1
+      BUILD_EXTENSIONS: "inet"
       VERIFY_VECTOR: ${{ matrix.vector_type }}
 
     steps:
@@ -559,14 +553,12 @@ jobs:
       CXX: g++-10
       GEN: ninja
       BUILD_ICU: 1
-      BUILD_INET: 1
       BUILD_PARQUET: 1
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
       BUILD_FTS: 1
-      BUILD_VISUALIZER: 1
       BUILD_JSON: 1
-      BUILD_EXCEL: 1
+      BUILD_EXTENSIONS: "inet"
       FORCE_ASYNC_SINK_SOURCE: 1
 
     steps:
@@ -685,14 +677,12 @@ jobs:
       CXX: g++-10
       GEN: ninja
       BUILD_ICU: 1
-      BUILD_INET: 1
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
       BUILD_FTS: 1
-      BUILD_VISUALIZER: 1
       BUILD_JSON: 1
-      BUILD_EXCEL: 1
       BUILD_JEMALLOC: 1
+      BUILD_EXTENSIONS: "inet"
       TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt
 
     steps:

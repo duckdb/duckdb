@@ -320,6 +320,14 @@ class TestDuckDBConnection(object):
     def test_interrupt(self):
         assert None != duckdb.interrupt
 
+    def test_wrap_shadowing(self):
+        pd = NumpyPandas()
+        import duckdb
+
+        df = pd.DataFrame({"a": [1, 2, 3]})
+        res = duckdb.sql("from df").fetchall()
+        assert res == [(1,), (2,), (3,)]
+
     def test_wrap_coverage(self):
         con = duckdb.default_connection
 
