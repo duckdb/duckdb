@@ -241,7 +241,7 @@ void BoundNodeVisitor::VisitBoundQueryNode(BoundQueryNode &node) {
 
 class LogicalBoundNodeVisitor : public LogicalOperatorVisitor {
 public:
-	LogicalBoundNodeVisitor(BoundNodeVisitor &parent) : parent(parent) {
+	explicit LogicalBoundNodeVisitor(BoundNodeVisitor &parent) : parent(parent) {
 	}
 
 	void VisitExpression(unique_ptr<Expression> *expression) override {
