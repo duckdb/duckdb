@@ -95,6 +95,9 @@ regular:
 			quote = query[pos];
 			pos++;
 			goto in_quotes;
+		} else if (query[pos] == '$' && query[pos + 1] == '$') {
+			pos += 2;
+			goto in_dollar_quotes;
 		} else if (query[pos] == '-' && query[pos + 1] == '-') {
 			goto in_comment;
 		}
@@ -109,6 +112,14 @@ in_quotes:
 				continue;
 			}
 			pos++;
+			goto regular;
+		}
+	}
+	goto end;
+in_dollar_quotes:
+	for (; pos + 2 < qsize; pos++) {
+		if (query[pos] == '$' && query[pos + 1] == '$') {
+			pos += 2;
 			goto regular;
 		}
 	}
