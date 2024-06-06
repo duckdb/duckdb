@@ -126,10 +126,13 @@ runs:
         OVERLAY_TRIPLET_SRC: ${{ github.workspace }}/vcpkg/triplets/community/x64-windows-static-md.cmake
         OVERLAY_TRIPLET_DST: ${{ github.workspace }}/overlay_triplets/x64-windows-static-md.cmake
       run: |
+        mkdir overlay_triplets
+        cd overlay_triplets
         echo "int main() { return 0; }" > program.cpp
         cl program.cpp > output
         VERSION=$(grep Linker output | awk '{ print $6 }' | awk -F'.' '{ printf("%s.%s", $1, $2) }')
-        mkdir overlay_triplets
+        rm output program.cpp
+        cd ..
         cp $OVERLAY_TRIPLET_SRC $OVERLAY_TRIPLET_DST
         echo "set(VCPKG_PLATFORM_TOOLSET_VERSION "$VERSION")" >> $OVERLAY_TRIPLET_DST
 
