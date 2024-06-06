@@ -65,14 +65,6 @@ void BatchedBufferedData::UnblockSinks() {
 	}
 }
 
-void BatchedBufferedData::EnsureBatchExists(idx_t batch) {
-	lock_guard<mutex> lock(glock);
-	// Make sure a in-progress batch exists for this batch
-	// so UpdateMinBatchIndex is aware of it and won't move later batches until this is completed
-	auto &in_progress_batch = buffer[batch];
-	(void)in_progress_batch;
-}
-
 void BatchedBufferedData::UpdateMinBatchIndex(idx_t min_batch_index) {
 	lock_guard<mutex> lock(glock);
 

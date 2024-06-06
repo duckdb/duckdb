@@ -44,7 +44,6 @@ public:
 	void UpdateMinBatchIndex(idx_t min_batch_index);
 	bool IsMinimumBatchIndex(idx_t batch);
 	void CompleteBatch(idx_t batch);
-	void EnsureBatchExists(idx_t batch);
 	bool BufferIsEmpty();
 
 	inline idx_t ReadQueueCapacity() const {
