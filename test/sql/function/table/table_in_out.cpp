@@ -90,9 +90,10 @@ struct ThrottlingSum {
 		con.BeginTransaction();
 		auto &client_context = *con.context;
 		auto &catalog = Catalog::GetSystemCatalog(client_context);
-		TableFunction caching_table_in_out("throttling_sum", {LogicalType::TABLE}, nullptr, ThrottlingSum::Bind,
+		TableFunction caching_table_in_out("throttling_sum", {}, nullptr, ThrottlingSum::Bind,
 		                                   ThrottlingSum::ThrottlingSumGlobalInit,
 		                                   ThrottlingSum::ThrottlingSumLocalInit);
+		caching_table_in_out.varargs = LogicalType::ANY;
 		caching_table_in_out.in_out_function = ThrottlingSum::Function;
 		caching_table_in_out.in_out_function_final = ThrottlingSum::Finalize;
 		CreateTableFunctionInfo caching_table_in_out_info(caching_table_in_out);
