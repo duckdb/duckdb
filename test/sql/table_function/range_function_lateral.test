@@ -66,6 +66,18 @@ SELECT * FROM (SELECT '5'::VARCHAR) t(str), range(str) t2(j)
 ----
 No function matches the given name and argument types
 
+statement ok
+PREPARE v1 AS SELECT * FROM range(?);
+
+query I
+EXECUTE v1(5)
+----
+0
+1
+2
+3
+4
+
 query IIII
 SELECT * FROM (SELECT 3, 1, -1 UNION ALL SELECT 1, 3, 2) t(s, e, increment), range(s, e, increment) t2(j) ORDER BY s, j
 ----
