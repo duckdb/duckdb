@@ -13,7 +13,7 @@ public:
 	static void SetHLCTimestamp(transaction_t ts);
 
 private:
-	static const uint64_t billion = 1000000000L;
+	static const uint64_t BILLION = 1000000000L;
 	static transaction_t timestamp;
 	static mutex timestamp_lock;
 };

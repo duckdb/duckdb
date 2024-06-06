@@ -1,6 +1,6 @@
 #include "duckdb/common/error_data.hpp"
-#include "duckdb/common/exception.hpp"
 
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/types.hpp"
@@ -50,7 +50,10 @@ ErrorData::ErrorData(const string &message) : initialized(true), type(ExceptionT
 
 const string &ErrorData::Message() {
 	if (final_message.empty()) {
-		final_message = Exception::ExceptionTypeToString(type) + " Error: " + raw_message;
+		if (type != ExceptionType::UNKNOWN_TYPE) {
+			final_message = Exception::ExceptionTypeToString(type) + " ";
+		}
+		final_message += "Error: " + raw_message;
 		if (type == ExceptionType::INTERNAL) {
 			final_message += "\nThis error signals an assertion failure within DuckDB. This usually occurs due to "
 			                 "unexpected conditions or errors in the program's logic.\nFor more information, see "

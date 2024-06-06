@@ -4,10 +4,7 @@ on:
   repository_dispatch:
   push:
     branches:
-      - '**'
-      - '!main'
-      - '!ampere_main'
-      - '!feature'
+      - 'ampere_main'
     tags:
       - '**'
     paths-ignore:

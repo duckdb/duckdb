@@ -136,18 +136,21 @@ bool ExtensionHelper::CreateSuggestions(const string &extension_name, string &me
 unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtension(DBConfig &config, FileSystem &fs,
                                                                    const string &extension, bool force_install,
                                                                    optional_ptr<ExtensionRepository> repository,
+                                                                   bool throw_on_origin_mismatch,
                                                                    const string &version) {
 #ifdef WASM_LOADABLE_EXTENSIONS
 	// Install is currently a no-op
 	return nullptr;
 #endif
 	string local_path = ExtensionDirectory(config, fs);
-	return InstallExtensionInternal(config, fs, local_path, extension, force_install, version, repository);
+	return InstallExtensionInternal(config, fs, local_path, extension, force_install, throw_on_origin_mismatch, version,
+	                                repository);
 }
 
 unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtension(ClientContext &context, const string &extension,
                                                                    bool force_install,
                                                                    optional_ptr<ExtensionRepository> repository,
+                                                                   bool throw_on_origin_mismatch,
                                                                    const string &version) {
 #ifdef WASM_LOADABLE_EXTENSIONS
 	// Install is currently a no-op
@@ -158,8 +161,8 @@ unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtension(ClientContext
 	string local_path = ExtensionDirectory(context);
 	optional_ptr<HTTPLogger> http_logger =
 	    ClientConfig::GetConfig(context).enable_http_logging ? context.client_data->http_logger.get() : nullptr;
-	return InstallExtensionInternal(db_config, fs, local_path, extension, force_install, version, repository,
-	                                http_logger, context);
+	return InstallExtensionInternal(db_config, fs, local_path, extension, force_install, throw_on_origin_mismatch,
+	                                version, repository, http_logger, context);
 }
 
 unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, const string &path, idx_t &file_size) {
@@ -445,8 +448,8 @@ static void ThrowErrorOnMismatchingExtensionOrigin(FileSystem &fs, const string 
 
 unique_ptr<ExtensionInstallInfo>
 ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs, const string &local_path,
-                                          const string &extension, bool force_install, const string &version,
-                                          optional_ptr<ExtensionRepository> repository,
+                                          const string &extension, bool force_install, bool throw_on_origin_mismatch,
+                                          const string &version, optional_ptr<ExtensionRepository> repository,
                                           optional_ptr<HTTPLogger> http_logger, optional_ptr<ClientContext> context) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Installing external extensions is disabled through a compile time flag");
@@ -461,7 +464,8 @@ ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs, cons
 
 	if (fs.FileExists(local_extension_path) && !force_install) {
 		// File exists: throw error if origin mismatches
-		if (!config.options.allow_extensions_metadata_mismatch && fs.FileExists(local_extension_path + ".info")) {
+		if (throw_on_origin_mismatch && !config.options.allow_extensions_metadata_mismatch &&
+		    fs.FileExists(local_extension_path + ".info")) {
 			ThrowErrorOnMismatchingExtensionOrigin(fs, local_extension_path, extension_name, extension, repository);
 		}
 

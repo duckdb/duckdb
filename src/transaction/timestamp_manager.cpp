@@ -3,9 +3,14 @@
 #include <algorithm>
 #include <time.h> /* for clock_gettime */
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wexit-time-destructors"
+#endif
+
 namespace duckdb {
 transaction_t TimestampManager::timestamp = 0;
-[[clang::no_destroy]] mutex TimestampManager::timestamp_lock;
+mutex TimestampManager::timestamp_lock;
 #define PHYSICAL_TIME_MASK        0xffffffffffffff00
 #define LOGICAL_COUNTER_MASK      0x00000000000000ff
 #define PHYSICAL_TIME_ROUNDUP_BIT 0x0000000000000080
@@ -14,7 +19,7 @@ transaction_t TimestampManager::GetHLCTimestamp() {
 	struct timespec ts;
 	lock_guard<mutex> lock(timestamp_lock);
 	clock_gettime(CLOCK_MONOTONIC, &ts);
-	uint64_t ns = ((uint64_t) ts.tv_sec * billion) + (uint64_t) ts.tv_nsec;
+	uint64_t ns = ((uint64_t) ts.tv_sec * BILLION) + (uint64_t) ts.tv_nsec;
 	uint64_t pt = ns & PHYSICAL_TIME_MASK;
 	uint32_t rb = ns & PHYSICAL_TIME_ROUNDUP_BIT;
 	if (rb) {
@@ -39,7 +44,7 @@ void TimestampManager::SetHLCTimestamp(transaction_t message_ts) {
 	struct timespec ts;
 	lock_guard<mutex> lock(timestamp_lock);
 	clock_gettime(CLOCK_MONOTONIC, &ts);
-	uint64_t ns = ((uint64_t) ts.tv_sec * billion) + (uint64_t) ts.tv_nsec;
+	uint64_t ns = ((uint64_t) ts.tv_sec * BILLION) + (uint64_t) ts.tv_nsec;
 	uint64_t pt = ns & PHYSICAL_TIME_MASK;
 	uint32_t rb = ns & PHYSICAL_TIME_ROUNDUP_BIT;
 	if (rb) {
@@ -66,3 +71,7 @@ void TimestampManager::SetHLCTimestamp(transaction_t message_ts) {
 	timestamp = new_timestamp;
 }
 } // namespace duckdb
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
