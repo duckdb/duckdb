@@ -82,16 +82,16 @@ statement ok
 CREATE TABLE lists AS SELECT [1,2,3] l UNION ALL SELECT [4,5] UNION ALL SELECT [] UNION ALL SELECT [NULL] UNION ALL SELECT [7, 8];
 
 query I
-SELECT * FROM UNNEST((SELECT l FROM lists));
+SELECT u FROM lists, UNNEST(l) AS unnest(u) ORDER BY l, u;
 ----
 1
 2
 3
 4
 5
-NULL
 7
 8
+NULL
 
 # unnest with a prepared statement parameter
 statement ok
