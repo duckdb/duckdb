@@ -37,14 +37,17 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		auto child_node = CreatePlan(std::move(op.children[0]));
 		// push a projection node with casts if required
 		if (child_node->types.size() < op.input_table_types.size()) {
-			throw InternalException("Mismatch between input table types and child node types - expected %llu but got %llu", op.input_table_types.size(), child_node->types.size());
+			throw InternalException(
+			    "Mismatch between input table types and child node types - expected %llu but got %llu",
+			    op.input_table_types.size(), child_node->types.size());
 		}
 		vector<LogicalType> return_types;
 		vector<unique_ptr<Expression>> expressions;
 		bool any_cast_required = false;
-		for(idx_t proj_idx = 0; proj_idx < child_node->types.size(); proj_idx++) {
+		for (idx_t proj_idx = 0; proj_idx < child_node->types.size(); proj_idx++) {
 			auto ref = make_uniq<BoundReferenceExpression>(child_node->types[proj_idx], proj_idx);
-			auto &target_type = proj_idx < op.input_table_types.size() ? op.input_table_types[proj_idx] : child_node->types[proj_idx];
+			auto &target_type =
+			    proj_idx < op.input_table_types.size() ? op.input_table_types[proj_idx] : child_node->types[proj_idx];
 			if (child_node->types[proj_idx] != target_type) {
 				// cast is required - push a cast
 				any_cast_required = true;
@@ -56,7 +59,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 			return_types.push_back(target_type);
 		}
 		if (any_cast_required) {
-			auto proj = make_uniq<PhysicalProjection>(std::move(return_types), std::move(expressions), child_node->estimated_cardinality);
+			auto proj = make_uniq<PhysicalProjection>(std::move(return_types), std::move(expressions),
+			                                          child_node->estimated_cardinality);
 			proj->children.push_back(std::move(child_node));
 			child_node = std::move(proj);
 		}

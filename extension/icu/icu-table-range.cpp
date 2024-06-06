@@ -80,11 +80,10 @@ struct ICUTableRange {
 		}
 	};
 
-
 	template <bool GENERATE_SERIES>
 	static void GenerateRangeDateTimeParameters(DataChunk &input, idx_t row_id, ICURangeLocalState &result) {
 		input.Flatten();
-		for(idx_t c = 0; c < input.ColumnCount(); c++) {
+		for (idx_t c = 0; c < input.ColumnCount(); c++) {
 			if (FlatVector::IsNull(input.data[c], row_id)) {
 				result.start = timestamp_t(0);
 				result.end = timestamp_t(0);
@@ -141,19 +140,20 @@ struct ICUTableRange {
 		return std::move(result);
 	}
 
-	static unique_ptr<LocalTableFunctionState> RangeDateTimeLocalInit(ExecutionContext &context, TableFunctionInitInput &input,
-	                                                           GlobalTableFunctionState *global_state) {
+	static unique_ptr<LocalTableFunctionState> RangeDateTimeLocalInit(ExecutionContext &context,
+	                                                                  TableFunctionInitInput &input,
+	                                                                  GlobalTableFunctionState *global_state) {
 		return make_uniq<ICURangeLocalState>();
 	}
 
 	template <bool GENERATE_SERIES>
-	static OperatorResultType ICUTableRangeFunction(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &input,
-	                                         DataChunk &output) {
+	static OperatorResultType ICUTableRangeFunction(ExecutionContext &context, TableFunctionInput &data_p,
+	                                                DataChunk &input, DataChunk &output) {
 		auto &bind_data = data_p.bind_data->Cast<ICURangeBindData>();
 		auto &state = data_p.local_state->Cast<ICURangeLocalState>();
 		CalendarPtr calendar_ptr(bind_data.calendar->clone());
 		auto calendar = calendar_ptr.get();
-		while(true) {
+		while (true) {
 			if (!state.initialized_row) {
 				// initialize for the current input row
 				if (state.current_input_row >= input.size()) {
@@ -192,15 +192,16 @@ struct ICUTableRange {
 	static void AddICUTableRangeFunction(DatabaseInstance &db) {
 		TableFunctionSet range("range");
 		TableFunction range_function({LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL},
-		                                nullptr, Bind<false>, nullptr, RangeDateTimeLocalInit);
+		                             nullptr, Bind<false>, nullptr, RangeDateTimeLocalInit);
 		range_function.in_out_function = ICUTableRangeFunction<false>;
 		range.AddFunction(range_function);
 		ExtensionUtil::AddFunctionOverload(db, range);
 
 		// generate_series: similar to range, but inclusive instead of exclusive bounds on the RHS
 		TableFunctionSet generate_series("generate_series");
-		TableFunction generate_series_function({LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL},
-		                  nullptr, Bind<true>, nullptr, RangeDateTimeLocalInit);
+		TableFunction generate_series_function(
+		    {LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL}, nullptr, Bind<true>, nullptr,
+		    RangeDateTimeLocalInit);
 		generate_series_function.in_out_function = ICUTableRangeFunction<true>;
 		generate_series.AddFunction(generate_series_function);
 		ExtensionUtil::AddFunctionOverload(db, generate_series);

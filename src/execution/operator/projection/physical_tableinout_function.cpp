@@ -41,10 +41,10 @@ unique_ptr<OperatorState> PhysicalTableInOutFunction::GetOperatorState(Execution
 		vector<LogicalType> input_types;
 		auto &child_types = children[0]->types;
 		idx_t input_length = child_types.size() - projected_input.size();
-		for(idx_t k = 0; k < input_length; k++) {
+		for (idx_t k = 0; k < input_length; k++) {
 			input_types.push_back(child_types[k]);
 		}
-		for(idx_t k = 0; k < projected_input.size(); k++) {
+		for (idx_t k = 0; k < projected_input.size(); k++) {
 			D_ASSERT(projected_input[k] >= input_length);
 		}
 		result->input_chunk.Initialize(context.client, input_types);

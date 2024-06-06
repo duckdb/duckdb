@@ -36,15 +36,16 @@ struct RangeFunctionLocalState : public LocalTableFunctionState {
 	hugeint_t increment;
 };
 
-static unique_ptr<LocalTableFunctionState> RangeFunctionLocalInit(ExecutionContext &context, TableFunctionInitInput &input,
-                                                           GlobalTableFunctionState *global_state) {
+static unique_ptr<LocalTableFunctionState> RangeFunctionLocalInit(ExecutionContext &context,
+                                                                  TableFunctionInitInput &input,
+                                                                  GlobalTableFunctionState *global_state) {
 	return make_uniq<RangeFunctionLocalState>();
 }
 
 template <bool GENERATE_SERIES>
 static void GenerateRangeParameters(DataChunk &input, idx_t row_id, RangeFunctionLocalState &result) {
 	input.Flatten();
-	for(idx_t c = 0; c < input.ColumnCount(); c++) {
+	for (idx_t c = 0; c < input.ColumnCount(); c++) {
 		if (FlatVector::IsNull(input.data[c], row_id)) {
 			result.start = GENERATE_SERIES ? 1 : 0;
 			result.end = 0;
@@ -86,9 +87,9 @@ static void GenerateRangeParameters(DataChunk &input, idx_t row_id, RangeFunctio
 
 template <bool GENERATE_SERIES>
 static OperatorResultType RangeFunction(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &input,
-                                         DataChunk &output) {
+                                        DataChunk &output) {
 	auto &state = data_p.local_state->Cast<RangeFunctionLocalState>();
-	while(true) {
+	while (true) {
 		if (!state.initialized_row) {
 			// initialize for the current input row
 			if (state.current_input_row >= input.size()) {
@@ -112,8 +113,8 @@ static OperatorResultType RangeFunction(ExecutionContext &context, TableFunction
 			continue;
 		}
 		int64_t offset = increment < 0 ? 1 : -1;
-		idx_t remaining = MinValue<idx_t>(Hugeint::Cast<idx_t>((end - current_value + (increment + offset)) / increment),
-		                                  STANDARD_VECTOR_SIZE);
+		idx_t remaining = MinValue<idx_t>(
+		    Hugeint::Cast<idx_t>((end - current_value + (increment + offset)) / increment), STANDARD_VECTOR_SIZE);
 		// set the result vector as a sequence vector
 		output.data[0].Sequence(current_value_i64, Hugeint::Cast<int64_t>(increment), remaining);
 		// increment the index pointer by the remaining count
@@ -186,7 +187,7 @@ template <bool GENERATE_SERIES>
 static void GenerateRangeDateTimeParameters(DataChunk &input, idx_t row_id, RangeDateTimeLocalState &result) {
 	input.Flatten();
 
-	for(idx_t c = 0; c < input.ColumnCount(); c++) {
+	for (idx_t c = 0; c < input.ColumnCount(); c++) {
 		if (FlatVector::IsNull(input.data[c], row_id)) {
 			result.start = timestamp_t(0);
 			result.end = timestamp_t(0);
@@ -229,16 +230,17 @@ static void GenerateRangeDateTimeParameters(DataChunk &input, idx_t row_id, Rang
 	result.inclusive_bound = GENERATE_SERIES;
 }
 
-static unique_ptr<LocalTableFunctionState> RangeDateTimeLocalInit(ExecutionContext &context, TableFunctionInitInput &input,
-                                                           GlobalTableFunctionState *global_state) {
+static unique_ptr<LocalTableFunctionState> RangeDateTimeLocalInit(ExecutionContext &context,
+                                                                  TableFunctionInitInput &input,
+                                                                  GlobalTableFunctionState *global_state) {
 	return make_uniq<RangeDateTimeLocalState>();
 }
 
 template <bool GENERATE_SERIES>
 static OperatorResultType RangeDateTimeFunction(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &input,
-                                         DataChunk &output) {
+                                                DataChunk &output) {
 	auto &state = data_p.local_state->Cast<RangeDateTimeLocalState>();
-	while(true) {
+	while (true) {
 		if (!state.initialized_row) {
 			// initialize for the current input row
 			if (state.current_input_row >= input.size()) {
@@ -278,7 +280,8 @@ static OperatorResultType RangeDateTimeFunction(ExecutionContext &context, Table
 void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet range("range");
 
-	TableFunction range_function({LogicalType::BIGINT}, nullptr, RangeFunctionBind<false>, nullptr, RangeFunctionLocalInit);
+	TableFunction range_function({LogicalType::BIGINT}, nullptr, RangeFunctionBind<false>, nullptr,
+	                             RangeFunctionLocalInit);
 	range_function.in_out_function = RangeFunction<false>;
 	range_function.cardinality = RangeCardinality;
 
@@ -290,8 +293,8 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	// three arguments range: (start, end, increment)
 	range_function.arguments = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT};
 	range.AddFunction(range_function);
-	TableFunction range_in_out({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP, LogicalType::INTERVAL},
-	                                nullptr, RangeDateTimeBind<false>, nullptr, RangeDateTimeLocalInit);
+	TableFunction range_in_out({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP, LogicalType::INTERVAL}, nullptr,
+	                           RangeDateTimeBind<false>, nullptr, RangeDateTimeLocalInit);
 	range_in_out.in_out_function = RangeDateTimeFunction<false>;
 	range.AddFunction(range_in_out);
 	set.AddFunction(range);
@@ -306,7 +309,7 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	range_function.arguments = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT};
 	generate_series.AddFunction(range_function);
 	TableFunction generate_series_in_out({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP, LogicalType::INTERVAL},
-	                                          nullptr, RangeDateTimeBind<true>, nullptr, RangeDateTimeLocalInit);
+	                                     nullptr, RangeDateTimeBind<true>, nullptr, RangeDateTimeLocalInit);
 	generate_series_in_out.in_out_function = RangeDateTimeFunction<true>;
 	generate_series.AddFunction(generate_series_in_out);
 	set.AddFunction(generate_series);

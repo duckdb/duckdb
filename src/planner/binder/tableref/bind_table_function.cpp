@@ -26,14 +26,15 @@ namespace duckdb {
 static bool IsTableInTableOutFunction(TableFunctionCatalogEntry &table_function) {
 	bool has_in_out_function = false;
 	bool has_standard_table_function = false;
-	for(idx_t function_idx = 0; function_idx < table_function.functions.Size(); function_idx++) {
+	for (idx_t function_idx = 0; function_idx < table_function.functions.Size(); function_idx++) {
 		const auto &function = table_function.functions.GetFunctionReferenceByOffset(function_idx);
 		if (function.in_out_function) {
 			has_in_out_function = true;
 		} else if (function.function || function.bind_replace) {
 			has_standard_table_function = true;
 		} else {
-			throw InternalException("Function \"%s\" has neither in_out_function nor function defined", table_function.name);
+			throw InternalException("Function \"%s\" has neither in_out_function nor function defined",
+			                        table_function.name);
 		}
 	}
 	if (has_in_out_function && has_standard_table_function) {
@@ -299,20 +300,22 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		D_ASSERT(!subquery);
 		// cast the parameters to the type of the function
 		for (idx_t i = 0; i < arguments.size(); i++) {
-			auto target_type = i < table_function.arguments.size() ? table_function.arguments[i] : table_function.varargs;
+			auto target_type =
+			    i < table_function.arguments.size() ? table_function.arguments[i] : table_function.varargs;
 
-			if (target_type != LogicalType::ANY &&
-			    target_type != LogicalType::POINTER && target_type.id() != LogicalTypeId::LIST) {
+			if (target_type != LogicalType::ANY && target_type != LogicalType::POINTER &&
+			    target_type.id() != LogicalTypeId::LIST) {
 				parameters[i] = parameters[i].CastAs(context, target_type);
 			}
 		}
 	} else {
 		D_ASSERT(parameters.empty());
 		for (idx_t i = 0; i < arguments.size(); i++) {
-			auto target_type = i < table_function.arguments.size() ? table_function.arguments[i] : table_function.varargs;
+			auto target_type =
+			    i < table_function.arguments.size() ? table_function.arguments[i] : table_function.varargs;
 
-			if (target_type != LogicalType::ANY &&
-			    target_type != LogicalType::POINTER && target_type.id() != LogicalTypeId::LIST) {
+			if (target_type != LogicalType::ANY && target_type != LogicalType::POINTER &&
+			    target_type.id() != LogicalTypeId::LIST) {
 				input_table_types[i] = target_type;
 			}
 		}
