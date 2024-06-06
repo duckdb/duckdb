@@ -41,10 +41,10 @@ struct PrivateAllocatorData {
 	}
 };
 
-using allocate_function_ptr_t = std::function<data_ptr_t(PrivateAllocatorData *private_data, idx_t size)>;
-using free_function_ptr_t = std::function<void(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size)>;
-using reallocate_function_ptr_t =
-    std::function<data_ptr_t(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size, idx_t size)>;
+typedef data_ptr_t (*allocate_function_ptr_t)(PrivateAllocatorData *private_data, idx_t size);
+typedef void (*free_function_ptr_t)(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size);
+typedef data_ptr_t (*reallocate_function_ptr_t)(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
+                                                idx_t size);
 
 class AllocatedData {
 public:
