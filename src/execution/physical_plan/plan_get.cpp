@@ -38,23 +38,22 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		child_node = CreatePlan(std::move(op.children[0]));
 	} else if (op.function.in_out_function) {
 		// this is an in-out function, but it was bound as a regular table function
-		// this happens if we are serializing older plans with functions that used to be regular functions but were turned into in-out fnuctions
-		// push a dummy scan and a projection
+		// this happens if we are serializing older plans with functions that used to be regular functions but were
+		// turned into in-out fnuctions push a dummy scan and a projection
 		vector<LogicalType> return_types;
 		vector<vector<unique_ptr<Expression>>> expressions;
 		vector<unique_ptr<Expression>> expression_list;
-		for(idx_t i = 0; i < op.parameters.size(); i++) {
+		for (idx_t i = 0; i < op.parameters.size(); i++) {
 			auto &parameter = op.parameters[i];
 			op.input_table_types.push_back(parameter.type());
 			op.input_table_names.push_back("parameter" + to_string(i + 1));
 			return_types.push_back(parameter.type());
 			expression_list.push_back(make_uniq<BoundConstantExpression>(parameter));
 		}
-		vector<LogicalType> dummy_types { LogicalType::INTEGER };
+		vector<LogicalType> dummy_types {LogicalType::INTEGER};
 		auto dummy_scan = make_uniq<PhysicalDummyScan>(std::move(dummy_types), 1ULL);
 		expressions.push_back(std::move(expression_list));
-		auto expr_scan = make_uniq<PhysicalExpressionScan>(std::move(return_types), std::move(expressions),
-		                                          1ULL);
+		auto expr_scan = make_uniq<PhysicalExpressionScan>(std::move(return_types), std::move(expressions), 1ULL);
 		expr_scan->children.push_back(std::move(dummy_scan));
 		child_node = std::move(expr_scan);
 	}
