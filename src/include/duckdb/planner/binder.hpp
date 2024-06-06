@@ -332,7 +332,7 @@ private:
 	                                 vector<Value> &parameters, named_parameter_map_t &named_parameters,
 	                                 unique_ptr<BoundSubqueryRef> &subquery, ErrorData &error);
 	void BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &expressions,
-	                                 unique_ptr<BoundSubqueryRef> &subquery, ErrorData &error);
+	                                 unique_ptr<BoundSubqueryRef> &subquery);
 	unique_ptr<LogicalOperator> BindTableFunction(TableFunction &function, vector<Value> parameters);
 	unique_ptr<LogicalOperator> BindTableFunctionInternal(TableFunction &table_function, const TableFunctionRef &ref,
 	                                                      vector<Value> parameters,
