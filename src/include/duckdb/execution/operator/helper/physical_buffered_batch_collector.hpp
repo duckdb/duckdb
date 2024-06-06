@@ -18,7 +18,6 @@ public:
 	BufferedBatchCollectorLocalState();
 
 public:
-	bool blocked = false;
 	idx_t current_batch = 0;
 };
 
