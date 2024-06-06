@@ -338,8 +338,9 @@ duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statemen
 		return DuckDBError;
 	}
 
+	duckdb::unique_ptr<duckdb::QueryResult> result;
 	try {
-		auto result = wrapper->statement->Execute(wrapper->values, false);
+		result = wrapper->statement->Execute(wrapper->values, false);
 	} catch (...) {
 		return DuckDBError;
 	}
