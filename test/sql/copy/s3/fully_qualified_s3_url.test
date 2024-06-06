@@ -152,6 +152,13 @@ SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_use_ssl=false" L
 
 statement error
 SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_use_ssl=bla" LIMIT 3
+
+#test requester_pays
+statement ok
+SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_requester_pays=false" LIMIT 3
+
+statement error
+SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_requester_pays=bla" LIMIT 3
 ----
 
 #test url_style
