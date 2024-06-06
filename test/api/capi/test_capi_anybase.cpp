@@ -43,7 +43,7 @@ TEST_CASE("Convert DuckDB Chunks to Arrow Array in C API", "[cToArrow]") {
 	auto count = duckdb_result_chunk_count(result);
 	auto chunks = new duckdb_data_chunk[count];
 
-	for (auto i = 0; i < count; i++) {
+	for (auto i = 0UL; i < count; i++) {
 		chunks[i] = duckdb_result_get_chunk(result, i);
 	}
 
@@ -55,7 +55,7 @@ TEST_CASE("Convert DuckDB Chunks to Arrow Array in C API", "[cToArrow]") {
 	duckdb_destroy_result(&result); // segmentation failure happens here
 	duckdb_disconnect(&con);
 	duckdb_close(&db);
-	for (auto i = 0; i < count; i++) {
+	for (auto i = 0UL; i < count; i++) {
 		duckdb_destroy_data_chunk(&chunks[i]);
 	}
 }
@@ -77,7 +77,7 @@ TEST_CASE("Convert DuckDB Chunk column to Arrow Array in C API", "[ccToArrow]") 
 	auto count = duckdb_result_chunk_count(result);
 	auto chunks = new duckdb_data_chunk[count];
 
-	for (auto i = 0; i < count; i++) {
+	for (auto i = 0UL; i < count; i++) {
 		chunks[i] = duckdb_result_get_chunk(result, i);
 	}
 
@@ -100,7 +100,7 @@ TEST_CASE("Convert DuckDB Chunk column to Arrow Array in C API", "[ccToArrow]") 
 	duckdb_destroy_result(&result); // segmentation failure happens here
 	duckdb_disconnect(&con);
 	duckdb_close(&db);
-	for (auto i = 0; i < count; i++) {
+	for (auto i = 0UL; i < count; i++) {
 		duckdb_destroy_data_chunk(&chunks[i]);
 	}
 	delete[] chunks;

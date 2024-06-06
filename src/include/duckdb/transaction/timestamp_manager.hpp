@@ -16,6 +16,8 @@ private:
 	static const uint64_t BILLION = 1000000000L;
 	static transaction_t timestamp;
 	static mutex timestamp_lock;
+	static void ClockGetTimeMonotonic(struct timespec *tv);
+
 };
 
 } // namespace duckdb

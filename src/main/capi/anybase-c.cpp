@@ -4,12 +4,14 @@
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/common/arrow/arrow_appender.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
+#include "duckdb/common/types.hpp"
 
 using duckdb::ArrowConverter;
 using duckdb::ArrowAppender;
 using duckdb::ArrowResultWrapper;
 using duckdb::Connection;
 using duckdb::DataChunk;
+using duckdb::LogicalType;
 
 uint64_t duckdb_get_hlc_timestamp() {
 	return duckdb::TimestampManager::GetHLCTimestamp();
@@ -76,7 +78,7 @@ duckdb_state duckdb_data_chunks_to_arrow_array(duckdb_connection  connection, du
 	return DuckDBSuccess;
 }
 
-duckdb_state duckdb_data_chunk_column_to_arrow_array(duckdb_connection  connection, duckdb_data_chunk *chunks, idx_t number_of_chunks, idx_t column_index, duckdb_arrow_array *out_array) {
+duckdb_state duckdb_data_chunk_column_to_arrow_array(duckdb_connection connection, duckdb_data_chunk *chunks, idx_t number_of_chunks, idx_t column_index, duckdb_arrow_array *out_array) {
 	if (!chunks || number_of_chunks == 0 || !out_array)  {
 		return DuckDBSuccess;
 	}
@@ -84,7 +86,7 @@ duckdb_state duckdb_data_chunk_column_to_arrow_array(duckdb_connection  connecti
 	auto options = ((Connection *)connection)->context->GetClientProperties();
 	auto chunk_count = number_of_chunks;
 	auto first_chunk = reinterpret_cast<duckdb::DataChunk *>(chunks[0]);
-	auto types = duckdb::vector<LogicalType>{first_chunk->GetTypes()[column_index]};
+	auto types = duckdb::vector<duckdb::LogicalType>{first_chunk->GetTypes()[column_index]};
 	ArrowAppender appender(types, chunk_count * STANDARD_VECTOR_SIZE, options);
 	for (idx_t i = 0; i < chunk_count; i++) {
 		auto chunk = reinterpret_cast<duckdb::DataChunk *>(chunks[i]);
