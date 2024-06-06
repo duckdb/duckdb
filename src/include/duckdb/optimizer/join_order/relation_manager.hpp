@@ -20,7 +20,6 @@
 
 namespace duckdb {
 
-struct FilterInfo;
 class JoinOrderOptimizer;
 class FilterInfo;
 
