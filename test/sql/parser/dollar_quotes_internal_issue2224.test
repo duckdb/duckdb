@@ -16,12 +16,6 @@ select ' ' = '　';
 ----
 false
 
-
-query I
-select $$$$ = '';
-----
-true
-
 # just checking if parsing didn't break by fixing the dollar thing
 query I
 select $$$$ = '';
