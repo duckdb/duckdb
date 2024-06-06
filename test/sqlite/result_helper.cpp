@@ -1,12 +1,13 @@
 #include "result_helper.hpp"
-#include "re2/re2.h"
+
 #include "catch.hpp"
-#include "termcolor.hpp"
-#include "sqllogic_test_runner.hpp"
 #include "duckdb/common/crypto/md5.hpp"
 #include "duckdb/parser/qualified_name.hpp"
-#include "test_helpers.hpp"
+#include "re2/re2.h"
 #include "sqllogic_test_logger.hpp"
+#include "sqllogic_test_runner.hpp"
+#include "termcolor.hpp"
+#include "test_helpers.hpp"
 
 #include <thread>
 
@@ -279,8 +280,15 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 		}
 		if (result.HasError() && !statement.expected_error.empty()) {
 			if (!StringUtil::Contains(result.GetError(), statement.expected_error)) {
-				logger.ExpectedErrorMismatch(statement.expected_error, result);
-				return false;
+				bool success = MatchesRegex(logger, result, statement.expected_error);
+				if (!success) {
+					logger.ExpectedErrorMismatch(statement.expected_error, result);
+					return false;
+				}
+				string success_log =
+				    StringUtil::Format("CheckStatementResult: %s:%d", statement.file_name, statement.query_line);
+				REQUIRE(success_log.c_str());
+				return true;
 			}
 		}
 	}
@@ -438,23 +446,7 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 		return true;
 	}
 	if (StringUtil::StartsWith(rvalue_str, "<REGEX>:") || StringUtil::StartsWith(rvalue_str, "<!REGEX>:")) {
-		bool want_match = StringUtil::StartsWith(rvalue_str, "<REGEX>:");
-		string regex_str = StringUtil::Replace(StringUtil::Replace(rvalue_str, "<REGEX>:", ""), "<!REGEX>:", "");
-		RE2::Options options;
-		options.set_dot_nl(true);
-		RE2 re(regex_str, options);
-		if (!re.ok()) {
-			logger.PrintErrorHeader("Test error!");
-			logger.PrintLineSep();
-			std::cerr << termcolor::red << termcolor::bold << "Failed to parse regex: " << re.error()
-			          << termcolor::reset << std::endl;
-			logger.PrintLineSep();
-			return false;
-		}
-		bool regex_matches = RE2::FullMatch(lvalue_str, re);
-		if (regex_matches == want_match) {
-			return true;
-		}
+		return MatchesRegex(logger, result, rvalue_str);
 	}
 	// some times require more checking (specifically floating point numbers because of inaccuracies)
 	// if not equivalent we need to cast to the SQL type to verify
@@ -521,6 +513,28 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 		return false;
 	}
 	return true;
+}
+
+bool TestResultHelper::MatchesRegex(SQLLogicTestLogger &logger, MaterializedQueryResult &result, string rvalue_str) {
+	bool want_match = StringUtil::StartsWith(rvalue_str, "<REGEX>:");
+	string regex_str = StringUtil::Replace(rvalue_str, "<REGEX>:", "");
+	RE2::Options options;
+	options.set_dot_nl(true);
+	RE2 re(regex_str, options);
+	if (!re.ok()) {
+		logger.PrintErrorHeader("Test error!");
+		logger.PrintLineSep();
+		std::cerr << termcolor::red << termcolor::bold << "Failed to parse regex: " << re.error() << termcolor::reset
+		          << std::endl;
+		logger.PrintLineSep();
+		return false;
+	}
+	auto resString = result.ToString();
+	bool regex_matches = RE2::FullMatch(result.ToString(), re);
+	if (regex_matches == want_match) {
+		return true;
+	}
+	return false;
 }
 
 } // namespace duckdb

@@ -13,6 +13,7 @@ fuzzer = None
 db = None
 shell = None
 perform_checks = True
+dry = False
 for param in sys.argv:
     if param == '--sqlsmith':
         fuzzer = 'sqlsmith'
@@ -32,6 +33,8 @@ for param in sys.argv:
         shell = param.replace('--shell=', '')
     elif param.startswith('--seed='):
         seed = int(param.replace('--seed=', ''))
+    elif param.startswith('--dry'):
+        dry = True
 
 if fuzzer is None:
     print("Unrecognized fuzzer to run, expected e.g. --sqlsmith or --duckfuzz")
@@ -94,7 +97,11 @@ def run_shell_command(cmd):
 
 
 # first get a list of all github issues, and check if we can still reproduce them
-current_errors = fuzzer_helper.extract_github_issues(shell, perform_checks)
+
+if dry:
+    current_errors = []
+else:
+    current_errors = fuzzer_helper.extract_github_issues(shell, perform_checks)
 
 max_queries = 2000
 last_query_log_file = 'sqlsmith.log'
@@ -148,11 +155,12 @@ print("Attempting to reproduce and file issue...")
 with open(last_query_log_file, 'r') as f:
     last_query = f.read()
 
-cmd = load_script + '\n' + last_query
+with open(complete_log_file, 'r') as f:
+    all_queries = f.read()
 
-(stdout, stderr, returncode) = run_shell_command(cmd)
+(stdout, stderr, returncode) = run_shell_command(load_script + all_queries)
 if returncode == 0:
-    print("Failed to reproduce the issue with a single command...")
+    print("Failed to reproduce the issue...")
     exit(0)
 
 print("==============  STDOUT  ================")
@@ -161,11 +169,10 @@ print("==============  STDERR  =================")
 print(stderr)
 print("==========================================")
 if not fuzzer_helper.is_internal_error(stderr):
-    print("Failed to reproduce the internal error with a single command")
+    print("Failed to reproduce the internal error")
     exit(0)
 
 error_msg = reduce_sql.sanitize_error(stderr)
-
 
 print("=========================================")
 print("         Reproduced successfully         ")
@@ -180,14 +187,13 @@ if error_msg in current_errors:
     )
     exit(0)
 
-print(last_query)
-
 print("=========================================")
 print("        Attempting to reduce query       ")
 print("=========================================")
-
 # try to reduce the query as much as possible
-last_query = reduce_sql.reduce(last_query, load_script, shell, error_msg)
+# reduce_multi_statement checks just the last statement first as a heuristic to see if
+# only the last statement causes the error.
+required_queries = reduce_sql.reduce_multi_statement(all_queries, shell, load_script)
 cmd = load_script + '\n' + last_query + "\n"
 
 fuzzer_helper.file_issue(cmd, error_msg, fuzzer_name, seed, git_hash)

@@ -533,6 +533,7 @@ public:
 
 	bool initialized;
 	JoinHashTable::ProbeSpillLocalAppendState spill_state;
+	JoinHashTable::ProbeState probe_state;
 	//! Chunk to sink data into for external join
 	DataChunk spill_chunk;
 
@@ -610,10 +611,11 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 
 	// perform the actual probe
 	if (sink.external) {
-		state.scan_structure = sink.hash_table->ProbeAndSpill(state.join_keys, state.join_key_state, input,
-		                                                      *sink.probe_spill, state.spill_state, state.spill_chunk);
+		state.scan_structure =
+		    sink.hash_table->ProbeAndSpill(state.join_keys, state.join_key_state, state.probe_state, input,
+		                                   *sink.probe_spill, state.spill_state, state.spill_chunk);
 	} else {
-		state.scan_structure = sink.hash_table->Probe(state.join_keys, state.join_key_state);
+		state.scan_structure = sink.hash_table->Probe(state.join_keys, state.join_key_state, state.probe_state);
 	}
 	state.scan_structure->Next(state.join_keys, input, chunk);
 	return OperatorResultType::HAVE_MORE_OUTPUT;
@@ -716,11 +718,13 @@ public:
 	DataChunk join_keys;
 	DataChunk payload;
 	TupleDataChunkState join_key_state;
+
 	//! Column indices to easily reference the join keys/payload columns in probe_chunk
 	vector<idx_t> join_key_indices;
 	vector<idx_t> payload_indices;
 	//! Scan structure for the external probe
 	unique_ptr<JoinHashTable::ScanStructure> scan_structure;
+	JoinHashTable::ProbeState probe_state;
 	bool empty_ht_probe_in_progress;
 
 	//! Chunks assigned to this thread for a full/outer scan
@@ -991,7 +995,7 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 	}
 
 	// Perform the probe
-	scan_structure = sink.hash_table->Probe(join_keys, join_key_state, precomputed_hashes);
+	scan_structure = sink.hash_table->Probe(join_keys, join_key_state, probe_state, precomputed_hashes);
 	scan_structure->Next(join_keys, payload, chunk);
 }
 

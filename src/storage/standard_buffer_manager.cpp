@@ -428,9 +428,15 @@ vector<TemporaryFileInformation> StandardBufferManager::GetTemporaryFiles() {
 		if (!StringUtil::EndsWith(name, ".block")) {
 			return;
 		}
+
+		// Another process or thread can delete the file before we can get its file size.
+		auto handle = fs.OpenFile(name, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
+		if (!handle) {
+			return;
+		}
+
 		TemporaryFileInformation info;
 		info.path = name;
-		auto handle = fs.OpenFile(name, FileFlags::FILE_FLAGS_READ);
 		info.size = NumericCast<idx_t>(fs.GetFileSize(*handle));
 		handle.reset();
 		result.push_back(info);

@@ -49,6 +49,8 @@ public:
 	unique_ptr<Block> CreateBlock(block_id_t block_id, FileBuffer *source_buffer) override;
 	//! Return the next free block id
 	block_id_t GetFreeBlockId() override;
+	//! Check the next free block id - but do not assign or allocate it
+	block_id_t PeekFreeBlockId() override;
 	//! Returns whether or not a specified block is the root block
 	bool IsRootBlock(MetaBlockPointer root) override;
 	//! Mark a block as free (immediately re-writeable)

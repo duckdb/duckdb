@@ -348,6 +348,15 @@ block_id_t SingleFileBlockManager::GetFreeBlockId() {
 	return block;
 }
 
+block_id_t SingleFileBlockManager::PeekFreeBlockId() {
+	lock_guard<mutex> lock(block_lock);
+	if (!free_list.empty()) {
+		return *free_list.begin();
+	} else {
+		return max_block;
+	}
+}
+
 void SingleFileBlockManager::MarkBlockAsFree(block_id_t block_id) {
 	lock_guard<mutex> lock(block_lock);
 	D_ASSERT(block_id >= 0);

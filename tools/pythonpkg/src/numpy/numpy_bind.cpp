@@ -10,7 +10,6 @@ namespace duckdb {
 void NumpyBind::Bind(const ClientContext &context, py::handle df, vector<PandasColumnBindData> &bind_columns,
                      vector<LogicalType> &return_types, vector<string> &names) {
 
-	auto &config = DBConfig::GetConfig(context);
 	auto df_columns = py::list(df.attr("keys")());
 	auto df_types = py::list();
 	for (auto item : py::cast<py::dict>(df)) {
@@ -61,7 +60,7 @@ void NumpyBind::Bind(const ClientContext &context, py::handle df, vector<PandasC
 		}
 
 		if (bind_data.numpy_type.type == NumpyNullableType::OBJECT) {
-			PandasAnalyzer analyzer(config);
+			PandasAnalyzer analyzer(context);
 			if (analyzer.Analyze(get_fun(df_columns[col_idx]))) {
 				duckdb_col_type = analyzer.AnalyzedType();
 			}

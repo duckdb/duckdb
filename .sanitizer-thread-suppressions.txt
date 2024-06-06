@@ -1,5 +1,6 @@
 deadlock:InitializeIndexes
 race:NextInnerJoin
+race:NextRightSemiOrAntiJoin
 race:duckdb_moodycamel
 race:duckdb_jemalloc
 race:AddToEvictionQueue
