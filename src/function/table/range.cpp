@@ -93,6 +93,8 @@ static OperatorResultType RangeFunction(ExecutionContext &context, TableFunction
 			// initialize for the current input row
 			if (state.current_input_row >= input.size()) {
 				// ran out of rows
+				state.current_input_row = 0;
+				state.initialized_row = false;
 				return OperatorResultType::NEED_MORE_INPUT;
 			}
 			GenerateRangeParameters<GENERATE_SERIES>(input, state.current_input_row, state);
@@ -186,9 +188,11 @@ static void GenerateRangeDateTimeParameters(DataChunk &input, idx_t row_id, Rang
 
 	for(idx_t c = 0; c < input.ColumnCount(); c++) {
 		if (FlatVector::IsNull(input.data[c], row_id)) {
-			result.start = GENERATE_SERIES ? timestamp_t(1) : timestamp_t(0);
+			result.start = timestamp_t(0);
 			result.end = timestamp_t(0);
 			result.increment = interval_t();
+			result.greater_than_check = true;
+			result.inclusive_bound = false;
 			return;
 		}
 	}
@@ -239,6 +243,8 @@ static OperatorResultType RangeDateTimeFunction(ExecutionContext &context, Table
 			// initialize for the current input row
 			if (state.current_input_row >= input.size()) {
 				// ran out of rows
+				state.current_input_row = 0;
+				state.initialized_row = false;
 				return OperatorResultType::NEED_MORE_INPUT;
 			}
 			GenerateRangeDateTimeParameters<GENERATE_SERIES>(input, state.current_input_row, state);

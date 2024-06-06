@@ -30,7 +30,7 @@ static bool IsTableInTableOutFunction(TableFunctionCatalogEntry &table_function)
 		const auto &function = table_function.functions.GetFunctionReferenceByOffset(function_idx);
 		if (function.in_out_function) {
 			has_in_out_function = true;
-		} else if (function.function) {
+		} else if (function.function || function.bind_replace) {
 			has_standard_table_function = true;
 		} else {
 			throw InternalException("Function \"%s\" has neither in_out_function nor function defined", table_function.name);
@@ -58,6 +58,7 @@ void Binder::BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &e
 		select_node->from_table = make_uniq<EmptyTableRef>();
 		subquery_node = std::move(select_node);
 	}
+	binder->can_contain_nulls = true;
 	auto node = binder->BindNode(*subquery_node);
 	subquery = make_uniq<BoundSubqueryRef>(std::move(binder), std::move(node));
 	MoveCorrelatedExpressions(*subquery->binder);
