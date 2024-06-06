@@ -41,6 +41,8 @@ bool CanWeCastIt(LogicalTypeId source, LogicalTypeId destination) {
 		return true;
 	}
 	switch (source) {
+	case LogicalTypeId::SQLNULL:
+		return true;
 	case LogicalTypeId::TINYINT:
 		return destination == LogicalTypeId::SMALLINT || destination == LogicalTypeId::INTEGER ||
 		       destination == LogicalTypeId::BIGINT || destination == LogicalTypeId::DECIMAL ||
@@ -122,7 +124,8 @@ CSVFileScan::CSVFileScan(ClientContext &context, shared_ptr<CSVBufferManager> bu
 		                                    bind_data.return_names, column_ids, nullptr, file_path, context, nullptr);
 		InitializeFileNamesTypes();
 		return;
-	} else if (!bind_data.column_info.empty()) {
+	}
+	if (!bind_data.column_info.empty()) {
 		// Serialized Union By name
 		names = bind_data.column_info[0].names;
 		types = bind_data.column_info[0].types;
@@ -222,7 +225,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 			auto result = sniffer.SniffCSV();
 			file_schema.Initialize(result.names, result.return_types, options.file_path);
 		} else if (file_idx > 0 && buffer_manager->file_handle->FileSize() > 0) {
-			CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
+			CSVSniffer sniffer(options, buffer_manager, state_machine_cache, false);
 			auto result = sniffer.SniffCSV();
 			if (!options.file_options.AnySet()) {
 				// Union By name has its own mystical rules
