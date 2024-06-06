@@ -67,9 +67,9 @@ SinkNextBatchType PhysicalBufferedBatchCollector::NextBatch(ExecutionContext &co
 	auto &buffered_data = gstate.buffered_data->Cast<BatchedBufferedData>();
 	buffered_data.CompleteBatch(batch);
 	lstate.current_batch = new_index;
-	// FIXME: this can move from 'other' chunks to 'current' chunks, increasing the 'current_batch_tuple_count'
-	// We might want to block here if 'current_batch_tuple_count' has already reached the threshold
-	// So we don't completely disregard the BUFFER_SIZE we set
+	// FIXME: this can move from the buffer to the read queue, increasing the 'read_queue_byte_count'
+	// We might want to block here if 'read_queue_byte_count' has already reached the ReadQueueCapacity()
+	// So we don't completely disregard the 'streaming_buffer_size' that was set
 	buffered_data.UpdateMinBatchIndex(min_batch_index);
 	return SinkNextBatchType::READY;
 }
@@ -82,9 +82,9 @@ SinkCombineResultType PhysicalBufferedBatchCollector::Combine(ExecutionContext &
 	auto min_batch_index = lstate.partition_info.min_batch_index.GetIndex();
 	auto &buffered_data = gstate.buffered_data->Cast<BatchedBufferedData>();
 
-	// FIXME: this can move from 'other' chunks to 'current' chunks, increasing the 'current_batch_tuple_count'
-	// We might want to block here if 'current_batch_tuple_count' has already reached the threshold
-	// So we don't completely disregard the BUFFER_SIZE we set
+	// FIXME: this can move from the buffer to the read queue, increasing the 'read_queue_byte_count'
+	// We might want to block here if 'read_queue_byte_count' has already reached the ReadQueueCapacity()
+	// So we don't completely disregard the 'streaming_buffer_size' that was set
 	buffered_data.UpdateMinBatchIndex(min_batch_index);
 	return SinkCombineResultType::FINISHED;
 }
