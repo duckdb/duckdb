@@ -10,6 +10,7 @@ and the [documentation page](https://duckpgq.notion.site/duckpgq/b8ac652667964f9
 # Loading DuckPGQ into DuckDB
 The extension currently only works for DuckDB version 0.10.1 on macOS and Linux. 
 
+
 Since this is a third-party extension, DuckDB must be started in `unsigned` mode to load it. The extension can be loaded with the following commands: 
 
 For CLI:
