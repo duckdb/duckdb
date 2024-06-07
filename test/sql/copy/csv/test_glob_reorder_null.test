@@ -2,7 +2,6 @@
 # description: Test the glob reorder on a file that is mostly null
 # group: [csv]
 
-
 statement ok
 PRAGMA enable_verification
 
