@@ -25,7 +25,22 @@ namespace duckdb {
 
 enum class TableFunctionBindType { STANDARD_TABLE_FUNCTION, TABLE_IN_OUT_FUNCTION, TABLE_PARAMETER_FUNCTION };
 
-static TableFunctionBindType GetTableFunctionBindType(TableFunctionCatalogEntry &table_function) {
+static TableFunctionBindType GetTableFunctionBindType(TableFunctionCatalogEntry &table_function,
+                                                      vector<unique_ptr<ParsedExpression>> &expressions) {
+	// first check if all expressions are scalar
+	// if they are we always bind as a standard table function
+	bool all_scalar = true;
+	for (auto &expr : expressions) {
+		if (!expr->IsScalar()) {
+			all_scalar = false;
+			break;
+		}
+	}
+	if (all_scalar) {
+		return TableFunctionBindType::STANDARD_TABLE_FUNCTION;
+	}
+	// if we have non-scalar parameters - we need to look at the function definition to decide how to bind
+	// if a function does not have an in_out_function defined, we need to bind as a standard table function regardless
 	bool has_in_out_function = false;
 	bool has_standard_table_function = false;
 	bool has_table_parameter = false;
@@ -80,7 +95,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
                                          vector<LogicalType> &arguments, vector<Value> &parameters,
                                          named_parameter_map_t &named_parameters,
                                          unique_ptr<BoundSubqueryRef> &subquery, ErrorData &error) {
-	auto bind_type = GetTableFunctionBindType(table_function);
+	auto bind_type = GetTableFunctionBindType(table_function, expressions);
 	if (bind_type == TableFunctionBindType::TABLE_IN_OUT_FUNCTION) {
 		// bind table in-out function
 		BindTableInTableOutFunction(expressions, subquery);

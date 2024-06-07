@@ -11,6 +11,42 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Range (integers)
 //===--------------------------------------------------------------------===//
+static void GetParameters(int64_t values[], idx_t value_count, hugeint_t &start, hugeint_t &end, hugeint_t &increment) {
+	if (value_count < 2) {
+		// single argument: only the end is specified
+		start = 0;
+		end = values[0];
+	} else {
+		// two arguments: first two arguments are start and end
+		start = values[0];
+		end = values[1];
+	}
+	if (value_count < 3) {
+		increment = 1;
+	} else {
+		increment = values[2];
+	}
+}
+
+struct RangeFunctionBindData : public TableFunctionData {
+	explicit RangeFunctionBindData(const vector<Value> &inputs) : cardinality(0) {
+		int64_t values[3];
+		for (idx_t i = 0; i < inputs.size(); i++) {
+			if (inputs[i].IsNull()) {
+				return;
+			}
+			values[i] = inputs[i].GetValue<int64_t>();
+		}
+		hugeint_t start;
+		hugeint_t end;
+		hugeint_t increment;
+		GetParameters(values, inputs.size(), start, end, increment);
+		cardinality = Hugeint::Cast<idx_t>((end - start) / increment);
+	}
+
+	idx_t cardinality;
+};
+
 template <bool GENERATE_SERIES>
 static unique_ptr<FunctionData> RangeFunctionBind(ClientContext &context, TableFunctionBindInput &input,
                                                   vector<LogicalType> &return_types, vector<string> &names) {
@@ -20,7 +56,10 @@ static unique_ptr<FunctionData> RangeFunctionBind(ClientContext &context, TableF
 	} else {
 		names.emplace_back("range");
 	}
-	return nullptr;
+	if (input.inputs.empty() || input.inputs.size() > 3) {
+		return nullptr;
+	}
+	return make_uniq<RangeFunctionBindData>(input.inputs);
 }
 
 struct RangeFunctionLocalState : public LocalTableFunctionState {
@@ -53,26 +92,21 @@ static void GenerateRangeParameters(DataChunk &input, idx_t row_id, RangeFunctio
 			return;
 		}
 	}
-	if (input.ColumnCount() < 2) {
-		// single argument: only the end is specified
-		result.start = 0;
-		result.end = FlatVector::GetValue<int64_t>(input.data[0], row_id);
-	} else {
-		// two arguments: first two arguments are start and end
-		result.start = FlatVector::GetValue<int64_t>(input.data[0], row_id);
-		result.end = FlatVector::GetValue<int64_t>(input.data[1], row_id);
+	int64_t values[3];
+	for (idx_t c = 0; c < input.ColumnCount(); c++) {
+		if (c >= 3) {
+			throw InternalException("Unsupported parameter count for range function");
+		}
+		values[c] = FlatVector::GetValue<int64_t>(input.data[c], row_id);
 	}
-	if (input.ColumnCount() < 3) {
-		result.increment = 1;
-	} else {
-		result.increment = FlatVector::GetValue<int64_t>(input.data[2], row_id);
-	}
+	GetParameters(values, input.ColumnCount(), result.start, result.end, result.increment);
 	if (result.increment == 0) {
 		throw BinderException("interval cannot be 0!");
 	}
 	if (result.start > result.end && result.increment > 0) {
 		throw BinderException("start is bigger than end, but increment is positive: cannot generate infinite series");
-	} else if (result.start < result.end && result.increment < 0) {
+	}
+	if (result.start < result.end && result.increment < 0) {
 		throw BinderException("start is smaller than end, but increment is negative: cannot generate infinite series");
 	}
 	if (GENERATE_SERIES) {
@@ -131,10 +165,11 @@ static OperatorResultType RangeFunction(ExecutionContext &context, TableFunction
 }
 
 unique_ptr<NodeStatistics> RangeCardinality(ClientContext &context, const FunctionData *bind_data_p) {
-	return nullptr;
-	// auto &bind_data = bind_data_p->Cast<RangeFunctionBindData>();
-	// idx_t cardinality = Hugeint::Cast<idx_t>((bind_data.end - bind_data.start) / bind_data.increment);
-	// return make_uniq<NodeStatistics>(cardinality, cardinality);
+	if (!bind_data_p) {
+		return nullptr;
+	}
+	auto &bind_data = bind_data_p->Cast<RangeFunctionBindData>();
+	return make_uniq<NodeStatistics>(bind_data.cardinality, bind_data.cardinality);
 }
 
 //===--------------------------------------------------------------------===//
