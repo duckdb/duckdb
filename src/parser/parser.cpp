@@ -1,5 +1,6 @@
 #include "duckdb/parser/parser.hpp"
 
+#include "duckdb/parser/group_by_node.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/parser/query_error_context.hpp"
@@ -8,7 +9,6 @@
 #include "duckdb/parser/statement/extension_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
-#include "duckdb/parser/group_by_node.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "parser/parser.hpp"
@@ -50,6 +50,7 @@ bool Parser::StripUnicodeSpaces(const string &query_str, string &new_query) {
 	const idx_t USP_LEN = 3;
 	idx_t pos = 0;
 	unsigned char quote;
+	pair<const unsigned char *, idx_t> dollar_quote_tag;
 	vector<UnicodeSpace> unicode_spaces;
 	auto query = const_uchar_ptr_cast(query_str.c_str());
 	auto qsize = query_str.size();
@@ -95,9 +96,16 @@ regular:
 			quote = query[pos];
 			pos++;
 			goto in_quotes;
-		} else if (query[pos] == '$' && query[pos + 1] == '$') {
-			pos += 2;
-			goto in_dollar_quotes;
+		} else if (query[pos] == '$' && (query[pos + 1] < '0' || query[pos + 1] > '9')) {
+			// (optionally tagged) dollar-quoted string, which can't start with a digit
+			auto start = &query[++pos];
+			for (; pos + 2 < qsize; pos++) {
+				if (query[pos] == '$') {
+					dollar_quote_tag = make_pair(start, &query[pos] - start);
+					goto in_dollar_quotes;
+				}
+			}
+			goto end;
 		} else if (query[pos] == '-' && query[pos + 1] == '-') {
 			goto in_comment;
 		}
@@ -118,8 +126,10 @@ in_quotes:
 	goto end;
 in_dollar_quotes:
 	for (; pos + 2 < qsize; pos++) {
-		if (query[pos] == '$' && query[pos + 1] == '$') {
-			pos += 2;
+		if (query[pos] == '$' && qsize - (pos + 1) >= dollar_quote_tag.second + 1 && // found '$' and enough space left
+		    query[pos + dollar_quote_tag.second + 1] == '$' &&                       // ending '$' at the right spot
+		    memcmp(&query[pos + 1], dollar_quote_tag.first, dollar_quote_tag.second) == 0) { // tags match
+			pos += dollar_quote_tag.second + 1;
 			goto regular;
 		}
 	}

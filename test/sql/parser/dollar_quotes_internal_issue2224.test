@@ -10,6 +10,11 @@ select $$ $$ = $$　$$;
 ----
 false
 
+query I
+select $tag$ $tag$ = $tag$　$tag$;
+----
+false
+
 # worked properly before for these quotes
 query I
 select ' ' = '　';
@@ -23,7 +28,17 @@ select $$$$ = '';
 true
 
 query I
+select $tag$$tag$ = '';
+----
+true
+
+query I
 select '' = $$$$;
+----
+true
+
+query I
+select '' = $tag$$tag$;
 ----
 true
 
@@ -33,6 +48,28 @@ select $$ $$ = $$　$$ or ' ' = '　';
 false
 
 query I
+select $tag$ $tag$ = $tag$　$tag$ or ' ' = '　';
+----
+false
+
+query I
 select ' ' = '　' or $$ $$ = $$　$$;
 ----
 false
+
+query I
+select ' ' = '　' or $tag$ $tag$ = $tag$　$tag$;
+----
+false
+
+# we can nest dollars if tags don't match
+query I
+select $tag$ $duck$ $tag$ = $tag$　$duck$　$tag$;
+----
+false
+
+# of course we have to try this too
+query I
+select $🦆$duck$🦆$;
+----
+duck
