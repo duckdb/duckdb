@@ -162,7 +162,6 @@ private:
 	                                     DataChunk &input) override;
 };
 
-//! Generate ART keys for an input chunk
 template <>
 void ART::GenerateKeys<>(ArenaAllocator &allocator, DataChunk &input, vector<ARTKey> &keys);
 
