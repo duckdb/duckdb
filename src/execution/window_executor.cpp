@@ -193,7 +193,7 @@ private:
 template <typename T, typename OP>
 struct OperationCompare : public std::function<bool(T, T)> {
 	inline bool operator()(const T &lhs, const T &val) const {
-		return OP::template Operation(lhs, val);
+		return OP::template Operation<T>(lhs, val);
 	}
 };
 
