@@ -74,7 +74,11 @@ unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &l
 		}
 	}
 	if (HasError()) {
-		return make_uniq<MaterializedQueryResult>(error);
+		if (allow_stream_result) {
+			return make_uniq<StreamQueryResult>(error);
+		} else {
+			return make_uniq<MaterializedQueryResult>(error);
+		}
 	}
 	auto result = context->FetchResultInternal(lock, *this);
 	Close();
