@@ -17,7 +17,7 @@
 
 #include "../common/brotli_constants.h"
 #include "../common/dictionary.h"
-#include "../common/platform.h"
+#include "../common/brotli_platform.h"
 #include "compound_dictionary.h"
 #include "encoder_dict.h"
 #include "fast_log.h"

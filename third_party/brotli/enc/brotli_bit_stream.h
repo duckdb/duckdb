@@ -19,7 +19,7 @@
 #include <brotli/types.h>
 
 #include "../common/context.h"
-#include "../common/platform.h"
+#include "../common/brotli_platform.h"
 #include "command.h"
 #include "entropy_encode.h"
 #include "memory.h"

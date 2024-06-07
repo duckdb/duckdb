@@ -6,7 +6,7 @@
 
 /* Hash table on the 4-byte prefixes of static dictionary words. */
 
-#include "../common/platform.h"
+#include "../common/brotli_platform.h"
 #include "dictionary_hash.h"
 
 using namespace duckdb_brotli;

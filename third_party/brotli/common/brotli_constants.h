@@ -15,7 +15,7 @@
 #include <brotli/port.h>
 #include <brotli/types.h>
 
-#include "platform.h"
+#include "brotli_platform.h"
 
 namespace  duckdb_brotli {
 

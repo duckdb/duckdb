@@ -13,7 +13,7 @@
 
 #include "../common/brotli_constants.h"
 #include "../common/context.h"
-#include "../common/platform.h"
+#include "../common/brotli_platform.h"
 #include "bit_cost.h"
 #include "block_splitter.h"
 #include "cluster.h"

@@ -14,7 +14,7 @@
 #include "command.h"
 #include "compress_fragment.h"
 #include "compress_fragment_two_pass.h"
-#include "hash.h"
+#include "brotli_hash.h"
 #include "memory.h"
 #include "brotli_params.h"
 #include "ringbuffer.h"

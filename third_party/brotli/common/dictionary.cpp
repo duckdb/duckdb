@@ -5,7 +5,7 @@
 */
 
 #include "dictionary.h"
-#include "platform.h"
+#include "brotli_platform.h"
 
 using namespace duckdb_brotli;
 

@@ -10,7 +10,7 @@
 #include <brotli/shared_dictionary.h>
 #include <brotli/types.h>
 
-#include "../common/platform.h"
+#include "../common/brotli_platform.h"
 #include "../common/brotli_constants.h"
 #include "memory.h"
 

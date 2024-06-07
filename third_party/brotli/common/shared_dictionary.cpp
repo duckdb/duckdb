@@ -13,7 +13,7 @@
 #include <stdio.h>
 
 #include "dictionary.h"
-#include "platform.h"
+#include "brotli_platform.h"
 #include "shared_dictionary_internal.h"
 
 using namespace duckdb_brotli;

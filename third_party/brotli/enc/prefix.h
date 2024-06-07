@@ -13,7 +13,7 @@
 #include <brotli/types.h>
 
 #include "../common/brotli_constants.h"
-#include "../common/platform.h"
+#include "../common/brotli_platform.h"
 #include "fast_log.h"
 
 namespace duckdb_brotli {
