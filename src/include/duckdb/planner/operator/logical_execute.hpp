@@ -21,7 +21,6 @@ public:
 	explicit LogicalExecute(shared_ptr<PreparedStatementData> prepared_p)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXECUTE), prepared(std::move(prepared_p)) {
 		D_ASSERT(prepared);
-		types = prepared->types;
 	}
 
 	shared_ptr<PreparedStatementData> prepared;
@@ -34,7 +33,7 @@ public:
 
 protected:
 	void ResolveTypes() override {
-		// already resolved
+		types = prepared->types;
 	}
 	vector<ColumnBinding> GetColumnBindings() override {
 		return GenerateColumnBindings(0, types.size());
