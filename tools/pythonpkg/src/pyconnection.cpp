@@ -1522,6 +1522,9 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 	config.AddExtensionOption("pandas_analyze_sample",
 	                          "The maximum number of rows to sample when analyzing a pandas object column.",
 	                          LogicalType::UBIGINT, Value::UBIGINT(1000));
+	config.AddExtensionOption("python_enable_replacements",
+	                          "Whether variables visible to the current stack should be used for replacement scans.",
+	                          LogicalType::BOOLEAN, Value::BOOLEAN(true));
 	if (!DuckDBPyConnection::IsJupyter()) {
 		config_dict["duckdb_api"] = Value("python");
 	} else {
