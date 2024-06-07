@@ -12,6 +12,9 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/planner/expression_binder/constant_binder.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 
@@ -57,9 +60,39 @@ Appender::Appender(Connection &con, const string &schema_name, const string &tab
 		// table could not be found
 		throw CatalogException(StringUtil::Format("Table \"%s.%s\" could not be found", schema_name, table_name));
 	}
+	vector<optional_ptr<const ParsedExpression>> defaults;
 	for (auto &column : description->columns) {
 		types.push_back(column.Type());
+		defaults.push_back(column.HasDefaultValue() ? &column.DefaultValue() : nullptr);
 	}
+	auto binder = Binder::CreateBinder(*context);
+
+	context->RunFunctionInTransaction([&]() {
+		for (idx_t i = 0; i < types.size(); i++) {
+			auto &type = types[i];
+			auto &expr = defaults[i];
+
+			if (!expr) {
+				// Insert NULL
+				default_values[i] = Value(type);
+				continue;
+			}
+			auto default_copy = expr->Copy();
+			D_ASSERT(!default_copy->HasParameter());
+			ConstantBinder default_binder(*binder, *context, "DEFAULT value");
+			default_binder.target_type = type;
+			auto bound_default = default_binder.Bind(default_copy);
+			Value result_value;
+			if (bound_default->IsFoldable() &&
+			    ExpressionExecutor::TryEvaluateScalar(*context, *bound_default, result_value)) {
+				// Insert the evaluated Value
+				default_values[i] = result_value;
+			} else {
+				// These are not supported currently, we don't add them to the 'default_values' map
+			}
+		}
+	});
+
 	InitializeChunk();
 	collection = make_uniq<ColumnDataCollection>(allocator, types);
 }
@@ -374,6 +407,18 @@ void BaseAppender::Flush() {
 
 void Appender::FlushInternal(ColumnDataCollection &collection) {
 	context->Append(*description, collection);
+}
+
+void Appender::AppendDefault() {
+	auto it = default_values.find(column);
+	auto &column_def = description->columns[column];
+	if (it == default_values.end()) {
+		throw NotImplementedException(
+		    "AppendDefault is currently not supported for column \"%s\" because default expression is not foldable.",
+		    column_def.Name());
+	}
+	auto &default_value = it->second;
+	Append(default_value);
 }
 
 void InternalAppender::FlushInternal(ColumnDataCollection &collection) {
