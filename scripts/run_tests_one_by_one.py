@@ -133,9 +133,7 @@ for test_number, test_case in enumerate(test_cases):
         test_cmd = [unittest_program, test_case]
         if args.valgrind:
             test_cmd = ['valgrind'] + test_cmd
-        res = subprocess.run(test_cmd,
-             stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout
-        )
+        res = subprocess.run(test_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
     except subprocess.TimeoutExpired as e:
         print(" (TIMED OUT)", flush=True)
         fail()
