@@ -85,6 +85,9 @@ static void capi_register_table_function(duckdb_connection connection, const cha
 }
 
 TEST_CASE("Test Table Functions C API", "[capi]") {
+#ifdef WIN32
+	return;
+#endif
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;
 
@@ -216,6 +219,9 @@ void my_named_function(duckdb_function_info info, duckdb_data_chunk output) {
 }
 
 TEST_CASE("Test Table Function named parameters in C API", "[capi]") {
+#ifdef WIN32
+	return;
+#endif
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;
 

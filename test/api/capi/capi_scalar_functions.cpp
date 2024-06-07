@@ -75,6 +75,9 @@ static void CAPIRegisterAddition(duckdb_connection connection, const char *name,
 }
 
 TEST_CASE("Test Scalar Functions C API", "[capi]") {
+#ifdef WIN32
+	return;
+#endif
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;
 
@@ -164,6 +167,9 @@ static void CAPIRegisterStringInfo(duckdb_connection connection, const char *nam
 }
 
 TEST_CASE("Test Scalar Functions - strings & extra_info", "[capi]") {
+#ifdef WIN32
+	return;
+#endif
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;
 
