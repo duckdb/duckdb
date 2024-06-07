@@ -454,12 +454,12 @@ def century(ts, /) -> FunctionExpression:
 
 def current_date() -> FunctionExpression:
     """Returns the current date. Function category: Date"""
-    return FunctionExpression("current_date", )
+    return FunctionExpression("current_date")
 
 
 def today() -> FunctionExpression:
     """Returns the current date Alias for current_date. Function category: Date"""
-    return FunctionExpression("today", )
+    return FunctionExpression("today")
 
 
 def date_diff(part, startdate, enddate, /) -> FunctionExpression:
@@ -570,24 +570,24 @@ def era(ts, /) -> FunctionExpression:
 
 def get_current_time() -> FunctionExpression:
     """Returns the current time. Function category: Date"""
-    return FunctionExpression("get_current_time", )
+    return FunctionExpression("get_current_time")
 
 
 def get_current_timestamp() -> FunctionExpression:
     """Returns the current timestamp. Function category: Date"""
-    return FunctionExpression("get_current_timestamp", )
+    return FunctionExpression("get_current_timestamp")
 
 
 def now() -> FunctionExpression:
     """Returns the current timestamp Alias for get_current_timestamp. Function
     category: Date"""
-    return FunctionExpression("now", )
+    return FunctionExpression("now")
 
 
 def transaction_timestamp() -> FunctionExpression:
     """Returns the current timestamp Alias for get_current_timestamp. Function
     category: Date"""
-    return FunctionExpression("transaction_timestamp", )
+    return FunctionExpression("transaction_timestamp")
 
 
 def hour(ts, /) -> FunctionExpression:
@@ -1017,7 +1017,7 @@ def nextafter(x, y, /) -> FunctionExpression:
 
 def pi() -> FunctionExpression:
     """Returns the value of pi. Function category: Math"""
-    return FunctionExpression("pi", )
+    return FunctionExpression("pi")
 
 
 def radians(x, /) -> FunctionExpression:
@@ -1359,13 +1359,13 @@ def typeof(expression, /) -> FunctionExpression:
 
 def current_query() -> FunctionExpression:
     """Returns the current query as a string. Function category: Generic"""
-    return FunctionExpression("current_query", )
+    return FunctionExpression("current_query")
 
 
 def current_schema() -> FunctionExpression:
     """Returns the name of the currently active schema. Default is main. Function
     category: Generic"""
-    return FunctionExpression("current_schema", )
+    return FunctionExpression("current_schema")
 
 
 def current_schemas(include_implicit, /) -> FunctionExpression:
@@ -1376,7 +1376,7 @@ def current_schemas(include_implicit, /) -> FunctionExpression:
 
 def current_database() -> FunctionExpression:
     """Returns the name of the currently active database. Function category: Generic"""
-    return FunctionExpression("current_database", )
+    return FunctionExpression("current_database")
 
 
 def in_search_path(database_name, schema_name, /) -> FunctionExpression:
@@ -1388,13 +1388,13 @@ def in_search_path(database_name, schema_name, /) -> FunctionExpression:
 def txid_current() -> FunctionExpression:
     """Returns the current transaction’s ID (a BIGINT). It will assign a new one if the
     current transaction does not have one already. Function category: Generic"""
-    return FunctionExpression("txid_current", )
+    return FunctionExpression("txid_current")
 
 
 def version() -> FunctionExpression:
     """Returns the currently active version of DuckDB in this format: v0.3.2. Function
     category: Generic"""
-    return FunctionExpression("version", )
+    return FunctionExpression("version")
 
 
 def starts_with(string, search_string, /) -> FunctionExpression:
@@ -1759,24 +1759,24 @@ def regexp_escape(string, /) -> FunctionExpression:
 
 def random() -> FunctionExpression:
     """Returns a random number between 0 and 1. Function category: Random"""
-    return FunctionExpression("random", )
+    return FunctionExpression("random")
 
 
 def setseed() -> FunctionExpression:
     """Sets the seed to be used for the random function. Function category: Random"""
-    return FunctionExpression("setseed", )
+    return FunctionExpression("setseed")
 
 
 def uuid() -> FunctionExpression:
     """Returns a random UUID similar to this: eeccb8c5-9943-b2bb-bb5e-222f4e14b687.
     Function category: Random"""
-    return FunctionExpression("uuid", )
+    return FunctionExpression("uuid")
 
 
 def gen_random_uuid() -> FunctionExpression:
     """Returns a random UUID similar to this: eeccb8c5-9943-b2bb-bb5e-222f4e14b687
     Alias for uuid. Function category: Random"""
-    return FunctionExpression("gen_random_uuid", )
+    return FunctionExpression("gen_random_uuid")
 
 
 def decode(blob, /) -> FunctionExpression:

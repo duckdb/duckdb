@@ -41,15 +41,24 @@ def generate() -> None:
         expression_parameters = [p for p in def_parameters if p != "/"]
         if optional_parameter:
             function_def.append(f"{indent}if {optional_parameter} is None:")
-            function_def.append(
-                f'{indent * 2}return FunctionExpression("{name}", {", ".join([p for p in expression_parameters if p != optional_parameter])})'
-            )
-        function_def.append(f'{indent}return FunctionExpression("{name}", {", ".join(expression_parameters)})')
+            return_statement = make_return_statement(name, [p for p in expression_parameters if p != optional_parameter])
+            function_def.append(f'{indent*2}{return_statement}')
+
+        return_statement = make_return_statement(name, expression_parameters)
+        function_def.append(f'{indent}{return_statement}')
 
         content.append("\n".join(function_def))
 
     with FUNC_FILE.open("w", encoding="utf-8") as f:
-        f.write("\n\n\n".join(content))
+        # New line at the end of the file to make black formatter happy
+        f.write("\n\n\n".join(content) + "\n")
+
+
+def make_return_statement(function_name: str, expression_parameters: List[str]) -> str:
+    statement = f'return FunctionExpression("{function_name}"'
+    if expression_parameters:
+        statement += ", " + ", ".join(expression_parameters)
+    return statement + ")"
 
 
 _FunctionsMetadata = List[Dict[str, str]]
