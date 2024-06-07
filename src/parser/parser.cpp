@@ -107,7 +107,7 @@ regular:
 			pos++;
 			goto in_quotes;
 		} else if (query[pos] == '$' &&
-		           (query[pos] == '$' || IsValidDollarQuotedStringTagFirstChar(static_cast<char>(query[pos])))) {
+		           (query[pos + 1] == '$' || IsValidDollarQuotedStringTagFirstChar(static_cast<char>(query[pos])))) {
 			// (optionally tagged) dollar-quoted string
 			auto start = &query[++pos];
 			for (; pos + 2 < qsize; pos++) {
