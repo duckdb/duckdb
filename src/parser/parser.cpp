@@ -42,6 +42,16 @@ static bool ReplaceUnicodeSpaces(const string &query, string &new_query, vector<
 	return true;
 }
 
+static bool IsValidDollarQuotedStringTagFirstChar(const char &c) {
+	// the first character can be between A-Z, a-z, or \200 - \377
+	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '\200' && c <= '\377');
+}
+
+static bool IsValidDollarQuotedStringTagSubsequentChar(const char &c) {
+	// subsequent characters can also be between 0-9
+	return IsValidDollarQuotedStringTagFirstChar(c) || (c >= '0' && c <= '9');
+}
+
 // This function strips unicode space characters from the query and replaces them with regular spaces
 // It returns true if any unicode space characters were found and stripped
 // See here for a list of unicode space characters - https://jkorpela.fi/chars/spaces.html
@@ -50,7 +60,7 @@ bool Parser::StripUnicodeSpaces(const string &query_str, string &new_query) {
 	const idx_t USP_LEN = 3;
 	idx_t pos = 0;
 	unsigned char quote;
-	pair<const unsigned char *, idx_t> dollar_quote_tag;
+	string_t dollar_quote_tag;
 	vector<UnicodeSpace> unicode_spaces;
 	auto query = const_uchar_ptr_cast(query_str.c_str());
 	auto qsize = query_str.size();
@@ -96,13 +106,21 @@ regular:
 			quote = query[pos];
 			pos++;
 			goto in_quotes;
-		} else if (query[pos] == '$' && (query[pos + 1] < '0' || query[pos + 1] > '9')) {
-			// (optionally tagged) dollar-quoted string, which can't start with a digit
+		} else if (query[pos] == '$' &&
+		           (query[pos] == '$' || IsValidDollarQuotedStringTagFirstChar(static_cast<char>(query[pos])))) {
+			// (optionally tagged) dollar-quoted string
 			auto start = &query[++pos];
 			for (; pos + 2 < qsize; pos++) {
 				if (query[pos] == '$') {
-					dollar_quote_tag = make_pair(start, &query[pos] - start);
+					// end of tag
+					dollar_quote_tag =
+					    string_t(const_char_ptr_cast(start), NumericCast<uint32_t, int64_t>(&query[pos] - start));
 					goto in_dollar_quotes;
+				}
+
+				if (!IsValidDollarQuotedStringTagSubsequentChar(static_cast<char>(query[pos]))) {
+					// invalid char in dollar-quoted string, continue as normal
+					goto regular;
 				}
 			}
 			goto end;
@@ -126,10 +144,11 @@ in_quotes:
 	goto end;
 in_dollar_quotes:
 	for (; pos + 2 < qsize; pos++) {
-		if (query[pos] == '$' && qsize - (pos + 1) >= dollar_quote_tag.second + 1 && // found '$' and enough space left
-		    query[pos + dollar_quote_tag.second + 1] == '$' &&                       // ending '$' at the right spot
-		    memcmp(&query[pos + 1], dollar_quote_tag.first, dollar_quote_tag.second) == 0) { // tags match
-			pos += dollar_quote_tag.second + 1;
+		if (query[pos] == '$' &&
+		    qsize - (pos + 1) >= dollar_quote_tag.GetSize() + 1 && // found '$' and enough space left
+		    query[pos + dollar_quote_tag.GetSize() + 1] == '$' &&  // ending '$' at the right spot
+		    memcmp(&query[pos + 1], dollar_quote_tag.GetData(), dollar_quote_tag.GetSize()) == 0) { // tags match
+			pos += dollar_quote_tag.GetSize() + 1;
 			goto regular;
 		}
 	}
