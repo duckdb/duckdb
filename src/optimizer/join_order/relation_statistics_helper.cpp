@@ -105,8 +105,8 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 	if (!get.table_filters.filters.empty()) {
 		column_statistics = nullptr;
 		for (auto &it : get.table_filters.filters) {
-            if (get.bind_data && get.function.statistics) {
-                column_statistics = get.function.statistics(context, get.bind_data.get(), it.first);
+			if (get.bind_data && get.function.statistics) {
+				column_statistics = get.function.statistics(context, get.bind_data.get(), it.first);
 			}
 
 			if (column_statistics && it.second->filter_type == TableFilterType::CONJUNCTION_AND) {
