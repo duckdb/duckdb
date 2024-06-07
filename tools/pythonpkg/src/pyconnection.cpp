@@ -1100,6 +1100,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::TableFunction(const string &fna
 	if (params.is_none()) {
 		params = py::list();
 	}
+	if (!py::isinstance<py::list>(params)) {
+		throw InvalidInputException("'params' has to be a list of parameters");
+	}
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
@@ -1436,9 +1439,7 @@ case_insensitive_map_t<Value> TransformPyConfigDict(const py::dict &py_config_di
 void CreateNewInstance(DuckDBPyConnection &res, const string &database, DBConfig &config) {
 	// We don't cache unnamed memory instances (i.e., :memory:)
 	bool cache_instance = database != ":memory:" && !database.empty();
-	if (config.options.enable_external_access) {
-		config.replacement_scans.emplace_back(PythonReplacementScan::Replace);
-	}
+	config.replacement_scans.emplace_back(PythonReplacementScan::Replace);
 	res.database = instance_cache.CreateInstance(database, config, cache_instance);
 	res.connection = make_uniq<Connection>(*res.database);
 	auto &context = *res.connection->context;

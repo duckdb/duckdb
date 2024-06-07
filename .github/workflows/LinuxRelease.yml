@@ -167,6 +167,10 @@ jobs:
         ccache: 1
         aarch64_cross_compile: 1
 
+     - name: Checkout (again)
+       shell: bash
+       run: git checkout ${{ inputs.git_ref }}
+
      - name: Install unixODBC
        shell: bash
        run: | # we need an x86 odbc_config tool to run cmake. fun.
@@ -221,6 +225,10 @@ jobs:
         openssl: 1
         ccache: 1
 
+    - name: Checkout (again)
+      shell: bash
+      run: git checkout ${{ inputs.git_ref }}
+
     - uses: ./.github/actions/build_extensions
       with:
         vcpkg_target_triplet: x64-linux
@@ -260,6 +268,10 @@ jobs:
           openssl: 1
           aarch64_cross_compile: 1
           ccache: 1
+
+      - name: Checkout (again)
+        shell: bash
+        run: git checkout ${{ inputs.git_ref }}
 
       - uses: ./.github/actions/build_extensions
         with:

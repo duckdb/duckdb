@@ -687,18 +687,24 @@ void BasicColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	if (HasDictionary(state)) {
 		column_chunk.meta_data.statistics.distinct_count = DictionarySize(state);
 		column_chunk.meta_data.statistics.__isset.distinct_count = true;
-		column_chunk.meta_data.dictionary_page_offset = start_offset;
+		column_chunk.meta_data.dictionary_page_offset = column_writer.GetTotalWritten();
 		column_chunk.meta_data.__isset.dictionary_page_offset = true;
 		FlushDictionary(state, state.stats_state.get());
 	}
 
 	// record the start position of the pages for this column
-	column_chunk.meta_data.data_page_offset = column_writer.GetTotalWritten();
+	column_chunk.meta_data.data_page_offset = 0;
 	SetParquetStatistics(state, column_chunk);
 
 	// write the individual pages to disk
 	idx_t total_uncompressed_size = 0;
 	for (auto &write_info : state.write_info) {
+		// set the data page offset whenever we see the *first* data page
+		if (column_chunk.meta_data.data_page_offset == 0 && (write_info.page_header.type == PageType::DATA_PAGE ||
+		                                                     write_info.page_header.type == PageType::DATA_PAGE_V2)) {
+			column_chunk.meta_data.data_page_offset = column_writer.GetTotalWritten();
+			;
+		}
 		D_ASSERT(write_info.page_header.uncompressed_page_size > 0);
 		auto header_start_offset = column_writer.GetTotalWritten();
 		writer.Write(write_info.page_header);

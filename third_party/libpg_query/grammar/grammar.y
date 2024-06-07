@@ -58,6 +58,7 @@
 	PGSubLinkType subquerytype;
 	PGViewCheckOption viewcheckoption;
 	PGInsertColumnOrder bynameorposition;
+	PGLoadInstallType loadinstalltype;
 }
 
 %type <node> stmt

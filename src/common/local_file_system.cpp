@@ -485,9 +485,14 @@ int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_byte
 
 bool LocalFileSystem::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes) {
 #if defined(__linux__)
+	// FALLOC_FL_PUNCH_HOLE requires glibc 2.18 or up
+#if __GLIBC__ < 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ < 18)
+	return false;
+#else
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	int res = fallocate(fd, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE, offset_bytes, length_bytes);
 	return res == 0;
+#endif
 #else
 	return false;
 #endif
@@ -609,10 +614,15 @@ bool LocalFileSystem::ListFiles(const string &directory, const std::function<voi
 	if (!DirectoryExists(directory, opener)) {
 		return false;
 	}
-	DIR *dir = opendir(directory.c_str());
+
+	auto dir = opendir(directory.c_str());
 	if (!dir) {
 		return false;
 	}
+
+	// RAII wrapper around DIR to automatically free on exceptions in callback
+	std::unique_ptr<DIR, std::function<void(DIR *)>> dir_unique_ptr(dir, [](DIR *d) { closedir(d); });
+
 	struct dirent *ent;
 	// loop over all files in the directory
 	while ((ent = readdir(dir)) != nullptr) {
@@ -635,7 +645,7 @@ bool LocalFileSystem::ListFiles(const string &directory, const std::function<voi
 		// invoke callback
 		callback(name, status.st_mode & S_IFDIR);
 	}
-	closedir(dir);
+
 	return true;
 }
 

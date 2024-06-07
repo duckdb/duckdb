@@ -8,8 +8,8 @@
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/in_memory_block_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
-#include "duckdb/storage/temporary_memory_manager.hpp"
 #include "duckdb/storage/temporary_file_manager.hpp"
+#include "duckdb/storage/temporary_memory_manager.hpp"
 
 namespace duckdb {
 
@@ -185,45 +185,62 @@ void StandardBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t bl
 }
 
 BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
+	// we need to be careful not to return the BufferHandle to this block while holding the BlockHandle's lock
+	// as exiting this function's scope may cause the destructor of the BufferHandle to be called while holding the lock
+	// the destructor calls Unpin, which grabs the BlockHandle's lock again, causing a deadlock
+	BufferHandle buf;
+
 	idx_t required_memory;
 	{
 		// lock the block
 		lock_guard<mutex> lock(handle->lock);
 		// check if the block is already loaded
 		if (handle->state == BlockState::BLOCK_LOADED) {
-			// the block is loaded, increment the reader count and return a pointer to the handle
+			// the block is loaded, increment the reader count and set the BufferHandle
 			handle->readers++;
-			return handle->Load(handle);
+			buf = handle->Load(handle);
 		}
 		required_memory = handle->memory_usage;
 	}
-	// evict blocks until we have space for the current block
-	unique_ptr<FileBuffer> reusable_buffer;
-	auto reservation =
-	    EvictBlocksOrThrow(handle->tag, required_memory, &reusable_buffer, "failed to pin block of size %s%s",
-	                       StringUtil::BytesToHumanReadableString(required_memory));
-	// lock the handle again and repeat the check (in case anybody loaded in the meantime)
-	lock_guard<mutex> lock(handle->lock);
-	// check if the block is already loaded
-	if (handle->state == BlockState::BLOCK_LOADED) {
-		// the block is loaded, increment the reader count and return a pointer to the handle
-		handle->readers++;
-		reservation.Resize(0);
-		return handle->Load(handle);
+
+	if (buf.IsValid()) {
+		return buf; // the block was already loaded, return it without holding the BlockHandle's lock
+	} else {
+		// evict blocks until we have space for the current block
+		unique_ptr<FileBuffer> reusable_buffer;
+		auto reservation =
+		    EvictBlocksOrThrow(handle->tag, required_memory, &reusable_buffer, "failed to pin block of size %s%s",
+		                       StringUtil::BytesToHumanReadableString(required_memory));
+
+		// lock the handle again and repeat the check (in case anybody loaded in the meantime)
+		lock_guard<mutex> lock(handle->lock);
+		// check if the block is already loaded
+		if (handle->state == BlockState::BLOCK_LOADED) {
+			// the block is loaded, increment the reader count and return a pointer to the handle
+			handle->readers++;
+			reservation.Resize(0);
+			buf = handle->Load(handle);
+		} else {
+			// now we can actually load the current block
+			D_ASSERT(handle->readers == 0);
+			handle->readers = 1;
+			buf = handle->Load(handle, std::move(reusable_buffer));
+			handle->memory_charge = std::move(reservation);
+			// in the case of a variable sized block, the buffer may be smaller than a full block.
+			int64_t delta =
+			    NumericCast<int64_t>(handle->buffer->AllocSize()) - NumericCast<int64_t>(handle->memory_usage);
+			if (delta) {
+				D_ASSERT(delta < 0);
+				handle->memory_usage += static_cast<idx_t>(delta);
+				handle->memory_charge.Resize(handle->memory_usage);
+			}
+			D_ASSERT(handle->memory_usage == handle->buffer->AllocSize());
+		}
 	}
-	// now we can actually load the current block
-	D_ASSERT(handle->readers == 0);
-	handle->readers = 1;
-	auto buf = handle->Load(handle, std::move(reusable_buffer));
-	handle->memory_charge = std::move(reservation);
-	// In the case of a variable sized block, the buffer may be smaller than a full block.
-	int64_t delta = NumericCast<int64_t>(handle->buffer->AllocSize()) - NumericCast<int64_t>(handle->memory_usage);
-	if (delta) {
-		D_ASSERT(delta < 0);
-		handle->memory_usage += NumericCast<idx_t>(delta);
-		handle->memory_charge.Resize(handle->memory_usage);
-	}
-	D_ASSERT(handle->memory_usage == handle->buffer->AllocSize());
+
+	// we should have a valid BufferHandle by now, either because the block was already loaded, or because we loaded it
+	// return it without holding the BlockHandle's lock
+	D_ASSERT(buf.IsValid());
 	return buf;
 }
 

@@ -651,7 +651,13 @@ public:
 		bool require_extra_columns =
 		    result->multi_file_reader_state && result->multi_file_reader_state->RequiresExtraColumns();
 		if (input.CanRemoveFilterColumns() || require_extra_columns) {
-			result->projection_ids = input.projection_ids;
+			if (!input.projection_ids.empty()) {
+				result->projection_ids = input.projection_ids;
+			} else {
+				result->projection_ids.resize(input.column_ids.size());
+				iota(begin(result->projection_ids), end(result->projection_ids), 0);
+			}
+
 			const auto table_types = bind_data.types;
 			for (const auto &col_idx : input.column_ids) {
 				if (IsRowIdColumnId(col_idx)) {
@@ -1445,6 +1451,14 @@ void ParquetExtension::Load(DuckDB &db) {
 
 std::string ParquetExtension::Name() {
 	return "parquet";
+}
+
+std::string ParquetExtension::Version() const {
+#ifdef EXT_VERSION_PARQUET
+	return EXT_VERSION_PARQUET;
+#else
+	return "";
+#endif
 }
 
 } // namespace duckdb

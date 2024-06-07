@@ -104,7 +104,7 @@ runs:
       run: |
         echo "VCPKG_TOOLCHAIN_PATH=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" >> $GITHUB_ENV
         echo "VCPKG_TARGET_TRIPLET=${{ inputs.vcpkg_target_triplet }}" >> $GITHUB_ENV
-        
+
     - name: workaround for https://github.com/duckdb/duckdb/issues/8360
       if: inputs.vcpkg_target_triplet == 'x64-windows-static-md'
       shell: bash
@@ -120,8 +120,8 @@ runs:
       shell: bash
       if: inputs.deploy_as == 'windows_amd64'
       env:
-        OVERLAY_TRIPLET_SRC:  ${{ github.workspace }}/vcpkg/triplets/community/x64-windows-static-md.cmake
-        OVERLAY_TRIPLET_DST:  ${{ github.workspace }}/overlay_triplets/x64-windows-static-md.cmake
+        OVERLAY_TRIPLET_SRC: ${{ github.workspace }}/vcpkg/triplets/community/x64-windows-static-md.cmake
+        OVERLAY_TRIPLET_DST: ${{ github.workspace }}/overlay_triplets/x64-windows-static-md.cmake
       run: |
         mkdir overlay_triplets
         cp $OVERLAY_TRIPLET_SRC $OVERLAY_TRIPLET_DST

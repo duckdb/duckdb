@@ -1,0 +1,39 @@
+# name: test/sql/catalog/view/recursive_view_with_dependencies.test
+# description: Issue #3017: Querying View of a View Crashes
+# group: [view]
+
+statement ok
+set storage_compatibility_version='latest'
+
+statement ok
+set enable_view_dependencies=true
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE IF NOT EXISTS test (val INTEGER);
+
+statement ok
+INSERT INTO test(val) VALUES (1), (2), (3);
+
+# recursive view definition
+statement ok
+CREATE OR REPLACE VIEW foo AS (SELECT * FROM test);
+
+statement error
+CREATE OR REPLACE VIEW foo AS (SELECT * FROM foo);
+----
+Catalog Error: CREATE OR REPLACE is not allowed to depend on itself
+
+# more complex recursive view definition
+statement ok
+CREATE OR REPLACE VIEW foo AS (SELECT * FROM test);
+
+statement ok
+CREATE OR REPLACE VIEW foo2 AS (SELECT * FROM foo);
+
+statement error
+CREATE OR REPLACE VIEW foo AS (SELECT (SELECT * FROM foo2));
+----
+Catalog Error: CREATE OR REPLACE is not allowed to depend on itself
