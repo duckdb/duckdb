@@ -129,6 +129,8 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 		} else if (s_ele.logicalType.__isset.TIMESTAMP) {
 			if (s_ele.logicalType.TIMESTAMP.isAdjustedToUTC) {
 				return LogicalType::TIMESTAMP_TZ;
+			} else if (s_ele.logicalType.TIMESTAMP.unit.__isset.NANOS) {
+				return LogicalType::TIMESTAMP_NS;
 			}
 			return LogicalType::TIMESTAMP;
 		} else if (s_ele.logicalType.__isset.TIME) {

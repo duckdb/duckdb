@@ -154,6 +154,10 @@ public:
 	DUCKDB_API static timestamp_t FromEpochNanoSecondsPossiblyInfinite(int64_t nanos);
 	DUCKDB_API static timestamp_t FromEpochNanoSeconds(int64_t nanos);
 
+	//! Construct ns timestamps from various epoch units
+	DUCKDB_API static timestamp_ns_t TimestampNsFromEpochMicros(int64_t micros);
+	DUCKDB_API static timestamp_ns_t TimestampNsFromEpochMillis(int64_t millis);
+
 	//! Try convert a timestamp to epoch (in nanoseconds)
 	DUCKDB_API static bool TryGetEpochNanoSeconds(timestamp_t timestamp, int64_t &result);
 	//! Convert the epoch (in seconds) to a timestamp

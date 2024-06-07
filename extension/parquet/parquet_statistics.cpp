@@ -244,6 +244,38 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 			return Value::TIMESTAMP(timestamp_value);
 		}
 	}
+	case LogicalTypeId::TIMESTAMP_NS: {
+		timestamp_ns_t timestamp_value;
+		if (schema_ele.type == Type::INT96) {
+			if (stats.size() != sizeof(Int96)) {
+				throw InternalException("Incorrect stats size for type TIMESTAMP_NS");
+			}
+			timestamp_value = ImpalaTimestampToTimestampNS(Load<Int96>(stats_data));
+		} else {
+			D_ASSERT(schema_ele.type == Type::INT64);
+			if (stats.size() != sizeof(int64_t)) {
+				throw InternalException("Incorrect stats size for type TIMESTAMP_NS");
+			}
+			auto val = Load<int64_t>(stats_data);
+			if (schema_ele.__isset.logicalType && schema_ele.logicalType.__isset.TIMESTAMP) {
+				// logical type
+				if (schema_ele.logicalType.TIMESTAMP.unit.__isset.MILLIS) {
+					timestamp_value = ParquetTimestampMsToTimestampNs(val);
+				} else if (schema_ele.logicalType.TIMESTAMP.unit.__isset.NANOS) {
+					timestamp_value = ParquetTimestampNsToTimestampNs(val);
+				} else if (schema_ele.logicalType.TIMESTAMP.unit.__isset.MICROS) {
+					timestamp_value = ParquetTimestampUsToTimestampNs(val);
+				} else {
+					throw InternalException("Timestamp (NS) logicalType is set but unit is unknown");
+				}
+			} else if (schema_ele.converted_type == duckdb_parquet::format::ConvertedType::TIMESTAMP_MILLIS) {
+				timestamp_value = ParquetTimestampMsToTimestampNs(val);
+			} else {
+				timestamp_value = ParquetTimestampUsToTimestampNs(val);
+			}
+		}
+		return Value::TIMESTAMPNS(timestamp_value);
+	}
 	default:
 		throw InternalException("Unsupported type for stats %s", type.ToString());
 	}

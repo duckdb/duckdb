@@ -386,12 +386,30 @@ timestamp_t Timestamp::FromEpochMicroSeconds(int64_t micros) {
 }
 
 timestamp_t Timestamp::FromEpochNanoSecondsPossiblyInfinite(int64_t ns) {
-	return timestamp_t(ns / 1000);
+	return timestamp_t(ns / Interval::NANOS_PER_MICRO);
 }
 
 timestamp_t Timestamp::FromEpochNanoSeconds(int64_t ns) {
 	D_ASSERT(Timestamp::IsFinite(timestamp_t(ns)));
 	return FromEpochNanoSecondsPossiblyInfinite(ns);
+}
+
+timestamp_ns_t Timestamp::TimestampNsFromEpochMillis(int64_t millis) {
+	D_ASSERT(Timestamp::IsFinite(timestamp_t(millis)));
+	timestamp_ns_t result;
+	if (!TryMultiplyOperator::Operation(millis, Interval::NANOS_PER_MICRO, result.value)) {
+		throw ConversionException("Could not convert Timestamp(US) to Timestamp(NS)");
+	}
+	return result;
+}
+
+timestamp_ns_t Timestamp::TimestampNsFromEpochMicros(int64_t micros) {
+	D_ASSERT(Timestamp::IsFinite(timestamp_t(micros)));
+	timestamp_ns_t result;
+	if (!TryMultiplyOperator::Operation(micros, Interval::NANOS_PER_MSEC, result.value)) {
+		throw ConversionException("Could not convert Timestamp(MS) to Timestamp(NS)");
+	}
+	return result;
 }
 
 int64_t Timestamp::GetEpochSeconds(timestamp_t timestamp) {
@@ -409,9 +427,8 @@ int64_t Timestamp::GetEpochMicroSeconds(timestamp_t timestamp) {
 }
 
 bool Timestamp::TryGetEpochNanoSeconds(timestamp_t timestamp, int64_t &result) {
-	constexpr static const int64_t NANOSECONDS_IN_MICROSECOND = 1000;
 	D_ASSERT(Timestamp::IsFinite(timestamp));
-	if (!TryMultiplyOperator::Operation(timestamp.value, NANOSECONDS_IN_MICROSECOND, result)) {
+	if (!TryMultiplyOperator::Operation(timestamp.value, Interval::NANOS_PER_MICRO, result)) {
 		return false;
 	}
 	return true;
