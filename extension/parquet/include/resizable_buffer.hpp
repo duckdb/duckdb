@@ -25,7 +25,12 @@ public:
 	uint64_t len = 0;
 
 public:
-	void inc(uint64_t increment) {
+	void inc(const uint64_t increment) {
+		available(increment);
+		unsafe_inc(increment);
+	}
+
+	void unsafe_inc(const uint64_t increment) {
 		available(increment);
 		len -= increment;
 		ptr += increment;
@@ -33,28 +38,44 @@ public:
 
 	template <class T>
 	T read() {
+		available(sizeof(T));
+		T val = unsafe_get<T>();
+		unsafe_inc(sizeof(T));
+		return val;
+	}
+
+	template <class T>
+	T unsafe_read() {
 		T val = get<T>();
-		inc(sizeof(T));
+		unsafe_inc(sizeof(T));
 		return val;
 	}
 
 	template <class T>
 	T get() {
 		available(sizeof(T));
-		T val = Load<T>(ptr);
-		return val;
+		return unsafe_get<T>();
 	}
 
-	void copy_to(char *dest, uint64_t len) {
+	template <class T>
+	T unsafe_get() {
+		return Load<T>(ptr);
+	}
+
+	void copy_to(char *dest, const uint64_t len) const {
 		available(len);
+		unsafe_copy_to(dest, len);
+	}
+
+	void unsafe_copy_to(char *dest, const uint64_t len) const {
 		std::memcpy(dest, ptr, len);
 	}
 
-	void zero() {
+	void zero() const {
 		std::memset(ptr, 0, len);
 	}
 
-	void available(uint64_t req_len) {
+	void available(const uint64_t req_len) const {
 		if (req_len > len) {
 			throw std::runtime_error("Out of buffer");
 		}
@@ -65,10 +86,10 @@ class ResizeableBuffer : public ByteBuffer {
 public:
 	ResizeableBuffer() {
 	}
-	ResizeableBuffer(Allocator &allocator, uint64_t new_size) {
+	ResizeableBuffer(Allocator &allocator, const uint64_t new_size) {
 		resize(allocator, new_size);
 	}
-	void resize(Allocator &allocator, uint64_t new_size) {
+	void resize(Allocator &allocator, const uint64_t new_size) {
 		len = new_size;
 		if (new_size == 0) {
 			return;

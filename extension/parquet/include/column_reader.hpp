@@ -71,20 +71,32 @@ public:
 	virtual unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns);
 
 	template <class VALUE_TYPE, class CONVERSION>
-	void PlainTemplated(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, uint64_t num_values,
-	                    parquet_filter_t &filter, idx_t result_offset, Vector &result) {
-		auto result_ptr = FlatVector::GetData<VALUE_TYPE>(result);
+	void PlainTemplated(shared_ptr<ByteBuffer> plain_data, const uint8_t *__restrict defines, const uint64_t num_values,
+	                    parquet_filter_t &filter, const idx_t result_offset, Vector &result) {
+		if (HasDefines()) {
+			PlainTemplatedInternal<VALUE_TYPE, CONVERSION, true>(*plain_data, defines, num_values, filter,
+			                                                     result_offset, result);
+		} else {
+			PlainTemplatedInternal<VALUE_TYPE, CONVERSION, false>(*plain_data, defines, num_values, filter,
+			                                                      result_offset, result);
+		}
+	}
+
+private:
+	template <class VALUE_TYPE, class CONVERSION, bool HAS_DEFINES>
+	void PlainTemplatedInternal(ByteBuffer &plain_data, const uint8_t *__restrict defines, const uint64_t num_values,
+	                            parquet_filter_t &filter, const idx_t result_offset, Vector &result) {
+		const auto result_ptr = FlatVector::GetData<VALUE_TYPE>(result);
 		auto &result_mask = FlatVector::Validity(result);
-		for (idx_t row_idx = 0; row_idx < num_values; row_idx++) {
-			if (HasDefines() && defines[row_idx + result_offset] != max_define) {
-				result_mask.SetInvalid(row_idx + result_offset);
+		for (idx_t row_idx = result_offset; row_idx < result_offset + num_values; row_idx++) {
+			if (HAS_DEFINES && defines[row_idx] != max_define) {
+				result_mask.SetInvalid(row_idx);
 				continue;
 			}
-			if (filter[row_idx + result_offset]) {
-				VALUE_TYPE val = CONVERSION::PlainRead(*plain_data, *this);
-				result_ptr[row_idx + result_offset] = val;
+			if (filter[row_idx]) {
+				result_ptr[row_idx] = CONVERSION::PlainRead(plain_data, *this);
 			} else { // there is still some data there that we have to skip over
-				CONVERSION::PlainSkip(*plain_data, *this);
+				CONVERSION::PlainSkip(plain_data, *this);
 			}
 		}
 	}
@@ -110,11 +122,11 @@ protected:
 	// applies any skips that were registered using Skip()
 	virtual void ApplyPendingSkips(idx_t num_values);
 
-	bool HasDefines() {
+	bool HasDefines() const {
 		return max_define > 0;
 	}
 
-	bool HasRepeats() {
+	bool HasRepeats() const {
 		return max_repeat > 0;
 	}
 
