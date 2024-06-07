@@ -1293,4 +1293,24 @@ bool ClientContext::ExecutionIsFinished() {
 	return active_query->executor->ExecutionIsFinished();
 }
 
+uint64_t ClientContext::GetSnapshotId() {
+  uint64_t result;
+  RunFunctionInTransaction([&]() {
+    result = transaction.GetSnapshotId();
+  }, false);
+  
+  return result;
+}
+
+unique_ptr<QueryResult> ClientContext::CreateSnapshot() {
+  unique_ptr<QueryResult> result;
+  string snapshot_file;
+  RunFunctionInTransaction([&]() {
+    snapshot_file = transaction.Snapshot();
+  });
+
+  string err_str = "Success";
+  return ErrorResult<MaterializedQueryResult>(ErrorData(err_str));
+}
+
 } // namespace duckdb

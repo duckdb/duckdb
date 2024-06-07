@@ -33,6 +33,8 @@ public:
 	void RollbackTransaction(Transaction &transaction) override;
 
 	void Checkpoint(ClientContext &context, bool force = false) override;
+        string Snapshot(ClientContext &context) override;
+        uint64_t GetSnapshotId(ClientContext &context) override;
 
 	transaction_t LowestActiveId() const {
 		return lowest_active_id;

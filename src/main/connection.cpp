@@ -313,4 +313,14 @@ bool Connection::HasActiveTransaction() {
 	return context->transaction.HasActiveTransaction();
 }
 
+uint64_t Connection::GetSnapshotId() {
+  return context->GetSnapshotId();
+}
+
+unique_ptr<MaterializedQueryResult> Connection::CreateSnapshot() {
+  auto result = context->CreateSnapshot();
+  D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
+  return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
+}
+
 } // namespace duckdb
