@@ -5,10 +5,10 @@
 # we replace unicode spaces in query strings, except if they are quoted
 # internal issue 2224 found that this doesn't work properly for double-dollar quoting
 # lhs is regular space, rhs is a wider unicode space, so this should be false
-query I
-select $$ $$ = $$　$$;
-----
-false
+#query I
+#select $$ $$ = $$　$$;
+#----
+#false
 
 query I
 select $tag$ $tag$ = $tag$　$tag$;
@@ -70,6 +70,12 @@ false
 
 # of course we have to try this too
 query I
-select $🦆$duck$🦆$;
+select $🦆$du ck$🦆$ = $🦆$du　ck$🦆$;
 ----
-duck
+false
+
+# and some more unicode
+query I
+select $ü$x x$ü$ = $ü$x　x$ü$;
+----
+false

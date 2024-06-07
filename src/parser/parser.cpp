@@ -42,12 +42,13 @@ static bool ReplaceUnicodeSpaces(const string &query, string &new_query, vector<
 	return true;
 }
 
-static bool IsValidDollarQuotedStringTagFirstChar(const char &c) {
+static bool IsValidDollarQuotedStringTagFirstChar(const unsigned char &c) {
 	// the first character can be between A-Z, a-z, or \200 - \377
-	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '\200' && c <= '\377');
+	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+	       (c >= static_cast<unsigned char>('\200') && c <= static_cast<unsigned char>('\377'));
 }
 
-static bool IsValidDollarQuotedStringTagSubsequentChar(const char &c) {
+static bool IsValidDollarQuotedStringTagSubsequentChar(const unsigned char &c) {
 	// subsequent characters can also be between 0-9
 	return IsValidDollarQuotedStringTagFirstChar(c) || (c >= '0' && c <= '9');
 }
@@ -107,7 +108,7 @@ regular:
 			pos++;
 			goto in_quotes;
 		} else if (query[pos] == '$' &&
-		           (query[pos + 1] == '$' || IsValidDollarQuotedStringTagFirstChar(static_cast<char>(query[pos])))) {
+		           (query[pos + 1] == '$' || IsValidDollarQuotedStringTagFirstChar(query[pos + 1]))) {
 			// (optionally tagged) dollar-quoted string
 			auto start = &query[++pos];
 			for (; pos + 2 < qsize; pos++) {
@@ -118,7 +119,7 @@ regular:
 					goto in_dollar_quotes;
 				}
 
-				if (!IsValidDollarQuotedStringTagSubsequentChar(static_cast<char>(query[pos]))) {
+				if (!IsValidDollarQuotedStringTagSubsequentChar(query[pos])) {
 					// invalid char in dollar-quoted string, continue as normal
 					goto regular;
 				}
