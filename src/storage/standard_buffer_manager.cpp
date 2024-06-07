@@ -201,6 +201,97 @@ void StandardBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t bl
 	handle->ResizeBuffer(block_size, memory_delta);
 }
 
+void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, const map<block_id_t, idx_t> &load_map,
+                                      block_id_t first_block, block_id_t last_block) {
+	auto &block_manager = handles[0]->block_manager;
+	idx_t block_count = NumericCast<idx_t>(last_block - first_block + 1);
+#ifndef DUCKDB_ALTERNATIVE_VERIFY
+	if (block_count == 1) {
+		// prefetching with block_count == 1 has no performance impact since we can't batch reads
+		// skip the prefetch in this case
+		// we do it anyway if alternative_verify is on for extra testing
+		return;
+	}
+#endif
+
+	// allocate a buffer to hold the data of all of the blocks
+	auto intermediate_buffer = Allocate(MemoryTag::BASE_TABLE, block_count * Storage::BLOCK_SIZE);
+	// perform a batch read of the blocks into the buffer
+	block_manager.ReadBlocks(intermediate_buffer.GetFileBuffer(), first_block, block_count);
+
+	// the blocks are read - now we need to assign them to the individual blocks
+	for (idx_t block_idx = 0; block_idx < block_count; block_idx++) {
+		block_id_t block_id = first_block + NumericCast<block_id_t>(block_idx);
+		auto entry = load_map.find(block_id);
+		D_ASSERT(entry != load_map.end()); // if we allow gaps we might not return true here
+		auto &handle = handles[entry->second];
+
+		// reserve memory for the block
+		idx_t required_memory = handle->memory_usage;
+		unique_ptr<FileBuffer> reusable_buffer;
+		auto reservation =
+		    EvictBlocksOrThrow(handle->tag, required_memory, &reusable_buffer, "failed to pin block of size %s%s",
+		                       StringUtil::BytesToHumanReadableString(required_memory));
+		// now load the block from the buffer
+		// note that we discard the buffer handle - we do not keep it around
+		// the prefetching relies on the block handle being pinned again during the actual read before it is evicted
+		BufferHandle buf;
+		{
+			lock_guard<mutex> lock(handle->lock);
+			if (handle->state == BlockState::BLOCK_LOADED) {
+				// the block is loaded already by another thread - free up the reservation and continue
+				reservation.Resize(0);
+				continue;
+			}
+			auto block_ptr =
+			    intermediate_buffer.GetFileBuffer().InternalBuffer() + block_idx * Storage::BLOCK_ALLOC_SIZE;
+			buf = BlockHandle::LoadFromBuffer(handle, block_ptr, std::move(reusable_buffer));
+			handle->readers = 1;
+			handle->memory_charge = std::move(reservation);
+		}
+	}
+}
+
+void StandardBufferManager::Prefetch(vector<shared_ptr<BlockHandle>> &handles) {
+	// figure out which set of blocks we should load
+	map<block_id_t, idx_t> to_be_loaded;
+	for (idx_t block_idx = 0; block_idx < handles.size(); block_idx++) {
+		auto &handle = handles[block_idx];
+		lock_guard<mutex> lock(handle->lock);
+		if (handle->state != BlockState::BLOCK_LOADED) {
+			// need to load this block - add it to the map
+			to_be_loaded.insert(make_pair(handle->BlockId(), block_idx));
+		}
+	}
+	if (to_be_loaded.empty()) {
+		// nothing to fetch
+		return;
+	}
+	// iterate over the blocks and perform bulk reads
+	block_id_t first_block = -1;
+	block_id_t previous_block_id = -1;
+	for (auto &entry : to_be_loaded) {
+		if (previous_block_id < 0) {
+			// this the first block we are seeing
+			first_block = entry.first;
+			previous_block_id = first_block;
+		} else if (previous_block_id + 1 == entry.first) {
+			// this block is adjacent to the previous block - add it to the batch read
+			previous_block_id = entry.first;
+		} else {
+			// this block is not adjacent to the previous block
+			// perform the batch read for the previous batch
+			BatchRead(handles, to_be_loaded, first_block, previous_block_id);
+
+			// set the first_block and previous_block_id to the current block
+			first_block = entry.first;
+			previous_block_id = entry.first;
+		}
+	}
+	// batch read the final batch
+	BatchRead(handles, to_be_loaded, first_block, previous_block_id);
+}
+
 BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	idx_t required_memory;
 	{
