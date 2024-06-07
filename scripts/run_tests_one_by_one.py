@@ -33,6 +33,7 @@ parser.add_argument(
     default=3600,
     type=valid_timeout,
 )
+parser.add_argument('--valgrind', action='store_true', help='Run the tests with valgrind', default=False)
 
 args, extra_args = parser.parse_known_args()
 
@@ -127,9 +128,10 @@ for test_number, test_case in enumerate(test_cases):
 
     start = time.time()
     try:
-        res = subprocess.run(
-            [unittest_program, test_case], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout
-        )
+        test_cmd = [unittest_program, test_case]
+        if args.valgrind:
+            test_cmd = ['valgrind'] + test_cmd
+        res = subprocess.run(test_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
     except subprocess.TimeoutExpired as e:
         print(" (TIMED OUT)", flush=True)
         fail()
