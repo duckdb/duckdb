@@ -260,9 +260,12 @@ idx_t RowMatcher::MatchColumns(DataChunk &lhs, const vector<TupleDataVectorForma
 	for (idx_t col_idx = 0; col_idx < size; col_idx++) {
 		idx_t match_index = key_columns.size() > 0 ? key_columns[col_idx] : col_idx;
 		const auto &match_function = match_functions[match_index];
-		count =
-		    match_function.function(lhs.data[match_index], lhs_formats[match_index], sel, count, rhs_layout, rhs_row_locations,
-		                            match_index, match_function.child_functions, no_match_sel, no_match_count);
+		count = match_function.function(lhs.data[match_index], lhs_formats[match_index], sel, count, rhs_layout,
+		                                rhs_row_locations, match_index, match_function.child_functions, no_match_sel,
+		                                no_match_count);
+	}
+	return count;
+}
 
 MatchFunction RowMatcher::GetMatchFunction(const bool no_match_sel, const LogicalType &type,
                                            const ExpressionType predicate) {

@@ -461,7 +461,7 @@ common_table_expr:  name opt_name_list opt_on_key AS opt_materialized '(' Prepar
 				PGCommonTableExpr *n = makeNode(PGCommonTableExpr);
 				n->ctename = $1;
 				n->aliascolnames = $2;
-				n->keycolnames = $3;
+				n->recursive_keys = $3;
 				n->ctematerialized = $5;
 				n->ctequery = $7;
 				n->location = @1;

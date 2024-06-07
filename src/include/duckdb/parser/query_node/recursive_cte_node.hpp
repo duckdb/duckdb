@@ -31,7 +31,7 @@ public:
 	//! Aliases of the recursive CTE node
 	vector<string> aliases;
 	//! targets for key variants
-	vector<idx_t> key_targets;
+	vector<idx_t> recursive_keys;
 
 	const vector<unique_ptr<ParsedExpression>> &GetSelectList() const override {
 		return left->GetSelectList();

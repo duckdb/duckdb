@@ -74,7 +74,8 @@ public:
 	//! Finds or creates groups in the hashtable using the specified group keys. The addresses vector will be filled
 	//! with pointers to the groups in the hash table, and the new_groups selection vector will point to the newly
 	//! created groups. The return value is the amount of newly created groups.
-	idx_t FindOrCreateGroupsWithKey(DataChunk &groups, Vector &addresses_out, SelectionVector &new_groups_out, vector<idx_t> key_indices);
+	idx_t FindOrCreateGroupsWithKey(DataChunk &groups, Vector &addresses_out, SelectionVector &new_groups_out,
+	                                vector<idx_t> key_indices);
 	idx_t FindOrCreateGroups(DataChunk &groups, Vector &group_hashes, Vector &addresses_out,
 	                         SelectionVector &new_groups_out);
 	idx_t FindOrCreateGroups(DataChunk &groups, Vector &addresses_out, SelectionVector &new_groups_out);
@@ -99,7 +100,8 @@ public:
 	//! Executes the filter(if any) and update the aggregates
 	void Combine(GroupedAggregateHashTable &other);
 	void Combine(GroupedAggregateHashTable &other, vector<idx_t> column_idx);
-	void Combine(TupleDataCollection &other_data, optional_ptr<atomic<double>> progress = nullptr, vector<idx_t> column_idx = vector<idx_t>());
+	void Combine(TupleDataCollection &other_data, optional_ptr<atomic<double>> progress = nullptr,
+	             vector<idx_t> column_idx = vector<idx_t>());
 
 	//! Unpins the data blocks
 	void UnpinData();

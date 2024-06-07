@@ -19,8 +19,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 	result->union_all = statement.union_all;
 	result->setop_index = GenerateTableIndex();
 
-	for (idx_t i = 0; i < statement.key_targets.size(); ++i) {
-		result->key_targets.push_back(statement.key_targets[i]);
+	for (idx_t i = 0; i < statement.recursive_keys.size(); ++i) {
+		result->recursive_keys.push_back(statement.recursive_keys[i]);
 	}
 
 	result->left_binder = Binder::CreateBinder(context, this);
@@ -39,7 +39,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 
 	result->right_binder = Binder::CreateBinder(context, this);
 
-	if (!statement.key_targets.empty()) {
+	if (!statement.recursive_keys.empty()) {
 		result->recurring_index = GenerateTableIndex();
 		// Retrieves the recursive CTE information in order to add it to the own context for the recurring table.
 		optional_ptr<CommonTableExpressionInfo> current_cte_info = FindCTE(statement.ctename);

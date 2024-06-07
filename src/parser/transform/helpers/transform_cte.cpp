@@ -43,12 +43,11 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 		auto alias_index = 0;
 		vector<string> key_column_names;
 
-		//Collect all columns to be used as key for key variant
-		if (cte.keycolnames) {
-			for (auto key = cte.keycolnames->head; key != nullptr; key = key->next) {
+		// Collect all columns to be used as key for key variant
+		if (cte.recursive_keys) {
+			for (auto key = cte.recursive_keys->head; key != nullptr; key = key->next) {
 				key_column_names.emplace_back(
-				    reinterpret_cast<duckdb_libpgquery::PGValue *>(key->data.ptr_value)->val.str
-				    );
+				    reinterpret_cast<duckdb_libpgquery::PGValue *>(key->data.ptr_value)->val.str);
 			}
 		}
 
@@ -58,17 +57,17 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 				info->aliases.emplace_back(value->val.str);
 
 
-				if (cte.keycolnames) {
+				if (cte.recursive_keys) {
 					for (idx_t key = 0; key < key_column_names.size(); key++) {
 						if (info->aliases.back() == key_column_names[key]) {
-							info->keyIdx.push_back(alias_index);
+							info->recursive_keys.push_back(alias_index);
 						}
 					}
 				}
 				alias_index++;
 			}
 			// All keys should be bound to one column
-			D_ASSERT(key_column_names.size() == info->keyIdx.size());
+			D_ASSERT(key_column_names.size() == info->recursive_keys.size());
 		}
 		// lets throw some errors on unsupported features early
 		if (cte.ctecolnames) {
@@ -135,9 +134,8 @@ unique_ptr<SelectStatement> Transformer::TransformRecursiveCTE(duckdb_libpgquery
 		result.left = TransformSelectNode(*PGPointerCast<duckdb_libpgquery::PGSelectStmt>(stmt.larg));
 		result.right = TransformSelectNode(*PGPointerCast<duckdb_libpgquery::PGSelectStmt>(stmt.rarg));
 		result.aliases = info.aliases;
-		for (idx_t i = 0; i < info.keyIdx.size(); ++i) {
-			result.key_targets.push_back(info.keyIdx[i]);
-		}
+		result.recursive_keys = info.recursive_keys;
+
 		if (stmt.op != duckdb_libpgquery::PG_SETOP_UNION) {
 			throw ParserException("Unsupported setop type for recursive CTE: only UNION or UNION ALL are supported");
 		}

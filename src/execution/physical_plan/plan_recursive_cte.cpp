@@ -18,7 +18,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalRecursiveC
 	// Add the ColumnDataCollection to the context of this PhysicalPlanGenerator
 	recursive_cte_tables[op.table_index] = working_table;
 
-	if (op.key_indices.size() == 0) {
+	if (op.recursive_keys.size() == 0) {
 		auto left = CreatePlan(*op.children[0]);
 		auto right = CreatePlan(*op.children[1]);
 
@@ -35,8 +35,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalRecursiveC
 		auto left = CreatePlan(*op.children[0]);
 		auto right = CreatePlan(*op.children[1]);
 
-		auto cte = make_uniq<PhysicalRecursiveKeyCTE>(op.ctename, op.table_index, op.types, op.union_all, op.key_indices, std::move(left),
-		                                           std::move(right), op.estimated_cardinality);
+		auto cte =
+		    make_uniq<PhysicalRecursiveKeyCTE>(op.ctename, op.table_index, op.types, op.union_all, op.recursive_keys,
+		                                       std::move(left), std::move(right), op.estimated_cardinality);
 		cte->working_table = working_table;
 		cte->recurring_table = recurring_table;
 		return std::move(cte);

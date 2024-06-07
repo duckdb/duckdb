@@ -31,7 +31,7 @@ public:
 	//! The right side of the set operation
 	unique_ptr<BoundQueryNode> right;
 	//! Target columns for the recursive key variant
-	vector<idx_t> key_targets;
+	vector<idx_t> recursive_keys;
 
 	//! Index used by the set operation
 	idx_t setop_index;

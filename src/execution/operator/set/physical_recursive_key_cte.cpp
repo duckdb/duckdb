@@ -6,11 +6,12 @@
 namespace duckdb {
 
 PhysicalRecursiveKeyCTE::PhysicalRecursiveKeyCTE(string ctename, idx_t table_index, vector<LogicalType> types,
-                                           bool union_all, vector<idx_t > key_columns,
-                                           unique_ptr<PhysicalOperator> top, unique_ptr<PhysicalOperator> bottom,
-                                           idx_t estimated_cardinality)
+                                                 bool union_all, vector<idx_t> key_columns,
+                                                 unique_ptr<PhysicalOperator> top, unique_ptr<PhysicalOperator> bottom,
+                                                 idx_t estimated_cardinality)
     : PhysicalRecursiveCTE(ctename, table_index, types, union_all, std::move(top), std::move(bottom),
-                           estimated_cardinality), key_columns(std::move(key_columns)) {
+                           estimated_cardinality),
+      key_columns(std::move(key_columns)) {
 }
 
 PhysicalRecursiveKeyCTE::~PhysicalRecursiveKeyCTE() {
@@ -22,15 +23,16 @@ public:
 	    : intermediate_table(context, op.GetTypes()), new_groups(STANDARD_VECTOR_SIZE) {
 		ht = make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), op.types,
 		                                          vector<LogicalType>(), vector<BoundAggregateExpression *>());
-		recurring_ht = make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), op.types,
-		                                                    vector<LogicalType>(), vector<BoundAggregateExpression *>());
+		recurring_ht =
+		    make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), op.types,
+		                                         vector<LogicalType>(), vector<BoundAggregateExpression *>());
 	}
 
 	unique_ptr<GroupedAggregateHashTable> ht;
-	// btodo: bad naming change later
 	unique_ptr<GroupedAggregateHashTable> recurring_ht;
 
 	bool intermediate_empty = true;
+	mutex intermediate_table_lock;
 	ColumnDataCollection intermediate_table;
 	ColumnDataScanState scan_state;
 	bool initialized = false;
@@ -55,8 +57,10 @@ idx_t PhysicalRecursiveKeyCTE::ProbeHT(DataChunk &chunk, RecursiveKeyCTEState &s
 	return new_group_count;
 }
 
-SinkResultType PhysicalRecursiveKeyCTE::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+SinkResultType PhysicalRecursiveKeyCTE::Sink(ExecutionContext &context, DataChunk &chunk,
+                                             OperatorSinkInput &input) const {
 	auto &gstate = input.global_state.Cast<RecursiveKeyCTEState>();
+	lock_guard<mutex> guard(gstate.intermediate_table_lock);
 	if (!union_all) {
 		idx_t match_count = ProbeHT(chunk, gstate);
 		if (match_count > 0) {
@@ -72,7 +76,7 @@ SinkResultType PhysicalRecursiveKeyCTE::Sink(ExecutionContext &context, DataChun
 // Source
 //===--------------------------------------------------------------------===//
 SourceResultType PhysicalRecursiveKeyCTE::GetData(ExecutionContext &context, DataChunk &chunk,
-                                               OperatorSourceInput &input) const {
+                                                  OperatorSourceInput &input) const {
 	auto &gstate = sink_state->Cast<RecursiveKeyCTEState>();
 	if (!gstate.initialized) {
 		gstate.intermediate_table.InitializeScan(gstate.scan_state);
