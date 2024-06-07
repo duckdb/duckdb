@@ -14,7 +14,7 @@ PRAGMA enable_verification
 statement error
 PRAGMA add_parquet_key('my_cool_key', '42')
 ----
-Invalid Input Error: Invalid AES key. Must have a length of 128, 192, or 256 bits (16, 24, or 32 bytes)
+Conversion Error: Could not decode string "42" as base64: length must be a multiple of 4
 
 # we dont support this yet
 statement error
@@ -87,3 +87,12 @@ statement error
 SELECT * FROM read_parquet('__TEST_DIR__/unencrypted.parquet', encryption_config={footer_key: 'key256'})
 ----
 Invalid Input Error
+
+# Use Base64 encoded key
+statement ok
+PRAGMA add_parquet_key('key256base64', 'MDEyMzQ1Njc4OTExMjM0NTAxMjM0NTY3ODkxMTIzNDU=')
+
+query I
+SELECT * FROM read_parquet('__TEST_DIR__/encrypted256.parquet', encryption_config={footer_key: 'key256base64'})
+----
+42

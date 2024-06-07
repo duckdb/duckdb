@@ -4,21 +4,12 @@
 #include "thrift_tools.hpp"
 
 #ifndef DUCKDB_AMALGAMATION
-#include "duckdb/common/common.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
 #endif
 
 namespace duckdb {
-
-std::string base64decode(const std::string& key) {
-	auto result_size = Blob::FromBase64Size(key);
-	auto output = duckdb::unique_ptr<unsigned char[]>(new unsigned char[result_size]);
-	Blob::FromBase64(key, output.get(), result_size);
-	std::string decoded_key(reinterpret_cast<const char *>(output.get()), result_size);
-	return decoded_key;
-}
 
 ParquetKeys &ParquetKeys::Get(ClientContext &context) {
 	auto &cache = ObjectCache::GetObjectCache(context);
@@ -82,16 +73,16 @@ shared_ptr<ParquetEncryptionConfig> ParquetEncryptionConfig::Create(ClientContex
 	return shared_ptr<ParquetEncryptionConfig>(new ParquetEncryptionConfig(context, arg));
 }
 
-using duckdb_apache::thrift::transport::TTransport;
-using AESGCMState = duckdb_mbedtls::MbedTlsWrapper::AESGCMState;
-using duckdb_apache::thrift::protocol::TCompactProtocolFactoryT;
-
 const string &ParquetEncryptionConfig::GetFooterKey() const {
 	const auto &keys = ParquetKeys::Get(context);
 	D_ASSERT(!footer_key.empty());
 	D_ASSERT(keys.HasKey(footer_key));
 	return keys.GetKey(footer_key);
 }
+
+using duckdb_apache::thrift::transport::TTransport;
+using AESGCMState = duckdb_mbedtls::MbedTlsWrapper::AESGCMState;
+using duckdb_apache::thrift::protocol::TCompactProtocolFactoryT;
 
 static void GenerateNonce(const data_ptr_t nonce) {
 	duckdb_mbedtls::MbedTlsWrapper::GenerateRandomData(nonce, ParquetCrypto::NONCE_BYTES);
@@ -365,6 +356,14 @@ uint32_t ParquetCrypto::WriteData(TProtocol &oprot, const const_data_ptr_t buffe
 
 	// Encrypt and write to oprot
 	return etrans.Finalize();
+}
+
+std::string base64decode(const std::string& key) {
+	auto result_size = Blob::FromBase64Size(key);
+	auto output = duckdb::unique_ptr<unsigned char[]>(new unsigned char[result_size]);
+	Blob::FromBase64(key, output.get(), result_size);
+	std::string decoded_key(reinterpret_cast<const char *>(output.get()), result_size);
+	return decoded_key;
 }
 
 void ParquetCrypto::AddKey(ClientContext &context, const FunctionParameters &parameters) {
