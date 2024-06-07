@@ -734,10 +734,9 @@ Value CustomProfilingSettings::GetSetting(const ClientContext &context) {
 		if (!profiling_settings_str.empty()) {
 			profiling_settings_str += ", ";
 		}
-		profiling_settings_str += EnumUtil::ToString(entry);
+		profiling_settings_str += StringUtil::Format("\"%s\": \"true\"", EnumUtil::ToString(entry));
 	}
-
-	return Value(profiling_settings_str);
+	return Value(StringUtil::Format("{%s}", profiling_settings_str));
 }
 
 //===--------------------------------------------------------------------===//

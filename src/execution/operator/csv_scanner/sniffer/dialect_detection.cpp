@@ -68,6 +68,8 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 	} else {
 		new_line_id = DetectNewLineDelimiter(*buffer_manager);
 	}
+	CSVIterator first_iterator;
+	bool iterator_set = false;
 	for (const auto quoterule : quoterule_candidates) {
 		const auto &quote_candidates = quote_candidates_map.at((uint8_t)quoterule);
 		for (const auto &quote : quote_candidates) {
@@ -77,7 +79,18 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 					D_ASSERT(buffer_manager);
 					CSVStateMachineOptions state_machine_options(delimiter, quote, escape, new_line_id);
 					auto sniffing_state_machine =
-					    make_uniq<CSVStateMachine>(options, state_machine_options, state_machine_cache);
+					    make_shared_ptr<CSVStateMachine>(options, state_machine_options, state_machine_cache);
+					if (options.dialect_options.skip_rows.IsSetByUser()) {
+						if (!iterator_set) {
+							first_iterator = BaseScanner::SkipCSVRows(buffer_manager, sniffing_state_machine,
+							                                          options.dialect_options.skip_rows.GetValue());
+							iterator_set = true;
+						}
+						column_count_scanners.emplace_back(
+						    make_uniq<ColumnCountScanner>(buffer_manager, std::move(sniffing_state_machine),
+						                                  detection_error_handler, first_iterator));
+						continue;
+					}
 					column_count_scanners.emplace_back(make_uniq<ColumnCountScanner>(
 					    buffer_manager, std::move(sniffing_state_machine), detection_error_handler));
 				}
@@ -319,24 +332,6 @@ NewLineIdentifier CSVSniffer::DetectNewLineDelimiter(CSVBufferManager &buffer_ma
 	return NewLineIdentifier::SINGLE;
 }
 
-void CSVSniffer::SkipLines(vector<unique_ptr<ColumnCountScanner>> &csv_state_machines) {
-	if (csv_state_machines.empty()) {
-		return;
-	}
-	auto &first_scanner = *csv_state_machines[0];
-	// We figure out the iterator position for the first scanner
-	if (options.dialect_options.skip_rows.IsSetByUser()) {
-		first_scanner.SkipCSVRows(options.dialect_options.skip_rows.GetValue());
-	}
-	// The iterator position is the same regardless of the scanner configuration, hence we apply the same iterator
-	// To the remaining scanners
-	const auto first_iterator = first_scanner.GetIterator();
-	for (idx_t i = 1; i < csv_state_machines.size(); i++) {
-		auto &cur_scanner = *csv_state_machines[i];
-		cur_scanner.SetIterator(first_iterator);
-	}
-}
-
 // Dialect Detection consists of five steps:
 // 1. Generate a search space of all possible dialects
 // 2. Generate a state machine for each dialect
@@ -370,7 +365,6 @@ void CSVSniffer::DetectDialect() {
 	// Step 2: Generate state machines
 	GenerateStateMachineSearchSpace(csv_state_machines, delim_candidates, quoterule_candidates, quote_candidates_map,
 	                                escape_candidates_map);
-	SkipLines(csv_state_machines);
 	// Step 3: Analyze all candidates on the first chunk
 	for (auto &state_machine : csv_state_machines) {
 		AnalyzeDialectCandidate(std::move(state_machine), rows_read, best_consistent_rows, prev_padding_count);

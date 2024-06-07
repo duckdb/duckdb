@@ -3,7 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
-#include "utf8proc.hpp"
+#include "utf8proc_wrapper.hpp"
 
 #include <string.h>
 
@@ -23,10 +23,9 @@ static bool StrReverseASCII(const char *input, idx_t n, char *output) {
 
 //! Unicode string reverse using grapheme breakers
 static void StrReverseUnicode(const char *input, idx_t n, char *output) {
-	utf8proc_grapheme_callback(input, n, [&](size_t start, size_t end) {
-		memcpy(output + n - end, input + start, end - start);
-		return true;
-	});
+	for (auto cluster : Utf8Proc::GraphemeClusters(input, n)) {
+		memcpy(output + n - cluster.end, input + cluster.start, cluster.end - cluster.start);
+	}
 }
 
 struct ReverseOperator {

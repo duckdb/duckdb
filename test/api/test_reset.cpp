@@ -115,6 +115,7 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"produce_arrow_string_view", {true}},
 	    {"enable_http_logging", {true}},
 	    {"http_logging_output", {"my_cool_outputfile"}},
+	    {"produce_arrow_string_view", {true}},
 	    {"allocator_flush_threshold", {"4.0 GiB"}},
 	    {"allocator_background_threads", {true}}};
 	// Every option that's not excluded has to be part of this map

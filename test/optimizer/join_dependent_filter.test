@@ -235,7 +235,7 @@ ORDER BY
 physical_plan	<REGEX>:.*FILTER.*FILTER.*FILTER.*
 
 # results should still be the same
-query I
+query IIII
 PRAGMA tpch(7)
 ----
 <FILE>:extension/tpch/dbgen/answers/sf0.01/q07.csv
