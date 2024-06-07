@@ -24,7 +24,7 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
 	} else {
 		// If not we need to construct it for the first file
 		file_scans.emplace_back(
-		    make_uniq<CSVFileScan>(context, files[0], options, 0U, bind_data, column_ids, file_schema));
+		    make_uniq<CSVFileScan>(context, files[0], options, 0U, bind_data, column_ids, file_schema, false));
 	};
 	// There are situations where we only support single threaded scanning
 	bool many_csv_files = files.size() > 1 && files.size() > system_threads * 2;
@@ -70,7 +70,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 		} else {
 			lock_guard<mutex> parallel_lock(main_mutex);
 			file_scans.emplace_back(make_shared_ptr<CSVFileScan>(context, bind_data.files[cur_idx], bind_data.options,
-			                                                     cur_idx, bind_data, column_ids, file_schema));
+			                                                     cur_idx, bind_data, column_ids, file_schema, true));
 			current_file = file_scans.back();
 			current_boundary = current_file->start_iterator;
 			current_boundary.SetCurrentBoundaryToPosition(single_threaded);
@@ -119,7 +119,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 			// If we have a next file we have to construct the file scan for that
 			file_scans.emplace_back(make_shared_ptr<CSVFileScan>(context, bind_data.files[current_file_idx],
 			                                                     bind_data.options, current_file_idx, bind_data,
-			                                                     column_ids, file_schema));
+			                                                     column_ids, file_schema, false));
 			// And re-start the boundary-iterator
 			current_boundary = file_scans.back()->start_iterator;
 			current_boundary.SetCurrentBoundaryToPosition(single_threaded);
