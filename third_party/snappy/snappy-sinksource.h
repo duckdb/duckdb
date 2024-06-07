@@ -146,10 +146,10 @@ class Source {
 class ByteArraySource : public Source {
  public:
   ByteArraySource(const char* p, size_t n) : ptr_(p), left_(n) { }
-  virtual ~ByteArraySource();
-  virtual size_t Available() const;
-  virtual const char* Peek(size_t* len);
-  virtual void Skip(size_t n);
+  ~ByteArraySource() override;
+  size_t Available() const override;
+  const char* Peek(size_t* len) override;
+  void Skip(size_t n) override;
  private:
   const char* ptr_;
   size_t left_;
@@ -159,15 +159,15 @@ class ByteArraySource : public Source {
 class UncheckedByteArraySink : public Sink {
  public:
   explicit UncheckedByteArraySink(char* dest) : dest_(dest) { }
-  virtual ~UncheckedByteArraySink();
-  virtual void Append(const char* data, size_t n);
-  virtual char* GetAppendBuffer(size_t len, char* scratch);
-  virtual char* GetAppendBufferVariable(
+  ~UncheckedByteArraySink() override;
+  void Append(const char* data, size_t n) override;
+  char* GetAppendBuffer(size_t len, char* scratch) override;
+  char* GetAppendBufferVariable(
       size_t min_size, size_t desired_size_hint, char* scratch,
-      size_t scratch_size, size_t* allocated_size);
-  virtual void AppendAndTakeOwnership(
+      size_t scratch_size, size_t* allocated_size) override;
+  void AppendAndTakeOwnership(
       char* bytes, size_t n, void (*deleter)(void*, const char*, size_t),
-      void *deleter_arg);
+      void *deleter_arg) override;
 
   // Return the current output pointer so that a caller can see how
   // many bytes were produced.
