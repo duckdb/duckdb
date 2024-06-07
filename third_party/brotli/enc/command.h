@@ -14,7 +14,7 @@
 #include "../common/brotli_constants.h"
 #include "../common/platform.h"
 #include "fast_log.h"
-#include "params.h"
+#include "brotli_params.h"
 #include "prefix.h"
 
 namespace duckdb_brotli {

@@ -21,7 +21,7 @@
 #include "find_match_length.h"
 #include "literal_cost.h"
 #include "memory.h"
-#include "params.h"
+#include "brotli_params.h"
 #include "prefix.h"
 #include "quality.h"
 

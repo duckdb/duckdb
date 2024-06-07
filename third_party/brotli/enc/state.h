@@ -16,7 +16,7 @@
 #include "compress_fragment_two_pass.h"
 #include "hash.h"
 #include "memory.h"
-#include "params.h"
+#include "brotli_params.h"
 #include "ringbuffer.h"
 
 namespace duckdb_brotli {
