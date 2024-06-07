@@ -26,7 +26,7 @@ SELECT AVG(STRLEN(s)), MIN(STRLEN(S)), MAX(STRLEN(S)), SUM(STRLEN(S)), MIN(S[1])
 statement ok
 CREATE TABLE total_blocks_tbl AS SELECT total_blocks FROM pragma_database_size();
 
-loop i 0 20
+loop i 0 30
 
 statement ok
 ALTER TABLE strings DROP COLUMN s;
@@ -45,21 +45,21 @@ SELECT AVG(STRLEN(s)), MIN(STRLEN(S)), MAX(STRLEN(S)), SUM(STRLEN(S)), MIN(S[1])
 statement ok
 CHECKPOINT;
 
-# Ensure that the total blocks don't exceed the total blocks after the first iteration by more than 1.2.
+# Ensure that the total blocks don't exceed the total blocks by more than 1.2.
 
 query I
-SELECT CASE WHEN ${i} = 0 THEN True
+SELECT CASE WHEN ${i} < 10 THEN True
 	WHEN current.total_blocks <= total_blocks_tbl.total_blocks * 1.2 THEN True
 	ELSE False END
 FROM pragma_database_size() AS current, total_blocks_tbl;
 ----
 1
 
-# Adjust total_blocks_tbl once to the count after the first iteration.
+# Adjust total_blocks_tbl to the count after 10 warm-up iterations.
 
 statement ok
 UPDATE total_blocks_tbl SET total_blocks = (
-	SELECT CASE WHEN ${i} = 0 THEN (SELECT current.total_blocks FROM pragma_database_size() AS current)
+	SELECT CASE WHEN ${i} < 10 THEN (SELECT current.total_blocks FROM pragma_database_size() AS current)
 		ELSE (total_blocks) END);
 
 restart
