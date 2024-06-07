@@ -35,8 +35,6 @@ SinkResultType PhysicalBufferedBatchCollector::Sink(ExecutionContext &context, D
 	auto min_batch_index = lstate.partition_info.min_batch_index.GetIndex();
 
 	auto &buffered_data = gstate.buffered_data->Cast<BatchedBufferedData>();
-	bool is_minimum_batch = buffered_data.IsMinimumBatchIndex(batch);
-
 	buffered_data.UpdateMinBatchIndex(min_batch_index);
 
 	if (buffered_data.ShouldBlockBatch(batch)) {
