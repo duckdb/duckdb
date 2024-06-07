@@ -17,11 +17,11 @@ namespace duckdb {
 
 struct ApproxCountDistinctFun {
 	static constexpr const char *Name = "approx_count_distinct";
-	static constexpr const char *Parameters = "x";
+	static constexpr const char *Parameters = "any";
 	static constexpr const char *Description = "Computes the approximate count of distinct elements using HyperLogLog.";
 	static constexpr const char *Example = "approx_count_distinct(A)";
 
-	static AggregateFunctionSet GetFunctions();
+	static AggregateFunction GetFunction();
 };
 
 struct ArgMinFun {

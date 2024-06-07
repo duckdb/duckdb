@@ -14,6 +14,7 @@
 #include <cstdint>
 
 namespace duckdb {
+class GraphemeIterator;
 
 enum class UnicodeType { INVALID, ASCII, UNICODE };
 enum class UnicodeInvalidReason { BYTE_MISMATCH, INVALID_UNICODE };
@@ -43,6 +44,58 @@ public:
 	static size_t RenderWidth(const char *s, size_t len, size_t pos);
 	static size_t RenderWidth(const std::string &str);
 
+	static int32_t CodepointToUpper(int32_t codepoint);
+	static int32_t CodepointToLower(int32_t codepoint);
+
+	//! Constructs a class that can be iterated over to fetch grapheme clusters in a string
+	static GraphemeIterator GraphemeClusters(const char *s, size_t len);
+
+	//! Returns the number of grapheme clusters in a string
+	static size_t GraphemeCount(const char *s, size_t len);
+
+
 };
+
+struct GraphemeCluster {
+	size_t start;
+	size_t end;
+};
+
+class GraphemeIterator {
+public:
+	GraphemeIterator(const char *s, size_t len);
+
+private:
+	const char *s;
+	size_t len;
+
+private:
+	class GraphemeClusterIterator {
+	public:
+		GraphemeClusterIterator(const char *s, size_t len);
+
+		const char *s;
+		size_t len;
+		GraphemeCluster cluster;
+
+	public:
+		void Next();
+		void SetInvalid();
+		bool IsInvalid() const;
+
+		GraphemeClusterIterator &operator++();
+		bool operator!=(const GraphemeClusterIterator &other) const;
+		GraphemeCluster operator*() const;
+	};
+
+public:
+	GraphemeClusterIterator begin() { // NOLINT: match stl API
+		return GraphemeClusterIterator(s, len);
+	}
+	GraphemeClusterIterator end() { // NOLINT: match stl API
+		return GraphemeClusterIterator(nullptr, 0);
+	}
+};
+
 
 }

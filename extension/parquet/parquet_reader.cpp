@@ -244,7 +244,7 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 		case ConvertedType::INTERVAL:
 			return LogicalType::INTERVAL;
 		case ConvertedType::JSON:
-			return LogicalType::VARCHAR;
+			return LogicalType::JSON();
 		case ConvertedType::NULL_TYPE:
 			return LogicalTypeId::SQLNULL;
 		case ConvertedType::MAP:
