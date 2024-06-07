@@ -67,6 +67,7 @@ enum class PhysicalOperatorType : uint8_t {
 	// -----------------------------
 	UNION,
 	RECURSIVE_CTE,
+	RECURSIVE_KEY_CTE,
 	CTE,
 
 	// -----------------------------

@@ -456,17 +456,22 @@ cte_list:
 		| cte_list ',' common_table_expr		{ $$ = lappend($1, $3); }
 		;
 
-common_table_expr:  name opt_name_list AS opt_materialized '(' PreparableStmt ')'
+common_table_expr:  name opt_name_list opt_on_key AS opt_materialized '(' PreparableStmt ')'
 			{
 				PGCommonTableExpr *n = makeNode(PGCommonTableExpr);
 				n->ctename = $1;
 				n->aliascolnames = $2;
-				n->ctematerialized = $4;
-				n->ctequery = $6;
+				n->keycolnames = $3;
+				n->ctematerialized = $5;
+				n->ctequery = $7;
 				n->location = @1;
 				$$ = (PGNode *) n;
 			}
 		;
+
+opt_on_key:
+		USING KEY opt_name_list 				{ $$ = $3; }
+		| /*EMPTY*/												{ $$ = NIL; }
 
 opt_materialized:
 		MATERIALIZED							{ $$ = PGCTEMaterializeAlways; }

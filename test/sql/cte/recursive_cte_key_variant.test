@@ -1,0 +1,47 @@
+# name: test/sql/cte/recursive_cte_key_variant.test
+# description: Recursive CTEs with an error thrown in the pipelines
+# group: [cte]
+
+
+query III
+WITH RECURSIVE tbl(a,b,c) USING KEY (a) AS (SELECT * FROM (VALUES (1, 2, 3), (2,2,5)) UNION SELECT a+1, b+1, c FROM tbl WHERE b < 4) SELECT * FROM  tbl;
+----
+3	4	3
+4	4	5
+2	3	3
+1	2	3
+
+query III
+WITH RECURSIVE tbl(a,b,c) USING KEY (b) AS (SELECT * FROM (VALUES (1, 2, 3), (2,3,2)) UNION SELECT a, b+1, c FROM tbl WHERE b < 4) SELECT * FROM  tbl;
+----
+1	4	3
+1	3	3
+1	2	3
+
+query III
+WITH RECURSIVE tbl(a,b,c) USING KEY (a) AS (SELECT * FROM (VALUES (1, 2, 3), (2,3,2)) UNION SELECT a, b+1, c FROM tbl WHERE b < 4) SELECT * FROM  tbl;
+----
+1	4	3
+2	4	2
+
+query III
+WITH RECURSIVE tbl(a,b,c) USING KEY (b,c) AS (SELECT * FROM (VALUES (1, 2, 3), (2,3,3)) UNION SELECT a, b+1, c FROM tbl WHERE b < 4) SELECT * FROM  tbl;
+----
+1	4	3
+1	3	3
+1	2	3
+
+query III
+WITH RECURSIVE tbl(a,b,c) USING KEY (a,b,c) AS (SELECT * FROM (VALUES (1, 2, 3), (2,3,3)) UNION SELECT a, b+1, c FROM tbl WHERE b < 4) SELECT * FROM  tbl;
+----
+1	4	3
+1	3	3
+2	4	3
+1	2	3
+2	3	3
+
+query III
+WITH RECURSIVE tbl(a,b,c) USING KEY (a) AS (SELECT * FROM (VALUES (1, 2, 3), (1,3,3)) UNION SELECT a, b+1, c FROM tbl WHERE b < 4) SELECT * FROM  tbl;
+----
+1	4	3
+

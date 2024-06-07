@@ -30,6 +30,8 @@ public:
 	unique_ptr<QueryNode> right;
 	//! Aliases of the recursive CTE node
 	vector<string> aliases;
+	//! targets for key variants
+	vector<idx_t> key_targets;
 
 	const vector<unique_ptr<ParsedExpression>> &GetSelectList() const override {
 		return left->GetSelectList();

@@ -15,10 +15,13 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 	// the left side is visited first and is added to the BindContext of the right side
 	D_ASSERT(statement.left);
 	D_ASSERT(statement.right);
-
 	result->ctename = statement.ctename;
 	result->union_all = statement.union_all;
 	result->setop_index = GenerateTableIndex();
+
+	for (idx_t i = 0; i < statement.key_targets.size(); ++i) {
+		result->key_targets.push_back(statement.key_targets[i]);
+	}
 
 	result->left_binder = Binder::CreateBinder(context, this);
 	result->left = result->left_binder->BindNode(*statement.left);
@@ -35,6 +38,15 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 	bind_context.AddGenericBinding(result->setop_index, statement.ctename, result->names, result->types);
 
 	result->right_binder = Binder::CreateBinder(context, this);
+
+	if (!statement.key_targets.empty()) {
+		result->recurring_index = GenerateTableIndex();
+		// Retrieves the recursive CTE information in order to add it to the own context for the recurring table.
+		optional_ptr<CommonTableExpressionInfo> current_cte_info = FindCTE(statement.ctename);
+		AddCTE("recurring", *current_cte_info);
+		result->right_binder->bind_context.AddCTEBinding(result->recurring_index, "recurring", result->names,
+		                                                 result->types);
+	}
 
 	// Add bindings of left side to temporary CTE bindings context
 	result->right_binder->bind_context.AddCTEBinding(result->setop_index, statement.ctename, result->names,

@@ -106,6 +106,7 @@ bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
 	case PhysicalOperatorType::RIGHT_DELIM_JOIN:
 	case PhysicalOperatorType::UNION:
 	case PhysicalOperatorType::RECURSIVE_CTE:
+	case PhysicalOperatorType::RECURSIVE_KEY_CTE:
 	case PhysicalOperatorType::EMPTY_RESULT:
 		return true;
 	default:

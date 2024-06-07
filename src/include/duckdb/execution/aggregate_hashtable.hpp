@@ -68,9 +68,14 @@ public:
 	//! Fetch the aggregates for specific groups from the HT and place them in the result
 	void FetchAggregates(DataChunk &groups, DataChunk &result);
 
+	//! Fetch entries from the hash table into the result chunk
+	void FetchAll(DataChunk &result, TupleDataCollection &collection_p);
+	void FetchAll(DataChunk &result);
+
 	//! Finds or creates groups in the hashtable using the specified group keys. The addresses vector will be filled
 	//! with pointers to the groups in the hash table, and the new_groups selection vector will point to the newly
 	//! created groups. The return value is the amount of newly created groups.
+	idx_t FindOrCreateGroupsWithKey(DataChunk &groups, Vector &addresses_out, SelectionVector &new_groups_out, vector<idx_t> key_indices);
 	idx_t FindOrCreateGroups(DataChunk &groups, Vector &group_hashes, Vector &addresses_out,
 	                         SelectionVector &new_groups_out);
 	idx_t FindOrCreateGroups(DataChunk &groups, Vector &addresses_out, SelectionVector &new_groups_out);
@@ -113,6 +118,7 @@ private:
 		SelectionVector no_match_vector;
 		SelectionVector empty_vector;
 		SelectionVector new_groups;
+		vector<idx_t> compared_columns;
 		Vector addresses;
 		unsafe_unique_array<UnifiedVectorFormat> group_data;
 		DataChunk group_chunk;

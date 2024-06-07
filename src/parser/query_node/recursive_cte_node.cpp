@@ -43,6 +43,7 @@ unique_ptr<QueryNode> RecursiveCTENode::Copy() const {
 	result->left = left->Copy();
 	result->right = right->Copy();
 	result->aliases = aliases;
+	result->key_targets = key_targets;
 	this->CopyProperties(*result);
 	return std::move(result);
 }

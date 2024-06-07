@@ -17,6 +17,7 @@ class SelectStatement;
 
 struct CommonTableExpressionInfo {
 	vector<string> aliases;
+	vector<idx_t> keyIdx;
 	unique_ptr<SelectStatement> query;
 	CTEMaterialize materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
 

@@ -1,6 +1,7 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
+#include "duckdb/execution/operator/set/physical_recursive_key_cte.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
@@ -17,14 +18,29 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalRecursiveC
 	// Add the ColumnDataCollection to the context of this PhysicalPlanGenerator
 	recursive_cte_tables[op.table_index] = working_table;
 
-	auto left = CreatePlan(*op.children[0]);
-	auto right = CreatePlan(*op.children[1]);
+	if (op.key_indices.size() == 0) {
+		auto left = CreatePlan(*op.children[0]);
+		auto right = CreatePlan(*op.children[1]);
 
-	auto cte = make_uniq<PhysicalRecursiveCTE>(op.ctename, op.table_index, op.types, op.union_all, std::move(left),
-	                                           std::move(right), op.estimated_cardinality);
-	cte->working_table = working_table;
+		auto cte = make_uniq<PhysicalRecursiveCTE>(op.ctename, op.table_index, op.types, op.union_all, std::move(left),
+		                                           std::move(right), op.estimated_cardinality);
 
-	return std::move(cte);
+		cte->working_table = working_table;
+		return std::move(cte);
+	} else {
+		// If the key variant has been used, a recurring table will be created.
+		auto recurring_table = std::make_shared<ColumnDataCollection>(context, op.types);
+		recursive_cte_tables[op.recurring_index] = recurring_table;
+
+		auto left = CreatePlan(*op.children[0]);
+		auto right = CreatePlan(*op.children[1]);
+
+		auto cte = make_uniq<PhysicalRecursiveKeyCTE>(op.ctename, op.table_index, op.types, op.union_all, op.key_indices, std::move(left),
+		                                           std::move(right), op.estimated_cardinality);
+		cte->working_table = working_table;
+		cte->recurring_table = recurring_table;
+		return std::move(cte);
+	}
 }
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op) {

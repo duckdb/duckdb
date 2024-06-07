@@ -432,8 +432,9 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 			}
 
 			// Perform group comparisons
-			row_matcher.Match(state.group_chunk, chunk_state.vector_data, state.group_compare_vector,
-			                  need_compare_count, layout, addresses_v, &state.no_match_vector, no_match_count);
+			row_matcher.MatchColumns(state.group_chunk, chunk_state.vector_data, state.group_compare_vector,
+			                  		 need_compare_count, layout, addresses_v, &state.no_match_vector,
+			                         no_match_count, state.compared_columns);
 		}
 
 		// Linear probing: each of the entries that do not match move to the next entry in the HT
@@ -453,6 +454,15 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 
 	count += new_group_count;
 	return new_group_count;
+}
+
+idx_t GroupedAggregateHashTable::FindOrCreateGroupsWithKey(DataChunk &groups, Vector &addresses_out, SelectionVector &new_groups_out, vector<idx_t> key_columns) {
+	// Hashes only the columns that should be compared
+	Vector hashes(LogicalType::HASH);
+	groups.Hash(key_columns, hashes);
+	state.compared_columns = key_columns;
+
+	return FindOrCreateGroups(groups, hashes, addresses_out, new_groups_out);
 }
 
 // this is to support distinct aggregations where we need to record whether we
@@ -551,6 +561,21 @@ void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data, optiona
 	}
 
 	Verify();
+}
+
+void GroupedAggregateHashTable::FetchAll(DataChunk &result, TupleDataCollection &collection_p) {
+	FlushMoveState collection(collection_p);
+	collection.Scan();
+	result.Reference(collection.groups);
+}
+
+void GroupedAggregateHashTable::FetchAll(DataChunk &result) {
+		auto other_data = partitioned_data->GetUnpartitioned();
+	    InitializePartitionedData();
+		ClearPointerTable();
+		ResetCount();
+		UnpinData();
+		FetchAll(result, *other_data);
 }
 
 void GroupedAggregateHashTable::UnpinData() {
