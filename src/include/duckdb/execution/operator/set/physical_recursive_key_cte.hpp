@@ -21,7 +21,8 @@ public:
 
 public:
 	PhysicalRecursiveKeyCTE(string ctename, idx_t table_index, vector<LogicalType> types, bool union_all,
-	                        unique_ptr<PhysicalOperator> top, unique_ptr<PhysicalOperator> bottom, idx_t estimated_cardinality);
+	                        unique_ptr<PhysicalOperator> top, unique_ptr<PhysicalOperator> bottom,
+	                        idx_t estimated_cardinality);
 	~PhysicalRecursiveKeyCTE() override;
 	// Contains the result of the key variant
 	std::shared_ptr<ColumnDataCollection> recurring_table;
@@ -32,16 +33,12 @@ public:
 	// Contains the aggregates for the payload
 	vector<unique_ptr<BoundAggregateExpression>> payload_aggregates;
 
-
 public:
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
 
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 
 protected:
-	//! Probe Hash Table and eliminate duplicate rows
-	idx_t ProbeHT(DataChunk &chunk, RecursiveKeyCTEState &state) const;
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
-
 };
 } // namespace duckdb

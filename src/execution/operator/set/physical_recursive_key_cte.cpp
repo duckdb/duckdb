@@ -22,15 +22,14 @@ public:
 	explicit RecursiveKeyCTEState(ClientContext &context, const PhysicalRecursiveKeyCTE &op)
 	    : intermediate_table(context, op.GetTypes()), new_groups(STANDARD_VECTOR_SIZE) {
 
-		vector<BoundAggregateExpression*> payload_aggregates_ptr;
+		vector<BoundAggregateExpression *> payload_aggregates_ptr;
 		for (idx_t i = 0; i < op.payload_aggregates.size(); i++) {
-			auto& dat = op.payload_aggregates[i];
+			auto &dat = op.payload_aggregates[i];
 			payload_aggregates_ptr.push_back(dat.get());
 		}
 		// We need to add the payload types
 		ht = make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), op.distinct_types,
 		                                          op.payload_types, payload_aggregates_ptr);
-
 	}
 
 	unique_ptr<GroupedAggregateHashTable> ht;
@@ -47,12 +46,17 @@ unique_ptr<GlobalSinkState> PhysicalRecursiveKeyCTE::GetGlobalSinkState(ClientCo
 	return make_uniq<RecursiveKeyCTEState>(context, *this);
 }
 
-void PopulateGroupChunk(DataChunk &group_chunk, DataChunk &input_chunk, vector<idx_t> idx_set) {
+void PopulateChunk(DataChunk &group_chunk, DataChunk &input_chunk, vector<idx_t> idx_set, bool reference) {
 	idx_t chunk_index = 0;
 	// Populate the group_chunk
 	for (auto &group_idx : idx_set) {
-		// Reference from input_chunk[group.index] -> group_chunk[chunk_index]
-		group_chunk.data[chunk_index++].Reference(input_chunk.data[group_idx]);
+		if (reference) {
+			// Reference from input_chunk[chunk_index] -> group_chunk[group_idx]
+			group_chunk.data[chunk_index++].Reference(input_chunk.data[group_idx]);
+		} else {
+			// Reference from input_chunk[group.index] -> group_chunk[chunk_index]
+			group_chunk.data[group_idx].Reference(input_chunk.data[chunk_index++]);
+		}
 	}
 	group_chunk.SetCardinality(input_chunk.size());
 }
@@ -61,17 +65,17 @@ SinkResultType PhysicalRecursiveKeyCTE::Sink(ExecutionContext &context, DataChun
                                              OperatorSinkInput &input) const {
 
 	auto &gstate = input.global_state.Cast<RecursiveKeyCTEState>();
- 	lock_guard<mutex> guard(gstate.intermediate_table_lock);
+	lock_guard<mutex> guard(gstate.intermediate_table_lock);
 
 	// Split incoming DataChunk into payload and keys
 	DataChunk distinct_rows;
 	distinct_rows.Initialize(Allocator::DefaultAllocator(), distinct_types);
-	PopulateGroupChunk(distinct_rows, chunk, distinct_idx);
+	PopulateChunk(distinct_rows, chunk, distinct_idx, true);
 	DataChunk payload_rows;
 	payload_rows.Initialize(Allocator::DefaultAllocator(), payload_types);
-	PopulateGroupChunk(payload_rows, chunk, payload_idx);
+	PopulateChunk(payload_rows, chunk, payload_idx, true);
 
-	// add new rows and update payload
+	// Add the chunk to the hash table and append it to the intermediate table
 	gstate.ht->AddChunk(distinct_rows, payload_rows, AggregateType::NON_DISTINCT);
 	gstate.intermediate_table.Append(chunk);
 	return SinkResultType::NEED_MORE_INPUT;
@@ -80,16 +84,6 @@ SinkResultType PhysicalRecursiveKeyCTE::Sink(ExecutionContext &context, DataChun
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-
-void PopulateResultChunk(DataChunk &group_chunk, DataChunk &input_chunk, vector<idx_t> idx_set) {
-	idx_t chunk_index = 0;
-	// Populate the group_chunk
-	for (auto &group_idx : idx_set) {
-		// Reference from input_chunk[group.index] -> group_chunk[chunk_index]
-		group_chunk.data[group_idx].Reference(input_chunk.data[chunk_index++]);
-	}
-	group_chunk.SetCardinality(input_chunk.size());
-}
 
 SourceResultType PhysicalRecursiveKeyCTE::GetData(ExecutionContext &context, DataChunk &chunk,
                                                   OperatorSourceInput &input) const {
@@ -116,9 +110,8 @@ SourceResultType PhysicalRecursiveKeyCTE::GetData(ExecutionContext &context, Dat
 			// and fill it up with the new hash table rows for the next iteration.
 			if (gstate.intermediate_table.Count() != 0) {
 				recurring_table->Reset();
-
-				// btodo: find better solution
-				idx_t size = gstate.ht->Count() > STANDARD_VECTOR_SIZE ? gstate.ht->Count() : STANDARD_VECTOR_SIZE;
+				// Set the size of the DataChunks to the maximum of the hash table size and the standard vector size.
+				idx_t size = std::max<idx_t>(gstate.ht->Count(), STANDARD_VECTOR_SIZE);
 				// Initialise the DataChunks to read the resulting rows.
 				// One DataChunk for the payload, one for the keys.
 				DataChunk payload_rows;
@@ -129,11 +122,13 @@ SourceResultType PhysicalRecursiveKeyCTE::GetData(ExecutionContext &context, Dat
 				// Collect all currently available keys and their payload.
 				gstate.ht->FetchAll(distinct_rows, payload_rows);
 
+				// Create a new DataChunk to store the result.
 				DataChunk result;
 				result.Initialize(Allocator::DefaultAllocator(), chunk.GetTypes(), size);
-				PopulateResultChunk(result, payload_rows, payload_idx);
-				PopulateResultChunk(result, distinct_rows, distinct_idx);
-
+				// Populate the result DataChunk with the keys and the payload.
+				PopulateChunk(result, payload_rows, payload_idx, false);
+				PopulateChunk(result, distinct_rows, distinct_idx, false);
+				// Append the result to the recurring table.
 				recurring_table->Append(result);
 			}
 

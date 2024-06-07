@@ -45,10 +45,8 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 		auto info = make_uniq<CommonTableExpressionInfo>();
 
 		auto &cte = *PGPointerCast<duckdb_libpgquery::PGCommonTableExpr>(cte_ele->data.ptr_value);
-		auto alias_index = 0;
-		vector<string> key_column_names;
 
-		auto  key_target = PGPointerCast<duckdb_libpgquery::PGNode>(cte.recursive_keys->head->data.ptr_value);
+		auto key_target = PGPointerCast<duckdb_libpgquery::PGNode>(cte.recursive_keys->head->data.ptr_value);
 		if (key_target) {
 			TransformExpressionList(*cte.recursive_keys, info->key_targets);
 		}
@@ -58,8 +56,6 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 
 				info->aliases.emplace_back(
 				    reinterpret_cast<duckdb_libpgquery::PGValue *>(node->data.ptr_value)->val.str);
-
-				alias_index++;
 			}
 		}
 		// lets throw some errors on unsupported features early
@@ -127,8 +123,9 @@ unique_ptr<SelectStatement> Transformer::TransformRecursiveCTE(duckdb_libpgquery
 		result.left = TransformSelectNode(*PGPointerCast<duckdb_libpgquery::PGSelectStmt>(stmt.larg));
 		result.right = TransformSelectNode(*PGPointerCast<duckdb_libpgquery::PGSelectStmt>(stmt.rarg));
 		result.aliases = info.aliases;
-		
-		for (auto &key: info.key_targets) {
+
+		// btodo: Maybe there is another way, we handle unique pointers and therefore can only copy the keys.
+		for (auto &key : info.key_targets) {
 			result.key_targets.emplace_back(key->Copy());
 		}
 

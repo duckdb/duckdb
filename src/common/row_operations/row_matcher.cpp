@@ -228,6 +228,7 @@ idx_t RowMatcher::Match(DataChunk &lhs, const vector<TupleDataVectorFormat> &lhs
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 idx_t RowMatcher::Match(DataChunk &lhs, const vector<TupleDataVectorFormat> &lhs_formats, SelectionVector &sel,
                         idx_t count, const TupleDataLayout &rhs_layout, Vector &rhs_row_locations,
                         SelectionVector *no_match_sel, idx_t &no_match_count, const vector<column_t> &columns) {
@@ -252,20 +253,6 @@ idx_t RowMatcher::Match(DataChunk &lhs, const vector<TupleDataVectorFormat> &lhs
 	return count;
 }
 
-idx_t RowMatcher::MatchColumns(DataChunk &lhs, const vector<TupleDataVectorFormat> &lhs_formats, SelectionVector &sel,
-                               idx_t &count, const TupleDataLayout &rhs_layout, Vector &rhs_row_locations,
-                               SelectionVector *no_match_sel, idx_t &no_match_count, vector<column_t> key_columns) {
-	D_ASSERT(!match_functions.empty());
-	idx_t size = !key_columns.empty() ? key_columns.size() : match_functions.size();
-	for (idx_t col_idx = 0; col_idx < size; col_idx++) {
-		idx_t match_index = !key_columns.empty() ? key_columns[col_idx] : col_idx;
-		const auto &match_function = match_functions[match_index];
-		count = match_function.function(lhs.data[match_index], lhs_formats[match_index], sel, count, rhs_layout,
-		                                rhs_row_locations, match_index, match_function.child_functions, no_match_sel,
-		                                no_match_count);
-	}
-	return count;
-}
 
 MatchFunction RowMatcher::GetMatchFunction(const bool no_match_sel, const LogicalType &type,
                                            const ExpressionType predicate) {

@@ -472,6 +472,7 @@ common_table_expr:  name opt_name_list opt_on_key AS opt_materialized '(' Prepar
 opt_on_key:
 		USING KEY '(' expr_list_opt_comma ')' 				{ $$ = $4; }
 		| /*EMPTY*/												{ $$ = list_make1(NIL); }
+		;
 
 opt_materialized:
 		MATERIALIZED							{ $$ = PGCTEMaterializeAlways; }

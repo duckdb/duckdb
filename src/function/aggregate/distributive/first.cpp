@@ -300,7 +300,7 @@ AggregateFunction FirstFun::GetFunction(const LogicalType &type) {
 	return fun;
 }
 
-AggregateFunction FirstFun::GetLastFunction(const LogicalType &type) {
+AggregateFunction LastFun::GetFunction(const LogicalType &type) {
 	auto fun = GetFirstFunction<true, false>(type);
 	fun.name = "last";
 	return fun;

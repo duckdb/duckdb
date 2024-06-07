@@ -12,8 +12,6 @@
 #include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
-#include <utility>
-
 namespace duckdb {
 
 using ValidityBytes = TupleDataLayout::ValidityBytes;
@@ -435,7 +433,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 
 			// Perform group comparisons
 			row_matcher.Match(state.group_chunk, chunk_state.vector_data, state.group_compare_vector,
-			                         need_compare_count, layout, addresses_v, &state.no_match_vector, no_match_count);
+			                  need_compare_count, layout, addresses_v, &state.no_match_vector, no_match_count);
 		}
 
 		// Linear probing: each of the entries that do not match move to the next entry in the HT
@@ -455,16 +453,6 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 
 	count += new_group_count;
 	return new_group_count;
-}
-
-idx_t GroupedAggregateHashTable::FindOrCreateGroupsWithKey(DataChunk &groups, Vector &addresses_out,
-                                                           SelectionVector &new_groups_out, vector<idx_t> key_columns) {
-	// Hashes only the columns that should be compared
-	Vector hashes(LogicalType::HASH);
-	groups.Hash(key_columns, hashes);
-	state.compared_columns = key_columns;
-
-	return FindOrCreateGroups(groups, hashes, addresses_out, new_groups_out);
 }
 
 // this is to support distinct aggregations where we need to record whether we
@@ -534,20 +522,7 @@ void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other) {
 	}
 }
 
-void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other, const vector<idx_t> &column_idx) {
-	auto other_data = other.partitioned_data->GetUnpartitioned();
-
-	Combine(*other_data, nullptr, column_idx);
-
-	// Inherit ownership to all stored aggregate allocators
-	stored_allocators.emplace_back(other.aggregate_allocator);
-	for (const auto &stored_allocator : other.stored_allocators) {
-		stored_allocators.emplace_back(stored_allocator);
-	}
-}
-
-void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data, optional_ptr<atomic<double>> progress,
-                                        const vector<idx_t> &column_idx) {
+void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data, optional_ptr<atomic<double>> progress) {
 	D_ASSERT(other_data.GetLayout().GetAggrWidth() == layout.GetAggrWidth());
 	D_ASSERT(other_data.GetLayout().GetDataWidth() == layout.GetDataWidth());
 	D_ASSERT(other_data.GetLayout().GetRowWidth() == layout.GetRowWidth());
@@ -562,12 +537,7 @@ void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data, optiona
 	idx_t chunk_idx = 0;
 	const auto chunk_count = other_data.ChunkCount();
 	while (fm_state.Scan()) {
-		if (!column_idx.empty()) {
-			FindOrCreateGroupsWithKey(fm_state.groups, fm_state.group_addresses, fm_state.new_groups_sel, column_idx);
-		} else {
-			FindOrCreateGroups(fm_state.groups, fm_state.hashes, fm_state.group_addresses, fm_state.new_groups_sel);
-		}
-
+		FindOrCreateGroups(fm_state.groups, fm_state.hashes, fm_state.group_addresses, fm_state.new_groups_sel);
 		RowOperations::CombineStates(row_state, layout, fm_state.scan_state.chunk_state.row_locations,
 		                             fm_state.group_addresses, fm_state.groups.size());
 		if (layout.HasDestructor()) {
@@ -581,6 +551,11 @@ void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data, optiona
 	}
 
 	Verify();
+}
+
+void GroupedAggregateHashTable::UnpinData() {
+	partitioned_data->FlushAppendState(state.append_state);
+	partitioned_data->Unpin();
 }
 
 void GroupedAggregateHashTable::FetchAll(DataChunk &keys, DataChunk &payload) {
@@ -603,7 +578,8 @@ void GroupedAggregateHashTable::FetchAll(DataChunk &keys, DataChunk &payload) {
 
 		// As long as we can scan new chunks from a data collection,
 		// we will append them to our result.
-		while(data_collection->Scan(scan_state, scan_chunk)) {
+		while (data_collection->Scan(scan_state, scan_chunk)) {
+			// btodo: is there a way to scan without hashes?
 			// Remove hash column
 			auto hash_column = scan_chunk.data.back();
 			scan_chunk.data.pop_back();
@@ -614,11 +590,6 @@ void GroupedAggregateHashTable::FetchAll(DataChunk &keys, DataChunk &payload) {
 			scan_chunk.data.push_back(std::move(hash_column));
 		}
 	}
-}
-
-void GroupedAggregateHashTable::UnpinData() {
-	partitioned_data->FlushAppendState(state.append_state);
-	partitioned_data->Unpin();
 }
 
 void GroupedAggregateHashTable::Reset() {

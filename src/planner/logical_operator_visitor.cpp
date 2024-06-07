@@ -56,7 +56,6 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		}
 		break;
 	}
-
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
 		auto &rec = op.Cast<LogicalRecursiveCTE>();
 
@@ -65,7 +64,6 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		}
 		break;
 	}
-
 	case LogicalOperatorType::LOGICAL_INSERT: {
 		auto &insert = op.Cast<LogicalInsert>();
 		if (insert.on_conflict_condition) {

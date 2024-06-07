@@ -15,6 +15,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 	// the left side is visited first and is added to the BindContext of the right side
 	D_ASSERT(statement.left);
 	D_ASSERT(statement.right);
+
 	result->ctename = statement.ctename;
 	result->union_all = statement.union_all;
 	result->setop_index = GenerateTableIndex();
@@ -38,10 +39,13 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 	if (!statement.key_targets.empty()) {
 		result->recurring_index = GenerateTableIndex();
 		// Retrieves the recursive CTE information in order to add it to the own context for the recurring table.
-		optional_ptr<CommonTableExpressionInfo> current_cte_info = FindCTE(statement.ctename);
-		AddCTE("recurring", *current_cte_info);
-		result->right_binder->bind_context.AddCTEBinding(result->recurring_index, "recurring", result->names,
-		                                                 result->types);
+		vector<std::reference_wrapper<CommonTableExpressionInfo>> current_cte_info = FindCTE(statement.ctename);
+		string recurring_name = "recurring_" + statement.ctename;
+		if (current_cte_info.size() != 0) {
+			AddCTE(recurring_name, current_cte_info[0]);
+			result->right_binder->bind_context.AddCTEBinding(result->recurring_index, recurring_name, result->names,
+			                                                 result->types);
+		}
 	}
 
 	// Add bindings of left side to temporary CTE bindings context
@@ -56,13 +60,13 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 	MoveCorrelatedExpressions(*result->left_binder);
 	MoveCorrelatedExpressions(*result->right_binder);
 
+	// bind specified keys to the referenced column
 	auto expression_binder = ExpressionBinder(*this, context);
 	for (unique_ptr<ParsedExpression> &expr : statement.key_targets) {
 		auto bound_expr = expression_binder.Bind(expr);
 		D_ASSERT(bound_expr->type == ExpressionType::BOUND_COLUMN_REF);
 		result->key_targets.push_back(std::move(bound_expr));
 	}
-	D_ASSERT(result->key_targets.size() == statement.key_targets.size());
 
 	// now both sides have been bound we can resolve types
 	if (result->left->types.size() != result->right->types.size()) {

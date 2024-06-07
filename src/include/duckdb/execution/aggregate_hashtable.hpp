@@ -74,8 +74,6 @@ public:
 	//! Finds or creates groups in the hashtable using the specified group keys. The addresses vector will be filled
 	//! with pointers to the groups in the hash table, and the new_groups selection vector will point to the newly
 	//! created groups. The return value is the amount of newly created groups.
-	idx_t FindOrCreateGroupsWithKey(DataChunk &groups, Vector &addresses_out, SelectionVector &new_groups_out,
-	                                vector<idx_t> key_indices);
 	idx_t FindOrCreateGroups(DataChunk &groups, Vector &group_hashes, Vector &addresses_out,
 	                         SelectionVector &new_groups_out);
 	idx_t FindOrCreateGroups(DataChunk &groups, Vector &addresses_out, SelectionVector &new_groups_out);
@@ -94,17 +92,15 @@ public:
 	void SetRadixBits(idx_t radix_bits);
 	//! Initializes the PartitionedTupleData
 	void InitializePartitionedData();
-	//! Reset aggregate ht
-	void Reset();
 
 	//! Executes the filter(if any) and update the aggregates
 	void Combine(GroupedAggregateHashTable &other);
-	void Combine(GroupedAggregateHashTable &other, const vector<idx_t> &column_idx);
-	void Combine(TupleDataCollection &other_data, optional_ptr<atomic<double>> progress = nullptr,
-	             const vector<idx_t> &column_idx = vector<idx_t>());
+	void Combine(TupleDataCollection &other_data, optional_ptr<atomic<double>> progress = nullptr);
 
 	//! Unpins the data blocks
 	void UnpinData();
+	//! Reset aggregate ht
+	void Reset();
 
 private:
 	//! Efficiently matches groups
@@ -122,7 +118,6 @@ private:
 		SelectionVector no_match_vector;
 		SelectionVector empty_vector;
 		SelectionVector new_groups;
-		vector<idx_t> compared_columns;
 		Vector addresses;
 		unsafe_unique_array<UnifiedVectorFormat> group_data;
 		DataChunk group_chunk;

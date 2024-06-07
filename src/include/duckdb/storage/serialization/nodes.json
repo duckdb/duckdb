@@ -45,8 +45,8 @@
       },
       {
         "id": 103,
-        "name": "recursive_keys",
-        "type": "vector<idx_t>"
+        "name": "key_targets",
+        "type": "vector<ParsedExpression*>"
       }
     ]
   },
