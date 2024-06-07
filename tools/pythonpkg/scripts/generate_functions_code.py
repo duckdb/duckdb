@@ -101,9 +101,8 @@ def prepare_description(description: str, category: str) -> str:
 
 def removesuffix(string: str, suffix: str) -> str:
     if string.endswith(suffix) and suffix:
-        return string[:-len(suffix)]
+        return string[: -len(suffix)]
     return string
-
 
 
 def prepare_parameters(parameters_raw: str) -> Tuple[List[str], Optional[str]]:
