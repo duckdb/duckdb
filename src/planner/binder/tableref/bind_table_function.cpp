@@ -321,6 +321,11 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	if (subquery) {
 		input_table_types = subquery->subquery->types;
 		input_table_names = subquery->subquery->names;
+	} else if (table_function.in_out_function) {
+		for (auto &param : parameters) {
+			input_table_types.push_back(param.type());
+			input_table_names.push_back(string());
+		}
 	}
 	if (!parameters.empty()) {
 		// cast the parameters to the type of the function

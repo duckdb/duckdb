@@ -155,3 +155,33 @@ SELECT k, a, b,
 a	[4, 5, 5]	[5, 7]	[5]
 b	[2, 3]	[1, 2, 3, 4]	[2, 3]
 c	[2, 3]	[4]	[]
+
+
+# aliases
+query I
+SELECT unnest FROM UNNEST(ARRAY[1,2,3]);
+----
+1
+2
+3
+
+query I
+SELECT a FROM UNNEST(ARRAY[1,2,3]) t(a);
+----
+1
+2
+3
+
+query I
+SELECT unnest FROM (SELECT ARRAY[1,2,3] AS x), UNNEST(x);
+----
+1
+2
+3
+
+query I
+SELECT b FROM (SELECT ARRAY[1,2,3] AS x), UNNEST(x) t(b);
+----
+1
+2
+3
