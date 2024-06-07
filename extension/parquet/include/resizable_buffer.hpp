@@ -31,7 +31,6 @@ public:
 	}
 
 	void unsafe_inc(const uint64_t increment) {
-		available(increment);
 		len -= increment;
 		ptr += increment;
 	}
@@ -76,9 +75,13 @@ public:
 	}
 
 	void available(const uint64_t req_len) const {
-		if (req_len > len) {
+		if (!check_available(req_len)) {
 			throw std::runtime_error("Out of buffer");
 		}
+	}
+
+	bool check_available(const uint64_t req_len) const {
+		return req_len <= len;
 	}
 };
 

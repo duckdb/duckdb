@@ -74,16 +74,26 @@ public:
 	void PlainTemplated(shared_ptr<ByteBuffer> plain_data, const uint8_t *__restrict defines, const uint64_t num_values,
 	                    parquet_filter_t &filter, const idx_t result_offset, Vector &result) {
 		if (HasDefines()) {
-			PlainTemplatedInternal<VALUE_TYPE, CONVERSION, true>(*plain_data, defines, num_values, filter,
-			                                                     result_offset, result);
+			if (CONVERSION::PlainAvailable(*plain_data, num_values)) {
+				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, true, true>(*plain_data, defines, num_values, filter,
+				                                                           result_offset, result);
+			} else {
+				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, true, false>(*plain_data, defines, num_values, filter,
+				                                                            result_offset, result);
+			}
 		} else {
-			PlainTemplatedInternal<VALUE_TYPE, CONVERSION, false>(*plain_data, defines, num_values, filter,
-			                                                      result_offset, result);
+			if (CONVERSION::PlainAvailable(*plain_data, num_values)) {
+				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, false, true>(*plain_data, defines, num_values, filter,
+				                                                            result_offset, result);
+			} else {
+				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, false, false>(*plain_data, defines, num_values, filter,
+				                                                             result_offset, result);
+			}
 		}
 	}
 
 private:
-	template <class VALUE_TYPE, class CONVERSION, bool HAS_DEFINES>
+	template <class VALUE_TYPE, class CONVERSION, bool HAS_DEFINES, bool UNSAFE>
 	void PlainTemplatedInternal(ByteBuffer &plain_data, const uint8_t *__restrict defines, const uint64_t num_values,
 	                            parquet_filter_t &filter, const idx_t result_offset, Vector &result) {
 		const auto result_ptr = FlatVector::GetData<VALUE_TYPE>(result);
@@ -94,9 +104,14 @@ private:
 				continue;
 			}
 			if (filter[row_idx]) {
-				result_ptr[row_idx] = CONVERSION::PlainRead(plain_data, *this);
+				result_ptr[row_idx] =
+				    UNSAFE ? CONVERSION::UnsafePlainRead(plain_data, *this) : CONVERSION::PlainRead(plain_data, *this);
 			} else { // there is still some data there that we have to skip over
-				CONVERSION::PlainSkip(plain_data, *this);
+				if (UNSAFE) {
+					CONVERSION::UnsafePlainSkip(plain_data, *this);
+				} else {
+					CONVERSION::PlainSkip(plain_data, *this);
+				}
 			}
 		}
 	}

@@ -794,6 +794,18 @@ void StringParquetValueConversion::PlainSkip(ByteBuffer &plain_data, ColumnReade
 	plain_data.inc(str_len);
 }
 
+bool StringParquetValueConversion::PlainAvailable(const ByteBuffer &plain_data, const idx_t count) {
+	return true;
+}
+
+string_t StringParquetValueConversion::UnsafePlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
+	return PlainRead(plain_data, reader);
+}
+
+void StringParquetValueConversion::UnsafePlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
+	PlainSkip(plain_data, reader);
+}
+
 //===--------------------------------------------------------------------===//
 // List Column Reader
 //===--------------------------------------------------------------------===//
@@ -1170,6 +1182,18 @@ struct DecimalParquetValueConversion {
 		uint32_t decimal_len = FIXED_LENGTH ? reader.Schema().type_length : plain_data.read<uint32_t>();
 		plain_data.inc(decimal_len);
 	}
+
+	static bool PlainAvailable(const ByteBuffer &plain_data, const idx_t count) {
+		return true;
+	}
+
+	static DUCKDB_PHYSICAL_TYPE UnsafePlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
+		return PlainRead(plain_data, reader);
+	}
+
+	static void UnsafePlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
+		PlainSkip(plain_data, reader);
+	}
 };
 
 template <class DUCKDB_PHYSICAL_TYPE, bool FIXED_LENGTH>
@@ -1284,16 +1308,26 @@ struct UUIDValueConversion {
 	}
 
 	static hugeint_t PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
-		idx_t byte_len = sizeof(hugeint_t);
-		plain_data.available(byte_len);
-		auto res = ReadParquetUUID(const_data_ptr_cast(plain_data.ptr));
-
-		plain_data.inc(byte_len);
-		return res;
+		plain_data.available(sizeof(hugeint_t));
+		return UnsafePlainRead(plain_data, reader);
 	}
 
 	static void PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
 		plain_data.inc(sizeof(hugeint_t));
+	}
+
+	static bool PlainAvailable(const ByteBuffer &plain_data, const idx_t count) {
+		return plain_data.check_available(count * sizeof(hugeint_t));
+	}
+
+	static hugeint_t UnsafePlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
+		auto res = ReadParquetUUID(const_data_ptr_cast(plain_data.ptr));
+		plain_data.unsafe_inc(sizeof(hugeint_t));
+		return res;
+	}
+
+	static void UnsafePlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
+		plain_data.unsafe_inc(sizeof(hugeint_t));
 	}
 };
 
@@ -1335,16 +1369,26 @@ struct IntervalValueConversion {
 	}
 
 	static interval_t PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
-		idx_t byte_len = PARQUET_INTERVAL_SIZE;
-		plain_data.available(byte_len);
-		auto res = ReadParquetInterval(const_data_ptr_cast(plain_data.ptr));
-
-		plain_data.inc(byte_len);
-		return res;
+		plain_data.available(PARQUET_INTERVAL_SIZE);
+		return UnsafePlainRead(plain_data, reader);
 	}
 
 	static void PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
 		plain_data.inc(PARQUET_INTERVAL_SIZE);
+	}
+
+	static bool PlainAvailable(const ByteBuffer &plain_data, const idx_t count) {
+		return plain_data.check_available(count * PARQUET_INTERVAL_SIZE);
+	}
+
+	static interval_t UnsafePlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
+		auto res = ReadParquetInterval(const_data_ptr_cast(plain_data.ptr));
+		plain_data.unsafe_inc(PARQUET_INTERVAL_SIZE);
+		return res;
+	}
+
+	static void UnsafePlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
+		plain_data.unsafe_inc(PARQUET_INTERVAL_SIZE);
 	}
 };
 

@@ -27,6 +27,18 @@ struct TemplatedParquetValueConversion {
 	static void PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
 		plain_data.inc(sizeof(VALUE_TYPE));
 	}
+
+	static bool PlainAvailable(const ByteBuffer &plain_data, const idx_t count) {
+		return plain_data.check_available(count * sizeof(VALUE_TYPE));
+	}
+
+	static VALUE_TYPE UnsafePlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
+		return plain_data.unsafe_read<VALUE_TYPE>();
+	}
+
+	static void UnsafePlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
+		plain_data.unsafe_inc(sizeof(VALUE_TYPE));
+	}
 };
 
 template <class VALUE_TYPE, class VALUE_CONVERSION>
@@ -98,6 +110,18 @@ struct CallbackParquetValueConversion {
 
 	static void PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
 		plain_data.inc(sizeof(PARQUET_PHYSICAL_TYPE));
+	}
+
+	static bool PlainAvailable(const ByteBuffer &plain_data, const idx_t count) {
+		return plain_data.check_available(count * sizeof(PARQUET_PHYSICAL_TYPE));
+	}
+
+	static DUCKDB_PHYSICAL_TYPE UnsafePlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
+		return FUNC(plain_data.unsafe_read<PARQUET_PHYSICAL_TYPE>());
+	}
+
+	static void UnsafePlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
+		plain_data.unsafe_inc(sizeof(PARQUET_PHYSICAL_TYPE));
 	}
 };
 
