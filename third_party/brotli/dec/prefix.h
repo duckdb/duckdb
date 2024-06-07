@@ -12,7 +12,7 @@
 
 #include <brotli/types.h>
 
-#include "../common/constants.h"
+#include "../common/brotli_constants.h"
 
 typedef struct CmdLutElement {
   uint8_t insert_len_extra_bits;

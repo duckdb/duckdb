@@ -13,7 +13,7 @@
 #include <stdlib.h>  /* free, malloc */
 #include <string.h>  /* memcpy, memset */
 
-#include "../common/constants.h"
+#include "../common/brotli_constants.h"
 #include "../common/context.h"
 #include "../common/platform.h"
 #include "../common/version.h"

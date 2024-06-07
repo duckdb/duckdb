@@ -13,7 +13,7 @@
 #include <brotli/shared_dictionary.h>
 #include <brotli/types.h>
 
-#include "../common/constants.h"
+#include "../common/brotli_constants.h"
 #include "../common/dictionary.h"
 #include "../common/platform.h"
 #include "../common/transform.h"

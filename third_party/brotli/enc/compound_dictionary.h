@@ -11,7 +11,7 @@
 #include <brotli/types.h>
 
 #include "../common/platform.h"
-#include "../common/constants.h"
+#include "../common/brotli_constants.h"
 #include "memory.h"
 
 namespace duckdb_brotli {
