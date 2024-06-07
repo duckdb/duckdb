@@ -93,10 +93,17 @@ def clean_function_name(name: str) -> str:
 
 def prepare_description(description: str, category: str) -> str:
     if description:
-        description = description.removesuffix(".") + ". "
+        description = removesuffix(description, ".") + ". "
     description += "Function category: " + category.title()
     description = "\n".join(textwrap.wrap(description, width=80, initial_indent="", subsequent_indent=" " * 4))
     return description
+
+
+def removesuffix(string: str, suffix: str) -> str:
+    if string.endswith(suffix) and suffix:
+        return string[:-len(suffix)]
+    return string
+
 
 
 def prepare_parameters(parameters_raw: str) -> Tuple[List[str], Optional[str]]:
@@ -115,7 +122,7 @@ def prepare_parameters(parameters_raw: str) -> Tuple[List[str], Optional[str]]:
             parameters_raw.count("[") == 1 and parameters_raw.count("]") == 1
         ), "Only one optional argument is supported in this script"
         parameters_raw, optional_parameter = parameters_raw.split("[,")
-        optional_parameter = optional_parameter.removesuffix("]").strip()
+        optional_parameter = removesuffix(optional_parameter, "]").strip()
 
         parameters = parameters_raw.split(",") + [optional_parameter]
     else:
@@ -165,7 +172,7 @@ def prepare_parameters(parameters_raw: str) -> Tuple[List[str], Optional[str]]:
             if not has_variable_args and idx > 0:
                 # Only add it if there was a parameter before
                 prepared_parameters.append("/")
-            prepared_parameters.append(f"*{p.removesuffix('...')}")
+            prepared_parameters.append(f"*{removesuffix(p, '...')}")
             has_variable_args = True
         else:
             prepared_parameters.append(p)
