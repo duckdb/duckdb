@@ -173,7 +173,11 @@ data_ptr_t Allocator::DefaultAllocate(PrivateAllocatorData *private_data, idx_t 
 #ifdef USE_JEMALLOC
 	return JemallocExtension::Allocate(private_data, size);
 #else
-	return data_ptr_cast(malloc(size));
+	auto default_allocate_result = malloc(size);
+	if (!default_allocate_result) {
+		throw std::bad_alloc();
+	}
+	return data_ptr_cast(default_allocate_result);
 #endif
 }
 

@@ -291,3 +291,12 @@ SELECT list_zip([{'a': 1}, {'a': 5}, {'a': 3}])
 ----
 [({'a': 1}), ({'a': 5}), ({'a': 3})]
 
+# Non-list type
+
+statement error
+SELECT list_zip('')
+----
+
+statement error
+SELECT list_zip(3, 4)
+----

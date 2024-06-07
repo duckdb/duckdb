@@ -93,6 +93,7 @@ class SerializationCompatibility {
 public:
 	static SerializationCompatibility FromString(const string &input);
 	static SerializationCompatibility Default();
+	static SerializationCompatibility Latest();
 
 public:
 	bool Compare(idx_t property_version) const;
@@ -102,6 +103,8 @@ public:
 	string duckdb_version;
 	//! The max version that should be serialized
 	idx_t serialization_version;
+	//! Whether this was set by a manual SET/PRAGMA or default
+	bool manually_set;
 
 protected:
 	SerializationCompatibility() = default;
@@ -199,10 +202,16 @@ struct DBConfigOptions {
 	string extension_directory;
 	//! Whether unsigned extensions should be loaded
 	bool allow_unsigned_extensions = false;
+	//! Whether community extensions should be loaded
+	bool allow_community_extensions = true;
 	//! Whether extensions with missing metadata should be loaded
 	bool allow_extensions_metadata_mismatch = false;
 	//! Enable emitting FSST Vectors
 	bool enable_fsst_vectors = false;
+	//! Enable VIEWs to create dependencies
+	bool enable_view_dependencies = false;
+	//! Enable macros to create dependencies
+	bool enable_macro_dependencies = false;
 	//! Start transactions immediately in all attached databases - instead of lazily when a database is referenced
 	bool immediate_transaction_mode = false;
 	//! Debug setting - how to initialize  blocks in the storage layer when allocating

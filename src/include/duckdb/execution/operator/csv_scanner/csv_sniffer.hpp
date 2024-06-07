@@ -139,6 +139,10 @@ private:
 	                                     const vector<QuoteRule> &quoterule_candidates,
 	                                     const unordered_map<uint8_t, vector<char>> &quote_candidates_map,
 	                                     const unordered_map<uint8_t, vector<char>> &escape_candidates_map);
+	//! 2.1 If the user set a number of lines to skip, make sure we skip them
+	//! We skip from the first scanner and then apply information on the remaining scanners.
+	void SkipLines(vector<unique_ptr<ColumnCountScanner>> &csv_state_machines);
+
 	//! 3. Analyzes if dialect candidate is a good candidate to be considered, if so, it adds it to the candidates
 	void AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner>, idx_t &rows_read, idx_t &best_consistent_rows,
 	                             idx_t &prev_padding_count);

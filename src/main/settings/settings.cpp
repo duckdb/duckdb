@@ -438,6 +438,38 @@ Value EnableExternalAccessSetting::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Enable Macro Dependencies
+//===--------------------------------------------------------------------===//
+void EnableMacrosDependencies::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.enable_macro_dependencies = input.GetValue<bool>();
+}
+
+void EnableMacrosDependencies::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.enable_macro_dependencies = DBConfig().options.enable_macro_dependencies;
+}
+
+Value EnableMacrosDependencies::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.enable_macro_dependencies);
+}
+
+//===--------------------------------------------------------------------===//
+// Enable View Dependencies
+//===--------------------------------------------------------------------===//
+void EnableViewDependencies::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.enable_view_dependencies = input.GetValue<bool>();
+}
+
+void EnableViewDependencies::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.enable_view_dependencies = DBConfig().options.enable_view_dependencies;
+}
+
+Value EnableViewDependencies::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.enable_view_dependencies);
+}
+
+//===--------------------------------------------------------------------===//
 // Enable FSST Vectors
 //===--------------------------------------------------------------------===//
 void EnableFSSTVectors::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -474,6 +506,36 @@ void AllowUnsignedExtensionsSetting::ResetGlobal(DatabaseInstance *db, DBConfig 
 Value AllowUnsignedExtensionsSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::BOOLEAN(config.options.allow_unsigned_extensions);
+}
+
+//===--------------------------------------------------------------------===//
+// Allow Community Extensions
+//===--------------------------------------------------------------------===//
+void AllowCommunityExtensionsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (db && !config.options.allow_community_extensions) {
+		auto new_value = input.GetValue<bool>();
+		if (new_value) {
+			throw InvalidInputException("Cannot upgrade allow_community_extensions setting while database is running");
+		}
+		return;
+	}
+	auto new_value = input.GetValue<bool>();
+	config.options.allow_community_extensions = new_value;
+}
+
+void AllowCommunityExtensionsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (db && !config.options.allow_community_extensions) {
+		if (DBConfig().options.allow_community_extensions) {
+			throw InvalidInputException("Cannot upgrade allow_community_extensions setting while database is running");
+		}
+		return;
+	}
+	config.options.allow_community_extensions = DBConfig().options.allow_community_extensions;
+}
+
+Value AllowCommunityExtensionsSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.allow_community_extensions);
 }
 
 //===--------------------------------------------------------------------===//

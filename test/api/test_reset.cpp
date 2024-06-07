@@ -60,6 +60,8 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"prefer_range_joins", {Value(true)}},
 	    {"allow_persistent_secrets", {Value(false)}},
 	    {"secret_directory", {"/tmp/some/path"}},
+	    {"enable_macro_dependencies", {Value(true)}},
+	    {"enable_view_dependencies", {Value(true)}},
 	    {"default_secret_storage", {"custom_storage"}},
 	    {"custom_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
 	    {"autoinstall_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
@@ -127,11 +129,12 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "search_path",
 	    "debug_window_mode",
 	    "experimental_parallel_csv",
-	    "lock_configuration",        // cant change this while db is running
-	    "disabled_filesystems",      // cant change this while db is running
-	    "enable_external_access",    // cant change this while db is running
-	    "allow_unsigned_extensions", // cant change this while db is running
-	    "allow_unredacted_secrets",  // cant change this while db is running
+	    "lock_configuration",         // cant change this while db is running
+	    "disabled_filesystems",       // cant change this while db is running
+	    "enable_external_access",     // cant change this while db is running
+	    "allow_unsigned_extensions",  // cant change this while db is running
+	    "allow_community_extensions", // cant change this while db is running
+	    "allow_unredacted_secrets",   // cant change this while db is running
 	    "log_query_path",
 	    "password",
 	    "username",

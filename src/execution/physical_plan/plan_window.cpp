@@ -10,29 +10,6 @@
 
 namespace duckdb {
 
-static bool IsStreamingWindow(unique_ptr<Expression> &expr) {
-	auto &wexpr = expr->Cast<BoundWindowExpression>();
-	if (!wexpr.partitions.empty() || !wexpr.orders.empty() || wexpr.ignore_nulls ||
-	    wexpr.exclude_clause != WindowExcludeMode::NO_OTHER) {
-		return false;
-	}
-	switch (wexpr.type) {
-	// TODO: add more expression types here?
-	case ExpressionType::WINDOW_AGGREGATE:
-		// We can stream aggregates if they are "running totals" and don't use filters
-		return wexpr.start == WindowBoundary::UNBOUNDED_PRECEDING && wexpr.end == WindowBoundary::CURRENT_ROW_ROWS &&
-		       !wexpr.filter_expr;
-	case ExpressionType::WINDOW_FIRST_VALUE:
-	case ExpressionType::WINDOW_PERCENT_RANK:
-	case ExpressionType::WINDOW_RANK:
-	case ExpressionType::WINDOW_RANK_DENSE:
-	case ExpressionType::WINDOW_ROW_NUMBER:
-		return true;
-	default:
-		return false;
-	}
-}
-
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 	D_ASSERT(op.children.size() == 1);
 
@@ -54,7 +31,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op
 	vector<idx_t> blocking_windows;
 	vector<idx_t> streaming_windows;
 	for (idx_t expr_idx = 0; expr_idx < op.expressions.size(); expr_idx++) {
-		if (IsStreamingWindow(op.expressions[expr_idx])) {
+		if (PhysicalStreamingWindow::IsStreamingFunction(op.expressions[expr_idx])) {
 			streaming_windows.push_back(expr_idx);
 		} else {
 			blocking_windows.push_back(expr_idx);

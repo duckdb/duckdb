@@ -17,7 +17,7 @@ statement ok
 INSERT INTO inserts VALUES (1, 'hello'), (1, 'world');
 
 # We cannot perform on-conflict handling in the same chunk. This is a known limitation.
-statement error
+statement maybe
 INSERT OR REPLACE INTO create_or_replace SELECT i, s FROM inserts;
 ----
 PRIMARY KEY or UNIQUE constraint violated

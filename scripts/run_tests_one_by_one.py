@@ -1,6 +1,7 @@
 import sys
 import subprocess
 import time
+import threading
 
 import argparse
 
@@ -22,6 +23,9 @@ parser.add_argument('--profile', action='store_true', help='Enable profiling')
 parser.add_argument('--no-assertions', action='store_false', help='Disable assertions')
 parser.add_argument('--time_execution', action='store_true', help='Measure and print the execution time of each test')
 parser.add_argument('--list', action='store_true', help='Print the list of tests to run')
+parser.add_argument(
+    '--print-interval', action='store', help='Prints "Still running..." every N seconds', default=300.0, type=float
+)
 parser.add_argument(
     '--timeout',
     action='store',
@@ -98,9 +102,29 @@ def parse_assertions(stdout):
     return "ERROR"
 
 
+is_active = False
+
+
+def print_interval_background(interval):
+    global is_active
+    current_ticker = 0.0
+    while is_active:
+        time.sleep(0.1)
+        current_ticker += 0.1
+        if current_ticker >= interval:
+            print("Still running...")
+            current_ticker = 0
+
+
 for test_number, test_case in enumerate(test_cases):
     if not profile:
         print(f"[{test_number}/{test_count}]: {test_case}", end="", flush=True)
+
+    # start the background thread
+    is_active = True
+    background_print_thread = threading.Thread(target=print_interval_background, args=[args.print_interval])
+    background_print_thread.start()
+
     start = time.time()
     try:
         res = subprocess.run(
@@ -114,6 +138,10 @@ for test_number, test_case in enumerate(test_cases):
     stdout = res.stdout.decode('utf8')
     stderr = res.stderr.decode('utf8')
     end = time.time()
+
+    # joint he background print thread
+    is_active = False
+    background_print_thread.join()
 
     additional_data = ""
     if assertions:

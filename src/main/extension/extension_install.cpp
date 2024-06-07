@@ -136,18 +136,21 @@ bool ExtensionHelper::CreateSuggestions(const string &extension_name, string &me
 unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtension(DBConfig &config, FileSystem &fs,
                                                                    const string &extension, bool force_install,
                                                                    optional_ptr<ExtensionRepository> repository,
+                                                                   bool throw_on_origin_mismatch,
                                                                    const string &version) {
 #ifdef WASM_LOADABLE_EXTENSIONS
 	// Install is currently a no-op
 	return nullptr;
 #endif
 	string local_path = ExtensionDirectory(config, fs);
-	return InstallExtensionInternal(config, fs, local_path, extension, force_install, version, repository);
+	return InstallExtensionInternal(config, fs, local_path, extension, force_install, throw_on_origin_mismatch, version,
+	                                repository);
 }
 
 unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtension(ClientContext &context, const string &extension,
                                                                    bool force_install,
                                                                    optional_ptr<ExtensionRepository> repository,
+                                                                   bool throw_on_origin_mismatch,
                                                                    const string &version) {
 #ifdef WASM_LOADABLE_EXTENSIONS
 	// Install is currently a no-op
@@ -158,8 +161,8 @@ unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtension(ClientContext
 	string local_path = ExtensionDirectory(context);
 	optional_ptr<HTTPLogger> http_logger =
 	    ClientConfig::GetConfig(context).enable_http_logging ? context.client_data->http_logger.get() : nullptr;
-	return InstallExtensionInternal(db_config, fs, local_path, extension, force_install, version, repository,
-	                                http_logger, context);
+	return InstallExtensionInternal(db_config, fs, local_path, extension, force_install, throw_on_origin_mismatch,
+	                                version, repository, http_logger, context);
 }
 
 unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, const string &path, idx_t &file_size) {
@@ -376,9 +379,14 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DBConfig &config, con
 	CheckExtensionMetadataOnInstall(config, (void *)decompressed_body.data(), decompressed_body.size(), info,
 	                                extension_name);
 
-	info.mode = ExtensionInstallMode::REPOSITORY;
-	info.full_path = url;
-	info.repository_url = repository->path;
+	if (repository) {
+		info.mode = ExtensionInstallMode::REPOSITORY;
+		info.full_path = url;
+		info.repository_url = repository->path;
+	} else {
+		info.mode = ExtensionInstallMode::CUSTOM_PATH;
+		info.full_path = url;
+	}
 
 	auto fs = FileSystem::CreateLocal();
 	WriteExtensionFiles(*fs, temp_path, local_extension_path, (void *)decompressed_body.data(),
@@ -412,10 +420,36 @@ static bool IsHTTP(const string &path) {
 	return StringUtil::StartsWith(path, "http://") || !StringUtil::StartsWith(path, "https://");
 }
 
+static void ThrowErrorOnMismatchingExtensionOrigin(FileSystem &fs, const string &local_extension_path,
+                                                   const string &extension_name, const string &extension,
+                                                   optional_ptr<ExtensionRepository> repository) {
+	auto install_info = ExtensionInstallInfo::TryReadInfoFile(fs, local_extension_path + ".info", extension_name);
+
+	string format_string = "Installing extension '%s' failed. The extension is already installed "
+	                       "but the origin is different.\n"
+	                       "Currently installed extension is from %s '%s', while the extension to be "
+	                       "installed is from %s '%s'.\n"
+	                       "To solve this rerun this command with `FORCE INSTALL`";
+	string repo = "repository";
+	string custom_path = "custom_path";
+
+	if (install_info) {
+		if (install_info->mode == ExtensionInstallMode::REPOSITORY && repository &&
+		    install_info->repository_url != repository->path) {
+			throw InvalidInputException(format_string, extension_name, repo, install_info->repository_url, repo,
+			                            repository->path);
+		}
+		if (install_info->mode == ExtensionInstallMode::REPOSITORY && ExtensionHelper::IsFullPath(extension)) {
+			throw InvalidInputException(format_string, extension_name, repo, install_info->repository_url, custom_path,
+			                            extension);
+		}
+	}
+}
+
 unique_ptr<ExtensionInstallInfo>
 ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs, const string &local_path,
-                                          const string &extension, bool force_install, const string &version,
-                                          optional_ptr<ExtensionRepository> repository,
+                                          const string &extension, bool force_install, bool throw_on_origin_mismatch,
+                                          const string &version, optional_ptr<ExtensionRepository> repository,
                                           optional_ptr<HTTPLogger> http_logger, optional_ptr<ClientContext> context) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Installing external extensions is disabled through a compile time flag");
@@ -429,22 +463,13 @@ ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs, cons
 	string temp_path = local_extension_path + ".tmp-" + UUID::ToString(UUID::GenerateRandomUUID());
 
 	if (fs.FileExists(local_extension_path) && !force_install) {
-		// The file exists but the origin is different, throw an error to indicate to the user that weird things are
-		// happening
-		if (fs.FileExists(local_extension_path + ".info")) {
-			auto install_info =
-			    ExtensionInstallInfo::TryReadInfoFile(fs, local_extension_path + ".info", extension_name);
-			if (install_info) {
-				if (install_info->repository_url != repository->path) {
-					throw InvalidInputException("Installing extension '%s' failed. The extension is already installed "
-					                            "but the repositories are different.\n"
-					                            "Currently installed extension is from '%s', while the extension to be "
-					                            "installed is from '%s'.\n"
-					                            "To solve this rerun this command with `FORCE INSTALL`",
-					                            extension_name, install_info->repository_url, repository->path);
-				}
-			}
+		// File exists: throw error if origin mismatches
+		if (throw_on_origin_mismatch && !config.options.allow_extensions_metadata_mismatch &&
+		    fs.FileExists(local_extension_path + ".info")) {
+			ThrowErrorOnMismatchingExtensionOrigin(fs, local_extension_path, extension_name, extension, repository);
 		}
+
+		// File exists, but that's okay, install is now a NOP
 		return nullptr;
 	}
 

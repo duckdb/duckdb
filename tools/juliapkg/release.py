@@ -36,7 +36,13 @@ os.system('git fetch upstream --tags')
 proc = subprocess.Popen(['git', 'show-ref', '--tags'], stdout=subprocess.PIPE)
 tags = [x for x in proc.stdout.read().decode('utf8').split('\n') if len(x) > 0 and 'master-builds' not in x]
 
-tags.sort(key=lambda x: int(x.split('refs/tags/')[1].split('.')[1]))
+
+def extract_tag(x):
+    keys = x.split('refs/tags/')[1].lstrip('v').split('.')
+    return int(keys[0]) * 10000000 + int(keys[1]) * 10000 + int(keys[2])
+
+
+tags.sort(key=extract_tag)
 
 # latest tag
 splits = tags[-1].split(' ')
