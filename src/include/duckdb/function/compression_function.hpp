@@ -26,6 +26,7 @@ struct ColumnSegmentState;
 
 struct ColumnFetchState;
 struct ColumnScanState;
+struct PrefetchState;
 struct SegmentScanState;
 
 struct AnalyzeState {
@@ -128,6 +129,7 @@ typedef void (*compression_compress_finalize_t)(CompressionState &state);
 //===--------------------------------------------------------------------===//
 // Uncompress / Scan
 //===--------------------------------------------------------------------===//
+typedef void (*compression_init_prefetch_t)(ColumnSegment &segment, PrefetchState &prefetch_state);
 typedef unique_ptr<SegmentScanState> (*compression_init_segment_scan_t)(ColumnSegment &segment);
 
 //! Function prototype used for reading an entire vector (STANDARD_VECTOR_SIZE)
@@ -178,13 +180,14 @@ public:
 	                    compression_revert_append_t revert_append = nullptr,
 	                    compression_serialize_state_t serialize_state = nullptr,
 	                    compression_deserialize_state_t deserialize_state = nullptr,
-	                    compression_cleanup_state_t cleanup_state = nullptr)
+	                    compression_cleanup_state_t cleanup_state = nullptr,
+	                    compression_init_prefetch_t init_prefetch = nullptr)
 	    : type(type), data_type(data_type), init_analyze(init_analyze), analyze(analyze), final_analyze(final_analyze),
 	      init_compression(init_compression), compress(compress), compress_finalize(compress_finalize),
-	      init_scan(init_scan), scan_vector(scan_vector), scan_partial(scan_partial), fetch_row(fetch_row), skip(skip),
-	      init_segment(init_segment), init_append(init_append), append(append), finalize_append(finalize_append),
-	      revert_append(revert_append), serialize_state(serialize_state), deserialize_state(deserialize_state),
-	      cleanup_state(cleanup_state) {
+	      init_prefetch(init_prefetch), init_scan(init_scan), scan_vector(scan_vector), scan_partial(scan_partial),
+	      fetch_row(fetch_row), skip(skip), init_segment(init_segment), init_append(init_append), append(append),
+	      finalize_append(finalize_append), revert_append(revert_append), serialize_state(serialize_state),
+	      deserialize_state(deserialize_state), cleanup_state(cleanup_state) {
 	}
 
 	//! Compression type
@@ -213,6 +216,8 @@ public:
 	//! compress_finalize is called after
 	compression_compress_finalize_t compress_finalize;
 
+	//! Initialize prefetch state with required I/O data to scan this segment
+	compression_init_prefetch_t init_prefetch;
 	//! init_scan is called to set up the scan state
 	compression_init_segment_scan_t init_scan;
 	//! scan_vector scans an entire vector using the scan state

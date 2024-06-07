@@ -43,6 +43,9 @@ public:
 	static unique_ptr<FileBuffer> ReadTemporaryBufferInternal(BufferManager &buffer_manager, FileHandle &handle,
 	                                                          idx_t position, idx_t size,
 	                                                          unique_ptr<FileBuffer> reusable_buffer);
+
+	//! Registers a transient memory buffer.
+	shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size) final;
 	//! Registers an in-memory buffer that cannot be unloaded until it is destroyed
 	//! This buffer can be small (smaller than BLOCK_SIZE)
 	//! Unpin and pin are nops on this block of memory
@@ -62,6 +65,7 @@ public:
 	void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) final;
 
 	BufferHandle Pin(shared_ptr<BlockHandle> &handle) final;
+	void Prefetch(vector<shared_ptr<BlockHandle>> &handles) final;
 	void Unpin(shared_ptr<BlockHandle> &handle) final;
 
 	//! Set a new memory limit to the buffer manager, throws an exception if the new limit is too low and not enough
@@ -109,7 +113,7 @@ protected:
 	shared_ptr<BlockHandle> RegisterMemory(MemoryTag tag, idx_t block_size, bool can_destroy);
 
 	//! Garbage collect eviction queue
-	void PurgeQueue() final;
+	void PurgeQueue(FileBufferType type) final;
 
 	BufferPool &GetBufferPool() const final;
 	TemporaryMemoryManager &GetTemporaryMemoryManager() final;
@@ -138,6 +142,9 @@ protected:
 	//! When the BlockHandle reaches 0 readers, this creates a new FileBuffer for this BlockHandle and
 	//! overwrites the data within with garbage. Any readers that do not hold the pin will notice
 	void VerifyZeroReaders(shared_ptr<BlockHandle> &handle);
+
+	void BatchRead(vector<shared_ptr<BlockHandle>> &handles, const map<block_id_t, idx_t> &load_map,
+	               block_id_t first_block, block_id_t last_block);
 
 protected:
 	// These are stored here because temp_directory creation is lazy

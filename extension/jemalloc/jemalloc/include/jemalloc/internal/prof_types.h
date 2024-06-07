@@ -1,8 +1,6 @@
 #ifndef JEMALLOC_INTERNAL_PROF_TYPES_H
 #define JEMALLOC_INTERNAL_PROF_TYPES_H
 
-namespace duckdb_jemalloc {
-
 typedef struct prof_bt_s prof_bt_t;
 typedef struct prof_cnt_s prof_cnt_t;
 typedef struct prof_tctx_s prof_tctx_t;
@@ -10,8 +8,6 @@ typedef struct prof_info_s prof_info_t;
 typedef struct prof_gctx_s prof_gctx_t;
 typedef struct prof_tdata_s prof_tdata_t;
 typedef struct prof_recent_s prof_recent_t;
-
-} // namespace duckdb_jemalloc
 
 /* Option defaults. */
 #ifdef JEMALLOC_PROF
@@ -27,7 +23,12 @@ typedef struct prof_recent_s prof_recent_t;
  * is based on __builtin_return_address() necessarily has a hard-coded number
  * of backtrace frame handlers, and should be kept in sync with this setting.
  */
-#define PROF_BT_MAX			128
+#ifdef JEMALLOC_PROF_GCC
+#  define PROF_BT_MAX_LIMIT 256
+#else
+#  define PROF_BT_MAX_LIMIT UINT_MAX
+#endif
+#define PROF_BT_MAX_DEFAULT			128
 
 /* Initial hash table size. */
 #define PROF_CKH_MINITEMS		64
@@ -75,5 +76,19 @@ typedef struct prof_recent_s prof_recent_t;
 
 /* Default number of recent allocations to record. */
 #define PROF_RECENT_ALLOC_MAX_DEFAULT 0
+
+/* Thread name storage size limit. */
+#define PROF_THREAD_NAME_MAX_LEN 16
+
+/*
+ * Minimum required alignment for sampled allocations. Over-aligning sampled
+ * allocations allows us to quickly identify them on the dalloc path without
+ * resorting to metadata lookup.
+ */
+#define PROF_SAMPLE_ALIGNMENT PAGE
+#define PROF_SAMPLE_ALIGNMENT_MASK PAGE_MASK
+
+/* NOLINTNEXTLINE(performance-no-int-to-ptr) */
+#define PROF_TCTX_SENTINEL ((prof_tctx_t *)((uintptr_t)1U))
 
 #endif /* JEMALLOC_INTERNAL_PROF_TYPES_H */

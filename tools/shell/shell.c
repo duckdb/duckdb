@@ -14208,7 +14208,32 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc){
   char zBuf[1000];
 
   if( nLine>sizeof(zBuf)-30 ) return;
-  if( zLine[0]=='.' || zLine[0]=='#') return;
+  if (zLine[0] == '.') {
+    // auto-complete dot command
+    // look for all completions in the help file
+	for(size_t line_idx = 0; line_idx < ArraySize(azHelp); line_idx++) {
+      const char *line = azHelp[line_idx];
+      if (line[0] != '.') {
+        continue;
+      }
+	  int found_match = 1;
+      size_t line_pos;
+      for(line_pos = 0; !IsSpace(line[line_pos]) && line[line_pos] && line_pos + 1 < sizeof(zBuf); line_pos++) {
+        zBuf[line_pos] = line[line_pos];
+		if (line_pos < nLine && line[line_pos] != zLine[line_pos]) {
+			// only match prefixes for auto-completion, i.e. ".sh" matches ".shell"
+			found_match = 0;
+			break;
+		}
+      }
+      zBuf[line_pos] = '\0';
+      if (found_match && line_pos >= nLine) {
+        linenoiseAddCompletion(lc, zBuf);
+      }
+	}
+    return;
+  }
+  if(zLine[0]=='#') return;
 //  if( i==nLine-1 ) return;
   zSql = sqlite3_mprintf("CALL sql_auto_complete(%Q)", zLine);
   sqlite3 *localDb = NULL;
