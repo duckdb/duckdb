@@ -30,6 +30,13 @@ bool ArrayColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) 
 	return false;
 }
 
+void ArrayColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {
+	ColumnData::InitializePrefetch(prefetch_state, scan_state, rows);
+	validity.InitializePrefetch(prefetch_state, scan_state.child_states[0], rows);
+	auto array_size = ArrayType::GetSize(type);
+	child_column->InitializePrefetch(prefetch_state, scan_state.child_states[1], rows * array_size);
+}
+
 void ArrayColumnData::InitializeScan(ColumnScanState &state) {
 	// initialize the validity segment
 	D_ASSERT(state.child_states.size() == 2);

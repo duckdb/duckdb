@@ -60,6 +60,11 @@ bool StandardColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filte
 	}
 }
 
+void StandardColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {
+	ColumnData::InitializePrefetch(prefetch_state, scan_state, rows);
+	validity.InitializePrefetch(prefetch_state, scan_state.child_states[0], rows);
+}
+
 void StandardColumnData::InitializeScan(ColumnScanState &state) {
 	ColumnData::InitializeScan(state);
 
