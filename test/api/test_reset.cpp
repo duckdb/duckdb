@@ -114,6 +114,11 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"arrow_large_buffer_size", {true}},
 	    {"enable_http_logging", {true}},
 	    {"http_logging_output", {"my_cool_outputfile"}},
+	    {"kafka_writer", {true}},
+	    {"kafka_topic_name", {"my_cool_topic"}},
+	    {"kafka_redo_log", {true}},
+	    {"kafka_bootstrap_server_and_port", {"john:117"}},
+	    {"log_extension", {"just_log_me"}},
 	};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {

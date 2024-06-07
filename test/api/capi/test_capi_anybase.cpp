@@ -1,4 +1,5 @@
 #include "capi_tester.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb.h"
 
 using namespace duckdb;
@@ -52,12 +53,13 @@ TEST_CASE("Convert DuckDB Chunks to Arrow Array in C API", "[cToArrow]") {
 
 	arrow_array->release(arrow_array);
 	delete arrow_array;
-	duckdb_destroy_result(&result); // segmentation failure happens here
-	duckdb_disconnect(&con);
-	duckdb_close(&db);
 	for (auto i = 0UL; i < count; i++) {
 		duckdb_destroy_data_chunk(&chunks[i]);
 	}
+	delete [] chunks;
+	duckdb_destroy_result(&result); // segmentation failure happens here
+	duckdb_disconnect(&con);
+	duckdb_close(&db);
 }
 
 TEST_CASE("Convert DuckDB Chunk column to Arrow Array in C API", "[ccToArrow]") {
@@ -143,4 +145,6 @@ TEST_CASE("Test DataChunk C API reference", "[capi]") {
 
 	duckdb_destroy_data_chunk(&data_chunk);
 	duckdb_destroy_data_chunk(&other_chunk);
+	duckdb_destroy_logical_type(&types[0]);
+	duckdb_destroy_logical_type(&types[1]);
 }
