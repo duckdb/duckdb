@@ -33,9 +33,7 @@ parser.add_argument(
     default=3600,
     type=valid_timeout,
 )
-parser.add_argument(
-    '--valgrind', action='store_true', help='Run the tests with valgrind', default=False
-)
+parser.add_argument('--valgrind', action='store_true', help='Run the tests with valgrind', default=False)
 
 args, extra_args = parser.parse_known_args()
 
