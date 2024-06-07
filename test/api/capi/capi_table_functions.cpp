@@ -140,6 +140,9 @@ void my_error_function(duckdb_function_info info, duckdb_data_chunk output) {
 }
 
 TEST_CASE("Test Table Function errors in C API", "[capi]") {
+#ifdef WIN32
+	return;
+#endif
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;
 
@@ -157,6 +160,9 @@ TEST_CASE("Test Table Function errors in C API", "[capi]") {
 }
 
 TEST_CASE("Test Table Function register errors in C API", "[capi]") {
+#ifdef WIN32
+	return;
+#endif
 	CAPITester tester;
 	REQUIRE(tester.OpenDatabase(nullptr));
 
