@@ -178,7 +178,7 @@ final class TypeConversionTests: XCTestCase {
     let t1 = Timestamp.Components(
       year: 1677, month: 09, day: 21, hour: 0, minute: 0, second: 0, microsecond: 0)
     let t2 = Timestamp.Components(
-      year: 2262, month: 04, day: 11, hour: 23, minute: 47, second: 16, nanosecond: 854_775_806)
+      year: 2262, month: 04, day: 11, hour: 23, minute: 47, second: 16, microsecond: 854_775)
     let expected = [Timestamp(components: t1), Timestamp(components: t2), nil]
     try extractTest(
       testColumnName: "timestamp_ns", expected: expected) { $0.cast(to: Timestamp.self) }
