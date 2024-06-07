@@ -22,11 +22,10 @@ public:
 
 public:
 	LogicalRecursiveCTE(string ctename_p, idx_t table_index, idx_t recurring_index, idx_t column_count, bool union_all,
-	                    vector<idx_t> key_indices, unique_ptr<LogicalOperator> top, unique_ptr<LogicalOperator> bottom)
+	                    vector<unique_ptr<Expression>> key_targets, unique_ptr<LogicalOperator> top, unique_ptr<LogicalOperator> bottom)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_RECURSIVE_CTE), union_all(union_all), ctename(std::move(ctename_p)),
 	      table_index(table_index), recurring_index(recurring_index), column_count(column_count),
-	      recursive_keys(key_indices)  {
-
+	      key_targets(std::move(key_targets))  {
 
 		children.push_back(std::move(top));
 		children.push_back(std::move(bottom));
@@ -37,12 +36,11 @@ public:
 	idx_t table_index;
 	idx_t recurring_index;
 	idx_t column_count;
-<<<<<<< HEAD
+
+	vector<unique_ptr<Expression>> key_targets;
 	vector<CorrelatedColumnInfo> correlated_columns;
-	vector<idx_t> key_indices;
-=======
 	vector<idx_t> recursive_keys;
->>>>>>> 2bde7ec3f7 (rename keys property)
+
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override {

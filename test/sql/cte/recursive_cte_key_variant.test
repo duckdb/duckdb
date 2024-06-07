@@ -8,17 +8,17 @@ PRAGMA enable_verification;
 query III
 WITH RECURSIVE tbl(a,b,c) USING KEY (a) AS (SELECT * FROM (VALUES (1, 2, 3), (2,2,5)) UNION SELECT a+1, b+1, c FROM tbl WHERE b < 4) SELECT * FROM  tbl;
 ----
+1	2	3
+2	3	3
 3	4	3
 4	4	5
-2	3	3
-1	2	3
 
 query III
 WITH RECURSIVE tbl(a,b,c) USING KEY (b) AS (SELECT * FROM (VALUES (1, 2, 3), (2,3,2)) UNION SELECT a, b+1, c FROM tbl WHERE b < 4) SELECT * FROM  tbl;
 ----
-1	4	3
-1	3	3
 1	2	3
+1	3	3
+1	4	3
 
 query III
 WITH RECURSIVE tbl(a,b,c) USING KEY (a) AS (SELECT * FROM (VALUES (1, 2, 3), (2,3,2)) UNION SELECT a, b+1, c FROM tbl WHERE b < 4) SELECT * FROM  tbl;
@@ -29,33 +29,40 @@ WITH RECURSIVE tbl(a,b,c) USING KEY (a) AS (SELECT * FROM (VALUES (1, 2, 3), (2,
 query III
 WITH RECURSIVE tbl(a,b,c) USING KEY (b,c) AS (SELECT * FROM (VALUES (1, 2, 3), (2,3,3)) UNION SELECT a, b+1, c FROM tbl WHERE b < 4) SELECT * FROM  tbl;
 ----
-1	4	3
-1	3	3
 1	2	3
+1	3	3
+1	4	3
 
 query III
 WITH RECURSIVE tbl(a,b,c) USING KEY (a,b,c) AS (SELECT * FROM (VALUES (1, 2, 3), (2,3,3)) UNION SELECT a, b+1, c FROM tbl WHERE b < 4) SELECT * FROM  tbl;
 ----
-1	4	3
-1	3	3
-2	4	3
 1	2	3
 2	3	3
+1	3	3
+2	4	3
+1	4	3
 
 query III
 WITH RECURSIVE tbl(a,b,c) USING KEY (a) AS (SELECT * FROM (VALUES (1, 2, 3), (1,3,3)) UNION SELECT a, b+1, c FROM tbl WHERE b < 4) SELECT * FROM  tbl;
 ----
 1	4	3
 
+query III
+WITH RECURSIVE tbl(a,b,c) USING KEY (a,b,c) AS (SELECT * FROM (VALUES (1, 2, 3), (1,3,3)) UNION SELECT a, b+1, c FROM tbl WHERE b < 4) SELECT * FROM  tbl;
+----
+1	2	3
+1	3	3
+1	4	3
+
 # Reference the recurring table more than once
 query III
 WITH RECURSIVE tbl(a,b,c) USING KEY (a) AS (SELECT 1, NULL, NULL UNION SELECT tbl.a+1, rec1.a, rec2.b FROM tbl, recurring AS rec1, recurring AS rec2 WHERE tbl.a < 5) SELECT * FROM tbl;
 ----
-5	4	3
-4	3	2
-3	2	1
-2	1	NULL
 1	NULL	NULL
+2	1	NULL
+3	2	1
+4	3	2
+5	4	3
 
 
 #######################
@@ -142,7 +149,7 @@ WITH RECURSIVE bellman(knode, distance) USING KEY (knode) AS (
   FROM   bellman AS n, edges AS e, recurring AS rec
   WHERE  (e.here, e.there) = (n.knode, rec.knode)
   AND    rec.distance > n.distance + e.length
-  ORDER BY knode, distance)
+  ORDER BY distance DESC)
 )
 SELECT n.knode || CASE WHEN n.knode = 'v0' THEN ' (source)' ELSE '' END AS node,
        n.distance
@@ -154,3 +161,12 @@ v1	5
 v2	3
 v3	4
 v4	6
+
+
+# more rows than STANDARD_CHUNK_SIZE
+query I
+WITH RECURSIVE tbl(n) USING KEY (n) AS (SELECT 1 UNION SELECT n+1 FROM tbl WHERE n < 3000) SELECT SUM(n) FROM tbl
+----
+4501500
+
+

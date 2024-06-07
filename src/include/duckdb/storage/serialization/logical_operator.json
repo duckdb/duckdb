@@ -509,8 +509,8 @@
       },
       {
         "id": 204,
-        "name": "recursive_keys",
-        "type": "vector<idx_t>"
+        "name": "key_targets",
+        "type": "vector<Expression*>"
       },
       {
         "id": 205,

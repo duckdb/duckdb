@@ -9,6 +9,7 @@
 #include "duckdb/planner/operator/logical_create_index.hpp"
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
+#include "duckdb/planner/operator/logical_recursive_cte.hpp"
 
 namespace duckdb {
 
@@ -133,6 +134,19 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		ext_op.ResolveColumnBindings(*this, bindings);
 		return;
 	}
+
+	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
+		auto &rec = op.Cast<LogicalRecursiveCTE>();
+		VisitOperatorChildren(op);
+		bindings = op.GetColumnBindings();
+
+		for (auto &expr : rec.key_targets) {
+			VisitExpression(&expr);
+		}
+
+		return;
+	}
+
 	default:
 		break;
 	}

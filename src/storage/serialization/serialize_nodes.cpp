@@ -311,7 +311,7 @@ void CommonTableExpressionInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<string>>(100, "aliases", aliases);
 	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(101, "query", query);
 	serializer.WriteProperty<CTEMaterialize>(102, "materialized", materialized);
-	serializer.WritePropertyWithDefault<vector<idx_t>>(103, "recursive_keys", recursive_keys);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(103, "key_targets", key_targets);
 }
 
 unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::Deserialize(Deserializer &deserializer) {
@@ -319,7 +319,7 @@ unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::Deserialize(Des
 	deserializer.ReadPropertyWithDefault<vector<string>>(100, "aliases", result->aliases);
 	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(101, "query", result->query);
 	deserializer.ReadProperty<CTEMaterialize>(102, "materialized", result->materialized);
-	deserializer.ReadPropertyWithDefault<vector<idx_t>>(103, "recursive_keys", result->recursive_keys);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(103, "key_targets", result->key_targets);
 	return result;
 }
 

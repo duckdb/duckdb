@@ -434,9 +434,8 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 			}
 
 			// Perform group comparisons
-			row_matcher.MatchColumns(state.group_chunk, chunk_state.vector_data, state.group_compare_vector,
-			                         need_compare_count, layout, addresses_v, &state.no_match_vector, no_match_count,
-			                         state.compared_columns);
+			row_matcher.Match(state.group_chunk, chunk_state.vector_data, state.group_compare_vector,
+			                         need_compare_count, layout, addresses_v, &state.no_match_vector, no_match_count);
 		}
 
 		// Linear probing: each of the entries that do not match move to the next entry in the HT
@@ -584,43 +583,36 @@ void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data, optiona
 	Verify();
 }
 
-void GroupedAggregateHashTable::FetchAll(DataChunk &result) {
+void GroupedAggregateHashTable::FetchAll(DataChunk &keys, DataChunk &payload) {
 	UnpinData();
 
 	for (auto &data_collection : partitioned_data->GetPartitions()) {
+		// If the data collection is empty, we do not need to scan it
 		if (data_collection->Count() == 0) {
 			continue;
 		}
-
-		// Initialise chunk to scan into,
-		// we cannot scan directly into the result chunk because we do not want the column with hashes
+		// Initialise chunk we are scanning into,
+		// we cannot scan directly into the result chunk because we do not want the hash column
 		DataChunk scan_chunk;
 		data_collection->InitializeChunk(scan_chunk);
+		DataChunk scan_payload;
+		scan_payload.Initialize(Allocator::DefaultAllocator(), payload.GetTypes());
 
 		TupleDataScanState scan_state;
 		data_collection->InitializeScan(scan_state);
-		bool firstScan = true;
 
 		// As long as we can scan new chunks from a data collection,
 		// we will append them to our result.
 		while(data_collection->Scan(scan_state, scan_chunk)) {
-			scan_chunk.Flatten();
-			result.Flatten();
-
-			// btodo: Manuel remove hash column everytime could be better
-			auto l = scan_chunk.data.back();
+			// Remove hash column
+			auto hash_column = scan_chunk.data.back();
 			scan_chunk.data.pop_back();
-
-			if (firstScan) {
-				scan_chunk.Copy(result);
-				firstScan = false;
-			} else {
-				result.Append(scan_chunk, true);
-			}
-
-			scan_chunk.data.emplace_back(l);
+			// Using the scanned key, we will retrieve our payload.
+			keys.Append(scan_chunk, true);
+			FetchAggregates(scan_chunk, scan_payload);
+			payload.Append(scan_payload, true);
+			scan_chunk.data.push_back(std::move(hash_column));
 		}
-
 	}
 }
 

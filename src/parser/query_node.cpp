@@ -20,8 +20,8 @@ CommonTableExpressionMap CommonTableExpressionMap::Copy() const {
 		for (auto &al : kv.second->aliases) {
 			kv_info->aliases.push_back(al);
 		}
-		for (auto &al : kv.second->recursive_keys) {
-			kv_info->recursive_keys.push_back(al);
+		for (auto &al : kv.second->key_targets) {
+			kv_info->key_targets.push_back(al->Copy());
 		}
 		kv_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(kv.second->query->Copy());
 		kv_info->materialized = kv.second->materialized;
@@ -65,16 +65,15 @@ string CommonTableExpressionMap::ToString() const {
 			}
 			result += ")";
 		}
-		if (!cte.recursive_keys.empty()) {
-			result += " USING KEY ";
-			result += "(";
-			for (idx_t i = 0; i < cte.recursive_keys.size(); i++) {
-				if (i > 0) {
+		if (!cte.key_targets.empty()) {
+			result += " USING KEY (";
+			for (idx_t k = 0; k < cte.key_targets.size(); k++) {
+				if (k > 0) {
 					result += ", ";
 				}
-				result += KeywordHelper::WriteOptionallyQuoted(cte.aliases[cte.recursive_keys[i]]);
+				result += cte.key_targets[k]->ToString();
 			}
-			result += ")";
+			result += ") ";
 		}
 		if (kv.second->materialized == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
 			result += " AS MATERIALIZED (";
@@ -157,7 +156,7 @@ bool QueryNode::Equals(const QueryNode *other) const {
 		if (entry.second->aliases != other->cte_map.map.at(entry.first)->aliases) {
 			return false;
 		}
-		if (entry.second->recursive_keys != other_entry->second->recursive_keys) {
+		if (!ParsedExpression::ListEquals(entry.second->key_targets, other_entry->second->key_targets)) {
 			return false;
 		}
 		if (!entry.second->query->Equals(*other->cte_map.map.at(entry.first)->query)) {
@@ -176,8 +175,8 @@ void QueryNode::CopyProperties(QueryNode &other) const {
 		for (auto &al : kv.second->aliases) {
 			kv_info->aliases.push_back(al);
 		}
-		for (auto &key : kv.second->recursive_keys) {
-			kv_info->recursive_keys.push_back(key);
+		for (auto &key : kv.second->key_targets) {
+			kv_info->key_targets.push_back(key->Copy());
 		}
 		kv_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(kv.second->query->Copy());
 		kv_info->materialized = kv.second->materialized;

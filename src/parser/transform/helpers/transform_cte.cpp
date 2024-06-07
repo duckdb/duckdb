@@ -11,6 +11,11 @@ unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::Copy() {
 	auto result = make_uniq<CommonTableExpressionInfo>();
 	result->aliases = aliases;
 	result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
+
+	for (auto &key : result->key_targets) {
+		result->key_targets.push_back(key->Copy());
+	}
+
 	result->materialized = materialized;
 	return result;
 }
@@ -43,31 +48,19 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 		auto alias_index = 0;
 		vector<string> key_column_names;
 
-		// Collect all columns to be used as key for key variant
-		if (cte.recursive_keys) {
-			for (auto key = cte.recursive_keys->head; key != nullptr; key = key->next) {
-				key_column_names.emplace_back(
-				    reinterpret_cast<duckdb_libpgquery::PGValue *>(key->data.ptr_value)->val.str);
-			}
+		auto  key_target = PGPointerCast<duckdb_libpgquery::PGNode>(cte.recursive_keys->head->data.ptr_value);
+		if (key_target) {
+			TransformExpressionList(*cte.recursive_keys, info->key_targets);
 		}
 
 		if (cte.aliascolnames) {
 			for (auto node = cte.aliascolnames->head; node != nullptr; node = node->next) {
-				auto value = PGPointerCast<duckdb_libpgquery::PGValue>(node->data.ptr_value);
-				info->aliases.emplace_back(value->val.str);
 
+				info->aliases.emplace_back(
+				    reinterpret_cast<duckdb_libpgquery::PGValue *>(node->data.ptr_value)->val.str);
 
-				if (cte.recursive_keys) {
-					for (idx_t key = 0; key < key_column_names.size(); key++) {
-						if (info->aliases.back() == key_column_names[key]) {
-							info->recursive_keys.push_back(alias_index);
-						}
-					}
-				}
 				alias_index++;
 			}
-			// All keys should be bound to one column
-			D_ASSERT(key_column_names.size() == info->recursive_keys.size());
 		}
 		// lets throw some errors on unsupported features early
 		if (cte.ctecolnames) {
@@ -134,7 +127,10 @@ unique_ptr<SelectStatement> Transformer::TransformRecursiveCTE(duckdb_libpgquery
 		result.left = TransformSelectNode(*PGPointerCast<duckdb_libpgquery::PGSelectStmt>(stmt.larg));
 		result.right = TransformSelectNode(*PGPointerCast<duckdb_libpgquery::PGSelectStmt>(stmt.rarg));
 		result.aliases = info.aliases;
-		result.recursive_keys = info.recursive_keys;
+		
+		for (auto &key: info.key_targets) {
+			result.key_targets.emplace_back(key->Copy());
+		}
 
 		if (stmt.op != duckdb_libpgquery::PG_SETOP_UNION) {
 			throw ParserException("Unsupported setop type for recursive CTE: only UNION or UNION ALL are supported");

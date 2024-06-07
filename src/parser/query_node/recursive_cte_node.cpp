@@ -28,7 +28,7 @@ bool RecursiveCTENode::Equals(const QueryNode *other_p) const {
 		return false;
 	}
 
-	if (recursive_keys != other.recursive_keys) {
+	if (!ParsedExpression::ListEquals(key_targets, other.key_targets)) {
 		return false;
 	}
 
@@ -48,7 +48,11 @@ unique_ptr<QueryNode> RecursiveCTENode::Copy() const {
 	result->left = left->Copy();
 	result->right = right->Copy();
 	result->aliases = aliases;
-	result->recursive_keys = recursive_keys;
+
+	for (auto &key : key_targets) {
+		result->key_targets.push_back(key->Copy());
+	}
+
 	this->CopyProperties(*result);
 	return std::move(result);
 }

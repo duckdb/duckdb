@@ -69,7 +69,7 @@ public:
 	void FetchAggregates(DataChunk &groups, DataChunk &result);
 
 	//! Fetch entries from the hash table into the result chunk
-	void FetchAll(DataChunk &result);
+	void FetchAll(DataChunk &keys, DataChunk &payload);
 
 	//! Finds or creates groups in the hashtable using the specified group keys. The addresses vector will be filled
 	//! with pointers to the groups in the hash table, and the new_groups selection vector will point to the newly
