@@ -108,6 +108,18 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 	return OperatorResultType::HAVE_MORE_OUTPUT;
 }
 
+string PhysicalTableInOutFunction::ParamsToString() const {
+	string result;
+	if (function.to_string) {
+		result = function.to_string(bind_data.get());
+	} else {
+		result += function.name;
+	}
+	result += "\n[INFOSEPARATOR]\n";
+	result += StringUtil::Format("EC: %llu", estimated_cardinality);
+	return result;
+}
+
 OperatorFinalizeResultType PhysicalTableInOutFunction::FinalExecute(ExecutionContext &context, DataChunk &chunk,
                                                                     GlobalOperatorState &gstate_p,
                                                                     OperatorState &state_p) const {

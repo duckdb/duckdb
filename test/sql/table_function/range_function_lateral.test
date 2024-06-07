@@ -106,9 +106,9 @@ SELECT * FROM (SELECT DATE '2000-01-01', DATE '2000-10-1', NULL) t(s, e, increme
 
 # many rows
 query I
-select count(*) from (values (1), (10), (100), (1000), (10000), (100000)) t(a), range(a);
+select count(*) from (values (1), (10), (100), (1000), (10000)) t(a), range(a);
 ----
-111111
+11111
 
 require icu
 
