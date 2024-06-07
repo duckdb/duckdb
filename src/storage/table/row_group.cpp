@@ -463,6 +463,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 		if (!CheckZonemapSegments(state)) {
 			continue;
 		}
+
 		// second, scan the version chunk manager to figure out which tuples to load for this transaction
 		idx_t count;
 		SelectionVector valid_sel(STANDARD_VECTOR_SIZE);
@@ -484,6 +485,26 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 		} else {
 			count = max_count;
 		}
+		auto &block_manager = GetBlockManager();
+#ifndef DUCKDB_ALTERNATIVE_VERIFY
+		// // in regular operation we only prefetch from remote file systems
+		// // when alternative verify is set, we always prefetch for testing purposes
+		if (block_manager.IsRemote())
+#else
+		if (!block_manager.InMemory())
+#endif
+		{
+			PrefetchState prefetch_state;
+			for (idx_t i = 0; i < column_ids.size(); i++) {
+				const auto &column = column_ids[i];
+				if (column != COLUMN_IDENTIFIER_ROW_ID) {
+					GetColumn(column).InitializePrefetch(prefetch_state, state.column_scans[i], max_count);
+				}
+			}
+			auto &buffer_manager = block_manager.buffer_manager;
+			buffer_manager.Prefetch(prefetch_state.blocks);
+		}
+
 		if (count == max_count && !table_filters) {
 			// scan all vectors completely: full scan without deletions or table filters
 			for (idx_t i = 0; i < column_ids.size(); i++) {
