@@ -73,10 +73,6 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 			break;
 		}
 		auto &comp_join = op.Cast<LogicalComparisonJoin>();
-		if (comp_join.join_type == JoinType::MARK || comp_join.join_type == JoinType::SEMI ||
-		    comp_join.join_type == JoinType::ANTI) {
-			break;
-		}
 		// FIXME for now, we only push into the projection map for equality (hash) joins
 		// FIXME: add projection to LHS as well
 		bool has_equality = false;
@@ -93,7 +89,7 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		LogicalOperatorVisitor::VisitOperatorExpressions(op);
 
 		column_binding_set_t unused_bindings;
-		auto old_op_bindings = op.GetColumnBindings();
+		auto old_bindings = op.GetColumnBindings();
 		ExtractUnusedColumnBindings(op.children[1]->GetColumnBindings(), unused_bindings);
 
 		// now recurse into the filter and its children
@@ -101,6 +97,7 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 
 		// then generate the projection map
 		GenerateProjectionMap(op.children[1]->GetColumnBindings(), unused_bindings, comp_join.right_projection_map);
+		auto new_bindings = op.GetColumnBindings();
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_UNION:

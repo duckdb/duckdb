@@ -1,3 +1,4 @@
+import platform
 import duckdb
 import pytest
 from duckdb.typing import INTEGER, VARCHAR, TIMESTAMP
@@ -12,6 +13,11 @@ from duckdb import (
 )
 from duckdb.value.constant import Value, IntegerValue
 import datetime
+
+pytestmark = pytest.mark.skipif(
+    platform.system() == "Emscripten",
+    reason="Extensions are not supported on Emscripten",
+)
 
 
 @pytest.fixture(scope='function')

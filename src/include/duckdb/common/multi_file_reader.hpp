@@ -52,6 +52,7 @@ struct MultiFileReaderBindData {
 struct MultiFileReaderGlobalState {
 	MultiFileReaderGlobalState(vector<LogicalType> extra_columns_p, optional_ptr<const MultiFileList> file_list_p)
 	    : extra_columns(std::move(extra_columns_p)), file_list(file_list_p) {};
+	virtual ~MultiFileReaderGlobalState();
 
 	//! extra columns that will be produced during scanning
 	const vector<LogicalType> extra_columns;

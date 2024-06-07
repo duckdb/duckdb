@@ -438,6 +438,22 @@ Value EnableExternalAccessSetting::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Enable Macro Dependencies
+//===--------------------------------------------------------------------===//
+void EnableMacrosDependencies::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.enable_macro_dependencies = input.GetValue<bool>();
+}
+
+void EnableMacrosDependencies::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.enable_macro_dependencies = DBConfig().options.enable_macro_dependencies;
+}
+
+Value EnableMacrosDependencies::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.enable_macro_dependencies);
+}
+
+//===--------------------------------------------------------------------===//
 // Enable View Dependencies
 //===--------------------------------------------------------------------===//
 void EnableViewDependencies::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -718,10 +734,9 @@ Value CustomProfilingSettings::GetSetting(const ClientContext &context) {
 		if (!profiling_settings_str.empty()) {
 			profiling_settings_str += ", ";
 		}
-		profiling_settings_str += EnumUtil::ToString(entry);
+		profiling_settings_str += StringUtil::Format("\"%s\": \"true\"", EnumUtil::ToString(entry));
 	}
-
-	return Value(profiling_settings_str);
+	return Value(StringUtil::Format("{%s}", profiling_settings_str));
 }
 
 //===--------------------------------------------------------------------===//

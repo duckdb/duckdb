@@ -860,7 +860,10 @@ void Vector::Flatten(idx_t count) {
 			// constant NULL, set nullmask
 			validity.EnsureWritable();
 			validity.SetAllInvalid(count);
-			return;
+			if (GetType().InternalType() != PhysicalType::STRUCT) {
+				// for structs we still need to flatten the child vectors as well
+				return;
+			}
 		}
 		// non-null constant: have to repeat the constant
 		switch (GetType().InternalType()) {
@@ -1155,8 +1158,13 @@ void Vector::Serialize(Serializer &serializer, idx_t count) {
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = vdata.sel->get_index(i);
 				auto source = source_array[idx];
-				entries[i].offset = source.offset;
-				entries[i].length = source.length;
+				if (vdata.validity.RowIsValid(idx)) {
+					entries[i].offset = source.offset;
+					entries[i].length = source.length;
+				} else {
+					entries[i].offset = 0;
+					entries[i].length = 0;
+				}
 			}
 			serializer.WriteProperty(104, "list_size", list_size);
 			serializer.WriteList(105, "entries", count, [&](Serializer::List &list, idx_t i) {
