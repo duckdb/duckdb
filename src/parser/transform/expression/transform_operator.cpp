@@ -57,6 +57,31 @@ unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(string op, uni
 	}
 }
 
+void Transformer::TransformInExpression(duckdb_libpgquery::PGNode &rhs,
+                                        vector<unique_ptr<ParsedExpression>> &in_candidates) {
+	auto expr = TransformExpression(rhs);
+
+	switch (expr->type) {
+	case ExpressionType::FUNCTION: {
+		auto &func = expr->Cast<FunctionExpression>();
+		if (func.function_name != "list_value" && func.function_name != "row") {
+			break;
+		}
+		for (auto &expr : func.children) {
+			in_candidates.push_back(std::move(expr));
+		}
+		return;
+	}
+	case ExpressionType::VALUE_PARAMETER: {
+		in_candidates.push_back(std::move(expr));
+		return;
+	}
+	default:
+		break;
+	}
+	throw ParserException("IN does not support \"%s\" as a valid right hand side", expr->ToString());
+}
+
 unique_ptr<ParsedExpression> Transformer::TransformAExprInternal(duckdb_libpgquery::PGAExpr &root) {
 	auto name = string(PGPointerCast<duckdb_libpgquery::PGValue>(root.name->head->data.ptr_value)->val.str);
 
@@ -108,7 +133,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExprInternal(duckdb_libpgque
 		}
 		auto result = make_uniq<OperatorExpression>(operator_type, std::move(left_expr));
 		SetQueryLocation(*result, root.location);
-		TransformExpressionList(*PGPointerCast<duckdb_libpgquery::PGList>(root.rexpr), result->children);
+		TransformInExpression(*root.rexpr, result->children);
 		return std::move(result);
 	}
 	// rewrite NULLIF(a, b) into CASE WHEN a=b THEN NULL ELSE a END

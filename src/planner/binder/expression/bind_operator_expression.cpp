@@ -84,6 +84,24 @@ BindResult ExpressionBinder::BindGroupingFunction(OperatorExpression &op, idx_t 
 	return BindResult("GROUPING function is not supported here");
 }
 
+static bool IsPreparedList(ParsedExpression &unbound, ParsedExpression &bound) {
+	if (unbound.type != ExpressionType::VALUE_PARAMETER) {
+		// Not a prepared parameter (not one of: ?, $1, $<name>)
+		return false;
+	}
+	D_ASSERT(bound.expression_class == ExpressionClass::BOUND_EXPRESSION);
+	auto &expr = BoundExpression::GetExpression(bound);
+	if (expr->type != ExpressionType::VALUE_CONSTANT) {
+		return false;
+	}
+	auto &value_constant = expr->Cast<BoundConstantExpression>();
+	auto &value = value_constant.value;
+	if (value.type().id() != LogicalTypeId::LIST) {
+		return false;
+	}
+	return true;
+}
+
 BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth) {
 	if (op.type == ExpressionType::GROUPING_FUNCTION) {
 		return BindGroupingFunction(op, depth);
@@ -92,9 +110,13 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	// Bind the children of the operator expression. We already create bound expressions.
 	// Only those children that trigger an error are not yet bound.
 	ErrorData error;
+	vector<unique_ptr<ParsedExpression>> bound_children;
 	for (idx_t i = 0; i < op.children.size(); i++) {
-		BindChild(op.children[i], depth, error);
+		bound_children.push_back(op.children[i]->Copy());
+		BindChild(bound_children[i], depth, error);
 	}
+	D_ASSERT(bound_children.size() == op.children.size());
+
 	if (error.HasError()) {
 		return BindResult(std::move(error));
 	}
@@ -103,15 +125,15 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	string function_name;
 	switch (op.type) {
 	case ExpressionType::ARRAY_EXTRACT: {
-		D_ASSERT(op.children[0]->expression_class == ExpressionClass::BOUND_EXPRESSION);
-		auto &b_exp = BoundExpression::GetExpression(*op.children[0]);
+		D_ASSERT(bound_children[0]->expression_class == ExpressionClass::BOUND_EXPRESSION);
+		auto &b_exp = BoundExpression::GetExpression(*bound_children[0]);
 		const auto &b_exp_type = b_exp->return_type;
 		if (b_exp_type.id() == LogicalTypeId::MAP) {
 			function_name = "map_extract";
-		} else if (b_exp_type.IsJSONType() && op.children.size() == 2) {
+		} else if (b_exp_type.IsJSONType() && bound_children.size() == 2) {
 			function_name = "json_extract";
 			// Make sure we only extract array elements, not fields, by adding the $[] syntax
-			auto &i_exp = BoundExpression::GetExpression(*op.children[1]);
+			auto &i_exp = BoundExpression::GetExpression(*bound_children[1]);
 			if (i_exp->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 				auto &const_exp = i_exp->Cast<BoundConstantExpression>();
 				if (!const_exp.value.IsNull()) {
@@ -128,11 +150,11 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		function_name = "array_slice";
 		break;
 	case ExpressionType::STRUCT_EXTRACT: {
-		D_ASSERT(op.children.size() == 2);
-		D_ASSERT(op.children[0]->expression_class == ExpressionClass::BOUND_EXPRESSION);
-		D_ASSERT(op.children[1]->expression_class == ExpressionClass::BOUND_EXPRESSION);
-		auto &extract_exp = BoundExpression::GetExpression(*op.children[0]);
-		auto &name_exp = BoundExpression::GetExpression(*op.children[1]);
+		D_ASSERT(bound_children.size() == 2);
+		D_ASSERT(bound_children[0]->expression_class == ExpressionClass::BOUND_EXPRESSION);
+		D_ASSERT(bound_children[1]->expression_class == ExpressionClass::BOUND_EXPRESSION);
+		auto &extract_exp = BoundExpression::GetExpression(*bound_children[0]);
+		auto &name_exp = BoundExpression::GetExpression(*bound_children[1]);
 		const auto &extract_expr_type = extract_exp->return_type;
 		if (extract_expr_type.id() != LogicalTypeId::STRUCT && extract_expr_type.id() != LogicalTypeId::UNION &&
 		    extract_expr_type.id() != LogicalTypeId::SQLNULL && !extract_expr_type.IsJSONType()) {
@@ -157,6 +179,27 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		}
 		break;
 	}
+	case ExpressionType::COMPARE_IN: {
+		if (op.children.size() == 2 && IsPreparedList(*op.children[1], *bound_children[1])) {
+			vector<unique_ptr<ParsedExpression>> replacement_bound_expressions;
+			auto &lhs = bound_children[0];
+			auto &rhs = bound_children[1];
+			// Move the lhs
+			replacement_bound_expressions.push_back(std::move(lhs));
+			// Expand the LIST value
+			auto &bound_expr = BoundExpression::GetExpression(*rhs);
+			auto &bound_constant = bound_expr->Cast<BoundConstantExpression>();
+			auto &list_value = bound_constant.value;
+			D_ASSERT(list_value.type().id() == LogicalTypeId::LIST);
+			auto list_children = ListValue::GetChildren(list_value);
+			for (auto &child : list_children) {
+				auto bound_child = make_uniq<BoundConstantExpression>(child);
+				replacement_bound_expressions.push_back(make_uniq<BoundExpression>(std::move(bound_child)));
+			}
+			bound_children = std::move(replacement_bound_expressions);
+		}
+		break;
+	}
 	case ExpressionType::ARRAY_CONSTRUCTOR:
 		function_name = "list_value";
 		break;
@@ -167,14 +210,14 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		break;
 	}
 	if (!function_name.empty()) {
-		auto function = make_uniq_base<ParsedExpression, FunctionExpression>(function_name, std::move(op.children));
+		auto function = make_uniq_base<ParsedExpression, FunctionExpression>(function_name, std::move(bound_children));
 		return BindExpression(function, depth, false);
 	}
 
 	vector<unique_ptr<Expression>> children;
-	for (idx_t i = 0; i < op.children.size(); i++) {
-		D_ASSERT(op.children[i]->expression_class == ExpressionClass::BOUND_EXPRESSION);
-		children.push_back(std::move(BoundExpression::GetExpression(*op.children[i])));
+	for (idx_t i = 0; i < bound_children.size(); i++) {
+		D_ASSERT(bound_children[i]->expression_class == ExpressionClass::BOUND_EXPRESSION);
+		children.push_back(std::move(BoundExpression::GetExpression(*bound_children[i])));
 	}
 	// now resolve the types
 	LogicalType result_type = ResolveOperatorType(op, children);
