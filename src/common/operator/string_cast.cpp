@@ -192,7 +192,7 @@ duckdb::string_t StringCast::Operation(timestamp_ns_t input, Vector &vector) {
 		nano_length = 6;
 		nano_length -= NumericCast<idx_t>(TimeToStringCast::FormatMicros(time[4], nano_buffer));
 	}
-	idx_t length = date_length + time_length + nano_length + 1;
+	const idx_t length = date_length + time_length + nano_length + 1;
 
 	string_t result = StringVector::EmptyString(vector, length);
 	auto data = result.GetDataWriteable();
@@ -203,6 +203,7 @@ duckdb::string_t StringCast::Operation(timestamp_ns_t input, Vector &vector) {
 	TimeToStringCast::Format(data, time_length, time, micro_buffer);
 	data += time_length;
 	memcpy(data, nano_buffer, nano_length);
+	D_ASSERT(data + nano_length <= result.GetDataWriteable() + length);
 
 	result.Finalize();
 	return result;
