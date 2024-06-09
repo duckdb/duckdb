@@ -165,6 +165,13 @@ SELECT quantile_disc(42::UTINYINT, 0.5);
 ----
 42
 
+# Array arguments
+query I
+SELECT quantile_disc(col, ARRAY_VALUE(0.5, 0.4, 0.1)) AS percentile 
+FROM VALUES (0), (1), (2), (10) AS tab(col);
+----
+[1, 1, 0]
+
 # Invalid use
 statement error
 SELECT quantile_disc(r, [-0.1, 0.5, 0.9]) FROM quantiles

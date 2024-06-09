@@ -537,7 +537,7 @@ if(NOT MSVC)
   endif()
 else()
   set(CMAKE_CXX_WINDOWS_FLAGS
-      "/wd4244 /wd4267 /wd4200 /wd26451 /wd26495 /D_CRT_SECURE_NO_WARNINGS /utf-8")
+      "/wd4244 /wd4267 /wd4200 /wd26451 /wd26495 /D_CRT_SECURE_NO_WARNINGS /utf-8 /D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR")
   if(TREAT_WARNINGS_AS_ERRORS)
     set(CMAKE_CXX_WINDOWS_FLAGS "${CMAKE_CXX_WINDOWS_FLAGS} /WX")
   endif()
@@ -978,7 +978,7 @@ function(duckdb_extension_generate_version OUTPUT_VAR WORKING_DIR)
       message(FATAL_ERROR "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'log -1 --format=%h'.")
     endif()
     execute_process(
-            COMMAND ${GIT_EXECUTABLE} describe --tags
+            COMMAND ${GIT_EXECUTABLE} describe --tags --always
             WORKING_DIRECTORY ${WORKING_DIR}
             RESULT_VARIABLE GIT_RESULT
             OUTPUT_VARIABLE GIT_DESCRIBE
