@@ -47,7 +47,7 @@ static unique_ptr<FunctionData> UnnestBind(ClientContext &context, TableFunction
 		throw BinderException("UNNEST requires a single list as input");
 	}
 	return_types.push_back(ListType::GetChildType(input.input_table_types[0]));
-	names.push_back(input.input_table_names[0]);
+	names.push_back("unnest");
 	return make_uniq<UnnestBindData>(input.input_table_types[0]);
 }
 
