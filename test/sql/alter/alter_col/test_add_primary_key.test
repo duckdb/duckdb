@@ -155,3 +155,52 @@ statement error
 INSERT INTO test8 VALUES (NULL, 100)
 ----
 Constraint Error: NOT NULL constraint failed: test8.i
+
+# Scenario #9: reverse column order in index
+statement ok
+CREATE TABLE test9 (i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO test9 VALUES (1, 2)
+
+statement ok
+ALTER TABLE test9 ADD PRIMARY KEY (j, i)
+
+statement error
+INSERT INTO test9 VALUES (1, 2)
+----
+Duplicate key "j: 2, i: 1" violates primary key constraint.
+
+statement error
+INSERT INTO test9 (j, i) VALUES (2, 1)
+----
+Duplicate key "j: 2, i: 1" violates primary key constraint.
+
+# Scenario #10: invalid primary key type
+statement ok
+CREATE TABLE test10 (a INTEGER[], b INTEGER)
+
+statement error
+ALTER TABLE test10 ADD PRIMARY KEY (a)
+----
+Invalid type Error: Invalid Type [INTEGER[]]: Invalid type for index key.
+
+statement error
+ALTER TABLE test10 ADD PRIMARY KEY (a, b)
+----
+Invalid type Error: Invalid Type [INTEGER[]]: Invalid type for index key.
+
+# Scenario #11: After adding a primary key to an existing table, verify index is correct
+statement ok
+CREATE TABLE test11 (i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO test11 VALUES (4, 40), (1, 10), (3, 30), (2, 20), (5, 50)
+
+statement ok
+ALTER TABLE test11 ADD PRIMARY KEY (i)
+
+query II
+SELECT * FROM test11 WHERE i = 2
+----
+2	20
