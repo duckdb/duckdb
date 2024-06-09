@@ -487,7 +487,7 @@ struct VectorMinMaxBase {
 			if (!state.value) {
 				Assign(state, input, i);
 			} else {
-				OP::template Execute(state, input, i, count);
+				OP::template Execute<STATE>(state, input, i, count);
 			}
 		}
 	}
@@ -499,7 +499,7 @@ struct VectorMinMaxBase {
 		} else if (!target.value) {
 			Assign(target, *source.value, 0);
 		} else {
-			OP::template Execute(target, *source.value, 0, 1);
+			OP::template Execute<STATE>(target, *source.value, 0, 1);
 		}
 	}
 

@@ -1107,7 +1107,7 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name,
 		result->schema = schema_name;
 		result->table = table_name;
 		for (auto &column : table->GetColumns().Logical()) {
-			result->columns.emplace_back(column.Name(), column.Type());
+			result->columns.emplace_back(column.Copy());
 		}
 	});
 	return result;
