@@ -1508,7 +1508,7 @@ Index &DataTable::AddConstraintIndex(const vector<reference<const ColumnDefiniti
 
 void DataTable::AddIndexStorage(ClientContext &context, Index &index) {
 	// If the table is empty, there's nothing to do
-	if (row_groups->GetTotalRows() == 0 || column_definitions.size() == 0) {
+	if (row_groups->GetTotalRows() == 0 || column_definitions.empty()) {
 		return;
 	}
 
