@@ -1,7 +1,7 @@
 #ifndef JEMALLOC_INTERNAL_ATOMIC_H
 #define JEMALLOC_INTERNAL_ATOMIC_H
 
-#define ATOMIC_INLINE JEMALLOC_ALWAYS_INLINE
+#include "jemalloc/internal/jemalloc_preamble.h"
 
 #define JEMALLOC_U8_ATOMICS
 #if defined(JEMALLOC_GCC_ATOMIC_ATOMICS)
@@ -21,6 +21,8 @@
 #else
 #  error "Don't have atomics implemented on this platform."
 #endif
+
+#define ATOMIC_INLINE JEMALLOC_ALWAYS_INLINE
 
 /*
  * This header gives more or less a backport of C11 atomics. The user can write
@@ -50,8 +52,6 @@
 #define ATOMIC_RELEASE atomic_memory_order_release
 #define ATOMIC_ACQ_REL atomic_memory_order_acq_rel
 #define ATOMIC_SEQ_CST atomic_memory_order_seq_cst
-
-namespace duckdb_jemalloc {
 
 /*
  * Another convenience -- simple atomic helper functions.
@@ -105,7 +105,5 @@ JEMALLOC_GENERATE_EXPANDED_INT_ATOMICS(uint64_t, u64, 3)
 #endif
 
 #undef ATOMIC_INLINE
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_ATOMIC_H */

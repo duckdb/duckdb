@@ -125,7 +125,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 		if (entry == installed_extensions.end()) {
 			installed_extensions[info.name] = std::move(info);
 		} else {
-			if (!entry->second.loaded) {
+			if (entry->second.install_mode != ExtensionInstallMode::STATICALLY_LINKED) {
 				entry->second.file_path = info.file_path;
 				entry->second.install_mode = info.install_mode;
 				entry->second.installed_from = info.installed_from;
@@ -144,13 +144,12 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 		auto &ext_info = e.second;
 		auto entry = installed_extensions.find(ext_name);
 		if (entry == installed_extensions.end() || !entry->second.installed) {
-			ExtensionInformation info;
+			ExtensionInformation &info = installed_extensions[ext_name];
 			info.name = ext_name;
 			info.loaded = true;
 			info.extension_version = ext_info.version;
 			info.installed = ext_info.mode == ExtensionInstallMode::STATICALLY_LINKED;
 			info.install_mode = ext_info.mode;
-			installed_extensions[ext_name] = std::move(info);
 		} else {
 			entry->second.loaded = true;
 			entry->second.extension_version = ext_info.version;

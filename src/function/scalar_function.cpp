@@ -5,6 +5,9 @@ namespace duckdb {
 FunctionLocalState::~FunctionLocalState() {
 }
 
+ScalarFunctionInfo::~ScalarFunctionInfo() {
+}
+
 ScalarFunction::ScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
                                scalar_function_t function, bind_scalar_function_t bind,
                                dependency_function_t dependency, function_statistics_t statistics,

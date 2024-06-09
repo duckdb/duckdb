@@ -89,11 +89,14 @@ void CSVReaderOptions::SetEscape(const string &input) {
 	this->dialect_options.state_machine_options.escape.Set(escape_str[0]);
 }
 
-int64_t CSVReaderOptions::GetSkipRows() const {
-	return NumericCast<int64_t>(this->dialect_options.skip_rows.GetValue());
+idx_t CSVReaderOptions::GetSkipRows() const {
+	return NumericCast<idx_t>(this->dialect_options.skip_rows.GetValue());
 }
 
 void CSVReaderOptions::SetSkipRows(int64_t skip_rows) {
+	if (skip_rows < 0) {
+		throw InvalidInputException("skip_rows option from read_csv scanner, must be equal or higher than 0");
+	}
 	dialect_options.skip_rows.Set(NumericCast<idx_t>(skip_rows));
 }
 
@@ -588,7 +591,7 @@ void CSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) {
 	}
 	named_params["max_line_size"] = Value::BIGINT(NumericCast<int64_t>(maximum_line_size));
 	if (dialect_options.skip_rows.IsSetByUser()) {
-		named_params["skip"] = Value::BIGINT(GetSkipRows());
+		named_params["skip"] = Value::UBIGINT(GetSkipRows());
 	}
 	named_params["null_padding"] = Value::BOOLEAN(null_padding);
 	named_params["parallel"] = Value::BOOLEAN(parallel);

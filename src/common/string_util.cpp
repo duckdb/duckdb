@@ -246,7 +246,7 @@ bool StringUtil::CIEquals(const string &l1, const string &l2) {
 bool StringUtil::CILessThan(const string &s1, const string &s2) {
 	const auto charmap = UpperFun::ASCII_TO_UPPER_MAP;
 
-	unsigned char u1, u2;
+	unsigned char u1 {}, u2 {};
 
 	idx_t length = MinValue<idx_t>(s1.length(), s2.length());
 	length += s1.length() != s2.length();

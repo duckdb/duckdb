@@ -280,6 +280,12 @@ duckdb_state duckdb_bind_timestamp(duckdb_prepared_statement prepared_statement,
 	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
 }
 
+duckdb_state duckdb_bind_timestamp_tz(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+                                      duckdb_timestamp val) {
+	auto value = Value::TIMESTAMPTZ(timestamp_t(val.micros));
+	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
+}
+
 duckdb_state duckdb_bind_interval(duckdb_prepared_statement prepared_statement, idx_t param_idx, duckdb_interval val) {
 	auto value = Value::INTERVAL(val.months, val.days, val.micros);
 	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
@@ -332,7 +338,12 @@ duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statemen
 		return DuckDBError;
 	}
 
-	auto result = wrapper->statement->Execute(wrapper->values, false);
+	duckdb::unique_ptr<duckdb::QueryResult> result;
+	try {
+		result = wrapper->statement->Execute(wrapper->values, false);
+	} catch (...) {
+		return DuckDBError;
+	}
 	return DuckDBTranslateResult(std::move(result), out_result);
 }
 

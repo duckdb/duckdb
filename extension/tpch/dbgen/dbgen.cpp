@@ -11,6 +11,9 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#ifndef DUCKDB_NO_THREADS
+#include "duckdb/common/thread.hpp"
+#endif
 #endif
 
 #define DECLARER /* EXTERN references get defined here */
@@ -473,16 +476,97 @@ void skip(int table, int children, DSS_HUGE step, DBGenContext &dbgen_ctx) {
 	}
 }
 
+struct TPCHDBgenParameters {
+	TPCHDBgenParameters(ClientContext &context, Catalog &catalog, const string &schema, const string &suffix) {
+		tables.resize(REGION + 1);
+		for (size_t i = PART; i <= REGION; i++) {
+			auto tname = get_table_name(i);
+			if (!tname.empty()) {
+				string full_tname = string(tname) + string(suffix);
+				auto &tbl_catalog = catalog.GetEntry<TableCatalogEntry>(context, schema, full_tname);
+				tables[i] = &tbl_catalog;
+			}
+		}
+
+	}
+
+	vector<optional_ptr<TableCatalogEntry>> tables;
+};
+
+class TPCHDataAppender {
+public:
+	TPCHDataAppender(ClientContext &context, TPCHDBgenParameters &parameters, DBGenContext base_context, idx_t flush_count) :
+		context(context), parameters(parameters) {
+		dbgen_ctx = base_context;
+		append_info = duckdb::unique_ptr<tpch_append_information[]>(new tpch_append_information[REGION + 1]);
+		memset(append_info.get(), 0, sizeof(tpch_append_information) * REGION + 1);
+		for (size_t i = PART; i <= REGION; i++) {
+			if (parameters.tables[i]) {
+				auto &tbl_catalog = *parameters.tables[i];
+				append_info[i].appender = make_uniq<InternalAppender>(context, tbl_catalog, flush_count);
+			}
+		}
+	}
+
+	void GenerateTableData(int table_index, idx_t row_count, idx_t offset) {
+		gen_tbl(context, table_index, static_cast<DSS_HUGE>(row_count), append_info.get(), &dbgen_ctx, offset);
+	}
+
+	void AppendData(int children, int current_step) {
+		DSS_HUGE i;
+		DSS_HUGE rowcnt = 0;
+		for (i = PART; i <= REGION; i++) {
+			if (table & (1 << i)) {
+				if (i < NATION) {
+					rowcnt = dbgen_ctx.tdefs[i].base * dbgen_ctx.scale_factor;
+				} else {
+					rowcnt = dbgen_ctx.tdefs[i].base;
+				}
+				if (children > 1 && current_step != -1) {
+					size_t part_size = std::ceil((double)rowcnt / (double)children);
+					auto part_offset = part_size * current_step;
+					auto part_end = part_offset + part_size;
+					rowcnt = part_end > rowcnt ? rowcnt - part_offset : part_size;
+					skip(i, children, part_offset, dbgen_ctx);
+					if (rowcnt > 0) {
+						// generate part of the table
+						GenerateTableData((int) i, rowcnt, part_offset);
+					}
+				} else {
+					// generate full table
+					GenerateTableData((int) i, rowcnt, 0);
+				}
+			}
+		}
+	}
+
+	void Flush() {
+		// flush any incomplete chunks
+		for (idx_t i = PART; i <= REGION; i++) {
+			if (append_info[i].appender) {
+				append_info[i].appender->Flush();
+				append_info[i].appender.reset();
+			}
+		}
+	}
+
+private:
+	ClientContext &context;
+	TPCHDBgenParameters &parameters;
+	unique_ptr<tpch_append_information[]> append_info;
+	DBGenContext dbgen_ctx;
+};
+
+static void ParallelTPCHAppend(TPCHDataAppender *appender, int children, int current_step) {
+	appender->AppendData(children, current_step);
+}
+
 void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string catalog_name, string schema,
-                                string suffix, int children_p, int current_step) {
+                                string suffix, int children, int current_step) {
 	if (flt_scale == 0) {
 		return;
 	}
 
-	// generate the actual data
-	DSS_HUGE rowcnt = 0;
-	DSS_HUGE extra;
-	DSS_HUGE i;
 	// all tables
 	table = (1 << CUST) | (1 << SUPP) | (1 << NATION) | (1 << REGION) | (1 << PART_PSUPP) | (1 << ORDER_LINE);
 	force = 0;
@@ -495,9 +579,10 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 	set_seeds = 0;
 	updates = 0;
 
-	DBGenContext dbgen_ctx;
+	d_path = NULL;
 
-	tdef *tdefs = dbgen_ctx.tdefs;
+	DBGenContext base_context;
+	tdef *tdefs = base_context.tdefs;
 	tdefs[PART].base = 200000;
 	tdefs[PSUPP].base = 200000;
 	tdefs[SUPP].base = 10000;
@@ -509,18 +594,11 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 	tdefs[NATION].base = NATIONS_MAX;
 	tdefs[REGION].base = NATIONS_MAX;
 
-	children = children_p;
-	d_path = NULL;
-
-	if (current_step >= children) {
-		return;
-	}
-
 	if (flt_scale < MIN_SCALE) {
 		int i;
 		int int_scale;
 
-		dbgen_ctx.scale_factor = 1;
+		base_context.scale_factor = 1;
 		int_scale = (int)(1000 * flt_scale);
 		for (i = PART; i < REGION; i++) {
 			tdefs[i].base = (DSS_HUGE)(int_scale * tdefs[i].base) / 1000;
@@ -529,58 +607,76 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 			}
 		}
 	} else {
-		dbgen_ctx.scale_factor = (long)flt_scale;
+		base_context.scale_factor = (long)flt_scale;
 	}
-	load_dists(10 * 1024 * 1024, &dbgen_ctx); // 10MiB
 
+	if (current_step >= children) {
+		return;
+	}
+
+	load_dists(10 * 1024 * 1024, &base_context); // 10MiB
 	/* have to do this after init */
 	tdefs[NATION].base = nations.count;
 	tdefs[REGION].base = regions.count;
 
 	auto &catalog = Catalog::GetCatalog(context, catalog_name);
 
-	auto append_info = duckdb::unique_ptr<tpch_append_information[]>(new tpch_append_information[REGION + 1]);
-	memset(append_info.get(), 0, sizeof(tpch_append_information) * REGION + 1);
-	for (size_t i = PART; i <= REGION; i++) {
-		auto tname = get_table_name(i);
-		if (!tname.empty()) {
-			string full_tname = string(tname) + string(suffix);
-			auto &tbl_catalog = catalog.GetEntry<TableCatalogEntry>(context, schema, full_tname);
-			append_info[i].appender = make_uniq<InternalAppender>(context, tbl_catalog);
+	TPCHDBgenParameters parameters(context, catalog, schema, suffix);
+#ifndef DUCKDB_NO_THREADS
+	bool explicit_partial_generation = children > 1 && current_step != -1;
+	auto thread_count = TaskScheduler::GetScheduler(context).NumberOfThreads();
+	if (explicit_partial_generation || thread_count <= 1) {
+#endif
+		// if we are doing explicit partial generation the parallelism is managed outside of dbgen
+		// only generate the chunk we are interested in
+		TPCHDataAppender appender(context, parameters, base_context, BaseAppender::DEFAULT_FLUSH_COUNT);
+		appender.AppendData(children, current_step);
+		appender.Flush();
+#ifndef DUCKDB_NO_THREADS
+	} else {
+		// we split into 20 children per scale factor by default
+		static constexpr idx_t CHILDREN_PER_SCALE_FACTOR = 20;
+		idx_t child_count;
+		if (flt_scale < 1) {
+			child_count = 1;
+		} else {
+			child_count = MinValue<idx_t>(static_cast<idx_t>(CHILDREN_PER_SCALE_FACTOR * flt_scale), MAX_CHILDREN);
 		}
-	}
-
-	for (i = PART; i <= REGION; i++) {
-		if (table & (1 << i)) {
-			if (i < NATION) {
-				rowcnt = tdefs[i].base * dbgen_ctx.scale_factor;
-			} else {
-				rowcnt = tdefs[i].base;
+		idx_t step = 0;
+		vector<TPCHDataAppender> finished_appenders;
+		while(step < child_count) {
+			// launch N threads
+			vector<TPCHDataAppender> new_appenders;
+			vector<std::thread> threads;
+			idx_t launched_step = step;
+			// initialize the appenders for each thread
+			// note we prevent the threads themselves from flushing the appenders by specifying a very high flush count here
+			for(idx_t thr_idx = 0; thr_idx < thread_count && launched_step < child_count; thr_idx++, launched_step++) {
+				new_appenders.emplace_back(context, parameters, base_context, NumericLimits<int64_t>::Maximum());
 			}
-			if (children > 1 && current_step != -1) {
-				size_t part_size = std::ceil((double)rowcnt / (double)children);
-				auto part_offset = part_size * current_step;
-				auto part_end = part_offset + part_size;
-				rowcnt = part_end > rowcnt ? rowcnt - part_offset : part_size;
-				skip(i, children, part_offset, dbgen_ctx);
-				if (rowcnt > 0) {
-					// generate part of the table
-					gen_tbl(context, (int)i, rowcnt, append_info.get(), &dbgen_ctx, part_offset);
-				}
-			} else {
-				// generate full table
-				gen_tbl(context, (int)i, rowcnt, append_info.get(), &dbgen_ctx);
+			// launch the threads
+			for(idx_t thr_idx = 0; thr_idx < new_appenders.size(); thr_idx++) {
+				threads.emplace_back(ParallelTPCHAppend, &new_appenders[thr_idx], child_count, step);
+				step++;
 			}
+			// flush the previous batch of appenders while waiting (if any are there)
+			// now flush the appenders in-order
+			for(auto &appender : finished_appenders) {
+				appender.Flush();
+			}
+			finished_appenders.clear();
+			// wait for all threads to finish
+			for(auto &thread : threads) {
+				thread.join();
+			}
+			finished_appenders = std::move(new_appenders);
+		}
+		// flush the final batch of appenders
+		for(auto &appender : finished_appenders) {
+			appender.Flush();
 		}
 	}
-	// flush any incomplete chunks
-	for (size_t i = PART; i <= REGION; i++) {
-		if (append_info[i].appender) {
-			append_info[i].appender->Flush();
-			append_info[i].appender.reset();
-		}
-	}
-
+#endif
 	cleanup_dists();
 }
 

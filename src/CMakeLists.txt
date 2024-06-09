@@ -116,7 +116,8 @@ else()
     DIRECTORY "${PROJECT_SOURCE_DIR}/src/include/duckdb"
     DESTINATION "${INSTALL_INCLUDE_DIR}"
     FILES_MATCHING
-    PATTERN "*.hpp")
+    PATTERN "*.hpp"
+    PATTERN "*.ipp")
   install(FILES "${PROJECT_SOURCE_DIR}/src/include/duckdb.hpp"
                 "${PROJECT_SOURCE_DIR}/src/include/duckdb.h"
           DESTINATION "${INSTALL_INCLUDE_DIR}")

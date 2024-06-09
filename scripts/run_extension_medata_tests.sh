@@ -59,6 +59,10 @@ EOL
   # Build the extensions using the first config
   LOCAL_EXTENSION_REPO=$LOCAL_EXTENSION_REPO_UPDATED EXTENSION_CONFIGS=$TEST_DIR/extension_config_before.cmake make debug
 
+  # Set the version and platform now that we have a build
+  DUCKDB_VERSION=`$DUCKDB_BUILD_DIR/duckdb -csv -noheader  -c 'select source_id from pragma_version()'`
+  DUCKDB_PLATFORM=`cat $DUCKDB_BUILD_DIR/duckdb_platform_out`
+
   # Install the extension from the initial config
   $DUCKDB_BUILD_DIR/duckdb -unsigned -c "set extension_directory='$LOCAL_EXTENSION_DIR'; set custom_extension_repository='$LOCAL_EXTENSION_REPO_UPDATED'; install tpch; install json; install inet;"
 
@@ -67,8 +71,6 @@ EOL
   $DUCKDB_BUILD_DIR/duckdb -unsigned -c "set extension_directory='$LOCAL_EXTENSION_DIR'; install '$DIRECT_INSTALL_DIR/tpcds.duckdb_extension';"
 
   # Delete the info file from the inet extension
-  DUCKDB_VERSION=`$DUCKDB_BUILD_DIR/duckdb -csv -noheader  -c 'select source_id from pragma_version()'`
-  DUCKDB_PLATFORM=`cat $DUCKDB_BUILD_DIR/duckdb_platform_out`
   rm $LOCAL_EXTENSION_DIR/$DUCKDB_VERSION/$DUCKDB_PLATFORM/inet.duckdb_extension.info
 
   # Set updated extension config where we update the tpch and inet extension but not the json extension
@@ -143,14 +145,10 @@ EOL
   $DUCKDB_BUILD_DIR/duckdb -unsigned -c "set allow_extensions_metadata_mismatch=true; set extension_directory='$LOCAL_EXTENSION_REPO_VERSION_AND_PLATFORM_INCORRECT'; install '$DIRECT_INSTALL_DIR/json_incorrect_version_and_platform.duckdb_extension'"
 
   # Create dir with malformed info file
-  DUCKDB_VERSION=`$DUCKDB_BUILD_DIR/duckdb -csv -noheader  -c 'select source_id from pragma_version()'`
-  DUCKDB_PLATFORM=`cat $DUCKDB_BUILD_DIR/duckdb_platform_out`
   $DUCKDB_BUILD_DIR/duckdb -unsigned -c "set extension_directory='$LOCAL_EXTENSION_DIR_MALFORMED_INFO'; install '$DIRECT_INSTALL_DIR/tpcds.duckdb_extension';"
   echo blablablab > $LOCAL_EXTENSION_DIR_MALFORMED_INFO/$DUCKDB_VERSION/$DUCKDB_PLATFORM/tpcds.duckdb_extension.info
 
   # Create dir with malformed info file: we install a new version from LOCAL_EXTENSION_REPO_UPDATED but preserve the old info file
-  DUCKDB_VERSION=`$DUCKDB_BUILD_DIR/duckdb -csv -noheader  -c 'select source_id from pragma_version()'`
-  DUCKDB_PLATFORM=`cat $DUCKDB_BUILD_DIR/duckdb_platform_out`
   $DUCKDB_BUILD_DIR/duckdb -unsigned -c "set extension_directory='$LOCAL_EXTENSION_DIR_INFO_INCORRECT_VERSION'; install 'tpch' from '$LOCAL_EXTENSION_REPO_UPDATED'"
   cp $LOCAL_EXTENSION_DIR/$DUCKDB_VERSION/$DUCKDB_PLATFORM/tpch.duckdb_extension.info $LOCAL_EXTENSION_DIR_INFO_INCORRECT_VERSION/$DUCKDB_VERSION/$DUCKDB_PLATFORM/tpch.duckdb_extension.info
 
@@ -161,10 +159,17 @@ EOL
 fi
 
 ###########################
+### Set version and platform
+###########################
+DUCKDB_VERSION=`$DUCKDB_BUILD_DIR/duckdb -csv -noheader  -c 'select source_id from pragma_version()'`
+DUCKDB_PLATFORM=`cat $DUCKDB_BUILD_DIR/duckdb_platform_out`
+
+###########################
 ### Populate the minio repositories
 ###########################
 AWS_DEFAULT_REGION=eu-west-1 AWS_ACCESS_KEY_ID=minio_duckdb_user AWS_SECRET_ACCESS_KEY=minio_duckdb_user_password aws --endpoint-url http://duckdb-minio.com:9000 s3 sync $LOCAL_EXTENSION_REPO_UPDATED s3://test-bucket-public/ci-test-repo
 export REMOTE_EXTENSION_REPO_UPDATED=http://duckdb-minio.com:9000/test-bucket-public/ci-test-repo
+export REMOTE_EXTENSION_REPO_DIRECT_PATH=http://duckdb-minio.com:9000/test-bucket-public/ci-test-repo/$DUCKDB_VERSION/$DUCKDB_PLATFORM
 
 ################
 ### Run test

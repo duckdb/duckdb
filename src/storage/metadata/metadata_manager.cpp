@@ -26,7 +26,7 @@ MetadataHandle MetadataManager::AllocateHandle() {
 			break;
 		}
 	}
-	if (free_block == INVALID_BLOCK) {
+	if (free_block == INVALID_BLOCK || free_block > PeekNextBlockId()) {
 		free_block = AllocateNewBlock();
 	}
 	D_ASSERT(free_block != INVALID_BLOCK);
@@ -313,6 +313,18 @@ vector<MetadataBlockInfo> MetadataManager::GetMetadataInfo() const {
 	std::sort(result.begin(), result.end(),
 	          [](const MetadataBlockInfo &a, const MetadataBlockInfo &b) { return a.block_id < b.block_id; });
 	return result;
+}
+
+vector<shared_ptr<BlockHandle>> MetadataManager::GetBlocks() const {
+	vector<shared_ptr<BlockHandle>> result;
+	for (auto &entry : blocks) {
+		result.push_back(entry.second.block);
+	}
+	return result;
+}
+
+block_id_t MetadataManager::PeekNextBlockId() {
+	return block_manager.PeekFreeBlockId();
 }
 
 block_id_t MetadataManager::GetNextBlockId() {

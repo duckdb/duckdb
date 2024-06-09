@@ -233,7 +233,8 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	relation_module.def("filter", &DuckDBPyRelation::Filter, "Filter the relation object by the filter in filter_expr",
 	                    py::arg("filter_expr"));
 	DefineMethod({"select", "project"}, relation_module, &DuckDBPyRelation::Project,
-	             "Project the relation object by the projection in project_expr");
+	             "Project the relation object by the projection in project_expr", py::kw_only(),
+	             py::arg("groups") = "");
 	DefineMethod({"select_types", "select_dtypes"}, relation_module, &DuckDBPyRelation::ProjectFromTypes,
 	             "Select columns from the relation, by filtering based on type(s)", py::arg("types"));
 

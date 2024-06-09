@@ -1,0 +1,25 @@
+# name: test/optimizer/pushdown/pushdown_in_to_parquet.test
+# description: Parquet filter of IN with 1 argument can be converted to =
+# group: [pushdown]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table t1 as select range::VARCHAR a from range(1000);
+
+statement ok
+copy t1 to '__TEST_DIR__/t1.parquet' (FORMAT PARQUET);
+
+query II
+explain select * from '__TEST_DIR__/t1.parquet' where a in ('400');
+----
+physical_plan	<!REGEX>:.*FILTER.*PARQUET_SCAN.*
+
+query II
+explain select * from '__TEST_DIR__/t1.parquet' where a in ('400');
+----
+physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters:.*
+

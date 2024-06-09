@@ -6,6 +6,9 @@ statement ok
 set storage_compatibility_version='latest'
 
 statement ok
+set enable_view_dependencies=true
+
+statement ok
 PRAGMA enable_verification
 
 # create a table
@@ -30,7 +33,7 @@ SELECT * FROM v1
 statement error
 DROP TABLE t1
 ----
-Dependency Error: Cannot drop entry "t1" because there are entries that depend on it. Use DROP...CASCADE to drop all dependents.
+view "v1" depends on table "t1".
 
 statement ok
 DROP TABLE t1 CASCADE
