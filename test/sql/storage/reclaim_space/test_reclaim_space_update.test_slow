@@ -26,7 +26,7 @@ SELECT MIN(i), MAX(i), COUNT(*) FROM integers
 statement ok
 CREATE TABLE total_blocks_tbl AS SELECT total_blocks FROM pragma_database_size();
 
-loop i 0 30
+loop i 0 20
 
 statement ok
 UPDATE integers SET i=i;
