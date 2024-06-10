@@ -243,6 +243,12 @@ void SingleFileCheckpointReader::LoadFromStorage() {
 		return;
 	}
 
+	if (block_manager.IsRemote()) {
+		auto metadata_blocks = metadata_manager.GetBlocks();
+		auto &buffer_manager = BufferManager::GetBufferManager(storage.GetDatabase());
+		buffer_manager.Prefetch(metadata_blocks);
+	}
+
 	// create the MetadataReader to read from the storage
 	MetadataReader reader(metadata_manager, meta_block);
 	auto transaction = CatalogTransaction::GetSystemTransaction(catalog.GetDatabase());

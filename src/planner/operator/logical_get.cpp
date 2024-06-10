@@ -122,6 +122,9 @@ idx_t LogicalGet::EstimateCardinality(ClientContext &context) {
 			return node_stats->estimated_cardinality;
 		}
 	}
+	if (!children.empty()) {
+		return children[0]->EstimateCardinality(context);
+	}
 	return 1;
 }
 
