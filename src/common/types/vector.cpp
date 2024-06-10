@@ -30,7 +30,7 @@ namespace duckdb {
 UnifiedVectorFormat::UnifiedVectorFormat() : sel(nullptr), data(nullptr) {
 }
 
-UnifiedVectorFormat::UnifiedVectorFormat(UnifiedVectorFormat &&other) noexcept {
+UnifiedVectorFormat::UnifiedVectorFormat(UnifiedVectorFormat &&other) noexcept : sel(nullptr), data(nullptr) {
 	bool refers_to_self = other.sel == &other.owned_sel;
 	std::swap(sel, other.sel);
 	std::swap(data, other.data);
@@ -1158,8 +1158,13 @@ void Vector::Serialize(Serializer &serializer, idx_t count) {
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = vdata.sel->get_index(i);
 				auto source = source_array[idx];
-				entries[i].offset = source.offset;
-				entries[i].length = source.length;
+				if (vdata.validity.RowIsValid(idx)) {
+					entries[i].offset = source.offset;
+					entries[i].length = source.length;
+				} else {
+					entries[i].offset = 0;
+					entries[i].length = 0;
+				}
 			}
 			serializer.WriteProperty(104, "list_size", list_size);
 			serializer.WriteList(105, "entries", count, [&](Serializer::List &list, idx_t i) {
