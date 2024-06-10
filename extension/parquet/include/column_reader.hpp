@@ -71,8 +71,8 @@ public:
 	virtual unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns);
 
 	template <class VALUE_TYPE, class CONVERSION>
-	void PlainTemplated(shared_ptr<ByteBuffer> plain_data, const uint8_t *__restrict defines, const uint64_t num_values,
-	                    parquet_filter_t &filter, const idx_t result_offset, Vector &result) {
+	void PlainTemplated(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, uint64_t num_values,
+	                    parquet_filter_t &filter, idx_t result_offset, Vector &result) {
 		if (HasDefines()) {
 			if (CONVERSION::PlainAvailable(*plain_data, num_values)) {
 				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, true, true>(*plain_data, defines, num_values, filter,
@@ -95,7 +95,7 @@ public:
 private:
 	template <class VALUE_TYPE, class CONVERSION, bool HAS_DEFINES, bool UNSAFE>
 	void PlainTemplatedInternal(ByteBuffer &plain_data, const uint8_t *__restrict defines, const uint64_t num_values,
-	                            parquet_filter_t &filter, const idx_t result_offset, Vector &result) {
+	                            const parquet_filter_t &filter, const idx_t result_offset, Vector &result) {
 		const auto result_ptr = FlatVector::GetData<VALUE_TYPE>(result);
 		auto &result_mask = FlatVector::Validity(result);
 		for (idx_t row_idx = result_offset; row_idx < result_offset + num_values; row_idx++) {
@@ -103,7 +103,7 @@ private:
 				result_mask.SetInvalid(row_idx);
 				continue;
 			}
-			if (filter[row_idx]) {
+			if (filter.test(row_idx)) {
 				result_ptr[row_idx] =
 				    UNSAFE ? CONVERSION::UnsafePlainRead(plain_data, *this) : CONVERSION::PlainRead(plain_data, *this);
 			} else { // there is still some data there that we have to skip over
