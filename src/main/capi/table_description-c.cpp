@@ -9,14 +9,13 @@ duckdb_state duckdb_table_description_create(duckdb_connection connection, const
                                              duckdb_table_description *out) {
 	Connection *conn = reinterpret_cast<Connection *>(connection);
 
-	auto wrapper = new TableDescriptionWrapper();
-	if (out) {
-		*out = (duckdb_table_description)wrapper;
-	} else {
-		delete wrapper;
+	if (!out) {
+		return DuckDBError;
 	}
+	auto wrapper = new TableDescriptionWrapper();
+	*out = (duckdb_table_description)wrapper;
 
-	if (!connection || !table || !out) {
+	if (!connection || !table) {
 		return DuckDBError;
 	}
 

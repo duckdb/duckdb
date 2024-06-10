@@ -2935,7 +2935,8 @@ DUCKDB_API duckdb_state duckdb_append_data_chunk(duckdb_appender appender, duckd
 
 /*!
 Creates a table description object.
-Note that the object must be destroyed with `duckdb_table_description_destroy`.
+Note that `duckdb_table_description_destroy` should always be called on the resulting table_description, even if the
+function returns `DuckDBError`.
 * connection: The connection context.
 * schema: The schema of the table, or `nullptr` for the default schema.
 * table: The table name.
