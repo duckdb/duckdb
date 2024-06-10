@@ -2948,9 +2948,8 @@ DUCKDB_API duckdb_state duckdb_table_description_create(duckdb_connection connec
 /*!
 Destroy the TableDescription object.
 * table: The table_description to destroy.
-* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
 */
-DUCKDB_API duckdb_state duckdb_table_description_destroy(duckdb_table_description *table_description);
+DUCKDB_API void duckdb_table_description_destroy(duckdb_table_description *table_description);
 
 /*!
 Returns the error message associated with the given table_description.

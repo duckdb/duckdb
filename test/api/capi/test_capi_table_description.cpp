@@ -15,14 +15,14 @@ TEST_CASE("Test table description in C API", "[capi]") {
 	// Table doesn't exist yet
 	status = duckdb_table_description_create(tester.connection, nullptr, "test", &table_description);
 	REQUIRE(status == DuckDBError);
-	REQUIRE(table_description == nullptr);
+	duckdb_table_description_destroy(&table_description);
 
 	tester.Query("CREATE TABLE test (i integer, j integer default 5)");
 
 	// The table was not created in this schema
 	status = duckdb_table_description_create(tester.connection, "non-existant", "test", &table_description);
 	REQUIRE(status == DuckDBError);
-	REQUIRE(table_description == nullptr);
+	duckdb_table_description_destroy(&table_description);
 
 	status = duckdb_table_description_create(tester.connection, nullptr, "test", &table_description);
 	REQUIRE(status == DuckDBSuccess);
@@ -43,6 +43,5 @@ TEST_CASE("Test table description in C API", "[capi]") {
 		REQUIRE(status == DuckDBSuccess);
 		REQUIRE(has_default == true);
 	}
-	status = duckdb_table_description_destroy(&table_description);
-	REQUIRE(status == DuckDBSuccess);
+	duckdb_table_description_destroy(&table_description);
 }

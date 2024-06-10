@@ -9,13 +9,21 @@ duckdb_state duckdb_table_description_create(duckdb_connection connection, const
                                              duckdb_table_description *out) {
 	Connection *conn = reinterpret_cast<Connection *>(connection);
 
+	auto wrapper = new TableDescriptionWrapper();
+	if (out) {
+		*out = (duckdb_table_description)wrapper;
+	} else {
+		delete wrapper;
+	}
+
 	if (!connection || !table || !out) {
 		return DuckDBError;
 	}
+
 	if (schema == nullptr) {
 		schema = DEFAULT_SCHEMA;
 	}
-	auto wrapper = new TableDescriptionWrapper();
+
 	try {
 		wrapper->description = conn->TableInfo(schema, table);
 	} catch (std::exception &ex) {
@@ -27,23 +35,19 @@ duckdb_state duckdb_table_description_create(duckdb_connection connection, const
 		return DuckDBError;
 	} // LCOV_EXCL_STOP
 	if (!wrapper->description) {
-		delete wrapper;
+		wrapper->error = "No table with that schema+name could be located";
 		return DuckDBError;
 	}
-	*out = (duckdb_table_description)wrapper;
 	return DuckDBSuccess;
 }
 
-duckdb_state duckdb_table_description_destroy(duckdb_table_description *table) {
+void duckdb_table_description_destroy(duckdb_table_description *table) {
 	if (!table || !*table) {
-		return DuckDBError;
+		return;
 	}
 	auto wrapper = reinterpret_cast<TableDescriptionWrapper *>(*table);
-	if (wrapper) {
-		delete wrapper;
-	}
+	delete wrapper;
 	*table = nullptr;
-	return DuckDBSuccess;
 }
 
 const char *duckdb_table_description_error(duckdb_table_description table) {
@@ -60,11 +64,16 @@ const char *duckdb_table_description_error(duckdb_table_description table) {
 duckdb_state duckdb_column_has_default(duckdb_table_description table_description, idx_t index, bool *out) {
 	auto wrapper = reinterpret_cast<TableDescriptionWrapper *>(table_description);
 	if (!wrapper || !out) {
+		if (wrapper) {
+			wrapper->error = "Please provide a valid (non-null) 'out' variable";
+		}
 		return DuckDBError;
 	}
 
 	auto &table = wrapper->description;
 	if (index >= table->columns.size()) {
+		wrapper->error = StringUtil::Format("Column index %d is out of range, table only has %d columns", index,
+		                                    table->columns.size());
 		return DuckDBError;
 	}
 	auto &column = table->columns[index];
