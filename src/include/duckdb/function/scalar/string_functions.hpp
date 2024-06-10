@@ -44,6 +44,11 @@ struct StripAccentsFun {
 
 struct ConcatFun {
 	static void RegisterFunction(BuiltinFunctions &set);
+	static ScalarFunction GetFunction();
+};
+
+struct ConcatWSFun {
+	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 struct LengthFun {

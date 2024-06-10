@@ -2,7 +2,7 @@
 #ifndef JEMALLOC_INTERNAL_DEFS_H_
 #define JEMALLOC_INTERNAL_DEFS_H_
 
-#if defined(__GNUC__) && !defined(__clang__)
+#if defined(__GNUC__)
 #define _GNU_SOURCE
 #endif
 
@@ -453,12 +453,12 @@
 /* #undef JEMALLOC_HAVE_PTHREAD_MUTEX_ADAPTIVE_NP */
 
 /* GNU specific sched_getcpu support */
-#if defined(__GNUC__) && !defined(__clang__)
+#if defined(__GNUC__)
 #define JEMALLOC_HAVE_SCHED_GETCPU
 #endif
 
 /* GNU specific sched_setaffinity support */
-#if defined(__GNUC__) && !defined(__clang__)
+#if defined(__GNUC__)
 #define JEMALLOC_HAVE_SCHED_SETAFFINITY
 #endif
 
