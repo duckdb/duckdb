@@ -1,5 +1,6 @@
 #include "duckdb/planner/collation_binding.hpp"
 #include "duckdb/catalog/catalog_entry/collate_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/catalog/catalog.hpp"
@@ -7,8 +8,7 @@
 
 namespace duckdb {
 
-bool PushVarcharCollation(ClientContext &context, unique_ptr<Expression> &source,
-                                     const LogicalType &sql_type) {
+bool PushVarcharCollation(ClientContext &context, unique_ptr<Expression> &source, const LogicalType &sql_type) {
 	if (sql_type.id() != LogicalTypeId::VARCHAR) {
 		// only VARCHAR columns require collation
 		return false;
@@ -54,23 +54,46 @@ bool PushVarcharCollation(ClientContext &context, unique_ptr<Expression> &source
 	return true;
 }
 
+bool PushTimeTZCollation(ClientContext &context, unique_ptr<Expression> &source, const LogicalType &sql_type) {
+	if (sql_type.id() != LogicalTypeId::TIME_TZ) {
+		return false;
+	}
+
+	auto &catalog = Catalog::GetSystemCatalog(context);
+	auto &function_entry =
+	    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "timetz_byte_comparable");
+	if (function_entry.functions.Size() != 1) {
+		throw InternalException("timetz_byte_comparable should only have a single overload");
+	}
+	auto &scalar_function = function_entry.functions.GetFunctionReferenceByOffset(0);
+	vector<unique_ptr<Expression>> children;
+	children.push_back(std::move(source));
+
+	FunctionBinder function_binder(context);
+	auto function = function_binder.BindScalarFunction(scalar_function, std::move(children));
+	source = std::move(function);
+	return true;
+}
+
+// timetz_byte_comparable
 CollationBinding::CollationBinding() {
 	RegisterCollation(CollationCallback(PushVarcharCollation));
+	RegisterCollation(CollationCallback(PushTimeTZCollation));
 }
 
 void CollationBinding::RegisterCollation(CollationCallback callback) {
-    collations.push_back(callback);
+	collations.push_back(callback);
 }
 
-bool CollationBinding::PushCollation(ClientContext &context, unique_ptr<Expression> &source, const LogicalType &sql_type) const {
-    for(auto &collation : collations) {
-        if (collation.try_push_collation(context, source, sql_type)) {
-            // successfully pushed a collation
-        	return true;
-        }
-    }
-    return false;
+bool CollationBinding::PushCollation(ClientContext &context, unique_ptr<Expression> &source,
+                                     const LogicalType &sql_type) const {
+	for (auto &collation : collations) {
+		if (collation.try_push_collation(context, source, sql_type)) {
+			// successfully pushed a collation
+			return true;
+		}
+	}
+	return false;
 }
 
-
-}
+} // namespace duckdb
