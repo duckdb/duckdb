@@ -43,7 +43,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, shared_ptr<CSVBufferManager> bu
 
 CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, const CSVReaderOptions &options_p,
                          const idx_t file_idx_p, const ReadCSVData &bind_data, const vector<column_t> &column_ids,
-                         const vector<LogicalType> &file_schema)
+                         const vector<LogicalType> &file_schema, bool per_file_single_threaded)
     : file_path(file_path_p), file_idx(file_idx_p),
       error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())), options(options_p) {
 	auto multi_file_reader = MultiFileReader::CreateDefault("CSV Scan");
@@ -76,7 +76,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 	}
 
 	// Initialize Buffer Manager
-	buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, file_path, file_idx);
+	buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, file_path, file_idx, per_file_single_threaded);
 	// Initialize On Disk and Size of file
 	on_disk_file = buffer_manager->file_handle->OnDiskFile();
 	file_size = buffer_manager->file_handle->FileSize();

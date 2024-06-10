@@ -623,9 +623,14 @@ FileType FileHandle::GetType() {
 }
 
 bool FileSystem::IsRemoteFile(const string &path) {
-	const string prefixes[] = {"http://", "https://", "s3://", "s3a://", "s3n://", "gcs://", "gs://", "r2://", "hf://"};
-	for (auto &prefix : prefixes) {
-		if (StringUtil::StartsWith(path, prefix)) {
+	string extension = "";
+	return IsRemoteFile(path, extension);
+}
+
+bool FileSystem::IsRemoteFile(const string &path, string &extension) {
+	for (const auto &entry : EXTENSION_FILE_PREFIXES) {
+		if (StringUtil::StartsWith(path, entry.name)) {
+			extension = entry.extension;
 			return true;
 		}
 	}
