@@ -35,7 +35,8 @@ if(NOT CLANG_TIDY)
       ../../third_party/thrift/thrift/transport/TTransportException.cpp
       ../../third_party/thrift/thrift/transport/TBufferTransports.cpp
       ../../third_party/snappy/snappy.cc
-      ../../third_party/snappy/snappy-sinksource.cc)
+      ../../third_party/snappy/snappy-sinksource.cc
+      ../../third_party/snappy/snappy_wrapper.cpp)
   # zstd
   set(PARQUET_EXTENSION_FILES
       ${PARQUET_EXTENSION_FILES}
