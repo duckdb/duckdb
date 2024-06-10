@@ -742,7 +742,7 @@ void StringColumnReader::DeltaByteArray(uint8_t *defines, idx_t num_values, parq
 			result_mask.SetInvalid(row_idx + result_offset);
 			continue;
 		}
-		if (filter[row_idx + result_offset]) {
+		if (filter.test(row_idx + result_offset)) {
 			if (delta_offset >= byte_array_count) {
 				throw IOException("DELTA_BYTE_ARRAY - length mismatch between values and byte array lengths (attempted "
 				                  "read of %d from %d entries) - corrupt file?",
@@ -1023,7 +1023,7 @@ idx_t CastColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data
 		intermediate_vector.Flatten(amount);
 		auto &validity = FlatVector::Validity(intermediate_vector);
 		for (idx_t i = 0; i < amount; i++) {
-			if (!filter[i]) {
+			if (!filter.test(i)) {
 				validity.SetInvalid(i);
 			}
 		}

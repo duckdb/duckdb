@@ -1055,7 +1055,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 
 		idx_t sel_size = 0;
 		for (idx_t i = 0; i < this_output_chunk_rows; i++) {
-			if (filter_mask[i]) {
+			if (filter_mask.test(i)) {
 				state.sel.set_index(sel_size++, i);
 			}
 		}
