@@ -17,7 +17,6 @@
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
-#include "yyjson.hpp"
 #endif
 
 namespace duckdb {
@@ -556,7 +555,7 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 }
 
 void ParquetWriter::Finalize() {
-	auto start_offset = writer->GetTotalWritten();
+	const auto start_offset = writer->GetTotalWritten();
 	if (encryption_config) {
 		// Crypto metadata is written unencrypted
 		FileCryptoMetaData crypto_metadata;
@@ -568,32 +567,8 @@ void ParquetWriter::Finalize() {
 	}
 
 	// file_meta_data.key_value_metadata add geoparquet data.
-	if (geo_data.is_geoparquet) {
-		/*
-		JsonValue json;
-		json["version"] = 1.0;
-		// json["primary_column"] = geo_data.columns.begin()->first; // TODO: Keep order
-		auto columns_json = JsonValue(JsonKind::OBJECT);
-		for (auto &column : geo_data.columns) {
-			auto column_json = JsonValue(JsonKind::OBJECT);
-			column_json["encoding"] = "WKB";
-			column_json["geometry_types"] = JsonValue(JsonKind::ARRAY); // TODO: populate
-			column_json["bbox"] = JsonValue(JsonKind::ARRAY);
-			column_json["bbox"].AsArray().resize(4); // min_x, min_y, max_x, max_y
-			column_json["bbox"][0] = column.second.bounds.min_x;
-			column_json["bbox"][1] = column.second.bounds.min_y;
-			column_json["bbox"][2] = column.second.bounds.max_x;
-			column_json["bbox"][3] = column.second.bounds.max_y;
-			columns_json[column.first] = std::move(column_json);
-		}
-		json["columns"] = std::move(columns_json);
-		duckdb_parquet::format::KeyValue kv;
-		kv.__set_key("geo");
-		kv.__set_value(json.ToString(false));
-
-		file_meta_data.key_value_metadata.push_back(kv);
-		file_meta_data.__isset.key_value_metadata = true;
-		*/
+	if (geoparquet_data) {
+		geoparquet_data->WriteMetadata(file_meta_data);
 	}
 
 	Write(file_meta_data);
@@ -611,6 +586,13 @@ void ParquetWriter::Finalize() {
 	// flush to disk
 	writer->Sync();
 	writer.reset();
+}
+
+GeoParquetData &ParquetWriter::GetGeoParquetData() {
+	if (!geoparquet_data) {
+		geoparquet_data = make_uniq<GeoParquetData>();
+	}
+	return *geoparquet_data;
 }
 
 } // namespace duckdb

@@ -21,7 +21,6 @@
 #include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/helper.hpp"
-#include "duckdb/common/json/json_value.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
@@ -34,6 +33,7 @@
 #include "duckdb/planner/filter/struct_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/object_cache.hpp"
+#include "yyjson.hpp"
 #endif
 
 #include <cassert>
@@ -42,6 +42,8 @@
 #include <sstream>
 
 namespace duckdb {
+
+using namespace duckdb_yyjson;
 
 using duckdb_parquet::format::ColumnChunk;
 using duckdb_parquet::format::ConvertedType;
@@ -316,15 +318,35 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		for (auto &kv : GetFileMetadata()->key_value_metadata) {
 			if (kv.key == "geo") {
 				// parse the geoparquet metadata
-				auto geo_metadata = JsonValue::Parse(kv.value);
-				for (auto &col : geo_metadata["columns"].AsObject()) {
-					if (col.first == s_ele.name) {
-						// This is a geoparquet column
-						auto geo_type = col.second["encoding"].AsString();
-						// TODO: Handle other geoparquet types (geoarrow encoding)
-						if (geo_type == "WKB") {
-							auto logical_type = DeriveLogicalType(s_ele);
+				auto geo_metadata = yyjson_read(kv.value.c_str(), kv.value.size(), 0);
+				if (!geo_metadata) {
+					throw InvalidInputException("Failed to parse geoparquet metadata");
+				}
+				auto root = yyjson_doc_get_root(geo_metadata);
+
+				auto columns_val = yyjson_obj_get(root, "columns");
+
+				yyjson_obj_iter iter = yyjson_obj_iter_with(columns_val);
+				yyjson_val *column_key, *column_val;
+
+				while ((column_key = yyjson_obj_iter_next(&iter))) {
+					column_val = yyjson_obj_iter_get_val(column_key);
+					auto column_name = yyjson_get_str(column_key);
+
+					if (column_name == s_ele.name) {
+						auto geo_type_val = yyjson_obj_get(column_val, "encoding");
+						if (!geo_type_val) {
+							yyjson_doc_free(geo_metadata);
+							throw InvalidInputException("Geoparquet column '%s' does not have an encoding", s_ele.name);
+						}
+
+						auto geo_type_str = string(yyjson_get_str(geo_type_val));
+
+						// TODO: Handle other geoparquet types (GeoArrow Encoding)
+						if (geo_type_str == "WKB") {
+							const auto logical_type = DeriveLogicalType(s_ele);
 							if (logical_type.id() != LogicalTypeId::BLOB) {
+								yyjson_doc_free(geo_metadata);
 								throw InvalidInputException(
 								    "Geoparquet column '%s' is of type WKB, but the logical type is not BLOB",
 								    s_ele.name);
@@ -355,6 +377,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 						}
 					}
 				}
+				yyjson_doc_free(geo_metadata);
 			}
 		}
 	}

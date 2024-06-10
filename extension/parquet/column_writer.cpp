@@ -5,30 +5,25 @@
 #include "parquet_rle_bp_encoder.hpp"
 #include "parquet_writer.hpp"
 #ifndef DUCKDB_AMALGAMATION
-#include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/string_map_set.hpp"
-#include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/hugeint.hpp"
-#include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #endif
 
 #include "lz4.hpp"
 #include "miniz_wrapper.hpp"
 #include "snappy.h"
 #include "zstd.h"
+
+#include <geo_parquet.hpp>
 
 namespace duckdb {
 
@@ -1193,103 +1188,34 @@ public:
 //===--------------------------------------------------------------------===//
 // Geometry Column Writer
 //===--------------------------------------------------------------------===//
+// This class just wraps another column writer, but also calculates the extent
+// of the geometry column by updating the geodata object with every written
+// vector.
 template <class WRITER_IMPL>
 class GeometryColumnWriter : public WRITER_IMPL {
-
-	double min_x;
-	double max_x;
-	double min_y;
-	double max_y;
-
-	DataChunk input_chunk;
-	DataChunk output_chunk;
-	ExpressionExecutor executor;
-
+	GeometryColumnData geo_data;
 	string column_name;
-
-	unique_ptr<Expression> extent_expr;
 
 public:
 	void Write(ColumnWriterState &state, Vector &vector, idx_t count) override {
 		// Just write normally
 		WRITER_IMPL::Write(state, vector, count);
 
-		input_chunk.Reset();
-		output_chunk.Reset();
-		input_chunk.data[0].Reference(vector);
-		input_chunk.SetCardinality(count);
-		executor.Execute(input_chunk, output_chunk);
-
-		// Also update extent
-		auto &extent_vec = output_chunk.data[0];
-		auto &entries = StructVector::GetEntries(extent_vec);
-		auto min_x_data = FlatVector::GetData<double>(*entries[0]);
-		auto min_y_data = FlatVector::GetData<double>(*entries[1]);
-		auto max_x_data = FlatVector::GetData<double>(*entries[2]);
-		auto max_y_data = FlatVector::GetData<double>(*entries[3]);
-
-		UnifiedVectorFormat format;
-		extent_vec.ToUnifiedFormat(count, format);
-		for (idx_t i = 0; i < count; i++) {
-			auto row_id = format.sel->get_index(i);
-			if (format.validity.RowIsValid(row_id)) {
-				min_x = std::min(min_x, min_x_data[row_id]);
-				max_x = std::max(max_x, max_x_data[row_id]);
-				min_y = std::min(min_y, min_y_data[row_id]);
-				max_y = std::max(max_y, max_y_data[row_id]);
-			}
-		}
+		// And update the geodata object
+		geo_data.Update(vector, count);
 	}
 	void FinalizeWrite(ColumnWriterState &state) override {
 		WRITER_IMPL::FinalizeWrite(state);
 
-		auto &geo_data = this->writer.geo_data;
-		auto &col_data = geo_data.columns[column_name];
-		col_data.bounds.min_x = std::min(col_data.bounds.min_x, min_x);
-		col_data.bounds.max_x = std::max(col_data.bounds.max_x, max_x);
-		col_data.bounds.min_y = std::min(col_data.bounds.min_y, min_y);
-		col_data.bounds.max_y = std::max(col_data.bounds.max_y, max_y);
+		// Add the geodata object to the writer
+		this->writer.GetGeoParquetData().columns[column_name] = geo_data;
 	}
 
 public:
 	GeometryColumnWriter(ClientContext &context, ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p,
 	                     idx_t max_repeat, idx_t max_define, bool can_have_nulls, string name)
 	    : WRITER_IMPL(writer, schema_idx, std::move(schema_path_p), max_repeat, max_define, can_have_nulls),
-	      executor(context), column_name(std::move(name)) {
-
-		// Create expression executor
-		auto box_type = LogicalType::STRUCT({{"min_x", LogicalType::DOUBLE},
-		                                     {"min_y", LogicalType::DOUBLE},
-		                                     {"max_x", LogicalType::DOUBLE},
-		                                     {"max_y", LogicalType::DOUBLE}});
-		box_type.SetAlias("BOX_2D");
-
-		auto wkb_type = LogicalType(LogicalTypeId::BLOB);
-		wkb_type.SetAlias("WKB_BLOB");
-
-		auto &catalog = Catalog::GetSystemCatalog(context);
-
-		// Look for a extent function in the catalog
-		auto &extent_func_set =
-		    catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, "st_extent")
-		        .Cast<ScalarFunctionCatalogEntry>();
-		auto extent_func = extent_func_set.functions.GetFunctionByArguments(context, {wkb_type});
-
-		// Create a bound function call expression
-		vector<unique_ptr<Expression>> extent_args;
-		extent_args.push_back(std::move(make_uniq<BoundReferenceExpression>(wkb_type, 0)));
-		extent_expr =
-		    make_uniq<BoundFunctionExpression>(extent_func.return_type, extent_func, std::move(extent_args), nullptr);
-
-		// Add the expression to the executor
-		executor.AddExpression(*extent_expr);
-
-		// Create the input and output chunks
-		input_chunk.InitializeEmpty({wkb_type});
-		output_chunk.Initialize(context, {box_type});
-
-		// Create an entry in the geodata for this column
-		writer.geo_data.columns[column_name] = {};
+	      column_name(std::move(name)) {
 	}
 };
 
@@ -2276,7 +2202,6 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 	schema_path.push_back(name);
 
 	if (type.id() == LogicalTypeId::BLOB && type.GetAlias() == "WKB_BLOB") {
-		writer.geo_data.is_geoparquet = true;
 		return make_uniq<GeometryColumnWriter<StringColumnWriter>>(context, writer, schema_idx, std::move(schema_path),
 		                                                           max_repeat, max_define, can_have_nulls, name);
 	}
