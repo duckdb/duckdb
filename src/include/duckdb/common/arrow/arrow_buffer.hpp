@@ -32,7 +32,7 @@ struct ArrowBuffer {
 	ArrowBuffer(const ArrowBuffer &other) = delete;
 	ArrowBuffer &operator=(const ArrowBuffer &) = delete;
 	//! enable move constructors
-	ArrowBuffer(ArrowBuffer &&other) noexcept {
+	ArrowBuffer(ArrowBuffer &&other) noexcept : count(0), capacity(0) {
 		std::swap(dataptr, other.dataptr);
 		std::swap(count, other.count);
 		std::swap(capacity, other.capacity);

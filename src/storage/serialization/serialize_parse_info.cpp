@@ -465,11 +465,13 @@ unique_ptr<AlterTableInfo> SetNotNullInfo::Deserialize(Deserializer &deserialize
 void TransactionInfo::Serialize(Serializer &serializer) const {
 	ParseInfo::Serialize(serializer);
 	serializer.WriteProperty<TransactionType>(200, "type", type);
+	serializer.WriteProperty<TransactionModifierType>(201, "modifier", modifier);
 }
 
 unique_ptr<ParseInfo> TransactionInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<TransactionInfo>(new TransactionInfo());
 	deserializer.ReadProperty<TransactionType>(200, "type", result->type);
+	deserializer.ReadProperty<TransactionModifierType>(201, "modifier", result->modifier);
 	return std::move(result);
 }
 

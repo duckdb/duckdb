@@ -7,10 +7,27 @@
 
 namespace duckdb {
 
-bool UseBatchLimit(BoundLimitNode &limit_val, BoundLimitNode &offset_val) {
+bool UseBatchLimit(PhysicalOperator &child_node, BoundLimitNode &limit_val, BoundLimitNode &offset_val) {
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 	return true;
 #else
+	// we only want to use the batch limit when we are executing a complex query (e.g. involving a filter or join)
+	// if we are doing a limit over a table scan we are otherwise scanning a lot of rows just to throw them away
+	reference<PhysicalOperator> current_ref(child_node);
+	bool finished = false;
+	while (!finished) {
+		auto &current_op = current_ref.get();
+		switch (current_op.type) {
+		case PhysicalOperatorType::TABLE_SCAN:
+			return false;
+		case PhysicalOperatorType::PROJECTION:
+			current_ref = *current_op.children[0];
+			break;
+		default:
+			finished = true;
+			break;
+		}
+	}
 	// we only use batch limit when we are computing a small amount of values
 	// as the batch limit materializes this many rows PER thread
 	static constexpr const idx_t BATCH_LIMIT_THRESHOLD = 10000;
@@ -48,7 +65,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalLimit &op)
 			                                          op.estimated_cardinality, true);
 		} else {
 			// maintaining insertion order is important
-			if (UseBatchIndex(*plan) && UseBatchLimit(op.limit_val, op.offset_val)) {
+			if (UseBatchIndex(*plan) && UseBatchLimit(*plan, op.limit_val, op.offset_val)) {
 				// source supports batch index: use parallel batch limit
 				limit = make_uniq<PhysicalLimit>(op.types, std::move(op.limit_val), std::move(op.offset_val),
 				                                 op.estimated_cardinality);

@@ -14,6 +14,18 @@ select (select MIN(val) from unnest((select a)) t(val)) from (select ARRAY[1, 2,
 1
 
 query I
+select (select MIN(val) from unnest((select (select a))) t(val)) from (select ARRAY[1, 2, 3, NULL]) t(a);
+----
+1
+
+query II
+select * from (select array[1, 2, 3] a), unnest((select (select (select a))))
+----
+[1, 2, 3]	1
+[1, 2, 3]	2
+[1, 2, 3]	3
+
+query I
 select (select MIN(val) from unnest(a) t(val)) from (select ARRAY[1, 2, 3, NULL]) t(a);
 ----
 1

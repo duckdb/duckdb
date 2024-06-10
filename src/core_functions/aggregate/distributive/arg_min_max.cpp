@@ -164,7 +164,7 @@ struct ArgMinMaxBase {
 		if (!state.is_initialized || state.arg_null) {
 			finalize_data.ReturnNull();
 		} else {
-			STATE::template ReadValue(finalize_data.result, state.arg, target);
+			STATE::template ReadValue<T>(finalize_data.result, state.arg, target);
 		}
 	}
 
@@ -248,7 +248,7 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR, IGNORE_NULL> {
 			return;
 		}
 		if (!target.is_initialized || COMPARATOR::Operation(source.value, target.value)) {
-			STATE::template AssignValue(target.value, source.value);
+			STATE::template AssignValue<typename STATE::BY_TYPE>(target.value, source.value);
 			AssignVector(target, *source.arg, source.arg_null, 0);
 			target.is_initialized = true;
 		}
