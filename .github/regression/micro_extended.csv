@@ -1,3 +1,4 @@
+benchmark/micro/aggregate/any_value_uuid.benchmark
 benchmark/micro/aggregate/bitstring_aggregate.benchmark
 benchmark/micro/aggregate/bitwise_aggregate.benchmark
 benchmark/micro/aggregate/grouped_distinct.benchmark
