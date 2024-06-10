@@ -20,7 +20,6 @@ duckdb_state duckdb_table_description_create(duckdb_connection connection, const
 		schema = DEFAULT_SCHEMA;
 	}
 	auto wrapper = new TableDescriptionWrapper();
-	*out = (duckdb_table_description)wrapper;
 	try {
 		wrapper->description = conn->TableInfo(schema, table);
 	} catch (std::exception &ex) {
@@ -31,6 +30,11 @@ duckdb_state duckdb_table_description_create(duckdb_connection connection, const
 		wrapper->error = "Unknown Connection::TableInfo error";
 		return DuckDBError;
 	} // LCOV_EXCL_STOP
+	if (!wrapper->description) {
+		delete wrapper;
+		return DuckDBError;
+	}
+	*out = (duckdb_table_description)wrapper;
 	return DuckDBSuccess;
 }
 

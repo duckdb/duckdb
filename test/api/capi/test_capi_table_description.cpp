@@ -7,12 +7,22 @@ using namespace std;
 TEST_CASE("Test table description in C API", "[capi]") {
 	CAPITester tester;
 	duckdb_state status;
+	duckdb_table_description table_description = nullptr;
 
 	// open the database in in-memory mode
 	REQUIRE(tester.OpenDatabase(nullptr));
 
+	// Table doesn't exist yet
+	status = duckdb_table_description_create(tester.connection, nullptr, "test", &table_description);
+	REQUIRE(status == DuckDBError);
+	REQUIRE(table_description == nullptr);
+
 	tester.Query("CREATE TABLE test (i integer, j integer default 5)");
-	duckdb_table_description table_description;
+
+	// The table was not created in this schema
+	status = duckdb_table_description_create(tester.connection, "non-existant", "test", &table_description);
+	REQUIRE(status == DuckDBError);
+	REQUIRE(table_description == nullptr);
 
 	status = duckdb_table_description_create(tester.connection, nullptr, "test", &table_description);
 	REQUIRE(status == DuckDBSuccess);
@@ -33,7 +43,6 @@ TEST_CASE("Test table description in C API", "[capi]") {
 		REQUIRE(status == DuckDBSuccess);
 		REQUIRE(has_default == true);
 	}
-
 	status = duckdb_table_description_destroy(&table_description);
 	REQUIRE(status == DuckDBSuccess);
 }
