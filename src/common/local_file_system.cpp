@@ -1096,6 +1096,14 @@ void LocalFileSystem::MoveFile(const string &source, const string &target, optio
 	}
 }
 
+void LocalFileSystem::CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle, unique_ptr<FileHandle>& dst_handle) {
+        auto source_unicode = WindowsUtil::UTF8ToUnicode(source.c_str());
+	auto target_unicode = WindowsUtil::UTF8ToUnicode(target.c_str());
+	if (!CopyFileW(source_unicode.c_str(), target_unicode.c_str(), FALSE)) {
+		throw IOException("Could not copy file: %s", GetLastErrorAsString());
+	}
+}
+
 FileType LocalFileSystem::GetFileType(FileHandle &handle) {
 	auto path = handle.Cast<WindowsFileHandle>().path;
 	// pipes in windows are just files in '\\.\pipe\' folder
