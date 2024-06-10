@@ -76,7 +76,7 @@ unique_ptr<FunctionData> CreateSortKeyBind(ClientContext &context, ScalarFunctio
 	}
 	// push collations
 	for (idx_t i = 0; i < arguments.size(); i += 2) {
-		ExpressionBinder::PushCollation(context, arguments[i], arguments[i]->return_type, false);
+		ExpressionBinder::PushCollation(context, arguments[i], arguments[i]->return_type);
 	}
 	// check if all types are constant
 	bool all_constant = true;
