@@ -101,6 +101,18 @@ ColumnSegment::~ColumnSegment() {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
+void ColumnSegment::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &) {
+	if (!block || block->BlockId() >= MAXIMUM_BLOCK) {
+		// not an on-disk block
+		return;
+	}
+	if (function.get().init_prefetch) {
+		function.get().init_prefetch(*this, prefetch_state);
+	} else {
+		prefetch_state.AddBlock(block);
+	}
+}
+
 void ColumnSegment::InitializeScan(ColumnScanState &state) {
 	state.scan_state = function.get().init_scan(*this);
 }

@@ -138,4 +138,11 @@ bool CollectionScanState::ScanCommitted(DataChunk &result, TableScanType type) {
 	return false;
 }
 
+PrefetchState::~PrefetchState() {
+}
+
+void PrefetchState::AddBlock(shared_ptr<BlockHandle> block) {
+	blocks.push_back(std::move(block));
+}
+
 } // namespace duckdb

@@ -31,6 +31,7 @@ class TableFilter;
 struct ColumnFetchState;
 struct ColumnScanState;
 struct ColumnAppendState;
+struct PrefetchState;
 
 enum class ColumnSegmentType : uint8_t { TRANSIENT, PERSISTENT };
 //! TableFilter represents a filter pushed down into the table scan.
@@ -64,6 +65,7 @@ public:
 	                                                        const idx_t segment_size = Storage::BLOCK_SIZE);
 
 public:
+	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state);
 	void InitializeScan(ColumnScanState &state);
 	//! Scan one vector from this segment
 	void Scan(ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset, ScanVectorType scan_type);

@@ -315,6 +315,14 @@ vector<MetadataBlockInfo> MetadataManager::GetMetadataInfo() const {
 	return result;
 }
 
+vector<shared_ptr<BlockHandle>> MetadataManager::GetBlocks() const {
+	vector<shared_ptr<BlockHandle>> result;
+	for (auto &entry : blocks) {
+		result.push_back(entry.second.block);
+	}
+	return result;
+}
+
 block_id_t MetadataManager::PeekNextBlockId() {
 	return block_manager.PeekFreeBlockId();
 }

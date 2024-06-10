@@ -51,6 +51,14 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 		}
 	}
 
+	string extension = "";
+	if (FileSystem::IsRemoteFile(path, extension)) {
+		if (!ExtensionHelper::TryAutoLoadExtension(context.client, extension)) {
+			throw MissingExtensionException("Attaching path '%s' requires extension '%s' to be loaded", path,
+			                                extension);
+		}
+	}
+
 	// Get the database type and attach the database.
 	db_manager.GetDatabaseType(context.client, *info, config, options);
 	auto attached_db = db_manager.AttachDatabase(context.client, *info, options);

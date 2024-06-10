@@ -107,6 +107,31 @@ ScanVectorType ColumnData::GetVectorScanType(ColumnScanState &state, idx_t scan_
 	return ScanVectorType::SCAN_ENTIRE_VECTOR;
 }
 
+void ColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t remaining) {
+	auto current_segment = scan_state.current;
+	if (!current_segment) {
+		return;
+	}
+	if (!scan_state.initialized) {
+		// need to prefetch for the current segment if we have not yet initialized the scan for this segment
+		scan_state.current->InitializePrefetch(prefetch_state, scan_state);
+	}
+	idx_t row_index = scan_state.row_index;
+	while (remaining > 0) {
+		idx_t scan_count = MinValue<idx_t>(remaining, current_segment->start + current_segment->count - row_index);
+		remaining -= scan_count;
+		row_index += scan_count;
+		if (remaining > 0) {
+			auto next = data.GetNextSegment(current_segment);
+			if (!next) {
+				break;
+			}
+			next->InitializePrefetch(prefetch_state, scan_state);
+			current_segment = next;
+		}
+	}
+}
+
 idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType scan_type) {
 	if (scan_type == ScanVectorType::SCAN_FLAT_VECTOR && result.GetVectorType() != VectorType::FLAT_VECTOR) {
 		throw InternalException("ScanVector called with SCAN_FLAT_VECTOR but result is not a flat vector");

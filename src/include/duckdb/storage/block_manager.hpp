@@ -54,6 +54,8 @@ public:
 	virtual idx_t GetMetaBlock() = 0;
 	//! Read the content of the block from disk
 	virtual void Read(Block &block) = 0;
+	//! Read the content of the block from disk
+	virtual void ReadBlocks(FileBuffer &buffer, block_id_t start_block, idx_t block_count) = 0;
 	//! Writes the block to disk
 	virtual void Write(FileBuffer &block, block_id_t block_id) = 0;
 	//! Writes the block to disk
@@ -67,6 +69,12 @@ public:
 	virtual idx_t TotalBlocks() = 0;
 	//! Returns the number of free blocks
 	virtual idx_t FreeBlocks() = 0;
+	//! Whether or not the attached database is a remote file (e.g. attached over s3/https)
+	virtual bool IsRemote() {
+		return false;
+	}
+	//! Whether or not the attached database is in-memory
+	virtual bool InMemory() = 0;
 
 	//! Truncate the underlying database file after a checkpoint
 	virtual void Truncate();

@@ -39,6 +39,8 @@ public:
 	//! Reallocate an in-memory buffer that is pinned.
 	virtual void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) = 0;
 	virtual BufferHandle Pin(shared_ptr<BlockHandle> &handle) = 0;
+	//! Prefetch a series of blocks. Note that this is a performance suggestion.
+	virtual void Prefetch(vector<shared_ptr<BlockHandle>> &handles) = 0;
 	virtual void Unpin(shared_ptr<BlockHandle> &handle) = 0;
 
 	//! Returns the currently allocated memory
