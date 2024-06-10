@@ -5,10 +5,6 @@ using duckdb::ErrorData;
 using duckdb::TableDescription;
 using duckdb::TableDescriptionWrapper;
 
-// FIXME: should the table name be its own struct for extensibility?
-// i.e duckdb_table_path
-// duckdb_table_path_set_schema(...)
-// duckdb_table_path_set_catalog(...)
 duckdb_state duckdb_table_description_create(duckdb_connection connection, const char *schema, const char *table,
                                              duckdb_table_description *out) {
 	Connection *conn = reinterpret_cast<Connection *>(connection);
@@ -60,11 +56,6 @@ const char *duckdb_table_description_error(duckdb_table_description table) {
 	}
 	return wrapper->error.c_str();
 }
-
-// other methods could be:
-// duckdb_column_is_generated(...)
-// duckdb_column_get_name(...)
-// duckdb_column_get_type(...)
 
 duckdb_state duckdb_column_has_default(duckdb_table_description table_description, idx_t index, bool *out) {
 	auto wrapper = reinterpret_cast<TableDescriptionWrapper *>(table_description);
