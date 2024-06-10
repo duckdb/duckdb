@@ -101,9 +101,7 @@ private:
 		for (idx_t row_idx = result_offset; row_idx < result_offset + num_values; row_idx++) {
 			if (HAS_DEFINES && defines[row_idx] != max_define) {
 				result_mask.SetInvalid(row_idx);
-				continue;
-			}
-			if (filter.test(row_idx)) {
+			} else if (filter.test(row_idx)) {
 				result_ptr[row_idx] =
 				    UNSAFE ? CONVERSION::UnsafePlainRead(plain_data, *this) : CONVERSION::PlainRead(plain_data, *this);
 			} else { // there is still some data there that we have to skip over
