@@ -1,0 +1,25 @@
+# name: test/sql/types/date/date_implicit_cast.test
+# description: Test date implicit casts
+# group: [date]
+
+statement ok
+PRAGMA enable_verification
+
+foreach type timestamp timestamp_ms timestamp_ns timestamp_s
+
+statement ok
+CREATE TABLE timestamps(ts ${type})
+
+statement ok
+INSERT INTO timestamps VALUES ('1993-08-14 00:00:00'), ('1993-08-15 01:01:02'), ('1993-08-16 00:00:00')
+
+query I
+SELECT * FROM timestamps WHERE ts >= date '1993-08-15'
+----
+1993-08-15 01:01:02
+1993-08-16 00:00:00
+
+statement ok
+DROP TABLE timestamps
+
+endloop
