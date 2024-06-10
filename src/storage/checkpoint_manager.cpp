@@ -28,8 +28,9 @@
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
-#include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/catalog/default/default_schemas.hpp"
 
 namespace duckdb {
 
@@ -351,6 +352,11 @@ void CheckpointReader::ReadSchema(CatalogTransaction transaction, Deserializer &
 	// Read the schema and create it in the catalog
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "schema");
 	auto &schema_info = info->Cast<CreateSchemaInfo>();
+
+	// work-around for a bug in versions <=0.10.2 where internal schemas (e.g. information_schema) are checkpointed
+	if (DefaultSchemaGenerator::IsDefaultSchema(schema_info.schema)) {
+		return;
+	}
 
 	// we set create conflict to IGNORE_ON_CONFLICT, so that we can ignore a failure when recreating the main schema
 	schema_info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
