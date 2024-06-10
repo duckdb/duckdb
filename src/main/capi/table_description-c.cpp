@@ -16,13 +16,16 @@ duckdb_state duckdb_table_description_create(duckdb_connection connection, const
 		schema = DEFAULT_SCHEMA;
 	}
 	auto wrapper = new TableDescriptionWrapper();
-	wrapper->description = nullptr;
 	try {
 		wrapper->description = conn->TableInfo(schema, table);
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		wrapper->error = error.RawMessage();
+		return DuckDBError;
 	} catch (...) { // LCOV_EXCL_START
-		wrapper->description = nullptr;
+		wrapper->error = "Unknown Connection::TableInfo error";
+		return DuckDBError;
 	} // LCOV_EXCL_STOP
-
 	if (!wrapper->description) {
 		delete wrapper;
 		return DuckDBError;
@@ -41,6 +44,17 @@ duckdb_state duckdb_table_description_destroy(duckdb_table_description *table) {
 	}
 	*table = nullptr;
 	return DuckDBSuccess;
+}
+
+const char *duckdb_table_description_error(duckdb_table_description table) {
+	if (!table) {
+		return nullptr;
+	}
+	auto wrapper = reinterpret_cast<TableDescriptionWrapper *>(table);
+	if (wrapper->error.empty()) {
+		return nullptr;
+	}
+	return wrapper->error.c_str();
 }
 
 duckdb_state duckdb_column_has_default(duckdb_table_description table_description, idx_t index, bool *out) {
