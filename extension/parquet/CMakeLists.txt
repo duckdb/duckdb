@@ -59,14 +59,29 @@ if(NOT CLANG_TIDY)
   }"
     HAVE_ATTRIBUTE_ALWAYS_INLINE)
 
+  if(HAVE_BUILTIN_EXPECT)
+    add_definitions(-DHAVE_BUILTIN_EXPECT)
+  endif()
+  if(HAVE_BUILTIN_CTZ)
+    add_definitions(-DHAVE_BUILTIN_CTZ)
+  endif()
+  if(HAVE_BUILTIN_PREFETCH)
+    add_definitions(-DHAVE_BUILTIN_PREFETCH)
+  endif()
+  if(HAVE_ATTRIBUTE_ALWAYS_INLINE)
+    add_definitions(-DHAVE_ATTRIBUTE_ALWAYS_INLINE)
+  endif()
+
   include(CheckSymbolExists)
   check_symbol_exists("mmap" "sys/mman.h" HAVE_FUNC_MMAP)
   check_symbol_exists("sysconf" "unistd.h" HAVE_FUNC_SYSCONF)
 
-  set(HAVE_SYS_UIO_H_01 ${HAVE_SYS_UIO_H})
-  if(NOT HAVE_SYS_UIO_H_01)
-    set(HAVE_SYS_UIO_H_01 0)
-  endif(NOT HAVE_SYS_UIO_H_01)
+  if(HAVE_FUNC_MMAP)
+    add_definitions(-DHAVE_FUNC_MMAP)
+  endif()
+  if(HAVE_FUNC_SYSCONF)
+    add_definitions(-DHAVE_FUNC_SYSCONF)
+  endif()
 
   # parquet/thrift/snappy
   set(PARQUET_EXTENSION_FILES
