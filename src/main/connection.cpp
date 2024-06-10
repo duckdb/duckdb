@@ -317,10 +317,9 @@ uint64_t Connection::GetSnapshotId() {
   return context->GetSnapshotId();
 }
 
-unique_ptr<MaterializedQueryResult> Connection::CreateSnapshot() {
+unique_ptr<QueryResult> Connection::CreateSnapshot() {
   auto result = context->CreateSnapshot();
-  D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
-  return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
+  return result;
 }
 
 } // namespace duckdb

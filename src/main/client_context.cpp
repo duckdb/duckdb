@@ -11,6 +11,7 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
+#include "duckdb/main/buffered_data/file_buffered_data.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -1303,14 +1304,23 @@ uint64_t ClientContext::GetSnapshotId() {
 }
 
 unique_ptr<QueryResult> ClientContext::CreateSnapshot() {
-  unique_ptr<QueryResult> result;
   string snapshot_file;
   RunFunctionInTransaction([&]() {
     snapshot_file = transaction.Snapshot();
   });
 
-  string err_str = "Success";
-  return ErrorResult<MaterializedQueryResult>(ErrorData(err_str));
+  StatementType statement_type = StatementType::SELECT_STATEMENT;
+  StatementProperties properties;
+  vector<LogicalType> types{LogicalType::BLOB};
+  vector<string> names{"blob_column"};
+  ClientProperties client_properties;
+  auto ctx = this->shared_from_this();
+  FileSystem &fs = FileSystem::GetFileSystem(*this);
+  auto buffered_data = make_shared_ptr<FileBufferedData>(ctx, fs, snapshot_file);
+  auto result = make_uniq<StreamQueryResult>(statement_type, properties, types,
+					     names, client_properties,
+					     buffered_data);
+  return std::move(result);
 }
 
 } // namespace duckdb
