@@ -2,6 +2,8 @@
 # description: Verify internal schemas are not duplicated in the main schema when reading older databases
 # group: [bc]
 
+require skip_reload
+
 # we cannot read/open a file with a different block size
 require block_size 262144
 
