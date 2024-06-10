@@ -281,7 +281,7 @@ SinkFinalizeType PhysicalBatchCopyToFile::FinalFlush(ClientContext &context, Glo
 	if (gstate.task_manager.TaskCount() != 0) {
 		throw InternalException("Unexecuted tasks are remaining in PhysicalFixedBatchCopy::FinalFlush!?");
 	}
-	auto min_batch_index = idx_t(NumericLimits<int64_t>::Maximum());
+
 	FlushBatchData(context, gstate_p);
 	if (gstate.scheduled_batch_index != gstate.flushed_batch_index) {
 		throw InternalException("Not all batches were flushed to disk - incomplete file?");
