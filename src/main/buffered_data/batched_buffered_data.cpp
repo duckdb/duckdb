@@ -22,7 +22,8 @@ BatchedBufferedData::BatchedBufferedData(weak_ptr<ClientContext> context)
 }
 
 bool BatchedBufferedData::ShouldBlockBatch(idx_t batch) {
-	bool is_minimum = IsMinimumBatchIndex(batch);
+	lock_guard<mutex> lock(glock);
+	bool is_minimum = IsMinimumBatchIndex(lock, batch);
 	if (is_minimum) {
 		// If there is room in the read queue, we want to process the minimum batch
 		return read_queue_byte_count >= ReadQueueCapacity();
@@ -35,7 +36,7 @@ bool BatchedBufferedData::BufferIsEmpty() {
 	return read_queue.empty();
 }
 
-bool BatchedBufferedData::IsMinimumBatchIndex(idx_t batch) {
+bool BatchedBufferedData::IsMinimumBatchIndex(lock_guard<mutex> &lock, idx_t batch) {
 	return min_batch == batch;
 }
 
@@ -45,7 +46,7 @@ void BatchedBufferedData::UnblockSinks() {
 	for (auto it = blocked_sinks.begin(); it != blocked_sinks.end(); it++) {
 		auto batch = it->first;
 		auto &blocked_sink = it->second;
-		const bool is_minimum = IsMinimumBatchIndex(batch);
+		const bool is_minimum = IsMinimumBatchIndex(lock, batch);
 		if (is_minimum) {
 			if (read_queue_byte_count >= ReadQueueCapacity()) {
 				continue;
@@ -65,8 +66,7 @@ void BatchedBufferedData::UnblockSinks() {
 	}
 }
 
-void BatchedBufferedData::MoveCompletedBatches() {
-
+void BatchedBufferedData::MoveCompletedBatches(lock_guard<mutex> &lock) {
 	stack<idx_t> to_remove;
 	for (auto &it : buffer) {
 		auto batch_index = it.first;
@@ -74,7 +74,7 @@ void BatchedBufferedData::MoveCompletedBatches() {
 		if (batch_index > min_batch) {
 			break;
 		}
-		D_ASSERT(in_progress_batch.completed || batch_index == min_batch.load());
+		D_ASSERT(in_progress_batch.completed || batch_index == min_batch);
 		// min_batch - took longer than others
 		// min_batch+1 - completed before min_batch
 		// min_batch+2 - completed before min_batch
@@ -96,8 +96,7 @@ void BatchedBufferedData::MoveCompletedBatches() {
 		if (lowest_moved_batch > batch_index) {
 			throw InternalException("Lowest moved batch is %d, attempted to move %d afterwards\nAttempted to move %d "
 			                        "chunks, of %d bytes in total\nmin_batch is %d",
-			                        lowest_moved_batch, batch_index, chunks.size(), batch_allocation_size,
-			                        min_batch.load());
+			                        lowest_moved_batch, batch_index, chunks.size(), batch_allocation_size, min_batch);
 		}
 		D_ASSERT(lowest_moved_batch <= batch_index);
 		lowest_moved_batch = batch_index;
@@ -116,14 +115,14 @@ void BatchedBufferedData::MoveCompletedBatches() {
 void BatchedBufferedData::UpdateMinBatchIndex(idx_t min_batch_index) {
 	lock_guard<mutex> lock(glock);
 
-	auto old_min_batch = min_batch.load();
+	auto old_min_batch = min_batch;
 	auto new_min_batch = MaxValue(old_min_batch, min_batch_index);
 	if (new_min_batch == min_batch) {
 		// No change, early out
 		return;
 	}
 	min_batch = new_min_batch;
-	MoveCompletedBatches();
+	MoveCompletedBatches(lock);
 }
 
 PendingExecutionResult BatchedBufferedData::ReplenishBuffer(StreamQueryResult &result,
@@ -181,17 +180,24 @@ unique_ptr<DataChunk> BatchedBufferedData::Scan() {
 
 void BatchedBufferedData::Append(const DataChunk &to_append, idx_t batch) {
 	// We should never find any chunks with a smaller batch index than the minimum
-	D_ASSERT(batch >= min_batch);
 
-	bool is_minimum = batch == min_batch;
 	auto chunk = make_uniq<DataChunk>();
 	chunk->Initialize(Allocator::DefaultAllocator(), to_append.GetTypes());
 	to_append.Copy(*chunk, 0);
 	auto allocation_size = chunk->GetAllocationSize();
 
 	lock_guard<mutex> lock(glock);
+	D_ASSERT(batch >= min_batch);
+	auto is_minimum = IsMinimumBatchIndex(lock, batch);
 	if (is_minimum) {
-		MoveCompletedBatches();
+		for (auto &it : buffer) {
+			auto batch_index = it.first;
+			if (batch_index >= min_batch) {
+				break;
+			}
+			// There should not be any batches in the buffer that are lower or equal to the minimum batch index
+			throw InternalException("Batches remaining in buffer");
+		}
 		read_queue.push_back(std::move(chunk));
 		read_queue_byte_count += allocation_size;
 	} else {

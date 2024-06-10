@@ -42,7 +42,7 @@ public:
 	PendingExecutionResult ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) override;
 	unique_ptr<DataChunk> Scan() override;
 	void UpdateMinBatchIndex(idx_t min_batch_index);
-	bool IsMinimumBatchIndex(idx_t batch);
+	bool IsMinimumBatchIndex(lock_guard<mutex> &lock, idx_t batch);
 	void CompleteBatch(idx_t batch);
 	bool BufferIsEmpty();
 
@@ -56,7 +56,7 @@ public:
 private:
 	void ResetReplenishState();
 	void UnblockSinks();
-	void MoveCompletedBatches();
+	void MoveCompletedBatches(lock_guard<mutex> &lock);
 
 private:
 	//! The buffer where chunks are written before they are ready to be read.
@@ -71,7 +71,7 @@ private:
 
 	map<idx_t, InterruptState> blocked_sinks;
 
-	atomic<idx_t> min_batch;
+	idx_t min_batch;
 	//! Debug variable to verify that order is preserved correctly.
 	idx_t lowest_moved_batch = 0;
 };
