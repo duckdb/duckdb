@@ -21,7 +21,8 @@ static_assert(sizeof(dtime_t) == sizeof(int64_t), "dtime_t was padded");
 // microseconds and Z are optional
 // ISO 8601
 
-bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict, int32_t *nanos) {
+bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict,
+                              optional_ptr<int32_t> nanos) {
 	int32_t hour = -1, min = -1, sec = -1, micros = -1;
 	pos = 0;
 
@@ -123,11 +124,13 @@ bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &r
 	return true;
 }
 
-bool Time::TryConvertInterval(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict, int32_t *nanos) {
+bool Time::TryConvertInterval(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict,
+                              optional_ptr<int32_t> nanos) {
 	return Time::TryConvertInternal(buf, len, pos, result, strict, nanos);
 }
 
-bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict, int32_t *nanos) {
+bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict,
+                          optional_ptr<int32_t> nanos) {
 	if (!Time::TryConvertInternal(buf, len, pos, result, strict, nanos)) {
 		if (!strict) {
 			// last chance, check if we can parse as timestamp
@@ -146,7 +149,7 @@ bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &resul
 }
 
 bool Time::TryConvertTimeTZ(const char *buf, idx_t len, idx_t &pos, dtime_tz_t &result, bool &has_offset, bool strict,
-                            int32_t *nanos) {
+                            optional_ptr<int32_t> nanos) {
 	dtime_t time_part;
 	has_offset = false;
 	if (!Time::TryConvertInternal(buf, len, pos, time_part, false, nanos)) {
@@ -227,7 +230,7 @@ string Time::ConversionError(string_t str) {
 	return Time::ConversionError(str.GetString());
 }
 
-dtime_t Time::FromCString(const char *buf, idx_t len, bool strict, int32_t *nanos) {
+dtime_t Time::FromCString(const char *buf, idx_t len, bool strict, optional_ptr<int32_t> nanos) {
 	dtime_t result;
 	idx_t pos;
 	if (!Time::TryConvertTime(buf, len, pos, result, strict, nanos)) {
@@ -236,7 +239,7 @@ dtime_t Time::FromCString(const char *buf, idx_t len, bool strict, int32_t *nano
 	return result;
 }
 
-dtime_t Time::FromString(const string &str, bool strict, int32_t *nanos) {
+dtime_t Time::FromString(const string &str, bool strict, optional_ptr<int32_t> nanos) {
 	return Time::FromCString(str.c_str(), str.size(), strict, nanos);
 }
 

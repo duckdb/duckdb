@@ -22,15 +22,17 @@ struct dtime_tz_t; // NOLINT
 class Time {
 public:
 	//! Convert a string in the format "hh:mm:ss" to a time object
-	DUCKDB_API static dtime_t FromString(const string &str, bool strict = false, int32_t *nanos = nullptr);
-	DUCKDB_API static dtime_t FromCString(const char *buf, idx_t len, bool strict = false, int32_t *nanos = nullptr);
+	DUCKDB_API static dtime_t FromString(const string &str, bool strict = false, optional_ptr<int32_t> nanos = nullptr);
+	DUCKDB_API static dtime_t FromCString(const char *buf, idx_t len, bool strict = false,
+	                                      optional_ptr<int32_t> nanos = nullptr);
 	DUCKDB_API static bool TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict = false,
-	                                      int32_t *nanos = nullptr);
+	                                      optional_ptr<int32_t> nanos = nullptr);
 	DUCKDB_API static bool TryConvertTimeTZ(const char *buf, idx_t len, idx_t &pos, dtime_tz_t &result,
-	                                        bool &has_offset, bool strict = false, int32_t *nanos = nullptr);
+	                                        bool &has_offset, bool strict = false,
+	                                        optional_ptr<int32_t> nanos = nullptr);
 	// No hour limit
 	DUCKDB_API static bool TryConvertInterval(const char *buf, idx_t len, idx_t &pos, dtime_t &result,
-	                                          bool strict = false, int32_t *nanos = nullptr);
+	                                          bool strict = false, optional_ptr<int32_t> nanos = nullptr);
 
 	//! Convert a time object to a string in the format "hh:mm:ss"
 	DUCKDB_API static string ToString(dtime_t time);
@@ -56,7 +58,7 @@ public:
 
 private:
 	static bool TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict,
-	                               int32_t *nanos = nullptr);
+	                               optional_ptr<int32_t> nanos = nullptr);
 };
 
 } // namespace duckdb

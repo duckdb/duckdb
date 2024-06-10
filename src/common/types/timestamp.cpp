@@ -56,7 +56,7 @@ timestamp_t &timestamp_t::operator-=(const int64_t &delta) {
 }
 
 bool Timestamp::TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &result, bool &has_offset, string_t &tz,
-                                      int32_t *nanos) {
+                                      optional_ptr<int32_t> nanos) {
 	idx_t pos;
 	date_t date;
 	dtime_t time;
@@ -133,7 +133,8 @@ bool Timestamp::TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &r
 	return true;
 }
 
-TimestampCastResult Timestamp::TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result, int32_t *nanos) {
+TimestampCastResult Timestamp::TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result,
+                                                   optional_ptr<int32_t> nanos) {
 	string_t tz(nullptr, 0);
 	bool has_offset = false;
 	// We don't understand TZ without an extension, so fail if one was provided.
@@ -201,7 +202,7 @@ string Timestamp::UnsupportedTimezoneError(string_t str) {
 	return Timestamp::UnsupportedTimezoneError(str.GetString());
 }
 
-timestamp_t Timestamp::FromCString(const char *str, idx_t len, int32_t *nanos) {
+timestamp_t Timestamp::FromCString(const char *str, idx_t len, optional_ptr<int32_t> nanos) {
 	timestamp_t result;
 	auto cast_result = Timestamp::TryConvertTimestamp(str, len, result, nanos);
 	if (cast_result == TimestampCastResult::SUCCESS) {
