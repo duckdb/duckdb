@@ -26,6 +26,48 @@ set(PARQUET_EXTENSION_FILES
     zstd_file_system.cpp)
 
 if(NOT CLANG_TIDY)
+  # copy over checks from snappy
+  include(CheckCXXSourceCompiles)
+  check_cxx_source_compiles(
+    "
+  int main() {
+    return __builtin_expect(0, 1);
+  }"
+    HAVE_BUILTIN_EXPECT)
+
+  check_cxx_source_compiles(
+    "
+  int main() {
+    return __builtin_ctzll(0);
+  }"
+    HAVE_BUILTIN_CTZ)
+
+  check_cxx_source_compiles(
+    "
+  int main() {
+    __builtin_prefetch(0, 0, 3);
+    return 0;
+  }"
+    HAVE_BUILTIN_PREFETCH)
+
+  check_cxx_source_compiles(
+    "
+  __attribute__((always_inline)) int zero() { return 0; }
+
+  int main() {
+    return zero();
+  }"
+    HAVE_ATTRIBUTE_ALWAYS_INLINE)
+
+  include(CheckSymbolExists)
+  check_symbol_exists("mmap" "sys/mman.h" HAVE_FUNC_MMAP)
+  check_symbol_exists("sysconf" "unistd.h" HAVE_FUNC_SYSCONF)
+
+  set(HAVE_SYS_UIO_H_01 ${HAVE_SYS_UIO_H})
+  if(NOT HAVE_SYS_UIO_H_01)
+    set(HAVE_SYS_UIO_H_01 0)
+  endif(NOT HAVE_SYS_UIO_H_01)
+
   # parquet/thrift/snappy
   set(PARQUET_EXTENSION_FILES
       ${PARQUET_EXTENSION_FILES}

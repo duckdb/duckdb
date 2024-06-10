@@ -123,10 +123,10 @@ namespace duckdb_snappy {
 template <typename T>
 inline T GetFlag(T flag) { return flag; }
 
-static const uint32_t kuint32max = std::numeric_limits<uint32_t>::max();
-static const int64_t kint64max = std::numeric_limits<int64_t>::max();
+// static const uint32_t kuint32max = std::numeric_limits<uint32_t>::max();
+// static const int64_t kint64max = std::numeric_limits<int64_t>::max();
 
-// Potentially unaligned loads and stores.
+// DuckDB - HM: Always use aligned load to keep ourselves out of trouble. Sorry.
 
 inline uint16_t UNALIGNED_LOAD16(const void *p) {
   // Compiles to a single movzx/ldrh on clang/gcc/msvc.

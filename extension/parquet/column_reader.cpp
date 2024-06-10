@@ -13,7 +13,6 @@
 #include "parquet_timestamp.hpp"
 #include "row_number_column_reader.hpp"
 #include "snappy.h"
-#include "snappy_wrapper.hpp"
 #include "string_column_reader.hpp"
 #include "struct_column_reader.hpp"
 #include "templated_column_reader.hpp"
