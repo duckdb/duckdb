@@ -1733,7 +1733,7 @@ Creates a list value from a type and an array of values of length `value_count`
 DUCKDB_API duckdb_value duckdb_create_list_value(duckdb_logical_type type, duckdb_value *values, idx_t value_count);
 
 /*!
-Creates a array value from a type and an array of values of length `value_count`
+Creates an array value from a type and an array of values of length `value_count`
 
 * type: The type of the array
 * values: The values for the array
@@ -1793,7 +1793,7 @@ The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 DUCKDB_API duckdb_logical_type duckdb_create_list_type(duckdb_logical_type type);
 
 /*!
-Creates a array type from its child type.
+Creates an array type from its child type.
 The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 
 * type: The child type of array type to create.
@@ -2804,6 +2804,11 @@ Finish the current row of appends. After end_row is called, the next row can be 
 * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
 */
 DUCKDB_API duckdb_state duckdb_appender_end_row(duckdb_appender appender);
+
+/*!
+Append a DEFAULT value (NULL if DEFAULT not available for column) to the appender.
+*/
+DUCKDB_API duckdb_state duckdb_append_default(duckdb_appender appender);
 
 /*!
 Append a bool value to the appender.

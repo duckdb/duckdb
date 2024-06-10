@@ -527,10 +527,7 @@ class TestRelation(object):
             duckdb_cursor.sql(
                 """
                 create table tbl(a varchar);
-                insert into tbl values ('test');
-                SELECT
-                    *
-                FROM tbl
+                insert into tbl values ('test') returning *
             """
             ).to_view('vw')
             res = duckdb_cursor.sql("select * from vw").fetchone()

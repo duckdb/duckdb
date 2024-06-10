@@ -10,6 +10,7 @@
 
 #include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/tableref/bound_subqueryref.hpp"
 
 namespace duckdb {
 
@@ -24,6 +25,7 @@ public:
 	}
 
 	unique_ptr<LogicalOperator> get;
+	unique_ptr<BoundSubqueryRef> subquery;
 };
 
 } // namespace duckdb

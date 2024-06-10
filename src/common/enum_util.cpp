@@ -81,6 +81,7 @@
 #include "duckdb/execution/operator/csv_scanner/quote_rules.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/function/aggregate_state.hpp"
+#include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/function/macro_function.hpp"
 #include "duckdb/function/scalar/compressed_materialization_functions.hpp"
@@ -679,6 +680,8 @@ const char* EnumUtil::ToChars<BindingMode>(BindingMode value) {
 		return "STANDARD_BINDING";
 	case BindingMode::EXTRACT_NAMES:
 		return "EXTRACT_NAMES";
+	case BindingMode::EXTRACT_REPLACEMENT_SCANS:
+		return "EXTRACT_REPLACEMENT_SCANS";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -691,6 +694,9 @@ BindingMode EnumUtil::FromString<BindingMode>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "EXTRACT_NAMES")) {
 		return BindingMode::EXTRACT_NAMES;
+	}
+	if (StringUtil::Equals(value, "EXTRACT_REPLACEMENT_SCANS")) {
+		return BindingMode::EXTRACT_REPLACEMENT_SCANS;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -1354,6 +1360,29 @@ ConstraintType EnumUtil::FromString<ConstraintType>(const char *value) {
 }
 
 template<>
+const char* EnumUtil::ToChars<CopyFunctionReturnType>(CopyFunctionReturnType value) {
+	switch(value) {
+	case CopyFunctionReturnType::CHANGED_ROWS:
+		return "CHANGED_ROWS";
+	case CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST:
+		return "CHANGED_ROWS_AND_FILE_LIST";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+CopyFunctionReturnType EnumUtil::FromString<CopyFunctionReturnType>(const char *value) {
+	if (StringUtil::Equals(value, "CHANGED_ROWS")) {
+		return CopyFunctionReturnType::CHANGED_ROWS;
+	}
+	if (StringUtil::Equals(value, "CHANGED_ROWS_AND_FILE_LIST")) {
+		return CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
 const char* EnumUtil::ToChars<CopyOverwriteMode>(CopyOverwriteMode value) {
 	switch(value) {
 	case CopyOverwriteMode::COPY_ERROR_ON_CONFLICT:
@@ -1362,6 +1391,8 @@ const char* EnumUtil::ToChars<CopyOverwriteMode>(CopyOverwriteMode value) {
 		return "COPY_OVERWRITE";
 	case CopyOverwriteMode::COPY_OVERWRITE_OR_IGNORE:
 		return "COPY_OVERWRITE_OR_IGNORE";
+	case CopyOverwriteMode::COPY_APPEND:
+		return "COPY_APPEND";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -1377,6 +1408,9 @@ CopyOverwriteMode EnumUtil::FromString<CopyOverwriteMode>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "COPY_OVERWRITE_OR_IGNORE")) {
 		return CopyOverwriteMode::COPY_OVERWRITE_OR_IGNORE;
+	}
+	if (StringUtil::Equals(value, "COPY_APPEND")) {
+		return CopyOverwriteMode::COPY_APPEND;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -7085,6 +7119,34 @@ TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value)
 	}
 	if (StringUtil::Equals(value, "ERROR_NON_UTC_TIMEZONE")) {
 		return TimestampCastResult::ERROR_NON_UTC_TIMEZONE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<TransactionModifierType>(TransactionModifierType value) {
+	switch(value) {
+	case TransactionModifierType::TRANSACTION_DEFAULT_MODIFIER:
+		return "TRANSACTION_DEFAULT_MODIFIER";
+	case TransactionModifierType::TRANSACTION_READ_ONLY:
+		return "TRANSACTION_READ_ONLY";
+	case TransactionModifierType::TRANSACTION_READ_WRITE:
+		return "TRANSACTION_READ_WRITE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+TransactionModifierType EnumUtil::FromString<TransactionModifierType>(const char *value) {
+	if (StringUtil::Equals(value, "TRANSACTION_DEFAULT_MODIFIER")) {
+		return TransactionModifierType::TRANSACTION_DEFAULT_MODIFIER;
+	}
+	if (StringUtil::Equals(value, "TRANSACTION_READ_ONLY")) {
+		return TransactionModifierType::TRANSACTION_READ_ONLY;
+	}
+	if (StringUtil::Equals(value, "TRANSACTION_READ_WRITE")) {
+		return TransactionModifierType::TRANSACTION_READ_WRITE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
