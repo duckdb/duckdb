@@ -371,9 +371,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 							                                               max_define, max_repeat);
 
 							// Create an expression reader that applies the conversion function to the child reader
-							auto expression_reader =
-							    make_uniq<ExpressionColumnReader>(context, std::move(child_reader), std::move(expr));
-							return expression_reader;
+							return make_uniq<ExpressionColumnReader>(context, std::move(child_reader), std::move(expr));
 						}
 					}
 				}
