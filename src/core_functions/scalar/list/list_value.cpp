@@ -12,20 +12,20 @@
 namespace duckdb {
 
 struct ListValueAssign {
-	template<class T>
+	template <class T>
 	static T Assign(const T &input, Vector &result) {
 		return input;
 	}
 };
 
 struct ListValueStringAssign {
-	template<class T>
+	template <class T>
 	static T Assign(const T &input, Vector &result) {
 		return StringVector::AddString(result, input);
 	}
 };
 
-template<class T, class OP=ListValueAssign>
+template <class T, class OP = ListValueAssign>
 static void TemplatedListValueFunction(DataChunk &args, Vector &result) {
 	idx_t list_size = args.ColumnCount();
 	ListVector::Reserve(result, args.size() * list_size);
@@ -35,8 +35,8 @@ static void TemplatedListValueFunction(DataChunk &args, Vector &result) {
 	auto &child_validity = FlatVector::Validity(list_child);
 
 	auto unified_format = args.ToUnifiedFormat();
-	for(idx_t r = 0; r < args.size(); r++) {
-		for(idx_t c = 0; c < list_size; c++) {
+	for (idx_t r = 0; r < args.size(); r++) {
+		for (idx_t c = 0; c < list_size; c++) {
 			auto input_idx = unified_format[c].sel->get_index(r);
 			auto result_idx = r * list_size + c;
 			auto input_data = UnifiedVectorFormat::GetData<T>(unified_format[c]);
@@ -54,14 +54,14 @@ static void TemplatedListValueFunction(DataChunk &args, Vector &result) {
 
 static void TemplatedListValueFunctionFallback(DataChunk &args, Vector &result) {
 	auto &child_type = ListType::GetChildType(result.GetType());
-   auto result_data = FlatVector::GetData<list_entry_t>(result);
-   for (idx_t i = 0; i < args.size(); i++) {
-           result_data[i].offset = ListVector::GetListSize(result);
-           for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
-                   auto val = args.GetValue(col_idx, i).DefaultCastAs(child_type);
-                   ListVector::PushBack(result, val);
-           }
-           result_data[i].length = args.ColumnCount();
+	auto result_data = FlatVector::GetData<list_entry_t>(result);
+	for (idx_t i = 0; i < args.size(); i++) {
+		result_data[i].offset = ListVector::GetListSize(result);
+		for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
+			auto val = args.GetValue(col_idx, i).DefaultCastAs(child_type);
+			ListVector::PushBack(result, val);
+		}
+		result_data[i].length = args.ColumnCount();
 	}
 }
 
@@ -82,7 +82,7 @@ static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 		return;
 	}
 	auto &result_type = result.GetType();
-	switch(result_type.InternalType()) {
+	switch (result_type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		TemplatedListValueFunction<int8_t>(args, result);
