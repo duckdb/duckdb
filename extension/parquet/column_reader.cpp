@@ -641,7 +641,7 @@ uint32_t StringColumnReader::VerifyString(const char *str_data, uint32_t str_len
 
 void StringColumnReader::Dictionary(shared_ptr<ResizeableBuffer> data, idx_t num_entries) {
 	dict = std::move(data);
-	dict_strings = unique_ptr<string_t[]>(new string_t[num_entries]);
+	dict_strings = unsafe_unique_ptr<string_t[]>(new string_t[num_entries]);
 	for (idx_t dict_idx = 0; dict_idx < num_entries; dict_idx++) {
 		uint32_t str_len;
 		if (fixed_width_string_length == 0) {
