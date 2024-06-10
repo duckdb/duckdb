@@ -59,7 +59,6 @@ struct AppenderWrapper {
 
 struct TableDescriptionWrapper {
 	unique_ptr<TableDescription> description;
-	string error;
 };
 
 enum class CAPIResultSetType : uint8_t {

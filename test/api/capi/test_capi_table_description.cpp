@@ -26,7 +26,6 @@ TEST_CASE("Test table description in C API", "[capi]") {
 
 	status = duckdb_table_description_create(tester.connection, nullptr, "test", &table_description);
 	REQUIRE(status == DuckDBSuccess);
-	REQUIRE(duckdb_table_description_error(table_description) == nullptr);
 
 	bool has_default;
 	SECTION("Out of range column") {

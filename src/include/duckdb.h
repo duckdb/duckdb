@@ -2953,15 +2953,6 @@ Destroy the TableDescription object.
 DUCKDB_API duckdb_state duckdb_table_description_destroy(duckdb_table_description *table_description);
 
 /*!
-Returns the error message associated with the given table_description.
-If the table_description has no error message, this returns `nullptr` instead.
-The error message should not be freed. It will be de-allocated when `duckdb_table_description_destroy` is called.
-* table_description: The table_description to get the error from.
-* returns: The error message, or `nullptr` if there is none.
-*/
-DUCKDB_API const char *duckdb_table_description_error(duckdb_table_description table);
-
-/*!
 Check if the column at 'index' index of the table has a DEFAULT expression.
 * table: The table_description to query.
 * index: The index of the column to query.
