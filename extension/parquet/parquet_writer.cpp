@@ -471,6 +471,11 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 			}
 		}
 
+		// Reserving these once at the start really pays off
+		for (auto &write_state : write_states) {
+			write_state->definition_levels.reserve(buffer.Count());
+		}
+
 		for (auto &chunk : buffer.Chunks({column_ids})) {
 			for (idx_t i = 0; i < next; i++) {
 				col_writers[i].get().Prepare(*write_states[i], nullptr, chunk.data[i], chunk.size());

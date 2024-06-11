@@ -17,9 +17,9 @@
 #include "thrift_tools.hpp"
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/pair.hpp"
-#include "duckdb/common/helper.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -722,7 +722,9 @@ void FilterIsNull(Vector &v, parquet_filter_t &filter_mask, idx_t count) {
 		filter_mask.reset();
 	} else {
 		for (idx_t i = 0; i < count; i++) {
-			filter_mask[i] = filter_mask[i] && !mask.RowIsValid(i);
+			if (filter_mask.test(i)) {
+				filter_mask.set(i, !mask.RowIsValid(i));
+			}
 		}
 	}
 }
@@ -740,7 +742,9 @@ void FilterIsNotNull(Vector &v, parquet_filter_t &filter_mask, idx_t count) {
 	auto &mask = FlatVector::Validity(v);
 	if (!mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
-			filter_mask[i] = filter_mask[i] && mask.RowIsValid(i);
+			if (filter_mask.test(i)) {
+				filter_mask.set(i, mask.RowIsValid(i));
+			}
 		}
 	}
 }
@@ -765,13 +769,15 @@ void TemplatedFilterOperation(Vector &v, T constant, parquet_filter_t &filter_ma
 
 	if (!mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
-			if (mask.RowIsValid(i)) {
-				filter_mask[i] = filter_mask[i] && OP::Operation(v_ptr[i], constant);
+			if (filter_mask.test(i) && mask.RowIsValid(i)) {
+				filter_mask.set(i, OP::Operation(v_ptr[i], constant));
 			}
 		}
 	} else {
 		for (idx_t i = 0; i < count; i++) {
-			filter_mask[i] = filter_mask[i] && OP::Operation(v_ptr[i], constant);
+			if (filter_mask.test(i)) {
+				filter_mask.set(i, OP::Operation(v_ptr[i], constant));
+			}
 		}
 	}
 }
@@ -1051,7 +1057,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 
 		idx_t sel_size = 0;
 		for (idx_t i = 0; i < this_output_chunk_rows; i++) {
-			if (filter_mask[i]) {
+			if (filter_mask.test(i)) {
 				state.sel.set_index(sel_size++, i);
 			}
 		}
