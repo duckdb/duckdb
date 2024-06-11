@@ -221,7 +221,6 @@ struct StrpTimeFunction {
 
 	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
 	                                     vector<unique_ptr<Expression>> &arguments) {
-		using ScalarType = void(DataChunk &, ExpressionState &, Vector &);
 		if (arguments[1]->HasParameter()) {
 			throw ParameterNotResolvedException();
 		}
@@ -245,7 +244,7 @@ struct StrpTimeFunction {
 				bound_function.return_type = LogicalType::TIMESTAMP_TZ;
 			} else if (format.HasFormatSpecifier(StrTimeSpecifier::NANOSECOND_PADDED)) {
 				bound_function.return_type = LogicalType::TIMESTAMP_NS;
-				if (bound_function.function.target<ScalarType>() == Parse<timestamp_t>) {
+				if (bound_function.name == "strptime") {
 					bound_function.function = Parse<timestamp_ns_t>;
 				} else {
 					bound_function.function = TryParse<timestamp_ns_t>;
@@ -283,7 +282,7 @@ struct StrpTimeFunction {
 				// If any format has nanoseconds, then we have to produce TSNS
 				// unless there is an offset, in which case we produce
 				bound_function.return_type = LogicalType::TIMESTAMP_NS;
-				if (bound_function.function.target<ScalarType>() == Parse<timestamp_t>) {
+				if (bound_function.name == "strptime") {
 					bound_function.function = Parse<timestamp_ns_t>;
 				} else {
 					bound_function.function = TryParse<timestamp_ns_t>;
