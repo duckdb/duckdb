@@ -43,3 +43,39 @@ ASOF LEFT JOIN (
 ----
 0 	0	0.0	0.0
 1 	0	NULL	0.0
+
+query II
+WITH t as (
+    SELECT
+        t1.col0 AS left_val,
+        t2.col0 AS right_val,
+    FROM
+        (VALUES (0), (5), (10), (15)) AS t1
+        ASOF JOIN (VALUES (1), (6), (11), (16)) AS t2
+        ON t2.col0 > t1.col0
+)
+SELECT *
+FROM t
+WHERE right_val BETWEEN 3 AND 12
+ORDER BY ALL
+----
+5	6
+10	11
+
+query II
+WITH t as (
+    SELECT
+        t1.col0 AS left_val,
+        t2.col0 AS right_val,
+    FROM
+        (VALUES (0), (5), (10), (15)) AS t1
+        ASOF LEFT JOIN (VALUES (1), (6), (11), (16)) AS t2
+        ON t2.col0 > t1.col0
+)
+SELECT *
+FROM t
+WHERE right_val BETWEEN 3 AND 12
+ORDER BY ALL
+----
+5	6
+10	11
