@@ -814,7 +814,7 @@ struct ParquetCastOperator : public BaseParquetOperator {
 struct ParquetTimestampNSOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
-		return Timestamp::FromEpochNanoSecondsPossiblyInfinite(input).value;
+		return TGT(input);
 	}
 };
 

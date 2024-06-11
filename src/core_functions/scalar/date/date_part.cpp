@@ -2,6 +2,7 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/types/date.hpp"
@@ -403,6 +404,18 @@ struct DatePart {
 		}
 	};
 
+	struct NanosecondsOperator {
+		template <class TA, class TR>
+		static inline TR Operation(TA input) {
+			return MicrosecondsOperator::Operation<TA, TR>(input) * Interval::NANOS_PER_MICRO;
+		}
+
+		template <class T>
+		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+			return PropagateSimpleDatePartStatistics<0, 60000000000>(input.child_stats);
+		}
+	};
+
 	struct MicrosecondsOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
@@ -466,7 +479,7 @@ struct DatePart {
 	struct EpochOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
-			return Date::Epoch(input);
+			return TR(Date::Epoch(input));
 		}
 
 		template <class T>
@@ -720,7 +733,7 @@ struct DatePart {
 			if (mask & EPOCH) {
 				auto double_data = HasPartValue(double_values, DatePartSpecifier::EPOCH);
 				if (double_data) {
-					double_data[idx] = Date::Epoch(input);
+					double_data[idx] = double(Date::Epoch(input));
 				}
 			}
 			if (mask & DOY) {
@@ -732,7 +745,7 @@ struct DatePart {
 			if (mask & JD) {
 				auto double_data = HasPartValue(double_values, DatePartSpecifier::JULIAN_DAY);
 				if (double_data) {
-					double_data[idx] = Date::ExtractJulianDay(input);
+					double_data[idx] = double(Date::ExtractJulianDay(input));
 				}
 			}
 		}
@@ -1074,6 +1087,19 @@ int64_t DatePart::EpochMillisOperator::Operation(dtime_tz_t input) {
 }
 
 template <>
+int64_t DatePart::NanosecondsOperator::Operation(timestamp_ns_t input) {
+	if (!Timestamp::IsFinite(input)) {
+		throw ConversionException("Can't get nanoseconds of infinite TIMESTAMP");
+	}
+	date_t date;
+	dtime_t time;
+	int32_t nanos;
+	Timestamp::Convert(input, date, time, nanos);
+	// remove everything but the second & nanosecond part
+	return (time.micros % Interval::MICROS_PER_MINUTE) * Interval::NANOS_PER_MICRO + nanos;
+}
+
+template <>
 int64_t DatePart::MicrosecondsOperator::Operation(timestamp_t input) {
 	D_ASSERT(Timestamp::IsFinite(input));
 	auto time = Timestamp::GetTime(input);
@@ -1189,7 +1215,7 @@ int64_t DatePart::HoursOperator::Operation(dtime_tz_t input) {
 template <>
 double DatePart::EpochOperator::Operation(timestamp_t input) {
 	D_ASSERT(Timestamp::IsFinite(input));
-	return Timestamp::GetEpochMicroSeconds(input) / double(Interval::MICROS_PER_SEC);
+	return double(Timestamp::GetEpochMicroSeconds(input)) / double(Interval::MICROS_PER_SEC);
 }
 
 template <>
@@ -1203,7 +1229,7 @@ double DatePart::EpochOperator::Operation(interval_t input) {
 	interval_epoch = interval_days * Interval::SECS_PER_DAY;
 	// we add 0.25 days per year to sort of account for leap days
 	interval_epoch += interval_years * (Interval::SECS_PER_DAY / 4);
-	return interval_epoch + input.micros / double(Interval::MICROS_PER_SEC);
+	return double(interval_epoch) + double(input.micros) / double(Interval::MICROS_PER_SEC);
 }
 
 //	TODO: We can't propagate interval statistics because we can't easily compare interval_t for order.
@@ -1215,7 +1241,7 @@ unique_ptr<BaseStatistics> DatePart::EpochOperator::PropagateStatistics<interval
 
 template <>
 double DatePart::EpochOperator::Operation(dtime_t input) {
-	return input.micros / double(Interval::MICROS_PER_SEC);
+	return double(input.micros) / double(Interval::MICROS_PER_SEC);
 }
 
 template <>
@@ -1301,7 +1327,7 @@ int64_t DatePart::TimezoneMinuteOperator::Operation(dtime_tz_t input) {
 
 template <>
 double DatePart::JulianDayOperator::Operation(date_t input) {
-	return Date::ExtractJulianDay(input);
+	return double(Date::ExtractJulianDay(input));
 }
 
 template <>
@@ -2061,6 +2087,26 @@ ScalarFunctionSet EpochMsFun::GetFunctions() {
 	//	Legacy inverse BIGINT => TIMESTAMP
 	operator_set.AddFunction(
 	    ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP, DatePart::EpochMillisOperator::Inverse));
+
+	return operator_set;
+}
+
+ScalarFunctionSet NanosecondsFun::GetFunctions() {
+	using OP = DatePart::NanosecondsOperator;
+	using TR = int64_t;
+	const LogicalType &result_type = LogicalType::BIGINT;
+	auto operator_set = GetTimePartFunction<OP, TR>();
+
+	auto ns_func = DatePart::UnaryFunction<timestamp_ns_t, TR, OP>;
+	auto ns_stats = OP::template PropagateStatistics<timestamp_ns_t>;
+	operator_set.AddFunction(
+	    ScalarFunction({LogicalType::TIMESTAMP_NS}, result_type, ns_func, nullptr, nullptr, ns_stats));
+
+	//	TIMESTAMP WITH TIME ZONE has the same representation as TIMESTAMP so no need to defer to ICU
+	auto tstz_func = DatePart::UnaryFunction<timestamp_t, TR, OP>;
+	auto tstz_stats = OP::template PropagateStatistics<timestamp_t>;
+	operator_set.AddFunction(
+	    ScalarFunction({LogicalType::TIMESTAMP_TZ}, LogicalType::BIGINT, tstz_func, nullptr, nullptr, tstz_stats));
 
 	return operator_set;
 }

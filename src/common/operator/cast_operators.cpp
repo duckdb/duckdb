@@ -1125,8 +1125,8 @@ bool TryCast::Operation(interval_t input, interval_t &result, bool strict) {
 // Non-Standard Timestamps
 //===--------------------------------------------------------------------===//
 template <>
-duckdb::string_t CastFromTimestampNS::Operation(duckdb::timestamp_t input, Vector &result) {
-	return StringCast::Operation<timestamp_t>(CastTimestampNsToUs::Operation<timestamp_t, timestamp_t>(input), result);
+duckdb::string_t CastFromTimestampNS::Operation(duckdb::timestamp_ns_t input, Vector &result) {
+	return StringCast::Operation<timestamp_ns_t>(input, result);
 }
 template <>
 duckdb::string_t CastFromTimestampMS::Operation(duckdb::timestamp_t input, Vector &result) {
@@ -1258,20 +1258,8 @@ dtime_t CastTimestampSecToTime::Operation(timestamp_t input) {
 // Cast To Timestamp
 //===--------------------------------------------------------------------===//
 template <>
-bool TryCastToTimestampNS::Operation(string_t input, timestamp_t &result, bool strict) {
-	if (!TryCast::Operation<string_t, timestamp_t>(input, result, strict)) {
-		return false;
-	}
-	if (!Timestamp::IsFinite(result)) {
-		return true;
-	}
-
-	int64_t nanoseconds;
-	if (!Timestamp::TryGetEpochNanoSeconds(result, nanoseconds)) {
-		throw ConversionException("Could not convert VARCHAR value '%s' to Timestamp(NS)", input.GetString());
-	}
-	result = nanoseconds;
-	return true;
+bool TryCastToTimestampNS::Operation(string_t input, timestamp_ns_t &result, bool strict) {
+	return TryCast::Operation<string_t, timestamp_ns_t>(input, result, strict);
 }
 
 template <>
@@ -1293,7 +1281,7 @@ bool TryCastToTimestampSec::Operation(string_t input, timestamp_t &result, bool 
 }
 
 template <>
-bool TryCastToTimestampNS::Operation(date_t input, timestamp_t &result, bool strict) {
+bool TryCastToTimestampNS::Operation(date_t input, timestamp_ns_t &result, bool strict) {
 	if (!TryCast::Operation<date_t, timestamp_t>(input, result, strict)) {
 		return false;
 	}
@@ -1559,8 +1547,24 @@ bool TryCast::Operation(string_t input, timestamp_t &result, bool strict) {
 }
 
 template <>
+bool TryCast::Operation(string_t input, timestamp_ns_t &result, bool strict) {
+	return Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), result) == TimestampCastResult::SUCCESS;
+}
+
+template <>
 timestamp_t Cast::Operation(string_t input) {
 	return Timestamp::FromCString(input.GetData(), input.GetSize());
+}
+
+template <>
+timestamp_ns_t Cast::Operation(string_t input) {
+	int32_t nanos;
+	const auto ts = Timestamp::FromCString(input.GetData(), input.GetSize(), &nanos);
+	timestamp_ns_t result;
+	if (!Timestamp::TryFromTimestampNanos(ts, nanos, result)) {
+		throw ConversionException(Timestamp::ConversionError(input));
+	}
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
