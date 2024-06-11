@@ -66,6 +66,7 @@ PendingExecutionResult PendingQueryResult::ExecuteTaskInternal(ClientContextLock
 unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &lock) {
 	CheckExecutableInternal(lock);
 	// Busy wait while execution is not finished
+
 	if (allow_stream_result) {
 		while (!IsFinishedOrBlocked(ExecuteTaskInternal(lock))) {
 		}

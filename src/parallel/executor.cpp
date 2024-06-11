@@ -426,6 +426,21 @@ void Executor::WorkOnTasks() {
 	}
 }
 
+void Executor::SignalTaskRescheduled() {
+	task_reschedule.notify_one();
+}
+
+void Executor::WaitForTask() {
+	{
+		lock_guard<mutex> l(executor_lock);
+		if (to_be_rescheduled_tasks.empty()) {
+			return;
+		}
+	}
+	std::unique_lock<mutex> l(task_reschedule_lock);
+	task_reschedule.wait(l);
+}
+
 void Executor::RescheduleTask(shared_ptr<Task> &task_p) {
 	// This function will spin lock until the task provided is added to the to_be_rescheduled_tasks
 	while (true) {
@@ -438,6 +453,7 @@ void Executor::RescheduleTask(shared_ptr<Task> &task_p) {
 			auto &scheduler = TaskScheduler::GetScheduler(context);
 			to_be_rescheduled_tasks.erase(task_p.get());
 			scheduler.ScheduleTask(GetToken(), task_p);
+			SignalTaskRescheduled();
 			break;
 		}
 	}
