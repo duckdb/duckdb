@@ -12,6 +12,7 @@
 #include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/serializer/encoding_util.hpp"
+#include "duckdb/common/serializer/deserialization_data.hpp"
 
 namespace duckdb {
 
@@ -68,6 +69,14 @@ public:
 		OnObjectEnd();
 	}
 
+	DeserializationData &GetSerializationData() {
+		return data;
+	}
+
+	void SetSerializationData(const DeserializationData &other) {
+		data = other;
+	}
+
 protected:
 	//-------------------------------------------------------------------------
 	// Nested Type Hooks
@@ -110,6 +119,9 @@ protected:
 private:
 	vector<DebugState> debug_stack;
 	WriteStream &stream;
+
+protected:
+	duckdb::DeserializationData data;
 };
 
 } // namespace duckdb

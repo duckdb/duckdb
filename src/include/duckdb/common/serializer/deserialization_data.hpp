@@ -20,12 +20,17 @@ class CompressionInfo;
 enum class ExpressionType : uint8_t;
 
 struct DeserializationData {
+	struct CustomData {
+		virtual ~CustomData() = default;
+	};
+
 	stack<reference<ClientContext>> contexts;
 	stack<reference<DatabaseInstance>> databases;
 	stack<idx_t> enums;
 	stack<reference<bound_parameter_map_t>> parameter_data;
 	stack<const_reference<LogicalType>> types;
 	stack<const_reference<CompressionInfo>> compression_infos;
+	duckdb::unordered_map<std::string, duckdb::stack<duckdb::reference<CustomData>>> customs;
 
 	template <class T>
 	void Set(T entry) = delete;
@@ -41,6 +46,31 @@ struct DeserializationData {
 		if (e.empty()) {
 			throw InternalException("DeserializationData - unexpected empty stack");
 		}
+	}
+
+	template <typename T>
+	typename std::enable_if<std::is_base_of<CustomData, T>::value, T &>::type GetCustom() const {
+		std::string type = T::GetType();
+		auto iter = customs.find(type);
+		if (iter == customs.end()) {
+			throw duckdb::InternalException("SeserializationData - no stack for %s", type);
+		}
+		auto &stack = iter->second;
+		if (stack.empty()) {
+			throw duckdb::InternalException("DeserializationData - unexpected empty stack for %s", type);
+		}
+		return dynamic_cast<T &>(stack.top().get());
+	}
+
+	template <typename T>
+	typename std::enable_if<std::is_base_of<CustomData, T>::value, void>::type SetCustom(T &data) {
+		std::string type = T::GetType();
+		auto iter = customs.find(type);
+		if (iter == customs.end()) {
+			iter = customs.emplace(type, duckdb::stack<duckdb::reference<CustomData>> {}).first;
+		}
+		auto &stack = iter->second;
+		stack.push(data);
 	}
 };
 

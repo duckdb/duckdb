@@ -57,6 +57,14 @@ public:
 		return stream;
 	}
 
+	DeserializationData &GetSerializationData() {
+		return data;
+	}
+
+	void SetSerializationData(const DeserializationData &other) {
+		data = other;
+	}
+
 private:
 	ReadStream &stream;
 	idx_t nesting_level = 0;
