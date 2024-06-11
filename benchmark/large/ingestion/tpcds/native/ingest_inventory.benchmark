@@ -2,7 +2,7 @@
 # description: benchmark ingestion of inventory
 # group: [native]
 
-template benchmark/ingestion/large/tpcds/tpcds_ingestion_persistent.benchmark.in
+template benchmark/large/ingestion/tpcds/tpcds_ingestion_persistent.benchmark.in
 table_name=inventory
 format=native
 

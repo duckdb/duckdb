@@ -1,6 +1,6 @@
-CALL dbgen(sf=10);
-EXPORT DATABASE 'duckdb_benchmark_data/tpch_parquet' (FORMAT PARQUET);
-EXPORT DATABASE 'duckdb_benchmark_data/tpch_csv' (FORMAT CSV);
+CALL dbgen(sf=100);
+EXPORT DATABASE 'duckdb_benchmark_data/tpch_parquet_sf100' (FORMAT PARQUET);
+EXPORT DATABASE 'duckdb_benchmark_data/tpch_csv_sf100' (FORMAT CSV);
 
 create view customer_csv as select * from read_csv('duckdb_benchmark_data/tpch_csv/customer.csv');
 create view customer_parquet as select * from read_parquet('duckdb_benchmark_data/tpch_parquet/customer.parquet');
