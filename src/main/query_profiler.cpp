@@ -129,7 +129,7 @@ void QueryProfiler::StartExplainAnalyze() {
 	this->is_explain_analyze = true;
 }
 
-static void GetTotalCPUTime(QueryProfiler::ProfilingNode &node) {
+static void GetTotalCPUTime(ProfilingNode &node) {
 	node.profiling_info.metrics.cpu_time = node.profiling_info.metrics.operator_timing;
 	if (!node.children.empty()) {
 		for (const auto &i : node.children) {
@@ -155,7 +155,7 @@ void QueryProfiler::EndQuery() {
 	if (IsEnabled() && !is_explain_analyze) {
 		// initialize the query info
 		if (root) {
-			auto query_info = make_uniq<QueryProfiler::QueryProfilingNode>();
+			auto query_info = make_uniq<QueryProfilingNode>();
 
 			query_info->is_query = true;
 			query_info->query = query;
@@ -515,8 +515,8 @@ string QueryProfiler::JSONSanitize(const std::string &text) {
 	return result;
 }
 
-static void ToJSONRecursive(QueryProfiler::ProfilingNode &node, std::stringstream &ss, idx_t depth = 1) {
-	auto &op_node = node.Cast<QueryProfiler::OperatorProfilingNode>();
+static void ToJSONRecursive(ProfilingNode &node, std::stringstream &ss, idx_t depth = 1) {
+	auto &op_node = node.Cast<OperatorProfilingNode>();
 
 	ss << string(depth * 3, ' ') << " {\n";
 	ss << string(depth * 3, ' ') << "   \"name\": \"" + QueryProfiler::JSONSanitize(op_node.name) + "\",\n";
@@ -547,7 +547,7 @@ string QueryProfiler::ToJSON() const {
 		return "{ \"result\": \"error\" }\n";
 	}
 
-	auto &query_info = root->Cast<QueryProfiler::QueryProfilingNode>();
+	auto &query_info = root->Cast<QueryProfilingNode>();
 	auto &settings = query_info.profiling_info;
 
 	std::stringstream ss;
@@ -589,12 +589,12 @@ void QueryProfiler::WriteToFile(const char *path, string &info) const {
 	}
 }
 
-unique_ptr<QueryProfiler::ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root,
+unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root,
                                                                    profiler_settings_t settings, idx_t depth) {
 	if (OperatorRequiresProfiling(root.type)) {
 		this->query_requires_profiling = true;
 	}
-	auto node = make_uniq<QueryProfiler::OperatorProfilingNode>();
+	auto node = make_uniq<OperatorProfilingNode>();
 	node->type = root.type;
 	node->name = root.GetName();
 	node->depth = depth;
@@ -602,7 +602,7 @@ unique_ptr<QueryProfiler::ProfilingNode> QueryProfiler::CreateTree(const Physica
 	if (node->profiling_info.Enabled(MetricsType::EXTRA_INFO)) {
 		node->profiling_info.metrics.extra_info = root.ParamsToString();
 	}
-	tree_map.insert(make_pair(reference<const PhysicalOperator>(root), reference<QueryProfiler::ProfilingNode>(*node)));
+	tree_map.insert(make_pair(reference<const PhysicalOperator>(root), reference<ProfilingNode>(*node)));
 	auto children = root.GetChildren();
 	for (auto &child : children) {
 		auto child_node = CreateTree(child.get(), settings, depth + 1);
@@ -611,7 +611,7 @@ unique_ptr<QueryProfiler::ProfilingNode> QueryProfiler::CreateTree(const Physica
 	return node;
 }
 
-void QueryProfiler::Render(const QueryProfiler::ProfilingNode &node, std::ostream &ss) const {
+void QueryProfiler::Render(const ProfilingNode &node, std::ostream &ss) const {
 	TreeRenderer renderer;
 	if (IsDetailedEnabled()) {
 		renderer.EnableDetailed();

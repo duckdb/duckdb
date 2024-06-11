@@ -226,7 +226,7 @@ string TreeRenderer::ToString(const PhysicalOperator &op) {
 	return ss.str();
 }
 
-string TreeRenderer::ToString(const QueryProfiler::ProfilingNode &op) {
+string TreeRenderer::ToString(const ProfilingNode &op) {
 	std::stringstream ss;
 	Render(op, ss);
 	return ss.str();
@@ -248,7 +248,7 @@ void TreeRenderer::Render(const PhysicalOperator &op, std::ostream &ss) {
 	ToStream(*tree, ss);
 }
 
-void TreeRenderer::Render(const QueryProfiler::ProfilingNode &op, std::ostream &ss) {
+void TreeRenderer::Render(const ProfilingNode &op, std::ostream &ss) {
 	auto tree = CreateTree(op);
 	ToStream(*tree, ss);
 }
@@ -483,8 +483,8 @@ unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const PipelineRenderNode &op
 	return CreateNode(op.op);
 }
 
-unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const QueryProfiler::ProfilingNode &op) {
-	auto &op_node = op.Cast<QueryProfiler::OperatorProfilingNode>();
+unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const ProfilingNode &op) {
+	auto &op_node = op.Cast<OperatorProfilingNode>();
 
 	string extra_info;
 	if (op_node.profiling_info.Enabled(MetricsType::EXTRA_INFO)) {
@@ -506,8 +506,8 @@ unique_ptr<RenderTree> TreeRenderer::CreateTree(const PhysicalOperator &op) {
 	return CreateRenderTree<PhysicalOperator>(op);
 }
 
-unique_ptr<RenderTree> TreeRenderer::CreateTree(const QueryProfiler::ProfilingNode &op) {
-	return CreateRenderTree<QueryProfiler::ProfilingNode>(op);
+unique_ptr<RenderTree> TreeRenderer::CreateTree(const ProfilingNode &op) {
+	return CreateRenderTree<ProfilingNode>(op);
 }
 
 unique_ptr<RenderTree> TreeRenderer::CreateTree(const Pipeline &pipeline) {

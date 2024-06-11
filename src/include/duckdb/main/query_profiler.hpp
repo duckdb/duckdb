@@ -21,6 +21,7 @@
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/profiling_info.hpp"
+#include "duckdb/main/profiling_node.hpp"
 
 #include <stack>
 
@@ -88,61 +89,6 @@ public:
 	DUCKDB_API explicit QueryProfiler(ClientContext &context);
 
 public:
-	// Recursive tree that mirrors the operator tree
-	class ProfilingNode {
-	public:
-		ProfilingInfo profiling_info;
-		vector<unique_ptr<ProfilingNode>> children;
-		idx_t depth = 0;
-		bool is_query = false;
-
-	public:
-		idx_t GetChildCount() {
-			return children.size();
-		}
-
-		// TODO: Can this be simplified?
-		template <class TARGET>
-		TARGET &Cast() {
-			if (std::is_same<TARGET, QueryProfilingNode>::value) {
-				if (!is_query) {
-					throw InternalException("Failed to cast ProfilingNode to QueryProfilingNode - node type mismatch");
-				}
-				return reinterpret_cast<TARGET &>(*this);
-			}
-			if (is_query) {
-				throw InternalException("Failed to cast ProfilingNode to OperatorProfilingNode - node type mismatch");
-			}
-			return reinterpret_cast<TARGET &>(*this);
-		}
-
-		template <class TARGET>
-		const TARGET &Cast() const {
-			if (std::is_same<TARGET, QueryProfilingNode>::value) {
-				if (!is_query) {
-					throw InternalException("Failed to cast ProfilingNode to QueryProfilingNode - node type mismatch");
-				}
-				return reinterpret_cast<const TARGET &>(*this);
-			}
-			if (is_query) {
-				throw InternalException("Failed to cast ProfilingNode to OperatorProfilingNode - node type mismatch");
-			}
-			return reinterpret_cast<const TARGET &>(*this);
-		}
-	};
-
-	// Holds the top level query info
-	class QueryProfilingNode : public ProfilingNode {
-	public:
-		string query;
-	};
-
-	class OperatorProfilingNode : public ProfilingNode {
-	public:
-		PhysicalOperatorType type;
-		string name;
-	};
-
 	// Propagate save_location, enabled, detailed_enabled and automatic_print_format.
 	void Propagate(QueryProfiler &qp);
 
