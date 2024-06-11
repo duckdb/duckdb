@@ -773,8 +773,7 @@ void StringColumnReader::PlainReference(shared_ptr<ByteBuffer> plain_data, Vecto
 }
 
 string_t StringParquetValueConversion::DictRead(ByteBuffer &dict, uint32_t &offset, ColumnReader &reader) {
-	auto &dict_strings = reader.Cast<StringColumnReader>().dict_strings;
-	return dict_strings[offset];
+	return reader.Cast<StringColumnReader>().dict_strings[offset];
 }
 
 string_t StringParquetValueConversion::PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
@@ -1159,8 +1158,7 @@ idx_t StructColumnReader::GroupRowsAvailable() {
 template <class DUCKDB_PHYSICAL_TYPE, bool FIXED_LENGTH>
 struct DecimalParquetValueConversion {
 	static DUCKDB_PHYSICAL_TYPE DictRead(ByteBuffer &dict, uint32_t &offset, ColumnReader &reader) {
-		auto dict_ptr = reinterpret_cast<DUCKDB_PHYSICAL_TYPE *>(dict.ptr);
-		return dict_ptr[offset];
+		return reinterpret_cast<DUCKDB_PHYSICAL_TYPE *>(dict.ptr)[offset];
 	}
 
 	static DUCKDB_PHYSICAL_TYPE PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
@@ -1286,8 +1284,7 @@ unique_ptr<ColumnReader> ParquetDecimalUtils::CreateReader(ParquetReader &reader
 //===--------------------------------------------------------------------===//
 struct UUIDValueConversion {
 	static hugeint_t DictRead(ByteBuffer &dict, uint32_t &offset, ColumnReader &reader) {
-		auto dict_ptr = reinterpret_cast<hugeint_t *>(dict.ptr);
-		return dict_ptr[offset];
+		return reinterpret_cast<hugeint_t *>(dict.ptr)[offset];
 	}
 
 	static hugeint_t ReadParquetUUID(const_data_ptr_t input) {
@@ -1356,8 +1353,7 @@ struct IntervalValueConversion {
 	static constexpr const idx_t PARQUET_INTERVAL_SIZE = 12;
 
 	static interval_t DictRead(ByteBuffer &dict, uint32_t &offset, ColumnReader &reader) {
-		auto dict_ptr = reinterpret_cast<interval_t *>(dict.ptr);
-		return dict_ptr[offset];
+		return reinterpret_cast<interval_t *>(dict.ptr)[offset];
 	}
 
 	static interval_t ReadParquetInterval(const_data_ptr_t input) {

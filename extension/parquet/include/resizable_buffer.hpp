@@ -38,9 +38,7 @@ public:
 	template <class T>
 	T read() {
 		available(sizeof(T));
-		T val = unsafe_get<T>();
-		unsafe_inc(sizeof(T));
-		return val;
+		return unsafe_read<T>();
 	}
 
 	template <class T>

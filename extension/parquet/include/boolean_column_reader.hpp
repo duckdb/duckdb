@@ -60,8 +60,7 @@ struct BooleanParquetValueConversion {
 	static bool UnsafePlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
 		auto &byte_pos = reader.Cast<BooleanColumnReader>().byte_pos;
 		bool ret = (*plain_data.ptr >> byte_pos) & 1;
-		byte_pos++;
-		if (byte_pos == 8) {
+		if (++byte_pos == 8) {
 			byte_pos = 0;
 			plain_data.unsafe_inc(1);
 		}
