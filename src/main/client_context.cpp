@@ -1310,6 +1310,9 @@ unique_ptr<QueryResult> ClientContext::CreateSnapshot() {
   });
 
   StatementType statement_type = StatementType::SELECT_STATEMENT;
+  string query = "SELECT blob_column";
+  auto lock = LockContext();
+  BeginQueryInternal(*lock, query);
   StatementProperties properties;
   vector<LogicalType> types{LogicalType::BLOB};
   vector<string> names{"blob_column"};
@@ -1320,6 +1323,7 @@ unique_ptr<QueryResult> ClientContext::CreateSnapshot() {
   auto result = make_uniq<StreamQueryResult>(statement_type, properties, types,
 					     names, client_properties,
 					     buffered_data);
+  SetActiveResult(*lock, *result);
   return std::move(result);
 }
 

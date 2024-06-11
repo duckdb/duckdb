@@ -14,7 +14,7 @@
 #include "duckdb/common/queue.hpp"
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/serializer/buffered_file_reader.hpp"
+#include "duckdb/common/file_system.hpp"
 
 namespace duckdb {
 
@@ -46,7 +46,9 @@ private:
 	//! The current capacity of the buffer (tuples)
 	atomic<idx_t> buffered_count;
         string file_name;
-        unique_ptr<BufferedFileReader> reader;
+        FileSystem &fs;
+        unique_ptr<FileHandle> handle;
+        bool done;
 };
 
 } // namespace duckdb

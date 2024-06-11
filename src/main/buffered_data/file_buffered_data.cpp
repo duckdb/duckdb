@@ -1,17 +1,18 @@
+#include <limits>
 #include "duckdb/main/buffered_data/file_buffered_data.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/common/helper.hpp"
-#include "duckdb/common/file_system.hpp"
 
 namespace duckdb {
 
-FileBufferedData::FileBufferedData(weak_ptr<ClientContext> context, FileSystem &fs, string file)
-  : BufferedData(BufferedData::Type::SIMPLE, std::move(context)) {
+FileBufferedData::FileBufferedData(weak_ptr<ClientContext> context, FileSystem &fis, string file)
+  :BufferedData(BufferedData::Type::SIMPLE, std::move(context)), fs(fis){
   buffered_count = 0;
   file_name = file;
-  reader = make_uniq<BufferedFileReader>(fs, file_name.c_str());
+  handle = fs.OpenFile(file, FileFlags::FILE_FLAGS_READ | FileLockType::READ_LOCK);
+  done = false;
 }
 
 FileBufferedData::~FileBufferedData() {
@@ -22,18 +23,38 @@ bool FileBufferedData::BufferIsFull() {
 }
 
 PendingExecutionResult FileBufferedData::ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) {
-	if (Closed()) {
+	if (Closed() || done) {
 		return PendingExecutionResult::EXECUTION_ERROR;
 	}
+	
 	if (BufferIsFull()) {
 		// The buffer isn't empty yet, just return
 		return PendingExecutionResult::RESULT_READY;
 	}
+	uint32_t max_blob_size = std::numeric_limits<int32_t>::max();
+	auto to_append = make_uniq<DataChunk>();
+	vector<LogicalType> types{LogicalType::BLOB};
 
-	
+	to_append->Initialize(Allocator::DefaultAllocator(), types);
+	idx_t count = 0;
+
+	for (idx_t col_idx = 0; col_idx < STANDARD_VECTOR_SIZE; col_idx++) {
+	  auto buffer = make_unsafe_uniq_array<char>(UnsafeNumericCast<size_t>(max_blob_size));
+	  int64_t bytes_read = fs.Read(*handle, buffer.get(), max_blob_size);
+	  auto blob_data = std::string(buffer.get(), (size_t)bytes_read);
+	  to_append->SetValue(0, count, Value::BLOB_RAW(blob_data));
+	  count++;
+	  if (bytes_read < max_blob_size) {
+	    done = true;
+	    break;
+	  }
+	}
+	to_append->SetCardinality(count);
+	Append(std::move(to_append));
 	if (result.HasError()) {
 		Close();
 	}
+	return PendingExecutionResult::RESULT_READY;
 }
 
 unique_ptr<DataChunk> FileBufferedData::Scan() {
