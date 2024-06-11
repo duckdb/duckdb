@@ -2,7 +2,7 @@
 # description: Ordered LIST aggregation
 # group: [list]
 
-name String Split Regexp
+name List Order By
 group micro
 subgroup list
 

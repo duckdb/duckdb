@@ -279,16 +279,14 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    "Create a duplicate of the current connection", py::kw_only(), py::arg("connection") = py::none());
 	m.def(
 	    "execute",
-	    [](const py::object &query, py::object params, bool many = false,
-	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	    [](const py::object &query, py::object params, shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
-		    return conn->Execute(query, params, many);
+		    return conn->Execute(query, params);
 	    },
 	    "Execute the given SQL query, optionally using prepared statements with parameters set", py::arg("query"),
-	    py::arg("parameters") = py::none(), py::arg("multiple_parameter_sets") = false, py::kw_only(),
-	    py::arg("connection") = py::none());
+	    py::arg("parameters") = py::none(), py::kw_only(), py::arg("connection") = py::none());
 	m.def(
 	    "executemany",
 	    [](const py::object &query, py::object params, shared_ptr<DuckDBPyConnection> conn = nullptr) {
@@ -587,8 +585,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("connection") = py::none());
 	m.def(
 	    "sql",
-	    [](const py::object &query, string alias, const py::object &params,
-	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	    [](const py::object &query, string alias, py::object params, shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
@@ -600,8 +597,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("connection") = py::none());
 	m.def(
 	    "query",
-	    [](const py::object &query, string alias, const py::object &params,
-	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	    [](const py::object &query, string alias, py::object params, shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
@@ -613,8 +609,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("connection") = py::none());
 	m.def(
 	    "from_query",
-	    [](const py::object &query, string alias, const py::object &params,
-	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	    [](const py::object &query, string alias, py::object params, shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
