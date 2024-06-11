@@ -1,4 +1,5 @@
 #include "duckdb/catalog/default/default_generator.hpp"
+#include "duckdb/catalog/catalog_transaction.hpp"
 
 namespace duckdb {
 
