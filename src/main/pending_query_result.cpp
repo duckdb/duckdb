@@ -67,12 +67,11 @@ unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &l
 	CheckExecutableInternal(lock);
 	// Busy wait while execution is not finished
 
-	if (allow_stream_result) {
-		while (!IsFinishedOrBlocked(ExecuteTaskInternal(lock))) {
-		}
-	} else {
-		while (!IsFinished(ExecuteTaskInternal(lock))) {
-		}
+	const auto is_finished = allow_stream_result ? IsFinishedOrBlocked : IsFinished;
+
+	while (!is_finished(ExecuteTaskInternal(lock))) {
+		CheckExecutableInternal(lock);
+		context->WaitForTask(lock, *this);
 	}
 	if (HasError()) {
 		return make_uniq<MaterializedQueryResult>(error);

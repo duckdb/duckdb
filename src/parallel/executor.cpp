@@ -435,6 +435,16 @@ void Executor::WaitForTask() {
 	if (to_be_rescheduled_tasks.empty()) {
 		return;
 	}
+	if (ResultCollectorIsBlocked()) {
+		return;
+	}
+	auto &scheduler = TaskScheduler::GetScheduler(context);
+	auto active_threads = NumericCast<idx_t>(scheduler.NumberOfThreads());
+	if (to_be_rescheduled_tasks.size() + 1 >= active_threads) {
+		// All tasks are blocked, the main thread *has* to pick up a task to unblock them
+		return;
+	}
+
 	task_reschedule.wait(l);
 }
 
@@ -461,7 +471,6 @@ bool Executor::ResultCollectorIsBlocked() {
 		// The result collector is always in the last pipeline
 		return false;
 	}
-	lock_guard<mutex> l(executor_lock);
 	if (to_be_rescheduled_tasks.empty()) {
 		return false;
 	}
@@ -516,6 +525,7 @@ PendingExecutionResult Executor::ExecuteTask(bool dry_run) {
 
 		if (!current_task && !HasError()) {
 			// there are no tasks to be scheduled and there are tasks blocked
+			lock_guard<mutex> l(executor_lock);
 			if (ResultCollectorIsBlocked()) {
 				// The blocked tasks are processing the Sink of a BufferedResultCollector
 				// We return here so the query result can be made and fetched from
