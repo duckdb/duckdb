@@ -4,6 +4,7 @@
 #include "thrift_tools.hpp"
 
 #ifndef DUCKDB_AMALGAMATION
+#include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
@@ -377,7 +378,7 @@ void ParquetCrypto::AddKey(ClientContext &context, const FunctionParameters &par
 		string decoded_key;
 		try {
 			decoded_key = Base64Decode(key);
-		} catch (...) {
+		} catch (const ConversionException &e) {
 			throw InvalidInputException("Invalid AES key. Not a plain AES key NOR a base64 encoded string");
 		}
 		if (!AESGCMState::ValidKey(decoded_key)) {
