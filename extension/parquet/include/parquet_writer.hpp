@@ -106,7 +106,7 @@ public:
 	uint32_t Write(const duckdb_apache::thrift::TBase &object);
 	uint32_t WriteData(const const_data_ptr_t buffer, const uint32_t buffer_size);
 
-	GeoParquetData &GetGeoParquetData();
+	GeoParquetFileMetadata &GetGeoParquetData();
 
 private:
 	static CopyTypeSupport DuckDBTypeToParquetTypeInternal(const LogicalType &duckdb_type,
@@ -127,7 +127,7 @@ private:
 
 	vector<unique_ptr<ColumnWriter>> column_writers;
 
-	unique_ptr<GeoParquetData> geoparquet_data;
+	unique_ptr<GeoParquetFileMetadata> geoparquet_data;
 };
 
 } // namespace duckdb

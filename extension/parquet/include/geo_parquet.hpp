@@ -8,17 +8,15 @@
 
 #pragma once
 
-#include <limits>
-#include <algorithm>
-#include "duckdb/common/unordered_set.hpp"
+#include "column_writer.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "parquet_types.h"
-#include "column_writer.hpp"
 
 namespace duckdb {
 
-enum class GeometryType : uint8_t {
+enum class WKBGeometryType : uint16_t {
 	POINT = 1,
 	LINESTRING = 2,
 	POLYGON = 3,
@@ -26,17 +24,18 @@ enum class GeometryType : uint8_t {
 	MULTILINESTRING = 5,
 	MULTIPOLYGON = 6,
 	GEOMETRYCOLLECTION = 7,
+
+	POINT_Z = 1001,
+	LINESTRING_Z = 1002,
+	POLYGON_Z = 1003,
+	MULTIPOINT_Z = 1004,
+	MULTILINESTRING_Z = 1005,
+	MULTIPOLYGON_Z = 1006,
+	GEOMETRYCOLLECTION_Z = 1007,
 };
 
-struct GeometryTypes {
-	static const char *ToString(GeometryType type);
-};
-
-enum class CoordType : uint8_t {
-	XY = 1,
-	XYZ = 2,
-	XYM = 3,
-	XYZM = 4,
+struct WKBGeometryTypes {
+	static const char *ToString(WKBGeometryType type);
 };
 
 struct GeometryBounds {
@@ -44,8 +43,6 @@ struct GeometryBounds {
 	double max_x = NumericLimits<double>::Minimum();
 	double min_y = NumericLimits<double>::Maximum();
 	double max_y = NumericLimits<double>::Minimum();
-	double max_z = NumericLimits<double>::Minimum();
-	double min_z = NumericLimits<double>::Maximum();
 
 	GeometryBounds() = default;
 
@@ -54,8 +51,6 @@ struct GeometryBounds {
 		max_x = std::max(max_x, other.max_x);
 		min_y = std::min(min_y, other.min_y);
 		max_y = std::max(max_y, other.max_y);
-		min_z = std::min(min_z, other.min_z);
-		max_z = std::max(max_z, other.max_z);
 	}
 
 	void Combine(const double &x, const double &y) {
@@ -65,52 +60,65 @@ struct GeometryBounds {
 		max_y = std::max(max_y, y);
 	}
 
-	void Combine(const double &x, const double &y, const double &z) {
-		min_x = std::min(min_x, x);
-		max_x = std::max(max_x, x);
-		min_y = std::min(min_y, y);
-		max_y = std::max(max_y, y);
-		min_z = std::min(min_z, z);
-		max_z = std::max(max_z, z);
-	}
-
 	void Combine(const double &min_x, const double &max_x, const double &min_y, const double &max_y) {
 		this->min_x = std::min(this->min_x, min_x);
 		this->max_x = std::max(this->max_x, max_x);
 		this->min_y = std::min(this->min_y, min_y);
 		this->max_y = std::max(this->max_y, max_y);
 	}
-
-	void Combine(const double &min_x, const double &max_x, const double &min_y, const double &max_y,
-	             const double &min_z, const double &max_z) {
-		this->min_x = std::min(this->min_x, min_x);
-		this->max_x = std::max(this->max_x, max_x);
-		this->min_y = std::min(this->min_y, min_y);
-		this->max_y = std::max(this->max_y, max_y);
-		this->min_z = std::min(this->min_z, min_z);
-		this->max_z = std::max(this->max_z, max_z);
-	}
 };
 
-struct GeometryColumnData {
-	GeometryBounds bounds;
-	unordered_set<GeometryType> types;
-	bool has_z = false;
+//------------------------------------------------------------------------------
+// GeoParquetMetadata
+//------------------------------------------------------------------------------
+class ParquetReader;
+class ColumnReader;
+class ClientContext;
+
+enum class GeoParquetColumnEncoding : uint8_t {
+	WKB = 1,
+	POINT,
+	LINESTRING,
+	POLYGON,
+	MULTIPOINT,
+	MULTILINESTRING,
+	MULTIPOLYGON,
+};
+
+struct GeoParquetColumnMetadata {
+	// The encoding of the geometry column
+	GeoParquetColumnEncoding geometry_encoding;
+
+	// The geometry types that are present in the column
+	set<WKBGeometryType> geometry_types;
+
+	// The bounds of the geometry column
+	GeometryBounds bbox;
+
+	// The crs of the geometry column (if any) in PROJJSON format
+	string projjson;
 
 	void Update(Vector &vector, idx_t count);
-
-	void Combine(const GeometryColumnData &other) {
-		bounds.Combine(other.bounds);
-		for (auto &type : other.types) {
-			types.insert(type);
-		}
-	}
 };
 
-struct GeoParquetData {
-	bool is_geoparquet = false;
-	unordered_map<string, GeometryColumnData> columns;
-	void WriteMetadata(duckdb_parquet::format::FileMetaData &file_meta_data) const;
+struct GeoParquetFileMetadata {
+public:
+	static unique_ptr<GeoParquetFileMetadata> Read(const duckdb_parquet::format::FileMetaData &file_meta_data);
+	void Write(duckdb_parquet::format::FileMetaData &file_meta_data) const;
+
+public:
+	// Default to 1.1.0 for now
+	string version = "1.1.0";
+	string primary_geometry_column;
+	unordered_map<string, GeoParquetColumnMetadata> geometry_columns;
+
+	unique_ptr<ColumnReader> CreateColumnReader(ParquetReader &reader, const LogicalType &logical_type,
+	                                            const duckdb_parquet::format::SchemaElement &s_ele, idx_t schema_idx_p,
+	                                            idx_t max_define_p, idx_t max_repeat_p, ClientContext &context);
+
+	bool IsGeometryColumn(const string &column_name) const;
+
+	static bool IsSpatialExtensionInstalled(ClientContext &context);
 };
 
 } // namespace duckdb

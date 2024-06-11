@@ -1397,6 +1397,14 @@ unique_ptr<TableRef> ParquetScanReplacement(ClientContext &context, ReplacementS
 }
 
 static BoundStatement WriteGeoParquetPlan(Binder &binder, CopyStatement &stmt) {
+
+	// First off, check if we even have the spatial extension installed
+	if (!GeoParquetFileMetadata::IsSpatialExtensionInstalled(binder.context)) {
+		// Just fall back to regular parquet if we don't have the spatial extension
+		stmt.info->format = "parquet";
+		return binder.Bind(*stmt.info->select_statement);
+	}
+
 	auto stmt_copy = stmt.Copy();
 	auto &copy = stmt_copy->Cast<CopyStatement>();
 	auto &copied_info = *copy.info;
@@ -1425,6 +1433,7 @@ static BoundStatement WriteGeoParquetPlan(Binder &binder, CopyStatement &stmt) {
 		auto column = make_uniq_base<ParsedExpression, PositionalReferenceExpression>(col_idx + 1);
 		auto &type = bound_original.types[col_idx];
 		auto &name = bound_original.names[col_idx];
+		// Look for geometry columns and convert them to WKB
 		if (type == geometry_type) {
 			vector<unique_ptr<ParsedExpression>> args;
 			args.push_back(std::move(column));

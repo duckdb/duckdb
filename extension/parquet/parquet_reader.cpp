@@ -39,6 +39,7 @@
 #include <cassert>
 #include <chrono>
 #include <cstring>
+#include <geo_parquet.hpp>
 #include <sstream>
 
 namespace duckdb {
@@ -62,7 +63,7 @@ CreateThriftFileProtocol(Allocator &allocator, FileHandle &file_handle, bool pre
 }
 
 static shared_ptr<ParquetFileMetadataCache>
-LoadMetadata(Allocator &allocator, FileHandle &file_handle,
+LoadMetadata(ClientContext &context, Allocator &allocator, FileHandle &file_handle,
              const shared_ptr<const ParquetEncryptionConfig> &encryption_config) {
 	auto current_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
@@ -120,7 +121,14 @@ LoadMetadata(Allocator &allocator, FileHandle &file_handle,
 		metadata->read(file_proto.get());
 	}
 
-	return make_shared_ptr<ParquetFileMetadataCache>(std::move(metadata), current_time);
+	unique_ptr<GeoParquetFileMetadata> geo_meta = nullptr;
+
+	// Only read the GeoParquet metadata if the spatial extension is installed
+	if (GeoParquetFileMetadata::IsSpatialExtensionInstalled(context)) {
+		geo_meta = GeoParquetFileMetadata::Read(*metadata);
+	}
+
+	return make_shared_ptr<ParquetFileMetadataCache>(std::move(metadata), current_time, std::move(geo_meta));
 }
 
 LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool binary_as_string) {
@@ -312,71 +320,11 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 	}
 
 	// Check for geoparquet spatial types
-	// geoparquet types have to be at the root of the schema, and have to be present in the kv metadata
 	if (depth == 1) {
-		// TODO: Move this to the reader itself so we dont have to reparse the metadata for every column
-		for (auto &kv : GetFileMetadata()->key_value_metadata) {
-			if (kv.key == "geo") {
-				// parse the geoparquet metadata
-				auto geo_metadata = yyjson_read(kv.value.c_str(), kv.value.size(), 0);
-				if (!geo_metadata) {
-					throw InvalidInputException("Failed to parse geoparquet metadata");
-				}
-				auto root = yyjson_doc_get_root(geo_metadata);
-
-				auto columns_val = yyjson_obj_get(root, "columns");
-
-				yyjson_obj_iter iter = yyjson_obj_iter_with(columns_val);
-				yyjson_val *column_key, *column_val;
-
-				while ((column_key = yyjson_obj_iter_next(&iter))) {
-					column_val = yyjson_obj_iter_get_val(column_key);
-					auto column_name = yyjson_get_str(column_key);
-
-					if (column_name == s_ele.name) {
-						auto geo_type_val = yyjson_obj_get(column_val, "encoding");
-						if (!geo_type_val) {
-							yyjson_doc_free(geo_metadata);
-							throw InvalidInputException("Geoparquet column '%s' does not have an encoding", s_ele.name);
-						}
-
-						auto geo_type_str = string(yyjson_get_str(geo_type_val));
-
-						// TODO: Handle other geoparquet types (GeoArrow Encoding)
-						if (geo_type_str == "WKB") {
-							const auto logical_type = DeriveLogicalType(s_ele);
-							if (logical_type.id() != LogicalTypeId::BLOB) {
-								yyjson_doc_free(geo_metadata);
-								throw InvalidInputException(
-								    "Geoparquet column '%s' is of type WKB, but the logical type is not BLOB",
-								    s_ele.name);
-							}
-							// Look for a conversion function in the catalog
-							auto &catalog = Catalog::GetSystemCatalog(context);
-							auto &conversion_func_set = catalog
-							                                .GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY,
-							                                          DEFAULT_SCHEMA, "st_geomfromwkb")
-							                                .Cast<ScalarFunctionCatalogEntry>();
-							auto conversion_func =
-							    conversion_func_set.functions.GetFunctionByArguments(context, {LogicalType::BLOB});
-
-							// Create a bound function call expression
-							auto args = vector<unique_ptr<Expression>>();
-							args.push_back(std::move(make_uniq<BoundReferenceExpression>(LogicalType::BLOB, 0)));
-							auto expr = make_uniq<BoundFunctionExpression>(conversion_func.return_type, conversion_func,
-							                                               std::move(args), nullptr);
-
-							// Create a child reader
-							auto child_reader = ColumnReader::CreateReader(*this, logical_type, s_ele, next_file_idx++,
-							                                               max_define, max_repeat);
-
-							// Create an expression reader that applies the conversion function to the child reader
-							return make_uniq<ExpressionColumnReader>(context, std::move(child_reader), std::move(expr));
-						}
-					}
-				}
-				yyjson_doc_free(geo_metadata);
-			}
+		// geoparquet types have to be at the root of the schema, and have to be present in the kv metadata
+		if (metadata->geo_metadata && metadata->geo_metadata->IsGeometryColumn(s_ele.name)) {
+			return metadata->geo_metadata->CreateColumnReader(*this, DeriveLogicalType(s_ele), s_ele, next_file_idx++,
+			                                                  max_define, max_repeat, context);
 		}
 	}
 
@@ -576,12 +524,12 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, Parqu
 	// or if this file has cached metadata
 	// or if the cached version already expired
 	if (!ObjectCache::ObjectCacheEnabled(context_p)) {
-		metadata = LoadMetadata(allocator, *file_handle, parquet_options.encryption_config);
+		metadata = LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config);
 	} else {
 		auto last_modify_time = fs.GetLastModifiedTime(*file_handle);
 		metadata = ObjectCache::GetObjectCache(context_p).Get<ParquetFileMetadataCache>(file_name);
 		if (!metadata || (last_modify_time + 10 >= metadata->read_time)) {
-			metadata = LoadMetadata(allocator, *file_handle, parquet_options.encryption_config);
+			metadata = LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config);
 			ObjectCache::GetObjectCache(context_p).Put(file_name, metadata);
 		}
 	}

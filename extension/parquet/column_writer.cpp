@@ -1193,7 +1193,7 @@ public:
 // vector.
 template <class WRITER_IMPL>
 class GeometryColumnWriter : public WRITER_IMPL {
-	GeometryColumnData geo_data;
+	GeoParquetColumnMetadata geo_data;
 	string column_name;
 
 public:
@@ -1208,7 +1208,7 @@ public:
 		WRITER_IMPL::FinalizeWrite(state);
 
 		// Add the geodata object to the writer
-		this->writer.GetGeoParquetData().columns[column_name] = geo_data;
+		this->writer.GetGeoParquetData().geometry_columns[column_name] = geo_data;
 	}
 
 public:
@@ -1216,6 +1216,12 @@ public:
 	                     idx_t max_repeat, idx_t max_define, bool can_have_nulls, string name)
 	    : WRITER_IMPL(writer, schema_idx, std::move(schema_path_p), max_repeat, max_define, can_have_nulls),
 	      column_name(std::move(name)) {
+
+		auto &geo_data = writer.GetGeoParquetData();
+		if (geo_data.primary_geometry_column.empty()) {
+			// Set the first column to the primary column
+			geo_data.primary_geometry_column = column_name;
+		}
 	}
 };
 

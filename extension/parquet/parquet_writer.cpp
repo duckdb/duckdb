@@ -566,9 +566,9 @@ void ParquetWriter::Finalize() {
 		crypto_metadata.write(protocol.get());
 	}
 
-	// file_meta_data.key_value_metadata add geoparquet data.
+	// Add geoparquet metadata to the file metadata
 	if (geoparquet_data) {
-		geoparquet_data->WriteMetadata(file_meta_data);
+		geoparquet_data->Write(file_meta_data);
 	}
 
 	Write(file_meta_data);
@@ -588,9 +588,9 @@ void ParquetWriter::Finalize() {
 	writer.reset();
 }
 
-GeoParquetData &ParquetWriter::GetGeoParquetData() {
+GeoParquetFileMetadata &ParquetWriter::GetGeoParquetData() {
 	if (!geoparquet_data) {
-		geoparquet_data = make_uniq<GeoParquetData>();
+		geoparquet_data = make_uniq<GeoParquetFileMetadata>();
 	}
 	return *geoparquet_data;
 }
