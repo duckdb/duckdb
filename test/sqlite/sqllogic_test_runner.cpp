@@ -9,6 +9,7 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "sqllogic_parser.hpp"
 #include "test_helpers.hpp"
+#include "sqllogic_test_logger.hpp"
 
 #ifdef DUCKDB_OUT_OF_TREE
 #include DUCKDB_EXTENSION_HEADER
