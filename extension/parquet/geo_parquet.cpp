@@ -106,7 +106,7 @@ void WKBScanner::ScanWKB(const WKBGeometryType type, const bool le, const bool h
 		// Points are special in that they may be empty (all NaN)
 		bool all_nan = true;
 		double coords[3];
-		for (uint32_t i = 0; i < (2 + has_z); i++) {
+		for (auto i = 0; i < (2 + has_z); i++) {
 			coords[i] = ReadDouble(le);
 			if (!std::isnan(coords[i])) {
 				all_nan = false;

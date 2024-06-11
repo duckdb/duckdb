@@ -33,7 +33,6 @@
 #include "duckdb/planner/filter/struct_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/object_cache.hpp"
-#include "yyjson.hpp"
 #endif
 
 #include <cassert>
@@ -43,8 +42,6 @@
 #include <sstream>
 
 namespace duckdb {
-
-using namespace duckdb_yyjson;
 
 using duckdb_parquet::format::ColumnChunk;
 using duckdb_parquet::format::ConvertedType;
