@@ -358,11 +358,11 @@ uint32_t ParquetCrypto::WriteData(TProtocol &oprot, const const_data_ptr_t buffe
 	return etrans.Finalize();
 }
 
-std::string Base64Decode(const std::string &key) {
+string Base64Decode(const string &key) {
 	auto result_size = Blob::FromBase64Size(key);
 	auto output = duckdb::unique_ptr<unsigned char[]>(new unsigned char[result_size]);
 	Blob::FromBase64(key, output.get(), result_size);
-	std::string decoded_key(reinterpret_cast<const char *>(output.get()), result_size);
+	string decoded_key(reinterpret_cast<const char *>(output.get()), result_size);
 	return decoded_key;
 }
 
@@ -374,8 +374,13 @@ void ParquetCrypto::AddKey(ClientContext &context, const FunctionParameters &par
 	if (AESGCMState::ValidKey(key)) {
 		keys.AddKey(key_name, key);
 	} else {
-		// try Base64 decoding
-		std::string decoded_key = Base64Decode(key);
+		string decoded_key;
+		try {
+			decoded_key = Base64Decode(key);
+		} catch (...) {
+			throw InvalidInputException(
+			    "Invalid AES key. Not a plain AES key NOR a base64 encoded string");
+		}
 		if (!AESGCMState::ValidKey(decoded_key)) {
 			throw InvalidInputException(
 			    "Invalid AES key. Must have a length of 128, 192, or 256 bits (16, 24, or 32 bytes)");

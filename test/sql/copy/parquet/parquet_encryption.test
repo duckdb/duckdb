@@ -14,7 +14,7 @@ PRAGMA enable_verification
 statement error
 PRAGMA add_parquet_key('my_cool_key', '42')
 ----
-Conversion Error: Could not decode string "42" as base64: length must be a multiple of 4
+Invalid Input Error: Invalid AES key. Not a plain AES key NOR a base64 encoded string
 
 # we dont support this yet
 statement error
