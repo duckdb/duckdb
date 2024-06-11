@@ -10,10 +10,10 @@ statement ok
 SET threads=8
 
 statement ok
-SET memory_limit='2GB';
+SET memory_limit='1GB';
 
 statement ok
-CALL dbgen(sf=1.1);
+CALL dbgen(sf=1);
 
 statement ok
 ALTER TABLE lineitem RENAME TO lineitem1
