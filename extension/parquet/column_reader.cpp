@@ -1464,6 +1464,39 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 			break;
 		}
 		break;
+	case LogicalTypeId::TIMESTAMP_NS:
+		switch (schema_p.type) {
+		case Type::INT96:
+			return make_uniq<CallbackColumnReader<Int96, timestamp_ns_t, ImpalaTimestampToTimestampNS>>(
+			    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		case Type::INT64:
+			if (schema_p.__isset.logicalType && schema_p.logicalType.__isset.TIMESTAMP) {
+				if (schema_p.logicalType.TIMESTAMP.unit.__isset.MILLIS) {
+					return make_uniq<CallbackColumnReader<int64_t, timestamp_ns_t, ParquetTimestampMsToTimestampNs>>(
+					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+				} else if (schema_p.logicalType.TIMESTAMP.unit.__isset.MICROS) {
+					return make_uniq<CallbackColumnReader<int64_t, timestamp_ns_t, ParquetTimestampUsToTimestampNs>>(
+					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+				} else if (schema_p.logicalType.TIMESTAMP.unit.__isset.NANOS) {
+					return make_uniq<CallbackColumnReader<int64_t, timestamp_ns_t, ParquetTimestampNsToTimestampNs>>(
+					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+				}
+			} else if (schema_p.__isset.converted_type) {
+				switch (schema_p.converted_type) {
+				case ConvertedType::TIMESTAMP_MICROS:
+					return make_uniq<CallbackColumnReader<int64_t, timestamp_ns_t, ParquetTimestampUsToTimestampNs>>(
+					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+				case ConvertedType::TIMESTAMP_MILLIS:
+					return make_uniq<CallbackColumnReader<int64_t, timestamp_ns_t, ParquetTimestampMsToTimestampNs>>(
+					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+				default:
+					break;
+				}
+			}
+		default:
+			break;
+		}
+		break;
 	case LogicalTypeId::DATE:
 		return make_uniq<CallbackColumnReader<int32_t, date_t, ParquetIntToDate>>(reader, type_p, schema_p, file_idx_p,
 		                                                                          max_define, max_repeat);

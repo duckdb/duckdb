@@ -269,7 +269,6 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 		break;
 	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 		schema_ele.converted_type = ConvertedType::TIMESTAMP_MICROS;
 		schema_ele.__isset.converted_type = true;
@@ -277,6 +276,13 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 		schema_ele.logicalType.__isset.TIMESTAMP = true;
 		schema_ele.logicalType.TIMESTAMP.isAdjustedToUTC = (duckdb_type.id() == LogicalTypeId::TIMESTAMP_TZ);
 		schema_ele.logicalType.TIMESTAMP.unit.__isset.MICROS = true;
+		break;
+	case LogicalTypeId::TIMESTAMP_NS:
+		schema_ele.__isset.converted_type = false;
+		schema_ele.__isset.logicalType = true;
+		schema_ele.logicalType.__isset.TIMESTAMP = true;
+		schema_ele.logicalType.TIMESTAMP.isAdjustedToUTC = false;
+		schema_ele.logicalType.TIMESTAMP.unit.__isset.NANOS = true;
 		break;
 	case LogicalTypeId::TIMESTAMP_MS:
 		schema_ele.converted_type = ConvertedType::TIMESTAMP_MILLIS;
