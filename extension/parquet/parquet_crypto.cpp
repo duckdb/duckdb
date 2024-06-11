@@ -378,8 +378,7 @@ void ParquetCrypto::AddKey(ClientContext &context, const FunctionParameters &par
 		try {
 			decoded_key = Base64Decode(key);
 		} catch (...) {
-			throw InvalidInputException(
-			    "Invalid AES key. Not a plain AES key NOR a base64 encoded string");
+			throw InvalidInputException("Invalid AES key. Not a plain AES key NOR a base64 encoded string");
 		}
 		if (!AESGCMState::ValidKey(decoded_key)) {
 			throw InvalidInputException(
