@@ -438,12 +438,6 @@ void Executor::WaitForTask() {
 	if (ResultCollectorIsBlocked()) {
 		return;
 	}
-	auto &scheduler = TaskScheduler::GetScheduler(context);
-	auto active_threads = NumericCast<idx_t>(scheduler.NumberOfThreads());
-	if (to_be_rescheduled_tasks.size() + 1 >= active_threads) {
-		// All tasks are blocked, the main thread *has* to pick up a task to unblock them
-		return;
-	}
 
 	task_reschedule.wait(l);
 }

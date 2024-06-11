@@ -65,13 +65,15 @@ PendingExecutionResult PendingQueryResult::ExecuteTaskInternal(ClientContextLock
 
 unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &lock) {
 	CheckExecutableInternal(lock);
-	// Busy wait while execution is not finished
 
 	const auto is_finished = allow_stream_result ? IsFinishedOrBlocked : IsFinished;
-
-	while (!is_finished(ExecuteTaskInternal(lock))) {
-		CheckExecutableInternal(lock);
-		context->WaitForTask(lock, *this);
+	PendingExecutionResult execution_result;
+	while (!is_finished(execution_result = ExecuteTaskInternal(lock))) {
+		if (execution_result == PendingExecutionResult::BLOCKED ||
+		    execution_result == PendingExecutionResult::NO_TASKS_AVAILABLE) {
+			CheckExecutableInternal(lock);
+			context->WaitForTask(lock, *this);
+		}
 	}
 	if (HasError()) {
 		return make_uniq<MaterializedQueryResult>(error);
