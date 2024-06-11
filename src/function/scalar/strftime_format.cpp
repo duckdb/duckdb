@@ -1,10 +1,14 @@
 #include "duckdb/function/scalar/strftime_format.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/operator/multiply.hpp"
+
 #include <cctype>
 
 namespace duckdb {
@@ -1435,6 +1439,12 @@ dtime_t StrpTimeFormat::ParseResult::ToTime() {
 	return Time::FromTime(data[3] - hour_offset, data[4] - mins_offset, data[5], GetMicros());
 }
 
+int64_t StrpTimeFormat::ParseResult::ToTimeNS() {
+	const int32_t hour_offset = data[7] / Interval::MINS_PER_HOUR;
+	const int32_t mins_offset = data[7] % Interval::MINS_PER_HOUR;
+	return Time::ToNanoTime(data[3] - hour_offset, data[4] - mins_offset, data[5], data[6]);
+}
+
 bool StrpTimeFormat::ParseResult::TryToTime(dtime_t &result) {
 	if (data[7]) {
 		return false;
@@ -1453,7 +1463,7 @@ timestamp_t StrpTimeFormat::ParseResult::ToTimestamp() {
 		return Timestamp::FromDatetime(special, dtime_t(0));
 	}
 
-	date_t date = Date::FromDate(data[0], data[1], data[2]);
+	date_t date = ToDate();
 	dtime_t time = ToTime();
 	return Timestamp::FromDatetime(date, time);
 }
@@ -1465,6 +1475,49 @@ bool StrpTimeFormat::ParseResult::TryToTimestamp(timestamp_t &result) {
 	}
 	dtime_t time = ToTime();
 	return Timestamp::TryFromDatetime(date, time, result);
+}
+
+timestamp_ns_t StrpTimeFormat::ParseResult::ToTimestampNS() {
+	timestamp_ns_t result;
+	if (is_special) {
+		if (special == date_t::infinity()) {
+			result.value = timestamp_t::infinity().value;
+		} else if (special == date_t::ninfinity()) {
+			result.value = timestamp_t::ninfinity().value;
+		} else {
+			result.value = special.days * Interval::NANOS_PER_DAY;
+		}
+	} else {
+		// Don't use rounded µs
+		const auto date = ToDate();
+		const auto time = ToTimeNS();
+		if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(date.days, Interval::NANOS_PER_DAY,
+		                                                               result.value)) {
+			throw ConversionException("Date out of nanosecond range: %d-%d-%d", data[0], data[1], data[2]);
+		}
+		if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(result.value, time, result.value)) {
+			throw ConversionException("Overflow exception in date/time -> timestamp_ns conversion");
+		}
+	}
+
+	return result;
+}
+
+bool StrpTimeFormat::ParseResult::TryToTimestampNS(timestamp_ns_t &result) {
+	date_t date;
+	if (!TryToDate(date)) {
+		return false;
+	}
+
+	// Don't use rounded µs
+	const auto time = ToTimeNS();
+	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(date.days, Interval::NANOS_PER_DAY, result.value)) {
+		return false;
+	}
+	if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(result.value, time, result.value)) {
+		return false;
+	}
+	return Timestamp::IsFinite(result);
 }
 
 string StrpTimeFormat::ParseResult::FormatError(string_t input, const string &format_specifier) {
@@ -1514,6 +1567,23 @@ bool StrpTimeFormat::TryParseTimestamp(const char *data, size_t size, timestamp_
 		return false;
 	}
 	return parse_result.TryToTimestamp(result);
+}
+
+bool StrpTimeFormat::TryParseTimestampNS(string_t input, timestamp_ns_t &result, string &error_message) const {
+	ParseResult parse_result;
+	if (!Parse(input, parse_result)) {
+		error_message = parse_result.FormatError(input, format_specifier);
+		return false;
+	}
+	return parse_result.TryToTimestampNS(result);
+}
+
+bool StrpTimeFormat::TryParseTimestampNS(const char *data, size_t size, timestamp_ns_t &result) const {
+	ParseResult parse_result;
+	if (!Parse(data, size, parse_result)) {
+		return false;
+	}
+	return parse_result.TryToTimestampNS(result);
 }
 
 } // namespace duckdb

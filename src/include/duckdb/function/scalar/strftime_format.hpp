@@ -152,11 +152,14 @@ public:
 
 		date_t ToDate();
 		dtime_t ToTime();
+		int64_t ToTimeNS();
 		timestamp_t ToTimestamp();
+		timestamp_ns_t ToTimestampNS();
 
 		bool TryToDate(date_t &result);
 		bool TryToTime(dtime_t &result);
 		bool TryToTimestamp(timestamp_t &result);
+		bool TryToTimestampNS(timestamp_ns_t &result);
 
 		DUCKDB_API string FormatError(string_t input, const string &format_specifier);
 	};
@@ -173,10 +176,12 @@ public:
 
 	DUCKDB_API bool TryParseDate(const char *data, size_t size, date_t &result) const;
 	DUCKDB_API bool TryParseTimestamp(const char *data, size_t size, timestamp_t &result) const;
+	DUCKDB_API bool TryParseTimestampNS(const char *data, size_t size, timestamp_ns_t &result) const;
 
 	DUCKDB_API bool TryParseDate(string_t str, date_t &result, string &error_message) const;
 	DUCKDB_API bool TryParseTime(string_t str, dtime_t &result, string &error_message) const;
 	DUCKDB_API bool TryParseTimestamp(string_t str, timestamp_t &result, string &error_message) const;
+	DUCKDB_API bool TryParseTimestampNS(string_t str, timestamp_ns_t &result, string &error_message) const;
 
 	void Serialize(Serializer &serializer) const;
 	static StrpTimeFormat Deserialize(Deserializer &deserializer);
