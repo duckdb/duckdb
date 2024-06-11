@@ -26,63 +26,6 @@ set(PARQUET_EXTENSION_FILES
     zstd_file_system.cpp)
 
 if(NOT CLANG_TIDY)
-  # copy over checks from snappy
-  include(CheckCXXSourceCompiles)
-  check_cxx_source_compiles(
-    "
-  int main() {
-    return __builtin_expect(0, 1);
-  }"
-    HAVE_BUILTIN_EXPECT)
-
-  check_cxx_source_compiles(
-    "
-  int main() {
-    return __builtin_ctzll(0);
-  }"
-    HAVE_BUILTIN_CTZ)
-
-  check_cxx_source_compiles(
-    "
-  int main() {
-    __builtin_prefetch(0, 0, 3);
-    return 0;
-  }"
-    HAVE_BUILTIN_PREFETCH)
-
-  check_cxx_source_compiles(
-    "
-  __attribute__((always_inline)) int zero() { return 0; }
-
-  int main() {
-    return zero();
-  }"
-    HAVE_ATTRIBUTE_ALWAYS_INLINE)
-
-  if(HAVE_BUILTIN_EXPECT)
-    add_definitions(-DHAVE_BUILTIN_EXPECT)
-  endif()
-  if(HAVE_BUILTIN_CTZ)
-    add_definitions(-DHAVE_BUILTIN_CTZ)
-  endif()
-  if(HAVE_BUILTIN_PREFETCH)
-    add_definitions(-DHAVE_BUILTIN_PREFETCH)
-  endif()
-  if(HAVE_ATTRIBUTE_ALWAYS_INLINE)
-    add_definitions(-DHAVE_ATTRIBUTE_ALWAYS_INLINE)
-  endif()
-
-  include(CheckSymbolExists)
-  check_symbol_exists("mmap" "sys/mman.h" HAVE_FUNC_MMAP)
-  check_symbol_exists("sysconf" "unistd.h" HAVE_FUNC_SYSCONF)
-
-  if(HAVE_FUNC_MMAP)
-    add_definitions(-DHAVE_FUNC_MMAP)
-  endif()
-  if(HAVE_FUNC_SYSCONF)
-    add_definitions(-DHAVE_FUNC_SYSCONF)
-  endif()
-
   # parquet/thrift/snappy
   set(PARQUET_EXTENSION_FILES
       ${PARQUET_EXTENSION_FILES}
