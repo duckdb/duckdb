@@ -67,15 +67,15 @@ void StrfTimeFormat::AddFormatSpecifier(string preceding_literal, StrTimeSpecifi
 	StrTimeFormat::AddFormatSpecifier(std::move(preceding_literal), specifier);
 }
 
-idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date, dtime_t time, int32_t utc_offset,
+idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date, int32_t data[8],
                                          const char *tz_name) {
 	switch (specifier) {
 	case StrTimeSpecifier::FULL_WEEKDAY_NAME:
 		return Date::DAY_NAMES[Date::ExtractISODayOfTheWeek(date) % 7].GetSize();
 	case StrTimeSpecifier::FULL_MONTH_NAME:
-		return Date::MONTH_NAMES[Date::ExtractMonth(date) - 1].GetSize();
+		return Date::MONTH_NAMES[data[1] - 1].GetSize();
 	case StrTimeSpecifier::YEAR_DECIMAL: {
-		auto year = Date::ExtractYear(date);
+		auto year = data[0];
 		// Be consistent with WriteStandardSpecifier
 		if (0 <= year && year <= 9999) {
 			return 4;
@@ -85,13 +85,13 @@ idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date
 	}
 	case StrTimeSpecifier::MONTH_DECIMAL: {
 		idx_t len = 1;
-		auto month = Date::ExtractMonth(date);
+		auto month = data[1];
 		len += month >= 10;
 		return len;
 	}
 	case StrTimeSpecifier::UTC_OFFSET:
 		// ±HH or ±HH:MM
-		return (utc_offset % 60) ? 6 : 3;
+		return (data[7] % 60) ? 6 : 3;
 	case StrTimeSpecifier::TZ_NAME:
 		if (tz_name) {
 			return strlen(tz_name);
@@ -104,8 +104,7 @@ idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date
 	case StrTimeSpecifier::SECOND_DECIMAL: {
 		// time specifiers
 		idx_t len = 1;
-		int32_t hour, min, sec, msec;
-		Time::Convert(time, hour, min, sec, msec);
+		int32_t hour = data[3], min = data[4], sec = data[5];
 		switch (specifier) {
 		case StrTimeSpecifier::HOUR_24_DECIMAL:
 			len += hour >= 10;
@@ -129,38 +128,49 @@ idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date
 		return len;
 	}
 	case StrTimeSpecifier::DAY_OF_MONTH:
-		return UnsafeNumericCast<idx_t>(
-		    NumericHelper::UnsignedLength<uint32_t>(UnsafeNumericCast<uint32_t>(Date::ExtractDay(date))));
+		return UnsafeNumericCast<idx_t>(NumericHelper::UnsignedLength<uint32_t>(UnsafeNumericCast<uint32_t>(data[2])));
 	case StrTimeSpecifier::DAY_OF_YEAR_DECIMAL:
 		return UnsafeNumericCast<idx_t>(
 		    NumericHelper::UnsignedLength<uint32_t>(UnsafeNumericCast<uint32_t>(Date::ExtractDayOfTheYear(date))));
 	case StrTimeSpecifier::YEAR_WITHOUT_CENTURY:
-		return UnsafeNumericCast<idx_t>(NumericHelper::UnsignedLength<uint32_t>(
-		    UnsafeNumericCast<uint32_t>(AbsValue(Date::ExtractYear(date)) % 100)));
+		return UnsafeNumericCast<idx_t>(
+		    NumericHelper::UnsignedLength<uint32_t>(UnsafeNumericCast<uint32_t>(AbsValue(data[0]) % 100)));
 	default:
 		throw InternalException("Unimplemented specifier for GetSpecifierLength");
 	}
 }
 
 //! Returns the total length of the date formatted by this format specifier
-idx_t StrfTimeFormat::GetLength(date_t date, dtime_t time, int32_t utc_offset, const char *tz_name) {
+idx_t StrfTimeFormat::GetLength(date_t date, int32_t data[8], const char *tz_name) const {
 	idx_t size = constant_size;
 	if (!var_length_specifiers.empty()) {
 		for (auto &specifier : var_length_specifiers) {
-			size += GetSpecifierLength(specifier, date, time, utc_offset, tz_name);
+			size += GetSpecifierLength(specifier, date, data, tz_name);
 		}
 	}
 	return size;
 }
 
-char *StrfTimeFormat::WriteString(char *target, const string_t &str) {
+idx_t StrfTimeFormat::GetLength(date_t date, dtime_t time, int32_t utc_offset, const char *tz_name) {
+	if (!var_length_specifiers.empty()) {
+		int32_t data[8];
+		Date::Convert(date, data[0], data[1], data[2]);
+		Time::Convert(time, data[3], data[4], data[5], data[6]);
+		data[6] *= Interval::NANOS_PER_MICRO;
+		data[7] = utc_offset;
+		return GetLength(date, data, tz_name);
+	}
+	return constant_size;
+}
+
+char *StrfTimeFormat::WriteString(char *target, const string_t &str) const {
 	idx_t size = str.GetSize();
 	memcpy(target, str.GetData(), size);
 	return target + size;
 }
 
 // write a value in the range of 0..99 unpadded (e.g. "1", "2", ... "98", "99")
-char *StrfTimeFormat::Write2(char *target, uint8_t value) {
+char *StrfTimeFormat::Write2(char *target, uint8_t value) const {
 	D_ASSERT(value < 100);
 	if (value >= 10) {
 		return WritePadded2(target, value);
@@ -171,7 +181,7 @@ char *StrfTimeFormat::Write2(char *target, uint8_t value) {
 }
 
 // write a value in the range of 0..99 padded to 2 digits
-char *StrfTimeFormat::WritePadded2(char *target, uint32_t value) {
+char *StrfTimeFormat::WritePadded2(char *target, uint32_t value) const {
 	D_ASSERT(value < 100);
 	auto index = static_cast<unsigned>(value * 2);
 	*target++ = duckdb_fmt::internal::data::digits[index];
@@ -180,7 +190,7 @@ char *StrfTimeFormat::WritePadded2(char *target, uint32_t value) {
 }
 
 // write a value in the range of 0..999 padded
-char *StrfTimeFormat::WritePadded3(char *target, uint32_t value) {
+char *StrfTimeFormat::WritePadded3(char *target, uint32_t value) const {
 	D_ASSERT(value < 1000);
 	if (value >= 100) {
 		WritePadded2(target + 1, value % 100);
@@ -194,7 +204,7 @@ char *StrfTimeFormat::WritePadded3(char *target, uint32_t value) {
 }
 
 // write a value in the range of 0..999999... padded to the given number of digits
-char *StrfTimeFormat::WritePadded(char *target, uint32_t value, size_t padding) {
+char *StrfTimeFormat::WritePadded(char *target, uint32_t value, size_t padding) const {
 	D_ASSERT(padding > 1);
 	if (padding % 2) {
 		int decimals = value % 1000;
@@ -228,7 +238,7 @@ bool StrfTimeFormat::IsDateSpecifier(StrTimeSpecifier specifier) {
 	}
 }
 
-char *StrfTimeFormat::WriteDateSpecifier(StrTimeSpecifier specifier, date_t date, char *target) {
+char *StrfTimeFormat::WriteDateSpecifier(StrTimeSpecifier specifier, date_t date, char *target) const {
 	switch (specifier) {
 	case StrTimeSpecifier::ABBREVIATED_WEEKDAY_NAME: {
 		auto dow = Date::ExtractISODayOfTheWeek(date);
@@ -280,7 +290,7 @@ char *StrfTimeFormat::WriteDateSpecifier(StrTimeSpecifier specifier, date_t date
 }
 
 char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t data[], const char *tz_name,
-                                             size_t tz_len, char *target) {
+                                             size_t tz_len, char *target) const {
 	// data contains [0] year, [1] month, [2] day, [3] hour, [4] minute, [5] second, [6] ns, [7] utc
 	switch (specifier) {
 	case StrTimeSpecifier::DAY_OF_MONTH_PADDED:
@@ -404,7 +414,7 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 	return target;
 }
 
-void StrfTimeFormat::FormatStringNS(date_t date, int32_t data[8], const char *tz_name, char *target) {
+void StrfTimeFormat::FormatStringNS(date_t date, int32_t data[8], const char *tz_name, char *target) const {
 	D_ASSERT(specifiers.size() + 1 == literals.size());
 	idx_t i;
 	for (i = 0; i < specifiers.size(); i++) {
@@ -656,24 +666,68 @@ void StrfTimeFormat::ConvertDateVector(Vector &input, Vector &result, idx_t coun
 	    });
 }
 
+string_t StrfTimeFormat::ConvertTimestampValue(const timestamp_t &input, Vector &result) const {
+	if (Timestamp::IsFinite(input)) {
+		date_t date;
+		dtime_t time;
+		Timestamp::Convert(input, date, time);
+
+		int32_t data[8]; // year, month, day, hour, min, sec, ns, offset
+		Date::Convert(date, data[0], data[1], data[2]);
+		Time::Convert(time, data[3], data[4], data[5], data[6]);
+		data[6] *= Interval::NANOS_PER_MICRO;
+		data[7] = 0;
+		const char *tz_name = nullptr;
+
+		idx_t len = GetLength(date, data, tz_name);
+		string_t target = StringVector::EmptyString(result, len);
+		FormatStringNS(date, data, tz_name, target.GetDataWriteable());
+		target.Finalize();
+		return target;
+	} else {
+		return StringVector::AddString(result, Timestamp::ToString(input));
+	}
+}
+
+string_t StrfTimeFormat::ConvertTimestampValue(const timestamp_ns_t &input, Vector &result) const {
+	if (Timestamp::IsFinite(input)) {
+		date_t date;
+		dtime_t time;
+		int32_t nanos;
+		Timestamp::Convert(input, date, time, nanos);
+
+		int32_t data[8]; // year, month, day, hour, min, sec, ns, offset
+		Date::Convert(date, data[0], data[1], data[2]);
+		Time::Convert(time, data[3], data[4], data[5], data[6]);
+		data[6] *= Interval::NANOS_PER_MICRO;
+		data[6] += nanos;
+		data[7] = 0;
+		const char *tz_name = nullptr;
+
+		idx_t len = GetLength(date, data, tz_name);
+		string_t target = StringVector::EmptyString(result, len);
+		FormatStringNS(date, data, tz_name, target.GetDataWriteable());
+		target.Finalize();
+		return target;
+	} else {
+		return StringVector::AddString(result, Timestamp::ToString(input));
+	}
+}
+
 void StrfTimeFormat::ConvertTimestampVector(Vector &input, Vector &result, idx_t count) {
 	D_ASSERT(input.GetType().id() == LogicalTypeId::TIMESTAMP || input.GetType().id() == LogicalTypeId::TIMESTAMP_TZ);
 	D_ASSERT(result.GetType().id() == LogicalTypeId::VARCHAR);
 	UnaryExecutor::ExecuteWithNulls<timestamp_t, string_t>(
-	    input, result, count, [&](timestamp_t input, ValidityMask &mask, idx_t idx) {
-		    if (Timestamp::IsFinite(input)) {
-			    date_t date;
-			    dtime_t time;
-			    Timestamp::Convert(input, date, time);
-			    idx_t len = GetLength(date, time, 0, nullptr);
-			    string_t target = StringVector::EmptyString(result, len);
-			    FormatString(date, time, target.GetDataWriteable());
-			    target.Finalize();
-			    return target;
-		    } else {
-			    return StringVector::AddString(result, Timestamp::ToString(input));
-		    }
-	    });
+	    input, result, count,
+	    [&](timestamp_t input, ValidityMask &mask, idx_t idx) { return ConvertTimestampValue(input, result); });
+}
+
+void StrfTimeFormat::ConvertTimestampNSVector(Vector &input, Vector &result, idx_t count) {
+	D_ASSERT(input.GetType().id() == LogicalTypeId::TIMESTAMP_NS);
+	D_ASSERT(result.GetType().id() == LogicalTypeId::VARCHAR);
+	UnaryExecutor::ExecuteWithNulls<timestamp_ns_t, string_t>(
+	    input, result, count,
+	    [&](timestamp_ns_t input, ValidityMask &mask, idx_t idx) { return ConvertTimestampValue(input, result); });
 }
 
 void StrpTimeFormat::AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) {

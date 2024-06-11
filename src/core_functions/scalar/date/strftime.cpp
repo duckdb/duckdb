@@ -80,6 +80,19 @@ static void StrfTimeFunctionTimestamp(DataChunk &args, ExpressionState &state, V
 	info.format.ConvertTimestampVector(args.data[REVERSED ? 1 : 0], result, args.size());
 }
 
+template <bool REVERSED>
+static void StrfTimeFunctionTimestampNS(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &info = func_expr.bind_info->Cast<StrfTimeBindData>();
+
+	if (info.is_null) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, true);
+		return;
+	}
+	info.format.ConvertTimestampNSVector(args.data[REVERSED ? 1 : 0], result, args.size());
+}
+
 ScalarFunctionSet StrfTimeFun::GetFunctions() {
 	ScalarFunctionSet strftime;
 
@@ -87,10 +100,14 @@ ScalarFunctionSet StrfTimeFun::GetFunctions() {
 	                                    StrfTimeFunctionDate<false>, StrfTimeBindFunction<false>));
 	strftime.AddFunction(ScalarFunction({LogicalType::TIMESTAMP, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                                    StrfTimeFunctionTimestamp<false>, StrfTimeBindFunction<false>));
+	strftime.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_NS, LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	                                    StrfTimeFunctionTimestampNS<false>, StrfTimeBindFunction<false>));
 	strftime.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE}, LogicalType::VARCHAR,
 	                                    StrfTimeFunctionDate<true>, StrfTimeBindFunction<true>));
 	strftime.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::VARCHAR,
 	                                    StrfTimeFunctionTimestamp<true>, StrfTimeBindFunction<true>));
+	strftime.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP_NS}, LogicalType::VARCHAR,
+	                                    StrfTimeFunctionTimestampNS<true>, StrfTimeBindFunction<true>));
 	return strftime;
 }
 
