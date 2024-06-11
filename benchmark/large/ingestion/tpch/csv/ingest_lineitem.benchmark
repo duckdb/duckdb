@@ -2,6 +2,6 @@
 # description: benchmark ingestion of lineitem
 # group: [csv]
 
-template benchmark/ingestion/large/tpch/tpch_ingestion_persistent.benchmark.in
+template benchmark/large/ingestion/tpch/tpch_ingestion_persistent.benchmark.in
 table_name=lineitem
 format=csv

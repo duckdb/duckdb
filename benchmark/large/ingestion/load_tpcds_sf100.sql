@@ -1,6 +1,6 @@
-CALL dsdgen(sf=10);
-EXPORT DATABASE 'duckdb_benchmark_data/tpcds_parquet' (FORMAT PARQUET);
-EXPORT DATABASE 'duckdb_benchmark_data/tpcds_csv' (FORMAT CSV);
+CALL dsdgen(sf=100);
+EXPORT DATABASE 'duckdb_benchmark_data/tpcds_parquet_sf100' (FORMAT PARQUET);
+EXPORT DATABASE 'duckdb_benchmark_data/tpcds_csv_sf100' (FORMAT CSV);
 
 create view call_center_csv as select * from read_csv('duckdb_benchmark_data/tpcds_csv/call_center.csv');
 create view call_center_parquet as select * from read_parquet('duckdb_benchmark_data/tpcds_parquet/call_center.parquet');
