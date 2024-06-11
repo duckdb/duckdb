@@ -62,8 +62,7 @@ struct CovarOperation {
 			//  Schubert and Gertz SSDBM 2018, equation 21
 			const auto deltax = target.meanx - source.meanx;
 			const auto deltay = target.meany - source.meany;
-			target.co_moment = source.co_moment + target.co_moment +
-			                   deltax * deltay * static_cast<double>(source.count * target.count) / count;
+			target.co_moment = source.co_moment + target.co_moment + deltax * deltay * static_cast<double>(source.count * target.count) / count;
 			target.meanx = meanx;
 			target.meany = meany;
 			target.count = count;

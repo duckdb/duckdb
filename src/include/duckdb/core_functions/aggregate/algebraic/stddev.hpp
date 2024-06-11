@@ -49,8 +49,7 @@ struct STDDevBaseOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
-	                              idx_t count) {
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input, idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
 			Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
 		}
@@ -66,8 +65,7 @@ struct STDDevBaseOperation {
 			const auto count = target_count + source_count;
 			const auto mean = (source_count * source.mean + target_count * target.mean) / count;
 			const auto delta = source.mean - target.mean;
-			target.dsquared = source.dsquared + target.dsquared +
-			                  delta * delta * static_cast<double>(source.count * target.count) / count;
+			target.dsquared = source.dsquared + target.dsquared + delta * delta * static_cast<double>(source.count * target.count) / count;
 			target.mean = mean;
 			target.count = static_cast<decltype(target.count)>(count);
 		}
