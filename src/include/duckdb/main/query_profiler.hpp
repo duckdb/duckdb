@@ -89,28 +89,68 @@ public:
 
 public:
 	// Recursive tree that mirrors the operator tree
-	struct TreeNode {
-		PhysicalOperatorType type;
-		string name;
+	class ProfilingNode {
+	public:
 		ProfilingInfo profiling_info;
-		vector<unique_ptr<TreeNode>> children;
+		vector<unique_ptr<ProfilingNode>> children;
 		idx_t depth = 0;
+		bool is_query = false;
+
+	public:
+		idx_t GetChildCount() {
+			return children.size();
+		}
+
+		// TODO: Can this be simplified?
+		template <class TARGET>
+		TARGET &Cast() {
+			if (std::is_same<TARGET, QueryProfilingNode>::value) {
+				if (!is_query) {
+					throw InternalException("Failed to cast ProfilingNode to QueryProfilingNode - node type mismatch");
+				}
+				return reinterpret_cast<TARGET &>(*this);
+			}
+			if (is_query) {
+				throw InternalException("Failed to cast ProfilingNode to OperatorProfilingNode - node type mismatch");
+			}
+			return reinterpret_cast<TARGET &>(*this);
+		}
+
+		template <class TARGET>
+		const TARGET &Cast() const {
+			if (std::is_same<TARGET, QueryProfilingNode>::value) {
+				if (!is_query) {
+					throw InternalException("Failed to cast ProfilingNode to QueryProfilingNode - node type mismatch");
+				}
+				return reinterpret_cast<const TARGET &>(*this);
+			}
+			if (is_query) {
+				throw InternalException("Failed to cast ProfilingNode to OperatorProfilingNode - node type mismatch");
+			}
+			return reinterpret_cast<const TARGET &>(*this);
+		}
 	};
 
 	// Holds the top level query info
-	struct QueryInfo {
+	class QueryProfilingNode : public ProfilingNode {
+	public:
 		string query;
-		ProfilingInfo settings;
+	};
+
+	class OperatorProfilingNode : public ProfilingNode {
+	public:
+		PhysicalOperatorType type;
+		string name;
 	};
 
 	// Propagate save_location, enabled, detailed_enabled and automatic_print_format.
 	void Propagate(QueryProfiler &qp);
 
-	using TreeMap = reference_map_t<const PhysicalOperator, reference<TreeNode>>;
+	using TreeMap = reference_map_t<const PhysicalOperator, reference<ProfilingNode>>;
 
 private:
-	unique_ptr<TreeNode> CreateTree(const PhysicalOperator &root, profiler_settings_t settings, idx_t depth = 0);
-	void Render(const TreeNode &node, std::ostream &str) const;
+	unique_ptr<ProfilingNode> CreateTree(const PhysicalOperator &root, profiler_settings_t settings, idx_t depth = 0);
+	void Render(const ProfilingNode &node, std::ostream &str) const;
 
 public:
 	DUCKDB_API bool IsEnabled() const;
@@ -150,7 +190,7 @@ public:
 		return tree_map.size();
 	}
 
-	void Finalize(TreeNode &node);
+	void Finalize(ProfilingNode &node);
 
 private:
 	ClientContext &context;
@@ -164,10 +204,7 @@ private:
 	bool query_requires_profiling;
 
 	//! The root of the query tree
-	unique_ptr<TreeNode> root;
-
-	//! The query info
-	unique_ptr<QueryInfo> query_info;
+	unique_ptr<ProfilingNode> root;
 
 	//! The query string
 	string query;
