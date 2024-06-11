@@ -52,7 +52,7 @@ public:
 	void CancelTasks();
 	PendingExecutionResult ExecuteTask(bool dry_run = false);
 	void WaitForTask();
-	void SignalTaskRescheduled();
+	void SignalTaskRescheduled(lock_guard<mutex> &);
 
 	void Reset();
 
@@ -168,8 +168,6 @@ private:
 
 	//! Task that have been descheduled
 	unordered_map<Task *, shared_ptr<Task>> to_be_rescheduled_tasks;
-	//! The lock for task_reschedule
-	mutex task_reschedule_lock;
 	//! The semaphore to signal task rescheduling
 	std::condition_variable task_reschedule;
 
