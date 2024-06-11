@@ -281,7 +281,7 @@ char *StrfTimeFormat::WriteDateSpecifier(StrTimeSpecifier specifier, date_t date
 
 char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t data[], const char *tz_name,
                                              size_t tz_len, char *target) {
-	// data contains [0] year, [1] month, [2] day, [3] hour, [4] minute, [5] second, [6] msec, [7] utc
+	// data contains [0] year, [1] month, [2] day, [3] hour, [4] minute, [5] second, [6] ns, [7] utc
 	switch (specifier) {
 	case StrTimeSpecifier::DAY_OF_MONTH_PADDED:
 		target = WritePadded2(target, UnsafeNumericCast<uint32_t>(data[2]));
@@ -339,13 +339,13 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 		target = WritePadded2(target, UnsafeNumericCast<uint32_t>(data[5]));
 		break;
 	case StrTimeSpecifier::NANOSECOND_PADDED:
-		target = WritePadded(target, UnsafeNumericCast<uint32_t>(data[6] * Interval::NANOS_PER_MICRO), 9);
+		target = WritePadded(target, UnsafeNumericCast<uint32_t>(data[6]), 9);
 		break;
 	case StrTimeSpecifier::MICROSECOND_PADDED:
-		target = WritePadded(target, UnsafeNumericCast<uint32_t>(data[6]), 6);
+		target = WritePadded(target, UnsafeNumericCast<uint32_t>(data[6] / Interval::NANOS_PER_MICRO), 6);
 		break;
 	case StrTimeSpecifier::MILLISECOND_PADDED:
-		target = WritePadded3(target, UnsafeNumericCast<uint32_t>(data[6] / Interval::MICROS_PER_MSEC));
+		target = WritePadded3(target, UnsafeNumericCast<uint32_t>(data[6] / Interval::NANOS_PER_MSEC));
 		break;
 	case StrTimeSpecifier::UTC_OFFSET: {
 		*target++ = (data[7] < 0) ? '-' : '+';
@@ -404,7 +404,7 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 	return target;
 }
 
-void StrfTimeFormat::FormatString(date_t date, int32_t data[8], const char *tz_name, char *target) {
+void StrfTimeFormat::FormatStringNS(date_t date, int32_t data[8], const char *tz_name, char *target) {
 	D_ASSERT(specifiers.size() + 1 == literals.size());
 	idx_t i;
 	for (i = 0; i < specifiers.size(); i++) {
@@ -421,6 +421,12 @@ void StrfTimeFormat::FormatString(date_t date, int32_t data[8], const char *tz_n
 	}
 	// copy the final literal into the target
 	memcpy(target, literals[i].c_str(), literals[i].size());
+}
+
+void StrfTimeFormat::FormatString(date_t date, int32_t data[8], const char *tz_name, char *target) {
+	data[6] *= Interval::NANOS_PER_MICRO;
+	FormatStringNS(date, data, tz_name, target);
+	data[6] /= Interval::NANOS_PER_MICRO;
 }
 
 void StrfTimeFormat::FormatString(date_t date, dtime_t time, char *target) {
@@ -1000,19 +1006,18 @@ bool StrpTimeFormat::Parse(const char *data, size_t size, ParseResult &result) c
 				break;
 			case StrTimeSpecifier::NANOSECOND_PADDED:
 				D_ASSERT(number < Interval::NANOS_PER_SEC); // enforced by the length of the number
-				// microseconds (rounded)
-				result_data[6] =
-				    UnsafeNumericCast<int32_t>((number + Interval::NANOS_PER_MICRO / 2) / Interval::NANOS_PER_MICRO);
+				// nanoseconds
+				result_data[6] = UnsafeNumericCast<int32_t>(number);
 				break;
 			case StrTimeSpecifier::MICROSECOND_PADDED:
 				D_ASSERT(number < Interval::MICROS_PER_SEC); // enforced by the length of the number
-				// microseconds
-				result_data[6] = UnsafeNumericCast<int32_t>(number);
+				// nanoseconds
+				result_data[6] = UnsafeNumericCast<int32_t>(number * Interval::NANOS_PER_MICRO);
 				break;
 			case StrTimeSpecifier::MILLISECOND_PADDED:
 				D_ASSERT(number < Interval::MSECS_PER_SEC); // enforced by the length of the number
-				// microseconds
-				result_data[6] = UnsafeNumericCast<int32_t>(number * Interval::MICROS_PER_MSEC);
+				// nanoseconds
+				result_data[6] = UnsafeNumericCast<int32_t>(number * Interval::NANOS_PER_MSEC);
 				break;
 			case StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST:
 			case StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST:
@@ -1366,17 +1371,21 @@ bool StrpTimeFormat::ParseResult::TryToDate(date_t &result) {
 	return Date::TryFromDate(data[0], data[1], data[2], result);
 }
 
+int32_t StrpTimeFormat::ParseResult::GetMicros() const {
+	return (data[6] + Interval::NANOS_PER_MICRO / 2) / Interval::NANOS_PER_MICRO;
+}
+
 dtime_t StrpTimeFormat::ParseResult::ToTime() {
 	const auto hour_offset = data[7] / Interval::MINS_PER_HOUR;
 	const auto mins_offset = data[7] % Interval::MINS_PER_HOUR;
-	return Time::FromTime(data[3] - hour_offset, data[4] - mins_offset, data[5], data[6]);
+	return Time::FromTime(data[3] - hour_offset, data[4] - mins_offset, data[5], GetMicros());
 }
 
 bool StrpTimeFormat::ParseResult::TryToTime(dtime_t &result) {
 	if (data[7]) {
 		return false;
 	}
-	result = Time::FromTime(data[3], data[4], data[5], data[6]);
+	result = Time::FromTime(data[3], data[4], data[5], GetMicros());
 	return true;
 }
 

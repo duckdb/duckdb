@@ -98,6 +98,7 @@ protected:
 struct StrfTimeFormat : public StrTimeFormat { // NOLINT: work-around bug in clang-tidy
 	DUCKDB_API idx_t GetLength(date_t date, dtime_t time, int32_t utc_offset, const char *tz_name);
 
+	DUCKDB_API void FormatStringNS(date_t date, int32_t data[8], const char *tz_name, char *target);
 	DUCKDB_API void FormatString(date_t date, int32_t data[8], const char *tz_name, char *target);
 	void FormatString(date_t date, dtime_t time, char *target);
 
@@ -134,13 +135,15 @@ public:
 
 	//! Type-safe parsing argument
 	struct ParseResult {
-		int32_t data[8]; // year, month, day, hour, min, sec, µs, offset
+		int32_t data[8]; // year, month, day, hour, min, sec, ns, offset
 		string tz;
 		string error_message;
 		optional_idx error_position;
 
 		bool is_special;
 		date_t special;
+
+		int32_t GetMicros() const;
 
 		date_t ToDate();
 		dtime_t ToTime();
