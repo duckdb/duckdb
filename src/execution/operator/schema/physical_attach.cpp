@@ -57,6 +57,12 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 			throw MissingExtensionException("Attaching path '%s' requires extension '%s' to be loaded", path,
 			                                extension);
 		}
+		if (options.access_mode == AccessMode::AUTOMATIC) {
+			// Attaching of remote files gets bumped to READ_ONLY
+			// This is due to the fact that on most (all?) remote files writes to DB are not available
+			// and having this raised later is not super helpful
+			options.access_mode = AccessMode::READ_ONLY;
+		}
 	}
 
 	// Get the database type and attach the database.
