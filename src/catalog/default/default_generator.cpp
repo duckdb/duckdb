@@ -11,13 +11,13 @@ unique_ptr<CatalogEntry> DefaultGenerator::CreateDefaultEntry(ClientContext &con
 	throw InternalException("CreateDefaultEntry with ClientContext called but not supported in this generator");
 }
 
-unique_ptr<CatalogEntry> DefaultGenerator::CreateDefaultEntry(CatalogTransaction transaction, const string &entry_name) {
+unique_ptr<CatalogEntry> DefaultGenerator::CreateDefaultEntry(CatalogTransaction transaction,
+                                                              const string &entry_name) {
 	if (!transaction.context) {
 		// no context - cannot create default entry
 		return nullptr;
 	}
 	return CreateDefaultEntry(*transaction.context, entry_name);
 }
-
 
 } // namespace duckdb
