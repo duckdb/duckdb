@@ -504,7 +504,8 @@ void BasicColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 		hdr.data_page_header.definition_level_encoding = Encoding::RLE;
 		hdr.data_page_header.repetition_level_encoding = Encoding::RLE;
 
-		write_info.temp_writer = make_uniq<MemoryStream>(NextPowerOfTwo(page_info.estimated_page_size));
+		write_info.temp_writer = make_uniq<MemoryStream>(
+		    MaxValue<idx_t>(NextPowerOfTwo(page_info.estimated_page_size), MemoryStream::DEFAULT_INITIAL_CAPACITY));
 		write_info.write_count = page_info.empty_count;
 		write_info.max_write_count = page_info.row_count;
 		write_info.page_state = InitializePageState(state);
@@ -1408,32 +1409,15 @@ public:
 				}
 			}
 		} else {
-			static constexpr idx_t WRITE_COMBINER_CAPACITY = 4096;
-			data_t write_combiner[WRITE_COMBINER_CAPACITY];
-			idx_t write_combiner_size = 0;
-
 			// plain page
 			for (idx_t r = chunk_start; r < chunk_end; r++) {
 				if (!mask.RowIsValid(r)) {
 					continue;
 				}
-				const auto &str = ptr[r];
-				const auto write_size = sizeof(uint32_t) + str.GetSize();
-				stats.Update(str);
-				if (write_combiner_size + write_size > WRITE_COMBINER_CAPACITY) {
-					temp_writer.WriteData(write_combiner, write_combiner_size);
-					write_combiner_size = 0;
-				}
-				if (write_size > WRITE_COMBINER_CAPACITY) {
-					temp_writer.Write<uint32_t>(str.GetSize());
-					temp_writer.WriteData(const_data_ptr_cast(str.GetData()), str.GetSize());
-				} else {
-					Store<uint32_t>(str.GetSize(), write_combiner + write_combiner_size);
-					memcpy(write_combiner + sizeof(uint32_t), str.GetData(), str.GetSize());
-					write_combiner_size += write_size;
-				}
+				stats.Update(ptr[r]);
+				temp_writer.Write<uint32_t>(ptr[r].GetSize());
+				temp_writer.WriteData(const_data_ptr_cast(ptr[r].GetData()), ptr[r].GetSize());
 			}
-			temp_writer.WriteData(write_combiner, write_combiner_size);
 		}
 	}
 
@@ -1484,7 +1468,8 @@ public:
 			values[entry.second] = entry.first;
 		}
 		// first write the contents of the dictionary page to a temporary buffer
-		auto temp_writer = make_uniq<MemoryStream>(state.estimated_dict_page_size);
+		auto temp_writer = make_uniq<MemoryStream>(
+		    MaxValue<idx_t>(NextPowerOfTwo(state.estimated_dict_page_size), MemoryStream::DEFAULT_INITIAL_CAPACITY));
 		for (idx_t r = 0; r < values.size(); r++) {
 			auto &value = values[r];
 			// update the statistics
