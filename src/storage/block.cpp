@@ -1,9 +1,10 @@
 #include "duckdb/storage/block.hpp"
+
 #include "duckdb/common/assert.hpp"
 
 namespace duckdb {
 
-Block::Block(Allocator &allocator, block_id_t id)
+Block::Block(Allocator &allocator, const block_id_t id)
     : FileBuffer(allocator, FileBufferType::BLOCK, Storage::BLOCK_SIZE), id(id) {
 }
 

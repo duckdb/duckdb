@@ -9,9 +9,9 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/limits.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/vector_size.hpp"
-#include "duckdb/common/limits.hpp"
 
 namespace duckdb {
 struct FileHandle;
@@ -39,6 +39,7 @@ struct Storage {
 	//! Block header size for blocks written to the storage
 	constexpr static idx_t BLOCK_HEADER_SIZE = sizeof(uint64_t);
 	//! Size of a memory slot managed by the StorageManager and the BlockManager.
+	//! Defaults to DUCKDB_BLOCK_ALLOC_SIZE.
 	constexpr static idx_t BLOCK_ALLOC_SIZE = DUCKDB_BLOCK_ALLOC_SIZE;
 	//! The actual memory space that is available within a block.
 	constexpr static idx_t BLOCK_SIZE = BLOCK_ALLOC_SIZE - BLOCK_HEADER_SIZE;
