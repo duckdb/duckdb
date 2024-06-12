@@ -928,11 +928,30 @@ bool TryCast::Operation(string_t input, bool &result, bool strict) {
 	switch (input_size) {
 	case 1: {
 		char c = UnsafeNumericCast<char>(std::tolower(*input_data));
-		if (c == 't' || (!strict && c == '1')) {
+		if (c == 't' || (!strict && c == 'y') || (!strict && c == '1')) {
 			result = true;
 			return true;
-		} else if (c == 'f' || (!strict && c == '0')) {
+		} else if (c == 'f' || (!strict && c == 'n') || (!strict && c == '0')) {
 			result = false;
+			return true;
+		}
+		return false;
+	}
+	case 2: {
+		char n = UnsafeNumericCast<char>(std::tolower(input_data[0]));
+		char o = UnsafeNumericCast<char>(std::tolower(input_data[1]));
+		if (n == 'n' && o == 'o') {
+			result = false;
+			return true;
+		}
+		return false;
+	}
+	case 3: {
+		char y = UnsafeNumericCast<char>(std::tolower(input_data[0]));
+		char e = UnsafeNumericCast<char>(std::tolower(input_data[1]));
+		char s = UnsafeNumericCast<char>(std::tolower(input_data[2]));
+		if (y == 'y' && e == 'e' && s == 's') {
+			result = true;
 			return true;
 		}
 		return false;
