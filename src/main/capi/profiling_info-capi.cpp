@@ -45,3 +45,27 @@ duckdb_profiling_info duckdb_profiling_info_get_child(duckdb_profiling_info info
 	}
 	return reinterpret_cast<duckdb_profiling_info>(node.children[index].get());
 }
+
+const char *duckdb_profiling_info_get_name(duckdb_profiling_info info) {
+	if (!info) {
+		return nullptr;
+	}
+	auto &node = *reinterpret_cast<duckdb::ProfilingNode *>(info);
+	if (node.is_query) {
+		return nullptr;
+    }
+    auto &op_node = node.Cast<duckdb::OperatorProfilingNode>();
+    return strdup(op_node.name.c_str());
+}
+
+const char *duckdb_profiling_info_get_query(duckdb_profiling_info info) {
+	if (!info) {
+		return nullptr;
+	}
+	auto &node = *reinterpret_cast<duckdb::ProfilingNode *>(info);
+	if (!node.is_query) {
+        return nullptr;
+    }
+    auto &query_node = node.Cast<duckdb::QueryProfilingNode>();
+    return strdup(query_node.query.c_str());
+}

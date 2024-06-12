@@ -2718,6 +2718,12 @@ DUCKDB_API idx_t duckdb_profiling_info_get_child_count(duckdb_profiling_info inf
 //! Returns the child node at the specified index.
 DUCKDB_API duckdb_profiling_info duckdb_profiling_info_get_child(duckdb_profiling_info info, idx_t index);
 
+//! Returns the name of the current profiling info node, if the node is an operation node.
+DUCKDB_API const char *duckdb_profiling_info_get_name(duckdb_profiling_info info);
+
+//! Returns the query of the current profiling info node, if the node the root.
+DUCKDB_API const char *duckdb_profiling_info_get_query(duckdb_profiling_info info);
+
 //===--------------------------------------------------------------------===//
 // Appender
 //===--------------------------------------------------------------------===//

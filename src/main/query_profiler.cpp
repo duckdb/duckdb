@@ -596,7 +596,7 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 	}
 	auto node = make_uniq<OperatorProfilingNode>();
 	node->type = root.type;
-	node->name = root.GetName();
+	node->name = "hjh";
 	node->depth = depth;
 	node->profiling_info = ProfilingInfo(settings);
 	if (node->profiling_info.Enabled(MetricsType::EXTRA_INFO)) {

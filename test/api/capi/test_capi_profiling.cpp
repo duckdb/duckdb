@@ -34,7 +34,18 @@ void RetrieveAllMetrics(duckdb_profiling_info profiling_info, const std::vector<
 	}
 }
 
-TEST_CASE("Test Profiling", "[capi]") {
+// Traverse the tree and retrieve all metrics
+void TraverseTree(duckdb_profiling_info profiling_info, const std::vector<string> &settings) {
+	RetrieveAllMetrics(profiling_info, settings);
+
+	auto child_count = duckdb_profiling_info_get_child_count(profiling_info);
+	for (idx_t i = 0; i < child_count; i++) {
+		auto child = duckdb_profiling_info_get_child(profiling_info, i);
+		TraverseTree(child, settings);
+	}
+}
+
+TEST_CASE("Test Profiling with Single Metric", "[capi]") {
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;
 
@@ -48,26 +59,38 @@ TEST_CASE("Test Profiling", "[capi]") {
 	tester.Query("SELECT 42");
 
 	auto profiling_info = duckdb_get_profiling_info(tester.connection);
-
 	REQUIRE(profiling_info != nullptr);
-
-	RetrieveAllMetrics(profiling_info, settings);
 
 	// Retrieve metric that is not enabled
 	REQUIRE(duckdb_profiling_info_get_value(profiling_info, "EXTRA_INFO") == nullptr);
 
-	// Retrieve child count
-	REQUIRE(duckdb_profiling_info_get_child_count(profiling_info) == 1);
+	TraverseTree(profiling_info, settings);
 
-	// Retrieve child
-	auto child = duckdb_profiling_info_get_child(profiling_info, 0);
-	REQUIRE(child != nullptr);
+	// Cleanup
+	tester.Cleanup();
+}
 
-	// Retrieve child's metrics
-	RetrieveAllMetrics(child, settings);
+TEST_CASE("Test Profiling with All Metrics", "[capi]") {
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+
+	// open the database in in-memory mode
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	// test all profiling metrics
+	std::vector<string> settings = {"CPU_TIME", "EXTRA_INFO", "OPERATOR_CARDINALITY", "OPERATOR_TIMING"};
+	REQUIRE_NO_FAIL(tester.Query("PRAGMA custom_profiling_settings=" + BuildProfilingSettingsString(settings)));
+
+	tester.Query("SELECT 42");
+
+	auto profiling_info = duckdb_get_profiling_info(tester.connection);
+	REQUIRE(profiling_info != nullptr);
+
+	TraverseTree(profiling_info, settings);
+
+	// Cleanup
+	tester.Cleanup();
 }
 
 // TODO:
-//- build recursive function to retrieve all metrics from profiling tree
-//- test all metrics
 //- retrieve "NAME" and "TYPE" from OperatorProfilingNode and "QUERY" from QueryProfilingNode?
