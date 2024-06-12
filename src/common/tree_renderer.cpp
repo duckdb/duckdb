@@ -484,16 +484,24 @@ unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const PipelineRenderNode &op
 }
 
 unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const ProfilingNode &op) {
-	auto &op_node = op.Cast<OperatorProfilingNode>();
+//	auto &op_node = op.Cast<OperatorProfilingNode>();
 
 	string extra_info;
-	if (op_node.profiling_info.Enabled(MetricsType::EXTRA_INFO)) {
-		extra_info = op_node.profiling_info.metrics.extra_info;
+	if (op.profiling_info.Enabled(MetricsType::EXTRA_INFO)) {
+		extra_info = op.profiling_info.metrics.extra_info;
 	}
-	auto result = TreeRenderer::CreateRenderNode(op_node.name, extra_info);
+
+	unique_ptr<RenderTreeNode> result;
+	if (op.is_query) {
+        auto &query_node = op.Cast<QueryProfilingNode>();
+        result = TreeRenderer::CreateRenderNode(query_node.query, extra_info);
+    } else {
+        auto &op_node = op.Cast<OperatorProfilingNode>();
+        result = TreeRenderer::CreateRenderNode(op_node.name, extra_info);
+    }
 	result->extra_text += "\n[INFOSEPARATOR]";
-	result->extra_text += "\n" + to_string(op_node.profiling_info.metrics.operator_cardinality);
-	string timing = StringUtil::Format("%.2f", op_node.profiling_info.metrics.operator_timing);
+	result->extra_text += "\n" + to_string(op.profiling_info.metrics.operator_cardinality);
+	string timing = StringUtil::Format("%.2f", op.profiling_info.metrics.operator_timing);
 	result->extra_text += "\n(" + timing + "s)";
 	return result;
 }

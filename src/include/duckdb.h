@@ -436,6 +436,11 @@ typedef struct _duckdb_value {
 	void *__val;
 } * duckdb_value;
 
+//! Holds the result of a query profiling operation.
+typedef struct _duckdb_profiling_info {
+	void *__prof;
+} * duckdb_profiling_info;
+
 //===--------------------------------------------------------------------===//
 // Function types
 //===--------------------------------------------------------------------===//
@@ -2696,6 +2701,22 @@ Report that an error has occurred while executing the replacement scan.
 */
 DUCKDB_API void duckdb_replacement_scan_set_error(duckdb_replacement_scan_info info, const char *error);
 #endif
+
+//===--------------------------------------------------------------------===//
+// Profiling Info
+//===--------------------------------------------------------------------===//
+
+//! Returns the root node from the profiling information.
+DUCKDB_API duckdb_profiling_info duckdb_get_profiling_info(duckdb_connection connection);
+
+//! Returns the value of the setting key of the current profiling info node.
+DUCKDB_API const char *duckdb_profiling_info_get_value(duckdb_profiling_info info, const char *key);
+
+//! Returns the number of children of the current profiling info node.
+DUCKDB_API idx_t duckdb_profiling_info_get_child_count(duckdb_profiling_info info);
+
+//! Returns the child node at the specified index.
+DUCKDB_API duckdb_profiling_info duckdb_profiling_info_get_child(duckdb_profiling_info info, idx_t index);
 
 //===--------------------------------------------------------------------===//
 // Appender

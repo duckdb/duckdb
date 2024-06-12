@@ -57,6 +57,11 @@ string Connection::GetProfilingInformation(ProfilerPrintFormat format) {
 	}
 }
 
+ProfilingNode *Connection::GetProfilingTree(){
+	auto &profiler = QueryProfiler::Get(*context);
+    return profiler.GetRoot();
+}
+
 void Connection::Interrupt() {
 	context->Interrupt();
 }

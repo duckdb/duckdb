@@ -138,6 +138,11 @@ public:
 
 	void Finalize(ProfilingNode &node);
 
+	//! Return the root of the query tree
+	ProfilingNode *GetRoot() {
+        return reinterpret_cast<ProfilingNode *>(root.get());
+    }
+
 private:
 	ClientContext &context;
 
