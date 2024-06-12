@@ -54,6 +54,8 @@ class ConnectionMethod:
 
 
 def traverse(class_name, node, methods_dict):
+    import clang.cindex
+
     if node.kind == clang.cindex.CursorKind.STRUCT_DECL or node.kind == clang.cindex.CursorKind.CLASS_DECL:
         if node.spelling != class_name:
             return
