@@ -12,6 +12,7 @@
 #include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
+struct ValidityMask;
 
 class DateLookupCache {
 public:

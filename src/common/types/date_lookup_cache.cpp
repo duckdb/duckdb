@@ -1,5 +1,10 @@
 #include "duckdb/common/types/date_lookup_cache.hpp"
 
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+
 namespace duckdb {
 
 DateLookupCache::DateLookupCache() {
@@ -62,9 +67,10 @@ void DateLookupCache::BuildCache() {
 	// but maybe we don't care
 	for (int32_t d = CACHE_MIN_DATE; d < CACHE_MAX_DATE; d++) {
 		int32_t year, month, day;
-		Date::Convert(date_t(d), year, month, day);
+		date_t date(d);
+		Date::Convert(date, year, month, day);
 
-		auto &cache_entry = cache[GetDateCacheEntry(date_t(d))];
+		auto &cache_entry = cache[GetDateCacheEntry(date)];
 		cache_entry.year = UnsafeNumericCast<uint16_t>(year);
 		cache_entry.month = UnsafeNumericCast<uint8_t>(month);
 		cache_entry.day = UnsafeNumericCast<uint8_t>(day);

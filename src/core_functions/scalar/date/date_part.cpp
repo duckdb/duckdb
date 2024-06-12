@@ -1986,9 +1986,9 @@ ScalarFunctionSet MonthFun::GetFunctions() {
 
 ScalarFunctionSet DayFun::GetFunctions() {
 	return GetGenericDatePartFunction<true>(DayCachedFunction<date_t>, DayCachedFunction<timestamp_t>,
-	                                        ScalarFunction::UnaryFunction<interval_t, int64_t, DatePart::MonthOperator>,
-	                                        DatePart::MonthOperator::PropagateStatistics<date_t>,
-	                                        DatePart::MonthOperator::PropagateStatistics<timestamp_t>);
+	                                        ScalarFunction::UnaryFunction<interval_t, int64_t, DatePart::DayOperator>,
+	                                        DatePart::DayOperator::PropagateStatistics<date_t>,
+	                                        DatePart::DayOperator::PropagateStatistics<timestamp_t>);
 }
 
 ScalarFunctionSet DecadeFun::GetFunctions() {
