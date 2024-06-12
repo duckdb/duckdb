@@ -1194,6 +1194,7 @@ public:
 template <class WRITER_IMPL>
 class GeometryColumnWriter : public WRITER_IMPL {
 	GeoParquetColumnMetadata geo_data;
+	GeoParquetColumnMetadataWriter geo_data_writer;
 	string column_name;
 
 public:
@@ -1202,7 +1203,7 @@ public:
 		WRITER_IMPL::Write(state, vector, count);
 
 		// And update the geodata object
-		geo_data.Update(vector, count);
+		geo_data_writer.Update(geo_data, vector, count);
 	}
 	void FinalizeWrite(ColumnWriterState &state) override {
 		WRITER_IMPL::FinalizeWrite(state);
@@ -1215,7 +1216,7 @@ public:
 	GeometryColumnWriter(ClientContext &context, ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p,
 	                     idx_t max_repeat, idx_t max_define, bool can_have_nulls, string name)
 	    : WRITER_IMPL(writer, schema_idx, std::move(schema_path_p), max_repeat, max_define, can_have_nulls),
-	      column_name(std::move(name)) {
+	      geo_data_writer(context), column_name(std::move(name)) {
 
 		auto &geo_data = writer.GetGeoParquetData();
 		if (geo_data.primary_geometry_column.empty()) {

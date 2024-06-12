@@ -10,6 +10,7 @@
 
 #include "column_writer.hpp"
 #include "duckdb/common/string.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "parquet_types.h"
@@ -74,6 +75,7 @@ struct GeometryBounds {
 class ParquetReader;
 class ColumnReader;
 class ClientContext;
+class ExpressionExecutor;
 
 enum class GeoParquetColumnEncoding : uint8_t {
 	WKB = 1,
@@ -97,8 +99,20 @@ struct GeoParquetColumnMetadata {
 
 	// The crs of the geometry column (if any) in PROJJSON format
 	string projjson;
+};
 
-	void Update(Vector &vector, idx_t count);
+class GeoParquetColumnMetadataWriter {
+	unique_ptr<ExpressionExecutor> executor;
+	DataChunk input_chunk;
+	DataChunk result_chunk;
+
+	unique_ptr<Expression> type_expr;
+	unique_ptr<Expression> flag_expr;
+	unique_ptr<Expression> bbox_expr;
+
+public:
+	explicit GeoParquetColumnMetadataWriter(ClientContext &context);
+	void Update(GeoParquetColumnMetadata &meta, Vector &vector, idx_t count);
 };
 
 struct GeoParquetFileMetadata {

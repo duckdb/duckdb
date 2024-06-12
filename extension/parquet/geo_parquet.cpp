@@ -4,9 +4,11 @@
 #include "column_reader.hpp"
 #include "expression_column_reader.hpp"
 
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 #include "yyjson.hpp"
 
@@ -50,182 +52,128 @@ const char *WKBGeometryTypes::ToString(WKBGeometryType type) {
 }
 
 //------------------------------------------------------------------------------
-// WKB Scanner
+// GeoParquetColumnMetadataWriter
 //------------------------------------------------------------------------------
-class WKBScanner {
-	GeoParquetColumnMetadata &data;
-	const_data_ptr_t ptr;
-	const_data_ptr_t end;
+GeoParquetColumnMetadataWriter::GeoParquetColumnMetadataWriter(ClientContext &context) {
+	executor = make_uniq<ExpressionExecutor>(context);
 
-public:
-	explicit WKBScanner(GeoParquetColumnMetadata &data) : data(data), ptr(nullptr), end(nullptr) {
-	}
+	auto &catalog = Catalog::GetSystemCatalog(context);
 
-	void Scan(const string_t &blob) {
-		ptr = const_data_ptr_cast(blob.GetDataUnsafe());
-		end = ptr + blob.GetSize();
-		ScanWKB(true);
-	}
+	// These functions are required to extract the geometry type, ZM flag and bounding box from a WKB blob
+	auto &type_func_set =
+	    catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, "st_geometrytype")
+	        .Cast<ScalarFunctionCatalogEntry>();
+	auto &flag_func_set = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, "st_zmflag")
+	                          .Cast<ScalarFunctionCatalogEntry>();
+	auto &bbox_func_set = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, "st_extent")
+	                          .Cast<ScalarFunctionCatalogEntry>();
 
-private:
-	void ScanWKB(bool first);
-	void ScanWKB(WKBGeometryType type, bool le, bool has_z);
-	uint32_t ReadInt(bool le);
-	double ReadDouble(bool le);
-	bool ReadBool();
+	auto wkb_type = LogicalType(LogicalTypeId::BLOB);
+	wkb_type.SetAlias("WKB_BLOB");
 
-	template <class T>
-	T ReadLE();
+	auto type_func = type_func_set.functions.GetFunctionByArguments(context, {wkb_type});
+	auto flag_func = flag_func_set.functions.GetFunctionByArguments(context, {wkb_type});
+	auto bbox_func = bbox_func_set.functions.GetFunctionByArguments(context, {wkb_type});
 
-	template <class T>
-	T ReadBE();
-};
+	auto type_type = LogicalType::UTINYINT;
+	auto flag_type = flag_func.return_type;
+	auto bbox_type = bbox_func.return_type;
 
-void WKBScanner::ScanWKB(const bool first) {
-	const auto le = ReadBool();
-	const auto type_id = ReadInt(le);
-	const bool has_z = type_id > 1000;
-	const bool has_m = type_id > 2000;
-	const auto type = static_cast<WKBGeometryType>(type_id % 1000);
-	if (has_m) {
-		// We dont support M!
-		throw InvalidInputException("Geoparquet does not support geometries with M coordinates");
-	}
+	vector<unique_ptr<Expression>> type_args;
+	type_args.push_back(make_uniq<BoundReferenceExpression>(wkb_type, 0));
 
-	ScanWKB(type, le, has_z);
+	vector<unique_ptr<Expression>> flag_args;
+	flag_args.push_back(make_uniq<BoundReferenceExpression>(wkb_type, 0));
 
-	if (first) {
-		// Only consider the first geometry type
-		data.geometry_types.insert(static_cast<WKBGeometryType>(type_id));
-	}
+	vector<unique_ptr<Expression>> bbox_args;
+	bbox_args.push_back(make_uniq<BoundReferenceExpression>(wkb_type, 0));
+
+	type_expr = make_uniq<BoundFunctionExpression>(type_type, type_func, std::move(type_args), nullptr);
+	flag_expr = make_uniq<BoundFunctionExpression>(flag_type, flag_func, std::move(flag_args), nullptr);
+	bbox_expr = make_uniq<BoundFunctionExpression>(bbox_type, bbox_func, std::move(bbox_args), nullptr);
+
+	// Add the expressions to the executor
+	executor->AddExpression(*type_expr);
+	executor->AddExpression(*flag_expr);
+	executor->AddExpression(*bbox_expr);
+
+	// Initialize the input and result chunks
+	// The input chunk should be empty, as we always reference the input vector
+	input_chunk.InitializeEmpty({wkb_type});
+	result_chunk.Initialize(context, {type_type, flag_type, bbox_type});
 }
 
-void WKBScanner::ScanWKB(const WKBGeometryType type, const bool le, const bool has_z) {
-	switch (type) {
-	case WKBGeometryType::POINT: {
-		// Points are special in that they may be empty (all NaN)
-		bool all_nan = true;
-		double coords[3];
-		for (auto i = 0; i < (2 + has_z); i++) {
-			coords[i] = ReadDouble(le);
-			if (!std::isnan(coords[i])) {
-				all_nan = false;
-			}
-		}
-		if (!all_nan) {
-			data.bbox.Combine(coords[0], coords[1]);
-		}
-	} break;
-	case WKBGeometryType::LINESTRING: {
-		const auto num_points = ReadInt(le);
-		for (uint32_t i = 0; i < num_points; i++) {
-			const auto x = ReadDouble(le);
-			const auto y = ReadDouble(le);
-			if (has_z) {
-				// We dont care about Z for now
-				ptr += sizeof(double);
-			}
-			data.bbox.Combine(x, y);
-		}
-	} break;
-	case WKBGeometryType::POLYGON: {
-		const auto num_rings = ReadInt(le);
-		for (uint32_t i = 0; i < num_rings; i++) {
-			const auto num_points = ReadInt(le);
-			for (uint32_t j = 0; j < num_points; j++) {
-				const auto x = ReadDouble(le);
-				const auto y = ReadDouble(le);
-				if (has_z) {
-					// We dont care about Z for now
-					ptr += sizeof(double);
-				}
-				data.bbox.Combine(x, y);
-			}
-		}
-	} break;
-	case WKBGeometryType::MULTIPOINT:
-	case WKBGeometryType::MULTILINESTRING:
-	case WKBGeometryType::MULTIPOLYGON:
-	case WKBGeometryType::GEOMETRYCOLLECTION: {
-		const auto num_geometries = ReadInt(le);
-		for (uint32_t i = 0; i < num_geometries; i++) {
-			ScanWKB(false);
-		}
-	} break;
-	default:
-		throw SerializationException("Unsupported geometry type");
-	}
-}
+void GeoParquetColumnMetadataWriter::Update(GeoParquetColumnMetadata &meta, Vector &vector, idx_t count) {
+	input_chunk.Reset();
+	result_chunk.Reset();
 
-bool WKBScanner::ReadBool() {
-	return ReadLE<uint8_t>() != 0;
-}
+	// Reference the vector
+	input_chunk.data[0].Reference(vector);
+	input_chunk.SetCardinality(count);
 
-uint32_t WKBScanner::ReadInt(const bool le) {
-	return le ? ReadLE<uint32_t>() : ReadBE<uint32_t>();
-}
+	// Execute the expression
+	executor->Execute(input_chunk, result_chunk);
 
-double WKBScanner::ReadDouble(const bool le) {
-	return le ? ReadLE<double>() : ReadBE<double>();
-}
+	// The first column is the geometry type
+	// The second column is the zm flag
+	// The third column is the bounding box
 
-template <class T>
-T WKBScanner::ReadLE() {
-	if (ptr + sizeof(T) > end) {
-		throw SerializationException("WKB data is too short");
-	}
-	T res = Load<T>(ptr);
-	ptr += sizeof(T);
-	return res;
-}
+	UnifiedVectorFormat type_format;
+	UnifiedVectorFormat flag_format;
+	UnifiedVectorFormat bbox_format;
 
-template <class T>
-T WKBScanner::ReadBE() {
-	if (ptr + sizeof(T) > end) {
-		throw SerializationException("WKB data is too short");
-	}
-	data_t in[sizeof(T)];
-	data_t out[sizeof(T)];
-	memcpy(in, ptr, sizeof(T));
-	// Reverse the bytes
-	for (idx_t i = 0; i < sizeof(T); i++) {
-		out[i] = in[sizeof(T) - i - 1];
-	}
-	T res;
-	memcpy(&res, out, sizeof(T));
-	ptr += sizeof(T);
-	return res;
-}
+	result_chunk.data[0].ToUnifiedFormat(count, type_format);
+	result_chunk.data[1].ToUnifiedFormat(count, flag_format);
+	result_chunk.data[2].ToUnifiedFormat(count, bbox_format);
 
-//------------------------------------------------------------------------------
-// GeometryColumnProps
-//------------------------------------------------------------------------------
-void GeoParquetColumnMetadata::Update(Vector &vector, idx_t count) {
-	const auto &data_type = vector.GetType();
-	const auto type_id = data_type.id();
-	const auto type_name = data_type.GetAlias();
+	const auto &bbox_components = StructVector::GetEntries(result_chunk.data[2]);
+	D_ASSERT(bbox_components.size() == 4);
 
-	if (type_id == LogicalTypeId::BLOB && type_name == "WKB_BLOB") {
-		UnifiedVectorFormat format;
-		vector.ToUnifiedFormat(count, format);
-		const auto data = UnifiedVectorFormat::GetData<string_t>(format);
+	UnifiedVectorFormat xmin_format;
+	UnifiedVectorFormat ymin_format;
+	UnifiedVectorFormat xmax_format;
+	UnifiedVectorFormat ymax_format;
 
-		WKBScanner scanner(*this);
-		for (idx_t i = 0; i < count; i++) {
-			const auto row_idx = format.sel->get_index(i);
-			if (!format.validity.RowIsValid(row_idx)) {
-				continue;
-			}
-			scanner.Scan(data[row_idx]);
+	bbox_components[0]->ToUnifiedFormat(count, xmin_format);
+	bbox_components[1]->ToUnifiedFormat(count, ymin_format);
+	bbox_components[2]->ToUnifiedFormat(count, xmax_format);
+	bbox_components[3]->ToUnifiedFormat(count, ymax_format);
+
+	for (idx_t in_idx = 0; in_idx < count; in_idx++) {
+		const auto type_idx = type_format.sel->get_index(in_idx);
+		const auto flag_idx = flag_format.sel->get_index(in_idx);
+		const auto bbox_idx = bbox_format.sel->get_index(in_idx);
+
+		const auto type_valid = type_format.validity.RowIsValid(type_idx);
+		const auto flag_valid = flag_format.validity.RowIsValid(flag_idx);
+		const auto bbox_valid = bbox_format.validity.RowIsValid(bbox_idx);
+
+		if (!type_valid || !flag_valid || !bbox_valid) {
+			continue;
 		}
 
-	} else {
-		throw NotImplementedException("Unsupported geometry encoding %s", type_name);
+		// Update the geometry type
+		const auto flag = UnifiedVectorFormat::GetData<uint8_t>(flag_format)[flag_idx];
+		const auto type = UnifiedVectorFormat::GetData<uint8_t>(type_format)[type_idx];
+		if (flag == 1 || flag == 3) {
+			// M or ZM
+			throw InvalidInputException("Geoparquet does not support geometries with M coordinates");
+		}
+		const auto has_z = flag == 2;
+		auto wkb_type = static_cast<WKBGeometryType>((type + 1) + (has_z ? 1000 : 0));
+		meta.geometry_types.insert(wkb_type);
+
+		// Update the bounding box
+		const auto min_x = UnifiedVectorFormat::GetData<double>(xmin_format)[bbox_idx];
+		const auto min_y = UnifiedVectorFormat::GetData<double>(ymin_format)[bbox_idx];
+		const auto max_x = UnifiedVectorFormat::GetData<double>(xmax_format)[bbox_idx];
+		const auto max_y = UnifiedVectorFormat::GetData<double>(ymax_format)[bbox_idx];
+		meta.bbox.Combine(min_x, max_x, min_y, max_y);
 	}
 }
 
 //------------------------------------------------------------------------------
-// GeoParquetMetadata
+// GeoParquetFileMetadata
 //------------------------------------------------------------------------------
 
 unique_ptr<GeoParquetFileMetadata>
@@ -335,7 +283,6 @@ void GeoParquetFileMetadata::Write(duckdb_parquet::format::FileMetaData &file_me
 	// Add the columns
 	const auto json_columns = yyjson_mut_obj_add_obj(doc, root, "columns");
 
-	// TODO: Keep order of columns
 	for (auto &column : geometry_columns) {
 		const auto column_json = yyjson_mut_obj_add_obj(doc, json_columns, column.first.c_str());
 		yyjson_mut_obj_add_str(doc, column_json, "encoding", "WKB");
