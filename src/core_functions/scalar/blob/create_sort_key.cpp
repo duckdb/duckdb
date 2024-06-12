@@ -4,41 +4,9 @@
 #include "duckdb/common/radix.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/core_functions/create_sort_key.hpp"
 
 namespace duckdb {
-
-struct OrderModifiers {
-	OrderModifiers(OrderType order_type, OrderByNullType null_type) : order_type(order_type), null_type(null_type) {
-	}
-
-	OrderType order_type;
-	OrderByNullType null_type;
-
-	bool operator==(const OrderModifiers &other) const {
-		return order_type == other.order_type && null_type == other.null_type;
-	}
-
-	static OrderModifiers Parse(const string &val) {
-		auto lcase = StringUtil::Replace(StringUtil::Lower(val), "_", " ");
-		OrderType order_type;
-		if (StringUtil::StartsWith(lcase, "asc")) {
-			order_type = OrderType::ASCENDING;
-		} else if (StringUtil::StartsWith(lcase, "desc")) {
-			order_type = OrderType::DESCENDING;
-		} else {
-			throw BinderException("create_sort_key modifier must start with either ASC or DESC");
-		}
-		OrderByNullType null_type;
-		if (StringUtil::EndsWith(lcase, "nulls first")) {
-			null_type = OrderByNullType::NULLS_FIRST;
-		} else if (StringUtil::EndsWith(lcase, "nulls last")) {
-			null_type = OrderByNullType::NULLS_LAST;
-		} else {
-			throw BinderException("create_sort_key modifier must end with either NULLS FIRST or NULLS LAST");
-		}
-		return OrderModifiers(order_type, null_type);
-	}
-};
 
 struct CreateSortKeyBindData : public FunctionData {
 	vector<OrderModifiers> modifiers;
@@ -642,6 +610,39 @@ static void FinalizeSortData(Vector &result, idx_t size) {
 	}
 }
 
+static void CreateSortKeyInternal(vector<unique_ptr<SortKeyVectorData>> &sort_key_data, const vector<OrderModifiers> &modifiers, Vector &result, idx_t row_count) {
+	// two phases
+	// a) get the length of the final sorted key
+	// b) allocate the sorted key and construct
+	// we do all of this in a vectorized manner
+	SortKeyLengthInfo key_lengths(row_count);
+	for (auto &vector_data : sort_key_data) {
+		GetSortKeyLength(*vector_data, key_lengths);
+	}
+	// allocate the empty sort keys
+	auto data_pointers = unique_ptr<data_ptr_t[]>(new data_ptr_t[row_count]);
+	PrepareSortData(result, row_count, key_lengths, data_pointers.get());
+
+	unsafe_vector<idx_t> offsets;
+	offsets.resize(row_count, 0);
+	// now construct the sort keys
+	for (idx_t c = 0; c < sort_key_data.size(); c++) {
+		SortKeyConstructInfo info(modifiers[c], offsets, data_pointers.get());
+		ConstructSortKey(*sort_key_data[c], info);
+	}
+	FinalizeSortData(result, row_count);
+
+}
+
+void CreateSortKeyHelpers::CreateSortKey(Vector &input, idx_t input_count, OrderModifiers order_modifier, Vector &result) {
+	// prepare the sort key data
+	vector<OrderModifiers> modifiers { order_modifier };
+	vector<unique_ptr<SortKeyVectorData>> sort_key_data;
+	sort_key_data.push_back(make_uniq<SortKeyVectorData>(input, input_count, order_modifier));
+
+	CreateSortKeyInternal(sort_key_data, modifiers, result, input_count);
+}
+
 static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &bind_data = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<CreateSortKeyBindData>();
 
@@ -650,27 +651,8 @@ static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 	for (idx_t c = 0; c < args.ColumnCount(); c += 2) {
 		sort_key_data.push_back(make_uniq<SortKeyVectorData>(args.data[c], args.size(), bind_data.modifiers[c / 2]));
 	}
+	CreateSortKeyInternal(sort_key_data, bind_data.modifiers, result, args.size());
 
-	// two phases
-	// a) get the length of the final sorted key
-	// b) allocate the sorted key and construct
-	// we do all of this in a vectorized manner
-	SortKeyLengthInfo key_lengths(args.size());
-	for (auto &vector_data : sort_key_data) {
-		GetSortKeyLength(*vector_data, key_lengths);
-	}
-	// allocate the empty sort keys
-	auto data_pointers = unique_ptr<data_ptr_t[]>(new data_ptr_t[args.size()]);
-	PrepareSortData(result, args.size(), key_lengths, data_pointers.get());
-
-	unsafe_vector<idx_t> offsets;
-	offsets.resize(args.size(), 0);
-	// now construct the sort keys
-	for (idx_t c = 0; c < sort_key_data.size(); c++) {
-		SortKeyConstructInfo info(bind_data.modifiers[c], offsets, data_pointers.get());
-		ConstructSortKey(*sort_key_data[c], info);
-	}
-	FinalizeSortData(result, args.size());
 	if (args.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
