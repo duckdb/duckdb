@@ -29,7 +29,6 @@ SinkResultType PhysicalArrowCollector::Sink(ExecutionContext &context, DataChunk
 	auto &appender = lstate.appender;
 	D_ASSERT(count != 0);
 
-	// Printer::Print(StringUtil::Format("chunk_size: %d\n", chunk.size()));
 	idx_t processed = 0;
 	do {
 		if (!appender) {

@@ -183,7 +183,7 @@ bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, b
 	// Using the PhysicalArrowCollector, we create a ArrowQueryResult from the result
 	{
 		auto &config = ClientConfig::GetConfig(*con.context);
-		idx_t batch_size = STANDARD_VECTOR_SIZE;
+		idx_t batch_size = big_result ? NumericLimits<idx_t>::Maximum() : STANDARD_VECTOR_SIZE;
 		// Set up the result collector to use
 		ScopedConfigSetting setting(
 		    config,
