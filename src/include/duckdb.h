@@ -2709,7 +2709,8 @@ DUCKDB_API void duckdb_replacement_scan_set_error(duckdb_replacement_scan_info i
 //! Returns the root node from the profiling information.
 DUCKDB_API duckdb_profiling_info duckdb_get_profiling_info(duckdb_connection connection);
 
-//! Returns the value of the setting key of the current profiling info node.
+//! Returns the value of the setting key of the current profiling info node. If the setting does not exist or is not
+//! enabled, nullptr is returned.
 DUCKDB_API const char *duckdb_profiling_info_get_value(duckdb_profiling_info info, const char *key);
 
 //! Returns the number of children of the current profiling info node.
@@ -2718,10 +2719,10 @@ DUCKDB_API idx_t duckdb_profiling_info_get_child_count(duckdb_profiling_info inf
 //! Returns the child node at the specified index.
 DUCKDB_API duckdb_profiling_info duckdb_profiling_info_get_child(duckdb_profiling_info info, idx_t index);
 
-//! Returns the name of the current profiling info node, if the node is an operation node.
+//! Returns the name of the current profiling info node, if the node is an operation node. Returns nullptr otherwise.
 DUCKDB_API const char *duckdb_profiling_info_get_name(duckdb_profiling_info info);
 
-//! Returns the query of the current profiling info node, if the node the root.
+//! Returns the query of the current profiling info node, if the node the root. Returns nullptr otherwise.
 DUCKDB_API const char *duckdb_profiling_info_get_query(duckdb_profiling_info info);
 
 //===--------------------------------------------------------------------===//
