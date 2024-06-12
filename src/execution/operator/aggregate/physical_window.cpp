@@ -185,6 +185,8 @@ public:
 	using HashGroupSourcePtr = unique_ptr<WindowPartitionSourceState>;
 	using ScannerPtr = unique_ptr<RowDataCollectionScanner>;
 	using Task = std::pair<WindowPartitionSourceState *, ScannerPtr>;
+	using ExecutorPtr = unique_ptr<WindowExecutor>;
+	using Executors = vector<ExecutorPtr>;
 
 	WindowGlobalSourceState(ClientContext &context_p, WindowGlobalSinkState &gsink_p);
 
@@ -195,6 +197,8 @@ public:
 	ClientContext &context;
 	//! All the sunk data
 	WindowGlobalSinkState &gsink;
+	//! The current execution functions
+	Executors executors;
 	//! The next group to build.
 	atomic<idx_t> next_build;
 	//! The built groups
@@ -218,6 +222,14 @@ private:
 
 WindowGlobalSourceState::WindowGlobalSourceState(ClientContext &context_p, WindowGlobalSinkState &gsink_p)
     : context(context_p), gsink(gsink_p), next_build(0), tasks_remaining(0), returned(0) {
+	const auto &op = gsink.op;
+	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
+		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
+		auto &wexpr = op.select_list[expr_idx]->Cast<BoundWindowExpression>();
+		auto wexec = WindowExecutorFactory(wexpr, context, gsink.mode);
+		executors.emplace_back(std::move(wexec));
+	}
+
 	auto &hash_groups = gsink.global_partition->hash_groups;
 
 	auto &gpart = gsink.global_partition;
@@ -254,8 +266,6 @@ WindowGlobalSourceState::WindowGlobalSourceState(ClientContext &context_p, Windo
 class WindowPartitionSourceState {
 public:
 	using HashGroupPtr = unique_ptr<PartitionGlobalHashGroup>;
-	using ExecutorPtr = unique_ptr<WindowExecutor>;
-	using Executors = vector<ExecutorPtr>;
 	using OrderMasks = PartitionGlobalHashGroup::OrderMasks;
 	using ExecutorGlobalStatePtr = unique_ptr<WindowExecutorGlobalState>;
 	using ExecutorGlobalStates = vector<ExecutorGlobalStatePtr>;
@@ -284,8 +294,6 @@ public:
 	OrderMasks order_masks;
 	//! External paging
 	bool external;
-	//! The current execution functions
-	Executors executors;
 	//! The current execution functions
 	ExecutorGlobalStates gestates;
 
@@ -375,9 +383,9 @@ void WindowPartitionSourceState::BuildPartition(WindowGlobalSinkState &gstate, c
 	partition_mask.Initialize(count);
 	partition_mask.SetAllInvalid(count);
 
-	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
-		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
-		auto &wexpr = op.select_list[expr_idx]->Cast<BoundWindowExpression>();
+	const auto &executors = gsource.executors;
+	for (auto &wexec : executors) {
+		auto &wexpr = wexec->wexpr;
 		auto &order_mask = order_masks[wexpr.partitions.size() + wexpr.orders.size()];
 		if (order_mask.IsMaskSet()) {
 			continue;
@@ -411,14 +419,10 @@ void WindowPartitionSourceState::BuildPartition(WindowGlobalSinkState &gstate, c
 	}
 
 	// Create the executors for each function
-	executors.clear();
-	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
-		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
-		auto &wexpr = op.select_list[expr_idx]->Cast<BoundWindowExpression>();
+	for (auto &wexec : executors) {
+		auto &wexpr = wexec->wexpr;
 		auto &order_mask = order_masks[wexpr.partitions.size() + wexpr.orders.size()];
-		auto wexec = WindowExecutorFactory(wexpr, context, gstate.mode);
 		gestates.emplace_back(wexec->GetGlobalState(count, partition_mask, order_mask));
-		executors.emplace_back(std::move(wexec));
 	}
 
 	//	First pass over the input without flushing
@@ -484,14 +488,12 @@ public:
 WindowLocalSourceState::WindowLocalSourceState(WindowGlobalSourceState &gsource)
     : gsource(gsource), hash_bin(gsource.built.size()), batch_index(0) {
 	auto &gsink = *gsource.gsink.global_partition;
-	auto &op = gsource.gsink.op;
 
 	input_chunk.Initialize(gsink.allocator, gsink.payload_types);
 
 	vector<LogicalType> output_types;
-	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
-		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
-		auto &wexpr = op.select_list[expr_idx]->Cast<BoundWindowExpression>();
+	for (auto &wexec : gsource.executors) {
+		auto &wexpr = wexec->wexpr;
 		output_types.emplace_back(wexpr.return_type);
 	}
 	output_chunk.Initialize(Allocator::Get(gsource.context), output_types);
@@ -615,7 +617,7 @@ bool WindowLocalSourceState::NextPartition() {
 		UpdateBatchIndex();
 	}
 
-	auto &executors = partition_source->executors;
+	const auto &executors = gsource.executors;
 	auto &gestates = partition_source->gestates;
 	for (idx_t w = 0; w < executors.size(); ++w) {
 		read_states.emplace_back(executors[w]->GetLocalState(*gestates[w]));
@@ -644,7 +646,7 @@ void WindowLocalSourceState::Scan(DataChunk &result) {
 	input_chunk.Reset();
 	scanner->Scan(input_chunk);
 
-	auto &executors = partition_source->executors;
+	const auto &executors = gsource.executors;
 	auto &gestates = partition_source->gestates;
 	output_chunk.Reset();
 	for (idx_t expr_idx = 0; expr_idx < executors.size(); ++expr_idx) {
