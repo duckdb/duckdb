@@ -44,7 +44,8 @@ string LogicalGet::ParamsToString() const {
 		result += "\n[INFOSEPARATOR]\n";
 		result += "File Filters: " + extra_info.file_filters;
 		if (extra_info.filtered_files.IsValid() && extra_info.total_files.IsValid()) {
-			result += StringUtil::Format("\nScanning: %llu/%llu files", extra_info.filtered_files.GetIndex(), extra_info.total_files.GetIndex());
+			result += StringUtil::Format("\nScanning: %llu/%llu files", extra_info.filtered_files.GetIndex(),
+			                             extra_info.total_files.GetIndex());
 		}
 	}
 	if (!function.to_string) {
