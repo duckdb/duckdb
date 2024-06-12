@@ -61,7 +61,7 @@ SinkCombineResultType PhysicalArrowCollector::Combine(ExecutionContext &context,
 	auto &lstate = input.local_state.Cast<ArrowCollectorLocalState>();
 	auto &last_appender = lstate.appender;
 	auto &arrays = lstate.finished_arrays;
-	if (arrays.size() == 0 && !last_appender) {
+	if (arrays.empty() && !last_appender) {
 		// Nothing to do
 		return SinkCombineResultType::FINISHED;
 	}
@@ -107,7 +107,7 @@ SinkFinalizeType PhysicalArrowCollector::Finalize(Pipeline &pipeline, Event &eve
 	auto tuple_count = gstate.tuple_count;
 	gstate.result = make_uniq<ArrowQueryResult>(statement_type, properties, names, types, context.GetClientProperties(),
 	                                            tuple_count, record_batch_size);
-	auto &arrow_result = (ArrowQueryResult &)*gstate.result;
+	auto &arrow_result = gstate.result->Cast<ArrowQueryResult>();
 	arrow_result.SetArrowData(std::move(gstate.chunks));
 
 	return SinkFinalizeType::READY;
