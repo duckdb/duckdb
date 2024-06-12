@@ -91,14 +91,6 @@ Value KeyValueSecret::ToMapValueShort(SecretDisplayType mode) const {
 	vector<Value> keys;
 	vector<Value> values;
 
-	// Name
-	keys.push_back("name");
-	values.push_back(name);
-
-	// Types
-	keys.push_back("type");
-	values.push_back(type);
-
 	// Contents of secret_map
 	for (auto it = secret_map.begin(); it != secret_map.end(); it++) {
 		// We only print keys that have a value to print in the short version
