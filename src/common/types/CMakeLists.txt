@@ -16,7 +16,6 @@ add_library_unity(
   conflict_manager.cpp
   conflict_info.cpp
   data_chunk.cpp
-  date_lookup_cache.cpp
   date.cpp
   decimal.cpp
   hash.cpp
