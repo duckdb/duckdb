@@ -1,10 +1,10 @@
 # name: test/sql/outofcore/leftover_temp_files_issue_6420.test_slow
-# description: Issue #6420: Large joins in persistent databases have left over temporary directory
+# description: Issue #6420: Large joins in persistent databases have a leftover temporary directory.
 # group: [outofcore]
 
-load __TEST_DIR__/leftover_temp_files.db
-
 require tpch
+
+load __TEST_DIR__/leftover_temp_files.db
 
 statement ok
 SET threads=8
@@ -23,7 +23,7 @@ CREATE TABLE lineitem2 AS FROM lineitem1
 
 # creating and dropping a temp table should not leave temp files
 statement ok
-CREATE OR REPLACE TEMPORARY TABLE ans as select l1.* from lineitem1 l1;
+CREATE OR REPLACE TEMPORARY TABLE ans AS SELECT l1.* FROM lineitem1 l1;
 
 query I
 SELECT COUNT(*) > 0 FROM duckdb_temporary_files()

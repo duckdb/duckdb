@@ -1,14 +1,16 @@
+#include "duckdb/common/fsst.hpp"
+
 #include "duckdb/common/bitpacking.hpp"
-#include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
-#include "duckdb/storage/string_uncompressed.hpp"
-#include "duckdb/function/compression/compression.hpp"
-#include "duckdb/storage/table/column_data_checkpointer.hpp"
-#include "duckdb/main/config.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/random_engine.hpp"
-#include "duckdb/common/fsst.hpp"
-#include "miniz_wrapper.hpp"
+#include "duckdb/function/compression/compression.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
+#include "duckdb/storage/string_uncompressed.hpp"
+#include "duckdb/storage/table/column_data_checkpointer.hpp"
+
 #include "fsst.h"
+#include "miniz_wrapper.hpp"
 
 namespace duckdb {
 
@@ -33,7 +35,6 @@ typedef struct BPDeltaDecodeOffsets {
 } bp_delta_offsets_t;
 
 struct FSSTStorage {
-	static constexpr size_t COMPACTION_FLUSH_LIMIT = (size_t)Storage::BLOCK_SIZE / 5 * 4;
 	static constexpr double MINIMUM_COMPRESSION_RATIO = 1.2;
 	static constexpr double ANALYSIS_SAMPLE_SIZE = 0.25;
 
@@ -67,7 +68,8 @@ struct FSSTStorage {
 // Analyze
 //===--------------------------------------------------------------------===//
 struct FSSTAnalyzeState : public AnalyzeState {
-	FSSTAnalyzeState() : count(0), fsst_string_total_size(0), empty_strings(0) {
+	explicit FSSTAnalyzeState(const CompressionInfo &info)
+	    : AnalyzeState(info), count(0), fsst_string_total_size(0), empty_strings(0) {
 	}
 
 	~FSSTAnalyzeState() override {
@@ -90,7 +92,8 @@ struct FSSTAnalyzeState : public AnalyzeState {
 };
 
 unique_ptr<AnalyzeState> FSSTStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	return make_uniq<FSSTAnalyzeState>();
+	CompressionInfo info(Storage::BLOCK_SIZE, type);
+	return make_uniq<FSSTAnalyzeState>(info);
 }
 
 bool FSSTStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
@@ -185,10 +188,9 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	auto bitpacked_offsets_size =
 	    BitpackingPrimitives::GetRequiredSize(string_count + state.empty_strings, minimum_width);
 
-	auto estimated_base_size = (bitpacked_offsets_size + compressed_dict_size) * (1 / ANALYSIS_SAMPLE_SIZE);
-	auto num_blocks = estimated_base_size / (Storage::BLOCK_SIZE - sizeof(duckdb_fsst_decoder_t));
+	auto estimated_base_size = double(bitpacked_offsets_size + compressed_dict_size) * (1 / ANALYSIS_SAMPLE_SIZE);
+	auto num_blocks = estimated_base_size / double(state.info.GetBlockSize() - sizeof(duckdb_fsst_decoder_t));
 	auto symtable_size = num_blocks * sizeof(duckdb_fsst_decoder_t);
-
 	auto estimated_size = estimated_base_size + symtable_size;
 
 	return NumericCast<idx_t>(estimated_size * MINIMUM_COMPRESSION_RATIO);
@@ -200,8 +202,9 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 
 class FSSTCompressionState : public CompressionState {
 public:
-	explicit FSSTCompressionState(ColumnDataCheckpointer &checkpointer)
-	    : checkpointer(checkpointer), function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_FSST)) {
+	FSSTCompressionState(ColumnDataCheckpointer &checkpointer, const CompressionInfo &info)
+	    : CompressionState(info), checkpointer(checkpointer),
+	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_FSST)) {
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
 	}
 
@@ -227,6 +230,7 @@ public:
 	void CreateEmptySegment(idx_t row_start) {
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
+
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
 		current_segment = std::move(compressed_segment);
 		current_segment->function = function;
@@ -297,7 +301,7 @@ public:
 	bool HasEnoughSpace(size_t string_len) {
 		auto required_size = GetRequiredSize(string_len);
 
-		if (required_size <= Storage::BLOCK_SIZE) {
+		if (required_size <= info.GetBlockSize()) {
 			last_fitting_size = required_size;
 			return true;
 		}
@@ -319,7 +323,7 @@ public:
 	idx_t Finalize() {
 		auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
 		auto handle = buffer_manager.Pin(current_segment->block);
-		D_ASSERT(current_dictionary.end == Storage::BLOCK_SIZE);
+		D_ASSERT(current_dictionary.end == info.GetBlockSize());
 
 		// calculate sizes
 		auto compressed_index_buffer_size =
@@ -353,12 +357,13 @@ public:
 		                data_ptr_cast(&header_ptr->fsst_symbol_table_offset));
 		Store<uint32_t>((uint32_t)current_width, data_ptr_cast(&header_ptr->bitpacking_width));
 
-		if (total_size >= FSSTStorage::COMPACTION_FLUSH_LIMIT) {
+		if (total_size >= info.GetCompactionFlushLimit()) {
 			// the block is full enough, don't bother moving around the dictionary
-			return Storage::BLOCK_SIZE;
+			return info.GetBlockSize();
 		}
+
 		// the block has space left: figure out how much space we can save
-		auto move_amount = Storage::BLOCK_SIZE - total_size;
+		auto move_amount = info.GetBlockSize() - total_size;
 		// move the dictionary so it lines up exactly with the offsets
 		auto new_dictionary_offset = symbol_table_offset + fsst_serialized_symbol_table_size;
 		memmove(base_ptr + new_dictionary_offset, base_ptr + current_dictionary.end - current_dictionary.size,
@@ -395,7 +400,7 @@ public:
 unique_ptr<CompressionState> FSSTStorage::InitCompression(ColumnDataCheckpointer &checkpointer,
                                                           unique_ptr<AnalyzeState> analyze_state_p) {
 	auto &analyze_state = analyze_state_p->Cast<FSSTAnalyzeState>();
-	auto compression_state = make_uniq<FSSTCompressionState>(checkpointer);
+	auto compression_state = make_uniq<FSSTCompressionState>(checkpointer, analyze_state.info);
 
 	if (analyze_state.fsst_encoder == nullptr) {
 		throw InternalException("No encoder found during FSST compression");
@@ -693,8 +698,8 @@ CompressionFunction FSSTFun::GetFunction(PhysicalType data_type) {
 	    FSSTStorage::StringScanPartial<false>, FSSTStorage::StringFetchRow, UncompressedFunctions::EmptySkip);
 }
 
-bool FSSTFun::TypeIsSupported(PhysicalType type) {
-	return type == PhysicalType::VARCHAR;
+bool FSSTFun::TypeIsSupported(const CompressionInfo &info) {
+	return info.GetPhysicalType() == PhysicalType::VARCHAR;
 }
 
 //===--------------------------------------------------------------------===//
