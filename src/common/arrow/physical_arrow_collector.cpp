@@ -98,9 +98,14 @@ SinkFinalizeType PhysicalArrowCollector::Finalize(Pipeline &pipeline, Event &eve
 	auto &gstate = input.global_state.Cast<ArrowCollectorGlobalState>();
 
 	if (gstate.chunks.empty()) {
-		D_ASSERT(gstate.tuple_count == 0);
-		gstate.result = make_uniq<ArrowQueryResult>(statement_type, properties, names, types,
-		                                            context.GetClientProperties(), (idx_t)0, record_batch_size);
+		if (gstate.tuple_count != 0) {
+			throw InternalException(
+			    "PhysicalArrowCollector Finalize contains no chunks, but tuple_count is non-zero (%d)",
+			    gstate.tuple_count);
+		}
+		gstate.result =
+		    make_uniq<ArrowQueryResult>(statement_type, properties, names, types, context.GetClientProperties(),
+		                                gstate.tuple_count, record_batch_size);
 		return SinkFinalizeType::READY;
 	}
 
