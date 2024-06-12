@@ -85,6 +85,9 @@ public:
 	duckdb_parquet::format::Type::type GetType(idx_t schema_idx) {
 		return file_meta_data.schema[schema_idx].type;
 	}
+	LogicalType GetSQLType(idx_t schema_idx) const {
+		return sql_types[schema_idx];
+	}
 	BufferedFileWriter &GetWriter() {
 		return *writer;
 	}

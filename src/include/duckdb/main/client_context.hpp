@@ -244,6 +244,8 @@ private:
 	void BeginQueryInternal(ClientContextLock &lock, const string &query);
 	ErrorData EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction);
 
+	//! Wait until a task is available to execute
+	void WaitForTask(ClientContextLock &lock, BaseQueryResult &result);
 	PendingExecutionResult ExecuteTaskInternal(ClientContextLock &lock, BaseQueryResult &result, bool dry_run = false);
 
 	unique_ptr<PendingQueryResult> PendingStatementOrPreparedStatementInternal(

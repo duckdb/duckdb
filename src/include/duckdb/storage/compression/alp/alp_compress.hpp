@@ -8,21 +8,19 @@
 
 #pragma once
 
-#include "duckdb/storage/compression/patas/patas.hpp"
-#include "duckdb/function/compression_function.hpp"
-#include "duckdb/storage/compression/alp/algorithm/alp.hpp"
-#include "duckdb/storage/compression/alp/alp_analyze.hpp"
-
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/function/compression/compression.hpp"
+#include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-
+#include "duckdb/storage/compression/alp/algorithm/alp.hpp"
+#include "duckdb/storage/compression/alp/alp_analyze.hpp"
+#include "duckdb/storage/compression/patas/patas.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/common/operator/subtract.hpp"
 
 #include <functional>
 
@@ -33,8 +31,10 @@ struct AlpCompressionState : public CompressionState {
 
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
-	explicit AlpCompressionState(ColumnDataCheckpointer &checkpointer, AlpAnalyzeState<T> *analyze_state)
-	    : checkpointer(checkpointer), function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_ALP)) {
+
+	AlpCompressionState(ColumnDataCheckpointer &checkpointer, AlpAnalyzeState<T> *analyze_state)
+	    : CompressionState(analyze_state->info), checkpointer(checkpointer),
+	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_ALP)) {
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
 
 		//! Combinations found on the analyze step are needed for compression
@@ -92,17 +92,18 @@ public:
 	void CreateEmptySegment(idx_t row_start) {
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
+
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
 		current_segment = std::move(compressed_segment);
 		current_segment->function = function;
+
 		auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
 		handle = buffer_manager.Pin(current_segment->block);
 
-		// Pointer to the start of the compressed data
+		// The pointer to the start of the compressed data.
 		data_ptr = handle.Ptr() + current_segment->GetBlockOffset() + AlpConstants::HEADER_SIZE;
-		// Pointer to the start of the Metadata
-		metadata_ptr = handle.Ptr() + current_segment->GetBlockOffset() + Storage::BLOCK_SIZE;
-
+		// The pointer to the start of the metadata.
+		metadata_ptr = handle.Ptr() + current_segment->GetBlockOffset() + info.GetBlockSize();
 		next_vector_byte_index_start = AlpConstants::HEADER_SIZE;
 	}
 
@@ -183,10 +184,10 @@ public:
 		// Verify that the metadata_ptr is not smaller than the space used by the data
 		D_ASSERT(dataptr + metadata_offset <= metadata_ptr);
 
-		auto bytes_used_by_metadata = UnsafeNumericCast<idx_t>(dataptr + Storage::BLOCK_SIZE - metadata_ptr);
+		auto bytes_used_by_metadata = UnsafeNumericCast<idx_t>(dataptr + info.GetBlockSize() - metadata_ptr);
 
 		// Initially the total segment size is the size of the block
-		auto total_segment_size = Storage::BLOCK_SIZE;
+		auto total_segment_size = info.GetBlockSize();
 
 		//! We compact the block if the space used is less than a threshold
 		const auto used_space_percentage =

@@ -20,7 +20,7 @@ BindResult ExpressionBinder::BindExpression(CollateExpression &expr, idx_t depth
 	// Validate the collation, but don't use it
 	auto child_copy = child->Copy();
 	auto collation_type = LogicalType::VARCHAR_COLLATION(expr.collation);
-	PushCollation(context, child_copy, collation_type, false);
+	PushCollation(context, child_copy, collation_type);
 	child->return_type = collation_type;
 	return BindResult(std::move(child));
 }
