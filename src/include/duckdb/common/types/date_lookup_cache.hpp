@@ -51,12 +51,10 @@ private:
 	void BuildCache() {
 		D_ASSERT(CACHE_MAX_DATE > CACHE_MIN_DATE);
 		cache = make_unsafe_uniq_array<CACHE_TYPE>(CACHE_MAX_DATE - CACHE_MIN_DATE);
-		// this can certainly be optimized
-		// but maybe we don't care
 		for (int32_t d = CACHE_MIN_DATE; d < CACHE_MAX_DATE; d++) {
 			date_t date(d);
-			cache[GetDateCacheEntry(date)] =
-			    UnsafeNumericCast<CACHE_TYPE>(OP::template Operation<date_t, int64_t>(date));
+			auto cache_entry = OP::template Operation<date_t, int64_t>(date);
+			cache[GetDateCacheEntry(date)] = UnsafeNumericCast<CACHE_TYPE>(cache_entry);
 		}
 	}
 
