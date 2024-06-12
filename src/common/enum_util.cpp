@@ -97,6 +97,7 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/main/profiling_info.hpp"
+#include "duckdb/main/profiling_node.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/settings.hpp"
@@ -5509,6 +5510,29 @@ ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value)
 	}
 	if (StringUtil::Equals(value, "QUERY_TREE_OPTIMIZER")) {
 		return ProfilerPrintFormat::QUERY_TREE_OPTIMIZER;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<ProfilingNodeType>(ProfilingNodeType value) {
+	switch(value) {
+	case ProfilingNodeType::QUERY:
+		return "QUERY";
+	case ProfilingNodeType::OPERATOR:
+		return "OPERATOR";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+ProfilingNodeType EnumUtil::FromString<ProfilingNodeType>(const char *value) {
+	if (StringUtil::Equals(value, "QUERY")) {
+		return ProfilingNodeType::QUERY;
+	}
+	if (StringUtil::Equals(value, "OPERATOR")) {
+		return ProfilingNodeType::OPERATOR;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

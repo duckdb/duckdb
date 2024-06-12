@@ -24,6 +24,8 @@
 
 namespace duckdb {
 
+enum class ProfilingNodeType : uint8_t { QUERY, OPERATOR };
+
 class QueryProfilingNode;
 
 // Recursive tree that mirrors the operator tree
@@ -32,40 +34,25 @@ public:
 	ProfilingInfo profiling_info;
 	vector<unique_ptr<ProfilingNode>> children;
 	idx_t depth = 0;
-	bool is_query = false;
+	ProfilingNodeType node_type = ProfilingNodeType::OPERATOR;
 
 public:
 	idx_t GetChildCount() {
 		return children.size();
 	}
 
-	// TODO: Can this be simplified?
 	template <class TARGET>
 	TARGET &Cast() {
-		if (std::is_same<TARGET, QueryProfilingNode>::value) {
-			if (!is_query) {
-				throw InternalException("Failed to cast ProfilingNode to QueryProfilingNode - node type mismatch");
-			}
-			return reinterpret_cast<TARGET &>(*this);
-		}
-
-		if (is_query) {
-			throw InternalException("Failed to cast ProfilingNode to OperatorProfilingNode - node type mismatch");
+		if (node_type != TARGET::TYPE) {
+			throw InternalException("Failed to cast ProfilingNode - node type mismatch");
 		}
 		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
 	const TARGET &Cast() const {
-		if (std::is_same<TARGET, QueryProfilingNode>::value) {
-			if (!is_query) {
-				throw InternalException("Failed to cast ProfilingNode to QueryProfilingNode - node type mismatch");
-			}
-			return reinterpret_cast<const TARGET &>(*this);
-		}
-
-		if (is_query) {
-			throw InternalException("Failed to cast ProfilingNode to OperatorProfilingNode - node type mismatch");
+		if (node_type != TARGET::TYPE) {
+			throw InternalException("Failed to cast ProfilingNode - node type mismatch");
 		}
 		return reinterpret_cast<const TARGET &>(*this);
 	}
@@ -74,11 +61,15 @@ public:
 // Holds the top level query info
 class QueryProfilingNode : public ProfilingNode {
 public:
+	static constexpr const ProfilingNodeType TYPE = ProfilingNodeType::QUERY;
+
 	string query;
 };
 
 class OperatorProfilingNode : public ProfilingNode {
 public:
+	static constexpr const ProfilingNodeType TYPE = ProfilingNodeType::OPERATOR;
+
 	PhysicalOperatorType type;
 	string name;
 };

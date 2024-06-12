@@ -51,7 +51,7 @@ const char *duckdb_profiling_info_get_name(duckdb_profiling_info info) {
 		return nullptr;
 	}
 	auto &node = *reinterpret_cast<duckdb::ProfilingNode *>(info);
-	if (node.is_query) {
+	if (node.node_type != duckdb::ProfilingNodeType::OPERATOR) {
 		return nullptr;
 	}
 	auto &op_node = node.Cast<duckdb::OperatorProfilingNode>();
@@ -63,7 +63,7 @@ const char *duckdb_profiling_info_get_query(duckdb_profiling_info info) {
 		return nullptr;
 	}
 	auto &node = *reinterpret_cast<duckdb::ProfilingNode *>(info);
-	if (!node.is_query) {
+	if (node.node_type != duckdb::ProfilingNodeType::QUERY) {
 		return nullptr;
 	}
 	auto &query_node = node.Cast<duckdb::QueryProfilingNode>();

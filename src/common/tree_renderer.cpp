@@ -492,7 +492,7 @@ unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const ProfilingNode &op) {
 	}
 
 	unique_ptr<RenderTreeNode> result;
-	if (op.is_query) {
+	if (op.node_type == ProfilingNodeType::QUERY) {
 		auto &query_node = op.Cast<QueryProfilingNode>();
 		result = TreeRenderer::CreateRenderNode(query_node.query, extra_info);
 	} else {

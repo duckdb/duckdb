@@ -157,7 +157,7 @@ void QueryProfiler::EndQuery() {
 		if (root) {
 			auto query_info = make_uniq<QueryProfilingNode>();
 
-			query_info->is_query = true;
+			query_info->node_type = ProfilingNodeType::QUERY;
 			query_info->query = query;
 			query_info->profiling_info = ProfilingInfo(ClientConfig::GetConfig(context).profiler_settings);
 			if (query_info->profiling_info.Enabled(MetricsType::OPERATOR_TIMING)) {

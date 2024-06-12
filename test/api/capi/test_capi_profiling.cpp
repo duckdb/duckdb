@@ -36,6 +36,17 @@ void RetrieveAllMetrics(duckdb_profiling_info profiling_info, const std::vector<
 
 // Traverse the tree and retrieve all metrics
 void TraverseTree(duckdb_profiling_info profiling_info, const std::vector<string> &settings) {
+	static idx_t DEPTH = 0;
+	if (DEPTH == 0) {
+		REQUIRE(duckdb_profiling_info_get_name(profiling_info) == nullptr);
+		REQUIRE(duckdb_profiling_info_get_query(profiling_info) != nullptr);
+	} else {
+		REQUIRE(duckdb_profiling_info_get_name(profiling_info) != nullptr);
+		REQUIRE(duckdb_profiling_info_get_query(profiling_info) == nullptr);
+	}
+
+	DEPTH++;
+
 	RetrieveAllMetrics(profiling_info, settings);
 
 	auto child_count = duckdb_profiling_info_get_child_count(profiling_info);
