@@ -15,8 +15,8 @@ namespace duckdb {
 
 class DateLookupCache {
 public:
-	constexpr static int32_t CACHE_MIN_DATE = 0;       // 1970-01-01
-	constexpr static int32_t CACHE_MAX_DATE = 29584;   // 2050-12-31
+	constexpr static int32_t CACHE_MIN_DATE = 0;     // 1970-01-01
+	constexpr static int32_t CACHE_MAX_DATE = 29584; // 2050-12-31
 
 public:
 	DateLookupCache();
@@ -28,6 +28,7 @@ public:
 	//! Extracts the year, or sets the validity mask to NULL if the date is infinite
 	int64_t ExtractYear(date_t date, ValidityMask &mask, idx_t idx);
 	int64_t ExtractYear(timestamp_t ts, ValidityMask &mask, idx_t idx);
+
 private:
 	void BuildCache();
 

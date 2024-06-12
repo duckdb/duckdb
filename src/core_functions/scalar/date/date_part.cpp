@@ -107,7 +107,7 @@ struct DateCacheLocalState : public FunctionLocalState {
 };
 
 unique_ptr<FunctionLocalState> InitDateCacheLocalState(ExpressionState &state, const BoundFunctionExpression &expr,
-                                                   FunctionData *bind_data) {
+                                                       FunctionData *bind_data) {
 	return make_uniq<DateCacheLocalState>();
 }
 
@@ -752,14 +752,12 @@ struct DatePart {
 	};
 };
 
-
 template <class T>
 static void LastYearFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<DateCacheLocalState>();
-	UnaryExecutor::ExecuteWithNulls<T, int64_t>(args.data[0], result, args.size(),
-	                                            [&](T input, ValidityMask &mask, idx_t idx) {
-	                                            	return lstate.cache.ExtractYear(input, mask, idx);
-	                                            });
+	UnaryExecutor::ExecuteWithNulls<T, int64_t>(
+	    args.data[0], result, args.size(),
+	    [&](T input, ValidityMask &mask, idx_t idx) { return lstate.cache.ExtractYear(input, mask, idx); });
 }
 
 template <>
@@ -1668,15 +1666,15 @@ static unique_ptr<FunctionData> DatePartBind(ClientContext &context, ScalarFunct
 	return nullptr;
 }
 
-template<bool DATE_CACHE = false>
+template <bool DATE_CACHE = false>
 ScalarFunctionSet GetGenericDatePartFunction(scalar_function_t date_func, scalar_function_t ts_func,
                                              scalar_function_t interval_func, function_statistics_t date_stats,
                                              function_statistics_t ts_stats) {
 	ScalarFunctionSet operator_set;
-	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, std::move(date_func), nullptr, nullptr, date_stats, DATE_CACHE ? InitDateCacheLocalState : nullptr));
-	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, std::move(ts_func), nullptr, nullptr, ts_stats, DATE_CACHE ? InitDateCacheLocalState : nullptr));
+	operator_set.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, std::move(date_func), nullptr,
+	                                        nullptr, date_stats, DATE_CACHE ? InitDateCacheLocalState : nullptr));
+	operator_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, std::move(ts_func), nullptr,
+	                                        nullptr, ts_stats, DATE_CACHE ? InitDateCacheLocalState : nullptr));
 	operator_set.AddFunction(ScalarFunction({LogicalType::INTERVAL}, LogicalType::BIGINT, std::move(interval_func)));
 	return operator_set;
 }
@@ -1958,9 +1956,9 @@ struct StructDatePart {
 
 ScalarFunctionSet YearFun::GetFunctions() {
 	return GetGenericDatePartFunction<true>(LastYearFunction<date_t>, LastYearFunction<timestamp_t>,
-	                                  ScalarFunction::UnaryFunction<interval_t, int64_t, DatePart::YearOperator>,
-	                                  DatePart::YearOperator::PropagateStatistics<date_t>,
-	                                  DatePart::YearOperator::PropagateStatistics<timestamp_t>);
+	                                        ScalarFunction::UnaryFunction<interval_t, int64_t, DatePart::YearOperator>,
+	                                        DatePart::YearOperator::PropagateStatistics<date_t>,
+	                                        DatePart::YearOperator::PropagateStatistics<timestamp_t>);
 }
 
 ScalarFunctionSet MonthFun::GetFunctions() {
