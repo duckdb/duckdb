@@ -300,18 +300,17 @@ struct VectorMinMaxBase {
 
 	template <class STATE>
 	static void Finalize(STATE &state, AggregateFinalizeData &finalize_data) {
-		auto target_data = FlatVector::GetData<string_t>(finalize_data.result);
 		if (!state.isset) {
 			finalize_data.ReturnNull();
 		} else {
-			target_data[finalize_data.result_idx] = StringVector::AddStringOrBlob(finalize_data.result, state.value);
+			CreateSortKeyHelpers::DecodeSortKey(state.value, finalize_data.result, finalize_data.result_idx, OrderModifiers(ORDER_TYPE, OrderByNullType::NULLS_LAST));
 		}
 	}
 
 	static unique_ptr<FunctionData> Bind(ClientContext &context, AggregateFunction &function,
 	                                     vector<unique_ptr<Expression>> &arguments) {
 		function.arguments[0] = arguments[0]->return_type;
-		function.return_type = LogicalType::BLOB;
+		function.return_type = arguments[0]->return_type;
 		return nullptr;
 	}
 };

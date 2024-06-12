@@ -37,6 +37,11 @@ public:
 		throw NotImplementedException("Cannot create data from this type");
 	}
 
+	template <class T>
+	static inline T DecodeData(const_data_ptr_t input) {
+		throw NotImplementedException("Cannot read data from this type");
+	}
+
 	static inline void EncodeStringDataPrefix(data_ptr_t dataptr, string_t value, idx_t prefix_len) {
 		auto len = value.GetSize();
 		memcpy(dataptr, value.GetData(), MinValue(len, prefix_len));
@@ -198,6 +203,81 @@ inline void Radix::EncodeData(data_ptr_t dataptr, interval_t value) {
 	EncodeData<int32_t>(dataptr, value.days);
 	dataptr += sizeof(value.days);
 	EncodeData<int64_t>(dataptr, value.micros);
+}
+
+template <>
+inline bool Radix::DecodeData(const_data_ptr_t input) {
+	throw InternalException("FIXME Radix::DecodeData");
+}
+
+template <>
+inline int8_t Radix::DecodeData(const_data_ptr_t input) {
+	throw InternalException("FIXME Radix::DecodeData");
+}
+
+template <>
+inline int16_t Radix::DecodeData(const_data_ptr_t input) {
+	throw InternalException("FIXME Radix::DecodeData");
+}
+
+template <>
+inline int32_t Radix::DecodeData(const_data_ptr_t input) {
+	throw InternalException("FIXME Radix::DecodeData");
+}
+
+template <>
+inline int64_t Radix::DecodeData(const_data_ptr_t input) {
+	uint64_t bytes = Load<uint64_t>(input);
+	auto bytes_data = data_ptr_cast(&bytes);
+	bytes_data[0] = FlipSign(bytes_data[0]);
+	int64_t result;
+	Store<uint64_t>(BSwap<uint64_t>(bytes), data_ptr_cast(&result));
+	return result;
+}
+
+template <>
+inline uint8_t Radix::DecodeData(const_data_ptr_t input) {
+	throw InternalException("FIXME Radix::DecodeData");
+}
+
+template <>
+inline uint16_t Radix::DecodeData(const_data_ptr_t input) {
+	throw InternalException("FIXME Radix::DecodeData");
+}
+
+template <>
+inline uint32_t Radix::DecodeData(const_data_ptr_t input) {
+	throw InternalException("FIXME Radix::DecodeData");
+}
+
+template <>
+inline uint64_t Radix::DecodeData(const_data_ptr_t input) {
+	throw InternalException("FIXME Radix::DecodeData");
+}
+
+template <>
+inline hugeint_t Radix::DecodeData(const_data_ptr_t input) {
+	throw InternalException("FIXME Radix::DecodeData");
+}
+
+template <>
+inline uhugeint_t Radix::DecodeData(const_data_ptr_t input) {
+	throw InternalException("FIXME Radix::DecodeData");
+}
+
+template <>
+inline float Radix::DecodeData(const_data_ptr_t input) {
+	throw InternalException("FIXME Radix::DecodeData");
+}
+
+template <>
+inline double Radix::DecodeData(const_data_ptr_t input) {
+	throw InternalException("FIXME Radix::DecodeData");
+}
+
+template <>
+inline interval_t Radix::DecodeData(const_data_ptr_t input) {
+	throw InternalException("FIXME Radix::DecodeData");
 }
 
 } // namespace duckdb

@@ -77,7 +77,9 @@ struct SortKeyVectorData {
 	static constexpr data_t BLOB_ESCAPE_CHARACTER = 1;
 
 	SortKeyVectorData(Vector &input, idx_t size, OrderModifiers modifiers) : vec(input) {
-		input.ToUnifiedFormat(size, format);
+		if (size != 0) {
+			input.ToUnifiedFormat(size, format);
+		}
 		this->size = size;
 
 		null_byte = NULL_FIRST_BYTE;
@@ -108,7 +110,7 @@ struct SortKeyVectorData {
 		}
 		case PhysicalType::LIST: {
 			auto &child_entry = ListVector::GetEntry(input);
-			auto child_size = ListVector::GetListSize(input);
+			auto child_size = size == 0 ? 0 : ListVector::GetListSize(input);
 			child_data.push_back(make_uniq<SortKeyVectorData>(child_entry, child_size, child_modifiers));
 			break;
 		}
@@ -119,6 +121,10 @@ struct SortKeyVectorData {
 	// disable copy constructors
 	SortKeyVectorData(const SortKeyVectorData &other) = delete;
 	SortKeyVectorData &operator=(const SortKeyVectorData &) = delete;
+
+	void Initialize() {
+
+	}
 
 	PhysicalType GetPhysicalType() {
 		return vec.GetType().InternalType();
@@ -144,6 +150,11 @@ struct SortKeyConstantOperator {
 		Radix::EncodeData<T>(result, input);
 		return sizeof(T);
 	}
+
+	static idx_t Decode(const_data_ptr_t input, TYPE &result) {
+		result = Radix::DecodeData<T>(input);
+		return sizeof(T);
+	}
 };
 
 struct SortKeyVarcharOperator {
@@ -161,6 +172,10 @@ struct SortKeyVarcharOperator {
 		}
 		result[input_size] = SortKeyVectorData::STRING_DELIMITER; // null-byte delimiter
 		return input_size + 1;
+	}
+
+	static idx_t Decode(const_data_ptr_t input, TYPE &result) {
+		throw InternalException("Decode varchar");
 	}
 };
 
@@ -195,6 +210,10 @@ struct SortKeyBlobOperator {
 		}
 		result[result_offset++] = SortKeyVectorData::STRING_DELIMITER; // null-byte delimiter
 		return result_offset;
+	}
+
+	static idx_t Decode(const_data_ptr_t input, TYPE &result) {
+		throw InternalException("Decode blob");
 	}
 };
 
@@ -656,6 +675,124 @@ static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 	if (args.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
+}
+
+//===--------------------------------------------------------------------===//
+// Decode Sort Key
+//===--------------------------------------------------------------------===//
+struct DecodeSortKeyData {
+	explicit DecodeSortKeyData(string_t sort_key) : data(const_data_ptr_cast(sort_key.GetData())), size(sort_key.GetSize()), position(0) {
+	}
+
+	const_data_ptr_t data;
+	idx_t size;
+	idx_t position;
+};
+
+void DecodeSortKeyRecursive(DecodeSortKeyData &decode_data, SortKeyVectorData &vector_data, Vector &result, idx_t result_idx);
+
+template <class OP>
+void TemplatedDecodeSortKey(DecodeSortKeyData &decode_data, SortKeyVectorData &vector_data, Vector &result, idx_t result_idx) {
+	auto result_data = FlatVector::GetData<typename OP::TYPE>(result);
+
+	auto validity_byte = decode_data.data[decode_data.position];
+	decode_data.position++;
+	if (validity_byte == vector_data.null_byte) {
+		// NULL value
+		FlatVector::SetNull(result, result_idx, true);
+		return;
+	}
+	idx_t increment = OP::Decode(decode_data.data + decode_data.position, result_data[result_idx]);
+	decode_data.position += increment;
+}
+
+void DecodeSortKeyStruct(DecodeSortKeyData &decode_data, SortKeyVectorData &vector_data, Vector &result, idx_t result_idx) {
+	// check if the top-level is valid or not
+	auto validity_byte = decode_data.data[decode_data.position];
+	decode_data.position++;
+	if (validity_byte == vector_data.null_byte) {
+		// entire struct is NULL
+		FlatVector::SetNull(result, result_idx, true);
+		return;
+	}
+	// recurse into children
+	auto &child_entries = StructVector::GetEntries(result);
+	for(idx_t c = 0; c < child_entries.size(); c++) {
+		auto &child_entry = child_entries[c];
+		DecodeSortKeyRecursive(decode_data, *vector_data.child_data[c], *child_entry, result_idx);
+	}
+}
+
+void DecodeSortKeyRecursive(DecodeSortKeyData &decode_data, SortKeyVectorData &vector_data, Vector &result, idx_t result_idx) {
+	switch (result.GetType().InternalType()) {
+	case PhysicalType::BOOL:
+		TemplatedDecodeSortKey<SortKeyConstantOperator<bool>>(decode_data, vector_data, result, result_idx);
+		break;
+	case PhysicalType::UINT8:
+		TemplatedDecodeSortKey<SortKeyConstantOperator<uint8_t>>(decode_data, vector_data, result, result_idx);
+		break;
+	case PhysicalType::INT8:
+		TemplatedDecodeSortKey<SortKeyConstantOperator<int8_t>>(decode_data, vector_data, result, result_idx);
+		break;
+	case PhysicalType::UINT16:
+		TemplatedDecodeSortKey<SortKeyConstantOperator<uint16_t>>(decode_data, vector_data, result, result_idx);
+		break;
+	case PhysicalType::INT16:
+		TemplatedDecodeSortKey<SortKeyConstantOperator<int16_t>>(decode_data, vector_data, result, result_idx);
+		break;
+	case PhysicalType::UINT32:
+		TemplatedDecodeSortKey<SortKeyConstantOperator<uint32_t>>(decode_data, vector_data, result, result_idx);
+		break;
+	case PhysicalType::INT32:
+		TemplatedDecodeSortKey<SortKeyConstantOperator<int32_t>>(decode_data, vector_data, result, result_idx);
+		break;
+	case PhysicalType::UINT64:
+		TemplatedDecodeSortKey<SortKeyConstantOperator<uint64_t>>(decode_data, vector_data, result, result_idx);
+		break;
+	case PhysicalType::INT64:
+		TemplatedDecodeSortKey<SortKeyConstantOperator<int64_t>>(decode_data, vector_data, result, result_idx);
+		break;
+	case PhysicalType::FLOAT:
+		TemplatedDecodeSortKey<SortKeyConstantOperator<float>>(decode_data, vector_data, result, result_idx);
+		break;
+	case PhysicalType::DOUBLE:
+		TemplatedDecodeSortKey<SortKeyConstantOperator<double>>(decode_data, vector_data, result, result_idx);
+		break;
+	case PhysicalType::INTERVAL:
+		TemplatedDecodeSortKey<SortKeyConstantOperator<interval_t>>(decode_data, vector_data, result, result_idx);
+		break;
+	case PhysicalType::UINT128:
+		TemplatedDecodeSortKey<SortKeyConstantOperator<uhugeint_t>>(decode_data, vector_data, result, result_idx);
+		break;
+	case PhysicalType::INT128:
+		TemplatedDecodeSortKey<SortKeyConstantOperator<hugeint_t>>(decode_data, vector_data, result, result_idx);
+		break;
+	case PhysicalType::VARCHAR:
+		if (vector_data.vec.GetType().id() == LogicalTypeId::VARCHAR) {
+			TemplatedDecodeSortKey<SortKeyVarcharOperator>(decode_data, vector_data, result, result_idx);
+		} else {
+			TemplatedDecodeSortKey<SortKeyBlobOperator>(decode_data, vector_data, result, result_idx);
+		}
+		break;
+	case PhysicalType::STRUCT:
+		DecodeSortKeyStruct(decode_data, vector_data, result, result_idx);
+		break;
+	// case PhysicalType::LIST:
+	// 	ConstructSortKeyList<SortKeyListEntry>(vector_data, chunk, info);
+	// 	break;
+	// case PhysicalType::ARRAY:
+	// 	ConstructSortKeyList<SortKeyArrayEntry>(vector_data, chunk, info);
+	// 	break;
+	default:
+		throw NotImplementedException("Unsupported type %s in DecodeSortKey", vector_data.vec.GetType());
+	}
+}
+
+
+void CreateSortKeyHelpers::DecodeSortKey(string_t sort_key, Vector &result, idx_t result_idx, OrderModifiers modifiers) {
+	SortKeyVectorData sort_key_data(result, 0, modifiers);
+	DecodeSortKeyData decode_data(sort_key);
+	DecodeSortKeyRecursive(decode_data, sort_key_data, result, result_idx);
 }
 
 ScalarFunction CreateSortKeyFun::GetFunction() {
