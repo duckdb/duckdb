@@ -100,6 +100,10 @@ public:
 	virtual int64_t MatchScore(const string &path) const;
 	//! Prints the secret as a string
 	virtual string ToString(SecretDisplayType mode = SecretDisplayType::REDACTED) const;
+	//! Returns the secret as a Map Value. Used in printing the secret
+	virtual Value ToMapValue(SecretDisplayType mode = SecretDisplayType::REDACTED) const;
+	//! Returns a shortened version of the Map value, to print to screen on secret creation
+	virtual Value ToMapValueShort(SecretDisplayType mode = SecretDisplayType::REDACTED) const;
 	//! Serialize this secret
 	virtual void Serialize(Serializer &serializer) const;
 
@@ -168,9 +172,11 @@ public:
 		redact_keys = std::move(secret.redact_keys);
 		serializable = true;
 	};
+	//! Returns the secret as a Map Value. Used in printing the secret
+	Value ToMapValue(SecretDisplayType mode = SecretDisplayType::REDACTED) const override;
+	//! Returns a shortened version of the Map value, to print to screen on secret creation
+	Value ToMapValueShort(SecretDisplayType mode = SecretDisplayType::REDACTED) const override;
 
-	//! Print the secret as a key value map in the format 'key1=value;key2=value2'
-	string ToString(SecretDisplayType mode = SecretDisplayType::REDACTED) const override;
 	void Serialize(Serializer &serializer) const override;
 
 	//! Tries to get the value at key <key>, depending on error_on_missing will throw or return Value()

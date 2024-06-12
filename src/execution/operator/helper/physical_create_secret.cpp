@@ -10,10 +10,17 @@ SourceResultType PhysicalCreateSecret::GetData(ExecutionContext &context, DataCh
 	auto &client = context.client;
 	auto &secret_manager = SecretManager::Get(client);
 
-	secret_manager.CreateSecret(client, info);
+	auto result = secret_manager.CreateSecret(client, info);
 
-	chunk.SetValue(0, 0, true);
-	chunk.SetCardinality(1);
+	if (result) {
+		chunk.SetValue(0, 0, true);
+		chunk.SetValue(1, 0, result->secret->ToMapValueShort());
+		chunk.SetCardinality(1);
+	} else {
+		chunk.SetValue(0, 0, false);
+		chunk.SetValue(1, 0, Value());
+		chunk.SetCardinality(1);
+	}
 
 	return SourceResultType::FINISHED;
 }

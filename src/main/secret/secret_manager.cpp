@@ -230,8 +230,7 @@ unique_ptr<SecretEntry> SecretManager::CreateSecret(ClientContext &context, cons
 	auto secret = function_lookup->function(context, function_input);
 
 	if (!secret) {
-		throw InternalException("CreateSecretFunction for type: '%s' and provider: '%s' did not return a secret!",
-		                        info.type, info.provider);
+		return nullptr;
 	}
 
 	// Register the secret at the secret_manager
@@ -283,8 +282,8 @@ BoundStatement SecretManager::BindCreateSecret(CatalogTransaction transaction, C
 	}
 
 	BoundStatement result;
-	result.names = {"Success"};
-	result.types = {LogicalType::BOOLEAN};
+	result.names = {"Success", "Secret"};
+	result.types = {LogicalType::BOOLEAN, LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)};
 	result.plan = make_uniq<LogicalCreateSecret>(std::move(bound_info));
 	return result;
 }
