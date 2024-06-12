@@ -10,7 +10,7 @@
 
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/query_result.hpp"
-#include "duckdb/common/preserved_error.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 
@@ -29,7 +29,7 @@ public:
 	                            vector<LogicalType> types_p, ClientProperties client_properties, idx_t row_count,
 	                            idx_t batch_size);
 	//! Creates an unsuccessful query result with error condition
-	DUCKDB_API explicit ArrowQueryResult(PreservedError error);
+	DUCKDB_API explicit ArrowQueryResult(ErrorData error);
 
 public:
 	//! Fetches a DataChunk from the query result.
@@ -40,18 +40,19 @@ public:
 	DUCKDB_API string ToString() override;
 	DUCKDB_API string ToBox(ClientContext &context, const BoxRendererConfig &config) override;
 
-	DUCKDB_API idx_t RowCount() const;
-
 public:
 	vector<unique_ptr<ArrowArrayWrapper>> ConsumeArrays();
 	vector<unique_ptr<ArrowArrayWrapper>> &Arrays();
 	void SetArrowData(vector<unique_ptr<ArrowArrayWrapper>> arrays);
 	idx_t BatchSize() const;
+	idx_t RowCount() const;
+	unique_ptr<ArrowArrayWrapper> FetchArray();
 
 private:
 	vector<unique_ptr<ArrowArrayWrapper>> arrays;
 	idx_t row_count;
 	idx_t batch_size;
+	vector<unique_ptr<ArrowArrayWrapper>>::iterator it;
 };
 
 } // namespace duckdb

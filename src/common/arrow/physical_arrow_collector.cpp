@@ -2,8 +2,7 @@
 #include "duckdb/common/arrow/physical_arrow_collector.hpp"
 #include "duckdb/common/arrow/arrow_query_result.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
-#include "duckdb/common/arrow/physical_arrow_batch_collector.hpp"
-#include "duckdb/common/arrow/arrow_merge_event.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
@@ -17,9 +16,7 @@ unique_ptr<PhysicalResultCollector> PhysicalArrowCollector::Create(ClientContext
 		// the plan is order preserving, but we cannot use the batch index: use a single-threaded result collector
 		return make_uniq_base<PhysicalResultCollector, PhysicalArrowCollector>(data, false, batch_size);
 	} else {
-		// we care about maintaining insertion order and the sources all support batch indexes
-		// use a batch collector
-		return make_uniq_base<PhysicalResultCollector, PhysicalArrowBatchCollector>(data, batch_size);
+		return make_uniq_base<PhysicalResultCollector, PhysicalArrowCollector>(data, false, batch_size);
 	}
 }
 
@@ -104,7 +101,7 @@ SinkFinalizeType PhysicalArrowCollector::Finalize(Pipeline &pipeline, Event &eve
 	if (gstate.chunks.empty()) {
 		D_ASSERT(gstate.tuple_count == 0);
 		gstate.result = make_uniq<ArrowQueryResult>(statement_type, properties, names, types,
-		                                            context.GetClientProperties(), 0, record_batch_size);
+		                                            context.GetClientProperties(), (idx_t)0, record_batch_size);
 		return SinkFinalizeType::READY;
 	}
 

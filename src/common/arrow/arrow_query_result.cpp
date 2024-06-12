@@ -14,8 +14,7 @@ ArrowQueryResult::ArrowQueryResult(StatementType statement_type, StatementProper
       row_count(row_count), batch_size(batch_size) {
 }
 
-ArrowQueryResult::ArrowQueryResult(PreservedError error)
-    : QueryResult(QueryResultType::ARROW_RESULT, std::move(error)) {
+ArrowQueryResult::ArrowQueryResult(ErrorData error) : QueryResult(QueryResultType::ARROW_RESULT, std::move(error)) {
 }
 
 unique_ptr<DataChunk> ArrowQueryResult::Fetch() {
@@ -44,6 +43,7 @@ vector<unique_ptr<ArrowArrayWrapper>> ArrowQueryResult::ConsumeArrays() {
 		throw InvalidInputException("Attempting to fetch ArrowArrays from an unsuccessful query result\n: Error %s",
 		                            GetError());
 	}
+	it = arrays.end();
 	return std::move(arrays);
 }
 
@@ -58,6 +58,16 @@ vector<unique_ptr<ArrowArrayWrapper>> &ArrowQueryResult::Arrays() {
 void ArrowQueryResult::SetArrowData(vector<unique_ptr<ArrowArrayWrapper>> arrays) {
 	D_ASSERT(this->arrays.empty());
 	this->arrays = std::move(arrays);
+	this->it = this->arrays.begin();
+}
+
+unique_ptr<ArrowArrayWrapper> ArrowQueryResult::FetchArray() {
+	if (it == arrays.end()) {
+		return nullptr;
+	}
+	auto current_array = std::move(*it);
+	it++;
+	return current_array;
 }
 
 idx_t ArrowQueryResult::BatchSize() const {
