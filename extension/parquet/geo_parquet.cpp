@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-using namespace duckdb_yyjson;
+using namespace duckdb_yyjson; // NOLINT
 
 const char *WKBGeometryTypes::ToString(WKBGeometryType type) {
 	switch (type) {
@@ -405,8 +405,6 @@ unique_ptr<ColumnReader> GeoParquetFileMetadata::CreateColumnReader(ParquetReade
 
 	// WKB encoding
 	if (logical_type.id() == LogicalTypeId::BLOB && column.geometry_encoding == GeoParquetColumnEncoding::WKB) {
-		// TODO: What if the spatial extension isnt installed?
-
 		// Look for a conversion function in the catalog
 		auto &conversion_func_set =
 		    catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, "st_geomfromwkb")
