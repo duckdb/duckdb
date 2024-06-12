@@ -57,9 +57,9 @@ string Connection::GetProfilingInformation(ProfilerPrintFormat format) {
 	}
 }
 
-ProfilingNode *Connection::GetProfilingTree(){
+ProfilingNode *Connection::GetProfilingTree() {
 	auto &profiler = QueryProfiler::Get(*context);
-    return profiler.GetRoot();
+	return profiler.GetRoot();
 }
 
 void Connection::Interrupt() {

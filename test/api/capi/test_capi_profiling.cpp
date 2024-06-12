@@ -1,20 +1,20 @@
 #include "iostream"
 
 string BuildProfilingSettingsString(const std::vector<string> &settings) {
-    string result = "'{";
-    for (idx_t i = 0; i < settings.size(); i++) {
-        result += "\"" + settings[i] + "\": \"true\"";
-        if (i < settings.size() - 1) {
-            result += ", ";
-        }
-    }
-    result += "}'";
-    return result;
+	string result = "'{";
+	for (idx_t i = 0; i < settings.size(); i++) {
+		result += "\"" + settings[i] + "\": \"true\"";
+		if (i < settings.size() - 1) {
+			result += ", ";
+		}
+	}
+	result += "}'";
+	return result;
 }
 
 void RetrieveAllMetrics(duckdb_profiling_info profiling_info, const std::vector<string> &settings) {
 	for (size_t i = 0; i < settings.size(); i++) {
-        auto value = duckdb_profiling_info_get_value(profiling_info, settings[i].c_str());
+		auto value = duckdb_profiling_info_get_value(profiling_info, settings[i].c_str());
 		if (value != nullptr) {
 			if (settings[i] == "EXTRA_INFO") {
 				REQUIRE(value[0] == '\"');
@@ -31,7 +31,7 @@ void RetrieveAllMetrics(duckdb_profiling_info profiling_info, const std::vector<
 				REQUIRE(result >= 0);
 			}
 		}
-    }
+	}
 }
 
 TEST_CASE("Test Profiling", "[capi]") {
@@ -51,7 +51,7 @@ TEST_CASE("Test Profiling", "[capi]") {
 
 	REQUIRE(profiling_info != nullptr);
 
-    RetrieveAllMetrics(profiling_info, settings);
+	RetrieveAllMetrics(profiling_info, settings);
 
 	// Retrieve metric that is not enabled
 	REQUIRE(duckdb_profiling_info_get_value(profiling_info, "EXTRA_INFO") == nullptr);
@@ -67,7 +67,7 @@ TEST_CASE("Test Profiling", "[capi]") {
 	RetrieveAllMetrics(child, settings);
 }
 
-//TODO:
+// TODO:
 //- build recursive function to retrieve all metrics from profiling tree
 //- test all metrics
 //- retrieve "NAME" and "TYPE" from OperatorProfilingNode and "QUERY" from QueryProfilingNode?
