@@ -32,7 +32,7 @@ struct CovarOperation {
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const A_TYPE &y, const B_TYPE &x, AggregateBinaryInput &idata) {
 		// update running mean and d^2
-		const uint64_t n = ++(state.count);
+		const double n = static_cast<double>(++(state.count));
 
 		const double dx = (x - state.meanx);
 		const double meanx = state.meanx + dx / n;
@@ -53,15 +53,16 @@ struct CovarOperation {
 		if (target.count == 0) {
 			target = source;
 		} else if (source.count > 0) {
-			const auto count = target.count + source.count;
-			const auto meanx = (source.count * source.meanx + target.count * target.meanx) / count;
-			const auto meany = (source.count * source.meany + target.count * target.meany) / count;
+			const auto target_count = static_cast<double>(target.count);
+			const auto source_count = static_cast<double>(source.count);
+			const auto count = static_cast<double>(target_count + source.count);
+			const auto meanx = (source_count * source.meanx + target_count * target.meanx) / count;
+			const auto meany = (source_count * source.meany + target_count * target.meany) / count;
 
 			//  Schubert and Gertz SSDBM 2018, equation 21
 			const auto deltax = target.meanx - source.meanx;
 			const auto deltay = target.meany - source.meany;
-			target.co_moment =
-			    source.co_moment + target.co_moment + deltax * deltay * source.count * target.count / count;
+			target.co_moment = source.co_moment + target.co_moment + deltax * deltay * static_cast<double>(source.count * target.count) / count;
 			target.meanx = meanx;
 			target.meany = meany;
 			target.count = count;
