@@ -71,7 +71,6 @@ void MetadataManager::ConvertToTransient(MetadataBlock &block) {
 
 	// copy the data to the transient block
 	memcpy(new_buffer.Ptr(), old_buffer.Ptr(), Storage::BLOCK_SIZE);
-
 	block.block = std::move(new_block);
 
 	// unregister the old block
@@ -175,6 +174,7 @@ idx_t MetadataManager::BlockCount() {
 
 void MetadataManager::Flush() {
 	const idx_t total_metadata_size = MetadataManager::METADATA_BLOCK_SIZE * MetadataManager::METADATA_BLOCK_COUNT;
+
 	// write the blocks of the metadata manager to disk
 	for (auto &kv : blocks) {
 		auto &block = kv.second;
@@ -312,6 +312,14 @@ vector<MetadataBlockInfo> MetadataManager::GetMetadataInfo() const {
 	}
 	std::sort(result.begin(), result.end(),
 	          [](const MetadataBlockInfo &a, const MetadataBlockInfo &b) { return a.block_id < b.block_id; });
+	return result;
+}
+
+vector<shared_ptr<BlockHandle>> MetadataManager::GetBlocks() const {
+	vector<shared_ptr<BlockHandle>> result;
+	for (auto &entry : blocks) {
+		result.push_back(entry.second.block);
+	}
 	return result;
 }
 

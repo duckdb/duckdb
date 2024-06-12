@@ -1,8 +1,11 @@
+#include "duckdb/execution/operator/scan/physical_expression_scan.hpp"
+#include "duckdb/execution/operator/scan/physical_dummy_scan.hpp"
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/execution/operator/projection/physical_tableinout_function.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -31,11 +34,41 @@ unique_ptr<TableFilterSet> CreateTableFilterSet(TableFilterSet &table_filters, v
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	if (!op.children.empty()) {
+		auto child_node = CreatePlan(std::move(op.children[0]));
 		// this is for table producing functions that consume subquery results
-		D_ASSERT(op.children.size() == 1);
+		// push a projection node with casts if required
+		if (child_node->types.size() < op.input_table_types.size()) {
+			throw InternalException(
+			    "Mismatch between input table types and child node types - expected %llu but got %llu",
+			    op.input_table_types.size(), child_node->types.size());
+		}
+		vector<LogicalType> return_types;
+		vector<unique_ptr<Expression>> expressions;
+		bool any_cast_required = false;
+		for (idx_t proj_idx = 0; proj_idx < child_node->types.size(); proj_idx++) {
+			auto ref = make_uniq<BoundReferenceExpression>(child_node->types[proj_idx], proj_idx);
+			auto &target_type =
+			    proj_idx < op.input_table_types.size() ? op.input_table_types[proj_idx] : child_node->types[proj_idx];
+			if (child_node->types[proj_idx] != target_type) {
+				// cast is required - push a cast
+				any_cast_required = true;
+				auto cast = BoundCastExpression::AddCastToType(context, std::move(ref), target_type);
+				expressions.push_back(std::move(cast));
+			} else {
+				expressions.push_back(std::move(ref));
+			}
+			return_types.push_back(target_type);
+		}
+		if (any_cast_required) {
+			auto proj = make_uniq<PhysicalProjection>(std::move(return_types), std::move(expressions),
+			                                          child_node->estimated_cardinality);
+			proj->children.push_back(std::move(child_node));
+			child_node = std::move(proj);
+		}
+
 		auto node = make_uniq<PhysicalTableInOutFunction>(op.types, op.function, std::move(op.bind_data), op.column_ids,
 		                                                  op.estimated_cardinality, std::move(op.projected_input));
-		node->children.push_back(CreatePlan(std::move(op.children[0])));
+		node->children.push_back(std::move(child_node));
 		return std::move(node);
 	}
 	if (!op.projected_input.empty()) {
@@ -53,9 +86,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	// create the table scan node
 	if (!op.function.projection_pushdown) {
 		// function does not support projection pushdown
-		auto node = make_uniq<PhysicalTableScan>(op.returned_types, op.function, std::move(op.bind_data),
-		                                         op.returned_types, op.column_ids, vector<column_t>(), op.names,
-		                                         std::move(table_filters), op.estimated_cardinality, op.extra_info);
+		auto node =
+		    make_uniq<PhysicalTableScan>(op.returned_types, op.function, std::move(op.bind_data), op.returned_types,
+		                                 op.column_ids, vector<column_t>(), op.names, std::move(table_filters),
+		                                 op.estimated_cardinality, op.extra_info, std::move(op.parameters));
 		// first check if an additional projection is necessary
 		if (op.column_ids.size() == op.returned_types.size()) {
 			bool projection_necessary = false;
@@ -93,7 +127,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	} else {
 		return make_uniq<PhysicalTableScan>(op.types, op.function, std::move(op.bind_data), op.returned_types,
 		                                    op.column_ids, op.projection_ids, op.names, std::move(table_filters),
-		                                    op.estimated_cardinality, op.extra_info);
+		                                    op.estimated_cardinality, op.extra_info, std::move(op.parameters));
 	}
 }
 

@@ -754,13 +754,6 @@ bool ClientContext::IsActiveResult(ClientContextLock &lock, BaseQueryResult &res
 	return active_query->IsOpenResult(result);
 }
 
-void ClientContext::SetActiveResult(ClientContextLock &lock, BaseQueryResult &result) {
-	if (!active_query) {
-		return;
-	}
-	return active_query->SetOpenResult(result);
-}
-
 unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatementInternal(
     ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
     shared_ptr<PreparedStatementData> &prepared, const PendingQueryParameters &parameters) {
@@ -1107,7 +1100,7 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name,
 		result->schema = schema_name;
 		result->table = table_name;
 		for (auto &column : table->GetColumns().Logical()) {
-			result->columns.emplace_back(column.Name(), column.Type());
+			result->columns.emplace_back(column.Copy());
 		}
 	});
 	return result;

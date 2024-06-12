@@ -77,7 +77,7 @@
     )
     @test isequal(
         df.timestamp_ns,
-        [Dates.DateTime(1677, 9, 21, 0, 12, 43, 146), Dates.DateTime(2262, 4, 11, 23, 47, 16, 854), missing]
+        [Dates.DateTime(1677, 9, 22, 0, 0, 0, 0), Dates.DateTime(2262, 4, 11, 23, 47, 16, 854), missing]
     )
     @test isequal(
         df.interval,

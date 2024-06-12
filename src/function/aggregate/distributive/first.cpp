@@ -229,45 +229,44 @@ AggregateFunction GetDecimalFirstFunction(const LogicalType &type) {
 		return GetFirstFunction<LAST, SKIP_NULLS>(LogicalType::HUGEINT);
 	}
 }
-
 template <bool LAST, bool SKIP_NULLS>
 static AggregateFunction GetFirstFunction(const LogicalType &type) {
-	switch (type.id()) {
-	case LogicalTypeId::BOOLEAN:
+	if (type.id() == LogicalTypeId::DECIMAL) {
+		type.Verify();
+		AggregateFunction function = GetDecimalFirstFunction<LAST, SKIP_NULLS>(type);
+		function.arguments[0] = type;
+		function.return_type = type;
+		return function;
+	}
+	switch (type.InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
 		return GetFirstAggregateTemplated<int8_t, LAST, SKIP_NULLS>(type);
-	case LogicalTypeId::TINYINT:
-		return GetFirstAggregateTemplated<int8_t, LAST, SKIP_NULLS>(type);
-	case LogicalTypeId::SMALLINT:
+	case PhysicalType::INT16:
 		return GetFirstAggregateTemplated<int16_t, LAST, SKIP_NULLS>(type);
-	case LogicalTypeId::INTEGER:
-	case LogicalTypeId::DATE:
+	case PhysicalType::INT32:
 		return GetFirstAggregateTemplated<int32_t, LAST, SKIP_NULLS>(type);
-	case LogicalTypeId::BIGINT:
-	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIME_TZ:
-	case LogicalTypeId::TIMESTAMP_TZ:
+	case PhysicalType::INT64:
 		return GetFirstAggregateTemplated<int64_t, LAST, SKIP_NULLS>(type);
-	case LogicalTypeId::UTINYINT:
+	case PhysicalType::UINT8:
 		return GetFirstAggregateTemplated<uint8_t, LAST, SKIP_NULLS>(type);
-	case LogicalTypeId::USMALLINT:
+	case PhysicalType::UINT16:
 		return GetFirstAggregateTemplated<uint16_t, LAST, SKIP_NULLS>(type);
-	case LogicalTypeId::UINTEGER:
+	case PhysicalType::UINT32:
 		return GetFirstAggregateTemplated<uint32_t, LAST, SKIP_NULLS>(type);
-	case LogicalTypeId::UBIGINT:
+	case PhysicalType::UINT64:
 		return GetFirstAggregateTemplated<uint64_t, LAST, SKIP_NULLS>(type);
-	case LogicalTypeId::HUGEINT:
+	case PhysicalType::INT128:
 		return GetFirstAggregateTemplated<hugeint_t, LAST, SKIP_NULLS>(type);
-	case LogicalTypeId::UHUGEINT:
+	case PhysicalType::UINT128:
 		return GetFirstAggregateTemplated<uhugeint_t, LAST, SKIP_NULLS>(type);
-	case LogicalTypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		return GetFirstAggregateTemplated<float, LAST, SKIP_NULLS>(type);
-	case LogicalTypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		return GetFirstAggregateTemplated<double, LAST, SKIP_NULLS>(type);
-	case LogicalTypeId::INTERVAL:
+	case PhysicalType::INTERVAL:
 		return GetFirstAggregateTemplated<interval_t, LAST, SKIP_NULLS>(type);
-	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::BLOB:
+	case PhysicalType::VARCHAR:
 		if (LAST) {
 			return AggregateFunction::UnaryAggregateDestructor<FirstState<string_t>, string_t, string_t,
 			                                                   FirstFunctionString<LAST, SKIP_NULLS>>(type, type);
@@ -275,14 +274,6 @@ static AggregateFunction GetFirstFunction(const LogicalType &type) {
 			return AggregateFunction::UnaryAggregate<FirstState<string_t>, string_t, string_t,
 			                                         FirstFunctionString<LAST, SKIP_NULLS>>(type, type);
 		}
-	case LogicalTypeId::DECIMAL: {
-		type.Verify();
-		AggregateFunction function = GetDecimalFirstFunction<LAST, SKIP_NULLS>(type);
-		function.arguments[0] = type;
-		function.return_type = type;
-		// TODO set_key here?
-		return function;
-	}
 	default: {
 		using OP = FirstVectorFunction<LAST, SKIP_NULLS>;
 		return AggregateFunction({type}, type, AggregateFunction::StateSize<FirstStateVector>,

@@ -22,9 +22,11 @@ private:
 	data_ptr_t data;
 
 public:
+	static constexpr idx_t DEFAULT_INITIAL_CAPACITY = 512;
+
 	// Create a new owning MemoryStream with an internal  backing buffer with the specified capacity. The stream will
 	// own the backing buffer, resize it when needed and free its memory when the stream is destroyed
-	explicit MemoryStream(idx_t capacity = 512);
+	explicit MemoryStream(idx_t capacity = DEFAULT_INITIAL_CAPACITY);
 
 	// Create a new non-owning MemoryStream over the specified external buffer and capacity. The stream will not take
 	// ownership of the backing buffer, will not attempt to resize it and will not free the memory when the stream
