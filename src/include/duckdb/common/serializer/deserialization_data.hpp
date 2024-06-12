@@ -16,6 +16,7 @@ namespace duckdb {
 class ClientContext;
 class Catalog;
 class DatabaseInstance;
+class CompressionInfo;
 enum class ExpressionType : uint8_t;
 
 struct DeserializationData {
@@ -24,6 +25,7 @@ struct DeserializationData {
 	stack<idx_t> enums;
 	stack<reference<bound_parameter_map_t>> parameter_data;
 	stack<const_reference<LogicalType>> types;
+	stack<const_reference<CompressionInfo>> compression_infos;
 
 	template <class T>
 	void Set(T entry) = delete;
@@ -187,6 +189,23 @@ template <>
 inline void DeserializationData::Unset<const LogicalType>() {
 	AssertNotEmpty(types);
 	types.pop();
+}
+
+template <>
+inline void DeserializationData::Set(const CompressionInfo &compression_info) {
+	compression_infos.emplace(compression_info);
+}
+
+template <>
+inline const CompressionInfo &DeserializationData::Get() {
+	AssertNotEmpty(compression_infos);
+	return compression_infos.top();
+}
+
+template <>
+inline void DeserializationData::Unset<const CompressionInfo>() {
+	AssertNotEmpty(compression_infos);
+	compression_infos.pop();
 }
 
 } // namespace duckdb

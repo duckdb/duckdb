@@ -8,7 +8,12 @@
 
 #pragma once
 
+#include "duckdb/common/typedefs.hpp"
+
 namespace duckdb {
+class Value;
+class Vector;
+struct string_t;
 
 class FSSTPrimitives {
 public:

@@ -279,6 +279,10 @@ CastFunctionSet &DBConfig::GetCastFunctions() {
 	return *cast_functions;
 }
 
+CollationBinding &DBConfig::GetCollationBinding() {
+	return *collation_bindings;
+}
+
 IndexTypeSet &DBConfig::GetIndexTypes() {
 	return *index_types;
 }

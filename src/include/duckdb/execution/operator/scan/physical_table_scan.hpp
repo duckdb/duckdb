@@ -42,7 +42,7 @@ public:
 	vector<string> names;
 	//! The table filters
 	unique_ptr<TableFilterSet> table_filters;
-	//! Currently stores any filters applied to file names (as strings)
+	//! Currently stores info related to filters pushed down into MultiFileLists
 	ExtraOperatorInfo extra_info;
 	//! Parameters
 	vector<Value> parameters;

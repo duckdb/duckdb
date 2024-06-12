@@ -107,14 +107,9 @@ TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(MemoryTag ta
 	return std::move(r.reservation);
 }
 
-shared_ptr<BlockHandle> StandardBufferManager::RegisterTransientMemory(idx_t size) {
-
-	// FIXME: Some transient segments are converted to persistent segments. So, if available,
-	// we need to pass the block size to this function instead of using the global constant,
-	// if we want to support configurable block sizes.
+shared_ptr<BlockHandle> StandardBufferManager::RegisterTransientMemory(const idx_t size) {
 	const idx_t block_size = Storage::BLOCK_SIZE;
 	D_ASSERT(size <= block_size);
-
 	if (size < block_size) {
 		return RegisterSmallMemory(size);
 	}
@@ -124,17 +119,16 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterTransientMemory(idx_t siz
 	return block;
 }
 
-shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(idx_t block_size) {
-	D_ASSERT(block_size < Storage::BLOCK_SIZE);
-	auto reservation =
-	    EvictBlocksOrThrow(MemoryTag::BASE_TABLE, block_size, nullptr, "could not allocate block of size %s%s",
-	                       StringUtil::BytesToHumanReadableString(block_size));
+shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(const idx_t size) {
+	D_ASSERT(size < Storage::BLOCK_SIZE);
+	auto reservation = EvictBlocksOrThrow(MemoryTag::BASE_TABLE, size, nullptr, "could not allocate block of size %s%s",
+	                                      StringUtil::BytesToHumanReadableString(size));
 
-	auto buffer = ConstructManagedBuffer(block_size, nullptr, FileBufferType::TINY_BUFFER);
+	auto buffer = ConstructManagedBuffer(size, nullptr, FileBufferType::TINY_BUFFER);
 
-	// create a new block pointer for this block
+	// Create a new block pointer for this block.
 	auto result = make_shared_ptr<BlockHandle>(*temp_block_manager, ++temporary_id, MemoryTag::BASE_TABLE,
-	                                           std::move(buffer), false, block_size, std::move(reservation));
+	                                           std::move(buffer), false, size, std::move(reservation));
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 	// Initialize the memory with garbage data
 	WriteGarbageIntoBuffer(*result->buffer);
@@ -145,14 +139,14 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(idx_t block_s
 shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx_t block_size, bool can_destroy) {
 	D_ASSERT(block_size >= Storage::BLOCK_SIZE);
 	auto alloc_size = GetAllocSize(block_size);
-	// first evict blocks until we have enough memory to store this buffer
+
+	// Evict blocks until there is enough memory to store the buffer.
 	unique_ptr<FileBuffer> reusable_buffer;
 	auto res = EvictBlocksOrThrow(tag, alloc_size, &reusable_buffer, "could not allocate block of size %s%s",
 	                              StringUtil::BytesToHumanReadableString(alloc_size));
 
+	// Create a new buffer and a block to hold the buffer.
 	auto buffer = ConstructManagedBuffer(block_size, std::move(reusable_buffer));
-
-	// create a new block pointer for this block
 	return make_shared_ptr<BlockHandle>(*temp_block_manager, ++temporary_id, tag, std::move(buffer), can_destroy,
 	                                    alloc_size, std::move(res));
 }
@@ -448,17 +442,22 @@ void StandardBufferManager::RequireTemporaryDirectory() {
 }
 
 void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer) {
+
 	RequireTemporaryDirectory();
+
+	// Append to a few grouped files.
 	if (buffer.size == Storage::BLOCK_SIZE) {
 		evicted_data_per_tag[uint8_t(tag)] += Storage::BLOCK_SIZE;
 		temporary_directory.handle->GetTempFile().WriteTemporaryBuffer(block_id, buffer);
 		return;
 	}
-	evicted_data_per_tag[uint8_t(tag)] += buffer.size;
-	// get the path to write to
-	auto path = GetTemporaryPath(block_id);
+
+	// Get the path to write to.
 	D_ASSERT(buffer.size > Storage::BLOCK_SIZE);
-	// create the file and write the size followed by the buffer contents
+	auto path = GetTemporaryPath(block_id);
+	evicted_data_per_tag[uint8_t(tag)] += buffer.size;
+
+	// Create the file and write the size followed by the buffer contents.
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
 	handle->Write(&buffer.size, sizeof(idx_t), 0);
@@ -473,18 +472,20 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(MemoryTag tag,
 		evicted_data_per_tag[uint8_t(tag)] -= Storage::BLOCK_SIZE;
 		return temporary_directory.handle->GetTempFile().ReadTemporaryBuffer(id, std::move(reusable_buffer));
 	}
+
+	// Open the temporary file and read its size.
 	idx_t block_size;
-	// open the temporary file and read the size
 	auto path = GetTemporaryPath(id);
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 	handle->Read(&block_size, sizeof(idx_t), 0);
 	evicted_data_per_tag[uint8_t(tag)] -= block_size;
 
-	// now allocate a buffer of this size and read the data into that buffer
+	// Allocate a buffer of the file's size and read the data into that buffer.
 	auto buffer = ReadTemporaryBufferInternal(*this, *handle, sizeof(idx_t), block_size, std::move(reusable_buffer));
-
 	handle.reset();
+
+	// Delete the file and return the buffer.
 	DeleteTemporaryFile(id);
 	return buffer;
 }
