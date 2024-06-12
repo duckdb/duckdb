@@ -31,6 +31,7 @@ void VerifyArrowDatasetLoaded() {
 }
 
 PyArrowObjectType GetArrowType(const py::handle &obj) {
+	D_ASSERT(py::gil_check());
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	// First Verify Lib Types
 	auto table_class = import_cache.pyarrow.Table();

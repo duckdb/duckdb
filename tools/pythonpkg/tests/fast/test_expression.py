@@ -1,9 +1,23 @@
+import platform
 import duckdb
 import pytest
 from duckdb.typing import INTEGER, VARCHAR, TIMESTAMP
-from duckdb import Expression, ConstantExpression, ColumnExpression, StarExpression, FunctionExpression, CaseExpression
+from duckdb import (
+    Expression,
+    ConstantExpression,
+    ColumnExpression,
+    CoalesceOperator,
+    StarExpression,
+    FunctionExpression,
+    CaseExpression,
+)
 from duckdb.value.constant import Value, IntegerValue
 import datetime
+
+pytestmark = pytest.mark.skipif(
+    platform.system() == "Emscripten",
+    reason="Extensions are not supported on Emscripten",
+)
 
 
 @pytest.fixture(scope='function')
@@ -63,6 +77,110 @@ class TestExpression(object):
         column = ColumnExpression('d')
         with pytest.raises(duckdb.BinderException, match='Referenced column "d" not found'):
             rel2 = rel.select(column)
+
+    def test_coalesce_operator(self):
+        con = duckdb.connect()
+
+        rel = con.sql(
+            """
+            select 'unused'
+        """
+        )
+
+        rel2 = rel.select(CoalesceOperator(ConstantExpression(None), ConstantExpression('hello').cast(int)))
+        res = rel2.explain()
+        assert 'COALESCE' in res
+
+        with pytest.raises(duckdb.ConversionException, match="Could not convert string 'hello' to INT64"):
+            rel2.fetchall()
+
+        con.execute(
+            """
+            CREATE TABLE exprtest(a INTEGER, b INTEGER);
+            INSERT INTO exprtest VALUES (42, 10), (43, 100), (NULL, 1), (45, 0)
+        """
+        )
+
+        with pytest.raises(duckdb.InvalidInputException, match='Please provide at least one argument'):
+            rel3 = rel.select(CoalesceOperator())
+
+        rel4 = rel.select(CoalesceOperator(ConstantExpression(None)))
+        assert rel4.fetchone() == (None,)
+
+        rel5 = rel.select(CoalesceOperator(ConstantExpression(42)))
+        assert rel5.fetchone() == (42,)
+
+        exprtest = con.table('exprtest')
+        rel6 = exprtest.select(CoalesceOperator(ColumnExpression("a")))
+        res = rel6.fetchall()
+        assert res == [(42,), (43,), (None,), (45,)]
+
+        rel7 = con.sql("select 42")
+        rel7 = rel7.select(
+            CoalesceOperator(
+                ConstantExpression(None), ConstantExpression(None), ConstantExpression(42), ConstantExpression(43)
+            )
+        )
+        res = rel7.fetchall()
+        assert res == [(42,)]
+
+        rel7 = con.sql("select 42")
+        rel7 = rel7.select(CoalesceOperator(ConstantExpression(None), ConstantExpression(None), ConstantExpression(42)))
+        res = rel7.fetchall()
+        assert res == [(42,)]
+
+        rel7 = con.sql("select 42")
+        rel7 = rel7.select(CoalesceOperator(ConstantExpression(None), ConstantExpression(None), ConstantExpression(43)))
+        res = rel7.fetchall()
+        assert res == [(43,)]
+
+        rel7 = con.sql("select 42")
+        rel7 = rel7.select(
+            CoalesceOperator(ConstantExpression(None), ConstantExpression(None), ConstantExpression(None))
+        )
+        res = rel7.fetchall()
+        assert res == [(None,)]
+
+        # These are converted tests
+        # See 'test_coalesce.test_slow' for the original tests
+
+        con.execute("SET default_null_order='nulls_first';")
+
+        rel7 = exprtest.select(
+            CoalesceOperator(
+                ConstantExpression(None),
+                ConstantExpression(None),
+                ConstantExpression(None),
+                ColumnExpression("a"),
+                ConstantExpression(None),
+                ColumnExpression("b"),
+            )
+        )
+        res = rel7.fetchall()
+        assert res == [(42,), (43,), (1,), (45,)]
+
+        rel7 = exprtest.filter((ColumnExpression("b") == 1) | (CoalesceOperator("a", "b") == 42)).sort("a")
+        res = rel7.fetchall()
+        assert res == [(None, 1), (42, 10)]
+
+        rel7 = exprtest.filter(
+            (CoalesceOperator("a", "b") == 1) | (CoalesceOperator("a", "b") == 43) | (CoalesceOperator("a", "b") == 45)
+        ).sort("a")
+        res = rel7.fetchall()
+        assert res == [(None, 1), (43, 100), (45, 0)]
+
+        rel7 = exprtest.filter(
+            (CoalesceOperator("a", "b") == 1)
+            | (CoalesceOperator("a", "b") == 42)
+            | (CoalesceOperator("a", "b") == 43)
+            | (CoalesceOperator("a", "b") == 45)
+        ).sort("a")
+        res = rel7.fetchall()
+        assert res == [(None, 1), (42, 10), (43, 100), (45, 0)]
+
+        rel7 = exprtest.filter((ColumnExpression("b") == 1) | (CoalesceOperator("a", "b") == 1)).sort("a")
+        res = rel7.fetchall()
+        assert res == [(None, 1)]
 
     def test_column_expression_explain(self):
         con = duckdb.connect()

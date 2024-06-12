@@ -31,12 +31,14 @@ class NestedValidity {
 	data_ptr_t *struct_validity_locations;
 	idx_t entry_idx;
 	idx_t idx_in_entry;
+	idx_t list_validity_offset;
 
 public:
 	explicit NestedValidity(data_ptr_t validitymask_location);
 	NestedValidity(data_ptr_t *validitymask_locations, idx_t child_vector_index);
 	void SetInvalid(idx_t idx);
 	bool IsValid(idx_t idx);
+	void OffsetListBy(idx_t offset);
 };
 
 struct RowOperationsState {

@@ -8,7 +8,8 @@ vector<string> Transformer::TransformStringList(duckdb_libpgquery::PGList *list)
 		return result;
 	}
 	for (auto node = list->head; node != nullptr; node = node->next) {
-		result.emplace_back(reinterpret_cast<duckdb_libpgquery::PGValue *>(node->data.ptr_value)->val.str);
+		auto value = PGPointerCast<duckdb_libpgquery::PGValue>(node->data.ptr_value);
+		result.emplace_back(value->val.str);
 	}
 	return result;
 }

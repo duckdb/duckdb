@@ -104,12 +104,24 @@ unique_ptr<DPJoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
 	// FIXME: we should probably actually benchmark that as well
 	// FIXME: should consider different join algorithms, should we pick a join algorithm here as well? (probably)
 	optional_ptr<NeighborInfo> best_connection = nullptr;
-
-	// cross products are techincally still connections, but the filter expression is a null_ptr
+	// cross products are technically still connections, but the filter expression is a null_ptr
 	if (!possible_connections.empty()) {
 		best_connection = &possible_connections.back().get();
 	}
+	auto join_type = JoinType::INVALID;
+	for (auto &filter_binding : best_connection->filters) {
+		if (!filter_binding->left_set || !filter_binding->right_set) {
+			continue;
+		}
 
+		join_type = filter_binding->join_type;
+		// prefer joining on semi and anti joins as they have a higher chance of being more
+		// selective
+		if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
+			break;
+		}
+	}
+	// need the filter info from the Neighborhood info.
 	auto cost = cost_model.ComputeCost(left, right);
 	auto result = make_uniq<DPJoinNode>(set, best_connection, left.set, right.set, cost);
 	result->cardinality = cost_model.cardinality_estimator.EstimateCardinalityWithSet<idx_t>(set);

@@ -20,13 +20,10 @@ struct EvictionQueue;
 struct BufferEvictionNode {
 	BufferEvictionNode() {
 	}
-	BufferEvictionNode(weak_ptr<BlockHandle> handle_p, idx_t timestamp_p)
-	    : handle(std::move(handle_p)), timestamp(timestamp_p) {
-		D_ASSERT(!handle.expired());
-	}
+	BufferEvictionNode(weak_ptr<BlockHandle> handle_p, idx_t eviction_seq_num);
 
 	weak_ptr<BlockHandle> handle;
-	idx_t timestamp;
+	idx_t handle_sequence_number;
 
 	bool CanUnload(BlockHandle &handle_p);
 	shared_ptr<BlockHandle> TryGetBlockHandle();
@@ -41,7 +38,7 @@ class BufferPool {
 	friend class StandardBufferManager;
 
 public:
-	explicit BufferPool(idx_t maximum_memory);
+	explicit BufferPool(idx_t maximum_memory, bool track_eviction_timestamps);
 	virtual ~BufferPool();
 
 	//! Set a new memory limit to the buffer pool, throws an exception if the new limit is too low and not enough
@@ -74,6 +71,9 @@ protected:
 	virtual EvictionResult EvictBlocksInternal(EvictionQueue &queue, MemoryTag tag, idx_t extra_memory,
 	                                           idx_t memory_limit, unique_ptr<FileBuffer> *buffer = nullptr);
 
+	//! Purge all blocks that haven't been pinned within the last N seconds
+	idx_t PurgeAgedBlocks(uint32_t max_age_sec);
+	idx_t PurgeAgedBlocksInternal(EvictionQueue &queue, uint32_t max_age_sec, int64_t now, int64_t limit);
 	//! Garbage collect dead nodes in the eviction queue.
 	void PurgeQueue(FileBufferType type);
 	//! Add a buffer handle to the eviction queue. Returns true, if the queue is
@@ -91,7 +91,8 @@ protected:
 	atomic<idx_t> current_memory;
 	//! The maximum amount of memory that the buffer manager can keep (in bytes)
 	atomic<idx_t> maximum_memory;
-
+	//! Record timestamps of buffer manager unpin() events. Usable by custom eviction policies.
+	bool track_eviction_timestamps;
 	//! Eviction queues
 	vector<unique_ptr<EvictionQueue>> queues;
 	//! Memory manager for concurrently used temporary memory, e.g., for physical operators

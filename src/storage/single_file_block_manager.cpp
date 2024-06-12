@@ -4,11 +4,11 @@
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
-#include "duckdb/storage/metadata/metadata_reader.hpp"
-#include "duckdb/storage/metadata/metadata_writer.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/metadata/metadata_reader.hpp"
+#include "duckdb/storage/metadata/metadata_writer.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -62,7 +62,7 @@ MainHeader MainHeader::Read(ReadStream &source) {
 	if (header.version_number != VERSION_NUMBER) {
 		auto version = GetDuckDBVersion(header.version_number);
 		string version_text;
-		if (version) {
+		if (!version.empty()) {
 			// known version
 			version_text = "DuckDB version " + string(version);
 		} else {
@@ -228,7 +228,7 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	handle = fs.OpenFile(path, flags);
 	if (!handle) {
 		// this can only happen in read-only mode - as that is when we set FILE_FLAGS_NULL_IF_NOT_EXISTS
-		throw CatalogException("Cannot open database \"%s\" in read-only mode: database does not exist", path);
+		throw IOException("Cannot open database \"%s\" in read-only mode: database does not exist", path);
 	}
 
 	MainHeader::CheckMagicBytes(*handle);
@@ -268,8 +268,9 @@ void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t locatio
 
 	// verify the checksum
 	if (stored_checksum != computed_checksum) {
-		throw IOException("Corrupt database file: computed checksum %llu does not match stored checksum %llu in block",
-		                  computed_checksum, stored_checksum);
+		throw IOException("Corrupt database file: computed checksum %llu does not match stored checksum %llu in block "
+		                  "at location %llu",
+		                  computed_checksum, stored_checksum, location);
 	}
 }
 
@@ -347,6 +348,15 @@ block_id_t SingleFileBlockManager::GetFreeBlockId() {
 	return block;
 }
 
+block_id_t SingleFileBlockManager::PeekFreeBlockId() {
+	lock_guard<mutex> lock(block_lock);
+	if (!free_list.empty()) {
+		return *free_list.begin();
+	} else {
+		return max_block;
+	}
+}
+
 void SingleFileBlockManager::MarkBlockAsFree(block_id_t block_id) {
 	lock_guard<mutex> lock(block_lock);
 	D_ASSERT(block_id >= 0);
@@ -410,6 +420,10 @@ idx_t SingleFileBlockManager::FreeBlocks() {
 	return free_list.size();
 }
 
+bool SingleFileBlockManager::IsRemote() {
+	return !handle->OnDiskFile();
+}
+
 unique_ptr<Block> SingleFileBlockManager::ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) {
 	D_ASSERT(source_buffer.AllocSize() == Storage::BLOCK_ALLOC_SIZE);
 	return make_uniq<Block>(source_buffer, block_id);
@@ -426,10 +440,39 @@ unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileB
 	return result;
 }
 
+idx_t SingleFileBlockManager::GetBlockLocation(block_id_t block_id) {
+	return BLOCK_START + NumericCast<idx_t>(block_id) * Storage::BLOCK_ALLOC_SIZE;
+}
+
 void SingleFileBlockManager::Read(Block &block) {
 	D_ASSERT(block.id >= 0);
 	D_ASSERT(std::find(free_list.begin(), free_list.end(), block.id) == free_list.end());
-	ReadAndChecksum(block, BLOCK_START + NumericCast<idx_t>(block.id) * Storage::BLOCK_ALLOC_SIZE);
+	ReadAndChecksum(block, GetBlockLocation(block.id));
+}
+
+void SingleFileBlockManager::ReadBlocks(FileBuffer &buffer, block_id_t start_block, idx_t block_count) {
+	D_ASSERT(start_block >= 0);
+	D_ASSERT(block_count >= 1);
+
+	// read the buffer from disk
+	auto location = GetBlockLocation(start_block);
+	buffer.Read(*handle, location);
+
+	// for each of the blocks - verify the checksum
+	auto ptr = buffer.InternalBuffer();
+	for (idx_t i = 0; i < block_count; i++) {
+		// compute the checksum
+		auto start_ptr = ptr + i * Storage::BLOCK_ALLOC_SIZE;
+		auto stored_checksum = Load<uint64_t>(start_ptr);
+		uint64_t computed_checksum = Checksum(start_ptr + Storage::BLOCK_HEADER_SIZE, Storage::BLOCK_SIZE);
+		// verify the checksum
+		if (stored_checksum != computed_checksum) {
+			throw IOException(
+			    "Corrupt database file: computed checksum %llu does not match stored checksum %llu in block "
+			    "at location %llu",
+			    computed_checksum, stored_checksum, location + i * Storage::BLOCK_ALLOC_SIZE);
+		}
+	}
 }
 
 void SingleFileBlockManager::Write(FileBuffer &buffer, block_id_t block_id) {
@@ -504,15 +547,17 @@ protected:
 };
 
 void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
-	// set the iteration count
-	header.iteration = ++iteration_count;
-
 	auto free_list_blocks = GetFreeListBlocks();
 
 	// now handle the free list
 	auto &metadata_manager = GetMetadataManager();
 	// add all modified blocks to the free list: they can now be written to again
 	metadata_manager.MarkBlocksAsModified();
+
+	lock_guard<mutex> lock(block_lock);
+	// set the iteration count
+	header.iteration = ++iteration_count;
+
 	for (auto &block : modified_blocks) {
 		free_list.insert(block);
 		newly_freed_list.insert(block);

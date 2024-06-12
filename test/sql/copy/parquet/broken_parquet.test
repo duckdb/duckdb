@@ -34,3 +34,8 @@ select count(*) from parquet_scan('test/sql/copy/parquet/broken/hugefooter.parqu
 statement error
 select count(*) from parquet_scan('test/sql/copy/parquet/broken/garbledfooter.parquet')
 ----
+
+statement error
+from parquet_scan('test/sql/copy/parquet/broken/broken_structure.parquet')
+----
+Parquet file is likely corrupted

@@ -14,10 +14,11 @@
 
 #include "dbgen/config.h"
 #include "dbgen/dss.h"
+#include <memory>
 
 DSS_HUGE NextRand(DSS_HUGE seed);
 void permute(long *set, int cnt, seed_t *seed);
-void permute_dist(distribution *d, seed_t *seed);
+void permute_dist(distribution *d, seed_t *seed, DBGenContext *ctx);
 long seed;
 char *eol[2] = {" ", "},"};
 
@@ -27,8 +28,8 @@ char *eol[2] = {" ", "},"};
 
 void permute(long *a, int c, seed_t *seed) {
 	int i;
-	static DSS_HUGE source;
-	static long temp;
+	DSS_HUGE source;
+	long temp;
 
 	if (a != (long *)NULL) {
 		for (i = 0; i < c; i++) {
@@ -42,17 +43,17 @@ void permute(long *a, int c, seed_t *seed) {
 	return;
 }
 
-void permute_dist(distribution *d, seed_t *seed) {
+void permute_dist(distribution *d, seed_t *seed, DBGenContext *ctx) {
 	int i;
 
 	if (d != NULL) {
-		if (d->permute == (long *)NULL) {
-			d->permute = (long *)malloc(sizeof(long) * DIST_SIZE(d));
-			MALLOC_CHECK(d->permute);
+		if (ctx->permute == (long *)NULL) {
+			ctx->permute = (long *)malloc(sizeof(long) * DIST_SIZE(d));
+			MALLOC_CHECK(ctx->permute);
 		}
 		for (i = 0; i < DIST_SIZE(d); i++)
-			*(d->permute + i) = i;
-		permute(d->permute, DIST_SIZE(d), seed);
+			*(ctx->permute + i) = i;
+		permute(ctx->permute, DIST_SIZE(d), seed);
 	} else
 		INTERNAL_ERROR("Bad call to permute_dist");
 

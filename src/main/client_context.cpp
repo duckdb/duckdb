@@ -127,7 +127,7 @@ struct DebugClientContextState : public ClientContextState {
 		}
 		return RebindQueryInfo::DO_NOT_REBIND;
 	}
-	RebindQueryInfo OnExecutePrepared(ClientContext &context, PreparedStatementData &prepared_statement,
+	RebindQueryInfo OnExecutePrepared(ClientContext &context, PreparedStatementCallbackInfo &info,
 	                                  RebindQueryInfo current_rebind) override {
 		return RebindQueryInfo::ATTEMPT_TO_REBIND;
 	}
@@ -520,7 +520,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 		rebind = RebindQueryInfo::ATTEMPT_TO_REBIND;
 	}
 	for (auto const &s : registered_state) {
-		auto new_rebind = s.second->OnExecutePrepared(*this, *prepared, rebind);
+		PreparedStatementCallbackInfo info(*prepared, parameters);
+		auto new_rebind = s.second->OnExecutePrepared(*this, info, rebind);
 		if (new_rebind == RebindQueryInfo::ATTEMPT_TO_REBIND) {
 			rebind = RebindQueryInfo::ATTEMPT_TO_REBIND;
 		}
@@ -529,6 +530,10 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 		RebindPreparedStatement(lock, query, prepared, parameters);
 	}
 	return PendingPreparedStatementInternal(lock, prepared, parameters);
+}
+
+void ClientContext::WaitForTask(ClientContextLock &lock, BaseQueryResult &result) {
+	active_query->executor->WaitForTask();
 }
 
 PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &lock, BaseQueryResult &result,
@@ -751,13 +756,6 @@ bool ClientContext::IsActiveResult(ClientContextLock &lock, BaseQueryResult &res
 		return false;
 	}
 	return active_query->IsOpenResult(result);
-}
-
-void ClientContext::SetActiveResult(ClientContextLock &lock, BaseQueryResult &result) {
-	if (!active_query) {
-		return;
-	}
-	return active_query->SetOpenResult(result);
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatementInternal(
@@ -1106,7 +1104,7 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name,
 		result->schema = schema_name;
 		result->table = table_name;
 		for (auto &column : table->GetColumns().Logical()) {
-			result->columns.emplace_back(column.Name(), column.Type());
+			result->columns.emplace_back(column.Copy());
 		}
 	});
 	return result;

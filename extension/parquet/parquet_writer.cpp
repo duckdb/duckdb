@@ -8,6 +8,8 @@
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -214,6 +216,11 @@ CopyTypeSupport ParquetWriter::TypeIsSupported(const LogicalType &type) {
 
 void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
                                         duckdb_parquet::format::SchemaElement &schema_ele) {
+	if (duckdb_type.IsJSONType()) {
+		schema_ele.converted_type = ConvertedType::JSON;
+		schema_ele.__isset.converted_type = true;
+		return;
+	}
 	switch (duckdb_type.id()) {
 	case LogicalTypeId::TINYINT:
 		schema_ele.converted_type = ConvertedType::INT_8;
@@ -262,7 +269,6 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 		break;
 	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 		schema_ele.converted_type = ConvertedType::TIMESTAMP_MICROS;
 		schema_ele.__isset.converted_type = true;
@@ -270,6 +276,13 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 		schema_ele.logicalType.__isset.TIMESTAMP = true;
 		schema_ele.logicalType.TIMESTAMP.isAdjustedToUTC = (duckdb_type.id() == LogicalTypeId::TIMESTAMP_TZ);
 		schema_ele.logicalType.TIMESTAMP.unit.__isset.MICROS = true;
+		break;
+	case LogicalTypeId::TIMESTAMP_NS:
+		schema_ele.__isset.converted_type = false;
+		schema_ele.__isset.logicalType = true;
+		schema_ele.logicalType.__isset.TIMESTAMP = true;
+		schema_ele.logicalType.TIMESTAMP.isAdjustedToUTC = false;
+		schema_ele.logicalType.TIMESTAMP.unit.__isset.NANOS = true;
 		break;
 	case LogicalTypeId::TIMESTAMP_MS:
 		schema_ele.converted_type = ConvertedType::TIMESTAMP_MILLIS;
@@ -458,6 +471,11 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 			}
 		}
 
+		// Reserving these once at the start really pays off
+		for (auto &write_state : write_states) {
+			write_state->definition_levels.reserve(buffer.Count());
+		}
+
 		for (auto &chunk : buffer.Chunks({column_ids})) {
 			for (idx_t i = 0; i < next; i++) {
 				col_writers[i].get().Prepare(*write_states[i], nullptr, chunk.data[i], chunk.size());
@@ -481,6 +499,42 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 	result.heaps = buffer.GetHeapReferences();
 }
 
+// Validation code adapted from Impala
+static void ValidateOffsetInFile(const string &filename, idx_t col_idx, idx_t file_length, idx_t offset,
+                                 const string &offset_name) {
+	if (offset < 0 || offset >= file_length) {
+		throw IOException("File '%s': metadata is corrupt. Column %d has invalid "
+		                  "%s (offset=%llu file_size=%llu).",
+		                  filename, col_idx, offset_name, offset, file_length);
+	}
+}
+
+static void ValidateColumnOffsets(const string &filename, idx_t file_length, const ParquetRowGroup &row_group) {
+	for (idx_t i = 0; i < row_group.columns.size(); ++i) {
+		const auto &col_chunk = row_group.columns[i];
+		ValidateOffsetInFile(filename, i, file_length, col_chunk.meta_data.data_page_offset, "data page offset");
+		auto col_start = NumericCast<idx_t>(col_chunk.meta_data.data_page_offset);
+		// The file format requires that if a dictionary page exists, it be before data pages.
+		if (col_chunk.meta_data.__isset.dictionary_page_offset) {
+			ValidateOffsetInFile(filename, i, file_length, col_chunk.meta_data.dictionary_page_offset,
+			                     "dictionary page offset");
+			if (NumericCast<idx_t>(col_chunk.meta_data.dictionary_page_offset) >= col_start) {
+				throw IOException("Parquet file '%s': metadata is corrupt. Dictionary "
+				                  "page (offset=%llu) must come before any data pages (offset=%llu).",
+				                  filename, col_chunk.meta_data.dictionary_page_offset, col_start);
+			}
+			col_start = col_chunk.meta_data.dictionary_page_offset;
+		}
+		auto col_len = NumericCast<idx_t>(col_chunk.meta_data.total_compressed_size);
+		auto col_end = col_start + col_len;
+		if (col_end <= 0 || col_end > file_length) {
+			throw IOException("Parquet file '%s': metadata is corrupt. Column %llu has "
+			                  "invalid column offsets (offset=%llu, size=%llu, file_size=%llu).",
+			                  filename, i, col_start, col_len, file_length);
+		}
+	}
+}
+
 void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {
 	lock_guard<mutex> glock(lock);
 	auto &row_group = prepared.row_group;
@@ -494,6 +548,8 @@ void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {
 		auto write_state = std::move(states[col_idx]);
 		col_writer->FinalizeWrite(*write_state);
 	}
+	// let's make sure all offsets are ay-okay
+	ValidateColumnOffsets(file_name, writer->GetTotalWritten(), row_group);
 
 	// append the row group to the file meta data
 	file_meta_data.row_groups.push_back(row_group);
@@ -538,7 +594,7 @@ void ParquetWriter::Finalize() {
 	}
 
 	// flush to disk
-	writer->Sync();
+	writer->Close();
 	writer.reset();
 }
 

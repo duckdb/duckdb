@@ -208,6 +208,11 @@ static unique_ptr<FunctionData> ArrayGenericBinaryBind(ClientContext &context, S
 	auto &left_type = arguments[0]->return_type;
 	auto &right_type = arguments[1]->return_type;
 
+	// mystery to me how anything non-array could ever end up here but it happened
+	if (left_type.id() != LogicalTypeId::ARRAY || right_type.id() != LogicalTypeId::ARRAY) {
+		throw InvalidInputException(StringUtil::Format("%s: Arguments must be arrays of FLOAT or DOUBLE", OP::NAME));
+	}
+
 	auto left_size = ArrayType::GetSize(left_type);
 	auto right_size = ArrayType::GetSize(right_type);
 	if (left_size != right_size) {

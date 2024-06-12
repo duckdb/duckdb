@@ -164,7 +164,7 @@ struct ArgMinMaxBase {
 		if (!state.is_initialized || state.arg_null) {
 			finalize_data.ReturnNull();
 		} else {
-			STATE::template ReadValue(finalize_data.result, state.arg, target);
+			STATE::template ReadValue<T>(finalize_data.result, state.arg, target);
 		}
 	}
 
@@ -175,7 +175,7 @@ struct ArgMinMaxBase {
 	static unique_ptr<FunctionData> Bind(ClientContext &context, AggregateFunction &function,
 	                                     vector<unique_ptr<Expression>> &arguments) {
 		if (arguments[1]->return_type.InternalType() == PhysicalType::VARCHAR) {
-			ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->return_type, false);
+			ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->return_type);
 		}
 		function.arguments[0] = arguments[0]->return_type;
 		function.return_type = arguments[0]->return_type;
@@ -248,7 +248,7 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR, IGNORE_NULL> {
 			return;
 		}
 		if (!target.is_initialized || COMPARATOR::Operation(source.value, target.value)) {
-			STATE::template AssignValue(target.value, source.value);
+			STATE::template AssignValue<typename STATE::BY_TYPE>(target.value, source.value);
 			AssignVector(target, *source.arg, source.arg_null, 0);
 			target.is_initialized = true;
 		}

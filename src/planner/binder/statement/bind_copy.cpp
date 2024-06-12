@@ -33,9 +33,6 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	if (!config.options.enable_external_access) {
 		throw PermissionException("COPY TO is disabled by configuration");
 	}
-	BoundStatement result;
-	result.types = {LogicalType::BIGINT};
-	result.names = {"Count"};
 
 	// lookup the format in the catalog
 	auto &copy_function =
@@ -55,12 +52,15 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	}
 
 	bool use_tmp_file = true;
-	bool overwrite_or_ignore = false;
+	CopyOverwriteMode overwrite_mode = CopyOverwriteMode::COPY_ERROR_ON_CONFLICT;
 	FilenamePattern filename_pattern;
 	bool user_set_use_tmp_file = false;
 	bool per_thread_output = false;
 	optional_idx file_size_bytes;
 	vector<idx_t> partition_cols;
+	bool seen_overwrite_mode = false;
+	bool seen_filepattern = false;
+	CopyFunctionReturnType return_type = CopyFunctionReturnType::CHANGED_ROWS;
 
 	CopyFunctionBindInput bind_input(*stmt.info);
 
@@ -68,20 +68,37 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 
 	auto original_options = stmt.info->options;
 	stmt.info->options.clear();
-
 	for (auto &option : original_options) {
 		auto loption = StringUtil::Lower(option.first);
 		if (loption == "use_tmp_file") {
 			use_tmp_file = GetBooleanArg(context, option.second);
 			user_set_use_tmp_file = true;
-		} else if (loption == "overwrite_or_ignore") {
-			overwrite_or_ignore = GetBooleanArg(context, option.second);
+		} else if (loption == "overwrite_or_ignore" || loption == "overwrite" || loption == "append") {
+			if (seen_overwrite_mode) {
+				throw BinderException("Can only set one of OVERWRITE_OR_IGNORE, OVERWRITE or APPEND");
+			}
+			seen_overwrite_mode = true;
+
+			auto boolean = GetBooleanArg(context, option.second);
+			if (boolean) {
+				if (loption == "overwrite_or_ignore") {
+					overwrite_mode = CopyOverwriteMode::COPY_OVERWRITE_OR_IGNORE;
+				} else if (loption == "overwrite") {
+					overwrite_mode = CopyOverwriteMode::COPY_OVERWRITE;
+				} else if (loption == "append") {
+					if (!seen_filepattern) {
+						filename_pattern.SetFilenamePattern("{uuid}");
+					}
+					overwrite_mode = CopyOverwriteMode::COPY_APPEND;
+				}
+			}
 		} else if (loption == "filename_pattern") {
 			if (option.second.empty()) {
 				throw IOException("FILENAME_PATTERN cannot be empty");
 			}
 			filename_pattern.SetFilenamePattern(
 			    option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>());
+			seen_filepattern = true;
 		} else if (loption == "file_extension") {
 			if (option.second.empty()) {
 				throw IOException("FILE_EXTENSION cannot be empty");
@@ -104,9 +121,31 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 		} else if (loption == "partition_by") {
 			auto converted = ConvertVectorToValue(std::move(option.second));
 			partition_cols = ParseColumnsOrdered(converted, select_node.names, loption);
+		} else if (loption == "return_files") {
+			if (GetBooleanArg(context, option.second)) {
+				return_type = CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST;
+			}
 		} else {
+			if (loption == "compression") {
+				if (option.second.empty()) {
+					// This can't be empty
+					throw BinderException("COMPRESSION option, in the file scanner, can't be empty. It should be set "
+					                      "to AUTO, UNCOMPRESSED, GZIP, SNAPPY or ZSTD. Depending on the file format.");
+				}
+				auto parameter = StringUtil::Lower(option.second[0].ToString());
+				if (parameter == "gzip" && !StringUtil::EndsWith(bind_input.file_extension, ".gz")) {
+					// We just add .gz
+					bind_input.file_extension += ".gz";
+				} else if (parameter == "zstd" && !StringUtil::EndsWith(bind_input.file_extension, ".zst")) {
+					// We just add .zst
+					bind_input.file_extension += ".zst";
+				}
+			}
 			stmt.info->options[option.first] = option.second;
 		}
+	}
+	if (overwrite_mode == CopyOverwriteMode::COPY_APPEND && !filename_pattern.HasUUID()) {
+		throw BinderException("APPEND mode requires a {uuid} label in filename_pattern");
 	}
 	if (user_set_use_tmp_file && per_thread_output) {
 		throw NotImplementedException("Can't combine USE_TMP_FILE and PER_THREAD_OUTPUT for COPY");
@@ -162,7 +201,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	auto copy = make_uniq<LogicalCopyToFile>(copy_function.function, std::move(function_data), std::move(stmt.info));
 	copy->file_path = file_path;
 	copy->use_tmp_file = use_tmp_file;
-	copy->overwrite_or_ignore = overwrite_or_ignore;
+	copy->overwrite_mode = overwrite_mode;
 	copy->filename_pattern = filename_pattern;
 	copy->file_extension = bind_input.file_extension;
 	copy->per_thread_output = per_thread_output;
@@ -172,12 +211,28 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	copy->rotate = rotate;
 	copy->partition_output = !partition_cols.empty();
 	copy->partition_columns = std::move(partition_cols);
+	copy->return_type = return_type;
 
 	copy->names = unique_column_names;
 	copy->expected_types = select_node.types;
 
 	copy->AddChild(std::move(select_node.plan));
 
+	auto &properties = GetStatementProperties();
+	switch (copy->return_type) {
+	case CopyFunctionReturnType::CHANGED_ROWS:
+		properties.return_type = StatementReturnType::CHANGED_ROWS;
+		break;
+	case CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST:
+		properties.return_type = StatementReturnType::QUERY_RESULT;
+		break;
+	default:
+		throw NotImplementedException("Unknown CopyFunctionReturnType");
+	}
+
+	BoundStatement result;
+	result.names = GetCopyFunctionReturnNames(copy->return_type);
+	result.types = GetCopyFunctionReturnLogicalTypes(copy->return_type);
 	result.plan = std::move(copy);
 
 	return result;

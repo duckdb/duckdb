@@ -52,8 +52,10 @@ shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, optional_ptr<Bin
 }
 
 Binder::Binder(bool, ClientContext &context, shared_ptr<Binder> parent_p, BinderType binder_type)
-    : context(context), bind_context(*this), parent(std::move(parent_p)), bound_tables(0), binder_type(binder_type) {
+    : context(context), bind_context(*this), parent(std::move(parent_p)), bound_tables(0), binder_type(binder_type),
+      entry_retriever(context) {
 	if (parent) {
+		entry_retriever.SetCallback(parent->entry_retriever.GetCallback());
 
 		// We have to inherit macro and lambda parameter bindings and from the parent binder, if there is a parent.
 		macro_binding = parent->macro_binding;
@@ -189,6 +191,8 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind(statement.Cast<DetachStatement>());
 	case StatementType::COPY_DATABASE_STATEMENT:
 		return Bind(statement.Cast<CopyDatabaseStatement>());
+	case StatementType::UPDATE_EXTENSIONS_STATEMENT:
+		return Bind(statement.Cast<UpdateExtensionsStatement>());
 	default: // LCOV_EXCL_START
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));
@@ -512,9 +516,26 @@ void Binder::AddTableName(string table_name) {
 	root_binder.table_names.insert(std::move(table_name));
 }
 
+void Binder::AddReplacementScan(const string &table_name, unique_ptr<TableRef> replacement) {
+	auto &root_binder = GetRootBinder();
+	auto it = root_binder.replacement_scans.find(table_name);
+	replacement->column_name_alias.clear();
+	replacement->alias.clear();
+	if (it == root_binder.replacement_scans.end()) {
+		root_binder.replacement_scans[table_name] = std::move(replacement);
+	} else {
+		// A replacement scan by this name was previously registered, we can just use it
+	}
+}
+
 const unordered_set<string> &Binder::GetTableNames() {
 	auto &root_binder = GetRootBinder();
 	return root_binder.table_names;
+}
+
+case_insensitive_map_t<unique_ptr<TableRef>> &Binder::GetReplacementScans() {
+	auto &root_binder = GetRootBinder();
+	return root_binder.replacement_scans;
 }
 
 // FIXME: this is extremely naive
@@ -584,6 +605,12 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::QUERY_RESULT;
 	return result;
+}
+
+optional_ptr<CatalogEntry> Binder::GetCatalogEntry(CatalogType type, const string &catalog, const string &schema,
+                                                   const string &name, OnEntryNotFound on_entry_not_found,
+                                                   QueryErrorContext &error_context) {
+	return entry_retriever.GetEntry(type, catalog, schema, name, on_entry_not_found, error_context);
 }
 
 } // namespace duckdb

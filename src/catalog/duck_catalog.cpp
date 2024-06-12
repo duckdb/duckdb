@@ -7,6 +7,7 @@
 #include "duckdb/catalog/default/default_schemas.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 #ifndef DISABLE_CORE_FUNCTIONS_EXTENSION
 #include "duckdb/core_functions/core_functions.hpp"
 #endif
@@ -129,10 +130,14 @@ optional_ptr<SchemaCatalogEntry> DuckCatalog::GetSchema(CatalogTransaction trans
 }
 
 DatabaseSize DuckCatalog::GetDatabaseSize(ClientContext &context) {
+	auto &transaction = DuckTransactionManager::Get(db);
+	auto lock = transaction.SharedCheckpointLock();
 	return db.GetStorageManager().GetDatabaseSize();
 }
 
 vector<MetadataBlockInfo> DuckCatalog::GetMetadataInfo(ClientContext &context) {
+	auto &transaction = DuckTransactionManager::Get(db);
+	auto lock = transaction.SharedCheckpointLock();
 	return db.GetStorageManager().GetMetadataInfo();
 }
 

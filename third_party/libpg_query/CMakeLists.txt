@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.5...3.29)
 
 project(duckdb_pg_query CXX C)
 if(POLICY CMP0063)

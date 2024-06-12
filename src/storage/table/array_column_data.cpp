@@ -30,6 +30,13 @@ bool ArrayColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) 
 	return false;
 }
 
+void ArrayColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {
+	ColumnData::InitializePrefetch(prefetch_state, scan_state, rows);
+	validity.InitializePrefetch(prefetch_state, scan_state.child_states[0], rows);
+	auto array_size = ArrayType::GetSize(type);
+	child_column->InitializePrefetch(prefetch_state, scan_state.child_states[1], rows * array_size);
+}
+
 void ArrayColumnData::InitializeScan(ColumnScanState &state) {
 	// initialize the validity segment
 	D_ASSERT(state.child_states.size() == 2);
@@ -67,12 +74,14 @@ void ArrayColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row
 	}
 }
 
-idx_t ArrayColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
-	return ScanCount(state, result, STANDARD_VECTOR_SIZE);
+idx_t ArrayColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+                            idx_t scan_count) {
+	return ScanCount(state, result, scan_count);
 }
 
-idx_t ArrayColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) {
-	return ScanCount(state, result, STANDARD_VECTOR_SIZE);
+idx_t ArrayColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
+                                     idx_t scan_count) {
+	return ScanCount(state, result, scan_count);
 }
 
 idx_t ArrayColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {

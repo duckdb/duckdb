@@ -12,6 +12,7 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/limits.hpp"
 
 #include <cstring>
 #include <algorithm>
@@ -26,6 +27,7 @@ public:
 	static constexpr idx_t PREFIX_BYTES = 4 * sizeof(char);
 	static constexpr idx_t INLINE_BYTES = 12 * sizeof(char);
 	static constexpr idx_t HEADER_SIZE = sizeof(uint32_t) + PREFIX_BYTES;
+	static constexpr idx_t MAX_STRING_SIZE = NumericLimits<uint32_t>::Maximum();
 #ifndef DUCKDB_DEBUG_NO_INLINE
 	static constexpr idx_t PREFIX_LENGTH = PREFIX_BYTES;
 	static constexpr idx_t INLINE_LENGTH = INLINE_BYTES;

@@ -92,6 +92,7 @@ import types
 
 types.UnionType
 types.GenericAlias
+types.BuiltinFunctionType
 
 import typing
 

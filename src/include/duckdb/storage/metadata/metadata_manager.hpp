@@ -68,6 +68,7 @@ public:
 	void ClearModifiedBlocks(const vector<MetaBlockPointer> &pointers);
 
 	vector<MetadataBlockInfo> GetMetadataInfo() const;
+	vector<shared_ptr<BlockHandle>> GetBlocks() const;
 	idx_t BlockCount();
 
 	void Write(WriteStream &sink);
@@ -81,6 +82,7 @@ protected:
 
 protected:
 	block_id_t AllocateNewBlock();
+	block_id_t PeekNextBlockId();
 	block_id_t GetNextBlockId();
 
 	void AddBlock(MetadataBlock new_block, bool if_exists = false);

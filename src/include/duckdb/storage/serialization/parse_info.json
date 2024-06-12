@@ -505,6 +505,31 @@
         "id": 202,
         "name": "repository",
         "type": "string"
+      },
+      {
+        "id": 203,
+        "name": "version",
+        "type": "string"
+      },
+      {
+        "id": 204,
+        "name": "repo_is_alias",
+        "type": "bool"
+      }
+    ]
+  },
+  {
+    "class": "UpdateExtensionsInfo",
+    "base": "ParseInfo",
+    "enum": "UPDATE_EXTENSIONS_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/update_extensions_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "extensions_to_update",
+        "type": "vector<string>"
       }
     ]
   },
@@ -545,6 +570,11 @@
         "id": 200,
         "name": "type",
         "type": "TransactionType"
+      },
+      {
+        "id": 201,
+        "name": "modifier",
+        "type": "TransactionModifierType"
       }
     ]
   },

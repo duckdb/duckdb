@@ -25,7 +25,7 @@ public:
 
 	//! Initialize any unknown indexes whose types might now be present after an extension load, optionally throwing an
 	//! exception if an index can't be initialized
-	void InitializeIndexes(ClientContext &context, bool throw_on_failure = false);
+	void InitializeIndexes(ClientContext &context, const char *index_type = nullptr);
 
 	//! Whether or not the table is temporary
 	bool IsTemporary() const;

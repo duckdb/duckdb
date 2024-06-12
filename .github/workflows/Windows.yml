@@ -60,6 +60,7 @@ jobs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+        ref: ${{ inputs.git_ref }}
 
     - uses: actions/setup-python@v5
       with:
@@ -189,6 +190,7 @@ jobs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+        ref: ${{ inputs.git_ref }}
 
     - uses: actions/setup-python@v5
       with:
@@ -227,6 +229,8 @@ jobs:
      needs: win-release-64
      steps:
        - uses: actions/checkout@v3
+         with:
+           ref: ${{ inputs.git_ref }}
        - uses: msys2/setup-msys2@v2
          with:
            msystem: MINGW64
@@ -260,35 +264,36 @@ jobs:
          shell: msys2 {0}
          run: |
            tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper.exe
-
- win-extensions-64:
-   # Builds extensions for windows_amd64
-   name: Windows Extensions (64-bit)
-   runs-on: windows-latest
-   needs: win-release-64
-   steps:
-     - name: Keep \n line endings
-       shell: bash
-       run: |
-         git config --global core.autocrlf false
-         git config --global core.eol lf
-
-     - uses: actions/checkout@v3
-       with:
-         fetch-depth: 0
-
-     - uses: actions/setup-python@v5
-       with:
-         python-version: '3.12'
-
-     - uses: ./.github/actions/build_extensions
-       with:
-         vcpkg_target_triplet: x64-windows-static-md
-         deploy_as: windows_amd64
-         treat_warn_as_error: 0
-         s3_id: ${{ secrets.S3_ID }}
-         s3_key: ${{ secrets.S3_KEY }}
-         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-         run_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
-         run_autoload_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
-         unittest_script: python3 scripts/run_tests_one_by_one.py ./build/release/test/Release/unittest.exe
+#
+# win-extensions-64:
+#   # Builds extensions for windows_amd64
+#   name: Windows Extensions (64-bit)
+#   runs-on: windows-latest
+#   needs: win-release-64
+#   steps:
+#     - name: Keep \n line endings
+#       shell: bash
+#       run: |
+#         git config --global core.autocrlf false
+#         git config --global core.eol lf
+#
+#     - uses: actions/checkout@v3
+#       with:
+#         fetch-depth: 0
+#         ref: ${{ inputs.git_ref }}
+#
+#     - uses: actions/setup-python@v5
+#       with:
+#         python-version: '3.12'
+#
+#     - uses: ./.github/actions/build_extensions
+#       with:
+#         vcpkg_target_triplet: x64-windows-static-md
+#         deploy_as: windows_amd64
+#         treat_warn_as_error: 0
+#         s3_id: ${{ secrets.S3_ID }}
+#         s3_key: ${{ secrets.S3_KEY }}
+#         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
+#         run_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
+#         run_autoload_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
+#         unittest_script: python3 scripts/run_tests_one_by_one.py ./build/release/test/Release/unittest.exe

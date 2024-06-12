@@ -596,7 +596,11 @@ DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, timestamp_t &resu
 template <>
 DUCKDB_API bool TryCast::Operation(string_t input, timestamp_t &result, bool strict);
 template <>
+DUCKDB_API bool TryCast::Operation(string_t input, timestamp_ns_t &result, bool strict);
+template <>
 timestamp_t Cast::Operation(string_t input);
+template <>
+timestamp_ns_t Cast::Operation(string_t input);
 //===--------------------------------------------------------------------===//
 // String -> Interval Casts
 //===--------------------------------------------------------------------===//
@@ -628,14 +632,14 @@ struct TryCastToTimestampSec {
 };
 
 template <>
-DUCKDB_API bool TryCastToTimestampNS::Operation(string_t input, timestamp_t &result, bool strict);
+DUCKDB_API bool TryCastToTimestampNS::Operation(string_t input, timestamp_ns_t &result, bool strict);
 template <>
 DUCKDB_API bool TryCastToTimestampMS::Operation(string_t input, timestamp_t &result, bool strict);
 template <>
 DUCKDB_API bool TryCastToTimestampSec::Operation(string_t input, timestamp_t &result, bool strict);
 
 template <>
-DUCKDB_API bool TryCastToTimestampNS::Operation(date_t input, timestamp_t &result, bool strict);
+DUCKDB_API bool TryCastToTimestampNS::Operation(date_t input, timestamp_ns_t &result, bool strict);
 template <>
 DUCKDB_API bool TryCastToTimestampMS::Operation(date_t input, timestamp_t &result, bool strict);
 template <>
@@ -799,7 +803,7 @@ template <>
 duckdb::timestamp_t CastTimestampSecToNs::Operation(duckdb::timestamp_t input);
 
 template <>
-duckdb::string_t CastFromTimestampNS::Operation(duckdb::timestamp_t input, Vector &result);
+duckdb::string_t CastFromTimestampNS::Operation(duckdb::timestamp_ns_t input, Vector &result);
 template <>
 duckdb::string_t CastFromTimestampMS::Operation(duckdb::timestamp_t input, Vector &result);
 template <>

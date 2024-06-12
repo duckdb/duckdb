@@ -487,7 +487,7 @@ struct VectorMinMaxBase {
 			if (!state.value) {
 				Assign(state, input, i);
 			} else {
-				OP::template Execute(state, input, i, count);
+				OP::template Execute<STATE>(state, input, i, count);
 			}
 		}
 	}
@@ -499,7 +499,7 @@ struct VectorMinMaxBase {
 		} else if (!target.value) {
 			Assign(target, *source.value, 0);
 		} else {
-			OP::template Execute(target, *source.value, 0, 1);
+			OP::template Execute<STATE>(target, *source.value, 0, 1);
 		}
 	}
 
@@ -616,7 +616,7 @@ unique_ptr<FunctionData> BindMinMax(ClientContext &context, AggregateFunction &f
 
 			// Create a copied child and PushCollation for it.
 			arguments.push_back(arguments[0]->Copy());
-			ExpressionBinder::PushCollation(context, arguments[1], arguments[0]->return_type, false);
+			ExpressionBinder::PushCollation(context, arguments[1], arguments[0]->return_type);
 
 			// Bind function like arg_min/arg_max.
 			function.arguments[0] = arguments[0]->return_type;

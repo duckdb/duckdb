@@ -66,7 +66,9 @@ static unique_ptr<FunctionData> CSVSniffBind(ClientContext &context, TableFuncti
 	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("HasHeader");
 	// 7. List<Struct<Column-Name:Types>>
-	return_types.emplace_back(LogicalType::VARCHAR);
+	child_list_t<LogicalType> struct_children {{"name", LogicalType::VARCHAR}, {"type", LogicalType::VARCHAR}};
+	auto list_child = LogicalType::STRUCT(struct_children);
+	return_types.emplace_back(LogicalType::LIST(list_child));
 	names.emplace_back("Columns");
 	// 8. Date Format
 	return_types.emplace_back(LogicalType::VARCHAR);
@@ -141,16 +143,20 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	auto has_header = Value::BOOLEAN(sniffer_options.dialect_options.header.GetValue()).ToString();
 	output.SetValue(5, 0, has_header);
 	// 7. List<Struct<Column-Name:Types>> {'col1': 'INTEGER', 'col2': 'VARCHAR'}
+	vector<Value> values;
 	std::ostringstream columns;
 	columns << "{";
 	for (idx_t i = 0; i < sniffer_result.return_types.size(); i++) {
+		child_list_t<Value> struct_children {{"name", sniffer_result.names[i]},
+		                                     {"type", {sniffer_result.return_types[i].ToString()}}};
+		values.emplace_back(Value::STRUCT(struct_children));
 		columns << "'" << sniffer_result.names[i] << "': '" << sniffer_result.return_types[i].ToString() << "'";
 		if (i != sniffer_result.return_types.size() - 1) {
 			columns << separator;
 		}
 	}
 	columns << "}";
-	output.SetValue(6, 0, columns.str());
+	output.SetValue(6, 0, Value::LIST(values));
 	// 8. Date Format
 	auto date_format = sniffer_options.dialect_options.date_format[LogicalType::DATE].GetValue();
 	if (!date_format.Empty()) {

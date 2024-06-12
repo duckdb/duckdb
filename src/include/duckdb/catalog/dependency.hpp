@@ -153,6 +153,10 @@ public:
 		}
 		return true;
 	}
+
+public:
+	void Serialize(Serializer &serializer) const;
+	static CatalogEntryInfo Deserialize(Deserializer &deserializer);
 };
 
 struct Dependency {

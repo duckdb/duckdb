@@ -67,7 +67,8 @@ struct CastToVectorSQLiteValue {
 
 		if (vec_data.validity.AllValid()) {
 			for (idx_t i = 0; i < count; ++i) {
-				res_data[i] = OPCAST::template Operation<INPUT_TYPE>(input_data[i]);
+				auto idx = vec_data.sel->get_index(i);
+				res_data[i] = OPCAST::template Operation<INPUT_TYPE>(input_data[idx]);
 			}
 			return result;
 		}
