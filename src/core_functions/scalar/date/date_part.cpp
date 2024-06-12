@@ -753,11 +753,27 @@ struct DatePart {
 };
 
 template <class T>
-static void LastYearFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+static void YearCachedFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<DateCacheLocalState>();
 	UnaryExecutor::ExecuteWithNulls<T, int64_t>(
 	    args.data[0], result, args.size(),
 	    [&](T input, ValidityMask &mask, idx_t idx) { return lstate.cache.ExtractYear(input, mask, idx); });
+}
+
+template <class T>
+static void MonthCachedFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<DateCacheLocalState>();
+	UnaryExecutor::ExecuteWithNulls<T, int64_t>(
+	    args.data[0], result, args.size(),
+	    [&](T input, ValidityMask &mask, idx_t idx) { return lstate.cache.ExtractMonth(input, mask, idx); });
+}
+
+template <class T>
+static void DayCachedFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<DateCacheLocalState>();
+	UnaryExecutor::ExecuteWithNulls<T, int64_t>(
+	    args.data[0], result, args.size(),
+	    [&](T input, ValidityMask &mask, idx_t idx) { return lstate.cache.ExtractDay(input, mask, idx); });
 }
 
 template <>
@@ -1955,18 +1971,24 @@ struct StructDatePart {
 };
 
 ScalarFunctionSet YearFun::GetFunctions() {
-	return GetGenericDatePartFunction<true>(LastYearFunction<date_t>, LastYearFunction<timestamp_t>,
+	return GetGenericDatePartFunction<true>(YearCachedFunction<date_t>, YearCachedFunction<timestamp_t>,
 	                                        ScalarFunction::UnaryFunction<interval_t, int64_t, DatePart::YearOperator>,
 	                                        DatePart::YearOperator::PropagateStatistics<date_t>,
 	                                        DatePart::YearOperator::PropagateStatistics<timestamp_t>);
 }
 
 ScalarFunctionSet MonthFun::GetFunctions() {
-	return GetDatePartFunction<DatePart::MonthOperator>();
+	return GetGenericDatePartFunction<true>(MonthCachedFunction<date_t>, MonthCachedFunction<timestamp_t>,
+	                                        ScalarFunction::UnaryFunction<interval_t, int64_t, DatePart::MonthOperator>,
+	                                        DatePart::MonthOperator::PropagateStatistics<date_t>,
+	                                        DatePart::MonthOperator::PropagateStatistics<timestamp_t>);
 }
 
 ScalarFunctionSet DayFun::GetFunctions() {
-	return GetDatePartFunction<DatePart::DayOperator>();
+	return GetGenericDatePartFunction<true>(DayCachedFunction<date_t>, DayCachedFunction<timestamp_t>,
+	                                        ScalarFunction::UnaryFunction<interval_t, int64_t, DatePart::MonthOperator>,
+	                                        DatePart::MonthOperator::PropagateStatistics<date_t>,
+	                                        DatePart::MonthOperator::PropagateStatistics<timestamp_t>);
 }
 
 ScalarFunctionSet DecadeFun::GetFunctions() {
