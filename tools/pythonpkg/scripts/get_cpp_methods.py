@@ -1,4 +1,4 @@
-# Requires `python3 -m pip install libclang==16.0.6`
+import clang.cindex
 import os
 
 from typing import List, Dict
@@ -8,31 +8,13 @@ scripts_folder = os.path.dirname(os.path.abspath(__file__))
 file_contents: str = ''
 
 
-def test_clang():
-    try:
-        import clang.cindex
-    except ImportError:
-        return False
-    from clang.cindex import TranslationUnitLoadError, Index
-
-    try:
-        index = Index.create()
-        path = get_path('DuckDBPyConnection')
-        index.parse(path, args=['-std=c++11'])
-    except TranslationUnitLoadError:
-        return False
-    return True
-
-
 def load_content(path):
     global file_contents
     with open(path, 'r') as file:
         file_contents = file.read()
 
 
-def get_string(input: "clang.cindex.SourceRange") -> str:
-    import clang.cindex
-
+def get_string(input: clang.cindex.SourceRange) -> str:
     return file_contents[input.start.offset : input.end.offset]
 
 
@@ -54,8 +36,6 @@ class ConnectionMethod:
 
 
 def traverse(class_name, node, methods_dict):
-    import clang.cindex
-
     if node.kind == clang.cindex.CursorKind.STRUCT_DECL or node.kind == clang.cindex.CursorKind.CLASS_DECL:
         if node.spelling != class_name:
             return
@@ -73,24 +53,17 @@ def traverse(class_name, node, methods_dict):
             traverse(class_name, child, methods_dict)
 
 
-def get_path(class_name: str) -> str:
+def get_methods(class_name: str) -> Dict[str, ConnectionMethod]:
     CLASSES = {
         'DuckDBPyConnection': os.path.join(
             scripts_folder, '..', 'src', 'include', 'duckdb_python', 'pyconnection', 'pyconnection.hpp'
         ),
         'DuckDBPyRelation': os.path.join(scripts_folder, '..', 'src', 'include', 'duckdb_python', 'pyrelation.hpp'),
     }
-    path = CLASSES[class_name]
-    return path
-
-
-def get_methods(class_name: str) -> Dict[str, ConnectionMethod]:
-    import clang.cindex
-
     # Create a dictionary to store method names and prototypes
     methods_dict = {}
 
-    path = get_path(class_name)
+    path = CLASSES[class_name]
     load_content(path)
 
     index = clang.cindex.Index.create()
