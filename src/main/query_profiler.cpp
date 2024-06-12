@@ -594,10 +594,12 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 	if (OperatorRequiresProfiling(root.type)) {
 		this->query_requires_profiling = true;
 	}
-	auto node = make_uniq<ProfilingNode>();
-	auto &op_node = node->Cast<OperatorProfilingNode>();
-	op_node.type = root.type;
-	op_node.name = "hjh";
+
+	auto op_node = make_uniq<OperatorProfilingNode>();
+	op_node->type = root.type;
+	op_node->name = root.GetName();
+	unique_ptr<ProfilingNode> node = std::move(op_node);
+
 	node->depth = depth;
 	node->profiling_info = ProfilingInfo(settings);
 	if (node->profiling_info.Enabled(MetricsType::EXTRA_INFO)) {
