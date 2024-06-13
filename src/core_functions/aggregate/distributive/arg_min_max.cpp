@@ -180,8 +180,8 @@ struct SpecializedGenericArgMinMaxState {
 		return false;
 	}
 
-	static void PrepareData(Vector &by, idx_t input_count, bool &extra_state, UnifiedVectorFormat &result) {
-		by.ToUnifiedFormat(input_count, result);
+	static void PrepareData(Vector &by, idx_t count, bool &, UnifiedVectorFormat &result) {
+		by.ToUnifiedFormat(count, result);
 	}
 };
 
@@ -191,10 +191,10 @@ struct GenericArgMinMaxState {
 		return Vector(LogicalType::BLOB);
 	}
 
-	static void PrepareData(Vector &by, idx_t input_count, Vector &extra_state, UnifiedVectorFormat &result) {
-		auto modifiers = OrderModifiers(ORDER_TYPE, OrderByNullType::NULLS_LAST);
-		CreateSortKeyHelpers::CreateSortKey(by, input_count, modifiers, extra_state);
-		extra_state.ToUnifiedFormat(input_count, result);
+	static void PrepareData(Vector &by, idx_t count, Vector &extra_state, UnifiedVectorFormat &result) {
+		OrderModifiers modifiers(ORDER_TYPE, OrderByNullType::NULLS_LAST);
+		CreateSortKeyHelpers::CreateSortKey(by, count, modifiers, extra_state);
+		extra_state.ToUnifiedFormat(count, result);
 	}
 };
 
@@ -211,7 +211,7 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR, IGNORE_NULL> {
 		auto &by = inputs[1];
 		UnifiedVectorFormat bdata;
 		auto extra_state = UPDATE_TYPE::CreateExtraState();
-		UPDATE_TYPE::PrepareData(by, input_count, extra_state, bdata);
+		UPDATE_TYPE::PrepareData(by, count, extra_state, bdata);
 		const auto bys = UnifiedVectorFormat::GetData<BY_TYPE>(bdata);
 
 		UnifiedVectorFormat sdata;
