@@ -7,6 +7,7 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/core_functions/create_sort_key.hpp"
 
 namespace duckdb {
 
@@ -43,21 +44,10 @@ void ArgMinMaxStateBase::CreateValue(string_t &value) {
 }
 
 template <>
-void ArgMinMaxStateBase::CreateValue(Vector *&value) {
-	value = nullptr;
-}
-
-template <>
 void ArgMinMaxStateBase::DestroyValue(string_t &value) {
 	if (!value.IsInlined()) {
 		delete[] value.GetData();
 	}
-}
-
-template <>
-void ArgMinMaxStateBase::DestroyValue(Vector *&value) {
-	delete value;
-	value = nullptr;
 }
 
 template <>
@@ -104,7 +94,6 @@ struct ArgMinMaxState : public ArgMinMaxStateBase {
 
 template <class COMPARATOR, bool IGNORE_NULL>
 struct ArgMinMaxBase {
-
 	template <class STATE>
 	static void Initialize(STATE &state) {
 		new (&state) STATE;
@@ -183,20 +172,13 @@ struct ArgMinMaxBase {
 	}
 };
 
-template <typename COMPARATOR, bool IGNORE_NULL>
+template <typename COMPARATOR, bool IGNORE_NULL, OrderType ORDER_TYPE>
 struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR, IGNORE_NULL> {
 	template <class STATE>
-	static void AssignVector(STATE &state, Vector &arg, bool arg_null, const idx_t idx) {
-		if (!state.arg) {
-			state.arg = new Vector(arg.GetType(), 1);
-			state.arg->SetVectorType(VectorType::CONSTANT_VECTOR);
-		}
-		state.arg_null = arg_null;
-		if (!arg_null) {
-			sel_t selv = UnsafeNumericCast<sel_t>(idx);
-			SelectionVector sel(&selv);
-			VectorOperations::Copy(arg, *state.arg, sel, 1, 0, 0);
-		}
+	static void AssignVector(STATE &state, Vector &source, const idx_t idx) {
+		state.DestroyValue(state.arg);
+		OrderModifiers modifier(ORDER_TYPE, OrderByNullType::NULLS_LAST);
+		state.arg = CreateSortKeyHelpers::CreateSortKey(source, idx, modifier);
 	}
 
 	template <class STATE>
@@ -205,6 +187,7 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR, IGNORE_NULL> {
 		UnifiedVectorFormat adata;
 		arg.ToUnifiedFormat(count, adata);
 
+		using ARG_TYPE = typename STATE::ARG_TYPE;
 		using BY_TYPE = typename STATE::BY_TYPE;
 		auto &by = inputs[1];
 		UnifiedVectorFormat bdata;
@@ -214,7 +197,11 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR, IGNORE_NULL> {
 		UnifiedVectorFormat sdata;
 		state_vector.ToUnifiedFormat(count, sdata);
 
-		auto states = (STATE **)sdata.data;
+		STATE *last_state = nullptr;
+		sel_t assign_sel[STANDARD_VECTOR_SIZE];
+		idx_t assign_count = 0;
+
+		auto states = UnifiedVectorFormat::GetData<STATE *>(sdata);
 		for (idx_t i = 0; i < count; i++) {
 			const auto bidx = bdata.sel->get_index(i);
 			if (!bdata.validity.RowIsValid(bidx)) {
@@ -230,15 +217,41 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR, IGNORE_NULL> {
 
 			const auto sidx = sdata.sel->get_index(i);
 			auto &state = *states[sidx];
-			if (!state.is_initialized) {
+			if (!state.is_initialized || COMPARATOR::template Operation<BY_TYPE>(bval, state.value)) {
 				STATE::template AssignValue<BY_TYPE>(state.value, bval);
-				AssignVector(state, arg, arg_null, i);
+				state.arg_null = arg_null;
+				// micro-adaptivity: it is common we overwrite the same state repeatedly
+				// e.g. when running arg_max(val, ts) and ts is sorted in ascending order
+				// this check essentially says:
+				// "if we are overriding the same state as the last row, the last write was pointless"
+				// hence we skip the last write altogether
+				if (!arg_null) {
+					if (&state == last_state) {
+						assign_count--;
+					}
+					assign_sel[assign_count++] = UnsafeNumericCast<sel_t>(i);
+					last_state = &state;
+				}
 				state.is_initialized = true;
-
-			} else if (COMPARATOR::template Operation<BY_TYPE>(bval, state.value)) {
-				STATE::template AssignValue<BY_TYPE>(state.value, bval);
-				AssignVector(state, arg, arg_null, i);
 			}
+		}
+		if (assign_count == 0) {
+			// no need to assign anything: nothing left to do
+			return;
+		}
+		Vector sort_key(LogicalType::BLOB);
+		auto modifiers = OrderModifiers(ORDER_TYPE, OrderByNullType::NULLS_LAST);
+		// slice with a selection vector and generate sort keys
+		SelectionVector sel(assign_sel);
+		Vector sliced_input(arg, sel, assign_count);
+		CreateSortKeyHelpers::CreateSortKey(sliced_input, assign_count, modifiers, sort_key);
+		auto sort_key_data = FlatVector::GetData<string_t>(sort_key);
+
+		// now assign sort keys
+		for(idx_t i = 0; i < assign_count; i++) {
+			const auto sidx = sdata.sel->get_index(sel.get_index(i));
+			auto &state = *states[sidx];
+			STATE::template AssignValue<ARG_TYPE>(state.arg, sort_key_data[i]);
 		}
 	}
 
@@ -249,7 +262,10 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR, IGNORE_NULL> {
 		}
 		if (!target.is_initialized || COMPARATOR::Operation(source.value, target.value)) {
 			STATE::template AssignValue<typename STATE::BY_TYPE>(target.value, source.value);
-			AssignVector(target, *source.arg, source.arg_null, 0);
+			target.arg_null = source.arg_null;
+			if (!target.arg_null) {
+				STATE::template AssignValue<typename STATE::ARG_TYPE>(target.arg, source.arg);;
+			}
 			target.is_initialized = true;
 		}
 	}
@@ -259,7 +275,8 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR, IGNORE_NULL> {
 		if (!state.is_initialized || state.arg_null) {
 			finalize_data.ReturnNull();
 		} else {
-			VectorOperations::Copy(*state.arg, finalize_data.result, 1, 0, finalize_data.result_idx);
+			CreateSortKeyHelpers::DecodeSortKey(state.arg, finalize_data.result, finalize_data.result_idx,
+			                                    OrderModifiers(ORDER_TYPE, OrderByNullType::NULLS_LAST));
 		}
 	}
 
@@ -409,7 +426,7 @@ void AddDecimalArgMinMaxFunctionBy(AggregateFunctionSet &fun, const LogicalType 
 	                                  nullptr, nullptr, nullptr, nullptr, BindDecimalArgMinMax<OP>));
 }
 
-template <class COMPARATOR, bool IGNORE_NULL>
+template <class COMPARATOR, bool IGNORE_NULL, OrderType ORDER_TYPE>
 static void AddArgMinMaxFunctions(AggregateFunctionSet &fun) {
 	using OP = ArgMinMaxBase<COMPARATOR, IGNORE_NULL>;
 	AddArgMinMaxFunctionBy<OP, int32_t>(fun, LogicalType::INTEGER);
@@ -426,31 +443,31 @@ static void AddArgMinMaxFunctions(AggregateFunctionSet &fun) {
 		AddDecimalArgMinMaxFunctionBy<OP>(fun, by_type);
 	}
 
-	using VECTOR_OP = VectorArgMinMaxBase<COMPARATOR, IGNORE_NULL>;
-	AddVectorArgMinMaxFunctionBy<VECTOR_OP, Vector *>(fun, LogicalType::ANY);
+	using VECTOR_OP = VectorArgMinMaxBase<COMPARATOR, IGNORE_NULL, ORDER_TYPE>;
+	AddVectorArgMinMaxFunctionBy<VECTOR_OP, string_t>(fun, LogicalType::ANY);
 }
 
 AggregateFunctionSet ArgMinFun::GetFunctions() {
 	AggregateFunctionSet fun;
-	AddArgMinMaxFunctions<LessThan, true>(fun);
+	AddArgMinMaxFunctions<LessThan, true, OrderType::ASCENDING>(fun);
 	return fun;
 }
 
 AggregateFunctionSet ArgMaxFun::GetFunctions() {
 	AggregateFunctionSet fun;
-	AddArgMinMaxFunctions<GreaterThan, true>(fun);
+	AddArgMinMaxFunctions<GreaterThan, true, OrderType::DESCENDING>(fun);
 	return fun;
 }
 
 AggregateFunctionSet ArgMinNullFun::GetFunctions() {
 	AggregateFunctionSet fun;
-	AddArgMinMaxFunctions<LessThan, false>(fun);
+	AddArgMinMaxFunctions<LessThan, false, OrderType::ASCENDING>(fun);
 	return fun;
 }
 
 AggregateFunctionSet ArgMaxNullFun::GetFunctions() {
 	AggregateFunctionSet fun;
-	AddArgMinMaxFunctions<GreaterThan, false>(fun);
+	AddArgMinMaxFunctions<GreaterThan, false, OrderType::DESCENDING>(fun);
 	return fun;
 }
 

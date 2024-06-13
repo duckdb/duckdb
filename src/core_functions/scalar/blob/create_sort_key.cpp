@@ -451,7 +451,7 @@ static void GetSortKeyLengthRecursive(SortKeyVectorData &vector_data, SortKeyChu
 	}
 }
 
-static void GetSortKeyLength(SortKeyVectorData &vector_data, SortKeyLengthInfo &result) {
+static void GetSortKeyLength(SortKeyVectorData &vector_data, SortKeyLengthInfo &result, SortKeyChunk chunk) {
 	// top-level method
 	auto physical_type = vector_data.GetPhysicalType();
 	if (TypeIsConstantSize(physical_type)) {
@@ -460,7 +460,18 @@ static void GetSortKeyLength(SortKeyVectorData &vector_data, SortKeyLengthInfo &
 		result.constant_length += GetTypeIdSize(physical_type);
 		return;
 	}
-	GetSortKeyLengthRecursive(vector_data, SortKeyChunk(0, vector_data.size), result);
+	GetSortKeyLengthRecursive(vector_data, chunk, result);
+}
+
+static void GetSortKeyLength(SortKeyVectorData &vector_data, SortKeyLengthInfo &result) {
+	GetSortKeyLength(vector_data, result, SortKeyChunk(0, vector_data.size));
+}
+
+static void GetSortKeyLength(SortKeyVectorData &vector_data, SortKeyLengthInfo &result, idx_t row) {
+	SortKeyChunk chunk(row, row + 1);
+	chunk.result_index = 0;
+	chunk.has_result_index = true;
+	GetSortKeyLength(vector_data, result, chunk);
 }
 
 //===--------------------------------------------------------------------===//
@@ -642,6 +653,13 @@ static void ConstructSortKey(SortKeyVectorData &vector_data, SortKeyConstructInf
 	ConstructSortKeyRecursive(vector_data, SortKeyChunk(0, vector_data.size), info);
 }
 
+static void ConstructSortKey(SortKeyVectorData &vector_data, SortKeyConstructInfo &info, idx_t row) {
+	SortKeyChunk chunk(row, row + 1);
+	chunk.result_index = 0;
+	chunk.has_result_index = true;
+	ConstructSortKeyRecursive(vector_data, chunk, info);
+}
+
 static void PrepareSortData(Vector &result, idx_t size, SortKeyLengthInfo &key_lengths, data_ptr_t *data_pointers) {
 	switch (result.GetType().id()) {
 	case LogicalTypeId::BLOB: {
@@ -723,6 +741,35 @@ void CreateSortKeyHelpers::CreateSortKey(Vector &input, idx_t input_count, Order
 	sort_key_data.push_back(make_uniq<SortKeyVectorData>(input, input_count, order_modifier));
 
 	CreateSortKeyInternal(sort_key_data, modifiers, result, input_count);
+}
+
+string_t CreateSortKeyHelpers::CreateSortKey(Vector &input, idx_t row, OrderModifiers order_modifier) {
+	vector<OrderModifiers> modifiers {order_modifier};
+	vector<unique_ptr<SortKeyVectorData>> sort_key_data;
+	sort_key_data.push_back(make_uniq<SortKeyVectorData>(input, 1ULL, order_modifier));
+
+	// get the sort key length for this row
+	SortKeyLengthInfo key_lengths(1);
+	GetSortKeyLength(*sort_key_data[0], key_lengths, row);
+
+	// allocate space for the sort key
+	data_ptr_t pointers[1];
+	uint32_t sort_key_length = NumericCast<uint32_t>(key_lengths.constant_length + key_lengths.variable_lengths[0]);
+	auto sort_key = make_unsafe_uniq_array<char>(sort_key_length);
+	pointers[0] = data_ptr_cast(sort_key.get());
+
+	// generate the sort key
+	unsafe_vector<idx_t> offsets;
+	offsets.resize(1, 0);
+
+	SortKeyConstructInfo info(order_modifier, offsets, pointers);
+	ConstructSortKey(*sort_key_data[0], info, row);
+
+	if (sort_key_length > string_t::INLINE_BYTES) {
+		return string_t(sort_key.release(), sort_key_length);
+	} else {
+		return string_t(sort_key.get(), sort_key_length);
+	}
 }
 
 static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
