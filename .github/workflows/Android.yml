@@ -52,18 +52,21 @@ env:
   OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
 
 jobs:
- android_armv7a:
-    # Builds binaries for linux_amd64_gcc4
-    name: Android armv7a
+  android:
+    name: Android
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [ armeabi-v7a, arm64-v8a ]
+
 
     env:
       ENABLE_EXTENSION_AUTOLOADING: 1
       ENABLE_EXTENSION_AUTOINSTALL: 1
       GEN: ninja
       EXTENSION_STATIC_BUILD: 1
-      DUCKDB_PLATFORM: android_armv7a
-      CMAKE_VARS_BUILD: -DBUILD_UNITTESTS=0 -DBUILD_SHELL=0 -DANDROID_ABI=armeabi-v7a -DCMAKE_TOOLCHAIN_FILE=./android-ndk/build/cmake/android.toolchain.cmake
+      DUCKDB_PLATFORM: android_${{ matrix.arch}}
+      CMAKE_VARS_BUILD: -DBUILD_UNITTESTS=0 -DBUILD_SHELL=0 -DANDROID_ABI=${{ matrix.arch}} -DCMAKE_TOOLCHAIN_FILE=./android-ndk/build/cmake/android.toolchain.cmake
 
     steps:
     - uses: actions/checkout@v3
@@ -92,15 +95,14 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
-        zip -j libduckdb-android_armv7a.zip build/release/src/libduckdb*.*  src/include/duckdb.h
-
-        ./scripts/upload-assets-to-staging.sh libduckdb-android_armv7a.zip
+        zip -j libduckdb-android_${{matrix.arch}}.zip build/release/src/libduckdb*.*  src/include/duckdb.h
+        ./scripts/upload-assets-to-staging.sh libduckdb-android_${{matrix.arch}}.zip
 
     - uses: actions/upload-artifact@v3
       with:
-        name: duckdb-binaries-android-armv7a
+        name: duckdb-binaries-android-${{matrix.arch}}
         path: |
-          libduckdb-android_armv7a.zip
+          libduckdb-android_${{matrix.arch}}.zip
 
 #
 # # Linux extensions for builds that use C++11 ABI, currently these are all linux builds based on ubuntu >= 18 (e.g. NodeJS)
