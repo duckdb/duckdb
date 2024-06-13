@@ -8,9 +8,5 @@ subgroup result_collection
 
 resultmode arrow
 
-load
-create table tbl (a varchar);
-insert into tbl select 'this is a long string' from range(100000000)
-
 run
-select * from tbl;
+select 'this is a long string' from range(100000000);
