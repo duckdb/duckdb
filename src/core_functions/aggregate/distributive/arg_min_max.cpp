@@ -175,13 +175,6 @@ struct ArgMinMaxBase {
 template <typename COMPARATOR, bool IGNORE_NULL, OrderType ORDER_TYPE>
 struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR, IGNORE_NULL> {
 	template <class STATE>
-	static void AssignVector(STATE &state, Vector &source, const idx_t idx) {
-		state.DestroyValue(state.arg);
-		OrderModifiers modifier(ORDER_TYPE, OrderByNullType::NULLS_LAST);
-		state.arg = CreateSortKeyHelpers::CreateSortKey(source, idx, modifier);
-	}
-
-	template <class STATE>
 	static void Update(Vector inputs[], AggregateInputData &, idx_t input_count, Vector &state_vector, idx_t count) {
 		auto &arg = inputs[0];
 		UnifiedVectorFormat adata;
