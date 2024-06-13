@@ -10,7 +10,6 @@
 
 #include "duckdb/function/function_set.hpp"
 
-
 namespace duckdb {
 
 struct OrderModifiers {
