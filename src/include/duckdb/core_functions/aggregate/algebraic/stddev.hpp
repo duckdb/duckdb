@@ -40,7 +40,7 @@ struct STDDevBaseOperation {
 
 		state.mean = new_mean;
 		state.dsquared = new_dsquared;
-
+		
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
@@ -60,13 +60,14 @@ struct STDDevBaseOperation {
 		if (target.count == 0) {
 			target = source;
 		} else if (source.count > 0) {
-			const auto count = target.count + source.count;
-			const auto mean = (source.count * source.mean + target.count * target.mean) / count;
+			const double target_count = static_cast<double>(target.count);
+			const double source_count = static_cast<double>(source.count);
+			const auto count = target_count + source_count;
+			const auto mean = (source_count * source.mean + target_count * target.mean) / count;
 			const auto delta = source.mean - target.mean;
-			target.dsquared =
-			    source.dsquared + target.dsquared + delta * delta * source.count * target.count / count;
+			target.dsquared = source.dsquared + target.dsquared + delta * delta * static_cast<double>(source.count * target.count) / count;
 			target.mean = mean;
-			target.count = count;
+			target.count = static_cast<decltype(target.count)>(count);
 		}
 	}
 
