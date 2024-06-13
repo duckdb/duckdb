@@ -81,7 +81,7 @@ static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		return;
 	}
-	auto &result_type = result.GetType();
+	auto &result_type = ListVector::GetEntry(result).GetType();
 	switch (result_type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
