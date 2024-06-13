@@ -241,7 +241,7 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR, IGNORE_NULL> {
 		auto sort_key_data = FlatVector::GetData<string_t>(sort_key);
 
 		// now assign sort keys
-		for(idx_t i = 0; i < assign_count; i++) {
+		for (idx_t i = 0; i < assign_count; i++) {
 			const auto sidx = sdata.sel->get_index(sel.get_index(i));
 			auto &state = *states[sidx];
 			STATE::template AssignValue<ARG_TYPE>(state.arg, sort_key_data[i]);
@@ -257,7 +257,8 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR, IGNORE_NULL> {
 			STATE::template AssignValue<typename STATE::BY_TYPE>(target.value, source.value);
 			target.arg_null = source.arg_null;
 			if (!target.arg_null) {
-				STATE::template AssignValue<typename STATE::ARG_TYPE>(target.arg, source.arg);;
+				STATE::template AssignValue<typename STATE::ARG_TYPE>(target.arg, source.arg);
+				;
 			}
 			target.is_initialized = true;
 		}
