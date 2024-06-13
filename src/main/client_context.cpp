@@ -3,9 +3,10 @@
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/common/error_data.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/http_state.hpp"
-#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/progress_bar/progress_bar.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
@@ -15,6 +16,7 @@
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context_file_opener.hpp"
+#include "duckdb/main/client_context_state.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
@@ -39,11 +41,9 @@
 #include "duckdb/planner/operator/logical_execute.hpp"
 #include "duckdb/planner/planner.hpp"
 #include "duckdb/planner/pragma_handler.hpp"
+#include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/common/exception/transaction_exception.hpp"
-#include "duckdb/main/client_context_state.hpp"
 
 namespace duckdb {
 
@@ -90,7 +90,7 @@ struct DebugClientContextState : public ClientContextState {
 		}
 		active_query = true;
 	}
-	void QueryEnd(ClientContext &context) override {
+	void QueryEnd(ClientContext &context, optional_ptr<ErrorData>) override {
 		if (!active_query) {
 			throw InternalException("DebugClientContextState::QueryEnd called when no query is active");
 		}
@@ -109,7 +109,7 @@ struct DebugClientContextState : public ClientContextState {
 		}
 		active_transaction = false;
 	}
-	void TransactionRollback(MetaTransaction &transaction, ClientContext &context) override {
+	void TransactionRollback(MetaTransaction &transaction, ClientContext &context, optional_ptr<ErrorData>) override {
 		if (!active_transaction) {
 			throw InternalException(
 			    "DebugClientContextState::TransactionRollback called when no transaction is active");
@@ -244,7 +244,7 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 		if (error.HasError()) {
 			s.second->QueryEnd(*this, &error);
 		} else {
-			s.second->QueryEnd(*this, previous_error);
+			s.second->QueryEnd(*this, nullptr);
 		}
 	}
 

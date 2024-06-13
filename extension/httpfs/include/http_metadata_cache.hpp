@@ -75,7 +75,7 @@ public:
 	}
 
 	//! Called by the ClientContext when the current query ends
-	void QueryEnd(ClientContext &context) override {
+	void QueryEnd(ClientContext &context, optional_ptr<ErrorData>) override {
 		if (flush_on_query_end) {
 			Clear();
 		}

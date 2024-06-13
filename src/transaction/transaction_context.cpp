@@ -47,7 +47,7 @@ void TransactionContext::Commit() {
 	// Notify any registered state of transaction commit
 	if (error.HasError()) {
 		for (auto const &s : context.registered_state) {
-			s.second->TransactionRollback(*transaction, context);
+			s.second->TransactionRollback(*transaction, context, &error);
 		}
 		throw TransactionException("Failed to commit: %s", error.RawMessage());
 	} else {
@@ -77,7 +77,7 @@ void TransactionContext::Rollback() {
 	transaction->Rollback();
 	// Notify any registered state of transaction rollback
 	for (auto const &s : context.registered_state) {
-		s.second->TransactionRollback(*transaction, context);
+		s.second->TransactionRollback(*transaction, context, nullptr);
 	}
 }
 
