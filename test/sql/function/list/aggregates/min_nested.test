@@ -1,0 +1,76 @@
+# name: test/sql/function/list/aggregates/min_nested.test
+# description: Test the list_min aggregate function
+# group: [aggregates]
+
+# structs with blobs
+
+mode skip
+
+# structs
+statement ok
+CREATE TABLE structs AS SELECT {'i': i} s FROM range(1000) t(i);
+
+query II
+SELECT MIN(s), MAX(s) FROM structs;
+----
+{'i': 0}	{'i': 999}
+
+# larger values
+statement ok
+INSERT INTO structs VALUES ({'i': 99999999});
+
+query II
+SELECT MIN(s), MAX(s) FROM structs;
+----
+{'i': 0}	{'i': 99999999}
+
+# limits
+statement ok
+INSERT INTO structs VALUES ({'i': -9223372036854775808}), ({'i': 9223372036854775807});
+
+query II
+SELECT MIN(s), MAX(s) FROM structs;
+----
+{'i': -9223372036854775808}	{'i': 9223372036854775807}
+
+# null values
+statement ok
+INSERT INTO structs VALUES ({'i': NULL}), (NULL)
+
+query II
+SELECT MIN(s), MAX(s) FROM structs;
+----
+{'i': -9223372036854775808}	{'i': NULL}
+
+# structs with varchars
+statement ok
+CREATE TABLE varchar_structs AS SELECT {'i': concat('long_prefix_', i)} s FROM range(1000) t(i);
+
+query II
+SELECT MIN(s), MAX(s) FROM varchar_structs;
+----
+{'i': long_prefix_0}	{'i': long_prefix_999}
+
+# null bytes
+statement ok
+INSERT INTO varchar_structs VALUES ({'i': chr(0)}), ({'i': 'zzzzz' || chr(0)})
+
+query II
+SELECT MIN(s), MAX(s) FROM varchar_structs;
+----
+{'i': \0}	{'i': zzzzz\0}
+
+
+
+
+# NULLs
+
+# structs with multiple elements
+# lists
+# structs with lists
+# lists with structs
+# arrays
+# structs with arrays
+# all mixed
+
+# test_all_types?

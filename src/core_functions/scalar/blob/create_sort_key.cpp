@@ -151,8 +151,18 @@ struct SortKeyConstantOperator {
 		return sizeof(T);
 	}
 
-	static idx_t Decode(const_data_ptr_t input, TYPE &result) {
-		result = Radix::DecodeData<T>(input);
+	static idx_t Decode(const_data_ptr_t input, Vector &result, idx_t result_idx, bool flip_bytes) {
+		auto result_data = FlatVector::GetData<TYPE>(result);
+		if (flip_bytes) {
+			// descending order - so flip bytes
+			data_t flipped_bytes[sizeof(T)];
+			for (idx_t b = 0; b < sizeof(T); b++) {
+				flipped_bytes[b] = ~input[b];
+			}
+			result_data[result_idx] = Radix::DecodeData<T>(flipped_bytes);
+		} else {
+			result_data[result_idx] = Radix::DecodeData<T>(input);
+		}
 		return sizeof(T);
 	}
 };
@@ -174,8 +184,28 @@ struct SortKeyVarcharOperator {
 		return input_size + 1;
 	}
 
-	static idx_t Decode(const_data_ptr_t input, TYPE &result) {
-		throw InternalException("Decode varchar");
+	static idx_t Decode(const_data_ptr_t input, Vector &result, idx_t result_idx, bool flip_bytes) {
+		auto result_data = FlatVector::GetData<TYPE>(result);
+		// iterate until we encounter the string delimiter to figure out the string length
+		data_t string_delimiter = SortKeyVectorData::STRING_DELIMITER;
+		if (flip_bytes) {
+			string_delimiter = ~string_delimiter;
+		}
+		idx_t pos;
+		for(pos = 0; input[pos] != string_delimiter; pos++) {}
+		idx_t str_len = pos;
+		// now allocate the string data and fill it with the decoded data
+		result_data[result_idx] = StringVector::EmptyString(result, str_len);
+		auto str_data = data_ptr_cast(result_data[result_idx].GetDataWriteable());
+		for(pos = 0; pos < str_len; pos++) {
+			if (flip_bytes) {
+				str_data[pos] = (~input[pos]) - 1;
+			} else {
+				str_data[pos] = input[pos] - 1;
+			}
+		}
+		result_data[result_idx].Finalize();
+		return pos + 1;
 	}
 };
 
@@ -212,7 +242,7 @@ struct SortKeyBlobOperator {
 		return result_offset;
 	}
 
-	static idx_t Decode(const_data_ptr_t input, TYPE &result) {
+	static idx_t Decode(const_data_ptr_t input, Vector &result, idx_t result_idx, bool flip_bytes) {
 		throw InternalException("Decode blob");
 	}
 };
@@ -681,20 +711,20 @@ static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 // Decode Sort Key
 //===--------------------------------------------------------------------===//
 struct DecodeSortKeyData {
-	explicit DecodeSortKeyData(string_t sort_key) : data(const_data_ptr_cast(sort_key.GetData())), size(sort_key.GetSize()), position(0) {
+	explicit DecodeSortKeyData(OrderModifiers modifiers, string_t &sort_key) :
+		data(const_data_ptr_cast(sort_key.GetData())), size(sort_key.GetSize()), position(0), flip_bytes(modifiers.order_type == OrderType::DESCENDING) {
 	}
 
 	const_data_ptr_t data;
 	idx_t size;
 	idx_t position;
+	bool flip_bytes;
 };
 
 void DecodeSortKeyRecursive(DecodeSortKeyData &decode_data, SortKeyVectorData &vector_data, Vector &result, idx_t result_idx);
 
 template <class OP>
 void TemplatedDecodeSortKey(DecodeSortKeyData &decode_data, SortKeyVectorData &vector_data, Vector &result, idx_t result_idx) {
-	auto result_data = FlatVector::GetData<typename OP::TYPE>(result);
-
 	auto validity_byte = decode_data.data[decode_data.position];
 	decode_data.position++;
 	if (validity_byte == vector_data.null_byte) {
@@ -702,7 +732,7 @@ void TemplatedDecodeSortKey(DecodeSortKeyData &decode_data, SortKeyVectorData &v
 		FlatVector::SetNull(result, result_idx, true);
 		return;
 	}
-	idx_t increment = OP::Decode(decode_data.data + decode_data.position, result_data[result_idx]);
+	idx_t increment = OP::Decode(decode_data.data + decode_data.position, result, result_idx, decode_data.flip_bytes);
 	decode_data.position += increment;
 }
 
@@ -791,7 +821,7 @@ void DecodeSortKeyRecursive(DecodeSortKeyData &decode_data, SortKeyVectorData &v
 
 void CreateSortKeyHelpers::DecodeSortKey(string_t sort_key, Vector &result, idx_t result_idx, OrderModifiers modifiers) {
 	SortKeyVectorData sort_key_data(result, 0, modifiers);
-	DecodeSortKeyData decode_data(sort_key);
+	DecodeSortKeyData decode_data(modifiers, sort_key);
 	DecodeSortKeyRecursive(decode_data, sort_key_data, result, result_idx);
 }
 
