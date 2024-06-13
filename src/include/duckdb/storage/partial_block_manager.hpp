@@ -100,7 +100,8 @@ public:
 
 public:
 	PartialBlockManager(BlockManager &block_manager, PartialBlockType partial_block_type,
-	                    optional_ptr<uint32_t> max_partial_block_size, uint32_t max_use_count = DEFAULT_MAX_USE_COUNT);
+	                    optional_idx max_partial_block_size = optional_idx(),
+	                    uint32_t max_use_count = DEFAULT_MAX_USE_COUNT);
 	virtual ~PartialBlockManager();
 
 public:
