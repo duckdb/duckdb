@@ -73,6 +73,7 @@ jobs:
     - name:  Build
       shell: bash
       run: |
+        export EXTENSION_STATIC_BUILD=1
         export DUCKDB_PLATFORM=android_armv7a
         export CMAKE_VARS_BUILD="-DBUILD_UNITTESTS=0 -DBUILD_SHELL=0 -DANDROID_ABI=armeabi-v7a -DCMAKE_TOOLCHAIN_FILE=./android-ndk/build/cmake/android.toolchain.cmake"
         make
