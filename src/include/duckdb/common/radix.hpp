@@ -14,6 +14,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/limits.hpp"
 
 #include <cfloat>
 #include <cstring> // strlen() on Solaris
@@ -88,13 +89,13 @@ public:
 	static inline float DecodeFloat(uint32_t input) {
 		// nan
 		if (input == UINT_MAX) {
-			return NAN;
+			return std::numeric_limits<float>::quiet_NaN();
 		}
 		if (input == UINT_MAX - 1) {
-			return INFINITY;
+			return std::numeric_limits<float>::infinity();
 		}
 		if (input == 0) {
-			return -INFINITY;
+			return -std::numeric_limits<float>::infinity();
 		}
 		float result;
 		if (input & (1U << 31)) {
@@ -139,13 +140,13 @@ public:
 	static inline double DecodeDouble(uint64_t input) {
 		// nan
 		if (input == ULLONG_MAX) {
-			return NAN;
+			return std::numeric_limits<double>::quiet_NaN();
 		}
 		if (input == ULLONG_MAX - 1) {
-			return INFINITY;
+			return std::numeric_limits<double>::infinity();
 		}
 		if (input == 0) {
-			return -INFINITY;
+			return -std::numeric_limits<double>::infinity();
 		}
 		double result;
 		if (input & (1ULL << 63)) {
