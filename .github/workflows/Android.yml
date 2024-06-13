@@ -108,7 +108,8 @@ jobs:
     # Builds extensions for linux_amd64
     name: Android Extensions
     runs-on: ubuntu-latest
-
+    container: ubuntu:18.04
+    
     strategy:
       matrix:
         arch: [ armeabi-v7a, arm64-v8a ]
