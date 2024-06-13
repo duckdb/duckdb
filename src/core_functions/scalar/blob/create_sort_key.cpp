@@ -682,7 +682,7 @@ static void FinalizeSortData(Vector &result, idx_t size) {
 	case LogicalTypeId::BIGINT: {
 		auto result_data = FlatVector::GetData<int64_t>(result);
 		for (idx_t r = 0; r < size; r++) {
-			result_data[r] = BSwap<int64_t>(result_data[r]);
+			result_data[r] = BSwap(result_data[r]);
 		}
 		break;
 	}
