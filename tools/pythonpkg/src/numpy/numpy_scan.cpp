@@ -340,7 +340,7 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 
 			// Get the pointer to the object
 			PyObject *val = src_ptr[source_idx];
-			if (bind_data.numpy_type.type == NumpyNullableType::OBJECT && !py::isinstance<py::str>(val)) {
+			if (!py::isinstance<py::str>(val)) {
 				if (val == Py_None) {
 					out_mask.SetInvalid(row);
 					continue;
