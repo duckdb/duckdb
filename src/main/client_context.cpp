@@ -202,15 +202,12 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 	}
 }
 
-ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction) {
+ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction,
+                                          optional_ptr<ErrorData> previous_error) {
 	client_data->profiler->EndQuery();
 
 	if (active_query->executor) {
 		active_query->executor->CancelTasks();
-	}
-	// Notify any registered state of query end
-	for (auto const &s : registered_state) {
-		s.second->QueryEnd(*this);
 	}
 	active_query->progress_bar.reset();
 
@@ -241,6 +238,16 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 	} catch (...) { // LCOV_EXCL_START
 		error = ErrorData("Unhandled exception!");
 	} // LCOV_EXCL_STOP
+
+	// Notify any registered state of query end
+	for (auto const &s : registered_state) {
+		if (error.HasError()) {
+			s.second->QueryEnd(*this, &error);
+		} else {
+			s.second->QueryEnd(*this, previous_error);
+		}
+	}
+
 	return error;
 }
 
@@ -258,7 +265,7 @@ void ClientContext::CleanupInternal(ClientContextLock &lock, BaseQueryResult *re
 	auto &scheduler = TaskScheduler::GetScheduler(*this);
 	scheduler.RelaunchThreads();
 
-	auto error = EndQueryInternal(lock, result ? !result->HasError() : false, invalidate_transaction);
+	auto error = EndQueryInternal(lock, result ? !result->HasError() : false, invalidate_transaction, nullptr);
 	if (result && !result->HasError()) {
 		// if an error occurred while committing report it in the result
 		result->SetError(error);
@@ -576,7 +583,7 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 	} catch (...) { // LCOV_EXCL_START
 		result.SetError(ErrorData("Unhandled exception in ExecuteTaskInternal"));
 	} // LCOV_EXCL_STOP
-	EndQueryInternal(lock, false, invalidate_transaction);
+	EndQueryInternal(lock, false, invalidate_transaction, &result.GetErrorObject());
 	return PendingExecutionResult::EXECUTION_ERROR;
 }
 
@@ -861,7 +868,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 	}
 	if (pending->HasError()) {
 		// query failed: abort now
-		EndQueryInternal(lock, false, invalidate_query);
+		EndQueryInternal(lock, false, invalidate_query, &pending->GetErrorObject());
 		return pending;
 	}
 	D_ASSERT(active_query->IsOpenResult(*pending));

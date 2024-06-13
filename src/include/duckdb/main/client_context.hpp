@@ -245,7 +245,8 @@ private:
 	unique_ptr<ClientContextLock> LockContext();
 
 	void BeginQueryInternal(ClientContextLock &lock, const string &query);
-	ErrorData EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction);
+	ErrorData EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction,
+	                           optional_ptr<ErrorData> previous_error);
 
 	//! Wait until a task is available to execute
 	void WaitForTask(ClientContextLock &lock, BaseQueryResult &result);
