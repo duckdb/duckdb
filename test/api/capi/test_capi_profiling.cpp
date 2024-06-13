@@ -1,4 +1,7 @@
-#include "iostream"
+#include "capi_tester.hpp"
+
+using namespace duckdb;
+using namespace std;
 
 string BuildProfilingSettingsString(const std::vector<string> &settings) {
 	string result = "'{";
