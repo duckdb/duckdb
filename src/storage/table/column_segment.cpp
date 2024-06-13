@@ -262,7 +262,8 @@ static idx_t TemplatedFilterSelection(UnifiedVectorFormat &vdata, T predicate, S
 	for (idx_t i = 0; i < approved_tuple_count; i++) {
 		auto idx = sel.get_index(i);
 		auto vector_idx = vdata.sel->get_index(idx);
-		bool comparison_result = (!HAS_NULL || mask.RowIsValid(vector_idx)) && OP::Operation(vec[vector_idx], predicate);
+		bool comparison_result =
+		    (!HAS_NULL || mask.RowIsValid(vector_idx)) && OP::Operation(vec[vector_idx], predicate);
 		result_sel.set_index(result_count, idx);
 		result_count += comparison_result;
 	}
