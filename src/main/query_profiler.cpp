@@ -147,29 +147,23 @@ void QueryProfiler::EndQuery() {
 
 	main_query.End();
 	if (root && root->profiling_info.Enabled(MetricsType::OPERATOR_CARDINALITY)) {
-		Finalize(*root);
+		Finalize(root->children[0]->Cast<OperatorProfilingNode>());
 	}
 	this->running = false;
 	// print or output the query profiling after termination
 	// EXPLAIN ANALYSE should not be outputted by the profiler
 	if (IsEnabled() && !is_explain_analyze) {
-		// initialize the query info
+		// Expand the query info
 		if (root) {
-			auto query_info = make_uniq<QueryProfilingNode>();
-
-			query_info->node_type = ProfilingNodeType::QUERY;
-			query_info->query = query;
-			query_info->profiling_info = ProfilingInfo(ClientConfig::GetConfig(context).profiler_settings);
-			if (query_info->profiling_info.Enabled(MetricsType::OPERATOR_TIMING)) {
-				query_info->profiling_info.metrics.operator_timing = main_query.Elapsed();
+			auto &query_info = root->Cast<QueryProfilingNode>();
+			query_info.query = query;
+			query_info.profiling_info = ProfilingInfo(ClientConfig::GetConfig(context).profiler_settings);
+			if (query_info.profiling_info.Enabled(MetricsType::OPERATOR_TIMING)) {
+				query_info.profiling_info.metrics.operator_timing = main_query.Elapsed();
 			}
-			if (query_info->profiling_info.Enabled(MetricsType::CPU_TIME)) {
+			if (query_info.profiling_info.Enabled(MetricsType::CPU_TIME)) {
 				GetTotalCPUTime(*root);
-				query_info->profiling_info.metrics.cpu_time = root->profiling_info.metrics.cpu_time;
 			}
-
-			query_info->children.push_back(std::move(root));
-			root = std::move(query_info);
 		}
 
 		string tree = ToString();
@@ -241,23 +235,6 @@ void QueryProfiler::EndPhase() {
 
 	if (!phase_stack.empty()) {
 		phase_profiler.Start();
-	}
-}
-
-void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
-	if (!IsEnabled() || !running) {
-		return;
-	}
-	this->query_requires_profiling = false;
-	ClientConfig &config = ClientConfig::GetConfig(context);
-	this->root = CreateTree(root_op, config.profiler_settings, 0);
-	if (!query_requires_profiling) {
-		// query does not require profiling: disable profiling for this query
-		this->running = false;
-		tree_map.clear();
-		root = nullptr;
-		phase_timings.clear();
-		phase_stack.clear();
 	}
 }
 
@@ -595,10 +572,18 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 		this->query_requires_profiling = true;
 	}
 
-	auto op_node = make_uniq<OperatorProfilingNode>();
-	op_node->type = root.type;
-	op_node->name = root.GetName();
-	unique_ptr<ProfilingNode> node = std::move(op_node);
+	unique_ptr<ProfilingNode> node;
+
+	if (depth == 0) {
+		auto query_node = make_uniq<QueryProfilingNode>();
+		query_node->node_type = ProfilingNodeType::QUERY;
+		node = std::move(query_node);
+	} else {
+		auto op_node = make_uniq<OperatorProfilingNode>();
+		op_node->type = root.type;
+		op_node->name = root.GetName();
+		node = std::move(op_node);
+	}
 
 	node->depth = depth;
 	node->profiling_info = ProfilingInfo(settings);
@@ -612,6 +597,23 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 		node->children.push_back(std::move(child_node));
 	}
 	return node;
+}
+
+void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
+	if (!IsEnabled() || !running) {
+		return;
+	}
+	this->query_requires_profiling = false;
+	ClientConfig &config = ClientConfig::GetConfig(context);
+	this->root = CreateTree(root_op, config.profiler_settings, 0);
+	if (!query_requires_profiling) {
+		// query does not require profiling: disable profiling for this query
+		this->running = false;
+		tree_map.clear();
+		root = nullptr;
+		phase_timings.clear();
+		phase_stack.clear();
+	}
 }
 
 void QueryProfiler::Render(const ProfilingNode &node, std::ostream &ss) const {
